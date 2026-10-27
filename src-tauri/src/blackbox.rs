@@ -344,8 +344,31 @@ impl NextStep {
     }
 }
 
+/// Which starter rule produced an assessment (P7-rig-care). A stable machine key beside the prose, so
+/// a surface can react to WHICH rule fired (the Lab rig picks out the part a record points at)
+/// without matching on `consistent_with` text. Names the rule, never a cause: it carries nothing the
+/// prose doesn't already say, and adding it changes no rule's firing or wording.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum AssessmentRule {
+    /// Rule 1a: a measured high GPU temperature on a GPU timeout / unexpected shutdown.
+    Overheating,
+    /// Rule 1b: a WHEA hardware machine-check (heat, power OR memory — deliberately not one part).
+    HardwareError,
+    /// Rule 2: the same graphics-driver module timing out repeatedly, temps not high.
+    GraphicsDriver,
+    /// Rule 3: a lone app crash/hang with no system-level event around it.
+    AppSpecific,
+    /// Rule 4: an unexpected shutdown with no blue screen and temps not high (ambiguous).
+    PowerHardlock,
+    /// Escape hatch: a blue screen Compy won't guess at.
+    BeyondUs,
+}
+
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub(crate) struct Assessment {
+    /// Which rule fired (stable key; see `AssessmentRule`).
+    pub(crate) rule: AssessmentRule,
     /// Always "consistent with…" / "points toward…" phrasing — NEVER "the cause is…".
     pub(crate) consistent_with: String,
     pub(crate) strength: Strength,
@@ -443,6 +466,7 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
     if high && matches!(inc.kind, IncidentKind::GpuTimeout | IncidentKind::UnexpectedShutdown) {
         let t = peak_temp(inc).unwrap_or(0);
         return Some(Assessment {
+            rule: AssessmentRule::Overheating,
             consistent_with: "overheating around the time of the crash".into(),
             strength: Strength::Strong,
             evidence: vec![
@@ -472,6 +496,7 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
             evidence.push(format!("the GPU was at {t}°C in the session at the time"));
         }
         return Some(Assessment {
+            rule: AssessmentRule::HardwareError,
             consistent_with: "a hardware-level error Windows logged — commonly heat, but also power or memory".into(),
             strength,
             evidence,
@@ -503,6 +528,7 @@ fn rule_graphics_driver(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> 
         return None;
     }
     Some(Assessment {
+        rule: AssessmentRule::GraphicsDriver,
         consistent_with: format!("your graphics driver ({module}) repeatedly timing out"),
         strength: Strength::Strong,
         evidence: vec![
@@ -536,6 +562,7 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         None => "the app closed on its own, with no system-level error logged around it".to_string(),
     };
     Some(Assessment {
+        rule: AssessmentRule::AppSpecific,
         consistent_with: format!("a problem inside {subject} itself, rather than your PC"),
         strength: Strength::Strong,
         evidence: vec![lead, "your graphics, power, and hardware logs were quiet at that moment".into()],
@@ -561,6 +588,7 @@ fn rule_power_hardlock(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         return None;
     }
     Some(Assessment {
+        rule: AssessmentRule::PowerHardlock,
         consistent_with: "an abrupt power loss or hard lock — Windows didn't get to record why".into(),
         strength: Strength::Partial,
         evidence: vec![
@@ -585,6 +613,7 @@ fn rule_beyond_us(inc: &Incident) -> Option<Assessment> {
     }
     let code = inc.receipt.code.as_deref().unwrap_or("unknown");
     Some(Assessment {
+        rule: AssessmentRule::BeyondUs,
         consistent_with: "a blue-screen crash whose stop code can point to several different things".into(),
         strength: Strength::Weak,
         evidence: vec![
@@ -2841,6 +2870,27 @@ mod blackbox_tests {
                 assert!(!h.contains(w), "next-step headline commands an irreversible action '{w}': {}", a.next_step.headline);
             }
             assert!(a.next_step.reversible, "every next step stays reversible");
+        }
+    }
+
+    #[test]
+    fn each_rule_reports_its_own_stable_key_on_the_wire() {
+        // P7-rig-care: the rig reacts to WHICH rule fired by this key, never by the prose. Pinned in the
+        // firing battery's order and as the exact serialized string the frontend reads.
+        let expected = [
+            "overheating",
+            "graphics-driver",
+            "app-specific",
+            "power-hardlock",
+            "beyond-us",
+            "hardware-error",
+        ];
+        let cases = firing_cases();
+        assert_eq!(cases.len(), expected.len(), "one key per firing case");
+        for (ctx, want) in cases.iter().zip(expected) {
+            let a = assess(&ctx[0], ctx).expect("fires");
+            let wire = serde_json::to_value(&a).unwrap();
+            assert_eq!(wire["rule"], serde_json::json!(want), "rule key for {:?}", a.consistent_with);
         }
     }
 

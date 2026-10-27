@@ -506,7 +506,18 @@ export type CrashNextStep = {
   reversible: boolean; // always true by construction
   research_only: boolean; // "what to research", not "do this"
 };
+/** Which Black Box starter rule produced an assessment (mirrors blackbox.rs `AssessmentRule`,
+ *  kebab-case on the wire). A stable key beside the prose; it names the rule, never a cause. */
+export type AssessmentRule =
+  | "overheating"
+  | "hardware-error"
+  | "graphics-driver"
+  | "app-specific"
+  | "power-hardlock"
+  | "beyond-us";
 export type CrashAssessment = {
+  /** P7-rig-care. Absent on records from a build before the key existed: read as "no rule known". */
+  rule?: AssessmentRule;
   consistent_with: string; // "consistent with…" — never "the cause is…"
   strength: AssessmentStrength;
   evidence: string[];

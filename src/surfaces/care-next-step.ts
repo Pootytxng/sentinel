@@ -110,6 +110,13 @@ export function sameKind(i: CrashIncident, step: { kind: string; app: string | n
   return !APP_KINDS.has(step.kind) || appOf(i) === step.app;
 }
 
+/** Pure: the NEWEST crash record that carries an assessment — the one the Care step is drawn from
+ *  (rule 1 above), and the one the Lab rig picks a part from (P7-rig-care). null when none does. */
+export function newestAssessedIncident(incidents: CrashIncident[] | null | undefined): CrashIncident | null {
+  const withStep = (incidents ?? []).filter((i) => i.assessment && Number.isFinite(ms(i.when)));
+  return withStep.length > 0 ? withStep.reduce((a, b) => (ms(b.when) > ms(a.when) ? b : a)) : null;
+}
+
 /** Pure: the ONE step, by the priority above. */
 export function pickCareStep(
   incidents: CrashIncident[] | null | undefined,
@@ -117,9 +124,8 @@ export function pickCareStep(
   /** P6-next-f2: the stored stutter step for this game (storedStutterStep), or null. */
   stored: CareStep | null = null,
 ): CareStep | null {
-  const withStep = (incidents ?? []).filter((i) => i.assessment && Number.isFinite(ms(i.when)));
-  if (withStep.length > 0) {
-    const inc = withStep.reduce((a, b) => (ms(b.when) > ms(a.when) ? b : a));
+  const inc = newestAssessedIncident(incidents);
+  if (inc) {
     const a = inc.assessment!;
     const app = appOf(inc);
     return {

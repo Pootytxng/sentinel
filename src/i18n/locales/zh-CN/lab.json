@@ -180,7 +180,12 @@
     "bench": {
       "aria": "工作台上的你的整机"
     },
-    "addPartRoute": "添加 Compy 无法检测到的部件"
+    "addPartRoute": "添加 Compy 无法检测到的部件",
+    "rigFocus": {
+      "overheating": "已高亮：{{part}} — 崩溃扫描中最新的记录（{{when}}）与它温度过高的情况相符。",
+      "graphicsDriver": "已高亮：{{part}} — 崩溃扫描中最新的记录（{{when}}）与它的显卡驱动超时的情况相符。",
+      "away": "崩溃扫描中最新的记录（{{when}}）与应用本身的问题相符，而不是某个部件。"
+    }
   },
   "optimizeStation": {
     "gaugeAriaLabel": "{{total}} 项安全优化项中已开启 {{applied}} 项",
