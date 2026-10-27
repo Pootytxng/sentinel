@@ -2,12 +2,20 @@
 // records (src/test/fixtures/wardogs-p4-exit.json: read-only copies of experiments.json and the
 // WARDOGS sessions, 2026-10-25).
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 import fixture from "../test/fixtures/wardogs-p4-exit.json";
 import today from "../test/fixtures/p5-learned-today.json";
 import type { SessionSummary } from "../types";
+import { knowledgeByIdForLanguage } from "../data/knowledge";
 import {
+  LESSON_KEY,
+  LESSON_LIBRARY_ID,
   LESSON_RULES,
+  lessonDirs,
   lessonFor,
+  lessonRuleFor,
+  lessonRuleForVerdict,
   outcomeChoices,
   stillAppliedFrom,
   summarizeGame,
@@ -204,6 +212,70 @@ describe("P5-learned lesson rules", () => {
     const noisy = row({ recId: "c", verdict: "too-noisy", noise: null, at: "2026-10-25T00:00:00Z" });
     expect(lessonFor([older, newer, noisy])).toMatchObject({ recId: "b", rule: "less-steady-not-slower" });
     expect(lessonFor([noisy, row({ recId: "d", deltaLow1Pct: 0, deltaAvgPct: 0 })])).toMatchObject({ recId: "c", rule: "too-noisy" });
+  });
+
+  // P7-teach: one rule function behind every surface that teaches from personal evidence (the Trial
+  // summary, the Debrief comparison card, the Care stutter comparison), plus the Library entry each
+  // rule links. Fails on the code before the slice (no shared `lessonRuleFor`).
+  describe("lessonRuleFor is the shared rule for one measured result", () => {
+    it("reads the same table as lessonFor, with the band as the line", () => {
+      expect(lessonRuleFor("improved", 4.2, 0.8, 3)).toBe("steadier-not-faster");
+      expect(lessonRuleFor("regressed", -12.5, -0.8, 3)).toBe("less-steady-not-slower");
+      expect(lessonRuleFor("no-change", 5, 5, 3)).toBe("faster-and-steadier");
+      expect(lessonRuleFor("improved", 4, null, 3)).toBe("steadier");
+      expect(lessonRuleFor("improved", 3, 3, 3)).toBeNull(); // exactly the band = flat/flat
+      expect(lessonRuleFor("regressed", -2, 1, 3)).toBeNull();
+    });
+    it("no rule without a measured verdict, a band and a 1% low delta, or with a non-finite number", () => {
+      for (const v of ["too-noisy", "confounded", "expired", "inconclusive", "insufficient-evidence", null, undefined])
+        expect(lessonRuleFor(v, 20, 0, 3)).toBeNull();
+      expect(lessonRuleFor("improved", null, 20, 3)).toBeNull();
+      expect(lessonRuleFor("improved", 20, 0, null)).toBeNull();
+      expect(lessonRuleFor("improved", Number.NaN, 0, 3)).toBeNull();
+      expect(lessonRuleFor("improved", 20, Number.POSITIVE_INFINITY, 3)).toBeNull();
+    });
+    it("lessonRuleForVerdict drops a rule whose 1% low direction disagrees with the stored verdict", () => {
+      expect(lessonRuleForVerdict("improved", 7.9, 0.9, 3)).toBe("steadier-not-faster");
+      expect(lessonRuleForVerdict("regressed", -12.5, -0.8, 3)).toBe("less-steady-not-slower");
+      // The verdict is judged on the 1% low; the average may still move beyond the floor.
+      expect(lessonRuleForVerdict("no-change", 0.7, 8, 3)).toBe("faster-not-steadier");
+      // Contradictions: the stored verdict wins, so nothing is taught.
+      expect(lessonRuleForVerdict("no-change", 5, 5, 3)).toBeNull();
+      expect(lessonRuleForVerdict("improved", -12.5, 0, 3)).toBeNull();
+      expect(lessonRuleForVerdict("regressed", 0, 8, 3)).toBeNull();
+      expect(lessonRuleForVerdict("confounded", 20, 0, 3)).toBeNull();
+    });
+    it("every rule's copy exists where the Debrief and the stutter comparison read it (en + zh-CN)", () => {
+      const load = (lang: string, area: string) =>
+        JSON.parse(readFileSync(join("src", "i18n", "locales", lang, `${area}.json`), "utf8"));
+      for (const lang of ["en", "zh-CN"]) {
+        const lab = load(lang, "lab") as { experimentBench: { summary: { lesson: Record<string, string> } } };
+        const common = load(lang, "common") as { lesson: { label: string; sessions: Record<string, string> } };
+        expect(common.lesson.label, lang).toBeTruthy();
+        for (const key of Object.values(LESSON_KEY)) {
+          expect(lab.experimentBench.summary.lesson[key], `${lang} lab ${key}`).toBeTruthy();
+          expect(common.lesson.sessions[key], `${lang} common ${key}`).toBeTruthy();
+        }
+      }
+    });
+    it("lessonDirs recovers each measured rule's directions; too-noisy has none", () => {
+      for (const [key, rule] of Object.entries(LESSON_RULES)) {
+        const [low1, avg] = key.split("/");
+        expect(lessonDirs(rule)).toEqual({ low1, avg });
+      }
+      expect(lessonDirs("too-noisy")).toBeNull();
+    });
+    it("every rule has a copy key and links a Library entry that exists in both languages", () => {
+      const rules = [...new Set(Object.values(LESSON_RULES)), "too-noisy"] as const;
+      expect(Object.keys(LESSON_KEY).sort()).toEqual([...rules].sort());
+      expect(Object.keys(LESSON_LIBRARY_ID).sort()).toEqual([...rules].sort());
+      for (const lang of ["en", "zh-CN"]) {
+        const byId = knowledgeByIdForLanguage(lang);
+        for (const rule of rules) expect(byId.has(LESSON_LIBRARY_ID[rule]), `${lang} ${rule}`).toBe(true);
+      }
+      expect(LESSON_LIBRARY_ID["too-noisy"]).toBe("noise-floor");
+      expect(LESSON_LIBRARY_ID.steadier).toBe("one-percent-lows");
+    });
   });
 });
 

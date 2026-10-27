@@ -4,8 +4,10 @@ import { useTranslation } from "react-i18next";
 // Side-effect import, as in BlackBox.tsx: the i18next singleton is ready even when this is the first
 // thing a test loads.
 import "../i18n";
-import type { SessionSummary, WhatChangedOutcome } from "../types";
+import type { SessionSummary, WhatChangedOutcome, WhatChangedReport } from "../types";
 import type { StutterResult } from "./care-next-step";
+import { LESSON_KEY, lessonRuleForVerdict, type LessonRule } from "./test-summary";
+import { LessonLine } from "../design/LessonLine";
 import { gradeBaseline } from "./baseline-grade";
 import { WhatChangedReportView } from "./WhatChangedPanel";
 import { prettyGameName } from "./game-name";
@@ -59,6 +61,27 @@ export function pickStutterPair(sessions: SessionSummary[]): StutterPick {
     .sort((a, b) => when(b) - when(a))
     .slice(0, MAX_GOOD_CANDIDATES);
   return { kind: "pick", latest, candidates };
+}
+
+/** P7-teach: the one lesson this pair of sessions can teach, by the P5-learned rule table over the
+ *  engine's stored verdict and the two sessions' stored readings (test-summary.ts). The deltas are
+ *  arithmetic over the report's own `baseline` / `current` refs against its `noise_floor_pct`; no new
+ *  data. The engine judged the verdict on the 1% low against that floor, so a rule whose 1% low
+ *  direction disagrees with the verdict is dropped: the stored verdict wins over a re-derived number,
+ *  never the other way (honest measurement). null = no rule, no lesson: inconclusive, confounded
+ *  (two or more change families moved, so no single reading is a lesson), a zero or missing baseline
+ *  reading, a zero floor, or both deltas inside the floor. A partly comparable pair still teaches:
+ *  the report's own comparability banner says how far the pair may be compared. The average is
+ *  always compared here, so the "average wasn't compared" rules (steadier / less-steady) and
+ *  too-noisy can't fire from this surface. */
+export function stutterLessonRule(r: WhatChangedReport): LessonRule | null {
+  const b = r.baseline;
+  const c = r.current;
+  if (r.confounded || !(r.noise_floor_pct > 0)) return null;
+  if (!(b.low1_fps > 0) || !(b.avg_fps > 0) || !Number.isFinite(c.low1_fps) || !Number.isFinite(c.avg_fps)) return null;
+  const low1Pct = ((c.low1_fps - b.low1_fps) / b.low1_fps) * 100;
+  const avgPct = ((c.avg_fps - b.avg_fps) / b.avg_fps) * 100;
+  return lessonRuleForVerdict(r.verdict, low1Pct, avgPct, r.noise_floor_pct);
 }
 
 /** The engine's comparability verdicts that make an earlier steady session a good baseline. */
@@ -165,6 +188,9 @@ export function StutterCompare({
     );
   }
 
+  const lessonRule =
+    state.kind === "report" && state.outcome.kind === "report" ? stutterLessonRule(state.outcome) : null;
+
   return (
     <section className="bb-stutter" aria-label={t("gaming.blackBox.stutter.title")}>
       <div className="bb-stutter-head">
@@ -203,6 +229,16 @@ export function StutterCompare({
             causeTag={t("gaming.blackBox.changedBefore.notProven")}
             hideNextAction={hideNextAction}
           />
+          {/* P7-teach: one lesson from this pair's own readings, worded for two sessions of one game
+              (no change was tried here). The rule table and the Library link are shared with the Trial
+              summary and the Debrief. No rule = nothing. */}
+          {lessonRule && (
+            <LessonLine
+              rule={lessonRule}
+              testId="stutter-lesson"
+              sentence={t(`common.lesson.sessions.${LESSON_KEY[lessonRule]}`, { game: state.game })}
+            />
+          )}
         </>
       )}
     </section>

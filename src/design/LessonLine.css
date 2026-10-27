@@ -1,0 +1,27 @@
+/* P7-teach: one lesson after personal evidence. Quiet prose, not a callout; the link is a plain
+   text affordance like every "More in History →" the glossary already shows. Token colors only. */
+.lesson-line {
+  margin: 10px 0 0;
+  font-size: var(--type-body, 14px);
+  line-height: 1.45;
+}
+.lesson-label {
+  color: var(--muted);
+}
+.lesson-more {
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  min-height: 24px; /* a real tap target, not a 12px word */
+  margin-left: 4px;
+  color: var(--ix-accent-text, inherit);
+  font: inherit;
+  font-size: var(--type-label, 12px);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.lesson-more:hover,
+.lesson-more:focus-visible {
+  text-decoration-thickness: 2px;
+}
