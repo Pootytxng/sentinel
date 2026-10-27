@@ -41,6 +41,24 @@
   min-height: 0;
   display: block;
 }
+
+/* P7-rig-care: what the Care station's highlight or dim means, one quiet line along the stage's
+   bottom edge — Home's .hc-rig-note, here. Absolute so it never takes a grid cell from the rig, and
+   never interactive so it can't block the parts the evidence map makes clickable. Tokens only. */
+:root[data-v2="on"] .lc-rig-note {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 8px;
+  max-width: calc(100% - 32px);
+  margin: 0 auto;
+  text-align: center;
+  font-size: var(--type-label);
+  line-height: 1.35;
+  color: var(--v2-muted);
+  text-shadow: 0 1px 6px var(--v2-bg), 0 0 2px var(--v2-bg);
+  pointer-events: none;
+}
 /* THE RIG FILLS ITS STAGE (2026-08-26, measured). `place-items: center` used to shrink-wrap the
    viewer, so `.rig-canvas` took its auto width -- ~300 px at 1280, at 1500 AND at 1920. The rig was
    size-INVARIANT: the bigger the owner's window, the smaller the hologram looked (15.6% of width at

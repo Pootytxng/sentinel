@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
@@ -12,6 +12,8 @@ import { ReticleCursor } from "../design/console/ReticleCursor";
 import { RigViewer } from "./rig/RigViewer";
 import { RigManualParts } from "./rig/RigManualParts";
 import { buildRigParts, type RigSelection } from "./rig/rig-parts";
+import { incidentFocus } from "./rig/incident-part";
+import { newestAssessedIncident } from "./care-next-step";
 import { rigPartReadings, subsystemForRigPart, type LabReadingKey, type LabSubsystem } from "./lab-evidence-map";
 import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
 import {
@@ -301,6 +303,26 @@ export function LabConsole({
   // Detail view — exactly ONE station open at a time (the dock IS the menu). Clicking a node opens
   // it, clicking again closes, clicking another swaps. Optimize is included — it is NOT always-on.
   const [openStation, setOpenStation] = useState<LabStationKey | null>(null);
+  // P7-rig-care (ROADMAP P7 bullet 4, Constitution §24, §25): once the Care station has read the
+  // crash records this visit, the newest assessed one — the record the Care step is drawn from —
+  // picks out the part its rule is about on the room's rig, or dims the rig when it reads as the app
+  // itself (rig/incident-part.ts). An open station takes the whole workspace and draws no rig, so the
+  // record shows on the rig when the user comes back to the room — not only while Care is open,
+  // which would be never. No scan this visit → the rig is its own.
+  const careRigParts = useMemo(() => buildRigParts(hw, t), [hw, t]);
+  const careFocus = useMemo(
+    () => (bbReport ? incidentFocus(newestAssessedIncident(bbReport.incidents), careRigParts) : null),
+    [bbReport, careRigParts],
+  );
+  const careRigNote = careFocus ? (
+    <p className="lc-rig-note" data-testid="lc-rig-note" data-focus={careFocus.kind}>
+      {careFocus.kind === "part"
+        ? t(`lab.labConsole.rigFocus.${careFocus.rule === "overheating" ? "overheating" : "graphicsDriver"}`, {
+            part: careFocus.partName,
+          })
+        : t("lab.labConsole.rigFocus.away")}
+    </p>
+  ) : null;
   // The optional exact-incident selector that rides alongside a `blackbox` deep-link (Tier 1 task
   // 9). One-shot, like the station key: read and cleared on mount, so a later ordinary visit to the
   // Lab never re-opens somebody's old crash.
@@ -709,8 +731,11 @@ export function LabConsole({
                   cameraDist={BENCH_CAMERA_DIST}
                   cameraTargetY={BENCH_CAMERA_TARGET_Y}
                   onSelectedIdChange={(_id, what) => setSelectedRig(what)}
+                  focusId={careFocus?.kind === "part" ? careFocus.partId : null}
+                  dimmed={careFocus?.kind === "away"}
                 />
               </div>
+              {careRigNote}
               <ReticleCursor scopeRef={stageRef} />
             </div>
             {/* THE APPROVED RHYTHM (2026-08-27, Codex REJECT of 9bef1cc2). Four cells: ARC, NUMERAL,
@@ -1058,8 +1083,11 @@ export function LabConsole({
                   cameraDist={BENCH_CAMERA_DIST}
                   cameraTargetY={BENCH_CAMERA_TARGET_Y}
                   onSelectedIdChange={(_id, what) => setSelectedRig(what)}
+                  focusId={careFocus?.kind === "part" ? careFocus.partId : null}
+                  dimmed={careFocus?.kind === "away"}
                 />
               </div>
+              {careRigNote}
               <ReticleCursor scopeRef={stageRef} />
             </div>
           </BentoTile>

@@ -34,6 +34,8 @@ export const RigViewer = memo(function RigViewer({
   cameraDist,
   cameraTargetY,
   onSelectedIdChange,
+  focusId = null,
+  dimmed = false,
 }: {
   hw: HardwareInfo;
   // chromeless: render ONLY the 3D hologram canvas (no control bar, honesty caption, monitor nudge,
@@ -57,6 +59,13 @@ export const RigViewer = memo(function RigViewer({
   // for a host that wants to react to it (e.g. the Ops Console showing evidence for the selected
   // part), not a hand-off of ownership.
   onSelectedIdChange?: (id: string | null, what: RigSelection | null) => void;
+  /** P7-rig-care: a part the HOST's evidence points at (the Care station's newest assessed crash).
+   *  Shown as the selection until the user picks or clears one themselves on this mount — the
+   *  answer points, it never fights the user. Not mirrored to `onSelectedIdChange`: that stays the
+   *  user's own selection. Default null — every other host is untouched. */
+  focusId?: string | null;
+  /** P7-rig-care: the host's evidence points away from the parts (RigHologram `dimmed`). */
+  dimmed?: boolean;
 }) {
   const { t } = useTranslation();
   const [exploded, setExploded] = useState(false);
@@ -65,6 +74,10 @@ export const RigViewer = memo(function RigViewer({
   // keeps its classic always-orbiting default.
   const [autoRotate, setAutoRotate] = useState(() => !readHologramV2());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // P7-rig-care: once the user picks or clears a part, the host's focus steps aside (derived at
+  // render, never re-asserted in an effect).
+  const [userPicked, setUserPicked] = useState(false);
+  const shownId = !userPicked && focusId ? focusId : selectedId;
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   // What the hologram drew, for the keyboard picker below. Empty until the lazy 3D chunk mounts.
   const [inventory, setInventory] = useState<RigSelection[]>([]);
@@ -78,6 +91,7 @@ export const RigViewer = memo(function RigViewer({
   const select = useCallback(
     (id: string, what: RigSelection | null) => {
       const next = id || null;
+      setUserPicked(true);
       setSelectedId(next);
       onSelectedIdChange?.(next, what);
     },
@@ -141,7 +155,7 @@ export const RigViewer = memo(function RigViewer({
             hw={hw}
             exploded={exploded}
             autoRotate={autoRotate}
-            selectedId={selectedId}
+            selectedId={shownId}
             hoveredId={hoveredId}
             // `what` rides along so a host can answer for a fan or a user-added part, neither of
             // which is in `buildRigParts`. Selection ownership is unchanged — this is still a
@@ -156,6 +170,7 @@ export const RigViewer = memo(function RigViewer({
             evidenceMap={chromeless}
             cameraDist={cameraDist}
             cameraTargetY={cameraTargetY}
+            dimmed={dimmed}
           />
         </Suspense>
 
@@ -192,7 +207,7 @@ export const RigViewer = memo(function RigViewer({
                     // localized label or by counting rows, both of which move. The id is the same
                     // one the hologram selects by, so this is the stable way in.
                     data-rig-part={item.id}
-                    aria-pressed={selectedId === item.id}
+                    aria-pressed={shownId === item.id}
                     onClick={() => select(item.id, item)}
                     onFocus={() => setHoveredId(item.id)}
                     onBlur={() => setHoveredId((h) => (h === item.id ? null : h))}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import { invoke } from "@tauri-apps/api/core";
@@ -23,14 +23,19 @@ vi.mock("../design/use-motion", () => ({ useReducedMotion: () => true }));
 vi.mock("./rig/RigViewer", () => ({
   RigViewer: ({
     onSelectedIdChange,
+    focusId,
+    dimmed,
   }: {
     // Both arguments, exactly as the real viewer emits them: the id AND which of the three drawn
     // lists it came from. A mock that emitted the id alone let the console's fan / user-added
     // branches go untested — that gap is what shipped a click that highlighted a part and then
     // showed nothing.
     onSelectedIdChange?: (id: string | null, what: RigSelection | null) => void;
+    // P7-rig-care: what the Care station's crash record asks the rig to show.
+    focusId?: string | null;
+    dimmed?: boolean;
   }) => (
-    <div data-testid="rig-hologram">
+    <div data-testid="rig-hologram" data-focus-id={focusId ?? ""} data-dimmed={dimmed ? "1" : "0"}>
       <button
         onClick={() =>
           onSelectedIdChange?.("gpu-1", {
@@ -830,5 +835,93 @@ describe("LabConsole — Crash & Freeze Rescue scans on a promised arrival (P6-t
     fireEvent.click(stationNode(/crash/i));
     expect(await screen.findByRole("button", { name: "Scan for recent crashes" })).toBeTruthy();
     expect(scans()).toBe(0);
+  });
+});
+
+// P7-rig-care (ROADMAP P7 bullet 4, Constitution §24, §25): once the Care station has read the crash
+// records, the newest assessed one drives the Lab rig — its rule's part highlighted, or the rig dimmed
+// when it reads as the app itself — with one line saying which, in the rules' own "consistent with"
+// frame. An open station draws no rig, so it shows when the user comes back to the room. Fails on the
+// code before this slice (the rig ignored the record).
+describe("P7-rig-care: the Care station's crash record picks out the part on the Lab rig", () => {
+  const assessed = (when: string, rule: string, tag = "GPU stopped responding") => ({
+    incident_id: `id-${when}`,
+    headline: "h",
+    tag,
+    when,
+    when_display: when,
+    vitals: null,
+    receipt: { source: "System", event_ids: [4101], faulting_app: null, faulting_module: "amdkmdag", code: null, detail: "" },
+    assessment: {
+      rule,
+      consistent_with: "c",
+      strength: "strong",
+      evidence: ["e"],
+      next_step: { headline: "Do a clean reinstall of your graphics driver", detail: "d", reversible: true, research_only: false },
+      beyond_us: false,
+    },
+  });
+  const withIncidents = (incidents: unknown[]) =>
+    vi.mocked(invoke).mockImplementation(((cmd: string) =>
+      Promise.resolve(
+        cmd === "get_crash_blackbox"
+          ? { incidents, skipped_sources: [] }
+          : cmd === "get_session_summaries"
+            ? []
+            : null,
+      )) as never);
+  const rig = () => screen.getAllByTestId("rig-hologram")[0];
+  /** Deep-link to Care (it scans on arrival), wait for the read, then come back to the room. */
+  const scanThenBack = async () => {
+    localStorage.setItem("compy_lab_open_station", "blackbox");
+    renderConsole();
+    await waitFor(() =>
+      expect(vi.mocked(invoke).mock.calls.some(([cmd]) => cmd === "get_crash_blackbox")).toBe(true),
+    );
+    // Let the read resolve and the station hand its report up before leaving it.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Back to Test/ }));
+  };
+  const note = () => document.querySelector('[data-testid="lc-rig-note"]');
+  afterEach(() => {
+    vi.mocked(invoke).mockImplementation((() => Promise.resolve(null)) as never);
+    localStorage.clear();
+  });
+
+  it("a repeating graphics-driver timeout highlights the GPU and says so", async () => {
+    withIncidents([assessed("2026-10-20T10:00:00Z", "app-specific"), assessed("2026-10-24T10:00:00Z", "graphics-driver")]);
+    await scanThenBack();
+    await waitFor(() => expect(rig().getAttribute("data-focus-id")).toBe("gpu-0"));
+    expect(rig().getAttribute("data-dimmed")).toBe("0");
+    expect(note()!.getAttribute("data-focus")).toBe("part");
+    expect(note()!.textContent).toMatch(/consistent with its graphics driver timing out/);
+  });
+
+  it("an app-specific record dims the rig and says the app, not a part", async () => {
+    withIncidents([assessed("2026-10-24T10:00:00Z", "app-specific", "App crash")]);
+    await scanThenBack();
+    await waitFor(() => expect(rig().getAttribute("data-dimmed")).toBe("1"));
+    expect(rig().getAttribute("data-focus-id")).toBe("");
+    expect(note()!.textContent).toMatch(/problem in the app itself, not a part/);
+  });
+
+  it("an ambiguous record (heat, power or memory) claims nothing", async () => {
+    withIncidents([assessed("2026-10-24T10:00:00Z", "hardware-error", "Hardware error")]);
+    await scanThenBack();
+    await screen.findAllByTestId("rig-hologram");
+    expect(rig().getAttribute("data-focus-id")).toBe("");
+    expect(rig().getAttribute("data-dimmed")).toBe("0");
+    expect(note()).toBeNull();
+  });
+
+  it("without a crash read this visit the rig is its own", async () => {
+    withIncidents([assessed("2026-10-24T10:00:00Z", "graphics-driver")]);
+    renderConsole();
+    await screen.findAllByTestId("rig-hologram");
+    expect(rig().getAttribute("data-focus-id")).toBe("");
+    expect(rig().getAttribute("data-dimmed")).toBe("0");
+    expect(note()).toBeNull();
   });
 });
