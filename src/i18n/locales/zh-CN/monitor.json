@@ -249,7 +249,7 @@
     "expiredSub": "这个基线设立得太久了，公平比较已经不可靠——驱动、游戏和 Windows 都在持续变化。请从新的会话总结重新设立基线。",
     "avgFpsLabel": "平均 FPS",
     "oneLowLabel": "1% 最低帧",
-    "deltaLine": "Δ 平均帧率 {{avgSign}} FPS（{{avgPct}}%）· 1% 最低帧 {{lowSign}} FPS（{{lowPct}}%）——{{inOut}}±{{noiseFloor}}% 的噪声范围",
+    "deltaLine": "Δ 平均帧率 {{avgSign}} FPS（{{avgPct}}%）· 1% 最低帧（最卡的时刻）{{lowSign}} FPS（{{lowPct}}%）——{{inOut}}±{{noiseFloor}}% 的正常局间波动（噪声范围）",
     "insideNoiseFloor": "位于",
     "outsideNoiseFloor": "超出",
     "noChangeMeansPre": "这是一个真实的答案，不是失败——换成能力差一点的工具可能会把这称作一次胜利。已排除一个嫌疑：",

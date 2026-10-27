@@ -276,7 +276,7 @@ describe("P5-resume: progress comes from the experiments store", () => {
     await waitFor(() => expect(calls("start_experiment")).toHaveLength(1), { timeout: 3000 });
     // P5-continue's rule: Game Mode was put back, so its before-session is how the PC is now.
     expect(calls("start_experiment")[0]).toMatchObject({ recId: "power-plan", baselineSessionId: S1.started_at });
-    expect(await finalLine()).toBe("Kept Power plan: 1% low up 4.2%.");
+    expect(await finalLine()).toBe("Kept Power plan: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     // Only the with-change session was measured.
     expect(calls("start_fps_capture")).toHaveLength(1);
   });
@@ -311,7 +311,7 @@ describe("P5-resume: progress comes from the experiments store", () => {
   it("Stop here after a verdict keeps the change it just kept", async () => {
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     // The picker now reads HAGS as set by Compy.
     state.recs = [cand("hags", "HAGS", null, false, "already-set-by-compy"), cand("game-mode", "Game Mode", 2)];
     fireEvent.click(screen.getByRole("button", { name: "Stop here" }));

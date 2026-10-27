@@ -367,7 +367,7 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
     expect(container.querySelector(".bb-next-why")!.textContent).not.toMatch(/latest/);
     const pay = container.querySelector(".bb-next-payoff")!;
     expect(pay.className).toContain("bb-next-payoff-sessions-steady");
-    expect(pay.textContent).toMatch(/In the 2 Valorant sessions since then, the 1% low stayed within 3%.*not proof/);
+    expect(pay.textContent).toMatch(/In the 2 Valorant sessions since then, the frame rate in your worst moments \(the 1% low\) stayed within 3%.*not proof/);
     // The user can stop tracking it: it is retired and the slot no longer shows it.
     fireEvent.click(screen.getByRole("button", { name: "Stop tracking this step" }));
     await waitFor(() => expect(container.querySelector(".bb-next")).toBeNull());

@@ -118,7 +118,7 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
     expect(card.querySelector(".cmp-receipts")).toBeNull();
     expect(card.textContent).not.toMatch(/140|141|110|111|±3%/);
     fireEvent.click(card.querySelector('[data-testid="cmp-depth-why"] > summary')!);
-    expect(card.querySelector(".cmp-delta")!.textContent).toMatch(/inside the ±3% noise floor/);
+    expect(card.querySelector(".cmp-delta")!.textContent).toMatch(/inside the ±3% normal run-to-run wobble \(the noise floor\)/);
     expect(card.querySelector(".cmp-means")!.textContent).toMatch(/your dips aren't game mode/);
     fireEvent.click(card.querySelector('[data-testid="cmp-depth-receipt"] > summary')!);
     const rows = Object.fromEntries(

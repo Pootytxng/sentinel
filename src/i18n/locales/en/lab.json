@@ -375,7 +375,7 @@
       "reading": "Reading your session…",
       "judging": "Comparing the two sessions…",
       "kept": "Kept {{change}}.",
-      "keptLow": "Kept {{change}}: 1% low up {{pct}}%.",
+      "keptLow": "Kept {{change}}: the frame rate in your worst moments (the 1% low) is up {{pct}}%.",
       "keptAvg": "Kept {{change}}: average up {{pct}}%.",
       "putBack": "Put {{change}} back: {{reason}}.",
       "putBackWhy": {
@@ -397,10 +397,10 @@
       },
       "nothingLeft": "Nothing else here is worth testing on this PC.",
       "why": {
-        "recommended": "Recommended keeps a change only when the 1% low rose beyond the noise band and the average did not fall beyond it; otherwise the change goes back.",
-        "recommendedBand": "Recommended keeps a change only when the 1% low rose beyond the ±{{band}}% noise band and the average did not fall beyond it; otherwise the change goes back.",
-        "maxFps": "Maximum FPS keeps a change only when the average rose beyond the noise band and the 1% low held; otherwise the change goes back.",
-        "maxFpsBand": "Maximum FPS keeps a change only when the average rose beyond the ±{{band}}% noise band and the 1% low held; otherwise the change goes back.",
+        "recommended": "Recommended keeps a change only when the frame rate in your worst moments (the 1% low) improved beyond the normal run-to-run wobble (the noise band) and the average did not fall beyond it; otherwise the change goes back.",
+        "recommendedBand": "Recommended keeps a change only when the frame rate in your worst moments (the 1% low) improved beyond the ±{{band}}% normal run-to-run wobble (the noise band) and the average did not fall beyond it; otherwise the change goes back.",
+        "maxFps": "Maximum FPS keeps a change only when the average improved beyond the normal run-to-run wobble (the noise band) and the frame rate in your worst moments (the 1% low) held; otherwise the change goes back.",
+        "maxFpsBand": "Maximum FPS keeps a change only when the average improved beyond the ±{{band}}% normal run-to-run wobble (the noise band) and the frame rate in your worst moments (the 1% low) held; otherwise the change goes back.",
         "noResult": "The two sessions could not be compared fairly, so nothing was judged. The line above says what got in the way, and what happened to the change."
       },
       "receipt": {
