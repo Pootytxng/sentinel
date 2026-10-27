@@ -74,10 +74,11 @@
     "stage": {
       "readinessLabel": "就绪度",
       "readinessNote": "{{total}} 项检查中通过 {{passed}} 项",
+      "readinessUnread_other": "{{count}} 项无法读取",
       "readinessGrade": {
         "good": "良好",
         "fair": "尚可",
-        "poor": "需要处理"
+        "poor": "值得看看"
       },
       "avgFps": "平均 FPS",
       "onePercentLow": "1% 低帧",

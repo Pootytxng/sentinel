@@ -491,6 +491,33 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
     expect(checking.querySelector(".rcb")!.textContent).toContain("Checking your PC now");
   });
 
+  // P7-score (Constitution §34, §26): a check Compy could not read is not a failing check. It is
+  // left out of the ratio and named beside the number; the grade words are calm. Fails on the code
+  // before this slice (13 of 16 = 81 "FAIR", and "2 couldn't be read" nowhere).
+  it("unreadable checks are left out of the readiness ratio and said beside it, never graded as failures", () => {
+    const some: GameReadiness = {
+      ...readiness,
+      checks: Array.from({ length: 16 }, (_, i) => ({ id: `c${i}`, label: `C${i}`, status: i < 13 ? "ready" : i < 14 ? "attention" : "unknown", detail: "", value: null })),
+      ready_count: 13,
+      attention_count: 1,
+      unknown_count: 2,
+    };
+    const c = mount({ ...props, readiness: some }).container;
+    const r = readout(c, "readiness");
+    expect(r.value).toBe("93"); // 13 of the 14 READABLE checks, not 13 of 16
+    expect(r.el.textContent).toContain("13 of 14 checks passed");
+    expect(r.el.textContent).toContain("2 couldn't be read");
+    expect(r.el.textContent).toContain("Good");
+    expect(r.el.textContent).not.toMatch(/NEEDS WORK|FAIR|GOOD/);
+    cleanup();
+    // Nothing readable at all: no ratio, no grade — the honest not-yet, never 0.
+    const none: GameReadiness = { ...some, checks: some.checks.map((k) => ({ ...k, status: "unknown" })), ready_count: 0, attention_count: 0, unknown_count: 16 };
+    const n = mount({ ...props, readiness: none }).container;
+    expect(readout(n, "readiness").unmeasured).not.toBeNull();
+    expect(readout(n, "readiness").value).not.toMatch(/\d/);
+    expect(n.textContent).toContain("16 couldn't be read");
+  });
+
   it("GPU temp reading shows the polled value once it lands", async () => {
     const c = mount().container;
     await waitFor(() => expect(readout(c, "gpuTemp").value).toBe("62"));

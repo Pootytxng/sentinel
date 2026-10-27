@@ -1242,3 +1242,12 @@
   color: var(--v2-accent-text, var(--v2-accent));
   white-space: nowrap;
 }
+
+/* P7-score: the readiness ring's "N couldn't be read" when nothing at all was readable (the gauge
+   is in its not-yet state then and drops its own note). Same face as the gauge's note. */
+:root[data-v2="on"] .hc-read-arc .hc-read-unread {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--type-label);
+  color: var(--ix-text-3);
+}
