@@ -156,6 +156,60 @@
         "unsure": "我不确定——就是感觉不对"
       }
     },
+    "palette": {
+      "wantFps": {
+        "label": "我想要更高的帧率",
+        "keywords": "帧率, fps, 更快, 提速, 性能, 优化"
+      },
+      "stutter": {
+        "label": "它会一顿一顿的",
+        "keywords": "卡顿, 顿, 掉帧, 不流畅, 抖动, 延迟尖峰, 微卡顿, stutter"
+      },
+      "slowSometimes": {
+        "label": "某些游戏很慢",
+        "keywords": "慢, 卡, 帧率低, 某些游戏, 只在游戏里, 延迟"
+      },
+      "slowAlways": {
+        "label": "它一直都很慢",
+        "keywords": "慢, 迟钝, 桌面也慢, 一直慢, 卡, 延迟"
+      },
+      "crashInGame": {
+        "label": "游戏里崩溃了",
+        "keywords": "崩溃, 闪退, 黑屏, 游戏关闭, 退出, 游戏里崩溃"
+      },
+      "crashAnytime": {
+        "label": "它随时会崩溃",
+        "keywords": "崩溃, 卡死, 死机, 自动重启, 蓝屏, 随机"
+      },
+      "crashBoot": {
+        "label": "开机后就崩溃",
+        "keywords": "崩溃, 开机, 启动, 重启循环, 无法启动, 登录卡死"
+      },
+      "heat": {
+        "label": "它很烫或者很吵",
+        "keywords": "烫, 热, 温度, 风扇, 噪音, 吵, 过热, 降频"
+      },
+      "didItHelp": {
+        "label": "我改了设置——有用吗？",
+        "keywords": "改了, 变化, 有用吗, 之前之后, 对比, 上次还正常"
+      },
+      "wantMonitor": {
+        "label": "游戏时看帧率",
+        "keywords": "看帧率, 叠加层, 屏幕显示, 实时帧率, 帧率计数, 监控, 读数"
+      },
+      "wantScores": {
+        "label": "看看这台电脑的跑分",
+        "keywords": "跑分, 分数, 基准测试, 测试, 评分, 电脑有多好"
+      },
+      "wantSpecs": {
+        "label": "这台电脑用了什么硬件",
+        "keywords": "配置, 硬件, 部件, 显卡, 处理器, 内存, 系统信息, 规格"
+      },
+      "sweep": {
+        "label": "帮我整体看看",
+        "keywords": "检查, 体检, 看看, 扫描, 哪里不对劲, 健康, 有没有问题"
+      }
+    },
     "f": {
       "ev": {
         "readiness": "当前 {{total}} 项启动检查中有 {{passed}} 项通过。",

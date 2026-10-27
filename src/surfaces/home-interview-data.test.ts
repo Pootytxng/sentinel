@@ -5,6 +5,9 @@ import {
   INTERVIEW_ROOT,
   interviewFinding,
   interviewQuestions,
+  PALETTE_INTENT_FINDINGS,
+  paletteIntents,
+  pathToFinding,
   type InterviewFacts,
   type InterviewFindingId,
   type InterviewStep,
@@ -447,6 +450,70 @@ describe("answers land on the journey that answers them", () => {
     for (const id of ["wantFps", "didItHelp"] as const) {
       const a = find(id, noLab).action;
       expect(a.kind === "room" || a.kind === "station" ? a.room : null).not.toBe("lab");
+    }
+  });
+});
+
+// P7-palette (ROADMAP P7 bullet 1, Constitution §27): the interview's answers as command-palette
+// intents, and the full path the palette lands on — the same journey answering would take. Fails
+// on the code before this slice (no intents, no path).
+describe("P7-palette: plain problems are the interview's own answers", () => {
+  it("offers every finding except the not-sure ones, once, with plain words to type", () => {
+    const intents = paletteIntents(t);
+    const offered = intents.map((i) => i.finding);
+    expect(new Set(offered).size).toBe(offered.length);
+    expect(offered).toEqual(PALETTE_INTENT_FINDINGS);
+    const notSure: InterviewFindingId[] = ["crashUnsure", "slowUnsure"];
+    expect(INTERVIEW_FINDINGS.filter((f) => !offered.includes(f))).toEqual(notSure);
+    for (const i of intents) {
+      expect(i.label, i.finding).toMatch(/\S/);
+      expect(i.label).not.toMatch(/home\.interview/); // a missing key would print its own name
+      expect(i.keywords.length, i.finding).toBeGreaterThanOrEqual(3);
+      expect(i.keywords.every((k) => k.length > 0)).toBe(true);
+    }
+    // The four problems the slice names are typed in plain words.
+    const byId = Object.fromEntries(intents.map((i) => [i.finding, i]));
+    expect([byId.stutter.label, ...byId.stutter.keywords].join(" ")).toMatch(/stutter/i);
+    expect([byId.crashInGame.label, ...byId.crashInGame.keywords].join(" ")).toMatch(/crash/i);
+    expect([byId.wantFps.label, ...byId.wantFps.keywords].join(" ")).toMatch(/more fps/i);
+    expect([byId.didItHelp.label, ...byId.didItHelp.keywords].join(" ")).toMatch(/what changed/i);
+  });
+
+  it("the same words exist in zh-CN", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      const intents = paletteIntents(t);
+      expect(intents.map((i) => i.finding)).toEqual(PALETTE_INTENT_FINDINGS);
+      for (const i of intents) {
+        expect(i.label).not.toMatch(/home\.interview|^[A-Za-z ]+$/); // translated, not the key or English
+        expect(i.keywords.length).toBeGreaterThanOrEqual(3);
+      }
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  it("pathToFinding walks the tree: root, the question between, the finding", () => {
+    expect(pathToFinding("stutter", Q)).toEqual([
+      { kind: "question", id: "start" },
+      { kind: "question", id: "slow" },
+      { kind: "finding", id: "stutter" },
+    ]);
+    expect(pathToFinding("crashBoot", Q)).toEqual([
+      { kind: "question", id: "start" },
+      { kind: "question", id: "crash" },
+      { kind: "finding", id: "crashBoot" },
+    ]);
+    expect(pathToFinding("wantFps", Q)).toEqual([
+      { kind: "question", id: "start" },
+      { kind: "finding", id: "wantFps" },
+    ]);
+    // Every offered intent is reachable, and the path always ends on that finding.
+    for (const f of PALETTE_INTENT_FINDINGS) {
+      const p = pathToFinding(f, Q);
+      expect(p, f).not.toBeNull();
+      expect(p![0]).toEqual({ kind: "question", id: INTERVIEW_ROOT });
+      expect(p![p!.length - 1]).toEqual({ kind: "finding", id: f });
     }
   });
 });

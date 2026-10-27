@@ -32,6 +32,14 @@
     "placeholder": "输入房间、仪器,或者哪里不对劲……",
     "settingsLabel": "设置",
     "settingsHint": "语言、更新,以及 Compy 被允许做什么",
+    "intentHint": "Compy 会根据这台电脑自己的读数来回答",
+    "group": {
+      "intent": "你的问题或目标",
+      "room": "房间",
+      "station": "测试工具",
+      "app": "应用",
+      "entry": "历史"
+    },
     "emptyTitle": "没有匹配“{{query}}”的结果",
     "emptyHint": "试试用大白话描述问题——“卡顿”“崩溃”“很吵”。",
     "footMove": "移动",

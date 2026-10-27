@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
-import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import { HomeRoom } from "./HomeRoom";
+import { INTERVIEW_ARRIVAL_KEY, INTERVIEW_ARRIVAL_TTL_MS, markInterviewArrival } from "./home-arrival";
 import { ShellV2 } from "../design/ShellV2";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import { railFor } from "../design/homeRail";
@@ -738,5 +739,63 @@ describe("copy honesty (pure data)", () => {
     for (const s of strings) {
       expect(s, `"${s}" names a room`).not.toMatch(/\b(Monitor|Blackbook|Lab|Live|History)\b/);
     }
+  });
+});
+
+// P7-palette (ROADMAP P7 bullet 1, Constitution §27): a plain problem typed into the command
+// palette lands on the interview's card for it — the same journey answering would reach — with
+// Back working, and the one action is the card's own (the palette fires nothing). Fails on the
+// code before this slice (the key is never read).
+describe("P7-palette: a typed problem lands on the interview's card for it", () => {
+  const findingCard = () => document.querySelector(".hi-finding") as HTMLElement | null;
+
+  it("an arrival written before Home mounts opens the interview at that finding, along its full path", () => {
+    markInterviewArrival("stutter");
+    renderHome();
+    const card = findingCard();
+    expect(card).not.toBeNull();
+    expect(document.querySelector(".hi-sentence")).not.toBeNull();
+    // The card's one action is the finding's own (P6-stutter / P7-route decide it), and it waits
+    // for the tap: nothing was fired by arriving.
+    expect(action()).not.toBeNull();
+    expect(action()!.textContent).toMatch(/\S/);
+    // Back is there: the path is the real one (start → slow → stutter), not a bare card.
+    expect(document.querySelector(".hi-back")).not.toBeNull();
+    fireEvent.click(document.querySelector(".hi-back") as HTMLElement);
+    const stutterChoice = Q.slow.choices.find((c) => c.next.kind === "finding" && c.next.id === "stutter")!;
+    expect(answerNamed(stutterChoice.label)).toBeTruthy();
+    // One-shot: the key is spent.
+    expect(localStorage.getItem(INTERVIEW_ARRIVAL_KEY)).toBeNull();
+  });
+
+  it("an arrival while Home is already up opens it too (the event), and a junk key opens nothing", () => {
+    renderHome();
+    expect(findingCard()).toBeNull();
+    act(() => markInterviewArrival("wantFps"));
+    expect(findingCard()).not.toBeNull();
+    expect(document.querySelector(".hi-sentence")!.textContent).toMatch(/\S/);
+    // A key that names no finding is cleared and ignored.
+    cleanup();
+    localStorage.setItem(INTERVIEW_ARRIVAL_KEY, "not-a-finding");
+    renderHome();
+    expect(findingCard()).toBeNull();
+    expect(localStorage.getItem(INTERVIEW_ARRIVAL_KEY)).toBeNull();
+  });
+
+  // Review r1 MUST-FIX 1/2: the interview switched off stays off for the palette, and a key left
+  // behind (Home couldn't mount, a flag flipped) never opens the sheet on a later visit.
+  it("with the interview switched off, an arrival is spent and opens nothing", () => {
+    localStorage.setItem("compy_home_interview", "0");
+    markInterviewArrival("stutter");
+    renderHomeRaw();
+    expect(findingCard()).toBeNull();
+    expect(localStorage.getItem(INTERVIEW_ARRIVAL_KEY)).toBeNull();
+  });
+
+  it("an arrival older than its shelf life is spent and opens nothing", () => {
+    markInterviewArrival("stutter", Date.now() - INTERVIEW_ARRIVAL_TTL_MS - 1_000);
+    renderHome();
+    expect(findingCard()).toBeNull();
+    expect(localStorage.getItem(INTERVIEW_ARRIVAL_KEY)).toBeNull();
   });
 });

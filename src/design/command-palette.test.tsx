@@ -7,6 +7,9 @@ import { join } from "path";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { CommandPalette } from "./CommandPalette";
 import { railFor, type HomeRailItem } from "./homeRail";
+import { buildPaletteIndex, filterPalette } from "./command-palette-data";
+import { paletteIntents } from "../surfaces/home-interview-data";
+import i18n from "../i18n";
 
 const railLabel = (item: HomeRailItem) => item.label;
 
@@ -96,6 +99,108 @@ describe("it routes through the host's writers — never its own navigation", ()
     fireEvent.click(rows()[0]);
     expect(order).toEqual(["close", "navigate"]);
     expect(p.onClose).toHaveBeenCalled();
+  });
+});
+
+// P7-palette (ROADMAP P7 bullet 1, Constitution §27): a plain problem typed here lands on the
+// interview's answer for it, above the instrument whose symptom line merely mentions the word.
+// The palette fires no action of its own: it hands the finding to the host, which opens the
+// interview at that card. Fails on the code before this slice (no intent rows).
+describe("P7-palette: plain problems land on the interview's answer", () => {
+  it("'stutter' ranks the stutter answer first and hands its finding to the host, after closing", () => {
+    const order: string[] = [];
+    const onOpenIntent = vi.fn(() => order.push("intent"));
+    const p = setup({ onOpenIntent, onClose: vi.fn(() => order.push("close")) });
+    type("stutter");
+    expect(rows()[0].textContent).toContain("It stutters");
+    expect(rows()[0].textContent).toContain("Compy answers from this PC's own readings");
+    fireEvent.click(rows()[0]);
+    expect(onOpenIntent).toHaveBeenCalledWith("stutter");
+    expect(order).toEqual(["close", "intent"]);
+    expect(p.onOpenStation).not.toHaveBeenCalled();
+  });
+
+  it("'crashed', 'more fps' and 'what changed' each land on their answer, not a door", () => {
+    const onOpenIntent = vi.fn();
+    setup({ onOpenIntent });
+    type("crashed");
+    expect(rows()[0].textContent).toContain("It crashed in a game");
+    type("more fps");
+    expect(rows()[0].textContent).toContain("I want more FPS");
+    type("what changed");
+    expect(rows()[0].textContent).toContain("What changed");
+    fireEvent.click(rows()[0]);
+    expect(onOpenIntent).toHaveBeenCalledWith("didItHelp");
+  });
+
+  it("with nothing typed the map still comes first: no intent row in the default view", () => {
+    setup({ onOpenIntent: vi.fn() });
+    expect(rows()[0].textContent).toContain("Health");
+    expect(rows().some((r) => r.textContent?.includes("It stutters"))).toBe(false);
+  });
+
+  it("the instrument is still offered under the answer, so a reader who wants the tool finds it", () => {
+    setup({ onOpenIntent: vi.fn() });
+    type("crashed");
+    expect(rows()[0].textContent).toContain("It crashed in a game");
+    // The crash instrument (its "reach for it when" line says "crashed") still appears below the
+    // answer — the row ids are the index keys.
+    expect(rows().slice(1).some((r) => r.id === "cp-station:blackbox")).toBe(true);
+  });
+
+  it("omits every intent when the host cannot open the interview", () => {
+    setup({ onOpenIntent: undefined });
+    type("stutter");
+    expect(rows().some((r) => r.textContent?.includes("It stutters"))).toBe(false);
+  });
+
+  // Review r1 §4/§5: a word that means one answer must not be pulled onto another by a shared
+  // keyword or a substring ("ram" inside "frames", "卡" on "more FPS"). Intents alone, so the
+  // collision is between answers, not with a door.
+  it("words that mean one answer land on that answer (en + zh-CN)", async () => {
+    const firstIntent = (q: string) =>
+      filterPalette(
+        buildPaletteIndex({ rail: [], railLabel: () => "", roomHint: () => "", intents: paletteIntents(i18n.t) }),
+        q,
+      )[0]?.action;
+    expect(firstIntent("ram")).toEqual({ kind: "intent", finding: "wantSpecs" });
+    expect(firstIntent("compare")).toEqual({ kind: "intent", finding: "didItHelp" });
+    expect(firstIntent("desktop")).toEqual({ kind: "intent", finding: "slowAlways" });
+    for (const q of ["stutter", "crashed", "more fps", "what changed"]) expect(firstIntent(q), q).toBeTruthy();
+    await i18n.changeLanguage("zh-CN");
+    try {
+      expect(firstIntent("卡")).not.toEqual({ kind: "intent", finding: "wantFps" });
+      expect(firstIntent("死机")).toEqual({ kind: "intent", finding: "crashAnytime" });
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  it("the group header is translated, like every other header (zh-CN)", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      setup({ onOpenIntent: vi.fn() });
+      type("fps");
+      const headers = [...document.querySelectorAll(".cp-group")].map((h) => h.textContent);
+      expect(headers).toContain("你的问题或目标");
+      expect(headers.every((h) => !/^(Your problem or goal|Rooms|Test instruments|App|History)$/.test(h ?? ""))).toBe(true);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  // Review r1 §7: the wiring the component tests can't see. App writes the arrival BEFORE it
+  // navigates, and offers intents only while the one reader (Home console + interview) exists;
+  // ShellV2 forwards the handler, or the group silently disappears.
+  it("App writes the arrival before navigating, only with the console and the interview on; ShellV2 forwards it", () => {
+    const app = readFileSync(join("src", "App.tsx"), "utf8");
+    const block = app.slice(app.indexOf("onOpenIntent={"), app.indexOf("onOpenIntent={") + 400);
+    expect(block).toMatch(/homeConsoleOn && homeInterviewOn\s*\?/);
+    expect(block.indexOf("markInterviewArrival(finding)")).toBeGreaterThan(-1);
+    expect(block.indexOf("markInterviewArrival(finding)")).toBeLessThan(block.indexOf('navHome("home")'));
+    expect(block).toMatch(/:\s*undefined/);
+    const shell = readFileSync(join("src", "design", "ShellV2.tsx"), "utf8");
+    expect(shell).toMatch(/onOpenIntent=\{onOpenIntent\}/);
   });
 });
 

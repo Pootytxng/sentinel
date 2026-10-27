@@ -22,10 +22,11 @@ import "../i18n";
 import type { HomeRailId, HomeRailItem } from "./homeRail";
 import { labStations, LAB_STATION_ORDER, type LabStationKey } from "../surfaces/lab-guided-data";
 import { KNOWLEDGE } from "../data/knowledge";
+import { paletteIntents, type InterviewFindingId } from "../surfaces/home-interview-data";
 import {
   buildPaletteIndex,
   filterPalette,
-  GROUP_LABEL,
+  GROUP_LABEL_KEY,
   GROUP_ORDER,
   type PaletteItem,
 } from "./command-palette-data";
@@ -44,6 +45,9 @@ export type CommandPaletteProps = {
   /** LibraryContext's openLibrary(focusId). Omitted → Blackbook entries are not indexed. */
   onOpenEntry?: (entryId: string) => void;
   onOpenSettings?: () => void;
+  /** P7-palette: opens the Home interview at a finding's card (App: mark the arrival, go Home).
+   *  Omitted → plain problems are not indexed. */
+  onOpenIntent?: (finding: InterviewFindingId) => void;
 };
 
 export function CommandPalette({
@@ -55,6 +59,7 @@ export function CommandPalette({
   onOpenStation,
   onOpenEntry,
   onOpenSettings,
+  onOpenIntent,
 }: CommandPaletteProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
@@ -85,8 +90,10 @@ export function CommandPalette({
         entries: onOpenEntry ? KNOWLEDGE : undefined,
         settingsLabel: onOpenSettings ? t("common.palette.settingsLabel") : undefined,
         settingsHint: t("common.palette.settingsHint"),
+        intents: onOpenIntent ? paletteIntents(t) : undefined,
+        intentHint: t("common.palette.intentHint"),
       }),
-    [rail, railLabel, onOpenStation, onOpenEntry, onOpenSettings, t],
+    [rail, railLabel, onOpenStation, onOpenEntry, onOpenSettings, onOpenIntent, t],
   );
 
   const results = useMemo(() => filterPalette(index, query), [index, query]);
@@ -134,6 +141,9 @@ export function CommandPalette({
         break;
       case "settings":
         onOpenSettings?.();
+        break;
+      case "intent":
+        onOpenIntent?.(item.action.finding);
         break;
     }
   };
@@ -213,7 +223,7 @@ export function CommandPalette({
           ) : (
             results.map((item, i) => {
               const header =
-                item.group !== lastGroup ? ((lastGroup = item.group), GROUP_LABEL[item.group]) : null;
+                item.group !== lastGroup ? ((lastGroup = item.group), t(GROUP_LABEL_KEY[item.group])) : null;
               return (
                 <div key={item.key}>
                   {header && <div className="cp-group">{header}</div>}

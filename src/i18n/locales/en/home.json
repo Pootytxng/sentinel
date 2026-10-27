@@ -163,6 +163,60 @@
         "unsure": "I am not sure — it just feels off"
       }
     },
+    "palette": {
+      "wantFps": {
+        "label": "I want more FPS",
+        "keywords": "more fps, higher fps, faster, boost, speed up, performance, optimize, fps"
+      },
+      "stutter": {
+        "label": "It stutters",
+        "keywords": "stutter, stutters, stuttering, hitch, hitches, hitching, choppy, fps drops, micro stutter, lag spikes, jitter"
+      },
+      "slowSometimes": {
+        "label": "Some games run slow",
+        "keywords": "slow, laggy, lag, low fps, choppy, certain games, one game, only in games"
+      },
+      "slowAlways": {
+        "label": "It is slow all the time",
+        "keywords": "slow, sluggish, laggy, desktop slow, everything slow, always slow, lag"
+      },
+      "crashInGame": {
+        "label": "It crashed in a game",
+        "keywords": "crash, crashed, crashes, froze, freeze, closed, game closed, kicked out, black screen"
+      },
+      "crashAnytime": {
+        "label": "It crashes any time",
+        "keywords": "crash, crashed, crashes, froze, freeze, restarted, blue screen, bsod, reboot, random"
+      },
+      "crashBoot": {
+        "label": "It crashes right after startup",
+        "keywords": "crash, boot, startup, start up, restart loop, won't start, freeze at login"
+      },
+      "heat": {
+        "label": "It runs hot or loud",
+        "keywords": "hot, heat, temperature, temp, fans, fan loud, noisy, loud, thermal, throttle, throttling, overheating"
+      },
+      "didItHelp": {
+        "label": "What changed — did it help?",
+        "keywords": "what changed, did it help, changed something, since it last worked, before and after, compare"
+      },
+      "wantMonitor": {
+        "label": "Watch my FPS while I play",
+        "keywords": "watch fps, overlay, on screen, live fps, fps counter, hud, monitor, readout"
+      },
+      "wantScores": {
+        "label": "See how my PC scores",
+        "keywords": "score, scores, benchmark, test, rating, how good is my pc"
+      },
+      "wantSpecs": {
+        "label": "What is in my PC",
+        "keywords": "specs, parts, hardware, what gpu, what cpu, ram, my pc, components, system info"
+      },
+      "sweep": {
+        "label": "Just look it over",
+        "keywords": "check, checkup, look over, scan, something feels off, health, anything wrong"
+      }
+    },
     "f": {
       "ev": {
         "readiness": "{{passed}} of {{total}} startup checks pass right now.",

@@ -277,6 +277,73 @@ export function groupChoices(choices: InterviewChoice[], t: TFunction): Intervie
   return groups.filter((g) => g.choices.length > 0);
 }
 
+// ── P7-palette: the interview's answers as command-palette intents ─────────────────────────────
+// ROADMAP P7 bullet 1, Constitution §27: typing a plain problem ("it stutters", "it crashed",
+// "more fps", "what changed") lands on the SAME journey as answering the interview — the palette
+// opens the interview at that finding's card, and the card's one action is the P7-route action.
+// The palette never fires an action itself, so a mutating finding (the fast path) still shows its
+// undo line and waits for the tap. The "not sure" answers are not intents: nobody types "not sure"
+// to find them, and the interview's own question is the honest way to reach them.
+
+/** One palette row per finding: the plain words someone would type for it. */
+export type PaletteIntent = {
+  finding: InterviewFindingId;
+  /** The plain problem or wish, short ("It stutters", "More FPS"). */
+  label: string;
+  /** Other words the same person might type (synonyms, symptoms). */
+  keywords: string[];
+};
+
+/** The findings the palette offers, in the order the interview's own tree reaches them. */
+export const PALETTE_INTENT_FINDINGS: InterviewFindingId[] = [
+  "wantFps",
+  "stutter",
+  "slowSometimes",
+  "slowAlways",
+  "crashInGame",
+  "crashAnytime",
+  "crashBoot",
+  "heat",
+  "didItHelp",
+  "wantMonitor",
+  "wantScores",
+  "wantSpecs",
+  "sweep",
+];
+
+export function paletteIntents(t: TFunction): PaletteIntent[] {
+  return PALETTE_INTENT_FINDINGS.map((finding) => ({
+    finding,
+    label: t(`home.interview.palette.${finding}.label`),
+    keywords: String(t(`home.interview.palette.${finding}.keywords`))
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  }));
+}
+
+/** The full interview path to a finding — root question, any question between, the finding —
+ *  so a palette landing reads like an answered interview (breadcrumb and Back work as usual).
+ *  null when the tree does not reach it (a guard would have to be wrong for that). */
+export function pathToFinding(
+  finding: InterviewFindingId,
+  questions: Record<InterviewQuestionId, InterviewQuestion>,
+): InterviewStep[] | null {
+  const walk = (id: InterviewQuestionId, trail: InterviewStep[]): InterviewStep[] | null => {
+    const here: InterviewStep[] = [...trail, { kind: "question", id }];
+    for (const c of questions[id].choices) {
+      if (c.next.kind === "finding") {
+        if (c.next.id === finding) return [...here, c.next];
+      } else if (!here.some((s) => s.kind === "question" && s.id === c.next.id)) {
+        const deeper = walk(c.next.id, here);
+        if (deeper) return deeper;
+      }
+    }
+    return null;
+  };
+  return walk(INTERVIEW_ROOT, []);
+}
+
 // ── The live facts a finding is allowed to speak from ───────────────────────────────────────────
 // Every field here is something the caller ALREADY holds. This module opens no new probe and adds
 // no IPC; it is a different sentence over the same readings the room is already rendering.
