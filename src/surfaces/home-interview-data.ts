@@ -31,6 +31,7 @@ import type { LabStationKey } from "./lab-guided-data";
 import type { HomeIntakeRoom } from "./home-intake-data";
 import { knownFps } from "../lib/session-metrics";
 import { readIntelligence } from "../design/theme";
+import { confidenceWordKey, wordFromFinding } from "../data/confidence-word";
 
 // ── The question tree ───────────────────────────────────────────────────────────────────────────
 
@@ -626,7 +627,7 @@ export function interviewFinding(
   return {
     id,
     level,
-    levelLabel: k(`level.${level}`),
+    levelLabel: t(confidenceWordKey(wordFromFinding(level))),
     sentence,
     evidence: ev,
     action,

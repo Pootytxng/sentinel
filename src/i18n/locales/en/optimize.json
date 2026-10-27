@@ -139,7 +139,6 @@
     "turnItBackOn": "Turn it back on",
     "turnTitleOn": "Turn “{{title}}” on",
     "gameModeDriftedNote": "Heads-up: Game Mode keeps switching off because your recording software (AMD Adrenalin) resets it at every restart — turning it on works, but it won't stick.",
-    "confidenceTag": "{{level}} confidence",
     "startupLimiterReason": "These launch with Windows and use memory and CPU before a game ever opens. Turn off the ones you don't need — nothing gets uninstalled, they just stop auto-starting. Reversible anytime.",
     "turningOffEllipsis": "Turning off…",
     "turnOffAtStartup": "Turn off at startup",
@@ -395,7 +394,6 @@
     }
   },
   "whatChangedPanel": {
-    "confidenceTag": "{{level}} confidence",
     "evidence": "Evidence",
     "arguesAgainst": "What argues against it",
     "notRecorded": "Not recorded",

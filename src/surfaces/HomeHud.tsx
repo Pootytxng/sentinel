@@ -26,6 +26,7 @@ import { useV2Accent } from "./HomeV2";
 import CountUp from "../design/vendor/CountUp/CountUp";
 import ElectricBorder from "../design/vendor/ElectricBorder/ElectricBorder";
 import "./home-hud.css";
+import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
 // HomeHud — the pure Instrument-HUD pilot (spec 2026-07-05-ui-deslop-organic-directive,
 // LOCKED direction CORRECTED: editorial retired; flag DEFAULT OFF). The whole room reads as
@@ -736,7 +737,7 @@ export function HomeHud({
                   >
                     {i === 0
                       ? t("home.homeHud.docket.biggestLimiter")
-                      : t("home.homeHud.docket.confidenceTag", { level: l.confidence })}
+                      : <span data-confidence={l.confidence} title={t(confidenceHintKey(wordFromBand(l.confidence)))}>{t(confidenceWordKey(wordFromBand(l.confidence)))}</span>}
                   </span>
                   <button type="button" className="hud-btn hud-btn-ghost" onClick={onSeeInFix}>
                     {t("home.homeHud.docket.seeIn", { room: fixRoomLabel })}

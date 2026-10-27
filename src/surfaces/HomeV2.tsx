@@ -26,6 +26,7 @@ import CountUp from "../design/vendor/CountUp/CountUp";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import SpotlightCard from "../design/vendor/SpotlightCard/SpotlightCard";
 import "./home-v2.css";
+import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
 // HomeV2 (V2-3, spec 2026-07-02-v2-shell-sourcing-and-plan) — the Home room on the V2 shell,
 // laid out per the owner-approved mockup: verdict → hologram hero stage + stat column →
@@ -628,7 +629,7 @@ export function HomeV2({
                   >
                     {i === 0
                       ? t("home.homeV2.priorities.biggestLimiter")
-                      : t("home.homeV2.priorities.confidenceTag", { level: l.confidence })}
+                      : <span data-confidence={l.confidence} title={t(confidenceHintKey(wordFromBand(l.confidence)))}>{t(confidenceWordKey(wordFromBand(l.confidence)))}</span>}
                   </span>
                   <button type="button" className="hv2-btn hv2-btn-ghost" onClick={onSeeInFix}>
                     {t("home.homeV2.priorities.seeIn", { room: fixRoomLabel })}

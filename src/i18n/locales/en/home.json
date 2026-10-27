@@ -100,7 +100,6 @@
       "topLabel": "top limiter",
       "lastSessionLabel": "Last session",
       "seeIn": "See in {{room}}",
-      "confidenceTag": "{{level}} confidence",
       "none": "Nothing further — the verdict above covers it.",
       "pending": "Still reading this PC.",
       "lastSessionNone": "No before-and-after yet — play a monitored session.",
@@ -163,11 +162,6 @@
       }
     },
     "f": {
-      "level": {
-        "measured": "Measured",
-        "likely": "Likely",
-        "unknown": "Not measured yet"
-      },
       "ev": {
         "readiness": "{{passed}} of {{total}} startup checks pass right now.",
         "stackReady_one": "{{count}} safe change is ready to apply.",
@@ -337,7 +331,6 @@
       "note": "ranked for your hardware",
       "clean": "Nothing worth changing today — measured clean on this rig.",
       "biggestLimiter": "biggest limiter",
-      "confidenceTag": "{{level}} confidence",
       "seeIn": "See in {{room}}"
     }
   },
@@ -409,7 +402,6 @@
       "note": "ranked for your hardware, not generic advice",
       "clean": "Nothing worth changing today — measured clean on this rig. A lesser tool would invent something; Compy won't.",
       "biggestLimiter": "biggest limiter",
-      "confidenceTag": "{{level}} confidence",
       "seeIn": "See in {{room}}"
     }
   },

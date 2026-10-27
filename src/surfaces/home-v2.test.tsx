@@ -369,7 +369,7 @@ describe("HomeV2 — priorities rows", () => {
     useReduced();
     const { props } = mount();
     expect(screen.getByText("biggest limiter")).toBeTruthy();
-    expect(screen.getByText("medium confidence")).toBeTruthy();
+    expect(screen.getByText("Likely").getAttribute("data-confidence")).toBe("medium"); // P7-confidence
     fireEvent.click(screen.getAllByRole("button", { name: "See in Lab" })[0]);
     expect(props.onSeeInFix).toHaveBeenCalled();
   });

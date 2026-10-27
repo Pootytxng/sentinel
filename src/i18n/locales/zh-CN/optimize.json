@@ -124,7 +124,6 @@
     "turnItBackOn": "重新打开",
     "turnTitleOn": "打开「{{title}}」",
     "gameModeDriftedNote": "提示:游戏模式会不断被关闭,因为你的录制软件(AMD Adrenalin)每次重启都会重置它——打开是有效的,但无法保持开启。",
-    "confidenceTag": "{{level}} 置信度",
     "startupLimiterReason": "这些程序会随 Windows 启动,在游戏打开之前就占用内存和 CPU。关掉你不需要的——不会卸载任何东西,只是不再自动启动,随时可以恢复。",
     "turningOffEllipsis": "正在关闭…",
     "turnOffAtStartup": "禁止开机启动",
@@ -372,7 +371,6 @@
     }
   },
   "whatChangedPanel": {
-    "confidenceTag": "{{level}} 置信度",
     "evidence": "证据",
     "arguesAgainst": "反面证据",
     "notRecorded": "未记录",

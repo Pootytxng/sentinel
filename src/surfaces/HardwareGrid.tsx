@@ -20,6 +20,7 @@ import { fmtGB, fmtGHz } from "./hardware-format";
 import { rigTierLine } from "../data/rig-tier";
 import { Term } from "../design/Term";
 import { useIntelligenceFlag } from "../design/use-hud";
+import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
 // The detailed "Your hardware" card grid — the SINGLE source every Home surface renders, so they
 // can never drift (the regression this restores: the grid once lived only in the classic Overview,
@@ -182,7 +183,7 @@ function CardEvidence({ ev }: { ev: ComponentEvidence }) {
     <details className={`hw-evi hw-evi-${ev.confidence}`}>
       <summary className="hw-evi-summary">
         <span className="hw-evi-band">
-          {t("gaming.hardwareGrid.confidenceSuffix", { level: ev.confidence })}
+          <span data-confidence={ev.confidence} title={t(confidenceHintKey(wordFromBand(ev.confidence)))}>{t(confidenceWordKey(wordFromBand(ev.confidence)))}</span>
         </span>
         <span className="hw-evi-headline">{ev.headline}</span>
       </summary>

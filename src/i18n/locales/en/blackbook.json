@@ -140,13 +140,6 @@
     }
   },
   "patternsTile": {
-    "confidenceLevel": {
-      "unknown": "unknown",
-      "low": "low",
-      "medium": "medium",
-      "high": "high"
-    },
-    "confidenceLabel": "{{level}} confidence",
     "hideTheWorking": "Hide the working",
     "whyWeThinkSo": "Why we think so",
     "evidenceLabel": "Evidence",

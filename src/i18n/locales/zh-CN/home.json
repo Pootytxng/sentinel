@@ -96,7 +96,6 @@
       "topLabel": "首要限制因素",
       "lastSessionLabel": "上次会话",
       "seeIn": "在「{{room}}」中查看",
-      "confidenceTag": "{{level}} 置信度",
       "none": "没有更多发现——上方的结论已经说明。",
       "pending": "正在读取这台电脑。",
       "lastSessionNone": "还没有前后对比——先进行一次受监控的游戏会话。",
@@ -157,11 +156,6 @@
       }
     },
     "f": {
-      "level": {
-        "measured": "已实测",
-        "likely": "可能",
-        "unknown": "尚未实测"
-      },
       "ev": {
         "readiness": "当前 {{total}} 项启动检查中有 {{passed}} 项通过。",
         "stackReady_other": "有 {{count}} 项安全改动可以应用。",
@@ -323,7 +317,6 @@
       "note": "根据你的硬件排序",
       "clean": "今天没有需要更改的地方——这台主机测得很干净。",
       "biggestLimiter": "最大限制因素",
-      "confidenceTag": "{{level}} 置信度",
       "seeIn": "在「{{room}}」中查看"
     }
   },
@@ -390,7 +383,6 @@
       "note": "根据你的硬件排序,而非泛泛而谈",
       "clean": "今天没有需要更改的地方——这台主机测得很干净。换成其他工具可能会硬凑一个问题出来,但 Compy 不会。",
       "biggestLimiter": "最大限制因素",
-      "confidenceTag": "{{level}} 置信度",
       "seeIn": "在「{{room}}」中查看"
     }
   },

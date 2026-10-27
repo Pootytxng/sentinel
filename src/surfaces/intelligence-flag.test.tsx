@@ -223,9 +223,9 @@ describe("WhatChangedPanel — compy_intelligence default ON", () => {
       "1% lows improved 10.1% vs your previous Valorant session. Most likely: GPU driver updated (medium confidence).",
     );
     expect(container.textContent).toContain("Most likely cause");
-    expect(container.querySelector(".wcp-hypo-lead .wcp-hypo-conf")?.textContent).toBe(
-      "medium confidence",
-    );
+    // P7-confidence: the hypothesis band reads as the one vocabulary word; the raw band is kept.
+    expect(container.querySelector(".wcp-hypo-lead .wcp-hypo-conf")?.textContent).toBe("Likely");
+    expect(container.querySelector(".wcp-hypo-lead .wcp-hypo-conf [data-confidence]")?.getAttribute("data-confidence")).toBe("medium");
     expect(container.textContent).toContain("Next test");
     // The working stays folded behind the §7 disclosure until asked.
     expect(container.querySelector(".wcp-detail-toggle")?.textContent).toContain(

@@ -206,7 +206,6 @@
   },
   "hardwareGrid": {
     "nextTestLabel": "Next test",
-    "confidenceSuffix": "{{level}} confidence",
     "rigTierLabel": "Rig tier",
     "rigTierValue": {
       "Entry": "Entry",

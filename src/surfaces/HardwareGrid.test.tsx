@@ -415,8 +415,11 @@ describe("HardwareGrid component-evidence highlight (§4H)", () => {
     expect(lit).toHaveLength(1);
     expect(lit[0].querySelector(".card-label")?.textContent).toContain("Memory");
 
-    // The band pill states the inherited band verbatim; the reason renders; the next test is offered.
-    expect(screen.getByText("medium confidence")).toBeTruthy();
+    // P7-confidence (Constitution §25): the pill says the ONE vocabulary word for the band — a medium
+    // band is a supported inference, "Likely" — and keeps the raw band on data-confidence for the
+    // technical layer; the reason renders; the next test is offered.
+    const pill = screen.getByText("Likely");
+    expect(pill.getAttribute("data-confidence")).toBe("medium");
     expect(screen.getByText(/trended upward across your recent sessions/)).toBeTruthy();
     expect(screen.getByText("Next test")).toBeTruthy();
     expect(screen.getByText(/controlled before\/after/)).toBeTruthy();
@@ -452,8 +455,15 @@ describe("HardwareGrid component-evidence highlight (§4H)", () => {
     state.evidence = { components: [memEvi({ confidence: "low" })], sessions_considered: 2 };
     const { container } = render(<HardwareGrid hw={baseHw()} model={baseModel()} />);
 
-    await screen.findByText("low confidence");
-    const evi = container.querySelector(".hw-evi");
+    // A low band is not enough to lean on: "Unknown" (§26), raw band kept.
+    const evi = await waitFor(() => {
+      const el = container.querySelector(".hw-evi");
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    const band = evi.querySelector(".hw-evi-band [data-confidence]")!;
+    expect(band.textContent).toBe("Unknown");
+    expect(band.getAttribute("data-confidence")).toBe("low");
     expect(evi?.classList.contains("hw-evi-low")).toBe(true);
     expect(evi?.classList.contains("hw-evi-medium")).toBe(false);
   });
