@@ -370,7 +370,15 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       "noise floor" (25 en strings), "frametime" (10) and bare "1% low" (67) get plain words or a `Term`
       gloss on the answer and explanation layers; exact terms stay in the receipt. Locale JSON + call sites;
       no new guard. Needs P7-depth-verdicts. ROADMAP P7 exit; Constitution §3, §13.
-- [ ] **P7-confidence** One user-facing confidence vocabulary from Constitution §25: Known / Measured / Likely
+- [x] **P7-confidence** (`f0fd750d`, feat `7b55540b`; visual self-review owed at FULL) `src/data/confidence-word.ts`:
+      inference bands (limiter rows, What-changed hypotheses, hardware evidence, Blackbook patterns) read
+      Likely for high/medium and Unknown for low/unknown; provenance reads Known / Measured / Expected, else
+      Unknown; the interview's level maps 1:1 ("Not measured yet" → Unknown, §26). Seven raw "{{level}}
+      confidence" tags and the interview chip replaced; raw band kept on `data-confidence`; a title hint
+      says what the word qualifies ("the reading is measured; what it means here is inferred, not proven").
+      Retired keys removed (en + zh-CN; zh Likely = 较可能); affordance census re-recorded for the deliberate
+      retirement. Review (1 round, APPROVE, SHOULD-FIX hint taken). Guards: confidence-word.test.ts + 5
+      surface assertions. Full desk suite 523 files / 10708 green. One user-facing confidence vocabulary from Constitution §25: Known / Measured / Likely
       / Expected / Unknown, one helper in `src/data/` with en + zh-CN keys. Replace the six
       "{{level}} confidence" tags that print raw high/medium/low (`home.json` ×3, `optimize.json` ×2,
       `gaming.json` `confidenceSuffix`, `blackbook.json` `confidenceLabel`) and the interview's
@@ -382,7 +390,12 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       `verdictTone` (`benchmark-view.ts`) use `danger` for "Hurt — reverted" and "regressed"; danger stays for
       a harmful state still on the machine; check `status.ts` "Critical" has no other user. `Benchmark.tsx`,
       `TwoFutures.tsx`. ROADMAP P7 bullet 7; Constitution §34, §26. Parallel-safe.
-- [ ] **P7-score** The Home/Lab readiness ring counts unreadable checks as failures (`readinessScore` subtracts
+- [x] **P7-score** (`d2f5b002`, fix `81ccb193`; visual self-review owed at FULL) HomeConsole: readable = checks −
+      unknown; score = passed / readable, null when nothing was readable; note "13 of 14 checks passed · 2
+      couldn't be read"; with nothing readable the reason is said beside the not-yet ring; grade words Good /
+      Fair / Worth a look (zh 良好 / 尚可 / 值得看看); the interview's readiness fact counts "of" the readable
+      checks. Not changed: HomeHud / HomeV2 pilots' own counters; LabConsole derives no ring. Guard in
+      home-console.test.tsx fails on the old code (81 "FAIR" for 13/16 with 2 unread). The Home/Lab readiness ring counts unreadable checks as failures (`readinessScore` subtracts
       `unknown_count`) and grades < 70 "NEEDS WORK": leave unknowns out of the ratio and say "N couldn't be
       read"; calm grade words; the formula line stays. `HomeConsole.tsx` ~624-660, `command-center-data.ts`,
       LabConsole's same derivation, `home.json` `readinessGrade`. Needs P7-confidence (HomeConsole).
@@ -483,6 +496,10 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   (APPROVE + 4 SHOULD-FIX taken); visual self-review owed (FULL). Not pushed.
 - 2026-10-27 ~12:45–13:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-jargon `a49b2128` (copy
   `94000540`); tsc 0; FULL vitest on the desk 522 files / 10032 tests, exit 0; copy only, no review round.
+  Not pushed.
+- 2026-10-27 ~13:20–14:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-confidence `f0fd750d` (feat
+  `7b55540b`), FULL vitest 523 files / 10708, exit 0, one review round (APPROVE + SHOULD-FIX taken);
+  P7-score `d2f5b002` (fix `81ccb193`), FULL vitest 523 files / 10709, exit 0. Visual self-review owed (FULL).
   Not pushed.
 
 ## Done
