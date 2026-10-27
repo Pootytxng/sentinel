@@ -659,22 +659,16 @@ export function HomeConsole({
   // which CPU is in the socket — only the ramp is generic, and gradeCpuTempC says so.
   const cpuTempGrade = gradeCpuTempC(cpuTemp?.temp_c ?? null);
 
-  // Readiness reuses the same ready/total ratio the Command Center's signal ring derives (no
-  // invented 0–100 "score") — LabConsole's exact derivation; null while checks are running.
+  // Readiness is the share of checks Compy could READ that passed (no invented 0–100 "score").
+  // P7-score (Constitution §34, §26): a check Compy could not read is not a failing check — it is
+  // left out of the ratio and said as "N couldn't be read" beside the number, so the ring never
+  // grades the PC down for what Compy couldn't see. Null while checks are running, and null when
+  // nothing could be read at all (a ring over zero readable checks would be a made-up number).
   const readinessKnown = !!readiness && readiness.checks.length > 0;
-  const readinessScore = readinessKnown
-    ? Math.round(
-        (100 *
-          Math.max(0, readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count)) /
-          readiness!.checks.length,
-      )
-    : null;
-  const checksGood = readinessKnown
-    ? Math.max(
-        0,
-        readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count,
-      )
-    : 0;
+  const checksUnread = readinessKnown ? readiness!.unknown_count : 0;
+  const checksReadable = readinessKnown ? Math.max(0, readiness!.checks.length - checksUnread) : 0;
+  const checksGood = readinessKnown ? Math.max(0, checksReadable - readiness!.attention_count) : 0;
+  const readinessScore = readinessKnown && checksReadable > 0 ? Math.round((100 * checksGood) / checksReadable) : null;
   /**
    * THE READINESS BAND — the one word 01-health-approved.png prints beside the ring.
    *
@@ -685,9 +679,11 @@ export function HomeConsole({
    * never a claim about the machine beyond it. Null score (checks still running, or none at
    * all) yields NO grade — the gauge falls back to its honest not-yet state.
    *
-   *   >= 90  GOOD        at 16 checks that is at most one imperfect check
-   *   >= 70  FAIR        a handful want a look; the room still works
-   *    < 70  NEEDS WORK  a third or more are failing or unreadable
+   *   >= 90  Good          at 16 readable checks that is at most one imperfect check
+   *   >= 70  Fair          a handful want a look; the room still works
+   *    < 70  Worth a look  a third or more of the readable checks want attention
+   * (P7-score: the words are calm — a grade is a share of checks, not a verdict on the PC — and
+   *  unreadable checks are outside the ratio, named beside it.)
    */
   const readinessGrade =
     readinessScore == null
@@ -856,11 +852,9 @@ export function HomeConsole({
         : null,
     readiness: readinessKnown
       ? {
-          passed: Math.max(
-            0,
-            readiness!.checks.length - readiness!.attention_count - readiness!.unknown_count,
-          ),
-          total: readiness!.checks.length,
+          passed: checksGood,
+          // P7-score: "of" the checks Compy could read; unreadable ones are not counted against the PC.
+          total: checksReadable,
           attention: readiness!.attention_count,
         }
       : null,
@@ -1218,13 +1212,18 @@ export function HomeConsole({
                   gradeTone={readinessGrade?.tone}
                   note={
                     readinessKnown
-                      ? t("home.homeConsole.stage.readinessNote", {
-                          passed: checksGood,
-                          total: readiness!.checks.length,
-                        })
+                      ? [
+                          t("home.homeConsole.stage.readinessNote", { passed: checksGood, total: checksReadable }),
+                          ...(checksUnread > 0 ? [t("home.homeConsole.stage.readinessUnread", { count: checksUnread })] : []),
+                        ].join(" · ")
                       : undefined
                   }
                 />
+                {/* P7-score: with NOTHING readable the ring is honestly not-yet (the gauge drops its
+                    note in that state), so the reason is said here instead of nowhere. */}
+                {readinessKnown && readinessScore == null && checksUnread > 0 && (
+                  <span className="hc-read-unread">{t("home.homeConsole.stage.readinessUnread", { count: checksUnread })}</span>
+                )}
               </div>
               <Reading
                 id="avgFps"

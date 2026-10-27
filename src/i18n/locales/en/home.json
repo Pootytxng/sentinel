@@ -78,10 +78,12 @@
     "stage": {
       "readinessLabel": "Readiness",
       "readinessNote": "{{passed}} of {{total}} checks passed",
+      "readinessUnread_one": "{{count}} couldn't be read",
+      "readinessUnread_other": "{{count}} couldn't be read",
       "readinessGrade": {
-        "good": "GOOD",
-        "fair": "FAIR",
-        "poor": "NEEDS WORK"
+        "good": "Good",
+        "fair": "Fair",
+        "poor": "Worth a look"
       },
       "avgFps": "Avg FPS",
       "onePercentLow": "1% low",
