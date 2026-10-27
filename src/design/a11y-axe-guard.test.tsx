@@ -30,6 +30,7 @@ import { RoomAccentPicker } from "./RoomAccentPicker";
 import { Walkthrough } from "./Walkthrough";
 import { WalkthroughDisclosure } from "./WalkthroughDisclosure";
 import { Depth, ReceiptRow } from "./Depth";
+import { LessonLine } from "./LessonLine";
 import { Term, GlossText } from "./Term";
 import { ConfirmProvider, useConfirm } from "./ConfirmDialog";
 import { LibraryContext } from "../surfaces/library-context";
@@ -184,6 +185,13 @@ const ROSTER: Array<[name: string, node: ReactNode]> = [
   ],
   ["TrustCue", <TrustCue title="Reversible" detail="Compy saved what this was before changing it." />],
   ["WhatsThis", <WhatsThis id="vrr" onOpen={() => {}} />],
+  // P7-teach: label · sentence · a link button described by the sentence (aria-describedby).
+  [
+    "LessonLine",
+    <LibraryContext.Provider value={{ openLibrary: () => {} }}>
+      <LessonLine rule="steadier-not-faster" testId="a11y-lesson" sentence="With Game Mode, 1% lows rose and the average barely moved: Elden Ring got steadier, not faster." />
+    </LibraryContext.Provider>,
+  ],
   ["KonamiWhisper", <KonamiWhisper />],
   [
     "LedgerHealthNotice",
