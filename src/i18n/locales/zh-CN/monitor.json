@@ -260,6 +260,16 @@
     "reverting": "撤销中…",
     "revertIt": "撤销它——不丢人",
     "honestTally": "诚实结论：1 次 · 虚假胜利：0 次",
+      "receipt": {
+        "change": "更改",
+        "game": "游戏",
+        "baselineAvg": "之前，平均",
+        "afterAvg": "之后，平均",
+        "baselineLow": "之前，1% low",
+        "afterLow": "之后，1% low",
+        "verdict": "判定",
+        "kind": "对比类型"
+      },
     "verdict": {
       "background": {
         "headline": "未评级",
