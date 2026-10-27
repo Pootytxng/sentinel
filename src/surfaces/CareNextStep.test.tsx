@@ -511,6 +511,7 @@ describe("P7-depth: the next step's technical receipt", () => {
     expect([...dl.querySelectorAll("dd")].every((dd) => dd.textContent!.trim() !== "")).toBe(true);
     // The explanation says why, in plain words, and names the kind.
     fireEvent.click(box.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
+    await waitFor(() => expect(box.querySelector(".bb-next-why")).not.toBeNull());
     expect(box.querySelector(".bb-next-why")!.textContent).toMatch(/newest crash record is tagged App crash/);
     expect(box.querySelector(".bb-next-why")!.textContent).toMatch(/safe first thing to check/);
   });
@@ -525,6 +526,9 @@ describe("P7-depth: the next step's technical receipt", () => {
     fireEvent.click(screen.getByRole("button", { name: /scan/i }));
     await waitFor(() => expect(first.container.querySelector(".bb-next")).not.toBeNull());
     fireEvent.click(first.container.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
+    // The explanation mounts on the details' toggle, which jsdom delivers on a later task: wait for it
+    // (desk full-suite flake under load, 2026-10-27) rather than read it in the same tick.
+    await waitFor(() => expect(first.container.querySelector(".bb-next-why")).not.toBeNull());
     expect(first.container.querySelector(".bb-next-why")!.textContent).toMatch(/lead worth researching/);
     expect(first.container.querySelector(".bb-next-why")!.textContent).not.toMatch(/safe first thing/);
     cleanup();
@@ -537,6 +541,7 @@ describe("P7-depth: the next step's technical receipt", () => {
     // The stop code the user is told to share is in the answer, before any tap.
     expect(second.container.querySelector(".bb-next-detail:not(.bb-next-beyond)")!.textContent).toBe("Stop code 0x133.");
     fireEvent.click(second.container.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
+    await waitFor(() => expect(second.container.querySelector(".bb-next-why")).not.toBeNull());
     expect(second.container.querySelector(".bb-next-why")!.textContent).toMatch(/beyond what Compy can safely narrow down/);
     expect(second.container.querySelector(".bb-next-why")!.textContent).not.toMatch(/safe first thing/);
   });
