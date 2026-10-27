@@ -686,7 +686,9 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
     const row = c.querySelector(".hc-limiter")!;
     expect(row).not.toBeNull();
     expect(row.textContent).toContain("C: drive is 87% full");
-    expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("high confidence");
+    // P7-confidence: a high inference band reads "Likely" (one vocabulary); the band stays on data-confidence.
+    expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Likely");
+    expect(row.querySelector(".hc-limiter-tag [data-confidence]")!.getAttribute("data-confidence")).toBe("high");
     fireEvent.click(row.querySelector("button")!);
     expect(jump).toHaveBeenCalled();
   });

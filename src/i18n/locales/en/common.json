@@ -128,6 +128,20 @@
     "schematicNote": "Schematic — menus vary slightly by version.",
     "openIt": "Open it"
   },
+  "confidenceHint": {
+    "known": "Compy read this directly on your PC.",
+    "measured": "Measured on this PC, before and after.",
+    "likely": "The reading is measured; what it means here is inferred from the evidence, not proven.",
+    "expected": "From how Windows works, not measured on this PC.",
+    "unknown": "Not enough evidence yet to say."
+  },
+  "confidenceWord": {
+    "known": "Known",
+    "measured": "Measured",
+    "likely": "Likely",
+    "expected": "Expected",
+    "unknown": "Unknown"
+  },
   "depth": {
     "why": "Why this, for this PC",
     "receipt": "Technical receipt"

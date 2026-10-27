@@ -23,6 +23,7 @@ import { knownFps } from "../lib/session-metrics";
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
 import { eventText } from "./event-text";
+import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
 // Intelligence Phase 1 — the "What changed?" panel (Monitor session debrief slot). Renders the
 // deterministic Rust engine's verdict for THIS session vs the previous session of the same game:
@@ -60,7 +61,7 @@ function HypothesisBlock({ h, lead }: { h: IntelHypothesis; lead: boolean }) {
       <div className="wcp-hypo-head">
         <span className="wcp-hypo-title">{h.title}</span>
         <span className="wcp-hypo-conf">
-          {t("optimize.whatChangedPanel.confidenceTag", { level: h.confidence })}
+          <span data-confidence={h.confidence} title={t(confidenceHintKey(wordFromBand(h.confidence)))}>{t(confidenceWordKey(wordFromBand(h.confidence)))}</span>
         </span>
       </div>
       {h.supporting_evidence.length > 0 && (

@@ -133,13 +133,6 @@
     "tapeMore_one": "显示另外 {{count}} 条记录"
   },
   "patternsTile": {
-    "confidenceLevel": {
-      "unknown": "未知",
-      "low": "低",
-      "medium": "中",
-      "high": "高"
-    },
-    "confidenceLabel": "{{level}}置信度",
     "hideTheWorking": "收起推理过程",
     "whyWeThinkSo": "我们为什么这么判断",
     "evidenceLabel": "依据",

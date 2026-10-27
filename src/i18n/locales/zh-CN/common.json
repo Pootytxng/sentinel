@@ -126,6 +126,20 @@
     "schematicNote": "示意图——菜单可能因版本略有不同。",
     "openIt": "打开"
   },
+  "confidenceHint": {
+    "known": "Compy 直接在这台电脑上读到的。",
+    "measured": "在这台电脑上前后实测过。",
+    "likely": "读数是实测的；它在这里意味着什么是根据证据推断的，并未证实。",
+    "expected": "来自 Windows 的工作原理，未在这台电脑上实测。",
+    "unknown": "证据还不够，无法下结论。"
+  },
+  "confidenceWord": {
+    "known": "已知",
+    "measured": "已实测",
+    "likely": "较可能",
+    "expected": "预期",
+    "unknown": "未知"
+  },
   "depth": {
     "why": "为什么对这台电脑推荐这一步",
     "receipt": "技术回执"

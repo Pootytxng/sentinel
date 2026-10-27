@@ -21,6 +21,7 @@ import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
 import "./Check.css";
+import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
 // Structural subset of App's GpuInfo — driver freshness needs only name + age (object covariance).
 type GpuDriverInfo = { name: string; driver_age_days: number | null };
@@ -306,7 +307,6 @@ export default function Check({
   const alreadyFine = priorities?.already_fine ?? [];
   const notWorth = priorities?.not_worth_touching ?? [];
   const checkDrifts = (readiness?.drifts ?? []).filter((d) => d.id !== "applied-changes");
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
   // Advisory tuning nudge (spec 2026-06-08) — appears ONLY when recent sessions ran sustained-warm
   // (bathroom law: signposted at the moment of need, never a standing "try undervolting!" banner).
@@ -712,7 +712,7 @@ export default function Check({
                         <div className="check-row-head">
                           <span className="check-row-title">{lim.title}</span>
                           <span className="check-conf">
-                            {t("optimize.check.confidenceTag", { level: cap(lim.confidence) })}
+                            <span data-confidence={lim.confidence} title={t(confidenceHintKey(wordFromBand(lim.confidence)))}>{t(confidenceWordKey(wordFromBand(lim.confidence)))}</span>
                           </span>
                         </div>
                         <p className="check-row-reason">{t("optimize.check.startupLimiterReason")}</p>
@@ -747,7 +747,7 @@ export default function Check({
                       <div className="check-row-head">
                         <span className="check-row-title">{lim.title}</span>
                         <span className="check-conf">
-                          {t("optimize.check.confidenceTag", { level: cap(lim.confidence) })}
+                          <span data-confidence={lim.confidence} title={t(confidenceHintKey(wordFromBand(lim.confidence)))}>{t(confidenceWordKey(wordFromBand(lim.confidence)))}</span>
                         </span>
                       </div>
                       <p className="check-row-reason">{lim.reason}</p>

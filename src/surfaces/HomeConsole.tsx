@@ -51,6 +51,7 @@ import {
   type InterviewStep,
 } from "./home-interview-data";
 import "./home-console.css";
+import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
 // HomeConsole — Home as the console cold-open (plan 2026-07-10-console-hud-phase2-home,
 // Phase 2 of the Console HUD; design source 2026-07-09-compy-console-hud-direction, owner-
@@ -1325,7 +1326,7 @@ export function HomeConsole({
                 <span className="hc-limiter-label">{t("home.homeConsole.limiter.topLabel")}</span>
                 <span className="hc-limiter-title">{topLimiter.title}</span>
                 <span className="hc-limiter-tag hc-mono">
-                  {t("home.homeConsole.limiter.confidenceTag", { level: topLimiter.confidence })}
+                  <span data-confidence={topLimiter.confidence} title={t(confidenceHintKey(wordFromBand(topLimiter.confidence)))}>{t(confidenceWordKey(wordFromBand(topLimiter.confidence)))}</span>
                 </span>
                 <button type="button" className="hc-btn hc-btn-ghost" onClick={onSeeInFix}>
                   {t("home.homeConsole.limiter.seeIn", { room: fixRoomLabel })}

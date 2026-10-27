@@ -204,7 +204,6 @@
   },
   "hardwareGrid": {
     "nextTestLabel": "下一步验证",
-    "confidenceSuffix": "{{level}} 置信度",
     "rigTierLabel": "配置等级",
     "rigTierValue": {
       "Entry": "入门级",

@@ -8,6 +8,7 @@ import { prettyGameName } from "../game-name";
 import { BentoTile } from "../../design/bento/BentoGrid";
 import "../../i18n";
 import "./patterns-tile.css";
+import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../../data/confidence-word";
 
 // Intelligence Phase 2 — cross-session pattern detection, surfaced in Blackbook (§5E: the room that
 // holds the historical record). The deterministic Rust detectors (intelligence_patterns.rs) read
@@ -34,9 +35,7 @@ function PatternCard({ p, expert }: { p: SessionPattern; expert: boolean }) {
           {p.game && <span className="bpt-card-game">{prettyGameName(p.game) || p.game}</span>}
         </div>
         <span className="bpt-card-conf">
-          {t("blackbook.patternsTile.confidenceLabel", {
-            level: t(`blackbook.patternsTile.confidenceLevel.${p.confidence}`),
-          })}
+          <span data-confidence={p.confidence} title={t(confidenceHintKey(wordFromBand(p.confidence)))}>{t(confidenceWordKey(wordFromBand(p.confidence)))}</span>
         </span>
       </div>
       <p className="bpt-card-detail">{p.detail}</p>
