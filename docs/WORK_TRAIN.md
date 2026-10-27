@@ -161,6 +161,13 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       ~125 B/session; between-session pacing band). Store per-frame frame times (or a percentile spread) per session and measure the
       spread's session-to-session noise; then offer Smoothest.
 - [ ] **P4-smooth-offer** Offer Smoothest for a game once `between_session_pacing_noise` (p99/p50 band) is measured for it; judge against that band (ratios carry ~±1% bucket error: a spread under ~2% is at the resolution limit).
+      Scoped 2026-10-27 (skipped for P7-depth: not one bounded session). Split before starting: **-a** (Rust,
+      measurement; review: one Rust agent) `experiment.rs` `start_experiment` admits "smoothest" only when
+      `between_session_pacing_noise` is `Some` for the game, and `conclude` judges the treatment's p99/p50
+      against the baseline's beyond that band (floor 2%); verdict rows record the band used; unit tests for
+      admit/refuse and improved/no-change/regressed at the band edges. **-b** (TS) the bench's Smoothest option
+      reads a new read-only field from `get_trial_candidates` (or the gate) saying whether it is measured for
+      this game, and its "held" reason names what is missing; `ExperimentBench.test.tsx`.
 - [x] **P4-next** `abd4c883`: after a Trial, offer the next untested change (offer only); none left =
       "Nothing else here is worth testing on this PC" as success. Tested = a verdict on this game in experiments.json.
 - [x] **P4-next-f1** `1fc5026c`: picker marks tested changes ("· Tested: <verdict>") after untested ones.
@@ -321,7 +328,18 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       "I changed something — did it help?" opens "What Compy tested" or "Since it last worked", not Benchmark.
       `home-interview-data.ts`, `App.tsx` `openLabStation`, `LabConsole.tsx` mount effect, a one-shot arrival
       key beside `care-arrival.ts`, `GuidedJourney.tsx`. ROADMAP P7 bullet 1; Constitution §3, §11, §27.
-- [ ] **P7-depth** One shared Answer / Explanation / Technical receipt block in `src/design/` (answer always
+- [x] **P7-depth** (`7530677e`, feat `4306036b`; visual self-review owed at the next FULL session, CODE-ONLY run)
+      `src/design/Depth.tsx` + `Depth.css`: answer always shown; explanation one tap ("Why this, for this
+      PC", or the adopter's own label); receipt one more tap; Expert view opens both by default and follows
+      the toggle live; children mount only while open; `ReceiptRow` never shows a blank field; a11y rostered,
+      mono on values only. Adopters: `CareNextStep` (answer = step + its own instruction + measured payoff;
+      explanation = why, with safe / research / beyond and stored-stutter variants, the source, final read;
+      receipt = the exact recorded fields) and `CareHonestEnd` (answer = no step + what adds evidence;
+      explanation = why none; no receipt — the gaps are its whole state). Review (1 round, 3 MUST-FIX +
+      5 SHOULD-FIX, all taken): the why over-claimed "safe first check" and "latest comparison"; the detail
+      (stop code) had gone behind a tap. Taste calls recorded: payoff in the answer; two hairline doors
+      inside the block, not boxed. Proof: tsc 0; 87 files / 958 tests on the touched suites (desk + Linux);
+      full desk suite under the landing. One shared Answer / Explanation / Technical receipt block in `src/design/` (answer always
       shown; explanation one tap; receipt one more tap, or open by default under Expert view via
       `use-expert-view.ts`). First adopter: `CareNextStep.tsx` + `CareHonestEnd.tsx`. No new data.
       ROADMAP P7 bullet 2; Constitution §13. Parallel-safe (new component + Care files only).
@@ -431,6 +449,11 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   port put back (no-debug-port CLEAN). Not seen live: the dark-bench Home sentence (this PC's bench is
   armed; unit-tested only). Noted, not changed: display mode shows "@250" without a Hz unit (pre-existing).
   RELEASE_STATE row + anchors updated (verify-release-state: 0 state-drift). Walkthrough-ready; pushed.
+
+- 2026-10-27 ~07:20–08:20 (interactive from Claude HQ, CODE-ONLY, owner playing): P7-depth `7530677e` (feat
+  `4306036b`); P4-smooth-offer scoped and split (-a Rust / -b TS), not started; tsc 0; FULL vitest on the
+  desk 522 files / 10699 tests, exit 0; one review round, 3 MUST-FIX + 5 SHOULD-FIX taken; visual
+  self-review owed (FULL). Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
