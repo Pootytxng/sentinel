@@ -463,7 +463,10 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
     const second = render(<BlackBox />);
     await waitFor(() => expect(second.container.querySelector(".bb-next")?.getAttribute("data-source")).toBe("stutter"));
     await waitFor(() => expect(entry().finalView).toBeDefined());
-    fireEvent.click(second.container.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
+    const door1 = second.container.querySelector('[data-testid="bb-next-depth-why"] > summary')!;
+    fireEvent.click(door1);
+    // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
+    await waitFor(() => expect(door1.parentElement!.children.length).toBeGreaterThan(1));
     expect(second.container.querySelector(".bb-next-final")).not.toBeNull();
     expect(entry().retired).toBeUndefined();
   });
@@ -493,7 +496,10 @@ describe("P7-depth: the next step's technical receipt", () => {
     expect(box.querySelector(".bb-next-headline")!.textContent).toBe("Check the driver");
     expect(box.querySelector(".bb-next-payoff")).not.toBeNull();
     expect(box.querySelector(".bb-next-receipt")).toBeNull();
-    fireEvent.click(box.querySelector('[data-testid="bb-next-depth-receipt"] > summary')!);
+    const door2 = box.querySelector('[data-testid="bb-next-depth-receipt"] > summary')!;
+    fireEvent.click(door2);
+    // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
+    await waitFor(() => expect(door2.parentElement!.children.length).toBeGreaterThan(1));
     const dl = box.querySelector(".bb-next-receipt")!;
     const rows = Object.fromEntries([...dl.querySelectorAll("dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]));
     expect(rows).toMatchObject({
