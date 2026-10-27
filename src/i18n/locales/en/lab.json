@@ -646,8 +646,8 @@
     "summary": {
       "label": "What Compy tested on {{game}}",
       "finishedSupportedTests": "Compy finished the supported tests for {{game}} on this PC: every change it lists as worth testing here has a measured result.",
-      "worthRetesting_one": "{{count}} result on {{game}} needs another run before it counts: it was too noisy to judge, or it was judged under an older graphics driver or Windows build.",
-      "worthRetesting_other": "{{count}} results on {{game}} need another run before they count: too noisy to judge, or judged under an older graphics driver or Windows build.",
+      "worthRetesting_one": "{{count}} result on {{game}} needs another run before it counts: {{why}}.",
+      "worthRetesting_other": "{{count}} results on {{game}} need another run before they count: {{why}}.",
       "stillWorth_one": "{{count}} more change is still worth testing on {{game}}, so this isn't finished yet.",
       "stillWorth_other": "{{count}} more changes are still worth testing on {{game}}, so this isn't finished yet.",
       "unknownLeft": "Compy couldn't read which changes are still worth testing, so it can't say whether anything is left.",
@@ -674,8 +674,8 @@
       "retestLabel": "Worth another run:",
       "retestRow": "{{title}} ({{why}})",
       "retestWhy": {
-        "inconclusive": "too noisy to judge last time",
-        "stale": "judged under an older graphics driver or Windows build",
+        "inconclusive": "couldn't be judged last time",
+        "stale": "judged under a different graphics driver, Windows build or GPU",
         "unverified": "can't be tied to this PC as it is now"
       },
       "unjudgedLabel_one": "{{count}} change this PC couldn't judge after two runs:",
@@ -684,7 +684,8 @@
       "staleKeptLabel_other": "{{count}} kept changes were judged under an older graphics driver or Windows build (put them back, then test again):",
       "skippedLabel": "Not tested, and why ({{count}})",
       "noiseLabel": "Noise band:",
-      "contextLabel": "Measured on:",
+      "contextLabel": "Last recorded context ({{when}}):",
+      "contextLabelUndated": "Last recorded context:",
       "contextDriver": "driver {{driver}}",
       "contextWindows": "Windows build {{build}}",
       "contextSeparator": " · ",

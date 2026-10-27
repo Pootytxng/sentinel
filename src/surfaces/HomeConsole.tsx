@@ -445,7 +445,9 @@ export function HomeConsole({
       try {
         armed = await invoke<boolean>("get_experiment_gate");
         if (!armed) {
-          if (live) setInterviewTrials({ armed: false, judged: 0 });
+          // Round 4 review: a dark bench is "testing unavailable", not an empty history. The records
+          // are not read, so the count stays unknown; the interview says the bench is off.
+          if (live) setInterviewTrials({ armed: false, judged: null });
           return;
         }
         const exps = await invoke<SummaryExperiment[] | null>("get_experiments");

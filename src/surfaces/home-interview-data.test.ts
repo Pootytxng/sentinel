@@ -430,8 +430,16 @@ describe("answers land on the journey that answers them", () => {
       expect(f.sentence).not.toMatch(/has not measured/);
       expect(f.level).not.toBe("measured");
     }
-    // A bench that positively read as dark IS a confirmed empty history: "not measured yet" is honest there.
-    expect(find("didItHelp", { ...RICH, trials: { armed: false, judged: 0 } }).sentence).toBe(t("home.interview.f.didItHelp.sentenceSince"));
+    // Round 4 review: a bench that read as dark is "testing unavailable", NOT a confirmed empty
+    // history — its records were never read (HomeConsole leaves `judged` null there). Fails before
+    // this fix ("has not measured a change" was said without reading anything).
+    const dark = find("didItHelp", { ...RICH, trials: { armed: false, judged: null } });
+    expect(dark.sentence).toBe(t("home.interview.f.didItHelp.sentenceUnavailableSince"));
+    expect(dark.sentence).not.toMatch(/has not measured|couldn't read/);
+    expect(dark.action.kind === "station" ? [dark.action.station, dark.action.arrival] : [dark.action.kind]).toEqual(["blackbox", "since"]);
+    expect(dark.level).not.toBe("measured");
+    // Only an ARMED bench whose records were read as empty is "not measured yet".
+    expect(find("didItHelp", { ...RICH, trials: { armed: true, judged: 0 } }).sentence).toBe(t("home.interview.f.didItHelp.sentenceSince"));
   });
 
   it("never sends either answer to a room the rail does not render", () => {

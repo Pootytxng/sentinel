@@ -25,9 +25,8 @@
 import type { SessionSummary } from "../types";
 import {
   contextCheckFor,
-  inconclusiveRunsOf,
   isMeasuredVerdict,
-  unverifiedRunsOf,
+  unusableRunsOf,
   judgedAt,
   RETEST_CAP,
   stillAppliedFrom,
@@ -103,12 +102,14 @@ export function retestReasonFor(
 ): RetestReason | null {
   const newest = runs[runs.length - 1];
   if (!newest) return null;
-  if (!isMeasuredVerdict(newest.verdict)) return inconclusiveRunsOf(runs, matchOf) < RETEST_CAP ? "inconclusive" : null;
+  // Round 3 MUST-FIX 1 + round 4 review: attempts that gave nothing usable (judged nothing, or
+  // measured under an unverified context) draw on ONE budget, so alternating the two reasons reaches
+  // the cap too. The reason named is the newest attempt's; the budget is shared.
+  const spent = unusableRunsOf(runs, matchOf) >= RETEST_CAP;
+  if (!isMeasuredVerdict(newest.verdict)) return spent ? null : "inconclusive";
   const m = matchOf(newest.baseline_session_id);
   if (m === "changed") return "stale";
-  // Round 3 review MUST-FIX 1: an unverified result is offered again at most RETEST_CAP times in a row;
-  // after that this PC evidently isn't recording its context, and another run would not change that.
-  return m === "unverified" && unverifiedRunsOf(runs, matchOf) < RETEST_CAP ? "unverified" : null;
+  return m === "unverified" && !spent ? "unverified" : null;
 }
 
 /**

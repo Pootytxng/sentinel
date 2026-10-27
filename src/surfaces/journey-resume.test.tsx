@@ -406,6 +406,26 @@ describe("truthful completion: the journey never counts an attempt or a stale re
     expect(journeyProgress("Valorant", then, [HAGS], [BEFORE, AFTER])).toMatchObject({ tested: 1, inconclusive: 0, next: null });
   });
 
+  // REVIEW ROUND 4 (2026-10-27): the reviewer alternated "measured but unverified" and "too noisy" on
+  // fresh baselines with no recorded context, six times, and was offered a run every time: the two
+  // counters reset each other. ONE budget now. Fails on the code before this fix.
+  it("round 4: alternating unverified and inconclusive attempts stop the offer at the shared cap", () => {
+    // No sessions recorded a context: every measured result is unverified.
+    const m1 = measured("exp:1", "2026-10-20T12:00:00Z");
+    const n2 = noisy("exp:2", "2026-10-21T12:00:00Z");
+    const m3 = measured("exp:3", "2026-10-22T12:00:00Z");
+    const n4 = noisy("exp:4", "2026-10-23T12:00:00Z");
+    expect(nextToTest("Valorant", [m1], [HAGS])).toMatchObject({ id: "hags", retest: "unverified" });
+    expect(nextToTest("Valorant", [m1, n2], [HAGS])).toBeNull();
+    expect(nextToTest("Valorant", [m1, n2, m3], [HAGS])).toBeNull();
+    expect(nextToTest("Valorant", [m1, n2, m3, n4], [HAGS])).toBeNull();
+    // The other order too: noisy, then measured-unverified.
+    expect(nextToTest("Valorant", [n2, m3], [HAGS])).toBeNull();
+    // A measured result under a matching context resets the budget: the next noisy run is offered once.
+    expect(nextToTest("Valorant", [m1, n2, m3, n4], [HAGS], [BEFORE, AFTER])).toMatchObject({ id: "hags", retest: "inconclusive" });
+    expect(journeyProgress("Valorant", [m1, n2, m3, n4], [HAGS])).toMatchObject({ tested: 0, inconclusive: 1, unverified: 0, next: null });
+  });
+
   it("Optimize says a retest is a retest, and how many tries judged nothing", async () => {
     state.experiments = [noisy("exp:1-0", "2026-10-20T12:00:00Z")];
     state.recs = [HAGS];
