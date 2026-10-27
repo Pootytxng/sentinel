@@ -17,7 +17,7 @@ import { RoomShell } from "../design/room-shell";
 import { RoomEyebrow } from "../design/room-eyebrow";
 import { useReducedMotion } from "../design/use-motion";
 import { useIntelligenceFlag, useHomeInterviewFlag } from "../design/use-hud";
-import { readHologramV2 } from "../design/theme";
+import { readHologramV2, readHomeInterview } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
@@ -482,8 +482,14 @@ export function HomeConsole({
   // rect: the sheet grows from nowhere in particular, exactly as if there were no door to grow from.
   useEffect(() => {
     const land = () => {
+      // Consumed first, whatever happens next: a key nobody acts on must not wait for a later visit.
       const finding = takeInterviewArrival();
       if (!finding) return;
+      // The interview switched off (compy_home_interview "0") is off for the palette too — read at
+      // arrival time, so a flip in Settings since this mount is honoured (review r1, MUST-FIX 2).
+      if (!readHomeInterview()) return;
+      // `interviewQuestions` is read only for the tree's ids, which no language changes, so the
+      // first render's `t` captured here is enough.
       const path = pathToFinding(finding, interviewQuestions(t));
       if (!path) return; // the tree doesn't reach it: stay put rather than open a card out of nowhere
       setInterviewOrigin(null);
@@ -493,7 +499,7 @@ export function HomeConsole({
     land();
     window.addEventListener(INTERVIEW_ARRIVAL_EVENT, land);
     return () => window.removeEventListener(INTERVIEW_ARRIVAL_EVENT, land);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `t` is stable per language; the key is one-shot
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot key; `t` only feeds the tree's ids (see above)
   }, []);
   // Whether the one-tap safe stack has already been applied in THIS visit. The finding card reads
   // it to stop offering an apply that has landed, instead of re-offering work that is done.

@@ -56,10 +56,13 @@ export type PaletteItem = {
 
 /** Group ordering + base weight. Rooms and instruments outrank the corpus — see rule 1 above. */
 const GROUP_WEIGHT: Record<PaletteGroup, number> = {
-  // P7-palette: an intent sits between rooms and instruments. With no query the map (rooms) still
-  // comes first; once a word matches, an intent's label hit (+60/+100) carries it past an
-  // instrument's keyword hit (+30) and a room's hint hit (+15), so typing a problem lands on its
-  // answer rather than on a door — rule 2 above, taken to the interview.
+  // P7-palette: an intent sits between rooms and instruments. Intents are left out of the untyped
+  // view, so the map still opens first. Per matched word: an intent label hit scores 410 (450 when
+  // the label starts with it), a keyword hit 380; an instrument keyword hit 330, its label hit 360;
+  // a room hint hit 415, its label hit 460. So a problem typed in the intent's own words ("stutter",
+  // "crashed", "more fps", "what changed" — pinned in command-palette.test.tsx) lands on its answer,
+  // a room's NAME still wins, and a word that only a room's hint and an intent's keywords share
+  // ("undo") stays with the room. Rule 2 above, taken to the interview.
   intent: 350,
   room: 400,
   station: 300,
@@ -67,12 +70,14 @@ const GROUP_WEIGHT: Record<PaletteGroup, number> = {
   entry: 0,
 };
 
-export const GROUP_LABEL: Record<PaletteGroup, string> = {
-  intent: "Ask Compy",
-  room: "Rooms",
-  station: "Test instruments",
-  app: "App",
-  entry: "History",
+/** The group header's copy key (common.palette.group.*). Through i18n since P7-palette (review r1:
+ *  these headers were English-only in zh-CN). */
+export const GROUP_LABEL_KEY: Record<PaletteGroup, string> = {
+  intent: "common.palette.group.intent",
+  room: "common.palette.group.room",
+  station: "common.palette.group.station",
+  app: "common.palette.group.app",
+  entry: "common.palette.group.entry",
 };
 
 /** Rooms are ordered by the rail; everything else follows the group order. */

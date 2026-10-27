@@ -33,6 +33,13 @@
     "settingsLabel": "Settings",
     "settingsHint": "language, updates, and what Compy is allowed to do",
     "intentHint": "Compy answers from this PC's own readings",
+    "group": {
+      "intent": "Your problem or goal",
+      "room": "Rooms",
+      "station": "Test instruments",
+      "app": "App",
+      "entry": "History"
+    },
     "emptyTitle": "Nothing matches \"{{query}}\"",
     "emptyHint": "Try what's wrong in plain words — \"stutter\", \"crashed\", \"loud\".",
     "footMove": "move",

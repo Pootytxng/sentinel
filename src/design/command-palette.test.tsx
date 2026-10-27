@@ -7,6 +7,9 @@ import { join } from "path";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { CommandPalette } from "./CommandPalette";
 import { railFor, type HomeRailItem } from "./homeRail";
+import { buildPaletteIndex, filterPalette } from "./command-palette-data";
+import { paletteIntents } from "../surfaces/home-interview-data";
+import i18n from "../i18n";
 
 const railLabel = (item: HomeRailItem) => item.label;
 
@@ -149,6 +152,55 @@ describe("P7-palette: plain problems land on the interview's answer", () => {
     setup({ onOpenIntent: undefined });
     type("stutter");
     expect(rows().some((r) => r.textContent?.includes("It stutters"))).toBe(false);
+  });
+
+  // Review r1 §4/§5: a word that means one answer must not be pulled onto another by a shared
+  // keyword or a substring ("ram" inside "frames", "卡" on "more FPS"). Intents alone, so the
+  // collision is between answers, not with a door.
+  it("words that mean one answer land on that answer (en + zh-CN)", async () => {
+    const firstIntent = (q: string) =>
+      filterPalette(
+        buildPaletteIndex({ rail: [], railLabel: () => "", roomHint: () => "", intents: paletteIntents(i18n.t) }),
+        q,
+      )[0]?.action;
+    expect(firstIntent("ram")).toEqual({ kind: "intent", finding: "wantSpecs" });
+    expect(firstIntent("compare")).toEqual({ kind: "intent", finding: "didItHelp" });
+    expect(firstIntent("desktop")).toEqual({ kind: "intent", finding: "slowAlways" });
+    for (const q of ["stutter", "crashed", "more fps", "what changed"]) expect(firstIntent(q), q).toBeTruthy();
+    await i18n.changeLanguage("zh-CN");
+    try {
+      expect(firstIntent("卡")).not.toEqual({ kind: "intent", finding: "wantFps" });
+      expect(firstIntent("死机")).toEqual({ kind: "intent", finding: "crashAnytime" });
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  it("the group header is translated, like every other header (zh-CN)", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      setup({ onOpenIntent: vi.fn() });
+      type("fps");
+      const headers = [...document.querySelectorAll(".cp-group")].map((h) => h.textContent);
+      expect(headers).toContain("你的问题或目标");
+      expect(headers.every((h) => !/^(Your problem or goal|Rooms|Test instruments|App|History)$/.test(h ?? ""))).toBe(true);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  // Review r1 §7: the wiring the component tests can't see. App writes the arrival BEFORE it
+  // navigates, and offers intents only while the one reader (Home console + interview) exists;
+  // ShellV2 forwards the handler, or the group silently disappears.
+  it("App writes the arrival before navigating, only with the console and the interview on; ShellV2 forwards it", () => {
+    const app = readFileSync(join("src", "App.tsx"), "utf8");
+    const block = app.slice(app.indexOf("onOpenIntent={"), app.indexOf("onOpenIntent={") + 400);
+    expect(block).toMatch(/homeConsoleOn && homeInterviewOn\s*\?/);
+    expect(block.indexOf("markInterviewArrival(finding)")).toBeGreaterThan(-1);
+    expect(block.indexOf("markInterviewArrival(finding)")).toBeLessThan(block.indexOf('navHome("home")'));
+    expect(block).toMatch(/:\s*undefined/);
+    const shell = readFileSync(join("src", "design", "ShellV2.tsx"), "utf8");
+    expect(shell).toMatch(/onOpenIntent=\{onOpenIntent\}/);
   });
 });
 

@@ -26,7 +26,7 @@ import { paletteIntents, type InterviewFindingId } from "../surfaces/home-interv
 import {
   buildPaletteIndex,
   filterPalette,
-  GROUP_LABEL,
+  GROUP_LABEL_KEY,
   GROUP_ORDER,
   type PaletteItem,
 } from "./command-palette-data";
@@ -223,7 +223,7 @@ export function CommandPalette({
           ) : (
             results.map((item, i) => {
               const header =
-                item.group !== lastGroup ? ((lastGroup = item.group), GROUP_LABEL[item.group]) : null;
+                item.group !== lastGroup ? ((lastGroup = item.group), t(GROUP_LABEL_KEY[item.group])) : null;
               return (
                 <div key={item.key}>
                   {header && <div className="cp-group">{header}</div>}

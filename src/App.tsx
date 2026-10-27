@@ -20,6 +20,7 @@ import { fmtGB } from "./surfaces/hardware-format";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { HomeRoom } from "./surfaces/HomeRoom";
 import { markInterviewArrival } from "./surfaces/home-arrival";
+import { useHomeConsoleFlag, useHomeInterviewFlag } from "./design/use-hud";
 import { TrustMoment } from "./surfaces/TrustMoment";
 import { FirstWin } from "./surfaces/FirstWin";
 import { MonitorV2 } from "./surfaces/MonitorV2";
@@ -567,6 +568,11 @@ function App() {
   );
   const [showEncyclopedia, setShowEncyclopedia] = useState(false);
   const [libraryFocusId, setLibraryFocusId] = useState<string | null>(null);
+  // P7-palette: only the Home console reads an interview arrival, and only with the interview on.
+  // Either off → the palette offers no plain-problem rows (no dead doors, and no key left waiting
+  // for a reader that will never mount).
+  const homeConsoleOn = useHomeConsoleFlag();
+  const homeInterviewOn = useHomeInterviewFlag();
   const libraryApi = useMemo(
     () => ({
       openLibrary: (focusId?: string) => {
@@ -1454,10 +1460,15 @@ function App() {
           // P7-palette: a typed problem lands on the interview's card for it — the arrival is
           // written BEFORE Home is navigated to (the same order every station deep-link keeps), and
           // the Home console reads it once, on mount or on the arrival event when it is already up.
-          onOpenIntent={(finding) => {
-            markInterviewArrival(finding);
-            navHome("home");
-          }}
+          // Offered only while that reader exists (console + interview on).
+          onOpenIntent={
+            homeConsoleOn && homeInterviewOn
+              ? (finding) => {
+                  markInterviewArrival(finding);
+                  navHome("home");
+                }
+              : undefined
+          }
         >
           {/* The OptimizeV2 keepalive stood here until the generation prune (2026-08-06). There is no
               Optimize ROOM any more — the rail has no `fix` door and the Optimize station lives inside

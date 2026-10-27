@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { render, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import { HomeRoom } from "./HomeRoom";
-import { INTERVIEW_ARRIVAL_KEY, markInterviewArrival } from "./home-arrival";
+import { INTERVIEW_ARRIVAL_KEY, INTERVIEW_ARRIVAL_TTL_MS, markInterviewArrival } from "./home-arrival";
 import { ShellV2 } from "../design/ShellV2";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import { railFor } from "../design/homeRail";
@@ -762,7 +762,8 @@ describe("P7-palette: a typed problem lands on the interview's card for it", () 
     // Back is there: the path is the real one (start → slow → stutter), not a bare card.
     expect(document.querySelector(".hi-back")).not.toBeNull();
     fireEvent.click(document.querySelector(".hi-back") as HTMLElement);
-    expect(answerNamed(Q.slow.choices[2].label)).toBeTruthy();
+    const stutterChoice = Q.slow.choices.find((c) => c.next.kind === "finding" && c.next.id === "stutter")!;
+    expect(answerNamed(stutterChoice.label)).toBeTruthy();
     // One-shot: the key is spent.
     expect(localStorage.getItem(INTERVIEW_ARRIVAL_KEY)).toBeNull();
   });
@@ -776,6 +777,23 @@ describe("P7-palette: a typed problem lands on the interview's card for it", () 
     // A key that names no finding is cleared and ignored.
     cleanup();
     localStorage.setItem(INTERVIEW_ARRIVAL_KEY, "not-a-finding");
+    renderHome();
+    expect(findingCard()).toBeNull();
+    expect(localStorage.getItem(INTERVIEW_ARRIVAL_KEY)).toBeNull();
+  });
+
+  // Review r1 MUST-FIX 1/2: the interview switched off stays off for the palette, and a key left
+  // behind (Home couldn't mount, a flag flipped) never opens the sheet on a later visit.
+  it("with the interview switched off, an arrival is spent and opens nothing", () => {
+    localStorage.setItem("compy_home_interview", "0");
+    markInterviewArrival("stutter");
+    renderHomeRaw();
+    expect(findingCard()).toBeNull();
+    expect(localStorage.getItem(INTERVIEW_ARRIVAL_KEY)).toBeNull();
+  });
+
+  it("an arrival older than its shelf life is spent and opens nothing", () => {
+    markInterviewArrival("stutter", Date.now() - INTERVIEW_ARRIVAL_TTL_MS - 1_000);
     renderHome();
     expect(findingCard()).toBeNull();
     expect(localStorage.getItem(INTERVIEW_ARRIVAL_KEY)).toBeNull();
