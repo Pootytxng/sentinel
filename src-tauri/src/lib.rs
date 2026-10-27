@@ -115,17 +115,14 @@ use winreg::RegKey;
 /// APIs like notifications without an injected handle.
 static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 
-/// Fire the session-end "debrief ready" toast. A read-only nudge — it never opens or focuses a
-/// window; the user opens Compy's Sessions tab themselves. No-op until the app handle is set.
-pub(crate) fn notify_debrief_ready(game: &str) {
+/// Fire the session-end toast with `body` (`experiment::SessionEndNotice::body`). Only a session
+/// that settles a decision or a state change gets here (P7-notify, `experiment::session_end_notice`).
+/// A read-only nudge — it never opens or focuses a window; the user opens Compy themselves. No-op
+/// until the app handle is set.
+pub(crate) fn notify_debrief_ready(body: &str) {
     use tauri_plugin_notification::NotificationExt;
     let Some(app) = APP_HANDLE.get() else {
         return;
-    };
-    let body = if game.is_empty() {
-        "Your session debrief is ready in Compy.".to_string()
-    } else {
-        format!("Your {game} debrief is ready in Compy.")
     };
     let _ = app.notification().builder().title("Session ended").body(body).show();
 }
