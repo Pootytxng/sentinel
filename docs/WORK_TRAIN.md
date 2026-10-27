@@ -212,6 +212,25 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       inconclusive), then said as unverified; `stop.unjudged` renamed `stop.noResult` (it is the uncapped
       count). Noted, not changed: "worth retesting" with only a set stale result is mitigated by the
       stale-kept line (pre-existing).
+- [x] **P4-exit-truth-f3** (3de75240, fix dcfc5d9f; the fourth review's one defect + three wordings, one
+      bounded pass). Defect: alternating "measured but unverified" and "too noisy" attempts never reached
+      the retest cap (each counter reset the other) → `unusableRunsOf` is the ONE budget (RETEST_CAP 2) for
+      every attempt that gave no result Compy can use now; summary (`unjudged`, retest offers) and journey
+      (`retestReasonFor`) draw on it; the reason named is the newest attempt's; a measured MATCHING result
+      resets it; "changed" attempts don't count (round-3 semantics kept). Wordings: the "worth retesting"
+      headline lists the reasons present through the row's own mapping; the §9 line is "Last recorded
+      context (<date>):" (`contextAt`), never "Measured on:"; Home: a bench read dark is "testing
+      unavailable" (`judged` stays null, `didItHelp.sentenceUnavailableSince`), not an empty history.
+      Caught on the way: two zh-CN Home strings were mojibake from f2's write (repaired), and the full
+      desk suite then showed the repo's own `scripts/encoding-guard.test.mjs` already catches exactly this
+      (it also flagged 3 comment spans in `CareNextStep.tsx` from an earlier round; repaired with
+      `node scripts/encoding-guard.mjs --fix` in the tick commit). Lesson, not a new guard: f1/f2 proved
+      only the touched suites; the FULL suite is the landing gate (a draft parallel mojibake test was
+      dropped — one monitor). Review (1 round, 1 MUST-FIX + 3 SHOULD-FIX, all taken in the same commit): the
+      headline counted/explained unverified rows the cap had stopped offering → from `retest` + `stale`
+      only; no "Invalid Date"; reasons say "couldn't be judged" and "a different driver, build or GPU".
+      Guards fail on the old code: summary 2, journey 1, bench 4, Home 1. Not pushed, not installed
+      (CODE-ONLY); the owner-and-friend walkthrough is the next investment, not code.
 - [ ] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "Compy finished the supported
       tests" with nothing worth another run; record it in BACKLOG as the Phase 4 exit.
 
@@ -395,6 +414,10 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
 - 2026-10-27 ~00:05–01:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f2 38e31fa0
   (the third review's four gaps + combination matrix); tsc 0, vitest 21 files / 475 passed on the desk;
   one review round, MUST-FIX + SHOULD-FIXes taken; not pushed.
+- 2026-10-27 ~02:30–03:40 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f3 3de75240
+  (the fourth review's alternating-retest defect + three wordings; zh-CN mojibake repaired); tsc 0, FULL
+  vitest on the desk 521 files pass + `encoding-guard` green after the tick commit's repair; one review
+  round, MUST-FIX + 3 SHOULD-FIXes taken; not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
