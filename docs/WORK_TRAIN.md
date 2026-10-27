@@ -434,7 +434,16 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       "what changed"): intent items reuse the interview finding actions from P7-route, so typing a symptom
       lands on the same journey as answering it. `command-palette-data.ts`, `CommandPalette.tsx`. Needs
       P7-route. ROADMAP P7 bullet 1; Constitution §27.
-- [ ] **P7-rig-limiter** The Home rig picks out the part the answer is about: the #1 limiter maps to a rig part
+- [x] **P7-rig-limiter** (`bf178ac5` + gate repair `9ef50adb`; feat `2678d781`, fix `2d0e3d3d`, `b72f3934`; visual
+      self-review owed at FULL — confirm the limiter highlight also opens the part's spec card on Home, intended)
+      `rig/limiter-part.ts`: `install-drive` → the ONE detected physical drive reporting media type HDD
+      (hardware.rs MediaType 3 → "HDD"); none/two HDDs, SSD-only or a volume fallback → no part; seven
+      setting/software ids → "away" (dim, `DIMMED_GLOW` 0.35 through the existing `glow`, fans excepted);
+      anything else → rig untouched. Drift guard parses priorities.rs so a new limiter id must be classified.
+      HomeConsole: the raw top attention limiter drives `selectedId` until the user picks or clears a part;
+      one line under the 3D stage ("the top thing Compy flagged is about this part" / "…is a setting or
+      software, not a part", en + zh-CN). Review: r1 REQUEST-CHANGES (wiring lost — see session log; wrong-
+      drive risk; copy overclaimed) → r2 APPROVE. Landing gate r22: tsc 0, 524 files / 10084. The Home rig picks out the part the answer is about: the #1 limiter maps to a rig part
       kind (`rig-parts.ts`), `RigHologram` highlights it through its existing `selectedId`; a limiter that is a
       setting or software dims the parts and says the evidence points away from hardware. `HomeConsole.tsx`
       stage, `rig-parts.ts`, `RigHologram.tsx`. Needs P7-score (HomeConsole). ROADMAP P7 bullet 4;
@@ -530,6 +539,12 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   r20 ran 10068 tests vs r19 10724: the whole gap is `scripts/main-module-idiom-guard.test.mjs` (2010 → 1338
   cases), which walks `.claude/` including `.claude/worktrees/*`, so its count tracks how many train worktrees
   exist (r19 had two, r20 one) — not lost coverage. Not pushed.
+- 2026-10-27 ~15:40–16:20 (interactive from Claude HQ, CODE-ONLY): P7-rig-limiter `bf178ac5` + `9ef50adb`; r21 caught
+  rgba() fallbacks under tokens-v2-guard → `b72f3934`; r22 FULL vitest 524 files / 10084, exit 0, tsc 0.
+  Lessons: (1) a pre-slice proof that swaps a file must run AFTER the commit — `git checkout -- <file>`
+  restores from the index, and 2678d781's unstaged HomeConsole wiring was overwritten that way (the
+  review caught it; tests that failed were the evidence). (2) Any v2 CSS edit puts
+  `src/design/tokens-v2-guard.test.ts` in the touched set. Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
