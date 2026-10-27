@@ -578,6 +578,8 @@
       "useKeep": "Use {{outcome}}: apply {{change}} again",
       "useOff": "Use {{outcome}}: undo {{change}}",
       "cantTell": "Compy can't read whether this change is on now, so it doesn't offer to switch.",
+      "keepStale": "The result that kept {{change}} under {{outcome}} came from a different graphics card, driver or Windows build. Test it again before Compy applies it on that basis.",
+      "keepUnverified": "The result that kept {{change}} under {{outcome}} can't be tied to this PC as it is now (no graphics driver or Windows build was recorded). Test it again before Compy applies it on that basis.",
       "notFound": "Compy couldn't confirm {{change}} is applied now, so nothing was undone. Check it in Test → Applied & history.",
       "busy": "Finish or stop the Trial in progress before switching."
     },
@@ -647,6 +649,9 @@
       "stillWorth_one": "{{count}} more change is still worth testing on {{game}}, so this isn't finished yet.",
       "stillWorth_other": "{{count}} more changes are still worth testing on {{game}}, so this isn't finished yet.",
       "unknownLeft": "Compy couldn't read which changes are still worth testing, so it can't say whether anything is left.",
+      "nothingTestableNow": "Nothing on {{game}} is left for Compy to test right now, but nothing was measured either: the tries it made couldn't be judged.",
+      "resultsUnverified_one": "Nothing on {{game}} is left for Compy to test right now. {{count}} result can't be tied to this PC as it is now (its test or your newest session recorded no graphics driver or Windows build), so Compy won't call it current.",
+      "resultsUnverified_other": "Nothing on {{game}} is left for Compy to test right now. {{count}} results can't be tied to this PC as it is now (their tests or your newest session recorded no graphics driver or Windows build), so Compy won't call them current.",
       "testedLabel": "Tested:",
       "trials_one": "tested {{count}} time",
       "trials_other": "tested {{count}} times",

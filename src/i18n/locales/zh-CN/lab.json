@@ -570,6 +570,8 @@
       "useKeep": "改用{{outcome}}：重新应用 {{change}}",
       "useOff": "改用{{outcome}}：撤销 {{change}}",
       "cantTell": "Compy 无法读取此更改当前是否开启，因此不提供切换。",
+      "keepStale": "在{{outcome}}下保留{{change}}的结果来自不同的显卡、驱动或 Windows 版本。请先重新测试，Compy 才会据此应用它。",
+      "keepUnverified": "在{{outcome}}下保留{{change}}的结果无法与这台电脑当前的状态对照（没有记录显卡驱动或 Windows 版本）。请先重新测试，Compy 才会据此应用它。",
       "notFound": "Compy 无法确认 {{change}} 当前已应用，因此没有撤销任何内容。请在 测试 → 已应用与历史 中检查。",
       "busy": "请先完成或停止正在进行的测试，再切换。"
     },
@@ -636,6 +638,8 @@
       "worthRetesting_other": "{{game}} 上有 {{count}} 项结果需要再跑一次才算数：当时噪音太大无法判断，或是在更旧的显卡驱动或 Windows 版本下测的。",
       "stillWorth_other": "{{game}} 上还有 {{count}} 项更改值得测试，所以还没有测完。",
       "unknownLeft": "Compy 无法读取哪些更改仍值得测试，所以无法判断是否还有剩余。",
+      "nothingTestableNow": "{{game}} 上现在没有 Compy 可以测试的项目了，但也没有测得任何结果：所做的尝试都无法判断。",
+      "resultsUnverified_other": "{{game}} 上现在没有 Compy 可以测试的项目了。有 {{count}} 项结果无法与这台电脑当前的状态对照（当时的测试或你最新的一局没有记录显卡驱动或 Windows 版本），所以 Compy 不会把它们当作当前有效。",
       "testedLabel": "已测试：",
       "trials_other": "测试了 {{count}} 次",
       "stillOn": "目前已应用。",

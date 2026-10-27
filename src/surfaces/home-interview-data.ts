@@ -309,11 +309,13 @@ export type InterviewFacts = {
   /**
    * P7-route: the Trial bench, read when the interview opens (`get_experiment_gate` +
    * `get_experiments`). `armed` is the bench's own gate — dark means no journey and no test
-   * summary render, so nothing may route to them. `judged` counts Trials with a verdict, the
-   * records "What Compy tested" is built from. Absent or null = not read (or the read failed),
-   * which routes the way a dark bench does: never to a panel that may not be there.
+   * summary render, so nothing may route to them. `judged` counts changes with a measured result,
+   * the records "What Compy tested" is built from; null = the records couldn't be read (follow-up
+   * review 2026-10-26 §5: "couldn't read" is said as that, never as "nothing measured"). Absent or
+   * null as a whole = not read at all, which routes the way a dark bench does: never to a panel that
+   * may not be there.
    */
-  trials?: { armed: boolean; judged: number } | null;
+  trials?: { armed: boolean; judged: number | null } | null;
 };
 
 // ── The finding card ────────────────────────────────────────────────────────────────────────────
@@ -405,7 +407,9 @@ export function interviewFinding(
       );
   };
   // P7-route: only a judged Trial on an armed bench is a tested change; anything else is not quoted.
-  const testedCount = facts.trials?.armed ? facts.trials.judged : 0;
+  // Follow-up review 2026-10-26 §5: a count that couldn't be read is UNKNOWN, kept apart from zero.
+  const testedCount = facts.trials?.armed ? (facts.trials.judged ?? 0) : 0;
+  const testedUnknown = facts.trials?.armed === true && facts.trials.judged == null;
   const benchArmed = facts.trials?.armed === true;
   const testedLine = () => {
     if (testedCount > 0) ev.push(k("ev.tested", { count: testedCount }));
@@ -588,8 +592,14 @@ export function interviewFinding(
       if (testedCount > 0 && reachable("lab", facts)) {
         sentence = k("didItHelp.sentenceTested");
         action = { kind: "room", label: k("act.whatTested"), room: "lab", arrival: "tested" };
+      } else if (testedUnknown && reachable("lab", facts)) {
+        // Follow-up review 2026-10-26 §5: the records couldn't be read. "You haven't measured this"
+        // and "I couldn't retrieve your measurements" are different statements; this is the second.
+        // The panel that reads the records itself is where to look.
+        sentence = k("didItHelp.sentenceUnread");
+        action = { kind: "room", label: k("act.whatTested"), room: "lab", arrival: "tested" };
       } else {
-        sentence = k("didItHelp.sentenceSince");
+        sentence = k(testedUnknown ? "didItHelp.sentenceUnreadSince" : "didItHelp.sentenceSince");
         const since = station("blackbox", "lab", k("act.sinceWorked"));
         action = since.kind === "station" ? { ...since, arrival: "since" } : since;
       }

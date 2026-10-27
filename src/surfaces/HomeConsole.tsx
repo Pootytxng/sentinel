@@ -433,26 +433,31 @@ export function HomeConsole({
   const [interviewOpen, setInterviewOpen] = useState(false);
   // P7-route: whether the Trial bench is armed and how many changes it has MEASURED (a result
   // verdict, P4-exit-truth), read only while the interview is open so the answer can land on the
-  // journey or "What Compy tested". Any failure stays null — the interview then speaks as if
-  // nothing was measured, never inventing a count.
+  // journey or "What Compy tested". A failed read is unknown (`judged: null`, or null when even the
+  // gate didn't answer) — the interview then says it couldn't read the records, never that nothing
+  // was measured, and never invents a count.
   const [interviewTrials, setInterviewTrials] = useState<InterviewFacts["trials"]>(null);
   useEffect(() => {
     if (!interviewOpen) return;
     let live = true;
     (async () => {
+      let armed: boolean | null = null;
       try {
-        const armed = await invoke<boolean>("get_experiment_gate");
+        armed = await invoke<boolean>("get_experiment_gate");
         if (!armed) {
           if (live) setInterviewTrials({ armed: false, judged: 0 });
           return;
         }
-        const exps = await invoke<SummaryExperiment[]>("get_experiments");
-        const judged = new Set(
-          (exps ?? []).filter((e) => isMeasuredVerdict(e.verdict)).map((e) => e.rec_id),
-        ).size;
+        const exps = await invoke<SummaryExperiment[] | null>("get_experiments");
+        // A null answer is no list, not an empty one: the count stays unknown (review round 2, §5).
+        const judged = Array.isArray(exps)
+          ? new Set(exps.filter((e) => isMeasuredVerdict(e.verdict)).map((e) => e.rec_id)).size
+          : null;
         if (live) setInterviewTrials({ armed: true, judged });
       } catch {
-        if (live) setInterviewTrials(null);
+        // Follow-up review 2026-10-26 §5: a failed read of the Trial records is "couldn't read",
+        // never "nothing measured". The gate's answer, if it came, is kept; the count is unknown.
+        if (live) setInterviewTrials(armed == null ? null : { armed, judged: null });
       }
     })();
     return () => {

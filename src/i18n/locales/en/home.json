@@ -236,7 +236,9 @@
       },
       "didItHelp": {
         "sentenceTested": "Compy already measured some changes before and after on this PC. Here is what each one did to your game.",
-        "sentenceSince": "Compy has not measured a change before and after yet, so it cannot say whether one helped. It can line up what changed and when, which shows timing, not cause."
+        "sentenceSince": "Compy has not measured a change before and after yet, so it cannot say whether one helped. It can line up what changed and when, which shows timing, not cause.",
+        "sentenceUnread": "Compy couldn't read its test records just now, so it can't say here whether it has measured a change. What Compy tested reads them itself.",
+        "sentenceUnreadSince": "Compy couldn't read its test records just now, so it can't say here whether it has measured a change. It can still line up what changed and when, which shows timing, not cause."
       },
       "wantFps": {
         "sentence": "Compy can test that on this PC: one session as it is now, one with a single change, and the change stays only if your game measured better.",

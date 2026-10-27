@@ -30,6 +30,7 @@ import {
   judgedAt,
   RETEST_CAP,
   stillAppliedFrom,
+  type ContextMatch,
   type RetestReason,
   type SummaryCandidate,
 } from "./test-summary";
@@ -93,12 +94,12 @@ function judgedByRec(game: string, experiments: readonly ResumeExperiment[]): Ma
  *  stale. Pure. */
 export function retestReasonFor(
   runs: readonly ResumeExperiment[],
-  sameContext: (baselineSessionId: string | null | undefined) => boolean | null,
+  matchOf: (baselineSessionId: string | null | undefined) => ContextMatch,
 ): RetestReason | null {
   const newest = runs[runs.length - 1];
   if (!newest) return null;
-  if (!isMeasuredVerdict(newest.verdict)) return inconclusiveRunsOf(runs) < RETEST_CAP ? "inconclusive" : null;
-  return sameContext(newest.baseline_session_id) === false ? "stale" : null;
+  if (!isMeasuredVerdict(newest.verdict)) return inconclusiveRunsOf(runs, matchOf) < RETEST_CAP ? "inconclusive" : null;
+  return matchOf(newest.baseline_session_id) === "changed" ? "stale" : null;
 }
 
 /**
@@ -118,10 +119,10 @@ export function nextToTest<C extends { id: string; title: string }>(
   const byRec = judgedByRec(game, experiments);
   const fresh = candidates.find((c) => !byRec.has(c.id) && c.id !== exclude);
   if (fresh) return { ...fresh, retest: null };
-  const { sameContext } = contextCheckFor(game, sessions);
+  const { matchOf } = contextCheckFor(game, sessions);
   for (const c of candidates) {
     if (c.id === exclude) continue;
-    const why = retestReasonFor(byRec.get(c.id) ?? [], sameContext);
+    const why = retestReasonFor(byRec.get(c.id) ?? [], matchOf);
     if (why) return { ...c, retest: why };
   }
   return null;
@@ -136,10 +137,10 @@ export function journeyProgress(
 ): JourneyProgress {
   const byRec = judgedByRec(game, experiments);
   const judged = [...byRec.values()].flat().sort((a, b) => when(a) - when(b));
-  const { sameContext } = contextCheckFor(game, sessions);
+  const { matchOf } = contextCheckFor(game, sessions);
   const newestOf = (runs: ResumeExperiment[]) => runs[runs.length - 1];
   const measured = [...byRec.values()].filter((runs) => isMeasuredVerdict(newestOf(runs).verdict));
-  const staleRuns = measured.filter((runs) => sameContext(newestOf(runs).baseline_session_id) === false);
+  const staleRuns = measured.filter((runs) => matchOf(newestOf(runs).baseline_session_id) === "changed");
   const running = experiments.find((x) => x.game === game && x.status === "running") ?? null;
   const unfinished = running && !byRec.has(running.rec_id) ? running : null;
   const left = candidates.filter((c) => !byRec.has(c.id) && c.id !== running?.rec_id);

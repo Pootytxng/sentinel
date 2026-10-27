@@ -284,7 +284,20 @@ export function anchorFor(step: CareStep, incidents: CrashIncident[] = [], now: 
     const map = readShown();
     const found = map.get(step.key);
     // A retired stutter step that regressed again is a fresh step: new anchor, new baseline.
-    const prior = typeof found === "object" && found.retired ? undefined : found;
+    let prior = typeof found === "object" && found.retired ? undefined : found;
+    // Follow-up review 2026-10-26 §4: the same advice on different hardware is not the same step.
+    // A stored stutter baseline whose rig (gpu, ram, display; never the hash, which includes the
+    // driver) differs from the one this step was just judged on would measure the new problem from
+    // the old machine's numbers. Retire it as a rig change and anchor afresh. Either rig unknown:
+    // nothing is known to differ, so the anchor is kept.
+    if (step.source === "stutter" && typeof prior === "object" && prior.baseline) {
+      const was = prior.baseline.rig ?? null;
+      const is = step.baseline.rig ?? null;
+      if (was && is && !sameRig(was, is)) {
+        map.set(step.key, { ...prior, retired: "rig" });
+        prior = undefined;
+      }
+    }
     const priorAt = typeof prior === "string" ? ms(prior) : prior && typeof prior.at === "string" ? ms(prior.at) : NaN;
     if (Number.isFinite(priorAt)) {
       const stored = typeof prior === "object" && prior.baseline ? prior.baseline : undefined;
@@ -388,16 +401,31 @@ export function storedStutterStep(
     const p = payoffFor(step, { at: best.at, basis: "shown", baseline: best.baseline }, [], stutter.sessions, now);
     if ("total" in p && p.total > STORED_STEP_END_SESSIONS) {
       const e = map.get(best.key) as ShownEntry;
+      // Follow-up review 2026-10-26 §4: the final read is "shown" only once a Care view actually
+      // rendered it (markFinalShown, from the view, after pickCareStep chose this step over a crash
+      // card). Preparing it here is not showing it. Retire only after a DIFFERENT view showed it.
       if (e.finalView !== undefined && e.finalView !== view) return retire("ended");
-      if (e.finalView === undefined) {
-        map.set(best.key, { ...e, finalView: view });
-        writeShown(map);
-      }
       return { ...step, final: true };
     }
     return step;
   } catch {
     return null;
+  }
+}
+
+/** The Care view `view` is rendering the stored stutter step `key`'s final read right now: record
+ *  it, so the step retires in the next view, never in one where a crash card took its place. First
+ *  view to show it wins; later views in the same session change nothing. */
+export function markFinalShown(key: string, view: string): void {
+  try {
+    const map = readShown();
+    const e = map.get(key);
+    if (e && typeof e === "object" && !e.retired && e.finalView === undefined) {
+      map.set(key, { ...e, finalView: view });
+      writeShown(map);
+    }
+  } catch {
+    /* storage unavailable: the final read simply shows again next time */
   }
 }
 

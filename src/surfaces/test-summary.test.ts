@@ -8,6 +8,7 @@ import type { SessionSummary } from "../types";
 import {
   LESSON_RULES,
   lessonFor,
+  outcomeChoices,
   stillAppliedFrom,
   summarizeGame,
   type SummaryCandidate,
@@ -165,6 +166,7 @@ describe("P5-learned lesson rules", () => {
     noise: { band_pct: 3, measured_noise_pct: null },
     trials: 1,
     sameContext: null,
+    context: "unverified",
     deltaLow1Pct: 0,
     deltaAvgPct: 0,
     at: "2026-10-25T10:00:00Z",
@@ -272,7 +274,8 @@ describe("truthful completion: attempts and stale results are not finished tests
     expect(s.tested[0]).toMatchObject({ measured: false, inconclusiveRuns: 2, trials: 2 });
     expect(s.unjudged.map((r) => r.recId)).toEqual(["visual-effects"]);
     expect(s.retest).toEqual([]);
-    expect(s.headline).toBe("finished-supported-tests");
+    // Follow-up §3: giving up is not finishing. Nothing was measured, so Compy says that instead.
+    expect(s.headline).toBe("nothing-testable-now");
     // A measured result after an inconclusive one resets the count: that change has a result.
     const thenMeasured = [...twice, { ...judged, id: "exp:1-c", created_at: "2026-10-26T10:00:00Z", concluded_at: "2026-10-26T11:00:00Z" }];
     const m = summarizeGame(GAME, thenMeasured, [VFX], sessions)!;
@@ -280,11 +283,89 @@ describe("truthful completion: attempts and stale results are not finished tests
     expect(m.headline).toBe("finished-supported-tests");
   });
 
-  it("unknown context stays unknown: a Trial that recorded no driver or build is never stale", () => {
+  it("unknown context stays unknown: a Trial that recorded no driver or build is never stale, and never finished either", () => {
     const bare = sessions.map((s) => ({ ...s, hw_fingerprint: null, game_state: null })) as SessionSummary[];
     const s = summarizeGame(GAME, experiments, [VFX], bare)!;
     expect(s.tested[0].sameContext).toBeNull();
     expect(s.stale).toEqual([]);
-    expect(s.headline).toBe("finished-supported-tests");
+    // Follow-up §2: unverified is not proof the result applies now, so the claim is not "finished".
+    expect(s.headline).toBe("results-unverified");
+  });
+});
+
+// FOLLOW-UP REVIEW 2026-10-26 (§1 evidence validity, §2 context classes, §3 false completion).
+// Each case below fails on the code before this fix.
+describe("follow-up: one validity rule for summary, journey and outcome switch", () => {
+  const judged = experiments.find((x) => x.verdict != null)!;
+  const latest = sessions[sessions.length - 1];
+  const withHw = (over: Partial<NonNullable<SessionSummary["hw_fingerprint"]>>, gs: Record<string, unknown> = {}): SessionSummary =>
+    ({ ...latest, started_at: "2026-10-26T00:00:00Z", hw_fingerprint: { ...latest.hw_fingerprint!, ...over }, game_state: { ...(latest.game_state ?? {}), ...gs } }) as SessionSummary;
+  const noisy = (id: string, at: string, base = judged.baseline_session_id): SummaryExperiment =>
+    ({ ...judged, id, status: "restored", kept: false, verdict: "too-noisy", created_at: at, concluded_at: at, baseline_session_id: base }) as SummaryExperiment;
+
+  it("§2: a different GPU with the same driver and Windows build is a changed context, not matching", () => {
+    const newerGpu = withHw({ gpu: "AMD Radeon RX 9999" });
+    const s = summarizeGame(GAME, experiments, [VFX], [...sessions, newerGpu])!;
+    expect(s.tested[0]).toMatchObject({ context: "changed", sameContext: false });
+    expect(s.headline).toBe("worth-retesting");
+    expect(s.stale.map((r) => r.recId)).toEqual(["visual-effects"]);
+  });
+
+  it("§2: an unverified context is neither matching nor changed, and is never 'finished'", () => {
+    const bare = sessions.map((x) => ({ ...x, hw_fingerprint: null, game_state: null })) as SessionSummary[];
+    const s = summarizeGame(GAME, experiments, [VFX], bare)!;
+    expect(s.tested[0]).toMatchObject({ context: "unverified", sameContext: null });
+    expect(s.stale).toEqual([]);
+    // Round 2: a measured result that can't be tied to this PC is said as that, not as "nothing measured".
+    expect(s.unverified.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.headline).toBe("results-unverified");
+  });
+
+  it("§2: two inconclusive runs, then a driver change: the cap counts only attempts under comparable conditions", () => {
+    const twice = [noisy("exp:a", "2026-10-24T10:00:00Z"), noisy("exp:b", "2026-10-25T10:00:00Z")];
+    expect(summarizeGame(GAME, twice, [VFX], sessions)!.tested[0].inconclusiveRuns).toBe(2);
+    const newerDriver = withHw({ gpu_driver: "33.0.1" }, { windows_build: "26200.9000" });
+    const s = summarizeGame(GAME, twice, [VFX], [...sessions, newerDriver])!;
+    expect(s.tested[0].inconclusiveRuns).toBe(0);
+    expect(s.unjudged).toEqual([]);
+    expect(s.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.headline).toBe("worth-retesting");
+  });
+
+  it("§3: an inconclusive attempt whose change is no longer offered is 'nothing testable now', never 'finished'", () => {
+    const s = summarizeGame(GAME, [noisy("exp:a", "2026-10-24T10:00:00Z")], [cand("visual-effects", false, "already-set")], sessions)!;
+    expect(s.tested[0].measured).toBe(false);
+    expect(s.leftToTest).toEqual([]);
+    expect(s.retest).toEqual([]);
+    expect(s.headline).toBe("nothing-testable-now");
+    // Two capped attempts, nothing else listed: also not "finished" — nothing was measured.
+    const twice = [noisy("exp:a", "2026-10-24T10:00:00Z"), noisy("exp:b", "2026-10-25T10:00:00Z")];
+    expect(summarizeGame(GAME, twice, [VFX], sessions)!.headline).toBe("nothing-testable-now");
+    // A measured, matching result beside them: finished.
+    expect(summarizeGame(GAME, [...twice, { ...judged, rec_id: "mouse-accel-off", rec_title: "mouse", id: "exp:m" }], [VFX], sessions)!.headline).toBe("finished-supported-tests");
+  });
+
+  it("§1: the outcome switch never offers a keep whose Trial ran under a changed context", () => {
+    const base = sessions[0].started_at;
+    const rec = { ...judged, id: "exp:r", rec_id: "hags", rec_title: "HAGS", outcome: "recommended" as const, verdict: "no-change", kept: false, baseline_session_id: base, treatment: { delta_low1_pct: 0.5, delta_avg_pct: 0.2 }, noise_evidence: { band_pct: 3, measured_noise_pct: null } } as SummaryExperiment;
+    const max = { ...rec, id: "exp:x", outcome: "max-fps" as const, verdict: "improved", kept: true, treatment: { delta_low1_pct: 0.5, delta_avg_pct: 6 } } as SummaryExperiment;
+    const on = [cand("hags", false, "already-set-by-compy")];
+    const same = outcomeChoices(GAME, [rec, max], on, sessions);
+    expect(same).toHaveLength(1);
+    expect(same[0]).toMatchObject({ keepOutcome: "max-fps", keepTrialId: "exp:x", keepContext: "matching", keepStale: false, inEffect: "max-fps" });
+    const changed = outcomeChoices(GAME, [rec, max], on, [...sessions, withHw({ gpu_driver: "33.0.1" }, { windows_build: "26200.9000" })]);
+    expect(changed[0]).toMatchObject({ keepContext: "changed", keepStale: true });
+    // Round 2: without sessions nothing ties the result to this PC, and that is not proof either:
+    // the keep side is withheld the same way (one validity rule: matching only).
+    expect(outcomeChoices(GAME, [rec, max], on)[0]).toMatchObject({ keepContext: "unverified", keepStale: true });
+  });
+
+  it("round 2 §3: 'finished' needs every measured result to match, not just one", () => {
+    const matching = experiments.find((x) => x.verdict != null)!;
+    const unverifiedOther = { ...matching, id: "exp:u", rec_id: "mouse-accel-off", rec_title: "mouse", baseline_session_id: "no-such-session" } as SummaryExperiment;
+    const s = summarizeGame(GAME, [matching, unverifiedOther], [VFX, cand("mouse-accel-off", true, null, 2)], sessions)!;
+    expect(s.tested.map((r) => [r.recId, r.context])).toEqual([["visual-effects", "matching"], ["mouse-accel-off", "unverified"]]);
+    expect(s.unverified.map((r) => r.recId)).toEqual(["mouse-accel-off"]);
+    expect(s.headline).toBe("results-unverified");
   });
 });
