@@ -368,7 +368,7 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       read"; calm grade words; the formula line stays. `HomeConsole.tsx` ~624-660, `command-center-data.ts`,
       LabConsole's same derivation, `home.json` `readinessGrade`. Needs P7-confidence (HomeConsole).
       ROADMAP P7 bullet 8; Constitution §34, §26.
-- [ ] **P7-notify** (parked: uncommitted 2026-10-25 Rust work in `train-p7notify`; resume there) The session-end toast fires for every saved session ("Your <game> debrief is ready").
+- [x] **P7-notify** — `890e71bb` (feat `687551d1`, 2026-10-27; live toast proof owed in a FULL session) The session-end toast fires for every saved session ("Your <game> debrief is ready").
       Fire it only when the session settles a decision or a state change (a Trial/journey verdict, a
       regression against the last good session); otherwise stay silent and leave the debrief in the app.
       `lib.rs` `notify_debrief_ready`, `monitoring.rs` ~1286, `sessions.rs` `save_session`; Rust unit tests.
@@ -454,6 +454,11 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   `4306036b`); P4-smooth-offer scoped and split (-a Rust / -b TS), not started; tsc 0; FULL vitest on the
   desk 522 files / 10699 tests, exit 0; one review round, 3 MUST-FIX + 5 SHOULD-FIX taken; visual
   self-review owed (FULL). Not pushed.
+
+- 2026-10-27 ~08:40–09:10 (scheduled, CODE-ONLY): P7-notify `890e71bb` (feat `687551d1`), resumed from the
+  parked worktree onto `379ac51b`; cargo test --lib 1644/0, clippy -D warnings clean; Rust review 2 rounds,
+  1 MUST-FIX + 3 SHOULD-FIX taken in-item, round 2 PASS. Stale non-worktree folders train-p6nextf2,
+  train-p7route, train-p7severity left untouched (items already landed). Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
