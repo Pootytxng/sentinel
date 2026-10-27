@@ -46,6 +46,11 @@ const session = (started_at: string, samples: number, process_name = "Valorant")
   ram_total_bytes: 31_000_000_000,
   compy_changes_active: 0,
   fps_series: Array.from({ length: 60 }, (_, i) => [i * 10, 244] as [number, number]),
+  // Round 3 of the 2026-10-26 follow-up review: "now" is the newest session, and a result counts as
+  // tested only under a MATCHING context, so every fixture session records a driver and Windows build.
+  // Tests about unverified or changed context override these on purpose.
+  hw_fingerprint: { gpu: "GPU", gpu_driver: "32.0.1" },
+  game_state: { gpu_driver: "32.0.1", windows_build: "26200.8457" },
 });
 
 const record = (over: Record<string, unknown>) => ({
@@ -108,7 +113,8 @@ vi.mock("@tauri-apps/api/core", () => ({
           return Promise.reject(
             "experiment not started — a Compy change was applied or undone after the baseline session, so the before/after would measure more than this one change — play a new baseline session, then start",
           );
-        const r = record({ id: `exp:${9 + state.startCalls}-0`, rec_id: args?.recId, rec_title: args?.recTitle, outcome: args?.outcome });
+        // The real start records the baseline it was given (round 3: a baseline that can't be found reads unverified).
+        const r = record({ id: `exp:${9 + state.startCalls}-0`, rec_id: args?.recId, rec_title: args?.recTitle, outcome: args?.outcome, baseline_session_id: args?.baselineSessionId ?? "b" });
         state.startCalls += 1;
         state.experiments = [...state.experiments, r];
         return Promise.resolve(r);
@@ -382,9 +388,10 @@ describe("truthful completion: the journey never counts an attempt or a stale re
   it("a measured result judged under an older driver and Windows build is offered again as stale", () => {
     const p = journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS], [BEFORE, AFTER, NEWER]);
     expect(p).toMatchObject({ tested: 0, stale: 1, inconclusive: 0, total: 1, next: { id: "hags", retest: "stale" } });
-    // The same result with no newer context, or no context at all, still holds: nothing is next.
+    // The same result with a matching newest context still holds: nothing is next. With no sessions at
+    // all, nothing ties it to this PC (round 3): it is offered again as unverified.
     expect(journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS], [BEFORE, AFTER]).next).toBeNull();
-    expect(journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS]).next).toBeNull();
+    expect(journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS]).next).toMatchObject({ retest: "unverified" });
   });
 
   it("untested changes come first; two inconclusive runs in a row stop the offer", () => {
@@ -394,9 +401,9 @@ describe("truthful completion: the journey never counts an attempt or a stale re
     const two = [...one, noisy("exp:2-0", "2026-10-21T12:00:00Z")];
     expect(nextToTest("Valorant", two, [HAGS])).toBeNull();
     expect(journeyProgress("Valorant", two, [HAGS])).toMatchObject({ tested: 0, inconclusive: 1, total: 1, next: null });
-    // A measured result after the two attempts is a result: tested, and not offered again.
+    // A measured result after the two attempts is a result: tested under a matching context, and not offered again.
     const then = [...two, measured("exp:3-0", "2026-10-22T12:00:00Z")];
-    expect(journeyProgress("Valorant", then, [HAGS])).toMatchObject({ tested: 1, inconclusive: 0, next: null });
+    expect(journeyProgress("Valorant", then, [HAGS], [BEFORE, AFTER])).toMatchObject({ tested: 1, inconclusive: 0, next: null });
   });
 
   it("Optimize says a retest is a retest, and how many tries judged nothing", async () => {
@@ -437,9 +444,10 @@ describe("truthful completion, review round 1", () => {
     // Steady, usable, the same game: reusable while the context matches, never once it changed.
     expect(reusableAsIs([BEFORE, AFTER], BEFORE.started_at, "Valorant")).not.toBeNull();
     expect(reusableAsIs([BEFORE, AFTER, NEWER], BEFORE.started_at, "Valorant")).toBeNull();
-    // Unknown context stays unknown: a session with no driver or build recorded is still reusable.
-    const bare = session("2026-10-27T10:00:00Z", 5400) as unknown as SessionSummary;
-    expect(reusableAsIs([BEFORE, AFTER, NEWER, bare], bare.started_at, "Valorant")).not.toBeNull();
+    // Round 3: a session with no driver or build recorded is NOT reusable either (its result would be
+    // unverified, run after run); unknown is not stale, but it is not a match.
+    const bare = { ...session("2026-10-27T10:00:00Z", 5400), hw_fingerprint: null, game_state: null } as unknown as SessionSummary;
+    expect(reusableAsIs([BEFORE, AFTER, NEWER, bare], bare.started_at, "Valorant")).toBeNull();
     // The journey's own asIs for a stale journey is that old-context session: the bench reads it as not reusable.
     const p = journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS], [BEFORE, AFTER, NEWER]);
     expect(p.next).toMatchObject({ id: "hags", retest: "stale" });
@@ -488,5 +496,30 @@ describe("truthful completion, review round 1", () => {
     // Next is Game Mode, never HAGS again as if untested.
     const next = await screen.findByRole("button", { name: /^Next: / });
     expect(next.textContent).toMatch(/^Next: Game Mode/);
+  });
+
+  // Round 3 of the follow-up review (§1, §3): the journey agrees with the summary on unverified
+  // results, and the newest session is the reference for "now".
+  it("round 3 §3: a measured result that can't be tied to this PC is counted apart and offered again, not 'nothing left'", () => {
+    const bareNewest = { ...session("2026-10-27T10:00:00Z", 5400), hw_fingerprint: null, game_state: null } as unknown as SessionSummary;
+    const p = journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS], [BEFORE, AFTER, bareNewest]);
+    expect(p).toMatchObject({ tested: 0, stale: 0, unverified: 1, total: 1, next: { id: "hags", retest: "unverified" } });
+    // The same with the newest session recording a matching context: tested, nothing next.
+    expect(journeyProgress("Valorant", [measured("exp:1-0", "2026-10-20T12:00:00Z")], [HAGS], [BEFORE, AFTER]).next).toBeNull();
+  });
+
+  it("round 3 §1 + review MUST-FIX 1: an as-is session is reused only under a MATCHING context; unverified retests are capped", () => {
+    const bareNewest = { ...session("2026-10-27T10:00:00Z", 5400), hw_fingerprint: null, game_state: null } as unknown as SessionSummary;
+    // The newest session can't be classified: the old as-is session is NOT reused (it would make the next
+    // result unverified too, run after run); a fresh before-session is the route to a verifiable result.
+    expect(reusableAsIs([BEFORE, AFTER, bareNewest], BEFORE.started_at, "Valorant")).toBeNull();
+    expect(reusableAsIs([BEFORE, AFTER], BEFORE.started_at, "Valorant")).not.toBeNull();
+    // A newest session with a different GPU and nothing else reads as changed: not reusable either.
+    const otherGpu = { ...session("2026-10-27T10:00:00Z", 5400), hw_fingerprint: { gpu: "OTHER" }, game_state: null } as unknown as SessionSummary;
+    expect(reusableAsIs([BEFORE, AFTER, otherGpu], BEFORE.started_at, "Valorant")).toBeNull();
+    // Two unverified results in a row: no third offer; the count still says what they are.
+    const two = [measured("exp:1-0", "2026-10-20T12:00:00Z"), measured("exp:2-0", "2026-10-21T12:00:00Z")];
+    expect(journeyProgress("Valorant", two, [HAGS], [BEFORE, AFTER, bareNewest])).toMatchObject({ tested: 0, unverified: 1, next: null });
+    expect(journeyProgress("Valorant", two.slice(0, 1), [HAGS], [BEFORE, AFTER, bareNewest]).next).toMatchObject({ retest: "unverified" });
   });
 });

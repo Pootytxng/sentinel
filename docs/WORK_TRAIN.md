@@ -196,6 +196,22 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       `reusableAsIs` reads `matchOf`; a null `get_experiments` answer is unknown, not zero. Two UNVERIFIED
       items checked and found not defects: CareNextStep renders whenever it has a step, and
       `storedStutterStep` already compares rigs via `newestRigOf` before the final read.
+- [x] **P4-exit-truth-f2** (this entry's commit; the third review's four remaining gaps, one bounded pass) §1 "now"
+      is the NEWEST session, never an older one found by searching back: a newest session with no context
+      leaves results unverified (last-known context is still shown). §2 completion is worded from what EVERY
+      change holds (`stop` counts): one measured change never speaks for another's unjudged attempt; "finished"
+      needs a matching result and nothing unjudged. §3 journey and summary agree on unverified: counted apart
+      in progress, offered again as a retest while the picker offers the change (the route to fresh
+      evidence), with its own reason line. §4 Home: a failed gate check is also "couldn't read"; only a bench
+      that positively read dark is an empty history. Combination tests: a 12-cell matrix (context × result ×
+      offered) pins headline and offer; harness fixtures now record a context and the real baseline id, so
+      "tested" in tests means verified. Guards fail on the old code: summary 13, journey 2, bench 3, Home 1.
+      Review (1 round, 1 MUST-FIX + 2 SHOULD-FIX, all taken in the same commit): an unverified retest could
+      loop forever and as-is reuse defeated it → an as-is session is reused only under a MATCHING context,
+      and an unverified result is offered again at most twice in a row (`unverifiedRuns`, same cap as
+      inconclusive), then said as unverified; `stop.unjudged` renamed `stop.noResult` (it is the uncapped
+      count). Noted, not changed: "worth retesting" with only a set stale result is mitigated by the
+      stale-kept line (pre-existing).
 - [ ] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "Compy finished the supported
       tests" with nothing worth another run; record it in BACKLOG as the Phase 4 exit.
 
@@ -376,6 +392,9 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
 - 2026-10-26 ~19:35–20:40 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f1 2af5f7e2
   (the follow-up review's five findings); tsc 0, vitest 21 files / 466 passed on the desk; one review
   round, all SHOULD-FIXes taken; not pushed.
+- 2026-10-27 ~00:05–01:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f2 (this entry's
+  commit; the third review's four gaps + combination matrix); tsc 0, vitest 21 files / 475 passed on the desk;
+  one review round, MUST-FIX + SHOULD-FIXes taken; not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)

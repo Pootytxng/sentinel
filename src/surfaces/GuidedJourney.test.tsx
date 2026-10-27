@@ -44,6 +44,10 @@ const session = (started_at: string, samples: number, process_name = "Valorant")
   ram_total_bytes: 31_000_000_000,
   compy_changes_active: 0,
   fps_series: Array.from({ length: 60 }, (_, i) => [i * 10, 244] as [number, number]),
+  // Round 3 of the 2026-10-26 follow-up review: a result counts as tested only under a MATCHING
+  // context against the newest session, so fixture sessions record a driver and Windows build.
+  hw_fingerprint: { gpu: "GPU", gpu_driver: "32.0.1" },
+  game_state: { gpu_driver: "32.0.1", windows_build: "26200.8457" },
 });
 
 const record = (over: Record<string, unknown>) => ({
@@ -104,7 +108,7 @@ vi.mock("@tauri-apps/api/core", () => ({
           return Promise.reject(
             "experiment not started — a Compy change was applied or undone after the baseline session, so the before/after would measure more than this one change — play a new baseline session, then start",
           );
-        const r = record({ id: `exp:${9 + state.startCalls}-0`, rec_id: args?.recId, rec_title: args?.recTitle, outcome: args?.outcome });
+        const r = record({ id: `exp:${9 + state.startCalls}-0`, rec_id: args?.recId, rec_title: args?.recTitle, outcome: args?.outcome, baseline_session_id: args?.baselineSessionId ?? "b" });
         state.startCalls += 1;
         state.experiments = [...state.experiments, r];
         return Promise.resolve(r);

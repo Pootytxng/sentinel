@@ -311,11 +311,12 @@ export type InterviewFacts = {
    * `get_experiments`). `armed` is the bench's own gate — dark means no journey and no test
    * summary render, so nothing may route to them. `judged` counts changes with a measured result,
    * the records "What Compy tested" is built from; null = the records couldn't be read (follow-up
-   * review 2026-10-26 §5: "couldn't read" is said as that, never as "nothing measured"). Absent or
-   * null as a whole = not read at all, which routes the way a dark bench does: never to a panel that
-   * may not be there.
+   * review 2026-10-26 §5: "couldn't read" is said as that, never as "nothing measured"). `armed`
+   * null = even the gate didn't answer (round 3 §4): still "couldn't read", and it routes the way a
+   * dark bench does, never to a panel that may not be there. Absent or null as a whole = not read at
+   * all yet (the interview just opened): the same routing, and the unread wording.
    */
-  trials?: { armed: boolean; judged: number | null } | null;
+  trials?: { armed: boolean | null; judged: number | null } | null;
 };
 
 // ── The finding card ────────────────────────────────────────────────────────────────────────────
@@ -408,8 +409,11 @@ export function interviewFinding(
   };
   // P7-route: only a judged Trial on an armed bench is a tested change; anything else is not quoted.
   // Follow-up review 2026-10-26 §5: a count that couldn't be read is UNKNOWN, kept apart from zero.
-  const testedCount = facts.trials?.armed ? (facts.trials.judged ?? 0) : 0;
-  const testedUnknown = facts.trials?.armed === true && facts.trials.judged == null;
+  const testedCount = facts.trials?.armed === true ? (facts.trials.judged ?? 0) : 0;
+  // Round 3 §4: "records read" is tracked apart from "bench armed". Only a bench that positively read as
+  // dark (armed: false) is a confirmed empty history; a failed gate check, a failed records read, or no
+  // read at all are all "couldn't read".
+  const testedUnknown = facts.trials == null || (facts.trials.armed !== false && facts.trials.judged == null);
   const benchArmed = facts.trials?.armed === true;
   const testedLine = () => {
     if (testedCount > 0) ev.push(k("ev.tested", { count: testedCount }));
@@ -592,7 +596,7 @@ export function interviewFinding(
       if (testedCount > 0 && reachable("lab", facts)) {
         sentence = k("didItHelp.sentenceTested");
         action = { kind: "room", label: k("act.whatTested"), room: "lab", arrival: "tested" };
-      } else if (testedUnknown && reachable("lab", facts)) {
+      } else if (testedUnknown && benchArmed && reachable("lab", facts)) {
         // Follow-up review 2026-10-26 §5: the records couldn't be read. "You haven't measured this"
         // and "I couldn't retrieve your measurements" are different statements; this is the second.
         // The panel that reads the records itself is where to look.

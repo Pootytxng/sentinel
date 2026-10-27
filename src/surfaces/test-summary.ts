@@ -132,6 +132,9 @@ export type TestedChange = {
   /** Judged Trials of this change, newest first, that were inconclusive before a measured one (0 when
    *  the newest is measured). `RETEST_CAP` of them in a row and this PC stops offering another run. */
   inconclusiveRuns: number;
+  /** Measured Trials of this change, newest first, judged under an unverified context (0 when the
+   *  newest is not). `RETEST_CAP` of them in a row and this PC stops offering another run. */
+  unverifiedRuns: number;
   kept: boolean;
   confidence: SummaryConfidence | null;
   stillApplied: StillApplied;
@@ -186,13 +189,31 @@ const MEASURED_VERDICTS = new Set(["improved", "no-change", "regressed"]);
 export const isMeasuredVerdict = (verdict: string | null | undefined): boolean =>
   verdict != null && MEASURED_VERDICTS.has(verdict);
 
-/** Inconclusive attempts in a row on one change before Compy stops offering another run (ENGINE §7:
- *  benchmark repeatability is insufficient; stopping early is success). The picker still allows
- *  testing it by hand. */
+/** Attempts in a row on one change before Compy stops offering another run (ENGINE §7: repeatability
+ *  is insufficient; stopping early is success): inconclusive ones, and (round 3 review) measured ones
+ *  that still couldn't be tied to this PC. The picker still allows testing it by hand. */
 export const RETEST_CAP = 2;
 
-/** Why a change is offered another run. */
-export type RetestReason = "inconclusive" | "stale";
+/** How many measured Trials of one change, newest first, were judged under an unverified context
+ *  (round 3 review, MUST-FIX 1): two in a row and another run is not offered, since on this PC the
+ *  context is evidently not being recorded. Stops at the first run that is not measured-unverified. */
+export function unverifiedRunsOf(
+  judgedOldestFirst: readonly { verdict: string | null; baseline_session_id?: string | null }[],
+  matchOf: (baselineSessionId: string | null | undefined) => ContextMatch,
+): number {
+  let n = 0;
+  for (let i = judgedOldestFirst.length - 1; i >= 0; i--) {
+    const x = judgedOldestFirst[i];
+    if (!isMeasuredVerdict(x.verdict) || matchOf(x.baseline_session_id) !== "unverified") break;
+    n++;
+  }
+  return n;
+}
+
+/** Why a change is offered another run: its last attempt judged nothing; its result was judged
+ *  under a changed context; or its result can't be tied to this PC as it is now (round 3 §3: the
+ *  route to fresh, verifiable evidence is a run under a recorded context). */
+export type RetestReason = "inconclusive" | "stale" | "unverified";
 
 export type Lesson = {
   rule: LessonRule;
@@ -254,6 +275,12 @@ export type GameTestSummary = {
   headline: "finished-supported-tests" | "still-worth-testing" | "worth-retesting" | "results-unverified" | "nothing-testable-now" | "unknown";
   /** Measured results whose context is unverified (neither matching nor changed). */
   unverified: TestedChange[];
+  /** Round 3 §2: when nothing is left to test or retry, what the stopping point holds, counted over
+   *  EVERY change regardless of the retest cap: measured results that hold now, and changes with no
+   *  result at all (their newest attempt judged nothing, whether capped or merely not offered again;
+   *  `unjudged` above is only the capped subset). The completion line is worded from these, so one
+   *  measured change never speaks for one without a result. */
+  stop: { measured: number; noResult: number; unverified: number; stale: number };
   /** Changes the picker offers that have no judged Trial on this game, in its suggested order. */
   leftToTest: SummaryCandidate[];
   /** Tested changes worth another run: inconclusive (under `RETEST_CAP`) or stale, and still offered
@@ -333,16 +360,21 @@ export function contextCheckFor(
   const ofGame = sessions
     .filter((s) => s.process_name === game)
     .sort((a, b) => time(b.started_at) - time(a.started_at));
+  // The §9 line shows the last context Compy recorded for the game ("last known").
   const context = contextOf(ofGame.find((s) => contextOf(s) != null));
+  // Follow-up review 2026-10-26 round 3, §1: "now" is the NEWEST session, never an older one found
+  // by searching back. A newest session that recorded no context leaves every result unverified;
+  // an older complete record may be shown as last known, but it does not establish what is true now.
+  const now = contextOf(ofGame[0]);
   const matchOf = (baselineSessionId: string | null | undefined): ContextMatch => {
     const then = contextOf(sessions.find((s) => s.started_at === baselineSessionId));
-    if (!then || !context) return "unverified";
+    if (!then || !now) return "unverified";
     // Any part both sides recorded that differs: changed. GPU included.
     for (const k of ["gpu", "driver", "windowsBuild"] as const) {
-      if (then[k] != null && context[k] != null && then[k] !== context[k]) return "changed";
+      if (then[k] != null && now[k] != null && then[k] !== now[k]) return "changed";
     }
     // Matching needs at least the driver and the Windows build on both sides.
-    return then.driver && then.windowsBuild && context.driver && context.windowsBuild ? "matching" : "unverified";
+    return then.driver && then.windowsBuild && now.driver && now.windowsBuild ? "matching" : "unverified";
   };
   return {
     context,
@@ -400,6 +432,7 @@ export function summarizeGame(
       verdict: x.verdict as string,
       measured: isMeasuredVerdict(x.verdict),
       inconclusiveRuns: inconclusiveRunsOf(runs, matchOf),
+      unverifiedRuns: unverifiedRunsOf(runs, matchOf),
       kept: x.kept,
       confidence: x.verdict_confidence ?? null,
       stillApplied: stillApplied(x.rec_id),
@@ -425,14 +458,17 @@ export function summarizeGame(
 
   const inconclusive = tested.filter((r) => !r.measured);
   const unjudged = inconclusive.filter((r) => r.inconclusiveRuns >= RETEST_CAP);
-  const stale = tested.filter((r) => r.measured && r.sameContext === false);
-  const retestIds = new Set([...inconclusive.filter((r) => r.inconclusiveRuns < RETEST_CAP), ...stale].map((r) => r.recId));
+  const stale = tested.filter((r) => r.measured && r.context === "changed");
+  const unverified = tested.filter((r) => r.measured && r.context === "unverified");
+  const retestIds = new Set(
+    [...inconclusive.filter((r) => r.inconclusiveRuns < RETEST_CAP), ...stale, ...unverified.filter((r) => r.unverifiedRuns < RETEST_CAP)].map((r) => r.recId),
+  );
   const retest = inPickerOrder((candidates ?? []).filter((c) => c.passes && retestIds.has(c.id)))
     .map((c) => tested.find((r) => r.recId === c.id))
     .filter((r): r is TestedChange => r != null);
   const staleKept = stale.filter((r) => !retest.some((x) => x.recId === r.recId));
   const holds = tested.filter((r) => r.measured && r.context === "matching");
-  const unverified = tested.filter((r) => r.measured && r.context === "unverified");
+  const stop = { measured: holds.length, noResult: inconclusive.length, unverified: unverified.length, stale: stale.length };
 
   return {
     game,
@@ -444,9 +480,9 @@ export function summarizeGame(
           ? "still-worth-testing"
           : retest.length > 0 || stale.length > 0
             ? "worth-retesting"
-            : unverified.length > 0
+            : unverified.length > 0 // measured, unverified, and not offered again (set, or not for this PC now)
               ? "results-unverified"
-              : holds.length > 0
+              : holds.length > 0 && inconclusive.length === 0
                 ? "finished-supported-tests"
                 : "nothing-testable-now",
     leftToTest,
@@ -456,6 +492,7 @@ export function summarizeGame(
     stale,
     staleKept,
     unverified,
+    stop,
     skipped,
     staysApplied: tested.filter((r) => r.stillApplied === "on"),
     cantConfirm: tested.filter((r) => r.stillApplied === "cant-confirm"),

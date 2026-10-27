@@ -160,6 +160,7 @@ describe("P5-learned lesson rules", () => {
     verdict: "improved",
     measured: true,
     inconclusiveRuns: 0,
+    unverifiedRuns: 0,
     kept: true,
     confidence: "medium",
     stillApplied: "on",
@@ -281,6 +282,9 @@ describe("truthful completion: attempts and stale results are not finished tests
     const m = summarizeGame(GAME, thenMeasured, [VFX], sessions)!;
     expect(m.tested[0]).toMatchObject({ measured: true, inconclusiveRuns: 0, trials: 3 });
     expect(m.headline).toBe("finished-supported-tests");
+    // Round 3 §2: a measured result on ONE change beside two capped attempts on ANOTHER is not "finished".
+    const other = [...twice, { ...judged, id: "exp:o", rec_id: "mouse-accel-off", rec_title: "mouse" }];
+    expect(summarizeGame(GAME, other, [VFX], sessions)!.headline).toBe("nothing-testable-now");
   });
 
   it("unknown context stays unknown: a Trial that recorded no driver or build is never stale, and never finished either", () => {
@@ -288,8 +292,9 @@ describe("truthful completion: attempts and stale results are not finished tests
     const s = summarizeGame(GAME, experiments, [VFX], bare)!;
     expect(s.tested[0].sameContext).toBeNull();
     expect(s.stale).toEqual([]);
-    // Follow-up §2: unverified is not proof the result applies now, so the claim is not "finished".
-    expect(s.headline).toBe("results-unverified");
+    // Follow-up §2: unverified is not proof the result applies now, so the claim is not "finished";
+    // round 3: offered again, it is worth another run under a recorded context.
+    expect(s.headline).toBe("worth-retesting");
   });
 });
 
@@ -317,8 +322,10 @@ describe("follow-up: one validity rule for summary, journey and outcome switch",
     expect(s.tested[0]).toMatchObject({ context: "unverified", sameContext: null });
     expect(s.stale).toEqual([]);
     // Round 2: a measured result that can't be tied to this PC is said as that, not as "nothing measured".
+    // Round 3: and while the picker still offers the change, that is the route to fresh evidence.
     expect(s.unverified.map((r) => r.recId)).toEqual(["visual-effects"]);
-    expect(s.headline).toBe("results-unverified");
+    expect(s.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.headline).toBe("worth-retesting");
   });
 
   it("§2: two inconclusive runs, then a driver change: the cap counts only attempts under comparable conditions", () => {
@@ -341,8 +348,11 @@ describe("follow-up: one validity rule for summary, journey and outcome switch",
     // Two capped attempts, nothing else listed: also not "finished" — nothing was measured.
     const twice = [noisy("exp:a", "2026-10-24T10:00:00Z"), noisy("exp:b", "2026-10-25T10:00:00Z")];
     expect(summarizeGame(GAME, twice, [VFX], sessions)!.headline).toBe("nothing-testable-now");
-    // A measured, matching result beside them: finished.
-    expect(summarizeGame(GAME, [...twice, { ...judged, rec_id: "mouse-accel-off", rec_title: "mouse", id: "exp:m" }], [VFX], sessions)!.headline).toBe("finished-supported-tests");
+    // A measured, matching result beside two capped attempts: round 3 §2 says that is a stop, not "finished"
+    // (one measured, one this PC couldn't judge).
+    const beside = summarizeGame(GAME, [...twice, { ...judged, rec_id: "mouse-accel-off", rec_title: "mouse", id: "exp:m" }], [VFX], sessions)!;
+    expect(beside.headline).toBe("nothing-testable-now");
+    expect(beside.stop).toEqual({ measured: 1, noResult: 1, unverified: 0, stale: 0 });
   });
 
   it("§1: the outcome switch never offers a keep whose Trial ran under a changed context", () => {
@@ -366,6 +376,110 @@ describe("follow-up: one validity rule for summary, journey and outcome switch",
     const s = summarizeGame(GAME, [matching, unverifiedOther], [VFX, cand("mouse-accel-off", true, null, 2)], sessions)!;
     expect(s.tested.map((r) => [r.recId, r.context])).toEqual([["visual-effects", "matching"], ["mouse-accel-off", "unverified"]]);
     expect(s.unverified.map((r) => r.recId)).toEqual(["mouse-accel-off"]);
+    // Offered again: worth another run. Not offered (set): results-unverified. Never "finished".
+    expect(s.headline).toBe("worth-retesting");
+    const set = summarizeGame(GAME, [matching, unverifiedOther], [VFX, cand("mouse-accel-off", false, "already-set-by-compy")], sessions)!;
+    expect(set.headline).toBe("results-unverified");
+  });
+});
+
+// FOLLOW-UP REVIEW 2026-10-26, ROUND 3: the fixes held for the reported examples and failed on
+// nearby combinations. These combine context (matching / changed / unverified), results (measured /
+// inconclusive) and availability (offered / not), and check what is said AND what is offered.
+describe("round 3: combinations of context, result and availability", () => {
+  const judged = experiments.find((x) => x.verdict != null)!;
+  const latest = sessions[sessions.length - 1];
+  const bareNewest = { ...latest, started_at: "2026-10-27T00:00:00Z", hw_fingerprint: null, game_state: null } as SessionSummary;
+  const noisy = (id: string, rec = "visual-effects", at = "2026-10-24T10:00:00Z"): SummaryExperiment =>
+    ({ ...judged, id, rec_id: rec, rec_title: rec, status: "restored", kept: false, verdict: "too-noisy", created_at: at, concluded_at: at }) as SummaryExperiment;
+  const measuredOther = { ...judged, id: "exp:m", rec_id: "mouse-accel-off", rec_title: "mouse", created_at: "2026-10-25T10:00:00Z", concluded_at: "2026-10-25T10:00:00Z" } as SummaryExperiment;
+
+  it("§1: the NEWEST session is the reference; a newer session with no context leaves results unverified even when an older one was complete", () => {
+    // Older sessions record GPU/driver/build and match the Trial; the newest records nothing.
+    const s = summarizeGame(GAME, experiments, [cand("visual-effects", false, "already-set-by-compy")], [...sessions, bareNewest])!;
+    expect(s.tested[0].context).toBe("unverified");
     expect(s.headline).toBe("results-unverified");
+    // The last-known context is still shown; it just doesn't establish "now".
+    expect(s.context?.driver).toBe("32.0.32015.7029");
+    // A newest session with a DIFFERENT gpu but no driver/build is still "changed", not unverified.
+    const otherGpuNewest = { ...bareNewest, hw_fingerprint: { ...latest.hw_fingerprint!, gpu: "AMD Radeon RX 9999", gpu_driver: "" } } as SessionSummary;
+    expect(summarizeGame(GAME, experiments, [VFX], [...sessions, otherGpuNewest])!.tested[0].context).toBe("changed");
+  });
+
+  it("§1: an unverified keep is never offered by the outcome switch even if an older session matched", () => {
+    const base = sessions[0].started_at;
+    const rec = { ...judged, id: "exp:r", rec_id: "hags", rec_title: "HAGS", outcome: "recommended" as const, verdict: "no-change", kept: false, baseline_session_id: base, treatment: { delta_low1_pct: 0.5, delta_avg_pct: 0.2 }, noise_evidence: { band_pct: 3, measured_noise_pct: null } } as SummaryExperiment;
+    const max = { ...rec, id: "exp:x", outcome: "max-fps" as const, verdict: "improved", kept: true, treatment: { delta_low1_pct: 0.5, delta_avg_pct: 6 } } as SummaryExperiment;
+    const c = outcomeChoices(GAME, [rec, max], [cand("hags", false, "already-set-by-compy")], [...sessions, bareNewest]);
+    expect(c[0]).toMatchObject({ keepContext: "unverified", keepStale: true });
+  });
+
+  it("§2: one measured change does not speak for another change's unjudged attempt", () => {
+    // A measured and matching, B inconclusive once and no longer offered: not finished, and the stop says both.
+    const s = summarizeGame(GAME, [measuredOther, noisy("exp:a")], [cand("visual-effects", false, "already-set")], sessions)!;
+    expect(s.leftToTest).toEqual([]);
+    expect(s.retest).toEqual([]);
+    expect(s.unjudged).toEqual([]); // under the cap, merely unavailable
+    expect(s.headline).toBe("nothing-testable-now");
+    expect(s.stop).toEqual({ measured: 1, noResult: 1, unverified: 0, stale: 0 });
+    // The same two with B still offered: worth another run, B first in the retest list.
+    const offered = summarizeGame(GAME, [measuredOther, noisy("exp:a")], [VFX], sessions)!;
+    expect(offered.headline).toBe("worth-retesting");
+    expect(offered.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
+    // Only A, measured and matching: finished, and the stop says so.
+    const only = summarizeGame(GAME, [measuredOther], [], sessions)!;
+    expect(only.headline).toBe("finished-supported-tests");
+    expect(only.stop).toEqual({ measured: 1, noResult: 0, unverified: 0, stale: 0 });
+  });
+
+  it("§3: an unverified measured result the picker still offers is worth another run (the route to fresh evidence)", () => {
+    const s = summarizeGame(GAME, experiments, [VFX], [...sessions, bareNewest])!;
+    expect(s.unverified.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.headline).toBe("worth-retesting");
+  });
+
+  it("matrix: every (context × result × offered) cell is said and offered consistently", () => {
+    const changedNewest = { ...latest, started_at: "2026-10-27T00:00:00Z", hw_fingerprint: { ...latest.hw_fingerprint!, gpu_driver: "33.0.1" }, game_state: { ...(latest.game_state ?? {}), windows_build: "26200.9000" } } as SessionSummary;
+    const ctx: Record<string, SessionSummary[]> = { matching: sessions, changed: [...sessions, changedNewest], unverified: [...sessions, bareNewest] };
+    const res: Record<string, SummaryExperiment[]> = { measured: [judged], inconclusive: [noisy("exp:a")] };
+    const offer: Record<string, SummaryCandidate[]> = { offered: [VFX], unavailable: [cand("visual-effects", false, "already-set")] };
+    const table: Record<string, { headline: string; retest: boolean }> = {};
+    for (const [cn, ss] of Object.entries(ctx)) for (const [rn, xs] of Object.entries(res)) for (const [on, cs] of Object.entries(offer)) {
+      const s = summarizeGame(GAME, xs, cs, ss)!;
+      table[`${cn}/${rn}/${on}`] = { headline: s.headline, retest: s.retest.length > 0 };
+    }
+    expect(table).toEqual({
+      "matching/measured/offered": { headline: "finished-supported-tests", retest: false },
+      "matching/measured/unavailable": { headline: "finished-supported-tests", retest: false },
+      "matching/inconclusive/offered": { headline: "worth-retesting", retest: true },
+      "matching/inconclusive/unavailable": { headline: "nothing-testable-now", retest: false },
+      "changed/measured/offered": { headline: "worth-retesting", retest: true },
+      "changed/measured/unavailable": { headline: "worth-retesting", retest: false }, // stale, kept: listed as staleKept
+      "changed/inconclusive/offered": { headline: "worth-retesting", retest: true },
+      "changed/inconclusive/unavailable": { headline: "nothing-testable-now", retest: false },
+      "unverified/measured/offered": { headline: "worth-retesting", retest: true },
+      "unverified/measured/unavailable": { headline: "results-unverified", retest: false },
+      "unverified/inconclusive/offered": { headline: "worth-retesting", retest: true },
+      "unverified/inconclusive/unavailable": { headline: "nothing-testable-now", retest: false },
+    });
+    // "finished" is claimed in exactly the two cells where a measured result matches now and nothing is unjudged.
+  });
+
+  it("round 3 review MUST-FIX 1: an unverified result is offered again at most twice in a row, then said as unverified", () => {
+    const u = (id: string, at: string) => ({ ...judged, id, created_at: at, concluded_at: at }) as SummaryExperiment;
+    const ctx = [...sessions, bareNewest];
+    const once = summarizeGame(GAME, [u("exp:1", "2026-10-24T10:00:00Z")], [VFX], ctx)!;
+    expect(once.tested[0].unverifiedRuns).toBe(1);
+    expect(once.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(once.headline).toBe("worth-retesting");
+    const twice = summarizeGame(GAME, [u("exp:1", "2026-10-24T10:00:00Z"), u("exp:2", "2026-10-25T10:00:00Z")], [VFX], ctx)!;
+    expect(twice.tested[0].unverifiedRuns).toBe(2);
+    expect(twice.retest).toEqual([]);
+    expect(twice.headline).toBe("results-unverified");
+    // A matching run in between resets the count: the newest decides.
+    const reset = summarizeGame(GAME, [u("exp:1", "2026-10-24T10:00:00Z"), u("exp:2", "2026-10-25T10:00:00Z")], [VFX], sessions)!;
+    expect(reset.tested[0].unverifiedRuns).toBe(0);
+    expect(reset.headline).toBe("finished-supported-tests");
   });
 });
