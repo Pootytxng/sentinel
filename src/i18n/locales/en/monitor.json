@@ -249,7 +249,7 @@
     "expiredSub": "This was armed too long ago to compare fairly — drivers, games, and Windows move on. Re-arm fresh from a new debrief.",
     "avgFpsLabel": "Avg FPS",
     "oneLowLabel": "1% low",
-    "deltaLine": "Δ avg {{avgSign}} FPS ({{avgPct}}%) · 1% low {{lowSign}} FPS ({{lowPct}}%) — {{inOut}} the ±{{noiseFloor}}% noise floor",
+    "deltaLine": "Δ average {{avgSign}} FPS ({{avgPct}}%) · worst-moment FPS (1% low) {{lowSign}} FPS ({{lowPct}}%) — {{inOut}} the ±{{noiseFloor}}% normal run-to-run wobble (the noise floor)",
     "insideNoiseFloor": "inside",
     "outsideNoiseFloor": "outside",
     "noChangeMeansPre": "That's a real answer, not a failure — a lesser tool would have called this a win. One suspect cleared: ",

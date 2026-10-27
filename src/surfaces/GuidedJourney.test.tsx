@@ -192,7 +192,7 @@ describe("P5-guided: one button runs the whole Trial", () => {
   it("happy path: measures as-is, applies the change, measures again, concludes and shows Better", async () => {
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     const [start] = calls("start_experiment");
     expect(start).toMatchObject({ recId: "hags", recTitle: "HAGS", outcome: "recommended" });
     // The as-is session just measured is the baseline, not the older one.
@@ -210,7 +210,7 @@ describe("P5-guided: one button runs the whole Trial", () => {
   it("the result has three depths: the line, the keep rule it was judged by, and the record's numbers", async () => {
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     const journey = screen.getByTestId("journey");
     // Answer face: no raw record field, no door open.
     expect(journey.querySelector(".journey-why")).toBeNull();
@@ -218,7 +218,7 @@ describe("P5-guided: one button runs the whole Trial", () => {
     fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
     // The harness record holds a noise FLOOR but not the judged band, so no band figure is named.
     expect(journey.querySelector(".journey-why")!.textContent).toBe(
-      "Recommended keeps a change only when the 1% low rose beyond the noise band and the average did not fall beyond it; otherwise the change goes back.",
+      "Recommended keeps a change only when the frame rate in your worst moments (the 1% low) improved beyond the normal run-to-run wobble (the noise band) and the average did not fall beyond it; otherwise the change goes back.",
     );
     fireEvent.click(journey.querySelector('[data-testid="journey-depth-receipt"] > summary')!);
     const rows = Object.fromEntries(
@@ -265,7 +265,7 @@ describe("P5-guided: one button runs the whole Trial", () => {
     const journey = screen.getByTestId("journey");
     fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
     expect(journey.querySelector(".journey-why")!.textContent).toBe(
-      "Maximum FPS keeps a change only when the average rose beyond the ±5.9% noise band and the 1% low held; otherwise the change goes back.",
+      "Maximum FPS keeps a change only when the average improved beyond the ±5.9% normal run-to-run wobble (the noise band) and the frame rate in your worst moments (the 1% low) held; otherwise the change goes back.",
     );
     fireEvent.click(journey.querySelector('[data-testid="journey-depth-receipt"] > summary')!);
     const rows = Object.fromEntries(
@@ -479,7 +479,7 @@ describe("P5-rebaseline: an uneven as-is session is retaken, not tested", () => 
     expect(screen.queryByRole("button", { name: "Test anyway" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Play one more as-is session" }));
     expect(await screen.findByText(/^One more as-is session: play Valorant as usual/)).toBeTruthy();
-    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     expect(calls("start_experiment")).toHaveLength(1);
     expect(calls("start_experiment")[0].baselineSessionId).toBe(steady.started_at);
     expect(calls("start_fps_capture")).toHaveLength(3);
@@ -502,7 +502,7 @@ describe("P5-rebaseline: an uneven as-is session is retaken, not tested", () => 
     expect(screen.queryByRole("button", { name: "Play one more as-is session" })).toBeNull();
     expect(calls("start_experiment")).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Test anyway" }));
-    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     expect(calls("start_experiment")[0].baselineSessionId).toBe(second.started_at);
     expect(calls("start_fps_capture")).toHaveLength(3);
   });
@@ -537,7 +537,7 @@ describe("P5-rebaseline: an uneven as-is session is retaken, not tested", () => 
     state.saves = [first, session(later(2), 5400)];
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     expect(calls("start_experiment")).toHaveLength(1);
     expect(calls("start_experiment")[0].baselineSessionId).toBe(first.started_at);
     expect(calls("start_fps_capture")).toHaveLength(2);
@@ -556,7 +556,7 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     state.saves = [asIs, withHags, session(later(3), 5400)];
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     expect(calls("restore_experiment")).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 10 min" }));
     await lineIs(/^Game Mode is on\. Compy uses your last session as the before-reading, so this is the only session: play Valorant/);
@@ -564,7 +564,7 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     expect(second).toMatchObject({ recId: "game-mode", baselineSessionId: withHags.started_at });
     // No new as-is session was measured for it.
     expect(calls("start_fps_capture")).toHaveLength(3);
-    await lineIs("Kept Game Mode: 1% low up 4.2%.");
+    await lineIs("Kept Game Mode: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     expect(calls("conclude_experiment")[1]).toMatchObject({ experimentId: "exp:10-0" });
   });
 
@@ -606,7 +606,7 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     state.saves = [session(later(1), 5400), uneven(later(2)), fresh, session(later(4), 5400)];
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 20 min (a new before-session first)" }));
     await lineIs(/^Session 1 of 2: play Valorant as usual/);
     await waitFor(() => expect(calls("start_experiment")).toHaveLength(2), { timeout: 3000 });
@@ -617,7 +617,7 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     state.recs = [{ id: "hags", title: "HAGS", passes: true, reason: null, detail: null, position: 1, evidence: "not-measured", risk: "low" }];
     render(<ExperimentBench />);
     await press();
-    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     expect((await screen.findByTestId("journey-done")).textContent).toBe("Nothing else here is worth testing on this PC.");
     expect(screen.queryByRole("button", { name: /^Next:/ })).toBeNull();
   });
