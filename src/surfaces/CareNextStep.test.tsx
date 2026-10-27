@@ -290,6 +290,7 @@ describe("P6-next r2: separate steps stay separate; App crash / hang name the ap
     const { container } = render(<BlackBox />);
     fireEvent.click(screen.getByRole("button", { name: /scan/i }));
     await waitFor(() => expect(container.querySelector(".bb-next")).not.toBeNull());
+    // P7-depth: the detail is the step's own instruction (it carries the stop code): ANSWER layer, no tap.
     expect(container.querySelector(".bb-next-detail")!.textContent).toBe("Stop code B.");
     expect(screen.getAllByText("Shown as your next step above.")).toHaveLength(1);
     const own = container.querySelectorAll(".bb-list .bb-nextstep-detail");
@@ -356,8 +357,15 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
     const box = container.querySelector(".bb-next")!;
     expect(box.getAttribute("data-source")).toBe("stutter");
     expect(box.querySelector(".bb-next-headline")!.textContent).toBe("Roll back the GPU driver");
-    expect(box.querySelector(".bb-next-from")!.textContent).toMatch(/From an earlier Valorant session comparison/);
-    const pay = box.querySelector(".bb-next-payoff")!;
+    // P7-depth: the "from" line is the EXPLANATION layer; the payoff stays in the answer. The block
+    // can re-render once more after the anchor read settles, so query the live tree, never `box`.
+    fireEvent.click(container.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
+    await waitFor(() => expect(container.querySelector(".bb-next-from")).not.toBeNull());
+    expect(container.querySelector(".bb-next-from")!.textContent).toMatch(/From an earlier Valorant session comparison/);
+    // Review MUST-FIX 2: a stored step's why says "an earlier comparison", never "the latest".
+    expect(container.querySelector(".bb-next-why")!.textContent).toMatch(/from an earlier Valorant session comparison/);
+    expect(container.querySelector(".bb-next-why")!.textContent).not.toMatch(/latest/);
+    const pay = container.querySelector(".bb-next-payoff")!;
     expect(pay.className).toContain("bb-next-payoff-sessions-steady");
     expect(pay.textContent).toMatch(/In the 2 Valorant sessions since then, the 1% low stayed within 3%.*not proof/);
     // The user can stop tracking it: it is retired and the slot no longer shows it.
@@ -455,6 +463,7 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
     const second = render(<BlackBox />);
     await waitFor(() => expect(second.container.querySelector(".bb-next")?.getAttribute("data-source")).toBe("stutter"));
     await waitFor(() => expect(entry().finalView).toBeDefined());
+    fireEvent.click(second.container.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
     expect(second.container.querySelector(".bb-next-final")).not.toBeNull();
     expect(entry().retired).toBeUndefined();
   });
@@ -468,5 +477,67 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
     expect(entry().retired).toBeUndefined();
     localStorage.clear();
     expect(() => dismissStoredStep(KEY)).not.toThrow();
+  });
+});
+
+// P7-depth (Constitution §13): the step is ONE truth at three depths. The receipt shows the exact
+// fields the step and its payoff were computed from, verbatim, and never a blank field.
+describe("P7-depth: the next step's technical receipt", () => {
+  it("an incident step: answer first; the receipt lists the record's exact fields, nothing invented", async () => {
+    h.incidents = [inc("2026-10-20T10:00:00Z", { step: "Check the driver", detail: "Stop code B.", app: "Valorant.exe" })];
+    const { container } = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(container.querySelector(".bb-next")).not.toBeNull());
+    const box = container.querySelector(".bb-next")!;
+    // The answer carries the headline and the payoff; the receipt is closed.
+    expect(box.querySelector(".bb-next-headline")!.textContent).toBe("Check the driver");
+    expect(box.querySelector(".bb-next-payoff")).not.toBeNull();
+    expect(box.querySelector(".bb-next-receipt")).toBeNull();
+    fireEvent.click(box.querySelector('[data-testid="bb-next-depth-receipt"] > summary')!);
+    const dl = box.querySelector(".bb-next-receipt")!;
+    const rows = Object.fromEntries([...dl.querySelectorAll("dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]));
+    expect(rows).toMatchObject({
+      Source: "crash record",
+      Kind: "App crash",
+      "Faulting app": "Valorant.exe",
+      Record: "id-2026-10-20T10:00:00Z",
+      Recorded: "2026-10-20T10:00:00Z",
+      "Consistent with": "a GPU driver fault",
+      Research: "no",
+    });
+    expect(rows["Tracked since"]).toMatch(/^\d{4}-\d{2}-\d{2}T.*\((shown|answered)\)$/);
+    expect(rows["Step id"]).toBeTruthy();
+    // No blank value anywhere in the receipt.
+    expect([...dl.querySelectorAll("dd")].every((dd) => dd.textContent!.trim() !== "")).toBe(true);
+    // The explanation says why, in plain words, and names the kind.
+    fireEvent.click(box.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
+    expect(box.querySelector(".bb-next-why")!.textContent).toMatch(/newest crash record is tagged App crash/);
+    expect(box.querySelector(".bb-next-why")!.textContent).toMatch(/safe first thing to check/);
+  });
+
+  // Review of this slice, MUST-FIX 1: the why never says "safe first thing to check" for a step the
+  // answer tags as worth researching or beyond Compy.
+  it("a research step and a beyond step explain themselves as that, never as the safe first check", async () => {
+    const research = inc("2026-10-20T10:00:00Z", { step: "Look into the driver timeout" });
+    research.assessment!.next_step.research_only = true;
+    h.incidents = [research];
+    const first = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(first.container.querySelector(".bb-next")).not.toBeNull());
+    fireEvent.click(first.container.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
+    expect(first.container.querySelector(".bb-next-why")!.textContent).toMatch(/lead worth researching/);
+    expect(first.container.querySelector(".bb-next-why")!.textContent).not.toMatch(/safe first thing/);
+    cleanup();
+    const beyond = inc("2026-10-21T10:00:00Z", { step: "Take this to a person", detail: "Stop code 0x133." });
+    beyond.assessment!.beyond_us = true;
+    h.incidents = [beyond];
+    const second = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(second.container.querySelector(".bb-next")).not.toBeNull());
+    // The stop code the user is told to share is in the answer, before any tap.
+    expect(second.container.querySelector(".bb-next-detail:not(.bb-next-beyond)")!.textContent).toBe("Stop code 0x133.");
+    fireEvent.click(second.container.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
+    expect(second.container.querySelector(".bb-next-why")!.textContent).toMatch(/beyond what Compy can safely narrow down/);
+    expect(second.container.querySelector(".bb-next-why")!.textContent).not.toMatch(/safe first thing/);
   });
 });

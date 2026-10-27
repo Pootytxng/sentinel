@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import { SupportEvidence } from "./SupportEvidence";
 import type { HonestEnd } from "./care-honest-end";
+import { Depth } from "../design/Depth";
 import "./CareHonestEnd.css";
 
 // P6-unknown: the honest end of the Care view when Compy can't name a next step. It takes the
@@ -10,24 +11,37 @@ import "./CareHonestEnd.css";
 export function CareHonestEnd({ end }: { end: HonestEnd | null }) {
   const { t } = useTranslation();
   if (!end) return null;
+  // P7-depth (Constitution §13): ANSWER = there is no step yet, and what would add evidence (that IS
+  // the recommendation); EXPLANATION = why Compy won't name one. No receipt: the gaps are the whole
+  // recorded state this component holds, and a receipt that restates the answer in code names is
+  // not evidence (review of this slice, SHOULD-FIX 4).
   return (
     <section className="bb-honest bb-honest-unknown" aria-label={t("gaming.blackBox.honestEnd.unknownTitle")}>
-      <p className="bb-honest-title">{t("gaming.blackBox.honestEnd.unknownTitle")}</p>
-      <p className="bb-honest-line">{t("gaming.blackBox.honestEnd.unknownLine")}</p>
-      <span className="bb-honest-sublabel">{t("gaming.blackBox.honestEnd.addLabel")}</span>
-      <ul className="bb-honest-gaps">
-        {end.gaps.map((g) => (
-          <li key={g.kind}>
-            {g.kind === "admin"
-              ? t("gaming.blackBox.honestEnd.gapAdmin")
-              : g.kind === "rescan"
-                ? t("gaming.blackBox.honestEnd.gapRescan")
-                : g.kind === "repeat"
-                  ? t("gaming.blackBox.honestEnd.gapRepeat")
-                  : t("gaming.blackBox.honestEnd.gapSession", { game: g.game })}
-          </li>
-        ))}
-      </ul>
+      <Depth
+        testId="bb-honest-depth"
+        answer={
+          <>
+            <p className="bb-honest-title">{t("gaming.blackBox.honestEnd.unknownTitle")}</p>
+            <p className="bb-honest-line">{t("gaming.blackBox.honestEnd.unknownLine")}</p>
+            <span className="bb-honest-sublabel">{t("gaming.blackBox.honestEnd.addLabel")}</span>
+            <ul className="bb-honest-gaps">
+              {end.gaps.map((g) => (
+                <li key={g.kind}>
+                  {g.kind === "admin"
+                    ? t("gaming.blackBox.honestEnd.gapAdmin")
+                    : g.kind === "rescan"
+                      ? t("gaming.blackBox.honestEnd.gapRescan")
+                      : g.kind === "repeat"
+                        ? t("gaming.blackBox.honestEnd.gapRepeat")
+                        : t("gaming.blackBox.honestEnd.gapSession", { game: g.game })}
+                </li>
+              ))}
+            </ul>
+          </>
+        }
+        whyLabel={t("gaming.blackBox.honestEnd.whyLabel")}
+        explanation={<p className="bb-honest-line bb-honest-why">{t("gaming.blackBox.honestEnd.whyLine")}</p>}
+      />
     </section>
   );
 }

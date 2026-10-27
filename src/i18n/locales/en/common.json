@@ -128,6 +128,10 @@
     "schematicNote": "Schematic — menus vary slightly by version.",
     "openIt": "Open it"
   },
+  "depth": {
+    "why": "Why this, for this PC",
+    "receipt": "Technical receipt"
+  },
   "whatsThis": {
     "trigger": "What's this?",
     "more": "More in History →"

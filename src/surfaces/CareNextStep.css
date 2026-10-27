@@ -47,3 +47,11 @@
 .bb-next-dismiss {
   align-self: flex-start;
 }
+/* P7-depth: the explanation's "why" line and the receipt list reuse the block's label face. */
+.bb-next-why,
+.bb-honest-why {
+  margin: 0;
+  font-size: var(--type-label);
+  color: var(--ix-text-2);
+  overflow-wrap: anywhere;
+}
