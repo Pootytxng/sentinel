@@ -129,12 +129,11 @@ export type TestedChange = {
   verdict: string;
   /** The newest judged Trial reached a measured verdict (improved / no-change / regressed). */
   measured: boolean;
-  /** Judged Trials of this change, newest first, that were inconclusive before a measured one (0 when
-   *  the newest is measured). `RETEST_CAP` of them in a row and this PC stops offering another run. */
-  inconclusiveRuns: number;
-  /** Measured Trials of this change, newest first, judged under an unverified context (0 when the
-   *  newest is not). `RETEST_CAP` of them in a row and this PC stops offering another run. */
-  unverifiedRuns: number;
+  /** Judged Trials of this change, newest first, that gave no result Compy can use now: judged
+   *  nothing, or measured under an unverified context (0 when the newest is a measured result under
+   *  a matching context). ONE budget across both reasons (round 4 review: alternating reasons must
+   *  not defeat the cap). `RETEST_CAP` of them in a row and this PC stops offering another run. */
+  unusableRuns: number;
   kept: boolean;
   confidence: SummaryConfidence | null;
   stillApplied: StillApplied;
@@ -189,22 +188,28 @@ const MEASURED_VERDICTS = new Set(["improved", "no-change", "regressed"]);
 export const isMeasuredVerdict = (verdict: string | null | undefined): boolean =>
   verdict != null && MEASURED_VERDICTS.has(verdict);
 
-/** Attempts in a row on one change before Compy stops offering another run (ENGINE §7: repeatability
- *  is insufficient; stopping early is success): inconclusive ones, and (round 3 review) measured ones
- *  that still couldn't be tied to this PC. The picker still allows testing it by hand. */
+/** Attempts in a row on one change that gave no result Compy can use now, before it stops offering
+ *  another run (ENGINE §7: repeatability is insufficient; stopping early is success). ONE budget
+ *  shared by every reason (round 4 review: a Trial that judged nothing and a measured one under an
+ *  unverified context each used to reset the other's count, so alternating them never reached the
+ *  cap). The picker still allows testing it by hand. */
 export const RETEST_CAP = 2;
 
-/** How many measured Trials of one change, newest first, were judged under an unverified context
- *  (round 3 review, MUST-FIX 1): two in a row and another run is not offered, since on this PC the
- *  context is evidently not being recorded. Stops at the first run that is not measured-unverified. */
-export function unverifiedRunsOf(
+/** How many judged Trials of one change, newest first, gave no result Compy can use now
+ *  (`unusableRuns`): each judged nothing (too-noisy, confounded…) or measured under an unverified
+ *  context. The count ends at a measured result under a matching context. Attempts under a
+ *  "changed" context don't count and don't end it (follow-up §2: old attempts under a different
+ *  driver, build or GPU don't exhaust the cap). `matchOf` absent = every measured result ends it. */
+export function unusableRunsOf(
   judgedOldestFirst: readonly { verdict: string | null; baseline_session_id?: string | null }[],
-  matchOf: (baselineSessionId: string | null | undefined) => ContextMatch,
+  matchOf?: (baselineSessionId: string | null | undefined) => ContextMatch,
 ): number {
   let n = 0;
   for (let i = judgedOldestFirst.length - 1; i >= 0; i--) {
     const x = judgedOldestFirst[i];
-    if (!isMeasuredVerdict(x.verdict) || matchOf(x.baseline_session_id) !== "unverified") break;
+    const m = matchOf ? matchOf(x.baseline_session_id) : "matching";
+    if (m === "changed") continue;
+    if (isMeasuredVerdict(x.verdict) && m === "matching") break;
     n++;
   }
   return n;
@@ -301,7 +306,10 @@ export type GameTestSummary = {
   staysApplied: TestedChange[];
   /** Tested changes Compy applied whose live check can't be read now. */
   cantConfirm: TestedChange[];
+  /** The LAST RECORDED context for the game (display only; `TestedChange.context` is the judgment),
+   *  with when it was recorded. Round 4 review: labelled as last recorded, with its date. */
   context: SummaryContext | null;
+  contextAt: string | null;
   /** P5-learned: tested changes whose newest Trial kept them, and those it put back (each with its
    *  verdict as the why), in first-tested order. */
   kept: TestedChange[];
@@ -352,6 +360,9 @@ export function contextCheckFor(
   sessions: readonly SessionSummary[],
 ): {
   context: SummaryContext | null;
+  /** When the session that recorded `context` started (ISO), or null. Round 4 review: the shown
+   *  context is the LAST RECORDED one, not necessarily now's, and is labelled with its date. */
+  contextAt: string | null;
   /** The class of a Trial's baseline session against the game's newest. */
   matchOf: (baselineSessionId: string | null | undefined) => ContextMatch;
   /** `matchOf` as a tri-state: true matching, false changed, null unverified. */
@@ -361,7 +372,10 @@ export function contextCheckFor(
     .filter((s) => s.process_name === game)
     .sort((a, b) => time(b.started_at) - time(a.started_at));
   // The §9 line shows the last context Compy recorded for the game ("last known").
-  const context = contextOf(ofGame.find((s) => contextOf(s) != null));
+  const contextSession = ofGame.find((s) => contextOf(s) != null);
+  const context = contextOf(contextSession);
+  // Only a date that parses is carried: the bench never shows "Invalid Date".
+  const contextAt = context && Number.isFinite(time(contextSession?.started_at)) ? text(contextSession?.started_at) : null;
   // Follow-up review 2026-10-26 round 3, §1: "now" is the NEWEST session, never an older one found
   // by searching back. A newest session that recorded no context leaves every result unverified;
   // an older complete record may be shown as last known, but it does not establish what is true now.
@@ -378,28 +392,13 @@ export function contextCheckFor(
   };
   return {
     context,
+    contextAt,
     matchOf,
     sameContext: (id) => {
       const m = matchOf(id);
       return m === "unverified" ? null : m === "matching";
     },
   };
-}
-
-/** How many judged Trials of one change, newest first, judged nothing before one that did, counting
- *  only attempts whose context is not "changed" against now (follow-up §2: old attempts under a
- *  different driver, build or GPU don't exhaust the retest cap; an unverified one still counts, since
- *  nothing says it differed). `matchOf` absent = count every attempt. */
-export function inconclusiveRunsOf(
-  judgedOldestFirst: readonly { verdict: string | null; baseline_session_id?: string | null }[],
-  matchOf?: (baselineSessionId: string | null | undefined) => ContextMatch,
-): number {
-  let n = 0;
-  for (let i = judgedOldestFirst.length - 1; i >= 0 && !isMeasuredVerdict(judgedOldestFirst[i].verdict); i--) {
-    if (matchOf && matchOf(judgedOldestFirst[i].baseline_session_id) === "changed") continue;
-    n++;
-  }
-  return n;
 }
 
 /**
@@ -417,7 +416,7 @@ export function summarizeGame(
 
   const stillApplied = (recId: string): StillApplied => stillAppliedFrom(candidates?.find((c) => c.id === recId));
 
-  const { context, matchOf, sameContext } = contextCheckFor(game, sessions);
+  const { context, contextAt, matchOf, sameContext } = contextCheckFor(game, sessions);
 
   // One row per change, from its newest judged Trial (`judgedAt` order), in first-judged order.
   const byRec = new Map<string, SummaryExperiment[]>();
@@ -431,8 +430,7 @@ export function summarizeGame(
       title: x.rec_title,
       verdict: x.verdict as string,
       measured: isMeasuredVerdict(x.verdict),
-      inconclusiveRuns: inconclusiveRunsOf(runs, matchOf),
-      unverifiedRuns: unverifiedRunsOf(runs, matchOf),
+      unusableRuns: unusableRunsOf(runs, matchOf),
       kept: x.kept,
       confidence: x.verdict_confidence ?? null,
       stillApplied: stillApplied(x.rec_id),
@@ -457,11 +455,12 @@ export function summarizeGame(
   const skipped = (candidates ?? []).filter((c) => !c.passes && !testedIds.has(c.id));
 
   const inconclusive = tested.filter((r) => !r.measured);
-  const unjudged = inconclusive.filter((r) => r.inconclusiveRuns >= RETEST_CAP);
+  const unjudged = inconclusive.filter((r) => r.unusableRuns >= RETEST_CAP);
   const stale = tested.filter((r) => r.measured && r.context === "changed");
   const unverified = tested.filter((r) => r.measured && r.context === "unverified");
+  // Round 4 review: inconclusive and unverified attempts draw on the ONE budget (`unusableRuns`).
   const retestIds = new Set(
-    [...inconclusive.filter((r) => r.inconclusiveRuns < RETEST_CAP), ...stale, ...unverified.filter((r) => r.unverifiedRuns < RETEST_CAP)].map((r) => r.recId),
+    [...inconclusive.filter((r) => r.unusableRuns < RETEST_CAP), ...stale, ...unverified.filter((r) => r.unusableRuns < RETEST_CAP)].map((r) => r.recId),
   );
   const retest = inPickerOrder((candidates ?? []).filter((c) => c.passes && retestIds.has(c.id)))
     .map((c) => tested.find((r) => r.recId === c.id))
@@ -497,6 +496,7 @@ export function summarizeGame(
     staysApplied: tested.filter((r) => r.stillApplied === "on"),
     cantConfirm: tested.filter((r) => r.stillApplied === "cant-confirm"),
     context,
+    contextAt,
     kept: tested.filter((r) => r.kept),
     putBack: tested.filter((r) => !r.kept),
     lesson: lessonFor(tested),

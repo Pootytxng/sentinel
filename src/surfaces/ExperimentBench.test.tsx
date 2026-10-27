@@ -1752,6 +1752,11 @@ describe("P4-exit: what Compy tested on this game", () => {
     expect(screen.getByTestId("exp-summary-context")).toHaveTextContent(
       "WardogsClient · AMD Radeon RX 9070 XT · driver 32.0.32015.7029 · Windows build 26200.8457 · 1920x1080@250",
     );
+    // Round 4 review: this line is the LAST RECORDED context, dated, never "measured on" (whether a
+    // result is current is each row's judgment against the newest session).
+    expect(screen.getByTestId("exp-summary-context").textContent).toMatch(/^Last recorded context \(.+\): WardogsClient/);
+    expect(screen.getByTestId("exp-summary-context")).toHaveAttribute("data-context-at");
+    expect(screen.getByTestId("exp-summary-context")).not.toHaveTextContent("Measured on");
     // No percentage Compy didn't measure: the stated 3% minimum band and (P5-learned, behind the
     // lesson's toggle) the Trial's own stored 1% low delta. "1% low" is the metric's name.
     expect(panel.textContent!.replace(/1% lows?/g, "").match(/[\d.]+\s*%/g)).toEqual(["18.5%", "3%", "3%"]);
@@ -1779,9 +1784,11 @@ describe("P4-exit: what Compy tested on this game", () => {
     const panel = await screen.findByTestId("exp-summary");
     expect(panel).toHaveAttribute("data-headline", "worth-retesting");
     expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent(
-      "1 result on WardogsClient needs another run before it counts: it was too noisy to judge, or it was judged under an older graphics driver or Windows build.",
+      // Round 4 review: the headline names the reason PRESENT, not a fixed pair of reasons.
+      "1 result on WardogsClient needs another run before it counts: couldn't be judged last time.",
     );
-    expect(screen.getByTestId("exp-summary-retest")).toHaveTextContent("Worth another run: Trim Windows visual effects (too noisy to judge last time)");
+    expect(screen.getByTestId("exp-summary-headline")).not.toHaveTextContent("older graphics driver");
+    expect(screen.getByTestId("exp-summary-retest")).toHaveTextContent("Worth another run: Trim Windows visual effects (couldn't be judged last time)");
     expect(panel).not.toHaveTextContent("finished the supported tests");
   });
 
@@ -2075,6 +2082,36 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     expect(screen.getByTestId("exp-summary")).toHaveAttribute("data-headline", "results-unverified");
     expect(screen.queryByTestId("exp-summary-retest")).toBeNull();
     expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("can't be tied to this PC as it is now");
+  });
+
+  // Round 4 review: the "worth retesting" headline explained every retest as noise or an older
+  // driver/build, even when the one reason present was a context that can't be tied to this PC.
+  it("the retest headline names the reason present: an unverified context is said as that, not as noise", async () => {
+    await renderWith([REC_OFF], [hags(true, null)], [{ ...VALORANT_SESSION, process_name: VAL }]);
+    expect(screen.getByTestId("exp-summary")).toHaveAttribute("data-headline", "worth-retesting");
+    expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent(
+      "1 result on Valorant needs another run before it counts: can't be tied to this PC as it is now.",
+    );
+    expect(screen.getByTestId("exp-summary-headline")).not.toHaveTextContent("too noisy");
+    expect(screen.getByTestId("exp-summary-headline")).not.toHaveTextContent("older graphics driver");
+    // And with no context recorded at all, the context line says so without a date.
+    expect(screen.getByTestId("exp-summary-context")).toHaveTextContent("Last recorded context: Compy has no recorded rig details for Valorant.");
+    expect(screen.getByTestId("exp-summary-context")).not.toHaveAttribute("data-context-at");
+  });
+
+  // Review of the round-4 fix, MUST-FIX: the headline counts and explains only the rows a run is
+  // actually asked for. An unverified change the cap has stopped offering is neither counted nor
+  // named there (it is said in its own row). Fails on the code before this fix (count 2, both reasons).
+  it("the retest headline leaves out a change the cap has stopped offering", async () => {
+    const GM = { ...hags(true, null), id: "game-mode", title: "Game Mode", position: 2 };
+    const noisyGm = trial({ id: "exp:gm", rec_id: "game-mode", rec_title: "Game Mode", verdict: "too-noisy", created_at: "2026-07-19T00:00:00Z", baseline_session_id: VAL_SESSION.started_at });
+    // HAGS: two unverified measured Trials (cap reached). Game Mode: one attempt that judged nothing (offered).
+    await renderWith([REC_OFF, MAX_KEEP, noisyGm], [hags(true, null), GM], [{ ...VALORANT_SESSION, process_name: VAL }]);
+    expect(screen.getByTestId("exp-summary")).toHaveAttribute("data-headline", "worth-retesting");
+    expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("1 result on Valorant needs another run before it counts: couldn't be judged last time.");
+    expect(screen.getByTestId("exp-summary-headline")).not.toHaveTextContent("can't be tied");
+    expect(screen.getByTestId("exp-summary-retest")).toHaveTextContent("Worth another run: Game Mode (couldn't be judged last time)");
+    expect(screen.getByTestId("exp-summary-retest")).not.toHaveTextContent("Hardware-accelerated");
   });
 
   it("choosing the keep side re-applies through apply_recommendation, citing the Better Trial", async () => {

@@ -636,7 +636,7 @@
     "summary": {
       "label": "Compy 在 {{game}} 上测试过的内容",
       "finishedSupportedTests": "Compy 已在这台主机上完成 {{game}} 的受支持测试：它列为值得在这里测试的每一项更改都有了测得的结果。",
-      "worthRetesting_other": "{{game}} 上有 {{count}} 项结果需要再跑一次才算数：当时噪音太大无法判断，或是在更旧的显卡驱动或 Windows 版本下测的。",
+      "worthRetesting_other": "{{game}} 上有 {{count}} 项结果需要再跑一次才算数：{{why}}。",
       "stillWorth_other": "{{game}} 上还有 {{count}} 项更改值得测试，所以还没有测完。",
       "unknownLeft": "Compy 无法读取哪些更改仍值得测试，所以无法判断是否还有剩余。",
       "nothingTestableNow": "{{game}} 上现在没有 Compy 可以测试的项目了，但也没有测得任何结果：所做的尝试都无法判断。",
@@ -658,15 +658,16 @@
       "retestLabel": "值得再跑一次：",
       "retestRow": "{{title}}（{{why}}）",
       "retestWhy": {
-        "inconclusive": "上次噪音太大，无法判断",
-        "stale": "在更旧的显卡驱动或 Windows 版本下测的",
+        "inconclusive": "上次无法判断",
+        "stale": "在不同的显卡驱动、Windows 版本或显卡下测的",
         "unverified": "无法与这台电脑当前的状态对照"
       },
       "unjudgedLabel_other": "这台电脑跑了两次仍无法判断的更改（{{count}} 项）：",
       "staleKeptLabel_other": "在更旧的显卡驱动或 Windows 版本下判定、现已保留的更改（{{count}} 项；先撤回，再重新测试）：",
       "skippedLabel": "未测试的更改及原因（{{count}}）",
       "noiseLabel": "噪声范围：",
-      "contextLabel": "测量环境：",
+      "contextLabel": "最近记录的环境（{{when}}）：",
+      "contextLabelUndated": "最近记录的环境：",
       "contextDriver": "驱动 {{driver}}",
       "contextWindows": "Windows 版本 {{build}}",
       "contextSeparator": " · ",

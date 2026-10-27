@@ -30,6 +30,7 @@ import {
   type OutcomeResult,
   type ResultOutcome,
   type StillApplied,
+  type RetestReason,
   type TestedChange,
 } from "./test-summary";
 import { GuidedJourney, interruptedJourneyId, JourneyProgressLine, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
@@ -291,6 +292,23 @@ function whenLabel(iso: string, t: Translate): string {
   const hrs = Math.round(mins / 60);
   if (hrs < 24) return t("lab.experimentBench.when.hrAgo", { count: hrs });
   return t("lab.experimentBench.when.dAgo", { count: Math.round(hrs / 24) });
+}
+
+/** Why a tested change is offered another run, as the summary says it (ONE mapping for the row and
+ *  the headline): the newest attempt judged nothing; or its result was judged under a changed
+ *  context; or under one that can't be tied to this PC now. */
+function retestWhyKey(r: TestedChange): RetestReason {
+  return r.measured ? (r.context === "unverified" ? "unverified" : "stale") : "inconclusive";
+}
+
+/** The distinct reasons among `rows`, in a fixed order, as one list for the "worth retesting"
+ *  headline (round 4 review: the headline names the reasons present, never a fixed pair). */
+function retestReasonsLine(rows: readonly TestedChange[], t: Translate, sep: string): string {
+  const present = new Set(rows.map(retestWhyKey));
+  return (["inconclusive", "stale", "unverified"] as const)
+    .filter((k) => present.has(k))
+    .map((k) => t(`lab.experimentBench.summary.retestWhy.${k}`))
+    .join(sep);
 }
 
 // A session the backend will accept as a reading: a real frame rate and 1% low (experiment.rs
@@ -1449,7 +1467,14 @@ function TestSummary({ s }: { s: GameTestSummary }) {
           : s.headline === "still-worth-testing"
             ? t("lab.experimentBench.summary.stillWorth", { count: s.leftToTest.length, game })
             : s.headline === "worth-retesting"
-              ? t("lab.experimentBench.summary.worthRetesting", { count: new Set([...s.retest, ...s.stale, ...s.unverified].map((r) => r.recId)).size, game })
+              ? // Round 4 review: the headline counts and explains only the rows another run is actually
+                // asked for — those offered (`retest`) and the stale ones (put back, then test) — never
+                // an unverified row the cap has already stopped offering (review of this fix, MUST-FIX).
+                t("lab.experimentBench.summary.worthRetesting", {
+                  count: new Set([...s.retest, ...s.stale].map((r) => r.recId)).size,
+                  game,
+                  why: retestReasonsLine([...s.retest, ...s.stale], t, list),
+                })
               : s.headline === "nothing-testable-now"
                 ? // Round 3 §2: the stopping point is worded from what EVERY change holds, never from one.
                   s.stop.measured > 0
@@ -1506,7 +1531,7 @@ function TestSummary({ s }: { s: GameTestSummary }) {
             .map((r) =>
               t("lab.experimentBench.summary.retestRow", {
                 title: r.title,
-                why: t(`lab.experimentBench.summary.retestWhy.${r.measured ? (r.context === "unverified" ? "unverified" : "stale") : "inconclusive"}`),
+                why: t(`lab.experimentBench.summary.retestWhy.${retestWhyKey(r)}`),
               }),
             )
             .join(list)}`}
@@ -1543,10 +1568,14 @@ function TestSummary({ s }: { s: GameTestSummary }) {
           ...(unjudged > 0 ? [t("lab.experimentBench.noiseNotRecorded", { count: unjudged })] : []),
         ].join(" ")}
       </p>
-      <p className="exp-fineprint" data-testid="exp-summary-context">
-        {`${t("lab.experimentBench.summary.contextLabel")} ${
-          ctxParts.length > 0 ? ctxParts.join(sep) : t("lab.experimentBench.summary.contextUnknown", { game })
-        }`}
+      <p className="exp-fineprint" data-testid="exp-summary-context" data-context-at={s.contextAt ?? undefined}>
+        {/* Round 4 review: this is the LAST RECORDED context, dated; whether a result is current is
+            each row's `context` against the newest session, never this line. */}
+        {`${
+          ctxParts.length > 0 && s.contextAt
+            ? t("lab.experimentBench.summary.contextLabel", { when: new Date(s.contextAt).toLocaleDateString() })
+            : t("lab.experimentBench.summary.contextLabelUndated")
+        } ${ctxParts.length > 0 ? ctxParts.join(sep) : t("lab.experimentBench.summary.contextUnknown", { game })}`}
       </p>
       <p className="exp-fineprint">{t("lab.experimentBench.summary.readOnly")}</p>
     </div>

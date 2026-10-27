@@ -603,7 +603,15 @@ export function interviewFinding(
         sentence = k("didItHelp.sentenceUnread");
         action = { kind: "room", label: k("act.whatTested"), room: "lab", arrival: "tested" };
       } else {
-        sentence = k(testedUnknown ? "didItHelp.sentenceUnreadSince" : "didItHelp.sentenceSince");
+        // Round 4 review: a bench read as dark is "testing unavailable", not "nothing measured" —
+        // its records were never read, so no count (empty or otherwise) is claimed.
+        sentence = k(
+          testedUnknown
+            ? "didItHelp.sentenceUnreadSince"
+            : facts.trials?.armed === false
+              ? "didItHelp.sentenceUnavailableSince"
+              : "didItHelp.sentenceSince",
+        );
         const since = station("blackbox", "lab", k("act.sinceWorked"));
         action = since.kind === "station" ? { ...since, arrival: "since" } : since;
       }

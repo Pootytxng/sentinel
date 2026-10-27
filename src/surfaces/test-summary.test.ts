@@ -159,8 +159,7 @@ describe("P5-learned lesson rules", () => {
     title: "X",
     verdict: "improved",
     measured: true,
-    inconclusiveRuns: 0,
-    unverifiedRuns: 0,
+    unusableRuns: 0,
     kept: true,
     confidence: "medium",
     stillApplied: "on",
@@ -233,7 +232,7 @@ describe("truthful completion: attempts and stale results are not finished tests
   it("one inconclusive attempt the picker still offers is 'worth another run', never finished", () => {
     const s = summarizeGame(GAME, [noisy()], [VFX], sessions)!;
     expect(s.tested).toHaveLength(1);
-    expect(s.tested[0]).toMatchObject({ recId: "visual-effects", measured: false, inconclusiveRuns: 1 });
+    expect(s.tested[0]).toMatchObject({ recId: "visual-effects", measured: false, unusableRuns: 1 });
     expect(s.headline).toBe("worth-retesting");
     expect(s.inconclusive.map((r) => r.recId)).toEqual(["visual-effects"]);
     expect(s.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
@@ -272,7 +271,7 @@ describe("truthful completion: attempts and stale results are not finished tests
   it("two inconclusive runs in a row: this PC gives up on that change, honestly, and may then finish", () => {
     const twice = [noisy({ id: "exp:1-a", created_at: "2026-10-24T10:00:00Z", concluded_at: "2026-10-24T11:00:00Z" }), noisy({ id: "exp:1-b", created_at: "2026-10-25T10:00:00Z", concluded_at: "2026-10-25T11:00:00Z" })];
     const s = summarizeGame(GAME, twice, [VFX], sessions)!;
-    expect(s.tested[0]).toMatchObject({ measured: false, inconclusiveRuns: 2, trials: 2 });
+    expect(s.tested[0]).toMatchObject({ measured: false, unusableRuns: 2, trials: 2 });
     expect(s.unjudged.map((r) => r.recId)).toEqual(["visual-effects"]);
     expect(s.retest).toEqual([]);
     // Follow-up §3: giving up is not finishing. Nothing was measured, so Compy says that instead.
@@ -280,7 +279,7 @@ describe("truthful completion: attempts and stale results are not finished tests
     // A measured result after an inconclusive one resets the count: that change has a result.
     const thenMeasured = [...twice, { ...judged, id: "exp:1-c", created_at: "2026-10-26T10:00:00Z", concluded_at: "2026-10-26T11:00:00Z" }];
     const m = summarizeGame(GAME, thenMeasured, [VFX], sessions)!;
-    expect(m.tested[0]).toMatchObject({ measured: true, inconclusiveRuns: 0, trials: 3 });
+    expect(m.tested[0]).toMatchObject({ measured: true, unusableRuns: 0, trials: 3 });
     expect(m.headline).toBe("finished-supported-tests");
     // Round 3 §2: a measured result on ONE change beside two capped attempts on ANOTHER is not "finished".
     const other = [...twice, { ...judged, id: "exp:o", rec_id: "mouse-accel-off", rec_title: "mouse" }];
@@ -330,10 +329,10 @@ describe("follow-up: one validity rule for summary, journey and outcome switch",
 
   it("§2: two inconclusive runs, then a driver change: the cap counts only attempts under comparable conditions", () => {
     const twice = [noisy("exp:a", "2026-10-24T10:00:00Z"), noisy("exp:b", "2026-10-25T10:00:00Z")];
-    expect(summarizeGame(GAME, twice, [VFX], sessions)!.tested[0].inconclusiveRuns).toBe(2);
+    expect(summarizeGame(GAME, twice, [VFX], sessions)!.tested[0].unusableRuns).toBe(2);
     const newerDriver = withHw({ gpu_driver: "33.0.1" }, { windows_build: "26200.9000" });
     const s = summarizeGame(GAME, twice, [VFX], [...sessions, newerDriver])!;
-    expect(s.tested[0].inconclusiveRuns).toBe(0);
+    expect(s.tested[0].unusableRuns).toBe(0);
     expect(s.unjudged).toEqual([]);
     expect(s.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
     expect(s.headline).toBe("worth-retesting");
@@ -470,16 +469,56 @@ describe("round 3: combinations of context, result and availability", () => {
     const u = (id: string, at: string) => ({ ...judged, id, created_at: at, concluded_at: at }) as SummaryExperiment;
     const ctx = [...sessions, bareNewest];
     const once = summarizeGame(GAME, [u("exp:1", "2026-10-24T10:00:00Z")], [VFX], ctx)!;
-    expect(once.tested[0].unverifiedRuns).toBe(1);
+    expect(once.tested[0].unusableRuns).toBe(1);
     expect(once.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
     expect(once.headline).toBe("worth-retesting");
     const twice = summarizeGame(GAME, [u("exp:1", "2026-10-24T10:00:00Z"), u("exp:2", "2026-10-25T10:00:00Z")], [VFX], ctx)!;
-    expect(twice.tested[0].unverifiedRuns).toBe(2);
+    expect(twice.tested[0].unusableRuns).toBe(2);
     expect(twice.retest).toEqual([]);
     expect(twice.headline).toBe("results-unverified");
     // A matching run in between resets the count: the newest decides.
     const reset = summarizeGame(GAME, [u("exp:1", "2026-10-24T10:00:00Z"), u("exp:2", "2026-10-25T10:00:00Z")], [VFX], sessions)!;
-    expect(reset.tested[0].unverifiedRuns).toBe(0);
+    expect(reset.tested[0].unusableRuns).toBe(0);
     expect(reset.headline).toBe("finished-supported-tests");
+  });
+  // REVIEW ROUND 4 (2026-10-27): "changing failure reasons defeats the retry limit". Fails on the
+  // code before this fix (two counters, each reset by the other: six alternating attempts, six offers).
+  it("round 4: alternating unverified and inconclusive attempts draw on ONE budget and reach the cap", () => {
+    const ctx = [...sessions, bareNewest]; // the newest session recorded no context: measured = unverified
+    const u = (id: string, at: string) => ({ ...judged, id, created_at: at, concluded_at: at }) as SummaryExperiment;
+    const alternating = [
+      u("exp:1", "2026-10-20T10:00:00Z"),
+      noisy("exp:2", "visual-effects", "2026-10-21T10:00:00Z"),
+      u("exp:3", "2026-10-22T10:00:00Z"),
+      noisy("exp:4", "visual-effects", "2026-10-23T10:00:00Z"),
+    ];
+    // After the first unusable attempt one more run is offered, whichever reason it was.
+    const one = summarizeGame(GAME, alternating.slice(0, 1), [VFX], ctx)!;
+    expect(one.tested[0].unusableRuns).toBe(1);
+    expect(one.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
+    // The second attempt judged nothing: the budget is spent, not reset by the change of reason.
+    const two = summarizeGame(GAME, alternating.slice(0, 2), [VFX], ctx)!;
+    expect(two.tested[0].unusableRuns).toBe(2);
+    expect(two.retest).toEqual([]);
+    expect(two.unjudged.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(two.headline).toBe("nothing-testable-now");
+    // Nor by a third of the first kind: the count keeps growing and nothing is offered.
+    const four = summarizeGame(GAME, alternating, [VFX], ctx)!;
+    expect(four.tested[0].unusableRuns).toBe(4);
+    expect(four.retest).toEqual([]);
+    // A measured result under a MATCHING context is what resets the budget.
+    const reset = summarizeGame(GAME, alternating, [VFX], sessions)!;
+    expect(reset.tested[0]).toMatchObject({ unusableRuns: 1, measured: false }); // only the newest noisy run counts
+    expect(reset.retest.map((r) => r.recId)).toEqual(["visual-effects"]);
+  });
+
+  it("round 4: the summary carries WHEN the last recorded context was recorded, and null when none was", () => {
+    const s = summarizeGame(GAME, experiments, [VFX], sessions)!;
+    expect(s.context).not.toBeNull();
+    expect(s.contextAt).toBe(latest.started_at);
+    const bare = sessions.map((x) => ({ ...x, hw_fingerprint: null, game_state: null })) as SessionSummary[];
+    const none = summarizeGame(GAME, experiments, [VFX], bare)!;
+    expect(none.context).toBeNull();
+    expect(none.contextAt).toBeNull();
   });
 });
