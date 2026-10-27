@@ -731,17 +731,25 @@ fn sends_receipt(samples: u32) -> bool {
     samples > 0
 }
 
-/// Returns `Ok(true)` if a real session was saved, `Ok(false)` if it was dropped as too short — the
-/// caller uses this to decide whether to fire the debrief toast.
-pub(crate) fn save_session(summary: SessionSummary) -> Result<bool, String> {
+/// What a save did, for the caller's session-end toast decision (P7-notify,
+/// `experiment::session_end_notice`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SavedSession {
+    /// The kind of armed comparison this session settled, if any.
+    pub(crate) settled: Option<crate::comparison::ComparisonKind>,
+}
+
+/// Returns `Ok(Some(_))` if a real session was saved, `Ok(None)` if it was dropped as too short.
+/// Saving alone no longer fires the debrief toast: the caller asks `experiment::session_end_notice`.
+pub(crate) fn save_session(summary: SessionSummary) -> Result<Option<SavedSession>, String> {
     // Drop trivially short sessions entirely — no debrief, and crucially no armed-comparison
     // resolution (a blip must not confound or settle a pending comparison; the arm waits).
     if !meets_min_duration(summary.duration_secs) {
-        return Ok(false);
+        return Ok(None);
     }
     std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
     // M4: if a comparison was armed for this game, compute the cross-session delta now.
-    crate::comparison::on_session_finalized(&summary);
+    let settled = crate::comparison::on_session_finalized(&summary);
     let measured_samples = summary.samples;
     save_session_to(&sessions_path(), summary)?;
     // Tier 2 receipts (Q9a, #217): a finalized session is the ONLY thing that produces a receipt,
@@ -757,7 +765,7 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<bool, String> {
     // foreground trigger, off-thread, and it cannot fail this save — `scan_async` swallows
     // everything by contract.
     crate::incident_observer::scan_async(crate::incident_observer::ScanTrigger::SessionFinalized);
-    Ok(true)
+    Ok(Some(SavedSession { settled }))
 }
 
 #[tauri::command]

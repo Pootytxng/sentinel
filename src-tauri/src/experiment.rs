@@ -1228,6 +1228,129 @@ fn has_frame_reading(s: &SessionSummary) -> bool {
     s.avg_fps.is_finite() && s.avg_fps > 0.0 && s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0
 }
 
+// ─── P7-notify: which finished sessions earn the session-end toast ─────────
+
+/// Why a saved session interrupts the player with a native toast (Constitution §15: only for a
+/// decision or a state change; §33: never for engagement). Every other session stays silent and its
+/// debrief simply waits in the app.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SessionEndNotice {
+    /// A running Trial of this game (the bench or the guided journey) now has its after-session, so
+    /// it gets a verdict.
+    TrialMeasured,
+    /// A one-shot before/after armed from a debrief (`ComparisonKind::Fix`) was settled by this session.
+    BeforeAfterSettled,
+    /// The 1% low fell below this game's last steady session by more than the noise band.
+    Regressed,
+}
+
+impl SessionEndNotice {
+    /// The toast body. English only, like every native toast Compy shows (`lib.rs`).
+    pub(crate) fn body(self, process_name: &str) -> String {
+        let game = crate::intelligence::pretty_game_name(process_name);
+        let game = if game.is_empty() { "your game".to_string() } else { game };
+        match self {
+            Self::TrialMeasured => format!("Your {game} Trial session is measured. Open Compy for the verdict."),
+            Self::BeforeAfterSettled => format!("Your {game} before/after result is ready in Compy."),
+            Self::Regressed => format!(
+                "{game} dipped lower than in your last steady session. The debrief in Compy has the details."
+            ),
+        }
+    }
+}
+
+/// Pure (P7-notify): does the session that just saved earn the toast, and why. `sessions` is the
+/// session store (it may hold `session` itself), `trials` the experiment store, `settled` what
+/// `comparison::on_session_finalized` reported for this session, and `band_pct` the noise band the
+/// regression check is judged against (`noise_floor::noise_band_pct`). No new threshold: the Trial
+/// match is `began_after_apply` on a Running record, steadiness is `grade_baseline` on the default
+/// floor, comparability is `comparability::derive`, and "worse" is `comparison::classify`.
+///
+/// A session that measured nothing (`samples == 0`, the game behind another window the whole time)
+/// never notifies: it settles nothing and has no reading to compare.
+pub(crate) fn session_end_notice(
+    session: &SessionSummary,
+    sessions: &[SessionSummary],
+    trials: &[ExperimentRecord],
+    settled: Option<ComparisonKind>,
+    band_pct: Option<f64>,
+) -> Option<SessionEndNotice> {
+    if session.samples == 0 || !has_frame_reading(session) || session.process_name.trim().is_empty() {
+        return None;
+    }
+    // Only THE after-session: the first saved session of the game after the change went on. A Trial
+    // stays Running until the user concludes it, so later sessions must stay silent (§15/§33).
+    let after = |s: &SessionSummary, at: &str| began_after_apply(s, at) == Some(true);
+    let trial = trials.iter().any(|t| {
+        t.status == ExperimentStatus::Running
+            && t.game == session.process_name
+            && t.applied_at.as_deref().is_some_and(|at| {
+                after(session, at)
+                    && !sessions.iter().any(|s| {
+                        s.started_at != session.started_at
+                            && s.process_name == session.process_name
+                            && s.samples > 0
+                            && after(s, at)
+                    })
+            })
+    });
+    if trial {
+        return Some(SessionEndNotice::TrialMeasured);
+    }
+    if settled == Some(ComparisonKind::Fix) {
+        return Some(SessionEndNotice::BeforeAfterSettled);
+    }
+    // An unmeasured band is a floor, not a measurement (P4-rank): it never drives a regression claim.
+    let band_pct = band_pct?;
+    // A session too short to be a baseline is too short to call a regression on.
+    if matches!(grade_baseline(session, DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::TooShort { .. }) {
+        return None;
+    }
+    let at = |s: &SessionSummary| DateTime::parse_from_rfc3339(&s.started_at).ok();
+    let now = at(session)?;
+    let last_steady = sessions
+        .iter()
+        .filter(|s| s.process_name == session.process_name && has_frame_reading(s))
+        .filter_map(|s| Some((at(s)?, s)))
+        .filter(|(t, s)| *t < now && matches!(grade_baseline(s, DEFAULT_NOISE_FLOOR_PCT), BaselineGrade::Steady(_)))
+        .max_by_key(|(t, _)| *t)
+        .map(|(_, s)| s)?;
+    match crate::comparability::derive(last_steady, session).verdict {
+        // Partial means some conditions differ; "dipped lower" would read as a causal claim.
+        Comparability::Comparable => {}
+        Comparability::Partial | Comparability::NotComparable | Comparability::Unknown => return None,
+    }
+    let delta = delta_low1_pct(last_steady.low1_fps_est, session.low1_fps_est);
+    (comparison::classify(delta, band_pct) == "regressed").then_some(SessionEndNotice::Regressed)
+}
+
+/// [`session_end_notice`] on the live stores, for the monitoring loop right after a save. Reads only:
+/// the experiment store is read the way `get_experiments` reads it (no gate, nothing written), and
+/// no store lock is held across any of it. The band leaves `session` out of the spread, so the drop
+/// being judged can't widen the band that judges it; an unreadable ledger or an unmeasured spread is
+/// `None`, which never toasts a regression (the fixed default is a floor, not a measurement).
+pub(crate) fn session_end_notice_now(
+    session: &SessionSummary,
+    settled: Option<ComparisonKind>,
+) -> Option<SessionEndNotice> {
+    if session.samples == 0 {
+        return None;
+    }
+    let sessions = crate::sessions::get_session_summaries();
+    let trials = load_store().experiments;
+    let others: Vec<SessionSummary> = sessions.iter().filter(|s| s.started_at != session.started_at).cloned().collect();
+    let history = ledger_for_one_change_checks(
+        crate::history::load_history(),
+        crate::history::ledger_was_quarantined(),
+    );
+    let between = history
+        .as_deref()
+        .ok()
+        .and_then(|h| crate::noise_floor::between_session_noise(&others, session, &ledger_rows(h)));
+    let band = between.as_ref().map(|b| crate::noise_floor::noise_band_pct(Some(b)));
+    session_end_notice(session, &sessions, &trials, settled, band)
+}
+
 /// P4-rank: the band the NEXT Trial would be judged against, only when it is measured — the
 /// between-session spread of the game the bench offers as baseline (the newest session with a frame
 /// reading and a known game, the same pick `ExperimentBench` makes), never below the fixed default.
@@ -6007,5 +6130,154 @@ mod experiment_tests {
         assert!(rec_v.as_object_mut().unwrap().remove("outcome").is_some());
         let back: ExperimentRecord = serde_json::from_value(rec_v.clone()).unwrap();
         assert_eq!(back.outcome, TrialOutcome::Recommended);
+    }
+
+    // ─── P7-notify: the session-end toast fires only on a decision or a state change ───
+
+    /// A steady cs2 session (eight even 10 s buckets) at `at` with this 1% low.
+    fn steady(at: &str, low1: f64) -> SessionSummary {
+        let mut s = session(at, low1);
+        s.fps_series = (0..8).map(|i| (10 * i, 200.0)).collect();
+        s
+    }
+
+    const BEFORE: &str = "2026-09-02T18:00:00+00:00";
+    const NOW: &str = "2026-09-02T20:00:00+00:00";
+
+    fn notice(now: &SessionSummary, sessions: &[SessionSummary]) -> Option<SessionEndNotice> {
+        session_end_notice(now, sessions, &[], None, MEASURED)
+    }
+
+    /// A measured band at the default width (the live path passes `None` when unmeasured).
+    const MEASURED: Option<f64> = Some(DEFAULT_NOISE_FLOOR_PCT);
+
+    #[test]
+    fn an_ordinary_session_ends_without_a_toast() {
+        // Old behaviour: every saved session toasted "Your <game> debrief is ready".
+        let before = steady(BEFORE, 150.0);
+        for low1 in [150.0, 147.0, 170.0] {
+            let now = steady(NOW, low1);
+            assert_eq!(notice(&now, &[before.clone(), now.clone()]), None, "1% low {low1}: nothing settled");
+        }
+        // The first session of a game has nothing to settle either.
+        let first = steady(NOW, 150.0);
+        assert_eq!(notice(&first, std::slice::from_ref(&first)), None);
+    }
+
+    #[test]
+    fn a_session_that_measured_nothing_never_toasts() {
+        let mut behind = session(NOW, 0.0);
+        behind.samples = 0;
+        behind.avg_fps = 0.0;
+        behind.background_secs_excluded = Some(900);
+        let sessions = [steady(BEFORE, 150.0), behind.clone()];
+        assert_eq!(
+            session_end_notice(&behind, &sessions, &[running()], Some(ComparisonKind::Fix), MEASURED),
+            None,
+            "not even with a Trial running and a before/after armed"
+        );
+    }
+
+    #[test]
+    fn a_trials_after_session_toasts() {
+        let after = session("2026-09-01T12:00:00+00:00", 150.0);
+        let sessions = [session(BASE_ID, 150.0), after.clone()];
+        let at = |trials: &[ExperimentRecord], s: &SessionSummary| {
+            session_end_notice(s, &sessions, trials, None, MEASURED)
+        };
+        assert_eq!(at(&[running()], &after), Some(SessionEndNotice::TrialMeasured));
+        // Review SHOULD-FIX: only THE after-session. A second one while the Trial is still Running
+        // (the user hasn't concluded) stays silent.
+        let second = session("2026-09-01T14:00:00+00:00", 150.0);
+        let with_second = [session(BASE_ID, 150.0), after.clone(), second.clone()];
+        assert_eq!(session_end_notice(&second, &with_second, &[running()], None, MEASURED), None);
+        // An earlier after-session that measured nothing doesn't use up the toast.
+        let mut hidden = after.clone();
+        hidden.samples = 0;
+        let with_hidden = [session(BASE_ID, 150.0), hidden, second.clone()];
+        assert_eq!(
+            session_end_notice(&second, &with_hidden, &[running()], None, MEASURED),
+            Some(SessionEndNotice::TrialMeasured)
+        );
+        // Played before the change went on: not the after-session.
+        assert_eq!(at(&[running()], &session("2026-09-01T11:02:00+00:00", 150.0)), None);
+        // Another game, or a Trial already judged: nothing to settle.
+        assert_eq!(at(&[ExperimentRecord { game: "valorant.exe".into(), ..running() }], &after), None);
+        assert_eq!(at(&[ExperimentRecord { status: ExperimentStatus::Kept, ..running() }], &after), None);
+        // A record without the apply time can't place the session after the change.
+        assert_eq!(at(&[ExperimentRecord { applied_at: None, ..running() }], &after), None);
+    }
+
+    #[test]
+    fn a_settled_before_after_toasts_but_a_tuning_readout_does_not() {
+        let now = steady(NOW, 150.0);
+        let sessions = [steady(BEFORE, 150.0), now.clone()];
+        let with = |k| session_end_notice(&now, &sessions, &[], Some(k), MEASURED);
+        assert_eq!(with(ComparisonKind::Fix), Some(SessionEndNotice::BeforeAfterSettled));
+        // A tuning baseline reads out on every session of the game; that alone settles nothing.
+        assert_eq!(with(ComparisonKind::Tuning), None);
+    }
+
+    #[test]
+    fn a_drop_below_the_last_steady_session_beyond_the_band_toasts() {
+        let before = steady(BEFORE, 150.0);
+        let now = steady(NOW, 120.0); // 1% low -20%
+        let sessions = [before.clone(), now.clone()];
+        assert_eq!(notice(&now, &sessions), Some(SessionEndNotice::Regressed));
+        // Inside a wider measured band it is noise, not a regression.
+        assert_eq!(session_end_notice(&now, &sessions, &[], None, Some(25.0)), None);
+        // Review SHOULD-FIX: an unmeasured band is a floor, not a measurement, so no regression claim.
+        assert_eq!(session_end_notice(&now, &sessions, &[], None, None), None);
+        // ...while a Trial or a settled before/after needs no band.
+        assert_eq!(
+            session_end_notice(&now, &sessions, &[], Some(ComparisonKind::Fix), None),
+            Some(SessionEndNotice::BeforeAfterSettled)
+        );
+        // Too short to judge.
+        let mut short = steady(NOW, 120.0);
+        short.samples = MIN_BASELINE_SAMPLES - 1;
+        assert_eq!(notice(&short, &[before.clone(), short.clone()]), None);
+        // The newest earlier session is uneven: the comparison is against the last STEADY one.
+        let mut uneven = steady("2026-09-02T19:00:00+00:00", 120.0);
+        uneven.fps_series = (0..8).map(|i| (10 * i, if i < 4 { 200.0 } else { 150.0 })).collect();
+        assert_eq!(notice(&now, &[before.clone(), uneven.clone(), now.clone()]), Some(SessionEndNotice::Regressed));
+        // Only an uneven or untraced history: nothing steady to regress from.
+        assert_eq!(notice(&now, &[uneven.clone(), now.clone()]), None);
+        assert_eq!(notice(&now, &[session(BEFORE, 150.0), now.clone()]), None);
+        // A later session is never the reference.
+        assert_eq!(notice(&now, &[steady("2026-09-02T21:00:00+00:00", 150.0), now.clone()]), None);
+        // Another game's steady session is not this game's.
+        let other = SessionSummary { process_name: "valorant.exe".into(), ..before.clone() };
+        assert_eq!(notice(&now, &[other, now.clone()]), None);
+        // Not comparable (a different GPU): no verdict, so no toast.
+        let mut new_gpu = before.clone();
+        if let Some(h) = new_gpu.hw_fingerprint.as_mut() {
+            h.gpu = "GeForce RTX 5090".into();
+            h.hash = "cafef00d".into();
+        }
+        assert_eq!(notice(&now, &[new_gpu, now.clone()]), None);
+    }
+
+    #[test]
+    fn the_toast_says_why_in_plain_words() {
+        let b = |n: SessionEndNotice| n.body("WARDOGS-Win64-Shipping.exe");
+        assert_eq!(b(SessionEndNotice::TrialMeasured), "Your WARDOGS Trial session is measured. Open Compy for the verdict.");
+        assert_eq!(b(SessionEndNotice::BeforeAfterSettled), "Your WARDOGS before/after result is ready in Compy.");
+        assert!(b(SessionEndNotice::Regressed).starts_with("WARDOGS dipped lower than in your last steady session."));
+        for n in [SessionEndNotice::TrialMeasured, SessionEndNotice::BeforeAfterSettled, SessionEndNotice::Regressed] {
+            assert!(!b(n).contains("1%") && !b(n).contains(".exe"), "{}", b(n));
+        }
+    }
+
+    #[test]
+    fn the_session_end_toast_fires_only_through_the_notice_rule() {
+        // Pinned on the source: the monitoring loop has no live seam in tests.
+        let monitoring = include_str!("monitoring.rs");
+        let call = monitoring.find("crate::notify_debrief_ready(").expect("the toast call");
+        let rule = monitoring.find("crate::experiment::session_end_notice_now(").expect("the notice rule");
+        assert!(rule < call, "the toast is decided by session_end_notice_now");
+        assert_eq!(monitoring.matches("notify_debrief_ready(").count(), 1, "one toast site");
+        let lib = include_str!("lib.rs");
+        assert!(!lib.contains("debrief is ready in Compy"), "no unconditional 'debrief ready' copy left");
     }
 }

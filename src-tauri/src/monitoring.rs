@@ -1280,10 +1280,15 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                     &summary.started_at,
                     Some(gaming_mode_seen),
                 ));
-                let game = summary.process_name.clone();
-                // Only a real (saved) session fires the "debrief ready" toast — never a short blip.
-                if matches!(crate::sessions::save_session(summary), Ok(true)) {
-                    crate::notify_debrief_ready(&game);
+                // P7-notify (Constitution §15, §33): a saved session toasts only when it settles a
+                // decision or a state change (a Trial's after-session, a before/after verdict, a
+                // regression against the game's last steady session). Otherwise the debrief waits
+                // in the app, silently. A short blip is never saved, so it never toasts.
+                let ended = summary.clone();
+                if let Ok(Some(saved)) = crate::sessions::save_session(summary) {
+                    if let Some(notice) = crate::experiment::session_end_notice_now(&ended, saved.settled) {
+                        crate::notify_debrief_ready(&notice.body(&ended.process_name));
+                    }
                 }
             }
         });

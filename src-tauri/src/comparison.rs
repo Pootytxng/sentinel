@@ -425,9 +425,11 @@ pub(crate) fn build_result(
 
 /// Called after a session finalizes. If a comparison is armed for THIS game, compute + store the
 /// result. A fix comparison then disarms; a tuning baseline stays armed (keeps measuring). A
-/// different game leaves the arming intact for its own next session.
-pub(crate) fn on_session_finalized(s: &SessionSummary) {
-    on_session_finalized_at(&armed_path(), &result_path(), s);
+/// different game leaves the arming intact for its own next session. Returns the kind of the
+/// comparison this session settled (a result was written), or `None` when it settled nothing; the
+/// session-end toast reads it (P7-notify).
+pub(crate) fn on_session_finalized(s: &SessionSummary) -> Option<ComparisonKind> {
+    on_session_finalized_at(&armed_path(), &result_path(), s)
 }
 
 /// Path-parameterized for the same reason as [`report_tuning_crash_at`]. The disarm at the end
@@ -437,19 +439,17 @@ fn on_session_finalized_at(
     armed_path_: &std::path::Path,
     result_path_: &std::path::Path,
     s: &SessionSummary,
-) {
+) -> Option<ComparisonKind> {
     let _lock = lock_comparison();
-    let Some(armed) = load_armed_from(armed_path_) else {
-        return;
-    };
+    let armed = load_armed_from(armed_path_)?;
     crate::race_seam::hold(); // no-op in a release build; see race_seam
     if s.process_name.is_empty() || armed.game != s.process_name {
-        return;
+        return None;
     }
     // P4-show-f1: a session behind another window the whole time measured nothing (its 0s are
     // "not measured"), so it neither settles nor disarms the comparison; the arm waits for play.
     if s.samples == 0 {
-        return;
+        return None;
     }
     let result = build_result(
         &armed,
@@ -479,12 +479,15 @@ fn on_session_finalized_at(
     if let Some(dir) = result_path_.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    let _ = save_result_to(result_path_, &result);
+    // P7-notify: an unwritten result settled nothing the user can open, so it reports `None` (no
+    // "result is ready" toast). The disarm below is unchanged on purpose (mutation-lifecycle scope).
+    let written = save_result_to(result_path_, &result).is_ok();
     // Same window as `report_tuning_crash_at`: the result is written, the arm is not yet gone.
     crate::race_seam::panic_at(crate::race_seam::AFTER_RESULT_WRITE);
     if should_disarm(armed.kind) {
         let _ = std::fs::remove_file(armed_path_); // the one-shot fix comparison happened
     }
+    written.then_some(armed.kind)
 }
 
 pub(crate) fn latest_result() -> Option<ComparisonResult> {
@@ -985,7 +988,7 @@ mod comparison_race_tests {
 
         let (a, r) = (armed.clone(), result.clone());
         let left = arm_lands_mid_seam(&armed, move || {
-            on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None))
+            let _ = on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None));
         });
         assert_survived(left, "session finalize");
     }
@@ -1008,11 +1011,34 @@ mod comparison_race_tests {
         behind.avg_fps = 0.0;
         behind.avg_frametime_ms = 0.0;
         behind.background_secs_excluded = Some(900);
-        on_session_finalized_at(&armed, &result, &behind);
+        assert_eq!(on_session_finalized_at(&armed, &result, &behind), None, "nothing settled");
         assert!(!result.exists(), "no result from a session with no reading");
         assert_eq!(load_armed_from(&armed).map(|a| a.rec_id), Some("waiting".to_string()), "the arm waits");
-        on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None));
+        assert_eq!(
+            on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None)),
+            Some(ComparisonKind::Fix),
+            "the settle is reported to the session-end toast (P7-notify)"
+        );
         assert!(result.exists() && load_armed_from(&armed).is_none(), "the next measured session settles it");
+    }
+
+    /// P7-notify review MUST-FIX: a result that could not be written settled nothing the user can
+    /// open, so it must not report a settle (that would toast "before/after result is ready").
+    #[test]
+    fn an_unwritten_result_reports_no_settle() {
+        let _exclusive = crate::race_seam::exclusive();
+        let dir = scratch("unwritable");
+        let armed = dir.join("compy_comparison.json");
+        let blocker = dir.join("not_a_dir");
+        std::fs::write(&blocker, b"file").unwrap();
+        let result = blocker.join("compy_comparison_result.json"); // parent is a regular file
+        arm_at(&armed, armed_of(ComparisonKind::Fix, "write-fails")).unwrap();
+        assert_eq!(
+            on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None)),
+            None,
+            "no result on disk, so no settle reaches the toast"
+        );
+        assert!(!result.exists());
     }
 
     /// `report_tuning_crash` is a load-modify-save on the armed store — the classic lost update. An
@@ -1091,7 +1117,7 @@ mod comparison_race_tests {
         let (a, r) = (armed.clone(), result.clone());
         let _seam = crate::race_seam::PanicAt::arm(crate::race_seam::AFTER_RESULT_WRITE);
         let died = std::thread::spawn(move || {
-            on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None))
+            let _ = on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None));
         })
         .join();
         assert!(died.is_err(), "the armed seam was supposed to panic mid-sequence");
