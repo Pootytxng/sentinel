@@ -260,6 +260,16 @@
     "reverting": "Reverting…",
     "revertIt": "Revert it — no shame",
     "honestTally": "honest answers: 1 · fake wins sold: 0",
+      "receipt": {
+        "change": "Change",
+        "game": "Game",
+        "baselineAvg": "Before, average",
+        "afterAvg": "After, average",
+        "baselineLow": "Before, 1% low",
+        "afterLow": "After, 1% low",
+        "verdict": "Verdict",
+        "kind": "Comparison kind"
+      },
     "verdict": {
       "background": {
         "headline": "Not graded",

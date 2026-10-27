@@ -205,6 +205,78 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(calls("restore_experiment")).toHaveLength(0);
   });
 
+  // P7-depth-verdicts (Constitution §13): the result line is the answer; the rule it was judged by is
+  // one tap; the record's own numbers one more. Fails on the code before this slice (no doors).
+  it("the result has three depths: the line, the keep rule it was judged by, and the record's numbers", async () => {
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe("Kept HAGS: 1% low up 4.2%.");
+    const journey = screen.getByTestId("journey");
+    // Answer face: no raw record field, no door open.
+    expect(journey.querySelector(".journey-why")).toBeNull();
+    expect(journey.querySelector(".journey-receipt")).toBeNull();
+    fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
+    // The harness record holds a noise FLOOR but not the judged band, so no band figure is named.
+    expect(journey.querySelector(".journey-why")!.textContent).toBe(
+      "Recommended keeps a change only when the 1% low rose beyond the noise band and the average did not fall beyond it; otherwise the change goes back.",
+    );
+    fireEvent.click(journey.querySelector('[data-testid="journey-depth-receipt"] > summary')!);
+    const rows = Object.fromEntries(
+      [...journey.querySelectorAll(".journey-receipt dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]),
+    );
+    expect(rows).toMatchObject({
+      Change: "hags",
+      Outcome: "recommended",
+      Verdict: "improved",
+      "Before, average": "244.0 fps",
+      "After, average": "247.0 fps +1.1%",
+      "Before, 1% low": "182.0 fps",
+      "After, 1% low": "190.0 fps +4.2%",
+      "Noise floor": "±3%",
+      "After, samples": "5400",
+      Trial: "exp:9-0",
+    });
+    // Nothing the record didn't hold: no judged band or measured-noise row (none recorded), no blank value.
+    expect(rows["Noise band"]).toBeUndefined();
+    expect(rows["Measured noise"]).toBeUndefined();
+    expect([...journey.querySelectorAll(".journey-receipt dd")].every((dd) => dd.textContent!.trim() !== "")).toBe(true);
+  });
+
+  it("an attempt that judged nothing explains that, not a keep rule", async () => {
+    state.concludeResult = { status: "restored", verdict: "insufficient-evidence" };
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe("Put HAGS back: there wasn't enough play with it on to judge.");
+    const journey = screen.getByTestId("journey");
+    fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
+    expect(journey.querySelector(".journey-why")!.textContent).toMatch(/could not be compared fairly, so nothing was judged/);
+    expect(journey.querySelector(".journey-why")!.textContent).not.toMatch(/keeps a change/);
+    // Review SHOULD-FIX 1: the why never asserts the change "went back" — the line above owns that claim.
+    expect(journey.querySelector(".journey-why")!.textContent).not.toMatch(/went back/);
+  });
+
+  // Review SHOULD-FIX 2 + 3: a record without the judged band names no band figure (its floor is shown
+  // AS a floor in the receipt), and a Maximum FPS pick is explained by the Maximum FPS rule.
+  it("names the band only when the record holds it, and the Maximum FPS rule for a Maximum FPS pick", async () => {
+    state.concludeResult = { status: "kept", kept: true, verdict: "improved", outcome: "max-fps", treatment: TREATMENT, noise_evidence: { band_pct: 5.94, measured_noise_pct: 4.1 } };
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe("Kept HAGS: average up 1.1%.");
+    const journey = screen.getByTestId("journey");
+    fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
+    expect(journey.querySelector(".journey-why")!.textContent).toBe(
+      "Maximum FPS keeps a change only when the average rose beyond the ±5.9% noise band and the 1% low held; otherwise the change goes back.",
+    );
+    fireEvent.click(journey.querySelector('[data-testid="journey-depth-receipt"] > summary')!);
+    const rows = Object.fromEntries(
+      [...journey.querySelectorAll(".journey-receipt dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]),
+    );
+    expect(rows["Noise band"]).toBe("±5.9%");
+    expect(rows["Measured noise"]).toBe("±4.1%");
+    expect(rows["Noise floor"]).toBeUndefined(); // the judged band is recorded: the floor is not shown as if it were it
+    expect(rows.Outcome).toBe("max-fps");
+  });
+
   it("game exits early in session 2: too few readings is judged and the change is restored", async () => {
     state.saves = [session(later(1), 5400), session(later(2), 120)];
     state.concludeResult = { status: "restored", verdict: "insufficient-evidence" };

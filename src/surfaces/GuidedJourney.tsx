@@ -59,6 +59,7 @@ import { allBackground } from "../lib/session-metrics";
 import { writeLedger } from "../data/ledger-write";
 import { prettyGameName } from "./game-name";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
+import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
 import { asProgress, enoughLine, enoughState, setJourneyRecording, type CaptureProgress } from "./journey-enough";
 import { journeyStopped, pickUpJourney, stopJourneyHere, type JourneyProgress } from "./journey-resume";
 import { contextCheckFor, type RetestReason } from "./test-summary";
@@ -77,7 +78,22 @@ type JourneyExperiment = {
   concluded_at?: string | null;
   outcome?: JourneyOutcome | null;
   /** The after-session's numbers (experiment.rs `Treatment`); null while Running. */
-  treatment?: { delta_low1_pct: number; delta_avg_pct?: number | null; session_id?: string | null } | null;
+  treatment?: {
+    delta_low1_pct: number;
+    delta_avg_pct?: number | null;
+    session_id?: string | null;
+    avg_fps?: number | null;
+    low1_fps?: number | null;
+    samples?: number | null;
+  } | null;
+  // P7-depth-verdicts: the record fields the receipt shows verbatim (experiment.rs `ExperimentRecord`).
+  // All optional: an older record, or the journey's own lighter copy, simply shows fewer rows.
+  baseline_session_id?: string | null;
+  baseline_avg_fps?: number | null;
+  baseline_low1_fps?: number | null;
+  verdict_confidence?: string | null;
+  noise_evidence?: { band_pct?: number | null; measured_noise_pct?: number | null } | null;
+  noise_floor_pct?: number | null;
 };
 
 type FpsStatusLite = {
@@ -526,6 +542,52 @@ function resultLine(exp: JourneyExperiment, t: Translate): string {
   return t(`${k}.putBack`, { change, reason: t(`${k}.putBackWhy.${why}`) });
 }
 
+/** P7-depth-verdicts (Constitution §13): the result line is the ANSWER; this is its EXPLANATION — the
+ *  rule the verdict was judged by (Recommended: the 1% low beyond the band with the average not
+ *  falling beyond it; Maximum FPS: the average beyond the band with the 1% low held), and, for an
+ *  attempt that judged nothing, that the two sessions could not be compared fairly. */
+function resultWhy(exp: JourneyExperiment, t: Translate): string {
+  const k = "lab.experimentBench.journey.why";
+  const measured = exp.verdict === "improved" || exp.verdict === "no-change" || exp.verdict === "regressed";
+  if (!measured) return t(`${k}.noResult`);
+  // The band figure is named only when the record holds the band it was judged against
+  // (`noise_evidence.band_pct`); a legacy record's `noise_floor_pct` is a floor, not that band.
+  const band = exp.noise_evidence?.band_pct ?? null;
+  // Any pick that is not Maximum FPS was judged by the Recommended rule: experiment.rs reads an
+  // unknown or absent pick as Recommended (P4-maxfps-smooth).
+  const key = exp.outcome === "max-fps" ? "maxFps" : "recommended";
+  return band != null && Number.isFinite(band) ? t(`${k}.${key}Band`, { band: Number(band.toFixed(1)) }) : t(`${k}.${key}`);
+}
+
+/** The RECEIPT: the record's own numbers, verbatim. Rows with nothing recorded are left out. */
+function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
+  const { t } = useTranslation();
+  const rk = (key: string) => t(`lab.experimentBench.journey.receipt.${key}`);
+  const fps = (n: number | null | undefined) => (n != null && Number.isFinite(n) ? `${n.toFixed(1)} fps` : null);
+  const pct = receiptPct;
+  const tr = exp.treatment;
+  return (
+    <dl className="journey-receipt">
+      <ReceiptRow label={rk("change")} value={exp.rec_id} />
+      <ReceiptRow label={rk("outcome")} value={exp.outcome ?? null} />
+      <ReceiptRow label={rk("verdict")} value={exp.verdict} />
+      <ReceiptRow label={rk("confidence")} value={exp.verdict_confidence ?? null} />
+      <ReceiptRow label={rk("baselineAvg")} value={fps(exp.baseline_avg_fps)} />
+      <ReceiptRow label={rk("afterAvg")} value={tr ? [fps(tr.avg_fps), pct(tr.delta_avg_pct)].filter(Boolean).join(" ") || null : null} />
+      <ReceiptRow label={rk("baselineLow")} value={fps(exp.baseline_low1_fps)} />
+      <ReceiptRow label={rk("afterLow")} value={tr ? [fps(tr.low1_fps), pct(tr.delta_low1_pct)].filter(Boolean).join(" ") || null : null} />
+      {/* The band the verdict was judged against, when recorded; a legacy record shows its floor AS a floor. */}
+      <ReceiptRow label={rk("band")} value={receiptBand(exp.noise_evidence?.band_pct)} />
+      <ReceiptRow label={rk("noiseFloor")} value={exp.noise_evidence?.band_pct == null ? receiptBand(exp.noise_floor_pct) : null} />
+      <ReceiptRow label={rk("measuredNoise")} value={receiptBand(exp.noise_evidence?.measured_noise_pct)} />
+      <ReceiptRow label={rk("samples")} value={tr?.samples != null ? String(tr.samples) : null} />
+      <ReceiptRow label={rk("baselineSession")} value={exp.baseline_session_id ?? null} />
+      <ReceiptRow label={rk("afterSession")} value={tr?.session_id ?? null} />
+      <ReceiptRow label={rk("trial")} value={exp.id} />
+    </dl>
+  );
+}
+
 // ── The panel ───────────────────────────────────────────────────────────────────────────────────
 export function GuidedJourney({
   game,
@@ -735,11 +797,19 @@ export function GuidedJourney({
       line = t(`${k}.restoreFailed`, { change: p.change, reason: p.reason });
       break;
   }
+  const lineEl = (
+    <p className="exp-note" data-testid="journey-line" role={finished ? "status" : undefined}>
+      {line}
+    </p>
+  );
   return (
     <div className="exp-order exp-journey" data-testid="journey" data-phase={p.kind}>
-      <p className="exp-note" data-testid="journey-line" role={finished ? "status" : undefined}>
-        {line}
-      </p>
+      {p.kind === "result" ? (
+        // P7-depth-verdicts: the result at three depths; the line itself is unchanged.
+        <Depth testId="journey-depth" answer={lineEl} explanation={<p className="exp-fineprint journey-why">{resultWhy(p.exp, t)}</p>} receipt={<ResultReceipt exp={p.exp} />} />
+      ) : (
+        lineEl
+      )}
       {live && (
         // P5-enough: quiet, in place; nothing here moves focus or brings a window forward.
         <p className="exp-fineprint" data-testid="journey-enough" aria-live="polite">

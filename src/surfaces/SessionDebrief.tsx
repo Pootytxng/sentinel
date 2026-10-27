@@ -20,6 +20,7 @@ import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grad
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { readDisplayRefreshHz } from "../design/theme";
 import { useExpertView } from "../design/use-expert-view";
+import { Depth, ReceiptRow, receiptPct } from "../design/Depth";
 import { knownFps, leftOutSecs, allBackground, leftOutSpan } from "../lib/session-metrics";
 import "../i18n";
 
@@ -84,11 +85,19 @@ function ComparisonCard({
     noiseFloor: r.noise_floor_pct,
   });
 
+  // P7-depth-verdicts (Constitution §13): ANSWER = the verdict and what to do about it; EXPLANATION =
+  // the comparison in both units against the noise floor, and what a null result means; RECEIPT = the
+  // before/after readings and the exact fields the verdict was judged on. No new data.
+  const rk = (k: string) => t(`monitor.sessionDebrief.receipt.${k}`);
+  const one = (n: number) => n.toFixed(1);
   return (
-    <div className={`cmp cmp-${r.verdict}`}>
+    <div className={`cmp cmp-${r.verdict}`} data-testid="cmp-card">
+      <Depth
+        testId="cmp-depth"
+        answer={
+          <>
       <div className="cmp-head">
         <span>{t("monitor.sessionDebrief.comparisonHeader", { title: r.rec_title, game: prettyGameName(r.game) })}</span>
-        <span className="cmp-nf">{t("monitor.sessionDebrief.noiseFloor", { pct: r.noise_floor_pct })}</span>
       </div>
 
       {r.verdict === "no-change" && (
@@ -143,28 +152,6 @@ function ComparisonCard({
         </>
       )}
 
-      {isMeasured && (
-        <>
-          <div className="cmp-receipts">
-            <CmpReceipt label={t("monitor.sessionDebrief.avgFpsLabel")} before={r.baseline_avg_fps} after={r.after_avg_fps} />
-            <CmpReceipt
-              label={<Term id="one-percent-lows">{t("monitor.sessionDebrief.oneLowLabel")}</Term>}
-              before={r.baseline_low1_fps}
-              after={r.after_low1_fps}
-            />
-          </div>
-          <p className="cmp-delta">{deltaLine}</p>
-        </>
-      )}
-
-      {r.verdict === "no-change" && (
-        <div className="cmp-means">
-          {t("monitor.sessionDebrief.noChangeMeansPre")}
-          <strong>{t("monitor.sessionDebrief.noChangeMeansEmph", { title: r.rec_title.toLowerCase() })}</strong>
-          {t("monitor.sessionDebrief.noChangeMeansPost")}
-        </div>
-      )}
-
       <div className="cmp-actions">
         {nextSuspect && (
           <button className="btn-small" onClick={onDismiss}>
@@ -183,6 +170,48 @@ function ComparisonCard({
       </div>
 
       <div className="cmp-tally">{t("monitor.sessionDebrief.honestTally")}</div>
+          </>
+        }
+        explanation={
+          isMeasured ? (
+            <>
+              <p className="cmp-delta">{deltaLine}</p>
+              {r.verdict === "no-change" && (
+                <div className="cmp-means">
+                  {t("monitor.sessionDebrief.noChangeMeansPre")}
+                  <strong>{t("monitor.sessionDebrief.noChangeMeansEmph", { title: r.rec_title.toLowerCase() })}</strong>
+                  {t("monitor.sessionDebrief.noChangeMeansPost")}
+                </div>
+              )}
+            </>
+          ) : undefined
+        }
+        receipt={
+          isMeasured ? (
+            <>
+              <span className="cmp-nf">{t("monitor.sessionDebrief.noiseFloor", { pct: r.noise_floor_pct })}</span>
+              <div className="cmp-receipts">
+                <CmpReceipt label={t("monitor.sessionDebrief.avgFpsLabel")} before={r.baseline_avg_fps} after={r.after_avg_fps} />
+                <CmpReceipt
+                  label={<Term id="one-percent-lows">{t("monitor.sessionDebrief.oneLowLabel")}</Term>}
+                  before={r.baseline_low1_fps}
+                  after={r.after_low1_fps}
+                />
+              </div>
+              <dl className="cmp-receipt-fields">
+                <ReceiptRow label={rk("change")} value={r.rec_id} />
+                <ReceiptRow label={rk("game")} value={r.game} />
+                <ReceiptRow label={rk("baselineAvg")} value={`${one(r.baseline_avg_fps)} fps`} />
+                <ReceiptRow label={rk("afterAvg")} value={`${one(r.after_avg_fps)} fps (${receiptPct(r.delta_avg_pct)})`} />
+                <ReceiptRow label={rk("baselineLow")} value={`${one(r.baseline_low1_fps)} fps`} />
+                <ReceiptRow label={rk("afterLow")} value={`${one(r.after_low1_fps)} fps (${receiptPct(r.delta_low1_pct)})`} />
+                <ReceiptRow label={rk("verdict")} value={r.verdict} />
+                <ReceiptRow label={rk("kind")} value={r.kind ?? null} />
+              </dl>
+            </>
+          ) : undefined
+        }
+      />
     </div>
   );
 }

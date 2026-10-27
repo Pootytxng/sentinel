@@ -76,6 +76,19 @@ export function Depth({
   );
 }
 
+/** A signed percentage for a receipt, one decimal: "+4.2%", "-18.5%", and "0.0%" (no sign) when it
+ *  rounds to zero — never "-0.0%" in one place and "+0%" in another. null when not a finite number. */
+export function receiptPct(n: number | null | undefined): string | null {
+  if (n == null || !Number.isFinite(n)) return null;
+  const v = n.toFixed(1);
+  return Number(v) === 0 ? "0.0%" : `${n > 0 ? "+" : ""}${v}%`;
+}
+
+/** A band/floor figure for a receipt: "±3%" (up to one decimal, trailing zero dropped). */
+export function receiptBand(n: number | null | undefined): string | null {
+  return n == null || !Number.isFinite(n) ? null : `±${Number(n.toFixed(1))}%`;
+}
+
 /** A receipt row: an exact field and its value, as recorded. Values are shown verbatim. */
 export function ReceiptRow({ label, value }: { label: string; value: ReactNode }) {
   if (value == null || value === "") return null;

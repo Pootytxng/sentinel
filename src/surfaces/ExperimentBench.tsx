@@ -33,6 +33,7 @@ import {
   type RetestReason,
   type TestedChange,
 } from "./test-summary";
+import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
 import { GuidedJourney, interruptedJourneyId, JourneyProgressLine, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
 import { journeyProgress, nextToTest, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
@@ -1461,6 +1462,14 @@ function TestSummary({ s }: { s: GameTestSummary }) {
   return (
     <div className="exp-order exp-summary" data-testid="exp-summary" data-headline={s.headline}>
       <SectionLabel>{t("lab.experimentBench.summary.label", { game })}</SectionLabel>
+      {/* P7-depth-verdicts (Constitution §13): the summary is ONE conclusion at three depths. ANSWER = the
+          headline, what happened and what is left; RECEIPT = the noise band each verdict was judged
+          against, the last recorded context, and each change's measured deltas. No explanation door:
+          the headline already says why. */}
+      <Depth
+        testId="exp-summary-depth"
+        answer={
+          <>
       <p className="exp-note" data-testid="exp-summary-headline">
         {s.headline === "finished-supported-tests"
           ? t("lab.experimentBench.summary.finishedSupportedTests", { game })
@@ -1561,6 +1570,10 @@ function TestSummary({ s }: { s: GameTestSummary }) {
           </ul>
         </details>
       )}
+          </>
+        }
+        receipt={
+          <>
       <p className="exp-fineprint" data-testid="exp-summary-noise">
         {[
           t("lab.experimentBench.summary.noiseLabel"),
@@ -1577,6 +1590,27 @@ function TestSummary({ s }: { s: GameTestSummary }) {
             : t("lab.experimentBench.summary.contextLabelUndated")
         } ${ctxParts.length > 0 ? ctxParts.join(sep) : t("lab.experimentBench.summary.contextUnknown", { game })}`}
       </p>
+      <dl className="exp-summary-receipt" data-testid="exp-summary-receipt">
+        {s.tested.map((r) => (
+          <ReceiptRow
+            key={r.recId}
+            label={r.recId}
+            value={[
+              r.verdict,
+              receiptPct(r.deltaLow1Pct) != null ? t("lab.experimentBench.summary.receiptLow", { pct: receiptPct(r.deltaLow1Pct) }) : null,
+              receiptPct(r.deltaAvgPct) != null ? t("lab.experimentBench.summary.receiptAvg", { pct: receiptPct(r.deltaAvgPct) }) : null,
+              receiptBand(r.noise?.band_pct) != null ? t("lab.experimentBench.summary.receiptBand", { band: receiptBand(r.noise?.band_pct) }) : null,
+              t("lab.experimentBench.summary.receiptTrials", { count: r.trials }),
+              r.context,
+            ]
+              .filter((x): x is string => !!x)
+              .join(sep)}
+          />
+        ))}
+      </dl>
+          </>
+        }
+      />
       <p className="exp-fineprint">{t("lab.experimentBench.summary.readOnly")}</p>
     </div>
   );

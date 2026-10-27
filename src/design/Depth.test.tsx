@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import { useEffect } from "react";
-import { Depth, ReceiptRow } from "./Depth";
+import { Depth, ReceiptRow, receiptBand, receiptPct } from "./Depth";
 import { setExpertView } from "./use-expert-view";
 
 // P7-depth (Constitution §13): one block, three depths of the same truth. These pin the contract
@@ -65,6 +65,22 @@ describe("Depth", () => {
     // The user can still open a layer by hand under the default face.
     fireEvent.click(screen.getByText("Technical receipt"));
     expect(screen.getByText("exact")).toBeInTheDocument();
+  });
+
+  // Review of P7-depth-verdicts, SHOULD-FIX 4: one sign rule for every receipt — a delta that rounds
+  // to zero carries no sign, so the same record never reads "-0.0%" here and "+0%" there.
+  it("receiptPct and receiptBand: one decimal, signed, never a signed zero, null for nothing", () => {
+    expect(receiptPct(4.2)).toBe("+4.2%");
+    expect(receiptPct(-18.5)).toBe("-18.5%");
+    expect(receiptPct(-0.04)).toBe("0.0%");
+    expect(receiptPct(0.04)).toBe("0.0%");
+    expect(receiptPct(0)).toBe("0.0%");
+    expect(receiptPct(null)).toBeNull();
+    expect(receiptPct(Number.NaN)).toBeNull();
+    expect(receiptBand(3)).toBe("±3%");
+    expect(receiptBand(3.0000000001)).toBe("±3%");
+    expect(receiptBand(5.94)).toBe("±5.9%");
+    expect(receiptBand(undefined)).toBeNull();
   });
 
   it("ReceiptRow renders nothing for an empty value: a receipt never shows a blank field", () => {

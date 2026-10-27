@@ -1746,6 +1746,15 @@ describe("P4-exit: what Compy tested on this game", () => {
     expect(screen.getByTestId("exp-summary-stays")).toHaveTextContent("Nothing from these tests stays applied.");
     expect(screen.getByTestId("exp-summary-left")).toHaveTextContent("Turn off mouse acceleration");
     expect(screen.getByTestId("exp-summary-skipped")).toHaveTextContent("Turn off Game Bar: Already set this way in Windows, not by Compy.");
+    // P7-depth-verdicts: the noise band, the context line and each change's deltas are the RECEIPT,
+    // one tap away; the answer face carries no raw number beyond the stated minimum band and the
+    // lesson's own figure. "1% low" is the metric's name.
+    expect(screen.queryByTestId("exp-summary-noise")).toBeNull();
+    expect(screen.queryByTestId("exp-summary-context")).toBeNull();
+    expect(panel.textContent!.replace(/1% lows?/g, "").match(/[\d.]+\s*%/g)).toEqual(["18.5%", "3%"]);
+    // Read-only: the panel has no button.
+    expect(panel.querySelectorAll("button")).toHaveLength(0);
+    fireEvent.click(panel.querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!);
     expect(screen.getByTestId("exp-summary-noise")).toHaveTextContent(
       "Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
     );
@@ -1757,11 +1766,11 @@ describe("P4-exit: what Compy tested on this game", () => {
     expect(screen.getByTestId("exp-summary-context").textContent).toMatch(/^Last recorded context \(.+\): WardogsClient/);
     expect(screen.getByTestId("exp-summary-context")).toHaveAttribute("data-context-at");
     expect(screen.getByTestId("exp-summary-context")).not.toHaveTextContent("Measured on");
-    // No percentage Compy didn't measure: the stated 3% minimum band and (P5-learned, behind the
-    // lesson's toggle) the Trial's own stored 1% low delta. "1% low" is the metric's name.
-    expect(panel.textContent!.replace(/1% lows?/g, "").match(/[\d.]+\s*%/g)).toEqual(["18.5%", "3%", "3%"]);
-    // Read-only: the panel has no button.
-    expect(panel.querySelectorAll("button")).toHaveLength(0);
+    // The receipt's per-change row: id, verdict, the stored deltas, the band it was judged on, trials, context.
+    const receipt = screen.getByTestId("exp-summary-receipt");
+    expect(receipt.querySelector("dt")!.textContent).toBe("visual-effects");
+    // The owner's record stored no average delta: the row shows none, never a made-up one.
+    expect(receipt.querySelector("dd")!.textContent).toBe("regressed · 1% low -18.5% · band ±3% · 1 trial · matching");
   });
 
   it("says it finished the supported tests only when the picker has nothing untested or worth another run", async () => {
@@ -2094,7 +2103,8 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     );
     expect(screen.getByTestId("exp-summary-headline")).not.toHaveTextContent("too noisy");
     expect(screen.getByTestId("exp-summary-headline")).not.toHaveTextContent("older graphics driver");
-    // And with no context recorded at all, the context line says so without a date.
+    // And with no context recorded at all, the context line (in the receipt) says so without a date.
+    fireEvent.click(screen.getByTestId("exp-summary").querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!);
     expect(screen.getByTestId("exp-summary-context")).toHaveTextContent("Last recorded context: Compy has no recorded rig details for Valorant.");
     expect(screen.getByTestId("exp-summary-context")).not.toHaveAttribute("data-context-at");
   });
