@@ -358,7 +358,15 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       `test-summary.ts` output) and `SessionDebrief.tsx` on the P7-depth block: raw deltas, noise band,
       registry/API names and sample counts move to the receipt layer. Needs P7-depth, P7-route (both touch
       GuidedJourney). ROADMAP P7 bullet 2; Constitution §13, §25.
-- [ ] **P7-jargon** Default-face copy sweep of Home, the journey, the Care view and the Debrief (en + zh-CN):
+- [x] **P7-jargon** (`a49b2128`, copy `94000540`; copy only — no review round, visual self-review owed at FULL)
+      Inventory of the in-scope faces found the Home tiles and Debrief headline terms already `Term`-glossed;
+      the un-glossed strings were the journey's kept line + four keep-rule whys, the Care view's two
+      session-payoff lines and the Debrief's delta line. They now read "the frame rate in your worst
+      moments (the 1% low)" and "the normal run-to-run wobble (the noise band/floor)" — the Debrief's own
+      "worst moments" vocabulary — with the exact term kept once in parentheses; receipts keep exact terms.
+      zh-CN unified on "1% 最低帧（最卡的时刻）" / "噪声范围". Nine test expectations updated. Full desk suite
+      522 files / 10032 green. Not swept (out of this item's named scope): the Benchmark room's own strings
+      and the bench's technical rows. Default-face copy sweep of Home, the journey, the Care view and the Debrief (en + zh-CN):
       "noise floor" (25 en strings), "frametime" (10) and bare "1% low" (67) get plain words or a `Term`
       gloss on the answer and explanation layers; exact terms stay in the receipt. Locale JSON + call sites;
       no new guard. Needs P7-depth-verdicts. ROADMAP P7 exit; Constitution §3, §13.
@@ -473,6 +481,9 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
 - 2026-10-27 ~11:35–12:45 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-depth-verdicts `a0c008bd`
   (feat `e43ffe78`); tsc 0; FULL vitest on the desk 522 files / 10032 tests, exit 0; one review round
   (APPROVE + 4 SHOULD-FIX taken); visual self-review owed (FULL). Not pushed.
+- 2026-10-27 ~12:45–13:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-jargon `a49b2128` (copy
+  `94000540`); tsc 0; FULL vitest on the desk 522 files / 10032 tests, exit 0; copy only, no review round.
+  Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
