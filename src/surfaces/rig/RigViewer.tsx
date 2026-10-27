@@ -61,7 +61,8 @@ export const RigViewer = memo(function RigViewer({
   onSelectedIdChange?: (id: string | null, what: RigSelection | null) => void;
   /** P7-rig-care: a part the HOST's evidence points at (the Care station's newest assessed crash).
    *  Shown as the selection until the user picks or clears one themselves on this mount — the
-   *  answer points, it never fights the user. Not mirrored to `onSelectedIdChange`: that stays the
+   *  answer points, it never fights the user. Sticky per mount: a later focus (a rescan) does not
+   *  take the rig back from a user who already picked. Not mirrored to `onSelectedIdChange`: that stays the
    *  user's own selection. Default null — every other host is untouched. */
   focusId?: string | null;
   /** P7-rig-care: the host's evidence points away from the parts (RigHologram `dimmed`). */

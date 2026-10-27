@@ -310,19 +310,21 @@ export function LabConsole({
   // record shows on the rig when the user comes back to the room — not only while Care is open,
   // which would be never. No scan this visit → the rig is its own.
   const careRigParts = useMemo(() => buildRigParts(hw, t), [hw, t]);
-  const careFocus = useMemo(
-    () => (bbReport ? incidentFocus(newestAssessedIncident(bbReport.incidents), careRigParts) : null),
-    [bbReport, careRigParts],
-  );
-  const careRigNote = careFocus ? (
-    <p className="lc-rig-note" data-testid="lc-rig-note" data-focus={careFocus.kind}>
-      {careFocus.kind === "part"
-        ? t(`lab.labConsole.rigFocus.${careFocus.rule === "overheating" ? "overheating" : "graphicsDriver"}`, {
-            part: careFocus.partName,
-          })
-        : t("lab.labConsole.rigFocus.away")}
-    </p>
-  ) : null;
+  const careRecord = useMemo(() => (bbReport ? newestAssessedIncident(bbReport.incidents) : null), [bbReport]);
+  const careFocus = useMemo(() => incidentFocus(careRecord, careRigParts), [careRecord, careRigParts]);
+  // Review r1 SHOULD-FIX 1: seen back in the room, the line names its source and the record's date,
+  // so a dim or a highlight never reads as a fresh verdict about the parts.
+  const careRigNote =
+    careFocus && careRecord ? (
+      <p className="lc-rig-note" data-testid="lc-rig-note" data-focus={careFocus.kind}>
+        {careFocus.kind === "part"
+          ? t(`lab.labConsole.rigFocus.${careFocus.rule === "overheating" ? "overheating" : "graphicsDriver"}`, {
+              part: careFocus.partName,
+              when: careRecord.when_display,
+            })
+          : t("lab.labConsole.rigFocus.away", { when: careRecord.when_display })}
+      </p>
+    ) : null;
   // The optional exact-incident selector that rides alongside a `blackbox` deep-link (Tier 1 task
   // 9). One-shot, like the station key: read and cleared on mount, so a later ordinary visit to the
   // Lab never re-opens somebody's old crash.

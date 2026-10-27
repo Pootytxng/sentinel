@@ -897,6 +897,8 @@ describe("P7-rig-care: the Care station's crash record picks out the part on the
     expect(rig().getAttribute("data-dimmed")).toBe("0");
     expect(note()!.getAttribute("data-focus")).toBe("part");
     expect(note()!.textContent).toMatch(/consistent with its graphics driver timing out/);
+    // Review r1 SHOULD-FIX 1: the line names its source and the record's own date.
+    expect(note()!.textContent).toContain("crash scan (2026-10-24T10:00:00Z)");
   });
 
   it("an app-specific record dims the rig and says the app, not a part", async () => {
@@ -905,12 +907,15 @@ describe("P7-rig-care: the Care station's crash record picks out the part on the
     await waitFor(() => expect(rig().getAttribute("data-dimmed")).toBe("1"));
     expect(rig().getAttribute("data-focus-id")).toBe("");
     expect(note()!.textContent).toMatch(/problem in the app itself, not a part/);
+    expect(note()!.textContent).toContain("(2026-10-24T10:00:00Z)");
   });
 
   it("an ambiguous record (heat, power or memory) claims nothing", async () => {
     withIncidents([assessed("2026-10-24T10:00:00Z", "hardware-error", "Hardware error")]);
     await scanThenBack();
     await screen.findAllByTestId("rig-hologram");
+    // The read DID land (so the nulls below are a decision, not a race): Care read the record.
+    expect(vi.mocked(invoke).mock.calls.some(([cmd]) => cmd === "get_crash_blackbox")).toBe(true);
     expect(rig().getAttribute("data-focus-id")).toBe("");
     expect(rig().getAttribute("data-dimmed")).toBe("0");
     expect(note()).toBeNull();

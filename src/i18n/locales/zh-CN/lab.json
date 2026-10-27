@@ -182,9 +182,9 @@
     },
     "addPartRoute": "添加 Compy 无法检测到的部件",
     "rigFocus": {
-      "overheating": "已高亮：{{part}} — 最新的崩溃记录与它温度过高的情况相符。",
-      "graphicsDriver": "已高亮：{{part}} — 最新的崩溃记录与它的显卡驱动超时的情况相符。",
-      "away": "最新的崩溃记录与应用本身的问题相符，而不是某个部件。"
+      "overheating": "已高亮：{{part}} — 崩溃扫描中最新的记录（{{when}}）与它温度过高的情况相符。",
+      "graphicsDriver": "已高亮：{{part}} — 崩溃扫描中最新的记录（{{when}}）与它的显卡驱动超时的情况相符。",
+      "away": "崩溃扫描中最新的记录（{{when}}）与应用本身的问题相符，而不是某个部件。"
     }
   },
   "optimizeStation": {

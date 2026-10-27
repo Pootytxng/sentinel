@@ -6,7 +6,14 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import type { AssessmentRule, CrashIncident } from "../../types";
-import { INCIDENT_RULE_AWAY, INCIDENT_RULE_NONE, INCIDENT_RULE_PART, incidentFocus } from "./incident-part";
+import {
+  INCIDENT_RULE_AWAY,
+  INCIDENT_RULE_NONE,
+  INCIDENT_RULE_PART,
+  gpuNameVendor,
+  incidentFocus,
+  moduleVendor,
+} from "./incident-part";
 import type { FocusPart } from "./limiter-part";
 import type { RigPartKind } from "./rig-parts";
 import { newestAssessedIncident, pickCareStep } from "../care-next-step";
@@ -68,6 +75,35 @@ describe("incidentFocus", () => {
     expect(incidentFocus(inc("2026-10-20T10:00:00Z"), RIG)).toBeNull(); // record from before the key
     expect(incidentFocus(inc("2026-10-20T10:00:00Z", null), RIG)).toBeNull();
     expect(incidentFocus(null, RIG)).toBeNull();
+  });
+
+  // Review r1 SHOULD-FIX 2: a driver record from another vendor's card (a GPU swap since) is not
+  // about the card on the bench; unknown on either side keeps the one-GPU rule.
+  it("graphics-driver claims the GPU only when the driver module's vendor doesn't contradict it", () => {
+    const withModule = (m: string | null) => {
+      const i = inc("2026-10-20T10:00:00Z", "graphics-driver");
+      return { ...i, receipt: { ...i.receipt, faulting_module: m } } as CrashIncident;
+    };
+    expect(incidentFocus(withModule("amdkmdag.sys"), RIG)).toMatchObject({ partId: "gpu-0" }); // Radeon drawn
+    expect(incidentFocus(withModule("nvlddmkm"), RIG)).toBeNull(); // NVIDIA record, Radeon drawn
+    expect(incidentFocus(withModule("somedriver"), RIG)).toMatchObject({ partId: "gpu-0" }); // unknown module
+    expect(incidentFocus(withModule(null), RIG)).toMatchObject({ partId: "gpu-0" });
+    const unnamed = [part("cpu", "cpu"), part("gpu-0", "gpu", "Graphics adapter")];
+    expect(incidentFocus(withModule("nvlddmkm"), unnamed)).toMatchObject({ partId: "gpu-0" }); // name says nothing
+    // Overheating reads a measured GPU temperature, not a driver module: no vendor check.
+    const hot = { ...inc("2026-10-20T10:00:00Z", "overheating"), receipt: { ...withModule("nvlddmkm").receipt } } as CrashIncident;
+    expect(incidentFocus(hot, RIG)).toMatchObject({ partId: "gpu-0" });
+  });
+
+  it("vendor readers know the common module and card names, and nothing else", () => {
+    expect(moduleVendor("atikmdag.sys")).toBe("amd");
+    expect(moduleVendor("NVLDDMKM")).toBe("nvidia");
+    expect(moduleVendor("igdkmd64.sys")).toBe("intel");
+    expect(moduleVendor("dxgkrnl.sys")).toBeNull();
+    expect(gpuNameVendor("AMD Radeon RX 9070 XT")).toBe("amd");
+    expect(gpuNameVendor("NVIDIA GeForce RTX 4070")).toBe("nvidia");
+    expect(gpuNameVendor("Intel(R) Arc(TM) A770")).toBe("intel");
+    expect(gpuNameVendor("Microsoft Basic Display Adapter")).toBeNull();
   });
 
   it("RAM is never claimed (no rule says memory alone)", () => {

@@ -35,6 +35,26 @@ export const INCIDENT_RULE_NONE: ReadonlySet<AssessmentRule> = new Set<Assessmen
   "beyond-us",
 ]);
 
+type Vendor = "amd" | "nvidia" | "intel";
+
+/** The vendor a Windows graphics-driver module belongs to; null when this build doesn't know it. */
+export function moduleVendor(module: string | null | undefined): Vendor | null {
+  const m = (module ?? "").toLowerCase();
+  if (/^(amdkmdag|atikmdag|atikmpag|amdkmpfd)/.test(m)) return "amd";
+  if (/^nvlddmkm/.test(m)) return "nvidia";
+  if (/^igdkmd/.test(m)) return "intel";
+  return null;
+}
+
+/** The vendor a drawn GPU's own name says; null when the name doesn't say. */
+export function gpuNameVendor(name: string | null | undefined): Vendor | null {
+  const n = (name ?? "").toLowerCase();
+  if (/\b(amd|radeon)\b/.test(n)) return "amd";
+  if (/\b(nvidia|geforce)\b/.test(n)) return "nvidia";
+  if (/\bintel\b/.test(n)) return "intel";
+  return null;
+}
+
 export function incidentFocus(incident: CrashIncident | null | undefined, parts: readonly FocusPart[]): IncidentFocus {
   const rule = incident?.assessment?.rule;
   if (!rule) return null;
@@ -43,5 +63,13 @@ export function incidentFocus(incident: CrashIncident | null | undefined, parts:
   if (!kind) return null;
   const matches = parts.filter((p) => p.detected && p.kind === kind);
   if (matches.length !== 1) return null;
+  // Review r1 SHOULD-FIX 2: a driver record from before a card swap (an AMD module with an NVIDIA
+  // card drawn now) is not about the card on the bench. When both vendors are known and differ, no
+  // part is claimed; when either is unknown, the one-GPU rule stands.
+  if (rule === "graphics-driver") {
+    const recorded = moduleVendor(incident?.receipt?.faulting_module);
+    const drawn = gpuNameVendor(matches[0].name);
+    if (recorded && drawn && recorded !== drawn) return null;
+  }
   return { kind: "part", rule: rule as "overheating" | "graphics-driver", partId: matches[0].id, partName: matches[0].name };
 }

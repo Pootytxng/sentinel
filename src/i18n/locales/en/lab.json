@@ -185,9 +185,9 @@
     },
     "addPartRoute": "Add a part Compy can't detect",
     "rigFocus": {
-      "overheating": "Highlighted: {{part}} — the newest crash record is consistent with it running hot.",
-      "graphicsDriver": "Highlighted: {{part}} — the newest crash record is consistent with its graphics driver timing out.",
-      "away": "The newest crash record is consistent with a problem in the app itself, not a part."
+      "overheating": "Highlighted: {{part}} — the newest record from your crash scan ({{when}}) is consistent with it running hot.",
+      "graphicsDriver": "Highlighted: {{part}} — the newest record from your crash scan ({{when}}) is consistent with its graphics driver timing out.",
+      "away": "The newest record from your crash scan ({{when}}) is consistent with a problem in the app itself, not a part."
     }
   },
   "optimizeStation": {
