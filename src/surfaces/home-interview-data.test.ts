@@ -419,6 +419,21 @@ describe("answers land on the journey that answers them", () => {
     expect(find("didItHelp", { ...RICH, trials: { armed: true, judged: 0 } }).sentence).toBe(t("home.interview.f.didItHelp.sentenceSince"));
   });
 
+  // Round 3 §4: a failed AVAILABILITY check (the gate itself) is also "couldn't read", never "has not
+  // measured". Unavailable information does not prove an empty history. Fails on the code before this fix.
+  it("'did it help?' when even the bench's gate couldn't be read says so, and never claims an empty history", () => {
+    for (const trials of [{ armed: null, judged: null }, null, undefined]) {
+      const f = find("didItHelp", { ...RICH, trials });
+      // The bench may not be there: never route to its panel; the timeline is the safe door.
+      expect(f.action.kind === "station" ? [f.action.station, f.action.arrival] : [f.action.kind]).toEqual(["blackbox", "since"]);
+      expect(f.sentence).toBe(t("home.interview.f.didItHelp.sentenceUnreadSince"));
+      expect(f.sentence).not.toMatch(/has not measured/);
+      expect(f.level).not.toBe("measured");
+    }
+    // A bench that positively read as dark IS a confirmed empty history: "not measured yet" is honest there.
+    expect(find("didItHelp", { ...RICH, trials: { armed: false, judged: 0 } }).sentence).toBe(t("home.interview.f.didItHelp.sentenceSince"));
+  });
+
   it("never sends either answer to a room the rail does not render", () => {
     const noLab = { ...RICH, rooms: ["play", "learn"] as HomeIntakeRoom[] };
     for (const id of ["wantFps", "didItHelp"] as const) {

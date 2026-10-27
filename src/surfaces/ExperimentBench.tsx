@@ -1049,8 +1049,17 @@ export default function ExperimentBench({
                   <p className="exp-note" data-testid="exp-next-done">
                     {t("lab.experimentBench.next.none")}
                   </p>
-                  <p className="exp-fineprint">
-                    {t("lab.experimentBench.next.noneWhy", { game: prettyGameName(concluded.game) || concluded.game })}
+                  <p className="exp-fineprint" data-testid="exp-next-done-why">
+                    {/* Round 3 §2: worded from what every change holds (the summary's stop counts), never
+                        "every change has a result" when one of them was never judged. */}
+                    {summary?.game === concluded.game && summary.stop.noResult + summary.stop.unverified + summary.stop.stale > 0
+                      ? [
+                          t("lab.experimentBench.summary.stopMeasured", { count: summary.stop.measured }),
+                          ...(summary.stop.noResult > 0 ? [t("lab.experimentBench.summary.stopUnjudged", { count: summary.stop.noResult })] : []),
+                          ...(summary.stop.unverified > 0 ? [t("lab.experimentBench.journey.progressUnverified", { count: summary.stop.unverified })] : []),
+                          ...(summary.stop.stale > 0 ? [t("lab.experimentBench.journey.progressStale", { count: summary.stop.stale })] : []),
+                        ].join(" ")
+                      : t("lab.experimentBench.next.noneWhy", { game: prettyGameName(concluded.game) || concluded.game })}
                     {summary?.game === concluded.game && summary.staleKept.length > 0
                       ? ` ${t("lab.experimentBench.journey.progressStaleKept", { count: summary.staleKept.length })}`
                       : null}
@@ -1436,13 +1445,16 @@ function TestSummary({ s }: { s: GameTestSummary }) {
       <SectionLabel>{t("lab.experimentBench.summary.label", { game })}</SectionLabel>
       <p className="exp-note" data-testid="exp-summary-headline">
         {s.headline === "finished-supported-tests"
-          ? t(s.unjudged.length > 0 ? "lab.experimentBench.summary.finishedSupportedTestsUnjudged" : "lab.experimentBench.summary.finishedSupportedTests", { game })
+          ? t("lab.experimentBench.summary.finishedSupportedTests", { game })
           : s.headline === "still-worth-testing"
             ? t("lab.experimentBench.summary.stillWorth", { count: s.leftToTest.length, game })
             : s.headline === "worth-retesting"
-              ? t("lab.experimentBench.summary.worthRetesting", { count: new Set([...s.retest, ...s.stale].map((r) => r.recId)).size, game })
+              ? t("lab.experimentBench.summary.worthRetesting", { count: new Set([...s.retest, ...s.stale, ...s.unverified].map((r) => r.recId)).size, game })
               : s.headline === "nothing-testable-now"
-                ? t("lab.experimentBench.summary.nothingTestableNow", { game })
+                ? // Round 3 §2: the stopping point is worded from what EVERY change holds, never from one.
+                  s.stop.measured > 0
+                  ? `${t("lab.experimentBench.summary.stoppedHere", { game })} ${t("lab.experimentBench.summary.stopMeasured", { count: s.stop.measured })} ${t("lab.experimentBench.summary.stopUnjudged", { count: s.stop.noResult })}`
+                  : t("lab.experimentBench.summary.nothingTestableNow", { game })
                 : s.headline === "results-unverified"
                   ? t("lab.experimentBench.summary.resultsUnverified", { count: s.unverified.length, game })
                   : t("lab.experimentBench.summary.unknownLeft")}
@@ -1491,7 +1503,12 @@ function TestSummary({ s }: { s: GameTestSummary }) {
       {s.retest.length > 0 && (
         <p className="exp-note" data-testid="exp-summary-retest">
           {`${t("lab.experimentBench.summary.retestLabel")} ${s.retest
-            .map((r) => t("lab.experimentBench.summary.retestRow", { title: r.title, why: t(`lab.experimentBench.summary.retestWhy.${r.measured ? "stale" : "inconclusive"}`) }))
+            .map((r) =>
+              t("lab.experimentBench.summary.retestRow", {
+                title: r.title,
+                why: t(`lab.experimentBench.summary.retestWhy.${r.measured ? (r.context === "unverified" ? "unverified" : "stale") : "inconclusive"}`),
+              }),
+            )
             .join(list)}`}
         </p>
       )}

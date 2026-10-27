@@ -275,14 +275,17 @@ async function waitForSession(
 }
 
 /** The session a next journey may reuse as its before-reading: still in the store, the same game,
- *  a usable reading, graded steady, and not recorded under a different graphics driver or Windows
- *  build than the game's newest session (P4-exit-truth review, MUST-FIX 1: reusing an old-context
- *  as-is session would keep a stale result stale, run after run; unknown context is not stale).
- *  Whether it is otherwise still comparable is the start's to say. */
+ *  a usable reading, graded steady, and recorded under the SAME graphics driver and Windows build as
+ *  the game's newest session (P4-exit-truth reviews: reusing an old- or unknown-context as-is session
+ *  would keep the next result stale or unverified, run after run). Whether it is otherwise still
+ *  comparable is the start's to say. */
 export function reusableAsIs(sessions: SessionSummary[], id: string | null, game: string | null): SessionSummary | null {
   const s = id == null ? undefined : sessions.find((x) => x.started_at === id);
   if (!s || !usable(s) || (game != null && s.process_name !== game)) return null;
-  if (contextCheckFor(game ?? s.process_name, sessions).matchOf(s.started_at) === "changed") return null;
+  // Round 3 review MUST-FIX 1: reuse needs a MATCHING context. An as-is session whose context can't be
+  // classified would make the next result unverified too (and keep it so, run after run); a fresh
+  // before-session is the only way to a verifiable result.
+  if (contextCheckFor(game ?? s.process_name, sessions).matchOf(s.started_at) !== "matching") return null;
   return gradeBaseline(s).kind === "steady" ? s : null;
 }
 async function reusableSession(id: string, game: string | null): Promise<SessionSummary | null> {
@@ -574,7 +577,7 @@ export function GuidedJourney({
   const gameName = (g: string | null) => (g ? prettyGameName(g) || g : null);
 
   // P5-resume: a journey already under way on this game (something tested or tried there).
-  const resuming = progress != null && progress.tested + progress.inconclusive + progress.stale > 0 && progress.unfinished == null;
+  const resuming = progress != null && progress.tested + progress.inconclusive + progress.stale + progress.unverified > 0 && progress.unfinished == null;
   const stopLine = (pr: JourneyProgress) =>
     `${t(`${k}.stoppedHere`, { tested: pr.tested, total: pr.total })} ${
       stillOn.length > 0 ? t(`${k}.stillOn`, { changes: stillOn.join(", ") }) : t(`${k}.noneOn`)
@@ -851,6 +854,7 @@ function progressNotes(progress: JourneyProgress, t: (key: string, opts?: Record
   return [
     ...(progress.inconclusive > 0 ? [t(`${k}.progressUnjudged`, { count: progress.inconclusive })] : []),
     ...(progress.stale > 0 ? [t(`${k}.progressStale`, { count: progress.stale })] : []),
+    ...(progress.unverified > 0 ? [t(`${k}.progressUnverified`, { count: progress.unverified })] : []),
     ...(progress.staleKept > 0 ? [t(`${k}.progressStaleKept`, { count: progress.staleKept })] : []),
   ];
 }

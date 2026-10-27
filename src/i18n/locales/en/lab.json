@@ -392,7 +392,8 @@
       "nextFresh": "Next: {{change}}, about 20 min (a new before-session first)",
       "retestWhy": {
         "inconclusive": "{{change}} was tried before, but the frame rate moved around too much to judge. This run tries it again.",
-        "stale": "{{change}} has a result from an older graphics driver or Windows build, so Compy can't say it still holds. This run checks it again."
+        "stale": "{{change}} has a result from an older graphics driver or Windows build, so Compy can't say it still holds. This run checks it again.",
+        "unverified": "{{change}} has a result Compy can't tie to this PC as it is now (no graphics driver or Windows build was recorded for it or for your newest session). This run records them."
       },
       "nothingLeft": "Nothing else here is worth testing on this PC.",
       "withChangeReused": "{{change}} is on. Compy uses your last session as the before-reading, so this is the only session: play {{game}} the same way for about 10 minutes, then close the game.",
@@ -427,6 +428,8 @@
       "progressStale_other": "{{count}} results are from an older graphics driver or Windows build.",
       "progressStaleKept_one": "{{count}} of those is a kept change: put it back to test it again.",
       "progressStaleKept_other": "{{count}} of those are kept changes: put them back to test them again.",
+      "progressUnverified_one": "{{count}} result can't be tied to this PC as it is now.",
+      "progressUnverified_other": "{{count}} results can't be tied to this PC as it is now.",
       "progressDone": "{{tested}} of {{total}} tested. Nothing else here is worth testing on this PC.",
       "progressTesting": "{{tested}} of {{total}} tested · Testing now: {{change}}",
       "progressInterrupted": "{{tested}} of {{total}} tested · {{change}} didn't finish testing (see below)",
@@ -512,7 +515,7 @@
       "setUp": "Set up this test",
       "offerOnly": "Nothing changes until you start it.",
       "none": "Nothing else here is worth testing on this PC.",
-      "noneWhy": "Every change Compy lists as worth testing here has a result on {{game}}, or couldn't be judged after two runs.",
+      "noneWhy": "No more changes are available to test on {{game}} right now.",
       "noneEffectUnknown": "Compy doesn't know how big any change's effect would be, so that list is by whether a change applies here, is already set and can be safely undone, not by size."
     },
     "readingRig": "Reading your rig…",
@@ -643,13 +646,17 @@
     "summary": {
       "label": "What Compy tested on {{game}}",
       "finishedSupportedTests": "Compy finished the supported tests for {{game}} on this PC: every change it lists as worth testing here has a measured result.",
-      "finishedSupportedTestsUnjudged": "Compy finished the supported tests for {{game}} on this PC: every change it lists as worth testing here has a measured result, except what this PC couldn't judge (below).",
       "worthRetesting_one": "{{count}} result on {{game}} needs another run before it counts: it was too noisy to judge, or it was judged under an older graphics driver or Windows build.",
       "worthRetesting_other": "{{count}} results on {{game}} need another run before they count: too noisy to judge, or judged under an older graphics driver or Windows build.",
       "stillWorth_one": "{{count}} more change is still worth testing on {{game}}, so this isn't finished yet.",
       "stillWorth_other": "{{count}} more changes are still worth testing on {{game}}, so this isn't finished yet.",
       "unknownLeft": "Compy couldn't read which changes are still worth testing, so it can't say whether anything is left.",
       "nothingTestableNow": "Nothing on {{game}} is left for Compy to test right now, but nothing was measured either: the tries it made couldn't be judged.",
+      "stoppedHere": "Nothing on {{game}} is left for Compy to test right now.",
+      "stopMeasured_one": "{{count}} change was measured.",
+      "stopMeasured_other": "{{count}} changes were measured.",
+      "stopUnjudged_one": "{{count}} couldn't be judged.",
+      "stopUnjudged_other": "{{count}} couldn't be judged.",
       "resultsUnverified_one": "Nothing on {{game}} is left for Compy to test right now. {{count}} result can't be tied to this PC as it is now (its test or your newest session recorded no graphics driver or Windows build), so Compy won't call it current.",
       "resultsUnverified_other": "Nothing on {{game}} is left for Compy to test right now. {{count}} results can't be tied to this PC as it is now (their tests or your newest session recorded no graphics driver or Windows build), so Compy won't call them current.",
       "testedLabel": "Tested:",
@@ -668,7 +675,8 @@
       "retestRow": "{{title}} ({{why}})",
       "retestWhy": {
         "inconclusive": "too noisy to judge last time",
-        "stale": "judged under an older graphics driver or Windows build"
+        "stale": "judged under an older graphics driver or Windows build",
+        "unverified": "can't be tied to this PC as it is now"
       },
       "unjudgedLabel_one": "{{count}} change this PC couldn't judge after two runs:",
       "unjudgedLabel_other": "{{count}} changes this PC couldn't judge after two runs:",

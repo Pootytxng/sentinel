@@ -455,9 +455,10 @@ export function HomeConsole({
           : null;
         if (live) setInterviewTrials({ armed: true, judged });
       } catch {
-        // Follow-up review 2026-10-26 §5: a failed read of the Trial records is "couldn't read",
-        // never "nothing measured". The gate's answer, if it came, is kept; the count is unknown.
-        if (live) setInterviewTrials(armed == null ? null : { armed, judged: null });
+        // Follow-up review 2026-10-26 §5 (and round 3 §4): a failed read is "couldn't read", never
+        // "nothing measured", whichever call failed. The gate's answer, if it came, is kept; when even
+        // the gate didn't answer, the bench's state is unknown too (`armed: null`).
+        if (live) setInterviewTrials({ armed, judged: null });
       }
     })();
     return () => {

@@ -1630,13 +1630,17 @@ describe("ExperimentBench — the next change to test after a Trial", () => {
     status,
     verdict,
     kept: status === "kept",
+    baseline_session_id: VALORANT_SESSION.started_at,
   });
 
+  // Round 3: a result counts as tested only under a MATCHING context against the newest session, so the
+  // harness session records a driver and build, and the records' baselines point at it.
+  const CTX_SESSION = { ...VALORANT_SESSION, hw_fingerprint: { gpu: "GPU", gpu_driver: "32.0.1" }, game_state: { gpu_driver: "32.0.1", windows_build: "26200.8457" } };
   /** Render a running Trial, let the store hold `after` once it concludes, and conclude it. */
   const concludeInto = async (after: unknown[]) => {
     state.gate = true;
     state.experiments = [RUNNING_EXPERIMENT];
-    state.sessions = [VALORANT_SESSION];
+    state.sessions = [CTX_SESSION];
     render(<ExperimentBench />);
     const conclude = await screen.findByRole("button", { name: /Conclude with my latest/ });
     state.experiments = after;
@@ -1677,11 +1681,14 @@ describe("ExperimentBench — the next change to test after a Trial", () => {
     expect(next).toHaveTextContent(/Next to test on Valorant: Change A/);
   });
 
+  // Round 3 of the 2026-10-26 follow-up review (§2): the "none left" line is worded from what EVERY
+  // change holds. Two measured, matching results: no more to test, plainly. One measured beside one
+  // that judged nothing and is no longer offered: the counts, never "every change has a result".
   it.each([
-    ["kept", "improved", "kept"],
-    ["restored", "no-change", "restored"],
-    ["too noisy", "too-noisy", "restored"],
-  ])("with none left after a %s result, says so as a success, not a warning", async (_n, verdict, status) => {
+    ["kept", "improved", "kept", "No more changes are available to test on Valorant right now."],
+    ["restored", "no-change", "restored", "No more changes are available to test on Valorant right now."],
+    ["too noisy", "too-noisy", "restored", "1 change was measured. 1 couldn't be judged."],
+  ])("with none left after a %s result, says so as a success, not a warning, and counts what was and wasn't measured", async (_n, verdict, status, why) => {
     state.recs = [
       cand("a-rec", "Change A", 1),
       { id: "hags", title: "HAGS", passes: false, reason: "already-set-by-compy", detail: null },
@@ -1690,7 +1697,9 @@ describe("ExperimentBench — the next change to test after a Trial", () => {
     const done = screen.getByTestId("exp-next-done");
     expect(done).toHaveTextContent("Nothing else here is worth testing on this PC.");
     expect(done.closest(".exp-bench-warn, [role=alert]")).toBeNull();
-    expect(next).toHaveTextContent("Every change Compy lists as worth testing here has a result on Valorant, or couldn't be judged after two runs.");
+    const line = screen.getByTestId("exp-next-done-why");
+    expect(line).toHaveTextContent(why);
+    expect(line).not.toHaveTextContent("has a result");
     expect(next).toHaveTextContent("Compy doesn't know how big any change's effect would be");
     expect(screen.queryByRole("button", { name: "Set up this test" })).toBeNull();
   });
@@ -2060,7 +2069,11 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     const why = screen.getByTestId("exp-outcome-choice-stale");
     expect(why).toHaveAttribute("data-context", "unverified");
     expect(why).toHaveTextContent("can't be tied to this PC as it is now");
+    // Round 3 §3 + review MUST-FIX 1: HAGS has TWO unverified measured Trials here (Recommended and
+    // Maximum FPS), so the retest cap is reached: no third run is offered, and the summary says the
+    // results can't be tied to this PC rather than "worth another run".
     expect(screen.getByTestId("exp-summary")).toHaveAttribute("data-headline", "results-unverified");
+    expect(screen.queryByTestId("exp-summary-retest")).toBeNull();
     expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("can't be tied to this PC as it is now");
   });
 

@@ -27,6 +27,7 @@ import {
   contextCheckFor,
   inconclusiveRunsOf,
   isMeasuredVerdict,
+  unverifiedRunsOf,
   judgedAt,
   RETEST_CAP,
   stillAppliedFrom,
@@ -64,6 +65,10 @@ export type JourneyProgress = {
   inconclusive: number;
   /** Changes with a measured result judged under a different driver or Windows build than now. */
   stale: number;
+  /** Round 3 §3: changes with a measured result that can't be tied to this PC as it is now (the
+   *  Trial's baseline or the game's newest session recorded no driver or build). Said apart, so the
+   *  journey and the summary agree that a historical result is not a current one. */
+  unverified: number;
   /** Stale results the picker no longer offers (the change is set now; put it back to test again). */
   staleKept: number;
   /** Tested + inconclusive + stale + unfinished + left to test. */
@@ -99,7 +104,11 @@ export function retestReasonFor(
   const newest = runs[runs.length - 1];
   if (!newest) return null;
   if (!isMeasuredVerdict(newest.verdict)) return inconclusiveRunsOf(runs, matchOf) < RETEST_CAP ? "inconclusive" : null;
-  return matchOf(newest.baseline_session_id) === "changed" ? "stale" : null;
+  const m = matchOf(newest.baseline_session_id);
+  if (m === "changed") return "stale";
+  // Round 3 review MUST-FIX 1: an unverified result is offered again at most RETEST_CAP times in a row;
+  // after that this PC evidently isn't recording its context, and another run would not change that.
+  return m === "unverified" && unverifiedRunsOf(runs, matchOf) < RETEST_CAP ? "unverified" : null;
 }
 
 /**
@@ -141,6 +150,7 @@ export function journeyProgress(
   const newestOf = (runs: ResumeExperiment[]) => runs[runs.length - 1];
   const measured = [...byRec.values()].filter((runs) => isMeasuredVerdict(newestOf(runs).verdict));
   const staleRuns = measured.filter((runs) => matchOf(newestOf(runs).baseline_session_id) === "changed");
+  const unverifiedRuns = measured.filter((runs) => matchOf(newestOf(runs).baseline_session_id) === "unverified");
   const running = experiments.find((x) => x.game === game && x.status === "running") ?? null;
   const unfinished = running && !byRec.has(running.rec_id) ? running : null;
   const left = candidates.filter((c) => !byRec.has(c.id) && c.id !== running?.rec_id);
@@ -149,9 +159,10 @@ export function journeyProgress(
   const keptBetter = newest?.status === "kept" && newest.verdict === "improved";
   return {
     game,
-    tested: measured.length - staleRuns.length,
+    tested: measured.length - staleRuns.length - unverifiedRuns.length,
     inconclusive: byRec.size - measured.length,
     stale: staleRuns.length,
+    unverified: unverifiedRuns.length,
     staleKept: staleRuns.filter((runs) => !offered.has(newestOf(runs).rec_id)).length,
     total: byRec.size + (unfinished ? 1 : 0) + left.length,
     next: nextToTest(game, experiments, candidates, sessions, running?.rec_id ?? null),

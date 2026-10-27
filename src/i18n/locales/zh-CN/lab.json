@@ -387,7 +387,8 @@
       "nextFresh": "下一项：{{change}}，约 20 分钟（先玩一局新的更改前对照）",
       "retestWhy": {
         "inconclusive": "{{change}}之前试过，但帧率波动太大无法判断。这次再试一遍。",
-        "stale": "{{change}}的结果来自更旧的显卡驱动或 Windows 版本，Compy 无法确定它是否仍然成立。这次再核对一遍。"
+        "stale": "{{change}}的结果来自更旧的显卡驱动或 Windows 版本，Compy 无法确定它是否仍然成立。这次再核对一遍。",
+        "unverified": "{{change}}的结果无法与这台电脑当前的状态对照（当时或你最新的一局没有记录显卡驱动或 Windows 版本）。这次会把它们记录下来。"
       },
       "nothingLeft": "这台电脑上没有其他值得测试的项目了。",
       "withChangeReused": "{{change}}已开启。Compy 会用你上一局作为更改前的读数，所以只需这一局：用同样的方式玩{{game}}约 10 分钟，然后关闭游戏。",
@@ -419,6 +420,7 @@
       "progressUnjudged_other": "{{count}} 次尝试无法判断。",
       "progressStale_other": "{{count}} 项结果来自更旧的显卡驱动或 Windows 版本。",
       "progressStaleKept_other": "其中 {{count}} 项是已保留的更改：先撤回，再重新测试。",
+      "progressUnverified_other": "{{count}} 项结果无法与这台电脑当前的状态对照。",
       "progressDone": "已测试 {{tested}}/{{total}} 项。这台电脑上没有其他值得测试的项目了。",
       "progressTesting": "已测试 {{tested}}/{{total}} 项 · 正在测试：{{change}}",
       "progressInterrupted": "已测试 {{tested}}/{{total}} 项 · {{change}}的测试没有完成（见下方）",
@@ -504,7 +506,7 @@
       "setUp": "准备这项测试",
       "offerOnly": "在你开始测试之前，什么都不会改动。",
       "none": "这台主机上没有其他值得测试的更改了。",
-      "noneWhy": "Compy 列为值得在这里测试的每一项更改在 {{game}} 上都有了结果，或者跑了两次仍无法判断。",
+      "noneWhy": "{{game}} 上现在没有更多可供测试的更改了。",
       "noneEffectUnknown": "Compy 不知道任何一项更改的效果会有多大，所以这份列表依据的是更改是否适用于这里、是否已设置、能否安全撤销，而不是效果大小。"
     },
     "readingRig": "正在读取你的主机…",
@@ -634,11 +636,13 @@
     "summary": {
       "label": "Compy 在 {{game}} 上测试过的内容",
       "finishedSupportedTests": "Compy 已在这台主机上完成 {{game}} 的受支持测试：它列为值得在这里测试的每一项更改都有了测得的结果。",
-      "finishedSupportedTestsUnjudged": "Compy 已在这台主机上完成 {{game}} 的受支持测试：它列为值得在这里测试的每一项更改都有了测得的结果，除了这台电脑无法判断的那些（见下方）。",
       "worthRetesting_other": "{{game}} 上有 {{count}} 项结果需要再跑一次才算数：当时噪音太大无法判断，或是在更旧的显卡驱动或 Windows 版本下测的。",
       "stillWorth_other": "{{game}} 上还有 {{count}} 项更改值得测试，所以还没有测完。",
       "unknownLeft": "Compy 无法读取哪些更改仍值得测试，所以无法判断是否还有剩余。",
       "nothingTestableNow": "{{game}} 上现在没有 Compy 可以测试的项目了，但也没有测得任何结果：所做的尝试都无法判断。",
+      "stoppedHere": "{{game}} 上现在没有 Compy 可以测试的项目了。",
+      "stopMeasured_other": "已测得 {{count}} 项更改。",
+      "stopUnjudged_other": "{{count}} 项无法判断。",
       "resultsUnverified_other": "{{game}} 上现在没有 Compy 可以测试的项目了。有 {{count}} 项结果无法与这台电脑当前的状态对照（当时的测试或你最新的一局没有记录显卡驱动或 Windows 版本），所以 Compy 不会把它们当作当前有效。",
       "testedLabel": "已测试：",
       "trials_other": "测试了 {{count}} 次",
@@ -655,7 +659,8 @@
       "retestRow": "{{title}}（{{why}}）",
       "retestWhy": {
         "inconclusive": "上次噪音太大，无法判断",
-        "stale": "在更旧的显卡驱动或 Windows 版本下测的"
+        "stale": "在更旧的显卡驱动或 Windows 版本下测的",
+        "unverified": "无法与这台电脑当前的状态对照"
       },
       "unjudgedLabel_other": "这台电脑跑了两次仍无法判断的更改（{{count}} 项）：",
       "staleKeptLabel_other": "在更旧的显卡驱动或 Windows 版本下判定、现已保留的更改（{{count}} 项；先撤回，再重新测试）：",
