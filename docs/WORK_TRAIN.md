@@ -420,7 +420,17 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       lesson from the P5-learned rule table (`test-summary.ts` `LESSON_RULES` / `lessonFor`), with a link to
       the matching Library entry (`libraryApi.openLibrary`); no rule = no lesson. `SessionDebrief.tsx`,
       `StutterCompare.tsx`. Needs P7-depth-verdicts (Debrief). ROADMAP P7 bullet 5; Constitution §14.
-- [ ] **P7-palette** The command palette understands plain problems ("it stutters", "it crashed", "more fps",
+- [x] **P7-palette** (`2f72e4a3`; feat `029c217e`, fix `dbc55768`; visual self-review owed at FULL) 13 interview
+      findings (all but the two "not sure" answers) are palette intents with plain labels + typed keywords
+      (home.json `interview.palette.*`, en + zh-CN); choosing one writes a 60-second one-shot arrival and goes
+      Home, where HomeConsole opens the interview AT that card along `pathToFinding` (Back works; the card's own
+      action waits for the tap — the palette fires nothing). Offered only with the Home console and the
+      interview both on; an interview switched off spends the key and opens nothing. Group headers now via
+      i18n. Review (1 round, APPROVE-WITH-FIXES: 2 MUST-FIX + 5 SHOULD-FIX + 2 NIT taken; per-row hint and the
+      pre-existing header role kept). Guards: intents census + zh words + pathToFinding; palette ranking for
+      the four named phrases, keyword collisions (ram, compare, desktop, 卡, 死机), zh header, App
+      write-before-navigate + flag gating, ShellV2 forwarding; Home arrival before/after mount, junk, interview
+      off, expired. Landing gate r20: tsc 0, 523 files green. The command palette understands plain problems ("it stutters", "it crashed", "more fps",
       "what changed"): intent items reuse the interview finding actions from P7-route, so typing a symptom
       lands on the same journey as answering it. `command-palette-data.ts`, `CommandPalette.tsx`. Needs
       P7-route. ROADMAP P7 bullet 1; Constitution §27.
@@ -515,6 +525,11 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   `3fb653a3`, fix `7d0eae04`), landing gate r18 caught an a11y-census gap and a Care next-step flake → `3801b499`,
   merged `ab2cdda8`; r19 FULL vitest 523 files / 10724, exit 0, tsc 0. Lesson: run the a11y census guard in the
   touched set whenever src/design gains a file. Not pushed.
+- 2026-10-27 ~13:00–15:40 (interactive from Claude HQ, CODE-ONLY; model switched by the owner to Opus 5.5
+  mid-item): P7-palette `2f72e4a3` (feat `029c217e`, fix `dbc55768`), r20 FULL vitest 523 files, exit 0, tsc 0.
+  r20 ran 10068 tests vs r19 10724: the whole gap is `scripts/main-module-idiom-guard.test.mjs` (2010 → 1338
+  cases), which walks `.claude/` including `.claude/worktrees/*`, so its count tracks how many train worktrees
+  exist (r19 had two, r20 one) — not lost coverage. Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
