@@ -179,7 +179,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       fresh before-reading; a stale result is counted apart from tested, and a kept one is listed with "put it
       back, then test again"; the just-judged Trial replaces the store's running copy of itself; journey and
       summary share one newest-Trial comparator (`judgedAt`). Decision to overrule if wanted: the two-run cap.
-- [x] **P4-exit-truth-f1** (this entry's commit; the 2026-10-26 follow-up review's five findings, one bounded
+- [x] **P4-exit-truth-f1** (2af5f7e2, fix 748e2192; the 2026-10-26 follow-up review's five findings, one bounded
       pass) §1 one validity rule: `contextCheckFor(...).matchOf` (GPU + driver + Windows build → matching /
       changed / unverified) now serves the summary, the journey, as-is reuse AND the outcome switch, which
       withholds a keep whose Trial ran under a changed context (`keepStale`; trade still shown as history).
@@ -373,8 +373,8 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   on the desk; one review round, all findings fixed (details under the item); not pushed.
 - 2026-10-26 afternoon (scheduled, CODE-ONLY, owner on PC): P7-route `9fefbf6d` (resumed parked worktree;
   TS-only, no Rust); tsc 0, full vitest 521 files / 9312 passed; visual self-review owed; not pushed.
-- 2026-10-26 ~19:35–20:40 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f1 (this entry's
-  commit; the follow-up review's five findings); tsc 0, vitest 21 files / 466 passed on the desk; one review
+- 2026-10-26 ~19:35–20:40 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f1 2af5f7e2
+  (the follow-up review's five findings); tsc 0, vitest 21 files / 466 passed on the desk; one review
   round, all SHOULD-FIXes taken; not pushed.
 
 ## Done
