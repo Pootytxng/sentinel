@@ -406,7 +406,17 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       `lib.rs` `notify_debrief_ready`, `monitoring.rs` ~1286, `sessions.rs` `save_session`; Rust unit tests.
       Care incident toast (`incident_observer.rs`) already follows the rule: leave it. ROADMAP P7 bullet 3;
       Constitution §15, §33. Parallel-safe (Rust only). Review: one agent (Rust).
-- [ ] **P7-teach** After personal evidence only: the Debrief and the Care stutter comparison show at most one
+- [x] **P7-teach** (`d501a659` + gate repairs `ab2cdda8`; feat `3fb653a3`, fix `7d0eae04`, test `3801b499`; visual
+      self-review owed at FULL) `lessonRuleFor` / `lessonRuleForVerdict` (test-summary.ts) are the one rule table
+      behind the Trial summary, the Debrief comparison card (lesson behind Why, worded for the Trial of that change)
+      and the Care stutter comparison (`stutterLessonRule`: deltas from the report's own session readings against
+      its floor, worded for two sessions; the stored verdict wins, confounded / zero floor / inside-floor teach
+      nothing). `src/design/LessonLine.tsx` links the Library entry (`LESSON_LIBRARY_ID`: one-percent-lows, noise-floor
+      for too-noisy). Review (1 round, APPROVE-WITH-FIXES, 3 SHOULD-FIX + 5 NIT taken; stutter line stays outside
+      a Depth). Guards: test-summary (rules, dirs, key-exists in both locales, entries exist), SessionDebrief
+      (lesson behind Why; verdict wins; confounded none), StutterCompare (rule, verdict wins, render + none),
+      a11y census roster. Landing gate r19: 523 files / 10724 green after two repairs (LessonLine roster; Care
+      next-step explanation waited for). After personal evidence only: the Debrief and the Care stutter comparison show at most one
       lesson from the P5-learned rule table (`test-summary.ts` `LESSON_RULES` / `lessonFor`), with a link to
       the matching Library entry (`libraryApi.openLibrary`); no rule = no lesson. `SessionDebrief.tsx`,
       `StutterCompare.tsx`. Needs P7-depth-verdicts (Debrief). ROADMAP P7 bullet 5; Constitution §14.
@@ -501,6 +511,10 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   `7b55540b`), FULL vitest 523 files / 10708, exit 0, one review round (APPROVE + SHOULD-FIX taken);
   P7-score `d2f5b002` (fix `81ccb193`), FULL vitest 523 files / 10709, exit 0. Visual self-review owed (FULL).
   Not pushed.
+- 2026-10-27 ~12:00–13:00 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-teach `d501a659` (feat
+  `3fb653a3`, fix `7d0eae04`), landing gate r18 caught an a11y-census gap and a Care next-step flake → `3801b499`,
+  merged `ab2cdda8`; r19 FULL vitest 523 files / 10724, exit 0, tsc 0. Lesson: run the a11y census guard in the
+  touched set whenever src/design gains a file. Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
