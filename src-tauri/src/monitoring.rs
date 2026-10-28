@@ -1087,11 +1087,13 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
     // presented frames (so cancelled/idle starts leave no empty record).
     {
         let started_at = chrono::Utc::now().to_rfc3339();
-        // #669: ONE ledger read; a read that fails here, or a ledger set aside as damaged earlier,
-        // records NO count — never a fabricated 0.
+        // #669: ONE ledger read; a read that fails here records NO count — never a fabricated 0.
+        // #618: the ledger is loaded before the set-aside marker is read; a session begun after a
+        // set-aside records the fresh ledger's counts as counts since it, never as its total.
         let active_changes = crate::history::session_start_counts(
-            crate::history::load_history(),
-            crate::history::ledger_was_quarantined(),
+            crate::history::load_history,
+            crate::history::ledger_set_aside_through,
+            &started_at,
         );
         std::thread::spawn(move || {
             use std::sync::atomic::Ordering;

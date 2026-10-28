@@ -1754,6 +1754,7 @@ mod blackbox_tests {
             compy_changes_per_change: true,
             compy_changes_cant_confirm: Some(0),
             compy_changes_legacy_active: None,
+            compy_changes_since_set_aside: None,
             hw_fingerprint: None,
             gaming_mode_active: None,
             stutter_insight: None,

@@ -245,7 +245,9 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
     // The band is max(measured spread between unchanged sessions, 3%), computed once at start from
     // the ledger that start loaded, and kept on the record for the verdict.
     const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
-    const measure = start.indexOf("crate::noise_floor::between_session_noise(&sessions, baseline, &ledger_rows(changes))");
+    // #618: over the sessions the ledger covers (every session unless an earlier history was set aside).
+    const measure = start.indexOf("crate::noise_floor::between_session_noise(&covered, baseline, &ledger_rows(changes))");
+    expect(start).toContain("let covered = sessions_the_ledger_covers(&sessions, coverage);");
     const band = start.indexOf("let noise_floor_pct = crate::noise_floor::noise_band_pct(between.as_ref());");
     expect(measure, "the start no longer measures the game's between-session noise").toBeGreaterThanOrEqual(0);
     expect(band, "the band no longer comes from the measurement").toBeGreaterThan(measure);
@@ -267,7 +269,7 @@ describe("a Trial measures one change, and says so only when it can (#611 review
   const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
 
   it("§3: the baseline must still match Compy's changes before anything is recorded or applied", () => {
-    const check = start.indexOf("baseline_checked_view(baseline, &history)");
+    const check = start.indexOf("baseline_checked_view(baseline, &history, coverage)");
     expect(check, "the start no longer checks that the baseline is current").toBeGreaterThanOrEqual(0);
     expect(check).toBeGreaterThan(start.indexOf("resolve_baseline("));
     expect(check).toBeLessThan(start.indexOf("status: ExperimentStatus::Pending"));
@@ -317,14 +319,101 @@ describe("a Trial measures one change, and says so only when it can (#611 review
 describe("a Trial never reads a lost history as a quiet one (#611 review round 2)", () => {
   const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
   const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
-  const read = /ledger_for_one_change_checks\(\s*crate::history::load_history\(\),\s*crate::history::ledger_was_quarantined\(\),?\s*\)/;
+  // #618: bounded by WHEN the ledger was set aside, against the baseline the Trial itself measured.
+  // #618 review (P2): both reads go to the one helper that loads the ledger BEFORE it reads the
+  // marker — handed over by name, never as values a call site could evaluate in its own order.
+  const read = (baseline: string) =>
+    new RegExp(
+      String.raw`ledger_view_for_one_change_checks\(\s*crate::history::load_history,\s*` +
+        String.raw`crate::history::ledger_set_aside_through,\s*` +
+        baseline +
+        String.raw`,?\s*\)`,
+    );
+  const sites = [
+    ["start", start, read(String.raw`Some\(baseline\.started_at\.as_str\(\)\)`)],
+    ["conclude", conclude, read(String.raw`store\.experiments\[idx\]\.baseline_session_id\.as_deref\(\)`)],
+    ["readiness", fnBody(EXPERIMENT, "pub(crate) fn get_smoothest_readiness("), read(String.raw`Some\(from\.started_at\.as_str\(\)\)`)],
+    ["session-end notice", fnBody(EXPERIMENT, "pub(crate) fn session_end_notice_now("), read(String.raw`Some\(session\.started_at\.as_str\(\)\)`)],
+    ["next band", fnBody(EXPERIMENT, "pub(crate) fn next_trial_measured_band_pct("), read(String.raw`Some\(baseline\.started_at\.as_str\(\)\)`)],
+  ] as const;
 
-  it("start and conclude read the ledger through the set-aside check, never raw", () => {
-    for (const [name, body] of [["start", start], ["conclude", conclude]] as const) {
-      expect(body, `${name} no longer counts a set-aside ledger as incomplete`).toMatch(read);
-      expect(body.replace(read, ""), `${name} reads the ledger raw again`).not.toContain("crate::history::load_history()");
+  it("every Trial-side read goes through the set-aside check, bounded by its own session, never raw", () => {
+    for (const [name, body, bounded] of sites) {
+      expect(body, `${name} no longer bounds a set-aside ledger by its session`).toMatch(bounded);
+      const rest = body.replace(bounded, "");
+      expect(rest, `${name} reads the ledger raw again`).not.toContain("crate::history::load_history(");
+      expect(rest, `${name} reads the marker on its own again`).not.toContain("ledger_set_aside_through(");
+      expect(rest, `${name} orders the two reads itself again`).not.toContain("ledger_for_one_change_checks(");
+      // The yes/no marker refused every Trial forever on a PC whose ledger was set aside once.
+      expect(body, `${name} is back on the unbounded marker`).not.toContain("ledger_was_quarantined");
     }
-    expect(fnBody(EXPERIMENT, "fn ledger_for_one_change_checks<")).toMatch(/if set_aside \{\s*return Err/);
+    expect(EXPERIMENT, "experiment.rs reads the unbounded marker again").not.toContain("ledger_was_quarantined");
+  });
+
+  // #618 review (P2): a damaged ledger is set aside by whichever reader loads it first, and a
+  // background reader (a session summary being saved) can be that one, between a start's two reads.
+  it("the ledger is loaded before the set-aside marker is read, in one place", () => {
+    const view = fnBody(EXPERIMENT, "fn ledger_view_for_one_change_checks<");
+    const load = view.indexOf("let loaded = load();");
+    const marker = view.indexOf("let coverage = crate::history::ledger_coverage(set_aside_through(), began);");
+    expect(load, "the helper no longer loads the ledger through its closure").toBeGreaterThanOrEqual(0);
+    expect(marker, "the helper no longer reads the marker through its closure").toBeGreaterThanOrEqual(0);
+    expect(load, "the marker is read before the ledger again").toBeLessThan(marker);
+    expect(view).toContain("(ledger_for_one_change_checks(loaded, coverage), coverage)");
+    expect(view).toMatch(/load: impl FnOnce\(\) -> Result<Vec<T>, String>,/);
+    expect(view).toMatch(/set_aside_through: impl FnOnce\(\) -> Result<Option<DateTime<Utc>>, String>,/);
+    expect(EXPERIMENT, "the deterministic race guard is gone").toContain(
+      "fn a_set_aside_that_lands_during_the_ledger_load_is_never_missed()",
+    );
+    // The session start makes the same two reads, in the same order.
+    const counts = fnBody(HISTORY, "pub(crate) fn session_start_counts(");
+    expect(counts.indexOf("let loaded = load();")).toBeGreaterThanOrEqual(0);
+    expect(counts.indexOf("let loaded = load();")).toBeLessThan(counts.indexOf("ledger_coverage(set_aside_through(), Some(began))"));
+    expect(HISTORY).toContain("fn a_session_start_sees_a_set_aside_that_lands_during_its_load()");
+  });
+
+  // #618: only a session that began after the set-aside time, plus a slack for the file clock, is
+  // covered by the fresh ledger. Every other shape is lost or unknown, and neither passes.
+  it("a set-aside ledger covers only a session that began after it, and unknown refuses", () => {
+    const coverage = fnBody(HISTORY, "pub(crate) fn ledger_coverage(");
+    expect(coverage).toContain("through.checked_add_signed(SET_ASIDE_TIME_SLACK)");
+    expect(coverage).toMatch(/Ok\(None\) => return LedgerCoverage::Whole/);
+    expect(coverage).toMatch(/Err\(_\) => return LedgerCoverage::Unknown/);
+    expect(coverage).toMatch(/Some\(began\) if began\.with_timezone\(&Utc\) > edge => LedgerCoverage::SinceSetAside\(through\)/);
+    expect(coverage).toMatch(/Some\(_\) => LedgerCoverage::Lost/);
+    expect(coverage).toMatch(/None => LedgerCoverage::Unknown/);
+    expect(coverage.match(/SinceSetAside/g), "a new way to be covered").toHaveLength(1);
+    expect(HISTORY).toMatch(/pub\(crate\) const SET_ASIDE_TIME_SLACK: chrono::TimeDelta = chrono::TimeDelta::seconds\([1-9]\d*\);/);
+    const check = fnBody(EXPERIMENT, "fn ledger_for_one_change_checks<");
+    expect(check).toMatch(/LedgerCoverage::Whole \| LedgerCoverage::SinceSetAside\(_\) => Ok\(history\)/);
+    expect(check.match(/Ok\(history\)/g), "a new way to pass the check").toHaveLength(1);
+  });
+
+  // #618 review: a Trial that starts after a set-aside counts active changes from the fresh ledger
+  // only, so "no other change is active" would be a claim Compy can't back.
+  it("a Trial after a set-aside never calls the rig clean", () => {
+    expect(start).toContain("attribution_warning(others, matches!(coverage, LedgerCoverage::SinceSetAside(_)))");
+    const warn = fnBody(EXPERIMENT, "pub(crate) fn attribution_warning(");
+    expect(warn.match(/=> None/g), "a second way to say nothing").toHaveLength(1);
+    expect(warn).toContain("(0, false) => None");
+  });
+
+  // #618: history.rs is the safety boundary; the time comes from the marker's metadata alone.
+  it("the set-aside time is a read-only metadata read, never a clock or a write", () => {
+    const at = fnBody(HISTORY, "fn set_aside_through_at(");
+    expect(at).toContain('std::fs::metadata(path.with_extension("json.corrupt"))');
+    expect(at).toMatch(/ErrorKind::NotFound => Ok\(None\)/);
+    expect(at).toMatch(/\.modified\(\)/);
+    expect(at).not.toMatch(/fs::(?:write|rename|remove|create|copy|OpenOptions)|File::|set_modified|now\(\)|unwrap_or/);
+    expect(fnBody(HISTORY, "pub(crate) fn ledger_set_aside_through(")).toContain("set_aside_through_at(&history_path())");
+  });
+
+  // #618: after a set-aside, noise pairs only sessions the fresh ledger covers.
+  it("between-session measurements pair only sessions the ledger covers", () => {
+    for (const [name, body] of sites) {
+      if (!body.includes("between_session_noise(") && !body.includes("smoothest_for(")) continue;
+      expect(body, `${name} pairs sessions the ledger can't cover`).toContain("sessions_the_ledger_covers(");
+    }
   });
 
   it("a crash is pinned on the change only in a session begun after it took effect", () => {
@@ -410,7 +499,7 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
   it("the start note names only other settings; the stored count stays the sessions' count", () => {
     const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
     expect(start, "the note counts the setting under test again").toMatch(
-      /let others = other_active_changes\(&view\.active_recs, &rec_id\);\s*let warning = attribution_warning\(others\);/,
+      /let others = other_active_changes\(&view\.active_recs, &rec_id\);\s*let warning = attribution_warning\(others, /,
     );
     expect(start, "the stored count no longer matches what sessions record").toContain("active_changes_at_start: active,");
     expect(fnBody(EXPERIMENT, "pub(crate) fn other_active_changes(")).toContain('rec.as_str() != own_rec');
@@ -498,10 +587,11 @@ describe("a Trial start counts its changes from the one ledger it loaded (#668)"
   it("no count in the start comes from a second read of the change history", () => {
     expect(start, "the baseline check reads the ledger again for its count").not.toContain("applied_changes_summary(");
     expect(start, "the record's count reads the ledger again").not.toContain("active_change_count(");
-    expect(start.match(/load_history\(\)/g) ?? [], "the start loads the ledger more than once").toHaveLength(1);
-    const view = start.indexOf("let view = baseline_checked_view(baseline, &history)");
+    expect(start.match(/load_history\b/g) ?? [], "the start loads the ledger more than once").toHaveLength(1);
+    expect(start, "the start calls the load itself again").not.toContain("load_history()");
+    const view = start.indexOf("let view = baseline_checked_view(baseline, &history, coverage)");
     expect(view, "the start no longer folds its view from the loaded rows").toBeGreaterThan(
-      start.indexOf("ledger_for_one_change_checks("),
+      start.indexOf("ledger_view_for_one_change_checks("),
     );
     expect(start).toContain("let active = view.active;");
     expect(start).toContain("active_changes_at_start: active,");
@@ -526,12 +616,13 @@ describe("a Trial start counts its changes from the one ledger it loaded (#668)"
 describe("a session records its change count from a checked read, or no count at all (#669)", () => {
   const MONITORING = readFileSync(join("src-tauri", "src", "monitoring.rs"), "utf8");
 
-  it("the session start takes its counts from session_start_counts(load_history(), ledger_was_quarantined())", () => {
-    // A ledger set aside as history.json.corrupt loads empty from then on; the marker is the only
-    // evidence the count is lost, so the session start must hand it in with the load.
+  it("the session start takes its counts from session_start_counts(load_history, ledger_set_aside_through, &started_at)", () => {
+    // A ledger set aside as history.json.corrupt loads empty from then on; the marker's time is the
+    // only evidence of what the count lost, so the session start hands both reads in by name (the
+    // load first, #618 review P2) with its own start.
     expect(MONITORING.replace(/\s+/g, " ")).toContain(
       "let active_changes = crate::history::session_start_counts( " +
-        "crate::history::load_history(), crate::history::ledger_was_quarantined(), );",
+        "crate::history::load_history, crate::history::ledger_set_aside_through, &started_at, );",
     );
     expect(MONITORING, "the zero-collapsing summary is back at the session start").not.toContain(
       "applied_changes_summary().active",

@@ -1716,6 +1716,82 @@ pub(crate) fn ledger_was_quarantined() -> bool {
     history_path().with_extension("json.corrupt").exists()
 }
 
+/// How far a set-aside Trust Ledger reached (#618): the moment `history.json.corrupt` was last written.
+///
+/// `Ok(None)`: nothing was ever set aside. `Ok(Some(t))`: every change the lost ledger recorded was
+/// applied or undone at or before `t`. `Err`: a marker may exist, but its time can't be read, so
+/// callers must treat the whole ledger as in doubt. Unknown stays unknown.
+///
+/// This is the file's modified time, not the time of the rename. A rename keeps the modified time,
+/// so `t` is when the lost ledger was last WRITTEN, which is at or before the rename. That is the
+/// bound a "did anything move since X?" check needs. Every row the lost file held was saved at or
+/// before `t`. Nothing can move between that last write and the rename, because every apply and
+/// every rollback loads the ledger BEFORE it touches Windows (`begin_mutation`,
+/// `rollback_change_inner`), and the first load of a damaged file is the one that sets it aside and
+/// refuses. From the rename on, the fresh `history.json` records every move.
+///
+/// Read-only: one metadata read. It does not write, and it never takes a time from the clock.
+pub(crate) fn ledger_set_aside_through() -> Result<Option<chrono::DateTime<Utc>>, String> {
+    set_aside_through_at(&history_path())
+}
+
+fn set_aside_through_at(path: &Path) -> Result<Option<chrono::DateTime<Utc>>, String> {
+    match std::fs::metadata(path.with_extension("json.corrupt")) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("the set-aside change history can't be checked ({e})")),
+        Ok(meta) => meta
+            .modified()
+            .map(|t| Some(chrono::DateTime::<Utc>::from(t)))
+            .map_err(|e| format!("the set-aside change history has no readable time ({e})")),
+    }
+}
+
+/// How much later than a set-aside ledger's last write a session must begin to count as covered by
+/// the fresh one (#618). A file's modified time is stamped from a coarser clock than a session start
+/// (about 16 ms on NTFS, 2 s on FAT), so a session begun just before that write could otherwise read
+/// as just after it.
+pub(crate) const SET_ASIDE_TIME_SLACK: chrono::TimeDelta = chrono::TimeDelta::seconds(2);
+
+/// What the Trust Ledger can say about Compy's moves since a session began (#618). The set-aside
+/// marker is permanent, so a plain "was it ever set aside?" refused every Trial on that PC forever;
+/// the loss has an edge in time instead ([`ledger_set_aside_through`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LedgerCoverage {
+    /// Nothing was ever set aside: the ledger is the whole history.
+    Whole,
+    /// A damaged ledger was set aside, last written at the time held here, and the session began
+    /// more than [`SET_ASIDE_TIME_SLACK`] after it: the fresh ledger holds every Compy move since the
+    /// session began. Its counts are NOT totals: changes the lost ledger recorded may still be in
+    /// place, so they compare only with counts made since the same set-aside.
+    SinceSetAside(chrono::DateTime<Utc>),
+    /// The session began at or before the lost ledger's last write: moves it needs may be lost.
+    Lost,
+    /// A marker exists but its time can't be read, or the session's start can't be. Unknown stays
+    /// unknown: nothing that needs coverage passes on it.
+    Unknown,
+}
+
+/// Pure (#618): [`LedgerCoverage`] for a session that began at `began` (RFC 3339), from
+/// [`ledger_set_aside_through`]'s answer. Instants are compared, never text.
+pub(crate) fn ledger_coverage(
+    set_aside_through: Result<Option<chrono::DateTime<Utc>>, String>,
+    began: Option<&str>,
+) -> LedgerCoverage {
+    let through = match set_aside_through {
+        Ok(None) => return LedgerCoverage::Whole,
+        Ok(Some(t)) => t,
+        Err(_) => return LedgerCoverage::Unknown,
+    };
+    let Some(edge) = through.checked_add_signed(SET_ASIDE_TIME_SLACK) else {
+        return LedgerCoverage::Unknown;
+    };
+    match began.and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok()) {
+        Some(began) if began.with_timezone(&Utc) > edge => LedgerCoverage::SinceSetAside(through),
+        Some(_) => LedgerCoverage::Lost,
+        None => LedgerCoverage::Unknown,
+    }
+}
+
 /// What Compy can honestly say about its OWN record right now — the read side of the question
 /// `intelligence::LedgerHealth` already answers for the "What changed?" engine.
 ///
@@ -1865,16 +1941,41 @@ impl AppliedChangesSummary {
     }
 }
 
-/// The change counts a session records when it begins, from the one ledger read the session start
-/// passes in: `None` when that read failed or the ledger was set aside earlier. A session keeps these
-/// for the rest of its life — every Trial baseline check, debrief and comparison reads them back — so
-/// a lost count must stay "not recorded", never the 0 the zero-collapsing summary would give it
-/// (#669; never claim unmeasured). Adds no write of its own and no retry.
+/// The change counts a session records when it begins (#669, #618), from one ledger read.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct SessionStartCounts {
+    /// The counts over the whole history. `None` when the read failed, or when a ledger was set
+    /// aside earlier: the fresh ledger's counts are then not totals, so they are never recorded as
+    /// the session's count (every Debrief, Monitor and Trial line reads that back as a total).
+    pub(crate) whole: Option<SessionChangeCounts>,
+    /// #618: after a set-aside, the fresh ledger's counts and the set-aside time they are counted
+    /// since. Complete for every Compy move after that time, never a total: compared only with
+    /// counts made since the same set-aside.
+    pub(crate) since_set_aside: Option<(SessionChangeCounts, chrono::DateTime<Utc>)>,
+}
+
+/// The change counts a session records when it begins at `began`, from one ledger load and then
+/// one read of the set-aside marker, in that order (#618 review P2): a set-aside the load caused, or
+/// one a background reader made before it, is on disk by the time the marker is read. A failed load,
+/// a session begun at or before a set-aside, and an unreadable time all record nothing (#669; never
+/// claim unmeasured). The reads come in as closures so a test can stage a set-aside DURING the load.
+/// Adds no write of its own and no retry.
 pub(crate) fn session_start_counts(
-    loaded: Result<Vec<AppliedChange>, String>,
-    set_aside: bool,
-) -> Option<SessionChangeCounts> {
-    checked_summary(loaded, set_aside).ok().map(|summary| summary.session_counts())
+    load: impl FnOnce() -> Result<Vec<AppliedChange>, String>,
+    set_aside_through: impl FnOnce() -> Result<Option<chrono::DateTime<Utc>>, String>,
+    began: &str,
+) -> SessionStartCounts {
+    let loaded = load();
+    let coverage = ledger_coverage(set_aside_through(), Some(began));
+    let Ok(history) = loaded else {
+        return SessionStartCounts::default();
+    };
+    let counts = summarize_history(&history).session_counts();
+    match coverage {
+        LedgerCoverage::Whole => SessionStartCounts { whole: Some(counts), since_set_aside: None },
+        LedgerCoverage::SinceSetAside(at) => SessionStartCounts { whole: None, since_set_aside: Some((counts, at)) },
+        LedgerCoverage::Lost | LedgerCoverage::Unknown => SessionStartCounts::default(),
+    }
 }
 
 /// The Trust Ledger roll-up that keeps a failed read or a set-aside ledger as the error it is,
@@ -4042,23 +4143,123 @@ mod history_tests {
         assert_eq!(s.externally_reverted, 0);
     }
 
+    fn utc(at: &str) -> chrono::DateTime<Utc> {
+        chrono::DateTime::parse_from_rfc3339(at).unwrap().with_timezone(&Utc)
+    }
+    const SET_ASIDE_AT: &str = "2026-09-01T10:00:00.123456789+00:00";
+
     // #669: the count a session records when it begins comes from ONE ledger read, and a read that
     // fails at that moment records NO count — never the 0 the zero-collapsing summary would give it
     // (a Trial started on such a baseline would read "0 then, 0 now" on a stock rig and pass).
+    // #618: after a set-aside, a session begun past its edge records the fresh ledger's counts as
+    // counts SINCE that set-aside, never as its total.
     #[test]
     fn a_session_start_records_no_count_when_the_ledger_read_failed() {
-        let active = |r: Result<Vec<AppliedChange>, String>, aside| session_start_counts(r, aside).map(|c| c.active);
-        assert_eq!(active(Err("sharing violation".into()), false), None);
-        assert_eq!(active(Ok(Vec::new()), false), Some(Some(0)));
+        let never = || Ok(None);
+        let later = "2026-09-02T10:00:00+00:00";
+        let start = |r: Result<Vec<AppliedChange>, String>| session_start_counts(move || r, never, later);
+        assert_eq!(start(Err("sharing violation".into())), SessionStartCounts::default());
+        assert_eq!(start(Ok(Vec::new())).whole.map(|c| c.active), Some(Some(0)));
         let history = vec![record("unknown-x", "applied"), record("unknown-y", "rolled_back")];
         // 453-f1: a ledger whose only live change can't be confirmed has counts, but its active
         // count is unknown — nothing was confirmed either way, so it is never recorded as 0.
-        let counts = session_start_counts(Ok(history.clone()), false).expect("a readable ledger has counts");
+        let counts = start(Ok(history.clone())).whole.expect("a readable ledger has counts");
         assert_eq!((counts.active, counts.cant_confirm, counts.legacy_active), (None, 1, 1));
+
         // A ledger set aside as history.json.corrupt loads EMPTY from then on (or with only the rows
-        // added since): its count is LOST, not 0 (rust-tauri-reviewer on #669, same class).
-        assert_eq!(active(Ok(Vec::new()), true), None);
-        assert_eq!(active(Ok(history), true), None);
+        // added since): its count is LOST as a total, never 0 (rust-tauri-reviewer on #669).
+        let aside = || Ok(Some(utc(SET_ASIDE_AT)));
+        let after = session_start_counts(|| Ok(history.clone()), aside, later);
+        assert_eq!(after.whole, None, "a fresh ledger's count is never recorded as the session's total");
+        let (since, at) = after.since_set_aside.expect("a session begun after the set-aside counts since it");
+        assert_eq!((since.active, since.cant_confirm, at), (None, 1, utc(SET_ASIDE_AT)));
+        // Begun at the set-aside, or inside the slack, it may be missing moves: nothing at all.
+        for began in [SET_ASIDE_AT, "2026-09-01T10:00:02.123456789+00:00", "2026-08-01T00:00:00Z"] {
+            assert_eq!(session_start_counts(|| Ok(Vec::new()), aside, began), SessionStartCounts::default(), "{began}");
+        }
+        // A marker whose time can't be read records nothing, however late the session began.
+        let unread = || Err("access denied".to_string());
+        assert_eq!(session_start_counts(|| Ok(Vec::new()), unread, later), SessionStartCounts::default());
+    }
+
+    // #618 review (P2): the marker is read AFTER the load. A set-aside that lands during the load (this
+    // load, or a background reader's just before it) is seen, so the fresh empty ledger it leaves is
+    // never recorded as a whole history of "0 changes".
+    #[test]
+    fn a_session_start_sees_a_set_aside_that_lands_during_its_load() {
+        use std::cell::Cell;
+        let marker: Cell<Option<chrono::DateTime<Utc>>> = Cell::new(None);
+        let load = || {
+            marker.set(Some(utc(SET_ASIDE_AT)));
+            Ok(Vec::new())
+        };
+        let counts = session_start_counts(load, || Ok(marker.get()), SET_ASIDE_AT);
+        assert_eq!(counts, SessionStartCounts::default(), "a set-aside during the load is never a whole 0");
+    }
+
+    // #618: the set-aside marker is permanent, so the loss needs an edge in time. Only a session that
+    // began after the lost ledger's last write (plus the file-clock slack) is covered; unknown on
+    // either side is unknown.
+    #[test]
+    fn ledger_coverage_has_an_edge_in_time_and_unknown_stays_unknown() {
+        let through = || Ok(Some(utc(SET_ASIDE_AT)));
+        assert_eq!(ledger_coverage(Ok(None), None), LedgerCoverage::Whole, "nothing set aside: no time consulted");
+        // At, before, or within the slack: lost. The same instant in another offset is the same instant.
+        for began in [
+            SET_ASIDE_AT,
+            "2026-09-01T12:00:00.123456789+02:00",
+            "2026-09-01T09:00:00Z",
+            "2026-09-01T10:00:02.123456789+00:00",
+        ] {
+            assert_eq!(ledger_coverage(through(), Some(began)), LedgerCoverage::Lost, "{began}");
+        }
+        // Strictly past the slack, to the nanosecond: covered since the set-aside time.
+        assert_eq!(
+            ledger_coverage(through(), Some("2026-09-01T10:00:02.123456790+00:00")),
+            LedgerCoverage::SinceSetAside(utc(SET_ASIDE_AT))
+        );
+        // Unknown: an unreadable marker time, a time too late to add the slack to, a missing or
+        // garbled start.
+        assert_eq!(ledger_coverage(Err("denied".into()), Some("2099-01-01T00:00:00Z")), LedgerCoverage::Unknown);
+        assert_eq!(ledger_coverage(Ok(Some(chrono::DateTime::<Utc>::MAX_UTC)), Some("2099-01-01T00:00:00Z")), LedgerCoverage::Unknown);
+        for began in [None, Some("not a time"), Some("")] {
+            assert_eq!(ledger_coverage(through(), began), LedgerCoverage::Unknown, "{began:?}");
+        }
+    }
+
+    #[test]
+    fn set_aside_time_is_the_lost_ledgers_last_write_carried_through_the_rename() {
+        // #618: the Trial's one-change checks bound a set-aside ledger by this time, so it must be
+        // the lost file's own last write (every row it held is at or before it), read from disk and
+        // never from the clock. With no marker it is None. If the marker can't be read it is unknown.
+        let dir = std::env::temp_dir().join(format!("compy-hist-set-aside-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        assert_eq!(set_aside_through_at(&path), Ok(None), "nothing set aside reads as None");
+
+        // Back-date the damaged ledger's last write, so a reading taken from the clock could never pass.
+        let written = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
+        std::fs::write(&path, b"{ not json ]]]").unwrap();
+        std::fs::File::options().write(true).open(&path).unwrap().set_modified(written).unwrap();
+        assert!(load_history_from(&path).is_err(), "the first load sets it aside");
+        assert!(load_history_from(&path).unwrap().is_empty(), "the fresh ledger starts empty");
+        assert_eq!(
+            set_aside_through_at(&path),
+            Ok(Some(chrono::DateTime::<Utc>::from(written))),
+            "the rename carries the lost file's last write, never the moment it was read"
+        );
+
+        // A second set-aside replaces the marker, and its later write moves the edge forward: every
+        // row either lost ledger held is still at or before it.
+        let later = written + std::time::Duration::from_secs(3_600);
+        std::fs::write(&path, b"[ torn").unwrap();
+        std::fs::File::options().write(true).open(&path).unwrap().set_modified(later).unwrap();
+        assert!(load_history_from(&path).is_err(), "the second damaged ledger is set aside too");
+        assert_eq!(set_aside_through_at(&path), Ok(Some(chrono::DateTime::<Utc>::from(later))));
+        std::fs::remove_dir_all(&dir).ok();
+
+        // A path the OS can't look up at all is unknown, never "nothing was set aside".
+        assert!(set_aside_through_at(Path::new("bad\0dir/history.json")).is_err());
     }
 
     // #669: the checked summary a surface reads instead of the zero-collapsing one keeps a failed

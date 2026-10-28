@@ -642,6 +642,7 @@ mod tests {
             compy_changes_per_change: true,
             compy_changes_cant_confirm: Some(0),
             compy_changes_legacy_active: None,
+            compy_changes_since_set_aside: None,
             hw_fingerprint: Some(HwFingerprint {
                 hash: "62f1370e0d48cfea".into(),
                 gpu: "Radeon RX 9070 XT".into(),
