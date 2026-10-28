@@ -561,11 +561,35 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         Some(a) => format!("{a} closed on its own, with no system-level error logged around it"),
         None => "the app closed on its own, with no system-level error logged around it".to_string(),
     };
+    let evidence = vec![lead, "your graphics, power, and hardware logs were quiet at that moment".into()];
+    // self-review 2026-10-28 (P7-depth): a crashing Windows host process (RUNDLL32, svchost, …) is
+    // not a game, so "verify the game's files" is wrong advice. These hosts run other programs'
+    // code; the honest step is to update Windows and whatever was starting.
+    if inc.receipt.faulting_app.as_deref().is_some_and(is_windows_host_process) {
+        return Some(Assessment {
+            rule: AssessmentRule::AppSpecific,
+            consistent_with: format!(
+                "likely a problem in code {subject} was running for another program, rather than your hardware"
+            ),
+            // Only the process name and a quiet hardware log are known here, so this is Partial.
+            strength: Strength::Partial,
+            evidence,
+            next_step: NextStep::safe(
+                "Update Windows, then the program that was starting",
+                "This file is part of Windows and runs code on behalf of other programs, so the fault is \
+                 often in the program it was hosting. Install any pending Windows updates, then update \
+                 the app you were opening when it happened. If it keeps repeating, the matching \
+                 Application Error in Event Viewer (Windows Logs > Application) lists the faulting module, \
+                 which can help identify the program involved.",
+            ),
+            beyond_us: false,
+        });
+    }
     Some(Assessment {
         rule: AssessmentRule::AppSpecific,
         consistent_with: format!("a problem inside {subject} itself, rather than your PC"),
         strength: Strength::Strong,
-        evidence: vec![lead, "your graphics, power, and hardware logs were quiet at that moment".into()],
+        evidence,
         next_step: NextStep::safe(
             "Verify the game's files, then update it",
             "In the launcher (Steam: right-click → Properties → Installed Files → Verify integrity of game \
@@ -574,6 +598,31 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         ),
         beyond_us: false,
     })
+}
+
+/// Windows processes that host other programs' code. A crash attributed to one of these is not a
+/// game crash, so game-file advice does not apply. Compared on the bare, lower-cased file name.
+/// Deliberately absent (review 2026-10-28): explorer.exe (the shell, not a host), msiexec.exe (an
+/// installer, not "the app you were opening") and werfault.exe (the crash reporter itself).
+const WINDOWS_HOST_PROCESSES: &[&str] = &[
+    "rundll32.exe",
+    "svchost.exe",
+    "dllhost.exe",
+    "conhost.exe",
+    "taskhostw.exe",
+    "sihost.exe",
+    "ctfmon.exe",
+    "runtimebroker.exe",
+    "searchhost.exe",
+    "startmenuexperiencehost.exe",
+    "shellexperiencehost.exe",
+    "wmiprvse.exe",
+    "applicationframehost.exe",
+];
+
+fn is_windows_host_process(faulting_app: &str) -> bool {
+    let name = faulting_app.rsplit(['\\', '/']).next().unwrap_or_default().trim().to_ascii_lowercase();
+    WINDOWS_HOST_PROCESSES.contains(&name.as_str())
 }
 
 /// Rule 4 — power / hard-lock-consistent. An unexpected shutdown (Kernel-Power 41 / EventLog 6008) with
@@ -2766,6 +2815,33 @@ mod blackbox_tests {
             mk(IncidentKind::GpuTimeout, "2026-06-12T21:03:00Z", Some("amdkmdag"), None, None, None),
         ];
         assert!(rule_app_specific(&near[0], &near).is_none(), "a nearby system event blocks the app-side call");
+    }
+
+    #[test]
+    fn windows_host_process_crash_gets_windows_advice_not_game_files() {
+        // bug→guard self-review 2026-10-28 (P7-depth): a RUNDLL32 crash told the owner to "verify the
+        // game's files". A Windows host process is not a game; the step names Windows + the hosted app.
+        for app in ["RUNDLL32.EXE", "svchost.exe", r"C:\Windows\System32\DllHost.exe"] {
+            let lone = mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", None, Some("0xc0000005"), Some(app), None);
+            let a = assess(&lone, std::slice::from_ref(&lone)).expect("fires");
+            assert!(matches!(a.rule, AssessmentRule::AppSpecific));
+            assert_eq!(a.strength, Strength::Partial, "{app}: only the process name is known");
+            let step = format!("{} {}", a.next_step.headline, a.next_step.detail).to_lowercase();
+            assert!(!step.contains("game"), "{app}: game advice for a Windows process: {step}");
+            assert!(step.contains("windows update") || step.contains("windows updates"), "{app}: {step}");
+            assert!(a.consistent_with.contains("another program"), "{app}: {}", a.consistent_with);
+            assert!(a.next_step.reversible && !has_percent(&a));
+        }
+        // a real game keeps the game-files advice
+        let game = mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", None, None, Some("WardogsClient.exe"), None);
+        let g = assess(&game, std::slice::from_ref(&game)).expect("fires");
+        assert!(g.next_step.headline.contains("game's files"), "{}", g.next_step.headline);
+        assert!(!is_windows_host_process("rundll32.exe.bak") && !is_windows_host_process("mysvchost.exe"));
+        assert!(is_windows_host_process("C:/Windows/System32/rundll32.exe") && is_windows_host_process("svchost.exe "));
+        // shell, installer and crash reporter are not hosts (review 2026-10-28)
+        for not_host in ["explorer.exe", "msiexec.exe", "WerFault.exe"] {
+            assert!(!is_windows_host_process(not_host), "{not_host}");
+        }
     }
 
     #[test]
