@@ -481,6 +481,21 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       app-specific -> "not hardware", the rest draw no focus. Deviation: no RAM focus — no rule says memory
       alone (hardware-error covers WHEA/CPU/RAM together), so it stays unfocused rather than guessed. Review:
       source + date named on the rig line, vendor match taken. Visual self-review owed (FULL).
+- [x] **P7-visual-review** `547fd2a1` (fix `f722c49f` TS, `1e0943a3` Rust) + gate repair `ed2de634` (`55b4093b`).
+      2026-10-28 visual self-review of desk build `a33ff51c` on the owner's rig (right monitor), run by a
+      general-purpose agent with desk tools. PASS: P7-score, P7-palette, P7-rig-limiter. FAIL, now fixed:
+      P7-confidence (8 native-title chips -> `ConfidenceWord` with a glossed Term; bench "confidence: x" ->
+      shared words, `lab.experimentBench.confidence.*` retired; What-Changed headline drops its raw
+      "(x confidence)"), P7-jargon (`withTerms` glosses "1% lows"/"noise floor" in headlines), P7-rig-care
+      (rig note no longer overlaps the grid), P7-depth (Step-id receipt row removed; a Windows host-process
+      crash such as RUNDLL32 now gets "Update Windows, then the program that was starting", Partial, instead
+      of "Verify the game's files"), P7-route (StutterCompare scrolls the answer into view once on a
+      stutter arrival). Also the bench "Tested:" line separator. Review: rust-tauri-reviewer
+      REQUEST-CHANGES (host list pruned of explorer/msiexec/WerFault, Strong -> Partial, Event Viewer
+      wording softened), all taken. BLOCKED on real data (re-check when the owner has it): P7-severity,
+      P7-depth-verdicts, P7-teach, P4-smooth-offer-b (its held state passed). The "Aniimo header on a
+      Wardogs debrief" note was not reproduced: the captured outline shows an Aniimo session throughout.
+      Re-review of the fixed items owed on the next desk build.
 - [ ] **P7-exit-proof** (owner, FULL) The friend goes from Home to an answer on "more FPS", "it stutters" and
       "it crashed" without asking what a word means; the owner opens the technical layer on each and finds the
       exact setting, measurement and source. Record in BACKLOG as the Phase 7 exit. Needs P7-route through
@@ -602,6 +617,13 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   run and restored after; a watcher moved three gate-launched Compy windows off the film monitor, no focus taken.
   Visual self-reviews still owed: the self-reviewer can't reach the desk from a cloud session (needs a desk-local
   session).
+- 2026-10-28 ~05:50-07:30 (interactive from Claude HQ, owner on PC, Compy on the right monitor by his choice):
+  the owed visual self-reviews ran after all - a general-purpose agent with the desk tools can capture and
+  judge, unlike the dedicated self-reviewer from a cloud session. Verdicts and fixes under P7-visual-review.
+  Gate r30 caught two expected misses (a named census retirement, a test reading the old chip); r31 green
+  (526 files / 9448 passed), cargo 1661 passed, clippy clean. Lessons: a gate-launch wrapper's array args
+  do not survive `-File`, call it with `&`; keep vitest log filters to summary lines (a loose "fail" regex
+  matches hundreds of test names).
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)

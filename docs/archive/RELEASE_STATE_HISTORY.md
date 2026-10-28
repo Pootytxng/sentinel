@@ -4,6 +4,12 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-10-28 - the a33ff51c desk row (P7 teach/palette/rig, P4-smooth-offer, #618), moved verbatim
+
+Superseded by the ed2de634 desk build (P7 visual-review fixes). Moved verbatim; it has no links.
+
+| **Owner-installed version + embedded stamp** | **0.9.26 desk build, embedded stamp `a33ff51c`** - built 2026-10-27 (about 20:15 local) from `main` itself at `a33ff51c` (pushed first: `2730e4d8..a33ff51c`, pre-push gate passed after one refusal by `closing-keyword-guard` on an unpushed docs commit, reworded), in the main checkout, via `npm run tauri build -- --config` with `bundle.createUpdaterArtifacts=false` for this build only (no updater signing key in this session; desk-only build, never published, app bytes otherwise the same config) then `scripts/ship-reinstall.ps1 -NoLaunch` (owner watching a film on the primary monitor; no window popped). Installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`98DCFB2E0B115E7448739BCDB3E0B43C03DF94C360963395C6B89C1BC0A4DBB2`**, the only installer on the Desktop. **Live == build proved by the embedded stamp in the installed exe** (`%LOCALAPPDATA%\Compy\compy.exe` contains `a33ff51c`; runtime CDP proof not run - no launch); installed version 0.9.26. Installed by Claude + LIVE; supersedes `71b8e1b9`. **Visible delta vs `71b8e1b9`:** P7-depth, -verdicts, -jargon, -confidence, -score, -teach (lesson lines), -palette (intent search), -rig-limiter and -rig-care (rig focus), P4-smooth-offer (Smoothest offered when measured), #618 (a set-aside history no longer blocks Trials or Care). Visual self-reviews of those owed (need a desk-local session). | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern 71b8e1b9` · HKCU uninstall `DisplayVersion` — **both from a non-containerized session only** (a packaged host sees `%LOCALAPPDATA%`/`HKCU` through an overlay) |
+
 ### 2026-10-27 - the 71b8e1b9 desk row (P4-exit-truth-f3), moved verbatim
 
 Superseded by the a33ff51c desk build (P7 teach/palette/rig, P4-smooth-offer, #618). Moved verbatim except its one link to this file, re-pointed from `docs/archive/`.
