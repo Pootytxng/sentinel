@@ -521,10 +521,17 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
       risk only" is left out with a new `SkipReason::OutsideChosenRisk`; so is an unknown severity (it
       can't be shown to be low). The default leaves nothing out (every live catalog row states safe or
       moderate). Pure unit tests; one review round. RISK_MODEL §2.
-- [ ] **P8-posture-b** (TS) The Trial picker asks once, "How far may Compy go on this PC?", saves the
+- [x] **P8-posture-b** — `48785b23` (TS) The Trial picker asks once, "How far may Compy go on this PC?", saves the
       choice, sends it to the candidate read, and the "why not listed" row says "Outside the risk you
       chose" (en + zh-CN). The guided journey's next pick uses the same list; `test-summary.ts` and
       `journey-resume.ts` must not read a risk-filtered change as "not available". Needs P8-posture-a.
+      Visible UI (new picker) still needs self-review in the next FULL session.
+- [ ] **P8-posture-note** (review r1 SHOULD-FIX) `summarizeGame`'s "nothing-testable-now" headline hides
+      that changes are held back by the chosen risk (e.g. Low risk only, one moderate change held, one low
+      change at its retest cap). Show the risk note on that branch too; add a test for that case.
+- [ ] **P8-posture-count** (review r1 NITs) `outsideRisk` should leave out changes already tested (as
+      `skipped` does), so "{{count}} more change is above it" is not overstated; `stop.stale` should not
+      count a held-back stale result. Tests for both.
 - [ ] **P8-posture-show** The Trial receipt and the game summary name the risk choice in force when each
       Trial started (stored on the experiment record; older records read "not recorded", never a guess).
       Needs P8-posture-b.
@@ -678,6 +685,10 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
 - 2026-10-28 ~08:45-09:00 (scheduled, CODE-ONLY, owner playing WARDOGS): Phase 8 queue refill `fb483dd4`;
   P8-posture-a `1eeef838` (cargo trial_candidates 20 passed, clippy clean, review r1 PASS-WITH-NITS; nit
   folded into P8-posture-b). Not pushed - next FULL session pushes.
+- 2026-10-28 ~13:00-14:15 (scheduled, CODE-ONLY): Phase 9 queue refill `2fc32bf7`; P8-posture-b `48785b23`
+  (tsc clean, targeted 570/570, full vitest 523/526 files - the 3 site-app tests need site-app/node_modules,
+  absent in the worktree; review r1 MUST-FIX reload race fixed + guard test; SHOULD-FIX and NITs queued as
+  P8-posture-note / P8-posture-count). Picker needs self-review next FULL session. Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
