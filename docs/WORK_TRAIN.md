@@ -175,6 +175,10 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       write-order findings checked and not applicable). Ordering gate: -b ships in the same build or later, never
       before -a (an older Compy reads a stored "smoothest" as Recommended). -b plan: a read-only
       `get_smoothest_readiness(baseline_session_id)` sharing the start's admission, read by the bench.
+      -b scope found 2026-10-27 (read-only): the bench reads every non-"max-fps" Trial as Recommended
+      (`ExperimentBench.tsx` judged-row readout ~:363 and P5 `outcomeChoices` ~:913), so -b must also type
+      "smoothest" there (judged row says "Judged for Smoothest"; P5 choices either include it or skip it
+      explicitly), and the readiness reason needs locale keys (en + zh-CN), not the backend's English.
 - [x] **P4-next** `abd4c883`: after a Trial, offer the next untested change (offer only); none left =
       "Nothing else here is worth testing on this PC" as success. Tested = a verdict on this game in experiments.json.
 - [x] **P4-next-f1** `1fc5026c`: picker marks tested changes ("· Tested: <verdict>") after untested ones.
