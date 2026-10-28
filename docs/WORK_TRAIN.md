@@ -510,6 +510,32 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       exact setting, measurement and source. Record in BACKLOG as the Phase 7 exit. Needs P7-route through
       P7-teach; P7-palette and the rig slices do not block it. ROADMAP P7 exit.
 
+### Then — Roadmap Phase 8: Advanced tuning envelope (`product/ROADMAP.md` Phase 8, `product/RISK_MODEL.md`)
+Planned 2026-10-28 (scheduled refill). ROADMAP: broaden only after the Trial/risk/stability systems are
+proven, so the first slices build the user-facing risk side of the Risk Model on the existing catalog
+(no new mutation, no new catalog entry). Already there, not re-queued: the Blackbook says "Refused" for the
+barred tweaks (HPET, bcdedit, core parking, registry hacks) and the palette finds them; the picker shows
+each change's risk word. New capabilities wait for the owner and the Phase 4 exit proof.
+- [ ] **P8-posture-a** (Rust) `trial_candidates::screen` takes the user's risk choice: "Low risk only"
+      (catalog `safe`) or "Low and moderate" (today's behaviour, the default). A moderate change under "Low
+      risk only" is left out with a new `SkipReason::OutsideChosenRisk`; an unknown severity is left out
+      under both until the catalog states it. Pure unit tests; one review round. RISK_MODEL §2.
+- [ ] **P8-posture-b** (TS) The Trial picker asks once, "How far may Compy go on this PC?", saves the
+      choice, sends it to the candidate read, and the "why not listed" row says "Outside the risk you
+      chose" (en + zh-CN). The guided journey's next pick uses the same list. Needs P8-posture-a.
+- [ ] **P8-posture-show** The Trial receipt and the game summary name the risk choice in force when each
+      Trial started (stored on the experiment record; older records read "not recorded", never a guess).
+      Needs P8-posture-b.
+- [ ] **P8-ack** Before a moderate change's Trial starts, one plain line names its cost from the catalog's
+      own words and needs one tap ("I understand, test it"); safe changes start as today. Recorded on the
+      receipt. RISK_MODEL §1 Advanced ("explicit user acknowledgement when the cost is not obvious").
+- [ ] **P8-dims** The Trial receipt's technical layer lists the risk dimensions the catalog states for the
+      change (reversibility, stability, compatibility, security) instead of one word; an unstated dimension
+      reads "not stated", never filled in. RISK_MODEL §3 ("do not collapse these into one arbitrary score").
+- [ ] **P8-first-advanced** (owner) Pick the first Advanced candidate (deeper power/scheduling behaviour)
+      and admit it through `.claude/rules/tweak-catalog.md` + ARCHITECTURE_LOCKS "candidate only after
+      Trial + Risk proof". Needs the owner's sign-off and P4-exit-proof.
+
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
 - [x] **tokio** `fcc64291` (1.54.1; only tokio's lock entry changed). Desk install at the next ship.
