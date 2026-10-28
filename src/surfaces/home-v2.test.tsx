@@ -369,7 +369,8 @@ describe("HomeV2 — priorities rows", () => {
     useReduced();
     const { props } = mount();
     expect(screen.getByText("biggest limiter")).toBeTruthy();
-    expect(screen.getByText("Likely").getAttribute("data-confidence")).toBe("medium"); // P7-confidence
+    // P7-confidence; the word is now a glossed Term inside the [data-confidence] wrapper (self-review 2026-10-28)
+    expect(screen.getByText("Likely").closest("[data-confidence]")?.getAttribute("data-confidence")).toBe("medium");
     fireEvent.click(screen.getAllByRole("button", { name: "See in Lab" })[0]);
     expect(props.onSeeInFix).toHaveBeenCalled();
   });
