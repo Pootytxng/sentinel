@@ -401,7 +401,9 @@ describe("a Trial never reads a lost history as a quiet one (#611 review round 2
   // #618: history.rs is the safety boundary; the time comes from the marker's metadata alone.
   it("the set-aside time is a read-only metadata read, never a clock or a write", () => {
     const at = fnBody(HISTORY, "fn set_aside_through_at(");
-    expect(at).toContain('std::fs::metadata(path.with_extension("json.corrupt"))');
+    // symlink_metadata + a plain-file check: a link or directory is unknown, never "nothing set aside".
+    expect(at).toContain('std::fs::symlink_metadata(path.with_extension("json.corrupt"))');
+    expect(at).toMatch(/Ok\(meta\) if !meta\.is_file\(\) => Err\(/);
     expect(at).toMatch(/ErrorKind::NotFound => Ok\(None\)/);
     expect(at).toMatch(/\.modified\(\)/);
     expect(at).not.toMatch(/fs::(?:write|rename|remove|create|copy|OpenOptions)|File::|set_modified|now\(\)|unwrap_or/);

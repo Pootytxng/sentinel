@@ -1730,15 +1730,22 @@ pub(crate) fn ledger_was_quarantined() -> bool {
 /// `rollback_change_inner`), and the first load of a damaged file is the one that sets it aside and
 /// refuses. From the rename on, the fresh `history.json` records every move.
 ///
+/// Which way it can be wrong: a marker touched later than the lost ledger's last write (a backup or
+/// scanner rewriting it) moves the edge later, toward refusing more sessions, the safe side. The one
+/// direction no read here can see is a marker back-dated by something outside Compy (see
+/// `experiment::ledger_for_one_change_checks`). A marker that isn't a plain file (a directory, a
+/// link) has no trustworthy time and is unknown, never "nothing set aside" (#618 review).
+///
 /// Read-only: one metadata read. It does not write, and it never takes a time from the clock.
 pub(crate) fn ledger_set_aside_through() -> Result<Option<chrono::DateTime<Utc>>, String> {
     set_aside_through_at(&history_path())
 }
 
 fn set_aside_through_at(path: &Path) -> Result<Option<chrono::DateTime<Utc>>, String> {
-    match std::fs::metadata(path.with_extension("json.corrupt")) {
+    match std::fs::symlink_metadata(path.with_extension("json.corrupt")) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(format!("the set-aside change history can't be checked ({e})")),
+        Ok(meta) if !meta.is_file() => Err("the set-aside change history isn't a plain file, so its time can't be trusted".into()),
         Ok(meta) => meta
             .modified()
             .map(|t| Some(chrono::DateTime::<Utc>::from(t)))
@@ -4260,6 +4267,15 @@ mod history_tests {
 
         // A path the OS can't look up at all is unknown, never "nothing was set aside".
         assert!(set_aside_through_at(Path::new("bad\0dir/history.json")).is_err());
+
+        // A marker that isn't a plain file has no trustworthy time: unknown, never "nothing set
+        // aside" (#618 review: a dangling link read through `metadata` was NotFound, i.e. Whole).
+        let odd = std::env::temp_dir().join(format!("compy-hist-set-aside-dir-{}", std::process::id()));
+        std::fs::create_dir_all(odd.join("history.json.corrupt")).unwrap();
+        let why = set_aside_through_at(&odd.join("history.json")).unwrap_err();
+        assert!(why.contains("isn't a plain file"), "{why}");
+        assert_eq!(ledger_coverage(set_aside_through_at(&odd.join("history.json")), Some("2099-01-01T00:00:00Z")), LedgerCoverage::Unknown);
+        std::fs::remove_dir_all(&odd).ok();
     }
 
     // #669: the checked summary a surface reads instead of the zero-collapsing one keeps a failed
