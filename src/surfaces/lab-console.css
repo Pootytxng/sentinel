@@ -42,25 +42,22 @@
   display: block;
 }
 
-/* P7-rig-care: what the Care station's highlight or dim means, one quiet line along the stage's
-   bottom edge — Home's .hc-rig-note, here. Absolute so it never takes a grid cell from the rig, and
-   never interactive so it can't block the parts the evidence map makes clickable. Tokens only. */
+/* P7-rig-care: what the Care station's highlight or dim means, one quiet line just under the stage —
+   Home's .hc-rig-note, here. Never interactive. Tokens only. */
 :root[data-v2="on"] .lc-rig-note {
-  position: absolute;
-  left: 50%;
-  bottom: 8px;
-  transform: translateX(-50%);
-  width: max-content;
+  /* Self-review r2 2026-10-28: in flow under the stage, not overlaid on its floor (it touched the ring). */
+  position: static;
+  display: block;
+  width: fit-content;
   max-width: calc(100% - 32px);
+  margin: 6px auto 0;
   text-align: center;
   font-size: var(--type-label);
   line-height: 1.35;
   color: var(--v2-muted);
-  /* Self-review 2026-10-28 (rubric 12): the Lab stage draws its floor grid right up to this edge, and
-     a shadow alone let grid lines cut through the glyphs. A solid backing in the stage's own colour
-     keeps every word on a clean field. */
-  background: var(--v2-bg);
-  padding: 2px 8px;
+  /* Self-review 2026-10-28 (rubric 12): over the stage, grid lines cut through the glyphs. Out of the
+     stage there is no grid behind it, so it needs no backing of its own. */
+  padding: 4px 8px 6px;
   pointer-events: none;
 }
 /* THE RIG FILLS ITS STAGE (2026-08-26, measured). `place-items: center` used to shrink-wrap the

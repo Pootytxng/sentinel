@@ -12,6 +12,16 @@ export function markStutterArrival(): void {
   }
 }
 
+/** Reads without clearing: the Care view uses it to put the stutter answer first, while
+ *  StutterCompare still takes (and clears) the flag on its own mount. */
+export function peekStutterArrival(): boolean {
+  try {
+    return localStorage.getItem(CARE_ARRIVAL_KEY) === "stutter";
+  } catch {
+    return false;
+  }
+}
+
 export function takeStutterArrival(): boolean {
   try {
     const v = localStorage.getItem(CARE_ARRIVAL_KEY);

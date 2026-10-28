@@ -283,6 +283,22 @@ describe("the Care view renders exactly one next step at its top", () => {
     expect(container.textContent!.split("Roll back the GPU driver in the Trust Ledger").length - 1).toBe(1);
   });
 
+  it("a stutter arrival puts the comparison above the crash scan; an ordinary visit keeps it last", () => {
+    // bug→guard self-review r2 2026-10-28 (P7-route): "it stutters" landed on the crash list with
+    // the answer ~27,500px down, under a crash scan that loaded above it.
+    const before = (c: HTMLElement) => {
+      const cmp = c.querySelector(".bb-stutter")!;
+      const scanBtn = c.querySelector(".bb-scan")!;
+      return !!(cmp.compareDocumentPosition(scanBtn) & Node.DOCUMENT_POSITION_FOLLOWING);
+    };
+    localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+    const arrived = render(<BlackBox />);
+    expect(before(arrived.container)).toBe(true);
+    arrived.unmount();
+    const ordinary = render(<BlackBox />);
+    expect(before(ordinary.container)).toBe(false);
+  });
+
   it("with neither, no step is shown: the honest end takes the slot (P6-unknown)", async () => {
     h.incidents = [inc("2026-10-20T10:00:00Z", { assessed: false })];
     const { container } = render(<BlackBox />);

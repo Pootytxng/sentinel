@@ -8,7 +8,8 @@
 // Spec: docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md.
 
 import { withTerms } from "../design/with-terms";
-import { confidenceWordKey, type ConfidenceWord } from "../data/confidence-word";
+import { confidenceHintKey, confidenceWordKey, type ConfidenceWord } from "../data/confidence-word";
+import { Term } from "../design/Term";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
@@ -280,11 +281,12 @@ function simVerdictCopy(t: Translate): Record<string, { label: string; blocked: 
 // Review 2026-10-28 (P7-confidence): the one shared vocabulary, never "confidence: medium". A
 // simulator estimate is engineering reasoning (Expected); a Trial result is a measurement (Measured);
 // low or unknown evidence is Unknown.
-function confidenceCopy(t: Translate, kind: "estimate" | "measured"): Record<Confidence, string> {
-  const word = (c: Confidence): ConfidenceWord =>
+// Self-review r2 2026-10-28: the word carries the shared gloss, like every other confidence word.
+function BenchWord({ c, kind }: { c: Confidence; kind: "estimate" | "measured" }) {
+  const { t } = useTranslation();
+  const word: ConfidenceWord =
     c === "high" || c === "medium" ? (kind === "estimate" ? "expected" : "measured") : "unknown";
-  const say = (c: Confidence) => t(confidenceWordKey(word(c)));
-  return { unknown: say("unknown"), low: say("low"), medium: say("medium"), high: say("high") };
+  return <Term tip={t(confidenceHintKey(word))}>{t(confidenceWordKey(word))}</Term>;
 }
 
 // §11 receipt line: the band the verdict was judged against, and whether this game's own noise on
@@ -1241,7 +1243,7 @@ export default function ExperimentBench({
               <p className="exp-sim-rec">{sim.rec_title}</p>
               <div className="exp-sim-head">
                 <VerdictBand tone={simulationTone(sim.verdict)}>{simMeta.label}</VerdictBand>
-                <span className="exp-sim-conf">{confidenceCopy(t, "estimate")[sim.confidence]}</span>
+                <span className="exp-sim-conf"><BenchWord c={sim.confidence} kind="estimate" /></span>
               </div>
               <p className="exp-sim-why">{sim.why}</p>
               <p className="exp-sim-line">
@@ -1483,12 +1485,9 @@ function LessonBlock({ lesson, game }: { lesson: Lesson; game: string }) {
     <>
       <p className="exp-order-label">{t("lab.experimentBench.summary.lessonLabel")}</p>
       <p className="exp-note" data-testid="exp-summary-lesson" data-rule={lesson.rule}>
-        {withTerms(
-          [
-            t(`lab.experimentBench.summary.lesson.${key}`, { change: lesson.title, game }),
-            confidenceCopy(t, "measured")[lesson.confidence ?? "unknown"],
-          ].join(t("lab.experimentBench.summary.contextSeparator")),
-        )}
+        {withTerms(t(`lab.experimentBench.summary.lesson.${key}`, { change: lesson.title, game }))}
+        {t("lab.experimentBench.summary.contextSeparator")}
+        <BenchWord c={lesson.confidence ?? "unknown"} kind="measured" />
       </p>
       <details className="exp-why" data-testid="exp-summary-lesson-detail">
         <summary className="exp-why-toggle">{t("lab.experimentBench.summary.lessonDetailToggle")}</summary>
@@ -1507,7 +1506,6 @@ function TestSummary({ s }: { s: GameTestSummary }) {
   const { t } = useTranslation();
   const game = prettyGameName(s.game) || s.game;
   const verdicts = verdictCopy(t);
-  const conf = confidenceCopy(t, "measured");
   const sep = t("lab.experimentBench.summary.contextSeparator");
   const list = t("lab.experimentBench.pairListSeparator");
   const noiseLines = [...new Set(s.tested.filter((r) => r.noise).map((r) => noiseLine(r.noise!, s.game, t)))];
@@ -1525,15 +1523,23 @@ function TestSummary({ s }: { s: GameTestSummary }) {
     : [];
   // Each line is ONE string: the bench's own rows above and below say the same titles and noise
   // sentences, and a summary line is a summary, not a second copy of those rows.
-  const testedLine = (r: TestedChange) =>
-    [
-      t("lab.experimentBench.summary.row", { title: r.title, text: verdicts[r.verdict] ?? r.verdict }),
-      conf[r.confidence ?? "unknown"],
-      ...(r.trials > 1 ? [t("lab.experimentBench.summary.trials", { count: r.trials })] : []),
-      // Review 2026-10-28: every part of the line is separated alike ("· Measured · Not applied now.").
-      t(STILL_APPLIED_KEY[r.stillApplied]),
-      ...(r.sameContext === false ? [t("lab.experimentBench.summary.contextChanged")] : []),
-    ].join(sep);
+  // Review 2026-10-28: every part of the line is separated alike ("· Measured · Not applied now.").
+  // Self-review r2: the confidence word is the shared vocabulary, so it carries the shared gloss.
+  const testedLine = (r: TestedChange) => {
+    return (
+      <>
+        {t("lab.experimentBench.summary.row", { title: r.title, text: verdicts[r.verdict] ?? r.verdict })}
+        {sep}
+        <BenchWord c={r.confidence ?? "unknown"} kind="measured" />
+        {sep}
+        {[
+          ...(r.trials > 1 ? [t("lab.experimentBench.summary.trials", { count: r.trials })] : []),
+          t(STILL_APPLIED_KEY[r.stillApplied]),
+          ...(r.sameContext === false ? [t("lab.experimentBench.summary.contextChanged")] : []),
+        ].join(sep)}
+      </>
+    );
+  };
   const skippedLine = (r: GameTestSummary["skipped"][number]) => {
     const why =
       r.reason && r.reason in SKIP_REASON_KEY
@@ -1661,11 +1667,13 @@ function TestSummary({ s }: { s: GameTestSummary }) {
         receipt={
           <>
       <p className="exp-fineprint" data-testid="exp-summary-noise">
-        {[
-          t("lab.experimentBench.summary.noiseLabel"),
-          ...noiseLines,
-          ...(unjudged > 0 ? [t("lab.experimentBench.noiseNotRecorded", { count: unjudged })] : []),
-        ].join(" ")}
+        {withTerms(
+          [
+            t("lab.experimentBench.summary.noiseLabel"),
+            ...noiseLines,
+            ...(unjudged > 0 ? [t("lab.experimentBench.noiseNotRecorded", { count: unjudged })] : []),
+          ].join(" "),
+        )}
       </p>
       <p className="exp-fineprint" data-testid="exp-summary-context" data-context-at={s.contextAt ?? undefined}>
         {/* Round 4 review: this is the LAST RECORDED context, dated; whether a result is current is

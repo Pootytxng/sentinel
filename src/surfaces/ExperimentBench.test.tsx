@@ -1973,7 +1973,8 @@ describe("P5-learned: what Compy learned on this PC", () => {
     // A too-noisy Trial judged nothing, so none of its stored deltas is shown.
     expect(panel).not.toHaveTextContent("15.5");
     expect(panel).not.toHaveTextContent("16%");
-    expect(panel.querySelectorAll("button")).toHaveLength(0);
+    // gloss triggers (a confidence word, "noise floor") are not actions
+    expect(panel.querySelectorAll("button:not(.kl-term)")).toHaveLength(0);
   });
 
   it("no rule, no lesson", async () => {

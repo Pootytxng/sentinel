@@ -12,6 +12,8 @@ import {
   type InterviewStep,
 } from "./home-interview-data";
 import { markStutterArrival } from "./care-arrival";
+import { Term } from "../design/Term";
+import { confidenceHintKey, wordFromFinding } from "../data/confidence-word";
 import { markBenchArrival, markSinceArrival } from "./lab-arrival";
 import "./home-interview.css";
 
@@ -200,7 +202,9 @@ export function HomeInterview({
                   word and hue together — the chip prints its word, so a reader who cannot separate
                   the hues still gets the whole message. */}
               <span className="hi-level" data-level={finding.level}>
-                {finding.levelLabel}
+                {/* Self-review r2 2026-10-28 (P7-confidence): the level word is the shared confidence
+                    vocabulary, so it carries the same gloss as every other confidence word. */}
+                <Term tip={t(confidenceHintKey(wordFromFinding(finding.level)))}>{finding.levelLabel}</Term>
               </span>
               <p className="hi-sentence">{finding.sentence}</p>
 
