@@ -1368,7 +1368,7 @@ export default function ExperimentBench({
       {history.length > 0 && (
         <div className="exp-history">
           <SectionLabel>{t("lab.experimentBench.pastExperiments")}</SectionLabel>
-          {sharedNoise && <p className="exp-fineprint exp-bench-noise-shared">{sharedNoise}</p>}
+          {sharedNoise && <p className="exp-fineprint exp-bench-noise-shared">{withTerms(sharedNoise)}</p>}
           <ul className="exp-bench-list">
             {history.map((x, i) => (
               <li key={x.id} className="exp-bench-row" data-status={x.status}>
@@ -1427,7 +1427,7 @@ export default function ExperimentBench({
           </ul>
           {footnotes.map((n, k) => (
             <p key={k} className="exp-fineprint exp-bench-noise">
-              <span className="exp-bench-noise-mark">{noteMark(k)}</span> <span>{footnoteText(n)}</span>
+              <span className="exp-bench-noise-mark">{noteMark(k)}</span> <span>{withTerms(footnoteText(n))}</span>
             </p>
           ))}
         </div>
