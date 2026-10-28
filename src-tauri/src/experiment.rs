@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
+use crate::history::LedgerCoverage;
 use chrono::{DateTime, Utc};
 
 use crate::comparability::{Comparability, SessionComparability};
@@ -260,12 +261,18 @@ pub(crate) fn get_smoothest_readiness(baseline_session_id: String) -> Result<Smo
     }
     let sessions = crate::sessions::get_session_summaries();
     let from = resolve_baseline(&sessions, &baseline_session_id)?;
-    let history = ledger_for_one_change_checks(
-        crate::history::load_history(),
-        crate::history::ledger_was_quarantined(),
+    let (history, coverage) = ledger_view_for_one_change_checks(
+        crate::history::load_history,
+        crate::history::ledger_set_aside_through,
+        Some(from.started_at.as_str()),
     );
+    // #618: a session the change history can't cover is the start's refusal to give, as for a
+    // session that can't be a baseline: Smoothest is neither offered nor held for a reason it isn't.
+    if let (Err(why), LedgerCoverage::Lost | LedgerCoverage::Unknown) = (&history, coverage) {
+        return Err(why.clone());
+    }
     Ok(SmoothestReadiness {
-        held: smoothest_for(&sessions, from, &history).err(),
+        held: smoothest_for(&sessions_the_ledger_covers(&sessions, coverage), from, &history).err(),
         min_sessions: crate::noise_floor::MIN_UNCHANGED_SESSIONS,
     })
 }
@@ -613,16 +620,27 @@ pub(crate) fn lock_store() -> Result<crate::race_seam::StoreGuard, String> {
 /// The single-variable attribution note (§4F "warn when multiple changes active"). `None` when the
 /// rig is clean (a truly isolated experiment); otherwise names the count and states the honest
 /// limit — the experiment isolates the ONE new variable, it does not attribute the others.
-pub(crate) fn attribution_warning(active_changes: usize) -> Option<String> {
-    if active_changes == 0 {
-        return None;
+///
+/// `earlier_history_set_aside` (#618): the count comes from the fresh ledger, so changes the
+/// set-aside one recorded may still be in place uncounted. Then a zero is not a clean rig.
+pub(crate) fn attribution_warning(active_changes: usize, earlier_history_set_aside: bool) -> Option<String> {
+    let set_aside = "Compy's earlier change history was damaged and set aside, so changes it recorded \
+                     aren't counted here and may still be in place. This experiment measures ONLY the \
+                     one new change, holding everything else constant.";
+    match (active_changes, earlier_history_set_aside) {
+        (0, false) => None,
+        (0, true) => Some(set_aside.into()),
+        (n, set_aside_too) => Some(format!(
+            "{n} other Compy change{s} already active. This experiment measures ONLY the one new \
+             change, holding the others constant — it can't attribute the result to any of them.{more}",
+            s = if n == 1 { " is" } else { "s are" },
+            more = if set_aside_too {
+                " Compy's earlier change history was also set aside, so there may be more."
+            } else {
+                ""
+            },
+        )),
     }
-    Some(format!(
-        "{active} other Compy change{s} already active. This experiment measures ONLY the one new \
-         change, holding the others constant — it can't attribute the result to any of them.",
-        active = active_changes,
-        s = if active_changes == 1 { " is" } else { "s are" },
-    ))
 }
 
 /// How many OTHER settings Compy has active: the changes the shared rule counts as on
@@ -845,14 +863,73 @@ pub(crate) struct LedgerEntryRef<'a> {
 /// The Trust Ledger the §3 one-change checks read, or why it can't back them, in words.
 /// `load_history` fails loud only once on a damaged ledger: it sets the file aside, and every later
 /// load returns a fresh, EMPTY ledger that would read as "no Compy change moved". The marker left on
-/// disk is the only evidence that the silence is a loss, so it counts as incomplete here, as it does
-/// in `intelligence::gather`.
-fn ledger_for_one_change_checks<T>(loaded: Result<Vec<T>, String>, set_aside: bool) -> Result<Vec<T>, String> {
+/// disk is the only evidence that the silence is a loss.
+///
+/// The loss has an edge in time (#618, `history::ledger_coverage`): every move the lost file held
+/// happened at or before its last write, and the fresh ledger holds every move after. So it only
+/// matters to a session that began at or before that time; one that began later is covered, and a
+/// PC whose ledger was set aside once is not refused forever. Unknown on either side refuses.
+///
+/// The known limit is the marker's own time. Something outside Compy that back-dates the file, such
+/// as restoring an old copy that keeps its modified date, moves the edge earlier. That same restore
+/// of a copy that still parses would drop rows with no marker at all, so no ledger check here can see it.
+fn ledger_for_one_change_checks<T>(loaded: Result<Vec<T>, String>, coverage: LedgerCoverage) -> Result<Vec<T>, String> {
     let history = loaded.map_err(|_| "Compy can't read its change history".to_string())?;
-    if set_aside {
-        return Err("Compy's change history was damaged earlier and set aside, so part of it is missing".into());
+    match coverage {
+        LedgerCoverage::Whole | LedgerCoverage::SinceSetAside(_) => Ok(history),
+        LedgerCoverage::Lost => Err("a new baseline session is needed, because Compy's change history was \
+                                     damaged and set aside after this one began"
+            .into()),
+        LedgerCoverage::Unknown => Err("Compy's change history was damaged and set aside, and Compy can't \
+                                        tell whether that happened before the session this Trial compares \
+                                        against began"
+            .into()),
     }
-    Ok(history)
+}
+
+/// The ledger the §3 one-change checks read and what it covers for the session that began at
+/// `began`: the two reads behind `ledger_for_one_change_checks`, the ledger itself and the set-aside
+/// marker, in the order that can't miss a set-aside made before the load (#618 review P2).
+///
+/// A damaged ledger is set aside by whichever reader loads it first, and Compy's background readers
+/// load it too: a session summary being saved reaches `history::ledger_len_checked` through
+/// `comparison::on_session_finalized` while a comparison is armed for that game, and the session
+/// start, `intelligence::gather` and Game Readiness load it on their own. Read marker-first, a start
+/// could see "nothing set aside", then load the fresh EMPTY ledger a background reader had just set
+/// the damaged one aside for, and read that silence as "no Compy change moved" on a clean rig.
+/// Loading FIRST closes that: a set-aside that happened before the load is on disk by the time the
+/// marker is read, and one that happens after the load can't have changed the rows the load
+/// returned. Two reads are still two reads, not one snapshot: a marker that appears after both is the
+/// next reader's to see.
+///
+/// The reads come in as closures so the guard in the tests can stage a set-aside DURING the load.
+fn ledger_view_for_one_change_checks<T>(
+    load: impl FnOnce() -> Result<Vec<T>, String>,
+    set_aside_through: impl FnOnce() -> Result<Option<DateTime<Utc>>, String>,
+    began: Option<&str>,
+) -> (Result<Vec<T>, String>, LedgerCoverage) {
+    let loaded = load();
+    let coverage = crate::history::ledger_coverage(set_aside_through(), began);
+    (ledger_for_one_change_checks(loaded, coverage), coverage)
+}
+
+/// The sessions a between-session measurement may pair under `coverage` (#618): after a set-aside,
+/// only those begun past its edge, the same edge `history::ledger_coverage` draws, because the fresh
+/// ledger can't say what moved between sessions older than that. Every session otherwise.
+fn sessions_the_ledger_covers(sessions: &[SessionSummary], coverage: LedgerCoverage) -> std::borrow::Cow<'_, [SessionSummary]> {
+    match coverage {
+        LedgerCoverage::SinceSetAside(at) => std::borrow::Cow::Owned(
+            sessions
+                .iter()
+                .filter(|s| {
+                    crate::history::ledger_coverage(Ok(Some(at)), Some(s.started_at.as_str()))
+                        == LedgerCoverage::SinceSetAside(at)
+                })
+                .cloned()
+                .collect(),
+        ),
+        LedgerCoverage::Whole | LedgerCoverage::Lost | LedgerCoverage::Unknown => std::borrow::Cow::Borrowed(sessions),
+    }
 }
 
 /// The Trust Ledger as the pure checks here read it.
@@ -888,10 +965,20 @@ struct StartLedgerView<'a> {
 /// The start's view of the ledger it loaded, once the §3 baseline check has passed on it, or why the
 /// start is refused, in the check's own words. An unreadable ledger has no view and so no count:
 /// nothing after this can record a 0 for a ledger that didn't load.
+///
+/// #618: after a set-aside the ledger's counts are counted since it, so the baseline's are read the
+/// same way (`SessionSummary::counted_since_set_aside`); a baseline that recorded none since that
+/// set-aside keeps its whole fields, which are "not recorded", and is refused in those words.
 fn baseline_checked_view<'a>(
     baseline: &SessionSummary,
     history: &'a Result<Vec<crate::history::AppliedChange>, String>,
+    coverage: LedgerCoverage,
 ) -> Result<StartLedgerView<'a>, String> {
+    let counted = match coverage {
+        LedgerCoverage::SinceSetAside(at) => baseline.counted_since_set_aside(at),
+        LedgerCoverage::Whole | LedgerCoverage::Lost | LedgerCoverage::Unknown => None,
+    };
+    let baseline = counted.as_ref().unwrap_or(baseline);
     let view = history.as_deref().map(|changes| {
         let summary = crate::history::summarize_history(changes);
         StartLedgerView {
@@ -1469,14 +1556,14 @@ pub(crate) fn session_end_notice_now(
     let sessions = crate::sessions::get_session_summaries();
     let trials = load_store().experiments;
     let others: Vec<SessionSummary> = sessions.iter().filter(|s| s.started_at != session.started_at).cloned().collect();
-    let history = ledger_for_one_change_checks(
-        crate::history::load_history(),
-        crate::history::ledger_was_quarantined(),
+    let (history, coverage) = ledger_view_for_one_change_checks(
+        crate::history::load_history,
+        crate::history::ledger_set_aside_through,
+        Some(session.started_at.as_str()),
     );
-    let between = history
-        .as_deref()
-        .ok()
-        .and_then(|h| crate::noise_floor::between_session_noise(&others, session, &ledger_rows(h)));
+    let between = history.as_deref().ok().and_then(|h| {
+        crate::noise_floor::between_session_noise(&sessions_the_ledger_covers(&others, coverage), session, &ledger_rows(h))
+    });
     let band = between.as_ref().map(|b| crate::noise_floor::noise_band_pct(Some(b)));
     session_end_notice(session, &sessions, &trials, settled, band)
 }
@@ -1494,12 +1581,14 @@ pub(crate) fn next_trial_measured_band_pct() -> Option<f64> {
         .filter_map(|s| Some((chrono::DateTime::parse_from_rfc3339(&s.started_at).ok()?, s)))
         .max_by_key(|(at, _)| *at)
         .map(|(_, s)| s)?;
-    let history = ledger_for_one_change_checks(
-        crate::history::load_history(),
-        crate::history::ledger_was_quarantined(),
-    )
-    .ok()?;
-    let between = crate::noise_floor::between_session_noise(&sessions, baseline, &ledger_rows(&history))?;
+    let (history, coverage) = ledger_view_for_one_change_checks(
+        crate::history::load_history,
+        crate::history::ledger_set_aside_through,
+        Some(baseline.started_at.as_str()),
+    );
+    let history = history.ok()?;
+    let covered = sessions_the_ledger_covers(&sessions, coverage);
+    let between = crate::noise_floor::between_session_noise(&covered, baseline, &ledger_rows(&history))?;
     Some(crate::noise_floor::noise_band_pct(Some(&between)))
 }
 
@@ -2803,29 +2892,23 @@ pub(crate) fn start_experiment(
     let sessions = crate::sessions::get_session_summaries();
     let baseline = resolve_baseline(&sessions, &baseline_session_id)
         .map_err(|why| format!("experiment not started — {why}"))?;
-    // §3: the baseline must still describe the Compy changes in place now.
-    let history = ledger_for_one_change_checks(
-        crate::history::load_history(),
-        crate::history::ledger_was_quarantined(),
+    // §3: the baseline must still describe the Compy changes in place now. #618: bounded by when an
+    // earlier ledger was set aside, against this baseline's own start.
+    let (history, coverage) = ledger_view_for_one_change_checks(
+        crate::history::load_history,
+        crate::history::ledger_set_aside_through,
+        Some(baseline.started_at.as_str()),
     );
+    // #618: after a set-aside, only sessions past its edge can be paired as unchanged.
+    let covered = sessions_the_ledger_covers(&sessions, coverage);
     // §5 (P4-noise): the band this Trial is judged against, from this game's unchanged sessions on
     // this PC when there are enough, never below the fixed default; an unreadable ledger can't prove
     // any pair unchanged, so it measures nothing.
     let between = history
         .as_deref()
         .ok()
-        .and_then(|changes| crate::noise_floor::between_session_noise(&sessions, baseline, &ledger_rows(changes)));
+        .and_then(|changes| crate::noise_floor::between_session_noise(&covered, baseline, &ledger_rows(changes)));
     let noise_floor_pct = crate::noise_floor::noise_band_pct(between.as_ref());
-    // P4-smooth-offer: Smoothest starts only when this game's frame pacing was measured between
-    // unchanged sessions on this PC, and is judged on that band; refused before anything is recorded.
-    let smoothest = match outcome {
-        TrialOutcome::Smoothest => {
-            let evidence = smoothest_for(&sessions, baseline, &history)
-                .map_err(|held| format!("experiment not started — {}", smoothest_held_message(held)))?;
-            Some(evidence)
-        }
-        TrialOutcome::Recommended | TrialOutcome::MaxFps => None,
-    };
     // §2: a baseline too short to judge a change against is refused; an uneven or untraced one starts
     // and the record says so. Its halves are graded on the fixed default, which the record keeps as
     // `halves_floor_pct`, never on the verdict band (average fps vs a 1% low spread).
@@ -2834,9 +2917,20 @@ pub(crate) fn start_experiment(
         .map_err(|why| format!("experiment not started — {why}"))?;
     // #668: every count below is folded from the rows this one load returned, never read again — a
     // second read that failed used to record 0 changes active on a rig that had some.
-    let view = baseline_checked_view(baseline, &history)
+    let view = baseline_checked_view(baseline, &history, coverage)
         .map_err(|why| format!("experiment not started — {why}"))?;
     let (changes, rows) = (view.changes, view.rows.as_slice());
+    // P4-smooth-offer: Smoothest starts only when this game's frame pacing was measured between
+    // unchanged sessions on this PC, and is judged on that band; refused before anything is recorded.
+    // After the §3 view, so a history that can't cover this baseline is refused in its own words.
+    let smoothest = match outcome {
+        TrialOutcome::Smoothest => {
+            let evidence = smoothest_for(&covered, baseline, &history)
+                .map_err(|held| format!("experiment not started — {}", smoothest_held_message(held)))?;
+            Some(evidence)
+        }
+        TrialOutcome::Recommended | TrialOutcome::MaxFps => None,
+    };
     // §3: other applied settings not confirmed in place would leave the result unjudged at conclude.
     let unverified = unverified_others_live(changes, rows, &rec_id, &crate::history::LiveReads::default());
     if let Some(why) = unverified_start_refusal(unverified) {
@@ -2854,7 +2948,7 @@ pub(crate) fn start_experiment(
     // never an older row for the one under test (#628).
     let active = view.active;
     let others = other_active_changes(&view.active_recs, &rec_id);
-    let warning = attribution_warning(others);
+    let warning = attribution_warning(others, matches!(coverage, LedgerCoverage::SinceSetAside(_)));
 
     // Step 0 — RECORD FIRST. Saved before the apply; a failed save stops here with nothing changed.
     let now = Utc::now();
@@ -3149,9 +3243,13 @@ pub(crate) fn conclude_experiment(
     .map_err(|why| format!("experiment not concluded — {why}"))?;
 
     let now = Utc::now();
-    let history = ledger_for_one_change_checks(
-        crate::history::load_history(),
-        crate::history::ledger_was_quarantined(),
+    // #618: bounded by the record's own baseline, the same edge start checked: a ledger set aside
+    // after it began (during the Trial, say) loses rows this conclude would need. The attribution
+    // flag is start's: its warning is stored on the record.
+    let (history, _coverage) = ledger_view_for_one_change_checks(
+        crate::history::load_history,
+        crate::history::ledger_set_aside_through,
+        store.experiments[idx].baseline_session_id.as_deref(),
     );
     let rows = history.as_deref().ok().map(ledger_rows);
     // `.ok()` is the honest direction here, not a collapse: an unreadable ledger becomes `None`,
@@ -3547,15 +3645,15 @@ mod experiment_tests {
 
     #[test]
     fn attribution_warning_none_when_rig_is_clean() {
-        assert_eq!(attribution_warning(0), None);
+        assert_eq!(attribution_warning(0, false), None);
     }
 
     #[test]
     fn attribution_warning_names_count_and_refuses_to_attribute_when_changes_active() {
-        let one = attribution_warning(1).unwrap();
+        let one = attribution_warning(1, false).unwrap();
         assert!(one.contains("1 other Compy change is already active"));
         assert!(one.contains("ONLY the one new change"));
-        let many = attribution_warning(3).unwrap();
+        let many = attribution_warning(3, false).unwrap();
         assert!(many.contains("3 other Compy changes are already active"));
         assert!(many.contains("can't attribute"));
     }
@@ -3568,10 +3666,10 @@ mod experiment_tests {
         // (`AppliedChangesSummary::active_recs`), never the setting under test.
         let stale = ["test-rec".to_string()];
         assert_eq!(other_active_changes(&stale, "test-rec"), 0);
-        assert_eq!(attribution_warning(other_active_changes(&stale, "test-rec")), None, "no 'other change' note");
+        assert_eq!(attribution_warning(other_active_changes(&stale, "test-rec"), false), None, "no 'other change' note");
         let on = ["game-bar-disable".to_string(), "game-mode".to_string(), "test-rec".to_string()];
         assert_eq!(other_active_changes(&on, "test-rec"), 2, "each other change on, counted once");
-        let note = attribution_warning(other_active_changes(&on, "test-rec")).unwrap();
+        let note = attribution_warning(other_active_changes(&on, "test-rec"), false).unwrap();
         assert!(note.contains("2 other Compy changes are already active"), "{note}");
     }
 
@@ -4550,6 +4648,7 @@ mod experiment_tests {
             compy_changes_per_change: true,
             compy_changes_cant_confirm: Some(0),
             compy_changes_legacy_active: None,
+            compy_changes_since_set_aside: None,
             hw_fingerprint: Some(crate::hardware::HwFingerprint {
                 hash: "deadbeef".into(),
                 gpu: "Radeon RX 9070 XT".into(),
@@ -5116,17 +5215,121 @@ mod experiment_tests {
     // that would read as "no Compy change moved" forever. The marker makes that silence a loss.
     #[test]
     fn a_ledger_set_aside_as_damaged_never_backs_a_one_change_claim() {
-        let unread = ledger_for_one_change_checks::<u8>(Err("sharing violation".into()), false).unwrap_err();
+        use crate::history::LedgerCoverage::{Lost, SinceSetAside, Unknown, Whole};
+        let unread = ledger_for_one_change_checks::<u8>(Err("sharing violation".into()), Whole).unwrap_err();
         assert_eq!(unread, "Compy can't read its change history");
-        let lost = ledger_for_one_change_checks(Ok(Vec::<u8>::new()), true).unwrap_err();
-        assert!(lost.contains("set aside") && lost.contains("part of it is missing"), "{lost}");
+        // #618: a ledger set aside after the baseline began may be missing rows it needs: refused, and
+        // the refusal carries its fix (the journey offers a new as-is session for a baseline refusal).
+        let lost = ledger_for_one_change_checks(Ok(Vec::<u8>::new()), Lost).unwrap_err();
+        assert!(lost.starts_with("a new baseline session is needed") && lost.contains("set aside after this one began"), "{lost}");
         // Even a fresh ledger that has rows since is only part of the story.
-        assert!(ledger_for_one_change_checks(Ok(vec!["c1"]), true).is_err());
-        assert_eq!(ledger_for_one_change_checks(Ok(vec!["c1"]), false), Ok(vec!["c1"]));
+        assert!(ledger_for_one_change_checks(Ok(vec!["c1"]), Lost).is_err());
+        // Unknown stays unknown, in words that don't send the user to record a session that can't help.
+        let unknown = ledger_for_one_change_checks(Ok(vec!["c1"]), Unknown).unwrap_err();
+        assert!(unknown.contains("can't tell whether that happened before") && !unknown.contains("baseline"), "{unknown}");
+        // Covered: the whole history, or every move since a set-aside the baseline began after.
+        assert_eq!(ledger_for_one_change_checks(Ok(vec!["c1"]), Whole), Ok(vec!["c1"]));
+        assert_eq!(ledger_for_one_change_checks(Ok(vec!["c1"]), SinceSetAside(Utc::now())), Ok(vec!["c1"]));
 
         let base = SessionSummary { compy_changes_active: Some(0), ..session(BASE_ID, 150.0) };
         let why = baseline_is_current(&base, Err(lost.as_str())).unwrap_err();
         assert!(why.contains("set aside") && why.contains("nothing else changed"), "{why}");
+    }
+
+    // #618 review: once a Trial can start after a set-aside, the count comes from the fresh ledger
+    // alone. Changes the lost one recorded may still be applied, so a zero must not read as clean.
+    #[test]
+    fn attribution_warning_never_calls_a_rig_clean_when_earlier_history_was_set_aside() {
+        let zero = attribution_warning(0, true).expect("a zero count after a set-aside is not a clean rig");
+        assert!(zero.contains("set aside") && zero.contains("may still be in place"), "{zero}");
+        assert!(zero.contains("ONLY the one new change"), "{zero}");
+        let some = attribution_warning(2, true).unwrap();
+        assert!(some.contains("2 other Compy changes are already active"), "{some}");
+        assert!(some.contains("also set aside, so there may be more"), "{some}");
+        assert!(!attribution_warning(3, false).unwrap().contains("set aside"));
+    }
+
+    fn utc(at: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(at).unwrap().with_timezone(&Utc)
+    }
+
+    // #618 review (P2): a damaged ledger is set aside by whichever reader loads it first, and a
+    // background reader (a session summary being saved) can be that one, between a start's two reads.
+    // Read marker-first, the start saw "nothing set aside", then loaded the fresh EMPTY ledger the
+    // background reader had just left, and called the rig clean. The ledger is loaded FIRST now, so
+    // a set-aside that landed before the load is on the marker by the time the marker is read. The
+    // two reads are still two reads: this stages the set-aside DURING the load, deterministically.
+    #[test]
+    fn a_set_aside_that_lands_during_the_ledger_load_is_never_missed() {
+        use std::cell::Cell;
+        let marker: Cell<Option<DateTime<Utc>>> = Cell::new(None);
+        let load_after_a_background_set_aside = || {
+            marker.set(Some(utc(BASE_ID)));
+            Ok(Vec::<&str>::new())
+        };
+        let read_marker = || Ok(marker.get());
+
+        // A baseline begun at the set-aside time could be missing rows: refused, never covered.
+        let (history, coverage) =
+            ledger_view_for_one_change_checks(load_after_a_background_set_aside, read_marker, Some(BASE_ID));
+        let why = history.expect_err("a fresh EMPTY ledger after a set-aside is not a quiet one");
+        assert!(why.starts_with("a new baseline session is needed"), "{why}");
+        assert_eq!(coverage, LedgerCoverage::Lost, "the coverage must come from the marker read AFTER the load");
+
+        // The same race against a baseline begun well after the set-aside: covered by the fresh
+        // ledger, so the check passes, but only since the set-aside, never as the whole history.
+        marker.set(None);
+        let (history, coverage) =
+            ledger_view_for_one_change_checks(load_after_a_background_set_aside, read_marker, Some(TREAT_ID));
+        assert_eq!(history, Ok(Vec::<&str>::new()));
+        assert_eq!(coverage, LedgerCoverage::SinceSetAside(utc(BASE_ID)), "a pass is not a whole history");
+
+        // Nothing set aside, before or during the load: the rows come back, the whole history.
+        marker.set(None);
+        let (history, coverage) = ledger_view_for_one_change_checks(|| Ok(vec!["c1"]), read_marker, Some(BASE_ID));
+        assert_eq!((history, coverage), (Ok(vec!["c1"]), LedgerCoverage::Whole));
+
+        // A load that fails loud (this reader set the damaged ledger aside) is a refusal in its own
+        // words, whatever the marker says.
+        let (history, _) = ledger_view_for_one_change_checks::<&str>(|| Err("parse: bad".into()), read_marker, Some(BASE_ID));
+        assert_eq!(history.unwrap_err(), "Compy can't read its change history");
+    }
+
+    // #618: after a set-aside, a between-session measurement pairs only sessions past its edge (the
+    // fresh ledger can't say what moved between older ones); with the whole history, every session.
+    #[test]
+    fn noise_pairs_only_sessions_the_ledger_covers() {
+        let sessions = vec![session(BASE_ID, 150.0), session(TREAT_ID, 160.0)];
+        let starts = |c: LedgerCoverage| sessions_the_ledger_covers(&sessions, c).iter().map(|s| s.started_at.clone()).collect::<Vec<_>>();
+        assert_eq!(starts(LedgerCoverage::Whole), vec![BASE_ID.to_string(), TREAT_ID.to_string()]);
+        assert_eq!(starts(LedgerCoverage::SinceSetAside(utc(BASE_ID))), vec![TREAT_ID.to_string()]);
+        assert!(starts(LedgerCoverage::SinceSetAside(utc(TREAT_ID))).is_empty());
+    }
+
+    // #618: after a set-aside, the baseline is checked like with like: its counts since that
+    // set-aside against the fresh ledger's. A baseline with only whole counts (or counts since another
+    // set-aside) has nothing comparable and is refused as unrecorded, never matched against a partial.
+    #[test]
+    fn a_baseline_after_a_set_aside_is_checked_on_its_counts_since_it() {
+        let at = utc(BASE_ID);
+        let history: Result<Vec<crate::history::AppliedChange>, String> = Ok(Vec::new());
+        let since = crate::sessions::CountsSinceSetAside { active: Some(0), cant_confirm: 0, since: at.to_rfc3339() };
+        let base = SessionSummary {
+            compy_changes_active: None,
+            compy_changes_cant_confirm: None,
+            compy_changes_since_set_aside: Some(since.clone()),
+            ..session(TREAT_ID, 150.0)
+        };
+        let view = baseline_checked_view(&base, &history, LedgerCoverage::SinceSetAside(at));
+        assert!(view.is_ok(), "{:?}", view.err());
+        // Counted since a different set-aside: nothing like to compare with.
+        let Err(why) = baseline_checked_view(&base, &history, LedgerCoverage::SinceSetAside(at + chrono::TimeDelta::seconds(5))) else {
+            panic!("counts since another set-aside are never compared")
+        };
+        assert!(why.contains("didn't record how many of its changes"), "{why}");
+        // Moved since the baseline began: refused by the ledger rows as before.
+        let moved = SessionSummary { compy_changes_since_set_aside: Some(crate::sessions::CountsSinceSetAside { active: Some(1), ..since }), ..base.clone() };
+        assert!(baseline_checked_view(&moved, &history, LedgerCoverage::SinceSetAside(at)).is_err());
     }
 
     // #669: a baseline session that recorded no count (its start couldn't read the change history) is
@@ -5200,7 +5403,7 @@ mod experiment_tests {
             compy_changes_cant_confirm: None,
             ..session(BASE_ID, 150.0)
         };
-        let Ok(view) = baseline_checked_view(&base, &history) else {
+        let Ok(view) = baseline_checked_view(&base, &history, LedgerCoverage::Whole) else {
             panic!("a readable ledger at the count the baseline recorded is a view")
         };
         assert_eq!(view.rows.len(), 4, "the one-change checks walk every row");
@@ -5209,14 +5412,14 @@ mod experiment_tests {
         assert_eq!(view.counts, crate::history::SessionChangeCounts { active: None, cant_confirm: 2, legacy_active: 2 });
 
         let moved = SessionSummary { compy_changes_active: Some(1), ..base.clone() };
-        let Err(why) = baseline_checked_view(&moved, &history) else {
+        let Err(why) = baseline_checked_view(&moved, &history, LedgerCoverage::Whole) else {
             panic!("a count that moved since the baseline is never a view")
         };
         assert!(why.contains("(1 then, 2 now"), "{why}");
 
         // A ledger that didn't load is refused in words; there is no view, so no 0 to record.
-        let unread = ledger_for_one_change_checks::<crate::history::AppliedChange>(Err("sharing violation".into()), false);
-        let Err(why) = baseline_checked_view(&base, &unread) else {
+        let unread = ledger_for_one_change_checks::<crate::history::AppliedChange>(Err("sharing violation".into()), LedgerCoverage::Whole);
+        let Err(why) = baseline_checked_view(&base, &unread, LedgerCoverage::Whole) else {
             panic!("an unreadable ledger is never a view with a count")
         };
         assert!(why.starts_with("Compy can't read its change history"), "{why}");
@@ -6280,12 +6483,12 @@ mod experiment_tests {
         // record is saved or the change applied.
         let src = include_str!("experiment.rs");
         let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
-        let admit = start.find("smoothest_for(&sessions, baseline, &history)").expect("start admits Smoothest");
+        let admit = start.find("smoothest_for(&covered, baseline, &history)").expect("start admits Smoothest");
         assert!(admit < start.find("save_store(&store)?").unwrap(), "refused before anything is recorded");
         assert!(start[..start.find("save_store(&store)?").unwrap()].contains("        smoothest,\n"));
         let ready = &src[src.find("pub(crate) fn get_smoothest_readiness(").unwrap()..];
         let ready = &ready[..ready.find("\n}\n").unwrap()];
-        assert!(ready.contains("held: smoothest_for(&sessions, from, &history).err(),"));
+        assert!(ready.contains("held: smoothest_for(&sessions_the_ledger_covers(&sessions, coverage), from, &history).err(),"));
         for write in ["save_store", "lock_store", "apply_recommendation", "rollback_change", "write"] {
             assert!(!ready.contains(write), "the readiness check is read-only: {write}");
         }

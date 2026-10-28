@@ -141,6 +141,14 @@ pub(crate) struct SessionSummary {
     /// older Compy wrote (their `compy_changes_active` is that count). Additive.
     #[serde(default)]
     pub(crate) compy_changes_legacy_active: Option<usize>,
+    /// #618: the counts a session recorded from a change history that had been set aside before it
+    /// began (`history::SessionStartCounts::since_set_aside`). Complete for every Compy move since that
+    /// set-aside, never a total, so the fields above stay "not recorded" for this session and only a
+    /// like-with-like comparison reads these ([`comparable_change_counts`],
+    /// [`SessionSummary::counted_since_set_aside`]). Additive: an older Compy ignores the key and reads
+    /// the session as unrecorded, the cautious side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) compy_changes_since_set_aside: Option<CountsSinceSetAside>,
     /// Rig identity at session time — groundwork for same-rig analysis. Additive: pre-fingerprint
     /// sessions parse with this as None.
     #[serde(default)]
@@ -207,6 +215,28 @@ pub(crate) struct SessionSummary {
     pub(crate) frame_pacing: Option<FramePacing>,
 }
 
+/// #618: change counts counted from a fresh change history after a damaged one was set aside.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct CountsSinceSetAside {
+    /// Changes whose live check reads On. `None` when every live change is can't-confirm (453-f1).
+    pub(crate) active: Option<usize>,
+    pub(crate) cant_confirm: usize,
+    /// The set-aside ledger's last write (`history::ledger_set_aside_through`), RFC 3339: the counts
+    /// are complete for every Compy move after it.
+    pub(crate) since: String,
+}
+
+impl CountsSinceSetAside {
+    fn of(counts: crate::history::SessionChangeCounts, at: chrono::DateTime<chrono::Utc>) -> Self {
+        Self { active: counts.active, cant_confirm: counts.cant_confirm, since: at.to_rfc3339() }
+    }
+
+    /// The set-aside time these were counted since, or `None` when it can't be read back.
+    fn since_instant(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        chrono::DateTime::parse_from_rfc3339(&self.since).ok().map(|t| t.with_timezone(&chrono::Utc))
+    }
+}
+
 /// A session's change counts in the form another session's can be compared with (453-f1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ChangeCounts {
@@ -251,6 +281,24 @@ impl SessionSummary {
         self.samples == 0 && self.background_secs_excluded.is_some_and(|n| n > 0)
     }
 
+    /// #618: this session read with its counts since the set-aside at `at`, for a check whose own
+    /// counts come from the fresh ledger since that same set-aside (`experiment::baseline_checked_view`).
+    /// Like with like: both leave out exactly the changes the lost ledger recorded. `None` when this
+    /// session recorded no counts since that set-aside (it began before it, or before this build).
+    pub(crate) fn counted_since_set_aside(&self, at: chrono::DateTime<chrono::Utc>) -> Option<SessionSummary> {
+        let since = self.compy_changes_since_set_aside.as_ref()?;
+        if since.since_instant()? != at {
+            return None;
+        }
+        Some(SessionSummary {
+            compy_changes_active: since.active,
+            compy_changes_cant_confirm: Some(since.cant_confirm),
+            compy_changes_legacy_active: None,
+            compy_changes_per_change: true,
+            ..self.clone()
+        })
+    }
+
     /// Why this session has no count to compare, in words, for "didn't record how many …" lines.
     pub(crate) fn unrecorded_changes_reason(&self) -> &'static str {
         if self.compy_changes_per_change
@@ -268,14 +316,27 @@ impl SessionSummary {
 /// sessions were counted per change, otherwise the older rule on both (a session this build
 /// recorded carries that count too). `Err` names the session (`a` or `b`) with no count in the form
 /// the pair needs.
+///
+/// #618: two sessions begun after the same set-aside compare their counts since it
+/// ([`CountsSinceSetAside`]), like with like: both leave out exactly what the lost ledger recorded.
+/// A session with whole counts never compares with one counted since a set-aside.
 pub(crate) fn comparable_change_counts<'s>(
     a: &'s SessionSummary,
     b: &'s SessionSummary,
 ) -> Result<(ChangeCounts, ChangeCounts), &'s SessionSummary> {
     let per_change = a.compy_changes_per_change && b.compy_changes_per_change;
-    let ca = a.change_counts(per_change).ok_or(a)?;
-    let cb = b.change_counts(per_change).ok_or(b)?;
-    Ok((ca, cb))
+    let (ca, cb) = (a.change_counts(per_change), b.change_counts(per_change));
+    if let (Some(ca), Some(cb)) = (ca, cb) {
+        return Ok((ca, cb));
+    }
+    let since = |s: &SessionSummary| {
+        let c = s.compy_changes_since_set_aside.as_ref()?;
+        Some((c.since_instant()?, ChangeCounts::PerChange { active: c.active?, cant_confirm: c.cant_confirm }))
+    };
+    match (since(a), since(b)) {
+        (Some((at_a, x)), Some((at_b, y))) if at_a == at_b => Ok((x, y)),
+        _ => Err(if ca.is_none() { a } else { b }),
+    }
 }
 
 fn round1(x: f64) -> f64 {
@@ -299,6 +360,8 @@ pub(crate) struct CaptureProgress {
 pub(crate) struct SessionAccumulator {
     started_at: String,
     compy_changes: Option<crate::history::SessionChangeCounts>,
+    /// #618: the counts since a set-aside, when the session began after one.
+    compy_changes_since_set_aside: Option<CountsSinceSetAside>,
     proc_counts: HashMap<String, u32>,
     fps_sum: f64,
     frametime_sum: f64,
@@ -335,15 +398,20 @@ impl SessionAccumulator {
     pub(crate) fn new(started_at: String, active: Option<usize>) -> Self {
         Self::with_counts(
             started_at,
-            active.map(|a| crate::history::SessionChangeCounts { active: Some(a), cant_confirm: 0, legacy_active: a }),
+            crate::history::SessionStartCounts {
+                whole: active.map(|a| crate::history::SessionChangeCounts { active: Some(a), cant_confirm: 0, legacy_active: a }),
+                since_set_aside: None,
+            },
         )
     }
 
-    /// `counts` is `None` when the session start couldn't read the change history (#669).
-    pub(crate) fn with_counts(started_at: String, counts: Option<crate::history::SessionChangeCounts>) -> Self {
+    /// `counts.whole` is `None` when the session start couldn't read the change history (#669), or
+    /// counted only since a set-aside (#618, kept apart in `since_set_aside`).
+    pub(crate) fn with_counts(started_at: String, counts: crate::history::SessionStartCounts) -> Self {
         Self {
             started_at,
-            compy_changes: counts,
+            compy_changes: counts.whole,
+            compy_changes_since_set_aside: counts.since_set_aside.map(|(c, at)| CountsSinceSetAside::of(c, at)),
             proc_counts: HashMap::new(),
             fps_sum: 0.0,
             frametime_sum: 0.0,
@@ -569,6 +637,7 @@ impl SessionAccumulator {
             compy_changes_cant_confirm: self.compy_changes.map(|c| c.cant_confirm),
             compy_changes_legacy_active: self.compy_changes.map(|c| c.legacy_active),
             compy_changes_per_change: true,
+            compy_changes_since_set_aside: self.compy_changes_since_set_aside,
             // Stamped by the monitoring loop at save time (finalize stays pure/system-free).
             hw_fingerprint: None,
             gaming_mode_active: None,
@@ -1468,7 +1537,7 @@ mod session_tests {
         let _ = std::fs::remove_file(&path);
         let session = |active, cant| {
             let counts = crate::history::SessionChangeCounts { active, cant_confirm: cant, legacy_active: 7 };
-            let mut acc = SessionAccumulator::with_counts("t".into(), Some(counts));
+            let mut acc = SessionAccumulator::with_counts("t".into(), crate::history::SessionStartCounts { whole: Some(counts), since_set_aside: None });
             acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
             acc.finalize(MIN_SESSION_SECS)
         };
@@ -1516,7 +1585,7 @@ mod session_tests {
         let path = std::env::temp_dir().join(format!("compy-sessions-downgrade-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let counts = crate::history::SessionChangeCounts { active: Some(1), cant_confirm: 1, legacy_active: 2 };
-        let mut acc = SessionAccumulator::with_counts("t".into(), Some(counts));
+        let mut acc = SessionAccumulator::with_counts("t".into(), crate::history::SessionStartCounts { whole: Some(counts), since_set_aside: None });
         acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
         save_session_to(&path, acc.finalize(MIN_SESSION_SECS)).unwrap();
         let text = std::fs::read_to_string(&path).unwrap();
@@ -1565,5 +1634,50 @@ mod session_tests {
         std::fs::write(&corrupt, b"}}not json[[").unwrap();
         assert!(load_sessions_from(&corrupt).is_empty(), "corrupt file fails safe to empty");
         std::fs::remove_file(&corrupt).ok();
+    }
+
+    // #618: a session begun after a set-aside keeps the fresh ledger's counts apart from its total
+    // (which stays "not recorded" for every reader), and compares them only like with like.
+    #[test]
+    fn counts_since_a_set_aside_are_never_a_total_and_compare_only_like_with_like() {
+        let at = chrono::DateTime::parse_from_rfc3339("2026-09-01T10:00:00Z").unwrap().with_timezone(&chrono::Utc);
+        let counts = crate::history::SessionChangeCounts { active: Some(2), cant_confirm: 1, legacy_active: 3 };
+        let since = |at| crate::history::SessionStartCounts { whole: None, since_set_aside: Some((counts, at)) };
+        let session = |c: crate::history::SessionStartCounts| {
+            let mut acc = SessionAccumulator::with_counts("2026-09-02T10:00:00Z".into(), c);
+            acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
+            acc.finalize(MIN_SESSION_SECS)
+        };
+        let a = session(since(at));
+        // Never a total: every reader of the whole fields sees "not recorded".
+        assert_eq!((a.compy_changes_active, a.compy_changes_cant_confirm, a.compy_changes_legacy_active), (None, None, None));
+        assert_eq!(a.compy_changes_since_set_aside.as_ref().map(|c| (c.active, c.cant_confirm)), Some((Some(2), 1)));
+        // On disk and back, and an older row without the key reads as before.
+        let row = disk_row(&a).unwrap();
+        assert_eq!(row["compy_changes_unrecorded"], true, "an older Compy reads the total as not recorded");
+        assert_eq!(from_disk_row(row.clone()).unwrap(), a);
+        let mut old = row;
+        old.as_object_mut().unwrap().remove("compy_changes_since_set_aside");
+        assert_eq!(from_disk_row(old).unwrap().compy_changes_since_set_aside, None);
+
+        // Two sessions since the SAME set-aside compare those counts; the edge is an instant, not text.
+        let mut b = session(since(at));
+        b.compy_changes_since_set_aside.as_mut().unwrap().since = "2026-09-01T12:00:00+02:00".into();
+        let pc = ChangeCounts::PerChange { active: 2, cant_confirm: 1 };
+        assert_eq!(comparable_change_counts(&a, &b), Ok((pc, pc)));
+        // A different set-aside, or a session with whole counts, is never compared with them.
+        let other = session(since(at + chrono::TimeDelta::hours(1)));
+        assert!(comparable_change_counts(&a, &other).is_err());
+        let whole = session(crate::history::SessionStartCounts { whole: Some(counts), since_set_aside: None });
+        assert_eq!(comparable_change_counts(&whole, &a).unwrap_err().started_at, a.started_at, "names the one with no total");
+        assert!(comparable_change_counts(&a, &whole).is_err());
+
+        // Read for a check counted since that set-aside, the session carries those counts per change.
+        let counted = a.counted_since_set_aside(at).expect("counted since this set-aside");
+        assert_eq!((counted.compy_changes_active, counted.compy_changes_cant_confirm), (Some(2), Some(1)));
+        assert!(counted.compy_changes_per_change);
+        assert_eq!(counted.compy_changes_legacy_active, None);
+        assert!(a.counted_since_set_aside(at + chrono::TimeDelta::seconds(1)).is_none(), "another set-aside");
+        assert!(whole.counted_since_set_aside(at).is_none(), "a session with whole counts has none since");
     }
 }

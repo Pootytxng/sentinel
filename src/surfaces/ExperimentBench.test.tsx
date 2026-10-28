@@ -1610,8 +1610,8 @@ describe("ExperimentBench — Maximum FPS, and Smoothest when measured", () => {
     expect(rs).toContain('Some("max-fps") => Ok(TrialOutcome::MaxFps),');
     expect(rs).toContain('Some("smoothest") => Ok(TrialOutcome::Smoothest),');
     // The bench's readiness is the start's own check (`smoothest_for`), keyed as the bench reads it.
-    expect(rs).toContain("let evidence = smoothest_for(&sessions, baseline, &history)");
-    expect(rs).toContain("held: smoothest_for(&sessions, from, &history).err(),");
+    expect(rs).toContain("let evidence = smoothest_for(&covered, baseline, &history)");
+    expect(rs).toContain("held: smoothest_for(&sessions_the_ledger_covers(&sessions, coverage), from, &history).err(),");
     expect(rs).toContain("pub(crate) fn get_smoothest_readiness(baseline_session_id: String)");
     const keys = ["HistoryUnread", "Unmeasured", "NoStartPacing"].map((v) => v.replace(/[A-Z]/g, (c, i) => (i ? "-" : "") + c.toLowerCase()));
     expect(tsx).toContain(`type SmoothestHeld = ${keys.map((k) => `"${k}"`).join(" | ")};`);
