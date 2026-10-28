@@ -168,6 +168,13 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       admit/refuse and improved/no-change/regressed at the band edges. **-b** (TS) the bench's Smoothest option
       reads a new read-only field from `get_trial_candidates` (or the gate) saying whether it is measured for
       this game, and its "held" reason names what is missing; `ExperimentBench.test.tsx`.
+      **-a done** `75f1d0d3` (feat `45d48c79`): `smoothest_admission` (unmeasured / no start ratio / unreadable
+      history each refused in plain words before anything is recorded), `with_smoothest_outcome` (delta as a % of
+      the lower ratio, like the band), `SmoothestEvidence` stored additively; cargo 1651/0, clippy clean; one Rust
+      review (REQUEST-CHANGES → denominator, history refusal, wording, NaN note taken; wrong-session and
+      write-order findings checked and not applicable). Ordering gate: -b ships in the same build or later, never
+      before -a (an older Compy reads a stored "smoothest" as Recommended). -b plan: a read-only
+      `get_smoothest_readiness(baseline_session_id)` sharing the start's admission, read by the bench.
 - [x] **P4-next** `abd4c883`: after a Trial, offer the next untested change (offer only); none left =
       "Nothing else here is worth testing on this PC" as success. Tested = a verdict on this game in experiments.json.
 - [x] **P4-next-f1** `1fc5026c`: picker marks tested changes ("· Tested: <verdict>") after untested ones.
@@ -555,6 +562,10 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   live card and open its door idempotently inside waitFor; other door clicks wait for the body to mount).
   r24 FULL vitest 525 files / 10772, exit 0, tsc 0. Lesson: never hold a node across a Depth door open —
   re-query inside waitFor. Not pushed.
+- 2026-10-27 ~18:15–18:50 (interactive from Claude HQ, CODE-ONLY): P4-smooth-offer-a `75f1d0d3` (feat `45d48c79`);
+  cargo test 1651 passed, clippy -D warnings clean; one Rust review round, 4 findings taken; r25 FULL vitest 525
+  files / 10100, exit 0. Lesson: a regex over `ExperimentRecord {` also matches fn return types — anchor struct
+  literal edits on the compiler's missing-field errors, not text. Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
