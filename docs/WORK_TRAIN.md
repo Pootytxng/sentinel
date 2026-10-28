@@ -48,7 +48,7 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
 `git commit -F <file>` for messages with quotes; never run git writes from the remote Linux shell.
 
 ## Needs owner
-- **Close fixed issues** #645, #608, #671 on GitHub (sessions cannot write issues).
+- **Close fixed issues** #645, #608, #671, #618 on GitHub (sessions cannot write issues).
 - **Old scheduled task** "#678 check-in 1/3…" still armed; turn it off in your scheduled tasks list.
 
 ## Queue
@@ -106,6 +106,16 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
 - [x] **GB-picker** `e0160644`: not a bug — Game Bar already off in Windows (AppCaptureEnabled=0, GameDVR_Enabled=0),
       now shown as "Already set this way in Windows, not by Compy".
 - [x] **#686-followup** One `LiveReads` per Trial start instead of one PowerShell spawn per row. `6e7792a8`.
+- [x] **#618** A set-aside change history refused every Trial forever. Trials `4405e96c` (fix `c9d4fa64`,
+      review fix `1292fd09`), Care `d16309a3` (fix `871f9f41`). The marker's own last write is the edge
+      (`history::ledger_coverage`, read-only metadata, 2 s slack); the history is loaded before the marker is
+      read everywhere (start, conclude, readiness, notice, next band, session start, Care); a session begun
+      after a set-aside records its counts as counts since it (`compy_changes_since_set_aside`), never as its
+      total, compared only like with like; noise pairs only covered sessions; attribution never calls the rig
+      clean after one. Game Readiness keeps its "right now" total refused (deliberate). Mutation-gate: read-only
+      history.rs additions only, rollback untouched. rust-tauri-reviewer: round 1 REQUEST-CHANGES (symlink /
+      directory marker taken), round 2 APPROVE; Care round: no MUST-FIX, window-start edge confirmed.
+      Cowork-lane adversarial audit flagged (history.rs).
 
 ### Then — Roadmap Phase 4: Optimization Engine v1 (`product/OPTIMIZATION_ENGINE.md`)
 Planned 2026-10-24 from the spec and the code. Order is dependency order. Phase 4 exit on the owner rig:
@@ -579,6 +589,10 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   fix `76d56405`); r26 FULL vitest failed on command-authority-guard + affordance-census → `0f38e9ba`; r27 FULL
   vitest 525 files / 10777, exit 0, tsc 0; cargo 1651/0, clippy clean. Lessons: a new command's touched set
   includes `command-authority-guard` (capability grant), and retiring a locale key includes the census. Not pushed.
+- 2026-10-27 ~19:40–20:10 (interactive from Claude HQ, CODE-ONLY): #618 Trials `4405e96c` + Care `d16309a3`;
+  cargo 1660/0, clippy clean; r28 FULL vitest 525 files / 10110, exit 0 (Trials), r29 for Care. Lesson: when
+  a permanent marker gates a check, find every reader of it (#669's session counts were a second dead-end
+  the old patch didn't cover). Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
