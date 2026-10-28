@@ -609,6 +609,9 @@ export default function ExperimentBench({
   const [concluded, setConcluded] = useState<Experiment | null>(null);
   const [showWhy, setShowWhy] = useState(false);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  // Counts finished reloads, so a check that depends on more than what the bench holds (the change
+  // history behind Smoothest's readiness) is asked again after each one.
+  const [reloads, setReloads] = useState(0);
 
   const [pickId, setPickId] = useState<string>("");
   const [sim, setSim] = useState<SimulatorReport | null>(null);
@@ -647,6 +650,7 @@ export default function ExperimentBench({
     setRecs(rs ?? []);
     if (rs != null) setRecsLoaded(true);
     setSessions(ss ?? []);
+    setReloads((n) => n + 1);
   }, []);
 
   useEffect(() => {
@@ -739,7 +743,9 @@ export default function ExperimentBench({
   });
 
   // P4-smooth-offer-b: whether Smoothest can start from the session a Trial would start from, asked
-  // of the start's own check. Until it answers, or when it can't, Smoothest isn't offered.
+  // of the start's own check. Until it answers, or when it can't, Smoothest isn't offered. Asked again
+  // whenever the bench reloads its Trials (an apply, undo or conclude can change what the check reads),
+  // so neither a stale yes nor a transient failure outlives the next reload.
   const smoothFrom = latestUsableReading(sessions)?.started_at ?? null;
   const [smoothReady, setSmoothReady] = useState<{ from: string; r: SmoothestReadiness | null } | null>(null);
   useEffect(() => {
@@ -751,9 +757,14 @@ export default function ExperimentBench({
     return () => {
       live = false;
     };
-  }, [gate, smoothFrom]);
+  }, [gate, smoothFrom, reloads]);
   const smoothAnswer = smoothReady && smoothReady.from === smoothFrom ? smoothReady : null;
   const smoothestOpen = smoothAnswer?.r?.held === null;
+  // A Smoothest pick the check no longer allows goes back to the default, so the picker never shows a
+  // choice it can't start and its "why" line never describes one.
+  useEffect(() => {
+    if (outcome === "smoothest" && smoothAnswer && !smoothestOpen) setOutcome("recommended");
+  }, [outcome, smoothAnswer, smoothestOpen]);
 
   if (!gate) return null;
 

@@ -1538,7 +1538,9 @@ describe("ExperimentBench — Maximum FPS, and Smoothest when measured", () => {
     fireEvent.click(smooth);
     expect(trigger).toHaveTextContent("Recommended");
     // The check is asked about the session a Trial would start from.
-    expect(callArgs("get_smoothest_readiness")).toEqual({ baselineSessionId: VALORANT_SESSION.started_at });
+    const asked = vi.mocked(invoke).mock.calls.filter(([c]) => c === "get_smoothest_readiness").map(([, a]) => a);
+    expect(asked.length).toBeGreaterThan(0);
+    for (const a of asked) expect(a).toEqual({ baselineSessionId: VALORANT_SESSION.started_at });
     cleanup();
     await i18n.changeLanguage("zh-CN");
     render(<ExperimentBench />);
@@ -1580,6 +1582,21 @@ describe("ExperimentBench — Maximum FPS, and Smoothest when measured", () => {
     fireEvent.click(start);
     await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("start_experiment", expect.anything()));
     expect(callArgs("start_experiment")).toMatchObject({ outcome: "smoothest" });
+  });
+
+  it("asks again after a reload, and a Smoothest pick the check no longer allows goes back to Recommended", async () => {
+    state.smoothReady = { held: null, min_sessions: 3 };
+    const { trigger } = await openOutcomePicker();
+    const smooth = document.querySelector('[role="listbox"] [data-value="smoothest"]') as HTMLElement;
+    await waitFor(() => expect(smooth).not.toHaveAttribute("aria-disabled", "true"));
+    fireEvent.click(smooth);
+    await waitFor(() => expect(trigger).toHaveTextContent("Smoothest"));
+    // Something changed the history: the next reload's answer holds it.
+    state.smoothReady = { held: "unmeasured", min_sessions: 3 };
+    fireEvent(window, new Event(LEDGER_CHANGED_EVENT));
+    expect(await screen.findByTestId("exp-outcome-smoothest")).toHaveTextContent("Smoothest needs at least 3 sessions");
+    await waitFor(() => expect(trigger).toHaveTextContent("Recommended"));
+    expect(screen.getByTestId("exp-outcome-why")).toHaveTextContent("Keeps the change only if the 1% low rises beyond the noise band");
   });
 
   it("the picker's outcome names are the backend's", async () => {
