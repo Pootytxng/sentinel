@@ -156,6 +156,33 @@ describe("the Care view compares on a stutter arrival", () => {
     expect(cmds().every((c) => ["get_session_summaries", "what_changed_between"].includes(c))).toBe(true);
   });
 
+  // Self-review 2026-10-28 (P7-route): the stutter section is the answer to the question the user
+  // arrived with, but it sits below the crash steps and the view opened at the top. Once it has an
+  // answer it is brought into view, once; a plain visit never scrolls.
+  it("brings the comparison into view once it has an answer, only on a stutter arrival", async () => {
+    const scrolled: Element[] = [];
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      h.sessions = [sess("2026-10-20T10:00:00Z", { fps_series: UNEVEN }), sess("2026-10-24T10:00:00Z")];
+      localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
+      const first = render(<BlackBox />);
+      expect(await screen.findByText(/no steady Valorant session/)).toBeInTheDocument();
+      await waitFor(() => expect(scrolled).toHaveLength(1));
+      expect(scrolled[0]).toBe(first.container.querySelector("section.bb-stutter"));
+      cleanup();
+      scrolled.length = 0;
+      render(<BlackBox />);
+      fireEvent.click(await screen.findByRole("button", { name: /Compare my latest session with my last steady one/i }));
+      expect(await screen.findByText(/no steady Valorant session/)).toBeInTheDocument();
+      expect(scrolled, "a visit that didn't arrive with the question never scrolls").toEqual([]);
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
+  });
+
   it("skips a steady session the engine can't compare and uses the next one", async () => {
     h.sessions = [
       sess("2026-10-18T10:00:00Z"),

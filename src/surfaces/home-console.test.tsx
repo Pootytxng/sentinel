@@ -722,7 +722,7 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
     // P7-confidence: a high inference band reads "Likely" (one vocabulary); the band stays on data-confidence.
     expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Likely");
     expect(row.querySelector(".hc-limiter-tag [data-confidence]")!.getAttribute("data-confidence")).toBe("high");
-    fireEvent.click(row.querySelector("button")!);
+    fireEvent.click(row.querySelector("button.hc-btn")!);
     expect(jump).toHaveBeenCalled();
   });
 
@@ -852,7 +852,7 @@ describe("HomeConsole — the last-session intelligence line (Intelligence Phase
     expect(row.querySelector(".hc-limiter-title")!.textContent).toBe(headlineFixture.text);
     // The headline sentence already names the game — the row adds no second game tag.
     expect(row.querySelectorAll(".hc-limiter-tag")).toHaveLength(0);
-    const door = row.querySelector("button")!;
+    const door = row.querySelector("button.hc-btn")!;
     expect(door.textContent).toBe("See in Monitor");
     fireEvent.click(door);
     expect(nav).toHaveBeenCalledWith("play");
@@ -868,7 +868,7 @@ describe("HomeConsole — the last-session intelligence line (Intelligence Phase
       onNavigate: () => {},
     }).container;
     await waitFor(() => expect(intelRow(c)).not.toBeNull());
-    expect(intelRow(c)!.querySelector("button")).toBeNull();
+    expect(intelRow(c)!.querySelector("button.hc-btn")).toBeNull();
   });
 
   it("no verdict ⇒ no line: a null headline renders nothing (never a fabricated sentence)", async () => {

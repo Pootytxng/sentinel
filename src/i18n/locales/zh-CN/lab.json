@@ -479,12 +479,6 @@
       "notApplicable": "此处无法测试",
       "riskExceedsValue": "风险大于收益——已禁止"
     },
-    "confidence": {
-      "unknown": "置信度：未知",
-      "low": "置信度：低",
-      "medium": "置信度：中",
-      "high": "置信度：高"
-    },
     "when": {
       "justNow": "刚刚",
       "minAgo": "{{count}} 分钟前",

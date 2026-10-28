@@ -1,3 +1,4 @@
+import { ConfidenceWord } from "../design/ConfidenceWord";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 // DIR-1 first-timer walk, 2026-08-26, finding #5: "1% low" is a measurement word, and the
 // reader this product is for has never met it. `src/jargon-term-gloss-guard.test.ts` derives
@@ -26,7 +27,6 @@ import { useV2Accent } from "./HomeV2";
 import CountUp from "../design/vendor/CountUp/CountUp";
 import ElectricBorder from "../design/vendor/ElectricBorder/ElectricBorder";
 import "./home-hud.css";
-import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
 // HomeHud — the pure Instrument-HUD pilot (spec 2026-07-05-ui-deslop-organic-directive,
 // LOCKED direction CORRECTED: editorial retired; flag DEFAULT OFF). The whole room reads as
@@ -737,7 +737,7 @@ export function HomeHud({
                   >
                     {i === 0
                       ? t("home.homeHud.docket.biggestLimiter")
-                      : <span data-confidence={l.confidence} title={t(confidenceHintKey(wordFromBand(l.confidence)))}>{t(confidenceWordKey(wordFromBand(l.confidence)))}</span>}
+                      : <ConfidenceWord band={l.confidence} />}
                   </span>
                   <button type="button" className="hud-btn hud-btn-ghost" onClick={onSeeInFix}>
                     {t("home.homeHud.docket.seeIn", { room: fixRoomLabel })}

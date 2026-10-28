@@ -47,16 +47,20 @@
    never interactive so it can't block the parts the evidence map makes clickable. Tokens only. */
 :root[data-v2="on"] .lc-rig-note {
   position: absolute;
-  left: 16px;
-  right: 16px;
+  left: 50%;
   bottom: 8px;
+  transform: translateX(-50%);
+  width: max-content;
   max-width: calc(100% - 32px);
-  margin: 0 auto;
   text-align: center;
   font-size: var(--type-label);
   line-height: 1.35;
   color: var(--v2-muted);
-  text-shadow: 0 1px 6px var(--v2-bg), 0 0 2px var(--v2-bg);
+  /* Self-review 2026-10-28 (rubric 12): the Lab stage draws its floor grid right up to this edge, and
+     a shadow alone let grid lines cut through the glyphs. A solid backing in the stage's own colour
+     keeps every word on a clean field. */
+  background: var(--v2-bg);
+  padding: 2px 8px;
   pointer-events: none;
 }
 /* THE RIG FILLS ITS STAGE (2026-08-26, measured). `place-items: center` used to shrink-wrap the

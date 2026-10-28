@@ -1,3 +1,4 @@
+import { ConfidenceWord } from "../design/ConfidenceWord";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 // DIR-1 first-timer walk, 2026-08-26, finding #5: "1% low" is a measurement word, and the
 // reader this product is for has never met it. `src/jargon-term-gloss-guard.test.ts` derives
@@ -26,7 +27,6 @@ import CountUp from "../design/vendor/CountUp/CountUp";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import SpotlightCard from "../design/vendor/SpotlightCard/SpotlightCard";
 import "./home-v2.css";
-import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
 // HomeV2 (V2-3, spec 2026-07-02-v2-shell-sourcing-and-plan) — the Home room on the V2 shell,
 // laid out per the owner-approved mockup: verdict → hologram hero stage + stat column →
@@ -629,7 +629,7 @@ export function HomeV2({
                   >
                     {i === 0
                       ? t("home.homeV2.priorities.biggestLimiter")
-                      : <span data-confidence={l.confidence} title={t(confidenceHintKey(wordFromBand(l.confidence)))}>{t(confidenceWordKey(wordFromBand(l.confidence)))}</span>}
+                      : <ConfidenceWord band={l.confidence} />}
                   </span>
                   <button type="button" className="hv2-btn hv2-btn-ghost" onClick={onSeeInFix}>
                     {t("home.homeV2.priorities.seeIn", { room: fixRoomLabel })}

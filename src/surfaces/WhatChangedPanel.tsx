@@ -1,3 +1,6 @@
+import { Term } from "../design/Term";
+import { withTerms } from "../design/with-terms";
+import { ConfidenceWord } from "../design/ConfidenceWord";
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
@@ -23,7 +26,6 @@ import { knownFps } from "../lib/session-metrics";
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
 import { eventText } from "./event-text";
-import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
 // Intelligence Phase 1 — the "What changed?" panel (Monitor session debrief slot). Renders the
 // deterministic Rust engine's verdict for THIS session vs the previous session of the same game:
@@ -61,7 +63,7 @@ function HypothesisBlock({ h, lead }: { h: IntelHypothesis; lead: boolean }) {
       <div className="wcp-hypo-head">
         <span className="wcp-hypo-title">{h.title}</span>
         <span className="wcp-hypo-conf">
-          <span data-confidence={h.confidence} title={t(confidenceHintKey(wordFromBand(h.confidence)))}>{t(confidenceWordKey(wordFromBand(h.confidence)))}</span>
+          <ConfidenceWord band={h.confidence} />
         </span>
       </div>
       {h.supporting_evidence.length > 0 && (
@@ -371,11 +373,11 @@ export function WhatChangedReportView({
           {headline ?? t("optimize.whatChangedPanel.headlineDefault", { game: r.game })}
         </span>
         <span className="wcp-nf">
-          {t("optimize.whatChangedPanel.noiseFloor", { pct: r.noise_floor_pct.toFixed(0) })}
+          <Term id="noise-floor">{t("optimize.whatChangedPanel.noiseFloor", { pct: r.noise_floor_pct.toFixed(0) })}</Term>
         </span>
       </div>
 
-      <h3 className="wcp-headline">{r.headline}</h3>
+      <h3 className="wcp-headline">{withTerms(r.headline)}</h3>
 
       <ComparabilityBanner c={r.comparability} />
 

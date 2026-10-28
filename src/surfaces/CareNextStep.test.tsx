@@ -518,7 +518,8 @@ describe("P7-depth: the next step's technical receipt", () => {
       Research: "no",
     });
     expect(rows["Tracked since"]).toMatch(/^\d{4}-\d{2}-\d{2}T.*\((shown|answered)\)$/);
-    expect(rows["Step id"]).toBeTruthy();
+    // Self-review 2026-10-28: the step id repeated the step text; the receipt no longer shows it.
+    expect(rows["Step id"]).toBeUndefined();
     // No blank value anywhere in the receipt.
     expect([...dl.querySelectorAll("dd")].every((dd) => dd.textContent!.trim() !== "")).toBe(true);
     // The explanation says why, in plain words, and names the kind.

@@ -7,6 +7,8 @@
 // the numbers clearly beat it. It measures; it never fabricates a gain.
 // Spec: docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md.
 
+import { withTerms } from "../design/with-terms";
+import { confidenceWordKey, type ConfidenceWord } from "../data/confidence-word";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
@@ -275,13 +277,14 @@ function simVerdictCopy(t: Translate): Record<string, { label: string; blocked: 
   };
 }
 
-function confidenceCopy(t: Translate): Record<Confidence, string> {
-  return {
-    unknown: t("lab.experimentBench.confidence.unknown"),
-    low: t("lab.experimentBench.confidence.low"),
-    medium: t("lab.experimentBench.confidence.medium"),
-    high: t("lab.experimentBench.confidence.high"),
-  };
+// Review 2026-10-28 (P7-confidence): the one shared vocabulary, never "confidence: medium". A
+// simulator estimate is engineering reasoning (Expected); a Trial result is a measurement (Measured);
+// low or unknown evidence is Unknown.
+function confidenceCopy(t: Translate, kind: "estimate" | "measured"): Record<Confidence, string> {
+  const word = (c: Confidence): ConfidenceWord =>
+    c === "high" || c === "medium" ? (kind === "estimate" ? "expected" : "measured") : "unknown";
+  const say = (c: Confidence) => t(confidenceWordKey(word(c)));
+  return { unknown: say("unknown"), low: say("low"), medium: say("medium"), high: say("high") };
 }
 
 // §11 receipt line: the band the verdict was judged against, and whether this game's own noise on
@@ -1238,7 +1241,7 @@ export default function ExperimentBench({
               <p className="exp-sim-rec">{sim.rec_title}</p>
               <div className="exp-sim-head">
                 <VerdictBand tone={simulationTone(sim.verdict)}>{simMeta.label}</VerdictBand>
-                <span className="exp-sim-conf">{confidenceCopy(t)[sim.confidence]}</span>
+                <span className="exp-sim-conf">{confidenceCopy(t, "estimate")[sim.confidence]}</span>
               </div>
               <p className="exp-sim-why">{sim.why}</p>
               <p className="exp-sim-line">
@@ -1480,10 +1483,12 @@ function LessonBlock({ lesson, game }: { lesson: Lesson; game: string }) {
     <>
       <p className="exp-order-label">{t("lab.experimentBench.summary.lessonLabel")}</p>
       <p className="exp-note" data-testid="exp-summary-lesson" data-rule={lesson.rule}>
-        {[
-          t(`lab.experimentBench.summary.lesson.${key}`, { change: lesson.title, game }),
-          confidenceCopy(t)[lesson.confidence ?? "unknown"],
-        ].join(t("lab.experimentBench.summary.contextSeparator"))}
+        {withTerms(
+          [
+            t(`lab.experimentBench.summary.lesson.${key}`, { change: lesson.title, game }),
+            confidenceCopy(t, "measured")[lesson.confidence ?? "unknown"],
+          ].join(t("lab.experimentBench.summary.contextSeparator")),
+        )}
       </p>
       <details className="exp-why" data-testid="exp-summary-lesson-detail">
         <summary className="exp-why-toggle">{t("lab.experimentBench.summary.lessonDetailToggle")}</summary>
@@ -1502,7 +1507,7 @@ function TestSummary({ s }: { s: GameTestSummary }) {
   const { t } = useTranslation();
   const game = prettyGameName(s.game) || s.game;
   const verdicts = verdictCopy(t);
-  const conf = confidenceCopy(t);
+  const conf = confidenceCopy(t, "measured");
   const sep = t("lab.experimentBench.summary.contextSeparator");
   const list = t("lab.experimentBench.pairListSeparator");
   const noiseLines = [...new Set(s.tested.filter((r) => r.noise).map((r) => noiseLine(r.noise!, s.game, t)))];
@@ -1525,9 +1530,10 @@ function TestSummary({ s }: { s: GameTestSummary }) {
       t("lab.experimentBench.summary.row", { title: r.title, text: verdicts[r.verdict] ?? r.verdict }),
       conf[r.confidence ?? "unknown"],
       ...(r.trials > 1 ? [t("lab.experimentBench.summary.trials", { count: r.trials })] : []),
-    ].join(sep) +
-    ` ${t(STILL_APPLIED_KEY[r.stillApplied])}` +
-    (r.sameContext === false ? ` ${t("lab.experimentBench.summary.contextChanged")}` : "");
+      // Review 2026-10-28: every part of the line is separated alike ("· Measured · Not applied now.").
+      t(STILL_APPLIED_KEY[r.stillApplied]),
+      ...(r.sameContext === false ? [t("lab.experimentBench.summary.contextChanged")] : []),
+    ].join(sep);
   const skippedLine = (r: GameTestSummary["skipped"][number]) => {
     const why =
       r.reason && r.reason in SKIP_REASON_KEY
