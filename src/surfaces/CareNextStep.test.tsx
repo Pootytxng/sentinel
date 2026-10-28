@@ -105,6 +105,18 @@ afterEach(() => {
   h.verdict = "";
 });
 
+// A Depth door is per-mount state: a late re-render can remount it shut after a one-shot click, and a
+// held node can be detached (desk full-gate and pre-push flakes, 2026-10-27). Open it against the live
+// tree, clicking only while it is shut, until its body has mounted.
+async function openDoor(root: ParentNode, testId: string): Promise<void> {
+  await waitFor(() => {
+    const door = root.querySelector<HTMLDetailsElement>(`[data-testid="${testId}"]`);
+    expect(door, testId).not.toBeNull();
+    if (!door!.open) fireEvent.click(door!.querySelector("summary")!);
+    expect(door!.children.length, `${testId} body`).toBeGreaterThan(1);
+  });
+}
+
 describe("pickCareStep: one step, by the documented priority", () => {
   it("takes the NEWEST assessed crash record, over an older one and over the stutter test", () => {
     const s = pickCareStep(
@@ -359,7 +371,7 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
     expect(box.querySelector(".bb-next-headline")!.textContent).toBe("Roll back the GPU driver");
     // P7-depth: the "from" line is the EXPLANATION layer; the payoff stays in the answer. The block
     // can re-render once more after the anchor read settles, so query the live tree, never `box`.
-    fireEvent.click(container.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
+    await openDoor(container, "bb-next-depth-why");
     await waitFor(() => expect(container.querySelector(".bb-next-from")).not.toBeNull());
     expect(container.querySelector(".bb-next-from")!.textContent).toMatch(/From an earlier Valorant session comparison/);
     // Review MUST-FIX 2: a stored step's why says "an earlier comparison", never "the latest".
@@ -463,10 +475,7 @@ describe("P6-next-f2: the stored stutter step outlives a good session", () => {
     const second = render(<BlackBox />);
     await waitFor(() => expect(second.container.querySelector(".bb-next")?.getAttribute("data-source")).toBe("stutter"));
     await waitFor(() => expect(entry().finalView).toBeDefined());
-    const door1 = second.container.querySelector('[data-testid="bb-next-depth-why"] > summary')!;
-    fireEvent.click(door1);
-    // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
-    await waitFor(() => expect(door1.parentElement!.children.length).toBeGreaterThan(1));
+    await openDoor(second.container, "bb-next-depth-why");
     expect(second.container.querySelector(".bb-next-final")).not.toBeNull();
     expect(entry().retired).toBeUndefined();
   });
@@ -496,11 +505,8 @@ describe("P7-depth: the next step's technical receipt", () => {
     expect(box.querySelector(".bb-next-headline")!.textContent).toBe("Check the driver");
     expect(box.querySelector(".bb-next-payoff")).not.toBeNull();
     expect(box.querySelector(".bb-next-receipt")).toBeNull();
-    const door2 = box.querySelector('[data-testid="bb-next-depth-receipt"] > summary')!;
-    fireEvent.click(door2);
-    // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
-    await waitFor(() => expect(door2.parentElement!.children.length).toBeGreaterThan(1));
-    const dl = box.querySelector(".bb-next-receipt")!;
+    await openDoor(container, "bb-next-depth-receipt");
+    const dl = container.querySelector(".bb-next-receipt")!;
     const rows = Object.fromEntries([...dl.querySelectorAll("dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]));
     expect(rows).toMatchObject({
       Source: "crash record",
@@ -516,10 +522,9 @@ describe("P7-depth: the next step's technical receipt", () => {
     // No blank value anywhere in the receipt.
     expect([...dl.querySelectorAll("dd")].every((dd) => dd.textContent!.trim() !== "")).toBe(true);
     // The explanation says why, in plain words, and names the kind.
-    fireEvent.click(box.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
-    await waitFor(() => expect(box.querySelector(".bb-next-why")).not.toBeNull());
-    expect(box.querySelector(".bb-next-why")!.textContent).toMatch(/newest crash record is tagged App crash/);
-    expect(box.querySelector(".bb-next-why")!.textContent).toMatch(/safe first thing to check/);
+    await openDoor(container, "bb-next-depth-why");
+    expect(container.querySelector(".bb-next-why")!.textContent).toMatch(/newest crash record is tagged App crash/);
+    expect(container.querySelector(".bb-next-why")!.textContent).toMatch(/safe first thing to check/);
   });
 
   // Review of this slice, MUST-FIX 1: the why never says "safe first thing to check" for a step the
@@ -531,10 +536,7 @@ describe("P7-depth: the next step's technical receipt", () => {
     const first = render(<BlackBox />);
     fireEvent.click(screen.getByRole("button", { name: /scan/i }));
     await waitFor(() => expect(first.container.querySelector(".bb-next")).not.toBeNull());
-    fireEvent.click(first.container.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
-    // The explanation mounts on the details' toggle, which jsdom delivers on a later task: wait for it
-    // (desk full-suite flake under load, 2026-10-27) rather than read it in the same tick.
-    await waitFor(() => expect(first.container.querySelector(".bb-next-why")).not.toBeNull());
+    await openDoor(first.container, "bb-next-depth-why");
     expect(first.container.querySelector(".bb-next-why")!.textContent).toMatch(/lead worth researching/);
     expect(first.container.querySelector(".bb-next-why")!.textContent).not.toMatch(/safe first thing/);
     cleanup();
@@ -546,8 +548,7 @@ describe("P7-depth: the next step's technical receipt", () => {
     await waitFor(() => expect(second.container.querySelector(".bb-next")).not.toBeNull());
     // The stop code the user is told to share is in the answer, before any tap.
     expect(second.container.querySelector(".bb-next-detail:not(.bb-next-beyond)")!.textContent).toBe("Stop code 0x133.");
-    fireEvent.click(second.container.querySelector('[data-testid="bb-next-depth-why"] > summary')!);
-    await waitFor(() => expect(second.container.querySelector(".bb-next-why")).not.toBeNull());
+    await openDoor(second.container, "bb-next-depth-why");
     expect(second.container.querySelector(".bb-next-why")!.textContent).toMatch(/beyond what Compy can safely narrow down/);
     expect(second.container.querySelector(".bb-next-why")!.textContent).not.toMatch(/safe first thing/);
   });
