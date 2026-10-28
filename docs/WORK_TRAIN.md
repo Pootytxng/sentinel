@@ -43,12 +43,14 @@ item you cannot finish in the time left.
 
 **Stop rules.** A gate fails twice on the same cause → write the blocker under the item and move on.
 Never change Windows settings outside Compy's own apply/rollback. Never publish a release, sign, touch
-credentials, close or edit GitHub issues (the session cannot), or edit `~/.claude/settings.json`.
+credentials, or edit `~/.claude/settings.json`. **Closing issues is Claude's job, not the owner's** (owner,
+2026-10-28): once a fix is on `main` and pushed, close its issue with a comment naming the fix commit. A
+session with no GitHub issue access (the scheduled desk sessions) lists the issue under Needs owner's
+next interactive session instead, and that session closes it.
 Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$vars` are stripped); use
 `git commit -F <file>` for messages with quotes; never run git writes from the remote Linux shell.
 
 ## Needs owner
-- **Close fixed issues** #645, #608, #671, #618 on GitHub (sessions cannot write issues).
 - **Old scheduled task** "#678 check-in 1/3…" still armed; turn it off in your scheduled tasks list.
 
 ## Queue
@@ -95,8 +97,8 @@ Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$v
       `e83017a5` (2026-10-24): unknown stays unknown; sessions.json stays loadable by older builds.
       Needs history.rs (#668: `active_changes_in(rows)` fold; #669 also touches sessions.rs types).
 - [x] **#645 / #608 / #671** Unmeasured FPS still shown as a number anywhere. All listed sites fixed on
-      main (#656, PR #661, PR #673); a grep finds only gated sites. Issues still open on GitHub: closing them
-      needs the owner (the session could not write to issues).
+      main (#656, PR #661, PR #673); a grep finds only gated sites. Issues closed 2026-10-28 with the fix
+      commits named.
 - [x] **#622** Health layout below ~600 px. `3c3e7553` (2026-10-24).
 - [x] **#677** Clipped session metadata and combined-effect tooltips. `3c3e7553`.
 - [x] **#622-f1** Live session rows stack below 600 px of list width `716e0fbd`.
