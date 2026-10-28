@@ -210,6 +210,11 @@ const pickChange = async (value: string) => {
   return trigger;
 };
 
+// A noise sentence now carries glossed terms ("noise floor", "1% low") as their own buttons, so the
+// sentence spans several nodes: match the innermost element whose whole text is the line.
+const wholeLine = (line: string) => (_: string, el: Element | null) =>
+  !!el && el.textContent === line && ![...el.children].some((c) => c.textContent === line);
+
 describe("ExperimentBench (dark)", () => {
   it("renders NOTHING while the backend gate is hard-false (every shipped build today)", async () => {
     const { container } = render(<ExperimentBench />);
@@ -767,7 +772,7 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     expect(
       await screen.findByText(
-        "Judged against Compy's fixed 3% noise floor. In one 25-second calibration on your PC, this game's 1% low varied by ±1.3%. That number isn't used to judge yet, and the game version isn't checked.",
+        wholeLine("Judged against Compy's fixed 3% noise floor. In one 25-second calibration on your PC, this game's 1% low varied by ±1.3%. That number isn't used to judge yet, and the game version isn't checked."),
       ),
     ).toBeInTheDocument();
   });
@@ -786,7 +791,7 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     expect(
       await screen.findByText(
-        "Judged against a ±5.9% noise floor: across 4 of your unchanged WardogsClient sessions on this PC, the 1% low frame rate differed by up to 5.9% between any two of those sessions.",
+        wholeLine("Judged against a ±5.9% noise floor: across 4 of your unchanged WardogsClient sessions on this PC, the 1% low frame rate differed by up to 5.9% between any two of those sessions."),
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/hasn't been measured yet/)).not.toBeInTheDocument();
@@ -801,7 +806,7 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     expect(
       await screen.findByText(
-        "Judged against Compy's 3% minimum noise floor: across 3 of your unchanged Valorant sessions on this PC, the 1% low frame rate differed by up to 1.8% between any two of those sessions, which is less than that minimum.",
+        wholeLine("Judged against Compy's 3% minimum noise floor: across 3 of your unchanged Valorant sessions on this PC, the 1% low frame rate differed by up to 1.8% between any two of those sessions, which is less than that minimum."),
       ),
     ).toBeInTheDocument();
   });
@@ -823,7 +828,7 @@ describe("ExperimentBench (armed)", () => {
       { ...KEPT_EXPERIMENT, noise_evidence: { band_pct: 3, measured_noise_pct: null, measured_noise_stale: why } },
     ];
     render(<ExperimentBench />);
-    expect(await screen.findByText(line)).toBeInTheDocument();
+    expect(await screen.findByText(wholeLine(line))).toBeInTheDocument();
     expect(screen.queryByText(/hasn't been measured yet/)).not.toBeInTheDocument();
   });
 

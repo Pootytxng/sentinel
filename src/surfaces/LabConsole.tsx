@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
+import { Term } from "../design/Term";
 import { useReducedMotion } from "../design/use-motion";
 import { ArcGauge } from "../design/console/ArcGauge";
 import { Dock, type DockNode } from "../design/console/Dock";
@@ -775,7 +776,7 @@ export function LabConsole({
                     even resolve. A magnitude, so it prints as a numeral; the ± unit stays, because
                     dropping it would turn a tolerance into a score. */}
                 <ArcGauge
-                  label={t("lab.labConsole.noiseFloorLabel")}
+                  label={<Term id="noise-floor">{t("lab.labConsole.noiseFloorLabel")}</Term>}
                   value={noiseFloorPct}
                   max={10}
                   unit={t("lab.labConsole.unitPct")}
@@ -1033,7 +1034,7 @@ export function LabConsole({
                     even resolve. Fixed 10% display ceiling (a typical noise floor is a few percent;
                     this is a reading, not a graded score, so a rare spike just fills the ring). */}
                 <ArcGauge
-                  label={t("lab.labConsole.noiseFloorLabel")}
+                  label={<Term id="noise-floor">{t("lab.labConsole.noiseFloorLabel")}</Term>}
                   value={noiseFloorPct}
                   max={10}
                   unit={t("lab.labConsole.unitPct")}

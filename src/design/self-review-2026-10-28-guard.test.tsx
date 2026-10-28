@@ -107,6 +107,10 @@ describe("self-review 2026-10-28 guards", () => {
     expect(patterns).toContain("{withTerms(p.detail)}");
     expect(patterns).toContain("{withTerms(p.title)}");
     expect(read("surfaces", "ExperimentBench.tsx")).toMatch(/data-testid="exp-summary-noise">\s*\{withTerms\(/);
+    // r3: the bench history's "Judged against … noise floor" lines and the Lab noise-floor gauge
+    expect(bench).toContain("{withTerms(sharedNoise)}");
+    expect(bench).toContain("{withTerms(footnoteText(n))}");
+    expect(read("surfaces", "LabConsole.tsx").match(/label=\{<Term id="noise-floor">\{t\("lab\.labConsole\.noiseFloorLabel"\)\}<\/Term>\}/g)?.length).toBe(2);
   });
 
   it("the Care receipt no longer repeats the step as its id", () => {
