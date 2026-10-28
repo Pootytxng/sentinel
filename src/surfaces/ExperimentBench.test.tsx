@@ -196,7 +196,7 @@ afterEach(() => {
 // addressed by `[data-value]` (the replacement for `<option value>`), and the pick is proven by the
 // trigger's rendered label rather than by a form value.
 const pickChange = async (value: string) => {
-  const trigger = await screen.findByRole("combobox");
+  const trigger = await screen.findByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") });
   await waitFor(() => expect(trigger).toBeEnabled());
   fireEvent.click(trigger);
   const option = await waitFor(() => {
@@ -342,7 +342,7 @@ describe("ExperimentBench (armed)", () => {
       },
     ];
     render(<ExperimentBench />);
-    const trigger = await screen.findByRole("combobox");
+    const trigger = await screen.findByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") });
     await waitFor(() => expect(trigger).toBeEnabled());
     fireEvent.click(trigger);
     await waitFor(() =>
@@ -379,6 +379,96 @@ describe("ExperimentBench (armed)", () => {
     expect(row("test-rec")).toBe("");
   });
 
+  // P8-posture-b (RISK_MODEL §2): the Trial asks once how far Compy may go, saves the answer, and every
+  // candidate read carries it. A change above the chosen risk is listed with that reason, never dropped.
+  it("asks once how far Compy may go, sends it with every candidate read, and saves a change", async () => {
+    localStorage.removeItem("compy.trial.riskChoice");
+    state.gate = true;
+    state.recs = [
+      { id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null },
+      { id: "mod-rec", title: "Moderate tweak", passes: false, reason: "outside-chosen-risk", detail: null },
+    ];
+    render(<ExperimentBench />);
+    const risk = await screen.findByRole("combobox", { name: "How far may Compy go on this PC?" });
+    expect(risk).toHaveTextContent("Low and moderate risk");
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_trial_candidates", { riskChoice: "low-and-moderate" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Show why others aren't listed" }));
+    expect(document.querySelector('.exp-why-list [data-rec="mod-rec"]')?.textContent).toContain(
+      "Outside the risk you chose.",
+    );
+
+    vi.mocked(invoke).mockClear();
+    await waitFor(() => expect(risk).toBeEnabled());
+    fireEvent.click(risk);
+    const low = await waitFor(() => {
+      const el = document.querySelector('[role="listbox"] [data-value="low-only"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+    fireEvent.click(low);
+    await waitFor(() => expect(risk).toHaveTextContent("Low risk only"));
+    expect(localStorage.getItem("compy.trial.riskChoice")).toBe("low-only");
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_trial_candidates", { riskChoice: "low-only" }),
+    );
+    localStorage.removeItem("compy.trial.riskChoice");
+  });
+
+  // bug->guard (review MUST-FIX, 2026-10-28): a slow read made under the OLD risk answer landed after
+  // the new one and offered a change above the chosen risk again. The latest read must win.
+  it("a slower read under the old risk answer never overwrites the newer one", async () => {
+    localStorage.removeItem("compy.trial.riskChoice");
+    state.gate = true;
+    const low = { id: "low-rec", title: "Low tweak", passes: true, reason: null, detail: null };
+    const mod = { id: "mod-rec", title: "Moderate tweak", passes: true, reason: null, detail: null };
+    const base = vi.mocked(invoke).getMockImplementation()!;
+    vi.mocked(invoke).mockImplementation(((cmd: string, args?: { riskChoice?: string }) => {
+      if (cmd !== "get_trial_candidates") return base(cmd, args as never);
+      return args?.riskChoice === "low-only"
+        ? Promise.resolve([low, { ...mod, passes: false, reason: "outside-chosen-risk" }])
+        : new Promise((r) => setTimeout(() => r([low, mod]), 150));
+    }) as typeof base);
+    try {
+      render(<ExperimentBench />);
+      const risk = await screen.findByRole("combobox", { name: "How far may Compy go on this PC?" });
+      fireEvent.click(risk);
+      const opt = await waitFor(() => {
+        const el = document.querySelector('[role="listbox"] [data-value="low-only"]');
+        expect(el).not.toBeNull();
+        return el as HTMLElement;
+      });
+      fireEvent.click(opt);
+      await waitFor(() => expect(risk).toHaveTextContent("Low risk only"));
+      await new Promise((r) => setTimeout(r, 250)); // let the old, slow read land
+      const pick = screen.getByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") });
+      fireEvent.click(pick);
+      await waitFor(() => expect(document.querySelector('[role="listbox"] [data-value="low-rec"]')).not.toBeNull());
+      expect(document.querySelector('[role="listbox"] [data-value="mod-rec"]')).toBeNull();
+    } finally {
+      vi.mocked(invoke).mockImplementation(base);
+      localStorage.removeItem("compy.trial.riskChoice");
+    }
+  });
+
+  it("reads a saved risk answer back on the next visit, and ignores an unknown one", async () => {
+    localStorage.setItem("compy.trial.riskChoice", "low-only");
+    state.gate = true;
+    render(<ExperimentBench />);
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_trial_candidates", { riskChoice: "low-only" }),
+    );
+    cleanup();
+    vi.mocked(invoke).mockClear();
+    localStorage.setItem("compy.trial.riskChoice", "anything-goes");
+    render(<ExperimentBench />);
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_trial_candidates", { riskChoice: "low-and-moderate" }),
+    );
+    localStorage.removeItem("compy.trial.riskChoice");
+  });
+
   // P4-rank (ENGINE §3.5, §3.7, §4): the picker used to offer changes in catalog order with no
   // reason for the order. It now follows the backend's suggested order (stronger evidence, then lower
   // risk), shows one reason per position, says when no effect size is known, and names a change too
@@ -395,7 +485,7 @@ describe("ExperimentBench (armed)", () => {
         too_small: { effect_pct: 1.5, band_pct: 4.2 } },
     ];
     render(<ExperimentBench />);
-    const trigger = await screen.findByRole("combobox");
+    const trigger = await screen.findByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") });
     await waitFor(() => expect(trigger).toBeEnabled());
     fireEvent.click(trigger);
     await waitFor(() =>
@@ -429,7 +519,7 @@ describe("ExperimentBench (armed)", () => {
     state.gate = true;
     state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
     render(<ExperimentBench />);
-    await screen.findByRole("combobox");
+    await screen.findByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") });
     await waitFor(() => expect(screen.queryByText("Nothing worth testing on this PC right now.")).toBeNull());
     expect(screen.queryByRole("button", { name: /why others aren't listed/ })).toBeNull();
   });
@@ -444,7 +534,7 @@ describe("ExperimentBench (armed)", () => {
     ];
     const open = holdInitialLoad();
     render(<ExperimentBench />);
-    await screen.findByRole("combobox");
+    await screen.findByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") });
     expect(screen.queryByText("Nothing worth testing on this PC right now.")).toBeNull();
     open();
     expect(await screen.findByText("Nothing worth testing on this PC right now.")).toBeInTheDocument();
@@ -497,7 +587,7 @@ describe("ExperimentBench (armed)", () => {
     // bare fireEvent here would set nothing. If this ever stops being true the repro has rotted and
     // the test below is passing for the wrong reason. Held open by the gate rather than by a timer,
     // so a slow machine cannot let the reads land early and turn the precondition into a race.
-    const trigger = await screen.findByRole("combobox");
+    const trigger = await screen.findByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") });
     fireEvent.click(trigger);
     expect(document.querySelector('[role="listbox"] [data-value="test-rec"]')).toBeNull();
     fireEvent.click(trigger); // close again, so pickChange below drives it from the same state
@@ -526,7 +616,7 @@ describe("ExperimentBench (armed)", () => {
 
     await pickChange("test-rec");
 
-    await waitFor(() => expect(screen.getByRole("combobox")).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") })).toBeDisabled());
   });
 
   // Guard for W2 (Intelligence Phase 3 fast-follow, 2026-07-17): the bench loads once when the gate
@@ -557,7 +647,7 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
     // …and the pick stayed visible in the dropdown instead of silently disappearing. The Picker
     // (C-10) shows the chosen option's LABEL on its trigger; there is no form value to read.
-    expect(screen.getByRole("combobox")).toHaveTextContent("Test tweak");
+    expect(screen.getByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") })).toHaveTextContent("Test tweak");
   });
 
   // Guard for Measurement-2.0 Task A (2026-07-18): the refocus fix (W2) only fires on OS focus /
@@ -585,7 +675,7 @@ describe("ExperimentBench (armed)", () => {
     await waitFor(() => expect(screen.getByText("Already configured")).toBeInTheDocument());
     expect(screen.queryByText("Worth testing")).toBeNull();
     expect(screen.queryByRole("button", { name: /Start experiment/ })).toBeNull();
-    expect(screen.getByRole("combobox")).toHaveTextContent("Test tweak");
+    expect(screen.getByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") })).toHaveTextContent("Test tweak");
     // The kept pick is said once: in the dropdown, not again under "why others aren't listed".
     expect(screen.queryByRole("button", { name: /why others aren't listed/ })).toBeNull();
   });
@@ -599,7 +689,7 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.getByRole("button", { name: /Conclude with my latest/ })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Restore now" })).toBeInTheDocument();
     // Single-variable honesty: the launcher picker is hidden while an experiment is in flight.
-    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") })).toBeNull();
   });
 
   // #583 lane 2b: the backend reads the baseline and the treatment from its own session store by id.
@@ -1509,7 +1599,7 @@ describe("ExperimentBench — Maximum FPS, and Smoothest when measured", () => {
     await pickChange("test-rec");
     const start = await screen.findByRole("button", { name: /Start experiment/ });
     await waitFor(() => expect(start).toBeEnabled());
-    const trigger = screen.getAllByRole("combobox")[1];
+    const trigger = screen.getAllByRole("combobox")[2];
     fireEvent.click(trigger);
     return { start, trigger };
   };
@@ -2036,7 +2126,7 @@ describe("P4-next-f1: the picker marks changes already tested on this game", () 
     ];
     state.sim = { ...WORTH_TESTING_SIM, rec_id: "a-rec", rec_title: "Change A" };
     render(<ExperimentBench />);
-    const trigger = await screen.findByRole("combobox");
+    const trigger = await screen.findByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") });
     await waitFor(() => expect(trigger).toBeEnabled());
     fireEvent.click(trigger);
     return waitFor(() => {

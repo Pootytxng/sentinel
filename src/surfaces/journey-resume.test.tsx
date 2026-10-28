@@ -482,6 +482,13 @@ describe("truthful completion, review round 1", () => {
     expect(kept).toMatchObject({ tested: 0, stale: 1, staleKept: 1, next: null, total: 1 });
   });
 
+  it("P8-posture-b: a change held back by the chosen risk is not set, so its stale result is never 'kept and set'", () => {
+    const old = [measured("exp:1-0", "2026-10-20T12:00:00Z")];
+    // Without the held-back list the missing change reads as set by Compy (the old, wrong answer).
+    expect(journeyProgress("Valorant", old, [], [BEFORE, AFTER, NEWER])).toMatchObject({ staleKept: 1 });
+    expect(journeyProgress("Valorant", old, [], [BEFORE, AFTER, NEWER], ["hags"])).toMatchObject({ stale: 1, staleKept: 0 });
+  });
+
   it("SHOULD-FIX 4: journey and summary agree on which Trial is newest when concluded order differs from start order", () => {
     // Started first, judged last: it is the newest judged Trial of HAGS, so its (inconclusive) verdict rules.
     const startedFirstJudgedLast = record({ id: "exp:a", status: "restored", kept: false, verdict: "too-noisy", baseline_session_id: BEFORE.started_at, created_at: "2026-10-20T09:00:00Z", concluded_at: "2026-10-22T12:00:00Z" });

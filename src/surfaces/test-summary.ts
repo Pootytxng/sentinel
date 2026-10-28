@@ -117,6 +117,9 @@ export function stillAppliedFrom(c: SummaryCandidate | undefined): StillApplied 
       return "gaming-mode";
     // Too small to measure is judged only on a change that isn't set, as passing is.
     case "too-small-to-measure-here":
+    // P8-posture-b: the risk filter is checked last, only on a change that passed every other one
+    // (so it is not set). Held back by the user's choice is not "unknown".
+    case "outside-chosen-risk":
       return "off";
     default:
       return "unknown"; // couldn't check, not for this PC, no safe apply, a reason this build doesn't know
@@ -344,8 +347,13 @@ export type GameTestSummary = {
    *  (every attempt judged nothing); "results-unverified" when nothing is left but at least one
    *  measured result can't be tied to this PC as it is now (its Trial or the newest session recorded
    *  no driver or build): Compy has nothing to do next, and says what it has without claiming a
-   *  current measurement (follow-up §2, §3). */
-  headline: "finished-supported-tests" | "still-worth-testing" | "worth-retesting" | "results-unverified" | "nothing-testable-now" | "unknown";
+   *  current measurement (follow-up §2, §3). P8-posture-b: "finished-within-chosen-risk" replaces
+   *  "finished-supported-tests" when the picker held changes back only for the user's risk choice, so
+   *  the summary never claims Compy finished what it could test here. */
+  headline:
+    | "finished-supported-tests"
+    | "finished-within-chosen-risk"
+    | "still-worth-testing" | "worth-retesting" | "results-unverified" | "nothing-testable-now" | "unknown";
   /** Measured results whose context is unverified (neither matching nor changed). */
   unverified: TestedChange[];
   /** Round 3 §2: when nothing is left to test or retry, what the stopping point holds, counted over
@@ -368,6 +376,9 @@ export type GameTestSummary = {
   /** Stale results the picker no longer offers (the change is set now): testing again means putting
    *  it back first. Said apart, so a stale kept result is never a silent dead end. */
   staleKept: TestedChange[];
+  /** P8-posture-b: changes the picker leaves out only because their risk is above what the user chose
+   *  (reason "outside-chosen-risk"; they are not set). In the picker's order. */
+  outsideRisk: SummaryCandidate[];
   /** Changes the picker leaves out, each with its reason. Empty when the list couldn't be read. */
   skipped: SummaryCandidate[];
   /** Tested changes whose live check reads On now. */
@@ -533,7 +544,11 @@ export function summarizeGame(
   const retest = inPickerOrder((candidates ?? []).filter((c) => c.passes && retestIds.has(c.id)))
     .map((c) => tested.find((r) => r.recId === c.id))
     .filter((r): r is TestedChange => r != null);
-  const staleKept = stale.filter((r) => !retest.some((x) => x.recId === r.recId));
+  // P8-posture-b: a change held back only by the risk choice is not set, so a stale result on it is
+  // not "set now, put it back first"; it is said as outside the chosen risk instead.
+  const outsideRisk = inPickerOrder((candidates ?? []).filter((c) => !c.passes && c.reason === "outside-chosen-risk"));
+  const heldIds = new Set(outsideRisk.map((c) => c.id));
+  const staleKept = stale.filter((r) => !retest.some((x) => x.recId === r.recId) && !heldIds.has(r.recId));
   const holds = tested.filter((r) => r.measured && r.context === "matching");
   const stop = { measured: holds.length, noResult: inconclusive.length, unverified: unverified.length, stale: stale.length };
 
@@ -545,12 +560,14 @@ export function summarizeGame(
         ? "unknown"
         : leftToTest.length > 0
           ? "still-worth-testing"
-          : retest.length > 0 || stale.length > 0
+          : retest.length > 0 || stale.some((r) => !heldIds.has(r.recId))
             ? "worth-retesting"
             : unverified.length > 0 // measured, unverified, and not offered again (set, or not for this PC now)
               ? "results-unverified"
               : holds.length > 0 && inconclusive.length === 0
-                ? "finished-supported-tests"
+                ? outsideRisk.length > 0
+                  ? "finished-within-chosen-risk"
+                  : "finished-supported-tests"
                 : "nothing-testable-now",
     leftToTest,
     retest,
@@ -558,6 +575,7 @@ export function summarizeGame(
     unjudged,
     stale,
     staleKept,
+    outsideRisk,
     unverified,
     stop,
     skipped,

@@ -500,6 +500,11 @@
     "title": "Test one change",
     "hint": "Compy measures a baseline, applies one reversible change, measures a real session, and puts the change back unless the numbers clearly beat the noise.",
     "pickLabel": "Pick a change to test",
+    "riskChoice": {
+      "label": "How far may Compy go on this PC?",
+      "lowOnly": "Low risk only",
+      "lowAndModerate": "Low and moderate risk"
+    },
     "chooseChange": "Choose a change…",
     "pickTested": "{{title}} · Tested: {{verdict}}",
     "noChangesToTest": "Nothing worth testing on this PC right now.",
@@ -514,7 +519,8 @@
       "alreadySetUnchecked": "Already set this way in Windows; Compy couldn't check whether it made this change.",
       "alreadySetUnconfirmed": "Already set. Compy applied this earlier but can't confirm its change is the one keeping it set.",
       "noSafeApply": "Advice only. Compy has no safe one-click change for it, so it can't be tested.",
-      "tooSmallToMeasureHere": "Too small to measure here. Its expected effect ({{effect}}%) is no bigger than this game's measured run-to-run noise ({{band}}%)."
+      "tooSmallToMeasureHere": "Too small to measure here. Its expected effect ({{effect}}%) is no bigger than this game's measured run-to-run noise ({{band}}%).",
+      "outsideChosenRisk": "Outside the risk you chose."
     },
     "rank": {
       "label": "Suggested order to test:",
@@ -681,6 +687,8 @@
     "summary": {
       "label": "What Compy tested on {{game}}",
       "finishedSupportedTests": "Compy finished the supported tests for {{game}} on this PC: every change it lists as worth testing here has a measured result.",
+      "finishedWithinChosenRisk_one": "Compy finished the tests for {{game}} within the risk you chose: every change worth testing here at that risk has a measured result. {{count}} more change is above it.",
+      "finishedWithinChosenRisk_other": "Compy finished the tests for {{game}} within the risk you chose: every change worth testing here at that risk has a measured result. {{count}} more changes are above it.",
       "worthRetesting_one": "{{count}} result on {{game}} needs another run before it counts: {{why}}.",
       "worthRetesting_other": "{{count}} results on {{game}} need another run before they count: {{why}}.",
       "stillWorth_one": "{{count}} more change is still worth testing on {{game}}, so this isn't finished yet.",

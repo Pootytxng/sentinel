@@ -491,6 +491,11 @@
     "title": "只测一项更改",
     "hint": "Compy 先测基线，应用一项可撤销的更改，再实测一局，除非数据明显超过噪声，否则自动撤回这项更改。",
     "pickLabel": "选择要测试的更改",
+    "riskChoice": {
+      "label": "Compy 在这台主机上可以做到哪一步？",
+      "lowOnly": "仅低风险",
+      "lowAndModerate": "低风险和中等风险"
+    },
     "chooseChange": "选择一项更改…",
     "pickTested": "{{title}} · 已测试：{{verdict}}",
     "noChangesToTest": "目前这台主机上没有值得测试的更改。",
@@ -505,7 +510,8 @@
       "alreadySetUnchecked": "Windows 里已经是这个设置；Compy 无法确认这项更改是不是它做的。",
       "alreadySetUnconfirmed": "已经设置好了。Compy 之前应用过这项更改，但无法确认现在保持这个设置的是不是它的更改。",
       "noSafeApply": "仅为建议。Compy 没有可安全一键执行的更改，所以无法测试。",
-      "tooSmallToMeasureHere": "效果太小，这里测不出来。它的预期效果（{{effect}}%）不超过这款游戏实测的每次运行间波动（{{band}}%）。"
+      "tooSmallToMeasureHere": "效果太小，这里测不出来。它的预期效果（{{effect}}%）不超过这款游戏实测的每次运行间波动（{{band}}%）。",
+      "outsideChosenRisk": "超出你选择的风险范围。"
     },
     "rank": {
       "label": "建议的测试顺序：",
@@ -671,6 +677,7 @@
     "summary": {
       "label": "Compy 在 {{game}} 上测试过的内容",
       "finishedSupportedTests": "Compy 已在这台主机上完成 {{game}} 的受支持测试：它列为值得在这里测试的每一项更改都有了测得的结果。",
+      "finishedWithinChosenRisk_other": "Compy 已在你选择的风险范围内完成 {{game}} 的测试：在该风险范围内值得在这里测试的每一项更改都有了测得的结果。另有 {{count}} 项更改超出这个范围。",
       "worthRetesting_other": "{{game}} 上有 {{count}} 项结果需要再跑一次才算数：{{why}}。",
       "stillWorth_other": "{{game}} 上还有 {{count}} 项更改值得测试，所以还没有测完。",
       "unknownLeft": "Compy 无法读取哪些更改仍值得测试，所以无法判断是否还有剩余。",

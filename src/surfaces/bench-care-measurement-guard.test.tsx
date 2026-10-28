@@ -270,7 +270,7 @@ const digits = (s: string) => s.replace(/1\s?%/g, "").match(/\d+/g) ?? [];
 
 // Same flow as ExperimentBench.test.tsx: wait for the option to exist, fire, then prove the pick took.
 const pickChange = async (value: string) => {
-  const trigger = await screen.findByRole("combobox");
+  const trigger = await screen.findByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") });
   await waitFor(() => expect(trigger).toBeEnabled());
   fireEvent.click(trigger);
   const option = await waitFor(() => {

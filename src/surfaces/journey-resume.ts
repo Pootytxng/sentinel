@@ -144,6 +144,9 @@ export function journeyProgress(
   experiments: readonly ResumeExperiment[],
   candidates: readonly { id: string; title: string }[],
   sessions: readonly SessionSummary[] = [],
+  // P8-posture-b: ids the picker left out only because they are above the risk the user chose. They
+  // are not set (Rust checks that filter last), so a stale result on one is not "set now, put back first".
+  heldBack: readonly string[] = [],
 ): JourneyProgress {
   const byRec = judgedByRec(game, experiments);
   const judged = [...byRec.values()].flat().sort((a, b) => when(a) - when(b));
@@ -155,7 +158,7 @@ export function journeyProgress(
   const running = experiments.find((x) => x.game === game && x.status === "running") ?? null;
   const unfinished = running && !byRec.has(running.rec_id) ? running : null;
   const left = candidates.filter((c) => !byRec.has(c.id) && c.id !== running?.rec_id);
-  const offered = new Set(candidates.map((c) => c.id));
+  const offered = new Set([...candidates.map((c) => c.id), ...heldBack]);
   const newest = judged[judged.length - 1];
   const keptBetter = newest?.status === "kept" && newest.verdict === "improved";
   return {

@@ -122,6 +122,40 @@ describe("P4-exit summary on the owner's WARDOGS records", () => {
   });
 });
 
+// P8-posture-b (RISK_MODEL §2): a change above the risk the user chose is held back, not set. The
+// summary must never read it as "Compy applied it", and never claim the game is fully tested.
+describe("P8-posture-b: a change outside the chosen risk", () => {
+  const held = (id: string) => cand(id, false, "outside-chosen-risk");
+  const newer: SessionSummary = {
+    ...sessions[sessions.length - 1],
+    started_at: "2026-10-26T00:00:00Z",
+    hw_fingerprint: { ...sessions[0].hw_fingerprint!, gpu_driver: "33.0.1" },
+  } as SessionSummary;
+
+  it("is not applied now", () => {
+    expect(stillAppliedFrom(held("x"))).toBe("off");
+  });
+
+  it("turns 'finished' into 'finished within the risk you chose' and lists what is above it", () => {
+    const s = summarizeGame(GAME, experiments, [VFX, held("mouse-accel-off")], sessions)!;
+    expect(s.headline).toBe("finished-within-chosen-risk");
+    expect(s.outsideRisk.map((c) => c.id)).toEqual(["mouse-accel-off"]);
+    expect(s.skipped.map((c) => c.id)).toContain("mouse-accel-off");
+    const all = summarizeGame(GAME, experiments, [VFX], sessions)!;
+    expect(all.headline).toBe("finished-supported-tests");
+    expect(all.outsideRisk).toEqual([]);
+  });
+
+  it("a stale result for a held change is not 'kept and set', and does not by itself ask for a retest", () => {
+    const s = summarizeGame(GAME, experiments, [held("visual-effects")], [...sessions, newer])!;
+    expect(s.stale.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.staleKept).toEqual([]);
+    expect(s.tested[0].stillApplied).toBe("off");
+    expect(s.headline).not.toBe("worth-retesting");
+    expect(s.headline).not.toBe("finished-supported-tests");
+  });
+});
+
 // P5-learned (ROADMAP Phase 5 step 8): kept / put back and why, and at most one lesson from the
 // documented rule table, on the owner's records as of 2026-10-25 15:28 (src/test/fixtures/
 // p5-learned-today.json: today's Aniimo too-noisy Trial and the WARDOGS visual-effects Trial).

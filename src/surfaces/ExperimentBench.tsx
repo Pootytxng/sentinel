@@ -197,7 +197,30 @@ type SkipReason =
   | "already-set-unchecked"
   | "already-set-unconfirmed"
   | "no-safe-apply"
-  | "too-small-to-measure-here";
+  | "too-small-to-measure-here"
+  // P8-posture-b (RISK_MODEL §2): the change passed every other filter but its risk is above what
+  // the user chose. Checked last in Rust, so it never hides an earlier reason; the change is not set.
+  | "outside-chosen-risk";
+// P8-posture-b: the user's answer to "How far may Compy go on this PC?" — serde names of Rust's
+// `RiskChoice`. Saved per viewer (localStorage); unknown/unreadable falls back to the Rust default.
+export type RiskChoice = "low-only" | "low-and-moderate";
+export const RISK_CHOICE_STORAGE_KEY = "compy.trial.riskChoice";
+export const DEFAULT_RISK_CHOICE: RiskChoice = "low-and-moderate";
+export function loadRiskChoice(): RiskChoice {
+  try {
+    const v = localStorage.getItem(RISK_CHOICE_STORAGE_KEY);
+    return v === "low-only" || v === "low-and-moderate" ? v : DEFAULT_RISK_CHOICE;
+  } catch {
+    return DEFAULT_RISK_CHOICE;
+  }
+}
+function saveRiskChoice(v: RiskChoice): void {
+  try {
+    localStorage.setItem(RISK_CHOICE_STORAGE_KEY, v);
+  } catch {
+    /* private window / blocked storage: the choice still applies for this session */
+  }
+}
 // P4-rank (ENGINE §3.5, §3.7): the backend numbers the changes that passed in a suggested test order
 // (stronger evidence that it helps, then lower risk, then catalog order) and says why per position.
 // A change is "too small to measure here" only when the catalog states its effect AND this game's
@@ -238,6 +261,7 @@ const SKIP_REASON_KEY: Record<SkipReason, string> = {
   "already-set-unconfirmed": "lab.experimentBench.skipReason.alreadySetUnconfirmed",
   "no-safe-apply": "lab.experimentBench.skipReason.noSafeApply",
   "too-small-to-measure-here": "lab.experimentBench.skipReason.tooSmallToMeasureHere",
+  "outside-chosen-risk": "lab.experimentBench.skipReason.outsideChosenRisk",
 };
 
 // A plain (key, options?) => string signature — avoids importing react-i18next's generic TFunction
@@ -625,6 +649,8 @@ export default function ExperimentBench({
   const [outcome, setOutcome] = useState<TrialOutcome>("recommended");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // P8-posture-b: how far Compy may go on this PC; sent with every candidate read.
+  const [riskChoice, setRiskChoice] = useState<RiskChoice>(loadRiskChoice);
   // P5-guided: while the one-button journey runs, it is the bench's only panel.
   const journey = useJourneyPhase();
 
@@ -645,18 +671,24 @@ export default function ExperimentBench({
     };
   }, []);
 
+  // P8-posture-b review MUST-FIX: reloads overlap (focus, ledger event, risk change). A slower read made
+  // under the OLD risk answer must never land after the new one, or changes above the chosen risk would
+  // be offered again. Same latest-wins rule as `simReq`.
+  const reloadReq = useRef(0);
   const reload = useCallback(async () => {
+    const reqId = ++reloadReq.current;
     const [xs, rs, ss] = await Promise.all([
       invoke<Experiment[]>("get_experiments").catch(() => []),
-      invoke<TrialCandidate[]>("get_trial_candidates").catch(() => null),
+      invoke<TrialCandidate[]>("get_trial_candidates", { riskChoice }).catch(() => null),
       invoke<SessionSummary[]>("get_session_summaries").catch(() => []),
     ]);
+    if (reloadReq.current !== reqId) return; // superseded by a newer read - drop it
     setExperiments(xs ?? []);
     setRecs(rs ?? []);
     if (rs != null) setRecsLoaded(true);
     setSessions(ss ?? []);
     setReloads((n) => n + 1);
-  }, []);
+  }, [riskChoice]);
 
   useEffect(() => {
     if (!gate) return;
@@ -876,7 +908,8 @@ export default function ExperimentBench({
   // P5-resume: the game's journey progress, derived from the experiments store, for the game a
   // running Trial is on, else the journey's game. Unknown until the candidates have loaded.
   const progressGame = running?.game ?? pickGame;
-  const progress = progressGame && recsLoaded ? journeyProgress(progressGame, experiments, pickable, sessions) : null;
+  const heldBack = recs.filter((r) => r.reason === "outside-chosen-risk").map((r) => r.id);
+  const progress = progressGame && recsLoaded ? journeyProgress(progressGame, experiments, pickable, sessions, heldBack) : null;
   const optionLabel = (r: TrialCandidate) => {
     const v = lastVerdict.get(r.id);
     return v == null
@@ -1096,6 +1129,31 @@ export default function ExperimentBench({
       ) : (
         // ── Launcher: pick a change → honest simulator read → start against the real baseline ──
         <div className="exp-launch">
+          {/* P8-posture-b (RISK_MODEL §2): asked once, saved; every candidate read carries it. A change
+              above the chosen risk moves to "why not listed" with its reason, never vanishes. */}
+          <div className="exp-field" data-testid="exp-risk-choice">
+            <span className="exp-field-label" id="exp-risk-label">
+              {t("lab.experimentBench.riskChoice.label")}
+            </span>
+            <Picker
+              className="exp-select"
+              labelledBy="exp-risk-label"
+              value={riskChoice}
+              disabled={busy || simBusy}
+              onChange={(v) => {
+                const next: RiskChoice = v === "low-only" ? "low-only" : "low-and-moderate";
+                if (next === riskChoice) return;
+                // A pick made under the old answer may now be outside it: start over, never carry it.
+                runSim("");
+                saveRiskChoice(next);
+                setRiskChoice(next);
+              }}
+              options={[
+                { value: "low-only", label: t("lab.experimentBench.riskChoice.lowOnly") },
+                { value: "low-and-moderate", label: t("lab.experimentBench.riskChoice.lowAndModerate") },
+              ]}
+            />
+          </div>
           {/* C-10: was a native <select>, whose OS-drawn menu ignored every token in the room.
               `<label>` became a plain wrapper + an explicit `labelledBy` because the Picker's
               trigger is a button, and implicit label association only works for form controls. */}
@@ -1551,6 +1609,7 @@ function TestSummary({ s }: { s: GameTestSummary }) {
     const text = [why, r.detail ?? ""].filter((x) => x !== "").join(" ");
     return t("lab.experimentBench.summary.row", { title: r.title, text });
   };
+  const staleAsked = s.stale.filter((r) => !s.outsideRisk.some((c) => c.id === r.recId));
   return (
     <div className="exp-order exp-summary" data-testid="exp-summary" data-headline={s.headline}>
       <SectionLabel>{t("lab.experimentBench.summary.label", { game })}</SectionLabel>
@@ -1565,16 +1624,19 @@ function TestSummary({ s }: { s: GameTestSummary }) {
       <p className="exp-note" data-testid="exp-summary-headline">
         {s.headline === "finished-supported-tests"
           ? t("lab.experimentBench.summary.finishedSupportedTests", { game })
+          : s.headline === "finished-within-chosen-risk"
+            ? t("lab.experimentBench.summary.finishedWithinChosenRisk", { game, count: s.outsideRisk.length })
           : s.headline === "still-worth-testing"
             ? t("lab.experimentBench.summary.stillWorth", { count: s.leftToTest.length, game })
             : s.headline === "worth-retesting"
               ? // Round 4 review: the headline counts and explains only the rows another run is actually
                 // asked for — those offered (`retest`) and the stale ones (put back, then test) — never
                 // an unverified row the cap has already stopped offering (review of this fix, MUST-FIX).
+                // P8-posture-b: a stale result held back by the risk choice is not asked for again.
                 t("lab.experimentBench.summary.worthRetesting", {
-                  count: new Set([...s.retest, ...s.stale].map((r) => r.recId)).size,
+                  count: new Set([...s.retest, ...staleAsked].map((r) => r.recId)).size,
                   game,
-                  why: retestReasonsLine([...s.retest, ...s.stale], t, list),
+                  why: retestReasonsLine([...s.retest, ...staleAsked], t, list),
                 })
               : s.headline === "nothing-testable-now"
                 ? // Round 3 §2: the stopping point is worded from what EVERY change holds, never from one.
