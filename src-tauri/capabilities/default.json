@@ -82,6 +82,7 @@
     "allow-get-scoreboard",
     "allow-get-sensor-sources",
     "allow-get-session-summaries",
+    "allow-get-smoothest-readiness",
     "allow-get-startup-entries",
     "allow-get-trial-candidates",
     "allow-get-trial-state",

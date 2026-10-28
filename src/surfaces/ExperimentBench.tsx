@@ -1309,11 +1309,15 @@ export default function ExperimentBench({
                       value={outcome}
                       disabled={busy}
                       onChange={(v) => setOutcome(v as TrialOutcome)}
-                      options={OUTCOME_OPTIONS.map((o) => ({
-                        value: o,
-                        label: t(`lab.experimentBench.outcome.${OUTCOME_KEY[o]}`),
-                        ...(o === "smoothest" && !smoothestOpen ? { disabled: true } : {}),
-                      }))}
+                      options={OUTCOME_OPTIONS.map((o) =>
+                        o === "smoothest"
+                          ? {
+                              value: o,
+                              label: t("lab.experimentBench.outcome.smoothest"),
+                              ...(smoothestOpen ? {} : { disabled: true }),
+                            }
+                          : { value: o, label: t(`lab.experimentBench.outcome.${OUTCOME_KEY[o]}`) },
+                      )}
                     />
                   </div>
                   <p className="exp-fineprint" data-testid="exp-outcome-why">
