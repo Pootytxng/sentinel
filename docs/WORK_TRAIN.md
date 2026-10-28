@@ -160,7 +160,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
 - [x] **P4-smooth-measure** `df01e252` (true per-frame p50/p99/p99.9 via a 1% log histogram, freezes capped at 1 s,
       ~125 B/session; between-session pacing band). Store per-frame frame times (or a percentile spread) per session and measure the
       spread's session-to-session noise; then offer Smoothest.
-- [ ] **P4-smooth-offer** Offer Smoothest for a game once `between_session_pacing_noise` (p99/p50 band) is measured for it; judge against that band (ratios carry ~±1% bucket error: a spread under ~2% is at the resolution limit).
+- [x] **P4-smooth-offer** (-a `75f1d0d3`, -b `06596359` + `0f38e9ba`) Offer Smoothest for a game once `between_session_pacing_noise` (p99/p50 band) is measured for it; judge against that band (ratios carry ~±1% bucket error: a spread under ~2% is at the resolution limit).
       Scoped 2026-10-27 (skipped for P7-depth: not one bounded session). Split before starting: **-a** (Rust,
       measurement; review: one Rust agent) `experiment.rs` `start_experiment` admits "smoothest" only when
       `between_session_pacing_noise` is `Some` for the game, and `conclude` judges the treatment's p99/p50
@@ -179,6 +179,11 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       (`ExperimentBench.tsx` judged-row readout ~:363 and P5 `outcomeChoices` ~:913), so -b must also type
       "smoothest" there (judged row says "Judged for Smoothest"; P5 choices either include it or skip it
       explicitly), and the readiness reason needs locale keys (en + zh-CN), not the backend's English.
+      **-b done** `06596359` (feat `f53f4511`, review fix `76d56405`): read-only `get_smoothest_readiness`
+      sharing the start's `smoothest_for`; held reasons as `SmoothestHeld` keys in en + zh-CN; Smoothest rows
+      judged on pacing; never one side of the P5 switch; frontend IPC review APPROVE, re-ask after each
+      reload and held-pick fallback taken. r26 caught the command granted to no window and the census
+      retirement → `0f38e9ba` (capability + `outcomeSmoothestUnavailable` retired). Visual self-review owed (FULL).
 - [x] **P4-next** `abd4c883`: after a Trial, offer the next untested change (offer only); none left =
       "Nothing else here is worth testing on this PC" as success. Tested = a verdict on this game in experiments.json.
 - [x] **P4-next-f1** `1fc5026c`: picker marks tested changes ("· Tested: <verdict>") after untested ones.
@@ -570,6 +575,10 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   cargo test 1651 passed, clippy -D warnings clean; one Rust review round, 4 findings taken; r25 FULL vitest 525
   files / 10100, exit 0. Lesson: a regex over `ExperimentRecord {` also matches fn return types — anchor struct
   literal edits on the compiler's missing-field errors, not text. Not pushed.
+- 2026-10-27 ~18:55–19:40 (interactive from Claude HQ, CODE-ONLY): P4-smooth-offer-b `06596359` (feat `f53f4511`,
+  fix `76d56405`); r26 FULL vitest failed on command-authority-guard + affordance-census → `0f38e9ba`; r27 FULL
+  vitest 525 files / 10777, exit 0, tsc 0; cargo 1651/0, clippy clean. Lessons: a new command's touched set
+  includes `command-authority-guard` (capability grant), and retiring a locale key includes the census. Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
