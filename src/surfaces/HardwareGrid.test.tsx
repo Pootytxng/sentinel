@@ -418,7 +418,7 @@ describe("HardwareGrid component-evidence highlight (§4H)", () => {
     // P7-confidence (Constitution §25): the pill says the ONE vocabulary word for the band — a medium
     // band is a supported inference, "Likely" — and keeps the raw band on data-confidence for the
     // technical layer; the reason renders; the next test is offered.
-    const pill = screen.getByText("Likely");
+    const pill = screen.getByText("Likely").closest("[data-confidence]")!;
     expect(pill.getAttribute("data-confidence")).toBe("medium");
     expect(screen.getByText(/trended upward across your recent sessions/)).toBeTruthy();
     expect(screen.getByText("Next test")).toBeTruthy();

@@ -434,8 +434,7 @@
         "anchorTaken": "answered",
         "anchorShown": "shown",
         "sessionsSlow": "Slow sessions",
-        "sessionsCounted": "Sessions counted",
-        "stepKey": "Step id"
+        "sessionsCounted": "Sessions counted"
       },
       "basisTaken": "You answered \u201cDid this help?\u201d on {{date}}.",
       "basisShown": "Compy has tracked this step since {{date}}.",

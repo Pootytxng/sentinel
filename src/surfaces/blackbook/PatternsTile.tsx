@@ -1,3 +1,4 @@
+import { ConfidenceWord } from "../../design/ConfidenceWord";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
@@ -8,7 +9,6 @@ import { prettyGameName } from "../game-name";
 import { BentoTile } from "../../design/bento/BentoGrid";
 import "../../i18n";
 import "./patterns-tile.css";
-import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../../data/confidence-word";
 
 // Intelligence Phase 2 — cross-session pattern detection, surfaced in Blackbook (§5E: the room that
 // holds the historical record). The deterministic Rust detectors (intelligence_patterns.rs) read
@@ -35,7 +35,7 @@ function PatternCard({ p, expert }: { p: SessionPattern; expert: boolean }) {
           {p.game && <span className="bpt-card-game">{prettyGameName(p.game) || p.game}</span>}
         </div>
         <span className="bpt-card-conf">
-          <span data-confidence={p.confidence} title={t(confidenceHintKey(wordFromBand(p.confidence)))}>{t(confidenceWordKey(wordFromBand(p.confidence)))}</span>
+          <ConfidenceWord band={p.confidence} />
         </span>
       </div>
       <p className="bpt-card-detail">{p.detail}</p>

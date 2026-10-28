@@ -42,15 +42,6 @@ pub(crate) enum Confidence {
     High,
 }
 
-fn confidence_label(c: Confidence) -> &'static str {
-    match c {
-        Confidence::Unknown => "unknown",
-        Confidence::Low => "low",
-        Confidence::Medium => "medium",
-        Confidence::High => "high",
-    }
-}
-
 /// Who/what an event is attributable to. `Observed` is for changes Compy noticed between
 /// probes (driver updates, Windows builds…) — external changes are NEVER presented as
 /// Compy-applied (anti-fabrication guard).
@@ -2256,11 +2247,10 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         if leader.id == "insufficient-evidence" {
             headline.push_str(" Nothing Compy recorded changed in between — cause unknown.");
         } else {
-            headline.push_str(&format!(
-                " Most likely: {} ({} confidence).",
-                leader.title,
-                confidence_label(leader.confidence)
-            ));
+            // The confidence word lives on the hypothesis itself, where the shared confidence
+            // vocabulary renders it with its gloss (self-review 2026-10-28, P7-confidence). The
+            // headline is prose and must not carry a raw, unglossed "(medium confidence)".
+            headline.push_str(&format!(" Most likely: {}.", leader.title));
         }
         next_action = leader.next_test.clone();
         next_action_rec_id = leader.next_test_rec_id.clone();
@@ -3557,6 +3547,10 @@ mod tests {
         let leader = r.leading_hypotheses.first().expect("has a leader");
         assert_eq!(leader.id, "gpu-driver-change");
         assert_eq!(leader.confidence, Confidence::High);
+        // self-review 2026-10-28 (P7-confidence): the headline names the likely cause in prose and
+        // leaves the confidence word to the hypothesis, where the UI glosses it.
+        assert!(r.headline.contains(&format!("Most likely: {}.", leader.title)), "{}", r.headline);
+        assert!(!r.headline.contains("confidence"), "raw confidence word in headline: {}", r.headline);
         assert!(leader.supporting_evidence[0].contains("25.5.1"));
         // Recorded facts rule OUT what matched: gaming mode + hardware + compy config.
         let ruled: Vec<&str> = r.ruled_out.iter().map(|h| h.id.as_str()).collect();

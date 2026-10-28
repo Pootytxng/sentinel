@@ -722,7 +722,7 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
     // P7-confidence: a high inference band reads "Likely" (one vocabulary); the band stays on data-confidence.
     expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Likely");
     expect(row.querySelector(".hc-limiter-tag [data-confidence]")!.getAttribute("data-confidence")).toBe("high");
-    fireEvent.click(row.querySelector("button")!);
+    fireEvent.click(row.querySelector("button.hc-btn")!);
     expect(jump).toHaveBeenCalled();
   });
 
@@ -829,7 +829,7 @@ describe("HomeConsole — verdict/top-limiter one-owner dedup", () => {
 // verdict sentence verbatim (get_intelligence_headline is non-null ONLY for a real
 // improved/regressed verdict, engine-enforced). Flag "0" must render nothing AND never fetch.
 const headlineFixture = {
-  text: "1% lows improved 10.1% vs your previous Valorant session. Most likely: GPU driver updated (medium confidence).",
+  text: "1% lows improved 10.1% vs your previous Valorant session. Most likely: GPU driver updated.",
   verdict: "improved",
   game: "Valorant",
   session_started_at: "2026-07-10T20:00:00Z",
@@ -852,7 +852,7 @@ describe("HomeConsole — the last-session intelligence line (Intelligence Phase
     expect(row.querySelector(".hc-limiter-title")!.textContent).toBe(headlineFixture.text);
     // The headline sentence already names the game — the row adds no second game tag.
     expect(row.querySelectorAll(".hc-limiter-tag")).toHaveLength(0);
-    const door = row.querySelector("button")!;
+    const door = row.querySelector("button.hc-btn")!;
     expect(door.textContent).toBe("See in Monitor");
     fireEvent.click(door);
     expect(nav).toHaveBeenCalledWith("play");
@@ -868,7 +868,7 @@ describe("HomeConsole — the last-session intelligence line (Intelligence Phase
       onNavigate: () => {},
     }).container;
     await waitFor(() => expect(intelRow(c)).not.toBeNull());
-    expect(intelRow(c)!.querySelector("button")).toBeNull();
+    expect(intelRow(c)!.querySelector("button.hc-btn")).toBeNull();
   });
 
   it("no verdict ⇒ no line: a null headline renders nothing (never a fabricated sentence)", async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 // Side-effect import, as in BlackBox.tsx: the i18next singleton is ready even when this is the first
@@ -174,15 +174,27 @@ export function StutterCompare({
   // fire on some later visit.
   useEffect(() => {
     const arrived = takeStutterArrival();
+    arrivedRef.current = arrived;
     if (arrived && on) run();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount by design
   }, []);
+
+  // Self-review 2026-10-28 (P7-route): the user asked about a stutter, and this section is the answer,
+  // but it sits below the crash steps and the view opened at the top. Once the comparison has settled
+  // (a report, no steady session, or an error), bring it into view, once.
+  const arrivedRef = useRef(false);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!arrivedRef.current || state.kind === "idle" || state.kind === "busy") return;
+    arrivedRef.current = false;
+    sectionRef.current?.scrollIntoView?.({ block: "start" });
+  }, [state.kind]);
 
   // compy_intelligence "0" (the devtools failsafe) switches the engine's surfaces off. Say so in one
   // line rather than leave a stutter arrival with nothing.
   if (!on) {
     return (
-      <section className="bb-stutter" aria-label={t("gaming.blackBox.stutter.title")}>
+      <section ref={sectionRef} className="bb-stutter" aria-label={t("gaming.blackBox.stutter.title")}>
         <p className="bb-stutter-line">{t("gaming.blackBox.stutter.off")}</p>
       </section>
     );
@@ -192,7 +204,7 @@ export function StutterCompare({
     state.kind === "report" && state.outcome.kind === "report" ? stutterLessonRule(state.outcome) : null;
 
   return (
-    <section className="bb-stutter" aria-label={t("gaming.blackBox.stutter.title")}>
+    <section ref={sectionRef} className="bb-stutter" aria-label={t("gaming.blackBox.stutter.title")}>
       <div className="bb-stutter-head">
         <span className="bb-stutter-title">{t("gaming.blackBox.stutter.title")}</span>
         <span className="bb-stutter-tag">{t("gaming.blackBox.changedBefore.notProven")}</span>

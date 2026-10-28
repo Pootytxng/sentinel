@@ -1836,7 +1836,7 @@ describe("P4-exit: what Compy tested on this game", () => {
     );
     expect(panel).not.toHaveTextContent("finished the supported tests");
     const tested = screen.getByTestId("exp-summary-tested");
-    expect(tested).toHaveTextContent("Trim Windows visual effects: Slower — restored · confidence: medium Not applied now.");
+    expect(tested).toHaveTextContent("Trim Windows visual effects: Slower — restored · Measured · Not applied now.");
     expect(screen.getByTestId("exp-summary-stays")).toHaveTextContent("Nothing from these tests stays applied.");
     expect(screen.getByTestId("exp-summary-left")).toHaveTextContent("Turn off mouse acceleration");
     expect(screen.getByTestId("exp-summary-skipped")).toHaveTextContent("Turn off Game Bar: Already set this way in Windows, not by Compy.");
@@ -1846,8 +1846,8 @@ describe("P4-exit: what Compy tested on this game", () => {
     expect(screen.queryByTestId("exp-summary-noise")).toBeNull();
     expect(screen.queryByTestId("exp-summary-context")).toBeNull();
     expect(panel.textContent!.replace(/1% lows?/g, "").match(/[\d.]+\s*%/g)).toEqual(["18.5%", "3%"]);
-    // Read-only: the panel has no button.
-    expect(panel.querySelectorAll("button")).toHaveLength(0);
+    // Read-only: the panel has no action button (a glossed term's own trigger is a disclosure, not an action).
+    expect(panel.querySelectorAll("button:not(.kl-term)")).toHaveLength(0);
     const door1 = panel.querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!;
     fireEvent.click(door1);
     // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
@@ -1950,7 +1950,7 @@ describe("P5-learned: what Compy learned on this PC", () => {
     const lesson = screen.getByTestId("exp-summary-lesson");
     expect(lesson).toHaveAttribute("data-rule", "less-steady");
     expect(lesson).toHaveTextContent(
-      "With Trim Windows visual effects, 1% lows fell: WardogsClient got less steady. The average wasn't compared. · confidence: medium",
+      "With Trim Windows visual effects, 1% lows fell: WardogsClient got less steady. The average wasn't compared. · Measured",
     );
     const detail = screen.getByTestId("exp-summary-lesson-detail");
     expect(detail.tagName).toBe("DETAILS");
@@ -1958,7 +1958,7 @@ describe("P5-learned: what Compy learned on this PC", () => {
     expect(detail).toHaveTextContent(
       "From the Trial of Trim Windows visual effects: 1% low -18.5%, average not compared, against a 3% noise band. Rule used: the 1% low fell beyond the band; the average wasn't compared.",
     );
-    expect(panel.querySelectorAll("button")).toHaveLength(0);
+    expect(panel.querySelectorAll("button:not(.kl-term)")).toHaveLength(0);
   });
 
   it("Aniimo today: put back as too noisy; lesson: the game swings between sessions", async () => {
@@ -1968,7 +1968,7 @@ describe("P5-learned: what Compy learned on this PC", () => {
       "Put Trim Windows visual effects back: the frame rate moved around too much to tell.",
     );
     expect(screen.getByTestId("exp-summary-lesson")).toHaveTextContent(
-      "Aniimo swings a lot between sessions on your PC; Compy needs steadier sessions to judge. · confidence: unknown",
+      "Aniimo swings a lot between sessions on your PC; Compy needs steadier sessions to judge. · Unknown",
     );
     // A too-noisy Trial judged nothing, so none of its stored deltas is shown.
     expect(panel).not.toHaveTextContent("15.5");
@@ -2135,7 +2135,7 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     const btn = screen.getByRole("button", { name: "Use Recommended: undo Hardware-accelerated GPU scheduling" });
     expect(btn).toHaveAttribute("data-outcome", "recommended");
     // The summary itself stays read-only.
-    expect(screen.getByTestId("exp-summary").querySelectorAll("button")).toHaveLength(0);
+    expect(screen.getByTestId("exp-summary").querySelectorAll("button:not(.kl-term)")).toHaveLength(0);
   });
 
   it("two agreeing results, or a single one: no choice", async () => {

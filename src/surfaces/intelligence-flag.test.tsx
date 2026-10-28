@@ -131,7 +131,7 @@ const report: WhatChangedOutcome = {
   game: "Valorant",
   verdict: "improved",
   headline:
-    "1% lows improved 10.1% vs your previous Valorant session. Most likely: GPU driver updated (medium confidence).",
+    "1% lows improved 10.1% vs your previous Valorant session. Most likely: GPU driver updated.",
   observations: [],
   noise_floor_pct: 3.0,
   events_between: [],
@@ -220,7 +220,7 @@ describe("WhatChangedPanel — compy_intelligence default ON", () => {
     const { container } = mountPanel();
     await waitFor(() => expect(container.querySelector(".wcp-improved")).toBeTruthy());
     expect(container.querySelector("h3.wcp-headline")?.textContent).toBe(
-      "1% lows improved 10.1% vs your previous Valorant session. Most likely: GPU driver updated (medium confidence).",
+      "1% lows improved 10.1% vs your previous Valorant session. Most likely: GPU driver updated.",
     );
     expect(container.textContent).toContain("Most likely cause");
     // P7-confidence: the hypothesis band reads as the one vocabulary word; the raw band is kept.

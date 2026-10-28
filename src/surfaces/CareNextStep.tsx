@@ -195,7 +195,6 @@ export function CareNextStep({
             <ReceiptRow label={rk("anchor")} value={`${iso(anchor.at)} (${anchor.basis === "taken" ? rk("anchorTaken") : rk("anchorShown")})`} />
             <ReceiptRow label={rk("sessionsSlow")} value={slow} />
             <ReceiptRow label={rk("sessionsCounted")} value={counted} />
-            <ReceiptRow label={rk("stepKey")} value={step.key} />
           </dl>
         }
       />

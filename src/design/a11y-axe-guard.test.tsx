@@ -31,6 +31,8 @@ import { Walkthrough } from "./Walkthrough";
 import { WalkthroughDisclosure } from "./WalkthroughDisclosure";
 import { Depth, ReceiptRow } from "./Depth";
 import { LessonLine } from "./LessonLine";
+import { ConfidenceWord } from "./ConfidenceWord";
+import { withTerms } from "./with-terms";
 import { Term, GlossText } from "./Term";
 import { ConfirmProvider, useConfirm } from "./ConfirmDialog";
 import { LibraryContext } from "../surfaces/library-context";
@@ -190,6 +192,15 @@ const ROSTER: Array<[name: string, node: ReactNode]> = [
     "LessonLine",
     <LibraryContext.Provider value={{ openLibrary: () => {} }}>
       <LessonLine rule="steadier-not-faster" testId="a11y-lesson" sentence="With Game Mode, 1% lows rose and the average barely moved: Elden Ring got steadier, not faster." />
+    </LibraryContext.Provider>,
+  ],
+  // Self-review 2026-10-28: a confidence word with its hint in the in-app tooltip, never a native title.
+  ["ConfidenceWord", <ConfidenceWord band="high" />],
+  // Self-review 2026-10-28: an engine sentence with its terms glossed in place.
+  [
+    "withTerms",
+    <LibraryContext.Provider value={{ openLibrary: () => {} }}>
+      <p>{withTerms("1% lows fell 15.5% against a noise floor of ±3%.")}</p>
     </LibraryContext.Provider>,
   ],
   ["KonamiWhisper", <KonamiWhisper />],

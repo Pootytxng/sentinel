@@ -1,3 +1,4 @@
+import { ConfidenceWord } from "../design/ConfidenceWord";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { writeLedger } from "../data/ledger-write";
@@ -21,7 +22,6 @@ import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
 import "./Check.css";
-import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
 // Structural subset of App's GpuInfo — driver freshness needs only name + age (object covariance).
 type GpuDriverInfo = { name: string; driver_age_days: number | null };
@@ -712,7 +712,7 @@ export default function Check({
                         <div className="check-row-head">
                           <span className="check-row-title">{lim.title}</span>
                           <span className="check-conf">
-                            <span data-confidence={lim.confidence} title={t(confidenceHintKey(wordFromBand(lim.confidence)))}>{t(confidenceWordKey(wordFromBand(lim.confidence)))}</span>
+                            <ConfidenceWord band={lim.confidence} />
                           </span>
                         </div>
                         <p className="check-row-reason">{t("optimize.check.startupLimiterReason")}</p>
@@ -747,7 +747,7 @@ export default function Check({
                       <div className="check-row-head">
                         <span className="check-row-title">{lim.title}</span>
                         <span className="check-conf">
-                          <span data-confidence={lim.confidence} title={t(confidenceHintKey(wordFromBand(lim.confidence)))}>{t(confidenceWordKey(wordFromBand(lim.confidence)))}</span>
+                          <ConfidenceWord band={lim.confidence} />
                         </span>
                       </div>
                       <p className="check-row-reason">{lim.reason}</p>

@@ -1,3 +1,5 @@
+import { withTerms } from "../design/with-terms";
+import { ConfidenceWord } from "../design/ConfidenceWord";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -55,7 +57,6 @@ import {
 } from "./home-interview-data";
 import { INTERVIEW_ARRIVAL_EVENT, takeInterviewArrival } from "./home-arrival";
 import "./home-console.css";
-import { confidenceHintKey, confidenceWordKey, wordFromBand } from "../data/confidence-word";
 
 // HomeConsole — Home as the console cold-open (plan 2026-07-10-console-hud-phase2-home,
 // Phase 2 of the Console HUD; design source 2026-07-09-compy-console-hud-direction, owner-
@@ -1386,9 +1387,9 @@ export function HomeConsole({
             {topLimiter ? (
               <div className="hc-limiter">
                 <span className="hc-limiter-label">{t("home.homeConsole.limiter.topLabel")}</span>
-                <span className="hc-limiter-title">{topLimiter.title}</span>
+                <span className="hc-limiter-title">{withTerms(topLimiter.title)}</span>
                 <span className="hc-limiter-tag hc-mono">
-                  <span data-confidence={topLimiter.confidence} title={t(confidenceHintKey(wordFromBand(topLimiter.confidence)))}>{t(confidenceWordKey(wordFromBand(topLimiter.confidence)))}</span>
+                  <ConfidenceWord band={topLimiter.confidence} />
                 </span>
                 <button type="button" className="hc-btn hc-btn-ghost" onClick={onSeeInFix}>
                   {t("home.homeConsole.limiter.seeIn", { room: fixRoomLabel })}
@@ -1419,7 +1420,7 @@ export function HomeConsole({
           <div className="hc-lastsession">
             {intelHeadline ? (
               <div className="hc-limiter">
-                <span className="hc-limiter-title">{intelHeadline.text}</span>
+                <span className="hc-limiter-title">{withTerms(intelHeadline.text)}</span>
                 {onNavigate && rooms?.some((r) => r.key === "play") && (
                   <button
                     type="button"

@@ -488,12 +488,6 @@
       "notApplicable": "Not testable here",
       "riskExceedsValue": "Risk exceeds value — barred"
     },
-    "confidence": {
-      "unknown": "confidence: unknown",
-      "low": "confidence: low",
-      "medium": "confidence: medium",
-      "high": "confidence: high"
-    },
     "when": {
       "justNow": "just now",
       "minAgo": "{{count}} min ago",

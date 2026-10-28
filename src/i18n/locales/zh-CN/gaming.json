@@ -423,8 +423,7 @@
         "anchorTaken": "已回答",
         "anchorShown": "已显示",
         "sessionsSlow": "变慢的对局",
-        "sessionsCounted": "计入对局",
-        "stepKey": "步骤 id"
+        "sessionsCounted": "计入对局"
       },
       "basisTaken": "你在 {{date}} 回答了\u201c这有帮助吗？\u201d。",
       "basisShown": "Compy 从 {{date}} 起一直在跟踪这一步。",
