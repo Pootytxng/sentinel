@@ -965,6 +965,10 @@ export function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<
         ...RECS.map((r) => ({ id: r.id, title: r.title, passes: true, reason: null, detail: null })),
         { id: "fixture-rec-3", title: "Turn off mouse acceleration", passes: false, reason: "already-set", detail: null },
       ] as T);
+    // P4-smooth-offer-b: this fixture PC hasn't measured pacing noise, so Smoothest is held with
+    // its reason under the picker (the sweep reviews that line).
+    case "get_smoothest_readiness":
+      return Promise.resolve({ held: "unmeasured", min_sessions: 3 } as T);
     // camelCase on purpose — the bench calls this with `{ recId }`, and the arg is echoed back so
     // the preview shows the sim for whichever rec the picker has selected.
     case "simulate_optimization":

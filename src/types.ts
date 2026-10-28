@@ -134,7 +134,9 @@ export type AppliedChange = {
 /** Which Trial an outcome-switch apply or undo was based on, copied into the Trust Ledger row. */
 export type TrialLink = {
   experiment_id: string;
-  outcome: "recommended" | "max-fps";
+  /** experiment.rs `trial_link_in`. The bench only switches between Recommended and Maximum FPS, but
+   *  the backend names a Smoothest Trial too, so the ledger reads it rather than mislabel it. */
+  outcome: "recommended" | "max-fps" | "smoothest";
   concluded_at?: string | null;
 };
 

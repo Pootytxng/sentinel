@@ -583,7 +583,18 @@
     "receiptRuleMaxAvgFell": "The average fell by more than the band, so the change was restored.",
     "receiptRuleMaxInside": "The average stayed inside the band, so the default was kept and the change restored.",
     "outcomeLabel": "What to aim for",
-    "outcomeSmoothestUnavailable": "Smoothest needs Compy to measure frame pacing more precisely than it does today, so it isn't offered yet.",
+    "receiptComparedSmoothest": "Judged for Smoothest. Compared with the baseline: the gap between the slowest 1% of frames and a typical frame {{pacing}}% against a ±{{pacingBand}}% band, 1% low {{low}}% against a ±{{band}}% band. {{rule}}",
+    "receiptComparedSmoothestUnknown": "Judged for Smoothest. Compared with the baseline: frame pacing couldn't be compared, 1% low {{low}}% against a ±{{band}}% band. {{rule}}",
+    "receiptRuleSmoothKept": "Frames got steadier by more than the band and the 1% low didn't fall by more than its band, so the change was kept.",
+    "receiptRuleSmoothUneven": "Frames got more uneven by more than the band, so the change was restored.",
+    "receiptRuleSmoothInside": "Frame pacing stayed inside the band, so the default was kept and the change restored.",
+    "receiptRuleSmoothUnknown": "Without frame pacing from both sessions Compy can't tell whether frames got steadier, so the default was kept and the change restored.",
+    "smoothestHeld": {
+      "unmeasured": "Smoothest needs at least {{sessions}} sessions of this game with nothing changed between them, each with frame pacing recorded by this version of Compy, so it knows how much the pacing varies on its own. Play this game a few more times, then pick Smoothest.",
+      "noStartPacing": "Smoothest needs frame pacing from the session this Trial starts from, and that session didn't record it. Play this game once more, then start from that session.",
+      "historyUnread": "Smoothest needs Compy's change history to tell which sessions ran with nothing changed, and it couldn't be read just now. Try again in a moment; if it keeps happening, check Test → Applied & history.",
+      "unknown": "Compy couldn't check whether this game's frame pacing is measured yet, so Smoothest isn't offered right now."
+    },
     "outcome": {
       "recommended": "Recommended",
       "maxFps": "Maximum FPS",
@@ -591,7 +602,8 @@
     },
     "outcomeWhy": {
       "recommended": "Keeps the change only if the 1% low rises beyond the noise band and the average frame rate doesn't fall beyond it.",
-      "maxFps": "Keeps the change only if the average frame rate rises beyond the noise band and the 1% low doesn't fall beyond it."
+      "maxFps": "Keeps the change only if the average frame rate rises beyond the noise band and the 1% low doesn't fall beyond it.",
+      "smoothest": "Keeps the change only if frames get steadier beyond this game's own pacing band and the 1% low doesn't fall beyond its band."
     },
     "outcomeChoice": {
       "label": "Two results that disagree",

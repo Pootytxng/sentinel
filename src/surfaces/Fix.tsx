@@ -885,7 +885,13 @@ function rigLabel(f: NonNullable<AppliedChange["hw_fingerprint"]>, t: TFunction)
 function TrialReason({ link, kind }: { link?: TrialLink | null; kind: "applied" | "undone" }) {
   const { t } = useTranslation();
   if (!link) return null;
-  const outcome = t(link.outcome === "max-fps" ? "lab.experimentBench.outcome.maxFps" : "lab.experimentBench.outcome.recommended");
+  const outcome = t(
+    link.outcome === "max-fps"
+      ? "lab.experimentBench.outcome.maxFps"
+      : link.outcome === "smoothest"
+        ? "lab.experimentBench.outcome.smoothest"
+        : "lab.experimentBench.outcome.recommended",
+  );
   const when = link.concluded_at ? humanizeWhen(link.concluded_at, t) : null;
   const text =
     kind === "applied"

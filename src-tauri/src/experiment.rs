@@ -167,42 +167,106 @@ pub(crate) struct SmoothestEvidence {
     pub after_ratio: Option<f64>,
 }
 
-/// P4-smooth-offer: what a Smoothest start is judged against, or why it can't start. Admitted only
-/// when this game's frame pacing was measured between unchanged sessions on this PC
-/// (`noise_floor::between_session_pacing_noise`) and the session the Trial starts from recorded its
-/// own; never estimated. Refused before anything is recorded or changed. `history_read` is false when
-/// Compy's change history couldn't be read: no pair of sessions can then be shown unchanged, which is
-/// a different problem from too few sessions and is said as one.
-pub(crate) fn smoothest_admission(
-    history_read: bool,
-    pacing: Option<&crate::noise_floor::BetweenSessionNoise>,
-    start_ratio: Option<f64>,
-) -> Result<SmoothestEvidence, String> {
-    if !history_read {
-        return Err("Smoothest needs Compy's change history to tell which sessions ran with nothing changed, \
-             and it couldn't be read just now. Try again in a moment; if it keeps happening, check \
-             Test → Applied & history."
-            .to_string());
-    }
-    let Some(pacing) = pacing else {
-        return Err(format!(
+/// P4-smooth-offer-b: why Smoothest can't start from a session yet, as a stable key the bench words
+/// in the reader's language (`lab.experimentBench.smoothestHeld.*`) and a start words in English
+/// ([`smoothest_held_message`]). Never a guess: each names exactly what is missing.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum SmoothestHeld {
+    /// Compy's change history couldn't be read, so no pair of sessions can be shown unchanged.
+    HistoryUnread,
+    /// Fewer than `noise_floor::MIN_UNCHANGED_SESSIONS` unchanged sessions of this game with frame
+    /// pacing: how much pacing varies on its own isn't measured.
+    Unmeasured,
+    /// The session the Trial would start from recorded no frame pacing.
+    NoStartPacing,
+}
+
+/// The start's refusal for a held Smoothest, in plain words. None reads as a baseline refusal (the
+/// journey matches /baseline/i to offer a new as-is session; this is a different problem).
+pub(crate) fn smoothest_held_message(held: SmoothestHeld) -> String {
+    match held {
+        SmoothestHeld::HistoryUnread => "Smoothest needs Compy's change history to tell which sessions ran with \
+             nothing changed, and it couldn't be read just now. Try again in a moment; if it keeps \
+             happening, check Test \u{2192} Applied & history."
+            .to_string(),
+        SmoothestHeld::Unmeasured => format!(
             "Smoothest needs at least {} sessions of this game with nothing changed between them, each \
              with frame pacing recorded by this version of Compy, so it knows how much the pacing varies \
              on its own. Play this game a few more times, then pick Smoothest.",
             crate::noise_floor::MIN_UNCHANGED_SESSIONS
-        ));
-    };
-    let Some(start_ratio) = start_ratio.filter(|r| r.is_finite() && *r > 0.0) else {
-        return Err("Smoothest needs frame pacing from the session this Trial starts from, and that session \
-             didn't record it. Play this game once more, then start from that session."
-            .to_string());
-    };
+        ),
+        SmoothestHeld::NoStartPacing => "Smoothest needs frame pacing from the session this Trial starts from, \
+             and that session didn't record it. Play this game once more, then start from that session."
+            .to_string(),
+    }
+}
+
+/// P4-smooth-offer: what a Smoothest start is judged against, or why it can't start. Admitted only
+/// when this game's frame pacing was measured between unchanged sessions on this PC
+/// (`noise_floor::between_session_pacing_noise`) and the session the Trial starts from recorded its
+/// own; never estimated. `history_read` is false when Compy's change history couldn't be read: no
+/// pair of sessions can then be shown unchanged, which is a different problem from too few sessions.
+pub(crate) fn smoothest_admission(
+    history_read: bool,
+    pacing: Option<&crate::noise_floor::BetweenSessionNoise>,
+    start_ratio: Option<f64>,
+) -> Result<SmoothestEvidence, SmoothestHeld> {
+    if !history_read {
+        return Err(SmoothestHeld::HistoryUnread);
+    }
+    let pacing = pacing.ok_or(SmoothestHeld::Unmeasured)?;
+    let start_ratio = start_ratio.filter(|r| r.is_finite() && *r > 0.0).ok_or(SmoothestHeld::NoStartPacing)?;
     Ok(SmoothestEvidence {
         // `f64::max` returns the other side for a NaN, so a NaN spread still gets the 2% floor.
         band_pct: pacing.spread_pct.max(PACING_RESOLUTION_PCT),
         start_ratio,
         between_sessions: pacing.clone(),
         after_ratio: None,
+    })
+}
+
+/// The one read both the start and the bench's readiness check make: this game's pacing noise and
+/// the session's own ratio, from Compy's session store and change history (P4-smooth-offer-b).
+fn smoothest_for(
+    sessions: &[SessionSummary],
+    from: &SessionSummary,
+    history: &Result<Vec<crate::history::AppliedChange>, String>,
+) -> Result<SmoothestEvidence, SmoothestHeld> {
+    let pacing = history
+        .as_deref()
+        .ok()
+        .and_then(|changes| crate::noise_floor::between_session_pacing_noise(sessions, from, &ledger_rows(changes)));
+    let ratio = from.frame_pacing.as_ref().and_then(|p| p.p99_over_p50());
+    smoothest_admission(history.is_ok(), pacing.as_ref(), ratio)
+}
+
+/// P4-smooth-offer-b: whether Smoothest can start from a session, for the bench's picker. `held` is
+/// `None` when it can.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct SmoothestReadiness {
+    pub held: Option<SmoothestHeld>,
+    /// `noise_floor::MIN_UNCHANGED_SESSIONS`, so the bench's sentence names the same number.
+    pub min_sessions: usize,
+}
+
+/// P4-smooth-offer-b: the start's own Smoothest check, without starting. Read-only: reads the session
+/// store and the change history, writes nothing. A session that can't be a baseline is the start's
+/// refusal to give, so it comes back as an error and the bench says nothing about Smoothest.
+#[tauri::command]
+pub(crate) fn get_smoothest_readiness(baseline_session_id: String) -> Result<SmoothestReadiness, String> {
+    if !experiment_gate() {
+        return Err("The experiment engine isn't part of this build yet.".into());
+    }
+    let sessions = crate::sessions::get_session_summaries();
+    let from = resolve_baseline(&sessions, &baseline_session_id)?;
+    let history = ledger_for_one_change_checks(
+        crate::history::load_history(),
+        crate::history::ledger_was_quarantined(),
+    );
+    Ok(SmoothestReadiness {
+        held: smoothest_for(&sessions, from, &history).err(),
+        min_sessions: crate::noise_floor::MIN_UNCHANGED_SESSIONS,
     })
 }
 
@@ -2756,12 +2820,8 @@ pub(crate) fn start_experiment(
     // unchanged sessions on this PC, and is judged on that band; refused before anything is recorded.
     let smoothest = match outcome {
         TrialOutcome::Smoothest => {
-            let pacing = history.as_deref().ok().and_then(|changes| {
-                crate::noise_floor::between_session_pacing_noise(&sessions, baseline, &ledger_rows(changes))
-            });
-            let ratio = baseline.frame_pacing.as_ref().and_then(|p| p.p99_over_p50());
-            let evidence = smoothest_admission(history.is_ok(), pacing.as_ref(), ratio)
-                .map_err(|why| format!("experiment not started — {why}"))?;
+            let evidence = smoothest_for(&sessions, baseline, &history)
+                .map_err(|held| format!("experiment not started — {}", smoothest_held_message(held)))?;
             Some(evidence)
         }
         TrialOutcome::Recommended | TrialOutcome::MaxFps => None,
@@ -6186,33 +6246,49 @@ mod experiment_tests {
 
     #[test]
     fn smoothest_starts_only_when_this_games_pacing_noise_is_measured() {
-        let unmeasured = smoothest_admission(true, None, Some(1.5)).unwrap_err();
-        assert!(unmeasured.starts_with("Smoothest needs at least 3 sessions of this game with nothing changed between them"), "{unmeasured}");
-        let no_ratio = smoothest_admission(true, Some(&pacing(4.0)), None).unwrap_err();
-        assert!(no_ratio.contains("the session this Trial starts from"), "{no_ratio}");
+        assert_eq!(smoothest_admission(true, None, Some(1.5)), Err(SmoothestHeld::Unmeasured));
+        assert_eq!(smoothest_admission(true, Some(&pacing(4.0)), None), Err(SmoothestHeld::NoStartPacing));
         for bad in [0.0, -1.0, f64::NAN, f64::INFINITY] {
-            assert!(smoothest_admission(true, Some(&pacing(4.0)), Some(bad)).is_err(), "{bad}");
+            assert_eq!(smoothest_admission(true, Some(&pacing(4.0)), Some(bad)), Err(SmoothestHeld::NoStartPacing), "{bad}");
         }
-        // The band is the measured spread, never below the ratio's resolution.
+        // An unreadable history is said as itself, ahead of anything else.
+        assert_eq!(smoothest_admission(false, None, None), Err(SmoothestHeld::HistoryUnread));
+        // The band is the measured spread, never below the ratio's resolution; NaN gets the floor.
         assert_eq!(smoothest_admission(true, Some(&pacing(1.0)), Some(1.5)).unwrap().band_pct, PACING_RESOLUTION_PCT);
+        assert_eq!(smoothest_admission(true, Some(&pacing(f64::NAN)), Some(1.5)).unwrap().band_pct, PACING_RESOLUTION_PCT);
         let wide = smoothest_admission(true, Some(&pacing(4.5)), Some(1.5)).unwrap();
         assert_eq!((wide.band_pct, wide.start_ratio, wide.after_ratio), (4.5, 1.5, None));
         assert_eq!(wide.between_sessions, pacing(4.5));
-        // An unreadable change history is said as itself, never as "play more".
-        let unread = smoothest_admission(false, Some(&pacing(4.0)), Some(1.5)).unwrap_err();
+        // The words: each names what is missing, and none reads as a baseline refusal (the journey's
+        // `refusesBaseline` matches /baseline/i).
+        let unmeasured = smoothest_held_message(SmoothestHeld::Unmeasured);
+        assert!(unmeasured.starts_with("Smoothest needs at least 3 sessions of this game with nothing changed between them"), "{unmeasured}");
+        let no_ratio = smoothest_held_message(SmoothestHeld::NoStartPacing);
+        assert!(no_ratio.contains("the session this Trial starts from"), "{no_ratio}");
+        let unread = smoothest_held_message(SmoothestHeld::HistoryUnread);
         assert!(unread.starts_with("Smoothest needs Compy's change history"), "{unread}");
+        assert!(unread.contains("Test \u{2192} Applied & history"), "{unread}");
         assert!(!unread.contains("Play this game"), "{unread}");
-        // No refusal reads as a baseline refusal (the journey's `refusesBaseline` matches /baseline/i).
         for w in [unmeasured, no_ratio, unread] {
             assert!(!w.to_lowercase().contains("baseline"), "{w}");
         }
-        // The start reads the pacing noise and refuses before the record is saved or the change applied.
+        // The keys the bench reads.
+        assert_eq!(serde_json::to_value(SmoothestHeld::HistoryUnread).unwrap(), "history-unread");
+        assert_eq!(serde_json::to_value(SmoothestHeld::Unmeasured).unwrap(), "unmeasured");
+        assert_eq!(serde_json::to_value(SmoothestHeld::NoStartPacing).unwrap(), "no-start-pacing");
+        // The start and the readiness check make the one same read, and the start refuses before the
+        // record is saved or the change applied.
         let src = include_str!("experiment.rs");
         let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
-        let admit = start.find("smoothest_admission(history.is_ok(), pacing.as_ref(), ratio)").expect("start admits Smoothest");
-        assert!(start.contains("crate::noise_floor::between_session_pacing_noise(&sessions, baseline, &ledger_rows(changes))"));
+        let admit = start.find("smoothest_for(&sessions, baseline, &history)").expect("start admits Smoothest");
         assert!(admit < start.find("save_store(&store)?").unwrap(), "refused before anything is recorded");
         assert!(start[..start.find("save_store(&store)?").unwrap()].contains("        smoothest,\n"));
+        let ready = &src[src.find("pub(crate) fn get_smoothest_readiness(").unwrap()..];
+        let ready = &ready[..ready.find("\n}\n").unwrap()];
+        assert!(ready.contains("held: smoothest_for(&sessions, from, &history).err(),"));
+        for write in ["save_store", "lock_store", "apply_recommendation", "rollback_change", "write"] {
+            assert!(!ready.contains(write), "the readiness check is read-only: {write}");
+        }
     }
 
     #[test]

@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   loadGate: null as Promise<void> | null, // when set, the initial ledger reads block on it
   refuse: {} as Record<string, string>, // a lifecycle command the backend refuses, with its message
   changes: [] as unknown[], // get_applied_changes (the P5-outcomes undo reads it)
+  smoothReady: null as unknown, // get_smoothest_readiness; "reject" = the check failed
 }));
 
 /** Hold the initial ledger reads until the returned function is called.
@@ -134,6 +135,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         return afterLoad(state.sessions);
       case "get_applied_changes":
         return Promise.resolve(state.changes);
+      case "get_smoothest_readiness":
+        return state.smoothReady === "reject" ? Promise.reject("unreadable") : Promise.resolve(state.smoothReady);
       case "simulate_optimization":
         if (state.simHang) return new Promise(() => {}); // never resolves
         return state.sim ? Promise.resolve(state.sim) : Promise.reject("no sim");
@@ -168,6 +171,7 @@ afterEach(() => {
   state.loadGate = null;
   state.refuse = {};
   state.changes = [];
+  state.smoothReady = null;
 });
 
 // bug->guard (CI run 30696118350, 2026-08-01). Picking a value that has NO matching option yet is a
@@ -1481,9 +1485,10 @@ describe("ExperimentBench — what the Recommended verdict compared", () => {
   });
 });
 
-// P4-maxfps-smooth (ENGINE §2): the user picks what a Trial aims for; Recommended is the default and
-// Smoothest is shown but not offered yet. A judged Maximum FPS row says what it compared.
-describe("ExperimentBench — Maximum FPS, and Smoothest held", () => {
+// P4-maxfps-smooth (ENGINE §2): the user picks what a Trial aims for; Recommended is the default.
+// P4-smooth-offer-b: Smoothest is offered only when the backend says it can judge it from this session,
+// and otherwise says what is missing. A judged row says what it compared, by its own outcome's rule.
+describe("ExperimentBench — Maximum FPS, and Smoothest when measured", () => {
   afterEach(async () => {
     cleanup();
     await i18n.changeLanguage("en");
@@ -1522,21 +1527,76 @@ describe("ExperimentBench — Maximum FPS, and Smoothest held", () => {
     expect(callArgs("start_experiment")).toMatchObject({ outcome: "max-fps" });
   });
 
-  it("shows Smoothest disabled with its reason, and it can't be picked", async () => {
+  it("holds Smoothest with what is missing, and it can't be picked", async () => {
+    state.smoothReady = { held: "unmeasured", min_sessions: 3 };
     const { trigger } = await openOutcomePicker();
     const smooth = document.querySelector('[role="listbox"] [data-value="smoothest"]') as HTMLElement;
     expect(smooth).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByTestId("exp-outcome-smoothest")).toHaveTextContent(
-      "Smoothest needs Compy to measure frame pacing more precisely than it does today, so it isn't offered yet.",
+    expect(await screen.findByTestId("exp-outcome-smoothest")).toHaveTextContent(
+      "Smoothest needs at least 3 sessions of this game with nothing changed between them, each with frame pacing recorded by this version of Compy",
     );
     fireEvent.click(smooth);
     expect(trigger).toHaveTextContent("Recommended");
+    // The check is asked about the session a Trial would start from.
+    const asked = vi.mocked(invoke).mock.calls.filter(([c]) => c === "get_smoothest_readiness").map(([, a]) => a);
+    expect(asked.length).toBeGreaterThan(0);
+    for (const a of asked) expect(a).toEqual({ baselineSessionId: VALORANT_SESSION.started_at });
     cleanup();
     await i18n.changeLanguage("zh-CN");
     render(<ExperimentBench />);
     await screen.findByTestId("experiment-bench");
     await pickChange("test-rec");
-    expect(await screen.findByTestId("exp-outcome-smoothest")).toHaveTextContent("“最流畅”需要 Compy 比现在更精确地测量帧节奏，所以暂不提供。");
+    expect(await screen.findByTestId("exp-outcome-smoothest")).toHaveTextContent("“最流畅”需要这款游戏至少 3 次");
+  });
+
+  it("names each missing piece, and says it couldn't check when the check fails", async () => {
+    for (const [ready, text] of [
+      [{ held: "no-start-pacing", min_sessions: 3 }, "Smoothest needs frame pacing from the session this Trial starts from"],
+      [{ held: "history-unread", min_sessions: 3 }, "Smoothest needs Compy's change history"],
+      ["reject", "Compy couldn't check whether this game's frame pacing is measured yet"],
+      [null, "Compy couldn't check whether this game's frame pacing is measured yet"],
+    ] as const) {
+      state.smoothReady = ready;
+      const { trigger } = await openOutcomePicker();
+      expect(await screen.findByTestId("exp-outcome-smoothest")).toHaveTextContent(text);
+      expect(document.querySelector('[role="listbox"] [data-value="smoothest"]')).toHaveAttribute("aria-disabled", "true");
+      fireEvent.click(trigger);
+      cleanup();
+      vi.mocked(invoke).mockClear();
+    }
+  });
+
+  it("offers Smoothest when the backend can judge it, and starts with that pick", async () => {
+    state.smoothReady = { held: null, min_sessions: 3 };
+    const { start, trigger } = await openOutcomePicker();
+    const smooth = document.querySelector('[role="listbox"] [data-value="smoothest"]') as HTMLElement;
+    await waitFor(() => expect(smooth).not.toHaveAttribute("aria-disabled", "true"));
+    expect(screen.queryByTestId("exp-outcome-smoothest")).toBeNull();
+    fireEvent.click(smooth);
+    await waitFor(() => expect(trigger).toHaveTextContent("Smoothest"));
+    expect(screen.getByTestId("exp-outcome-why")).toHaveTextContent(
+      "Keeps the change only if frames get steadier beyond this game's own pacing band and the 1% low doesn't fall beyond its band.",
+    );
+    expect(start).toBeEnabled();
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(start);
+    await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("start_experiment", expect.anything()));
+    expect(callArgs("start_experiment")).toMatchObject({ outcome: "smoothest" });
+  });
+
+  it("asks again after a reload, and a Smoothest pick the check no longer allows goes back to Recommended", async () => {
+    state.smoothReady = { held: null, min_sessions: 3 };
+    const { trigger } = await openOutcomePicker();
+    const smooth = document.querySelector('[role="listbox"] [data-value="smoothest"]') as HTMLElement;
+    await waitFor(() => expect(smooth).not.toHaveAttribute("aria-disabled", "true"));
+    fireEvent.click(smooth);
+    await waitFor(() => expect(trigger).toHaveTextContent("Smoothest"));
+    // Something changed the history: the next reload's answer holds it.
+    state.smoothReady = { held: "unmeasured", min_sessions: 3 };
+    fireEvent(window, new Event(LEDGER_CHANGED_EVENT));
+    expect(await screen.findByTestId("exp-outcome-smoothest")).toHaveTextContent("Smoothest needs at least 3 sessions");
+    await waitFor(() => expect(trigger).toHaveTextContent("Recommended"));
+    expect(screen.getByTestId("exp-outcome-why")).toHaveTextContent("Keeps the change only if the 1% low rises beyond the noise band");
   });
 
   it("the picker's outcome names are the backend's", async () => {
@@ -1549,7 +1609,42 @@ describe("ExperimentBench — Maximum FPS, and Smoothest held", () => {
     expect(rs).toContain('None | Some("recommended") => Ok(TrialOutcome::Recommended),');
     expect(rs).toContain('Some("max-fps") => Ok(TrialOutcome::MaxFps),');
     expect(rs).toContain('Some("smoothest") => Ok(TrialOutcome::Smoothest),');
-    expect(rs).toContain("let evidence = smoothest_admission(history.is_ok(), pacing.as_ref(), ratio)");
+    // The bench's readiness is the start's own check (`smoothest_for`), keyed as the bench reads it.
+    expect(rs).toContain("let evidence = smoothest_for(&sessions, baseline, &history)");
+    expect(rs).toContain("held: smoothest_for(&sessions, from, &history).err(),");
+    expect(rs).toContain("pub(crate) fn get_smoothest_readiness(baseline_session_id: String)");
+    const keys = ["HistoryUnread", "Unmeasured", "NoStartPacing"].map((v) => v.replace(/[A-Z]/g, (c, i) => (i ? "-" : "") + c.toLowerCase()));
+    expect(tsx).toContain(`type SmoothestHeld = ${keys.map((k) => `"${k}"`).join(" | ")};`);
+    for (const v of ["HistoryUnread", "Unmeasured", "NoStartPacing"]) expect(rs).toContain(`    ${v},\n`);
+    // Registered on both sides of the IPC allowlist.
+    expect(readFileSync("src-tauri/build.rs", "utf8")).toContain('"get_smoothest_readiness",');
+    expect(readFileSync("src-tauri/src/lib.rs", "utf8")).toContain("experiment::get_smoothest_readiness,");
+  });
+
+  it("a Smoothest row leads with frame pacing on its own band, and says why", async () => {
+    const smooth = (verdict: string, low: number, after: number | null, id: string) => ({
+      ...judged(verdict, low, 0),
+      id,
+      outcome: "smoothest",
+      smoothest: { band_pct: 2, start_ratio: 1.5, after_ratio: after },
+    });
+    state.gate = true;
+    state.experiments = [
+      smooth("improved", 0, 1.44, "exp:1-0"),
+      smooth("regressed", 0, 1.56, "exp:2-0"),
+      smooth("regressed", -6.7, 1.44, "exp:3-0"),
+      smooth("no-change", 0, 1.5, "exp:4-0"),
+      smooth("no-change", 20, null, "exp:5-0"),
+    ];
+    render(<ExperimentBench />);
+    const lines = (await screen.findAllByTestId("exp-compared-receipt")).map((n) => n.textContent);
+    expect(lines[0]).toBe(
+      "Judged for Smoothest. Compared with the baseline: the gap between the slowest 1% of frames and a typical frame -4.2% against a ±2% band, 1% low 0% against a ±3% band. Frames got steadier by more than the band and the 1% low didn't fall by more than its band, so the change was kept.",
+    );
+    expect(lines[1]).toMatch(/frame \+4% against a ±2% band.*Frames got more uneven by more than the band, so the change was restored\.$/);
+    expect(lines[2]).toMatch(/The 1% low fell by more than the band, so the change was restored\.$/);
+    expect(lines[3]).toMatch(/Frame pacing stayed inside the band, so the default was kept and the change restored\.$/);
+    expect(lines[4]).toMatch(/^Judged for Smoothest\. Compared with the baseline: frame pacing couldn't be compared, 1% low \+20%.*Without frame pacing from both sessions/);
   });
 
   const judged = (verdict: string, low: number, avg: number) => ({
@@ -1594,7 +1689,7 @@ describe("ExperimentBench — Maximum FPS, and Smoothest held", () => {
     state.gate = true;
     state.experiments = [
       { ...judged("no-change", 2, 10), outcome: undefined },
-      { ...judged("no-change", 2, 10), outcome: "smoothest", id: "exp:9-0" },
+      { ...judged("no-change", 2, 10), outcome: "turbo", id: "exp:9-0" },
     ];
     render(<ExperimentBench />);
     const lines = (await screen.findAllByTestId("exp-compared-receipt")).map((n) => n.textContent);

@@ -574,7 +574,18 @@
     "receiptRuleMaxAvgFell": "平均帧率的下降超过了该范围，所以已恢复这项更改。",
     "receiptRuleMaxInside": "平均帧率的变化没有超出该范围，所以保持默认，已恢复这项更改。",
     "outcomeLabel": "测试目标",
-    "outcomeSmoothestUnavailable": "“最流畅”需要 Compy 比现在更精确地测量帧节奏，所以暂不提供。",
+    "receiptComparedSmoothest": "按“最流畅”评判。与基准相比：最慢 1% 帧与典型帧的差距 {{pacing}}%（对照 ±{{pacingBand}}% 范围），1% 最低帧 {{low}}%（对照 ±{{band}}% 范围）。{{rule}}",
+    "receiptComparedSmoothestUnknown": "按“最流畅”评判。与基准相比：帧节奏无法比较，1% 最低帧 {{low}}%（对照 ±{{band}}% 范围）。{{rule}}",
+    "receiptRuleSmoothKept": "帧变得更平稳且超出范围，1% 最低帧的下降也未超出其范围，因此保留了该更改。",
+    "receiptRuleSmoothUneven": "帧变得更不均匀且超出范围，因此还原了该更改。",
+    "receiptRuleSmoothInside": "帧节奏保持在范围内，因此保留默认设置并还原了该更改。",
+    "receiptRuleSmoothUnknown": "缺少两次会话的帧节奏，Compy 无法判断帧是否更平稳，因此保留默认设置并还原了该更改。",
+    "smoothestHeld": {
+      "unmeasured": "“最流畅”需要这款游戏至少 {{sessions}} 次期间未做任何更改的会话，且每次都由此版本的 Compy 记录了帧节奏，这样它才知道帧节奏本身波动多少。再玩几次这款游戏，然后选择“最流畅”。",
+      "noStartPacing": "“最流畅”需要本次测试起始会话的帧节奏，而该会话没有记录。再玩一次这款游戏，然后从那次会话开始。",
+      "historyUnread": "“最流畅”需要 Compy 的更改历史来判断哪些会话期间没有更改，但此刻无法读取。请稍后重试；如果一直如此，请在「已应用与历史记录」中查看。",
+      "unknown": "Compy 暂时无法确认这款游戏的帧节奏是否已测量，因此现在暂不提供“最流畅”。"
+    },
     "outcome": {
       "recommended": "推荐",
       "maxFps": "最高帧率",
@@ -582,7 +593,8 @@
     },
     "outcomeWhy": {
       "recommended": "只有当 1% 最低帧的提升超出噪声范围、且平均帧率的下降没有超出它时，才保留这项更改。",
-      "maxFps": "只有当平均帧率的提升超出噪声范围、且 1% 最低帧的下降没有超出它时，才保留这项更改。"
+      "maxFps": "只有当平均帧率的提升超出噪声范围、且 1% 最低帧的下降没有超出它时，才保留这项更改。",
+      "smoothest": "只有当帧变得更平稳且超出这款游戏自身的帧节奏范围，且 1% 最低帧的下降未超出其范围时，才保留该更改。"
     },
     "outcomeChoice": {
       "label": "两个结果不一致",
