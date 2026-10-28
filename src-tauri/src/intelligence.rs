@@ -1240,7 +1240,8 @@ impl HypoEval {
 pub(crate) enum LedgerHealth {
     /// Loaded cleanly and no quarantine marker on disk — silence is real evidence.
     Complete,
-    /// Unreadable now, or a damaged ledger was set aside earlier. Silence proves nothing.
+    /// Unreadable now, or a damaged ledger was set aside at or after the window began (#618: one set
+    /// aside before the window began lost nothing the window needs). Silence proves nothing.
     Incomplete,
 }
 
@@ -2301,24 +2302,46 @@ struct Gathered {
     comparison: Option<crate::comparison::ComparisonResult>,
     snapshots: Vec<IdentitySnapshot>,
     drift_notices: Vec<crate::drift::DriftNotice>,
-    /// Whether `applied` is the whole ledger. The timeline can honestly show fewer rows; the
-    /// "What changed?" engine cannot honestly claim Compy was quiet, so it needs this told to it.
-    ledger: LedgerHealth,
+    /// Whether `applied` loaded at all. The timeline can honestly show fewer rows; the "What
+    /// changed?" engine cannot honestly claim Compy was quiet, so it needs this told to it, together
+    /// with `set_aside_through`, per window ([`Gathered::ledger_since`]).
+    ledger_loaded: bool,
+    /// #618: when an earlier, damaged ledger was set aside (`history::ledger_set_aside_through`), read
+    /// AFTER the load so a set-aside the load caused is seen.
+    set_aside_through: Result<Option<DateTime<Utc>>, String>,
+}
+
+impl Gathered {
+    /// #618: whether the Trust Ledger is a whole record of Compy's own moves since `since`, a
+    /// window's start (RFC 3339). A set-aside history lost only moves at or before its last write, so
+    /// a window that began after it (`history::ledger_coverage`) is still covered and its silence is
+    /// real evidence; one that began at or before it, or an unknown either side, is not. The marker
+    /// is permanent, so a plain "was it ever set aside?" left Care unable to rule Compy out forever.
+    fn ledger_since(&self, since: &str) -> LedgerHealth {
+        if !self.ledger_loaded {
+            return LedgerHealth::Incomplete;
+        }
+        match crate::history::ledger_coverage(self.set_aside_through.clone(), Some(since)) {
+            crate::history::LedgerCoverage::Whole | crate::history::LedgerCoverage::SinceSetAside(_) => {
+                LedgerHealth::Complete
+            }
+            crate::history::LedgerCoverage::Lost | crate::history::LedgerCoverage::Unknown => LedgerHealth::Incomplete,
+        }
+    }
 }
 
 fn gather() -> Gathered {
     // One load, two readings. `unwrap_or_default` is fine for the timeline VIEW below — an empty
     // view is honest — but the error it swallows is exactly what the engine needs, so capture the
-    // health before collapsing it. Transient failure (Err) and durable loss (a quarantined ledger,
-    // which loads Ok and empty forever after) are both incompleteness.
+    // health before collapsing it. Transient failure (Err) is incompleteness for every window; a
+    // durable loss (a ledger set aside, which loads Ok and empty forever after) only for a window
+    // that began at or before it (#618, `Gathered::ledger_since`). The marker is read AFTER the load
+    // (#618 review P2), so a set-aside this load caused, or a reader made just before, is seen.
     let loaded = crate::history::load_history();
-    let ledger = if loaded.is_err() || crate::history::ledger_was_quarantined() {
-        LedgerHealth::Incomplete
-    } else {
-        LedgerHealth::Complete
-    };
+    let set_aside_through = crate::history::ledger_set_aside_through();
     Gathered {
-        ledger,
+        ledger_loaded: loaded.is_ok(),
+        set_aside_through,
         applied: loaded.unwrap_or_default(),
         sessions: crate::sessions::get_session_summaries(),
         gaming_slot: crate::gaming_session::load_session()
@@ -2395,7 +2418,7 @@ fn what_changed_impl(g: &Gathered, started_at: &str) -> WhatChangedOutcome {
             events_ambiguous,
             snapshots: &g.snapshots,
         },
-        g.ledger,
+        g.ledger_since(&baseline.started_at),
     )))
 }
 
@@ -2466,7 +2489,7 @@ fn what_changed_between_impl(
             events_ambiguous,
             snapshots: &g.snapshots,
         },
-        g.ledger,
+        g.ledger_since(&baseline.started_at),
     )))
 }
 
@@ -2726,7 +2749,7 @@ fn changed_before_incident_impl(
         let mut it = cb_item("compy-changes", "changed");
         it.events = compy;
         it
-    } else if g.ledger == LedgerHealth::Complete {
+    } else if g.ledger_since(&win_start.to_rfc3339()) == LedgerHealth::Complete {
         cb_item("compy-changes", "no-change")
     } else {
         cb_unknown("compy-changes", "ledger-incomplete")
@@ -4357,7 +4380,8 @@ mod tests {
             comparison: None,
             snapshots: vec![],
             drift_notices: vec![],
-            ledger: LedgerHealth::Complete,
+            ledger_loaded: true,
+            set_aside_through: Ok(None),
         }
     }
 
@@ -4782,12 +4806,44 @@ mod tests {
         assert_eq!(r.anchor.as_ref().unwrap().started_at, "2026-10-22T10:00:00Z");
     }
 
+    // #618: Care's "since it last worked" and "What changed?" are bounded by when an earlier history
+    // was set aside, against the window's own start: before it, silence is still evidence; at or after
+    // it (or unknown), Compy can't rule itself out. The marker is permanent, so the old yes/no check
+    // left every later incident on that PC unable to rule Compy out.
+    #[test]
+    fn a_history_set_aside_before_the_window_still_rules_compy_out() {
+        let at = |s: &str| DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc);
+        let mut g = gathered_with(vec![mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0)]);
+        assert_eq!(g.ledger_since("2026-10-20T10:00:00Z"), LedgerHealth::Complete, "nothing set aside");
+        g.set_aside_through = Ok(Some(at("2026-10-19T08:00:00Z")));
+        assert_eq!(g.ledger_since("2026-10-20T10:00:00Z"), LedgerHealth::Complete, "set aside before the window");
+        let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
+        assert_eq!(cb_cat(&r, "compy-changes").status, "no-change");
+        g.set_aside_through = Ok(Some(at("2026-10-21T08:00:00Z")));
+        assert_eq!(g.ledger_since("2026-10-20T10:00:00Z"), LedgerHealth::Incomplete, "set aside inside the window");
+        let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
+        assert_eq!(cb_cat(&r, "compy-changes").unknown_reason.as_deref(), Some("ledger-incomplete"));
+        g.set_aside_through = Err("denied".into());
+        assert_eq!(g.ledger_since("2026-10-20T10:00:00Z"), LedgerHealth::Incomplete, "unknown stays unknown");
+        g.set_aside_through = Ok(None);
+        g.ledger_loaded = false;
+        assert_eq!(g.ledger_since("2026-10-20T10:00:00Z"), LedgerHealth::Incomplete, "a failed load covers nothing");
+        // The window is the investigation's own: the marker is read once, after the load.
+        let src = include_str!("intelligence.rs");
+        let gather = &src[src.find("fn gather() -> Gathered {").unwrap()..];
+        let gather = &gather[..gather.find("\n}\n").unwrap()];
+        let load = gather.find("let loaded = crate::history::load_history();").unwrap();
+        let marker = gather.find("let set_aside_through = crate::history::ledger_set_aside_through();").unwrap();
+        assert!(load < marker, "the marker is read after the load");
+        assert!(!src.contains(&["ledger_was", "_quarantined()"].concat()), "the unbounded marker is back");
+    }
+
     #[test]
     fn changed_before_unknown_and_unreadable_evidence_is_never_no_change() {
         // No identity reading at all, an unreadable ledger, nothing in the window: every category
         // is unknown with a reason — not one of them may claim "no change".
         let mut g = gathered_with(vec![mk_session("2026-10-20T10:00:00Z", "Game.exe", 100.0, 120.0)]);
-        g.ledger = LedgerHealth::Incomplete;
+        g.ledger_loaded = false;
         let r = cb(&g, "2026-10-24T10:00:00Z", &[]);
         assert_eq!(r.items.len(), 6);
         for it in &r.items {
