@@ -593,6 +593,15 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   cargo 1660/0, clippy clean; r28 FULL vitest 525 files / 10110, exit 0 (Trials), r29 for Care. Lesson: when
   a permanent marker gates a check, find every reader of it (#669's session counts were a second dead-end
   the old patch didn't cover). Not pushed.
+- 2026-10-27 ~19:57–20:42 (owner watching a film on the primary monitor, asked us to work around it): FULL
+  catch-up. Pushed `2730e4d8..a33ff51c` then `..f515f53f` (pre-push gate refused twice on real catches:
+  closing-keyword in a docs subject, reworded; a moved archive row's relative link, re-pointed; and once on a
+  CareNextStep Depth-door flake → `f515f53f`, doors opened against the live tree). Desk build `a33ff51c` installed
+  silently (`-NoLaunch`, updater artifacts off for this desk-only build: no signing key in the session), stamp
+  in the installed exe; RELEASE_STATE row `bc38ee54`. Compy's saved window position pointed at monitor 2 for the
+  run and restored after; a watcher moved three gate-launched Compy windows off the film monitor, no focus taken.
+  Visual self-reviews still owed: the self-reviewer can't reach the desk from a cloud session (needs a desk-local
+  session).
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
