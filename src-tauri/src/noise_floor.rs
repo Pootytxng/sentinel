@@ -316,8 +316,7 @@ pub(crate) fn between_session_noise(
 /// Resolution: each ratio carries about ±1% bucket error (`FramePacing::p99_over_p50`), so a
 /// spread under ~2% is at the limit of what the histogram can resolve; a band that small must not
 /// be read as "this game is that steady".
-/// Measured only; nothing offers Smoothest from it yet (P4-smooth-offer).
-#[cfg_attr(not(test), allow(dead_code))] // wired by P4-smooth-offer.
+/// Smoothest is offered from it (`experiment::smoothest_admission`, P4-smooth-offer).
 pub(crate) fn between_session_pacing_noise(
     sessions: &[crate::sessions::SessionSummary],
     now: &crate::sessions::SessionSummary,

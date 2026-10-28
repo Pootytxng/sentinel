@@ -84,7 +84,6 @@ impl FramePacing {
     /// How uneven the session's frames were: the 99th-percentile frame time over the median, a
     /// plain ratio (1.0 = every frame alike). Each side carries the 0.5% bucket error, so the ratio
     /// is good to about ±1%. `None` when either isn't a positive number.
-    #[cfg_attr(not(test), allow(dead_code))] // read by noise_floor; offered by P4-smooth-offer.
     pub(crate) fn p99_over_p50(&self) -> Option<f64> {
         let r = self.p99_ms / self.p50_ms;
         (self.p50_ms > 0.0 && r.is_finite() && r > 0.0).then_some(r)

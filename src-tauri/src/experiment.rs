@@ -117,8 +117,8 @@ pub(crate) struct TreatmentRecord {
 
 /// P4-maxfps-smooth (ENGINE §2): the outcome the user picked when starting a Trial. Persisted
 /// (kebab-case); older records carry no `outcome` and load as `Recommended`, the default.
-/// Smoothest is not an outcome yet: sessions don't measure frame pacing precisely enough to judge it
-/// (see [`SMOOTHEST_UNAVAILABLE`]), so `start_experiment` refuses it and nothing judges it.
+/// Smoothest (P4-smooth-offer) starts only for a game whose frame pacing Compy has measured between
+/// unchanged sessions on this PC ([`smoothest_admission`]).
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum TrialOutcome {
@@ -127,31 +127,93 @@ pub(crate) enum TrialOutcome {
     Recommended,
     /// The average beside the 1% low (`with_max_fps_outcome`).
     MaxFps,
+    /// Frame pacing beside the 1% low (`with_smoothest_outcome`).
+    Smoothest,
 }
 
 impl<'de> Deserialize<'de> for TrialOutcome {
-    /// Only "max-fps" reads as Maximum FPS. Any other value (null, an older or unknown pick,
-    /// "smoothest" included) reads as Recommended, so an unknown pick never fails the store's load and
-    /// is never judged as something this build doesn't judge.
+    /// "max-fps" and "smoothest" read as themselves. Any other value (null, an older or unknown pick)
+    /// reads as Recommended, so an unknown pick never fails the store's load and is never judged as
+    /// something this build doesn't judge.
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let v = serde_json::Value::deserialize(d)?;
-        Ok(if v.as_str() == Some("max-fps") { TrialOutcome::MaxFps } else { TrialOutcome::Recommended })
+        Ok(match v.as_str() {
+            Some("max-fps") => TrialOutcome::MaxFps,
+            Some("smoothest") => TrialOutcome::Smoothest,
+            _ => TrialOutcome::Recommended,
+        })
     }
 }
 
-/// Why Smoothest isn't offered (owner review 2026-10-25): sessions keep the mean of per-second
-/// averages and per-second 1% lows, not frame times, so the frame-time spread they support is only
-/// rough, and its session-to-session noise isn't measured. Queue item P4-smooth-measure.
-pub(crate) const SMOOTHEST_UNAVAILABLE: &str =
-    "Smoothest needs Compy to measure frame pacing more precisely than it does today, so it isn't offered yet.";
+/// P4-smooth-offer: the smallest band frame pacing is judged on, in percent. Each session's p99/p50
+/// ratio is good to about ±1% (`sessions::FramePacing::p99_over_p50`), so a narrower band would
+/// read the histogram's own bucket error as a change.
+pub(crate) const PACING_RESOLUTION_PCT: f64 = 2.0;
+
+/// P4-smooth-offer (ENGINE §2 `smoothest`): the frame-pacing evidence a Smoothest Trial is judged on,
+/// recorded at start; `after_ratio` is added at conclude. Additive: older records load as `None`.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct SmoothestEvidence {
+    /// ± band on the p99/p50 ratio, in percent of the start session's ratio: this game's measured
+    /// between-session pacing spread, never below [`PACING_RESOLUTION_PCT`].
+    pub band_pct: f64,
+    /// The start session's p99/p50 frame-time ratio (1.0 = every frame alike; lower is steadier).
+    pub start_ratio: f64,
+    /// The between-session pacing spread the band came from.
+    pub between_sessions: crate::noise_floor::BetweenSessionNoise,
+    /// The after-session's ratio, set at conclude. `None` while Running, or when that session
+    /// recorded no frame pacing, which is never a win.
+    #[serde(default)]
+    pub after_ratio: Option<f64>,
+}
+
+/// P4-smooth-offer: what a Smoothest start is judged against, or why it can't start. Admitted only
+/// when this game's frame pacing was measured between unchanged sessions on this PC
+/// (`noise_floor::between_session_pacing_noise`) and the session the Trial starts from recorded its
+/// own; never estimated. Refused before anything is recorded or changed. `history_read` is false when
+/// Compy's change history couldn't be read: no pair of sessions can then be shown unchanged, which is
+/// a different problem from too few sessions and is said as one.
+pub(crate) fn smoothest_admission(
+    history_read: bool,
+    pacing: Option<&crate::noise_floor::BetweenSessionNoise>,
+    start_ratio: Option<f64>,
+) -> Result<SmoothestEvidence, String> {
+    if !history_read {
+        return Err("Smoothest needs Compy's change history to tell which sessions ran with nothing changed, \
+             and it couldn't be read just now. Try again in a moment; if it keeps happening, check \
+             Test → Applied & history."
+            .to_string());
+    }
+    let Some(pacing) = pacing else {
+        return Err(format!(
+            "Smoothest needs at least {} sessions of this game with nothing changed between them, each \
+             with frame pacing recorded by this version of Compy, so it knows how much the pacing varies \
+             on its own. Play this game a few more times, then pick Smoothest.",
+            crate::noise_floor::MIN_UNCHANGED_SESSIONS
+        ));
+    };
+    let Some(start_ratio) = start_ratio.filter(|r| r.is_finite() && *r > 0.0) else {
+        return Err("Smoothest needs frame pacing from the session this Trial starts from, and that session \
+             didn't record it. Play this game once more, then start from that session."
+            .to_string());
+    };
+    Ok(SmoothestEvidence {
+        // `f64::max` returns the other side for a NaN, so a NaN spread still gets the 2% floor.
+        band_pct: pacing.spread_pct.max(PACING_RESOLUTION_PCT),
+        start_ratio,
+        between_sessions: pacing.clone(),
+        after_ratio: None,
+    })
+}
 
 /// The outcome a start asked for, read at the webview trust boundary: none means Recommended,
-/// "smoothest" and anything unknown are refused before anything is recorded or changed.
+/// anything unknown is refused before anything is recorded or changed. Smoothest is read here and
+/// admitted or refused by `start_experiment` ([`smoothest_admission`]).
 pub(crate) fn start_outcome(picked: Option<&str>) -> Result<TrialOutcome, String> {
     match picked {
         None | Some("recommended") => Ok(TrialOutcome::Recommended),
         Some("max-fps") => Ok(TrialOutcome::MaxFps),
-        Some("smoothest") => Err(format!("experiment not started — {SMOOTHEST_UNAVAILABLE}")),
+        Some("smoothest") => Ok(TrialOutcome::Smoothest),
         Some(other) => {
             let other: String = other.chars().take(40).collect();
             Err(format!("experiment not started — Compy doesn't know the outcome \"{other}\"."))
@@ -348,6 +410,10 @@ pub(crate) struct ExperimentRecord {
     /// `Recommended`; an older Compy ignores the key (it judged everything as Recommended).
     #[serde(default)]
     pub outcome: TrialOutcome,
+    /// P4-smooth-offer: the frame-pacing band and ratios a Smoothest Trial is judged on. `None` for
+    /// every other outcome and on older records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub smoothest: Option<SmoothestEvidence>,
 }
 
 /// Trial Protocol §8 — the five result classes a Trial is judged in (#583). Persisted (kebab-case).
@@ -2189,6 +2255,76 @@ fn rebuilt(outcome: ConcludeOutcome, verdict: &str, note: String) -> ConcludeOut
     ConcludeOutcome { verdict: verdict.to_string(), keep, note, ..outcome }
 }
 
+/// P4-smooth-offer (ENGINE §2 `smoothest`, §6 "default wins ties"): the Smoothest outcome of a
+/// measured verdict. Frame pacing is the p99/p50 frame-time ratio (lower is steadier). Its change is
+/// taken as a % of the lower of the two ratios, rounded to 0.1, the way the band was measured
+/// (`noise_floor::between_session_pacing_noise`), and judged against the band recorded at start; the 1% low on
+/// `low_band_pct` (`noise_floor_pct`):
+/// - Better (`improved`, kept) only when the ratio fell by more than its band AND the 1% low did not
+///   fall by more than its band;
+/// - Worse (`regressed`) when the ratio rose by more than its band, or the 1% low fell by more than its;
+/// - anything else is No change: the default is kept and the change restored. Pacing that couldn't be
+///   compared (no evidence recorded, or the after-session recorded none) is never a win.
+///
+/// Same precedence as [`with_recommended_outcome`]: only a verdict judged against the band is touched.
+pub(crate) fn with_smoothest_outcome(
+    outcome: ConcludeOutcome,
+    evidence: Option<&SmoothestEvidence>,
+    after_ratio: Option<f64>,
+    low_band_pct: f64,
+) -> ConcludeOutcome {
+    if !judged_against_noise(&outcome) {
+        return outcome;
+    }
+    let low = outcome.delta_low1_pct;
+    let low_fell = low < -low_band_pct;
+    let low_band = band_pct_text(low_band_pct);
+    let pacing = evidence
+        .zip(after_ratio.filter(|r| r.is_finite() && *r > 0.0))
+        .filter(|(ev, _)| ev.start_ratio.is_finite() && ev.start_ratio > 0.0)
+        .map(|(ev, after)| (((after - ev.start_ratio) / after.min(ev.start_ratio) * 1000.0).round() / 10.0, ev.band_pct));
+    let Some((delta, band_pct)) = pacing else {
+        let (verdict, why) = if low_fell {
+            ("regressed", "The 1% low fell by more than its band, so the change was restored.")
+        } else {
+            (
+                "no-change",
+                "Without frame pacing from both sessions Compy can't tell whether frames got steadier, so \
+                 the default was kept and the change restored.",
+            )
+        };
+        let note = format!(
+            "{} Judged for Smoothest. Compared with the start: frame pacing couldn't be compared, the 1% low \
+             {} against a ±{low_band}% band. {why}",
+            outcome.note,
+            signed_pct(low)
+        );
+        return rebuilt(outcome, verdict, note);
+    };
+    let (verdict, why) = if delta > band_pct {
+        ("regressed", "Frames got more uneven by more than the band, so the change was restored.")
+    } else if low_fell {
+        ("regressed", "The 1% low fell by more than its band, so the change was restored.")
+    } else if delta < -band_pct {
+        (
+            "improved",
+            "Frames got steadier by more than the band and the 1% low didn't fall by more than its band, so \
+             the change was kept.",
+        )
+    } else {
+        ("no-change", "Frame pacing stayed inside the band, so the default was kept and the change restored.")
+    };
+    let note = format!(
+        "{} Judged for Smoothest. Compared with the start: the gap between the slowest 1% of frames and a \
+         typical frame {} against a ±{}% band, the 1% low {} against a ±{low_band}% band. {why}",
+        outcome.note,
+        signed_pct(delta),
+        band_pct_text(band_pct),
+        signed_pct(low)
+    );
+    rebuilt(outcome, verdict, note)
+}
+
 /// P4-maxfps-smooth (ENGINE §2 `max_fps`, §6 "default wins ties"): the Maximum FPS outcome of a
 /// measured verdict, both numbers on the same band (`noise_floor_pct`, a % of the baseline):
 /// - Better (`improved`, kept) only when the average rose by more than the band AND the 1% low did
@@ -2528,6 +2664,7 @@ fn trial_link_in(
         outcome: match x.outcome {
             TrialOutcome::MaxFps => "max-fps",
             TrialOutcome::Recommended => "recommended",
+            TrialOutcome::Smoothest => "smoothest",
         }
         .to_string(),
         concluded_at: x.concluded_at.clone(),
@@ -2615,6 +2752,20 @@ pub(crate) fn start_experiment(
         .ok()
         .and_then(|changes| crate::noise_floor::between_session_noise(&sessions, baseline, &ledger_rows(changes)));
     let noise_floor_pct = crate::noise_floor::noise_band_pct(between.as_ref());
+    // P4-smooth-offer: Smoothest starts only when this game's frame pacing was measured between
+    // unchanged sessions on this PC, and is judged on that band; refused before anything is recorded.
+    let smoothest = match outcome {
+        TrialOutcome::Smoothest => {
+            let pacing = history.as_deref().ok().and_then(|changes| {
+                crate::noise_floor::between_session_pacing_noise(&sessions, baseline, &ledger_rows(changes))
+            });
+            let ratio = baseline.frame_pacing.as_ref().and_then(|p| p.p99_over_p50());
+            let evidence = smoothest_admission(history.is_ok(), pacing.as_ref(), ratio)
+                .map_err(|why| format!("experiment not started — {why}"))?;
+            Some(evidence)
+        }
+        TrialOutcome::Recommended | TrialOutcome::MaxFps => None,
+    };
     // §2: a baseline too short to judge a change against is refused; an uneven or untraced one starts
     // and the record says so. Its halves are graded on the fixed default, which the record keeps as
     // `halves_floor_pct`, never on the verdict band (average fps vs a 1% low spread).
@@ -2684,6 +2835,7 @@ pub(crate) fn start_experiment(
         final_state_verified: None,
         // P4-maxfps-smooth: a webview that sends no pick asks for the default (`start_outcome`).
         outcome,
+        smoothest,
     });
     let idx = store.experiments.len() - 1;
     save_store(&store)?;
@@ -2957,6 +3109,10 @@ pub(crate) fn conclude_experiment(
         .as_ref()
         .map_or((None, None), |(treatment, _)| session_check(grade_baseline(treatment, halves_floor_pct(rec))));
     let uneven_after = after_halves.as_ref().filter(|_| after_check == Some(BaselineCheck::Uneven));
+    // P4-smooth-offer: the after-session's frame pacing, judged only for Smoothest and kept on its record.
+    let after_ratio = resolved
+        .as_ref()
+        .and_then(|(treatment, _)| treatment.frame_pacing.as_ref().and_then(|p| p.p99_over_p50()));
     let (judged, crash_pairing) = match &resolved {
         Some((treatment, pairing)) => {
             // Steadiness first, so a Partial pairing appends its "not every condition could be
@@ -2987,6 +3143,9 @@ pub(crate) fn conclude_experiment(
             let picked = match rec.outcome {
                 TrialOutcome::Recommended => with_recommended_outcome(paired, rec.noise_floor_pct, avg),
                 TrialOutcome::MaxFps => with_max_fps_outcome(paired, rec.noise_floor_pct, avg),
+                TrialOutcome::Smoothest => {
+                    with_smoothest_outcome(paired, rec.smoothest.as_ref(), after_ratio, rec.noise_floor_pct)
+                }
             };
             (picked, None)
         }
@@ -3016,6 +3175,9 @@ pub(crate) fn conclude_experiment(
         halves: after_halves.clone(),
         delta_avg_pct: delta_avg_pct(rec_baseline_avg, treatment.avg_fps),
     });
+    if let Some(ev) = store.experiments[idx].smoothest.as_mut() {
+        ev.after_ratio = after_ratio;
+    }
     store.experiments[idx].session_pairing = resolved
         .as_ref()
         .map(|(_, pairing)| pairing)
@@ -3284,6 +3446,7 @@ mod experiment_tests {
             prior_state_verified: false,
             final_state_verified: None,
             outcome: TrialOutcome::Recommended,
+            smoothest: None,
         }
     }
 
@@ -5985,14 +6148,12 @@ mod experiment_tests {
     }
 
     #[test]
-    fn a_start_refuses_smoothest_and_any_outcome_this_build_does_not_judge() {
+    fn a_start_reads_smoothest_and_refuses_any_outcome_this_build_does_not_judge() {
         assert_eq!(start_outcome(None), Ok(TrialOutcome::Recommended));
         assert_eq!(start_outcome(Some("recommended")), Ok(TrialOutcome::Recommended));
         assert_eq!(start_outcome(Some("max-fps")), Ok(TrialOutcome::MaxFps));
-        assert_eq!(
-            start_outcome(Some("smoothest")),
-            Err("experiment not started — Smoothest needs Compy to measure frame pacing more precisely than it does today, so it isn't offered yet.".to_string())
-        );
+        // P4-smooth-offer: read here, admitted or refused by `smoothest_admission` in the start.
+        assert_eq!(start_outcome(Some("smoothest")), Ok(TrialOutcome::Smoothest));
         let unknown = start_outcome(Some(&"x".repeat(500))).unwrap_err();
         assert!(unknown.starts_with("experiment not started — Compy doesn't know the outcome"), "{unknown}");
         assert!(unknown.len() < 120, "a long pick is capped: {unknown}");
@@ -6002,11 +6163,148 @@ mod experiment_tests {
         let refuse = start.find("let outcome = start_outcome(outcome.as_deref())?;").expect("start reads the pick");
         assert!(refuse < start.find("lock_store()").unwrap(), "refused before anything is touched");
         assert!(start[..start.find("save_store(&store)?").unwrap()].contains("        outcome,\n"));
-        // Nothing judges as Smoothest: a stored "smoothest" or unknown pick reads as Recommended.
-        for v in ["smoothest", "turbo", ""] {
+        // A stored "smoothest" reads as itself; an unknown pick reads as Recommended.
+        assert_eq!(serde_json::from_value::<TrialOutcome>("smoothest".into()).unwrap(), TrialOutcome::Smoothest);
+        for v in ["turbo", ""] {
             assert_eq!(serde_json::from_value::<TrialOutcome>(v.into()).unwrap(), TrialOutcome::Recommended, "{v}");
         }
         assert_eq!(serde_json::from_value::<TrialOutcome>(serde_json::Value::Null).unwrap(), TrialOutcome::Recommended);
+    }
+
+    // ─── P4-smooth-offer-a (ENGINE §2 smoothest: offered once this game's pacing noise is measured) ──
+
+    fn pacing(spread_pct: f64) -> crate::noise_floor::BetweenSessionNoise {
+        crate::noise_floor::BetweenSessionNoise { spread_pct, sessions: 3 }
+    }
+
+    /// A measured verdict on `rec(150.0, 5)` (1% low 150, band 3%), read as Smoothest from a start
+    /// ratio of 1.5 on a 2% pacing band.
+    fn smoothest(treatment_low1: f64, after_ratio: Option<f64>) -> ConcludeOutcome {
+        let ev = smoothest_admission(true, Some(&pacing(1.0)), Some(1.5)).unwrap();
+        with_smoothest_outcome(measured(treatment_low1), Some(&ev), after_ratio, rec(150.0, 5).noise_floor_pct)
+    }
+
+    #[test]
+    fn smoothest_starts_only_when_this_games_pacing_noise_is_measured() {
+        let unmeasured = smoothest_admission(true, None, Some(1.5)).unwrap_err();
+        assert!(unmeasured.starts_with("Smoothest needs at least 3 sessions of this game with nothing changed between them"), "{unmeasured}");
+        let no_ratio = smoothest_admission(true, Some(&pacing(4.0)), None).unwrap_err();
+        assert!(no_ratio.contains("the session this Trial starts from"), "{no_ratio}");
+        for bad in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            assert!(smoothest_admission(true, Some(&pacing(4.0)), Some(bad)).is_err(), "{bad}");
+        }
+        // The band is the measured spread, never below the ratio's resolution.
+        assert_eq!(smoothest_admission(true, Some(&pacing(1.0)), Some(1.5)).unwrap().band_pct, PACING_RESOLUTION_PCT);
+        let wide = smoothest_admission(true, Some(&pacing(4.5)), Some(1.5)).unwrap();
+        assert_eq!((wide.band_pct, wide.start_ratio, wide.after_ratio), (4.5, 1.5, None));
+        assert_eq!(wide.between_sessions, pacing(4.5));
+        // An unreadable change history is said as itself, never as "play more".
+        let unread = smoothest_admission(false, Some(&pacing(4.0)), Some(1.5)).unwrap_err();
+        assert!(unread.starts_with("Smoothest needs Compy's change history"), "{unread}");
+        assert!(!unread.contains("Play this game"), "{unread}");
+        // No refusal reads as a baseline refusal (the journey's `refusesBaseline` matches /baseline/i).
+        for w in [unmeasured, no_ratio, unread] {
+            assert!(!w.to_lowercase().contains("baseline"), "{w}");
+        }
+        // The start reads the pacing noise and refuses before the record is saved or the change applied.
+        let src = include_str!("experiment.rs");
+        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let admit = start.find("smoothest_admission(history.is_ok(), pacing.as_ref(), ratio)").expect("start admits Smoothest");
+        assert!(start.contains("crate::noise_floor::between_session_pacing_noise(&sessions, baseline, &ledger_rows(changes))"));
+        assert!(admit < start.find("save_store(&store)?").unwrap(), "refused before anything is recorded");
+        assert!(start[..start.find("save_store(&store)?").unwrap()].contains("        smoothest,\n"));
+    }
+
+    #[test]
+    fn smoothest_keeps_steadier_frames_only_when_the_1pct_low_holds() {
+        // Ratio 1.5 → 1.44 (-4.2% of the lower ratio), 1% low unchanged: kept.
+        let kept = smoothest(150.0, Some(1.44));
+        assert_eq!((kept.verdict.as_str(), kept.keep), ("improved", true));
+        assert!(kept.note.contains("Judged for Smoothest. Compared with the start: the gap between the slowest 1% of frames and a typical frame -4.2% against a ±2% band, the 1% low 0% against a ±3% band."), "{}", kept.note);
+        assert!(kept.note.contains("Frames got steadier by more than the band"), "{}", kept.note);
+        // Steadier, but the 1% low fell beyond its band (150 → 140, -6.7%): Worse.
+        let low_fell = smoothest(140.0, Some(1.44));
+        assert_eq!((low_fell.verdict.as_str(), low_fell.keep), ("regressed", false));
+        assert!(low_fell.note.contains("The 1% low fell by more than its band"), "{}", low_fell.note);
+        // More uneven beyond the band (1.5 → 1.56, +4%), whatever the 1% low did: Worse.
+        let uneven = smoothest(180.0, Some(1.56));
+        assert_eq!((uneven.verdict.as_str(), uneven.keep), ("regressed", false));
+        assert!(uneven.note.contains("Frames got more uneven by more than the band"), "{}", uneven.note);
+        // A 1% low gain with pacing inside the band: Recommended keeps it, Smoothest doesn't.
+        let tie = smoothest(180.0, Some(1.5));
+        assert_eq!((tie.verdict.as_str(), tie.keep), ("no-change", false));
+        assert!(tie.note.contains("Frame pacing stayed inside the band"), "{}", tie.note);
+    }
+
+    #[test]
+    fn smoothest_band_edges_are_inside_the_band() {
+        // ±2.0% exactly is inside; 2.1% is beyond (each a % of the lower ratio).
+        assert_eq!(smoothest(150.0, Some(1.47)).verdict, "no-change", "-2.0%");
+        assert_eq!(smoothest(150.0, Some(1.53)).verdict, "no-change", "+2.0%");
+        assert_eq!(smoothest(150.0, Some(1.4685)).verdict, "improved", "-2.1%");
+        assert_eq!(smoothest(150.0, Some(1.5315)).verdict, "regressed", "+2.1%");
+        // The 1% low's own edge (-3%) is inside its band.
+        assert_eq!(smoothest(145.5, Some(1.44)).verdict, "improved", "-3.0% 1% low holds");
+        assert_eq!(trial_result_for(&smoothest(150.0, Some(1.5)).verdict), TrialResult::Negligible);
+    }
+
+    #[test]
+    fn smoothest_pacing_that_couldnt_be_compared_is_never_a_win() {
+        for after in [None, Some(0.0), Some(f64::NAN)] {
+            let o = smoothest(180.0, after);
+            assert_eq!((o.verdict.as_str(), o.keep), ("no-change", false), "{after:?}");
+            assert!(o.note.contains("frame pacing couldn't be compared"), "{}", o.note);
+        }
+        assert_eq!(smoothest(140.0, None).verdict, "regressed", "a falling 1% low still counts");
+        // No evidence recorded at start (a hand-edited or damaged record): never a win either.
+        let none = with_smoothest_outcome(measured(180.0), None, Some(1.2), 3.0);
+        assert_eq!((none.verdict.as_str(), none.keep), ("no-change", false));
+    }
+
+    #[test]
+    fn every_earlier_gate_keeps_its_verdict_ahead_of_smoothest() {
+        let h = BaselineHalves { first_half_fps: 200.0, second_half_fps: 240.0 };
+        let crash = conclude_outcome(&rec(150.0, 5), 180.0, 5000, true, Some("Test"), Some(5), Utc::now());
+        let thin = conclude_outcome(&rec(150.0, 5), 180.0, 10, false, Some("Test"), Some(5), Utc::now());
+        let confounded = conclude_outcome(&rec(150.0, 5), 180.0, 5000, false, Some("Test"), Some(6), Utc::now());
+        let wrong_game = conclude_outcome(&rec(150.0, 5), 180.0, 5000, false, Some("Other"), Some(5), Utc::now());
+        let noisy = with_steady_sessions(measured(180.0), Some(&h), None);
+        let ev = smoothest_admission(true, Some(&pacing(1.0)), Some(1.5)).unwrap();
+        for o in [crash, thin, confounded, wrong_game, noisy] {
+            for after in [None, Some(1.0), Some(3.0)] {
+                assert_eq!(with_smoothest_outcome(o.clone(), Some(&ev), after, 3.0), o, "{} / {after:?}", o.verdict);
+            }
+        }
+    }
+
+    #[test]
+    fn smoothest_is_judged_at_conclude_and_its_evidence_is_stored_additively() {
+        let src = include_str!("experiment.rs");
+        let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
+        let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
+        assert!(body.contains("with_smoothest_outcome(paired, rec.smoothest.as_ref(), after_ratio, rec.noise_floor_pct)"));
+        assert!(body.contains("ev.after_ratio = after_ratio;"));
+        // Absent on every other outcome's record, so their stored shape is unchanged.
+        let plain = serde_json::to_value(rec(150.0, 5)).unwrap();
+        assert!(plain.get("smoothest").is_none());
+        // Round-trips, and a record without the key loads as None.
+        let mut ev = smoothest_admission(true, Some(&pacing(3.5)), Some(1.42)).unwrap();
+        ev.after_ratio = Some(1.31);
+        let r = ExperimentRecord { outcome: TrialOutcome::Smoothest, smoothest: Some(ev.clone()), ..rec(150.0, 5) };
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["outcome"], "smoothest");
+        assert_eq!(v["smoothest"]["band_pct"], 3.5);
+        let back: ExperimentRecord = serde_json::from_value(v.clone()).unwrap();
+        assert_eq!((back.outcome, back.smoothest), (TrialOutcome::Smoothest, Some(ev)));
+        let mut old = v;
+        old.as_object_mut().unwrap().remove("smoothest");
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(old).unwrap().smoothest, None);
+        // A Trial chosen for Smoothest names it on the change it keeps or undoes.
+        let mut x = ExperimentRecord { outcome: TrialOutcome::Smoothest, ..rec(150.0, 5) };
+        x.status = ExperimentStatus::Kept;
+        x.verdict = Some("improved".into());
+        let link = trial_link_in(&[x.clone()], &x.id, &x.rec_id, true).unwrap();
+        assert_eq!(link.outcome, "smoothest");
     }
 
     #[test]

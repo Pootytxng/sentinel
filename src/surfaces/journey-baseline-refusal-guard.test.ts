@@ -63,9 +63,8 @@ describe("the journey's baseline-refusal match is pinned to experiment.rs", () =
   });
 
   it("the start's other refusals never read as a baseline refusal", () => {
-    const others = ["pre_apply_refusal", "unverified_start_refusal", "start_outcome", "start_experiment"].flatMap(literals);
-    const smoothest = rs.slice(rs.indexOf("const SMOOTHEST_UNAVAILABLE"), rs.indexOf(";", rs.indexOf("const SMOOTHEST_UNAVAILABLE")));
+    const others = ["pre_apply_refusal", "unverified_start_refusal", "start_outcome", "start_experiment", "smoothest_admission"].flatMap(literals);
     expect(others.length).toBeGreaterThan(5);
-    for (const w of [...others, smoothest]) expect(refusesBaseline(w), w).toBe(false);
+    for (const w of others) expect(refusesBaseline(w), w).toBe(false);
   });
 });
