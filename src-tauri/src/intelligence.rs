@@ -4825,6 +4825,11 @@ mod tests {
         assert_eq!(cb_cat(&r, "compy-changes").unknown_reason.as_deref(), Some("ledger-incomplete"));
         g.set_aside_through = Err("denied".into());
         assert_eq!(g.ledger_since("2026-10-20T10:00:00Z"), LedgerHealth::Incomplete, "unknown stays unknown");
+        // A window start that can't be read is unknown too, once anything was set aside.
+        g.set_aside_through = Ok(Some(at("2026-10-19T08:00:00Z")));
+        for bad in ["", "not a time"] {
+            assert_eq!(g.ledger_since(bad), LedgerHealth::Incomplete, "{bad:?}");
+        }
         g.set_aside_through = Ok(None);
         g.ledger_loaded = false;
         assert_eq!(g.ledger_since("2026-10-20T10:00:00Z"), LedgerHealth::Incomplete, "a failed load covers nothing");
