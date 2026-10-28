@@ -448,9 +448,13 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       setting or software dims the parts and says the evidence points away from hardware. `HomeConsole.tsx`
       stage, `rig-parts.ts`, `RigHologram.tsx`. Needs P7-score (HomeConsole). ROADMAP P7 bullet 4;
       Constitution §24.
-- [ ] **P7-rig-care** Same on the Care station: the incident's faulting part (GPU driver -> GPU, memory error ->
+- [x] **P7-rig-care** `9f60e291` (feat `c184ad8c`, fix `4f1f0437`; flake fix `908b0464`). Same on the Care station: the incident's faulting part (GPU driver -> GPU, memory error ->
       RAM, app crash with no hardware sign -> "not hardware") drives the Lab rig (`LabConsole.tsx`
       `RigViewer`). Needs P7-rig-limiter. ROADMAP P7 bullet 4; Constitution §24, §25.
+      Rust `AssessmentRule` key beside the prose; overheating / graphics-driver (vendor-matched) -> the GPU,
+      app-specific -> "not hardware", the rest draw no focus. Deviation: no RAM focus — no rule says memory
+      alone (hardware-error covers WHEA/CPU/RAM together), so it stays unfocused rather than guessed. Review:
+      source + date named on the rig line, vendor match taken. Visual self-review owed (FULL).
 - [ ] **P7-exit-proof** (owner, FULL) The friend goes from Home to an answer on "more FPS", "it stutters" and
       "it crashed" without asking what a word means; the owner opens the technical layer on each and finds the
       exact setting, measurement and source. Record in BACKLOG as the Phase 7 exit. Needs P7-route through
@@ -545,6 +549,12 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   restores from the index, and 2678d781's unstaged HomeConsole wiring was overwritten that way (the
   review caught it; tests that failed were the evidence). (2) Any v2 CSS edit puts
   `src/design/tokens-v2-guard.test.ts` in the touched set. Not pushed.
+- 2026-10-27 ~16:20–18:20 (interactive from Claude HQ, CODE-ONLY): P7-rig-care `9f60e291` (feat `c184ad8c`,
+  fix `4f1f0437`); cargo test 1645 passed, clippy -D warnings clean; one review round taken. r23 FULL vitest
+  failed on one Depth-door flake (SessionDebrief); fixed on its own branch `908b0464` (test-only: re-query the
+  live card and open its door idempotently inside waitFor; other door clicks wait for the body to mount).
+  r24 FULL vitest 525 files / 10772, exit 0, tsc 0. Lesson: never hold a node across a Depth door open —
+  re-query inside waitFor. Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
