@@ -538,6 +538,18 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
       and admit it through `.claude/rules/tweak-catalog.md` + ARCHITECTURE_LOCKS "candidate only after
       Trial + Risk proof". Needs the owner's sign-off and P4-exit-proof.
 
+### Then — Roadmap Phase 9: Hardware decision intelligence (`product/ROADMAP.md` Phase 9)
+Planned 2026-10-28 (scheduled refill, second). Smallest read-only slices on what Compy already measures;
+no shopping, no product names, no prices (affiliate firewall), never an invented spec.
+- [ ] **P9-hz** The display-mode line shows the refresh rate with its unit ("250 Hz", today "@250"), en +
+      zh-CN; an unreadable rate stays "unknown". Smallest visible slice (noted in the 2026-10-27 review).
+- [ ] **P9-target** FPS answers compare against the screen's measured refresh rate ("about 60% of your
+      250 Hz screen"); no line when the rate or the FPS is unmeasured. ROADMAP P9 "display target".
+- [ ] **P9-settings-done** When the Phase 4 panel says Compy finished the supported candidates for a game,
+      the game summary adds one line: settings have reached what Compy can test here, then the measured
+      limiter (P7-rig-limiter) or "not measured". "No upgrade recommended" is a valid answer and the default
+      when nothing is measured. Needs P4-exit-proof for a live case; code + tests can land first.
+
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
 - [x] **tokio** `fcc64291` (1.54.1; only tokio's lock entry changed). Desk install at the next ship.
