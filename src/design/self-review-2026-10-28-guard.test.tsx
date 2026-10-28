@@ -6,7 +6,8 @@
 //  - P7-rig-care: the Lab rig note had no backing, so the floor grid cut through its glyphs;
 //  - P7-depth: the Care receipt's "Step id" row repeated the whole step.
 import { describe, it, expect } from "vitest";
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
+import { Term } from "./Term";
 import { readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 import { ConfidenceWord } from "./ConfidenceWord";
@@ -39,8 +40,9 @@ describe("self-review 2026-10-28 guards", () => {
       expect(JSON.parse(lab).experimentBench.confidence, `${loc}: the raw band copy is back`).toBeUndefined();
     }
     const bench = readFileSync(join("src", "surfaces", "ExperimentBench.tsx"), "utf8");
-    expect(bench).toContain('confidenceCopy(t, "estimate")[sim.confidence]');
-    expect(bench).toContain('const conf = confidenceCopy(t, "measured");');
+    // r2: BenchWord replaced confidenceCopy (same words, now glossed); see the r2 case below.
+    expect(bench).toContain('<BenchWord c={sim.confidence} kind="estimate" />');
+    expect(bench).toContain('<BenchWord c={r.confidence ?? "unknown"} kind="measured" />');
   });
 
   it("engine sentences gloss the terms inside them and keep every other word as given", () => {
@@ -58,10 +60,53 @@ describe("self-review 2026-10-28 guards", () => {
     expect(wcp).toMatch(/<Term id="noise-floor">\{t\("optimize\.whatChangedPanel\.noiseFloor"/);
   });
 
-  it("the Lab rig note sits on a solid backing", () => {
+  it("the Lab rig note sits under the stage, not on its floor", () => {
     const css = readFileSync(join("src", "surfaces", "lab-console.css"), "utf8");
     const rule = css.slice(css.indexOf('.lc-rig-note {'), css.indexOf("}", css.indexOf('.lc-rig-note {')));
-    expect(rule).toMatch(/background:\s*var\(--v2-bg\)/);
+    // r2: the note sits under the stage, in flow, never overlaid on the floor grid or ring.
+    expect(rule).not.toMatch(/position:\s*absolute/);
+    const lab = readFileSync(join("src", "surfaces", "LabConsole.tsx"), "utf8");
+    expect(lab).not.toMatch(/\{careRigNote\}\s*<ReticleCursor/);
+    expect(lab.match(/<ReticleCursor scopeRef=\{stageRef\} \/>\s*<\/div>\s*(\{\/\*[^]*?\*\/\}\s*)?\{careRigNote\}/g)?.length).toBe(2);
+  });
+
+  it("r2: a tooltip that would spill past the right edge flips to end-anchored", () => {
+    // bug→guard r2: the Black Book "Likely" and the noise-floor tooltips were cut off at the right
+    // edge and added a horizontal scrollbar.
+    const orig = HTMLElement.prototype.getBoundingClientRect;
+    const width = window.innerWidth;
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      const r = this.classList.contains("kl-tip") && !this.classList.contains("kl-tip-end") ? width + 40 : 100;
+      return { right: r, left: r - 100, top: 0, bottom: 10, width: 100, height: 10, x: r - 100, y: 0, toJSON() {} } as DOMRect;
+    };
+    try {
+      const { container } = render(<Term tip="A sentence">near the edge</Term>);
+      fireEvent.click(container.querySelector("button.kl-term")!);
+      expect(container.querySelector(".kl-tip")!.classList.contains("kl-tip-end")).toBe(true);
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = orig;
+    }
+    const fits = render(<Term tip="A sentence">in the middle</Term>);
+    fireEvent.click(fits.container.querySelector("button.kl-term")!);
+    expect(fits.container.querySelector(".kl-tip")!.classList.contains("kl-tip-end")).toBe(false);
+  });
+
+  it("r2: the remaining bare confidence words and engine jargon carry their gloss", () => {
+    const read = (...p: string[]) => readFileSync(join("src", ...p), "utf8");
+    // the interview's level chip ("MEASURED") is the shared vocabulary → the shared hint
+    expect(read("surfaces", "HomeInterview.tsx")).toMatch(
+      /<Term tip=\{t\(confidenceHintKey\(wordFromFinding\(finding\.level\)\)\)\}>\{finding\.levelLabel\}<\/Term>/,
+    );
+    // the bench's "· Unknown" / "· Measured" / "Expected": every confidence word goes through BenchWord
+    const bench = read("surfaces", "ExperimentBench.tsx");
+    expect(bench).toMatch(/<Term tip=\{t\(confidenceHintKey\(word\)\)\}>\{t\(confidenceWordKey\(word\)\)\}<\/Term>/);
+    expect(bench).not.toContain("confidenceCopy");
+    expect(bench.match(/<BenchWord /g)?.length).toBe(3);
+    // pattern sentences and the bench's noise fine print say "1% low" / "noise floor"
+    const patterns = read("surfaces", "blackbook", "PatternsTile.tsx");
+    expect(patterns).toContain("{withTerms(p.detail)}");
+    expect(patterns).toContain("{withTerms(p.title)}");
+    expect(read("surfaces", "ExperimentBench.tsx")).toMatch(/data-testid="exp-summary-noise">\s*\{withTerms\(/);
   });
 
   it("the Care receipt no longer repeats the step as its id", () => {

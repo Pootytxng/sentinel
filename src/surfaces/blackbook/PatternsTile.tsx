@@ -1,4 +1,5 @@
 import { ConfidenceWord } from "../../design/ConfidenceWord";
+import { withTerms } from "../../design/with-terms";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
@@ -31,14 +32,15 @@ function PatternCard({ p, expert }: { p: SessionPattern; expert: boolean }) {
     <div className={`bpt-card bpt-conf-${p.confidence}`}>
       <div className="bpt-card-head">
         <div className="bpt-card-titles">
-          <span className="bpt-card-title">{p.title}</span>
+          <span className="bpt-card-title">{withTerms(p.title)}</span>
           {p.game && <span className="bpt-card-game">{prettyGameName(p.game) || p.game}</span>}
         </div>
         <span className="bpt-card-conf">
           <ConfidenceWord band={p.confidence} />
         </span>
       </div>
-      <p className="bpt-card-detail">{p.detail}</p>
+      {/* Self-review r2 2026-10-28 (P7-jargon): engine sentences carry "1% low" / "noise floor". */}
+      <p className="bpt-card-detail">{withTerms(p.detail)}</p>
       {hasWorking && (
         <button
           type="button"

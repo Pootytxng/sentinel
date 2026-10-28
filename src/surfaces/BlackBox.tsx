@@ -17,6 +17,7 @@ import type {
 } from "../types";
 import { resolutionFor, type HelpMark, type IncidentResolution } from "../data/blackbox-resolution";
 import { StutterCompare } from "./StutterCompare";
+import { peekStutterArrival } from "./care-arrival";
 import { SinceLastWorked } from "./SinceLastWorked";
 import { eventText } from "./event-text";
 import { writeLedger } from "../data/ledger-write";
@@ -74,6 +75,10 @@ export function BlackBox({
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stutter, setStutter] = useState<StutterResult | null>(null);
+  // Self-review r2 2026-10-28 (P7-route): a user who said "it stutters" came for the comparison, not
+  // the crash list. Read (not take) the arrival before StutterCompare's mount clears it, and put the
+  // comparison first for this visit; a crash scan loading above it pushed the answer far down.
+  const [stutterFirst] = useState(peekStutterArrival);
 
   const scan = () => {
     setScanning(true);
@@ -189,6 +194,10 @@ export function BlackBox({
     !scanning &&
     !report.incidents.some((i) => i.incident_id === selectedIncidentId);
 
+  // P6-stutter: a stutter or slowdown rarely leaves a crash record, so the same view also compares
+  // the latest session with its last good one (StutterCompare.tsx). First on a stutter arrival.
+  const stutterCompare = <StutterCompare onResult={setStutter} hideNextAction={careStep?.source === "stutter"} />;
+
   return (
     <div className="bb">
       <p className="bb-intro">
@@ -212,6 +221,8 @@ export function BlackBox({
       <CareHonestEnd
         end={honestEndFor(careStep, shownIncidents, { admin: skips.admin.length, other: skips.other.length }, stutter)}
       />
+
+      {stutterFirst && stutterCompare}
 
       <button className="bb-scan cmp-door" onClick={scan} disabled={scanning}>
         {scanning
@@ -276,9 +287,7 @@ export function BlackBox({
 
       <SinceLastWorked report={scanning ? null : report} />
 
-      {/* P6-stutter: a stutter or slowdown rarely leaves a crash record, so the same view also
-          compares the latest session with its last good one (StutterCompare.tsx). */}
-      <StutterCompare onResult={setStutter} hideNextAction={careStep?.source === "stutter"} />
+      {!stutterFirst && stutterCompare}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 // Side-effect import: guarantees the i18next instance is initialized before this file's t() calls run.
 import "../i18n";
@@ -46,6 +46,21 @@ export function Term({
   };
   useEffect(() => cancelClose, []); // never fire a close after unmount
 
+  // Self-review r2 2026-10-28: a start-anchored tooltip near the window's right edge was cut off and
+  // added a horizontal scrollbar. Measure once it opens and flip it to end-anchored when it would
+  // spill past the viewport. The flip resets on close, so a moved trigger is measured afresh.
+  const tipRef = useRef<HTMLSpanElement | null>(null);
+  const [flipEnd, setFlipEnd] = useState(false);
+  useLayoutEffect(() => {
+    if (!open) {
+      setFlipEnd(false);
+      return;
+    }
+    const el = tipRef.current;
+    if (!el || align === "end" || flipEnd) return;
+    if (el.getBoundingClientRect().right > window.innerWidth - 8) setFlipEnd(true);
+  }, [open, align, flipEnd]);
+
   const what = tip || (entry && entry.type === "term" ? entry.what : null);
   if (!what) return <>{children}</>;
 
@@ -84,7 +99,12 @@ export function Term({
         {children}
       </button>
       {open && (
-        <span className={`kl-tip${align === "end" ? " kl-tip-end" : ""}`} role="tooltip" id={tipId}>
+        <span
+          ref={tipRef}
+          className={`kl-tip${align === "end" || flipEnd ? " kl-tip-end" : ""}`}
+          role="tooltip"
+          id={tipId}
+        >
           <span className="kl-tip-what">{what}</span>
           {id && !tip && (
             <button

@@ -737,9 +737,10 @@ export function LabConsole({
                   dimmed={careFocus?.kind === "away"}
                 />
               </div>
-              {careRigNote}
               <ReticleCursor scopeRef={stageRef} />
             </div>
+            {/* Self-review r2 2026-10-28: the note sits under the stage, never on its floor grid. */}
+            {careRigNote}
             {/* THE APPROVED RHYTHM (2026-08-27, Codex REJECT of 9bef1cc2). Four cells: ARC, NUMERAL,
                 NUMERAL, ARC — and under each, exactly ONE supporting line. The rejected build drew
                 four heavy rings and stacked a unit line AND a stamp AND a gloss under every one of
@@ -1089,9 +1090,9 @@ export function LabConsole({
                   dimmed={careFocus?.kind === "away"}
                 />
               </div>
-              {careRigNote}
               <ReticleCursor scopeRef={stageRef} />
             </div>
+            {careRigNote}
           </BentoTile>
           <BentoTile span="half" title={t("lab.labConsole.tiles.manual")}>
             <div className="lc-manual">
