@@ -1544,13 +1544,12 @@ describe("ExperimentBench — Maximum FPS, and Smoothest held", () => {
     const rs = readFileSync("src-tauri/src/experiment.rs", "utf8");
     const tsx = readFileSync("src/surfaces/ExperimentBench.tsx", "utf8");
     expect(tsx).toContain('const OUTCOME_OPTIONS = ["recommended", "max-fps", "smoothest"] as const;');
-    // What the backend starts with, and the one it refuses.
+    // What the backend starts with. Smoothest is read there and admitted only for a game whose frame
+    // pacing is measured (P4-smooth-offer-a); the bench still holds it until it reads that (-b).
     expect(rs).toContain('None | Some("recommended") => Ok(TrialOutcome::Recommended),');
     expect(rs).toContain('Some("max-fps") => Ok(TrialOutcome::MaxFps),');
-    expect(rs).toContain('Some("smoothest") => Err(format!("experiment not started — {SMOOTHEST_UNAVAILABLE}")),');
-    // The disabled line says what the backend's refusal says.
-    const en = (await import("../i18n/locales/en/lab.json")).default as { experimentBench: Record<string, unknown> };
-    expect(rs).toContain(`"${en.experimentBench.outcomeSmoothestUnavailable}"`);
+    expect(rs).toContain('Some("smoothest") => Ok(TrialOutcome::Smoothest),');
+    expect(rs).toContain("let evidence = smoothest_admission(history.is_ok(), pacing.as_ref(), ratio)");
   });
 
   const judged = (verdict: string, low: number, avg: number) => ({
