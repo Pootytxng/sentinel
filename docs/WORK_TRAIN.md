@@ -495,7 +495,16 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       wording softened), all taken. BLOCKED on real data (re-check when the owner has it): P7-severity,
       P7-depth-verdicts, P7-teach, P4-smooth-offer-b (its held state passed). The "Aniimo header on a
       Wardogs debrief" note was not reproduced: the captured outline shows an Aniimo session throughout.
-      Re-review of the fixed items owed on the next desk build.
+      Round 2 (desk build `ed2de634`): P7-depth PASS; FAIL on clipped tooltips at the right edge, the
+      stutter answer ~27,500px down under a loading crash scan, the rig note still on the stage floor, and
+      a few unglossed words -> fixed in `dfd8f90c` (fix `7682027d`): Term flips end-anchored when it would
+      spill, a stutter arrival renders the comparison first, the note sits under the stage, the interview
+      level chip and every bench confidence word glossed. Round 3 (`dfd8f90c`): all PASS except bench
+      noise-floor sentences -> `e6db699e` (fix `504dbbe3`). Kept unglossed by decision: delta labels
+      ("After, 1% low") and the Home MEASURED provenance stamps (technical-layer measurement chrome).
+      Desk build `e6db699e` installed. Round 4 verdict: "OVERALL: PASS, except the per-row footnote half
+      of (a), which is BLOCKED because no such row exists here" (shared noise line, Lab gauge, tooltip
+      flip, rig note, stutter-first, bench words all PASS). Evidence `C:\Users\Kuya\code\_train\review\r4\`.
 - [ ] **P7-exit-proof** (owner, FULL) The friend goes from Home to an answer on "more FPS", "it stutters" and
       "it crashed" without asking what a word means; the owner opens the technical layer on each and finds the
       exact setting, measurement and source. Record in BACKLOG as the Phase 7 exit. Needs P7-route through
@@ -623,7 +632,9 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
   Gate r30 caught two expected misses (a named census retirement, a test reading the old chip); r31 green
   (526 files / 9448 passed), cargo 1661 passed, clippy clean. Lessons: a gate-launch wrapper's array args
   do not survive `-File`, call it with `&`; keep vitest log filters to summary lines (a loose "fail" regex
-  matches hundreds of test names).
+  matches hundreds of test names). Review rounds 2-4 drove `dfd8f90c` and `e6db699e` (gates r32, r33 green,
+  526 files / 9453 passed); round 4 PASS. Lesson: a scroll-into-view fix loses to content loading above
+  it - put the answer first instead. Installed `e6db699e`, pushed after.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)

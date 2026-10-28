@@ -4,6 +4,12 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-10-28 - the ed2de634 desk row (P7 visual-review fixes, round 1), moved verbatim
+
+Superseded the same morning by the e6db699e desk build (review rounds 2 and 3). Moved verbatim; it has no links.
+
+| **Owner-installed version + embedded stamp** | **0.9.26 desk build, embedded stamp `ed2de634`** - built 2026-10-28 (about 06:30 local) from `main` itself at `ed2de634` (the P7 visual-review fixes `547fd2a1` plus gate repair `ed2de634`; full desk gate r31 green: tsc 0, vitest 526 files / 9448 passed; cargo 1661 passed, clippy clean), in the main checkout, via `npm run tauri build -- --config` with `bundle.createUpdaterArtifacts=false` for this build only (no updater signing key in this session; desk-only build, never published) then `scripts/ship-reinstall.ps1 -NoLaunch`. Installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`F388AA1D87991479622319C1537CA9DA03358F868AD7B3B3C67F4C8EBD8C772D`**, the only installer on the Desktop. **Live == build proved by the embedded stamp in the installed exe** (`%LOCALAPPDATA%\Compy\compy.exe` contains `ed2de634`; runtime CDP proof not run - no launch); installed version 0.9.26. Installed by Claude + LIVE; supersedes `a33ff51c`. **Visible delta vs `a33ff51c`:** confidence words are the shared glossed vocabulary everywhere (no raw "medium confidence"); "1% lows" and "noise floor" are glossed in headlines; the Care rig note no longer covers the rig; the crash receipt drops its Step-id row; a crash in a Windows host process (RUNDLL32, svchost, ...) advises updating Windows and the program that was starting instead of verifying game files; the stutter comparison scrolls its answer into view. Visual re-review of those fixes in progress. | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern ed2de634` · HKCU uninstall `DisplayVersion` — **both from a non-containerized session only** (a packaged host sees `%LOCALAPPDATA%`/`HKCU` through an overlay) |
+
 ### 2026-10-28 - the a33ff51c desk row (P7 teach/palette/rig, P4-smooth-offer, #618), moved verbatim
 
 Superseded by the ed2de634 desk build (P7 visual-review fixes). Moved verbatim; it has no links.
