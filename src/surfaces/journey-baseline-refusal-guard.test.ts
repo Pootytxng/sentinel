@@ -63,7 +63,7 @@ describe("the journey's baseline-refusal match is pinned to experiment.rs", () =
   });
 
   it("the start's other refusals never read as a baseline refusal", () => {
-    const others = ["pre_apply_refusal", "unverified_start_refusal", "start_outcome", "start_experiment", "smoothest_admission"].flatMap(literals);
+    const others = ["pre_apply_refusal", "unverified_start_refusal", "start_outcome", "start_experiment", "smoothest_admission", "smoothest_held_message"].flatMap(literals);
     expect(others.length).toBeGreaterThan(5);
     for (const w of others) expect(refusesBaseline(w), w).toBe(false);
   });

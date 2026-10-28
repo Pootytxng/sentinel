@@ -1375,6 +1375,7 @@ pub fn run() {
             experiment::get_experiments,
             experiment::simulate_optimization,
             experiment::start_experiment,
+            experiment::get_smoothest_readiness,
             experiment::conclude_experiment,
             experiment::restore_experiment,
             experiment::apply_outcome_choice,

@@ -63,17 +63,36 @@ type Treatment = {
 };
 
 /** P4-maxfps-smooth: what the user asked a Trial to aim for (experiment.rs `TrialOutcome`, its serde
- *  names). Smoothest is shown but not offered: Compy doesn't measure frame pacing precisely enough
- *  yet, and the backend refuses it (`start_outcome`). */
-type TrialOutcome = "recommended" | "max-fps";
+ *  names). P4-smooth-offer-b: Smoothest is offered only from a session the backend says it can judge
+ *  (`get_smoothest_readiness`, the start's own check); otherwise it is listed disabled with what is
+ *  missing beside the picker. */
+type TrialOutcome = "recommended" | "max-fps" | "smoothest";
 
 const OUTCOME_KEY: Record<TrialOutcome, string> = {
   recommended: "recommended",
   "max-fps": "maxFps",
+  smoothest: "smoothest",
 };
 
-/** The picker's entries, in order. Smoothest is listed disabled, with its reason beside the picker. */
+/** The picker's entries, in order. */
 const OUTCOME_OPTIONS = ["recommended", "max-fps", "smoothest"] as const;
+
+/** Why Smoothest can't start from a session yet (experiment.rs `SmoothestHeld`, serde names). */
+type SmoothestHeld = "history-unread" | "unmeasured" | "no-start-pacing";
+const SMOOTHEST_HELD_KEY: Record<SmoothestHeld, string> = {
+  "history-unread": "historyUnread",
+  unmeasured: "unmeasured",
+  "no-start-pacing": "noStartPacing",
+};
+/** experiment.rs `SmoothestReadiness`: `held` null = Smoothest can start from that session. */
+type SmoothestReadiness = { held: SmoothestHeld | null; min_sessions: number };
+
+/** P4-smooth-offer-b: the pacing change a Smoothest row was judged on, as experiment.rs
+ *  `with_smoothest_outcome` takes it (a % of the lower ratio, to 0.1). null when either is missing. */
+export function pacingDeltaPct(start: number | null | undefined, after: number | null | undefined): number | null {
+  if (start == null || after == null || !(start > 0) || !(after > 0) || !isFinite(start) || !isFinite(after)) return null;
+  return Math.round(((after - start) / Math.min(after, start)) * 1000) / 10;
+}
 
 /** §11 — the credible-noise band a verdict was judged against. Present only when it really was. */
 type NoiseEvidence = {
@@ -147,6 +166,8 @@ type Experiment = {
   session_pairing?: SessionPairing | null;
   /** P4-maxfps-smooth: the outcome picked at start. Absent on older records, which read as Recommended. */
   outcome?: TrialOutcome | null;
+  /** P4-smooth-offer: what a Smoothest Trial was judged on (experiment.rs `SmoothestEvidence`). */
+  smoothest?: { band_pct: number; start_ratio: number; after_ratio?: number | null } | null;
 };
 
 type SimulatorReport = {
@@ -325,6 +346,16 @@ function isUsableReading(s: SessionSummary): boolean {
   );
 }
 
+/** The honest baseline: the most recent monitored session with a real frame-rate reading and a known
+ *  game (the backend refuses anything less). */
+function latestUsableReading(sessions: SessionSummary[]): SessionSummary | null {
+  return (
+    [...sessions]
+      .filter(isUsableReading)
+      .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())[0] ?? null
+  );
+}
+
 // Trial Protocol §2: the backend's baseline grade, shared with the guided journey (baseline-grade.ts).
 
 // §2 the record's own baseline grade, said on its receipt (the running panel and its history row):
@@ -355,10 +386,36 @@ function afterReceipt(x: Experiment, t: Translate): string | null {
 function comparedReceipt(x: Experiment, t: Translate): string | null {
   const avg = x.treatment?.delta_avg_pct;
   const band = x.noise_evidence?.band_pct;
-  if (!looksJudged(x) || !x.treatment || avg == null || band == null) return null;
+  if (!looksJudged(x) || !x.treatment || band == null) return null;
   const signed = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 10) / 10}`;
   const low = x.treatment.delta_low1_pct;
   const one = (v: number) => String(Math.round(v * 10) / 10);
+  // P4-smooth-offer-b: a Smoothest row leads with frame pacing, on its own band, beside the 1% low.
+  if (x.outcome === "smoothest") {
+    const ev = x.smoothest;
+    const pacing = pacingDeltaPct(ev?.start_ratio, ev?.after_ratio);
+    const rule =
+      x.verdict === "improved"
+        ? "receiptRuleSmoothKept"
+        : x.verdict === "regressed"
+          ? pacing != null && ev && pacing > ev.band_pct
+            ? "receiptRuleSmoothUneven"
+            : "receiptRuleLowFell"
+          : pacing == null
+            ? "receiptRuleSmoothUnknown"
+            : "receiptRuleSmoothInside";
+    if (pacing == null || !ev) {
+      return t("lab.experimentBench.receiptComparedSmoothestUnknown", { low: signed(low), band: one(band), rule: t(`lab.experimentBench.${rule}`) });
+    }
+    return t("lab.experimentBench.receiptComparedSmoothest", {
+      pacing: signed(pacing),
+      pacingBand: one(ev.band_pct),
+      low: signed(low),
+      band: one(band),
+      rule: t(`lab.experimentBench.${rule}`),
+    });
+  }
+  if (avg == null) return null;
   // P4-maxfps-smooth: a Maximum FPS row leads with the average.
   if (x.outcome === "max-fps") {
     const rule =
@@ -681,6 +738,23 @@ export default function ExperimentBench({
     if (a === "journey") el.querySelector<HTMLElement>("button:not([disabled])")?.focus({ preventScroll: true });
   });
 
+  // P4-smooth-offer-b: whether Smoothest can start from the session a Trial would start from, asked
+  // of the start's own check. Until it answers, or when it can't, Smoothest isn't offered.
+  const smoothFrom = latestUsableReading(sessions)?.started_at ?? null;
+  const [smoothReady, setSmoothReady] = useState<{ from: string; r: SmoothestReadiness | null } | null>(null);
+  useEffect(() => {
+    if (!gate || !smoothFrom) return;
+    let live = true;
+    invoke<SmoothestReadiness>("get_smoothest_readiness", { baselineSessionId: smoothFrom })
+      .then((r) => live && setSmoothReady({ from: smoothFrom, r }))
+      .catch(() => live && setSmoothReady({ from: smoothFrom, r: null }));
+    return () => {
+      live = false;
+    };
+  }, [gate, smoothFrom]);
+  const smoothAnswer = smoothReady && smoothReady.from === smoothFrom ? smoothReady : null;
+  const smoothestOpen = smoothAnswer?.r?.held === null;
+
   if (!gate) return null;
 
   const running = experiments.find((x) => x.status === "running") ?? null;
@@ -689,10 +763,7 @@ export default function ExperimentBench({
   // The honest baseline: the most recent monitored session with a real frame-rate reading and a known
   // game (the backend refuses anything less). The experiment locks to that game. No sessions → we
   // cannot invent a baseline; the owner plays one monitored session first.
-  const baseline =
-    [...sessions]
-      .filter(isUsableReading)
-      .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())[0] ?? null;
+  const baseline = latestUsableReading(sessions);
 
   // §11 notes for the past experiments. Every sentence is said once per list, however many rows it
   // covers — the same sentence down the rows buries the rows it describes (C-11). When every judged
@@ -910,7 +981,7 @@ export default function ExperimentBench({
     try {
       if (pick === c.keepOutcome) {
         const better = experiments.find(
-          (x) => x.id === c.keepTrialId && x.rec_id === c.recId && x.verdict === "improved" && (x.outcome === "max-fps" ? "max-fps" : "recommended") === pick,
+          (x) => x.id === c.keepTrialId && x.rec_id === c.recId && x.verdict === "improved" && x.outcome !== "smoothest" && (x.outcome === "max-fps" ? "max-fps" : "recommended") === pick,
         );
         if (!better) return; // no Trial judged it Better under this outcome: there is no keep
         // P5-outcomes-f1: the same audited apply, and the ledger row records which Trial justified
@@ -940,7 +1011,7 @@ export default function ExperimentBench({
   const SIM_VERDICT = simVerdictCopy(t);
   const simMeta = sim ? SIM_VERDICT[sim.verdict] ?? { label: sim.verdict, blocked: false } : null;
   const grade = baseline ? gradeBaseline(baseline) : null;
-  const canStart = !!sim && !!simMeta && !simMeta.blocked && !!baseline && grade?.kind !== "too-short" && !busy && !ledgerBusy;
+  const canStart = !!sim && !!simMeta && !simMeta.blocked && !!baseline && grade?.kind !== "too-short" && !busy && !ledgerBusy && (outcome !== "smoothest" || smoothestOpen);
 
   // Bento conversion (2026-08-12). span="full" is FORCED, not a taste call: this component can
   // return null (the dark experiment gate above) and this file declares no grid of its own, so
@@ -976,7 +1047,7 @@ export default function ExperimentBench({
           game={pickGame}
           change={journeyChange ? { id: journeyChange.id, title: journeyChange.title, retest: journeyChange.retest } : null}
           canStart={!busy && !running && !ledgerBusy}
-          outcome={outcome}
+          outcome={outcome === "smoothest" ? "recommended" : outcome}
           onOutcome={setOutcome}
           next={journeyNext}
           nextReuses={journey.kind === "result" && reusableAsIs(sessions, journey.asIs, journey.exp.game) != null}
@@ -1227,19 +1298,25 @@ export default function ExperimentBench({
                       value={outcome}
                       disabled={busy}
                       onChange={(v) => setOutcome(v as TrialOutcome)}
-                      options={OUTCOME_OPTIONS.map((o) =>
-                        o === "smoothest"
-                          ? { value: o, label: t("lab.experimentBench.outcome.smoothest"), disabled: true }
-                          : { value: o, label: t(`lab.experimentBench.outcome.${OUTCOME_KEY[o]}`) },
-                      )}
+                      options={OUTCOME_OPTIONS.map((o) => ({
+                        value: o,
+                        label: t(`lab.experimentBench.outcome.${OUTCOME_KEY[o]}`),
+                        ...(o === "smoothest" && !smoothestOpen ? { disabled: true } : {}),
+                      }))}
                     />
                   </div>
                   <p className="exp-fineprint" data-testid="exp-outcome-why">
                     {t(`lab.experimentBench.outcomeWhy.${OUTCOME_KEY[outcome]}`)}
                   </p>
-                  <p className="exp-fineprint" data-testid="exp-outcome-smoothest">
-                    {t("lab.experimentBench.outcomeSmoothestUnavailable")}
-                  </p>
+                  {smoothAnswer && !smoothestOpen && (
+                    <p className="exp-fineprint" data-testid="exp-outcome-smoothest">
+                      {smoothAnswer.r?.held
+                        ? t(`lab.experimentBench.smoothestHeld.${SMOOTHEST_HELD_KEY[smoothAnswer.r.held]}`, {
+                            sessions: smoothAnswer.r.min_sessions,
+                          })
+                        : t("lab.experimentBench.smoothestHeld.unknown")}
+                    </p>
+                  )}
                   <button
                     className="exp-cta"
                     disabled={!canStart}

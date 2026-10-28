@@ -426,6 +426,14 @@ describe("follow-up: one validity rule for summary, journey and outcome switch",
     expect(beside.stop).toEqual({ measured: 1, noResult: 1, unverified: 0, stale: 0 });
   });
 
+  it("P4-smooth-offer-b: a Smoothest Trial is never one side of the Recommended / Maximum FPS trade", () => {
+    const base = sessions[0].started_at;
+    const max = { ...judged, id: "exp:x", rec_id: "hags", rec_title: "HAGS", outcome: "max-fps" as const, verdict: "no-change", kept: false, baseline_session_id: base, treatment: { delta_low1_pct: 0.5, delta_avg_pct: 0.2 }, noise_evidence: { band_pct: 3, measured_noise_pct: null } } as SummaryExperiment;
+    // Judged Better for Smoothest, newer: read as Recommended it would fake a disagreement to switch on.
+    const smooth = { ...max, id: "exp:s", outcome: "smoothest" as const, verdict: "improved", kept: true, created_at: "2099-01-01T00:00:00Z", treatment: { delta_low1_pct: 0.5, delta_avg_pct: 0 } } as SummaryExperiment;
+    expect(outcomeChoices(GAME, [max, smooth], [cand("hags", false, "already-set-by-compy")], sessions)).toEqual([]);
+  });
+
   it("§1: the outcome switch never offers a keep whose Trial ran under a changed context", () => {
     const base = sessions[0].started_at;
     const rec = { ...judged, id: "exp:r", rec_id: "hags", rec_title: "HAGS", outcome: "recommended" as const, verdict: "no-change", kept: false, baseline_session_id: base, treatment: { delta_low1_pct: 0.5, delta_avg_pct: 0.2 }, noise_evidence: { band_pct: 3, measured_noise_pct: null } } as SummaryExperiment;

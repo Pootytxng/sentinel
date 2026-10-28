@@ -630,6 +630,9 @@ const outcomeOf = (x: SummaryExperiment): ResultOutcome => (x.outcome === "max-f
 /** The reason a measured Trial gives, by its outcome's own rule (experiment.rs
  *  `with_recommended_outcome` / `with_max_fps_outcome`). */
 function resultOf(x: SummaryExperiment): OutcomeResult | null {
+  // P4-smooth-offer-b: a Smoothest Trial is judged on frame pacing, a third rule; it is not one side of
+  // the Recommended / Maximum FPS trade, so it is never a result here (and never read as Recommended).
+  if (x.outcome === "smoothest") return null;
   const band = x.noise_evidence?.band_pct;
   const low = x.treatment?.delta_low1_pct;
   if (!x.verdict || !MEASURED_VERDICTS.has(x.verdict) || band == null || low == null) return null;
