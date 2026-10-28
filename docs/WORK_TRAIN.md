@@ -518,8 +518,9 @@ barred tweaks (HPET, bcdedit, core parking, registry hacks) and the palette find
 each change's risk word. New capabilities wait for the owner and the Phase 4 exit proof.
 - [ ] **P8-posture-a** (Rust) `trial_candidates::screen` takes the user's risk choice: "Low risk only"
       (catalog `safe`) or "Low and moderate" (today's behaviour, the default). A moderate change under "Low
-      risk only" is left out with a new `SkipReason::OutsideChosenRisk`; an unknown severity is left out
-      under both until the catalog states it. Pure unit tests; one review round. RISK_MODEL §2.
+      risk only" is left out with a new `SkipReason::OutsideChosenRisk`; so is an unknown severity (it
+      can't be shown to be low). The default leaves nothing out (every live catalog row states safe or
+      moderate). Pure unit tests; one review round. RISK_MODEL §2.
 - [ ] **P8-posture-b** (TS) The Trial picker asks once, "How far may Compy go on this PC?", saves the
       choice, sends it to the candidate read, and the "why not listed" row says "Outside the risk you
       chose" (en + zh-CN). The guided journey's next pick uses the same list. Needs P8-posture-a.

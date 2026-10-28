@@ -29,6 +29,11 @@
 //!      time doesn't split ties: the catalog has no per-change test time, and every Trial is the
 //!      same one baseline session plus one session with the change.
 //!   6. interactions — not grouped: the catalog records no interaction or conflict between changes.
+//!
+//! P8-posture-a (RISK_MODEL §2): last of all, the user's [`RiskChoice`]. "Low risk only" leaves a
+//! change the catalog doesn't call `safe` out as "outside the risk you chose"; "Low and moderate",
+//! the default, leaves nothing out (today's behaviour). It reads only `severity`; it adds no
+//! change and applies nothing.
 
 use serde::Serialize;
 use serde_json::Value;
@@ -65,6 +70,31 @@ pub(crate) enum SkipReason {
     /// §3.5: the catalog's stated effect is no bigger than this game's measured between-session
     /// band, so a Trial couldn't tell it from noise ("too small to measure here").
     TooSmallToMeasureHere,
+    /// RISK_MODEL §2: the change's catalog risk is more than the user chose to allow on this PC.
+    OutsideChosenRisk,
+}
+
+/// How far the user lets Compy go on this PC (RISK_MODEL §2 posture), applied to the catalog's
+/// `severity`. Defaults to today's behaviour.
+#[derive(Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum RiskChoice {
+    /// Only changes the catalog calls `safe`. An unknown severity is left out: it can't be shown
+    /// to be low.
+    LowOnly,
+    /// `safe` and `moderate` (what the picker offered before the choice existed). An unknown
+    /// severity stays listed as before; the picker shows its risk as unknown.
+    #[default]
+    LowAndModerate,
+}
+
+impl RiskChoice {
+    fn allows(self, risk: Risk) -> bool {
+        match self {
+            Self::LowOnly => risk == Risk::Low,
+            Self::LowAndModerate => true,
+        }
+    }
 }
 
 /// How strong the catalog's evidence is that the change helps (`provenance`). Variant order is the
@@ -182,9 +212,17 @@ impl WhoSetIt {
     }
 }
 
-/// One change through §3.1–3.3 and §3.5. `band_pct` is this game's measured between-session band,
-/// `None` when it isn't measured. Pure.
-pub(crate) fn screen(entry: &CatalogEntry, appliable: bool, who: &WhoSetIt, band_pct: Option<f64>) -> TrialCandidate {
+/// One change through §3.1–3.3, §3.5 and the user's risk choice (checked last, so a change that
+/// fails an earlier filter keeps that more specific reason). `band_pct` is this game's measured
+/// between-session band, `None` when it isn't measured. Pure.
+pub(crate) fn screen(
+    entry: &CatalogEntry,
+    appliable: bool,
+    who: &WhoSetIt,
+    band_pct: Option<f64>,
+    choice: RiskChoice,
+) -> TrialCandidate {
+    let risk = Risk::of(entry.severity);
     let stated = entry.stated_effect_pct.filter(|e| e.is_finite() && *e > 0.0);
     let too_small = match (stated, band_pct.filter(|b| b.is_finite() && *b > 0.0)) {
         (Some(effect_pct), Some(band_pct)) if effect_pct <= band_pct => Some(EffectVsBand { effect_pct, band_pct }),
@@ -201,6 +239,8 @@ pub(crate) fn screen(entry: &CatalogEntry, appliable: bool, who: &WhoSetIt, band
         (Some(SkipReason::NoSafeApply), None)
     } else if too_small.is_some() {
         (Some(SkipReason::TooSmallToMeasureHere), None)
+    } else if !choice.allows(risk) {
+        (Some(SkipReason::OutsideChosenRisk), None)
     } else {
         (None, None)
     };
@@ -213,7 +253,7 @@ pub(crate) fn screen(entry: &CatalogEntry, appliable: bool, who: &WhoSetIt, band
         detail,
         position: None,
         evidence: Evidence::of(entry.provenance),
-        risk: Risk::of(entry.severity),
+        risk,
         stated_effect_pct: stated,
     }
 }
@@ -247,6 +287,7 @@ pub(crate) fn screen_catalog(
     appliable: &dyn Fn(&str) -> bool,
     who: &WhoSetIt,
     band_pct: Option<f64>,
+    choice: RiskChoice,
 ) -> Vec<TrialCandidate> {
     let Some(rows) = catalog.as_array() else { return Vec::new() };
     let screened = rows
@@ -264,7 +305,7 @@ pub(crate) fn screen_catalog(
                 severity: r.get("severity").and_then(Value::as_str),
                 stated_effect_pct: stated_effect(r),
             };
-            Some(screen(&entry, appliable(id), who, band_pct))
+            Some(screen(&entry, appliable(id), who, band_pct, choice))
         })
         .collect();
     rank(screened)
@@ -373,9 +414,10 @@ fn read_gaming_mode() -> Option<(HashSet<String>, bool)> {
     }
 }
 
-/// Every catalog change with its pass/fail for the Trial picker. Read-only.
+/// Every catalog change with its pass/fail for the Trial picker, under the user's risk choice
+/// (`riskChoice` from the UI; absent = [`RiskChoice::default`], today's behaviour). Read-only.
 #[tauri::command]
-pub(crate) fn get_trial_candidates() -> Vec<TrialCandidate> {
+pub(crate) fn get_trial_candidates(risk_choice: Option<RiskChoice>) -> Vec<TrialCandidate> {
     let catalog = serde_json::to_value(crate::recommendations::get_recommendations()).unwrap_or(Value::Null);
     let (ledger_on, ledger_cant_confirm) = match read_ledger() {
         Some((on, cant)) => (Some(on), cant),
@@ -388,7 +430,7 @@ pub(crate) fn get_trial_candidates() -> Vec<TrialCandidate> {
     let who = WhoSetIt { ledger_on, ledger_cant_confirm, gaming_mode, gaming_mode_restore_unfinished };
     // The band is only read when some change states an effect size to hold against it.
     let band = if any_stated_effect(&catalog) { crate::experiment::next_trial_measured_band_pct() } else { None };
-    screen_catalog(&catalog, &crate::history::is_appliable, &who, band)
+    screen_catalog(&catalog, &crate::history::is_appliable, &who, band, risk_choice.unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -409,7 +451,7 @@ mod tests {
         }
     }
     fn scr(e: &CatalogEntry, appliable: bool, w: &WhoSetIt) -> TrialCandidate {
-        screen(e, appliable, w, None)
+        screen(e, appliable, w, None, RiskChoice::default())
     }
     fn set(ids: &[&str]) -> Option<HashSet<String>> {
         Some(ids.iter().map(|s| s.to_string()).collect())
@@ -601,7 +643,7 @@ mod tests {
             { "id": "hdr-advisory", "title": "HDR", "eligible": true, "currently_applied": false },
         ]);
         let appliable = |id: &str| crate::history::is_appliable(id);
-        let out = screen_catalog(&catalog, &appliable, &nobody(), None);
+        let out = screen_catalog(&catalog, &appliable, &nobody(), None, RiskChoice::default());
         assert_eq!(out.len(), 3, "every catalog change gets an answer, none dropped");
         let by = |id: &str| out.iter().find(|c| c.id == id).unwrap();
         assert_eq!(by("game-bar-disable").reason, Some(SkipReason::AlreadySet));
@@ -622,7 +664,7 @@ mod tests {
     #[test]
     fn missing_eligible_defaults_to_eligible_and_bad_rows_are_skipped() {
         let catalog = json!([{ "id": "game-mode", "currently_applied": false }, { "title": "no id" }]);
-        let out = screen_catalog(&catalog, &|_| true, &nobody(), None);
+        let out = screen_catalog(&catalog, &|_| true, &nobody(), None, RiskChoice::default());
         assert_eq!(out.len(), 1);
         assert!(out[0].passes);
         assert_eq!(out[0].title, "game-mode");
@@ -646,7 +688,7 @@ mod tests {
             ranked_entry("e-measured-safe", "measured-signal", "safe"),
             ranked_entry("f-unknown", "something-new", "high"),
         ]);
-        let out = screen_catalog(&catalog, &|_| true, &nobody(), None);
+        let out = screen_catalog(&catalog, &|_| true, &nobody(), None, RiskChoice::default());
         let order: Vec<(&str, Option<u32>)> = out.iter().map(|c| (c.id.as_str(), c.position)).collect();
         assert_eq!(
             order,
@@ -672,29 +714,29 @@ mod tests {
     fn too_small_to_measure_needs_a_stated_effect_and_a_measured_band() {
         let mut e = entry("visual-effects", true, false);
         // No stated effect, measured band: kept, effect unknown.
-        let c = screen(&e, true, &nobody(), Some(4.0));
+        let c = screen(&e, true, &nobody(), Some(4.0), RiskChoice::default());
         assert!(c.passes);
         assert_eq!(c.stated_effect_pct, None);
         // Stated effect inside the band: left out, with both numbers.
         e.stated_effect_pct = Some(3.0);
-        let c = screen(&e, true, &nobody(), Some(4.0));
+        let c = screen(&e, true, &nobody(), Some(4.0), RiskChoice::default());
         assert_eq!(c.reason, Some(SkipReason::TooSmallToMeasureHere));
         assert_eq!(c.too_small, Some(EffectVsBand { effect_pct: 3.0, band_pct: 4.0 }));
         assert_eq!(serde_json::to_value(&c).unwrap()["reason"], "too-small-to-measure-here");
         // Equal to the band can't beat it either.
-        assert_eq!(screen(&e, true, &nobody(), Some(3.0)).reason, Some(SkipReason::TooSmallToMeasureHere));
+        assert_eq!(screen(&e, true, &nobody(), Some(3.0), RiskChoice::default()).reason, Some(SkipReason::TooSmallToMeasureHere));
         // Bigger than the band: kept.
-        assert!(screen(&e, true, &nobody(), Some(2.0)).passes);
+        assert!(screen(&e, true, &nobody(), Some(2.0), RiskChoice::default()).passes);
         // Band not measured: kept, whatever the stated effect.
-        let c = screen(&e, true, &nobody(), None);
+        let c = screen(&e, true, &nobody(), None, RiskChoice::default());
         assert!(c.passes);
         assert_eq!(c.too_small, None);
         // An earlier filter's reason wins and carries no effect/band pair.
-        let c = screen(&e, false, &nobody(), Some(4.0));
+        let c = screen(&e, false, &nobody(), Some(4.0), RiskChoice::default());
         assert_eq!((c.reason, c.too_small), (Some(SkipReason::NoSafeApply), None));
         // A nonsense stated effect is unknown, not a number.
         e.stated_effect_pct = Some(f64::NAN);
-        assert!(screen(&e, true, &nobody(), Some(4.0)).passes);
+        assert!(screen(&e, true, &nobody(), Some(4.0), RiskChoice::default()).passes);
     }
 
     // The live catalog states no effect size for any change, so the band is never read and no
@@ -704,7 +746,64 @@ mod tests {
         let catalog = serde_json::to_value(crate::recommendations::get_recommendations()).unwrap();
         assert!(!any_stated_effect(&catalog));
         assert!(any_stated_effect(&json!([{ "id": "x", "expected_low1_pct": 2.5 }])));
-        let out = screen_catalog(&catalog, &|_| true, &nobody(), Some(50.0));
+        let out = screen_catalog(&catalog, &|_| true, &nobody(), Some(50.0), RiskChoice::default());
         assert!(out.iter().all(|c| c.reason != Some(SkipReason::TooSmallToMeasureHere)));
+    }
+
+    // RISK_MODEL §2: "Low risk only" keeps `safe` changes and leaves moderate and unknown ones out
+    // with their own reason; "Low and moderate" (the default) is today's behaviour.
+    #[test]
+    fn risk_choice_low_only_leaves_out_moderate_and_unknown() {
+        let mut e = entry("visual-effects", true, false);
+        let by = |e: &CatalogEntry, c: RiskChoice| screen(e, true, &nobody(), None, c);
+        for (sev, low_only_passes) in [(Some("safe"), true), (Some("moderate"), false), (None, false), (Some("odd"), false)] {
+            e.severity = sev;
+            let c = by(&e, RiskChoice::LowOnly);
+            assert_eq!(c.passes, low_only_passes, "{sev:?}");
+            assert_eq!(c.reason, (!low_only_passes).then_some(SkipReason::OutsideChosenRisk), "{sev:?}");
+            assert!(by(&e, RiskChoice::LowAndModerate).passes, "{sev:?} under the default");
+        }
+        assert_eq!(RiskChoice::default(), RiskChoice::LowAndModerate);
+        e.severity = Some("moderate");
+        let v = serde_json::to_value(by(&e, RiskChoice::LowOnly)).unwrap();
+        assert_eq!(v["reason"], "outside-chosen-risk");
+        assert_eq!(v["risk"], "moderate");
+    }
+
+    // The risk choice is checked last: a change that fails an earlier filter keeps that reason.
+    #[test]
+    fn risk_choice_never_hides_an_earlier_reason() {
+        let mut e = entry("visual-effects", false, false);
+        e.severity = Some("moderate");
+        assert_eq!(screen(&e, true, &nobody(), None, RiskChoice::LowOnly).reason, Some(SkipReason::NotForThisPc));
+        e.eligible = true;
+        assert_eq!(screen(&e, false, &nobody(), None, RiskChoice::LowOnly).reason, Some(SkipReason::NoSafeApply));
+        e.currently_applied = true;
+        assert_eq!(screen(&e, true, &nobody(), None, RiskChoice::LowOnly).reason, Some(SkipReason::AlreadySet));
+    }
+
+    // The UI sends the choice in kebab-case; a missing choice is the default.
+    #[test]
+    fn risk_choice_reads_the_ui_words() {
+        let c: RiskChoice = serde_json::from_value(json!("low-only")).unwrap();
+        assert_eq!(c, RiskChoice::LowOnly);
+        let c: RiskChoice = serde_json::from_value(json!("low-and-moderate")).unwrap();
+        assert_eq!(c, RiskChoice::LowAndModerate);
+        assert!(serde_json::from_value::<RiskChoice>(json!("aggressive")).is_err());
+        let none: Option<RiskChoice> = serde_json::from_value(json!(null)).unwrap();
+        assert_eq!(none.unwrap_or_default(), RiskChoice::LowAndModerate);
+    }
+
+    // On the live catalog, "Low risk only" lists only `safe` changes, and every change it leaves
+    // out for risk is one the default lists.
+    #[test]
+    fn live_catalog_under_low_only() {
+        let catalog = serde_json::to_value(crate::recommendations::get_recommendations()).unwrap();
+        let low = screen_catalog(&catalog, &|_| true, &nobody(), None, RiskChoice::LowOnly);
+        let all = screen_catalog(&catalog, &|_| true, &nobody(), None, RiskChoice::default());
+        assert!(low.iter().filter(|c| c.passes).all(|c| c.risk == Risk::Low));
+        for c in low.iter().filter(|c| c.reason == Some(SkipReason::OutsideChosenRisk)) {
+            assert!(all.iter().any(|a| a.id == c.id && a.passes), "{}", c.id);
+        }
     }
 }
