@@ -516,14 +516,15 @@ proven, so the first slices build the user-facing risk side of the Risk Model on
 (no new mutation, no new catalog entry). Already there, not re-queued: the Blackbook says "Refused" for the
 barred tweaks (HPET, bcdedit, core parking, registry hacks) and the palette finds them; the picker shows
 each change's risk word. New capabilities wait for the owner and the Phase 4 exit proof.
-- [ ] **P8-posture-a** (Rust) `trial_candidates::screen` takes the user's risk choice: "Low risk only"
+- [x] **P8-posture-a** — `1eeef838` (Rust) `trial_candidates::screen` takes the user's risk choice: "Low risk only"
       (catalog `safe`) or "Low and moderate" (today's behaviour, the default). A moderate change under "Low
       risk only" is left out with a new `SkipReason::OutsideChosenRisk`; so is an unknown severity (it
       can't be shown to be low). The default leaves nothing out (every live catalog row states safe or
       moderate). Pure unit tests; one review round. RISK_MODEL §2.
 - [ ] **P8-posture-b** (TS) The Trial picker asks once, "How far may Compy go on this PC?", saves the
       choice, sends it to the candidate read, and the "why not listed" row says "Outside the risk you
-      chose" (en + zh-CN). The guided journey's next pick uses the same list. Needs P8-posture-a.
+      chose" (en + zh-CN). The guided journey's next pick uses the same list; `test-summary.ts` and
+      `journey-resume.ts` must not read a risk-filtered change as "not available". Needs P8-posture-a.
 - [ ] **P8-posture-show** The Trial receipt and the game summary name the risk choice in force when each
       Trial started (stored on the experiment record; older records read "not recorded", never a guess).
       Needs P8-posture-b.
@@ -662,6 +663,9 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
   matches hundreds of test names). Review rounds 2-4 drove `dfd8f90c` and `e6db699e` (gates r32, r33 green,
   526 files / 9453 passed); round 4 PASS. Lesson: a scroll-into-view fix loses to content loading above
   it - put the answer first instead. Installed `e6db699e`, pushed after.
+- 2026-10-28 ~08:45-09:00 (scheduled, CODE-ONLY, owner playing WARDOGS): Phase 8 queue refill `fb483dd4`;
+  P8-posture-a `1eeef838` (cargo trial_candidates 20 passed, clippy clean, review r1 PASS-WITH-NITS; nit
+  folded into P8-posture-b). Not pushed - next FULL session pushes.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
