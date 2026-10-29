@@ -104,7 +104,10 @@ describe("eventText", () => {
     expect(new Set(rows.map((r) => r.parts!.kind)).size).toBe(9);
     for (const r of rows) {
       const e = ev({ event_type: r.event_type, summary: r.summary, since_rolled_back: r.since_rolled_back, parts: r.parts });
-      expect(eventText(e, t)).toBe(r.summary);
+      // P9-hz: the one deliberate difference — a display mode is worded with its unit
+      // ("2560x1440@165" → "2560×1440 @ 165 Hz"); the backend summary keeps the raw mode.
+      const worded = r.summary.replace(/(\d+)x(\d+)@(\d+)/g, (_m, w, h, hz) => `${w}×${h} @ ${hz} Hz`);
+      expect(eventText(e, t)).toBe(worded);
     }
   });
 

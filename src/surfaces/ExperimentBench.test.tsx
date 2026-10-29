@@ -1951,7 +1951,7 @@ describe("P4-exit: what Compy tested on this game", () => {
       "Judged against Compy's 3% noise floor. This game's own run-to-run noise on your PC hasn't been measured yet.",
     );
     expect(screen.getByTestId("exp-summary-context")).toHaveTextContent(
-      "WardogsClient · AMD Radeon RX 9070 XT · driver 32.0.32015.7029 · Windows build 26200.8457 · 1920x1080@250",
+      "WardogsClient · AMD Radeon RX 9070 XT · driver 32.0.32015.7029 · Windows build 26200.8457 · 1920×1080 @ 250 Hz",
     );
     // Round 4 review: this line is the LAST RECORDED context, dated, never "measured on" (whether a
     // result is current is each row's judgment against the newest session).

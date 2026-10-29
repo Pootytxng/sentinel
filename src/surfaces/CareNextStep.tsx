@@ -5,6 +5,7 @@ import type { CrashIncident, SessionSummary } from "../types";
 import { anchorFor, payoffFor, MIN_PAYOFF_SESSIONS, type CareStep, type Payoff } from "./care-next-step";
 import { CareSupportExport } from "./CareHonestEnd";
 import { Depth, ReceiptRow } from "../design/Depth";
+import { displayModeLabel } from "../data/display-mode";
 import "./CareNextStep.css";
 
 // P6-next: the ONE next step at the top of the Care view, and its measured payoff. BlackBox picks the
@@ -128,7 +129,7 @@ export function CareNextStep({
   const counted = payoff.kind === "sessions-back" || payoff.kind === "sessions-steady" || payoff.kind === "not-enough-sessions" ? String(payoff.total) : null;
   const slow = payoff.kind === "sessions-back" ? String(payoff.bad) : null;
   const base = step.source === "stutter" ? (anchor.baseline ?? step.baseline) : null;
-  const rigParts = base?.rig ? [base.rig.gpu, Number.isFinite(base.rig.ram_gb) ? `${base.rig.ram_gb} GB` : null, base.rig.display].filter((p): p is string => !!p) : [];
+  const rigParts = base?.rig ? [base.rig.gpu, Number.isFinite(base.rig.ram_gb) ? `${base.rig.ram_gb} GB` : null, displayModeLabel(base.rig.display, t)].filter((p): p is string => !!p) : [];
   const rig = rigParts.length > 0 ? rigParts.join(" · ") : null;
   return (
     <section className="bb-next" aria-label={t("gaming.blackBox.nextStep.title")} data-source={step.source}>

@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 import type { IntelEvent } from "../types";
+import { displayModeLabel } from "../data/display-mode";
 
 // P6-changed-f1: one place that words a timeline event in the viewer's language. The backend sends
 // the event's facts as data (`parts`, intelligence.rs `EventParts`) beside its English `summary`;
@@ -27,7 +28,11 @@ export function eventText(e: IntelEvent, t: TFunction): string {
       const part = (c: (typeof p.changes)[number]) => {
         if (c.part === "gpu") return t("common.timelineEvent.hardwarePart.gpu", { from: c.from, to: c.to });
         if (c.part === "ram") return t("common.timelineEvent.hardwarePart.ram", { from: c.from, to: c.to });
-        if (c.part === "display") return t("common.timelineEvent.hardwarePart.display", { from: c.from, to: c.to });
+        if (c.part === "display")
+          return t("common.timelineEvent.hardwarePart.display", {
+            from: displayModeLabel(c.from, t) ?? c.from,
+            to: displayModeLabel(c.to, t) ?? c.to,
+          });
         return null;
       };
       const changes = p.changes.map(part);
