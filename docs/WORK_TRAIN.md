@@ -664,6 +664,13 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   matches hundreds of test names). Review rounds 2-4 drove `dfd8f90c` and `e6db699e` (gates r32, r33 green,
   526 files / 9453 passed); round 4 PASS. Lesson: a scroll-into-view fix loses to content loading above
   it - put the answer first instead. Installed `e6db699e`, pushed after.
+- 2026-10-29 10:16-12:50 (interactive from Claude HQ, owner away then playing PBZ): 4 unchanged PBZ sessions
+  recorded unattended (owner-approved admin-prompt window 10:22-11:55, restored), one guided Trial
+  (too-noisy, put back), P4-show-f2 PASS, round-5 screen checks (P4-smooth-offer-b, P7-teach, P7-severity
+  PASS), noise-line copy fix `d38ef19b`, Constitution §36 `b9fe3c8b`, admin prompts left off by owner decision
+  (`4ab109f8`). Gate r34 green (526 files / 9465), cargo 1665, clippy clean; desk build `4ab109f8` installed,
+  pushed. Lesson: Compy's FPS helper needs an elevated start each session; an unattended session needs the
+  owner's prompt decision first.
 - 2026-10-28 ~08:45-09:00 (scheduled, CODE-ONLY, owner playing WARDOGS): Phase 8 queue refill `fb483dd4`;
   P8-posture-a `1eeef838` (cargo trial_candidates 20 passed, clippy clean, review r1 PASS-WITH-NITS; nit
   folded into P8-posture-b). Not pushed - next FULL session pushes.
