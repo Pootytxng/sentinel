@@ -144,6 +144,14 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       record was kept for this result" although a band was used. Find where a too-noisy / uneven-session
       conclude skips writing noise evidence (`experiment.rs` conclude paths); the record should carry the band
       it was judged against. Rust + measurement: one review. Record: `C:\Users\Kuya\code\_train\trial\result.json`.
+- [ ] **P5-realplay** (owner decision 2026-10-29, Constitution §36; ROADMAP Phase 5 "Real-play mode"; next after
+      P4-noise-evidence, ahead of the redesign) Trials must reach a verdict from normal, inconsistent play.
+      Plan before coding (one bounded Rust slice + one TS slice): a Trial may keep its change on across several
+      ordinary sessions and judge them against several ordinary sessions without it (session-level 1% low and
+      average distributions, band from between-session spread), reporting Likely / No clear difference /
+      Unknown with the confidence it earned; "too noisy" becomes "keep playing, Compy is still collecting"
+      until enough sessions exist. Measurement + rollback (the change stays on for days): Rust review, and
+      the journey must say plainly that the change is on and how to put it back.
 - [x] **P4-noise-copy** Lands with the 2026-10-24 evening log entry. "from one session to the next" → "between any two of those sessions" (en); rename
       `grade_baseline`'s `noise_floor_pct` param to `halves_floor_pct`; fix ExperimentBench.tsx:206 comment.
 - [x] **453-fix** `dce14e95`: Health, Optimize and History count one per change whose live check reads On;

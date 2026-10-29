@@ -159,7 +159,12 @@ User flow:
 
 The user never needs to know which internal setting should be tried next.
 
-**Exit:** a first-time gamer can complete an optimization journey without outside benchmarking knowledge or manual Windows-tweak research.
+**Real-play mode (Constitution §36, 2026-10-29).** Step 4 must not depend on disciplined repetition. When a
+user just plays normally, Compy keeps the change on across several ordinary sessions and compares them
+with several ordinary sessions without it (like-with-like where it can tell scenes apart), and reports the
+confidence that earned ("Likely", "No clear difference", "Unknown") instead of stopping at "too noisy".
+
+**Exit:** a first-time gamer can complete an optimization journey without outside benchmarking knowledge or manual Windows-tweak research, playing the way they normally play.
 
 ---
 
