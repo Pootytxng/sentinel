@@ -566,6 +566,30 @@ Compy succeeds when a normal user can truthfully say:
 
 That experience is the north star.
 
+## 36. Design for how people actually behave
+
+*Owner decision, 2026-10-29.* Compy is built for everyone who owns a PC, not for people who already
+benchmark carefully. Most users will not follow proper method: they play normally, inconsistently,
+impatiently, and still expect an answer. Compy treats that as the normal case, not as user error.
+
+- Every journey must still produce a useful, honest result from ordinary, imperfect use. "Play the same
+  scene for ten minutes" may be how to get a *stronger* result; it must never be the only way to get *a*
+  result.
+- When ordinary use is noisy, Compy gathers more of it (more sessions, longer windows, like-with-like
+  comparison) before it asks the user to change how they play.
+- Honest measurement still governs (§25, §26, §29): a result from messy play carries the confidence it
+  earned ("Likely", "No clear difference", "Unknown"), never borrowed certainty, and no measured
+  benefit beyond credible noise still means the current state wins.
+- When choosing between a method that is more rigorous and one that typical people will actually
+  complete, prefer the one they will complete, then make it as rigorous as the data allows.
+
+Reason and expected effect: the first owner-rig Trials (2026-10-25 Aniimo, 2026-10-29 Phantom Blade
+Zero) both ended "too noisy" because real play swings between scenes; a product that only answers
+disciplined benchmarkers answers almost no one. Expected effect: Trials that reach a verdict from
+normal play (first slice: a real-play mode that compares several normal sessions with and without a
+change). No conflict with `ARCHITECTURE_LOCKS.md`: nothing here widens privilege, mutation or outbound
+data.
+
 ---
 
 ## Constitutional anti-goals
