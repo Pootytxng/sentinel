@@ -139,9 +139,23 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       `benchmark_trial.rs` calibration. Rust unit tests. TRIAL_PROTOCOL §5, MACHINE_MODEL §4, ENGINE §10.
 - [x] **P4-noise** `f1c93f44`: verdict band = max(1% low range across >= 3 unchanged sessions, 3%);
       uneven-halves grading stays on the fixed 3% (owner). An effect inside the band reads No change.
-- [ ] **P4-noise-proof** (owner) Play 3 WARDOGS sessions >= 10 min with no Compy change, Trial or Gaming
-      Mode change between them; then confirm the receipt shows the measured band. None qualify yet.
-      2026-10-29 (owner moved it to Phantom Blade Zero, idle in the open world): 4 unchanged PBZ sessions of
+- [x] **P4-noise-proof** DONE 2026-10-29 on WARDOGS: 3 unchanged firing-range sessions 15:37-16:12 (661/634/660
+      readings, ~319 fps, 1% low 211-214), then a bench retest of visual-effects (exp:5-1793315799398, owner OK):
+      no-change, medium, restored (verified, VisualFXSetting=0); 1% low +1.6%, average +0.1%. The record's
+      `noise_evidence` carries the measured band (±21.6%, between-session, 6 sessions) and the bench line shows
+      it. Findings queued below (P4-noise-stretch, P4-noise-copy-2). Evidence `C:\Users\Kuya\code\_train\trial-wardogs\`.
+- [ ] **P4-noise-stretch** (from P4-noise-proof) WARDOGS was judged against ±21.6% from older Oct-25 play
+      (1% lows 148/136/122) although today's three idle sessions agreed within ~1.4%: the band takes the widest
+      unchanged stretch in history, so old noisy play sets the band for every later Trial. Decide with
+      P5-realplay (like-with-like scenes): which unchanged sessions describe the Trial's own conditions.
+      Measurement: Rust review.
+- [ ] **P4-noise-copy-2** "differed by up to X% between any two of those sessions" overstates it: only
+      sessions within one unchanged stretch are compared. Reword (en + zh-CN) with a test.
+- [ ] **P4-cap-note** Both WARDOGS firing-range sessions sat at ~320 fps and were flagged "may be a menu or a
+      frame cap"; a capped scene can't show a gain, so a no-change verdict there says little. Check the verdict
+      line says so when both sides are capped (copy + test).
+      Earlier the same day, P4-noise-proof's first attempt (original ask: 3 unchanged WARDOGS sessions >= 10 min,
+      then the receipt shows the measured band). 2026-10-29 (owner moved it to Phantom Blade Zero, idle in the open world): 4 unchanged PBZ sessions of
       ~11 min recorded 10:25-11:11 (661/661/661/620 readings, ~168-170 fps). A guided Trial (visual effects,
       exp:4-1793299391026) then ran: Compy measured a ±16.1% between-session band over 7 PBZ sessions, but its
       two before-sessions swung 172->132 and 132->178 fps (the character left the idle spot for a boss
@@ -547,6 +561,10 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       count) and the bench summary receipt carries deltas (P7-depth-verdicts spec). Small follow-ups noted,
       not queued: Smoothest's hypothesis text still names 1% lows; the stutter headline says "previous" while
       its header says "last steady". Evidence `C:\Users\Kuya\code\_train\review\r5\`.
+      Hurt-case check (2026-10-29, WARDOGS exp:1 "regressed -18.5%, restored"): bench row "Slower — restored",
+      neutral grey, never red or "Critical"; no other surface shows it. Not seen live: SessionDebrief's
+      session-vs-session `cmp-bad` (a measured regression of play, not a reverted Trial). P7-severity PASS.
+      Evidence `C:\Users\Kuya\code\_train\trial-wardogs\`.
       Desk build `e6db699e` installed. Round 4 verdict: "OVERALL: PASS, except the per-row footnote half
       of (a), which is BLOCKED because no such row exists here" (shared noise line, Lab gauge, tooltip
       flip, rig note, stutter-first, bench words all PASS). Evidence `C:\Users\Kuya\code\_train\review\r4\`.
