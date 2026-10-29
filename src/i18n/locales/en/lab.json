@@ -700,6 +700,8 @@
       "stopMeasured_other": "{{count}} changes were measured.",
       "stopUnjudged_one": "{{count}} couldn't be judged.",
       "stopUnjudged_other": "{{count}} couldn't be judged.",
+      "heldByRisk_one": "{{count}} more change is held back by the risk you chose.",
+      "heldByRisk_other": "{{count}} more changes are held back by the risk you chose.",
       "resultsUnverified_one": "Nothing on {{game}} is left for Compy to test right now. {{count}} result can't be tied to this PC as it is now (its test or your newest session recorded no graphics driver or Windows build), so Compy won't call it current.",
       "resultsUnverified_other": "Nothing on {{game}} is left for Compy to test right now. {{count}} results can't be tied to this PC as it is now (their tests or your newest session recorded no graphics driver or Windows build), so Compy won't call them current.",
       "testedLabel": "Tested:",

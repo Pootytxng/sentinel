@@ -1993,6 +1993,33 @@ describe("P4-exit: what Compy tested on this game", () => {
     expect(panel).not.toHaveTextContent("finished the supported tests");
   });
 
+  // P8-posture-note (review r1 SHOULD-FIX): "nothing left to test" must not hide a change held back
+  // by the risk the user chose (Low risk only: the moderate change is held, the low one at its cap).
+  it("'nothing left to test' still names a change held back by the chosen risk", async () => {
+    const f = await owner();
+    const judged = f.experiments.find((x) => x.verdict)!;
+    const noisy = (id: string, at: string) => ({ ...judged, id, verdict: "too-noisy", status: "restored", kept: false, created_at: at, concluded_at: at });
+    state.gate = true;
+    state.experiments = [noisy("exp:n-a", "2026-10-24T11:00:00Z"), noisy("exp:n-b", "2026-10-25T11:00:00Z")];
+    state.sessions = f.sessions;
+    state.recs = [
+      pass("visual-effects", "Trim Windows visual effects", 1),
+      { id: "mouse-accel-off", title: "Turn off mouse acceleration", passes: false, reason: "outside-chosen-risk", detail: null, risk: "moderate" },
+    ];
+    render(<ExperimentBench />);
+    const panel = await screen.findByTestId("exp-summary");
+    expect(panel).toHaveAttribute("data-headline", "nothing-testable-now");
+    const headline = screen.getByTestId("exp-summary-headline");
+    expect(headline).toHaveTextContent("Nothing on WardogsClient is left for Compy to test right now");
+    expect(headline).toHaveTextContent("1 more change is held back by the risk you chose.");
+    await i18n.changeLanguage("zh-CN");
+    try {
+      expect(await screen.findByText(/另有 1 项更改因你选择的风险范围而暂不测试/)).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   it("never claims it when the picker's list couldn't be read, nor 'not applied' without it", async () => {
     const f = await owner();
     state.gate = true;
