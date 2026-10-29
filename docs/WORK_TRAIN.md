@@ -139,11 +139,13 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       two before-sessions swung 172->132 and 132->178 fps (the character left the idle spot for a boss
       fight), so the verdict was too-noisy and the change was put back (verified restored). Not closed: the
       receipt did not show the band (see **P4-noise-evidence**), and the swinging sessions widened PBZ's band.
-- [ ] **P4-noise-evidence** (bug, from the 2026-10-29 PBZ Trial) A too-noisy Trial judged against a measured
-      ±16.1% between-session band was stored with `noise_evidence: null`, so the bench says "No noise-floor
-      record was kept for this result" although a band was used. Find where a too-noisy / uneven-session
-      conclude skips writing noise evidence (`experiment.rs` conclude paths); the record should carry the band
-      it was judged against. Rust + measurement: one review. Record: `C:\Users\Kuya\code\_train\trial\result.json`.
+- [x] **P4-noise-evidence** (from the 2026-10-29 PBZ Trial; copy fix, see the merge "train-noise-unjudged")
+      Not a lost record: `noise_evidence_for` records a band only when the verdict was judged against it, and
+      this too-noisy Trial stopped on its uneven before-session (3% halves check), so nothing reached the
+      ±16.1% band. The bench said "No noise-floor record was kept", which read as a lost record and
+      contradicted the journey receipt's band. Now a result that never reached the band says "not judged
+      against a noise floor: its sessions could not be compared fairly" (en + zh-CN); guard in
+      ExperimentBench.test ("Aniimo today") fails on the old copy.
 - [ ] **P5-realplay** (owner decision 2026-10-29, Constitution §36; ROADMAP Phase 5 "Real-play mode"; next after
       P4-noise-evidence, ahead of the redesign) Trials must reach a verdict from normal, inconsistent play.
       Plan before coding (one bounded Rust slice + one TS slice): a Trial may keep its change on across several
@@ -525,6 +527,15 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       level chip and every bench confidence word glossed. Round 3 (`dfd8f90c`): all PASS except bench
       noise-floor sentences -> `e6db699e` (fix `504dbbe3`). Kept unglossed by decision: delta labels
       ("After, 1% low") and the Home MEASURED provenance stamps (technical-layer measurement chrome).
+      Round 5 (2026-10-29, real PBZ data, driven through the debug port while the owner played): P4-smooth-
+      offer-b PASS (Smoothest offered and selectable on PBZ), P7-teach PASS (stutter comparison against the
+      11:00 steady session, lesson line + Library link, glosses inside the window), P7-severity PASS (the
+      too-noisy, put-back Trial is grey/amber, never red or "Critical"), P7-depth-verdicts: three layers
+      present; the bench noise line contradicted the receipt -> P4-noise-evidence copy fix. Judged by design,
+      not defects: the receipt shows only "After, samples" (the record stores no before-session sample
+      count) and the bench summary receipt carries deltas (P7-depth-verdicts spec). Small follow-ups noted,
+      not queued: Smoothest's hypothesis text still names 1% lows; the stutter headline says "previous" while
+      its header says "last steady". Evidence `C:\Users\Kuya\code\_train\review\r5\`.
       Desk build `e6db699e` installed. Round 4 verdict: "OVERALL: PASS, except the per-row footnote half
       of (a), which is BLOCKED because no such row exists here" (shared noise line, Lab gauge, tooltip
       flip, rig note, stutter-first, bench words all PASS). Evidence `C:\Users\Kuya\code\_train\review\r4\`.

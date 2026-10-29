@@ -674,6 +674,7 @@
     "noiseStaleChanged": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的波动是在驱动或 Windows 更新之前测量的，因此未采用。未检查游戏版本。",
     "noiseStaleUnconfirmed": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的波动已测量过，但 Compy 无法确认此后没有变化，因此未采用。未检查游戏版本。",
     "noiseNotRecorded_other": "标记的结果没有保存噪声下限记录。",
+    "noiseNothingJudged_other": "有 {{count}} 个结果没有按噪声下限评判：前后两次会话无法公平比较。",
     "summary": {
       "label": "Compy 在 {{game}} 上测试过的内容",
       "finishedSupportedTests": "Compy 已在这台主机上完成 {{game}} 的受支持测试：它列为值得在这里测试的每一项更改都有了测得的结果。",

@@ -684,6 +684,8 @@
     "noiseStaleUnconfirmed": "Judged against Compy's {{band}}% noise floor. This game's spread on your PC was measured, but Compy couldn't confirm nothing changed since, so it wasn't used. The game version isn't checked.",
     "noiseNotRecorded_one": "No noise-floor record was kept for this result.",
     "noiseNotRecorded_other": "No noise-floor record was kept for these results.",
+    "noiseNothingJudged_one": "One result was not judged against a noise floor: its sessions could not be compared fairly.",
+    "noiseNothingJudged_other": "{{count}} results were not judged against a noise floor: their sessions could not be compared fairly.",
     "summary": {
       "label": "What Compy tested on {{game}}",
       "finishedSupportedTests": "Compy finished the supported tests for {{game}} on this PC: every change it lists as worth testing here has a measured result.",
