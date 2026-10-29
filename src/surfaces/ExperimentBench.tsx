@@ -1609,7 +1609,7 @@ function TestSummary({ s }: { s: GameTestSummary }) {
     const text = [why, r.detail ?? ""].filter((x) => x !== "").join(" ");
     return t("lab.experimentBench.summary.row", { title: r.title, text });
   };
-  const staleAsked = s.stale.filter((r) => !s.outsideRisk.some((c) => c.id === r.recId));
+  const staleAsked = s.staleAsked;
   return (
     <div className="exp-order exp-summary" data-testid="exp-summary" data-headline={s.headline}>
       <SectionLabel>{t("lab.experimentBench.summary.label", { game })}</SectionLabel>

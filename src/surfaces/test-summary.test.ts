@@ -154,6 +154,29 @@ describe("P8-posture-b: a change outside the chosen risk", () => {
     expect(s.headline).not.toBe("worth-retesting");
     expect(s.headline).not.toBe("finished-supported-tests");
   });
+
+  // P8-posture-count (review r1 NITs): each case fails on the code before this fix.
+  it("a held change already tested here is listed as tested, not counted as 'above it'", () => {
+    const s = summarizeGame(GAME, experiments, [held("visual-effects"), held("mouse-accel-off")], sessions)!;
+    expect(s.tested.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.outsideRisk.map((c) => c.id)).toEqual(["mouse-accel-off"]);
+    expect(s.headline).toBe("finished-within-chosen-risk");
+    // Only the tested held change: nothing untested is above the chosen risk.
+    const onlyTested = summarizeGame(GAME, experiments, [held("visual-effects")], sessions)!;
+    expect(onlyTested.outsideRisk).toEqual([]);
+    expect(onlyTested.headline).toBe("finished-supported-tests");
+  });
+
+  it("a held stale result is not counted as needing another run in the stop counts", () => {
+    const s = summarizeGame(GAME, experiments, [held("visual-effects")], [...sessions, newer])!;
+    expect(s.stale.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(s.staleAsked).toEqual([]);
+    expect(s.stop.stale).toBe(0);
+    // The same stale result on a change the picker still offers IS asked for, and counted.
+    const offered = summarizeGame(GAME, experiments, [VFX], [...sessions, newer])!;
+    expect(offered.staleAsked.map((r) => r.recId)).toEqual(["visual-effects"]);
+    expect(offered.stop.stale).toBe(1);
+  });
 });
 
 // P5-learned (ROADMAP Phase 5 step 8): kept / put back and why, and at most one lesson from the
