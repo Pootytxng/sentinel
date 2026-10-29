@@ -533,9 +533,10 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
 - [x] **P8-posture-count** — `9e2083f5` (TS) `outsideRisk` lists only never-tested held changes; a held
       stale result no longer counts in `stop.stale` or the retest headline (`staleAsked`). Two tests, both
       proven failing on the old code.
-- [ ] **P8-posture-stale-copy** A held-back change whose only result is stale reaches "nothing-testable-now",
+- [x] **P8-posture-stale-copy** `53514506` (fix `35e39a0a`) A held-back change whose only result is stale reaches "nothing-testable-now",
       whose copy says nothing was measured; that is untrue when a (stale) result exists. Give that case its
-      own honest line (en + zh-CN) and a test. Found 2026-10-29 while doing P8-posture-count.
+      own honest line (en + zh-CN) and a test. Found 2026-10-29 while doing P8-posture-count. Self-review of
+      the new line owed at the next FULL desk session.
 - [ ] **P8-posture-show** The Trial receipt and the game summary name the risk choice in force when each
       Trial started (stored on the experiment record; older records read "not recorded", never a guess).
       Needs P8-posture-b.
@@ -568,9 +569,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-27 ~12:45–13:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-jargon `a49b2128` (copy
-  `94000540`); tsc 0; FULL vitest on the desk 522 files / 10032 tests, exit 0; copy only, no review round.
-  Not pushed.
 - 2026-10-27 ~13:20–14:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-confidence `f0fd750d` (feat
   `7b55540b`), FULL vitest 523 files / 10708, exit 0, one review round (APPROVE + SHOULD-FIX taken);
   P7-score `d2f5b002` (fix `81ccb193`), FULL vitest 523 files / 10709, exit 0. Visual self-review owed (FULL).
@@ -638,6 +636,10 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   site-app env only; TS display logic, no review). New item P8-posture-stale-copy. Self-review of the P8
   picker + headline owed (needs desk build). Log trimmed to the newest 14. Not pushed - owner back at the PC before landing (preflight idle 0 s);
   next FULL session pushes.
+- 2026-10-29 ~15:45-16:30 (scheduled, CODE-ONLY, owner playing PBZ): P8-posture-stale-copy `53514506` (fix
+  `35e39a0a`); tsc clean, targeted 170/170, i18n/copy guards 40/40, bench test proven failing on old code; TS
+  display copy, no review. Leftover train-p6nextf2/p7notify/p7route/p7severity folders hold only site-app
+  residue, no commits. Log trimmed to the newest 14. Not pushed (CODE-ONLY); next FULL session pushes.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
