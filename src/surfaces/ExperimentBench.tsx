@@ -40,6 +40,7 @@ import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
 import { GuidedJourney, interruptedJourneyId, JourneyProgressLine, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
 import { journeyProgress, nextToTest, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
+import { displayModeLabel } from "../data/display-mode";
 import { takeBenchArrival, type BenchArrival } from "./lab-arrival";
 import "./ExperimentBench.css";
 
@@ -1579,7 +1580,7 @@ function TestSummary({ s }: { s: GameTestSummary }) {
         ctx.gpu,
         ctx.driver && t("lab.experimentBench.summary.contextDriver", { driver: ctx.driver }),
         ctx.windowsBuild && t("lab.experimentBench.summary.contextWindows", { build: ctx.windowsBuild }),
-        ctx.display,
+        displayModeLabel(ctx.display, t),
       ].filter((p): p is string => !!p)
     : [];
   // Each line is ONE string: the bench's own rows above and below say the same titles and noise

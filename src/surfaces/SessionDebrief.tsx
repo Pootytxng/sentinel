@@ -19,6 +19,7 @@ import { type GpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { readDisplayRefreshHz } from "../design/theme";
+import { displayModeLabel } from "../data/display-mode";
 import { useExpertView } from "../design/use-expert-view";
 import { Depth, ReceiptRow, receiptPct } from "../design/Depth";
 import { LessonLine } from "../design/LessonLine";
@@ -530,7 +531,7 @@ export function SessionDebrief({
             {s.hw_fingerprint && (
               <div>
                 {t("monitor.sessionDebrief.rigLinePrefix")}{s.hw_fingerprint.gpu || t("monitor.sessionDebrief.gpuFallback")} · {s.hw_fingerprint.ram_gb}GB
-                {s.hw_fingerprint.display ? ` · ${s.hw_fingerprint.display}` : ""}
+                {s.hw_fingerprint.display ? ` · ${displayModeLabel(s.hw_fingerprint.display, t) ?? ""}` : ""}
               </div>
             )}
             {s.compy_changes_active === 0 && (

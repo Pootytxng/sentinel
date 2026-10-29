@@ -256,6 +256,10 @@
     "revealFile": "Show me the file Compy set aside",
     "revealFolder": "Open the Compy folder"
   },
+  "displayMode": {
+    "withRate": "{{width}}×{{height}} @ {{rate}} Hz",
+    "rateUnknown": "{{width}}×{{height}}, refresh rate unknown"
+  },
   "timelineEvent": {
     "applied": "{{title}} applied",
     "appliedRolledBack": "{{title}} applied (since rolled back)",

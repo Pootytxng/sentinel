@@ -251,6 +251,10 @@
     "revealFile": "看看 Compy 挪走的那个文件",
     "revealFolder": "打开 Compy 文件夹"
   },
+  "displayMode": {
+    "withRate": "{{width}}×{{height}} @ {{rate}} Hz",
+    "rateUnknown": "{{width}}×{{height}},刷新率未知"
+  },
   "timelineEvent": {
     "applied": "已应用 {{title}}",
     "appliedRolledBack": "已应用 {{title}}(之后已撤销)",
