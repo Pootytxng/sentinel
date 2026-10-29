@@ -2131,8 +2131,16 @@ describe("P5-learned: what Compy learned on this PC", () => {
     // A too-noisy Trial judged nothing, so none of its stored deltas is shown.
     expect(panel).not.toHaveTextContent("15.5");
     expect(panel).not.toHaveTextContent("16%");
+    // bug→guard 2026-10-29 (owner-rig PBZ Trial): a result that never reached the band says so, not
+    // "no record was kept", which read as a lost record.
     // gloss triggers (a confidence word, "noise floor") are not actions
     expect(panel.querySelectorAll("button:not(.kl-term)")).toHaveLength(0);
+    const door = panel.querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!;
+    fireEvent.click(door);
+    await waitFor(() => expect(door.parentElement!.children.length).toBeGreaterThan(1));
+    const noise = screen.getByTestId("exp-summary-noise");
+    expect(noise).toHaveTextContent("One result was not judged against a noise floor: its sessions could not be compared fairly.");
+    expect(noise).not.toHaveTextContent("No noise-floor record was kept");
   });
 
   it("no rule, no lesson", async () => {

@@ -1567,7 +1567,10 @@ function TestSummary({ s }: { s: GameTestSummary }) {
   const sep = t("lab.experimentBench.summary.contextSeparator");
   const list = t("lab.experimentBench.pairListSeparator");
   const noiseLines = [...new Set(s.tested.filter((r) => r.noise).map((r) => noiseLine(r.noise!, s.game, t)))];
-  const unjudged = s.tested.filter((r) => !r.noise).length;
+  // 2026-10-29 owner-rig Trial (PBZ, too-noisy): a result that never reached the band has no noise record
+  // by design (`noise_evidence_for`), and "no record was kept" read as a lost record. Say which it is.
+  const unjudged = s.tested.filter((r) => !r.noise && r.measured).length;
+  const nothingJudged = s.tested.filter((r) => !r.noise && !r.measured).length;
   const names = (rows: { title: string }[]) => rows.map((r) => r.title).join(list);
   const ctx = s.context;
   const ctxParts = ctx
@@ -1744,6 +1747,7 @@ function TestSummary({ s }: { s: GameTestSummary }) {
             t("lab.experimentBench.summary.noiseLabel"),
             ...noiseLines,
             ...(unjudged > 0 ? [t("lab.experimentBench.noiseNotRecorded", { count: unjudged })] : []),
+            ...(nothingJudged > 0 ? [t("lab.experimentBench.noiseNothingJudged", { count: nothingJudged })] : []),
           ].join(" "),
         )}
       </p>
