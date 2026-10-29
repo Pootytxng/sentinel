@@ -528,12 +528,14 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
       chose" (en + zh-CN). The guided journey's next pick uses the same list; `test-summary.ts` and
       `journey-resume.ts` must not read a risk-filtered change as "not available". Needs P8-posture-a.
       Visible UI (new picker) still needs self-review in the next FULL session.
-- [ ] **P8-posture-note** (review r1 SHOULD-FIX) `summarizeGame`'s "nothing-testable-now" headline hides
-      that changes are held back by the chosen risk (e.g. Low risk only, one moderate change held, one low
-      change at its retest cap). Show the risk note on that branch too; add a test for that case.
-- [ ] **P8-posture-count** (review r1 NITs) `outsideRisk` should leave out changes already tested (as
-      `skipped` does), so "{{count}} more change is above it" is not overstated; `stop.stale` should not
-      count a held-back stale result. Tests for both.
+- [x] **P8-posture-note** — `73d9c5d9` (TS) "Nothing left to test" now adds "N more changes are held back
+      by the risk you chose" (en + zh-CN); test proven failing on the old code. Self-review owed (FULL+desk).
+- [x] **P8-posture-count** — `9e2083f5` (TS) `outsideRisk` lists only never-tested held changes; a held
+      stale result no longer counts in `stop.stale` or the retest headline (`staleAsked`). Two tests, both
+      proven failing on the old code.
+- [ ] **P8-posture-stale-copy** A held-back change whose only result is stale reaches "nothing-testable-now",
+      whose copy says nothing was measured; that is untrue when a (stale) result exists. Give that case its
+      own honest line (en + zh-CN) and a test. Found 2026-10-29 while doing P8-posture-count.
 - [ ] **P8-posture-show** The Trial receipt and the game summary name the risk choice in force when each
       Trial started (stored on the experiment record; older records read "not recorded", never a guess).
       Needs P8-posture-b.
@@ -566,66 +568,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-25 morning: P4-recommended `a86fbcf5`.
-- 2026-10-25 morning: P4-rank `8f1169ca`, #622-f2 `4edfbb0e`.
-- 2026-10-25 midday: P4-next `abd4c883`.
-- 2026-10-25 midday: P4-maxfps `baa03405` (Smoothest held).
-- 2026-10-25 afternoon: P4-exit code `e3d0420e`.
-- 2026-10-25 ~06:39 desk install of main `f6736154` (stamp-proved, attempt 1; installer 21B647B4…EDB940) so the
-  owner's Phase 4 Trial runs use the new engine; RELEASE_STATE recorded.
-- 2026-10-25 morning: P5-guided `2f33cc6b`, P5-rebaseline `a0da7bbb`, P4-comparable-show `78b908c3`;
-  owner's first live Aniimo Trial (visual-effects): too noisy (baseline 293->241 fps), restored, verified.
-- 2026-10-25 late morning: P4-smooth-measure `df01e252`.
-- 2026-10-25 midday: P5-continue `61e7539e`.
-- 2026-10-25 afternoon: layout harness flake fix `f904c658`, P5-enough `b28e188c`.
-- 2026-10-25 afternoon: P5-learned `a5836783`, P5-resume `b285dc73`.
-- 2026-10-25 ~11:55 desk install of main `7aa8e810` (stamp-proved, attempt 1; installer 02AC5E76…F21814) so the
-  owner gets the Phase 5 guided journey and the Phase 6 "Changed before this" crash view; RELEASE_STATE recorded.
-- 2026-10-25 ~14:45 desk install of main `9712572d` (stamp-proved, attempt 1; installer D945743C…F3D6FC) so the
-  owner can run the Phase 6 exit proof; RELEASE_STATE recorded.
-- 2026-10-26 (scheduled, CODE-ONLY, owner on PC): P7-severity `2ba1f70c`, P6-next-f2 `142b769b`
-  (review fixes `aa762687`; new tests fail on the old code); tsc 0, vitest 152/152; not pushed.
-- 2026-10-26 ~12:20–13:15 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth `8e8370a0` (the
-  2026-10-26 critical review's reproduced completion/staleness defect); tsc 0, vitest 255/255 across 13 files
-  on the desk; one review round, all findings fixed (details under the item); not pushed.
-- 2026-10-26 afternoon (scheduled, CODE-ONLY, owner on PC): P7-route `9fefbf6d` (resumed parked worktree;
-  TS-only, no Rust); tsc 0, full vitest 521 files / 9312 passed; visual self-review owed; not pushed.
-- 2026-10-26 ~19:35–20:40 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f1 2af5f7e2
-  (the follow-up review's five findings); tsc 0, vitest 21 files / 466 passed on the desk; one review
-  round, all SHOULD-FIXes taken; not pushed.
-- 2026-10-27 ~00:05–01:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f2 38e31fa0
-  (the third review's four gaps + combination matrix); tsc 0, vitest 21 files / 475 passed on the desk;
-  one review round, MUST-FIX + SHOULD-FIXes taken; not pushed.
-- 2026-10-27 ~02:30–03:40 (interactive from Claude HQ, CODE-ONLY, owner on PC): P4-exit-truth-f3 3de75240
-  (the fourth review's alternating-retest defect + three wordings; zh-CN mojibake repaired); tsc 0, FULL
-  vitest on the desk 521 files pass + `encoding-guard` green after the tick commit's repair; one review
-  round, MUST-FIX + 3 SHOULD-FIXes taken; not pushed.
-- 2026-10-27 ~03:30 (interactive from Claude HQ, CODE-ONLY, owner on PC): verification receipt for the
-  final tree `ac58379a` (fifth review asked for one clean full-suite run, no code): tsc exit 0; FULL vitest
-  521 files / 10020 tests passed, exit 0, 157 s; clean checkout. Not pushed.
-- 2026-10-27 ~06:50–07:20 (interactive from Claude HQ; owner waived the FULL idle rule for this run and
-  left the desk free): catch-up push `cdf0c2d8..71b8e1b9` (pre-push gate passed); `npm run tauri build`;
-  `scripts/ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit 71b8e1b9…` → runtime proof
-  `71b8e1b9 · release · shell 0.9.26`, attempt 1, installer SHA-256 A7E858DA…80EBE, one installer on the
-  Desktop; self-review on the installed app (CDP capture 1620×867, midnight/#a78bfa): VERDICT PASS — headline
-  "1 result on Aniimo needs another run before it counts: couldn't be judged last time.", retest row agrees,
-  context line "Last recorded context (10/25/2026): …"; no raw keys, no mojibake, nothing clipped; debug
-  port put back (no-debug-port CLEAN). Not seen live: the dark-bench Home sentence (this PC's bench is
-  armed; unit-tested only). Noted, not changed: display mode shows "@250" without a Hz unit (pre-existing).
-  RELEASE_STATE row + anchors updated (verify-release-state: 0 state-drift). Walkthrough-ready; pushed.
-
-- 2026-10-27 ~07:20–08:20 (interactive from Claude HQ, CODE-ONLY, owner playing): P7-depth `7530677e` (feat
-  `4306036b`); P4-smooth-offer scoped and split (-a Rust / -b TS), not started; tsc 0; FULL vitest on the
-  desk 522 files / 10699 tests, exit 0; one review round, 3 MUST-FIX + 5 SHOULD-FIX taken; visual
-  self-review owed (FULL). Not pushed.
-
-- 2026-10-27 ~08:40–09:10 (scheduled, CODE-ONLY): P7-notify `890e71bb` (feat `687551d1`), resumed from the
-  parked worktree onto `379ac51b`; cargo test --lib 1644/0, clippy -D warnings clean; Rust review 2 rounds,
-  1 MUST-FIX + 3 SHOULD-FIX taken in-item, round 2 PASS. Stale non-worktree folders train-p6nextf2,
-  train-p7route, train-p7severity left untouched (items already landed). Not pushed.
-- 2026-10-27 ~11:35–12:45 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-depth-verdicts `a0c008bd`
-  (feat `e43ffe78`); tsc 0; FULL vitest on the desk 522 files / 10032 tests, exit 0; one review round
-  (APPROVE + 4 SHOULD-FIX taken); visual self-review owed (FULL). Not pushed.
 - 2026-10-27 ~12:45–13:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-jargon `a49b2128` (copy
   `94000540`); tsc 0; FULL vitest on the desk 522 files / 10032 tests, exit 0; copy only, no review round.
   Not pushed.
@@ -691,6 +633,11 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   (tsc clean, targeted 570/570, full vitest 523/526 files - the 3 site-app tests need site-app/node_modules,
   absent in the worktree; review r1 MUST-FIX reload race fixed + guard test; SHOULD-FIX and NITs queued as
   P8-posture-note / P8-posture-count). Picker needs self-review next FULL session. Not pushed.
+- 2026-10-29 (scheduled, FULL): catch-up push `a8ff8391..651cd1b6`; P8-posture-note `73d9c5d9`, P8-posture-count
+  `9e2083f5` (tsc clean, targeted 163/163, both fixes' tests proven failing on old code, full vitest 523/526 -
+  site-app env only; TS display logic, no review). New item P8-posture-stale-copy. Self-review of the P8
+  picker + headline owed (needs desk build). Log trimmed to the newest 14. Not pushed - owner back at the PC before landing (preflight idle 0 s);
+  next FULL session pushes.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
