@@ -50,6 +50,14 @@ next interactive session instead, and that session closes it.
 Windows commands: write PowerShell to a .ps1 and run it with `-File` (inline `$vars` are stripped); use
 `git commit -F <file>` for messages with quotes; never run git writes from the remote Linux shell.
 
+**Owner's PC: admin prompts off (owner decision 2026-10-29).** The owner is the only user and wants
+Windows admin (UAC) prompts off indefinitely: `ConsentPromptBehaviorAdmin=0`, UAC itself still on
+(`EnableLUA=1`). Leave it that way: do not turn prompts back on, and do not treat silent elevation as a
+fault. A session may *suggest* turning them on only when a test needs prompt-on behaviour (for example,
+checking Compy's elevation prompt as a normal user sees it), and turns them back off afterwards with the
+owner's OK. Scripts: `C:\Users\Kuya\code\_train\uac-off-permanent.ps1` (off), `uac-restore.ps1` (back to
+the recorded original, 5). Every other security setting stays owner-gated (CLAUDE.md).
+
 ## Needs owner
 - **Old scheduled task** "#678 check-in 1/3…" still armed; turn it off in your scheduled tasks list.
 
