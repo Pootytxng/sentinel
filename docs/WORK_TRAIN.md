@@ -162,6 +162,9 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       Unknown with the confidence it earned; "too noisy" becomes "keep playing, Compy is still collecting"
       until enough sessions exist. Measurement + rollback (the change stays on for days): Rust review, and
       the journey must say plainly that the change is on and how to put it back.
+      2026-10-29 evening (scheduled, CODE-ONLY, owner in PBZ): not started - needs a Rust measurement slice +
+      review that does not fit one bounded session, and cargo builds would load the PC mid-game. Best taken
+      in an interactive or FULL session.
 - [x] **P4-noise-copy** Lands with the 2026-10-24 evening log entry. "from one session to the next" → "between any two of those sessions" (en); rename
       `grade_baseline`'s `noise_floor_pct` param to `halves_floor_pct`; fix ExperimentBench.tsx:206 comment.
 - [x] **453-fix** `dce14e95`: Health, Optimize and History count one per change whose live check reads On;
@@ -593,8 +596,9 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
 ### Then — Roadmap Phase 9: Hardware decision intelligence (`product/ROADMAP.md` Phase 9)
 Planned 2026-10-28 (scheduled refill, second). Smallest read-only slices on what Compy already measures;
 no shopping, no product names, no prices (affiliate firewall), never an invented spec.
-- [ ] **P9-hz** The display-mode line shows the refresh rate with its unit ("250 Hz", today "@250"), en +
-      zh-CN; an unreadable rate stays "unknown". Smallest visible slice (noted in the 2026-10-27 review).
+- [x] **P9-hz** `f1bfbb26` The display-mode line shows the refresh rate with its unit ("1920×1080 @ 250 Hz", was
+      "1920x1080@250") on the debrief rig line, Trial summary context, Care next-step rig and hardware-change
+      timeline, en + zh-CN; rate 0 reads "refresh rate unknown". Self-review of the four lines owed (FULL+desk).
 - [ ] **P9-target** FPS answers compare against the screen's measured refresh rate ("about 60% of your
       250 Hz screen"); no line when the rate or the FPS is unmeasured. ROADMAP P9 "display target".
 - [ ] **P9-settings-done** When the Phase 4 panel says Compy finished the supported candidates for a game,
@@ -613,15 +617,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `7b55540b`), FULL vitest 523 files / 10708, exit 0, one review round (APPROVE + SHOULD-FIX taken);
   P7-score `d2f5b002` (fix `81ccb193`), FULL vitest 523 files / 10709, exit 0. Visual self-review owed (FULL).
   Not pushed.
-- 2026-10-27 ~12:00–13:00 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-teach `d501a659` (feat
-  `3fb653a3`, fix `7d0eae04`), landing gate r18 caught an a11y-census gap and a Care next-step flake → `3801b499`,
-  merged `ab2cdda8`; r19 FULL vitest 523 files / 10724, exit 0, tsc 0. Lesson: run the a11y census guard in the
-  touched set whenever src/design gains a file. Not pushed.
-- 2026-10-27 ~13:00–15:40 (interactive from Claude HQ, CODE-ONLY; model switched by the owner to Opus 5.5
-  mid-item): P7-palette `2f72e4a3` (feat `029c217e`, fix `dbc55768`), r20 FULL vitest 523 files, exit 0, tsc 0.
-  r20 ran 10068 tests vs r19 10724: the whole gap is `scripts/main-module-idiom-guard.test.mjs` (2010 → 1338
-  cases), which walks `.claude/` including `.claude/worktrees/*`, so its count tracks how many train worktrees
-  exist (r19 had two, r20 one) — not lost coverage. Not pushed.
 - 2026-10-27 ~15:40–16:20 (interactive from Claude HQ, CODE-ONLY): P7-rig-limiter `bf178ac5` + `9ef50adb`; r21 caught
   rgba() fallbacks under tokens-v2-guard → `b72f3934`; r22 FULL vitest 524 files / 10084, exit 0, tsc 0.
   Lessons: (1) a pre-slice proof that swaps a file must run AFTER the commit — `git checkout -- <file>`
@@ -687,6 +682,10 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `35e39a0a`); tsc clean, targeted 170/170, i18n/copy guards 40/40, bench test proven failing on old code; TS
   display copy, no review. Leftover train-p6nextf2/p7notify/p7route/p7severity folders hold only site-app
   residue, no commits. Log trimmed to the newest 14. Not pushed (CODE-ONLY); next FULL session pushes.
+- 2026-10-29 evening (scheduled, CODE-ONLY, owner playing PBZ): P9-hz `f1bfbb26` (display mode worded with Hz on
+  four lines); tsc clean, targeted 240/240, census/i18n/copy/data guards 64 files / 516, the bench context test
+  asserted the old raw mode. TS display only, no review. P5-realplay left for an interactive/FULL session (Rust
+  + review, no cargo mid-game). One item only. Not pushed (CODE-ONLY); next FULL session pushes.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
