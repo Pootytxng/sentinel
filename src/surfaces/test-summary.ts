@@ -379,6 +379,10 @@ export type GameTestSummary = {
   /** P8-posture-count: stale results another run is asked for (a stale result on a change held back by
    *  the chosen risk is not). `stop.stale` counts these. */
   staleAsked: TestedChange[];
+  /** P8-posture-stale-copy: stale results on changes held back by the chosen risk (not asked for
+   *  again). A measured result exists for each, so a stopping point holding only these is never
+   *  worded as "nothing was measured". */
+  staleHeld: TestedChange[];
   /** P8-posture-b: changes the picker leaves out only because their risk is above what the user chose
    *  (reason "outside-chosen-risk"; they are not set) and that were never tested here — a tested one
    *  is listed as tested. In the picker's order. */
@@ -558,6 +562,7 @@ export function summarizeGame(
   const staleKept = stale.filter((r) => !retest.some((x) => x.recId === r.recId) && !heldIds.has(r.recId));
   // A stale result on a held change is not asked for again, so it is not counted as "needs another run".
   const staleAsked = stale.filter((r) => !heldIds.has(r.recId));
+  const staleHeld = stale.filter((r) => heldIds.has(r.recId));
   const holds = tested.filter((r) => r.measured && r.context === "matching");
   const stop = { measured: holds.length, noResult: inconclusive.length, unverified: unverified.length, stale: staleAsked.length };
 
@@ -585,6 +590,7 @@ export function summarizeGame(
     stale,
     staleKept,
     staleAsked,
+    staleHeld,
     outsideRisk,
     unverified,
     stop,

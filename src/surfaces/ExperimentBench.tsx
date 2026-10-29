@@ -1645,7 +1645,13 @@ function TestSummary({ s }: { s: GameTestSummary }) {
                   `${
                     s.stop.measured > 0
                       ? `${t("lab.experimentBench.summary.stoppedHere", { game })} ${t("lab.experimentBench.summary.stopMeasured", { count: s.stop.measured })} ${t("lab.experimentBench.summary.stopUnjudged", { count: s.stop.noResult })}`
-                      : t("lab.experimentBench.summary.nothingTestableNow", { game })
+                      : s.staleHeld.length > 0
+                        ? // P8-posture-stale-copy: a held change has an older (stale) result, so
+                          // "nothing was measured" would be untrue; say what is there instead.
+                          `${t("lab.experimentBench.summary.stoppedStaleHeld", { game, count: s.staleHeld.length })}${
+                            s.stop.noResult > 0 ? ` ${t("lab.experimentBench.summary.stopUnjudged", { count: s.stop.noResult })}` : ""
+                          }`
+                        : t("lab.experimentBench.summary.nothingTestableNow", { game })
                   }${s.outsideRisk.length > 0 ? ` ${t("lab.experimentBench.summary.heldByRisk", { count: s.outsideRisk.length })}` : ""}`
                 : s.headline === "results-unverified"
                   ? t("lab.experimentBench.summary.resultsUnverified", { count: s.unverified.length, game })

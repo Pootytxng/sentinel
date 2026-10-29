@@ -2020,6 +2020,42 @@ describe("P4-exit: what Compy tested on this game", () => {
     }
   });
 
+  // P8-posture-stale-copy: the held change has a (stale) measured result, so the stopping point must
+  // not say "nothing was measured"; it says the result is older and the change is above the risk.
+  it("a held change whose only result is stale is never worded as 'nothing was measured'", async () => {
+    const f = await owner();
+    const judged = f.experiments.find((x) => x.verdict)!;
+    const ofGame = f.sessions.filter((s) => s.process_name === judged.game);
+    const last = ofGame[ofGame.length - 1] as Record<string, unknown> & { hw_fingerprint: object; game_state: object };
+    const newer = {
+      ...last,
+      started_at: "2026-10-30T00:00:00Z",
+      hw_fingerprint: { ...last.hw_fingerprint, gpu_driver: "99.0.0" },
+      game_state: { ...last.game_state, gpu_driver: "99.0.0" },
+    };
+    state.gate = true;
+    state.experiments = f.experiments;
+    state.sessions = [...f.sessions, newer] as typeof f.sessions;
+    state.recs = [
+      { id: judged.rec_id, title: judged.rec_title, passes: false, reason: "outside-chosen-risk", detail: null, risk: "moderate" },
+    ];
+    render(<ExperimentBench />);
+    const panel = await screen.findByTestId("exp-summary");
+    expect(panel).toHaveAttribute("data-headline", "nothing-testable-now");
+    const headline = screen.getByTestId("exp-summary-headline");
+    expect(headline).not.toHaveTextContent("nothing was measured");
+    expect(headline).toHaveTextContent(
+      "Nothing on WardogsClient is left for Compy to test within the risk you chose. 1 change has a result from an older graphics driver or Windows build",
+    );
+    await i18n.changeLanguage("zh-CN");
+    try {
+      expect(await screen.findByText(/有 1 项更改的结果来自较旧的显卡驱动或 Windows 版本/)).toBeInTheDocument();
+      expect(screen.getByTestId("exp-summary-headline")).not.toHaveTextContent("也没有测得任何结果");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   it("never claims it when the picker's list couldn't be read, nor 'not applied' without it", async () => {
     const f = await owner();
     state.gate = true;

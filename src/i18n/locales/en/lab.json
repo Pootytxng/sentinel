@@ -696,6 +696,8 @@
       "unknownLeft": "Compy couldn't read which changes are still worth testing, so it can't say whether anything is left.",
       "nothingTestableNow": "Nothing on {{game}} is left for Compy to test right now, but nothing was measured either: the tries it made couldn't be judged.",
       "stoppedHere": "Nothing on {{game}} is left for Compy to test right now.",
+      "stoppedStaleHeld_one": "Nothing on {{game}} is left for Compy to test within the risk you chose. {{count}} change has a result from an older graphics driver or Windows build; it is above the risk you chose, so Compy won't test it again unless you allow that risk.",
+      "stoppedStaleHeld_other": "Nothing on {{game}} is left for Compy to test within the risk you chose. {{count}} changes have results from an older graphics driver or Windows build; they are above the risk you chose, so Compy won't test them again unless you allow that risk.",
       "stopMeasured_one": "{{count}} change was measured.",
       "stopMeasured_other": "{{count}} changes were measured.",
       "stopUnjudged_one": "{{count}} couldn't be judged.",
