@@ -683,6 +683,7 @@
       "unknownLeft": "Compy 无法读取哪些更改仍值得测试，所以无法判断是否还有剩余。",
       "nothingTestableNow": "{{game}} 上现在没有 Compy 可以测试的项目了，但也没有测得任何结果：所做的尝试都无法判断。",
       "stoppedHere": "{{game}} 上现在没有 Compy 可以测试的项目了。",
+      "stoppedStaleHeld_other": "在你选择的风险范围内，{{game}} 上已没有 Compy 可以测试的项目了。有 {{count}} 项更改的结果来自较旧的显卡驱动或 Windows 版本；它们超出了你选择的风险范围，除非你允许该风险，Compy 不会再次测试。",
       "stopMeasured_other": "已测得 {{count}} 项更改。",
       "stopUnjudged_other": "{{count}} 项无法判断。",
       "heldByRisk_other": "另有 {{count}} 项更改因你选择的风险范围而暂不测试。",

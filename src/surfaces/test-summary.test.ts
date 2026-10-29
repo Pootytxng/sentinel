@@ -177,6 +177,17 @@ describe("P8-posture-b: a change outside the chosen risk", () => {
     expect(offered.staleAsked.map((r) => r.recId)).toEqual(["visual-effects"]);
     expect(offered.stop.stale).toBe(1);
   });
+
+  // P8-posture-stale-copy: the stopping point holds a (stale) measured result, so it is carried apart
+  // and the copy never says "nothing was measured".
+  it("a held change whose only result is stale is listed in staleHeld", () => {
+    const s = summarizeGame(GAME, experiments, [held("visual-effects")], [...sessions, newer])!;
+    expect(s.headline).toBe("nothing-testable-now");
+    expect(s.stop.measured).toBe(0);
+    expect(s.staleHeld.map((r) => r.recId)).toEqual(["visual-effects"]);
+    const offered = summarizeGame(GAME, experiments, [VFX], [...sessions, newer])!;
+    expect(offered.staleHeld).toEqual([]);
+  });
 });
 
 // P5-learned (ROADMAP Phase 5 step 8): kept / put back and why, and at most one lesson from the
