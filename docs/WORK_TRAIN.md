@@ -133,6 +133,17 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       uneven-halves grading stays on the fixed 3% (owner). An effect inside the band reads No change.
 - [ ] **P4-noise-proof** (owner) Play 3 WARDOGS sessions >= 10 min with no Compy change, Trial or Gaming
       Mode change between them; then confirm the receipt shows the measured band. None qualify yet.
+      2026-10-29 (owner moved it to Phantom Blade Zero, idle in the open world): 4 unchanged PBZ sessions of
+      ~11 min recorded 10:25-11:11 (661/661/661/620 readings, ~168-170 fps). A guided Trial (visual effects,
+      exp:4-1793299391026) then ran: Compy measured a ±16.1% between-session band over 7 PBZ sessions, but its
+      two before-sessions swung 172->132 and 132->178 fps (the character left the idle spot for a boss
+      fight), so the verdict was too-noisy and the change was put back (verified restored). Not closed: the
+      receipt did not show the band (see **P4-noise-evidence**), and the swinging sessions widened PBZ's band.
+- [ ] **P4-noise-evidence** (bug, from the 2026-10-29 PBZ Trial) A too-noisy Trial judged against a measured
+      ±16.1% between-session band was stored with `noise_evidence: null`, so the bench says "No noise-floor
+      record was kept for this result" although a band was used. Find where a too-noisy / uneven-session
+      conclude skips writing noise evidence (`experiment.rs` conclude paths); the record should carry the band
+      it was judged against. Rust + measurement: one review. Record: `C:\Users\Kuya\code\_train\trial\result.json`.
 - [x] **P4-noise-copy** Lands with the 2026-10-24 evening log entry. "from one session to the next" → "between any two of those sessions" (en); rename
       `grade_baseline`'s `noise_floor_pct` param to `halves_floor_pct`; fix ExperimentBench.tsx:206 comment.
 - [x] **453-fix** `dce14e95`: Health, Optimize and History count one per change whose live check reads On;
@@ -159,7 +170,9 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       `focusable:false` (was focusable) + guard.
 - [x] **P4-show-f1** `97313e21` (saved as a zero-reading row; every reader skips it; deck, receipts, detail windows fixed). A session whose game was always behind another window is never saved (`has_data()` needs
       samples > 0); save a zero-sample record that every comparison skips, so the UI can say why.
-- [ ] **P4-show-f2** (desk) Check the overlay still shows and stays click-through with `focusable:false`.
+- [x] **P4-show-f2** 2026-10-29 PASS on installed `e6db699e` over Phantom Blade Zero: shows on the primary
+      monitor, EXSTYLE 0x080C0138 (TRANSPARENT|LAYERED|NOACTIVATE|TOPMOST), WindowFromPoint inside it hits the
+      game, never foreground. Evidence `C:\Users\Kuya\code\_train\review\p4-show-f2\`.
 - [x] **P4-candidates** `e0160644`: picker shows only changes worth testing here; reasons behind a toggle.
 - [x] **P4-rank** `8f1169ca`: picker ordered by evidence then risk, one reason each; "too small to measure here"
       only with a stated `expected_low1_pct` + a measured band (no catalog entry states one yet); no grouping
