@@ -685,6 +685,7 @@
       "stoppedHere": "{{game}} 上现在没有 Compy 可以测试的项目了。",
       "stopMeasured_other": "已测得 {{count}} 项更改。",
       "stopUnjudged_other": "{{count}} 项无法判断。",
+      "heldByRisk_other": "另有 {{count}} 项更改因你选择的风险范围而暂不测试。",
       "resultsUnverified_other": "{{game}} 上现在没有 Compy 可以测试的项目了。有 {{count}} 项结果无法与这台电脑当前的状态对照（当时的测试或你最新的一局没有记录显卡驱动或 Windows 版本），所以 Compy 不会把它们当作当前有效。",
       "testedLabel": "已测试：",
       "trials_other": "测试了 {{count}} 次",

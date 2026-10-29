@@ -376,8 +376,12 @@ export type GameTestSummary = {
   /** Stale results the picker no longer offers (the change is set now): testing again means putting
    *  it back first. Said apart, so a stale kept result is never a silent dead end. */
   staleKept: TestedChange[];
+  /** P8-posture-count: stale results another run is asked for (a stale result on a change held back by
+   *  the chosen risk is not). `stop.stale` counts these. */
+  staleAsked: TestedChange[];
   /** P8-posture-b: changes the picker leaves out only because their risk is above what the user chose
-   *  (reason "outside-chosen-risk"; they are not set). In the picker's order. */
+   *  (reason "outside-chosen-risk"; they are not set) and that were never tested here — a tested one
+   *  is listed as tested. In the picker's order. */
   outsideRisk: SummaryCandidate[];
   /** Changes the picker leaves out, each with its reason. Empty when the list couldn't be read. */
   skipped: SummaryCandidate[];
@@ -546,11 +550,16 @@ export function summarizeGame(
     .filter((r): r is TestedChange => r != null);
   // P8-posture-b: a change held back only by the risk choice is not set, so a stale result on it is
   // not "set now, put it back first"; it is said as outside the chosen risk instead.
-  const outsideRisk = inPickerOrder((candidates ?? []).filter((c) => !c.passes && c.reason === "outside-chosen-risk"));
-  const heldIds = new Set(outsideRisk.map((c) => c.id));
+  const held = (candidates ?? []).filter((c) => !c.passes && c.reason === "outside-chosen-risk");
+  const heldIds = new Set(held.map((c) => c.id));
+  // P8-posture-count: a held change that was already tested is listed as tested (as `skipped` does),
+  // so "N more changes are above it" counts only the ones never tried.
+  const outsideRisk = inPickerOrder(held.filter((c) => !testedIds.has(c.id)));
   const staleKept = stale.filter((r) => !retest.some((x) => x.recId === r.recId) && !heldIds.has(r.recId));
+  // A stale result on a held change is not asked for again, so it is not counted as "needs another run".
+  const staleAsked = stale.filter((r) => !heldIds.has(r.recId));
   const holds = tested.filter((r) => r.measured && r.context === "matching");
-  const stop = { measured: holds.length, noResult: inconclusive.length, unverified: unverified.length, stale: stale.length };
+  const stop = { measured: holds.length, noResult: inconclusive.length, unverified: unverified.length, stale: staleAsked.length };
 
   return {
     game,
@@ -560,7 +569,7 @@ export function summarizeGame(
         ? "unknown"
         : leftToTest.length > 0
           ? "still-worth-testing"
-          : retest.length > 0 || stale.some((r) => !heldIds.has(r.recId))
+          : retest.length > 0 || staleAsked.length > 0
             ? "worth-retesting"
             : unverified.length > 0 // measured, unverified, and not offered again (set, or not for this PC now)
               ? "results-unverified"
@@ -575,6 +584,7 @@ export function summarizeGame(
     unjudged,
     stale,
     staleKept,
+    staleAsked,
     outsideRisk,
     unverified,
     stop,

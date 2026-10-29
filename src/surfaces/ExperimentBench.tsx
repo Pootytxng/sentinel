@@ -1609,7 +1609,7 @@ function TestSummary({ s }: { s: GameTestSummary }) {
     const text = [why, r.detail ?? ""].filter((x) => x !== "").join(" ");
     return t("lab.experimentBench.summary.row", { title: r.title, text });
   };
-  const staleAsked = s.stale.filter((r) => !s.outsideRisk.some((c) => c.id === r.recId));
+  const staleAsked = s.staleAsked;
   return (
     <div className="exp-order exp-summary" data-testid="exp-summary" data-headline={s.headline}>
       <SectionLabel>{t("lab.experimentBench.summary.label", { game })}</SectionLabel>
@@ -1640,9 +1640,13 @@ function TestSummary({ s }: { s: GameTestSummary }) {
                 })
               : s.headline === "nothing-testable-now"
                 ? // Round 3 §2: the stopping point is worded from what EVERY change holds, never from one.
-                  s.stop.measured > 0
-                  ? `${t("lab.experimentBench.summary.stoppedHere", { game })} ${t("lab.experimentBench.summary.stopMeasured", { count: s.stop.measured })} ${t("lab.experimentBench.summary.stopUnjudged", { count: s.stop.noResult })}`
-                  : t("lab.experimentBench.summary.nothingTestableNow", { game })
+                  // P8-posture-note: a change held back by the chosen risk is named here too, so
+                  // "nothing left to test" never hides that the user's risk choice is what stopped it.
+                  `${
+                    s.stop.measured > 0
+                      ? `${t("lab.experimentBench.summary.stoppedHere", { game })} ${t("lab.experimentBench.summary.stopMeasured", { count: s.stop.measured })} ${t("lab.experimentBench.summary.stopUnjudged", { count: s.stop.noResult })}`
+                      : t("lab.experimentBench.summary.nothingTestableNow", { game })
+                  }${s.outsideRisk.length > 0 ? ` ${t("lab.experimentBench.summary.heldByRisk", { count: s.outsideRisk.length })}` : ""}`
                 : s.headline === "results-unverified"
                   ? t("lab.experimentBench.summary.resultsUnverified", { count: s.unverified.length, game })
                   : t("lab.experimentBench.summary.unknownLeft")}
