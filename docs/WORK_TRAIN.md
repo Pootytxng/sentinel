@@ -617,8 +617,10 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
 - [x] **P9-hz** `f1bfbb26` The display-mode line shows the refresh rate with its unit ("1920×1080 @ 250 Hz", was
       "1920x1080@250") on the debrief rig line, Trial summary context, Care next-step rig and hardware-change
       timeline, en + zh-CN; rate 0 reads "refresh rate unknown". Self-review of the four lines owed (FULL+desk).
-- [ ] **P9-target** FPS answers compare against the screen's measured refresh rate ("about 60% of your
+- [x] **P9-target** FPS answers compare against the screen's measured refresh rate ("about 60% of your
       250 Hz screen"); no line when the rate or the FPS is unmeasured. ROADMAP P9 "display target".
+      `97ebbf7f` (merge `6e4224c9`): session debrief line from the session's own recorded mode, en + zh-CN.
+      Self-review of the line owed at next FULL desk session.
 - [ ] **P9-settings-done** When the Phase 4 panel says Compy finished the supported candidates for a game,
       the game summary adds one line: settings have reached what Compy can test here, then the measured
       limiter (P7-rig-limiter) or "not measured". "No upgrade recommended" is a valid answer and the default
@@ -631,12 +633,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-27 ~15:40–16:20 (interactive from Claude HQ, CODE-ONLY): P7-rig-limiter `bf178ac5` + `9ef50adb`; r21 caught
-  rgba() fallbacks under tokens-v2-guard → `b72f3934`; r22 FULL vitest 524 files / 10084, exit 0, tsc 0.
-  Lessons: (1) a pre-slice proof that swaps a file must run AFTER the commit — `git checkout -- <file>`
-  restores from the index, and 2678d781's unstaged HomeConsole wiring was overwritten that way (the
-  review caught it; tests that failed were the evidence). (2) Any v2 CSS edit puts
-  `src/design/tokens-v2-guard.test.ts` in the touched set. Not pushed.
 - 2026-10-27 ~16:20–18:20 (interactive from Claude HQ, CODE-ONLY): P7-rig-care `9f60e291` (feat `c184ad8c`,
   fix `4f1f0437`); cargo test 1645 passed, clippy -D warnings clean; one review round taken. r23 FULL vitest
   failed on one Depth-door flake (SessionDebrief); fixed on its own branch `908b0464` (test-only: re-query the
@@ -704,6 +700,10 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   P4-cap-note `42f8e04a` (merge `9234ff98`); tsc 0; vitest bench + i18n/locale/copy set 10 files / 190, exit 0;
   both proven failing on old code (3 and 2 tests). TS copy only, no review needed. Cap line self-review owed
   at next FULL desk session. Not pushed.
+- 2026-10-30 ~16:30 (scheduled, CODE-ONLY, owner playing WARDOGS): P9-target `97ebbf7f` (merge `6e4224c9`);
+  tsc 0; 21 files / 318 tests, exit 0; debrief test proven failing on old code (run after the commit). TS
+  display only, no review. Rust items (P4-noise-stretch, P5-realplay) left for a session with no game running.
+  One item only. Log trimmed to the newest 14. Not pushed (CODE-ONLY); next FULL session pushes.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
