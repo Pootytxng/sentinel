@@ -149,9 +149,9 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       unchanged stretch in history, so old noisy play sets the band for every later Trial. Decide with
       P5-realplay (like-with-like scenes): which unchanged sessions describe the Trial's own conditions.
       Measurement: Rust review.
-- [ ] **P4-noise-copy-2** "differed by up to X% between any two of those sessions" overstates it: only
+- [x] **P4-noise-copy-2** (done 2026-10-30 `a2437af7`, merge `fcb18d43`) "differed by up to X% between any two of those sessions" overstates it: only
       sessions within one unchanged stretch are compared. Reword (en + zh-CN) with a test.
-- [ ] **P4-cap-note** Both WARDOGS firing-range sessions sat at ~320 fps and were flagged "may be a menu or a
+- [x] **P4-cap-note** (done 2026-10-30 `42f8e04a`, merge `9234ff98`; self-review owed at next FULL) Both WARDOGS firing-range sessions sat at ~320 fps and were flagged "may be a menu or a
       frame cap"; a capped scene can't show a gain, so a no-change verdict there says little. Check the verdict
       line says so when both sides are capped (copy + test).
       Earlier the same day, P4-noise-proof's first attempt (original ask: 3 unchanged WARDOGS sessions >= 10 min,
@@ -631,10 +631,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-27 ~13:20–14:20 (interactive from Claude HQ, CODE-ONLY, owner on PC): P7-confidence `f0fd750d` (feat
-  `7b55540b`), FULL vitest 523 files / 10708, exit 0, one review round (APPROVE + SHOULD-FIX taken);
-  P7-score `d2f5b002` (fix `81ccb193`), FULL vitest 523 files / 10709, exit 0. Visual self-review owed (FULL).
-  Not pushed.
 - 2026-10-27 ~15:40–16:20 (interactive from Claude HQ, CODE-ONLY): P7-rig-limiter `bf178ac5` + `9ef50adb`; r21 caught
   rgba() fallbacks under tokens-v2-guard → `b72f3934`; r22 FULL vitest 524 files / 10084, exit 0, tsc 0.
   Lessons: (1) a pre-slice proof that swaps a file must run AFTER the commit — `git checkout -- <file>`
@@ -704,6 +700,10 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   four lines); tsc clean, targeted 240/240, census/i18n/copy/data guards 64 files / 516, the bench context test
   asserted the old raw mode. TS display only, no review. P5-realplay left for an interactive/FULL session (Rust
   + review, no cargo mid-game). One item only. Not pushed (CODE-ONLY); next FULL session pushes.
+- 2026-10-30 (scheduled, CODE-ONLY, owner in Aniimo): P4-noise-copy-2 `a2437af7` (merge `fcb18d43`) and
+  P4-cap-note `42f8e04a` (merge `9234ff98`); tsc 0; vitest bench + i18n/locale/copy set 10 files / 190, exit 0;
+  both proven failing on old code (3 and 2 tests). TS copy only, no review needed. Cap line self-review owed
+  at next FULL desk session. Not pushed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
