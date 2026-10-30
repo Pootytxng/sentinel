@@ -230,6 +230,8 @@
   },
   "sessionDebrief": {
     "leftOut": "其他窗口在前台的 {{span}} 没有计入数据。",
+    "screenTarget": "你的平均帧率约为 {{rate}} Hz 屏幕刷新率的 {{pct}}%。",
+    "screenTargetMet": "你的平均帧率跟上了 {{rate}} Hz 屏幕的刷新率。",
     "comparisonHeader": "对比 · {{title}} · 两次 {{game}} 会话",
     "noiseFloor": "噪声范围 ±{{pct}}%",
     "noMeasurableChange": "没有可测量的变化",

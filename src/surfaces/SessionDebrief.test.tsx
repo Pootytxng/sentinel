@@ -72,6 +72,34 @@ describe("SessionDebrief (audit M1)", () => {
     expect(screen.getByText("71°C")).toBeInTheDocument();
   });
 
+  it("P9-target: the average is compared with the screen the session was played on", async () => {
+    const hw = { hash: "h", gpu: "RX 7800 XT", gpu_driver: "", ram_gb: 32, display: "1920x1080@250" };
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} s={{ ...session, hw_fingerprint: hw }} />
+      </ConfirmProvider>,
+    );
+    await screen.findByText(/eldenring/);
+    // 142.4 fps on a 250 Hz screen = 57%.
+    expect(screen.getByText("Your average was about 57% of your 250 Hz screen.")).toBeInTheDocument();
+    cleanup();
+    // Unread rate or unmeasured FPS: no line, never a guess.
+    for (const s of [
+      { ...session, hw_fingerprint: { ...hw, display: "1920x1080@0" } },
+      { ...session, hw_fingerprint: null },
+      { ...session, hw_fingerprint: hw, avg_fps: 0 },
+    ]) {
+      const { container } = render(
+        <ConfirmProvider>
+          <SessionDebrief {...baseProps} s={s} />
+        </ConfirmProvider>,
+      );
+      await screen.findByText(/eldenring/);
+      expect(container.querySelector(".debrief-screen-target")).toBeNull();
+      cleanup();
+    }
+  });
+
   it("missing sensors degrade to a dash — never a fabricated number", async () => {
     render(
       <ConfirmProvider>
