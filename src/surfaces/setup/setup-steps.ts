@@ -29,6 +29,9 @@ export const TAB_BLURB: Record<HomeRailId, string> = {
   // Logbook tab and was confused — the intro should introduce it).
   learn: "The measured record of what actually works — and the myths that don't. Its library is the Field Guide.",
   lab: "Go deeper: benchmarks, latency and system diagnostics.",
+  // Glass redesign (2026-10-30): the two journey doors.
+  games: "Every game Compy has measured, and how each one runs — where making a game better starts.",
+  problems: "Crashes, freezes and restarts from Windows' own records — find out what went wrong.",
 };
 
 // The merged room absorbs Check's diagnose half, so its blurb must cover both (the fix-id blurb

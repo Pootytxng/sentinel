@@ -53,6 +53,10 @@ export const DOOR_MAP: Record<HomeRailId, { to: HomeRailId; label: string } | nu
   learn: { to: "lab", label: "Open the instruments" },
   lab: null, // last chapter — the rail is the way home
   check: null, // legacy escape-hatch room (merge-off only) — outside the journey, no door
+  // Glass redesign (2026-10-30): the two journey doors draw their own pages (surfaces/glass), not a
+  // RoomShell chapter, so they carry no forward door of their own.
+  games: null,
+  problems: null,
 };
 
 // Ground-aware door resolution (the proving-ground rail, 2026-07-10 flip): the standalone

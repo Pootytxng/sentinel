@@ -3,7 +3,7 @@
 // guard test asserts this list stays the blessed set/order/labels).
 // Settings is a separate gear at the bottom of the rail; Export is a header action — neither lives here.
 
-export type HomeRailId = "home" | "check" | "play" | "fix" | "learn" | "lab";
+export type HomeRailId = "home" | "games" | "problems" | "check" | "play" | "fix" | "learn" | "lab";
 
 export type HomeRailItem = { id: HomeRailId; label: string; icon: string };
 
@@ -15,6 +15,12 @@ export const HOME_RAIL: HomeRailItem[] = [
   // below. THE SHIPPED LABEL IS `common.rail.home`; this literal is its English source and
   // `rail-label-locale-guard.test.ts` fails the build if the two ever disagree.
   { id: "home", label: "Health", icon: "gauge" },
+  // THE TWO FLAGSHIP JOURNEYS GET THEIR OWN DOORS (glass redesign, owner decision 2026-10-30).
+  // Constitution: MAKE THIS PC BETTER and FIGURE OUT WHAT WENT WRONG are equal and neither is
+  // subordinate. Games is where "better" starts (per game, from real sessions); Problems is where
+  // "what went wrong" starts (Crash & Freeze Rescue, promoted out of the Test room's dock).
+  { id: "games", label: "Games", icon: "games" },
+  { id: "problems", label: "Problems", icon: "problems" },
   { id: "check", label: "Check", icon: "check" },
   // Label "Live" (owner rename 2026-08-12; previously "Monitor" 2026-06-15): the room is live
   // monitoring + session debriefs. The id stays "play" — it's the persisted nav key (location
@@ -69,9 +75,13 @@ export function railFor(merged: boolean, ground = false): HomeRailItem[] {
 // 2026-08-06 directive bars a hide-behind-a-toggle). Pure; order within each group is rail order.
 export type RailGroups = { door: HomeRailItem[]; instruments: HomeRailItem[] };
 
+// The door group is the front door plus the two flagship journeys (glass redesign 2026-10-30);
+// Live · History · Test stay the instruments, one step away under their own sign.
+const DOOR_IDS: HomeRailId[] = ["home", "games", "problems"];
+
 export function railGroups(items: HomeRailItem[]): RailGroups {
   return {
-    door: items.filter((r) => r.id === "home"),
-    instruments: items.filter((r) => r.id !== "home"),
+    door: items.filter((r) => DOOR_IDS.includes(r.id)),
+    instruments: items.filter((r) => !DOOR_IDS.includes(r.id)),
   };
 }

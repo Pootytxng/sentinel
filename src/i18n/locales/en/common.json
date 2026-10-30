@@ -1,6 +1,8 @@
 {
   "rail": {
     "home": "Health",
+    "games": "Games",
+    "problems": "Problems",
     "check": "Check",
     "play": "Live",
     "fix": "Tune",
@@ -13,6 +15,8 @@
     "deeperGroup": "Look deeper",
     "crumb": {
       "home": "how your PC is doing",
+      "games": "make a game run better",
+      "problems": "find out what went wrong",
       "check": "is anything holding you back?",
       "fix": "find it, fix it, undo it",
       "play": "watch it live",
@@ -25,7 +29,8 @@
     "footerEmphFloor": "at least {{n}}",
     "footerEmphUnknown": "count unknown",
     "fallbackTitle": "Compy",
-    "searchPlaceholder": "Search or jump anywhere"
+    "searchPlaceholder": "Search or jump anywhere",
+    "badgeWaiting": "{{count}} waiting to be looked at"
   },
   "palette": {
     "title": "Search or jump anywhere",
@@ -275,5 +280,66 @@
     "durationMinutes": "{{minutes}} min",
     "durationSeconds": "{{seconds}}s",
     "benchmarkBaseline": "Lab baseline recorded"
+  },
+  "look": {
+    "button": "Look",
+    "title": "Look",
+    "sub": "Changes apply right away and stay on this PC.",
+    "theme": "Theme",
+    "surface": "Surface",
+    "backdrop": "Behind the glass",
+    "surfaces": {
+      "glass": "Glass",
+      "frosted": "Frosted",
+      "solid": "Solid"
+    },
+    "backdrops": {
+      "auto": "Match theme",
+      "night": "Night city",
+      "room": "Warm room",
+      "plain": "Plain"
+    },
+    "solidNote": "Solid panels hide the backdrop. Pick Glass or Frosted to see it."
+  },
+  "games": {
+    "title": "Games",
+    "sub": "Every game Compy has measured you playing, from your real sessions. Pick one to see how it runs.",
+    "empty": "No games yet. Turn on capture in Live and play as usual: each game shows up here after its first measured session.",
+    "emptyCta": "Open Live",
+    "sessions_one": "{{count}} session",
+    "sessions_other": "{{count}} sessions",
+    "lastPlayed": "Last played {{when}}",
+    "notMeasured": "Not measured",
+    "fps": "fps",
+    "open": "Open {{name}}",
+    "back": "All games",
+    "detailSub": "{{sessions}} measured, {{time}} of play. Last played {{when}}.",
+    "hm": "{{h}} h {{m}} m",
+    "m": "{{m}} m",
+    "kpi": {
+      "last": "Last session",
+      "lastNote": "average FPS",
+      "low1": "1% low",
+      "low1Note": "the slowest moments, last session",
+      "sessions": "Sessions",
+      "sessionsNote": "{{time}} of play",
+      "best": "Best session",
+      "bestNote": "highest average FPS"
+    },
+    "chartTitle": "Average FPS per session",
+    "chartSub": "Newest on the right · hover or focus a bar",
+    "chartAria": "Average FPS for each of the last {{count}} sessions of {{name}}",
+    "tip": "{{date}} · {{avg}} fps average · 1% low {{low}} fps",
+    "tipAvg": "{{date}} · {{avg}} fps average",
+    "tipUnmeasured": "{{date}} · not measured",
+    "sessionsTitle": "Sessions",
+    "sessionsSub": "Newest first",
+    "rowFps": "{{avg}} fps",
+    "liveCta": "See sessions in Live",
+    "testCta": "Try a change in Test"
+  },
+  "problems": {
+    "title": "Problems",
+    "sub": "Crashes, freezes and restarts, read from Windows’ own records. Compy shows what it can prove, says what it cannot, and changes nothing until you choose."
   }
 }

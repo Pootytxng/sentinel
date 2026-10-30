@@ -16,10 +16,13 @@ import { LibraryContext } from "./surfaces/library-context";
 import { Wordmark } from "./design/Wordmark";
 import { readCloseToTray, persistDisplayRefreshHz } from "./design/theme";
 import { ShellV2 } from "./design/ShellV2";
+import { GamesRoom } from "./surfaces/glass/GamesRoom";
+import { ProblemsRoom } from "./surfaces/glass/ProblemsRoom";
+import { HomeGlass } from "./surfaces/glass/HomeGlass";
 import { fmtGB } from "./surfaces/hardware-format";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { HomeRoom } from "./surfaces/HomeRoom";
-import { markInterviewArrival } from "./surfaces/home-arrival";
+import { markInterviewArrival, INTERVIEW_ARRIVAL_EVENT } from "./surfaces/home-arrival";
 import { useHomeConsoleFlag, useHomeInterviewFlag } from "./design/use-hud";
 import { TrustMoment } from "./surfaces/TrustMoment";
 import { FirstWin } from "./surfaces/FirstWin";
@@ -280,7 +283,9 @@ const APPLIABLE_REC_IDS = new Set<string>([
 // Top-level sections shown in the left command rail. Four rooms, one face each: the
 // Check + Optimize (Tune) tabs are gone — their content lives inside the Lab's Optimize
 // station, which is where railFor() has pointed since the proving-ground merge shipped.
-type Tab = "Overview" | "Play" | "Learn" | "Lab";
+// Glass redesign (owner decision 2026-10-30): Games and Problems are the two flagship journeys'
+// own doors (MAKE THIS PC BETTER / FIGURE OUT WHAT WENT WRONG).
+type Tab = "Overview" | "Games" | "Problems" | "Play" | "Learn" | "Lab";
 
 type DiagnosticEntry = {
   label: string;
@@ -1034,7 +1039,19 @@ function App() {
   // railFor() already filters the check + fix ids off the rail, so those two arms only fire for a
   // stale persisted location; both land on the Lab, which is where the toggles live.
   const navHome = (id: HomeRailId) => {
-    setActiveTab(id === "home" ? "Overview" : id === "play" ? "Play" : id === "learn" ? "Learn" : "Lab");
+    setActiveTab(
+      id === "home"
+        ? "Overview"
+        : id === "games"
+          ? "Games"
+          : id === "problems"
+            ? "Problems"
+            : id === "play"
+              ? "Play"
+              : id === "learn"
+                ? "Learn"
+                : "Lab",
+    );
   };
   // The check->fix hallway. Every "take me to the fixes" affordance in the app routes through HERE,
   // so there is exactly ONE writer of the station intent and exactly one ordering to get right:
@@ -1055,6 +1072,13 @@ function App() {
   // able to lose both. `home-intake-data.ts` deliberately deferred this parameter until something
   // could fill it; `incident_observer.rs` is that something.
   const openLabStation = (station: LabStationKey, incidentId?: string) => {
+    // Crash & Freeze Rescue has its own door now (glass redesign): every hallway that led to the
+    // "blackbox" station lands on Problems instead, carrying the exact incident when there is one.
+    if (station === "blackbox") {
+      setProblemsFocus(incidentId ?? null);
+      navHome("problems");
+      return;
+    }
     try {
       localStorage.setItem("compy_lab_open_station", station);
       if (incidentId) localStorage.setItem("compy_lab_open_incident", incidentId);
@@ -1074,13 +1098,34 @@ function App() {
   // "Overview", so both fired back to back on every cold start, and on a boot that restores some
   // other tab the mount read fetched a card Home was not rendering anyway. (#222 IPC audit.)
   const [pendingCare, setPendingCare] = useState<PendingCareIncident | null>(null);
+  // The exact incident a hallway asked Problems to open (one-time delivery, cleared on leaving).
+  const [problemsFocus, setProblemsFocus] = useState<string | null>(null);
+  useEffect(() => {
+    if (activeTab !== "Problems") setProblemsFocus(null);
+  }, [activeTab]);
+  // Health's two views (glass redesign) and the game a Health card asked Games to open.
+  const [homeView, setHomeView] = useState<"summary" | "details">("summary");
+  const [gamesFocus, setGamesFocus] = useState<string | null>(null);
+  useEffect(() => {
+    if (activeTab !== "Overview") setHomeView("summary");
+    if (activeTab !== "Games") setGamesFocus(null);
+  }, [activeTab]);
+  // A problem typed into the palette lands on the console's interview card, so it opens the
+  // console view; HomeConsole then reads and clears the arrival exactly as before.
+  useEffect(() => {
+    const open = () => setHomeView("details");
+    window.addEventListener(INTERVIEW_ARRIVAL_EVENT, open);
+    return () => window.removeEventListener(INTERVIEW_ARRIVAL_EVENT, open);
+  }, []);
   const refreshPendingCare = useCallback(() => {
     invoke<PendingCareIncident | null>("get_pending_care_incident")
       .then((c) => setPendingCare(c ?? null))
       .catch(() => setPendingCare(null));
   }, []);
+  // Read on every room change, not only on Health: the Problems door's badge shows the same pending
+  // incident wherever the user is (glass redesign). One cheap read per navigation.
   useEffect(() => {
-    if (activeTab === "Overview") refreshPendingCare();
+    refreshPendingCare();
   }, [activeTab, refreshPendingCare]);
   // "Find out why" — mark it opened, then route to the EXACT incident. The card is cleared
   // optimistically: the user is on their way to the evidence, so leaving it behind them would be
@@ -1100,6 +1145,8 @@ function App() {
   };
   const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
     Overview: "home",
+    Games: "games",
+    Problems: "problems",
     Play: "play",
     Learn: "learn",
     Lab: "lab",
@@ -1449,6 +1496,7 @@ function App() {
           activeId={activeHomeId}
           onNavigate={navHome}
           ledgerCount={changes.length}
+          badges={{ problems: pendingCare ? 1 : 0 }}
           rig={hw ? [hw.cpu_brand, hw.gpus[0]?.name].filter(Boolean).join(" · ") : null}
           // Command-palette destinations. Each is the SAME single writer the rest of the app routes
           // through — openLabStation persists the station intent before the room mounts,
@@ -1486,67 +1534,115 @@ function App() {
                 isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
                 onChanged={refresh}
               />
-            <HomeRoom
-              hw={hw}
-              /* THE LATEST-CHANGE FOLLOW-THROUGH, NOW SUBORDINATE (#225 finding 1). FirstWin is
-                 the other half of the first-win journey (P2 / issue #49): TrustMoment rehearses
-                 apply→receipt→rollback on a demo setting while the ledger is EMPTY, FirstWin
-                 follows through on the user's own first live change. The two gate on exact
-                 complements (`changes.length === 0` vs at least one still-active entry), so they
-                 can never both be on screen.
+            {/* GLASS REDESIGN (owner decision 2026-10-30): Health opens on the summary page; the
+                console with every panel the room had is "Open the full health check", and a typed
+                problem from the palette (interview arrival) opens it directly. */}
+            {homeView === "summary" ? (
+              <HomeGlass
+                readiness={readiness}
+                priorities={priorities}
+                sessions={sessions}
+                pendingCare={pendingCare}
+                onOpenCareIncident={openCareIncident}
+                onDismissCareIncident={dismissCareIncident}
+                onOpenGame={(key) => {
+                  setGamesFocus(key);
+                  navHome("games");
+                }}
+                onOpenProblems={() => navHome("problems")}
+                onOpenLive={() => navHome("play")}
+                onRunCheck={() => setShowFirstCheck(true)}
+                onSeeChecks={openFixesInLab}
+                onOpenDetails={() => setHomeView("details")}
+                latestChange={<FirstWin changes={changes} onChanged={refresh} />}
+              />
+            ) : (
+              <>
+                <div className="gl-back-row">
+                  <button type="button" className="gl-back" onClick={() => setHomeView("summary")}>
+                    {t("home.glass.back")}
+                  </button>
+                </div>
+                <HomeRoom
+                  hw={hw}
+                  /* THE LATEST-CHANGE FOLLOW-THROUGH, NOW SUBORDINATE (#225 finding 1). FirstWin is
+                     the other half of the first-win journey (P2 / issue #49): TrustMoment rehearses
+                     apply→receipt→rollback on a demo setting while the ledger is EMPTY, FirstWin
+                     follows through on the user's own first live change. The two gate on exact
+                     complements (`changes.length === 0` vs at least one still-active entry), so they
+                     can never both be on screen.
 
-                 It used to render as a sibling ABOVE <HomeRoom>, which put a 147px bordered
-                 banner — carrying its own accented button — at the top of the room and pushed the
-                 eyebrow from the comp's y127 to y269. Measured: every element below it moved 142px
-                 down, and at 1280x720 that alone cropped the rig before its readout strip. The
-                 approved comp draws nothing in that position.
+                     It used to render as a sibling ABOVE <HomeRoom>, which put a 147px bordered
+                     banner — carrying its own accented button — at the top of the room and pushed the
+                     eyebrow from the comp's y127 to y269. Measured: every element below it moved 142px
+                     down, and at 1280x720 that alone cropped the rig before its readout strip. The
+                     approved comp draws nothing in that position.
 
-                 So it moves into RoomShell's `below` slot, whose contract is exactly this case:
-                 full-width content beneath both columns, where a split room keeps what is real but
-                 below the fold — content moves down, it is never deleted to make a comp fit. Every
-                 handler, phase, verdict, aria-live region and localisation key is untouched; only
-                 the mount point moves. Passed as a NODE rather than as data so App keeps owning
-                 `changes`/`refresh` and HomeRoom stays presentation-only. */
-              latestChange={<FirstWin changes={changes} onChanged={refresh} />}
-              readiness={readiness}
-              priorities={priorities}
-              sessions={sessions}
-              changes={changes}
-              onRunCheck={() => setShowFirstCheck(true)}
-              onSeeInFix={openFixesInLab}
-              fixRoomLabel={t("common.rail.lab")}
-              // Console-only (compy_home_console): the Home dock's doors are the rail the app
-              // actually shows (the shared `rail` above) minus Home itself, navigating through
-              // the SAME navHome mapping the rail uses.
-              onNavigate={(k) => navHome(k as HomeRailId)}
-              // Console intake band only: the crash row lands ON the crash evidence, through the
-              // same single writer every other station deep-link uses.
-              onOpenLabStation={(s, incidentId) => openLabStation(s as LabStationKey, incidentId)}
-              pendingCare={pendingCare}
-              onOpenCareIncident={openCareIncident}
-              onDismissCareIncident={dismissCareIncident}
-              rooms={rail
-                .filter((r) => r.id !== "home")
-                .map((r) => ({
-                  key: r.id,
-                  // r.label is HOME_RAIL's English literal (homeRail.ts is guard-pinned, out of
-                  // scope) — re-derive the DISPLAY name from common.rail instead of using it
-                  // directly, so this list localizes too.
-                  name: t(`common.rail.${r.id}`),
-                }))}
-              // The interview's one-tap fast path only (issue #177, was the intake band's option C):
-              // derives its safe stack from the SAME recs + allowlist Optimize uses, and applies
-              // through the SAME audited one-UAC batch primitive — no new mutation boundary.
-              recs={recs}
-              isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
-              onApplyBatch={applyBatch}
-            />
+                     So it moves into RoomShell's `below` slot, whose contract is exactly this case:
+                     full-width content beneath both columns, where a split room keeps what is real but
+                     below the fold — content moves down, it is never deleted to make a comp fit. Every
+                     handler, phase, verdict, aria-live region and localisation key is untouched; only
+                     the mount point moves. Passed as a NODE rather than as data so App keeps owning
+                     `changes`/`refresh` and HomeRoom stays presentation-only. */
+                  latestChange={<FirstWin changes={changes} onChanged={refresh} />}
+                  readiness={readiness}
+                  priorities={priorities}
+                  sessions={sessions}
+                  changes={changes}
+                  onRunCheck={() => setShowFirstCheck(true)}
+                  onSeeInFix={openFixesInLab}
+                  fixRoomLabel={t("common.rail.lab")}
+                  // Console-only (compy_home_console): the Home dock's doors are the rail the app
+                  // actually shows (the shared `rail` above) minus Home itself, navigating through
+                  // the SAME navHome mapping the rail uses.
+                  onNavigate={(k) => navHome(k as HomeRailId)}
+                  // Console intake band only: the crash row lands ON the crash evidence, through the
+                  // same single writer every other station deep-link uses.
+                  onOpenLabStation={(s, incidentId) => openLabStation(s as LabStationKey, incidentId)}
+                  pendingCare={pendingCare}
+                  onOpenCareIncident={openCareIncident}
+                  onDismissCareIncident={dismissCareIncident}
+                  rooms={rail
+                    .filter((r) => r.id !== "home")
+                    .map((r) => ({
+                      key: r.id,
+                      // r.label is HOME_RAIL's English literal (homeRail.ts is guard-pinned, out of
+                      // scope) — re-derive the DISPLAY name from common.rail instead of using it
+                      // directly, so this list localizes too.
+                      name: t(`common.rail.${r.id}`),
+                    }))}
+                  // The interview's one-tap fast path only (issue #177, was the intake band's option C):
+                  // derives its safe stack from the SAME recs + allowlist Optimize uses, and applies
+                  // through the SAME audited one-UAC batch primitive — no new mutation boundary.
+                  recs={recs}
+                  isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                  onApplyBatch={applyBatch}
+                />
+              </>
+            )}
             </>
           ) : (
             <>
               {/* V2-5: the Monitor room on RoomShell — the room's ONE face since the generation
                   prune (the compy_monitor="0" fallthrough to the classic Play panels is gone).
                   Mounts per-visit; its pollers are demand-gated on the active tab. */}
+              {activeTab === "Games" && (
+                <GamesRoom
+                  sessions={sessions}
+                  focusKey={gamesFocus}
+                  onOpenLive={() => navHome("play")}
+                  onOpenTest={() => navHome("lab")}
+                />
+              )}
+              {activeTab === "Problems" && (
+                <ProblemsRoom
+                  changes={changes}
+                  onChanged={refresh}
+                  ledgerBusy={busyId !== null}
+                  onLedgerBusy={(b) => setBusyId(b ? "care-restore" : null)}
+                  focusIncidentId={problemsFocus}
+                />
+              )}
               {activeTab === "Play" && hw && (
                 <MonitorV2
                   active

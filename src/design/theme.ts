@@ -26,6 +26,11 @@ const THEME_KEY = "compy_theme";
 const isTheme = (v: unknown): v is InstrumentTheme =>
   v === "midnight" || v === "violet" || v === "crimson" || v === "emerald" || v === "hearth";
 
+// DEFAULT MIDNIGHT (owner decision 2026-10-30, the glass redesign: "this is the best design model we
+// have come up with to date"). The approved prototype opens in Midnight, DESIGN.md has always named
+// Midnight the default, and main.tsx's comment said so while its code said violet. A saved pick wins.
+export const DEFAULT_THEME: InstrumentTheme = "midnight";
+
 export function readInstrumentTheme(): InstrumentTheme {
   try {
     const v = localStorage.getItem(THEME_KEY);
@@ -33,7 +38,73 @@ export function readInstrumentTheme(): InstrumentTheme {
   } catch {
     /* ignore — fall back to default */
   }
-  return "violet";
+  return DEFAULT_THEME;
+}
+
+// ── Look: surface + backdrop (glass redesign, owner decision 2026-10-30) ─────────────────────────
+// Surface = how panels are drawn: "glass" lets the backdrop through, "frosted" lets less through,
+// "solid" is the opaque classic look with no backdrop. Backdrop = the picture behind the glass:
+// two original, procedurally drawn images bundled with the app (no network, no third-party art) or
+// a plain ground. "auto" follows the theme. Local-only and cosmetic, like the theme.
+export type SurfaceStyle = "glass" | "frosted" | "solid";
+export type BackdropChoice = "auto" | "night" | "room" | "plain";
+export type BackdropImage = "night" | "room" | "plain";
+
+export const SURFACE_STYLES: SurfaceStyle[] = ["glass", "frosted", "solid"];
+export const BACKDROP_CHOICES: BackdropChoice[] = ["auto", "night", "room", "plain"];
+
+const SURFACE_KEY = "compy_surface";
+const BACKDROP_KEY = "compy_backdrop";
+
+export function readSurface(): SurfaceStyle {
+  try {
+    const v = localStorage.getItem(SURFACE_KEY);
+    if (v === "glass" || v === "frosted" || v === "solid") return v;
+  } catch {
+    /* ignore — default */
+  }
+  return "glass";
+}
+
+export function readBackdrop(): BackdropChoice {
+  try {
+    const v = localStorage.getItem(BACKDROP_KEY);
+    if (v === "auto" || v === "night" || v === "room" || v === "plain") return v;
+  } catch {
+    /* ignore — default */
+  }
+  return "auto";
+}
+
+/** The picture a backdrop choice shows under a theme: warm themes get the warm room. */
+export function resolveBackdrop(choice: BackdropChoice, theme: InstrumentTheme): BackdropImage {
+  if (choice !== "auto") return choice;
+  return theme === "hearth" || theme === "crimson" ? "room" : "night";
+}
+
+/** Writes the look attributes on <html>. Called before first paint (main.tsx) and on every change. */
+export function syncLookAttributes(): void {
+  const root = document.documentElement;
+  root.dataset.surface = readSurface();
+  root.dataset.bd = resolveBackdrop(readBackdrop(), readInstrumentTheme());
+}
+
+function persistLook(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* ignore persistence failure — still applies this session */
+  }
+  syncLookAttributes();
+  window.dispatchEvent(new CustomEvent("compy:look-changed"));
+}
+
+export function applySurface(s: SurfaceStyle): void {
+  persistLook(SURFACE_KEY, s);
+}
+
+export function applyBackdrop(b: BackdropChoice): void {
+  persistLook(BACKDROP_KEY, b);
 }
 
 // Hearth keeper (shadow realm, pure-craftsmanship tier): with the Hearth theme lit in December, the
@@ -56,6 +127,9 @@ export function applyInstrumentTheme(t: InstrumentTheme): void {
   } catch {
     /* ignore persistence failure — still applies this session */
   }
+  // An "auto" backdrop follows the theme, so a theme change can change the picture.
+  syncLookAttributes();
+  window.dispatchEvent(new CustomEvent("compy:look-changed"));
 }
 
 // Monitor refresh rate, relayed main-window → overlay window via localStorage (the same

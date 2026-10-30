@@ -120,4 +120,95 @@
      still gets 366px, instead of a fixed width crushing the headline into a column it cannot
      hold. One rule, no media query, and none may be added. */
   --v2-aside: min(680px, 56.5%);
+
+  /* ── Glass shell geometry + chrome (owner decision 2026-10-30, the glass redesign) ── */
+  --v2-dock-w: 64px;
+  --v2-dock-active-bg: rgba(255, 255, 255, 0.92);
+  --v2-dock-active-ink: #0d1117;
+  --v2-glass-blur: 18px;
+  --v2-accent-text: #d4c5ff;
+  --v2-glass-rgb: 22, 17, 32;
+  --v2-ground: #0a0710;
+  /* Popovers and the dock: near-opaque glass so their own text never sits on the busy backdrop. */
+  --v2-panel-pop: rgba(var(--v2-glass-rgb), 0.96);
+  --v2-panel-dock: rgba(var(--v2-glass-rgb), 0.58);
+  /* The Look panel's theme swatches: each theme's own accent, shown whatever theme is active. */
+  --v2-swatch-midnight: #2ee6c0;
+  --v2-swatch-violet: #a78bfa;
+  --v2-swatch-crimson: #fb3b53;
+  --v2-swatch-emerald: #27e08a;
+  --v2-swatch-hearth: #f0b878;
+}
+
+/* ── THE THEME DRIVES THE V2 ACCENT (glass redesign, owner decision 2026-10-30) ─────────────────
+   Until now the five Settings themes recoloured only the legacy --ix-* layer; every V2 room stayed
+   violet whatever the user picked (COLOR-1, 2026-08-13). The approved redesign opens in Midnight and
+   lets the theme pick the accent, so each theme now carries its own accent, its readable text tint,
+   its dark ink (legible on the accent fill) and the tint the glass panels take. Violet keeps the V2
+   violet it always had. A per-room user pick (room-identity) still overrides inside its room. */
+:root[data-v2="on"][data-itheme="midnight"] {
+  --v2-accent: #2ee6c0;
+  --v2-accent-ink: #06231c;
+  --v2-accent-dim: rgba(46, 230, 192, 0.14);
+  --v2-accent-line: rgba(46, 230, 192, 0.3);
+  --v2-accent-text: #7defcf;
+  --v2-glass-rgb: 14, 20, 27;
+  --v2-ground: #05080c;
+}
+:root[data-v2="on"][data-itheme="violet"] {
+  --v2-accent: #a78bfa;
+  --v2-accent-ink: #1a0a2e;
+  --v2-accent-dim: rgba(167, 139, 250, 0.14);
+  --v2-accent-line: rgba(167, 139, 250, 0.3);
+  --v2-accent-text: #d4c5ff;
+  --v2-glass-rgb: 22, 17, 32;
+  --v2-ground: #0a0710;
+}
+:root[data-v2="on"][data-itheme="crimson"] {
+  --v2-accent: #fb3b53;
+  --v2-accent-ink: #2a0610;
+  --v2-accent-dim: rgba(251, 59, 83, 0.14);
+  --v2-accent-line: rgba(251, 59, 83, 0.32);
+  --v2-accent-text: #ffadb8;
+  --v2-glass-rgb: 31, 16, 20;
+  --v2-ground: #0d0608;
+}
+:root[data-v2="on"][data-itheme="emerald"] {
+  --v2-accent: #27e08a;
+  --v2-accent-ink: #042012;
+  --v2-accent-dim: rgba(39, 224, 138, 0.14);
+  --v2-accent-line: rgba(39, 224, 138, 0.3);
+  --v2-accent-text: #8af0b5;
+  --v2-glass-rgb: 13, 24, 19;
+  --v2-ground: #050a07;
+}
+:root[data-v2="on"][data-itheme="hearth"] {
+  --v2-accent: #f0b878;
+  --v2-accent-ink: #2a1304;
+  --v2-accent-dim: rgba(240, 184, 120, 0.14);
+  --v2-accent-line: rgba(240, 184, 120, 0.32);
+  --v2-accent-text: #ffe0b4;
+  --v2-glass-rgb: 30, 25, 20;
+  --v2-ground: #0d0a08;
+}
+
+/* ── Surfaces: glass / frosted / solid (Look panel) ──────────────────────────────────────────────
+   Glass lets the backdrop show through every panel; frosted lets a little through; solid keeps the
+   opaque tokens above and drops the backdrop. Only the panel family and hairlines change, so every
+   room re-skins without touching its own CSS. */
+:root[data-v2="on"][data-surface="glass"] {
+  --v2-panel: rgba(var(--v2-glass-rgb), 0.64);
+  --v2-panel-2: rgba(var(--v2-glass-rgb), 0.74);
+  --v2-panel-card: rgba(var(--v2-glass-rgb), 0.6);
+  --v2-panel-card-hover: rgba(var(--v2-glass-rgb), 0.72);
+  --v2-line: rgba(255, 255, 255, 0.1);
+  --v2-line-strong: rgba(255, 255, 255, 0.17);
+}
+:root[data-v2="on"][data-surface="frosted"] {
+  --v2-panel: rgba(var(--v2-glass-rgb), 0.86);
+  --v2-panel-2: rgba(var(--v2-glass-rgb), 0.9);
+  --v2-panel-card: rgba(var(--v2-glass-rgb), 0.84);
+  --v2-panel-card-hover: rgba(var(--v2-glass-rgb), 0.9);
+  --v2-line: rgba(255, 255, 255, 0.09);
+  --v2-line-strong: rgba(255, 255, 255, 0.15);
 }
