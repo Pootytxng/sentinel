@@ -19,7 +19,7 @@ import { type GpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { readDisplayRefreshHz } from "../design/theme";
-import { displayModeLabel } from "../data/display-mode";
+import { displayModeLabel, screenTargetLine } from "../data/display-mode";
 import { useExpertView } from "../design/use-expert-view";
 import { Depth, ReceiptRow, receiptPct } from "../design/Depth";
 import { LessonLine } from "../design/LessonLine";
@@ -301,6 +301,7 @@ export function SessionDebrief({
   const fmtFps = (n: number | null) => (n == null ? "—" : n.toFixed(expert ? 1 : 0));
   const avgFps = knownFps(s.avg_fps);
   const lowFps = knownFps(s.low1_fps_est);
+  const screenLine = screenTargetLine(avgFps, s.hw_fingerprint?.display, t);
   // Honesty gate (LOCKED rule #5): NVIDIA GPU temp comes from NVML — implemented, NOT hardware-verified
   // — so it's never graded authoritatively. Routed through the shared gpu-sensor helper (one source,
   // can't drift) — same gate Play + the Home/Monitoring surfaces use.
@@ -462,6 +463,10 @@ export function SessionDebrief({
           grade={tempGrade(s.peak_gpu_temp_c)}
         />
       </div>
+
+      {/* P9-target: the average against the screen this session was played on (its own recorded
+          mode). No line when either reading is unmeasured. */}
+      {screenLine && <p className="debrief-sub debrief-screen-target">{screenLine}</p>}
 
       {/* The shape of the session, from the trace that was already being persisted and never drawn
           (#49 deviation 3 / BACKLOG §A2). Sits between the summary numbers and the analysis on

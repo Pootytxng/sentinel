@@ -230,6 +230,8 @@
   },
   "sessionDebrief": {
     "leftOut": "{{span}} left out while another window was in front.",
+    "screenTarget": "Your average was about {{pct}}% of your {{rate}} Hz screen.",
+    "screenTargetMet": "Your average kept up with your {{rate}} Hz screen.",
     "comparisonHeader": "COMPARISON · {{title}} · two {{game}} sessions",
     "noiseFloor": "noise floor ±{{pct}}%",
     "noMeasurableChange": "No measurable change",

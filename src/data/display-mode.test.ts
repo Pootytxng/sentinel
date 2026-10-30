@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import i18n from "../i18n";
-import { displayModeLabel } from "./display-mode";
+import { displayModeLabel, refreshRateOf, screenTarget, screenTargetLine } from "./display-mode";
 import { eventText } from "../surfaces/event-text";
 import type { IntelEvent } from "../types";
 
@@ -53,5 +53,44 @@ describe("displayModeLabel", () => {
       parts: { kind: "hardware", changes: [{ part: "display", from: "2560x1440@165", to: "3440x1440@144" }] },
     } as unknown as IntelEvent;
     expect(eventText(e, t)).toBe("Hardware changed — Display: 2560×1440 @ 165 Hz → 3440×1440 @ 144 Hz");
+  });
+});
+
+// P9-target: FPS answers compared with the screen's measured refresh rate.
+describe("screenTarget / screenTargetLine", () => {
+  const t = i18n.t.bind(i18n);
+
+  it("reads the recorded rate, never a default", () => {
+    expect(refreshRateOf("1920x1080@250")).toBe(250);
+    expect(refreshRateOf("1920x1080@0")).toBeNull();
+    expect(refreshRateOf("1920x1080")).toBeNull();
+    expect(refreshRateOf(null)).toBeNull();
+  });
+
+  it("compares the average with the screen in plain words", () => {
+    expect(screenTarget(150, "1920x1080@250")).toEqual({ kind: "under", pct: 60, rate: 250 });
+    expect(screenTargetLine(150, "1920x1080@250", t)).toBe("Your average was about 60% of your 250 Hz screen.");
+  });
+
+  it("at or above the rate says it kept up; just under never rounds up into it", () => {
+    expect(screenTargetLine(319, "2560x1440@165", t)).toBe("Your average kept up with your 165 Hz screen.");
+    expect(screenTargetLine(165, "2560x1440@165", t)).toBe("Your average kept up with your 165 Hz screen.");
+    expect(screenTarget(249.6, "1920x1080@250")).toEqual({ kind: "under", pct: 99, rate: 250 });
+  });
+
+  it("no line when the rate or the FPS is unmeasured", () => {
+    expect(screenTargetLine(150, "1920x1080@0", t)).toBeNull();
+    expect(screenTargetLine(150, null, t)).toBeNull();
+    expect(screenTargetLine(150, "1920x1080", t)).toBeNull();
+    expect(screenTargetLine(null, "1920x1080@250", t)).toBeNull();
+    expect(screenTargetLine(0, "1920x1080@250", t)).toBeNull();
+    expect(screenTargetLine(Number.NaN, "1920x1080@250", t)).toBeNull();
+  });
+
+  it("zh-CN carries the same numbers", async () => {
+    await i18n.changeLanguage("zh-CN");
+    const line = screenTargetLine(150, "1920x1080@250", t)!;
+    expect(line).toContain("250 Hz");
+    expect(line).toContain("60%");
   });
 });
