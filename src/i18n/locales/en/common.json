@@ -338,7 +338,10 @@
     "liveCta": "See sessions in Live",
     "testCta": "Try a change in Test",
     "recentTitle": "Recent sessions",
-    "recentSub": "Across every game · newest first"
+    "recentSub": "Across every game · newest first",
+    "playTitle": "Play time by game",
+    "playSub": "Measured sessions only",
+    "playRow": "{{name}}, {{time}} of play"
   },
   "problems": {
     "title": "Problems"

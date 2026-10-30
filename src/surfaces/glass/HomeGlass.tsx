@@ -170,12 +170,13 @@ export function HomeGlass({
       )}
 
       <div className="gl-kpis">
-        {gameCards.map((g, i) => (
+        {gameCards.map((g) => (
           <button
             key={g.key}
             type="button"
             className="gl-kpi"
-            data-hot={i === 0}
+            // The lit card is the game the chart below is showing — one meaning for the one fill.
+            data-hot={g.key === chartKey}
             onClick={() => onOpenGame(g.key)}
             aria-label={t("common.games.open", { name: g.name })}
           >

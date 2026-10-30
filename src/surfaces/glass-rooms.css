@@ -107,7 +107,7 @@
 }
 :root[data-v2="on"] .gl-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 12px;
 }
 :root[data-v2="on"] .gl-kpi {
@@ -280,6 +280,53 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+}
+/* The last card in the right-hand stack takes up the slack, so both columns end on one line. */
+:root[data-v2="on"] .gl-stack > :last-child {
+  flex: 1;
+}
+:root[data-v2="on"] .gl-lower[data-align="start"] {
+  align-items: start;
+}
+
+/* ── Play time by game: one bar per game, proportional to measured play time ── */
+:root[data-v2="on"] .gl-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+:root[data-v2="on"] .gl-bars-row {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .gl-bars-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root[data-v2="on"] .gl-bars-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--v2-line);
+  overflow: hidden;
+}
+:root[data-v2="on"] .gl-bars-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--v2-accent);
+}
+
+/* FirstWin ("Your latest change") on glass: a glass card with pill buttons like its neighbours. */
+:root[data-v2="on"]:not([data-surface="solid"]) .gl-room .first-win {
+  border: 1px solid var(--v2-line);
+  border-radius: 18px;
+  background: var(--v2-panel-card);
+  -webkit-backdrop-filter: blur(var(--v2-glass-blur));
+  backdrop-filter: blur(var(--v2-glass-blur));
 }
 :root[data-v2="on"] .gl-pair {
   display: grid;

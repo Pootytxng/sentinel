@@ -1137,6 +1137,9 @@
   opacity: 1;
   transition-delay: 0.35s;
 }
+:root[data-v2="on"] .v2-nav-item[aria-selected="true"]:hover > .v2-nav-label {
+  opacity: 0;
+}
 :root[data-v2="on"] .v2-nav-item:focus-visible > .v2-nav-label {
   opacity: 1;
 }
@@ -1283,14 +1286,96 @@
 /* Older rooms speak the glass language: pill primary actions in the theme accent, the classic
    buttons rounded, and room titles at the same size as the new pages' titles. */
 :root[data-v2="on"]:not([data-surface="solid"]) .v2-primary,
-:root[data-v2="on"]:not([data-surface="solid"]) :is(.btn, .btn-small, .btn-primary) {
+:root[data-v2="on"]:not([data-surface="solid"]) :is(.btn, .btn-small, .btn-primary, .fw-btn, .mc-start),
+:root[data-v2="on"]:not([data-surface="solid"]) :is(.hc-notice-acts, .hc-seg-group) button {
   border-radius: 999px;
 }
-:root[data-v2="on"]:not([data-surface="solid"]) .v2-room .v2-verdict h1 {
+:root[data-v2="on"]:not([data-surface="solid"])
+  .v2-content-wrap > .v2-room[data-layout][data-room] .v2-verdict h1 {
   font-size: var(--type-section);
 }
 :root[data-v2="on"]:not([data-surface="solid"]) .v2-content-wrap:has(> .v2-room[data-room="lab"]) {
   max-width: 1320px;
+}
+
+/* Live's capture row sat flush against the Live/Sessions switch above it. */
+:root[data-v2="on"]:not([data-surface="solid"]) .mc-capture {
+  margin-top: 10px;
+}
+/* The console's mono uppercase micro-labels ("chrome-tag" in the mono census) read as the old
+   look on glass, so on glass they speak in the UI face, sentence case. Solid keeps them. */
+:root[data-v2="on"]:not([data-surface="solid"]) :is(
+  .bb-assess-label,
+  .bb-known-label,
+  .bb-known-step-tag,
+  .bb-known-sublabel,
+  .bb-nextstep-tag,
+  .bb-strength,
+  .bb-tag,
+  .bb-vitals-label,
+  .cp-group,
+  .drift-watch-head,
+  .ds-trace-eyebrow,
+  .hero-eyebrow,
+  .lab-gauge-caption-k,
+  .mc-eyebrow,
+  .progate-badge,
+  .rig-loading,
+  .set-action,
+  .set-done,
+  .set-field-label,
+  .set-seg-btn,
+  .st-affects-key,
+  .st-leg,
+  .st-loading,
+  .st-tag,
+  .st-tweaks-head,
+  .tag,
+  .tf-eyebrow,
+  .theme-pop-head,
+  .vital-label,
+  .wcp-graph-kind,
+  .wcp-inv-field > span,
+  .wcp-tag,
+  .ag-label,
+  .ag-u,
+  .bc-library-all,
+  .bc-pick-type,
+  .bc-sect-t,
+  .bc-state,
+  .bc-tag,
+  .bc-tile-k,
+  .bpt-card-conf,
+  .bpt-coverage-label,
+  .bpt-evi-label,
+  .deck-zoomreset,
+  .gc-btn,
+  .gc-engage,
+  .gc-panel-title,
+  .gc-state,
+  .gc-tier-title,
+  .gc-what summary,
+  .hi-evidence-title,
+  .hi-level,
+  .hud-frame-readout,
+  .mc-cap,
+  .mc-last-k,
+  .mc-ov-seg,
+  .mc-readout-k,
+  .osc-label,
+  .osc-nosignal-k,
+  .ss-axisnote,
+  .ss-coverage,
+  .ss-empty,
+  .ss-filter-btn,
+  .ss-meta,
+  .ss-notimeline,
+  .v2-eyebrow,
+  [data-v2="on"] .v2-accent-pop-head
+) {
+  font-family: var(--v2-font-sans);
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 /* The narrow-window icon strip (#622) is now the dock at every width; below 600px the dock just

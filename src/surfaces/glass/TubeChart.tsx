@@ -98,7 +98,9 @@ export function TubeChart({
         ))}
         {bars.map((b, i) => {
           const isHi = i === hi;
-          const showLabel = isHi || !(thin && (n - 1 - i) % 2);
+          // Two sessions on one day share a date: print it once, on the later bar.
+          const sameAsNext = i < n - 1 && bars[i + 1].label === b.label;
+          const showLabel = isHi || (!(thin && (n - 1 - i) % 2) && !sameAsNext);
           const tone = b.tone ?? (isHi ? "accent" : "base");
           const fill = `url(#${uid}${tone === "accent" ? "acc" : tone === "bad" ? "bad" : "base"})`;
           const v = b.value;

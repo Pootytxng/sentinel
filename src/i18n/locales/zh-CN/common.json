@@ -333,7 +333,10 @@
     "liveCta": "在实时里查看",
     "testCta": "在测试里尝试改动",
     "recentTitle": "最近的游戏记录",
-    "recentSub": "所有游戏 · 最新的在前"
+    "recentSub": "所有游戏 · 最新的在前",
+    "playTitle": "各游戏的游玩时长",
+    "playSub": "仅统计实测的游戏记录",
+    "playRow": "{{name}}，共 {{time}}"
   },
   "problems": {
     "title": "问题"

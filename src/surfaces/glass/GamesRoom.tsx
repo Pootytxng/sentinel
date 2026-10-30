@@ -192,7 +192,7 @@ function GameDetail({
         </div>
       </div>
 
-      <div className="gl-lower">
+      <div className="gl-lower" data-align="start">
         <section className="gl-card" aria-labelledby="gl-games-chart">
           <h2 className="gl-card-title" id="gl-games-chart">
             {t("common.games.chartTitle")}
@@ -264,6 +264,39 @@ function RecentSessions({ games, onOpen }: { games: GameEntry[]; onOpen: (key: s
   );
 }
 
+/** Measured play time per game, as bars — where the hours actually went. */
+function PlayTime({ games, onOpen }: { games: GameEntry[]; onOpen: (key: string) => void }) {
+  const { t } = useTranslation();
+  const time = usePlayTime();
+  const ranked = [...games].sort((a, b) => b.totalSecs - a.totalSecs).slice(0, 6);
+  const most = Math.max(1, ...ranked.map((g) => g.totalSecs));
+  return (
+    <section className="gl-card" aria-labelledby="gl-games-playtime">
+      <h2 className="gl-card-title" id="gl-games-playtime">
+        {t("common.games.playTitle")}
+      </h2>
+      <p className="gl-card-sub">{t("common.games.playSub")}</p>
+      <div className="gl-bars">
+        {ranked.map((g) => (
+          <button
+            type="button"
+            className="gl-bars-row gl-row-btn"
+            key={g.key}
+            onClick={() => onOpen(g.key)}
+            aria-label={t("common.games.playRow", { name: g.name, time: time(g.totalSecs) })}
+          >
+            <span className="gl-bars-name">{g.name}</span>
+            <span className="gl-bars-track" aria-hidden="true">
+              <span className="gl-bars-fill" style={{ display: "block", width: `${Math.max(3, (100 * g.totalSecs) / most)}%` }} />
+            </span>
+            <span className="gl-row-val">{time(g.totalSecs)}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function GamesRoom({
   sessions,
   focusKey = null,
@@ -317,7 +350,10 @@ export function GamesRoom({
               <GameCard key={g.key} game={g} hot={i === 0} onOpen={() => setOpenKey(g.key)} />
             ))}
           </div>
-          <RecentSessions games={games} onOpen={setOpenKey} />
+          <div className="gl-lower" data-align="start">
+            <RecentSessions games={games} onOpen={setOpenKey} />
+            <PlayTime games={games} onOpen={setOpenKey} />
+          </div>
         </>
       )}
     </section>

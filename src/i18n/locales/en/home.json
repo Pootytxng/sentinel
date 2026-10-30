@@ -692,7 +692,7 @@
     "live": {
       "title": "Last session",
       "unit": "fps avg",
-      "note": "{{game}} · {{when}} · 1% low {{low}} fps · Measured",
+      "note": "{{game}} · {{when}} · 1% low {{low}} fps · Measured",
       "noteNoLow": "{{game}} · {{when}} · Measured",
       "none": "No session yet",
       "noneNote": "Open Live to start capture"

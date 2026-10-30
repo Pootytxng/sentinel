@@ -666,7 +666,7 @@
     "live": {
       "title": "上一次游戏",
       "unit": "平均 fps",
-      "note": "{{game}} · {{when}} · 1% 低帧 {{low}} fps · 实测",
+      "note": "{{game}} · {{when}} · 1% 低帧 {{low}} fps · 实测",
       "noteNoLow": "{{game}} · {{when}} · 实测",
       "none": "还没有记录",
       "noneNote": "打开“实时”开始采集"
