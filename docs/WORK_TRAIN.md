@@ -621,10 +621,13 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
       250 Hz screen"); no line when the rate or the FPS is unmeasured. ROADMAP P9 "display target".
       `97ebbf7f` (merge `6e4224c9`): session debrief line from the session's own recorded mode, en + zh-CN.
       Self-review of the line owed at next FULL desk session.
-- [ ] **P9-settings-done** When the Phase 4 panel says Compy finished the supported candidates for a game,
+- [x] **P9-settings-done** When the Phase 4 panel says Compy finished the supported candidates for a game,
       the game summary adds one line: settings have reached what Compy can test here, then the measured
       limiter (P7-rig-limiter) or "not measured". "No upgrade recommended" is a valid answer and the default
       when nothing is measured. Needs P4-exit-proof for a live case; code + tests can land first.
+      `25feba43` (merge `a84ba5a7`): code + tests landed; reads the cached scan's top attention limiter (a
+      setting named as a setting, a part named only), no scan/unread = "not measured". Live case still needs
+      P4-exit-proof; self-review of the line owed at next FULL desk session.
 
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
@@ -633,12 +636,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-27 ~16:20–18:20 (interactive from Claude HQ, CODE-ONLY): P7-rig-care `9f60e291` (feat `c184ad8c`,
-  fix `4f1f0437`); cargo test 1645 passed, clippy -D warnings clean; one review round taken. r23 FULL vitest
-  failed on one Depth-door flake (SessionDebrief); fixed on its own branch `908b0464` (test-only: re-query the
-  live card and open its door idempotently inside waitFor; other door clicks wait for the body to mount).
-  r24 FULL vitest 525 files / 10772, exit 0, tsc 0. Lesson: never hold a node across a Depth door open —
-  re-query inside waitFor. Not pushed.
 - 2026-10-27 ~18:15–18:50 (interactive from Claude HQ, CODE-ONLY): P4-smooth-offer-a `75f1d0d3` (feat `45d48c79`);
   cargo test 1651 passed, clippy -D warnings clean; one Rust review round, 4 findings taken; r25 FULL vitest 525
   files / 10100, exit 0. Lesson: a regex over `ExperimentRecord {` also matches fn return types — anchor struct
@@ -703,6 +700,10 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
 - 2026-10-30 ~16:30 (scheduled, CODE-ONLY, owner playing WARDOGS): P9-target `97ebbf7f` (merge `6e4224c9`);
   tsc 0; 21 files / 318 tests, exit 0; debrief test proven failing on old code (run after the commit). TS
   display only, no review. Rust items (P4-noise-stretch, P5-realplay) left for a session with no game running.
+  One item only. Log trimmed to the newest 14. Not pushed (CODE-ONLY); next FULL session pushes.
+- 2026-10-30 evening (scheduled, CODE-ONLY, owner playing WARDOGS): P9-settings-done `25feba43` (merge
+  `a84ba5a7`); tsc 0; bench + helper + i18n/locale/copy/census guards 17 files / 275, exit 0; two bench tests
+  proven failing on old code. TS display only, no review. Rust items left for a session with no game running.
   One item only. Log trimmed to the newest 14. Not pushed (CODE-ONLY); next FULL session pushes.
 
 ## Done
