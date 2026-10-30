@@ -554,7 +554,22 @@ function stretchReceipts(x: Experiment, t: Translate): string[] {
     if (flat >= 1 && s.flat_fps != null)
       lines.push(t(flatKey, { session, minutes: flat, fps: Math.round(s.flat_fps) }));
   }
+  const cap = sharedHeldRate(p.baseline_stretches, p.after_stretches);
+  if (x.verdict === "no-change" && cap != null) lines.push(t("lab.experimentBench.stretchCappedBoth", { fps: cap }));
   return lines;
+}
+
+// P4-cap-note: both sides held flat for a minute or more at the same rate (within the backend's
+// FLAT_SPREAD_FPS, comparability.rs) look like one frame cap. A capped scene can't show a gain, so a
+// No change there says little. Only named, never used to judge. Returns the shared rate, or null.
+const HELD_SAME_RATE_FPS = 2;
+function sharedHeldRate(a?: SessionStretches | null, b?: SessionStretches | null): number | null {
+  const held = (s?: SessionStretches | null) =>
+    s && (s.flat_secs ?? 0) >= 60 && s.flat_fps != null && Number.isFinite(s.flat_fps) ? s.flat_fps : null;
+  const x = held(a);
+  const y = held(b);
+  if (x == null || y == null || Math.abs(x - y) > HELD_SAME_RATE_FPS) return null;
+  return Math.round((x + y) / 2);
 }
 
 // A past result whose verdict reads like a measured judgment (Better / No change / Worse). Only such
