@@ -152,6 +152,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import ExperimentBench from "./ExperimentBench";
+import { invalidateProbe, putProbe } from "../data/probe-cache";
 
 /** The args of the one call to `cmd` since the last `mockClear`. */
 const callArgs = (cmd: string) => {
@@ -2034,6 +2035,49 @@ describe("P4-exit: what Compy tested on this game", () => {
       "Compy finished the supported tests for WardogsClient on this PC: every change it lists as worth testing here has a measured result.",
     );
     expect(screen.queryByTestId("exp-summary-retest")).toBeNull();
+    // P9-settings-done: with no scan in hand the limiter is "not measured" and no upgrade is the answer.
+    const done = screen.getByTestId("exp-summary-settings-done");
+    expect(done).toHaveAttribute("data-kind", "not-measured");
+    expect(done).toHaveTextContent(
+      "Settings have reached what Compy can test here. What holds this PC back hasn't been measured, so no upgrade is recommended.",
+    );
+  });
+
+  it("P9-settings-done: a finished summary names the last scan's top limiter, a setting or a part", async () => {
+    const lim = (id: string, title: string) => ({ id, title, reason: "", linked: null, confidence: "medium", status: "attention" });
+    const scan = (limiters: unknown[]) => ({
+      readiness: null,
+      priorities: { limiters, already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null },
+      recs: [],
+      reverted: [],
+      elapsed: null,
+    });
+    try {
+      putProbe("readiness-scan", scan([lim("monitor-refresh", "Monitor refresh rate")]));
+      await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
+      expect(screen.getByTestId("exp-summary-settings-done")).toHaveTextContent(
+        "The last check's top limiter is a setting, not a part: Monitor refresh rate. No upgrade is recommended for it.",
+      );
+      cleanup();
+      putProbe("readiness-scan", scan([lim("gpu-headroom", "Graphics card")]));
+      await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
+      const done = screen.getByTestId("exp-summary-settings-done");
+      expect(done).toHaveAttribute("data-kind", "part-limiter");
+      expect(done).toHaveTextContent("The last check's top limiter is a part of this PC: Graphics card.");
+      // Phase 9 law: a named part is never a shopping line.
+      expect(done.textContent).not.toMatch(/buy|\$|price|upgrade to/i);
+    } finally {
+      invalidateProbe("readiness-scan");
+    }
+  });
+
+  it("P9-settings-done: no settings-done line while changes are still worth testing", async () => {
+    const panel = await renderOwner([
+      pass("visual-effects", "Trim Windows visual effects", 1),
+      pass("mouse-accel", "Turn off mouse acceleration", 2),
+    ]);
+    expect(panel).toHaveAttribute("data-headline", "still-worth-testing");
+    expect(screen.queryByTestId("exp-summary-settings-done")).toBeNull();
   });
 
   // TRUTHFUL COMPLETION (critical review 2026-10-26 §4): an attempt is not a result.

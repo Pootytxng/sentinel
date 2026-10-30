@@ -679,6 +679,12 @@
     "summary": {
       "label": "Compy 在 {{game}} 上测试过的内容",
       "finishedSupportedTests": "Compy 已在这台主机上完成 {{game}} 的受支持测试：它列为值得在这里测试的每一项更改都有了测得的结果。",
+      "settingsDone": {
+        "notMeasured": "设置已经达到 Compy 在这里能测试的程度。是什么在拖慢这台主机还没有测过，所以不建议升级。",
+        "nothingLimiting": "设置已经达到 Compy 在这里能测试的程度。上次检查没有发现拖慢这台主机的因素，所以不建议升级。",
+        "settingLimiter": "设置已经达到 Compy 在这里能测试的程度。上次检查的首要瓶颈是一项设置，而不是硬件：{{title}}。不建议为此升级。",
+        "partLimiter": "设置已经达到 Compy 在这里能测试的程度。上次检查的首要瓶颈是这台主机的一个部件：{{title}}。"
+      },
       "finishedWithinChosenRisk_other": "Compy 已在你选择的风险范围内完成 {{game}} 的测试：在该风险范围内值得在这里测试的每一项更改都有了测得的结果。另有 {{count}} 项更改超出这个范围。",
       "worthRetesting_other": "{{game}} 上有 {{count}} 项结果需要再跑一次才算数：{{why}}。",
       "stillWorth_other": "{{game}} 上还有 {{count}} 项更改值得测试，所以还没有测完。",
