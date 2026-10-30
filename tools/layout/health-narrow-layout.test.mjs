@@ -34,7 +34,9 @@ const src = root.replace(/\\/g, "/") + "/src";
 const NARROW = [380, 504];
 const WIDE = [684, 1100, 1230, 1238, 1240, 1280, 1500, 1920];
 const FRAMES = [...NARROW, ...WIDE];
-const RAIL_PX = 216;
+// Glass redesign (owner decision 2026-10-30): the rail is a floating dock of icon doors at every
+// width — 64px from 600 up, tighter below — and each name is a caption shown on hover or focus.
+const RAIL_PX = 64;
 const NARROW_RAIL_MAX_PX = 72;
 /** Below this window width Health's split stacks and the rig panel must show all of itself (#622-f2). */
 const SPLIT_STACK_BELOW_PX = 1240;
@@ -164,7 +166,8 @@ window.__measure = async () => {
     const label = b.querySelector("span");
     const lr = label.getBoundingClientRect();
     const svg = b.querySelector("svg").getBoundingClientRect();
-    return { name: label.textContent, labelVisible: lr.width > 2 && lr.height > 2, iconWidth: svg.width, right: b.getBoundingClientRect().right };
+    const shown = lr.width > 2 && lr.height > 2 && getComputedStyle(label).opacity !== "0";
+    return { name: label.textContent, labelVisible: shown, iconWidth: svg.width, right: b.getBoundingClientRect().right };
   });
   const panel = document.querySelector(".hc-panel");
   return {
@@ -180,7 +183,13 @@ window.__measure = async () => {
     panel: panel && { client: panel.clientWidth, scroll: panel.scrollWidth, clientH: panel.clientHeight, scrollH: panel.scrollHeight },
     verdict: (() => { const r = document.querySelector(".v2-room > .v2-verdict").getBoundingClientRect(); return { left: r.left, right: r.right, bottom: r.bottom }; })(),
     aside: (() => { const r = document.querySelector(".v2-room > .v2-room-aside").getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width }; })(),
-    roomWidth: document.querySelector(".v2-room").getBoundingClientRect().width,
+    // The room's CONTENT box: on glass the room sits on a sheet with its own padding and edge.
+    roomWidth: (() => {
+      const r = document.querySelector(".v2-room");
+      const cs = getComputedStyle(r);
+      const inset = ["paddingLeft", "paddingRight", "borderLeftWidth", "borderRightWidth"].reduce((n, k) => n + parseFloat(cs[k]), 0);
+      return r.getBoundingClientRect().width - inset;
+    })(),
     docScroll: document.documentElement.scrollWidth,
   };
 };
@@ -239,7 +248,7 @@ describe("Health composes at every window width in a real Chromium (#622)", () =
     }
   });
 
-  it("collapses the rail to an icon strip below 600px and keeps the full rail at 600px and up", () => {
+  it("keeps the rail an icon dock at every width, every door named, captions only on hover or focus", () => {
     const violations = [];
     for (const s of steps) {
       const narrow = s.vw < 600;
@@ -248,7 +257,7 @@ describe("Health composes at every window width in a real Chromium (#622)", () =
       for (const it of s.items) {
         if (!it.name.trim()) violations.push(`vw=${s.vw}: a rail item lost its name`);
         if (it.iconWidth < 14) violations.push(`vw=${s.vw}: "${it.name}" icon ${it.iconWidth}px`);
-        if (it.labelVisible === narrow) violations.push(`vw=${s.vw}: "${it.name}" label visible=${it.labelVisible}`);
+        if (it.labelVisible) violations.push(`vw=${s.vw}: "${it.name}" caption showing without hover or focus`);
         if (it.right > s.railRight + TOLERANCE_PX) violations.push(`vw=${s.vw}: "${it.name}" pokes out of the rail`);
       }
     }
