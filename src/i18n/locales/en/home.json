@@ -679,7 +679,9 @@
     "care": {
       "label": "Needs a look",
       "find": "Find out why",
-      "later": "Not now"
+      "later": "Not now",
+      "headline": "{{what}} closed unexpectedly",
+      "detail": "Windows recorded it: {{kind}}, {{when}}. Compy changes nothing until you choose."
     },
     "noGames": "Games",
     "noGamesValue": "None measured yet",
@@ -711,6 +713,10 @@
       "unknown": "Not known yet. Compy needs a measured session to say."
     },
     "details": "Open the full health check",
-    "back": "Back to the summary"
+    "back": "Back to the summary",
+    "allGames": "All games",
+    "allGamesUnit_one": "game measured",
+    "allGamesUnit_other": "games measured",
+    "allGamesNote": "Every game Compy has measured"
   }
 }

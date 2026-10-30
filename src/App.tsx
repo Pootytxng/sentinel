@@ -1007,7 +1007,9 @@ function App() {
   // proving-ground merge shipped. Overview and Learn are always available (Learn's knowledge library
   // is static/offline); Learn MUST be listed or the reset effect below bounces it to Overview.
   const visibleTabs: Tab[] = useMemo(() => {
-    const list: Tab[] = ["Overview", "Learn"];
+    // Games and Problems (glass redesign) need nothing but the session list and Windows' own records,
+    // which every rig has, so they are always visible.
+    const list: Tab[] = ["Overview", "Games", "Problems", "Learn"];
     // Play consolidates Monitoring + Sessions IN PLACE; Lab consolidates Benchmark + Latency IN PLACE.
     if (hw || sessions.length > 0) list.push("Play");
     if (hw) list.push("Lab");

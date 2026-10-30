@@ -36,12 +36,17 @@ vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 import { ShellV2 } from "../ShellV2";
 import { railFor, type HomeRailId, type HomeRailItem } from "../homeRail";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 const ITEMS: HomeRailItem[] = railFor(false, true);
 const RIG = "Ryzen 7 · RX 9070 XT";
 
-function readoutText(activeId: HomeRailId): string | null {
+function renderIn(activeId: HomeRailId) {
+  // The readout exists only on the Solid surface since the glass redesign (2026-10-30).
+  localStorage.setItem("compy_surface", "solid");
   const { container } = render(
     <ShellV2
       items={ITEMS}
@@ -54,22 +59,28 @@ function readoutText(activeId: HomeRailId): string | null {
     </ShellV2>,
   );
   const el = container.querySelector(".hud-frame-readout");
-  return el ? (el.textContent ?? "") : null;
+  return {
+    readout: el ? (el.textContent ?? "") : null,
+    pill: container.querySelector(".v2-rig-pill")?.textContent ?? null,
+  };
 }
 
 describe("the HUD readout never repeats a fact the room already shows", () => {
+  // GLASS REDESIGN (2026-10-30): the topbar's PC pill prints the rig line in EVERY room, so the
+  // readout never prints it — on Health (where the Detected record and the 3D rig name it too) or
+  // anywhere else. The readout still renders (clock) so this cannot pass by losing the frame.
   it("stands the rig down on Health, where the Detected record and the 3D rig both name it", () => {
-    const text = readoutText("home");
-    expect(text, "the HUD readout must still render on Health — only its rig segment stands down")
+    const { readout, pill } = renderIn("home");
+    expect(readout, "the HUD readout must still render on Health — only its rig segment stands down")
       .not.toBeNull();
-    expect(
-      text,
-      "Health shows the processor and GPU in its Detected record AND on the rig; the readout " +
-        "must not print them a third time (issue #49 self-review round 2).",
-    ).not.toContain("RX 9070 XT");
+    expect(readout).not.toContain("RX 9070 XT");
+    expect(pill).toContain("RX 9070 XT");
   });
 
-  it("still reads the rig in a room that does not show it — the anti-vacuous half", () => {
-    expect(readoutText("play")).toContain("RX 9070 XT");
+  it("prints the rig exactly once in a room that has no rig of its own — the anti-vacuous half", () => {
+    const { readout, pill } = renderIn("play");
+    expect(readout).not.toBeNull();
+    expect(readout).not.toContain("RX 9070 XT");
+    expect(pill, "the rig must still be on screen once, in the topbar pill").toContain("RX 9070 XT");
   });
 });

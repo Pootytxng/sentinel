@@ -49,6 +49,7 @@ import CountUp from "./vendor/CountUp/CountUp";
 import DecryptedText from "./vendor/DecryptedText/DecryptedText";
 import ElectricBorder from "./vendor/ElectricBorder/ElectricBorder";
 import SpotlightCard from "./vendor/SpotlightCard/SpotlightCard";
+import { LookButton, LookPanel } from "./LookPanel";
 
 // C-13, rank 3 of the design foundation's tooling asks: axe-core in the vitest suite. This file is
 // the roster — every design-system component that renders standalone, mounted at a REAL prop shape
@@ -250,6 +251,15 @@ describe("axe · provider-backed and interactive components", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it("LookButton and LookPanel (closed, open, and the panel alone)", async () => {
+    const { container } = render(<LookButton />);
+    await expectNoAxeViolations(container);
+    fireEvent.click(within(container).getByRole("button"));
+    await expectNoAxeViolations(container);
+    const panel = render(<LookPanel />);
+    await expectNoAxeViolations(panel.container);
   });
 
   it("RoomAccentPicker (closed and open)", async () => {

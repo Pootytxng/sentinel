@@ -16,7 +16,7 @@ import { HOME_RAIL, railFor } from "./design/homeRail";
 // 2026-08-19 (Home → Health) — a guard against stale room names carrying a stale room list.
 // `liveLabels()` below derives the live set, and a test pins this sentence to it:
 //
-//   THE SHIPPED RAIL (compy_lab_ground DEFAULT ON) IS: Health · Live · History · Test
+//   THE SHIPPED RAIL (compy_lab_ground DEFAULT ON) IS: Health · Games · Problems · Live · History · Test
 //
 // The persisted nav IDS stay home/check/play/fix/learn/lab (renaming one orphans stored history),
 // and homeRail.ts RELABELS them on EVERY rail. So a label that is not in the live set NEVER

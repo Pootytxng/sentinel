@@ -75,6 +75,11 @@
   background: var(--v2-panel);
   color: var(--v2-text);
 }
+:root[data-v2="on"] :is(.gl-ghost, .gl-cta) svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
 :root[data-v2="on"] .gl-ghost:hover {
   background: var(--v2-panel-2);
 }
@@ -268,7 +273,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
 }
 :root[data-v2="on"] .gl-stack {
   display: flex;
@@ -369,9 +374,12 @@
 :root[data-v2="on"] .gl-chart .gl-bar {
   cursor: default;
 }
-:root[data-v2="on"] .gl-chart .gl-bar:hover,
+:root[data-v2="on"] .gl-chart .gl-bar:hover {
+  filter: brightness(1.25);
+}
 :root[data-v2="on"] .gl-chart .gl-bar:focus-visible {
-  outline: none;
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
   filter: brightness(1.25);
 }
 :root[data-v2="on"] .gl-chart-tip {
@@ -458,6 +466,44 @@
 }
 :root[data-v2="on"] .gl-station {
   min-width: 0;
+  background: var(--v2-panel-2);
+}
+
+/* ── Banner: what Windows recorded, in the attention colour ── */
+:root[data-v2="on"] .gl-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 14px 12px 18px;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 16px;
+  background: var(--v2-panel-2);
+  -webkit-backdrop-filter: blur(var(--v2-glass-blur));
+  backdrop-filter: blur(var(--v2-glass-blur));
+}
+:root[data-v2="on"] .gl-banner[data-tone="warn"] {
+  border-color: var(--v2-warn);
+}
+:root[data-v2="on"] .gl-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--type-body);
+}
+:root[data-v2="on"] .gl-banner-text b {
+  font-weight: 650;
+}
+:root[data-v2="on"] .gl-banner-text span {
+  color: var(--v2-muted);
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .gl-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 :root[data-v2="on"][data-surface="solid"] :is(.gl-kpi, .gl-card) {

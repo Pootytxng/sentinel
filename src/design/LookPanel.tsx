@@ -71,7 +71,19 @@ export function LookButton() {
         aria-haspopup="dialog"
         onClick={() => setOpen((o) => !o)}
       >
-        <span className="v2-look-dot" aria-hidden="true" />
+        {/* A palette, not a colour dot: the room accent picker beside it already shows a dot. */}
+        <svg className="v2-look-ico" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.9 1.4-1.9-.5-1.3.4-2.6 1.8-2.6H17a4 4 0 0 0 4-4c0-5-4-9.5-9-9.5Z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinejoin="round"
+          />
+          <circle cx="7.5" cy="11" r="1.3" fill="currentColor" />
+          <circle cx="10.5" cy="7.2" r="1.3" fill="currentColor" />
+          <circle cx="15" cy="7.6" r="1.3" fill="currentColor" />
+        </svg>
         {t("common.look.button")}
       </button>
       {open && <LookPanel />}

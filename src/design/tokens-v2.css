@@ -126,6 +126,9 @@
   --v2-dock-active-bg: rgba(255, 255, 255, 0.92);
   --v2-dock-active-ink: #0d1117;
   --v2-glass-blur: 18px;
+  /* One even dim over the backdrop picture, under the vignette, so no bokeh patch is bright
+     enough to fight text in the gaps between panels. */
+  --v2-backdrop-dim: rgba(0, 0, 0, 0.2);
   --v2-accent-text: #d4c5ff;
   --v2-glass-rgb: 22, 17, 32;
   --v2-ground: #0a0710;
@@ -149,8 +152,8 @@
 :root[data-v2="on"][data-itheme="midnight"] {
   --v2-accent: #2ee6c0;
   --v2-accent-ink: #06231c;
-  --v2-accent-dim: rgba(46, 230, 192, 0.14);
-  --v2-accent-line: rgba(46, 230, 192, 0.3);
+  --v2-accent-dim: color-mix(in srgb, var(--v2-accent) 14%, transparent);
+  --v2-accent-line: color-mix(in srgb, var(--v2-accent) 30%, transparent);
   --v2-accent-text: #7defcf;
   --v2-glass-rgb: 14, 20, 27;
   --v2-ground: #05080c;
@@ -158,8 +161,8 @@
 :root[data-v2="on"][data-itheme="violet"] {
   --v2-accent: #a78bfa;
   --v2-accent-ink: #1a0a2e;
-  --v2-accent-dim: rgba(167, 139, 250, 0.14);
-  --v2-accent-line: rgba(167, 139, 250, 0.3);
+  --v2-accent-dim: color-mix(in srgb, var(--v2-accent) 14%, transparent);
+  --v2-accent-line: color-mix(in srgb, var(--v2-accent) 30%, transparent);
   --v2-accent-text: #d4c5ff;
   --v2-glass-rgb: 22, 17, 32;
   --v2-ground: #0a0710;
@@ -167,8 +170,8 @@
 :root[data-v2="on"][data-itheme="crimson"] {
   --v2-accent: #fb3b53;
   --v2-accent-ink: #2a0610;
-  --v2-accent-dim: rgba(251, 59, 83, 0.14);
-  --v2-accent-line: rgba(251, 59, 83, 0.32);
+  --v2-accent-dim: color-mix(in srgb, var(--v2-accent) 14%, transparent);
+  --v2-accent-line: color-mix(in srgb, var(--v2-accent) 30%, transparent);
   --v2-accent-text: #ffadb8;
   --v2-glass-rgb: 31, 16, 20;
   --v2-ground: #0d0608;
@@ -176,8 +179,8 @@
 :root[data-v2="on"][data-itheme="emerald"] {
   --v2-accent: #27e08a;
   --v2-accent-ink: #042012;
-  --v2-accent-dim: rgba(39, 224, 138, 0.14);
-  --v2-accent-line: rgba(39, 224, 138, 0.3);
+  --v2-accent-dim: color-mix(in srgb, var(--v2-accent) 14%, transparent);
+  --v2-accent-line: color-mix(in srgb, var(--v2-accent) 30%, transparent);
   --v2-accent-text: #8af0b5;
   --v2-glass-rgb: 13, 24, 19;
   --v2-ground: #050a07;
@@ -185,8 +188,8 @@
 :root[data-v2="on"][data-itheme="hearth"] {
   --v2-accent: #f0b878;
   --v2-accent-ink: #2a1304;
-  --v2-accent-dim: rgba(240, 184, 120, 0.14);
-  --v2-accent-line: rgba(240, 184, 120, 0.32);
+  --v2-accent-dim: color-mix(in srgb, var(--v2-accent) 14%, transparent);
+  --v2-accent-line: color-mix(in srgb, var(--v2-accent) 30%, transparent);
   --v2-accent-text: #ffe0b4;
   --v2-glass-rgb: 30, 25, 20;
   --v2-ground: #0d0a08;
@@ -197,6 +200,8 @@
    opaque tokens above and drops the backdrop. Only the panel family and hairlines change, so every
    room re-skins without touching its own CSS. */
 :root[data-v2="on"][data-surface="glass"] {
+  /* Primary actions take the theme accent on glass, as in the approved prototype. */
+  --v2-cta: var(--v2-accent);
   --v2-panel: rgba(var(--v2-glass-rgb), 0.64);
   --v2-panel-2: rgba(var(--v2-glass-rgb), 0.74);
   --v2-panel-card: rgba(var(--v2-glass-rgb), 0.6);
@@ -205,6 +210,7 @@
   --v2-line-strong: rgba(255, 255, 255, 0.17);
 }
 :root[data-v2="on"][data-surface="frosted"] {
+  --v2-cta: var(--v2-accent);
   --v2-panel: rgba(var(--v2-glass-rgb), 0.86);
   --v2-panel-2: rgba(var(--v2-glass-rgb), 0.9);
   --v2-panel-card: rgba(var(--v2-glass-rgb), 0.84);

@@ -331,10 +331,11 @@
     "sessionsSub": "最新的在前",
     "rowFps": "{{avg}} fps",
     "liveCta": "在实时里查看",
-    "testCta": "在测试里尝试改动"
+    "testCta": "在测试里尝试改动",
+    "recentTitle": "最近的游戏记录",
+    "recentSub": "所有游戏 · 最新的在前"
   },
   "problems": {
-    "title": "问题",
-    "sub": "崩溃、卡死和重启，读取自 Windows 自己的记录。Compy 只展示它能证明的，说明它不能证明的，在你决定之前不做任何改动。"
+    "title": "问题"
   }
 }

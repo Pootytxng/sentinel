@@ -31,7 +31,6 @@ export function ProblemsRoom({
           <h1 className="gl-h1" id="gl-problems-h1">
             {t("common.problems.title")}
           </h1>
-          <p className="gl-sub">{t("common.problems.sub")}</p>
         </div>
       </header>
       <div className="gl-card gl-station">

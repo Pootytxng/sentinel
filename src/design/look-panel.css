@@ -28,11 +28,10 @@
   outline: 2px solid var(--v2-accent);
   outline-offset: 2px;
 }
-:root[data-v2="on"] .v2-look-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--v2-accent);
+:root[data-v2="on"] .v2-look-ico {
+  width: 16px;
+  height: 16px;
+  color: var(--v2-accent-text);
 }
 
 :root[data-v2="on"] .v2-look-panel {

@@ -64,6 +64,29 @@ const V2NavContext = createContext<V2Nav>({
 });
 export const useV2Nav = () => useContext(V2NavContext);
 
+// The topbar's PC pill prints the probe's own names with the vendor boilerplate trimmed, so a
+// 1440px window shows "Ryzen 7 9850X3D · RX 9070 XT" instead of cutting off at "AMD Ryzen 7 98…".
+// Trimming only removes words; it never invents or reorders one. The full line stays in the
+// accessibility tree.
+export function shortRig(rig: string): string {
+  return rig
+    .split(" · ")
+    .map((part) =>
+      part
+        .replace(/\((R|TM|tm|r)\)/g, "")
+        .replace(/\b\d+-Core Processor\b/i, "")
+        .replace(/\bProcessor\b/i, "")
+        .replace(/\bCPU @ .*$/i, "")
+        .replace(/^(AMD|Intel|NVIDIA)\s+/i, "")
+        .replace(/^(GeForce|Radeon)\s+(?=(RTX|GTX|RX)\b)/i, "")
+        .replace(/^Core\s+/i, "")
+        .replace(/\s{2,}/g, " ")
+        .trim(),
+    )
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export function ShellV2({
   items,
   activeId,
@@ -349,7 +372,10 @@ export function ShellV2({
                   <rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
                   <path d="M8 20h8M12 16v4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
                 </svg>
-                <span className="v2-rig-text">{rig}</span>
+                <span className="v2-rig-text" aria-hidden="true">
+                  {shortRig(rig)}
+                </span>
+                <span className="v2-sr-only">{rig}</span>
               </span>
             )}
             <span className="v2-room-title">

@@ -336,10 +336,11 @@
     "sessionsSub": "Newest first",
     "rowFps": "{{avg}} fps",
     "liveCta": "See sessions in Live",
-    "testCta": "Try a change in Test"
+    "testCta": "Try a change in Test",
+    "recentTitle": "Recent sessions",
+    "recentSub": "Across every game · newest first"
   },
   "problems": {
-    "title": "Problems",
-    "sub": "Crashes, freezes and restarts, read from Windows’ own records. Compy shows what it can prove, says what it cannot, and changes nothing until you choose."
+    "title": "Problems"
   }
 }

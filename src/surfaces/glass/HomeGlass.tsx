@@ -15,6 +15,7 @@ import { knownFps } from "../../lib/session-metrics";
 import { wordFromBand, confidenceWordKey } from "../../data/confidence-word";
 import { TubeChart, type TubeBar } from "./TubeChart";
 import { useDates } from "./GamesRoom";
+import { NavGlyph } from "../../design/NavGlyph";
 import "../glass-rooms.css";
 
 const Arrow = () => (
@@ -80,11 +81,15 @@ export function HomeGlass({
     ? readiness!.checks.filter((c) => c.status === "attention").map((c) => c.label)
     : [];
 
-  const answer = !checksKnown
-    ? t("home.glass.answer.unknown")
-    : attention > 0
-      ? t("home.glass.answer.worth", { count: attention })
-      : t("home.glass.answer.allRight");
+  // A crash or freeze Windows recorded is a thing worth a look too, so the answer counts it; with
+  // nothing recorded and every readable check fine, the answer is the plain "set up right".
+  const worthCount = attention + (pendingCare ? 1 : 0);
+  const answer =
+    worthCount > 0
+      ? t("home.glass.answer.worth", { count: worthCount })
+      : !checksKnown
+        ? t("home.glass.answer.unknown")
+        : t("home.glass.answer.allRight");
   const sub = checksKnown
     ? t("home.glass.sub.known", { good, total: readable })
     : t("home.glass.sub.unknown");
@@ -115,7 +120,11 @@ export function HomeGlass({
         })
     : [];
 
-  const gameCards = games.slice(0, pendingCare ? 3 : 4);
+  // One row of four: the care card (when Windows recorded something), the most recent games, and
+  // an "All games" door whenever there are more games than fit or a slot would sit empty.
+  const slots = 4;
+  const showAll = games.length > 0 && games.length !== slots;
+  const gameCards = games.slice(0, showAll ? Math.min(games.length, slots - 1) : slots);
 
   return (
     <section className="gl-room" data-room="home" aria-labelledby="gl-home-h1">
@@ -128,40 +137,45 @@ export function HomeGlass({
           <p className="gl-sub">{sub}</p>
         </div>
         <div className="gl-actions">
+          {/* The two flagship journeys, as equals (Constitution): same weight, each with its door's
+              own glyph from the dock. */}
           <button type="button" className="gl-ghost" onClick={onOpenProblems}>
+            <NavGlyph name="problems" />
             {t("home.glass.actions.problem")}
           </button>
-          <button type="button" className="gl-cta" onClick={() => onOpenGame(null)}>
+          <button type="button" className="gl-ghost" onClick={() => onOpenGame(null)}>
+            <NavGlyph name="games" />
             {t("home.glass.actions.improve")}
           </button>
         </div>
       </header>
 
+      {/* What Windows recorded (the Care observer's pointer). Its own band in the attention colour —
+          never the accent fill, which on this page means "your most recent game". */}
+      {pendingCare && (
+        <div className="gl-banner" data-tone="warn" role="group" aria-label={t("home.glass.care.label")}>
+          <span className="gl-banner-text">
+            <b>{t("home.glass.care.headline", { what: pendingCare.app_label ?? pendingCare.kind })}</b>
+            <span>{t("home.glass.care.detail", { kind: pendingCare.kind, when: pendingCare.occurred_display })}</span>
+          </span>
+          <span className="gl-banner-actions">
+            <button type="button" className="gl-ghost" onClick={() => onDismissCareIncident(pendingCare.incident_id)}>
+              {t("home.glass.care.later")}
+            </button>
+            <button type="button" className="gl-cta" onClick={() => onOpenCareIncident(pendingCare.incident_id)}>
+              {t("home.glass.care.find")}
+            </button>
+          </span>
+        </div>
+      )}
+
       <div className="gl-kpis">
-        {pendingCare && (
-          <div className="gl-kpi" data-hot="true" role="group" aria-label={t("home.glass.care.label")}>
-            <span className="gl-kpi-label">{t("home.glass.care.label")}</span>
-            <span className="gl-kpi-row">
-              <span className="gl-kpi-value">{pendingCare.app_label ?? pendingCare.kind}</span>
-              <span className="gl-chip">{pendingCare.kind}</span>
-            </span>
-            <span className="gl-kpi-note">{pendingCare.occurred_display}</span>
-            <span className="gl-care-actions">
-              <button type="button" className="gl-care-go" onClick={() => onOpenCareIncident(pendingCare.incident_id)}>
-                {t("home.glass.care.find")}
-              </button>
-              <button type="button" className="gl-care-later" onClick={() => onDismissCareIncident(pendingCare.incident_id)}>
-                {t("home.glass.care.later")}
-              </button>
-            </span>
-          </div>
-        )}
         {gameCards.map((g, i) => (
           <button
             key={g.key}
             type="button"
             className="gl-kpi"
-            data-hot={!pendingCare && i === 0}
+            data-hot={i === 0}
             onClick={() => onOpenGame(g.key)}
             aria-label={t("common.games.open", { name: g.name })}
           >
@@ -183,6 +197,19 @@ export function HomeGlass({
             <span className="gl-kpi-note">{t("common.games.lastPlayed", { when: dates.dayTime(g.lastPlayed) })}</span>
           </button>
         ))}
+        {showAll ? (
+          <button type="button" className="gl-kpi" onClick={() => onOpenGame(null)}>
+            <span className="gl-kpi-label">{t("home.glass.allGames")}</span>
+            <Arrow />
+            <span className="gl-kpi-row">
+              <span className="gl-kpi-value">
+                <span className="gl-num">{games.length}</span>
+                <small>{t("home.glass.allGamesUnit", { count: games.length })}</small>
+              </span>
+            </span>
+            <span className="gl-kpi-note">{t("home.glass.allGamesNote")}</span>
+          </button>
+        ) : null}
         {games.length === 0 && (
           <button type="button" className="gl-kpi" onClick={onOpenLive}>
             <span className="gl-kpi-label">{t("home.glass.noGames")}</span>

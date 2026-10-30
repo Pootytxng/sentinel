@@ -56,13 +56,15 @@ export function railFor(merged: boolean, ground = false): HomeRailItem[] {
   if (!merged) return HOME_RAIL;
   const out: HomeRailItem[] = [];
   for (const r of HOME_RAIL) {
-    if (r.id === "check") continue; // collapsed into the merged room
     if (r.id === "fix") continue; // re-inserted at Check's slot below
-    out.push(r);
-    if (r.id === "home") {
+    if (r.id === "check") {
+      // Optimize takes the slot Check held — right after the door group since the glass redesign
+      // gave the two flagship journeys doors beside Health, so the rail stays in group order.
       const fix = HOME_RAIL.find((x) => x.id === "fix")!;
-      out.push({ ...fix, label: "Optimize" }); // Optimize takes the slot Check held (position 2)
+      out.push({ ...fix, label: "Optimize" });
+      continue;
     }
+    out.push(r);
   }
   return out;
 }

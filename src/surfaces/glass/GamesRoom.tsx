@@ -227,6 +227,43 @@ function GameDetail({
   );
 }
 
+/** The newest measured sessions across every game — what actually ran lately, one click from its game. */
+function RecentSessions({ games, onOpen }: { games: GameEntry[]; onOpen: (key: string) => void }) {
+  const { t } = useTranslation();
+  const dates = useDates();
+  const time = usePlayTime();
+  const recent = games
+    .flatMap((g) => g.sessions.map((s) => ({ s, g })))
+    .sort((a, b) => (Date.parse(b.s.started_at) || 0) - (Date.parse(a.s.started_at) || 0))
+    .slice(0, 6);
+  return (
+    <section className="gl-card" aria-labelledby="gl-games-recent">
+      <h2 className="gl-card-title" id="gl-games-recent">
+        {t("common.games.recentTitle")}
+      </h2>
+      <p className="gl-card-sub">{t("common.games.recentSub")}</p>
+      <div className="gl-rows">
+        {recent.map(({ s, g }, i) => {
+          const avg = knownFps(s.avg_fps);
+          return (
+            <button type="button" className="gl-row gl-row-btn" key={`${s.started_at}-${i}`} onClick={() => onOpen(g.key)}>
+              <span>
+                <span className="gl-row-title">{g.name}</span>
+                <span className="gl-row-sub">
+                  {dates.dayTime(s.started_at)} · {time(s.duration_secs)}
+                </span>
+              </span>
+              <span className="gl-row-val">
+                {avg != null ? t("common.games.rowFps", { avg: Math.round(avg) }) : t("common.games.notMeasured")}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function GamesRoom({
   sessions,
   focusKey = null,
@@ -274,11 +311,14 @@ export function GamesRoom({
           </button>
         </div>
       ) : (
-        <div className="gl-grid">
-          {games.map((g, i) => (
-            <GameCard key={g.key} game={g} hot={i === 0} onOpen={() => setOpenKey(g.key)} />
-          ))}
-        </div>
+        <>
+          <div className="gl-grid">
+            {games.map((g, i) => (
+              <GameCard key={g.key} game={g} hot={i === 0} onOpen={() => setOpenKey(g.key)} />
+            ))}
+          </div>
+          <RecentSessions games={games} onOpen={setOpenKey} />
+        </>
       )}
     </section>
   );

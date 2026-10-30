@@ -653,7 +653,9 @@
     "care": {
       "label": "需要看一看",
       "find": "找出原因",
-      "later": "稍后"
+      "later": "稍后",
+      "headline": "{{what}} 意外关闭了",
+      "detail": "Windows 记录了这次事件：{{kind}}，{{when}}。在你决定之前，Compy 不会做任何改动。"
     },
     "noGames": "游戏",
     "noGamesValue": "还没有测量记录",
@@ -685,6 +687,10 @@
       "unknown": "暂时未知。Compy 需要一次实测的游戏记录才能判断。"
     },
     "details": "打开完整健康检查",
-    "back": "返回概览"
+    "back": "返回概览",
+    "allGames": "全部游戏",
+    "allGamesUnit_one": "款游戏已测量",
+    "allGamesUnit_other": "款游戏已测量",
+    "allGamesNote": "Compy 测量过的每款游戏"
   }
 }

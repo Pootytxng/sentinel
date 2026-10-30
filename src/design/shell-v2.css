@@ -1006,7 +1006,8 @@
   inset: 0;
   background:
     linear-gradient(180deg, var(--v2-shadow-panel) 0%, transparent 34%),
-    radial-gradient(130% 110% at 50% 0%, transparent 40%, var(--v2-shadow-panel) 100%);
+    radial-gradient(130% 110% at 50% 0%, transparent 40%, var(--v2-shadow-panel) 100%),
+    var(--v2-backdrop-dim);
 }
 :root[data-v2="on"][data-bd="night"] .v2-backdrop {
   background-image: url("../assets/backdrops/night-city.jpg");
@@ -1132,7 +1133,11 @@
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-:root[data-v2="on"] .v2-nav-item:is(:hover, :focus-visible) > .v2-nav-label {
+:root[data-v2="on"] .v2-nav-item:hover > .v2-nav-label {
+  opacity: 1;
+  transition-delay: 0.35s;
+}
+:root[data-v2="on"] .v2-nav-item:focus-visible > .v2-nav-label {
   opacity: 1;
 }
 :root[data-v2="on"] .v2-nav-item > .v2-nav-badge {
@@ -1221,12 +1226,71 @@
 :root[data-v2="on"] .v2-foot {
   flex: none;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
+  align-self: flex-start;
   gap: 4px 18px;
-  margin: 0;
-  padding: 6px 2px 10px;
-  border-top: 0;
+  margin: 2px 0 10px;
+  padding: 5px 14px;
+  border: 1px solid var(--v2-line);
+  border-top: 1px solid var(--v2-line);
+  border-radius: 999px;
+  background: var(--v2-panel);
+  color: var(--v2-muted);
+}
+
+/* ── Older rooms on glass ──
+   Live, History, Test and the full health check still lay their text straight onto the room
+   ground. Over a picture that ground has to be glass, or a bright patch of the backdrop lands
+   behind a line of text — so each of those rooms sits on one sheet. The new glass rooms (.gl-room)
+   draw their own cards and take no sheet. The console's whisper scanline belongs to the console
+   look and stands down on glass, where it read as a second, older panel behind the sheet. */
+:root[data-v2="on"]:not([data-surface="solid"]) .v2-content-wrap > .v2-room {
+  padding: 20px 24px 24px;
+  border: 1px solid var(--v2-line);
+  border-radius: 22px;
+  background: var(--v2-panel);
+  -webkit-backdrop-filter: blur(var(--v2-glass-blur));
+  backdrop-filter: blur(var(--v2-glass-blur));
+}
+:root[data-v2="on"][data-hud="on"]:not([data-surface="solid"])
+  .v2-room:not([data-room="home"]):not([data-room="check"])::after {
+  display: none;
+}
+:root[data-v2="on"]:not([data-surface="solid"])
+  :is(.bc-tag, .ag-tag, .rd-tag, .fc-tag, .fct-tag, .st-tag, .hv2-tag, .ss-chip, .fc-chip, .cc-chip, .lx-chip, .hud-pill, .ds-pill) {
+  border-radius: 999px;
+}
+
+/* The search pill sits in the middle of the bar, so it never jumps when the right-hand cluster
+   changes (the accent picker shows only in rooms that take one). Below 1200px it returns to the
+   flow, where the left cluster would otherwise run under it. */
+@media (min-width: 1200px) {
+  :root[data-v2="on"] .v2-top {
+    position: relative;
+  }
+  :root[data-v2="on"] .v2-top .v2-search {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+/* Content scrolls out under a soft edge instead of a hard cut at the window's foot. */
+:root[data-v2="on"]:not([data-surface="solid"]) .v2-content {
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, black calc(100% - 22px), transparent);
+}
+/* Older rooms speak the glass language: pill primary actions in the theme accent, the classic
+   buttons rounded, and room titles at the same size as the new pages' titles. */
+:root[data-v2="on"]:not([data-surface="solid"]) .v2-primary,
+:root[data-v2="on"]:not([data-surface="solid"]) :is(.btn, .btn-small, .btn-primary) {
+  border-radius: 999px;
+}
+:root[data-v2="on"]:not([data-surface="solid"]) .v2-room .v2-verdict h1 {
+  font-size: var(--type-section);
+}
+:root[data-v2="on"]:not([data-surface="solid"]) .v2-content-wrap:has(> .v2-room[data-room="lab"]) {
+  max-width: 1320px;
 }
 
 /* The narrow-window icon strip (#622) is now the dock at every width; below 600px the dock just

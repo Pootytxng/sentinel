@@ -226,7 +226,13 @@ export function RoomAccentPicker({
         onKeyDown={onTriggerKeyDown}
       >
         {/* swatchDotCss: flat fill for a single, diagonal split for a duo (both colours visible) */}
-        <span className="v2-accent-dot" style={{ background: swatchDotCss(effective) }} aria-hidden="true" />
+        {/* No pick = the room follows the theme (glass redesign 2026-10-30), so the dot shows the
+            theme's accent rather than the old fixed violet default. */}
+        <span
+          className="v2-accent-dot"
+          style={{ background: pick ? swatchDotCss(pick) : "var(--v2-accent)" }}
+          aria-hidden="true"
+        />
         <span className="v2-accent-caret" aria-hidden="true" />
       </button>
       {open && (
