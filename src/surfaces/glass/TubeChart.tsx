@@ -16,13 +16,13 @@ export type TubeBar = {
   tone?: "base" | "accent" | "bad";
 };
 
-function niceCeil(v: number): number {
-  if (!(v > 0)) return 1;
-  const step = Math.pow(10, Math.floor(Math.log10(v)));
-  for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) {
-    if (m * step >= v) return m * step;
+function niceStep(raw: number): number {
+  if (!(raw > 0)) return 1;
+  const exp = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 2.5, 5, 10]) {
+    if (m * exp >= raw) return m * exp;
   }
-  return 10 * step;
+  return 10 * exp;
 }
 
 export function TubeChart({
@@ -62,8 +62,10 @@ export function TubeChart({
   const slot = (x1 - x0) / n;
   const bw = Math.max(9, Math.min(22, slot * 0.44));
   const known = bars.map((b) => b.value).filter((v): v is number => v != null && Number.isFinite(v));
-  const max = niceCeil((known.length ? Math.max(...known) : 1) * 1.12);
-  const ticks = [0, max / 4, max / 2, (3 * max) / 4, max];
+  // Axis steps a person can read (0 · 50 · 100 · 150), never quarters of an odd ceiling (0 · 38 · 75).
+  const step = niceStep(((known.length ? Math.max(...known) : 1) * 1.12) / 4);
+  const max = Math.max(step, Math.ceil(((known.length ? Math.max(...known) : 1) * 1.12) / step) * step);
+  const ticks = Array.from({ length: Math.round(max / step) + 1 }, (_, i) => i * step);
   const Y = (v: number) => yB - (v / max) * (yB - yT);
   const cx = (i: number) => x0 + slot * (i + 0.5);
   const longest = bars.reduce((m, b) => Math.max(m, b.label.length), 0);
