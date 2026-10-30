@@ -881,7 +881,7 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     expect(
       await screen.findByText(
-        wholeLine("Judged against a ±5.9% noise floor: across 4 of your unchanged WardogsClient sessions on this PC, the 1% low frame rate differed by up to 5.9% between any two of those sessions."),
+        wholeLine("Judged against a ±5.9% noise floor: across 4 of your unchanged WardogsClient sessions on this PC, the 1% low frame rate differed by up to 5.9% between sessions played with nothing changed in between. Sessions on either side of a change are never compared."),
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/hasn't been measured yet/)).not.toBeInTheDocument();
@@ -896,9 +896,23 @@ describe("ExperimentBench (armed)", () => {
     render(<ExperimentBench />);
     expect(
       await screen.findByText(
-        wholeLine("Judged against Compy's 3% minimum noise floor: across 3 of your unchanged Valorant sessions on this PC, the 1% low frame rate differed by up to 1.8% between any two of those sessions, which is less than that minimum."),
+        wholeLine("Judged against Compy's 3% minimum noise floor: across 3 of your unchanged Valorant sessions on this PC, the 1% low frame rate differed by up to 1.8% between sessions played with nothing changed in between, which is less than that minimum. Sessions on either side of a change are never compared."),
       ),
     ).toBeInTheDocument();
+  });
+
+  // P4-noise-copy-2: the spread is the largest 1% low difference inside one unchanged run
+  // (noise_floor::unchanged_spread); sessions in different runs are never compared, so neither
+  // locale may say "between any two of those sessions".
+  it("never claims the spread compares any two of the counted sessions, in either locale", async () => {
+    const en = (await import("../i18n/locales/en/lab.json")).default.experimentBench;
+    const zh = (await import("../i18n/locales/zh-CN/lab.json")).default.experimentBench;
+    for (const key of ["noiseBetweenSessions", "noiseBetweenSessionsBelowFloor"] as const) {
+      expect(en[key]).not.toMatch(/any two/);
+      expect(en[key]).toContain("Sessions on either side of a change are never compared.");
+      expect(zh[key]).not.toContain("在两次之间");
+      expect(zh[key]).toContain("改动前后的场次从不互相比较");
+    }
   });
 
   // P4-noise-store: a calibration that isn't current isn't used, and the receipt says which reason —
