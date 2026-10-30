@@ -1492,6 +1492,54 @@ describe("ExperimentBench — what differed and what wasn't play", () => {
     ]);
   });
 
+  // P4-cap-note: the 2026-10-29 WARDOGS firing-range sessions both sat at ~320 fps. A No change between
+  // two sides held at the same rate may be a frame cap, and the receipt says it says little.
+  const capped = (verdict: string, before: { flat_secs: number; flat_fps: number | null }, after: { flat_secs: number; flat_fps: number | null }) => ({
+    ...KEPT_EXPERIMENT,
+    status: "restored",
+    kept: false,
+    verdict,
+    session_pairing: {
+      verdict: "comparable",
+      baseline_stretches: { left_out_secs: 0, traced: true, ...before },
+      after_stretches: { left_out_secs: 0, traced: true, ...after },
+    },
+  });
+  const CAP_LINE =
+    "Both sessions held at about 320 fps for a minute or more, which may be a frame cap. While a cap holds, a change can't show a gain, so no measurable change here says little about the change itself.";
+
+  it("a No change between two sides held at the same rate says a cap may hide any gain", async () => {
+    state.gate = true;
+    state.experiments = [capped("no-change", { flat_secs: 900, flat_fps: 319.4 }, { flat_secs: 840, flat_fps: 320.6 })];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent)).toContain(CAP_LINE));
+  });
+
+  it.each([
+    ["a judged gain", capped("improved", { flat_secs: 900, flat_fps: 320 }, { flat_secs: 900, flat_fps: 320 })],
+    ["different held rates", capped("no-change", { flat_secs: 900, flat_fps: 320 }, { flat_secs: 900, flat_fps: 240 })],
+    ["one side held under a minute", capped("no-change", { flat_secs: 59, flat_fps: 320 }, { flat_secs: 900, flat_fps: 320 })],
+    ["one side never held", capped("no-change", { flat_secs: 0, flat_fps: null }, { flat_secs: 900, flat_fps: 320 })],
+  ])("adds no cap line for %s", async (_name, exp) => {
+    state.gate = true;
+    state.experiments = [exp];
+    render(<ExperimentBench />);
+    await screen.findAllByTestId("exp-stretch-receipt");
+    expect(screen.queryByText(/may be a frame cap\. While a cap holds/)).toBeNull();
+  });
+
+  it("says the cap note in zh-CN", async () => {
+    await i18n.changeLanguage("zh-CN");
+    state.gate = true;
+    state.experiments = [capped("no-change", { flat_secs: 900, flat_fps: 320 }, { flat_secs: 900, flat_fps: 320 })];
+    render(<ExperimentBench />);
+    await waitFor(() =>
+      expect(screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent)).toContain(
+        "两次会话都有一分钟以上稳定在约 320 fps，这可能是帧率上限。上限生效时，更改无法显示出提升，所以这里没有可测变化也几乎说明不了这项更改本身。",
+      ),
+    );
+  });
+
   it("too few readings after background time says how much was left out", async () => {
     state.gate = true;
     state.experiments = [
