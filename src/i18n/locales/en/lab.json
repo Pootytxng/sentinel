@@ -690,6 +690,12 @@
     "summary": {
       "label": "What Compy tested on {{game}}",
       "finishedSupportedTests": "Compy finished the supported tests for {{game}} on this PC: every change it lists as worth testing here has a measured result.",
+      "settingsDone": {
+        "notMeasured": "Settings have reached what Compy can test here. What holds this PC back hasn't been measured, so no upgrade is recommended.",
+        "nothingLimiting": "Settings have reached what Compy can test here. The last check found nothing holding this PC back, so no upgrade is recommended.",
+        "settingLimiter": "Settings have reached what Compy can test here. The last check's top limiter is a setting, not a part: {{title}}. No upgrade is recommended for it.",
+        "partLimiter": "Settings have reached what Compy can test here. The last check's top limiter is a part of this PC: {{title}}."
+      },
       "finishedWithinChosenRisk_one": "Compy finished the tests for {{game}} within the risk you chose: every change worth testing here at that risk has a measured result. {{count}} more change is above it.",
       "finishedWithinChosenRisk_other": "Compy finished the tests for {{game}} within the risk you chose: every change worth testing here at that risk has a measured result. {{count}} more changes are above it.",
       "worthRetesting_one": "{{count}} result on {{game}} needs another run before it counts: {{why}}.",

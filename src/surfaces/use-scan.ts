@@ -98,6 +98,12 @@ type ScanResult = {
 };
 const SCAN_KEY = "readiness-scan";
 
+/** The priorities from the last cached scan, read synchronously with no IPC (P9-settings-done).
+ *  undefined = no scan cached this session; null = the scan ran but its priorities read failed. */
+export function peekScanPriorities(): Priorities | null | undefined {
+  return peekProbe<ScanResult>(SCAN_KEY)?.priorities;
+}
+
 export function rowVerdict(s: ReadinessCheck["status"]): "ok" | "fix" | "unknown" {
   if (s === "attention") return "fix";
   if (s === "ready" || s === "advisory") return "ok";

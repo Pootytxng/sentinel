@@ -42,6 +42,8 @@ import { journeyProgress, nextToTest, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { displayModeLabel } from "../data/display-mode";
 import { takeBenchArrival, type BenchArrival } from "./lab-arrival";
+import { settingsDoneLine } from "./settings-done";
+import { peekScanPriorities } from "./use-scan";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -1629,6 +1631,8 @@ function TestSummary({ s }: { s: GameTestSummary }) {
     return t("lab.experimentBench.summary.row", { title: r.title, text });
   };
   const staleAsked = s.staleAsked;
+  // P9-settings-done: the last cached scan's limiters, read with no IPC; no scan = "not measured".
+  const settingsDone = settingsDoneLine(s.headline, peekScanPriorities());
   return (
     <div className="exp-order exp-summary" data-testid="exp-summary" data-headline={s.headline}>
       <SectionLabel>{t("lab.experimentBench.summary.label", { game })}</SectionLabel>
@@ -1676,6 +1680,17 @@ function TestSummary({ s }: { s: GameTestSummary }) {
                   ? t("lab.experimentBench.summary.resultsUnverified", { count: s.unverified.length, game })
                   : t("lab.experimentBench.summary.unknownLeft")}
       </p>
+      {settingsDone && (
+        <p className="exp-note" data-testid="exp-summary-settings-done" data-kind={settingsDone.kind}>
+          {settingsDone.kind === "setting-limiter"
+            ? t("lab.experimentBench.summary.settingsDone.settingLimiter", { title: settingsDone.title })
+            : settingsDone.kind === "part-limiter"
+              ? t("lab.experimentBench.summary.settingsDone.partLimiter", { title: settingsDone.title })
+              : settingsDone.kind === "nothing-limiting"
+                ? t("lab.experimentBench.summary.settingsDone.nothingLimiting")
+                : t("lab.experimentBench.summary.settingsDone.notMeasured")}
+        </p>
+      )}
       {(s.kept.length > 0 || s.putBack.length > 0) && (
         <>
           <p className="exp-order-label">{t("lab.experimentBench.summary.happenedLabel")}</p>
