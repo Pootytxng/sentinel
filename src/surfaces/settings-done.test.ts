@@ -44,6 +44,19 @@ describe("settingsDoneLine (P9-settings-done)", () => {
     });
   });
 
+  it("never names the safe-tweak rows it just finished testing (desk review 2026-10-31)", () => {
+    // On the owner's rig the finished WARDOGS summary said "tested twice, no measurable difference"
+    // for Trim Windows visual effects, and this line then named "1 safe tweak not applied" (that same
+    // tweak) as what holds the PC back.
+    const aggregate = item("pending-safe-recs", "attention", "1 safe tweak not applied");
+    const applied = item("applied-changes", "attention", "2 changes applied");
+    expect(settingsDoneLine("finished-supported-tests", pri([aggregate, applied]))).toEqual({ kind: "nothing-limiting" });
+    // A real limiter behind them is still named.
+    expect(
+      settingsDoneLine("finished-supported-tests", pri([aggregate, item("ram-capacity", "attention", "Memory")])),
+    ).toEqual({ kind: "part-limiter", title: "Memory" });
+  });
+
   it("names a hardware limiter by its title only", () => {
     expect(settingsDoneLine("finished-supported-tests", pri([item("ready-x", "ready"), item("ram-capacity", "attention", "Memory")]))).toEqual({
       kind: "part-limiter",

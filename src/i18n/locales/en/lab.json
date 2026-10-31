@@ -655,7 +655,7 @@
     "stretchLeftOut": "{{session}}: {{minutes}} min with the game in the background was left out of the numbers.",
     "stretchFlat": "{{session}}: {{minutes}} min held at about {{fps}} fps. That may be a menu, a frame cap or the game in the background; Compy can't tell, so it was counted.",
     "stretchFlatFocused": "{{session}}: {{minutes}} min held at about {{fps}} fps. That may be a menu or a frame cap; Compy can't tell, so it was counted.",
-    "stretchCappedBoth": "Both sessions held at about {{fps}} fps for a minute or more, which may be a frame cap. While a cap holds, a change can't show a gain, so no measurable change here says little about the change itself.",
+    "stretchCappedBoth": "Both sessions held at about {{fps}} fps ({{before}} min before, {{after}} min after), which looks like one frame cap. While it holds, a change can't show a gain, so this \"No measurable change\" says little about the change itself.",
     "spanMinutes": "{{minutes}} min",
     "spanSeconds": "{{seconds}} s",
     "receiptTooFewLeftOut": "Only {{readings}} readings while the game was in front: {{span}} were left out because another window was in front.",
