@@ -677,7 +677,8 @@
       "find": "Find out why",
       "later": "Not now",
       "headline": "Something happened with {{what}}",
-      "detail": "Windows recorded it: {{kind}}, {{when}}. Compy changes nothing until you choose."
+      "detail": "Windows recorded it: {{kind}}, {{when}}. Compy changes nothing until you choose.",
+      "detailRecorded": "Windows recorded it. Compy changes nothing until you choose."
     },
     "noGames": "Games",
     "noGamesValue": "None measured yet",

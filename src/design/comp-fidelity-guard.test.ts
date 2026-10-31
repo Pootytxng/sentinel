@@ -88,6 +88,13 @@ describe("comp fidelity — the primary action wears the ladder's good end (owne
     const cta = body(glass, ':root[data-v2="on"] .gl-cta');
     expect(cta).toMatch(/background:\s*var\(--v2-cta\)/);
     expect(cta).not.toContain("--v2-accent");
+    // Round 2: its focus ring is the page ink in a rule of its own. Left inside the shared :is()
+    // list, the accent ring won on specificity and circled the green primary in red under Crimson.
+    expect(body(glass, ':root[data-v2="on"] .gl-cta:focus-visible')).toMatch(/outline:\s*2px solid var\(--v2-text\)/);
+    const glassCode = glass.replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const m of glassCode.matchAll(/:is\(([^)]*)\):focus-visible/g)) expect(m[1]).not.toContain(".gl-cta");
+    // Problems' one filled action (Black Box's scan) wears the same green, not its sheet's accent.
+    expect(body(glass, ':root[data-v2="on"] .gl-station .bb-scan')).toMatch(/background:\s*var\(--v2-cta\)/);
   });
 
   it("Live's Start capture stays VIOLET — the comps differ here ON PURPOSE", () => {
