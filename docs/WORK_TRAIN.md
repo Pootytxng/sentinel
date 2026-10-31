@@ -602,9 +602,14 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
       whose copy says nothing was measured; that is untrue when a (stale) result exists. Give that case its
       own honest line (en + zh-CN) and a test. Found 2026-10-29 while doing P8-posture-count. Self-review of
       the new line owed at the next FULL desk session.
-- [ ] **P8-posture-show** The Trial receipt and the game summary name the risk choice in force when each
+- [x] **P8-posture-show** The Trial receipt and the game summary name the risk choice in force when each
       Trial started (stored on the experiment record; older records read "not recorded", never a guess).
-      Needs P8-posture-b.
+      Needs P8-posture-b. `e4d22675` (merge on this line's commit): `risk_choice` on the record, bench Trial
+      row + journey result receipt, en + zh-CN. Review r1 LAND. Self-review of both lines owed (FULL+desk).
+- [ ] **P8-posture-lenient** (review SHOULD-FIX on P8-posture-show) A `risk_choice` value this build does not
+      know (a downgrade after a later build adds one) must read "not recorded", not fail the whole
+      experiments.json load: lenient deserialize to `None`, plus a test. First check what the store loader
+      does on a parse failure (an empty-store fallback would lose Trial history for any enum field).
 - [ ] **P8-ack** Before a moderate change's Trial starts, one plain line names its cost from the catalog's
       own words and needs one tap ("I understand, test it"); safe changes start as today. Recorded on the
       receipt. RISK_MODEL §1 Advanced ("explicit user acknowledgement when the cost is not obvious").
@@ -640,10 +645,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-27 ~18:55–19:40 (interactive from Claude HQ, CODE-ONLY): P4-smooth-offer-b `06596359` (feat `f53f4511`,
-  fix `76d56405`); r26 FULL vitest failed on command-authority-guard + affordance-census → `0f38e9ba`; r27 FULL
-  vitest 525 files / 10777, exit 0, tsc 0; cargo 1651/0, clippy clean. Lessons: a new command's touched set
-  includes `command-authority-guard` (capability grant), and retiring a locale key includes the census. Not pushed.
 - 2026-10-27 ~19:40–20:10 (interactive from Claude HQ, CODE-ONLY): #618 Trials `4405e96c` + Care `d16309a3`;
   cargo 1660/0, clippy clean; r28 FULL vitest 525 files / 10110, exit 0 (Trials), r29 for Care. Lesson: when
   a permanent marker gates a check, find every reader of it (#669's session counts were a second dead-end
@@ -714,6 +715,12 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `03580297` with this line, through the pre-push gate. Lane line removed: scheduled sessions may write again. Lessons:
   Desktop Commander drops output after a printed line ending in `>`; an unattended wake may not re-arm its own check, so
   a long wait ends with "say go".
+- 2026-10-31 (scheduled, CODE-ONLY, owner on Discord): P8-posture-show `e4d22675` (merge: this line's commit);
+  tsc 0; cargo experiment 146 passed; clippy clean; full vitest 526/530 files (3 site-app suites need
+  site-app/node_modules, absent in the worktree; branch-disposition fails the same on main: stale
+  `origin/claude/redesign-glass` in the ref cache, cleared by `git fetch origin --prune` next FULL session).
+  Review r1 LAND; SHOULD-FIX queued as P8-posture-lenient. One item only. Not pushed (CODE-ONLY); next FULL
+  session pushes.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
