@@ -10,7 +10,7 @@
 // floor and 1280/1500/1920 windows), in English and Chinese. Read back over CDP:
 //   1. every glyph of the age · duration tail lies inside its `.ss-meta` box (not clipped, not
 //      under an ellipsis), on one line;
-//   2. the meta track stays at most 210px unless the age · duration tail alone needs more (a
+//   2. the meta track stays at most TRACK_CAP_PX unless the age · duration tail alone needs more (a
 //      100-plus-days-old row in English does: "123 DAYS AGO · 12M 34S" is ~207px), and rows within
 //      the cap start their canvases at one x;
 //   3. no row scrolls sideways at any width (#622-f1). Below 600px the "vs previous" chip used to
@@ -32,7 +32,11 @@ const src = root.replace(/\\/g, "/") + "/src";
 const WIDTHS = [300, 380, 420, 480, 560, 600, 640, 680, 720, 900, 1100];
 const MIN_CANVAS_PX = 120;
 const LOCALES = ["en", "zh-CN"];
-const TRACK_CAP_PX = 210;
+// 300, was 210 (desk review 2026-10-30): with real tails at 150-220px a 210px cap left the game's
+// name 16-24px on the owner's rig (and 0px for "eldenring" here). The name now gets at least
+// NAME_MIN_PX (about eight capitals of the mono face) wherever the row runs three across.
+const TRACK_CAP_PX = 300;
+const NAME_MIN_PX = 72;
 const TOLERANCE_PX = 0.5;
 
 function appCssImports() {
@@ -157,6 +161,7 @@ window.__measure = async (lang, widths) => {
         lang, width: w, text,
         tail: text.slice(cut + 3),
         metaWidth: m.width,
+        nameWidth: row.querySelector(".ss-meta-name").getBoundingClientRect().width,
         tailWidth,
         canvasLeft: row.querySelector(".ss-canvas-wrap").getBoundingClientRect().left,
         canvasWidth: row.querySelector(".ss-canvas-wrap").getBoundingClientRect().width,
@@ -220,7 +225,15 @@ describe("Live session rows keep age and duration whole in a real Chromium (#677
     expect(violations).toEqual([]);
   });
 
-  it("keeps the meta track at 210px or less unless the tail alone needs more, and aligns rows within the cap", () => {
+  it("gives the game's name room to be read wherever the row runs three across (desk review 2026-10-30)", () => {
+    const violations = [];
+    for (const r of rows.filter((x) => x.width >= 720)) {
+      if (r.nameWidth < NAME_MIN_PX - TOLERANCE_PX) violations.push(`${where(r)}: name ${r.nameWidth.toFixed(1)}px`);
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("keeps the meta track at the cap or less unless the tail alone needs more, and aligns rows within the cap", () => {
     const violations = [];
     for (const lang of LOCALES) {
       for (const w of WIDTHS.filter((x) => x >= 720)) {
