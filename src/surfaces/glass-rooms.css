@@ -1,0 +1,578 @@
+/* Glass rooms (owner decision 2026-10-30: the approved glass redesign). Shared by the new Health
+   front page, Games and Problems: a page head, a row of headline cards, glass cards, a tube chart and
+   plain rows. Tokens only (tokens-v2.css); no colour literals. The selected/hot card is the one
+   accent fill on a screen, so it always means "start here". */
+
+:root[data-v2="on"] .gl-room {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  color: var(--v2-text);
+}
+
+/* ── Head ── */
+:root[data-v2="on"] .gl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+:root[data-v2="on"] .gl-head-text {
+  min-width: 0;
+}
+:root[data-v2="on"] .gl-h1 {
+  margin: 0;
+  font-size: var(--type-section);
+  font-weight: var(--type-section-weight);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+:root[data-v2="on"] .gl-eyebrow {
+  margin: 0 0 4px;
+  color: var(--v2-muted);
+  font-size: var(--type-label);
+  font-weight: 500;
+}
+:root[data-v2="on"] .gl-sub {
+  margin: 4px 0 0;
+  max-width: 72ch;
+  color: var(--v2-muted);
+  font-size: var(--type-body);
+}
+:root[data-v2="on"] .gl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+:root[data-v2="on"] .gl-cta,
+:root[data-v2="on"] .gl-ghost,
+:root[data-v2="on"] .gl-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font: 600 var(--type-label) var(--v2-font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+:root[data-v2="on"] .gl-cta {
+  border: 1px solid transparent;
+  background: var(--v2-accent);
+  color: var(--v2-accent-ink);
+}
+:root[data-v2="on"] .gl-cta:hover {
+  background: var(--v2-accent-text);
+}
+:root[data-v2="on"] .gl-ghost {
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-panel);
+  color: var(--v2-text);
+}
+:root[data-v2="on"] :is(.gl-ghost, .gl-cta) svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+:root[data-v2="on"] .gl-ghost:hover {
+  background: var(--v2-panel-2);
+}
+:root[data-v2="on"] .gl-back {
+  height: 30px;
+  padding: 0 12px 0 8px;
+  border: 1px solid var(--v2-line);
+  background: transparent;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .gl-back:hover {
+  color: var(--v2-text);
+  border-color: var(--v2-line-strong);
+}
+:root[data-v2="on"] :is(.gl-cta, .gl-ghost, .gl-back, .gl-kpi, .gl-pill-seg button, .gl-row-btn):focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+
+/* ── Headline cards ── */
+:root[data-v2="on"] .gl-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+:root[data-v2="on"] .gl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 12px;
+}
+:root[data-v2="on"] .gl-kpi {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  min-height: 116px;
+  padding: 14px 16px 13px;
+  border: 1px solid var(--v2-line);
+  border-radius: 18px;
+  background: var(--v2-panel-card);
+  -webkit-backdrop-filter: blur(var(--v2-glass-blur));
+  backdrop-filter: blur(var(--v2-glass-blur));
+  color: var(--v2-text);
+  font: inherit;
+  text-align: left;
+}
+:root[data-v2="on"] button.gl-kpi {
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+:root[data-v2="on"] button.gl-kpi:hover {
+  border-color: var(--v2-line-strong);
+  background: var(--v2-panel-card-hover);
+}
+:root[data-v2="on"] .gl-kpi[data-hot="true"] {
+  border-color: transparent;
+  background: var(--v2-accent);
+  color: var(--v2-accent-ink);
+}
+:root[data-v2="on"] button.gl-kpi[data-hot="true"]:hover {
+  background: var(--v2-accent-text);
+}
+:root[data-v2="on"] .gl-kpi-label {
+  padding-right: 34px;
+  color: var(--v2-muted);
+  font-size: var(--type-label);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root[data-v2="on"] .gl-kpi-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+}
+:root[data-v2="on"] .gl-kpi-value {
+  min-width: 0;
+  font-size: var(--type-card);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+:root[data-v2="on"] .gl-kpi-value[data-size="big"] {
+  font-size: var(--type-section);
+}
+:root[data-v2="on"] .gl-kpi-value .gl-num {
+  font-family: var(--v2-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+:root[data-v2="on"] .gl-kpi-value small {
+  margin-left: 3px;
+  color: var(--v2-muted);
+  font-size: var(--type-label);
+  font-weight: 500;
+}
+:root[data-v2="on"] .gl-kpi-note {
+  color: var(--v2-faint);
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .gl-kpi[data-hot="true"] :is(.gl-kpi-label, .gl-kpi-note, .gl-kpi-value small) {
+  color: var(--v2-accent-ink);
+}
+:root[data-v2="on"] .gl-arrow {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 50%;
+}
+:root[data-v2="on"] .gl-arrow svg {
+  width: 12px;
+  height: 12px;
+}
+:root[data-v2="on"] .gl-kpi[data-hot="true"] .gl-arrow {
+  border-color: transparent;
+  background: var(--v2-accent-ink);
+  color: var(--v2-accent);
+}
+
+/* The Care observer's card on Health: the card is the one accent fill, its two actions are the
+   console card's "Find out why" / "Not now", in the card's own ink. */
+:root[data-v2="on"] .gl-care-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+:root[data-v2="on"] .gl-care-go,
+:root[data-v2="on"] .gl-care-later {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font: 600 var(--type-label) var(--v2-font-sans);
+  cursor: pointer;
+}
+:root[data-v2="on"] .gl-care-go {
+  border: 0;
+  background: var(--v2-accent-ink);
+  color: var(--v2-accent);
+}
+:root[data-v2="on"] .gl-care-later {
+  border: 1px solid var(--v2-accent-ink);
+  background: transparent;
+  color: var(--v2-accent-ink);
+}
+:root[data-v2="on"] :is(.gl-care-go, .gl-care-later):focus-visible {
+  outline: 2px solid var(--v2-accent-ink);
+  outline-offset: 2px;
+}
+:root[data-v2="on"] .gl-card-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+/* ── Chips ── */
+:root[data-v2="on"] .gl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--v2-line-strong);
+  color: var(--v2-text);
+  font-size: var(--type-label);
+  font-weight: 600;
+  white-space: nowrap;
+  transform-origin: right center;
+}
+:root[data-v2="on"] .gl-chip[data-tone="ok"] { background: var(--v2-ok-dim); color: var(--v2-ok); }
+:root[data-v2="on"] .gl-chip[data-tone="warn"] { background: var(--v2-warn-dim); color: var(--v2-warn); }
+:root[data-v2="on"] .gl-chip[data-tone="bad"] { background: var(--v2-bad-dim); color: var(--v2-bad); }
+:root[data-v2="on"] .gl-chip[data-tone="accent"] { background: var(--v2-accent-dim); color: var(--v2-accent-text); }
+:root[data-v2="on"] .gl-kpi[data-hot="true"] .gl-chip {
+  background: var(--v2-accent-ink);
+  color: var(--v2-accent);
+}
+
+/* ── Cards, the lower band ── */
+:root[data-v2="on"] .gl-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+:root[data-v2="on"] .gl-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+/* The last card in the right-hand stack takes up the slack, so both columns end on one line. */
+:root[data-v2="on"] .gl-stack > :last-child {
+  flex: 1;
+}
+:root[data-v2="on"] .gl-lower[data-align="start"] {
+  align-items: start;
+}
+
+/* ── Play time by game: one bar per game, proportional to measured play time ── */
+:root[data-v2="on"] .gl-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+:root[data-v2="on"] .gl-bars-row {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .gl-bars-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root[data-v2="on"] .gl-bars-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--v2-line);
+  overflow: hidden;
+}
+:root[data-v2="on"] .gl-bars-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--v2-accent);
+}
+
+/* FirstWin ("Your latest change") on glass: a glass card with pill buttons like its neighbours. */
+:root[data-v2="on"]:not([data-surface="solid"]) .gl-room .first-win {
+  border: 1px solid var(--v2-line);
+  border-radius: 18px;
+  background: var(--v2-panel-card);
+  -webkit-backdrop-filter: blur(var(--v2-glass-blur));
+  backdrop-filter: blur(var(--v2-glass-blur));
+}
+:root[data-v2="on"] .gl-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+:root[data-v2="on"] .gl-card {
+  min-width: 0;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--v2-line);
+  border-radius: 18px;
+  background: var(--v2-panel-card);
+  -webkit-backdrop-filter: blur(var(--v2-glass-blur));
+  backdrop-filter: blur(var(--v2-glass-blur));
+}
+:root[data-v2="on"] .gl-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+:root[data-v2="on"] .gl-card-title {
+  margin: 0;
+  font-size: var(--type-body);
+  font-weight: 650;
+}
+:root[data-v2="on"] .gl-card-sub {
+  margin: 2px 0 0;
+  color: var(--v2-faint);
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .gl-pill-seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--v2-line);
+  border-radius: 999px;
+  background: var(--v2-panel);
+}
+:root[data-v2="on"] .gl-pill-seg button {
+  height: 28px;
+  max-width: 160px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--v2-muted);
+  font: 600 var(--type-label) var(--v2-font-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+:root[data-v2="on"] .gl-pill-seg button:hover {
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .gl-pill-seg button[aria-pressed="true"] {
+  background: var(--v2-dock-active-bg);
+  color: var(--v2-dock-active-ink);
+}
+
+/* ── Tube chart ── */
+:root[data-v2="on"] .gl-chart {
+  position: relative;
+  margin-top: 8px;
+  min-height: 210px;
+}
+:root[data-v2="on"] .gl-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+:root[data-v2="on"] .gl-chart text {
+  fill: var(--v2-faint);
+  font-family: var(--v2-font-mono);
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .gl-chart .gl-ax-hi {
+  fill: var(--v2-text);
+  font-weight: 600;
+}
+:root[data-v2="on"] .gl-chart .gl-tip-val {
+  fill: var(--v2-dock-active-ink);
+  font-weight: 700;
+}
+:root[data-v2="on"] .gl-chart .gl-grid-line {
+  stroke: var(--v2-line);
+}
+:root[data-v2="on"] .gl-chart .gl-bar {
+  cursor: default;
+}
+:root[data-v2="on"] .gl-chart .gl-bar:hover {
+  filter: brightness(1.25);
+}
+:root[data-v2="on"] .gl-chart .gl-bar:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+  filter: brightness(1.25);
+}
+:root[data-v2="on"] .gl-chart-tip {
+  position: absolute;
+  z-index: 3;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: var(--v2-dock-active-bg);
+  color: var(--v2-dock-active-ink);
+  font-size: var(--type-label);
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+}
+:root[data-v2="on"] .gl-chart-foot {
+  margin: 6px 0 0;
+  color: var(--v2-faint);
+  font-size: var(--type-label);
+}
+
+/* ── Rows ── */
+:root[data-v2="on"] .gl-rows {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+}
+:root[data-v2="on"] .gl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--v2-line);
+}
+:root[data-v2="on"] .gl-rows > .gl-row:first-child {
+  border-top: 0;
+}
+:root[data-v2="on"] .gl-row-title {
+  display: block;
+  font-size: var(--type-label);
+  font-weight: 600;
+}
+:root[data-v2="on"] .gl-row-sub {
+  display: block;
+  color: var(--v2-faint);
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .gl-row-val {
+  font-family: var(--v2-font-mono);
+  font-size: var(--type-data);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+:root[data-v2="on"] .gl-row-btn {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--v2-line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+:root[data-v2="on"] .gl-row-btn:hover {
+  background: var(--v2-line);
+}
+
+/* ── Empty / unknown ── */
+:root[data-v2="on"] .gl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 22px;
+  border: 1px dashed var(--v2-line-strong);
+  border-radius: 18px;
+  background: var(--v2-panel);
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .gl-empty p {
+  margin: 0;
+  max-width: 64ch;
+}
+:root[data-v2="on"] .gl-station {
+  min-width: 0;
+  background: var(--v2-panel-2);
+}
+
+/* ── Banner: what Windows recorded, in the attention colour ── */
+:root[data-v2="on"] .gl-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 12px 14px 12px 18px;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 16px;
+  background: var(--v2-panel-2);
+  -webkit-backdrop-filter: blur(var(--v2-glass-blur));
+  backdrop-filter: blur(var(--v2-glass-blur));
+}
+:root[data-v2="on"] .gl-banner[data-tone="warn"] {
+  border-color: var(--v2-warn);
+}
+:root[data-v2="on"] .gl-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: var(--type-body);
+}
+:root[data-v2="on"] .gl-banner-text b {
+  font-weight: 650;
+}
+:root[data-v2="on"] .gl-banner-text span {
+  color: var(--v2-muted);
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .gl-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:root[data-v2="on"][data-surface="solid"] :is(.gl-kpi, .gl-card) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+@media (max-width: 1099.98px) {
+  :root[data-v2="on"] .gl-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  :root[data-v2="on"] .gl-lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 599.98px) {
+  :root[data-v2="on"] .gl-kpis,
+  :root[data-v2="on"] .gl-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+:root[data-v2="on"] .gl-back-row {
+  margin-bottom: 10px;
+}

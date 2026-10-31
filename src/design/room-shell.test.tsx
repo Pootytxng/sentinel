@@ -29,6 +29,9 @@ describe("DOOR_MAP — the journey pinned literally (P6 spec table)", () => {
       learn: { to: "lab", label: "Open the instruments" },
       lab: null,
       check: null,
+      // Glass redesign (2026-10-30): the two journey doors draw their own pages, no chapter door.
+      games: null,
+      problems: null,
     });
   });
 });

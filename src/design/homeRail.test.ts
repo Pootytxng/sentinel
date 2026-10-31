@@ -10,10 +10,10 @@ import { HOME_RAIL, railFor, railGroups } from "./homeRail";
 // — the shell rail is the ONE rail now.)
 describe("home rail parity", () => {
   it("is the blessed six-home set, in order", () => {
-    expect(HOME_RAIL.map((r) => r.id)).toEqual(["home", "check", "play", "fix", "learn", "lab"]);
+    expect(HOME_RAIL.map((r) => r.id)).toEqual(["home", "games", "problems", "check", "play", "fix", "learn", "lab"]);
     // "Live" + "History" + "Test" labels = owner-approved renames (2026-08-12; earlier rounds
     // 2026-06-12/15); persisted ids unchanged (the id "play" stays the nav key behind "Live").
-    expect(HOME_RAIL.map((r) => r.label)).toEqual(["Health", "Check", "Live", "Tune", "History", "Test"]);
+    expect(HOME_RAIL.map((r) => r.label)).toEqual(["Health", "Games", "Problems", "Check", "Live", "Tune", "History", "Test"]);
   });
 
   it("the app-shell rail renders from the shared rail (no second map)", () => {
@@ -28,12 +28,12 @@ describe("home rail parity", () => {
 describe("railFor — Optimize merge collapse", () => {
   it("is the blessed six-home set, unchanged, when the merge is OFF", () => {
     expect(railFor(false)).toBe(HOME_RAIL); // same reference — no copy, no drift
-    expect(railFor(false).map((r) => r.id)).toEqual(["home", "check", "play", "fix", "learn", "lab"]);
+    expect(railFor(false).map((r) => r.id)).toEqual(["home", "games", "problems", "check", "play", "fix", "learn", "lab"]);
   });
 
   it("collapses to 5 rooms with no standalone check when the merge is ON", () => {
     const rail = railFor(true);
-    expect(rail.map((r) => r.id)).toEqual(["home", "fix", "play", "learn", "lab"]);
+    expect(rail.map((r) => r.id)).toEqual(["home", "games", "problems", "fix", "play", "learn", "lab"]);
     expect(rail.some((r) => r.id === "check")).toBe(false);
   });
 
@@ -54,10 +54,10 @@ describe("railFor — Optimize merge collapse", () => {
 // is the ONE door to the safe-tweak toggles. Four rooms, relative order preserved (the Lab stays
 // the last chapter). compy_lab_ground="0" restores the classic rails above.
 describe("railFor — proving ground drops the standalone Optimize room", () => {
-  it("ground: Home · Live · History · Test — no check, no fix, order preserved", () => {
+  it("ground: Health · Games · Problems · Live · History · Test — no check, no fix, order preserved", () => {
     const rail = railFor(true, true);
-    expect(rail.map((r) => r.id)).toEqual(["home", "play", "learn", "lab"]);
-    expect(rail.map((r) => r.label)).toEqual(["Health", "Live", "History", "Test"]);
+    expect(rail.map((r) => r.id)).toEqual(["home", "games", "problems", "play", "learn", "lab"]);
+    expect(rail.map((r) => r.label)).toEqual(["Health", "Games", "Problems", "Live", "History", "Test"]);
   });
 
   it("ground wins over the merge flag (same rail either way)", () => {
@@ -66,12 +66,12 @@ describe("railFor — proving ground drops the standalone Optimize room", () => 
 
   it("ground=false keeps both classic shapes untouched", () => {
     expect(railFor(false, false)).toBe(HOME_RAIL);
-    expect(railFor(true, false).map((r) => r.id)).toEqual(["home", "fix", "play", "learn", "lab"]);
+    expect(railFor(true, false).map((r) => r.id)).toEqual(["home", "games", "problems", "fix", "play", "learn", "lab"]);
   });
 
   it("does not mutate HOME_RAIL", () => {
     railFor(true, true);
-    expect(HOME_RAIL.map((r) => r.id)).toEqual(["home", "check", "play", "fix", "learn", "lab"]);
+    expect(HOME_RAIL.map((r) => r.id)).toEqual(["home", "games", "problems", "check", "play", "fix", "learn", "lab"]);
   });
 });
 
@@ -81,10 +81,10 @@ describe("railFor — proving ground drops the standalone Optimize room", () => 
 // kept — a "door" that removed a room from the rail would be the hide-behind-a-toggle the
 // 2026-08-06 directive bars.
 describe("railGroups — the front door and the instruments", () => {
-  it("the shipped rail: Health alone at the door, Live · History · Test under the sign, in rail order", () => {
+  it("the shipped rail: Health, Games and Problems at the door, Live · History · Test under the sign, in rail order", () => {
     const rail = railFor(true, true);
     const g = railGroups(rail);
-    expect(g.door.map((r) => r.id)).toEqual(["home"]);
+    expect(g.door.map((r) => r.id)).toEqual(["home", "games", "problems"]);
     expect(g.instruments.map((r) => r.id)).toEqual(["play", "learn", "lab"]);
   });
 

@@ -1,0 +1,177 @@
+/* Look panel (glass redesign, owner decision 2026-10-30). Tokens only — every colour comes from
+   tokens-v2.css. The panel itself is near-opaque so its own text never sits on the busy backdrop. */
+
+:root[data-v2="on"] .v2-look {
+  position: relative;
+}
+
+:root[data-v2="on"] .v2-look-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-panel);
+  color: var(--v2-text);
+  font: var(--type-label-weight, 600) var(--type-label) var(--v2-font-sans);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+:root[data-v2="on"] .v2-look-btn:hover,
+:root[data-v2="on"] .v2-look-btn[aria-expanded="true"] {
+  background: var(--v2-panel-2);
+  border-color: var(--v2-accent-line);
+}
+:root[data-v2="on"] .v2-look-btn:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+:root[data-v2="on"] .v2-look-ico {
+  width: 16px;
+  height: 16px;
+  color: var(--v2-accent-text);
+}
+
+:root[data-v2="on"] .v2-look-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: min(360px, calc(100vw - 32px));
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  padding: 16px 18px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-panel-pop);
+  -webkit-backdrop-filter: blur(var(--v2-glass-blur));
+  backdrop-filter: blur(var(--v2-glass-blur));
+  box-shadow: 0 18px 48px var(--v2-shadow-panel);
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .v2-look-title {
+  margin: 0;
+  font-size: var(--type-card);
+  font-weight: var(--type-card-weight);
+}
+:root[data-v2="on"] .v2-look-sub {
+  margin: 2px 0 0;
+  color: var(--v2-muted);
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .v2-look-label {
+  margin: 16px 0 8px;
+  color: var(--v2-faint);
+  font-size: var(--type-label);
+  font-weight: 600;
+}
+
+:root[data-v2="on"] .v2-look-themes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+:root[data-v2="on"] .v2-look-theme {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--v2-r);
+  border: 1px solid var(--v2-line);
+  background: var(--v2-panel-2);
+  color: var(--v2-text);
+  font: 500 var(--type-label) var(--v2-font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+:root[data-v2="on"] .v2-look-theme[aria-checked="true"] {
+  border-color: var(--v2-text);
+}
+:root[data-v2="on"] .v2-look-swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--v2-line-strong);
+}
+:root[data-v2="on"] .v2-look-theme[data-theme-id="midnight"] .v2-look-swatch { background: var(--v2-swatch-midnight); }
+:root[data-v2="on"] .v2-look-theme[data-theme-id="violet"] .v2-look-swatch { background: var(--v2-swatch-violet); }
+:root[data-v2="on"] .v2-look-theme[data-theme-id="crimson"] .v2-look-swatch { background: var(--v2-swatch-crimson); }
+:root[data-v2="on"] .v2-look-theme[data-theme-id="emerald"] .v2-look-swatch { background: var(--v2-swatch-emerald); }
+:root[data-v2="on"] .v2-look-theme[data-theme-id="hearth"] .v2-look-swatch { background: var(--v2-swatch-hearth); }
+
+:root[data-v2="on"] .v2-look-seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--v2-line);
+  background: var(--v2-panel-2);
+}
+:root[data-v2="on"] .v2-look-seg button {
+  flex: 1;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--v2-muted);
+  font: 600 var(--type-label) var(--v2-font-sans);
+  cursor: pointer;
+}
+:root[data-v2="on"] .v2-look-seg button[aria-checked="true"] {
+  background: var(--v2-dock-active-bg);
+  color: var(--v2-dock-active-ink);
+}
+
+:root[data-v2="on"] .v2-look-backdrops {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+:root[data-v2="on"] .v2-look-bd {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 5px;
+  border-radius: var(--v2-r);
+  border: 1px solid var(--v2-line);
+  background: var(--v2-panel-2);
+  color: var(--v2-text);
+  font: 500 var(--type-label) var(--v2-font-sans);
+  text-align: center;
+  cursor: pointer;
+}
+:root[data-v2="on"] .v2-look-bd[aria-checked="true"] {
+  border-color: var(--v2-text);
+}
+:root[data-v2="on"] .v2-look-thumb {
+  display: block;
+  height: 40px;
+  border-radius: 6px;
+  background-color: var(--v2-ground);
+  background-position: center;
+  background-size: cover;
+}
+:root[data-v2="on"] .v2-look-thumb[data-thumb="night"] {
+  background-image: url("../assets/backdrops/night-city.jpg");
+}
+:root[data-v2="on"] .v2-look-thumb[data-thumb="room"] {
+  background-image: url("../assets/backdrops/warm-room.jpg");
+}
+:root[data-v2="on"] .v2-look-thumb[data-thumb="plain"] {
+  background-image: radial-gradient(120% 90% at 20% 0%, var(--v2-accent-dim), transparent 70%);
+}
+:root[data-v2="on"] .v2-look-theme:focus-visible,
+:root[data-v2="on"] .v2-look-seg button:focus-visible,
+:root[data-v2="on"] .v2-look-bd:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+:root[data-v2="on"] .v2-look-note {
+  margin: 12px 0 0;
+  color: var(--v2-muted);
+  font-size: var(--type-label);
+}

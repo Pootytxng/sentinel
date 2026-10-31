@@ -29,6 +29,9 @@ export const TAB_BLURB: Record<HomeRailId, string> = {
   // Logbook tab and was confused — the intro should introduce it).
   learn: "The measured record of what actually works — and the myths that don't. Its library is the Field Guide.",
   lab: "Go deeper: benchmarks, latency and system diagnostics.",
+  // Glass redesign (2026-10-30): the two journey doors.
+  games: "Every game Compy has measured, and how each one runs — where making a game better starts.",
+  problems: "Crashes, freezes and restarts from Windows' own records — find out what went wrong.",
 };
 
 // The merged room absorbs Check's diagnose half, so its blurb must cover both (the fix-id blurb
@@ -257,12 +260,12 @@ export function buildHardwareSteps(parts: RigPart[], merged = true, ground = fal
 // it): the rail reads top to bottom in story order. Only the merged five-room rail IS that
 // journey; the classic six-room escape hatch keeps its original copy.
 export const JOURNEY_RECAP_BODY =
-  "The rail reads top to bottom: Health for the glance, Optimize to check and fix, Live to watch the frames as they happen, History for what actually works, Test to go deeper.";
+  "The rail reads top to bottom: Health for the glance, Games to make a game run better, Problems to find out what went wrong, Optimize to check and fix, Live to watch the frames as they happen, History for what actually works, Test to go deeper.";
 
 // The proving-ground recap (2026-07-10 flip) — the four-room rail in ITS order, the Lab as the
 // workshop at the end of the row.
 export const GROUND_RECAP_BODY =
-  "The rail reads top to bottom: Health for the glance, Live to watch the frames as they happen, History for what actually works, Test to check, fix and prove it.";
+  "The rail reads top to bottom: Health for the glance, Games to make a game run better, Problems to find out what went wrong, Live to watch the frames as they happen, History for what actually works, Test to check, fix and prove it.";
 
 // The ordered flow: setup steps → a hardware lesson per present component → the rail recap.
 // 2026-07-23 (tester Matthew: "the last tab is the best for clarity" — orientation must not wait

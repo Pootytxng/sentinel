@@ -7,7 +7,7 @@ import { ConfirmProvider } from "./design/ConfirmDialog";
 import { ErrorBoundary } from "./design/ErrorBoundary";
 import { WindowChrome } from "./design/WindowChrome";
 import { applyMotionAttribute } from "./design/use-motion";
-import { applyRoomAccents } from "./design/theme";
+import { applyRoomAccents, readInstrumentTheme, syncLookAttributes, DEFAULT_THEME } from "./design/theme";
 // i18next init (side-effect import — sets up the translator before first render) + the language
 // preference reader, same "resolve before first paint" convention as every other data-* attribute
 // below. Default is ALWAYS English; Chinese (Simplified) is reachable only via Settings.
@@ -36,16 +36,22 @@ if (isOverlay) {
 // (The classic [data-theme] appearance system was retired 2026-06-06; data-itheme is the one theme.)
 // Local-only, cosmetic; reversible (drop instrument.css + this block to fall back to the old accent).
 try {
-  const it = localStorage.getItem("compy_theme");
-  const valid = ["midnight", "violet", "crimson", "emerald", "hearth"];
-  const theme = it && valid.includes(it) ? it : "violet";
+  const theme = readInstrumentTheme();
   document.documentElement.dataset.itheme = theme;
   // Hearth keeper (shadow realm): Hearth lit in December → ambient drifts a hair warmer. No UI ever.
   if (theme === "hearth" && new Date().getMonth() === 11) {
     document.documentElement.dataset.hearthSeason = "december";
   }
 } catch {
-  document.documentElement.dataset.itheme = "violet";
+  document.documentElement.dataset.itheme = DEFAULT_THEME;
+}
+// Look (glass redesign 2026-10-30): surface + backdrop attributes, before first paint so the glass
+// never flashes in over a solid frame. theme.ts owns the keys and the defaults.
+try {
+  syncLookAttributes();
+} catch {
+  document.documentElement.dataset.surface = "glass";
+  document.documentElement.dataset.bd = "night";
 }
 
 // Living Instrument skin (2026-06-15) — the shipped default look (cosmetic depth/glow/motion +

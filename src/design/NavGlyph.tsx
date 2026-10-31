@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 // Shared six-home nav glyphs for the app-shell rail (one-rail pass §1). One glyph source = no drift.
 const NAV_ICONS: Record<string, ReactNode> = {
   gauge: (<><path d="M4 18a8 8 0 1 1 16 0" /><line x1="12" y1="18" x2="15.5" y2="11" /></>),
+  // Glass redesign 2026-10-30: a controller for Games, a life ring for Problems (rescue).
+  games: (<><rect x="2.5" y="7" width="19" height="10.5" rx="5.25" /><path d="M7.5 10.5v4M5.5 12.5h4" /><circle cx="15.5" cy="11.4" r="0.6" /><circle cx="17.6" cy="13.6" r="0.6" /></>),
+  problems: (<><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="3.6" /><path d="M6 6l3.4 3.4M18 6l-3.4 3.4M6 18l3.4-3.4M18 18l-3.4-3.4" /></>),
   check: (<><circle cx="12" cy="12" r="8.5" /><path d="M8.5 12l2.5 2.5 4.5-5" /></>),
   play: (<><rect x="3" y="7" width="14" height="10" rx="3" /><path d="M17 10h2.5l1.5 1.5v3l-1.5 1.5H17" /><circle cx="7" cy="12" r="0.6" /><circle cx="9.4" cy="12" r="0.6" /></>),
   // "monitor" — a live activity/pulse line, coherent with what the Monitor room shows (live stats +

@@ -1,6 +1,8 @@
 {
   "rail": {
     "home": "健康",
+    "games": "游戏",
+    "problems": "问题",
     "check": "检测",
     "play": "实时",
     "fix": "调校",
@@ -13,6 +15,8 @@
     "deeperGroup": "深入查看",
     "crumb": {
       "home": "你的电脑现在怎么样",
+      "games": "让游戏运行得更好",
+      "problems": "找出出了什么问题",
       "check": "有什么在拖你后腿吗?",
       "fix": "找出问题、修复问题、随时可撤销",
       "play": "实时查看",
@@ -25,7 +29,8 @@
     "footerEmphFloor": "至少 {{n}} 项",
     "footerEmphUnknown": "数量未知",
     "fallbackTitle": "Compy",
-    "searchPlaceholder": "搜索或跳转到任意位置"
+    "searchPlaceholder": "搜索或跳转到任意位置",
+    "badgeWaiting": "{{count}} 个待查看"
   },
   "palette": {
     "title": "搜索或跳转到任意位置",
@@ -274,5 +279,70 @@
     "durationMinutes": "{{minutes}} 分钟",
     "durationSeconds": "{{seconds}} 秒",
     "benchmarkBaseline": "已记录测试基线"
+  },
+  "look": {
+    "button": "外观",
+    "title": "外观",
+    "sub": "更改会立即生效，并保存在这台电脑上。",
+    "theme": "主题",
+    "surface": "面板",
+    "backdrop": "玻璃背后",
+    "surfaces": {
+      "glass": "玻璃",
+      "frosted": "磨砂",
+      "solid": "实色"
+    },
+    "backdrops": {
+      "auto": "跟随主题",
+      "night": "城市夜景",
+      "room": "暖色房间",
+      "plain": "纯色"
+    },
+    "solidNote": "实色面板会隐藏背景。选择玻璃或磨砂即可看到。"
+  },
+  "games": {
+    "title": "游戏",
+    "sub": "Compy 根据你真实的游戏记录，列出它测量过的每款游戏。选一款，看看它运行得怎么样。",
+    "empty": "还没有游戏。在“实时”里开启采集，然后照常游戏：每款游戏在第一次被测量后就会出现在这里。",
+    "emptyCta": "打开实时",
+    "sessions_one": "{{count}} 次游戏",
+    "sessions_other": "{{count}} 次游戏",
+    "lastPlayed": "上次游玩 {{when}}",
+    "notMeasured": "未测量",
+    "fps": "fps",
+    "open": "打开 {{name}}",
+    "back": "全部游戏",
+    "detailSub": "已测量 {{sessions}}，共 {{time}}。上次游玩 {{when}}。",
+    "hm": "{{h}} 小时 {{m}} 分",
+    "m": "{{m}} 分",
+    "kpi": {
+      "last": "上一次",
+      "lastNote": "平均 FPS",
+      "low1": "1% 低帧",
+      "low1Note": "上一次中最慢的时刻",
+      "sessions": "游戏次数",
+      "sessionsNote": "共 {{time}}",
+      "best": "最佳一次",
+      "bestNote": "最高平均 FPS"
+    },
+    "chartTitle": "每次游戏的平均 FPS",
+    "chartSub": "最新的在右边 · 悬停或聚焦查看",
+    "chartAria": "{{name}} 最近 {{count}} 次游戏的平均 FPS",
+    "tip": "{{date}} · 平均 {{avg}} fps · 1% 低帧 {{low}} fps",
+    "tipAvg": "{{date}} · 平均 {{avg}} fps",
+    "tipUnmeasured": "{{date}} · 未测量",
+    "sessionsTitle": "游戏记录",
+    "sessionsSub": "最新的在前",
+    "rowFps": "{{avg}} fps",
+    "liveCta": "在实时里查看",
+    "testCta": "在测试里尝试改动",
+    "recentTitle": "最近的游戏记录",
+    "recentSub": "所有游戏 · 最新的在前",
+    "playTitle": "各游戏的游玩时长",
+    "playSub": "仅统计实测的游戏记录",
+    "playRow": "{{name}}，共 {{time}}"
+  },
+  "problems": {
+    "title": "问题"
   }
 }

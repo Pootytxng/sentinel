@@ -629,5 +629,68 @@
     "tabMap": {
       "tag": "导览"
     }
+  },
+  "glass": {
+    "greeting": {
+      "morning": "早上好",
+      "afternoon": "下午好",
+      "evening": "晚上好"
+    },
+    "answer": {
+      "allRight": "你的电脑设置看起来没问题",
+      "worth_one": "有 {{count}} 处值得一看",
+      "worth_other": "有 {{count}} 处值得一看",
+      "unknown": "这是你的电脑现在的情况"
+    },
+    "sub": {
+      "known": "{{total}} 项检查中有 {{good}} 项没问题。下面是你的游戏运行情况。在你决定之前，什么都不会改变。",
+      "unknown": "Compy 还没有检查 Windows。下面是你的游戏运行情况。在你决定之前，什么都不会改变。"
+    },
+    "actions": {
+      "problem": "出了点问题",
+      "improve": "优化一款游戏"
+    },
+    "care": {
+      "label": "需要看一看",
+      "find": "找出原因",
+      "later": "稍后",
+      "headline": "{{what}} 意外关闭了",
+      "detail": "Windows 记录了这次事件：{{kind}}，{{when}}。在你决定之前，Compy 不会做任何改动。"
+    },
+    "noGames": "游戏",
+    "noGamesValue": "还没有测量记录",
+    "noGamesNote": "在“实时”里开启采集，然后照常游戏",
+    "chartSub": "{{name}} · 最新的在右边",
+    "chartEmpty": "开启采集玩一局游戏，记录就会出现在这里。",
+    "chartPick": "游戏",
+    "live": {
+      "title": "上一次游戏",
+      "unit": "平均 fps",
+      "note": "{{game}} · {{when}} · 1% 低帧 {{low}} fps · 实测",
+      "noteNoLow": "{{game}} · {{when}} · 实测",
+      "none": "还没有记录",
+      "noneNote": "打开“实时”开始采集"
+    },
+    "checks": {
+      "title": "Windows 设置",
+      "of": "/ {{total}} 项检查没问题",
+      "worth": "值得一看：{{names}}",
+      "allGood": "没有需要处理的",
+      "unread_one": "{{count}} 项无法读取",
+      "unread_other": "{{count}} 项无法读取",
+      "run": "运行检查",
+      "unknownNote": "Compy 还没有检查。检查不会改变任何设置。"
+    },
+    "limiter": {
+      "title": "是什么在拖慢 FPS",
+      "none": "你上一次实测的游戏中没有明显的瓶颈。",
+      "unknown": "暂时未知。Compy 需要一次实测的游戏记录才能判断。"
+    },
+    "details": "打开完整健康检查",
+    "back": "返回概览",
+    "allGames": "全部游戏",
+    "allGamesUnit_one": "款游戏已测量",
+    "allGamesUnit_other": "款游戏已测量",
+    "allGamesNote": "Compy 测量过的每款游戏"
   }
 }

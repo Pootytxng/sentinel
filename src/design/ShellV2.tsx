@@ -37,12 +37,15 @@ import { MagneticLayer } from "./jarvis/MagneticLayer";
 import { HudFrame } from "./console/HudFrame";
 import { ReticleCursor } from "./console/ReticleCursor";
 import { useLedgerHealth, knownIncomplete } from "./LedgerHealthNotice";
+import { LookButton, useLook } from "./LookPanel";
 import "./shell-v2.css";
 import "./jarvis/jarvis.css";
 
 // Plain-English crumb per room (topbar wayfinding). Says what the room is FOR — Sarah & Caleb bar.
 export const ROOM_CRUMB: Record<HomeRailId, string> = {
   home: "how your PC is doing",
+  games: "make a game run better",
+  problems: "find out what went wrong",
   check: "is anything holding you back?",
   fix: "find it, fix it, undo it",
   play: "watch it live",
@@ -61,6 +64,29 @@ const V2NavContext = createContext<V2Nav>({
 });
 export const useV2Nav = () => useContext(V2NavContext);
 
+// The topbar's PC pill prints the probe's own names with the vendor boilerplate trimmed, so a
+// 1440px window shows "Ryzen 7 9850X3D · RX 9070 XT" instead of cutting off at "AMD Ryzen 7 98…".
+// Trimming only removes words; it never invents or reorders one. The full line stays in the
+// accessibility tree.
+export function shortRig(rig: string): string {
+  return rig
+    .split(" · ")
+    .map((part) =>
+      part
+        .replace(/\((R|TM|tm|r)\)/g, "")
+        .replace(/\b\d+-Core Processor\b/i, "")
+        .replace(/\bProcessor\b/i, "")
+        .replace(/\bCPU @ .*$/i, "")
+        .replace(/^(AMD|Intel|NVIDIA)\s+/i, "")
+        .replace(/^(GeForce|Radeon)\s+(?=(RTX|GTX|RX)\b)/i, "")
+        .replace(/^Core\s+/i, "")
+        .replace(/\s{2,}/g, " ")
+        .trim(),
+    )
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export function ShellV2({
   items,
   activeId,
@@ -71,12 +97,16 @@ export function ShellV2({
   onOpenEntry,
   onOpenSettings,
   onOpenIntent,
+  badges,
   children,
 }: {
   items: HomeRailItem[];
   activeId: HomeRailId | undefined;
   onNavigate: (id: HomeRailId) => void;
   ledgerCount: number;
+  /** Glass redesign: a count shown on a dock door (Problems: an incident waiting to be looked at).
+   *  Only real counts are passed; absent or 0 draws nothing. */
+  badges?: Partial<Record<HomeRailId, number>>;
   // Command-palette destinations beyond the rail. Each is the app's EXISTING single writer for that
   // kind of navigation, passed in rather than reached for — the shell owns chrome, not routing.
   // Any one omitted → the palette does not index that group, so it can never offer a dead door.
@@ -106,7 +136,11 @@ export function ShellV2({
   // App-wide viewport HUD frame + shell-scoped reticle (compy_hud_frame, console-HUD §viewport
   // frame 2026-07-15, DEFAULT ON). "0" failsafe: neither mounts, and the stage-scoped reticle
   // instances (which self-defer while this is on) take back over — byte-identical shell.
-  const hudFrame = useHudFrameFlag();
+  // GLASS REDESIGN (owner decision 2026-10-30): the viewport brackets and the reticle cursor belong
+  // to the console look. Over glass they read as a second frame on top of the picture, so they draw
+  // only on the Solid surface, which is the classic look. The flag still governs Solid.
+  const look = useLook();
+  const hudFrame = useHudFrameFlag() && look.surface === "solid";
   /**
    * ...EXCEPT IN TEST, WHERE THE ROOM IS ALREADY THE INSTRUMENT.
    *
@@ -241,6 +275,9 @@ export function ShellV2({
   return (
     <V2NavContext.Provider value={nav}>
       <div className={hudFrameHere ? "v2-shell v2-shell-hud" : "v2-shell"} ref={shellRef}>
+        {/* The picture behind the glass (Look → Backdrop). Purely decorative and static: one
+            image, drawn once, no animation — the idle-cost bar is unchanged. Solid hides it. */}
+        <div className="v2-backdrop" aria-hidden="true" />
         <nav className="v2-rail" aria-label={t("common.shellV2.navAriaLabel")}>
           {/* NO VERSION NUMBER HERE. Build identifiers are developer furniture, and the navigation
               audit ruled they belong in Settings → About, not in consumer chrome on every screen
@@ -269,6 +306,7 @@ export function ShellV2({
                   <div role="tablist" aria-labelledby={group === "instruments" ? "v2-nav-deeper" : undefined}>
                     {rooms.map((item) => {
                       const i = items.indexOf(item);
+                      const badge = badges?.[item.id] ?? 0;
                       return (
                         <button
                           key={item.id}
@@ -293,7 +331,22 @@ export function ShellV2({
                           {...(jarvis ? { "data-magnetic": "" } : {})}
                         >
                           <NavGlyph name={item.icon} />
-                          <span>{railLabel(item)}</span>
+                          {/* In the glass dock this label is the hover/focus tooltip; it stays the
+                              button's accessible name either way. */}
+                          <span className="v2-nav-label">
+                            {railLabel(item)}
+                            {badge > 0 && (
+                              <span className="v2-sr-only">
+                                {", "}
+                                {t("common.shellV2.badgeWaiting", { count: badge })}
+                              </span>
+                            )}
+                          </span>
+                          {badge > 0 && (
+                            <span className="v2-nav-badge" aria-hidden="true">
+                              {badge}
+                            </span>
+                          )}
                           <kbd aria-hidden="true">{i + 1}</kbd>
                         </button>
                       );
@@ -303,41 +356,6 @@ export function ShellV2({
               );
             })}
           </div>
-          <div className="v2-foot">
-            {/* Outbound honesty line (updater ARMED 2026-07-22): the signed update check is now
-                Compy's ONE outbound call, so the old "Zero outbound connections" absolute would
-                be a lie. Copy states exactly what leaves the machine; opt-in Receipts still
-                gates separately and would change this line again when (if) it ships.
-                Intentionally NOT run through t() — ShellV2.test.tsx pins this exact English
-                sentence literally (screen.getByText("Outbound: signed update check only")), so
-                this one line stays hardcoded English regardless of app language (i18n task note). */}
-            <div className="v2-zero">
-              <span className="v2-zero-led" aria-hidden="true" />
-              Outbound: signed update check only
-            </div>
-            {/* The reversible/ledger line, gated on the same health check HomeHud and HomeV2 use.
-                BOTH halves are false under an incomplete record, not just the count: changes made
-                before a quarantine genuinely cannot be undone, so "Every change reversible" is the
-                bigger lie of the two. The incomplete branch therefore replaces the WHOLE line
-                rather than swapping the number out from under a prefix that stopped being true.
-                Known-incomplete ONLY — UNKNOWN health leaves this byte-identical to today. */}
-            {ledgerUnvouched ? (
-              <div className="v2-ledger-state">
-                <span className="v2-ledger-led" aria-hidden="true" />
-                {t("common.shellV2.footerIncompletePre")}{" "}
-                <span className="v2-mono">
-                  {ledgerCount > 0
-                    ? t("common.shellV2.footerEmphFloor", { n: ledgerCount })
-                    : t("common.shellV2.footerEmphUnknown")}
-                </span>
-              </div>
-            ) : (
-              <div>
-                {t("common.shellV2.footerPre")}{" "}
-                <span className="v2-mono">{t("common.shellV2.footerEmph", { n: ledgerCount })}</span>
-              </div>
-            )}
-          </div>
         </nav>
 
         <div className="v2-main">
@@ -346,6 +364,20 @@ export function ShellV2({
                 comps that turns out to be false: Health's and Test's approved PNGs both print
                 the room name here. Two comps keep it, two omit it, and a nameless bar in two
                 rooms out of four is not a rule anyone designed — see shell-v2.css. */}
+            {/* The PC this is (glass redesign): the real hardware line from the probe, never a
+                guess — absent until the probe resolves. Display only; it is not a button. */}
+            {rig && (
+              <span className="v2-rig-pill">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+                  <path d="M8 20h8M12 16v4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                </svg>
+                <span className="v2-rig-text" aria-hidden="true">
+                  {shortRig(rig)}
+                </span>
+                <span className="v2-sr-only">{rig}</span>
+              </span>
+            )}
             <span className="v2-room-title">
               {active ? railLabel(active) : t("common.shellV2.fallbackTitle")}
             </span>
@@ -387,11 +419,50 @@ export function ShellV2({
             {roomIdentity && active && PICKABLE_ROOMS.includes(active.id as PickableRoom) && (
               <RoomAccentPicker room={active.id as PickableRoom} roomLabel={railLabel(active)} />
             )}
+            <LookButton />
           </div>
           <div className="v2-content" ref={contentRef}>
             <div className="v2-content-wrap" ref={wrapRef}>
               {children}
             </div>
+          </div>
+          {/* GLASS REDESIGN: the footer left the rail when the rail became a 64px dock. Both lines
+              (the outbound disclosure and the ledger state) stay on every screen, now as the slim
+              status line under the content instead of the rail's foot. */}
+          <div className="v2-foot">
+            {/* Outbound honesty line (updater ARMED 2026-07-22): the signed update check is now
+                Compy's ONE outbound call, so the old "Zero outbound connections" absolute would
+                be a lie. Copy states exactly what leaves the machine; opt-in Receipts still
+                gates separately and would change this line again when (if) it ships.
+                Intentionally NOT run through t() — ShellV2.test.tsx pins this exact English
+                sentence literally (screen.getByText("Outbound: signed update check only")), so
+                this one line stays hardcoded English regardless of app language (i18n task note). */}
+            <div className="v2-zero">
+              <span className="v2-zero-led" aria-hidden="true" />
+              Outbound: signed update check only
+            </div>
+            {/* The reversible/ledger line, gated on the same health check HomeHud and HomeV2 use.
+                BOTH halves are false under an incomplete record, not just the count: changes made
+                before a quarantine genuinely cannot be undone, so "Every change reversible" is the
+                bigger lie of the two. The incomplete branch therefore replaces the WHOLE line
+                rather than swapping the number out from under a prefix that stopped being true.
+                Known-incomplete ONLY — UNKNOWN health leaves this byte-identical to today. */}
+            {ledgerUnvouched ? (
+              <div className="v2-ledger-state">
+                <span className="v2-ledger-led" aria-hidden="true" />
+                {t("common.shellV2.footerIncompletePre")}{" "}
+                <span className="v2-mono">
+                  {ledgerCount > 0
+                    ? t("common.shellV2.footerEmphFloor", { n: ledgerCount })
+                    : t("common.shellV2.footerEmphUnknown")}
+                </span>
+              </div>
+            ) : (
+              <div>
+                {t("common.shellV2.footerPre")}{" "}
+                <span className="v2-mono">{t("common.shellV2.footerEmph", { n: ledgerCount })}</span>
+              </div>
+            )}
           </div>
           {jarvis && wipe > 0 && (
             <div
@@ -416,7 +487,9 @@ export function ShellV2({
             processor and GPU, and the 3D rig annotates them -- so it stands down there and the
             readout collapses to the clock. Room id "home" is the tab labelled Health.
             bug->guard, self-review round 2 (issue #49): hud-readout-no-duplicate-guard. */}
-        {hudFrameHere && <HudFrame rig={activeId === "home" ? null : (rig ?? null)} />}
+        {/* The topbar's PC pill now prints the rig line on every room, so the readout never repeats
+            it (same no-duplicate rule as before, now app-wide). */}
+        {hudFrameHere && <HudFrame rig={null} />}
         {hudFrame && <ReticleCursor scopeRef={shellRef} appWide />}
         {paletteEnabled && (
           <CommandPalette

@@ -43,11 +43,16 @@ vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 import { ShellV2 } from "../ShellV2";
 import { railFor, type HomeRailId, type HomeRailItem } from "../homeRail";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 const ITEMS: HomeRailItem[] = railFor(false, true);
 
 function shellIn(activeId: HomeRailId) {
+  // The frame draws only on the Solid surface since the glass redesign (2026-10-30).
+  localStorage.setItem("compy_surface", "solid");
   const { container } = render(
     <ShellV2
       items={ITEMS}

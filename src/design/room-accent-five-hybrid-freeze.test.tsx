@@ -266,10 +266,10 @@ describe("accent freeze: persistence round-trips, and a removed value falls back
       // the picker mounts without crashing, shows the DEFAULT, and marks nothing selected
       const { container } = render(<RoomAccentPicker room="home" roomLabel="Home" />);
       const dot = container.querySelector<HTMLElement>(".v2-accent-dot")!;
-      // jsdom normalises a hex background to rgb(), so compare on the parsed channels: the dot must
-      // paint the DEFAULT as a flat fill — not a gradient, and not the retired colour.
-      const { r, g, b } = parseHex(defaultRoomAccent("home"));
-      expect(dot.style.background).toBe(`rgb(${r}, ${g}, ${b})`);
+      // The dot must paint the DEFAULT as a flat fill — not a gradient, and not the retired colour.
+      // Since the glass redesign (2026-10-30) an un-picked room follows the theme, so the default
+      // is the theme accent token itself rather than a fixed hex.
+      expect(dot.style.background).toBe("var(--v2-accent)");
       fireEvent.click(within(container).getAllByRole("button")[0]);
       for (const item of screen.getAllByRole("menuitemradio")) {
         expect(item.getAttribute("aria-checked")).toBe("false");

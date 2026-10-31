@@ -967,3 +967,351 @@
     grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   }
 }
+
+/* ══ GLASS SHELL (owner decision 2026-10-30: "this is the best design model we have come up with
+   to date. FULL send it") ═══════════════════════════════════════════════════════════════════════
+   The approved prototype's chrome, layered over the rules above so the selectors every test and
+   tool keys on (.v2-shell, .v2-rail, .v2-nav-item, .v2-top, .v2-foot) keep their meaning:
+   - a picture behind everything (.v2-backdrop, Look → Backdrop), softened so it reads as depth;
+   - the rail becomes a floating glass dock of icon doors, labels as styled captions on hover or
+     keyboard focus (never a native title — shell-native-tooltip-guard), the selected door a white
+     key;
+   - the topbar loses its slab: the PC pill, the room name, search, update, Look;
+   - the footer's two honesty lines become a slim status line under the content.
+   Solid (Look → Surface) keeps opaque panels and no picture. Tokens only (tokens-v2.css). */
+:root[data-v2="on"] .v2-shell {
+  --v2-rail-w: var(--v2-dock-w);
+  column-gap: 14px;
+  padding: 12px 18px 0 16px;
+  background: var(--v2-ground);
+  isolation: isolate;
+}
+:root[data-v2="on"] .v2-shell::before {
+  display: none;
+}
+:root[data-v2="on"] .v2-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: var(--v2-ground);
+  background-position: center;
+  background-size: cover;
+  filter: blur(3px) saturate(1.1);
+  transform: scale(1.04);
+}
+:root[data-v2="on"] .v2-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, var(--v2-shadow-panel) 0%, transparent 34%),
+    radial-gradient(130% 110% at 50% 0%, transparent 40%, var(--v2-shadow-panel) 100%),
+    var(--v2-backdrop-dim);
+}
+:root[data-v2="on"][data-bd="night"] .v2-backdrop {
+  background-image: url("../assets/backdrops/night-city.jpg");
+}
+:root[data-v2="on"][data-bd="room"] .v2-backdrop {
+  background-image: url("../assets/backdrops/warm-room.jpg");
+}
+:root[data-v2="on"][data-bd="plain"] .v2-backdrop {
+  background-image:
+    radial-gradient(70% 60% at 22% 0%, var(--v2-accent-dim), transparent 70%),
+    radial-gradient(60% 50% at 92% 100%, var(--v2-info-dim), transparent 70%);
+  filter: none;
+}
+:root[data-v2="on"][data-surface="solid"] .v2-backdrop {
+  display: none;
+}
+:root[data-v2="on"] .v2-rail,
+:root[data-v2="on"] .v2-main {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── The dock ── */
+:root[data-v2="on"] .v2-rail {
+  z-index: 5;
+  align-self: start;
+  align-items: center;
+  max-height: calc(100% - 16px);
+  margin-bottom: 16px;
+  padding: 10px 0;
+  border: 1px solid var(--v2-line);
+  border-radius: 22px;
+  background: var(--v2-panel-dock);
+  -webkit-backdrop-filter: blur(var(--v2-glass-blur)) saturate(1.2);
+  backdrop-filter: blur(var(--v2-glass-blur)) saturate(1.2);
+  box-shadow: 0 16px 40px var(--v2-shadow-panel);
+}
+:root[data-v2="on"][data-surface="solid"] .v2-rail {
+  background: var(--v2-panel);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+:root[data-v2="on"] .v2-wordmark {
+  justify-content: center;
+  padding: 4px 0 12px;
+}
+:root[data-v2="on"] .v2-wordmark .cmp-wordmark-rest {
+  display: none;
+}
+:root[data-v2="on"] .v2-nav,
+:root[data-v2="on"] .v2-nav-group,
+:root[data-v2="on"] .v2-nav-group [role="tablist"] {
+  align-items: center;
+  gap: 6px;
+}
+:root[data-v2="on"] .v2-nav-instruments {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--v2-line);
+}
+:root[data-v2="on"] .v2-nav-eyebrow,
+:root[data-v2="on"] .v2-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+:root[data-v2="on"] .v2-nav-item {
+  position: relative;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 13px;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .v2-nav-door .v2-nav-item {
+  color: var(--v2-text);
+  font-weight: 500;
+}
+:root[data-v2="on"] .v2-nav-item svg,
+:root[data-v2="on"] .v2-nav-instruments .v2-nav-item svg {
+  width: 19px;
+  height: 19px;
+  opacity: 1;
+}
+:root[data-v2="on"] .v2-nav-item:hover {
+  background: var(--v2-line-strong);
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .v2-nav-item[aria-selected="true"] {
+  background: var(--v2-dock-active-bg);
+  border-color: transparent;
+  color: var(--v2-dock-active-ink);
+}
+:root[data-v2="on"] .v2-nav-item kbd {
+  display: none;
+}
+:root[data-v2="on"] .v2-nav-item > .v2-nav-label {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  z-index: 20;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  transform: translateY(-50%);
+  padding: 5px 10px;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: var(--v2-r-sm);
+  background: var(--v2-panel-pop);
+  color: var(--v2-text);
+  font-size: var(--type-label);
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+:root[data-v2="on"] .v2-nav-item:hover > .v2-nav-label {
+  opacity: 1;
+  transition-delay: 0.35s;
+}
+:root[data-v2="on"] .v2-nav-item[aria-selected="true"]:hover > .v2-nav-label {
+  opacity: 0;
+}
+:root[data-v2="on"] .v2-nav-item:focus-visible > .v2-nav-label {
+  opacity: 1;
+}
+:root[data-v2="on"] .v2-nav-item > .v2-nav-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: grid;
+  place-items: center;
+  width: auto;
+  min-width: 17px;
+  height: 17px;
+  margin: 0;
+  padding: 0 4px;
+  overflow: visible;
+  clip-path: none;
+  border: 0;
+  border-radius: 999px;
+  background: var(--v2-accent);
+  color: var(--v2-accent-ink);
+  font-family: var(--v2-font-mono);
+  font-size: var(--type-label);
+  font-weight: 700;
+  line-height: 1;
+  transform: scale(0.8);
+}
+
+/* ── The topbar ── */
+:root[data-v2="on"] .v2-top {
+  height: 54px;
+  gap: 10px;
+  padding: 0 2px;
+  border-bottom: 0;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-v2="on"] .v2-rig-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 340px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--v2-line);
+  border-radius: 999px;
+  background: var(--v2-panel);
+  color: var(--v2-text);
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .v2-rig-pill svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .v2-rig-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root[data-v2="on"] .v2-rig-pill + .v2-room-title::before {
+  content: "›";
+  margin-right: 8px;
+  color: var(--v2-faint);
+  font-weight: 400;
+}
+:root[data-v2="on"] .v2-room-title {
+  font-size: var(--type-label);
+  white-space: nowrap;
+}
+:root[data-v2="on"] .v2-top .v2-search {
+  height: 34px;
+  min-width: min(340px, 34vw);
+  border-radius: 999px;
+  border-color: var(--v2-line);
+  background: var(--v2-panel);
+}
+
+/* ── Content + the status line ── */
+:root[data-v2="on"] .v2-content {
+  padding: 10px 2px 18px 0;
+}
+:root[data-v2="on"] .v2-content-wrap {
+  max-width: 1320px;
+}
+:root[data-v2="on"] .v2-foot {
+  flex: none;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px 18px;
+  margin: 2px 0 10px;
+  padding: 5px 14px;
+  border: 1px solid var(--v2-line);
+  border-top: 1px solid var(--v2-line);
+  border-radius: 999px;
+  background: var(--v2-panel);
+  color: var(--v2-muted);
+}
+
+/* ── Older rooms on glass ──
+   Live, History, Test and the full health check still lay their text straight onto the room
+   ground. Over a picture that ground has to be glass, or a bright patch of the backdrop lands
+   behind a line of text — so each of those rooms sits on one sheet. The new glass rooms (.gl-room)
+   draw their own cards and take no sheet. The console's whisper scanline belongs to the console
+   look and stands down on glass, where it read as a second, older panel behind the sheet. */
+:root[data-v2="on"]:not([data-surface="solid"]) .v2-content-wrap > .v2-room {
+  padding: 20px 24px 24px;
+  border: 1px solid var(--v2-line);
+  border-radius: 22px;
+  background: var(--v2-panel);
+  -webkit-backdrop-filter: blur(var(--v2-glass-blur));
+  backdrop-filter: blur(var(--v2-glass-blur));
+}
+:root[data-v2="on"][data-hud="on"]:not([data-surface="solid"])
+  .v2-room:not([data-room="home"]):not([data-room="check"])::after {
+  display: none;
+}
+:root[data-v2="on"]:not([data-surface="solid"])
+  :is(.bc-tag, .ag-tag, .rd-tag, .fc-tag, .fct-tag, .st-tag, .hv2-tag, .ss-chip, .fc-chip, .cc-chip, .lx-chip, .hud-pill, .ds-pill) {
+  border-radius: 999px;
+}
+
+/* The search pill sits in the middle of the bar, so it never jumps when the right-hand cluster
+   changes (the accent picker shows only in rooms that take one). Below 1200px it returns to the
+   flow, where the left cluster would otherwise run under it. */
+@media (min-width: 1200px) {
+  :root[data-v2="on"] .v2-top {
+    position: relative;
+  }
+  :root[data-v2="on"] .v2-top .v2-search {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+/* Content scrolls out under a soft edge instead of a hard cut at the window's foot. */
+:root[data-v2="on"]:not([data-surface="solid"]) .v2-content {
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, black calc(100% - 22px), transparent);
+}
+/* Older rooms speak the glass language: pill primary actions in the theme accent, the classic
+   buttons rounded, and room titles at the same size as the new pages' titles. */
+:root[data-v2="on"]:not([data-surface="solid"]) .v2-primary,
+:root[data-v2="on"]:not([data-surface="solid"]) :is(.btn, .btn-small, .btn-primary, .fw-btn, .mc-start, .hc-btn),
+:root[data-v2="on"]:not([data-surface="solid"]) :is(.hc-notice-acts, .hc-seg-group) button {
+  border-radius: 999px;
+}
+:root[data-v2="on"]:not([data-surface="solid"])
+  .v2-content-wrap > .v2-room[data-layout][data-room] .v2-verdict h1 {
+  font-size: var(--type-section);
+}
+:root[data-v2="on"]:not([data-surface="solid"]) .v2-content-wrap:has(> .v2-room[data-room="lab"]) {
+  max-width: 1320px;
+}
+
+/* Live's Start capture sat flush against the Live/Sessions switch above it. */
+:root[data-v2="on"]:not([data-surface="solid"]) .v2-room[data-room="play"] .v2-verdict-action {
+  margin-top: 14px;
+}
+
+/* The narrow-window icon strip (#622) is now the dock at every width; below 600px the dock just
+   tightens. The status line keeps its visually-hidden treatment from the block above. */
+@media (max-width: 599.98px) {
+  :root[data-v2="on"] .v2-shell {
+    --v2-rail-w: 52px;
+    column-gap: 8px;
+    padding: 8px 8px 0;
+  }
+  :root[data-v2="on"] .v2-rig-pill {
+    display: none;
+  }
+}

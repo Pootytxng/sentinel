@@ -655,5 +655,68 @@
     "tabMap": {
       "tag": "THE TOUR"
     }
+  },
+  "glass": {
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening"
+    },
+    "answer": {
+      "allRight": "Your PC looks set up right",
+      "worth_one": "{{count}} thing is worth a look",
+      "worth_other": "{{count}} things are worth a look",
+      "unknown": "Here's how your PC is doing"
+    },
+    "sub": {
+      "known": "{{good}} of {{total}} checks look right. Here's how your games ran. Nothing changes until you choose.",
+      "unknown": "Compy hasn't checked Windows yet. Here's how your games ran. Nothing changes until you choose."
+    },
+    "actions": {
+      "problem": "Something went wrong",
+      "improve": "Improve a game"
+    },
+    "care": {
+      "label": "Needs a look",
+      "find": "Find out why",
+      "later": "Not now",
+      "headline": "{{what}} closed unexpectedly",
+      "detail": "Windows recorded it: {{kind}}, {{when}}. Compy changes nothing until you choose."
+    },
+    "noGames": "Games",
+    "noGamesValue": "None measured yet",
+    "noGamesNote": "Turn on capture in Live and play as usual",
+    "chartSub": "{{name}} · newest on the right",
+    "chartEmpty": "Play a game with capture on and its sessions show up here.",
+    "chartPick": "Game",
+    "live": {
+      "title": "Last session",
+      "unit": "fps avg",
+      "note": "{{game}} · {{when}} · 1% low {{low}} fps · Measured",
+      "noteNoLow": "{{game}} · {{when}} · Measured",
+      "none": "No session yet",
+      "noneNote": "Open Live to start capture"
+    },
+    "checks": {
+      "title": "Windows setup",
+      "of": "of {{total}} checks look right",
+      "worth": "Worth a look: {{names}}",
+      "allGood": "Nothing needs a look",
+      "unread_one": "{{count}} couldn't be read",
+      "unread_other": "{{count}} couldn't be read",
+      "run": "Run a check",
+      "unknownNote": "Compy hasn't checked yet. Checking changes nothing."
+    },
+    "limiter": {
+      "title": "What's holding FPS back",
+      "none": "Nothing big stood out in your last measured session.",
+      "unknown": "Not known yet. Compy needs a measured session to say."
+    },
+    "details": "Open the full health check",
+    "back": "Back to the summary",
+    "allGames": "All games",
+    "allGamesUnit_one": "game measured",
+    "allGamesUnit_other": "games measured",
+    "allGamesNote": "Every game Compy has measured"
   }
 }

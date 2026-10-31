@@ -29,10 +29,10 @@ afterEach(() => {
   health.value = null;
 });
 
-const ITEMS = railFor(true); // merged (the shipped default): Health · Optimize · Live · History · Test
+const ITEMS = railFor(true); // merged: Health · Games · Problems · Optimize · Live · History · Test
 // Rendered rail text comes from i18n (common.rail.*), not HOME_RAIL's guard-pinned literals —
 // room renames (owner-approved 2026-08-12: Blackbook→History, Lab→Test, Monitor→Live) land here.
-const RAIL_TEXT: Record<string, string> = { home: "Health", check: "Check", fix: "Optimize", play: "Live", learn: "History", lab: "Test", optimize: "Optimize" };
+const RAIL_TEXT: Record<string, string> = { home: "Health", games: "Games", problems: "Problems", check: "Check", fix: "Optimize", play: "Live", learn: "History", lab: "Test", optimize: "Optimize" };
 
 const shell = (over: Partial<Parameters<typeof ShellV2>[0]> = {}) => (
   <ShellV2
@@ -89,7 +89,7 @@ describe("ShellV2 rail", () => {
     // group, and the label span is where a reader actually finds that out.
     const railNames = (group: Element) =>
       Array.from(group.querySelectorAll('[role="tab"]')).map((t) => t.querySelector("span")?.textContent);
-    expect(railNames(door!)).toEqual(["Health"]);
+    expect(railNames(door!)).toEqual(["Health", "Games", "Problems"]);
     expect(railNames(instruments!)).toEqual(["Live", "History", "Test"]);
     // The sign names the group for sighted users AND the tablist (aria-labelledby) — one element, both jobs.
     const sign = container.querySelector("#v2-nav-deeper");
@@ -99,8 +99,8 @@ describe("ShellV2 rail", () => {
     expect(door!.compareDocumentPosition(sign!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Grouped, not hidden: every rail room is still a visible, focusable tab with its GLOBAL digit.
     const tabs = screen.getAllByRole("tab");
-    expect(tabs).toHaveLength(4);
-    expect(tabs.map((t) => t.getAttribute("aria-keyshortcuts"))).toEqual(["1", "2", "3", "4"]);
+    expect(tabs).toHaveLength(6);
+    expect(tabs.map((t) => t.getAttribute("aria-keyshortcuts"))).toEqual(["1", "2", "3", "4", "5", "6"]);
     for (const t of tabs) expect(t.hasAttribute("hidden") || t.getAttribute("aria-hidden") === "true").toBe(false);
   });
 

@@ -31,6 +31,7 @@ import "../../../src/surfaces/Settings.css";
 // Order is load-bearing: instrument.css must follow App.css so the accent re-point wins, and the
 // v2/hud token layers must come after the classics. Any reordering here silently re-skins the
 // screenshots and the review would be reporting on a look the app does not have.
+import { readInstrumentTheme, syncLookAttributes, DEFAULT_THEME } from "../../../src/design/theme";
 import "../../../src/design/type-scale.css";
 import "../../../src/App.css";
 import "../../../src/design/doorknob.css";
@@ -145,15 +146,20 @@ import {
 document.documentElement.dataset.customChrome = "1";
 
 try {
-  const it = localStorage.getItem("compy_theme");
-  const valid = ["midnight", "violet", "crimson", "emerald", "hearth"];
-  const theme = it && valid.includes(it) ? it : "violet";
+  const theme = readInstrumentTheme();
   document.documentElement.dataset.itheme = theme;
   if (theme === "hearth" && new Date().getMonth() === 11) {
     document.documentElement.dataset.hearthSeason = "december";
   }
 } catch {
-  document.documentElement.dataset.itheme = "violet";
+  document.documentElement.dataset.itheme = DEFAULT_THEME;
+}
+// Look (glass redesign 2026-10-30): surface + backdrop, exactly as src/main.tsx sets them.
+try {
+  syncLookAttributes();
+} catch {
+  document.documentElement.dataset.surface = "glass";
+  document.documentElement.dataset.bd = "night";
 }
 
 try {

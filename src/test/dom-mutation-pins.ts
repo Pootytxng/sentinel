@@ -13,9 +13,9 @@ export const CLASS_WRITES = new Map<string, string[]>([
 /** `.dataset.name =` and `delete .dataset.name`, per file (camelCase, as written). */
 export const DATA_WRITES = new Map<string, string[]>([
   ["src/design/bento/Sheet.tsx", ["sheet"]], // document.documentElement while a sheet is open
-  ["src/design/theme.ts", ["dashV2", "hearthSeason", "hud", "itheme", "living", "roomIdentity"]], // document.documentElement
+  ["src/design/theme.ts", ["bd", "dashV2", "hearthSeason", "hud", "itheme", "living", "roomIdentity", "surface"]], // document.documentElement (bd/surface: Look, glass redesign 2026-10-30)
   ["src/design/use-motion.ts", ["jarvis", "motion"]], // document.documentElement
-  ["src/main.tsx", ["customChrome", "dashV2", "hearthSeason", "hud", "itheme", "living", "roomIdentity", "v2"]], // document.documentElement
+  ["src/main.tsx", ["bd", "customChrome", "dashV2", "hearthSeason", "hud", "itheme", "living", "roomIdentity", "surface", "v2"]], // document.documentElement
 ]);
 
 /** Every other write the census records, one line per `file iface.kind name on receiver`. */

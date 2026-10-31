@@ -18,6 +18,7 @@
     "src/design/LedgerHealthNotice.tsx": "rostered",
     "src/design/LessonLine.tsx": "rostered",
     "src/design/ConfidenceWord.tsx": "rostered",
+    "src/design/LookPanel.tsx": "rostered",
     "src/design/with-terms.tsx": "no-dom: a function, not a component; the Term triggers it returns are axe-checked in the withTerms roster case",
     "src/design/NavGlyph.tsx": "rostered",
     "src/design/Picker.tsx": "rostered",

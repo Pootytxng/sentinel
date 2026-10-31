@@ -59,11 +59,11 @@ describe("buildSetupSteps", () => {
   // merged five-room rail, NAMES the journey in rail order. Align, don't add — same step count.
   it("merged recap = the five journey rooms in rail order, body names the journey", () => {
     const last = steps[steps.length - 1];
-    expect(last.tabs?.map((t) => t.id)).toEqual(["home", "fix", "play", "learn", "lab"]);
+    expect(last.tabs?.map((t) => t.id)).toEqual(["home", "games", "problems", "fix", "play", "learn", "lab"]);
     expect(last.body).toBe(JOURNEY_RECAP_BODY);
     // The journey copy names every room in rail order (order is felt — the recap says it once).
     // Room labels renamed by owner decision 2026-08-12 (Monitor→Live, Blackbook→History, Lab→Test).
-    for (const label of ["Health", "Optimize", "Live", "History", "Test"]) {
+    for (const label of ["Health", "Games", "Problems", "Optimize", "Live", "History", "Test"]) {
       expect(last.body).toContain(label);
     }
   });
@@ -182,9 +182,9 @@ describe("proving-ground tour alignment (ground=true)", () => {
   it("recap = the four ground rooms in rail order, body names that journey", () => {
     const last = steps[steps.length - 1];
     expect(last.kind).toBe("tabmap");
-    expect(last.tabs?.map((t) => t.id)).toEqual(["home", "play", "learn", "lab"]);
+    expect(last.tabs?.map((t) => t.id)).toEqual(["home", "games", "problems", "play", "learn", "lab"]);
     expect(last.body).toBe(GROUND_RECAP_BODY);
-    for (const label of ["Health", "Live", "History", "Test"]) {
+    for (const label of ["Health", "Games", "Problems", "Live", "History", "Test"]) {
       expect(last.body).toContain(label);
     }
     // The dead room never appears in the recap copy.

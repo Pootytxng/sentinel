@@ -4,7 +4,7 @@
 // readouts only (real rig/stamp/ledger/clock — a missing source is OMITTED, never faked),
 // "0" removes frame + shell reticle entirely, and the stage-scoped ReticleCursor instances
 // SELF-DEFER while the flag is on (one reticle, never two) but return when it's off.
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { useRef } from "react";
 import { ShellV2 } from "../ShellV2";
@@ -51,6 +51,11 @@ function Stage() {
 }
 
 describe("compy_hud_frame default ON (the HUD frame + shell reticle)", () => {
+  // GLASS REDESIGN (2026-10-30): the frame and the shell reticle belong to the console look and
+  // draw only on the Solid surface; on Glass and Frosted the shell mounts neither.
+  beforeEach(() => {
+    localStorage.setItem("compy_surface", "solid");
+  });
   it("renders the frame: four corner brackets + the rig·clock readout, nothing duplicated", async () => {
     // NOT on Health: since the four-room rebuild that room names the processor and GPU in its
     // own Detected record and on the 3D rig, so the shell stands the readout's rig segment down
@@ -63,7 +68,10 @@ describe("compy_hud_frame default ON (the HUD frame + shell reticle)", () => {
     expect(frame?.querySelectorAll(".hud-frame-c").length).toBe(4);
 
     const readout = container.querySelector(".hud-frame-readout");
-    expect(readout?.textContent).toContain("Ryzen 7 · RX 9070 XT");
+    // The rig line moved to the topbar's PC pill (glass redesign), which shows it in every room,
+    // so the readout never prints it a second time.
+    expect(readout?.textContent).not.toContain("RX 9070 XT");
+    expect(container.querySelector(".v2-rig-pill")?.textContent).toContain("Ryzen 7 · RX 9070 XT");
     // System clock: HH:MM:SS — real, ticking, never fabricated.
     expect(readout?.textContent).toMatch(/\d{1,2}:\d{2}:\d{2}/);
     // NO DUPLICATION (self-review 2026-07-15): the ledger count lives in the rail foot, and the
