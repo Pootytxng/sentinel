@@ -59,12 +59,14 @@ export function HomeGlass({
   onRunCheck: () => void;
   onSeeChecks: () => void;
   onOpenDetails: () => void;
-  /** FirstWin's follow-through on the user's first live change (App owns it). */
+  /** The first-win journey, below the answer: TrustMoment's demo while the ledger is empty, then
+   *  FirstWin's follow-through on the user's first live change (App owns both). */
   latestChange?: ReactNode;
 }) {
   const { t } = useTranslation();
   const dates = useDates();
   const games = useMemo(() => gameLibrary(sessions), [sessions]);
+  const noGames = games.length === 0;
   const [chartKey, setChartKey] = useState<string | null>(games[0]?.key ?? null);
   useEffect(() => {
     if (!games.some((g) => g.key === chartKey)) setChartKey(games[0]?.key ?? null);
@@ -181,85 +183,91 @@ export function HomeGlass({
         </div>
       )}
 
-      <div className="gl-kpis">
-        {gameCards.map((g) => (
-          <button
-            key={g.key}
-            type="button"
-            className="gl-kpi"
-            // The lit card is the game the chart below is showing — one meaning for the one fill.
-            data-hot={g.key === chartKey}
-            onClick={() => onOpenGame(g.key)}
-            aria-label={t("common.games.open", { name: g.name })}
-          >
-            <span className="gl-kpi-label">{g.name}</span>
-            <Arrow />
-            <span className="gl-kpi-row">
-              <span className="gl-kpi-value">
-                {g.lastAvg != null ? (
-                  <>
-                    <span className="gl-num">{Math.round(g.lastAvg)}</span>
-                    <small>{t("common.games.fps")}</small>
-                  </>
-                ) : (
-                  t("common.games.notMeasured")
-                )}
+      {/* No measured game yet: ONE block, the width of the page, says so and points at Live
+          (GL-empty). A lone "Games / None measured yet" card used to sit in this row with three
+          empty slots beside it, and with the empty chart, the Last session note and the limiter the
+          page said "capture in Live" four times. The words and button are the Games room's own. */}
+      {noGames ? (
+        <div className="gl-empty">
+          <p>{t("common.games.empty")}</p>
+          <button type="button" className="gl-ghost" onClick={onOpenLive}>
+            {t("common.games.emptyCta")}
+          </button>
+        </div>
+      ) : (
+        <div className="gl-kpis">
+          {gameCards.map((g) => (
+            <button
+              key={g.key}
+              type="button"
+              className="gl-kpi"
+              // The lit card is the game the chart below is showing — one meaning for the one fill.
+              data-hot={g.key === chartKey}
+              onClick={() => onOpenGame(g.key)}
+              aria-label={t("common.games.open", { name: g.name })}
+            >
+              <span className="gl-kpi-label">{g.name}</span>
+              <Arrow />
+              <span className="gl-kpi-row">
+                <span className="gl-kpi-value">
+                  {g.lastAvg != null ? (
+                    <>
+                      <span className="gl-num">{Math.round(g.lastAvg)}</span>
+                      <small>{t("common.games.fps")}</small>
+                    </>
+                  ) : (
+                    t("common.games.notMeasured")
+                  )}
+                </span>
+                <span className="gl-chip">{t("common.games.sessions", { count: g.sessions.length })}</span>
               </span>
-              <span className="gl-chip">{t("common.games.sessions", { count: g.sessions.length })}</span>
-            </span>
-            <span className="gl-kpi-note">{t("common.games.lastPlayed", { when: dates.dayTime(g.lastPlayed) })}</span>
-          </button>
-        ))}
-        {showAll ? (
-          <button type="button" className="gl-kpi" onClick={() => onOpenGame(null)}>
-            <span className="gl-kpi-label">{t("home.glass.allGames")}</span>
-            <Arrow />
-            <span className="gl-kpi-row">
-              <span className="gl-kpi-value">
-                <span className="gl-num">{games.length}</span>
-                <small>{t("home.glass.allGamesUnit", { count: games.length })}</small>
+              <span className="gl-kpi-note">{t("common.games.lastPlayed", { when: dates.dayTime(g.lastPlayed) })}</span>
+            </button>
+          ))}
+          {showAll ? (
+            <button type="button" className="gl-kpi" onClick={() => onOpenGame(null)}>
+              <span className="gl-kpi-label">{t("home.glass.allGames")}</span>
+              <Arrow />
+              <span className="gl-kpi-row">
+                <span className="gl-kpi-value">
+                  <span className="gl-num">{games.length}</span>
+                  <small>{t("home.glass.allGamesUnit", { count: games.length })}</small>
+                </span>
               </span>
-            </span>
-            <span className="gl-kpi-note">{t("home.glass.allGamesNote")}</span>
-          </button>
-        ) : null}
-        {games.length === 0 && (
-          <button type="button" className="gl-kpi" onClick={onOpenLive}>
-            <span className="gl-kpi-label">{t("home.glass.noGames")}</span>
-            <Arrow />
-            <span className="gl-kpi-row">
-              <span className="gl-kpi-value">{t("home.glass.noGamesValue")}</span>
-            </span>
-            <span className="gl-kpi-note">{t("home.glass.noGamesNote")}</span>
-          </button>
-        )}
-      </div>
+              <span className="gl-kpi-note">{t("home.glass.allGamesNote")}</span>
+            </button>
+          ) : null}
+        </div>
+      )}
 
-      <div className="gl-lower">
-        <section className="gl-card" aria-labelledby="gl-home-chart">
-          <div className="gl-card-top">
-            <div>
-              <h2 className="gl-card-title" id="gl-home-chart">
-                {t("common.games.chartTitle")}
-              </h2>
-              <p className="gl-card-sub">
-                {chartGame ? t("home.glass.chartSub", { name: chartGame.name }) : t("home.glass.chartEmpty")}
-              </p>
-            </div>
-            {games.length > 1 && (
-              <div className="gl-pill-seg" role="group" aria-label={t("home.glass.chartPick")}>
-                {games.slice(0, 4).map((g) => (
-                  <button key={g.key} type="button" aria-pressed={g.key === chartKey} onClick={() => setChartKey(g.key)}>
-                    {g.name}
-                  </button>
-                ))}
+      {/* With no game there is no chart, so the stack below takes the whole row (glass-rooms.css). */}
+      <div className="gl-lower" data-chart={noGames ? "none" : undefined}>
+        {!noGames && (
+          <section className="gl-card" aria-labelledby="gl-home-chart">
+            <div className="gl-card-top">
+              <div>
+                <h2 className="gl-card-title" id="gl-home-chart">
+                  {t("common.games.chartTitle")}
+                </h2>
+                <p className="gl-card-sub">
+                  {chartGame ? t("home.glass.chartSub", { name: chartGame.name }) : t("home.glass.chartEmpty")}
+                </p>
               </div>
+              {games.length > 1 && (
+                <div className="gl-pill-seg" role="group" aria-label={t("home.glass.chartPick")}>
+                  {games.slice(0, 4).map((g) => (
+                    <button key={g.key} type="button" aria-pressed={g.key === chartKey} onClick={() => setChartKey(g.key)}>
+                      {g.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {chartGame && (
+              <TubeChart bars={bars} ariaLabel={t("common.games.chartAria", { count: bars.length, name: chartGame.name })} />
             )}
-          </div>
-          {chartGame && (
-            <TubeChart bars={bars} ariaLabel={t("common.games.chartAria", { count: bars.length, name: chartGame.name })} />
-          )}
-        </section>
+          </section>
+        )}
 
         <div className="gl-stack">
           <div className="gl-pair">
@@ -280,13 +288,16 @@ export function HomeGlass({
                   )}
                 </span>
               </span>
-              <span className="gl-kpi-note">
-                {newest
-                  ? t(newestLow != null ? "home.glass.live.lowNote" : "home.glass.live.lowNoneNote", {
-                      game: newestGame?.name ?? newest.process_name,
-                    })
-                  : t("home.glass.live.noneNote")}
-              </span>
+              {/* While the empty block above points at Live, this card does not point a second time. */}
+              {(newest || !noGames) && (
+                <span className="gl-kpi-note">
+                  {newest
+                    ? t(newestLow != null ? "home.glass.live.lowNote" : "home.glass.live.lowNoneNote", {
+                        game: newestGame?.name ?? newest.process_name,
+                      })
+                    : t("home.glass.live.noneNote")}
+                </span>
+              )}
             </button>
             <button type="button" className="gl-kpi" onClick={checksKnown ? onSeeChecks : onRunCheck}>
               <span className="gl-kpi-label">{t("home.glass.checks.title")}</span>

@@ -1,7 +1,7 @@
 // P6-stutter: on the Care view, a stutter compares the game's latest session with its last good one
 // through the existing engine (`what_changed_between`) — never a hand-off to Monitor or Benchmark.
 // "Good" = measured, steady (baseline-grade.ts) and comparable (the engine's own gate). No good one
-// = the view says so and points at recording one in Benchmark.
+// = the view says so and points at recording one in Live, the room whose capture records sessions.
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { readFileSync } from "fs";
@@ -199,12 +199,12 @@ describe("the Care view compares on a stutter arrival", () => {
     ]);
   });
 
-  it("says there is no good session and points at Benchmark, instead of comparing", async () => {
+  it("says there is no good session and points at Live, instead of comparing", async () => {
     h.sessions = [sess("2026-10-20T10:00:00Z", { fps_series: UNEVEN }), sess("2026-10-24T10:00:00Z")];
     localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
     render(<BlackBox />);
     expect(await screen.findByText(/no steady Valorant session/)).toBeInTheDocument();
-    expect(screen.getByText(/record a session in Benchmark/)).toBeInTheDocument();
+    expect(screen.getByText(/record a session in Live when the game runs well/)).toBeInTheDocument();
     expect(betweenCalls()).toEqual([]);
   });
 
@@ -222,6 +222,7 @@ describe("the Care view compares on a stutter arrival", () => {
     localStorage.setItem(CARE_ARRIVAL_KEY, "stutter");
     render(<BlackBox />);
     expect(await screen.findByText(/no recorded game session yet/)).toBeInTheDocument();
+    expect(screen.getByText(/record a session in Live while you play/)).toBeInTheDocument();
   });
 
   it("without the arrival flag it reads nothing on mount, and the button runs it", async () => {
@@ -353,6 +354,23 @@ describe("P7-teach: the stutter comparison teaches one lesson from this pair's o
     await screen.findByText("ENGINE HEADLINE 2026-10-20T10:00:00Z");
     expect(screen.queryByTestId("stutter-lesson")).toBeNull();
   });
+});
+
+describe("GL-empty F7 — the stutter lines send you to the room that records sessions", () => {
+  // Sessions are recorded by Live's capture; Benchmark is a Test station that records none. Both
+  // lines name Live by the rail's own label, so a rename of the room trips this.
+  for (const lang of ["en", "zh-CN"]) {
+    it(`${lang}: noSession and noGood name Live's rail label, never Benchmark`, () => {
+      const loc = (f: string) => JSON.parse(readFileSync(join("src", "i18n", "locales", lang, f), "utf8"));
+      const live: string = loc("common.json").rail.play;
+      const gaming = loc("gaming.json");
+      const benchmark: string = gaming.benchmark.heading;
+      for (const k of ["noSession", "noGood"]) {
+        expect(gaming.blackBox.stutter[k], k).toContain(live);
+        expect(gaming.blackBox.stutter[k], k).not.toContain(benchmark);
+      }
+    });
+  }
 });
 
 describe("the empty crash view no longer claims stutters can't be checked", () => {
