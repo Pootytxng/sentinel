@@ -169,6 +169,18 @@ const press = async () => {
   fireEvent.click(btn);
 };
 
+/** Opens the finished journey's technical receipt and reads its rows, label to value. */
+const receiptRows = async (): Promise<Record<string, string>> => {
+  const journey = screen.getByTestId("journey");
+  const door = journey.querySelector('[data-testid="journey-depth-receipt"] > summary')!;
+  fireEvent.click(door);
+  // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
+  await waitFor(() => expect(door.parentElement!.children.length).toBeGreaterThan(1));
+  return Object.fromEntries(
+    [...journey.querySelectorAll(".journey-receipt dt")].map((dt) => [dt.textContent ?? "", dt.nextElementSibling?.textContent ?? ""]),
+  );
+};
+
 /** The journey's closing line, once it has one (only a finished journey's line is a status). */
 const finalLine = () =>
   waitFor(
@@ -288,6 +300,51 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(rows["Measured noise"]).toBe("±4.1%");
     expect(rows["Noise floor"]).toBeUndefined(); // the judged band is recorded: the floor is not shown as if it were it
     expect(rows.Outcome).toBe("max-fps");
+  });
+
+  // P8-dims (RISK_MODEL §3, "do not collapse these into one arbitrary score"): the receipt names the
+  // catalog's overall word AND each risk dimension it states for the change, from the record the
+  // Trial started with; a dimension it doesn't state reads "not stated", never filled in from the
+  // overall word. Fails on the code before this slice, whose receipt had no risk row at all.
+  it("the receipt lists each risk dimension the catalog states, and says so for one it doesn't", async () => {
+    state.concludeResult = {
+      status: "kept",
+      kept: true,
+      verdict: "improved",
+      treatment: TREATMENT,
+      stated_risk: { overall: "moderate", dimensions: { reversibility: "low", stability: null, compatibility: null, security: "high" } },
+    };
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    expect(await receiptRows()).toMatchObject({
+      "Risk, overall": "moderate risk",
+      Reversibility: "low risk",
+      Stability: "not stated",
+      Compatibility: "not stated",
+      Security: "high risk",
+    });
+    cleanup();
+    resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });
+    // An overall word the catalog didn't state (or one this build doesn't know), and no dimensions.
+    state.concludeResult = { status: "restored", verdict: "no-change", treatment: TREATMENT, stated_risk: { overall: "unknown", dimensions: {} } };
+    state.saves = [session(later(3), 5400), session(later(4), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    const rows = await receiptRows();
+    for (const label of ["Risk, overall", "Reversibility", "Stability", "Compatibility", "Security"]) {
+      expect(rows[label], label).toBe("not stated");
+    }
+  });
+
+  it("a Trial whose record kept no catalog risk says not recorded, and lists no dimension", async () => {
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    const rows = await receiptRows();
+    expect(rows["Risk, overall"]).toBe("not recorded");
+    for (const label of ["Reversibility", "Stability", "Compatibility", "Security"]) expect(rows[label], label).toBeUndefined();
   });
 
   it("game exits early in session 2: too few readings is judged and the change is restored", async () => {

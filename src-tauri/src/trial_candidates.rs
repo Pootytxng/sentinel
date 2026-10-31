@@ -34,8 +34,14 @@
 //! change the catalog doesn't call `safe` out as "outside the risk you chose"; "Low and moderate",
 //! the default, leaves nothing out (today's behaviour). It reads only `severity`; it adds no
 //! change and applies nothing.
+//!
+//! P8-dims (RISK_MODEL §3, "do not collapse these into one arbitrary score"): [`stated_risk`] reads
+//! what the catalog states about one change's risk, its one overall word and each risk dimension it
+//! states (`risk_dimensions`), for a Trial to keep on its record. A dimension the catalog doesn't
+//! state stays `None` and the receipt says "not stated"; nothing here fills one in. No catalog change
+//! states a dimension today.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
 
@@ -111,7 +117,7 @@ pub(crate) enum Evidence {
 }
 
 /// The catalog's risk for the change (`severity`). Variant order is the rank order.
-#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum Risk {
     /// `safe`.
@@ -119,7 +125,92 @@ pub(crate) enum Risk {
     /// `moderate`.
     Moderate,
     /// A severity the rank doesn't recognise.
+    #[default]
     Unknown,
+}
+
+impl<'de> Deserialize<'de> for Risk {
+    /// P8-dims: a Trial keeps this word on its record. "low" and "moderate" read as themselves; any
+    /// other value (a word a newer Compy wrote, null) reads as Unknown, so a stored risk never fails
+    /// the store's load and is never read as lower than it was.
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(match Value::deserialize(d)?.as_str() {
+            Some("low") => Risk::Low,
+            Some("moderate") => Risk::Moderate,
+            _ => Risk::Unknown,
+        })
+    }
+}
+
+/// Reads a stored value as `T` when this build knows it, else `None` (absent, null, or a value a
+/// newer Compy wrote). For record fields that must never fail a whole store's load, the way an
+/// unreadable experiments file is set aside: one unknown word must not cost every Trial on record.
+pub(crate) fn lenient<'de, D, T>(d: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    Ok(serde_json::from_value(Value::deserialize(d)?).ok())
+}
+
+/// P8-dims (RISK_MODEL §3): the risk the catalog states for a change on one dimension, in the
+/// catalog's words "low", "moderate" or "high". Any other word is not a statement this build can
+/// read, so it reads as not stated.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum DimensionRisk {
+    Low,
+    Moderate,
+    High,
+}
+
+/// P8-dims: the risk dimensions the Trial receipt lists (RISK_MODEL §3: reversibility certainty,
+/// stability risk, compatibility uncertainty, security impact), as the catalog states them in a
+/// change's `risk_dimensions`. `None` = the catalog doesn't state it: the receipt says "not stated",
+/// and nothing estimates it from the overall word. No catalog change states one today.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RiskDimensions {
+    #[serde(default, deserialize_with = "lenient")]
+    pub reversibility: Option<DimensionRisk>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub stability: Option<DimensionRisk>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub compatibility: Option<DimensionRisk>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub security: Option<DimensionRisk>,
+}
+
+/// P8-dims: what the catalog stated about one change's risk, kept on a Trial's record at its start
+/// (`experiment::ExperimentRecord::stated_risk`), so its receipt names the risk the Trial ran under
+/// (TRIAL_PROTOCOL §1 `risk_class`, §11), never a later catalog's.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct StatedRisk {
+    /// The catalog's one overall word (`severity`).
+    #[serde(default)]
+    pub overall: Risk,
+    /// Each dimension the catalog states for it; `None` where it states nothing.
+    #[serde(default)]
+    pub dimensions: RiskDimensions,
+}
+
+/// P8-dims: what the catalog (as `get_recommendations` serializes it) states about `rec_id`'s risk.
+/// `None` when the change isn't in the catalog. A `risk_dimensions` the build can't read states
+/// nothing. Pure.
+pub(crate) fn stated_risk(catalog: &Value, rec_id: &str) -> Option<StatedRisk> {
+    let row = catalog.as_array()?.iter().find(|r| r.get("id").and_then(Value::as_str) == Some(rec_id))?;
+    Some(StatedRisk {
+        overall: Risk::of(row.get("severity").and_then(Value::as_str)),
+        dimensions: row
+            .get("risk_dimensions")
+            .and_then(|d| serde_json::from_value(d.clone()).ok())
+            .unwrap_or_default(),
+    })
+}
+
+/// [`stated_risk`] on the live catalog, the one the Trial picker reads. Read-only.
+pub(crate) fn stated_risk_now(rec_id: &str) -> Option<StatedRisk> {
+    let catalog = serde_json::to_value(crate::recommendations::get_recommendations()).ok()?;
+    stated_risk(&catalog, rec_id)
 }
 
 impl Evidence {
@@ -792,6 +883,87 @@ mod tests {
         assert!(serde_json::from_value::<RiskChoice>(json!("aggressive")).is_err());
         let none: Option<RiskChoice> = serde_json::from_value(json!(null)).unwrap();
         assert_eq!(none.unwrap_or_default(), RiskChoice::LowAndModerate);
+    }
+
+    // P8-dims (RISK_MODEL §3): the receipt lists each dimension the catalog states, and only those. A
+    // dimension it doesn't state, or states in a word this build can't read, is not stated; the
+    // overall word never fills one in.
+    #[test]
+    fn stated_risk_reads_the_overall_word_and_only_the_dimensions_the_catalog_states() {
+        let catalog = json!([
+            { "id": "stated", "severity": "moderate",
+              "risk_dimensions": { "reversibility": "low", "security": "high", "stability": "odd" } },
+            { "id": "plain", "severity": "safe" },
+            { "id": "garbled", "severity": "high", "risk_dimensions": "low" },
+        ]);
+        let s = stated_risk(&catalog, "stated").unwrap();
+        assert_eq!(s.overall, Risk::Moderate);
+        assert_eq!(
+            s.dimensions,
+            RiskDimensions {
+                reversibility: Some(DimensionRisk::Low),
+                stability: None,
+                compatibility: None,
+                security: Some(DimensionRisk::High),
+            }
+        );
+        // No `risk_dimensions`: every dimension is not stated, whatever the overall word says.
+        let plain = stated_risk(&catalog, "plain").unwrap();
+        assert_eq!((plain.overall, plain.dimensions), (Risk::Low, RiskDimensions::default()));
+        // An unreadable `risk_dimensions` states nothing; an unknown overall word is Unknown.
+        let garbled = stated_risk(&catalog, "garbled").unwrap();
+        assert_eq!((garbled.overall, garbled.dimensions), (Risk::Unknown, RiskDimensions::default()));
+        // A change the catalog doesn't have has no stated risk at all.
+        assert_eq!(stated_risk(&catalog, "missing"), None);
+        assert_eq!(stated_risk(&Value::Null, "stated"), None);
+        // The shape the receipt reads.
+        let v = serde_json::to_value(s).unwrap();
+        assert_eq!(
+            v,
+            json!({ "overall": "moderate", "dimensions": {
+                "reversibility": "low", "stability": null, "compatibility": null, "security": "high" } })
+        );
+    }
+
+    // The live catalog states only the one overall word: every dimension reads not stated, and every
+    // change Compy can test has an overall word the picker knows.
+    #[test]
+    fn the_live_catalog_states_no_risk_dimension() {
+        let catalog = serde_json::to_value(crate::recommendations::get_recommendations()).unwrap();
+        for row in catalog.as_array().unwrap() {
+            let id = row["id"].as_str().unwrap();
+            let s = stated_risk(&catalog, id).unwrap();
+            assert_eq!(s.dimensions, RiskDimensions::default(), "{id}");
+            if crate::history::is_appliable(id) {
+                assert_ne!(s.overall, Risk::Unknown, "{id}");
+            }
+        }
+    }
+
+    // A Trial keeps this on its record: a stored value this build can't read is unknown or not
+    // stated, never an error that would set the whole experiments file aside.
+    #[test]
+    fn a_stored_risk_reads_leniently() {
+        let s: StatedRisk = serde_json::from_value(json!({ "overall": "severe", "dimensions": {
+            "reversibility": "moderate", "stability": 3, "security": "catastrophic" } }))
+        .unwrap();
+        assert_eq!(s.overall, Risk::Unknown);
+        assert_eq!(
+            s.dimensions,
+            RiskDimensions { reversibility: Some(DimensionRisk::Moderate), ..RiskDimensions::default() }
+        );
+        assert_eq!(serde_json::from_value::<StatedRisk>(json!({})).unwrap(), StatedRisk::default());
+        // The record stores the picker's words ("low"), never the catalog's ("safe").
+        for v in [json!("severe"), json!(null), json!(7), json!("safe")] {
+            assert_eq!(serde_json::from_value::<Risk>(v.clone()).unwrap(), Risk::Unknown, "{v}");
+        }
+        for (word, risk) in [("low", Risk::Low), ("moderate", Risk::Moderate), ("unknown", Risk::Unknown)] {
+            assert_eq!(serde_json::to_value(risk).unwrap(), word);
+            assert_eq!(serde_json::from_value::<Risk>(json!(word)).unwrap(), risk, "{word} round-trips");
+        }
+        // A whole stored value this build can't read is None.
+        assert_eq!(lenient::<_, StatedRisk>(json!("moderate")).unwrap(), None);
+        assert_eq!(lenient::<_, StatedRisk>(json!(null)).unwrap(), None);
     }
 
     // On the live catalog, "Low risk only" lists only `safe` changes, and every change it leaves

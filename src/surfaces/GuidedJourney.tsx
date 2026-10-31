@@ -94,7 +94,19 @@ type JourneyExperiment = {
   verdict_confidence?: string | null;
   noise_evidence?: { band_pct?: number | null; measured_noise_pct?: number | null } | null;
   noise_floor_pct?: number | null;
+  /** P8-dims: what the catalog stated about the change's risk when this Trial started (experiment.rs
+   *  `stated_risk`): its one overall word and each dimension it states (null = not stated). Absent on
+   *  records started before Compy kept it. */
+  stated_risk?: {
+    overall?: string | null;
+    dimensions?: Partial<Record<RiskDimension, string | null>> | null;
+  } | null;
 };
+
+/** P8-dims (RISK_MODEL §3): the risk dimensions the receipt lists, in its order (trial_candidates.rs
+ *  `RiskDimensions`). */
+const RISK_DIMENSIONS = ["reversibility", "stability", "compatibility", "security"] as const;
+type RiskDimension = (typeof RISK_DIMENSIONS)[number];
 
 type FpsStatusLite = {
   active: boolean;
@@ -559,6 +571,13 @@ function resultWhy(exp: JourneyExperiment, t: Translate): string {
   return band != null && Number.isFinite(band) ? t(`${k}.${key}Band`, { band: Number(band.toFixed(1)) }) : t(`${k}.${key}`);
 }
 
+/** P8-dims: one stated risk word as the receipt says it. A word the catalog didn't state, or one this
+ *  build doesn't know, is "not stated": never filled in from another dimension or the overall word. */
+function riskWord(word: string | null | undefined, t: Translate): string {
+  const k = "lab.experimentBench.journey.receipt.riskWord";
+  return word === "low" || word === "moderate" || word === "high" ? t(`${k}.${word}`) : t(`${k}.notStated`);
+}
+
 /** The RECEIPT: the record's own numbers, verbatim. Rows with nothing recorded are left out. */
 function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
   const { t } = useTranslation();
@@ -566,6 +585,7 @@ function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
   const fps = (n: number | null | undefined) => (n != null && Number.isFinite(n) ? `${n.toFixed(1)} fps` : null);
   const pct = receiptPct;
   const tr = exp.treatment;
+  const risk = exp.stated_risk;
   return (
     <dl className="journey-receipt">
       <ReceiptRow label={rk("change")} value={exp.rec_id} />
@@ -583,6 +603,12 @@ function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
       <ReceiptRow label={rk("samples")} value={tr?.samples != null ? String(tr.samples) : null} />
       <ReceiptRow label={rk("baselineSession")} value={exp.baseline_session_id ?? null} />
       <ReceiptRow label={rk("afterSession")} value={tr?.session_id ?? null} />
+      {/* P8-dims (RISK_MODEL §3, "do not collapse these into one arbitrary score"): the catalog's one
+          overall word, then each dimension it states for the change; one it doesn't state says so. A
+          record started before Compy kept the catalog's risk says that instead, never a guess. */}
+      <ReceiptRow label={rk("riskOverall")} value={risk ? riskWord(risk.overall, t) : rk("riskWord.notRecorded")} />
+      {risk &&
+        RISK_DIMENSIONS.map((d) => <ReceiptRow key={d} label={rk(`risk.${d}`)} value={riskWord(risk.dimensions?.[d], t)} />)}
       <ReceiptRow label={rk("trial")} value={exp.id} />
     </dl>
   );

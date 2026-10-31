@@ -423,6 +423,20 @@
         "samples": "After, samples",
         "baselineSession": "Before session",
         "afterSession": "After session",
+        "riskOverall": "Risk, overall",
+        "risk": {
+          "reversibility": "Reversibility",
+          "stability": "Stability",
+          "compatibility": "Compatibility",
+          "security": "Security"
+        },
+        "riskWord": {
+          "low": "low risk",
+          "moderate": "moderate risk",
+          "high": "high risk",
+          "notStated": "not stated",
+          "notRecorded": "not recorded"
+        },
         "trial": "Trial"
       },
       "withChangeReused": "{{change}} is on. Compy uses your last session as the before-reading, so this is the only session: play {{game}} the same way for about 10 minutes, then close the game.",
