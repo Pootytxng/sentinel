@@ -75,6 +75,21 @@ describe("comp fidelity — the primary action wears the ladder's good end (owne
     ).toMatch(/className="hc-front-door v2-primary"/);
   });
 
+  it("no surface or theme block re-points the primary action at the accent (desk review 2026-10-30)", () => {
+    // The first test reads only the FIRST --v2-cta. The glass redesign added a second one inside the
+    // glass and frosted blocks (`--v2-cta: var(--v2-accent)`), which the first test could not see:
+    // under Crimson every primary action turned the danger red. Every declaration is checked now.
+    const code = tokens.replace(/\/\*[\s\S]*?\*\//g, "");
+    const decls = [...code.matchAll(/--v2-cta:\s*([^;]+);/g)].map((m) => m[1].trim());
+    expect(decls.length).toBeGreaterThan(0);
+    for (const v of decls) expect(v, `--v2-cta re-declared as ${v}`).toMatch(/^#[0-9a-fA-F]{6}$/);
+    // The glass rooms' own primary button follows the same token, not the accent.
+    const glass = read("src", "surfaces", "glass-rooms.css");
+    const cta = body(glass, ':root[data-v2="on"] .gl-cta');
+    expect(cta).toMatch(/background:\s*var\(--v2-cta\)/);
+    expect(cta).not.toContain("--v2-accent");
+  });
+
   it("Live's Start capture stays VIOLET — the comps differ here ON PURPOSE", () => {
     // 02-live-approved.png fills this one button #a37ef9 while the other three rooms' actions are
     // green. That asymmetry is the owner's approved picture, not drift: a room whose action starts

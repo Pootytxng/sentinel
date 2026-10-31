@@ -642,10 +642,6 @@
       "worth_other": "有 {{count}} 处值得一看",
       "unknown": "这是你的电脑现在的情况"
     },
-    "sub": {
-      "known": "{{total}} 项检查中有 {{good}} 项没问题。下面是你的游戏运行情况。在你决定之前，什么都不会改变。",
-      "unknown": "Compy 还没有检查 Windows。下面是你的游戏运行情况。在你决定之前，什么都不会改变。"
-    },
     "actions": {
       "problem": "出了点问题",
       "improve": "优化一款游戏"
@@ -654,7 +650,7 @@
       "label": "需要看一看",
       "find": "找出原因",
       "later": "稍后",
-      "headline": "{{what}} 意外关闭了",
+      "headline": "{{what}} 出了状况",
       "detail": "Windows 记录了这次事件：{{kind}}，{{when}}。在你决定之前，Compy 不会做任何改动。"
     },
     "noGames": "游戏",
@@ -665,9 +661,9 @@
     "chartPick": "游戏",
     "live": {
       "title": "上一次游戏",
-      "unit": "平均 fps",
-      "note": "{{game}} · {{when}} · 1% 低帧 {{low}} fps · 实测",
-      "noteNoLow": "{{game}} · {{when}} · 实测",
+      "lowUnit": "fps 1% 低帧",
+      "lowNote": "{{game}} 最卡的时刻 · 实测",
+      "lowNoneNote": "{{game}} 最卡的时刻没有测到",
       "none": "还没有记录",
       "noneNote": "打开“实时”开始采集"
     },
@@ -675,7 +671,7 @@
       "title": "Windows 设置",
       "of": "/ {{total}} 项检查没问题",
       "worth": "值得一看：{{names}}",
-      "allGood": "没有需要处理的",
+      "allGood": "没有需要处理的检查项",
       "unread_one": "{{count}} 项无法读取",
       "unread_other": "{{count}} 项无法读取",
       "run": "运行检查",

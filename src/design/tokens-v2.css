@@ -200,8 +200,8 @@
    opaque tokens above and drops the backdrop. Only the panel family and hairlines change, so every
    room re-skins without touching its own CSS. */
 :root[data-v2="on"][data-surface="glass"] {
-  /* Primary actions take the theme accent on glass, as in the approved prototype. */
-  --v2-cta: var(--v2-accent);
+  /* --v2-cta is NOT re-pointed here: the primary action stays the ladder's green on every surface
+     and theme (owner ruling 2026-08-23), so Crimson never paints an action in the danger colour. */
   --v2-panel: rgba(var(--v2-glass-rgb), 0.64);
   --v2-panel-2: rgba(var(--v2-glass-rgb), 0.74);
   --v2-panel-card: rgba(var(--v2-glass-rgb), 0.6);
@@ -210,7 +210,6 @@
   --v2-line-strong: rgba(255, 255, 255, 0.17);
 }
 :root[data-v2="on"][data-surface="frosted"] {
-  --v2-cta: var(--v2-accent);
   --v2-panel: rgba(var(--v2-glass-rgb), 0.86);
   --v2-panel-2: rgba(var(--v2-glass-rgb), 0.9);
   --v2-panel-card: rgba(var(--v2-glass-rgb), 0.84);

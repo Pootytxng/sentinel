@@ -112,13 +112,6 @@ function GameDetail({
           <h1 className="gl-h1" id="gl-games-h1">
             {game.name}
           </h1>
-          <p className="gl-sub">
-            {t("common.games.detailSub", {
-              sessions: t("common.games.sessions", { count: game.sessions.length }),
-              time: time(game.totalSecs),
-              when: dates.dayTime(game.lastPlayed),
-            })}
-          </p>
         </div>
         <div className="gl-actions">
           <button type="button" className="gl-ghost" onClick={onOpenLive}>
@@ -325,10 +318,11 @@ export function GamesRoom({
     <section className="gl-room" data-room="games" aria-labelledby="gl-games-h1">
       <header className="gl-head">
         <div className="gl-head-text">
+          {/* The top bar already names the room; the h1 is the room's answer line, as on Live,
+              History and Test (one name per room). */}
           <h1 className="gl-h1" id="gl-games-h1">
-            {t("common.games.title")}
+            {t("common.games.headline")}
           </h1>
-          <p className="gl-sub">{t("common.games.sub")}</p>
         </div>
         <div className="gl-actions">
           <button type="button" className="gl-cta" onClick={onOpenTest}>
