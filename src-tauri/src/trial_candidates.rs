@@ -40,10 +40,15 @@
 //! states (`risk_dimensions`), for a Trial to keep on its record. A dimension the catalog doesn't
 //! state stays `None` and the receipt says "not stated"; nothing here fills one in. No catalog change
 //! states a dimension today.
+//!
+//! P8-follow (Rust review S1): the picker's candidate read remembers each change's stated risk
+//! ([`STATED_RISKS`]: the catalog's static words only, never a live read), and [`stated_risk_now`]
+//! answers a Trial start from it, so a start that follows the picker runs no catalog probe.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
+use std::sync::{Mutex, PoisonError};
 
 use crate::actions::{KnownService, RollbackAction, Snapshot, PWR_SUBGROUP_PCIE, PWR_SUBGROUP_USB};
 use crate::gaming_session::{SessionChange, SessionStatus};
@@ -202,20 +207,85 @@ pub(crate) struct StatedRisk {
 /// nothing. Pure.
 pub(crate) fn stated_risk(catalog: &Value, rec_id: &str) -> Option<StatedRisk> {
     let row = catalog.as_array()?.iter().find(|r| r.get("id").and_then(Value::as_str) == Some(rec_id))?;
-    Some(StatedRisk {
+    Some(row_stated_risk(row))
+}
+
+/// What one catalog row states about its change's risk. It reads the row's static words and
+/// nothing else. Pure.
+fn row_stated_risk(row: &Value) -> StatedRisk {
+    StatedRisk {
         overall: Risk::of(row.get("severity").and_then(Value::as_str)),
         dimensions: row
             .get("risk_dimensions")
             .and_then(|d| serde_json::from_value(d.clone()).ok())
             .unwrap_or_default(),
         cost: cost_words(row.get("downside").and_then(Value::as_str)),
-    })
+    }
 }
 
-/// [`stated_risk`] on the live catalog, the one the Trial picker reads. Read-only.
-pub(crate) fn stated_risk_now(rec_id: &str) -> Option<StatedRisk> {
-    let catalog = serde_json::to_value(crate::recommendations::get_recommendations()).ok()?;
+/// P8-follow (Rust review S1): what the catalog states about each change's risk, as the latest full
+/// catalog read found it. Every Trial picker candidate read ([`get_trial_candidates`]) refreshes it,
+/// and so does [`stated_risk_now`]'s own fallback read. A start that follows the picker therefore
+/// keeps the same words without a second full read. A full read runs every change's
+/// `currently_applied` probe, several of which spawn a child process (`sc`, `powercfg`, PowerShell),
+/// and the start ran it inline on its sync command, ahead of its cheap refusals.
+///
+/// STATIC WORDS ONLY: one [`StatedRisk`] per change id, from `severity`, `risk_dimensions` and
+/// `downside`. Nothing live is cached. `currently_applied` and `eligible` are never cached, and each
+/// read replaces the whole map, so it never outlives the list of changes the last read found.
+/// ASSUMPTION: those words cannot change within a process today. The rules are the embedded
+/// baseline, and every hand-built change's words are literals, because remote rules are
+/// hard-disabled (`remote_rules::remote_fetch_enabled()` is false, so `load_rules` never returns a
+/// remote or cached ruleset). Arming remote rules ends that assumption: whatever loads a new ruleset
+/// must refresh or clear this cache in the same step.
+///
+/// Each acquisition is one map swap or one lookup. It is never held across a catalog read, a store
+/// lock or any other lock, and nothing under it reaches disk.
+static STATED_RISKS: Mutex<BTreeMap<String, StatedRisk>> = Mutex::new(BTreeMap::new());
+
+/// The full live catalog read, as `get_recommendations` serializes it. Every change's
+/// `currently_applied` probe runs. Read-only.
+fn live_catalog() -> Option<Value> {
+    serde_json::to_value(crate::recommendations::get_recommendations()).ok()
+}
+
+/// Remembers what `catalog` states about each change's risk ([`row_stated_risk`], first row per id,
+/// as [`stated_risk`] reads it), replacing what an earlier read left. A catalog that can't be read
+/// leaves nothing remembered, so the next start reads the catalog itself.
+fn remember_stated_risks(cache: &Mutex<BTreeMap<String, StatedRisk>>, catalog: &Value) {
+    let mut fresh = BTreeMap::new();
+    for row in catalog.as_array().into_iter().flatten() {
+        if let Some(id) = row.get("id").and_then(Value::as_str) {
+            fresh.entry(id.to_string()).or_insert_with(|| row_stated_risk(row));
+        }
+    }
+    *cache.lock().unwrap_or_else(PoisonError::into_inner) = fresh;
+}
+
+/// `rec_id`'s stated risk from `cache` when the last read listed it. Otherwise from one
+/// `full_read`, which refreshes `cache` too. A change in neither, or a catalog that can't be read,
+/// is `None` ("not recorded"), never a guess. Nothing negative is cached.
+fn stated_risk_via(
+    cache: &Mutex<BTreeMap<String, StatedRisk>>,
+    rec_id: &str,
+    full_read: impl FnOnce() -> Option<Value>,
+) -> Option<StatedRisk> {
+    // Its own statement, so the guard drops here, before the full read spawns any process.
+    let remembered = cache.lock().unwrap_or_else(PoisonError::into_inner).get(rec_id).cloned();
+    if remembered.is_some() {
+        return remembered;
+    }
+    let catalog = full_read()?;
+    remember_stated_risks(cache, &catalog);
     stated_risk(&catalog, rec_id)
+}
+
+/// [`stated_risk`] on the live catalog, the one the Trial picker reads. P8-follow: the answer comes
+/// from the picker's last candidate read when that read listed the change ([`STATED_RISKS`]). The
+/// words can't change within a process, so no second full read runs. Otherwise it does today's one
+/// full read. Read-only.
+pub(crate) fn stated_risk_now(rec_id: &str) -> Option<StatedRisk> {
+    stated_risk_via(&STATED_RISKS, rec_id, live_catalog)
 }
 
 impl Evidence {
@@ -524,10 +594,12 @@ fn read_gaming_mode() -> Option<(HashSet<String>, bool)> {
 }
 
 /// Every catalog change with its pass/fail for the Trial picker, under the user's risk choice
-/// (`riskChoice` from the UI; absent = [`RiskChoice::default`], today's behaviour). Read-only.
+/// (`riskChoice` from the UI; absent = [`RiskChoice::default`], today's behaviour). P8-follow: it
+/// also remembers each change's stated risk ([`STATED_RISKS`]) for the start that follows. Read-only.
 #[tauri::command]
 pub(crate) fn get_trial_candidates(risk_choice: Option<RiskChoice>) -> Vec<TrialCandidate> {
-    let catalog = serde_json::to_value(crate::recommendations::get_recommendations()).unwrap_or(Value::Null);
+    let catalog = live_catalog().unwrap_or(Value::Null);
+    remember_stated_risks(&STATED_RISKS, &catalog);
     let (ledger_on, ledger_cant_confirm) = match read_ledger() {
         Some((on, cant)) => (Some(on), cant),
         None => (None, HashSet::new()),
@@ -546,6 +618,7 @@ pub(crate) fn get_trial_candidates(risk_choice: Option<RiskChoice>) -> Vec<Trial
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::cell::Cell;
 
     fn entry<'a>(id: &'a str, eligible: bool, applied: bool) -> CatalogEntry<'a> {
         CatalogEntry {
@@ -1012,6 +1085,127 @@ mod tests {
         // A whole stored value this build can't read is None.
         assert_eq!(lenient::<_, StatedRisk>(json!("moderate")).unwrap(), None);
         assert_eq!(lenient::<_, StatedRisk>(json!(null)).unwrap(), None);
+    }
+
+    // ─── P8-follow (Rust review S1): a start reads the stated risk the picker's read remembered ───
+
+    fn fresh_cache() -> Mutex<BTreeMap<String, StatedRisk>> {
+        Mutex::new(BTreeMap::new())
+    }
+
+    // The candidate read keeps each change's static risk words, exactly as `stated_risk` reads them
+    // (first row per id), and nothing live: the same change read as applied or not, eligible or not,
+    // is kept the same. Every read replaces the last, so a newer read's words win and a change it no
+    // longer lists is forgotten.
+    #[test]
+    fn the_candidate_read_remembers_only_the_catalogs_static_risk_words() {
+        let catalog = json!([
+            { "id": "mod", "severity": "moderate", "downside": " Search gets slower. ",
+              "currently_applied": true, "eligible": false, "risk_dimensions": { "security": "low" } },
+            { "id": "safe", "severity": "safe", "currently_applied": false },
+            { "id": "mod", "severity": "safe", "downside": "a later row for the same id" },
+            { "title": "no id" },
+        ]);
+        let cache = fresh_cache();
+        remember_stated_risks(&cache, &catalog);
+        let kept = cache.lock().unwrap().clone();
+        assert_eq!(kept.keys().map(String::as_str).collect::<Vec<_>>(), ["mod", "safe"]);
+        for (id, s) in &kept {
+            assert_eq!(Some(s), stated_risk(&catalog, id).as_ref(), "{id}: the words stated_risk reads");
+        }
+        assert_eq!((kept["mod"].overall, kept["mod"].cost.as_deref()), (Risk::Moderate, Some("Search gets slower.")));
+        // The kept value has no field a live read could fill: its static words and nothing else.
+        let v = serde_json::to_value(&kept["mod"]).unwrap();
+        let mut fields: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
+        fields.sort_unstable();
+        assert_eq!(fields, ["cost", "dimensions", "overall"]);
+        let flipped = json!([{ "id": "mod", "severity": "moderate", "downside": " Search gets slower. ",
+            "currently_applied": false, "eligible": true, "risk_dimensions": { "security": "low" } }]);
+        let other = fresh_cache();
+        remember_stated_risks(&other, &flipped);
+        assert_eq!(other.lock().unwrap()["mod"], kept["mod"], "a live read never changes what is kept");
+        // Refreshed on every read, not only the first.
+        remember_stated_risks(&cache, &json!([{ "id": "safe", "severity": "moderate" }]));
+        let kept = cache.lock().unwrap().clone();
+        assert_eq!(kept.keys().map(String::as_str).collect::<Vec<_>>(), ["safe"]);
+        assert_eq!(kept["safe"].overall, Risk::Moderate);
+        // A catalog that can't be read leaves nothing kept, so the next start reads the catalog itself.
+        remember_stated_risks(&cache, &Value::Null);
+        assert!(cache.lock().unwrap().is_empty());
+    }
+
+    // A start the picker's read covered keeps that read's words and runs no full catalog read.
+    #[test]
+    fn a_start_after_the_picker_runs_no_full_catalog_read() {
+        let cache = fresh_cache();
+        remember_stated_risks(&cache, &json!([{ "id": "mod", "severity": "moderate", "downside": "Search gets slower." }]));
+        let reads = Cell::new(0);
+        // A full read would say something else, so its words would show if it ran.
+        let full_read = || {
+            reads.set(reads.get() + 1);
+            Some(json!([{ "id": "mod", "severity": "safe" }]))
+        };
+        for _ in 0..3 {
+            let s = stated_risk_via(&cache, "mod", full_read).expect("remembered");
+            assert_eq!((s.overall, s.cost.as_deref()), (Risk::Moderate, Some("Search gets slower.")));
+        }
+        assert_eq!(reads.get(), 0, "the picker's words, with no second read");
+    }
+
+    // A change the last read didn't list falls back to ONE full read, which refreshes the cache. A
+    // change in neither, or a catalog that can't be read, is not recorded (None), never a guess, and
+    // is never remembered as missing.
+    #[test]
+    fn a_miss_falls_back_to_one_full_read() {
+        let cache = fresh_cache();
+        let reads = Cell::new(0);
+        let catalog = json!([{ "id": "mod", "severity": "moderate", "downside": "Search gets slower." }]);
+        let full_read = || {
+            reads.set(reads.get() + 1);
+            Some(catalog.clone())
+        };
+        let s = stated_risk_via(&cache, "mod", full_read);
+        assert_eq!((s.as_ref().map(|s| s.overall), reads.get()), (Some(Risk::Moderate), 1));
+        assert_eq!(s, stated_risk(&catalog, "mod"));
+        // That read refreshed the cache: the next start of it reads nothing.
+        assert_eq!(stated_risk_via(&cache, "mod", full_read), s);
+        assert_eq!(reads.get(), 1);
+        // In neither: None, and each such start reads the catalog again.
+        assert_eq!(stated_risk_via(&cache, "missing", full_read), None);
+        assert_eq!(stated_risk_via(&cache, "missing", full_read), None);
+        assert_eq!(reads.get(), 3);
+        assert_eq!(stated_risk_via(&fresh_cache(), "mod", || None), None, "an unreadable catalog");
+    }
+
+    // The entry point a start calls, on the process-wide cache the picker fills: a change only the
+    // picker's read named is answered from that read. The old `stated_risk_now` ran the full live read
+    // here and answered None, since no live catalog has this id. The only test that writes
+    // STATED_RISKS; the others use their own cache.
+    #[test]
+    fn stated_risk_now_answers_from_the_pickers_last_read() {
+        let id = "p8f-a-change-only-the-pickers-read-named";
+        remember_stated_risks(&STATED_RISKS, &json!([{ "id": id, "severity": "moderate", "downside": "Costs a little." }]));
+        let s = stated_risk_now(id).expect("the picker's read answers it, with no full read");
+        assert_eq!((s.overall, s.cost.as_deref()), (Risk::Moderate, Some("Costs a little.")));
+    }
+
+    // The wiring the tests above can't reach without the live catalog: the picker remembers the very
+    // catalog it screens, before screening it, and the start's read goes through the cache with the
+    // full read only as its fallback.
+    #[test]
+    fn the_picker_fills_the_cache_and_a_start_reads_it_first() {
+        let src = include_str!("trial_candidates.rs");
+        let body = |sig: &str| {
+            let at = &src[src.find(sig).unwrap()..];
+            &at[..at.find("\n}\n").unwrap()]
+        };
+        let picker = body("pub(crate) fn get_trial_candidates(");
+        let read = picker.find("let catalog = live_catalog().unwrap_or(Value::Null);").expect("one full read");
+        let fill = picker.find("remember_stated_risks(&STATED_RISKS, &catalog);").expect("remembered");
+        assert!(read < fill && fill < picker.find("screen_catalog(&catalog,").unwrap(), "{picker}");
+        let now = body("pub(crate) fn stated_risk_now(");
+        assert!(now.contains("stated_risk_via(&STATED_RISKS, rec_id, live_catalog)"), "{now}");
+        assert!(!now.contains("get_recommendations"), "{now}");
     }
 
     // On the live catalog, "Low risk only" lists only `safe` changes, and every change it leaves

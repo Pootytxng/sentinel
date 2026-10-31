@@ -749,6 +749,14 @@ const LOCK_CENSUS = {
     class: "out",
     why: "the sysinfo handle used for memory-pressure reads; a probe handle, not a store",
   },
+  "trial_candidates::STATED_RISKS: Mutex<BTreeMap<String, StatedRisk>>": {
+    class: "out",
+    why:
+      "P8-follow: an in-memory cache of the catalog's static risk words per change, refreshed by " +
+      "the Trial picker's candidate read and read by start_experiment before it takes the " +
+      "experiment store gate. Nothing under it reaches disk, and each acquisition is one map swap " +
+      "or one lookup, never held across a catalog read, a store lock or any other lock.",
+  },
   "lib::UPDATE_RESTART_BARRIER: Mutex<bool>": {
     class: "out",
     why: "a one-shot restart barrier flag guarding no persisted state",
