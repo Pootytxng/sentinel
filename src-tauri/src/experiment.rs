@@ -1474,7 +1474,7 @@ fn session_by_id<'a>(sessions: &'a [SessionSummary], id: &str) -> SessionLookup<
 
 /// A session carries a real frame-rate reading: both the average and the 1% low were measured.
 /// Without a 1% low there is nothing to judge a Trial on.
-fn has_frame_reading(s: &SessionSummary) -> bool {
+pub(crate) fn has_frame_reading(s: &SessionSummary) -> bool {
     s.avg_fps.is_finite() && s.avg_fps > 0.0 && s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0
 }
 
@@ -1866,13 +1866,7 @@ pub(crate) fn other_compy_change(
         }
     };
     use crate::sessions::ChangeCounts::{Legacy, PerChange};
-    let plus_this_one = match (then, after) {
-        (PerChange { active: a0, cant_confirm: c0 }, PerChange { active: a1, cant_confirm: c1 }) => {
-            (a1 == a0 + 1 && c1 == c0) || (a1 == a0 && c1 == c0 + 1)
-        }
-        (Legacy(n0), Legacy(n1)) => n1 == n0 + 1,
-        _ => false,
-    };
+    let plus_this_one = then.adds_one_change(after);
     let active = |c: crate::sessions::ChangeCounts| {
         let (n, cant) = match c {
             PerChange { active, cant_confirm } => (active, cant_confirm),

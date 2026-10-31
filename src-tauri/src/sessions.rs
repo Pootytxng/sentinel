@@ -246,6 +246,23 @@ pub(crate) enum ChangeCounts {
     Legacy(usize),
 }
 
+impl ChangeCounts {
+    /// `after` is these counts with exactly one more Compy change in place: one more active with the
+    /// same can't-confirm count, or one more can't-confirm with the same active one (453-f1 compares
+    /// them apart); one more on the older rule. Counts made in different forms never match. The one
+    /// rule a Trial's after-session (`experiment::other_compy_change`) and a real-play session
+    /// (`realplay::with_arm`) are held to.
+    pub(crate) fn adds_one_change(self, after: ChangeCounts) -> bool {
+        match (self, after) {
+            (ChangeCounts::PerChange { active: a0, cant_confirm: c0 }, ChangeCounts::PerChange { active: a1, cant_confirm: c1 }) => {
+                (a1 == a0 + 1 && c1 == c0) || (a1 == a0 && c1 == c0 + 1)
+            }
+            (ChangeCounts::Legacy(n0), ChangeCounts::Legacy(n1)) => n1 == n0 + 1,
+            _ => false,
+        }
+    }
+}
+
 impl std::fmt::Display for ChangeCounts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {

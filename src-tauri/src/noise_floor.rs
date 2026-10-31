@@ -235,8 +235,9 @@ pub(crate) fn noise_band_pct(measured: Option<&BetweenSessionNoise>) -> f64 {
 
 /// A session measured under `then` describes the game under `now`: same game, same rig, same driver,
 /// and the Windows build read on both sides and equal (the game build by the same stamp rule as
-/// [`lookup`]). Anything unread doesn't count.
-fn still_current(then: &NoiseConditions, now: &NoiseConditions) -> bool {
+/// [`lookup`]). Anything unread doesn't count. Real play checks its with-change sessions against its
+/// as-is ones by the same rule (`realplay::with_arm`).
+pub(crate) fn still_current(then: &NoiseConditions, now: &NoiseConditions) -> bool {
     let rig = then.hw_fingerprint.hash == now.hw_fingerprint.hash
         && then.hw_fingerprint.gpu_driver == now.hw_fingerprint.gpu_driver
         && same_rig(&then.hw_fingerprint, &now.hw_fingerprint);
