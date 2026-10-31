@@ -715,6 +715,7 @@ describe("ExperimentBench (armed)", () => {
       baselineSessionId: VALORANT_SESSION.started_at,
       hypothesis: expect.any(String),
       outcome: "recommended",
+      riskChoice: "low-and-moderate",
     });
   });
 
@@ -1470,6 +1471,32 @@ describe("ExperimentBench — what differed and what wasn't play", () => {
       "差异：分辨率、刷新率有变化，且其中一局没有记录图形 API。",
     );
     expect(screen.getAllByTestId("exp-stretch-receipt")[1]).toHaveTextContent("测试后的那局：有 16 分钟稳定在约 120 fps。");
+  });
+
+  // P8-posture-show: every Trial row names the risk choice it started under; an older record without
+  // one says "not recorded" and is never filled in with the default. Fails on the code before it.
+  it("names the risk choice a Trial started under, and 'not recorded' on an older record", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, id: "exp:low", risk_choice: "low-only" },
+      { ...KEPT_EXPERIMENT, id: "exp:old" },
+    ];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getAllByTestId("exp-risk-choice-receipt")).toHaveLength(2));
+    const lines = screen.getAllByTestId("exp-risk-choice-receipt").map((n) => n.textContent);
+    expect(lines).toContain("Risk you allowed when this Trial started: Low risk only");
+    expect(lines).toContain("Risk you allowed when this Trial started: not recorded");
+    expect(lines.join(" ")).not.toMatch(/Low and moderate/);
+  });
+
+  it("names the risk choice in zh-CN", async () => {
+    await i18n.changeLanguage("zh-CN");
+    state.gate = true;
+    state.experiments = [{ ...KEPT_EXPERIMENT, risk_choice: "low-and-moderate" }];
+    render(<ExperimentBench />);
+    expect(await screen.findByTestId("exp-risk-choice-receipt")).toHaveTextContent(
+      "这次试验开始时你允许的风险：低风险和中等风险",
+    );
   });
 
   it("a session that recorded focus never blames the background, and minutes are floored", async () => {

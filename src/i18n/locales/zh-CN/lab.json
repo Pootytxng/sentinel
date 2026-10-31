@@ -406,6 +406,7 @@
       "receipt": {
         "change": "更改",
         "outcome": "目标",
+        "riskChoice": "你允许的风险",
         "verdict": "判定",
         "confidence": "置信度",
         "baselineAvg": "之前，平均",
@@ -494,7 +495,9 @@
     "riskChoice": {
       "label": "Compy 在这台主机上可以做到哪一步？",
       "lowOnly": "仅低风险",
-      "lowAndModerate": "低风险和中等风险"
+      "lowAndModerate": "低风险和中等风险",
+      "notRecorded": "未记录",
+      "receipt": "这次试验开始时你允许的风险：{{choice}}"
     },
     "chooseChange": "选择一项更改…",
     "pickTested": "{{title}} · 已测试：{{verdict}}",

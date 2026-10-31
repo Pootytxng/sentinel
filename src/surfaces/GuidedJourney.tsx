@@ -63,6 +63,7 @@ import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
 import { asProgress, enoughLine, enoughState, setJourneyRecording, type CaptureProgress } from "./journey-enough";
 import { journeyStopped, pickUpJourney, stopJourneyHere, type JourneyProgress } from "./journey-resume";
 import { contextCheckFor, type RetestReason } from "./test-summary";
+import { loadRiskChoice, riskChoiceText, type RiskChoice } from "./risk-choice";
 
 export type JourneyOutcome = "recommended" | "max-fps";
 
@@ -77,6 +78,8 @@ type JourneyExperiment = {
   created_at?: string;
   concluded_at?: string | null;
   outcome?: JourneyOutcome | null;
+  /** P8-posture-show: the risk choice in force at start; absent on older records ("not recorded"). */
+  risk_choice?: RiskChoice | null;
   /** The after-session's numbers (experiment.rs `Treatment`); null while Running. */
   treatment?: {
     delta_low1_pct: number;
@@ -442,6 +445,8 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
             baselineSessionId: baseline.started_at,
             hypothesis: args.hypothesis,
             outcome: args.outcome,
+            // P8-posture-show: the bench's saved choice, recorded on the Trial for its receipt.
+            riskChoice: loadRiskChoice(),
           },
           args.refresh,
         );
@@ -570,6 +575,8 @@ function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
     <dl className="journey-receipt">
       <ReceiptRow label={rk("change")} value={exp.rec_id} />
       <ReceiptRow label={rk("outcome")} value={exp.outcome ?? null} />
+      {/* P8-posture-show: always shown; an older record says "not recorded", never a guess. */}
+      <ReceiptRow label={rk("riskChoice")} value={riskChoiceText(exp.risk_choice, t)} />
       <ReceiptRow label={rk("verdict")} value={exp.verdict} />
       <ReceiptRow label={rk("confidence")} value={exp.verdict_confidence ?? null} />
       <ReceiptRow label={rk("baselineAvg")} value={fps(exp.baseline_avg_fps)} />
