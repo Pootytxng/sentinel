@@ -4,6 +4,12 @@
 > CURRENT STATE lives in docs/RELEASE_STATE.md; this file is the reverse-chron audit log.
 > APPEND new dated UPDATE banners at the TOP, directly below this header.
 
+### 2026-10-31 - the 4ab109f8 desk row (P8 posture slices, noise-line copy fix), moved verbatim
+
+Superseded by the d9b87bf4 desk build (the glass redesign). Moved verbatim; it has no links.
+
+| **Owner-installed version + embedded stamp** | **0.9.26 desk build, embedded stamp `4ab109f8`** - built 2026-10-29 (about 12:45 local) from `main` itself at `4ab109f8` (full desk gate r34 green: tsc 0, vitest 526 files / 9465 passed; cargo test 1665 passed, clippy -D warnings clean), in the main checkout, via `npm run tauri build -- --config` with `bundle.createUpdaterArtifacts=false` for this build only (no updater signing key in this session; desk-only build, never published) then `scripts/ship-reinstall.ps1 -NoLaunch`. Installer `Compy_0.9.26_x64-setup.exe` SHA-256 **`B636911BB60F95FE75BB2E7A9D071F0232ECEE05DE2189167382098AEF3CAFEC`**, the only installer on the Desktop. **Live == build proved by the embedded stamp in the installed exe** (`%LOCALAPPDATA%\Compy\compy.exe` contains `4ab109f8`; runtime CDP proof not run - no launch); installed version 0.9.26. Installed by Claude + LIVE; supersedes `e6db699e`. **Visible delta vs `e6db699e`:** the Lab's "nothing left to test" names changes held back by the chosen risk and leaves out ones already tested here (P8-posture-note, -count), an honest stopping line when a held change has only a stale result (P8-posture-stale-copy), and a Trial that never reached the noise band now says it was not judged against one instead of "no record was kept". | `node scripts/verify-release-state.mjs` (check 7) · `Select-String -Path "$env:LOCALAPPDATA\Compy\compy.exe" -Pattern 4ab109f8` · HKCU uninstall `DisplayVersion` — **both from a non-containerized session only** (a packaged host sees `%LOCALAPPDATA%`/`HKCU` through an overlay) |
+
 ### 2026-10-29 - the e6db699e desk row (P7 visual-review rounds 2-3), moved verbatim
 
 Superseded by the 4ab109f8 desk build (P8 posture slices, noise-line copy fix). Moved verbatim; it has no links.

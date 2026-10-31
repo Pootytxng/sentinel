@@ -63,8 +63,6 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 
 ## Queue
 
-**Lane, 2026-10-30 (owner: "FULL send it"):** the interactive Claude HQ session holds write access for the glass redesign (branch `claude/redesign-glass`: shell, Home, Games, Problems). Scheduled sessions stay read-only until this line is removed.
-
 ### Now — finish what's open
 - [x] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
       (data-root tests), #661 (debrief unmeasured), #627 (ledger write announce), #604 (TS coverage).
@@ -80,6 +78,10 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 - [x] **WT-prune** 15 worktree folders removed 2026-10-23 evening; every branch kept, detached heads
       saved as `keep/*` branches, uncommitted edits saved as patches in
       `_archive/compy-sessions/worktree-salvage-2026-10-23/wt-prune-2026-10-23`. The `.codex` one is left alone.
+- [ ] **GL-empty** (glass redesign, landed 2026-10-31) Self-review the new pages in the states the owner's data
+      never shows, before the redesign reaches testers: Health with no measured game, no readiness read and no Care
+      record; Games empty; Problems on a clean scan; the Look panel under Frosted and Solid. Round 1 and round 2 judged
+      only his live data (8 games, a pending "tail" record).
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -638,10 +640,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-27 ~18:15–18:50 (interactive from Claude HQ, CODE-ONLY): P4-smooth-offer-a `75f1d0d3` (feat `45d48c79`);
-  cargo test 1651 passed, clippy -D warnings clean; one Rust review round, 4 findings taken; r25 FULL vitest 525
-  files / 10100, exit 0. Lesson: a regex over `ExperimentRecord {` also matches fn return types — anchor struct
-  literal edits on the compiler's missing-field errors, not text. Not pushed.
 - 2026-10-27 ~18:55–19:40 (interactive from Claude HQ, CODE-ONLY): P4-smooth-offer-b `06596359` (feat `f53f4511`,
   fix `76d56405`); r26 FULL vitest failed on command-authority-guard + affordance-census → `0f38e9ba`; r27 FULL
   vitest 525 files / 10777, exit 0, tsc 0; cargo 1651/0, clippy clean. Lessons: a new command's touched set
@@ -707,6 +705,15 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `a84ba5a7`); tsc 0; bench + helper + i18n/locale/copy/census guards 17 files / 275, exit 0; two bench tests
   proven failing on old code. TS display only, no review. Rust items left for a session with no game running.
   One item only. Log trimmed to the newest 14. Not pushed (CODE-ONLY); next FULL session pushes.
+- 2026-10-30 ~20:30 to 10-31 ~12:45 (interactive from Claude HQ; owner: "FULL send it", "RUN IT NOW", then "go"): the
+  glass redesign landed. Merge `bb06a585` (`claude/redesign-glass`: glass shell, Look panel, Health summary, Games,
+  Problems); desk review round 1 FAIL, 8 findings fixed in `5724dcec` (merge `a15e065a`); round 2 FAIL, 5 fixed in
+  `8bc28d32`, plus Live's session names `34734a7c` (merge `d9b87bf4`), each re-measured PASS on the installed build.
+  Owner played PBZ 22:13 to past 02:30: nothing heavy ran meanwhile, only `vitest run src` at idle priority (357 files /
+  5047). Desk build `d9b87bf4` installed (`ship-reinstall.ps1 -VerifyRuntime`, proof `d9b87bf4 · release`); pushed from
+  `03580297` with this line, through the pre-push gate. Lane line removed: scheduled sessions may write again. Lessons:
+  Desktop Commander drops output after a printed line ending in `>`; an unattended wake may not re-arm its own check, so
+  a long wait ends with "say go".
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
