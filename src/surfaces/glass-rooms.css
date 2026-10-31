@@ -97,13 +97,16 @@
   color: var(--v2-text);
   border-color: var(--v2-line-strong);
 }
-:root[data-v2="on"] :is(.gl-cta, .gl-ghost, .gl-back, .gl-kpi, .gl-pill-seg button, .gl-row-btn):focus-visible {
+:root[data-v2="on"] :is(.gl-ghost, .gl-back, .gl-kpi, .gl-pill-seg button, .gl-row-btn):focus-visible {
   outline: 2px solid var(--v2-accent);
   outline-offset: 2px;
 }
-/* The green fill sits close to Midnight's accent, so its ring is the page ink, as on .v2-primary. */
+/* The green primary's ring is the page ink, as on .v2-primary: an accent ring vanishes into
+   Midnight's teal and turns danger-red under Crimson. Its own rule, NOT a member of the list above:
+   :is() takes its most specific argument's weight, so a shorter override would lose to it. */
 :root[data-v2="on"] .gl-cta:focus-visible {
-  outline-color: var(--v2-text);
+  outline: 2px solid var(--v2-text);
+  outline-offset: 2px;
 }
 
 /* ── Headline cards ── */
@@ -521,6 +524,21 @@
 :root[data-v2="on"] .gl-station {
   min-width: 0;
   background: var(--v2-panel-2);
+}
+/* Black Box's scan button is the room's one filled action, so it wears the primary's green and ink
+   (owner ruling 2026-08-23). Its own sheet paints the theme accent, which is the danger red under
+   Crimson. The ring is the page ink, as on every green primary. */
+:root[data-v2="on"] .gl-station .bb-scan {
+  background: var(--v2-cta);
+  color: var(--v2-bg);
+}
+:root[data-v2="on"] .gl-station .bb-scan:focus-visible {
+  outline-color: var(--v2-text);
+}
+/* A deep-linked record can be taller than the window; it lands by its top (BlackBox scrolls it to
+   "start"), with room to breathe under the content lane's edge. */
+:root[data-v2="on"] .gl-station .bb-item[data-selected="true"] {
+  scroll-margin-top: 14px;
 }
 
 /* ── Banner: what Windows recorded, in the attention colour ── */

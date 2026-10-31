@@ -651,7 +651,8 @@
       "find": "找出原因",
       "later": "稍后",
       "headline": "{{what}} 出了状况",
-      "detail": "Windows 记录了这次事件：{{kind}}，{{when}}。在你决定之前，Compy 不会做任何改动。"
+      "detail": "Windows 记录了这次事件：{{kind}}，{{when}}。在你决定之前，Compy 不会做任何改动。",
+      "detailRecorded": "这是 Windows 记录的事件。在你决定之前，Compy 不会做任何改动。"
     },
     "noGames": "游戏",
     "noGamesValue": "还没有测量记录",

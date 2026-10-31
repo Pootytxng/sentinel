@@ -103,11 +103,21 @@ describe("Health summary (glass redesign)", () => {
 
   it("says a freeze stopped responding, in Black Box's own words, never 'closed unexpectedly' (desk review 2026-10-30)", () => {
     home({
-      pendingCare: { ...care, kind: "App hang", app_label: "tail", summary: "tail stopped responding (froze)" },
+      pendingCare: {
+        ...care,
+        kind: "App hang",
+        app_label: "tail",
+        occurred_display: "Sep 28, 11:57 AM",
+        // Black Box builds every headline as "{what happened} — {when}".
+        summary: "tail stopped responding (froze) — Sep 28, 11:57 AM",
+      },
     });
     const band = screen.getByRole("group", { name: "Needs a look" });
-    expect(within(band).getByText("tail stopped responding (froze)")).toBeTruthy();
+    expect(within(band).getByText("tail stopped responding (froze) — Sep 28, 11:57 AM")).toBeTruthy();
     expect(band.textContent).not.toMatch(/closed unexpectedly/);
+    // Round 2: the line under it does not say the time (or the kind) a second time.
+    expect(band.textContent!.split("Sep 28, 11:57 AM").length - 1).toBe(1);
+    expect(band.textContent).not.toContain("App hang");
   });
 
   it("the Last session card shows the 1% low the other cards lack, not the average again (desk review 2026-10-30)", () => {
@@ -213,6 +223,7 @@ describe("Problems (glass redesign)", () => {
       ],
       skipped_sources: [],
     };
+    const scrolled = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
     render(
       <ProblemsRoom
         changes={[]}
@@ -224,7 +235,14 @@ describe("Problems (glass redesign)", () => {
       />,
     );
     const note = await screen.findByText("This is the one you came here to see.");
-    expect(note.closest(".bb-item")!.textContent).toContain("tail stopped responding");
+    const row = note.closest(".bb-item")!;
+    expect(row.textContent).toContain("tail stopped responding");
+    // Round 2: it lands by its top. A record with its evidence open is taller than the window, and
+    // centring it left the note and the headline above the fold.
+    const call = scrolled.mock.contexts.findIndex((el) => el === row);
+    expect(call, "the selected row was never scrolled to").toBeGreaterThan(-1);
+    expect(scrolled.mock.calls[call][0]).toMatchObject({ block: "start" });
+    scrolled.mockRestore();
     // Read-only: arriving does not mark the record opened.
     expect(invoked).not.toContain("mark_care_incident_opened");
   });

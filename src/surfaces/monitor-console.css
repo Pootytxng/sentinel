@@ -98,9 +98,11 @@
   flex-direction: column; gap: 6px; container-type: inline-size; }
 :root[data-v2="on"] .ss-item { min-width: 0; }
 /* The meta track's floor is its own content (#677): `min-content` here is the age · duration
-   tail (the name contributes nothing, see .ss-meta-name), so at most 210px for alignment across
-   rows, but never narrower than what keeps the age and duration whole. */
-:root[data-v2="on"] .ss-row { display: grid; grid-template-columns: minmax(min-content, 210px) minmax(120px, 1fr) auto;
+   tail (the name contributes nothing, see .ss-meta-name), so at most 300px for alignment across
+   rows, but never narrower than what keeps the age and duration whole. 300, was 210 (desk review
+   2026-10-30): real tails run 150-220px, and 210 left the game's name 0-50px, unreadable. 300 is
+   also the most every row can reach at 720px beside a wide "vs previous" chip, so rows still align. */
+:root[data-v2="on"] .ss-row { display: grid; grid-template-columns: minmax(min-content, 300px) minmax(120px, 1fr) auto;
   align-items: center; gap: 14px; width: 100%; padding: 6px 12px; background: transparent;
   border: 1px solid var(--ix-glass-border); color: var(--ix-text-2); cursor: pointer; text-align: left; }
 :root[data-v2="on"] .ss-row:hover { border-color: var(--ix-accent); color: var(--ix-text-1); }

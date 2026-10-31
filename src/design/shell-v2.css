@@ -1272,10 +1272,14 @@
   :root[data-v2="on"] .v2-top {
     position: relative;
   }
+  /* Centred WITHOUT a transform. The magnetic pull animates transform, and GSAP leaves its last
+     value inline (translate(-50%) included), which stranded the box half its width to the left,
+     over the room title, once the window narrowed below 1200px (desk review 2026-10-30). */
   :root[data-v2="on"] .v2-top .v2-search {
     position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+    inset-inline: 0;
+    margin-inline: auto;
+    width: max-content;
   }
 }
 /* Content scrolls out under a soft edge instead of a hard cut at the window's foot. */
@@ -1283,8 +1287,8 @@
   -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 22px), transparent);
   mask-image: linear-gradient(to bottom, black calc(100% - 22px), transparent);
 }
-/* Older rooms speak the glass language: pill primary actions in the theme accent, the classic
-   buttons rounded, and room titles at the same size as the new pages' titles. */
+/* Older rooms speak the glass language: pill primary actions (still the ladder's green), the
+   classic buttons rounded, and room titles at the same size as the new pages' titles. */
 :root[data-v2="on"]:not([data-surface="solid"]) .v2-primary,
 :root[data-v2="on"]:not([data-surface="solid"]) :is(.btn, .btn-small, .btn-primary, .fw-btn, .mc-start, .hc-btn),
 :root[data-v2="on"]:not([data-surface="solid"]) :is(.hc-notice-acts, .hc-seg-group) button {

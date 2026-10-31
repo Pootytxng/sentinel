@@ -100,9 +100,16 @@ export function HomeGlass({
   const newestLow = newest ? knownFps(newest.low1_fps_est) : null;
   // The headline is Black Box's own sentence for the record, the one the full check prints, so a
   // freeze reads "stopped responding" and a crash "closed unexpectedly". The fallback names no kind.
+  const careSummary = pendingCare ? pendingCare.summary.trim() : "";
   const careHeadline = pendingCare
-    ? pendingCare.summary.trim() ||
-      t("home.glass.care.headline", { what: pendingCare.app_label ?? pendingCare.kind })
+    ? careSummary || t("home.glass.care.headline", { what: pendingCare.app_label ?? pendingCare.kind })
+    : "";
+  // Black Box's sentence already carries what happened and when ("… — Sep 28, 11:57 AM"), so the
+  // line under it says only where the record came from; the fallback headline keeps kind and time.
+  const careDetail = pendingCare
+    ? careSummary
+      ? t("home.glass.care.detailRecorded")
+      : t("home.glass.care.detail", { kind: pendingCare.kind, when: pendingCare.occurred_display })
     : "";
 
   const topLimiter = priorities?.limiters?.[0] ?? null;
@@ -161,7 +168,7 @@ export function HomeGlass({
         <div className="gl-banner" data-tone="warn" role="group" aria-label={t("home.glass.care.label")}>
           <span className="gl-banner-text">
             <b>{careHeadline}</b>
-            <span>{t("home.glass.care.detail", { kind: pendingCare.kind, when: pendingCare.occurred_display })}</span>
+            <span>{careDetail}</span>
           </span>
           <span className="gl-banner-actions">
             <button type="button" className="gl-ghost" onClick={() => onDismissCareIncident(pendingCare.incident_id)}>

@@ -221,6 +221,19 @@ describe("ShellV2 topbar", () => {
   // there is no product reason two rooms would be named in shared chrome and two nameless, and
   // the standing brief says preserve every existing control -- so the element stays and this
   // assertion is back the way it was, now with the measurement written down beside it.
+  it("centres the wide-window search box WITHOUT a transform (desk review 2026-10-30)", () => {
+    // The magnetic pull animates transform, and GSAP leaves its last value inline. With the box
+    // centred by translateX(-50%), that inline value survived the window narrowing below 1200px
+    // and painted the box over the PC pill and the room title (measured at 904px wide).
+    const css = readFileSync("src/design/shell-v2.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const at = css.indexOf("@media (min-width: 1200px)");
+    expect(at, "the wide-window search rule moved").toBeGreaterThan(-1);
+    const block = css.slice(at, css.indexOf("\n}\n", at));
+    expect(block).toContain(".v2-search");
+    expect(block).not.toMatch(/transform\s*:/);
+    expect(block).toMatch(/margin-inline:\s*auto/);
+  });
+
   it("names the active room, as Health's and Test's comps do", () => {
     const { container } = render(shell({ activeId: "play" }));
     const title = container.querySelector(".v2-room-title");

@@ -312,7 +312,9 @@ function IncidentRow({
   const [showReceipt, setShowReceipt] = useState(false);
   const ref = useRef<HTMLLIElement | null>(null);
   useEffect(() => {
-    if (selected) ref.current?.scrollIntoView({ block: "center", behavior: "auto" });
+    // By its top: a record with its evidence open runs taller than the window, and centring it put
+    // the "this is the one" note and the headline above the fold (desk review 2026-10-30).
+    if (selected) ref.current?.scrollIntoView({ block: "start", behavior: "auto" });
   }, [selected]);
   const r = inc.receipt;
   return (
