@@ -270,6 +270,22 @@ pub(crate) fn newest_after<'s>(game: &str, applied_at: &str, sessions: &'s [Sess
         .map(|(_, s)| s)
 }
 
+/// Pure (P5-realplay): the as-is sessions a real-play start pins, oldest first: the unchanged run
+/// that ends at `anchor` (`noise_floor::current_unchanged_run` within
+/// `comparison::ARM_MAX_AGE_DAYS`: same game, rig, driver, Windows and game build, comparable
+/// conditions, Gaming Mode state and Compy changes, nothing Compy applied or undone between them),
+/// trimmed by [`pin_before`]. A run split off by any change never counts, nor does anything older
+/// than 14 days. Fewer than [`MIN_SESSIONS`] means a start refuses before anything is recorded.
+pub(crate) fn before_arm(
+    sessions: &[SessionSummary],
+    anchor: &SessionSummary,
+    ledger: &[LedgerEntryRef<'_>],
+    now: DateTime<Utc>,
+) -> Vec<RealPlaySession> {
+    let run = crate::noise_floor::current_unchanged_run(sessions, anchor, ledger, crate::comparison::ARM_MAX_AGE_DAYS);
+    pin_before(&run, anchor, now)
+}
+
 /// The before arm, from the unchanged run that ends at `anchor` (oldest first): the run's sessions
 /// that can count, started within `comparison::ARM_MAX_AGE_DAYS` before `now`, the newest
 /// [`MAX_SESSIONS`]. Empty unless the anchor itself is the newest of them, so the anchor the record
@@ -1342,6 +1358,21 @@ mod tests {
         assert!(pin_before(&refs, &short[9], instant("2026-10-22T20:00:00+00:00").unwrap()).is_empty());
         let refs: Vec<&SessionSummary> = run[..9].iter().collect();
         assert!(pin_before(&refs, anchor, instant("2026-10-22T20:00:00+00:00").unwrap()).is_empty(), "the anchor must be the run's newest");
+    }
+
+    #[test]
+    fn a_real_play_start_pins_the_unchanged_run_that_ends_at_the_anchor() {
+        // A Compy change on 10-19 splits the history: only the run after it describes this PC now.
+        let ledger = vec![change("visual-effects", "2026-10-19T12:00:00+00:00", None)];
+        let sessions: Vec<SessionSummary> = std::iter::once(played("2026-10-18T18:00:00+00:00", 150.0, 240.0, 13)).chain(as_is()).collect();
+        let pinned = before_arm(&sessions, &sessions[3], &ledger, now());
+        assert_eq!(pinned, self::pinned(), "the three as-is sessions, never the one before the change");
+        // Two sessions since the change: too few, so the progress says so and a start refuses.
+        let two = before_arm(&sessions[..3], &sessions[2], &ledger, now());
+        assert_eq!(two.len(), 2);
+        assert_eq!(before_start_progress(WARDOGS, &two).phase, RealPlayPhase::CollectingBefore);
+        // Older than 14 days on the clock: nothing to pin.
+        assert!(before_arm(&sessions, &sessions[3], &ledger, instant("2026-11-10T00:00:00+00:00").unwrap()).is_empty());
     }
 
     // ─── progress ──────────────────────────────────────────────────────────────

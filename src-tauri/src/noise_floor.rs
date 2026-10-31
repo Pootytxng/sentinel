@@ -326,6 +326,59 @@ pub(crate) fn between_session_pacing_noise(
     unchanged_spread(sessions, now, ledger, |s| s.frame_pacing.as_ref().and_then(|p| p.p99_over_p50()))
 }
 
+/// The sessions a measurement under `now` may read, oldest first: long enough to be a baseline, of
+/// `now`'s game on its rig under its driver and Windows build ([`still_current`]), with a start that
+/// can be read.
+fn sessions_like<'s>(
+    sessions: &'s [crate::sessions::SessionSummary],
+    now: &NoiseConditions,
+) -> Vec<(chrono::DateTime<chrono::FixedOffset>, &'s crate::sessions::SessionSummary)> {
+    let mut like: Vec<_> = sessions
+        .iter()
+        .filter(|s| s.samples >= crate::experiment::MIN_BASELINE_SAMPLES)
+        .filter(|s| NoiseConditions::of_session(s).is_some_and(|c| still_current(&c, now)))
+        .filter_map(|s| Some((parse(&s.started_at)?, s)))
+        .collect();
+    like.sort_by_key(|(at, _)| *at);
+    like
+}
+
+/// Pure (P5-realplay, P4-noise-stretch): the unchanged run `now` belongs to, oldest first. Of the
+/// sessions [`sessions_like`] reads, those begun at most `window_days` before `now` began and not
+/// after it, walked back from `now`: each session joins while nothing changed between it and the
+/// next one already in the run ([`unchanged_between`]), and the first change ends the walk. `now`
+/// is in the run when it is one of `sessions` and long enough; otherwise the run is the one that
+/// continues to it, and a change between the newest session and `now` leaves it empty. A session
+/// in another run, or older than the window, is never this PC's noise now.
+pub(crate) fn current_unchanged_run<'s>(
+    sessions: &'s [crate::sessions::SessionSummary],
+    now: &crate::sessions::SessionSummary,
+    ledger: &[crate::experiment::LedgerEntryRef<'_>],
+    window_days: i64,
+) -> Vec<&'s crate::sessions::SessionSummary> {
+    let (Some(conditions), Some(began)) = (NoiseConditions::of_session(now), parse(&now.started_at)) else {
+        return Vec::new();
+    };
+    let from = began - chrono::Duration::days(window_days);
+    let mut run: Vec<&crate::sessions::SessionSummary> = Vec::new();
+    let mut next = now;
+    for &(at, s) in sessions_like(sessions, &conditions).iter().rev() {
+        if at > began {
+            continue;
+        }
+        if at < from {
+            break;
+        }
+        if s.started_at != now.started_at && !unchanged_between(s, next, ledger) {
+            break;
+        }
+        run.push(s);
+        next = s;
+    }
+    run.reverse();
+    run
+}
+
 /// The shared measurement behind both spreads: `metric` reads one positive number off a session, or
 /// `None` to leave the session out.
 fn unchanged_spread(
@@ -335,13 +388,10 @@ fn unchanged_spread(
     metric: impl Fn(&crate::sessions::SessionSummary) -> Option<f64>,
 ) -> Option<BetweenSessionNoise> {
     let now = NoiseConditions::of_session(now)?;
-    let mut usable: Vec<(chrono::DateTime<chrono::FixedOffset>, &crate::sessions::SessionSummary, f64)> = sessions
-        .iter()
-        .filter(|s| s.samples >= crate::experiment::MIN_BASELINE_SAMPLES)
-        .filter(|s| NoiseConditions::of_session(s).is_some_and(|c| still_current(&c, &now)))
-        .filter_map(|s| Some((parse(&s.started_at)?, s, metric(s).filter(|x| x.is_finite() && *x > 0.0)?)))
+    let usable: Vec<(chrono::DateTime<chrono::FixedOffset>, &crate::sessions::SessionSummary, f64)> = sessions_like(sessions, &now)
+        .into_iter()
+        .filter_map(|(at, s)| Some((at, s, metric(s).filter(|x| x.is_finite() && *x > 0.0)?)))
         .collect();
-    usable.sort_by_key(|(at, _, _)| *at);
     let mut runs: Vec<Vec<f64>> = Vec::new();
     let mut prev: Option<&crate::sessions::SessionSummary> = None;
     for &(_, s, x) in &usable {
@@ -860,6 +910,57 @@ mod tests {
         s[1].compy_changes_active = Some(14);
         s[2].samples = 1170;
         assert_eq!(between_session_noise(&s, &s[2], &ledger), None);
+    }
+
+    // ─── P5-realplay / P4-noise-stretch: the run a measurement now belongs to ──────
+
+    fn ids(run: &[&SessionSummary]) -> Vec<String> {
+        run.iter().map(|s| s.started_at.clone()).collect()
+    }
+
+    #[test]
+    fn the_current_run_is_the_newest_unchanged_run_ending_at_now() {
+        let s = evening();
+        assert_eq!(ids(&current_unchanged_run(&s, &s[3], &settled(), 14)), ids(&s.iter().collect::<Vec<_>>()));
+        // A Compy change between the 2nd and 3rd session: only the run that ends at now.
+        let ledger = vec![change("visual-effects", "2026-10-25T18:55:00+00:00", None)];
+        let mut moved = s.clone();
+        for x in &mut moved[2..] {
+            x.compy_changes_active = Some(15);
+        }
+        assert_eq!(ids(&current_unchanged_run(&moved, &moved[3], &ledger, 14)), ids(&[&moved[2], &moved[3]]));
+        // Ending at an earlier session: the run up to it, and nothing played after it.
+        assert_eq!(ids(&current_unchanged_run(&moved, &moved[1], &ledger, 14)), ids(&[&moved[0], &moved[1]]));
+        // `now` not in the store (the session-end toast's view): the run that continues to it...
+        let mut later = played("2026-10-25T20:00:00+00:00", 151.0, 14);
+        assert_eq!(current_unchanged_run(&s, &later, &settled(), 14).len(), 4);
+        // ...and a change between the newest session and `now` leaves nothing current.
+        later.compy_changes_active = Some(15);
+        assert!(current_unchanged_run(&s, &later, &settled(), 14).is_empty());
+        // A session too short to measure is passed over without breaking the run.
+        let mut short = s.clone();
+        short[2].samples = 300;
+        assert_eq!(ids(&current_unchanged_run(&short, &short[3], &settled(), 14)), ids(&[&s[0], &s[1], &s[3]]));
+        // Another rig's or driver's sessions are never in it.
+        assert!(current_unchanged_run(&s, &{
+            let mut x = s[3].clone();
+            x.hw_fingerprint.as_mut().unwrap().gpu_driver = "33.0".into();
+            x
+        }, &settled(), 14)
+        .is_empty());
+    }
+
+    #[test]
+    fn the_current_run_reaches_back_only_window_days() {
+        let long_ago = vec![change("game-mode", "2026-09-01T10:00:00+00:00", None)];
+        let s = vec![
+            played("2026-10-01T18:00:00+00:00", 150.0, 14),
+            played("2026-10-05T18:00:00+00:00", 152.0, 14),
+            played("2026-10-20T18:00:00+00:00", 151.0, 14),
+            played("2026-10-25T18:00:00+00:00", 153.0, 14),
+        ];
+        assert_eq!(ids(&current_unchanged_run(&s, &s[3], &long_ago, 14)), ids(&[&s[2], &s[3]]));
+        assert_eq!(current_unchanged_run(&s, &s[3], &long_ago, 30).len(), 4);
     }
 
     fn paced(mut s: SessionSummary, p50: f64, p99: f64) -> SessionSummary {
