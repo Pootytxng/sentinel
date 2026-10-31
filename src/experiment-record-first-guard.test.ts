@@ -111,11 +111,16 @@ describe("a Trial verifies the setting before, during and after (#583 lane 2)", 
       /let outcome = guard_target_at_conclude\(judged,/,
     );
     expect(guard).toBeGreaterThan(conclude.indexOf("conclude_outcome("));
-    expect(guard).toBeLessThan(conclude.indexOf("if outcome.keep"));
+    // P5-realplay: the keep/restore decision is the tail both concludes share, handed the checked outcome.
+    const finish = conclude.indexOf("finish_conclude(&mut store, idx, outcome, target_now)");
+    expect(finish, "conclude no longer hands the checked outcome to the shared keep/restore").toBeGreaterThan(guard);
+    expect(fnBody(EXPERIMENT, "fn finish_conclude("), "the shared tail no longer decides keep or restore").toContain(
+      "if outcome.keep",
+    );
   });
 
   it("§4.10: every restore path reads the setting back after the rollback", () => {
-    for (const sig of ["fn abort_start(", "pub(crate) fn conclude_experiment(", "pub(crate) fn restore_experiment("]) {
+    for (const sig of ["fn abort_start(", "fn finish_conclude(", "pub(crate) fn restore_experiment("]) {
       const body = fnBody(EXPERIMENT, sig);
       const rollback = body.indexOf("crate::history::rollback_change(");
       const settle = body.indexOf("settle_restore(");
@@ -203,7 +208,8 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
     expect(conclude, "a crash whose session can't be used no longer restores").toMatch(
       /None => crash_outcome\(rec\.applied_at\.as_deref\(\), baseline, treatment\)/,
     );
-    for (const later of ["conclude_outcome(", ".treatment = resolved", "crate::history::rollback_change(", "save_store("]) {
+    // The restore and the save are the shared keep/restore tail's (P5-realplay), called last.
+    for (const later of ["conclude_outcome(", ".treatment = resolved", "finish_conclude("]) {
       expect(conclude.indexOf(later), `${later} moved ahead of the treatment check`).toBeGreaterThan(resolve);
     }
     expect(conclude).toMatch(/with_comparability\(/);

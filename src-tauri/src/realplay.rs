@@ -26,9 +26,6 @@
 //! rule 2 forbids, so the band comes from the Trial's own sessions and nothing is borrowed from
 //! older history.
 
-// Nothing in experiment.rs calls this module yet: the wiring lands two commits on, with this line's removal.
-#![cfg_attr(not(test), allow(dead_code))]
-
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -255,6 +252,28 @@ fn unique<'s>(sessions: &'s [SessionSummary], id: &str) -> Option<&'s SessionSum
 /// any of them stands for all.
 pub(crate) fn reference_session<'s>(before: &[RealPlaySession], sessions: &'s [SessionSummary]) -> Option<&'s SessionSummary> {
     before.iter().rev().find_map(|b| unique(sessions, &b.session_id))
+}
+
+/// The newest session of the game that can count on either side: the one a real-play start would
+/// pin as its newest as-is session.
+pub(crate) fn newest_countable<'s>(game: &str, sessions: &'s [SessionSummary]) -> Option<&'s SessionSummary> {
+    sessions
+        .iter()
+        .filter(|s| same_game(s, game) && countable(s))
+        .filter_map(|s| Some((instant(&s.started_at)?, s)))
+        .max_by_key(|(at, _)| *at)
+        .map(|(_, s)| s)
+}
+
+/// The geometric means of the 1% low and the average over `sessions` (the arms are judged on their
+/// logs), or `None` when there is no session or a reading isn't real. Written on a real-play record
+/// so an older Compy reads a pair Trial against the as-is sessions together, not against one of them.
+pub(crate) fn geometric_means(sessions: &[RealPlaySession]) -> Option<(f64, f64)> {
+    if sessions.is_empty() || !sessions.iter().all(RealPlaySession::readable) {
+        return None;
+    }
+    let mean = |f: fn(&RealPlaySession) -> f64| (sessions.iter().map(|s| f(s).ln()).sum::<f64>() / sessions.len() as f64).exp();
+    Some((mean(|s| s.low1_fps), mean(|s| s.avg_fps)))
 }
 
 /// The newest session of the game that began after the change took effect, counted or not: the one
@@ -1373,6 +1392,20 @@ mod tests {
         assert_eq!(before_start_progress(WARDOGS, &two).phase, RealPlayPhase::CollectingBefore);
         // Older than 14 days on the clock: nothing to pin.
         assert!(before_arm(&sessions, &sessions[3], &ledger, instant("2026-11-10T00:00:00+00:00").unwrap()).is_empty());
+    }
+
+    #[test]
+    fn the_older_compy_fallback_is_the_geometric_mean_of_the_as_is_sessions() {
+        let (low1, avg) = geometric_means(&numbers(&[100.0, 400.0], &[200.0, 200.0])).unwrap();
+        assert!((low1 - 200.0).abs() < 1e-9 && (avg - 200.0).abs() < 1e-9, "{low1} {avg}");
+        assert_eq!(geometric_means(&[]), None);
+        assert_eq!(geometric_means(&numbers(&[100.0, 0.0], &[200.0, 200.0])), None, "a reading that isn't real is never averaged");
+        // The session a start would pin as its newest: long enough, in front, of this game.
+        let mut sessions = as_is();
+        sessions.push(played("2026-10-20T20:00:00+00:00", 200.0, 240.0, 14));
+        sessions[3].samples = 120;
+        assert_eq!(newest_countable(WARDOGS, &sessions).map(|s| s.started_at.as_str()), Some("2026-10-20T19:00:00+00:00"));
+        assert_eq!(newest_countable("cs2.exe", &sessions), None);
     }
 
     // ─── progress ──────────────────────────────────────────────────────────────
