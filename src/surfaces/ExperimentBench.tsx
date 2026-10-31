@@ -37,7 +37,7 @@ import {
   type TestedChange,
 } from "./test-summary";
 import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
-import { GuidedJourney, interruptedJourneyId, JourneyProgressLine, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
+import { GuidedJourney, interruptedJourneyId, JourneyProgressLine, reusableAsIs, riskChoiceWord, useJourneyPhase } from "./GuidedJourney";
 import { journeyProgress, nextToTest, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { displayModeLabel } from "../data/display-mode";
@@ -980,6 +980,8 @@ export default function ExperimentBench({
               baselineSessionId: baseline.started_at,
               hypothesis,
               outcome,
+              // P8-posture-show: the risk allowed now, kept on the record for its receipt.
+              riskChoice,
             },
             refresh,
           ),
@@ -1119,6 +1121,7 @@ export default function ExperimentBench({
           next={journeyNext}
           nextReuses={journey.kind === "result" && reusableAsIs(sessions, journey.asIs, journey.exp.game) != null}
           refresh={settle}
+          riskChoice={riskChoice}
           progress={progress}
           resumeReuses={progress != null && reusableAsIs(sessions, progress.asIs, progress.game) != null}
           stillOn={progress ? stillOnFor(progress.game, experiments, recs) : []}
@@ -1803,6 +1806,8 @@ function TestSummary({ s }: { s: GameTestSummary }) {
               receiptBand(r.noise?.band_pct) != null ? t("lab.experimentBench.summary.receiptBand", { band: receiptBand(r.noise?.band_pct) }) : null,
               t("lab.experimentBench.summary.receiptTrials", { count: r.trials }),
               r.context,
+              // P8-posture-show: the risk allowed when this row's Trial started, or "not recorded".
+              t("lab.experimentBench.summary.receiptRiskChoice", { choice: riskChoiceWord(r.riskChoice, t) }),
             ]
               .filter((x): x is string => !!x)
               .join(sep)}

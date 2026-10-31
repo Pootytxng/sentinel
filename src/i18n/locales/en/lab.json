@@ -423,6 +423,7 @@
         "samples": "After, samples",
         "baselineSession": "Before session",
         "afterSession": "After session",
+        "riskChoice": "Risk you allowed",
         "riskOverall": "Risk, overall",
         "risk": {
           "reversibility": "Reversibility",
@@ -757,6 +758,7 @@
       "receiptLow": "1% low {{pct}}",
       "receiptAvg": "average {{pct}}",
       "receiptBand": "band {{band}}",
+      "receiptRiskChoice": "risk you allowed: {{choice}}",
       "receiptTrials_one": "{{count}} trial",
       "receiptTrials_other": "{{count}} trials",
       "contextLabel": "Last recorded context ({{when}}):",

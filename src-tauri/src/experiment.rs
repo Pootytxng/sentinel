@@ -497,6 +497,16 @@ pub(crate) struct ExperimentRecord {
         skip_serializing_if = "Option::is_none"
     )]
     pub stated_risk: Option<crate::trial_candidates::StatedRisk>,
+    /// P8-posture-show (RISK_MODEL §2): the user's answer to "How far may Compy go on this PC?" in force
+    /// when the Trial started, as the start was told it. `None` on records started before it was kept
+    /// (and on a start that didn't say): the receipt then says "not recorded", never the default.
+    /// Additive; read leniently, so a choice this build doesn't know is `None`, never a failed load.
+    #[serde(
+        default,
+        deserialize_with = "crate::trial_candidates::lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub risk_choice: Option<crate::trial_candidates::RiskChoice>,
 }
 
 /// Trial Protocol §8 — the five result classes a Trial is judged in (#583). Persisted (kebab-case).
@@ -2856,7 +2866,9 @@ pub(crate) fn simulate_optimization(rec_id: String) -> Result<SimulatorReport, S
 /// finish (the target didn't take, or the evidence watermark is unreadable) restores the change
 /// through the audited boundary before returning the error, never leaves it applied unrecorded.
 /// The baseline is named by its session id and read from Compy's own session store (#583 lane 2b):
-/// the game and the frame rates come from there, never from the webview.
+/// the game and the frame rates come from there, never from the webview. `risk_choice` is the risk
+/// the user allows on this PC (P8-posture-show), kept on the record for its receipt; absent = not
+/// recorded.
 #[tauri::command]
 pub(crate) fn start_experiment(
     rec_id: String,
@@ -2864,6 +2876,7 @@ pub(crate) fn start_experiment(
     baseline_session_id: String,
     hypothesis: String,
     outcome: Option<String>,
+    risk_choice: Option<crate::trial_candidates::RiskChoice>,
 ) -> Result<ExperimentRecord, String> {
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
@@ -3006,6 +3019,8 @@ pub(crate) fn start_experiment(
         outcome,
         smoothest,
         stated_risk,
+        // P8-posture-show: the risk the user allowed when this Trial started, as the webview said it.
+        risk_choice,
     });
     let idx = store.experiments.len() - 1;
     save_store(&store)?;
@@ -3622,6 +3637,7 @@ mod experiment_tests {
             outcome: TrialOutcome::Recommended,
             smoothest: None,
             stated_risk: None,
+            risk_choice: None,
         }
     }
 
@@ -6483,6 +6499,34 @@ mod experiment_tests {
         let mut odd = v;
         odd["stated_risk"] = serde_json::json!("high");
         assert_eq!(serde_json::from_value::<ExperimentRecord>(odd).unwrap().stated_risk, None);
+    }
+
+    // P8-posture-show (RISK_MODEL §2): the start keeps the risk the user allowed, as the webview said
+    // it, on the Pending record. A record from before, a start that didn't say, or a choice this build
+    // doesn't know loads as None ("not recorded"), never as the default and never as a failed store.
+    #[test]
+    fn a_start_keeps_the_risk_choice_in_force_and_an_older_record_reads_not_recorded() {
+        use crate::trial_candidates::RiskChoice;
+        let src = include_str!("experiment.rs");
+        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let params = &start[..start.find(") -> Result<").unwrap()];
+        assert!(params.contains("risk_choice: Option<crate::trial_candidates::RiskChoice>,"), "{params}");
+        assert!(start[..start.find("save_store(&store)?").unwrap()].contains("        risk_choice,\n"), "saved with the Pending record");
+
+        for (choice, word) in [(RiskChoice::LowOnly, "low-only"), (RiskChoice::LowAndModerate, "low-and-moderate")] {
+            let v = serde_json::to_value(ExperimentRecord { risk_choice: Some(choice), ..rec(150.0, 5) }).unwrap();
+            assert_eq!(v["risk_choice"], word);
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(v).unwrap().risk_choice, Some(choice));
+        }
+        // Not recorded: no key, and an older record loads as None, not as the default choice.
+        let v = serde_json::to_value(rec(150.0, 5)).unwrap();
+        assert!(v.get("risk_choice").is_none());
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(v.clone()).unwrap().risk_choice, None);
+        for odd in [serde_json::json!("aggressive"), serde_json::json!(null), serde_json::json!(3)] {
+            let mut r = v.clone();
+            r["risk_choice"] = odd.clone();
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(r).unwrap().risk_choice, None, "{odd}");
+        }
     }
 
     // ─── P4-smooth-offer-a (ENGINE §2 smoothest: offered once this game's pacing noise is measured) ──

@@ -418,6 +418,7 @@
         "samples": "之后，样本数",
         "baselineSession": "之前的对局",
         "afterSession": "之后的对局",
+        "riskChoice": "你允许的风险",
         "riskOverall": "总体风险",
         "risk": {
           "reversibility": "可逆性",
@@ -735,6 +736,7 @@
       "receiptLow": "1% low {{pct}}",
       "receiptAvg": "平均 {{pct}}",
       "receiptBand": "区间 {{band}}",
+      "receiptRiskChoice": "你允许的风险：{{choice}}",
       "receiptTrials_other": "{{count}} 次试验",
       "contextLabel": "最近记录的环境（{{when}}）：",
       "contextLabelUndated": "最近记录的环境：",

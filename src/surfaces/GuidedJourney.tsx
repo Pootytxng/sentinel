@@ -65,6 +65,8 @@ import { journeyStopped, pickUpJourney, stopJourneyHere, type JourneyProgress } 
 import { contextCheckFor, type RetestReason } from "./test-summary";
 
 export type JourneyOutcome = "recommended" | "max-fps";
+/** P8-posture-b's answer to "How far may Compy go on this PC?" (trial_candidates.rs `RiskChoice`). */
+export type JourneyRiskChoice = "low-only" | "low-and-moderate";
 
 /** The fields of an experiment record the journey reads. */
 type JourneyExperiment = {
@@ -101,6 +103,9 @@ type JourneyExperiment = {
     overall?: string | null;
     dimensions?: Partial<Record<RiskDimension, string | null>> | null;
   } | null;
+  /** P8-posture-show: the risk the user allowed when this Trial started (experiment.rs `risk_choice`).
+   *  Absent on records started before Compy kept it. */
+  risk_choice?: string | null;
 };
 
 /** P8-dims (RISK_MODEL §3): the risk dimensions the receipt lists, in its order (trial_candidates.rs
@@ -328,6 +333,9 @@ export const refusesBaseline = (reason: string) => /baseline/i.test(reason);
 type RunArgs = {
   change: { id: string; title: string };
   outcome: JourneyOutcome;
+  /** P8-posture-show: the risk allowed when the owner pressed the button; the bench hides its picker
+   *  while a journey runs, so it is still the one in force when the change goes on. */
+  riskChoice?: JourneyRiskChoice;
   hypothesis: string;
   refresh: () => Promise<void>;
   captureFailed: string;
@@ -454,6 +462,7 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
             baselineSessionId: baseline.started_at,
             hypothesis: args.hypothesis,
             outcome: args.outcome,
+            riskChoice: args.riskChoice,
           },
           args.refresh,
         );
@@ -571,6 +580,14 @@ function resultWhy(exp: JourneyExperiment, t: Translate): string {
   return band != null && Number.isFinite(band) ? t(`${k}.${key}Band`, { band: Number(band.toFixed(1)) }) : t(`${k}.${key}`);
 }
 
+/** P8-posture-show: the risk a Trial's record says the user allowed, in the picker's own words; a
+ *  record without one (or with one this build doesn't know) is "not recorded", never the default. */
+export function riskChoiceWord(choice: string | null | undefined, t: Translate): string {
+  if (choice === "low-only") return t("lab.experimentBench.riskChoice.lowOnly");
+  if (choice === "low-and-moderate") return t("lab.experimentBench.riskChoice.lowAndModerate");
+  return t("lab.experimentBench.journey.receipt.riskWord.notRecorded");
+}
+
 /** P8-dims: one stated risk word as the receipt says it. A word the catalog didn't state, or one this
  *  build doesn't know, is "not stated": never filled in from another dimension or the overall word. */
 function riskWord(word: string | null | undefined, t: Translate): string {
@@ -603,6 +620,8 @@ function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
       <ReceiptRow label={rk("samples")} value={tr?.samples != null ? String(tr.samples) : null} />
       <ReceiptRow label={rk("baselineSession")} value={exp.baseline_session_id ?? null} />
       <ReceiptRow label={rk("afterSession")} value={tr?.session_id ?? null} />
+      {/* P8-posture-show: how far the user let Compy go when this Trial started. */}
+      <ReceiptRow label={rk("riskChoice")} value={riskChoiceWord(exp.risk_choice, t)} />
       {/* P8-dims (RISK_MODEL §3, "do not collapse these into one arbitrary score"): the catalog's one
           overall word, then each dimension it states for the change; one it doesn't state says so. A
           record started before Compy kept the catalog's risk says that instead, never a guess. */}
@@ -624,6 +643,7 @@ export function GuidedJourney({
   next,
   nextReuses = false,
   refresh,
+  riskChoice,
   onFinished,
   progress = null,
   resumeReuses = false,
@@ -647,6 +667,9 @@ export function GuidedJourney({
    *  one session, about 10 min; otherwise a new before-session first, about 20. */
   nextReuses?: boolean;
   refresh: () => Promise<void>;
+  /** P8-posture-show: the bench's answer to "How far may Compy go on this PC?", kept on the record of
+   *  every Trial the journey starts. Absent: the start doesn't say, and the record reads not recorded. */
+  riskChoice?: JourneyRiskChoice;
   /** Called when the owner closes a finished journey, with the Trial it concluded (if any). */
   onFinished?: (exp: JourneyExperiment | null) => void;
   /** P5-resume: this game's progress, derived from the experiments store (journey-resume.ts). */
@@ -710,7 +733,7 @@ export function GuidedJourney({
       // P6-restore-f1: refuse here too, not only on the disabled button.
       if (!canStart) return;
       const hypothesis = t("lab.experimentBench.hypothesisWithBaseline", { metric: t("lab.experimentBench.hypothesisMetricFallback") });
-      void runJourney({ change, outcome, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, game, reuseId);
+      void runJourney({ change, outcome, riskChoice, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, game, reuseId);
     };
     return (
       <div className="exp-order exp-journey" data-testid="journey">
@@ -885,7 +908,7 @@ export function GuidedJourney({
           onClick={() => {
             if (!canStart) return;
             const hypothesis = t("lab.experimentBench.hypothesisWithBaseline", { metric: t("lab.experimentBench.hypothesisMetricFallback") });
-            void runJourney({ change: next, outcome, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, p.exp.game, p.asIs);
+            void runJourney({ change: next, outcome, riskChoice, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, p.exp.game, p.asIs);
           }}
         >
           {t(nextReuses ? `${k}.next` : `${k}.nextFresh`, { change: next.title })}

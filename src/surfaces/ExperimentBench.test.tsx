@@ -715,7 +715,33 @@ describe("ExperimentBench (armed)", () => {
       baselineSessionId: VALORANT_SESSION.started_at,
       hypothesis: expect.any(String),
       outcome: "recommended",
+      // P8-posture-show: the risk allowed now, for the record's receipt (the default here).
+      riskChoice: "low-and-moderate",
     });
+  });
+
+  // P8-posture-show (RISK_MODEL §2): the start carries the answer to "How far may Compy go on this PC?"
+  // in force when it starts, so the Trial's record can name it later. Fails on the code before this
+  // slice, whose start sent no risk choice.
+  it("a start carries the risk the user allows now, so the record can name it", async () => {
+    localStorage.setItem("compy.trial.riskChoice", "low-only");
+    try {
+      state.gate = true;
+      state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
+      state.sessions = [VALORANT_SESSION];
+      state.sim = WORTH_TESTING_SIM;
+      render(<ExperimentBench />);
+      await screen.findByTestId("experiment-bench");
+      await pickChange("test-rec");
+      const start = await screen.findByRole("button", { name: /Start experiment/ });
+      await waitFor(() => expect(start).toBeEnabled());
+      vi.mocked(invoke).mockClear();
+      fireEvent.click(start);
+      await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("start_experiment", expect.anything()));
+      expect(callArgs("start_experiment")).toMatchObject({ recId: "test-rec", riskChoice: "low-only" });
+    } finally {
+      localStorage.removeItem("compy.trial.riskChoice");
+    }
   });
 
   // P6-restore-f1: while the Care view's "Put back how it was" runs, App's busyId is "care-restore"
@@ -2024,8 +2050,29 @@ describe("P4-exit: what Compy tested on this game", () => {
     // The receipt's per-change row: id, verdict, the stored deltas, the band it was judged on, trials, context.
     const receipt = screen.getByTestId("exp-summary-receipt");
     expect(receipt.querySelector("dt")!.textContent).toBe("visual-effects");
-    // The owner's record stored no average delta: the row shows none, never a made-up one.
-    expect(receipt.querySelector("dd")!.textContent).toBe("regressed · 1% low -18.5% · band ±3% · 1 trial · matching");
+    // The owner's record stored no average delta: the row shows none, never a made-up one. It predates
+    // P8-posture-show, so the risk allowed when it started is "not recorded", never the default.
+    expect(receipt.querySelector("dd")!.textContent).toBe(
+      "regressed · 1% low -18.5% · band ±3% · 1 trial · matching · risk you allowed: not recorded",
+    );
+  });
+
+  // P8-posture-show (RISK_MODEL §2): each tested change's receipt row names the risk the user allowed
+  // when its newest judged Trial started, from that Trial's record. Fails on the code before this slice.
+  it("each tested row's receipt names the risk allowed when its Trial started", async () => {
+    const f = await owner();
+    state.gate = true;
+    state.experiments = f.experiments.map((x: Record<string, unknown>) => ({ ...x, risk_choice: "low-only" }));
+    state.sessions = f.sessions;
+    state.recs = [pass("visual-effects", "Trim Windows visual effects", 1)];
+    render(<ExperimentBench />);
+    const panel = await screen.findByTestId("exp-summary");
+    const door = panel.querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!;
+    fireEvent.click(door);
+    await waitFor(() => expect(door.parentElement!.children.length).toBeGreaterThan(1));
+    expect(screen.getByTestId("exp-summary-receipt").querySelector("dd")!.textContent).toMatch(
+      / · risk you allowed: Low risk only$/,
+    );
   });
 
   it("says it finished the supported tests only when the picker has nothing untested or worth another run", async () => {

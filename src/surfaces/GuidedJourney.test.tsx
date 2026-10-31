@@ -338,6 +338,33 @@ describe("P5-guided: one button runs the whole Trial", () => {
     }
   });
 
+  // P8-posture-show (RISK_MODEL §2): the journey's start carries the risk the user allows on this PC,
+  // and the receipt names the one its Trial's record kept; a record without one says "not recorded",
+  // never the default. Fails on the code before this slice (no choice sent, no row).
+  it("the start carries the risk allowed, and the receipt names the one the record kept", async () => {
+    localStorage.setItem("compy.trial.riskChoice", "low-only");
+    try {
+      state.concludeResult = { status: "kept", kept: true, verdict: "improved", treatment: TREATMENT, risk_choice: "low-only" };
+      render(<ExperimentBench />);
+      await press();
+      await finalLine();
+      expect(calls("start_experiment")[0]).toMatchObject({ recId: "hags", riskChoice: "low-only" });
+      expect((await receiptRows())["Risk you allowed"]).toBe("Low risk only");
+    } finally {
+      localStorage.removeItem("compy.trial.riskChoice");
+    }
+    cleanup();
+    resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });
+    state.concludeResult = { status: "restored", verdict: "no-change", treatment: TREATMENT, risk_choice: "anything-goes" };
+    state.saves = [session(later(3), 5400), session(later(4), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    const starts = calls("start_experiment");
+    expect(starts[starts.length - 1]).toMatchObject({ riskChoice: "low-and-moderate" });
+    expect((await receiptRows())["Risk you allowed"]).toBe("not recorded");
+  });
+
   it("a Trial whose record kept no catalog risk says not recorded, and lists no dimension", async () => {
     render(<ExperimentBench />);
     await press();
