@@ -63,6 +63,8 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 
 ## Queue
 
+**Lane, 2026-10-31 (owner, PC idle: "get as much done as possible"):** the interactive Claude HQ session holds write access for the owed desk self-reviews, GL-empty, P8-dims, P8-posture-show, P8-ack and P5-realplay (with P4-noise-stretch). Scheduled sessions stay read-only until this line is removed.
+
 ### Now — finish what's open
 - [x] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
       (data-root tests), #661 (debrief unmeasured), #627 (ledger write announce), #604 (TS coverage).
