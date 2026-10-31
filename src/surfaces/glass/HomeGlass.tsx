@@ -67,6 +67,9 @@ export function HomeGlass({
   const dates = useDates();
   const games = useMemo(() => gameLibrary(sessions), [sessions]);
   const noGames = games.length === 0;
+  // Games can be recorded with no frame rate measured (a session Compy saw but couldn't read).
+  // Nothing on this page may then speak as if one was measured (round-2 review, 2026-10-31).
+  const anyMeasured = sessions.some((s) => knownFps(s.avg_fps) != null);
   const [chartKey, setChartKey] = useState<string | null>(games[0]?.key ?? null);
   useEffect(() => {
     if (!games.some((g) => g.key === chartKey)) setChartKey(games[0]?.key ?? null);
@@ -241,8 +244,8 @@ export function HomeGlass({
       )}
 
       {/* With no game there is no chart, so the stack below takes the whole row (glass-rooms.css). */}
-      <div className="gl-lower" data-chart={noGames ? "none" : undefined}>
-        {!noGames && (
+      <div className="gl-lower" data-chart={noGames || !anyMeasured ? "none" : undefined}>
+        {!noGames && anyMeasured && (
           <section className="gl-card" aria-labelledby="gl-home-chart">
             <div className="gl-card-top">
               <div>
@@ -277,7 +280,7 @@ export function HomeGlass({
               <span className="gl-kpi-row">
                 <span className="gl-kpi-value" data-size="big">
                   {!newest ? (
-                    t("home.glass.live.none")
+                    noGames ? t("home.glass.live.none") : t("common.games.notMeasured")
                   ) : newestLow != null ? (
                     <>
                       <span className="gl-num">{Math.round(newestLow)}</span>
@@ -295,7 +298,7 @@ export function HomeGlass({
                     ? t(newestLow != null ? "home.glass.live.lowNote" : "home.glass.live.lowNoneNote", {
                         game: newestGame?.name ?? newest.process_name,
                       })
-                    : t("home.glass.live.noneNote")}
+                    : t("home.glass.live.unmeasuredNote", { game: games[0]?.name ?? "" })}
                 </span>
               )}
             </button>

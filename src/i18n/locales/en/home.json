@@ -689,7 +689,7 @@
       "lowNote": "{{game}}'s worst moments · Measured",
       "lowNoneNote": "{{game}}'s worst moments weren't measured",
       "none": "No session yet",
-      "noneNote": "Open Live to start capture"
+      "unmeasuredNote": "{{game}}'s last session wasn't measured"
     },
     "checks": {
       "title": "Windows setup",
@@ -709,8 +709,8 @@
     "details": "Open the full health check",
     "back": "Back to the summary",
     "allGames": "All games",
-    "allGamesUnit_one": "game measured",
-    "allGamesUnit_other": "games measured",
-    "allGamesNote": "Every game Compy has measured"
+    "allGamesUnit_one": "game recorded",
+    "allGamesUnit_other": "games recorded",
+    "allGamesNote": "Every game Compy has recorded"
   }
 }

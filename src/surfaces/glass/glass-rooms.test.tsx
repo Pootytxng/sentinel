@@ -406,3 +406,47 @@ describe("Problems (glass redesign)", () => {
     expect(invoked).not.toContain("mark_care_incident_opened");
   });
 });
+
+// Round-2 review 2026-10-31: games recorded but no frame rate measured (a session Compy saw but
+// couldn't read). The page said "No session yet" beside cards counting "1 session", "2 games
+// measured" beside two "Not measured" cards, and drew an empty chart with ticks "0 1 1 2".
+describe("Health summary when games were recorded but nothing was measured", () => {
+  const unmeasured = [
+    session({ process_name: "eldenring.exe", avg_fps: 0, low1_fps_est: 0 }),
+    session({ process_name: "pbz.exe", started_at: "2026-10-28T20:00:00Z", avg_fps: 0, low1_fps_est: 0 }),
+  ];
+
+  it("never claims a measurement and never says no session was recorded", () => {
+    home({ sessions: unmeasured });
+    const page = document.querySelector(".gl-room")!.textContent ?? "";
+    expect(page).not.toMatch(/No session yet/);
+    expect(page).not.toMatch(/games? measured|has measured/);
+    const last = screen.getByRole("button", { name: /Last session/ });
+    expect(last.textContent).toContain("Not measured");
+    expect(last.textContent).toMatch(/eldenring's last session wasn't measured/);
+  });
+
+  it("draws no chart when no bar has a value", () => {
+    home({ sessions: unmeasured });
+    expect(document.querySelector('[aria-labelledby="gl-home-chart"]')).toBeNull();
+    expect(document.querySelector(".gl-lower")!.getAttribute("data-chart")).toBe("none");
+  });
+});
+
+describe("TubeChart axis", () => {
+  it("prints whole, unique ticks even when nothing was measured", async () => {
+    const { TubeChart } = await import("./TubeChart");
+    const { container } = render(
+      <TubeChart
+        ariaLabel="test"
+        bars={[
+          { key: "a", value: null, label: "Oct 1", tip: "" },
+          { key: "b", value: null, label: "Oct 2", tip: "" },
+        ]}
+      />,
+    );
+    const ticks = [...container.querySelectorAll("svg > g > text")].map((n) => n.textContent);
+    expect(ticks.length).toBeGreaterThan(1);
+    expect(new Set(ticks).size).toBe(ticks.length);
+  });
+});

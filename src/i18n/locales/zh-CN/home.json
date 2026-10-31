@@ -663,7 +663,7 @@
       "lowNote": "{{game}} 最卡的时刻 · 实测",
       "lowNoneNote": "{{game}} 最卡的时刻没有测到",
       "none": "还没有记录",
-      "noneNote": "打开“实时”开始采集"
+      "unmeasuredNote": "{{game}} 上一次没有测到"
     },
     "checks": {
       "title": "Windows 设置",
@@ -683,8 +683,8 @@
     "details": "打开完整健康检查",
     "back": "返回概览",
     "allGames": "全部游戏",
-    "allGamesUnit_one": "款游戏已测量",
-    "allGamesUnit_other": "款游戏已测量",
-    "allGamesNote": "Compy 测量过的每款游戏"
+    "allGamesUnit_one": "款游戏已记录",
+    "allGamesUnit_other": "款游戏已记录",
+    "allGamesNote": "Compy 记录过的每款游戏"
   }
 }
