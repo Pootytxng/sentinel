@@ -433,6 +433,13 @@
           "notStated": "未说明",
           "notRecorded": "未记录"
         },
+        "cost": "代价",
+        "costConfirmed": "已确认代价",
+        "costWord": {
+          "yes": "是，在试验开始前",
+          "notNeeded": "不需要：风险低",
+          "notAsked": "未询问"
+        },
         "trial": "试验"
       },
       "withChangeReused": "{{change}}已开启。Compy 会用你上一局作为更改前的读数，所以只需这一局：用同样的方式玩{{game}}约 10 分钟，然后关闭游戏。",
@@ -506,6 +513,11 @@
     "title": "只测一项更改",
     "hint": "Compy 先测基线，应用一项可撤销的更改，再实测一局，除非数据明显超过噪声，否则自动撤回这项更改。",
     "pickLabel": "选择要测试的更改",
+    "costAck": {
+      "line": "{{change}}的代价：{{cost}}",
+      "noCost": "{{change}}不属于低风险，Compy 也没有关于其代价的说明。",
+      "button": "我了解，开始测试"
+    },
     "riskChoice": {
       "label": "Compy 在这台主机上可以做到哪一步？",
       "lowOnly": "仅低风险",

@@ -102,10 +102,15 @@ type JourneyExperiment = {
   stated_risk?: {
     overall?: string | null;
     dimensions?: Partial<Record<RiskDimension, string | null>> | null;
+    /** P8-ack: the catalog's own cost words the start read (null = it states none). */
+    cost?: string | null;
   } | null;
   /** P8-posture-show: the risk the user allowed when this Trial started (experiment.rs `risk_choice`).
    *  Absent on records started before Compy kept it. */
   risk_choice?: string | null;
+  /** P8-ack: whether the user confirmed the change's cost before this Trial started (experiment.rs
+   *  `cost_acknowledged`; false = not asked). Absent on records started before Compy kept it. */
+  cost_acknowledged?: boolean | null;
 };
 
 /** P8-dims (RISK_MODEL §3): the risk dimensions the receipt lists, in its order (trial_candidates.rs
@@ -336,6 +341,8 @@ type RunArgs = {
   /** P8-posture-show: the risk allowed when the owner pressed the button; the bench hides its picker
    *  while a journey runs, so it is still the one in force when the change goes on. */
   riskChoice?: JourneyRiskChoice;
+  /** P8-ack: the owner tapped "I understand, test it" on the line naming the change's cost. */
+  costAcknowledged?: boolean;
   hypothesis: string;
   refresh: () => Promise<void>;
   captureFailed: string;
@@ -463,6 +470,7 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
             hypothesis: args.hypothesis,
             outcome: args.outcome,
             riskChoice: args.riskChoice,
+            costAcknowledged: args.costAcknowledged ?? false,
           },
           args.refresh,
         );
@@ -580,6 +588,33 @@ function resultWhy(exp: JourneyExperiment, t: Translate): string {
   return band != null && Number.isFinite(band) ? t(`${k}.${key}Band`, { band: Number(band.toFixed(1)) }) : t(`${k}.${key}`);
 }
 
+/** P8-ack (RISK_MODEL §1 Advanced, "explicit user acknowledgement when the cost is not obvious"): a
+ *  change the catalog rates moderate, or whose risk it doesn't state, needs one tap on a line naming
+ *  its cost before its Trial starts. A low-risk change starts as before, and so does a candidate with
+ *  no risk at all (trial_candidates.rs always sends one). Shared by the bench's Start and the journey. */
+export function needsCostAck(risk: string | null | undefined): boolean {
+  return risk === "moderate" || risk === "unknown";
+}
+
+/** P8-ack: the one plain line before such a start: the change's cost in the catalog's own words, or,
+ *  when the catalog states none, that it states none (never a cost Compy made up). */
+export function costAckLine(change: string, cost: string | null | undefined, t: Translate): string {
+  const words = cost?.trim();
+  return words
+    ? t("lab.experimentBench.costAck.line", { change, cost: words })
+    : t("lab.experimentBench.costAck.noCost", { change });
+}
+
+/** P8-ack: what a Trial's record says about the cost confirmation. False on a low-risk change is "not
+ *  needed"; false otherwise is "not asked"; a record from before is "not recorded". */
+function costConfirmedWord(exp: JourneyExperiment, t: Translate): string {
+  const k = "lab.experimentBench.journey.receipt";
+  if (exp.cost_acknowledged === true) return t(`${k}.costWord.yes`);
+  if (exp.cost_acknowledged === false)
+    return exp.stated_risk?.overall === "low" ? t(`${k}.costWord.notNeeded`) : t(`${k}.costWord.notAsked`);
+  return t(`${k}.riskWord.notRecorded`);
+}
+
 /** P8-posture-show: the risk a Trial's record says the user allowed, in the picker's own words; a
  *  record without one (or with one this build doesn't know) is "not recorded", never the default. */
 export function riskChoiceWord(choice: string | null | undefined, t: Translate): string {
@@ -628,6 +663,9 @@ function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
       <ReceiptRow label={rk("riskOverall")} value={risk ? riskWord(risk.overall, t) : rk("riskWord.notRecorded")} />
       {risk &&
         RISK_DIMENSIONS.map((d) => <ReceiptRow key={d} label={rk(`risk.${d}`)} value={riskWord(risk.dimensions?.[d], t)} />)}
+      {/* P8-ack: the catalog's own cost words the start read, and whether the user confirmed them. */}
+      {risk && <ReceiptRow label={rk("cost")} value={risk.cost?.trim() ? risk.cost : rk("riskWord.notStated")} />}
+      <ReceiptRow label={rk("costConfirmed")} value={costConfirmedWord(exp, t)} />
       <ReceiptRow label={rk("trial")} value={exp.id} />
     </dl>
   );
@@ -654,7 +692,7 @@ export function GuidedJourney({
   /** The top-ranked change not yet tested on that game (P4-rank), else one worth another run
    *  (`retest` says why: an inconclusive attempt, or a result judged under an older driver or Windows
    *  build), or null when none is left. */
-  change: { id: string; title: string; retest?: RetestReason | null } | null;
+  change: { id: string; title: string; retest?: RetestReason | null; risk?: string | null; cost?: string | null } | null;
   /** False while another Trial runs, the bench is busy, or App's shared busy flag is held. */
   canStart: boolean;
   outcome: JourneyOutcome;
@@ -662,7 +700,7 @@ export function GuidedJourney({
   /** After a concluded journey: the next change P4-next ranks untested on that game, else one worth
    *  another run (`retest`), null when nothing is left, undefined while that isn't known yet (the
    *  candidates haven't loaded). */
-  next?: { id: string; title: string; retest?: RetestReason | null } | null;
+  next?: { id: string; title: string; retest?: RetestReason | null; risk?: string | null; cost?: string | null } | null;
   /** Whether the finished journey left a reusable as-is session (`reusableAsIs`) for that next change:
    *  one session, about 10 min; otherwise a new before-session first, about 20. */
   nextReuses?: boolean;
@@ -729,11 +767,17 @@ export function GuidedJourney({
     const name = gameName(game);
     // Continuing reuses the newest judged Trial's as-is session when it is still reusable.
     const reuseId = resuming && resumeReuses ? progress.asIs : null;
+    // P8-ack: a change that isn't low risk starts only from the tap on the line naming its cost.
+    const ack = needsCostAck(change.risk);
     const start = () => {
       // P6-restore-f1: refuse here too, not only on the disabled button.
       if (!canStart) return;
       const hypothesis = t("lab.experimentBench.hypothesisWithBaseline", { metric: t("lab.experimentBench.hypothesisMetricFallback") });
-      void runJourney({ change, outcome, riskChoice, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, game, reuseId);
+      void runJourney(
+        { change, outcome, riskChoice, costAcknowledged: ack, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) },
+        game,
+        reuseId,
+      );
     };
     return (
       <div className="exp-order exp-journey" data-testid="journey">
@@ -767,8 +811,13 @@ export function GuidedJourney({
             </button>
           ))}
         </div>
+        {ack && (
+          <p className="exp-note" data-testid="journey-cost-ack">
+            {costAckLine(change.title, change.cost, t)}
+          </p>
+        )}
         <button type="button" className="exp-cta" disabled={!canStart} onClick={start}>
-          {t(`${k}.button`)}
+          {ack ? t("lab.experimentBench.costAck.button") : t(`${k}.button`)}
         </button>
         {resuming && (
           <button
@@ -900,20 +949,40 @@ export function GuidedJourney({
           {t(`${k}.planFor`, { game: gameName(p.played) })}
         </button>
       )}
-      {p.kind === "result" && next && (
-        <button
-          type="button"
-          className="exp-cta"
-          disabled={!canStart}
-          onClick={() => {
+      {p.kind === "result" &&
+        next &&
+        (() => {
+          // P8-ack: the next change, when it isn't low risk, starts only from the tap on its cost line;
+          // the plan it would have said on the button is said above it instead.
+          const ack = needsCostAck(next.risk);
+          const plan = t(nextReuses ? `${k}.next` : `${k}.nextFresh`, { change: next.title });
+          const startNext = () => {
             if (!canStart) return;
             const hypothesis = t("lab.experimentBench.hypothesisWithBaseline", { metric: t("lab.experimentBench.hypothesisMetricFallback") });
-            void runJourney({ change: next, outcome, riskChoice, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) }, p.exp.game, p.asIs);
-          }}
-        >
-          {t(nextReuses ? `${k}.next` : `${k}.nextFresh`, { change: next.title })}
-        </button>
-      )}
+            void runJourney(
+              { change: next, outcome, riskChoice, costAcknowledged: ack, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) },
+              p.exp.game,
+              p.asIs,
+            );
+          };
+          return ack ? (
+            <>
+              <p className="exp-note" data-testid="journey-next-plan">
+                {plan}
+              </p>
+              <p className="exp-note" data-testid="journey-cost-ack">
+                {costAckLine(next.title, next.cost, t)}
+              </p>
+              <button type="button" className="exp-cta" disabled={!canStart} onClick={startNext}>
+                {t("lab.experimentBench.costAck.button")}
+              </button>
+            </>
+          ) : (
+            <button type="button" className="exp-cta" disabled={!canStart} onClick={startNext}>
+              {plan}
+            </button>
+          );
+        })()}
       {p.kind === "result" && next?.retest && (
         <p className="exp-fineprint" data-testid="journey-retest-why">
           {t(`${k}.retestWhy.${next.retest}`, { change: next.title })}

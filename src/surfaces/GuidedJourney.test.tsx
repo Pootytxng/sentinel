@@ -365,6 +365,78 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect((await receiptRows())["Risk you allowed"]).toBe("not recorded");
   });
 
+  // P8-ack (RISK_MODEL §1 Advanced): when the journey's change is moderate, the plan is followed by one
+  // plain line naming its cost in the catalog's own words, and the journey starts from one tap on "I
+  // understand, test it"; the start records it and the receipt names the cost and the confirmation. A
+  // low-risk change starts from "Optimize my game" as before. Fails on the code before this slice.
+  it("a moderate change names its cost and starts from one tap; the receipt names both", async () => {
+    state.recs = [
+      { id: "hags", title: "HAGS", passes: true, reason: null, detail: null, position: 1, evidence: "not-measured", risk: "moderate", cost: "Reboot required." },
+    ];
+    state.concludeResult = {
+      status: "kept",
+      kept: true,
+      verdict: "improved",
+      treatment: TREATMENT,
+      cost_acknowledged: true,
+      stated_risk: { overall: "moderate", dimensions: {}, cost: "Reboot required." },
+    };
+    render(<ExperimentBench />);
+    expect(await screen.findByTestId("journey-cost-ack")).toHaveTextContent("HAGS has a cost: Reboot required.");
+    expect(screen.queryByRole("button", { name: "Optimize my game" })).toBeNull();
+    const tap = screen.getByRole("button", { name: "I understand, test it" });
+    await waitFor(() => expect(tap).toBeEnabled());
+    fireEvent.click(tap);
+    await finalLine();
+    expect(calls("start_experiment")[0]).toMatchObject({ recId: "hags", costAcknowledged: true });
+    expect(await receiptRows()).toMatchObject({ Cost: "Reboot required.", "Cost confirmed": "yes, before the Trial started" });
+  });
+
+  it("a low-risk change starts as before, and its receipt says no confirmation was needed", async () => {
+    state.concludeResult = {
+      status: "kept",
+      kept: true,
+      verdict: "improved",
+      treatment: TREATMENT,
+      cost_acknowledged: false,
+      stated_risk: { overall: "low", dimensions: {}, cost: null },
+    };
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    expect(screen.queryByTestId("journey-cost-ack")).toBeNull();
+    expect(calls("start_experiment")[0]).toMatchObject({ recId: "hags", costAcknowledged: false });
+    expect(await receiptRows()).toMatchObject({ Cost: "not stated", "Cost confirmed": "not needed: low risk" });
+  });
+
+  it("the next change, when moderate, keeps its plan line and starts from the same one tap", async () => {
+    state.recs = [
+      { id: "hags", title: "HAGS", passes: true, reason: null, detail: null, position: 1, evidence: "not-measured", risk: "low" },
+      { id: "sysmain", title: "SysMain", passes: true, reason: null, detail: null, position: 2, evidence: "not-measured", risk: "moderate", cost: "App launches get a little slower." },
+    ];
+    state.saves = [session(later(1), 5400), session(later(2), 5400), session(later(3), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    expect(await screen.findByTestId("journey-next-plan")).toHaveTextContent(/Next: SysMain/);
+    expect(screen.getByTestId("journey-cost-ack")).toHaveTextContent("SysMain has a cost: App launches get a little slower.");
+    expect(screen.queryByRole("button", { name: /Next: SysMain/ })).toBeNull();
+    const tap = screen.getByRole("button", { name: "I understand, test it" });
+    await waitFor(() => expect(tap).toBeEnabled());
+    fireEvent.click(tap);
+    await waitFor(() => expect(calls("start_experiment")).toHaveLength(2), { timeout: 3000 });
+    expect(calls("start_experiment")[1]).toMatchObject({ recId: "sysmain", costAcknowledged: true });
+  });
+
+  it("a record from before Compy kept the confirmation says not recorded", async () => {
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    const rows = await receiptRows();
+    expect(rows["Cost confirmed"]).toBe("not recorded");
+    expect(rows.Cost).toBeUndefined(); // no catalog risk was kept either, so no cost words to show
+  });
+
   it("a Trial whose record kept no catalog risk says not recorded, and lists no dimension", async () => {
     render(<ExperimentBench />);
     await press();

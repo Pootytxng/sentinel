@@ -3,7 +3,7 @@
 // build arms the gate the interactive bench renders: a change picker → honest simulator read →
 // start-against-a-real-baseline, a running panel (conclude / restore), and the honest history list.
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, fireEvent, within } from "@testing-library/react";
 import { LEDGER_CHANGED_EVENT } from "../types";
 import i18n from "../i18n";
 
@@ -717,6 +717,69 @@ describe("ExperimentBench (armed)", () => {
       outcome: "recommended",
       // P8-posture-show: the risk allowed now, for the record's receipt (the default here).
       riskChoice: "low-and-moderate",
+      // P8-ack: nothing to confirm for a change the picker didn't rate above low risk.
+      costAcknowledged: false,
+    });
+  });
+
+  // P8-ack (RISK_MODEL §1 Advanced, "explicit user acknowledgement when the cost is not obvious"):
+  // before a moderate change's Trial starts, one plain line names its cost in the catalog's own words
+  // and the start is one tap on "I understand, test it", which the start records. A low-risk change
+  // starts as before. Fails on the code before this slice (no line, the usual Start, nothing recorded).
+  describe("P8-ack: a moderate change names its cost and starts from one tap", () => {
+    const setUp = async (cand: Record<string, unknown>) => {
+      state.gate = true;
+      state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null, ...cand }];
+      state.sessions = [VALORANT_SESSION];
+      state.sim = WORTH_TESTING_SIM;
+      render(<ExperimentBench />);
+      await screen.findByTestId("experiment-bench");
+      await pickChange("test-rec");
+    };
+    // The bench's own Start, in its launcher (the journey above it asks the same for its own start).
+    const launcher = () => within(document.querySelector<HTMLElement>(".exp-start")!);
+    const startWith = async (name: RegExp | string) => {
+      await waitFor(() => expect(document.querySelector(".exp-start")).not.toBeNull());
+      const btn = await launcher().findByRole("button", { name });
+      await waitFor(() => expect(btn).toBeEnabled());
+      vi.mocked(invoke).mockClear();
+      fireEvent.click(btn);
+      await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("start_experiment", expect.anything()));
+      return callArgs("start_experiment") as Record<string, unknown>;
+    };
+
+    it("a moderate change: its cost in the catalog's words, then one tap that the start records", async () => {
+      await setUp({ risk: "moderate", cost: "Start menu search becomes slower." });
+      expect(await screen.findByTestId("exp-cost-ack")).toHaveTextContent("Test tweak has a cost: Start menu search becomes slower.");
+      expect(launcher().queryByRole("button", { name: /Start experiment/ })).toBeNull();
+      expect(await startWith("I understand, test it")).toMatchObject({ recId: "test-rec", costAcknowledged: true });
+    });
+
+    it("a change whose risk isn't stated asks the same; with no cost words it says the catalog has none", async () => {
+      await setUp({ risk: "unknown", cost: null });
+      expect(await screen.findByTestId("exp-cost-ack")).toHaveTextContent(
+        "Test tweak isn't rated low risk, and Compy has no note on what it costs.",
+      );
+      expect(await startWith("I understand, test it")).toMatchObject({ costAcknowledged: true });
+    });
+
+    it("a low-risk change starts as before: no line, the usual Start, nothing to confirm", async () => {
+      await setUp({ risk: "low", cost: "Cold boot takes a few seconds longer." });
+      expect(await startWith(/Start experiment/)).toMatchObject({ costAcknowledged: false });
+      expect(screen.queryByTestId("exp-cost-ack")).toBeNull();
+      expect(screen.queryByRole("button", { name: "I understand, test it" })).toBeNull(); // nor in the journey
+    });
+
+    it("the line and the tap are in zh-CN too", async () => {
+      await i18n.changeLanguage("zh-CN");
+      try {
+        await setUp({ risk: "moderate", cost: "Start menu search becomes slower." });
+        expect(await screen.findByTestId("exp-cost-ack")).toHaveTextContent("Test tweak的代价：Start menu search becomes slower.");
+        await waitFor(() => expect(document.querySelector(".exp-start")).not.toBeNull());
+        expect(await launcher().findByRole("button", { name: "我了解，开始测试" })).toBeInTheDocument();
+      } finally {
+        await i18n.changeLanguage("en");
+      }
     });
   });
 

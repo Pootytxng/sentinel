@@ -507,6 +507,17 @@ pub(crate) struct ExperimentRecord {
         skip_serializing_if = "Option::is_none"
     )]
     pub risk_choice: Option<crate::trial_candidates::RiskChoice>,
+    /// P8-ack (RISK_MODEL §1 Advanced, "explicit user acknowledgement when the cost is not obvious"):
+    /// whether the user tapped "I understand, test it" on the line naming the change's cost before the
+    /// Trial started, as the start was told it. `Some(false)` = no acknowledgement was asked (a low-risk
+    /// change starts as before). `None` on records started before it was kept: "not recorded".
+    /// Additive; read leniently, so a value this build can't read is `None`, never a failed load.
+    #[serde(
+        default,
+        deserialize_with = "crate::trial_candidates::lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub cost_acknowledged: Option<bool>,
 }
 
 /// Trial Protocol §8 — the five result classes a Trial is judged in (#583). Persisted (kebab-case).
@@ -2868,7 +2879,8 @@ pub(crate) fn simulate_optimization(rec_id: String) -> Result<SimulatorReport, S
 /// The baseline is named by its session id and read from Compy's own session store (#583 lane 2b):
 /// the game and the frame rates come from there, never from the webview. `risk_choice` is the risk
 /// the user allows on this PC (P8-posture-show), kept on the record for its receipt; absent = not
-/// recorded.
+/// recorded. `cost_acknowledged` is the user's tap on the line naming the change's cost (P8-ack), a
+/// UI confirm before this command, kept on the record the same way.
 #[tauri::command]
 pub(crate) fn start_experiment(
     rec_id: String,
@@ -2877,6 +2889,7 @@ pub(crate) fn start_experiment(
     hypothesis: String,
     outcome: Option<String>,
     risk_choice: Option<crate::trial_candidates::RiskChoice>,
+    cost_acknowledged: Option<bool>,
 ) -> Result<ExperimentRecord, String> {
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
@@ -3021,6 +3034,8 @@ pub(crate) fn start_experiment(
         stated_risk,
         // P8-posture-show: the risk the user allowed when this Trial started, as the webview said it.
         risk_choice,
+        // P8-ack: whether the user confirmed the change's cost before it started, as the webview said it.
+        cost_acknowledged,
     });
     let idx = store.experiments.len() - 1;
     save_store(&store)?;
@@ -3638,6 +3653,7 @@ mod experiment_tests {
             smoothest: None,
             stated_risk: None,
             risk_choice: None,
+            cost_acknowledged: None,
         }
     }
 
@@ -6483,8 +6499,9 @@ mod experiment_tests {
         let stated = StatedRisk {
             overall: Risk::Moderate,
             dimensions: RiskDimensions { security: Some(DimensionRisk::Low), ..RiskDimensions::default() },
+            ..StatedRisk::default()
         };
-        let r = ExperimentRecord { stated_risk: Some(stated), ..rec(150.0, 5) };
+        let r = ExperimentRecord { stated_risk: Some(stated.clone()), ..rec(150.0, 5) };
         let v = serde_json::to_value(&r).unwrap();
         assert_eq!(v["stated_risk"]["overall"], "moderate");
         assert_eq!(v["stated_risk"]["dimensions"]["security"], "low");
@@ -6527,6 +6544,41 @@ mod experiment_tests {
             r["risk_choice"] = odd.clone();
             assert_eq!(serde_json::from_value::<ExperimentRecord>(r).unwrap().risk_choice, None, "{odd}");
         }
+    }
+
+    // P8-ack (RISK_MODEL §1 Advanced): the start keeps whether the user confirmed the change's cost
+    // ("I understand, test it", a UI confirm before this command) on the Pending record, beside the
+    // catalog's own cost words it read (`stated_risk.cost`). Older records load as None ("not
+    // recorded"); a value this build can't read is None too, never a failed store.
+    #[test]
+    fn a_start_keeps_the_cost_acknowledgement_and_an_older_record_reads_not_recorded() {
+        let src = include_str!("experiment.rs");
+        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let params = &start[..start.find(") -> Result<").unwrap()];
+        assert!(params.contains("cost_acknowledged: Option<bool>,"), "{params}");
+        let first_save = start.find("save_store(&store)?").unwrap();
+        assert!(start[..first_save].contains("        cost_acknowledged,\n"), "saved with the Pending record");
+        // A UI confirm and a record, nothing more: the start refuses nothing on it.
+        assert_eq!(start[..first_save].matches("cost_acknowledged").count(), 2, "only the parameter and the record field");
+
+        for ack in [true, false] {
+            let v = serde_json::to_value(ExperimentRecord { cost_acknowledged: Some(ack), ..rec(150.0, 5) }).unwrap();
+            assert_eq!(v["cost_acknowledged"], ack);
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(v).unwrap().cost_acknowledged, Some(ack));
+        }
+        let v = serde_json::to_value(rec(150.0, 5)).unwrap();
+        assert!(v.get("cost_acknowledged").is_none());
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(v.clone()).unwrap().cost_acknowledged, None);
+        for odd in [serde_json::json!("yes"), serde_json::json!(null), serde_json::json!(1)] {
+            let mut r = v.clone();
+            r["cost_acknowledged"] = odd.clone();
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(r).unwrap().cost_acknowledged, None, "{odd}");
+        }
+        // The cost words the user saw are the catalog's, kept with the stated risk at the start.
+        let stated = crate::trial_candidates::StatedRisk { cost: Some("Search gets slower.".into()), ..Default::default() };
+        let v = serde_json::to_value(ExperimentRecord { stated_risk: Some(stated.clone()), ..rec(150.0, 5) }).unwrap();
+        assert_eq!(v["stated_risk"]["cost"], "Search gets slower.");
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(v).unwrap().stated_risk, Some(stated));
     }
 
     // ─── P4-smooth-offer-a (ENGINE §2 smoothest: offered once this game's pacing noise is measured) ──

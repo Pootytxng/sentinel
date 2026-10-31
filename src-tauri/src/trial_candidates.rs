@@ -183,7 +183,7 @@ pub(crate) struct RiskDimensions {
 /// P8-dims: what the catalog stated about one change's risk, kept on a Trial's record at its start
 /// (`experiment::ExperimentRecord::stated_risk`), so its receipt names the risk the Trial ran under
 /// (TRIAL_PROTOCOL §1 `risk_class`, §11), never a later catalog's.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct StatedRisk {
     /// The catalog's one overall word (`severity`).
     #[serde(default)]
@@ -191,6 +191,10 @@ pub(crate) struct StatedRisk {
     /// Each dimension the catalog states for it; `None` where it states nothing.
     #[serde(default)]
     pub dimensions: RiskDimensions,
+    /// P8-ack: the catalog's own words for what the change costs (`downside`), the line the user
+    /// confirmed before a change that isn't low risk started. `None` when it states none.
+    #[serde(default, deserialize_with = "lenient")]
+    pub cost: Option<String>,
 }
 
 /// P8-dims: what the catalog (as `get_recommendations` serializes it) states about `rec_id`'s risk.
@@ -204,6 +208,7 @@ pub(crate) fn stated_risk(catalog: &Value, rec_id: &str) -> Option<StatedRisk> {
             .get("risk_dimensions")
             .and_then(|d| serde_json::from_value(d.clone()).ok())
             .unwrap_or_default(),
+        cost: cost_words(row.get("downside").and_then(Value::as_str)),
     })
 }
 
@@ -256,6 +261,10 @@ pub(crate) struct TrialCandidate {
     pub stated_effect_pct: Option<f64>,
     /// Set with `TooSmallToMeasureHere`: the effect and the band it can't beat.
     pub too_small: Option<EffectVsBand>,
+    /// P8-ack (RISK_MODEL §1 Advanced): the catalog's own words for what the change costs
+    /// (`downside`), which the picker shows before a change that isn't low risk starts. `None` when
+    /// the catalog states no cost; nothing is written in its place.
+    pub cost: Option<String>,
 }
 
 /// The catalog fields the filter reads.
@@ -271,6 +280,13 @@ pub(crate) struct CatalogEntry<'a> {
     pub severity: Option<&'a str>,
     /// `expected_low1_pct`: a stated effect size. No catalog change has one today.
     pub stated_effect_pct: Option<f64>,
+    /// `downside`: the catalog's own words for what the change costs (P8-ack).
+    pub downside: Option<&'a str>,
+}
+
+/// The catalog's cost words, when it states any (`downside`); blank states nothing.
+fn cost_words(downside: Option<&str>) -> Option<String> {
+    downside.map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
 }
 
 /// Which already-set changes Compy is behind. `None` = that record couldn't be read.
@@ -346,6 +362,7 @@ pub(crate) fn screen(
         evidence: Evidence::of(entry.provenance),
         risk,
         stated_effect_pct: stated,
+        cost: cost_words(entry.downside),
     }
 }
 
@@ -395,6 +412,7 @@ pub(crate) fn screen_catalog(
                 provenance: r.get("provenance").and_then(Value::as_str),
                 severity: r.get("severity").and_then(Value::as_str),
                 stated_effect_pct: stated_effect(r),
+                downside: r.get("downside").and_then(Value::as_str),
             };
             Some(screen(&entry, appliable(id), who, band_pct, choice))
         })
@@ -539,6 +557,7 @@ mod tests {
             provenance: None,
             severity: None,
             stated_effect_pct: None,
+            downside: None,
         }
     }
     fn scr(e: &CatalogEntry, appliable: bool, w: &WhoSetIt) -> TrialCandidate {
@@ -891,9 +910,9 @@ mod tests {
     #[test]
     fn stated_risk_reads_the_overall_word_and_only_the_dimensions_the_catalog_states() {
         let catalog = json!([
-            { "id": "stated", "severity": "moderate",
+            { "id": "stated", "severity": "moderate", "downside": "  Search gets slower.  ",
               "risk_dimensions": { "reversibility": "low", "security": "high", "stability": "odd" } },
-            { "id": "plain", "severity": "safe" },
+            { "id": "plain", "severity": "safe", "downside": " " },
             { "id": "garbled", "severity": "high", "risk_dimensions": "low" },
         ]);
         let s = stated_risk(&catalog, "stated").unwrap();
@@ -907,9 +926,11 @@ mod tests {
                 security: Some(DimensionRisk::High),
             }
         );
+        // P8-ack: the catalog's own cost words, trimmed; a blank or missing `downside` states none.
+        assert_eq!(s.cost.as_deref(), Some("Search gets slower."));
         // No `risk_dimensions`: every dimension is not stated, whatever the overall word says.
         let plain = stated_risk(&catalog, "plain").unwrap();
-        assert_eq!((plain.overall, plain.dimensions), (Risk::Low, RiskDimensions::default()));
+        assert_eq!((plain.overall, plain.dimensions, plain.cost), (Risk::Low, RiskDimensions::default(), None));
         // An unreadable `risk_dimensions` states nothing; an unknown overall word is Unknown.
         let garbled = stated_risk(&catalog, "garbled").unwrap();
         assert_eq!((garbled.overall, garbled.dimensions), (Risk::Unknown, RiskDimensions::default()));
@@ -920,7 +941,7 @@ mod tests {
         let v = serde_json::to_value(s).unwrap();
         assert_eq!(
             v,
-            json!({ "overall": "moderate", "dimensions": {
+            json!({ "overall": "moderate", "cost": "Search gets slower.", "dimensions": {
                 "reversibility": "low", "stability": null, "compatibility": null, "security": "high" } })
         );
     }
@@ -936,8 +957,32 @@ mod tests {
             assert_eq!(s.dimensions, RiskDimensions::default(), "{id}");
             if crate::history::is_appliable(id) {
                 assert_ne!(s.overall, Risk::Unknown, "{id}");
+                // P8-ack: every change Compy can test that isn't low risk names its cost in the
+                // catalog's own words, so the line before its start never falls back to "no note".
+                if s.overall != Risk::Low {
+                    assert!(s.cost.is_some(), "{id}");
+                }
             }
         }
+    }
+
+    // P8-ack (RISK_MODEL §1 Advanced): the picker carries the catalog's own cost words for every
+    // change, passing or not, so the line before a start that isn't low risk quotes them; a change
+    // whose catalog row states none carries none.
+    #[test]
+    fn the_picker_carries_the_catalogs_own_cost_words() {
+        let catalog = json!([
+            { "id": "mod", "title": "Mod", "severity": "moderate", "downside": "Search gets slower." },
+            { "id": "safe", "title": "Safe", "severity": "safe" },
+            { "id": "held", "title": "Held", "severity": "moderate", "downside": "More power.", "eligible": false },
+        ]);
+        let out = screen_catalog(&catalog, &|_| true, &nobody(), None, RiskChoice::default());
+        let by = |id: &str| out.iter().find(|c| c.id == id).unwrap();
+        assert_eq!((by("mod").cost.as_deref(), by("mod").risk), (Some("Search gets slower."), Risk::Moderate));
+        assert_eq!(by("safe").cost, None);
+        assert_eq!(by("held").cost.as_deref(), Some("More power."));
+        assert_eq!(serde_json::to_value(by("mod")).unwrap()["cost"], "Search gets slower.");
+        assert!(serde_json::to_value(by("safe")).unwrap()["cost"].is_null());
     }
 
     // A Trial keeps this on its record: a stored value this build can't read is unknown or not
@@ -953,6 +998,9 @@ mod tests {
             RiskDimensions { reversibility: Some(DimensionRisk::Moderate), ..RiskDimensions::default() }
         );
         assert_eq!(serde_json::from_value::<StatedRisk>(json!({})).unwrap(), StatedRisk::default());
+        // Cost words that aren't text are no cost words, and the rest still reads.
+        let odd: StatedRisk = serde_json::from_value(json!({ "overall": "moderate", "cost": 5 })).unwrap();
+        assert_eq!((odd.overall, odd.cost), (Risk::Moderate, None));
         // The record stores the picker's words ("low"), never the catalog's ("safe").
         for v in [json!("severe"), json!(null), json!(7), json!("safe")] {
             assert_eq!(serde_json::from_value::<Risk>(v.clone()).unwrap(), Risk::Unknown, "{v}");
