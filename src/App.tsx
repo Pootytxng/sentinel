@@ -1643,6 +1643,7 @@ function App() {
                   ledgerBusy={busyId !== null}
                   onLedgerBusy={(b) => setBusyId(b ? "care-restore" : null)}
                   focusIncidentId={problemsFocus}
+                  pendingIncidentId={pendingCare?.incident_id ?? null}
                 />
               )}
               {activeTab === "Play" && hw && (

@@ -2,9 +2,12 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 
 const invoked: string[] = [];
+// Settable per-test scan answer (vi.mock factories are hoisted, so this must be too).
+const scan = vi.hoisted(() => ({ report: null as unknown }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) => {
     invoked.push(cmd);
+    if (cmd === "get_crash_blackbox") return Promise.resolve(scan.report);
     return Promise.resolve(null);
   },
 }));
@@ -18,6 +21,7 @@ import { ProblemsRoom } from "./ProblemsRoom";
 afterEach(() => {
   cleanup();
   invoked.length = 0;
+  scan.report = null;
 });
 
 const session = (over: Partial<SessionSummary>): SessionSummary =>
@@ -58,7 +62,7 @@ const care: PendingCareIncident = {
   occurred_display: "Oct 30, 1:44 PM",
   kind: "App crash",
   app_label: "Elden Ring",
-  summary: "",
+  summary: "Elden Ring closed unexpectedly",
 };
 
 function home(over: Partial<Parameters<typeof HomeGlass>[0]> = {}) {
@@ -85,7 +89,34 @@ describe("Health summary (glass redesign)", () => {
   it("answers 'set up right' only when every readable check is fine and nothing was recorded", () => {
     home();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Your PC looks set up right");
-    expect(screen.getByText(/10 of 10 checks look right/)).toBeTruthy();
+    const checks = screen.getByRole("button", { name: /Windows setup/ });
+    expect(checks.textContent).toMatch(/10\s*of 10 checks look right/);
+    expect(checks.textContent).toContain("No check needs a look");
+  });
+
+  it("puts nothing under the answer: the header is a title, its facts live on the cards (desk review 2026-10-30)", () => {
+    home();
+    const head = document.querySelector(".gl-head-text")!;
+    expect(head.querySelector(".gl-sub")).toBeNull();
+    expect(head.textContent).not.toMatch(/checks look right|until you choose/);
+  });
+
+  it("says a freeze stopped responding, in Black Box's own words, never 'closed unexpectedly' (desk review 2026-10-30)", () => {
+    home({
+      pendingCare: { ...care, kind: "App hang", app_label: "tail", summary: "tail stopped responding (froze)" },
+    });
+    const band = screen.getByRole("group", { name: "Needs a look" });
+    expect(within(band).getByText("tail stopped responding (froze)")).toBeTruthy();
+    expect(band.textContent).not.toMatch(/closed unexpectedly/);
+  });
+
+  it("the Last session card shows the 1% low the other cards lack, not the average again (desk review 2026-10-30)", () => {
+    home();
+    const last = screen.getByRole("button", { name: /Last session/ });
+    expect(last.textContent).toMatch(/96\s*fps 1% low/);
+    expect(last.textContent).not.toContain("141");
+    // The average is on the game's own card.
+    expect(screen.getByRole("button", { name: "Open eldenring" }).textContent).toContain("141");
   });
 
   it("counts a crash Windows recorded as a thing worth a look, in its own band with both actions", () => {
@@ -93,6 +124,8 @@ describe("Health summary (glass redesign)", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("1 thing is worth a look");
     const band = screen.getByRole("group", { name: "Needs a look" });
     expect(within(band).getByText("Elden Ring closed unexpectedly")).toBeTruthy();
+    // The checks card speaks for the checks only, so it cannot contradict the answer's count.
+    expect(screen.getByRole("button", { name: /Windows setup/ }).textContent).toContain("No check needs a look");
     fireEvent.click(within(band).getByRole("button", { name: "Find out why" }));
     expect(p.onOpenCareIncident).toHaveBeenCalledWith("inc-1");
     fireEvent.click(within(band).getByRole("button", { name: "Not now" }));
@@ -101,7 +134,7 @@ describe("Health summary (glass redesign)", () => {
 
   it("never grades what it could not read: unknown checks leave the ratio, and no checks means 'Run a check'", () => {
     home({ readiness: readiness(1, 2) });
-    expect(screen.getByText(/7 of 8 checks look right/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Windows setup/ }).textContent).toMatch(/7\s*of 8 checks look right/);
     cleanup();
     const p = home({ readiness: null });
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Here's how your PC is doing");
@@ -139,7 +172,16 @@ describe("Games (glass redesign)", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("eldenring");
     expect(screen.getAllByText("141").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "All games" }));
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Games");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("How your games run");
+  });
+
+  it("never prints the room's name as its h1 (the top bar has it) and has no sub line (desk review 2026-10-30)", () => {
+    render(<GamesRoom sessions={[session({})]} onOpenLive={vi.fn()} onOpenTest={vi.fn()} />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).not.toBe("Games");
+    expect(document.querySelector(".gl-sub")).toBeNull();
+    cleanup();
+    render(<GamesRoom sessions={[session({})]} onOpenLive={vi.fn()} onOpenTest={vi.fn()} focusKey="eldenring.exe" />);
+    expect(document.querySelector(".gl-sub")).toBeNull();
   });
 });
 
@@ -148,8 +190,42 @@ describe("Problems (glass redesign)", () => {
     render(
       <ProblemsRoom changes={[]} onChanged={vi.fn()} ledgerBusy={false} onLedgerBusy={vi.fn()} focusIncidentId={null} />,
     );
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Problems");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("What went wrong, and why");
     await new Promise((r) => setTimeout(r, 0));
     expect(invoked).toContain("get_crash_blackbox");
+  });
+
+  it("arriving while a record waits lands on THAT record, the one the door's dot counts (desk review 2026-10-30)", async () => {
+    const incident = (id: string, headline: string, when: string) => ({
+      incident_id: id,
+      headline,
+      tag: "App hang",
+      when,
+      when_display: when,
+      vitals: null,
+      receipt: { source: "Application log · 1002", event_ids: [1002], faulting_app: null, faulting_module: null, code: null, detail: "" },
+      assessment: null,
+    });
+    scan.report = {
+      incidents: [
+        incident("chatgpt0000000001", "ChatGPT stopped responding (froze)", "2026-10-28T10:00:00Z"),
+        incident("tail0000000000001", "tail stopped responding (froze)", "2026-09-28T10:00:00Z"),
+      ],
+      skipped_sources: [],
+    };
+    render(
+      <ProblemsRoom
+        changes={[]}
+        onChanged={vi.fn()}
+        ledgerBusy={false}
+        onLedgerBusy={vi.fn()}
+        focusIncidentId={null}
+        pendingIncidentId="tail0000000000001"
+      />,
+    );
+    const note = await screen.findByText("This is the one you came here to see.");
+    expect(note.closest(".bb-item")!.textContent).toContain("tail stopped responding");
+    // Read-only: arriving does not mark the record opened.
+    expect(invoked).not.toContain("mark_care_incident_opened");
   });
 });

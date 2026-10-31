@@ -297,8 +297,7 @@
     "solidNote": "实色面板会隐藏背景。选择玻璃或磨砂即可看到。"
   },
   "games": {
-    "title": "游戏",
-    "sub": "Compy 根据你真实的游戏记录，列出它测量过的每款游戏。选一款，看看它运行得怎么样。",
+    "headline": "你的游戏运行得怎么样",
     "empty": "还没有游戏。在“实时”里开启采集，然后照常游戏：每款游戏在第一次被测量后就会出现在这里。",
     "emptyCta": "打开实时",
     "sessions_one": "{{count}} 次游戏",
@@ -308,14 +307,13 @@
     "fps": "fps",
     "open": "打开 {{name}}",
     "back": "全部游戏",
-    "detailSub": "已测量 {{sessions}}，共 {{time}}。上次游玩 {{when}}。",
     "hm": "{{h}} 小时 {{m}} 分",
     "m": "{{m}} 分",
     "kpi": {
       "last": "上一次",
       "lastNote": "平均 FPS",
       "low1": "1% 低帧",
-      "low1Note": "上一次中最慢的时刻",
+      "low1Note": "上一次中最卡的时刻",
       "sessions": "游戏次数",
       "sessionsNote": "共 {{time}}",
       "best": "最佳一次",
@@ -339,6 +337,6 @@
     "playRow": "{{name}}，共 {{time}}"
   },
   "problems": {
-    "title": "问题"
+    "headline": "出了什么问题，为什么"
   }
 }

@@ -302,8 +302,7 @@
     "solidNote": "Solid panels hide the backdrop. Pick Glass or Frosted to see it."
   },
   "games": {
-    "title": "Games",
-    "sub": "Every game Compy has measured you playing, from your real sessions. Pick one to see how it runs.",
+    "headline": "How your games run",
     "empty": "No games yet. Turn on capture in Live and play as usual: each game shows up here after its first measured session.",
     "emptyCta": "Open Live",
     "sessions_one": "{{count}} session",
@@ -313,14 +312,13 @@
     "fps": "fps",
     "open": "Open {{name}}",
     "back": "All games",
-    "detailSub": "{{sessions}} measured, {{time}} of play. Last played {{when}}.",
     "hm": "{{h}} h {{m}} m",
     "m": "{{m}} m",
     "kpi": {
       "last": "Last session",
       "lastNote": "average FPS",
       "low1": "1% low",
-      "low1Note": "the slowest moments, last session",
+      "low1Note": "your worst moments, last session",
       "sessions": "Sessions",
       "sessionsNote": "{{time}} of play",
       "best": "Best session",
@@ -344,6 +342,6 @@
     "playRow": "{{name}}, {{time}} of play"
   },
   "problems": {
-    "title": "Problems"
+    "headline": "What went wrong, and why"
   }
 }

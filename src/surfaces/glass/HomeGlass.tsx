@@ -90,14 +90,20 @@ export function HomeGlass({
       : !checksKnown
         ? t("home.glass.answer.unknown")
         : t("home.glass.answer.allRight");
-  const sub = checksKnown
-    ? t("home.glass.sub.known", { good, total: readable })
-    : t("home.glass.sub.unknown");
+  // No sub line under the answer (title-header law): the checks ratio lives on the Windows setup
+  // card and the "nothing changes until you choose" promise beside the band's buttons.
 
+  // The newest measured session. Its average is already on the lit game card and the chart, so the
+  // Last session card shows what neither does: its 1% low.
   const newest = sessions.find((s) => knownFps(s.avg_fps) != null) ?? null;
   const newestGame = newest ? games.find((g) => g.key === newest.process_name.trim().toLowerCase()) : undefined;
-  const newestAvg = newest ? knownFps(newest.avg_fps) : null;
   const newestLow = newest ? knownFps(newest.low1_fps_est) : null;
+  // The headline is Black Box's own sentence for the record, the one the full check prints, so a
+  // freeze reads "stopped responding" and a crash "closed unexpectedly". The fallback names no kind.
+  const careHeadline = pendingCare
+    ? pendingCare.summary.trim() ||
+      t("home.glass.care.headline", { what: pendingCare.app_label ?? pendingCare.kind })
+    : "";
 
   const topLimiter = priorities?.limiters?.[0] ?? null;
 
@@ -134,7 +140,6 @@ export function HomeGlass({
           <h1 className="gl-h1" id="gl-home-h1">
             {answer}
           </h1>
-          <p className="gl-sub">{sub}</p>
         </div>
         <div className="gl-actions">
           {/* The two flagship journeys, as equals (Constitution): same weight, each with its door's
@@ -155,7 +160,7 @@ export function HomeGlass({
       {pendingCare && (
         <div className="gl-banner" data-tone="warn" role="group" aria-label={t("home.glass.care.label")}>
           <span className="gl-banner-text">
-            <b>{t("home.glass.care.headline", { what: pendingCare.app_label ?? pendingCare.kind })}</b>
+            <b>{careHeadline}</b>
             <span>{t("home.glass.care.detail", { kind: pendingCare.kind, when: pendingCare.occurred_display })}</span>
           </span>
           <span className="gl-banner-actions">
@@ -256,28 +261,23 @@ export function HomeGlass({
               <Arrow />
               <span className="gl-kpi-row">
                 <span className="gl-kpi-value" data-size="big">
-                  {newestAvg != null ? (
+                  {!newest ? (
+                    t("home.glass.live.none")
+                  ) : newestLow != null ? (
                     <>
-                      <span className="gl-num">{Math.round(newestAvg)}</span>
-                      <small>{t("home.glass.live.unit")}</small>
+                      <span className="gl-num">{Math.round(newestLow)}</span>
+                      <small>{t("home.glass.live.lowUnit")}</small>
                     </>
                   ) : (
-                    t("home.glass.live.none")
+                    t("common.games.notMeasured")
                   )}
                 </span>
               </span>
               <span className="gl-kpi-note">
                 {newest
-                  ? newestLow != null
-                    ? t("home.glass.live.note", {
-                        game: newestGame?.name ?? newest.process_name,
-                        when: dates.dayTime(newest.started_at),
-                        low: Math.round(newestLow),
-                      })
-                    : t("home.glass.live.noteNoLow", {
-                        game: newestGame?.name ?? newest.process_name,
-                        when: dates.dayTime(newest.started_at),
-                      })
+                  ? t(newestLow != null ? "home.glass.live.lowNote" : "home.glass.live.lowNoneNote", {
+                      game: newestGame?.name ?? newest.process_name,
+                    })
                   : t("home.glass.live.noneNote")}
               </span>
             </button>
