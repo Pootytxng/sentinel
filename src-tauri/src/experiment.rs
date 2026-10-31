@@ -3798,8 +3798,6 @@ pub(crate) fn real_play_outcome(read: &RealPlayRead<'_>) -> Option<ConcludeOutco
 /// runs. Before a start it checks only that no Compy change moved since the newest as-is session
 /// began; the start checks the active-change counts live again. A change history that can't back
 /// the count is refused in words, never read as nothing counted.
-// Registered with the command surface in the next commit but one; until then nothing calls it.
-#[allow(dead_code)]
 #[tauri::command]
 pub(crate) fn get_realplay_progress(game: String) -> Result<crate::realplay::RealPlayProgress, String> {
     if !experiment_gate() {
@@ -3856,8 +3854,6 @@ pub(crate) fn get_realplay_progress(game: String) -> Result<crate::realplay::Rea
 /// [`real_play_outcome`] is the result, other settings Compy can't confirm leave it unjudged
 /// ([`with_unverified_changes`]), and a setting that reads off or can't be read is never kept
 /// ([`guard_target_at_conclude`]). Real play never records High confidence.
-// Registered with the command surface in the next commit but one; until then nothing calls it.
-#[allow(dead_code)]
 #[tauri::command]
 pub(crate) fn conclude_realplay(experiment_id: String, crashed: bool) -> Result<ExperimentRecord, String> {
     if !experiment_gate() {

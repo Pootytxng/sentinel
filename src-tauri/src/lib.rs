@@ -1378,6 +1378,8 @@ pub fn run() {
             experiment::start_experiment,
             experiment::get_smoothest_readiness,
             experiment::conclude_experiment,
+            experiment::get_realplay_progress,
+            experiment::conclude_realplay,
             experiment::restore_experiment,
             experiment::apply_outcome_choice,
             experiment::undo_outcome_choice,

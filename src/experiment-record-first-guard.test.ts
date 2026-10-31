@@ -119,6 +119,22 @@ describe("a Trial verifies the setting before, during and after (#583 lane 2)", 
     );
   });
 
+  // P5-realplay: the real-play conclude reads the setting once, before it decides; that read is the
+  // target check, and the shared keep/restore gets the checked outcome.
+  it("§7 at the real-play conclude: the same read, the same check, the same keep/restore", () => {
+    const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_realplay(");
+    const read = conclude.indexOf(`let target_now = ${PROBE}`);
+    const guard = conclude.indexOf("let outcome = guard_target_at_conclude(judged, live);");
+    const finish = conclude.indexOf("finish_conclude(&mut store, idx, outcome, target_now)");
+    expect(read, "the real-play conclude no longer reads the target").toBeGreaterThanOrEqual(0);
+    expect(conclude).toContain("let live = target_verification(Some(target_now));");
+    expect(guard, "the target check no longer wraps the real-play outcome").toBeGreaterThan(read);
+    expect(finish, "the real-play conclude no longer hands the checked outcome to the shared keep/restore").toBeGreaterThan(guard);
+    expect(conclude.indexOf("with_unverified_changes(judged, unverified)")).toBeLessThan(guard);
+    // It keeps or restores only through the shared tail, never on its own.
+    expect(conclude).not.toMatch(/crate::history::(?:apply_recommendation|rollback_change)\s*\(/);
+  });
+
   it("§4.10: every restore path reads the setting back after the rollback", () => {
     for (const sig of ["fn abort_start(", "fn finish_conclude(", "pub(crate) fn restore_experiment("]) {
       const body = fnBody(EXPERIMENT, sig);
@@ -183,6 +199,12 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
     }
     expect(signature("pub(crate) fn start_experiment(")).toMatch(/baseline_session_id: String/);
     expect(signature("pub(crate) fn conclude_experiment(")).toMatch(/treatment_session_id: String/);
+    // P5-realplay: the real-play conclude takes the Trial's id and a crash flag, and nothing else;
+    // every session it judges is read from the session store.
+    const params = signature("pub(crate) fn conclude_realplay(");
+    const args = params.slice(params.indexOf("fn conclude_realplay(") + "fn conclude_realplay(".length);
+    expect(args.replace(/\s+/g, " ").trim()).toBe("experiment_id: String, crashed: bool");
+    expect(fnBody(EXPERIMENT, "pub(crate) fn conclude_realplay(")).toContain("crate::sessions::get_session_summaries()");
   });
 
   it("§4.2: the baseline is resolved before anything is recorded or applied", () => {
@@ -341,6 +363,9 @@ describe("a Trial never reads a lost history as a quiet one (#611 review round 2
     ["readiness", fnBody(EXPERIMENT, "pub(crate) fn get_smoothest_readiness("), read(String.raw`Some\(from\.started_at\.as_str\(\)\)`)],
     ["session-end notice", fnBody(EXPERIMENT, "pub(crate) fn session_end_notice_now("), read(String.raw`Some\(session\.started_at\.as_str\(\)\)`)],
     ["next band", fnBody(EXPERIMENT, "pub(crate) fn next_trial_measured_band_pct("), read(String.raw`Some\(baseline\.started_at\.as_str\(\)\)`)],
+    // P5-realplay: bounded by the Trial's own newest as-is session, as the two-session conclude is.
+    ["real-play conclude", fnBody(EXPERIMENT, "pub(crate) fn conclude_realplay("), read(String.raw`store\.experiments\[idx\]\.baseline_session_id\.as_deref\(\)`)],
+    ["real-play progress", fnBody(EXPERIMENT, "pub(crate) fn get_realplay_progress("), read(String.raw`rec\.baseline_session_id\.as_deref\(\)`)],
   ] as const;
 
   it("every Trial-side read goes through the set-aside check, bounded by its own session, never raw", () => {
