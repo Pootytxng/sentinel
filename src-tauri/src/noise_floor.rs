@@ -10,8 +10,9 @@
 //!
 //! What the number is: the spread (coefficient of variation) of the 1% low across the ten 2.5 s
 //! windows of ONE ~25 s calibration, not the variation between whole sessions. Verdicts don't use
-//! it: they judge against [`between_session_noise`] (P4-noise), the spread between whole unchanged
-//! sessions of the game read from the session store and change history, never below the fixed
+//! it: they judge against [`between_session_noise`] (P4-noise), the spread between the whole
+//! sessions of the game's current unchanged run (P4-noise-stretch: the last 14 days, nothing changed
+//! between them), read from the session store and change history, never below the fixed
 //! `DEFAULT_NOISE_FLOOR_PCT` ([`noise_band_pct`]).
 //!
 //! Game builds aren't readable yet (`GameStateFingerprint::game_build` is always unknown), so a game
@@ -219,8 +220,8 @@ pub(crate) const MIN_UNCHANGED_SESSIONS: usize = 3;
 /// Trial record and its noise evidence (additive: older records load as `None`).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct BetweenSessionNoise {
-    /// The largest difference in the 1% low between two of the counted sessions that ran with nothing
-    /// changed between them, in percent of the lower one.
+    /// The largest difference in the 1% low between two sessions of the unchanged run the measured
+    /// session belongs to, in percent of the lower one.
     pub spread_pct: f64,
     /// How many sessions were counted (at least [`MIN_UNCHANGED_SESSIONS`]).
     pub sessions: u32,
@@ -294,12 +295,11 @@ fn unchanged_between(
 
 /// Pure (P4-noise): how much `now`'s game varied between whole sessions on this PC with nothing
 /// changed, from Compy's own session store and change history. Only sessions long enough to be a
-/// baseline, of the same game on the same rig under `now`'s driver and Windows build, are read. In
-/// time order, each session either continues the previous one's unchanged run ([`unchanged_between`])
-/// or starts a new run; runs of two or more are counted, and the spread is the largest 1% low
-/// difference inside one run (sessions in different runs are never compared: something changed
-/// between them). Fewer than [`MIN_UNCHANGED_SESSIONS`] counted sessions is `None`: unmeasured,
-/// never estimated.
+/// baseline, of the same game on the same rig under `now`'s driver and Windows build, are read, and
+/// only the unchanged run `now` belongs to within the last 14 days ([`current_unchanged_run`],
+/// P4-noise-stretch): the spread is the largest 1% low difference inside that run. A session in
+/// another run (something changed between them) or older than that is never compared. Fewer than
+/// [`MIN_UNCHANGED_SESSIONS`] counted sessions is `None`: unmeasured, never estimated.
 pub(crate) fn between_session_noise(
     sessions: &[crate::sessions::SessionSummary],
     now: &crate::sessions::SessionSummary,
@@ -311,8 +311,8 @@ pub(crate) fn between_session_noise(
 /// Pure (P4-smooth-measure): how much `now`'s game's frame pacing varied between whole unchanged
 /// sessions on this PC: the same sessions, runs and [`MIN_UNCHANGED_SESSIONS`] as
 /// [`between_session_noise`], read on each session's `frame_pacing` p99 / p50 ratio instead of its
-/// 1% low. Unit: `spread_pct` is the largest difference in that ratio between two sessions of one
-/// unchanged run, in percent of the lower ratio (a ratio of 1.40 against 1.47 is 5%). Sessions
+/// 1% low. Unit: `spread_pct` is the largest difference in that ratio between two sessions of the
+/// current unchanged run, in percent of the lower ratio (a ratio of 1.40 against 1.47 is 5%). Sessions
 /// recorded without frame pacing (an older Compy or helper) aren't counted. `None` = unmeasured.
 /// Resolution: each ratio carries about ±1% bucket error (`FramePacing::p99_over_p50`), so a
 /// spread under ~2% is at the limit of what the histogram can resolve; a band that small must not
@@ -380,40 +380,27 @@ pub(crate) fn current_unchanged_run<'s>(
 }
 
 /// The shared measurement behind both spreads: `metric` reads one positive number off a session, or
-/// `None` to leave the session out.
+/// `None` to leave the session out. P4-noise-stretch (R4): only the unchanged run `now` belongs to,
+/// within `comparison::ARM_MAX_AGE_DAYS` ([`current_unchanged_run`]), is measured. A run split off
+/// by a change, or older than 14 days, ran under another configuration than the PC has now; before
+/// R4 the widest spread of every unchanged run in history set the band (the owner's WARDOGS bench
+/// retest was judged on ±21.6% from an older run, against its own run's 1.4%).
 fn unchanged_spread(
     sessions: &[crate::sessions::SessionSummary],
     now: &crate::sessions::SessionSummary,
     ledger: &[crate::experiment::LedgerEntryRef<'_>],
     metric: impl Fn(&crate::sessions::SessionSummary) -> Option<f64>,
 ) -> Option<BetweenSessionNoise> {
-    let now = NoiseConditions::of_session(now)?;
-    let usable: Vec<(chrono::DateTime<chrono::FixedOffset>, &crate::sessions::SessionSummary, f64)> = sessions_like(sessions, &now)
+    let xs: Vec<f64> = current_unchanged_run(sessions, now, ledger, crate::comparison::ARM_MAX_AGE_DAYS)
         .into_iter()
-        .filter_map(|(at, s)| Some((at, s, metric(s).filter(|x| x.is_finite() && *x > 0.0)?)))
+        .filter_map(|s| metric(s).filter(|x| x.is_finite() && *x > 0.0))
         .collect();
-    let mut runs: Vec<Vec<f64>> = Vec::new();
-    let mut prev: Option<&crate::sessions::SessionSummary> = None;
-    for &(_, s, x) in &usable {
-        match (prev, runs.last_mut()) {
-            (Some(p), Some(run)) if unchanged_between(p, s, ledger) => run.push(x),
-            _ => runs.push(vec![x]),
-        }
-        prev = Some(s);
-    }
-    let runs: Vec<&Vec<f64>> = runs.iter().filter(|r| r.len() >= 2).collect();
-    let counted: usize = runs.iter().map(|r| r.len()).sum();
-    if counted < MIN_UNCHANGED_SESSIONS {
+    if xs.len() < MIN_UNCHANGED_SESSIONS {
         return None;
     }
-    let spread_pct = runs
-        .iter()
-        .map(|r| {
-            let (lo, hi) = r.iter().fold((f64::INFINITY, 0.0_f64), |(lo, hi), &x| (lo.min(x), hi.max(x)));
-            (hi - lo) / lo * 100.0
-        })
-        .fold(0.0_f64, f64::max);
-    let sessions = u32::try_from(counted).ok()?;
+    let (lo, hi) = xs.iter().fold((f64::INFINITY, 0.0_f64), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+    let spread_pct = (hi - lo) / lo * 100.0;
+    let sessions = u32::try_from(xs.len()).ok()?;
     spread_pct.is_finite().then_some(BetweenSessionNoise { spread_pct, sessions })
 }
 
@@ -775,15 +762,20 @@ mod tests {
     #[test]
     fn a_compy_change_between_sessions_splits_them() {
         let s = evening();
-        // Applied between the 2nd and 3rd session: 150/156 (4.0%) and 147/153 (4.1%) are two runs of
-        // two. Four sessions count, the wider run sets the spread, and 156 → 147 is never compared.
+        // Applied between the 2nd and 3rd session: 150/156 and 147/153 are two runs of two, and only
+        // the run that ends at now is this PC's noise (P4-noise-stretch). Two sessions: unmeasured.
         let ledger = vec![change("visual-effects", "2026-10-25T18:55:00+00:00", None)];
         let mut moved = s.clone();
         for x in &mut moved[2..] {
             x.compy_changes_active = Some(15);
         }
-        let got = between_session_noise(&moved, &moved[3], &ledger).unwrap();
-        assert_eq!(got.sessions, 4);
+        assert_eq!(between_session_noise(&moved, &moved[3], &ledger), None);
+        // A third session in that run measures it, and 156 → 147 across the change is never compared.
+        let mut third = played("2026-10-25T20:00:00+00:00", 150.0, 15);
+        third.compy_changes_active = Some(15);
+        moved.push(third);
+        let got = between_session_noise(&moved, &moved[4], &ledger).unwrap();
+        assert_eq!(got.sessions, 3);
         assert!((got.spread_pct - spread(147.0, 153.0)).abs() < 1e-9, "{got:?}");
 
         // Applied and undone between two sessions (counts equal again): still a change.
@@ -865,10 +857,10 @@ mod tests {
         let got = between_session_noise(&s, &s[4], &settled()).expect("the four measured sessions still count");
         assert_eq!(got.sessions, 4);
         assert!((got.spread_pct - spread(147.0, 156.0)).abs() < 1e-9, "one unbroken run: {got:?}");
-        // A Compy change applied while it ran still splits the measured sessions.
+        // A Compy change applied while it ran still splits the measured sessions: the run that ends at
+        // now is 147 / 153, two sessions, so nothing is measured (P4-noise-stretch).
         let during = vec![change("visual-effects", "2026-10-25T18:55:00+00:00", None)];
-        let got = between_session_noise(&s, &s[4], &during).expect("two runs of two");
-        assert!((got.spread_pct - spread(147.0, 153.0)).abs() < 1e-9, "{got:?}");
+        assert_eq!(between_session_noise(&s, &s[4], &during), None);
     }
 
     #[test]
@@ -910,6 +902,47 @@ mod tests {
         s[1].compy_changes_active = Some(14);
         s[2].samples = 1170;
         assert_eq!(between_session_noise(&s, &s[2], &ledger), None);
+    }
+
+    /// P4-noise-stretch (R4), the owner's WARDOGS bench retest: an evening of 148 / 136 / 122 on
+    /// 2026-10-25, a Compy change, then 211 / 214 / 212 on 2026-10-29. The Trial started from the
+    /// 10-29 run is judged on that run's 1.4% (the 3% floor), not on the 21.3% an older run of
+    /// another configuration had: the widest spread in history set the band before.
+    #[test]
+    fn the_band_is_the_trials_own_run_not_the_widest_in_history() {
+        let s = vec![
+            played("2026-10-25T18:00:00+00:00", 148.0, 14),
+            played("2026-10-25T18:30:00+00:00", 136.0, 14),
+            played("2026-10-25T19:00:00+00:00", 122.0, 14),
+            played("2026-10-29T18:00:00+00:00", 211.0, 15),
+            played("2026-10-29T18:30:00+00:00", 214.0, 15),
+            played("2026-10-29T19:00:00+00:00", 212.0, 15),
+        ];
+        let ledger = vec![
+            change("game-mode", "2026-10-23T14:38:16+00:00", None),
+            change("visual-effects", "2026-10-27T12:00:00+00:00", None),
+        ];
+        let got = between_session_noise(&s, &s[5], &ledger).expect("the 10-29 run measures it");
+        assert_eq!(got.sessions, 3);
+        assert!((got.spread_pct - spread(211.0, 214.0)).abs() < 1e-9, "{got:?}");
+        assert_eq!(noise_band_pct(Some(&got)), 3.0);
+    }
+
+    /// P4-noise-stretch (R4): sessions a few weeks old, even with nothing changed since, are not this
+    /// PC's noise now: drivers, games and Windows move on, so only the last 14 days count.
+    #[test]
+    fn a_run_older_than_14_days_is_not_this_pcs_noise_now() {
+        let s = vec![
+            played("2026-10-01T18:00:00+00:00", 150.0, 14),
+            played("2026-10-01T18:30:00+00:00", 156.0, 14),
+            played("2026-10-01T19:00:00+00:00", 147.0, 14),
+            played("2026-10-25T18:00:00+00:00", 153.0, 14),
+        ];
+        let long_ago = vec![change("game-mode", "2026-09-01T10:00:00+00:00", None)];
+        assert_eq!(between_session_noise(&s, &s[3], &long_ago), None, "only the session of 10-25 is in the last 14 days");
+        // Read for a session not in the store (the session-end toast's view): the same.
+        let next = played("2026-10-25T19:00:00+00:00", 151.0, 14);
+        assert_eq!(between_session_noise(&s[..3], &next, &long_ago), None);
     }
 
     // ─── P5-realplay / P4-noise-stretch: the run a measurement now belongs to ──────
