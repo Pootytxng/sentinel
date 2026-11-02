@@ -1170,8 +1170,49 @@ describe("P5-realplay: the change stays on while you play", () => {
     render(<ExperimentBench />);
     await statusIs("Compy has enough sessions for a result.");
     expect(calls("conclude_realplay")).toHaveLength(0);
+    // Review 2026-11-02 (fix 4): before the tap, the panel says what the tap does.
+    expect(screen.getByTestId("realplay-see-how").textContent).toBe(
+      "Seeing the result ends the test: Compy keeps HAGS only if the result is Likely better, and otherwise puts it back the way it was before the test.",
+    );
     fireEvent.click(await enabled("See the result"));
     expect(await finalLine()).toMatch(/^Likely better: Compy kept HAGS\./);
+  });
+
+  // Review 2026-11-02 (fix 8): a record that holds no numbers for its verdict (a crash one) said
+  // "Unknown: ... doesn't hold the numbers" and, in its receipt, "Verdict regressed", "Confidence medium".
+  it("a result whose record holds no numbers says not judged for its verdict and confidence, in en and zh-CN", async () => {
+    const CRASHED = {
+      status: "restored",
+      kept: false,
+      verdict: "regressed",
+      verdict_confidence: "high",
+      stop_reason: "crash-during-treatment",
+      outcome: "recommended",
+      real_play: { before: [OLD, ...AS_IS].map(numbers), with: [1, 2].map((i) => numbers(session(ago(10 * i), 5400))) },
+    };
+    for (const [lang, see, rows] of [
+      ["en", "See the result", { verdict: "Verdict", confidence: "Confidence", word: "not judged" }],
+      ["zh-CN", "查看结果", { verdict: "判定", confidence: "置信度", word: "未判定" }],
+    ] as const) {
+      cleanup();
+      resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });
+      await i18n.changeLanguage(lang);
+      try {
+        state.experiments = [running()];
+        state.sessions = [OLD, ...AS_IS];
+        state.rpProgress = backendLike({ phase: "ready", with: 3 });
+        state.concludeResult = CRASHED;
+        render(<ExperimentBench />);
+        fireEvent.click(await enabled(see));
+        const line = await finalLine();
+        if (lang === "en") expect(line).toBe("Unknown: Compy put HAGS back. This record doesn't hold the numbers its verdict was judged on.");
+        const receipt = await receiptRows();
+        expect(receipt[rows.verdict], lang).toBe(rows.word);
+        expect(receipt[rows.confidence], lang).toBe(rows.word);
+      } finally {
+        await i18n.changeLanguage("en");
+      }
+    }
   });
 
   it("with three as-is sessions the change goes on at once and the session about to be played is measured with it", async () => {

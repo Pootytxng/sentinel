@@ -218,6 +218,9 @@ export type RealPlayView = {
   putBackHow: string | null;
   /** When stopped: what closing the test does. */
   closeHow: string | null;
+  /** When a look decided: what "See the result" does, before the tap (concludeRealPlayTrial: the
+   *  conclude keeps the change only on a Likely better and puts it back otherwise). */
+  seeHow: string | null;
   /** Each session not counted, with when and why. */
   notCounted: string[];
   /** The panel's one main action: measure the next session, see the result, or close the test. */
@@ -251,6 +254,7 @@ export function realPlayView(
       notYet: null,
       putBackHow,
       closeHow: null,
+      seeHow: null,
       notCounted: [],
       action: null,
     };
@@ -271,12 +275,22 @@ export function realPlayView(
       // Nothing is on to put back once the change reads off or was put back in history.
       putBackHow: on === "noLongerOn" ? null : putBackHow,
       closeHow: t("lab.experimentBench.journey.realPlay.closeHow", { change }),
+      seeHow: null,
       notCounted,
       action: "close",
     };
   }
   if (own.phase === "ready") {
-    return { changeOn, status: t("lab.experimentBench.journey.realPlay.ready"), notYet: null, putBackHow, closeHow: null, notCounted, action: "see-result" };
+    return {
+      changeOn,
+      status: t("lab.experimentBench.journey.realPlay.ready"),
+      notYet: null,
+      putBackHow,
+      closeHow: null,
+      seeHow: t("lab.experimentBench.journey.realPlay.seeHow", { change }),
+      notCounted,
+      action: "see-result",
+    };
   }
   return {
     changeOn,
@@ -284,6 +298,7 @@ export function realPlayView(
     notYet: own.band_pct != null ? t("lab.experimentBench.journey.realPlay.notYet", { band: one(own.band_pct) }) : null,
     putBackHow,
     closeHow: null,
+    seeHow: null,
     notCounted,
     action: "measure",
   };
@@ -348,6 +363,14 @@ function because(exp: RealPlayRecord, t: Translate): string {
   return t(`lab.experimentBench.journey.putBackWhy.${PUT_BACK_WHY[exp.verdict ?? ""] ?? "other"}`);
 }
 
+/** A measured verdict (Likely better / worse / no clear difference) whose numbers the record doesn't
+ *  hold: its line says Unknown and that the record doesn't hold them (`realPlayResult`), and its
+ *  receipt says the verdict and confidence were not judged, never a verdict without its numbers. */
+export function realPlayNumbersMissing(exp: { verdict: string | null; real_play?: RealPlayEvidence | null }): boolean {
+  const rp = exp.real_play ?? {};
+  return MEASURED.has(exp.verdict ?? "") && !(finite(rp.band_pct) && finite(rp.delta_low1_pct) && finite(rp.delta_avg_pct));
+}
+
 /** Its own change was put back in Test → Applied & history: the record keeps its measured verdict,
  *  never keeps the change, and says who put it back. */
 const putBackInHistory = (exp: { stop_reason?: string | null; real_play?: RealPlayEvidence | null }): boolean =>
@@ -406,8 +429,8 @@ export function realPlayResult(exp: RealPlayRecord, game: string, t: Translate):
   }
   if (exp.verdict === "too-noisy" && finite(band))
     return t("lab.experimentBench.journey.realPlay.unknown", { action, game, band: one(band), with: counted });
-  // A measured verdict whose numbers the record doesn't hold: never filled in, and never "not judged".
-  if (MEASURED.has(exp.verdict ?? "")) return t("lab.experimentBench.journey.realPlay.unknownNoNumbers", { action });
+  // A measured verdict whose numbers the record doesn't hold: never filled in.
+  if (realPlayNumbersMissing(exp)) return t("lab.experimentBench.journey.realPlay.unknownNoNumbers", { action });
   // No look decided (the test stopped before enough sessions counted): say how few counted.
   if (rp.look == null) {
     if (inHistory) return t("lab.experimentBench.journey.realPlay.unknownShortHistory", { change, count: counted });

@@ -13,6 +13,7 @@ import {
   realPlayCounts,
   realPlayFace,
   realPlayNoiseLine,
+  realPlayNumbersMissing,
   realPlayOffer,
   realPlayResult,
   realPlayView,
@@ -126,7 +127,11 @@ describe("P5-realplay: what the progress read says", () => {
       status: "Compy has enough sessions for a result.",
       action: "see-result",
       closeHow: null,
+      // Review 2026-11-02 (fix 4): before the tap, what See the result does (concludeRealPlayTrial).
+      seeHow:
+        "Seeing the result ends the test: Compy keeps HAGS only if the result is Likely better, and otherwise puts it back the way it was before the test.",
     });
+    for (const phase of ["collecting", "stopped"] as const) expect(realPlayView(RUNNING, progress({ phase }), t, "en").seeHow, phase).toBeNull();
     const lines: Record<string, string> = {
       "change-off": "HAGS no longer reads as on, so no new session can count. If it reads as on again, Compy keeps collecting.",
       "put-back-in-history": "HAGS was put back in Test → Applied & history, so the test can't go on.",
@@ -314,6 +319,21 @@ describe("P5-realplay: what a concluded real-play Trial says", () => {
     );
   });
 
+  // Review 2026-11-02 (fix 8): such a record (a crash one too) printed "Verdict regressed" and
+  // "Confidence medium" in its receipt under that Unknown headline. Its receipt reads the same rule.
+  it("knows a measured verdict whose numbers the record doesn't hold, the one its headline calls Unknown", () => {
+    const numbers = { band_pct: 3, delta_low1_pct: 12.1, delta_avg_pct: 0.4 };
+    for (const verdict of ["improved", "no-change", "regressed"]) {
+      expect(realPlayNumbersMissing(concluded({ verdict }, { look: 1 })), verdict).toBe(true);
+      expect(realPlayNumbersMissing(concluded({ verdict }, { ...numbers, delta_avg_pct: null })), verdict).toBe(true);
+      expect(realPlayNumbersMissing(concluded({ verdict }, numbers)), verdict).toBe(false);
+    }
+    // A crash record: a measured verdict, and no numbers at all.
+    expect(realPlayNumbersMissing({ ...concluded({ verdict: "regressed", stop_reason: "crash-during-treatment" }), real_play: null })).toBe(true);
+    // A verdict that judged nothing is not "missing" numbers: it never had any to hold.
+    for (const verdict of ["too-noisy", "insufficient-evidence", "confounded"]) expect(realPlayNumbersMissing(concluded({ verdict })), verdict).toBe(false);
+  });
+
   // Rust review fix (claude/train-p5-rust-fixes): a change put back in Test → Applied & history keeps
   // its measured verdict with kept=false. Its line says who put it back and never that it was kept.
   it("put back in Applied & history: the measured verdict stands, and it is never called kept", () => {
@@ -405,6 +425,7 @@ describe("P5-realplay: every line in zh-CN too", () => {
       lines.push(v.changeOn, v.status, v.putBackHow, ...v.notCounted);
       if (v.notYet) lines.push(v.notYet);
       if (v.closeHow) lines.push(v.closeHow);
+      if (v.seeHow) lines.push(v.seeHow);
     }
     lines.push(realPlayView(RUNNING, null, t, "zh-CN", "x").status);
     const verdicts: [Partial<RealPlayRecord>, Record<string, unknown>][] = [

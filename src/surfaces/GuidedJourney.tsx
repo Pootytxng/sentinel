@@ -88,6 +88,7 @@ import {
   isRealPlay,
   notCountedWhy,
   realPlayConfidence,
+  realPlayNumbersMissing,
   realPlayOffer,
   realPlayResult,
   realPlayView,
@@ -932,14 +933,20 @@ function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
   // P5-realplay: what real play judged on, from the record's own evidence; nothing it didn't record.
   const rp = isRealPlay(exp) ? (exp.real_play ?? null) : null;
   const count = (n: number | undefined) => (n != null ? String(n) : null);
+  // Review 2026-11-02: a real-play verdict whose numbers the record doesn't hold reads Unknown above,
+  // so its verdict and confidence rows say not judged, never a verdict without its numbers.
+  const unjudged = isRealPlay(exp) && realPlayNumbersMissing(exp);
   return (
     <dl className="journey-receipt">
       <ReceiptRow label={rk("change")} value={exp.rec_id} />
       <ReceiptRow label={rk("outcome")} value={exp.outcome ?? null} />
       <ReceiptRow label={rk("mode")} value={rp ? (exp.mode ?? null) : null} />
-      <ReceiptRow label={rk("verdict")} value={exp.verdict} />
+      <ReceiptRow label={rk("verdict")} value={unjudged ? rk("notJudged") : exp.verdict} />
       {/* Real play never claims High confidence (none is recorded); a stored "high" reads as medium. */}
-      <ReceiptRow label={rk("confidence")} value={rp ? realPlayConfidence(exp.verdict_confidence) : (exp.verdict_confidence ?? null)} />
+      <ReceiptRow
+        label={rk("confidence")}
+        value={unjudged ? rk("notJudged") : rp ? realPlayConfidence(exp.verdict_confidence) : (exp.verdict_confidence ?? null)}
+      />
       {rp && (
         <>
           <ReceiptRow label={rk("sessionsBefore")} value={count(rp.before?.length)} />
@@ -1543,6 +1550,12 @@ export function RealPlayPanel({
       {view.closeHow && (
         <p className="exp-fineprint" data-testid="realplay-close-how">
           {view.closeHow}
+        </p>
+      )}
+      {view.seeHow && (
+        // Review 2026-11-02: what "See the result" does, said before the tap.
+        <p className="exp-fineprint" data-testid="realplay-see-how">
+          {view.seeHow}
         </p>
       )}
       {(view.action != null || view.putBackHow != null) && (
