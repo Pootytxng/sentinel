@@ -1282,8 +1282,9 @@
     width: max-content;
   }
 }
-/* Content scrolls out under a soft edge instead of a hard cut at the window's foot. */
-:root[data-v2="on"]:not([data-surface="solid"]) .v2-content {
+/* Content scrolls out under a soft edge instead of a hard cut at the window's foot, on every
+   surface: scoped to glass, Solid's lane edge cut lines of text mid-glyph (GL-empty). */
+:root[data-v2="on"] .v2-content {
   -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 22px), transparent);
   mask-image: linear-gradient(to bottom, black calc(100% - 22px), transparent);
 }

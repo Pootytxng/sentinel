@@ -654,9 +654,6 @@
       "detail": "Windows 记录了这次事件：{{kind}}，{{when}}。在你决定之前，Compy 不会做任何改动。",
       "detailRecorded": "这是 Windows 记录的事件。在你决定之前，Compy 不会做任何改动。"
     },
-    "noGames": "游戏",
-    "noGamesValue": "还没有测量记录",
-    "noGamesNote": "在“实时”里开启采集，然后照常游戏",
     "chartSub": "{{name}} · 最新的在右边",
     "chartEmpty": "开启采集玩一局游戏，记录就会出现在这里。",
     "chartPick": "游戏",
@@ -666,7 +663,7 @@
       "lowNote": "{{game}} 最卡的时刻 · 实测",
       "lowNoneNote": "{{game}} 最卡的时刻没有测到",
       "none": "还没有记录",
-      "noneNote": "打开“实时”开始采集"
+      "unmeasuredNote": "{{game}} 上一次没有测到"
     },
     "checks": {
       "title": "Windows 设置",
@@ -680,14 +677,14 @@
     },
     "limiter": {
       "title": "是什么在拖慢 FPS",
-      "none": "你上一次实测的游戏中没有明显的瓶颈。",
-      "unknown": "暂时未知。Compy 需要一次实测的游戏记录才能判断。"
+      "none": "Compy 检查过的设置里没有明显的瓶颈。",
+      "unknown": "暂时未知：Compy 还没有读取你的设置。"
     },
     "details": "打开完整健康检查",
     "back": "返回概览",
     "allGames": "全部游戏",
-    "allGamesUnit_one": "款游戏已测量",
-    "allGamesUnit_other": "款游戏已测量",
-    "allGamesNote": "Compy 测量过的每款游戏"
+    "allGamesUnit_one": "款游戏已记录",
+    "allGamesUnit_other": "款游戏已记录",
+    "allGamesNote": "Compy 记录过的每款游戏"
   }
 }

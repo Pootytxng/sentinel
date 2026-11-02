@@ -72,3 +72,24 @@ describe("TrustMoment — a rollback error", () => {
     expect(err.textContent).not.toMatch(/undo worked on Windows/i);
   });
 });
+
+// Desk-batch review 2026-10-31: the card now sits inside the Health summary, so opening the full
+// health check (or leaving Health) remounts it while a demo is mid-flight. A fresh copy must not
+// offer or start a second run: its apply would snapshot the first run's "on" as its "before", and
+// its undo would leave the setting on while the ledger reads it undone.
+describe("TrustMoment — one demo at a time", () => {
+  it("a card mounted while a demo runs offers nothing and starts nothing", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const calls = () => vi.mocked(invoke).mock.calls.filter(([c]) => c === "apply_recommendation").length;
+    const before = calls();
+    const first = render(<TrustMoment recs={[REC]} changes={[]} isAppliable={() => true} onChanged={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /watch it work/i }));
+    // The remount: the first card goes away mid-run and a fresh one mounts.
+    first.unmount();
+    render(<TrustMoment recs={[REC]} changes={[]} isAppliable={() => true} onChanged={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /watch it work/i })).toBeNull();
+    expect(calls() - before).toBe(1);
+    // Let the first run finish its own undo so no state leaks into the next test.
+    await new Promise((r) => setTimeout(r, 2800));
+  });
+});

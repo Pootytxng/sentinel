@@ -37,6 +37,13 @@ const persistDone = () => {
 
 type Phase = "offer" | "applying" | "applied" | "reverting" | "done" | "error";
 
+// One demo at a time, across remounts. The card lives inside the Health summary, so "Open the full
+// health check" (or leaving Health) remounts it while a run is mid-flight. A fresh copy must neither
+// offer nor start a second run: its apply would snapshot the first run's "on" as its "before", and
+// its undo would then leave the setting on while the ledger reads it undone (rollback-first,
+// ARCHITECTURE_LOCKS §3). The first run carries on to its own undo after an unmount.
+let demoInFlight = false;
+
 export function TrustMoment({
   recs,
   changes,
@@ -57,7 +64,7 @@ export function TrustMoment({
 
   // Once running, the card stays through the whole loop even though the demo's own apply makes
   // the ledger non-empty mid-flight; the offer gate only decides whether to APPEAR.
-  const offered = shouldOfferTrustMoment(changes, done) && demoRec != null;
+  const offered = shouldOfferTrustMoment(changes, done) && demoRec != null && !demoInFlight;
   if (!offered && phase === "offer") return null;
   if (done && phase === "offer") return null;
 
@@ -69,43 +76,48 @@ export function TrustMoment({
   };
 
   const run = async () => {
-    if (!demoRec) return;
-    setPhase("applying");
-    setErrorMsg(null);
-    let change: AppliedChange;
+    if (!demoRec || demoInFlight) return;
+    demoInFlight = true;
     try {
-      change = await writeLedger<AppliedChange>("apply_recommendation", {
-        recId: demoRec.id,
-        recTitle: demoRec.title,
-      });
-    } catch (e) {
-      setErrorMsg(t("home.trustMoment.errors.applyFailed", { error: String(e) }));
-      setPhase("error");
-      return;
-    }
-    setReceipt(change);
-    setPhase("applied");
-    // Let the applied state + receipt actually be READ before the rollback half runs.
-    await new Promise((r) => setTimeout(r, 2600));
-    setPhase("reverting");
-    try {
-      await writeLedger("rollback_change", { changeId: change.id });
-    } catch (e) {
-      // Honest, unsoftened: the change is real and still active — say exactly where to undo it.
-      // #631: an undo that ran but couldn't be saved is not a failed undo — never say "still active".
-      setErrorMsg(
-        isUnrecordedUndo(e)
-          ? t("common.undoUnrecorded")
-          : t("home.trustMoment.errors.rollbackFailed", { error: String(e) }),
-      );
-      setPhase("error");
+      setPhase("applying");
+      setErrorMsg(null);
+      let change: AppliedChange;
+      try {
+        change = await writeLedger<AppliedChange>("apply_recommendation", {
+          recId: demoRec.id,
+          recTitle: demoRec.title,
+        });
+      } catch (e) {
+        setErrorMsg(t("home.trustMoment.errors.applyFailed", { error: String(e) }));
+        setPhase("error");
+        return;
+      }
+      setReceipt(change);
+      setPhase("applied");
+      // Let the applied state + receipt actually be READ before the rollback half runs.
+      await new Promise((r) => setTimeout(r, 2600));
+      setPhase("reverting");
+      try {
+        await writeLedger("rollback_change", { changeId: change.id });
+      } catch (e) {
+        // Honest, unsoftened: the change is real and still active — say exactly where to undo it.
+        // #631: an undo that ran but couldn't be saved is not a failed undo — never say "still active".
+        setErrorMsg(
+          isUnrecordedUndo(e)
+            ? t("common.undoUnrecorded")
+            : t("home.trustMoment.errors.rollbackFailed", { error: String(e) }),
+        );
+        setPhase("error");
+        onChanged();
+        return;
+      }
+      setPhase("done");
+      persistDone();
+      setDone(true);
       onChanged();
-      return;
+    } finally {
+      demoInFlight = false;
     }
-    setPhase("done");
-    persistDone();
-    setDone(true);
-    onChanged();
   };
 
   return (
