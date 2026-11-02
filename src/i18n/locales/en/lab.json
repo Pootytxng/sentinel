@@ -537,6 +537,12 @@
           "beforeMissing": "The sessions from before the change are no longer in Compy's session history, so there is nothing to compare against.",
           "other": "This test can't go on as it is."
         },
+        "stoppedOn": {
+          "noLongerOn": "{{change}} is no longer on.",
+          "cantTell": "Compy can't tell whether {{change}} is on right now.",
+          "stillOn": "{{change}} is still on, but this test can't reach a result.",
+          "notPutBack": "Compy hasn't put {{change}} back, but this test can't go on."
+        },
         "notCounted": "Not counted:",
         "notCountedItem": "{{when}}: {{why}}",
         "reason": {

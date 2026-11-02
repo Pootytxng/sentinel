@@ -1440,8 +1440,9 @@ function noteText(note: RealPlayNote, t: Translate): string {
 
 /** P5-realplay: a running real-play Trial, derived from its record and its progress read (never from
  *  this module's state, so it reads the same after a restart). It says the change is on and since
- *  when, how long it may stay on, how to put it back (with "Put it back now", the existing
- *  restore_experiment), where the count stands ("Keep playing, Compy is still collecting (N of M
+ *  when, how long it may stay on (once the test stopped, only what the stop says about the change),
+ *  how to put it back (with "Put it back now", the existing restore_experiment; not once a stop says
+ *  the change is already off), where the count stands ("Keep playing, Compy is still collecting (N of M
  *  sessions)"), and every session that didn't count, with why. Never an "interrupted" banner: the
  *  change staying on across restarts is the test. Its main button measures the next session, sees a
  *  result a look has decided, or closes a test that can't go on, each through the journey's audited
@@ -1530,20 +1531,26 @@ export function RealPlayPanel({
               {t("lab.experimentBench.journey.realPlay.closeTest")}
             </button>
           )}
-          <button
-            type="button"
-            className="exp-cta-ghost"
-            disabled={!canAct}
-            onClick={() => {
-              if (canAct) void putBackRealPlay(exp.id, exp.rec_title, refresh);
-            }}
-          >
-            {t("lab.experimentBench.journey.realPlay.putBackNow")}
-          </button>
+          {/* Review 2026-11-02: once a stop says the change is already off, there is nothing on to put
+              back, so neither the button nor its line shows; everywhere else the way back does. */}
+          {view.putBackHow != null && (
+            <button
+              type="button"
+              className="exp-cta-ghost"
+              disabled={!canAct}
+              onClick={() => {
+                if (canAct) void putBackRealPlay(exp.id, exp.rec_title, refresh);
+              }}
+            >
+              {t("lab.experimentBench.journey.realPlay.putBackNow")}
+            </button>
+          )}
         </div>
-        <p className="exp-fineprint" data-testid="realplay-put-back-how">
-          {view.putBackHow}
-        </p>
+        {view.putBackHow != null && (
+          <p className="exp-fineprint" data-testid="realplay-put-back-how">
+            {view.putBackHow}
+          </p>
+        )}
         {view.notCounted.length > 0 && (
           <div data-testid="realplay-not-counted">
             <p className="exp-fineprint">{t("lab.experimentBench.journey.realPlay.notCounted")}</p>

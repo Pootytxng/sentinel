@@ -149,6 +149,52 @@ describe("P5-realplay: what the progress read says", () => {
     }
   });
 
+  // Review 2026-11-02 (fix 1): every stopped state printed "HAGS is on (since …). It stays on while you
+  // play, until Compy has a result", the put-back line and its button, beside a status saying the
+  // change is off, was put back or can't be read. The line now follows the stop in the backend's own
+  // stop order (realplay.rs `with_arm`): off and put back say so and offer no put-back; unreadable says
+  // Compy can't tell; before-missing is only ever reported while the setting reads on; every other stop
+  // can come first over a setting that reads off or can't be read, so it says only what Compy did.
+  describe("a stopped test says plainly whether its change is on", () => {
+    const ON_LINE = {
+      en: {
+        noLongerOn: "HAGS is no longer on.",
+        cantTell: "Compy can't tell whether HAGS is on right now.",
+        stillOn: "HAGS is still on, but this test can't reach a result.",
+        notPutBack: "Compy hasn't put HAGS back, but this test can't go on.",
+      },
+      "zh-CN": {
+        noLongerOn: "HAGS已不再开启。",
+        cantTell: "Compy 现在无法判断HAGS是否开启。",
+        stillOn: "HAGS仍然开启，但这次测试无法得出结果。",
+        notPutBack: "Compy 还没有把HAGS恢复原样，但这次测试无法继续。",
+      },
+    } as const;
+    const STOPPED: [string, keyof (typeof ON_LINE)["en"]][] = [
+      ["change-off", "noLongerOn"],
+      ["put-back-in-history", "noLongerOn"],
+      ["unreadable", "cantTell"],
+      ["before-missing", "stillOn"],
+      ["window-over", "notPutBack"],
+      ["other-change", "notPutBack"],
+      ["conditions", "notPutBack"],
+      ["a-newer-stop", "notPutBack"],
+    ];
+    for (const lang of ["en", "zh-CN"] as const)
+      it.each(STOPPED)(`${lang}: %s`, async (stop, on) => {
+        await i18n.changeLanguage(lang);
+        const v = realPlayView(RUNNING, progress({ phase: "stopped", stop, band_pct: 7.8 }), t, lang);
+        expect(v.changeOn).toBe(ON_LINE[lang][on]);
+        // No stopped state says the change stays on until Compy has a result.
+        const said = [v.changeOn, v.status, v.notYet, v.putBackHow, v.closeHow].filter((l) => l != null).join("\n");
+        expect(said).not.toMatch(/stays on|until Compy has a result|一直保持开启|得出结果之前/);
+        // The two stops that say the change is already off offer no put-back, line or button.
+        if (on === "noLongerOn") expect(v.putBackHow).toBeNull();
+        else expect(v.putBackHow).toBe(t("lab.experimentBench.journey.realPlay.putBackHow"));
+        expect(v.action).toBe("close");
+      });
+  });
+
   it("lists every session not counted, when it was played and why", () => {
     const reasons = ["too-short", "behind", "before-change", "conditions-changed", "change-not-on", "other-compy-change", "gaming-mode-differs", "after-window", "no-reading", "other", "a-newer-reason"];
     const at = "2026-10-21T20:15:00+00:00";

@@ -528,6 +528,12 @@
           "beforeMissing": "更改前的对局已不在 Compy 的对局历史中，所以没有可比较的对象。",
           "other": "这次测试无法照原样继续。"
         },
+        "stoppedOn": {
+          "noLongerOn": "{{change}}已不再开启。",
+          "cantTell": "Compy 现在无法判断{{change}}是否开启。",
+          "stillOn": "{{change}}仍然开启，但这次测试无法得出结果。",
+          "notPutBack": "Compy 还没有把{{change}}恢复原样，但这次测试无法继续。"
+        },
         "notCounted": "未计入：",
         "notCountedItem": "{{when}}：{{why}}",
         "reason": {

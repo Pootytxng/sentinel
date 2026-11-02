@@ -2849,6 +2849,25 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     expect(screen.queryByRole("button", { name: "Measure my next session" })).toBeNull();
   });
 
+  // Review 2026-11-02 (fix 1): a stopped panel offered the put-back beside "no longer reads as on".
+  it("a stopped test whose change is already off offers no put-back; one that can't read it still does", async () => {
+    state.gate = true;
+    state.experiments = [RP_RUNNING];
+    state.realPlay = rpProgress({ phase: "stopped", stop: "change-off" });
+    const first = render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getByTestId("realplay-on").textContent).toBe("HAGS is no longer on."));
+    expect(screen.queryByRole("button", { name: "Put it back now" })).toBeNull();
+    expect(screen.queryByTestId("realplay-put-back-how")).toBeNull();
+    expect(screen.getByRole("button", { name: "Close this test" })).toBeEnabled();
+    first.unmount();
+    state.realPlay = rpProgress({ phase: "stopped", stop: "unreadable" });
+    render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getByTestId("realplay-on").textContent).toBe("Compy can't tell whether HAGS is on right now."));
+    expect(screen.getByRole("button", { name: "Put it back now" })).toBeEnabled();
+    expect(screen.getByTestId("realplay-put-back-how")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close this test" })).toBeEnabled();
+  });
+
   it("says the same in zh-CN", async () => {
     await i18n.changeLanguage("zh-CN");
     try {

@@ -162,6 +162,24 @@ const STOP_KEY: Record<RealPlayStop, string> = {
   "window-over": "windowOver",
   "before-missing": "beforeMissing",
 };
+/** What a stopped test says about its change (journey.realPlay.stoppedOn.*). realplay.rs `with_arm`
+ *  reports the first stop that holds, in this order: put back in history, another Compy change, a
+ *  condition, the setting reads off, the window is over, the setting can't be read, the as-is sessions
+ *  are gone. So the two stops that say the change is off are "no longer on"; an unreadable setting is
+ *  "can't tell"; before-missing, reported only once every stop before it is ruled out, is the one with
+ *  the setting reading on ("still on", and with no as-is session to compare against no result can
+ *  come); every other stop can come first over a setting that reads off or can't be read, and can
+ *  still close with a result from the sessions counted, so it says only what Compy did: it hasn't
+ *  put the change back, and the test can't go on. A stop this build doesn't know says the same. */
+const STOPPED_ON: Record<RealPlayStop, "noLongerOn" | "cantTell" | "stillOn" | "notPutBack"> = {
+  "change-off": "noLongerOn",
+  "put-back-in-history": "noLongerOn",
+  unreadable: "cantTell",
+  "other-change": "notPutBack",
+  conditions: "notPutBack",
+  "window-over": "notPutBack",
+  "before-missing": "stillOn",
+};
 const REASON_KEY: Record<string, string> = {
   "too-short": "tooShort",
   behind: "behind",
@@ -185,15 +203,19 @@ export function notCountedWhy(reason: string, minReadings: number, t: Translate)
 
 /** What a running real-play Trial's panel says, from its record and its progress read now. */
 export type RealPlayView = {
-  /** That the change is on, since when, and how long it may stay on (max sessions, until when). */
+  /** Whether the change is on. While the test runs: that it is on, since when, and how long it may
+   *  stay on (max sessions, until when). Once it stopped: only what the stop says (`STOPPED_ON`),
+   *  never how long it stays on. */
   changeOn: string;
   /** Where it stands: still collecting N of M, a result is ready, why it stopped, or that its
    *  progress can't be read right now. null while the first read hasn't answered. */
   status: string | null;
   /** While still collecting after a look: how much the sessions vary, so a few more are needed. */
   notYet: string | null;
-  /** How to put it back (always said). */
-  putBackHow: string;
+  /** How to put it back, said beside the button that does. null only once a stop says the change is
+   *  already off (then neither the line nor the button shows): everywhere else the way back shows,
+   *  including when Compy can't tell whether it is on. */
+  putBackHow: string | null;
   /** When stopped: what closing the test does. */
   closeHow: string | null;
   /** Each session not counted, with when and why. */
@@ -240,12 +262,14 @@ export function realPlayView(
     }),
   );
   if (own.phase === "stopped") {
-    const stop = own.stop && STOPS.has(own.stop) ? STOP_KEY[own.stop as RealPlayStop] : "other";
+    const known = own.stop && STOPS.has(own.stop) ? (own.stop as RealPlayStop) : null;
+    const on = known ? STOPPED_ON[known] : "notPutBack";
     return {
-      changeOn,
-      status: t(`lab.experimentBench.journey.realPlay.stop.${stop}`, { change, days: own.window_days }),
+      changeOn: t(`lab.experimentBench.journey.realPlay.stoppedOn.${on}`, { change }),
+      status: t(`lab.experimentBench.journey.realPlay.stop.${known ? STOP_KEY[known] : "other"}`, { change, days: own.window_days }),
       notYet: null,
-      putBackHow,
+      // Nothing is on to put back once the change reads off or was put back in history.
+      putBackHow: on === "noLongerOn" ? null : putBackHow,
       closeHow: t("lab.experimentBench.journey.realPlay.closeHow", { change }),
       notCounted,
       action: "close",
