@@ -365,7 +365,8 @@ describe("a Trial never reads a lost history as a quiet one (#611 review round 2
     ["next band", fnBody(EXPERIMENT, "pub(crate) fn next_trial_measured_band_pct("), read(String.raw`Some\(baseline\.started_at\.as_str\(\)\)`)],
     // P5-realplay: bounded by the Trial's own newest as-is session, as the two-session conclude is.
     ["real-play conclude", fnBody(EXPERIMENT, "pub(crate) fn conclude_realplay("), read(String.raw`store\.experiments\[idx\]\.baseline_session_id\.as_deref\(\)`)],
-    ["real-play progress", fnBody(EXPERIMENT, "pub(crate) fn get_realplay_progress("), read(String.raw`rec\.baseline_session_id\.as_deref\(\)`)],
+    // Its work runs on the blocking pool (review of 59fc753), in the helper the command hands it to.
+    ["real-play progress", fnBody(EXPERIMENT, "fn read_realplay_progress("), read(String.raw`rec\.baseline_session_id\.as_deref\(\)`)],
   ] as const;
 
   it("every Trial-side read goes through the set-aside check, bounded by its own session, never raw", () => {

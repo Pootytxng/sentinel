@@ -3932,8 +3932,20 @@ pub(crate) fn record_real_play(
 /// runs. Before a start it checks only that no Compy change moved since the newest as-is session
 /// began; the start checks the active-change counts live again. A change history that can't back
 /// the count is refused in words, never read as nothing counted.
+///
+/// Off the main thread (review of 59fc753): a plain command runs on the main thread, and each read
+/// loads three stores and may run the setting's probe (`powercfg`, `sc`), so the window would stall
+/// while it ran. It runs on the blocking pool instead, as `latency_measure_*` do; the invoke is the
+/// same (`{ game }` in, the progress or an error out).
 #[tauri::command]
-pub(crate) fn get_realplay_progress(game: String) -> Result<crate::realplay::RealPlayProgress, String> {
+pub(crate) async fn get_realplay_progress(game: String) -> Result<crate::realplay::RealPlayProgress, String> {
+    tauri::async_runtime::spawn_blocking(move || read_realplay_progress(&game))
+        .await
+        .map_err(|e| format!("Compy couldn't read where real play stands ({e})"))?
+}
+
+/// The work [`get_realplay_progress`] runs on the blocking pool.
+fn read_realplay_progress(game: &str) -> Result<crate::realplay::RealPlayProgress, String> {
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
     }
@@ -8032,5 +8044,22 @@ mod experiment_tests {
         assert!(write < body.find("finish_conclude(&mut store, idx, outcome, target_now)").unwrap());
         let crash_rule = &src[src.find("pub(crate) fn real_play_crash(").unwrap()..];
         assert!(crash_rule.contains("with_compy_state(crash, other_compy_change(rec, reference, newest, ledger))"));
+    }
+
+    #[test]
+    fn real_play_progress_runs_off_the_main_thread() {
+        let src = include_str!("experiment.rs");
+        let at = src.find("fn get_realplay_progress(").unwrap();
+        let head = &src[src[..at].rfind("#[tauri::command]").unwrap()..at];
+        assert!(head.contains("async"), "a plain command runs on the main thread: {head:?}");
+        let body = &src[at..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        assert!(body.contains("tauri::async_runtime::spawn_blocking(move || read_realplay_progress(&game))"), "{body}");
+        // The invoke the webview makes is unchanged: `{ game }` in, the progress or an error out.
+        assert!(body.starts_with("fn get_realplay_progress(game: String) -> Result<crate::realplay::RealPlayProgress, String> {"), "{body}");
+        // And the work it hands over is the read it always was: no store lock, no mutation.
+        let work = &src[src.find("fn read_realplay_progress(").unwrap()..];
+        let work = &work[..work.find("\n}\n").unwrap()];
+        assert!(!work.contains("lock_store(") && !work.contains("rollback_change(") && !work.contains("apply_recommendation("), "{work}");
     }
 }
