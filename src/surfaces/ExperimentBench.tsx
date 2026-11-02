@@ -480,11 +480,17 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
   // P5-realplay: a real-play row compared its sessions with the change on against those without it,
   // not one after-session against one baseline; it names how many, with the same rules.
   const rp = isRealPlay(x) ? realPlayCounts(x) : null;
+  // Review 2026-11-02: a real-play Likely better can end put back (its change was undone in Test →
+  // Applied & history before the conclude, which then keeps nothing), so its rule never says kept.
+  // A two-session row can't: every Better is kept (keep_rule) and nothing un-keeps the record later.
+  const putBackAfterBetter = rp != null && x.verdict === "improved" && !x.kept;
   // P4-maxfps-smooth: a Maximum FPS row leads with the average.
   if (x.outcome === "max-fps") {
     const rule =
       x.verdict === "improved"
-        ? "receiptRuleMaxKept"
+        ? putBackAfterBetter
+          ? "receiptRuleMaxPutBack"
+          : "receiptRuleMaxKept"
         : x.verdict === "regressed"
           ? avg < -band
             ? "receiptRuleMaxAvgFell"
@@ -508,7 +514,9 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
   }
   const rule =
     x.verdict === "improved"
-      ? "receiptRuleKept"
+      ? putBackAfterBetter
+        ? "receiptRulePutBack"
+        : "receiptRuleKept"
       : x.verdict === "regressed"
         ? "receiptRuleLowFell"
         : low > band

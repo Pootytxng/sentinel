@@ -2980,6 +2980,47 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     expect(summary.textContent).not.toMatch(/Measurably faster/);
   });
 
+  // Review 2026-11-02 (fix 3): the rule sentence was picked by verdict alone, so a real-play row put
+  // back in Test → Applied & history after a Likely better ended "...so the change was kept", beside
+  // its own "restored" face.
+  it("a real-play row put back after Likely better never says the change was kept", async () => {
+    state.gate = true;
+    const putBack = {
+      ...RP_KEPT,
+      status: "restored",
+      kept: false,
+      stop_reason: "real-play-put-back-in-history",
+      real_play: { ...RP_KEPT.real_play, stop: "put-back-in-history" },
+    };
+    state.experiments = [putBack];
+    const first = render(<ExperimentBench />);
+    const row = (await screen.findByText("Likely better — restored")).closest("li")!;
+    expect(within(row).getByTestId("exp-compared-receipt").textContent).toBe(
+      "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band. The 1% low rose by more than the band and the average didn't fall by more, but the change was put back before Compy kept it.",
+    );
+    expect(row.textContent).not.toMatch(/so the change was kept/);
+    first.unmount();
+    // Maximum FPS leads with the average, and ends the same way.
+    state.experiments = [{ ...putBack, outcome: "max-fps" }];
+    const second = render(<ExperimentBench />);
+    const maxRow = (await screen.findByText("Likely better — restored")).closest("li")!;
+    expect(within(maxRow).getByTestId("exp-compared-receipt").textContent).toBe(
+      "Judged for Maximum FPS. Compared across 3 sessions with it on and 3 without: average frame rate +0.4%, 1% low +12.1%, both against a ±3% band. The average rose by more than the band and the 1% low didn't fall by more, but the change was put back before Compy kept it.",
+    );
+    second.unmount();
+    await i18n.changeLanguage("zh-CN");
+    try {
+      state.experiments = [putBack];
+      render(<ExperimentBench />);
+      const zhRow = (await screen.findByText("较可能更好——已恢复")).closest("li")!;
+      const zh = within(zhRow).getByTestId("exp-compared-receipt").textContent;
+      expect(zh).toMatch(/但在 Compy 保留它之前，这项更改已被恢复原样。$/);
+      expect(zh).not.toMatch(/所以保留了这项更改/);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   it("a real-play row that judged nothing says why in real-play words, never the session-halves sentence", async () => {
     state.gate = true;
     state.experiments = [
