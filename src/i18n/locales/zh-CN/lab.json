@@ -646,7 +646,7 @@
     "stretchLeftOut": "{{session}}：游戏在后台的 {{minutes}} 分钟没有计入数据。",
     "stretchFlat": "{{session}}：有 {{minutes}} 分钟稳定在约 {{fps}} fps。这可能是菜单、帧率上限或游戏在后台；Compy 无法判断，所以已计入。",
     "stretchFlatFocused": "{{session}}：有 {{minutes}} 分钟稳定在约 {{fps}} fps。这可能是菜单或帧率上限；Compy 无法判断，所以已计入。",
-    "stretchCappedBoth": "两次会话都有一分钟以上稳定在约 {{fps}} fps，这可能是帧率上限。上限生效时，更改无法显示出提升，所以这里没有可测变化也几乎说明不了这项更改本身。",
+    "stretchCappedBoth": "两次会话都稳定在约 {{fps}} fps（之前 {{before}} 分钟，之后 {{after}} 分钟），看起来是同一个帧率上限。上限生效时，更改无法显示出提升，所以这次的“无可测量的变化”几乎说明不了这项更改本身。",
     "spanMinutes": "{{minutes}} 分钟",
     "spanSeconds": "{{seconds}} 秒",
     "receiptTooFewLeftOut": "游戏在前台时只有 {{readings}} 个读数：另有 {{span}} 因为其他窗口在前台而没有计入。",

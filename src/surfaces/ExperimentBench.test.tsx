@@ -1507,13 +1507,24 @@ describe("ExperimentBench — what differed and what wasn't play", () => {
     },
   });
   const CAP_LINE =
-    "Both sessions held at about 320 fps for a minute or more, which may be a frame cap. While a cap holds, a change can't show a gain, so no measurable change here says little about the change itself.";
+    'Both sessions held at about 320 fps (15 min before, 14 min after), which looks like one frame cap. While it holds, a change can\'t show a gain, so this "No measurable change" says little about the change itself.';
 
   it("a No change between two sides held at the same rate says a cap may hide any gain", async () => {
     state.gate = true;
     state.experiments = [capped("no-change", { flat_secs: 900, flat_fps: 319.4 }, { flat_secs: 840, flat_fps: 320.6 })];
     render(<ExperimentBench />);
     await waitFor(() => expect(screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent)).toContain(CAP_LINE));
+  });
+
+  // Desk review 2026-10-31: on the owner's WARDOGS row the cap line sat under the two per-session
+  // "held at about 320 fps" lines it restates, three lines in a row. It now says it once, with the minutes.
+  it("says the shared cap once, in place of the two per-session held lines", async () => {
+    state.gate = true;
+    state.experiments = [capped("no-change", { flat_secs: 900, flat_fps: 319.4 }, { flat_secs: 840, flat_fps: 320.6 })];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent)).toContain(CAP_LINE));
+    const lines = screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent ?? "");
+    expect(lines.filter((l) => /held at about/.test(l))).toEqual([CAP_LINE]);
   });
 
   it.each([
@@ -1526,7 +1537,7 @@ describe("ExperimentBench — what differed and what wasn't play", () => {
     state.experiments = [exp];
     render(<ExperimentBench />);
     await screen.findAllByTestId("exp-stretch-receipt");
-    expect(screen.queryByText(/may be a frame cap\. While a cap holds/)).toBeNull();
+    expect(screen.queryByText(/looks like one frame cap/)).toBeNull();
   });
 
   it("says the cap note in zh-CN", async () => {
@@ -1536,7 +1547,7 @@ describe("ExperimentBench — what differed and what wasn't play", () => {
     render(<ExperimentBench />);
     await waitFor(() =>
       expect(screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent)).toContain(
-        "两次会话都有一分钟以上稳定在约 320 fps，这可能是帧率上限。上限生效时，更改无法显示出提升，所以这里没有可测变化也几乎说明不了这项更改本身。",
+        "两次会话都稳定在约 320 fps（之前 15 分钟，之后 15 分钟），看起来是同一个帧率上限。上限生效时，更改无法显示出提升，所以这次的“无可测量的变化”几乎说明不了这项更改本身。",
       ),
     );
   });
@@ -2596,5 +2607,18 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
     } finally {
       await i18n.changeLanguage("en");
     }
+  });
+});
+
+// Desk review 2026-10-31 (P8-posture-b): the journey line ("1 of 1 tested. Nothing else here is worth
+// testing on this PC.") sat flush against the new "How far may Compy go on this PC?" field, 0px, while
+// the launcher keeps a 12px rhythm everywhere else. jsdom has no layout, so the rule itself is pinned.
+describe("ExperimentBench spacing under the journey line", () => {
+  it("keeps the launcher's 12px rhythm below the journey line", async () => {
+    const { readFileSync } = await import("fs");
+    const css = readFileSync("src/surfaces/ExperimentBench.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = css.match(/\.exp-journey\s*\+\s*\.exp-launch\s*\{([^}]*)\}/);
+    expect(rule, "nothing spaces the launcher from the journey line above it").not.toBeNull();
+    expect(rule![1]).toMatch(/margin-top:\s*12px/);
   });
 });

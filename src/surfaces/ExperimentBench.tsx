@@ -544,6 +544,10 @@ function stretchReceipts(x: Experiment, t: Translate): string[] {
   const p = x.session_pairing;
   if (!p) return [];
   const lines: string[] = [];
+  // A No change between two sides held at one rate gets ONE line that says it all (minutes, rate,
+  // what it means), not the two per-session held lines plus a third restating them (desk review
+  // 2026-10-31: three lines in a row on the WARDOGS firing-range row).
+  const cap = x.verdict === "no-change" ? sharedHeldRate(p.baseline_stretches, p.after_stretches) : null;
   for (const [s, label] of [
     [p.baseline_stretches, "lab.experimentBench.stretchBefore"],
     [p.after_stretches, "lab.experimentBench.stretchAfter"],
@@ -552,13 +556,21 @@ function stretchReceipts(x: Experiment, t: Translate): string[] {
     const session = t(label);
     const leftOut = Math.floor((s.left_out_secs ?? 0) / 60);
     if (leftOut >= 1) lines.push(t("lab.experimentBench.stretchLeftOut", { session, minutes: leftOut }));
+    if (cap != null) continue;
     const flat = Math.floor((s.flat_secs ?? 0) / 60);
     const flatKey = s.left_out_secs != null ? "lab.experimentBench.stretchFlatFocused" : "lab.experimentBench.stretchFlat";
     if (flat >= 1 && s.flat_fps != null)
       lines.push(t(flatKey, { session, minutes: flat, fps: Math.round(s.flat_fps) }));
   }
-  const cap = sharedHeldRate(p.baseline_stretches, p.after_stretches);
-  if (x.verdict === "no-change" && cap != null) lines.push(t("lab.experimentBench.stretchCappedBoth", { fps: cap }));
+  if (cap != null) {
+    lines.push(
+      t("lab.experimentBench.stretchCappedBoth", {
+        fps: cap,
+        before: Math.floor((p.baseline_stretches?.flat_secs ?? 0) / 60),
+        after: Math.floor((p.after_stretches?.flat_secs ?? 0) / 60),
+      }),
+    );
+  }
   return lines;
 }
 

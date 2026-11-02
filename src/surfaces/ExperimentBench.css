@@ -51,6 +51,11 @@
   flex-direction: column;
   gap: 12px;
 }
+/* The journey line above the launcher has no margin of its own, so the risk question sat flush
+   against it (0px, desk review 2026-10-31); the launcher's own 12px rhythm continues across it. */
+.exp-journey + .exp-launch {
+  margin-top: 12px;
+}
 .exp-field {
   display: flex;
   flex-direction: column;

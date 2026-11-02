@@ -16,6 +16,8 @@ export type SettingsDoneLine =
   // The top limiter is a part of the PC. Named only; Compy does not pick a part to buy.
   | { kind: "part-limiter"; title: string };
 
+const AGGREGATE_REC_ROWS = new Set(["pending-safe-recs", "applied-changes"]);
+
 /** The one Phase 9 line under a finished game summary, or null when the summary is not finished.
  *  `priorities`: undefined = no scan cached, null = the priorities read failed. Both are "not measured".
  *  "finished-within-chosen-risk" is excluded: changes above the user's risk are still untested, so
@@ -26,7 +28,11 @@ export function settingsDoneLine(
 ): SettingsDoneLine | null {
   if (headline !== "finished-supported-tests") return null;
   if (!priorities) return { kind: "not-measured" };
-  const limiters = priorities.limiters ?? [];
+  // The two aggregate rows that re-state recommendations (Check.tsx's one-mention law) are not
+  // limiters here: on a finished summary, "safe tweaks not applied" are exactly the changes Compy
+  // just tested and put back for no measured gain (desk review 2026-10-31: the line named Trim
+  // Windows visual effects right under "tested twice, no measurable difference").
+  const limiters = (priorities.limiters ?? []).filter((l) => !AGGREGATE_REC_ROWS.has(l.id));
   const top = limiters.find((l) => l.status === "attention");
   if (top) {
     return LIMITER_AWAY.has(top.id)
