@@ -29,7 +29,15 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import Overlay from "../Overlay";
 import { GuidedJourney, resetJourneyForTests } from "./GuidedJourney";
-import { enoughLine, enoughState, JOURNEY_RECORDING_KEY, SETTLE_CAP_SAMPLES, type CaptureProgress } from "./journey-enough";
+import {
+  enoughLine,
+  enoughState,
+  JOURNEY_RECORDING_KEY,
+  journeyRecordingMode,
+  setJourneyRecording,
+  SETTLE_CAP_SAMPLES,
+  type CaptureProgress,
+} from "./journey-enough";
 import { MIN_BASELINE_SAMPLES } from "./baseline-grade";
 
 const t = i18n.t.bind(i18n);
@@ -252,6 +260,50 @@ describe("P5-enough-f1: halves that never settle don't keep the line up forever"
     localStorage.setItem(JOURNEY_RECORDING_KEY, "1");
     render(<Overlay />);
     await waitFor(() => expect(screen.getByTestId("overlay-enough").textContent).toBe("Keeps changing. Stop now; it counts as uneven."));
+  });
+});
+
+// P5-realplay: a real-play session is judged whole against other whole sessions, never by its halves,
+// so the line only counts down to the readings a session needs, then says it is long enough. Fails on
+// the code before it (the halves states, and an overlay that ignored a real-play flag).
+describe("P5-realplay: a real-play session only counts down, then counts", () => {
+  it("counts down to 600 readings, then says it is long enough, whatever its halves do", () => {
+    expect(enoughState(prog(510), "real-play")).toEqual({ kind: "more", secs: 90 });
+    expect(enoughLine(prog(510), t, "panel", "real-play")).toBe("About 90 s more for this session to count.");
+    expect(enoughLine(prog(0), t, "panel", "real-play")).toBe("About 10 min more for this session to count.");
+    for (const p of [prog(600), prog(900, 240, 250), prog(SETTLE_CAP_SAMPLES, 240, 250), { samples: SETTLE_CAP_SAMPLES, fps_series: [] }]) {
+      expect(enoughState(p, "real-play")).toEqual({ kind: "counts" });
+      expect(enoughLine(p, t, "panel", "real-play")).toBe("This session is long enough to count. Stop whenever you like.");
+      expect(enoughLine(p, t, "overlay", "real-play")).toBe("Long enough to count. Stop anytime.");
+    }
+    // The two-session journey keeps its halves states.
+    expect(enoughState(prog(900, 240, 250))).toEqual({ kind: "settling" });
+  });
+
+  it("has zh-CN copy", async () => {
+    await i18n.changeLanguage("zh-CN");
+    expect(enoughLine(prog(510), t, "panel", "real-play")).toBe("再玩约 90 秒，这一局就能计入。");
+    expect(enoughLine(prog(0), t, "overlay", "real-play")).toBe("再玩约 10 分钟，这一局就能计入。");
+    expect(enoughLine(prog(900, 240, 250), t, "panel", "real-play")).toBe("这一局的时长已足够计入。你可以随时停下。");
+    expect(enoughLine(prog(900, 240, 250), t, "overlay", "real-play")).toBe("时长已够计入。可随时停下。");
+  });
+
+  it("the recording flag says which kind of session it is; the two-session value stays what it was", () => {
+    setJourneyRecording("real-play");
+    expect([localStorage.getItem(JOURNEY_RECORDING_KEY), journeyRecordingMode()]).toEqual(["real-play", "real-play"]);
+    setJourneyRecording(true);
+    expect([localStorage.getItem(JOURNEY_RECORDING_KEY), journeyRecordingMode()]).toEqual(["1", "pair"]);
+    setJourneyRecording(false);
+    expect(journeyRecordingMode()).toBeNull();
+  });
+
+  it("the overlay says the real-play line, never the halves states", async () => {
+    state.fps = playing(prog(510));
+    localStorage.setItem(JOURNEY_RECORDING_KEY, "real-play");
+    render(<Overlay />);
+    await waitFor(() => expect(screen.getByTestId("overlay-enough").textContent).toBe("About 90 s more for this session to count."));
+    state.fps = playing(prog(SETTLE_CAP_SAMPLES, 240, 250));
+    await waitFor(() => expect(screen.getByTestId("overlay-enough").textContent).toBe("Long enough to count. Stop anytime."));
   });
 });
 

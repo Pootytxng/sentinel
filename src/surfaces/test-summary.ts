@@ -89,6 +89,10 @@ export type SummaryExperiment = {
   /** P8-posture-show: the risk the user allowed when the Trial started (experiment.rs `risk_choice`).
    *  Absent on records started before Compy kept it. */
   risk_choice?: string | null;
+  /** P5-realplay: "real-play" for a Trial judged on real play; absent on a two-session Trial. */
+  mode?: string | null;
+  /** P5-realplay: the sessions a real-play Trial judged on (experiment.rs `real_play`). */
+  real_play?: { before?: readonly unknown[] | null; with?: readonly unknown[] | null } | null;
 };
 
 /** P8-posture-show: a Trial's recorded risk choice; null when it isn't recorded or this build doesn't
@@ -165,6 +169,9 @@ export type TestedChange = {
   /** P8-posture-show: the risk the user allowed when the newest judged Trial started; null = not
    *  recorded. */
   riskChoice: RecordedRiskChoice;
+  /** P5-realplay: the newest judged Trial was judged on real play, on this many sessions a side; null
+   *  (or absent) for a two-session Trial. Only how it is said changes; every rule above is the same. */
+  realPlay?: { before: number; with: number } | null;
 };
 
 export type LessonRule =
@@ -541,6 +548,7 @@ export function summarizeGame(
       deltaAvgPct: x.treatment?.delta_avg_pct ?? null,
       at: x.created_at,
       riskChoice: recordedRiskChoice(x.risk_choice),
+      realPlay: x.mode === "real-play" ? { before: x.real_play?.before?.length ?? 0, with: x.real_play?.with?.length ?? 0 } : null,
     };
   });
 

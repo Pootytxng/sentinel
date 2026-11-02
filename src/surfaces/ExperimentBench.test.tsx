@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
   refuse: {} as Record<string, string>, // a lifecycle command the backend refuses, with its message
   changes: [] as unknown[], // get_applied_changes (the P5-outcomes undo reads it)
   smoothReady: null as unknown, // get_smoothest_readiness; "reject" = the check failed
+  realPlay: null as unknown, // P5-realplay: get_realplay_progress; "reject" = the read failed
 }));
 
 /** Hold the initial ledger reads until the returned function is called.
@@ -137,6 +138,10 @@ vi.mock("@tauri-apps/api/core", () => ({
         return Promise.resolve(state.changes);
       case "get_smoothest_readiness":
         return state.smoothReady === "reject" ? Promise.reject("unreadable") : Promise.resolve(state.smoothReady);
+      case "get_realplay_progress":
+        return state.realPlay === "reject"
+          ? Promise.reject("Compy can't read its change history: the ledger was set aside")
+          : Promise.resolve(state.realPlay);
       case "simulate_optimization":
         if (state.simHang) return new Promise(() => {}); // never resolves
         return state.sim ? Promise.resolve(state.sim) : Promise.reject("no sim");
@@ -152,6 +157,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import ExperimentBench from "./ExperimentBench";
+import { resetJourneyForTests } from "./GuidedJourney";
+import { whenText } from "./journey-realplay";
 import { invalidateProbe, putProbe } from "../data/probe-cache";
 
 /** The args of the one call to `cmd` since the last `mockClear`. */
@@ -173,6 +180,10 @@ afterEach(() => {
   state.refuse = {};
   state.changes = [];
   state.smoothReady = null;
+  state.realPlay = null;
+  // A real-play panel tap runs in the journey's module store; nothing of it may reach the next test.
+  resetJourneyForTests();
+  localStorage.removeItem("compy.journey.running");
 });
 
 // bug->guard (CI run 30696118350, 2026-08-01). Picking a value that has NO matching option yet is a
@@ -2730,5 +2741,192 @@ describe("ExperimentBench spacing under the journey line", () => {
     const rule = css.match(/\.exp-journey\s*\+\s*\.exp-launch\s*\{([^}]*)\}/);
     expect(rule, "nothing spaces the launcher from the journey line above it").not.toBeNull();
     expect(rule![1]).toMatch(/margin-top:\s*12px/);
+  });
+});
+
+// P5-realplay: a real-play Trial leaves its change on for days while the owner plays however he plays.
+// Its panel is derived from the record and get_realplay_progress, so it reads the same after a restart.
+describe("P5-realplay: a running real-play Trial on the bench", () => {
+  const APPLIED = "2026-10-29T10:25:00Z";
+  const UNTIL = "2026-11-12T10:25:00+00:00";
+  const PBZ = "PhantomBladeZero.exe";
+  const numbers = (low1_fps: number, i: number) => ({ session_id: `2026-10-29T0${i}:00:00Z`, low1_fps, avg_fps: 170, samples: 661 });
+  // The owner's 2026-10-29 PBZ sessions: whole sessions 172 / 132 / 178 on the 1% low.
+  const RP_RUNNING = {
+    ...RUNNING_EXPERIMENT,
+    id: "exp:7-0",
+    rec_title: "HAGS",
+    game: PBZ,
+    mode: "real-play",
+    applied_at: APPLIED,
+    baseline_session_id: "2026-10-29T02:00:00Z",
+    real_play: { before: [172, 132, 178].map(numbers) },
+  };
+  const rpProgress = (over: Record<string, unknown> = {}) => ({
+    phase: "collecting",
+    game: PBZ,
+    experiment_id: "exp:7-0",
+    anchor_session_id: null,
+    before: 3,
+    with: 2,
+    need: 3,
+    min_sessions: 3,
+    max_sessions: 8,
+    min_readings: 600,
+    window_days: 14,
+    band_pct: null,
+    applied_at: APPLIED,
+    until: UNTIL,
+    stop: null,
+    not_counted: [],
+    ...over,
+  });
+
+  // ✗ on the code before real play: the running panel offered "conclude with your latest session",
+  // and a journey Trial still running after a relaunch was called interrupted.
+  it("a running real-play Trial says the change is on, how to put it back and N of M, and never shows the interrupted banner", async () => {
+    state.gate = true;
+    state.experiments = [RP_RUNNING];
+    state.realPlay = rpProgress({ not_counted: [{ session_id: "2026-10-30T21:14:00Z", reason: "too-short" }] });
+    // Even a webview that remembers this Trial as a journey's says nothing about an interruption.
+    localStorage.setItem("compy.journey.running", "exp:7-0");
+    render(<ExperimentBench />);
+    // Before the progress read answers, the panel already says the change is on and since when.
+    expect((await screen.findByTestId("realplay-on")).textContent).toMatch(/^HAGS is on \(since /);
+    await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("Keep playing, Compy is still collecting (2 of 3 sessions)."));
+    expect(screen.getByTestId("realplay-on").textContent).toBe(
+      `HAGS is on (since ${whenText(APPLIED, "en")}). It stays on while you play, until Compy has a result: at most 8 sessions, or by ${whenText(UNTIL, "en")}.`,
+    );
+    expect(screen.getByTestId("realplay-put-back-how").textContent).toBe(
+      "To put it back, tap Put it back now: Compy restores the setting exactly as it was before the test. You can also undo it in Test → Applied & history.",
+    );
+    expect(within(screen.getByTestId("realplay-not-counted")).getByText(`${whenText("2026-10-30T21:14:00Z", "en")}: too short to count (about 10 minutes of play needed)`)).toBeTruthy();
+    expect(screen.queryByTestId("exp-interrupted")).toBeNull();
+    expect(screen.queryByTestId("experiment-running")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Conclude/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Measure my next session" })).toBeEnabled();
+    // "Put it back now" is the existing audited restore, announced like every ledger write.
+    const announced = vi.fn();
+    window.addEventListener(LEDGER_CHANGED_EVENT, announced);
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "Put it back now" }));
+      await waitFor(() => expect(callArgs("restore_experiment")).toEqual({ experimentId: "exp:7-0" }));
+      await waitFor(() => expect(announced).toHaveBeenCalled());
+    } finally {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, announced);
+    }
+  });
+
+  // ✗ on the code before real play: two PBZ sessions this far apart were "too noisy", and the change went back.
+  it("PBZ 2026-10-29 in real play: still collecting, never too noisy after two sessions", async () => {
+    state.gate = true;
+    state.experiments = [RP_RUNNING];
+    state.realPlay = rpProgress({ with: 2 });
+    const first = render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("Keep playing, Compy is still collecting (2 of 3 sessions)."));
+    expect(screen.getByTestId("experiment-bench").textContent).not.toMatch(/noisy/i);
+    expect(screen.queryByTestId("realplay-not-yet")).toBeNull();
+    first.unmount();
+    // After the first look (3 sessions with it on) the swings still leave it open: a few more, never a verdict.
+    state.realPlay = rpProgress({ with: 3, need: 5, band_pct: 21.66 });
+    render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("Keep playing, Compy is still collecting (3 of 5 sessions)."));
+    expect(screen.getByTestId("realplay-not-yet").textContent).toBe("Not clear yet: your sessions vary by about ±21.7%, so Compy needs a few more.");
+    expect(screen.getByTestId("experiment-bench").textContent).not.toMatch(/noisy/i);
+    expect(vi.mocked(invoke).mock.calls.filter(([c]) => c === "conclude_realplay" || c === "conclude_experiment")).toEqual([]);
+  });
+
+  it("when the count can't be read, it says so in the backend's words and still offers Put it back now", async () => {
+    state.gate = true;
+    state.experiments = [RP_RUNNING];
+    state.realPlay = "reject";
+    render(<ExperimentBench />);
+    await waitFor(() =>
+      expect(screen.getByTestId("realplay-status").textContent).toBe("Compy can't count this test's sessions right now. HAGS stays on until you put it back."),
+    );
+    expect(screen.getByTestId("realplay-unread").textContent).toBe("Compy can't read its change history: the ledger was set aside");
+    expect(screen.getByRole("button", { name: "Put it back now" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Measure my next session" })).toBeNull();
+  });
+
+  it("says the same in zh-CN", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      state.gate = true;
+      state.experiments = [RP_RUNNING];
+      state.realPlay = rpProgress();
+      render(<ExperimentBench />);
+      await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("继续玩吧，Compy 仍在收集数据（2/3 局）。"));
+      expect(screen.getByTestId("realplay-on").textContent).toMatch(/^HAGS已开启（自 .+ 起）。在 Compy 得出结果之前它会一直保持开启：最多 8 局，最晚到 .+。$/);
+      expect(screen.getByRole("button", { name: "立即恢复原样" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "测量我的下一局" })).toBeTruthy();
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  const RP_KEPT = {
+    ...RP_RUNNING,
+    id: "exp:8-0",
+    game: "Valorant",
+    status: "kept",
+    verdict: "improved",
+    kept: true,
+    concluded_at: "2026-11-01T10:00:00Z",
+    verdict_confidence: "medium",
+    outcome: "recommended",
+    noise_evidence: { band_pct: 3, measured_noise_pct: null, between_sessions: null },
+    treatment: { avg_fps: 241, low1_fps: 202, samples: 3510, crashed: false, delta_low1_pct: 12.1, delta_avg_pct: 0.4, recorded_at: "" },
+    real_play: {
+      before: [172, 132, 178].map(numbers),
+      with: [190, 201, 199].map(numbers),
+      band_pct: 3,
+      delta_low1_pct: 12.1,
+      delta_avg_pct: 0.4,
+      look: 1,
+    },
+  };
+
+  it("a concluded real-play row reads Likely better, with its own band, never Measurably faster", async () => {
+    state.gate = true;
+    state.experiments = [RP_KEPT];
+    render(<ExperimentBench />);
+    const row = (await screen.findByText("Likely better — kept")).closest("li")!;
+    expect(row.textContent).not.toMatch(/Measurably faster/);
+    expect(within(row).getByTestId("exp-compared-receipt").textContent).toBe(
+      "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band. The 1% low rose by more than the band and the average didn't fall by more, so the change was kept.",
+    );
+    expect(screen.getAllByText(wholeLine("Judged against a ±3% band from this test's own sessions: how much your Valorant sessions varied on their own (3 without the change, 3 with it).")).length).toBeGreaterThan(0);
+    // The per-game summary says the real-play face and the Likely word, never Measured.
+    const summary = await screen.findByTestId("exp-summary");
+    expect(summary.textContent).toMatch(/Likely better — kept/);
+    expect(summary.textContent).toMatch(/Likely/);
+    expect(summary.textContent).not.toMatch(/Measurably faster/);
+  });
+
+  it("a real-play row that judged nothing says why in real-play words, never the session-halves sentence", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...RP_KEPT, status: "restored", kept: false, verdict: "too-noisy", stop_reason: "sessions-too-varied", verdict_confidence: "unknown", noise_evidence: null, treatment: null },
+    ];
+    render(<ExperimentBench />);
+    const row = (await screen.findByText("Unknown — restored")).closest("li")!;
+    expect(within(row).getByTestId("exp-too-noisy-why").textContent).toBe(
+      "Your sessions varied too much from one to the next to tell this setting's effect apart, so Compy restored it and judged nothing.",
+    );
+    expect(row.textContent).not.toMatch(/A session this uneven/);
+  });
+
+  it("reads in Chinese too", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      state.gate = true;
+      state.experiments = [RP_KEPT];
+      render(<ExperimentBench />);
+      expect((await screen.findAllByText("较可能更好——已保留")).length).toBeGreaterThan(0);
+      expect(screen.getByTestId("experiment-bench").textContent).not.toMatch(/lab\.experimentBench|\{\{/);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 });
