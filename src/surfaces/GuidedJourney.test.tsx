@@ -211,6 +211,20 @@ const receiptRows = async (): Promise<Record<string, string>> => {
   );
 };
 
+/** Review 2026-11-02 (P5-realplay, fix 2): buttons that sit on one line share one .exp-running-actions
+ *  row ("Test it while I play normally" touched "Stop here", "Measure my next session" touched "OK"). */
+const sharesRow = (a: HTMLElement, b: HTMLElement) => {
+  expect(a.parentElement, `${a.textContent} and ${b.textContent} share one row`).toBe(b.parentElement);
+  expect(a.parentElement).toHaveClass("exp-running-actions");
+};
+/** ...and no two buttons are the journey's own neighbouring blocks, side by side with nothing between. */
+const noTouchingButtons = (root: HTMLElement) => {
+  const kids = [...root.children];
+  kids.forEach((el, i) => {
+    if (el.tagName === "BUTTON") expect(kids[i + 1]?.tagName, `${el.textContent} touches the button beside it`).not.toBe("BUTTON");
+  });
+};
+
 /** The journey's closing line, once it has one (only a finished journey's line is a status). */
 const finalLine = () =>
   waitFor(
@@ -438,6 +452,10 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(await screen.findByTestId("journey-cost-ack")).toHaveTextContent("HAGS has a cost: Reboot required.");
     expect(screen.queryByRole("button", { name: "Optimize my game" })).toBeNull();
     const tap = screen.getByRole("button", { name: "I understand, test it" });
+    // Review 2026-11-02 (fix 10): the cost line keeps the journey's 9px either side, and the tap under it
+    // sits in a row, so the two margins meet as one 9px.
+    expect(screen.getByTestId("journey-cost-ack")).toHaveClass("exp-journey-cost");
+    expect(tap.parentElement).toHaveClass("exp-running-actions");
     await waitFor(() => expect(tap).toBeEnabled());
     fireEvent.click(tap);
     await finalLine();
@@ -473,8 +491,13 @@ describe("P5-guided: one button runs the whole Trial", () => {
     await finalLine();
     expect(await screen.findByTestId("journey-next-plan")).toHaveTextContent(/Next: SysMain/);
     expect(screen.getByTestId("journey-cost-ack")).toHaveTextContent("SysMain has a cost: App launches get a little slower.");
+    expect(screen.getByTestId("journey-cost-ack")).toHaveClass("exp-journey-cost");
     expect(screen.queryByRole("button", { name: /Next: SysMain/ })).toBeNull();
     const tap = screen.getByRole("button", { name: "I understand, test it" });
+    expect(tap.parentElement).toHaveClass("exp-running-actions");
+    // The generic OK shares one row with Stop here, and no button touches another.
+    sharesRow(screen.getByRole("button", { name: "Stop here" }), screen.getByRole("button", { name: "OK" }));
+    noTouchingButtons(screen.getByTestId("journey"));
     await waitFor(() => expect(tap).toBeEnabled());
     fireEvent.click(tap);
     await waitFor(() => expect(calls("start_experiment")).toHaveLength(2), { timeout: 3000 });
@@ -780,6 +803,9 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     await press();
     expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     expect(calls("restore_experiment")).toHaveLength(0);
+    // Review 2026-11-02 (fix 2): Next, Stop here and OK touched; Stop here and OK share one row.
+    sharesRow(screen.getByRole("button", { name: "Stop here" }), screen.getByRole("button", { name: "OK" }));
+    noTouchingButtons(screen.getByTestId("journey"));
     fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 10 min" }));
     await lineIs(/^Game Mode is on\. Compy uses your last session as the before-reading, so this is the only session: play Valorant/);
     const [, second] = calls("start_experiment");
@@ -968,6 +994,31 @@ describe("P5-realplay: the change stays on while you play", () => {
     expect(screen.getByTestId("realplay-note").textContent).toBe("That session counts.");
     expect(calls("start_experiment")).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Measure my next session" })).toBeEnabled();
+    // Review 2026-11-02 (fix 2): "Measure my next session" touched "OK"; they share one row now.
+    sharesRow(screen.getByRole("button", { name: "Measure my next session" }), screen.getByRole("button", { name: "OK" }));
+    noTouchingButtons(screen.getByTestId("journey"));
+  });
+
+  // Review 2026-11-02 (fix 2): the offer's "Test it while I play normally" touched "Stop here" (0px).
+  // The last row of the idle journey holds Stop here: beside the offer's button, else beside the start.
+  it("the offer's button and Stop here share one row; with no offer, Stop here sits beside the start", async () => {
+    state.rpProgress = backendLike();
+    state.sessions = [OLD, ...AS_IS];
+    // A journey under way on Valorant (Game Mode measured there), so Stop here is offered.
+    state.experiments = [
+      record({ id: "exp:1-0", rec_id: "game-mode", rec_title: "Game Mode", status: "restored", verdict: "no-change", treatment: TREATMENT, baseline_session_id: OLD.started_at, concluded_at: ago(90) }),
+    ];
+    const first = render(<ExperimentBench />);
+    const offer = await enabled("Test it while I play normally");
+    sharesRow(offer, screen.getByRole("button", { name: "Stop here" }));
+    noTouchingButtons(screen.getByTestId("journey"));
+    first.unmount();
+    state.rpProgress = null;
+    render(<ExperimentBench />);
+    const start = await enabled("Optimize my game");
+    expect(screen.queryByRole("button", { name: "Test it while I play normally" })).toBeNull();
+    sharesRow(start, screen.getByRole("button", { name: "Stop here" }));
+    noTouchingButtons(screen.getByTestId("journey"));
   });
 
   // ✗ on the code before real play: the journey concluded right after its one with-change session.
@@ -1149,6 +1200,8 @@ describe("P5-realplay: the change stays on while you play", () => {
     expect(await finalLine()).toBe(`Compy didn't start the test, and nothing was changed: ${why}`);
     expect(calls("start_fps_capture")).toHaveLength(0);
     expect(calls("restore_experiment")).toHaveLength(0);
+    // Review 2026-11-02 (fix 2): the generic OK sits in a row of its own, 9px under the line.
+    expect(screen.getByRole("button", { name: "OK" }).parentElement).toHaveClass("exp-running-actions");
   });
 
   // Rust review fix: a long session with no frame-rate reading is not counted ("no-reading"). The

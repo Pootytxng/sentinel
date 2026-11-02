@@ -56,6 +56,23 @@
 .exp-journey + .exp-launch {
   margin-top: 12px;
 }
+/* A real-play panel (or the journey, while its Trial runs) ended 0px above the summary's eyebrow
+   (desk review 2026-11-02); the same 12px continues below it. */
+.exp-journey + .exp-summary {
+  margin-top: 12px;
+}
+/* The journey is plain block flow, and its lines, rows and buttons sat flush against each other
+   (desk review 2026-11-02): every block after the first keeps the running panel's 9px rhythm, and
+   buttons that sit side by side share one .exp-running-actions row. A real-play panel is an
+   .exp-running frame, whose own 9px gap does this. */
+.exp-journey:not(.exp-running) > * + * {
+  margin-top: 9px;
+}
+/* The cost line a user reads before "I understand, test it" sat 0px under the aim pills and 1px above
+   the button (desk review 2026-11-02): 9px either side, like the rest of the journey. */
+.exp-journey-cost {
+  margin: 9px 0;
+}
 .exp-field {
   display: flex;
   flex-direction: column;
@@ -279,6 +296,11 @@
   display: flex;
   flex-direction: column;
   gap: 9px;
+}
+/* The journey's progress line ("N of M tested · Testing now: X") sat flush on the running panel's
+   frame under it (desk review 2026-11-02, P5-realplay): the panel's own 9px. */
+.exp-journey-progress + .exp-running {
+  margin-top: 9px;
 }
 .exp-running-head {
   display: flex;

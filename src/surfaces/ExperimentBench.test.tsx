@@ -2735,12 +2735,47 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
 // testing on this PC.") sat flush against the new "How far may Compy go on this PC?" field, 0px, while
 // the launcher keeps a 12px rhythm everywhere else. jsdom has no layout, so the rule itself is pinned.
 describe("ExperimentBench spacing under the journey line", () => {
+  /** ExperimentBench.css with its comments stripped, and the body of the rule `selector` names. */
+  const ruleBody = async (selector: RegExp) => {
+    const { readFileSync } = await import("fs");
+    const css = readFileSync("src/surfaces/ExperimentBench.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    return css.match(new RegExp(`${selector.source}\\s*\\{([^}]*)\\}`))?.[1] ?? null;
+  };
+
   it("keeps the launcher's 12px rhythm below the journey line", async () => {
     const { readFileSync } = await import("fs");
     const css = readFileSync("src/surfaces/ExperimentBench.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     const rule = css.match(/\.exp-journey\s*\+\s*\.exp-launch\s*\{([^}]*)\}/);
     expect(rule, "nothing spaces the launcher from the journey line above it").not.toBeNull();
     expect(rule![1]).toMatch(/margin-top:\s*12px/);
+  });
+
+  // Review 2026-11-02 (P5-realplay, fix 2): a real-play panel's last block sat 0px above the summary's
+  // eyebrow, and its own blocks (and the journey's lines and buttons) sat flush against each other.
+  it("keeps the bench's 12px rhythm between the journey (or a real-play panel) and the summary below", async () => {
+    const rule = await ruleBody(/\.exp-journey\s*\+\s*\.exp-summary/);
+    expect(rule, "nothing spaces the summary from the journey above it").not.toBeNull();
+    expect(rule).toMatch(/margin-top:\s*12px/);
+  });
+
+  it("keeps the running panel's 9px rhythm between the journey's own blocks", async () => {
+    const rule = await ruleBody(/\.exp-journey:not\(\.exp-running\)\s*>\s*\*\s*\+\s*\*/);
+    expect(rule, "nothing spaces the journey's blocks from each other").not.toBeNull();
+    expect(rule).toMatch(/margin-top:\s*9px/);
+  });
+
+  it("keeps 9px between the journey's progress line and the running panel under it", async () => {
+    const rule = await ruleBody(/\.exp-journey-progress\s*\+\s*\.exp-running/);
+    expect(rule, "the progress line sits flush on the running panel's frame").not.toBeNull();
+    expect(rule).toMatch(/margin-top:\s*9px/);
+  });
+
+  // Review 2026-11-02 (fix 10): the cost line a user reads before "I understand, test it" sat 0px under
+  // the aim pills and 1px above the button.
+  it("gives the cost line the journey's 9px either side", async () => {
+    const rule = await ruleBody(/\.exp-journey-cost/);
+    expect(rule, "the cost line has no spacing of its own").not.toBeNull();
+    expect(rule).toMatch(/margin:\s*9px 0\b/);
   });
 });
 
@@ -2847,6 +2882,28 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     expect(screen.getByTestId("realplay-unread").textContent).toBe("Compy can't read its change history: the ledger was set aside");
     expect(screen.getByRole("button", { name: "Put it back now" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Measure my next session" })).toBeNull();
+  });
+
+  // Review 2026-11-02 (fix 2): the panel's blocks sat flush (0px) against each other. It now wears the
+  // pair running panel's frame and 9px rhythm (.exp-running), every block a child of that frame, and
+  // the progress line above it keeps 9px from the frame (.exp-journey-progress + .exp-running).
+  it("the real-play panel shares the pair running panel's frame and rhythm", async () => {
+    state.gate = true;
+    state.experiments = [RP_RUNNING];
+    state.realPlay = rpProgress({ not_counted: [{ session_id: "2026-10-30T21:14:00Z", reason: "too-short" }] });
+    render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("Keep playing, Compy is still collecting (2 of 3 sessions)."));
+    const panel = screen.getByTestId("journey");
+    expect(panel).toHaveAttribute("data-phase", "realplay");
+    expect(panel).toHaveClass("exp-running");
+    for (const id of ["realplay-on", "realplay-status", "realplay-put-back-how", "realplay-not-counted"])
+      expect(screen.getByTestId(id).parentElement, id).toBe(panel);
+    const measure = screen.getByRole("button", { name: "Measure my next session" });
+    expect(measure.parentElement).toHaveClass("exp-running-actions");
+    expect(measure.parentElement?.parentElement).toBe(panel);
+    const line = screen.getByTestId("journey-progress");
+    expect(line).toHaveClass("exp-journey-progress");
+    expect(line.nextElementSibling).toBe(panel);
   });
 
   // Review 2026-11-02 (fix 1): a stopped panel offered the put-back beside "no longer reads as on".
