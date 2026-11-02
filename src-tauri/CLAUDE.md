@@ -49,6 +49,7 @@ Line counts drift — treat as rough and verify against current code before asse
 - `intelligence_patterns.rs` (~903) — Phase 2: cross-session pattern detection over `sessions.json`.
 - `experiment.rs` (~1420) — Phase 3: single-variable experiment engine + optimization simulator. **ARMED** (`experiment_gate()` returns true, owner sign-off 2026-07-17) — the bench renders live. It APPLIES via `history::apply_recommendation`, so an already-active rec simulates to `already-configured`; do not route a rollback-shaped next test here.
 - `trial_candidates.rs` (~710) — P4-candidates/rank: read-only Trial picker filter + test order (ENGINE §3.1–3.7), one reason each.
+- `realplay.rs` (~1400) — P5-realplay: pure judge (which sessions count, looks at 3/5/8, the Trial's own band). No I/O, lock or Windows state.
 - `component_evidence.rs` (~332) — Phase 4: component-level evidence attribution. READ-ONLY.
 - `comparability.rs` (~730), `game_state.rs` (~276), `capture.rs` (~279) — Measurement Platform 2.0 tasks E/F: session-comparability gate, conditions fingerprint, capture-backend/capability model.
 - `fuzz_support.rs` (~184) — test-only input generator for the property/fuzz suites.
