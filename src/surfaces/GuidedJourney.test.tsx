@@ -921,7 +921,7 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
 
 // P5-realplay: "Test it while I play normally". The change goes on once and stays on while the owner
 // plays however he plays; each tap measures one session; a decided look is concluded right after the
-// session that decided it; a stopped test waits for a tap; "Put it back now" is the audited restore.
+// session that decided it; a stopped test waits for a tap; "Restore now" is the audited restore.
 describe("P5-realplay: the change stays on while you play", () => {
   /** What get_realplay_progress answers for these records, the backend's way for this harness: before a
    *  start every session of the game with 600+ readings counts as-is (whatever its halves did), the
@@ -1094,7 +1094,7 @@ describe("P5-realplay: the change stays on while you play", () => {
       await statusIs("Keep playing, Compy is still collecting (2 of 3 sessions).");
       fireEvent.click(await enabled("Measure my next session"));
       expect(await finalLine()).toBe(
-        "Likely better: Compy kept HAGS. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% your sessions vary on their own.",
+        "Likely better: Compy kept HAGS. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% allowance for normal swings between sessions.",
       );
       expect(calls("conclude_realplay")).toEqual([{ experimentId: "exp:9-0", crashed: false }]);
       expect(announced).toHaveBeenCalled();
@@ -1112,14 +1112,14 @@ describe("P5-realplay: the change stays on while you play", () => {
       "Sessions without it": "3",
       "Sessions with it": "3",
       "Spread between sessions, 1% low": "±1.1%",
-      "Deciding look": "1",
+      "Which check decided it": "1",
     });
     const journey = screen.getByTestId("journey");
     fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
     await waitFor(() => expect(journey.querySelector(".journey-why")?.textContent).toMatch(/^Real play compares your sessions with the change on/));
   });
 
-  it("Put it back now restores through restore_experiment and says so", async () => {
+  it("Restore now restores through restore_experiment and says so", async () => {
     state.experiments = [running()];
     state.sessions = [OLD, ...AS_IS];
     state.rpProgress = backendLike();
@@ -1127,7 +1127,7 @@ describe("P5-realplay: the change stays on while you play", () => {
     window.addEventListener(LEDGER_CHANGED_EVENT, announced);
     try {
       render(<ExperimentBench />);
-      fireEvent.click(await enabled("Put it back now"));
+      fireEvent.click(await enabled("Restore now"));
       expect(await finalLine()).toBe("Compy put HAGS back the way it was before the test. Nothing was judged.");
       expect(announced).toHaveBeenCalled();
     } finally {

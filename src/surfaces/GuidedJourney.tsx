@@ -188,7 +188,7 @@ export type JourneyPhase =
   | { kind: "too-short"; samples: number | null; behind?: boolean }
   | { kind: "wrong-game"; played: string; planned: string }
   | { kind: "not-started"; reason: string }
-  /** `asked`: the owner tapped "Put it back now" on a real-play Trial. */
+  /** `asked`: the owner tapped "Restore now" on a real-play Trial. */
   | { kind: "restored"; change: string; why: "no-reading" | "behind" | "error" | "asked"; reason: string }
   | { kind: "restore-failed"; change: string; reason: string }
   /** P5-realplay: one session is being measured; `on` = with the change on, else as-is (nothing on). */
@@ -812,8 +812,9 @@ async function closeRealPlay(expId: string, change: string, refresh: () => Promi
   }
 }
 
-/** "Put it back now": the existing audited restore_experiment, which writes the setting back exactly
- *  as it was saved before the test and reads it back. */
+/** "Restore now" (the label the pair panel's undo already wears): the existing audited
+ *  restore_experiment, which writes the setting back exactly as it was saved before the test and
+ *  reads it back. */
 async function putBackRealPlay(expId: string, change: string, refresh: () => Promise<void>) {
   if (current || acting) return;
   acting = true;
@@ -1472,7 +1473,7 @@ function noteText(note: RealPlayNote, t: Translate): string {
 /** P5-realplay: a running real-play Trial, derived from its record and its progress read (never from
  *  this module's state, so it reads the same after a restart). It says the change is on and since
  *  when, how long it may stay on (once the test stopped, only what the stop says about the change),
- *  how to put it back (with "Put it back now", the existing restore_experiment; not once a stop says
+ *  how to put it back (with "Restore now", the existing restore_experiment; not once a stop says
  *  the change is already off), where the count stands ("Keep playing, Compy is still collecting (N of M
  *  sessions)"), and every session that didn't count, with why. Never an "interrupted" banner: the
  *  change staying on across restarts is the test. Its main button measures the next session, sees a
@@ -1586,7 +1587,8 @@ export function RealPlayPanel({
                 if (canAct) void putBackRealPlay(exp.id, exp.rec_title, refresh);
               }}
             >
-              {t("lab.experimentBench.journey.realPlay.putBackNow")}
+              {/* Review 2026-11-02: the same undo as the pair panel's, so the same label. */}
+              {t("lab.experimentBench.restoreNow")}
             </button>
           )}
         </div>

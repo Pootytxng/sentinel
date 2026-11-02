@@ -2833,18 +2833,18 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
       `HAGS is on (since ${whenText(APPLIED, "en")}). It stays on while you play, until Compy has a result: at most 8 sessions, or by ${whenText(UNTIL, "en")}.`,
     );
     expect(screen.getByTestId("realplay-put-back-how").textContent).toBe(
-      "To put it back, tap Put it back now: Compy restores the setting exactly as it was before the test. You can also undo it in Test → Applied & history.",
+      "To put it back, tap Restore now: Compy restores the setting exactly as it was before the test. You can also undo it in Test → Applied & history.",
     );
     expect(within(screen.getByTestId("realplay-not-counted")).getByText(`${whenText("2026-10-30T21:14:00Z", "en")}: too short to count (about 10 minutes of play needed)`)).toBeTruthy();
     expect(screen.queryByTestId("exp-interrupted")).toBeNull();
     expect(screen.queryByTestId("experiment-running")).toBeNull();
     expect(screen.queryByRole("button", { name: /Conclude/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Measure my next session" })).toBeEnabled();
-    // "Put it back now" is the existing audited restore, announced like every ledger write.
+    // "Restore now" is the existing audited restore, announced like every ledger write.
     const announced = vi.fn();
     window.addEventListener(LEDGER_CHANGED_EVENT, announced);
     try {
-      fireEvent.click(screen.getByRole("button", { name: "Put it back now" }));
+      fireEvent.click(screen.getByRole("button", { name: "Restore now" }));
       await waitFor(() => expect(callArgs("restore_experiment")).toEqual({ experimentId: "exp:7-0" }));
       await waitFor(() => expect(announced).toHaveBeenCalled());
     } finally {
@@ -2866,12 +2866,12 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     state.realPlay = rpProgress({ with: 3, need: 5, band_pct: 21.66 });
     render(<ExperimentBench />);
     await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("Keep playing, Compy is still collecting (3 of 5 sessions)."));
-    expect(screen.getByTestId("realplay-not-yet").textContent).toBe("Not clear yet: your sessions vary by about ±21.7%, so Compy needs a few more.");
+    expect(screen.getByTestId("realplay-not-yet").textContent).toBe("Not clear yet: the allowance for normal swings between your sessions is ±21.7% so far, so Compy needs a few more.");
     expect(screen.getByTestId("experiment-bench").textContent).not.toMatch(/noisy/i);
     expect(vi.mocked(invoke).mock.calls.filter(([c]) => c === "conclude_realplay" || c === "conclude_experiment")).toEqual([]);
   });
 
-  it("when the count can't be read, it says so in the backend's words and still offers Put it back now", async () => {
+  it("when the count can't be read, it says so in the backend's words and still offers Restore now", async () => {
     state.gate = true;
     state.experiments = [RP_RUNNING];
     state.realPlay = "reject";
@@ -2880,7 +2880,7 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
       expect(screen.getByTestId("realplay-status").textContent).toBe("Compy can't count this test's sessions right now. HAGS stays on until you put it back."),
     );
     expect(screen.getByTestId("realplay-unread").textContent).toBe("Compy can't read its change history: the ledger was set aside");
-    expect(screen.getByRole("button", { name: "Put it back now" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Restore now" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Measure my next session" })).toBeNull();
   });
 
@@ -2913,14 +2913,14 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     state.realPlay = rpProgress({ phase: "stopped", stop: "change-off" });
     const first = render(<ExperimentBench />);
     await waitFor(() => expect(screen.getByTestId("realplay-on").textContent).toBe("HAGS is no longer on."));
-    expect(screen.queryByRole("button", { name: "Put it back now" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Restore now" })).toBeNull();
     expect(screen.queryByTestId("realplay-put-back-how")).toBeNull();
     expect(screen.getByRole("button", { name: "Close this test" })).toBeEnabled();
     first.unmount();
     state.realPlay = rpProgress({ phase: "stopped", stop: "unreadable" });
     render(<ExperimentBench />);
     await waitFor(() => expect(screen.getByTestId("realplay-on").textContent).toBe("Compy can't tell whether HAGS is on right now."));
-    expect(screen.getByRole("button", { name: "Put it back now" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Restore now" })).toBeEnabled();
     expect(screen.getByTestId("realplay-put-back-how")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Close this test" })).toBeEnabled();
   });
@@ -2934,7 +2934,7 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
       render(<ExperimentBench />);
       await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("继续玩吧，Compy 仍在收集数据（2/3 局）。"));
       expect(screen.getByTestId("realplay-on").textContent).toMatch(/^HAGS已开启（自 .+ 起）。在 Compy 得出结果之前它会一直保持开启：最多 8 局，最晚到 .+。$/);
-      expect(screen.getByRole("button", { name: "立即恢复原样" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "立即恢复" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "测量我的下一局" })).toBeTruthy();
     } finally {
       await i18n.changeLanguage("en");
@@ -2970,9 +2970,9 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     const row = (await screen.findByText("Likely better — kept")).closest("li")!;
     expect(row.textContent).not.toMatch(/Measurably faster/);
     expect(within(row).getByTestId("exp-compared-receipt").textContent).toBe(
-      "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band. The 1% low rose by more than the band and the average didn't fall by more, so the change was kept.",
+      "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band (the allowance for normal swings between sessions). The 1% low rose by more than the band and the average didn't fall by more, so the change was kept.",
     );
-    expect(screen.getAllByText(wholeLine("Judged against a ±3% band from this test's own sessions: how much your Valorant sessions varied on their own (3 without the change, 3 with it).")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(wholeLine("Judged against a ±3% band from this test's own sessions: an allowance for normal swings between your Valorant sessions (3 without the change, 3 with it).")).length).toBeGreaterThan(0);
     // The per-game summary says the real-play face and the Likely word, never Measured.
     const summary = await screen.findByTestId("exp-summary");
     expect(summary.textContent).toMatch(/Likely better — kept/);
@@ -2996,7 +2996,7 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     const first = render(<ExperimentBench />);
     const row = (await screen.findByText("Likely better — restored")).closest("li")!;
     expect(within(row).getByTestId("exp-compared-receipt").textContent).toBe(
-      "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band. The 1% low rose by more than the band and the average didn't fall by more, but the change was put back before Compy kept it.",
+      "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band (the allowance for normal swings between sessions). The 1% low rose by more than the band and the average didn't fall by more, but the change was put back before Compy kept it.",
     );
     expect(row.textContent).not.toMatch(/so the change was kept/);
     first.unmount();
@@ -3005,7 +3005,7 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     const second = render(<ExperimentBench />);
     const maxRow = (await screen.findByText("Likely better — restored")).closest("li")!;
     expect(within(maxRow).getByTestId("exp-compared-receipt").textContent).toBe(
-      "Judged for Maximum FPS. Compared across 3 sessions with it on and 3 without: average frame rate +0.4%, 1% low +12.1%, both against a ±3% band. The average rose by more than the band and the 1% low didn't fall by more, but the change was put back before Compy kept it.",
+      "Judged for Maximum FPS. Compared across 3 sessions with it on and 3 without: average frame rate +0.4%, 1% low +12.1%, both against a ±3% band (the allowance for normal swings between sessions). The average rose by more than the band and the 1% low didn't fall by more, but the change was put back before Compy kept it.",
     );
     second.unmount();
     await i18n.changeLanguage("zh-CN");

@@ -54,8 +54,9 @@ const EXPECTED_KEY = {
   enough: ["lab.experimentBench.journey.enough", {}],
   unsettled: ["lab.experimentBench.journey.enoughUnsettledShort", {}],
   untraced: ["lab.experimentBench.journey.enoughUntracedShort", {}],
-  realPlayMoreSecs: ["lab.experimentBench.journey.realPlay.enoughMore", { secs: 90 }],
-  realPlayMoreMin: ["lab.experimentBench.journey.realPlay.enoughMoreMin", { min: 10 }],
+  // The overlay's own shorter countdown (journey-enough.ts `enoughLine`, review 2026-11-02).
+  realPlayMoreSecs: ["lab.experimentBench.journey.realPlay.enoughMoreShort", { secs: 90 }],
+  realPlayMoreMin: ["lab.experimentBench.journey.realPlay.enoughMoreMinShort", { min: 10 }],
   realPlayCounts: ["lab.experimentBench.journey.realPlay.enoughCountsShort", {}],
 };
 const TOLERANCE_PX = 0.5;
