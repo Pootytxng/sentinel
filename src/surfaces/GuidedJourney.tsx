@@ -998,6 +998,7 @@ export function GuidedJourney({
   resumeReuses = false,
   stillOn = [],
   realPlay = null,
+  heldByRisk = 0,
 }: {
   /** The detected / last-played game (the newest usable session's), or null before any session. */
   game: string | null;
@@ -1031,6 +1032,11 @@ export function GuidedJourney({
   /** P5-realplay: where real play stands on that game (get_realplay_progress), while no Trial runs.
    *  null when it couldn't be read: then real play isn't offered, because Compy can't count. */
   realPlay?: RealPlayProgress | null;
+  /** P8-posture-note: how many changes on the journey's game (the finished journey's, else `game`)
+   *  the chosen risk holds back and were never tested there (the summary's `outsideRisk`). Above 0,
+   *  "nothing left" says nothing is left within the risk chosen: the risk choice is never hidden
+   *  behind "nothing left". The count itself is the summary's to say, just below. */
+  heldByRisk?: number;
 }) {
   const { t } = useTranslation();
   // "Stop here" / "Pick up" write only localStorage; this repaints the panel after either.
@@ -1095,7 +1101,10 @@ export function GuidedJourney({
       return (
         <div className="exp-order exp-journey" data-testid="journey">
           <p className="exp-note" data-testid="journey-progress">
-            {[t(`${k}.progressDone`, { tested: progress.tested, total: progress.total }), ...progressNotes(progress, t)].join(" ")}
+            {[
+              t(heldByRisk > 0 ? `${k}.progressDoneWithinRisk` : `${k}.progressDone`, { tested: progress.tested, total: progress.total }),
+              ...progressNotes(progress, t),
+            ].join(" ")}
           </p>
         </div>
       );
@@ -1372,7 +1381,10 @@ export function GuidedJourney({
       )}
       {p.kind === "result" && next === null && (
         <p className="exp-note" data-testid="journey-done">
-          {[t(`${k}.nothingLeft`), ...(progress?.game === p.exp.game ? progressNotes(progress, t) : [])].join(" ")}
+          {[
+            t(heldByRisk > 0 ? `${k}.nothingLeftWithinRisk` : `${k}.nothingLeft`),
+            ...(progress?.game === p.exp.game ? progressNotes(progress, t) : []),
+          ].join(" ")}
         </p>
       )}
       {finished && (

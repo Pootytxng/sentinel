@@ -401,6 +401,7 @@
         "unverified": "{{change}} has a result Compy can't tie to this PC as it is now (no graphics driver or Windows build was recorded for it or for your newest session). This run records them."
       },
       "nothingLeft": "Nothing else here is worth testing on this PC.",
+      "nothingLeftWithinRisk": "Nothing else within the risk you chose is worth testing on this PC.",
       "why": {
         "recommended": "Recommended keeps a change only when the frame rate in your worst moments (the 1% low) improved beyond the normal run-to-run wobble (the noise band) and the average did not fall beyond it; otherwise the change goes back.",
         "recommendedBand": "Recommended keeps a change only when the frame rate in your worst moments (the 1% low) improved beyond the ±{{band}}% normal run-to-run wobble (the noise band) and the average did not fall beyond it; otherwise the change goes back.",
@@ -491,6 +492,7 @@
       "progressUnverified_one": "{{count}} result can't be tied to this PC as it is now.",
       "progressUnverified_other": "{{count}} results can't be tied to this PC as it is now.",
       "progressDone": "{{tested}} of {{total}} tested. Nothing else here is worth testing on this PC.",
+      "progressDoneWithinRisk": "{{tested}} of {{total}} tested. Nothing else within the risk you chose is worth testing on this PC.",
       "progressTesting": "{{tested}} of {{total}} tested · Testing now: {{change}}",
       "progressInterrupted": "{{tested}} of {{total}} tested · {{change}} didn't finish testing (see below)",
       "planResume": "{{game}}: 1 session of about 10 min with {{change}}. Your last as-is session still counts as the before-reading.",

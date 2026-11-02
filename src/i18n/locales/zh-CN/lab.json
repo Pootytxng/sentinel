@@ -396,6 +396,7 @@
         "unverified": "{{change}}的结果无法与这台电脑当前的状态对照（当时或你最新的一局没有记录显卡驱动或 Windows 版本）。这次会把它们记录下来。"
       },
       "nothingLeft": "这台电脑上没有其他值得测试的项目了。",
+      "nothingLeftWithinRisk": "在你选择的风险范围内，这台电脑上没有其他值得测试的项目了。",
       "why": {
         "recommended": "“推荐”只有在 1% 最低帧（最卡的时刻）的提升超出正常的局间波动（噪声范围）、且平均帧率没有下降超出该范围时才保留更改；否则更改会被撤回。",
         "recommendedBand": "“推荐”只有在 1% 最低帧（最卡的时刻）的提升超出 ±{{band}}% 的正常局间波动（噪声范围）、且平均帧率没有下降超出该范围时才保留更改；否则更改会被撤回。",
@@ -482,6 +483,7 @@
       "progressStaleKept_other": "其中 {{count}} 项是已保留的更改：先撤回，再重新测试。",
       "progressUnverified_other": "{{count}} 项结果无法与这台电脑当前的状态对照。",
       "progressDone": "已测试 {{tested}}/{{total}} 项。这台电脑上没有其他值得测试的项目了。",
+      "progressDoneWithinRisk": "已测试 {{tested}}/{{total}} 项。在你选择的风险范围内，这台电脑上没有其他值得测试的项目了。",
       "progressTesting": "已测试 {{tested}}/{{total}} 项 · 正在测试：{{change}}",
       "progressInterrupted": "已测试 {{tested}}/{{total}} 项 · {{change}}的测试没有完成（见下方）",
       "planResume": "{{game}}：1 局，约 10 分钟，开启{{change}}。你上一局原样的游戏仍可作为更改前的读数。",

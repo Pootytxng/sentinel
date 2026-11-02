@@ -870,6 +870,43 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     expect(screen.queryByRole("button", { name: /^Next:/ })).toBeNull();
   });
 
+  // Review 2026-11-02 (fix 11, P8-posture-note): under "Low risk only" the journey said "Nothing else
+  // here is worth testing on this PC." while changes were held back by that choice, and the summary
+  // right below said "...N more changes are above it". "Nothing left" never hides the risk choice.
+  const HELD = { id: "sysmain", title: "SysMain", passes: false, reason: "outside-chosen-risk", detail: null, position: null, evidence: "not-measured", risk: "moderate" };
+  const ONLY_HAGS = { id: "hags", title: "HAGS", passes: true, reason: null, detail: null, position: 1, evidence: "not-measured", risk: "low" };
+  it("nothing left, low risk only, a change held back: says nothing else WITHIN the risk chosen, here and once idle", async () => {
+    localStorage.setItem("compy.trial.riskChoice", "low-only");
+    try {
+      state.recs = [ONLY_HAGS, HELD];
+      render(<ExperimentBench />);
+      await press();
+      await finalLine();
+      expect((await screen.findByTestId("journey-done")).textContent).toBe("Nothing else within the risk you chose is worth testing on this PC.");
+      fireEvent.click(screen.getByRole("button", { name: "OK" }));
+      await waitFor(() =>
+        expect(screen.getByTestId("journey-progress").textContent).toBe("1 of 1 tested. Nothing else within the risk you chose is worth testing on this PC."),
+      );
+    } finally {
+      localStorage.removeItem("compy.trial.riskChoice");
+    }
+  });
+
+  it("nothing left, low risk only, nothing held back: keeps today's line", async () => {
+    localStorage.setItem("compy.trial.riskChoice", "low-only");
+    try {
+      state.recs = [ONLY_HAGS];
+      render(<ExperimentBench />);
+      await press();
+      await finalLine();
+      expect((await screen.findByTestId("journey-done")).textContent).toBe("Nothing else here is worth testing on this PC.");
+      fireEvent.click(screen.getByRole("button", { name: "OK" }));
+      await waitFor(() => expect(screen.getByTestId("journey-progress").textContent).toBe("1 of 1 tested. Nothing else here is worth testing on this PC."));
+    } finally {
+      localStorage.removeItem("compy.trial.riskChoice");
+    }
+  });
+
   it("a failure in the next journey still restores and says so", async () => {
     state.saves = [session(later(1), 5400), session(later(2), 5400), session(later(3), 5400)];
     render(<ExperimentBench />);

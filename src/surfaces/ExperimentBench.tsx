@@ -1025,6 +1025,14 @@ export default function ExperimentBench({
   // with its verdict). Unknown until the candidates have loaded: an empty list then is not "nothing left".
   const journeyNext =
     journey.kind === "result" && recsLoaded ? nextToTest(journey.exp.game, withJudged(journey.exp), ranked, sessions) : undefined;
+  // P8-posture-note (review 2026-11-02): how many changes on the journey's game the chosen risk holds
+  // back, by the summary's own count (`outsideRisk`), so the journey's "nothing left" never hides that
+  // the risk choice is what stopped it: the finished journey's game, else the game it would run on.
+  const journeyGame = journey.kind === "result" ? journey.exp.game : pickGame;
+  const journeyHeldByRisk =
+    journeyGame && recsLoaded
+      ? ((summary?.game === journeyGame ? summary : summarizeGame(journeyGame, experiments, recs, sessions))?.outsideRisk.length ?? 0)
+      : 0;
   // P5-resume: the game's journey progress, derived from the experiments store, for the game a
   // running Trial is on, else the journey's game. Unknown until the candidates have loaded.
   const progressGame = running?.game ?? pickGame;
@@ -1239,6 +1247,7 @@ export default function ExperimentBench({
           resumeReuses={progress != null && reusableAsIs(sessions, progress.asIs, progress.game) != null}
           stillOn={progress ? stillOnFor(progress.game, experiments, recs) : []}
           realPlay={running ? null : (rp?.progress ?? null)}
+          heldByRisk={journeyHeldByRisk}
           onFinished={(exp) => {
             // The finished journey hands over to P4-next's offer of the next change to test.
             if (exp) setConcluded(experiments.find((x) => x.id === exp.id) ?? null);
