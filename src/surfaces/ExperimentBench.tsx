@@ -1832,7 +1832,9 @@ function TestSummary({ s }: { s: GameTestSummary }) {
                         ? // P8-posture-stale-copy: a held change has an older (stale) result, so
                           // "nothing was measured" would be untrue; say what is there instead.
                           `${t("lab.experimentBench.summary.stoppedStaleHeld", { game, count: s.staleHeld.length })}${
-                            s.stop.noResult > 0 ? ` ${t("lab.experimentBench.summary.stopUnjudged", { count: s.stop.noResult })}` : ""
+                            // Harness review 2026-11-02: a bare "1 couldn't be judged." here has no subject and reads as
+                            // the stale change; the unjudged ones are other changes, so they are named so.
+                            s.stop.noResult > 0 ? ` ${t("lab.experimentBench.summary.stopUnjudgedOther", { count: s.stop.noResult })}` : ""
                           }`
                         : t("lab.experimentBench.summary.nothingTestableNow", { game })
                   }${s.outsideRisk.length > 0 ? ` ${t("lab.experimentBench.summary.heldByRisk", { count: s.outsideRisk.length })}` : ""}`

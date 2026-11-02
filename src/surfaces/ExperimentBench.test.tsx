@@ -2294,6 +2294,43 @@ describe("P4-exit: what Compy tested on this game", () => {
     }
   });
 
+  // Harness review 2026-11-02 (round 1): beside a stale held change, a bare "1 couldn't be judged."
+  // had no subject and read as belonging to the stale change. The unjudged one is another change.
+  it("beside a stale held change, a change that couldn't be judged is named as another change", async () => {
+    const f = await owner();
+    const judged = f.experiments.find((x) => x.verdict)!;
+    const ofGame = f.sessions.filter((s) => s.process_name === judged.game);
+    const last = ofGame[ofGame.length - 1] as Record<string, unknown> & { hw_fingerprint: object; game_state: object };
+    const newer = {
+      ...last,
+      started_at: "2026-10-30T00:00:00Z",
+      hw_fingerprint: { ...last.hw_fingerprint, gpu_driver: "99.0.0" },
+      game_state: { ...last.game_state, gpu_driver: "99.0.0" },
+    };
+    const noisy = { ...judged, id: "exp:noisy-1", rec_id: "game-mode", rec_title: "Game Mode", verdict: "too-noisy", kept: false };
+    state.gate = true;
+    state.experiments = [...f.experiments, noisy] as typeof f.experiments;
+    state.sessions = [...f.sessions, newer] as typeof f.sessions;
+    state.recs = [
+      { id: judged.rec_id, title: judged.rec_title, passes: false, reason: "outside-chosen-risk", detail: null, risk: "moderate" },
+    ];
+    render(<ExperimentBench />);
+    const panel = await screen.findByTestId("exp-summary");
+    expect(panel).toHaveAttribute("data-headline", "nothing-testable-now");
+    const headline = screen.getByTestId("exp-summary-headline");
+    expect(headline).toHaveTextContent(
+      "so Compy won't test it again unless you allow that risk. 1 other change couldn't be judged.",
+    );
+    expect(headline).not.toHaveTextContent(/allow that risk\. 1 couldn't be judged/);
+    await i18n.changeLanguage("zh-CN");
+    try {
+      expect(await screen.findByText(/另有 1 项更改无法判断/)).toBeInTheDocument();
+      expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("相关更改超出了你选择的风险范围");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   it("never claims it when the picker's list couldn't be read, nor 'not applied' without it", async () => {
     const f = await owner();
     state.gate = true;
