@@ -523,6 +523,7 @@
         "seeResult": "See the result",
         "closeTest": "Close this test",
         "closeHow": "Closing judges the sessions Compy counted. Unless they show {{change}} likely better, Compy then writes the setting back exactly as it was before the test, even if it was changed outside Compy since.",
+        "closeHowPutBack": "Closing records what the sessions Compy counted show, and keeps nothing, since {{change}} was already put back.",
         "seeHow": "Seeing the result ends the test: Compy keeps {{change}} only if the result is Likely better, and otherwise puts it back the way it was before the test.",
         "progressUnread": "Compy can't count this test's sessions right now. {{change}} stays on until you put it back.",
         "noProgress": "Compy couldn't read how many of your sessions count.",

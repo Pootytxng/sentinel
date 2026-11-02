@@ -149,7 +149,9 @@ describe("P5-realplay: what the progress read says", () => {
       expect(v.status, stop).toBe(line);
       expect(v.action, stop).toBe("close");
       expect(v.closeHow, stop).toBe(
-        "Closing judges the sessions Compy counted. Unless they show HAGS likely better, Compy then writes the setting back exactly as it was before the test, even if it was changed outside Compy since.",
+        stop === "put-back-in-history"
+          ? "Closing records what the sessions Compy counted show, and keeps nothing, since HAGS was already put back."
+          : "Closing judges the sessions Compy counted. Unless they show HAGS likely better, Compy then writes the setting back exactly as it was before the test, even if it was changed outside Compy since.",
       );
     }
   });
@@ -196,6 +198,15 @@ describe("P5-realplay: what the progress read says", () => {
         // The two stops that say the change is already off offer no put-back, line or button.
         if (on === "noLongerOn") expect(v.putBackHow).toBeNull();
         else expect(v.putBackHow).toBe(t("lab.experimentBench.journey.realPlay.putBackHow"));
+        // Closing a test put back in history keeps nothing and writes nothing (experiment.rs
+        // put_back_before_conclude, then a restore that meets "already rolled back"), so it never says
+        // "unless they show it likely better"; every other stop's close can still keep a Likely better.
+        expect(v.closeHow).toBe(
+          stop === "put-back-in-history"
+            ? t("lab.experimentBench.journey.realPlay.closeHowPutBack", { change: "HAGS" })
+            : t("lab.experimentBench.journey.realPlay.closeHow", { change: "HAGS" }),
+        );
+        if (stop === "put-back-in-history") expect(v.closeHow).not.toMatch(/likely better|较可能更好/);
         expect(v.action).toBe("close");
       });
   });

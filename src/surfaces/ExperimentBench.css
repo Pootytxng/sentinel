@@ -69,8 +69,9 @@
   margin-top: 9px;
 }
 /* The cost line a user reads before "I understand, test it" sat 0px under the aim pills and 1px above
-   the button (desk review 2026-11-02): 9px either side, like the rest of the journey. */
-.exp-journey-cost {
+   the button (desk review 2026-11-02): 9px either side, like the rest of the journey. Two classes, so
+   it outranks .exp-note's own margin: 0 further down this file. */
+.exp-journey .exp-journey-cost {
   margin: 9px 0;
 }
 .exp-field {

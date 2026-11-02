@@ -2773,8 +2773,10 @@ describe("ExperimentBench spacing under the journey line", () => {
   // Review 2026-11-02 (fix 10): the cost line a user reads before "I understand, test it" sat 0px under
   // the aim pills and 1px above the button.
   it("gives the cost line the journey's 9px either side", async () => {
-    const rule = await ruleBody(/\.exp-journey-cost/);
-    expect(rule, "the cost line has no spacing of its own").not.toBeNull();
+    // Two classes: a one-class rule here loses to `.exp-note { margin: 0 }`, which comes later in the
+    // file (caught in self-review, 2026-11-02: the rule was there and did nothing).
+    const rule = await ruleBody(/\.exp-journey\s+\.exp-journey-cost/);
+    expect(rule, "the cost line has no spacing of its own that outranks .exp-note").not.toBeNull();
     expect(rule).toMatch(/margin:\s*9px 0\b/);
   });
 });

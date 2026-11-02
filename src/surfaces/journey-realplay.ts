@@ -210,7 +210,8 @@ export type RealPlayView = {
   /** Where it stands: still collecting N of M, a result is ready, why it stopped, or that its
    *  progress can't be read right now. null while the first read hasn't answered. */
   status: string | null;
-  /** While still collecting after a look: how much the sessions vary, so a few more are needed. */
+  /** While still collecting after a look: the allowance for normal swings between sessions so far
+   *  (the newest look's band, not the spread), so a few more are needed. */
   notYet: string | null;
   /** How to put it back, said beside the button that does. null only once a stop says the change is
    *  already off (then neither the line nor the button shows): everywhere else the way back shows,
@@ -274,7 +275,13 @@ export function realPlayView(
       notYet: null,
       // Nothing is on to put back once the change reads off or was put back in history.
       putBackHow: on === "noLongerOn" ? null : putBackHow,
-      closeHow: t("lab.experimentBench.journey.realPlay.closeHow", { change }),
+      // Put back in history, closing keeps nothing even on a Likely better and writes nothing
+      // (experiment.rs put_back_before_conclude; the restore meets "already rolled back"). Every
+      // other stop's close keeps a Likely better and otherwise writes the setting back.
+      closeHow: t(
+        known === "put-back-in-history" ? "lab.experimentBench.journey.realPlay.closeHowPutBack" : "lab.experimentBench.journey.realPlay.closeHow",
+        { change },
+      ),
       seeHow: null,
       notCounted,
       action: "close",
