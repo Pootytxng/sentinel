@@ -485,11 +485,6 @@ pub(crate) struct ExperimentRecord {
     /// every other outcome and on older records.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub smoothest: Option<SmoothestEvidence>,
-    /// P8-posture-show (RISK_MODEL §2): how far the user let Compy go on this PC when this Trial
-    /// started, as the picker sent it with the start. `None` on older records and on a start that
-    /// sent no choice: the receipt then reads "not recorded", never a guessed default.
-    #[serde(default)]
-    pub risk_choice: Option<crate::trial_candidates::RiskChoice>,
 }
 
 /// Trial Protocol §8 — the five result classes a Trial is judged in (#583). Persisted (kebab-case).
@@ -2857,7 +2852,6 @@ pub(crate) fn start_experiment(
     baseline_session_id: String,
     hypothesis: String,
     outcome: Option<String>,
-    risk_choice: Option<crate::trial_candidates::RiskChoice>,
 ) -> Result<ExperimentRecord, String> {
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
@@ -2996,8 +2990,6 @@ pub(crate) fn start_experiment(
         // P4-maxfps-smooth: a webview that sends no pick asks for the default (`start_outcome`).
         outcome,
         smoothest,
-        // P8-posture-show: recorded as sent; a missing choice stays unrecorded.
-        risk_choice,
     });
     let idx = store.experiments.len() - 1;
     save_store(&store)?;
@@ -3613,25 +3605,7 @@ mod experiment_tests {
             final_state_verified: None,
             outcome: TrialOutcome::Recommended,
             smoothest: None,
-            risk_choice: None,
         }
-    }
-
-    /// P8-posture-show: the risk choice in force at start round-trips in the record's own words, and
-    /// a record written before the field existed loads it as unrecorded (never as the default).
-    #[test]
-    fn risk_choice_round_trips_and_older_records_read_unrecorded() {
-        use crate::trial_candidates::RiskChoice;
-        let r = ExperimentRecord { risk_choice: Some(RiskChoice::LowOnly), ..rec(150.0, 5) };
-        let v = serde_json::to_value(&r).unwrap();
-        assert_eq!(v["risk_choice"], serde_json::json!("low-only"));
-        let back: ExperimentRecord = serde_json::from_value(v.clone()).unwrap();
-        assert_eq!(back.risk_choice, Some(RiskChoice::LowOnly));
-
-        let mut older = v;
-        older.as_object_mut().unwrap().remove("risk_choice");
-        let old: ExperimentRecord = serde_json::from_value(older).unwrap();
-        assert_eq!(old.risk_choice, None, "an older record's risk choice is not recorded, not the default");
     }
 
     #[test]

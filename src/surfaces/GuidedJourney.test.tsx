@@ -194,8 +194,7 @@ describe("P5-guided: one button runs the whole Trial", () => {
     await press();
     expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     const [start] = calls("start_experiment");
-    // P8-posture-show: the saved risk choice (none saved → the default) is recorded with the start.
-    expect(start).toMatchObject({ recId: "hags", recTitle: "HAGS", outcome: "recommended", riskChoice: "low-and-moderate" });
+    expect(start).toMatchObject({ recId: "hags", recTitle: "HAGS", outcome: "recommended" });
     // The as-is session just measured is the baseline, not the older one.
     expect(start.baselineSessionId).not.toBe(OLD.started_at);
     const [conclude] = calls("conclude_experiment");

@@ -38,7 +38,6 @@ import {
 } from "./test-summary";
 import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
 import { GuidedJourney, interruptedJourneyId, JourneyProgressLine, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
-import { loadRiskChoice, riskChoiceText, saveRiskChoice, type RiskChoice } from "./risk-choice";
 import { journeyProgress, nextToTest, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { displayModeLabel } from "../data/display-mode";
@@ -175,9 +174,6 @@ type Experiment = {
   outcome?: TrialOutcome | null;
   /** P4-smooth-offer: what a Smoothest Trial was judged on (experiment.rs `SmoothestEvidence`). */
   smoothest?: { band_pct: number; start_ratio: number; after_ratio?: number | null } | null;
-  /** P8-posture-show: the risk choice in force when this Trial started (experiment.rs `risk_choice`).
-   *  Absent on older records: those read "not recorded", never a guessed default. */
-  risk_choice?: RiskChoice | null;
 };
 
 type SimulatorReport = {
@@ -208,9 +204,26 @@ type SkipReason =
   // P8-posture-b (RISK_MODEL §2): the change passed every other filter but its risk is above what
   // the user chose. Checked last in Rust, so it never hides an earlier reason; the change is not set.
   | "outside-chosen-risk";
-// P8-posture-b: the risk choice lives in risk-choice.ts (shared with the guided journey); re-exported
-// here for the callers that import it from the bench.
-export { DEFAULT_RISK_CHOICE, loadRiskChoice, RISK_CHOICE_STORAGE_KEY, type RiskChoice } from "./risk-choice";
+// P8-posture-b: the user's answer to "How far may Compy go on this PC?" — serde names of Rust's
+// `RiskChoice`. Saved per viewer (localStorage); unknown/unreadable falls back to the Rust default.
+export type RiskChoice = "low-only" | "low-and-moderate";
+export const RISK_CHOICE_STORAGE_KEY = "compy.trial.riskChoice";
+export const DEFAULT_RISK_CHOICE: RiskChoice = "low-and-moderate";
+export function loadRiskChoice(): RiskChoice {
+  try {
+    const v = localStorage.getItem(RISK_CHOICE_STORAGE_KEY);
+    return v === "low-only" || v === "low-and-moderate" ? v : DEFAULT_RISK_CHOICE;
+  } catch {
+    return DEFAULT_RISK_CHOICE;
+  }
+}
+function saveRiskChoice(v: RiskChoice): void {
+  try {
+    localStorage.setItem(RISK_CHOICE_STORAGE_KEY, v);
+  } catch {
+    /* private window / blocked storage: the choice still applies for this session */
+  }
+}
 // P4-rank (ENGINE §3.5, §3.7): the backend numbers the changes that passed in a suggested test order
 // (stronger evidence that it helps, then lower risk, then catalog order) and says why per position.
 // A change is "too small to measure here" only when the catalog states its effect AND this game's
@@ -506,11 +519,6 @@ function pairingReceipt(x: Experiment, t: Translate): string | null {
   if (changed.length > 0) return t("lab.experimentBench.pairChanged", { changed: pairList(changed, t) });
   if (unrecorded.length > 0) return t("lab.experimentBench.pairUnrecorded", { unrecorded: pairList(unrecorded, t) });
   return null;
-}
-
-// P8-posture-show: every Trial row names the risk choice it started under ("not recorded" when none).
-function riskChoiceReceipt(x: Experiment, t: Translate): string {
-  return t("lab.experimentBench.riskChoice.receipt", { choice: riskChoiceText(x.risk_choice, t) });
 }
 
 // "12 min" / "45 s" — a left-out span as the backend words it (experiment.rs `left_out_clause`).
@@ -972,8 +980,6 @@ export default function ExperimentBench({
               baselineSessionId: baseline.started_at,
               hypothesis,
               outcome,
-              // P8-posture-show: recorded on the Trial so its receipt can name it.
-              riskChoice,
             },
             refresh,
           ),
@@ -1482,9 +1488,6 @@ export default function ExperimentBench({
                     {pairingReceipt(x, t)}
                   </span>
                 )}
-                <span className="exp-bench-abort" data-testid="exp-risk-choice-receipt">
-                  {riskChoiceReceipt(x, t)}
-                </span>
                 {stretchReceipts(x, t).map((line, k) => (
                   <span key={k} className="exp-bench-abort" data-testid="exp-stretch-receipt">
                     {line}

@@ -411,7 +411,6 @@
       "receipt": {
         "change": "Change",
         "outcome": "Outcome",
-        "riskChoice": "Risk you allowed",
         "verdict": "Verdict",
         "confidence": "Confidence",
         "baselineAvg": "Before, average",
@@ -504,9 +503,7 @@
     "riskChoice": {
       "label": "How far may Compy go on this PC?",
       "lowOnly": "Low risk only",
-      "lowAndModerate": "Low and moderate risk",
-      "notRecorded": "not recorded",
-      "receipt": "Risk you allowed when this Trial started: {{choice}}"
+      "lowAndModerate": "Low and moderate risk"
     },
     "chooseChange": "Choose a change…",
     "pickTested": "{{title}} · Tested: {{verdict}}",
