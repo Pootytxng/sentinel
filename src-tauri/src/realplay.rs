@@ -18,9 +18,10 @@
 //!   change, with the change shown on at the session's start and at the next observation after it.
 //!   Every other session is listed with a reason ([`NotCountedReason`]) and never counted.
 //! - **Judging** ([`judge`]): on ln(1% low) and ln(average), the effect between the arms against a
-//!   band from the Trial's own between-session spread (pooled SD, Student t at α = 0.05/3), never
-//!   below the fixed 3%. Looks at 3, 5 and 8 sessions, each on the chronological prefix, so when
-//!   Compy is opened never changes the verdict. Real play never records High confidence.
+//!   band from the Trial's own between-session spread (Welch: each arm on its own spread, with
+//!   Satterthwaite's degrees of freedom, Student t at α = 0.05/3), never below the fixed 3%. Looks at
+//!   3, 5 and 8 sessions, each on the chronological prefix, so when Compy is opened never changes the
+//!   verdict. Real play never records High confidence.
 //!
 //! Compy can't tell one scene or match from another without looking inside the game, which LOCKED
 //! rule 2 forbids, so the band comes from the Trial's own sessions and nothing is borrowed from
@@ -60,18 +61,28 @@ pub(crate) const MIN_READINGS: u32 = crate::experiment::MIN_BASELINE_SAMPLES;
 pub(crate) const MAX_NOT_COUNTED: usize = 10;
 
 /// Two-sided Student t critical values at α = 0.05/3 (Bonferroni over at most three looks), for
-/// df = n + m − 2 from 4 (3 + 3 sessions) to 14 (8 + 8): `scipy.stats.t.ppf(1 - 0.05/6, df)`,
-/// three decimals. (The df-14 value is 2.718: a t quantile that happens to share e's digits.)
+/// df 2 to 14: `scipy.stats.t.ppf(1 - 0.05/6, df)`, three decimals. Welch's degrees of freedom lie
+/// between min(n, m) − 1 (2 with three sessions a side) and n + m − 2 (14 with eight a side). (The
+/// df-14 value is 2.718: a t quantile that happens to share e's digits.)
 #[allow(clippy::approx_constant)]
-const T_CRITICAL: [f64; 11] = [3.961, 3.534, 3.287, 3.128, 3.016, 2.933, 2.870, 2.820, 2.779, 2.746, 2.718];
-const T_FIRST_DF: usize = 4;
+const T_CRITICAL: [f64; 13] = [7.649, 4.857, 3.961, 3.534, 3.287, 3.128, 3.016, 2.933, 2.870, 2.820, 2.779, 2.746, 2.718];
+const T_FIRST_DF: usize = 2;
 
-/// The t critical value for `df` degrees of freedom. Below 4 there is no value (fewer than three
-/// sessions a side is never judged); above 14 the df-14 value is used, which is wider than the true
-/// one, so it can only be more cautious.
-pub(crate) fn t_critical(df: usize) -> Option<f64> {
-    let i = df.checked_sub(T_FIRST_DF)?;
-    Some(T_CRITICAL[i.min(T_CRITICAL.len() - 1)])
+/// The t critical value for `df` degrees of freedom, which Welch's makes fractional: between two
+/// whole df, the straight line between their values. t falls ever more slowly as df grows, so that
+/// line lies above the exact value and can only be more cautious. Below 2 (or not a number) there is
+/// no value; above 14 the df-14 value, which is wider than the true one.
+pub(crate) fn t_critical(df: f64) -> Option<f64> {
+    if df.is_nan() || df < T_FIRST_DF as f64 {
+        return None;
+    }
+    let last = T_CRITICAL.len() - 1;
+    let x = df - T_FIRST_DF as f64;
+    let i = x.floor() as usize;
+    if i >= last {
+        return Some(T_CRITICAL[last]);
+    }
+    Some(T_CRITICAL[i] + (T_CRITICAL[i + 1] - T_CRITICAL[i]) * (x - i as f64))
 }
 
 /// The recorded conditions that, once changed, no later session can change back: a different GPU or
@@ -189,7 +200,8 @@ pub(crate) struct RealPlayEvidence {
     /// on an early end, the ones that were counted.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub with: Vec<RealPlaySession>,
-    /// The between-session spread of each metric (pooled within-arm SD, as a %). `None` until a look.
+    /// The between-session spread of each metric (pooled within-arm SD, as a %), for the receipt:
+    /// descriptive only, since the band judges each arm on its own spread. `None` until a look.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub low1_spread_pct: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -561,7 +573,8 @@ pub(crate) struct Look {
     /// The effect, in %, rounded to 0.1: (e^d − 1)·100, d the difference of the arms' mean logs.
     pub delta_low1_pct: f64,
     pub delta_avg_pct: f64,
-    /// The pooled within-arm spread of each metric, in %, rounded to 0.1.
+    /// The pooled within-arm spread of each metric, in %, rounded to 0.1: how much sessions varied on
+    /// their own, for the receipt. Descriptive only; the band judges each arm on its own spread.
     pub low1_spread_pct: f64,
     pub avg_spread_pct: f64,
 }
@@ -577,35 +590,64 @@ pub(crate) enum Judgement {
     Decided { look: Look, outcome: ConcludeOutcome },
 }
 
-/// The measurements of one look: per metric, the effect d = mean(ln with) − mean(ln before), the
-/// pooled within-arm SD s_p (df = n + m − 2), SE = s_p·√(1/n + 1/m), and a band of
-/// max(t·SE, ln 1.03); the band used is the wider of the two.
-fn measure(before: &[&RealPlaySession], with: &[&RealPlaySession], ordinal: u8) -> Option<Look> {
+/// One metric of one look, on the logs: the effect, its ± half-width, and the pooled spread.
+struct Metric {
+    /// d = mean(ln with) − mean(ln before).
+    effect: f64,
+    /// t·SE on Welch's terms, never assuming the arms vary alike.
+    half_width: f64,
+    /// The pooled within-arm SD: descriptive only ([`Look::low1_spread_pct`]).
+    spread: f64,
+}
+
+/// One metric's Welch comparison: SE = √(s_b²/n + s_w²/m), each arm its own sample variance, and
+/// t at Satterthwaite's degrees of freedom, (s_b²/n + s_w²/m)² / ((s_b²/n)²/(n−1) + (s_w²/m)²/(m−1)),
+/// which lie between min(n, m) − 1 and n + m − 2 (clamped there against rounding, and the cautious
+/// end when they can't be computed). Real play's two arms are played on different days, often in
+/// different matches, so one can swing far more than the other; a pooled SD that assumes they don't
+/// read Likely in up to 21% of Trials with no effect (review of 59fc753). Both arms at zero spread
+/// leave nothing to scale, and the band is the fixed floor.
+fn metric(before: &[&RealPlaySession], with: &[&RealPlaySession], f: fn(&RealPlaySession) -> f64) -> Option<Metric> {
     let (n, m) = (before.len(), with.len());
-    let df = (n + m).checked_sub(2)?;
-    let t = t_critical(df)?;
-    let arm = |xs: &[&RealPlaySession], f: fn(&RealPlaySession) -> f64| -> (f64, f64) {
+    if n < 2 || m < 2 {
+        return None;
+    }
+    let arm = |xs: &[&RealPlaySession]| -> (f64, f64) {
         let logs: Vec<f64> = xs.iter().map(|s| f(s).ln()).collect();
         let mean = logs.iter().sum::<f64>() / logs.len() as f64;
         (mean, logs.iter().map(|x| (x - mean).powi(2)).sum::<f64>())
     };
-    let metric = |f: fn(&RealPlaySession) -> f64| -> (f64, f64) {
-        let ((mb, ssb), (mw, ssw)) = (arm(before, f), arm(with, f));
-        (mw - mb, ((ssb + ssw) / df as f64).sqrt())
+    let ((mean_before, ss_before), (mean_with, ss_with)) = (arm(before), arm(with));
+    let (nf, mf) = (n as f64, m as f64);
+    // Each arm's variance of its mean.
+    let (vb, vw) = (ss_before / (nf - 1.0) / nf, ss_with / (mf - 1.0) / mf);
+    let se2 = vb + vw;
+    let half_width = if se2 > 0.0 {
+        let (low, high) = ((n.min(m) - 1) as f64, (n + m - 2) as f64);
+        let df = se2.powi(2) / (vb.powi(2) / (nf - 1.0) + vw.powi(2) / (mf - 1.0));
+        let df = if df.is_finite() { df.clamp(low, high) } else { low };
+        t_critical(df)? * se2.sqrt()
+    } else {
+        0.0
     };
-    let (d_low, sp_low) = metric(|s| s.low1_fps);
-    let (d_avg, sp_avg) = metric(|s| s.avg_fps);
-    let se = (1.0 / n as f64 + 1.0 / m as f64).sqrt();
-    let band = |sp: f64| pct(t * sp * se).max(DEFAULT_NOISE_FLOOR_PCT);
+    Some(Metric { effect: mean_with - mean_before, half_width, spread: ((ss_before + ss_with) / (nf + mf - 2.0)).sqrt() })
+}
+
+/// The measurements of one look: per metric, [`metric`]'s effect and a band of max(t·SE, ln 1.03);
+/// the band used is the wider of the two metrics'.
+fn measure(before: &[&RealPlaySession], with: &[&RealPlaySession], ordinal: u8) -> Option<Look> {
+    let low = metric(before, with, |s| s.low1_fps)?;
+    let avg = metric(before, with, |s| s.avg_fps)?;
+    let band = |m: &Metric| pct(m.half_width).max(DEFAULT_NOISE_FLOOR_PCT);
     let look = Look {
         ordinal,
-        with: m,
-        before: n,
-        band_pct: round1(band(sp_low).max(band(sp_avg))),
-        delta_low1_pct: round1(pct(d_low)),
-        delta_avg_pct: round1(pct(d_avg)),
-        low1_spread_pct: round1(pct(sp_low)),
-        avg_spread_pct: round1(pct(sp_avg)),
+        with: with.len(),
+        before: before.len(),
+        band_pct: round1(band(&low).max(band(&avg))),
+        delta_low1_pct: round1(pct(low.effect)),
+        delta_avg_pct: round1(pct(avg.effect)),
+        low1_spread_pct: round1(pct(low.spread)),
+        avg_spread_pct: round1(pct(avg.spread)),
     };
     let numbers = [look.band_pct, look.delta_low1_pct, look.delta_avg_pct, look.low1_spread_pct, look.avg_spread_pct];
     numbers.iter().all(|x| x.is_finite()).then_some(look)
@@ -912,14 +954,22 @@ mod tests {
     #[test]
     #[allow(clippy::approx_constant)]
     fn the_t_table_is_the_bonferroni_t_and_never_narrower_than_the_normal() {
-        assert_eq!(t_critical(4), Some(3.961));
-        assert_eq!(t_critical(14), Some(2.718));
-        assert_eq!(t_critical(3), None, "fewer than three sessions a side is never judged");
-        assert_eq!(t_critical(40), Some(2.718), "beyond the table the df-14 value is the cautious one");
+        // Welch's degrees of freedom go down to 2 with three sessions a side (review of 59fc753).
+        assert_eq!((t_critical(2.0), t_critical(3.0), t_critical(4.0)), (Some(7.649), Some(4.857), Some(3.961)));
+        assert_eq!(t_critical(14.0), Some(2.718));
+        assert_eq!(t_critical(1.9), None, "below Welch's least df for three sessions a side, nothing is judged");
+        assert_eq!(t_critical(f64::NAN), None);
+        assert_eq!(t_critical(40.0), Some(2.718), "beyond the table the df-14 value is the cautious one");
         assert!(T_CRITICAL.windows(2).all(|w| w[0] > w[1]), "decreasing with df");
         // z at α = 0.05/3 two-sided is 2.394: a t value is always wider than it.
         assert!(T_CRITICAL.iter().all(|&t| t > 2.394), "{T_CRITICAL:?}");
-        assert_eq!(T_CRITICAL.len(), 2 * MAX_SESSIONS - 2 - T_FIRST_DF + 1, "df 4 (3 + 3) to 14 (8 + 8)");
+        assert_eq!(T_CRITICAL.len(), 2 * MAX_SESSIONS - 2 - T_FIRST_DF + 1, "df 2 (Welch, 3 a side) to 14 (8 + 8)");
+        // Between whole df the line between them: never below the exact t, and within 10% of it.
+        // scipy.stats.t.ppf(1 - 0.05/6, df) for these df is 5.7842, 4.3135, 3.3497, 2.8437, 2.7285.
+        for (df, exact) in [(2.5, 5.7842), (3.5, 4.3135), (5.7, 3.3497), (10.5, 2.8437), (13.6, 2.7285)] {
+            let t = t_critical(df).unwrap();
+            assert!(t >= exact - 0.0005 && t < exact * 1.1, "df {df}: {t} against {exact}");
+        }
     }
 
     #[test]
@@ -1105,12 +1155,16 @@ mod tests {
             }
         }
         let rate = likely as f64 / trials as f64;
+        println!("{likely} of {trials} null Trials read Likely ({:.2}%)", rate * 100.0);
         assert!(rate <= 0.05, "{likely} of {trials} null Trials read Likely ({:.1}%)", rate * 100.0);
     }
 
-    /// The other side of the null test above: a judge that never says Likely would pass it. At σ 4%
-    /// between sessions, a real +10% on both numbers reads Likely better in most Trials, more often
-    /// with more as-is sessions (plan §1 simulation: 74% with 3, 97% with 8).
+    /// The other side of the null tests above: a judge that never says Likely would pass them. At σ 4%
+    /// between sessions, a real +10% on both numbers reads Likely better almost always with 8 as-is
+    /// sessions, and about half the time with 3. That is the price of Welch's band (review of
+    /// 59fc753): it doesn't assume the two arms vary alike, so its first looks, with 3 sessions a side,
+    /// have 2 to 4 degrees of freedom. The pooled band's 74% with 3 (plan §1) came from assuming
+    /// they do, which read Likely in up to 21% of Trials with no effect when they don't.
     #[test]
     fn a_real_ten_percent_gain_is_found_most_of_the_time() {
         let mut rng = Rng::seeded(0x0F0F_0F0F_0F0F_0F0F);
@@ -1134,7 +1188,8 @@ mod tests {
             better as f64 / trials as f64
         };
         let (three, eight) = (found(3, &mut rng), found(8, &mut rng));
-        assert!(three >= 0.6 && eight >= 0.9 && eight > three, "3 as-is: {three:.2}, 8 as-is: {eight:.2}");
+        println!("a real +10% read Likely better: 3 as-is {three:.3}, 8 as-is {eight:.3}");
+        assert!(three >= 0.4 && eight >= 0.9 && eight > three, "3 as-is: {three:.3}, 8 as-is: {eight:.3}");
     }
 
     // ─── with_arm ──────────────────────────────────────────────────────────────
@@ -1475,5 +1530,42 @@ mod tests {
         // A record with only the pinned sessions (as started) loads with everything else unknown.
         let started: RealPlayEvidence = serde_json::from_value(serde_json::json!({ "before": [] })).unwrap();
         assert_eq!(started, RealPlayEvidence::default());
+    }
+
+    // ─── review of 59fc753 ─────────────────────────────────────────────────────
+
+    /// The arms needn't vary alike: real play's two sides are played on different days, often in
+    /// different matches, so one side can swing three or eight times as much as the other. A pooled
+    /// SD assumes they don't, and read Likely in 11–21% of null Trials of these shapes (review of
+    /// 59fc753); Welch's band, each arm judged on its own spread, keeps every shape at 5% or less.
+    #[test]
+    fn null_effect_with_unequal_spreads_reads_likely_at_most_5_percent() {
+        let mut rng = Rng::seeded(0x00C0_FFEE_0059_FC75);
+        // (as-is σ, with-change σ, as-is sessions): the three shapes the review simulated.
+        let shapes = [(0.03, 0.09, 8), (0.01, 0.08, 8), (0.09, 0.03, 3)];
+        let trials = 2000;
+        let (mut seen, mut likely) = ([0usize; 3], [0usize; 3]);
+        for t in 0..trials {
+            let k = t % shapes.len();
+            let (before_sigma, with_sigma, n) = shapes[k];
+            let draw = |count: usize, sigma: f64, rng: &mut Rng| -> Vec<RealPlaySession> {
+                let low: Vec<f64> = (0..count).map(|_| 150.0 * (sigma * normal(rng)).exp()).collect();
+                let avg: Vec<f64> = (0..count).map(|_| 240.0 * (sigma * 0.5 * normal(rng)).exp()).collect();
+                numbers(&low, &avg)
+            };
+            let before = draw(n, before_sigma, &mut rng);
+            let with = draw(MAX_SESSIONS, with_sigma, &mut rng);
+            seen[k] += 1;
+            if let Judgement::Decided { outcome, .. } = judge(&before, &with, TrialOutcome::Recommended, false) {
+                if matches!(outcome.verdict.as_str(), "improved" | "regressed") {
+                    likely[k] += 1;
+                }
+            }
+        }
+        let rates: Vec<String> = (0..shapes.len())
+            .map(|k| format!("{:?}: {} of {} ({:.1}%)", shapes[k], likely[k], seen[k], 100.0 * likely[k] as f64 / seen[k] as f64))
+            .collect();
+        println!("null Trials that read Likely: {rates:?}");
+        assert!((0..shapes.len()).all(|k| likely[k] * 20 <= seen[k]), "null Trials that read Likely: {rates:?}");
     }
 }
