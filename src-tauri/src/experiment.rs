@@ -3755,15 +3755,20 @@ pub(crate) fn real_play_read<'s>(
 
 /// Pure (P5-realplay): what concluding `read` records before the conclude's own checks
 /// (`with_unverified_changes`, then `guard_target_at_conclude`), or `None` while Compy is still
-/// collecting. A decided look is its verdict, never above Medium. A Trial stopped with fewer than
-/// `realplay::MIN_SESSIONS` counted ends unjudged: `confounded` through [`with_compy_state`] when
-/// another Compy change moved, or [`with_comparability`] when a driver, Windows or game build changed
-/// (a change that reads off turns `confounded` at the target check); `insufficient-evidence` when the
-/// window ran out, the setting couldn't be read or the as-is sessions are gone.
+/// collecting. A decided look is its verdict, never above Medium, and never kept once the Trial's own
+/// change was put back in Test → Applied & history ([`put_back_before_conclude`]). A Trial stopped with
+/// fewer than `realplay::MIN_SESSIONS` counted ends unjudged: `confounded` through [`with_compy_state`]
+/// when another Compy change moved, or [`with_comparability`] when a driver, Windows or game build
+/// changed (a change that reads off turns `confounded` at the target check); `insufficient-evidence`
+/// when the window ran out, the setting couldn't be read or the as-is sessions are gone.
 pub(crate) fn real_play_outcome(read: &RealPlayRead<'_>) -> Option<ConcludeOutcome> {
     use crate::realplay::{Judgement, RealPlayStop as Stop, MIN_SESSIONS, WINDOW_DAYS};
-    if let Judgement::Decided { outcome, .. } = &read.judgement {
-        return Some(ConcludeOutcome { confidence: outcome.confidence.min(Confidence::Medium), ..outcome.clone() });
+    if let Judgement::Decided { outcome, look } = &read.judgement {
+        let decided = ConcludeOutcome { confidence: outcome.confidence.min(Confidence::Medium), ..outcome.clone() };
+        return Some(match read.arm.stop {
+            Some(Stop::PutBackInHistory) => put_back_before_conclude(decided, look),
+            _ => decided,
+        });
     }
     let stop = read.arm.stop?;
     let (stop_reason, why) = match stop {
@@ -3799,6 +3804,124 @@ pub(crate) fn real_play_outcome(read: &RealPlayRead<'_>) -> Option<ConcludeOutco
         },
         _ => base,
     })
+}
+
+/// A decided look whose own change was put back in Test → Applied & history before the conclude
+/// (rollback integrity, review of 59fc753). The Trial's ledger row is already rolled back, so it owns
+/// nothing to keep, whatever the look measured and whatever the setting reads now (it can read on
+/// again under another row, re-applied after the undo). Keep is false, so the shared restore runs and
+/// meets the ledger's "already rolled back": Restored, or the loud Aborted state when the setting
+/// still reads as changed afterwards (`settle_restore`). The measurement stays in the note, which
+/// never says the change was kept.
+fn put_back_before_conclude(decided: ConcludeOutcome, look: &crate::realplay::Look) -> ConcludeOutcome {
+    ConcludeOutcome {
+        keep: false,
+        stop_reason: Some("real-play-put-back-in-history".into()),
+        note: format!(
+            "Real play: {} sessions with the change on, against {} sessions as the PC was before it: the 1% low {}, \
+             the average frame rate {}, against a ±{}% band. The change was put back in Test → Applied & history \
+             before Compy concluded the test, so Compy kept nothing.",
+            look.with,
+            look.before,
+            signed_pct(look.delta_low1_pct),
+            signed_pct(look.delta_avg_pct),
+            band_pct_text(look.band_pct)
+        ),
+        ..decided
+    }
+}
+
+/// Pure (P5-realplay): what a crash reported during a real-play Trial records before the conclude's
+/// own checks. It always restores, and is pinned on the change only through [`crash_outcome`], on the
+/// newest session of the game after the change took effect against the newest as-is session still
+/// stored. As in the two-session conclude, another Compy change applied or undone during the test, or
+/// a crash session that didn't run with exactly the as-is sessions' changes plus this one, confounds
+/// it ahead of the crash ([`with_compy_state`] on [`other_compy_change`]): then nothing is pinned on
+/// this setting. Returns the pairing it judged by, for the receipt.
+pub(crate) fn real_play_crash(
+    rec: &ExperimentRecord,
+    sessions: &[SessionSummary],
+    ledger: Option<&[LedgerEntryRef<'_>]>,
+) -> Result<(ConcludeOutcome, Option<SessionPairing>), String> {
+    let trial = real_play_trial(rec)?;
+    let reference = crate::realplay::reference_session(trial.before, sessions);
+    let newest = crate::realplay::newest_after(trial.game, trial.applied_at, sessions);
+    let (crash, pairing) = crash_outcome(Some(trial.applied_at), reference, newest);
+    let judged = with_compy_state(crash, other_compy_change(rec, reference, newest, ledger));
+    Ok((judged, pairing.map(|p| SessionPairing::of(&p, reference, newest))))
+}
+
+/// Pure (P5-realplay): what a real-play conclude keeps on `rec` for the receipt once `outcome` is
+/// final: the with-change sessions judged (the deciding look's prefix, or every one counted), the
+/// sessions not counted and why, the deciding look's numbers, the pairing, and the pair fields an
+/// older Compy reads (`treatment`, as the judged sessions' means). After a reported crash no look's
+/// numbers are written, decided or not: the crash is the verdict, and a measured "+12%" beside
+/// "Likely worse" would read as a result it isn't (review of 59fc753).
+pub(crate) fn record_real_play(
+    rec: &mut ExperimentRecord,
+    read: Option<&RealPlayRead<'_>>,
+    outcome: &ConcludeOutcome,
+    crashed: bool,
+    crash_pairing: Option<SessionPairing>,
+    now: DateTime<Utc>,
+) {
+    let decided = read.filter(|_| !crashed).and_then(|r| match &r.judgement {
+        crate::realplay::Judgement::Decided { look, .. } => Some(look.clone()),
+        _ => None,
+    });
+    let judged_on: Vec<&SessionSummary> = match (read, &decided) {
+        (Some(r), Some(look)) => r.arm.counted.iter().copied().take(look.with).collect(),
+        (Some(r), None) => r.arm.counted.clone(),
+        (None, _) => Vec::new(),
+    };
+    let newest_judged = decided.as_ref().and_then(|_| judged_on.last().copied());
+    let reference = read.and_then(|r| r.arm.reference);
+    let pairing = match (crash_pairing, newest_judged, read.and_then(|r| r.arm.changed.as_ref())) {
+        (Some(p), _, _) => Some(p),
+        (None, Some(newest), _) => reference.map(|r| SessionPairing::of(&crate::comparability::derive(r, newest), Some(r), Some(newest))),
+        (None, None, Some((changed, p))) => Some(SessionPairing::of(p, reference, Some(changed))),
+        (None, None, None) => None,
+    };
+    let numbers: Vec<crate::realplay::RealPlaySession> = judged_on.iter().map(|s| crate::realplay::RealPlaySession::of(s)).collect();
+    let means = crate::realplay::geometric_means(&numbers);
+    let game_noise = newest_judged.map_or(crate::noise_floor::NoiseLookup::Unmeasured, crate::noise_floor::lookup_for_session);
+    if let Some(ev) = rec.real_play.as_mut() {
+        ev.not_counted = read.map(|r| crate::realplay::newest_not_counted(&r.arm.not_counted)).unwrap_or_default();
+        ev.stop = read.and_then(|r| r.arm.stop);
+        if let Some(look) = &decided {
+            ev.low1_spread_pct = Some(look.low1_spread_pct);
+            ev.avg_spread_pct = Some(look.avg_spread_pct);
+            ev.band_pct = Some(look.band_pct);
+            ev.delta_low1_pct = Some(look.delta_low1_pct);
+            ev.delta_avg_pct = Some(look.delta_avg_pct);
+            ev.look = Some(look.ordinal);
+        }
+        ev.with = numbers;
+    }
+    // The pair fields an older Compy reads: the with-change sessions' means, total readings and deltas.
+    rec.treatment = match (&decided, means, newest_judged) {
+        (Some(look), Some((low1, avg)), Some(newest)) => Some(TreatmentRecord {
+            avg_fps: avg,
+            low1_fps: low1,
+            samples: judged_on.iter().fold(0u32, |n, s| n.saturating_add(s.samples)),
+            crashed,
+            delta_low1_pct: look.delta_low1_pct,
+            recorded_at: now.to_rfc3339(),
+            session_id: Some(newest.started_at.clone()),
+            check: None,
+            halves: None,
+            delta_avg_pct: Some(look.delta_avg_pct),
+        }),
+        _ => None,
+    };
+    rec.session_pairing = pairing;
+    let band_pct = decided.as_ref().map_or(rec.noise_floor_pct, |look| look.band_pct);
+    rec.noise_evidence = noise_evidence_for(outcome, band_pct, &game_noise, None);
+    rec.verdict = Some(outcome.verdict.clone());
+    rec.trial_result = Some(trial_result_for(&outcome.verdict));
+    rec.verdict_confidence = Some(outcome.confidence);
+    rec.verdict_note = Some(outcome.note.clone());
+    rec.concluded_at = Some(now.to_rfc3339());
 }
 
 /// P5-realplay: where a game's real play stands, for the journey's panel. Before a start, how many
@@ -3861,10 +3984,10 @@ pub(crate) fn get_realplay_progress(game: String) -> Result<crate::realplay::Rea
 /// judgement and the keep/restore, as `conclude_experiment` does (the declared Experiment -> History
 /// nesting). While Compy is still collecting (no look has decided and nothing stopped the test) it is
 /// refused, with nothing judged or changed, unless a crash was reported: a crash always restores, and
-/// is pinned on the change only through `crash_outcome` on the newest session after it. Otherwise
-/// [`real_play_outcome`] is the result, other settings Compy can't confirm leave it unjudged
-/// ([`with_unverified_changes`]), and a setting that reads off or can't be read is never kept
-/// ([`guard_target_at_conclude`]). Real play never records High confidence.
+/// is pinned on the change only as [`real_play_crash`] allows. Otherwise [`real_play_outcome`] is the
+/// result, other settings Compy can't confirm leave it unjudged ([`with_unverified_changes`]), and a
+/// setting that reads off or can't be read is never kept ([`guard_target_at_conclude`]). Real play
+/// never records High confidence. What was measured goes on the record through [`record_real_play`].
 #[tauri::command]
 pub(crate) fn conclude_realplay(experiment_id: String, crashed: bool) -> Result<ExperimentRecord, String> {
     if !experiment_gate() {
@@ -3894,16 +4017,13 @@ pub(crate) fn conclude_realplay(experiment_id: String, crashed: bool) -> Result<
     let target_now = crate::history::probe_rec_target(&store.experiments[idx].rec_id);
     let live = target_verification(Some(target_now));
     let rec = &store.experiments[idx];
-    let trial = real_play_trial(rec).map_err(|why| format!("experiment not concluded — {why}"))?;
+    real_play_trial(rec).map_err(|why| format!("experiment not concluded — {why}"))?;
     let read = match rows.as_deref() {
         Some(rows) => Some(real_play_read(rec, &sessions, rows, live, now).map_err(|why| format!("experiment not concluded — {why}"))?),
         None => None,
     };
     let (judged, crash_pairing) = if crashed {
-        let reference = crate::realplay::reference_session(trial.before, &sessions);
-        let newest = crate::realplay::newest_after(trial.game, trial.applied_at, &sessions);
-        let (outcome, pairing) = crash_outcome(Some(trial.applied_at), reference, newest);
-        (outcome, pairing.map(|p| SessionPairing::of(&p, reference, newest)))
+        real_play_crash(rec, &sessions, rows.as_deref()).map_err(|why| format!("experiment not concluded — {why}"))?
     } else {
         let Some(read) = read.as_ref() else {
             let why = history.as_ref().err().cloned().unwrap_or_else(|| "Compy can't read its change history".into());
@@ -3933,64 +4053,7 @@ pub(crate) fn conclude_realplay(experiment_id: String, crashed: bool) -> Result<
     let outcome = ConcludeOutcome { confidence: outcome.confidence.min(Confidence::Medium), ..outcome };
 
     // §11: what was measured, kept on the record for the receipt.
-    let decided = read.as_ref().and_then(|r| match &r.judgement {
-        crate::realplay::Judgement::Decided { look, .. } => Some(look.clone()),
-        _ => None,
-    });
-    let judged_on: Vec<&SessionSummary> = match (&read, &decided) {
-        (Some(r), Some(look)) => r.arm.counted.iter().copied().take(look.with).collect(),
-        (Some(r), None) => r.arm.counted.clone(),
-        (None, _) => Vec::new(),
-    };
-    let newest_judged = decided.as_ref().and_then(|_| judged_on.last().copied());
-    let reference = read.as_ref().and_then(|r| r.arm.reference);
-    let pairing = match (&crash_pairing, newest_judged, read.as_ref().and_then(|r| r.arm.changed.as_ref())) {
-        (Some(p), _, _) => Some(p.clone()),
-        (None, Some(newest), _) => reference.map(|r| SessionPairing::of(&crate::comparability::derive(r, newest), Some(r), Some(newest))),
-        (None, None, Some((changed, p))) => Some(SessionPairing::of(p, reference, Some(changed))),
-        (None, None, None) => None,
-    };
-    let numbers: Vec<crate::realplay::RealPlaySession> = judged_on.iter().map(|s| crate::realplay::RealPlaySession::of(s)).collect();
-    let means = crate::realplay::geometric_means(&numbers);
-    let game_noise = newest_judged.map_or(crate::noise_floor::NoiseLookup::Unmeasured, crate::noise_floor::lookup_for_session);
-    let rec = &mut store.experiments[idx];
-    if let Some(ev) = rec.real_play.as_mut() {
-        ev.not_counted = read.as_ref().map(|r| crate::realplay::newest_not_counted(&r.arm.not_counted)).unwrap_or_default();
-        ev.stop = read.as_ref().and_then(|r| r.arm.stop);
-        if let Some(look) = &decided {
-            ev.low1_spread_pct = Some(look.low1_spread_pct);
-            ev.avg_spread_pct = Some(look.avg_spread_pct);
-            ev.band_pct = Some(look.band_pct);
-            ev.delta_low1_pct = Some(look.delta_low1_pct);
-            ev.delta_avg_pct = Some(look.delta_avg_pct);
-            ev.look = Some(look.ordinal);
-        }
-        ev.with = numbers;
-    }
-    // The pair fields an older Compy reads: the with-change sessions' means, total readings and deltas.
-    rec.treatment = match (&decided, means, newest_judged) {
-        (Some(look), Some((low1, avg)), Some(newest)) => Some(TreatmentRecord {
-            avg_fps: avg,
-            low1_fps: low1,
-            samples: judged_on.iter().fold(0u32, |n, s| n.saturating_add(s.samples)),
-            crashed,
-            delta_low1_pct: look.delta_low1_pct,
-            recorded_at: now.to_rfc3339(),
-            session_id: Some(newest.started_at.clone()),
-            check: None,
-            halves: None,
-            delta_avg_pct: Some(look.delta_avg_pct),
-        }),
-        _ => None,
-    };
-    rec.session_pairing = pairing;
-    let band_pct = decided.as_ref().map_or(rec.noise_floor_pct, |look| look.band_pct);
-    rec.noise_evidence = noise_evidence_for(&outcome, band_pct, &game_noise, None);
-    rec.verdict = Some(outcome.verdict.clone());
-    rec.trial_result = Some(trial_result_for(&outcome.verdict));
-    rec.verdict_confidence = Some(outcome.confidence);
-    rec.verdict_note = Some(outcome.note.clone());
-    rec.concluded_at = Some(now.to_rfc3339());
+    record_real_play(&mut store.experiments[idx], read.as_ref(), &outcome, crashed, crash_pairing, now);
 
     finish_conclude(&mut store, idx, outcome, target_now)
 }
@@ -7879,6 +7942,31 @@ mod experiment_tests {
 
     // ─── review of 59fc753 ─────────────────────────────────────────────────────
 
+    // Rollback integrity: once its own row is put back, the Trial owns nothing to keep. A look that
+    // decided "Likely better" before that, with the setting reading on again (re-applied under a new
+    // row, say), used to be Kept while the row it names was already rolled back.
+    #[test]
+    fn a_real_play_change_put_back_in_history_is_never_kept_whatever_was_measured() {
+        use crate::realplay::{Judgement, RealPlayStop};
+        let rec = rp_running();
+        let sessions = rp_store(&[168.0, 170.0, 169.0]);
+        let undone = vec![LedgerEntryRef { applied: false, rolled_back_at: Some("2026-09-05T09:00:00+00:00"), ..rp_ledger()[0] }];
+        let read = real_play_read(&rec, &sessions, &undone, Some(true), rp_now()).unwrap();
+        assert_eq!(read.arm.stop, Some(RealPlayStop::PutBackInHistory));
+        assert!(matches!(read.judgement, Judgement::Decided { .. }), "{:?}", read.judgement);
+        let o = guard_target_at_conclude(real_play_outcome(&read).unwrap(), Some(true));
+        assert!(!o.keep, "its own row is rolled back, so nothing may be kept: {o:?}");
+        assert_eq!(o.stop_reason.as_deref(), Some("real-play-put-back-in-history"));
+        assert!(!o.note.contains("was kept"), "{}", o.note);
+        // The restore that follows meets the ledger's "already rolled back", and a setting that reads
+        // on after it is the loud Aborted state, never a quiet Restored (a start always verifies the
+        // prior state, so its record says so).
+        let mut after = ExperimentRecord { prior_state_verified: true, ..rp_running() };
+        let loud = settle_restore(&mut after, false, crate::history::ActiveCheck::On);
+        assert_eq!(after.status, ExperimentStatus::Aborted);
+        assert!(loud.is_some_and(|m| m.contains("already undone outside Compy")));
+    }
+
     #[test]
     fn a_start_from_a_session_that_cant_be_pinned_says_why_not_how_many_count() {
         // The newest as-is session was played more than 14 days before the start: nothing is pinned,
@@ -7887,5 +7975,62 @@ mod experiment_tests {
         let why = real_play_start(&rp_before(), &rp_before()[2], &rp_ledger(), late).unwrap_err();
         assert!(!why.contains("0 of them count so far"), "{why}");
         assert!(why.contains("more than 14 days ago"), "{why}");
+    }
+
+    // A crash during a real-play Trial is confounded, ahead of the crash, by another Compy change
+    // moving during the test, exactly as in the two-session conclude; and the receipt never shows a
+    // decided look's "+12%" beside the crash's "Likely worse".
+    #[test]
+    fn a_real_play_crash_during_another_compy_change_is_confounded_and_writes_no_look() {
+        use crate::realplay::{Judgement, RealPlayStop};
+        let rec = rp_running();
+        let sessions = rp_store(&[168.0, 170.0, 169.0]);
+        // Alone, the crash on the newest session after the change is pinned on it.
+        let (alone, pairing) = real_play_crash(&rec, &sessions, Some(&rp_ledger())).unwrap();
+        assert_eq!((alone.verdict.as_str(), alone.keep, alone.stop_reason.as_deref()), ("regressed", false, Some("crash-during-treatment")));
+        assert!(pairing.is_some(), "the crash is judged against the as-is sessions' conditions");
+        // Another Compy change applied during the test: the crash can't be pinned on this setting.
+        let mut moved = rp_ledger();
+        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T10:30:00+00:00", applied: true, rolled_back_at: None });
+        let (o, _) = real_play_crash(&rec, &sessions, Some(&moved)).unwrap();
+        assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("confounded", false, Some("other-compy-change-during-trial")));
+        // So is a crash session that ran with Compy changes other than the as-is ones plus this one.
+        let mut extra = sessions.clone();
+        extra[5].compy_changes_active = Some(2);
+        let (o, _) = real_play_crash(&rec, &extra, Some(&rp_ledger())).unwrap();
+        assert_eq!(o.verdict, "confounded");
+        // Even when another stop is shown first (its own change put back), another change still counts.
+        let mut both = moved.clone();
+        both[0] = LedgerEntryRef { applied: false, rolled_back_at: Some("2026-09-05T09:00:00+00:00"), ..both[0] };
+        assert_eq!(real_play_read(&rec, &sessions, &both, Some(false), rp_now()).unwrap().arm.stop, Some(RealPlayStop::PutBackInHistory));
+        assert_eq!(real_play_crash(&rec, &sessions, Some(&both)).unwrap().0.verdict, "confounded");
+
+        // The record: a decided look's numbers stay off a crash's receipt.
+        let read = real_play_read(&rec, &sessions, &rp_ledger(), Some(true), rp_now()).unwrap();
+        assert!(matches!(read.judgement, Judgement::Decided { .. }), "{:?}", read.judgement);
+        let mut crashed = rp_running();
+        record_real_play(&mut crashed, Some(&read), &alone, true, pairing.clone(), rp_now());
+        let ev = crashed.real_play.as_ref().unwrap();
+        assert_eq!((ev.look, ev.delta_low1_pct, ev.band_pct), (None, None, None), "{ev:?}");
+        assert!(crashed.treatment.is_none());
+        assert_eq!(crashed.verdict.as_deref(), Some("regressed"));
+        // Without a crash the same read writes its deciding look.
+        let judged = real_play_outcome(&read).unwrap();
+        let mut measured = rp_running();
+        record_real_play(&mut measured, Some(&read), &judged, false, None, rp_now());
+        let ev = measured.real_play.as_ref().unwrap();
+        assert_eq!((ev.look, ev.with.len()), (Some(1), 3));
+        assert!(ev.delta_low1_pct.is_some_and(|d| d > 10.0) && measured.treatment.is_some(), "{ev:?}");
+
+        // In the command: the crash goes through that rule, and the record through that writer.
+        let src = include_str!("experiment.rs");
+        let body = &src[src.find("pub(crate) fn conclude_realplay(").unwrap()..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        assert!(body.contains("real_play_crash(rec, &sessions, rows.as_deref())"), "the crash branch goes through the pure crash rule");
+        let write = body.find("record_real_play(&mut store.experiments[idx], read.as_ref(), &outcome, crashed, crash_pairing, now)").unwrap();
+        assert!(body.find("let outcome = guard_target_at_conclude(judged, live);").unwrap() < write);
+        assert!(write < body.find("finish_conclude(&mut store, idx, outcome, target_now)").unwrap());
+        let crash_rule = &src[src.find("pub(crate) fn real_play_crash(").unwrap()..];
+        assert!(crash_rule.contains("with_compy_state(crash, other_compy_change(rec, reference, newest, ledger))"));
     }
 }
