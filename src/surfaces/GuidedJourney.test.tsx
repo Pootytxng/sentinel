@@ -5,7 +5,7 @@
 // "Done playing". A failure after the change went on restores it through restore_experiment.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
-import "../i18n";
+import i18n from "../i18n";
 
 type Status = { active: boolean; status: string; sample: { process_name: string } | null; game_running?: boolean | null };
 
@@ -317,24 +317,47 @@ describe("P5-guided: one button runs the whole Trial", () => {
     render(<ExperimentBench />);
     await press();
     await finalLine();
-    expect(await receiptRows()).toMatchObject({
+    const rows = await receiptRows();
+    expect(rows).toMatchObject({
       "Risk, overall": "moderate risk",
       Reversibility: "low risk",
       Stability: "not stated",
       Compatibility: "not stated",
       Security: "high risk",
     });
-    cleanup();
-    resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });
+    // One dimension stated keeps all four rows; the one-row summary is only for none stated.
+    expect(rows["Risk dimensions"]).toBeUndefined();
+  });
+
+  // N3 (Rust review of P8-dims): no catalog entry states its dimensions yet, so every receipt read four
+  // rows of "not stated". With none stated, one row says so. Fails on the code before it (four rows).
+  it("with no dimension stated, the receipt says so in one row, not four", async () => {
     // An overall word the catalog didn't state (or one this build doesn't know), and no dimensions.
     state.concludeResult = { status: "restored", verdict: "no-change", treatment: TREATMENT, stated_risk: { overall: "unknown", dimensions: {} } };
-    state.saves = [session(later(3), 5400), session(later(4), 5400)];
     render(<ExperimentBench />);
     await press();
     await finalLine();
     const rows = await receiptRows();
-    for (const label of ["Risk, overall", "Reversibility", "Stability", "Compatibility", "Security"]) {
-      expect(rows[label], label).toBe("not stated");
+    expect(rows["Risk, overall"]).toBe("not stated");
+    expect(rows["Risk dimensions"]).toBe("not stated in the catalog");
+    for (const label of ["Reversibility", "Stability", "Compatibility", "Security"]) expect(rows[label], label).toBeUndefined();
+    // A dimension in a form this build doesn't know is not "stated" either.
+    cleanup();
+    resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });
+    state.concludeResult = { status: "restored", verdict: "no-change", treatment: TREATMENT, stated_risk: { overall: "low", dimensions: { stability: "extreme", security: null } } };
+    state.saves = [session(later(3), 5400), session(later(4), 5400)];
+    await i18n.changeLanguage("zh-CN");
+    try {
+      render(<ExperimentBench />);
+      const btn = await screen.findByRole("button", { name: "优化我的游戏" });
+      await waitFor(() => expect(btn).toBeEnabled());
+      fireEvent.click(btn);
+      await finalLine();
+      const zh = await receiptRows();
+      expect(zh["风险维度"]).toBe("目录中未说明");
+      expect(zh["稳定性"]).toBeUndefined();
+    } finally {
+      await i18n.changeLanguage("en");
     }
   });
 

@@ -426,6 +426,8 @@
           "compatibility": "兼容性",
           "security": "安全性"
         },
+        "riskDimensions": "风险维度",
+        "riskDimensionsNotStated": "目录中未说明",
         "riskWord": {
           "low": "风险低",
           "moderate": "风险中等",

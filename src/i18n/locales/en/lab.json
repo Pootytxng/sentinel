@@ -431,6 +431,8 @@
           "compatibility": "Compatibility",
           "security": "Security"
         },
+        "riskDimensions": "Risk dimensions",
+        "riskDimensionsNotStated": "not stated in the catalog",
         "riskWord": {
           "low": "low risk",
           "moderate": "moderate risk",

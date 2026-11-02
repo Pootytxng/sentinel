@@ -623,11 +623,15 @@ export function riskChoiceWord(choice: string | null | undefined, t: Translate):
   return t("lab.experimentBench.journey.receipt.riskWord.notRecorded");
 }
 
+/** P8-dims: a risk word the catalog stated, in a form this build knows. */
+const isStatedRisk = (word: string | null | undefined): word is "low" | "moderate" | "high" =>
+  word === "low" || word === "moderate" || word === "high";
+
 /** P8-dims: one stated risk word as the receipt says it. A word the catalog didn't state, or one this
  *  build doesn't know, is "not stated": never filled in from another dimension or the overall word. */
 function riskWord(word: string | null | undefined, t: Translate): string {
   const k = "lab.experimentBench.journey.receipt.riskWord";
-  return word === "low" || word === "moderate" || word === "high" ? t(`${k}.${word}`) : t(`${k}.notStated`);
+  return isStatedRisk(word) ? t(`${k}.${word}`) : t(`${k}.notStated`);
 }
 
 /** The RECEIPT: the record's own numbers, verbatim. Rows with nothing recorded are left out. */
@@ -659,10 +663,15 @@ function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
       <ReceiptRow label={rk("riskChoice")} value={riskChoiceWord(exp.risk_choice, t)} />
       {/* P8-dims (RISK_MODEL §3, "do not collapse these into one arbitrary score"): the catalog's one
           overall word, then each dimension it states for the change; one it doesn't state says so. A
-          record started before Compy kept the catalog's risk says that instead, never a guess. */}
+          record started before Compy kept the catalog's risk says that instead, never a guess. When
+          the catalog states none of the four, one row says so rather than four rows of "not stated". */}
       <ReceiptRow label={rk("riskOverall")} value={risk ? riskWord(risk.overall, t) : rk("riskWord.notRecorded")} />
       {risk &&
-        RISK_DIMENSIONS.map((d) => <ReceiptRow key={d} label={rk(`risk.${d}`)} value={riskWord(risk.dimensions?.[d], t)} />)}
+        (RISK_DIMENSIONS.some((d) => isStatedRisk(risk.dimensions?.[d])) ? (
+          RISK_DIMENSIONS.map((d) => <ReceiptRow key={d} label={rk(`risk.${d}`)} value={riskWord(risk.dimensions?.[d], t)} />)
+        ) : (
+          <ReceiptRow label={rk("riskDimensions")} value={rk("riskDimensionsNotStated")} />
+        ))}
       {/* P8-ack: the catalog's own cost words the start read, and whether the user confirmed them. */}
       {risk && <ReceiptRow label={rk("cost")} value={risk.cost?.trim() ? risk.cost : rk("riskWord.notStated")} />}
       <ReceiptRow label={rk("costConfirmed")} value={costConfirmedWord(exp, t)} />
