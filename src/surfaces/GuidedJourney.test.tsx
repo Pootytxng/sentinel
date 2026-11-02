@@ -28,6 +28,8 @@ const state = vi.hoisted(() => ({
   startCalls: 0,
   /** start_experiment refuses these "recId|baselineId" pairs with the backend's §3 baseline refusal. */
   refuseBaselines: [] as string[],
+  /** P5-realplay: what get_realplay_progress answers for a game (null = no answer). */
+  rpProgress: null as ((game: string) => unknown) | null,
 }));
 
 const session = (started_at: string, samples: number, process_name = "Valorant") => ({
@@ -49,6 +51,18 @@ const session = (started_at: string, samples: number, process_name = "Valorant")
   hw_fingerprint: { gpu: "GPU", gpu_driver: "32.0.1" },
   game_state: { gpu_driver: "32.0.1", windows_build: "26200.8457" },
 });
+
+/** P5-realplay: the sessions of `game` that can count (600+ readings and a frame-rate reading, as
+ *  realplay.rs `countable`), oldest first. */
+function countable(game: string): Record<string, unknown>[] {
+  return state.sessions
+    .filter((s) => s.process_name === game && (s.samples as number) >= 600 && (s.avg_fps as number) > 0 && (s.low1_fps_est as number) > 0)
+    .sort((a, b) => Date.parse(a.started_at as string) - Date.parse(b.started_at as string));
+}
+/** A session's numbers as a real-play record copies them (realplay.rs `RealPlaySession`). */
+function numbers(s: Record<string, unknown>) {
+  return { session_id: s.started_at, low1_fps: s.low1_fps_est, avg_fps: s.avg_fps, samples: s.samples };
+}
 
 const record = (over: Record<string, unknown>) => ({
   id: "exp:9-0",
@@ -108,12 +122,26 @@ vi.mock("@tauri-apps/api/core", () => ({
           return Promise.reject(
             "experiment not started — a Compy change was applied or undone after the baseline session, so the before/after would measure more than this one change — play a new baseline session, then start",
           );
-        const r = record({ id: `exp:${9 + state.startCalls}-0`, rec_id: args?.recId, rec_title: args?.recTitle, outcome: args?.outcome, baseline_session_id: args?.baselineSessionId ?? "b" });
+        // P5-realplay: a real-play start pins its as-is sessions on the record, as the backend does.
+        const anchor = state.sessions.find((s) => s.started_at === args?.baselineSessionId);
+        const realPlay =
+          args?.mode === "real-play"
+            ? { mode: "real-play", real_play: { before: countable(String(anchor?.process_name ?? "")).slice(-8).map(numbers) } }
+            : {};
+        const r = record({ id: `exp:${9 + state.startCalls}-0`, rec_id: args?.recId, rec_title: args?.recTitle, outcome: args?.outcome, baseline_session_id: args?.baselineSessionId ?? "b", ...realPlay });
         state.startCalls += 1;
         state.experiments = [...state.experiments, r];
         return Promise.resolve(r);
       }
       case "conclude_experiment": {
+        const cur: Record<string, unknown> = state.experiments.find((x) => x.id === args?.experimentId) ?? record({});
+        const r: Record<string, unknown> = { ...cur, ...(state.concludeResult ?? {}), concluded_at: new Date().toISOString() };
+        state.experiments = state.experiments.map((x) => (x.id === r.id ? r : x));
+        return Promise.resolve(r);
+      }
+      case "get_realplay_progress":
+        return Promise.resolve(state.rpProgress ? state.rpProgress(String(args?.game)) : null);
+      case "conclude_realplay": {
         const cur: Record<string, unknown> = state.experiments.find((x) => x.id === args?.experimentId) ?? record({});
         const r: Record<string, unknown> = { ...cur, ...(state.concludeResult ?? {}), concluded_at: new Date().toISOString() };
         state.experiments = state.experiments.map((x) => (x.id === r.id ? r : x));
@@ -132,6 +160,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 import { invoke } from "@tauri-apps/api/core";
 import ExperimentBench from "./ExperimentBench";
 import { resetJourneyForTests } from "./GuidedJourney";
+import { LEDGER_CHANGED_EVENT } from "../types";
 
 const calls = (cmd: string) => vi.mocked(invoke).mock.calls.filter(([c]) => c === cmd).map(([, a]) => a as Record<string, unknown>);
 
@@ -159,6 +188,7 @@ beforeEach(() => {
   state.failSecondCapture = false;
   state.startCalls = 0;
   state.refuseBaselines = [];
+  state.rpProgress = null;
 });
 
 afterEach(() => cleanup());
@@ -823,5 +853,333 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 10 min" }));
     await lineIs(/^Something went wrong, so Compy put Game Mode back the way it was\. Nothing was kept\./);
     expect(calls("restore_experiment")).toEqual([{ experimentId: "exp:10-0" }]);
+  });
+});
+
+// P5-realplay: "Test it while I play normally". The change goes on once and stays on while the owner
+// plays however he plays; each tap measures one session; a decided look is concluded right after the
+// session that decided it; a stopped test waits for a tap; "Put it back now" is the audited restore.
+describe("P5-realplay: the change stays on while you play", () => {
+  /** What get_realplay_progress answers for these records, the backend's way for this harness: before a
+   *  start every session of the game with 600+ readings counts as-is (whatever its halves did), the
+   *  newest the anchor; while a real-play Trial runs, the unpinned ones begun after its apply count
+   *  with the change on, and three of them decide. `over` sets the answer's fields. */
+  const backendLike =
+    (over: Record<string, unknown> = {}) =>
+    (game: string) => {
+      const ok = countable(game);
+      const run = state.experiments.find((x) => x.status === "running" && x.mode === "real-play");
+      const base = { game, min_sessions: 3, max_sessions: 8, min_readings: 600, window_days: 14, band_pct: null, stop: null, not_counted: [] };
+      if (!run) {
+        const n = Math.min(ok.length, 8);
+        return {
+          ...base,
+          phase: n >= 3 ? "ready-to-start" : "collecting-before",
+          experiment_id: null,
+          anchor_session_id: (ok[ok.length - 1]?.started_at as string) ?? null,
+          before: n,
+          with: 0,
+          need: 3,
+          applied_at: null,
+          until: null,
+          ...over,
+        };
+      }
+      const pinned = new Set(((run.real_play as { before: { session_id: string }[] }).before ?? []).map((b) => b.session_id));
+      const applied = Date.parse(run.applied_at as string);
+      const withN = ok.filter((s) => !pinned.has(s.started_at as string) && Date.parse(s.started_at as string) > applied).length;
+      return {
+        ...base,
+        phase: withN >= 3 ? "ready" : "collecting",
+        experiment_id: run.id,
+        anchor_session_id: null,
+        before: pinned.size,
+        with: withN,
+        need: 3,
+        applied_at: run.applied_at,
+        until: new Date(applied + 14 * 86_400_000).toISOString(),
+        ...over,
+      };
+    };
+  const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+  const AS_IS = [session("2026-10-02T10:00:00Z", 5400), session("2026-10-03T10:00:00Z", 5400)];
+  /** A real-play Trial of HAGS on Valorant, on since an hour ago, pinned on OLD and AS_IS. */
+  const running = (over: Record<string, unknown> = {}) =>
+    record({ mode: "real-play", applied_at: ago(60), real_play: { before: [OLD, ...AS_IS].map(numbers) }, ...over });
+  const enabled = async (name: string) => {
+    const btn = await screen.findByRole("button", { name });
+    await waitFor(() => expect(btn).toBeEnabled());
+    return btn;
+  };
+  const statusIs = (text: string) =>
+    waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe(text), { timeout: 3000 });
+  const WON = {
+    status: "kept",
+    kept: true,
+    verdict: "improved",
+    verdict_confidence: "medium",
+    outcome: "recommended",
+    real_play: {
+      before: [OLD, ...AS_IS].map(numbers),
+      with: [1, 2, 3].map((i) => numbers(session(ago(10 * i), 5400))),
+      band_pct: 3,
+      delta_low1_pct: 12.1,
+      delta_avg_pct: 0.4,
+      low1_spread_pct: 1.1,
+      avg_spread_pct: 0.6,
+      look: 1,
+    },
+  };
+
+  // ✗ on the code before real play: there was no real-play choice, and an uneven session 1 was retaken.
+  it("an uneven as-is session counts toward real play, no retake", async () => {
+    state.rpProgress = backendLike();
+    state.sessions = [OLD, AS_IS[0]];
+    const swinging = uneven(later(1));
+    state.saves = [swinging];
+    render(<ExperimentBench />);
+    expect((await screen.findByTestId("journey-realplay-plan")).textContent).toBe(
+      "Or test it while you play normally: Compy first measures 3 sessions of Valorant as your PC is now (2 so far), then turns HAGS on and leaves it on while you play however you like.",
+    );
+    fireEvent.click(await enabled("Test it while I play normally"));
+    // The uneven session makes three: the change goes on through the audited start, on it.
+    await waitFor(() => expect(calls("start_experiment")).toHaveLength(1), { timeout: 3000 });
+    expect(calls("start_experiment")[0]).toMatchObject({ recId: "hags", mode: "real-play", baselineSessionId: swinging.started_at });
+    expect(screen.queryByRole("button", { name: "Play one more as-is session" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Test anyway" })).toBeNull();
+    expect(calls("start_fps_capture")).toHaveLength(1);
+    // The panel now says the change is on, derived from the record and the progress read.
+    expect((await screen.findByTestId("realplay-on")).textContent).toMatch(/^HAGS is on \(since .+\)\. It stays on while you play/);
+    await statusIs("Keep playing, Compy is still collecting (0 of 3 sessions).");
+    // Real play never tags the running Trial for the "interrupted" banner.
+    expect(localStorage.getItem("compy.journey.running")).toBeNull();
+  });
+
+  it("while fewer than three as-is sessions count, one more is measured and nothing goes on", async () => {
+    state.rpProgress = backendLike();
+    state.sessions = [OLD];
+    state.saves = [session(later(1), 5400)];
+    render(<ExperimentBench />);
+    fireEvent.click(await enabled("Test it while I play normally"));
+    await waitFor(() => expect(screen.getByTestId("journey")).toHaveAttribute("data-phase", "rp-before"), { timeout: 3000 });
+    expect(screen.getByTestId("journey-line").textContent).toBe(
+      "Nothing has been changed yet. Keep playing, Compy is still collecting (2 of 3 sessions of Valorant as your PC is now).",
+    );
+    expect(screen.getByTestId("realplay-note").textContent).toBe("That session counts.");
+    expect(calls("start_experiment")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Measure my next session" })).toBeEnabled();
+  });
+
+  // ✗ on the code before real play: the journey concluded right after its one with-change session.
+  it("after a with-change session it keeps collecting instead of concluding", async () => {
+    state.experiments = [running()];
+    state.sessions = [OLD, ...AS_IS];
+    state.rpProgress = backendLike();
+    state.closesAfter = null;
+    state.saves = [session(later(1), 5400)];
+    render(<ExperimentBench />);
+    await statusIs("Keep playing, Compy is still collecting (0 of 3 sessions).");
+    fireEvent.click(await enabled("Measure my next session"));
+    await waitFor(() => expect(screen.getByTestId("journey-line").textContent).toBe(
+      "HAGS is on. Play Valorant however you like; Compy stops measuring when you close the game.",
+    ));
+    expect(localStorage.getItem("compy.journey.recording")).toBe("real-play");
+    fireEvent.click(screen.getByRole("button", { name: "Done playing" }));
+    await statusIs("Keep playing, Compy is still collecting (1 of 3 sessions).");
+    expect(screen.getByTestId("realplay-note").textContent).toBe("That session counts.");
+    expect(calls("conclude_realplay")).toHaveLength(0);
+    expect(calls("conclude_experiment")).toHaveLength(0);
+    expect(calls("restore_experiment")).toHaveLength(0);
+    expect(state.experiments[0]).toMatchObject({ status: "running" });
+  });
+
+  it("a decided look is concluded right after the session that decided it: Likely better, kept", async () => {
+    state.experiments = [running()];
+    state.sessions = [OLD, ...AS_IS, session(ago(30), 5400), session(ago(20), 5400)];
+    state.rpProgress = backendLike();
+    state.saves = [session(later(1), 5400)];
+    state.concludeResult = WON;
+    const announced = vi.fn();
+    window.addEventListener(LEDGER_CHANGED_EVENT, announced);
+    try {
+      render(<ExperimentBench />);
+      await statusIs("Keep playing, Compy is still collecting (2 of 3 sessions).");
+      fireEvent.click(await enabled("Measure my next session"));
+      expect(await finalLine()).toBe(
+        "Likely better: Compy kept HAGS. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% your sessions vary on their own.",
+      );
+      expect(calls("conclude_realplay")).toEqual([{ experimentId: "exp:9-0", crashed: false }]);
+      expect(announced).toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, announced);
+    }
+    expect(calls("conclude_experiment")).toHaveLength(0);
+    expect(calls("restore_experiment")).toHaveLength(0);
+    // After real play the idle panel offers the next change both ways; the result offers no pair "Next".
+    expect(screen.queryByRole("button", { name: /^Next:/ })).toBeNull();
+    expect(await receiptRows()).toMatchObject({
+      "Way of measuring": "real-play",
+      Verdict: "improved",
+      Confidence: "medium",
+      "Sessions without it": "3",
+      "Sessions with it": "3",
+      "Spread between sessions, 1% low": "±1.1%",
+      "Deciding look": "1",
+    });
+    const journey = screen.getByTestId("journey");
+    fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
+    await waitFor(() => expect(journey.querySelector(".journey-why")?.textContent).toMatch(/^Real play compares your sessions with the change on/));
+  });
+
+  it("Put it back now restores through restore_experiment and says so", async () => {
+    state.experiments = [running()];
+    state.sessions = [OLD, ...AS_IS];
+    state.rpProgress = backendLike();
+    const announced = vi.fn();
+    window.addEventListener(LEDGER_CHANGED_EVENT, announced);
+    try {
+      render(<ExperimentBench />);
+      fireEvent.click(await enabled("Put it back now"));
+      expect(await finalLine()).toBe("Compy put HAGS back the way it was before the test. Nothing was judged.");
+      expect(announced).toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, announced);
+    }
+    expect(calls("restore_experiment")).toEqual([{ experimentId: "exp:9-0" }]);
+    expect(calls("conclude_realplay")).toHaveLength(0);
+  });
+
+  it("a test that stops after a session waits for the owner's tap, then closes through the conclude", async () => {
+    state.experiments = [running()];
+    state.sessions = [OLD, ...AS_IS, session(ago(30), 5400), session(ago(20), 5400)];
+    // The change reads off after this session: the test can't go on, and nothing is judged until the tap.
+    state.rpProgress = (g) => (state.sessions.length > 5 ? backendLike({ phase: "stopped", stop: "change-off", with: 2 })(g) : backendLike()(g));
+    state.saves = [session(later(1), 5400)];
+    state.concludeResult = {
+      status: "restored",
+      verdict: "confounded",
+      stop_reason: "target-reverted-during-treatment",
+      real_play: { before: [OLD, ...AS_IS].map(numbers), with: [1, 2].map((i) => numbers(session(ago(10 * i), 5400))), stop: "change-off" },
+    };
+    render(<ExperimentBench />);
+    fireEvent.click(await enabled("Measure my next session"));
+    await statusIs("HAGS no longer reads as on, so no new session can count. If it reads as on again, Compy keeps collecting.");
+    expect(calls("conclude_realplay")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "Measure my next session" })).toBeNull();
+    expect(screen.getByTestId("realplay-close-how").textContent).toMatch(/^Closing judges the sessions Compy counted\./);
+    fireEvent.click(await enabled("Close this test"));
+    expect(await finalLine()).toBe(
+      "Unknown: Compy put HAGS back. Only 2 sessions with it on were counted before the test stopped (it no longer read as on), too few to judge.",
+    );
+    expect(calls("conclude_realplay")).toEqual([{ experimentId: "exp:9-0", crashed: false }]);
+  });
+
+  it("a result a look decided while Compy was closed waits for See the result", async () => {
+    state.experiments = [running()];
+    state.sessions = [OLD, ...AS_IS];
+    state.rpProgress = backendLike({ phase: "ready", with: 3 });
+    state.concludeResult = WON;
+    render(<ExperimentBench />);
+    await statusIs("Compy has enough sessions for a result.");
+    expect(calls("conclude_realplay")).toHaveLength(0);
+    fireEvent.click(await enabled("See the result"));
+    expect(await finalLine()).toMatch(/^Likely better: Compy kept HAGS\./);
+  });
+
+  it("with three as-is sessions the change goes on at once and the session about to be played is measured with it", async () => {
+    state.rpProgress = backendLike();
+    state.sessions = [OLD, ...AS_IS];
+    state.saves = [session(later(1), 5400)];
+    render(<ExperimentBench />);
+    expect((await screen.findByTestId("journey-realplay-plan")).textContent).toBe(
+      "Or test it while you play normally: HAGS goes on now and stays on while you play Valorant however you like, for up to 8 sessions or 14 days. Compy compares those sessions with your last 3 without it.",
+    );
+    fireEvent.click(await enabled("Test it while I play normally"));
+    await statusIs("Keep playing, Compy is still collecting (1 of 3 sessions).");
+    expect(calls("start_experiment")).toEqual([
+      expect.objectContaining({ recId: "hags", mode: "real-play", baselineSessionId: AS_IS[1].started_at, outcome: "recommended", costAcknowledged: false }),
+    ]);
+    expect(calls("start_fps_capture")).toHaveLength(1);
+    expect(calls("conclude_realplay")).toHaveLength(0);
+    expect(localStorage.getItem("compy.journey.running")).toBeNull();
+  });
+
+  it("the two-session journey stays the default; with no progress read, real play isn't offered", async () => {
+    state.rpProgress = backendLike();
+    state.sessions = [OLD, ...AS_IS];
+    render(<ExperimentBench />);
+    await screen.findByTestId("journey-realplay-plan");
+    await press();
+    await finalLine();
+    expect(calls("start_experiment")[0].mode).toBeUndefined();
+    expect(calls("conclude_experiment")).toHaveLength(1);
+    cleanup();
+    resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });
+    state.rpProgress = null;
+    render(<ExperimentBench />);
+    await screen.findByRole("button", { name: "Optimize my game" });
+    expect(screen.queryByTestId("journey-realplay-plan")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Test it while I play normally" })).toBeNull();
+  });
+
+  it("a change that isn't low risk starts real play only from the tap on its cost line", async () => {
+    state.recs = [
+      { id: "hags", title: "HAGS", passes: true, reason: null, detail: null, position: 1, evidence: "not-measured", risk: "moderate", cost: "Reboot required." },
+    ];
+    state.rpProgress = backendLike();
+    state.sessions = [OLD, ...AS_IS];
+    state.saves = [session(later(1), 5400)];
+    render(<ExperimentBench />);
+    expect(await screen.findByTestId("journey-cost-ack")).toHaveTextContent("HAGS has a cost: Reboot required.");
+    fireEvent.click(await enabled("I understand, test it while I play normally"));
+    await waitFor(() => expect(calls("start_experiment")).toHaveLength(1), { timeout: 3000 });
+    expect(calls("start_experiment")[0]).toMatchObject({ mode: "real-play", costAcknowledged: true });
+  });
+
+  // Rust review fix: a start that can't pin its as-is sessions says why (e.g. older than 14 days); the
+  // journey shows the backend's words as they are, and nothing was changed.
+  it("a refused real-play start shows the backend's reason as it is, and nothing goes on", async () => {
+    const why =
+      "experiment not started — real play can't pin the as-is sessions of Valorant: the newest one is older than 14 days, so play a new one, then start";
+    state.rpProgress = backendLike();
+    state.sessions = [OLD, ...AS_IS];
+    state.refuse = { start_experiment: why };
+    render(<ExperimentBench />);
+    fireEvent.click(await enabled("Test it while I play normally"));
+    expect(await finalLine()).toBe(`Compy didn't start the test, and nothing was changed: ${why}`);
+    expect(calls("start_fps_capture")).toHaveLength(0);
+    expect(calls("restore_experiment")).toHaveLength(0);
+  });
+
+  // Rust review fix: a long session with no frame-rate reading is not counted ("no-reading"). The
+  // journey never reads such a session back itself, so the note takes the backend's reason for it.
+  it("a session saved without a frame-rate reading is named with the backend's reason", async () => {
+    state.experiments = [running()];
+    state.sessions = [OLD, ...AS_IS];
+    const blank = { ...session(later(1), 5400), avg_fps: 0, low1_fps_est: 0, fps_series: [] };
+    state.saves = [blank];
+    state.rpProgress = (g) =>
+      state.sessions.includes(blank) ? backendLike({ not_counted: [{ session_id: blank.started_at, reason: "no-reading" }] })(g) : backendLike()(g);
+    render(<ExperimentBench />);
+    fireEvent.click(await enabled("Measure my next session"));
+    await waitFor(() => expect(screen.getByTestId("realplay-note").textContent).toBe("That session doesn't count: no frame-rate reading."), {
+      timeout: 3000,
+    });
+    expect(screen.getByTestId("realplay-not-counted").textContent).toMatch(/no frame-rate reading/);
+    await statusIs("Keep playing, Compy is still collecting (0 of 3 sessions).");
+  });
+
+  it("a failure while measuring judges nothing, leaves the change on and says so", async () => {
+    state.experiments = [running()];
+    state.sessions = [OLD, ...AS_IS];
+    state.rpProgress = backendLike();
+    state.refuse = { start_fps_capture: "helper did not launch" };
+    render(<ExperimentBench />);
+    fireEvent.click(await enabled("Measure my next session"));
+    expect(await finalLine()).toBe(
+      "Compy couldn't finish that step, so nothing was judged. HAGS is still on until you close the test or put it back. (helper did not launch)",
+    );
+    expect(calls("restore_experiment")).toHaveLength(0);
+    expect(state.experiments[0]).toMatchObject({ status: "running" });
   });
 });

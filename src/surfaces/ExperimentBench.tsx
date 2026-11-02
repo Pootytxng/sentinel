@@ -43,10 +43,20 @@ import {
   interruptedJourneyId,
   JourneyProgressLine,
   needsCostAck,
+  RealPlayPanel,
   reusableAsIs,
   riskChoiceWord,
   useJourneyPhase,
 } from "./GuidedJourney";
+import {
+  asRealPlayProgress,
+  isRealPlay,
+  realPlayCounts,
+  realPlayFace,
+  realPlayNoiseLine,
+  type RealPlayEvidence,
+  type RealPlayProgress,
+} from "./journey-realplay";
 import { journeyProgress, nextToTest, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { displayModeLabel } from "../data/display-mode";
@@ -183,6 +193,10 @@ type Experiment = {
   outcome?: TrialOutcome | null;
   /** P4-smooth-offer: what a Smoothest Trial was judged on (experiment.rs `SmoothestEvidence`). */
   smoothest?: { band_pct: number; start_ratio: number; after_ratio?: number | null } | null;
+  /** P5-realplay: "real-play" for a Trial judged on real play; absent on a two-session Trial. */
+  mode?: string | null;
+  /** P5-realplay: its sessions and verdict numbers (experiment.rs `real_play`). */
+  real_play?: RealPlayEvidence | null;
 };
 
 type SimulatorReport = {
@@ -320,10 +334,12 @@ function simVerdictCopy(t: Translate): Record<string, { label: string; blocked: 
 // simulator estimate is engineering reasoning (Expected); a Trial result is a measurement (Measured);
 // low or unknown evidence is Unknown.
 // Self-review r2 2026-10-28: the word carries the shared gloss, like every other confidence word.
-function BenchWord({ c, kind }: { c: Confidence; kind: "estimate" | "measured" }) {
+// P5-realplay: a real-play result is a supported inference from sessions played however the owner
+// played (Likely), never a controlled measurement, and never High.
+function BenchWord({ c, kind }: { c: Confidence; kind: "estimate" | "measured" | "real-play" }) {
   const { t } = useTranslation();
   const word: ConfidenceWord =
-    c === "high" || c === "medium" ? (kind === "estimate" ? "expected" : "measured") : "unknown";
+    c === "high" || c === "medium" ? (kind === "estimate" ? "expected" : kind === "real-play" ? "likely" : "measured") : "unknown";
   return <Term tip={t(confidenceHintKey(word))}>{t(confidenceWordKey(word))}</Term>;
 }
 
@@ -404,6 +420,8 @@ function latestUsableReading(sessions: SessionSummary[]): SessionSummary | null 
 // §2 the record's own baseline grade, said on its receipt (the running panel and its history row):
 // a Trial started on an uneven or untraced baseline says so. Steady and older records say nothing.
 function baselineReceipt(x: Experiment, t: Translate): string | null {
+  // P5-realplay: real play grades no session's halves, so its anchor session's grade says nothing.
+  if (isRealPlay(x)) return null;
   if (x.baseline_check === "uneven" && x.baseline_halves)
     // A "too noisy" result has no result to call less reliable: the line just says what was uneven.
     return t(x.verdict === "too-noisy" ? "lab.experimentBench.receiptBaselineUnevenPlain" : "lab.experimentBench.receiptBaselineUneven", {
@@ -459,6 +477,9 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
     });
   }
   if (avg == null) return null;
+  // P5-realplay: a real-play row compared its sessions with the change on against those without it,
+  // not one after-session against one baseline; it names how many, with the same rules.
+  const rp = isRealPlay(x) ? realPlayCounts(x) : null;
   // P4-maxfps-smooth: a Maximum FPS row leads with the average.
   if (x.outcome === "max-fps") {
     const rule =
@@ -469,6 +490,15 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
             ? "receiptRuleMaxAvgFell"
             : "receiptRuleLowFell"
           : "receiptRuleMaxInside";
+    if (rp)
+      return t("lab.experimentBench.journey.realPlay.comparedMaxFps", {
+        avg: signed(avg),
+        low: signed(low),
+        band: one(band),
+        rule: t(`lab.experimentBench.${rule}`),
+        with: rp.with,
+        before: rp.before,
+      });
     return t("lab.experimentBench.receiptComparedMaxFps", {
       avg: signed(avg),
       low: signed(low),
@@ -484,6 +514,15 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
         : low > band
           ? "receiptRuleAvgFell"
           : "receiptRuleInside";
+  if (rp)
+    return t("lab.experimentBench.journey.realPlay.compared", {
+      low: signed(low),
+      avg: signed(avg),
+      band: one(band),
+      rule: t(`lab.experimentBench.${rule}`),
+      with: rp.with,
+      before: rp.before,
+    });
   return t("lab.experimentBench.receiptCompared", {
     low: signed(low),
     avg: signed(avg),
@@ -553,7 +592,9 @@ function tooFewLeftOutReceipt(x: Experiment, t: Translate): string | null {
 // session recorded focus, a held-flat stretch can't have been the game in the background.
 function stretchReceipts(x: Experiment, t: Translate): string[] {
   const p = x.session_pairing;
-  if (!p) return [];
+  // P5-realplay: a real-play result rests on several sessions a side, so the two its pairing names
+  // stand for none of them on their own.
+  if (!p || isRealPlay(x)) return [];
   const lines: string[] = [];
   for (const [s, label] of [
     [p.baseline_stretches, "lab.experimentBench.stretchBefore"],
@@ -832,6 +873,30 @@ export default function ExperimentBench({
     if (outcome === "smoothest" && smoothAnswer && !smoothestOpen) setOutcome("recommended");
   }, [outcome, smoothAnswer, smoothestOpen]);
 
+  // P5-realplay: where real play stands, for a running real-play Trial's game, else for the game a
+  // Trial would run on (the bench's baseline game, else the one just tested). A read-only backend read
+  // asked again after every reload, so the panel is always derived from the records, never from a
+  // copy kept here. An answer is used only for the Trial (or no-Trial state) it was asked for.
+  const runningNow = experiments.find((x) => x.status === "running") ?? null;
+  const rpGame = runningNow
+    ? isRealPlay(runningNow)
+      ? runningNow.game
+      : null
+    : (latestUsableReading(sessions)?.process_name ?? concluded?.game ?? null);
+  const rpTrial = runningNow?.id ?? null;
+  const [rpRead, setRpRead] = useState<{ game: string; trial: string | null; progress: RealPlayProgress | null; error: string | null } | null>(null);
+  useEffect(() => {
+    if (!gate || !rpGame) return;
+    let live = true;
+    invoke<unknown>("get_realplay_progress", { game: rpGame })
+      .then((p) => live && setRpRead({ game: rpGame, trial: rpTrial, progress: asRealPlayProgress(p), error: null }))
+      .catch((e) => live && setRpRead({ game: rpGame, trial: rpTrial, progress: null, error: String(e) }));
+    return () => {
+      live = false;
+    };
+  }, [gate, rpGame, rpTrial, reloads]);
+  const rp = rpRead && rpRead.game === rpGame && rpRead.trial === rpTrial ? rpRead : null;
+
   if (!gate) return null;
 
   const running = experiments.find((x) => x.status === "running") ?? null;
@@ -851,7 +916,13 @@ export default function ExperimentBench({
   // other note — a row that LOOKS judged (Better / No change / Worse) but has no record (a crash, an
   // older result), or noise lines that differ between rows — is said once under the list, and its
   // rows carry only its mark.
-  const noiseLines = history.map((x) => (x.noise_evidence ? noiseLine(x.noise_evidence, x.game, t) : null));
+  const noiseLines = history.map((x) =>
+    x.noise_evidence
+      ? isRealPlay(x)
+        ? realPlayNoiseLine(x.noise_evidence.band_pct, realPlayCounts(x), prettyGameName(x.game) || x.game, t)
+        : noiseLine(x.noise_evidence, x.game, t)
+      : null,
+  );
   const rowNotes = history.map((x, i): RowNote | null =>
     noiseLines[i] ?? (looksJudged(x) ? NO_RECORD : x.verdict === "not-comparable" ? x.verdict_note || null : null),
   );
@@ -1147,6 +1218,7 @@ export default function ExperimentBench({
           progress={progress}
           resumeReuses={progress != null && reusableAsIs(sessions, progress.asIs, progress.game) != null}
           stillOn={progress ? stillOnFor(progress.game, experiments, recs) : []}
+          realPlay={running ? null : (rp?.progress ?? null)}
           onFinished={(exp) => {
             // The finished journey hands over to P4-next's offer of the next change to test.
             if (exp) setConcluded(experiments.find((x) => x.id === exp.id) ?? null);
@@ -1155,9 +1227,20 @@ export default function ExperimentBench({
       )}
 
       {journey.kind === "idle" && running && (
-        <JourneyProgressLine progress={progress} interrupted={running.id === interruptedJourneyId()} />
+        // P5-realplay: a real-play Trial runs across restarts by design, so it is never "interrupted".
+        <JourneyProgressLine progress={progress} interrupted={!isRealPlay(running) && running.id === interruptedJourneyId()} />
       )}
-      {journey.kind !== "idle" ? null : running ? (
+      {journey.kind !== "idle" ? null : running && isRealPlay(running) ? (
+        // P5-realplay: the change stays on while the owner plays; the panel says so, how long, how to
+        // put it back, and where the count stands, from the record and the progress read.
+        <RealPlayPanel
+          exp={running}
+          progress={rp?.progress ?? null}
+          unread={rp ? (rp.error ?? (rp.progress ? null : "")) : null}
+          canAct={!busy && !ledgerBusy}
+          refresh={settle}
+        />
+      ) : running ? (
         // ── One experiment in flight: single-variable honesty is enforced by hiding the launcher ──
         <RunningPanel
           exp={running}
@@ -1484,7 +1567,7 @@ export default function ExperimentBench({
               <li key={x.id} className="exp-bench-row" data-status={x.status}>
                 <span className="exp-bench-rec">{x.rec_title}</span>
                 <span className="exp-bench-verdict">
-                  {x.verdict ? verdictCopy(t)[x.verdict] ?? x.verdict : "—"}
+                  {x.verdict ? (isRealPlay(x) ? realPlayFace(x, t) : (verdictCopy(t)[x.verdict] ?? x.verdict)) : "—"}
                   {rowMark[i] && <span className="exp-bench-noise-mark">{rowMark[i]}</span>}
                 </span>
                 {x.treatment && (
@@ -1529,7 +1612,7 @@ export default function ExperimentBench({
                 ))}
                 {x.verdict === "too-noisy" && (
                   <span className="exp-bench-abort" data-testid="exp-too-noisy-why">
-                    {t("lab.experimentBench.tooNoisyWhy")}
+                    {isRealPlay(x) ? t("lab.experimentBench.journey.realPlay.tooNoisyWhy") : t("lab.experimentBench.tooNoisyWhy")}
                   </span>
                 )}
               </li>
@@ -1618,7 +1701,14 @@ function TestSummary({ s }: { s: GameTestSummary }) {
   const verdicts = verdictCopy(t);
   const sep = t("lab.experimentBench.summary.contextSeparator");
   const list = t("lab.experimentBench.pairListSeparator");
-  const noiseLines = [...new Set(s.tested.filter((r) => r.noise).map((r) => noiseLine(r.noise!, s.game, t)))];
+  const noiseLines = [
+    ...new Set(
+      s.tested
+        .filter((r) => r.noise)
+        .map((r) => (r.realPlay ? realPlayNoiseLine(r.noise!.band_pct, r.realPlay, game, t) : noiseLine(r.noise!, s.game, t)))
+        .filter((n): n is string => n != null),
+    ),
+  ];
   // 2026-10-29 owner-rig Trial (PBZ, too-noisy): a result that never reached the band has no noise record
   // by design (`noise_evidence_for`), and "no record was kept" read as a lost record. Say which it is.
   const unjudged = s.tested.filter((r) => !r.noise && r.measured).length;
@@ -1641,9 +1731,16 @@ function TestSummary({ s }: { s: GameTestSummary }) {
   const testedLine = (r: TestedChange) => {
     return (
       <>
-        {t("lab.experimentBench.summary.row", { title: r.title, text: verdicts[r.verdict] ?? r.verdict })}
+        {t("lab.experimentBench.summary.row", {
+          title: r.title,
+          text: r.realPlay ? realPlayFace({ verdict: r.verdict, kept: r.kept }, t) : (verdicts[r.verdict] ?? r.verdict),
+        })}
         {sep}
-        <BenchWord c={r.confidence ?? "unknown"} kind="measured" />
+        {r.realPlay ? (
+          <BenchWord c={r.confidence ?? "unknown"} kind="real-play" />
+        ) : (
+          <BenchWord c={r.confidence ?? "unknown"} kind="measured" />
+        )}
         {sep}
         {[
           ...(r.trials > 1 ? [t("lab.experimentBench.summary.trials", { count: r.trials })] : []),

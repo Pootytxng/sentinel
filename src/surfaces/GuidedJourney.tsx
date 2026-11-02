@@ -49,6 +49,25 @@
 // early (`abortJourney`): the capture it started is stopped and nothing is judged. A change already on
 // stays on, its Trial Running, until the owner concludes or restores it in Test; the bench says so
 // with a banner on its next load.
+//
+// P5-realplay (ROADMAP Phase 5 "Real-play mode"; Constitution §36): the two-session journey above stays
+// the default. Beside it, one plain choice, "Test it while I play normally", is offered when real play
+// can start (enough recent as-is sessions count: the change goes on at once) or while Compy is still
+// collecting them. Real play leaves ONE change on, applied once through the same audited
+// start_experiment (`mode: "real-play"`), while the owner plays however he plays, and judges it on
+// several whole sessions with it against several without it (realplay.rs). Each tap measures one
+// session (`measureOneSession`, shared with the two-session flow): an uneven session is never retaken,
+// because whole sessions are compared and no session's halves are graded. After each one the journey
+// reads `get_realplay_progress`; when a look has decided it concludes at once through
+// conclude_realplay (which keeps only a Likely better and restores everything else), and when the test
+// has stopped it waits for the owner's tap. A running real-play Trial's panel (`RealPlayPanel`) is
+// derived from its record and that progress read, never from this module, so it reads the same after
+// a restart; it says the change is on and since when, how long it may stay on, how to put it back
+// (with the button that does, the existing restore_experiment), where the count stands and which
+// sessions didn't count and why. Real play never tags RUNNING_KEY: its Trial runs for days by design,
+// so it is never "interrupted". Once a real-play Trial has started, nothing here restores its change
+// behind the owner's back: a failure judges nothing, leaves it on and says so. (A start that fails is
+// handled as the two-session start's is: anything it left on is put back.)
 
 import { useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
@@ -60,9 +79,23 @@ import { writeLedger } from "../data/ledger-write";
 import { prettyGameName } from "./game-name";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
-import { asProgress, enoughLine, enoughState, setJourneyRecording, type CaptureProgress } from "./journey-enough";
+import { asProgress, enoughLine, enoughState, setJourneyRecording, type CaptureProgress, type JourneyMode } from "./journey-enough";
 import { journeyStopped, pickUpJourney, stopJourneyHere, type JourneyProgress } from "./journey-resume";
 import { contextCheckFor, type RetestReason } from "./test-summary";
+import {
+  asRealPlayProgress,
+  collectingBeforeLine,
+  isRealPlay,
+  notCountedWhy,
+  realPlayConfidence,
+  realPlayOffer,
+  realPlayResult,
+  realPlayView,
+  realPlayWhy,
+  type RealPlayEvidence,
+  type RealPlayProgress,
+  type RealPlayRecord,
+} from "./journey-realplay";
 
 export type JourneyOutcome = "recommended" | "max-fps";
 /** P8-posture-b's answer to "How far may Compy go on this PC?" (trial_candidates.rs `RiskChoice`). */
@@ -111,6 +144,15 @@ type JourneyExperiment = {
   /** P8-ack: whether the user confirmed the change's cost before this Trial started (experiment.rs
    *  `cost_acknowledged`; false = not asked). Absent on records started before Compy kept it. */
   cost_acknowledged?: boolean | null;
+  /** P5-realplay: "real-play" for a Trial judged on real play (experiment.rs `TrialMode`); absent on a
+   *  two-session Trial. */
+  mode?: string | null;
+  /** P5-realplay: the real-play sessions and verdict numbers (experiment.rs `real_play`). */
+  real_play?: RealPlayEvidence | null;
+  /** When the apply returned: the change has been on since then. */
+  applied_at?: string | null;
+  kept?: boolean;
+  stop_reason?: string | null;
 };
 
 /** P8-dims (RISK_MODEL §3): the risk dimensions the receipt lists, in its order (trial_candidates.rs
@@ -145,8 +187,18 @@ export type JourneyPhase =
   | { kind: "too-short"; samples: number | null; behind?: boolean }
   | { kind: "wrong-game"; played: string; planned: string }
   | { kind: "not-started"; reason: string }
-  | { kind: "restored"; change: string; why: "no-reading" | "behind" | "error"; reason: string }
-  | { kind: "restore-failed"; change: string; reason: string };
+  /** `asked`: the owner tapped "Put it back now" on a real-play Trial. */
+  | { kind: "restored"; change: string; why: "no-reading" | "behind" | "error" | "asked"; reason: string }
+  | { kind: "restore-failed"; change: string; reason: string }
+  /** P5-realplay: one session is being measured; `on` = with the change on, else as-is (nothing on). */
+  | { kind: "rp-playing"; game: string; change: string; on: boolean }
+  /** P5-realplay: after an as-is session, fewer than the sessions real play needs count yet. Nothing
+   *  is on. `costAcknowledged`: the owner already tapped the cost line for this change. */
+  | { kind: "rp-before"; game: string; change: { id: string; title: string }; progress: RealPlayProgress; costAcknowledged: boolean }
+  /** P5-realplay: judging the sessions (conclude_realplay), or putting the change back (restore_experiment). */
+  | { kind: "rp-working"; change: string; what: "judging" | "putting-back" }
+  /** P5-realplay: a step failed and judged nothing; the change is still on (that is the test). */
+  | { kind: "rp-failed"; change: string; reason: string };
 
 type UnfitGrade = { kind: "uneven"; first: number; second: number } | { kind: "untraced" };
 /** How many uneven as-is sessions the journey takes before it stops asking for another and offers
@@ -222,6 +274,25 @@ export function useJourneyPhase(): JourneyPhase {
   return useSyncExternalStore(subscribe, getPhase, getPhase);
 }
 
+/** P5-realplay: what became of the session a real-play run just measured, said once on the panel:
+ *  it counts, it doesn't (with the backend's reason, or one the saved session itself shows), or no
+ *  session of the game was saved. Cosmetic: the counts themselves always come from the backend. */
+type RealPlayNote =
+  | { expId: string | null; game: string; kind: "counted" }
+  | { expId: string | null; game: string; kind: "not-counted"; reason: string; minReadings: number }
+  | { expId: string | null; game: string; kind: "none" };
+let realPlayNote: RealPlayNote | null = null;
+const setRealPlayNote = (next: RealPlayNote | null) => {
+  realPlayNote = next;
+  for (const l of listeners) l();
+};
+const getRealPlayNote = () => realPlayNote;
+function useRealPlayNote(): RealPlayNote | null {
+  return useSyncExternalStore(subscribe, getRealPlayNote, getRealPlayNote);
+}
+/** Set while a panel tap's write (see the result, close the test, put it back) is in flight. */
+let acting = false;
+
 /** Tests only: back to idle between cases, with short timings. */
 export function resetJourneyForTests(timing: { pollMs: number; saveWaitMs: number } = { pollMs: 2000, saveWaitMs: 8000 }) {
   abortJourney();
@@ -229,6 +300,8 @@ export function resetJourneyForTests(timing: { pollMs: number; saveWaitMs: numbe
   stopPlaying = null;
   decide = null;
   current = null;
+  acting = false;
+  realPlayNote = null;
   tagRunning(null);
   setJourneyRecording(false);
   progress = null;
@@ -247,8 +320,8 @@ function usable(s: SessionSummary): boolean {
 
 /** Resolves when the measured game's process has closed, when capture ended elsewhere after the game
  *  was seen, or on "Done playing". Rejects if capture ended before any game was seen (a declined
- *  Windows prompt, a helper that didn't start). */
-function waitForPlay(captureFailed: string): Promise<void> {
+ *  Windows prompt, a helper that didn't start). `mode` tells the overlay which kind of session it is. */
+function waitForPlay(captureFailed: string, mode: JourneyMode = "pair"): Promise<void> {
   return new Promise((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let settled = false;
@@ -266,7 +339,7 @@ function waitForPlay(captureFailed: string): Promise<void> {
     };
     finishPlaying = () => finish();
     stopPlaying = (err) => finish(err);
-    setJourneyRecording(true);
+    setJourneyRecording(mode);
     setProgress(null);
     const tick = async () => {
       if (settled) return;
@@ -346,12 +419,40 @@ type RunArgs = {
   hypothesis: string;
   refresh: () => Promise<void>;
   captureFailed: string;
+  /** P5-realplay: what to say when the real-play progress can't be read (already translated). */
+  noProgress?: string;
 };
 
 /** One run's own flags: whether the room it was started from has gone (`aborted`), and whether it
  *  holds a capture it must stop. */
 type Run = { aborted: boolean; capturing: boolean };
 let current: Run | null = null;
+
+/** Stops the capture `run` started, when it still holds one. */
+async function stopCapture(run: Run) {
+  if (!run.capturing) return;
+  run.capturing = false;
+  await invoke("stop_fps_capture").catch(() => {});
+}
+
+/** One measured session, shared by the two-session flow (twice) and real play (once per tap): start
+ *  measuring, wait until the game closes or "Done playing", stop, then wait for the saved session (of
+ *  `game`, when given; never the one `not` names). `saving` is said while it saves. undefined: the
+ *  room went away mid-way and nothing more is to be done; null: no session was saved. */
+async function measureOneSession(
+  run: Run,
+  opts: { captureFailed: string; saving: () => void; game: string | null; not?: string; mode?: JourneyMode },
+): Promise<SessionSummary | null | undefined> {
+  const t0 = Date.now();
+  run.capturing = true;
+  await invoke("start_fps_capture");
+  await waitForPlay(opts.captureFailed, opts.mode);
+  await stopCapture(run);
+  if (run.aborted) return undefined;
+  opts.saving();
+  const s = await waitForSession(t0, opts.game, opts.not, () => run.aborted);
+  return run.aborted ? undefined : s;
+}
 
 /** The window went away mid-journey (a reload, Compy closing): stop the capture this journey started
  *  and end the flow without judging anything. A change already on stays on, its Trial Running, and
@@ -407,11 +508,6 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
     if (!run.aborted) setPhase(p);
   };
   let expId: string | null = null;
-  const stopCapture = async () => {
-    if (!run.capturing) return;
-    run.capturing = false;
-    await invoke("stop_fps_capture").catch(() => {});
-  };
   try {
     // P5-continue: a next journey starts from the last as-is session when it can be reused.
     let baseline: SessionSummary | null = reuseId ? await reusableSession(reuseId, game) : null;
@@ -425,16 +521,14 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
       if (!baseline)
         for (;;) {
           say({ kind: "as-is", game: planned, change: change.title, again: unevenSessions > 0, refused });
-          const t0 = Date.now();
-          run.capturing = true;
-          await invoke("start_fps_capture");
-          await waitForPlay(args.captureFailed);
-          await stopCapture();
-          if (left()) return;
-          say({ kind: "reading", change: change.title });
           // A retake never reads back the uneven session before it.
-          const s = await waitForSession(t0, null, baseline?.started_at, left);
-          if (left()) return;
+          const s = await measureOneSession(run, {
+            captureFailed: args.captureFailed,
+            saving: () => say({ kind: "reading", change: change.title }),
+            game: null,
+            not: baseline?.started_at,
+          });
+          if (s === undefined || left()) return;
           // A session of another game can't be this game's baseline: nothing goes on, and the room can
           // plan for the game actually played (it is now the newest session, so the bench's game).
           if (s && planned != null && s.process_name !== planned) {
@@ -499,15 +593,13 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
 
     // ── Session 2: with the change ──
     say({ kind: "with-change", game: trialGame, change: change.title, reused });
-    const t1 = Date.now();
-    run.capturing = true;
-    await invoke("start_fps_capture");
-    await waitForPlay(args.captureFailed);
-    await stopCapture();
-    if (left()) return;
-    say({ kind: "judging", change: change.title });
-    const after = await waitForSession(t1, trialGame, baseline.started_at, left);
-    if (left()) return;
+    const after = await measureOneSession(run, {
+      captureFailed: args.captureFailed,
+      saving: () => say({ kind: "judging", change: change.title }),
+      game: trialGame,
+      not: baseline.started_at,
+    });
+    if (after === undefined || left()) return;
     if (!after || allBackground(after)) {
       // The game closed before Compy saved a reading, or was behind another window the whole time:
       // nothing to judge, so the change goes back.
@@ -534,13 +626,205 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
     return say({ kind: "result", exp: done, asIs: kept ? after.started_at : baseline.started_at });
   } catch (e) {
     if (left()) return;
-    await stopCapture();
+    await stopCapture(run);
     await recover(args, say, expId, e);
     tagRunning(null);
   } finally {
     if (current === run) current = null;
     window.removeEventListener("pagehide", abortJourney);
     window.removeEventListener("beforeunload", abortJourney);
+  }
+}
+
+// ── P5-realplay ─────────────────────────────────────────────────────────────────────────────────
+
+/** This game's real-play progress (get_realplay_progress, read-only), or why it can't be read. */
+async function readRealPlay(game: string): Promise<{ progress: RealPlayProgress | null; error: string | null }> {
+  try {
+    const progress = asRealPlayProgress(await invoke<unknown>("get_realplay_progress", { game }));
+    return { progress, error: null };
+  } catch (e) {
+    return { progress: null, error: String(e instanceof Error ? e.message : e) };
+  }
+}
+
+/** What became of the session just measured: the backend's not-counted reason when it lists it, what
+ *  the saved session itself shows (behind another window the whole time, too few readings), or that
+ *  it counts when the count went up. null when none of these can be said. With no session read back
+ *  (the journey reads back only sessions with a frame-rate reading), a session the backend lists as
+ *  begun since `since` is that one, with its reason (no frame-rate reading); else nothing was saved. */
+function noteFor(
+  s: SessionSummary | null,
+  counts: { before: number; after: number | null },
+  listed: RealPlayProgress | null,
+  minReadings: number,
+  where: { game: string; expId: string | null },
+  since: number,
+): RealPlayNote | null {
+  if (!s) {
+    const unread = listed?.not_counted.find((n) => Date.parse(n.session_id) >= since - 1000);
+    return unread ? { ...where, kind: "not-counted", reason: unread.reason, minReadings } : { ...where, kind: "none" };
+  }
+  const reason =
+    listed?.not_counted.find((n) => n.session_id === s.started_at)?.reason ??
+    (allBackground(s) ? "behind" : s.samples < minReadings ? "too-short" : null);
+  if (reason) return { ...where, kind: "not-counted", reason, minReadings };
+  return counts.after != null && counts.after > counts.before ? { ...where, kind: "counted" } : null;
+}
+
+/** One tap of "Test it while I play normally" or "Measure my next session". Measures at most ONE
+ *  session: real play spans days, and a capture left waiting for a next session would keep measuring
+ *  a PC nobody plays on. With no Trial running, an as-is session is measured while fewer than the
+ *  sessions real play needs count (never retaken when uneven: whole sessions are compared, no
+ *  session's halves are graded), and the change goes on through the audited start once enough count;
+ *  with enough already counting, the change goes on at once and the session about to be played is
+ *  measured with it. After a session with the change on, a decided look is concluded at once; a
+ *  stopped test waits for the owner's tap. A failure judges nothing and leaves the change on. */
+async function runRealPlay(args: RunArgs, game: string, progress: RealPlayProgress) {
+  const { change } = args;
+  const run: Run = { aborted: false, capturing: false };
+  current = run;
+  window.addEventListener("pagehide", abortJourney);
+  window.addEventListener("beforeunload", abortJourney);
+  const left = () => run.aborted;
+  const say = (p: JourneyPhase) => {
+    if (!run.aborted) setPhase(p);
+  };
+  const saving = () => say({ kind: "reading", change: change.title });
+  const noProgress = args.noProgress ?? "";
+  setRealPlayNote(null);
+  let expId = progress.experiment_id;
+  try {
+    if (expId == null) {
+      let now = progress;
+      let startOnly = false;
+      if (now.phase === "collecting-before") {
+        // ── An as-is session: nothing is on. Whether it counts is the backend's to say. ──
+        say({ kind: "rp-playing", game, change: change.title, on: false });
+        const since = Date.now();
+        const s = await measureOneSession(run, { captureFailed: args.captureFailed, saving, game, mode: "real-play" });
+        if (s === undefined) return;
+        const read = await readRealPlay(game);
+        if (left()) return;
+        await args.refresh().catch(() => {});
+        if (!read.progress) return say({ kind: "not-started", reason: read.error ?? noProgress });
+        if (read.progress.phase !== "ready-to-start") {
+          setRealPlayNote(noteFor(s, { before: now.before, after: read.progress.before }, null, now.min_readings, { game, expId: null }, since));
+          return say({ kind: "rp-before", game, change, progress: read.progress, costAcknowledged: args.costAcknowledged ?? false });
+        }
+        // Enough as-is sessions count now: the change goes on, and the next session is the owner's tap.
+        now = read.progress;
+        startOnly = true;
+      }
+      if (now.phase !== "ready-to-start" || !now.anchor_session_id) return say({ kind: "not-started", reason: noProgress });
+      // ── The change goes on once, through the audited start, and stays on while the owner plays ──
+      try {
+        const started = await writeLedger<JourneyExperiment>(
+          "start_experiment",
+          {
+            recId: change.id,
+            recTitle: change.title,
+            baselineSessionId: now.anchor_session_id,
+            hypothesis: args.hypothesis,
+            outcome: args.outcome,
+            riskChoice: args.riskChoice,
+            costAcknowledged: args.costAcknowledged ?? false,
+            mode: "real-play",
+          },
+          args.refresh,
+        );
+        expId = started.id;
+      } catch (e) {
+        // As the two-session start: refused before anything changed, or the start restored what it
+        // applied itself. If it somehow left this change's Trial running, put it back.
+        const xs = await invoke<JourneyExperiment[]>("get_experiments").catch(() => []);
+        const leftOn = (xs ?? []).find((x) => x.status === "running" && x.rec_id === change.id);
+        return await recover(args, say, leftOn?.id ?? null, e);
+      }
+      if (startOnly || left()) return say({ kind: "idle" });
+    }
+    // ── One session with the change on ──
+    const counted = progress.experiment_id === expId ? progress.with : 0;
+    say({ kind: "rp-playing", game, change: change.title, on: true });
+    const since = Date.now();
+    const s = await measureOneSession(run, { captureFailed: args.captureFailed, saving, game, mode: "real-play" });
+    if (s === undefined) return;
+    const read = await readRealPlay(game);
+    if (left()) return;
+    const after = read.progress?.experiment_id === expId ? read.progress : null;
+    // Right after a session it measured, a look that decided is recorded at once (the two-session
+    // journey concludes after its second session the same way). A stopped test waits for a tap.
+    if (after?.phase === "ready") return await concludeRealPlayTrial(args.refresh, say, expId, change.title);
+    setRealPlayNote(noteFor(s, { before: counted, after: after?.with ?? null }, after, after?.min_readings ?? progress.min_readings, { game, expId }, since));
+    await args.refresh().catch(() => {});
+    say({ kind: "idle" });
+  } catch (e) {
+    if (left()) return;
+    await stopCapture(run);
+    const reason = String(e instanceof Error ? e.message : e);
+    // Nothing is put back behind the owner's back: the change staying on IS the test, and the panel
+    // offers to put it back. Before anything went on, nothing was changed.
+    say(expId ? { kind: "rp-failed", change: change.title, reason } : { kind: "not-started", reason });
+  } finally {
+    if (current === run) current = null;
+    window.removeEventListener("pagehide", abortJourney);
+    window.removeEventListener("beforeunload", abortJourney);
+  }
+}
+
+/** Records a real-play Trial's result through the audited conclude_realplay, which keeps the change
+ *  only when a look judged it Likely better and puts it back otherwise. A refused conclude changed
+ *  nothing (the test is still running); one whose restore couldn't be confirmed says so loudly. */
+async function concludeRealPlayTrial(refresh: () => Promise<void>, say: (p: JourneyPhase) => void, expId: string, change: string) {
+  say({ kind: "rp-working", change, what: "judging" });
+  let done: JourneyExperiment;
+  try {
+    done = await writeLedger<JourneyExperiment>("conclude_realplay", { experimentId: expId, crashed: false }, refresh);
+  } catch (e) {
+    const reason = String(e instanceof Error ? e.message : e);
+    const xs = await invoke<JourneyExperiment[]>("get_experiments").catch(() => null);
+    const exp = xs?.find((x) => x.id === expId) ?? null;
+    return say(exp?.status === "running" ? { kind: "rp-failed", change, reason } : { kind: "restore-failed", change, reason });
+  }
+  try {
+    if (done.status === "kept" && done.verdict !== "improved") {
+      // Never keep a change the verdict didn't call Better.
+      await writeLedger("restore_experiment", { experimentId: expId }, refresh);
+      return say({ kind: "result", exp: { ...done, status: "restored" }, asIs: done.baseline_session_id ?? null });
+    }
+  } catch (e) {
+    return say({ kind: "restore-failed", change, reason: String(e instanceof Error ? e.message : e) });
+  }
+  const kept = done.status === "kept" && done.verdict === "improved";
+  return say({ kind: "result", exp: done, asIs: (kept ? done.treatment?.session_id : done.baseline_session_id) ?? null });
+}
+
+/** "See the result" (a look decided) or "Close this test" (the test stopped), from the owner's tap. */
+async function closeRealPlay(expId: string, change: string, refresh: () => Promise<void>) {
+  if (current || acting) return;
+  acting = true;
+  setRealPlayNote(null);
+  try {
+    await concludeRealPlayTrial(refresh, setPhase, expId, change);
+  } finally {
+    acting = false;
+  }
+}
+
+/** "Put it back now": the existing audited restore_experiment, which writes the setting back exactly
+ *  as it was saved before the test and reads it back. */
+async function putBackRealPlay(expId: string, change: string, refresh: () => Promise<void>) {
+  if (current || acting) return;
+  acting = true;
+  setRealPlayNote(null);
+  setPhase({ kind: "rp-working", change, what: "putting-back" });
+  try {
+    await writeLedger("restore_experiment", { experimentId: expId }, refresh);
+    setPhase({ kind: "restored", change, why: "asked", reason: "" });
+  } catch (e) {
+    setPhase({ kind: "restore-failed", change, reason: String(e instanceof Error ? e.message : e) });
+  } finally {
+    acting = false;
   }
 }
 
@@ -558,6 +842,8 @@ const PUT_BACK_WHY: Record<string, string> = {
 };
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 function resultLine(exp: JourneyExperiment, t: Translate): string {
+  // P5-realplay: Likely better / Likely worse / No clear difference / Unknown, from the record's own numbers.
+  if (isRealPlay(exp)) return realPlayResult(exp, prettyGameName(exp.game) || exp.game, t);
   const k = "lab.experimentBench.journey";
   const change = exp.rec_title;
   if (exp.status === "kept" && exp.verdict === "improved") {
@@ -576,6 +862,7 @@ function resultLine(exp: JourneyExperiment, t: Translate): string {
  *  falling beyond it; Maximum FPS: the average beyond the band with the 1% low held), and, for an
  *  attempt that judged nothing, that the two sessions could not be compared fairly. */
 function resultWhy(exp: JourneyExperiment, t: Translate): string {
+  if (isRealPlay(exp)) return realPlayWhy(exp, t);
   const k = "lab.experimentBench.journey.why";
   const measured = exp.verdict === "improved" || exp.verdict === "no-change" || exp.verdict === "regressed";
   if (!measured) return t(`${k}.noResult`);
@@ -642,12 +929,27 @@ function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
   const pct = receiptPct;
   const tr = exp.treatment;
   const risk = exp.stated_risk;
+  // P5-realplay: what real play judged on, from the record's own evidence; nothing it didn't record.
+  const rp = isRealPlay(exp) ? (exp.real_play ?? null) : null;
+  const count = (n: number | undefined) => (n != null ? String(n) : null);
   return (
     <dl className="journey-receipt">
       <ReceiptRow label={rk("change")} value={exp.rec_id} />
       <ReceiptRow label={rk("outcome")} value={exp.outcome ?? null} />
+      <ReceiptRow label={rk("mode")} value={rp ? (exp.mode ?? null) : null} />
       <ReceiptRow label={rk("verdict")} value={exp.verdict} />
-      <ReceiptRow label={rk("confidence")} value={exp.verdict_confidence ?? null} />
+      {/* Real play never claims High confidence (none is recorded); a stored "high" reads as medium. */}
+      <ReceiptRow label={rk("confidence")} value={rp ? realPlayConfidence(exp.verdict_confidence) : (exp.verdict_confidence ?? null)} />
+      {rp && (
+        <>
+          <ReceiptRow label={rk("sessionsBefore")} value={count(rp.before?.length)} />
+          <ReceiptRow label={rk("sessionsWith")} value={count(rp.with?.length)} />
+          <ReceiptRow label={rk("spreadLow")} value={receiptBand(rp.low1_spread_pct)} />
+          <ReceiptRow label={rk("spreadAvg")} value={receiptBand(rp.avg_spread_pct)} />
+          <ReceiptRow label={rk("look")} value={rp.look != null ? String(rp.look) : null} />
+          <ReceiptRow label={rk("notCounted")} value={rp.not_counted?.length ? String(rp.not_counted.length) : null} />
+        </>
+      )}
       <ReceiptRow label={rk("baselineAvg")} value={fps(exp.baseline_avg_fps)} />
       <ReceiptRow label={rk("afterAvg")} value={tr ? [fps(tr.avg_fps), pct(tr.delta_avg_pct)].filter(Boolean).join(" ") || null : null} />
       <ReceiptRow label={rk("baselineLow")} value={fps(exp.baseline_low1_fps)} />
@@ -695,6 +997,7 @@ export function GuidedJourney({
   progress = null,
   resumeReuses = false,
   stillOn = [],
+  realPlay = null,
 }: {
   /** The detected / last-played game (the newest usable session's), or null before any session. */
   game: string | null;
@@ -725,14 +1028,38 @@ export function GuidedJourney({
   resumeReuses?: boolean;
   /** The kept changes on that game whose live check reads on (`stillOnFor`). */
   stillOn?: string[];
+  /** P5-realplay: where real play stands on that game (get_realplay_progress), while no Trial runs.
+   *  null when it couldn't be read: then real play isn't offered, because Compy can't count. */
+  realPlay?: RealPlayProgress | null;
 }) {
   const { t } = useTranslation();
   // "Stop here" / "Pick up" write only localStorage; this repaints the panel after either.
   const [, repaint] = useState(0);
   const p = useJourneyPhase();
   const recorded = useJourneyProgress();
+  const note = useRealPlayNote();
   const k = "lab.experimentBench.journey";
   const gameName = (g: string | null) => (g ? prettyGameName(g) || g : null);
+  // P5-realplay: one real-play tap for `c`, from the props this panel was given. `ackd`: the owner
+  // tapped the line naming the change's cost (or none was asked).
+  const realPlayRun = (c: { id: string; title: string }, ackd: boolean, rp: RealPlayProgress) => {
+    if (!canStart) return;
+    const hypothesis = t("lab.experimentBench.hypothesisWithBaseline", { metric: t("lab.experimentBench.hypothesisMetricFallback") });
+    void runRealPlay(
+      {
+        change: c,
+        outcome,
+        riskChoice,
+        costAcknowledged: ackd,
+        hypothesis,
+        refresh,
+        captureFailed: t(`${k}.captureFailed`),
+        noProgress: t("lab.experimentBench.journey.realPlay.noProgress"),
+      },
+      rp.game,
+      rp,
+    );
+  };
 
   // P5-resume: a journey already under way on this game (something tested or tried there).
   const resuming = progress != null && progress.tested + progress.inconclusive + progress.stale + progress.unverified > 0 && progress.unfinished == null;
@@ -788,6 +1115,10 @@ export function GuidedJourney({
         reuseId,
       );
     };
+    // P5-realplay: the one plain choice beside the two-session plan, while Compy can count this game's
+    // sessions: the change goes on at once when enough as-is sessions count, else Compy collects them.
+    const rpHere = realPlay != null && game != null && realPlay.game === game ? realPlay : null;
+    const offer = rpHere ? realPlayOffer(rpHere, change.title, name ?? rpHere.game, t) : null;
     return (
       <div className="exp-order exp-journey" data-testid="journey">
         {resuming && (
@@ -828,6 +1159,16 @@ export function GuidedJourney({
         <button type="button" className="exp-cta" disabled={!canStart} onClick={start}>
           {ack ? t("lab.experimentBench.costAck.button") : t(`${k}.button`)}
         </button>
+        {offer && rpHere && (
+          <>
+            <p className="exp-fineprint" data-testid="journey-realplay-plan">
+              {offer}
+            </p>
+            <button type="button" className="exp-cta-ghost" disabled={!canStart} onClick={() => realPlayRun(change, ack, rpHere)}>
+              {t(ack ? "lab.experimentBench.journey.realPlay.startAck" : "lab.experimentBench.journey.realPlay.start")}
+            </button>
+          </>
+        )}
         {resuming && (
           <button
             type="button"
@@ -845,10 +1186,12 @@ export function GuidedJourney({
     );
   }
 
-  const playing = p.kind === "as-is" || p.kind === "with-change";
+  const playing = p.kind === "as-is" || p.kind === "with-change" || p.kind === "rp-playing";
+  // P5-realplay: a real-play session only counts down to the readings it needs; no halves are graded.
+  const mode: JourneyMode = p.kind === "rp-playing" ? "real-play" : "pair";
   const live = playing ? recorded : null;
-  const unsettled = live != null && enoughState(live).kind === "unsettled";
-  const finished = !playing && p.kind !== "reading" && p.kind !== "judging" && p.kind !== "uneven";
+  const unsettled = live != null && enoughState(live, mode).kind === "unsettled";
+  const finished = !playing && p.kind !== "reading" && p.kind !== "judging" && p.kind !== "uneven" && p.kind !== "rp-working";
   let line: string;
   switch (p.kind) {
     case "as-is":
@@ -894,7 +1237,9 @@ export function GuidedJourney({
       break;
     case "restored":
       line =
-        p.why === "no-reading"
+        p.why === "asked"
+          ? t("lab.experimentBench.journey.realPlay.putBackDone", { change: p.change })
+          : p.why === "no-reading"
           ? t(`${k}.restoredNoReading`, { change: p.change })
           : p.why === "behind"
             ? t(`${k}.restoredBehind`, { change: p.change })
@@ -902,6 +1247,23 @@ export function GuidedJourney({
       break;
     case "restore-failed":
       line = t(`${k}.restoreFailed`, { change: p.change, reason: p.reason });
+      break;
+    case "rp-playing":
+      line = p.on
+        ? t("lab.experimentBench.journey.realPlay.playingOn", { change: p.change, game: gameName(p.game) })
+        : t("lab.experimentBench.journey.realPlay.playingAsIs", { game: gameName(p.game) });
+      break;
+    case "rp-before":
+      line = collectingBeforeLine(p.progress, gameName(p.game) ?? p.game, t);
+      break;
+    case "rp-working":
+      line =
+        p.what === "judging"
+          ? t("lab.experimentBench.journey.realPlay.judging")
+          : t("lab.experimentBench.journey.realPlay.puttingBack", { change: p.change });
+      break;
+    case "rp-failed":
+      line = t("lab.experimentBench.journey.realPlay.failed", { change: p.change, reason: p.reason });
       break;
   }
   const lineEl = (
@@ -920,7 +1282,7 @@ export function GuidedJourney({
       {live && (
         // P5-enough: quiet, in place; nothing here moves focus or brings a window forward.
         <p className="exp-fineprint" data-testid="journey-enough" aria-live="polite">
-          {enoughLine(live, t)}
+          {enoughLine(live, t, "panel", mode)}
         </p>
       )}
       {playing && (
@@ -953,6 +1315,18 @@ export function GuidedJourney({
           </div>
         </>
       )}
+      {p.kind === "rp-before" && (
+        <>
+          {note && note.expId === null && (
+            <p className="exp-fineprint" data-testid="realplay-note">
+              {noteText(note, t)}
+            </p>
+          )}
+          <button type="button" className="exp-cta" disabled={!canStart} onClick={() => realPlayRun(p.change, p.costAcknowledged, p.progress)}>
+            {t("lab.experimentBench.journey.realPlay.measureNext")}
+          </button>
+        </>
+      )}
       {p.kind === "wrong-game" && (
         <button type="button" className="exp-cta-ghost" onClick={() => setPhase({ kind: "idle" })}>
           {t(`${k}.planFor`, { game: gameName(p.played) })}
@@ -960,6 +1334,7 @@ export function GuidedJourney({
       )}
       {p.kind === "result" &&
         next &&
+        !isRealPlay(p.exp) &&
         (() => {
           // P8-ack: the next change, when it isn't low risk, starts only from the tap on its cost line;
           // the plan it would have said on the button is said above it instead.
@@ -992,12 +1367,12 @@ export function GuidedJourney({
             </button>
           );
         })()}
-      {p.kind === "result" && next?.retest && (
+      {p.kind === "result" && next?.retest && !isRealPlay(p.exp) && (
         <p className="exp-fineprint" data-testid="journey-retest-why">
           {t(`${k}.retestWhy.${next.retest}`, { change: next.title })}
         </p>
       )}
-      {p.kind === "result" && next && (
+      {p.kind === "result" && next && !isRealPlay(p.exp) && (
         // P5-resume: the owner ends the journey here; nothing is undone (ENGINE §7).
         <button
           type="button"
@@ -1054,6 +1429,136 @@ function progressNotes(progress: JourneyProgress, t: (key: string, opts?: Record
     ...(progress.unverified > 0 ? [t(`${k}.progressUnverified`, { count: progress.unverified })] : []),
     ...(progress.staleKept > 0 ? [t(`${k}.progressStaleKept`, { count: progress.staleKept })] : []),
   ];
+}
+
+/** P5-realplay: the one line about the session just measured. */
+function noteText(note: RealPlayNote, t: Translate): string {
+  if (note.kind === "counted") return t("lab.experimentBench.journey.realPlay.noteCounted");
+  if (note.kind === "none") return t("lab.experimentBench.journey.realPlay.noteNone", { game: prettyGameName(note.game) || note.game });
+  return t("lab.experimentBench.journey.realPlay.noteNotCounted", { why: notCountedWhy(note.reason, note.minReadings, t) });
+}
+
+/** P5-realplay: a running real-play Trial, derived from its record and its progress read (never from
+ *  this module's state, so it reads the same after a restart). It says the change is on and since
+ *  when, how long it may stay on, how to put it back (with "Put it back now", the existing
+ *  restore_experiment), where the count stands ("Keep playing, Compy is still collecting (N of M
+ *  sessions)"), and every session that didn't count, with why. Never an "interrupted" banner: the
+ *  change staying on across restarts is the test. Its main button measures the next session, sees a
+ *  result a look has decided, or closes a test that can't go on, each through the journey's audited
+ *  calls. `progress`: this Trial's progress read; `unread`: why that read failed ("" = no answer);
+ *  both null while the first read hasn't answered. */
+export function RealPlayPanel({
+  exp,
+  progress,
+  unread = null,
+  canAct,
+  refresh,
+}: {
+  exp: RealPlayRecord & { rec_id: string };
+  progress: RealPlayProgress | null;
+  unread?: string | null;
+  /** False while the bench is busy or App's shared busy flag is held. */
+  canAct: boolean;
+  refresh: () => Promise<void>;
+}) {
+  const { t, i18n } = useTranslation();
+  const note = useRealPlayNote();
+  const view = realPlayView(exp, progress, t, i18n.language, unread);
+  const measure = () => {
+    if (!canAct || !progress || view.action !== "measure" || current || acting) return;
+    void runRealPlay(
+      {
+        change: { id: exp.rec_id, title: exp.rec_title },
+        outcome: exp.outcome === "max-fps" ? "max-fps" : "recommended",
+        hypothesis: "",
+        refresh,
+        captureFailed: t("lab.experimentBench.journey.captureFailed"),
+        noProgress: t("lab.experimentBench.journey.realPlay.noProgress"),
+      },
+      exp.game,
+      progress,
+    );
+  };
+  const conclude = () => {
+    if (canAct) void closeRealPlay(exp.id, exp.rec_title, refresh);
+  };
+  return (
+    <div className="exp-order exp-journey" data-testid="journey" data-phase="realplay">
+      <div data-testid="realplay" data-realplay-phase={progress?.phase ?? "unread"}>
+        <p className="exp-note" data-testid="realplay-on">
+          {view.changeOn}
+        </p>
+        {note && note.expId === exp.id && (
+          <p className="exp-fineprint" data-testid="realplay-note">
+            {noteText(note, t)}
+          </p>
+        )}
+        {view.status && (
+          <p className="exp-note" data-testid="realplay-status" role="status">
+            {view.status}
+          </p>
+        )}
+        {view.action == null && unread && (
+          // The backend's own words for why the count can't be read, as the bench shows every refusal.
+          <p className="exp-fineprint" data-testid="realplay-unread">
+            {unread}
+          </p>
+        )}
+        {view.notYet && (
+          <p className="exp-fineprint" data-testid="realplay-not-yet">
+            {view.notYet}
+          </p>
+        )}
+        {view.closeHow && (
+          <p className="exp-fineprint" data-testid="realplay-close-how">
+            {view.closeHow}
+          </p>
+        )}
+        <div className="exp-running-actions">
+          {view.action === "measure" && (
+            <button type="button" className="exp-cta" disabled={!canAct} onClick={measure}>
+              {t("lab.experimentBench.journey.realPlay.measureNext")}
+            </button>
+          )}
+          {view.action === "see-result" && (
+            <button type="button" className="exp-cta" disabled={!canAct} onClick={conclude}>
+              {t("lab.experimentBench.journey.realPlay.seeResult")}
+            </button>
+          )}
+          {view.action === "close" && (
+            <button type="button" className="exp-cta" disabled={!canAct} onClick={conclude}>
+              {t("lab.experimentBench.journey.realPlay.closeTest")}
+            </button>
+          )}
+          <button
+            type="button"
+            className="exp-cta-ghost"
+            disabled={!canAct}
+            onClick={() => {
+              if (canAct) void putBackRealPlay(exp.id, exp.rec_title, refresh);
+            }}
+          >
+            {t("lab.experimentBench.journey.realPlay.putBackNow")}
+          </button>
+        </div>
+        <p className="exp-fineprint" data-testid="realplay-put-back-how">
+          {view.putBackHow}
+        </p>
+        {view.notCounted.length > 0 && (
+          <div data-testid="realplay-not-counted">
+            <p className="exp-fineprint">{t("lab.experimentBench.journey.realPlay.notCounted")}</p>
+            <ul className="exp-why-list">
+              {view.notCounted.map((line, i) => (
+                <li key={i} className="exp-fineprint">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /** P5-resume: the progress line while a Trial of the game is still Running, so it says what the

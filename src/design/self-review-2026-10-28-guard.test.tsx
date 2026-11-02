@@ -101,7 +101,9 @@ describe("self-review 2026-10-28 guards", () => {
     const bench = read("surfaces", "ExperimentBench.tsx");
     expect(bench).toMatch(/<Term tip=\{t\(confidenceHintKey\(word\)\)\}>\{t\(confidenceWordKey\(word\)\)\}<\/Term>/);
     expect(bench).not.toContain("confidenceCopy");
-    expect(bench.match(/<BenchWord /g)?.length).toBe(3);
+    // P5-realplay: a real-play summary row says its word through BenchWord too ("Likely": sessions played
+    // however the owner played support the result but don't prove its cause), so there are four.
+    expect(bench.match(/<BenchWord /g)?.length).toBe(4);
     // pattern sentences and the bench's noise fine print say "1% low" / "noise floor"
     const patterns = read("surfaces", "blackbook", "PatternsTile.tsx");
     expect(patterns).toContain("{withTerms(p.detail)}");
