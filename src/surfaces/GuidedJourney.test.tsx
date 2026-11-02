@@ -169,6 +169,18 @@ const press = async () => {
   fireEvent.click(btn);
 };
 
+/** Opens the finished journey's technical receipt and reads its rows, label to value. */
+const receiptRows = async (): Promise<Record<string, string>> => {
+  const journey = screen.getByTestId("journey");
+  const door = journey.querySelector('[data-testid="journey-depth-receipt"] > summary')!;
+  fireEvent.click(door);
+  // Depth mounts a door's content on the details' toggle (a later task in jsdom): wait for it.
+  await waitFor(() => expect(door.parentElement!.children.length).toBeGreaterThan(1));
+  return Object.fromEntries(
+    [...journey.querySelectorAll(".journey-receipt dt")].map((dt) => [dt.textContent ?? "", dt.nextElementSibling?.textContent ?? ""]),
+  );
+};
+
 /** The journey's closing line, once it has one (only a finished journey's line is a status). */
 const finalLine = () =>
   waitFor(
@@ -288,6 +300,150 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(rows["Measured noise"]).toBe("±4.1%");
     expect(rows["Noise floor"]).toBeUndefined(); // the judged band is recorded: the floor is not shown as if it were it
     expect(rows.Outcome).toBe("max-fps");
+  });
+
+  // P8-dims (RISK_MODEL §3, "do not collapse these into one arbitrary score"): the receipt names the
+  // catalog's overall word AND each risk dimension it states for the change, from the record the
+  // Trial started with; a dimension it doesn't state reads "not stated", never filled in from the
+  // overall word. Fails on the code before this slice, whose receipt had no risk row at all.
+  it("the receipt lists each risk dimension the catalog states, and says so for one it doesn't", async () => {
+    state.concludeResult = {
+      status: "kept",
+      kept: true,
+      verdict: "improved",
+      treatment: TREATMENT,
+      stated_risk: { overall: "moderate", dimensions: { reversibility: "low", stability: null, compatibility: null, security: "high" } },
+    };
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    expect(await receiptRows()).toMatchObject({
+      "Risk, overall": "moderate risk",
+      Reversibility: "low risk",
+      Stability: "not stated",
+      Compatibility: "not stated",
+      Security: "high risk",
+    });
+    cleanup();
+    resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });
+    // An overall word the catalog didn't state (or one this build doesn't know), and no dimensions.
+    state.concludeResult = { status: "restored", verdict: "no-change", treatment: TREATMENT, stated_risk: { overall: "unknown", dimensions: {} } };
+    state.saves = [session(later(3), 5400), session(later(4), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    const rows = await receiptRows();
+    for (const label of ["Risk, overall", "Reversibility", "Stability", "Compatibility", "Security"]) {
+      expect(rows[label], label).toBe("not stated");
+    }
+  });
+
+  // P8-posture-show (RISK_MODEL §2): the journey's start carries the risk the user allows on this PC,
+  // and the receipt names the one its Trial's record kept; a record without one says "not recorded",
+  // never the default. Fails on the code before this slice (no choice sent, no row).
+  it("the start carries the risk allowed, and the receipt names the one the record kept", async () => {
+    localStorage.setItem("compy.trial.riskChoice", "low-only");
+    try {
+      state.concludeResult = { status: "kept", kept: true, verdict: "improved", treatment: TREATMENT, risk_choice: "low-only" };
+      render(<ExperimentBench />);
+      await press();
+      await finalLine();
+      expect(calls("start_experiment")[0]).toMatchObject({ recId: "hags", riskChoice: "low-only" });
+      expect((await receiptRows())["Risk you allowed"]).toBe("Low risk only");
+    } finally {
+      localStorage.removeItem("compy.trial.riskChoice");
+    }
+    cleanup();
+    resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });
+    state.concludeResult = { status: "restored", verdict: "no-change", treatment: TREATMENT, risk_choice: "anything-goes" };
+    state.saves = [session(later(3), 5400), session(later(4), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    const starts = calls("start_experiment");
+    expect(starts[starts.length - 1]).toMatchObject({ riskChoice: "low-and-moderate" });
+    expect((await receiptRows())["Risk you allowed"]).toBe("not recorded");
+  });
+
+  // P8-ack (RISK_MODEL §1 Advanced): when the journey's change is moderate, the plan is followed by one
+  // plain line naming its cost in the catalog's own words, and the journey starts from one tap on "I
+  // understand, test it"; the start records it and the receipt names the cost and the confirmation. A
+  // low-risk change starts from "Optimize my game" as before. Fails on the code before this slice.
+  it("a moderate change names its cost and starts from one tap; the receipt names both", async () => {
+    state.recs = [
+      { id: "hags", title: "HAGS", passes: true, reason: null, detail: null, position: 1, evidence: "not-measured", risk: "moderate", cost: "Reboot required." },
+    ];
+    state.concludeResult = {
+      status: "kept",
+      kept: true,
+      verdict: "improved",
+      treatment: TREATMENT,
+      cost_acknowledged: true,
+      stated_risk: { overall: "moderate", dimensions: {}, cost: "Reboot required." },
+    };
+    render(<ExperimentBench />);
+    expect(await screen.findByTestId("journey-cost-ack")).toHaveTextContent("HAGS has a cost: Reboot required.");
+    expect(screen.queryByRole("button", { name: "Optimize my game" })).toBeNull();
+    const tap = screen.getByRole("button", { name: "I understand, test it" });
+    await waitFor(() => expect(tap).toBeEnabled());
+    fireEvent.click(tap);
+    await finalLine();
+    expect(calls("start_experiment")[0]).toMatchObject({ recId: "hags", costAcknowledged: true });
+    expect(await receiptRows()).toMatchObject({ Cost: "Reboot required.", "Cost confirmed": "yes, before the Trial started" });
+  });
+
+  it("a low-risk change starts as before, and its receipt says no confirmation was needed", async () => {
+    state.concludeResult = {
+      status: "kept",
+      kept: true,
+      verdict: "improved",
+      treatment: TREATMENT,
+      cost_acknowledged: false,
+      stated_risk: { overall: "low", dimensions: {}, cost: null },
+    };
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    expect(screen.queryByTestId("journey-cost-ack")).toBeNull();
+    expect(calls("start_experiment")[0]).toMatchObject({ recId: "hags", costAcknowledged: false });
+    expect(await receiptRows()).toMatchObject({ Cost: "not stated", "Cost confirmed": "not needed: low risk" });
+  });
+
+  it("the next change, when moderate, keeps its plan line and starts from the same one tap", async () => {
+    state.recs = [
+      { id: "hags", title: "HAGS", passes: true, reason: null, detail: null, position: 1, evidence: "not-measured", risk: "low" },
+      { id: "sysmain", title: "SysMain", passes: true, reason: null, detail: null, position: 2, evidence: "not-measured", risk: "moderate", cost: "App launches get a little slower." },
+    ];
+    state.saves = [session(later(1), 5400), session(later(2), 5400), session(later(3), 5400)];
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    expect(await screen.findByTestId("journey-next-plan")).toHaveTextContent(/Next: SysMain/);
+    expect(screen.getByTestId("journey-cost-ack")).toHaveTextContent("SysMain has a cost: App launches get a little slower.");
+    expect(screen.queryByRole("button", { name: /Next: SysMain/ })).toBeNull();
+    const tap = screen.getByRole("button", { name: "I understand, test it" });
+    await waitFor(() => expect(tap).toBeEnabled());
+    fireEvent.click(tap);
+    await waitFor(() => expect(calls("start_experiment")).toHaveLength(2), { timeout: 3000 });
+    expect(calls("start_experiment")[1]).toMatchObject({ recId: "sysmain", costAcknowledged: true });
+  });
+
+  it("a record from before Compy kept the confirmation says not recorded", async () => {
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    const rows = await receiptRows();
+    expect(rows["Cost confirmed"]).toBe("not recorded");
+    expect(rows.Cost).toBeUndefined(); // no catalog risk was kept either, so no cost words to show
+  });
+
+  it("a Trial whose record kept no catalog risk says not recorded, and lists no dimension", async () => {
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    const rows = await receiptRows();
+    expect(rows["Risk, overall"]).toBe("not recorded");
+    for (const label of ["Reversibility", "Stability", "Compatibility", "Security"]) expect(rows[label], label).toBeUndefined();
   });
 
   it("game exits early in session 2: too few readings is judged and the change is restored", async () => {

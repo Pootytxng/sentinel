@@ -423,6 +423,28 @@
         "samples": "After, samples",
         "baselineSession": "Before session",
         "afterSession": "After session",
+        "riskChoice": "Risk you allowed",
+        "riskOverall": "Risk, overall",
+        "risk": {
+          "reversibility": "Reversibility",
+          "stability": "Stability",
+          "compatibility": "Compatibility",
+          "security": "Security"
+        },
+        "riskWord": {
+          "low": "low risk",
+          "moderate": "moderate risk",
+          "high": "high risk",
+          "notStated": "not stated",
+          "notRecorded": "not recorded"
+        },
+        "cost": "Cost",
+        "costConfirmed": "Cost confirmed",
+        "costWord": {
+          "yes": "yes, before the Trial started",
+          "notNeeded": "not needed: low risk",
+          "notAsked": "not asked"
+        },
         "trial": "Trial"
       },
       "withChangeReused": "{{change}} is on. Compy uses your last session as the before-reading, so this is the only session: play {{game}} the same way for about 10 minutes, then close the game.",
@@ -500,6 +522,11 @@
     "title": "Test one change",
     "hint": "Compy measures a baseline, applies one reversible change, measures a real session, and puts the change back unless the numbers clearly beat the noise.",
     "pickLabel": "Pick a change to test",
+    "costAck": {
+      "line": "{{change}} has a cost: {{cost}}",
+      "noCost": "{{change}} isn't rated low risk, and Compy has no note on what it costs.",
+      "button": "I understand, test it"
+    },
     "riskChoice": {
       "label": "How far may Compy go on this PC?",
       "lowOnly": "Low risk only",
@@ -743,6 +770,7 @@
       "receiptLow": "1% low {{pct}}",
       "receiptAvg": "average {{pct}}",
       "receiptBand": "band {{band}}",
+      "receiptRiskChoice": "risk you allowed: {{choice}}",
       "receiptTrials_one": "{{count}} trial",
       "receiptTrials_other": "{{count}} trials",
       "contextLabel": "Last recorded context ({{when}}):",

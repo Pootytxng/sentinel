@@ -37,7 +37,16 @@ import {
   type TestedChange,
 } from "./test-summary";
 import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
-import { GuidedJourney, interruptedJourneyId, JourneyProgressLine, reusableAsIs, useJourneyPhase } from "./GuidedJourney";
+import {
+  costAckLine,
+  GuidedJourney,
+  interruptedJourneyId,
+  JourneyProgressLine,
+  needsCostAck,
+  reusableAsIs,
+  riskChoiceWord,
+  useJourneyPhase,
+} from "./GuidedJourney";
 import { journeyProgress, nextToTest, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { displayModeLabel } from "../data/display-mode";
@@ -241,6 +250,8 @@ type TrialCandidate = {
   risk?: Risk;
   stated_effect_pct?: number | null;
   too_small?: { effect_pct: number; band_pct: number } | null;
+  /** P8-ack: the catalog's own words for what the change costs (`downside`); null = it states none. */
+  cost?: string | null;
 };
 
 const EVIDENCE_KEY: Record<Evidence, string> = {
@@ -975,7 +986,9 @@ export default function ExperimentBench({
     }
   }
 
-  async function startExperiment() {
+  // P8-ack: `costAcknowledged` is the tap on "I understand, test it" under the line naming the change's
+  // cost; a low-risk change starts as before and sends false (nothing was asked).
+  async function startExperiment(costAcknowledged: boolean) {
     // P6-restore-f1: the handler refuses too, not just the button, while another write holds the flag.
     if (!sim || !baseline || ledgerBusy || busy) return;
     setBusy(true);
@@ -992,6 +1005,9 @@ export default function ExperimentBench({
               baselineSessionId: baseline.started_at,
               hypothesis,
               outcome,
+              // P8-posture-show: the risk allowed now, kept on the record for its receipt.
+              riskChoice,
+              costAcknowledged,
             },
             refresh,
           ),
@@ -1091,6 +1107,10 @@ export default function ExperimentBench({
   const simMeta = sim ? SIM_VERDICT[sim.verdict] ?? { label: sim.verdict, blocked: false } : null;
   const grade = baseline ? gradeBaseline(baseline) : null;
   const canStart = !!sim && !!simMeta && !simMeta.blocked && !!baseline && grade?.kind !== "too-short" && !busy && !ledgerBusy && (outcome !== "smoothest" || smoothestOpen);
+  // P8-ack (RISK_MODEL §1 Advanced): the picked change as the picker read it. One the catalog doesn't
+  // rate low risk starts only from the tap under the line naming its cost.
+  const simCandidate = sim ? recs.find((r) => r.id === sim.rec_id) : undefined;
+  const costAck = needsCostAck(simCandidate?.risk);
 
   // Bento conversion (2026-08-12). span="full" is FORCED, not a taste call: this component can
   // return null (the dark experiment gate above) and this file declares no grid of its own, so
@@ -1124,13 +1144,18 @@ export default function ExperimentBench({
       {(journey.kind !== "idle" || !running) && (
         <GuidedJourney
           game={pickGame}
-          change={journeyChange ? { id: journeyChange.id, title: journeyChange.title, retest: journeyChange.retest } : null}
+          change={
+            journeyChange
+              ? { id: journeyChange.id, title: journeyChange.title, retest: journeyChange.retest, risk: journeyChange.risk, cost: journeyChange.cost }
+              : null
+          }
           canStart={!busy && !running && !ledgerBusy}
           outcome={outcome === "smoothest" ? "recommended" : outcome}
           onOutcome={setOutcome}
           next={journeyNext}
           nextReuses={journey.kind === "result" && reusableAsIs(sessions, journey.asIs, journey.exp.game) != null}
           refresh={settle}
+          riskChoice={riskChoice}
           progress={progress}
           resumeReuses={progress != null && reusableAsIs(sessions, progress.asIs, progress.game) != null}
           stillOn={progress ? stillOnFor(progress.game, experiments, recs) : []}
@@ -1425,12 +1450,21 @@ export default function ExperimentBench({
                         : t("lab.experimentBench.smoothestHeld.unknown")}
                     </p>
                   )}
+                  {costAck && sim && (
+                    <p className="exp-note" data-testid="exp-cost-ack">
+                      {costAckLine(sim.rec_title, simCandidate?.cost, t)}
+                    </p>
+                  )}
                   <button
                     className="exp-cta"
                     disabled={!canStart}
-                    onClick={startExperiment}
+                    onClick={() => startExperiment(costAck)}
                   >
-                    {busy ? t("lab.experimentBench.applying") : t("lab.experimentBench.startExperiment")}
+                    {busy
+                      ? t("lab.experimentBench.applying")
+                      : costAck
+                        ? t("lab.experimentBench.costAck.button")
+                        : t("lab.experimentBench.startExperiment")}
                   </button>
                   <p className="exp-fineprint">
                     {t("lab.experimentBench.fineprint", {
@@ -1815,6 +1849,8 @@ function TestSummary({ s }: { s: GameTestSummary }) {
               receiptBand(r.noise?.band_pct) != null ? t("lab.experimentBench.summary.receiptBand", { band: receiptBand(r.noise?.band_pct) }) : null,
               t("lab.experimentBench.summary.receiptTrials", { count: r.trials }),
               r.context,
+              // P8-posture-show: the risk allowed when this row's Trial started, or "not recorded".
+              t("lab.experimentBench.summary.receiptRiskChoice", { choice: riskChoiceWord(r.riskChoice, t) }),
             ]
               .filter((x): x is string => !!x)
               .join(sep)}

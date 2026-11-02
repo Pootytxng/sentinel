@@ -86,7 +86,16 @@ export type SummaryExperiment = {
   treatment?: { delta_low1_pct: number; delta_avg_pct?: number | null } | null;
   /** The outcome the Trial was judged for. Absent on older records, which were judged as Recommended. */
   outcome?: "recommended" | "max-fps" | "smoothest" | null;
+  /** P8-posture-show: the risk the user allowed when the Trial started (experiment.rs `risk_choice`).
+   *  Absent on records started before Compy kept it. */
+  risk_choice?: string | null;
 };
+
+/** P8-posture-show: a Trial's recorded risk choice; null when it isn't recorded or this build doesn't
+ *  know it (never the default, which would claim a choice nobody recorded). */
+export type RecordedRiskChoice = "low-only" | "low-and-moderate" | null;
+const recordedRiskChoice = (v: string | null | undefined): RecordedRiskChoice =>
+  v === "low-only" || v === "low-and-moderate" ? v : null;
 
 /** The Trial picker fields the summary reads (trial_candidates.rs `TrialCandidate`). */
 export type SummaryCandidate = {
@@ -153,6 +162,9 @@ export type TestedChange = {
   deltaLow1Pct: number | null;
   deltaAvgPct: number | null;
   at: string;
+  /** P8-posture-show: the risk the user allowed when the newest judged Trial started; null = not
+   *  recorded. */
+  riskChoice: RecordedRiskChoice;
 };
 
 export type LessonRule =
@@ -528,6 +540,7 @@ export function summarizeGame(
       deltaLow1Pct: x.treatment?.delta_low1_pct ?? null,
       deltaAvgPct: x.treatment?.delta_avg_pct ?? null,
       at: x.created_at,
+      riskChoice: recordedRiskChoice(x.risk_choice),
     };
   });
 

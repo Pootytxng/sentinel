@@ -485,6 +485,39 @@ pub(crate) struct ExperimentRecord {
     /// every other outcome and on older records.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub smoothest: Option<SmoothestEvidence>,
+    /// P8-dims (RISK_MODEL §3; TRIAL_PROTOCOL §1 `risk_class`, §11): what the catalog stated about this
+    /// change's risk when the Trial started, its one overall word and each dimension it states, so
+    /// the receipt names the risk the Trial ran under. `None` on records started before it was kept,
+    /// and when the change wasn't in the catalog at the start: the receipt then says "not recorded",
+    /// never a guess. Additive; read leniently, so a value this build can't read is `None` and never
+    /// fails the store's load.
+    #[serde(
+        default,
+        deserialize_with = "crate::trial_candidates::lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub stated_risk: Option<crate::trial_candidates::StatedRisk>,
+    /// P8-posture-show (RISK_MODEL §2): the user's answer to "How far may Compy go on this PC?" in force
+    /// when the Trial started, as the start was told it. `None` on records started before it was kept
+    /// (and on a start that didn't say): the receipt then says "not recorded", never the default.
+    /// Additive; read leniently, so a choice this build doesn't know is `None`, never a failed load.
+    #[serde(
+        default,
+        deserialize_with = "crate::trial_candidates::lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub risk_choice: Option<crate::trial_candidates::RiskChoice>,
+    /// P8-ack (RISK_MODEL §1 Advanced, "explicit user acknowledgement when the cost is not obvious"):
+    /// whether the user tapped "I understand, test it" on the line naming the change's cost before the
+    /// Trial started, as the start was told it. `Some(false)` = no acknowledgement was asked (a low-risk
+    /// change starts as before). `None` on records started before it was kept: "not recorded".
+    /// Additive; read leniently, so a value this build can't read is `None`, never a failed load.
+    #[serde(
+        default,
+        deserialize_with = "crate::trial_candidates::lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub cost_acknowledged: Option<bool>,
 }
 
 /// Trial Protocol §8 — the five result classes a Trial is judged in (#583). Persisted (kebab-case).
@@ -2844,7 +2877,10 @@ pub(crate) fn simulate_optimization(rec_id: String) -> Result<SimulatorReport, S
 /// finish (the target didn't take, or the evidence watermark is unreadable) restores the change
 /// through the audited boundary before returning the error, never leaves it applied unrecorded.
 /// The baseline is named by its session id and read from Compy's own session store (#583 lane 2b):
-/// the game and the frame rates come from there, never from the webview.
+/// the game and the frame rates come from there, never from the webview. `risk_choice` is the risk
+/// the user allows on this PC (P8-posture-show), kept on the record for its receipt; absent = not
+/// recorded. `cost_acknowledged` is the user's tap on the line naming the change's cost (P8-ack), a
+/// UI confirm before this command, kept on the record the same way.
 #[tauri::command]
 pub(crate) fn start_experiment(
     rec_id: String,
@@ -2852,12 +2888,17 @@ pub(crate) fn start_experiment(
     baseline_session_id: String,
     hypothesis: String,
     outcome: Option<String>,
+    risk_choice: Option<crate::trial_candidates::RiskChoice>,
+    cost_acknowledged: Option<bool>,
 ) -> Result<ExperimentRecord, String> {
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
     }
     // P4-maxfps-smooth: an outcome this build can't judge is refused before anything happens.
     let outcome = start_outcome(outcome.as_deref())?;
+    // P8-dims: what the catalog states about this change's risk, read before the store lock and kept
+    // on the record. A read only; nothing is refused on it.
+    let stated_risk = crate::trial_candidates::stated_risk_now(&rec_id);
     let _g = lock_store()?;
 
     // Cap the persisted free-text at the trust boundary (see MAX_TEXT_LEN). Truncate, don't reject.
@@ -2990,6 +3031,11 @@ pub(crate) fn start_experiment(
         // P4-maxfps-smooth: a webview that sends no pick asks for the default (`start_outcome`).
         outcome,
         smoothest,
+        stated_risk,
+        // P8-posture-show: the risk the user allowed when this Trial started, as the webview said it.
+        risk_choice,
+        // P8-ack: whether the user confirmed the change's cost before it started, as the webview said it.
+        cost_acknowledged,
     });
     let idx = store.experiments.len() - 1;
     save_store(&store)?;
@@ -3605,6 +3651,9 @@ mod experiment_tests {
             final_state_verified: None,
             outcome: TrialOutcome::Recommended,
             smoothest: None,
+            stated_risk: None,
+            risk_choice: None,
+            cost_acknowledged: None,
         }
     }
 
@@ -6432,6 +6481,104 @@ mod experiment_tests {
             assert_eq!(serde_json::from_value::<TrialOutcome>(v.into()).unwrap(), TrialOutcome::Recommended, "{v}");
         }
         assert_eq!(serde_json::from_value::<TrialOutcome>(serde_json::Value::Null).unwrap(), TrialOutcome::Recommended);
+    }
+
+    // P8-dims (RISK_MODEL §3, TRIAL_PROTOCOL §1 `risk_class`): a start keeps what the catalog stated
+    // about the change's risk on its record, read before the store lock and saved with the Pending
+    // record; an older record without it, or with a value this build can't read, loads as None
+    // ("not recorded"), never as a failed store.
+    #[test]
+    fn a_start_keeps_the_catalogs_stated_risk_and_an_older_record_still_loads() {
+        let src = include_str!("experiment.rs");
+        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let read = start.find("let stated_risk = crate::trial_candidates::stated_risk_now(&rec_id);").expect("start reads it");
+        assert!(read < start.find("lock_store()").unwrap(), "read before the store lock");
+        assert!(start[..start.find("save_store(&store)?").unwrap()].contains("        stated_risk,\n"), "saved with the Pending record");
+
+        use crate::trial_candidates::{DimensionRisk, Risk, RiskDimensions, StatedRisk};
+        let stated = StatedRisk {
+            overall: Risk::Moderate,
+            dimensions: RiskDimensions { security: Some(DimensionRisk::Low), ..RiskDimensions::default() },
+            ..StatedRisk::default()
+        };
+        let r = ExperimentRecord { stated_risk: Some(stated.clone()), ..rec(150.0, 5) };
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["stated_risk"]["overall"], "moderate");
+        assert_eq!(v["stated_risk"]["dimensions"]["security"], "low");
+        assert!(v["stated_risk"]["dimensions"]["reversibility"].is_null(), "not stated stays null");
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(v.clone()).unwrap().stated_risk, Some(stated));
+        // A record that never kept it: no key, and it loads as None.
+        assert!(serde_json::to_value(rec(150.0, 5)).unwrap().get("stated_risk").is_none());
+        let mut old = v.clone();
+        old.as_object_mut().unwrap().remove("stated_risk");
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(old).unwrap().stated_risk, None);
+        // A value a newer Compy wrote that this build can't read: None, and the record still loads.
+        let mut odd = v;
+        odd["stated_risk"] = serde_json::json!("high");
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(odd).unwrap().stated_risk, None);
+    }
+
+    // P8-posture-show (RISK_MODEL §2): the start keeps the risk the user allowed, as the webview said
+    // it, on the Pending record. A record from before, a start that didn't say, or a choice this build
+    // doesn't know loads as None ("not recorded"), never as the default and never as a failed store.
+    #[test]
+    fn a_start_keeps_the_risk_choice_in_force_and_an_older_record_reads_not_recorded() {
+        use crate::trial_candidates::RiskChoice;
+        let src = include_str!("experiment.rs");
+        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let params = &start[..start.find(") -> Result<").unwrap()];
+        assert!(params.contains("risk_choice: Option<crate::trial_candidates::RiskChoice>,"), "{params}");
+        assert!(start[..start.find("save_store(&store)?").unwrap()].contains("        risk_choice,\n"), "saved with the Pending record");
+
+        for (choice, word) in [(RiskChoice::LowOnly, "low-only"), (RiskChoice::LowAndModerate, "low-and-moderate")] {
+            let v = serde_json::to_value(ExperimentRecord { risk_choice: Some(choice), ..rec(150.0, 5) }).unwrap();
+            assert_eq!(v["risk_choice"], word);
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(v).unwrap().risk_choice, Some(choice));
+        }
+        // Not recorded: no key, and an older record loads as None, not as the default choice.
+        let v = serde_json::to_value(rec(150.0, 5)).unwrap();
+        assert!(v.get("risk_choice").is_none());
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(v.clone()).unwrap().risk_choice, None);
+        for odd in [serde_json::json!("aggressive"), serde_json::json!(null), serde_json::json!(3)] {
+            let mut r = v.clone();
+            r["risk_choice"] = odd.clone();
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(r).unwrap().risk_choice, None, "{odd}");
+        }
+    }
+
+    // P8-ack (RISK_MODEL §1 Advanced): the start keeps whether the user confirmed the change's cost
+    // ("I understand, test it", a UI confirm before this command) on the Pending record, beside the
+    // catalog's own cost words it read (`stated_risk.cost`). Older records load as None ("not
+    // recorded"); a value this build can't read is None too, never a failed store.
+    #[test]
+    fn a_start_keeps_the_cost_acknowledgement_and_an_older_record_reads_not_recorded() {
+        let src = include_str!("experiment.rs");
+        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let params = &start[..start.find(") -> Result<").unwrap()];
+        assert!(params.contains("cost_acknowledged: Option<bool>,"), "{params}");
+        let first_save = start.find("save_store(&store)?").unwrap();
+        assert!(start[..first_save].contains("        cost_acknowledged,\n"), "saved with the Pending record");
+        // A UI confirm and a record, nothing more: the start refuses nothing on it.
+        assert_eq!(start[..first_save].matches("cost_acknowledged").count(), 2, "only the parameter and the record field");
+
+        for ack in [true, false] {
+            let v = serde_json::to_value(ExperimentRecord { cost_acknowledged: Some(ack), ..rec(150.0, 5) }).unwrap();
+            assert_eq!(v["cost_acknowledged"], ack);
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(v).unwrap().cost_acknowledged, Some(ack));
+        }
+        let v = serde_json::to_value(rec(150.0, 5)).unwrap();
+        assert!(v.get("cost_acknowledged").is_none());
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(v.clone()).unwrap().cost_acknowledged, None);
+        for odd in [serde_json::json!("yes"), serde_json::json!(null), serde_json::json!(1)] {
+            let mut r = v.clone();
+            r["cost_acknowledged"] = odd.clone();
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(r).unwrap().cost_acknowledged, None, "{odd}");
+        }
+        // The cost words the user saw are the catalog's, kept with the stated risk at the start.
+        let stated = crate::trial_candidates::StatedRisk { cost: Some("Search gets slower.".into()), ..Default::default() };
+        let v = serde_json::to_value(ExperimentRecord { stated_risk: Some(stated.clone()), ..rec(150.0, 5) }).unwrap();
+        assert_eq!(v["stated_risk"]["cost"], "Search gets slower.");
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(v).unwrap().stated_risk, Some(stated));
     }
 
     // ─── P4-smooth-offer-a (ENGINE §2 smoothest: offered once this game's pacing noise is measured) ──
