@@ -18,6 +18,7 @@ export const LEDGER_WRITE_COMMANDS = [
   "restore_leftover",
   "start_experiment",
   "conclude_experiment",
+  "conclude_realplay",
   "restore_experiment",
   "apply_outcome_choice",
   "undo_outcome_choice",

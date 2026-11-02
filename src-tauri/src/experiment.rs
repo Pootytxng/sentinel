@@ -485,6 +485,107 @@ pub(crate) struct ExperimentRecord {
     /// every other outcome and on older records.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub smoothest: Option<SmoothestEvidence>,
+    /// P8-dims (RISK_MODEL §3; TRIAL_PROTOCOL §1 `risk_class`, §11): what the catalog stated about this
+    /// change's risk when the Trial started, its one overall word and each dimension it states, so
+    /// the receipt names the risk the Trial ran under. `None` on records started before it was kept,
+    /// and when the change wasn't in the catalog at the start: the receipt then says "not recorded",
+    /// never a guess. Additive; read leniently, so a value this build can't read is `None` and never
+    /// fails the store's load.
+    #[serde(
+        default,
+        deserialize_with = "crate::trial_candidates::lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub stated_risk: Option<crate::trial_candidates::StatedRisk>,
+    /// P8-posture-show (RISK_MODEL §2): the user's answer to "How far may Compy go on this PC?" in force
+    /// when the Trial started, as the start was told it. `None` on records started before it was kept
+    /// (and on a start that didn't say): the receipt then says "not recorded", never the default.
+    /// Additive; read leniently, so a choice this build doesn't know is `None`, never a failed load.
+    #[serde(
+        default,
+        deserialize_with = "crate::trial_candidates::lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub risk_choice: Option<crate::trial_candidates::RiskChoice>,
+    /// P8-ack (RISK_MODEL §1 Advanced, "explicit user acknowledgement when the cost is not obvious"):
+    /// whether the user tapped "I understand, test it" on the line naming the change's cost before the
+    /// Trial started, as the start was told it. `Some(false)` = no acknowledgement was asked (a low-risk
+    /// change starts as before). `None` on records started before it was kept: "not recorded".
+    /// Additive; read leniently, so a value this build can't read is `None`, never a failed load.
+    #[serde(
+        default,
+        deserialize_with = "crate::trial_candidates::lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub cost_acknowledged: Option<bool>,
+    /// P5-realplay: how this Trial is measured. Not written for a two-session Trial, so its record is
+    /// byte-for-byte what it was; read leniently ([`TrialMode`]).
+    #[serde(default, skip_serializing_if = "TrialMode::is_pair")]
+    pub mode: TrialMode,
+    /// P5-realplay: a real-play Trial's sessions and verdict numbers. `None` on every two-session
+    /// Trial. An older Compy, which ignores this and `mode`, reads the record as the valid pair Trial
+    /// its fallback fields describe and can conclude or restore it: `baseline_session_id` is the newest
+    /// as-is session, `baseline_*_fps` are the as-is sessions' geometric means and `noise_floor_pct`
+    /// is set as for any start; at conclude `treatment` holds the with-change sessions' means, total
+    /// readings, the arms' deltas and the newest session, and `noise_evidence.band_pct` the real-play
+    /// band. Read leniently: evidence this build can't read is `None` (such a record can only be put
+    /// back), never a failed load.
+    #[serde(
+        default,
+        deserialize_with = "crate::trial_candidates::lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub real_play: Option<crate::realplay::RealPlayEvidence>,
+}
+
+/// P5-realplay: how a Trial is measured. Persisted (kebab-case) only when it isn't a pair. Read
+/// leniently: any value but "real-play" (an older or unknown mode) reads as `Pair`, so an unknown
+/// word never fails the store's load, and a record of a mode this build doesn't know is the valid
+/// pair Trial its fallback fields describe.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum TrialMode {
+    /// One as-is session against one session with the change on (the bench and the guided journey).
+    #[default]
+    Pair,
+    /// The change stays on while the player plays however they play, and is judged on several
+    /// sessions a side (`realplay`).
+    RealPlay,
+}
+
+impl TrialMode {
+    fn is_pair(&self) -> bool {
+        *self == TrialMode::Pair
+    }
+}
+
+impl<'de> Deserialize<'de> for TrialMode {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = serde_json::Value::deserialize(d)?;
+        Ok(if v.as_str() == Some("real-play") { TrialMode::RealPlay } else { TrialMode::Pair })
+    }
+}
+
+/// P5-realplay: the way of measuring a start asked for, read at the webview trust boundary: none (or
+/// "pair") is the two-session Trial, "real-play" leaves the change on across real play. Anything else
+/// is refused before anything is recorded or changed, and so is Smoothest in real play: frame pacing
+/// isn't compared across real-play sessions.
+pub(crate) fn start_mode(picked: Option<&str>, outcome: TrialOutcome) -> Result<TrialMode, String> {
+    let mode = match picked {
+        None | Some("pair") => TrialMode::Pair,
+        Some("real-play") => TrialMode::RealPlay,
+        Some(other) => {
+            let other: String = other.chars().take(40).collect();
+            return Err(format!("experiment not started — Compy doesn't know the way of measuring \"{other}\"."));
+        }
+    };
+    if mode == TrialMode::RealPlay && outcome == TrialOutcome::Smoothest {
+        return Err("experiment not started — Smoothest compares frame pacing, which real play doesn't measure \
+                    across sessions yet. Pick Recommended or Maximum FPS for real play, or test Smoothest with \
+                    two sessions."
+            .into());
+    }
+    Ok(mode)
 }
 
 /// Trial Protocol §8 — the five result classes a Trial is judged in (#583). Persisted (kebab-case).
@@ -1441,7 +1542,7 @@ fn session_by_id<'a>(sessions: &'a [SessionSummary], id: &str) -> SessionLookup<
 
 /// A session carries a real frame-rate reading: both the average and the 1% low were measured.
 /// Without a 1% low there is nothing to judge a Trial on.
-fn has_frame_reading(s: &SessionSummary) -> bool {
+pub(crate) fn has_frame_reading(s: &SessionSummary) -> bool {
     s.avg_fps.is_finite() && s.avg_fps > 0.0 && s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0
 }
 
@@ -1459,6 +1560,9 @@ pub(crate) enum SessionEndNotice {
     BeforeAfterSettled,
     /// The 1% low fell below this game's last steady session by more than the noise band.
     Regressed,
+    /// P5-realplay: with this session, a running real-play Trial of this game reached a look that
+    /// gives a result ([`realplay_ready_notice`]).
+    RealPlayReady,
 }
 
 impl SessionEndNotice {
@@ -1468,6 +1572,7 @@ impl SessionEndNotice {
         let game = if game.is_empty() { "your game".to_string() } else { game };
         match self {
             Self::TrialMeasured => format!("Your {game} Trial session is measured. Open Compy for the verdict."),
+            Self::RealPlayReady => format!("Your {game} test has enough sessions for a result. Open Compy to see it."),
             Self::BeforeAfterSettled => format!("Your {game} before/after result is ready in Compy."),
             Self::Regressed => format!(
                 "{game} dipped lower than in your last steady session. The debrief in Compy has the details."
@@ -1496,10 +1601,13 @@ pub(crate) fn session_end_notice(
         return None;
     }
     // Only THE after-session: the first saved session of the game after the change went on. A Trial
-    // stays Running until the user concludes it, so later sessions must stay silent (§15/§33).
+    // stays Running until the user concludes it, so later sessions must stay silent (§15/§33). A
+    // real-play Trial has no single after-session: it stays on across many, and is told only when a
+    // look gives a result (`realplay_ready_notice`).
     let after = |s: &SessionSummary, at: &str| began_after_apply(s, at) == Some(true);
     let trial = trials.iter().any(|t| {
         t.status == ExperimentStatus::Running
+            && t.mode == TrialMode::Pair
             && t.game == session.process_name
             && t.applied_at.as_deref().is_some_and(|at| {
                 after(session, at)
@@ -1565,7 +1673,55 @@ pub(crate) fn session_end_notice_now(
         crate::noise_floor::between_session_noise(&sessions_the_ledger_covers(&others, coverage), session, &ledger_rows(h))
     });
     let band = between.as_ref().map(|b| crate::noise_floor::noise_band_pct(Some(b)));
-    session_end_notice(session, &sessions, &trials, settled, band)
+    // P5-realplay: a real-play Trial of this game is told only when this session makes a look give a
+    // result; the setting is read only when such a Trial runs.
+    let rows = history.as_deref().ok().map(ledger_rows);
+    let live = |rec_id: &str| target_verification(Some(crate::history::probe_rec_target(rec_id)));
+    realplay_ready_notice(session, &sessions, &trials, rows.as_deref(), coverage, live, Utc::now())
+        .or_else(|| session_end_notice(session, &sessions, &trials, settled, band))
+}
+
+/// Whether `coverage`, read for a later session, also covers one begun at `began` (#618): after a
+/// set-aside, only a session begun past its edge is.
+fn coverage_covers(coverage: LedgerCoverage, began: Option<&str>) -> bool {
+    match coverage {
+        LedgerCoverage::Whole => true,
+        LedgerCoverage::SinceSetAside(at) => {
+            crate::history::ledger_coverage(Ok(Some(at)), began) == LedgerCoverage::SinceSetAside(at)
+        }
+        LedgerCoverage::Lost | LedgerCoverage::Unknown => false,
+    }
+}
+
+/// Pure (P5-realplay): does the session that just saved make a running real-play Trial of its game
+/// ready, so the player is told once (Constitution §15: a decision or a state change; §33: never for
+/// engagement)? Only when this session is the last one of the look that decides: a look that keeps
+/// collecting is no decision, and a later session never toasts a look already decided. A stopped
+/// Trial, a session that doesn't count, and a change history that can't back the count (`ledger`
+/// `None`, or `coverage` not reaching the Trial's own as-is sessions) all stay silent. `live` reads
+/// the setting (as [`target_verification`] answers it) and is called only when such a Trial runs.
+pub(crate) fn realplay_ready_notice(
+    session: &SessionSummary,
+    sessions: &[SessionSummary],
+    trials: &[ExperimentRecord],
+    ledger: Option<&[LedgerEntryRef<'_>]>,
+    coverage: LedgerCoverage,
+    live: impl FnOnce(&str) -> Option<bool>,
+    now: DateTime<Utc>,
+) -> Option<SessionEndNotice> {
+    let trial = trials.iter().find(|t| {
+        t.status == ExperimentStatus::Running
+            && t.mode == TrialMode::RealPlay
+            && game_match(&t.game, Some(session.process_name.as_str())) == GameMatch::Match
+    })?;
+    let ledger = ledger.filter(|_| coverage_covers(coverage, trial.baseline_session_id.as_deref()))?;
+    let read = real_play_read(trial, sessions, ledger, live(&trial.rec_id), now).ok()?;
+    if read.arm.stop.is_some() {
+        return None;
+    }
+    let crate::realplay::Judgement::Decided { look, .. } = &read.judgement else { return None };
+    let last = read.arm.counted.get(look.with.checked_sub(1)?)?;
+    (last.started_at == session.started_at).then_some(SessionEndNotice::RealPlayReady)
 }
 
 /// P4-rank: the band the NEXT Trial would be judged against, only when it is measured — the
@@ -1833,13 +1989,7 @@ pub(crate) fn other_compy_change(
         }
     };
     use crate::sessions::ChangeCounts::{Legacy, PerChange};
-    let plus_this_one = match (then, after) {
-        (PerChange { active: a0, cant_confirm: c0 }, PerChange { active: a1, cant_confirm: c1 }) => {
-            (a1 == a0 + 1 && c1 == c0) || (a1 == a0 && c1 == c0 + 1)
-        }
-        (Legacy(n0), Legacy(n1)) => n1 == n0 + 1,
-        _ => false,
-    };
+    let plus_this_one = then.adds_one_change(after);
     let active = |c: crate::sessions::ChangeCounts| {
         let (n, cant) = match c {
             PerChange { active, cant_confirm } => (active, cant_confirm),
@@ -2835,6 +2985,41 @@ pub(crate) fn simulate_optimization(rec_id: String) -> Result<SimulatorReport, S
     Ok(simulate(&ctx))
 }
 
+/// P5-realplay: a real-play start's evidence, the as-is sessions it pins (`realplay::before_arm` on
+/// the unchanged run that ends at `anchor`), or why it can't start, in words that name what to play.
+/// When `anchor` itself can't be pinned, that is the reason given (`realplay::unpinnable_anchor`),
+/// never "0 of them count so far".
+fn real_play_start(
+    sessions: &[SessionSummary],
+    anchor: &SessionSummary,
+    ledger: &[LedgerEntryRef<'_>],
+    now: DateTime<Utc>,
+) -> Result<crate::realplay::RealPlayEvidence, String> {
+    use crate::realplay::{MIN_READINGS, MIN_SESSIONS};
+    let before = crate::realplay::before_arm(sessions, anchor, ledger, now);
+    let game = crate::intelligence::pretty_game_name(&anchor.process_name);
+    if before.is_empty() {
+        if let Some(why) = crate::realplay::unpinnable_anchor(anchor, sessions, now) {
+            return Err(format!(
+                "real play compares the change with the sessions of {game} that end at the one this test starts \
+                 from, and that session can't be one of them: {why}; play {game} again for at least {MIN_READINGS} \
+                 readings (about 10 minutes), then start from that session"
+            ));
+        }
+    }
+    if before.len() < MIN_SESSIONS {
+        return Err(format!(
+            "real play compares the change with at least {MIN_SESSIONS} sessions of {game} played the way your PC is \
+             now, with nothing changed between them, in the last {} days, each at least {MIN_READINGS} readings \
+             (about 10 minutes); {} of them count so far, so play {} more, then start",
+            crate::comparison::ARM_MAX_AGE_DAYS,
+            before.len(),
+            MIN_SESSIONS - before.len()
+        ));
+    }
+    Ok(crate::realplay::RealPlayEvidence { before, ..Default::default() })
+}
+
 /// §4F step 1–4 — capture baseline, snapshot + apply ONE reversible change through the audited
 /// ledger boundary, and record a Running experiment. Refuses while dark, and while another experiment
 /// is starting or running. RECORD FIRST (#583): a `Pending` record naming the change is saved before
@@ -2844,20 +3029,35 @@ pub(crate) fn simulate_optimization(rec_id: String) -> Result<SimulatorReport, S
 /// finish (the target didn't take, or the evidence watermark is unreadable) restores the change
 /// through the audited boundary before returning the error, never leaves it applied unrecorded.
 /// The baseline is named by its session id and read from Compy's own session store (#583 lane 2b):
-/// the game and the frame rates come from there, never from the webview.
+/// the game and the frame rates come from there, never from the webview. `risk_choice` is the risk
+/// the user allows on this PC (P8-posture-show), kept on the record for its receipt; absent = not
+/// recorded. `cost_acknowledged` is the user's tap on the line naming the change's cost (P8-ack), a
+/// UI confirm before this command, kept on the record the same way. `mode` "real-play" (P5-realplay)
+/// leaves the change on while the player plays: the start then pins, from the session store, the
+/// unchanged run of as-is sessions that ends at the baseline session, and refuses before anything is
+/// recorded or changed when fewer than `realplay::MIN_SESSIONS` count; absent is the two-session Trial.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn start_experiment(
     rec_id: String,
     rec_title: String,
     baseline_session_id: String,
     hypothesis: String,
     outcome: Option<String>,
+    risk_choice: Option<crate::trial_candidates::RiskChoice>,
+    cost_acknowledged: Option<bool>,
+    mode: Option<String>,
 ) -> Result<ExperimentRecord, String> {
     if !experiment_gate() {
         return Err("The experiment engine isn't part of this build yet.".into());
     }
     // P4-maxfps-smooth: an outcome this build can't judge is refused before anything happens.
     let outcome = start_outcome(outcome.as_deref())?;
+    // P5-realplay: so is a way of measuring it doesn't know, and Smoothest in real play.
+    let mode = start_mode(mode.as_deref(), outcome)?;
+    // P8-dims: what the catalog states about this change's risk, read before the store lock and kept
+    // on the record. A read only; nothing is refused on it.
+    let stated_risk = crate::trial_candidates::stated_risk_now(&rec_id);
     let _g = lock_store()?;
 
     // Cap the persisted free-text at the trust boundary (see MAX_TEXT_LEN). Truncate, don't reject.
@@ -2931,6 +3131,15 @@ pub(crate) fn start_experiment(
         }
         TrialOutcome::Recommended | TrialOutcome::MaxFps => None,
     };
+    // P5-realplay: the as-is sessions a real-play Trial is judged against, pinned here and never
+    // re-picked, from the sessions the ledger covers and the rows this start loaded: the unchanged run
+    // that ends at this baseline. Too few is refused before anything is recorded or changed.
+    let real_play = match mode {
+        TrialMode::RealPlay => Some(
+            real_play_start(&covered, baseline, rows, Utc::now()).map_err(|why| format!("experiment not started — {why}"))?,
+        ),
+        TrialMode::Pair => None,
+    };
     // §3: other applied settings not confirmed in place would leave the result unjudged at conclude.
     let unverified = unverified_others_live(changes, rows, &rec_id, &crate::history::LiveReads::default());
     if let Some(why) = unverified_start_refusal(unverified) {
@@ -2990,8 +3199,21 @@ pub(crate) fn start_experiment(
         // P4-maxfps-smooth: a webview that sends no pick asks for the default (`start_outcome`).
         outcome,
         smoothest,
+        stated_risk,
+        // P8-posture-show: the risk the user allowed when this Trial started, as the webview said it.
+        risk_choice,
+        // P8-ack: whether the user confirmed the change's cost before it started, as the webview said it.
+        cost_acknowledged,
+        mode,
+        real_play,
     });
     let idx = store.experiments.len() - 1;
+    // P5-realplay: an older Compy reads a real-play record as a pair Trial against the as-is sessions'
+    // geometric means; its baseline session is already the newest of them.
+    let means = store.experiments[idx].real_play.as_ref().and_then(|ev| crate::realplay::geometric_means(&ev.before));
+    if let Some((low1, avg)) = means {
+        (store.experiments[idx].baseline_low1_fps, store.experiments[idx].baseline_avg_fps) = (low1, avg);
+    }
     save_store(&store)?;
 
     // Step 3–4: apply exactly ONE reversible change via the audited boundary. This captures the
@@ -3231,6 +3453,13 @@ pub(crate) fn conclude_experiment(
     if store.experiments[idx].status != ExperimentStatus::Running {
         return Err("experiment is not running — nothing to conclude".into());
     }
+    // P5-realplay: a real-play Trial is judged on several sessions a side (`conclude_realplay`), never
+    // on one after-session; nothing is judged or changed here.
+    if store.experiments[idx].mode == TrialMode::RealPlay {
+        return Err("experiment not concluded — this test runs over several sessions of real play, so Compy \
+                    judges it once enough of them count; to stop it now, put the change back"
+            .into());
+    }
 
     // §4.6: the treatment session and its comparability to the baseline, before anything is judged,
     // recorded or restored. A refusal leaves the Trial Running with the change applied; a reported
@@ -3352,6 +3581,21 @@ pub(crate) fn conclude_experiment(
     store.experiments[idx].verdict_note = Some(outcome.note.clone());
     store.experiments[idx].concluded_at = Some(now.to_rfc3339());
 
+    finish_conclude(&mut store, idx, outcome, target_now)
+}
+
+/// The keep-or-restore tail both concludes share (`conclude_experiment`, `conclude_realplay`), run
+/// under their store gate once the outcome is judged and the target check has had the last word
+/// (`guard_target_at_conclude`). A keep changes nothing, so `target_now`, the read the conclude took
+/// before deciding, is the final state. A restore goes through the audited `rollback_change`, which
+/// resolves from history.json alone, and the setting is read back after it (§4.10). A restore that
+/// doesn't complete is saved loudly as Aborted, never hidden.
+fn finish_conclude(
+    store: &mut ExperimentStore,
+    idx: usize,
+    outcome: ConcludeOutcome,
+    target_now: crate::history::ActiveCheck,
+) -> Result<ExperimentRecord, String> {
     if outcome.keep {
         store.experiments[idx].status = ExperimentStatus::Kept;
         store.experiments[idx].kept = true;
@@ -3386,7 +3630,7 @@ pub(crate) fn conclude_experiment(
                 store.experiments[idx].kept = false;
                 store.experiments[idx].stop_reason =
                     Some(format!("automatic restore did not complete — check it in Test → Applied & history: {e}"));
-                save_store(&store)?;
+                save_store(store)?;
                 return Err(format!(
                     "experiment concluded '{}' but the automatic restore did not complete — Compy \
                      could not confirm the change was rolled back; check it in Test → Applied & \
@@ -3399,11 +3643,11 @@ pub(crate) fn conclude_experiment(
         let rec_id = store.experiments[idx].rec_id.clone();
         let check = crate::history::probe_rec_target(&rec_id);
         if let Some(still) = settle_restore(&mut store.experiments[idx], compy_restored, check) {
-            save_store(&store)?;
+            save_store(store)?;
             return Err(format!("experiment concluded '{}' — {still}", outcome.verdict));
         }
     }
-    save_store(&store)?;
+    save_store(store)?;
     Ok(store.experiments[idx].clone())
 }
 
@@ -3458,6 +3702,372 @@ pub(crate) fn restore_experiment(experiment_id: String) -> Result<ExperimentReco
     }
     save_store(&store)?;
     Ok(store.experiments[idx].clone())
+}
+
+// ─── P5-realplay: a change left on while you play, judged on several sessions a side ──────
+
+/// A running real-play Trial's record as the session classifier reads it, or why it can't be judged
+/// as one, in words (such a record can only be put back).
+fn real_play_trial(rec: &ExperimentRecord) -> Result<crate::realplay::Running<'_>, String> {
+    if rec.mode != TrialMode::RealPlay {
+        return Err("this Trial compares two sessions, so it isn't judged on real play".into());
+    }
+    let Some(evidence) = rec.real_play.as_ref() else {
+        return Err("this test's record of its as-is sessions can't be read, so it can't be judged — put the \
+                    change back"
+            .into());
+    };
+    let Some(applied_at) = rec.applied_at.as_deref() else {
+        return Err("this test didn't record when its change took effect, so no session can be shown to have \
+                    been played after it — put the change back"
+            .into());
+    };
+    Ok(crate::realplay::Running {
+        game: &rec.game,
+        created_at: &rec.created_at,
+        applied_at,
+        applied_change_id: &rec.applied_change_id,
+        before: &evidence.before,
+    })
+}
+
+/// A running real-play Trial read against the session store and the change history now.
+pub(crate) struct RealPlayRead<'s> {
+    pub arm: crate::realplay::WithArm<'s>,
+    pub judgement: crate::realplay::Judgement,
+}
+
+/// Pure (P5-realplay): `rec` read as a running real-play Trial: which with-change sessions count
+/// (`realplay::with_arm`) and where the looks stand (`realplay::judge`, the final look due once the
+/// Trial is stopped). `live` is the setting read now, as [`target_verification`] answers it.
+pub(crate) fn real_play_read<'s>(
+    rec: &ExperimentRecord,
+    sessions: &'s [SessionSummary],
+    ledger: &[LedgerEntryRef<'_>],
+    live: Option<bool>,
+    now: DateTime<Utc>,
+) -> Result<RealPlayRead<'s>, String> {
+    let trial = real_play_trial(rec)?;
+    let arm = crate::realplay::with_arm(&trial, sessions, ledger, live, now);
+    let judgement = crate::realplay::judge(trial.before, &arm.counted_numbers(), rec.outcome, arm.stop.is_some());
+    Ok(RealPlayRead { arm, judgement })
+}
+
+/// Pure (P5-realplay): what concluding `read` records before the conclude's own checks
+/// (`with_unverified_changes`, then `guard_target_at_conclude`), or `None` while Compy is still
+/// collecting. A decided look is its verdict, never above Medium, and never kept once the Trial's own
+/// change was put back in Test → Applied & history ([`put_back_before_conclude`]). A Trial stopped with
+/// fewer than `realplay::MIN_SESSIONS` counted ends unjudged: `confounded` through [`with_compy_state`]
+/// when another Compy change moved, or [`with_comparability`] when a driver, Windows or game build
+/// changed (a change that reads off turns `confounded` at the target check); `insufficient-evidence`
+/// when the window ran out, the setting couldn't be read or the as-is sessions are gone.
+pub(crate) fn real_play_outcome(read: &RealPlayRead<'_>) -> Option<ConcludeOutcome> {
+    use crate::realplay::{Judgement, RealPlayStop as Stop, MIN_SESSIONS, WINDOW_DAYS};
+    if let Judgement::Decided { outcome, look } = &read.judgement {
+        let decided = ConcludeOutcome { confidence: outcome.confidence.min(Confidence::Medium), ..outcome.clone() };
+        return Some(match read.arm.stop {
+            Some(Stop::PutBackInHistory) => put_back_before_conclude(decided, look),
+            _ => decided,
+        });
+    }
+    let stop = read.arm.stop?;
+    let (stop_reason, why) = match stop {
+        Stop::ChangeOff => ("real-play-change-off", "the setting no longer reads as changed".to_string()),
+        Stop::PutBackInHistory => ("real-play-put-back-in-history", "it was put back in Test → Applied & history".into()),
+        Stop::Unreadable => ("target-unreadable-at-conclude", "Compy can't read the setting to confirm it stayed on".into()),
+        Stop::OtherChange => ("other-compy-change-during-trial", "another Compy change was applied or undone".into()),
+        Stop::Conditions => ("conditions-changed-between-sessions", "the PC's conditions changed".into()),
+        Stop::WindowOver => ("real-play-window-over", format!("the {WINDOW_DAYS} days ran out")),
+        Stop::BeforeMissing => (
+            "real-play-before-missing",
+            "the as-is sessions it compares against are no longer in Compy's session history".into(),
+        ),
+    };
+    let counted = read.arm.counted.len();
+    let base = ConcludeOutcome {
+        verdict: "insufficient-evidence".into(),
+        keep: false,
+        // Never persisted: with fewer than three sessions counted no delta is recorded.
+        delta_low1_pct: 0.0,
+        stop_reason: Some(stop_reason.into()),
+        confidence: Confidence::Unknown,
+        note: format!(
+            "Only {counted} of the {MIN_SESSIONS} sessions Compy needs were counted with the change on ({why}), so \
+             Compy restored the change and judged nothing."
+        ),
+    };
+    Some(match stop {
+        Stop::OtherChange => with_compy_state(base, Some("another Compy change was applied or undone during the test".into())),
+        Stop::Conditions => match &read.arm.changed {
+            Some((_, pairing)) => with_comparability(base, pairing),
+            None => base,
+        },
+        _ => base,
+    })
+}
+
+/// A decided look whose own change was put back in Test → Applied & history before the conclude
+/// (rollback integrity, review of 59fc753). The Trial's ledger row is already rolled back, so it owns
+/// nothing to keep, whatever the look measured and whatever the setting reads now (it can read on
+/// again under another row, re-applied after the undo). Keep is false, so the shared restore runs and
+/// meets the ledger's "already rolled back": Restored, or the loud Aborted state when the setting
+/// still reads as changed afterwards (`settle_restore`). The measurement stays in the note, which
+/// never says the change was kept.
+fn put_back_before_conclude(decided: ConcludeOutcome, look: &crate::realplay::Look) -> ConcludeOutcome {
+    ConcludeOutcome {
+        keep: false,
+        stop_reason: Some("real-play-put-back-in-history".into()),
+        note: format!(
+            "Real play: {} sessions with the change on, against {} sessions as the PC was before it: the 1% low {}, \
+             the average frame rate {}, against a ±{}% band. The change was put back in Test → Applied & history \
+             before Compy concluded the test, so Compy kept nothing.",
+            look.with,
+            look.before,
+            signed_pct(look.delta_low1_pct),
+            signed_pct(look.delta_avg_pct),
+            band_pct_text(look.band_pct)
+        ),
+        ..decided
+    }
+}
+
+/// Pure (P5-realplay): what a crash reported during a real-play Trial records before the conclude's
+/// own checks. It always restores, and is pinned on the change only through [`crash_outcome`], on the
+/// newest session of the game after the change took effect against the newest as-is session still
+/// stored. As in the two-session conclude, another Compy change applied or undone during the test, or
+/// a crash session that didn't run with exactly the as-is sessions' changes plus this one, confounds
+/// it ahead of the crash ([`with_compy_state`] on [`other_compy_change`]): then nothing is pinned on
+/// this setting. Returns the pairing it judged by, for the receipt.
+pub(crate) fn real_play_crash(
+    rec: &ExperimentRecord,
+    sessions: &[SessionSummary],
+    ledger: Option<&[LedgerEntryRef<'_>]>,
+) -> Result<(ConcludeOutcome, Option<SessionPairing>), String> {
+    let trial = real_play_trial(rec)?;
+    let reference = crate::realplay::reference_session(trial.before, sessions);
+    let newest = crate::realplay::newest_after(trial.game, trial.applied_at, sessions);
+    let (crash, pairing) = crash_outcome(Some(trial.applied_at), reference, newest);
+    let judged = with_compy_state(crash, other_compy_change(rec, reference, newest, ledger));
+    Ok((judged, pairing.map(|p| SessionPairing::of(&p, reference, newest))))
+}
+
+/// Pure (P5-realplay): what a real-play conclude keeps on `rec` for the receipt once `outcome` is
+/// final: the with-change sessions judged (the deciding look's prefix, or every one counted), the
+/// sessions not counted and why, the deciding look's numbers, the pairing, and the pair fields an
+/// older Compy reads (`treatment`, as the judged sessions' means). After a reported crash no look's
+/// numbers are written, decided or not: the crash is the verdict, and a measured "+12%" beside
+/// "Likely worse" would read as a result it isn't (review of 59fc753).
+pub(crate) fn record_real_play(
+    rec: &mut ExperimentRecord,
+    read: Option<&RealPlayRead<'_>>,
+    outcome: &ConcludeOutcome,
+    crashed: bool,
+    crash_pairing: Option<SessionPairing>,
+    now: DateTime<Utc>,
+) {
+    let decided = read.filter(|_| !crashed).and_then(|r| match &r.judgement {
+        crate::realplay::Judgement::Decided { look, .. } => Some(look.clone()),
+        _ => None,
+    });
+    let judged_on: Vec<&SessionSummary> = match (read, &decided) {
+        (Some(r), Some(look)) => r.arm.counted.iter().copied().take(look.with).collect(),
+        (Some(r), None) => r.arm.counted.clone(),
+        (None, _) => Vec::new(),
+    };
+    let newest_judged = decided.as_ref().and_then(|_| judged_on.last().copied());
+    let reference = read.and_then(|r| r.arm.reference);
+    let pairing = match (crash_pairing, newest_judged, read.and_then(|r| r.arm.changed.as_ref())) {
+        (Some(p), _, _) => Some(p),
+        (None, Some(newest), _) => reference.map(|r| SessionPairing::of(&crate::comparability::derive(r, newest), Some(r), Some(newest))),
+        (None, None, Some((changed, p))) => Some(SessionPairing::of(p, reference, Some(changed))),
+        (None, None, None) => None,
+    };
+    let numbers: Vec<crate::realplay::RealPlaySession> = judged_on.iter().map(|s| crate::realplay::RealPlaySession::of(s)).collect();
+    let means = crate::realplay::geometric_means(&numbers);
+    let game_noise = newest_judged.map_or(crate::noise_floor::NoiseLookup::Unmeasured, crate::noise_floor::lookup_for_session);
+    if let Some(ev) = rec.real_play.as_mut() {
+        ev.not_counted = read.map(|r| crate::realplay::newest_not_counted(&r.arm.not_counted)).unwrap_or_default();
+        ev.stop = read.and_then(|r| r.arm.stop);
+        if let Some(look) = &decided {
+            ev.low1_spread_pct = Some(look.low1_spread_pct);
+            ev.avg_spread_pct = Some(look.avg_spread_pct);
+            ev.band_pct = Some(look.band_pct);
+            ev.delta_low1_pct = Some(look.delta_low1_pct);
+            ev.delta_avg_pct = Some(look.delta_avg_pct);
+            ev.look = Some(look.ordinal);
+        }
+        ev.with = numbers;
+    }
+    // The pair fields an older Compy reads: the with-change sessions' means, total readings and deltas.
+    rec.treatment = match (&decided, means, newest_judged) {
+        (Some(look), Some((low1, avg)), Some(newest)) => Some(TreatmentRecord {
+            avg_fps: avg,
+            low1_fps: low1,
+            samples: judged_on.iter().fold(0u32, |n, s| n.saturating_add(s.samples)),
+            crashed,
+            delta_low1_pct: look.delta_low1_pct,
+            recorded_at: now.to_rfc3339(),
+            session_id: Some(newest.started_at.clone()),
+            check: None,
+            halves: None,
+            delta_avg_pct: Some(look.delta_avg_pct),
+        }),
+        _ => None,
+    };
+    rec.session_pairing = pairing;
+    let band_pct = decided.as_ref().map_or(rec.noise_floor_pct, |look| look.band_pct);
+    rec.noise_evidence = noise_evidence_for(outcome, band_pct, &game_noise, None);
+    rec.verdict = Some(outcome.verdict.clone());
+    rec.trial_result = Some(trial_result_for(&outcome.verdict));
+    rec.verdict_confidence = Some(outcome.confidence);
+    rec.verdict_note = Some(outcome.note.clone());
+    rec.concluded_at = Some(now.to_rfc3339());
+}
+
+/// P5-realplay: where a game's real play stands, for the journey's panel. Before a start, how many
+/// as-is sessions a real-play start would pin now and which one it names; while a real-play Trial of
+/// the game runs, which sessions count, the next look, and why it can't go on when it can't.
+/// Read-only and takes no lock, like `get_experiments`: it reads the experiment and session stores
+/// and the change history, and reads the setting once (`probe_rec_target`), only while such a Trial
+/// runs. Before a start it checks only that no Compy change moved since the newest as-is session
+/// began; the start checks the active-change counts live again. A change history that can't back
+/// the count is refused in words, never read as nothing counted.
+///
+/// Off the main thread (review of 59fc753): a plain command runs on the main thread, and each read
+/// loads three stores and may run the setting's probe (`powercfg`, `sc`), so the window would stall
+/// while it ran. It runs on the blocking pool instead, as `latency_measure_*` do; the invoke is the
+/// same (`{ game }` in, the progress or an error out).
+#[tauri::command]
+pub(crate) async fn get_realplay_progress(game: String) -> Result<crate::realplay::RealPlayProgress, String> {
+    tauri::async_runtime::spawn_blocking(move || read_realplay_progress(&game))
+        .await
+        .map_err(|e| format!("Compy couldn't read where real play stands ({e})"))?
+}
+
+/// The work [`get_realplay_progress`] runs on the blocking pool.
+fn read_realplay_progress(game: &str) -> Result<crate::realplay::RealPlayProgress, String> {
+    if !experiment_gate() {
+        return Err("The experiment engine isn't part of this build yet.".into());
+    }
+    let game: String = game.chars().take(MAX_TEXT_LEN).collect();
+    let sessions = crate::sessions::get_session_summaries();
+    let now = Utc::now();
+    let store = load_store();
+    let running = store.experiments.iter().find(|e| {
+        e.status == ExperimentStatus::Running
+            && e.mode == TrialMode::RealPlay
+            && game_match(&e.game, Some(game.as_str())) == GameMatch::Match
+    });
+    if let Some(rec) = running {
+        let (history, _coverage) = ledger_view_for_one_change_checks(
+            crate::history::load_history,
+            crate::history::ledger_set_aside_through,
+            rec.baseline_session_id.as_deref(),
+        );
+        let history = history?;
+        let rows = ledger_rows(&history);
+        let live = target_verification(Some(crate::history::probe_rec_target(&rec.rec_id)));
+        let read = real_play_read(rec, &sessions, &rows, live, now)?;
+        let trial = real_play_trial(rec)?;
+        return Ok(crate::realplay::progress(&rec.id, &trial, &read.arm, &read.judgement));
+    }
+    let Some(anchor) = crate::realplay::newest_countable(&game, &sessions) else {
+        return Ok(crate::realplay::before_start_progress(&game, &[]));
+    };
+    let (history, coverage) = ledger_view_for_one_change_checks(
+        crate::history::load_history,
+        crate::history::ledger_set_aside_through,
+        Some(anchor.started_at.as_str()),
+    );
+    let history = history?;
+    let rows = ledger_rows(&history);
+    // §3: the as-is run describes this PC now only if no Compy change moved since its newest session began.
+    let before = if compy_change_moved_after(&rows, &anchor.started_at, None) {
+        Vec::new()
+    } else {
+        crate::realplay::before_arm(&sessions_the_ledger_covers(&sessions, coverage), anchor, &rows, now)
+    };
+    Ok(crate::realplay::before_start_progress(&game, &before))
+}
+
+/// P5-realplay: judge a running real-play Trial, then keep or restore its change through the shared
+/// [`finish_conclude`]. Takes the Trial's id and whether the player reported a crash, never a number:
+/// every session is read from Compy's own session store. Holds the store gate across the read, the
+/// judgement and the keep/restore, as `conclude_experiment` does (the declared Experiment -> History
+/// nesting). While Compy is still collecting (no look has decided and nothing stopped the test) it is
+/// refused, with nothing judged or changed, unless a crash was reported: a crash always restores, and
+/// is pinned on the change only as [`real_play_crash`] allows. Otherwise [`real_play_outcome`] is the
+/// result, other settings Compy can't confirm leave it unjudged ([`with_unverified_changes`]), and a
+/// setting that reads off or can't be read is never kept ([`guard_target_at_conclude`]). Real play
+/// never records High confidence. What was measured goes on the record through [`record_real_play`].
+#[tauri::command]
+pub(crate) fn conclude_realplay(experiment_id: String, crashed: bool) -> Result<ExperimentRecord, String> {
+    if !experiment_gate() {
+        return Err("The experiment engine isn't part of this build yet.".into());
+    }
+    let _g = lock_store()?;
+    let mut store = load_store();
+    let idx = store
+        .experiments
+        .iter()
+        .position(|e| e.id == experiment_id)
+        .ok_or_else(|| format!("experiment '{experiment_id}' not found"))?;
+    if store.experiments[idx].status != ExperimentStatus::Running {
+        return Err("experiment is not running — nothing to conclude".into());
+    }
+    let sessions = crate::sessions::get_session_summaries();
+    let now = Utc::now();
+    // #618: bounded by the Trial's own newest as-is session, as for a two-session conclude.
+    let (history, _coverage) = ledger_view_for_one_change_checks(
+        crate::history::load_history,
+        crate::history::ledger_set_aside_through,
+        store.experiments[idx].baseline_session_id.as_deref(),
+    );
+    let rows = history.as_deref().ok().map(ledger_rows);
+    // §7: read before the keep/restore decision so a reverted or unreadable setting overrules a keep.
+    // It is also the newest session's check that the change stayed on.
+    let target_now = crate::history::probe_rec_target(&store.experiments[idx].rec_id);
+    let live = target_verification(Some(target_now));
+    let rec = &store.experiments[idx];
+    real_play_trial(rec).map_err(|why| format!("experiment not concluded — {why}"))?;
+    let read = match rows.as_deref() {
+        Some(rows) => Some(real_play_read(rec, &sessions, rows, live, now).map_err(|why| format!("experiment not concluded — {why}"))?),
+        None => None,
+    };
+    let (judged, crash_pairing) = if crashed {
+        real_play_crash(rec, &sessions, rows.as_deref()).map_err(|why| format!("experiment not concluded — {why}"))?
+    } else {
+        let Some(read) = read.as_ref() else {
+            let why = history.as_ref().err().cloned().unwrap_or_else(|| "Compy can't read its change history".into());
+            return Err(format!(
+                "experiment not concluded — {why}, so Compy can't tell which sessions count; try again, or put the \
+                 change back"
+            ));
+        };
+        let Some(outcome) = real_play_outcome(read) else {
+            return Err(format!(
+                "experiment not concluded — Compy is still collecting: {} sessions with the change on count so far, \
+                 and nothing has stopped the test",
+                read.arm.counted.len()
+            ));
+        };
+        (outcome, None)
+    };
+    // §3: other settings Compy changed that aren't confirmed in place limit what this result can claim.
+    let unverified = match (history.as_deref(), rows.as_deref()) {
+        (Ok(changes), Some(rows)) => {
+            unverified_others_live(changes, rows, &rec.rec_id, &crate::history::LiveReads::default())
+        }
+        _ => 0,
+    };
+    let judged = with_unverified_changes(judged, unverified);
+    let outcome = guard_target_at_conclude(judged, live);
+    let outcome = ConcludeOutcome { confidence: outcome.confidence.min(Confidence::Medium), ..outcome };
+
+    // §11: what was measured, kept on the record for the receipt.
+    record_real_play(&mut store.experiments[idx], read.as_ref(), &outcome, crashed, crash_pairing, now);
+
+    finish_conclude(&mut store, idx, outcome, target_now)
 }
 
 /// Build the simulator's deterministic context from live read-only state. Conservative by design:
@@ -3605,6 +4215,11 @@ mod experiment_tests {
             final_state_verified: None,
             outcome: TrialOutcome::Recommended,
             smoothest: None,
+            stated_risk: None,
+            risk_choice: None,
+            cost_acknowledged: None,
+            mode: TrialMode::Pair,
+            real_play: None,
         }
     }
 
@@ -6434,6 +7049,104 @@ mod experiment_tests {
         assert_eq!(serde_json::from_value::<TrialOutcome>(serde_json::Value::Null).unwrap(), TrialOutcome::Recommended);
     }
 
+    // P8-dims (RISK_MODEL §3, TRIAL_PROTOCOL §1 `risk_class`): a start keeps what the catalog stated
+    // about the change's risk on its record, read before the store lock and saved with the Pending
+    // record; an older record without it, or with a value this build can't read, loads as None
+    // ("not recorded"), never as a failed store.
+    #[test]
+    fn a_start_keeps_the_catalogs_stated_risk_and_an_older_record_still_loads() {
+        let src = include_str!("experiment.rs");
+        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let read = start.find("let stated_risk = crate::trial_candidates::stated_risk_now(&rec_id);").expect("start reads it");
+        assert!(read < start.find("lock_store()").unwrap(), "read before the store lock");
+        assert!(start[..start.find("save_store(&store)?").unwrap()].contains("        stated_risk,\n"), "saved with the Pending record");
+
+        use crate::trial_candidates::{DimensionRisk, Risk, RiskDimensions, StatedRisk};
+        let stated = StatedRisk {
+            overall: Risk::Moderate,
+            dimensions: RiskDimensions { security: Some(DimensionRisk::Low), ..RiskDimensions::default() },
+            ..StatedRisk::default()
+        };
+        let r = ExperimentRecord { stated_risk: Some(stated.clone()), ..rec(150.0, 5) };
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["stated_risk"]["overall"], "moderate");
+        assert_eq!(v["stated_risk"]["dimensions"]["security"], "low");
+        assert!(v["stated_risk"]["dimensions"]["reversibility"].is_null(), "not stated stays null");
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(v.clone()).unwrap().stated_risk, Some(stated));
+        // A record that never kept it: no key, and it loads as None.
+        assert!(serde_json::to_value(rec(150.0, 5)).unwrap().get("stated_risk").is_none());
+        let mut old = v.clone();
+        old.as_object_mut().unwrap().remove("stated_risk");
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(old).unwrap().stated_risk, None);
+        // A value a newer Compy wrote that this build can't read: None, and the record still loads.
+        let mut odd = v;
+        odd["stated_risk"] = serde_json::json!("high");
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(odd).unwrap().stated_risk, None);
+    }
+
+    // P8-posture-show (RISK_MODEL §2): the start keeps the risk the user allowed, as the webview said
+    // it, on the Pending record. A record from before, a start that didn't say, or a choice this build
+    // doesn't know loads as None ("not recorded"), never as the default and never as a failed store.
+    #[test]
+    fn a_start_keeps_the_risk_choice_in_force_and_an_older_record_reads_not_recorded() {
+        use crate::trial_candidates::RiskChoice;
+        let src = include_str!("experiment.rs");
+        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let params = &start[..start.find(") -> Result<").unwrap()];
+        assert!(params.contains("risk_choice: Option<crate::trial_candidates::RiskChoice>,"), "{params}");
+        assert!(start[..start.find("save_store(&store)?").unwrap()].contains("        risk_choice,\n"), "saved with the Pending record");
+
+        for (choice, word) in [(RiskChoice::LowOnly, "low-only"), (RiskChoice::LowAndModerate, "low-and-moderate")] {
+            let v = serde_json::to_value(ExperimentRecord { risk_choice: Some(choice), ..rec(150.0, 5) }).unwrap();
+            assert_eq!(v["risk_choice"], word);
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(v).unwrap().risk_choice, Some(choice));
+        }
+        // Not recorded: no key, and an older record loads as None, not as the default choice.
+        let v = serde_json::to_value(rec(150.0, 5)).unwrap();
+        assert!(v.get("risk_choice").is_none());
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(v.clone()).unwrap().risk_choice, None);
+        for odd in [serde_json::json!("aggressive"), serde_json::json!(null), serde_json::json!(3)] {
+            let mut r = v.clone();
+            r["risk_choice"] = odd.clone();
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(r).unwrap().risk_choice, None, "{odd}");
+        }
+    }
+
+    // P8-ack (RISK_MODEL §1 Advanced): the start keeps whether the user confirmed the change's cost
+    // ("I understand, test it", a UI confirm before this command) on the Pending record, beside the
+    // catalog's own cost words it read (`stated_risk.cost`). Older records load as None ("not
+    // recorded"); a value this build can't read is None too, never a failed store.
+    #[test]
+    fn a_start_keeps_the_cost_acknowledgement_and_an_older_record_reads_not_recorded() {
+        let src = include_str!("experiment.rs");
+        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let params = &start[..start.find(") -> Result<").unwrap()];
+        assert!(params.contains("cost_acknowledged: Option<bool>,"), "{params}");
+        let first_save = start.find("save_store(&store)?").unwrap();
+        assert!(start[..first_save].contains("        cost_acknowledged,\n"), "saved with the Pending record");
+        // A UI confirm and a record, nothing more: the start refuses nothing on it.
+        assert_eq!(start[..first_save].matches("cost_acknowledged").count(), 2, "only the parameter and the record field");
+
+        for ack in [true, false] {
+            let v = serde_json::to_value(ExperimentRecord { cost_acknowledged: Some(ack), ..rec(150.0, 5) }).unwrap();
+            assert_eq!(v["cost_acknowledged"], ack);
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(v).unwrap().cost_acknowledged, Some(ack));
+        }
+        let v = serde_json::to_value(rec(150.0, 5)).unwrap();
+        assert!(v.get("cost_acknowledged").is_none());
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(v.clone()).unwrap().cost_acknowledged, None);
+        for odd in [serde_json::json!("yes"), serde_json::json!(null), serde_json::json!(1)] {
+            let mut r = v.clone();
+            r["cost_acknowledged"] = odd.clone();
+            assert_eq!(serde_json::from_value::<ExperimentRecord>(r).unwrap().cost_acknowledged, None, "{odd}");
+        }
+        // The cost words the user saw are the catalog's, kept with the stated risk at the start.
+        let stated = crate::trial_candidates::StatedRisk { cost: Some("Search gets slower.".into()), ..Default::default() };
+        let v = serde_json::to_value(ExperimentRecord { stated_risk: Some(stated.clone()), ..rec(150.0, 5) }).unwrap();
+        assert_eq!(v["stated_risk"]["cost"], "Search gets slower.");
+        assert_eq!(serde_json::from_value::<ExperimentRecord>(v).unwrap().stated_risk, Some(stated));
+    }
+
     // ─── P4-smooth-offer-a (ENGINE §2 smoothest: offered once this game's pacing noise is measured) ──
 
     fn pacing(spread_pct: f64) -> crate::noise_floor::BetweenSessionNoise {
@@ -6856,5 +7569,497 @@ mod experiment_tests {
         assert_eq!(monitoring.matches("notify_debrief_ready(").count(), 1, "one toast site");
         let lib = include_str!("lib.rs");
         assert!(!lib.contains("debrief is ready in Compy"), "no unconditional 'debrief ready' copy left");
+    }
+
+    // ─── P5-realplay: a change left on while you play, judged on several sessions a side ───
+
+    // A real-play Trial stays on across many sessions, so its first after-session is not "the"
+    // after-session that gets a verdict, and nothing toasts it. Old behaviour: TrialMeasured.
+    #[test]
+    fn a_real_play_trial_is_silent_after_its_first_session() {
+        let mut v = serde_json::to_value(running()).unwrap();
+        v["mode"] = "real-play".into();
+        let real_play: ExperimentRecord = serde_json::from_value(v).unwrap();
+        let after = session("2026-09-01T12:00:00+00:00", 150.0);
+        let sessions = [session(BASE_ID, 150.0), after.clone()];
+        assert_eq!(session_end_notice(&after, &sessions, &[real_play], None, MEASURED), None);
+        // A two-session Trial still toasts its after-session.
+        assert_eq!(session_end_notice(&after, &sessions, &[running()], None, MEASURED), Some(SessionEndNotice::TrialMeasured));
+    }
+
+    const RP_CREATED: &str = "2026-09-03T19:30:00+00:00";
+    const RP_APPLIED: &str = "2026-09-03T19:31:00+00:00";
+
+    /// A 20-minute cs2 session at `at` with `active` Compy changes at its start: 0 as-is, 1 with the change.
+    fn rp_session(at: &str, low1: f64, active: usize) -> SessionSummary {
+        SessionSummary { compy_changes_active: Some(active), duration_secs: 1200, samples: 1200, ..session(at, low1) }
+    }
+
+    fn rp_before_at(lows: [f64; 3]) -> Vec<SessionSummary> {
+        ["2026-09-03T18:00:00+00:00", "2026-09-03T18:30:00+00:00", "2026-09-03T19:00:00+00:00"]
+            .iter()
+            .zip(lows)
+            .map(|(at, low1)| rp_session(at, low1, 0))
+            .collect()
+    }
+
+    fn rp_before() -> Vec<SessionSummary> {
+        rp_before_at([150.0, 152.0, 151.0])
+    }
+
+    fn rp_with(lows: &[f64]) -> Vec<SessionSummary> {
+        lows.iter().enumerate().map(|(i, &low1)| rp_session(&format!("2026-09-04T{:02}:00:00+00:00", 10 + i), low1, 1)).collect()
+    }
+
+    /// A Running real-play cs2 Trial started after `before`, its own change the ledger's `change-1`.
+    fn rp_running_from(before: &[SessionSummary]) -> ExperimentRecord {
+        ExperimentRecord {
+            game: "cs2.exe".into(),
+            created_at: RP_CREATED.into(),
+            applied_at: Some(RP_APPLIED.into()),
+            baseline_session_id: before.last().map(|s| s.started_at.clone()),
+            mode: TrialMode::RealPlay,
+            real_play: Some(crate::realplay::RealPlayEvidence {
+                before: before.iter().map(crate::realplay::RealPlaySession::of).collect(),
+                ..Default::default()
+            }),
+            ..rec(150.0, 5)
+        }
+    }
+
+    fn rp_running() -> ExperimentRecord {
+        rp_running_from(&rp_before())
+    }
+
+    fn rp_ledger() -> Vec<LedgerEntryRef<'static>> {
+        vec![LedgerEntryRef { id: "change-1", rec_id: "test-rec", applied_at: RP_APPLIED, applied: true, rolled_back_at: None }]
+    }
+
+    fn rp_now() -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339("2026-09-05T12:00:00+00:00").unwrap().with_timezone(&Utc)
+    }
+
+    fn rp_store(with: &[f64]) -> Vec<SessionSummary> {
+        rp_before().into_iter().chain(rp_with(with)).collect()
+    }
+
+    #[test]
+    fn a_real_play_record_round_trips_and_loads_in_an_older_shape() {
+        let mut r = rp_running();
+        if let Some(ev) = r.real_play.as_mut() {
+            ev.with = ev.before.clone();
+            (ev.band_pct, ev.delta_low1_pct, ev.delta_avg_pct, ev.look) = (Some(3.0), Some(0.2), Some(-0.1), Some(1));
+            ev.not_counted = vec![crate::realplay::NotCounted {
+                session_id: TREAT_ID.into(),
+                reason: crate::realplay::NotCountedReason::TooShort,
+            }];
+        }
+        (r.baseline_low1_fps, r.baseline_avg_fps) = (151.0, 200.0);
+        r.status = ExperimentStatus::Restored;
+        r.verdict = Some("no-change".into());
+        r.treatment = Some(TreatmentRecord {
+            avg_fps: 200.0,
+            low1_fps: 151.3,
+            samples: 3600,
+            crashed: false,
+            delta_low1_pct: 0.2,
+            recorded_at: TREAT_ID.into(),
+            session_id: Some("2026-09-04T12:00:00+00:00".into()),
+            check: None,
+            halves: None,
+            delta_avg_pct: Some(-0.1),
+        });
+        let v = serde_json::to_value(ExperimentStore { schema_version: STORE_SCHEMA_VERSION, experiments: vec![r.clone()] }).unwrap();
+        let x = &v["experiments"][0];
+        assert_eq!(x["mode"], "real-play");
+        assert_eq!(x["real_play"]["before"][2]["session_id"], "2026-09-03T19:00:00+00:00");
+        assert_eq!(x["real_play"]["not_counted"][0]["reason"], "too-short");
+        let back: ExperimentStore = serde_json::from_value(v.clone()).unwrap();
+        assert_eq!((back.experiments[0].mode, &back.experiments[0].real_play), (TrialMode::RealPlay, &r.real_play));
+
+        // A two-session Trial's record is what it was: neither key is written.
+        let pair = serde_json::to_string(&running()).unwrap();
+        assert!(!pair.contains("\"mode\"") && !pair.contains("real_play"), "{pair}");
+        assert_eq!(serde_json::from_str::<ExperimentRecord>(&pair).unwrap().mode, TrialMode::Pair);
+
+        // The previous Compy's record type (ec49306, before real play), field for field where it had no
+        // default, loads the file as a two-session Trial it can conclude or restore: the newest as-is
+        // session as its baseline, the as-is sessions' means as its numbers, the with-change sessions'
+        // means and deltas as its after-reading.
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct PrevTreatment {
+            avg_fps: f64,
+            low1_fps: f64,
+            samples: u32,
+            crashed: bool,
+            delta_low1_pct: f64,
+            recorded_at: String,
+            #[serde(default)]
+            session_id: Option<String>,
+            #[serde(default)]
+            delta_avg_pct: Option<f64>,
+        }
+        #[derive(Deserialize)]
+        #[allow(dead_code)]
+        struct PrevRecord {
+            id: String,
+            rec_id: String,
+            rec_title: String,
+            game: String,
+            hypothesis: String,
+            created_at: String,
+            status: ExperimentStatus,
+            baseline_avg_fps: f64,
+            baseline_low1_fps: f64,
+            ledger_watermark: usize,
+            applied_change_id: String,
+            noise_floor_pct: f64,
+            #[serde(default)]
+            baseline_session_id: Option<String>,
+            #[serde(default)]
+            applied_at: Option<String>,
+            #[serde(default)]
+            treatment: Option<PrevTreatment>,
+            #[serde(default)]
+            verdict: Option<String>,
+            #[serde(default)]
+            outcome: TrialOutcome,
+        }
+        #[derive(Deserialize)]
+        struct PrevStore {
+            experiments: Vec<PrevRecord>,
+        }
+        let prev: PrevStore = serde_json::from_value(v.clone()).expect("the previous Compy loads the file");
+        let p = &prev.experiments[0];
+        assert_eq!((p.status, p.baseline_session_id.as_deref()), (ExperimentStatus::Restored, Some("2026-09-03T19:00:00+00:00")));
+        assert_eq!((p.baseline_low1_fps, p.applied_change_id.as_str(), p.outcome), (151.0, "change-1", TrialOutcome::Recommended));
+        let t = p.treatment.as_ref().unwrap();
+        assert_eq!((t.low1_fps, t.samples, t.delta_low1_pct, t.session_id.as_deref()), (151.3, 3600, 0.2, Some("2026-09-04T12:00:00+00:00")));
+        // A running real-play record is a running pair Trial to it, which it can conclude or restore.
+        let running_v = serde_json::to_value(rp_running()).unwrap();
+        let p: PrevRecord = serde_json::from_value(running_v.clone()).unwrap();
+        assert_eq!((p.status, p.applied_at.as_deref(), p.treatment.is_none()), (ExperimentStatus::Running, Some(RP_APPLIED), true));
+
+        // Words this build doesn't know: an unknown mode reads as a pair, evidence it can't read as
+        // None (such a record can only be put back), and nothing fails the store's load.
+        let mut odd = running_v;
+        odd["mode"] = "real-play-v2".into();
+        odd["real_play"] = serde_json::json!({ "before": "not a list" });
+        let back: ExperimentRecord = serde_json::from_value(odd).unwrap();
+        assert_eq!((back.mode, &back.real_play), (TrialMode::Pair, &None));
+        for m in [serde_json::Value::Null, serde_json::json!(3), serde_json::json!("pair")] {
+            assert_eq!(serde_json::from_value::<TrialMode>(m.clone()).unwrap(), TrialMode::Pair, "{m}");
+        }
+        assert!(real_play_trial(&back).unwrap_err().contains("compares two sessions"));
+        let lost = ExperimentRecord { mode: TrialMode::RealPlay, real_play: None, ..rp_running() };
+        assert!(real_play_trial(&lost).unwrap_err().contains("put the change back"));
+    }
+
+    #[test]
+    fn a_start_reads_real_play_and_refuses_smoothest_in_it_or_a_mode_it_doesnt_know() {
+        use TrialOutcome::{MaxFps, Recommended, Smoothest};
+        assert_eq!(start_mode(None, Recommended), Ok(TrialMode::Pair));
+        assert_eq!(start_mode(Some("pair"), Smoothest), Ok(TrialMode::Pair));
+        assert_eq!(start_mode(Some("real-play"), MaxFps), Ok(TrialMode::RealPlay));
+        let smooth = start_mode(Some("real-play"), Smoothest).unwrap_err();
+        assert!(smooth.starts_with("experiment not started — Smoothest compares frame pacing"), "{smooth}");
+        let odd = start_mode(Some(&"y".repeat(500)), Recommended).unwrap_err();
+        assert!(odd.starts_with("experiment not started — Compy doesn't know the way of measuring") && odd.len() < 130, "{odd}");
+
+        // In the start: read before the store is touched; the as-is sessions pinned from the rows the
+        // §3 check passed on, and refused before the record-first write; both saved with the Pending record.
+        let src = include_str!("experiment.rs");
+        let start = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let params = &start[..start.find(") -> Result<").unwrap()];
+        assert!(params.contains("mode: Option<String>,"), "{params}");
+        assert!(start.find("let mode = start_mode(mode.as_deref(), outcome)?;").unwrap() < start.find("lock_store()").unwrap());
+        let first_save = start.find("save_store(&store)?").unwrap();
+        let pin = start.find("real_play_start(&covered, baseline, rows, Utc::now())").expect("the start pins its as-is sessions");
+        assert!(pin > start.find("baseline_checked_view(baseline, &history, coverage)").unwrap());
+        assert!(pin < start.find("status: ExperimentStatus::Pending").unwrap() && pin < start.find("apply_recommendation(").unwrap());
+        for field in ["        mode,\n", "        real_play,\n"] {
+            assert!(start[..first_save].contains(field), "{field:?} is saved with the Pending record");
+        }
+        assert!(start.find("crate::realplay::geometric_means(&ev.before)").unwrap() < first_save, "the older-Compy numbers are on the first save");
+
+        // What the start pins, and the refusal that names what to play.
+        let ev = real_play_start(&rp_before(), &rp_before()[2], &rp_ledger(), rp_now()).unwrap();
+        assert_eq!(ev, crate::realplay::RealPlayEvidence { before: rp_running().real_play.unwrap().before, ..Default::default() });
+        let why = real_play_start(&rp_before()[..2], &rp_before()[1], &rp_ledger(), rp_now()).unwrap_err();
+        assert!(why.contains("at least 3 sessions of cs2") && why.contains("2 of them count so far, so play 1 more"), "{why}");
+    }
+
+    #[test]
+    fn a_two_session_conclude_refuses_a_real_play_trial_before_judging_anything() {
+        let src = include_str!("experiment.rs");
+        let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        let refuse = body.find("if store.experiments[idx].mode == TrialMode::RealPlay {").expect("the refusal");
+        assert!(refuse < body.find("resolve_treatment(").unwrap(), "before any session is read");
+        assert!(body[refuse..].starts_with("if store.experiments[idx].mode == TrialMode::RealPlay {\n        return Err("));
+        // The keep/restore tail is the shared one, after the target check.
+        assert!(body.find("let outcome = guard_target_at_conclude(judged,").unwrap() < body.find("finish_conclude(&mut store, idx, outcome, target_now)").unwrap());
+        let unknown = conclude_realplay("nonexistent".into(), false).unwrap_err();
+        assert!(unknown.contains("not found"), "{unknown}");
+    }
+
+    #[test]
+    fn a_real_play_change_reverted_outside_compy_ends_as_confounded_and_restores() {
+        use crate::realplay::{Judgement, RealPlayStop};
+        let rec = rp_running();
+        // Three with-change sessions, then the setting reads off: the newest can't be shown on to its
+        // end, so two count, and closing the test is the next step.
+        let sessions = rp_store(&[151.0, 150.0, 152.0]);
+        let read = real_play_read(&rec, &sessions, &rp_ledger(), Some(false), rp_now()).unwrap();
+        assert_eq!((read.arm.stop, read.arm.counted.len()), (Some(RealPlayStop::ChangeOff), 2));
+        let o = guard_target_at_conclude(real_play_outcome(&read).expect("a stopped Trial can be closed"), Some(false));
+        assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false));
+        assert_eq!(o.stop_reason.as_deref(), Some("target-reverted-during-treatment"));
+        // Four counted before it went off: the looks judge what was counted (here the first decides,
+        // on the first three), and a change that reads off is still never kept.
+        let sessions = rp_store(&[151.0, 150.0, 152.0, 151.0, 150.0]);
+        let read = real_play_read(&rec, &sessions, &rp_ledger(), Some(false), rp_now()).unwrap();
+        let Judgement::Decided { look, .. } = &read.judgement else { panic!("{:?}", read.judgement) };
+        assert_eq!((read.arm.counted.len(), look.with, read.arm.stop), (4, 3, Some(RealPlayStop::ChangeOff)));
+        let judged = real_play_outcome(&read).unwrap();
+        assert_eq!(judged.verdict, "no-change");
+        let o = guard_target_at_conclude(judged, Some(false));
+        assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false));
+        // In the command: the target is read before the guard, and the guard comes before the shared
+        // keep/restore, whose restore reads the setting back.
+        let src = include_str!("experiment.rs");
+        let body = &src[src.find("pub(crate) fn conclude_realplay(").unwrap()..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        let probe = body.find("let target_now = crate::history::probe_rec_target(").unwrap();
+        let guard = body.find("let outcome = guard_target_at_conclude(judged, live);").unwrap();
+        let finish = body.find("finish_conclude(&mut store, idx, outcome, target_now)").unwrap();
+        assert!(probe < guard && guard < finish);
+        let tail = &src[src.find("fn finish_conclude(").unwrap()..];
+        let tail = &tail[..tail.find("\n}\n").unwrap()];
+        assert!(tail.find("crate::history::rollback_change(").unwrap() < tail.find("settle_restore(").unwrap());
+    }
+
+    #[test]
+    fn a_real_play_change_put_back_in_history_reads_already_reverted() {
+        use crate::realplay::RealPlayStop;
+        let rec = rp_running();
+        let sessions = rp_store(&[151.0, 150.0]);
+        let undone = vec![LedgerEntryRef { applied: false, rolled_back_at: Some("2026-09-05T09:00:00+00:00"), ..rp_ledger()[0] }];
+        let read = real_play_read(&rec, &sessions, &undone, Some(false), rp_now()).unwrap();
+        assert_eq!(read.arm.stop, Some(RealPlayStop::PutBackInHistory), "its own row moving is not another change");
+        let o = guard_target_at_conclude(real_play_outcome(&read).unwrap(), Some(false));
+        assert!(!o.keep, "{o:?}");
+        // The restore that follows meets the ledger's own "already rolled back", which records
+        // Restored, the bench's behaviour, never a failed restore.
+        assert!(restore_already_reverted("change has already been rolled back"));
+        let src = include_str!("experiment.rs");
+        let tail = &src[src.find("fn finish_conclude(").unwrap()..];
+        let tail = &tail[..tail.find("\n}\n").unwrap()];
+        let already = &tail[tail.find("Err(e) if restore_already_reverted(&e) => {").unwrap()..];
+        assert!(already.find("ExperimentStatus::Restored").unwrap() < already.find("Err(e) => {").unwrap());
+    }
+
+    #[test]
+    fn a_real_play_trial_stopped_early_ends_unjudged_and_says_why() {
+        use crate::realplay::RealPlayStop;
+        let rec = rp_running();
+        let outcome = |sessions: &[SessionSummary], ledger: &[LedgerEntryRef<'_>], live: Option<bool>, now: DateTime<Utc>| {
+            let read = real_play_read(&rec, sessions, ledger, live, now).unwrap();
+            (read.arm.stop, real_play_outcome(&read).map(|o| guard_target_at_conclude(o, live)))
+        };
+        let two = rp_store(&[151.0, 150.0]);
+        // Still collecting: nothing to record, so the command refuses.
+        assert_eq!(outcome(&two, &rp_ledger(), Some(true), rp_now()), (None, None));
+        // Another Compy change during the test: confounded.
+        let mut moved = rp_ledger();
+        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T10:30:00+00:00", applied: true, rolled_back_at: None });
+        let (stop, o) = outcome(&two, &moved, Some(true), rp_now());
+        let o = o.unwrap();
+        assert_eq!((stop, o.verdict.as_str(), o.stop_reason.as_deref()), (Some(RealPlayStop::OtherChange), "confounded", Some("other-compy-change-during-trial")));
+        // A driver update during the test: confounded, naming it.
+        let mut updated = rp_store(&[151.0, 150.0]);
+        updated[4].hw_fingerprint.as_mut().unwrap().gpu_driver = "25.9.1".into();
+        let (stop, o) = outcome(&updated, &rp_ledger(), Some(true), rp_now());
+        let o = o.unwrap();
+        assert_eq!((stop, o.verdict.as_str()), (Some(RealPlayStop::Conditions), "confounded"));
+        assert_eq!(o.stop_reason.as_deref(), Some("conditions-changed-between-sessions"));
+        assert!(o.note.contains("GPU driver"), "{}", o.note);
+        // The window ran out with two counted: unknown, never a guess.
+        let late = rp_now() + chrono::Duration::days(14);
+        let (stop, o) = outcome(&two, &rp_ledger(), Some(true), late);
+        let o = o.unwrap();
+        assert_eq!((stop, o.verdict.as_str(), o.keep), (Some(RealPlayStop::WindowOver), "insufficient-evidence", false));
+        assert_eq!((o.stop_reason.as_deref(), o.confidence), (Some("real-play-window-over"), Confidence::Unknown));
+        assert!(o.note.starts_with("Only 2 of the 3 sessions Compy needs were counted with the change on (the 14 days ran out)"), "{}", o.note);
+        // Unreadable now: unjudged, and the target check leaves it unjudged.
+        let (stop, o) = outcome(&two, &rp_ledger(), None, rp_now());
+        assert_eq!((stop, o.unwrap().verdict.as_str()), (Some(RealPlayStop::Unreadable), "insufficient-evidence"));
+        // A decided look is the verdict, never above Medium.
+        let three = rp_store(&[168.0, 170.0, 169.0]);
+        let (stop, o) = outcome(&three, &rp_ledger(), Some(true), rp_now());
+        let o = o.unwrap();
+        assert_eq!((stop, o.verdict.as_str(), o.keep, o.confidence), (None, "improved", true, Confidence::Medium));
+    }
+
+    #[test]
+    fn a_real_play_trial_toasts_only_when_a_look_is_due() {
+        let rec = rp_running();
+        let ledger = rp_ledger();
+        let all = rp_store(&[151.0, 150.0, 152.0, 151.0]);
+        let saved = |k: usize| {
+            // The session store as it stood when the k-th with-change session was saved.
+            let sessions = &all[..3 + k];
+            let session = &sessions[sessions.len() - 1];
+            realplay_ready_notice(session, sessions, std::slice::from_ref(&rec), Some(&ledger), LedgerCoverage::Whole, |_| Some(true), rp_now())
+        };
+        assert_eq!((saved(1), saved(2)), (None, None), "no look before three sessions");
+        assert_eq!(saved(3), Some(SessionEndNotice::RealPlayReady), "the first look gives No clear difference at ±3%");
+        assert_eq!(saved(4), None, "already decided: a later session never toasts it again");
+        // A look that keeps collecting is no decision: PBZ-like swings stay silent.
+        let before = rp_before_at([172.0, 132.0, 178.0]);
+        let swings = rp_running_from(&before);
+        let sessions: Vec<SessionSummary> = before.into_iter().chain(rp_with(&[150.0, 181.0, 128.0])).collect();
+        let notice = realplay_ready_notice(&sessions[5], &sessions, &[swings], Some(&ledger), LedgerCoverage::Whole, |_| Some(true), rp_now());
+        assert_eq!(notice, None);
+        // Stopped, no readable history, a history set aside after the as-is sessions began, or a
+        // two-session Trial: silent.
+        let sessions = &all[..6];
+        let at = |trials: &[ExperimentRecord], ledger: Option<&[LedgerEntryRef<'_>]>, coverage: LedgerCoverage, live: Option<bool>| {
+            realplay_ready_notice(&sessions[5], sessions, trials, ledger, coverage, |_| live, rp_now())
+        };
+        assert_eq!(at(std::slice::from_ref(&rec), Some(&ledger), LedgerCoverage::Whole, Some(true)), Some(SessionEndNotice::RealPlayReady));
+        assert_eq!(at(std::slice::from_ref(&rec), Some(&ledger), LedgerCoverage::Whole, Some(false)), None);
+        assert_eq!(at(std::slice::from_ref(&rec), None, LedgerCoverage::Whole, Some(true)), None);
+        let set_aside = DateTime::parse_from_rfc3339("2026-09-04T09:00:00+00:00").unwrap().with_timezone(&Utc);
+        assert_eq!(at(std::slice::from_ref(&rec), Some(&ledger), LedgerCoverage::SinceSetAside(set_aside), Some(true)), None);
+        assert_eq!(at(&[ExperimentRecord { mode: TrialMode::Pair, ..rec.clone() }], Some(&ledger), LedgerCoverage::Whole, Some(true)), None);
+        // The setting is read only when a real-play Trial of this game runs.
+        let mut asked = false;
+        realplay_ready_notice(&sessions[5], sessions, &[running()], Some(&ledger), LedgerCoverage::Whole, |_| {
+            asked = true;
+            Some(true)
+        }, rp_now());
+        assert!(!asked);
+        // The words.
+        let body = SessionEndNotice::RealPlayReady.body("WARDOGS-Win64-Shipping.exe");
+        assert_eq!(body, "Your WARDOGS test has enough sessions for a result. Open Compy to see it.");
+        assert!(!body.contains("1%") && !body.contains(".exe"));
+        // And the live path asks this rule first, then the two-session one.
+        let src = include_str!("experiment.rs");
+        let now = &src[src.find("pub(crate) fn session_end_notice_now(").unwrap()..];
+        let now = &now[..now.find("\n}\n").unwrap()];
+        assert!(now.find("realplay_ready_notice(session,").unwrap() < now.find(".or_else(|| session_end_notice(session,").unwrap());
+    }
+
+    // ─── review of 59fc753 ─────────────────────────────────────────────────────
+
+    // Rollback integrity: once its own row is put back, the Trial owns nothing to keep. A look that
+    // decided "Likely better" before that, with the setting reading on again (re-applied under a new
+    // row, say), used to be Kept while the row it names was already rolled back.
+    #[test]
+    fn a_real_play_change_put_back_in_history_is_never_kept_whatever_was_measured() {
+        use crate::realplay::{Judgement, RealPlayStop};
+        let rec = rp_running();
+        let sessions = rp_store(&[168.0, 170.0, 169.0]);
+        let undone = vec![LedgerEntryRef { applied: false, rolled_back_at: Some("2026-09-05T09:00:00+00:00"), ..rp_ledger()[0] }];
+        let read = real_play_read(&rec, &sessions, &undone, Some(true), rp_now()).unwrap();
+        assert_eq!(read.arm.stop, Some(RealPlayStop::PutBackInHistory));
+        assert!(matches!(read.judgement, Judgement::Decided { .. }), "{:?}", read.judgement);
+        let o = guard_target_at_conclude(real_play_outcome(&read).unwrap(), Some(true));
+        assert!(!o.keep, "its own row is rolled back, so nothing may be kept: {o:?}");
+        assert_eq!(o.stop_reason.as_deref(), Some("real-play-put-back-in-history"));
+        assert!(!o.note.contains("was kept"), "{}", o.note);
+        // The restore that follows meets the ledger's "already rolled back", and a setting that reads
+        // on after it is the loud Aborted state, never a quiet Restored (a start always verifies the
+        // prior state, so its record says so).
+        let mut after = ExperimentRecord { prior_state_verified: true, ..rp_running() };
+        let loud = settle_restore(&mut after, false, crate::history::ActiveCheck::On);
+        assert_eq!(after.status, ExperimentStatus::Aborted);
+        assert!(loud.is_some_and(|m| m.contains("already undone outside Compy")));
+    }
+
+    #[test]
+    fn a_start_from_a_session_that_cant_be_pinned_says_why_not_how_many_count() {
+        // The newest as-is session was played more than 14 days before the start: nothing is pinned,
+        // and the refusal says that instead of "0 of them count so far".
+        let late = rp_now() + chrono::Duration::days(20);
+        let why = real_play_start(&rp_before(), &rp_before()[2], &rp_ledger(), late).unwrap_err();
+        assert!(!why.contains("0 of them count so far"), "{why}");
+        assert!(why.contains("more than 14 days ago"), "{why}");
+    }
+
+    // A crash during a real-play Trial is confounded, ahead of the crash, by another Compy change
+    // moving during the test, exactly as in the two-session conclude; and the receipt never shows a
+    // decided look's "+12%" beside the crash's "Likely worse".
+    #[test]
+    fn a_real_play_crash_during_another_compy_change_is_confounded_and_writes_no_look() {
+        use crate::realplay::{Judgement, RealPlayStop};
+        let rec = rp_running();
+        let sessions = rp_store(&[168.0, 170.0, 169.0]);
+        // Alone, the crash on the newest session after the change is pinned on it.
+        let (alone, pairing) = real_play_crash(&rec, &sessions, Some(&rp_ledger())).unwrap();
+        assert_eq!((alone.verdict.as_str(), alone.keep, alone.stop_reason.as_deref()), ("regressed", false, Some("crash-during-treatment")));
+        assert!(pairing.is_some(), "the crash is judged against the as-is sessions' conditions");
+        // Another Compy change applied during the test: the crash can't be pinned on this setting.
+        let mut moved = rp_ledger();
+        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T10:30:00+00:00", applied: true, rolled_back_at: None });
+        let (o, _) = real_play_crash(&rec, &sessions, Some(&moved)).unwrap();
+        assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("confounded", false, Some("other-compy-change-during-trial")));
+        // So is a crash session that ran with Compy changes other than the as-is ones plus this one.
+        let mut extra = sessions.clone();
+        extra[5].compy_changes_active = Some(2);
+        let (o, _) = real_play_crash(&rec, &extra, Some(&rp_ledger())).unwrap();
+        assert_eq!(o.verdict, "confounded");
+        // Even when another stop is shown first (its own change put back), another change still counts.
+        let mut both = moved.clone();
+        both[0] = LedgerEntryRef { applied: false, rolled_back_at: Some("2026-09-05T09:00:00+00:00"), ..both[0] };
+        assert_eq!(real_play_read(&rec, &sessions, &both, Some(false), rp_now()).unwrap().arm.stop, Some(RealPlayStop::PutBackInHistory));
+        assert_eq!(real_play_crash(&rec, &sessions, Some(&both)).unwrap().0.verdict, "confounded");
+
+        // The record: a decided look's numbers stay off a crash's receipt.
+        let read = real_play_read(&rec, &sessions, &rp_ledger(), Some(true), rp_now()).unwrap();
+        assert!(matches!(read.judgement, Judgement::Decided { .. }), "{:?}", read.judgement);
+        let mut crashed = rp_running();
+        record_real_play(&mut crashed, Some(&read), &alone, true, pairing.clone(), rp_now());
+        let ev = crashed.real_play.as_ref().unwrap();
+        assert_eq!((ev.look, ev.delta_low1_pct, ev.band_pct), (None, None, None), "{ev:?}");
+        assert!(crashed.treatment.is_none());
+        assert_eq!(crashed.verdict.as_deref(), Some("regressed"));
+        // Without a crash the same read writes its deciding look.
+        let judged = real_play_outcome(&read).unwrap();
+        let mut measured = rp_running();
+        record_real_play(&mut measured, Some(&read), &judged, false, None, rp_now());
+        let ev = measured.real_play.as_ref().unwrap();
+        assert_eq!((ev.look, ev.with.len()), (Some(1), 3));
+        assert!(ev.delta_low1_pct.is_some_and(|d| d > 10.0) && measured.treatment.is_some(), "{ev:?}");
+
+        // In the command: the crash goes through that rule, and the record through that writer.
+        let src = include_str!("experiment.rs");
+        let body = &src[src.find("pub(crate) fn conclude_realplay(").unwrap()..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        assert!(body.contains("real_play_crash(rec, &sessions, rows.as_deref())"), "the crash branch goes through the pure crash rule");
+        let write = body.find("record_real_play(&mut store.experiments[idx], read.as_ref(), &outcome, crashed, crash_pairing, now)").unwrap();
+        assert!(body.find("let outcome = guard_target_at_conclude(judged, live);").unwrap() < write);
+        assert!(write < body.find("finish_conclude(&mut store, idx, outcome, target_now)").unwrap());
+        let crash_rule = &src[src.find("pub(crate) fn real_play_crash(").unwrap()..];
+        assert!(crash_rule.contains("with_compy_state(crash, other_compy_change(rec, reference, newest, ledger))"));
+    }
+
+    #[test]
+    fn real_play_progress_runs_off_the_main_thread() {
+        let src = include_str!("experiment.rs");
+        let at = src.find("fn get_realplay_progress(").unwrap();
+        let head = &src[src[..at].rfind("#[tauri::command]").unwrap()..at];
+        assert!(head.contains("async"), "a plain command runs on the main thread: {head:?}");
+        let body = &src[at..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        assert!(body.contains("tauri::async_runtime::spawn_blocking(move || read_realplay_progress(&game))"), "{body}");
+        // The invoke the webview makes is unchanged: `{ game }` in, the progress or an error out.
+        assert!(body.starts_with("fn get_realplay_progress(game: String) -> Result<crate::realplay::RealPlayProgress, String> {"), "{body}");
+        // And the work it hands over is the read it always was: no store lock, no mutation.
+        let work = &src[src.find("fn read_realplay_progress(").unwrap()..];
+        let work = &work[..work.find("\n}\n").unwrap()];
+        assert!(!work.contains("lock_store(") && !work.contains("rollback_change(") && !work.contains("apply_recommendation("), "{work}");
     }
 }

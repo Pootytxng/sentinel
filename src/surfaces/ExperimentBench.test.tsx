@@ -3,7 +3,7 @@
 // build arms the gate the interactive bench renders: a change picker → honest simulator read →
 // start-against-a-real-baseline, a running panel (conclude / restore), and the honest history list.
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, fireEvent, within } from "@testing-library/react";
 import { LEDGER_CHANGED_EVENT } from "../types";
 import i18n from "../i18n";
 
@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
   refuse: {} as Record<string, string>, // a lifecycle command the backend refuses, with its message
   changes: [] as unknown[], // get_applied_changes (the P5-outcomes undo reads it)
   smoothReady: null as unknown, // get_smoothest_readiness; "reject" = the check failed
+  realPlay: null as unknown, // P5-realplay: get_realplay_progress; "reject" = the read failed
 }));
 
 /** Hold the initial ledger reads until the returned function is called.
@@ -137,6 +138,10 @@ vi.mock("@tauri-apps/api/core", () => ({
         return Promise.resolve(state.changes);
       case "get_smoothest_readiness":
         return state.smoothReady === "reject" ? Promise.reject("unreadable") : Promise.resolve(state.smoothReady);
+      case "get_realplay_progress":
+        return state.realPlay === "reject"
+          ? Promise.reject("Compy can't read its change history: the ledger was set aside")
+          : Promise.resolve(state.realPlay);
       case "simulate_optimization":
         if (state.simHang) return new Promise(() => {}); // never resolves
         return state.sim ? Promise.resolve(state.sim) : Promise.reject("no sim");
@@ -152,6 +157,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 import { invoke } from "@tauri-apps/api/core";
 import ExperimentBench from "./ExperimentBench";
+import { resetJourneyForTests } from "./GuidedJourney";
+import { whenText } from "./journey-realplay";
 import { invalidateProbe, putProbe } from "../data/probe-cache";
 
 /** The args of the one call to `cmd` since the last `mockClear`. */
@@ -173,6 +180,10 @@ afterEach(() => {
   state.refuse = {};
   state.changes = [];
   state.smoothReady = null;
+  state.realPlay = null;
+  // A real-play panel tap runs in the journey's module store; nothing of it may reach the next test.
+  resetJourneyForTests();
+  localStorage.removeItem("compy.journey.running");
 });
 
 // bug->guard (CI run 30696118350, 2026-08-01). Picking a value that has NO matching option yet is a
@@ -715,7 +726,96 @@ describe("ExperimentBench (armed)", () => {
       baselineSessionId: VALORANT_SESSION.started_at,
       hypothesis: expect.any(String),
       outcome: "recommended",
+      // P8-posture-show: the risk allowed now, for the record's receipt (the default here).
+      riskChoice: "low-and-moderate",
+      // P8-ack: nothing to confirm for a change the picker didn't rate above low risk.
+      costAcknowledged: false,
     });
+  });
+
+  // P8-ack (RISK_MODEL §1 Advanced, "explicit user acknowledgement when the cost is not obvious"):
+  // before a moderate change's Trial starts, one plain line names its cost in the catalog's own words
+  // and the start is one tap on "I understand, test it", which the start records. A low-risk change
+  // starts as before. Fails on the code before this slice (no line, the usual Start, nothing recorded).
+  describe("P8-ack: a moderate change names its cost and starts from one tap", () => {
+    const setUp = async (cand: Record<string, unknown>) => {
+      state.gate = true;
+      state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null, ...cand }];
+      state.sessions = [VALORANT_SESSION];
+      state.sim = WORTH_TESTING_SIM;
+      render(<ExperimentBench />);
+      await screen.findByTestId("experiment-bench");
+      await pickChange("test-rec");
+    };
+    // The bench's own Start, in its launcher (the journey above it asks the same for its own start).
+    const launcher = () => within(document.querySelector<HTMLElement>(".exp-start")!);
+    const startWith = async (name: RegExp | string) => {
+      await waitFor(() => expect(document.querySelector(".exp-start")).not.toBeNull());
+      const btn = await launcher().findByRole("button", { name });
+      await waitFor(() => expect(btn).toBeEnabled());
+      vi.mocked(invoke).mockClear();
+      fireEvent.click(btn);
+      await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("start_experiment", expect.anything()));
+      return callArgs("start_experiment") as Record<string, unknown>;
+    };
+
+    it("a moderate change: its cost in the catalog's words, then one tap that the start records", async () => {
+      await setUp({ risk: "moderate", cost: "Start menu search becomes slower." });
+      expect(await screen.findByTestId("exp-cost-ack")).toHaveTextContent("Test tweak has a cost: Start menu search becomes slower.");
+      expect(launcher().queryByRole("button", { name: /Start experiment/ })).toBeNull();
+      expect(await startWith("I understand, test it")).toMatchObject({ recId: "test-rec", costAcknowledged: true });
+    });
+
+    it("a change whose risk isn't stated asks the same; with no cost words it says the catalog has none", async () => {
+      await setUp({ risk: "unknown", cost: null });
+      expect(await screen.findByTestId("exp-cost-ack")).toHaveTextContent(
+        "Test tweak isn't rated low risk, and Compy has no note on what it costs.",
+      );
+      expect(await startWith("I understand, test it")).toMatchObject({ costAcknowledged: true });
+    });
+
+    it("a low-risk change starts as before: no line, the usual Start, nothing to confirm", async () => {
+      await setUp({ risk: "low", cost: "Cold boot takes a few seconds longer." });
+      expect(await startWith(/Start experiment/)).toMatchObject({ costAcknowledged: false });
+      expect(screen.queryByTestId("exp-cost-ack")).toBeNull();
+      expect(screen.queryByRole("button", { name: "I understand, test it" })).toBeNull(); // nor in the journey
+    });
+
+    it("the line and the tap are in zh-CN too", async () => {
+      await i18n.changeLanguage("zh-CN");
+      try {
+        await setUp({ risk: "moderate", cost: "Start menu search becomes slower." });
+        expect(await screen.findByTestId("exp-cost-ack")).toHaveTextContent("Test tweak的代价：Start menu search becomes slower.");
+        await waitFor(() => expect(document.querySelector(".exp-start")).not.toBeNull());
+        expect(await launcher().findByRole("button", { name: "我了解，开始测试" })).toBeInTheDocument();
+      } finally {
+        await i18n.changeLanguage("en");
+      }
+    });
+  });
+
+  // P8-posture-show (RISK_MODEL §2): the start carries the answer to "How far may Compy go on this PC?"
+  // in force when it starts, so the Trial's record can name it later. Fails on the code before this
+  // slice, whose start sent no risk choice.
+  it("a start carries the risk the user allows now, so the record can name it", async () => {
+    localStorage.setItem("compy.trial.riskChoice", "low-only");
+    try {
+      state.gate = true;
+      state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
+      state.sessions = [VALORANT_SESSION];
+      state.sim = WORTH_TESTING_SIM;
+      render(<ExperimentBench />);
+      await screen.findByTestId("experiment-bench");
+      await pickChange("test-rec");
+      const start = await screen.findByRole("button", { name: /Start experiment/ });
+      await waitFor(() => expect(start).toBeEnabled());
+      vi.mocked(invoke).mockClear();
+      fireEvent.click(start);
+      await waitFor(() => expect(vi.mocked(invoke)).toHaveBeenCalledWith("start_experiment", expect.anything()));
+      expect(callArgs("start_experiment")).toMatchObject({ recId: "test-rec", riskChoice: "low-only" });
+    } finally {
+      localStorage.removeItem("compy.trial.riskChoice");
+    }
   });
 
   // P6-restore-f1: while the Care view's "Put back how it was" runs, App's busyId is "care-restore"
@@ -1507,13 +1607,24 @@ describe("ExperimentBench — what differed and what wasn't play", () => {
     },
   });
   const CAP_LINE =
-    "Both sessions held at about 320 fps for a minute or more, which may be a frame cap. While a cap holds, a change can't show a gain, so no measurable change here says little about the change itself.";
+    'Both sessions held at about 320 fps (15 min before, 14 min after), which looks like one frame cap. While it holds, a change can\'t show a gain, so this "No measurable change" says little about the change itself.';
 
   it("a No change between two sides held at the same rate says a cap may hide any gain", async () => {
     state.gate = true;
     state.experiments = [capped("no-change", { flat_secs: 900, flat_fps: 319.4 }, { flat_secs: 840, flat_fps: 320.6 })];
     render(<ExperimentBench />);
     await waitFor(() => expect(screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent)).toContain(CAP_LINE));
+  });
+
+  // Desk review 2026-10-31: on the owner's WARDOGS row the cap line sat under the two per-session
+  // "held at about 320 fps" lines it restates, three lines in a row. It now says it once, with the minutes.
+  it("says the shared cap once, in place of the two per-session held lines", async () => {
+    state.gate = true;
+    state.experiments = [capped("no-change", { flat_secs: 900, flat_fps: 319.4 }, { flat_secs: 840, flat_fps: 320.6 })];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent)).toContain(CAP_LINE));
+    const lines = screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent ?? "");
+    expect(lines.filter((l) => /held at about/.test(l))).toEqual([CAP_LINE]);
   });
 
   it.each([
@@ -1526,7 +1637,7 @@ describe("ExperimentBench — what differed and what wasn't play", () => {
     state.experiments = [exp];
     render(<ExperimentBench />);
     await screen.findAllByTestId("exp-stretch-receipt");
-    expect(screen.queryByText(/may be a frame cap\. While a cap holds/)).toBeNull();
+    expect(screen.queryByText(/looks like one frame cap/)).toBeNull();
   });
 
   it("says the cap note in zh-CN", async () => {
@@ -1536,7 +1647,7 @@ describe("ExperimentBench — what differed and what wasn't play", () => {
     render(<ExperimentBench />);
     await waitFor(() =>
       expect(screen.getAllByTestId("exp-stretch-receipt").map((n) => n.textContent)).toContain(
-        "两次会话都有一分钟以上稳定在约 320 fps，这可能是帧率上限。上限生效时，更改无法显示出提升，所以这里没有可测变化也几乎说明不了这项更改本身。",
+        "两次会话都稳定在约 320 fps（之前 15 分钟，之后 15 分钟），看起来是同一个帧率上限。上限生效时，更改无法显示出提升，所以这次的“无可测量的变化”几乎说明不了这项更改本身。",
       ),
     );
   });
@@ -2024,8 +2135,29 @@ describe("P4-exit: what Compy tested on this game", () => {
     // The receipt's per-change row: id, verdict, the stored deltas, the band it was judged on, trials, context.
     const receipt = screen.getByTestId("exp-summary-receipt");
     expect(receipt.querySelector("dt")!.textContent).toBe("visual-effects");
-    // The owner's record stored no average delta: the row shows none, never a made-up one.
-    expect(receipt.querySelector("dd")!.textContent).toBe("regressed · 1% low -18.5% · band ±3% · 1 trial · matching");
+    // The owner's record stored no average delta: the row shows none, never a made-up one. It predates
+    // P8-posture-show, so the risk allowed when it started is "not recorded", never the default.
+    expect(receipt.querySelector("dd")!.textContent).toBe(
+      "regressed · 1% low -18.5% · band ±3% · 1 trial · matching · risk you allowed: not recorded",
+    );
+  });
+
+  // P8-posture-show (RISK_MODEL §2): each tested change's receipt row names the risk the user allowed
+  // when its newest judged Trial started, from that Trial's record. Fails on the code before this slice.
+  it("each tested row's receipt names the risk allowed when its Trial started", async () => {
+    const f = await owner();
+    state.gate = true;
+    state.experiments = f.experiments.map((x: Record<string, unknown>) => ({ ...x, risk_choice: "low-only" }));
+    state.sessions = f.sessions;
+    state.recs = [pass("visual-effects", "Trim Windows visual effects", 1)];
+    render(<ExperimentBench />);
+    const panel = await screen.findByTestId("exp-summary");
+    const door = panel.querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!;
+    fireEvent.click(door);
+    await waitFor(() => expect(door.parentElement!.children.length).toBeGreaterThan(1));
+    expect(screen.getByTestId("exp-summary-receipt").querySelector("dd")!.textContent).toMatch(
+      / · risk you allowed: Low risk only$/,
+    );
   });
 
   it("says it finished the supported tests only when the picker has nothing untested or worth another run", async () => {
@@ -2593,6 +2725,206 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
       expect(await screen.findByTestId("exp-outcome-choice-trade")).toHaveTextContent(
         "推荐不保留此更改：1% 低帧下降 4%。 最高帧率保留它：平均帧率提高 6%。",
       );
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});
+
+// Desk review 2026-10-31 (P8-posture-b): the journey line ("1 of 1 tested. Nothing else here is worth
+// testing on this PC.") sat flush against the new "How far may Compy go on this PC?" field, 0px, while
+// the launcher keeps a 12px rhythm everywhere else. jsdom has no layout, so the rule itself is pinned.
+describe("ExperimentBench spacing under the journey line", () => {
+  it("keeps the launcher's 12px rhythm below the journey line", async () => {
+    const { readFileSync } = await import("fs");
+    const css = readFileSync("src/surfaces/ExperimentBench.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rule = css.match(/\.exp-journey\s*\+\s*\.exp-launch\s*\{([^}]*)\}/);
+    expect(rule, "nothing spaces the launcher from the journey line above it").not.toBeNull();
+    expect(rule![1]).toMatch(/margin-top:\s*12px/);
+  });
+});
+
+// P5-realplay: a real-play Trial leaves its change on for days while the owner plays however he plays.
+// Its panel is derived from the record and get_realplay_progress, so it reads the same after a restart.
+describe("P5-realplay: a running real-play Trial on the bench", () => {
+  const APPLIED = "2026-10-29T10:25:00Z";
+  const UNTIL = "2026-11-12T10:25:00+00:00";
+  const PBZ = "PhantomBladeZero.exe";
+  const numbers = (low1_fps: number, i: number) => ({ session_id: `2026-10-29T0${i}:00:00Z`, low1_fps, avg_fps: 170, samples: 661 });
+  // The owner's 2026-10-29 PBZ sessions: whole sessions 172 / 132 / 178 on the 1% low.
+  const RP_RUNNING = {
+    ...RUNNING_EXPERIMENT,
+    id: "exp:7-0",
+    rec_title: "HAGS",
+    game: PBZ,
+    mode: "real-play",
+    applied_at: APPLIED,
+    baseline_session_id: "2026-10-29T02:00:00Z",
+    real_play: { before: [172, 132, 178].map(numbers) },
+  };
+  const rpProgress = (over: Record<string, unknown> = {}) => ({
+    phase: "collecting",
+    game: PBZ,
+    experiment_id: "exp:7-0",
+    anchor_session_id: null,
+    before: 3,
+    with: 2,
+    need: 3,
+    min_sessions: 3,
+    max_sessions: 8,
+    min_readings: 600,
+    window_days: 14,
+    band_pct: null,
+    applied_at: APPLIED,
+    until: UNTIL,
+    stop: null,
+    not_counted: [],
+    ...over,
+  });
+
+  // ✗ on the code before real play: the running panel offered "conclude with your latest session",
+  // and a journey Trial still running after a relaunch was called interrupted.
+  it("a running real-play Trial says the change is on, how to put it back and N of M, and never shows the interrupted banner", async () => {
+    state.gate = true;
+    state.experiments = [RP_RUNNING];
+    state.realPlay = rpProgress({ not_counted: [{ session_id: "2026-10-30T21:14:00Z", reason: "too-short" }] });
+    // Even a webview that remembers this Trial as a journey's says nothing about an interruption.
+    localStorage.setItem("compy.journey.running", "exp:7-0");
+    render(<ExperimentBench />);
+    // Before the progress read answers, the panel already says the change is on and since when.
+    expect((await screen.findByTestId("realplay-on")).textContent).toMatch(/^HAGS is on \(since /);
+    await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("Keep playing, Compy is still collecting (2 of 3 sessions)."));
+    expect(screen.getByTestId("realplay-on").textContent).toBe(
+      `HAGS is on (since ${whenText(APPLIED, "en")}). It stays on while you play, until Compy has a result: at most 8 sessions, or by ${whenText(UNTIL, "en")}.`,
+    );
+    expect(screen.getByTestId("realplay-put-back-how").textContent).toBe(
+      "To put it back, tap Put it back now: Compy restores the setting exactly as it was before the test. You can also undo it in Test → Applied & history.",
+    );
+    expect(within(screen.getByTestId("realplay-not-counted")).getByText(`${whenText("2026-10-30T21:14:00Z", "en")}: too short to count (about 10 minutes of play needed)`)).toBeTruthy();
+    expect(screen.queryByTestId("exp-interrupted")).toBeNull();
+    expect(screen.queryByTestId("experiment-running")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Conclude/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Measure my next session" })).toBeEnabled();
+    // "Put it back now" is the existing audited restore, announced like every ledger write.
+    const announced = vi.fn();
+    window.addEventListener(LEDGER_CHANGED_EVENT, announced);
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "Put it back now" }));
+      await waitFor(() => expect(callArgs("restore_experiment")).toEqual({ experimentId: "exp:7-0" }));
+      await waitFor(() => expect(announced).toHaveBeenCalled());
+    } finally {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, announced);
+    }
+  });
+
+  // ✗ on the code before real play: two PBZ sessions this far apart were "too noisy", and the change went back.
+  it("PBZ 2026-10-29 in real play: still collecting, never too noisy after two sessions", async () => {
+    state.gate = true;
+    state.experiments = [RP_RUNNING];
+    state.realPlay = rpProgress({ with: 2 });
+    const first = render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("Keep playing, Compy is still collecting (2 of 3 sessions)."));
+    expect(screen.getByTestId("experiment-bench").textContent).not.toMatch(/noisy/i);
+    expect(screen.queryByTestId("realplay-not-yet")).toBeNull();
+    first.unmount();
+    // After the first look (3 sessions with it on) the swings still leave it open: a few more, never a verdict.
+    state.realPlay = rpProgress({ with: 3, need: 5, band_pct: 21.66 });
+    render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("Keep playing, Compy is still collecting (3 of 5 sessions)."));
+    expect(screen.getByTestId("realplay-not-yet").textContent).toBe("Not clear yet: your sessions vary by about ±21.7%, so Compy needs a few more.");
+    expect(screen.getByTestId("experiment-bench").textContent).not.toMatch(/noisy/i);
+    expect(vi.mocked(invoke).mock.calls.filter(([c]) => c === "conclude_realplay" || c === "conclude_experiment")).toEqual([]);
+  });
+
+  it("when the count can't be read, it says so in the backend's words and still offers Put it back now", async () => {
+    state.gate = true;
+    state.experiments = [RP_RUNNING];
+    state.realPlay = "reject";
+    render(<ExperimentBench />);
+    await waitFor(() =>
+      expect(screen.getByTestId("realplay-status").textContent).toBe("Compy can't count this test's sessions right now. HAGS stays on until you put it back."),
+    );
+    expect(screen.getByTestId("realplay-unread").textContent).toBe("Compy can't read its change history: the ledger was set aside");
+    expect(screen.getByRole("button", { name: "Put it back now" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Measure my next session" })).toBeNull();
+  });
+
+  it("says the same in zh-CN", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      state.gate = true;
+      state.experiments = [RP_RUNNING];
+      state.realPlay = rpProgress();
+      render(<ExperimentBench />);
+      await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("继续玩吧，Compy 仍在收集数据（2/3 局）。"));
+      expect(screen.getByTestId("realplay-on").textContent).toMatch(/^HAGS已开启（自 .+ 起）。在 Compy 得出结果之前它会一直保持开启：最多 8 局，最晚到 .+。$/);
+      expect(screen.getByRole("button", { name: "立即恢复原样" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "测量我的下一局" })).toBeTruthy();
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  const RP_KEPT = {
+    ...RP_RUNNING,
+    id: "exp:8-0",
+    game: "Valorant",
+    status: "kept",
+    verdict: "improved",
+    kept: true,
+    concluded_at: "2026-11-01T10:00:00Z",
+    verdict_confidence: "medium",
+    outcome: "recommended",
+    noise_evidence: { band_pct: 3, measured_noise_pct: null, between_sessions: null },
+    treatment: { avg_fps: 241, low1_fps: 202, samples: 3510, crashed: false, delta_low1_pct: 12.1, delta_avg_pct: 0.4, recorded_at: "" },
+    real_play: {
+      before: [172, 132, 178].map(numbers),
+      with: [190, 201, 199].map(numbers),
+      band_pct: 3,
+      delta_low1_pct: 12.1,
+      delta_avg_pct: 0.4,
+      look: 1,
+    },
+  };
+
+  it("a concluded real-play row reads Likely better, with its own band, never Measurably faster", async () => {
+    state.gate = true;
+    state.experiments = [RP_KEPT];
+    render(<ExperimentBench />);
+    const row = (await screen.findByText("Likely better — kept")).closest("li")!;
+    expect(row.textContent).not.toMatch(/Measurably faster/);
+    expect(within(row).getByTestId("exp-compared-receipt").textContent).toBe(
+      "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band. The 1% low rose by more than the band and the average didn't fall by more, so the change was kept.",
+    );
+    expect(screen.getAllByText(wholeLine("Judged against a ±3% band from this test's own sessions: how much your Valorant sessions varied on their own (3 without the change, 3 with it).")).length).toBeGreaterThan(0);
+    // The per-game summary says the real-play face and the Likely word, never Measured.
+    const summary = await screen.findByTestId("exp-summary");
+    expect(summary.textContent).toMatch(/Likely better — kept/);
+    expect(summary.textContent).toMatch(/Likely/);
+    expect(summary.textContent).not.toMatch(/Measurably faster/);
+  });
+
+  it("a real-play row that judged nothing says why in real-play words, never the session-halves sentence", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...RP_KEPT, status: "restored", kept: false, verdict: "too-noisy", stop_reason: "sessions-too-varied", verdict_confidence: "unknown", noise_evidence: null, treatment: null },
+    ];
+    render(<ExperimentBench />);
+    const row = (await screen.findByText("Unknown — restored")).closest("li")!;
+    expect(within(row).getByTestId("exp-too-noisy-why").textContent).toBe(
+      "Your sessions varied too much from one to the next to tell this setting's effect apart, so Compy restored it and judged nothing.",
+    );
+    expect(row.textContent).not.toMatch(/A session this uneven/);
+  });
+
+  it("reads in Chinese too", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      state.gate = true;
+      state.experiments = [RP_KEPT];
+      render(<ExperimentBench />);
+      expect((await screen.findAllByText("较可能更好——已保留")).length).toBeGreaterThan(0);
+      expect(screen.getByTestId("experiment-bench").textContent).not.toMatch(/lab\.experimentBench|\{\{/);
     } finally {
       await i18n.changeLanguage("en");
     }

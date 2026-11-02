@@ -22,7 +22,8 @@ pub(crate) const DEFAULT_NOISE_FLOOR_PCT: f64 = 3.0;
 
 /// Owner-tunable: an armed baseline older than this (days) at finalize is too stale to compare
 /// fairly — drivers/games/Windows move on, so we discard rather than attribute a misleading delta.
-const ARM_MAX_AGE_DAYS: i64 = 14;
+/// Real play reads its as-is sessions by the same age (`realplay`).
+pub(crate) const ARM_MAX_AGE_DAYS: i64 = 14;
 
 /// What an armed baseline is measuring. A `Fix` is a Compy-applied rec (one-shot: resolves on the
 /// next same-game session, then disarms). A `Tuning` baseline is a user change made in a VENDOR tool

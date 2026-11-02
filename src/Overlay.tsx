@@ -14,7 +14,7 @@ import {
 } from "./design/theme";
 import { gradeFps, gradeLow1, gradeColor } from "./data/metric-grade";
 import { gradeGpuTempForVendor } from "./data/gpu-sensor";
-import { asProgress, enoughLine, journeyRecording } from "./surfaces/journey-enough";
+import { asProgress, enoughLine, journeyRecordingMode, type JourneyMode } from "./surfaces/journey-enough";
 import "./Overlay.css";
 
 // Minimal shapes — the overlay only reads a few fields from the same sensor
@@ -89,8 +89,9 @@ export default function Overlay() {
   const [density, setDensity] = useState<OverlayDensity>(readOverlayDensity);
   const [backdrop, setBackdrop] = useState<OverlayBackdrop>(readOverlayBackdrop);
   const [refreshHz, setRefreshHz] = useState<number | null>(readDisplayRefreshHz);
-  // P5-enough: the main window's guided journey is recording (journey-enough.ts flag).
-  const [journey, setJourney] = useState<boolean>(journeyRecording);
+  // P5-enough: the main window's guided journey is recording (journey-enough.ts flag), and which kind
+  // of session (P5-realplay: a real-play session only counts down, never grades its halves).
+  const [journey, setJourney] = useState<JourneyMode | null>(journeyRecordingMode);
 
   // React to the main window flipping the flag / density / backdrop / relaying the monitor
   // refresh — `storage` fires in OTHER windows.
@@ -100,7 +101,7 @@ export default function Overlay() {
       setDensity(readOverlayDensity());
       setBackdrop(readOverlayBackdrop());
       setRefreshHz(readDisplayRefreshHz());
-      setJourney(journeyRecording());
+      setJourney(journeyRecordingMode());
     };
     window.addEventListener("storage", on);
     return () => window.removeEventListener("storage", on);
@@ -144,7 +145,7 @@ export default function Overlay() {
   const progress = journey && fps?.active ? asProgress(fps.progress) : null;
   const enough = progress ? (
     <div className="ovl2-note" data-testid="overlay-enough">
-      {enoughLine(progress, t, "overlay")}
+      {enoughLine(progress, t, "overlay", journey ?? "pair")}
     </div>
   ) : null;
 

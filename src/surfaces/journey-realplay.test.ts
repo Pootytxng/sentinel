@@ -1,0 +1,408 @@
+// P5-realplay: the words for a Trial that leaves one change on while the owner plays however he
+// plays. Every phase of the progress read and every verdict of a concluded record is said here, in
+// en and zh-CN, from the backend's own fields, and no line ever shows a raw key or an unfilled
+// placeholder. Real play never claims High confidence.
+import { describe, it, expect, afterEach } from "vitest";
+import i18n from "../i18n";
+import {
+  asRealPlayProgress,
+  collectingBeforeLine,
+  isRealPlay,
+  notCountedWhy,
+  realPlayConfidence,
+  realPlayCounts,
+  realPlayFace,
+  realPlayNoiseLine,
+  realPlayOffer,
+  realPlayResult,
+  realPlayView,
+  realPlayWhy,
+  whenText,
+  type RealPlayProgress,
+  type RealPlayRecord,
+} from "./journey-realplay";
+
+const t = i18n.t.bind(i18n);
+const APPLIED = "2026-10-20T19:31:00+00:00";
+const UNTIL = "2026-11-03T19:31:00+00:00";
+
+const progress = (over: Partial<RealPlayProgress> = {}): RealPlayProgress => ({
+  phase: "collecting",
+  game: "WardogsClient-Win64-Shipping.exe",
+  experiment_id: "exp:5-1",
+  anchor_session_id: null,
+  before: 3,
+  with: 1,
+  need: 3,
+  min_sessions: 3,
+  max_sessions: 8,
+  min_readings: 600,
+  window_days: 14,
+  band_pct: null,
+  applied_at: APPLIED,
+  until: UNTIL,
+  stop: null,
+  not_counted: [],
+  ...over,
+});
+const RUNNING: RealPlayRecord = {
+  id: "exp:5-1",
+  rec_title: "HAGS",
+  game: "WardogsClient-Win64-Shipping.exe",
+  status: "running",
+  verdict: null,
+  mode: "real-play",
+  applied_at: APPLIED,
+};
+const sessions = (n: number, low = 200) =>
+  Array.from({ length: n }, (_, i) => ({ session_id: `2026-10-2${i}T20:00:00+00:00`, low1_fps: low, avg_fps: 240, samples: 1170 }));
+/** A concluded real-play record: `before`/`with` sessions a side and the record's own numbers. */
+const concluded = (over: Partial<RealPlayRecord>, rp: Record<string, unknown> = {}, before = 3, withN = 3): RealPlayRecord => ({
+  ...RUNNING,
+  status: "restored",
+  verdict: "no-change",
+  ...over,
+  real_play: { before: sessions(before), with: sessions(withN), ...rp },
+});
+
+/** No line ever shows a raw key, an unfilled placeholder or an "undefined". */
+const clean = (line: string | null) => {
+  expect(line).toBeTruthy();
+  expect(line).not.toMatch(/lab\.experimentBench|\{\{|\}\}|undefined|NaN|null/);
+  return line as string;
+};
+
+afterEach(async () => {
+  await i18n.changeLanguage("en");
+});
+
+describe("P5-realplay: what the progress read says", () => {
+  it("offers real play beside the two-session plan: at once with enough as-is sessions, else while collecting them", () => {
+    expect(realPlayOffer(progress({ phase: "ready-to-start", experiment_id: null, before: 3 }), "HAGS", "WardogsClient", t)).toBe(
+      "Or test it while you play normally: HAGS goes on now and stays on while you play WardogsClient however you like, for up to 8 sessions or 14 days. Compy compares those sessions with your last 3 without it.",
+    );
+    expect(realPlayOffer(progress({ phase: "collecting-before", experiment_id: null, before: 2 }), "HAGS", "WardogsClient", t)).toBe(
+      "Or test it while you play normally: Compy first measures 3 sessions of WardogsClient as your PC is now (2 so far), then turns HAGS on and leaves it on while you play however you like.",
+    );
+    // Nothing to offer while a Trial runs, or when the count can't be read.
+    for (const phase of ["collecting", "ready", "stopped"] as const) expect(realPlayOffer(progress({ phase }), "HAGS", "W", t)).toBeNull();
+    expect(realPlayOffer(null, "HAGS", "W", t)).toBeNull();
+  });
+
+  // Rust review fix: sessions recorded before 2026-10-24 never pin, so an upgraded PC starts from zero.
+  it("collecting reads naturally from zero", () => {
+    expect(realPlayOffer(progress({ phase: "collecting-before", experiment_id: null, before: 0 }), "HAGS", "WardogsClient", t)).toBe(
+      "Or test it while you play normally: Compy first measures 3 sessions of WardogsClient as your PC is now (0 so far), then turns HAGS on and leaves it on while you play however you like.",
+    );
+    expect(collectingBeforeLine(progress({ phase: "collecting-before", before: 0 }), "WardogsClient", t)).toBe(
+      "Nothing has been changed yet. Keep playing, Compy is still collecting (0 of 3 sessions of WardogsClient as your PC is now).",
+    );
+  });
+
+  it("after an as-is session, says nothing is on yet and how many count", () => {
+    expect(collectingBeforeLine(progress({ phase: "collecting-before", before: 2 }), "WardogsClient", t)).toBe(
+      "Nothing has been changed yet. Keep playing, Compy is still collecting (2 of 3 sessions of WardogsClient as your PC is now).",
+    );
+  });
+
+  it("collecting: the change is on and since when, how long it may stay on, how to put it back, and N of M", () => {
+    const v = realPlayView(RUNNING, progress(), t, "en");
+    expect(v.changeOn).toBe(
+      `HAGS is on (since ${whenText(APPLIED, "en")}). It stays on while you play, until Compy has a result: at most 8 sessions, or by ${whenText(UNTIL, "en")}.`,
+    );
+    expect(v.status).toBe("Keep playing, Compy is still collecting (1 of 3 sessions).");
+    expect(v.putBackHow).toBe(
+      "To put it back, tap Put it back now: Compy restores the setting exactly as it was before the test. You can also undo it in Test → Applied & history.",
+    );
+    expect([v.notYet, v.closeHow, v.action]).toEqual([null, null, "measure"]);
+    // After a look that left it open: how much the sessions vary, and the next look's count.
+    const later = realPlayView(RUNNING, progress({ with: 3, need: 5, band_pct: 21.66 }), t, "en");
+    expect(later.status).toBe("Keep playing, Compy is still collecting (3 of 5 sessions).");
+    expect(later.notYet).toBe("Not clear yet: your sessions vary by about ±21.7%, so Compy needs a few more.");
+  });
+
+  it("ready: a result is there to see; stopped: why, what closing does, and the close action", () => {
+    expect(realPlayView(RUNNING, progress({ phase: "ready", with: 3 }), t, "en")).toMatchObject({
+      status: "Compy has enough sessions for a result.",
+      action: "see-result",
+      closeHow: null,
+    });
+    const lines: Record<string, string> = {
+      "change-off": "HAGS no longer reads as on, so no new session can count. If it reads as on again, Compy keeps collecting.",
+      "put-back-in-history": "HAGS was put back in Test → Applied & history, so the test can't go on.",
+      unreadable: "Compy can't read HAGS right now, so no new session can count until it can.",
+      "other-change": "Another Compy change was applied or undone during the test, so later sessions can't be compared.",
+      conditions:
+        "Your hardware, graphics driver, Windows build, game build or capture method changed during the test, so later sessions can't be compared.",
+      "window-over": "The 14 days for this test are over.",
+      "before-missing":
+        "The sessions from before the change are no longer in Compy's session history, so there is nothing to compare against.",
+      "a-newer-stop": "This test can't go on as it is.",
+    };
+    for (const [stop, line] of Object.entries(lines)) {
+      const v = realPlayView(RUNNING, progress({ phase: "stopped", stop }), t, "en");
+      expect(v.status, stop).toBe(line);
+      expect(v.action, stop).toBe("close");
+      expect(v.closeHow, stop).toBe(
+        "Closing judges the sessions Compy counted. Unless they show HAGS likely better, Compy then writes the setting back exactly as it was before the test, even if it was changed outside Compy since.",
+      );
+    }
+  });
+
+  it("lists every session not counted, when it was played and why", () => {
+    const reasons = ["too-short", "behind", "before-change", "conditions-changed", "change-not-on", "other-compy-change", "gaming-mode-differs", "after-window", "no-reading", "other", "a-newer-reason"];
+    const at = "2026-10-21T20:15:00+00:00";
+    const v = realPlayView(RUNNING, progress({ not_counted: reasons.map((reason) => ({ session_id: at, reason })) }), t, "en");
+    const when = whenText(at, "en");
+    expect(v.notCounted).toEqual([
+      `${when}: too short to count (about 10 minutes of play needed)`,
+      `${when}: another window was in front the whole time`,
+      `${when}: played before the change went on`,
+      `${when}: its conditions differed from the sessions before the change (display, graphics, driver, Windows or game version), or couldn't be confirmed the same`,
+      `${when}: the change didn't read as on during it`,
+      `${when}: another Compy change was on or moved`,
+      `${when}: Gaming Mode wasn't the same as in the sessions before the change`,
+      `${when}: played after the test's time ran out`,
+      `${when}: no frame-rate reading`,
+      `${when}: a reason this version of Compy doesn't know`,
+      `${when}: a reason this version of Compy doesn't know`,
+    ]);
+    expect(notCountedWhy("too-short", 1200, t)).toBe("too short to count (about 20 minutes of play needed)");
+  });
+
+  it("a read that failed says the count can't be read and offers nothing but putting it back; no answer yet says nothing", () => {
+    const failed = realPlayView(RUNNING, null, t, "en", "Compy can't read its change history");
+    expect(failed).toMatchObject({
+      changeOn: `HAGS is on (since ${whenText(APPLIED, "en")}).`,
+      status: "Compy can't count this test's sessions right now. HAGS stays on until you put it back.",
+      action: null,
+      notCounted: [],
+    });
+    expect(failed.putBackHow).toMatch(/^To put it back, tap Put it back now/);
+    expect(realPlayView(RUNNING, null, t, "en")).toMatchObject({ status: null, action: null });
+    // A read of the game before a start, or of another Trial, is no progress of this one.
+    expect(realPlayView(RUNNING, progress({ phase: "ready-to-start", experiment_id: null }), t, "en").action).toBeNull();
+    expect(realPlayView(RUNNING, progress({ experiment_id: "exp:4-0" }), t, "en").action).toBeNull();
+  });
+});
+
+describe("P5-realplay: what a concluded real-play Trial says", () => {
+  it("Likely better: kept, on the metric its outcome is judged on, with both counts and the band", () => {
+    const won = { status: "kept", verdict: "improved", kept: true };
+    expect(realPlayResult(concluded(won, { band_pct: 3, delta_low1_pct: 12.1, delta_avg_pct: 0.4 }), "WardogsClient", t)).toBe(
+      "Likely better: Compy kept HAGS. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% your sessions vary on their own.",
+    );
+    // Maximum FPS is judged on the average.
+    expect(realPlayResult(concluded({ ...won, outcome: "max-fps" }, { band_pct: 4.2, delta_low1_pct: 1, delta_avg_pct: 8.24 }, 5, 4), "W", t)).toBe(
+      "Likely better: Compy kept HAGS. With it on, your average frame rate was 8.2% higher across 4 sessions than across 5 without it, more than the ±4.2% your sessions vary on their own.",
+    );
+  });
+
+  it("Likely worse: put back, naming the metric that fell", () => {
+    const worse = { verdict: "regressed" };
+    expect(realPlayResult(concluded(worse, { band_pct: 4.1, delta_low1_pct: -9.4, delta_avg_pct: -2 }, 4, 5), "W", t)).toBe(
+      "Likely worse: Compy put HAGS back. With it on, your 1% low (the worst moments) was 9.4% lower across 5 sessions than across 4 without it, more than the ±4.1% your sessions vary on their own.",
+    );
+    // Maximum FPS puts it back when the average OR the 1% low fell beyond the band: the one that did.
+    expect(realPlayResult(concluded({ ...worse, outcome: "max-fps" }, { band_pct: 3, delta_low1_pct: -1, delta_avg_pct: -6 }), "W", t)).toMatch(
+      /your average frame rate was 6% lower/,
+    );
+    expect(realPlayResult(concluded({ ...worse, outcome: "max-fps" }, { band_pct: 3, delta_low1_pct: -7, delta_avg_pct: -1 }), "W", t)).toMatch(
+      /your 1% low \(the worst moments\) was 7% lower/,
+    );
+  });
+
+  it("No clear difference: put back; a 1% low gain beside an average that fell is not called a win", () => {
+    expect(realPlayResult(concluded({}, { band_pct: 4, delta_low1_pct: 1.2, delta_avg_pct: -0.5 }), "W", t)).toBe(
+      "No clear difference: Compy put HAGS back. Across 3 sessions with it on and 3 without, your 1% low (the worst moments) stayed within the ±4% your sessions vary on their own.",
+    );
+    expect(realPlayResult(concluded({ outcome: "max-fps" }, { band_pct: 4, delta_low1_pct: 9, delta_avg_pct: 2 }), "W", t)).toBe(
+      "No clear difference: Compy put HAGS back. Across 3 sessions with it on and 3 without, your average frame rate stayed within the ±4% your sessions vary on their own.",
+    );
+    expect(realPlayResult(concluded({}, { band_pct: 3, delta_low1_pct: 6, delta_avg_pct: -5 }), "W", t)).toBe(
+      "No clear difference: Compy put HAGS back. With it on, your 1% low (the worst moments) was 6% higher but your average frame rate was 5% lower, so it isn't clearly better.",
+    );
+  });
+
+  it("Unknown: sessions too varied (PBZ-style swings), or too few counted before the test stopped, with why", () => {
+    expect(
+      realPlayResult(concluded({ verdict: "too-noisy", stop_reason: "sessions-too-varied" }, { band_pct: 23.44, delta_low1_pct: 2, delta_avg_pct: 1, look: 3 }, 3, 8), "Phantom Blade Zero", t),
+    ).toBe(
+      "Unknown: Compy put HAGS back. Your Phantom Blade Zero sessions varied by about ±23.4%, too much to tell after 8 sessions with it on. Playing the same area each time can give a clearer answer.",
+    );
+    const because: Record<string, string> = {
+      "change-off": "it no longer read as on",
+      // put-back-in-history has its own line (below): it says who put the change back.
+      unreadable: "Compy couldn't read the setting to confirm it stayed on",
+      "other-change": "another Compy change was applied or undone during the test",
+      conditions: "your hardware, graphics driver, Windows build, game build or capture method changed",
+      "window-over": "the test's time ran out",
+      "before-missing": "the sessions from before the change are no longer in Compy's session history",
+    };
+    for (const [stop, why] of Object.entries(because))
+      expect(realPlayResult(concluded({ verdict: "insufficient-evidence" }, { stop }, 3, 2), "W", t), stop).toBe(
+        `Unknown: Compy put HAGS back. Only 2 sessions with it on were counted before the test stopped (${why}), too few to judge.`,
+      );
+    expect(realPlayResult(concluded({ verdict: "confounded" }, { stop: "other-change" }, 3, 1), "W", t)).toBe(
+      "Unknown: Compy put HAGS back. Only 1 session with it on was counted before the test stopped (another Compy change was applied or undone during the test), too few to judge.",
+    );
+  });
+
+  it("Unknown after a look decided but a conclude check overruled it, and the pair's words for anything else", () => {
+    expect(
+      realPlayResult(
+        concluded({ verdict: "insufficient-evidence", stop_reason: "other-change-unverified-at-conclude" }, { band_pct: 3, delta_low1_pct: 12, delta_avg_pct: 1, look: 1 }),
+        "W",
+        t,
+      ),
+    ).toBe("Unknown: Compy put HAGS back. Nothing was judged: another setting Compy changed earlier can't be confirmed as still in place.");
+    expect(realPlayResult(concluded({ verdict: "confounded", stop_reason: "target-reverted-during-treatment" }, { look: 1 }), "W", t)).toBe(
+      "Unknown: Compy put HAGS back. Nothing was judged: it no longer read as on when the test ended.",
+    );
+    expect(realPlayResult(concluded({ verdict: "expired" }, { look: 1 }), "W", t)).toBe(
+      "Unknown: Compy put HAGS back. Nothing was judged: the before-session was too old to compare against.",
+    );
+    // A measured verdict whose numbers the record doesn't hold is never filled in, nor called unjudged.
+    expect(realPlayResult(concluded({ verdict: "no-change" }, { look: 1 }), "W", t)).toBe(
+      "Unknown: Compy put HAGS back. This record doesn't hold the numbers its verdict was judged on.",
+    );
+  });
+
+  // Rust review fix (claude/train-p5-rust-fixes): a change put back in Test → Applied & history keeps
+  // its measured verdict with kept=false. Its line says who put it back and never that it was kept.
+  it("put back in Applied & history: the measured verdict stands, and it is never called kept", () => {
+    const history = { status: "restored", kept: false, stop_reason: "real-play-put-back-in-history" };
+    const numbers = { band_pct: 3, delta_low1_pct: 12.1, delta_avg_pct: 0.4, look: 1, stop: "put-back-in-history" };
+    const better = realPlayResult(concluded({ ...history, verdict: "improved" }, numbers), "W", t);
+    expect(better).toBe(
+      "Likely better: HAGS was put back in Test → Applied & history. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% your sessions vary on their own.",
+    );
+    // Even a record that says "kept" beside that stop reason never reads as kept.
+    expect(realPlayResult(concluded({ ...history, status: "kept", kept: true, verdict: "improved" }, numbers), "W", t)).not.toMatch(/kept/i);
+    expect(realPlayFace({ ...history, status: "kept", verdict: "improved" }, t)).toBe("Likely better — restored");
+    expect(realPlayResult(concluded({ ...history, verdict: "regressed" }, { ...numbers, delta_low1_pct: -9 }), "W", t)).toMatch(
+      /^Likely worse: HAGS was put back in Test → Applied & history\. With it on, your 1% low/,
+    );
+    expect(realPlayResult(concluded({ ...history, verdict: "insufficient-evidence" }, { stop: "put-back-in-history" }, 3, 2), "W", t)).toBe(
+      "Unknown: HAGS was put back in Test → Applied & history after only 2 sessions with it on were counted, too few to judge.",
+    );
+  });
+
+  it("explains the rule it was judged by, and that nothing was judged when nothing was", () => {
+    expect(realPlayWhy(concluded({ verdict: "improved" }), t)).toMatch(/^Real play compares your sessions .* Recommended keeps a change only when it is likely better/);
+    expect(realPlayWhy(concluded({ verdict: "regressed", outcome: "max-fps" }), t)).toMatch(/Maximum FPS keeps a change only when it is likely better: the average higher/);
+    expect(realPlayWhy(concluded({ verdict: "too-noisy" }), t)).toBe(
+      "Real play needs enough sessions on each side that can be compared fairly, so nothing was judged. The line above says what got in the way, and what happened to the change.",
+    );
+  });
+
+  it("history faces: Likely better / Likely worse / No clear difference / Unknown, never a measured-faster face", () => {
+    expect(realPlayFace({ verdict: "improved", status: "kept" }, t)).toBe("Likely better — kept");
+    expect(realPlayFace({ verdict: "improved", kept: true }, t)).toBe("Likely better — kept");
+    expect(realPlayFace({ verdict: "improved", status: "restored" }, t)).toBe("Likely better — restored");
+    expect(realPlayFace({ verdict: "regressed" }, t)).toBe("Likely worse — restored");
+    expect(realPlayFace({ verdict: "no-change" }, t)).toBe("No clear difference — restored");
+    for (const v of ["too-noisy", "insufficient-evidence", "confounded", "not-comparable"]) expect(realPlayFace({ verdict: v }, t), v).toBe("Unknown — restored");
+    expect(realPlayFace({ verdict: null }, t)).toBeNull();
+  });
+
+  it("its band line names this test's own sessions, never older history", () => {
+    expect(realPlayNoiseLine(3, realPlayCounts(concluded({})), "WardogsClient", t)).toBe(
+      "Judged against a ±3% band from this test's own sessions: how much your WardogsClient sessions varied on their own (3 without the change, 3 with it).",
+    );
+    expect(realPlayNoiseLine(null, { before: 3, with: 3 }, "W", t)).toBeNull();
+  });
+
+  it("never shows High confidence", () => {
+    expect(["high", "medium", "low", "unknown", null].map(realPlayConfidence)).toEqual(["medium", "medium", "low", "unknown", null]);
+  });
+});
+
+describe("P5-realplay: reading the backend's answer", () => {
+  it("reads a progress answer, and refuses one it can't read rather than guess a phase", () => {
+    const raw = { ...progress(), stop: "a-newer-stop", not_counted: [{ session_id: "s", reason: "too-short" }, { nope: 1 }] };
+    expect(asRealPlayProgress(raw)).toMatchObject({ phase: "collecting", stop: "a-newer-stop", not_counted: [{ session_id: "s", reason: "too-short" }] });
+    expect(asRealPlayProgress({ ...raw, phase: "a-newer-phase" })).toBeNull();
+    expect(asRealPlayProgress({ ...raw, need: undefined })).toBeNull();
+    expect(asRealPlayProgress(null)).toBeNull();
+    expect(asRealPlayProgress("collecting")).toBeNull();
+  });
+
+  it("knows a real-play record by its mode", () => {
+    expect(isRealPlay({ mode: "real-play" })).toBe(true);
+    expect([isRealPlay({}), isRealPlay({ mode: null }), isRealPlay(null)]).toEqual([false, false, false]);
+  });
+
+  it("names a moment in the reader's language, and nothing for a time it can't read", () => {
+    expect(whenText(APPLIED, "en")).toMatch(/Oct/);
+    expect(whenText(APPLIED, "zh-CN")).toMatch(/10月/);
+    expect([whenText(null, "en"), whenText("not a time", "en")]).toEqual(["", ""]);
+  });
+});
+
+describe("P5-realplay: every line in zh-CN too", () => {
+  it("each phase and verdict line reads in Chinese, with no raw key and no English sentence", async () => {
+    await i18n.changeLanguage("zh-CN");
+    const zh = (line: string | null) => {
+      const s = clean(line);
+      expect(s).toMatch(/[一-鿿]/);
+      expect(s).not.toMatch(/\b(Compy put|Keep playing|is on|Likely|Unknown|sessions)\b/);
+      return s;
+    };
+    const lines = [
+      realPlayOffer(progress({ phase: "ready-to-start", experiment_id: null }), "HAGS", "WardogsClient", t),
+      realPlayOffer(progress({ phase: "collecting-before", experiment_id: null, before: 1 }), "HAGS", "WardogsClient", t),
+      collectingBeforeLine(progress({ phase: "collecting-before", before: 1 }), "WardogsClient", t),
+    ];
+    for (const phase of ["collecting", "ready", "stopped"] as const) {
+      const v = realPlayView(RUNNING, progress({ phase, band_pct: 8, stop: phase === "stopped" ? "window-over" : null, not_counted: [{ session_id: APPLIED, reason: "behind" }] }), t, "zh-CN");
+      lines.push(v.changeOn, v.status, v.putBackHow, ...v.notCounted);
+      if (v.notYet) lines.push(v.notYet);
+      if (v.closeHow) lines.push(v.closeHow);
+    }
+    lines.push(realPlayView(RUNNING, null, t, "zh-CN", "x").status);
+    const verdicts: [Partial<RealPlayRecord>, Record<string, unknown>][] = [
+      [{ status: "kept", verdict: "improved" }, { band_pct: 3, delta_low1_pct: 12.1, delta_avg_pct: 0.4 }],
+      [{ verdict: "regressed" }, { band_pct: 3, delta_low1_pct: -9, delta_avg_pct: 0 }],
+      [{ verdict: "no-change" }, { band_pct: 4, delta_low1_pct: 1, delta_avg_pct: 0 }],
+      [{ verdict: "no-change" }, { band_pct: 3, delta_low1_pct: 6, delta_avg_pct: -5 }],
+      [{ verdict: "too-noisy" }, { band_pct: 23, delta_low1_pct: 1, delta_avg_pct: 1, look: 3 }],
+      [{ verdict: "insufficient-evidence" }, { stop: "window-over" }],
+      [{ verdict: "insufficient-evidence", stop_reason: "other-change-unverified-at-conclude" }, { look: 1 }],
+      [{ verdict: "insufficient-evidence", stop_reason: "real-play-put-back-in-history" }, { stop: "put-back-in-history" }],
+      [{ verdict: "no-change" }, { look: 1 }],
+    ];
+    for (const [over, rp] of verdicts) {
+      lines.push(realPlayResult(concluded(over, rp), "WardogsClient", t), realPlayWhy(concluded(over, rp), t), realPlayFace(concluded(over, rp), t));
+    }
+    lines.push(realPlayNoiseLine(3, { before: 3, with: 3 }, "WardogsClient", t));
+    for (const line of lines) zh(line);
+    // The lines the owner reads most, pinned.
+    expect(realPlayView(RUNNING, progress(), t, "zh-CN").status).toBe("继续玩吧，Compy 仍在收集数据（1/3 局）。");
+    expect(realPlayView(RUNNING, progress({ with: 3, need: 5, band_pct: 21.7 }), t, "zh-CN").notYet).toBe(
+      "暂时还看不出来：你的各局之间大约有 ±21.7% 的波动，所以 Compy 还需要几局。",
+    );
+    expect(realPlayView(RUNNING, progress(), t, "zh-CN").changeOn).toBe(
+      `HAGS已开启（自 ${whenText(APPLIED, "zh-CN")} 起）。在 Compy 得出结果之前它会一直保持开启：最多 8 局，最晚到 ${whenText(UNTIL, "zh-CN")}。`,
+    );
+    expect(realPlayResult(concluded({ status: "kept", verdict: "improved" }, { band_pct: 3, delta_low1_pct: 12.1, delta_avg_pct: 0.4 }), "W", t)).toBe(
+      "较可能更好：已保留HAGS。开启后的 3 局与未开启的 3 局相比，1% 最低帧（最卡的时刻）高了 12.1%，超出了你各局之间 ±3% 的正常波动。",
+    );
+    expect(realPlayFace({ verdict: "improved", status: "kept" }, t)).toBe("较可能更好——已保留");
+    expect(realPlayOffer(progress({ phase: "collecting-before", experiment_id: null, before: 0 }), "HAGS", "WardogsClient", t)).toBe(
+      "也可以边正常玩边测试：Compy 会先测量 3 局保持现状的WardogsClient（目前已测 0 局），然后开启HAGS，并在你随意玩的期间一直保持开启。",
+    );
+    expect(
+      realPlayResult(concluded({ status: "restored", kept: false, verdict: "improved", stop_reason: "real-play-put-back-in-history" }, { band_pct: 3, delta_low1_pct: 12.1, delta_avg_pct: 0.4, look: 1 }), "W", t),
+    ).toBe("较可能更好：HAGS已在“测试 → 已应用与历史”中被撤销。开启后的 3 局与未开启的 3 局相比，1% 最低帧（最卡的时刻）高了 12.1%，超出了你各局之间 ±3% 的正常波动。");
+    expect(notCountedWhy("no-reading", 600, t)).toBe("没有帧率读数");
+    expect(realPlayResult(concluded({ verdict: "insufficient-evidence" }, { stop: "window-over" }, 3, 1), "W", t)).toBe(
+      "未知：已把HAGS恢复原样。测试停止前，开启后只统计到 1 局（测试时间已经结束），太少，无法判断。",
+    );
+  });
+
+  it("every English line is clean too", () => {
+    const v = realPlayView(RUNNING, progress({ phase: "stopped", stop: "conditions", not_counted: [{ session_id: APPLIED, reason: "too-short" }] }), t, "en");
+    for (const line of [v.changeOn, v.status, v.putBackHow, v.closeHow, ...v.notCounted]) clean(line);
+  });
+});

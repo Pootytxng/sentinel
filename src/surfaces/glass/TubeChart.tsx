@@ -63,7 +63,9 @@ export function TubeChart({
   const bw = Math.max(9, Math.min(22, slot * 0.44));
   const known = bars.map((b) => b.value).filter((v): v is number => v != null && Number.isFinite(v));
   // Axis steps a person can read (0 · 50 · 100 · 150), never quarters of an odd ceiling (0 · 38 · 75).
-  const step = niceStep(((known.length ? Math.max(...known) : 1) * 1.12) / 4);
+  // At least 1 fps per step: the axis prints whole numbers, and a near-zero range used to round
+  // 0 · 0.5 · 1 · 1.5 into "0 1 1 2" (round-2 review, 2026-10-31).
+  const step = Math.max(1, niceStep(((known.length ? Math.max(...known) : 1) * 1.12) / 4));
   const max = Math.max(step, Math.ceil(((known.length ? Math.max(...known) : 1) * 1.12) / step) * step);
   const ticks = Array.from({ length: Math.round(max / step) + 1 }, (_, i) => i * step);
   const Y = (v: number) => yB - (v / max) * (yB - yT);

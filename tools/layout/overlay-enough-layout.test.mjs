@@ -16,6 +16,8 @@
 // RED on 58d57931: the cap states still read "hasn't settled yet" (no cap), so invariant 1 fails for
 // them, and at full density in English that settling line ran the pill to 152.7px, past the window's
 // 150px bottom edge (invariant 2). The overlay now has its own two-line wording for both.
+// P5-realplay: a real-play session's lines too (the countdown, then "long enough to count", never a
+// halves state), with the recording flag set to "real-play" for those states.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,14 +34,18 @@ const H = win.height;
 const DENSITIES = ["minimal", "standard", "full"];
 const BACKDROPS = ["on", "off"];
 const LOCALES = ["en", "zh-CN"];
-/** Every line the journey can show: [name, samples, first-half fps, second-half fps, traced]. */
+/** Every line the journey can show: [name, samples, first-half fps, second-half fps, traced, session
+ *  kind]. A real-play session counts down, then says it is long enough, whatever its halves do. */
 const STATES = [
-  ["moreSecs", 510, 240, 240, true],
-  ["moreMin", 0, 240, 240, true],
-  ["settling", 900, 240, 250, true],
-  ["enough", 900, 240, 245, true],
-  ["unsettled", 1200, 240, 250, true],
-  ["untraced", 1200, 240, 240, false],
+  ["moreSecs", 510, 240, 240, true, "pair"],
+  ["moreMin", 0, 240, 240, true, "pair"],
+  ["settling", 900, 240, 250, true, "pair"],
+  ["enough", 900, 240, 245, true, "pair"],
+  ["unsettled", 1200, 240, 250, true, "pair"],
+  ["untraced", 1200, 240, 240, false, "pair"],
+  ["realPlayMoreSecs", 510, 240, 240, true, "real-play"],
+  ["realPlayMoreMin", 0, 240, 240, true, "real-play"],
+  ["realPlayCounts", 1200, 240, 250, true, "real-play"],
 ];
 const EXPECTED_KEY = {
   moreSecs: ["lab.experimentBench.journey.enoughMore", { secs: 90 }],
@@ -48,6 +54,9 @@ const EXPECTED_KEY = {
   enough: ["lab.experimentBench.journey.enough", {}],
   unsettled: ["lab.experimentBench.journey.enoughUnsettledShort", {}],
   untraced: ["lab.experimentBench.journey.enoughUntracedShort", {}],
+  realPlayMoreSecs: ["lab.experimentBench.journey.realPlay.enoughMore", { secs: 90 }],
+  realPlayMoreMin: ["lab.experimentBench.journey.realPlay.enoughMoreMin", { min: 10 }],
+  realPlayCounts: ["lab.experimentBench.journey.realPlay.enoughCountsShort", {}],
 };
 const TOLERANCE_PX = 0.5;
 
@@ -168,6 +177,9 @@ window.__measure = async (lang, densities, backdrops) => {
       for (const st of STATES) {
         const [key, opts] = EXPECTED_KEY[st[0]];
         const expected = i18n.t(key, opts);
+        // The main window's flag says which kind of session records; the overlay reads it on "storage".
+        localStorage.setItem(JOURNEY_RECORDING_KEY, st[5] === "real-play" ? "real-play" : "1");
+        window.dispatchEvent(new StorageEvent("storage"));
         window.__fps = fpsFor(st);
         await waitFor(() => document.querySelector('[data-testid="overlay-enough"]')?.textContent === expected
           && document.querySelector(".ovl2-" + density), st[0] + " " + density + " (saw: " + document.querySelector('[data-testid="overlay-enough"]')?.textContent + ")").catch((e) => {

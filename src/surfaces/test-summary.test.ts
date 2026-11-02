@@ -56,6 +56,17 @@ describe("P4-exit summary on the owner's WARDOGS records", () => {
     expect(s.staysApplied).toEqual([]);
   });
 
+  // P8-posture-show (RISK_MODEL §2): each row carries the risk the user allowed when its newest judged
+  // Trial started, from that Trial's record; the owner's records predate it, so it is not recorded
+  // (null), never the default. Fails on the code before this slice (no such field).
+  it("each row names the risk allowed when its newest Trial started; an older record has none", () => {
+    expect(summarizeGame(GAME, experiments, [VFX], sessions)!.tested[0].riskChoice).toBeNull();
+    for (const [stored, want] of [["low-only", "low-only"], ["low-and-moderate", "low-and-moderate"], ["anything-goes", null], [null, null]] as const) {
+      const xs = experiments.map((x) => ({ ...x, risk_choice: stored }));
+      expect(summarizeGame(GAME, xs, [VFX], sessions)!.tested[0].riskChoice, String(stored)).toBe(want);
+    }
+  });
+
   it("says which noise band judged it: Compy's 3% minimum, not measured for this game", () => {
     const s = summarizeGame(GAME, experiments, [VFX], sessions)!;
     expect(s.tested[0].noise).toEqual({ band_pct: 3.0, measured_noise_pct: null });
@@ -246,6 +257,7 @@ describe("P5-learned lesson rules", () => {
     deltaLow1Pct: 0,
     deltaAvgPct: 0,
     at: "2026-10-25T10:00:00Z",
+    riskChoice: null,
     ...over,
   });
   const v = (d: string): number | null => (d === "up" ? 5 : d === "down" ? -5 : d === "flat" ? 1 : null);

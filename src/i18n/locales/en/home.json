@@ -680,9 +680,6 @@
       "detail": "Windows recorded it: {{kind}}, {{when}}. Compy changes nothing until you choose.",
       "detailRecorded": "Windows recorded it. Compy changes nothing until you choose."
     },
-    "noGames": "Games",
-    "noGamesValue": "None measured yet",
-    "noGamesNote": "Turn on capture in Live and play as usual",
     "chartSub": "{{name}} · newest on the right",
     "chartEmpty": "Play a game with capture on and its sessions show up here.",
     "chartPick": "Game",
@@ -692,7 +689,7 @@
       "lowNote": "{{game}}'s worst moments · Measured",
       "lowNoneNote": "{{game}}'s worst moments weren't measured",
       "none": "No session yet",
-      "noneNote": "Open Live to start capture"
+      "unmeasuredNote": "{{game}}'s last session wasn't measured"
     },
     "checks": {
       "title": "Windows setup",
@@ -706,14 +703,14 @@
     },
     "limiter": {
       "title": "What's holding FPS back",
-      "none": "Nothing big stood out in your last measured session.",
-      "unknown": "Not known yet. Compy needs a measured session to say."
+      "none": "Nothing in the setup Compy checked stands out.",
+      "unknown": "Not known yet: Compy hasn't read your setup."
     },
     "details": "Open the full health check",
     "back": "Back to the summary",
     "allGames": "All games",
-    "allGamesUnit_one": "game measured",
-    "allGamesUnit_other": "games measured",
-    "allGamesNote": "Every game Compy has measured"
+    "allGamesUnit_one": "game recorded",
+    "allGamesUnit_other": "games recorded",
+    "allGamesNote": "Every game Compy has recorded"
   }
 }

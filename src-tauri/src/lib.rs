@@ -49,6 +49,7 @@ mod overlay_tools; // A4 read-only: detect third-party in-game overlay/OSD tools
 mod priorities;
 mod race_seam; // Test-only deterministic race seam: holds a read-then-act window open from INSIDE a critical section so #283's lock tests fail on demand instead of once in a thousand runs. Compiled to an empty inline no-op in a release build.
 mod readiness;
+mod realplay; // P5-realplay: real-play mode's PURE core (which sessions count on each side, the looks, the verdict). No I/O, no lock, no Windows state; experiment.rs applies and restores through the existing audited path.
 mod receipts; // Receipts telemetry GROUNDWORK — DARK (gate hard-false; payload logic only, the send path does not exist).
 mod recommendations;
 mod remote_rules;
@@ -1377,6 +1378,8 @@ pub fn run() {
             experiment::start_experiment,
             experiment::get_smoothest_readiness,
             experiment::conclude_experiment,
+            experiment::get_realplay_progress,
+            experiment::conclude_realplay,
             experiment::restore_experiment,
             experiment::apply_outcome_choice,
             experiment::undo_outcome_choice,

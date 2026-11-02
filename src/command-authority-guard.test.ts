@@ -164,7 +164,7 @@ describe("command-authority guard: no window holds authority it does not need", 
       "restore_leftover", "set_startup_entry_enabled", "set_license_key",
       "begin_update_restart", "cancel_update_restart", "start_gaming_session",
       "stop_gaming_session", "recover_gaming_session", "set_keep_game_mode",
-      "start_experiment", "conclude_experiment", "restore_experiment",
+      "start_experiment", "conclude_experiment", "conclude_realplay", "restore_experiment",
       "apply_outcome_choice", "undo_outcome_choice",
       "start_tweak_trial", "start_stack_trial", "start_calibration", "export_report",
     ];

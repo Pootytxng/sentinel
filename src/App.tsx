@@ -1527,15 +1527,6 @@ function App() {
               proves it needs one; src/keepalive-idle-guard.test.ts still pins its contract. */}
           {activeTab === "Overview" && hw ? (
             <>
-              {/* One-time "watch it work" trust loop (consumer-panel Phase 2): offered only while
-                  the Trust Ledger is empty; runs the SAME audited apply→rollback IPC, consented by
-                  a click, never automatic. Renders nothing on a rig with history. */}
-              <TrustMoment
-                recs={recs}
-                changes={changes}
-                isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
-                onChanged={refresh}
-              />
             {/* GLASS REDESIGN (owner decision 2026-10-30): Health opens on the summary page; the
                 console with every panel the room had is "Open the full health check", and a typed
                 problem from the palette (interview arrival) opens it directly. */}
@@ -1556,10 +1547,36 @@ function App() {
                 onRunCheck={() => setShowFirstCheck(true)}
                 onSeeChecks={openFixesInLab}
                 onOpenDetails={() => setHomeView("details")}
-                latestChange={<FirstWin changes={changes} onChanged={refresh} />}
+                /* The first-win journey's slot, below the answer (GL-empty; the move #225 finding 1
+                   made for FirstWin). TrustMoment used to render ABOVE this page, so on a fresh rig
+                   it pushed the eyebrow and the h1 from y110 to y314. It gates on an empty ledger,
+                   FirstWin on a still-active change, so one shows at a time; the one overlap is a
+                   demo whose undo failed (its change stays active), and then the two stack here. */
+                latestChange={
+                  <>
+                    {/* One-time "watch it work" trust loop (consumer-panel Phase 2): offered only
+                        while the Trust Ledger is empty; runs the SAME audited apply→rollback IPC,
+                        consented by a click, never automatic. Renders nothing on a rig with history. */}
+                    <TrustMoment
+                      recs={recs}
+                      changes={changes}
+                      isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                      onChanged={refresh}
+                    />
+                    <FirstWin changes={changes} onChanged={refresh} />
+                  </>
+                }
               />
             ) : (
               <>
+                {/* The full health check keeps the trust loop where it always stood, above the back
+                    row (same gate and handlers as the summary's slot). */}
+                <TrustMoment
+                  recs={recs}
+                  changes={changes}
+                  isAppliable={(recId) => APPLIABLE_REC_IDS.has(recId)}
+                  onChanged={refresh}
+                />
                 <div className="gl-back-row">
                   <button type="button" className="gl-back" onClick={() => setHomeView("summary")}>
                     {t("home.glass.back")}

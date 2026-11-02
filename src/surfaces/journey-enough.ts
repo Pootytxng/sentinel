@@ -17,6 +17,11 @@
 // turn real play into background time). Nothing here shows, raises or focuses a window; the overlay
 // learns that a journey is recording from one localStorage key (the overlay's existing cross-window
 // `storage` channel) and reads the progress from its own get_fps_status poll.
+//
+// P5-realplay: a real-play session is judged as a whole against other whole sessions, never by its own
+// halves, so in real play the line only counts down to the readings a session needs to count and then
+// says it is long enough. No "settling" or "keeps changing" state: an uneven session counts like any
+// other. The recording flag carries which kind of session it is, so the overlay says the same.
 import type { SessionSummary } from "../types";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 
@@ -38,11 +43,17 @@ export type Enough =
   /** Past SETTLE_CAP_SAMPLES and still not steady: say so and offer to stop. `untraced`: there is no
    *  trace to check (never called uneven, because nothing was measured swinging). */
   | { kind: "unsettled"; untraced: boolean }
-  | { kind: "enough" };
+  | { kind: "enough" }
+  /** P5-realplay: enough readings for the session to count; its halves are never graded. */
+  | { kind: "counts" };
 
-export function enoughState(p: CaptureProgress): Enough {
+/** Which session the journey records: one of a two-session Trial, or one of real play. */
+export type JourneyMode = "pair" | "real-play";
+
+export function enoughState(p: CaptureProgress, mode: JourneyMode = "pair"): Enough {
   const g = gradeBaseline(p);
   if (g.kind === "too-short") return { kind: "more", secs: Math.max(1, MIN_BASELINE_SAMPLES - g.samples) };
+  if (mode === "real-play") return { kind: "counts" };
   if (g.kind === "steady") return { kind: "enough" };
   return p.samples >= SETTLE_CAP_SAMPLES ? { kind: "unsettled", untraced: g.kind === "untraced" } : { kind: "settling" };
 }
@@ -51,9 +62,16 @@ type Translate = (key: string, options?: Record<string, unknown>) => string;
 
 /** The one line, in plain words. About: whole minutes from 2 min up, else rounded up to 10 s.
  *  `overlay`: the in-game overlay's shorter wording where the panel's would not fit its 230x150 window
- *  (tools/layout/overlay-enough-layout.test.mjs). */
-export function enoughLine(p: CaptureProgress, t: Translate, where: "panel" | "overlay" = "panel"): string {
-  const e = enoughState(p);
+ *  (tools/layout/overlay-enough-layout.test.mjs). `mode` real-play: only the countdown, then "long
+ *  enough to count". */
+export function enoughLine(p: CaptureProgress, t: Translate, where: "panel" | "overlay" = "panel", mode: JourneyMode = "pair"): string {
+  const e = enoughState(p, mode);
+  if (e.kind === "counts")
+    return t(where === "overlay" ? "lab.experimentBench.journey.realPlay.enoughCountsShort" : "lab.experimentBench.journey.realPlay.enoughCounts");
+  if (mode === "real-play" && e.kind === "more") {
+    if (e.secs >= 120) return t("lab.experimentBench.journey.realPlay.enoughMoreMin", { min: Math.ceil(e.secs / 60) });
+    return t("lab.experimentBench.journey.realPlay.enoughMore", { secs: Math.ceil(e.secs / 10) * 10 });
+  }
   if (e.kind === "enough") return t("lab.experimentBench.journey.enough");
   if (e.kind === "unsettled") {
     const short = where === "overlay";
@@ -66,22 +84,28 @@ export function enoughLine(p: CaptureProgress, t: Translate, where: "panel" | "o
   return t("lab.experimentBench.journey.enoughMore", { secs: Math.ceil(e.secs / 10) * 10 });
 }
 
-/** The cross-window flag: set while a journey session is recording, read by the overlay. */
+/** The cross-window flag: set while a journey session is recording, read by the overlay. "1" is a
+ *  two-session Trial's session (what every build before real play wrote); "real-play" one of real play. */
 export const JOURNEY_RECORDING_KEY = "compy.journey.recording";
-export function setJourneyRecording(on: boolean) {
+export function setJourneyRecording(on: boolean | JourneyMode) {
   try {
-    if (on) localStorage.setItem(JOURNEY_RECORDING_KEY, "1");
-    else localStorage.removeItem(JOURNEY_RECORDING_KEY);
+    if (on === false) localStorage.removeItem(JOURNEY_RECORDING_KEY);
+    else localStorage.setItem(JOURNEY_RECORDING_KEY, on === "real-play" ? "real-play" : "1");
   } catch {
     /* storage unavailable: the overlay shows no line; the journey panel still does */
   }
 }
-export function journeyRecording(): boolean {
+/** Which kind of journey session is recording, or null when none is. */
+export function journeyRecordingMode(): JourneyMode | null {
   try {
-    return localStorage.getItem(JOURNEY_RECORDING_KEY) === "1";
+    const v = localStorage.getItem(JOURNEY_RECORDING_KEY);
+    return v === "1" ? "pair" : v === "real-play" ? "real-play" : null;
   } catch {
-    return false;
+    return null;
   }
+}
+export function journeyRecording(): boolean {
+  return journeyRecordingMode() != null;
 }
 
 /** A usable progress payload, or null (older build, nothing measured yet). */

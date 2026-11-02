@@ -378,8 +378,8 @@
       "runButton": "Compare my latest session with my last steady one",
       "comparing": "Comparing your sessions…",
       "readError": "Compy couldn't read your sessions just now. Nothing was compared.",
-      "noSession": "Compy has no recorded game session yet, so there is nothing to compare. To get one, record a session in Benchmark while you play.",
-      "noGood": "Compy has no steady {{game}} session to compare your latest one with. A steady session is an earlier one with at least 10 minutes of measured play at an even frame rate, on a setup Compy can compare. To get one, record a session in Benchmark when the game runs well.",
+      "noSession": "Compy has no recorded game session yet, so there is nothing to compare. To get one, record a session in Live while you play.",
+      "noGood": "Compy has no steady {{game}} session to compare your latest one with. A steady session is an earlier one with at least 10 minutes of measured play at an even frame rate, on a setup Compy can compare. To get one, record a session in Live when the game runs well.",
       "compared": "Your latest {{game}} session ({{latest}}) compared with your last steady one ({{good}}). What changed between them is listed below; none of it is a proven cause.",
       "headline": "Your latest {{game}} session vs your last steady one",
       "off": "Session comparison is switched off on this PC, so Compy can't compare your sessions here."
