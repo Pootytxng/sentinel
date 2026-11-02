@@ -249,17 +249,30 @@ pub(crate) enum ChangeCounts {
 impl ChangeCounts {
     /// `after` is these counts with exactly one more Compy change in place: one more active with the
     /// same can't-confirm count, or one more can't-confirm with the same active one (453-f1 compares
-    /// them apart); one more on the older rule. Counts made in different forms never match. The one
-    /// rule a Trial's after-session (`experiment::other_compy_change`) and a real-play session
-    /// (`realplay::with_arm`) are held to.
+    /// them apart); one more on the older rule. Counts made in different forms never match. The rule a
+    /// two-session Trial's after-session is held to (`experiment::other_compy_change`), where the
+    /// conclude reads the setting itself; a real-play session is held to [`Self::adds_one_active_change`].
     pub(crate) fn adds_one_change(self, after: ChangeCounts) -> bool {
         match (self, after) {
             (ChangeCounts::PerChange { active: a0, cant_confirm: c0 }, ChangeCounts::PerChange { active: a1, cant_confirm: c1 }) => {
-                (a1 == a0 + 1 && c1 == c0) || (a1 == a0 && c1 == c0 + 1)
+                (a0.checked_add(1) == Some(a1) && c1 == c0) || (a1 == a0 && c0.checked_add(1) == Some(c1))
             }
-            (ChangeCounts::Legacy(n0), ChangeCounts::Legacy(n1)) => n1 == n0 + 1,
+            (ChangeCounts::Legacy(n0), ChangeCounts::Legacy(n1)) => n0.checked_add(1) == Some(n1),
             _ => false,
         }
+    }
+
+    /// `after` is these counts with exactly one more Compy change in place AND read as on: one more
+    /// active, the same can't-confirm count. Stricter than [`Self::adds_one_change`]: one more change
+    /// Compy couldn't confirm, or one more on the older rule (which counted those as on), never shows
+    /// a change on. The rule a real-play session is held to (`realplay::with_arm`), at its start and
+    /// at the check after it, since nothing else reads the setting for that session.
+    pub(crate) fn adds_one_active_change(self, after: ChangeCounts) -> bool {
+        matches!(
+            (self, after),
+            (ChangeCounts::PerChange { active: a0, cant_confirm: c0 }, ChangeCounts::PerChange { active: a1, cant_confirm: c1 })
+                if a0.checked_add(1) == Some(a1) && c1 == c0
+        )
     }
 }
 

@@ -93,13 +93,38 @@ const PERMANENT_CHANGES: [&str; 6] = ["gpu", "ram", "gpu-driver", "windows-build
 // ─── Persisted evidence (additive on `ExperimentRecord::real_play`) ─────────────
 
 /// One session's numbers, copied onto the record so the receipt survives the session store's cap.
+/// Every field reads leniently: a row with a field missing or of the wrong type loads (a NaN is
+/// written as `null`, for one), and a number that isn't a real reading is never judged
+/// ([`RealPlaySession::readable`]), so one damaged row never costs the whole record.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct RealPlaySession {
     /// The session's `started_at`.
+    #[serde(default, deserialize_with = "text")]
     pub session_id: String,
+    #[serde(default, deserialize_with = "reading")]
     pub low1_fps: f64,
+    #[serde(default, deserialize_with = "reading")]
     pub avg_fps: f64,
+    #[serde(default, deserialize_with = "count")]
     pub samples: u32,
+}
+
+/// A number as written, or NaN for anything else (`null`, text): never a reading.
+fn reading<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
+    Ok(serde_json::Value::deserialize(d)?.as_f64().unwrap_or(f64::NAN))
+}
+
+/// A count as written, or 0 for anything else.
+fn count<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    Ok(serde_json::Value::deserialize(d)?.as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or(0))
+}
+
+/// Text as written, or empty for anything else.
+fn text<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    Ok(match serde_json::Value::deserialize(d)? {
+        serde_json::Value::String(s) => s,
+        _ => String::new(),
+    })
 }
 
 impl RealPlaySession {
@@ -114,12 +139,15 @@ impl RealPlaySession {
 }
 
 /// Why a session of the game, played while the Trial ran, wasn't counted. Persisted (kebab-case)
-/// and read leniently: a reason a newer Compy wrote reads as `Other`, never a failed load.
-#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+/// and read leniently: a reason a newer Compy wrote, or none at all, reads as `Other`, never a failed
+/// load.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum NotCountedReason {
-    /// Fewer than [`MIN_READINGS`] readings, or no frame-rate reading.
+    /// Fewer than [`MIN_READINGS`] readings.
     TooShort,
+    /// Long enough, but without a frame-rate reading: no average or no 1% low was measured.
+    NoReading,
     /// The game was behind another window the whole time.
     Behind,
     /// It began before the change took effect.
@@ -138,7 +166,9 @@ pub(crate) enum NotCountedReason {
     GamingModeDiffers,
     /// It began more than [`WINDOW_DAYS`] after the change took effect.
     AfterWindow,
-    /// A reason this build doesn't know.
+    /// Anything else: a session record Compy can't read in full (a length that can't be added to its
+    /// start), or a reason this build doesn't know.
+    #[default]
     Other,
 }
 
@@ -147,6 +177,7 @@ impl<'de> Deserialize<'de> for NotCountedReason {
         let v = serde_json::Value::deserialize(d)?;
         Ok(match v.as_str() {
             Some("too-short") => Self::TooShort,
+            Some("no-reading") => Self::NoReading,
             Some("behind") => Self::Behind,
             Some("before-change") => Self::BeforeChange,
             Some("conditions-changed") => Self::ConditionsChanged,
@@ -159,9 +190,12 @@ impl<'de> Deserialize<'de> for NotCountedReason {
     }
 }
 
+/// A session that wasn't counted, and why. Read leniently, like [`RealPlaySession`].
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct NotCounted {
+    #[serde(default, deserialize_with = "text")]
     pub session_id: String,
+    #[serde(default)]
     pub reason: NotCountedReason,
 }
 
@@ -236,8 +270,11 @@ fn instant(at: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(at).ok().map(|t| t.with_timezone(&Utc))
 }
 
+/// When the session ended: its start plus its length, or `None` when its start can't be read or the
+/// sum lies past the last date chrono can hold (a corrupt length). Such a session never counts.
 fn ended(s: &SessionSummary) -> Option<DateTime<Utc>> {
-    Some(instant(&s.started_at)? + Duration::seconds(i64::try_from(s.duration_secs).ok()?))
+    let length = Duration::try_seconds(i64::try_from(s.duration_secs).ok()?)?;
+    instant(&s.started_at)?.checked_add_signed(length)
 }
 
 fn same_game(s: &SessionSummary, game: &str) -> bool {
@@ -245,9 +282,19 @@ fn same_game(s: &SessionSummary, game: &str) -> bool {
     !a.is_empty() && a.eq_ignore_ascii_case(b)
 }
 
-/// A session that can count on either side, by its own record: long enough, measured, in front.
+/// A session that can count on either side, by its own record: long enough, measured, in front,
+/// with a length that adds up.
 fn countable(s: &SessionSummary) -> bool {
-    !s.behind_the_whole_time() && s.samples >= MIN_READINGS && crate::experiment::has_frame_reading(s)
+    !s.behind_the_whole_time() && s.samples >= MIN_READINGS && crate::experiment::has_frame_reading(s) && ended(s).is_some()
+}
+
+/// The session recorded its Compy changes the way real play reads them: the ones on and the ones
+/// Compy couldn't confirm apart (453-f1), in whole or since a set-aside (#618). An older Compy
+/// counted a change it couldn't read as on, so no later session can be shown to have this Trial's
+/// change on against such a session: it is never pinned as an as-is session.
+fn counts_each_change(s: &SessionSummary) -> bool {
+    let whole = s.compy_changes_per_change && s.compy_changes_active.is_some() && s.compy_changes_cant_confirm.is_some();
+    whole || s.compy_changes_since_set_aside.as_ref().is_some_and(|c| c.active.is_some())
 }
 
 /// The session with this id, when exactly one has it.
@@ -318,21 +365,58 @@ pub(crate) fn before_arm(
 }
 
 /// The before arm, from the unchanged run that ends at `anchor` (oldest first): the run's sessions
-/// that can count, started within `comparison::ARM_MAX_AGE_DAYS` before `now`, the newest
-/// [`MAX_SESSIONS`]. Empty unless the anchor itself is the newest of them, so the anchor the record
-/// names is always its newest as-is session.
+/// that can count and recorded each Compy change apart ([`counts_each_change`]), started within
+/// `comparison::ARM_MAX_AGE_DAYS` before `now`, the newest [`MAX_SESSIONS`]. Empty unless the anchor
+/// itself is the newest of them, so the anchor the record names is always its newest as-is session
+/// ([`unpinnable_anchor`] says why it isn't).
 fn pin_before(run: &[&SessionSummary], anchor: &SessionSummary, now: DateTime<Utc>) -> Vec<RealPlaySession> {
     let from = now - Duration::days(crate::comparison::ARM_MAX_AGE_DAYS);
     let kept: Vec<&SessionSummary> = run
         .iter()
         .copied()
-        .filter(|s| countable(s))
+        .filter(|s| countable(s) && counts_each_change(s))
         .filter(|s| instant(&s.started_at).is_some_and(|at| at >= from && at <= now))
         .collect();
     if kept.last().map(|s| s.started_at.as_str()) != Some(anchor.started_at.as_str()) {
         return Vec::new();
     }
     kept[kept.len().saturating_sub(MAX_SESSIONS)..].iter().map(|s| RealPlaySession::of(s)).collect()
+}
+
+/// Why `anchor` itself can't be the newest as-is session a real-play start pins, in words, or `None`
+/// when it can. When it can't, nothing is pinned however many sessions were played, so a start says
+/// this rather than how many count. `sessions` are the ones [`before_arm`] reads.
+pub(crate) fn unpinnable_anchor(anchor: &SessionSummary, sessions: &[SessionSummary], now: DateTime<Utc>) -> Option<String> {
+    let days = crate::comparison::ARM_MAX_AGE_DAYS;
+    if anchor.behind_the_whole_time() {
+        return Some("the game was behind another window the whole time".into());
+    }
+    if anchor.samples < MIN_READINGS {
+        return Some(format!("it has fewer than {MIN_READINGS} readings"));
+    }
+    if !crate::experiment::has_frame_reading(anchor) {
+        return Some("it has no frame-rate reading".into());
+    }
+    if ended(anchor).is_none() {
+        return Some("its recorded length can't be added to its start".into());
+    }
+    if !counts_each_change(anchor) {
+        return Some("an older version of Compy recorded it, before each change was counted on its own".into());
+    }
+    match instant(&anchor.started_at) {
+        Some(at) if at < now - Duration::days(days) => return Some(format!("it was played more than {days} days ago")),
+        Some(at) if at > now => return Some("it began later than this PC's clock reads now".into()),
+        None => return Some("its start time can't be read".into()),
+        Some(_) => {}
+    }
+    if unique(sessions, &anchor.started_at).is_none() || crate::noise_floor::NoiseConditions::of_session(anchor).is_none() {
+        return Some(
+            "Compy can't show what the PC was like during it (its rig and conditions weren't recorded, or the change \
+             history doesn't reach back to it)"
+                .into(),
+        );
+    }
+    None
 }
 
 /// A running real-play Trial, as the session classifier reads it from its record.
@@ -374,8 +458,11 @@ impl WithArm<'_> {
 /// How a session's Compy-change counts compare with the as-is sessions'.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Counts {
-    /// Exactly this Trial's one change more (`sessions::ChangeCounts::adds_one_change`).
+    /// Exactly this Trial's one change more, read as on (`sessions::ChangeCounts::adds_one_active_change`).
     ThisOneMore,
+    /// One change more that nothing shows on: one Compy couldn't confirm (453-f1), or counted the older
+    /// way, which counted a change it couldn't read as on.
+    Unconfirmed,
     /// The same as the as-is sessions: the change wasn't on.
     Same,
     /// Anything else.
@@ -387,7 +474,8 @@ enum Counts {
 fn counts_vs(reference: &SessionSummary, s: &SessionSummary) -> Counts {
     match crate::sessions::comparable_change_counts(reference, s) {
         Err(_) => Counts::Unrecorded,
-        Ok((then, after)) if then.adds_one_change(after) => Counts::ThisOneMore,
+        Ok((then, after)) if then.adds_one_active_change(after) => Counts::ThisOneMore,
+        Ok((then, after)) if then.adds_one_change(after) => Counts::Unconfirmed,
         Ok((then, after)) if then == after => Counts::Same,
         Ok(_) => Counts::Other,
     }
@@ -421,12 +509,13 @@ enum Count {
 
 /// Pure (P5-realplay): which sessions of the game, played while the Trial ran, count right now. A
 /// session counts only when it began after the change took effect and within [`WINDOW_DAYS`], is
-/// long enough and was in front, ran with no other Compy change applied or undone before it ended,
-/// under the reference's rig, driver, Windows and game build and fully comparable conditions, with
-/// the same Gaming Mode state and the reference's Compy changes plus this one at its start, and is
-/// bracketed: the next observation after it still shows the change on (the next session's start
-/// counts, in any game, or for the newest session `live`, the setting read now: `None` when it
-/// can't be read, and then that session waits).
+/// long enough, measured and in front, with a length that adds up, ran with no other Compy change
+/// applied or undone before it ended, under the reference's rig, driver, Windows and game build and
+/// fully comparable conditions, with the same Gaming Mode state and the reference's Compy changes
+/// plus this one, read as on (never one Compy couldn't confirm), at its start, and is bracketed: the
+/// next observation after it still shows the change on (the next session's start counts, in any
+/// game, unless another Compy change moved before it began; for the newest session, `live`, the
+/// setting read now: `None` when it can't be read, and then that session waits).
 ///
 /// `stop` is why the Trial can't go on as it is, in this order: its own change was undone in
 /// history, another Compy change moved, a permanent condition changed, the setting reads off now,
@@ -464,7 +553,7 @@ pub(crate) fn with_arm<'s>(
                     arm.changed = Some((s, pairing.clone()));
                 }
             }
-            let next = timeline.get(i + 1).map(|&(_, n)| n);
+            let next = timeline.get(i + 1).copied();
             let count = count_session(s, at, applied, until, other_moved, reference, conditions.as_ref(), &pairing, next, live);
             match count {
                 Count::Counted => arm.counted.push(s),
@@ -504,7 +593,7 @@ fn count_session(
     reference: &SessionSummary,
     conditions: Option<&crate::noise_floor::NoiseConditions>,
     pairing: &SessionComparability,
-    next: Option<&SessionSummary>,
+    next: Option<(DateTime<Utc>, &SessionSummary)>,
     live: Option<bool>,
 ) -> Count {
     use NotCountedReason as R;
@@ -517,10 +606,16 @@ fn count_session(
     if s.behind_the_whole_time() {
         return Count::Not(R::Behind);
     }
-    if !countable(s) {
+    if s.samples < MIN_READINGS {
         return Count::Not(R::TooShort);
     }
-    if other_moved.is_some_and(|t| ended(s).is_none_or(|end| t <= end)) {
+    if !crate::experiment::has_frame_reading(s) {
+        return Count::Not(R::NoReading);
+    }
+    let Some(end) = ended(s) else {
+        return Count::Not(R::Other);
+    };
+    if other_moved.is_some_and(|t| t <= end) {
         return Count::Not(R::OtherCompyChange);
     }
     let still_current = conditions
@@ -534,11 +629,14 @@ fn count_session(
     }
     match counts_vs(reference, s) {
         Counts::ThisOneMore => {}
-        Counts::Same | Counts::Unrecorded => return Count::Not(R::ChangeNotOn),
+        Counts::Same | Counts::Unconfirmed | Counts::Unrecorded => return Count::Not(R::ChangeNotOn),
         Counts::Other => return Count::Not(R::OtherCompyChange),
     }
     let still_on = match next {
-        Some(next) => Some(counts_vs(reference, next) == Counts::ThisOneMore),
+        // Another Compy change moved before the next observation began, so that check can't show this
+        // change stayed on: the other change is why this session can't be bracketed.
+        Some((next_at, _)) if other_moved.is_some_and(|t| t <= next_at) => return Count::Not(R::OtherCompyChange),
+        Some((_, next)) => Some(counts_vs(reference, next) == Counts::ThisOneMore),
         None => live,
     };
     match still_on {
@@ -1567,5 +1665,111 @@ mod tests {
             .collect();
         println!("null Trials that read Likely: {rates:?}");
         assert!((0..shapes.len()).all(|k| likely[k] * 20 <= seen[k]), "null Trials that read Likely: {rates:?}");
+    }
+
+    #[test]
+    fn a_damaged_row_on_the_record_loads_and_is_never_judged() {
+        let v = serde_json::json!({
+            "before": [
+                { "session_id": "a", "low1_fps": 150.0, "avg_fps": 240.0, "samples": 1200 },
+                { "session_id": "b" },
+                { "session_id": 7, "low1_fps": null, "avg_fps": "fast", "samples": -1 },
+                {}
+            ],
+            "not_counted": [{ "session_id": "c" }, {}]
+        });
+        let ev: RealPlayEvidence = serde_json::from_value(v).expect("a damaged row degrades; it doesn't lose the record");
+        assert_eq!(ev.before.len(), 4);
+        assert_eq!((ev.before[1].session_id.as_str(), ev.before[1].samples), ("b", 0));
+        assert!(ev.before[0].readable() && ev.before[1..].iter().all(|s| !s.readable()), "{:?}", ev.before);
+        let reasons: Vec<NotCountedReason> = ev.not_counted.iter().map(|n| n.reason).collect();
+        assert_eq!(reasons, vec![NotCountedReason::Other; 2]);
+        // Only the one real row can be judged, and one as-is session is never enough.
+        assert_eq!(judge(&ev.before, &flat(&[150.0; 3]), TrialOutcome::Recommended, true), Judgement::TooFew);
+    }
+
+    #[test]
+    fn a_session_with_no_frame_rate_reading_says_so_not_too_short() {
+        // Long enough and in front, but no 1% low was measured.
+        let none = played("2026-10-22T10:00:00+00:00", 0.0, 240.0, 15);
+        let sessions = all(vec![none, played("2026-10-22T11:00:00+00:00", 213.0, 240.0, 15)]);
+        let a = arm(&sessions, &ledger(), Some(true), &pinned());
+        let r = reasons(&a);
+        assert_eq!(r.len(), 1, "{r:?}");
+        assert_eq!(serde_json::to_value(r[0].1).unwrap(), "no-reading", "{r:?}");
+    }
+
+    #[test]
+    fn a_session_that_couldnt_confirm_its_own_change_doesnt_count() {
+        // 14 changes on, and the 15th, this one, Compy couldn't read when 10:00 began: nothing shows it
+        // on, there or as the check after 19:00 the evening before.
+        let mut unsure = played("2026-10-22T10:00:00+00:00", 213.0, 240.0, 14);
+        unsure.compy_changes_cant_confirm = Some(1);
+        let sessions = all(vec![unsure, played("2026-10-22T11:00:00+00:00", 213.0, 240.0, 15)]);
+        let a = arm(&sessions, &ledger(), Some(true), &pinned());
+        assert_eq!(
+            reasons(&a),
+            vec![
+                ("2026-10-21T19:00:00+00:00".into(), NotCountedReason::ChangeNotOn),
+                ("2026-10-22T10:00:00+00:00".into(), NotCountedReason::ChangeNotOn),
+            ]
+        );
+        assert_eq!(a.counted.len(), 3, "10-21 18:00 and 18:30, and 11:00");
+    }
+
+    #[test]
+    fn as_is_sessions_an_older_compy_counted_are_never_pinned() {
+        // Before 453-f1 a session counted a change Compy couldn't read as on, so no later session could
+        // be shown to have this change on against it: such sessions are never pinned.
+        let older: Vec<SessionSummary> = as_is()
+            .into_iter()
+            .map(|mut s| {
+                (s.compy_changes_per_change, s.compy_changes_cant_confirm) = (false, None);
+                s
+            })
+            .collect();
+        let refs: Vec<&SessionSummary> = older.iter().collect();
+        assert!(pin_before(&refs, &older[2], now()).is_empty());
+        let current = as_is();
+        let refs: Vec<&SessionSummary> = current.iter().collect();
+        assert_eq!(pin_before(&refs, &current[2], now()).len(), 3, "counted per change, they pin");
+    }
+
+    #[test]
+    fn a_session_whose_length_cant_be_added_to_its_start_never_counts_or_panics() {
+        let mut corrupt = played("2026-10-22T10:00:00+00:00", 213.0, 240.0, 15);
+        // Past chrono's last date once added to its start.
+        corrupt.duration_secs = 9_000_000_000_000;
+        // Another change after it, so its end is read.
+        let mut l = ledger();
+        l.push(change("visual-effects", "2026-10-22T12:00:00+00:00", None));
+        let sessions = all(vec![corrupt.clone()]);
+        let a = arm(&sessions, &l, Some(true), &pinned());
+        assert_eq!(a.stop, Some(RealPlayStop::OtherChange));
+        assert!(reasons(&a).contains(&("2026-10-22T10:00:00+00:00".into(), NotCountedReason::Other)), "{:?}", reasons(&a));
+        assert!(!countable(&corrupt), "nor is it ever an as-is session");
+    }
+
+    #[test]
+    fn the_session_before_another_compy_change_is_left_out_for_that_change() {
+        // The other change landed at 19:00 on 10-21: after 18:30 ended (18:50), as 19:00 began.
+        let mut l = ledger();
+        l.push(change("visual-effects", "2026-10-21T19:00:00+00:00", None));
+        let mut sessions = all(Vec::new());
+        sessions[5].compy_changes_active = Some(16);
+        let a = arm(&sessions, &l, Some(true), &pinned());
+        assert_eq!(a.counted.iter().map(|s| s.started_at.as_str()).collect::<Vec<_>>(), vec!["2026-10-21T18:00:00+00:00"]);
+        assert_eq!(
+            reasons(&a),
+            vec![
+                ("2026-10-21T18:30:00+00:00".into(), NotCountedReason::OtherCompyChange),
+                ("2026-10-21T19:00:00+00:00".into(), NotCountedReason::OtherCompyChange),
+            ]
+        );
+        // A check taken after another change moved can't vouch for this one, even when its count
+        // happens to read as this one change more.
+        sessions[5].compy_changes_active = Some(15);
+        let a = arm(&sessions, &l, Some(true), &pinned());
+        assert_eq!(a.counted.len(), 1, "{:?}", reasons(&a));
     }
 }

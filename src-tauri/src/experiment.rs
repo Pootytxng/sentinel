@@ -2987,6 +2987,8 @@ pub(crate) fn simulate_optimization(rec_id: String) -> Result<SimulatorReport, S
 
 /// P5-realplay: a real-play start's evidence, the as-is sessions it pins (`realplay::before_arm` on
 /// the unchanged run that ends at `anchor`), or why it can't start, in words that name what to play.
+/// When `anchor` itself can't be pinned, that is the reason given (`realplay::unpinnable_anchor`),
+/// never "0 of them count so far".
 fn real_play_start(
     sessions: &[SessionSummary],
     anchor: &SessionSummary,
@@ -2995,8 +2997,17 @@ fn real_play_start(
 ) -> Result<crate::realplay::RealPlayEvidence, String> {
     use crate::realplay::{MIN_READINGS, MIN_SESSIONS};
     let before = crate::realplay::before_arm(sessions, anchor, ledger, now);
+    let game = crate::intelligence::pretty_game_name(&anchor.process_name);
+    if before.is_empty() {
+        if let Some(why) = crate::realplay::unpinnable_anchor(anchor, sessions, now) {
+            return Err(format!(
+                "real play compares the change with the sessions of {game} that end at the one this test starts \
+                 from, and that session can't be one of them: {why}; play {game} again for at least {MIN_READINGS} \
+                 readings (about 10 minutes), then start from that session"
+            ));
+        }
+    }
     if before.len() < MIN_SESSIONS {
-        let game = crate::intelligence::pretty_game_name(&anchor.process_name);
         return Err(format!(
             "real play compares the change with at least {MIN_SESSIONS} sessions of {game} played the way your PC is \
              now, with nothing changed between them, in the last {} days, each at least {MIN_READINGS} readings \
@@ -7864,5 +7875,17 @@ mod experiment_tests {
         let now = &src[src.find("pub(crate) fn session_end_notice_now(").unwrap()..];
         let now = &now[..now.find("\n}\n").unwrap()];
         assert!(now.find("realplay_ready_notice(session,").unwrap() < now.find(".or_else(|| session_end_notice(session,").unwrap());
+    }
+
+    // ─── review of 59fc753 ─────────────────────────────────────────────────────
+
+    #[test]
+    fn a_start_from_a_session_that_cant_be_pinned_says_why_not_how_many_count() {
+        // The newest as-is session was played more than 14 days before the start: nothing is pinned,
+        // and the refusal says that instead of "0 of them count so far".
+        let late = rp_now() + chrono::Duration::days(20);
+        let why = real_play_start(&rp_before(), &rp_before()[2], &rp_ledger(), late).unwrap_err();
+        assert!(!why.contains("0 of them count so far"), "{why}");
+        assert!(why.contains("more than 14 days ago"), "{why}");
     }
 }
