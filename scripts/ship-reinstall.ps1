@@ -165,46 +165,6 @@ while ((Get-Process compy -ErrorAction SilentlyContinue) -and ((Get-Date) -lt $d
 }
 $left = Get-Process compy -ErrorAction SilentlyContinue
 if ($left) { throw "compy process(es) still alive 20s after close+kill (PID $(($left.Id) -join ', ')) — a helper that won't self-exit is a real defect (and would hold the exe lock through the install); investigate before shipping." }
-
-# 1a) WEBVIEW2 OUTLIVES THE APP (desk 2026-11-03). Compy's WebView2 browser process exits a moment
-#     after compy.exe, and until it does it still holds the profile, its localStorage database
-#     included. A launch inside that window got a fresh, EMPTY localStorage: at the 05:28 reinstall
-#     the owner's theme, room accents and first-run flags vanished (LevelDB opened a new store at
-#     sequence 1), and came back only on a later launch that found the old process gone (its LOG:
-#     "Recovering log #10 ... Delete type=0 #3"). So no launch below starts while a WebView2 process
-#     on Compy's profile is alive. Neither the profile's lockfile nor LevelDB's LOCK is held for the
-#     process's life (both measured free while Compy ran), so the witness is the process itself:
-#     msedgewebview2.exe whose command line carries Compy's user-data folder. Win32_Process has hung
-#     on this desk before (2026-09-02), so the query is bounded and a failed query waits a fixed 8 s.
-$webViewProfile = Join-Path $env:LOCALAPPDATA "gg.compy.app\EBWebView"
-function Get-CompyWebViewCount {
-  $marker = [regex]::Escape($webViewProfile)
-  try {
-    $all = @(Get-CimInstance -ClassName Win32_Process -Filter "Name='msedgewebview2.exe'" -OperationTimeoutSec 10 -ErrorAction Stop)
-  } catch {
-    return -1
-  }
-  return @($all | Where-Object { ([string]$_.CommandLine) -match $marker }).Count
-}
-function Wait-CompyWebViewFree {
-  param([int]$TimeoutSeconds = 30)
-  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-  while ($true) {
-    $alive = Get-CompyWebViewCount
-    if ($alive -eq 0) { break }
-    if ($alive -lt 0) {
-      Start-Sleep -Seconds 8
-      break
-    }
-    if ((Get-Date) -ge $deadline) {
-      throw "Compy's WebView2 ($alive process(es) on $webViewProfile) is still alive $TimeoutSeconds s after the app closed: a launch now would open an empty localStorage over the owner's settings. Investigate before shipping."
-    }
-    Start-Sleep -Milliseconds 250
-  }
-  # Its last file handles close as it exits; give them a moment.
-  Start-Sleep -Seconds 2
-}
-Wait-CompyWebViewFree
 Start-Sleep -Milliseconds 600
 
 # 1b) PAYLOAD-LOCK GATE (bug→guard 2026-08-21, issue #156). Every compy PROCESS being gone is not
@@ -418,8 +378,6 @@ if (-not $NoLaunch) {
       }
     }
     Wait-LoopbackPortClosed -Port $debugPort -TimeoutMs 10000
-    # The proof launch's WebView2 must be gone too, or this relaunch opens an empty localStorage (1a).
-    Wait-CompyWebViewFree
     # -Detached: this app outlives the script, so it must not inherit our stdout/stderr and strand
     # a caller's pipe (issue #60 defect 2). Port absence is proven by the assertion above.
     $normalLaunch = Start-NativeProcess -Command $exe -Detached -NoActivate -ArgumentList $quietLaunchArgs  # detached-window-allow: Compy is a GUI app, and this is the launch the owner is MEANT to see.
