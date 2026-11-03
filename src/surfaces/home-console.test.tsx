@@ -549,8 +549,9 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
 
   // Desk review 2026-11-03 (his rig: 14 ready, network QoS and VRR advisory): the ring said "16 of 16
   // checks passed" while FirstCheck said 2 were noted, not graded. An advisory is left out of the ratio
-  // like an unread check and named beside it; it never passed.
-  it("advisory checks are left out of the readiness ratio and named beside it, never counted as passed", () => {
+  // like an unread check; it never passed. The second pass kept the ring's note to the ratio (the
+  // advisory aside wrapped it to four lines at 720p) and the page names the advisory ones in the band.
+  it("advisory checks are left out of the readiness ratio and named on the page, never counted as passed", () => {
     const his: GameReadiness = {
       ...readiness,
       checks: Array.from({ length: 16 }, (_, i) => ({ id: `c${i}`, label: `C${i}`, status: i < 14 ? "ready" : "advisory", detail: "", value: null })),
@@ -560,8 +561,9 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
     const c = mount({ ...props, readiness: his }).container;
     const r = readout(c, "readiness");
     expect(r.value).toBe("100");
-    expect(r.el.textContent).toContain("14 of 14 checks passed · 2 advisory, not graded");
-    expect(r.el.textContent).not.toContain("16 of 16");
+    expect(r.el.querySelector(".ag-note")?.textContent).toBe("14 of 14 checks passed");
+    expect(c.querySelector(".rcb")!.textContent).toContain("All 14 checks look good · 2 advisory, not graded");
+    expect(c.textContent).not.toContain("16 of 16");
     cleanup();
     const flagged: GameReadiness = {
       ...his,
@@ -571,7 +573,7 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
     };
     const f = mount({ ...props, readiness: flagged }).container;
     expect(readout(f, "readiness").value).toBe("93"); // 13 of the 14 GRADED checks, not 15 of 16
-    expect(readout(f, "readiness").el.textContent).toContain("13 of 14 checks passed · 2 advisory, not graded");
+    expect(readout(f, "readiness").el.textContent).toContain("13 of 14 checks passed");
     cleanup();
     // Nothing graded at all: no ratio, no grade, and the reason is still said.
     const none: GameReadiness = { ...his, checks: his.checks.map((k) => ({ ...k, status: "advisory" })), ready_count: 0, advisory_count: 16 };

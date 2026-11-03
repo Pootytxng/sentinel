@@ -111,6 +111,13 @@
   padding: 4px 0;
   cursor: pointer;
 }
+/* The opt-ins are native checkboxes; without these they painted the browser's light default box on
+   the dark console (desk review 2026-11-03). Every Compy theme is a dark ground. */
+.gaming-toggle input {
+  accent-color: var(--ix-accent, var(--accent));
+  color-scheme: dark;
+  cursor: pointer;
+}
 
 .link-btn {
   background: none;

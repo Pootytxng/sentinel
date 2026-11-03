@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SessionSummary } from "../../types";
 import { useRoomIdentityFlag } from "../../design/use-hud";
@@ -60,6 +60,11 @@ function traceMonotone(ctx: CanvasRenderingContext2D, pts: { x: number; y: numbe
   }
 }
 
+/** Air between the pin's clock and a capped recording's note (px). */
+const PIN_NOTE_GAP = 8;
+/** The stylesheet's left clamp for the clock's centre (monitor-console.css `.ss-pin-label`). */
+const PIN_MIN_X = 36;
+
 function RowCanvas({
   row,
   axisMax,
@@ -81,6 +86,37 @@ function RowCanvas({
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 640, h: 40 });
+  const covRef = useRef<HTMLSpanElement>(null);
+  const pinRef = useRef<HTMLSpanElement>(null);
+  // The pin's clock and a capped recording's note share the strip above the plot. The note is
+  // right-aligned and as wide as its text (a longer duration, another language), so the clock's centre
+  // is clamped against the note's MEASURED width, never a guessed constant: at the old 170px the
+  // owner's "first 2h 2m recorded" ran 45px under "▼ 2:47 PM" (desk review 2026-11-03). With no room
+  // left for the clock at all, the clock gives way; the note is the honesty statement.
+  const [pinMax, setPinMax] = useState<number | null>(null);
+  const hasCoverage = row.partial && row.coveredSecs != null;
+  const hasPin = row.pin != null;
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    const cov = covRef.current;
+    const pin = pinRef.current;
+    if (!wrap || !cov || !pin) {
+      setPinMax(null);
+      return;
+    }
+    const measure = () => {
+      // Not laid out (jsdom, a hidden tab): keep the stylesheet's clamp.
+      if (wrap.clientWidth === 0) return setPinMax(null);
+      setPinMax(wrap.clientWidth - cov.offsetWidth - PIN_NOTE_GAP - pin.offsetWidth / 2);
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap);
+    ro.observe(cov);
+    ro.observe(pin);
+    return () => ro.disconnect();
+  }, [hasCoverage, hasPin]);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -182,15 +218,22 @@ function RowCanvas({
       )}
       {/* A capped recording must SAY so — the trace spans what was RECORDED, and this states
           it, so a full-width line never claims hours it doesn't show (bug→guard). */}
-      {row.partial && row.coveredSecs != null && (
-        <span className="ss-coverage">
-          {t("monitor.sessionStack.coverageNote", { duration: fmtDur(row.coveredSecs) })}
+      {hasCoverage && (
+        <span className="ss-coverage" ref={covRef}>
+          {t("monitor.sessionStack.coverageNote", { duration: fmtDur(row.coveredSecs!) })}
         </span>
       )}
       {row.pin && (
         <span
           className="ss-pin-label"
-          style={{ "--pin-x": `${(row.pin.x * 100).toFixed(1)}%` } as React.CSSProperties}
+          ref={pinRef}
+          data-crowded={pinMax != null && pinMax < PIN_MIN_X ? "" : undefined}
+          style={
+            {
+              "--pin-x": `${(row.pin.x * 100).toFixed(1)}%`,
+              ...(pinMax != null ? { "--pin-max": `${pinMax.toFixed(1)}px` } : {}),
+            } as React.CSSProperties
+          }
         >
           ▼ {row.pin.clock}
         </span>

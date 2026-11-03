@@ -730,9 +730,15 @@ export function HomeConsole({
     : 0;
   const checksGood = readinessKnown ? Math.max(0, checksGraded - readiness!.attention_count) : 0;
   const readinessScore = readinessKnown && checksGraded > 0 ? Math.round((100 * checksGood) / checksGraded) : null;
-  // What the ratio left out, said beside it: unread first, then advisory.
+  // What the ratio left out. An unread check is said beside the number (P7-score). The advisory count
+  // is not: at 1280×720 the ring's column is 134px, and "· 2 advisory, not graded" wrapped its note to
+  // four lines and pushed the panel 9px past its floor (desk review 2026-11-03, second pass). The ring
+  // never counts an advisory as passed; the Re-run line below names them, as the first check does.
+  // With nothing graded at all the ring has no number, so both reasons are said under it.
+  const readinessUnreadNote =
+    checksUnread > 0 ? [t("home.homeConsole.stage.readinessUnread", { count: checksUnread })] : [];
   const readinessAside = [
-    ...(checksUnread > 0 ? [t("home.homeConsole.stage.readinessUnread", { count: checksUnread })] : []),
+    ...readinessUnreadNote,
     ...(checksAdvisory > 0 ? [t("home.homeConsole.stage.readinessAdvisory", { count: checksAdvisory })] : []),
   ];
   /**
@@ -1306,7 +1312,7 @@ export function HomeConsole({
                     readinessKnown
                       ? [
                           t("home.homeConsole.stage.readinessNote", { passed: checksGood, total: checksGraded }),
-                          ...readinessAside,
+                          ...readinessUnreadNote,
                         ].join(" · ")
                       : undefined
                   }
