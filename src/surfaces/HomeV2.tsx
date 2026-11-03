@@ -213,7 +213,7 @@ export function HomeV2({
   const gradeInk = (g: Grade) => (g === "neutral" ? undefined : { color: gradeColor(g) });
   const checking = readiness == null; // checks literally still running (boot hydrate / re-scan)
   // LOCKED rule 5: the named GPU's own snapshot, graded by its own vendor (HomeConsole has why).
-  const gpuReading = sensorForGpu(gpuSnaps, hw.gpus?.[0]?.name);
+  const gpuReading = sensorForGpu(gpuSnaps, hw.gpus?.[0]?.name, hw.gpus?.length);
   const gpuTemp = gpuReading?.temperature_c ?? null;
   const gpuGrade = gradeGpuTempForVendor(gpuReading?.vendor, gpuTemp);
 

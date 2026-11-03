@@ -51,17 +51,21 @@ function adapterKey(name: string | null | undefined): string {
 /**
  * The snapshot that belongs to the GPU a surface names. An exact name match wins; failing that, the
  * ONE snapshot whose name ends the other's at a word boundary (an older NVML drops the "NVIDIA "
- * prefix DXGI keeps). With no GPU name to match, a lone snapshot is the only GPU Compy reads a
- * sensor for, so it stands. Anything else is null: the surface shows no reading rather than another
- * adapter's number. Grade what this returns by ITS OWN `vendor`.
+ * prefix DXGI keeps). A rig with one GPU and one snapshot needs no name at all: there is no other
+ * adapter the number could belong to (an SDK whose name read failed says "AMD GPU"), and neither
+ * does a lone snapshot when the GPU has no name. Anything else is null: the surface shows no reading
+ * rather than another adapter's number. Grade what this returns by ITS OWN `vendor`.
  */
 export function sensorForGpu<T extends GpuSensorReading>(
   list: readonly T[] | null | undefined,
   gpuName: string | null | undefined,
+  rigGpuCount?: number,
 ): T | null {
   if (!list || list.length === 0) return null;
+  const lone = list.length === 1 ? list[0] : null;
+  if (lone && rigGpuCount === 1) return lone;
   const want = adapterKey(gpuName);
-  if (want === "") return list.length === 1 ? list[0] : null;
+  if (want === "") return lone;
   const exact = list.find((s) => adapterKey(s.name) === want);
   if (exact) return exact;
   const ends = (long: string, short: string) => short !== "" && ` ${long}`.endsWith(` ${short}`);

@@ -703,7 +703,7 @@ export function HomeConsole({
   // LOCKED rule 5 (codebase review 2026-11-03): the reading is the snapshot of the GPU this face
   // names, graded by the vendor whose sensor produced it. The sensor list is NVML-first and hw.gpus
   // is DXGI order, so "first of each" put an RTX's NVML number under a hybrid laptop's iGPU.
-  const gpuReading = sensorForGpu(gpuSnaps, hw.gpus?.[0]?.name);
+  const gpuReading = sensorForGpu(gpuSnaps, hw.gpus?.[0]?.name, hw.gpus?.length);
   const gpuTemp = gpuReading?.temperature_c ?? null;
   const gpuGrade = gradeGpuTempForVendor(gpuReading?.vendor, gpuTemp);
   // No vendor gate here: unlike the GPU (LOCKED rule 5 — NVIDIA's sensor path is implemented but

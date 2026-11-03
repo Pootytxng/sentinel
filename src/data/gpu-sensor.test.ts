@@ -92,6 +92,15 @@ describe("sensorForGpu (the reading belongs to the GPU the surface names)", () =
     expect(sensorForGpu([rtx, xt], undefined)).toBeNull();
   });
 
+  it("one GPU and one snapshot are the same adapter whatever the SDK called it; two GPUs need the name", () => {
+    const unnamed = { vendor: "AMD", name: "AMD GPU", temperature_c: 58 }; // ADLX's name read failed
+    expect(sensorForGpu([unnamed], "AMD Radeon RX 9070 XT", 1)).toBe(unnamed);
+    expect(sensorForGpu([unnamed], "AMD Radeon RX 9070 XT", 2)).toBeNull();
+    expect(sensorForGpu([unnamed], "AMD Radeon RX 9070 XT")).toBeNull();
+    // A hybrid laptop with its iGPU listed first still never borrows the dGPU's lone NVML snapshot.
+    expect(sensorForGpu([rtx], "Intel(R) UHD Graphics 770", 2)).toBeNull();
+  });
+
   it("no snapshots is no reading", () => {
     expect(sensorForGpu([], "AMD Radeon RX 9070 XT")).toBeNull();
     expect(sensorForGpu(null, "AMD Radeon RX 9070 XT")).toBeNull();
