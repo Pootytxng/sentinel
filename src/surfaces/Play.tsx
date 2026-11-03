@@ -89,10 +89,20 @@ export function verdictLabel(t: TFunction, s: SessionSummary): string {
       : t("monitor.play.someDipsVerdict");
 }
 
+/**
+ * Above an hour: whole minutes ROUNDED, then split — the same rule as History (LogbookTape) and
+ * Games (`playTime`), so one session never reads 3h 28m here and 3h 29m there (CR-live-round).
+ * Rounding first means a near-whole hour carries into the hour, never "1h 60m".
+ */
+export function hoursAndMinutes(sec: number): string {
+  const totalMin = Math.round(sec / 60);
+  return `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`;
+}
+
 export function fmtDur(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  return h > 0 ? `${h}h ${m}m` : `${m}m ${sec % 60}s`;
+  if (sec >= 3600) return hoursAndMinutes(sec);
+  const m = Math.floor(sec / 60);
+  return `${m}m ${sec % 60}s`;
 }
 
 /**
@@ -104,10 +114,9 @@ export function fmtDur(sec: number): string {
  * list and everywhere else a duration is the fact itself.
  */
 export function fmtDurCoarse(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  if (h > 0) return `${h}h ${Math.floor((sec % 3600) / 60)}m`;
-  const m = Math.floor(sec / 60);
-  return m > 0 ? `${m}m` : `${sec}s`;
+  if (sec < 60) return `${sec}s`;
+  const totalMin = Math.round(sec / 60);
+  return totalMin >= 60 ? hoursAndMinutes(sec) : `${totalMin}m`;
 }
 
 // Inline color for a graded metric value — applied only when the grade is non-neutral (neutral

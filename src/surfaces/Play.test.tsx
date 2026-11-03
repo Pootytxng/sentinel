@@ -123,10 +123,28 @@ describe("fmtDurCoarse — the comp's session-length register", () => {
     expect(fmtDurCoarse(60)).toBe("1m");
     expect(fmtDurCoarse(59)).toBe("59s");
     expect(fmtDurCoarse(0)).toBe("0s");
-    expect(fmtDurCoarse(5025)).toBe("1h 23m");
+    expect(fmtDurCoarse(5025)).toBe("1h 24m");
   });
 
   it("leaves fmtDur exact — the session list still states the whole length", () => {
     expect(fmtDur(804)).toBe("13m 24s");
+  });
+});
+
+// CR-live-round (desk review 2026-11-03): Live's session strip read 3h 28m for a session History and
+// Games called 3h 29m — Live floored the minutes, the others round. Above an hour every screen rounds
+// to the nearest minute, and a near-whole hour carries into the hour instead of printing "60m".
+describe("session length above an hour rounds like History and Games", () => {
+  it("rounds the minutes instead of flooring them", () => {
+    expect(fmtDur(12_530)).toBe("3h 29m"); // 3h 28m 50s
+    expect(fmtDurCoarse(12_530)).toBe("3h 29m");
+    expect(fmtDur(12_509)).toBe("3h 28m"); // 3h 28m 29s
+  });
+
+  it("carries a rounded 60 into the hour", () => {
+    expect(fmtDur(7_170)).toBe("2h 0m"); // 1h 59m 30s
+    expect(fmtDurCoarse(7_170)).toBe("2h 0m");
+    expect(fmtDurCoarse(3_590)).toBe("1h 0m"); // 59m 50s, coarse register
+    expect(fmtDur(3_590)).toBe("59m 50s"); // under an hour fmtDur stays exact
   });
 });

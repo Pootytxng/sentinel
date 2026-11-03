@@ -352,10 +352,14 @@ export function SessionDebrief({
         }
       : verdictBand(t, ratio);
 
+  // Same rule as Play's fmtDur (not imported: Play imports this file). Above an hour the minutes
+  // are rounded, like History and Games (CR-live-round).
   const fmtDur = (sec: number) => {
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    return h > 0 ? `${h}h ${m}m` : `${m}m ${sec % 60}s`;
+    if (sec >= 3600) {
+      const totalMin = Math.round(sec / 60);
+      return `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`;
+    }
+    return `${Math.floor(sec / 60)}m ${sec % 60}s`;
   };
   const when = new Date(s.started_at);
   const end = new Date(when.getTime() + s.duration_secs * 1000);
