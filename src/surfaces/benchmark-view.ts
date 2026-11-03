@@ -150,12 +150,19 @@ export function changesBetweenRuns<T extends { applied_at: string }>(
 }
 
 /** How many changes sit inside that window: one per change (`rec_id`), never one per ledger row, so
- *  a change applied twice in the window is still one change (codebase review 2026-11-02). */
+ *  a change applied twice in the window is still one change (codebase review 2026-11-02). A row the
+ *  ledger says was applied on ANOTHER PC is not one of them — the same rule `benchmarkAttribution`
+ *  credits by (`on_this_rig !== false`; a legacy row with no rig stays counted), so the Lab's
+ *  "measured together" count can never speak for a change that ran elsewhere (CR-1102-left). */
 export function changesInWindowCount(
   bench: { baseline_at?: string | null; latest_at?: string | null } | null,
-  changes: { applied_at: string; rec_id: string }[],
+  changes: { applied_at: string; rec_id: string; on_this_rig?: boolean | null }[],
 ): number {
-  return new Set(changesBetweenRuns(bench, changes).map((c) => c.rec_id)).size;
+  return new Set(
+    changesBetweenRuns(bench, changes)
+      .filter((c) => c.on_this_rig !== false)
+      .map((c) => c.rec_id),
+  ).size;
 }
 
 // ── Attribution off the Machine Model (#452) ──

@@ -112,6 +112,19 @@ describe("changesBetweenRuns — the ONE attribution window every surface filter
     ).toBe(1);
     expect(changesInWindowCount(null, [row("game-mode", "2026-07-01T11:00:00Z")])).toBe(0);
   });
+
+  // CR-1102-left (codebase review 2026-11-03): the Lab's "measured together" count counted rows the
+  // ledger says were applied on another PC; the attribution line never credited them.
+  it("never counts a change the ledger says was applied on another PC; a rig-less row still counts", () => {
+    const row = (rec_id: string, applied_at: string) => ({ rec_id, applied_at });
+    const rows = [
+      { ...row("game-mode", "2026-07-01T11:00:00Z"), on_this_rig: true },
+      { ...row("hags", "2026-07-01T11:30:00Z"), on_this_rig: false },
+      { ...row("mouse-accel-off", "2026-07-01T11:45:00Z"), on_this_rig: null },
+      { ...row("visual-effects", "2026-07-01T11:50:00Z") },
+    ];
+    expect(changesInWindowCount(window, rows)).toBe(3);
+  });
 });
 
 describe("trial verdict", () => {
