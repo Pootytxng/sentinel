@@ -96,7 +96,31 @@ describe("RerunCheckBand honesty — age only with a real record", () => {
       unknown_count: 1,
     });
     render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
-    expect(line()).toContain("1 of 4 checks needs a look");
+    // Out of the 3 checks Compy could read and grade (the ring's denominator), and the unread one named.
+    expect(line()).toContain("1 of 3 checks needs a look · 1 couldn't be measured");
+  });
+
+  // Desk review 2026-11-03, third pass (his rig flagged: 13 ready, 1 attention, network QoS and VRR
+  // advisory): the ring said "13 of 14 checks passed" above "1 of 16 checks needs a look", and nothing
+  // on the page named the 2 advisory checks.
+  it("a flagged line counts only graded checks and still names the advisory ones", () => {
+    const r = readiness({
+      checks: [
+        ...Array.from({ length: 13 }, () => chk("ready")),
+        chk("attention"),
+        chk("advisory"),
+        chk("advisory"),
+      ],
+      attention_count: 1,
+      advisory_count: 2,
+    });
+    render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("1 of 14 checks needs a look · 2 advisory, not graded");
+    expect(line()).not.toContain("of 16");
+    cleanup();
+    storeCheck({ at: Date.now() - 5 * 60_000, total: 16, green: 13, advisory: 2, unread: 1, fixCount: 1 });
+    render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("Checked 5m ago · 1 thing to fix · 1 couldn't be measured · 2 advisory, not graded");
   });
 
   // bug → guard (2026-08-18): the honesty hole the old ratio hid. Two checks Compy CANNOT read must

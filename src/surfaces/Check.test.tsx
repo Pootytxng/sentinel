@@ -227,6 +227,28 @@ describe("Check", () => {
     expect(screen.getByText("SSD check")).toBeInTheDocument();
   });
 
+  // Desk review 2026-11-03 (third pass): the receipt gave network QoS and VRR the accent ✓ of a check
+  // that came back right, beside a verdict that called them noted, not graded.
+  it("the receipt marks an advisory row noted, not graded, never with the ✓", async () => {
+    readinessMock.advisories = 1;
+    try {
+      render(
+        <ConfirmProvider>
+          <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+        </ConfirmProvider>,
+      );
+      fireEvent.click(await screen.findByRole("button", { name: /All 2 checks/ }));
+      const advisory = screen.getByText("Advisory 0").closest("li")!;
+      expect(advisory.className).toContain("check-all-advisory");
+      expect(advisory.querySelector(".check-all-mark")!.textContent).toBe("·");
+      expect(advisory.textContent).toContain("noted, not graded");
+      const ready = screen.getByText("SSD check").closest("li")!;
+      expect(ready.querySelector(".check-all-mark")!.textContent).toBe("✓");
+    } finally {
+      readinessMock.advisories = 0;
+    }
+  });
+
   it("drift banner names WHAT (label + detail) and points to WHEN on the Care view, but never a WHO — no 'outside Compy' (honesty guard, drift.rs:61)", async () => {
     // A power-profile regression can be self-inflicted (rolling back the Ultimate power plan in the
     // Trust Ledger drops this same check to Attention). Drift has no vantage point to tell that from a

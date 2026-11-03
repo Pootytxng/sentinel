@@ -397,6 +397,10 @@
 .check-all-unknown .check-all-mark {
   color: var(--ix-text-3);
 }
+/* Noted, not graded: a quiet mark, never the accent ✓ of a check that came back right. */
+.check-all-advisory .check-all-mark {
+  color: var(--ix-text-2);
+}
 /* Dark-pick legibility (room-identity, 2026-07-13): these ✓ status marks read the raw accent, which
    a DARK per-room pick renders ~2.5:1. Inside a room (fix/lab) --ix-accent-text is the adaptive light
    token (== --ix-accent for bright/preset/flag-off, so byte-identical there); the .v2-room scope keeps
