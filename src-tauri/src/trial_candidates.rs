@@ -1021,22 +1021,28 @@ mod tests {
         );
     }
 
-    // The live catalog states only the one overall word: every dimension reads not stated, and every
-    // change Compy can test has an overall word the picker knows.
+    // The live catalog's words reach the picker whole: every change Compy can test has an overall word
+    // the picker knows and, since P8-dims-grades, all four dimensions stated (none High); an advisory
+    // row states no dimension, so its receipt says "not stated" rather than a guess.
     #[test]
-    fn the_live_catalog_states_no_risk_dimension() {
+    fn the_live_catalog_states_every_dimension_for_a_change_and_none_for_advice() {
         let catalog = serde_json::to_value(crate::recommendations::get_recommendations()).unwrap();
         for row in catalog.as_array().unwrap() {
             let id = row["id"].as_str().unwrap();
             let s = stated_risk(&catalog, id).unwrap();
-            assert_eq!(s.dimensions, RiskDimensions::default(), "{id}");
             if crate::history::is_appliable(id) {
+                let d = &s.dimensions;
+                for (name, dim) in [("reversibility", d.reversibility), ("stability", d.stability), ("compatibility", d.compatibility), ("security", d.security)] {
+                    assert!(dim.is_some_and(|w| w != DimensionRisk::High), "{id}: {name} must be stated, and never High");
+                }
                 assert_ne!(s.overall, Risk::Unknown, "{id}");
                 // P8-ack: every change Compy can test that isn't low risk names its cost in the
                 // catalog's own words, so the line before its start never falls back to "no note".
                 if s.overall != Risk::Low {
                     assert!(s.cost.is_some(), "{id}");
                 }
+            } else {
+                assert_eq!(s.dimensions, RiskDimensions::default(), "{id}: advice states no dimension");
             }
         }
     }
