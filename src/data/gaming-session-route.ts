@@ -1,3 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
+import type { GamingSessionFile } from "../surfaces/gaming-mode";
+
 // Resume-vs-recover decision for a Gaming Mode session the Gaming tab finds on disk.
 //
 // An on-disk `active` session is the LIVE one — resume it (show the toggle "on") —
@@ -15,4 +18,23 @@ export type SessionRoute = "resume" | "recover";
 export function routeSession(status: string, liveThisRun: boolean): SessionRoute {
   if (status === "active" && liveThisRun) return "resume";
   return "recover";
+}
+
+/** What the session slot holds right now: nothing, this run's live session, or a contract to recover. */
+export type SessionSlot =
+  | { route: "none" }
+  | { route: SessionRoute; session: GamingSessionFile };
+
+/**
+ * Re-read the slot and route it — the ONE read every surface uses, so the pane's mount, a failed
+ * start and App's banner can't disagree about what is on disk (codebase review 2026-11-03: a failed
+ * start whose undo also failed left a contract the pane and the banner never showed). An unreadable
+ * slot is "none": the caller keeps its plain wording, never a guessed contract.
+ */
+export async function readSessionSlot(): Promise<SessionSlot> {
+  const session = await invoke<GamingSessionFile | null>("get_gaming_session_state").catch(() => null);
+  if (!session) return { route: "none" };
+  const live =
+    session.status === "active" ? await invoke<boolean>("gaming_session_is_live").catch(() => false) : false;
+  return { route: routeSession(session.status, live), session };
 }

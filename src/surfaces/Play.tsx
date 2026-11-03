@@ -36,7 +36,7 @@ import "./Play.css";
 // overlay controls operate the SAME backend state via the SAME existing commands; session rows
 // expand IN PLACE into the full existing debrief (no route to another tab). Zero new IPC.
 
-type GpuLite = { temperature_c: number | null; utilization_gpu_pct: number | null };
+type GpuLite = { vendor?: string; temperature_c: number | null; utilization_gpu_pct: number | null };
 type CpuLite = { usage_overall_pct: number };
 type FpsLite = { active: boolean; status: string; sample: { fps: number; low1_fps: number } | null };
 type ArmedLite = { game: string } | null;
@@ -139,6 +139,7 @@ export default function Play({
   rollback,
   activeChangeFor,
   vendor = "any",
+  peakTempVendor,
   view = "all",
   onFpsActive,
   v2 = false,
@@ -160,6 +161,10 @@ export default function Play({
   // (`activeChangeFor` + `rollback`) the Fix/Optimize surfaces already take.
   activeChangeFor?: (recId: string) => AppliedChange | undefined;
   vendor?: GpuVendor;
+  /** The vendor a session's PEAK GPU temperature is graded under (`sessionPeakVendor`): a peak is the
+   *  hottest reading across every adapter, so any NVIDIA adapter keeps it ungraded (LOCKED rule 5).
+   *  Absent → `vendor`, as before. */
+  peakTempVendor?: string | null;
   // Monitor restructure (spec 2026-06-21): the Monitor shell renders Play twice under a segmented
   // control. "all" (default) = today's whole surface byte-identical (flag-off path); "sessions" = the
   // session list + trends only (no live cards/charts); "live" = the live monitor + overlay + deep
@@ -197,7 +202,9 @@ export default function Play({
   const visible = useDocumentVisible();
   // NVIDIA NVML sensors aren't hardware-verified yet (LOCKED rule #5) — don't grade their temp as
   // authoritative; AMD/unknown stay graded. Routed through the shared gpu-sensor helper (one source).
-  const tempGrade = (c: number | null | undefined): Grade => gradeGpuTempForVendor(vendor, c);
+  // A session peak has no adapter on record, so it grades under peakTempVendor; the live reading is
+  // one snapshot, so it grades under the vendor whose sensor produced it (codebase review 2026-11-03).
+  const peakGrade = (c: number | null | undefined): Grade => gradeGpuTempForVendor(peakTempVendor ?? vendor, c);
 
   // Live readout — same sensor commands the Monitoring tab uses, polled only while Play is active AND
   // the live view is actually showing. On the Sessions segment (the default landing) the live cards
@@ -340,7 +347,7 @@ export default function Play({
               <span className="play-hero-label">ms <Term id="frametime">{t("monitor.play.frametimeTermLabel")}</Term></span>
             </div>
             <div className="play-hero-metric">
-              <span className="play-hero-value" style={gradeStyle(tempGrade(latest.peak_gpu_temp_c))}>{latest.peak_gpu_temp_c == null ? "—" : `${latest.peak_gpu_temp_c}°C`}</span>
+              <span className="play-hero-value" style={gradeStyle(peakGrade(latest.peak_gpu_temp_c))}>{latest.peak_gpu_temp_c == null ? "—" : `${latest.peak_gpu_temp_c}°C`}</span>
               <span className="play-hero-label">{t("monitor.play.peakGpuLabel")}</span>
             </div>
           </div>
@@ -380,7 +387,7 @@ export default function Play({
               <div className="play-metric-label"><Term id="one-percent-lows">{t("monitor.play.oneLowTermLabel")}</Term>{t("monitor.play.estSuffix")}</div>
             </div>
             <div className="play-metric">
-              <div className="play-metric-value" style={gradeStyle(tempGrade(gpu?.temperature_c ?? null))}>{gpu?.temperature_c == null ? "—" : `${gpu.temperature_c}°C`}</div>
+              <div className="play-metric-value" style={gradeStyle(gradeGpuTempForVendor(gpu?.vendor, gpu?.temperature_c ?? null))}>{gpu?.temperature_c == null ? "—" : `${gpu.temperature_c}°C`}</div>
               <div className="play-metric-label">{t("monitor.play.gpuTempLabel")}</div>
             </div>
             <div className="play-metric">
@@ -516,6 +523,7 @@ export default function Play({
                         rollback={rollback}
                         activeChangeFor={activeChangeFor}
                         vendor={vendor}
+                        peakTempVendor={peakTempVendor}
                         sessions={sessions}
                       />
                     </div>

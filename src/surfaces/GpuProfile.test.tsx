@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within, waitFor } from "@testing-library/react";
 import { GpuProfile } from "./GpuProfile";
 import { GPU_SCOPE_KEY } from "../data/profile-store";
 import { type GpuProfileSnapshot } from "../data/gpu-profile-store";
@@ -96,6 +96,28 @@ describe("GpuProfile before/after delta", () => {
     const table = screen.getByRole("table");
     expect(within(table).getByText("24.6.1")).toBeTruthy();
     expect(within(table).getByText("24.7.1")).toBeTruthy();
+  });
+
+  // Codebase review 2026-11-03: the parent's snapshot is App's last refresh, so "Capture after" a
+  // driver-tool change saved the old values and said "No changes". With readNow the click reads now.
+  it("a capture reads the GPU at the click, not the parent's last refresh", async () => {
+    const stale = snap({ driverVersion: "24.6.1" });
+    let live = snap({ driverVersion: "24.6.1" });
+    render(<GpuProfile currentSnapshot={stale} readNow={() => Promise.resolve(live)} />);
+    fireEvent.click(screen.getByRole("button", { name: /Capture before/i }));
+    await screen.findByText(/Make your change, then capture after/i);
+    live = snap({ driverVersion: "24.7.1" }); // changed in the driver tool; the parent never refreshed
+    fireEvent.click(screen.getByRole("button", { name: /Capture after/i }));
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("24.7.1")).toBeTruthy();
+    expect(screen.queryByText(/No changes between these two snapshots/i)).toBeNull();
+  });
+
+  it("a fresh read that fails captures nothing — never the stale snapshot in its place", async () => {
+    render(<GpuProfile currentSnapshot={snap()} readNow={() => Promise.reject(new Error("wmi"))} />);
+    fireEvent.click(screen.getByRole("button", { name: /Capture before/i }));
+    expect(await screen.findByText(/Couldn't read your GPU just now, so nothing was captured/i)).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText(/Make your change, then capture after/i)).toBeNull());
   });
 
   it("does NOT count a missing read as a change (honesty)", () => {

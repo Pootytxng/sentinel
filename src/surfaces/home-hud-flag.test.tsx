@@ -21,7 +21,7 @@ vi.mock("./rig/RigHologram", () => ({
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) => {
     if (cmd === "get_build_stamp") return Promise.resolve("ab12cd3 · dev");
-    if (cmd === "get_gpu_sensors") return Promise.resolve([{ temperature_c: 62 }]);
+    if (cmd === "get_gpu_sensors") return Promise.resolve([{ vendor: "AMD", name: "AMD Radeon RX 9070 XT", temperature_c: 62 }]);
     if (cmd === "get_memory_pressure")
       return Promise.resolve({
         used_bytes: 14.2 * 1024 ** 3,

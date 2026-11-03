@@ -15,9 +15,8 @@ import { knownFps } from "../lib/session-metrics";
 import { useReducedMotion } from "../design/use-motion";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
-import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { gradeGpuTempForVendor, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
-import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
@@ -170,7 +169,7 @@ export function HomeHud({
   const accent = useV2Accent();
 
   // ── live callout probes (existing read-only commands; a failure just omits the value) ──
-  const [gpuTemp, setGpuTemp] = useState<number | null>(null);
+  const [gpuSnaps, setGpuSnaps] = useState<GpuSensorReading[] | null>(null);
   const [mem, setMem] = useState<{ used: number; total: number; level: string } | null>(null);
   // Q7 idle-cost: pause while the window is hidden (same contract as HomeConsole's port of this poll).
   const visible = useDocumentVisible();
@@ -178,14 +177,17 @@ export function HomeHud({
     if (!visible) return;
     let cancelled = false;
     const poll = () => {
-      invoke<{ temperature_c: number | null }[]>("get_gpu_sensors")
-        .then((g) => !cancelled && setGpuTemp(g?.[0]?.temperature_c ?? null))
-        .catch(() => !cancelled && setGpuTemp(null));
+      invoke<GpuSensorReading[]>("get_gpu_sensors")
+        .then((g) => !cancelled && setGpuSnaps(g ?? null))
+        .catch(() => !cancelled && setGpuSnaps(null));
       invoke<{ used_bytes: number; total_bytes: number; level: string }>("get_memory_pressure")
         .then(
           (m) =>
             !cancelled &&
-            setMem(m ? { used: m.used_bytes, total: m.total_bytes, level: m.level } : null),
+            setMem(
+              // 0 of 0 is the backend's no-reading (a poisoned lock), never "0.0 / 0.0 GB" in green.
+              m && m.total_bytes > 0 ? { used: m.used_bytes, total: m.total_bytes, level: m.level } : null,
+            ),
         )
         .catch(() => !cancelled && setMem(null));
     };
@@ -259,8 +261,10 @@ export function HomeHud({
   const gradeClass = (g: Grade) => (g === "neutral" ? "" : ` hud-grade-${g}`);
   const gradeInk = (g: Grade) => (g === "neutral" ? undefined : { color: gradeColor(g) });
   const checking = readiness == null; // checks literally still running
-  const vendor = gpuVendor(hw.gpus?.[0]?.name);
-  const gpuGrade = gradeGpuTempForVendor(vendor, gpuTemp);
+  // LOCKED rule 5: the named GPU's own snapshot, graded by its own vendor (HomeConsole has why).
+  const gpuReading = sensorForGpu(gpuSnaps, hw.gpus?.[0]?.name);
+  const gpuTemp = gpuReading?.temperature_c ?? null;
+  const gpuGrade = gradeGpuTempForVendor(gpuReading?.vendor, gpuTemp);
 
   // The dek: postureLine's sentence often opens by restating its own headline. Under the
   // display verdict that reads as a stutter, so the dek drops the restated prefix and keeps

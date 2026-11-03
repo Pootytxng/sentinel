@@ -99,7 +99,6 @@ const session = sess();
 function mount(over: Partial<Parameters<typeof MonitorConsole>[0]> = {}) {
   const props = {
     active: true,
-    vendor: "amd" as const,
     sessions: [session],
     onFpsActive: vi.fn(),
     ...over,
@@ -453,7 +452,7 @@ describe("MonitorConsole — vendor honesty (d)", () => {
       if (cmd === "get_fps_status") return Promise.resolve(stoppedFps);
       return Promise.resolve(null);
     });
-    const { container } = mount({ vendor: "nvidia" });
+    const { container } = mount();
     // A reading's identity is WHICH FACT it states, never where it sits (Reading.tsx). That is
     // exactly why this guard survived slice 4 moving the fact out of a corner-pinned dial and
     // into the strip: the selector never described the layout in the first place.
@@ -464,6 +463,26 @@ describe("MonitorConsole — vendor honesty (d)", () => {
     expect(gpuRead.classList.contains("rd-neutral")).toBe(true);
     expect(gpuRead.classList.contains("rd-good")).toBe(false);
     expect(gpuRead.classList.contains("rd-warn")).toBe(false);
+  });
+
+  // Codebase review 2026-11-03: the tone came from hw.gpus[0]'s vendor, so a hybrid laptop (iGPU
+  // first in DXGI order) graded the hottest snapshot — the RTX's NVML reading — as verified.
+  it("the hottest snapshot grades by ITS OWN vendor, so a hybrid rig's NVML reading stays neutral", async () => {
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === "get_cpu_sensors") return Promise.resolve(cpuSnap);
+      if (cmd === "get_gpu_sensors")
+        return Promise.resolve([
+          { vendor: "NVIDIA", temperature_c: 91, utilization_gpu_pct: 97 },
+          { vendor: "AMD", temperature_c: 48, utilization_gpu_pct: 3 },
+        ]);
+      if (cmd === "get_fps_status") return Promise.resolve(stoppedFps);
+      return Promise.resolve(null);
+    });
+    const { container } = mount();
+    await waitFor(() =>
+      expect(container.querySelector('[data-read="gpuTemp"] .rd-n')!.textContent).toBe("91"),
+    );
+    expect(container.querySelector('[data-read="gpuTemp"]')!.classList.contains("rd-neutral")).toBe(true);
   });
 });
 

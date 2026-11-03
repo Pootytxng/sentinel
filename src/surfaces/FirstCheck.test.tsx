@@ -55,8 +55,37 @@ describe("FirstCheck (audit M1)", () => {
       screen.getByText(/Every check came back right — measured on this rig, not assumed\./),
     ).toBeInTheDocument();
     // The anti-snake-oil close: green checks are named, work is never invented.
-    expect(screen.getByText(/1 checks measured perfect — confirmed right on this rig/)).toBeInTheDocument();
+    expect(screen.getByText(/1 check measured perfect — confirmed right on this rig/)).toBeInTheDocument();
     expect(screen.getByText(/won't invent work to look busy/)).toBeInTheDocument();
+  });
+
+  // Codebase review 2026-11-03: an unread check never "came back right" — the verdict speaks for the
+  // checks Compy could read and names the rest, instead of "Every check came back right".
+  it("unread checks are named, never counted as right", async () => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) =>
+      cmd === "get_game_readiness"
+        ? Promise.resolve({
+            checks: [
+              { id: "a", label: "SSD check", status: "ready", detail: "", value: null },
+              { id: "b", label: "Power plan", status: "unknown", detail: "", value: null },
+            ],
+            ready_count: 1,
+            attention_count: 0,
+            unknown_count: 1,
+            advisory_count: 0,
+            advisory: "",
+            dismissed_ids: [],
+            drifts: [],
+          })
+        : cleanRig(cmd)) as never);
+    render(
+      <ConfirmProvider>
+        <FirstCheck onDone={vi.fn()} />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("Ready to play — everything Compy could read measured clean")).toBeInTheDocument();
+    expect(screen.getByText(/Every check Compy could read came back right — 1 couldn't be read on this PC/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Every check came back right/)).not.toBeInTheDocument();
   });
 
   // bug→guard (owner screenshot 2026-07-06): the verdict state stacked the live run-list AND the

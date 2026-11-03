@@ -30,9 +30,10 @@ import { join } from "path";
 // engine reached no improved/regressed verdict, the honest default); calls records every
 // invoke so the flag-off pin can assert the IPC was never made.
 const state = vi.hoisted(() => ({
-  gpuSensors: [{ temperature_c: 62 }] as unknown,
+  gpuSensors: [{ vendor: "AMD", name: "AMD Radeon RX 9070 XT", temperature_c: 62 }] as unknown,
   headline: null as unknown,
   calls: [] as string[],
+  mem: null as unknown,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -40,11 +41,13 @@ vi.mock("@tauri-apps/api/core", () => ({
     state.calls.push(cmd);
     if (cmd === "get_gpu_sensors") return Promise.resolve(state.gpuSensors);
     if (cmd === "get_memory_pressure")
-      return Promise.resolve({
-        used_bytes: 14.2 * 1024 ** 3,
-        total_bytes: 29.4 * 1024 ** 3,
-        level: "ok",
-      });
+      return Promise.resolve(
+        state.mem ?? {
+          used_bytes: 14.2 * 1024 ** 3,
+          total_bytes: 29.4 * 1024 ** 3,
+          level: "ok",
+        },
+      );
     if (cmd === "get_intelligence_headline") return Promise.resolve(state.headline);
     return Promise.resolve(null);
   },
@@ -85,9 +88,10 @@ beforeAll(() => {
 afterEach(cleanup);
 beforeEach(() => {
   localStorage.clear();
-  state.gpuSensors = [{ temperature_c: 62 }];
+  state.gpuSensors = [{ vendor: "AMD", name: "AMD Radeon RX 9070 XT", temperature_c: 62 }];
   state.headline = null;
   state.calls = [];
+  state.mem = null;
 });
 
 const hw = {
@@ -547,6 +551,33 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
     const c = mount().container;
     await waitFor(() => expect(readout(c, "gpuTemp").value).toBe("62"));
     expect(readout(c, "gpuTemp").unmeasured).toBeNull();
+  });
+
+  // Codebase review 2026-11-03: the memory command's poisoned-lock branch answers 0 of 0 with level
+  // "ok", which Home printed as "0.0 / 0.0 GB" in green. 0 of 0 is no reading.
+  it("a 0-of-0 memory answer is no reading — the installed size stands, never 0.0 / 0.0 GB", async () => {
+    state.mem = { used_bytes: 0, total_bytes: 0, level: "ok" };
+    const c = mount().container;
+    await waitFor(() => expect(state.calls).toContain("get_memory_pressure"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(c.textContent).not.toContain("0.0 / 0.0 GB");
+    expect(c.textContent).toContain("32.0 GB");
+  });
+
+  // Codebase review 2026-11-03 (LOCKED rule 5): the sensor list is NVML-first and hw.gpus is DXGI
+  // order, so Home printed a hybrid laptop's RTX reading under its iGPU, graded as a verified sensor.
+  it("a hybrid laptop's iGPU never shows the dGPU's NVML reading, and NVIDIA's own stays ungraded", async () => {
+    const igpu = { name: "Intel(R) UHD Graphics 770", vram_bytes: 128 * 1024 ** 2 };
+    const rtx = { name: "NVIDIA GeForce RTX 4060 Laptop GPU", vram_bytes: 8 * 1024 ** 3 };
+    state.gpuSensors = [{ vendor: "NVIDIA", name: rtx.name, temperature_c: 91 }];
+    const hybrid = mount({ ...props, hw: { ...props.hw, gpus: [igpu, rtx] } as HardwareInfo }).container;
+    await waitFor(() => expect(state.calls).toContain("get_gpu_sensors"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(readout(hybrid, "gpuTemp").value).toBe("—");
+    cleanup();
+    const named = mount({ ...props, hw: { ...props.hw, gpus: [rtx, igpu] } as HardwareInfo }).container;
+    await waitFor(() => expect(readout(named, "gpuTemp").value).toBe("91"));
+    expect(readout(named, "gpuTemp").el.classList.contains("rd-neutral")).toBe(true);
   });
 
   // issue #49 — the CPU temperature moved off the annotation plane into the readout beside the

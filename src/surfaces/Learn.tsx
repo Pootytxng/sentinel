@@ -12,6 +12,7 @@ import {
   type TweakVerdict,
 } from "../data/knowledge";
 import { searchKnowledge } from "../data/knowledge-search";
+import { useDocumentVisible } from "../data/use-document-visible";
 import {
   TOPICS,
   TOPIC_LABELS,
@@ -30,7 +31,7 @@ import {
 } from "../data/verdict-glossary";
 import { Icon } from "../design";
 import { useReducedMotion } from "../design/use-motion";
-import { Walkthrough } from "../design/Walkthrough";
+import { WalkthroughDisclosure } from "../design/WalkthroughDisclosure";
 import { walkthroughForKeyForLanguage, type GpuVendor } from "./walkthroughs";
 import { tuningGuideByIdForLanguage } from "../data/tuning-guides";
 import { TuningGuideBody } from "./TuningGuide";
@@ -370,10 +371,9 @@ function EntryCard({
         <div className="lx-card-body">
           <EntryBody entry={entry} onNavigate={onNavigate} />
           {walkthrough && (
-            <details className="lx-walkthrough">
-              <summary>{t("blackbook.learn.showMeTheWay")}</summary>
-              <Walkthrough walkthrough={walkthrough} vendor={vendor} />
-            </details>
+            // Mounted only when opened (codebase review 2026-11-02): inside a closed <details> it ran its
+            // carousel and counted a walkthrough "opened" for every card anyone expanded.
+            <WalkthroughDisclosure className="lx-walkthrough" label={t("blackbook.learn.showMeTheWay")} walkthrough={walkthrough} vendor={vendor} />
           )}
           {related.length > 0 && (
             <div className="lx-related">
@@ -649,9 +649,12 @@ function AutopsyPanel({
         }}
       />
       <div className="lx-autopsy-actions">
+        {/* Shut while this text's grade is on screen: every click recorded the same guide again,
+            inflating "guides fact-checked" and the History tape (codebase review 2026-11-03).
+            Editing the text clears the result and re-opens it. */}
         <button
           className="lx-btn"
-          disabled={!text.trim() || !!urlKind}
+          disabled={!text.trim() || !!urlKind || result !== null}
           onClick={() => {
             const r = autopsyScan(text, knowledgeForLanguage(i18n.language));
             setResult(r);
@@ -764,6 +767,19 @@ export default function Learn({
     }
   }, [focusId, i18n.language]);
 
+  // The modal closes on Esc like the app's other modals (codebase review 2026-11-03); an open confirm
+  // keeps its own Esc. The room (asPanel) is not a modal.
+  useEffect(() => {
+    if (asPanel) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.querySelector('[role="alertdialog"][aria-modal="true"]')) return;
+      e.preventDefault();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [asPanel, onClose]);
+
   // Persist the room's mode so the autopsy survives leaving + returning (continuity §3); modal excluded.
   useEffect(() => {
     if (!asPanel) return;
@@ -774,12 +790,15 @@ export default function Learn({
     }
   }, [mode, asPanel]);
 
-  // Cycle the placeholder examples; frozen (static first) when motion is reduced.
+  // Cycle the placeholder examples; frozen (static first) when motion is reduced. Only while the
+  // browse search box is on screen and the window is visible: each tick re-renders all of Learn,
+  // so it ran every 2.8s in Autopsy mode and behind a fullscreen game (codebase review 2026-11-03).
+  const visible = useDocumentVisible();
   useEffect(() => {
-    if (reducedMotion) return;
+    if (reducedMotion || mode !== "browse" || !visible) return;
     const id = window.setInterval(() => setPhIdx((i) => (i + 1) % PLACEHOLDERS.length), 2800);
     return () => window.clearInterval(id);
-  }, [reducedMotion]);
+  }, [reducedMotion, mode, visible]);
 
   const results = useMemo(() => {
     let hits = searchKnowledge(deferredQ, knowledgeForLanguage(i18n.language));
@@ -803,14 +822,27 @@ export default function Learn({
   // the entry's category AFTER this first runs — the card isn't rendered yet (`cardRefs` miss), the
   // early-return fires, and without `openCats` here it never re-ran, so "More in the Blackbook →"
   // landed on an unscrolled list with the focused card off-screen.
+  //
+  // ONE-SHOT per arrival (codebase review 2026-11-03): it re-runs until the card exists, but once it
+  // has scrolled to an entry it stays put — expanding another category or changing a filter used to
+  // yank the view back and re-flash the card. A new target, or coming back to browse, re-arms it.
+  const scrolledTo = useRef<string | null>(null);
   useEffect(() => {
-    if (mode !== "browse" || !focused) return;
+    if (mode !== "browse" || !focused) {
+      scrolledTo.current = null;
+      return;
+    }
+    if (scrolledTo.current === focused) return;
     const el = cardRefs.current.get(focused);
     if (!el) return;
+    scrolledTo.current = focused;
     el.scrollIntoView({ block: "center", behavior: "smooth" });
     el.classList.add("lx-flash");
     const t = setTimeout(() => el.classList.remove("lx-flash"), 1200);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      el.classList.remove("lx-flash");
+    };
   }, [focused, results, mode, openCats]);
 
   const navigateTo = (id: string) => {
@@ -822,6 +854,7 @@ export default function Learn({
     setVerdict("all");
     setTopic("all");
     setFits("all");
+    scrolledTo.current = null; // a fresh arrival scrolls, even back to the entry already in focus
     setFocused(id);
     const e = byId.get(id);
     if (e) setOpenCats((prev) => new Set(prev).add(e.type)); // expand its category

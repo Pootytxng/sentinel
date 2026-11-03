@@ -1,7 +1,7 @@
 import { Term } from "../design/Term";
 import { withTerms } from "../design/with-terms";
 import { ConfidenceWord } from "../design/ConfidenceWord";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -615,8 +615,12 @@ export function SessionInvestigator({
   const [game, setGame] = useState<string>("");
   const [baselineAt, setBaselineAt] = useState<string>("");
   const [currentAt, setCurrentAt] = useState<string>("");
-  const [outcome, setOutcome] = useState<WhatChangedOutcome | null>(null);
+  // A report belongs to the pair it was asked about: it shows only while the pickers still name that
+  // pair, and only the newest request may land. It used to stay up under "between the two sessions
+  // you picked" after the picks changed (codebase review 2026-11-03).
+  const [outcome, setOutcome] = useState<{ pair: string; report: WhatChangedOutcome } | null>(null);
   const [busy, setBusy] = useState(false);
+  const request = useRef(0);
 
   const active = groups.find((g) => g.game === game) ?? groups[0] ?? null;
   // What each Picker SHOWS is derived from `active`, not read straight off the raw state. The
@@ -650,18 +654,28 @@ export function SessionInvestigator({
   // Compares what the user is LOOKING AT. The raw state is one render behind after a group switch,
   // so reading it here would let the button's enabled-ness — and, in that window, the comparison
   // itself — belong to the previous game while the pickers already show the new one.
+  const pair = `${shownBaseline}|${shownCurrent}`;
   const run = () => {
     if (!shownBaseline || !shownCurrent) return;
+    const mine = ++request.current;
+    const askedPair = pair;
     setBusy(true);
     setOutcome(null);
     invoke<WhatChangedOutcome>("what_changed_between", {
       baselineStartedAt: shownBaseline,
       currentStartedAt: shownCurrent,
     })
-      .then((o) => setOutcome(o))
-      .catch(() => setOutcome(null)) // fetch failure → no report; never a fabricated one
-      .finally(() => setBusy(false));
+      .then((report) => {
+        if (request.current === mine) setOutcome({ pair: askedPair, report });
+      })
+      .catch(() => {
+        if (request.current === mine) setOutcome(null); // fetch failure → no report, never a fabricated one
+      })
+      .finally(() => {
+        if (request.current === mine) setBusy(false);
+      });
   };
+  const shownOutcome = outcome?.pair === pair ? outcome.report : null;
 
   const optLabel = (s: SessionSummary) =>
     t("optimize.whatChangedPanel.sessionLine.main", {
@@ -736,10 +750,10 @@ export function SessionInvestigator({
         <p className="wcp-inv-hint">{t("optimize.whatChangedPanel.pickTwoDifferentSessions")}</p>
       )}
 
-      {outcome && (
+      {shownOutcome && (
         <div className="wcp-inv-result">
           <WhatChangedReportView
-            outcome={outcome}
+            outcome={shownOutcome}
             expert={expert}
             headline={t("optimize.whatChangedPanel.headlineBetween")}
             activeChangeFor={activeChangeFor}

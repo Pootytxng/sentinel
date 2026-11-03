@@ -22,7 +22,7 @@ import { useIntelligenceFlag, useHomeInterviewFlag } from "../design/use-hud";
 import { readHologramV2, readHomeInterview } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
-import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { gradeGpuTempForVendor, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
@@ -572,7 +572,7 @@ export function HomeConsole({
 
   // ── live probes (existing read-only commands; a failure just omits the value) — HomeHud's
   // 5s poll, ported verbatim ──
-  const [gpuTemp, setGpuTemp] = useState<number | null>(null);
+  const [gpuSnaps, setGpuSnaps] = useState<GpuSensorReading[] | null>(null);
   // C-19 — "is my CPU running hot" is a front-door question, so Home MEASURES it instead of
   // asserting it away. This callout used to print a hardcoded "no CPU temp — needs a sensor app"
   // with no probe behind it at all: it said unavailable even while HWiNFO was publishing, which
@@ -593,14 +593,17 @@ export function HomeConsole({
     if (!visible) return;
     let cancelled = false;
     const poll = () => {
-      invoke<{ temperature_c: number | null }[]>("get_gpu_sensors")
-        .then((g) => !cancelled && setGpuTemp(g?.[0]?.temperature_c ?? null))
-        .catch(() => !cancelled && setGpuTemp(null));
+      invoke<GpuSensorReading[]>("get_gpu_sensors")
+        .then((g) => !cancelled && setGpuSnaps(g ?? null))
+        .catch(() => !cancelled && setGpuSnaps(null));
       invoke<{ used_bytes: number; total_bytes: number; level: string }>("get_memory_pressure")
         .then(
           (m) =>
             !cancelled &&
-            setMem(m ? { used: m.used_bytes, total: m.total_bytes, level: m.level } : null),
+            setMem(
+              // 0 of 0 is the backend's no-reading (a poisoned lock), never "0.0 / 0.0 GB" in green.
+              m && m.total_bytes > 0 ? { used: m.used_bytes, total: m.total_bytes, level: m.level } : null,
+            ),
         )
         .catch(() => !cancelled && setMem(null));
       invoke<{ temp_c: number; source: string; label: string } | null>("get_cpu_temp")
@@ -697,7 +700,12 @@ export function HomeConsole({
     strip.kind === "data" ? gradeLow1(strip.low1Est, strip.avgFps) : "neutral";
   const checking = readiness == null; // checks literally still running
   const vendor = gpuVendor(hw.gpus?.[0]?.name);
-  const gpuGrade = gradeGpuTempForVendor(vendor, gpuTemp);
+  // LOCKED rule 5 (codebase review 2026-11-03): the reading is the snapshot of the GPU this face
+  // names, graded by the vendor whose sensor produced it. The sensor list is NVML-first and hw.gpus
+  // is DXGI order, so "first of each" put an RTX's NVML number under a hybrid laptop's iGPU.
+  const gpuReading = sensorForGpu(gpuSnaps, hw.gpus?.[0]?.name);
+  const gpuTemp = gpuReading?.temperature_c ?? null;
+  const gpuGrade = gradeGpuTempForVendor(gpuReading?.vendor, gpuTemp);
   // No vendor gate here: unlike the GPU (LOCKED rule 5 — NVIDIA's sensor path is implemented but
   // not hardware-verified), this number never comes from a Compy sensor path at all. It is
   // whatever monitor the USER installed is publishing, so its trustworthiness does not vary by

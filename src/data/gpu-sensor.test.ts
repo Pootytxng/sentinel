@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { gpuSensorVerified, gradeGpuTempForVendor, vendorProfileInsights } from "./gpu-sensor";
+import {
+  gpuSensorVerified,
+  gradeGpuTempForVendor,
+  sensorForGpu,
+  sessionPeakVendor,
+  vendorProfileInsights,
+} from "./gpu-sensor";
 
 // Guard for the LOCKED rule #5 honesty gate the consistency audit caught: the default Home + Play
 // grade GPU temperature, but NVIDIA NVML readings aren't hardware-verified — so they must NOT be
@@ -42,6 +48,70 @@ describe("gradeGpuTempForVendor (one source — the gate can't drift across surf
     expect(gradeGpuTempForVendor("AMD", null)).toBe("neutral");
     expect(gradeGpuTempForVendor("NVIDIA", null)).toBe("neutral");
     expect(gradeGpuTempForVendor(undefined, undefined)).toBe("neutral");
+  });
+});
+
+// Codebase review 2026-11-03 (LOCKED rule #5): get_gpu_sensors lists NVML adapters first, hw.gpus is
+// DXGI order. Home paired the first of each, so a hybrid laptop printed the RTX's NVML temperature
+// under "UHD Graphics" with a verified-sensor colour. The reading now follows the GPU's own name.
+describe("sensorForGpu (the reading belongs to the GPU the surface names)", () => {
+  const rtx = { vendor: "NVIDIA", name: "NVIDIA GeForce RTX 4060 Laptop GPU", temperature_c: 78 };
+  const uhd = { vendor: "AMD", name: "AMD Radeon(TM) Graphics", temperature_c: null };
+  const xt = { vendor: "AMD", name: "AMD Radeon RX 9070 XT", temperature_c: 61 };
+
+  it("a hybrid laptop's iGPU never wears the dGPU's NVML reading", () => {
+    expect(sensorForGpu([rtx], "Intel(R) UHD Graphics 770")).toBeNull();
+    expect(sensorForGpu([rtx, uhd], "AMD Radeon(TM) Graphics")).toBe(uhd);
+  });
+
+  it("the named GPU gets its own snapshot, whatever order the SDKs listed them in", () => {
+    expect(sensorForGpu([rtx, xt], "AMD Radeon RX 9070 XT")).toBe(xt);
+    expect(sensorForGpu([uhd, xt], "AMD Radeon RX 9070 XT")).toBe(xt);
+    expect(sensorForGpu([rtx, uhd], "NVIDIA GeForce RTX 4060 Laptop GPU")).toBe(rtx);
+  });
+
+  it("case, trademark marks and spacing are one adapter, not two", () => {
+    expect(sensorForGpu([uhd], "amd radeon graphics")).toBe(uhd);
+    expect(sensorForGpu([xt], "AMD Radeon™ RX 9070 XT ")).toBe(xt);
+  });
+
+  it("a name one SDK shortens still matches, but only when exactly one adapter fits", () => {
+    const old = { vendor: "NVIDIA", name: "GeForce RTX 3080", temperature_c: 70 };
+    expect(sensorForGpu([old], "NVIDIA GeForce RTX 3080")).toBe(old);
+    const a = { vendor: "NVIDIA", name: "GeForce RTX 3080", temperature_c: 70 };
+    const b = { vendor: "NVIDIA", name: "NVIDIA GeForce RTX 3080", temperature_c: 71 };
+    expect(sensorForGpu([a, b], "NVIDIA GeForce RTX 3080")).toBe(b); // exact wins
+    // "RTX 4060" is not "RTX 4060 Ti": a word-boundary suffix, never a loose substring.
+    const ti = { vendor: "NVIDIA", name: "NVIDIA GeForce RTX 4060 Ti", temperature_c: 66 };
+    expect(sensorForGpu([ti], "NVIDIA GeForce RTX 4060")).toBeNull();
+  });
+
+  it("no name: a lone snapshot stands, two are a guess and return nothing", () => {
+    expect(sensorForGpu([xt], null)).toBe(xt);
+    expect(sensorForGpu([xt], "")).toBe(xt);
+    expect(sensorForGpu([rtx, xt], undefined)).toBeNull();
+  });
+
+  it("no snapshots is no reading", () => {
+    expect(sensorForGpu([], "AMD Radeon RX 9070 XT")).toBeNull();
+    expect(sensorForGpu(null, "AMD Radeon RX 9070 XT")).toBeNull();
+  });
+});
+
+// A session's peak is the hottest reading across every adapter, recorded without its adapter, so any
+// NVIDIA adapter on the rig makes the peak possibly NVML's — never graded (LOCKED rule #5).
+describe("sessionPeakVendor", () => {
+  it("any NVIDIA adapter anywhere in the list makes the peak NVIDIA's to keep ungraded", () => {
+    expect(sessionPeakVendor(["Intel(R) UHD Graphics 770", "NVIDIA GeForce RTX 4060 Laptop GPU"])).toBe("NVIDIA");
+    expect(sessionPeakVendor(["AMD Radeon(TM) Graphics", "GeForce GTX 1650"])).toBe("NVIDIA");
+    expect(gradeGpuTempForVendor(sessionPeakVendor(["AMD Radeon(TM) Graphics", "NVIDIA RTX A2000"]), 90)).toBe("neutral");
+  });
+
+  it("an all-AMD rig keeps the first adapter, so its peak still grades", () => {
+    expect(sessionPeakVendor(["AMD Radeon RX 9070 XT", "AMD Radeon(TM) Graphics"])).toBe("AMD Radeon RX 9070 XT");
+    expect(gradeGpuTempForVendor(sessionPeakVendor(["AMD Radeon RX 9070 XT"]), 90)).toBe("bad");
+    expect(sessionPeakVendor([])).toBeNull();
+    expect(sessionPeakVendor(undefined)).toBeNull();
   });
 });
 

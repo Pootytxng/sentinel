@@ -20,7 +20,8 @@ import {
   type RestoredSummary,
   type StartOptions,
 } from "./gaming-mode";
-import { routeSession } from "../data/gaming-session-route";
+import { readSessionSlot } from "../data/gaming-session-route";
+import { lsGet, lsSet } from "../data/safe-storage";
 import { useGamingConsoleFlag } from "../design/use-hud";
 import "./GamingMode.css";
 import "./gaming-console.css";
@@ -48,6 +49,10 @@ export function GamingMode() {
   const { t } = useTranslation();
   const [session, setSession] = useState<GamingSessionFile | null>(null);
   const [recovery, setRecovery] = useState<GamingSessionFile | null>(null);
+  // "Not now" folds the recovery card into one row instead of dropping it: the contract stays on
+  // disk (recover(false) leaves it), so the pane keeps a way back to it and Engage stays shut —
+  // a start would only refuse "recover it first" (codebase review 2026-11-03).
+  const [recoveryDeferred, setRecoveryDeferred] = useState(false);
   // Restore-success confirmation (owner-caught UX gap: a successful restore showed nothing).
   // Set ONLY after the backend confirms a full restore; cleared on dismiss or next start.
   const [restored, setRestored] = useState<RestoredSummary | null>(null);
@@ -69,6 +74,25 @@ export function GamingMode() {
     setError(message);
   };
 
+  // Codebase review 2026-11-03: a failed start can leave a rollback contract on disk — a start whose
+  // own undo failed is left restore-failed ("your system may still be changed"), and a start refused
+  // because a contract already exists leaves that one applied. So a failed start re-reads the slot
+  // and shows whatever is there, routed exactly as on mount. Only an empty slot gets the plain
+  // "try again", because only then is nothing of Gaming Mode's left on this PC.
+  const failStart = async (message: string, detail: unknown) => {
+    const slot = await readSessionSlot();
+    if (slot.route === "none") {
+      failGaming(message, detail);
+      return;
+    }
+    if (slot.route === "resume") setSession(slot.session);
+    else {
+      setRecovery(slot.session);
+      setRecoveryDeferred(false);
+    }
+    failGaming(t("gaming.gamingMode.errorStartLeftChanged"), detail);
+  };
+
   // On mount: an on-disk session that wasn't cleanly cleared = interrupted →
   // prompt to recover. Never auto-restores. Only THIS run's own active session
   // (a tab-switch remount) resumes; an active session left by a prior run that
@@ -77,17 +101,10 @@ export function GamingMode() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const s = await invoke<GamingSessionFile | null>("get_gaming_session_state").catch(
-        () => null,
-      );
-      if (cancelled || !s) return;
-      const live =
-        s.status === "active"
-          ? await invoke<boolean>("gaming_session_is_live").catch(() => false)
-          : false;
-      if (cancelled) return;
-      if (routeSession(s.status, live) === "resume") setSession(s);
-      else setRecovery(s);
+      const slot = await readSessionSlot();
+      if (cancelled || slot.route === "none") return;
+      if (slot.route === "resume") setSession(slot.session);
+      else setRecovery(slot.session);
     })();
     return () => {
       cancelled = true;
@@ -111,6 +128,7 @@ export function GamingMode() {
   useEffect(() => {
     const onResolved = () => {
       setRecovery(null);
+      setRecoveryDeferred(false);
       setSession(null);
     };
     window.addEventListener(GAMING_SESSION_RESOLVED_EVENT, onResolved);
@@ -145,14 +163,16 @@ export function GamingMode() {
       const file = await invoke<GamingSessionFile>("start_gaming_session", { opts });
       setSession(file);
     } catch (e) {
-      failGaming(t("gaming.gamingMode.errorStart"), e);
+      await failStart(t("gaming.gamingMode.errorStart"), e);
     } finally {
       setBusy(false);
     }
   };
 
+  // Guarded storage: a bare localStorage throws where WebView2 storage is disabled, and Engage
+  // then did nothing at all. Unreadable consent just asks again.
   const onStartClick = () => {
-    if (localStorage.getItem(CONSENT_KEY) !== "1") {
+    if (lsGet(CONSENT_KEY) !== "1") {
       setNeedConsent(true);
       return;
     }
@@ -160,7 +180,7 @@ export function GamingMode() {
   };
 
   const confirmConsent = () => {
-    localStorage.setItem(CONSENT_KEY, "1");
+    lsSet(CONSENT_KEY, "1");
     setNeedConsent(false);
     void doStart();
   };
@@ -189,6 +209,7 @@ export function GamingMode() {
     try {
       await invoke("recover_gaming_session", { confirm });
       setRecovery(null);
+      setRecoveryDeferred(false);
       if (confirm) {
         setSession(null);
         setRestored(restoredSummary(changes, t)); // backend confirmed: every change restored
@@ -215,12 +236,20 @@ export function GamingMode() {
     setRestored(null); // heading back into an active session — the honesty line takes over
     try {
       await invoke("recover_gaming_session", { confirm: true });
-      setRecovery(null);
-      window.dispatchEvent(new Event(GAMING_SESSION_RESOLVED_EVENT)); // clear sibling prompts
+    } catch (e) {
+      // The restore leg failed: the session is still tracked and its card stays up.
+      failGaming(t("gaming.gamingMode.errorRecover"), e);
+      setBusy(false);
+      return;
+    }
+    setRecovery(null);
+    setRecoveryDeferred(false);
+    window.dispatchEvent(new Event(GAMING_SESSION_RESOLVED_EVENT)); // clear sibling prompts
+    try {
       const file = await invoke<GamingSessionFile>("start_gaming_session", { opts });
       setSession(file);
     } catch (e) {
-      failGaming(t("gaming.gamingMode.errorResume"), e);
+      await failStart(t("gaming.gamingMode.errorResume"), e);
     } finally {
       setBusy(false);
     }
@@ -312,7 +341,17 @@ export function GamingMode() {
         </div>
 
         {/* Interrupted-recovery panel — highest priority (same choices + copy as classic) */}
-        {recovery && (
+        {recovery && recoveryDeferred && (
+          <div className="gc-panel gc-recovery gc-recovery-deferred" role="status">
+            <p className="gc-prose">{t("gaming.gamingMode.recoveryDeferredLine")}</p>
+            <div className="gaming-actions">
+              <button className="gc-btn" onClick={() => setRecoveryDeferred(false)}>
+                {t("gaming.gamingMode.recoveryReviewButton")}
+              </button>
+            </div>
+          </div>
+        )}
+        {recovery && !recoveryDeferred && (
           <div className="gc-panel gc-recovery">
             <div className="gc-panel-title">{t("gaming.gamingMode.recoveryTitle")}</div>
             <p className="gc-prose">
@@ -335,7 +374,7 @@ export function GamingMode() {
               <button className="gc-btn" disabled={busy} onClick={() => onRecover(true)}>
                 {t("gaming.gamingMode.returnNormalButton")}
               </button>
-              <button className="link-btn" disabled={busy} onClick={() => onRecover(false)}>
+              <button className="link-btn" disabled={busy} onClick={() => setRecoveryDeferred(true)}>
                 {t("gaming.gamingMode.notNow")}
               </button>
             </div>
@@ -441,7 +480,8 @@ export function GamingMode() {
                   </label>
                 ))}
               </div>
-              <button className="gc-engage" disabled={busy} onClick={onStartClick}>
+              {/* Shut while a contract is on disk: a start would only refuse "recover it first". */}
+              <button className="gc-engage" disabled={busy || recovery !== null} onClick={onStartClick}>
                 {busy ? t("gaming.gamingMode.engagingEllipsis") : t("gaming.gamingMode.engageButton")}
               </button>
               {/* The promise explainer lives HERE, collapsed on the control it describes —
@@ -482,7 +522,18 @@ export function GamingMode() {
       </p>
 
       {/* Interrupted-recovery prompt — highest priority */}
-      {recovery && (
+      {recovery && recoveryDeferred && (
+        <Card className="gaming-recovery gaming-recovery-deferred">
+          <p>{t("gaming.gamingMode.recoveryDeferredLine")}</p>
+          <div className="gaming-actions">
+            {/* A link, not a bare .btn-small: that one hovers red, and reopening the card is not destructive. */}
+            <button className="link-btn" onClick={() => setRecoveryDeferred(false)}>
+              {t("gaming.gamingMode.recoveryReviewButton")}
+            </button>
+          </div>
+        </Card>
+      )}
+      {recovery && !recoveryDeferred && (
         <Card className="gaming-recovery">
           {/* Protection-first framing — same reframe as the App-level banner (consumer-panel Q4). */}
           <div className="gaming-card-head">{t("gaming.gamingMode.recoveryTitle")}</div>
@@ -506,7 +557,7 @@ export function GamingMode() {
             <button className="btn-small" disabled={busy} onClick={() => onRecover(true)}>
               {t("gaming.gamingMode.returnNormalButton")}
             </button>
-            <button className="link-btn" disabled={busy} onClick={() => onRecover(false)}>
+            <button className="link-btn" disabled={busy} onClick={() => setRecoveryDeferred(true)}>
               {t("gaming.gamingMode.notNow")}
             </button>
           </div>
@@ -552,7 +603,7 @@ export function GamingMode() {
               {busy ? t("gaming.gamingMode.stoppingEllipsis") : t("gaming.gamingMode.stopButton")}
             </button>
           ) : (
-            <button className="btn-small" disabled={busy} onClick={onStartClick}>
+            <button className="btn-small" disabled={busy || recovery !== null} onClick={onStartClick}>
               {busy ? t("gaming.gamingMode.startingEllipsis") : t("gaming.gamingMode.startButton")}
             </button>
           )}

@@ -33,6 +33,7 @@
   "errors": {
     "recoverGamingFailed": "暂时无法恢复你的设置——请重试,或点击「查看」。",
     "gamingResumeFailedGround": "设置已恢复,但游戏模式未能重新开启——准备好后,可以从{{room}}重新打开。",
+    "gamingResumeLeftChanged": "上一次会话已还原,但新的会话未能顺利开启——它的部分更改可能仍留在这台电脑上。请点击「立即恢复」将它们还原。",
     "gamingResumeFailedMerged": "设置已恢复,但游戏模式未能重新开启——准备好后,可以从{{room}}重新打开。",
     "exportFailed": "暂时无法生成报告——请稍后重试。",
     "readInfoFailed": "暂时无法读取部分系统信息——请稍后重试。",

@@ -38,6 +38,8 @@ import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
+import { sessionPeakVendor } from "./data/gpu-sensor";
+import { readSessionSlot } from "./data/gaming-session-route";
 import { invalidateProbe } from "./data/probe-cache";
 import { setStartupEntryEnabled } from "./data/startup-toggle";
 import { writeLedger } from "./data/ledger-write";
@@ -738,7 +740,20 @@ function App() {
   const [gamingPanes, setGamingPanes] = useState(0);
   useEffect(() => {
     const up = () => setGamingPanes((n) => n + 1);
-    const down = () => setGamingPanes((n) => Math.max(0, n - 1));
+    // On the pane's way out, re-read the slot: App's own read runs only at launch, and the pane can
+    // leave a contract App never saw — a start that failed and left one (codebase review 2026-11-03).
+    // The same contract keeps its object, so a toast tucked away this run stays tucked away.
+    const down = () => {
+      setGamingPanes((n) => Math.max(0, n - 1));
+      void readSessionSlot().then((slot) => {
+        if (slot.route !== "recover" || !isRecoverable(slot.session.status)) return;
+        setGamingRecovery((cur) =>
+          cur && cur.session_id === slot.session.session_id && cur.status === slot.session.status
+            ? cur
+            : slot.session,
+        );
+      });
+    };
     window.addEventListener(GAMING_PANE_MOUNTED_EVENT, up);
     window.addEventListener(GAMING_PANE_UNMOUNTED_EVENT, down);
     return () => {
@@ -773,9 +788,17 @@ function App() {
       setGamingResumed(summarizeChanges(file.changes, t).line);
       setGamingRestored(null); // one confirmation at a time — the live session supersedes it
     } catch (e) {
-      // Start leg failed AFTER a confirmed restore — settings are safely back; say exactly
-      // that, and point at the one door to try again (never a vague "resume failed").
-      fail(t("app.errors.gamingResumeFailedGround", { room: t("common.rail.lab") }), e);
+      // Start leg failed AFTER a confirmed restore. "Your settings were restored" holds only while
+      // the slot is empty: a start whose own undo failed leaves a restore-failed contract (codebase
+      // review 2026-11-03), so re-read it and bring the banner back with the honest wording.
+      const left = await invoke<GamingSessionFile | null>("get_gaming_session_state").catch(() => null);
+      if (left && isRecoverable(left.status)) {
+        setGamingRecovery(left);
+        fail(t("app.errors.gamingResumeLeftChanged"), e);
+      } else {
+        // Settings are safely back; say exactly that, and point at the one door to try again.
+        fail(t("app.errors.gamingResumeFailedGround", { room: t("common.rail.lab") }), e);
+      }
     } finally {
       setGamingResuming(false);
     }
@@ -1687,6 +1710,7 @@ function App() {
                   changes={changes}
                   rollback={rollback}
                   vendor={detectedVendor}
+                  peakTempVendor={sessionPeakVendor(hw?.gpus?.map((g) => g.name))}
                 />
               )}
               {/* V2-6: the Blackbook room on RoomShell — Learn composes verbatim (its v2 prop

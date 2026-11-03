@@ -271,6 +271,7 @@ export function SessionDebrief({
   rollback,
   activeChangeFor,
   vendor,
+  peakTempVendor,
   sessions,
 }: {
   s: SessionSummary;
@@ -289,6 +290,8 @@ export function SessionDebrief({
   /** Tuning before/after (spec 2026-06-08) — provided only where the full session list + GPU vendor
    *  are available (Play). Absent → the tuning cluster doesn't render (classic Sessions tab). */
   vendor?: GpuVendor;
+  /** Play's `peakTempVendor`: any NVIDIA adapter keeps a session peak ungraded. Absent → `vendor`. */
+  peakTempVendor?: string | null;
   sessions?: SessionSummary[];
 }) {
   const { t } = useTranslation();
@@ -308,7 +311,8 @@ export function SessionDebrief({
   // Honesty gate (LOCKED rule #5): NVIDIA GPU temp comes from NVML — implemented, NOT hardware-verified
   // — so it's never graded authoritatively. Routed through the shared gpu-sensor helper (one source,
   // can't drift) — same gate Play + the Home/Monitoring surfaces use.
-  const tempGrade = (c: number | null | undefined): Grade => gradeGpuTempForVendor(vendor, c);
+  // The peak is the hottest reading across every adapter, so it grades under peakTempVendor.
+  const tempGrade = (c: number | null | undefined): Grade => gradeGpuTempForVendor(peakTempVendor ?? vendor, c);
   // Show a resolved comparison only if it's for THIS session's game (Moment 4). A TUNING result is
   // NOT a fix comparison — it has no ledger entry to revert — so it's excluded here and rendered by
   // the dedicated TuningDebrief instead (no duplicate card, no meaningless revert button).

@@ -16,6 +16,8 @@ const readinessMock = vi.hoisted(() => ({
   drifts: [] as { id: string; label: string; detail: string; noticed_at: string }[],
   // P6-timeline: the hardware-change advisory's payload (hwchange.rs). Default: no change.
   hw: null as null | { changed: boolean; changes: string[]; baseline_recorded: boolean },
+  // Checks Compy could not read (each one an extra "unknown" row). Default: none.
+  unread: 0,
 }));
 
 // Settable priorities payload (R3 Lane B: upgrade_path arrives on this existing command).
@@ -64,10 +66,19 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "get_nic_driver_info") return Promise.resolve(leftoversMock.nics);
     if (cmd === "get_game_readiness")
       return Promise.resolve({
-        checks: [{ id: "a", label: "SSD check", status: "ready", detail: "", value: null }],
+        checks: [
+          { id: "a", label: "SSD check", status: "ready", detail: "", value: null },
+          ...Array.from({ length: readinessMock.unread }, (_, n) => ({
+            id: `u${n}`,
+            label: `Unread ${n}`,
+            status: "unknown",
+            detail: "",
+            value: null,
+          })),
+        ],
         ready_count: 1,
         attention_count: 0,
-        unknown_count: 0,
+        unknown_count: readinessMock.unread,
         advisory_count: 0,
         advisory: "",
         dismissed_ids: [],
@@ -150,6 +161,28 @@ describe("Check", () => {
     expect(screen.getByRole("button", { name: /Re-run check|Scanning/ })).toBeInTheDocument();
     // The real readiness check streams into the shared scan rows.
     expect(await screen.findByText("SSD check")).toBeInTheDocument();
+  });
+
+  // Codebase review 2026-11-03: "every check came back right" with unread checks on the same screen.
+  it("the living clean line never says every check came back right when some were unread", async () => {
+    document.documentElement.dataset.living = "on";
+    readinessMock.unread = 2;
+    try {
+      render(
+        <ConfirmProvider>
+          <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+        </ConfirmProvider>,
+      );
+      expect(
+        await screen.findByText(
+          "Measured clean — every check Compy could read came back right; 2 couldn't be read on this PC.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/every check came back right on this rig/)).not.toBeInTheDocument();
+    } finally {
+      readinessMock.unread = 0;
+      delete document.documentElement.dataset.living;
+    }
   });
 
   it("settled view collapses the scanned rows behind 'All N checks'; expanding reveals them", async () => {

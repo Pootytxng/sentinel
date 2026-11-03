@@ -91,6 +91,7 @@ export default function FirstCheck({
   const checks = readiness?.checks ?? [];
   const limiters = priorities?.limiters ?? [];
   const fixCount = limiters.length;
+  const unread = readiness?.unknown_count ?? 0;
   const top = limiters[0] ?? null;
   const rest = limiters.slice(1);
   const greenChecks = checks.filter((c) => rowVerdict(c.status) === "ok");
@@ -140,14 +141,21 @@ export default function FirstCheck({
           <div className="fc-verdict">
             <div className="fc-tag">VERDICT</div>
             <h1 className="fc-headline">
-              {fixCount === 0
-                ? "Ready to play — this rig measured clean"
-                : `Ready to play — ${fixCount} thing${fixCount === 1 ? "" : "s"} worth fixing`}
+              {fixCount > 0
+                ? `Ready to play — ${fixCount} thing${fixCount === 1 ? "" : "s"} worth fixing`
+                : unread > 0
+                  ? "Ready to play — everything Compy could read measured clean"
+                  : "Ready to play — this rig measured clean"}
             </h1>
+            {/* An unread check is never "came back right" (codebase review 2026-11-03). */}
             <p className="fc-subtitle">
               {fixCount === 0
-                ? "Every check came back right — measured on this rig, not assumed."
-                : `Reversible, every${fixCount === 1 ? "" : " single"} one. Everything else came back right — measured on this rig, not assumed.`}
+                ? unread > 0
+                  ? `Every check Compy could read came back right — ${unread} couldn't be read on this PC, so ${unread === 1 ? "it isn't" : "they aren't"} counted either way.`
+                  : "Every check came back right — measured on this rig, not assumed."
+                : unread > 0
+                  ? `Reversible, every${fixCount === 1 ? "" : " single"} one. Everything else Compy could read came back right — ${unread} couldn't be read on this PC.`
+                  : `Reversible, every${fixCount === 1 ? "" : " single"} one. Everything else came back right — measured on this rig, not assumed.`}
             </p>
 
             {/* #1 biggest limiter spotlight */}
@@ -254,7 +262,10 @@ export default function FirstCheck({
                   onClick={() => setGreenOpen((o) => !o)}
                   aria-expanded={greenOpen}
                 >
-                  <span>{greenChecks.length} checks measured perfect — confirmed right on this rig</span>
+                  <span>
+                    {greenChecks.length} check{greenChecks.length === 1 ? "" : "s"} measured perfect — confirmed
+                    right on this rig
+                  </span>
                   <span className="fc-green-caret">{greenOpen ? "▾" : "▸"}</span>
                 </button>
                 {greenOpen && (

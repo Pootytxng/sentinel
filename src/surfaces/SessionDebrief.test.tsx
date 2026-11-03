@@ -113,6 +113,30 @@ describe("SessionDebrief (audit M1)", () => {
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
   });
 
+  // Codebase review 2026-11-03 (LOCKED rule 5): a session's peak is the hottest reading across every
+  // adapter, recorded without its adapter. On a rig with an NVIDIA adapter it may be NVML's, so it
+  // must not take the first adapter's (AMD) colour.
+  it("a peak that may be an NVML reading stays uncoloured, whatever the first adapter is", async () => {
+    const hot = { ...session, peak_gpu_temp_c: 92 };
+    const tempTile = () =>
+      screen.getByText("92°C").closest(".debrief-tile")!.querySelector<HTMLElement>(".debrief-tile-value")!;
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} s={hot} vendor="amd" peakTempVendor="NVIDIA" />
+      </ConfirmProvider>,
+    );
+    await screen.findByText(/eldenring/);
+    expect(tempTile().style.color).toBe("");
+    cleanup();
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} s={hot} vendor="amd" peakTempVendor="AMD Radeon RX 9070 XT" />
+      </ConfirmProvider>,
+    );
+    await screen.findByText(/eldenring/);
+    expect(tempTile().style.color).not.toBe("");
+  });
+
   it("the context strip counts Compy changes active during the session, and Share exports", async () => {
     const onExport = vi.fn();
     render(

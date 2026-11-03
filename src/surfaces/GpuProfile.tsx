@@ -150,17 +150,45 @@ function DeltaRow({ d }: { d: FieldDelta }) {
   );
 }
 
-function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnapshot | null }) {
+function GpuProfileDelta({
+  currentSnapshot,
+  readNow,
+}: {
+  currentSnapshot?: GpuProfileSnapshot | null;
+  readNow?: () => Promise<GpuProfileSnapshot | null>;
+}) {
   const { t } = useTranslation();
   const [pair, setPair] = useState(() => readGpuProfiles());
+  const [reading, setReading] = useState(false);
+  const [readFailed, setReadFailed] = useState(false);
 
+  // A capture reads the GPU NOW when the host can (`readNow`): the parent's snapshot is App's last
+  // refresh, so a change made in the driver tool or Windows Settings between the two captures was
+  // saved as the old values and reported "No changes" (codebase review 2026-11-03). A failed read
+  // captures nothing — never the stale snapshot in its place.
   const capture = useCallback(
-    (slot: "before" | "after") => {
-      if (!currentSnapshot) return; // nothing readable right now — do nothing (never fabricate)
-      writeGpuProfileSlot(slot, currentSnapshot);
+    async (slot: "before" | "after") => {
+      if (!currentSnapshot || reading) return; // nothing readable right now — do nothing (never fabricate)
+      let snap: GpuProfileSnapshot | null = currentSnapshot;
+      if (readNow) {
+        setReading(true);
+        setReadFailed(false);
+        try {
+          snap = await readNow();
+        } catch {
+          snap = null;
+        } finally {
+          setReading(false);
+        }
+      }
+      if (!snap) {
+        setReadFailed(true);
+        return;
+      }
+      writeGpuProfileSlot(slot, snap);
       setPair(readGpuProfiles());
     },
-    [currentSnapshot],
+    [currentSnapshot, readNow, reading],
   );
 
   const reset = useCallback(() => {
@@ -184,10 +212,20 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
       </p>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" style={btnStyle()} onClick={() => capture("before")} disabled={!currentSnapshot}>
+        <button
+          type="button"
+          style={btnStyle()}
+          onClick={() => void capture("before")}
+          disabled={!currentSnapshot || reading}
+        >
           {pair.before ? t("lab.gpuProfile.recaptureBefore") : t("lab.gpuProfile.captureBefore")}
         </button>
-        <button type="button" style={btnStyle()} onClick={() => capture("after")} disabled={!currentSnapshot}>
+        <button
+          type="button"
+          style={btnStyle()}
+          onClick={() => void capture("after")}
+          disabled={!currentSnapshot || reading}
+        >
           {pair.after ? t("lab.gpuProfile.recaptureAfter") : t("lab.gpuProfile.captureAfter")}
         </button>
         {(pair.before || pair.after) && (
@@ -196,6 +234,11 @@ function GpuProfileDelta({ currentSnapshot }: { currentSnapshot?: GpuProfileSnap
           </button>
         )}
       </div>
+      {(reading || readFailed) && (
+        <p role="status" style={{ margin: 0, fontSize: "var(--type-label)", color: "var(--ix-text-2)" }}>
+          {reading ? t("lab.gpuProfile.readingNow") : t("lab.gpuProfile.readFailed")}
+        </p>
+      )}
 
       {!currentSnapshot && !pair.before && !pair.after ? (
         <p style={muted}>
@@ -335,12 +378,19 @@ function GpuVendorInsights({ currentSnapshot }: { currentSnapshot?: GpuProfileSn
  * you changed something in your driver tool). All are local, advisory, and change nothing on the PC.
  * `currentSnapshot` is the parent-supplied live GPU read for the badges + delta card.
  */
-export function GpuProfile({ currentSnapshot }: { currentSnapshot?: GpuProfileSnapshot | null }) {
+export function GpuProfile({
+  currentSnapshot,
+  readNow,
+}: {
+  currentSnapshot?: GpuProfileSnapshot | null;
+  /** Reads the GPU fresh for a before/after capture (LabGround wires it). Absent → the snapshot. */
+  readNow?: () => Promise<GpuProfileSnapshot | null>;
+}) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <GpuProfileScopePicker />
       <GpuVendorInsights currentSnapshot={currentSnapshot} />
-      <GpuProfileDelta currentSnapshot={currentSnapshot} />
+      <GpuProfileDelta currentSnapshot={currentSnapshot} readNow={readNow} />
     </div>
   );
 }

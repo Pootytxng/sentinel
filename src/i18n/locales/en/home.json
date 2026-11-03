@@ -631,6 +631,7 @@
       "elapsedPending": "…",
       "noGuessing": "No guessing — Compy measures this machine, then tells you the truth.",
       "readyClean": "Ready to play — this rig measured clean",
+      "readyCleanPartial": "Ready to play — everything Compy could read measured clean",
       "readyFixing_one": "Ready to play — {{count}} thing worth fixing",
       "readyFixing_other": "Ready to play — {{count}} things worth fixing",
       "revertedTitle_one": "“{{title}}” turned itself back off",
@@ -644,7 +645,10 @@
       "applying": "Applying…",
       "applyFix": "Apply this fix",
       "advisory": "advisory — no one-click change",
-      "checksClean": "{{count}} checks came back right — measured on this rig, not assumed.",
+      "checksClean_one": "{{count}} check came back right — measured on this rig, not assumed.",
+      "checksClean_other": "{{count}} checks came back right — measured on this rig, not assumed.",
+      "checksUnread_one": "{{count}} check couldn't be read on this PC, so it isn't counted either way.",
+      "checksUnread_other": "{{count}} checks couldn't be read on this PC, so they aren't counted either way.",
       "reversibleFooter": "Reversible, every one. Next, a quick tour of your rig — tap Next."
     },
     "lesson": {

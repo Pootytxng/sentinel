@@ -33,6 +33,7 @@
   "errors": {
     "recoverGamingFailed": "Couldn't finish restoring your settings just now — try again, or use Review.",
     "gamingResumeFailedGround": "Your settings were restored, but Gaming Mode couldn't start again — turn it on from the {{room}} when you're ready.",
+    "gamingResumeLeftChanged": "Your last session was restored, but the new one didn't start cleanly — some of its changes may still be on this PC. Use Restore now to put them back.",
     "gamingResumeFailedMerged": "Your settings were restored, but Gaming Mode couldn't start again — turn it on from {{room}} when you're ready.",
     "exportFailed": "Couldn't build the report just now — try again in a moment.",
     "readInfoFailed": "Couldn't read some of your system info just now — try again in a moment.",

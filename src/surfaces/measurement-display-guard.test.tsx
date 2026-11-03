@@ -76,7 +76,7 @@ const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts) as 
 const text = (el: Element | null) => (el?.textContent ?? "").trim();
 
 const renderConsole = (sessions: SessionSummary[]) =>
-  render(<MonitorConsole active={false} vendor="amd" sessions={sessions} />);
+  render(<MonitorConsole active={false} sessions={sessions} />);
 const renderPlay = (sessions: SessionSummary[]) =>
   render(
     <ConfirmProvider>
