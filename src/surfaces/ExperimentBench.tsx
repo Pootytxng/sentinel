@@ -62,7 +62,7 @@ import { journeyProgress, nextToTest, stillOnFor } from "./journey-resume";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { displayModeLabel } from "../data/display-mode";
 import { takeBenchArrival, type BenchArrival } from "./lab-arrival";
-import { settingsDoneLine } from "./settings-done";
+import { settingsDoneLine, softwareFirstLine } from "./settings-done";
 import { peekScanPriorities } from "./use-scan";
 import "./ExperimentBench.css";
 
@@ -1806,7 +1806,11 @@ function TestSummary({ s }: { s: GameTestSummary }) {
   };
   const staleAsked = s.staleAsked;
   // P9-settings-done: the last cached scan's limiters, read with no IPC; no scan = "not measured".
-  const settingsDone = settingsDoneLine(s.headline, peekScanPriorities());
+  const scanPriorities = peekScanPriorities();
+  const settingsDone = settingsDoneLine(s.headline, scanPriorities);
+  // P9-software-first: while changes are still untested (or worth another run), a part the last
+  // check named as the limiter is said AFTER the settings to try first; never a shopping line.
+  const softwareFirst = softwareFirstLine(s, scanPriorities);
   return (
     <div className="exp-order exp-summary" data-testid="exp-summary" data-headline={s.headline}>
       <SectionLabel>{t("lab.experimentBench.summary.label", { game })}</SectionLabel>
@@ -1865,6 +1869,15 @@ function TestSummary({ s }: { s: GameTestSummary }) {
               : settingsDone.kind === "nothing-limiting"
                 ? t("lab.experimentBench.summary.settingsDone.nothingLimiting")
                 : t("lab.experimentBench.summary.settingsDone.notMeasured")}
+        </p>
+      )}
+      {softwareFirst && (
+        <p className="exp-note" data-testid="exp-summary-software-first">
+          {t("lab.experimentBench.summary.softwareFirst", {
+            part: softwareFirst.part,
+            list: softwareFirst.candidates.join(list),
+            count: softwareFirst.candidates.length,
+          })}
         </p>
       )}
       {(s.kept.length > 0 || s.putBack.length > 0) && (

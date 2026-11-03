@@ -43,3 +43,35 @@ export function settingsDoneLine(
   if (limiters.some((l) => l.status === "unknown")) return { kind: "not-measured" };
   return { kind: "nothing-limiting" };
 }
+
+export type SoftwareFirstLine = {
+  kind: "software-first";
+  /** The part the last check named as the top limiter. Named only; never a shopping line. */
+  part: string;
+  /** The untested changes first, then those worth another run, in the picker's order. */
+  candidates: string[];
+};
+
+/** P9-software-first: before any part is named as what holds a game back, the summary lists the
+ *  Trial candidates still untested (or worth another run) for that game — "try these settings
+ *  before any upgrade". With none left, `settingsDoneLine` carries today's line instead, so the
+ *  two never render together. Absent when the last check named no part, or no scan is in hand. */
+export function softwareFirstLine(
+  summary: Pick<GameTestSummary, "headline" | "leftToTest" | "retest">,
+  priorities: Priorities | null | undefined,
+): SoftwareFirstLine | null {
+  if (summary.headline === "finished-supported-tests" || summary.headline === "unknown") return null;
+  if (!priorities) return null;
+  const limiters = (priorities.limiters ?? []).filter((l) => !AGGREGATE_REC_ROWS.has(l.id));
+  const top = limiters.find((l) => l.status === "attention");
+  if (!top || LIMITER_AWAY.has(top.id)) return null;
+  const seen = new Set<string>();
+  const candidates = [
+    ...summary.leftToTest.map((c) => ({ id: c.id, title: c.title })),
+    ...summary.retest.map((r) => ({ id: r.recId, title: r.title })),
+  ]
+    .filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)))
+    .map((c) => c.title);
+  if (candidates.length === 0) return null;
+  return { kind: "software-first", part: top.title, candidates };
+}

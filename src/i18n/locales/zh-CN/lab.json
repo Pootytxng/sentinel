@@ -853,6 +853,8 @@
         "settingLimiter": "设置已经达到 Compy 在这里能测试的程度。上次检查的首要瓶颈是一项设置，而不是硬件：{{title}}。不建议为此升级。",
         "partLimiter": "设置已经达到 Compy 在这里能测试的程度。上次检查的首要瓶颈是这台主机的一个部件：{{title}}。"
       },
+      "softwareFirst_one": "上次检查的首要瓶颈是这台电脑的一个部件：{{part}}。考虑升级之前，先试试这项设置：{{list}}。",
+      "softwareFirst_other": "上次检查的首要瓶颈是这台电脑的一个部件：{{part}}。考虑升级之前，先试试这 {{count}} 项设置：{{list}}。",
       "finishedWithinChosenRisk_other": "Compy 已在你选择的风险范围内完成 {{game}} 的测试：在该风险范围内值得在这里测试的每一项更改都有了测得的结果。另有 {{count}} 项更改超出这个范围。",
       "worthRetesting_other": "{{game}} 上有 {{count}} 项结果需要再跑一次才算数：{{why}}。",
       "stillWorth_other": "{{game}} 上还有 {{count}} 项更改值得测试，所以还没有测完。",

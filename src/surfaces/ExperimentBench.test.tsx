@@ -2287,6 +2287,40 @@ describe("P4-exit: what Compy tested on this game", () => {
     ]);
     expect(panel).toHaveAttribute("data-headline", "still-worth-testing");
     expect(screen.queryByTestId("exp-summary-settings-done")).toBeNull();
+    // P9-software-first: no scan in hand, no part named, so no line either.
+    expect(screen.queryByTestId("exp-summary-software-first")).toBeNull();
+  });
+
+  it("P9-software-first: a part named by the last check comes after the settings still worth trying", async () => {
+    const lim = (id: string, title: string) => ({ id, title, reason: "", linked: null, confidence: "medium", status: "attention" });
+    const scan = (limiters: unknown[]) => ({
+      readiness: null,
+      priorities: { limiters, already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null },
+      recs: [],
+      reverted: [],
+      elapsed: null,
+    });
+    try {
+      putProbe("readiness-scan", scan([lim("gpu-headroom", "Graphics card")]));
+      const panel = await renderOwner([
+        pass("visual-effects", "Trim Windows visual effects", 1),
+        pass("mouse-accel", "Turn off mouse acceleration", 2),
+      ]);
+      expect(panel).toHaveAttribute("data-headline", "still-worth-testing");
+      const line = screen.getByTestId("exp-summary-software-first");
+      expect(line).toHaveTextContent(
+        "The last check's top limiter is a part of this PC: Graphics card. Try this setting before any upgrade: Turn off mouse acceleration.",
+      );
+      expect(line.textContent).not.toMatch(/buy|\$|price|upgrade to/i);
+      expect(screen.queryByTestId("exp-summary-settings-done")).toBeNull();
+      cleanup();
+      // A setting as the limiter: nothing to put before it.
+      putProbe("readiness-scan", scan([lim("monitor-refresh", "Monitor refresh rate")]));
+      await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1), pass("mouse-accel", "Turn off mouse acceleration", 2)]);
+      expect(screen.queryByTestId("exp-summary-software-first")).toBeNull();
+    } finally {
+      invalidateProbe("readiness-scan");
+    }
   });
 
   // TRUTHFUL COMPLETION (critical review 2026-10-26 §4): an attempt is not a result.

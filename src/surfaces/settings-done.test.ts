@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { settingsDoneLine } from "./settings-done";
+import { settingsDoneLine, softwareFirstLine } from "./settings-done";
 import type { Priorities, PriorityItem } from "../types";
 
 const item = (id: string, status: PriorityItem["status"], title = id): PriorityItem => ({
@@ -70,6 +70,41 @@ describe("settingsDoneLine (P9-settings-done)", () => {
     // An unread limiter is unknown, never "nothing limiting".
     expect(settingsDoneLine("finished-supported-tests", pri([item("a", "ready"), item("b", "unknown")]))).toEqual({
       kind: "not-measured",
+    });
+  });
+});
+
+// P9-software-first: before a part is named as what holds a game back, the summary lists the
+// settings still worth trying — none left = today's settings-done line instead.
+describe("softwareFirstLine (P9-software-first)", () => {
+  const cand = (id: string, title: string) => ({ id, title, passes: true, reason: null, detail: null });
+  const tested = (recId: string, title: string) => ({ recId, title }) as never;
+  const part = pri([item("ram-capacity", "attention", "Memory")]);
+
+  it("lists the untested changes, then those worth another run, before the part — in the picker's order", () => {
+    const line = softwareFirstLine(
+      { headline: "still-worth-testing", leftToTest: [cand("a", "Change A"), cand("b", "Change B")], retest: [tested("c", "Change C"), tested("a", "Change A")] },
+      part,
+    );
+    expect(line).toEqual({ kind: "software-first", part: "Memory", candidates: ["Change A", "Change B", "Change C"] });
+  });
+
+  it("is absent on a finished summary (today's line carries it), with nothing left to try, or with no part named", () => {
+    const left = [cand("a", "Change A")];
+    expect(softwareFirstLine({ headline: "finished-supported-tests", leftToTest: left, retest: [] }, part)).toBeNull();
+    expect(softwareFirstLine({ headline: "still-worth-testing", leftToTest: [], retest: [] }, part)).toBeNull();
+    expect(softwareFirstLine({ headline: "still-worth-testing", leftToTest: left, retest: [] }, undefined)).toBeNull();
+    expect(softwareFirstLine({ headline: "still-worth-testing", leftToTest: left, retest: [] }, pri([]))).toBeNull();
+    // A setting or software limiter is not a part; the aggregate rec rows are not limiters here.
+    expect(softwareFirstLine({ headline: "still-worth-testing", leftToTest: left, retest: [] }, pri([item("monitor-refresh", "attention")]))).toBeNull();
+    expect(softwareFirstLine({ headline: "still-worth-testing", leftToTest: left, retest: [] }, pri([item("pending-safe-recs", "attention")]))).toBeNull();
+  });
+
+  it("a retest-only summary still lists what is worth another run", () => {
+    expect(softwareFirstLine({ headline: "worth-retesting", leftToTest: [], retest: [tested("c", "Change C")] }, part)).toEqual({
+      kind: "software-first",
+      part: "Memory",
+      candidates: ["Change C"],
     });
   });
 });

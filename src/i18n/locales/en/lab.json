@@ -866,6 +866,8 @@
         "settingLimiter": "Settings have reached what Compy can test here. The last check's top limiter is a setting, not a part: {{title}}. No upgrade is recommended for it.",
         "partLimiter": "Settings have reached what Compy can test here. The last check's top limiter is a part of this PC: {{title}}."
       },
+      "softwareFirst_one": "The last check's top limiter is a part of this PC: {{part}}. Try this setting before any upgrade: {{list}}.",
+      "softwareFirst_other": "The last check's top limiter is a part of this PC: {{part}}. Try these {{count}} settings before any upgrade: {{list}}.",
       "finishedWithinChosenRisk_one": "Compy finished the tests for {{game}} within the risk you chose: every change worth testing here at that risk has a measured result. {{count}} more change is above that risk.",
       "finishedWithinChosenRisk_other": "Compy finished the tests for {{game}} within the risk you chose: every change worth testing here at that risk has a measured result. {{count}} more changes are above that risk.",
       "worthRetesting_one": "{{count}} result on {{game}} needs another run before it counts: {{why}}.",
