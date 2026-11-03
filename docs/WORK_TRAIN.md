@@ -86,21 +86,38 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       empty block, notes and a tag on the wrong tokens, no mask under Solid, a Benchmark link meant for Live), fixed
       in `6d99f36c`; then one first-run demo at a time across remounts `59df7cb7`, and a recorded but unmeasured
       game never called measured `3b542b0a`; round 2 PASS. Installed in `1d53dfc8`.
-- [ ] **CR-1102-left** (codebase review 2026-11-02, slices 1-6; fixed in `8f4037c1`..`508b200f`, `4465e74b`, `16479f4b`)
+- [ ] **CR-1102-left** (codebase review 2026-11-02 to 11-03, slices 1-8; fixed in `8f4037c1`..`508b200f`, `4465e74b`, `16479f4b`, `22d23584`..`cd9e11c0`)
       What it found and left, each a decision or a UI study rather than a quick fix: drift notices stay up while a
-      check reads unknown; a Trial delta on a 0 or NaN baseline (older records only); `has_pending_contract`
-      refuses on any leftover temp file; one ledger row a downgraded build can't parse fails the whole ledger; a
-      partial batch apply carries no flag over IPC; nothing stops a double apply of one change; real play keeps a
-      change after an OtherChange or Conditions stop (owner call); the experiments, sessions and noise stores
-      still overwrite an earlier `.corrupt`; a session under 600 samples leaves an armed comparison waiting with
-      no line saying why; the Lab's "measured together" count still counts rows from another PC; App's refresh has
-      no latest-wins guard; the debrief's comparison isn't reset when the shown game changes; Benchmark's Measure
-      and Run have no in-flight latch. Slice 6: Care's first-ever scan seeds an empty world when its readers fail;
-      a crash's vitals come from the whole capture window, not the game's own; Black Box, export and capture start
-      run on the UI thread; a wedged old FPS helper can clear the new one's running flag; a Care state that can't
-      be read or written stays silent with no support event. Desk review: History prints "+0 fps vs last" for a
-      delta under 1 fps (LogbookTape tests the unrounded delta). Unsure: `elevate_and_wait` waits with no timeout
-      while the ledger is locked.
+      check reads unknown; a Trial delta on a 0 or NaN baseline (older records only); `has_pending_contract` refuses
+      on any leftover temp file; one ledger row a downgraded build can't parse fails the whole ledger; a partial
+      batch apply carries no flag over IPC; nothing stops a double apply of one change; real play keeps a change
+      after an OtherChange or Conditions stop (owner call); the experiments, sessions and noise stores still
+      overwrite an earlier `.corrupt`; a session under 600 samples leaves an armed comparison waiting with no line
+      saying why; the Lab's "measured together" count still counts rows from another PC. Slice 6: Care's first-ever
+      scan seeds an empty world when its readers fail; a crash's vitals come from the whole capture window, not the
+      game's own; Black Box, export and capture start run on the UI thread; a wedged old FPS helper can clear the new
+      one's running flag; a Care state that can't be read or written stays silent with no support event. Slice 7
+      (advice): a service that is only stopped still reads as Compy's change (its start type is unread); the
+      power-plan, core-parking and bcdedit checks match English words, so a localized Windows misreads them; one peak
+      GPU sample over 95% still reads as "the GPU was the bottleneck", with purchase links; the slow probes
+      (leftovers, readiness, priorities, diagnostics, Trial candidates) run as sync commands. Slice 8 (screens): the
+      GPU view's Global/Per-game picker changes nothing anything reads (remove it, or wire it); after the one-time
+      consent, newly ticked UAC tiers and service suspends start with no fresh confirm; the GPU profile labels and
+      the setup lessons are English in zh-CN; the tour waits on "Running checks" forever if the scan rejects (a panic
+      only); App's banner wiring (the pane-close re-read, the Resume failure) and its refresh guard are tested
+      through their helpers only (App has no render harness); a session's peak stays ungraded only when DXGI shows an
+      NVIDIA adapter (a TCC compute card only NVML reports is missed); App's and Home's walkthrough and tuning vendor
+      is still the first DXGI adapter, not the primary GPU. Desk reviews: with unread checks, Home's ring note still
+      carries "N couldn't be read" and wraps past two lines at 1280x720 (the advisory aside left the ring for that
+      reason); Live's session strip floors durations (3h 28m) where History and Games round (3h 29m); a Compy started
+      from the Claude desktop app's Desktop Commander runs inside that app's MSIX virtualization and keeps an overlay
+      copy of its WebView2 profile, where the owner's picks live, while his own launches and ship-reinstall's read
+      the real profile (near-empty localStorage since 07-23), so the app shows defaults after a reinstall or a reboot
+      until a Desktop Commander relaunch; merging the two copies is the owner's call. Unsure: `elevate_and_wait`
+      waits with no timeout while the ledger is locked; core parking flags any non-performance plan with minimum
+      cores at 100; a system-managed pagefile may print "Fixed at 0-0 MB"; VBS is read as configured, not running;
+      two modules are called dual-channel whatever their slots; drive health and memory speed or channels never rank
+      as limiters.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -722,15 +739,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-28 ~05:50-07:30 (interactive from Claude HQ, owner on PC, Compy on the right monitor by his choice):
-  the owed visual self-reviews ran after all - a general-purpose agent with the desk tools can capture and
-  judge, unlike the dedicated self-reviewer from a cloud session. Verdicts and fixes under P7-visual-review.
-  Gate r30 caught two expected misses (a named census retirement, a test reading the old chip); r31 green
-  (526 files / 9448 passed), cargo 1661 passed, clippy clean. Lessons: a gate-launch wrapper's array args
-  do not survive `-File`, call it with `&`; keep vitest log filters to summary lines (a loose "fail" regex
-  matches hundreds of test names). Review rounds 2-4 drove `dfd8f90c` and `e6db699e` (gates r32, r33 green,
-  526 files / 9453 passed); round 4 PASS. Lesson: a scroll-into-view fix loses to content loading above
-  it - put the answer first instead. Installed `e6db699e`, pushed after.
 - 2026-10-29 10:16-12:50 (interactive from Claude HQ, owner away then playing PBZ): 4 unchanged PBZ sessions
   recorded unattended (owner-approved admin-prompt window 10:22-11:55, restored), one guided Trial
   (too-noisy, put back), P4-show-f2 PASS, round-5 screen checks (P4-smooth-offer-b, P7-teach, P7-severity
@@ -818,6 +826,18 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   gate. What the review left is CR-1102-left. The lane line (`87656201`) was never pushed: kept on
   `keep/lane-87656201`; scheduled sessions may write again. Owner played; every launch was --no-activate on his
   second monitor.
+- 2026-11-03 ~01:00 to ~08:07 (interactive from Claude HQ, the same ask): the codebase review's slices 7 and 8 landed
+  from `claude/train-review-1103c` (`22d23584` advice that reads the machine honestly; `e50cc1e9` screens that say
+  what Compy read: GPU temperature from the named GPU's own sensor, never coloured from NVML, check counts that name
+  unread and advisory checks, Gaming Mode's leftover contract, Learn, the investigator, the GPU before/after; the
+  review rounds' follow-ups through `cd9e11c0`, with the GPU driver fields re-read in-session and three CR-1102-left
+  items). Merges `e2de00db`, `feb2e699`, `c152a383`, `49126983`, `fe2f6f82` (a script-only revert), `60a86db2` and
+  `50ceb38c`. Rust and frontend each reviewed twice, no MUST left. Desk self-review PASS 12 of 12 on `50ceb38c` with
+  his data, after five desk reviews (`e2de00db` to `60a86db2`) failed and were fixed. A Compy started from the Claude
+  app's Desktop Commander reads an overlay copy of its WebView2 profile (his picks); his own launches and
+  ship-reinstall's read the real one: nothing lost, merging them is his call. Desk build `50ceb38c` installed
+  (`ship-reinstall.ps1 -VerifyRuntime`, proof `50ceb38c · release`); pushed with this line through the pre-push gate.
+  What the review left is CR-1102-left. Every launch was --no-activate on his second monitor.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
