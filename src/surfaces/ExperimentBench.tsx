@@ -2107,9 +2107,11 @@ function RunningPanel({
     <div className="exp-running" data-testid="experiment-running" data-change-off={changeOff || undefined}>
       {interrupted && (
         <p className="exp-bench-warn" data-testid="exp-interrupted" role="status">
-          {t(changeOff ? "lab.experimentBench.journey.interruptedOff" : "lab.experimentBench.journey.interrupted", {
-            change: exp.rec_title,
-          })}
+          {/* Two literal calls, not one call on a ternary: src/affordance-census.test.ts reads each
+              surface's copy from its t("…") literals, and a key behind a ternary reads as dropped. */}
+          {changeOff
+            ? t("lab.experimentBench.journey.interruptedOff", { change: exp.rec_title })
+            : t("lab.experimentBench.journey.interrupted", { change: exp.rec_title })}
         </p>
       )}
       <div className="exp-running-head">
