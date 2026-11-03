@@ -38,7 +38,7 @@ import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
-import { sessionPeakVendor } from "./data/gpu-sensor";
+import { primaryGpu, sessionPeakVendor } from "./data/gpu-sensor";
 import { bannerAfterPaneClose, contractLeftByFailedStart, readSessionSlot } from "./data/gaming-session-route";
 import { createGenerations } from "./data/latest-wins";
 import { invalidateProbe } from "./data/probe-cache";
@@ -833,7 +833,9 @@ function App() {
           return v;
         })
         .catch((e) => {
+          // A superseded refresh's error is logged, never toasted over the newer refresh's answer.
           if (current()) fail(t("app.errors.readInfoFailed"), e);
+          else console.error("[compy refresh] superseded read failed", cmd, e);
           return undefined;
         });
     // readiness/recs/startup/sessions feed BOTH their own state AND the priority ranking — compute
@@ -869,6 +871,7 @@ function App() {
       // Only a genuine priorities_from failure (all four present, ranking itself failed) reaches here.
       .catch((e) => {
         if (current()) fail(t("app.errors.rankPrioritiesFailed"), e);
+        else console.error("[compy refresh] superseded ranking failed", e);
       });
     await Promise.all([
       run<HardwareInfo>("get_hardware_info", (info) => {
@@ -1311,7 +1314,8 @@ function App() {
   // Detected-hardware lines for the intro/tour rig step (shimmer until hardware is read).
   const rigLines = hw
     ? [
-        { label: t("app.rig.gpu"), value: hw.gpus[0]?.name ?? t("app.rig.noGpu") },
+        // The primary GPU (largest VRAM), the one Home, the grid and Readiness name (review 2026-11-03).
+        { label: t("app.rig.gpu"), value: primaryGpu(hw.gpus)?.name ?? t("app.rig.noGpu") },
         { label: t("app.rig.cpu"), value: hw.cpu_arch?.family_label || hw.cpu_brand },
         { label: t("app.rig.ram"), value: fmtGB(hw.ram_total_bytes) },
         { label: t("app.rig.os"), value: hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}` },
@@ -1533,7 +1537,7 @@ function App() {
           onNavigate={navHome}
           ledgerCount={changes.length}
           badges={{ problems: pendingCare ? 1 : 0 }}
-          rig={hw ? [hw.cpu_brand, hw.gpus[0]?.name].filter(Boolean).join(" · ") : null}
+          rig={hw ? [hw.cpu_brand, primaryGpu(hw.gpus)?.name].filter(Boolean).join(" · ") : null}
           // Command-palette destinations. Each is the SAME single writer the rest of the app routes
           // through — openLabStation persists the station intent before the room mounts,
           // openLibrary is what every inline glossary term already uses — so the palette adds a

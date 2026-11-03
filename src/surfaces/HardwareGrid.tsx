@@ -19,6 +19,7 @@ import type {
 } from "../types";
 import { fmtGB, fmtGHz } from "./hardware-format";
 import { rigTierLine } from "../data/rig-tier";
+import { primaryGpu } from "../data/gpu-sensor";
 import { Term } from "../design/Term";
 import { useIntelligenceFlag } from "../design/use-hud";
 
@@ -301,8 +302,11 @@ export function HardwareGrid({
   // one never reaches them, so no "0 GB" or "—" can come out of this block.
   const cpu = identityState(model, (id) => id.cpu, String);
   const gpu = identityState(model, (id) => id.gpu, String);
+  // The model's driver Fact names the primary (largest-VRAM) GPU, so its age, and the row itself, are
+  // that adapter's — not whichever adapter DXGI listed first (a hybrid laptop's iGPU; review 2026-11-03).
+  const primary = primaryGpu(hw.gpus);
   const driver = identityState(model, (id) => id.gpu_driver, (v) =>
-    fmtDriverAge(v, hw.gpus[0]?.driver_age_days, t),
+    fmtDriverAge(v, primary?.driver_age_days, t),
   );
   const ram = identityState(model, (id) => id.ram_gb, (gb) => t("gaming.hardwareGrid.ramGbValue", { gb }));
   const display = identityState(model, (id) => id.display, (mode) => fmtDisplayMode(mode, hw, t));
@@ -443,7 +447,7 @@ export function HardwareGrid({
                   k={<Term id="vram">{t("gaming.hardwareGrid.vramTermLabel")}</Term>}
                   v={g.vram_bytes > 0 ? fmtGB(g.vram_bytes) : "—"}
                 />
-                {i === 0 ? (
+                {g === primary ? (
                   <FactDetail k={t("gaming.hardwareGrid.driverLabel")} state={driver} t={t} />
                 ) : (
                   <Detail k={t("gaming.hardwareGrid.driverLabel")} v={fmtDriver(g, t)} />

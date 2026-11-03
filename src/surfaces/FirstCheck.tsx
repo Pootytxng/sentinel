@@ -95,13 +95,29 @@ export default function FirstCheck({
   const top = limiters[0] ?? null;
   const rest = limiters.slice(1);
   // Nothing wrong = ready OR advisory (Home's band counts both as clean). But "measured perfect" is a
-  // READY check: an advisory (VRR, HDR) is one Compy deliberately doesn't judge, so it is listed as
-  // yours to check, never as confirmed right (round 1 review, 2026-11-03).
+  // READY check. An advisory is noted, not graded: one Compy can't judge (VRR, HDR) or a reading it
+  // notes without calling it right or wrong (8 GB of RAM, Wi-Fi). Never "confirmed right" (review
+  // 2026-11-03, rounds 1 and 2).
   const okChecks = checks.filter((c) => rowVerdict(c.status) === "ok");
   const greenChecks = okChecks.filter((c) => c.status === "ready");
   const advisoryChecks = okChecks.filter((c) => c.status === "advisory");
   const advisory = advisoryChecks.length;
-  const yours = advisory === 1 ? "1 more is yours to check" : `${advisory} more are yours to check`;
+  const noted = advisory > 0 ? ` ${advisory} more ${advisory === 1 ? "is" : "are"} advisory: noted, not graded.` : "";
+  const reversible = `Reversible, every${fixCount === 1 ? "" : " single"} one.`;
+  const subtitle =
+    fixCount === 0
+      ? unread > 0
+        ? `Every ${advisory > 0 ? "graded " : ""}check Compy could read came back right — ${unread} couldn't be read on this PC, so ${unread === 1 ? "it isn't" : "they aren't"} counted either way.${noted}`
+        : advisory > 0
+          ? `Every graded check came back right — measured on this rig, not assumed.${noted}`
+          : "Every check came back right — measured on this rig, not assumed."
+      : unread > 0
+        ? advisory > 0
+          ? `${reversible} Every other graded check Compy could read came back right — ${unread} couldn't be read on this PC.${noted}`
+          : `${reversible} Everything else Compy could read came back right — ${unread} couldn't be read on this PC.`
+        : advisory > 0
+          ? `${reversible} Every other graded check came back right — measured on this rig, not assumed.${noted}`
+          : `${reversible} Everything else came back right — measured on this rig, not assumed.`;
 
   // Persist the honest last-check record when a real check resolves to a verdict — Home's Re-run
   // band reads this to show "2h ago · N/N clean". Re-fires if an in-arc apply re-runs the scan (the
@@ -155,19 +171,7 @@ export default function FirstCheck({
                   : "Ready to play — this rig measured clean"}
             </h1>
             {/* An unread check is never "came back right" (codebase review 2026-11-03). */}
-            <p className="fc-subtitle">
-              {fixCount === 0
-                ? unread > 0
-                  ? `Every check Compy could read came back right — ${unread} couldn't be read on this PC, so ${unread === 1 ? "it isn't" : "they aren't"} counted either way.`
-                  : advisory > 0
-                    ? `Every check Compy can judge came back right — measured on this rig, not assumed. ${yours}.`
-                    : "Every check came back right — measured on this rig, not assumed."
-                : unread > 0
-                  ? `Reversible, every${fixCount === 1 ? "" : " single"} one. Everything else Compy could read came back right — ${unread} couldn't be read on this PC.`
-                  : advisory > 0
-                    ? `Reversible, every${fixCount === 1 ? "" : " single"} one. Everything else Compy can judge came back right — ${yours}.`
-                    : `Reversible, every${fixCount === 1 ? "" : " single"} one. Everything else came back right — measured on this rig, not assumed.`}
-            </p>
+            <p className="fc-subtitle">{subtitle}</p>
 
             {/* #1 biggest limiter spotlight */}
             {top && (
@@ -277,7 +281,7 @@ export default function FirstCheck({
                     {greenChecks.length > 0 &&
                       `${greenChecks.length} check${greenChecks.length === 1 ? "" : "s"} measured perfect — confirmed right on this rig`}
                     {greenChecks.length > 0 && advisory > 0 && " · "}
-                    {advisory > 0 && `${advisory} yours to check`}
+                    {advisory > 0 && `${advisory} noted, not graded`}
                   </span>
                   <span className="fc-green-caret">{greenOpen ? "▾" : "▸"}</span>
                 </button>
@@ -292,7 +296,7 @@ export default function FirstCheck({
                     {advisoryChecks.map((c) => (
                       <div key={c.id} className="fc-green-row fc-green-row-advisory">
                         <span className="fc-row-mark">·</span>
-                        <span>{c.label} — yours to check</span>
+                        <span>{c.label} — noted, not graded</span>
                       </div>
                     ))}
                   </div>

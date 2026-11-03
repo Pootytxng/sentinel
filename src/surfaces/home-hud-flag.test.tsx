@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeAll, beforeEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, waitFor } from "@testing-library/react";
 import { HomeRoom } from "./HomeRoom";
 import { HomeV2 } from "./HomeV2";
 import { ShellV2 } from "../design/ShellV2";
@@ -18,10 +18,12 @@ vi.mock("./rig/RigHologram", () => ({
   RigHologram: () => <div data-testid="rig-hologram" />,
 }));
 
+// Settable for the hybrid-laptop case; reset after each test.
+const sensors = vi.hoisted(() => ({ list: null as unknown }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) => {
     if (cmd === "get_build_stamp") return Promise.resolve("ab12cd3 · dev");
-    if (cmd === "get_gpu_sensors") return Promise.resolve([{ vendor: "AMD", name: "AMD Radeon RX 9070 XT", temperature_c: 62 }]);
+    if (cmd === "get_gpu_sensors") return Promise.resolve(sensors.list ?? [{ vendor: "AMD", name: "AMD Radeon RX 9070 XT", temperature_c: 62 }]);
     if (cmd === "get_memory_pressure")
       return Promise.resolve({
         used_bytes: 14.2 * 1024 ** 3,
@@ -206,6 +208,30 @@ describe("Instrument-HUD flag-on pilot (same measured numbers, new presentation)
     localStorage.setItem("compy_editorial", "1");
     return render(shell(<HomeRoom {...props} />)).container;
   };
+
+  // Review 2026-11-03: HomeHud named gpus[0] (a hybrid laptop's iGPU) and paired the first snapshot.
+  it("a hybrid laptop's GPU callout names the primary GPU and shows its own reading", async () => {
+    sensors.list = [{ vendor: "NVIDIA", name: "NVIDIA GeForce RTX 4060 Laptop GPU", temperature_c: 91 }];
+    localStorage.setItem("compy_editorial", "1");
+    try {
+      const hybrid = {
+        ...props,
+        hw: {
+          ...props.hw,
+          gpus: [
+            { name: "Intel(R) UHD Graphics 770", vram_bytes: 128 * 1024 ** 2 },
+            { name: "NVIDIA GeForce RTX 4060 Laptop GPU", vram_bytes: 8 * 1024 ** 3 },
+          ],
+        } as HardwareInfo,
+      };
+      const c = render(shell(<HomeRoom {...hybrid} />)).container;
+      await waitFor(() => expect(c.textContent).toContain("91°C"));
+      expect(c.textContent).toContain("RTX 4060 Laptop GPU");
+      expect(c.textContent).not.toContain("UHD Graphics 770");
+    } finally {
+      sensors.list = null;
+    }
+  });
 
   it("renders the HUD Home with the console masthead over the real verdict", () => {
     const c = mountOn();

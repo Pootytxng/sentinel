@@ -194,7 +194,7 @@ describe("Check", () => {
     }
   });
 
-  it("the living clean line names advisories as the user's to check, never as came back right", async () => {
+  it("the living clean line names advisories as noted, not graded, never as came back right", async () => {
     document.documentElement.dataset.living = "on";
     readinessMock.advisories = 1;
     try {
@@ -204,7 +204,7 @@ describe("Check", () => {
         </ConfirmProvider>,
       );
       expect(
-        await screen.findByText("Measured clean — every check Compy can judge came back right; 1 more is yours to check."),
+        await screen.findByText("Measured clean — every graded check came back right; 1 more is advisory: noted, not graded."),
       ).toBeInTheDocument();
     } finally {
       readinessMock.advisories = 0;

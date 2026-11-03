@@ -413,7 +413,7 @@ export default function Check({
                         unread: readiness!.unknown_count,
                       })
                   : limiters.length === 0
-                    ? // An advisory (VRR, HDR) is one Compy deliberately doesn't judge: not "came back right".
+                    ? // An advisory is noted, not graded (VRR, HDR, 8 GB of RAM): never "came back right".
                       (readiness?.advisory_count ?? 0) > 0
                       ? t("optimize.check.measuredCleanJudged", { count: readiness!.advisory_count })
                       : t("optimize.check.measuredCleanRig")
