@@ -397,6 +397,7 @@ function StepCheck() {
   // and an advisory attention check is not one either (codebase review 2026-11-03).
   const readyCount = readiness?.ready_count ?? 0;
   const unreadCount = readiness?.unknown_count ?? 0;
+  const advisoryCount = readiness?.advisory_count ?? 0;
   // The "applied-changes" limiter is the vague-flag anti-pattern: name the actual drifted setting(s)
   // and carry the fix inline, instead of "1 setting(s) — go to Optimize/Ledger".
   const driftTop = top?.id === "applied-changes" && reverted.length > 0;
@@ -492,6 +493,11 @@ function StepCheck() {
           )}
           {unreadCount > 0 && (
             <p className="st-body-text">{t("home.setupTour.check.checksUnread", { count: unreadCount })}</p>
+          )}
+          {/* Named, never counted as right: the band, Home's card, the first check and Check say it
+              too (desk review 2026-11-03). */}
+          {advisoryCount > 0 && (
+            <p className="st-body-text">{t("home.setupTour.check.checksAdvisory", { count: advisoryCount })}</p>
           )}
         </>
       )}

@@ -651,6 +651,8 @@
       "checksClean_other": "{{count}} checks came back right — measured on this rig, not assumed.",
       "checksUnread_one": "{{count}} check couldn't be read on this PC, so it isn't counted either way.",
       "checksUnread_other": "{{count}} checks couldn't be read on this PC, so they aren't counted either way.",
+      "checksAdvisory_one": "{{count}} more is advisory: noted, not graded.",
+      "checksAdvisory_other": "{{count}} more are advisory: noted, not graded.",
       "reversibleFooter": "Reversible, every one. Next, a quick tour of your rig — tap Next."
     },
     "lesson": {
