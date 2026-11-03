@@ -204,7 +204,7 @@
     "appliedHistorySummaryUnvouched": "Applied & history — Compy can't promise every change here can be undone",
     "moreCleanupSummary": "More cleanup (optional)",
     "powerFeaturesSummary": "Power features — Gaming Mode (advanced, reversible)",
-    "powerFeaturesIntro": "Bigger changes you can make and prove here. These are the same reversible controls from Play — apply one, then run the Benchmark station to measure what it did on your rig."
+    "powerFeaturesIntro": "Bigger changes you can make and prove here. Each one is reversible — apply one, then run the Benchmark station to measure what it did on your rig."
   },
   "stations": {
     "optimize": {

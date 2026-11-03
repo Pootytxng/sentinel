@@ -201,7 +201,7 @@
     "appliedHistorySummaryUnvouched": "已应用与历史记录——Compy 无法保证这里的每一项更改都能撤销",
     "moreCleanupSummary": "更多清理项(可选)",
     "powerFeaturesSummary": "进阶功能——游戏模式(进阶,可撤销)",
-    "powerFeaturesIntro": "在这里可以进行力度更大、且能被验证效果的更改。这些和「监测」里的控制项完全相同,同样可以撤销——应用一项后,运行基准测试站,即可测出它对这台主机的实际效果。"
+    "powerFeaturesIntro": "在这里可以进行力度更大、且能被验证效果的更改。每一项都可以撤销——应用一项后,运行基准测试站,即可测出它对这台主机的实际效果。"
   },
   "stations": {
     "optimize": {

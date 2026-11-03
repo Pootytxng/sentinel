@@ -622,6 +622,7 @@
       "advisory": "仅供参考——没有一键修复选项",
       "checksClean_other": "{{count}} 项检测通过——基于这台主机的实测,而非假设。",
       "checksUnread_other": "{{count}} 项检测在这台电脑上无法读取,因此不计入通过或未通过。",
+      "checksAdvisory_other": "另有 {{count}} 项为提示项:仅作记录,不评级。",
       "reversibleFooter": "全部可撤销。接下来,快速浏览一下你的主机——点击「下一步」。"
     },
     "lesson": {

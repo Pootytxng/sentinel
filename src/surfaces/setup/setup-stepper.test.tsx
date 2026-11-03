@@ -130,6 +130,43 @@ describe("the first check counts only what it read", () => {
     expect(screen.getByText("3 checks couldn't be read on this PC, so they aren't counted either way.")).toBeTruthy();
     expect(screen.queryByText(/4 checks came back right/)).toBeNull();
   });
+
+  // Desk review 2026-11-03: the tour said "14 checks came back right" and was the only count surface
+  // that never named his 2 advisory checks.
+  it("names advisory checks as noted, not graded — never counted as right", async () => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) => {
+      if (cmd === "get_game_readiness")
+        return Promise.resolve({
+          checks: ["a", "b", "c"].map((id, n) => ({
+            id,
+            label: `Check ${id}`,
+            status: n === 0 ? "ready" : "advisory",
+            detail: "",
+            value: null,
+          })),
+          ready_count: 1,
+          attention_count: 0,
+          unknown_count: 0,
+          advisory_count: 2,
+          advisory: "",
+          dismissed_ids: [],
+          drifts: [],
+        });
+      if (cmd === "priorities_from")
+        return Promise.resolve({ limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null });
+      if (cmd === "get_recommendations") return Promise.resolve([]);
+      return Promise.resolve(null);
+    }) as never);
+    render(
+      <ConfirmProvider>
+        <SetupTour hw={{} as HardwareInfo} rig={[]} onDone={() => {}} />
+      </ConfirmProvider>,
+    );
+    for (let n = 0; n < 3; n++) fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText("1 check came back right — measured on this rig, not assumed.")).toBeTruthy();
+    expect(screen.getByText("2 more are advisory: noted, not graded.")).toBeTruthy();
+    expect(screen.queryByText(/3 checks came back right/)).toBeNull();
+  });
 });
 
 describe("the tour's keys yield to an open confirm", () => {

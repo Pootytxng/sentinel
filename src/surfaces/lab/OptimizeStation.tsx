@@ -256,8 +256,9 @@ export function OptimizeStation(props: LabFastPathProps) {
 
       {/* §5 Power features (spec 2026-07-08 §5, owner nod) — the bigger reversible changes you can
           make AND prove in the proving ground: Gaming Mode (foreground boost) + service-suspend,
-          the same audited controls from Play, gathered here so you can measure them at the Benchmark
-          station. Read-first, apply-behind-confirm (Gaming Mode owns its own confirm/undo flow),
+          gathered here so you can measure them at the Benchmark station (this is their only home;
+          the intro no longer points at "Play", a room renamed Live on 2026-08-12, desk review
+          2026-11-03). Read-first, apply-behind-confirm (Gaming Mode owns its own confirm/undo flow),
           fully reversible. Only shown when Gaming Mode is armed; Gaming Mode mounts lazily on open so
           the collapsed bay never polls. */}
       {props.gamingEnabled && (
