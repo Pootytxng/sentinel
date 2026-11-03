@@ -153,7 +153,11 @@ impl<'de> Deserialize<'de> for Risk {
 // reached from inside the Trust Ledger's lock (history -> leftovers -> recommendations) and this module
 // reaches `experiment` and the other stores: a `recommendations -> trial_candidates` import closed that
 // loop in the static call graph (`scripts/store-lock-order-guard.test.mjs` #283, 2026-11-03).
-pub(crate) use crate::recommendations::{lenient, DimensionRisk, RiskDimensions};
+pub(crate) use crate::recommendations::{lenient, RiskDimensions};
+// Production here never names a single dimension's word; the tests (this module's, experiment's and
+// the catalog's) do, through this path.
+#[cfg(test)]
+pub(crate) use crate::recommendations::DimensionRisk;
 
 /// P8-dims: what the catalog stated about one change's risk, kept on a Trial's record at its start
 /// (`experiment::ExperimentRecord::stated_risk`), so its receipt names the risk the Trial ran under
