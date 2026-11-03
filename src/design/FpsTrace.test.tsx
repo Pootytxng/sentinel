@@ -67,4 +67,17 @@ describe("FpsTrace", () => {
     );
     expect(container.querySelectorAll("line.ds-trace-dot")).toHaveLength(1);
   });
+
+  // CR-live-round (desk review 2026-11-03): the axis tick rounds a session above an hour to the
+  // minute, the same rule as the Debrief title, History, Games and Live — 12,527 s is "3h 29m" in all
+  // five places, never "3h 28m" under a "3h 29m" title. A near-whole hour carries, never "1h 60m".
+  it("rounds the span above an hour to the minute like every other place the session is named", () => {
+    const { container, unmount } = render(<FpsTrace series={[[0, 60], [10, 60]]} durationSecs={12527} />);
+    expect(container.querySelector(".ds-trace-tick")?.textContent).toBe("3h 29m");
+    unmount();
+    const { container: carried } = render(<FpsTrace series={[[0, 60], [10, 60]]} durationSecs={3599.6} />);
+    expect(carried.querySelector(".ds-trace-tick")?.textContent).toBe("59m");
+    const { container: whole } = render(<FpsTrace series={[[0, 60], [10, 60]]} durationSecs={7199.5} />);
+    expect(whole.querySelector(".ds-trace-tick")?.textContent).toBe("2h 0m");
+  });
 });

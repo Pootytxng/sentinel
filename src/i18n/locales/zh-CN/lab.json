@@ -56,6 +56,14 @@
       "powerModeLabel": "电源模式",
       "peakTempC": "GPU 峰值温度"
     },
+    "delta": {
+      "none": "这两份快照之间没有变化。",
+      "changedOne": "1 项设置有变化",
+      "changedMany": "{{count}} 项设置有变化",
+      "cooler": "峰值温度低了 {{mag}} °C",
+      "warmer": "峰值温度高了 {{mag}} °C",
+      "sentence": "{{parts}}。"
+    },
     "valueOn": "开",
     "valueOff": "关"
   },

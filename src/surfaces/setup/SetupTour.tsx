@@ -56,14 +56,18 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
   // zh-CN reads whole (CR-zh-gpu, 2026-11-03).
   const steps = useMemo(
     () =>
-      buildSetupSteps(buildRigParts(hw), true, true, (key, fallback, vars) =>
+      // `t` reaches the rig parts too, so a placeholder part name (no PSU detected → "Power Supply")
+      // reads 电源 in zh-CN like the detected ones (desk review 2026-11-03).
+      buildSetupSteps(buildRigParts(hw, t), true, true, (key, fallback, vars) =>
         t(key, { defaultValue: fallback, ...(vars ?? {}) }),
       ),
     [hw, t],
   );
-  // The room that holds the ledger, named by its rail label: the Lab, whose Optimize station owns
-  // the toggles + ledger — so the seatbelt step never names a tab the rail doesn't show.
-  const fixLabel = "Lab";
+  // The room that holds the ledger, named by its rail label as the rail renders it today: the
+  // `lab` entry reads "Test" (`common.rail.lab`, localized), not the retired "Lab" (desk review
+  // 2026-11-03: stale since the rail was relabeled) — so the seatbelt step never names a tab the
+  // rail doesn't show.
+  const fixLabel = t("common.rail.lab");
   const [i, setI] = useState(0);
   const step = steps[i];
   const reduced = useReducedMotion();

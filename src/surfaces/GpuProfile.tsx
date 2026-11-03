@@ -262,7 +262,7 @@ function GpuProfileDelta({
       ) : (
         <>
           <p style={{ ...muted, fontWeight: changed ? 600 : 400, color: "var(--ix-text-1)" }}>
-            {deltaSummary(deltas)}
+            {deltaSummary(deltas, (key, fallback, vars) => t(key, { defaultValue: fallback, ...(vars ?? {}) }))}
           </p>
           {mismatch && (
             <div

@@ -202,7 +202,11 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
 export function buildTabs(merged: boolean, ground = false, tr: SetupTr = asIs): TabInfo[] {
   return railFor(merged, ground).map((r) => ({
     id: r.id,
-    label: r.label,
+    // The label resolves the way the rendered rail resolves it (`ShellV2.railLabel`: the relabeled
+    // Optimize entry keys `common.rail.optimize`, every other room `common.rail.<id>`), English as
+    // the fallback, so a zh-CN recap names 健康/游戏/问题/实时/历史/测试 like the rail beside it
+    // (desk review 2026-11-03). The pure callers pass no resolver and read the English as before.
+    label: tr(r.label === "Optimize" ? "common.rail.optimize" : `common.rail.${r.id}`, r.label),
     icon: r.icon,
     blurb:
       ground && r.id === "lab"

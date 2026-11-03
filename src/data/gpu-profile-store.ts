@@ -184,17 +184,31 @@ export function hasAnyChange(deltas: FieldDelta[]): boolean {
  * and a temp move is phrased as cooler/warmer (down = cooler is the good direction) without any FPS
  * or performance claim.
  */
-export function deltaSummary(deltas: FieldDelta[]): string {
+export function deltaSummary(deltas: FieldDelta[], tr: DeltaTr = asIs): string {
   const changed = deltas.filter((d) => d.status === "changed");
-  if (changed.length === 0) return "No changes between these two snapshots.";
+  if (changed.length === 0) return tr("lab.gpuProfile.delta.none", "No changes between these two snapshots.");
   const temp = deltas.find((d) => d.key === "peakTempC" && d.numericDelta != null);
-  const parts: string[] = [`${changed.length} setting${changed.length === 1 ? "" : "s"} changed`];
+  const parts: string[] = [
+    changed.length === 1
+      ? tr("lab.gpuProfile.delta.changedOne", "1 setting changed")
+      : tr("lab.gpuProfile.delta.changedMany", `${changed.length} settings changed`, { count: changed.length }),
+  ];
   if (temp && temp.numericDelta != null && temp.numericDelta !== 0) {
     const mag = Math.abs(temp.numericDelta);
-    parts.push(temp.numericDelta < 0 ? `peak temp ${mag} °C cooler` : `peak temp ${mag} °C warmer`);
+    parts.push(
+      temp.numericDelta < 0
+        ? tr("lab.gpuProfile.delta.cooler", `peak temp ${mag} °C cooler`, { mag })
+        : tr("lab.gpuProfile.delta.warmer", `peak temp ${mag} °C warmer`, { mag }),
+    );
   }
-  return `${parts.join(" · ")}.`;
+  return tr("lab.gpuProfile.delta.sentence", `${parts.join(" · ")}.`, { parts: parts.join(" · ") });
 }
+
+/** A locale resolver for the summary (key, English fallback, vars), the same shape the setup tour's
+ *  steps take: the screen passes i18n's `t`; pure callers and tests pass none and read the English
+ *  exactly as before (desk review 2026-11-03: the line above the zh-CN delta table was English). */
+export type DeltaTr = (key: string, fallback: string, vars?: Record<string, string | number>) => string;
+const asIs: DeltaTr = (_key, fallback) => fallback;
 
 // ── The live snapshot builder (C-14, 2026-08-22) ─────────────────────────────────────────────
 

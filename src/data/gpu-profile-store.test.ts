@@ -157,6 +157,23 @@ describe("gpu-profile-store · summary", () => {
     expect(s).toContain("peak temp 7 °C warmer");
   });
 
+  it("resolves through the screen's locale resolver when given one, English otherwise", () => {
+    // Desk review 2026-11-03: the line above the zh-CN delta table was hard-coded English. The
+    // summary resolves through the screen's `t` (key, English fallback, vars); pure callers read the
+    // English above unchanged.
+    const seen: string[] = [];
+    const tr = (key: string, _fallback: string, vars?: Record<string, string | number>) => {
+      seen.push(key + (vars ? ":" + JSON.stringify(vars) : ""));
+      return `<${key}>`;
+    };
+    expect(deltaSummary(computeGpuProfileDelta(snap(), snap()), tr)).toBe("<lab.gpuProfile.delta.none>");
+    expect(deltaSummary(computeGpuProfileDelta(snap({ peakTempC: 68 }), snap({ peakTempC: 75 })), tr)).toBe(
+      "<lab.gpuProfile.delta.sentence>",
+    );
+    expect(seen).toContain("lab.gpuProfile.delta.changedOne");
+    expect(seen).toContain('lab.gpuProfile.delta.warmer:{"mag":7}');
+  });
+
   it("unknown-only diffs are reported as no changes (honesty: missing ≠ moved)", () => {
     expect(deltaSummary(computeGpuProfileDelta(null, snap()))).toBe(
       "No changes between these two snapshots.",

@@ -56,6 +56,14 @@
       "powerModeLabel": "Power mode",
       "peakTempC": "Peak GPU temperature"
     },
+    "delta": {
+      "none": "No changes between these two snapshots.",
+      "changedOne": "1 setting changed",
+      "changedMany": "{{count}} settings changed",
+      "cooler": "peak temp {{mag}} °C cooler",
+      "warmer": "peak temp {{mag}} °C warmer",
+      "sentence": "{{parts}}."
+    },
     "valueOn": "On",
     "valueOff": "Off"
   },

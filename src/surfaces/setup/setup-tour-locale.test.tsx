@@ -54,6 +54,28 @@ describe("the tour's lessons and recap read whole in zh-CN", () => {
     expect(screen.getByText("Compy 的地图")).toBeTruthy();
     expect(screen.getByText(/侧栏从上到下读/)).toBeTruthy();
     expect(screen.queryByText(/The rail reads top to bottom|Your way around Compy/)).toBeNull();
+    // Desk review 2026-11-03: the recap's tab cards named the rooms in English beside a Chinese
+    // rail; they resolve through the rail's own keys now.
+    expect(screen.getByText("测试")).toBeTruthy();
+    expect(screen.getByText("健康")).toBeTruthy();
+    expect(screen.queryByText(/^(Health|Games|Problems|Live|History|Test)$/)).toBeNull();
+  });
+
+  // Desk review 2026-11-03: the seatbelt step said "the Lab tab", a rail label retired for "Test"
+  // (en) / 测试 (zh-CN); it names the room the rail renders, in the rail's own words.
+  it("the seatbelt step names the Test room as the rail labels it, in both languages", async () => {
+    renderTour();
+    next(); // rig → seatbelt
+    const strongEn = Array.from(document.querySelectorAll("strong")).map((e) => e.textContent);
+    expect(strongEn).toContain("Test");
+    expect(strongEn).not.toContain("Lab");
+    cleanup();
+    await i18n.changeLanguage("zh-CN");
+    renderTour();
+    next();
+    const strongZh = Array.from(document.querySelectorAll("strong")).map((e) => e.textContent);
+    expect(strongZh).toContain("测试");
+    expect(strongZh).not.toContain("Lab");
   });
 
   it("the English stays byte-identical in en", () => {

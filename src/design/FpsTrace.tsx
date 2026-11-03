@@ -27,8 +27,14 @@ const H = 88;
  * `fmtDurCoarse` idiom (Play.tsx) — a duration that is CONTEXT, not the measurement itself.
  */
 function coarse(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  if (h > 0) return `${h}h ${Math.floor((sec % 3600) / 60)}m`;
+  // Above an hour: round to the minute FIRST, the rule History, Games, Live and the Debrief title
+  // share (CR-live-round, `hoursAndMinutes` in Play.tsx), so the trace's axis never reads "3h 28m"
+  // under a title that says "3h 29m" for the same 12,527 s (desk review 2026-11-03). Rounding first
+  // means a near-whole hour carries into the hour, never "1h 60m".
+  if (sec >= 3600) {
+    const totalMin = Math.round(sec / 60);
+    return `${Math.floor(totalMin / 60)}h ${totalMin % 60}m`;
+  }
   const m = Math.floor(sec / 60);
   return m > 0 ? `${m}m` : `${Math.max(0, Math.round(sec))}s`;
 }
