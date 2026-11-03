@@ -87,9 +87,14 @@ const LOCK_ENTRY_POINTS = ["history"];
  * `get_game_readiness` calls `drift::detect_and_persist` while holding NO dismissals lock, so
  * DRIFT_LOCK is never nested inside DISMISSALS_LOCK. The dismissal sequences themselves reach
  * nothing but `atomic_write`.
+ *
+ * `comparison → experiment` (codebase review 2026-11-02) is two leaves and nothing else: the
+ * `MIN_TREATMENT_SAMPLES` constant and `has_frame_reading`, which reads two fields of the session it
+ * is handed. Neither takes a lock or calls out, so neither can nest anything inside COMPARISON_LOCK;
+ * that is also why `experiment` is not a LOCK_ENTRY_POINT.
  */
 const ALLOWED_EDGES = {
-  comparison: ["atomic_write", "history", "race_seam", "sessions"],
+  comparison: ["atomic_write", "experiment", "history", "race_seam", "sessions"],
   drift: ["atomic_write", "race_seam"],
   readiness: ["atomic_write", "drift", "hardware", "history", "monitoring", "race_seam"],
 };
