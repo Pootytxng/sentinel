@@ -1746,6 +1746,24 @@ pub(crate) fn ledger_len_checked() -> Result<usize, String> {
     load_history().map(|h| h.len())
 }
 
+/// A before/after comparison's two confound marks over one read of the ledger: its entry count, and
+/// how many of its rows are not rolled back. Recorded status only, never a live probe. Pure, so the
+/// undo half can't silently become a second entry count (review round 2, 2026-11-02).
+pub(crate) fn ledger_marks_of(h: &[AppliedChange]) -> (usize, usize) {
+    (h.len(), h.iter().filter(|c| c.status != "rolled_back").count())
+}
+
+/// Whether the newest not-rolled-back row of `rec_id` reads Off on this machine now (review round 2,
+/// 2026-11-02): an armed before/after's own fix undone outside Compy (Windows Update putting a setting
+/// back) changes no recorded status, so the marks above can't see it. `Some(true)` only for a read that
+/// came back Off; `None` when there is no such row or the ledger can't be read. Read-only, takes no
+/// lock, and may run a live probe, so a caller holding a store lock must not call it.
+pub(crate) fn newest_applied_reads_off(rec_id: &str) -> Option<bool> {
+    let h = load_history().ok()?;
+    let row = h.iter().rev().find(|c| c.rec_id == rec_id && c.status != "rolled_back")?;
+    Some(check_row_state(row, &LiveReads::default()) == ActiveCheck::Off)
+}
+
 /// Whether a damaged Trust Ledger was ever set aside as `history.json.corrupt`.
 ///
 /// The DURABLE half of "is this the whole ledger?". `load_history_from` quarantines a ledger it
@@ -4327,6 +4345,15 @@ mod history_tests {
 
     // #669: the checked summary a surface reads instead of the zero-collapsing one keeps a failed
     // read AND a set-aside ledger as errors — Game Readiness shows "can't read", never "0".
+    #[test]
+    fn the_confound_marks_count_entries_and_rows_not_rolled_back() {
+        let h = vec![record("a", "applied"), record("b", "rolled_back"), record("a", "applied")];
+        assert_eq!(ledger_marks_of(&h), (3, 2));
+        let mut undone = h.clone();
+        undone[2].status = "rolled_back".into();
+        assert_eq!(ledger_marks_of(&undone), (3, 1), "an undo moves the second mark, never the first");
+    }
+
     #[test]
     fn a_checked_summary_never_summarizes_a_lost_ledger_as_zeros() {
         assert!(checked_summary(Err("sharing violation".into()), false).is_err());

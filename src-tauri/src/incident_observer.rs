@@ -311,6 +311,12 @@ fn parse_ts(s: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(s).ok().map(|d| d.with_timezone(&Utc))
 }
 
+/// Whether an incident's own time falls inside [`RETENTION_DAYS`] of `now`: the window the announce
+/// rule and the retention rule share.
+fn happened_within_retention(inc: &Incident, now: DateTime<Utc>) -> bool {
+    parse_ts(&inc.when).is_some_and(|t| now - t < Duration::days(RETENTION_DAYS))
+}
+
 // ─── The pure observation pass ──────────────────────────────────────────────────────────────────
 
 /// What one scan decided. Returned rather than acted on, so the whole rule set is testable without a
@@ -365,9 +371,16 @@ pub(crate) fn observe(
         return outcome;
     }
 
-    // ── Everything past the watermark.
-    let fresh: Vec<&Incident> =
-        qualifying.iter().copied().filter(|i| state.find(&i.incident_id).is_none()).collect();
+    // ── Everything past the watermark, and only what happened inside the retention window (codebase
+    // review 2026-11-02). Windows keeps its crash records for months while `prune` forgets a row 30
+    // days after it was first seen, so an old crash still in the report read as unseen on day 31 and
+    // was announced again. A crash older than the window is never news; one with no readable time
+    // can't be shown to be news, so it isn't announced either.
+    let fresh: Vec<&Incident> = qualifying
+        .iter()
+        .copied()
+        .filter(|i| state.find(&i.incident_id).is_none() && happened_within_retention(i, now))
+        .collect();
 
     for inc in &fresh {
         state.seen.push(ObservedIncident::observing(inc, now));
@@ -475,19 +488,27 @@ fn state_path() -> PathBuf {
 /// very next pass seeds silently — a corrupt file must never become a burst of notifications about
 /// a month of history.
 pub(crate) fn load_or_quarantine(path: &Path) -> IncidentObserverState {
-    let raw = match std::fs::read_to_string(path) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return IncidentObserverState::fresh(),
-        Err(_) => return IncidentObserverState::fresh(),
-        Ok(s) => s,
+    load_checked(path).unwrap_or_else(|_| IncidentObserverState::fresh())
+}
+
+/// The writer's read (codebase review 2026-11-02). A read that fails right now (a scanner or an
+/// indexer holding the file) is an `Err`, never a fresh state: the writer saved that fresh state over
+/// the real one, which lost every remembered incident and dismissal, and the next scan re-seeded and
+/// swallowed any crash in between. Only bytes that were read and can't be interpreted are set aside.
+fn load_checked(path: &Path) -> Result<IncidentObserverState, String> {
+    let bytes = match std::fs::read(path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(IncidentObserverState::fresh()),
+        Err(e) => return Err(format!("the incident record could not be read right now: {e}")),
+        Ok(b) => b,
     };
-    match serde_json::from_str::<IncidentObserverState>(&raw) {
+    match serde_json::from_slice::<IncidentObserverState>(&bytes) {
         Ok(mut s) if s.schema_version == SCHEMA_VERSION => {
             repair_powershell_blobs(&mut s);
-            s
+            Ok(s)
         }
         _ => {
             quarantine(path);
-            IncidentObserverState::fresh()
+            Ok(IncidentObserverState::fresh())
         }
     }
 }
@@ -563,14 +584,16 @@ fn lock_state() -> crate::race_seam::StoreGuard {
     })
 }
 
-/// Read → apply → save, under the lock. The single writer path.
-fn with_state<T>(f: impl FnOnce(&mut IncidentObserverState) -> T) -> T {
+/// Read → apply → save, under the lock. The single writer path. `None` when the state couldn't be
+/// read right now (nothing is written over it) or the save failed: a caller acts on the outcome only
+/// once it is on disk, so a save that keeps failing can't toast the same crash on every scan.
+fn with_state<T>(f: impl FnOnce(&mut IncidentObserverState) -> T) -> Option<T> {
     let _guard = lock_state();
     let path = state_path();
-    let mut state = load_or_quarantine(&path);
+    let mut state = load_checked(&path).ok()?;
     let out = f(&mut state);
-    let _ = save_to(&path, &state);
-    out
+    save_to(&path, &state).ok()?;
+    Some(out)
 }
 
 /// Read without writing, under the same lock. The single reader path.
@@ -685,7 +708,7 @@ fn scan_now(trigger: ScanTrigger) {
     // the read-modify-write below, which is microseconds.
     let report = crate::blackbox::collect_crash_blackbox();
     let now = Utc::now();
-    let toast = with_state(|state| observe(&report, now, state).toast);
+    let toast = with_state(|state| observe(&report, now, state).toast).flatten();
 
     if let Some(card) = toast {
         notify(&card);
@@ -750,7 +773,7 @@ pub(crate) fn dismiss_care_incident(incident_id: String) {
 /// Read → apply → save. Best-effort: a save failure leaves the previous state, which at worst shows
 /// the card once more.
 fn mutate(f: impl FnOnce(&mut IncidentObserverState, DateTime<Utc>)) {
-    with_state(|state| f(state, Utc::now()));
+    let _ = with_state(|state| f(state, Utc::now()));
 }
 
 #[cfg(test)]
@@ -804,6 +827,37 @@ mod tests {
 
     fn report(incidents: Vec<Incident>) -> BlackBoxReport {
         BlackBoxReport { incidents, skipped_sources: Vec::new(), ..Default::default() }
+    }
+
+    // Codebase review 2026-11-02: Windows keeps its crash records for months and `prune` forgets a row
+    // 30 days after it was first seen, so on day 31 a crash still in the report read as unseen and was
+    // toasted and carded again.
+    #[test]
+    fn a_crash_older_than_the_retention_window_is_never_announced_again() {
+        let mut s = IncidentObserverState::fresh();
+        s.last_scan_at = Some("2026-10-01T09:00:00Z".into());
+        let old = inc("old", IncidentKind::AppCrash, "2026-09-20T21:42:00Z", Some("game.exe"));
+        let unreadable_time = inc("odd", IncidentKind::AppCrash, "not a time", Some("game.exe"));
+        let out = observe(&report(vec![old, unreadable_time]), at("2026-10-30T09:00:00Z"), &mut s);
+        assert!(out.toast.is_none() && out.newly_observed.is_empty(), "{out:?}");
+        assert!(s.pending_home_incident_id.is_none() && s.pending_card.is_none());
+        // A crash inside the window still is news.
+        let new = inc("new", IncidentKind::AppCrash, "2026-10-30T08:00:00Z", Some("game.exe"));
+        let out = observe(&report(vec![new]), at("2026-10-30T09:00:00Z"), &mut s);
+        assert_eq!(out.newly_observed, vec!["new".to_string()]);
+    }
+
+    // Same review: a read that failed right now became a fresh state that the writer saved over the
+    // real one. The writer's read now says it failed, and nothing is set aside.
+    #[test]
+    fn a_state_that_cant_be_read_right_now_is_an_error_for_the_writer() {
+        let dir = std::env::temp_dir().join(format!("compy-observer-unreadable-{}", std::process::id()));
+        let path = dir.join("incident-observer.json");
+        std::fs::create_dir_all(&path).unwrap(); // a read that fails on every platform
+        assert!(load_checked(&path).is_err());
+        assert_eq!(load_or_quarantine(&path), IncidentObserverState::fresh(), "the reader still gets a fresh view");
+        assert!(path.is_dir(), "nothing was set aside or replaced");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     // ── Seeding ─────────────────────────────────────────────────────────────────────────────────

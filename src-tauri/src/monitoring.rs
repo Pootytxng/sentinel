@@ -771,6 +771,23 @@ pub(crate) fn fps_active() -> &'static std::sync::atomic::AtomicBool {
 /// elevated helper only self-exits on its next poll once the heartbeat goes stale. Tracking real
 /// process liveness lets a quick stop→start wait for the old helper to die before spawning a new one,
 /// so two elevated helpers never write `fps.json` at once (a non-elevated parent can't kill either).
+/// Which capture the running threads belong to (codebase review 2026-11-02). `stop_fps_capture`
+/// only clears `fps_active`, and each thread reads it after a 1 s sleep, so a start inside that second
+/// set it back and the old recorder ran on beside the new one: two recorders, the same play saved as
+/// two sessions, and the old helper's wait thread could clear the new capture's flag. Every thread
+/// now also checks that its capture is still the current one.
+fn capture_gen() -> &'static std::sync::atomic::AtomicU64 {
+    static G: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    &G
+}
+/// The capture `generation` was started as is still the current one.
+fn capture_current(generation: u64) -> bool {
+    capture_gen().load(std::sync::atomic::Ordering::Acquire) == generation
+}
+/// The capture `generation` was started as is still running.
+fn capture_live(generation: u64) -> bool {
+    fps_active().load(std::sync::atomic::Ordering::Acquire) && capture_current(generation)
+}
 fn helper_running() -> &'static std::sync::atomic::AtomicBool {
     static R: OnceLock<std::sync::atomic::AtomicBool> = OnceLock::new();
     R.get_or_init(|| std::sync::atomic::AtomicBool::new(false))
@@ -954,6 +971,9 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
     // Drop any stale sample so the UI doesn't briefly show last session's data.
     let _ = std::fs::remove_file(fps_out_path());
     touch_alive();
+    // A new generation BEFORE the flag goes up, so a thread of the last capture that wakes now sees
+    // it was superseded.
+    let generation = capture_gen().fetch_add(1, Ordering::AcqRel) + 1;
     fps_active().store(true, Ordering::Release);
     *lock_status() = "starting".into();
 
@@ -961,13 +981,15 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
 
     // Heartbeat: refresh the alive file every second while active; remove it
     // on stop so the helper self-exits.
-    std::thread::spawn(|| {
-        use std::sync::atomic::Ordering;
-        while fps_active().load(Ordering::Acquire) {
+    std::thread::spawn(move || {
+        while capture_live(generation) {
             touch_alive();
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
-        let _ = std::fs::remove_file(fps_alive_path());
+        // A superseded capture leaves the heartbeat alone: it is the new capture's now.
+        if capture_current(generation) {
+            let _ = std::fs::remove_file(fps_alive_path());
+        }
     });
 
     let out = fps_out_path().to_string_lossy().to_string();
@@ -1001,8 +1023,11 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 std::thread::spawn(move || {
                     let status = child.wait();
                     helper_running().store(false, Ordering::Release);
-                    fps_active().store(false, Ordering::Release);
-                    *lock_status() = "stopped".into();
+                    // Only this capture's flag and status: a newer capture's are not this helper's.
+                    if capture_current(generation) {
+                        fps_active().store(false, Ordering::Release);
+                        *lock_status() = "stopped".into();
+                    }
                     match status {
                         Ok(s) if s.success() => support_stop(SupportOutcome::Ok, "exit_clean", "helper exited cleanly"),
                         Ok(s) => support_stop(SupportOutcome::Failed, "exit_nonzero", &format!("helper exited with status {s}")),
@@ -1042,7 +1067,11 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 ],
             );
             helper_running().store(false, Ordering::Release);
-            fps_active().store(false, Ordering::Release);
+            // Only this capture's flag and status, as the direct-spawn wait above.
+            let current = capture_current(generation);
+            if current {
+                fps_active().store(false, Ordering::Release);
+            }
             // Distinguish a cancelled/failed elevation from a clean stop. Since 2026-07-14
             // the launcher is our own elevate_and_wait (the runas crate it replaced ALWAYS
             // returned Ok on Windows, so a cancel arrived as Ok(!0) and the Err arm was dead).
@@ -1052,7 +1081,9 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 Ok(s) if s.success() => "stopped",
                 _ => "declined",
             };
-            *lock_status() = msg.into();
+            if current {
+                *lock_status() = msg.into();
+            }
             // Support evidence (spec §12): "I pressed start and nothing happened" is the most
             // common monitoring report, and the three causes below are indistinguishable in the
             // UI. os error 1223 is specifically the user dismissing the UAC prompt — a REFUSED
@@ -1096,7 +1127,6 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
             &started_at,
         );
         std::thread::spawn(move || {
-            use std::sync::atomic::Ordering;
             let mut acc = crate::sessions::SessionAccumulator::with_counts(started_at, active_changes);
             // P5-enough: a new capture starts from nothing, never the last capture's count.
             *lock_progress() = None;
@@ -1125,9 +1155,9 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 "taskhostw",
                 "searchprotocolhost",
             ];
-            while fps_active().load(Ordering::Acquire) {
+            while capture_live(generation) {
                 std::thread::sleep(std::time::Duration::from_secs(1));
-                if !fps_active().load(Ordering::Acquire) {
+                if !capture_live(generation) {
                     break;
                 }
                 let elapsed = start.elapsed().as_secs() as u32;
@@ -1189,11 +1219,14 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 let gpu_clock = gpus.iter().filter_map(|g| g.graphics_clock_mhz).max();
                 let gpu_hotspot_temp = gpus.iter().filter_map(|g| g.hotspot_temperature_c).max();
                 let cpu = get_cpu_sensors();
+                // An unfilled sensor cache reads 0 of 0 (the poller starts with the capture): that is
+                // no reading, never a RAM figure (codebase review 2026-11-02).
+                let ram_read = cpu.ram_total_bytes > 0;
                 acc.record_sensors(
                     gpu_temp,
                     gpu_usage,
-                    Some(cpu.ram_used_bytes),
-                    Some(cpu.ram_total_bytes),
+                    ram_read.then_some(cpu.ram_used_bytes),
+                    ram_read.then_some(cpu.ram_total_bytes),
                 );
                 // Same driver-free interop as get_cpu_temp (cpu_temp.rs) — None when no HWiNFO/LHM/OHM
                 // is running; never fabricated. Session-scoped peak, same as the GPU sensors above.
@@ -1660,5 +1693,28 @@ mod background_sample_tests {
         assert_eq!((h.id, h.counts), (9, vec![(143, 250), (300, 2)]));
         let ui = serde_json::to_value(&s).unwrap();
         assert!(ui.get("frame_hist").is_none(), "{ui}");
+    }
+}
+
+#[cfg(test)]
+mod capture_generation_tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    // Codebase review 2026-11-02: a stop then a start inside one recorder tick left the old recorder
+    // and heartbeat running beside the new ones, because each read only `fps_active`.
+    #[test]
+    fn a_capture_superseded_by_a_newer_one_is_neither_current_nor_live() {
+        let generation = capture_gen().fetch_add(1, Ordering::AcqRel) + 1;
+        assert!(capture_current(generation));
+        capture_gen().fetch_add(1, Ordering::AcqRel); // the next start
+        assert!(!capture_current(generation) && !capture_live(generation));
+        // Every loop the start spawns asks for its own capture, never the shared flag alone. Tokens
+        // are built by concat! so this test's own lines don't match the scan.
+        let src = include_str!("monitoring.rs");
+        let start = src.find(concat!("pub(crate) fn ", "start_fps_capture()")).expect("start");
+        let body = &src[start..src[start..].find(concat!("pub(crate) fn ", "uac_disabled()")).map(|e| start + e).expect("next fn")];
+        assert_eq!(body.matches(concat!("while capture_", "live(generation)")).count(), 2, "heartbeat and recorder");
+        assert!(!body.contains(concat!("while fps_", "active().load")), "a loop that reads only the flag outlives a stop");
     }
 }

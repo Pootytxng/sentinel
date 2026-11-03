@@ -335,10 +335,17 @@ describe("GL-empty F5/F6 — legible small print, and the lane's soft foot on ev
   // Same reviews, Test room: on see-through panels the faint tier read 4.23-4.48:1 on his backdrop.
   it("on glass and frosted the faint tier takes the muted ink; Solid keeps its own", () => {
     const tokens = read("src", "design", "tokens-v2.css");
-    expect(body(tokens, ':root[data-v2="on"]:is([data-surface="glass"], [data-surface="frosted"])')).toMatch(
-      /--v2-faint:\s*var\(--v2-muted\)/,
-    );
-    expect(body(tokens, ':root[data-v2="on"][data-surface="solid"]')).not.toMatch(/--v2-faint/);
+    const lift = ':root[data-v2="on"]:is([data-surface="glass"], [data-surface="frosted"])';
+    expect(body(tokens, lift)).toMatch(/--v2-faint:\s*var\(--v2-muted\)/);
+    // Review round 2: a check that Solid's own rule lacks the token passed vacuously, as no such rule
+    // exists. What keeps Solid on its own ink is that only the base rule and the glass/frosted lift
+    // declare the token at all.
+    const declaring = rules(tokens)
+      .filter(([, d]) => /(^|[;\s])--v2-faint\s*:/.test(d))
+      .map(([s]) => s);
+    expect(declaring).toHaveLength(2);
+    expect(declaring).toContain(lift);
+    expect(declaring.filter((s) => s !== lift).every((s) => !/data-surface/.test(s))).toBe(true);
   });
 
   it("F6: the content lane's fade is not scoped away from Solid", () => {

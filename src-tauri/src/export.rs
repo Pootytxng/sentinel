@@ -51,6 +51,11 @@ fn vf64(v: &Value, key: &str) -> Option<f64> {
 fn obj_arr<'a>(v: &'a Value, key: &str) -> &'a [Value] {
     v.get(key).and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[])
 }
+/// A frame-rate reading when it is one: finite and above zero. The sampler's unknown is 0.
+fn measured(v: &Value, key: &str) -> Option<f64> {
+    vf64(v, key).filter(|x| x.is_finite() && *x > 0.0)
+}
+
 fn as_arr(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
@@ -589,14 +594,13 @@ fn build_discord_block(
     let _ = writeln!(o, "ready   · {ready}/{total} checks · {attention} need attention");
     let _ = writeln!(o, "top fix · {top_fix}");
     let _ = writeln!(o, "changes · {active_changes} active & reversible");
-    if let Some(s) = as_arr(sessions).first() {
-        let _ = writeln!(
-            o,
-            "session · {} · {:.0} avg / {:.0} 1% low",
-            vstr(s, "process_name"),
-            vf64(s, "avg_fps").unwrap_or(0.0),
-            vf64(s, "low1_fps_est").unwrap_or(0.0),
-        );
+    // The newest session that measured play, and only readings it measured (codebase review
+    // 2026-11-02): a session behind another window the whole time saves 0s that mean "not measured",
+    // and printed "0 avg / 0 1% low".
+    if let Some(s) = crate::sessions::newest_measured_row(sessions) {
+        if let (Some(avg), Some(low)) = (measured(s, "avg_fps"), measured(s, "low1_fps_est")) {
+            let _ = writeln!(o, "session · {} · {avg:.0} avg / {low:.0} 1% low", vstr(s, "process_name"));
+        }
     }
     let _ = writeln!(o, "measured, not promised · {}", site_host());
     o.push_str("```");
@@ -712,8 +716,9 @@ pub(crate) fn build_consumer_report(
             "Compy watched {n} gaming {s}. These are live readings from your own play, not lab \
              benchmarks."
         );
-        if let Some(latest) = sess.first() {
-            if let Some(fps) = vf64(latest, "avg_fps") {
+        // The newest session that measured play, as the Discord block reads it.
+        if let Some(latest) = crate::sessions::newest_measured_row(sessions) {
+            if let Some(fps) = measured(latest, "avg_fps") {
                 let game = {
                     let p = vstr(latest, "process_name");
                     if p == "—" { "a game".to_string() } else { p }
@@ -973,6 +978,27 @@ mod export_tests {
         let md = build_consumer_report(&Value::Null, &json!([]), &json!({}), &sessions, "t", None);
         assert!(md.contains("Compy watched 1 gaming session"));
         assert!(!md.contains("frames per second"), "no measurement, no number");
+    }
+
+    // Codebase review 2026-11-02: a session behind another window the whole time saves 0s that mean
+    // "not measured", and both blocks printed them as readings ("0 avg / 0 1% low", "about 0 frames
+    // per second"). They read the newest session that measured play instead, and print nothing when
+    // none did.
+    #[test]
+    fn an_unmeasured_session_never_prints_as_a_reading() {
+        let behind = json!({ "process_name": "new.exe", "samples": 0, "avg_fps": 0.0, "low1_fps_est": 0.0 });
+        let played = json!({ "process_name": "old.exe", "samples": 900, "avg_fps": 141.0, "low1_fps_est": 98.0 });
+        let both = json!([behind.clone(), played]);
+        let md = build_consumer_report(&Value::Null, &json!([]), &json!({}), &both, "t", None);
+        assert!(md.contains("about 141 frames per second"), "{md}");
+        assert!(!md.contains("about 0 frames"), "{md}");
+        let card = build_discord_block(&Value::Null, &json!({}), &both, &json!([]), "t");
+        assert!(card.contains("session · old.exe · 141 avg / 98 1% low"), "{card}");
+        let only = json!([behind]);
+        let md = build_consumer_report(&Value::Null, &json!([]), &json!({}), &only, "t", None);
+        assert!(!md.contains("frames per second"), "{md}");
+        let card = build_discord_block(&Value::Null, &json!({}), &only, &json!([]), "t");
+        assert!(!card.contains("session ·"), "{card}");
     }
 
     #[test]
