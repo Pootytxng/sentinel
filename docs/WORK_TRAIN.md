@@ -103,8 +103,8 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       batch apply carries no flag over IPC; nothing stops a double apply of one change; real play keeps a change
       after an OtherChange or Conditions stop (owner call); ~~the experiments, sessions and noise stores still
       overwrite an earlier `.corrupt`~~ (fixed `c127ce9`, `14d39b5`: a second damaged file keeps the first set-aside,
-      the intelligence store too; one that can't be set aside refuses the read); a session under 600 samples leaves
-      an armed comparison waiting with no line saying why; ~~the Lab's "measured together" count still counts rows
+      the intelligence store too; one that can't be set aside refuses the read); ~~a session under 600 samples leaves
+      an armed comparison waiting with no line saying why~~ (CR-cmp-wait `e01561f7`); ~~the Lab's "measured together" count still counts rows
       from another PC~~ (fixed `8ef5772`). Slice 6: Care's first-ever
       scan seeds an empty world when its readers fail; a crash's vitals come from the whole capture window, not the
       game's own; Black Box, export and capture start run on the UI thread; a wedged old FPS helper can clear the new
@@ -163,6 +163,22 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       candidates for that game first ("try these settings before any upgrade"); none left = today's line.
       `023da7d` (2026-11-03): `settings-done.ts` names the untested changes still worth trying ahead of any part,
       en + zh-CN; none left falls through to P9-settings-done's line. TS display only; tests fail on old code.
+
+### Next — small visible slices (refill 2026-11-03 PM: CR-1102-left's fixable lines)
+- [x] **CR-cmp-wait** A session under 600 readings (or with no frame reading) leaves an armed comparison waiting
+      with no line saying why: the debrief names it, with both counts. `e01561f7` (2026-11-03, CODE-ONLY): quiet for
+      the baseline session, another game, all-background or nothing armed; en + zh-CN; 2 tests fail on old code.
+      Screen check owed at the next desk install.
+- [ ] **CR-gpu-picker** The GPU view's Global/Per-game picker changes nothing anything reads: remove it (wiring it
+      is a feature, not a fix). Test: the picker is gone. Screen check at a FULL session.
+- [ ] **CR-trial-zero-base** A Trial delta on a 0 or NaN baseline (older records) prints a number: show "—" and
+      no verdict wording. Test with a 0 and a NaN baseline record.
+- [ ] **CR-primary-gpu** App's and Home's walkthrough and tuning vendor come from the first DXGI adapter: take the
+      primary GPU's vendor (the one the session peak already uses). Test with an iGPU listed first.
+- [ ] **CR-stopped-service** A service that is only stopped reads as Compy's change: read its start type and claim
+      it only when the start type is the one Compy set. Rust, read-only; one review.
+- [ ] **CR-localized-reads** Power-plan, core-parking and bcdedit checks match English words: read GUIDs and
+      numbers instead, so a localized Windows reads right. Rust, read-only; one review; test with zh-CN output.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -909,6 +925,10 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   pushes through the gate, then builds and installs. Lane line removed. The #678 scheduled task could not be turned off
   from here (the task tools refuse Claude); walkthroughs P4–P7 and P8-first-advanced stay the owner's, named under
   Needs owner with clicks and minutes.
+- 2026-11-03 PM (scheduled, CODE-ONLY, owner in a game): queue refill (5 ready slices from CR-1102-left); CR-cmp-wait
+  `e01561f7` (tsc 0; vitest 10 files / 116 passed; new test fails 2/5 on old code); stale `train-live-round` worktree
+  removed (its work is on main as `8be87e12`). NOT pushed (main ahead of GitHub), NOT installed: the next FULL
+  session pushes through the gate, builds, installs and does the screen check.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
