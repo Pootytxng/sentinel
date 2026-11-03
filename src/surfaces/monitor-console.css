@@ -130,8 +130,11 @@
 :root[data-v2="on"] .ss-coverage { position: absolute; top: 0; right: 0;
   font-family: var(--ix-mono); font-size: var(--type-label); letter-spacing: .08em; text-transform: uppercase;
   color: var(--ix-text-3); white-space: nowrap; pointer-events: none; }
+/* --pin-max is the note's MEASURED room (SessionStack's RowCanvas); the 170px is only the fallback
+   before the row is laid out. With no room for the clock at all, the clock gives way to the note. */
 :root[data-v2="on"] .ss-canvas-partial .ss-pin-label {
-  left: clamp(36px, var(--pin-x, 50%), calc(100% - 170px)); }
+  left: clamp(36px, var(--pin-x, 50%), var(--pin-max, calc(100% - 170px))); }
+:root[data-v2="on"] .ss-canvas-partial .ss-pin-label[data-crowded] { visibility: hidden; }
 /* #622-f2: the canvas track keeps a 120px floor, and the chip wraps only when that floor binds (at
    600px of list width the English chip used to leave the timeline 27px). Where the chip fits on one
    line the row is unchanged. */

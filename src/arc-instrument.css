@@ -26,10 +26,16 @@
 }
 /* The glass card needs an inside: the classic .fc-screen has no border, so it never set a padding,
    and the verdict's wordmark, headline and buttons sat on the border, the action buttons painted over
-   the rounded corner (desk review 2026-11-03). The tour's glass panel's inset. The boot theater keeps
-   its own frame padding (.fct-frame), so it is left as it was. */
+   the rounded corner (desk review 2026-11-03). The tour's glass panel's inset. */
 .arc-v2 .fc-screen:not(.fc-screen-theater) {
   padding: clamp(18px, 2.2vw, 26px);
+}
+/* While the boot theater runs, its frame (.fct-frame) pads its own content, but the head row above it
+   sat on the card's edge: the wordmark over the rounded corner, "first check · running" against the
+   right border (desk review 2026-11-03, second pass). Only the head takes the inset; the frame keeps
+   the card's full width. */
+.arc-v2 .fc-screen-theater > .fc-head {
+  padding: clamp(18px, 2.2vw, 26px) clamp(18px, 2.2vw, 26px) 0;
 }
 .arc-v2 .fc-brand {
   display: inline-flex;

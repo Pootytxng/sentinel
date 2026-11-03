@@ -205,6 +205,41 @@ describe("partial timeline coverage is STATED (self-review round-1 catch, bug→
     expect(container.querySelectorAll(".ss-canvas-partial")).toHaveLength(1);
   });
 
+  // Desk review 2026-11-03: the clock's centre was clamped 170px off the right edge, a guess at the
+  // note's width; the owner's "first 2h 2m recorded" is 177px, and it ran 45px under "▼ 2:47 PM".
+  it("the pin's clock clears the note by the note's measured width, and gives way with no room", () => {
+    const widths: [string, number][] = [
+      ["ss-coverage", 177],
+      ["ss-pin-label", 78],
+    ];
+    let wrapW = 400;
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(function (this: Element) {
+      return this.classList.contains("ss-canvas-wrap") ? wrapW : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return widths.find(([c]) => this.classList.contains(c))?.[1] ?? 0;
+    });
+    const withPin = () =>
+      sess({
+        duration_secs: 37_696,
+        stutter_timeline: [
+          [0, 100],
+          [3600, 20],
+          [7200, 80],
+        ],
+        stutter_events: [{ at_secs: 3600, kind: "process-start", label: "OneDrive.exe starting" }],
+      });
+    const pin = mount([withPin()]).container.querySelector<HTMLElement>(".ss-pin-label")!;
+    // 400 wide - 177 (the note) - 8 (air) - 39 (half the clock) = 176
+    expect(pin.style.getPropertyValue("--pin-max")).toBe("176.0px");
+    expect(pin.hasAttribute("data-crowded")).toBe(false);
+    cleanup();
+    wrapW = 200; // 200 - 177 - 8 - 39 < 36: no room for the clock beside the note
+    const narrow = mount([withPin()]).container.querySelector<HTMLElement>(".ss-pin-label")!;
+    expect(narrow.hasAttribute("data-crowded")).toBe(true);
+    expect(narrow.textContent).toContain("▼");
+  });
+
   it("the expanded detail states the coverage too", () => {
     const { container } = mount([capped()]);
     fireEvent.click(container.querySelector(".ss-row")!);
