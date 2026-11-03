@@ -72,6 +72,22 @@ describe("it routes through the host's writers — never its own navigation", ()
     expect(p.onOpenStation).toHaveBeenCalledWith("blackbox");
   });
 
+  // Codebase review 2026-11-02: only a GPU with a tuning guide gets a Tuning station, and the Lab
+  // drops a deep-link to one it can't render, so the row opened an empty dock on NVIDIA and Intel.
+  it("offers Tuning only where the Lab has that station", () => {
+    const opens = () =>
+      screen
+        .queryAllByRole("option")
+        .filter((r) => r.textContent?.includes("Tuning") && r.textContent?.includes("cooler and quieter"));
+    setup();
+    type("tuning");
+    expect(opens()).toHaveLength(1);
+    cleanup();
+    setup({ tuningStation: false });
+    type("tuning");
+    expect(opens()).toHaveLength(0);
+  });
+
   it("Settings calls onOpenSettings", () => {
     const p = setup();
     type("settings");

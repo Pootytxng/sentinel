@@ -244,6 +244,14 @@ describe("BlackbookConsole — the tape renders each real record kind", () => {
     expect(deltas[0].textContent).toContain("+30 fps vs last");
     expect(container.textContent).not.toContain("(s)");
   });
+
+  it("a session that measured nothing prints the em dash, never a 0 (codebase review 2026-11-02)", () => {
+    useReduced();
+    const { container } = mountConsole([session({ avgFps: null, low1Fps: null, avgFpsDelta: null })]);
+    const stats = [...container.querySelectorAll(".bc-stat .bc-mono")].map((el) => el.textContent);
+    expect(stats).toEqual(["—", "—"]);
+    expect(container.querySelector(".bc-delta")).toBeNull();
+  });
 });
 
 describe("BlackbookConsole — a collapsed repeat states its count (C-11)", () => {

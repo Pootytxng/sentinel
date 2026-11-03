@@ -97,6 +97,16 @@ describe("Health summary (glass redesign)", () => {
     expect(checks.textContent).toContain("No check needs a look");
   });
 
+  // Codebase review 2026-11-02: a dismissed check keeps its "attention" status, so the card named it
+  // as worth a look beside a heading that said everything was set up right.
+  it("never names a check the user dismissed", () => {
+    home({ readiness: { ...readiness(1), attention_count: 0, dismissed_ids: ["att0"] } });
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Your PC looks set up right");
+    const checks = screen.getByRole("button", { name: /Windows setup/ });
+    expect(checks.textContent).not.toContain("Memory speed 0");
+    expect(checks.textContent).toContain("No check needs a look");
+  });
+
   it("puts nothing under the answer: the header is a title, its facts live on the cards (desk review 2026-10-30)", () => {
     home();
     const head = document.querySelector(".gl-head-text")!;
@@ -309,14 +319,26 @@ describe("GL-empty F5/F6 — legible small print, and the lane's soft foot on ev
     }
   });
 
-  // Desk review 2026-11-02, on his rig: F5 lifted the stutter tag alone, and 151 of the station's 152
-  // "not a proven cause" tags (changed before, since it last worked) still wore the faint ink, 3.74-4.20:1.
-  // Even the muted ink measured 4.32-4.80:1 on the station's lighter inner blocks.
-  it("the station's three 'not a proven cause' tags share one ink, lifted past AA on its lightest block", () => {
-    const rule = body(glassCss(), ':root[data-v2="on"] .gl-station :is(.bb-stutter-tag, .bb-changed-tag, .bb-since-tag)');
-    expect(rule, "a station tag kept its own sheet's faint ink").toMatch(
-      /color:\s*color-mix\(in srgb, var\(--v2-muted\) 85%, var\(--v2-text\)\)/,
+  // Desk reviews 2026-11-02, on his rig: F5 lifted the stutter tag alone, and 151 of the station's 152
+  // "not a proven cause" tags still wore the faint ink, 3.74-4.20:1; round 2 found 166 more faint lines
+  // in the station at 3.03-4.47:1, the teal next-step and assess blocks the worst. Black Box's sheets
+  // read --ix-text-3, so the station re-points that one ink instead of chasing selectors.
+  it("the station lifts the faint ink its Black Box sheets read, past AA on the teal blocks", () => {
+    const station = body(glassCss(), ':root[data-v2="on"] .gl-station');
+    expect(station, "the station kept the instrument layer's faint ink").toMatch(
+      /--ix-text-3:\s*color-mix\(in srgb, var\(--v2-muted\) 70%, var\(--v2-text\)\)/,
     );
+    // One ink for the whole tier: no per-tag colour left behind to drift from it.
+    expect(rules(glassCss()).some(([s]) => /\.bb-(stutter|changed|since)-tag/.test(s))).toBe(false);
+  });
+
+  // Same reviews, Test room: on see-through panels the faint tier read 4.23-4.48:1 on his backdrop.
+  it("on glass and frosted the faint tier takes the muted ink; Solid keeps its own", () => {
+    const tokens = read("src", "design", "tokens-v2.css");
+    expect(body(tokens, ':root[data-v2="on"]:is([data-surface="glass"], [data-surface="frosted"])')).toMatch(
+      /--v2-faint:\s*var\(--v2-muted\)/,
+    );
+    expect(body(tokens, ':root[data-v2="on"][data-surface="solid"]')).not.toMatch(/--v2-faint/);
   });
 
   it("F6: the content lane's fade is not scoped away from Solid", () => {

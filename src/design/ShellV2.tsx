@@ -94,6 +94,7 @@ export function ShellV2({
   ledgerCount,
   rig,
   onOpenStation,
+  tuningStation,
   onOpenEntry,
   onOpenSettings,
   onOpenIntent,
@@ -111,6 +112,8 @@ export function ShellV2({
   // kind of navigation, passed in rather than reached for — the shell owns chrome, not routing.
   // Any one omitted → the palette does not index that group, so it can never offer a dead door.
   onOpenStation?: (station: LabStationKey) => void;
+  /** false = no Tuning station on this PC (CommandPalette's own note). */
+  tuningStation?: boolean;
   onOpenEntry?: (entryId: string) => void;
   onOpenSettings?: () => void;
   /** P7-palette: a plain problem typed here opens the Home interview at its finding's card. */
@@ -499,6 +502,7 @@ export function ShellV2({
             railLabel={railLabel}
             onNavigate={onNavigate}
             onOpenStation={onOpenStation}
+            tuningStation={tuningStation}
             onOpenEntry={onOpenEntry}
             onOpenSettings={onOpenSettings}
             onOpenIntent={onOpenIntent}

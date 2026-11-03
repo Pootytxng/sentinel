@@ -323,7 +323,7 @@ export function WhatChangedReportView({
    *  optional together: absent (or no live row) → the next-test sentence renders alone, exactly as
    *  before. The engine's own doc comment fixes the destination: the Trust Ledger, never the bench. */
   activeChangeFor?: (recId: string) => AppliedChange | undefined;
-  onRollback?: (c: AppliedChange) => Promise<void>;
+  onRollback?: (c: AppliedChange) => Promise<unknown>;
   busy?: boolean;
   /** P6-next: the next-test sentence is shown as the Care view's one next step, above; it is not
    *  repeated here. The rollback affordance (when resolvable) stays. Absent = unchanged. */
@@ -534,7 +534,7 @@ export function WhatChangedPanel({
   startedAt: string;
   /** BACKLOG:236 — optional together; absent = the next-test sentence renders alone (unchanged). */
   activeChangeFor?: (recId: string) => AppliedChange | undefined;
-  onRollback?: (c: AppliedChange) => Promise<void>;
+  onRollback?: (c: AppliedChange) => Promise<unknown>;
   busy?: boolean;
 }) {
   const on = useIntelligenceFlag();
@@ -586,7 +586,7 @@ export function SessionInvestigator({
    *  Named `rollbackBusy` because this surface already owns a local `busy` for its OWN compare
    *  fetch; the two are unrelated and must never gate each other. */
   activeChangeFor?: (recId: string) => AppliedChange | undefined;
-  onRollback?: (c: AppliedChange) => Promise<void>;
+  onRollback?: (c: AppliedChange) => Promise<unknown>;
   rollbackBusy?: boolean;
 }) {
   const { t } = useTranslation();

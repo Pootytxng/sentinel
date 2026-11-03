@@ -385,6 +385,25 @@ describe("HomeConsole — masthead (the proven HomeHud register)", () => {
     expect(c.querySelector(".hc-verdict-line")!.textContent).toContain("Applied Compy changes");
   });
 
+  // Codebase review 2026-11-02: the count line divided by every check, unread ones included, while
+  // the ring beside it and the glass page count only the checks Compy could read.
+  it("attention state: the count is out of the checks Compy could read, as the ring's is", () => {
+    const attn: GameReadiness = {
+      ...readiness,
+      checks: [
+        { id: "a", label: "A", status: "attention", detail: "", value: null },
+        { id: "b", label: "B", status: "ready", detail: "", value: null },
+        { id: "c", label: "C", status: "ready", detail: "", value: null },
+        { id: "u", label: "U", status: "unknown", detail: "", value: null },
+      ],
+      ready_count: 2,
+      attention_count: 1,
+      unknown_count: 1,
+    };
+    const c = mount({ ...props, readiness: attn }).container;
+    expect(c.querySelector(".v2-verdict-sub")!.textContent).toMatch(/^2 of 3 checks look good\./);
+  });
+
   // BUG -> GUARD (self-caught 2026-08-26, DIR-1 first-timer walk). The limiter row stands DOWN
   // when the verdict headline already names it, and the code comment justifying that stand-down
   // said the fix route "still lives in the verdict dek + the Dock". The dek had been stood down in

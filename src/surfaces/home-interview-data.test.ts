@@ -143,6 +143,16 @@ describe("LAW 1 — no dead end", () => {
     }
   });
 
+  // Codebase review 2026-11-02: only a GPU with a tuning guide (AMD in v1) gets a Tuning station, and
+  // the Lab drops a deep-link to one it can't render, so "It runs hot" landed NVIDIA and Intel users
+  // on an empty dock.
+  it("never routes heat to a Tuning station this PC doesn't have", () => {
+    expect(find("heat", RICH).action).toMatchObject({ kind: "station", station: "tuning" });
+    expect(find("heat", { ...RICH, tuning: true }).action).toMatchObject({ kind: "station", station: "tuning" });
+    expect(find("heat", { ...RICH, tuning: false }).action).toMatchObject({ kind: "room", room: "play" });
+    expect(find("heat", { ...BARE, tuning: false }).action.kind).toBe("check");
+  });
+
   it("never offers a room the rail does not render — it degrades to the read-only check", () => {
     // The action that needs no room, no rail and no wiring is always available, so "no room" can
     // never mean "nothing". This is the mechanism behind the no-dead-end law, not a nicety.

@@ -42,4 +42,13 @@ describe("rigTierLine — transparent basis, never fabricated", () => {
   it("returns null when nothing is readable (no tier from nothing)", () => {
     expect(rigTierLine(0, 0, 0)).toBeNull();
   });
+
+  // Codebase review 2026-11-02: one unread input (the probe's unknown is 0) still produced a tier,
+  // "Entry · rough, from 0 GB VRAM", which is a tier from nothing.
+  it("returns null when any one input is unread", () => {
+    expect(rigTierLine(0, 8, 32 * GIB)).toBeNull();
+    expect(rigTierLine(16 * GIB, 0, 32 * GIB)).toBeNull();
+    expect(rigTierLine(16 * GIB, 8, 0)).toBeNull();
+    expect(rigTierLine(Number.NaN, 8, 32 * GIB)).toBeNull();
+  });
 });

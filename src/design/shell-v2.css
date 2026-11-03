@@ -18,7 +18,10 @@
   max-width: none;
   margin-inline: 0;
   height: calc(100vh - var(--wc-h, 34px));
-  overflow: hidden;
+  /* clip, not hidden: hidden still scrolls under script, and the backdrop's 1.04 zoom overhangs this
+     box (956 vs 937px at 1500x980, desk review 2026-11-02), so Black Box's deep-link scrollIntoView
+     shifted the whole shell up 19px. clip paints the same and cannot be scrolled at all. */
+  overflow: clip;
 }
 
 :root[data-v2="on"] .v2-shell {

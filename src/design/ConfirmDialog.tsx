@@ -56,6 +56,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const trigger = useRef<HTMLElement | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const confirmBtn = useRef<HTMLButtonElement | null>(null);
+  const cancelBtn = useRef<HTMLButtonElement | null>(null);
 
   const confirm = useCallback<ConfirmFn>((o) => {
     // Re-entrancy guard: if a dialog is already open (two triggers firing close together — an Enter
@@ -97,7 +98,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       } else if (e.key === "Enter") {
         e.preventDefault();
         e.stopImmediatePropagation();
-        close(true);
+        // Enter answers for the button that has focus: on Cancel (tabbed to) it cancels, it never
+        // confirms the change behind it (codebase review 2026-11-02).
+        close(cancelBtn.current == null || document.activeElement !== cancelBtn.current);
       } else if (e.key === "Tab") {
         e.stopImmediatePropagation();
         const m = modalRef.current;
@@ -136,7 +139,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             {opts.body && <p className="cmp-confirm-body">{opts.body}</p>}
             <div className="cmp-confirm-actions">
               {!opts.acknowledge && (
-                <button type="button" className="cmp-confirm-cancel" onClick={() => close(false)}>
+                <button ref={cancelBtn} type="button" className="cmp-confirm-cancel" onClick={() => close(false)}>
                   {opts.cancelLabel ?? t("common.confirmDialog.cancel")}
                 </button>
               )}

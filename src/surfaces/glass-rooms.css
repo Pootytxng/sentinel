@@ -534,9 +534,16 @@
   margin: 0;
   max-width: 64ch;
 }
+/* The station hosts Black Box's own sheets, whose quiet lines wear the instrument layer's faint ink
+   (--ix-text-3, #828896, never re-pointed here). On his backdrop the desk reviews of 2026-11-02 measured
+   them at 3.03-4.47:1 in 166 places, the "not a proven cause" tags among them: the next-step and
+   assess blocks are teal-tinted, the record blocks lighter than the panel. The muted ink lifted 30%
+   toward the page ink clears 4.5:1 on all of them (about 4.9:1 on the teal blocks) and stays under the
+   station's own secondary ink (--ix-text-2), so the order of the three tiers holds. */
 :root[data-v2="on"] .gl-station {
   min-width: 0;
   background: var(--v2-panel-2);
+  --ix-text-3: color-mix(in srgb, var(--v2-muted) 70%, var(--v2-text));
 }
 /* Black Box's scan button is the room's one filled action, so it wears the primary's green and ink
    (owner ruling 2026-08-23). Its own sheet paints the theme accent, which is the danger red under
@@ -547,14 +554,6 @@
 }
 :root[data-v2="on"] .gl-station .bb-scan:focus-visible {
   outline-color: var(--v2-text);
-}
-/* The station's three "not a proven cause" tags (stutter, changed before, since it last worked). Their
-   own sheets' --ix-text-3 measured 3.74-4.21:1 on the station's glass, and the desk review of
-   2026-11-02 measured even the rooms' muted ink at 4.32-4.80:1 on the station's lighter inner blocks
-   (rgb 30-38, 40-49, 51-57, on his own backdrop): the muted ink lifted 15% toward the page ink is about
-   5:1 on the lightest of them. The tags stay italic, so they still read as a note on the line. */
-:root[data-v2="on"] .gl-station :is(.bb-stutter-tag, .bb-changed-tag, .bb-since-tag) {
-  color: color-mix(in srgb, var(--v2-muted) 85%, var(--v2-text));
 }
 /* A deep-linked record can be taller than the window; it lands by its top (BlackBox scrolls it to
    "start"), with room to breathe under the content lane's edge. */

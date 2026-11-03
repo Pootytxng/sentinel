@@ -921,6 +921,9 @@ export default function ExperimentBench({
   if (!gate) return null;
 
   const running = experiments.find((x) => x.status === "running") ?? null;
+  // The picker's live answer reads a classic running Trial's change as off (stillAppliedFrom, the
+  // summary's own read): its panel and the progress line above it say so, never "Testing now".
+  const runningOff = running != null && !isRealPlay(running) && stillAppliedFrom(recs.find((r) => r.id === running.rec_id)) === "off";
   const history = experiments.filter((x) => x.status !== "running");
 
   // The honest baseline: the most recent monitored session with a real frame-rate reading and a known
@@ -1263,6 +1266,7 @@ export default function ExperimentBench({
           progress={progress}
           interrupted={!isRealPlay(running) && running.id === interruptedJourneyId()}
           stopped={isRealPlay(running) && rp?.progress?.experiment_id === running.id && rp.progress.phase === "stopped"}
+          changeOff={runningOff}
         />
       )}
       {journey.kind !== "idle" ? null : running && isRealPlay(running) ? (
@@ -1283,7 +1287,7 @@ export default function ExperimentBench({
           // P5-guided: a journey Trial still running while no journey runs was interrupted (Compy
           // closed, a reload, the room left mid-session). Its change is still on; this says so.
           interrupted={running.id === interruptedJourneyId()}
-          changeOff={stillAppliedFrom(recs.find((r) => r.id === running.rec_id)) === "off"}
+          changeOff={runningOff}
           busy={busy}
           onConclude={concludeExperiment}
           onRestore={restoreExperiment}
@@ -1301,7 +1305,10 @@ export default function ExperimentBench({
               className="exp-select"
               labelledBy="exp-risk-label"
               value={riskChoice}
-              disabled={busy || simBusy}
+              // P8-launch-flash: held until the first read returns. Until then the bench can't know a
+              // Trial is running, so it shows this launcher (about 3 s on the owner's rig), and a pick
+              // here saved a new risk choice while a Trial ran.
+              disabled={busy || simBusy || reloads === 0}
               onChange={(v) => {
                 const next: RiskChoice = v === "low-only" ? "low-only" : "low-and-moderate";
                 if (next === riskChoice) return;

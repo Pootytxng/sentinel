@@ -42,6 +42,10 @@ export type CommandPaletteProps = {
   onNavigate: (id: HomeRailId) => void;
   /** App's single station-intent writer. Omitted → Lab instruments are not indexed. */
   onOpenStation?: (station: LabStationKey) => void;
+  /** false = the Lab renders no Tuning station on this PC (no guide for its GPU), so the palette
+   *  doesn't offer that door: the Lab drops a station it can't render, a dead end (codebase review
+   *  2026-11-02). Absent = offered. */
+  tuningStation?: boolean;
   /** LibraryContext's openLibrary(focusId). Omitted → Blackbook entries are not indexed. */
   onOpenEntry?: (entryId: string) => void;
   onOpenSettings?: () => void;
@@ -57,6 +61,7 @@ export function CommandPalette({
   railLabel,
   onNavigate,
   onOpenStation,
+  tuningStation = true,
   onOpenEntry,
   onOpenSettings,
   onOpenIntent,
@@ -83,7 +88,7 @@ export function CommandPalette({
               // and it sits outside LAB_STATION_ORDER (that list is the dock's own order).
               const keys: LabStationKey[] = ["optimize", ...LAB_STATION_ORDER];
               return keys
-                .filter((k, i) => keys.indexOf(k) === i && all[k])
+                .filter((k, i) => keys.indexOf(k) === i && all[k] && (k !== "tuning" || tuningStation))
                 .map((key) => ({ key, info: all[key] }));
             })()
           : undefined,
@@ -93,7 +98,7 @@ export function CommandPalette({
         intents: onOpenIntent ? paletteIntents(t) : undefined,
         intentHint: t("common.palette.intentHint"),
       }),
-    [rail, railLabel, onOpenStation, onOpenEntry, onOpenSettings, onOpenIntent, t],
+    [rail, railLabel, onOpenStation, tuningStation, onOpenEntry, onOpenSettings, onOpenIntent, t],
   );
 
   const results = useMemo(() => filterPalette(index, query), [index, query]);

@@ -2,6 +2,7 @@ import type { AppliedChange, ChangeChronology, ChronologyEntry, SessionSummary }
 import type { AutopsyLedgerEntry } from "../../data/autopsy-ledger";
 import { knowledgeForLanguage, type KnowledgeEntry } from "../../data/knowledge";
 import { changeLiveState } from "../../data/live-changes";
+import { knownFps } from "../../lib/session-metrics";
 
 // The Logbook tape builder (Console HUD Phase 4, plan 2026-07-12-console-hud-phase4-blackbook,
 // direction A "The Logbook"). A PURE builder — it does no IO itself; the surface hands it data.
@@ -57,13 +58,15 @@ export type LogbookSession = {
   at: number;
   /** Raw process name — the component prettifies it (prettyGameName). */
   game: string;
-  avgFps: number;
-  low1Fps: number;
+  /** The session's readings when it measured them (knownFps); null = not measured, never a 0. */
+  avgFps: number | null;
+  low1Fps: number | null;
   durationSecs: number;
   /** How many Compy changes were active during the session (0, or null = not recorded, ⇒ no tag). */
   changesActive: number | null;
-  /** Avg-fps delta vs the nearest OLDER same-game session; null when there is no same-game prior
-   *  (so a cross-game gap is never shown as a delta). */
+  /** Avg-fps delta vs the nearest OLDER same-game session that measured one; null when this session
+   *  or every same-game prior has no reading (so a cross-game gap, or an unmeasured 0, is never
+   *  shown as a delta). */
   avgFpsDelta: number | null;
 };
 
@@ -202,12 +205,17 @@ export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookIn
     .map((s) => ({ s, at: ms(s.started_at) }))
     .filter((x): x is { s: SessionSummary; at: number } => x.at !== null)
     .sort((a, b) => a.at - b.at);
+  // A session that measured nothing (behind another window the whole time, or the sampler's unknown
+  // 0) keeps its row, with no number on it: it is never printed as "avg 0 fps", and no neighbour's
+  // delta is taken against it (codebase review 2026-11-02).
   for (let i = 0; i < timed.length; i++) {
     const { s, at } = timed[i];
+    const avg = knownFps(s.avg_fps);
     let prevAvg: number | null = null;
     for (let j = i - 1; j >= 0; j--) {
-      if (timed[j].s.process_name === s.process_name) {
-        prevAvg = timed[j].s.avg_fps;
+      const prev = knownFps(timed[j].s.avg_fps);
+      if (timed[j].s.process_name === s.process_name && prev !== null) {
+        prevAvg = prev;
         break;
       }
     }
@@ -215,11 +223,11 @@ export function buildLogbook({ changes, sessions, autopsy, observed }: LogbookIn
       kind: "session",
       at,
       game: s.process_name,
-      avgFps: s.avg_fps,
-      low1Fps: s.low1_fps_est,
+      avgFps: avg,
+      low1Fps: knownFps(s.low1_fps_est),
       durationSecs: s.duration_secs,
       changesActive: s.compy_changes_active,
-      avgFpsDelta: prevAvg === null ? null : s.avg_fps - prevAvg,
+      avgFpsDelta: avg === null || prevAvg === null ? null : avg - prevAvg,
     });
   }
 

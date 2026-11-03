@@ -4,7 +4,7 @@
 
 import type { SessionSummary } from "../types";
 import { prettyGameName } from "../surfaces/game-name";
-import { allBackground } from "../lib/session-metrics";
+import { knownFps } from "../lib/session-metrics";
 
 export type GameTrend = {
   game: string; // pretty name (no .exe)
@@ -25,8 +25,10 @@ export type SessionTrendsData = {
 // "-Win64-Shipping" wrappers, so the same game's binaries aggregate as one row).
 
 export function computeSessionTrends(all: SessionSummary[]): SessionTrendsData {
-  // P4-show-f1: a session behind another window the whole time has no frame rate to trend.
-  const sessions = all.filter((s) => !allBackground(s));
+  // P4-show-f1: a session behind another window the whole time has no frame rate to trend, and nor
+  // has any other row without a reading (the sampler's unknown 0, a malformed legacy row): it would
+  // print "best 0 fps" and drag the trend arrow (codebase review 2026-11-02).
+  const sessions = all.filter((s) => knownFps(s.avg_fps) != null);
   const total = sessions.length;
   // Per game (sessions are newest-first, so the first one seen per game is the most recent).
   const byGame = new Map<string, GameTrend>();

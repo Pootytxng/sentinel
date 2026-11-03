@@ -82,8 +82,12 @@ export function HomeGlass({
   const attention = readinessKnown ? readiness!.attention_count : 0;
   const good = readinessKnown ? Math.max(0, readable - attention) : 0;
   const checksKnown = readinessKnown && readable > 0;
+  // A dismissed check keeps its "attention" status (the backend only drops it from attention_count),
+  // so it is left out here too: the page never names a check the user already set aside (codebase
+  // review 2026-11-02), the same rule system-posture.ts keeps.
+  const dismissed = new Set(readinessKnown ? readiness!.dismissed_ids ?? [] : []);
   const worthNames = readinessKnown
-    ? readiness!.checks.filter((c) => c.status === "attention").map((c) => c.label)
+    ? readiness!.checks.filter((c) => c.status === "attention" && !dismissed.has(c.id)).map((c) => c.label)
     : [];
 
   // A crash or freeze Windows recorded is a thing worth a look too, so the answer counts it; with

@@ -520,6 +520,18 @@ function DebloatTasks({
   const { t } = useTranslation();
   const [busy, setBusy] = useState<string | null>(null);
   const [state, setState] = useState<Record<string, "done" | string>>({});
+  // Once the ledger shows a disable made here, the ledger alone answers for that row (codebase review
+  // 2026-11-02): the Optimize station mounts two Fix views, and an undo in one (or in History) left
+  // the other reading "Disabled" with its button spent. Until the ledger shows it (a refresh that
+  // failed, #619), this click's own "done" holds the row.
+  const ledgerHas = DEBLOAT_TASKS.filter((task) => state[task.id] === "done" && !!activeChangeFor(`bloat-task:${task.id}`))
+    .map((task) => task.id)
+    .join(",");
+  useEffect(() => {
+    if (!ledgerHas) return;
+    const ids = ledgerHas.split(",");
+    setState((s) => Object.fromEntries(Object.entries(s).filter(([id, v]) => !(v === "done" && ids.includes(id)))));
+  }, [ledgerHas]);
   const disable = async (id: string) => {
     setBusy(id);
     try {

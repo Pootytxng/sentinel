@@ -149,6 +149,15 @@ export function changesBetweenRuns<T extends { applied_at: string }>(
   });
 }
 
+/** How many changes sit inside that window: one per change (`rec_id`), never one per ledger row, so
+ *  a change applied twice in the window is still one change (codebase review 2026-11-02). */
+export function changesInWindowCount(
+  bench: { baseline_at?: string | null; latest_at?: string | null } | null,
+  changes: { applied_at: string; rec_id: string }[],
+): number {
+  return new Set(changesBetweenRuns(bench, changes).map((c) => c.rec_id)).size;
+}
+
 // ── Attribution off the Machine Model (#452) ──
 /**
  * What the Test verdict may say about which Compy changes it measured. Read from the Machine

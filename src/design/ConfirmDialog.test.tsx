@@ -65,6 +65,20 @@ describe("ConfirmDialog", () => {
     await waitFor(() => expect(screen.getByTestId("result").textContent).toBe("false"));
   });
 
+  // Codebase review 2026-11-02: Enter confirmed whatever had focus, so a keyboard user who tabbed to
+  // Cancel and pressed Enter applied (or undid) the change behind the dialog.
+  it("Enter answers for the focused button: confirm on the confirm button, cancel on Cancel", async () => {
+    open();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Roll back" })));
+    fireEvent.keyDown(document.activeElement!, { key: "Enter" });
+    await waitFor(() => expect(screen.getByTestId("result").textContent).toBe("true"));
+    fireEvent.click(screen.getByText("trigger"));
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    cancel.focus();
+    fireEvent.keyDown(cancel, { key: "Enter" });
+    await waitFor(() => expect(screen.getByTestId("result").textContent).toBe("false"));
+  });
+
   // bug→guard (SetupTour.tsx:92): the modal must TRAP Escape/Enter so they never leak to a background
   // window keydown listener. Before this, a host that also listened on window for Escape (the SetupTour,
   // whose Escape calls finish()) fired alongside the dialog — dismissing the confirm also tore down the
