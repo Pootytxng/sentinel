@@ -715,16 +715,26 @@ export function HomeConsole({
   // which CPU is in the socket — only the ramp is generic, and gradeCpuTempC says so.
   const cpuTempGrade = gradeCpuTempC(cpuTemp?.temp_c ?? null);
 
-  // Readiness is the share of checks Compy could READ that passed (no invented 0–100 "score").
-  // P7-score (Constitution §34, §26): a check Compy could not read is not a failing check — it is
-  // left out of the ratio and said as "N couldn't be read" beside the number, so the ring never
-  // grades the PC down for what Compy couldn't see. Null while checks are running, and null when
-  // nothing could be read at all (a ring over zero readable checks would be a made-up number).
+  // Readiness is the share of checks Compy could READ and GRADE that passed (no invented 0–100
+  // "score"). P7-score (Constitution §34, §26): a check Compy could not read is not a failing check —
+  // it is left out of the ratio and said as "N couldn't be read" beside the number, so the ring never
+  // grades the PC down for what Compy couldn't see. An advisory (VRR, HDR, a RAM or Wi-Fi note) is
+  // noted, not graded, so it is left out the same way and named beside the number: it never "passed"
+  // either (desk review 2026-11-03). Null while checks are running, and null when nothing could be
+  // graded at all (a ring over zero graded checks would be a made-up number).
   const readinessKnown = !!readiness && readiness.checks.length > 0;
   const checksUnread = readinessKnown ? readiness!.unknown_count : 0;
-  const checksReadable = readinessKnown ? Math.max(0, readiness!.checks.length - checksUnread) : 0;
-  const checksGood = readinessKnown ? Math.max(0, checksReadable - readiness!.attention_count) : 0;
-  const readinessScore = readinessKnown && checksReadable > 0 ? Math.round((100 * checksGood) / checksReadable) : null;
+  const checksAdvisory = readinessKnown ? readiness!.advisory_count : 0;
+  const checksGraded = readinessKnown
+    ? Math.max(0, readiness!.checks.length - checksUnread - checksAdvisory)
+    : 0;
+  const checksGood = readinessKnown ? Math.max(0, checksGraded - readiness!.attention_count) : 0;
+  const readinessScore = readinessKnown && checksGraded > 0 ? Math.round((100 * checksGood) / checksGraded) : null;
+  // What the ratio left out, said beside it: unread first, then advisory.
+  const readinessAside = [
+    ...(checksUnread > 0 ? [t("home.homeConsole.stage.readinessUnread", { count: checksUnread })] : []),
+    ...(checksAdvisory > 0 ? [t("home.homeConsole.stage.readinessAdvisory", { count: checksAdvisory })] : []),
+  ];
   /**
    * THE READINESS BAND — the one word 01-health-approved.png prints beside the ring.
    *
@@ -918,8 +928,9 @@ export function HomeConsole({
     readiness: readinessKnown
       ? {
           passed: checksGood,
-          // P7-score: "of" the checks Compy could read; unreadable ones are not counted against the PC.
-          total: checksReadable,
+          // P7-score: "of" the checks Compy could read and grade; unreadable ones are not counted
+          // against the PC, and advisory ones are not counted as passed.
+          total: checksGraded,
           attention: readiness!.attention_count,
         }
       : null,
@@ -1017,9 +1028,10 @@ export function HomeConsole({
             <span className="hc-verdict-dek">
               {t("home.homeConsole.verdict.attentionSub", {
                 count: checksGood,
-                // P7-score: "of" the checks Compy could read, as the ring and the interview count
-                // them; an unread check is never counted against the PC (codebase review 2026-11-02).
-                total: checksReadable,
+                // P7-score: "of" the checks Compy could read and grade, as the ring and the interview
+                // count them; an unread check is never counted against the PC (codebase review
+                // 2026-11-02) and an advisory one never as good (desk review 2026-11-03).
+                total: checksGraded,
               })}{" "}
               {/* THE NEXT STEP, one line (owner ruling 2026-08-26). The DIR-1 first-timer walk
                   found that in this state Home names a problem and shows no way to deal with it:
@@ -1293,16 +1305,16 @@ export function HomeConsole({
                   note={
                     readinessKnown
                       ? [
-                          t("home.homeConsole.stage.readinessNote", { passed: checksGood, total: checksReadable }),
-                          ...(checksUnread > 0 ? [t("home.homeConsole.stage.readinessUnread", { count: checksUnread })] : []),
+                          t("home.homeConsole.stage.readinessNote", { passed: checksGood, total: checksGraded }),
+                          ...readinessAside,
                         ].join(" · ")
                       : undefined
                   }
                 />
-                {/* P7-score: with NOTHING readable the ring is honestly not-yet (the gauge drops its
+                {/* P7-score: with NOTHING graded the ring is honestly not-yet (the gauge drops its
                     note in that state), so the reason is said here instead of nowhere. */}
-                {readinessKnown && readinessScore == null && checksUnread > 0 && (
-                  <span className="hc-read-unread">{t("home.homeConsole.stage.readinessUnread", { count: checksUnread })}</span>
+                {readinessKnown && readinessScore == null && readinessAside.length > 0 && (
+                  <span className="hc-read-unread">{readinessAside.join(" · ")}</span>
                 )}
               </div>
               <Reading

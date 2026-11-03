@@ -12,7 +12,9 @@ export const LAST_CHECK_KEY = "compy_last_check_v1";
 export type LastCheck = {
   at: number; // epoch ms when the check completed
   total: number; // checks measured
-  green: number; // checks that came back clean
+  green: number; // checks that came back right: READY only
+  advisory: number; // noted, not graded (VRR, HDR, a RAM or Wi-Fi note): never counted as right
+  unread: number; // couldn't be read on this PC: never counted either way
   fixCount: number; // limiters worth fixing
 };
 
@@ -30,13 +32,25 @@ export function readLastCheck(): LastCheck | null {
     const raw = localStorage.getItem(LAST_CHECK_KEY);
     if (!raw) return null;
     const p = JSON.parse(raw) as Partial<LastCheck>;
+    // A record written before 2026-11-03 has no `advisory` or `unread`: its `green` counted the
+    // advisory checks as right. It is dropped, so the band falls back to live counts with no age
+    // instead of repeating that claim until the next check (desk review 2026-11-03).
     if (
       typeof p.at === "number" &&
       typeof p.total === "number" &&
       typeof p.green === "number" &&
+      typeof p.advisory === "number" &&
+      typeof p.unread === "number" &&
       typeof p.fixCount === "number"
     ) {
-      return { at: p.at, total: p.total, green: p.green, fixCount: p.fixCount };
+      return {
+        at: p.at,
+        total: p.total,
+        green: p.green,
+        advisory: p.advisory,
+        unread: p.unread,
+        fixCount: p.fixCount,
+      };
     }
   } catch {
     /* corrupt / unavailable → fallback */

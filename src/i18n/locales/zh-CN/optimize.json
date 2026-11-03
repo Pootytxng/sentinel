@@ -361,6 +361,7 @@
     "lastClean_other": "{{age}}检测 · 全部 {{count}} 项都正常",
     "lastCleanPartial": "{{age}}检测 · {{total}} 项中有 {{green}} 项正常 · {{unknown}} 项无法测量",
     "lastFlagged_other": "{{age}}检测 · {{count}} 项待修复",
+    "advisoryNote_other": "{{count}} 项为提示项,不评级",
     "checkingButton": "检测中…",
     "rerunButton": "重新检测",
     "fixLink": "在「{{room}}」中修复",

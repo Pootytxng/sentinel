@@ -75,6 +75,7 @@
       "readinessLabel": "就绪度",
       "readinessNote": "{{total}} 项检查中通过 {{passed}} 项",
       "readinessUnread_other": "{{count}} 项无法读取",
+      "readinessAdvisory_other": "{{count}} 项为提示项,不评级",
       "readinessGrade": {
         "good": "良好",
         "fair": "尚可",
@@ -674,6 +675,7 @@
       "allGood": "没有需要处理的检查项",
       "unread_one": "{{count}} 项无法读取",
       "unread_other": "{{count}} 项无法读取",
+      "advisory_other": "{{count}} 项为提示项,不评级",
       "run": "运行检查",
       "unknownNote": "Compy 还没有检查。检查不会改变任何设置。"
     },

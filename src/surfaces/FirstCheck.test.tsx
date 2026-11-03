@@ -6,6 +6,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 import { invoke } from "@tauri-apps/api/core";
 import FirstCheck, { FIRST_CHECK_KEY } from "./FirstCheck";
 import { ConfirmProvider } from "../design/ConfirmDialog";
+import { LAST_CHECK_KEY } from "./last-check";
 
 // FirstCheck drives the shared useScan (get_game_readiness → get_recommendations → priorities_from).
 // Default: one ready check, no limiters (the clean-rig verdict). Reset before every test so a test
@@ -117,6 +118,14 @@ describe("FirstCheck (audit M1)", () => {
     expect(head.textContent).toMatch(/^1 check measured perfect — confirmed right on this rig · 1 noted, not graded/);
     fireEvent.click(head);
     expect(screen.getByText("Variable refresh rate — noted, not graded")).toBeInTheDocument();
+    // Desk review 2026-11-03: Home's band read this record as "all 2 looked good". It carries the split.
+    expect(JSON.parse(localStorage.getItem(LAST_CHECK_KEY) as string)).toMatchObject({
+      total: 2,
+      green: 1,
+      advisory: 1,
+      unread: 0,
+      fixCount: 0,
+    });
   });
 
   // Round 2 review: with an unread check AND an advisory, the unread line still counted the advisory.
@@ -148,6 +157,12 @@ describe("FirstCheck (audit M1)", () => {
         /Every graded check Compy could read came back right — 1 couldn't be read on this PC, so it isn't counted either way\. 1 more is advisory: noted, not graded\./,
       ),
     ).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(LAST_CHECK_KEY) as string)).toMatchObject({
+      total: 3,
+      green: 1,
+      advisory: 1,
+      unread: 1,
+    });
   });
 
   // bug→guard (owner screenshot 2026-07-06): the verdict state stacked the live run-list AND the

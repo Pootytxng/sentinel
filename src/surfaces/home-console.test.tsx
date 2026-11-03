@@ -547,6 +547,39 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
     expect(n.textContent).toContain("16 couldn't be read");
   });
 
+  // Desk review 2026-11-03 (his rig: 14 ready, network QoS and VRR advisory): the ring said "16 of 16
+  // checks passed" while FirstCheck said 2 were noted, not graded. An advisory is left out of the ratio
+  // like an unread check and named beside it; it never passed.
+  it("advisory checks are left out of the readiness ratio and named beside it, never counted as passed", () => {
+    const his: GameReadiness = {
+      ...readiness,
+      checks: Array.from({ length: 16 }, (_, i) => ({ id: `c${i}`, label: `C${i}`, status: i < 14 ? "ready" : "advisory", detail: "", value: null })),
+      ready_count: 14,
+      advisory_count: 2,
+    };
+    const c = mount({ ...props, readiness: his }).container;
+    const r = readout(c, "readiness");
+    expect(r.value).toBe("100");
+    expect(r.el.textContent).toContain("14 of 14 checks passed · 2 advisory, not graded");
+    expect(r.el.textContent).not.toContain("16 of 16");
+    cleanup();
+    const flagged: GameReadiness = {
+      ...his,
+      checks: his.checks.map((k, i) => (i === 0 ? { ...k, status: "attention" } : k)),
+      ready_count: 13,
+      attention_count: 1,
+    };
+    const f = mount({ ...props, readiness: flagged }).container;
+    expect(readout(f, "readiness").value).toBe("93"); // 13 of the 14 GRADED checks, not 15 of 16
+    expect(readout(f, "readiness").el.textContent).toContain("13 of 14 checks passed · 2 advisory, not graded");
+    cleanup();
+    // Nothing graded at all: no ratio, no grade, and the reason is still said.
+    const none: GameReadiness = { ...his, checks: his.checks.map((k) => ({ ...k, status: "advisory" })), ready_count: 0, advisory_count: 16 };
+    const n = mount({ ...props, readiness: none }).container;
+    expect(readout(n, "readiness").value).not.toMatch(/\d/);
+    expect(n.textContent).toContain("16 advisory, not graded");
+  });
+
   it("GPU temp reading shows the polled value once it lands", async () => {
     const c = mount().container;
     await waitFor(() => expect(readout(c, "gpuTemp").value).toBe("62"));
