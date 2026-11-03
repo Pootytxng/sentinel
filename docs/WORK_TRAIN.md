@@ -123,12 +123,22 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       `8be87e12` (2026-11-03; written as `c8c2628e` by the 08:43 scheduled session, parked on `claude/train-live-round`
       when main moved under it, cherry-picked onto main by the HQ session): Live's list, Live console and debrief round
       above an hour; 3 tests fail on old code. Screen check owed at the next desk install.
-- [ ] **CR-tour-reject** The first-run tour sits on "Running checks" forever if the scan rejects: show the
+- [x] **CR-tour-reject** The first-run tour sits on "Running checks" forever if the scan rejects: show the
       couldn't-read line and let the tour go on.
-- [ ] **CR-ring-note** Home's ring note with unread checks wraps past two lines at 1280x720: keep the unread count
+      `a60b8068` (2026-11-03): `useScan` lands the verdict phase on a rejected read and reports `failed`; the tour's
+      check step, FirstCheck and Check say nothing was read (never "measured clean"), offer Try again, and FirstCheck
+      writes no last-check record. en + zh-CN. Tests fail on old code: use-scan 2, setup-stepper 1, FirstCheck 1.
+- [x] **CR-ring-note** Home's ring note with unread checks wraps past two lines at 1280x720: keep the unread count
       out of the ring note (it already has its own line below). Self-review at 1280x720 (FULL).
-- [ ] **CR-zh-gpu** The GPU profile labels and the setup lessons are English in zh-CN: move them to the locale
+      `5e8cf37a` (2026-11-03): the note is the ratio alone; the Re-run band already names the unread and advisory
+      checks in every state; with nothing graded both reasons stay under the not-yet ring. Screen check at
+      1280x720 owed at the next FULL desk session (the owner was in WARDOGS).
+- [x] **CR-zh-gpu** The GPU profile labels and the setup lessons are English in zh-CN: move them to the locale
       files, en + zh-CN.
+      `eddf6c7e` (2026-11-03): `setup-steps.ts` takes a resolver (English stays the fallback, pure tests byte-identical);
+      lessons, memory title, recap and tab blurbs under `home.setupTour.lessons|recap|tabBlurb.*`; GpuProfile's
+      delta table reads `lab.gpuProfile.field.*` and On/Off. The CPU note drops "kernel driver" (plain-language
+      guard). Tests fail on old code: setup-tour-locale 1, GpuProfile 1.
 - [ ] **P9-bottleneck-sustained** "The GPU was the bottleneck" (and its purchase links) from one peak sample over
       95%: require a sustained share of the session's samples, else say the GPU was busy at times. Measurement
       change: one review.
