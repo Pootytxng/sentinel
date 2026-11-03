@@ -63,6 +63,8 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 
 ## Queue
 
+**Lane, 2026-11-03 (owner: "ensure everything here that's actually deemed necessary is completed by you alone"):** the interactive Claude HQ session holds write access for the queue below. Scheduled sessions stay read-only until this line is removed.
+
 ### Now — finish what's open
 - [x] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
       (data-root tests), #661 (debrief unmeasured), #627 (ledger write announce), #604 (TS coverage).
@@ -114,6 +116,24 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       plan with minimum cores at 100; a system-managed pagefile may print "Fixed at 0-0 MB"; VBS is read as
       configured, not running; two modules are called dual-channel whatever their slots; drive health and memory
       speed or channels never rank as limiters.
+
+### Next — small visible slices (refill 2026-11-03: CR-1102-left's fixable lines + Roadmap Phase 9)
+- [x] **CR-live-round** Live's session strip and the debrief floor a session's length (3h 28m) where History and
+      Games round it (3h 29m): round to the minute above an hour everywhere, same rule as History.
+      `8be87e12` (2026-11-03; written as `c8c2628e` by the 08:43 scheduled session, parked on `claude/train-live-round`
+      when main moved under it, cherry-picked onto main by the HQ session): Live's list, Live console and debrief round
+      above an hour; 3 tests fail on old code. Screen check owed at the next desk install.
+- [ ] **CR-tour-reject** The first-run tour sits on "Running checks" forever if the scan rejects: show the
+      couldn't-read line and let the tour go on.
+- [ ] **CR-ring-note** Home's ring note with unread checks wraps past two lines at 1280x720: keep the unread count
+      out of the ring note (it already has its own line below). Self-review at 1280x720 (FULL).
+- [ ] **CR-zh-gpu** The GPU profile labels and the setup lessons are English in zh-CN: move them to the locale
+      files, en + zh-CN.
+- [ ] **P9-bottleneck-sustained** "The GPU was the bottleneck" (and its purchase links) from one peak sample over
+      95%: require a sustained share of the session's samples, else say the GPU was busy at times. Measurement
+      change: one review.
+- [ ] **P9-software-first** Before any part is named as a limiter in a game summary, list the untested Trial
+      candidates for that game first ("try these settings before any upgrade"); none left = today's line.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -735,13 +755,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-29 10:16-12:50 (interactive from Claude HQ, owner away then playing PBZ): 4 unchanged PBZ sessions
-  recorded unattended (owner-approved admin-prompt window 10:22-11:55, restored), one guided Trial
-  (too-noisy, put back), P4-show-f2 PASS, round-5 screen checks (P4-smooth-offer-b, P7-teach, P7-severity
-  PASS), noise-line copy fix `d38ef19b`, Constitution §36 `b9fe3c8b`, admin prompts left off by owner decision
-  (`4ab109f8`). Gate r34 green (526 files / 9465), cargo 1665, clippy clean; desk build `4ab109f8` installed,
-  pushed. Lesson: Compy's FPS helper needs an elevated start each session; an unattended session needs the
-  owner's prompt decision first.
 - 2026-10-28 ~08:45-09:00 (scheduled, CODE-ONLY, owner playing WARDOGS): Phase 8 queue refill `fb483dd4`;
   P8-posture-a `1eeef838` (cargo trial_candidates 20 passed, clippy clean, review r1 PASS-WITH-NITS; nit
   folded into P8-posture-b). Not pushed - next FULL session pushes.
@@ -836,6 +849,12 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   the ship launcher (self-reviewer rubric). Desk build `50ceb38c` installed (`ship-reinstall.ps1 -VerifyRuntime`,
   proof `50ceb38c · release`); pushed with this line through the pre-push gate. What the review left is CR-1102-left.
   Every launch was --no-activate on his second monitor.
+- 2026-11-03 08:43-08:55 (scheduled, FULL, owner idle on Discord): queue refill (six slices from CR-1102-left and
+  Phase 9); CR-live-round (tsc 0; vitest src/surfaces+design+data 283 files / 4074, exit 0; 3 tests fail on old
+  code). TS display only, no review. Not landed by that session: at 08:51 an interactive session committed `2471184f`
+  to main and the owner came back (preflight BUSY, idle 0 s), so its three commits waited on `claude/train-live-round`;
+  the 09:18 HQ session cherry-picked the code as `8be87e12` and folded the queue refill and this line into its own
+  docs commit (the branch's docs commits restated the CR-1102-left overlay note that `2471184f` had already closed).
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
