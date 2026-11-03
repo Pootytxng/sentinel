@@ -205,9 +205,11 @@ pub(crate) fn load_store_from(path: &Path) -> IntelligenceStore {
     match serde_json::from_str::<IntelligenceStore>(&raw) {
         Ok(store) => store,
         Err(_) => {
-            let corrupt = path.with_extension("json.corrupt");
-            let _ = std::fs::remove_file(&corrupt);
-            let _ = std::fs::rename(path, &corrupt);
+            // Set the damaged bytes aside for recovery, keeping an EARLIER set-aside beside them
+            // (review round 2: this deleted the previous `.corrupt` first, the defect the other
+            // stores had). This store is a derived timeline, not a rollback contract, so a set-aside
+            // that fails leaves the file in place and the next save replaces it; said, not implied.
+            let _ = crate::atomic_write::set_aside_damaged(path);
             IntelligenceStore::default()
         }
     }

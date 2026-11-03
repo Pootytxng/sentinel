@@ -100,6 +100,12 @@ const GPU_LIMITED_PCT: u64 = crate::sessions::GPU_LIMITED_PCT as u64;
 /// played. A session that never recorded the share (an older Compy) has a peak and no claim.
 const GPU_SUSTAINED_SHARE_PCT: u64 = 50;
 
+/// How many measured GPU readings (~1 Hz ticks, `sessions.rs`) a session needs before its share can
+/// be called sustained at all (review round 2): a session measured for a handful of seconds with every
+/// tick saturated is 100% busy on paper and still one moment, which is the exact claim this guards
+/// against. Under the floor the hint says how little was measured and makes no verdict.
+const GPU_SUSTAINED_MIN_READINGS: u32 = 30;
+
 /// What the newest measured session says about its GPU: the peak, and the share of readings that
 /// were saturated when the session recorded one. A session behind another window the whole time is
 /// skipped (P4-show-f1): its GPU load was the game running behind, not play.
@@ -121,9 +127,15 @@ impl GpuLoadRead {
     /// whose counts can be (busy within readings, and a peak that reached the threshold at all).
     fn sustained_share(&self) -> Option<u64> {
         let l = self.load?;
-        let sane = l.readings > 0 && l.busy <= l.readings && self.peak_pct >= GPU_LIMITED_PCT;
+        let sane = l.readings >= GPU_SUSTAINED_MIN_READINGS && l.busy <= l.readings && self.peak_pct >= GPU_LIMITED_PCT;
         let sustained = u64::from(l.busy) * 100 >= u64::from(l.readings) * GPU_SUSTAINED_SHARE_PCT;
         (sane && sustained).then(|| self.busy_share_pct()).flatten()
+    }
+
+    /// A session that recorded its share but measured too few readings to decide anything from it
+    /// (under [`GPU_SUSTAINED_MIN_READINGS`]); the count, for the words.
+    fn too_few_readings(&self) -> Option<u32> {
+        self.load.and_then(|l| (l.readings < GPU_SUSTAINED_MIN_READINGS).then_some(l.readings))
     }
 
     /// The share as words for a session that was NOT sustained: a floored 0 with any saturated tick
@@ -454,11 +466,14 @@ fn build_session_hint(sessions: &Value) -> Option<String> {
     } else if gpu >= GPU_LIMITED_PCT {
         // A peak alone is a moment, not the session (P9-bottleneck-sustained): say the GPU was busy
         // at times, and why that is not a verdict.
-        Some(match load.brief_share_words() {
-            Some(share) => format!(
+        Some(match (load.too_few_readings(), load.brief_share_words()) {
+            (Some(n), _) => format!(
+                "Recent session hint: the GPU was busy at times (peak ~{gpu}%), but Compy measured the game for only about {n} s, too little to say whether this session was GPU-limited."
+            ),
+            (None, Some(share)) => format!(
                 "Recent session hint: the GPU was busy at times (peak ~{gpu}%) but sat at or above {GPU_LIMITED_PCT}% for only {share} of the time Compy measured the game, so this session doesn't look GPU-limited overall."
             ),
-            None => format!(
+            (None, None) => format!(
                 "Recent session hint: the GPU was busy at times (peak ~{gpu}%); this session didn't record how much of the measured time the GPU spent saturated, so that is a moment, not a verdict."
             ),
         })
@@ -604,10 +619,22 @@ mod priority_tests {
         assert!(build_upgrade_path(&readiness(vec![]), &edge(99)).is_none(), "99 of 200 is not half: decided on the counts, never a rounded share");
         let hint = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &edge(99)).session_hint.expect("hint");
         assert!(hint.contains("only 49% of the time"), "{hint}");
+        // Too few measured readings never claim the limiter, even every one of them saturated (review
+        // round 2: 1 of 1 is "100%" on paper and one moment in fact); the hint says how little was
+        // measured and grows no retail links. The floor itself qualifies.
+        let brief_all_busy = json!([{ "peak_gpu_usage_pct": 100, "gpu_load": { "readings": 1, "busy": 1 } }]);
+        assert!(build_upgrade_path(&readiness(vec![]), &brief_all_busy).is_none(), "one saturated tick is not a sustained share");
+        let hint = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &brief_all_busy).session_hint.expect("hint");
+        assert!(hint.contains("busy at times") && hint.contains("only about 1 s") && hint.contains("too little"), "{hint}");
+        assert!(!hint.contains("GPU-limited for"), "{hint}");
+        let under_floor = json!([{ "peak_gpu_usage_pct": 100, "gpu_load": { "readings": GPU_SUSTAINED_MIN_READINGS - 1, "busy": GPU_SUSTAINED_MIN_READINGS - 1 } }]);
+        assert!(build_upgrade_path(&readiness(vec![]), &under_floor).is_none(), "one reading under the floor is still too brief");
+        let at_floor = json!([{ "peak_gpu_usage_pct": 100, "gpu_load": { "readings": GPU_SUSTAINED_MIN_READINGS, "busy": GPU_SUSTAINED_MIN_READINGS } }]);
+        assert!(build_upgrade_path(&readiness(vec![]), &at_floor).is_some(), "the floor itself, all saturated, is sustained");
         // Counts that can't be, or a peak that never reached the threshold, never claim the limiter.
         let impossible = json!([{ "peak_gpu_usage_pct": 97, "gpu_load": { "readings": 10, "busy": 11 } }]);
         assert!(build_upgrade_path(&readiness(vec![]), &impossible).is_none());
-        let no_peak = json!([{ "peak_gpu_usage_pct": 60, "gpu_load": { "readings": 10, "busy": 10 } }]);
+        let no_peak = json!([{ "peak_gpu_usage_pct": 60, "gpu_load": { "readings": 100, "busy": 100 } }]);
         assert!(build_upgrade_path(&readiness(vec![]), &no_peak).is_none());
     }
 

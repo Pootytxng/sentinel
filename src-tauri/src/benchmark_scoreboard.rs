@@ -168,7 +168,9 @@ fn load_store() -> ScoreStore {
                 // Don't silently reset a corrupt scoreboard (which the next save would then
                 // overwrite for good) — set the damaged bytes aside for recovery, then start
                 // fresh. This is arcade state, not a rollback contract, so it doesn't hard-fail.
-                // An earlier set-aside is kept, never renamed over (`set_aside_damaged`).
+                // An earlier set-aside is kept, never renamed over (`set_aside_damaged`). When
+                // the set-aside itself fails the damaged file stays in place and the next score
+                // save replaces it: accepted for arcade state, said here rather than implied away.
                 let _ = crate::atomic_write::set_aside_damaged(&path);
                 ScoreStore::default()
             }

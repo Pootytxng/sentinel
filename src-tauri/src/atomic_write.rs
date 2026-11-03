@@ -82,20 +82,25 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     write_atomic_at(path, bytes, FailPoint::None)
 }
 
-// Test-only injection armed on THIS thread for the NEXT write, whoever performs it.
-//
-// A caller test can only prove that a save *goes through this module* if it can interrupt the save
-// without the caller taking a fail-point argument — otherwise reverting that caller to
-// `std::fs::write` leaves the test green, and the guard guards nothing. It is thread-local and
-// one-shot: libtest gives every test its own thread, so one test's injection can never reach
-// another's, and consuming it disarms it even if the write then succeeds for some other reason.
 /// Set a damaged store file aside as `<file>.corrupt` without destroying an EARLIER set-aside
 /// (codebase review 2026-11-02 / 2026-11-03: the experiments, sessions, noise-floor and scoreboard
 /// stores each renamed over, or deleted, the previous `.corrupt`, so the second damage erased the
 /// first's recoverable bytes). An earlier `.corrupt` is first moved to `.corrupt.<its last write,
-/// unix seconds>` (or the first free `-<n>` after it), as the Trust Ledger's own set-aside does;
-/// when that move fails the damaged file is left in place rather than lose either copy. Returns
-/// whether the damaged file was set aside. Best effort, never panics; writes no Windows state.
+/// unix seconds>` (or the first free `-<n>` after it, 100 tried), as the Trust Ledger's own
+/// set-aside does.
+///
+/// Returns whether the damaged file was set aside. `false` means it is STILL IN PLACE, under its
+/// own name: a caller that then saves over it loses the bytes this exists to keep, so the checked
+/// loaders (`experiment`, `sessions`, `noise_floor`) refuse their read on `false` and the save
+/// that would follow never happens (review round 2); the scoreboard, arcade state, says so at its
+/// call and accepts the loss. Best effort, never panics; a locked or missing file yields `false`;
+/// writes no Windows state.
+///
+/// The free-name check and the rename are two steps, and `fs::rename` replaces an existing target
+/// on Windows and Unix alike, so a second writer landing on the same `<secs>-<n>` name in between
+/// would be renamed over. Every caller holds its store's process-wide lock across the load, and
+/// Compy is one process, so the window is not reachable today; it is named here so the next
+/// reader does not take the check for a guarantee.
 pub(crate) fn set_aside_damaged(path: &std::path::Path) -> bool {
     let corrupt = path.with_extension("json.corrupt");
     if std::fs::symlink_metadata(&corrupt).is_ok() {
@@ -118,6 +123,13 @@ pub(crate) fn set_aside_damaged(path: &std::path::Path) -> bool {
     std::fs::rename(path, &corrupt).is_ok()
 }
 
+// Test-only injection armed on THIS thread for the NEXT write, whoever performs it.
+//
+// A caller test can only prove that a save *goes through this module* if it can interrupt the save
+// without the caller taking a fail-point argument — otherwise reverting that caller to
+// `std::fs::write` leaves the test green, and the guard guards nothing. It is thread-local and
+// one-shot: libtest gives every test its own thread, so one test's injection can never reach
+// another's, and consuming it disarms it even if the write then succeeds for some other reason.
 #[cfg(test)]
 thread_local! {
     static FORCED: std::cell::Cell<FailPoint> = const { std::cell::Cell::new(FailPoint::None) };

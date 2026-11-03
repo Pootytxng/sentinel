@@ -430,14 +430,15 @@ pub(crate) fn load_checked_from(path: &Path) -> Result<NoiseFloorStore, String> 
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(NoiseFloorStore::default()),
         Err(e) => return Err(format!("Compy couldn't read its noise calibrations right now ({e}). Nothing was changed.")),
     };
-    Ok(match serde_json::from_slice::<NoiseFloorStore>(&raw) {
-        Ok(store) => store,
-        Err(_) => {
-            // An earlier set-aside is kept, never deleted (`set_aside_damaged`).
-            let _ = crate::atomic_write::set_aside_damaged(path);
-            NoiseFloorStore::default()
-        }
-    })
+    match serde_json::from_slice::<NoiseFloorStore>(&raw) {
+        Ok(store) => Ok(store),
+        // An earlier set-aside is kept, never deleted (`set_aside_damaged`). A damaged file that
+        // could NOT be set aside is still in place: refuse, so no save writes over it (review round 2).
+        Err(_) if crate::atomic_write::set_aside_damaged(path) => Ok(NoiseFloorStore::default()),
+        Err(_) => Err(
+            "Compy couldn't read its noise calibrations (the file is damaged) and couldn't set the damaged file aside right now. Nothing was changed.".to_string(),
+        ),
+    }
 }
 
 pub(crate) fn load() -> NoiseFloorStore {

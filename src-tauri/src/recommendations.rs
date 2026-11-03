@@ -65,9 +65,8 @@ pub(crate) struct Recommendation {
     eligible: bool,
     #[serde(default)]
     ineligible_reason: Option<String>,
-    risk_dimensions: None,
     /// P8-dims-grades: the risk dimensions the catalog states for a one-click change (RISK_MODEL
-    /// §3), from [`STATED_RISK_DIMENSIONS`] — graded from the apply code and the catalog's own
+    /// §3), from [`stated_risk_dimensions`] — graded from the apply code and the catalog's own
     /// downside, never filled in to look complete. `None` for every advisory-only entry. Serialized
     /// only when stated, so the Trial receipt says "not stated" for the rest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -758,13 +757,24 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
 ///   prior; `Moderate` when the rollback restores a STATE rather than the exact prior — the four
 ///   service changes (start type comes back as Automatic / Manual / Disabled only, so a delayed
 ///   start is not returned), the power plan (the prior plan is re-activated; a duplicated Ultimate
-///   scheme stays in the list) and reserved storage (the flag, not the reserved bytes).
+///   scheme stays in the list) and reserved storage (the flag, not the reserved bytes). The grade is
+///   about the stored value: HAGS is `Low` because `HwSchMode` comes back exactly (or is deleted when
+///   it was absent), although its effect, like the apply's, waits for the next reboot.
 /// - stability: `Low` for an HKCU preference that changes no process, service or power state
 ///   (Game Mode, visual effects, mouse acceleration, Game Bar) and for Fast Startup (a slower cold
 ///   boot is its whole documented cost); `Moderate` where the catalog's downside names a real
-///   behaviour change or possible regression: a stopped Windows service, a whole-plan or link power
-///   state, the GPU scheduler ("occasionally a driver/game combo regresses"), the TCP stack, reserved
-///   storage ("a feature update may fail to install cleanly").
+///   behaviour change or possible regression: a stopped Windows service, the whole power plan, the
+///   GPU scheduler ("occasionally a driver/game combo regresses"), the TCP stack, reserved storage
+///   ("a feature update may fail to install cleanly"). A downside that is only a POWER cost (USB
+///   selective suspend, PCIe ASPM and EEE off: "slightly higher idle power draw") is not graded here —
+///   power cost is its own RISK_MODEL §3 dimension, and keeping a link out of its low-power state
+///   names no behaviour that can regress.
+///
+/// Severity and dimensions are not one score (RISK_MODEL §3). A `safe` row may carry a `Moderate`
+/// dimension: a documented, RECOVERABLE caveat (HAGS's rare driver regression, a feature update that
+/// may need space freed first) still fits the Safe class, whose failure modes must be low-severity and
+/// recoverable, not absent. The one consistency the test pins is the other way round: a row the catalog
+/// calls `moderate` states at least one `Moderate` dimension, or its own word has no evidence behind it.
 /// - compatibility: `Low` when the change applies to every Windows 10/11 PC regardless of hardware;
 ///   `Moderate` when it depends on hardware, a vendor, a driver or a plan: HAGS (a GPU-name heuristic,
 ///   no WDDM or build check), the NVIDIA service (may not exist), EEE (the NIC driver must expose the
@@ -800,9 +810,10 @@ pub(crate) fn stated_risk_dimensions(rec_id: &str) -> Option<crate::trial_candid
         "windows-search-disable" => d(Moderate, Moderate, Moderate, Low),
         // Power: the whole plan on every profile, the prior plan re-activated on rollback.
         "power-ultimate" => d(Moderate, Moderate, Moderate, Low),
-        // Power-plan settings: exact AC/DC priors on the plan they were read from, AC written only.
-        "usb-selective-suspend-off" => d(Low, Moderate, Moderate, Low),
-        "pcie-aspm-off" => d(Low, Moderate, Moderate, Low),
+        // Power-plan settings: exact AC/DC priors on the plan they were read from, AC written only;
+        // the documented cost is idle power, not behaviour; bound to the plan GUID (compatibility).
+        "usb-selective-suspend-off" => d(Low, Low, Moderate, Low),
+        "pcie-aspm-off" => d(Low, Low, Moderate, Low),
         // GPU scheduler: exact HwSchMode prior; reboot; a driver/game combo can regress; GPU-name gate.
         "hags-enable" => d(Low, Moderate, Moderate, Low),
         // Fast Startup: exact HiberbootEnabled prior; a slower cold boot is its cost; every PC.
@@ -810,9 +821,11 @@ pub(crate) fn stated_risk_dimensions(rec_id: &str) -> Option<crate::trial_candid
         // Reserved storage: the Enabled/Disabled flag comes back, not the bytes; a feature update may
         // need space; only offered when C: is low.
         "reserved-storage-off" => d(Moderate, Moderate, Moderate, Low),
-        // Network: per-NIC exact priors (value or absence), TCP-only effect, NIC-dependent.
+        // Network: per-NIC exact priors (value or absence); Nagle changes the TCP stack's behaviour
+        // (TCP games only, NIC-dependent); EEE's documented cost is a fraction of a watt, and the NIC
+        // driver must expose the switch.
         "nagle-disable" => d(Low, Moderate, Moderate, Low),
-        "eee-disable" => d(Low, Moderate, Moderate, Low),
+        "eee-disable" => d(Low, Low, Moderate, Low),
         _ => return None,
     })
 }
@@ -870,9 +883,30 @@ mod rec_tests {
         // The HKCU preferences are the Low row; the services carry the restore-as-state caveat.
         assert_eq!(stated_risk_dimensions("visual-effects").unwrap().reversibility, Some(DimensionRisk::Low));
         assert_eq!(stated_risk_dimensions("windows-search-disable").unwrap().reversibility, Some(DimensionRisk::Moderate));
+        // A power-cost-only downside is not a stability grade (review round 2); a documented
+        // regression or behaviour change is.
+        for id in ["usb-selective-suspend-off", "pcie-aspm-off", "eee-disable", "fast-startup-off"] {
+            assert_eq!(stated_risk_dimensions(id).unwrap().stability, Some(DimensionRisk::Low), "{id}: its downside is a cost, not a regression");
+        }
+        for id in ["hags-enable", "reserved-storage-off", "nagle-disable", "power-ultimate", "sysmain-disable", "diagtrack-disable", "windows-search-disable", "nvidia-telemetry"] {
+            assert_eq!(stated_risk_dimensions(id).unwrap().stability, Some(DimensionRisk::Moderate), "{id}: its downside names a behaviour change or a possible regression");
+        }
         // Through the catalog: the row carries the words the picker and the Trial receipt read.
         let catalog = serde_json::to_value(build_recommendations(&HardwareInfo::default())).unwrap();
         let rows = catalog.as_array().unwrap();
+        // Severity and dimensions agree in the one direction that can be checked: a row the catalog
+        // calls moderate states at least one Moderate dimension (its word has evidence behind it);
+        // every one-click row states all four (a safe row may carry a recoverable Moderate caveat).
+        for r in rows.iter().filter(|r| r.get("risk_dimensions").is_some()) {
+            let id = r["id"].as_str().unwrap();
+            let dims: RiskDimensions = serde_json::from_value(r["risk_dimensions"].clone()).unwrap();
+            let graded = [dims.reversibility, dims.stability, dims.compatibility, dims.security];
+            assert!(graded.iter().all(Option::is_some), "{id}: a stated row grades all four");
+            if r["severity"] == "moderate" {
+                assert!(graded.contains(&Some(DimensionRisk::Moderate)), "{id}: called moderate, yet no dimension is");
+            }
+            assert!(!graded.contains(&Some(DimensionRisk::High)), "{id}: High is Unsupported, never a one-click row");
+        }
         let fast = rows.iter().find(|r| r["id"] == "fast-startup-off").expect("fast-startup-off is unconditional");
         assert_eq!(fast["risk_dimensions"]["reversibility"], "low");
         assert_eq!(fast["risk_dimensions"]["security"], "low");

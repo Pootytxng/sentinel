@@ -1233,6 +1233,11 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 );
                 // P9-bottleneck-sustained: the saturation share counts only the game's own measured
                 // ticks, never a launcher, a menu before the first frame or a window in front.
+                // KNOWN LIMIT (review round 2): `gpu_usage` is the BUSIEST adapter this tick, as the
+                // peak has always been. On an iGPU + dGPU PC that is usually the card rendering the
+                // game, but nothing here proves which adapter drew the frame (that would need game
+                // introspection, which is forbidden), so the limiter claim this share feeds inherits
+                // the same assumption the peak made.
                 acc.record_gpu_load(gpu_usage, tick_measured);
                 // Same driver-free interop as get_cpu_temp (cpu_temp.rs) — None when no HWiNFO/LHM/OHM
                 // is running; never fabricated. Session-scoped peak, same as the GPU sensors above.

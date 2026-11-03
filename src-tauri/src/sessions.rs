@@ -822,16 +822,17 @@ fn load_sessions_checked_from(path: &Path) -> Result<Vec<SessionSummary>, String
     };
     match std::str::from_utf8(&bytes).ok().map(parse_sessions) {
         Some(Ok(v)) => Ok(v),
-        _ => {
-            // A corrupt sessions.json must not be silently overwritten by the next save — set
-            // the damaged bytes aside for recovery, then start fresh. (Unlike the Trust Ledger
-            // this is not a rollback contract, so we don't hard-fail: losing session history is
-            // non-destructive, and blocking every future save on it would be worse.) Bytes that
-            // aren't UTF-8 are damage too, set aside rather than overwritten.
-            // An earlier set-aside is kept, never renamed over (`set_aside_damaged`).
-            let _ = crate::atomic_write::set_aside_damaged(path);
-            Ok(Vec::new())
-        }
+        // A corrupt sessions.json must not be silently overwritten by the next save — set the
+        // damaged bytes aside for recovery, then start fresh. (Unlike the Trust Ledger this is not
+        // a rollback contract, so a set-aside that WORKED does not hard-fail: losing session history
+        // is non-destructive, and blocking every future save on it would be worse.) Bytes that
+        // aren't UTF-8 are damage too, set aside rather than overwritten. An earlier set-aside is
+        // kept, never renamed over (`set_aside_damaged`).
+        _ if crate::atomic_write::set_aside_damaged(path) => Ok(Vec::new()),
+        // The set-aside itself failed (the file is locked, or a hundred set-asides share its second):
+        // the damaged file is still in place, so this one session is not added rather than saved
+        // over the only copy of the history (review round 2).
+        _ => Err("Compy couldn't set its damaged session history aside right now, so this session wasn't added to it.".to_string()),
     }
 }
 

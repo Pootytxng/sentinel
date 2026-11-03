@@ -675,14 +675,16 @@ pub(crate) fn load_store_checked_from(path: &Path) -> Result<ExperimentStore, St
             ))
         }
     };
-    Ok(match serde_json::from_slice::<ExperimentStore>(&raw) {
-        Ok(store) => store,
-        Err(_) => {
-            // An earlier set-aside is kept, never deleted (`set_aside_damaged`).
-            let _ = crate::atomic_write::set_aside_damaged(path);
-            ExperimentStore::default()
-        }
-    })
+    match serde_json::from_slice::<ExperimentStore>(&raw) {
+        Ok(store) => Ok(store),
+        // An earlier set-aside is kept, never deleted (`set_aside_damaged`). A damaged file that
+        // could NOT be set aside is still in place, so this read refuses rather than hand back an
+        // empty store whose save would write over the only copy of every Trial (review round 2).
+        Err(_) if crate::atomic_write::set_aside_damaged(path) => Ok(ExperimentStore::default()),
+        Err(_) => Err(
+            "Compy couldn't read its Trial records (the file is damaged) and couldn't set the damaged file aside right now. Nothing was changed; try again in a moment.".to_string(),
+        ),
+    }
 }
 
 fn load_store() -> ExperimentStore {
@@ -4730,6 +4732,51 @@ mod experiment_tests {
         let back = load_store_from(&path);
         assert_eq!(back.experiments.len(), 0, "corrupt store → empty, never a partial parse");
         assert!(path.with_extension("json.corrupt").exists(), "damaged file preserved for recovery");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // CR-1102-left (review round 2, call-site proof): a SECOND damaged store keeps the first set-aside
+    // beside it, through the loader the writes build on, not only through the helper; and a damaged
+    // file that cannot be set aside (a directory sits where `.corrupt` would go, and so do all of its
+    // dated names) is a refused read, never an empty store the next save would write over.
+    #[test]
+    fn a_second_damaged_store_keeps_the_first_set_aside_and_an_unmovable_one_refuses_the_read() {
+        let dir = std::env::temp_dir().join(format!("compy-exp-corrupt-twice-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("experiments.json");
+        std::fs::write(&path, b"{ first damage").unwrap();
+        assert_eq!(load_store_checked_from(&path).map(|s| s.experiments.len()), Ok(0));
+        std::fs::write(&path, b"{ second damage").unwrap();
+        assert_eq!(load_store_checked_from(&path).map(|s| s.experiments.len()), Ok(0));
+        let set_aside: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().into_owned()))
+            .filter(|n| n.starts_with("experiments.json.corrupt"))
+            .collect();
+        assert_eq!(set_aside.len(), 2, "both damaged files kept: {set_aside:?}");
+        let mut bytes: Vec<_> = set_aside.iter().map(|n| std::fs::read(dir.join(n)).unwrap()).collect();
+        bytes.sort();
+        assert_eq!(bytes, vec![b"{ first damage".to_vec(), b"{ second damage".to_vec()]);
+        // Unmovable: a directory already holds the `.corrupt` name and cannot be renamed over a file.
+        let blocked = dir.join("blocked");
+        std::fs::create_dir_all(&blocked).unwrap();
+        let path = blocked.join("experiments.json");
+        std::fs::write(&path, b"{ damage").unwrap();
+        std::fs::create_dir_all(path.with_extension("json.corrupt").join("occupied")).unwrap();
+        // The rename of the occupied `.corrupt` directory to its dated name succeeds on every
+        // platform, so block that too: pre-create every dated name the helper would try.
+        let secs = std::fs::symlink_metadata(path.with_extension("json.corrupt"))
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_secs());
+        std::fs::write(path.with_extension(format!("json.corrupt.{secs}")), b"").unwrap();
+        for n in 1..100u32 {
+            std::fs::write(path.with_extension(format!("json.corrupt.{secs}-{n}")), b"").unwrap();
+        }
+        let err = load_store_checked_from(&path).expect_err("a damaged file still in place refuses the read");
+        assert!(err.contains("couldn't set the damaged file aside"), "{err}");
+        assert_eq!(std::fs::read(&path).unwrap(), b"{ damage", "the damaged bytes are untouched");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
