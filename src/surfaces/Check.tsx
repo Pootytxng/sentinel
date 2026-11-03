@@ -485,19 +485,26 @@ export default function Check({
             {showAllChecks && (
               <ul className="check-all-list">
                 {readiness.checks.map((c) => {
-                  const v = rowVerdict(c.status);
+                  // An advisory is noted, not graded: never the ✓ of a check that came back right,
+                  // and it says so ahead of its reading, which the row may cut short (desk review
+                  // 2026-11-03, third pass; FirstCheck's advisory rows read the same).
+                  const kind = c.status === "advisory" ? "advisory" : rowVerdict(c.status);
+                  const reading = c.detail.trim() || c.value;
                   const result =
-                    c.detail.trim() ||
-                    c.value ||
-                    (v === "ok"
-                      ? t("optimize.check.resultOk")
-                      : v === "fix"
-                        ? t("optimize.check.resultFix")
-                        : t("optimize.check.resultUnknown"));
+                    kind === "advisory"
+                      ? reading
+                        ? `${t("optimize.check.resultAdvisory")} · ${reading}`
+                        : t("optimize.check.resultAdvisory")
+                      : reading ||
+                        (kind === "ok"
+                          ? t("optimize.check.resultOk")
+                          : kind === "fix"
+                            ? t("optimize.check.resultFix")
+                            : t("optimize.check.resultUnknown"));
                   return (
-                    <li key={c.id} className={`check-all-row check-all-${v}`}>
+                    <li key={c.id} className={`check-all-row check-all-${kind}`}>
                       <span className="check-all-mark" aria-hidden="true">
-                        {v === "fix" ? "→" : v === "ok" ? "✓" : "·"}
+                        {kind === "fix" ? "→" : kind === "ok" ? "✓" : "·"}
                       </span>
                       <span className="check-all-name">{c.label}</span>
                       <span className="check-all-result">{result}</span>

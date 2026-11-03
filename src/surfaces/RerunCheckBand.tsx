@@ -40,8 +40,8 @@ import "./RerunCheckBand.css";
 //     so 14/16 with two unreadable checks rendered identically to two FAILING checks. The partial
 //     variants below say which is which. This is a straight honesty upgrade, not a copy change.
 //   - NOR IS AN ADVISORY (desk review 2026-11-03). VRR, HDR or a RAM or Wi-Fi note is noted, not
-//     graded, so it is left out of "look good" and named after the sentence, the way FirstCheck,
-//     the readiness ring and Check say it.
+//     graded, so it is left out of "look good" and "needs a look" alike and named after the
+//     sentence, the way FirstCheck and Check say it; the readiness ring above counts the same way.
 //
 // The check→fix hallway (2026-08-06): when the line reports a non-zero fix count it also carries the
 // route to those fixes — a text link, not a rival button, so "one primary action" still holds. A
@@ -73,41 +73,52 @@ export function RerunCheckBand({
   let sentence: string;
   let warn = false;
   let advisory = 0;
+  let unread = 0;
+  // Whether the sentence itself already names the unread checks (the partial-clean lines do).
+  let unreadSaid = false;
 
   if (checking) {
     sentence = t("optimize.rerunCheckBand.checking");
   } else if (snap) {
     warn = snap.fixCount > 0;
     advisory = snap.advisory;
+    unread = snap.unread;
     const age = formatCheckAge(snap.at, Date.now(), t);
+    unreadSaid = !warn && unread > 0;
     sentence = warn
       ? t("optimize.rerunCheckBand.lastFlagged", { age, count: snap.fixCount })
-      : snap.unread > 0
+      : unread > 0
         ? t("optimize.rerunCheckBand.lastCleanPartial", {
             age,
             green: snap.green,
             total: snap.total,
-            unknown: snap.unread,
+            unknown: unread,
           })
         : t("optimize.rerunCheckBand.lastClean", { age, count: snap.green });
   } else {
     // Fallback: no stored snapshot yet — LIVE counts, NO age.
     const total = readiness?.checks.length ?? 0;
-    const unknown = readiness?.unknown_count ?? 0;
+    unread = readiness?.unknown_count ?? 0;
     advisory = readiness?.advisory_count ?? 0;
-    // Graded and read: the checks a "look good" can honestly cover.
-    const graded = Math.max(0, total - unknown - advisory);
+    // Graded and read: the checks a "look good" or a "needs a look" can honestly be counted out of,
+    // the readiness ring's own denominator (desk review 2026-11-03, third pass).
+    const graded = Math.max(0, total - unread - advisory);
     const attention = readiness?.attention_count ?? 0;
     warn = attention > 0;
+    unreadSaid = !warn && unread > 0;
     sentence = warn
-      ? t("optimize.rerunCheckBand.flagged", { count: attention, total })
-      : unknown > 0
-        ? t("optimize.rerunCheckBand.cleanPartial", { measured: graded, total, unknown })
+      ? t("optimize.rerunCheckBand.flagged", { count: attention, total: graded })
+      : unread > 0
+        ? t("optimize.rerunCheckBand.cleanPartial", { measured: graded, total, unknown: unread })
         : t("optimize.rerunCheckBand.clean", { count: graded });
   }
-  // A flagged line names only what to fix; a clean one says what it did not grade.
-  if (!checking && !warn && advisory > 0)
-    sentence += ` · ${t("optimize.rerunCheckBand.advisoryNote", { count: advisory })}`;
+  // Every line says what it did not count: the unread checks (unless the sentence already did) and
+  // the advisory ones, flagged or not.
+  if (!checking) {
+    if (unread > 0 && !unreadSaid)
+      sentence += ` · ${t("optimize.rerunCheckBand.unreadNote", { count: unread })}`;
+    if (advisory > 0) sentence += ` · ${t("optimize.rerunCheckBand.advisoryNote", { count: advisory })}`;
+  }
 
   return (
     <div className="rcb">
