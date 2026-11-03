@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import "../i18n";
 import { GPU_SCOPES, gpuScopeMeta } from "../data/profile-store";
 import { useGpuProfileScope } from "../hooks/use-gpu-profile-scope";
@@ -89,6 +90,13 @@ function GpuProfileScopePicker() {
   );
 }
 
+// The store formats a boolean field as "On" / "Off" (its tests pin that); the room says it in the
+// user's language, and leaves every other value as read (CR-zh-gpu).
+function valueText(t: TFunction, key: FieldDelta["key"], text: string): string {
+  if (key !== "hagsEnabled") return text;
+  return text === "On" ? t("lab.gpuProfile.valueOn") : text === "Off" ? t("lab.gpuProfile.valueOff") : text;
+}
+
 const dirGlyph: Record<FieldDelta["direction"], string> = { down: "↓", up: "↑", flat: "→", none: "" };
 
 const btnStyle = (quiet = false): React.CSSProperties => ({
@@ -134,11 +142,12 @@ function DeltaRow({ d }: { d: FieldDelta }) {
   return (
     <tr>
       <th scope="row" style={{ ...cell, textAlign: "left", fontWeight: 500 }}>
-        {d.label}
+        {/* The store's label is the English source and the fallback (CR-zh-gpu). */}
+        {t(`lab.gpuProfile.field.${d.key}`, d.label)}
       </th>
-      <td style={cell}>{d.beforeText}</td>
+      <td style={cell}>{valueText(t, d.key, d.beforeText)}</td>
       <td style={cell}>
-        {d.afterText}
+        {valueText(t, d.key, d.afterText)}
         {d.key === "peakTempC" && d.direction !== "none" && d.numericDelta !== 0 ? (
           <span aria-hidden="true"> {dirGlyph[d.direction]}</span>
         ) : null}

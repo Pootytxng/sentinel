@@ -665,6 +665,88 @@
     },
     "tabMap": {
       "tag": "THE TOUR"
+    },
+    "lessons": {
+      "psu": {
+        "eyebrow": "POWER DELIVERY",
+        "role": "Feeds steady power to every part, and your power settings decide how hard they can push.",
+        "affects": "Sustained clocks — whether your CPU and GPU hold high speeds instead of dipping mid-game.",
+        "tweaks": {
+          "0": "Ultimate / High-performance power plan — lets parts stay at high clocks",
+          "1": "Fast Startup off — a true clean boot, not a half-hibernated state",
+          "2": "USB selective-suspend & PCIe power-saving off — no power naps mid-game"
+        },
+        "tie": "Prove the clocks hold with benchmarks in the Test tab.",
+        "note": "Compy can't read your PSU model in software, so it stays a faint placeholder — but the power settings above decide how hard everything is allowed to draw."
+      },
+      "storage": {
+        "eyebrow": "STORAGE",
+        "role": "Holds Windows and your games, and streams level data to the game as you play.",
+        "affects": "Load times and texture/streaming hitches when the game pulls data from the drive.",
+        "tweaks": {
+          "0": "SysMain (Superfetch) tuned so it isn't churning the disk in the background",
+          "1": "Reserved storage & free-space cleanup — keep the system drive breathing room",
+          "2": "On an HDD, Compy flags an SSD upgrade as the single biggest win (advisory)"
+        },
+        "tie": "Apply or undo these in the Optimize tab — all in the ledger.",
+        "tieGround": "Apply or undo these at Test's Optimize station — all in the ledger."
+      },
+      "gpu": {
+        "eyebrow": "GRAPHICS",
+        "role": "Renders every frame you see — the heart of your frame rate.",
+        "affects": "FPS and frame consistency, especially at higher resolutions and settings.",
+        "tweaks": {
+          "0": "Hardware-accelerated GPU Scheduling — lets the GPU manage its own work",
+          "1": "Vendor background/telemetry services off (NVIDIA Container · AMD UXP)",
+          "2": "Force games onto your discrete GPU, and keep the driver current"
+        },
+        "tie": "Watch the frames these earn you, live, in the Live tab."
+      },
+      "cpu": {
+        "eyebrow": "PROCESSOR",
+        "role": "Runs game logic, physics, and the draw calls that feed your GPU.",
+        "affects": "1% lows and frametime smoothness — steady vs. stuttery, even at the same average FPS.",
+        "tweaks": {
+          "0": "A power plan that lets cores boost instead of idling low",
+          "1": "Fewer startup apps fighting for CPU time (Compy's startup review)"
+        },
+        "tie": "The Check tab scans for CPU limiters and applies the top fix.",
+        "tieMerged": "Optimize scans for CPU limiters and applies the top fix.",
+        "tieGround": "Test scans for CPU limiters and applies the top fix.",
+        "note": "One honest gap: reading CPU temperature directly needs something installed deep inside Windows, and Compy ships nothing of the kind. If you run HWiNFO or LibreHardwareMonitor, Compy reads the temperature they already publish — Health shows you how."
+      },
+      "ram": {
+        "eyebrow": "MEMORY",
+        "role": "Keeps the game and Windows instantly on hand while you play.",
+        "affects": "Stutter and alt-tab hitches when free memory runs low.",
+        "tweaks": {
+          "0": "Compy watches memory headroom and flags heavy background apps",
+          "1": "More capacity is the real fix when a game wants more than you have (advisory)"
+        },
+        "tie": "Your memory headroom shows on Health.",
+        "title": "Memory · {{total}}",
+        "titleModules": "Memory · {{total}} · {{count}} modules",
+        "titleBare": "Memory",
+        "titleBareModules": "Memory · {{count}} modules"
+      }
+    },
+    "recap": {
+      "title": "Your way around Compy",
+      "journey": "The rail reads top to bottom: Health for the glance, Games to make a game run better, Problems to find out what went wrong, Optimize to check and fix, Live to watch the frames as they happen, History for what actually works, Test to go deeper.",
+      "ground": "The rail reads top to bottom: Health for the glance, Games to make a game run better, Problems to find out what went wrong, Live to watch the frames as they happen, History for what actually works, Test to check, fix and prove it.",
+      "classic": "Six rooms, one job each. Here's where everything lives."
+    },
+    "tabBlurb": {
+      "home": "Is your PC OK right now — the verdict, and what is holding you back.",
+      "check": "Scan game-readiness, then apply the safe fixes it finds for your rig.",
+      "play": "Watch live FPS, 1% lows and temps — with a debrief after each session.",
+      "fix": "Apply and undo reversible tweaks — every change logged in the ledger.",
+      "learn": "The measured record of what actually works — and the myths that don't. Its library is the Field Guide.",
+      "lab": "Go deeper: benchmarks, latency and system diagnostics.",
+      "games": "Every game Compy has measured, and how each one runs — where making a game better starts.",
+      "problems": "Crashes, freezes and restarts from Windows' own records — find out what went wrong.",
+      "mergedFix": "Check what's holding your games back, then apply the safe fixes — every change undoable in the ledger.",
+      "groundLab": "Check what's holding your games back and apply the safe fixes — every change undoable — then prove it with benchmarks, latency and diagnostics."
     }
   },
   "glass": {

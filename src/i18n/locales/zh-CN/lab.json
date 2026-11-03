@@ -47,7 +47,17 @@
       "tempHotDetail": "GPU 峰值温度达到了 {{temp}}°C。Radeon 显卡本身耐受较高温度是正常设计，但如果持续这么高，可以检查一下机箱风道，并在 AMD Adrenalin 的「调校」中查看风扇曲线。",
       "tempOkTitle": "温度正常",
       "tempOkDetail": "GPU 峰值温度为 {{temp}}°C——对 Radeon 显卡来说温度余量很充足。无需处理散热。"
-    }
+    },
+    "field": {
+      "vendor": "厂商",
+      "model": "GPU 型号",
+      "driverVersion": "驱动版本",
+      "hagsEnabled": "硬件加速 GPU 调度",
+      "powerModeLabel": "电源模式",
+      "peakTempC": "GPU 峰值温度"
+    },
+    "valueOn": "开",
+    "valueOff": "关"
   },
   "labBento": {
     "ledePre": "你这台主机的全面体检——五项测量,从左到右依次呈现。这里的一切都只是在",

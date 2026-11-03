@@ -47,7 +47,17 @@
       "tempHotDetail": "Peak GPU temperature reached {{temp}} °C. Radeon cards are rated to run warm, but if it stays this high you can check case airflow and, in AMD Adrenalin's Tuning, review the fan curve.",
       "tempOkTitle": "Thermals healthy",
       "tempOkDetail": "Peak GPU temperature was {{temp}} °C — comfortable headroom for a Radeon. No thermal action needed."
-    }
+    },
+    "field": {
+      "vendor": "Vendor",
+      "model": "GPU model",
+      "driverVersion": "Driver version",
+      "hagsEnabled": "Hardware-accelerated GPU scheduling",
+      "powerModeLabel": "Power mode",
+      "peakTempC": "Peak GPU temperature"
+    },
+    "valueOn": "On",
+    "valueOff": "Off"
   },
   "labBento": {
     "ledePre": "Your rig's checkup — five kinds of measurement, in order, left to right. Everything here only",

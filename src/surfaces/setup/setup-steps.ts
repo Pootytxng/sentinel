@@ -13,6 +13,14 @@ import { fmtGB } from "../hardware-format";
 // recap copy names that journey; the compy_optimize="0" escape hatch keeps the classic six-room
 // recap verbatim. No new steps either way.
 
+/**
+ * Resolves a locale key with its English fallback (CR-zh-gpu, 2026-11-03): the lessons, the recap
+ * and the tab blurbs below are the English source and the keys' fallbacks, and the tour passes
+ * i18next's `t` so zh-CN reads whole. Callers that pass nothing get the English, byte for byte.
+ */
+export type SetupTr = (key: string, fallback: string, vars?: Record<string, string | number>) => string;
+const asIs: SetupTr = (_key, fallback) => fallback;
+
 export type SetupLeg = "setup" | "tour";
 export type SetupStepKind = "rig" | "seatbelt" | "rules" | "check" | "lesson" | "tabmap";
 
@@ -170,8 +178,9 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
     // ships none", full stop. That is only half the truth: Compy reads it out of a monitor app's
     // published shared memory (HWiNFO) or WMI namespace (LibreHardwareMonitor) when one is running,
     // which is driver-free and is what cpu_temp.rs actually does. Stating the gap without stating
-    // the working path taught the user a dead end.
-    note: "One honest gap: reading CPU temperature directly needs a kernel driver, and Compy ships none. If you run HWiNFO or LibreHardwareMonitor, Compy reads the temperature they already publish — Health shows you how.",
+    // the working path taught the user a dead end. Worded without "kernel driver" (the rules step's
+    // "Nothing installed deep inside Windows", plain-language guard) since the copy moved to i18n.
+    note: "One honest gap: reading CPU temperature directly needs something installed deep inside Windows, and Compy ships nothing of the kind. If you run HWiNFO or LibreHardwareMonitor, Compy reads the temperature they already publish — Health shows you how.",
   },
   {
     kind: "ram",
@@ -190,17 +199,17 @@ export const HARDWARE_LESSONS: readonly HardwareLesson[] = [
 // source), blurbs from TAB_BLURB. Merged = the five journey rooms; ground = the four-room
 // proving-ground rail (the Lab's blurb covers the absorbed Optimize). The recap can never show
 // a room the rail doesn't have.
-export function buildTabs(merged: boolean, ground = false): TabInfo[] {
+export function buildTabs(merged: boolean, ground = false, tr: SetupTr = asIs): TabInfo[] {
   return railFor(merged, ground).map((r) => ({
     id: r.id,
     label: r.label,
     icon: r.icon,
     blurb:
       ground && r.id === "lab"
-        ? GROUND_LAB_BLURB
+        ? tr("home.setupTour.tabBlurb.groundLab", GROUND_LAB_BLURB)
         : merged && r.id === "fix"
-          ? MERGED_FIX_BLURB
-          : TAB_BLURB[r.id],
+          ? tr("home.setupTour.tabBlurb.mergedFix", MERGED_FIX_BLURB)
+          : tr(`home.setupTour.tabBlurb.${r.id}`, TAB_BLURB[r.id]),
   }));
 }
 
@@ -210,26 +219,37 @@ export function buildTabs(merged: boolean, ground = false): TabInfo[] {
 // the merged Optimize room (same diagnose-first meaning, the room the rail actually shows).
 // Under the proving-ground rail (2026-07-10 flip) neither Check nor Optimize exists — both re-tie
 // to the Lab, whose Optimize station now holds the toggles and the scan.
-export function buildHardwareSteps(parts: RigPart[], merged = true, ground = false): SetupStep[] {
+export function buildHardwareSteps(
+  parts: RigPart[],
+  merged = true,
+  ground = false,
+  tr: SetupTr = asIs,
+): SetupStep[] {
   return HARDWARE_LESSONS.flatMap((rawLesson) => {
-    const lesson: HardwareLesson = ground
+    const k = `home.setupTour.lessons.${rawLesson.kind}`;
+    // The tab tie re-points by rail; each tie is its own key so a translation never has to carry
+    // three rails in one string.
+    const tab: HardwareLesson["tab"] = ground
       ? rawLesson.tab.id === "check"
-        ? {
-            ...rawLesson,
-            tab: { id: "lab", tie: "Test scans for CPU limiters and applies the top fix." },
-          }
+        ? { id: "lab", tie: tr(`${k}.tieGround`, "Test scans for CPU limiters and applies the top fix.") }
         : rawLesson.tab.id === "fix"
           ? {
-              ...rawLesson,
-              tab: { id: "lab", tie: "Apply or undo these at Test's Optimize station — all in the ledger." },
+              id: "lab",
+              tie: tr(`${k}.tieGround`, "Apply or undo these at Test's Optimize station — all in the ledger."),
             }
-          : rawLesson
+          : { id: rawLesson.tab.id, tie: tr(`${k}.tie`, rawLesson.tab.tie) }
       : merged && rawLesson.tab.id === "check"
-        ? {
-            ...rawLesson,
-            tab: { id: "fix", tie: "Optimize scans for CPU limiters and applies the top fix." },
-          }
-        : rawLesson;
+        ? { id: "fix", tie: tr(`${k}.tieMerged`, "Optimize scans for CPU limiters and applies the top fix.") }
+        : { id: rawLesson.tab.id, tie: tr(`${k}.tie`, rawLesson.tab.tie) };
+    const lesson: HardwareLesson = {
+      ...rawLesson,
+      eyebrow: tr(`${k}.eyebrow`, rawLesson.eyebrow),
+      role: tr(`${k}.role`, rawLesson.role),
+      affects: tr(`${k}.affects`, rawLesson.affects),
+      tweaks: rawLesson.tweaks.map((tw, i) => tr(`${k}.tweaks.${i}`, tw)),
+      tab,
+      ...(rawLesson.note ? { note: tr(`${k}.note`, rawLesson.note) } : {}),
+    };
     const part = parts.find((p) => p.kind === lesson.kind);
     if (!part) return [];
     // Memory: title by the REAL config (total capacity + module count), never the first slot — a lone
@@ -239,8 +259,15 @@ export function buildHardwareSteps(parts: RigPart[], merged = true, ground = fal
       const rams = parts.filter((p) => p.kind === "ram");
       const total = rams.reduce((sum, p) => sum + (p.capacityBytes ?? 0), 0);
       const n = rams.length;
-      const count = n > 1 ? ` · ${n} modules` : "";
-      title = total > 0 ? `Memory · ${fmtGB(total)}${count}` : n > 1 ? `Memory${count}` : "Memory";
+      const gb = total > 0 ? fmtGB(total) : "";
+      title =
+        total > 0
+          ? n > 1
+            ? tr(`${k}.titleModules`, `Memory · ${gb} · ${n} modules`, { total: gb, count: n })
+            : tr(`${k}.title`, `Memory · ${gb}`, { total: gb })
+          : n > 1
+            ? tr(`${k}.titleBareModules`, `Memory · ${n} modules`, { count: n })
+            : tr(`${k}.titleBare`, "Memory");
     }
     return [
       {
@@ -272,25 +299,32 @@ export const GROUND_RECAP_BODY =
 // until the END): the FIRST step now also carries the mode's rail-orientation line, so the user
 // holds the map from minute zero; the closing recap still repeats it with the tab cards (repeating
 // a MAP is good pedagogy, not overload).
-export function buildSetupSteps(parts: RigPart[], merged = true, ground = false): SetupStep[] {
-  const orientation = ground ? GROUND_RECAP_BODY : merged ? JOURNEY_RECAP_BODY : null;
+export function buildSetupSteps(
+  parts: RigPart[],
+  merged = true,
+  ground = false,
+  tr: SetupTr = asIs,
+): SetupStep[] {
+  const groundRecap = tr("home.setupTour.recap.ground", GROUND_RECAP_BODY);
+  const journeyRecap = tr("home.setupTour.recap.journey", JOURNEY_RECAP_BODY);
+  const orientation = ground ? groundRecap : merged ? journeyRecap : null;
   const setupSteps = SETUP_STEPS.map((s) =>
     s.id === "setup-rig" && orientation ? { ...s, body: `${s.body} ${orientation}` } : s,
   );
   return [
     ...setupSteps,
-    ...buildHardwareSteps(parts, merged, ground),
+    ...buildHardwareSteps(parts, merged, ground, tr),
     {
       id: "tour-tabmap",
       leg: "tour",
       kind: "tabmap",
-      title: "Your way around Compy",
+      title: tr("home.setupTour.recap.title", "Your way around Compy"),
       body: ground
-        ? GROUND_RECAP_BODY
+        ? groundRecap
         : merged
-          ? JOURNEY_RECAP_BODY
-          : "Six rooms, one job each. Here's where everything lives.",
-      tabs: buildTabs(merged, ground),
+          ? journeyRecap
+          : tr("home.setupTour.recap.classic", "Six rooms, one job each. Here's where everything lives."),
+      tabs: buildTabs(merged, ground, tr),
     },
   ];
 }

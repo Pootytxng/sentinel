@@ -52,7 +52,15 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
   // The tour follows the rail the user actually has (P6 §4 alignment). The `compy_optimize` and
   // `compy_lab_ground` flags were retired in the 2026-08-06 generation prune — the four-room
   // proving-ground rail is the only rail, so both arguments are literal `true` now.
-  const steps = useMemo(() => buildSetupSteps(buildRigParts(hw), true, true), [hw]);
+  // The lessons, recap and tab blurbs resolve through i18n with their English as the fallback, so
+  // zh-CN reads whole (CR-zh-gpu, 2026-11-03).
+  const steps = useMemo(
+    () =>
+      buildSetupSteps(buildRigParts(hw), true, true, (key, fallback, vars) =>
+        t(key, { defaultValue: fallback, ...(vars ?? {}) }),
+      ),
+    [hw, t],
+  );
   // The room that holds the ledger, named by its rail label: the Lab, whose Optimize station owns
   // the toggles + ledger — so the seatbelt step never names a tab the rail doesn't show.
   const fixLabel = "Lab";

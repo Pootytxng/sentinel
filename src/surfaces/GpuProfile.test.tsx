@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup, within, waitFor } from "@testing-li
 import { GpuProfile } from "./GpuProfile";
 import { GPU_SCOPE_KEY } from "../data/profile-store";
 import { type GpuProfileSnapshot } from "../data/gpu-profile-store";
+import i18n from "../i18n";
 
 afterEach(() => {
   cleanup();
@@ -190,5 +191,27 @@ describe("GpuProfile vendor advisory badges", () => {
   it("shows no advisory panel when there is no live snapshot", () => {
     render(<GpuProfile currentSnapshot={null} />);
     expect(screen.queryByRole("region", { name: /vendor.*(insight|advisor)/i })).toBeNull();
+  });
+});
+
+// CR-zh-gpu (codebase review 2026-11-03): the delta table's field labels and its On/Off came from the
+// store's English; the room now resolves them through i18n.
+describe("the delta table reads whole in zh-CN", () => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
+  });
+
+  it("names the fields and the HAGS state in Chinese", async () => {
+    await i18n.changeLanguage("zh-CN");
+    const { rerender } = render(<GpuProfile currentSnapshot={snap({ hagsEnabled: false })} />);
+    fireEvent.click(screen.getByRole("button", { name: "捕捉更改前" }));
+    rerender(<GpuProfile currentSnapshot={snap({ hagsEnabled: true })} />);
+    fireEvent.click(screen.getByRole("button", { name: "捕捉更改后" }));
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("硬件加速 GPU 调度")).toBeTruthy();
+    expect(within(table).getByText("驱动版本")).toBeTruthy();
+    expect(within(table).getByText("关")).toBeTruthy();
+    expect(within(table).getByText("开")).toBeTruthy();
+    expect(within(table).queryByText(/Driver version|Hardware-accelerated|^On$|^Off$/)).toBeNull();
   });
 });
