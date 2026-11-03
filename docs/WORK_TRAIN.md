@@ -86,6 +86,21 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       empty block, notes and a tag on the wrong tokens, no mask under Solid, a Benchmark link meant for Live), fixed
       in `6d99f36c`; then one first-run demo at a time across remounts `59df7cb7`, and a recorded but unmeasured
       game never called measured `3b542b0a`; round 2 PASS. Installed in `1d53dfc8`.
+- [ ] **CR-1102-left** (codebase review 2026-11-02, slices 1-6; fixed in `8f4037c1`..`508b200f`, `4465e74b`, `16479f4b`)
+      What it found and left, each a decision or a UI study rather than a quick fix: drift notices stay up while a
+      check reads unknown; a Trial delta on a 0 or NaN baseline (older records only); `has_pending_contract`
+      refuses on any leftover temp file; one ledger row a downgraded build can't parse fails the whole ledger; a
+      partial batch apply carries no flag over IPC; nothing stops a double apply of one change; real play keeps a
+      change after an OtherChange or Conditions stop (owner call); the experiments, sessions and noise stores
+      still overwrite an earlier `.corrupt`; a session under 600 samples leaves an armed comparison waiting with
+      no line saying why; the Lab's "measured together" count still counts rows from another PC; App's refresh has
+      no latest-wins guard; the debrief's comparison isn't reset when the shown game changes; Benchmark's Measure
+      and Run have no in-flight latch. Slice 6: Care's first-ever scan seeds an empty world when its readers fail;
+      a crash's vitals come from the whole capture window, not the game's own; Black Box, export and capture start
+      run on the UI thread; a wedged old FPS helper can clear the new one's running flag; a Care state that can't
+      be read or written stays silent with no support event. Desk review: History prints "+0 fps vs last" for a
+      delta under 1 fps (LogbookTape tests the unrounded delta). Unsure: `elevate_and_wait` waits with no timeout
+      while the ledger is locked.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -651,25 +666,32 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
 - [ ] **P8-ack-enforce** (owner call) `start_experiment` records `cost_acknowledged` as the start was told it
       and does not refuse a moderate change's start without it. Should the backend refuse it too (defence in
       depth), or is the one tap enough? RISK_MODEL §1.
-- [ ] **P8-launch-flash** (desk review 2026-11-02) On entering Test, the bench shows the launcher, with a live
+- [x] **P8-launch-flash** (desk review 2026-11-02) On entering Test, the bench shows the launcher, with a live
       risk picker, for about 3 s (2.7-3.3 s measured on the owner's rig) until the first read returns and a
       running Trial replaces it. A pick in that window saves a new risk choice while a Trial runs. Hold the
       launcher and the idle journey until the first read returns.
-- [ ] **P8-label-ink** (review 2026-11-02) `.exp-field-label` (the risk question's label) wears --ix-text-3,
+      Done in `508b200f`: the risk picker is held until the first read (the change picker has no options before
+      it, and the idle journey has no change to start). The flash itself stays. Desk review on his data PASS on `1d9c7abb`. Installed in `93c3ff0a`.
+- [x] **P8-label-ink** (review 2026-11-02) `.exp-field-label` (the risk question's label) wears --ix-text-3,
       4.47:1 in the Test room: just under AA. Give it the muted ink, as GL-empty did for the glass notes.
-- [ ] **GL-shell-overflow** (desk review 2026-11-02) `main.app` (`overflow: hidden`) keeps 19px of scrollable
+      Done with GL-faint-ink: on glass and frosted the faint tier is the muted ink. Installed in `93c3ff0a`.
+- [x] **GL-shell-overflow** (desk review 2026-11-02) `main.app` (`overflow: hidden`) keeps 19px of scrollable
       overflow from `.v2-backdrop` (956 vs 937 at 1500x980), so a `scrollIntoView` (BlackBox's deep link) can
       shift the whole shell up 19px. `overflow: clip` would stop it.
-- [ ] **GL-faint-ink** (desk review 2026-11-02, round 2) The faint ink (--ix-text-3, --v2-faint) on glass sits
+      Done in `508b200f` (`overflow: clip`). Desk review on his data PASS on `1d9c7abb`. Installed in `93c3ff0a`.
+- [x] **GL-faint-ink** (desk review 2026-11-02, round 2) The faint ink (--ix-text-3, --v2-faint) on glass sits
       under AA on his data: the Problems station's 13px lines (`.bb-helpful-q`, `.bb-nextstep-tag`, `.bb-vitals-text`,
       `.bb-changed-unknown .bb-changed-line`, `.bb-changed-norestore`, `.bb-restore-maybe`, `.bb-since-when`,
       `.bb-skipped`) at 3.03-4.47:1 in 166 instances, and Test's quiet labels (the "Past experiments" eyebrow,
       "Technical receipt", the gauge notes) at 4.23-4.48:1, there since the glass redesign. The station's tags
       clear it with 85% --v2-muted and 15% --v2-text (`d93dfe7e`); the teal assess and next-step blocks need about
       70/30, or --ix-text-2. Re-measure every instance on his data.
-- [ ] **P8-off-progress** (desk review 2026-11-02, round 2) Above a running Trial whose change reads off, the
+      Done in `508b200f`: on glass and frosted --v2-faint takes --v2-muted, and the station re-points --ix-text-3
+      to 70% --v2-muted and 30% --v2-text (the tags' own rule went with it). Desk review on his data PASS on `1d9c7abb`. Installed in `93c3ff0a`.
+- [x] **P8-off-progress** (desk review 2026-11-02, round 2) Above a running Trial whose change reads off, the
       progress line still says "Testing now: X". Pass the off read to `JourneyProgressLine`, as `136c85d6` did for
       a stopped real-play test.
+      Done in `508b200f`: "N of M tested · Compy reads X as off (see below)". Desk review on his data PASS on `1d9c7abb`. Installed in `93c3ff0a`.
 - [ ] **P8-first-advanced** (owner) Pick the first Advanced candidate (deeper power/scheduling behaviour)
       and admit it through `.claude/rules/tweak-catalog.md` + ARCHITECTURE_LOCKS "candidate only after
       Trial + Risk proof". Needs the owner's sign-off and P4-exit-proof.
@@ -700,15 +722,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-27 ~19:57–20:42 (owner watching a film on the primary monitor, asked us to work around it): FULL
-  catch-up. Pushed `2730e4d8..a33ff51c` then `..f515f53f` (pre-push gate refused twice on real catches:
-  closing-keyword in a docs subject, reworded; a moved archive row's relative link, re-pointed; and once on a
-  CareNextStep Depth-door flake → `f515f53f`, doors opened against the live tree). Desk build `a33ff51c` installed
-  silently (`-NoLaunch`, updater artifacts off for this desk-only build: no signing key in the session), stamp
-  in the installed exe; RELEASE_STATE row `bc38ee54`. Compy's saved window position pointed at monitor 2 for the
-  run and restored after; a watcher moved three gate-launched Compy windows off the film monitor, no focus taken.
-  Visual self-reviews still owed: the self-reviewer can't reach the desk from a cloud session (needs a desk-local
-  session).
 - 2026-10-28 ~05:50-07:30 (interactive from Claude HQ, owner on PC, Compy on the right monitor by his choice):
   the owed visual self-reviews ran after all - a general-purpose agent with the desk tools can capture and
   judge, unlike the dedicated self-reviewer from a cloud session. Verdicts and fixes under P7-visual-review.
@@ -791,6 +804,20 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   gate (its first run, on the dropped `32756cf8`, failed the census and a record's citation rule).
   `claude/redesign-glass` kept on the owner's word (LANDED record); the batch's 7 branches go once this push
   lands. Lane line removed: scheduled sessions may write again.
+- 2026-11-02 ~22:45 to 11-03 ~00:45 (interactive from Claude HQ; owner: "well continue witha peristent full
+  codebase review and fix and any other details you find need resolving"): the codebase review, slices 1-6, landed
+  from `claude/train-review-1103` (`8f4037c1` stores never saved over after a failed read, the ledger set aside only
+  on a parse failure and synced, Gaming Mode's start proves its root, the comparison gates, the Nagle refusal;
+  `445c1baa` its round-1 follow-ups; `508b200f` the frontend fixes with GL-faint-ink, P8-label-ink,
+  GL-shell-overflow, P8-off-progress and P8-launch-flash) and `-1103b` (`4465e74b` Care toasts, the support export
+  and captures; `16479f4b`). Merges `1d9c7abb` and `93c3ff0a`. Rust: each branch reviewed twice, no MUST; frontend:
+  a logic review (9 MUST, all fixed) and a round 2 with no MUST. Desk review on his data PASS on `1d9c7abb` (339
+  Problems quiet lines and Test's quiet labels at 5.08:1 or more; no shift on a deep-link scroll; the risk picker
+  held through the 2.7 s flash); `-1103b` changes nothing on screen. Desk build `93c3ff0a` installed
+  (`ship-reinstall.ps1 -VerifyRuntime`, proof `93c3ff0a · release`); pushed with this line through the pre-push
+  gate. What the review left is CR-1102-left. The lane line (`87656201`) was never pushed: kept on
+  `keep/lane-87656201`; scheduled sessions may write again. Owner played; every launch was --no-activate on his
+  second monitor.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
