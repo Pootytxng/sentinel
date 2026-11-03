@@ -318,7 +318,9 @@
     "applyFix": "Apply the #1 fix — compare next session",
     "applyTry": "Try one change — compare next session",
     "cleanSession": "Good session, good rig. Nothing worth changing.",
-    "cleanSessionOffer": "Good session, good rig."
+    "cleanSessionOffer": "Good session, good rig.",
+    "comparisonWaitShort": "Too short to compare: {{readings}} of the {{min}} readings the {{title}} comparison needs. It's still waiting for your next {{game}} session.",
+    "comparisonWaitNoReading": "No frame reading this session, so the {{title}} comparison is still waiting for your next {{game}} session."
   },
   "sessionTrends": {
     "proGateFeature": "Long-term history & trends",

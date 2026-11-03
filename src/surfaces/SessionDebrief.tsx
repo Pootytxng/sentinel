@@ -8,7 +8,9 @@ import type {
   Recommendation,
   AppliedChange,
   ComparisonResult,
+  ArmedComparison,
 } from "../types";
+import { comparisonWait } from "./comparison-wait";
 import { FpsTrace } from "../design/FpsTrace";
 import { Term } from "../design/Term";
 import { useConfirm } from "../design/ConfirmDialog";
@@ -330,6 +332,22 @@ export function SessionDebrief({
       live = false;
     };
   }, [s.process_name]);
+  // CR-cmp-wait: a session too short (or without a frame reading) to resolve the armed comparison
+  // for this game says so, instead of leaving it waiting silently. Only this session's read lands.
+  const [armed, setArmed] = useState<ArmedComparison | null>(null);
+  useEffect(() => {
+    let live = true;
+    setArmed(null);
+    invoke<ArmedComparison | null>("get_armed_comparison")
+      .then((a) => {
+        if (live) setArmed(a ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [s.process_name, s.started_at]);
+  const wait = comparisonWait(s, armed);
   // The verdict, the insights and the clean line all argue from the 1%-low/average ratio, so with
   // either reading unknown there is no ratio and nothing here concludes from one (#608). The old
   // fallback of 1 called an unmeasured session "Smooth"; an unknown low of 0 called it "Rough".
@@ -498,6 +516,22 @@ export function SessionDebrief({
           purpose: numbers say WHAT it averaged, the trace says what it DID, and everything below
           argues about why. Gaps stay gaps — see FpsTrace.tsx. */}
       <FpsTrace series={s.fps_series} durationSecs={s.duration_secs} />
+
+      {wait && armed && !comparison && (
+        <p className="debrief-sub debrief-wait" data-testid="cmp-wait">
+          {wait.reason === "short"
+            ? t("monitor.sessionDebrief.comparisonWaitShort", {
+                readings: wait.readings,
+                min: wait.min,
+                title: armed.rec_title,
+                game: prettyGameName(armed.game),
+              })
+            : t("monitor.sessionDebrief.comparisonWaitNoReading", {
+                title: armed.rec_title,
+                game: prettyGameName(armed.game),
+              })}
+        </p>
+      )}
 
       {comparison ? (
         <ComparisonCard

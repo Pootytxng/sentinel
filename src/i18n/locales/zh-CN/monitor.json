@@ -318,7 +318,9 @@
     "applyFix": "应用头号修复项——下次会话见分晓",
     "applyTry": "试一项改动——下次会话见分晓",
     "cleanSession": "会话很好，设备也很好，没什么值得改的。",
-    "cleanSessionOffer": "会话很好，设备也很好。"
+    "cleanSessionOffer": "会话很好，设备也很好。",
+    "comparisonWaitShort": "时间太短，无法比较：{{title}} 对比需要 {{min}} 个读数，本次只有 {{readings}} 个。它仍在等你下一次玩 {{game}}。",
+    "comparisonWaitNoReading": "本次会话没有帧读数，所以 {{title}} 对比仍在等你下一次玩 {{game}}。"
   },
   "sessionTrends": {
     "proGateFeature": "长期历史与趋势",
