@@ -63,8 +63,6 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 
 ## Queue
 
-**Lane, 2026-10-31 (owner, PC idle: "get as much done as possible"):** the interactive Claude HQ session holds write access for the owed desk self-reviews, GL-empty, P8-dims, P8-posture-show, P8-ack and P5-realplay (with P4-noise-stretch). Scheduled sessions stay read-only until this line is removed.
-
 ### Now — finish what's open
 - [x] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
       (data-root tests), #661 (debrief unmeasured), #627 (ledger write announce), #604 (TS coverage).
@@ -80,10 +78,14 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 - [x] **WT-prune** 15 worktree folders removed 2026-10-23 evening; every branch kept, detached heads
       saved as `keep/*` branches, uncommitted edits saved as patches in
       `_archive/compy-sessions/worktree-salvage-2026-10-23/wt-prune-2026-10-23`. The `.codex` one is left alone.
-- [ ] **GL-empty** (glass redesign, landed 2026-10-31) Self-review the new pages in the states the owner's data
+- [x] **GL-empty** (glass redesign, landed 2026-10-31) Self-review the new pages in the states the owner's data
       never shows, before the redesign reaches testers: Health with no measured game, no readiness read and no Care
       record; Games empty; Problems on a clean scan; the Look panel under Frosted and Solid. Round 1 and round 2 judged
       only his live data (8 games, a pending "tail" record).
+      Done 2026-11-02 in the stubbed cloud harness: round 1 found 7 (copy claiming a read nobody made, a second
+      empty block, notes and a tag on the wrong tokens, no mask under Solid, a Benchmark link meant for Live), fixed
+      in `6d99f36c`; then one first-run demo at a time across remounts `59df7cb7`, and a recorded but unmeasured
+      game never called measured `3b542b0a`; round 2 PASS. Installed in `1d53dfc8`.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -150,14 +152,17 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       no-change, medium, restored (verified, VisualFXSetting=0); 1% low +1.6%, average +0.1%. The record's
       `noise_evidence` carries the measured band (±21.6%, between-session, 6 sessions) and the bench line shows
       it. Findings queued below (P4-noise-stretch, P4-noise-copy-2). Evidence `C:\Users\Kuya\code\_train\trial-wardogs\`.
-- [ ] **P4-noise-stretch** (from P4-noise-proof) WARDOGS was judged against ±21.6% from older Oct-25 play
+- [x] **P4-noise-stretch** (from P4-noise-proof) WARDOGS was judged against ±21.6% from older Oct-25 play
       (1% lows 148/136/122) although today's three idle sessions agreed within ~1.4%: the band takes the widest
       unchanged stretch in history, so old noisy play sets the band for every later Trial. Decide with
       P5-realplay (like-with-like scenes): which unchanged sessions describe the Trial's own conditions.
       Measurement: Rust review.
+      Done 2026-11-02: `e79314a7` (a measurement belongs to its current unchanged run) and R4 `4faff373` (a bench
+      Trial's band is its own run's spread, never the widest stretch in history). Rust review r2 approve-with-nits.
+      Installed in `1d53dfc8`.
 - [x] **P4-noise-copy-2** (done 2026-10-30 `a2437af7`, merge `fcb18d43`) "differed by up to X% between any two of those sessions" overstates it: only
       sessions within one unchanged stretch are compared. Reword (en + zh-CN) with a test.
-- [x] **P4-cap-note** (done 2026-10-30 `42f8e04a`, merge `9234ff98`; self-review owed at next FULL) Both WARDOGS firing-range sessions sat at ~320 fps and were flagged "may be a menu or a
+- [x] **P4-cap-note** (done 2026-10-30 `42f8e04a`, merge `9234ff98`; the 2026-10-31 desk review found a third line restating both capped ones: one line since `f3bd1e49`) Both WARDOGS firing-range sessions sat at ~320 fps and were flagged "may be a menu or a
       frame cap"; a capped scene can't show a gain, so a no-change verdict there says little. Check the verdict
       line says so when both sides are capped (copy + test).
       Earlier the same day, P4-noise-proof's first attempt (original ask: 3 unchanged WARDOGS sessions >= 10 min,
@@ -174,7 +179,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       contradicted the journey receipt's band. Now a result that never reached the band says "not judged
       against a noise floor: its sessions could not be compared fairly" (en + zh-CN); guard in
       ExperimentBench.test ("Aniimo today") fails on the old copy.
-- [ ] **P5-realplay** (owner decision 2026-10-29, Constitution §36; ROADMAP Phase 5 "Real-play mode"; next after
+- [x] **P5-realplay** (owner decision 2026-10-29, Constitution §36; ROADMAP Phase 5 "Real-play mode"; next after
       P4-noise-evidence, ahead of the redesign) Trials must reach a verdict from normal, inconsistent play.
       Plan before coding (one bounded Rust slice + one TS slice): a Trial may keep its change on across several
       ordinary sessions and judge them against several ordinary sessions without it (session-level 1% low and
@@ -185,6 +190,13 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       2026-10-29 evening (scheduled, CODE-ONLY, owner in PBZ): not started - needs a Rust measurement slice +
       review that does not fit one bounded session, and cargo builds would load the PC mid-game. Best taken
       in an interactive or FULL session.
+      Done 2026-11-02 (interactive, Claude HQ): Rust `0dd20271` (the judge), `835d16a9` (start, read, conclude),
+      `59fc753c` (commands); review fixes `3ec4dce5` (Welch's band, not a pooled SD), `8682b11d` (only sessions that
+      show the change on count, and the page says why one didn't), `7271fb4e` (a crash or put-back never keeps or
+      pins what it can't), `d5f964a2` (progress read off the main thread); TS `12368826` ("Test it while I play
+      normally"). Rust review r2 APPROVE-WITH-NITS; native cargo 1713 passed on `59fc753c`.
+      UI: cloud-harness review round 1 FAIL, fixed in `71f98969`..`091ee7ff`; round 2 PASS, follow-ups in `136c85d6`.
+      Installed in `1d53dfc8`.
 - [x] **P4-noise-copy** Lands with the 2026-10-24 evening log entry. "from one session to the next" → "between any two of those sessions" (en); rename
       `grade_baseline`'s `noise_floor_pct` param to `halves_floor_pct`; fix ExperimentBench.tsx:206 comment.
 - [x] **453-fix** `dce14e95`: Health, Optimize and History count one per change whose live check reads On;
@@ -594,30 +606,70 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
       choice, sends it to the candidate read, and the "why not listed" row says "Outside the risk you
       chose" (en + zh-CN). The guided journey's next pick uses the same list; `test-summary.ts` and
       `journey-resume.ts` must not read a risk-filtered change as "not available". Needs P8-posture-a.
-      Visible UI (new picker) still needs self-review in the next FULL session.
+      Desk review 2026-10-31 (`d9b87bf4`): the question sat flush under the journey line; 12px since `f3bd1e49`.
 - [x] **P8-posture-note** — `73d9c5d9` (TS) "Nothing left to test" now adds "N more changes are held back
-      by the risk you chose" (en + zh-CN); test proven failing on the old code. Self-review owed (FULL+desk).
+      by the risk you chose" (en + zh-CN); test proven failing on the old code.
+      Not reachable on the owner's data; proven on stubbed data in the cloud-harness review, 2026-11-02.
 - [x] **P8-posture-count** — `9e2083f5` (TS) `outsideRisk` lists only never-tested held changes; a held
       stale result no longer counts in `stop.stale` or the retest headline (`staleAsked`). Two tests, both
       proven failing on the old code.
 - [x] **P8-posture-stale-copy** `53514506` (fix `35e39a0a`) A held-back change whose only result is stale reaches "nothing-testable-now",
       whose copy says nothing was measured; that is untrue when a (stale) result exists. Give that case its
-      own honest line (en + zh-CN) and a test. Found 2026-10-29 while doing P8-posture-count. Self-review of
-      the new line owed at the next FULL desk session.
+      own honest line (en + zh-CN) and a test. Found 2026-10-29 while doing P8-posture-count.
+      Not reachable on the owner's data; proven on stubbed data in the cloud-harness review, 2026-11-02.
 - [x] **P8-posture-show** The Trial receipt and the game summary name the risk choice in force when each
       Trial started (stored on the experiment record; older records read "not recorded", never a guess).
-      Needs P8-posture-b. `e4d22675` (merge on this line's commit): `risk_choice` on the record, bench Trial
-      row + journey result receipt, en + zh-CN. Review r1 LAND. Self-review of both lines owed (FULL+desk).
-- [ ] **P8-posture-lenient** (review SHOULD-FIX on P8-posture-show) A `risk_choice` value this build does not
+      Needs P8-posture-b. Landed as `b1f4ae76` (interactive lane, 2026-10-31): `risk_choice` on the record,
+      bench Trial row + journey result receipt, en + zh-CN. A scheduled session had landed the same item on the
+      PC's main at 13:54 (`e4d22675`), minutes before the lane claimed it; its code was reverted in `d6b0b1d3`
+      for the lane's version (lenient reads) and kept on `keep/train-p8-posture-show-e4d22675`.
+      Cloud-harness review: round 1 FAIL, fixed; round 2 one MUST (12px above the summary), fixed in `136c85d6`. Installed in `1d53dfc8`.
+- [x] **P8-posture-lenient** (review SHOULD-FIX on P8-posture-show) A `risk_choice` value this build does not
       know (a downgrade after a later build adds one) must read "not recorded", not fail the whole
       experiments.json load: lenient deserialize to `None`, plus a test. First check what the store loader
       does on a parse failure (an empty-store fallback would lose Trial history for any enum field).
-- [ ] **P8-ack** Before a moderate change's Trial starts, one plain line names its cost from the catalog's
+      Covered by the landed version: `risk_choice`, `stated_risk` and `cost_acknowledged` read through
+      `trial_candidates::lenient` (a value this build can't read is `None`; the store still loads), tested by
+      `a_start_keeps_the_risk_choice_in_force_and_an_older_record_reads_not_recorded` and
+      `a_stored_risk_reads_leniently`. The loader still moves an unreadable store aside (`experiments.json.corrupt`),
+      so an enum field added later needs the same reader.
+- [x] **P8-ack** Before a moderate change's Trial starts, one plain line names its cost from the catalog's
       own words and needs one tap ("I understand, test it"); safe changes start as today. Recorded on the
       receipt. RISK_MODEL §1 Advanced ("explicit user acknowledgement when the cost is not obvious").
-- [ ] **P8-dims** The Trial receipt's technical layer lists the risk dimensions the catalog states for the
+      Landed as `ec493063`: the cost line quotes the catalog's own `downside` words and the start records
+      `cost_acknowledged`.
+      Reviewed with P8-posture-show. The tap is a UI gate only: see P8-ack-enforce.
+- [x] **P8-dims** The Trial receipt's technical layer lists the risk dimensions the catalog states for the
       change (reversibility, stability, compatibility, security) instead of one word; an unstated dimension
       reads "not stated", never filled in. RISK_MODEL §3 ("do not collapse these into one arbitrary score").
+      Landed as `72212b40`, `2a19d405` (one "not stated" row when the catalog states none) and `d9f1b097` (a
+      start reuses the words the picker read). No catalog row states `risk_dimensions` yet, so every receipt
+      shows that one row today: see P8-dims-grades.
+- [ ] **P8-dims-grades** (owner sign-off) Grade each Trial candidate's reversibility, stability, compatibility
+      and security in the catalog (`risk_dimensions`), from evidence, never filled in to look complete. One review
+      round; the grades are catalog claims, so the owner signs them off. RISK_MODEL §3.
+- [ ] **P8-ack-enforce** (owner call) `start_experiment` records `cost_acknowledged` as the start was told it
+      and does not refuse a moderate change's start without it. Should the backend refuse it too (defence in
+      depth), or is the one tap enough? RISK_MODEL §1.
+- [ ] **P8-launch-flash** (desk review 2026-11-02) On entering Test, the bench shows the launcher, with a live
+      risk picker, for about 3 s (2.7-3.3 s measured on the owner's rig) until the first read returns and a
+      running Trial replaces it. A pick in that window saves a new risk choice while a Trial runs. Hold the
+      launcher and the idle journey until the first read returns.
+- [ ] **P8-label-ink** (review 2026-11-02) `.exp-field-label` (the risk question's label) wears --ix-text-3,
+      4.47:1 in the Test room: just under AA. Give it the muted ink, as GL-empty did for the glass notes.
+- [ ] **GL-shell-overflow** (desk review 2026-11-02) `main.app` (`overflow: hidden`) keeps 19px of scrollable
+      overflow from `.v2-backdrop` (956 vs 937 at 1500x980), so a `scrollIntoView` (BlackBox's deep link) can
+      shift the whole shell up 19px. `overflow: clip` would stop it.
+- [ ] **GL-faint-ink** (desk review 2026-11-02, round 2) The faint ink (--ix-text-3, --v2-faint) on glass sits
+      under AA on his data: the Problems station's 13px lines (`.bb-helpful-q`, `.bb-nextstep-tag`, `.bb-vitals-text`,
+      `.bb-changed-unknown .bb-changed-line`, `.bb-changed-norestore`, `.bb-restore-maybe`, `.bb-since-when`,
+      `.bb-skipped`) at 3.03-4.47:1 in 166 instances, and Test's quiet labels (the "Past experiments" eyebrow,
+      "Technical receipt", the gauge notes) at 4.23-4.48:1, there since the glass redesign. The station's tags
+      clear it with 85% --v2-muted and 15% --v2-text (`d93dfe7e`); the teal assess and next-step blocks need about
+      70/30, or --ix-text-2. Re-measure every instance on his data.
+- [ ] **P8-off-progress** (desk review 2026-11-02, round 2) Above a running Trial whose change reads off, the
+      progress line still says "Testing now: X". Pass the off read to `JourneyProgressLine`, as `136c85d6` did for
+      a stopped real-play test.
 - [ ] **P8-first-advanced** (owner) Pick the first Advanced candidate (deeper power/scheduling behaviour)
       and admit it through `.claude/rules/tweak-catalog.md` + ARCHITECTURE_LOCKS "candidate only after
       Trial + Risk proof". Needs the owner's sign-off and P4-exit-proof.
@@ -627,18 +679,19 @@ Planned 2026-10-28 (scheduled refill, second). Smallest read-only slices on what
 no shopping, no product names, no prices (affiliate firewall), never an invented spec.
 - [x] **P9-hz** `f1bfbb26` The display-mode line shows the refresh rate with its unit ("1920×1080 @ 250 Hz", was
       "1920x1080@250") on the debrief rig line, Trial summary context, Care next-step rig and hardware-change
-      timeline, en + zh-CN; rate 0 reads "refresh rate unknown". Self-review of the four lines owed (FULL+desk).
+      timeline, en + zh-CN; rate 0 reads "refresh rate unknown". Desk review 2026-10-31 (`d9b87bf4`): PASS.
 - [x] **P9-target** FPS answers compare against the screen's measured refresh rate ("about 60% of your
       250 Hz screen"); no line when the rate or the FPS is unmeasured. ROADMAP P9 "display target".
       `97ebbf7f` (merge `6e4224c9`): session debrief line from the session's own recorded mode, en + zh-CN.
-      Self-review of the line owed at next FULL desk session.
+      Desk review 2026-10-31 (`d9b87bf4`): PASS.
 - [x] **P9-settings-done** When the Phase 4 panel says Compy finished the supported candidates for a game,
       the game summary adds one line: settings have reached what Compy can test here, then the measured
       limiter (P7-rig-limiter) or "not measured". "No upgrade recommended" is a valid answer and the default
       when nothing is measured. Needs P4-exit-proof for a live case; code + tests can land first.
       `25feba43` (merge `a84ba5a7`): code + tests landed; reads the cached scan's top attention limiter (a
       setting named as a setting, a part named only), no scan/unread = "not measured". Live case still needs
-      P4-exit-proof; self-review of the line owed at next FULL desk session.
+      P4-exit-proof; the 2026-10-31 desk review found the line naming "1 safe tweak not applied" as the limiter:
+      aggregate rows are skipped since `f3bd1e49`.
 
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
@@ -647,10 +700,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-27 ~19:40–20:10 (interactive from Claude HQ, CODE-ONLY): #618 Trials `4405e96c` + Care `d16309a3`;
-  cargo 1660/0, clippy clean; r28 FULL vitest 525 files / 10110, exit 0 (Trials), r29 for Care. Lesson: when
-  a permanent marker gates a check, find every reader of it (#669's session counts were a second dead-end
-  the old patch didn't cover). Not pushed.
 - 2026-10-27 ~19:57–20:42 (owner watching a film on the primary monitor, asked us to work around it): FULL
   catch-up. Pushed `2730e4d8..a33ff51c` then `..f515f53f` (pre-push gate refused twice on real catches:
   closing-keyword in a docs subject, reworded; a moved archive row's relative link, re-pointed; and once on a
@@ -723,6 +772,25 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `origin/claude/redesign-glass` in the ref cache, cleared by `git fetch origin --prune` next FULL session).
   Review r1 LAND; SHOULD-FIX queued as P8-posture-lenient. One item only. Not pushed (CODE-ONLY); next FULL
   session pushes.
+- 2026-10-31 ~14:00 to 11-02 ~22:45 (interactive from Claude HQ; owner: "get as much done as possible", "Try
+  again", then "ARE YOU CAPABLE OF COMPLETING EVERYTHING"): the idle-PC batch landed from
+  `claude/train-batch-1102`: the owed desk fixes `f3bd1e49`, GL-empty, P8-dims, P8-posture-show, P8-ack and
+  P5-realplay with P4-noise-stretch. Merges `e99085ef` (round-1 base `456707d7`), `eeb8f70d` (review fixes
+  `71f98969`..`18b65859`, closing round `136c85d6`), `5db5c556` (desk fixes `d93dfe7e`) and `1d53dfc8`
+  (`2901f21f`, for the gate: the affordance census read a ternary's keys as a dropped line). UI: two cloud-harness
+  rounds on stubbed data (round 1 both FAIL, fixed; round 2 real play PASS, the risk UI one MUST, fixed). Desk
+  review on his data, round 1 on `eeb8f70d`: FAIL on two older defects (Problems' "not a proven cause" tags under
+  AA; a running Trial saying "applied" over a change Windows read as off), fixed in `d93dfe7e`; round 2 on
+  `5db5c556`: both re-measured PASS (152 of 152 tags at 4.62:1 or more; the off panel leads with Restore now),
+  FAIL on the station's other faint lines, under AA since the glass redesign: filed as GL-faint-ink, and the batch
+  shipped under the directive's two-round rule. A scheduled session had landed P8-posture-show at 13:54
+  (`e4d22675`): reverted in `d6b0b1d3`, kept on `keep/train-p8-posture-show-e4d22675`. Owner played PBZ, then
+  WardogsClient: nothing heavy ran until he said so ("I DONT REALLY MIND IF COMPY POPS UP"); the desk reviews
+  launched Compy without focus, on his second monitor. Desk build `1d53dfc8` installed
+  (`ship-reinstall.ps1 -VerifyRuntime`, proof `1d53dfc8 · release`); pushed with this line through the pre-push
+  gate (its first run, on the dropped `32756cf8`, failed the census and a record's citation rule).
+  `claude/redesign-glass` kept on the owner's word (LANDED record); the batch's 7 branches go once this push
+  lands. Lane line removed: scheduled sessions may write again.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)

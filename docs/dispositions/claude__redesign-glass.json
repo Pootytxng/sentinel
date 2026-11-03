@@ -1,0 +1,6 @@
+{
+  "ref": "origin/claude/redesign-glass",
+  "disposition": "LANDED",
+  "issue": null,
+  "evidence": "The glass redesign the owner picked from the prototype (\"FULL send it\", then \"RUN IT NOW\"). Its tip `34734a7c` (\"fix(live): the session list shows the game's name\") is in `main`: it shipped in the glass-redesign desk build (docs/archive/RELEASE_STATE_HISTORY.md), and merging it into `main` is a no-op (`git merge-tree --write-tree origin/main origin/claude/redesign-glass` prints `main`'s own tree). Kept on the owner's word, 2026-11-02, asked whether to delete it with the batch's leftover branches: \"thats the new and current design and i like it were keeping it\". The design itself lives in `main` either way; this ref stays as the reference point for the version he approved. Re-derive with `git merge-base --is-ancestor origin/claude/redesign-glass origin/main`."
+}
