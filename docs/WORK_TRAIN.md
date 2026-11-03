@@ -109,15 +109,11 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       NVIDIA adapter (a TCC compute card only NVML reports is missed); App's and Home's walkthrough and tuning vendor
       is still the first DXGI adapter, not the primary GPU. Desk reviews: with unread checks, Home's ring note still
       carries "N couldn't be read" and wraps past two lines at 1280x720 (the advisory aside left the ring for that
-      reason); Live's session strip floors durations (3h 28m) where History and Games round (3h 29m); a Compy started
-      from the Claude desktop app's Desktop Commander runs inside that app's MSIX virtualization and keeps an overlay
-      copy of its WebView2 profile, where the owner's picks live, while his own launches and ship-reinstall's read
-      the real profile (near-empty localStorage since 07-23), so the app shows defaults after a reinstall or a reboot
-      until a Desktop Commander relaunch; merging the two copies is the owner's call. Unsure: `elevate_and_wait`
-      waits with no timeout while the ledger is locked; core parking flags any non-performance plan with minimum
-      cores at 100; a system-managed pagefile may print "Fixed at 0-0 MB"; VBS is read as configured, not running;
-      two modules are called dual-channel whatever their slots; drive health and memory speed or channels never rank
-      as limiters.
+      reason); Live's session strip floors durations (3h 28m) where History and Games round (3h 29m). Unsure:
+      `elevate_and_wait` waits with no timeout while the ledger is locked; core parking flags any non-performance
+      plan with minimum cores at 100; a system-managed pagefile may print "Fixed at 0-0 MB"; VBS is read as
+      configured, not running; two modules are called dual-channel whatever their slots; drive health and memory
+      speed or channels never rank as limiters.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -835,9 +831,11 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `50ceb38c`. Rust and frontend each reviewed twice, no MUST left. Desk self-review PASS 12 of 12 on `50ceb38c` with
   his data, after five desk reviews (`e2de00db` to `60a86db2`) failed and were fixed. A Compy started from the Claude
   app's Desktop Commander reads an overlay copy of its WebView2 profile (his picks); his own launches and
-  ship-reinstall's read the real one: nothing lost, merging them is his call. Desk build `50ceb38c` installed
-  (`ship-reinstall.ps1 -VerifyRuntime`, proof `50ceb38c · release`); pushed with this line through the pre-push gate.
-  What the review left is CR-1102-left. Every launch was --no-activate on his second monitor.
+  ship-reinstall's read the real one: nothing lost. On his call his settings became the only copy at 08:47 (the side
+  copy and the old store are kept in `C:\Users\Kuya\code\_train\merge-backup-1103`) and Claude's launches go through
+  the ship launcher (self-reviewer rubric). Desk build `50ceb38c` installed (`ship-reinstall.ps1 -VerifyRuntime`,
+  proof `50ceb38c · release`); pushed with this line through the pre-push gate. What the review left is CR-1102-left.
+  Every launch was --no-activate on his second monitor.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)

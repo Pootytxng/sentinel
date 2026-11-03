@@ -35,6 +35,17 @@ The dev build runs two same-origin webviews + a small default window, so capture
   `src/design/homeRail.ts` is the source of those names and wins if this line ever disagrees;
   `src/stale-reference-guard.test.ts` fails the build if it does.
 - For the EXACT element changed: scroll to it / zoom — look AT it, not just the page.
+- **Launch Compy only through the ship launcher (2026-11-03).** A Compy started with a plain
+  `Start-Process` or `[Diagnostics.Process]::Start` from a Desktop Commander shell runs inside the
+  Claude desktop app's MSIX file-system virtualization and reads and writes a SIDE copy of its
+  WebView2 profile (`%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Local\gg.compy.app`), so the
+  owner's settings split in two (his picks lived only in that copy until he merged them). Dot-source
+  `scripts/lib/native-process.ps1` and launch with `Start-NativeProcess -Command <compy.exe>
+  -ArgumentList @('--no-activate') -Environment @{ WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS =
+  '--remote-debugging-port=<port>' }` for the capture and `Start-NativeProcess -Command <compy.exe>
+  -Detached -NoActivate -ArgumentList @('--no-activate')` for the teardown: the calls
+  `scripts/ship-reinstall.ps1` makes, which land outside the container. If that side-copy folder
+  ever reappears, say so in item 11.
 - **Real-density law (bug→guard 2026-07-11, v4 waterfall rejection):** when the diff renders
   data-driven density (charts, timelines, sparklines, long lists), judge on REAL data at real
   density — live app state or a real multi-hour capture, never fixture-scale props alone. A PASS
@@ -150,7 +161,8 @@ The dev build runs two same-origin webviews + a small default window, so capture
     relaunches the owner's INSTALLED app with
     `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port`. Nothing puts it back on its
     own. Before your verdict: stop compy, clear that variable at every scope it is set on,
-    relaunch `%LOCALAPPDATA%\Compy\compy.exe` plainly, then run `node scripts/no-debug-port.mjs`
+    relaunch `%LOCALAPPDATA%\Compy\compy.exe` plainly through the ship launcher (`-Detached
+    -NoActivate`, see "Capture it RIGHT first"), then run `node scripts/no-debug-port.mjs`
     and **quote its output line**. A non-zero exit FAILS this item even when every other item
     passed — the review is not done while the app is still open for inspection.
     **Precedent (the defect that created this item):** the 2026-08-21 ambient-backdrop review
