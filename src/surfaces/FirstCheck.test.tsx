@@ -246,3 +246,23 @@ describe("FirstCheck (audit M1)", () => {
     expect(screen.getByText(/roll this back anytime/i)).toBeInTheDocument();
   });
 });
+
+// CR-tour-reject (codebase review 2026-11-03): a scan that rejected left the first check "running"
+// forever; landed, it must not read as a clean rig, and it writes no last-check record (Home's band
+// would otherwise say "0/0 clean").
+describe("FirstCheck when the scan rejects", () => {
+  it("says it couldn't read the PC, offers a retry, and records nothing", async () => {
+    vi.mocked(invoke).mockImplementation((() => Promise.reject(new Error("ipc down"))) as never);
+    render(
+      <ConfirmProvider>
+        <FirstCheck onDone={vi.fn()} />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("Compy couldn't read this PC's checks just now")).toBeInTheDocument();
+    expect(screen.queryByText(/measured clean/)).toBeNull();
+    expect(screen.queryByText(/came back right/)).toBeNull();
+    expect(screen.queryByText(/won't invent work/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(localStorage.getItem(LAST_CHECK_KEY)).toBeNull();
+  });
+});

@@ -324,7 +324,7 @@ function StepRules() {
 
 function StepCheck() {
   const { t } = useTranslation();
-  const { readiness, priorities, recs, reverted, running, elapsed, phase, rerun } = useScan();
+  const { readiness, priorities, recs, reverted, running, failed, elapsed, phase, rerun } = useScan();
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const confirm = useConfirm();
 
@@ -418,6 +418,23 @@ function StepCheck() {
           </span>
         </div>
         <p className="st-body-text">{t("home.setupTour.check.noGuessing")}</p>
+      </>
+    );
+  }
+
+  // The scan rejected and nothing was ever read: say so and let the tour go on (the footer's Next is
+  // always there). A clean headline here would claim a measurement nobody made (CR-tour-reject).
+  if (failed && !readiness) {
+    return (
+      <>
+        <div className="st-tag">{t("home.setupTour.check.tag")}</div>
+        <h2 className="st-title">{t("home.setupTour.check.readFailedTitle")}</h2>
+        <p className="st-body-text">{t("home.setupTour.check.readFailedBody")}</p>
+        <div className="st-spotlight-foot">
+          <button className="btn-small btn-small-on" onClick={() => rerun()}>
+            {t("home.setupTour.check.tryAgain")}
+          </button>
+        </div>
       </>
     );
   }

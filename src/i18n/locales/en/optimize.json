@@ -72,6 +72,8 @@
   },
   "check": {
     "driverUnreadable": "Couldn't read your graphics driver's date this time — nothing to check, and nothing wrong.",
+    "scanFailed": "Compy couldn't read this PC's checks just now — nothing is claimed either way. Re-run the check to try again.",
+    "scanFailedPrevious": "The re-check couldn't read this PC just now; the result shown is the earlier one.",
     "driverRecent": "Driver is recent — {{days}} days old.",
     "driverStale": "Your {{vendor}} graphics driver is {{days}} days old.",
     "driverVendorFallbackGpu": "GPU",

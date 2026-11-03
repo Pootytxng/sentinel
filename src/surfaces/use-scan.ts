@@ -135,6 +135,10 @@ export type ScanState = {
   /** Compy-applied changes that have since drifted off (named) — drives inline "turn it back on". */
   reverted: RevertedChange[];
   running: boolean;
+  /** The latest scan's reads rejected (an IPC or backend failure): nothing new was measured. With
+   *  `readiness` null nothing is known at all; with a previous result, that result is older than the
+   *  failed re-run. Callers say so instead of claiming clean (CR-tour-reject). */
+  failed: boolean;
   elapsed: number | null;
   shownRows: number;
   phase: "scan" | "verdict";
@@ -199,12 +203,14 @@ export function useScan(opts?: { cache?: boolean; staggerMs?: number }): ScanSta
   const [recs, setRecs] = useState<ScanRecLite[]>(seed?.recs ?? []);
   const [reverted, setReverted] = useState<RevertedChange[]>(seed?.reverted ?? []);
   const [running, setRunning] = useState(!seed);
+  const [failed, setFailed] = useState(false);
   const [elapsed, setElapsed] = useState<number | null>(seed?.elapsed ?? null);
   const [shownRows, setShownRows] = useState(seed?.readiness?.checks.length ?? 0);
   const [phase, setPhase] = useState<"scan" | "verdict">(seed ? "verdict" : "scan");
 
   const rerun = useCallback(async () => {
     setRunning(true);
+    setFailed(false);
     setPhase("scan");
     setShownRows(0);
     const t0 = performance.now();
@@ -218,7 +224,11 @@ export function useScan(opts?: { cache?: boolean; staggerMs?: number }): ScanSta
       // instantly. The cache is cleared after every mutation, so it can't outlive a real state change.
       putProbe<ScanResult>(SCAN_KEY, result);
     } catch {
-      /* leave nulls — render guards downstream */
+      // Nothing new was read. The row reveal below needs a readiness to flip the phase, so a scan that
+      // rejected with no earlier result used to leave every caller on "running checks" forever
+      // (CR-tour-reject, codebase review 2026-11-03): land the verdict phase here, and say it failed.
+      setFailed(true);
+      setPhase("verdict");
     } finally {
       setElapsed((performance.now() - t0) / 1000);
       setRunning(false);
@@ -263,5 +273,5 @@ export function useScan(opts?: { cache?: boolean; staggerMs?: number }): ScanSta
     setPhase("verdict");
   }, [running, readiness]);
 
-  return { readiness, priorities, recs, reverted, running, elapsed, shownRows, phase, rerun, skip };
+  return { readiness, priorities, recs, reverted, running, failed, elapsed, shownRows, phase, rerun, skip };
 }

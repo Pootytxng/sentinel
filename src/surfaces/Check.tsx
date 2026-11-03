@@ -149,7 +149,7 @@ export default function Check({
   // cache: true — Optimize/Fixes is the PERMANENT surface (vs the first-run FirstCheck/Tour arcs), so
   // re-opening it serves the last verdict instantly instead of replaying the scan + 280ms/row reveal
   // every visit. The cache clears on any apply/rollback; "Re-run check" still does a full fresh scan.
-  const { readiness, priorities, recs, reverted, running, elapsed, shownRows, phase, rerun } =
+  const { readiness, priorities, recs, reverted, running, failed, elapsed, shownRows, phase, rerun } =
     useScan({ cache: true });
   const [applyingId, setApplyingId] = useState<string | null>(null);
   // Expert view (spec 2026-07-11-expert-layer-middle-ground §3): the "measured fine" and "not worth
@@ -402,7 +402,13 @@ export default function Check({
           <p className="check-sub">
             {running
               ? t("optimize.check.scanningYourRig")
-              : livingPreview
+              : failed
+                ? // The scan rejected: nothing new was read, so no clean claim; with an earlier result
+                  // on screen, say that it is the earlier one (CR-tour-reject).
+                  readiness
+                  ? t("optimize.check.scanFailedPrevious")
+                  : t("optimize.check.scanFailed")
+                : livingPreview
                 ? // An unread check never "came back right" (codebase review 2026-11-03): with any
                   // unread, the line speaks for the checks Compy could read and names the rest.
                   (readiness?.unknown_count ?? 0) > 0

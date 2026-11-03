@@ -238,3 +238,56 @@ describe("useScan caching (Optimize/Fixes re-open is instant, not a re-scan)", (
     expect(invokeMock.mock.calls.length).toBeGreaterThan(0); // fresh scan after a change
   });
 });
+
+// CR-tour-reject (codebase review 2026-11-03): the row reveal flips the phase only once a readiness
+// exists, so a scan that rejected with no earlier result left every caller on "running checks"
+// forever — the tour, the first check and Check alike. A rejected scan lands the verdict phase and
+// says it failed; a later successful re-run clears the flag.
+describe("useScan on a rejected scan", () => {
+  afterEach(() => invalidateProbe());
+
+  it("lands the verdict phase with failed=true and nothing read", async () => {
+    invokeMock.mockReset();
+    invokeMock.mockRejectedValue(new Error("ipc down"));
+    const { result } = renderHook(() => useScan());
+    await waitFor(() => expect(result.current.running).toBe(false));
+    expect(result.current.phase).toBe("verdict");
+    expect(result.current.failed).toBe(true);
+    expect(result.current.readiness).toBeNull();
+    expect(result.current.priorities).toBeNull();
+  });
+
+  it("a successful re-run clears the failure", async () => {
+    invokeMock.mockReset();
+    invokeMock.mockRejectedValueOnce(new Error("ipc down"));
+    const { result } = renderHook(() => useScan());
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === "get_game_readiness")
+        return Promise.resolve({
+          checks: [{ id: "a", label: "A", status: "ready", detail: "", value: null }],
+          ready_count: 1,
+          attention_count: 0,
+          unknown_count: 0,
+          advisory_count: 0,
+          advisory: "",
+          dismissed_ids: [],
+          drifts: [],
+        });
+      if (cmd === "priorities_from")
+        return Promise.resolve({
+          limiters: [],
+          already_fine: [],
+          not_worth_touching: [],
+          session_hint: null,
+          upgrade_path: null,
+        });
+      if (cmd === "get_recommendations") return Promise.resolve([]);
+      return Promise.resolve(null);
+    });
+    await result.current.rerun();
+    await waitFor(() => expect(result.current.running).toBe(false));
+    expect(result.current.failed).toBe(false);
+    expect(result.current.readiness?.ready_count).toBe(1);
+  });
+});

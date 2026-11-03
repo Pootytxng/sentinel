@@ -37,7 +37,7 @@ export default function FirstCheck({
   // 200ms/row so 16 checks land inside the ~3–4s ceiling; a click skips to the verdict.
   const [theater] = useState(readFirstCheckTheater);
   const reduced = useReducedMotion();
-  const { readiness, priorities, recs, running, elapsed, shownRows, phase, rerun, skip } = useScan(
+  const { readiness, priorities, recs, running, failed, elapsed, shownRows, phase, rerun, skip } = useScan(
     theater ? { staggerMs: 200 } : undefined,
   );
   const [greenOpen, setGreenOpen] = useState(false);
@@ -123,10 +123,12 @@ export default function FirstCheck({
   // band reads this to show "2h ago · N/N clean". Re-fires if an in-arc apply re-runs the scan (the
   // record tracks the LATEST result). The count summary is stored WITH its timestamp so the band
   // never pairs a live count with an implied time (honesty law).
+  // A scan that rejected measured nothing: no record, or Home's band would say "0/0 clean".
+  const nothingRead = failed && !readiness;
   useEffect(() => {
-    if (phase !== "verdict") return;
+    if (phase !== "verdict" || nothingRead) return;
     recordLastCheck({ total: checks.length, green: greenChecks.length, advisory, unread, fixCount });
-  }, [phase, checks.length, greenChecks.length, advisory, unread, fixCount]);
+  }, [phase, nothingRead, checks.length, greenChecks.length, advisory, unread, fixCount]);
 
   return (
     <div className={`fc-backdrop ${arcV2 ? "arc-v2" : ""}`}>
@@ -164,14 +166,21 @@ export default function FirstCheck({
           <div className="fc-verdict">
             <div className="fc-tag">VERDICT</div>
             <h1 className="fc-headline">
-              {fixCount > 0
-                ? `Ready to play — ${fixCount} thing${fixCount === 1 ? "" : "s"} worth fixing`
-                : unread > 0
-                  ? "Ready to play — everything Compy could read measured clean"
-                  : "Ready to play — this rig measured clean"}
+              {nothingRead
+                ? "Compy couldn't read this PC's checks just now"
+                : fixCount > 0
+                  ? `Ready to play — ${fixCount} thing${fixCount === 1 ? "" : "s"} worth fixing`
+                  : unread > 0
+                    ? "Ready to play — everything Compy could read measured clean"
+                    : "Ready to play — this rig measured clean"}
             </h1>
-            {/* An unread check is never "came back right" (codebase review 2026-11-03). */}
-            <p className="fc-subtitle">{subtitle}</p>
+            {/* An unread check is never "came back right" (codebase review 2026-11-03), and a scan that
+                rejected never "measured clean" (CR-tour-reject). */}
+            <p className="fc-subtitle">
+              {nothingRead
+                ? "Nothing is claimed either way — no check is counted as right or wrong. You can re-run the check any time from Health."
+                : subtitle}
+            </p>
 
             {/* #1 biggest limiter spotlight */}
             {top && (
@@ -304,11 +313,19 @@ export default function FirstCheck({
               </div>
             )}
 
-            <p className="fc-footer">
-              Nothing else on this PC is worth touching — and Compy won't invent work to look busy.
-              Play something tonight; the <strong>session debrief</strong> will tell you how it
-              actually went.
-            </p>
+            {nothingRead ? (
+              <div className="fc-actions fc-actions-retry">
+                <button className="fc-btn" onClick={() => rerun()}>
+                  Try again
+                </button>
+              </div>
+            ) : (
+              <p className="fc-footer">
+                Nothing else on this PC is worth touching — and Compy won't invent work to look busy.
+                Play something tonight; the <strong>session debrief</strong> will tell you how it
+                actually went.
+              </p>
+            )}
 
             <div className="fc-actions">
               {onGoToLab && (

@@ -169,6 +169,28 @@ describe("the first check counts only what it read", () => {
   });
 });
 
+// CR-tour-reject (codebase review 2026-11-03): with the scan rejected the step sat on "Running real
+// checks" forever. It now says nothing could be read, claims nothing, and the tour goes on.
+describe("the first check when the scan rejects", () => {
+  afterEach(() => vi.mocked(invoke).mockImplementation((() => Promise.resolve(null)) as never));
+
+  it("says it couldn't read the PC, never 'measured clean', and Next still works", async () => {
+    vi.mocked(invoke).mockImplementation((() => Promise.reject(new Error("ipc down"))) as never);
+    render(
+      <ConfirmProvider>
+        <SetupTour hw={{} as HardwareInfo} rig={[]} onDone={() => {}} />
+      </ConfirmProvider>,
+    );
+    for (let n = 0; n < 3; n++) fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText("Compy couldn't read this PC's checks just now")).toBeTruthy();
+    expect(screen.queryByText(/Running real checks/)).toBeNull();
+    expect(screen.queryByText(/measured clean/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.queryByText("Compy couldn't read this PC's checks just now")).toBeNull();
+  });
+});
+
 describe("the tour's keys yield to an open confirm", () => {
   it("arrows and Esc do nothing while an apply confirm is up", () => {
     const done = vi.fn();

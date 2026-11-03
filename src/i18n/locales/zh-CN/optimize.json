@@ -62,6 +62,8 @@
   },
   "check": {
     "driverUnreadable": "这次未能读取到你的显卡驱动日期——没什么可检测的,也没有问题。",
+    "scanFailed": "Compy 刚才没能读取这台电脑的检查项——不作任何判断。重新检查可再试一次。",
+    "scanFailedPrevious": "刚才的重新检查没能读取这台电脑；当前显示的是之前的结果。",
     "driverRecent": "驱动程序较新——已使用 {{days}} 天。",
     "driverStale": "你的 {{vendor}} 显卡驱动已使用 {{days}} 天。",
     "driverVendorFallbackGpu": "GPU",
