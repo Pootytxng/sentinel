@@ -59,7 +59,17 @@ owner's OK. Scripts: `C:\Users\Kuya\code\_train\uac-off-permanent.ps1` (off), `u
 the recorded original, 5). Every other security setting stays owner-gated (CLAUDE.md).
 
 ## Needs owner
-- **Old scheduled task** "#678 check-in 1/3…" still armed; turn it off in your scheduled tasks list.
+- **Old scheduled task** "#678 check-in 1/3…" still armed (it fails every day at 10:24 with access denied); turn
+  it off in your scheduled tasks list — one click. Claude tried on 2026-11-03: its scheduled-task tools refuse to
+  disable or delete a task, so this one stays yours.
+- **The four exit walkthroughs** (P4–P7 below, all code landed; each closes only on your rig, next FULL session
+  installs the build first): P4 — Test room, run Trials on WARDOGS (one tap each, ~10 min a session) until the panel
+  says "Compy finished the supported tests"; P5 — Optimize, "Optimize my game", play, read the summary, no manual
+  Trial clicks (~25 min); P6 — Home → "Something's wrong", follow a WARDOGS crash and a stutter to one next step
+  (~5 min); P7 — your friend asks Home for more FPS, a stutter and a crash without asking what a word means (his
+  ~15 min). Each is recorded in BACKLOG as that phase's exit.
+- **P8-first-advanced** waits on P4's walkthrough (the gate is Trial + Risk proof), then your sign-off on the
+  candidate Claude recommends.
 
 ## Queue
 
@@ -93,15 +103,18 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       check reads unknown; a Trial delta on a 0 or NaN baseline (older records only); `has_pending_contract` refuses
       on any leftover temp file; one ledger row a downgraded build can't parse fails the whole ledger; a partial
       batch apply carries no flag over IPC; nothing stops a double apply of one change; real play keeps a change
-      after an OtherChange or Conditions stop (owner call); the experiments, sessions and noise stores still
-      overwrite an earlier `.corrupt`; a session under 600 samples leaves an armed comparison waiting with no line
-      saying why; the Lab's "measured together" count still counts rows from another PC. Slice 6: Care's first-ever
+      after an OtherChange or Conditions stop (owner call); ~~the experiments, sessions and noise stores still
+      overwrite an earlier `.corrupt`~~ (fixed `c127ce9`, `14d39b5`: a second damaged file keeps the first set-aside,
+      the intelligence store too; one that can't be set aside refuses the read); a session under 600 samples leaves
+      an armed comparison waiting with no line saying why; ~~the Lab's "measured together" count still counts rows
+      from another PC~~ (fixed `8ef5772`). Slice 6: Care's first-ever
       scan seeds an empty world when its readers fail; a crash's vitals come from the whole capture window, not the
       game's own; Black Box, export and capture start run on the UI thread; a wedged old FPS helper can clear the new
       one's running flag; a Care state that can't be read or written stays silent with no support event. Slice 7
       (advice): a service that is only stopped still reads as Compy's change (its start type is unread); the
-      power-plan, core-parking and bcdedit checks match English words, so a localized Windows misreads them; one peak
-      GPU sample over 95% still reads as "the GPU was the bottleneck", with purchase links; the slow probes
+      power-plan, core-parking and bcdedit checks match English words, so a localized Windows misreads them; ~~one peak
+      GPU sample over 95% still reads as "the GPU was the bottleneck", with purchase links~~ (P9-bottleneck-sustained);
+      the slow probes
       (leftovers, readiness, priorities, diagnostics, Trial candidates) run as sync commands. Slice 8 (screens): the
       GPU view's Global/Per-game picker changes nothing anything reads (remove it, or wire it); after the one-time
       consent, newly ticked UAC tiers and service suspends start with no fresh confirm; the GPU profile labels and
@@ -139,11 +152,19 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       lessons, memory title, recap and tab blurbs under `home.setupTour.lessons|recap|tabBlurb.*`; GpuProfile's
       delta table reads `lab.gpuProfile.field.*` and On/Off. The CPU note drops "kernel driver" (plain-language
       guard). Tests fail on old code: setup-tour-locale 1, GpuProfile 1.
-- [ ] **P9-bottleneck-sustained** "The GPU was the bottleneck" (and its purchase links) from one peak sample over
+- [x] **P9-bottleneck-sustained** "The GPU was the bottleneck" (and its purchase links) from one peak sample over
       95%: require a sustained share of the session's samples, else say the GPU was busy at times. Measurement
       change: one review.
-- [ ] **P9-software-first** Before any part is named as a limiter in a game summary, list the untested Trial
+      `88f15e9` + r1 `3ed24a8` + r2 `14d39b5` (2026-11-03): each session records `gpu_load` (measured ticks that read
+      a GPU usage, and how many sat at or above 95%; additive, older rows read as before); the limiter row and its
+      retail links need at least half of at least 30 measured readings saturated, decided on the counts; otherwise
+      "busy at times" with the share, "didn't record" for an older session, or "measured for only about N s, too
+      little to say". Rust review r2 APPROVE-WITH-NITS, all taken. Known limit named in code: the usage is the busiest
+      adapter's, as the peak always was.
+- [x] **P9-software-first** Before any part is named as a limiter in a game summary, list the untested Trial
       candidates for that game first ("try these settings before any upgrade"); none left = today's line.
+      `023da7d` (2026-11-03): `settings-done.ts` names the untested changes still worth trying ahead of any part,
+      en + zh-CN; none left falls through to P9-settings-done's line. TS display only; tests fail on old code.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -703,12 +724,26 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
       Landed as `72212b40`, `2a19d405` (one "not stated" row when the catalog states none) and `d9f1b097` (a
       start reuses the words the picker read). No catalog row states `risk_dimensions` yet, so every receipt
       shows that one row today: see P8-dims-grades.
-- [ ] **P8-dims-grades** (owner sign-off) Grade each Trial candidate's reversibility, stability, compatibility
-      and security in the catalog (`risk_dimensions`), from evidence, never filled in to look complete. One review
-      round; the grades are catalog claims, so the owner signs them off. RISK_MODEL §3.
-- [ ] **P8-ack-enforce** (owner call) `start_experiment` records `cost_acknowledged` as the start was told it
-      and does not refuse a moderate change's start without it. Should the backend refuse it too (defence in
-      depth), or is the one tap enough? RISK_MODEL §1.
+- [x] **P8-dims-grades** (owner may overrule by editing a row) Grade each Trial candidate's reversibility, stability,
+      compatibility and security in the catalog (`risk_dimensions`), from evidence, never filled in to look complete.
+      One review round; the grades are catalog claims, so the owner signs them off. RISK_MODEL §3.
+      `b46f2c6` + review `14d39b5` (2026-11-03; the owner asked for this done without his review, so the grades ship
+      as Claude's call, each with its rule in `recommendations.rs::stated_risk_dimensions`): all 16 one-click changes
+      graded Low/Moderate on four dimensions; reversibility Moderate where the rollback restores a state, not the
+      exact prior (four services, the power plan, reserved storage); stability Moderate where the catalog's own
+      downside names a behaviour change or possible regression (services, power plan, HAGS, Nagle, reserved storage),
+      Low where the only cost is idle power (USB suspend, PCIe ASPM, EEE) or boot time; compatibility Moderate where
+      hardware, a driver or a plan gates it; security Low for all (none touches a security control). Severities
+      unchanged: a safe row may carry a recoverable Moderate caveat (RISK_MODEL §3); the test pins that every
+      moderate row states a Moderate dimension and nothing grades High. Review r1 REQUEST-CHANGES (a compile
+      break, three grades) → fixed.
+- [x] **P8-ack-enforce** (owner call, taken by Claude 2026-11-03 under "completed by you alone"; overrule by
+      reverting `81a9f14`) `start_experiment` records `cost_acknowledged` as the start was told it and does not
+      refuse a moderate change's start without it. Should the backend refuse it too (defence in depth), or is the
+      one tap enough? RISK_MODEL §1.
+      Decision: refuse. `81a9f14`: a moderate or unknown-risk change's start without the cost OK is refused in plain
+      words before anything is recorded or applied; safe changes start as before; the arg is additive, every
+      frontend start sends it. Rust review APPROVE.
 - [x] **P8-launch-flash** (desk review 2026-11-02) On entering Test, the bench shows the launcher, with a live
       risk picker, for about 3 s (2.7-3.3 s measured on the owner's rig) until the first read returns and a
       running Trial replaces it. A pick in that window saves a new risk choice while a Trial runs. Hold the
