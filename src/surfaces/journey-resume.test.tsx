@@ -281,6 +281,23 @@ describe("P5-resume: progress comes from the experiments store", () => {
     expect(calls("start_fps_capture")).toHaveLength(1);
   });
 
+  // Codebase review 2026-11-02: a continuing journey sets no phase before its start, so its button
+  // stayed live through the start (and any UAC prompt). A second tap started a second run, whose
+  // error path put back the first run's change while the first run said it was on.
+  it("a second tap while a continuing journey starts is ignored: one start, nothing put back", async () => {
+    twoOfFive();
+    render(<ExperimentBench />);
+    expect(await progressLine()).toBe("2 of 5 tested · Next: Power plan");
+    state.saves = [session(later(1), 5400)];
+    const btn = await screen.findByRole("button", { name: "Optimize my game" });
+    await waitFor(() => expect(btn).toBeEnabled());
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    expect(await finalLine()).toBe("Kept Power plan: the frame rate in your worst moments (the 1% low) is up 4.2%.");
+    expect(calls("start_experiment")).toHaveLength(1);
+    expect(calls("restore_experiment")).toHaveLength(0);
+  });
+
   it("continuing measures a new as-is session when the last one isn't steady any more", async () => {
     twoOfFive();
     state.sessions = [OLD, { ...S1, fps_series: [] }, S2];
@@ -355,6 +372,9 @@ describe("P5-resume: an interrupted Trial and the progress line agree", () => {
   it("a Trial started by hand says it is being tested now", async () => {
     twoOfFive();
     state.experiments = [...state.experiments, record({ id: "exp:3-0", rec_id: "power-plan", rec_title: "Power plan" })];
+    // A running Trial's change is on, and the picker says so (P8-off-progress reads a passing
+    // candidate as "off", which a running Trial's change never is).
+    state.recs = state.recs.map((r) => ((r as { id: string }).id === "power-plan" ? cand("power-plan", "Power plan", null, false, "already-set-by-compy") : r));
     render(<ExperimentBench />);
     expect(await progressLine()).toBe("2 of 5 tested · Testing now: Power plan");
     expect(screen.queryByTestId("exp-interrupted")).toBeNull();

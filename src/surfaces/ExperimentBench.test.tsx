@@ -436,15 +436,25 @@ describe("ExperimentBench (armed)", () => {
     const low = { id: "low-rec", title: "Low tweak", passes: true, reason: null, detail: null };
     const mod = { id: "mod-rec", title: "Moderate tweak", passes: true, reason: null, detail: null };
     const base = vi.mocked(invoke).getMockImplementation()!;
+    // The first read lands at once (P8-launch-flash holds the risk answer until it has); every later
+    // read under the old answer is the slow one.
+    let reads = 0;
     vi.mocked(invoke).mockImplementation(((cmd: string, args?: { riskChoice?: string }) => {
       if (cmd !== "get_trial_candidates") return base(cmd, args as never);
+      reads += 1;
       return args?.riskChoice === "low-only"
         ? Promise.resolve([low, { ...mod, passes: false, reason: "outside-chosen-risk" }])
-        : new Promise((r) => setTimeout(() => r([low, mod]), 150));
+        : reads === 1
+          ? Promise.resolve([low, mod])
+          : new Promise((r) => setTimeout(() => r([low, mod]), 150));
     }) as typeof base);
     try {
       render(<ExperimentBench />);
       const risk = await screen.findByRole("combobox", { name: "How far may Compy go on this PC?" });
+      await waitFor(() => expect(risk).toBeEnabled());
+      // A refresh under the old answer is in flight when the answer changes.
+      fireEvent(window, new Event(LEDGER_CHANGED_EVENT));
+      await waitFor(() => expect(reads).toBe(2));
       fireEvent.click(risk);
       const opt = await waitFor(() => {
         const el = document.querySelector('[role="listbox"] [data-value="low-only"]');
@@ -552,6 +562,20 @@ describe("ExperimentBench (armed)", () => {
     expect(await screen.findByText("Nothing worth testing on this PC right now.")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Show why others aren't listed" }));
     expect(screen.getByText("Already set this way in Windows, not by Compy.")).toBeInTheDocument();
+  });
+
+  // P8-launch-flash (desk review 2026-11-02): until the first read returns, the bench can't know a
+  // Trial is running and shows the launcher (about 3 s on the owner's rig). Its risk picker was live
+  // then, so a pick saved a new risk choice while a Trial ran.
+  it("holds the risk picker until the first read returns", async () => {
+    state.gate = true;
+    state.recs = [{ id: "test-rec", title: "Test tweak", passes: true, reason: null, detail: null }];
+    const open = holdInitialLoad();
+    render(<ExperimentBench />);
+    const risk = await screen.findByRole("combobox", { name: "How far may Compy go on this PC?" });
+    expect(risk).toBeDisabled();
+    open();
+    await waitFor(() => expect(risk).toBeEnabled());
   });
 
   // bug->guard (independent review, 2026-08-18): the C-10 port first carried the empty entry as the
@@ -721,6 +745,10 @@ describe("ExperimentBench (armed)", () => {
       ),
     );
     expect(screen.getByTestId("experiment-running")).toHaveAttribute("data-change-off", "true");
+    // Desk review 2026-11-02, round 2: the line above still said "Testing now" over this panel.
+    expect(screen.getByTestId("journey-progress").textContent).toMatch(
+      / · Compy reads Hardware-accelerated GPU scheduling as off \(see below\)$/,
+    );
     expect(screen.queryByRole("button", { name: /Conclude with my latest/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Restore now" })).toHaveClass("exp-cta");
     expect(screen.queryByText(/after-reading|Latest Valorant session/)).toBeNull();

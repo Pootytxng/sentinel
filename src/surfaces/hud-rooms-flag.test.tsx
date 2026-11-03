@@ -104,11 +104,11 @@ const ROOMS: {
           sessionsSeenAt=""
           priorities={null}
           recs={[]}
-          apply={() => Promise.resolve()}
+          apply={() => Promise.resolve(true)}
           busyId={null}
           onExport={() => {}}
           changes={[]}
-          rollback={() => Promise.resolve()}
+          rollback={() => Promise.resolve(true)}
           vendor="amd"
         />,
       ).container,

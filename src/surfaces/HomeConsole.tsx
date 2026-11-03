@@ -25,6 +25,7 @@ import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotic
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
+import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { gradeFps, gradeLow1, gradeCpuTempC, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { buildRigParts } from "./rig/rig-parts";
@@ -393,7 +394,7 @@ export function HomeConsole({
   onDismissCareIncident,
   latestChange,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
   // Shared Machine Model (#451): the hardware grid's identity rows read its facts, not bare
   // inventory fields. One read-only IPC per hardware refresh — `hw` is App.refresh()'s product, so a
@@ -914,6 +915,8 @@ export function HomeConsole({
     gpuTempC: gpuTemp,
     rooms: [...interviewRooms],
     trials: interviewTrials,
+    // The Lab's own rule (LabConsole measureKeys): Tuning is a station only where a guide exists.
+    tuning: tuningGuideForVendorForLanguage(vendor, i18n.language) != null,
   };
 
   // Option C's apply — mirrors FirstCheck's honest inline-apply idiom: confirm names the rollback
@@ -1003,7 +1006,9 @@ export function HomeConsole({
             <span className="hc-verdict-dek">
               {t("home.homeConsole.verdict.attentionSub", {
                 count: checksGood,
-                total: readiness!.checks.length,
+                // P7-score: "of" the checks Compy could read, as the ring and the interview count
+                // them; an unread check is never counted against the PC (codebase review 2026-11-02).
+                total: checksReadable,
               })}{" "}
               {/* THE NEXT STEP, one line (owner ruling 2026-08-26). The DIR-1 first-timer walk
                   found that in this state Home names a problem and shows no way to deal with it:

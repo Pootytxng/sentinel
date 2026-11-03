@@ -39,6 +39,15 @@ describe("computeSessionTrends", () => {
     expect(t.games[0]).toMatchObject({ sessions: 2, lastAvgFps: 150 });
   });
 
+  // Codebase review 2026-11-02: a retained row with no reading that wasn't flagged background-only
+  // (the sampler's unknown 0, a malformed legacy row) was the newest "last", and dragged the trend.
+  it("skips any session without an average reading, not only background ones", () => {
+    const unread = [{ ...s("game.exe", 1), avg_fps: 0 }, { ...s("game.exe", 1), avg_fps: Number.NaN }] as SessionSummary[];
+    const t = computeSessionTrends([...unread, s("game.exe", 150), s("game.exe", 120)]);
+    expect(t.total).toBe(2);
+    expect(t.games[0]).toMatchObject({ sessions: 2, lastAvgFps: 150, bestAvgFps: 150 });
+  });
+
   it("groups per game, keeps the best avg and the most-recent (first) avg", () => {
     // newest-first
     const t = computeSessionTrends([s("game.exe", 150), s("game.exe", 120), s("other.exe", 90)]);

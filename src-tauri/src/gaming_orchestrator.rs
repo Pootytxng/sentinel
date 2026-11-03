@@ -321,6 +321,11 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
 /// undo what landed, and return the error.
 pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
     let _op = session_op_guard()?; // held across the whole start (incl. its abort-restore)
+    // #130 on the start side (codebase review 2026-11-02): only the restore asked for a proven
+    // canonical data root, so under a redirected, split or unknown root a start wrote its contract
+    // where a normal launch can't see it and changed Windows, and its own undo then failed on the
+    // same check, leaving the session RestoreFailed. Refuse before any contract write or apply.
+    let _root = crate::data_root::mutation_root()?;
     // Slot-aware guard (rollback-first): a LOADED contract blocks start (recover it first). A file we
     // can't PARSE (corrupt / version-skewed schema) may still hold a real, unrestored rollback
     // contract — quarantine it aside so a schema-compatible build can recover it, never let the
@@ -741,6 +746,25 @@ mod live_session_tests {
         // No disk session at all.
         assert!(!same_session(None, Some("gm-1")));
         assert!(!same_session(None, None));
+    }
+}
+
+#[cfg(test)]
+mod start_root_tests {
+    // Codebase review 2026-11-02 (#130 on the start side): a start under a redirected, split or
+    // unknown data root wrote its contract where a normal launch can't see it and changed Windows.
+    // The test build issues the root unconditionally (data_root.rs), so this pins the order in the
+    // source: the root is proven before the slot is touched or the contract is written. Tokens are
+    // built by concat! so this test's own lines don't match the scan.
+    #[test]
+    fn a_start_proves_the_data_root_before_it_touches_the_session_slot() {
+        let src = include_str!("gaming_orchestrator.rs");
+        let start = src.find(concat!("pub(crate) fn ", "start(opts: StartOptions)")).expect("start fn");
+        let body = &src[start..];
+        let root = body.find(concat!("data_root::", "mutation_root()?")).expect("start must prove the root");
+        let quarantine = body.find(concat!("quarantine_", "session()")).expect("start may set a bad slot aside");
+        let save = body.find(concat!("save_", "session(&file)?")).expect("start writes its contract");
+        assert!(root < quarantine && root < save, "the data root must be proven first");
     }
 }
 

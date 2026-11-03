@@ -52,6 +52,13 @@ pub(crate) struct ArmedComparison {
     /// this number is always a real reading and never a fallback.
     #[serde(default)]
     pub ledger_watermark: usize,
+    /// Ledger rows not rolled back at arm time (codebase review 2026-11-02). An undo changes a row's
+    /// status and leaves the entry count alone, so the count alone credited a delta measured after a
+    /// change, the fix itself included, was undone. Read from the recorded status, never a live
+    /// probe, so a setting Windows reverted on its own doesn't read as an undo. `None` on an arm
+    /// written before this existed: that arm keeps the count-only check.
+    #[serde(default)]
+    pub ledger_active: Option<usize>,
     /// Fix (default — back-compat with pre-tuning armed files) vs Tuning.
     #[serde(default)]
     pub kind: ComparisonKind,
@@ -205,6 +212,30 @@ pub(crate) fn arm_watermark() -> Result<usize, String> {
     })
 }
 
+/// The ledger's two confound marks from ONE read: its entry count (the watermark) and how many of
+/// its rows are not rolled back (see [`ArmedComparison::ledger_active`]). One read, so a change
+/// landing between two reads can't split them; recorded status only, so nothing probes the machine.
+fn ledger_marks() -> Result<(usize, usize), String> {
+    crate::history::load_history().map(|h| (h.len(), h.iter().filter(|c| c.status != "rolled_back").count()))
+}
+
+/// Both marks for an arm, with [`arm_watermark`]'s refusal when the history can't be read.
+fn arm_marks() -> Result<(usize, usize), String> {
+    ledger_marks().map_err(|e| {
+        format!("can't arm a before/after comparison — the change history is unreadable, so a later result could never be proven fair: {e}")
+    })
+}
+
+/// A baseline is a measured session: a real average and a real 1% low (codebase review 2026-11-02).
+/// A zero or missing reading compared as a 0% change, so "no change" was claimed from nothing.
+fn require_baseline_reading(avg_fps: f64, low1_fps: f64) -> Result<(), String> {
+    if avg_fps.is_finite() && avg_fps > 0.0 && low1_fps.is_finite() && low1_fps > 0.0 {
+        Ok(())
+    } else {
+        Err("can't arm a before/after comparison — the session it would compare against has no frame-rate reading".into())
+    }
+}
+
 /// Arm a comparison: record the just-debriefed session as the baseline + the fix being applied.
 pub(crate) fn arm(
     rec_id: String,
@@ -213,7 +244,9 @@ pub(crate) fn arm(
     baseline_avg_fps: f64,
     baseline_low1_fps: f64,
 ) -> Result<(), String> {
+    require_baseline_reading(baseline_avg_fps, baseline_low1_fps)?;
     std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
+    let (watermark, active) = arm_marks()?;
     arm_at(
         &armed_path(),
         ArmedComparison {
@@ -223,7 +256,8 @@ pub(crate) fn arm(
             baseline_avg_fps,
             baseline_low1_fps,
             armed_at: chrono::Utc::now().to_rfc3339(),
-            ledger_watermark: arm_watermark()?,
+            ledger_watermark: watermark,
+            ledger_active: Some(active),
             kind: ComparisonKind::Fix,
             baseline_peak_temp_c: None,
             crash_reported: false,
@@ -251,7 +285,9 @@ pub(crate) fn arm_tuning(
     baseline_low1_fps: f64,
     baseline_peak_temp_c: Option<u32>,
 ) -> Result<(), String> {
+    require_baseline_reading(baseline_avg_fps, baseline_low1_fps)?;
     std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
+    let (watermark, active) = arm_marks()?;
     arm_at(
         &armed_path(),
         ArmedComparison {
@@ -261,7 +297,8 @@ pub(crate) fn arm_tuning(
             baseline_avg_fps,
             baseline_low1_fps,
             armed_at: chrono::Utc::now().to_rfc3339(),
-            ledger_watermark: arm_watermark()?,
+            ledger_watermark: watermark,
+            ledger_active: Some(active),
             kind: ComparisonKind::Tuning,
             baseline_peak_temp_c,
             crash_reported: false,
@@ -398,11 +435,17 @@ pub(crate) fn build_result(
     s: &SessionSummary,
     nf: f64,
     ledger_now: Option<usize>,
+    active_now: Option<usize>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> ComparisonResult {
     let pct = |after: f64, base: f64| if base > 0.0 { (after - base) / base * 100.0 } else { 0.0 };
     let delta_low1 = pct(s.low1_fps_est, armed.baseline_low1_fps);
-    let verdict = classify_with_guards(armed, delta_low1, nf, ledger_now, now).to_string();
+    let mut verdict = classify_with_guards(armed, delta_low1, nf, ledger_now, now).to_string();
+    // The other half of the confound watermark (see `ledger_active`): an undo since the arm, the
+    // fix's own included, leaves the entry count equal and is caught here. Expiry still wins.
+    if verdict != "expired" && armed.ledger_active.is_some_and(|a| active_now != Some(a)) {
+        verdict = "confounded".into();
+    }
     ComparisonResult {
         rec_id: armed.rec_id.clone(),
         rec_title: armed.rec_title.clone(),
@@ -444,14 +487,20 @@ fn on_session_finalized_at(
     let _lock = lock_comparison();
     let armed = load_armed_from(armed_path_)?;
     crate::race_seam::hold(); // no-op in a release build; see race_seam
-    if s.process_name.is_empty() || armed.game != s.process_name {
+    // Same game, compared as every other game match in the app is (codebase review 2026-11-02).
+    if s.process_name.is_empty() || !armed.game.eq_ignore_ascii_case(&s.process_name) {
         return None;
     }
     // P4-show-f1: a session behind another window the whole time measured nothing (its 0s are
     // "not measured"), so it neither settles nor disarms the comparison; the arm waits for play.
-    if s.samples == 0 {
+    // Codebase review 2026-11-02: nor does a session too short to judge or without a real 1% low,
+    // which read as a -100% "regressed" (a 0 low) or a verdict off a handful of ticks. The bar is the
+    // Trial's own: a real reading over at least MIN_TREATMENT_SAMPLES.
+    if s.samples < crate::experiment::MIN_TREATMENT_SAMPLES || !crate::experiment::has_frame_reading(s) {
         return None;
     }
+    // Both confound marks from one read (`ledger_marks`).
+    let marks = ledger_marks().ok();
     let result = build_result(
         &armed,
         s,
@@ -470,8 +519,11 @@ fn on_session_finalized_at(
         // recursive copy of the legacy `Sentinel` folder. Neither reaches back into
         // comparison/drift/readiness, so the order below still holds; in practice both are warmed
         // by startup long before any session finalizes. Named here because "the one call" was the
-        // kind of tidy sentence that stops anyone looking.
-        crate::history::ledger_len_checked().ok(),
+        // kind of tidy sentence that stops anyone looking. (`ledger_marks` reads through the same
+        // `load_history`, so the same note holds.)
+        marks.map(|m| m.0),
+        // The rows-not-rolled-back count, read the same honest way: unreadable is `None`.
+        marks.map(|m| m.1),
         chrono::Utc::now(),
     );
     // Restored after PR #395's review: the `save_result` wrapper this was lifted out of created
@@ -541,6 +593,7 @@ mod comparison_persistence_tests {
             baseline_low1_fps: 80.0,
             armed_at: at.into(),
             ledger_watermark: 3,
+            ledger_active: None,
             kind: ComparisonKind::Tuning,
             baseline_peak_temp_c: Some(71),
             crash_reported: false,
@@ -718,6 +771,7 @@ mod comparison_tests {
             baseline_low1_fps: 80.0,
             armed_at,
             ledger_watermark: watermark,
+            ledger_active: None,
             kind: ComparisonKind::Fix,
             baseline_peak_temp_c: None,
             crash_reported: false,
@@ -779,7 +833,7 @@ mod comparison_tests {
             started_at: "t".into(),
             duration_secs: 3600,
             process_name: "game.exe".into(),
-            samples: 100,
+            samples: 600,
             avg_fps: 140.0,
             avg_frametime_ms: 7.1,
             low1_fps_est: low1,
@@ -816,6 +870,7 @@ mod comparison_tests {
             baseline_low1_fps: 80.0,
             armed_at: chrono::Utc::now().to_rfc3339(),
             ledger_watermark: 0,
+            ledger_active: None,
             kind: ComparisonKind::Tuning,
             baseline_peak_temp_c: peak_temp,
             crash_reported: false,
@@ -841,7 +896,7 @@ mod comparison_tests {
         let now = chrono::Utc::now();
         let armed = tuning_fixture(Some(84));
         // 1% low held inside the noise floor; peak temp dropped 84 → 71.
-        let r = build_result(&armed, &session_fixture(81.0, Some(71)), 3.0, Some(0), now);
+        let r = build_result(&armed, &session_fixture(81.0, Some(71)), 3.0, Some(0), None, now);
         assert_eq!(r.kind, ComparisonKind::Tuning);
         assert_eq!(r.baseline_peak_temp_c, Some(84));
         assert_eq!(r.after_peak_temp_c, Some(71));
@@ -855,7 +910,7 @@ mod comparison_tests {
         let now = chrono::Utc::now();
         let armed = tuning_fixture(Some(84));
         // 1% low 80 → 70 = −12.5%, well past the 3% floor → "too aggressive" signal upstream.
-        let r = build_result(&armed, &session_fixture(70.0, Some(72)), 3.0, Some(0), now);
+        let r = build_result(&armed, &session_fixture(70.0, Some(72)), 3.0, Some(0), None, now);
         assert_eq!(r.verdict, "regressed");
         assert_eq!(r.delta_temp_c, Some(-12));
     }
@@ -865,7 +920,7 @@ mod comparison_tests {
         let now = chrono::Utc::now();
         let mut armed = tuning_fixture(Some(84));
         armed.crash_reported = true;
-        let r = build_result(&armed, &session_fixture(81.0, Some(71)), 3.0, Some(0), now);
+        let r = build_result(&armed, &session_fixture(81.0, Some(71)), 3.0, Some(0), None, now);
         assert!(r.crash_reported, "a reported crash rides into the result");
     }
 
@@ -923,6 +978,7 @@ mod comparison_race_tests {
             baseline_low1_fps: 80.0,
             armed_at: "2026-09-07T00:00:00Z".to_string(),
             ledger_watermark: 0,
+            ledger_active: None,
             kind,
             baseline_peak_temp_c: None,
             crash_reported: false,
@@ -1022,6 +1078,57 @@ mod comparison_race_tests {
             "the settle is reported to the session-end toast (P7-notify)"
         );
         assert!(result.exists() && load_armed_from(&armed).is_none(), "the next measured session settles it");
+    }
+
+    /// Codebase review 2026-11-02: a session with readings but no real 1% low read as a -100%
+    /// "regressed", and one of a handful of ticks settled the arm on noise. Neither settles now: the bar
+    /// is the Trial's own (a real reading over MIN_TREATMENT_SAMPLES). The game match ignores case,
+    /// as every other one in the app does.
+    #[test]
+    fn a_short_or_lowless_session_never_settles_and_the_game_match_ignores_case() {
+        let _exclusive = crate::race_seam::exclusive();
+        let dir = scratch("unfair");
+        let (armed, result) = (dir.join("compy_comparison.json"), dir.join("compy_comparison_result.json"));
+        arm_at(&armed, armed_of(ComparisonKind::Fix, "waiting")).unwrap();
+        let mut lowless = super::comparison_tests::session_fixture(0.0, None);
+        lowless.samples = 1200;
+        let mut short = super::comparison_tests::session_fixture(84.0, None);
+        short.samples = crate::experiment::MIN_TREATMENT_SAMPLES - 1;
+        for s in [&lowless, &short] {
+            assert_eq!(on_session_finalized_at(&armed, &result, s), None, "nothing settled");
+            assert!(!result.exists() && load_armed_from(&armed).is_some(), "the arm waits");
+        }
+        let mut upper = super::comparison_tests::session_fixture(84.0, None);
+        upper.process_name = upper.process_name.to_uppercase();
+        assert_eq!(on_session_finalized_at(&armed, &result, &upper), Some(ComparisonKind::Fix), "same game, other case");
+    }
+
+    /// Same review: an undo changes a row's status and leaves the entry count alone, so a delta measured
+    /// after the fix itself was undone was credited to it. The active count catches it; expiry still
+    /// wins; an arm written before the count existed keeps the count-only check.
+    #[test]
+    fn an_undo_since_the_arm_confounds_the_result_and_a_baseline_needs_a_reading() {
+        let now = chrono::Utc::now();
+        let mut armed = armed_of(ComparisonKind::Fix, "fix");
+        armed.armed_at = now.to_rfc3339();
+        armed.ledger_active = Some(2);
+        let s = super::comparison_tests::session_fixture(84.0, None);
+        let verdict = |a: &ArmedComparison, active: Option<usize>| {
+            build_result(a, &s, 3.0, Some(a.ledger_watermark), active, now).verdict
+        };
+        assert_eq!(verdict(&armed, Some(1)), "confounded", "a change was undone since the arm");
+        assert_eq!(verdict(&armed, None), "confounded", "an unreadable count proves nothing fair");
+        assert_ne!(verdict(&armed, Some(2)), "confounded", "the same active changes judge the delta");
+        armed.ledger_active = None;
+        assert_ne!(verdict(&armed, Some(1)), "confounded", "an older arm keeps the count-only check");
+        armed.ledger_active = Some(2);
+        armed.armed_at = (now - chrono::Duration::days(ARM_MAX_AGE_DAYS + 1)).to_rfc3339();
+        assert_eq!(verdict(&armed, Some(1)), "expired", "expiry still wins");
+
+        assert!(require_baseline_reading(140.0, 80.0).is_ok());
+        for (avg, low) in [(0.0, 80.0), (140.0, 0.0), (f64::NAN, 80.0), (140.0, f64::INFINITY)] {
+            assert!(require_baseline_reading(avg, low).is_err(), "{avg} / {low}");
+        }
     }
 
     /// P7-notify review MUST-FIX: a result that could not be written settled nothing the user can

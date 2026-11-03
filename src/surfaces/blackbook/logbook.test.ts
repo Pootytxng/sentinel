@@ -328,6 +328,25 @@ describe("buildLogbook — vs-previous delta is same-game only", () => {
     )!;
     expect(cyber.avgFpsDelta).toBe(null); // no same-game prior
   });
+
+  // Codebase review 2026-11-02: a session that measured nothing (avg 0, as a game behind another
+  // window the whole time records it) printed as "avg 0 fps · 1% low 0", and its same-game
+  // neighbours printed ±240 fps deltas taken against that 0.
+  it("an unmeasured session keeps its row with no reading, and no delta is taken to or from it", () => {
+    const r = buildLogbook({
+      sessions: [
+        session({ started_at: "2026-07-01T00:00:00Z", avg_fps: 200, process_name: "valorant.exe" }),
+        session({ started_at: "2026-07-02T00:00:00Z", avg_fps: 0, low1_fps_est: 0, samples: 0, process_name: "valorant.exe" }),
+        session({ started_at: "2026-07-03T00:00:00Z", avg_fps: 240, process_name: "valorant.exe" }),
+      ],
+    });
+    const rows = r.filter((x): x is Extract<LogbookRecord, { kind: "session" }> => x.kind === "session");
+    expect(rows.map((x) => [x.avgFps, x.low1Fps, x.avgFpsDelta])).toEqual([
+      [240, rows[0].low1Fps, 40], // against the last session that measured one, never the 0
+      [null, null, null],
+      [200, rows[2].low1Fps, null],
+    ]);
+  });
 });
 
 describe("buildLogbook — observed machine changes (Intelligence Phase 1; Machine Model since #450)", () => {

@@ -755,28 +755,42 @@ fn parse_sessions(text: &str) -> Result<Vec<SessionSummary>, serde_json::Error> 
 }
 
 fn load_sessions_from(path: &Path) -> Vec<SessionSummary> {
-    if !path.exists() {
-        return Vec::new();
-    }
-    match std::fs::read_to_string(path) {
-        Ok(s) => match parse_sessions(&s) {
-            Ok(v) => v,
-            Err(_) => {
-                // A corrupt sessions.json must not be silently overwritten by the next save — set
-                // the damaged bytes aside for recovery, then start fresh. (Unlike the Trust Ledger
-                // this is not a rollback contract, so we don't hard-fail: losing session history is
-                // non-destructive, and blocking every future save on it would be worse.)
-                let corrupt = path.with_extension("json.corrupt");
-                let _ = std::fs::rename(path, &corrupt);
-                Vec::new()
-            }
-        },
-        Err(_) => Vec::new(),
+    load_sessions_checked_from(path).unwrap_or_default()
+}
+
+/// The read a save builds on (codebase review 2026-11-02). A sessions.json that is there and could
+/// not be read right now (a sharing violation, a permissions glitch) is an error, never an empty
+/// history: the save that follows would otherwise rewrite the file with this one session and drop
+/// every baseline and real-play session before it. Absent and damaged files read as they always did.
+fn load_sessions_checked_from(path: &Path) -> Result<Vec<SessionSummary>, String> {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(format!("Compy couldn't read its session history right now ({e}), so this session wasn't added to it.")),
+    };
+    match std::str::from_utf8(&bytes).ok().map(parse_sessions) {
+        Some(Ok(v)) => Ok(v),
+        _ => {
+            // A corrupt sessions.json must not be silently overwritten by the next save — set
+            // the damaged bytes aside for recovery, then start fresh. (Unlike the Trust Ledger
+            // this is not a rollback contract, so we don't hard-fail: losing session history is
+            // non-destructive, and blocking every future save on it would be worse.) Bytes that
+            // aren't UTF-8 are damage too, set aside rather than overwritten.
+            let corrupt = path.with_extension("json.corrupt");
+            let _ = std::fs::rename(path, &corrupt);
+            Ok(Vec::new())
+        }
     }
 }
 
 fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
-    let mut all = load_sessions_from(path);
+    // A sharing violation (a scanner, a backup) usually clears in moments: read twice more before
+    // giving this session up, never rewrite the history around a read that failed.
+    let retry = |wait_ms: u64| {
+        std::thread::sleep(std::time::Duration::from_millis(wait_ms));
+        load_sessions_checked_from(path)
+    };
+    let mut all = load_sessions_checked_from(path).or_else(|_| retry(150)).or_else(|_| retry(300))?;
     all.push(summary);
     // Keep at most MAX_SESSIONS rows (`machine_model`'s headroom counts on it). P4-show-f1: when a
     // save goes over, a row that measured nothing (`samples == 0`) is let go before any measured
@@ -809,8 +823,14 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
     // Atomic swap (mirrors history.rs save_history_to): write beside the live file then rename it
     // in (MoveFileEx + REPLACE_EXISTING on Windows), so a crash mid-write leaves the prior valid
     // sessions.json intact plus an ignorable .tmp — never a torn half-written file.
+    // The temp file is synced before the swap, as the ledger's is.
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        f.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+        f.sync_all().map_err(|e| e.to_string())?;
+    }
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
@@ -846,10 +866,14 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<Option<SavedSessio
         return Ok(None);
     }
     std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
-    // M4: if a comparison was armed for this game, compute the cross-session delta now.
-    let settled = crate::comparison::on_session_finalized(&summary);
     let measured_samples = summary.samples;
+    // The comparison reads this session once it is saved (codebase review 2026-11-02): a save can
+    // now refuse, and a fix comparison settled against a session the history doesn't hold would show
+    // a result no session backs, with its arm already spent.
+    let compared = summary.clone();
     save_session_to(&sessions_path(), summary)?;
+    // M4: if a comparison was armed for this game, compute the cross-session delta now.
+    let settled = crate::comparison::on_session_finalized(&compared);
     // Tier 2 receipts (Q9a, #217): a finalized session is the ONLY thing that produces a receipt,
     // so this is the only trigger. Inert in every shipped build — it returns on receipts_gate()
     // before it reads consent, spawns anything, or touches the network. The call site lands in the
@@ -1664,6 +1688,36 @@ mod session_tests {
         std::fs::write(&corrupt, b"}}not json[[").unwrap();
         assert!(load_sessions_from(&corrupt).is_empty(), "corrupt file fails safe to empty");
         std::fs::remove_file(&corrupt).ok();
+    }
+
+    // Codebase review 2026-11-02: a sessions.json that is there but can't be read right now read as
+    // empty, and the save that followed rewrote it with one session, dropping every baseline before it.
+    #[test]
+    fn a_save_never_rewrites_a_history_it_could_not_read() {
+        let dir = std::env::temp_dir().join(format!("compy-sessions-unreadable-{}", std::process::id()));
+        let path = dir.join("sessions.json");
+        std::fs::create_dir_all(&path).unwrap(); // a read that fails on every platform
+        let mut acc = SessionAccumulator::new("2026-11-02T20:00:00Z".into(), Some(0));
+        acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
+        let err = save_session_to(&path, acc.finalize(600)).expect_err("the save refuses");
+        assert!(err.contains("couldn't read its session history right now"), "{err}");
+        assert!(path.is_dir() && !path.with_extension("json.corrupt").exists(), "nothing replaced or set aside");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // Review of the 2026-11-02 fixes: the armed comparison was settled (and a fix arm spent) before the
+    // save, which can now refuse, so a result could stand against a session the history doesn't hold.
+    // Both run against the process-wide data root, so the order is pinned in the source. Tokens are
+    // built by concat! so this test's own lines don't match the scan.
+    #[test]
+    fn a_session_settles_a_comparison_only_once_it_is_saved() {
+        let src = include_str!("sessions.rs");
+        let start = src.find(concat!("pub(crate) fn ", "save_session(")).expect("save_session");
+        let body = &src[start..];
+        let body = &body[..body.find(concat!("fn get_", "session_summaries")).expect("next fn")];
+        let saved = body.find(concat!("save_", "session_to(&sessions_path()")).expect("the save");
+        let settled = body.find(concat!("comparison::", "on_session_finalized(")).expect("the settle");
+        assert!(saved < settled, "the comparison must read a session the history holds");
     }
 
     // #618: a session begun after a set-aside keeps the fresh ledger's counts apart from its total

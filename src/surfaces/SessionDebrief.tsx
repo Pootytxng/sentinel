@@ -25,6 +25,7 @@ import { Depth, ReceiptRow, receiptPct } from "../design/Depth";
 import { LessonLine } from "../design/LessonLine";
 import { LESSON_KEY, lessonRuleForVerdict } from "./test-summary";
 import { knownFps, leftOutSecs, allBackground, leftOutSpan } from "../lib/session-metrics";
+import { liveChangeGroups } from "../data/live-changes";
 import "../i18n";
 
 // Session debrief cluster — extracted verbatim from App.tsx so it can render in place inside Play
@@ -275,11 +276,13 @@ export function SessionDebrief({
   s: SessionSummary;
   priorities: Priorities | null;
   recs: Recommendation[];
-  apply: (rec: Recommendation) => Promise<void>;
+  /** Resolves true only when the apply was recorded. */
+  apply: (rec: Recommendation) => Promise<boolean>;
   busyId: string | null;
   onExport: () => void;
   changes: AppliedChange[];
-  rollback: (c: AppliedChange) => Promise<void>;
+  /** Resolves true only when the undo was recorded. */
+  rollback: (c: AppliedChange) => Promise<boolean>;
   /** BACKLOG:236 Ledger half (additive — absent = prose only): lets the "What changed?" next-test
    *  line carry a real rollback button when the engine named a still-active rec id. */
   activeChangeFor?: (recId: string) => AppliedChange | undefined;
@@ -410,11 +413,16 @@ export function SessionDebrief({
     setComparison(null);
   };
   const revertCmp = async () => {
-    const active = changes.find((c) => c.rec_id === comparison?.rec_id && c.is_still_active);
-    if (active) {
+    // The newest live apply of this change is the one an undo targets (liveChangeGroups), and the
+    // result card goes only once that undo is recorded: a cancelled confirm or a failed undo leaves
+    // the measured result where it was (codebase review 2026-11-02).
+    const { active, cantConfirm } = liveChangeGroups(changes);
+    const row = [...active, ...cantConfirm].find((c) => c.rec_id === comparison?.rec_id);
+    if (row) {
       setReverting(true);
-      await rollback(active);
+      const undone = await rollback(row);
       setReverting(false);
+      if (!undone) return;
     }
     await dismissCmp();
   };
@@ -585,14 +593,18 @@ export function SessionDebrief({
               });
               if (!ok) return; // keep the pending comparison; don't apply a confounding change
             }
-            await apply(topRec);
-            // Arm the cross-session comparison: this session's metrics are the baseline.
+            const applied = await apply(topRec);
+            // Arm the cross-session comparison: this session's metrics are the baseline. Only for a
+            // change that was applied (a cancelled confirm or a failed apply changed nothing), and
+            // only from a session that measured both readings: an unmeasured one has nothing for the
+            // next session to be compared against (codebase review 2026-11-02).
+            if (!applied || avgFps == null || lowFps == null) return;
             await invoke("arm_comparison", {
               recId: topRec.id,
               recTitle: topRec.title,
               game: s.process_name,
-              baselineAvgFps: s.avg_fps,
-              baselineLow1Fps: s.low1_fps_est,
+              baselineAvgFps: avgFps,
+              baselineLow1Fps: lowFps,
             }).catch(() => {});
           }}
         >

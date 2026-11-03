@@ -3,6 +3,7 @@ import {
   benchmarkAttribution,
   changeAttribution,
   changesBetweenRuns,
+  changesInWindowCount,
   componentLabel,
   verdictLabel,
   verdictTone,
@@ -97,6 +98,20 @@ describe("changesBetweenRuns — the ONE attribution window every surface filter
     expect(changesBetweenRuns(window, [at("not-a-date"), at("2026-07-01T12:00:00Z")])).toHaveLength(1);
     expect(changesBetweenRuns({ baseline_at: "garbage", latest_at: window.latest_at }, [at("2026-07-01T12:00:00Z")])).toEqual([]);
   });
+
+  // Codebase review 2026-11-02: the Lab counted ledger rows, so one change re-applied inside the
+  // window read as "These 2 changes were measured together".
+  it("counts changes in the window one per change, never one per ledger row", () => {
+    const row = (rec_id: string, applied_at: string) => ({ rec_id, applied_at });
+    expect(
+      changesInWindowCount(window, [
+        row("game-mode", "2026-07-01T11:00:00Z"),
+        row("game-mode", "2026-07-01T12:00:00Z"),
+        row("hags", "2026-07-01T09:00:00Z"), // before the baseline
+      ]),
+    ).toBe(1);
+    expect(changesInWindowCount(null, [row("game-mode", "2026-07-01T11:00:00Z")])).toBe(0);
+  });
 });
 
 describe("trial verdict", () => {
@@ -163,10 +178,10 @@ describe("benchRigTier (A2 hardware-tier segmentation)", () => {
     expect(ctx!.basis).toContain("12 GB VRAM");
   });
 
-  it("treats a missing GPU list as 0 VRAM rather than throwing", () => {
-    const ctx = benchRigTier({ cpu_cores_physical: 8, ram_total_bytes: 16 * GIB });
-    expect(ctx!.tier).toBe("Entry"); // <6 GB VRAM floor
-    expect(ctx!.basis).toContain("0 GB VRAM");
+  // Codebase review 2026-11-02: a missing GPU list used to read as 0 VRAM and class the rig "Entry ·
+  // rough, from 0 GB VRAM" — a tier from a value nothing measured. It is unread, so there is no tier.
+  it("treats a missing GPU list as unread VRAM: no tier, and no throw", () => {
+    expect(benchRigTier({ cpu_cores_physical: 8, ram_total_bytes: 16 * GIB })).toBeNull();
   });
 
   it("returns null when nothing is readable — never a fabricated tier", () => {

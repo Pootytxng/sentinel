@@ -385,6 +385,13 @@ export type InterviewFacts = {
    * all yet (the interview just opened): the same routing, and the unread wording.
    */
   trials?: { armed: boolean | null; judged: number | null } | null;
+  /**
+   * Does the Lab render a Tuning station on this PC? Only a GPU with a tuning guide gets one (AMD in
+   * v1), and the Lab drops a deep-link to a station it can't render, so false routes nothing there
+   * (codebase review 2026-11-02: "It runs hot" landed on an empty dock on NVIDIA and Intel). Absent
+   * = not told, the route it always had.
+   */
+  tuning?: boolean;
 };
 
 // ── The finding card ────────────────────────────────────────────────────────────────────────────
@@ -650,7 +657,13 @@ export function interviewFinding(
       gpuTempLine();
       direct = facts.gpuTempC != null;
       sentence = k("heat.sentence");
-      action = station("tuning", "lab", k("act.heat"));
+      // With no Tuning station here, the last session's peak temperature is the reading Compy has.
+      action =
+        facts.tuning !== false
+          ? station("tuning", "lab", k("act.heat"))
+          : facts.sessionCount > 0
+            ? roomDoor("play", k("act.readSession"))
+            : runCheck();
       break;
     }
     case "didItHelp": {

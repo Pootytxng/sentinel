@@ -115,11 +115,11 @@ function SessionBody({ r }: { r: LogbookSession }) {
       </span>
       <span className="bc-row-meta">
         <span className="bc-stat">
-          avg <b className="bc-mono">{Math.round(r.avgFps)}</b> fps
+          avg <b className="bc-mono">{r.avgFps == null ? "—" : Math.round(r.avgFps)}</b> fps
         </span>
         <span className="bc-stat">
           <Term id="one-percent-lows">{t("blackbook.blackbookConsole.sessionBody.oneLow")}</Term>{" "}
-          <b className="bc-mono">{Math.round(r.low1Fps)}</b>
+          <b className="bc-mono">{r.low1Fps == null ? "—" : Math.round(r.low1Fps)}</b>
         </span>
         {delta != null && delta !== 0 && (
           <span className={`bc-delta ${delta > 0 ? "bc-delta-up" : "bc-delta-down"}`}>

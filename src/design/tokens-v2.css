@@ -209,6 +209,14 @@
   --v2-line: rgba(255, 255, 255, 0.1);
   --v2-line-strong: rgba(255, 255, 255, 0.17);
 }
+/* See-through panels let the backdrop lift what sits behind the text, and the faint tier, tuned to
+   clear 4.5:1 on the OPAQUE panels, fell under it: the desk review of 2026-11-02 measured Test's quiet
+   labels (the "Past experiments" eyebrow, "Technical receipt", the gauge notes) at 4.23-4.48:1 on his
+   backdrop. On glass and frosted the faint tier takes the muted ink, about 4.9:1 there; the tier below
+   muted is carried by size and weight, as the text-tier note above already says it must be. */
+:root[data-v2="on"]:is([data-surface="glass"], [data-surface="frosted"]) {
+  --v2-faint: var(--v2-muted);
+}
 :root[data-v2="on"][data-surface="frosted"] {
   --v2-panel: rgba(var(--v2-glass-rgb), 0.86);
   --v2-panel-2: rgba(var(--v2-glass-rgb), 0.9);

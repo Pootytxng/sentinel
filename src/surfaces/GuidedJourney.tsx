@@ -497,6 +497,11 @@ async function recover(args: RunArgs, say: (p: JourneyPhase) => void, expId: str
 }
 
 async function runJourney(args: RunArgs, game: string | null, reuseId: string | null = null) {
+  // One journey at a time (codebase review 2026-11-02). A continuing journey goes straight to the
+  // start without a new phase, so its button stays live through the start and any UAC prompt; a
+  // second tap started a second run, the backend refused it, and that run's error path put back
+  // the FIRST run's change while the first run went on to say it was on.
+  if (current || acting) return;
   const { change } = args;
   const run: Run = { aborted: false, capturing: false };
   current = run;
@@ -682,6 +687,8 @@ function noteFor(
  *  measured with it. After a session with the change on, a decided look is concluded at once; a
  *  stopped test waits for the owner's tap. A failure judges nothing and leaves the change on. */
 async function runRealPlay(args: RunArgs, game: string, progress: RealPlayProgress) {
+  // One journey at a time, as runJourney.
+  if (current || acting) return;
   const { change } = args;
   const run: Run = { aborted: false, capturing: false };
   current = run;
@@ -1625,10 +1632,14 @@ export function JourneyProgressLine({
   progress,
   interrupted,
   stopped = false,
+  changeOff = false,
 }: {
   progress: JourneyProgress | null;
   interrupted: boolean;
   stopped?: boolean;
+  /** A classic running Trial whose change the picker reads as off (desk review 2026-11-02, round 2):
+   *  the panel below says so and leads with Restore now, so this line never says "Testing now". */
+  changeOff?: boolean;
 }) {
   const { t } = useTranslation();
   if (!progress?.unfinished || progress.total === 0) return null;
@@ -1636,11 +1647,16 @@ export function JourneyProgressLine({
   return (
     // .exp-journey-progress: 9px above the running panel's frame that follows it (ExperimentBench.css).
     <p className="exp-note exp-journey-progress" data-testid="journey-progress">
-      {t(interrupted ? `${k}.progressInterrupted` : stopped ? `${k}.progressStopped` : `${k}.progressTesting`, {
-        tested: progress.tested,
-        total: progress.total,
-        change: progress.unfinished.title,
-      })}
+      {t(
+        interrupted
+          ? `${k}.progressInterrupted`
+          : stopped
+            ? `${k}.progressStopped`
+            : changeOff
+              ? `${k}.progressOff`
+              : `${k}.progressTesting`,
+        { tested: progress.tested, total: progress.total, change: progress.unfinished.title },
+      )}
     </p>
   );
 }

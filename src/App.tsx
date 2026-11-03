@@ -41,6 +41,7 @@ import { lsGet } from "./data/safe-storage";
 import { invalidateProbe } from "./data/probe-cache";
 import { setStartupEntryEnabled } from "./data/startup-toggle";
 import { writeLedger } from "./data/ledger-write";
+import { tuningGuideForVendorForLanguage } from "./data/tuning-guides";
 import { isUnrecordedUndo } from "./data/rollback-error";
 import type { LabStationKey } from "./surfaces/lab-guided-data";
 import Settings from "./surfaces/Settings";
@@ -534,7 +535,7 @@ const APP_VERSION = pkg.version;
 (globalThis as { __COMPY_UI_VERSION__?: string }).__COMPY_UI_VERSION__ = APP_VERSION;
 
 function App() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
   const [changes, setChanges] = useState<AppliedChange[]>([]);
@@ -883,30 +884,33 @@ function App() {
 
   const confirm = useConfirm();
 
-  const apply = async (rec: Recommendation) => {
+  // Resolves true only when the apply was recorded (codebase review 2026-11-02): a caller that acts
+  // on it afterwards (the debrief arming a before/after) must not act on a cancelled confirm or a
+  // failed apply. A refresh that fails after a recorded apply is still reported, and still true.
+  const apply = async (rec: Recommendation): Promise<boolean> => {
     const tradeoff = rec.downside ? t("app.dialogs.applyTradeoff", { downside: rec.downside }) : "";
     const ok = await confirm({
       title: t("app.dialogs.applyTitle", { title: rec.title }),
       body: t("app.dialogs.applyBody", { description: rec.description, tradeoff }),
       confirmLabel: t("app.dialogs.apply"),
     });
-    if (!ok) return;
+    if (!ok) return false;
     setBusyId(rec.id);
     setError(null);
+    let recorded = false;
     try {
       // writeLedger announces the ledger change before the refresh, so sibling surfaces that cache
       // ledger-derived state (e.g. the armed ExperimentBench simulator read) re-derive without
       // waiting for an OS refocus. Additive, read-only signal; no new mutation path.
-      await writeLedger<AppliedChange>(
-        "apply_recommendation",
-        { recId: rec.id, recTitle: rec.title },
-        refresh,
-      );
+      await writeLedger<AppliedChange>("apply_recommendation", { recId: rec.id, recTitle: rec.title });
+      recorded = true;
+      await refresh();
     } catch (e) {
       fail(t("app.errors.applyFailed"), e);
     } finally {
       setBusyId(null);
     }
+    return recorded;
   };
 
   // Train #3 §4 — "Apply all safe fixes", now via the ONE-elevation batch orchestrator
@@ -946,7 +950,8 @@ function App() {
     }
   };
 
-  const rollback = async (change: AppliedChange) => {
+  // Resolves true only when the undo was recorded, as apply does.
+  const rollback = async (change: AppliedChange): Promise<boolean> => {
     const dest = change.restores_label
       ? t("app.dialogs.rollbackDest", { label: change.restores_label })
       : "";
@@ -955,17 +960,21 @@ function App() {
       body: t("app.dialogs.rollbackBody", { dest }),
       confirmLabel: t("app.dialogs.rollback"),
     });
-    if (!ok) return;
+    if (!ok) return false;
     setBusyId(change.id);
     setError(null);
+    let recorded = false;
     try {
       // Rolling back changes the ledger too — a rec can become available again, so siblings re-derive.
-      await writeLedger("rollback_change", { changeId: change.id }, refresh);
+      await writeLedger("rollback_change", { changeId: change.id });
+      recorded = true;
+      await refresh();
     } catch (e) {
       fail(isUnrecordedUndo(e) ? t("common.undoUnrecorded") : t("app.errors.rollbackFailed"), e);
     } finally {
       setBusyId(null);
     }
+    return recorded;
   };
 
   // Find the most recent still-active applied change for a given rec_id.
@@ -1505,6 +1514,8 @@ function App() {
           // openLibrary is what every inline glossary term already uses — so the palette adds a
           // door without adding a second hallway (navigation never teleports).
           onOpenStation={(s) => openLabStation(s)}
+          // The Lab's own rule (LabConsole measureKeys): Tuning is a station only where a guide exists.
+          tuningStation={tuningGuideForVendorForLanguage(detectedVendor, i18n.language) != null}
           onOpenEntry={(id) => libraryApi.openLibrary(id)}
           onOpenSettings={() => setShowSettings(true)}
           // P7-palette: a typed problem lands on the interview's card for it — the arrival is

@@ -23,13 +23,15 @@ export function rigTier(vramBytes: number, physicalCores: number, ramBytes: numb
 }
 
 // One honest line naming the inputs, so the tier is never a black-box claim — the user sees exactly
-// what it's read from. Returns null when the inputs are unreadable (no fabricated tier from nothing).
+// what it's read from. Returns null when any input is unreadable: the probe's unknown is 0, and a
+// tier read from "0 GB VRAM" is a tier from nothing (codebase review 2026-11-02).
 export function rigTierLine(
   vramBytes: number,
   physicalCores: number,
   ramBytes: number,
 ): { tier: RigTier; basis: string } | null {
-  if (vramBytes <= 0 && physicalCores <= 0 && ramBytes <= 0) return null;
+  const read = (n: number) => Number.isFinite(n) && n > 0;
+  if (!read(vramBytes) || !read(physicalCores) || !read(ramBytes)) return null;
   const tier = rigTier(vramBytes, physicalCores, ramBytes);
   const vramGb = Math.round(vramBytes / GIB);
   const ramGb = Math.round(ramBytes / GIB);

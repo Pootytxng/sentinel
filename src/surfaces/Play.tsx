@@ -148,11 +148,13 @@ export default function Play({
   sessionsSeenAt: string;
   priorities: Priorities | null;
   recs: Recommendation[];
-  apply: (rec: Recommendation) => Promise<void>;
+  /** Resolves true only when the apply was recorded. */
+  apply: (rec: Recommendation) => Promise<boolean>;
   busyId: string | null;
   onExport: () => void;
   changes: AppliedChange[];
-  rollback: (c: AppliedChange) => Promise<void>;
+  /** Resolves true only when the undo was recorded. */
+  rollback: (c: AppliedChange) => Promise<boolean>;
   // BACKLOG:236 Ledger half (additive — absent = prose only): resolves a rec id to its still-active
   // ledger row so the session debrief's "next test" can carry a real rollback button. Same pair
   // (`activeChangeFor` + `rollback`) the Fix/Optimize surfaces already take.

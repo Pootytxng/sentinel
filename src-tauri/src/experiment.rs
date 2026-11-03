@@ -654,13 +654,28 @@ fn store_path() -> PathBuf {
 }
 
 /// Load, failing SAFE on corruption: the damaged file is set aside as `.corrupt` and we start
-/// fresh — never parse-partially, never overwrite the bytes in place.
+/// fresh — never parse-partially, never overwrite the bytes in place. For reads that only show the
+/// store; a write builds on [`load_store_checked_from`].
 pub(crate) fn load_store_from(path: &Path) -> ExperimentStore {
-    let raw = match std::fs::read_to_string(path) {
-        Ok(s) => s,
-        Err(_) => return ExperimentStore::default(), // absent = first run
+    load_store_checked_from(path).unwrap_or_default()
+}
+
+/// The read a Trial write builds on (codebase review 2026-11-02). Absent is a first run and a file
+/// that doesn't parse is set aside, as above; but a file that is there and could not be read (a
+/// sharing violation, a permissions glitch) is an error, never an empty store, or the save that
+/// follows would replace every Trial on disk, a Running one and its applied-change link included,
+/// with this one.
+pub(crate) fn load_store_checked_from(path: &Path) -> Result<ExperimentStore, String> {
+    let raw = match std::fs::read(path) {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(ExperimentStore::default()),
+        Err(e) => {
+            return Err(format!(
+                "Compy couldn't read its Trial records right now ({e}). Nothing was changed; try again in a moment."
+            ))
+        }
     };
-    match serde_json::from_str::<ExperimentStore>(&raw) {
+    Ok(match serde_json::from_slice::<ExperimentStore>(&raw) {
         Ok(store) => store,
         Err(_) => {
             let corrupt = path.with_extension("json.corrupt");
@@ -668,11 +683,15 @@ pub(crate) fn load_store_from(path: &Path) -> ExperimentStore {
             let _ = std::fs::rename(path, &corrupt);
             ExperimentStore::default()
         }
-    }
+    })
 }
 
 fn load_store() -> ExperimentStore {
     load_store_from(&store_path())
+}
+
+fn load_store_checked() -> Result<ExperimentStore, String> {
+    load_store_checked_from(&store_path())
 }
 
 /// Atomic write (tmp + rename) so a crash mid-write can't corrupt the log.
@@ -764,6 +783,8 @@ fn armed_from(rec: &ExperimentRecord) -> ArmedComparison {
         baseline_low1_fps: rec.baseline_low1_fps,
         armed_at: rec.created_at.clone(),
         ledger_watermark: rec.ledger_watermark,
+        // A Trial has its own target and other-change guards; the comparison's active count is unused.
+        ledger_active: None,
         kind: ComparisonKind::Fix,
         baseline_peak_temp_c: None,
         crash_reported: false,
@@ -3066,7 +3087,7 @@ pub(crate) fn start_experiment(
 
     // One store read serves the single-active check, the id counter and the read-modify-write, all
     // under this one lock.
-    let mut store = load_store();
+    let mut store = load_store_checked()?;
     // Under this lock no start is in flight, so any `Pending` here is an interrupted one: resolve it
     // now rather than letting it block until the next launch.
     reconcile_pending_locked(&mut store)?;
@@ -3413,7 +3434,7 @@ fn reconcile_pending_locked(store: &mut ExperimentStore) -> Result<Vec<Interrupt
 /// lock, so a launch whose save failed can't leave a stale `Pending` blocking every later start.
 pub(crate) fn reconcile_interrupted_starts() -> Result<Vec<InterruptedStart>, String> {
     let _g = lock_store()?;
-    let mut store = load_store();
+    let mut store = load_store_checked()?;
     reconcile_pending_locked(&mut store)
 }
 
@@ -3444,7 +3465,7 @@ pub(crate) fn conclude_experiment(
         return Err("The experiment engine isn't part of this build yet.".into());
     }
     let _g = lock_store()?;
-    let mut store = load_store();
+    let mut store = load_store_checked()?;
     let idx = store
         .experiments
         .iter()
@@ -3659,7 +3680,7 @@ pub(crate) fn restore_experiment(experiment_id: String) -> Result<ExperimentReco
         return Err("The experiment engine isn't part of this build yet.".into());
     }
     let _g = lock_store()?;
-    let mut store = load_store();
+    let mut store = load_store_checked()?;
     let idx = store
         .experiments
         .iter()
@@ -4006,7 +4027,7 @@ pub(crate) fn conclude_realplay(experiment_id: String, crashed: bool) -> Result<
         return Err("The experiment engine isn't part of this build yet.".into());
     }
     let _g = lock_store()?;
-    let mut store = load_store();
+    let mut store = load_store_checked()?;
     let idx = store
         .experiments
         .iter()
@@ -4689,6 +4710,22 @@ mod experiment_tests {
         let back = load_store_from(&path);
         assert_eq!(back.experiments.len(), 0, "corrupt store → empty, never a partial parse");
         assert!(path.with_extension("json.corrupt").exists(), "damaged file preserved for recovery");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Codebase review 2026-11-02: a store that is there but can't be read right now (a sharing
+    // violation, a permissions glitch) read as empty, and the start or conclude that followed saved one
+    // record over every Trial on disk. A directory at the store's path fails the read on any platform.
+    #[test]
+    fn a_store_that_cant_be_read_right_now_is_an_error_for_a_write_never_an_empty_store() {
+        let dir = std::env::temp_dir().join(format!("compy-exp-unreadable-{}", Utc::now().timestamp_nanos_opt().unwrap_or(0)));
+        let path = dir.join("experiments.json");
+        std::fs::create_dir_all(&path).unwrap();
+        let err = load_store_checked_from(&path).expect_err("a write never builds on an unread store");
+        assert!(err.contains("couldn't read its Trial records right now"), "{err}");
+        assert!(path.is_dir() && !path.with_extension("json.corrupt").exists(), "nothing set aside or replaced");
+        assert!(load_store_from(&path).experiments.is_empty(), "a read that only shows the store still shows nothing");
+        assert_eq!(load_store_checked_from(&dir.join("absent.json")).map(|s| s.experiments.len()), Ok(0), "absent is a first run");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

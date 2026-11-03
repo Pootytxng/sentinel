@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Fix from "./Fix";
-import { LEDGER_CHANGED_EVENT } from "../types";
+import { LEDGER_CHANGED_EVENT, type AppliedChange } from "../types";
 
 // Outside Tauri the real invoke rejects; the default here does the same, so the tests that never
 // touch the backend behave exactly as before. The #619 tests below give it the one command they use.
@@ -570,6 +570,29 @@ describe("Fix telemetry-task disable announces the ledger change", () => {
       reported.mockRestore();
       window.removeEventListener(LEDGER_CHANGED_EVENT, on);
     }
+  });
+
+  // Codebase review 2026-11-02: the Optimize station mounts two Fix views; an undo in one (or in
+  // History) left this row reading "Disabled" with its button spent, because this click's own "done"
+  // outlived the ledger that had since taken over.
+  it("once the ledger shows the disable, an undo elsewhere puts the row back to Disable", async () => {
+    invokeMock.mockImplementation((cmd: string) =>
+      cmd === "disable_known_bloat_task" ? Promise.resolve(null) : Promise.reject(new Error("no Tauri in tests")),
+    );
+    const row = { id: "c1", rec_id: "bloat-task:compatibility-appraiser", status: "applied", is_still_active: true } as AppliedChange;
+    const view = (has: boolean) => (
+      <Fix recs={[]} {...baseProps} activeChangeFor={(id: string) => (has && id === row.rec_id ? row : undefined)} onChanged={() => {}} />
+    );
+    const { rerender } = render(view(false));
+    fireEvent.click(await screen.findByText("Telemetry tasks"));
+    fireEvent.click((await screen.findAllByRole("button", { name: "Disable" }))[0]);
+    await screen.findByRole("button", { name: "Disabled · undo in History" });
+    // App's refresh: the ledger shows it now.
+    rerender(view(true));
+    expect(screen.getByRole("button", { name: "Disabled · undo in History" })).toBeDisabled();
+    // Undone in History or in the other Fix view.
+    rerender(view(false));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Disable" })).toHaveLength(3));
   });
 
   // A disable that landed is done whatever App's refresh then does. The refresh used to run inside the

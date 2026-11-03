@@ -498,6 +498,7 @@
       "progressTesting": "{{tested}} of {{total}} tested · Testing now: {{change}}",
       "progressInterrupted": "{{tested}} of {{total}} tested · {{change}} didn't finish testing (see below)",
       "progressStopped": "{{tested}} of {{total}} tested · Test stopped: {{change}}",
+      "progressOff": "{{tested}} of {{total}} tested · Compy reads {{change}} as off (see below)",
       "planResume": "{{game}}: 1 session of about 10 min with {{change}}. Your last as-is session still counts as the before-reading.",
       "stopHere": "Stop here",
       "stoppedHere": "Stopped here: {{tested}} of {{total}} tested. Nothing was undone.",

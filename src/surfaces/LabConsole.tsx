@@ -25,7 +25,7 @@ import {
 } from "./lab-guided-data";
 import { stationHasReading } from "./lab-bento-data";
 import { STATION_ICON } from "./station-icons";
-import { changesBetweenRuns } from "./benchmark-view";
+import { changesInWindowCount } from "./benchmark-view";
 import { safeFixesReady } from "./optimize-v2-data";
 import { deriveReverted } from "./use-scan";
 import { peekProbe, cachedProbe } from "../data/probe-cache";
@@ -252,8 +252,8 @@ export function LabConsole({
     safeReady,
     stackApplied,
     // Combined-effect honesty (panel-review brief 2026-07-15 §2): changes inside the graded
-    // window — the SAME window every attributing surface filters by.
-    stackedCount: changesBetweenRuns(bench, fast.changes ?? []).length,
+    // window — the SAME window every attributing surface filters by, one per change.
+    stackedCount: changesInWindowCount(bench, fast.changes ?? []),
   };
 
   // RIG EVIDENCE MAP (owner verdict 2026-07-29) — selecting a part in the hologram states what that
