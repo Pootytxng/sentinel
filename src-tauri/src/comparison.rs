@@ -52,10 +52,11 @@ pub(crate) struct ArmedComparison {
     /// this number is always a real reading and never a fallback.
     #[serde(default)]
     pub ledger_watermark: usize,
-    /// Active Compy changes at arm time (codebase review 2026-11-02). An undo changes a row's status
-    /// and leaves the entry count alone, so the count alone credited a delta measured after a change,
-    /// the fix itself included, was undone. `None` on an arm written before this existed: that arm
-    /// keeps the count-only check.
+    /// Ledger rows not rolled back at arm time (codebase review 2026-11-02). An undo changes a row's
+    /// status and leaves the entry count alone, so the count alone credited a delta measured after a
+    /// change, the fix itself included, was undone. Read from the recorded status, never a live
+    /// probe, so a setting Windows reverted on its own doesn't read as an undo. `None` on an arm
+    /// written before this existed: that arm keeps the count-only check.
     #[serde(default)]
     pub ledger_active: Option<usize>,
     /// Fix (default — back-compat with pre-tuning armed files) vs Tuning.
@@ -211,10 +212,16 @@ pub(crate) fn arm_watermark() -> Result<usize, String> {
     })
 }
 
-/// The active-change half of the watermark (see [`ArmedComparison::ledger_active`]). Same refusal
-/// when the history can't be read: a later result could never be proven fair.
-fn arm_active() -> Result<usize, String> {
-    crate::history::applied_changes_summary_checked().map(|s| s.active).map_err(|e| {
+/// The ledger's two confound marks from ONE read: its entry count (the watermark) and how many of
+/// its rows are not rolled back (see [`ArmedComparison::ledger_active`]). One read, so a change
+/// landing between two reads can't split them; recorded status only, so nothing probes the machine.
+fn ledger_marks() -> Result<(usize, usize), String> {
+    crate::history::load_history().map(|h| (h.len(), h.iter().filter(|c| c.status != "rolled_back").count()))
+}
+
+/// Both marks for an arm, with [`arm_watermark`]'s refusal when the history can't be read.
+fn arm_marks() -> Result<(usize, usize), String> {
+    ledger_marks().map_err(|e| {
         format!("can't arm a before/after comparison — the change history is unreadable, so a later result could never be proven fair: {e}")
     })
 }
@@ -239,6 +246,7 @@ pub(crate) fn arm(
 ) -> Result<(), String> {
     require_baseline_reading(baseline_avg_fps, baseline_low1_fps)?;
     std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
+    let (watermark, active) = arm_marks()?;
     arm_at(
         &armed_path(),
         ArmedComparison {
@@ -248,8 +256,8 @@ pub(crate) fn arm(
             baseline_avg_fps,
             baseline_low1_fps,
             armed_at: chrono::Utc::now().to_rfc3339(),
-            ledger_watermark: arm_watermark()?,
-            ledger_active: Some(arm_active()?),
+            ledger_watermark: watermark,
+            ledger_active: Some(active),
             kind: ComparisonKind::Fix,
             baseline_peak_temp_c: None,
             crash_reported: false,
@@ -279,6 +287,7 @@ pub(crate) fn arm_tuning(
 ) -> Result<(), String> {
     require_baseline_reading(baseline_avg_fps, baseline_low1_fps)?;
     std::fs::create_dir_all(crate::compy_data_dir()).map_err(|e| e.to_string())?;
+    let (watermark, active) = arm_marks()?;
     arm_at(
         &armed_path(),
         ArmedComparison {
@@ -288,8 +297,8 @@ pub(crate) fn arm_tuning(
             baseline_avg_fps,
             baseline_low1_fps,
             armed_at: chrono::Utc::now().to_rfc3339(),
-            ledger_watermark: arm_watermark()?,
-            ledger_active: Some(arm_active()?),
+            ledger_watermark: watermark,
+            ledger_active: Some(active),
             kind: ComparisonKind::Tuning,
             baseline_peak_temp_c,
             crash_reported: false,
@@ -432,8 +441,8 @@ pub(crate) fn build_result(
     let pct = |after: f64, base: f64| if base > 0.0 { (after - base) / base * 100.0 } else { 0.0 };
     let delta_low1 = pct(s.low1_fps_est, armed.baseline_low1_fps);
     let mut verdict = classify_with_guards(armed, delta_low1, nf, ledger_now, now).to_string();
-    // The active-change half of the confound watermark (see `ledger_active`): an undo since the arm,
-    // the fix's own included, leaves the entry count equal and is caught here. Expiry still wins.
+    // The other half of the confound watermark (see `ledger_active`): an undo since the arm, the
+    // fix's own included, leaves the entry count equal and is caught here. Expiry still wins.
     if verdict != "expired" && armed.ledger_active.is_some_and(|a| active_now != Some(a)) {
         verdict = "confounded".into();
     }
@@ -490,6 +499,8 @@ fn on_session_finalized_at(
     if s.samples < crate::experiment::MIN_TREATMENT_SAMPLES || !crate::experiment::has_frame_reading(s) {
         return None;
     }
+    // Both confound marks from one read (`ledger_marks`).
+    let marks = ledger_marks().ok();
     let result = build_result(
         &armed,
         s,
@@ -508,10 +519,11 @@ fn on_session_finalized_at(
         // recursive copy of the legacy `Sentinel` folder. Neither reaches back into
         // comparison/drift/readiness, so the order below still holds; in practice both are warmed
         // by startup long before any session finalizes. Named here because "the one call" was the
-        // kind of tidy sentence that stops anyone looking.
-        crate::history::ledger_len_checked().ok(),
-        // The active-change count, read the same honest way: unreadable is `None`, never a count.
-        crate::history::applied_changes_summary_checked().ok().map(|s| s.active),
+        // kind of tidy sentence that stops anyone looking. (`ledger_marks` reads through the same
+        // `load_history`, so the same note holds.)
+        marks.map(|m| m.0),
+        // The rows-not-rolled-back count, read the same honest way: unreadable is `None`.
+        marks.map(|m| m.1),
         chrono::Utc::now(),
     );
     // Restored after PR #395's review: the `save_result` wrapper this was lifted out of created

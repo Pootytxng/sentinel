@@ -673,8 +673,17 @@ fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
             // A second set-aside never destroys the first (review 2026-11-02): the earlier one is
             // kept beside it first, and when that fails the damaged file stays where it is.
             let corrupt = path.with_extension("json.corrupt");
-            let cleared = !corrupt.exists() || keep_earlier_set_aside(path, &corrupt);
-            let preserved = cleared && std::fs::rename(path, &corrupt).is_ok();
+            // `None`: the earlier one couldn't be moved. `Some(moved)`: free to set aside, with
+            // where the earlier one went, so a set-aside that then fails puts it back and the
+            // marker (`ledger_was_quarantined`, #618's bound) never reads as "nothing set aside".
+            let cleared = if corrupt.exists() { keep_earlier_set_aside(path, &corrupt).map(Some) } else { Some(None) };
+            let preserved = cleared.is_some_and(|moved| {
+                let set_aside = std::fs::rename(path, &corrupt).is_ok();
+                if let (false, Some(earlier)) = (set_aside, moved) {
+                    let _ = std::fs::rename(earlier, &corrupt);
+                }
+                set_aside
+            });
             Err(format!(
                 "The Trust Ledger could not be read (parse: {e}). {}",
                 if preserved {
@@ -691,8 +700,9 @@ fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
 /// Moves an earlier set-aside ledger to `history.json.corrupt.<its last write, unix seconds>` (or the
 /// first free `-<n>` after it), so a second set-aside can't replace its bytes. The newest set-aside
 /// stays `history.json.corrupt`, the marker `ledger_was_quarantined` and #618's time bound read.
-/// `false` when it could not be moved: the caller then leaves the newly damaged file in place.
-fn keep_earlier_set_aside(ledger: &Path, corrupt: &Path) -> bool {
+/// Where it went, or `None` when it could not be moved: the caller then leaves the newly damaged
+/// file in place.
+fn keep_earlier_set_aside(ledger: &Path, corrupt: &Path) -> Option<std::path::PathBuf> {
     let secs = std::fs::symlink_metadata(corrupt)
         .and_then(|m| m.modified())
         .ok()
@@ -704,7 +714,7 @@ fn keep_earlier_set_aside(ledger: &Path, corrupt: &Path) -> bool {
             n => ledger.with_extension(format!("json.corrupt.{secs}-{n}")),
         })
         .find(|older| std::fs::symlink_metadata(older).is_err())
-        .is_some_and(|older| std::fs::rename(corrupt, older).is_ok())
+        .filter(|older| std::fs::rename(corrupt, older).is_ok())
 }
 
 /// Persist the ledger. Takes the `MutationRoot` capability rather than a path: a receipt may only

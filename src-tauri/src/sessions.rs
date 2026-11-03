@@ -823,8 +823,14 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
     // Atomic swap (mirrors history.rs save_history_to): write beside the live file then rename it
     // in (MoveFileEx + REPLACE_EXISTING on Windows), so a crash mid-write leaves the prior valid
     // sessions.json intact plus an ignorable .tmp — never a torn half-written file.
+    // The temp file is synced before the swap, as the ledger's is.
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        f.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
+        f.sync_all().map_err(|e| e.to_string())?;
+    }
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())
 }
 
@@ -860,10 +866,14 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<Option<SavedSessio
         return Ok(None);
     }
     std::fs::create_dir_all(compy_data_dir()).map_err(|e| e.to_string())?;
-    // M4: if a comparison was armed for this game, compute the cross-session delta now.
-    let settled = crate::comparison::on_session_finalized(&summary);
     let measured_samples = summary.samples;
+    // The comparison reads this session once it is saved (codebase review 2026-11-02): a save can
+    // now refuse, and a fix comparison settled against a session the history doesn't hold would show
+    // a result no session backs, with its arm already spent.
+    let compared = summary.clone();
     save_session_to(&sessions_path(), summary)?;
+    // M4: if a comparison was armed for this game, compute the cross-session delta now.
+    let settled = crate::comparison::on_session_finalized(&compared);
     // Tier 2 receipts (Q9a, #217): a finalized session is the ONLY thing that produces a receipt,
     // so this is the only trigger. Inert in every shipped build — it returns on receipts_gate()
     // before it reads consent, spawns anything, or touches the network. The call site lands in the
@@ -1693,6 +1703,21 @@ mod session_tests {
         assert!(err.contains("couldn't read its session history right now"), "{err}");
         assert!(path.is_dir() && !path.with_extension("json.corrupt").exists(), "nothing replaced or set aside");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // Review of the 2026-11-02 fixes: the armed comparison was settled (and a fix arm spent) before the
+    // save, which can now refuse, so a result could stand against a session the history doesn't hold.
+    // Both run against the process-wide data root, so the order is pinned in the source. Tokens are
+    // built by concat! so this test's own lines don't match the scan.
+    #[test]
+    fn a_session_settles_a_comparison_only_once_it_is_saved() {
+        let src = include_str!("sessions.rs");
+        let start = src.find(concat!("pub(crate) fn ", "save_session(")).expect("save_session");
+        let body = &src[start..];
+        let body = &body[..body.find(concat!("fn get_", "session_summaries")).expect("next fn")];
+        let saved = body.find(concat!("save_", "session_to(&sessions_path()")).expect("the save");
+        let settled = body.find(concat!("comparison::", "on_session_finalized(")).expect("the settle");
+        assert!(saved < settled, "the comparison must read a session the history holds");
     }
 
     // #618: a session begun after a set-aside keeps the fresh ledger's counts apart from its total
