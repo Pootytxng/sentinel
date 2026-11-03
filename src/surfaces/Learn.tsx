@@ -359,7 +359,9 @@ function EntryCard({
         {entry.applies?.map((a) => {
           const label = t(`blackbook.learn.applicabilityLabels.${a}`, APPLICABILITY_LABELS[a]);
           return (
-            <span key={a} className="lx-typepill" title={t("blackbook.learn.applicableTitle", { label })}>
+            // No title: a native tooltip that repeats the pill's own label is the #213 A4 class
+            // (desk review 2026-11-03); the label already says which rigs.
+            <span key={a} className="lx-typepill">
               {label}
             </span>
           );

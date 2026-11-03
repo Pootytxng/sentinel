@@ -249,7 +249,6 @@
       "arrow": " → ",
       "outdated": "⚠ Outdated — kept for reference; this guidance is no longer current."
     },
-    "applicableTitle": "Relevant to {{label}} rigs",
     "autopsy": {
       "subLede": "Paste a tweak guide — a forum post, a video description, a \"do these 10 things\" list — and get the autopsy. Your text stays on this PC; it's matched against this library, offline.",
       "recordTitle": "Your autopsy record",
