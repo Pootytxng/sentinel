@@ -146,11 +146,11 @@ fn detect_pagefile(probes: &Value) -> Outcome {
         Some(true) => return Outcome::Clean,
         Some(false) => {}
     }
-    let files = probes
-        .get("pagefiles")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+    // A pagefile list that couldn't be read is null, never "no pagefile" (codebase review 2026-11-02):
+    // a failed query reported "Disabled entirely" with a crash-to-desktop verdict.
+    let Some(files) = probes.get("pagefiles").and_then(Value::as_array).cloned() else {
+        return Outcome::Unavailable(REASON_UNREADABLE);
+    };
     let ram = ram_gb(probes);
     let on_your = |what: &str| match ram {
         Some(gb) => format!("On your {gb} GB-RAM machine {what}"),
@@ -555,7 +555,7 @@ fn gather_probes() -> Value {
     // on the command thread (unit tests missed it — test threads aren't STA).
     let (auto_pf, ram_bytes, pagefiles) = crate::hardware::on_wmi_thread(|| {
         let (mut auto_pf, mut ram_bytes): (Option<bool>, Option<u64>) = (None, None);
-        let mut pagefiles: Vec<Value> = Vec::new();
+        let mut pagefiles: Option<Vec<Value>> = None;
         if let Ok(com) = COMLibrary::new() {
             if let Ok(conn) = WMIConnection::new(com) {
                 if let Ok(rows) = conn.query::<ComputerSystemProbe>() {
@@ -565,7 +565,7 @@ fn gather_probes() -> Value {
                     }
                 }
                 if let Ok(rows) = conn.query::<PageFileSettingProbe>() {
-                    pagefiles = rows
+                    pagefiles = Some(rows
                         .into_iter()
                         .map(|p| {
                             json!({
@@ -574,7 +574,7 @@ fn gather_probes() -> Value {
                                 "maximum_mb": p.maximum_size,
                             })
                         })
-                        .collect();
+                        .collect());
                 }
             }
         }
@@ -914,6 +914,18 @@ mod leftovers_tests {
         assert!(suppressed.findings.is_empty(), "an endorsed state must never be flagged");
         let unendorsed = evaluate_with(&synthetic, &p, &no_endorsements());
         assert_eq!(unendorsed.findings.len(), 1, "the same detector fires without endorsement");
+    }
+
+    // Codebase review 2026-11-02: a pagefile-settings query that failed left an empty list, read as
+    // "Disabled entirely" with a crash-to-desktop verdict. Unread is unavailable; an empty list read
+    // fine is still the finding.
+    #[test]
+    fn an_unread_pagefile_list_is_unavailable_never_disabled() {
+        let unread = evaluate_leftovers(&probes(Some(false), Value::Null, Some(true), Some(16)), &no_endorsements());
+        assert!(unread.findings.iter().all(|f| f.id != "pagefile-fixed"), "an unread list is no finding");
+        assert!(unread.unavailable.iter().any(|u| u.id == "pagefile-fixed"), "it is named as unchecked");
+        let none = evaluate_leftovers(&probes(Some(false), json!([]), Some(true), Some(16)), &no_endorsements());
+        assert!(none.findings.iter().any(|f| f.id == "pagefile-fixed" && f.current_value.contains("Disabled")));
     }
 
     #[test]

@@ -1738,6 +1738,10 @@ fn refresh_live_fields(hw: &mut HardwareInfo) {
     let mut sys = System::new();
     sys.refresh_memory();
     hw.ram_used_bytes = sys.used_memory();
+    // The display mode too (codebase review 2026-11-02): Readiness and the refresh-rate rec tell the
+    // user to raise it, and a startup snapshot kept both on until Compy restarted. A local
+    // EnumDisplaySettings read, no WMI. (The GPU driver date stays the startup read: it is WMI.)
+    hw.display = detect_display_info();
 
     let fresh = Disks::new_with_refreshed_list();
     for disk in hw.disks.iter_mut() {

@@ -556,7 +556,7 @@ pub(crate) fn evaluate_readiness(
                      keep games on your SSD/NVMe.",
                     Some("No library detected".into()),
                 )
-            } else {
+            } else if hw.physical_disks.iter().all(|d| d.media_type.eq_ignore_ascii_case("HDD")) {
                 check(
                     "install-drive",
                     "Games on slow storage",
@@ -564,6 +564,18 @@ pub(crate) fn evaluate_readiness(
                     "Only HDD storage was detected. Games load and stream textures much slower on \
                      an HDD than on an SSD/NVMe drive.",
                     Some("HDD only".into()),
+                )
+            } else {
+                // A drive whose type reads Unknown (a SATA SSD reporting Unspecified, RAID, a VM) is
+                // not an HDD (codebase review 2026-11-02): "HDD only" from unread types put an SSD
+                // purchase suggestion under a PC that may already have one.
+                check(
+                    "install-drive",
+                    "Game install drive",
+                    ReadinessStatus::Unknown,
+                    "No Steam/Epic game library was detected, and drive types couldn't be \
+                     read. Keep games on your fastest (SSD/NVMe) drive.",
+                    Some("No library detected".into()),
                 )
             }
         } else if gs.any_slow {
@@ -1005,10 +1017,18 @@ fn load_dismissals() -> Vec<String> {
 /// Unchanged policy, lifted to a path so it can be proven without the real data root: missing or
 /// corrupt both mean "nothing dismissed", never an error the user has to answer.
 fn load_dismissals_from(path: &std::path::Path) -> Vec<String> {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+    load_dismissals_checked_from(path).unwrap_or_default()
+}
+
+/// The writer's read (codebase review 2026-11-02). Missing or corrupt still mean "nothing dismissed",
+/// but a read that fails right now (an antivirus lock) is an error: a dismiss or restore built on it
+/// saved the list over every earlier dismissal.
+fn load_dismissals_checked_from(path: &std::path::Path) -> Result<Vec<String>, String> {
+    match std::fs::read(path) {
+        Ok(bytes) => Ok(serde_json::from_slice(&bytes).unwrap_or_default()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(format!("could not read your dismissed-checks setting right now ({e}); nothing was changed")),
+    }
 }
 
 fn save_dismissals_to(path: &std::path::Path, ids: &[String]) -> Result<(), String> {
@@ -1036,7 +1056,7 @@ pub(crate) fn dismiss_readiness_check(id: String) -> Result<(), String> {
 /// than the one it tested would pass for the wrong reason.
 fn dismiss_readiness_check_at(path: &std::path::Path, id: String) -> Result<(), String> {
     let _lock = lock_dismissals();
-    let mut ids = load_dismissals_from(path);
+    let mut ids = load_dismissals_checked_from(path)?;
     crate::race_seam::hold(); // no-op in a release build; see race_seam
     if !ids.contains(&id) {
         ids.push(id);
@@ -1056,7 +1076,7 @@ pub(crate) fn restore_readiness_check(id: String) -> Result<(), String> {
 /// Path-parameterized for the same reason as [`dismiss_readiness_check_at`].
 fn restore_readiness_check_at(path: &std::path::Path, id: String) -> Result<(), String> {
     let _lock = lock_dismissals();
-    let mut ids = load_dismissals_from(path);
+    let mut ids = load_dismissals_checked_from(path)?;
     crate::race_seam::hold(); // no-op in a release build; see race_seam
     ids.retain(|x| x != &id);
     save_dismissals_to(path, &ids)
@@ -1383,6 +1403,38 @@ mod readiness_tests {
         assert_eq!(find(&r, "install-drive").status, ReadinessStatus::Attention);
         // Severity redesign: HDR-capable is a preference, not a fix — INFO/Advisory, never amber.
         assert_eq!(find(&r, "hdr").status, ReadinessStatus::Advisory);
+    }
+
+    // Codebase review 2026-11-02: drive types that read Unknown (a SATA SSD reporting Unspecified,
+    // RAID, a VM) were "Only HDD storage was detected", with an SSD purchase suggestion under it.
+    #[test]
+    fn unread_drive_types_are_unknown_never_hdd_only() {
+        let disks = |media: &[&str]| {
+            media
+                .iter()
+                .map(|m| PhysicalDiskInfo { bus_type: "SATA".into(), media_type: (*m).into(), ..Default::default() })
+                .collect::<Vec<_>>()
+        };
+        let read = |media: &[&str]| {
+            let hw = hw_with(None, vec![], disks(media));
+            evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None)
+        };
+        assert_eq!(find(&read(&["Unknown"]), "install-drive").status, ReadinessStatus::Unknown);
+        assert_eq!(find(&read(&["HDD", "Unknown"]), "install-drive").status, ReadinessStatus::Unknown);
+        assert_eq!(find(&read(&["HDD", "HDD"]), "install-drive").status, ReadinessStatus::Attention);
+    }
+
+    // Same review: a dismissals read that failed right now became an empty list, and the next
+    // dismiss saved it over every earlier dismissal.
+    #[test]
+    fn a_dismiss_never_rewrites_a_list_it_could_not_read() {
+        let dir = std::env::temp_dir().join(format!("compy-dismissals-unreadable-{}", std::process::id()));
+        let path = dir.join("readiness_dismissals.json");
+        std::fs::create_dir_all(&path).unwrap(); // a read that fails on every platform
+        assert!(dismiss_readiness_check_at(&path, "x".into()).is_err());
+        assert!(restore_readiness_check_at(&path, "x".into()).is_err());
+        assert!(path.is_dir(), "nothing replaced");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

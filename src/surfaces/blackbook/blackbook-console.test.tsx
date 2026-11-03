@@ -245,6 +245,12 @@ describe("BlackbookConsole — the tape renders each real record kind", () => {
     expect(container.textContent).not.toContain("(s)");
   });
 
+  it("a delta that rounds to 0 prints no chip, never \"+0 fps vs last\" (desk review 2026-11-02)", () => {
+    useReduced();
+    const { container } = mountConsole([session({ avgFpsDelta: 0.4 }), session({ avgFpsDelta: -0.49 })]);
+    expect(container.querySelectorAll(".bc-delta")).toHaveLength(0);
+  });
+
   it("a session that measured nothing prints the em dash, never a 0 (codebase review 2026-11-02)", () => {
     useReduced();
     const { container } = mountConsole([session({ avgFps: null, low1Fps: null, avgFpsDelta: null })]);

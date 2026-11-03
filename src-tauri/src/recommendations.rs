@@ -14,7 +14,7 @@ use crate::{
     current_power_plan_name, eee_disabled_on_any_eligible_adapter, fast_startup_state,
     game_bar_disabled, game_mode_enabled, hags_state, memory_integrity_or_vbs_active,
     mouse_accel_disabled, nagle_disabled_on_any_nic, pcie_aspm_off_on_ac, reserved_storage_enabled,
-    service_running, usb_selective_suspend_off_on_ac, visual_effects_for_best_performance,
+    usb_selective_suspend_off_on_ac, visual_effects_for_best_performance,
 };
 
 // Provenance is the honesty tier for each rec's *impact* claim. The UI surfaces
@@ -192,13 +192,57 @@ pub(crate) fn get_rules_source() -> &'static str {
     }
 }
 
+/// Installed RAM to the nearest whole GB, as Readiness reads it (codebase review 2026-11-02). The
+/// OS-visible total sits a little under the marketed size (15.9 GiB on a 16 GB machine), so an
+/// unrounded `>= 16` never held on a 16 GB machine.
+fn ram_gb_nearest(hw: &HardwareInfo) -> f64 {
+    (hw.ram_total_bytes as f64 / 1024.0_f64.powi(3)).round()
+}
+
+/// A GPU whose driver supports Hardware-accelerated GPU Scheduling: GeForce RTX and GTX 16, Radeon
+/// RX 5000 (RDNA) and newer, Intel Arc. "RX 5" alone also matched the RX 550-590 (Polaris), which
+/// can't use it (codebase review 2026-11-02).
+fn hags_capable(name: &str) -> bool {
+    let u = name.to_uppercase();
+    let rdna = ["RX 5", "RX 6", "RX 7", "RX 9"].iter().any(|series| {
+        u.match_indices(series).any(|(i, m)| {
+            let digits: String = u[i + m.len() - 1..].chars().take_while(char::is_ascii_digit).collect();
+            digits.len() >= 4
+        })
+    });
+    // Windows names Arc "Intel(R) Arc(TM) A770 Graphics", which the old " ARC A" match never saw.
+    let arc = ["ARC ", "ARC A", "ARC B", "ARC(TM)"].iter().any(|t| u.contains(t));
+    u.contains("RTX") || u.contains("GTX 16") || rdna || arc
+}
+
+/// The GPU Readiness judges (the largest-VRAM adapter) when its driver is 90 days old or more, named
+/// by its own vendor, with the driver's age in days.
+fn stale_primary_driver(hw: &HardwareInfo) -> Option<(&'static str, i64)> {
+    let gpu = hw.gpus.iter().max_by_key(|g| g.vram_bytes)?;
+    let days = gpu.driver_age_days.filter(|d| *d >= 90)?;
+    let u = gpu.name.to_uppercase();
+    let vendor = if u.contains("NVIDIA") || u.contains("GEFORCE") {
+        "NVIDIA"
+    } else if u.contains("AMD") || u.contains("RADEON") {
+        "AMD"
+    } else if u.contains("INTEL") || u.contains("ARC") {
+        "Intel"
+    } else {
+        "GPU"
+    };
+    Some((vendor, days))
+}
+
+/// The service is read and is not running. A failed read is never "applied" (codebase review
+/// 2026-11-02): the infallible reader folds it into "not running", which read as the change made.
+fn service_read_stopped(name: &str) -> bool {
+    crate::service_running_checked(name) == Some(false)
+}
+
 pub(crate) fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
     match cond {
         Condition::GpuVendor { vendor } => gpu_vendor_match(hw, &vendor.to_uppercase()).is_some(),
-        Condition::RamGbAtLeast { min_gb } => {
-            let ram_gb = hw.ram_total_bytes as f64 / 1024.0_f64.powi(3);
-            ram_gb >= *min_gb as f64
-        }
+        Condition::RamGbAtLeast { min_gb } => ram_gb_nearest(hw) >= *min_gb as f64,
         Condition::FastStoragePresent => hw
             .physical_disks
             .iter()
@@ -207,18 +251,7 @@ pub(crate) fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
             !hw.physical_disks.is_empty()
                 && hw.physical_disks.iter().all(|d| d.media_type == "HDD")
         }
-        Condition::HasModernDiscreteGpu => hw.gpus.iter().any(|g| {
-            let u = g.name.to_uppercase();
-            u.contains("RTX")
-                || u.contains("GTX 16")
-                || u.contains("RX 5")
-                || u.contains("RX 6")
-                || u.contains("RX 7")
-                || u.contains("RX 9")
-                || u.contains("ARC ")
-                || u.contains("ARC A")
-                || u.contains("ARC B")
-        }),
+        Condition::HasModernDiscreteGpu => hw.gpus.iter().any(|g| hags_capable(&g.name)),
         Condition::DisplayUnderdriven { min_gap_hz } => hw
             .display
             .as_ref()
@@ -261,7 +294,7 @@ pub(crate) fn check_state_kind(kind: &str, params: &Option<serde_json::Value>, _
             .as_ref()
             .and_then(|p| p.get("service"))
             .and_then(|s| s.as_str())
-            .map(|name| !service_running(name))
+            .map(service_read_stopped)
             .unwrap_or(false),
         "power-plan-ultimate" => current_power_plan_name()
             .map(|p| p.to_lowercase().contains("ultimate"))
@@ -443,7 +476,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
     if let Some(name) = gpu_vendor_match(hw, "NVIDIA") {
-        let telemetry_running = service_running("NvTelemetryContainer");
+        let telemetry_stopped = service_read_stopped("NvTelemetryContainer");
         recs.push(Recommendation {
             id: "nvidia-telemetry".into(),
             title: "Disable NVIDIA Container telemetry services".into(),
@@ -454,7 +487,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             impact: "Free ~150–250 MB RAM · less background CPU".into(),
             downside: Some("GeForce Experience won't auto-update; you can still update manually.".into()),
             applies_to: name.clone(),
-            currently_applied: !telemetry_running,
+            currently_applied: telemetry_stopped,
             provenance: Provenance::ExpectedImpact,
             eligible: true,
             ineligible_reason: None,
@@ -543,7 +576,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     }
 
     // ─── RAM + storage-conditional ───────────────────────────────────────
-    let ram_gb = hw.ram_total_bytes as f64 / 1024.0_f64.powi(3);
+    let ram_gb = ram_gb_nearest(hw);
     let has_nvme = hw.physical_disks.iter().any(|d| d.bus_type == "NVMe");
     let has_ssd = hw.physical_disks.iter().any(|d| d.media_type == "SSD");
     let only_hdd = !hw.physical_disks.is_empty()
@@ -564,7 +597,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             impact: "Lower idle disk activity · ~100–200 MB RAM back".into(),
             downside: Some("App launches will be a tiny bit slower (usually unnoticeable on fast storage).".into()),
             applies_to: format!("{:.0} GB RAM · {} storage detected", ram_gb, storage_kind),
-            currently_applied: !service_running("SysMain"),
+            currently_applied: service_read_stopped("SysMain"),
             provenance: Provenance::ExpectedImpact,
             eligible: true,
             ineligible_reason: None,
@@ -574,18 +607,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     // Hardware-accelerated GPU Scheduling: modern GPUs only, requires reboot.
     {
         let state = hags_state();
-        let has_modern_gpu = hw.gpus.iter().any(|g| {
-            let u = g.name.to_uppercase();
-            u.contains("RTX")
-                || u.contains("GTX 16")
-                || u.contains("RX 5")
-                || u.contains("RX 6")
-                || u.contains("RX 7")
-                || u.contains("RX 9")
-                || u.contains("ARC ")
-                || u.contains("ARC A")
-                || u.contains("ARC B")
-        });
+        let has_modern_gpu = hw.gpus.iter().any(|g| hags_capable(&g.name));
         if has_modern_gpu {
             recs.push(Recommendation {
                 id: "hags-enable".into(),
@@ -640,40 +662,27 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         }
     }
 
-    // GPU driver freshness — flag when ANY adapter's driver is meaningfully stale.
-    let oldest_driver_days = hw
-        .gpus
-        .iter()
-        .filter_map(|g| g.driver_age_days)
-        .max();
-    if let Some(days) = oldest_driver_days {
-        if days >= 90 {
-            let vendor = if gpu_vendor_match(hw, "NVIDIA").is_some() {
-                "NVIDIA"
-            } else if gpu_vendor_match(hw, "AMD").is_some() || gpu_vendor_match(hw, "RADEON").is_some() {
-                "AMD"
-            } else if gpu_vendor_match(hw, "INTEL").is_some() {
-                "Intel"
-            } else {
-                "GPU"
-            };
-            let months = days / 30;
-            recs.push(Recommendation {
-                id: "gpu-driver-update".into(),
-                title: "Update your graphics driver".into(),
-                category: "GPU".into(),
-                severity: "safe".into(),
-                description:
-                    "Your installed graphics driver is several months old. Driver updates routinely include game-specific performance improvements, bug fixes for newly-released titles, and security patches. Update through GeForce Experience / NVIDIA App, AMD Adrenalin, or Intel Graphics Command Center.".into(),
-                impact: "Better game performance · fewer crashes · latest features (DLSS, FSR, frame-gen)".into(),
-                downside: Some("New drivers occasionally introduce regressions — keep the previous installer in case you need to roll back.".into()),
-                applies_to: format!("{} driver is ~{} months old", vendor, months),
-                currently_applied: false,
-                provenance: Provenance::Verified,
-                eligible: true,
-                ineligible_reason: None,
-            });
-        }
+    // GPU driver freshness, on the GPU Readiness judges (the largest-VRAM adapter), named by its own
+    // vendor (codebase review 2026-11-02): the oldest driver of ANY adapter (a laptop's integrated
+    // one) was named after the first vendor found, so a fresh NVIDIA driver read "~N months old"
+    // while Readiness called it current.
+    if let Some((vendor, days)) = stale_primary_driver(hw) {
+        let months = days / 30;
+        recs.push(Recommendation {
+            id: "gpu-driver-update".into(),
+            title: "Update your graphics driver".into(),
+            category: "GPU".into(),
+            severity: "safe".into(),
+            description:
+                "Your installed graphics driver is several months old. Driver updates routinely include game-specific performance improvements, bug fixes for newly-released titles, and security patches. Update through GeForce Experience / NVIDIA App, AMD Adrenalin, or Intel Graphics Command Center.".into(),
+            impact: "Better game performance · fewer crashes · latest features (DLSS, FSR, frame-gen)".into(),
+            downside: Some("New drivers occasionally introduce regressions — keep the previous installer in case you need to roll back.".into()),
+            applies_to: format!("{} driver is ~{} months old", vendor, months),
+            currently_applied: false,
+            provenance: Provenance::Verified,
+            eligible: true,
+            ineligible_reason: None,
+        });
     }
 
     // HDD-only advisory: the single biggest performance win is hardware, not a tweak.
@@ -732,6 +741,44 @@ mod rec_tests {
             name: name.into(),
             ..Default::default()
         }
+    }
+
+    // Codebase review 2026-11-02: the driver rec took the oldest driver of ANY adapter (a laptop's
+    // integrated one) and named the first vendor found, so a fresh NVIDIA driver read "~N months old"
+    // while Readiness, which judges the largest-VRAM GPU, called it current.
+    #[test]
+    fn the_driver_rec_judges_the_gpu_readiness_judges() {
+        let g = |name: &str, vram_gb: u64, days: i64| GpuInfo {
+            name: name.into(),
+            vram_bytes: vram_gb << 30,
+            driver_age_days: Some(days),
+            ..Default::default()
+        };
+        let laptop = HardwareInfo { gpus: vec![g("NVIDIA GeForce RTX 4070 Laptop GPU", 8, 12), g("Intel(R) UHD Graphics", 0, 400)], ..Default::default() };
+        assert_eq!(stale_primary_driver(&laptop), None, "the dGPU's driver is fresh");
+        let stale = HardwareInfo { gpus: vec![g("AMD Radeon RX 7800 XT", 16, 200), g("NVIDIA GeForce GT 710", 2, 30)], ..Default::default() };
+        assert_eq!(stale_primary_driver(&stale), Some(("AMD", 200)), "named by its own vendor");
+    }
+
+    // Same review: "RX 5" matched the RX 550-590 (Polaris), which can't use HAGS.
+    #[test]
+    fn hags_is_offered_only_on_gpus_that_support_it() {
+        for yes in ["NVIDIA GeForce RTX 3060", "NVIDIA GeForce GTX 1660 SUPER", "AMD Radeon RX 5700 XT", "AMD Radeon RX 5500M", "AMD Radeon RX 6600", "AMD Radeon RX 9070 XT", "Intel(R) Arc(TM) A770 Graphics"] {
+            assert!(hags_capable(yes), "{yes}");
+        }
+        for no in ["AMD Radeon RX 580 Series", "Radeon RX 550", "AMD Radeon RX 590", "AMD Radeon RX Vega 56", "NVIDIA GeForce GTX 1060", "Intel(R) UHD Graphics 630"] {
+            assert!(!hags_capable(no), "{no}");
+        }
+    }
+
+    // Same review: the OS-visible total of a 16 GB machine is about 15.9 GiB, so `>= 16` never held.
+    #[test]
+    fn a_16_gb_machine_reads_as_16_gb() {
+        let hw = HardwareInfo { ram_total_bytes: (15.9 * (1u64 << 30) as f64) as u64, ..Default::default() };
+        assert_eq!(ram_gb_nearest(&hw), 16.0);
+        assert!(condition_matches(&Condition::RamGbAtLeast { min_gb: 16 }, &hw));
+        let twelve = HardwareInfo { ram_total_bytes: 12 << 30, ..Default::default() };
+        assert!(!condition_matches(&Condition::RamGbAtLeast { min_gb: 16 }, &twelve));
     }
 
     #[test]
