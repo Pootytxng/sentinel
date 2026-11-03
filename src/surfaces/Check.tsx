@@ -403,9 +403,21 @@ export default function Check({
             {running
               ? t("optimize.check.scanningYourRig")
               : livingPreview
-                ? limiters.length === 0
-                  ? t("optimize.check.measuredCleanRig")
-                  : t("optimize.check.livingWorthLook", { count: limiters.length })
+                ? // An unread check never "came back right" (codebase review 2026-11-03): with any
+                  // unread, the line speaks for the checks Compy could read and names the rest.
+                  (readiness?.unknown_count ?? 0) > 0
+                  ? limiters.length === 0
+                    ? t("optimize.check.measuredCleanReadable", { count: readiness!.unknown_count })
+                    : t("optimize.check.livingWorthLookUnread", {
+                        count: limiters.length,
+                        unread: readiness!.unknown_count,
+                      })
+                  : limiters.length === 0
+                    ? // An advisory is noted, not graded (VRR, HDR, 8 GB of RAM): never "came back right".
+                      (readiness?.advisory_count ?? 0) > 0
+                      ? t("optimize.check.measuredCleanJudged", { count: readiness!.advisory_count })
+                      : t("optimize.check.measuredCleanRig")
+                    : t("optimize.check.livingWorthLook", { count: limiters.length })
                 : t("optimize.check.classicSummary", {
                     checks: checks.length,
                     elapsed: elapsed?.toFixed(1) ?? "—",

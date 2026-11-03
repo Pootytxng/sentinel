@@ -202,3 +202,83 @@ describe("GamingMode resume restarts with the interrupted session's own tiers", 
     });
   });
 });
+
+// Codebase review 2026-11-03: a failed start whose own undo also failed leaves a restore-failed
+// contract on disk; the pane showed only "…Try again" and stayed on "Standing by", and "Not now"
+// dropped the only way back to a contract that was still on disk.
+describe("GamingMode never stands by over a contract still on disk", () => {
+  it("a start that fails AND leaves a contract routes to recovery with the may-still-be-changed line", async () => {
+    let started = false;
+    invokeMock.mockImplementation((cmd) => {
+      if (cmd === "get_gaming_session_state")
+        return Promise.resolve(started ? session("restore-failed") : null);
+      if (cmd === "start_gaming_session") {
+        started = true;
+        return Promise.reject(new Error("power plan: declined — and undoing the partial session also failed"));
+      }
+      return Promise.resolve(null);
+    });
+    localStorage.setItem("compy_gaming_consent_v1", "1");
+    render(<GamingMode />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Gaming Mode" }));
+
+    expect(await screen.findByText(/some of its changes may still be on this PC/)).toBeTruthy();
+    expect(screen.getByText("Finish the last Gaming Mode session")).toBeTruthy();
+    expect(screen.queryByText(/it may need an admin OK/)).toBeNull();
+    // Starting again would only refuse "recover it first" — the control is shut until it's finished.
+    expect((screen.getByRole("button", { name: "Start Gaming Mode" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("a start that fails with nothing left on disk keeps the plain try-again", async () => {
+    invokeMock.mockImplementation((cmd) => {
+      if (cmd === "start_gaming_session") return Promise.reject(new Error("UAC cancelled"));
+      return Promise.resolve(null);
+    });
+    localStorage.setItem("compy_gaming_consent_v1", "1");
+    render(<GamingMode />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Start Gaming Mode" }));
+
+    expect(await screen.findByText(/it may need an admin OK/)).toBeTruthy();
+    expect(screen.queryByText("Finish the last Gaming Mode session")).toBeNull();
+  });
+
+  it("a resume whose start leg fails over a fresh contract shows that contract, not standing by", async () => {
+    let restored = false;
+    invokeMock.mockImplementation((cmd) => {
+      if (cmd === "get_gaming_session_state")
+        return Promise.resolve(restored ? session("restore-failed") : session("restore-pending"));
+      if (cmd === "recover_gaming_session") {
+        restored = true;
+        return Promise.resolve(null);
+      }
+      if (cmd === "start_gaming_session") return Promise.reject(new Error("undo also failed"));
+      return Promise.resolve(null);
+    });
+    render(<GamingMode />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Resume Gaming Mode" }));
+
+    expect(await screen.findByText(/some of its changes may still be on this PC/)).toBeTruthy();
+    expect(screen.getByText("Finish the last Gaming Mode session")).toBeTruthy();
+  });
+
+  it("Not now folds the card into a row that reopens it, and Start stays shut meanwhile", async () => {
+    invokeMock.mockImplementation((cmd) =>
+      cmd === "get_gaming_session_state" ? Promise.resolve(session("restore-pending")) : Promise.resolve(null),
+    );
+    render(<GamingMode />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Not now" }));
+
+    expect(screen.queryByText("Finish the last Gaming Mode session")).toBeNull();
+    expect(screen.getByText(/still has changes on this PC — finish it before starting a new one/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Start Gaming Mode" }) as HTMLButtonElement).disabled).toBe(true);
+    // No IPC behind "Not now": the backend's recover(false) is a no-op that leaves the contract.
+    expect(invokeMock.mock.calls.some(([c]) => c === "recover_gaming_session")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "Review" }));
+    expect(screen.getByText("Finish the last Gaming Mode session")).toBeTruthy();
+  });
+});

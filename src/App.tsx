@@ -38,6 +38,9 @@ import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
+import { primaryGpu, sessionPeakVendor } from "./data/gpu-sensor";
+import { bannerAfterPaneClose, contractLeftByFailedStart, readSessionSlot } from "./data/gaming-session-route";
+import { createGenerations } from "./data/latest-wins";
 import { invalidateProbe } from "./data/probe-cache";
 import { setStartupEntryEnabled } from "./data/startup-toggle";
 import { writeLedger } from "./data/ledger-write";
@@ -597,6 +600,7 @@ function App() {
   // export_report calls, and a ref reads correctly inside the async handler, where state would be
   // a stale closure and let both clicks through anyway.
   const exportingRef = useRef(false);
+  const refreshGenerations = useRef(createGenerations());
   const [showSettings, setShowSettings] = useState(false);
   // Settings opens from the custom titlebar (window chrome lives outside <App/>, so it signals across
   // the tree — same bridge as the compy:*-changed flags). The titlebar gear is the app-wide entry.
@@ -738,7 +742,13 @@ function App() {
   const [gamingPanes, setGamingPanes] = useState(0);
   useEffect(() => {
     const up = () => setGamingPanes((n) => n + 1);
-    const down = () => setGamingPanes((n) => Math.max(0, n - 1));
+    // On the pane's way out, re-read the slot: App's own read runs only at launch, and the pane can
+    // leave a contract App never saw — a start that failed and left one (codebase review 2026-11-03).
+    // bannerAfterPaneClose keeps a tucked-away toast tucked away unless the contract's state changed.
+    const down = () => {
+      setGamingPanes((n) => Math.max(0, n - 1));
+      void readSessionSlot().then((slot) => setGamingRecovery((cur) => bannerAfterPaneClose(cur, slot)));
+    };
     window.addEventListener(GAMING_PANE_MOUNTED_EVENT, up);
     window.addEventListener(GAMING_PANE_UNMOUNTED_EVENT, down);
     return () => {
@@ -773,9 +783,17 @@ function App() {
       setGamingResumed(summarizeChanges(file.changes, t).line);
       setGamingRestored(null); // one confirmation at a time — the live session supersedes it
     } catch (e) {
-      // Start leg failed AFTER a confirmed restore — settings are safely back; say exactly
-      // that, and point at the one door to try again (never a vague "resume failed").
-      fail(t("app.errors.gamingResumeFailedGround", { room: t("common.rail.lab") }), e);
+      // Start leg failed AFTER a confirmed restore. "Your settings were restored" holds only while
+      // the slot is empty: a start whose own undo failed leaves a restore-failed contract (codebase
+      // review 2026-11-03), so re-read it and bring the banner back with the honest wording.
+      const left = contractLeftByFailedStart(await readSessionSlot());
+      if (left) {
+        setGamingRecovery(left);
+        fail(t("app.errors.gamingResumeLeftChanged"), e);
+      } else {
+        // Settings are safely back; say exactly that, and point at the one door to try again.
+        fail(t("app.errors.gamingResumeFailedGround", { room: t("common.rail.lab") }), e);
+      }
     } finally {
       setGamingResuming(false);
     }
@@ -796,6 +814,9 @@ function App() {
   };
 
   const refresh = async () => {
+    // Latest wins (CR-1102-left): a refresh follows every apply and rollback, so two can overlap; an
+    // older one's slow read must not land over the newer one's answer, nor its error re-raise a toast.
+    const current = refreshGenerations.current.begin();
     setError(null);
     // A refresh follows app start and every apply/rollback — drop the per-surface probe cache so
     // Advanced/Optimize re-read fresh after any change (between mutations the cache serves instantly).
@@ -808,11 +829,13 @@ function App() {
     const run = <T,>(cmd: string, set: (v: T) => void): Promise<T | undefined> =>
       invoke<T>(cmd)
         .then((v) => {
-          set(v);
+          if (current()) set(v);
           return v;
         })
         .catch((e) => {
-          fail(t("app.errors.readInfoFailed"), e);
+          // A superseded refresh's error is logged, never toasted over the newer refresh's answer.
+          if (current()) fail(t("app.errors.readInfoFailed"), e);
+          else console.error("[compy refresh] superseded read failed", cmd, e);
           return undefined;
         });
     // readiness/recs/startup/sessions feed BOTH their own state AND the priority ranking — compute
@@ -841,10 +864,15 @@ function App() {
           recommendations,
           startup,
           sessions,
-        }).then(setPriorities);
+        }).then((p) => {
+          if (current()) setPriorities(p);
+        });
       })
       // Only a genuine priorities_from failure (all four present, ranking itself failed) reaches here.
-      .catch((e) => fail(t("app.errors.rankPrioritiesFailed"), e));
+      .catch((e) => {
+        if (current()) fail(t("app.errors.rankPrioritiesFailed"), e);
+        else console.error("[compy refresh] superseded ranking failed", e);
+      });
     await Promise.all([
       run<HardwareInfo>("get_hardware_info", (info) => {
         setHw(info);
@@ -1286,7 +1314,8 @@ function App() {
   // Detected-hardware lines for the intro/tour rig step (shimmer until hardware is read).
   const rigLines = hw
     ? [
-        { label: t("app.rig.gpu"), value: hw.gpus[0]?.name ?? t("app.rig.noGpu") },
+        // The primary GPU (largest VRAM), the one Home, the grid and Readiness name (review 2026-11-03).
+        { label: t("app.rig.gpu"), value: primaryGpu(hw.gpus)?.name ?? t("app.rig.noGpu") },
         { label: t("app.rig.cpu"), value: hw.cpu_arch?.family_label || hw.cpu_brand },
         { label: t("app.rig.ram"), value: fmtGB(hw.ram_total_bytes) },
         { label: t("app.rig.os"), value: hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}` },
@@ -1508,7 +1537,7 @@ function App() {
           onNavigate={navHome}
           ledgerCount={changes.length}
           badges={{ problems: pendingCare ? 1 : 0 }}
-          rig={hw ? [hw.cpu_brand, hw.gpus[0]?.name].filter(Boolean).join(" · ") : null}
+          rig={hw ? [hw.cpu_brand, primaryGpu(hw.gpus)?.name].filter(Boolean).join(" · ") : null}
           // Command-palette destinations. Each is the SAME single writer the rest of the app routes
           // through — openLabStation persists the station intent before the room mounts,
           // openLibrary is what every inline glossary term already uses — so the palette adds a
@@ -1687,6 +1716,7 @@ function App() {
                   changes={changes}
                   rollback={rollback}
                   vendor={detectedVendor}
+                  peakTempVendor={sessionPeakVendor(hw?.gpus?.map((g) => g.name))}
                 />
               )}
               {/* V2-6: the Blackbook room on RoomShell — Learn composes verbatim (its v2 prop

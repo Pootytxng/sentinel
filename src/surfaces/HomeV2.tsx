@@ -1,5 +1,6 @@
 import { ConfidenceWord } from "../design/ConfidenceWord";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { readHologramV2 } from "../design/theme";
 // DIR-1 first-timer walk, 2026-08-26, finding #5: "1% low" is a measurement word, and the
 // reader this product is for has never met it. `src/jargon-term-gloss-guard.test.ts` derives
 // its worklist from the shipped locale, so every place that prints the bare word is graded.
@@ -14,9 +15,8 @@ import { Sparkline } from "../design/Sparkline";
 import { knownFps } from "../lib/session-metrics";
 import { useReducedMotion } from "../design/use-motion";
 import { postureLine, liveStrip } from "./command-center-data";
-import { gradeGpuTempForVendor } from "../data/gpu-sensor";
+import { gradeGpuTempForVendor, primaryGpu, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
-import { gpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
@@ -143,7 +143,7 @@ export function HomeV2({
   const accent = useV2Accent();
 
   // ── live tag probes (existing read-only commands; a failure just omits the value) ──
-  const [gpuTemp, setGpuTemp] = useState<number | null>(null);
+  const [gpuSnaps, setGpuSnaps] = useState<GpuSensorReading[] | null>(null);
   const [mem, setMem] = useState<{ used: number; total: number; level: string } | null>(null);
   // Q7 idle-cost: pause while the window is hidden (same contract as HomeConsole's port of this poll).
   const visible = useDocumentVisible();
@@ -151,14 +151,17 @@ export function HomeV2({
     if (!visible) return;
     let cancelled = false;
     const poll = () => {
-      invoke<{ temperature_c: number | null }[]>("get_gpu_sensors")
-        .then((g) => !cancelled && setGpuTemp(g?.[0]?.temperature_c ?? null))
-        .catch(() => !cancelled && setGpuTemp(null));
+      invoke<GpuSensorReading[]>("get_gpu_sensors")
+        .then((g) => !cancelled && setGpuSnaps(g ?? null))
+        .catch(() => !cancelled && setGpuSnaps(null));
       invoke<{ used_bytes: number; total_bytes: number; level: string }>("get_memory_pressure")
         .then(
           (m) =>
             !cancelled &&
-            setMem(m ? { used: m.used_bytes, total: m.total_bytes, level: m.level } : null),
+            setMem(
+              // 0 of 0 is the backend's no-reading (a poisoned lock), never "0.0 / 0.0 GB" in green.
+              m && m.total_bytes > 0 ? { used: m.used_bytes, total: m.total_bytes, level: m.level } : null,
+            ),
         )
         .catch(() => !cancelled && setMem(null));
     };
@@ -187,8 +190,12 @@ export function HomeV2({
     }
   };
   const [exploded, setExploded] = useState(false);
-  const [autoRotate, setAutoRotate] = useState(true);
+  // T4d contract, which this face skipped (codebase review 2026-11-03): v2 rests idle and Orbit is an
+  // opt-in, so the bay doesn't render continuously; classic (flag "0") keeps its orbit. The select
+  // handler is stable so RigHologram's memo holds.
+  const [autoRotate, setAutoRotate] = useState(() => !readHologramV2());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const onRigSelect = useCallback((id: string) => setSelectedId(id || null), []);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const { parts: manualParts } = useManualParts();
 
@@ -205,8 +212,11 @@ export function HomeV2({
   const gradeClass = (g: Grade) => (g === "neutral" ? "" : ` hv2-grade-${g}`);
   const gradeInk = (g: Grade) => (g === "neutral" ? undefined : { color: gradeColor(g) });
   const checking = readiness == null; // checks literally still running (boot hydrate / re-scan)
-  const vendor = gpuVendor(hw.gpus?.[0]?.name);
-  const gpuGrade = gradeGpuTempForVendor(vendor, gpuTemp);
+  // LOCKED rule 5: the named GPU's own snapshot, graded by its own vendor (HomeConsole has why).
+  const gpu = primaryGpu(hw.gpus);
+  const gpuReading = sensorForGpu(gpuSnaps, gpu?.name, hw.gpus?.length);
+  const gpuTemp = gpuReading?.temperature_c ?? null;
+  const gpuGrade = gradeGpuTempForVendor(gpuReading?.vendor, gpuTemp);
 
   const measured = readiness
     ? t("home.homeV2.header.checksMeasured", {
@@ -292,7 +302,7 @@ export function HomeV2({
             autoRotate={autoRotate}
             selectedId={selectedId}
             hoveredId={hoveredId}
-            onSelect={(id) => setSelectedId(id || null)}
+            onSelect={onRigSelect}
             onHover={setHoveredId}
             manualParts={manualParts}
             cameraDist={6.9}
@@ -329,7 +339,7 @@ export function HomeV2({
             <PartTag
               tone={gradeTone(gpuGrade)}
               name={t("home.homeV2.tag.gpu")}
-              detail={shortModel(hw.gpus[0]?.name)}
+              detail={shortModel(gpu?.name)}
               value={gpuTemp != null ? `${Math.round(gpuTemp)}°C` : undefined}
               valueTone={gradeTone(gpuGrade)}
             />

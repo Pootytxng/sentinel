@@ -183,6 +183,27 @@ describe("hologram orbit default follows !readHologramV2() on every host (T4d co
     expect(orbit.className).toContain("hud-seg-on");
   });
 
+  // HomeV2 (both Home failsafes off) hardcoded the orbit on and this suite never rendered it
+  // (codebase review 2026-11-03).
+  it("HomeV2 bay, fresh default (v2 ON): Orbit renders un-pressed — no unattended rotation", async () => {
+    localStorage.setItem("compy_home_console", "0");
+    localStorage.setItem("compy_editorial", "0");
+    const c = render(shell(<HomeRoom {...props} />));
+    const orbit = await c.findByRole("button", { name: "Orbit" });
+    expect(orbit.getAttribute("aria-pressed")).toBe("false");
+    expect(orbit.className).not.toContain("hv2-seg-on");
+  });
+
+  it("HomeV2 bay, classic (flag '0'): auto-orbit stays the default", async () => {
+    localStorage.setItem("compy_home_console", "0");
+    localStorage.setItem("compy_editorial", "0");
+    localStorage.setItem("compy_hologram_v2", "0");
+    const c = render(shell(<HomeRoom {...props} />));
+    const orbit = await c.findByRole("button", { name: "Orbit" });
+    expect(orbit.getAttribute("aria-pressed")).toBe("true");
+    expect(orbit.className).toContain("hv2-seg-on");
+  });
+
   it("RigViewer bay, fresh default (v2 ON): Orbit renders un-pressed", async () => {
     const c = render(<RigViewer hw={hw} />);
     const orbit = await c.findByRole("button", { name: "Orbit" });

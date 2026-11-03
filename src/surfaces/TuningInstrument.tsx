@@ -4,7 +4,7 @@ import type { SessionSummary } from "../types";
 import type { TuningGuide } from "../data/tuning-guides";
 import type { TuningMeasurement, TuningEvidence } from "../data/tuning-measure";
 import { Term } from "../design/Term";
-import { Walkthrough } from "../design/Walkthrough";
+import { WalkthroughDisclosure } from "../design/WalkthroughDisclosure";
 import { walkthroughForKeyForLanguage, type GpuVendor } from "./walkthroughs";
 import { prettyGameName } from "./game-name";
 import { knownFps } from "../lib/session-metrics";
@@ -62,10 +62,9 @@ export function TuningInstrument({
           </p>
           <TuningGuideBody guide={guide} />
           {walkthrough && (
-            <details className="tg-walkthrough">
-              <summary>{t("blackbook.tuningInstrument.showMeTheWay")}</summary>
-              <Walkthrough walkthrough={walkthrough} vendor={vendor} />
-            </details>
+            // Mounted only when opened (codebase review 2026-11-02): inside a closed <details> it ran its
+            // carousel and counted a walkthrough "opened" for every card anyone expanded.
+            <WalkthroughDisclosure className="tg-walkthrough" label={t("blackbook.tuningInstrument.showMeTheWay")} walkthrough={walkthrough} vendor={vendor} />
           )}
         </>
       ) : (

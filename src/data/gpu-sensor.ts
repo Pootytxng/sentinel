@@ -26,6 +26,85 @@ export function gradeGpuTempForVendor(
   return gpuSensorVerified(vendor) ? gradeGpuTempC(c) : "neutral";
 }
 
+// ── Which reading belongs to which GPU (LOCKED rule #5; codebase review 2026-11-03) ─────────────
+// `get_gpu_sensors` lists NVML adapters first, then ADLX's; `hw.gpus` is in DXGI order. On a hybrid
+// laptop those orders disagree, so a face that paired "the first snapshot" with "the first GPU's
+// name" printed an NVIDIA reading under the iGPU's name, graded as a verified sensor.
+
+/** The fields of one `get_gpu_sensors` snapshot the temperature surfaces read. */
+export type GpuSensorReading = {
+  /** "NVIDIA" or "AMD" — the SDK that produced this reading. Grade by this, never by a name. */
+  vendor?: string | null;
+  name?: string | null;
+  temperature_c: number | null;
+};
+
+// DXGI, NVML and ADLX spell one adapter with different case, ™/® marks and punctuation.
+function adapterKey(name: string | null | undefined): string {
+  return (name ?? "")
+    .toLowerCase()
+    .replace(/\((?:tm|r)\)|[™®]/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * The snapshot that belongs to the GPU a surface names. An exact name match wins; failing that, the
+ * ONE snapshot whose name ends the other's at a word boundary (an older NVML drops the "NVIDIA "
+ * prefix DXGI keeps). A rig with one GPU and one snapshot needs no name at all: there is no other
+ * adapter the number could belong to (an SDK whose name read failed says "AMD GPU"), and neither
+ * does a lone snapshot when the GPU has no name. Anything else is null: the surface shows no reading
+ * rather than another adapter's number. Grade what this returns by ITS OWN `vendor`.
+ */
+export function sensorForGpu<T extends GpuSensorReading>(
+  list: readonly T[] | null | undefined,
+  gpuName: string | null | undefined,
+  rigGpuCount?: number,
+): T | null {
+  if (!list || list.length === 0) return null;
+  const lone = list.length === 1 ? list[0] : null;
+  if (lone && rigGpuCount === 1) return lone;
+  const want = adapterKey(gpuName);
+  if (want === "") return lone;
+  const exact = list.find((s) => adapterKey(s.name) === want);
+  if (exact) return exact;
+  const ends = (long: string, short: string) => short !== "" && ` ${long}`.endsWith(` ${short}`);
+  const partial = list.filter((s) => {
+    const have = adapterKey(s.name);
+    return ends(want, have) || ends(have, want);
+  });
+  return partial.length === 1 ? partial[0] : null;
+}
+
+/**
+ * The rig's primary GPU: the largest VRAM, the adapter Readiness, the driver rec and the Machine
+ * Model already judge (Rust's `max_by_key`, which keeps the LAST one on a tie). DXGI lists a hybrid
+ * laptop's iGPU first, so `gpus[0]` named the adapter with no sensor and no game on it.
+ */
+export function primaryGpu<T extends { vram_bytes?: number | null }>(
+  gpus: readonly T[] | null | undefined,
+): T | undefined {
+  let best: T | undefined;
+  for (const g of gpus ?? []) if (best === undefined || (g.vram_bytes ?? 0) >= (best.vram_bytes ?? 0)) best = g;
+  return best;
+}
+
+const NVIDIA_ADAPTER = /nvidia|geforce|quadro|\brtx\b|\bgtx\b/i;
+
+/**
+ * The vendor a SESSION's peak GPU temperature is graded under. A session keeps the hottest reading
+ * across every adapter `get_gpu_sensors` returned and records no adapter (`monitoring.rs`), so on a
+ * rig with any NVIDIA adapter the peak may be an NVML value, whichever adapter DXGI lists first:
+ * "NVIDIA" then, which never grades. Otherwise the first adapter's name, as before.
+ */
+export function sessionPeakVendor(
+  gpuNames: readonly (string | null | undefined)[] | null | undefined,
+): string | null {
+  const names = gpuNames ?? [];
+  if (names.some((n) => NVIDIA_ADAPTER.test(n ?? ""))) return "NVIDIA";
+  return names[0] ?? null;
+}
+
 // ── A4 (content): vendor-aware, READ-ONLY advisory badges ──────────────────────────────────────
 // Plain-English "for YOUR hardware" insight lines derived from GPU state Compy ALREADY read (HAGS,
 // power-mode label, peak temp). This is pure content/interpretation — it changes NOTHING, arms

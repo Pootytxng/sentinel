@@ -25,14 +25,17 @@ export function WalkthroughDisclosure({
   label,
   walkthrough,
   vendor,
+  className = "fix-walkthrough",
 }: {
   label: string;
   walkthrough: WT;
   vendor: GpuVendor;
+  /** The host's own disclosure class (Learn's and the tuning guide's keep their look). */
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <details className="fix-walkthrough" open={open}>
+    <details className={className} open={open}>
       <summary
         onClick={(e) => {
           e.preventDefault();

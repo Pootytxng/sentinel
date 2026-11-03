@@ -41,7 +41,6 @@ import { prettyGameName } from "./game-name";
 import { monitorVerdict } from "./monitor-v2-data";
 import { knownFps } from "../lib/session-metrics";
 import { fmtDurCoarse } from "./Play";
-import type { GpuVendor } from "./walkthroughs";
 import "../i18n";
 import "./monitor-console.css";
 
@@ -121,14 +120,12 @@ const FT_CAP = 240;
 
 export function MonitorConsole({
   active,
-  vendor = "any",
   sessions = [],
   onFpsActive,
   quiet,
   bar,
 }: {
   active: boolean;
-  vendor?: GpuVendor;
   /** Session history (newest-first): the stack's rows + the deck's delta row prior. */
   sessions?: SessionSummary[];
   /** Mirrors the room's live capture state up to MonitorV2 (the V2-8 forward-door rule). */
@@ -330,7 +327,9 @@ export function MonitorConsole({
   // session against its comparable prior, so it holds steady while capture starts/stops.
   const deck = deckDeltaFrom(sessions);
 
-  const gpuGrade = gradeGpuTempForVendor(vendor, gpu?.temperature_c ?? null);
+  // The hottest snapshot, graded by the vendor whose sensor produced it — never by hw.gpus[0]'s,
+  // which on a hybrid laptop is the iGPU (LOCKED rule 5; codebase review 2026-11-03).
+  const gpuGrade = gradeGpuTempForVendor(gpu?.vendor, gpu?.temperature_c ?? null);
   const low1Grade: Grade = sample ? gradeLow1(sample.low1_fps, sample.fps) : "neutral";
 
   // v3 (UI_VISION_BACKLOG §A0): the frame budget for THIS rig's display — the spike detector's

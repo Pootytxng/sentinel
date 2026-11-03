@@ -1,10 +1,12 @@
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { LabConsole } from "./LabConsole";
 import ExperimentBench from "./ExperimentBench";
 import { GpuProfile } from "./GpuProfile";
 import { liveGpuProfileSnapshot } from "../data/gpu-profile-store";
+import { primaryGpu } from "../data/gpu-sensor";
 import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
 import { deriveReverted } from "./use-scan";
@@ -12,6 +14,9 @@ import { optimizeVerdict, safeFixesReady } from "./optimize-v2-data";
 import DecryptedText from "../design/vendor/DecryptedText/DecryptedText";
 import type { LabFastPathProps } from "./lab/OptimizeStation";
 import type { HardwareInfo } from "../App";
+import type { Recommendation } from "../types";
+import { MACHINE_MODEL_PROBE_KEY, readMachineModel } from "../data/machine-model";
+import { invalidateProbe } from "../data/probe-cache";
 import "./lab-v2.css";
 
 // LabGround — the Lab as ONE cohesive PROVING GROUND (spec 2026-07-08-lab-proving-ground, ★ PRIMARY
@@ -78,9 +83,25 @@ export function LabGround(props: LabFastPathProps & {
   // adds zero IPC. Fields that are not user-mode readable stay null and render as "unknown"; see
   // liveGpuProfileSnapshot for why power mode and peak temp are permanently absent here.
   const gpuSnapshot = useMemo(
-    () => liveGpuProfileSnapshot(hw?.gpus?.[0], recs, new Date().toISOString()),
+    // The primary GPU, the adapter the fresh capture's Machine Model read names, so a capture never
+    // compares two different adapters on a hybrid laptop (round 1, 2026-11-03).
+    () => liveGpuProfileSnapshot(primaryGpu(hw?.gpus), recs, new Date().toISOString()),
     [hw, recs],
   );
+  // A before/after capture reads the GPU fresh — App re-reads hw/recs only on refresh, so a
+  // driver-tool change made between captures saved the old values (codebase review 2026-11-03).
+  // Identity comes through the Machine Model (machine-model-reader-guard), re-read past its cache;
+  // HAGS from the hags-enable rec, as the snapshot does. An unreadable model captures nothing.
+  const readGpuNow = useCallback(async () => {
+    invalidateProbe(MACHINE_MODEL_PROBE_KEY);
+    const [model, fresh] = await Promise.all([
+      readMachineModel(),
+      invoke<Recommendation[]>("get_recommendations"),
+    ]);
+    if (!model) return null;
+    const gpu = { name: model.identity.gpu.value, driver_version: model.identity.gpu_driver.value };
+    return liveGpuProfileSnapshot(gpu, fresh, new Date().toISOString());
+  }, []);
 
   return (
     /* THE SHELL MOVED DOWN INTO THE CONSOLE (issue #49 slice 6). The approved Test direction is a
@@ -121,7 +142,7 @@ export function LabGround(props: LabFastPathProps & {
               LOCKED rule 6 makes GPU-profile APPLY structurally impossible, because AMD profile
               state is not user-mode readable and so rollback-first cannot be satisfied. Nothing
               here writes to the machine. */}
-          <GpuProfile currentSnapshot={gpuSnapshot} />
+          <GpuProfile currentSnapshot={gpuSnapshot} readNow={readGpuNow} />
           {/* Intelligence Phase 3 — the controlled-experiment engine + optimization simulator.
               ARMED 2026-07-17 (owner-signed); still fails dark (renders NOTHING) if the gate ever
               reads false. */}

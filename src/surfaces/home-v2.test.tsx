@@ -23,10 +23,12 @@ vi.mock("./rig/RigHologram", () => ({
   RigHologram: () => <div data-testid="rig-hologram" />,
 }));
 
+// Settable for the hybrid-laptop case; reset after each test.
+const sensors = vi.hoisted(() => ({ list: null as unknown }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) => {
     if (cmd === "get_build_stamp") return Promise.resolve("ab12cd3 · dev");
-    if (cmd === "get_gpu_sensors") return Promise.resolve([{ temperature_c: 62 }]);
+    if (cmd === "get_gpu_sensors") return Promise.resolve(sensors.list ?? [{ vendor: "AMD", name: "AMD Radeon RX 9070 XT", temperature_c: 62 }]);
     if (cmd === "get_memory_pressure")
       return Promise.resolve({
         used_bytes: 14.2 * 1024 ** 3,
@@ -213,6 +215,27 @@ describe("HomeV2 — part-tags stay honest", () => {
     useReduced();
     mount();
     expect(screen.getByText("temp n/a — by design")).toBeTruthy();
+  });
+
+  // Review 2026-11-03: HomeV2 named gpus[0] (a hybrid laptop's iGPU) and paired the first snapshot.
+  it("a hybrid laptop's GPU tag names the primary GPU and shows its own reading", async () => {
+    useReduced();
+    sensors.list = [{ vendor: "NVIDIA", name: "NVIDIA GeForce RTX 4060 Laptop GPU", temperature_c: 91 }];
+    try {
+      mount({
+        hw: {
+          ...hw,
+          gpus: [
+            { name: "Intel(R) UHD Graphics 770", vram_bytes: 128 * 1024 ** 2 },
+            { name: "NVIDIA GeForce RTX 4060 Laptop GPU", vram_bytes: 8 * 1024 ** 3 },
+          ],
+        } as never,
+      });
+      expect(await screen.findByText("91°C")).toBeTruthy();
+      expect(screen.getByText("RTX 4060 Laptop GPU")).toBeTruthy();
+    } finally {
+      sensors.list = null;
+    }
   });
 
   it("GPU tag shows the live temp once the probe returns; storage % is the real C: math", async () => {

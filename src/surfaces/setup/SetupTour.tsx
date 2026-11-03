@@ -103,6 +103,9 @@ export function SetupTour({ hw, rig, onDone }: { hw: HardwareInfo; rig: RigLine[
   // latest finish/next/back), but it must NEVER move focus; that's the mount effect's sole job.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // An open confirm (the apply / turn-it-on prompt) owns the keyboard: arrows changed the step
+      // under it and Esc closed the whole tour along with it (codebase review 2026-11-03).
+      if (document.querySelector('[role="alertdialog"][aria-modal="true"]')) return;
       const root = rootRef.current;
       if (e.key === "Escape") {
         e.preventDefault();
@@ -390,7 +393,10 @@ function StepCheck() {
   const limiters = priorities?.limiters ?? [];
   const fixCount = limiters.length;
   const top = limiters[0] ?? null;
-  const checks = readiness?.checks ?? [];
+  // "Came back right" counts only checks that were READ and right: an unread check is never a pass,
+  // and an advisory attention check is not one either (codebase review 2026-11-03).
+  const readyCount = readiness?.ready_count ?? 0;
+  const unreadCount = readiness?.unknown_count ?? 0;
   // The "applied-changes" limiter is the vague-flag anti-pattern: name the actual drifted setting(s)
   // and carry the fix inline, instead of "1 setting(s) — go to Optimize/Ledger".
   const driftTop = top?.id === "applied-changes" && reverted.length > 0;
@@ -419,9 +425,11 @@ function StepCheck() {
     <>
       <div className="st-tag">{t("home.setupTour.check.tag")}</div>
       <h2 className="st-title">
-        {fixCount === 0
-          ? t("home.setupTour.check.readyClean")
-          : t("home.setupTour.check.readyFixing", { count: fixCount })}
+        {fixCount > 0
+          ? t("home.setupTour.check.readyFixing", { count: fixCount })
+          : unreadCount > 0
+            ? t("home.setupTour.check.readyCleanPartial")
+            : t("home.setupTour.check.readyClean")}
       </h2>
       {driftTop ? (
         <div className="st-spotlight">
@@ -478,9 +486,14 @@ function StepCheck() {
           </div>
         </div>
       ) : (
-        <p className="st-body-text">
-          {t("home.setupTour.check.checksClean", { count: checks.length })}
-        </p>
+        <>
+          {readyCount > 0 && (
+            <p className="st-body-text">{t("home.setupTour.check.checksClean", { count: readyCount })}</p>
+          )}
+          {unreadCount > 0 && (
+            <p className="st-body-text">{t("home.setupTour.check.checksUnread", { count: unreadCount })}</p>
+          )}
+        </>
       )}
       <p className="st-body-text">{t("home.setupTour.check.reversibleFooter")}</p>
     </>

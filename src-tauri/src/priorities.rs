@@ -246,8 +246,12 @@ pub(crate) fn build_priorities(
                 let title = r.get("title").and_then(Value::as_str).unwrap_or("");
                 // A drifted rec is applied-then-reverted — the "Applied Compy changes" row owns it
                 // with the right framing; never also list it here as "not applied".
+                // A change the catalog marks "not for this PC" is never pending here (codebase review
+                // 2026-11-02): an Ethernet-only tweak read as a limiter on a Wi-Fi-only rig.
+                let eligible = r.get("eligible").and_then(Value::as_bool).unwrap_or(true);
                 APPLIABLE_REC_IDS.contains(&id)
                     && !applied
+                    && eligible
                     && severity == "safe"
                     && !drifted.contains(title)
             })
@@ -327,32 +331,25 @@ pub(crate) fn build_priorities(
     }
 
     // Rule 12: Memory Integrity / VBS advisory (security tradeoff, never a limiter).
+    const VBS_ADVISORY_ID: &str = "memory-integrity-vbs-advisory";
     {
         let recs = recommendations.as_array().map(Vec::as_slice).unwrap_or(&[]);
-        if let Some(r) = recs.iter().find(|r| {
-            let id = r.get("id").and_then(Value::as_str).unwrap_or("").to_lowercase();
-            let title = r.get("title").and_then(Value::as_str).unwrap_or("").to_lowercase();
-            id.contains("memory-integrity")
-                || id.contains("vbs")
-                || title.contains("memory integrity")
-                || title.contains("core isolation")
-                || title.contains("vbs")
-        }) {
-            let applied = r.get("currently_applied").and_then(Value::as_bool).unwrap_or(false);
-            // Use a neutral, state-agnostic title — the recommendation's own title
-            // reads "…is active", which contradicts the row when VBS is actually
-            // off. Compy DOES know the state (read from the registry), so this
-            // is a real, decided advisory — never "Unknown".
+        // The exact advisory id, not a word match: the row now SAYS "turned on", which only this rule's
+        // condition guarantees — a future "turn on core isolation" rule must not read as already on.
+        if let Some(r) = recs
+            .iter()
+            .find(|r| r.get("id").and_then(Value::as_str) == Some(VBS_ADVISORY_ID))
+        {
+            // The advisory exists only while Memory Integrity / VBS is turned on (its catalog rule's
+            // condition, read from the registry), so the row says on (codebase review 2026-11-02).
+            // It read `currently_applied`, which a rule with no state check never sets, and said
+            // "off — nothing to do" on exactly the machines where it is on.
             tagged.push((
                 Bucket::NotWorth,
                 PriorityItem {
                     id: "memory-integrity",
                     title: "Memory Integrity / VBS".to_string(),
-                    reason: if applied {
-                        "Memory Integrity / VBS is ON. It can cost a few % in some games, but it's a security feature — advisory only, your call.".into()
-                    } else {
-                        "Memory Integrity / VBS is off — nothing to do. (Leaving it off can help a few games; turning it on is a security/FPS tradeoff Compy never changes for you.)".into()
-                    },
+                    reason: "Memory Integrity / VBS is turned on. It can cost a few % in some games, but it's a security feature — advisory only, your call.".into(),
                     linked: r.get("id").and_then(Value::as_str).map(str::to_string),
                     confidence: Confidence::Low,
                     status: PriorityStatus::Ready,
@@ -713,6 +710,31 @@ mod priority_tests {
         assert!(nw.contains(&"vrr"));
         assert!(nw.contains(&"hdr")); // advisory even though "attention"
         assert!(!limiter_ids(&p).contains(&"hdr"));
+    }
+
+    // Codebase review 2026-11-02: the VBS advisory exists only while VBS is on, and the row read a
+    // state check the rule doesn't have, so it said "off — nothing to do" on exactly those machines.
+    #[test]
+    fn the_vbs_row_says_on_whenever_the_advisory_exists() {
+        let recs = json!([{ "id": "memory-integrity-vbs-advisory", "title": "Memory Integrity / VBS is active", "currently_applied": false, "severity": "moderate" }]);
+        let p = build_priorities(&readiness(vec![]), &recs, &json!([]), &json!([]));
+        let row = p.not_worth_touching.iter().find(|i| i.id == "memory-integrity").expect("the row");
+        assert!(row.reason.contains("is turned on") && !row.reason.contains("off"), "{}", row.reason);
+        let none = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &json!([]));
+        assert!(none.not_worth_touching.iter().all(|i| i.id != "memory-integrity"), "no advisory, no row");
+        // A rule that merely MENTIONS core isolation is not the advisory: it must not read as "on".
+        let other = json!([{ "id": "core-isolation-enable", "title": "Turn on Core isolation", "currently_applied": false, "severity": "moderate" }]);
+        let o = build_priorities(&readiness(vec![]), &other, &json!([]), &json!([]));
+        assert!(o.not_worth_touching.iter().all(|i| i.id != "memory-integrity"), "a word match is not the advisory");
+    }
+
+    // Same review: a safe change the catalog marks "not for this PC" read as a pending limiter.
+    #[test]
+    fn a_change_not_for_this_pc_is_never_pending() {
+        let mut eee = rec_titled("eee-disable", "Disable Energy-Efficient Ethernet", false, "safe");
+        eee["eligible"] = json!(false);
+        let p = build_priorities(&readiness(vec![]), &json!([eee]), &json!([]), &json!([]));
+        assert!(!limiter_ids(&p).contains(&"pending-safe-recs"), "{:?}", limiter_ids(&p));
     }
 
     #[test]

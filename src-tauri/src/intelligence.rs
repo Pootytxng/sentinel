@@ -1688,32 +1688,30 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         }
     }
 
-    // Metric observations — 1% low is the verdict metric, avg FPS reference-only.
+    // Metric observations — 1% low is the verdict metric, avg FPS reference-only. An average the
+    // sampler couldn't take is its 0, and it is left out: it printed as "0.0 → 140.2 (+0.0%)" on
+    // the panel and in the evidence graph (codebase review 2026-11-03).
     let delta_low1 = round1((c.low1_fps_est - b.low1_fps_est) / b.low1_fps_est * 100.0);
-    let delta_avg = if b.avg_fps > 0.0 {
-        round1((c.avg_fps - b.avg_fps) / b.avg_fps * 100.0)
-    } else {
-        0.0
-    };
     let meaningful = delta_low1.abs() > floor; // boundary INCLUSIVE = no-change (comparison.rs pin)
-    let observations = vec![
-        Observation {
-            metric: "1% low FPS".into(),
-            baseline: round1(b.low1_fps_est),
-            current: round1(c.low1_fps_est),
-            delta_pct: delta_low1,
-            meaningful,
-            reference_only: false,
-        },
-        Observation {
+    let mut observations = vec![Observation {
+        metric: "1% low FPS".into(),
+        baseline: round1(b.low1_fps_est),
+        current: round1(c.low1_fps_est),
+        delta_pct: delta_low1,
+        meaningful,
+        reference_only: false,
+    }];
+    let avg_read = |v: f64| v.is_finite() && v > 0.0;
+    if avg_read(b.avg_fps) && avg_read(c.avg_fps) {
+        observations.push(Observation {
             metric: "average FPS".into(),
             baseline: round1(b.avg_fps),
             current: round1(c.avg_fps),
-            delta_pct: delta_avg,
+            delta_pct: round1((c.avg_fps - b.avg_fps) / b.avg_fps * 100.0),
             meaningful: false,
             reference_only: true,
-        },
-    ];
+        });
+    }
 
     let mut notes: Vec<String> = Vec::new();
     if gap_days > STALE_GAP_DAYS {
@@ -3486,6 +3484,37 @@ mod tests {
             mk_session("2026-07-10T10:00:00Z", "cp2077.exe", low_b, low_b * 1.4),
             mk_session("2026-07-12T10:00:00Z", "cp2077.exe", low_c, low_c * 1.4),
         )
+    }
+
+    #[test]
+    fn an_average_the_sampler_could_not_take_is_never_an_observation() {
+        let (mut b, c) = two_sessions(100.0, 100.0);
+        b.avg_fps = 0.0; // the sampler's unknown
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert_eq!(r.observations.len(), 1, "only the 1% low was measured on both sides");
+        assert_eq!(r.observations[0].metric, "1% low FPS");
+        assert!(
+            r.evidence_graph.nodes.iter().all(|n| !n.label.starts_with("average FPS")),
+            "no '0 → 140 (+0.0%)' evidence node"
+        );
+        // Both averages read: the reference row is back, with its real delta.
+        let (b2, c2) = two_sessions(100.0, 110.0);
+        let r2 = report(&WhatChangedInputs {
+            baseline: &b2,
+            current: &c2,
+            events_window: vec![],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        let avg = r2.observations.iter().find(|o| o.metric == "average FPS").expect("avg row");
+        assert!(avg.reference_only);
+        assert!((avg.delta_pct - 10.0).abs() < 0.05);
     }
 
     #[test]

@@ -366,7 +366,7 @@ describe("HardwareGrid identity rows (Shared Machine Model, #451)", () => {
   it("keeps a secondary adapter's driver on the inventory while the primary reads the model", () => {
     const { container } = render(
       <HardwareGrid
-        hw={baseHw({ gpus: [gpu(), gpu({ name: "Intel UHD 770", driver_version: "31.0.101", driver_age_days: 200 })] })}
+        hw={baseHw({ gpus: [gpu(), gpu({ name: "Intel UHD 770", vram_bytes: 128 * 1024 ** 2, driver_version: "31.0.101", driver_age_days: 200 })] })}
         model={known()}
       />
     );
@@ -375,6 +375,22 @@ describe("HardwareGrid identity rows (Shared Machine Model, #451)", () => {
       .filter((d) => d.querySelector(".detail-key")?.textContent === "Driver")
       .map((d) => d.querySelector(".detail-value")?.textContent);
     expect(drivers).toEqual(["25.5.1 · 1 mo old", "31.0.101 · 6 mo old"]);
+  });
+
+  // Review 2026-11-03: the model's driver row names the PRIMARY GPU (largest VRAM). It sat under
+  // whichever adapter DXGI listed first, with that adapter's age — a hybrid laptop's iGPU.
+  it("puts the model's driver row, and its age, under the primary adapter whatever the DXGI order", () => {
+    const { container } = render(
+      <HardwareGrid
+        hw={baseHw({ gpus: [gpu({ name: "Intel UHD 770", vram_bytes: 128 * 1024 ** 2, driver_version: "31.0.101", driver_age_days: 200 }), gpu()] })}
+        model={known()}
+      />
+    );
+    const graphics = cardByLabel(container, "Graphics");
+    const drivers = Array.from(graphics.querySelectorAll<HTMLElement>(".detail"))
+      .filter((d) => d.querySelector(".detail-key")?.textContent === "Driver")
+      .map((d) => d.querySelector(".detail-value")?.textContent);
+    expect(drivers).toEqual(["31.0.101 · 6 mo old", "25.5.1 · 1 mo old"]);
   });
 
   it("keeps the panel's higher maximum refresh rate beside the model's display mode", () => {

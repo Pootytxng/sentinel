@@ -121,7 +121,9 @@ function SessionBody({ r }: { r: LogbookSession }) {
           <Term id="one-percent-lows">{t("blackbook.blackbookConsole.sessionBody.oneLow")}</Term>{" "}
           <b className="bc-mono">{r.low1Fps == null ? "—" : Math.round(r.low1Fps)}</b>
         </span>
-        {delta != null && delta !== 0 && (
+        {/* The chip prints the rounded delta, so it shows only when that is not 0 (desk review
+            2026-11-02: a sub-1 fps difference printed "▲ +0 fps vs last"). */}
+        {delta != null && Math.round(delta) !== 0 && (
           <span className={`bc-delta ${delta > 0 ? "bc-delta-up" : "bc-delta-down"}`}>
             {t("blackbook.blackbookConsole.sessionBody.delta", {
               arrow: delta > 0 ? "▲" : "▼",

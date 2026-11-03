@@ -173,14 +173,11 @@ pub(crate) fn game_mode_enabled() -> bool {
     on(crate::actions::GAME_MODE_ENABLED_VALUE) && on(crate::actions::GAME_MODE_ALLOW_VALUE)
 }
 
-pub(crate) fn service_running(name: &str) -> bool {
-    service_running_checked(name).unwrap_or(false)
-}
-
-/// Like `service_running`, but `None` when `sc` produced nothing it can be read from — the spawn
+/// Whether a service is running, `None` when `sc` produced nothing it can be read from — the spawn
 /// failed, or the output carries neither a STATE line nor the "service does not exist" code. The
-/// infallible reader folds that into "not running", which for a disable-a-service change reads as
-/// "still in effect" when nothing was read at all (#392).
+/// infallible reader that folded that into "not running" read a disable-a-service change as "still
+/// in effect" when nothing was read at all (#392); its last callers (three catalog recs) moved here
+/// in the 2026-11-02 codebase review, and it is gone.
 pub(crate) fn service_running_checked(name: &str) -> Option<bool> {
     let output = crate::actions::quiet_command("sc")
         .args(["query", name])

@@ -10,6 +10,8 @@
     "captureAfter": "捕捉更改后",
     "recaptureAfter": "重新捕捉更改后",
     "clear": "清除",
+    "readingNow": "正在读取你的 GPU……",
+    "readFailed": "暂时无法读取你的 GPU,因此没有捕捉任何快照。请重试。",
     "noReadingYet": "目前还没有可用的 GPU 读数——等 GPU 详情加载完成后,你就可以捕捉快照了。",
     "beforeSaved": "已保存更改前快照。做出更改后,再捕捉更改后快照。",
     "captureToBegin": "先捕捉一次更改前快照以开始。",

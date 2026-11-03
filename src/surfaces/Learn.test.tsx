@@ -1,7 +1,9 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import Learn from "./Learn";
 import { AUTOPSY_MAX_CHARS } from "../data/knowledge-autopsy";
+import { readAutopsyLedger } from "../data/autopsy-ledger";
+import { readLocalStats } from "../data/local-stats";
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -193,6 +195,97 @@ describe("Learn surface (reskin)", () => {
     expect(
       document.querySelector('[data-kl-id="game-mode"] .lx-card-body .lx-row .lx-verdict'),
     ).not.toBeNull();
+  });
+
+  // Codebase review 2026-11-02 (MUST 1): the card mounted its walkthrough inside a closed <details>,
+  // so expanding the card counted a walkthrough "opened" (the Export modal shows that number) and
+  // started its carousel. The walkthrough mounts only when its own disclosure opens.
+  it("expanding a card never counts its walkthrough as opened; opening the disclosure does", async () => {
+    open();
+    fireEvent.change(searchBox(), { target: { value: "undervolt" } });
+    const card = await screen.findByText(/Undervolt your Radeon/i, { selector: title });
+    fireEvent.click(card.closest("button")!);
+    const summary = screen.getByText("Show me the way");
+    expect(document.querySelector(".wt-root")).toBeNull();
+    expect(readLocalStats().walkthroughsOpened).toBe(0);
+    fireEvent.click(summary);
+    expect(document.querySelector(".wt-root")).not.toBeNull();
+    expect(readLocalStats().walkthroughsOpened).toBe(1);
+  });
+
+  // Codebase review 2026-11-03: Grade stayed enabled after grading, so every click recorded the same
+  // guide again — inflating "guides fact-checked" and adding duplicate History rows.
+  it("grading the same text twice is impossible; an edit opens Grade again", () => {
+    open();
+    fireEvent.click(screen.getByRole("tab", { name: "Autopsy a guide" }));
+    const box = screen.getByLabelText("Paste a tweak guide to autopsy");
+    fireEvent.change(box, { target: { value: "turn on game mode\nforce hpet" } });
+    const grade = () => screen.getByRole("button", { name: "Grade this guide" }) as HTMLButtonElement;
+    fireEvent.click(grade());
+    expect(readAutopsyLedger()).toHaveLength(1);
+    expect(grade().disabled).toBe(true);
+    fireEvent.click(grade());
+    expect(readAutopsyLedger()).toHaveLength(1);
+    fireEvent.change(box, { target: { value: "turn on game mode\nforce hpet\nrun a deep scan" } });
+    expect(grade().disabled).toBe(false);
+  });
+
+  // Codebase review 2026-11-03: the deep-link scroll re-ran on every category toggle or filter
+  // change while the entry stayed focused, yanking the view back to it.
+  it("a deep link scrolls once; opening another category afterwards leaves the view alone", () => {
+    const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView");
+    try {
+      render(<Learn onClose={() => {}} focusId="one-percent-lows" />);
+      const arrived = spy.mock.calls.length;
+      expect(arrived).toBeGreaterThan(0);
+      fireEvent.click(screen.getByRole("button", { name: "Guides" }));
+      fireEvent.click(screen.getByRole("button", { name: "Terms" }));
+      expect(spy.mock.calls.length).toBe(arrived);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  // Round 1 review (2026-11-03): an arrival clears the search, but the deferred query renders once
+  // more with the old one as a flat list; the one-shot spent itself on that card, which the category
+  // view then replaced. The scroll lands on the card that is actually on screen.
+  it("a deep link from inside a search scrolls to the card left on screen, not the search's", async () => {
+    const landed: HTMLElement[] = [];
+    const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(function (this: HTMLElement) {
+      landed.push(this);
+    });
+    try {
+      const { rerender } = render(<Learn onClose={() => {}} />);
+      fireEvent.change(searchBox(), { target: { value: "1% low" } });
+      rerender(<Learn onClose={() => {}} focusId="one-percent-lows" />);
+      await waitFor(() => expect(landed.length).toBeGreaterThan(0));
+      const last = landed[landed.length - 1];
+      expect(last.isConnected, "the scrolled card is still on screen").toBe(true);
+      expect(last.textContent).toMatch(/1% low/i);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("an Esc another control already handled does not close the modal", () => {
+    const close = vi.fn();
+    render(<Learn onClose={close} />);
+    const ev = new KeyboardEvent("keydown", { key: "Escape", cancelable: true });
+    ev.preventDefault();
+    window.dispatchEvent(ev);
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("the modal closes on Esc; the room does not", () => {
+    const close = vi.fn();
+    render(<Learn onClose={close} />);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(close).toHaveBeenCalledTimes(1);
+    cleanup();
+    const roomClose = vi.fn();
+    render(<Learn onClose={roomClose} asPanel />);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(roomClose).not.toHaveBeenCalled();
   });
 
   it("an over-cap paste reports the SAME char count it actually graded (no hardcoded drift)", () => {

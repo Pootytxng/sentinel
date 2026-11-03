@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, fireEvent, cleanup } from "@testing-library/react";
+import { render, fireEvent, cleanup, screen } from "@testing-library/react";
 
 // The tour's 3D stage is lazy three.js — mock it out (these guards test the chrome, not WebGL).
 vi.mock("./HardwareTourScene", () => ({ HardwareTourScene: () => null }));
@@ -10,6 +10,8 @@ vi.mock("../rig/rig-parts", () => ({ buildRigParts: () => [] }));
 
 import { SetupTour } from "./SetupTour";
 import type { HardwareInfo } from "../../App";
+import { invoke } from "@tauri-apps/api/core";
+import { ConfirmProvider } from "../../design/ConfirmDialog";
 
 // Guards for the Setup & Tour stepper progress (React Bits Stepper, round-2 sourcing pass;
 // DEFAULT ON since the owner approval 2026-07-06). These pin the reversibility contract
@@ -85,5 +87,76 @@ describe("stepper progress (flag on)", () => {
     const c = renderStepper();
     expect(c.innerHTML.toLowerCase()).not.toContain("5227ff");
     expect(c.innerHTML).not.toContain("82, 39, 255");
+  });
+});
+
+// Codebase review 2026-11-03: the tour's clean verdict printed "{{count}} checks came back right"
+// with count = EVERY check, so unread checks (never limiters) and advisory ones read as passes.
+describe("the first check counts only what it read", () => {
+  afterEach(() => vi.mocked(invoke).mockImplementation((() => Promise.resolve(null)) as never));
+
+  it("1 right + 3 unread reads as 1 right and 3 unread — never 4 right", async () => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) => {
+      if (cmd === "get_game_readiness")
+        return Promise.resolve({
+          checks: ["a", "b", "c", "d"].map((id, n) => ({
+            id,
+            label: `Check ${id}`,
+            status: n === 0 ? "ready" : "unknown",
+            detail: "",
+            value: null,
+          })),
+          ready_count: 1,
+          attention_count: 0,
+          unknown_count: 3,
+          advisory_count: 0,
+          advisory: "",
+          dismissed_ids: [],
+          drifts: [],
+        });
+      if (cmd === "priorities_from")
+        return Promise.resolve({ limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null });
+      if (cmd === "get_recommendations") return Promise.resolve([]);
+      return Promise.resolve(null);
+    }) as never);
+    render(
+      <ConfirmProvider>
+        <SetupTour hw={{} as HardwareInfo} rig={[]} onDone={() => {}} />
+      </ConfirmProvider>,
+    );
+    for (let n = 0; n < 3; n++) fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText("Ready to play — everything Compy could read measured clean")).toBeTruthy();
+    expect(screen.getByText("1 check came back right — measured on this rig, not assumed.")).toBeTruthy();
+    expect(screen.getByText("3 checks couldn't be read on this PC, so they aren't counted either way.")).toBeTruthy();
+    expect(screen.queryByText(/4 checks came back right/)).toBeNull();
+  });
+});
+
+describe("the tour's keys yield to an open confirm", () => {
+  it("arrows and Esc do nothing while an apply confirm is up", () => {
+    const done = vi.fn();
+    render(
+      <ConfirmProvider>
+        <SetupTour hw={{} as HardwareInfo} rig={[]} onDone={done} />
+      </ConfirmProvider>,
+    );
+    const count = () => document.querySelector(".st-count")!.textContent;
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(count()).toBe("2 / 5");
+    const prompt = document.createElement("div");
+    prompt.setAttribute("role", "alertdialog");
+    prompt.setAttribute("aria-modal", "true");
+    document.body.appendChild(prompt);
+    try {
+      fireEvent.keyDown(window, { key: "ArrowRight" });
+      fireEvent.keyDown(window, { key: "ArrowLeft" });
+      fireEvent.keyDown(window, { key: "Escape" });
+      expect(count()).toBe("2 / 5");
+      expect(done).not.toHaveBeenCalled();
+    } finally {
+      prompt.remove();
+    }
+    fireEvent.keyDown(window, { key: "ArrowLeft" });
+    expect(count()).toBe("1 / 5");
   });
 });

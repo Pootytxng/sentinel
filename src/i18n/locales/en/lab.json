@@ -10,6 +10,8 @@
     "captureAfter": "Capture after",
     "recaptureAfter": "Re-capture after",
     "clear": "Clear",
+    "readingNow": "Reading your GPU now…",
+    "readFailed": "Couldn't read your GPU just now, so nothing was captured. Try again.",
     "noReadingYet": "No GPU reading is available yet — once your GPU details load you can capture a snapshot.",
     "beforeSaved": "Before snapshot saved. Make your change, then capture after.",
     "captureToBegin": "Capture a before snapshot to begin.",

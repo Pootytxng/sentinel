@@ -144,7 +144,6 @@ export function MonitorV2(props: Props) {
     return (
       <MonitorConsole
         active={props.active}
-        vendor={props.vendor ?? "any"}
         sessions={props.sessions}
         onFpsActive={setCapturing}
         quiet={quiet}
