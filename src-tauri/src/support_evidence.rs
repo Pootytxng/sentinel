@@ -491,9 +491,11 @@ pub fn record(kind: EventKind, operation: &str, code: &str, outcome: Outcome, de
     let _ = append_to(&evidence_path(), &event);
 }
 
-/// Append, then trim to the newest [`MAX_EVENTS`]. Caller holds the lock.
+/// Append, then trim to the newest [`MAX_EVENTS`]. Caller holds the lock. A record that can't be read
+/// right now is left exactly as it is and this one event is dropped (codebase review 2026-11-02): the
+/// append read the failure as an empty file and wrote one event over up to 400.
 fn append_to(path: &Path, event: &SupportEvent) -> Result<(), String> {
-    let (mut events, _skipped) = read_events_from(path);
+    let (mut events, _skipped) = read_events_checked(path)?;
     events.push(event.clone());
     let first = events.len().saturating_sub(MAX_EVENTS);
     write_events_to(path, &events[first..])
@@ -503,9 +505,18 @@ fn append_to(path: &Path, event: &SupportEvent) -> Result<(), String> {
 /// read as "no usable records", because refusing here would be a way for the support log to break
 /// the thing it exists to explain.
 pub fn read_events_from(path: &Path) -> (Vec<SupportEvent>, usize) {
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return (Vec::new(), 0);
+    read_events_checked(path).unwrap_or_default()
+}
+
+/// The same read, with a read that failed right now kept apart from an absent file. Bytes that
+/// aren't valid UTF-8 are decoded lossily, so one bad byte costs its own line, never the file.
+fn read_events_checked(path: &Path) -> Result<(Vec<SupportEvent>, usize), String> {
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok((Vec::new(), 0)),
+        Err(e) => return Err(format!("read: {e}")),
     };
+    let text = String::from_utf8_lossy(&bytes);
     let mut events = Vec::new();
     let mut unreadable = 0;
     for line in text.lines() {
@@ -517,7 +528,7 @@ pub fn read_events_from(path: &Path) -> (Vec<SupportEvent>, usize) {
             Err(_) => unreadable += 1,
         }
     }
-    (events, unreadable)
+    Ok((events, unreadable))
 }
 
 /// Crash-safe rewrite: build the whole file beside the live one, then atomically swap it in — the
@@ -702,7 +713,10 @@ pub fn build_bundle(path: &Path, generated_at: String, location: String) -> Evid
         location,
         events,
         unreadable_records,
-        data_root: crate::data_root::support_summary(),
+        // Redacted here like every other free text the bundle carries (codebase review 2026-11-02): a
+        // redirected root's evidence names full paths, account name included, and those are the states
+        // in which a user would send this bundle.
+        data_root: redact(&crate::data_root::support_summary()),
     }
 }
 
@@ -1016,6 +1030,40 @@ mod tests {
         let (events, unreadable) = read_events_from(&temp_dir("absent").join("nothing.jsonl"));
         assert!(events.is_empty());
         assert_eq!(unreadable, 0);
+    }
+
+    // Codebase review 2026-11-02: an append read any failed read (or one stray non-UTF-8 byte) as an
+    // empty file and wrote one event over up to 400.
+    #[test]
+    fn an_append_never_rewrites_a_record_it_could_not_read() {
+        let dir = temp_dir("append-unreadable");
+        let path = dir.join("events.jsonl");
+        std::fs::create_dir_all(&path).unwrap(); // a read that fails on every platform
+        let event = SupportEvent::new(EventKind::Ledger, "op", "code", Outcome::Failed, "detail");
+        assert!(append_to(&path, &event).is_err());
+        assert!(path.is_dir(), "nothing replaced");
+        // One bad byte costs its own line, never the file.
+        let file = dir.join("mixed.jsonl");
+        let good = serde_json::to_string(&event).unwrap();
+        let mut bytes = format!("{good}\n").into_bytes();
+        bytes.extend_from_slice(b"\xff\xfe not json\n");
+        bytes.extend_from_slice(format!("{good}\n").as_bytes());
+        std::fs::write(&file, bytes).unwrap();
+        let (events, unreadable) = read_events_from(&file);
+        assert_eq!((events.len(), unreadable), (2, 1));
+        append_to(&file, &event).unwrap();
+        assert_eq!(read_events_from(&file).0.len(), 3, "the append kept what was there");
+    }
+
+    // Same review: the bundle's data-root line carried a redirected root's paths, account name
+    // included. It goes through the same redaction as every other free text in the bundle.
+    #[test]
+    fn the_bundle_redacts_its_data_root_line() {
+        let src = include_str!("support_evidence.rs");
+        assert!(src.contains(concat!("data_root: redact(&crate::data_root::", "support_summary())")));
+        let line = r#"REDIRECTED - Compy is running inside another app's container (AppDataNotUserRoaming { appdata: "C:\\Users\\Kuya\\AppData\\Roaming", expected: "C:\\Users\\Kuya\\AppData\\Roaming" }); changes are blocked"#;
+        let out = redact_with(line, &[("Kuya".to_string(), "<user>")]);
+        assert!(!out.contains("Kuya"), "{out}");
     }
 
     #[test]

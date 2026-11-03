@@ -216,7 +216,7 @@ pub(crate) fn arm_watermark() -> Result<usize, String> {
 /// its rows are not rolled back (see [`ArmedComparison::ledger_active`]). One read, so a change
 /// landing between two reads can't split them; recorded status only, so nothing probes the machine.
 fn ledger_marks() -> Result<(usize, usize), String> {
-    crate::history::load_history().map(|h| (h.len(), h.iter().filter(|c| c.status != "rolled_back").count()))
+    crate::history::load_history().map(|h| crate::history::ledger_marks_of(&h))
 }
 
 /// Both marks for an arm, with [`arm_watermark`]'s refusal when the history can't be read.
@@ -467,13 +467,34 @@ pub(crate) fn build_result(
     }
 }
 
+/// The fix itself read Off before this settle (`on_session_finalized`), for the arm it was read for:
+/// the session measured the machine without it. Expiry still wins.
+fn confound_if_fix_was_off(result: &mut ComparisonResult, armed: &ArmedComparison, fix_off: Option<(String, bool)>) {
+    if result.verdict != "expired" && fix_off.is_some_and(|(rec, off)| off && rec == armed.rec_id) {
+        result.verdict = "confounded".into();
+    }
+}
+
 /// Called after a session finalizes. If a comparison is armed for THIS game, compute + store the
 /// result. A fix comparison then disarms; a tuning baseline stays armed (keeps measuring). A
 /// different game leaves the arming intact for its own next session. Returns the kind of the
 /// comparison this session settled (a result was written), or `None` when it settled nothing; the
 /// session-end toast reads it (P7-notify).
 pub(crate) fn on_session_finalized(s: &SessionSummary) -> Option<ComparisonKind> {
-    on_session_finalized_at(&armed_path(), &result_path(), s)
+    // The armed fix's own state on the machine, read BEFORE the lock: a live probe never runs under
+    // it (review round 2, 2026-11-02). The marks see an undo Compy recorded; this sees the fix put back
+    // outside Compy, which left the session measuring a fix that wasn't on.
+    // Only for a session that could settle it: the probe can spawn PowerShell, and the settle below
+    // drops every other session before using it (slice 6 review).
+    let could_settle = s.samples >= crate::experiment::MIN_TREATMENT_SAMPLES && crate::experiment::has_frame_reading(s);
+    let fix_off = load_armed()
+        .filter(|a| a.kind == ComparisonKind::Fix && could_settle && !s.process_name.is_empty())
+        .filter(|a| a.game.eq_ignore_ascii_case(&s.process_name))
+        .map(|a| {
+            let off = crate::history::newest_applied_reads_off(&a.rec_id) == Some(true);
+            (a.rec_id, off)
+        });
+    on_session_finalized_at(&armed_path(), &result_path(), s, fix_off)
 }
 
 /// Path-parameterized for the same reason as [`report_tuning_crash_at`]. The disarm at the end
@@ -483,6 +504,7 @@ fn on_session_finalized_at(
     armed_path_: &std::path::Path,
     result_path_: &std::path::Path,
     s: &SessionSummary,
+    fix_off: Option<(String, bool)>,
 ) -> Option<ComparisonKind> {
     let _lock = lock_comparison();
     let armed = load_armed_from(armed_path_)?;
@@ -501,7 +523,7 @@ fn on_session_finalized_at(
     }
     // Both confound marks from one read (`ledger_marks`).
     let marks = ledger_marks().ok();
-    let result = build_result(
+    let mut result = build_result(
         &armed,
         s,
         DEFAULT_NOISE_FLOOR_PCT,
@@ -526,6 +548,7 @@ fn on_session_finalized_at(
         marks.map(|m| m.1),
         chrono::Utc::now(),
     );
+    confound_if_fix_was_off(&mut result, &armed, fix_off);
     // Restored after PR #395's review: the `save_result` wrapper this was lifted out of created
     // the data folder first. Unreachable today — a `Some` arm above means the folder already exists
     // — but "unreachable today" is a property of the current call sites, not of this function.
@@ -1046,7 +1069,7 @@ mod comparison_race_tests {
 
         let (a, r) = (armed.clone(), result.clone());
         let left = arm_lands_mid_seam(&armed, move || {
-            let _ = on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None));
+            let _ = on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None), None);
         });
         assert_survived(left, "session finalize");
     }
@@ -1069,11 +1092,11 @@ mod comparison_race_tests {
         behind.avg_fps = 0.0;
         behind.avg_frametime_ms = 0.0;
         behind.background_secs_excluded = Some(900);
-        assert_eq!(on_session_finalized_at(&armed, &result, &behind), None, "nothing settled");
+        assert_eq!(on_session_finalized_at(&armed, &result, &behind, None), None, "nothing settled");
         assert!(!result.exists(), "no result from a session with no reading");
         assert_eq!(load_armed_from(&armed).map(|a| a.rec_id), Some("waiting".to_string()), "the arm waits");
         assert_eq!(
-            on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None)),
+            on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None), None),
             Some(ComparisonKind::Fix),
             "the settle is reported to the session-end toast (P7-notify)"
         );
@@ -1095,12 +1118,51 @@ mod comparison_race_tests {
         let mut short = super::comparison_tests::session_fixture(84.0, None);
         short.samples = crate::experiment::MIN_TREATMENT_SAMPLES - 1;
         for s in [&lowless, &short] {
-            assert_eq!(on_session_finalized_at(&armed, &result, s), None, "nothing settled");
+            assert_eq!(on_session_finalized_at(&armed, &result, s, None), None, "nothing settled");
             assert!(!result.exists() && load_armed_from(&armed).is_some(), "the arm waits");
         }
         let mut upper = super::comparison_tests::session_fixture(84.0, None);
         upper.process_name = upper.process_name.to_uppercase();
-        assert_eq!(on_session_finalized_at(&armed, &result, &upper), Some(ComparisonKind::Fix), "same game, other case");
+        assert_eq!(on_session_finalized_at(&armed, &result, &upper, None), Some(ComparisonKind::Fix), "same game, other case");
+    }
+
+    /// The probe runs before the lock, and only for a session that could settle the arm (slice 6
+    /// review): `newest_applied_reads_off` can spawn PowerShell, and a live probe never runs under a
+    /// store lock. Tokens are built by concat! so this test's own lines don't match the scan.
+    #[test]
+    fn the_fix_probe_runs_before_the_lock_and_only_for_a_session_that_could_settle() {
+        let src = include_str!("comparison.rs");
+        let start = src.find(concat!("pub(crate) fn ", "on_session_finalized(s: &SessionSummary)")).expect("wrapper");
+        let body = &src[start..];
+        let body = &body[..body.find(concat!("fn on_session_", "finalized_at(")).expect("the locked fn")];
+        assert!(body.contains(concat!("newest_applied_", "reads_off(")), "the wrapper reads the fix");
+        assert!(!body.contains(concat!("lock_", "comparison()")), "and takes no lock to do it");
+        let gate = body.find(concat!("could_", "settle &&")).expect("the settle gates");
+        assert!(gate < body.find(concat!("newest_applied_", "reads_off(")).unwrap());
+    }
+
+    /// Review round 2: the marks see an undo Compy recorded, never the fix put back outside Compy
+    /// (Windows Update restoring a setting), so a session measured without the fix was credited to it.
+    #[test]
+    fn a_fix_put_back_outside_compy_confounds_the_result() {
+        let now = chrono::Utc::now();
+        let mut armed = armed_of(ComparisonKind::Fix, "fix");
+        armed.armed_at = now.to_rfc3339();
+        let s = super::comparison_tests::session_fixture(84.0, None);
+        let fair = |a: &ArmedComparison| build_result(a, &s, 3.0, Some(a.ledger_watermark), None, now);
+        let mut r = fair(&armed);
+        assert_ne!(r.verdict, "confounded");
+        confound_if_fix_was_off(&mut r, &armed, Some(("fix".into(), true)));
+        assert_eq!(r.verdict, "confounded");
+        for other in [Some(("other".to_string(), true)), Some(("fix".to_string(), false)), None] {
+            let mut r = fair(&armed);
+            confound_if_fix_was_off(&mut r, &armed, other.clone());
+            assert_ne!(r.verdict, "confounded", "{other:?}");
+        }
+        armed.armed_at = (now - chrono::Duration::days(ARM_MAX_AGE_DAYS + 1)).to_rfc3339();
+        let mut r = fair(&armed);
+        confound_if_fix_was_off(&mut r, &armed, Some(("fix".into(), true)));
+        assert_eq!(r.verdict, "expired", "expiry still wins");
     }
 
     /// Same review: an undo changes a row's status and leaves the entry count alone, so a delta measured
@@ -1143,7 +1205,7 @@ mod comparison_race_tests {
         let result = blocker.join("compy_comparison_result.json"); // parent is a regular file
         arm_at(&armed, armed_of(ComparisonKind::Fix, "write-fails")).unwrap();
         assert_eq!(
-            on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None)),
+            on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None), None),
             None,
             "no result on disk, so no settle reaches the toast"
         );
@@ -1226,7 +1288,7 @@ mod comparison_race_tests {
         let (a, r) = (armed.clone(), result.clone());
         let _seam = crate::race_seam::PanicAt::arm(crate::race_seam::AFTER_RESULT_WRITE);
         let died = std::thread::spawn(move || {
-            let _ = on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None));
+            let _ = on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None), None);
         })
         .join();
         assert!(died.is_err(), "the armed seam was supposed to panic mid-sequence");
