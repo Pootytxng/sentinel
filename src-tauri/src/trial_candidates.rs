@@ -172,7 +172,9 @@ pub(crate) enum DimensionRisk {
 /// P8-dims: the risk dimensions the Trial receipt lists (RISK_MODEL §3: reversibility certainty,
 /// stability risk, compatibility uncertainty, security impact), as the catalog states them in a
 /// change's `risk_dimensions`. `None` = the catalog doesn't state it: the receipt says "not stated",
-/// and nothing estimates it from the overall word. No catalog change states one today.
+/// and nothing estimates it from the overall word. Every one-click change states all four since
+/// P8-dims-grades (`recommendations::stated_risk_dimensions`, graded from evidence); advisory
+/// entries state none.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct RiskDimensions {
     #[serde(default, deserialize_with = "lenient")]

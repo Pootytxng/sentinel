@@ -65,6 +65,13 @@ pub(crate) struct Recommendation {
     eligible: bool,
     #[serde(default)]
     ineligible_reason: Option<String>,
+    risk_dimensions: None,
+    /// P8-dims-grades: the risk dimensions the catalog states for a one-click change (RISK_MODEL
+    /// §3), from [`STATED_RISK_DIMENSIONS`] — graded from the apply code and the catalog's own
+    /// downside, never filled in to look complete. `None` for every advisory-only entry. Serialized
+    /// only when stated, so the Trial receipt says "not stated" for the rest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    risk_dimensions: Option<crate::trial_candidates::RiskDimensions>,
 }
 
 fn default_eligible() -> bool {
@@ -371,6 +378,7 @@ pub(crate) fn evaluate_rule_spec(spec: &RuleSpec, hw: &HardwareInfo) -> Option<R
         provenance: spec.provenance,
         eligible,
         ineligible_reason,
+        risk_dimensions: None,
     })
 }
 
@@ -413,6 +421,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         provenance: Provenance::MeasuredSignal,
         eligible: true,
         ineligible_reason: None,
+        risk_dimensions: None,
     });
 
     // game-mode is now defined in src-tauri/resources/baseline-rules-v1.json
@@ -457,6 +466,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             provenance: Provenance::MeasuredSignal,
             eligible: true,
             ineligible_reason: None,
+            risk_dimensions: None,
         });
     }
 
@@ -478,6 +488,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         provenance: Provenance::ExpectedImpact,
         eligible: true,
         ineligible_reason: None,
+        risk_dimensions: None,
     });
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
@@ -497,6 +508,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             provenance: Provenance::ExpectedImpact,
             eligible: true,
             ineligible_reason: None,
+            risk_dimensions: None,
         });
 
         recs.push(Recommendation {
@@ -513,6 +525,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             provenance: Provenance::MeasuredSignal,
             eligible: true,
             ineligible_reason: None,
+            risk_dimensions: None,
         });
     }
 
@@ -531,6 +544,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             provenance: Provenance::ExpectedImpact,
             eligible: true,
             ineligible_reason: None,
+            risk_dimensions: None,
         });
     }
 
@@ -552,6 +566,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             provenance: Provenance::ExpectedImpact,
             eligible: true,
             ineligible_reason: None,
+            risk_dimensions: None,
         });
     }
 
@@ -576,6 +591,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 provenance: Provenance::Verified,
                 eligible: true,
                 ineligible_reason: None,
+                risk_dimensions: None,
             });
             break;
         }
@@ -607,6 +623,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             provenance: Provenance::ExpectedImpact,
             eligible: true,
             ineligible_reason: None,
+            risk_dimensions: None,
         });
     }
 
@@ -634,6 +651,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 provenance: Provenance::MeasuredSignal,
                 eligible: true,
                 ineligible_reason: None,
+                risk_dimensions: None,
             });
         }
     }
@@ -664,6 +682,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
                 provenance: Provenance::Verified,
                 eligible: true,
                 ineligible_reason: None,
+                risk_dimensions: None,
             });
         }
     }
@@ -688,6 +707,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             provenance: Provenance::Verified,
             eligible: true,
             ineligible_reason: None,
+            risk_dimensions: None,
         });
     }
 
@@ -707,13 +727,94 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             provenance: Provenance::MeasuredSignal,
             eligible: true,
             ineligible_reason: None,
+            risk_dimensions: None,
         });
     }
 
     // ─── Network ─────────────────────────────────────────────────────────
     // nagle-disable migrated to baseline-rules-v1.json.
 
+    // P8-dims-grades: one source for every change's stated dimensions, whether the row came from the
+    // JSON rules or from the code above.
+    for rec in &mut recs {
+        rec.risk_dimensions = stated_risk_dimensions(&rec.id);
+    }
     recs
+}
+
+/// P8-dims-grades (RISK_MODEL §3; owner delegated the grading 2026-11-03, to overrule by editing a
+/// row): the four dimensions the Trial receipt lists, per one-click change, each graded FROM
+/// EVIDENCE in this repo — the apply/rollback code in `actions.rs` (what is read, snapshotted and
+/// restored), the catalog's own `downside` words and conditions, and the Trial records in
+/// `docs/WORK_TRAIN.md` / `docs/BACKLOG.md`. A dimension with no evidence stays `None`, which the
+/// receipt says as "not stated". Advisory-only entries (no apply) have no row and state nothing.
+///
+/// The words: `Low` = a small risk on that dimension, `Moderate` = a real, documented one, `High`
+/// never appears (it would make the change Unsupported, RISK_MODEL §1).
+///
+/// How each dimension was graded (the same rule for all 16, so a grade is a fact about the code):
+/// - reversibility: `Low` when the apply reads the EXACT prior values into a typed Snapshot and the
+///   typed rollback writes them back (or deletes what was absent), refusing to apply on an unreadable
+///   prior; `Moderate` when the rollback restores a STATE rather than the exact prior — the four
+///   service changes (start type comes back as Automatic / Manual / Disabled only, so a delayed
+///   start is not returned), the power plan (the prior plan is re-activated; a duplicated Ultimate
+///   scheme stays in the list) and reserved storage (the flag, not the reserved bytes).
+/// - stability: `Low` for an HKCU preference that changes no process, service or power state
+///   (Game Mode, visual effects, mouse acceleration, Game Bar) and for Fast Startup (a slower cold
+///   boot is its whole documented cost); `Moderate` where the catalog's downside names a real
+///   behaviour change or possible regression: a stopped Windows service, a whole-plan or link power
+///   state, the GPU scheduler ("occasionally a driver/game combo regresses"), the TCP stack, reserved
+///   storage ("a feature update may fail to install cleanly").
+/// - compatibility: `Low` when the change applies to every Windows 10/11 PC regardless of hardware;
+///   `Moderate` when it depends on hardware, a vendor, a driver or a plan: HAGS (a GPU-name heuristic,
+///   no WDDM or build check), the NVIDIA service (may not exist), EEE (the NIC driver must expose the
+///   switch), Nagle (per NIC, TCP games only), SysMain (SSD + RAM condition), Windows Search (HDD-only
+///   condition), the power plan (no laptop/AC gating, whole plan), the two power-plan settings (AC
+///   only, bound to the plan GUID) and reserved storage (C: condition; the cmdlet can fail
+///   mid-transition).
+/// - security: `Low` for all 16 — none writes a security control (Defender, UAC/LUA, firewall,
+///   SmartScreen, `Policies\*`, memory integrity, credentials): the apply paths are HKCU preferences,
+///   `GraphicsDrivers\HwSchMode`, `Session Manager\Power`, service start types, `powercfg`, the
+///   Tcpip interface parameters and NIC advanced properties. Stopping DiagTrack is a privacy choice,
+///   not a security control.
+pub(crate) fn stated_risk_dimensions(rec_id: &str) -> Option<crate::trial_candidates::RiskDimensions> {
+    use crate::trial_candidates::DimensionRisk::{Low, Moderate};
+    use crate::trial_candidates::RiskDimensions as D;
+    let d = |reversibility, stability, compatibility, security| D {
+        reversibility: Some(reversibility),
+        stability: Some(stability),
+        compatibility: Some(compatibility),
+        security: Some(security),
+    };
+    Some(match rec_id {
+        // HKCU preferences: exact prior, exact restore; no process or power state touched.
+        "game-mode" => d(Low, Low, Low, Low), // drift (ReLive/ShadowPlay reset it) is a downside, not instability
+        "visual-effects" => d(Low, Low, Low, Low), // the only change with measured Trials (no change / too noisy)
+        "mouse-accel-off" => d(Low, Low, Low, Low),
+        "game-bar-disable" => d(Low, Low, Low, Low),
+        // Services: start type restored as Automatic / Manual / Disabled only; a stopped service
+        // changes behaviour (catalog downside); SysMain and Search are hardware-conditioned.
+        "sysmain-disable" => d(Moderate, Moderate, Moderate, Low),
+        "nvidia-telemetry" => d(Moderate, Moderate, Moderate, Low),
+        "diagtrack-disable" => d(Moderate, Moderate, Low, Low),
+        "windows-search-disable" => d(Moderate, Moderate, Moderate, Low),
+        // Power: the whole plan on every profile, the prior plan re-activated on rollback.
+        "power-ultimate" => d(Moderate, Moderate, Moderate, Low),
+        // Power-plan settings: exact AC/DC priors on the plan they were read from, AC written only.
+        "usb-selective-suspend-off" => d(Low, Moderate, Moderate, Low),
+        "pcie-aspm-off" => d(Low, Moderate, Moderate, Low),
+        // GPU scheduler: exact HwSchMode prior; reboot; a driver/game combo can regress; GPU-name gate.
+        "hags-enable" => d(Low, Moderate, Moderate, Low),
+        // Fast Startup: exact HiberbootEnabled prior; a slower cold boot is its cost; every PC.
+        "fast-startup-off" => d(Low, Low, Low, Low),
+        // Reserved storage: the Enabled/Disabled flag comes back, not the bytes; a feature update may
+        // need space; only offered when C: is low.
+        "reserved-storage-off" => d(Moderate, Moderate, Moderate, Low),
+        // Network: per-NIC exact priors (value or absence), TCP-only effect, NIC-dependent.
+        "nagle-disable" => d(Low, Moderate, Moderate, Low),
+        "eee-disable" => d(Low, Moderate, Moderate, Low),
+        _ => return None,
+    })
 }
 
 #[tauri::command]
@@ -746,6 +847,40 @@ mod rec_tests {
         GpuInfo {
             name: name.into(),
             ..Default::default()
+        }
+    }
+
+    // P8-dims-grades: every one-click change states all four dimensions, graded Low or Moderate
+    // (High would make it Unsupported); an advisory-only entry states none. The serialized shape is
+    // the one `trial_candidates::stated_risk` reads, so the receipt names these words.
+    #[test]
+    fn every_one_click_change_states_its_four_risk_dimensions_and_no_advisory_does() {
+        use crate::trial_candidates::{DimensionRisk, Risk, RiskDimensions};
+        for id in crate::history::APPLIABLE_REC_IDS {
+            let d: RiskDimensions = stated_risk_dimensions(id).unwrap_or_else(|| panic!("{id} states nothing"));
+            for (name, dim) in [("reversibility", d.reversibility), ("stability", d.stability), ("compatibility", d.compatibility), ("security", d.security)] {
+                let word = dim.unwrap_or_else(|| panic!("{id}: {name} not stated"));
+                assert_ne!(word, DimensionRisk::High, "{id}: {name} graded High would make it Unsupported");
+            }
+            assert_eq!(d.security, Some(DimensionRisk::Low), "{id}: no one-click change touches a security control");
+        }
+        for id in ["memory-integrity-vbs-advisory", "vrr-advisory", "ssd-upgrade-advisory", "gpu-driver-update", "monitor-max-refresh", "not-a-change"] {
+            assert_eq!(stated_risk_dimensions(id), None, "{id} is advisory: it states nothing");
+        }
+        // The HKCU preferences are the Low row; the services carry the restore-as-state caveat.
+        assert_eq!(stated_risk_dimensions("visual-effects").unwrap().reversibility, Some(DimensionRisk::Low));
+        assert_eq!(stated_risk_dimensions("windows-search-disable").unwrap().reversibility, Some(DimensionRisk::Moderate));
+        // Through the catalog: the row carries the words the picker and the Trial receipt read.
+        let catalog = serde_json::to_value(build_recommendations(&HardwareInfo::default())).unwrap();
+        let rows = catalog.as_array().unwrap();
+        let fast = rows.iter().find(|r| r["id"] == "fast-startup-off").expect("fast-startup-off is unconditional");
+        assert_eq!(fast["risk_dimensions"]["reversibility"], "low");
+        assert_eq!(fast["risk_dimensions"]["security"], "low");
+        let stated = crate::trial_candidates::stated_risk(&catalog, "fast-startup-off").expect("in the catalog");
+        assert_eq!(stated.overall, Risk::Low);
+        assert_eq!(stated.dimensions.compatibility, Some(DimensionRisk::Low));
+        for r in rows.iter().filter(|r| r["id"].as_str().is_some_and(|id| id.ends_with("-advisory"))) {
+            assert!(r.get("risk_dimensions").is_none(), "{}: advisory rows serialize no dimensions", r["id"]);
         }
     }
 
