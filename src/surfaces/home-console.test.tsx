@@ -521,9 +521,11 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
   });
 
   // P7-score (Constitution §34, §26): a check Compy could not read is not a failing check. It is
-  // left out of the ratio and named beside the number; the grade words are calm. Fails on the code
-  // before this slice (13 of 16 = 81 "FAIR", and "2 couldn't be read" nowhere).
-  it("unreadable checks are left out of the readiness ratio and said beside it, never graded as failures", () => {
+  // left out of the ratio and named on the page; the grade words are calm. Fails on the code
+  // before this slice (13 of 16 = 81 "FAIR", and "2 couldn't be read" nowhere). CR-ring-note (desk
+  // review 2026-11-03): the count left the ring's note, which wrapped past two lines at 1280x720
+  // with it; the Re-run band names it, as it names the advisory checks.
+  it("unreadable checks are left out of the readiness ratio and named on the page, never graded as failures", () => {
     const some: GameReadiness = {
       ...readiness,
       checks: Array.from({ length: 16 }, (_, i) => ({ id: `c${i}`, label: `C${i}`, status: i < 13 ? "ready" : i < 14 ? "attention" : "unknown", detail: "", value: null })),
@@ -534,8 +536,9 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
     const c = mount({ ...props, readiness: some }).container;
     const r = readout(c, "readiness");
     expect(r.value).toBe("93"); // 13 of the 14 READABLE checks, not 13 of 16
-    expect(r.el.textContent).toContain("13 of 14 checks passed");
-    expect(r.el.textContent).toContain("2 couldn't be read");
+    expect(r.el.querySelector(".ag-note")?.textContent).toBe("13 of 14 checks passed");
+    expect(r.el.textContent).not.toContain("couldn't be read"); // CR-ring-note: not in the ring's cell
+    expect(c.querySelector(".rcb")!.textContent).toContain("2 couldn't be measured"); // the band says it
     expect(r.el.textContent).toContain("Good");
     expect(r.el.textContent).not.toMatch(/NEEDS WORK|FAIR|GOOD/);
     cleanup();
