@@ -210,8 +210,14 @@ fn hags_capable(name: &str) -> bool {
             digits.len() >= 4
         })
     });
-    // Windows names Arc "Intel(R) Arc(TM) A770 Graphics", which the old " ARC A" match never saw.
-    let arc = ["ARC ", "ARC A", "ARC B", "ARC(TM)"].iter().any(|t| u.contains(t));
+    // Discrete Arc only: Windows names it "Intel(R) Arc(TM) A770 Graphics", which the old " ARC A"
+    // match never saw. The Core Ultra iGPU ("Intel(R) Arc(TM) Graphics", "Arc(TM) 140V GPU") is not a
+    // known HAGS part, so a bare "Arc" is not enough (Rust review 2026-11-03).
+    let arc = u.match_indices("ARC").any(|(i, _)| {
+        let rest = u[i + 3..].trim_start_matches("(TM)").trim_start();
+        let mut c = rest.chars();
+        matches!(c.next(), Some('A' | 'B')) && c.take_while(char::is_ascii_digit).count() == 3
+    });
     u.contains("RTX") || u.contains("GTX 16") || rdna || arc
 }
 
@@ -763,10 +769,10 @@ mod rec_tests {
     // Same review: "RX 5" matched the RX 550-590 (Polaris), which can't use HAGS.
     #[test]
     fn hags_is_offered_only_on_gpus_that_support_it() {
-        for yes in ["NVIDIA GeForce RTX 3060", "NVIDIA GeForce GTX 1660 SUPER", "AMD Radeon RX 5700 XT", "AMD Radeon RX 5500M", "AMD Radeon RX 6600", "AMD Radeon RX 9070 XT", "Intel(R) Arc(TM) A770 Graphics"] {
+        for yes in ["NVIDIA GeForce RTX 3060", "NVIDIA GeForce GTX 1660 SUPER", "AMD Radeon RX 5700 XT", "AMD Radeon RX 5500M", "AMD Radeon RX 6600", "AMD Radeon RX 9070 XT", "Intel(R) Arc(TM) A770 Graphics", "Intel Arc B580", "Intel(R) Arc(TM) A380"] {
             assert!(hags_capable(yes), "{yes}");
         }
-        for no in ["AMD Radeon RX 580 Series", "Radeon RX 550", "AMD Radeon RX 590", "AMD Radeon RX Vega 56", "NVIDIA GeForce GTX 1060", "Intel(R) UHD Graphics 630"] {
+        for no in ["AMD Radeon RX 580 Series", "Radeon RX 550", "AMD Radeon RX 590", "AMD Radeon RX Vega 56", "NVIDIA GeForce GTX 1060", "Intel(R) UHD Graphics 630", "Intel(R) Arc(TM) Graphics", "Intel(R) Arc(TM) 140V GPU (16GB)"] {
             assert!(!hags_capable(no), "{no}");
         }
     }
