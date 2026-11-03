@@ -1024,11 +1024,31 @@ fn load_dismissals_from(path: &std::path::Path) -> Vec<String> {
 /// but a read that fails right now (an antivirus lock) is an error: a dismiss or restore built on it
 /// saved the list over every earlier dismissal.
 fn load_dismissals_checked_from(path: &std::path::Path) -> Result<Vec<String>, String> {
+    if dismissals_read_fault() {
+        return Err("could not read your dismissed-checks setting right now (test fault); nothing was changed".into());
+    }
     match std::fs::read(path) {
         Ok(bytes) => Ok(serde_json::from_slice(&bytes).unwrap_or_default()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(e) => Err(format!("could not read your dismissed-checks setting right now ({e}); nothing was changed")),
     }
+}
+
+// Test seam for the read that fails while the file is still there (an antivirus lock). A real lock
+// also blocks the replace, so a test built on one passes even if a dismiss reads through the lossy
+// loader; this fails only the read, so the earlier list surviving is what proves the fix.
+#[cfg(test)]
+thread_local! {
+    static FAIL_NEXT_DISMISSALS_READ: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+#[cfg(test)]
+fn dismissals_read_fault() -> bool {
+    FAIL_NEXT_DISMISSALS_READ.with(|f| f.replace(false))
+}
+#[cfg(not(test))]
+#[inline(always)]
+fn dismissals_read_fault() -> bool {
+    false
 }
 
 fn save_dismissals_to(path: &std::path::Path, ids: &[String]) -> Result<(), String> {
@@ -1429,11 +1449,19 @@ mod readiness_tests {
     #[test]
     fn a_dismiss_never_rewrites_a_list_it_could_not_read() {
         let dir = std::env::temp_dir().join(format!("compy-dismissals-unreadable-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("readiness_dismissals.json");
-        std::fs::create_dir_all(&path).unwrap(); // a read that fails on every platform
+        save_dismissals_to(&path, &["earlier".to_string()]).unwrap();
+        // The read fails, the write would not: through the lossy loader the dismiss would save ["x"]
+        // over the earlier dismissal; the checked one refuses before anything is written.
+        FAIL_NEXT_DISMISSALS_READ.with(|f| f.set(true));
         assert!(dismiss_readiness_check_at(&path, "x".into()).is_err());
-        assert!(restore_readiness_check_at(&path, "x".into()).is_err());
-        assert!(path.is_dir(), "nothing replaced");
+        FAIL_NEXT_DISMISSALS_READ.with(|f| f.set(true));
+        assert!(restore_readiness_check_at(&path, "earlier".into()).is_err());
+        assert_eq!(load_dismissals_checked_from(&path).unwrap(), vec!["earlier".to_string()], "the earlier dismissal survives");
+        // The loader itself: a path it can't read is an error, a missing file is an empty list.
+        assert!(load_dismissals_checked_from(&dir).is_err());
+        assert!(load_dismissals_checked_from(&dir.join("absent.json")).unwrap().is_empty());
         std::fs::remove_dir_all(&dir).ok();
     }
 

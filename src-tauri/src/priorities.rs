@@ -331,17 +331,15 @@ pub(crate) fn build_priorities(
     }
 
     // Rule 12: Memory Integrity / VBS advisory (security tradeoff, never a limiter).
+    const VBS_ADVISORY_ID: &str = "memory-integrity-vbs-advisory";
     {
         let recs = recommendations.as_array().map(Vec::as_slice).unwrap_or(&[]);
-        if let Some(r) = recs.iter().find(|r| {
-            let id = r.get("id").and_then(Value::as_str).unwrap_or("").to_lowercase();
-            let title = r.get("title").and_then(Value::as_str).unwrap_or("").to_lowercase();
-            id.contains("memory-integrity")
-                || id.contains("vbs")
-                || title.contains("memory integrity")
-                || title.contains("core isolation")
-                || title.contains("vbs")
-        }) {
+        // The exact advisory id, not a word match: the row now SAYS "turned on", which only this rule's
+        // condition guarantees — a future "turn on core isolation" rule must not read as already on.
+        if let Some(r) = recs
+            .iter()
+            .find(|r| r.get("id").and_then(Value::as_str) == Some(VBS_ADVISORY_ID))
+        {
             // The advisory exists only while Memory Integrity / VBS is turned on (its catalog rule's
             // condition, read from the registry), so the row says on (codebase review 2026-11-02).
             // It read `currently_applied`, which a rule with no state check never sets, and said
@@ -724,6 +722,10 @@ mod priority_tests {
         assert!(row.reason.contains("is turned on") && !row.reason.contains("off"), "{}", row.reason);
         let none = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &json!([]));
         assert!(none.not_worth_touching.iter().all(|i| i.id != "memory-integrity"), "no advisory, no row");
+        // A rule that merely MENTIONS core isolation is not the advisory: it must not read as "on".
+        let other = json!([{ "id": "core-isolation-enable", "title": "Turn on Core isolation", "currently_applied": false, "severity": "moderate" }]);
+        let o = build_priorities(&readiness(vec![]), &other, &json!([]), &json!([]));
+        assert!(o.not_worth_touching.iter().all(|i| i.id != "memory-integrity"), "a word match is not the advisory");
     }
 
     // Same review: a safe change the catalog marks "not for this PC" read as a pending limiter.
