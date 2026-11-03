@@ -147,45 +147,13 @@ impl<'de> Deserialize<'de> for Risk {
     }
 }
 
-/// Reads a stored value as `T` when this build knows it, else `None` (absent, null, or a value a
-/// newer Compy wrote). For record fields that must never fail a whole store's load, the way an
-/// unreadable experiments file is set aside: one unknown word must not cost every Trial on record.
-pub(crate) fn lenient<'de, D, T>(d: D) -> Result<Option<T>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: serde::de::DeserializeOwned,
-{
-    Ok(serde_json::from_value(Value::deserialize(d)?).ok())
-}
-
-/// P8-dims (RISK_MODEL §3): the risk the catalog states for a change on one dimension, in the
-/// catalog's words "low", "moderate" or "high". Any other word is not a statement this build can
-/// read, so it reads as not stated.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum DimensionRisk {
-    Low,
-    Moderate,
-    High,
-}
-
-/// P8-dims: the risk dimensions the Trial receipt lists (RISK_MODEL §3: reversibility certainty,
-/// stability risk, compatibility uncertainty, security impact), as the catalog states them in a
-/// change's `risk_dimensions`. `None` = the catalog doesn't state it: the receipt says "not stated",
-/// and nothing estimates it from the overall word. Every one-click change states all four since
-/// P8-dims-grades (`recommendations::stated_risk_dimensions`, graded from evidence); advisory
-/// entries state none.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct RiskDimensions {
-    #[serde(default, deserialize_with = "lenient")]
-    pub reversibility: Option<DimensionRisk>,
-    #[serde(default, deserialize_with = "lenient")]
-    pub stability: Option<DimensionRisk>,
-    #[serde(default, deserialize_with = "lenient")]
-    pub compatibility: Option<DimensionRisk>,
-    #[serde(default, deserialize_with = "lenient")]
-    pub security: Option<DimensionRisk>,
-}
+// The catalog owns the risk vocabulary (`recommendations.rs`): the words a change's row states, and the
+// lenient reader a stored word goes through. Re-exported here so the Trial code and the experiment store
+// keep their `trial_candidates::` paths. The types live THERE, not here, because `recommendations` is
+// reached from inside the Trust Ledger's lock (history -> leftovers -> recommendations) and this module
+// reaches `experiment` and the other stores: a `recommendations -> trial_candidates` import closed that
+// loop in the static call graph (`scripts/store-lock-order-guard.test.mjs` #283, 2026-11-03).
+pub(crate) use crate::recommendations::{lenient, DimensionRisk, RiskDimensions};
 
 /// P8-dims: what the catalog stated about one change's risk, kept on a Trial's record at its start
 /// (`experiment::ExperimentRecord::stated_risk`), so its receipt names the risk the Trial ran under

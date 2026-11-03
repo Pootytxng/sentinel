@@ -46,6 +46,46 @@ pub(crate) enum Provenance {
     ExpectedImpact,
 }
 
+/// Reads a stored value as `T` when this build knows it (used through `trial_candidates::lenient`), else `None` (absent, null, or a value a
+/// newer Compy wrote). For record fields that must never fail a whole store's load, the way an
+/// unreadable experiments file is set aside: one unknown word must not cost every Trial on record.
+pub(crate) fn lenient<'de, D, T>(d: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    Ok(serde_json::from_value(serde_json::Value::deserialize(d)?).ok())
+}
+
+/// P8-dims (RISK_MODEL §3): the risk the catalog states for a change on one dimension, in the
+/// catalog's words "low", "moderate" or "high". Any other word is not a statement this build can
+/// read, so it reads as not stated.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum DimensionRisk {
+    Low,
+    Moderate,
+    High,
+}
+
+/// P8-dims: the risk dimensions the Trial receipt lists (RISK_MODEL §3: reversibility certainty,
+/// stability risk, compatibility uncertainty, security impact), as the catalog states them in a
+/// change's `risk_dimensions`. `None` = the catalog doesn't state it: the receipt says "not stated",
+/// and nothing estimates it from the overall word. Every one-click change states all four since
+/// P8-dims-grades (`recommendations::stated_risk_dimensions`, graded from evidence); advisory
+/// entries state none.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct RiskDimensions {
+    #[serde(default, deserialize_with = "lenient")]
+    pub reversibility: Option<DimensionRisk>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub stability: Option<DimensionRisk>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub compatibility: Option<DimensionRisk>,
+    #[serde(default, deserialize_with = "lenient")]
+    pub security: Option<DimensionRisk>,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct Recommendation {
     id: String,
@@ -70,7 +110,7 @@ pub(crate) struct Recommendation {
     /// downside, never filled in to look complete. `None` for every advisory-only entry. Serialized
     /// only when stated, so the Trial receipt says "not stated" for the rest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    risk_dimensions: Option<crate::trial_candidates::RiskDimensions>,
+    risk_dimensions: Option<RiskDimensions>,
 }
 
 fn default_eligible() -> bool {
@@ -787,9 +827,9 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
 ///   `GraphicsDrivers\HwSchMode`, `Session Manager\Power`, service start types, `powercfg`, the
 ///   Tcpip interface parameters and NIC advanced properties. Stopping DiagTrack is a privacy choice,
 ///   not a security control.
-pub(crate) fn stated_risk_dimensions(rec_id: &str) -> Option<crate::trial_candidates::RiskDimensions> {
-    use crate::trial_candidates::DimensionRisk::{Low, Moderate};
-    use crate::trial_candidates::RiskDimensions as D;
+pub(crate) fn stated_risk_dimensions(rec_id: &str) -> Option<RiskDimensions> {
+    use DimensionRisk::{Low, Moderate};
+    use RiskDimensions as D;
     let d = |reversibility, stability, compatibility, security| D {
         reversibility: Some(reversibility),
         stability: Some(stability),
