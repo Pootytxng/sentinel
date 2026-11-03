@@ -387,6 +387,8 @@
     "lastCleanPartial": "Checked {{age}} · {{green}} of {{total}} looked good · {{unknown}} couldn't be measured",
     "lastFlagged_one": "Checked {{age}} · {{count}} thing to fix",
     "lastFlagged_other": "Checked {{age}} · {{count}} things to fix",
+    "advisoryNote_one": "{{count}} advisory, not graded",
+    "advisoryNote_other": "{{count}} advisory, not graded",
     "checkingButton": "Checking…",
     "rerunButton": "Re-run check",
     "fixLink": "Fix in {{room}}",

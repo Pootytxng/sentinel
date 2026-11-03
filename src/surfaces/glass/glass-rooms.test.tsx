@@ -165,6 +165,23 @@ describe("Health summary (glass redesign)", () => {
     expect(p.onRunCheck).toHaveBeenCalled();
   });
 
+  // Desk review 2026-11-03 (his rig: 14 ready, network QoS and VRR advisory): the card said "16 of 16
+  // checks look right" over two checks Compy notes but doesn't grade.
+  it("advisory checks leave the ratio and are named on the card, never counted as right", () => {
+    const base = readiness(0);
+    const withAdvisory: GameReadiness = {
+      ...base,
+      checks: base.checks.map((c, i) => (i >= 8 ? { ...c, status: "advisory" as const } : c)),
+      ready_count: 8,
+      advisory_count: 2,
+    };
+    home({ readiness: withAdvisory });
+    const card = screen.getByRole("button", { name: /Windows setup/ });
+    expect(card.textContent).toMatch(/8\s*of 8 checks look right/);
+    expect(card.textContent).toContain("2 advisory, not graded");
+    expect(card.textContent).not.toMatch(/10\s*of 10/);
+  });
+
   it("opens a game's page from its card and the Games door from 'Improve a game'", () => {
     const p = home();
     fireEvent.click(screen.getByRole("button", { name: "Open eldenring" }));

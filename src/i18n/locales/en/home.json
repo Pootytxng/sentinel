@@ -80,6 +80,8 @@
       "readinessNote": "{{passed}} of {{total}} checks passed",
       "readinessUnread_one": "{{count}} couldn't be read",
       "readinessUnread_other": "{{count}} couldn't be read",
+      "readinessAdvisory_one": "{{count}} advisory, not graded",
+      "readinessAdvisory_other": "{{count}} advisory, not graded",
       "readinessGrade": {
         "good": "Good",
         "fair": "Fair",
@@ -702,6 +704,8 @@
       "allGood": "No check needs a look",
       "unread_one": "{{count}} couldn't be read",
       "unread_other": "{{count}} couldn't be read",
+      "advisory_one": "{{count}} advisory, not graded",
+      "advisory_other": "{{count}} advisory, not graded",
       "run": "Run a check",
       "unknownNote": "Compy hasn't checked yet. Checking changes nothing."
     },

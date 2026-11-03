@@ -75,13 +75,20 @@ export function HomeGlass({
     if (!games.some((g) => g.key === chartKey)) setChartKey(games[0]?.key ?? null);
   }, [games, chartKey]);
 
-  // Same arithmetic as the console's readiness ring (P7-score): an unread check is left out.
+  // Same arithmetic as the console's readiness ring (P7-score): an unread check is left out, and so
+  // is an advisory one, which is noted, not graded, so it never "looks right" (desk review 2026-11-03).
   const readinessKnown = !!readiness && readiness.checks.length > 0;
   const unread = readinessKnown ? readiness!.unknown_count : 0;
-  const readable = readinessKnown ? Math.max(0, readiness!.checks.length - unread) : 0;
+  const advisory = readinessKnown ? readiness!.advisory_count : 0;
+  const graded = readinessKnown ? Math.max(0, readiness!.checks.length - unread - advisory) : 0;
   const attention = readinessKnown ? readiness!.attention_count : 0;
-  const good = readinessKnown ? Math.max(0, readable - attention) : 0;
-  const checksKnown = readinessKnown && readable > 0;
+  const good = readinessKnown ? Math.max(0, graded - attention) : 0;
+  const checksKnown = readinessKnown && graded > 0;
+  // What the ratio left out, named on the card.
+  const leftOut = [
+    ...(unread > 0 ? [t("home.glass.checks.unread", { count: unread })] : []),
+    ...(advisory > 0 ? [t("home.glass.checks.advisory", { count: advisory })] : []),
+  ].join(" · ");
   // A dismissed check keeps its "attention" status (the backend only drops it from attention_count),
   // so it is left out here too: the page never names a check the user already set aside (codebase
   // review 2026-11-02), the same rule system-posture.ts keeps.
@@ -314,7 +321,7 @@ export function HomeGlass({
                   {checksKnown ? (
                     <>
                       <span className="gl-num">{good}</span>
-                      <small>{t("home.glass.checks.of", { total: readable })}</small>
+                      <small>{t("home.glass.checks.of", { total: graded })}</small>
                     </>
                   ) : (
                     t("home.glass.checks.run")
@@ -322,13 +329,12 @@ export function HomeGlass({
                 </span>
               </span>
               <span className="gl-kpi-note">
+                {/* A check that ran but graded nothing says what it left out, never "hasn't checked". */}
                 {!checksKnown
-                  ? t("home.glass.checks.unknownNote")
+                  ? leftOut || t("home.glass.checks.unknownNote")
                   : worthNames.length > 0
                     ? t("home.glass.checks.worth", { names: worthNames.slice(0, 2).join(", ") })
-                    : unread > 0
-                      ? t("home.glass.checks.unread", { count: unread })
-                      : t("home.glass.checks.allGood")}
+                    : leftOut || t("home.glass.checks.allGood")}
               </span>
             </button>
           </div>

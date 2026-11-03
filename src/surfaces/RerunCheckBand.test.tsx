@@ -44,7 +44,7 @@ const readiness = (over: Partial<GameReadiness>): GameReadiness => ({
 const storeCheck = (v: Partial<LastCheck>) =>
   localStorage.setItem(
     LAST_CHECK_KEY,
-    JSON.stringify({ at: Date.now(), total: 16, green: 16, fixCount: 0, ...v }),
+    JSON.stringify({ at: Date.now(), total: 16, green: 16, advisory: 0, unread: 0, fixCount: 0, ...v }),
   );
 
 /** What the user actually reads. The old tests asserted on tag labels and bare ratios. */
@@ -116,11 +116,43 @@ describe("RerunCheckBand honesty — age only with a real record", () => {
   });
 
   it("the same honesty holds for a stored snapshot with unreadable checks", () => {
-    storeCheck({ at: Date.now() - 60_000, total: 16, green: 14, fixCount: 0 });
+    storeCheck({ at: Date.now() - 60_000, total: 16, green: 14, unread: 2, fixCount: 0 });
     render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
     expect(line()).toContain("14 of 16 looked good");
     expect(line()).toContain("couldn't be measured");
     expect(line(), "claimed all 16 clean off a 14-green snapshot").not.toContain("all 16 looked");
+  });
+
+  // Desk review 2026-11-03 (his rig: 14 ready, network QoS and VRR advisory): the band said "all 16
+  // looked good" while FirstCheck said 2 were noted, not graded. An advisory never looks good.
+  it("a stored snapshot with advisory checks counts only the graded ones and names the advisory", () => {
+    storeCheck({ at: Date.now() - 4 * 60_000, total: 16, green: 14, advisory: 2, unread: 0, fixCount: 0 });
+    render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("Checked 4m ago · all 14 looked good · 2 advisory, not graded");
+    expect(line()).not.toContain("all 16");
+  });
+
+  it("the live fallback counts only the graded checks and names the advisory", () => {
+    const r = readiness({
+      checks: [chk("ready"), chk("ready"), chk("ready"), chk("advisory"), chk("unknown")],
+      unknown_count: 1,
+      advisory_count: 1,
+    });
+    render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("3 of 5 checks look good · 1 couldn't be measured · 1 advisory, not graded");
+    cleanup();
+    const clean = readiness({ checks: [chk("ready"), chk("ready"), chk("advisory"), chk("advisory")], advisory_count: 2 });
+    render(<RerunCheckBand readiness={clean} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("All 2 checks look good · 2 advisory, not graded");
+    expect(line()).not.toContain("All 4");
+  });
+
+  it("a record from before the split is not read back: live counts, no age", () => {
+    localStorage.setItem(LAST_CHECK_KEY, JSON.stringify({ at: Date.now() - 60_000, total: 16, green: 16, fixCount: 0 }));
+    const r = readiness({ checks: [chk("ready"), chk("advisory")], advisory_count: 1 });
+    render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
+    expect(line()).not.toMatch(/ago|just now|yesterday|Checked/);
+    expect(line()).toContain("The one check looks good · 1 advisory, not graded");
   });
 
   // The row is a status line, not a destination. It had grown into a bordered panel with an

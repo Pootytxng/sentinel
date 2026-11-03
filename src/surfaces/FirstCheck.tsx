@@ -94,10 +94,10 @@ export default function FirstCheck({
   const unread = readiness?.unknown_count ?? 0;
   const top = limiters[0] ?? null;
   const rest = limiters.slice(1);
-  // Nothing wrong = ready OR advisory (Home's band counts both as clean). But "measured perfect" is a
-  // READY check. An advisory is noted, not graded: one Compy can't judge (VRR, HDR) or a reading it
-  // notes without calling it right or wrong (8 GB of RAM, Wi-Fi). Never "confirmed right" (review
-  // 2026-11-03, rounds 1 and 2).
+  // Nothing wrong = ready OR advisory. But "measured perfect" is a READY check. An advisory is noted,
+  // not graded: one Compy can't judge (VRR, HDR) or a reading it notes without calling it right or
+  // wrong (8 GB of RAM, Wi-Fi). Never "confirmed right" (review 2026-11-03, rounds 1 and 2), and never
+  // counted as right on Home either: the record below carries the split (desk review 2026-11-03).
   const okChecks = checks.filter((c) => rowVerdict(c.status) === "ok");
   const greenChecks = okChecks.filter((c) => c.status === "ready");
   const advisoryChecks = okChecks.filter((c) => c.status === "advisory");
@@ -125,8 +125,8 @@ export default function FirstCheck({
   // never pairs a live count with an implied time (honesty law).
   useEffect(() => {
     if (phase !== "verdict") return;
-    recordLastCheck({ total: checks.length, green: okChecks.length, fixCount });
-  }, [phase, checks.length, okChecks.length, fixCount]);
+    recordLastCheck({ total: checks.length, green: greenChecks.length, advisory, unread, fixCount });
+  }, [phase, checks.length, greenChecks.length, advisory, unread, fixCount]);
 
   return (
     <div className={`fc-backdrop ${arcV2 ? "arc-v2" : ""}`}>
