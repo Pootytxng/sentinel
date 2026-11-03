@@ -73,8 +73,6 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 
 ## Queue
 
-**Lane, 2026-11-03 (owner: "ensure everything here that's actually deemed necessary is completed by you alone"):** the interactive Claude HQ session holds write access for the queue below. Scheduled sessions stay read-only until this line is removed.
-
 ### Now — finish what's open
 - [x] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
       (data-root tests), #661 (debrief unmeasured), #627 (ledger write announce), #604 (TS coverage).
@@ -800,9 +798,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-28 ~08:45-09:00 (scheduled, CODE-ONLY, owner playing WARDOGS): Phase 8 queue refill `fb483dd4`;
-  P8-posture-a `1eeef838` (cargo trial_candidates 20 passed, clippy clean, review r1 PASS-WITH-NITS; nit
-  folded into P8-posture-b). Not pushed - next FULL session pushes.
 - 2026-10-28 ~13:00-14:15 (scheduled, CODE-ONLY): Phase 9 queue refill `2fc32bf7`; P8-posture-b `48785b23`
   (tsc clean, targeted 570/570, full vitest 523/526 files - the 3 site-app tests need site-app/node_modules,
   absent in the worktree; review r1 MUST-FIX reload race fixed + guard test; SHOULD-FIX and NITs queued as
@@ -900,6 +895,20 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   to main and the owner came back (preflight BUSY, idle 0 s), so its three commits waited on `claude/train-live-round`;
   the 09:18 HQ session cherry-picked the code as `8be87e12` and folded the queue refill and this line into its own
   docs commit (the branch's docs commits restated the CR-1102-left overlay note that `2471184f` had already closed).
+- 2026-11-03 ~09:18 to ~12:35 (interactive from Claude HQ; owner: "ensure everything here that's actually deemed
+  necessary is completed by you alone", in WARDOGS throughout): from `claude/train-hq-1103`: the 08:43 refill's slices
+  (CR-tour-reject `a60b8068`, CR-ring-note `5e8cf37a`, CR-zh-gpu `eddf6c7e`), P9-bottleneck-sustained `88f15e9a` /
+  `3ed24a87` / `14d39b55`, P9-software-first `023da7d7`, P8-ack-enforce `81a9f14d`, P8-dims-grades `b46f2c6a` /
+  `14d39b55`, two CR-1102-left lines (`c127ce9b` stores, `8ef5772c` Lab count); review r2 `14d39b55`, the lock-order
+  guard's new back edge `df636307`, clippy `388f2d73`. Proof: tsc + vite build 0 errors; full vitest on `8ef5772c`
+  509/534 files, every failure environment-only (site deps, shallow clone, pwsh, Windows paths) except the lock-order
+  guard, fixed and 41/41 at head; desk cargo test 1769/0 and clippy clean on `388f2d73`, run at idle priority with a
+  shared target dir while the owner played (no FPS cost he reported). Rust review: one rust-tauri-reviewer round over
+  the four items (approve / approve / request-changes → fixed / approve-with-nits, every SHOULD taken). Landed on the
+  desk `main` as a fast-forward of this commit; NOT pushed, NOT installed (CODE-ONLY, game open): the next FULL session
+  pushes through the gate, then builds and installs. Lane line removed. The #678 scheduled task could not be turned off
+  from here (the task tools refuse Claude); walkthroughs P4–P7 and P8-first-advanced stay the owner's, named under
+  Needs owner with clicks and minutes.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
