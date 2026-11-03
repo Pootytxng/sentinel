@@ -3041,6 +3041,13 @@ fn real_play_start(
     Ok(crate::realplay::RealPlayEvidence { before, ..Default::default() })
 }
 
+/// P8-ack (RISK_MODEL §1): which changes need the user's tap on the line naming their cost before a
+/// Trial starts — the catalog's `safe` ones don't; moderate, unstated and unlisted ones do. Mirrors
+/// the UI's `needsCostAck` so both locks agree.
+pub(crate) fn needs_cost_ack(stated: Option<&crate::trial_candidates::StatedRisk>) -> bool {
+    stated.is_none_or(|r| r.overall != crate::trial_candidates::Risk::Low)
+}
+
 /// §4F step 1–4 — capture baseline, snapshot + apply ONE reversible change through the audited
 /// ledger boundary, and record a Running experiment. Refuses while dark, and while another experiment
 /// is starting or running. RECORD FIRST (#583): a `Pending` record naming the change is saved before
@@ -3077,8 +3084,20 @@ pub(crate) fn start_experiment(
     // P5-realplay: so is a way of measuring it doesn't know, and Smoothest in real play.
     let mode = start_mode(mode.as_deref(), outcome)?;
     // P8-dims: what the catalog states about this change's risk, read before the store lock and kept
-    // on the record. A read only; nothing is refused on it.
+    // on the record.
     let stated_risk = crate::trial_candidates::stated_risk_now(&rec_id);
+    // P8-ack-enforce (RISK_MODEL §1 Advanced; owner delegated the call 2026-11-03): a change the
+    // catalog rates moderate, or whose risk it doesn't state, starts only with the user's tap on its
+    // cost line recorded. The UI asks first ("I understand, test it"); this is the second lock, so no
+    // other caller — a later journey step, a scripted start — applies such a change to the machine
+    // without that consent. Refused before anything is recorded or changed; a low-risk change starts
+    // as before. The same rule as the UI's `needsCostAck`: safe starts, anything else needs the tap.
+    if needs_cost_ack(stated_risk.as_ref()) && cost_acknowledged != Some(true) {
+        return Err(format!(
+            "experiment not started — {rec_title} isn't rated low risk, so its cost needs your OK \
+             (\"I understand, test it\") before the Trial starts"
+        ));
+    }
     let _g = lock_store()?;
 
     // Cap the persisted free-text at the trust boundary (see MAX_TEXT_LEN). Truncate, don't reject.
@@ -7162,8 +7181,20 @@ mod experiment_tests {
         assert!(params.contains("cost_acknowledged: Option<bool>,"), "{params}");
         let first_save = start.find("save_store(&store)?").unwrap();
         assert!(start[..first_save].contains("        cost_acknowledged,\n"), "saved with the Pending record");
-        // A UI confirm and a record, nothing more: the start refuses nothing on it.
-        assert_eq!(start[..first_save].matches("cost_acknowledged").count(), 2, "only the parameter and the record field");
+        // P8-ack-enforce: the parameter, ONE refusal before the store lock (nothing recorded or changed
+        // yet), and the record field — the second lock behind the UI's tap.
+        assert_eq!(start[..first_save].matches("cost_acknowledged").count(), 3, "parameter, refusal, record field");
+        let refusal = start.find("cost_acknowledged != Some(true)").expect("the refusal");
+        let lock = start.find("let _g = lock_store()?;").expect("the store lock");
+        assert!(refusal < lock, "refused before the store lock, so nothing is recorded or changed");
+        assert!(start[..refusal].contains("needs_cost_ack(stated_risk.as_ref())"), "the catalog's own rating decides");
+        // The rule itself: safe starts without the tap; moderate, unstated and unlisted need it.
+        use crate::trial_candidates::{Risk, StatedRisk};
+        let rated = |overall: Risk| StatedRisk { overall, ..Default::default() };
+        assert!(!needs_cost_ack(Some(&rated(Risk::Low))));
+        assert!(needs_cost_ack(Some(&rated(Risk::Moderate))));
+        assert!(needs_cost_ack(Some(&rated(Risk::Unknown))));
+        assert!(needs_cost_ack(None), "a change the catalog doesn't list can't be shown to be low risk");
 
         for ack in [true, false] {
             let v = serde_json::to_value(ExperimentRecord { cost_acknowledged: Some(ack), ..rec(150.0, 5) }).unwrap();
