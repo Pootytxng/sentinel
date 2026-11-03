@@ -89,6 +89,35 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 // `std::fs::write` leaves the test green, and the guard guards nothing. It is thread-local and
 // one-shot: libtest gives every test its own thread, so one test's injection can never reach
 // another's, and consuming it disarms it even if the write then succeeds for some other reason.
+/// Set a damaged store file aside as `<file>.corrupt` without destroying an EARLIER set-aside
+/// (codebase review 2026-11-02 / 2026-11-03: the experiments, sessions, noise-floor and scoreboard
+/// stores each renamed over, or deleted, the previous `.corrupt`, so the second damage erased the
+/// first's recoverable bytes). An earlier `.corrupt` is first moved to `.corrupt.<its last write,
+/// unix seconds>` (or the first free `-<n>` after it), as the Trust Ledger's own set-aside does;
+/// when that move fails the damaged file is left in place rather than lose either copy. Returns
+/// whether the damaged file was set aside. Best effort, never panics; writes no Windows state.
+pub(crate) fn set_aside_damaged(path: &std::path::Path) -> bool {
+    let corrupt = path.with_extension("json.corrupt");
+    if std::fs::symlink_metadata(&corrupt).is_ok() {
+        let secs = std::fs::symlink_metadata(&corrupt)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_secs());
+        let moved = (0..100u32)
+            .map(|n| match n {
+                0 => path.with_extension(format!("json.corrupt.{secs}")),
+                n => path.with_extension(format!("json.corrupt.{secs}-{n}")),
+            })
+            .find(|older| std::fs::symlink_metadata(older).is_err())
+            .is_some_and(|older| std::fs::rename(&corrupt, older).is_ok());
+        if !moved {
+            return false;
+        }
+    }
+    std::fs::rename(path, &corrupt).is_ok()
+}
+
 #[cfg(test)]
 thread_local! {
     static FORCED: std::cell::Cell<FailPoint> = const { std::cell::Cell::new(FailPoint::None) };
@@ -556,5 +585,34 @@ mod tests {
             "a lock failure cost the user their previous data"
         );
         assert!(leftovers(&dir).is_empty(), "temp file not cleaned up");
+    }
+
+    // Codebase review 2026-11-03: a second damaged store must not erase the first's recoverable bytes.
+    #[test]
+    fn a_second_set_aside_keeps_the_first_beside_it() {
+        let dir = std::env::temp_dir().join(format!("compy-set-aside-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("store.json");
+        std::fs::write(&path, b"first damage").unwrap();
+        assert!(set_aside_damaged(&path), "first set-aside");
+        assert!(!path.exists());
+        assert_eq!(std::fs::read(path.with_extension("json.corrupt")).unwrap(), b"first damage");
+        std::fs::write(&path, b"second damage").unwrap();
+        assert!(set_aside_damaged(&path), "second set-aside");
+        assert_eq!(std::fs::read(path.with_extension("json.corrupt")).unwrap(), b"second damage", "the newest is .corrupt");
+        let kept: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().starts_with("store.json.corrupt."))
+            .collect();
+        assert_eq!(kept.len(), 1, "the earlier one moved beside it, not deleted: {kept:?}");
+        assert_eq!(std::fs::read(kept[0].path()).unwrap(), b"first damage");
+        // A third damage keeps both earlier ones (a free `-<n>` suffix within the same second).
+        std::fs::write(&path, b"third damage").unwrap();
+        assert!(set_aside_damaged(&path));
+        let kept = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("store.json.corrupt.")).count();
+        assert_eq!(kept, 2);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

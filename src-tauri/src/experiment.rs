@@ -678,9 +678,8 @@ pub(crate) fn load_store_checked_from(path: &Path) -> Result<ExperimentStore, St
     Ok(match serde_json::from_slice::<ExperimentStore>(&raw) {
         Ok(store) => store,
         Err(_) => {
-            let corrupt = path.with_extension("json.corrupt");
-            let _ = std::fs::remove_file(&corrupt);
-            let _ = std::fs::rename(path, &corrupt);
+            // An earlier set-aside is kept, never deleted (`set_aside_damaged`).
+            let _ = crate::atomic_write::set_aside_damaged(path);
             ExperimentStore::default()
         }
     })

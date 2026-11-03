@@ -168,8 +168,8 @@ fn load_store() -> ScoreStore {
                 // Don't silently reset a corrupt scoreboard (which the next save would then
                 // overwrite for good) — set the damaged bytes aside for recovery, then start
                 // fresh. This is arcade state, not a rollback contract, so it doesn't hard-fail.
-                let corrupt = path.with_extension("json.corrupt");
-                let _ = std::fs::rename(&path, &corrupt);
+                // An earlier set-aside is kept, never renamed over (`set_aside_damaged`).
+                let _ = crate::atomic_write::set_aside_damaged(&path);
                 ScoreStore::default()
             }
         },

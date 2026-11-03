@@ -828,8 +828,8 @@ fn load_sessions_checked_from(path: &Path) -> Result<Vec<SessionSummary>, String
             // this is not a rollback contract, so we don't hard-fail: losing session history is
             // non-destructive, and blocking every future save on it would be worse.) Bytes that
             // aren't UTF-8 are damage too, set aside rather than overwritten.
-            let corrupt = path.with_extension("json.corrupt");
-            let _ = std::fs::rename(path, &corrupt);
+            // An earlier set-aside is kept, never renamed over (`set_aside_damaged`).
+            let _ = crate::atomic_write::set_aside_damaged(path);
             Ok(Vec::new())
         }
     }
