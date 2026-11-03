@@ -1163,6 +1163,8 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                 let elapsed = start.elapsed().as_secs() as u32;
                 // Tooltip carry-over: the live tray tooltip reuses this tick's data (no new IPC).
                 let mut tip: Option<(f64, f64)> = None;
+                // P9-bottleneck-sustained: whether this tick's frame reading was a MEASURED one.
+                let mut tick_measured = false;
                 // Freshness gate (0.9.1): the helper now emits NOTHING when no game is
                 // positively attached (fail-closed attribution), so fps.json can legitimately
                 // sit frozen at its last sample. Same <3 s mtime rule as get_fps_status —
@@ -1201,6 +1203,7 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                             if measured {
                                 *lock_progress() = Some(acc.progress());
                             }
+                            tick_measured = measured;
                             tip = Some((s.fps, s.low1_fps));
                             if measured && s.low1_fps > 0.0 && timeline.len() < 7200 {
                                 timeline.push((elapsed, s.low1_fps));
@@ -1228,6 +1231,9 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
                     ram_read.then_some(cpu.ram_used_bytes),
                     ram_read.then_some(cpu.ram_total_bytes),
                 );
+                // P9-bottleneck-sustained: the saturation share counts only the game's own measured
+                // ticks, never a launcher, a menu before the first frame or a window in front.
+                acc.record_gpu_load(gpu_usage, tick_measured);
                 // Same driver-free interop as get_cpu_temp (cpu_temp.rs) — None when no HWiNFO/LHM/OHM
                 // is running; never fabricated. Session-scoped peak, same as the GPU sensors above.
                 let cpu_temp = crate::cpu_temp::read_cpu_temp().map(|t| t.temp_c.round() as u32);

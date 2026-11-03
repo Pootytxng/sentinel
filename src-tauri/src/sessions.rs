@@ -398,19 +398,25 @@ pub(crate) const GPU_LIMITED_PCT: u32 = 95;
 
 /// P9-bottleneck-sustained: how much of a session the GPU spent saturated, not just whether it ever
 /// was. One loading-screen or menu spike reads 100% and used to name the GPU the session's limiter
-/// with purchase links under it; a limiter is a share of the session, so this counts the ticks.
+/// with purchase links under it; a limiter is a share of the session, so this counts the ticks —
+/// only the MEASURED ones (the game in front, a fresh frame reading), the same ticks the session's
+/// own numbers are built from, so a launcher, a menu before the first frame, or another app's GPU
+/// load while the game sat behind a window never counts (review 2026-11-03).
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct GpuLoad {
-    /// Sensor ticks that read a GPU usage at all (the denominator, never the session's samples).
+    /// Measured ticks that also read a GPU usage (the denominator, never the session's samples).
     pub(crate) readings: u32,
     /// Of those, the ticks at or above [`GPU_LIMITED_PCT`].
     pub(crate) busy: u32,
 }
 
 impl GpuLoad {
-    /// Whole-percent share of the readings that were saturated; `None` with no reading.
+    /// Whole-percent share of the readings that were saturated, rounded DOWN so a share said as
+    /// "49%" never sits beside a verdict decided on exact counts as if it were half; `None` with no
+    /// reading or with counts that can't be (busy above readings).
     pub(crate) fn busy_share_pct(&self) -> Option<u32> {
-        (self.readings > 0).then(|| (self.busy * 100 + self.readings / 2) / self.readings)
+        (self.readings > 0 && self.busy <= self.readings)
+            .then(|| (u64::from(self.busy) * 100 / u64::from(self.readings)) as u32)
     }
 }
 
@@ -625,17 +631,27 @@ impl SessionAccumulator {
         }
         if let Some(u) = gpu_usage_pct {
             self.peak_gpu_usage_pct = Some(self.peak_gpu_usage_pct.map_or(u, |p| p.max(u)));
-            let load = self.gpu_load.get_or_insert(GpuLoad { readings: 0, busy: 0 });
-            load.readings += 1;
-            if u >= GPU_LIMITED_PCT {
-                load.busy += 1;
-            }
         }
         if let Some(r) = ram_used {
             self.peak_ram_used_bytes = Some(self.peak_ram_used_bytes.map_or(r, |p| p.max(r)));
         }
         if let Some(t) = ram_total {
             self.ram_total_bytes = Some(t);
+        }
+    }
+
+    /// P9-bottleneck-sustained: count this tick's GPU usage toward the session's saturation share,
+    /// but only when the tick was MEASURED (`record_tick` counted it: the game in front, a fresh
+    /// frame reading). The peak above keeps every tick, as before; the share keeps the game's own.
+    pub(crate) fn record_gpu_load(&mut self, gpu_usage_pct: Option<u32>, measured: bool) {
+        let Some(u) = gpu_usage_pct else { return };
+        if !measured {
+            return;
+        }
+        let load = self.gpu_load.get_or_insert(GpuLoad { readings: 0, busy: 0 });
+        load.readings += 1;
+        if u >= GPU_LIMITED_PCT {
+            load.busy += 1;
         }
     }
 
@@ -1272,20 +1288,38 @@ mod session_tests {
     // P9-bottleneck-sustained: the session counts its GPU readings and how many were saturated, so
     // a limiter claim can rest on a share of the session instead of one peak sample.
     #[test]
-    fn gpu_load_counts_saturated_readings_and_rounds_its_share() {
+    fn gpu_load_counts_saturated_measured_readings_and_floors_its_share() {
         let mut acc = SessionAccumulator::new("2026-11-03T00:00:00Z".into(), Some(0));
         acc.record_fps("game.exe", 120.0, 8.3, 90.0, 0);
         for u in [40, 95, 100, 96, 60, 94] {
             acc.record_sensors(None, Some(u), None, None);
+            acc.record_gpu_load(Some(u), true);
         }
-        acc.record_sensors(Some(60), None, None, None); // a tick with no usage reading counts nowhere
-        let s = acc.finalize(7);
+        acc.record_gpu_load(None, true); // a tick with no usage reading counts nowhere
+        acc.record_gpu_load(Some(100), false); // an unmeasured tick (launcher, menu, behind a window) counts nowhere
+        acc.record_gpu_load(Some(100), false);
+        let s = acc.finalize(9);
         assert_eq!(s.peak_gpu_usage_pct, Some(100));
         let load = s.gpu_load.expect("counted");
         assert_eq!((load.readings, load.busy), (6, 3));
         assert_eq!(load.busy_share_pct(), Some(50));
-        assert_eq!(GpuLoad { readings: 200, busy: 99 }.busy_share_pct(), Some(50)); // 49.5 rounds; the verdict uses the counts
+        assert_eq!(GpuLoad { readings: 200, busy: 99 }.busy_share_pct(), Some(49), "49.5 floors, never half");
+        assert_eq!(GpuLoad { readings: 900, busy: 1 }.busy_share_pct(), Some(0));
         assert_eq!(GpuLoad { readings: 0, busy: 0 }.busy_share_pct(), None);
+        assert_eq!(GpuLoad { readings: 3, busy: 4 }.busy_share_pct(), None, "counts that can't be");
+        assert_eq!(GpuLoad { readings: u32::MAX, busy: u32::MAX }.busy_share_pct(), Some(100), "no overflow");
+    }
+
+    #[test]
+    fn gpu_load_is_counted_only_on_measured_ticks() {
+        // Unmeasured ticks alone leave the share unrecorded: a peak from the launcher is a moment.
+        let mut acc = SessionAccumulator::new("2026-11-03T00:00:00Z".into(), Some(0));
+        acc.record_fps("game.exe", 120.0, 8.3, 90.0, 0);
+        acc.record_sensors(None, Some(100), None, None);
+        acc.record_gpu_load(Some(100), false);
+        let s = acc.finalize(1);
+        assert_eq!(s.peak_gpu_usage_pct, Some(100));
+        assert_eq!(s.gpu_load, None);
     }
 
     #[test]
@@ -1299,7 +1333,7 @@ mod session_tests {
         // Recorded: a small object, read back whole.
         let mut acc = SessionAccumulator::new("2026-11-03T00:00:00Z".into(), Some(0));
         acc.record_fps("game.exe", 120.0, 8.3, 90.0, 0);
-        acc.record_sensors(None, Some(99), None, None);
+        acc.record_gpu_load(Some(99), true);
         let row = disk_row(&acc.finalize(60)).unwrap();
         assert_eq!(row["gpu_load"], serde_json::json!({ "readings": 1, "busy": 1 }));
         assert_eq!(from_disk_row(row).unwrap().gpu_load, Some(GpuLoad { readings: 1, busy: 1 }));

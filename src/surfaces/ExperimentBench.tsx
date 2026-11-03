@@ -1201,7 +1201,9 @@ export default function ExperimentBench({
   // P8-ack (RISK_MODEL §1 Advanced): the picked change as the picker read it. One the catalog doesn't
   // rate low risk starts only from the tap under the line naming its cost.
   const simCandidate = sim ? recs.find((r) => r.id === sim.rec_id) : undefined;
-  const costAck = needsCostAck(simCandidate?.risk);
+  // A pick the candidate read no longer lists can't be shown to be low risk: it needs the tap too,
+  // as the backend's own lock (P8-ack-enforce) will ask for it.
+  const costAck = !!sim && (!simCandidate || needsCostAck(simCandidate.risk));
 
   // Bento conversion (2026-08-12). span="full" is FORCED, not a taste call: this component can
   // return null (the dark experiment gate above) and this file declares no grid of its own, so

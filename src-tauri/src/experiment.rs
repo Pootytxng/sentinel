@@ -3060,7 +3060,8 @@ pub(crate) fn needs_cost_ack(stated: Option<&crate::trial_candidates::StatedRisk
 /// the game and the frame rates come from there, never from the webview. `risk_choice` is the risk
 /// the user allows on this PC (P8-posture-show), kept on the record for its receipt; absent = not
 /// recorded. `cost_acknowledged` is the user's tap on the line naming the change's cost (P8-ack), a
-/// UI confirm before this command, kept on the record the same way. `mode` "real-play" (P5-realplay)
+/// UI confirm before this command, kept on the record; a change the catalog doesn't rate low risk is
+/// refused without it (P8-ack-enforce). `mode` "real-play" (P5-realplay)
 /// leaves the change on while the player plays: the start then pins, from the session store, the
 /// unchanged run of as-is sessions that ends at the baseline session, and refuses before anything is
 /// recorded or changed when fewer than `realplay::MIN_SESSIONS` count; absent is the two-session Trial.
@@ -3093,8 +3094,9 @@ pub(crate) fn start_experiment(
     // without that consent. Refused before anything is recorded or changed; a low-risk change starts
     // as before. The same rule as the UI's `needsCostAck`: safe starts, anything else needs the tap.
     if needs_cost_ack(stated_risk.as_ref()) && cost_acknowledged != Some(true) {
+        let title: String = rec_title.chars().take(MAX_TEXT_LEN).collect();
         return Err(format!(
-            "experiment not started — {rec_title} isn't rated low risk, so its cost needs your OK \
+            "experiment not started — {title} isn't confirmed low risk, so its cost needs your OK \
              (\"I understand, test it\") before the Trial starts"
         ));
     }
@@ -7171,7 +7173,8 @@ mod experiment_tests {
 
     // P8-ack (RISK_MODEL §1 Advanced): the start keeps whether the user confirmed the change's cost
     // ("I understand, test it", a UI confirm before this command) on the Pending record, beside the
-    // catalog's own cost words it read (`stated_risk.cost`). Older records load as None ("not
+    // catalog's own cost words it read (`stated_risk.cost`), and (P8-ack-enforce) refuses a change
+    // the catalog doesn't rate low risk without that tap. Older records load as None ("not
     // recorded"); a value this build can't read is None too, never a failed store.
     #[test]
     fn a_start_keeps_the_cost_acknowledgement_and_an_older_record_reads_not_recorded() {
