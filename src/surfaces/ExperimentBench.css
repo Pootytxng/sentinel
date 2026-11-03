@@ -56,6 +56,27 @@
 .exp-journey + .exp-launch {
   margin-top: 12px;
 }
+/* A real-play panel (or the journey, while its Trial runs) ended 0px above the summary's eyebrow
+   (desk review 2026-11-02); the same 12px continues below it. Whatever sits above the summary: the
+   journey, the launcher (its resting state) or a classic running panel all ended flush on it (review
+   2026-11-02, round 2), so the rule names the summary, not its neighbour. The bench is block flow, so
+   this collapses with a neighbour's own bottom margin rather than adding to it. */
+.exp-bench > .exp-summary {
+  margin-top: 12px;
+}
+/* The journey is plain block flow, and its lines, rows and buttons sat flush against each other
+   (desk review 2026-11-02): every block after the first keeps the running panel's 9px rhythm, and
+   buttons that sit side by side share one .exp-running-actions row. A real-play panel is an
+   .exp-running frame, whose own 9px gap does this. */
+.exp-journey:not(.exp-running) > * + * {
+  margin-top: 9px;
+}
+/* The cost line a user reads before "I understand, test it" sat 0px under the aim pills and 1px above
+   the button (desk review 2026-11-02): 9px either side, like the rest of the journey. Two classes, so
+   it outranks .exp-note's own margin: 0 further down this file. */
+.exp-journey .exp-journey-cost {
+  margin: 9px 0;
+}
 .exp-field {
   display: flex;
   flex-direction: column;
@@ -148,6 +169,11 @@
   max-width: 64ch;
   overflow-wrap: anywhere;
 }
+/* "Compy doesn't know how big any of these effects are…" sat flush under the list's last row (review
+   2026-11-02, round 2). Two classes, so it outranks .exp-note's own margin: 0 further down. */
+.exp-order-list + .exp-note {
+  margin-top: 6px;
+}
 
 /* ── Simulator read (honest advisory — never a promise) ───────────────────── */
 .exp-sim {
@@ -225,7 +251,9 @@
   font-weight: 600;
   cursor: pointer;
   background: var(--ix-accent);
-  border: 0;
+  /* Transparent, not none: a ghost button's 1px edge made it 2px taller than this one in a shared
+     row (review 2026-11-02, round 2); the fill runs under the edge, so nothing else changes. */
+  border: 1px solid transparent;
   color: var(--ix-accent-ink, #06231c);
   border-radius: var(--ix-radius);
   padding: 9px 15px;
@@ -257,6 +285,15 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+/* The journey's aim pills are one toggle (aria-pressed), and the chosen one looked exactly like the
+   other (review 2026-11-02, round 2). It wears Home's selected-segment look (.hv2-seg-on): accent
+   wash, accent edge, primary ink, hovered or not. */
+.exp-cta-ghost.exp-journey-aim-on,
+.exp-cta-ghost.exp-journey-aim-on:hover:not(:disabled) {
+  background: var(--ix-accent-wash);
+  border-color: var(--ix-accent);
+  color: var(--ix-text-1);
+}
 .exp-fineprint {
   margin: 0;
   font-size: var(--type-label);
@@ -279,6 +316,11 @@
   display: flex;
   flex-direction: column;
   gap: 9px;
+}
+/* The journey's progress line ("N of M tested · Testing now: X") sat flush on the running panel's
+   frame under it (desk review 2026-11-02, P5-realplay): the panel's own 9px. */
+.exp-journey-progress + .exp-running {
+  margin-top: 9px;
 }
 .exp-running-head {
   display: flex;

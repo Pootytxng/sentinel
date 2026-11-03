@@ -211,6 +211,20 @@ const receiptRows = async (): Promise<Record<string, string>> => {
   );
 };
 
+/** Review 2026-11-02 (P5-realplay, fix 2): buttons that sit on one line share one .exp-running-actions
+ *  row ("Test it while I play normally" touched "Stop here", "Measure my next session" touched "OK"). */
+const sharesRow = (a: HTMLElement, b: HTMLElement) => {
+  expect(a.parentElement, `${a.textContent} and ${b.textContent} share one row`).toBe(b.parentElement);
+  expect(a.parentElement).toHaveClass("exp-running-actions");
+};
+/** ...and no two buttons are the journey's own neighbouring blocks, side by side with nothing between. */
+const noTouchingButtons = (root: HTMLElement) => {
+  const kids = [...root.children];
+  kids.forEach((el, i) => {
+    if (el.tagName === "BUTTON") expect(kids[i + 1]?.tagName, `${el.textContent} touches the button beside it`).not.toBe("BUTTON");
+  });
+};
+
 /** The journey's closing line, once it has one (only a finished journey's line is a status). */
 const finalLine = () =>
   waitFor(
@@ -438,6 +452,10 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(await screen.findByTestId("journey-cost-ack")).toHaveTextContent("HAGS has a cost: Reboot required.");
     expect(screen.queryByRole("button", { name: "Optimize my game" })).toBeNull();
     const tap = screen.getByRole("button", { name: "I understand, test it" });
+    // Review 2026-11-02 (fix 10): the cost line keeps the journey's 9px either side, and the tap under it
+    // sits in a row, so the two margins meet as one 9px.
+    expect(screen.getByTestId("journey-cost-ack")).toHaveClass("exp-journey-cost");
+    expect(tap.parentElement).toHaveClass("exp-running-actions");
     await waitFor(() => expect(tap).toBeEnabled());
     fireEvent.click(tap);
     await finalLine();
@@ -473,8 +491,13 @@ describe("P5-guided: one button runs the whole Trial", () => {
     await finalLine();
     expect(await screen.findByTestId("journey-next-plan")).toHaveTextContent(/Next: SysMain/);
     expect(screen.getByTestId("journey-cost-ack")).toHaveTextContent("SysMain has a cost: App launches get a little slower.");
+    expect(screen.getByTestId("journey-cost-ack")).toHaveClass("exp-journey-cost");
     expect(screen.queryByRole("button", { name: /Next: SysMain/ })).toBeNull();
     const tap = screen.getByRole("button", { name: "I understand, test it" });
+    expect(tap.parentElement).toHaveClass("exp-running-actions");
+    // The generic OK shares one row with Stop here, and no button touches another.
+    sharesRow(screen.getByRole("button", { name: "Stop here" }), screen.getByRole("button", { name: "OK" }));
+    noTouchingButtons(screen.getByTestId("journey"));
     await waitFor(() => expect(tap).toBeEnabled());
     fireEvent.click(tap);
     await waitFor(() => expect(calls("start_experiment")).toHaveLength(2), { timeout: 3000 });
@@ -780,6 +803,9 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     await press();
     expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
     expect(calls("restore_experiment")).toHaveLength(0);
+    // Review 2026-11-02 (fix 2): Next, Stop here and OK touched; Stop here and OK share one row.
+    sharesRow(screen.getByRole("button", { name: "Stop here" }), screen.getByRole("button", { name: "OK" }));
+    noTouchingButtons(screen.getByTestId("journey"));
     fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 10 min" }));
     await lineIs(/^Game Mode is on\. Compy uses your last session as the before-reading, so this is the only session: play Valorant/);
     const [, second] = calls("start_experiment");
@@ -844,6 +870,43 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     expect(screen.queryByRole("button", { name: /^Next:/ })).toBeNull();
   });
 
+  // Review 2026-11-02 (fix 11, P8-posture-note): under "Low risk only" the journey said "Nothing else
+  // here is worth testing on this PC." while changes were held back by that choice, and the summary
+  // right below said "...N more changes are above it". "Nothing left" never hides the risk choice.
+  const HELD = { id: "sysmain", title: "SysMain", passes: false, reason: "outside-chosen-risk", detail: null, position: null, evidence: "not-measured", risk: "moderate" };
+  const ONLY_HAGS = { id: "hags", title: "HAGS", passes: true, reason: null, detail: null, position: 1, evidence: "not-measured", risk: "low" };
+  it("nothing left, low risk only, a change held back: says nothing else WITHIN the risk chosen, here and once idle", async () => {
+    localStorage.setItem("compy.trial.riskChoice", "low-only");
+    try {
+      state.recs = [ONLY_HAGS, HELD];
+      render(<ExperimentBench />);
+      await press();
+      await finalLine();
+      expect((await screen.findByTestId("journey-done")).textContent).toBe("Nothing else within the risk you chose is worth testing on this PC.");
+      fireEvent.click(screen.getByRole("button", { name: "OK" }));
+      await waitFor(() =>
+        expect(screen.getByTestId("journey-progress").textContent).toBe("1 of 1 tested. Nothing else within the risk you chose is worth testing on this PC."),
+      );
+    } finally {
+      localStorage.removeItem("compy.trial.riskChoice");
+    }
+  });
+
+  it("nothing left, low risk only, nothing held back: keeps today's line", async () => {
+    localStorage.setItem("compy.trial.riskChoice", "low-only");
+    try {
+      state.recs = [ONLY_HAGS];
+      render(<ExperimentBench />);
+      await press();
+      await finalLine();
+      expect((await screen.findByTestId("journey-done")).textContent).toBe("Nothing else here is worth testing on this PC.");
+      fireEvent.click(screen.getByRole("button", { name: "OK" }));
+      await waitFor(() => expect(screen.getByTestId("journey-progress").textContent).toBe("1 of 1 tested. Nothing else here is worth testing on this PC."));
+    } finally {
+      localStorage.removeItem("compy.trial.riskChoice");
+    }
+  });
+
   it("a failure in the next journey still restores and says so", async () => {
     state.saves = [session(later(1), 5400), session(later(2), 5400), session(later(3), 5400)];
     render(<ExperimentBench />);
@@ -858,7 +921,7 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
 
 // P5-realplay: "Test it while I play normally". The change goes on once and stays on while the owner
 // plays however he plays; each tap measures one session; a decided look is concluded right after the
-// session that decided it; a stopped test waits for a tap; "Put it back now" is the audited restore.
+// session that decided it; a stopped test waits for a tap; "Restore now" is the audited restore.
 describe("P5-realplay: the change stays on while you play", () => {
   /** What get_realplay_progress answers for these records, the backend's way for this harness: before a
    *  start every session of the game with 600+ readings counts as-is (whatever its halves did), the
@@ -968,6 +1031,31 @@ describe("P5-realplay: the change stays on while you play", () => {
     expect(screen.getByTestId("realplay-note").textContent).toBe("That session counts.");
     expect(calls("start_experiment")).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Measure my next session" })).toBeEnabled();
+    // Review 2026-11-02 (fix 2): "Measure my next session" touched "OK"; they share one row now.
+    sharesRow(screen.getByRole("button", { name: "Measure my next session" }), screen.getByRole("button", { name: "OK" }));
+    noTouchingButtons(screen.getByTestId("journey"));
+  });
+
+  // Review 2026-11-02 (fix 2): the offer's "Test it while I play normally" touched "Stop here" (0px).
+  // The last row of the idle journey holds Stop here: beside the offer's button, else beside the start.
+  it("the offer's button and Stop here share one row; with no offer, Stop here sits beside the start", async () => {
+    state.rpProgress = backendLike();
+    state.sessions = [OLD, ...AS_IS];
+    // A journey under way on Valorant (Game Mode measured there), so Stop here is offered.
+    state.experiments = [
+      record({ id: "exp:1-0", rec_id: "game-mode", rec_title: "Game Mode", status: "restored", verdict: "no-change", treatment: TREATMENT, baseline_session_id: OLD.started_at, concluded_at: ago(90) }),
+    ];
+    const first = render(<ExperimentBench />);
+    const offer = await enabled("Test it while I play normally");
+    sharesRow(offer, screen.getByRole("button", { name: "Stop here" }));
+    noTouchingButtons(screen.getByTestId("journey"));
+    first.unmount();
+    state.rpProgress = null;
+    render(<ExperimentBench />);
+    const start = await enabled("Optimize my game");
+    expect(screen.queryByRole("button", { name: "Test it while I play normally" })).toBeNull();
+    sharesRow(start, screen.getByRole("button", { name: "Stop here" }));
+    noTouchingButtons(screen.getByTestId("journey"));
   });
 
   // ✗ on the code before real play: the journey concluded right after its one with-change session.
@@ -1006,7 +1094,7 @@ describe("P5-realplay: the change stays on while you play", () => {
       await statusIs("Keep playing, Compy is still collecting (2 of 3 sessions).");
       fireEvent.click(await enabled("Measure my next session"));
       expect(await finalLine()).toBe(
-        "Likely better: Compy kept HAGS. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% your sessions vary on their own.",
+        "Likely better: Compy kept HAGS. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% allowance for normal swings between sessions.",
       );
       expect(calls("conclude_realplay")).toEqual([{ experimentId: "exp:9-0", crashed: false }]);
       expect(announced).toHaveBeenCalled();
@@ -1024,14 +1112,14 @@ describe("P5-realplay: the change stays on while you play", () => {
       "Sessions without it": "3",
       "Sessions with it": "3",
       "Spread between sessions, 1% low": "±1.1%",
-      "Deciding look": "1",
+      "Which check decided it": "1",
     });
     const journey = screen.getByTestId("journey");
     fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
     await waitFor(() => expect(journey.querySelector(".journey-why")?.textContent).toMatch(/^Real play compares your sessions with the change on/));
   });
 
-  it("Put it back now restores through restore_experiment and says so", async () => {
+  it("Restore now restores through restore_experiment and says so", async () => {
     state.experiments = [running()];
     state.sessions = [OLD, ...AS_IS];
     state.rpProgress = backendLike();
@@ -1039,7 +1127,7 @@ describe("P5-realplay: the change stays on while you play", () => {
     window.addEventListener(LEDGER_CHANGED_EVENT, announced);
     try {
       render(<ExperimentBench />);
-      fireEvent.click(await enabled("Put it back now"));
+      fireEvent.click(await enabled("Restore now"));
       expect(await finalLine()).toBe("Compy put HAGS back the way it was before the test. Nothing was judged.");
       expect(announced).toHaveBeenCalled();
     } finally {
@@ -1082,8 +1170,49 @@ describe("P5-realplay: the change stays on while you play", () => {
     render(<ExperimentBench />);
     await statusIs("Compy has enough sessions for a result.");
     expect(calls("conclude_realplay")).toHaveLength(0);
+    // Review 2026-11-02 (fix 4): before the tap, the panel says what the tap does.
+    expect(screen.getByTestId("realplay-see-how").textContent).toBe(
+      "Seeing the result ends the test: Compy keeps HAGS only if the result is Likely better, and otherwise puts it back the way it was before the test.",
+    );
     fireEvent.click(await enabled("See the result"));
     expect(await finalLine()).toMatch(/^Likely better: Compy kept HAGS\./);
+  });
+
+  // Review 2026-11-02 (fix 8): a record that holds no numbers for its verdict (a crash one) said
+  // "Unknown: ... doesn't hold the numbers" and, in its receipt, "Verdict regressed", "Confidence medium".
+  it("a result whose record holds no numbers says not judged for its verdict and confidence, in en and zh-CN", async () => {
+    const CRASHED = {
+      status: "restored",
+      kept: false,
+      verdict: "regressed",
+      verdict_confidence: "high",
+      stop_reason: "crash-during-treatment",
+      outcome: "recommended",
+      real_play: { before: [OLD, ...AS_IS].map(numbers), with: [1, 2].map((i) => numbers(session(ago(10 * i), 5400))) },
+    };
+    for (const [lang, see, rows] of [
+      ["en", "See the result", { verdict: "Verdict", confidence: "Confidence", word: "not judged" }],
+      ["zh-CN", "查看结果", { verdict: "判定", confidence: "置信度", word: "未判定" }],
+    ] as const) {
+      cleanup();
+      resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });
+      await i18n.changeLanguage(lang);
+      try {
+        state.experiments = [running()];
+        state.sessions = [OLD, ...AS_IS];
+        state.rpProgress = backendLike({ phase: "ready", with: 3 });
+        state.concludeResult = CRASHED;
+        render(<ExperimentBench />);
+        fireEvent.click(await enabled(see));
+        const line = await finalLine();
+        if (lang === "en") expect(line).toBe("Unknown: Compy put HAGS back. This record doesn't hold the numbers its verdict was judged on.");
+        const receipt = await receiptRows();
+        expect(receipt[rows.verdict], lang).toBe(rows.word);
+        expect(receipt[rows.confidence], lang).toBe(rows.word);
+      } finally {
+        await i18n.changeLanguage("en");
+      }
+    }
   });
 
   it("with three as-is sessions the change goes on at once and the session about to be played is measured with it", async () => {
@@ -1149,6 +1278,8 @@ describe("P5-realplay: the change stays on while you play", () => {
     expect(await finalLine()).toBe(`Compy didn't start the test, and nothing was changed: ${why}`);
     expect(calls("start_fps_capture")).toHaveLength(0);
     expect(calls("restore_experiment")).toHaveLength(0);
+    // Review 2026-11-02 (fix 2): the generic OK sits in a row of its own, 9px under the line.
+    expect(screen.getByRole("button", { name: "OK" }).parentElement).toHaveClass("exp-running-actions");
   });
 
   // Rust review fix: a long session with no frame-rate reading is not counted ("no-reading"). The

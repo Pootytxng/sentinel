@@ -269,8 +269,11 @@ describe("P5-enough-f1: halves that never settle don't keep the line up forever"
 describe("P5-realplay: a real-play session only counts down, then counts", () => {
   it("counts down to 600 readings, then says it is long enough, whatever its halves do", () => {
     expect(enoughState(prog(510), "real-play")).toEqual({ kind: "more", secs: 90 });
-    expect(enoughLine(prog(510), t, "panel", "real-play")).toBe("About 90 s more for this session to count.");
-    expect(enoughLine(prog(0), t, "panel", "real-play")).toBe("About 10 min more for this session to count.");
+    expect(enoughLine(prog(510), t, "panel", "real-play")).toBe("About 90 s more before this session is long enough to count.");
+    expect(enoughLine(prog(0), t, "panel", "real-play")).toBe("About 10 min more before this session is long enough to count.");
+    // Review 2026-11-02: time alone never promises the session counts; the overlay says it shorter.
+    expect(enoughLine(prog(510), t, "overlay", "real-play")).toBe("About 90 s more to be long enough to count.");
+    expect(enoughLine(prog(0), t, "overlay", "real-play")).toBe("About 10 min more to be long enough to count.");
     for (const p of [prog(600), prog(900, 240, 250), prog(SETTLE_CAP_SAMPLES, 240, 250), { samples: SETTLE_CAP_SAMPLES, fps_series: [] }]) {
       expect(enoughState(p, "real-play")).toEqual({ kind: "counts" });
       expect(enoughLine(p, t, "panel", "real-play")).toBe("This session is long enough to count. Stop whenever you like.");
@@ -282,8 +285,8 @@ describe("P5-realplay: a real-play session only counts down, then counts", () =>
 
   it("has zh-CN copy", async () => {
     await i18n.changeLanguage("zh-CN");
-    expect(enoughLine(prog(510), t, "panel", "real-play")).toBe("再玩约 90 秒，这一局就能计入。");
-    expect(enoughLine(prog(0), t, "overlay", "real-play")).toBe("再玩约 10 分钟，这一局就能计入。");
+    expect(enoughLine(prog(510), t, "panel", "real-play")).toBe("再玩约 90 秒，这一局的时长就足够计入了。");
+    expect(enoughLine(prog(0), t, "overlay", "real-play")).toBe("再玩约 10 分钟，时长就够计入了。");
     expect(enoughLine(prog(900, 240, 250), t, "panel", "real-play")).toBe("这一局的时长已足够计入。你可以随时停下。");
     expect(enoughLine(prog(900, 240, 250), t, "overlay", "real-play")).toBe("时长已够计入。可随时停下。");
   });
@@ -301,7 +304,7 @@ describe("P5-realplay: a real-play session only counts down, then counts", () =>
     state.fps = playing(prog(510));
     localStorage.setItem(JOURNEY_RECORDING_KEY, "real-play");
     render(<Overlay />);
-    await waitFor(() => expect(screen.getByTestId("overlay-enough").textContent).toBe("About 90 s more for this session to count."));
+    await waitFor(() => expect(screen.getByTestId("overlay-enough").textContent).toBe("About 90 s more to be long enough to count."));
     state.fps = playing(prog(SETTLE_CAP_SAMPLES, 240, 250));
     await waitFor(() => expect(screen.getByTestId("overlay-enough").textContent).toBe("Long enough to count. Stop anytime."));
   });

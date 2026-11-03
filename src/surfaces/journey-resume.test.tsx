@@ -431,7 +431,8 @@ describe("truthful completion: the journey never counts an attempt or a stale re
     state.recs = [HAGS];
     state.sessions = [BEFORE, AFTER];
     render(<ExperimentBench />);
-    expect(await progressLine()).toBe("0 of 1 tested · Retest: HAGS 1 try couldn't be judged.");
+    // Review 2026-11-02, round 2: "Retest: HAGS 1 try couldn't be judged." ran on; the line's own " · ".
+    expect(await progressLine()).toBe("0 of 1 tested · Retest: HAGS · 1 try couldn't be judged.");
     expect(screen.getByTestId("journey-retest-why").textContent).toBe(
       "HAGS was tried before, but the frame rate moved around too much to judge. This run tries it again.",
     );

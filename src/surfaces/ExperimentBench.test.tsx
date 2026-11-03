@@ -2154,7 +2154,8 @@ describe("P4-exit: what Compy tested on this game", () => {
     const panel = await screen.findByTestId("exp-summary");
     const door = panel.querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!;
     fireEvent.click(door);
-    await waitFor(() => expect(door.parentElement!.children.length).toBeGreaterThan(1));
+    // 3s: the default 1s timed out once under a loaded parallel run (review 2026-11-02, round 2).
+    await waitFor(() => expect(door.parentElement!.children.length).toBeGreaterThan(1), { timeout: 3000 });
     expect(screen.getByTestId("exp-summary-receipt").querySelector("dd")!.textContent).toMatch(
       / · risk you allowed: Low risk only$/,
     );
@@ -2289,6 +2290,43 @@ describe("P4-exit: what Compy tested on this game", () => {
     try {
       expect(await screen.findByText(/有 1 项更改的结果来自较旧的显卡驱动或 Windows 版本/)).toBeInTheDocument();
       expect(screen.getByTestId("exp-summary-headline")).not.toHaveTextContent("也没有测得任何结果");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  // Harness review 2026-11-02 (round 1): beside a stale held change, a bare "1 couldn't be judged."
+  // had no subject and read as belonging to the stale change. The unjudged one is another change.
+  it("beside a stale held change, a change that couldn't be judged is named as another change", async () => {
+    const f = await owner();
+    const judged = f.experiments.find((x) => x.verdict)!;
+    const ofGame = f.sessions.filter((s) => s.process_name === judged.game);
+    const last = ofGame[ofGame.length - 1] as Record<string, unknown> & { hw_fingerprint: object; game_state: object };
+    const newer = {
+      ...last,
+      started_at: "2026-10-30T00:00:00Z",
+      hw_fingerprint: { ...last.hw_fingerprint, gpu_driver: "99.0.0" },
+      game_state: { ...last.game_state, gpu_driver: "99.0.0" },
+    };
+    const noisy = { ...judged, id: "exp:noisy-1", rec_id: "game-mode", rec_title: "Game Mode", verdict: "too-noisy", kept: false };
+    state.gate = true;
+    state.experiments = [...f.experiments, noisy] as typeof f.experiments;
+    state.sessions = [...f.sessions, newer] as typeof f.sessions;
+    state.recs = [
+      { id: judged.rec_id, title: judged.rec_title, passes: false, reason: "outside-chosen-risk", detail: null, risk: "moderate" },
+    ];
+    render(<ExperimentBench />);
+    const panel = await screen.findByTestId("exp-summary");
+    expect(panel).toHaveAttribute("data-headline", "nothing-testable-now");
+    const headline = screen.getByTestId("exp-summary-headline");
+    expect(headline).toHaveTextContent(
+      "so Compy won't test it again unless you allow that risk. 1 other change couldn't be judged.",
+    );
+    expect(headline).not.toHaveTextContent(/allow that risk\. 1 couldn't be judged/);
+    await i18n.changeLanguage("zh-CN");
+    try {
+      expect(await screen.findByText(/另有 1 项更改无法判断/)).toBeInTheDocument();
+      expect(screen.getByTestId("exp-summary-headline")).toHaveTextContent("相关更改超出了你选择的风险范围");
     } finally {
       await i18n.changeLanguage("en");
     }
@@ -2735,12 +2773,69 @@ describe("P5-outcomes: pick between Recommended and Maximum FPS", () => {
 // testing on this PC.") sat flush against the new "How far may Compy go on this PC?" field, 0px, while
 // the launcher keeps a 12px rhythm everywhere else. jsdom has no layout, so the rule itself is pinned.
 describe("ExperimentBench spacing under the journey line", () => {
+  /** ExperimentBench.css with its comments stripped, and the body of the rule `selector` names. */
+  const ruleBody = async (selector: RegExp) => {
+    const { readFileSync } = await import("fs");
+    const css = readFileSync("src/surfaces/ExperimentBench.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    return css.match(new RegExp(`${selector.source}\\s*\\{([^}]*)\\}`))?.[1] ?? null;
+  };
+
   it("keeps the launcher's 12px rhythm below the journey line", async () => {
     const { readFileSync } = await import("fs");
     const css = readFileSync("src/surfaces/ExperimentBench.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     const rule = css.match(/\.exp-journey\s*\+\s*\.exp-launch\s*\{([^}]*)\}/);
     expect(rule, "nothing spaces the launcher from the journey line above it").not.toBeNull();
     expect(rule![1]).toMatch(/margin-top:\s*12px/);
+  });
+
+  // Review 2026-11-02 (P5-realplay, fix 2): a real-play panel's last block sat 0px above the summary's
+  // eyebrow, and its own blocks (and the journey's lines and buttons) sat flush against each other.
+  // Round 2: a rule naming only the journey left the launcher (the resting state) and a classic running
+  // panel flush on the eyebrow, so the rule names the summary itself.
+  it("keeps the bench's 12px rhythm between whatever sits above the summary and the summary", async () => {
+    const rule = await ruleBody(/\.exp-bench\s*>\s*\.exp-summary/);
+    expect(rule, "nothing spaces the summary from the launcher, panel or journey above it").not.toBeNull();
+    expect(rule).toMatch(/margin-top:\s*12px/);
+    expect(await ruleBody(/\.exp-journey\s*\+\s*\.exp-summary/), "a neighbour-only rule misses the launcher").toBeNull();
+  });
+
+  // Review 2026-11-02, round 2: "Compy doesn't know how big any of these effects are…" sat flush under
+  // the ranked list's last row.
+  it("keeps a note under the ranked list off its last row", async () => {
+    const rule = await ruleBody(/\.exp-order-list\s*\+\s*\.exp-note/);
+    expect(rule, "the note sits flush on the list").not.toBeNull();
+    expect(rule).toMatch(/margin-top:\s*6px/);
+  });
+
+  // Review 2026-11-02, round 2: the aim pills are one toggle (aria-pressed), and the chosen one looked
+  // exactly like the other. jsdom has no cascade, so the rule is pinned, hovered or not.
+  it("marks the chosen aim pill, hovered or not", async () => {
+    const rule = await ruleBody(/\.exp-cta-ghost\.exp-journey-aim-on,\s*\.exp-cta-ghost\.exp-journey-aim-on:hover:not\(:disabled\)/);
+    expect(rule, "the chosen aim pill has no look of its own").not.toBeNull();
+    expect(rule).toMatch(/border-color:\s*var\(--ix-accent\)/);
+    expect(rule).toMatch(/background:\s*var\(--ix-accent-wash\)/);
+  });
+
+  it("keeps the running panel's 9px rhythm between the journey's own blocks", async () => {
+    const rule = await ruleBody(/\.exp-journey:not\(\.exp-running\)\s*>\s*\*\s*\+\s*\*/);
+    expect(rule, "nothing spaces the journey's blocks from each other").not.toBeNull();
+    expect(rule).toMatch(/margin-top:\s*9px/);
+  });
+
+  it("keeps 9px between the journey's progress line and the running panel under it", async () => {
+    const rule = await ruleBody(/\.exp-journey-progress\s*\+\s*\.exp-running/);
+    expect(rule, "the progress line sits flush on the running panel's frame").not.toBeNull();
+    expect(rule).toMatch(/margin-top:\s*9px/);
+  });
+
+  // Review 2026-11-02 (fix 10): the cost line a user reads before "I understand, test it" sat 0px under
+  // the aim pills and 1px above the button.
+  it("gives the cost line the journey's 9px either side", async () => {
+    // Two classes: a one-class rule here loses to `.exp-note { margin: 0 }`, which comes later in the
+    // file (caught in self-review, 2026-11-02: the rule was there and did nothing).
+    const rule = await ruleBody(/\.exp-journey\s+\.exp-journey-cost/);
+    expect(rule, "the cost line has no spacing of its own that outranks .exp-note").not.toBeNull();
+    expect(rule).toMatch(/margin:\s*9px 0\b/);
   });
 });
 
@@ -2798,18 +2893,18 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
       `HAGS is on (since ${whenText(APPLIED, "en")}). It stays on while you play, until Compy has a result: at most 8 sessions, or by ${whenText(UNTIL, "en")}.`,
     );
     expect(screen.getByTestId("realplay-put-back-how").textContent).toBe(
-      "To put it back, tap Put it back now: Compy restores the setting exactly as it was before the test. You can also undo it in Test → Applied & history.",
+      "To put it back, tap Restore now: Compy restores the setting exactly as it was before the test. You can also undo it in Test → Applied & history.",
     );
     expect(within(screen.getByTestId("realplay-not-counted")).getByText(`${whenText("2026-10-30T21:14:00Z", "en")}: too short to count (about 10 minutes of play needed)`)).toBeTruthy();
     expect(screen.queryByTestId("exp-interrupted")).toBeNull();
     expect(screen.queryByTestId("experiment-running")).toBeNull();
     expect(screen.queryByRole("button", { name: /Conclude/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Measure my next session" })).toBeEnabled();
-    // "Put it back now" is the existing audited restore, announced like every ledger write.
+    // "Restore now" is the existing audited restore, announced like every ledger write.
     const announced = vi.fn();
     window.addEventListener(LEDGER_CHANGED_EVENT, announced);
     try {
-      fireEvent.click(screen.getByRole("button", { name: "Put it back now" }));
+      fireEvent.click(screen.getByRole("button", { name: "Restore now" }));
       await waitFor(() => expect(callArgs("restore_experiment")).toEqual({ experimentId: "exp:7-0" }));
       await waitFor(() => expect(announced).toHaveBeenCalled());
     } finally {
@@ -2831,12 +2926,12 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     state.realPlay = rpProgress({ with: 3, need: 5, band_pct: 21.66 });
     render(<ExperimentBench />);
     await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("Keep playing, Compy is still collecting (3 of 5 sessions)."));
-    expect(screen.getByTestId("realplay-not-yet").textContent).toBe("Not clear yet: your sessions vary by about ±21.7%, so Compy needs a few more.");
+    expect(screen.getByTestId("realplay-not-yet").textContent).toBe("Not clear yet: the allowance for normal swings between your sessions is ±21.7% so far, so Compy needs a few more.");
     expect(screen.getByTestId("experiment-bench").textContent).not.toMatch(/noisy/i);
     expect(vi.mocked(invoke).mock.calls.filter(([c]) => c === "conclude_realplay" || c === "conclude_experiment")).toEqual([]);
   });
 
-  it("when the count can't be read, it says so in the backend's words and still offers Put it back now", async () => {
+  it("when the count can't be read, it says so in the backend's words and still offers Restore now", async () => {
     state.gate = true;
     state.experiments = [RP_RUNNING];
     state.realPlay = "reject";
@@ -2845,8 +2940,52 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
       expect(screen.getByTestId("realplay-status").textContent).toBe("Compy can't count this test's sessions right now. HAGS stays on until you put it back."),
     );
     expect(screen.getByTestId("realplay-unread").textContent).toBe("Compy can't read its change history: the ledger was set aside");
-    expect(screen.getByRole("button", { name: "Put it back now" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Restore now" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Measure my next session" })).toBeNull();
+  });
+
+  // Review 2026-11-02 (fix 2): the panel's blocks sat flush (0px) against each other. It now wears the
+  // pair running panel's frame and 9px rhythm (.exp-running), every block a child of that frame, and
+  // the progress line above it keeps 9px from the frame (.exp-journey-progress + .exp-running).
+  it("the real-play panel shares the pair running panel's frame and rhythm", async () => {
+    state.gate = true;
+    state.experiments = [RP_RUNNING];
+    state.realPlay = rpProgress({ not_counted: [{ session_id: "2026-10-30T21:14:00Z", reason: "too-short" }] });
+    render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("Keep playing, Compy is still collecting (2 of 3 sessions)."));
+    const panel = screen.getByTestId("journey");
+    expect(panel).toHaveAttribute("data-phase", "realplay");
+    expect(panel).toHaveClass("exp-running");
+    expect(screen.getByTestId("journey-progress").textContent).toMatch(/ · Testing now: HAGS$/);
+    for (const id of ["realplay-on", "realplay-status", "realplay-put-back-how", "realplay-not-counted"])
+      expect(screen.getByTestId(id).parentElement, id).toBe(panel);
+    const measure = screen.getByRole("button", { name: "Measure my next session" });
+    expect(measure.parentElement).toHaveClass("exp-running-actions");
+    expect(measure.parentElement?.parentElement).toBe(panel);
+    const line = screen.getByTestId("journey-progress");
+    expect(line).toHaveClass("exp-journey-progress");
+    expect(line.nextElementSibling).toBe(panel);
+  });
+
+  // Review 2026-11-02 (fix 1): a stopped panel offered the put-back beside "no longer reads as on".
+  it("a stopped test whose change is already off offers no put-back; one that can't read it still does", async () => {
+    state.gate = true;
+    state.experiments = [RP_RUNNING];
+    state.realPlay = rpProgress({ phase: "stopped", stop: "change-off" });
+    const first = render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getByTestId("realplay-on").textContent).toBe("HAGS is no longer on."));
+    // Review 2026-11-02, round 2: the line above said "Testing now: HAGS" over a stopped test.
+    expect(screen.getByTestId("journey-progress").textContent).toMatch(/ · Test stopped: HAGS$/);
+    expect(screen.queryByRole("button", { name: "Restore now" })).toBeNull();
+    expect(screen.queryByTestId("realplay-put-back-how")).toBeNull();
+    expect(screen.getByRole("button", { name: "Close this test" })).toBeEnabled();
+    first.unmount();
+    state.realPlay = rpProgress({ phase: "stopped", stop: "unreadable" });
+    render(<ExperimentBench />);
+    await waitFor(() => expect(screen.getByTestId("realplay-on").textContent).toBe("Compy can't tell whether HAGS is on right now."));
+    expect(screen.getByRole("button", { name: "Restore now" })).toBeEnabled();
+    expect(screen.getByTestId("realplay-put-back-how")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Close this test" })).toBeEnabled();
   });
 
   it("says the same in zh-CN", async () => {
@@ -2858,7 +2997,7 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
       render(<ExperimentBench />);
       await waitFor(() => expect(screen.getByTestId("realplay-status").textContent).toBe("继续玩吧，Compy 仍在收集数据（2/3 局）。"));
       expect(screen.getByTestId("realplay-on").textContent).toMatch(/^HAGS已开启（自 .+ 起）。在 Compy 得出结果之前它会一直保持开启：最多 8 局，最晚到 .+。$/);
-      expect(screen.getByRole("button", { name: "立即恢复原样" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "立即恢复" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "测量我的下一局" })).toBeTruthy();
     } finally {
       await i18n.changeLanguage("en");
@@ -2894,14 +3033,55 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     const row = (await screen.findByText("Likely better — kept")).closest("li")!;
     expect(row.textContent).not.toMatch(/Measurably faster/);
     expect(within(row).getByTestId("exp-compared-receipt").textContent).toBe(
-      "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band. The 1% low rose by more than the band and the average didn't fall by more, so the change was kept.",
+      "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band (the allowance for normal swings between sessions). The 1% low rose by more than the band and the average didn't fall by more, so the change was kept.",
     );
-    expect(screen.getAllByText(wholeLine("Judged against a ±3% band from this test's own sessions: how much your Valorant sessions varied on their own (3 without the change, 3 with it).")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(wholeLine("Judged against a ±3% band from this test's own sessions: an allowance for normal swings between your Valorant sessions (3 without the change, 3 with it).")).length).toBeGreaterThan(0);
     // The per-game summary says the real-play face and the Likely word, never Measured.
     const summary = await screen.findByTestId("exp-summary");
     expect(summary.textContent).toMatch(/Likely better — kept/);
     expect(summary.textContent).toMatch(/Likely/);
     expect(summary.textContent).not.toMatch(/Measurably faster/);
+  });
+
+  // Review 2026-11-02 (fix 3): the rule sentence was picked by verdict alone, so a real-play row put
+  // back in Test → Applied & history after a Likely better ended "...so the change was kept", beside
+  // its own "restored" face.
+  it("a real-play row put back after Likely better never says the change was kept", async () => {
+    state.gate = true;
+    const putBack = {
+      ...RP_KEPT,
+      status: "restored",
+      kept: false,
+      stop_reason: "real-play-put-back-in-history",
+      real_play: { ...RP_KEPT.real_play, stop: "put-back-in-history" },
+    };
+    state.experiments = [putBack];
+    const first = render(<ExperimentBench />);
+    const row = (await screen.findByText("Likely better — restored")).closest("li")!;
+    expect(within(row).getByTestId("exp-compared-receipt").textContent).toBe(
+      "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band (the allowance for normal swings between sessions). The 1% low rose by more than the band and the average didn't fall by more, but the change was put back before Compy kept it.",
+    );
+    expect(row.textContent).not.toMatch(/so the change was kept/);
+    first.unmount();
+    // Maximum FPS leads with the average, and ends the same way.
+    state.experiments = [{ ...putBack, outcome: "max-fps" }];
+    const second = render(<ExperimentBench />);
+    const maxRow = (await screen.findByText("Likely better — restored")).closest("li")!;
+    expect(within(maxRow).getByTestId("exp-compared-receipt").textContent).toBe(
+      "Judged for Maximum FPS. Compared across 3 sessions with it on and 3 without: average frame rate +0.4%, 1% low +12.1%, both against a ±3% band (the allowance for normal swings between sessions). The average rose by more than the band and the 1% low didn't fall by more, but the change was put back before Compy kept it.",
+    );
+    second.unmount();
+    await i18n.changeLanguage("zh-CN");
+    try {
+      state.experiments = [putBack];
+      render(<ExperimentBench />);
+      const zhRow = (await screen.findByText("较可能更好——已恢复")).closest("li")!;
+      const zh = within(zhRow).getByTestId("exp-compared-receipt").textContent;
+      expect(zh).toMatch(/但在 Compy 保留它之前，这项更改已被恢复原样。$/);
+      expect(zh).not.toMatch(/所以保留了这项更改/);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("a real-play row that judged nothing says why in real-play words, never the session-halves sentence", async () => {

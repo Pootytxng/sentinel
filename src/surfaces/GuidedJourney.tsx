@@ -88,6 +88,7 @@ import {
   isRealPlay,
   notCountedWhy,
   realPlayConfidence,
+  realPlayNumbersMissing,
   realPlayOffer,
   realPlayResult,
   realPlayView,
@@ -187,7 +188,7 @@ export type JourneyPhase =
   | { kind: "too-short"; samples: number | null; behind?: boolean }
   | { kind: "wrong-game"; played: string; planned: string }
   | { kind: "not-started"; reason: string }
-  /** `asked`: the owner tapped "Put it back now" on a real-play Trial. */
+  /** `asked`: the owner tapped "Restore now" on a real-play Trial. */
   | { kind: "restored"; change: string; why: "no-reading" | "behind" | "error" | "asked"; reason: string }
   | { kind: "restore-failed"; change: string; reason: string }
   /** P5-realplay: one session is being measured; `on` = with the change on, else as-is (nothing on). */
@@ -811,8 +812,9 @@ async function closeRealPlay(expId: string, change: string, refresh: () => Promi
   }
 }
 
-/** "Put it back now": the existing audited restore_experiment, which writes the setting back exactly
- *  as it was saved before the test and reads it back. */
+/** "Restore now" (the label the pair panel's undo already wears): the existing audited
+ *  restore_experiment, which writes the setting back exactly as it was saved before the test and
+ *  reads it back. */
 async function putBackRealPlay(expId: string, change: string, refresh: () => Promise<void>) {
   if (current || acting) return;
   acting = true;
@@ -932,14 +934,20 @@ function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
   // P5-realplay: what real play judged on, from the record's own evidence; nothing it didn't record.
   const rp = isRealPlay(exp) ? (exp.real_play ?? null) : null;
   const count = (n: number | undefined) => (n != null ? String(n) : null);
+  // Review 2026-11-02: a real-play verdict whose numbers the record doesn't hold reads Unknown above,
+  // so its verdict and confidence rows say not judged, never a verdict without its numbers.
+  const unjudged = isRealPlay(exp) && realPlayNumbersMissing(exp);
   return (
     <dl className="journey-receipt">
       <ReceiptRow label={rk("change")} value={exp.rec_id} />
       <ReceiptRow label={rk("outcome")} value={exp.outcome ?? null} />
       <ReceiptRow label={rk("mode")} value={rp ? (exp.mode ?? null) : null} />
-      <ReceiptRow label={rk("verdict")} value={exp.verdict} />
+      <ReceiptRow label={rk("verdict")} value={unjudged ? rk("notJudged") : exp.verdict} />
       {/* Real play never claims High confidence (none is recorded); a stored "high" reads as medium. */}
-      <ReceiptRow label={rk("confidence")} value={rp ? realPlayConfidence(exp.verdict_confidence) : (exp.verdict_confidence ?? null)} />
+      <ReceiptRow
+        label={rk("confidence")}
+        value={unjudged ? rk("notJudged") : rp ? realPlayConfidence(exp.verdict_confidence) : (exp.verdict_confidence ?? null)}
+      />
       {rp && (
         <>
           <ReceiptRow label={rk("sessionsBefore")} value={count(rp.before?.length)} />
@@ -998,6 +1006,7 @@ export function GuidedJourney({
   resumeReuses = false,
   stillOn = [],
   realPlay = null,
+  heldByRisk = 0,
 }: {
   /** The detected / last-played game (the newest usable session's), or null before any session. */
   game: string | null;
@@ -1031,6 +1040,11 @@ export function GuidedJourney({
   /** P5-realplay: where real play stands on that game (get_realplay_progress), while no Trial runs.
    *  null when it couldn't be read: then real play isn't offered, because Compy can't count. */
   realPlay?: RealPlayProgress | null;
+  /** P8-posture-note: how many changes on the journey's game (the finished journey's, else `game`)
+   *  the chosen risk holds back and were never tested there (the summary's `outsideRisk`). Above 0,
+   *  "nothing left" says nothing is left within the risk chosen: the risk choice is never hidden
+   *  behind "nothing left". The count itself is the summary's to say, just below. */
+  heldByRisk?: number;
 }) {
   const { t } = useTranslation();
   // "Stop here" / "Pick up" write only localStorage; this repaints the panel after either.
@@ -1095,7 +1109,10 @@ export function GuidedJourney({
       return (
         <div className="exp-order exp-journey" data-testid="journey">
           <p className="exp-note" data-testid="journey-progress">
-            {[t(`${k}.progressDone`, { tested: progress.tested, total: progress.total }), ...progressNotes(progress, t)].join(" ")}
+            {[
+              t(heldByRisk > 0 ? `${k}.progressDoneWithinRisk` : `${k}.progressDone`, { tested: progress.tested, total: progress.total }),
+              ...progressNotes(progress, t),
+            ].join(" ")}
           </p>
         </div>
       );
@@ -1119,6 +1136,20 @@ export function GuidedJourney({
     // sessions: the change goes on at once when enough as-is sessions count, else Compy collects them.
     const rpHere = realPlay != null && game != null && realPlay.game === game ? realPlay : null;
     const offer = rpHere ? realPlayOffer(rpHere, change.title, name ?? rpHere.game, t) : null;
+    // Review 2026-11-02: buttons that sit side by side share one row, so none touches another. "Stop
+    // here" joins the idle journey's last row: beside the offer's button, else beside the start.
+    const stopHere = resuming ? (
+      <button
+        type="button"
+        className="exp-cta-ghost"
+        onClick={() => {
+          stopJourneyHere(progress.game);
+          repaint((n) => n + 1);
+        }}
+      >
+        {t(`${k}.stopHere`)}
+      </button>
+    ) : null;
     return (
       <div className="exp-order exp-journey" data-testid="journey">
         {resuming && (
@@ -1152,34 +1183,28 @@ export function GuidedJourney({
           ))}
         </div>
         {ack && (
-          <p className="exp-note" data-testid="journey-cost-ack">
+          <p className="exp-note exp-journey-cost" data-testid="journey-cost-ack">
             {costAckLine(change.title, change.cost, t)}
           </p>
         )}
-        <button type="button" className="exp-cta" disabled={!canStart} onClick={start}>
-          {ack ? t("lab.experimentBench.costAck.button") : t(`${k}.button`)}
-        </button>
+        <div className="exp-running-actions">
+          <button type="button" className="exp-cta" disabled={!canStart} onClick={start}>
+            {ack ? t("lab.experimentBench.costAck.button") : t(`${k}.button`)}
+          </button>
+          {!(offer && rpHere) && stopHere}
+        </div>
         {offer && rpHere && (
           <>
             <p className="exp-fineprint" data-testid="journey-realplay-plan">
               {offer}
             </p>
-            <button type="button" className="exp-cta-ghost" disabled={!canStart} onClick={() => realPlayRun(change, ack, rpHere)}>
-              {t(ack ? "lab.experimentBench.journey.realPlay.startAck" : "lab.experimentBench.journey.realPlay.start")}
-            </button>
+            <div className="exp-running-actions">
+              <button type="button" className="exp-cta-ghost" disabled={!canStart} onClick={() => realPlayRun(change, ack, rpHere)}>
+                {t(ack ? "lab.experimentBench.journey.realPlay.startAck" : "lab.experimentBench.journey.realPlay.start")}
+              </button>
+              {stopHere}
+            </div>
           </>
-        )}
-        {resuming && (
-          <button
-            type="button"
-            className="exp-cta-ghost"
-            onClick={() => {
-              stopJourneyHere(progress.game);
-              repaint((n) => n + 1);
-            }}
-          >
-            {t(`${k}.stopHere`)}
-          </button>
         )}
         <p className="exp-fineprint">{t(`${k}.oneChange`)}</p>
       </div>
@@ -1315,22 +1340,10 @@ export function GuidedJourney({
           </div>
         </>
       )}
-      {p.kind === "rp-before" && (
-        <>
-          {note && note.expId === null && (
-            <p className="exp-fineprint" data-testid="realplay-note">
-              {noteText(note, t)}
-            </p>
-          )}
-          <button type="button" className="exp-cta" disabled={!canStart} onClick={() => realPlayRun(p.change, p.costAcknowledged, p.progress)}>
-            {t("lab.experimentBench.journey.realPlay.measureNext")}
-          </button>
-        </>
-      )}
-      {p.kind === "wrong-game" && (
-        <button type="button" className="exp-cta-ghost" onClick={() => setPhase({ kind: "idle" })}>
-          {t(`${k}.planFor`, { game: gameName(p.played) })}
-        </button>
+      {p.kind === "rp-before" && note && note.expId === null && (
+        <p className="exp-fineprint" data-testid="realplay-note">
+          {noteText(note, t)}
+        </p>
       )}
       {p.kind === "result" &&
         next &&
@@ -1349,22 +1362,24 @@ export function GuidedJourney({
               p.asIs,
             );
           };
-          return ack ? (
+          return (
             <>
-              <p className="exp-note" data-testid="journey-next-plan">
-                {plan}
-              </p>
-              <p className="exp-note" data-testid="journey-cost-ack">
-                {costAckLine(next.title, next.cost, t)}
-              </p>
-              <button type="button" className="exp-cta" disabled={!canStart} onClick={startNext}>
-                {t("lab.experimentBench.costAck.button")}
-              </button>
+              {ack && (
+                <>
+                  <p className="exp-note" data-testid="journey-next-plan">
+                    {plan}
+                  </p>
+                  <p className="exp-note exp-journey-cost" data-testid="journey-cost-ack">
+                    {costAckLine(next.title, next.cost, t)}
+                  </p>
+                </>
+              )}
+              <div className="exp-running-actions">
+                <button type="button" className="exp-cta" disabled={!canStart} onClick={startNext}>
+                  {ack ? t("lab.experimentBench.costAck.button") : plan}
+                </button>
+              </div>
             </>
-          ) : (
-            <button type="button" className="exp-cta" disabled={!canStart} onClick={startNext}>
-              {plan}
-            </button>
           );
         })()}
       {p.kind === "result" && next?.retest && !isRealPlay(p.exp) && (
@@ -1372,36 +1387,53 @@ export function GuidedJourney({
           {t(`${k}.retestWhy.${next.retest}`, { change: next.title })}
         </p>
       )}
-      {p.kind === "result" && next && !isRealPlay(p.exp) && (
-        // P5-resume: the owner ends the journey here; nothing is undone (ENGINE §7).
-        <button
-          type="button"
-          className="exp-cta-ghost"
-          onClick={() => {
-            stopJourneyHere(p.exp.game);
-            setPhase({ kind: "idle" });
-          }}
-        >
-          {t(`${k}.stopHere`)}
-        </button>
-      )}
       {p.kind === "result" && next === null && (
         <p className="exp-note" data-testid="journey-done">
-          {[t(`${k}.nothingLeft`), ...(progress?.game === p.exp.game ? progressNotes(progress, t) : [])].join(" ")}
+          {[
+            t(heldByRisk > 0 ? `${k}.nothingLeftWithinRisk` : `${k}.nothingLeft`),
+            ...(progress?.game === p.exp.game ? progressNotes(progress, t) : []),
+          ].join(" ")}
         </p>
       )}
       {finished && (
-        <button
-          type="button"
-          className="exp-cta-ghost"
-          onClick={() => {
-            const exp = p.kind === "result" ? p.exp : null;
-            setPhase({ kind: "idle" });
-            onFinished?.(exp);
-          }}
-        >
-          {t(`${k}.close`)}
-        </button>
+        // Review 2026-11-02: the buttons that end a phase share one row ("Measure my next session"
+        // touched "OK", "Stop here" touched it too), 9px under the block above.
+        <div className="exp-running-actions">
+          {p.kind === "rp-before" && (
+            <button type="button" className="exp-cta" disabled={!canStart} onClick={() => realPlayRun(p.change, p.costAcknowledged, p.progress)}>
+              {t("lab.experimentBench.journey.realPlay.measureNext")}
+            </button>
+          )}
+          {p.kind === "wrong-game" && (
+            <button type="button" className="exp-cta-ghost" onClick={() => setPhase({ kind: "idle" })}>
+              {t(`${k}.planFor`, { game: gameName(p.played) })}
+            </button>
+          )}
+          {p.kind === "result" && next && !isRealPlay(p.exp) && (
+            // P5-resume: the owner ends the journey here; nothing is undone (ENGINE §7).
+            <button
+              type="button"
+              className="exp-cta-ghost"
+              onClick={() => {
+                stopJourneyHere(p.exp.game);
+                setPhase({ kind: "idle" });
+              }}
+            >
+              {t(`${k}.stopHere`)}
+            </button>
+          )}
+          <button
+            type="button"
+            className="exp-cta-ghost"
+            onClick={() => {
+              const exp = p.kind === "result" ? p.exp : null;
+              setPhase({ kind: "idle" });
+              onFinished?.(exp);
+            }}
+          >
+            {t(`${k}.close`)}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -1416,7 +1448,10 @@ function progressLine(
 ): string {
   const k = "lab.experimentBench.journey";
   const line = t(change.retest ? `${k}.progressRetest` : `${k}.progress`, { tested: progress.tested, total: progress.total, change: change.title });
-  return [line, ...progressNotes(progress, t)].join(" ");
+  const notes = progressNotes(progress, t);
+  // "… · Next: X" has no full stop, so a note after it ran on ("Next: X 2 tries couldn't be judged.",
+  // review 2026-11-02, round 2): the line's own separator comes before the notes.
+  return notes.length > 0 ? `${line} · ${notes.join(" ")}` : line;
 }
 
 /** What the count line owes besides the count: attempts that judged nothing, results from an older
@@ -1440,8 +1475,9 @@ function noteText(note: RealPlayNote, t: Translate): string {
 
 /** P5-realplay: a running real-play Trial, derived from its record and its progress read (never from
  *  this module's state, so it reads the same after a restart). It says the change is on and since
- *  when, how long it may stay on, how to put it back (with "Put it back now", the existing
- *  restore_experiment), where the count stands ("Keep playing, Compy is still collecting (N of M
+ *  when, how long it may stay on (once the test stopped, only what the stop says about the change),
+ *  how to put it back (with "Restore now", the existing restore_experiment; not once a stop says
+ *  the change is already off), where the count stands ("Keep playing, Compy is still collecting (N of M
  *  sessions)"), and every session that didn't count, with why. Never an "interrupted" banner: the
  *  change staying on across restarts is the test. Its main button measures the next session, sees a
  *  result a look has decided, or closes a test that can't go on, each through the journey's audited
@@ -1483,37 +1519,50 @@ export function RealPlayPanel({
     if (canAct) void closeRealPlay(exp.id, exp.rec_title, refresh);
   };
   return (
-    <div className="exp-order exp-journey" data-testid="journey" data-phase="realplay">
-      <div data-testid="realplay" data-realplay-phase={progress?.phase ?? "unread"}>
-        <p className="exp-note" data-testid="realplay-on">
-          {view.changeOn}
+    // Review 2026-11-02: the panel's blocks sat flush (0px). It wears the pair running panel's frame and
+    // 9px rhythm (.exp-running, the same slot RunningPanel fills), every block a child of that frame.
+    <div
+      className="exp-order exp-journey exp-running"
+      data-testid="journey"
+      data-phase="realplay"
+      data-realplay-phase={progress?.phase ?? "unread"}
+    >
+      <p className="exp-note" data-testid="realplay-on">
+        {view.changeOn}
+      </p>
+      {note && note.expId === exp.id && (
+        <p className="exp-fineprint" data-testid="realplay-note">
+          {noteText(note, t)}
         </p>
-        {note && note.expId === exp.id && (
-          <p className="exp-fineprint" data-testid="realplay-note">
-            {noteText(note, t)}
-          </p>
-        )}
-        {view.status && (
-          <p className="exp-note" data-testid="realplay-status" role="status">
-            {view.status}
-          </p>
-        )}
-        {view.action == null && unread && (
-          // The backend's own words for why the count can't be read, as the bench shows every refusal.
-          <p className="exp-fineprint" data-testid="realplay-unread">
-            {unread}
-          </p>
-        )}
-        {view.notYet && (
-          <p className="exp-fineprint" data-testid="realplay-not-yet">
-            {view.notYet}
-          </p>
-        )}
-        {view.closeHow && (
-          <p className="exp-fineprint" data-testid="realplay-close-how">
-            {view.closeHow}
-          </p>
-        )}
+      )}
+      {view.status && (
+        <p className="exp-note" data-testid="realplay-status" role="status">
+          {view.status}
+        </p>
+      )}
+      {view.action == null && unread && (
+        // The backend's own words for why the count can't be read, as the bench shows every refusal.
+        <p className="exp-fineprint" data-testid="realplay-unread">
+          {unread}
+        </p>
+      )}
+      {view.notYet && (
+        <p className="exp-fineprint" data-testid="realplay-not-yet">
+          {view.notYet}
+        </p>
+      )}
+      {view.closeHow && (
+        <p className="exp-fineprint" data-testid="realplay-close-how">
+          {view.closeHow}
+        </p>
+      )}
+      {view.seeHow && (
+        // Review 2026-11-02: what "See the result" does, said before the tap.
+        <p className="exp-fineprint" data-testid="realplay-see-how">
+          {view.seeHow}
+        </p>
+      )}
+      {(view.action != null || view.putBackHow != null) && (
         <div className="exp-running-actions">
           {view.action === "measure" && (
             <button type="button" className="exp-cta" disabled={!canAct} onClick={measure}>
@@ -1530,47 +1579,64 @@ export function RealPlayPanel({
               {t("lab.experimentBench.journey.realPlay.closeTest")}
             </button>
           )}
-          <button
-            type="button"
-            className="exp-cta-ghost"
-            disabled={!canAct}
-            onClick={() => {
-              if (canAct) void putBackRealPlay(exp.id, exp.rec_title, refresh);
-            }}
-          >
-            {t("lab.experimentBench.journey.realPlay.putBackNow")}
-          </button>
+          {/* Review 2026-11-02: once a stop says the change is already off, there is nothing on to put
+              back, so neither the button nor its line shows; everywhere else the way back does. */}
+          {view.putBackHow != null && (
+            <button
+              type="button"
+              className="exp-cta-ghost"
+              disabled={!canAct}
+              onClick={() => {
+                if (canAct) void putBackRealPlay(exp.id, exp.rec_title, refresh);
+              }}
+            >
+              {/* Review 2026-11-02: the same undo as the pair panel's, so the same label. */}
+              {t("lab.experimentBench.restoreNow")}
+            </button>
+          )}
         </div>
+      )}
+      {view.putBackHow != null && (
         <p className="exp-fineprint" data-testid="realplay-put-back-how">
           {view.putBackHow}
         </p>
-        {view.notCounted.length > 0 && (
-          <div data-testid="realplay-not-counted">
-            <p className="exp-fineprint">{t("lab.experimentBench.journey.realPlay.notCounted")}</p>
-            <ul className="exp-why-list">
-              {view.notCounted.map((line, i) => (
-                <li key={i} className="exp-fineprint">
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
+      )}
+      {view.notCounted.length > 0 && (
+        <div data-testid="realplay-not-counted">
+          <p className="exp-fineprint">{t("lab.experimentBench.journey.realPlay.notCounted")}</p>
+          <ul className="exp-why-list">
+            {view.notCounted.map((line, i) => (
+              <li key={i} className="exp-fineprint">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
 
 /** P5-resume: the progress line while a Trial of the game is still Running, so it says what the
  *  bench's running panel (and, after a restart, its interrupted banner) says: that change is on and
- *  unfinished, never "Next". */
-export function JourneyProgressLine({ progress, interrupted }: { progress: JourneyProgress | null; interrupted: boolean }) {
+ *  unfinished, never "Next". A stopped real-play test says it stopped, never "Testing now" above a
+ *  panel saying the change is no longer on or the test can't go on (review 2026-11-02, round 2). */
+export function JourneyProgressLine({
+  progress,
+  interrupted,
+  stopped = false,
+}: {
+  progress: JourneyProgress | null;
+  interrupted: boolean;
+  stopped?: boolean;
+}) {
   const { t } = useTranslation();
   if (!progress?.unfinished || progress.total === 0) return null;
   const k = "lab.experimentBench.journey";
   return (
-    <p className="exp-note" data-testid="journey-progress">
-      {t(interrupted ? `${k}.progressInterrupted` : `${k}.progressTesting`, {
+    // .exp-journey-progress: 9px above the running panel's frame that follows it (ExperimentBench.css).
+    <p className="exp-note exp-journey-progress" data-testid="journey-progress">
+      {t(interrupted ? `${k}.progressInterrupted` : stopped ? `${k}.progressStopped` : `${k}.progressTesting`, {
         tested: progress.tested,
         total: progress.total,
         change: progress.unfinished.title,

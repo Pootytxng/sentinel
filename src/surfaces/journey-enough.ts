@@ -69,8 +69,16 @@ export function enoughLine(p: CaptureProgress, t: Translate, where: "panel" | "o
   if (e.kind === "counts")
     return t(where === "overlay" ? "lab.experimentBench.journey.realPlay.enoughCountsShort" : "lab.experimentBench.journey.realPlay.enoughCounts");
   if (mode === "real-play" && e.kind === "more") {
-    if (e.secs >= 120) return t("lab.experimentBench.journey.realPlay.enoughMoreMin", { min: Math.ceil(e.secs / 60) });
-    return t("lab.experimentBench.journey.realPlay.enoughMore", { secs: Math.ceil(e.secs / 10) * 10 });
+    // Time alone never says the session will count, only when it is long enough to (review
+    // 2026-11-02); the overlay's shorter form keeps the line inside its window.
+    const overlay = where === "overlay";
+    if (e.secs >= 120)
+      return t(overlay ? "lab.experimentBench.journey.realPlay.enoughMoreMinShort" : "lab.experimentBench.journey.realPlay.enoughMoreMin", {
+        min: Math.ceil(e.secs / 60),
+      });
+    return t(overlay ? "lab.experimentBench.journey.realPlay.enoughMoreShort" : "lab.experimentBench.journey.realPlay.enoughMore", {
+      secs: Math.ceil(e.secs / 10) * 10,
+    });
   }
   if (e.kind === "enough") return t("lab.experimentBench.journey.enough");
   if (e.kind === "unsettled") {

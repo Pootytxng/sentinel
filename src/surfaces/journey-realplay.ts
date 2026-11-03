@@ -162,6 +162,24 @@ const STOP_KEY: Record<RealPlayStop, string> = {
   "window-over": "windowOver",
   "before-missing": "beforeMissing",
 };
+/** What a stopped test says about its change (journey.realPlay.stoppedOn.*). realplay.rs `with_arm`
+ *  reports the first stop that holds, in this order: put back in history, another Compy change, a
+ *  condition, the setting reads off, the window is over, the setting can't be read, the as-is sessions
+ *  are gone. So the two stops that say the change is off are "no longer on"; an unreadable setting is
+ *  "can't tell"; before-missing, reported only once every stop before it is ruled out, is the one with
+ *  the setting reading on ("still on", and with no as-is session to compare against no result can
+ *  come); every other stop can come first over a setting that reads off or can't be read, and can
+ *  still close with a result from the sessions counted, so it says only what Compy did: it hasn't
+ *  put the change back, and the test can't go on. A stop this build doesn't know says the same. */
+const STOPPED_ON: Record<RealPlayStop, "noLongerOn" | "cantTell" | "stillOn" | "notPutBack"> = {
+  "change-off": "noLongerOn",
+  "put-back-in-history": "noLongerOn",
+  unreadable: "cantTell",
+  "other-change": "notPutBack",
+  conditions: "notPutBack",
+  "window-over": "notPutBack",
+  "before-missing": "stillOn",
+};
 const REASON_KEY: Record<string, string> = {
   "too-short": "tooShort",
   behind: "behind",
@@ -185,17 +203,25 @@ export function notCountedWhy(reason: string, minReadings: number, t: Translate)
 
 /** What a running real-play Trial's panel says, from its record and its progress read now. */
 export type RealPlayView = {
-  /** That the change is on, since when, and how long it may stay on (max sessions, until when). */
+  /** Whether the change is on. While the test runs: that it is on, since when, and how long it may
+   *  stay on (max sessions, until when). Once it stopped: only what the stop says (`STOPPED_ON`),
+   *  never how long it stays on. */
   changeOn: string;
   /** Where it stands: still collecting N of M, a result is ready, why it stopped, or that its
    *  progress can't be read right now. null while the first read hasn't answered. */
   status: string | null;
-  /** While still collecting after a look: how much the sessions vary, so a few more are needed. */
+  /** While still collecting after a look: the allowance for normal swings between sessions so far
+   *  (the newest look's band, not the spread), so a few more are needed. */
   notYet: string | null;
-  /** How to put it back (always said). */
-  putBackHow: string;
+  /** How to put it back, said beside the button that does. null only once a stop says the change is
+   *  already off (then neither the line nor the button shows): everywhere else the way back shows,
+   *  including when Compy can't tell whether it is on. */
+  putBackHow: string | null;
   /** When stopped: what closing the test does. */
   closeHow: string | null;
+  /** When a look decided: what "See the result" does, before the tap (concludeRealPlayTrial: the
+   *  conclude keeps the change only on a Likely better and puts it back otherwise). */
+  seeHow: string | null;
   /** Each session not counted, with when and why. */
   notCounted: string[];
   /** The panel's one main action: measure the next session, see the result, or close the test. */
@@ -229,6 +255,7 @@ export function realPlayView(
       notYet: null,
       putBackHow,
       closeHow: null,
+      seeHow: null,
       notCounted: [],
       action: null,
     };
@@ -240,19 +267,40 @@ export function realPlayView(
     }),
   );
   if (own.phase === "stopped") {
-    const stop = own.stop && STOPS.has(own.stop) ? STOP_KEY[own.stop as RealPlayStop] : "other";
+    const known = own.stop && STOPS.has(own.stop) ? (own.stop as RealPlayStop) : null;
+    const on = known ? STOPPED_ON[known] : "notPutBack";
     return {
-      changeOn,
-      status: t(`lab.experimentBench.journey.realPlay.stop.${stop}`, { change, days: own.window_days }),
+      changeOn: t(`lab.experimentBench.journey.realPlay.stoppedOn.${on}`, { change }),
+      status: t(`lab.experimentBench.journey.realPlay.stop.${known ? STOP_KEY[known] : "other"}`, { change, days: own.window_days }),
       notYet: null,
-      putBackHow,
-      closeHow: t("lab.experimentBench.journey.realPlay.closeHow", { change }),
+      // Nothing is on to put back once the change reads off or was put back in history.
+      putBackHow: on === "noLongerOn" ? null : putBackHow,
+      // Put back in history, closing keeps nothing even on a Likely better and writes nothing
+      // (experiment.rs put_back_before_conclude; the restore meets "already rolled back"). Every
+      // other stop's close keeps a Likely better and otherwise writes the setting back.
+      closeHow: t(
+        known === "put-back-in-history" ? "lab.experimentBench.journey.realPlay.closeHowPutBack" : "lab.experimentBench.journey.realPlay.closeHow",
+        { change },
+      ),
+      seeHow: null,
       notCounted,
       action: "close",
     };
   }
   if (own.phase === "ready") {
-    return { changeOn, status: t("lab.experimentBench.journey.realPlay.ready"), notYet: null, putBackHow, closeHow: null, notCounted, action: "see-result" };
+    return {
+      // "…until Compy has a result: at most N sessions, or by D" read stale right above "Compy has
+      // enough sessions for a result" (review 2026-11-02, round 2): once the result is there, only
+      // that the change is on, and since when.
+      changeOn: t("lab.experimentBench.journey.realPlay.changeOnShort", { change, since }),
+      status: t("lab.experimentBench.journey.realPlay.ready"),
+      notYet: null,
+      putBackHow,
+      closeHow: null,
+      seeHow: t("lab.experimentBench.journey.realPlay.seeHow", { change }),
+      notCounted,
+      action: "see-result",
+    };
   }
   return {
     changeOn,
@@ -260,6 +308,7 @@ export function realPlayView(
     notYet: own.band_pct != null ? t("lab.experimentBench.journey.realPlay.notYet", { band: one(own.band_pct) }) : null,
     putBackHow,
     closeHow: null,
+    seeHow: null,
     notCounted,
     action: "measure",
   };
@@ -324,6 +373,14 @@ function because(exp: RealPlayRecord, t: Translate): string {
   return t(`lab.experimentBench.journey.putBackWhy.${PUT_BACK_WHY[exp.verdict ?? ""] ?? "other"}`);
 }
 
+/** A measured verdict (Likely better / worse / no clear difference) whose numbers the record doesn't
+ *  hold: its line says Unknown and that the record doesn't hold them (`realPlayResult`), and its
+ *  receipt says the verdict and confidence were not judged, never a verdict without its numbers. */
+export function realPlayNumbersMissing(exp: { verdict: string | null; real_play?: RealPlayEvidence | null }): boolean {
+  const rp = exp.real_play ?? {};
+  return MEASURED.has(exp.verdict ?? "") && !(finite(rp.band_pct) && finite(rp.delta_low1_pct) && finite(rp.delta_avg_pct));
+}
+
 /** Its own change was put back in Test → Applied & history: the record keeps its measured verdict,
  *  never keeps the change, and says who put it back. */
 const putBackInHistory = (exp: { stop_reason?: string | null; real_play?: RealPlayEvidence | null }): boolean =>
@@ -382,8 +439,8 @@ export function realPlayResult(exp: RealPlayRecord, game: string, t: Translate):
   }
   if (exp.verdict === "too-noisy" && finite(band))
     return t("lab.experimentBench.journey.realPlay.unknown", { action, game, band: one(band), with: counted });
-  // A measured verdict whose numbers the record doesn't hold: never filled in, and never "not judged".
-  if (MEASURED.has(exp.verdict ?? "")) return t("lab.experimentBench.journey.realPlay.unknownNoNumbers", { action });
+  // A measured verdict whose numbers the record doesn't hold: never filled in.
+  if (realPlayNumbersMissing(exp)) return t("lab.experimentBench.journey.realPlay.unknownNoNumbers", { action });
   // No look decided (the test stopped before enough sessions counted): say how few counted.
   if (rp.look == null) {
     if (inHistory) return t("lab.experimentBench.journey.realPlay.unknownShortHistory", { change, count: counted });

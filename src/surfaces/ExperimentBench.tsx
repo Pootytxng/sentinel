@@ -480,11 +480,17 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
   // P5-realplay: a real-play row compared its sessions with the change on against those without it,
   // not one after-session against one baseline; it names how many, with the same rules.
   const rp = isRealPlay(x) ? realPlayCounts(x) : null;
+  // Review 2026-11-02: a real-play Likely better can end put back (its change was undone in Test →
+  // Applied & history before the conclude, which then keeps nothing), so its rule never says kept.
+  // A two-session row can't: every Better is kept (keep_rule) and nothing un-keeps the record later.
+  const putBackAfterBetter = rp != null && x.verdict === "improved" && !x.kept;
   // P4-maxfps-smooth: a Maximum FPS row leads with the average.
   if (x.outcome === "max-fps") {
     const rule =
       x.verdict === "improved"
-        ? "receiptRuleMaxKept"
+        ? putBackAfterBetter
+          ? "receiptRuleMaxPutBack"
+          : "receiptRuleMaxKept"
         : x.verdict === "regressed"
           ? avg < -band
             ? "receiptRuleMaxAvgFell"
@@ -508,7 +514,9 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
   }
   const rule =
     x.verdict === "improved"
-      ? "receiptRuleKept"
+      ? putBackAfterBetter
+        ? "receiptRulePutBack"
+        : "receiptRuleKept"
       : x.verdict === "regressed"
         ? "receiptRuleLowFell"
         : low > band
@@ -1017,6 +1025,14 @@ export default function ExperimentBench({
   // with its verdict). Unknown until the candidates have loaded: an empty list then is not "nothing left".
   const journeyNext =
     journey.kind === "result" && recsLoaded ? nextToTest(journey.exp.game, withJudged(journey.exp), ranked, sessions) : undefined;
+  // P8-posture-note (review 2026-11-02): how many changes on the journey's game the chosen risk holds
+  // back, by the summary's own count (`outsideRisk`), so the journey's "nothing left" never hides that
+  // the risk choice is what stopped it: the finished journey's game, else the game it would run on.
+  const journeyGame = journey.kind === "result" ? journey.exp.game : pickGame;
+  const journeyHeldByRisk =
+    journeyGame && recsLoaded
+      ? ((summary?.game === journeyGame ? summary : summarizeGame(journeyGame, experiments, recs, sessions))?.outsideRisk.length ?? 0)
+      : 0;
   // P5-resume: the game's journey progress, derived from the experiments store, for the game a
   // running Trial is on, else the journey's game. Unknown until the candidates have loaded.
   const progressGame = running?.game ?? pickGame;
@@ -1231,6 +1247,7 @@ export default function ExperimentBench({
           resumeReuses={progress != null && reusableAsIs(sessions, progress.asIs, progress.game) != null}
           stillOn={progress ? stillOnFor(progress.game, experiments, recs) : []}
           realPlay={running ? null : (rp?.progress ?? null)}
+          heldByRisk={journeyHeldByRisk}
           onFinished={(exp) => {
             // The finished journey hands over to P4-next's offer of the next change to test.
             if (exp) setConcluded(experiments.find((x) => x.id === exp.id) ?? null);
@@ -1240,7 +1257,12 @@ export default function ExperimentBench({
 
       {journey.kind === "idle" && running && (
         // P5-realplay: a real-play Trial runs across restarts by design, so it is never "interrupted".
-        <JourneyProgressLine progress={progress} interrupted={!isRealPlay(running) && running.id === interruptedJourneyId()} />
+        // Stopped, its panel says why and offers "Close this test"; the line above says it stopped.
+        <JourneyProgressLine
+          progress={progress}
+          interrupted={!isRealPlay(running) && running.id === interruptedJourneyId()}
+          stopped={isRealPlay(running) && rp?.progress?.experiment_id === running.id && rp.progress.phase === "stopped"}
+        />
       )}
       {journey.kind !== "idle" ? null : running && isRealPlay(running) ? (
         // P5-realplay: the change stays on while the owner plays; the panel says so, how long, how to
@@ -1815,7 +1837,9 @@ function TestSummary({ s }: { s: GameTestSummary }) {
                         ? // P8-posture-stale-copy: a held change has an older (stale) result, so
                           // "nothing was measured" would be untrue; say what is there instead.
                           `${t("lab.experimentBench.summary.stoppedStaleHeld", { game, count: s.staleHeld.length })}${
-                            s.stop.noResult > 0 ? ` ${t("lab.experimentBench.summary.stopUnjudged", { count: s.stop.noResult })}` : ""
+                            // Harness review 2026-11-02: a bare "1 couldn't be judged." here has no subject and reads as
+                            // the stale change; the unjudged ones are other changes, so they are named so.
+                            s.stop.noResult > 0 ? ` ${t("lab.experimentBench.summary.stopUnjudgedOther", { count: s.stop.noResult })}` : ""
                           }`
                         : t("lab.experimentBench.summary.nothingTestableNow", { game })
                   }${s.outsideRisk.length > 0 ? ` ${t("lab.experimentBench.summary.heldByRisk", { count: s.outsideRisk.length })}` : ""}`
