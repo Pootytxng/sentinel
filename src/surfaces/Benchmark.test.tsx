@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 
 // Benchmark polls several commands on mount; keyed mock with settable benchmark/fps state.
 const mocks = vi.hoisted(() => ({
@@ -42,6 +42,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { BenchmarkTab } from "./Benchmark";
+import { invoke } from "@tauri-apps/api/core";
 
 afterEach(() => {
   cleanup();
@@ -54,6 +55,20 @@ describe("BenchmarkTab (audit M1)", () => {
     render(<BenchmarkTab />);
     expect(await screen.findByRole("button", { name: "Run benchmark" })).toBeInTheDocument();
     expect(screen.getByText("Baseline")).toBeInTheDocument();
+  });
+
+  // CR-1102-left: "running" arrives with the next poll, so a second click before it started a second run.
+  it("a second click while the start is in flight starts nothing more", async () => {
+    mocks.benchState = { running: false, baseline: null, baseline_at: null, latest: null, latest_at: null, efficacy: null };
+    render(<BenchmarkTab />);
+    const runBtn = await screen.findByRole("button", { name: "Run benchmark" });
+    vi.mocked(invoke).mockClear();
+    fireEvent.click(runBtn);
+    fireEvent.click(runBtn);
+    fireEvent.click(runBtn);
+    await waitFor(() =>
+      expect(vi.mocked(invoke).mock.calls.filter(([c]) => c === "start_benchmark")).toHaveLength(1),
+    );
   });
 
   it("a run in flight is honest about the wait and not re-clickable", async () => {

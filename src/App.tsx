@@ -40,6 +40,7 @@ import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { sessionPeakVendor } from "./data/gpu-sensor";
 import { readSessionSlot } from "./data/gaming-session-route";
+import { createGenerations } from "./data/latest-wins";
 import { invalidateProbe } from "./data/probe-cache";
 import { setStartupEntryEnabled } from "./data/startup-toggle";
 import { writeLedger } from "./data/ledger-write";
@@ -599,6 +600,7 @@ function App() {
   // export_report calls, and a ref reads correctly inside the async handler, where state would be
   // a stale closure and let both clicks through anyway.
   const exportingRef = useRef(false);
+  const refreshGenerations = useRef(createGenerations());
   const [showSettings, setShowSettings] = useState(false);
   // Settings opens from the custom titlebar (window chrome lives outside <App/>, so it signals across
   // the tree — same bridge as the compy:*-changed flags). The titlebar gear is the app-wide entry.
@@ -819,6 +821,9 @@ function App() {
   };
 
   const refresh = async () => {
+    // Latest wins (CR-1102-left): a refresh follows every apply and rollback, so two can overlap; an
+    // older one's slow read must not land over the newer one's answer, nor its error re-raise a toast.
+    const current = refreshGenerations.current.begin();
     setError(null);
     // A refresh follows app start and every apply/rollback — drop the per-surface probe cache so
     // Advanced/Optimize re-read fresh after any change (between mutations the cache serves instantly).
@@ -831,11 +836,11 @@ function App() {
     const run = <T,>(cmd: string, set: (v: T) => void): Promise<T | undefined> =>
       invoke<T>(cmd)
         .then((v) => {
-          set(v);
+          if (current()) set(v);
           return v;
         })
         .catch((e) => {
-          fail(t("app.errors.readInfoFailed"), e);
+          if (current()) fail(t("app.errors.readInfoFailed"), e);
           return undefined;
         });
     // readiness/recs/startup/sessions feed BOTH their own state AND the priority ranking — compute
@@ -864,10 +869,14 @@ function App() {
           recommendations,
           startup,
           sessions,
-        }).then(setPriorities);
+        }).then((p) => {
+          if (current()) setPriorities(p);
+        });
       })
       // Only a genuine priorities_from failure (all four present, ranking itself failed) reaches here.
-      .catch((e) => fail(t("app.errors.rankPrioritiesFailed"), e));
+      .catch((e) => {
+        if (current()) fail(t("app.errors.rankPrioritiesFailed"), e);
+      });
     await Promise.all([
       run<HardwareInfo>("get_hardware_info", (info) => {
         setHw(info);

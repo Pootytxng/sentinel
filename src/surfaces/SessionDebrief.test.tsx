@@ -211,6 +211,29 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
     vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
   });
 
+  // CR-1102-left: the comparison was read once per game and kept on a failed read, so switching the
+  // debrief to another game whose read failed left the first game's verdict under the second.
+  it("switching to another game drops the first game's verdict, even when the new read fails", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? comparison : null));
+    const { rerender } = render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    await screen.findByTestId("cmp-card");
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      cmd === "get_latest_comparison" ? Promise.reject(new Error("unreadable")) : Promise.resolve(null),
+    );
+    rerender(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} s={{ ...session, process_name: "cs2.exe" }} />
+      </ConfirmProvider>,
+    );
+    await waitFor(() => expect(screen.queryByTestId("cmp-card")).toBeNull());
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
+  });
+
   // P7-teach (Constitution §14): after this PC's own result, at most one lesson from the P5-learned
   // rule table, behind the Why door, linking the Library entry it reads from. Fails on the code before
   // this slice (the card taught nothing).

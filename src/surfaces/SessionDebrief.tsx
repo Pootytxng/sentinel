@@ -316,10 +316,19 @@ export function SessionDebrief({
   // Show a resolved comparison only if it's for THIS session's game (Moment 4). A TUNING result is
   // NOT a fix comparison — it has no ledger entry to revert — so it's excluded here and rendered by
   // the dedicated TuningDebrief instead (no duplicate card, no meaningless revert button).
+  // A new game clears the old verdict first and only its own read may land: a failed or late read
+  // left the previous game's comparison showing under this one (CR-1102-left).
   useEffect(() => {
+    let live = true;
+    setComparison(null);
     invoke<ComparisonResult | null>("get_latest_comparison")
-      .then((c) => setComparison(c && c.game === s.process_name && c.kind !== "tuning" ? c : null))
+      .then((c) => {
+        if (live) setComparison(c && c.game === s.process_name && c.kind !== "tuning" ? c : null);
+      })
       .catch(() => {});
+    return () => {
+      live = false;
+    };
   }, [s.process_name]);
   // The verdict, the insights and the clean line all argue from the 1%-low/average ratio, so with
   // either reading unknown there is no ratio and nothing here concludes from one (#608). The old

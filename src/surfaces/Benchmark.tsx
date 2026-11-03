@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, StatusPill, SectionHeader } from "../design";
@@ -73,6 +73,22 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // In-flight latch for the two starts (CR-1102-left): "running" comes from the next poll, so until it
+  // lands a second click started a second run, or a second Trial of the same change. The ref answers
+  // inside one event loop turn; the state disables the buttons.
+  const startingRef = useRef(false);
+  const [starting, setStarting] = useState(false);
+  const latchStart = async (go: () => Promise<void>) => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
+    try {
+      await go();
+    } finally {
+      startingRef.current = false;
+      setStarting(false);
+    }
+  };
   // #629: until get_benchmark_state answers, "no baseline" is unknown, not false. A failed first read
   // stays unknown too, so the card never offers to overwrite a baseline it could not read.
   const [stateReadFailed, setStateReadFailed] = useState(false);
@@ -204,16 +220,17 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
     refresh();
   };
 
-  const measureTweak = async () => {
-    const t = tweaks.find((x) => x.id === selectedTweak);
-    if (!t) return;
-    try {
-      await invoke("start_tweak_trial", { recId: t.id, recTitle: t.title });
-    } catch {
-      /* surfaced via trial state */
-    }
-    refresh();
-  };
+  const measureTweak = () =>
+    latchStart(async () => {
+      const t = tweaks.find((x) => x.id === selectedTweak);
+      if (!t) return;
+      try {
+        await invoke("start_tweak_trial", { recId: t.id, recTitle: t.title });
+      } catch {
+        /* surfaced via trial state */
+      }
+      await refresh();
+    });
 
   const toggleFace = () => {
     setArcade((a) => {
@@ -232,15 +249,16 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
     }
   };
 
-  const run = async () => {
-    setErr(null);
-    try {
-      await invoke("start_benchmark");
-    } catch (e) {
-      setErr(String(e));
-    }
-    refresh();
-  };
+  const run = () =>
+    latchStart(async () => {
+      setErr(null);
+      try {
+        await invoke("start_benchmark");
+      } catch (e) {
+        setErr(String(e));
+      }
+      await refresh();
+    });
 
   const cancel = async () => {
     try {
@@ -351,7 +369,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
       </Card>
 
       <div className="bench-actions">
-        <button className="bench-btn bench-btn-primary" onClick={run} disabled={running || !baselineKnown}>
+        <button className="bench-btn bench-btn-primary" onClick={run} disabled={running || starting || !baselineKnown}>
           {running
             ? t("gaming.benchmark.measuringButton")
             : !baselineKnown
@@ -493,7 +511,7 @@ export function BenchmarkTab({ provingGround = false }: { provingGround?: boolea
                 <button
                   className="bench-btn"
                   onClick={measureTweak}
-                  disabled={!selectedTweak || fpsActive === false}
+                  disabled={!selectedTweak || fpsActive === false || starting}
                 >
                   {t("gaming.benchmark.measureThisTweakButton")}
                 </button>
