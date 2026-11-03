@@ -651,10 +651,18 @@ fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
     if !path.exists() {
         return Ok(Vec::new()); // first run — genuinely no history
     }
-    let parsed = std::fs::read_to_string(path)
-        .map_err(|e| format!("read: {e}"))
-        .and_then(|s| serde_json::from_str(&s).map_err(|e| format!("parse: {e}")));
-    match parsed {
+    // A READ that fails is not damage (codebase review 2026-11-02). A sharing violation, a
+    // permissions glitch or an IO error says nothing about the bytes on disk, and setting a valid
+    // ledger aside on one stranded every rollback contract in it: the next load finds no file and
+    // reads as a first run. Fail loud and leave the file exactly where it is; the next load reads it
+    // again. Only bytes that were read and do not parse (non-UTF-8 included) are set aside.
+    let bytes = std::fs::read(path).map_err(|e| {
+        format!(
+            "The Trust Ledger could not be read right now (read: {e}). It was left exactly as it \
+             is, and Compy will not record changes until it can read it again."
+        )
+    })?;
+    match serde_json::from_slice(&bytes) {
         Ok(h) => Ok(h),
         Err(e) => {
             // H1 fix (audit 2026-06-11): an unreadable EXISTING ledger must never be silently
@@ -662,10 +670,13 @@ fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
             // recoverable file and permanently erase every rollback contract. Set the damaged
             // file aside byte-for-byte (best effort) and fail LOUD. Every save sits behind a
             // successful load, so the recoverable bytes can never be clobbered either way.
+            // A second set-aside never destroys the first (review 2026-11-02): the earlier one is
+            // kept beside it first, and when that fails the damaged file stays where it is.
             let corrupt = path.with_extension("json.corrupt");
-            let preserved = std::fs::rename(path, &corrupt).is_ok();
+            let cleared = !corrupt.exists() || keep_earlier_set_aside(path, &corrupt);
+            let preserved = cleared && std::fs::rename(path, &corrupt).is_ok();
             Err(format!(
-                "The Trust Ledger could not be read ({e}). {}",
+                "The Trust Ledger could not be read (parse: {e}). {}",
                 if preserved {
                     "The damaged file was set aside as history.json.corrupt — nothing was \
                      overwritten, and Compy will not record changes over it."
@@ -675,6 +686,25 @@ fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
             ))
         }
     }
+}
+
+/// Moves an earlier set-aside ledger to `history.json.corrupt.<its last write, unix seconds>` (or the
+/// first free `-<n>` after it), so a second set-aside can't replace its bytes. The newest set-aside
+/// stays `history.json.corrupt`, the marker `ledger_was_quarantined` and #618's time bound read.
+/// `false` when it could not be moved: the caller then leaves the newly damaged file in place.
+fn keep_earlier_set_aside(ledger: &Path, corrupt: &Path) -> bool {
+    let secs = std::fs::symlink_metadata(corrupt)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_secs());
+    (0..100u32)
+        .map(|n| match n {
+            0 => ledger.with_extension(format!("json.corrupt.{secs}")),
+            n => ledger.with_extension(format!("json.corrupt.{secs}-{n}")),
+        })
+        .find(|older| std::fs::symlink_metadata(older).is_err())
+        .is_some_and(|older| std::fs::rename(corrupt, older).is_ok())
 }
 
 /// Persist the ledger. Takes the `MutationRoot` capability rather than a path: a receipt may only
@@ -705,8 +735,15 @@ fn save_history_to(path: &Path, h: &[AppliedChange]) -> Result<(), String> {
     // in (same-volume rename; std maps to MoveFileEx + REPLACE_EXISTING on Windows). A crash
     // mid-write can only ever leave a stale-but-valid history.json plus an ignorable .tmp —
     // never a torn ledger.
+    // The new bytes reach the disk BEFORE the swap (codebase review 2026-11-02): without the flush,
+    // a power cut or a crash just after the rename could leave history.json pointing at bytes that
+    // were never written, which the next load sets aside as damage, receipts and all.
     let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, json).map_err(|e| format!("write: {e}"))?;
+    let mut file = std::fs::File::create(&tmp).map_err(|e| format!("write: {e}"))?;
+    std::io::Write::write_all(&mut file, json.as_bytes())
+        .and_then(|()| file.sync_all())
+        .map_err(|e| format!("write: {e}"))?;
+    drop(file);
     std::fs::rename(&tmp, path).map_err(|e| format!("swap: {e}"))
 }
 
@@ -4441,6 +4478,46 @@ mod history_tests {
             "the recoverable bytes are preserved EXACTLY, where no save will touch them"
         );
         assert!(!path.exists(), "the damaged live file was set aside");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // Codebase review 2026-11-02: a read that fails (a sharing violation, a permissions glitch) says
+    // nothing about the bytes, and setting a VALID ledger aside on one stranded every rollback contract
+    // in it, since the next load found no file and read as a first run. A directory at the ledger's
+    // path is a read that fails on every platform.
+    #[test]
+    fn a_ledger_that_cant_be_read_right_now_is_never_set_aside() {
+        let dir = std::env::temp_dir().join(format!("compy-hist-unreadable-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        let path = dir.join("history.json");
+        std::fs::create_dir_all(&path).unwrap();
+        let err = load_history_from(&path).err().expect("an unreadable ledger fails loud");
+        assert!(err.contains("could not be read right now"), "{err}");
+        assert!(path.is_dir(), "left exactly where it was");
+        assert!(!path.with_extension("json.corrupt").exists(), "never set aside on a read error");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // Same review: a second set-aside replaced the first one's bytes. The newest stays the marker
+    // `ledger_was_quarantined` and #618 read; the earlier one is kept beside it.
+    #[test]
+    fn a_second_set_aside_keeps_the_first_ones_bytes() {
+        let dir = std::env::temp_dir().join(format!("compy-hist-second-aside-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        std::fs::write(&path, b"{ first ]]").unwrap();
+        assert!(load_history_from(&path).is_err());
+        std::fs::write(&path, b"[ second").unwrap();
+        assert!(load_history_from(&path).is_err());
+        assert_eq!(std::fs::read(path.with_extension("json.corrupt")).unwrap(), b"[ second", "the newest is the marker");
+        let kept: Vec<Vec<u8>> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().starts_with("history.json.corrupt."))
+            .map(|e| std::fs::read(e.path()).unwrap())
+            .collect();
+        assert_eq!(kept, vec![b"{ first ]]".to_vec()], "the first set-aside's bytes survive beside it");
         std::fs::remove_dir_all(&dir).ok();
     }
 

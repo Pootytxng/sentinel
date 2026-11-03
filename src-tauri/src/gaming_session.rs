@@ -236,7 +236,15 @@ pub(crate) fn save_session(f: &SessionFile) -> Result<(), String> {
     }
     let tmp = p.with_extension("json.tmp");
     let json = serde_json::to_string_pretty(f).map_err(|e| e.to_string())?;
-    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    // Flushed BEFORE the swap (codebase review 2026-11-02): after a power cut or a crash just after
+    // the rename, unflushed bytes could read back empty, and the live Game Mode, power-plan and
+    // service changes would then have no contract to restore from. The fixed temp name stays, so a
+    // leftover still counts as a pending contract for `has_pending_contract`.
+    let mut file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
+    std::io::Write::write_all(&mut file, json.as_bytes())
+        .and_then(|()| file.sync_all())
+        .map_err(|e| e.to_string())?;
+    drop(file);
     std::fs::rename(&tmp, &p).map_err(|e| e.to_string())
 }
 

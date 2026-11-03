@@ -2117,7 +2117,9 @@ mod eee_resolution_tests {
 
 #[cfg(test)]
 mod nagle_target_tests {
-    use super::select_nagle_targets;
+    use super::{
+        require_nagle_interfaces, rollback_nagle_disable_typed, select_nagle_targets, NagleInterfaceSnapshot,
+    };
 
     #[test]
     fn targets_physical_excludes_virtual() {
@@ -2139,6 +2141,33 @@ mod nagle_target_tests {
         let with_ip_lower = vec!["{a}".to_string(), "{b}".to_string()];
         let physical_upper = vec!["{A}".to_string()];
         assert_eq!(select_nagle_targets(&with_ip_lower, &physical_upper), vec!["{a}".to_string()]);
+    }
+
+    // Codebase review 2026-11-02: with no adapter to change, apply returned Ok with an empty snapshot,
+    // the ledger said "applied" for a change that wrote nothing, and rollback refuses an empty snapshot,
+    // so the row could never be closed.
+    #[test]
+    fn an_apply_with_no_interface_to_change_is_refused_before_anything_runs() {
+        let err = require_nagle_interfaces(Vec::new()).expect_err("nothing to change must refuse");
+        assert!(err.contains("nothing was changed"), "{err}");
+        // The row it would have written is one rollback can never close.
+        assert!(rollback_nagle_disable_typed(&[]).is_err());
+        let one = vec![NagleInterfaceSnapshot {
+            interface: "{A}".into(),
+            prior_ack: None,
+            prior_nodelay: Some(0),
+        }];
+        assert_eq!(require_nagle_interfaces(one).map(|v| v.len()), Ok(1));
+        // Wiring: apply passes its targets through the refusal before the elevated write. Tokens are
+        // built by concat! so this test's own lines don't match the scan.
+        let src = include_str!("actions.rs");
+        let start = src.find(concat!("pub(crate) fn apply_", "nagle_disable()")).expect("apply fn");
+        let body = &src[start..];
+        let end = body.find(concat!("pub(crate) fn rollback_", "nagle_disable_typed")).expect("rollback fn");
+        let body = &body[..end];
+        let refuse = body.find(concat!("require_nagle_", "interfaces(")).expect("apply must route through the refusal");
+        let write = body.find(concat!("run_elevated_", "powershell(&ps)")).expect("apply writes through the runner");
+        assert!(refuse < write, "the refusal must come before the elevated write");
     }
 }
 
@@ -4806,8 +4835,22 @@ pub(crate) fn select_nagle_targets(with_ip_guids: &[String], physical_guids_uppe
     }
 }
 
-/// Issue 617 assessment: every per-interface write is SilentlyContinue and the apply always returns
-/// Ok with the full snapshot, so any partial state is always receipted and rollback-able.
+/// An apply with no interface to change (offline, or no adapter has an address) is refused before
+/// anything runs (codebase review 2026-11-02). An Ok there recorded "applied" for a change that wrote
+/// nothing, and `rollback_nagle_disable_typed` refuses an empty snapshot, so that Trust Ledger row
+/// could never be closed.
+fn require_nagle_interfaces(
+    snapshots: Vec<NagleInterfaceSnapshot>,
+) -> Result<Vec<NagleInterfaceSnapshot>, String> {
+    if snapshots.is_empty() {
+        return Err("No active network adapter was found to change, so nothing was changed. Connect to a network and try again.".into());
+    }
+    Ok(snapshots)
+}
+
+/// Issue 617 assessment: every per-interface write is SilentlyContinue and, once there is an
+/// interface to change, the apply returns Ok with the full snapshot, so any partial state is always
+/// receipted and rollback-able.
 pub(crate) fn apply_nagle_disable() -> Result<ApplyResult, String> {
     // Snapshot (no admin): capture prior values on every Tcpip interface that has an IP...
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
@@ -4838,11 +4881,14 @@ pub(crate) fn apply_nagle_disable() -> Result<ApplyResult, String> {
         .into_iter()
         .map(|g| g.to_uppercase())
         .collect();
-    // The snapshot now covers EXACTLY what we write, so rollback is exact.
-    let nic_snapshots: Vec<NagleInterfaceSnapshot> = with_ip
-        .into_iter()
-        .filter(|s| targets.contains(&s.interface.to_uppercase()))
-        .collect();
+    // The snapshot now covers EXACTLY what we write, so rollback is exact. Nothing to change is
+    // refused here, before anything runs.
+    let nic_snapshots: Vec<NagleInterfaceSnapshot> = require_nagle_interfaces(
+        with_ip
+            .into_iter()
+            .filter(|s| targets.contains(&s.interface.to_uppercase()))
+            .collect(),
+    )?;
 
     // Write to exactly those interfaces, by explicit path (mirrors the rollback script).
     // Per-call `-ErrorAction SilentlyContinue` is DELIBERATE and MUST stay: run_elevated_powershell

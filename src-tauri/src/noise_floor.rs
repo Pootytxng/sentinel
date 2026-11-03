@@ -253,10 +253,13 @@ fn parse(at: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
     chrono::DateTime::parse_from_rfc3339(at).ok()
 }
 
-/// When a session ended, from its start and duration. `None` when the start can't be read.
+/// When a session ended, from its start and duration. `None` when the start can't be read or the sum
+/// lies past the last date chrono can hold (a corrupt length). `Duration::seconds` and `+` panic there,
+/// on a command thread holding the experiment gate, which a poisoned gate then refused for every later
+/// Trial command (codebase review 2026-11-02): the same guard as `realplay::ended`.
 fn ended(s: &crate::sessions::SessionSummary) -> Option<chrono::DateTime<chrono::FixedOffset>> {
-    let secs = i64::try_from(s.duration_secs).ok()?;
-    Some(parse(&s.started_at)? + chrono::Duration::seconds(secs))
+    let length = chrono::Duration::try_seconds(i64::try_from(s.duration_secs).ok()?)?;
+    parse(&s.started_at)?.checked_add_signed(length)
 }
 
 /// Whether any Compy change was applied or undone between `a` starting and `b` ending. A date that
@@ -411,12 +414,23 @@ fn store_path() -> PathBuf {
 }
 
 /// Absent reads as empty. A file that doesn't parse is set aside as `.corrupt`, never parsed
-/// partially, so a damaged file can't hand back a noise level nobody measured.
+/// partially, so a damaged file can't hand back a noise level nobody measured. A file that is there
+/// but can't be read right now also reads as empty here, for lookups; a write builds on
+/// [`load_checked_from`] instead.
 pub(crate) fn load_from(path: &Path) -> NoiseFloorStore {
-    let Ok(raw) = std::fs::read_to_string(path) else {
-        return NoiseFloorStore::default();
+    load_checked_from(path).unwrap_or_default()
+}
+
+/// The read a calibration write builds on (codebase review 2026-11-02). A file that exists and could
+/// not be read (a sharing violation, a permissions glitch) is an error, never an empty store: the save
+/// that follows would otherwise replace every game's calibration with this one.
+pub(crate) fn load_checked_from(path: &Path) -> Result<NoiseFloorStore, String> {
+    let raw = match std::fs::read(path) {
+        Ok(raw) => raw,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(NoiseFloorStore::default()),
+        Err(e) => return Err(format!("Compy couldn't read its noise calibrations right now ({e}). Nothing was changed.")),
     };
-    match serde_json::from_str::<NoiseFloorStore>(&raw) {
+    Ok(match serde_json::from_slice::<NoiseFloorStore>(&raw) {
         Ok(store) => store,
         Err(_) => {
             let corrupt = path.with_extension("json.corrupt");
@@ -424,7 +438,7 @@ pub(crate) fn load_from(path: &Path) -> NoiseFloorStore {
             let _ = std::fs::rename(path, &corrupt);
             NoiseFloorStore::default()
         }
-    }
+    })
 }
 
 pub(crate) fn load() -> NoiseFloorStore {
@@ -467,7 +481,7 @@ pub(crate) fn record_to(
     measured_at: &str,
 ) -> Result<bool, String> {
     let _g = lock_gate();
-    let mut store = load_from(path);
+    let mut store = load_checked_from(path)?;
     if !upsert(&mut store, at, noise_pct, windows, measured_at) {
         return Ok(false);
     }
@@ -636,6 +650,33 @@ mod tests {
         assert!(path.with_extension("json.corrupt").exists(), "the damaged file is set aside");
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(path.with_extension("json.corrupt"));
+    }
+
+    // Codebase review 2026-11-02: a file that is there but can't be read right now read as empty, and
+    // the calibration saved after it replaced every other game's noise level.
+    #[test]
+    fn a_calibration_never_rewrites_a_store_it_could_not_read() {
+        let path = temp("unreadable");
+        let _ = std::fs::remove_file(&path);
+        std::fs::create_dir_all(&path).unwrap(); // a read that fails on every platform
+        let c = at("wardogs.exe", "25.7.1", Some("26200.1"));
+        let err = record_to(&path, &c, 1.8, 10, "2026-10-24T10:00:00Z").expect_err("the write refuses");
+        assert!(err.contains("couldn't read its noise calibrations right now"), "{err}");
+        assert!(path.is_dir() && !path.with_extension("json.corrupt").exists(), "nothing replaced or set aside");
+        assert_eq!(lookup(&load_from(&path), &c), NoiseLookup::Unmeasured, "a lookup still reads nothing measured");
+        let _ = std::fs::remove_dir_all(&path);
+    }
+
+    // Same review: `Duration::seconds` and `+` panicked on a corrupt session length, on a command
+    // thread holding the experiment gate, which then refused every later Trial command.
+    #[test]
+    fn a_corrupt_session_length_never_panics_it_just_has_no_end() {
+        for secs in [u64::MAX, i64::MAX as u64, 9_000_000_000_000_000] {
+            let mut s = played("2026-10-24T10:00:00Z", 180.0, 0);
+            s.duration_secs = secs;
+            assert_eq!(ended(&s), None, "{secs}");
+        }
+        assert!(ended(&played("2026-10-24T10:00:00Z", 180.0, 0)).is_some(), "an ordinary length still ends");
     }
 
     #[test]
