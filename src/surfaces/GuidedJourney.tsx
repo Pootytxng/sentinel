@@ -1448,7 +1448,10 @@ function progressLine(
 ): string {
   const k = "lab.experimentBench.journey";
   const line = t(change.retest ? `${k}.progressRetest` : `${k}.progress`, { tested: progress.tested, total: progress.total, change: change.title });
-  return [line, ...progressNotes(progress, t)].join(" ");
+  const notes = progressNotes(progress, t);
+  // "… · Next: X" has no full stop, so a note after it ran on ("Next: X 2 tries couldn't be judged.",
+  // review 2026-11-02, round 2): the line's own separator comes before the notes.
+  return notes.length > 0 ? `${line} · ${notes.join(" ")}` : line;
 }
 
 /** What the count line owes besides the count: attempts that judged nothing, results from an older
@@ -1616,15 +1619,24 @@ export function RealPlayPanel({
 
 /** P5-resume: the progress line while a Trial of the game is still Running, so it says what the
  *  bench's running panel (and, after a restart, its interrupted banner) says: that change is on and
- *  unfinished, never "Next". */
-export function JourneyProgressLine({ progress, interrupted }: { progress: JourneyProgress | null; interrupted: boolean }) {
+ *  unfinished, never "Next". A stopped real-play test says it stopped, never "Testing now" above a
+ *  panel saying the change is no longer on or the test can't go on (review 2026-11-02, round 2). */
+export function JourneyProgressLine({
+  progress,
+  interrupted,
+  stopped = false,
+}: {
+  progress: JourneyProgress | null;
+  interrupted: boolean;
+  stopped?: boolean;
+}) {
   const { t } = useTranslation();
   if (!progress?.unfinished || progress.total === 0) return null;
   const k = "lab.experimentBench.journey";
   return (
     // .exp-journey-progress: 9px above the running panel's frame that follows it (ExperimentBench.css).
     <p className="exp-note exp-journey-progress" data-testid="journey-progress">
-      {t(interrupted ? `${k}.progressInterrupted` : `${k}.progressTesting`, {
+      {t(interrupted ? `${k}.progressInterrupted` : stopped ? `${k}.progressStopped` : `${k}.progressTesting`, {
         tested: progress.tested,
         total: progress.total,
         change: progress.unfinished.title,

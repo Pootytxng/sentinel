@@ -2154,7 +2154,8 @@ describe("P4-exit: what Compy tested on this game", () => {
     const panel = await screen.findByTestId("exp-summary");
     const door = panel.querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!;
     fireEvent.click(door);
-    await waitFor(() => expect(door.parentElement!.children.length).toBeGreaterThan(1));
+    // 3s: the default 1s timed out once under a loaded parallel run (review 2026-11-02, round 2).
+    await waitFor(() => expect(door.parentElement!.children.length).toBeGreaterThan(1), { timeout: 3000 });
     expect(screen.getByTestId("exp-summary-receipt").querySelector("dd")!.textContent).toMatch(
       / · risk you allowed: Low risk only$/,
     );
@@ -2789,10 +2790,30 @@ describe("ExperimentBench spacing under the journey line", () => {
 
   // Review 2026-11-02 (P5-realplay, fix 2): a real-play panel's last block sat 0px above the summary's
   // eyebrow, and its own blocks (and the journey's lines and buttons) sat flush against each other.
-  it("keeps the bench's 12px rhythm between the journey (or a real-play panel) and the summary below", async () => {
-    const rule = await ruleBody(/\.exp-journey\s*\+\s*\.exp-summary/);
-    expect(rule, "nothing spaces the summary from the journey above it").not.toBeNull();
+  // Round 2: a rule naming only the journey left the launcher (the resting state) and a classic running
+  // panel flush on the eyebrow, so the rule names the summary itself.
+  it("keeps the bench's 12px rhythm between whatever sits above the summary and the summary", async () => {
+    const rule = await ruleBody(/\.exp-bench\s*>\s*\.exp-summary/);
+    expect(rule, "nothing spaces the summary from the launcher, panel or journey above it").not.toBeNull();
     expect(rule).toMatch(/margin-top:\s*12px/);
+    expect(await ruleBody(/\.exp-journey\s*\+\s*\.exp-summary/), "a neighbour-only rule misses the launcher").toBeNull();
+  });
+
+  // Review 2026-11-02, round 2: "Compy doesn't know how big any of these effects are…" sat flush under
+  // the ranked list's last row.
+  it("keeps a note under the ranked list off its last row", async () => {
+    const rule = await ruleBody(/\.exp-order-list\s*\+\s*\.exp-note/);
+    expect(rule, "the note sits flush on the list").not.toBeNull();
+    expect(rule).toMatch(/margin-top:\s*6px/);
+  });
+
+  // Review 2026-11-02, round 2: the aim pills are one toggle (aria-pressed), and the chosen one looked
+  // exactly like the other. jsdom has no cascade, so the rule is pinned, hovered or not.
+  it("marks the chosen aim pill, hovered or not", async () => {
+    const rule = await ruleBody(/\.exp-cta-ghost\.exp-journey-aim-on,\s*\.exp-cta-ghost\.exp-journey-aim-on:hover:not\(:disabled\)/);
+    expect(rule, "the chosen aim pill has no look of its own").not.toBeNull();
+    expect(rule).toMatch(/border-color:\s*var\(--ix-accent\)/);
+    expect(rule).toMatch(/background:\s*var\(--ix-accent-wash\)/);
   });
 
   it("keeps the running panel's 9px rhythm between the journey's own blocks", async () => {
@@ -2935,6 +2956,7 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     const panel = screen.getByTestId("journey");
     expect(panel).toHaveAttribute("data-phase", "realplay");
     expect(panel).toHaveClass("exp-running");
+    expect(screen.getByTestId("journey-progress").textContent).toMatch(/ · Testing now: HAGS$/);
     for (const id of ["realplay-on", "realplay-status", "realplay-put-back-how", "realplay-not-counted"])
       expect(screen.getByTestId(id).parentElement, id).toBe(panel);
     const measure = screen.getByRole("button", { name: "Measure my next session" });
@@ -2952,6 +2974,8 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     state.realPlay = rpProgress({ phase: "stopped", stop: "change-off" });
     const first = render(<ExperimentBench />);
     await waitFor(() => expect(screen.getByTestId("realplay-on").textContent).toBe("HAGS is no longer on."));
+    // Review 2026-11-02, round 2: the line above said "Testing now: HAGS" over a stopped test.
+    expect(screen.getByTestId("journey-progress").textContent).toMatch(/ · Test stopped: HAGS$/);
     expect(screen.queryByRole("button", { name: "Restore now" })).toBeNull();
     expect(screen.queryByTestId("realplay-put-back-how")).toBeNull();
     expect(screen.getByRole("button", { name: "Close this test" })).toBeEnabled();

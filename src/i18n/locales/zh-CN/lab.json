@@ -487,6 +487,7 @@
       "progressDoneWithinRisk": "已测试 {{tested}}/{{total}} 项。在你选择的风险范围内，这台电脑上没有其他值得测试的项目了。",
       "progressTesting": "已测试 {{tested}}/{{total}} 项 · 正在测试：{{change}}",
       "progressInterrupted": "已测试 {{tested}}/{{total}} 项 · {{change}}的测试没有完成（见下方）",
+      "progressStopped": "已测试 {{tested}}/{{total}} 项 · 测试已停止：{{change}}",
       "planResume": "{{game}}：1 局，约 10 分钟，开启{{change}}。你上一局原样的游戏仍可作为更改前的读数。",
       "stopHere": "就此停止",
       "stoppedHere": "已就此停止：已测试 {{tested}}/{{total}} 项。没有撤销任何更改。",

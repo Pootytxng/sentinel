@@ -289,7 +289,10 @@ export function realPlayView(
   }
   if (own.phase === "ready") {
     return {
-      changeOn,
+      // "…until Compy has a result: at most N sessions, or by D" read stale right above "Compy has
+      // enough sessions for a result" (review 2026-11-02, round 2): once the result is there, only
+      // that the change is on, and since when.
+      changeOn: t("lab.experimentBench.journey.realPlay.changeOnShort", { change, since }),
       status: t("lab.experimentBench.journey.realPlay.ready"),
       notYet: null,
       putBackHow,

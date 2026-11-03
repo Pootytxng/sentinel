@@ -124,6 +124,8 @@ describe("P5-realplay: what the progress read says", () => {
 
   it("ready: a result is there to see; stopped: why, what closing does, and the close action", () => {
     expect(realPlayView(RUNNING, progress({ phase: "ready", with: 3 }), t, "en")).toMatchObject({
+      // Review 2026-11-02, round 2: no "until Compy has a result" above the line saying it has one.
+      changeOn: `HAGS is on (since ${whenText(APPLIED, "en")}).`,
       status: "Compy has enough sessions for a result.",
       action: "see-result",
       closeHow: null,

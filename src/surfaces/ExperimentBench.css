@@ -57,8 +57,11 @@
   margin-top: 12px;
 }
 /* A real-play panel (or the journey, while its Trial runs) ended 0px above the summary's eyebrow
-   (desk review 2026-11-02); the same 12px continues below it. */
-.exp-journey + .exp-summary {
+   (desk review 2026-11-02); the same 12px continues below it. Whatever sits above the summary: the
+   journey, the launcher (its resting state) or a classic running panel all ended flush on it (review
+   2026-11-02, round 2), so the rule names the summary, not its neighbour. The bench is block flow, so
+   this collapses with a neighbour's own bottom margin rather than adding to it. */
+.exp-bench > .exp-summary {
   margin-top: 12px;
 }
 /* The journey is plain block flow, and its lines, rows and buttons sat flush against each other
@@ -166,6 +169,11 @@
   max-width: 64ch;
   overflow-wrap: anywhere;
 }
+/* "Compy doesn't know how big any of these effects are…" sat flush under the list's last row (review
+   2026-11-02, round 2). Two classes, so it outranks .exp-note's own margin: 0 further down. */
+.exp-order-list + .exp-note {
+  margin-top: 6px;
+}
 
 /* ── Simulator read (honest advisory — never a promise) ───────────────────── */
 .exp-sim {
@@ -243,7 +251,9 @@
   font-weight: 600;
   cursor: pointer;
   background: var(--ix-accent);
-  border: 0;
+  /* Transparent, not none: a ghost button's 1px edge made it 2px taller than this one in a shared
+     row (review 2026-11-02, round 2); the fill runs under the edge, so nothing else changes. */
+  border: 1px solid transparent;
   color: var(--ix-accent-ink, #06231c);
   border-radius: var(--ix-radius);
   padding: 9px 15px;
@@ -274,6 +284,15 @@
 .exp-cta-ghost:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+/* The journey's aim pills are one toggle (aria-pressed), and the chosen one looked exactly like the
+   other (review 2026-11-02, round 2). It wears Home's selected-segment look (.hv2-seg-on): accent
+   wash, accent edge, primary ink, hovered or not. */
+.exp-cta-ghost.exp-journey-aim-on,
+.exp-cta-ghost.exp-journey-aim-on:hover:not(:disabled) {
+  background: var(--ix-accent-wash);
+  border-color: var(--ix-accent);
+  color: var(--ix-text-1);
 }
 .exp-fineprint {
   margin: 0;

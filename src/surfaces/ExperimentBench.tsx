@@ -1257,7 +1257,12 @@ export default function ExperimentBench({
 
       {journey.kind === "idle" && running && (
         // P5-realplay: a real-play Trial runs across restarts by design, so it is never "interrupted".
-        <JourneyProgressLine progress={progress} interrupted={!isRealPlay(running) && running.id === interruptedJourneyId()} />
+        // Stopped, its panel says why and offers "Close this test"; the line above says it stopped.
+        <JourneyProgressLine
+          progress={progress}
+          interrupted={!isRealPlay(running) && running.id === interruptedJourneyId()}
+          stopped={isRealPlay(running) && rp?.progress?.experiment_id === running.id && rp.progress.phase === "stopped"}
+        />
       )}
       {journey.kind !== "idle" ? null : running && isRealPlay(running) ? (
         // P5-realplay: the change stays on while the owner plays; the panel says so, how long, how to
