@@ -179,6 +179,9 @@ export type SessionSummary = {
   low1_fps_est: number;
   peak_gpu_temp_c: number | null;
   peak_gpu_usage_pct: number | null;
+  /** P9-bottleneck-sustained: GPU-usage readings seen and how many sat at or above 95% (sessions.rs
+   *  GpuLoad). Absent on rows an older Compy wrote: a peak alone is a moment, never "the limiter". */
+  gpu_load?: { readings: number; busy: number } | null;
   peak_ram_used_bytes: number | null;
   ram_total_bytes: number | null;
   /** null = not recorded: Compy couldn't read its change history when the session began (#669), or couldn't confirm any of its changes (453-f1). */

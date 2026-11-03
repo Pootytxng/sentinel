@@ -58,29 +58,42 @@ export function gpuRunningHot(
 }
 
 // Sustained near-limit usage (spec 2026-06-12 §A): the second admissible headroom-pain signal.
-// Threshold matches the backend's GPU-limited verdict (priorities.rs GPU_LIMITED_PCT = 95).
+// Threshold matches the backend's GPU-limited verdict (sessions.rs GPU_LIMITED_PCT = 95).
 export const TUNING_USAGE_LIMIT_PCT = 95;
+
+/** The share of a session's GPU readings at or above the limit that counts as "held there" — the
+ *  same half-the-session rule as priorities.rs GPU_SUSTAINED_SHARE_PCT (P9-bottleneck-sustained). */
+export const TUNING_USAGE_SUSTAINED_SHARE_PCT = 50;
+
+/** A session held near the limit: its recorded GPU-load counts put at least half its readings at or
+ *  above the limit. A peak alone (a row an older Compy wrote, with no counts) is one moment, so it
+ *  never counts as "held" (P9-bottleneck-sustained). Decided on the counts, never a rounded share. */
+export function sessionHeldNearLimit(s: SessionSummary): boolean {
+  const load = s.gpu_load;
+  if (!load || load.readings <= 0) return false;
+  return load.busy * 100 >= load.readings * TUNING_USAGE_SUSTAINED_SHARE_PCT;
+}
 
 /**
  * Sustained near-limit GPU usage across the last `TUNING_HOT_MIN_SESSIONS` recent sessions (same
- * window/recency discipline as `gpuRunningHot`). Returns the worst peak + count, or null.
+ * window/recency discipline as `gpuRunningHot`): each session must have HELD the limit for at least
+ * half its readings, not merely touched it. Returns the worst peak + count, or null.
  */
 export function gpuSustainedNearLimit(
   sessions: SessionSummary[],
   now: number = Date.now(),
 ): { peakPct: number; sessions: number } | null {
   const windowMs = TUNING_HOT_WINDOW_DAYS * 24 * 3600 * 1000;
-  const usages = sessions
+  const recent = sessions
     .filter((s) => {
       if (allBackground(s) || typeof s.peak_gpu_usage_pct !== "number") return false;
       const started = Date.parse(s.started_at);
       return Number.isFinite(started) && now - started <= windowMs;
     })
-    .slice(0, TUNING_HOT_MIN_SESSIONS)
-    .map((s) => s.peak_gpu_usage_pct as number);
-  if (usages.length < TUNING_HOT_MIN_SESSIONS) return null;
-  if (usages.some((u) => u < TUNING_USAGE_LIMIT_PCT)) return null; // not sustained
-  return { peakPct: Math.max(...usages), sessions: usages.length };
+    .slice(0, TUNING_HOT_MIN_SESSIONS);
+  if (recent.length < TUNING_HOT_MIN_SESSIONS) return null;
+  if (!recent.every(sessionHeldNearLimit)) return null; // not sustained
+  return { peakPct: Math.max(...recent.map((s) => s.peak_gpu_usage_pct as number)), sessions: recent.length };
 }
 
 // ── Evidence gate for tuning/OC-class OFFERS (spec 2026-06-12 §A — the tailoring law) ──────────
@@ -107,7 +120,7 @@ export function tuningEvidence(
   if (limit) {
     return {
       qualifies: true,
-      reason: `your GPU held ≥${TUNING_USAGE_LIMIT_PCT}% usage across your last ${limit.sessions} monitored sessions`,
+      reason: `your GPU held ≥${TUNING_USAGE_LIMIT_PCT}% usage for at least half of each of your last ${limit.sessions} monitored sessions`,
     };
   }
   return {

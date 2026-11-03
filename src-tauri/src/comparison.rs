@@ -881,6 +881,7 @@ mod comparison_tests {
             peak_gpu_hotspot_temp_c: None,
             background_secs_excluded: None,
             frame_pacing: None,
+            gpu_load: None,
         }
     }
 

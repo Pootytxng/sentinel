@@ -4,6 +4,7 @@ import {
   postTuneSessions,
   gpuRunningHot,
   gpuSustainedNearLimit,
+  sessionHeldNearLimit,
   tuningEvidence,
   TUNING_MIN_SECS,
   TUNING_USAGE_LIMIT_PCT,
@@ -314,9 +315,9 @@ describe("tuningEvidence", () => {
     sess({ started_at: "2026-06-08T14:00:00Z", peak_gpu_temp_c: 88, peak_gpu_usage_pct: 70 }),
   ];
   const nearLimitSessions = [
-    sess({ started_at: "2026-06-08T18:00:00Z", peak_gpu_temp_c: 65, peak_gpu_usage_pct: 99 }),
-    sess({ started_at: "2026-06-08T16:00:00Z", peak_gpu_temp_c: 64, peak_gpu_usage_pct: 97 }),
-    sess({ started_at: "2026-06-08T14:00:00Z", peak_gpu_temp_c: 66, peak_gpu_usage_pct: 96 }),
+    sess({ started_at: "2026-06-08T18:00:00Z", peak_gpu_temp_c: 65, peak_gpu_usage_pct: 99, gpu_load: { readings: 600, busy: 540 } }),
+    sess({ started_at: "2026-06-08T16:00:00Z", peak_gpu_temp_c: 64, peak_gpu_usage_pct: 97, gpu_load: { readings: 600, busy: 300 } }),
+    sess({ started_at: "2026-06-08T14:00:00Z", peak_gpu_temp_c: 66, peak_gpu_usage_pct: 96, gpu_load: { readings: 600, busy: 480 } }),
   ];
   const coolQuietSessions = [
     sess({ started_at: "2026-06-08T18:00:00Z", peak_gpu_temp_c: 65, peak_gpu_usage_pct: 70 }),
@@ -349,10 +350,25 @@ describe("tuningEvidence", () => {
   it("near-limit usage needs the SUSTAINED window — one cool/old session breaks it", () => {
     expect(gpuSustainedNearLimit(nearLimitSessions.slice(0, 2), NOW)).toBeNull();
     const mixed = [...nearLimitSessions];
-    mixed[1] = sess({ ...mixed[1], peak_gpu_usage_pct: 80 });
+    mixed[1] = sess({ ...mixed[1], peak_gpu_usage_pct: 80, gpu_load: { readings: 600, busy: 0 } });
     expect(gpuSustainedNearLimit(mixed, NOW)).toBeNull();
     const stale = nearLimitSessions.map((s) => ({ ...s, started_at: "2026-05-01T12:00:00Z" }));
     expect(gpuSustainedNearLimit(stale, NOW)).toBeNull();
+  });
+
+  // P9-bottleneck-sustained: "held ≥95%" was read off each session's PEAK, so one loading-screen
+  // spike per session made three sessions "sustained". A session counts only when its recorded GPU
+  // load puts at least half its readings at the limit; a peak with no counts is one moment.
+  it("a peak alone never counts as held — the session's own readings must sit at the limit for half of it", () => {
+    const peaksOnly = nearLimitSessions.map((s) => ({ ...s, gpu_load: undefined }));
+    expect(gpuSustainedNearLimit(peaksOnly, NOW)).toBeNull();
+    expect(tuningEvidence(peaksOnly, NOW).qualifies).toBe(false);
+    const brief = [...nearLimitSessions];
+    brief[2] = sess({ ...brief[2], gpu_load: { readings: 600, busy: 299 } }); // just under half
+    expect(gpuSustainedNearLimit(brief, NOW)).toBeNull();
+    expect(sessionHeldNearLimit(sess({ gpu_load: { readings: 600, busy: 300 } }))).toBe(true);
+    expect(sessionHeldNearLimit(sess({ gpu_load: { readings: 0, busy: 0 } }))).toBe(false);
+    expect(tuningEvidence(nearLimitSessions, NOW).reason).toContain("for at least half of each");
   });
 
   it("NVIDIA rigs get NO tuning surface at all (vendor-honesty rule #5 — pinned)", () => {

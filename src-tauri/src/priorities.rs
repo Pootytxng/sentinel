@@ -90,31 +90,68 @@ const SSD_LINKS: &[RetailLink] = &[
     RetailLink { retailer: "Newegg", url: "https://www.newegg.com/p/pl?d=nvme+ssd" },
 ];
 
-/// One threshold for "this session looked GPU-limited", shared by the session hint and the
-/// upgrade path so the two can never disagree.
-const GPU_LIMITED_PCT: u64 = 95;
+/// One threshold for "this tick the GPU was saturated" (`sessions.rs` records the count against
+/// it), shared by the session hint and the upgrade path so the two can never disagree.
+const GPU_LIMITED_PCT: u64 = crate::sessions::GPU_LIMITED_PCT as u64;
 
-/// Peak GPU usage of the most recent session, only when it crosses the GPU-limited threshold.
-/// A session behind another window the whole time is skipped (P4-show-f1): its GPU load was the
-/// game running behind, not play.
-fn gpu_limited_pct(sessions: &Value) -> Option<u64> {
+/// The share of a session's GPU readings that must sit at or above [`GPU_LIMITED_PCT`] before the
+/// GPU is called the session's limiter (P9-bottleneck-sustained). One peak sample is a loading
+/// screen or a menu; half the session is the card working as hard as it can while the game was
+/// played. A session that never recorded the share (an older Compy) has a peak and no claim.
+const GPU_SUSTAINED_SHARE_PCT: u64 = 50;
+
+/// What the newest measured session says about its GPU: the peak, and the share of readings that
+/// were saturated when the session recorded one. A session behind another window the whole time is
+/// skipped (P4-show-f1): its GPU load was the game running behind, not play.
+struct GpuLoadRead {
+    peak_pct: u64,
+    /// The recorded tick counts; `None` = the session didn't record them (an older Compy).
+    load: Option<crate::sessions::GpuLoad>,
+}
+
+impl GpuLoadRead {
+    /// Whole-percent share of GPU readings at or above the threshold, for the words.
+    fn busy_share_pct(&self) -> Option<u64> {
+        self.load.and_then(|l| l.busy_share_pct()).map(u64::from)
+    }
+
+    /// Decided on the exact counts, never on the rounded share (99 of 200 is not half).
+    fn sustained(&self) -> bool {
+        self.load.is_some_and(|l| {
+            l.readings > 0 && u64::from(l.busy) * 100 >= u64::from(l.readings) * GPU_SUSTAINED_SHARE_PCT
+        })
+    }
+}
+
+fn gpu_load_read(sessions: &Value) -> Option<GpuLoadRead> {
     let s = crate::sessions::newest_measured_row(sessions)?;
-    let gpu = s.get("peak_gpu_usage_pct").and_then(Value::as_u64)?;
-    (gpu >= GPU_LIMITED_PCT).then_some(gpu)
+    let peak_pct = s.get("peak_gpu_usage_pct").and_then(Value::as_u64)?;
+    let load = s
+        .get("gpu_load")
+        .and_then(|l| serde_json::from_value::<crate::sessions::GpuLoad>(l.clone()).ok());
+    Some(GpuLoadRead { peak_pct, load })
+}
+
+/// The newest session's GPU load, only when the GPU was saturated for a sustained share of it.
+fn gpu_limited(sessions: &Value) -> Option<GpuLoadRead> {
+    gpu_load_read(sessions).filter(GpuLoadRead::sustained)
 }
 
 /// Qualifying rows ONLY (right-room law): (1) the conservative GPU-limited session verdict,
 /// (2) the install-drive HDD readiness attention. Anything else → None (no block at all).
 pub(crate) fn build_upgrade_path(readiness: &Value, sessions: &Value) -> Option<UpgradePath> {
     let mut items = Vec::new();
-    if let Some(gpu) = gpu_limited_pct(sessions) {
+    if let Some(gpu) = gpu_limited(sessions) {
+        let share = gpu.busy_share_pct().unwrap_or(GPU_SUSTAINED_SHARE_PCT);
+        let peak = gpu.peak_pct;
         items.push(UpgradeSuggestion {
             kind: "gpu",
             title: "GPU was the measured limiter",
             why: format!(
-                "In your most recent monitored session, GPU usage peaked very high (~{gpu}%) — \
-                 the GPU was the bottleneck in that session. If you want more headroom, a GPU \
-                 upgrade is the hardware lever; no Windows tweak changes this."
+                "In your most recent monitored session the GPU sat at or above {GPU_LIMITED_PCT}% \
+                 for {share}% of its readings (peak ~{peak}%) — the GPU was the limiter for most of \
+                 that session. If you want more headroom, a GPU upgrade is the hardware lever; no \
+                 Windows tweak changes this."
             ),
             links: GPU_LINKS,
         });
@@ -392,14 +429,27 @@ pub(crate) fn build_priorities(
 /// the signal is inconclusive. Never claims a hard CPU/GPU-bound classification.
 fn build_session_hint(sessions: &Value) -> Option<String> {
     let s = crate::sessions::newest_measured_row(sessions)?; // skips one with no reading (P4-show-f1)
-    let gpu = s.get("peak_gpu_usage_pct").and_then(Value::as_u64)?;
+    let load = gpu_load_read(sessions)?;
+    let gpu = load.peak_pct;
     let avg = s.get("avg_fps").and_then(Value::as_f64).unwrap_or(0.0);
     let low1 = s.get("low1_fps_est").and_then(Value::as_f64).unwrap_or(0.0);
     let varied = avg > 0.0 && low1 > 0.0 && low1 < avg * 0.7;
-    if gpu >= GPU_LIMITED_PCT {
+    if load.sustained() {
+        let share = load.busy_share_pct().unwrap_or(GPU_SUSTAINED_SHARE_PCT);
         Some(format!(
-            "Recent session hint: GPU usage peaked very high (~{gpu}%), so this session looked mostly GPU-limited."
+            "Recent session hint: the GPU sat at or above {GPU_LIMITED_PCT}% for {share}% of its readings (peak ~{gpu}%), so this session looked mostly GPU-limited."
         ))
+    } else if gpu >= GPU_LIMITED_PCT {
+        // A peak alone is a moment, not the session (P9-bottleneck-sustained): say the GPU was busy
+        // at times, and why that is not a verdict.
+        Some(match load.busy_share_pct() {
+            Some(share) => format!(
+                "Recent session hint: the GPU was busy at times (peak ~{gpu}%) but sat at or above {GPU_LIMITED_PCT}% for only {share}% of its readings, so this session doesn't look GPU-limited overall."
+            ),
+            None => format!(
+                "Recent session hint: the GPU was busy at times (peak ~{gpu}%); this session didn't record how much of it the GPU spent saturated, so that is a moment, not a verdict."
+            ),
+        })
     } else if gpu <= 85 {
         let ft = if varied { " and frametimes varied" } else { "" };
         Some(format!(
@@ -488,10 +538,10 @@ mod priority_tests {
         // is the game idling behind, so the hint reads the newest session that measured play.
         let sessions = json!([
             { "samples": 0, "peak_gpu_usage_pct": 40, "avg_fps": 0.0, "low1_fps_est": 0.0 },
-            { "samples": 900, "peak_gpu_usage_pct": 98, "avg_fps": 120.0, "low1_fps_est": 100.0 }
+            { "samples": 900, "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 900, "busy": 800 }, "avg_fps": 120.0, "low1_fps_est": 100.0 }
         ]);
         let p = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &sessions);
-        assert!(p.session_hint.as_deref().is_some_and(|h| h.contains("GPU-limited")), "{:?}", p.session_hint);
+        assert!(p.session_hint.as_deref().is_some_and(|h| h.contains("looked mostly GPU-limited")), "{:?}", p.session_hint);
         assert!(build_upgrade_path(&readiness(vec![]), &sessions).is_some());
         let only = json!([{ "samples": 0, "peak_gpu_usage_pct": 99 }]);
         assert!(build_priorities(&readiness(vec![]), &json!([]), &json!([]), &only).session_hint.is_none());
@@ -507,10 +557,35 @@ mod priority_tests {
 
     #[test]
     fn ranking_with_a_session_emits_conservative_hint() {
-        let sessions = json!([{ "peak_gpu_usage_pct": 98, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
+        let sessions = json!([{ "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 600, "busy": 540 }, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
         let p = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &sessions);
         let hint = p.session_hint.expect("hint present");
-        assert!(hint.contains("GPU-limited"));
+        assert!(hint.contains("looked mostly GPU-limited"), "{hint}");
+        assert!(hint.contains("90% of its readings"), "{hint}");
+    }
+
+    // P9-bottleneck-sustained: one peak sample over the threshold is a loading screen or a menu, not
+    // the session. "The GPU was the limiter" and the purchase links under it need the GPU saturated
+    // for a sustained share of the session's readings; a peak alone says the GPU was busy at times.
+    #[test]
+    fn a_peak_alone_is_busy_at_times_never_the_limiter() {
+        // No share recorded (an older Compy's row): a peak and no claim, no upgrade row.
+        let old_row = json!([{ "peak_gpu_usage_pct": 98, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
+        let hint = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &old_row).session_hint.expect("hint");
+        assert!(hint.contains("busy at times") && hint.contains("~98%"), "{hint}");
+        assert!(hint.contains("didn't record"), "{hint}");
+        assert!(!hint.contains("GPU-limited"), "{hint}");
+        assert!(build_upgrade_path(&readiness(vec![]), &old_row).is_none(), "a peak alone grows no retail links");
+        // A share recorded, but under half the session: busy at times, said with the share.
+        let brief = json!([{ "peak_gpu_usage_pct": 100, "gpu_load": { "readings": 900, "busy": 45 }, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
+        let hint = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &brief).session_hint.expect("hint");
+        assert!(hint.contains("busy at times") && hint.contains("only 5% of its readings"), "{hint}");
+        assert!(hint.contains("doesn't look GPU-limited"), "{hint}");
+        assert!(build_upgrade_path(&readiness(vec![]), &brief).is_none());
+        // Exactly the threshold share qualifies; one reading under it does not.
+        let edge = |busy: u64| json!([{ "peak_gpu_usage_pct": 97, "gpu_load": { "readings": 200, "busy": busy } }]);
+        assert!(build_upgrade_path(&readiness(vec![]), &edge(100)).is_some(), "50% of readings is sustained");
+        assert!(build_upgrade_path(&readiness(vec![]), &edge(99)).is_none(), "99 of 200 is not half: decided on the counts, never the rounded share");
     }
 
     // ── Upgrade path (R3 Lane B) — qualifying logic pinned ──
@@ -529,11 +604,13 @@ mod priority_tests {
 
     #[test]
     fn gpu_limited_session_qualifies_for_the_gpu_upgrade_row() {
-        let sessions = json!([{ "peak_gpu_usage_pct": 98, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
+        let sessions = json!([{ "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 900, "busy": 720 }, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
         let up = build_upgrade_path(&readiness(vec![]), &sessions).expect("qualifies");
         assert_eq!(up.items.len(), 1);
         assert_eq!(up.items[0].kind, "gpu");
         assert!(up.items[0].why.contains("~98%"), "why is sample-qualified with the measured peak");
+        assert!(up.items[0].why.contains("for 80% of its readings"), "why names the sustained share: {}", up.items[0].why);
+        assert!(up.items[0].why.contains("limiter for most of that session"), "{}", up.items[0].why);
         assert!(up.items[0].why.contains("most recent monitored session"), "why is time-qualified");
         assert!(!up.items[0].links.is_empty());
         assert!(up.items[0].links.iter().all(|l| !l.url.contains("tag=") && !l.url.contains("affiliate")),
@@ -553,7 +630,7 @@ mod priority_tests {
 
     #[test]
     fn upgrade_path_always_carries_the_disclosure() {
-        let sessions = json!([{ "peak_gpu_usage_pct": 99 }]);
+        let sessions = json!([{ "peak_gpu_usage_pct": 99, "gpu_load": { "readings": 100, "busy": 90 } }]);
         let r = readiness(vec![chk("install-drive", "attention")]);
         let up = build_upgrade_path(&r, &sessions).expect("both qualify");
         assert_eq!(up.items.len(), 2);
@@ -594,7 +671,7 @@ mod priority_tests {
         // Each qualifying path ON ITS OWN must render the disclosure — links must never appear
         // disclosure-less (the combined 2-item case is covered above; this pins the single-item shapes,
         // the BACKLOG-noted gap). Links + disclosure are inseparable by construction.
-        let gpu_only = build_upgrade_path(&readiness(vec![]), &json!([{ "peak_gpu_usage_pct": 99 }]))
+        let gpu_only = build_upgrade_path(&readiness(vec![]), &json!([{ "peak_gpu_usage_pct": 99, "gpu_load": { "readings": 100, "busy": 90 } }]))
             .expect("gpu-only qualifies");
         let ssd_only =
             build_upgrade_path(&readiness(vec![chk("install-drive", "attention")]), &json!([]))

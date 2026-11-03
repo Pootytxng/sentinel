@@ -1042,7 +1042,7 @@ mod export_tests {
     fn upgrade_path_renders_as_anchors_only_when_hardware_is_named() {
         // R3 Lane B: a GPU-limited session puts the advisory block + disclosure + real Markdown
         // anchors in the report; without a qualifying verdict the section is entirely absent.
-        let sessions = json!([{ "peak_gpu_usage_pct": 98, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
+        let sessions = json!([{ "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 900, "busy": 800 }, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
         let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &sessions, &json!([]), "embedded", "t", None);
         assert!(md.contains("## Upgrade path (advisory)"));
         assert!(md.contains("never affects verdicts"), "disclosure always renders with the links");
@@ -1059,7 +1059,7 @@ mod export_tests {
         // Markdown anchor — same count (none dropped or duplicated), https-only, and free of
         // affiliate/tracking markers at the EXPORT layer (mirrors the priorities-side guard so a
         // rendering regression can't reintroduce what the table-side guard already bans).
-        let sessions = json!([{ "peak_gpu_usage_pct": 97, "avg_fps": 90.0, "low1_fps_est": 70.0 }]);
+        let sessions = json!([{ "peak_gpu_usage_pct": 97, "gpu_load": { "readings": 900, "busy": 700 }, "avg_fps": 90.0, "low1_fps_est": 70.0 }]);
         let readiness = json!({ "checks": [
             { "id": "install-drive", "status": "attention", "label": "Game install drive",
               "detail": "HDD detected" }
