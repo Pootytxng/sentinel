@@ -302,15 +302,21 @@ describe("GL-empty F4 — the trust demo opens below the answer, never above the
 });
 
 describe("GL-empty F5/F6 — legible small print, and the lane's soft foot on every surface", () => {
-  it("F5: card notes, card subs and the stutter tag take the muted ink (AA on glass), never the faint", () => {
+  it("F5: card notes and card subs take the muted ink (AA on glass), never the faint", () => {
     const css = glassCss();
-    for (const sel of [
-      ':root[data-v2="on"] .gl-kpi-note',
-      ':root[data-v2="on"] .gl-card-sub',
-      ':root[data-v2="on"] .gl-station .bb-stutter-tag',
-    ]) {
+    for (const sel of [':root[data-v2="on"] .gl-kpi-note', ':root[data-v2="on"] .gl-card-sub']) {
       expect(body(css, sel), sel).toMatch(/color:\s*var\(--v2-muted\)/);
     }
+  });
+
+  // Desk review 2026-11-02, on his rig: F5 lifted the stutter tag alone, and 151 of the station's 152
+  // "not a proven cause" tags (changed before, since it last worked) still wore the faint ink, 3.74-4.20:1.
+  // Even the muted ink measured 4.32-4.80:1 on the station's lighter inner blocks.
+  it("the station's three 'not a proven cause' tags share one ink, lifted past AA on its lightest block", () => {
+    const rule = body(glassCss(), ':root[data-v2="on"] .gl-station :is(.bb-stutter-tag, .bb-changed-tag, .bb-since-tag)');
+    expect(rule, "a station tag kept its own sheet's faint ink").toMatch(
+      /color:\s*color-mix\(in srgb, var\(--v2-muted\) 85%, var\(--v2-text\)\)/,
+    );
   });
 
   it("F6: the content lane's fade is not scoped away from Solid", () => {
