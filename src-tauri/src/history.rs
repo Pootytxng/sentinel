@@ -1760,8 +1760,13 @@ pub(crate) fn ledger_marks_of(h: &[AppliedChange]) -> (usize, usize) {
 /// lock, and may run a live probe, so a caller holding a store lock must not call it.
 pub(crate) fn newest_applied_reads_off(rec_id: &str) -> Option<bool> {
     let h = load_history().ok()?;
-    let row = h.iter().rev().find(|c| c.rec_id == rec_id && c.status != "rolled_back")?;
+    let row = newest_applied_row(&h, rec_id)?;
     Some(check_row_state(row, &LiveReads::default()) == ActiveCheck::Off)
+}
+
+/// The newest row of `rec_id` that isn't rolled back: the apply a live check of that change reads.
+fn newest_applied_row<'a>(h: &'a [AppliedChange], rec_id: &str) -> Option<&'a AppliedChange> {
+    h.iter().rev().find(|c| c.rec_id == rec_id && c.status != "rolled_back")
 }
 
 /// Whether a damaged Trust Ledger was ever set aside as `history.json.corrupt`.
@@ -4345,6 +4350,19 @@ mod history_tests {
 
     // #669: the checked summary a surface reads instead of the zero-collapsing one keeps a failed
     // read AND a set-aside ledger as errors — Game Readiness shows "can't read", never "0".
+    #[test]
+    fn the_fix_probe_reads_the_newest_apply_and_never_a_rolled_back_one() {
+        let mut first = record("power-plan", "applied");
+        first.id = "c1".into();
+        let mut second = record("power-plan", "applied");
+        second.id = "c2".into();
+        let h = vec![first, record("game-mode", "applied"), second];
+        assert_eq!(newest_applied_row(&h, "power-plan").map(|c| c.id.as_str()), Some("c2"));
+        let undone = vec![record("power-plan", "rolled_back")];
+        assert!(newest_applied_row(&undone, "power-plan").is_none(), "an undo Compy recorded is the marks' to see");
+        assert!(newest_applied_row(&h, "hags").is_none());
+    }
+
     #[test]
     fn the_confound_marks_count_entries_and_rows_not_rolled_back() {
         let h = vec![record("a", "applied"), record("b", "rolled_back"), record("a", "applied")];

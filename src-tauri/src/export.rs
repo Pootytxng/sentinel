@@ -598,8 +598,14 @@ fn build_discord_block(
     // 2026-11-02): a session behind another window the whole time saves 0s that mean "not measured",
     // and printed "0 avg / 0 1% low".
     if let Some(s) = crate::sessions::newest_measured_row(sessions) {
-        if let (Some(avg), Some(low)) = (measured(s, "avg_fps"), measured(s, "low1_fps_est")) {
-            let _ = writeln!(o, "session · {} · {avg:.0} avg / {low:.0} 1% low", vstr(s, "process_name"));
+        match (measured(s, "avg_fps"), measured(s, "low1_fps_est")) {
+            (Some(avg), Some(low)) => {
+                let _ = writeln!(o, "session · {} · {avg:.0} avg / {low:.0} 1% low", vstr(s, "process_name"));
+            }
+            (Some(avg), None) => {
+                let _ = writeln!(o, "session · {} · {avg:.0} avg", vstr(s, "process_name"));
+            }
+            _ => {}
         }
     }
     let _ = writeln!(o, "measured, not promised · {}", site_host());

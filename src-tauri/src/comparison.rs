@@ -484,8 +484,12 @@ pub(crate) fn on_session_finalized(s: &SessionSummary) -> Option<ComparisonKind>
     // The armed fix's own state on the machine, read BEFORE the lock: a live probe never runs under
     // it (review round 2, 2026-11-02). The marks see an undo Compy recorded; this sees the fix put back
     // outside Compy, which left the session measuring a fix that wasn't on.
+    // Only for a session that could settle it: the probe can spawn PowerShell, and the settle below
+    // drops every other session before using it (slice 6 review).
+    let could_settle = s.samples >= crate::experiment::MIN_TREATMENT_SAMPLES && crate::experiment::has_frame_reading(s);
     let fix_off = load_armed()
-        .filter(|a| a.kind == ComparisonKind::Fix)
+        .filter(|a| a.kind == ComparisonKind::Fix && could_settle && !s.process_name.is_empty())
+        .filter(|a| a.game.eq_ignore_ascii_case(&s.process_name))
         .map(|a| {
             let off = crate::history::newest_applied_reads_off(&a.rec_id) == Some(true);
             (a.rec_id, off)
@@ -1120,6 +1124,21 @@ mod comparison_race_tests {
         let mut upper = super::comparison_tests::session_fixture(84.0, None);
         upper.process_name = upper.process_name.to_uppercase();
         assert_eq!(on_session_finalized_at(&armed, &result, &upper, None), Some(ComparisonKind::Fix), "same game, other case");
+    }
+
+    /// The probe runs before the lock, and only for a session that could settle the arm (slice 6
+    /// review): `newest_applied_reads_off` can spawn PowerShell, and a live probe never runs under a
+    /// store lock. Tokens are built by concat! so this test's own lines don't match the scan.
+    #[test]
+    fn the_fix_probe_runs_before_the_lock_and_only_for_a_session_that_could_settle() {
+        let src = include_str!("comparison.rs");
+        let start = src.find(concat!("pub(crate) fn ", "on_session_finalized(s: &SessionSummary)")).expect("wrapper");
+        let body = &src[start..];
+        let body = &body[..body.find(concat!("fn on_session_", "finalized_at(")).expect("the locked fn")];
+        assert!(body.contains(concat!("newest_applied_", "reads_off(")), "the wrapper reads the fix");
+        assert!(!body.contains(concat!("lock_", "comparison()")), "and takes no lock to do it");
+        let gate = body.find(concat!("could_", "settle &&")).expect("the settle gates");
+        assert!(gate < body.find(concat!("newest_applied_", "reads_off(")).unwrap());
     }
 
     /// Review round 2: the marks see an undo Compy recorded, never the fix put back outside Compy

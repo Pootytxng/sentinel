@@ -970,10 +970,10 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not create data dir: {e}"))?;
     // Drop any stale sample so the UI doesn't briefly show last session's data.
     let _ = std::fs::remove_file(fps_out_path());
-    touch_alive();
-    // A new generation BEFORE the flag goes up, so a thread of the last capture that wakes now sees
-    // it was superseded.
+    // A new generation BEFORE the heartbeat and the flag go up, so a thread of the last capture that
+    // wakes now sees it was superseded (and leaves the fresh heartbeat alone).
     let generation = capture_gen().fetch_add(1, Ordering::AcqRel) + 1;
+    touch_alive();
     fps_active().store(true, Ordering::Release);
     *lock_status() = "starting".into();
 
