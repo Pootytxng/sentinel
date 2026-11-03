@@ -76,6 +76,19 @@ export function sensorForGpu<T extends GpuSensorReading>(
   return partial.length === 1 ? partial[0] : null;
 }
 
+/**
+ * The rig's primary GPU: the largest VRAM, the adapter Readiness, the driver rec and the Machine
+ * Model already judge (Rust's `max_by_key`, which keeps the LAST one on a tie). DXGI lists a hybrid
+ * laptop's iGPU first, so `gpus[0]` named the adapter with no sensor and no game on it.
+ */
+export function primaryGpu<T extends { vram_bytes?: number | null }>(
+  gpus: readonly T[] | null | undefined,
+): T | undefined {
+  let best: T | undefined;
+  for (const g of gpus ?? []) if (best === undefined || (g.vram_bytes ?? 0) >= (best.vram_bytes ?? 0)) best = g;
+  return best;
+}
+
 const NVIDIA_ADAPTER = /nvidia|geforce|quadro|\brtx\b|\bgtx\b/i;
 
 /**

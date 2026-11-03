@@ -88,6 +88,37 @@ describe("FirstCheck (audit M1)", () => {
     expect(screen.queryByText(/^Every check came back right/)).not.toBeInTheDocument();
   });
 
+  // Round 1 review (2026-11-03): an advisory (VRR, HDR) is a check Compy deliberately doesn't judge,
+  // yet it was listed as "measured perfect — confirmed right" and counted in "Every check came back right".
+  it("an advisory is yours to check, never measured perfect", async () => {
+    vi.mocked(invoke).mockImplementation(((cmd: string) =>
+      cmd === "get_game_readiness"
+        ? Promise.resolve({
+            checks: [
+              { id: "a", label: "SSD check", status: "ready", detail: "", value: null },
+              { id: "vrr", label: "Variable refresh rate", status: "advisory", detail: "", value: null },
+            ],
+            ready_count: 1,
+            attention_count: 0,
+            unknown_count: 0,
+            advisory_count: 1,
+            advisory: "",
+            dismissed_ids: [],
+            drifts: [],
+          })
+        : cleanRig(cmd)) as never);
+    render(
+      <ConfirmProvider>
+        <FirstCheck onDone={vi.fn()} />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText(/Every check Compy can judge came back right — measured on this rig, not assumed\. 1 more is yours to check\./)).toBeInTheDocument();
+    const head = screen.getByRole("button", { name: /measured perfect/ });
+    expect(head.textContent).toMatch(/^1 check measured perfect — confirmed right on this rig · 1 yours to check/);
+    fireEvent.click(head);
+    expect(screen.getByText("Variable refresh rate — yours to check")).toBeInTheDocument();
+  });
+
   // bug→guard (owner screenshot 2026-07-06): the verdict state stacked the live run-list AND the
   // green collapsible — every check title rendered twice. Pin: in the verdict state each check
   // title renders exactly once (inside the expanded green detail), never in a persisted run-list.

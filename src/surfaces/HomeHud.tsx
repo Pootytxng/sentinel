@@ -15,7 +15,7 @@ import { knownFps } from "../lib/session-metrics";
 import { useReducedMotion } from "../design/use-motion";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
-import { gradeGpuTempForVendor, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
+import { gradeGpuTempForVendor, primaryGpu, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { useManualParts } from "./rig/manual-parts";
@@ -262,7 +262,8 @@ export function HomeHud({
   const gradeInk = (g: Grade) => (g === "neutral" ? undefined : { color: gradeColor(g) });
   const checking = readiness == null; // checks literally still running
   // LOCKED rule 5: the named GPU's own snapshot, graded by its own vendor (HomeConsole has why).
-  const gpuReading = sensorForGpu(gpuSnaps, hw.gpus?.[0]?.name, hw.gpus?.length);
+  const gpu = primaryGpu(hw.gpus);
+  const gpuReading = sensorForGpu(gpuSnaps, gpu?.name, hw.gpus?.length);
   const gpuTemp = gpuReading?.temperature_c ?? null;
   const gpuGrade = gradeGpuTempForVendor(gpuReading?.vendor, gpuTemp);
 
@@ -424,7 +425,7 @@ export function HomeHud({
             <Callout
               tone={gradeTone(gpuGrade)}
               name={t("home.homeHud.callout.gpu")}
-              detail={shortModel(hw.gpus[0]?.name)}
+              detail={shortModel(gpu?.name)}
               value={gpuTemp != null ? `${Math.round(gpuTemp)}°C` : undefined}
               valueTone={gradeTone(gpuGrade)}
             />

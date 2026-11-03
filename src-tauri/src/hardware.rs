@@ -1480,11 +1480,7 @@ pub(crate) fn detect_gpus() -> Vec<GpuInfo> {
     // thing the user sees.
     let wmi_gpus = detect_gpus_wmi();
     for gpu in &mut gpus {
-        if let Some(w) = wmi_gpus.iter().find(|w| {
-            w.name.eq_ignore_ascii_case(&gpu.name)
-                || w.name.contains(&gpu.name)
-                || gpu.name.contains(&w.name)
-        }) {
+        if let Some(w) = wmi_record_for(&gpu.name, &wmi_gpus) {
             gpu.driver_version = w.driver_version.clone();
             gpu.driver_date = w.driver_date.clone();
             gpu.driver_age_days = w.driver_age_days;
@@ -1723,7 +1719,76 @@ pub(crate) fn collect_hardware() -> HardwareInfo {
         .get_or_init(|| on_wmi_thread(collect_hardware_inner))
         .clone();
     refresh_live_fields(&mut hw);
+    refresh_gpu_drivers(&mut hw.gpus);
     hw
+}
+
+/// How long a GPU driver read stands before the next call re-reads it.
+const GPU_DRIVER_REFRESH: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The last GPU driver read past the startup snapshot, and when it was taken.
+static GPU_DRIVER_CACHE: std::sync::Mutex<Option<(std::time::Instant, Vec<GpuInfo>)>> = std::sync::Mutex::new(None);
+
+/// What a call does with the driver fields, given when they were last read.
+#[derive(Debug, PartialEq, Eq)]
+enum DriverRefresh {
+    /// First call: the startup snapshot read them a moment ago. Start the clock, read nothing.
+    Seed,
+    /// Read within the window: use the last read.
+    Hold,
+    /// The window has passed: read again.
+    Read,
+}
+
+fn driver_refresh_due(last: Option<std::time::Instant>, now: std::time::Instant) -> DriverRefresh {
+    match last {
+        None => DriverRefresh::Seed,
+        Some(at) if now.saturating_duration_since(at) < GPU_DRIVER_REFRESH => DriverRefresh::Hold,
+        Some(_) => DriverRefresh::Read,
+    }
+}
+
+/// Re-read the GPU driver fields at most once a minute (codebase review 2026-11-03). Readiness's
+/// driver-age row and the driver rec tell the user to update the driver, and the startup snapshot
+/// kept both on until Compy restarted; the GPU before/after compared a driver it never re-read. The
+/// read is WMI, so it is throttled and runs on the WMI thread; a failed or empty read keeps the last
+/// good one rather than blanking the fields.
+fn refresh_gpu_drivers(gpus: &mut [GpuInfo]) {
+    let wmi = {
+        let Ok(mut cache) = GPU_DRIVER_CACHE.lock() else { return };
+        let now = std::time::Instant::now();
+        match driver_refresh_due(cache.as_ref().map(|(at, _)| *at), now) {
+            DriverRefresh::Seed => {
+                *cache = Some((now, Vec::new()));
+                return;
+            }
+            DriverRefresh::Hold => {}
+            DriverRefresh::Read => {
+                let read = on_wmi_thread(detect_gpus_wmi);
+                let kept = if read.is_empty() { cache.take().map(|(_, v)| v).unwrap_or_default() } else { read };
+                *cache = Some((now, kept));
+            }
+        }
+        cache.as_ref().map(|(_, v)| v.clone()).unwrap_or_default()
+    };
+    apply_wmi_driver_fields(gpus, &wmi);
+}
+
+/// The WMI record for a DXGI adapter: the same name match `detect_gpus` enriches with.
+fn wmi_record_for<'a>(name: &str, wmi: &'a [GpuInfo]) -> Option<&'a GpuInfo> {
+    wmi.iter()
+        .find(|w| w.name.eq_ignore_ascii_case(name) || w.name.contains(name) || name.contains(&w.name))
+}
+
+/// Copy the driver fields of each adapter's WMI record onto it. An adapter with no record keeps its own.
+fn apply_wmi_driver_fields(gpus: &mut [GpuInfo], wmi: &[GpuInfo]) {
+    for gpu in gpus.iter_mut() {
+        if let Some(w) = wmi_record_for(&gpu.name, wmi) {
+            gpu.driver_version = w.driver_version.clone();
+            gpu.driver_date = w.driver_date.clone();
+            gpu.driver_age_days = w.driver_age_days;
+        }
+    }
 }
 
 /// Re-read the handful of HardwareInfo fields that change during a session and are presented as
@@ -1740,7 +1805,7 @@ fn refresh_live_fields(hw: &mut HardwareInfo) {
     hw.ram_used_bytes = sys.used_memory();
     // The display mode too (codebase review 2026-11-02): Readiness and the refresh-rate rec tell the
     // user to raise it, and a startup snapshot kept both on until Compy restarted. A local
-    // EnumDisplaySettings read, no WMI. (The GPU driver date stays the startup read: it is WMI.)
+    // EnumDisplaySettings read, no WMI. (The GPU driver fields are WMI: `refresh_gpu_drivers`.)
     hw.display = detect_display_info();
 
     let fresh = Disks::new_with_refreshed_list();
@@ -1843,7 +1908,39 @@ fn collect_hardware_inner() -> HardwareInfo {
 
 #[cfg(test)]
 mod live_refresh_tests {
-    use super::{refresh_live_fields, DiskInfo, Disks, HardwareInfo};
+    use super::{
+        apply_wmi_driver_fields, driver_refresh_due, refresh_live_fields, DiskInfo, Disks, DriverRefresh, GpuInfo,
+        HardwareInfo, GPU_DRIVER_REFRESH,
+    };
+
+    // Codebase review 2026-11-03: the driver fields stayed the startup read, so the driver-age row and
+    // the driver rec outlived a driver update, and the GPU before/after compared a driver it never
+    // re-read. The first call starts the clock, a read stands for a minute, then it is read again.
+    #[test]
+    fn the_driver_fields_are_re_read_once_a_minute_never_on_the_first_call() {
+        let t0 = std::time::Instant::now();
+        assert_eq!(driver_refresh_due(None, t0), DriverRefresh::Seed);
+        assert_eq!(driver_refresh_due(Some(t0), t0 + GPU_DRIVER_REFRESH / 2), DriverRefresh::Hold);
+        assert_eq!(driver_refresh_due(Some(t0), t0 + GPU_DRIVER_REFRESH), DriverRefresh::Read);
+    }
+
+    #[test]
+    fn a_driver_read_updates_its_own_adapter_and_leaves_the_rest() {
+        let gpu = |name: &str, version: &str, days: Option<i64>| GpuInfo {
+            name: name.into(),
+            driver_version: version.into(),
+            driver_age_days: days,
+            ..Default::default()
+        };
+        let mut gpus = vec![gpu("AMD Radeon RX 9070 XT", "32.0.31", Some(400)), gpu("Some Other GPU", "1.0", Some(30))];
+        let wmi = vec![gpu("AMD Radeon RX 9070 XT", "32.0.32015.7029", Some(3))];
+        apply_wmi_driver_fields(&mut gpus, &wmi);
+        assert_eq!(gpus[0].driver_version, "32.0.32015.7029");
+        assert_eq!(gpus[0].driver_age_days, Some(3), "the update is seen");
+        assert_eq!(gpus[1].driver_version, "1.0", "no record, no change");
+        apply_wmi_driver_fields(&mut gpus, &[]);
+        assert_eq!(gpus[0].driver_version, "32.0.32015.7029", "an empty read blanks nothing");
+    }
 
     // bug→guard (hardware.rs:1715): the process-lifetime cache froze RAM-in-use / free-disk at
     // startup, yet HardwareGrid.tsx renders them as current. refresh_live_fields must re-read them

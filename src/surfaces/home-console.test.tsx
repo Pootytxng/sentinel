@@ -566,18 +566,24 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
 
   // Codebase review 2026-11-03 (LOCKED rule 5): the sensor list is NVML-first and hw.gpus is DXGI
   // order, so Home printed a hybrid laptop's RTX reading under its iGPU, graded as a verified sensor.
-  it("a hybrid laptop's iGPU never shows the dGPU's NVML reading, and NVIDIA's own stays ungraded", async () => {
+  // Home now names the primary (largest-VRAM) GPU and shows that adapter's own reading, ungraded when
+  // NVML produced it; a reading from any other adapter is never shown in its place.
+  it("a hybrid laptop shows its dGPU's own reading under the dGPU's name, and NVIDIA's stays ungraded", async () => {
     const igpu = { name: "Intel(R) UHD Graphics 770", vram_bytes: 128 * 1024 ** 2 };
     const rtx = { name: "NVIDIA GeForce RTX 4060 Laptop GPU", vram_bytes: 8 * 1024 ** 3 };
     state.gpuSensors = [{ vendor: "NVIDIA", name: rtx.name, temperature_c: 91 }];
     const hybrid = mount({ ...props, hw: { ...props.hw, gpus: [igpu, rtx] } as HardwareInfo }).container;
+    await waitFor(() => expect(readout(hybrid, "gpuTemp").value).toBe("91"));
+    expect(readout(hybrid, "gpuTemp").el.classList.contains("rd-neutral")).toBe(true);
+    expect(hybrid.textContent).toContain("RTX 4060 Laptop GPU");
+    cleanup();
+    // The only snapshot belongs to the iGPU: the dGPU Home names has no reading, so it shows none.
+    state.gpuSensors = [{ vendor: "AMD", name: "AMD Radeon(TM) Graphics", temperature_c: 50 }];
+    const amdIgpu = { name: "AMD Radeon(TM) Graphics", vram_bytes: 512 * 1024 ** 2 };
+    const other = mount({ ...props, hw: { ...props.hw, gpus: [amdIgpu, rtx] } as HardwareInfo }).container;
     await waitFor(() => expect(state.calls).toContain("get_gpu_sensors"));
     await new Promise((r) => setTimeout(r, 0));
-    expect(readout(hybrid, "gpuTemp").value).toBe("—");
-    cleanup();
-    const named = mount({ ...props, hw: { ...props.hw, gpus: [rtx, igpu] } as HardwareInfo }).container;
-    await waitFor(() => expect(readout(named, "gpuTemp").value).toBe("91"));
-    expect(readout(named, "gpuTemp").el.classList.contains("rd-neutral")).toBe(true);
+    expect(readout(other, "gpuTemp").value).toBe("—");
   });
 
   // issue #49 — the CPU temperature moved off the annotation plane into the readout beside the

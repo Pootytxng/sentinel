@@ -22,7 +22,7 @@ import { useIntelligenceFlag, useHomeInterviewFlag } from "../design/use-hud";
 import { readHologramV2, readHomeInterview } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
-import { gradeGpuTempForVendor, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
+import { gradeGpuTempForVendor, primaryGpu, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
@@ -703,7 +703,10 @@ export function HomeConsole({
   // LOCKED rule 5 (codebase review 2026-11-03): the reading is the snapshot of the GPU this face
   // names, graded by the vendor whose sensor produced it. The sensor list is NVML-first and hw.gpus
   // is DXGI order, so "first of each" put an RTX's NVML number under a hybrid laptop's iGPU.
-  const gpuReading = sensorForGpu(gpuSnaps, hw.gpus?.[0]?.name, hw.gpus?.length);
+  // The GPU Home names is the primary one (largest VRAM), as the hardware grid and Readiness name it:
+  // on a hybrid laptop gpus[0] is the iGPU, which has no sensor and runs no game (round 1, 2026-11-03).
+  const gpu = primaryGpu(hw.gpus);
+  const gpuReading = sensorForGpu(gpuSnaps, gpu?.name, hw.gpus?.length);
   const gpuTemp = gpuReading?.temperature_c ?? null;
   const gpuGrade = gradeGpuTempForVendor(gpuReading?.vendor, gpuTemp);
   // No vendor gate here: unlike the GPU (LOCKED rule 5 — NVIDIA's sensor path is implemented but
@@ -788,7 +791,7 @@ export function HomeConsole({
   // fabricated placeholder; all four empty drops the block, so a rig that reports no SMBIOS
   // module/disk detail is not handed four hollow boxes.
   const specs: { title: string; rows: [string, string][] }[] = [
-    { title: t("home.homeConsole.specs.gpu"), rows: denseGpu(hw.gpus?.[0], t) },
+    { title: t("home.homeConsole.specs.gpu"), rows: denseGpu(gpu, t) },
     { title: t("home.homeConsole.specs.cpu"), rows: denseCpu(hw, t) },
     { title: t("home.homeConsole.specs.ram"), rows: denseRam(hw.memory_modules ?? [], t) },
     { title: t("home.homeConsole.specs.storage"), rows: denseStorage(hw.physical_disks ?? []) },
@@ -1170,7 +1173,7 @@ export function HomeConsole({
                     <Callout
                       tone={null}
                       name={t("home.homeConsole.callout.gpu")}
-                      detail={shortModel(hw.gpus[0]?.name)}
+                      detail={shortModel(gpu?.name)}
                     />
                     {/* C-19 — the CPU callout answers "is it running hot", or hands over the ONE
                         next step that would let it. Measured ⇒ the number, graded and attributed to

@@ -3,7 +3,14 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 const invokeMock = vi.fn<(cmd: string) => Promise<unknown>>();
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (cmd: string) => invokeMock(cmd) }));
 
-import { readSessionSlot, routeSession } from "./gaming-session-route";
+import {
+  bannerAfterPaneClose,
+  contractLeftByFailedStart,
+  readSessionSlot,
+  routeSession,
+  type SessionSlot,
+} from "./gaming-session-route";
+import type { GamingSessionFile } from "../surfaces/gaming-mode";
 
 afterEach(() => invokeMock.mockReset());
 
@@ -56,5 +63,41 @@ describe("readSessionSlot", () => {
     expect((await readSessionSlot()).route).toBe("recover");
     live = () => Promise.reject(new Error("ipc"));
     expect((await readSessionSlot()).route).toBe("recover");
+  });
+});
+
+// App's banner (round 1 review, 2026-11-03: its half of the fix had no test).
+describe("bannerAfterPaneClose / contractLeftByFailedStart", () => {
+  const contract = (status: GamingSessionFile["status"], id = "gm-2") =>
+    ({ session_id: id, status, changes: [] }) as unknown as GamingSessionFile;
+  const recover = (s: GamingSessionFile): SessionSlot => ({ route: "recover", session: s });
+
+  it("a contract the pane left behind reaches the banner", () => {
+    const left = contract("restore-failed");
+    expect(bannerAfterPaneClose(null, recover(left))).toBe(left);
+  });
+
+  it("the same contract in the same state keeps the banner's object, so a tucked toast stays tucked", () => {
+    const shown = contract("restore-pending", "gm-1");
+    expect(bannerAfterPaneClose(shown, recover(contract("restore-pending", "gm-1")))).toBe(shown);
+  });
+
+  it("a changed state is news: the banner takes the new one", () => {
+    const shown = contract("active", "gm-1");
+    const now = contract("restore-failed", "gm-1");
+    expect(bannerAfterPaneClose(shown, recover(now))).toBe(now);
+  });
+
+  it("this run's live session, or a slot that can't be read, changes nothing", () => {
+    const shown = contract("restore-pending", "gm-1");
+    expect(bannerAfterPaneClose(shown, { route: "none" })).toBe(shown);
+    expect(bannerAfterPaneClose(null, { route: "resume", session: contract("active") })).toBeNull();
+  });
+
+  it("a failed start leaves a contract only when the slot holds one to recover", () => {
+    const left = contract("restore-failed");
+    expect(contractLeftByFailedStart(recover(left))).toBe(left);
+    expect(contractLeftByFailedStart({ route: "none" })).toBeNull();
+    expect(contractLeftByFailedStart({ route: "resume", session: contract("active") })).toBeNull();
   });
 });

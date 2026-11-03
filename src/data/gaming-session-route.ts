@@ -38,3 +38,24 @@ export async function readSessionSlot(): Promise<SessionSlot> {
     session.status === "active" ? await invoke<boolean>("gaming_session_is_live").catch(() => false) : false;
   return { route: routeSession(session.status, live), session };
 }
+
+/**
+ * App's banner once the pane closes. A contract the slot holds is shown; the same contract in the
+ * same state keeps the banner's own object, so a toast tucked away this run stays tucked away, while
+ * a changed status (a restore that failed in the pane) is news and greets again. An empty or
+ * unreadable slot changes nothing: an unreadable read must never hide a contract.
+ */
+export function bannerAfterPaneClose(
+  current: GamingSessionFile | null,
+  slot: SessionSlot,
+): GamingSessionFile | null {
+  if (slot.route !== "recover") return current;
+  const same =
+    current !== null && current.session_id === slot.session.session_id && current.status === slot.session.status;
+  return same ? current : slot.session;
+}
+
+/** The contract a failed start left for App's banner, if any: only a slot to recover holds one. */
+export function contractLeftByFailedStart(slot: SessionSlot): GamingSessionFile | null {
+  return slot.route === "recover" ? slot.session : null;
+}

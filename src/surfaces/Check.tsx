@@ -413,7 +413,10 @@ export default function Check({
                         unread: readiness!.unknown_count,
                       })
                   : limiters.length === 0
-                    ? t("optimize.check.measuredCleanRig")
+                    ? // An advisory (VRR, HDR) is one Compy deliberately doesn't judge: not "came back right".
+                      (readiness?.advisory_count ?? 0) > 0
+                      ? t("optimize.check.measuredCleanJudged", { count: readiness!.advisory_count })
+                      : t("optimize.check.measuredCleanRig")
                     : t("optimize.check.livingWorthLook", { count: limiters.length })
                 : t("optimize.check.classicSummary", {
                     checks: checks.length,

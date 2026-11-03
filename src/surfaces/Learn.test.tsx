@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import Learn from "./Learn";
 import { AUTOPSY_MAX_CHARS } from "../data/knowledge-autopsy";
 import { readAutopsyLedger } from "../data/autopsy-ledger";
@@ -244,6 +244,36 @@ describe("Learn surface (reskin)", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  // Round 1 review (2026-11-03): an arrival clears the search, but the deferred query renders once
+  // more with the old one as a flat list; the one-shot spent itself on that card, which the category
+  // view then replaced. The scroll lands on the card that is actually on screen.
+  it("a deep link from inside a search scrolls to the card left on screen, not the search's", async () => {
+    const landed: HTMLElement[] = [];
+    const spy = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(function (this: HTMLElement) {
+      landed.push(this);
+    });
+    try {
+      const { rerender } = render(<Learn onClose={() => {}} />);
+      fireEvent.change(searchBox(), { target: { value: "1% low" } });
+      rerender(<Learn onClose={() => {}} focusId="one-percent-lows" />);
+      await waitFor(() => expect(landed.length).toBeGreaterThan(0));
+      const last = landed[landed.length - 1];
+      expect(last.isConnected, "the scrolled card is still on screen").toBe(true);
+      expect(last.textContent).toMatch(/1% low/i);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("an Esc another control already handled does not close the modal", () => {
+    const close = vi.fn();
+    render(<Learn onClose={close} />);
+    const ev = new KeyboardEvent("keydown", { key: "Escape", cancelable: true });
+    ev.preventDefault();
+    window.dispatchEvent(ev);
+    expect(close).not.toHaveBeenCalled();
   });
 
   it("the modal closes on Esc; the room does not", () => {

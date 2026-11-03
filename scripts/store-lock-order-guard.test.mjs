@@ -726,6 +726,10 @@ const LOCK_CENSUS = {
     class: "out",
     why: "refresh_gate — a throttle timestamp whose scope closes before the work is spawned",
   },
+  "hardware::GPU_DRIVER_CACHE: Mutex<Option<(std::time::Instant, Vec<GpuInfo>)>>": {
+    class: "out",
+    why: "the last throttled WMI read of the GPU driver fields; held across that read, writes nothing to disk",
+  },
   "cpu_temp::TEMP_CACHE: Mutex<Option<(std::time::Instant, Option<CpuTemp>)>>": {
     class: "out",
     why: "a sensor read cache; sensors are read-only and nothing is written back to disk",

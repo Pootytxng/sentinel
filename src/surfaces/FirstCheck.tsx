@@ -94,7 +94,14 @@ export default function FirstCheck({
   const unread = readiness?.unknown_count ?? 0;
   const top = limiters[0] ?? null;
   const rest = limiters.slice(1);
-  const greenChecks = checks.filter((c) => rowVerdict(c.status) === "ok");
+  // Nothing wrong = ready OR advisory (Home's band counts both as clean). But "measured perfect" is a
+  // READY check: an advisory (VRR, HDR) is one Compy deliberately doesn't judge, so it is listed as
+  // yours to check, never as confirmed right (round 1 review, 2026-11-03).
+  const okChecks = checks.filter((c) => rowVerdict(c.status) === "ok");
+  const greenChecks = okChecks.filter((c) => c.status === "ready");
+  const advisoryChecks = okChecks.filter((c) => c.status === "advisory");
+  const advisory = advisoryChecks.length;
+  const yours = advisory === 1 ? "1 more is yours to check" : `${advisory} more are yours to check`;
 
   // Persist the honest last-check record when a real check resolves to a verdict — Home's Re-run
   // band reads this to show "2h ago · N/N clean". Re-fires if an in-arc apply re-runs the scan (the
@@ -102,8 +109,8 @@ export default function FirstCheck({
   // never pairs a live count with an implied time (honesty law).
   useEffect(() => {
     if (phase !== "verdict") return;
-    recordLastCheck({ total: checks.length, green: greenChecks.length, fixCount });
-  }, [phase, checks.length, greenChecks.length, fixCount]);
+    recordLastCheck({ total: checks.length, green: okChecks.length, fixCount });
+  }, [phase, checks.length, okChecks.length, fixCount]);
 
   return (
     <div className={`fc-backdrop ${arcV2 ? "arc-v2" : ""}`}>
@@ -152,10 +159,14 @@ export default function FirstCheck({
               {fixCount === 0
                 ? unread > 0
                   ? `Every check Compy could read came back right — ${unread} couldn't be read on this PC, so ${unread === 1 ? "it isn't" : "they aren't"} counted either way.`
-                  : "Every check came back right — measured on this rig, not assumed."
+                  : advisory > 0
+                    ? `Every check Compy can judge came back right — measured on this rig, not assumed. ${yours}.`
+                    : "Every check came back right — measured on this rig, not assumed."
                 : unread > 0
                   ? `Reversible, every${fixCount === 1 ? "" : " single"} one. Everything else Compy could read came back right — ${unread} couldn't be read on this PC.`
-                  : `Reversible, every${fixCount === 1 ? "" : " single"} one. Everything else came back right — measured on this rig, not assumed.`}
+                  : advisory > 0
+                    ? `Reversible, every${fixCount === 1 ? "" : " single"} one. Everything else Compy can judge came back right — ${yours}.`
+                    : `Reversible, every${fixCount === 1 ? "" : " single"} one. Everything else came back right — measured on this rig, not assumed.`}
             </p>
 
             {/* #1 biggest limiter spotlight */}
@@ -255,7 +266,7 @@ export default function FirstCheck({
             )}
 
             {/* Green strip — collapsed, expandable */}
-            {greenChecks.length > 0 && (
+            {okChecks.length > 0 && (
               <div className="fc-green">
                 <button
                   className="fc-green-head"
@@ -263,8 +274,10 @@ export default function FirstCheck({
                   aria-expanded={greenOpen}
                 >
                   <span>
-                    {greenChecks.length} check{greenChecks.length === 1 ? "" : "s"} measured perfect — confirmed
-                    right on this rig
+                    {greenChecks.length > 0 &&
+                      `${greenChecks.length} check${greenChecks.length === 1 ? "" : "s"} measured perfect — confirmed right on this rig`}
+                    {greenChecks.length > 0 && advisory > 0 && " · "}
+                    {advisory > 0 && `${advisory} yours to check`}
                   </span>
                   <span className="fc-green-caret">{greenOpen ? "▾" : "▸"}</span>
                 </button>
@@ -274,6 +287,12 @@ export default function FirstCheck({
                       <div key={c.id} className="fc-green-row">
                         <span className="fc-row-mark fc-row-ok">✓</span>
                         <span>{c.label}</span>
+                      </div>
+                    ))}
+                    {advisoryChecks.map((c) => (
+                      <div key={c.id} className="fc-green-row fc-green-row-advisory">
+                        <span className="fc-row-mark">·</span>
+                        <span>{c.label} — yours to check</span>
                       </div>
                     ))}
                   </div>

@@ -18,6 +18,8 @@ const readinessMock = vi.hoisted(() => ({
   hw: null as null | { changed: boolean; changes: string[]; baseline_recorded: boolean },
   // Checks Compy could not read (each one an extra "unknown" row). Default: none.
   unread: 0,
+  // Checks Compy deliberately doesn't judge (each an extra "advisory" row). Default: none.
+  advisories: 0,
 }));
 
 // Settable priorities payload (R3 Lane B: upgrade_path arrives on this existing command).
@@ -75,11 +77,18 @@ vi.mock("@tauri-apps/api/core", () => ({
             detail: "",
             value: null,
           })),
+          ...Array.from({ length: readinessMock.advisories }, (_, n) => ({
+            id: `adv${n}`,
+            label: `Advisory ${n}`,
+            status: "advisory",
+            detail: "",
+            value: null,
+          })),
         ],
         ready_count: 1,
         attention_count: 0,
         unknown_count: readinessMock.unread,
-        advisory_count: 0,
+        advisory_count: readinessMock.advisories,
         advisory: "",
         dismissed_ids: [],
         drifts: readinessMock.drifts,
@@ -181,6 +190,24 @@ describe("Check", () => {
       expect(screen.queryByText(/every check came back right on this rig/)).not.toBeInTheDocument();
     } finally {
       readinessMock.unread = 0;
+      delete document.documentElement.dataset.living;
+    }
+  });
+
+  it("the living clean line names advisories as the user's to check, never as came back right", async () => {
+    document.documentElement.dataset.living = "on";
+    readinessMock.advisories = 1;
+    try {
+      render(
+        <ConfirmProvider>
+          <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+        </ConfirmProvider>,
+      );
+      expect(
+        await screen.findByText("Measured clean — every check Compy can judge came back right; 1 more is yours to check."),
+      ).toBeInTheDocument();
+    } finally {
+      readinessMock.advisories = 0;
       delete document.documentElement.dataset.living;
     }
   });

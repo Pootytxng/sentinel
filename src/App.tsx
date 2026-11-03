@@ -39,7 +39,7 @@ import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./type
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { sessionPeakVendor } from "./data/gpu-sensor";
-import { readSessionSlot } from "./data/gaming-session-route";
+import { bannerAfterPaneClose, contractLeftByFailedStart, readSessionSlot } from "./data/gaming-session-route";
 import { createGenerations } from "./data/latest-wins";
 import { invalidateProbe } from "./data/probe-cache";
 import { setStartupEntryEnabled } from "./data/startup-toggle";
@@ -744,17 +744,10 @@ function App() {
     const up = () => setGamingPanes((n) => n + 1);
     // On the pane's way out, re-read the slot: App's own read runs only at launch, and the pane can
     // leave a contract App never saw — a start that failed and left one (codebase review 2026-11-03).
-    // The same contract keeps its object, so a toast tucked away this run stays tucked away.
+    // bannerAfterPaneClose keeps a tucked-away toast tucked away unless the contract's state changed.
     const down = () => {
       setGamingPanes((n) => Math.max(0, n - 1));
-      void readSessionSlot().then((slot) => {
-        if (slot.route !== "recover" || !isRecoverable(slot.session.status)) return;
-        setGamingRecovery((cur) =>
-          cur && cur.session_id === slot.session.session_id && cur.status === slot.session.status
-            ? cur
-            : slot.session,
-        );
-      });
+      void readSessionSlot().then((slot) => setGamingRecovery((cur) => bannerAfterPaneClose(cur, slot)));
     };
     window.addEventListener(GAMING_PANE_MOUNTED_EVENT, up);
     window.addEventListener(GAMING_PANE_UNMOUNTED_EVENT, down);
@@ -793,8 +786,8 @@ function App() {
       // Start leg failed AFTER a confirmed restore. "Your settings were restored" holds only while
       // the slot is empty: a start whose own undo failed leaves a restore-failed contract (codebase
       // review 2026-11-03), so re-read it and bring the banner back with the honest wording.
-      const left = await invoke<GamingSessionFile | null>("get_gaming_session_state").catch(() => null);
-      if (left && isRecoverable(left.status)) {
+      const left = contractLeftByFailedStart(await readSessionSlot());
+      if (left) {
         setGamingRecovery(left);
         fail(t("app.errors.gamingResumeLeftChanged"), e);
       } else {

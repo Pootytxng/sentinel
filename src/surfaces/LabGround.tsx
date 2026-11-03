@@ -6,6 +6,7 @@ import { LabConsole } from "./LabConsole";
 import ExperimentBench from "./ExperimentBench";
 import { GpuProfile } from "./GpuProfile";
 import { liveGpuProfileSnapshot } from "../data/gpu-profile-store";
+import { primaryGpu } from "../data/gpu-sensor";
 import { useReducedMotion } from "../design/use-motion";
 import { useHudFlag } from "../design/use-hud";
 import { deriveReverted } from "./use-scan";
@@ -82,7 +83,9 @@ export function LabGround(props: LabFastPathProps & {
   // adds zero IPC. Fields that are not user-mode readable stay null and render as "unknown"; see
   // liveGpuProfileSnapshot for why power mode and peak temp are permanently absent here.
   const gpuSnapshot = useMemo(
-    () => liveGpuProfileSnapshot(hw?.gpus?.[0], recs, new Date().toISOString()),
+    // The primary GPU, the adapter the fresh capture's Machine Model read names, so a capture never
+    // compares two different adapters on a hybrid laptop (round 1, 2026-11-03).
+    () => liveGpuProfileSnapshot(primaryGpu(hw?.gpus), recs, new Date().toISOString()),
     [hw, recs],
   );
   // A before/after capture reads the GPU fresh — App re-reads hw/recs only on refresh, so a

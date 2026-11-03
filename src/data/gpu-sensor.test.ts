@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   gpuSensorVerified,
   gradeGpuTempForVendor,
+  primaryGpu,
   sensorForGpu,
   sessionPeakVendor,
   vendorProfileInsights,
@@ -104,6 +105,20 @@ describe("sensorForGpu (the reading belongs to the GPU the surface names)", () =
   it("no snapshots is no reading", () => {
     expect(sensorForGpu([], "AMD Radeon RX 9070 XT")).toBeNull();
     expect(sensorForGpu(null, "AMD Radeon RX 9070 XT")).toBeNull();
+  });
+});
+
+describe("primaryGpu (the adapter the backend already judges)", () => {
+  it("the largest VRAM wins whatever order DXGI listed them in; a tie keeps the last, as max_by_key does", () => {
+    const igpu = { name: "Intel(R) UHD Graphics", vram_bytes: 128 };
+    const rtx = { name: "NVIDIA GeForce RTX 4060 Laptop GPU", vram_bytes: 8192 };
+    expect(primaryGpu([igpu, rtx])).toBe(rtx);
+    expect(primaryGpu([rtx, igpu])).toBe(rtx);
+    const a = { name: "A", vram_bytes: 16 };
+    const b = { name: "B", vram_bytes: 16 };
+    expect(primaryGpu([a, b])).toBe(b);
+    expect(primaryGpu([])).toBeUndefined();
+    expect(primaryGpu(undefined)).toBeUndefined();
   });
 });
 

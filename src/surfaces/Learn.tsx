@@ -751,11 +751,14 @@ export default function Learn({
   const reducedMotion = useReducedMotion();
   const deferredQ = useDeferredValue(q); // keeps the input snappy; dataset is tiny so results are instant
   const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  // The entry the deep-link scroll last landed on (the one-shot below; re-armed by every arrival).
+  const scrolledTo = useRef<string | null>(null);
 
   // Opened with a deep-link target (e.g. from a glossary tooltip) — go to browse and reveal it.
   useEffect(() => {
     if (focusId) {
       setMode("browse");
+      scrolledTo.current = null; // an arrival scrolls, even to the entry already in focus
       setFocused(focusId);
       setQ("");
       setFilter("all");
@@ -772,7 +775,9 @@ export default function Learn({
   useEffect(() => {
     if (asPanel) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || document.querySelector('[role="alertdialog"][aria-modal="true"]')) return;
+      // An Esc something else already handled (the command palette) is not this modal's to act on.
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector('[role="alertdialog"][aria-modal="true"]')) return;
       e.preventDefault();
       onClose();
     };
@@ -826,12 +831,16 @@ export default function Learn({
   // ONE-SHOT per arrival (codebase review 2026-11-03): it re-runs until the card exists, but once it
   // has scrolled to an entry it stays put — expanding another category or changing a filter used to
   // yank the view back and re-flash the card. A new target, or coming back to browse, re-arms it.
-  const scrolledTo = useRef<string | null>(null);
+  //
+  // It waits for the list to settle (round 1, 2026-11-03): an arrival clears the search, but the
+  // deferred query renders once more with the old one, as a flat list. Scrolling to that card spent
+  // the one shot on an element the category view then replaced, off-screen and unflashed.
   useEffect(() => {
     if (mode !== "browse" || !focused) {
       scrolledTo.current = null;
       return;
     }
+    if (deferredQ !== q) return;
     if (scrolledTo.current === focused) return;
     const el = cardRefs.current.get(focused);
     if (!el) return;
@@ -843,7 +852,7 @@ export default function Learn({
       clearTimeout(t);
       el.classList.remove("lx-flash");
     };
-  }, [focused, results, mode, openCats]);
+  }, [focused, results, mode, openCats, deferredQ, q]);
 
   const navigateTo = (id: string) => {
     const byId = knowledgeByIdForLanguage(i18n.language);
