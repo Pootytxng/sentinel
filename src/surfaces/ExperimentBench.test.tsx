@@ -704,6 +704,54 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.queryByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") })).toBeNull();
   });
 
+  // Desk review 2026-11-02, on his rig: his running Trial said "The change is applied. Play a PBZ
+  // session, then conclude" while Windows read the change as off and the summary below it said "Not
+  // applied now." Concluding then is recorded confounded (guard_target_at_conclude): a session spent
+  // for nothing. The panel now reads the picker's live answer, the summary's own read.
+  const HAGS_CANDIDATE = { id: "hags", title: "Hardware-accelerated GPU scheduling", detail: null };
+  it("with a running experiment whose change reads off: says so and leads with Restore now, never Conclude", async () => {
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [VALORANT_SESSION];
+    state.recs = [{ ...HAGS_CANDIDATE, passes: true, reason: null }];
+    render(<ExperimentBench />);
+    await waitFor(() =>
+      expect(screen.getByTestId("exp-running-step").textContent).toBe(
+        "Compy reads Hardware-accelerated GPU scheduling as off now, so a Valorant session can't count toward this test. Restore now ends it and leaves the setting as it was before the test.",
+      ),
+    );
+    expect(screen.getByTestId("experiment-running")).toHaveAttribute("data-change-off", "true");
+    expect(screen.queryByRole("button", { name: /Conclude with my latest/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Restore now" })).toHaveClass("exp-cta");
+    expect(screen.queryByText(/after-reading|Latest Valorant session/)).toBeNull();
+  });
+
+  it("a running experiment whose change still reads on keeps the conclude step, Restore now beside it", async () => {
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [VALORANT_SESSION];
+    state.recs = [{ ...HAGS_CANDIDATE, passes: false, reason: "already-set-by-compy" }];
+    render(<ExperimentBench />);
+    expect(await screen.findByRole("button", { name: /Conclude with my latest/ })).toBeEnabled();
+    expect(screen.getByTestId("exp-running-step").textContent).toMatch(/^The change is applied\. Play a Valorant session/);
+    expect(screen.getByTestId("experiment-running")).not.toHaveAttribute("data-change-off");
+    expect(screen.getByRole("button", { name: "Restore now" })).toHaveClass("exp-cta-ghost");
+  });
+
+  it("an interrupted Trial whose change reads off never says it is still on", async () => {
+    localStorage.setItem("compy.journey.running", RUNNING_EXPERIMENT.id);
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [VALORANT_SESSION];
+    state.recs = [{ ...HAGS_CANDIDATE, passes: true, reason: null }];
+    render(<ExperimentBench />);
+    await waitFor(() =>
+      expect(screen.getByTestId("exp-interrupted").textContent).toBe(
+        "A test was interrupted, and Compy reads Hardware-accelerated GPU scheduling as off now.",
+      ),
+    );
+  });
+
   // #583 lane 2b: the backend reads the baseline and the treatment from its own session store by id.
   // The webview names a session; it never hands over the game or a frame rate to be trusted.
   it("starts against the baseline by session id, never by frame rates it supplies", async () => {

@@ -671,7 +671,10 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(calls("restore_experiment")).toHaveLength(0);
     expect(state.experiments[0]).toMatchObject({ status: "running" });
 
-    // What the relaunch sees: the interrupted-test banner over the running panel.
+    // What the relaunch sees: the interrupted-test banner over the running panel. The picker reads the
+    // running Trial's change as Compy's own, as trial_candidates.rs does once it is applied (the panel
+    // trusts that live read: desk review 2026-11-02).
+    state.recs = (state.recs as { id: string }[]).map((c) => (c.id === "hags" ? { ...c, passes: false, reason: "already-set-by-compy" } : c));
     cleanup();
     render(<ExperimentBench />);
     const banner = await screen.findByTestId("exp-interrupted");
@@ -682,6 +685,8 @@ describe("P5-guided: one button runs the whole Trial", () => {
   it("the interrupted banner names only a Trial a journey started", async () => {
     localStorage.setItem("compy.journey.running", "exp:1-0");
     state.experiments = [record({ id: "exp:1-0" })];
+    // Applied by the running Trial, so the picker reads it as Compy's own (trial_candidates.rs).
+    state.recs = (state.recs as { id: string }[]).map((c) => (c.id === "hags" ? { ...c, passes: false, reason: "already-set-by-compy" } : c));
     render(<ExperimentBench />);
     expect((await screen.findByTestId("exp-interrupted")).textContent).toMatch(/^A test was interrupted: HAGS is still on\./);
     cleanup();

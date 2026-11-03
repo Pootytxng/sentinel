@@ -33,6 +33,7 @@ import {
   type OutcomeResult,
   type ResultOutcome,
   type StillApplied,
+  stillAppliedFrom,
   type RetestReason,
   type TestedChange,
 } from "./test-summary";
@@ -1282,6 +1283,7 @@ export default function ExperimentBench({
           // P5-guided: a journey Trial still running while no journey runs was interrupted (Compy
           // closed, a reload, the room left mid-session). Its change is still on; this says so.
           interrupted={running.id === interruptedJourneyId()}
+          changeOff={stillAppliedFrom(recs.find((r) => r.id === running.rec_id)) === "off"}
           busy={busy}
           onConclude={concludeExperiment}
           onRestore={restoreExperiment}
@@ -2080,6 +2082,7 @@ function RunningPanel({
   exp,
   treatment,
   interrupted = false,
+  changeOff = false,
   busy,
   onConclude,
   onRestore,
@@ -2087,6 +2090,10 @@ function RunningPanel({
   exp: Experiment;
   treatment: SessionSummary | null;
   interrupted?: boolean;
+  /** The Trial picker's live answer reads this Trial's change as off (`stillAppliedFrom` "off", the
+   *  same read behind the summary's "Not applied now."). A conclude now is recorded confounded
+   *  (experiment.rs guard_target_at_conclude), so the panel says so and leads with Restore now. */
+  changeOff?: boolean;
   busy: boolean;
   onConclude: (exp: Experiment, treatment: SessionSummary) => void;
   onRestore: (exp: Experiment) => void;
@@ -2097,10 +2104,12 @@ function RunningPanel({
   const baselineAvg = knownFps(exp.baseline_avg_fps);
   const baselineLow = knownFps(exp.baseline_low1_fps);
   return (
-    <div className="exp-running" data-testid="experiment-running">
+    <div className="exp-running" data-testid="experiment-running" data-change-off={changeOff || undefined}>
       {interrupted && (
         <p className="exp-bench-warn" data-testid="exp-interrupted" role="status">
-          {t("lab.experimentBench.journey.interrupted", { change: exp.rec_title })}
+          {t(changeOff ? "lab.experimentBench.journey.interruptedOff" : "lab.experimentBench.journey.interrupted", {
+            change: exp.rec_title,
+          })}
         </p>
       )}
       <div className="exp-running-head">
@@ -2131,12 +2140,19 @@ function RunningPanel({
           {baselineReceipt(exp, t)}
         </p>
       )}
-      <p className="exp-running-step">
-        {legacy ? t("lab.experimentBench.runningLegacy") : t("lab.experimentBench.runningStep", { game })}
+      {/* Desk review 2026-11-02: "The change is applied" stood over a change Windows read as off, with the
+          summary below saying "Not applied now." and Conclude leading, which would spend a session on a
+          confounded result. */}
+      <p className="exp-running-step" data-testid="exp-running-step">
+        {legacy
+          ? t("lab.experimentBench.runningLegacy")
+          : changeOff
+            ? t("lab.experimentBench.runningChangeOff", { change: exp.rec_title, game })
+            : t("lab.experimentBench.runningStep", { game })}
       </p>
 
       <div className="exp-running-actions">
-        {!legacy && (
+        {!legacy && !changeOff && (
           <button
             className="exp-cta"
             disabled={!treatment || busy}
@@ -2150,14 +2166,14 @@ function RunningPanel({
           </button>
         )}
         <button
-          className="exp-cta-ghost"
+          className={changeOff ? "exp-cta" : "exp-cta-ghost"}
           disabled={busy}
           onClick={() => onRestore(exp)}
         >
           {t("lab.experimentBench.restoreNow")}
         </button>
       </div>
-      {legacy ? null : treatment ? (
+      {legacy || changeOff ? null : treatment ? (
         <p className="exp-fineprint">
           {t("lab.experimentBench.runningLatestPre", { game })} <b>{Math.round(treatment.avg_fps)}</b> {t("lab.experimentBench.baselineMid")}{" "}
           <b>{Math.round(treatment.low1_fps_est)}</b>{" "}

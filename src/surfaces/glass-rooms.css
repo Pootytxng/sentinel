@@ -548,10 +548,13 @@
 :root[data-v2="on"] .gl-station .bb-scan:focus-visible {
   outline-color: var(--v2-text);
 }
-/* The stutter section's "not a proven cause" tag: its own sheet's --ix-text-3 measured 4.21:1 on
-   the station's glass; the rooms' muted ink clears AA (GL-empty). */
-:root[data-v2="on"] .gl-station .bb-stutter-tag {
-  color: var(--v2-muted);
+/* The station's three "not a proven cause" tags (stutter, changed before, since it last worked). Their
+   own sheets' --ix-text-3 measured 3.74-4.21:1 on the station's glass, and the desk review of
+   2026-11-02 measured even the rooms' muted ink at 4.32-4.80:1 on the station's lighter inner blocks
+   (rgb 30-38, 40-49, 51-57, on his own backdrop): the muted ink lifted 15% toward the page ink is about
+   5:1 on the lightest of them. The tags stay italic, so they still read as a note on the line. */
+:root[data-v2="on"] .gl-station :is(.bb-stutter-tag, .bb-changed-tag, .bb-since-tag) {
+  color: color-mix(in srgb, var(--v2-muted) 85%, var(--v2-text));
 }
 /* A deep-linked record can be taller than the window; it lands by its top (BlackBox scrolls it to
    "start"), with room to breathe under the content lane's edge. */
