@@ -1699,6 +1699,36 @@ where
     std::thread::spawn(f).join().unwrap_or_default()
 }
 
+/// One Windows service's `(State, StartMode)` from WMI `Win32_Service`, read-only, or `None` when the
+/// service has no row or WMI could not be read. `StartMode` is an enumerated string Windows does not
+/// localize ("Boot" / "System" / "Auto" / "Manual" / "Disabled"). The four catalog service-disable
+/// changes read from `history::LiveReads`' one batched listing (CR-service-batch); any other name (a
+/// remote rule's `service-not-running` param) reads here, in the read-only probe module, so the ledger's
+/// probe never reaches into `actions` (`src/experiment-record-first-guard.test.ts` pins that).
+/// `actions::service_info` is the same read on the mutation side, kept there because the apply's
+/// snapshot takes it. Cost: one thread, one COM init, one WMI connection, roughly 100-500 ms.
+pub(crate) fn service_state_and_start_mode(name: &str) -> Option<(String, String)> {
+    #[derive(Deserialize)]
+    #[serde(rename = "Win32_Service")]
+    #[serde(rename_all = "PascalCase")]
+    struct Win32ServiceRow {
+        state: Option<String>,
+        start_mode: Option<String>,
+    }
+    let name = name.to_string();
+    on_wmi_thread(move || {
+        let com = COMLibrary::new().ok()?;
+        let wmi_conn = WMIConnection::new(com).ok()?;
+        let query = format!("SELECT State,StartMode FROM Win32_Service WHERE Name='{}'", name.replace('\'', "''"));
+        let results: Vec<Win32ServiceRow> = wmi_conn.raw_query(&query).ok()?;
+        let svc = results.into_iter().next()?;
+        Some((
+            svc.state.unwrap_or_else(|| "Unknown".into()),
+            svc.start_mode.unwrap_or_else(|| "Unknown".into()),
+        ))
+    })
+}
+
 pub(crate) fn collect_hardware() -> HardwareInfo {
     // Hardware is static for a session, but several commands need it — on startup
     // get_recommendations / get_diagnostics / get_game_readiness / get_priorities fire in

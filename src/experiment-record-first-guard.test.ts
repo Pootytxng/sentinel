@@ -148,7 +148,8 @@ describe("a Trial verifies the setting before, during and after (#583 lane 2)", 
   it("every one-click rec has a live probe, so no appliable rec is refused as unreadable by design", () => {
     const ids = (body: string) => [...body.matchAll(/^\s*"([a-z0-9-]+)" =>/gm)].map((m) => m[1]).sort();
     const appliable = ids(fnBody(HISTORY, "fn apply_fn_for("));
-    const probed = ids(fnBody(HISTORY, "pub(crate) fn probe_rec_target("));
+    // The dispatch lives in `probe_rec_target_with` since CR-service-batch; `probe_rec_target` calls it.
+    const probed = ids(fnBody(HISTORY, "pub(crate) fn probe_rec_target_with("));
     expect(appliable.length, "the apply dispatch moved").toBeGreaterThan(0);
     expect(probed).toEqual(appliable);
   });
@@ -156,6 +157,16 @@ describe("a Trial verifies the setting before, during and after (#583 lane 2)", 
   it("the probe is read-only", () => {
     const probe = fnBody(HISTORY, "pub(crate) fn probe_rec_target(");
     expect(probe).not.toMatch(/apply_|rollback_|actions::|save_history/);
+  });
+
+  // 2026-11-04: CR-service-batch made `probe_rec_target` a one-line call into `probe_rec_target_with`
+  // and moved the service read into `LiveReads::service_disabled`, which still called
+  // `actions::service_info` — the check above passed on a body that no longer held the probe. The
+  // read-only rule follows the probe to where it now runs.
+  it("the probe's real body and its service read stay read-only", () => {
+    for (const sig of ["pub(crate) fn probe_rec_target_with(", "pub(crate) fn service_disabled("]) {
+      expect(fnBody(HISTORY, sig), sig).not.toMatch(/apply_|rollback_|actions::|save_history/);
+    }
   });
 });
 
@@ -484,8 +495,9 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
     expect(pure, "the reconcile drops a start again").not.toContain("experiments.remove(");
     expect(EXPERIMENT, "a way to drop an interrupted start is back").not.toContain("InterruptedStart::Dropped");
     expect(pure).toMatch(/None => \{\s*live_read = changed\(&store\.experiments\[i\]\.rec_id\);\s*InterruptedStart::ChangeUnrecorded/);
-    expect(fnBody(EXPERIMENT, "fn reconcile_pending_locked(")).toContain(
-      "target_verification(Some(crate::history::probe_rec_target(rec_id)))",
+    // CR-service-batch (2026-11-04): the reconcile's pass shares one `LiveReads`, so the call carries it.
+    expect(fnBody(EXPERIMENT, "fn reconcile_pending_locked(")).toMatch(
+      /target_verification\(Some\(crate::history::probe_rec_target(?:_with)?\(rec_id(?:, &reads)?\)\)\)/,
     );
   });
 

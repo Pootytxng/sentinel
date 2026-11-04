@@ -328,10 +328,11 @@ impl LiveReads {
 
     /// Whether `name`'s start type reads Disabled, through [`disabled_service_check`]. One of
     /// [`DISABLE_REC_SERVICES`] reads from the pass's one batched listing; any other name (a remote
-    /// rule's `service-not-running` param) keeps its own single read, as before.
+    /// rule's `service-not-running` param) keeps its own single read, as before, through the read-only
+    /// probe module and never through `actions` (`src/experiment-record-first-guard.test.ts`).
     pub(crate) fn service_disabled(&self, name: &str) -> ActiveCheck {
         if !DISABLE_REC_SERVICES.iter().any(|s| s.eq_ignore_ascii_case(name)) {
-            return disabled_service_check(crate::actions::service_info(name));
+            return disabled_service_check(crate::hardware::service_state_and_start_mode(name));
         }
         let listing = self.services.get_or_init(self.list_services).as_ref();
         disabled_service_check(service_in_listing(listing, name))

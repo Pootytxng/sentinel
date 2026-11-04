@@ -861,10 +861,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-30 ~16:30 (scheduled, CODE-ONLY, owner playing WARDOGS): P9-target `97ebbf7f` (merge `6e4224c9`);
-  tsc 0; 21 files / 318 tests, exit 0; debrief test proven failing on old code (run after the commit). TS
-  display only, no review. Rust items (P4-noise-stretch, P5-realplay) left for a session with no game running.
-  One item only. Log trimmed to the newest 14. Not pushed (CODE-ONLY); next FULL session pushes.
 - 2026-10-30 evening (scheduled, CODE-ONLY, owner playing WARDOGS): P9-settings-done `25feba43` (merge
   `a84ba5a7`); tsc 0; bench + helper + i18n/locale/copy/census guards 17 files / 275, exit 0; two bench tests
   proven failing on old code. TS display only, no review. Rust items left for a session with no game running.
@@ -991,6 +987,14 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   blockers, both SHOULD-FIX taken inline. Queue refill: five slices (CR-pagefile-0, CR-dual-channel, CR-vbs-running,
   CR-slow-async, CR-care-silent). One item only. Not pushed (CODE-ONLY): local `main` was already ten commits ahead of
   GitHub (the 03:12 line above said pushed; it wasn't); the next FULL session pushes it all through the gate.
+- 2026-11-04 ~10:50 (Claude HQ lane, owner in PBZ; gate at idle priority, no install): the 08:43 session's
+  CR-service-batch (`3cdfc782`) had not been through the gate and broke two record-first guards (the probe's
+  rec list and the reconcile's call read `probe_rec_target`, now a one-line call into `probe_rec_target_with`);
+  the read-only check passed on that one line while `LiveReads::service_disabled` still called
+  `actions::service_info`. Guards follow the probe to `probe_rec_target_with` and `service_disabled` (the new
+  check fails on `330235ad`); a non-catalog service name reads through `hardware::service_state_and_start_mode`.
+  The lane branch `claude/train-hq-1104` (`9a7902a`, the same fix on the pre-batch code) is superseded and
+  deleted. Installed build stays `e3d3b7fd`; the Friday desk install picks up main.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
