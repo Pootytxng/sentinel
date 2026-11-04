@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { TFunction } from "i18next";
 import type { GameReadiness, ReadinessCheck, Priorities } from "../types";
@@ -208,7 +208,14 @@ export function useScan(opts?: { cache?: boolean; staggerMs?: number }): ScanSta
   const [shownRows, setShownRows] = useState(seed?.readiness?.checks.length ?? 0);
   const [phase, setPhase] = useState<"scan" | "verdict">(seed ? "verdict" : "scan");
 
+  // The newest run wins. Two scans can overlap (the mount's own scan and a Re-run pressed before it
+  // answers, or two quick Re-runs); an older scan that answers LATE must not write its verdict, its
+  // failure or its "running" flag over the newer one's (desk gate 2026-11-03: the rejected mount scan
+  // and the re-run that followed it raced, and the stale failure landed last).
+  const seqRef = useRef(0);
   const rerun = useCallback(async () => {
+    const seq = ++seqRef.current;
+    const current = () => seq === seqRef.current;
     setRunning(true);
     setFailed(false);
     setPhase("scan");
@@ -216,6 +223,7 @@ export function useScan(opts?: { cache?: boolean; staggerMs?: number }): ScanSta
     const t0 = performance.now();
     try {
       const result = await fetchScan();
+      if (!current()) return;
       setReadiness(result.readiness);
       setPriorities(result.priorities);
       setRecs(result.recs);
@@ -224,14 +232,17 @@ export function useScan(opts?: { cache?: boolean; staggerMs?: number }): ScanSta
       // instantly. The cache is cleared after every mutation, so it can't outlive a real state change.
       putProbe<ScanResult>(SCAN_KEY, result);
     } catch {
+      if (!current()) return;
       // Nothing new was read. The row reveal below needs a readiness to flip the phase, so a scan that
       // rejected with no earlier result used to leave every caller on "running checks" forever
       // (CR-tour-reject, codebase review 2026-11-03): land the verdict phase here, and say it failed.
       setFailed(true);
       setPhase("verdict");
     } finally {
-      setElapsed((performance.now() - t0) / 1000);
-      setRunning(false);
+      if (current()) {
+        setElapsed((performance.now() - t0) / 1000);
+        setRunning(false);
+      }
     }
   }, []);
 

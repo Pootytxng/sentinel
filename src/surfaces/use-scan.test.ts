@@ -286,8 +286,48 @@ describe("useScan on a rejected scan", () => {
       return Promise.resolve(null);
     });
     await result.current.rerun();
-    await waitFor(() => expect(result.current.running).toBe(false));
+    await waitFor(() => {
+      expect(result.current.running).toBe(false);
+      expect(result.current.failed).toBe(false);
+      expect(result.current.readiness?.ready_count).toBe(1);
+    });
+  });
+
+  // Desk gate 2026-11-03: the mount's rejected scan and a Re-run pressed before it settled raced, and
+  // the older scan's failure landed after the newer scan's success. The newest run owns the state:
+  // an older scan that answers late writes nothing (not its verdict, not its failure, not "running").
+  it("an older scan that answers late never writes over the newer one", async () => {
+    invokeMock.mockReset();
+    let rejectFirst: (e: Error) => void = () => {};
+    const slowFailure = new Promise<never>((_, reject) => {
+      rejectFirst = reject;
+    });
+    invokeMock.mockImplementationOnce(() => slowFailure);
+    const { result } = renderHook(() => useScan());
+    await waitFor(() => expect(result.current.running).toBe(true));
+    invokeMock.mockImplementation((cmd: string) => {
+      if (cmd === "get_game_readiness")
+        return Promise.resolve({
+          checks: [{ id: "a", label: "A", status: "ready", detail: "", value: null }],
+          ready_count: 1,
+          attention_count: 0,
+          unknown_count: 0,
+          advisory_count: 0,
+          advisory: "",
+          dismissed_ids: [],
+          drifts: [],
+        });
+      if (cmd === "priorities_from")
+        return Promise.resolve({ limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null });
+      if (cmd === "get_recommendations") return Promise.resolve([]);
+      return Promise.resolve(null);
+    });
+    await result.current.rerun(); // the newer scan, succeeds
+    await waitFor(() => expect(result.current.readiness?.ready_count).toBe(1));
+    rejectFirst(new Error("ipc down, late")); // the older scan answers last
+    await new Promise((r) => setTimeout(r, 20));
     expect(result.current.failed).toBe(false);
+    expect(result.current.running).toBe(false);
     expect(result.current.readiness?.ready_count).toBe(1);
   });
 });

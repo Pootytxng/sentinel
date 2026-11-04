@@ -916,9 +916,11 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   desk self-review round 1 on his data FAIL on five findings (trace axis floored minutes above an hour; recap tabs, a placeholder
   part name and the GPU profile summary English in zh-CN; the seatbelt step naming the retired "Lab" tab), fixed in `71f1df93`
   (rebased over the 13:43 session's `e01561f7` / `e99a7a5c`), built and installed 14:03 (`ship-reinstall.ps1 -VerifyRuntime
-  -ExpectedCommit`, proof `71f1df93 · release`, installer `9E9C4A43…`). Round 2 of the desk review is OWED on `71f1df93` (the
-  reviewer stopped on a usage limit at 14:10; the lane resumed at 19:43): the five fixes carry tests that fail on the old code, and the
-  RELEASE_STATE row says the install is proven and the visual PASS is not. Pushed through the gate with this line. Lane line removed. The #678 scheduled task could not be turned off
+  -ExpectedCommit`, proof `71f1df93 · release`, installer `9E9C4A43…`). Round 2 of the desk review on `71f1df93` PASS 12 of 12 (a usage
+  limit paused the lane 14:10-19:43; CR-cmp-wait's positive case is unreachable on his data). The gate then caught two things and both
+  are fixed: the debrief's pinned mount lookups lacked CR-cmp-wait's `get_armed_comparison` (`d3b126c9`), and `useScan` let the mount's
+  rejected scan land its failure after a re-run's success (flaky 1 in 8; the newest scan owns the state now, test fails on old code).
+  Pushed through the gate with this line. Lane line removed. The #678 scheduled task could not be turned off
   from here (the task tools refuse Claude); walkthroughs P4–P7 and P8-first-advanced stay the owner's, named under
   Needs owner with clicks and minutes.
 - 2026-11-03 PM (scheduled, CODE-ONLY, owner in a game): queue refill (5 ready slices from CR-1102-left); CR-cmp-wait
