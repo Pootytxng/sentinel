@@ -47,8 +47,11 @@ const FRAMES = [
 /** Wide-window widths at which label and note must share one line (invariant 4). */
 const ONE_LINE_WIDTHS = [1200, 960];
 const LOCALES = ["en", "zh-CN"];
-/** The only commands the debrief invokes on mount: its comparison lookup and the What-changed panel's. */
-const MOUNT_LOOKUPS = ["get_latest_comparison", "what_changed_for_session"];
+/** The only commands the debrief invokes on mount: its comparison lookup, the What-changed panel's, and
+ *  since CR-cmp-wait (`e01561f7`) the armed-comparison read that lets a short session say why its
+ *  comparison is still waiting. Caught by the pre-push gate on 2026-11-03: the slice ran its own suites,
+ *  not this Chromium guard. */
+const MOUNT_LOOKUPS = ["get_armed_comparison", "get_latest_comparison", "what_changed_for_session"];
 const STATES = ["unknownAvg", "unknownLow", "measured"];
 const TOLERANCE_PX = 0.5;
 /** A collapsed-away space measures ~0px; a real one at the 13px label size measures 3px or more. */
