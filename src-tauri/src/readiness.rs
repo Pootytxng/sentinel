@@ -1276,16 +1276,21 @@ mod readiness_tests {
     #[test]
     fn the_power_profile_row_grades_the_plan_class_not_its_words() {
         let hw = HardwareInfo::default();
-        let ready = evaluate_readiness(&hw, Some((PowerPlanClass::HighPerformance, "高性能")), false, false, Ok(&AppliedChangesSummary::default()), None);
-        let row = ready.iter().find(|c| c.id == "power-profile").expect("row");
-        assert_eq!(row.status, ReadinessStatus::Ready);
-        assert!(row.detail.contains("高性能"), "{}", row.detail);
-        let attention = evaluate_readiness(&hw, Some((PowerPlanClass::Balanced, "平衡")), false, false, Ok(&AppliedChangesSummary::default()), None);
-        assert_eq!(attention.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Attention);
-        let other = evaluate_readiness(&hw, Some((PowerPlanClass::Other, "AMD Ryzen Balanced")), false, false, Ok(&AppliedChangesSummary::default()), None);
-        assert_eq!(other.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Attention, "a plan this build cannot class is not called performance");
-        let unread = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
-        assert_eq!(unread.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Unknown);
+        let hist = AppliedChangesSummary::default();
+        let row = |plan: Option<(PowerPlanClass, &str)>| {
+            let r = evaluate_readiness(&hw, plan, false, false, Ok(&hist), None);
+            r.checks.into_iter().find(|c| c.id == "power-profile").expect("the power-profile row")
+        };
+        let ready = row(Some((PowerPlanClass::HighPerformance, "高性能")));
+        assert_eq!(ready.status, ReadinessStatus::Ready);
+        assert!(ready.detail.contains("高性能"), "{}", ready.detail);
+        assert_eq!(row(Some((PowerPlanClass::Balanced, "平衡"))).status, ReadinessStatus::Attention);
+        assert_eq!(
+            row(Some((PowerPlanClass::Other, "AMD Ryzen Balanced"))).status,
+            ReadinessStatus::Attention,
+            "a plan this build cannot class is not called performance"
+        );
+        assert_eq!(row(None).status, ReadinessStatus::Unknown);
     }
 
     #[test]
