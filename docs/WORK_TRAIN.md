@@ -171,8 +171,8 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       Screen check owed at the next desk install.
 - [ ] **CR-gpu-picker** The GPU view's Global/Per-game picker changes nothing anything reads: remove it (wiring it
       is a feature, not a fix). Test: the picker is gone. Screen check at a FULL session.
-- [ ] **CR-trial-zero-base** A Trial delta on a 0 or NaN baseline (older records) prints a number: show "—" and
-      no verdict wording. Test with a 0 and a NaN baseline record.
+- [x] **CR-trial-zero-base** A Trial delta on a 0 or NaN baseline (older records) prints a number: show "—" and
+      no verdict wording. Test with a 0 and a NaN baseline record. — `4d5595fd`
 - [ ] **CR-primary-gpu** App's and Home's walkthrough and tuning vendor come from the first DXGI adapter: take the
       primary GPU's vendor (the one the session peak already uses). Test with an iGPU listed first.
 - [ ] **CR-stopped-service** A service that is only stopped reads as Compy's change: read its start type and claim
@@ -814,15 +814,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-28 ~13:00-14:15 (scheduled, CODE-ONLY): Phase 9 queue refill `2fc32bf7`; P8-posture-b `48785b23`
-  (tsc clean, targeted 570/570, full vitest 523/526 files - the 3 site-app tests need site-app/node_modules,
-  absent in the worktree; review r1 MUST-FIX reload race fixed + guard test; SHOULD-FIX and NITs queued as
-  P8-posture-note / P8-posture-count). Picker needs self-review next FULL session. Not pushed.
-- 2026-10-29 (scheduled, FULL): catch-up push `a8ff8391..651cd1b6`; P8-posture-note `73d9c5d9`, P8-posture-count
-  `9e2083f5` (tsc clean, targeted 163/163, both fixes' tests proven failing on old code, full vitest 523/526 -
-  site-app env only; TS display logic, no review). New item P8-posture-stale-copy. Self-review of the P8
-  picker + headline owed (needs desk build). Log trimmed to the newest 14. Not pushed - owner back at the PC before landing (preflight idle 0 s);
-  next FULL session pushes.
 - 2026-10-29 ~15:45-16:30 (scheduled, CODE-ONLY, owner playing PBZ): P8-posture-stale-copy `53514506` (fix
   `35e39a0a`); tsc clean, targeted 170/170, i18n/copy guards 40/40, bench test proven failing on old code; TS
   display copy, no review. Leftover train-p6nextf2/p7notify/p7route/p7severity folders hold only site-app
@@ -934,6 +925,9 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `e01561f7` (tsc 0; vitest 10 files / 116 passed; new test fails 2/5 on old code); stale `train-live-round` worktree
   removed (its work is on main as `8be87e12`). NOT pushed (main ahead of GitHub), NOT installed: the next FULL
   session pushes through the gate, builds, installs and does the screen check.
+- 2026-11-04 (scheduled, CODE-ONLY, owner in PBZ): CR-trial-zero-base `4d5595fd` (rebased over `1e9ce481`); tsc 0;
+  ExperimentBench 161/161; the 3 new cases fail on main's code. TS display only, no review. One item only; no cargo
+  mid-game. Log trimmed to the newest 14. Not pushed (CODE-ONLY; main ahead of GitHub); next FULL session pushes.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
