@@ -195,9 +195,13 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       clean or rotted. Fixtures keep the tools' SHAPE with labels in another language and say so: the repo holds no
       captured zh-CN output, so the claim is "no English word decides", not "zh-CN verified". Rust review r1
       REQUEST-CHANGES → all taken, cargo 1775/0, clippy clean. Not touched (actions.rs): see CR-ultimate-identity.
-- [ ] **CR-service-batch** (from the CR-stopped-service review) The four service-disable reads each open a WMI
+- [x] **CR-service-batch** (from the CR-stopped-service review) The four service-disable reads each open a WMI
       connection (~100-500 ms); a catalog build pays it up to four times in series, a Trial pass once per row. One
       batched `Win32_Service` read per pass (through `LiveReads`), and `SELECT State,StartMode` only. Rust, read-only.
+      `3cdfc782` (2026-11-04, CODE-ONLY): one `SELECT Name,State,StartMode` for the four, made once per pass in the catalog
+      build, the session-end notice and the pending reconcile; pre-apply and post-keep/restore probes still read fresh.
+      Same answers; other service names keep their single read. cargo 1781/0, clippy clean; review r1 no blockers, both
+      SHOULD-FIX taken (exact-query test, drift guard). Latency on his rig not measured yet (next FULL desk session).
 - [ ] **CR-ultimate-identity** (owner call + mutation-gate: `actions.rs`) `apply_power_ultimate` finds the Ultimate
       plan by its English name and otherwise duplicates it under a NEW GUID with a localized name, which then classes
       as Other: on a localized Windows the rec reads off after a successful apply and the verify can fail. Record the
@@ -208,6 +212,20 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 - [ ] **CR-zh-dial** (desk review 2026-11-04, pre-existing) In zh-CN the Test room's safe-stack dial label "已启用" collides
       with the ring stroke and ticks (en "ON" fits): fit the zh label inside the ring (a shorter string or a smaller size)
       and add a zh-width guard. TS/CSS; screen check at a FULL session.
+
+### Next — small visible slices (refill 2026-11-04: honest machine reads, Roadmap Phase 9 and the Care journey)
+- [ ] **CR-pagefile-0** A system-managed pagefile reads "Fixed at 0-0 MB": say "Managed by Windows" when Windows
+      manages it (0/0 sizes or the automatic flag), the sizes only when they are set. Rust read + TS line; test with
+      both shapes.
+- [ ] **CR-dual-channel** Claim a memory-channel count only from slot or bank data that names it, otherwise
+      "unknown" (never invent hardware specs); check first what the line reads today. Rust, read-only; one review.
+- [ ] **CR-vbs-running** Say whether VBS is actually running from `Win32_DeviceGuard.VirtualizationBasedSecurityStatus`
+      (running / enabled-not-running / off; unreadable stays unknown). Read-only: Compy never changes it (security
+      settings are the owner's). One review.
+- [ ] **CR-slow-async** Black Box, support export, capture start and the slow probes become async commands so the window
+      keeps painting while they work. Rust; one review; test the commands still answer the same shapes.
+- [ ] **CR-care-silent** A Care state read or write failure gets a support event and one visible line ("Compy couldn't
+      save this; it'll try again"), never silence. Rust + TS; test a failed write shows the line.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -843,10 +861,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-30 (scheduled, CODE-ONLY, owner in Aniimo): P4-noise-copy-2 `a2437af7` (merge `fcb18d43`) and
-  P4-cap-note `42f8e04a` (merge `9234ff98`); tsc 0; vitest bench + i18n/locale/copy set 10 files / 190, exit 0;
-  both proven failing on old code (3 and 2 tests). TS copy only, no review needed. Cap line self-review owed
-  at next FULL desk session. Not pushed.
 - 2026-10-30 ~16:30 (scheduled, CODE-ONLY, owner playing WARDOGS): P9-target `97ebbf7f` (merge `6e4224c9`);
   tsc 0; 21 files / 318 tests, exit 0; debrief test proven failing on old code (run after the commit). TS
   display only, no review. Rust items (P4-noise-stretch, P5-realplay) left for a session with no game running.
@@ -970,7 +984,13 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   taken); desk cargo test 1775/0 and clippy clean on `e3d3b7fd`. Desk build `e3d3b7fd` built and installed 04:06
   (`ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit`, proof `e3d3b7fd · release`, installer `0AC22D2F…`); desk
   self-review PASS 12 of 12 (his Ultimate plan is a /duplicatescheme copy, so it classes Other and the English words still name it — the exact gap CR-ultimate-identity queues); one pre-existing zh-CN defect found and queued (CR-zh-dial). Three follow-ups queued (CR-service-batch, CR-ultimate-identity, P9-hint-shown). RELEASE_STATE
-  row re-stamped; pushed with this line through the gate. Lane line removed.
+  row re-stamped; meant to be pushed with this line through the gate, but it never reached GitHub (corrected
+  2026-11-04 08:58: GitHub `main` still `0b0f6afe`, local `main` ten commits ahead, `c631989a..261c6af4`). Lane line removed.
+- 2026-11-04 ~08:30-09:05 (scheduled, CODE-ONLY, owner using the PC): CR-service-batch `3cdfc782` (fast-forward onto
+  `main` with this line's commit); cargo test 1781/0, clippy clean (idle priority, shared target dir); one rust-tauri-reviewer round, no
+  blockers, both SHOULD-FIX taken inline. Queue refill: five slices (CR-pagefile-0, CR-dual-channel, CR-vbs-running,
+  CR-slow-async, CR-care-silent). One item only. Not pushed (CODE-ONLY): local `main` was already ten commits ahead of
+  GitHub (the 03:12 line above said pushed; it wasn't); the next FULL session pushes it all through the gate.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
