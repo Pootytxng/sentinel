@@ -59,9 +59,8 @@ owner's OK. Scripts: `C:\Users\Kuya\code\_train\uac-off-permanent.ps1` (off), `u
 the recorded original, 5). Every other security setting stays owner-gated (CLAUDE.md).
 
 ## Needs owner
-- **Old scheduled task** "#678 check-in 1/3…" still armed (it fails every day at 10:24 with access denied); turn
-  it off in your scheduled tasks list — one click. Claude tried on 2026-11-03: its scheduled-task tools refuse to
-  disable or delete a task, so this one stays yours.
+- ~~**Old scheduled task** "#678 check-in 1/3…"~~ deleted 2026-11-04 03:14 by Claude on the owner's "yes please"
+  (a one-shot reminder bound to a closed session, hidden from his task list; the delete needed his go-ahead).
 - **The four exit walkthroughs** (P4–P7 below, all code landed; each closes only on your rig, next FULL session
   installs the build first): P4 — Test room, run Trials on WARDOGS (one tap each, ~10 min a session) until the panel
   says "Compy finished the supported tests"; P5 — Optimize, "Optimize my game", play, read the summary, no manual
@@ -72,6 +71,8 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
   candidate Claude recommends.
 
 ## Queue
+
+**Lane, 2026-11-04 (owner 03:12: "complete all of those required tasks"):** the interactive Claude HQ session holds write access for the queue below (the four CR slices of the 2026-11-03 PM refill). Scheduled sessions stay read-only until this line is removed.
 
 ### Now — finish what's open
 - [x] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
