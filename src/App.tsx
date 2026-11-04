@@ -1192,7 +1192,10 @@ function App() {
   };
   const activeHomeId = HOME_FOR_TAB[activeTab];
   // Detected GPU vendor — picks the right panel variant in schematic walkthroughs (show-me §2/§3).
-  const detectedVendor = gpuVendor(hw?.gpus?.[0]?.name);
+  // The PRIMARY GPU's vendor (largest VRAM, the one Home, Readiness and the hardware grid name), not
+  // the first DXGI adapter: on a hybrid laptop gpus[0] is the iGPU, which runs no game, and the
+  // walkthrough and the tuning station then read the wrong vendor (CR-primary-gpu, 2026-11-04).
+  const detectedVendor = gpuVendor(primaryGpu(hw?.gpus)?.name);
 
   // ── Back/Forward navigation (wayfinding §1 + its recorded forward follow-up) — two app-level
   // location stacks, browser model. A "location" is the active room/tab (or Settings). In-place

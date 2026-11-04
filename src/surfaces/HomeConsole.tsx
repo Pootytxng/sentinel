@@ -699,13 +699,14 @@ export function HomeConsole({
   const low1Grade: Grade =
     strip.kind === "data" ? gradeLow1(strip.low1Est, strip.avgFps) : "neutral";
   const checking = readiness == null; // checks literally still running
-  const vendor = gpuVendor(hw.gpus?.[0]?.name);
   // LOCKED rule 5 (codebase review 2026-11-03): the reading is the snapshot of the GPU this face
   // names, graded by the vendor whose sensor produced it. The sensor list is NVML-first and hw.gpus
   // is DXGI order, so "first of each" put an RTX's NVML number under a hybrid laptop's iGPU.
   // The GPU Home names is the primary one (largest VRAM), as the hardware grid and Readiness name it:
   // on a hybrid laptop gpus[0] is the iGPU, which has no sensor and runs no game (round 1, 2026-11-03).
   const gpu = primaryGpu(hw.gpus);
+  // The tuning station's vendor is that same primary GPU's, never the first adapter's (CR-primary-gpu).
+  const vendor = gpuVendor(gpu?.name);
   const gpuReading = sensorForGpu(gpuSnaps, gpu?.name, hw.gpus?.length);
   const gpuTemp = gpuReading?.temperature_c ?? null;
   const gpuGrade = gradeGpuTempForVendor(gpuReading?.vendor, gpuTemp);

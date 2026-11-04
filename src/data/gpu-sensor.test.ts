@@ -1,4 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "fs";
+import { resolve } from "path";
+import { gpuVendor } from "../surfaces/walkthroughs";
 import {
   gpuSensorVerified,
   gradeGpuTempForVendor,
@@ -119,6 +122,22 @@ describe("primaryGpu (the adapter the backend already judges)", () => {
     expect(primaryGpu([a, b])).toBe(b);
     expect(primaryGpu([])).toBeUndefined();
     expect(primaryGpu(undefined)).toBeUndefined();
+  });
+
+  // CR-primary-gpu (2026-11-04): App's walkthrough variant and Home's Tuning station read the vendor
+  // of `gpus[0]`, the first DXGI adapter — on a hybrid laptop the iGPU, which runs no game. Both read
+  // the primary GPU now, and this pins the two call sites to it: a source scan, because App has no
+  // render harness and the Home fact only surfaces deep inside the interview.
+  it("the walkthrough and tuning vendor is the primary GPU's, never the first adapter's", () => {
+    const igpu = { name: "Intel(R) UHD Graphics 770", vram_bytes: 128 * 1024 ** 2 };
+    const radeon = { name: "AMD Radeon RX 9070 XT", vram_bytes: 16 * 1024 ** 3 };
+    expect(gpuVendor(primaryGpu([igpu, radeon])?.name)).toBe("amd");
+    expect(gpuVendor(igpu.name)).toBe("intel"); // what the old `gpus[0]` read would have said
+    for (const file of ["src/App.tsx", "src/surfaces/HomeConsole.tsx"]) {
+      const src = readFileSync(resolve(file), "utf8");
+      expect(src, `${file} feeds gpuVendor the first adapter`).not.toMatch(/gpuVendor\(\s*hw\??\.gpus\??\.?\[0\]/);
+      expect(src, `${file} reads the primary GPU's vendor`).toMatch(/gpuVendor\((primaryGpu\(hw\??\.gpus\)|gpu)\?\.name\)/);
+    }
   });
 });
 
