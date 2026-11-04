@@ -270,7 +270,7 @@ fn check_change_state(rec_id: &str, action: Option<&AppliedAction>, reads: &Live
     if let Some(svc) = rec_id.strip_prefix("service-suspend:") {
         return service_row_check(svc, action, |s| service_running_checked(s.name()));
     }
-    probe_rec_target(rec_id)
+    probe_rec_target_with(rec_id, reads)
 }
 
 /// One pass's shared live reads (#620): every task row of a History, Health or Machine Model pass
@@ -280,25 +280,110 @@ fn check_change_state(rec_id: &str, action: Option<&AppliedAction>, reads: &Live
 pub(crate) struct LiveReads {
     list_tasks: fn() -> Option<String>,
     tasks: std::cell::OnceCell<Option<String>>,
+    /// The four service-disable recs' start types, read in one WMI query the first time a row of the
+    /// pass asks (CR-service-batch, 2026-11-04): a catalog build or a Trial pass used to open one WMI
+    /// connection per service, ~100-500 ms each, in series.
+    list_services: fn() -> Option<ServiceListing>,
+    services: std::cell::OnceCell<Option<ServiceListing>>,
 }
+
+/// One row per service a [`disable_service_listing`] read returned: (name, state, start mode), as
+/// WMI `Win32_Service` spells them. A service that does not exist has no row.
+pub(crate) type ServiceListing = Vec<(String, String, String)>;
+
+/// The services the four service-disable recs change (`sysmain-disable`, `nvidia-telemetry`,
+/// `diagtrack-disable`, `windows-search-disable`). Fixed literals, so the batched query is never built
+/// from outside input.
+pub(crate) const DISABLE_REC_SERVICES: [&str; 4] = ["SysMain", "NvTelemetryContainer", "DiagTrack", "WSearch"];
 
 impl Default for LiveReads {
     fn default() -> Self {
-        LiveReads::with_task_listing(known_task_listing)
+        LiveReads::with_listings(known_task_listing, disable_service_listing)
     }
 }
 
 impl LiveReads {
     /// A pass whose task rows read `list_tasks`, called at most once. Production is
     /// [`LiveReads::default`]; tests pass a counting fake.
+    #[cfg(test)]
     pub(crate) fn with_task_listing(list_tasks: fn() -> Option<String>) -> Self {
-        LiveReads { list_tasks, tasks: std::cell::OnceCell::new() }
+        LiveReads::with_listings(list_tasks, disable_service_listing)
+    }
+
+    /// A pass whose task rows read `list_tasks` and whose service-disable rows read `list_services`,
+    /// each called at most once. Tests pass counting fakes.
+    pub(crate) fn with_listings(list_tasks: fn() -> Option<String>, list_services: fn() -> Option<ServiceListing>) -> Self {
+        LiveReads {
+            list_tasks,
+            tasks: std::cell::OnceCell::new(),
+            list_services,
+            services: std::cell::OnceCell::new(),
+        }
     }
 
     fn task_disabled(&self, task: &KnownBloatTask) -> Option<bool> {
         let listing = self.tasks.get_or_init(self.list_tasks).as_deref()?;
         task_disabled_in_known_listing(listing, task)
     }
+
+    /// Whether `name`'s start type reads Disabled, through [`disabled_service_check`]. One of
+    /// [`DISABLE_REC_SERVICES`] reads from the pass's one batched listing; any other name (a remote
+    /// rule's `service-not-running` param) keeps its own single read, as before.
+    pub(crate) fn service_disabled(&self, name: &str) -> ActiveCheck {
+        if !DISABLE_REC_SERVICES.iter().any(|s| s.eq_ignore_ascii_case(name)) {
+            return disabled_service_check(crate::actions::service_info(name));
+        }
+        let listing = self.services.get_or_init(self.list_services).as_ref();
+        disabled_service_check(service_in_listing(listing, name))
+    }
+}
+
+/// Pure: `name`'s (state, start mode) in a batched listing. A failed listing (`None`) and a service
+/// with no row both give `None`, which [`disabled_service_check`] reads as `Unreadable`, exactly as a
+/// single read did. WMI matches `Name` without regard to case, so this does too.
+fn service_in_listing(listing: Option<&ServiceListing>, name: &str) -> Option<(String, String)> {
+    listing?
+        .iter()
+        .find(|(n, _, _)| n.eq_ignore_ascii_case(name))
+        .map(|(_, state, mode)| (state.clone(), mode.clone()))
+}
+
+/// The one batched WQL query: only the three columns we read, only the [`DISABLE_REC_SERVICES`].
+fn disable_service_query() -> String {
+    let filter = DISABLE_REC_SERVICES.iter().map(|s| format!("Name='{s}'")).collect::<Vec<_>>().join(" OR ");
+    format!("SELECT Name,State,StartMode FROM Win32_Service WHERE {filter}")
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename = "Win32_Service")]
+#[serde(rename_all = "PascalCase")]
+struct Win32ServiceRow {
+    name: Option<String>,
+    state: Option<String>,
+    start_mode: Option<String>,
+}
+
+/// Read-only: one WMI query for the [`DISABLE_REC_SERVICES`], selecting only `Name`, `State` and
+/// `StartMode`, on a clean MTA thread (the UI thread is STA). `None` when WMI can't be read; a
+/// missing service simply has no row. A failed query is remembered for the whole pass, so all four
+/// recs read `Unreadable` together rather than some succeeding on a retry; the next pass reads again.
+pub(crate) fn disable_service_listing() -> Option<ServiceListing> {
+    crate::hardware::on_wmi_thread(|| {
+        let com = wmi::COMLibrary::new().ok()?;
+        let conn = wmi::WMIConnection::new(com).ok()?;
+        let rows: Vec<Win32ServiceRow> = conn.raw_query(disable_service_query()).ok()?;
+        Some(
+            rows.into_iter()
+                .filter_map(|r| {
+                    Some((
+                        r.name?,
+                        r.state.unwrap_or_else(|| "Unknown".into()),
+                        r.start_mode.unwrap_or_else(|| "Unknown".into()),
+                    ))
+                })
+                .collect(),
+        )
+    })
 }
 
 /// Pure: a bloat-task row's live re-check. `disabled` reads whether the task is disabled now, which
@@ -365,7 +450,7 @@ pub(crate) fn probe_applied_setting(changes: &[AppliedChange], rec_id: &str, rea
         .iter()
         .rev()
         .find(|c| c.rec_id == rec_id && c.status == "applied")
-        .map_or_else(|| probe_rec_target(rec_id), |c| check_row_state(c, reads))
+        .map_or_else(|| probe_rec_target_with(rec_id, reads), |c| check_row_state(c, reads))
 }
 
 /// Read-only: does the live machine read as being in `rec_id`'s TARGET state right now? The same
@@ -373,13 +458,19 @@ pub(crate) fn probe_applied_setting(changes: &[AppliedChange], rec_id: &str, rea
 /// (§4.1, verify current state) and after its keep/restore (§4.10, verify final state) without a
 /// ledger row. Never mutates; `Unrecognised` for any rec with no probe.
 pub(crate) fn probe_rec_target(rec_id: &str) -> ActiveCheck {
+    probe_rec_target_with(rec_id, &LiveReads::default())
+}
+
+/// [`probe_rec_target`] inside a caller's pass: the four service-disable recs read the pass's one
+/// batched `Win32_Service` listing (CR-service-batch), so a pass that reads all four opens one WMI
+/// connection, not four. Read-only.
+pub(crate) fn probe_rec_target_with(rec_id: &str, reads: &LiveReads) -> ActiveCheck {
     let read = ActiveCheck::from_read;
     // A service disable's target state is its START TYPE, not whether it happens to be running
     // (CR-stopped-service, 2026-11-04): the apply sets Disabled and stops it; a Manual service that is
-    // merely idle used to read On, as if Compy had made the change. Cost (review round 1): each read is
-    // one WMI connection on its own thread, ~100-500 ms, where `sc query` was ~30 ms; a pass that reads
-    // all four service recs pays it four times. A batched read for the pass is the queued follow-up.
-    let disabled = |svc: &str| disabled_service_check(crate::actions::service_info(svc));
+    // merely idle used to read On, as if Compy had made the change. The start types come from one WMI
+    // query per pass through `reads` (CR-service-batch, 2026-11-04).
+    let disabled = |svc: &str| reads.service_disabled(svc);
     // The registry readers without a checked variant (game mode, visual effects, mouse, game bar,
     // Nagle, EEE) treat an absent key as the Windows default, which IS their "off" answer, so they
     // stay plain reads here.
@@ -5138,7 +5229,7 @@ mod row_probe_tests {
                 "\\Microsoft\\Windows\\Customer Experience Improvement Program\\\tConsolidator\tReady\n",
             ).to_string())
         }
-        let reads = LiveReads { list_tasks: listing, tasks: std::cell::OnceCell::new() };
+        let reads = LiveReads::with_task_listing(listing);
         let task = |t| Some(AppliedAction::DisableScheduledTask { task: t });
         let rows = [
             row("bloat-task:ceip-usb", "applied", task(KnownBloatTask::CeipUsb)),
@@ -5165,5 +5256,100 @@ mod row_probe_tests {
         assert_eq!(probe_applied_setting(&changes, rec, &reads), ActiveCheck::On, "the newest applied row is the enable");
         assert_eq!(probe_applied_setting(&changes[..1], rec, &reads), ActiveCheck::Off);
         assert_eq!(probe_applied_setting(&changes[2..], rec, &reads), ActiveCheck::Unrecognised, "no applied row: the rec id alone");
+    }
+
+    // CR-service-batch: each service-disable read opened its own WMI connection (~100-500 ms), so a
+    // pass that read all four paid it four times in series. A pass now reads one batched listing.
+    #[test]
+    fn a_pass_reads_the_service_listing_once_for_all_four_service_recs() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static SERVICE_LISTINGS: AtomicUsize = AtomicUsize::new(0);
+        fn no_tasks() -> Option<String> {
+            None
+        }
+        fn services() -> Option<ServiceListing> {
+            SERVICE_LISTINGS.fetch_add(1, Ordering::SeqCst);
+            let r = |n: &str, s: &str, m: &str| (n.to_string(), s.to_string(), m.to_string());
+            Some(vec![
+                r("SysMain", "Stopped", "Disabled"),
+                r("DiagTrack", "Stopped", "Manual"),
+                r("WSearch", "Running", "Auto"),
+            ])
+        }
+        let reads = LiveReads::with_listings(no_tasks, services);
+        let recs = ["sysmain-disable", "nvidia-telemetry", "diagtrack-disable", "windows-search-disable", "sysmain-disable"];
+        let checks: Vec<ActiveCheck> = recs.iter().map(|r| probe_rec_target_with(r, &reads)).collect();
+        use ActiveCheck::*;
+        assert_eq!(checks, [On, Unreadable, Off, Off, On], "no NvTelemetryContainer row reads unknown; idle Manual is not Disabled");
+        assert_eq!(SERVICE_LISTINGS.load(Ordering::SeqCst), 1, "one WMI read for the whole pass");
+    }
+
+    #[test]
+    fn a_failed_service_listing_reads_every_service_rec_unknown() {
+        fn no_tasks() -> Option<String> {
+            None
+        }
+        fn failed() -> Option<ServiceListing> {
+            None
+        }
+        let reads = LiveReads::with_listings(no_tasks, failed);
+        for name in DISABLE_REC_SERVICES {
+            assert_eq!(reads.service_disabled(name), ActiveCheck::Unreadable, "{name}: a failed read is never On");
+        }
+    }
+
+    #[test]
+    fn a_service_row_matches_its_name_without_regard_to_case() {
+        let listing: ServiceListing = vec![("sysmain".into(), "Stopped".into(), "Disabled".into())];
+        assert_eq!(service_in_listing(Some(&listing), "SysMain"), Some(("Stopped".into(), "Disabled".into())));
+        assert_eq!(service_in_listing(Some(&listing), "WSearch"), None, "no row: not there");
+        assert_eq!(service_in_listing(None, "SysMain"), None, "a failed listing");
+    }
+
+    #[test]
+    fn a_service_outside_the_four_never_touches_the_batched_listing() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static TOUCHED: AtomicUsize = AtomicUsize::new(0);
+        fn no_tasks() -> Option<String> {
+            None
+        }
+        fn services() -> Option<ServiceListing> {
+            TOUCHED.fetch_add(1, Ordering::SeqCst);
+            Some(vec![("compy-not-a-service".into(), "Stopped".into(), "Disabled".into())])
+        }
+        let reads = LiveReads::with_listings(no_tasks, services);
+        // A remote rule's own service name keeps its single read; the fake listing would say Disabled.
+        assert_ne!(reads.service_disabled("compy-not-a-service"), ActiveCheck::On);
+        assert_eq!(TOUCHED.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn the_batched_query_names_exactly_the_four_services_and_three_columns() {
+        assert_eq!(
+            disable_service_query(),
+            "SELECT Name,State,StartMode FROM Win32_Service WHERE Name='SysMain' OR \
+             Name='NvTelemetryContainer' OR Name='DiagTrack' OR Name='WSearch'"
+        );
+    }
+
+    #[test]
+    fn every_service_disable_rec_reads_through_the_batched_listing() {
+        // Drift guard: if a probe arm's service name leaves DISABLE_REC_SERVICES, that rec silently
+        // falls back to its own WMI query and this listing is never asked.
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static ASKED: AtomicUsize = AtomicUsize::new(0);
+        fn no_tasks() -> Option<String> {
+            None
+        }
+        fn services() -> Option<ServiceListing> {
+            ASKED.fetch_add(1, Ordering::SeqCst);
+            Some(Vec::new())
+        }
+        for rec in ["sysmain-disable", "nvidia-telemetry", "diagtrack-disable", "windows-search-disable"] {
+            let before = ASKED.load(Ordering::SeqCst);
+            let reads = LiveReads::with_listings(no_tasks, services);
+            assert_eq!(probe_rec_target_with(rec, &reads), ActiveCheck::Unreadable, "{rec}");
+            assert_eq!(ASKED.load(Ordering::SeqCst), before + 1, "{rec} skipped the batched listing");
+        }
     }
 }

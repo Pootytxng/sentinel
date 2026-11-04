@@ -1698,7 +1698,8 @@ pub(crate) fn session_end_notice_now(
     // P5-realplay: a real-play Trial of this game is told only when this session makes a look give a
     // result; the setting is read only when such a Trial runs.
     let rows = history.as_deref().ok().map(ledger_rows);
-    let live = |rec_id: &str| target_verification(Some(crate::history::probe_rec_target(rec_id)));
+    let reads = crate::history::LiveReads::default();
+    let live = |rec_id: &str| target_verification(Some(crate::history::probe_rec_target_with(rec_id, &reads)));
     realplay_ready_notice(session, &sessions, &trials, rows.as_deref(), coverage, live, Utc::now())
         .or_else(|| session_end_notice(session, &sessions, &trials, settled, band))
 }
@@ -3443,7 +3444,9 @@ fn reconcile_pending_locked(store: &mut ExperimentStore) -> Result<Vec<Interrupt
         Err(e) => Err(e.as_str()),
     };
     // The live read that words the loud record of a start with no change record; it never drops one.
-    let changed = |rec_id: &str| target_verification(Some(crate::history::probe_rec_target(rec_id)));
+    // One pass's reads, so several interrupted service-disable starts cost one WMI query.
+    let reads = crate::history::LiveReads::default();
+    let changed = |rec_id: &str| target_verification(Some(crate::history::probe_rec_target_with(rec_id, &reads)));
     let outcomes = reconcile_interrupted_starts_in(store, ledger, changed, Utc::now());
     if !outcomes.is_empty() {
         save_store(store)?;

@@ -288,10 +288,10 @@ fn stale_primary_driver(hw: &HardwareInfo) -> Option<(&'static str, i64)> {
 /// The service reads as DISABLED — its start type, the state the one-click change sets — not merely
 /// as not running (CR-stopped-service, 2026-11-04: a Manual service that was idle read as "already set
 /// this way", as if the change were made). A failed read, or a service that is not there, is never
-/// "applied" (codebase review 2026-11-02). One seam with the ledger's live check. Cost: one WMI
-/// connection per call (~100-500 ms); a catalog build makes up to four, in series — see history.rs.
-fn service_read_disabled(name: &str) -> bool {
-    crate::history::disabled_service_check(crate::actions::service_info(name)) == crate::history::ActiveCheck::On
+/// "applied" (codebase review 2026-11-02). One seam with the ledger's live check. Cost: the catalog
+/// build shares one `LiveReads`, so its four service-disable reads are one WMI query (CR-service-batch).
+fn service_read_disabled(name: &str, reads: &crate::history::LiveReads) -> bool {
+    reads.service_disabled(name) == crate::history::ActiveCheck::On
 }
 
 pub(crate) fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
@@ -341,7 +341,12 @@ pub(crate) fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
 // String-keyed state-check dispatcher. Each kind names an existing Rust
 // function; new kinds require a code release. Params allow parameterizing
 // shared shapes (e.g. "service-not-running" takes a service name).
-pub(crate) fn check_state_kind(kind: &str, params: &Option<serde_json::Value>, _hw: &HardwareInfo) -> bool {
+pub(crate) fn check_state_kind(
+    kind: &str,
+    params: &Option<serde_json::Value>,
+    _hw: &HardwareInfo,
+    reads: &crate::history::LiveReads,
+) -> bool {
     match kind {
         "game-mode-enabled" => game_mode_enabled(),
         "visual-effects-best-perf" => visual_effects_for_best_performance(),
@@ -351,7 +356,7 @@ pub(crate) fn check_state_kind(kind: &str, params: &Option<serde_json::Value>, _
             .as_ref()
             .and_then(|p| p.get("service"))
             .and_then(|s| s.as_str())
-            .map(service_read_disabled)
+            .map(|name| service_read_disabled(name, reads))
             .unwrap_or(false),
         "power-plan-ultimate" => crate::current_power_plan().is_some_and(|(class, _)| class == crate::PowerPlanClass::Ultimate),
         "nagle-disabled-any-nic" => nagle_disabled_on_any_nic(),
@@ -379,7 +384,11 @@ pub(crate) fn template_substitute(template: &str, hw: &HardwareInfo) -> String {
     out
 }
 
-pub(crate) fn evaluate_rule_spec(spec: &RuleSpec, hw: &HardwareInfo) -> Option<Recommendation> {
+pub(crate) fn evaluate_rule_spec(
+    spec: &RuleSpec,
+    hw: &HardwareInfo,
+    reads: &crate::history::LiveReads,
+) -> Option<Recommendation> {
     // Applicability gating: a failed RELEVANCE gate omits the rec; a failed HARDWARE-capability gate
     // keeps it but marks it ineligible (→ "Not for this rig" with the reason, out of the denominator).
     let mut ineligible_reason: Option<String> = None;
@@ -404,7 +413,7 @@ pub(crate) fn evaluate_rule_spec(spec: &RuleSpec, hw: &HardwareInfo) -> Option<R
     let currently_applied = spec
         .state_kind
         .as_ref()
-        .map(|kind| check_state_kind(kind, &spec.state_params, hw))
+        .map(|kind| check_state_kind(kind, &spec.state_params, hw, reads))
         .unwrap_or(false);
 
     Some(Recommendation {
@@ -427,6 +436,8 @@ pub(crate) fn evaluate_rule_spec(spec: &RuleSpec, hw: &HardwareInfo) -> Option<R
 
 pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     let mut recs: Vec<Recommendation> = Vec::new();
+    // One pass's live reads: every service-disable state below reads one batched WMI listing.
+    let reads = crate::history::LiveReads::default();
 
     // ── Step B: rules loaded from the embedded baseline JSON ──────────
     // Currently empty in commit B; first rec (game-mode) migrates over in C.
@@ -436,7 +447,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
     // disabled (see `remote_fetch_enabled()`).
     let (baseline, _source) = load_rules();
     for spec in &baseline.rules {
-        if let Some(rec) = evaluate_rule_spec(spec, hw) {
+        if let Some(rec) = evaluate_rule_spec(spec, hw, &reads) {
             recs.push(rec);
         }
     }
@@ -536,7 +547,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
     if let Some(name) = gpu_vendor_match(hw, "NVIDIA") {
-        let telemetry_stopped = service_read_disabled("NvTelemetryContainer");
+        let telemetry_stopped = service_read_disabled("NvTelemetryContainer", &reads);
         recs.push(Recommendation {
             id: "nvidia-telemetry".into(),
             title: "Disable NVIDIA Container telemetry services".into(),
@@ -662,7 +673,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             impact: "Lower idle disk activity · ~100–200 MB RAM back".into(),
             downside: Some("App launches will be a tiny bit slower (usually unnoticeable on fast storage).".into()),
             applies_to: format!("{:.0} GB RAM · {} storage detected", ram_gb, storage_kind),
-            currently_applied: service_read_disabled("SysMain"),
+            currently_applied: service_read_disabled("SysMain", &reads),
             provenance: Provenance::ExpectedImpact,
             eligible: true,
             ineligible_reason: None,
