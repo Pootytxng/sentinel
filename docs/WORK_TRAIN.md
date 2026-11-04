@@ -814,10 +814,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-29 ~15:45-16:30 (scheduled, CODE-ONLY, owner playing PBZ): P8-posture-stale-copy `53514506` (fix
-  `35e39a0a`); tsc clean, targeted 170/170, i18n/copy guards 40/40, bench test proven failing on old code; TS
-  display copy, no review. Leftover train-p6nextf2/p7notify/p7route/p7severity folders hold only site-app
-  residue, no commits. Log trimmed to the newest 14. Not pushed (CODE-ONLY); next FULL session pushes.
 - 2026-10-29 evening (scheduled, CODE-ONLY, owner playing PBZ): P9-hz `f1bfbb26` (display mode worded with Hz on
   four lines); tsc clean, targeted 240/240, census/i18n/copy/data guards 64 files / 516, the bench context test
   asserted the old raw mode. TS display only, no review. P5-realplay left for an interactive/FULL session (Rust
@@ -930,6 +926,17 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
 - 2026-11-04 (scheduled, CODE-ONLY, owner in PBZ): CR-trial-zero-base `4d5595fd` (rebased over `1e9ce481`); tsc 0;
   ExperimentBench 161/161; the 3 new cases fail on main's code. TS display only, no review. One item only; no cargo
   mid-game. Log trimmed to the newest 14. Not pushed (CODE-ONLY; main ahead of GitHub); next FULL session pushes.
+- 2026-11-03 ~19:43 to 11-04 ~02:20 (interactive from Claude HQ, resumed after the usage limit; owner: "continue from where u
+  left off", then 01:47 "can you complete the last task"): the day's `main` pushed through the gate at 20:32 (`8be87e12..6958e512`)
+  after two red runs it was right to refuse: the debrief layout guard lacked CR-cmp-wait's `get_armed_comparison` (`d3b126c9`) and
+  `useScan` let a late older scan overwrite a newer one (flaky 1 in 8; fixed, test fails on old code, `6958e512`); a third red was a
+  race with the 19:43 session committing mid-gate. Desk self-review round 2 on `71f1df93` PASS 12 of 12. Then, on the owner's ask,
+  desk build `6958e512` built and installed 01:50 (`ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit`, proof `6958e512 · release`,
+  installer `3490A339…`), desk self-review PASS 12 of 12 (CR-trial-zero-base's branch unreachable on his records; no row regressed).
+  RELEASE_STATE row re-stamped; pushed with this line through the gate. Lane branch deleted locally and on origin. Open for the train:
+  CR-gpu-picker, CR-primary-gpu, CR-stopped-service, CR-localized-reads. Disclosed: the 13:26 force-close of Compy by the round-1
+  reviewer ended that live PBZ measurement; `fps.alive` stayed absent while the same PBZ process kept running, so the running Trial
+  exp:6 collected nothing since — it resumes on the game's next launch.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
