@@ -1,8 +1,5 @@
 {
   "gpuProfile": {
-    "scopeAriaLabel": "GPU profile scope",
-    "scopeTitle": "GPU profile view",
-    "scopeReassurance": "This just frames what you look at — it changes nothing on your PC.",
     "beforeAfterTitle": "Before & after",
     "beforeAfterIntro": "Capture your GPU's readable settings before and after a change you make in your driver tool, then see exactly what moved. Read-only — Compy changes nothing here.",
     "captureBefore": "Capture before",
@@ -26,16 +23,6 @@
     "vendorInsightsAriaLabel": "Vendor advisory insights",
     "vendorInsightsTitle": "For your Radeon GPU",
     "vendorInsightsIntro": "Plain-English notes tailored to your GPU, read from settings Compy already sees. Advisory only — Compy changes nothing here.",
-    "scope": {
-      "global": {
-        "label": "Global",
-        "blurb": "Shows the GPU picture across all your usage — no single game assumed."
-      },
-      "per-game": {
-        "label": "Per-game",
-        "blurb": "Frames the GPU view around the game you're currently in."
-      }
-    },
     "insights": {
       "hagsOnTitle": "GPU scheduling on",
       "hagsOnDetail": "Hardware-Accelerated GPU Scheduling is on — a modern default on your Radeon. Nothing to do; it's manageable under Windows Graphics settings, not AMD Adrenalin.",

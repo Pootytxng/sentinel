@@ -2,8 +2,6 @@ import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import "../i18n";
-import { GPU_SCOPES, gpuScopeMeta } from "../data/profile-store";
-import { useGpuProfileScope } from "../hooks/use-gpu-profile-scope";
 import {
   type GpuProfileSnapshot,
   type FieldDelta,
@@ -37,58 +35,6 @@ const panelStyle: React.CSSProperties = {
 };
 
 const headingStyle: React.CSSProperties = { fontSize: "var(--type-label)", fontWeight: 600, color: "var(--ix-text-1)" };
-
-function GpuProfileScopePicker() {
-  const { t } = useTranslation();
-  const { scope, setScope } = useGpuProfileScope();
-  const active = gpuScopeMeta(scope);
-
-  return (
-    <section aria-label={t("lab.gpuProfile.scopeAriaLabel")} style={panelStyle}>
-      <div style={headingStyle}>{t("lab.gpuProfile.scopeTitle")}</div>
-
-      <div
-        role="radiogroup"
-        aria-label={t("lab.gpuProfile.scopeAriaLabel")}
-        style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
-      >
-        {GPU_SCOPES.map((s) => {
-          const meta = gpuScopeMeta(s);
-          const selected = s === scope;
-          return (
-            <button
-              key={s}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => setScope(s)}
-              style={{
-                cursor: "pointer",
-                borderRadius: 999,
-                padding: "6px 14px",
-                fontSize: "var(--type-label)",
-                fontWeight: 600,
-                border: selected ? "1px solid var(--ix-accent)" : "1px solid var(--ix-border)",
-                background: selected ? "var(--ix-accent)" : "transparent",
-                color: selected ? "var(--ix-accent-ink)" : "var(--ix-text-2)",
-              }}
-            >
-              {t(`lab.gpuProfile.scope.${s}.label`, meta.label)}
-            </button>
-          );
-        })}
-      </div>
-
-      <p style={{ margin: 0, fontSize: "var(--type-label)", lineHeight: 1.5, color: "var(--ix-text-2)" }}>
-        {t(`lab.gpuProfile.scope.${scope}.blurb`, active.blurb)}
-      </p>
-
-      <p style={{ margin: 0, fontSize: "var(--type-label)", lineHeight: 1.4, color: "var(--ix-text-3, var(--ix-text-2))" }}>
-        {t("lab.gpuProfile.scopeReassurance")}
-      </p>
-    </section>
-  );
-}
 
 // The store formats a boolean field as "On" / "Off" (its tests pin that); the room says it in the
 // user's language, and leaves every other value as read (CR-zh-gpu).
@@ -382,9 +328,11 @@ function GpuVendorInsights({ currentSnapshot }: { currentSnapshot?: GpuProfileSn
 }
 
 /**
- * The GPU profile surface: the scope picker (which slice you look at), the vendor-aware advisory
- * badges (plain-English notes for YOUR GPU), and the read-only before/after delta (what moved when
- * you changed something in your driver tool). All are local, advisory, and change nothing on the PC.
+ * The GPU profile surface: the vendor-aware advisory badges (plain-English notes for YOUR GPU) and the
+ * read-only before/after delta (what moved when you changed something in your driver tool). Both are
+ * local, advisory, and change nothing on the PC. The Global / Per-game scope picker that used to sit
+ * above them was removed (CR-gpu-picker, 2026-11-04): nothing read the chosen scope, so it framed
+ * nothing and promised a per-game view that did not exist.
  * `currentSnapshot` is the parent-supplied live GPU read for the badges + delta card.
  */
 export function GpuProfile({
@@ -397,7 +345,6 @@ export function GpuProfile({
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <GpuProfileScopePicker />
       <GpuVendorInsights currentSnapshot={currentSnapshot} />
       <GpuProfileDelta currentSnapshot={currentSnapshot} readNow={readNow} />
     </div>

@@ -1,7 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, within, waitFor } from "@testing-library/react";
 import { GpuProfile } from "./GpuProfile";
-import { GPU_SCOPE_KEY } from "../data/profile-store";
 import { type GpuProfileSnapshot } from "../data/gpu-profile-store";
 import i18n from "../i18n";
 
@@ -14,45 +13,23 @@ afterEach(() => {
   }
 });
 
-// ── Scope picker (measurement, UI-only) ─────────────────────────────────────────────────────────
-describe("GpuProfile scope picker", () => {
-  it("renders a Global and a Per-game option", () => {
+// ── No scope picker (CR-gpu-picker, 2026-11-04) ─────────────────────────────────────────────────
+// The Global / Per-game picker read and wrote one localStorage value that nothing else ever read: it
+// framed nothing and promised a per-game view that did not exist. It is gone; the view opens on the
+// vendor notes and the before/after delta, and a stale saved scope changes nothing.
+describe("GpuProfile has no scope picker", () => {
+  it("renders no radiogroup and no Global / Per-game option, whatever a stale store says", () => {
+    try {
+      localStorage.setItem("compy_gpu_profile_scope_v1", "per-game");
+    } catch {
+      /* ignore */
+    }
     render(<GpuProfile />);
-    expect(screen.getByRole("radio", { name: /global/i })).toBeTruthy();
-    expect(screen.getByRole("radio", { name: /per-game/i })).toBeTruthy();
-  });
-
-  it("defaults to Global selected", () => {
-    render(<GpuProfile />);
-    const global = screen.getByRole("radio", { name: /global/i });
-    expect(global.getAttribute("aria-checked")).toBe("true");
-  });
-
-  it("selecting Per-game marks it checked and persists", () => {
-    render(<GpuProfile />);
-    const perGame = screen.getByRole("radio", { name: /per-game/i });
-    fireEvent.click(perGame);
-    expect(perGame.getAttribute("aria-checked")).toBe("true");
-    expect(localStorage.getItem(GPU_SCOPE_KEY)).toBe("per-game");
-  });
-
-  it("shows the blurb for the active scope", () => {
-    localStorage.setItem(GPU_SCOPE_KEY, "per-game");
-    render(<GpuProfile />);
-    // per-game blurb mentions the current game framing
-    expect(screen.getByText(/frames the gpu view around the game/i)).toBeTruthy();
-  });
-
-  it("makes clear the picker is read-only / advisory (changes nothing on Windows)", () => {
-    render(<GpuProfile />);
-    // Scope the assertion to the picker's own region so the sibling delta card's copy can't confuse it.
-    const picker = screen.getByRole("radiogroup").closest("section")!;
-    expect(within(picker).getByText(/frames what you look at|changes nothing/i)).toBeTruthy();
-  });
-
-  it("uses a radiogroup for the picker", () => {
-    render(<GpuProfile />);
-    expect(screen.getByRole("radiogroup")).toBeTruthy();
+    expect(screen.queryByRole("radiogroup")).toBeNull();
+    expect(screen.queryByRole("radio", { name: /per-game|global/i })).toBeNull();
+    expect(screen.queryByText(/per-game/i)).toBeNull();
+    // What remains is the room's real content.
+    expect(screen.getByText(/before \/ after|before\/after|delta|snapshot/i)).toBeTruthy();
   });
 });
 

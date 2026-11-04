@@ -1,8 +1,5 @@
 {
   "gpuProfile": {
-    "scopeAriaLabel": "GPU 配置范围",
-    "scopeTitle": "GPU 配置视图",
-    "scopeReassurance": "这只是决定你查看的角度——不会更改你电脑上的任何设置。",
     "beforeAfterTitle": "前后对比",
     "beforeAfterIntro": "在你于驱动程序工具中做出更改的前后,分别捕捉一次 GPU 可读取的设置,即可精确查看发生了哪些变化。仅供查看——Compy 不会更改这里的任何设置。",
     "captureBefore": "捕捉更改前",
@@ -26,16 +23,6 @@
     "vendorInsightsAriaLabel": "厂商建议洞察",
     "vendorInsightsTitle": "针对你的 Radeon 显卡",
     "vendorInsightsIntro": "根据 Compy 已读取到的设置,为你的显卡量身定制的直白说明。仅供参考——Compy 不会更改这里的任何设置。",
-    "scope": {
-      "global": {
-        "label": "全局",
-        "blurb": "展示你所有使用场景下的 GPU 情况——不针对任何单一游戏。"
-      },
-      "per-game": {
-        "label": "按游戏",
-        "blurb": "围绕你当前所玩的游戏，呈现 GPU 视图。"
-      }
-    },
     "insights": {
       "hagsOnTitle": "GPU 调度已开启",
       "hagsOnDetail": "硬件加速 GPU 计划已开启——这是你的 Radeon 显卡的现代默认设置。无需处理；可在 Windows 图形设置中管理，而非 AMD Adrenalin。",
