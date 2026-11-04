@@ -374,8 +374,14 @@ fn detect_core_parking(probes: &Value) -> Outcome {
     let plan = p.get("plan_name").and_then(Value::as_str).unwrap_or("").to_lowercase();
     // Plans that legitimately ship with parking off — incl. vendor plans (AMD "Ryzen Balanced"
     // ships min-cores ~100 stock). Conservative direction: miss rot rather than false-flag stock.
-    let plan_ships_unparked =
-        plan.contains("high performance") || plan.contains("ultimate") || plan.contains("ryzen");
+    // The stock performance plans are known by their class (from the scheme GUID, so a localized
+    // name cannot hide them, CR-localized-reads); the vendor plan and a probe from an older build
+    // without `plan_class` still go by the words.
+    let plan_class = p.get("plan_class").and_then(Value::as_str).unwrap_or("");
+    let plan_ships_unparked = matches!(plan_class, "high-performance" | "ultimate")
+        || plan.contains("high performance")
+        || plan.contains("ultimate")
+        || plan.contains("ryzen");
     if min_pct < 100 || plan_ships_unparked {
         return Outcome::Clean;
     }
@@ -634,6 +640,21 @@ fn read_hklm_u32s(path: &str, names: &[(&str, &str)]) -> Value {
     Value::Object(obj)
 }
 
+/// Is a bcdedit timer flag set, read from the lower-cased `bcdedit /enum {current}` text? The two
+/// keys (`useplatformclock`, `disabledynamictick`) are locale-neutral identifiers and both are ABSENT
+/// from a stock store, so a line that carries one is the flag having been set — whatever word the
+/// value is printed in ("Yes", "是"). Only an explicit off value ("no" / "false" / "0" / "off") reads
+/// as not set. (CR-localized-reads, 2026-11-04: the English "yes"/"true" read missed every localized
+/// Windows and called a rotted store clean.) Pure.
+pub(crate) fn bcdedit_flag_set(text_lower: &str, name: &str) -> bool {
+    text_lower.lines().any(|l| {
+        l.contains(name) && {
+            let value = l.split(name).nth(1).unwrap_or("").trim();
+            !matches!(value, "no" | "false" | "0" | "off")
+        }
+    })
+}
+
 /// bcdedit /enum {current} — READ-ONLY. Non-elevated reads are usually denied; that is the
 /// honest "needs admin to check" path, never a guess.
 fn probe_bcdedit() -> Value {
@@ -642,9 +663,7 @@ fn probe_bcdedit() -> Value {
         Ok(o) if !o.status.success() => json!({ "readable": false, "needs_admin": true }),
         Ok(o) => {
             let text = String::from_utf8_lossy(&o.stdout).to_lowercase();
-            let flag = |name: &str| {
-                text.lines().any(|l| l.contains(name) && (l.contains("yes") || l.contains("true")))
-            };
+            let flag = |name: &str| bcdedit_flag_set(&text, name);
             json!({
                 "readable": true,
                 "needs_admin": false,
@@ -665,19 +684,25 @@ fn probe_core_parking() -> Value {
     if !o.status.success() {
         return json!({ "readable": false });
     }
-    let text = String::from_utf8_lossy(&o.stdout);
-    let ac = text
-        .lines()
-        .find(|l| l.contains("Current AC Power Setting Index"))
-        .and_then(|l| l.rsplit("0x").next())
-        .and_then(|hex| u32::from_str_radix(hex.trim(), 16).ok());
+    // One parser with the readiness check (`lib.rs`): the English label when present, else the
+    // output's shape, so a localized Windows reads its number too (CR-localized-reads).
+    let ac = crate::parse_powercfg_ac_index(&String::from_utf8_lossy(&o.stdout));
     match ac {
-        None => json!({ "readable": false }), // locale or format miss — honest, never guessed
-        Some(pct) => json!({
-            "readable": true,
-            "min_cores_ac_pct": pct,
-            "plan_name": crate::current_power_plan_name(),
-        }),
+        None => json!({ "readable": false }), // format miss — honest, never guessed
+        Some(pct) => {
+            let plan = crate::current_power_plan();
+            json!({
+                "readable": true,
+                "min_cores_ac_pct": pct,
+                "plan_name": plan.as_ref().map(|(_, name)| name.clone()),
+                "plan_class": plan.map(|(class, _)| match class {
+                    crate::PowerPlanClass::Balanced => "balanced",
+                    crate::PowerPlanClass::HighPerformance => "high-performance",
+                    crate::PowerPlanClass::Ultimate => "ultimate",
+                    crate::PowerPlanClass::Other => "other",
+                }),
+            })
+        }
     }
 }
 
@@ -969,6 +994,21 @@ mod leftovers_tests {
 
     // ── Detectors 3–9 (sprint item 4) — rotted / clean / honest-degrade fixtures ──────────────
 
+    // CR-localized-reads (2026-11-04): the flag read needs no English value word. The localized lines
+    // keep bcdedit's shape (key, spaces, value) with the value in another language; they are not
+    // captured zh-CN output, which the repo does not hold.
+    #[test]
+    fn a_bcdedit_flag_is_read_by_its_key_whatever_word_its_value_is_printed_in() {
+        let en = "useplatformclock        yes\r\ndisabledynamictick      yes\r\n";
+        assert!(bcdedit_flag_set(en, "useplatformclock"));
+        assert!(bcdedit_flag_set(en, "disabledynamictick"));
+        let zh = "useplatformclock        是\r\n";
+        assert!(bcdedit_flag_set(zh, "useplatformclock"), "a localized Yes is still set");
+        assert!(!bcdedit_flag_set(zh, "disabledynamictick"), "absent is not set");
+        assert!(!bcdedit_flag_set("useplatformclock        no\r\n", "useplatformclock"), "an explicit No is not set");
+        assert!(!bcdedit_flag_set("identifier              {current}\r\ndevice                  partition=c:\r\n", "useplatformclock"));
+    }
+
     #[test]
     fn bcdedit_flags_fire_and_degrade_to_needs_admin_honestly() {
         let rotted = with(
@@ -1027,6 +1067,15 @@ mod leftovers_tests {
                 "{plan} ships unparked — not rot"
             );
         }
+        // CR-localized-reads (2026-11-04): a stock performance plan named in another language is
+        // excused by its CLASS (from the scheme GUID), not its words; a Balanced plan is flagged
+        // whatever it is called; a probe from an older build without `plan_class` reads as before.
+        let zh_high = with(base(), "core_parking",
+            json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": "高性能", "plan_class": "high-performance" }));
+        assert!(find(&evaluate_leftovers(&zh_high, &no_endorsements()), "core-parking-forced").is_none(), "高性能 ships unparked");
+        let zh_balanced = with(base(), "core_parking",
+            json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": "平衡", "plan_class": "balanced" }));
+        assert!(find(&evaluate_leftovers(&zh_balanced, &no_endorsements()), "core-parking-forced").is_some(), "平衡 at 100 is forced");
     }
 
     #[test]

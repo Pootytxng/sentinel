@@ -12,7 +12,7 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 
-use crate::current_power_plan_name;
+use crate::{current_power_plan, PowerPlanClass};
 use crate::hardware::{get_hardware_info, HardwareInfo};
 use crate::history::{applied_changes_summary_checked, AppliedChangesSummary};
 use crate::monitoring::{fps_active, uac_disabled};
@@ -116,7 +116,9 @@ fn check(
 /// No system access — fully unit-testable.
 pub(crate) fn evaluate_readiness(
     hw: &HardwareInfo,
-    power_plan: Option<&str>,
+    // The active plan's class (decided from its GUID, CR-localized-reads) and its printed name: the
+    // class grades the row, the name is only shown, so a localized Windows reads right.
+    power_plan: Option<(PowerPlanClass, &str)>,
     fps_uac_required: bool,
     fps_running: bool,
     // #669: `Err` = the change history couldn't be read right now; the row then says so, never "0".
@@ -786,9 +788,8 @@ pub(crate) fn evaluate_readiness(
             "Couldn't read the active Windows power plan.",
             None,
         ),
-        Some(p) => {
-            let lp = p.to_lowercase();
-            if lp.contains("ultimate") || lp.contains("high performance") {
+        Some((class, p)) => {
+            if class.is_performance() {
                 check(
                     "power-profile",
                     "Power profile",
@@ -1105,7 +1106,7 @@ fn restore_readiness_check_at(path: &std::path::Path, id: String) -> Result<(), 
 #[tauri::command]
 pub(crate) fn get_game_readiness() -> GameReadiness {
     let hw = get_hardware_info();
-    let power_plan = current_power_plan_name();
+    let power_plan = current_power_plan();
     let fps_uac_required = !uac_disabled();
     let fps_running = fps_active().load(Ordering::Acquire);
     let hist = applied_changes_summary_checked();
@@ -1115,7 +1116,7 @@ pub(crate) fn get_game_readiness() -> GameReadiness {
     let freesync = crate::monitoring::amd_freesync_cache().lock().ok().and_then(|c| *c);
     let mut r = evaluate_readiness(
         &hw,
-        power_plan.as_deref(),
+        power_plan.as_ref().map(|(class, name)| (*class, name.as_str())),
         fps_uac_required,
         fps_running,
         hist.as_ref().map_err(String::as_str),
@@ -1269,6 +1270,24 @@ mod readiness_tests {
         }
     }
 
+    // CR-localized-reads (2026-11-04): the power-profile row grades the plan's CLASS, read from its GUID,
+    // never its printed words — a High performance plan named in another language is Ready, and a
+    // Balanced one is Attention whatever it is called. The name is only quoted back.
+    #[test]
+    fn the_power_profile_row_grades_the_plan_class_not_its_words() {
+        let hw = HardwareInfo::default();
+        let ready = evaluate_readiness(&hw, Some((PowerPlanClass::HighPerformance, "高性能")), false, false, Ok(&AppliedChangesSummary::default()), None);
+        let row = ready.iter().find(|c| c.id == "power-profile").expect("row");
+        assert_eq!(row.status, ReadinessStatus::Ready);
+        assert!(row.detail.contains("高性能"), "{}", row.detail);
+        let attention = evaluate_readiness(&hw, Some((PowerPlanClass::Balanced, "平衡")), false, false, Ok(&AppliedChangesSummary::default()), None);
+        assert_eq!(attention.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Attention);
+        let other = evaluate_readiness(&hw, Some((PowerPlanClass::Other, "AMD Ryzen Balanced")), false, false, Ok(&AppliedChangesSummary::default()), None);
+        assert_eq!(other.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Attention, "a plan this build cannot class is not called performance");
+        let unread = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
+        assert_eq!(unread.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Unknown);
+    }
+
     #[test]
     fn install_drive_no_library_no_disk_types_is_unknown() {
         use crate::hardware::DiskInfo;
@@ -1383,7 +1402,7 @@ mod readiness_tests {
         );
         let r = evaluate_readiness(
             &hw,
-            Some("Ultimate Performance"),
+            Some((PowerPlanClass::Ultimate, "Ultimate Performance")),
             false,
             false,
             Ok(&AppliedChangesSummary::default()),
@@ -1416,7 +1435,7 @@ mod readiness_tests {
                 ..Default::default()
             }],
         );
-        let r = evaluate_readiness(&hw, Some("Balanced"), true, false, Ok(&AppliedChangesSummary::default()), None);
+        let r = evaluate_readiness(&hw, Some((PowerPlanClass::Balanced, "Balanced")), true, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(find(&r, "monitor-refresh").status, ReadinessStatus::Attention);
         assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Attention); // 500d > 1yr
         assert_eq!(find(&r, "power-profile").status, ReadinessStatus::Attention);
@@ -1538,7 +1557,7 @@ mod readiness_tests {
             vec![],
         );
         let mut r =
-            evaluate_readiness(&hw, Some("Balanced"), false, false, Ok(&AppliedChangesSummary::default()), None);
+            evaluate_readiness(&hw, Some((PowerPlanClass::Balanced, "Balanced")), false, false, Ok(&AppliedChangesSummary::default()), None);
         let before = r.attention_count;
         assert!(before >= 1, "monitor-refresh below max should be Attention");
         r.apply_dismissals(vec!["monitor-refresh".to_string()]);

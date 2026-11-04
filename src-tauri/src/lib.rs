@@ -153,11 +153,91 @@ pub(crate) fn current_power_plan_name() -> Option<String> {
         .args(["/getactivescheme"])
         .output()
         .ok()?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    power_plan_name_of(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// The plan name inside the parentheses of `powercfg /getactivescheme` — whatever language Windows
+/// prints it in. Display only: nothing decides on these words any more (see [`PowerPlanClass`]).
+pub(crate) fn power_plan_name_of(stdout: &str) -> Option<String> {
     // Format: "Power Scheme GUID: <guid>  (Plan Name)"
     let start = stdout.find('(')? + 1;
     let end = stdout.rfind(')')?;
     Some(stdout[start..end].trim().to_string())
+}
+
+/// What kind of power plan is active, decided from the scheme GUID rather than the plan's name
+/// (CR-localized-reads, 2026-11-04): a zh-CN Windows prints "高性能", not "High performance", and
+/// every check that matched the English words read a localized PC as "not performance-oriented".
+/// The three plans Windows ships have fixed GUIDs on every locale. A plan with any other GUID (a
+/// vendor plan, or the copy `powercfg /duplicatescheme` makes of Ultimate, which gets a NEW GUID) is
+/// `Other`, and only there do the English words still decide, as they always did — so an English PC
+/// reads exactly as before and a localized one reads its stock plans right. Not fabricated: a
+/// localized Ultimate copy stays `Other`, which is today's answer too.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PowerPlanClass {
+    Balanced,
+    HighPerformance,
+    Ultimate,
+    /// A GUID Windows does not ship, named by words this build cannot read as a class.
+    Other,
+}
+
+const SCHEME_BALANCED: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+const SCHEME_HIGH_PERFORMANCE: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+const SCHEME_ULTIMATE: &str = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+
+impl PowerPlanClass {
+    /// Does this plan ship with performance-oriented defaults (parking off, no idle throttling)?
+    pub(crate) fn is_performance(self) -> bool {
+        matches!(self, PowerPlanClass::HighPerformance | PowerPlanClass::Ultimate)
+    }
+}
+
+/// The active plan's class and its printed name, from one `powercfg /getactivescheme` read.
+pub(crate) fn current_power_plan() -> Option<(PowerPlanClass, String)> {
+    let output = crate::actions::quiet_command("powercfg")
+        .args(["/getactivescheme"])
+        .output()
+        .ok()?;
+    power_plan_of(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Pure: the class (by GUID, then by the English words for a non-stock GUID) and the printed name.
+/// `None` when the output holds no 36-character GUID — an unreadable plan, never a guessed one.
+pub(crate) fn power_plan_of(stdout: &str) -> Option<(PowerPlanClass, String)> {
+    let guid = scheme_guid_of(stdout)?;
+    let name = power_plan_name_of(stdout).unwrap_or_default();
+    let class = match guid.as_str() {
+        SCHEME_BALANCED => PowerPlanClass::Balanced,
+        SCHEME_HIGH_PERFORMANCE => PowerPlanClass::HighPerformance,
+        SCHEME_ULTIMATE => PowerPlanClass::Ultimate,
+        _ => {
+            let lower = name.to_lowercase();
+            if lower.contains("ultimate") {
+                PowerPlanClass::Ultimate
+            } else if lower.contains("high performance") {
+                PowerPlanClass::HighPerformance
+            } else {
+                PowerPlanClass::Other
+            }
+        }
+    };
+    Some((class, name))
+}
+
+/// The first 36-character `8-4-4-4-12` hex GUID in a `powercfg` output, lower-cased. The label before
+/// it ("Power Scheme GUID:", "电源方案 GUID:") is not read, so the locale cannot hide it.
+pub(crate) fn scheme_guid_of(stdout: &str) -> Option<String> {
+    stdout
+        .split(|c: char| c.is_whitespace() || c == '(' || c == ')')
+        .find(|tok| {
+            tok.len() == 36
+                && tok.bytes().enumerate().all(|(i, b)| match i {
+                    8 | 13 | 18 | 23 => b == b'-',
+                    _ => b.is_ascii_hexdigit(),
+                })
+        })
+        .map(|g| g.to_ascii_lowercase())
 }
 
 pub(crate) fn game_mode_enabled() -> bool {
@@ -379,14 +459,31 @@ pub(crate) fn core_parking_min_cores_ac() -> Option<u32> {
     parse_powercfg_ac_index(&String::from_utf8_lossy(&output.stdout))
 }
 
-/// Extract the first "Current AC Power Setting Index: 0xNN" value from `powercfg /q` output (decimal).
+/// The AC value of a single-setting `powercfg /q <scheme> <subgroup> <setting>` read, as a number.
+/// The English label ("Current AC Power Setting Index") is taken when it is there; otherwise the
+/// shape of the output decides (CR-localized-reads, 2026-11-04): a single-setting query prints the
+/// setting's possible values and then exactly two "current index" lines, AC first and DC second, each
+/// ending in a `0x` hex number — so the second-to-last `0x` line after the setting's own GUID line is
+/// the AC index whatever language the labels are in (the possible-value lines before them may carry
+/// `0x` numbers too). A multi-setting dump (no single setting asked for) is not read that way. `None` when neither
+/// route finds a number: unreadable, never guessed.
 pub(crate) fn parse_powercfg_ac_index(output: &str) -> Option<u32> {
-    let line = output
-        .lines()
-        .find(|l| l.contains("Current AC Power Setting Index"))?;
-    let raw = line.rsplit(':').next()?.trim();
-    let hex = raw.strip_prefix("0x").unwrap_or(raw);
-    u32::from_str_radix(hex, 16).ok()
+    let hex_of = |line: &str| -> Option<u32> {
+        let raw = line.rsplit(|c| c == ':' || c == '：').next()?.trim();
+        let hex = raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X"))?;
+        u32::from_str_radix(hex, 16).ok()
+    };
+    if let Some(line) = output.lines().find(|l| l.contains("Current AC Power Setting Index")) {
+        return hex_of(line);
+    }
+    // Locale-neutral route: after the setting's own GUID line (scheme, subgroup, setting: the third
+    // GUID), the output ends with the two "current index" lines, AC then DC; the possible-value lines
+    // before them (minimum, maximum, increment) may carry `0x` numbers too, so the AC index is the
+    // second-to-last `0x` line, not the first.
+    let lines: Vec<&str> = output.lines().collect();
+    let setting_line = lines.iter().enumerate().filter(|(_, l)| scheme_guid_of(l).is_some()).map(|(i, _)| i).nth(2)?;
+    let hex_lines: Vec<u32> = lines[setting_line + 1..].iter().filter_map(|l| hex_of(l.trim())).collect();
+    (hex_lines.len() >= 2).then(|| hex_lines[hex_lines.len() - 2])
 }
 
 /// Plain-English core-parking policy from CPMINCORES%. Never describes live per-core state.
@@ -410,6 +507,49 @@ mod core_parking_tests {
         assert_eq!(parse_powercfg_ac_index("Current AC Power Setting Index: 0x00000032"), Some(50));
         assert_eq!(parse_powercfg_ac_index("no index line"), None);
         assert_eq!(parse_powercfg_ac_index("Current AC Power Setting Index: nothex"), None);
+    }
+
+    // CR-localized-reads (2026-11-04): the same single-setting read with every label in another
+    // language. The fixture keeps powercfg's SHAPE (three GUID lines, the possible-value lines, then
+    // AC and DC) with the labels replaced by words this parser must not need; it is not captured
+    // zh-CN output, which the repo does not hold, so the claim is "no English word decides", not
+    // "zh-CN wording verified".
+    #[test]
+    fn reads_the_ac_index_without_any_english_label() {
+        let out = "电源方案 GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (平衡)\r\n\
+                   \x20 子组 GUID: 54533251-82be-4824-96c1-47b60b740d00  (处理器电源管理)\r\n\
+                   \x20   电源设置 GUID: 0cc5b647-c1df-4637-891a-dec35c318583  (处理器性能内核停放最小内核数)\r\n\
+                   \x20     最小可能设置: 0x00000000\r\n\
+                   \x20     最大可能设置: 0x00000064\r\n\
+                   \x20     可能的设置增量: 0x00000001\r\n\
+                   \x20     可能的设置单位: %\r\n\
+                   \x20   当前交流电源设置索引: 0x00000032\r\n\
+                   \x20   当前直流电源设置索引: 0x00000014\r\n";
+        assert_eq!(parse_powercfg_ac_index(out), Some(50), "AC is the second-to-last 0x line, not the minimum");
+        // Fewer than two index lines after the setting: unreadable, never a possible-value line.
+        let truncated = "x GUID: 381b4222-f694-41f0-9685-ff5bb260df2e\r\n y GUID: 54533251-82be-4824-96c1-47b60b740d00\r\n z GUID: 0cc5b647-c1df-4637-891a-dec35c318583\r\n  min: 0x00000000\r\n";
+        assert_eq!(parse_powercfg_ac_index(truncated), None);
+    }
+
+    #[test]
+    fn the_plan_class_comes_from_the_scheme_guid_and_only_a_non_stock_guid_reads_the_words() {
+        use super::{power_plan_of, scheme_guid_of, PowerPlanClass};
+        let en = "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\r\n";
+        assert_eq!(power_plan_of(en), Some((PowerPlanClass::HighPerformance, "High performance".into())));
+        // The same stock plan with its name in another language: the GUID decides, the words do not.
+        let zh = "电源方案 GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (高性能)\r\n";
+        assert_eq!(power_plan_of(zh).map(|p| p.0), Some(PowerPlanClass::HighPerformance));
+        assert_eq!(power_plan_of("x GUID: 381B4222-F694-41F0-9685-FF5BB260DF2E  (Balanced)").map(|p| p.0), Some(PowerPlanClass::Balanced), "case-insensitive");
+        assert_eq!(power_plan_of("x GUID: e9a42b02-d5df-448d-aa00-03f14749eb61  (Ultimate Performance)").map(|p| p.0), Some(PowerPlanClass::Ultimate));
+        // A duplicated Ultimate (new GUID) or a vendor plan: the words decide, as they always did.
+        let copy = "Power Scheme GUID: 12345678-1234-1234-1234-123456789abc  (Ultimate Performance)";
+        assert_eq!(power_plan_of(copy).map(|p| p.0), Some(PowerPlanClass::Ultimate));
+        let ryzen = "Power Scheme GUID: 12345678-1234-1234-1234-123456789abc  (AMD Ryzen Balanced)";
+        assert_eq!(power_plan_of(ryzen), Some((PowerPlanClass::Other, "AMD Ryzen Balanced".into())));
+        let zh_copy = "电源方案 GUID: 12345678-1234-1234-1234-123456789abc  (卓越性能)";
+        assert_eq!(power_plan_of(zh_copy).map(|p| p.0), Some(PowerPlanClass::Other), "a localized copy stays Other: not guessed");
+        assert_eq!(power_plan_of("nothing here"), None);
+        assert_eq!(scheme_guid_of("GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635cXX"), None, "a 36-char token, exactly");
     }
 
     #[test]
