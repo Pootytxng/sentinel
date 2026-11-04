@@ -72,8 +72,6 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 
 ## Queue
 
-**Lane, 2026-11-04 (owner 03:12: "complete all of those required tasks"):** the interactive Claude HQ session holds write access for the queue below (the four CR slices of the 2026-11-03 PM refill). Scheduled sessions stay read-only until this line is removed.
-
 ### Now — finish what's open
 - [x] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
       (data-root tests), #661 (debrief unmeasured), #627 (ledger write announce), #604 (TS coverage).
@@ -170,16 +168,46 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       with no line saying why: the debrief names it, with both counts. `e01561f7` (2026-11-03, CODE-ONLY): quiet for
       the baseline session, another game, all-background or nothing armed; en + zh-CN; 2 tests fail on old code.
       Screen check owed at the next desk install.
-- [ ] **CR-gpu-picker** The GPU view's Global/Per-game picker changes nothing anything reads: remove it (wiring it
+- [x] **CR-gpu-picker** The GPU view's Global/Per-game picker changes nothing anything reads: remove it (wiring it
       is a feature, not a fix). Test: the picker is gone. Screen check at a FULL session.
+      `7e69760c` (2026-11-04): picker, hook, store section, en + zh-CN keys and census entries gone; the section
+      opens on the vendor notes and the delta card. Test fails on old code. Desk review: PASS (no radiogroup, two sections 12 px apart, nothing clipped at 1280/1500/1920, en + zh).
 - [x] **CR-trial-zero-base** A Trial delta on a 0 or NaN baseline (older records) prints a number: show "—" and
       no verdict wording. Test with a 0 and a NaN baseline record. — `4d5595fd`
-- [ ] **CR-primary-gpu** App's and Home's walkthrough and tuning vendor come from the first DXGI adapter: take the
+- [x] **CR-primary-gpu** App's and Home's walkthrough and tuning vendor come from the first DXGI adapter: take the
       primary GPU's vendor (the one the session peak already uses). Test with an iGPU listed first.
-- [ ] **CR-stopped-service** A service that is only stopped reads as Compy's change: read its start type and claim
+      `0f0cb0bb` (2026-11-04): both sites read `primaryGpu` (largest VRAM, what Home, Readiness and the hardware grid
+      already name); test [Intel iGPU, Radeon] → amd plus a source pin on both call sites. Same answer on the owner's
+      single-GPU rig. Desk review: PASS-same-data (one GPU on his rig; Tuning station and the AMD walkthrough variant render as before).
+- [x] **CR-stopped-service** A service that is only stopped reads as Compy's change: read its start type and claim
       it only when the start type is the one Compy set. Rust, read-only; one review.
-- [ ] **CR-localized-reads** Power-plan, core-parking and bcdedit checks match English words: read GUIDs and
+      `c552354c` (2026-11-04): one seam `history::disabled_service_check` over WMI `Win32_Service.StartMode` (Disabled →
+      on; any other start type → off; no row → unreadable, never on — a missing service used to read as Compy's
+      change); the catalog's currently_applied for the same four recs goes through it; suspend rows unchanged. Rust
+      review APPROVE-WITH-NITS; cost stated (one WMI connection per read, see CR-service-batch). Desk review: PASS (SysMain ×2 and Windows Search rows read on, Windows reads them Disabled; DiagTrack, Disabled by his hand, reads applied with no Compy row; every screen agrees with `Get-Service`; `get_recommendations` 1.17 s with the WMI reads).
+- [x] **CR-localized-reads** Power-plan, core-parking and bcdedit checks match English words: read GUIDs and
       numbers instead, so a localized Windows reads right. Rust, read-only; one review; test with zh-CN output.
+      `5e2a110d` + review `aded8095`, `45a4b2d7`, `e3d3b7fd` (2026-11-04): `PowerPlanClass` from the scheme GUID (the three
+      stock GUIDs are locale-fixed; a non-stock GUID still reads by the English words, as before) feeds readiness,
+      the Ultimate probe and rec, and the leftovers excuse; the core-parking AC index reads by shape (one setting,
+      five 0x lines, AC inside [min, max], the number from the token's last 0x) when the English label is absent;
+      bcdedit flags read by their key, and a value word this build can't read is unknown → "couldn't be read", never
+      clean or rotted. Fixtures keep the tools' SHAPE with labels in another language and say so: the repo holds no
+      captured zh-CN output, so the claim is "no English word decides", not "zh-CN verified". Rust review r1
+      REQUEST-CHANGES → all taken, cargo 1775/0, clippy clean. Not touched (actions.rs): see CR-ultimate-identity.
+- [ ] **CR-service-batch** (from the CR-stopped-service review) The four service-disable reads each open a WMI
+      connection (~100-500 ms); a catalog build pays it up to four times in series, a Trial pass once per row. One
+      batched `Win32_Service` read per pass (through `LiveReads`), and `SELECT State,StartMode` only. Rust, read-only.
+- [ ] **CR-ultimate-identity** (owner call + mutation-gate: `actions.rs`) `apply_power_ultimate` finds the Ultimate
+      plan by its English name and otherwise duplicates it under a NEW GUID with a localized name, which then classes
+      as Other: on a localized Windows the rec reads off after a successful apply and the verify can fail. Record the
+      applied scheme GUID on the receipt (an AppliedAction/Snapshot change) or compare against the duplicate's source.
+- [ ] **P9-hint-shown** (desk review 2026-11-03) `get_priorities.session_hint` (the "GPU busy at times / sustained"
+      sentence) reaches the frontend typed but no screen prints it. Decide: show it on Home or Optimize under the
+      limiter rows, or drop the field. Code + one test either way.
+- [ ] **CR-zh-dial** (desk review 2026-11-04, pre-existing) In zh-CN the Test room's safe-stack dial label "已启用" collides
+      with the ring stroke and ticks (en "ON" fits): fit the zh label inside the ring (a shorter string or a smaller size)
+      and add a zh-width guard. TS/CSS; screen check at a FULL session.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -815,10 +843,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-29 evening (scheduled, CODE-ONLY, owner playing PBZ): P9-hz `f1bfbb26` (display mode worded with Hz on
-  four lines); tsc clean, targeted 240/240, census/i18n/copy/data guards 64 files / 516, the bench context test
-  asserted the old raw mode. TS display only, no review. P5-realplay left for an interactive/FULL session (Rust
-  + review, no cargo mid-game). One item only. Not pushed (CODE-ONLY); next FULL session pushes.
 - 2026-10-30 (scheduled, CODE-ONLY, owner in Aniimo): P4-noise-copy-2 `a2437af7` (merge `fcb18d43`) and
   P4-cap-note `42f8e04a` (merge `9234ff98`); tsc 0; vitest bench + i18n/locale/copy set 10 files / 190, exit 0;
   both proven failing on old code (3 and 2 tests). TS copy only, no review needed. Cap line self-review owed
@@ -938,6 +962,15 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   CR-gpu-picker, CR-primary-gpu, CR-stopped-service, CR-localized-reads. Disclosed: the 13:26 force-close of Compy by the round-1
   reviewer ended that live PBZ measurement; `fps.alive` stayed absent while the same PBZ process kept running, so the running Trial
   exp:6 collected nothing since — it resumes on the game's next launch.
+- 2026-11-04 ~03:12 to ~04:40 (interactive from Claude HQ; owner 03:12: "yes please complete all of those required task you
+  mentioned before"): the #678 reminder deleted (03:14, on his go-ahead); the four CR slices of the PM refill landed from
+  `claude/train-hq-1104` — CR-gpu-picker `7e69760c`, CR-primary-gpu `0f0cb0bb`, CR-stopped-service `c552354c`,
+  CR-localized-reads `5e2a110d` with its review fixes `aded8095`..`e3d3b7fd`; tsc 0, touched TS suites and the census,
+  locale, orphan-key and copy guards green; one rust-tauri-reviewer round (A approve-with-nits, B request-changes → all
+  taken); desk cargo test 1775/0 and clippy clean on `e3d3b7fd`. Desk build `e3d3b7fd` built and installed 04:06
+  (`ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit`, proof `e3d3b7fd · release`, installer `0AC22D2F…`); desk
+  self-review PASS 12 of 12 (his Ultimate plan is a /duplicatescheme copy, so it classes Other and the English words still name it — the exact gap CR-ultimate-identity queues); one pre-existing zh-CN defect found and queued (CR-zh-dial). Three follow-ups queued (CR-service-batch, CR-ultimate-identity, P9-hint-shown). RELEASE_STATE
+  row re-stamped; pushed with this line through the gate. Lane line removed.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
