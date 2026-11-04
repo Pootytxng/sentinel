@@ -482,8 +482,12 @@ pub(crate) fn parse_powercfg_ac_index(output: &str) -> Option<u32> {
     // fullwidth colon can arrive as replacement characters — only the ASCII `0x…` survives for sure.
     let hex_of = |line: &str| -> Option<u32> {
         let raw = line.split_whitespace().last()?;
-        let hex = raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X"))?;
-        u32::from_str_radix(hex, 16).ok()
+        // The token may carry a glued label ("索引：0x00000032"): the number starts at its last `0x`.
+        let at = raw.rfind("0x").or_else(|| raw.rfind("0X"))?;
+        let hex = &raw[at + 2..];
+        (!hex.is_empty() && hex.bytes().all(|b| b.is_ascii_hexdigit()))
+            .then(|| u32::from_str_radix(hex, 16).ok())
+            .flatten()
     };
     if let Some(line) = output.lines().find(|l| l.contains("Current AC Power Setting Index")) {
         return hex_of(line);
