@@ -448,7 +448,7 @@ function afterReceipt(x: Experiment, t: Translate): string | null {
 function comparedReceipt(x: Experiment, t: Translate): string | null {
   const avg = x.treatment?.delta_avg_pct;
   const band = x.noise_evidence?.band_pct;
-  if (!looksJudged(x) || !x.treatment || band == null) return null;
+  if (!looksJudged(x) || !x.treatment || band == null || judgedOnNoBaseline(x)) return null;
   const signed = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 10) / 10}`;
   const low = x.treatment.delta_low1_pct;
   const one = (v: number) => String(Math.round(v * 10) / 10);
@@ -652,6 +652,21 @@ function sharedHeldRate(a?: SessionStretches | null, b?: SessionStretches | null
 // a row can be mistaken for one judged against the noise floor, so only it needs saying when it wasn't.
 function looksJudged(x: Experiment): boolean {
   return x.verdict === "improved" || x.verdict === "no-change" || x.verdict === "regressed";
+}
+
+/** CR-trial-zero-base: a percent change from a 0 or unread baseline 1% low is undefined. Today's
+ *  backend never records one (benchmark.rs), but an older record can carry a 0 or NaN baseline, or a
+ *  delta serde wrote as null. Such a row shows "—" for its delta and no verdict wording, never a
+ *  number. null = no delta to print. */
+export function trialDeltaLow(x: Pick<Experiment, "baseline_low1_fps" | "treatment">): number | null {
+  if (knownFps(x.baseline_low1_fps) == null) return null;
+  const d: unknown = x.treatment?.delta_low1_pct;
+  return typeof d === "number" && Number.isFinite(d) ? d : null;
+}
+
+/** A row that reads like a measured judgment but whose 1% low comparison is undefined (above). */
+function judgedOnNoBaseline(x: Experiment): boolean {
+  return looksJudged(x) && !isRealPlay(x) && trialDeltaLow(x) == null;
 }
 
 // A §11 note a row carries: its noise line, or "no record" for a row that looks judged without one.
@@ -1612,14 +1627,20 @@ export default function ExperimentBench({
               <li key={x.id} className="exp-bench-row" data-status={x.status}>
                 <span className="exp-bench-rec">{x.rec_title}</span>
                 <span className="exp-bench-verdict">
-                  {x.verdict ? (isRealPlay(x) ? realPlayFace(x, t) : (verdictCopy(t)[x.verdict] ?? x.verdict)) : "—"}
+                  {x.verdict && !judgedOnNoBaseline(x) ? (isRealPlay(x) ? realPlayFace(x, t) : (verdictCopy(t)[x.verdict] ?? x.verdict)) : "—"}
                   {rowMark[i] && <span className="exp-bench-noise-mark">{rowMark[i]}</span>}
                 </span>
                 {x.treatment && (
-                  <span className="exp-bench-delta">
-                    {x.treatment.delta_low1_pct >= 0 ? "+" : ""}
-                    {x.treatment.delta_low1_pct}
-                    {t("lab.experimentBench.deltaSuffix")}
+                  <span className="exp-bench-delta" data-testid="exp-bench-delta">
+                    {trialDeltaLow(x) == null ? (
+                      "—"
+                    ) : (
+                      <>
+                        {trialDeltaLow(x)! >= 0 ? "+" : ""}
+                        {trialDeltaLow(x)}
+                        {t("lab.experimentBench.deltaSuffix")}
+                      </>
+                    )}
                   </span>
                 )}
                 {x.stop_reason && x.status === "aborted" && (

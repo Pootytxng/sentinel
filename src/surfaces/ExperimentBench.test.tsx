@@ -1830,6 +1830,43 @@ describe("ExperimentBench — what the Recommended verdict compared", () => {
   });
 });
 
+// CR-trial-zero-base: an older record with a 0 or unread baseline 1% low has no defined percent change.
+// Its row prints "—", carries no verdict wording, and says nothing about what was compared.
+describe("ExperimentBench — a Trial with no baseline 1% low", () => {
+  afterEach(async () => {
+    cleanup();
+    await i18n.changeLanguage("en");
+  });
+
+  const judgedOn = (baseline: number | null, delta: number | null) => ({
+    ...KEPT_EXPERIMENT,
+    baseline_low1_fps: baseline,
+    treatment: { ...KEPT_EXPERIMENT.treatment, delta_low1_pct: delta, delta_avg_pct: 4.2 },
+    noise_evidence: { band_pct: 3, measured_noise_pct: null },
+  });
+
+  it.each([
+    ["a 0 baseline", 0, Infinity],
+    ["a NaN baseline", NaN, NaN],
+    ["a baseline serde wrote as null", null, null],
+  ])("%s shows — and no verdict", async (_name, baseline, delta) => {
+    state.gate = true;
+    state.experiments = [judgedOn(baseline as number | null, delta as number | null)];
+    render(<ExperimentBench />);
+    expect(await screen.findByTestId("exp-bench-delta")).toHaveTextContent(/^—$/);
+    expect(screen.queryByText("Measurably faster — kept")).toBeNull();
+    expect(screen.queryByTestId("exp-compared-receipt")).toBeNull();
+  });
+
+  it("a real baseline still prints its delta and verdict", async () => {
+    state.gate = true;
+    state.experiments = [judgedOn(180, 11.1)];
+    render(<ExperimentBench />);
+    expect(await screen.findByText("Measurably faster — kept")).toBeInTheDocument();
+    expect(screen.getByTestId("exp-bench-delta")).toHaveTextContent("+11.1");
+  });
+});
+
 // P4-maxfps-smooth (ENGINE §2): the user picks what a Trial aims for; Recommended is the default.
 // P4-smooth-offer-b: Smoothest is offered only when the backend says it can judge it from this session,
 // and otherwise says what is missing. A judged row says what it compared, by its own outcome's rule.
