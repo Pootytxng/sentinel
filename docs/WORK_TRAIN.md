@@ -920,9 +920,14 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   509/534 files, every failure environment-only (site deps, shallow clone, pwsh, Windows paths) except the lock-order
   guard, fixed and 41/41 at head; desk cargo test 1769/0 and clippy clean on `388f2d73`, run at idle priority with a
   shared target dir while the owner played (no FPS cost he reported). Rust review: one rust-tauri-reviewer round over
-  the four items (approve / approve / request-changes → fixed / approve-with-nits, every SHOULD taken). Landed on the
-  desk `main` as a fast-forward of this commit; NOT pushed, NOT installed (CODE-ONLY, game open): the next FULL session
-  pushes through the gate, then builds and installs. Lane line removed. The #678 scheduled task could not be turned off
+  the four items (approve / approve / request-changes → fixed / approve-with-nits, every SHOULD taken). At 12:51 the owner said he was only
+  in the lobby and to complete everything, so FULL from there: desk build `ba332a25` installed 12:56 (proof `ba332a25 · release`);
+  desk self-review round 1 on his data FAIL on five findings (trace axis floored minutes above an hour; recap tabs, a placeholder
+  part name and the GPU profile summary English in zh-CN; the seatbelt step naming the retired "Lab" tab), fixed in `71f1df93`
+  (rebased over the 13:43 session's `e01561f7` / `e99a7a5c`), built and installed 14:03 (`ship-reinstall.ps1 -VerifyRuntime
+  -ExpectedCommit`, proof `71f1df93 · release`, installer `9E9C4A43…`). Round 2 of the desk review is OWED on `71f1df93` (the
+  reviewer stopped on a usage limit at 14:10; the lane resumed at 19:43): the five fixes carry tests that fail on the old code, and the
+  RELEASE_STATE row says the install is proven and the visual PASS is not. Pushed through the gate with this line. Lane line removed. The #678 scheduled task could not be turned off
   from here (the task tools refuse Claude); walkthroughs P4–P7 and P8-first-advanced stay the owner's, named under
   Needs owner with clicks and minutes.
 - 2026-11-03 PM (scheduled, CODE-ONLY, owner in a game): queue refill (5 ready slices from CR-1102-left); CR-cmp-wait
