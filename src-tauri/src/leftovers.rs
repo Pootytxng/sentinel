@@ -283,8 +283,16 @@ fn detect_bcdedit_timer_flags(probes: &Value) -> Outcome {
     if !readable(p) {
         return Outcome::Unavailable(REASON_UNREADABLE);
     }
-    let upc = p.get("useplatformclock").and_then(Value::as_bool).unwrap_or(false);
-    let ddt = p.get("disabledynamictick").and_then(Value::as_bool).unwrap_or(false);
+    // A flag the probe could not read (a value word this build does not know) is null: the store is
+    // unreadable, never clean and never rotted (CR-localized-reads, review round 1).
+    let flag = |key: &str| match p.get(key) {
+        Some(Value::Bool(b)) => Some(*b),
+        Some(Value::Null) => None,
+        _ => Some(false),
+    };
+    let (Some(upc), Some(ddt)) = (flag("useplatformclock"), flag("disabledynamictick")) else {
+        return Outcome::Unavailable(REASON_UNREADABLE);
+    };
     if !upc && !ddt {
         return Outcome::Clean;
     }
@@ -640,19 +648,32 @@ fn read_hklm_u32s(path: &str, names: &[(&str, &str)]) -> Value {
     Value::Object(obj)
 }
 
-/// Is a bcdedit timer flag set, read from the lower-cased `bcdedit /enum {current}` text? The two
-/// keys (`useplatformclock`, `disabledynamictick`) are locale-neutral identifiers and both are ABSENT
-/// from a stock store, so a line that carries one is the flag having been set — whatever word the
-/// value is printed in ("Yes", "是"). Only an explicit off value ("no" / "false" / "0" / "off") reads
-/// as not set. (CR-localized-reads, 2026-11-04: the English "yes"/"true" read missed every localized
-/// Windows and called a rotted store clean.) Pure.
-pub(crate) fn bcdedit_flag_set(text_lower: &str, name: &str) -> bool {
-    text_lower.lines().any(|l| {
-        l.contains(name) && {
-            let value = l.split(name).nth(1).unwrap_or("").trim();
-            !matches!(value, "no" | "false" | "0" | "off")
-        }
+/// One bcdedit timer flag, read from the lower-cased `bcdedit /enum {current}` text. The two keys
+/// (`useplatformclock`, `disabledynamictick`) are locale-neutral identifiers that open their line and
+/// are ABSENT from a stock store: no line → `Some(false)`. A line with a value this build can read
+/// decides it ("yes" / "true" / "1" / "on" → set; "no" / "false" / "0" / "off" → not set). A value it
+/// cannot read — a localized word, or one mangled by the OEM code page — is `None`: unknown, so the
+/// detector says the store could not be read rather than calling it clean OR rotted (CR-localized-reads,
+/// 2026-11-04: the English "yes"/"true" read called a rotted localized store clean; review round 1:
+/// "any other word means set" would have called a clean one rotted). Pure.
+pub(crate) fn bcdedit_flag(text_lower: &str, name: &str) -> Option<bool> {
+    let line = text_lower.lines().map(str::trim_start).find(|l| {
+        l.starts_with(name) && l[name.len()..].chars().next().is_none_or(char::is_whitespace)
+    })?;
+    // Reached only with a line: an absent key is the `None` of `find`, mapped below.
+    Some(match line[name.len()..].trim() {
+        "yes" | "true" | "1" | "on" => true,
+        "no" | "false" | "0" | "off" => false,
+        _ => return None,
     })
+}
+
+/// [`bcdedit_flag`] with the absent key folded in: `Some(false)` when no line opens with the key.
+fn bcdedit_flag_or_absent(text_lower: &str, name: &str) -> Option<bool> {
+    let present = text_lower.lines().map(str::trim_start).any(|l| {
+        l.starts_with(name) && l[name.len()..].chars().next().is_none_or(char::is_whitespace)
+    });
+    if present { bcdedit_flag(text_lower, name) } else { Some(false) }
 }
 
 /// bcdedit /enum {current} — READ-ONLY. Non-elevated reads are usually denied; that is the
@@ -663,7 +684,8 @@ fn probe_bcdedit() -> Value {
         Ok(o) if !o.status.success() => json!({ "readable": false, "needs_admin": true }),
         Ok(o) => {
             let text = String::from_utf8_lossy(&o.stdout).to_lowercase();
-            let flag = |name: &str| bcdedit_flag_set(&text, name);
+            // A flag whose value this build cannot read is null here, and the detector says so.
+            let flag = |name: &str| bcdedit_flag_or_absent(&text, name);
             json!({
                 "readable": true,
                 "needs_admin": false,
@@ -998,15 +1020,33 @@ mod leftovers_tests {
     // keep bcdedit's shape (key, spaces, value) with the value in another language; they are not
     // captured zh-CN output, which the repo does not hold.
     #[test]
-    fn a_bcdedit_flag_is_read_by_its_key_whatever_word_its_value_is_printed_in() {
-        let en = "useplatformclock        yes\r\ndisabledynamictick      yes\r\n";
-        assert!(bcdedit_flag_set(en, "useplatformclock"));
-        assert!(bcdedit_flag_set(en, "disabledynamictick"));
-        let zh = "useplatformclock        是\r\n";
-        assert!(bcdedit_flag_set(zh, "useplatformclock"), "a localized Yes is still set");
-        assert!(!bcdedit_flag_set(zh, "disabledynamictick"), "absent is not set");
-        assert!(!bcdedit_flag_set("useplatformclock        no\r\n", "useplatformclock"), "an explicit No is not set");
-        assert!(!bcdedit_flag_set("identifier              {current}\r\ndevice                  partition=c:\r\n", "useplatformclock"));
+    fn a_bcdedit_flag_is_read_by_its_key_and_an_unknown_value_word_is_unknown_not_a_verdict() {
+        let en = "identifier              {current}\r\nuseplatformclock        Yes\r\ndisabledynamictick      yes\r\n".to_lowercase();
+        assert_eq!(bcdedit_flag_or_absent(&en, "useplatformclock"), Some(true));
+        assert_eq!(bcdedit_flag_or_absent(&en, "disabledynamictick"), Some(true));
+        assert_eq!(bcdedit_flag_or_absent("useplatformclock        no\r\n", "useplatformclock"), Some(false), "an explicit No");
+        assert_eq!(bcdedit_flag_or_absent("identifier              {current}\r\ndevice                  partition=c:\r\n", "useplatformclock"), Some(false), "absent is not set");
+        // A value word this build does not know (a localized Yes or No, or OEM-mangled bytes) is unknown:
+        // neither set nor clear, so the store reads as unreadable, never as clean or rotted.
+        assert_eq!(bcdedit_flag_or_absent("useplatformclock        是\r\n", "useplatformclock"), None);
+        assert_eq!(bcdedit_flag_or_absent("useplatformclock        \u{FFFD}\u{FFFD}\r\n", "useplatformclock"), None);
+        // The key opens the line: a mention inside another value is not the flag.
+        assert_eq!(bcdedit_flag_or_absent("description             useplatformclock test\r\n", "useplatformclock"), Some(false));
+        assert_eq!(bcdedit_flag_or_absent("useplatformclockx       yes\r\n", "useplatformclock"), Some(false), "a longer key is another key");
+    }
+
+    // The detector: a null flag (unreadable value) is "couldn't read", never clean and never rotted.
+    #[test]
+    fn an_unreadable_bcdedit_flag_makes_the_store_unreadable_not_clean() {
+        let unknown = with(
+            probes(Some(true), json!([]), Some(true), Some(31)),
+            "bcdedit",
+            json!({ "readable": true, "needs_admin": false, "useplatformclock": null, "disabledynamictick": false }),
+        );
+        let r = evaluate_leftovers(&unknown, &no_endorsements());
+        assert!(find(&r, "bcdedit-timer-flags").is_none(), "no finding is claimed");
+        let u = r.unavailable.iter().find(|u| u.id == "bcdedit-timer-flags").expect("listed as unavailable");
+        assert_eq!(u.reason, REASON_UNREADABLE);
     }
 
     #[test]

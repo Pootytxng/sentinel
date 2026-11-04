@@ -159,10 +159,19 @@ pub(crate) fn current_power_plan_name() -> Option<String> {
 /// The plan name inside the parentheses of `powercfg /getactivescheme` — whatever language Windows
 /// prints it in. Display only: nothing decides on these words any more (see [`PowerPlanClass`]).
 pub(crate) fn power_plan_name_of(stdout: &str) -> Option<String> {
-    // Format: "Power Scheme GUID: <guid>  (Plan Name)"
-    let start = stdout.find('(')? + 1;
-    let end = stdout.rfind(')')?;
-    Some(stdout[start..end].trim().to_string())
+    // Format: "Power Scheme GUID: <guid>  (Plan Name)". The name is the parenthesised text AFTER the
+    // GUID token, so a label with its own parentheses before the GUID cannot leak into it (review
+    // round 1); a ")" before "(" is no name, never a panic.
+    let after = match scheme_guid_of(stdout) {
+        Some(guid) => {
+            let at = stdout.to_ascii_lowercase().find(&guid)?;
+            &stdout[at + guid.len()..]
+        }
+        None => stdout,
+    };
+    let start = after.find('(')? + 1;
+    let end = after.rfind(')')?;
+    (end >= start).then(|| after[start..end].trim().to_string())
 }
 
 /// What kind of power plan is active, decided from the scheme GUID rather than the plan's name
@@ -229,7 +238,7 @@ pub(crate) fn power_plan_of(stdout: &str) -> Option<(PowerPlanClass, String)> {
 /// it ("Power Scheme GUID:", "电源方案 GUID:") is not read, so the locale cannot hide it.
 pub(crate) fn scheme_guid_of(stdout: &str) -> Option<String> {
     stdout
-        .split(|c: char| c.is_whitespace() || c == '(' || c == ')')
+        .split(|c: char| c.is_whitespace() || matches!(c, '(' | ')' | ':' | '：' | '{' | '}'))
         .find(|tok| {
             tok.len() == 36
                 && tok.bytes().enumerate().all(|(i, b)| match i {
@@ -468,8 +477,11 @@ pub(crate) fn core_parking_min_cores_ac() -> Option<u32> {
 /// `0x` numbers too). A multi-setting dump (no single setting asked for) is not read that way. `None` when neither
 /// route finds a number: unreadable, never guessed.
 pub(crate) fn parse_powercfg_ac_index(output: &str) -> Option<u32> {
+    // The number is the line's LAST whitespace-separated token. Not a split on the colon: powercfg
+    // writes the OEM code page, this reads it as UTF-8 lossily, so a localized label and its
+    // fullwidth colon can arrive as replacement characters — only the ASCII `0x…` survives for sure.
     let hex_of = |line: &str| -> Option<u32> {
-        let raw = line.rsplit(|c| c == ':' || c == '：').next()?.trim();
+        let raw = line.split_whitespace().last()?;
         let hex = raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X"))?;
         u32::from_str_radix(hex, 16).ok()
     };
@@ -480,10 +492,22 @@ pub(crate) fn parse_powercfg_ac_index(output: &str) -> Option<u32> {
     // GUID), the output ends with the two "current index" lines, AC then DC; the possible-value lines
     // before them (minimum, maximum, increment) may carry `0x` numbers too, so the AC index is the
     // second-to-last `0x` line, not the first.
+    // Exactly three GUID lines (scheme, subgroup, ONE setting): a multi-setting dump has more and is
+    // refused, since its last two `0x` lines belong to whichever setting came last. After the setting
+    // line a numeric setting prints minimum, maximum and increment, then AC and DC: five `0x` lines,
+    // and the AC value must sit inside [minimum, maximum] — a run that lost its DC line would
+    // otherwise hand back the increment as the index (review round 1). Anything else is None.
     let lines: Vec<&str> = output.lines().collect();
-    let setting_line = lines.iter().enumerate().filter(|(_, l)| scheme_guid_of(l).is_some()).map(|(i, _)| i).nth(2)?;
-    let hex_lines: Vec<u32> = lines[setting_line + 1..].iter().filter_map(|l| hex_of(l.trim())).collect();
-    (hex_lines.len() >= 2).then(|| hex_lines[hex_lines.len() - 2])
+    let guid_lines: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| scheme_guid_of(l).is_some()).map(|(i, _)| i).collect();
+    if guid_lines.len() != 3 {
+        return None;
+    }
+    let hex_lines: Vec<u32> = lines[guid_lines[2] + 1..].iter().filter_map(|l| hex_of(l.trim())).collect();
+    if hex_lines.len() < 5 {
+        return None;
+    }
+    let (min, max, ac) = (hex_lines[0], hex_lines[1], hex_lines[hex_lines.len() - 2]);
+    (min <= ac && ac <= max).then_some(ac)
 }
 
 /// Plain-English core-parking policy from CPMINCORES%. Never describes live per-core state.
@@ -526,17 +550,28 @@ mod core_parking_tests {
                    \x20   当前交流电源设置索引: 0x00000032\r\n\
                    \x20   当前直流电源设置索引: 0x00000014\r\n";
         assert_eq!(parse_powercfg_ac_index(out), Some(50), "AC is the second-to-last 0x line, not the minimum");
-        // Fewer than two index lines after the setting: unreadable, never a possible-value line.
+        // A label glued to the number with a fullwidth colon, or decoded lossily: the last token still reads.
+        assert_eq!(parse_powercfg_ac_index(&out.replace(": 0x00000032", "：0x00000032").replace("索引：0x00000032", "索引 \u{FFFD} 0x00000032")), Some(50));
+        // Review round 1: a run that lost its DC line must not hand back the increment as the index.
+        let no_dc = out.replace("\r\n   当前直流电源设置索引: 0x00000014", "");
+        assert_eq!(parse_powercfg_ac_index(&no_dc), None, "four 0x lines: not a complete single-setting read");
+        // A multi-setting dump (two settings under the subgroup) is refused, never read off the last setting.
+        let multi = format!("{out}   电源设置 GUID: 5d76a2ca-e8c0-402f-a133-2158492d58ad  (另一项)\r\n     最小可能设置: 0x00000000\r\n     最大可能设置: 0x00000001\r\n     可能的设置增量: 0x00000001\r\n   当前交流电源设置索引: 0x00000001\r\n   当前直流电源设置索引: 0x00000001\r\n");
+        assert_eq!(parse_powercfg_ac_index(&multi), None);
+        // An AC value outside [minimum, maximum] cannot be the index: None, never a guess.
+        assert_eq!(parse_powercfg_ac_index(&out.replace("0x00000032", "0x000000c8")), None);
+        // Fewer than five 0x lines after the setting: unreadable, never a possible-value line.
         let truncated = "x GUID: 381b4222-f694-41f0-9685-ff5bb260df2e\r\n y GUID: 54533251-82be-4824-96c1-47b60b740d00\r\n z GUID: 0cc5b647-c1df-4637-891a-dec35c318583\r\n  min: 0x00000000\r\n";
         assert_eq!(parse_powercfg_ac_index(truncated), None);
     }
 
     #[test]
     fn the_plan_class_comes_from_the_scheme_guid_and_only_a_non_stock_guid_reads_the_words() {
-        use super::{power_plan_of, scheme_guid_of, PowerPlanClass};
+        use super::{power_plan_name_of, power_plan_of, scheme_guid_of, PowerPlanClass};
         let en = "Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\r\n";
         assert_eq!(power_plan_of(en), Some((PowerPlanClass::HighPerformance, "High performance".into())));
-        // The same stock plan with its name in another language: the GUID decides, the words do not.
+        // The same stock plan with its label and name in another language (labels illustrative, not
+        // captured output): the GUID decides, the words do not.
         let zh = "电源方案 GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (高性能)\r\n";
         assert_eq!(power_plan_of(zh).map(|p| p.0), Some(PowerPlanClass::HighPerformance));
         assert_eq!(power_plan_of("x GUID: 381B4222-F694-41F0-9685-FF5BB260DF2E  (Balanced)").map(|p| p.0), Some(PowerPlanClass::Balanced), "case-insensitive");
@@ -550,6 +585,12 @@ mod core_parking_tests {
         assert_eq!(power_plan_of(zh_copy).map(|p| p.0), Some(PowerPlanClass::Other), "a localized copy stays Other: not guessed");
         assert_eq!(power_plan_of("nothing here"), None);
         assert_eq!(scheme_guid_of("GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635cXX"), None, "a 36-char token, exactly");
+        // A label glued to the GUID (no space after the colon, ASCII or fullwidth) still yields it.
+        assert_eq!(scheme_guid_of("GUID:8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c (x)").as_deref(), Some("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"));
+        assert_eq!(scheme_guid_of("方案 GUID：8C5E7FDA-E8BF-4A96-9A85-A6E23A8C635C").as_deref(), Some("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"));
+        // A name with its own parentheses, and a ")" before "(": the name is what follows the GUID; no panic.
+        assert_eq!(power_plan_name_of("Power Scheme (active) GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)").as_deref(), Some("High performance"));
+        assert_eq!(power_plan_name_of(") stray ("), None);
     }
 
     #[test]

@@ -288,7 +288,8 @@ fn stale_primary_driver(hw: &HardwareInfo) -> Option<(&'static str, i64)> {
 /// The service reads as DISABLED — its start type, the state the one-click change sets — not merely
 /// as not running (CR-stopped-service, 2026-11-04: a Manual service that was idle read as "already set
 /// this way", as if the change were made). A failed read, or a service that is not there, is never
-/// "applied" (codebase review 2026-11-02). One seam with the ledger's live check.
+/// "applied" (codebase review 2026-11-02). One seam with the ledger's live check. Cost: one WMI
+/// connection per call (~100-500 ms); a catalog build makes up to four, in series — see history.rs.
 fn service_read_disabled(name: &str) -> bool {
     crate::history::disabled_service_check(crate::actions::service_info(name)) == crate::history::ActiveCheck::On
 }

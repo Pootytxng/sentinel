@@ -376,7 +376,9 @@ pub(crate) fn probe_rec_target(rec_id: &str) -> ActiveCheck {
     let read = ActiveCheck::from_read;
     // A service disable's target state is its START TYPE, not whether it happens to be running
     // (CR-stopped-service, 2026-11-04): the apply sets Disabled and stops it; a Manual service that is
-    // merely idle used to read On, as if Compy had made the change.
+    // merely idle used to read On, as if Compy had made the change. Cost (review round 1): each read is
+    // one WMI connection on its own thread, ~100-500 ms, where `sc query` was ~30 ms; a pass that reads
+    // all four service recs pays it four times. A batched read for the pass is the queued follow-up.
     let disabled = |svc: &str| disabled_service_check(crate::actions::service_info(svc));
     // The registry readers without a checked variant (game mode, visual effects, mouse, game bar,
     // Nagle, EEE) treat an absent key as the Windows default, which IS their "off" answer, so they
