@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::hardware::{collect_hardware, gpu_vendor_match, HardwareInfo};
 use crate::remote_rules::{load_rules, RulesSource};
 use crate::{
-    current_power_plan_name, eee_disabled_on_any_eligible_adapter, fast_startup_state,
+    eee_disabled_on_any_eligible_adapter, fast_startup_state,
     game_bar_disabled, game_mode_enabled, hags_state, memory_integrity_or_vbs_active,
     mouse_accel_disabled, nagle_disabled_on_any_nic, pcie_aspm_off_on_ac, reserved_storage_enabled,
     usb_selective_suspend_off_on_ac, visual_effects_for_best_performance,
@@ -285,10 +285,12 @@ fn stale_primary_driver(hw: &HardwareInfo) -> Option<(&'static str, i64)> {
     Some((vendor, days))
 }
 
-/// The service is read and is not running. A failed read is never "applied" (codebase review
-/// 2026-11-02): the infallible reader folds it into "not running", which read as the change made.
-fn service_read_stopped(name: &str) -> bool {
-    crate::service_running_checked(name) == Some(false)
+/// The service reads as DISABLED — its start type, the state the one-click change sets — not merely
+/// as not running (CR-stopped-service, 2026-11-04: a Manual service that was idle read as "already set
+/// this way", as if the change were made). A failed read, or a service that is not there, is never
+/// "applied" (codebase review 2026-11-02). One seam with the ledger's live check.
+fn service_read_disabled(name: &str) -> bool {
+    crate::history::disabled_service_check(crate::actions::service_info(name)) == crate::history::ActiveCheck::On
 }
 
 pub(crate) fn condition_matches(cond: &Condition, hw: &HardwareInfo) -> bool {
@@ -342,15 +344,15 @@ pub(crate) fn check_state_kind(kind: &str, params: &Option<serde_json::Value>, _
     match kind {
         "game-mode-enabled" => game_mode_enabled(),
         "visual-effects-best-perf" => visual_effects_for_best_performance(),
+        // The rule kind keeps its historical name; since 2026-11-04 it reads the service's start type
+        // (Disabled), which is what the change sets, not whether the service happens to be running.
         "service-not-running" => params
             .as_ref()
             .and_then(|p| p.get("service"))
             .and_then(|s| s.as_str())
-            .map(service_read_stopped)
+            .map(service_read_disabled)
             .unwrap_or(false),
-        "power-plan-ultimate" => current_power_plan_name()
-            .map(|p| p.to_lowercase().contains("ultimate"))
-            .unwrap_or(false),
+        "power-plan-ultimate" => crate::current_power_plan().is_some_and(|(class, _)| class == crate::PowerPlanClass::Ultimate),
         "nagle-disabled-any-nic" => nagle_disabled_on_any_nic(),
         "hags-on" => hags_state() == Some(2),
         "mouse-accel-disabled" => mouse_accel_disabled(),
@@ -438,8 +440,9 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
         }
     }
 
-    let active_plan = current_power_plan_name().unwrap_or_default();
-    let on_ultimate = active_plan.to_lowercase().contains("ultimate");
+    // The plan's class comes from its GUID (CR-localized-reads); the name is shown, never judged.
+    let (plan_class, active_plan) = crate::current_power_plan().unwrap_or((crate::PowerPlanClass::Other, String::new()));
+    let on_ultimate = plan_class == crate::PowerPlanClass::Ultimate;
 
     // ─── Universal Windows tweaks ────────────────────────────────────────
     recs.push(Recommendation {
@@ -532,7 +535,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
 
     // ─── GPU vendor-specific ─────────────────────────────────────────────
     if let Some(name) = gpu_vendor_match(hw, "NVIDIA") {
-        let telemetry_stopped = service_read_stopped("NvTelemetryContainer");
+        let telemetry_stopped = service_read_disabled("NvTelemetryContainer");
         recs.push(Recommendation {
             id: "nvidia-telemetry".into(),
             title: "Disable NVIDIA Container telemetry services".into(),
@@ -658,7 +661,7 @@ pub(crate) fn build_recommendations(hw: &HardwareInfo) -> Vec<Recommendation> {
             impact: "Lower idle disk activity · ~100–200 MB RAM back".into(),
             downside: Some("App launches will be a tiny bit slower (usually unnoticeable on fast storage).".into()),
             applies_to: format!("{:.0} GB RAM · {} storage detected", ram_gb, storage_kind),
-            currently_applied: service_read_stopped("SysMain"),
+            currently_applied: service_read_disabled("SysMain"),
             provenance: Provenance::ExpectedImpact,
             eligible: true,
             ineligible_reason: None,

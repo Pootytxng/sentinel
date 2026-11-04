@@ -19,7 +19,7 @@ use crate::actions::*;
 use crate::compy_data_dir;
 use crate::data_root::MutationRoot;
 use crate::{
-    current_power_plan_name, eee_disabled_on_any_eligible_adapter, fast_startup_state_checked,
+    eee_disabled_on_any_eligible_adapter, fast_startup_state_checked,
     game_bar_disabled, game_mode_enabled, hags_state_checked, mouse_accel_disabled,
     nagle_disabled_on_any_nic, pcie_aspm_off_on_ac_checked, reserved_storage_enabled_checked,
     service_running_checked, startup_approval_value, usb_selective_suspend_off_on_ac_checked,
@@ -374,30 +374,48 @@ pub(crate) fn probe_applied_setting(changes: &[AppliedChange], rec_id: &str, rea
 /// ledger row. Never mutates; `Unrecognised` for any rec with no probe.
 pub(crate) fn probe_rec_target(rec_id: &str) -> ActiveCheck {
     let read = ActiveCheck::from_read;
-    let not_running = |svc: &str| read(service_running_checked(svc).map(|r| !r));
+    // A service disable's target state is its START TYPE, not whether it happens to be running
+    // (CR-stopped-service, 2026-11-04): the apply sets Disabled and stops it; a Manual service that is
+    // merely idle used to read On, as if Compy had made the change.
+    let disabled = |svc: &str| disabled_service_check(crate::actions::service_info(svc));
     // The registry readers without a checked variant (game mode, visual effects, mouse, game bar,
     // Nagle, EEE) treat an absent key as the Windows default, which IS their "off" answer, so they
     // stay plain reads here.
     match rec_id {
         "game-mode" => read(Some(game_mode_enabled())),
         "visual-effects" => read(Some(visual_effects_for_best_performance())),
-        "sysmain-disable" => not_running("SysMain"),
-        "nvidia-telemetry" => not_running("NvTelemetryContainer"),
-        "power-ultimate" => {
-            read(current_power_plan_name().map(|p| p.to_lowercase().contains("ultimate")))
-        }
+        "sysmain-disable" => disabled("SysMain"),
+        "nvidia-telemetry" => disabled("NvTelemetryContainer"),
+        // The plan's class comes from its GUID, so a localized plan name cannot hide it; a copy of
+        // Ultimate (a new GUID) still reads by its English words, as before (CR-localized-reads).
+        "power-ultimate" => read(crate::current_power_plan().map(|(class, _)| class == crate::PowerPlanClass::Ultimate)),
         "nagle-disable" => read(Some(nagle_disabled_on_any_nic())),
         "hags-enable" => read(hags_state_checked().ok().map(|v| v == Some(2))),
         "mouse-accel-off" => read(Some(mouse_accel_disabled())),
         "game-bar-disable" => read(Some(game_bar_disabled())),
-        "diagtrack-disable" => not_running("DiagTrack"),
-        "windows-search-disable" => not_running("WSearch"),
+        "diagtrack-disable" => disabled("DiagTrack"),
+        "windows-search-disable" => disabled("WSearch"),
         "fast-startup-off" => read(fast_startup_state_checked().ok().map(|v| v == Some(0))),
         "reserved-storage-off" => read(reserved_storage_enabled_checked().ok().map(|on| !on)),
         "usb-selective-suspend-off" => read(usb_selective_suspend_off_on_ac_checked()),
         "pcie-aspm-off" => read(pcie_aspm_off_on_ac_checked()),
         "eee-disable" => read(Some(eee_disabled_on_any_eligible_adapter())),
         _ => ActiveCheck::Unrecognised,
+    }
+}
+
+/// Pure seam for the four service-disable recs (CR-stopped-service): the change is in effect when the
+/// service's START TYPE reads `Disabled` — the state the apply sets and the rollback puts back — never
+/// merely when the service is stopped (a Manual-start service that is idle is not Compy's change). The
+/// start mode comes from WMI `Win32_Service.StartMode` ("Boot" / "System" / "Auto" / "Manual" /
+/// "Disabled"), enumerated words that Windows does not localize. No row (the service does not exist, or
+/// WMI could not be read) is `Unreadable`: a service that is not there is not "in the target state", and
+/// the UI says it could not be read rather than crediting Compy. `sc query` used to read a missing
+/// service as "not running", and so as On.
+pub(crate) fn disabled_service_check(info: Option<(String, String)>) -> ActiveCheck {
+    match info {
+        Some((_state, mode)) => ActiveCheck::from_read(Some(mode == "Disabled")),
+        None => ActiveCheck::Unreadable,
     }
 }
 
@@ -5087,6 +5105,22 @@ mod row_probe_tests {
         }
         assert_eq!(task_row_check("ceip-usb", None, |_| panic!("must not read")), Unrecognised);
         assert_eq!(service_row_check("SysMain", svc.as_ref(), |_| panic!("must not read")), Unrecognised);
+    }
+
+    // CR-stopped-service (2026-11-04): a service DISABLE is in effect when the start type is Disabled.
+    // A Manual-start service that happens to be stopped is not Compy's change (the old read, "not
+    // running", said On for it); a service WMI has no row for is unreadable, never On.
+    #[test]
+    fn a_service_disable_reads_the_start_type_not_the_running_state() {
+        use ActiveCheck::*;
+        let info = |state: &str, mode: &str| Some((state.to_string(), mode.to_string()));
+        assert_eq!(disabled_service_check(info("Stopped", "Disabled")), On);
+        assert_eq!(disabled_service_check(info("Running", "Disabled")), On, "disabled, not yet stopped: the start type is the change");
+        assert_eq!(disabled_service_check(info("Stopped", "Manual")), Off, "idle is not disabled");
+        assert_eq!(disabled_service_check(info("Stopped", "Auto")), Off);
+        assert_eq!(disabled_service_check(info("Running", "Auto")), Off);
+        assert_eq!(disabled_service_check(info("Stopped", "Unknown")), Off, "an unknown start mode is not shown to be Disabled");
+        assert_eq!(disabled_service_check(None), Unreadable, "no row: not there, or WMI unread");
     }
 
     // #620 review: each task row spawned its own PowerShell on the UI thread, so a ledger with four
