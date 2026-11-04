@@ -540,29 +540,39 @@ mod core_parking_tests {
     // "zh-CN wording verified".
     #[test]
     fn reads_the_ac_index_without_any_english_label() {
-        let out = "电源方案 GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (平衡)\r\n\
-                   \x20 子组 GUID: 54533251-82be-4824-96c1-47b60b740d00  (处理器电源管理)\r\n\
-                   \x20   电源设置 GUID: 0cc5b647-c1df-4637-891a-dec35c318583  (处理器性能内核停放最小内核数)\r\n\
-                   \x20     最小可能设置: 0x00000000\r\n\
-                   \x20     最大可能设置: 0x00000064\r\n\
-                   \x20     可能的设置增量: 0x00000001\r\n\
-                   \x20     可能的设置单位: %\r\n\
-                   \x20   当前交流电源设置索引: 0x00000032\r\n\
-                   \x20   当前直流电源设置索引: 0x00000014\r\n";
-        assert_eq!(parse_powercfg_ac_index(out), Some(50), "AC is the second-to-last 0x line, not the minimum");
+        let lines = [
+            "电源方案 GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (平衡)",
+            "  子组 GUID: 54533251-82be-4824-96c1-47b60b740d00  (处理器电源管理)",
+            "    电源设置 GUID: 0cc5b647-c1df-4637-891a-dec35c318583  (处理器性能内核停放最小内核数)",
+            "      最小可能设置: 0x00000000",
+            "      最大可能设置: 0x00000064",
+            "      可能的设置增量: 0x00000001",
+            "      可能的设置单位: %",
+            "    当前交流电源设置索引: 0x00000032",
+            "    当前直流电源设置索引: 0x00000014",
+        ];
+        let join = |ls: &[&str]| ls.iter().map(|l| format!("{l}\r\n")).collect::<String>();
+        let out = join(&lines);
+        assert_eq!(parse_powercfg_ac_index(&out), Some(50), "AC is the second-to-last 0x line, not the minimum");
         // A label glued to the number with a fullwidth colon, or decoded lossily: the last token still reads.
-        assert_eq!(parse_powercfg_ac_index(&out.replace(": 0x00000032", "：0x00000032").replace("索引：0x00000032", "索引 \u{FFFD} 0x00000032")), Some(50));
+        assert_eq!(parse_powercfg_ac_index(&out.replace("索引: 0x00000032", "索引：0x00000032")), Some(50));
+        assert_eq!(parse_powercfg_ac_index(&out.replace("当前交流电源设置索引:", "\u{FFFD}\u{FFFD}\u{FFFD}")), Some(50));
         // Review round 1: a run that lost its DC line must not hand back the increment as the index.
-        let no_dc = out.replace("\r\n   当前直流电源设置索引: 0x00000014", "");
-        assert_eq!(parse_powercfg_ac_index(&no_dc), None, "four 0x lines: not a complete single-setting read");
+        assert_eq!(parse_powercfg_ac_index(&join(&lines[..8])), None, "four 0x lines: not a complete single-setting read");
         // A multi-setting dump (two settings under the subgroup) is refused, never read off the last setting.
-        let multi = format!("{out}   电源设置 GUID: 5d76a2ca-e8c0-402f-a133-2158492d58ad  (另一项)\r\n     最小可能设置: 0x00000000\r\n     最大可能设置: 0x00000001\r\n     可能的设置增量: 0x00000001\r\n   当前交流电源设置索引: 0x00000001\r\n   当前直流电源设置索引: 0x00000001\r\n");
-        assert_eq!(parse_powercfg_ac_index(&multi), None);
+        let second = [
+            "    电源设置 GUID: 5d76a2ca-e8c0-402f-a133-2158492d58ad  (另一项)",
+            "      最小可能设置: 0x00000000",
+            "      最大可能设置: 0x00000001",
+            "      可能的设置增量: 0x00000001",
+            "    当前交流电源设置索引: 0x00000001",
+            "    当前直流电源设置索引: 0x00000001",
+        ];
+        assert_eq!(parse_powercfg_ac_index(&format!("{out}{}", join(&second))), None);
         // An AC value outside [minimum, maximum] cannot be the index: None, never a guess.
         assert_eq!(parse_powercfg_ac_index(&out.replace("0x00000032", "0x000000c8")), None);
         // Fewer than five 0x lines after the setting: unreadable, never a possible-value line.
-        let truncated = "x GUID: 381b4222-f694-41f0-9685-ff5bb260df2e\r\n y GUID: 54533251-82be-4824-96c1-47b60b740d00\r\n z GUID: 0cc5b647-c1df-4637-891a-dec35c318583\r\n  min: 0x00000000\r\n";
-        assert_eq!(parse_powercfg_ac_index(truncated), None);
+        assert_eq!(parse_powercfg_ac_index(&join(&lines[..4])), None);
     }
 
     #[test]
