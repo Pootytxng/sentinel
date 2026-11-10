@@ -944,8 +944,30 @@ fn support_stop(outcome: SupportOutcome, code: &str, detail: &str) {
     );
 }
 
-#[tauri::command]
+/// CR-capture-async: start and stop take turns. Both commands now run on the blocking pool
+/// (lib.rs `off_main`), so without this a stop pressed while a start waits up to 5 s for an old
+/// helper could run first, and the start would then raise the flag and launch a helper after the
+/// user had stopped. Under one lock a stop always sees a start that has finished (or failed) and
+/// undoes it; a start never sees half a stop. A panic in either leaves the lock usable.
+fn capture_ctl() -> &'static std::sync::Mutex<()> {
+    use std::sync::{Mutex, OnceLock};
+    static CTL: OnceLock<Mutex<()>> = OnceLock::new();
+    CTL.get_or_init(|| Mutex::new(()))
+}
+
+/// Run `f` holding the capture start/stop lock.
+fn capture_serialized<T>(f: impl FnOnce() -> T) -> T {
+    let _turn = capture_ctl().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    f()
+}
+
+/// Start FPS capture. Served to the window by lib.rs `off_main::start_fps_capture`, off the main
+/// thread; same answer as before.
 pub(crate) fn start_fps_capture() -> Result<(), String> {
+    capture_serialized(start_fps_capture_locked)
+}
+
+fn start_fps_capture_locked() -> Result<(), String> {
     use std::sync::atomic::Ordering;
     if fps_active().load(Ordering::Acquire) {
         return Ok(()); // already running
@@ -1354,8 +1376,13 @@ pub(crate) fn uac_disabled() -> bool {
         .unwrap_or(false)
 }
 
-#[tauri::command]
+/// Stop FPS capture. Served by lib.rs `off_main::stop_fps_capture`; waits its turn behind a start
+/// in progress (see [`capture_serialized`]), so it always stops what that start began.
 pub(crate) fn stop_fps_capture() {
+    capture_serialized(stop_fps_capture_locked)
+}
+
+fn stop_fps_capture_locked() {
     use std::sync::atomic::Ordering;
     fps_active().store(false, Ordering::Release);
     *lock_status() = "idle".into();
@@ -1727,5 +1754,61 @@ mod capture_generation_tests {
         let body = &src[start..src[start..].find(concat!("pub(crate) fn ", "uac_disabled()")).map(|e| start + e).expect("next fn")];
         assert_eq!(body.matches(concat!("while capture_", "live(generation)")).count(), 2, "heartbeat and recorder");
         assert!(!body.contains(concat!("while fps_", "active().load")), "a loop that reads only the flag outlives a stop");
+    }
+
+    // CR-capture-async: start and stop now run on the blocking pool. A stop issued while a start is
+    // inside its (up to 5 s) wait must run AFTER that start and leave capture off; without the lock
+    // it ran first and the start then turned capture back on. Fakes stand in for the two bodies so
+    // the test touches no helper, file or Windows state; the last assertion pins that the real
+    // commands go through the same lock.
+    #[test]
+    fn a_stop_issued_during_a_start_runs_after_it_and_leaves_capture_off() {
+        use std::sync::atomic::AtomicBool;
+        use std::sync::{mpsc, Arc, Mutex};
+        let on = Arc::new(AtomicBool::new(false));
+        let log = Arc::new(Mutex::new(Vec::<&str>::new()));
+
+        // Start, then stop, one after the other: off at the end.
+        capture_serialized(|| on.store(true, Ordering::SeqCst));
+        capture_serialized(|| on.store(false, Ordering::SeqCst));
+        assert!(!on.load(Ordering::SeqCst));
+
+        // A stop issued while a start is still waiting.
+        let (entered_tx, entered_rx) = mpsc::channel();
+        let start = {
+            let (on, log) = (on.clone(), log.clone());
+            std::thread::spawn(move || {
+                capture_serialized(|| {
+                    log.lock().unwrap().push("start-begin");
+                    entered_tx.send(()).unwrap();
+                    std::thread::sleep(std::time::Duration::from_millis(300)); // the old-helper wait
+                    on.store(true, Ordering::SeqCst); // flag up, helper launched
+                    log.lock().unwrap().push("start-end");
+                })
+            })
+        };
+        entered_rx.recv().unwrap();
+        let stop = {
+            let (on, log) = (on.clone(), log.clone());
+            std::thread::spawn(move || {
+                capture_serialized(|| {
+                    log.lock().unwrap().push("stop");
+                    on.store(false, Ordering::SeqCst);
+                })
+            })
+        };
+        start.join().unwrap();
+        stop.join().unwrap();
+        assert_eq!(*log.lock().unwrap(), vec!["start-begin", "start-end", "stop"], "the stop overtook the start");
+        assert!(!on.load(Ordering::SeqCst), "capture left on after a stop");
+
+        // A start that panicked must not leave stop locked out.
+        let _ = std::thread::spawn(|| capture_serialized(|| panic!("start failed"))).join();
+        capture_serialized(|| on.store(false, Ordering::SeqCst));
+
+        // The served commands take that lock. Tokens built by concat! so this test can't match itself.
+        let src = include_str!("monitoring.rs");
+        assert!(src.contains(concat!("capture_serialized(", "start_fps_capture_locked)")));
+        assert!(src.contains(concat!("capture_serialized(", "stop_fps_capture_locked)")));
     }
 }

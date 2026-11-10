@@ -997,9 +997,10 @@ async fn latency_measure_mouse(duration_ms: u32) -> Option<latency::MouseMeasure
 /// priorities and the tests read them directly). Nothing here changes Windows or reaches
 /// `actions.rs`; the two exports write their files exactly as before.
 ///
-/// Not here yet: `start_fps_capture`. It waits up to 5 s for an old helper and launches an
-/// elevated one, and off the main thread it could interleave with `stop_fps_capture`; it needs the
-/// two serialized first (parked under CR-slow-async in WORK_TRAIN.md).
+/// CR-capture-async: `start_fps_capture` (which waits up to 5 s for an old helper and launches an
+/// elevated one) and `stop_fps_capture` are served here too. They take turns under one lock in
+/// monitoring.rs (`capture_serialized`), so a stop pressed during a start's wait runs after that
+/// start and leaves capture off.
 mod off_main {
     /// Run `work` on the blocking pool and hand back exactly what it returned. The pool only fails
     /// a task that panicked; that panic is re-raised here, so it is printed and that one invoke is
@@ -1080,6 +1081,16 @@ mod off_main {
         blocking(move || crate::trial_candidates::get_trial_candidates(risk_choice)).await
     }
 
+    #[tauri::command]
+    pub(crate) async fn start_fps_capture() -> Result<(), String> {
+        blocking_result("starting the capture", crate::monitoring::start_fps_capture).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn stop_fps_capture() {
+        blocking(crate::monitoring::stop_fps_capture).await
+    }
+
     /// The commands served here, by the name the window invokes. The tests hold the handler list
     /// and `build.rs` to it.
     #[cfg(test)]
@@ -1093,6 +1104,8 @@ mod off_main {
         "get_priorities",
         "get_diagnostics",
         "get_trial_candidates",
+        "start_fps_capture",
+        "stop_fps_capture",
     ];
 
     #[cfg(test)]
@@ -1104,6 +1117,7 @@ mod off_main {
         // very type it answered, so the invoke and the JSON the window gets are unchanged.
         fn answers<T, Fut: Future<Output = T>>(_sync: fn() -> T, _async: fn() -> Fut) {}
         fn answers1<A, T, Fut: Future<Output = T>>(_sync: fn(A) -> T, _async: fn(A) -> Fut) {}
+        fn answers_by_type<T, Fut: Future<Output = T>>(_sync: impl Fn() -> T, _async: impl Fn() -> Fut) {}
         fn answers2<A, B, T, Fut: Future<Output = T>>(_sync: fn(A, B) -> T, _async: fn(A, B) -> Fut) {}
 
         #[test]
@@ -1117,6 +1131,11 @@ mod off_main {
             answers1(crate::support_evidence::export_support_evidence, export_support_evidence);
             answers1(crate::trial_candidates::get_trial_candidates, get_trial_candidates);
             answers2(crate::export::export_report, export_report);
+            // The capture commands are checked by item type, never as fn pointers: a pointer links
+            // their bodies (helper launch, tray) into this test binary, which has no Windows app
+            // manifest, and it then fails to load (STATUS_ENTRYPOINT_NOT_FOUND).
+            answers_by_type(crate::monitoring::start_fps_capture, start_fps_capture);
+            answers_by_type(crate::monitoring::stop_fps_capture, stop_fps_capture);
         }
 
         #[test]
@@ -1657,8 +1676,8 @@ pub fn run() {
             get_gpu_sensors,
             get_cpu_sensors,
             monitoring::get_memory_pressure,
-            start_fps_capture,
-            stop_fps_capture,
+            off_main::start_fps_capture,
+            off_main::stop_fps_capture,
             get_fps_status,
             show_overlay,
             hide_overlay,
