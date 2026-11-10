@@ -67,6 +67,15 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
   Trial clicks (~25 min); P6 — Home → "Something's wrong", follow a WARDOGS crash and a stutter to one next step
   (~5 min); P7 — your friend asks Home for more FPS, a stutter and a crash without asking what a word means (his
   ~15 min). Each is recorded in BACKLOG as that phase's exit.
+- **CR-1102-left owner calls** (triaged 2026-11-10; Claude's recommendation after each):
+  - Real play stopped by an OtherChange or Conditions: keep the change on, or put it back? *Put it back, as a Trial
+    does when another change confounds it.*
+  - After the one-time consent, should newly ticked UAC tiers and service suspends ask once more before they
+    start? *Yes: one confirm naming only the newly added items.*
+  - A drift notice whose check now reads unknown: keep showing it, or hide it? *Keep it, worded "last seen
+    changed; Compy can't read it now".*
+  - A leftover `gaming-session` temp file blocks update and restart until removed: keep refusing, or clear a temp
+    older than the live contract? *Keep refusing, but name the file and offer Recover in the refusal.*
 - **P8-first-advanced** waits on P4's walkthrough (the gate is Trial + Risk proof), then your sign-off on the
   candidate Claude recommends.
 
@@ -96,36 +105,24 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       in `6d99f36c`; then one first-run demo at a time across remounts `59df7cb7`, and a recorded but unmeasured
       game never called measured `3b542b0a`; round 2 PASS. Installed in `1d53dfc8`.
 - [ ] **CR-1102-left** (codebase review 2026-11-02 to 11-03, slices 1-8; fixed in `8f4037c1`..`508b200f`, `4465e74b`, `16479f4b`, `22d23584`..`cd9e11c0`)
-      What it found and left, each a decision or a UI study rather than a quick fix: drift notices stay up while a
-      check reads unknown; a Trial delta on a 0 or NaN baseline (older records only); `has_pending_contract` refuses
-      on any leftover temp file; one ledger row a downgraded build can't parse fails the whole ledger; a partial
-      batch apply carries no flag over IPC; nothing stops a double apply of one change; real play keeps a change
-      after an OtherChange or Conditions stop (owner call); ~~the experiments, sessions and noise stores still
-      overwrite an earlier `.corrupt`~~ (fixed `c127ce9`, `14d39b5`: a second damaged file keeps the first set-aside,
-      the intelligence store too; one that can't be set aside refuses the read); ~~a session under 600 samples leaves
-      an armed comparison waiting with no line saying why~~ (CR-cmp-wait `e01561f7`); ~~the Lab's "measured together" count still counts rows
-      from another PC~~ (fixed `8ef5772`). Slice 6: Care's first-ever
-      scan seeds an empty world when its readers fail; a crash's vitals come from the whole capture window, not the
-      game's own; Black Box, export and capture start run on the UI thread; a wedged old FPS helper can clear the new
-      one's running flag; a Care state that can't be read or written stays silent with no support event. Slice 7
-      (advice): a service that is only stopped still reads as Compy's change (its start type is unread); the
-      power-plan, core-parking and bcdedit checks match English words, so a localized Windows misreads them; ~~one peak
-      GPU sample over 95% still reads as "the GPU was the bottleneck", with purchase links~~ (P9-bottleneck-sustained);
-      the slow probes
-      (leftovers, readiness, priorities, diagnostics, Trial candidates) run as sync commands. Slice 8 (screens): the
-      GPU view's Global/Per-game picker changes nothing anything reads (remove it, or wire it); after the one-time
-      consent, newly ticked UAC tiers and service suspends start with no fresh confirm; the GPU profile labels and
-      the setup lessons are English in zh-CN; the tour waits on "Running checks" forever if the scan rejects (a panic
-      only); App's banner wiring (the pane-close re-read, the Resume failure) and its refresh guard are tested
-      through their helpers only (App has no render harness); a session's peak stays ungraded only when DXGI shows an
-      NVIDIA adapter (a TCC compute card only NVML reports is missed); App's and Home's walkthrough and tuning vendor
-      is still the first DXGI adapter, not the primary GPU. Desk reviews: with unread checks, Home's ring note still
-      carries "N couldn't be read" and wraps past two lines at 1280x720 (the advisory aside left the ring for that
-      reason); Live's session strip floors durations (3h 28m) where History and Games round (3h 29m). Unsure:
-      `elevate_and_wait` waits with no timeout while the ledger is locked; core parking flags any non-performance
-      plan with minimum cores at 100; a system-managed pagefile may print "Fixed at 0-0 MB"; VBS is read as
-      configured, not running; two modules are called dual-channel whatever their slots; drive health and memory
-      speed or channels never rank as limiters.
+      Triaged 2026-11-10 (coordinator desk session). Already fixed on `main`, struck: the Trial delta on a 0/NaN
+      baseline (`4d5595fd`), Black Box/export/capture start and the slow probes off the UI thread (`9cab29d0`,
+      `25af5dc5`), a silent Care state (`e77fba1e`), a stopped service read as Compy's (`c5523543`), English-word
+      power/parking/bcdedit reads (`5e2a110d`; the Ultimate apply stays CR-ultimate-identity), the GPU picker
+      (`7e697609`), zh-CN GPU labels and lessons (`eddf6c7e`), the tour on a rejected scan (`a60b8068`), the first-DXGI
+      vendor (`0f0cb0ba`), the ring note (`5e8cf37a`), Live's floored durations (`8be87e12`), "Fixed at 0-0 MB"
+      (`258b438f`), VBS configured-not-running (`b2ed0cca`), dual-channel (`ad5074ac`); earlier: the `.corrupt`
+      overwrite (`c127ce9`, `14d39b5`), the waiting comparison (`e01561f7`), "measured together" (`8ef5772`), one peak
+      GPU sample (P9-bottleneck-sustained). Four owner calls moved to **Needs owner**. Still open, engineering, none
+      a one-session fix: one ledger row a downgraded build can't parse fails the whole ledger; a partial batch apply
+      carries no flag over IPC; nothing stops a double apply of one change; Care's first-ever scan seeds an empty
+      world when its readers fail; a crash's vitals come from the whole capture window, not the game's own; a wedged
+      old FPS helper can clear the new one's running flag (`monitoring.rs` stores `helper_running` false on any exit;
+      gating it on the generation would leave it stuck true after a failed relaunch, so it needs a live-helper
+      count); App's banner wiring and refresh guard are tested through helpers only (no App render harness); a TCC
+      NVIDIA card only NVML reports leaves a session's peak graded (the ungrade rule reads DXGI only); `elevate_and_wait` waits with no timeout while
+      the ledger is locked (`actions.rs`); core parking flags any non-performance plan with minimum cores at 100;
+      drive health and memory speed or channels never rank as limiters.
 
 ### Next — small visible slices (refill 2026-11-03: CR-1102-left's fixable lines + Roadmap Phase 9)
 - [x] **CR-live-round** Live's session strip and the debrief floor a session's length (3h 28m) where History and
@@ -977,10 +974,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-03 PM (scheduled, CODE-ONLY, owner in a game): queue refill (5 ready slices from CR-1102-left); CR-cmp-wait
-  `e01561f7` (tsc 0; vitest 10 files / 116 passed; new test fails 2/5 on old code); stale `train-live-round` worktree
-  removed (its work is on main as `8be87e12`). NOT pushed (main ahead of GitHub), NOT installed: the next FULL
-  session pushes through the gate, builds, installs and does the screen check.
 - 2026-11-04 (scheduled, CODE-ONLY, owner in PBZ): CR-trial-zero-base `4d5595fd` (rebased over `1e9ce481`); tsc 0;
   ExperimentBench 161/161; the 3 new cases fail on main's code. TS display only, no review. One item only; no cargo
   mid-game. Log trimmed to the newest 14. Not pushed (CODE-ONLY; main ahead of GitHub); next FULL session pushes.
@@ -1069,6 +1062,14 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   0 state-drift; the installed-stamp scan SKIPs because a GUID literal abuts the stamp in rodata). Screen check
   (`_train\view-1110b\`): zh safe-stack dial, stutter "Undoing it isn't suggested" with no rollback button, #677 rows;
   sonnet self-review FAIL on the Live term tip showing text through it -> queued CR-tip-see-through. Language restored.
+- 2026-11-10 ~14:30-15:20 (coordinator-assigned desk session, FULL): CR-tip-see-through `0ab041dd` (tip ground
+  `--v2-panel-pop` 0.96 + blur; term-style-guard fails on the old 0.74; src/design + monitor + glass vitest 97 files /
+  1150 passed, tsc 0); #663 `5993d0ec` (ROADMAP done-when table, derived Exit lines for Phases 9-11, "What v1.0
+  means"; BACKLOG's #583 lanes ticked; 10 docs-guard files green, doc-budget ALL PASS, verify-release-state 31/31);
+  CR-1102-left triaged: 15 already fixed and struck, 0 fixed now, 4 owner calls under Needs owner, 11 engineering
+  lines left open. Three WORK_TRAIN SHAs were mistyped (`c552354c`/`7e69760c`/`0f0cb0bb` are `c5523543`/`7e697609`/
+  `0f0cb0ba` on main). `5fb37609..5993d0ec` pushed through the gate (cargo 1810/0); #663 closed naming `5993d0ec`.
+  No Rust, no install; tip visual re-check due at the next FULL install. Pushed with this line.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
