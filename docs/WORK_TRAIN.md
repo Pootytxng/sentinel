@@ -224,10 +224,16 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       Now an improved pair says "Keep things as they are ... Undoing it isn't suggested: these two sessions measured
       an improvement", carries no rec id (no rollback button); the power plan likewise. Regressed path unchanged.
       Test proven failing on the old code. Review r1 APPROVE-WITH-NITS (2 nits taken; SHOULD-FIX queued below).
-- [ ] **CR-stutter-rollback-trial** (from CR-stutter-rollback-improved review r1) A REGRESSED comparison whose suspect
+- [x] **CR-stutter-rollback-trial** (from CR-stutter-rollback-improved review r1) A REGRESSED comparison whose suspect
       change was kept on a Trial's measured improvement (`AppliedChange.justified_by_experiment`) still proposes the
       plain rollback. The copy should say the Trial measured an improvement on <date> and this later session
       contradicts it (the ledger event needs the Trial link). Rust (intelligence.rs); one review.
+      Done `d7004a9a` (2026-11-10): the timeline apply event carries the row's Trial link (`serde(skip)`, wire shape
+      unchanged); that case now reads "A Trial measured this change as an improvement on <date>, and this later
+      comparison got worse. Roll it back in the Trust Ledger, play one more session, and compare — that is the next
+      test of which result holds." Rec id kept (rollback still offered); no date when the record has none. Test
+      proven failing on the old code. cargo 1809/0, clippy clean. Review r1 APPROVE-WITH-NITS (SHOULD-FIX + 2 nits
+      taken). English only, like the sentence it replaces.
 - [x] **CR-zh-dial** (desk review 2026-11-04, pre-existing) In zh-CN the Test room's safe-stack dial label "已启用" collides
       with the ring stroke and ticks (en "ON" fits): fit the zh label inside the ring (a shorter string or a smaller size)
       and add a zh-width guard. TS/CSS; screen check at a FULL session.
