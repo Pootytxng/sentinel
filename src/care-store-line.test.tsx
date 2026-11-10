@@ -11,10 +11,12 @@ const SAVE_LINE = "Compy couldn't save this; it'll try again";
 const READ_LINE = "Compy couldn't check for crash notices; it'll try again";
 
 function Harness({ invokeFn }: { invokeFn: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> }) {
-  const store = useCareStore(invokeFn);
+  const store = useCareStore();
   return (
     <>
-      <button onClick={() => store.persist("dismiss_care_incident", "inc-1")}>Not now</button>
+      <button onClick={() => store.persist(() => invokeFn("dismiss_care_incident", { incidentId: "inc-1" }))}>
+        Not now
+      </button>
       <button onClick={store.readFailed}>read failed</button>
       <button onClick={store.readOk}>read ok</button>
       <CareStoreLine trouble={store.trouble} />
@@ -84,9 +86,10 @@ describe("a crash-notice choice that can't be saved says so (CR-care-silent)", (
   it("is what App uses: no crash-notice call swallows its failure, and the line is rendered", () => {
     const app = readFileSync(join("src", "App.tsx"), "utf8");
     for (const cmd of ["dismiss_care_incident", "mark_care_incident_opened"]) {
-      expect(app, `${cmd} is invoked directly again, outside the store that reports failures`)
-        .not.toMatch(new RegExp(`invoke\\("${cmd}"`));
-      expect(app).toContain(`careStore.persist("${cmd}", incidentId)`);
+      const calls = app.match(new RegExp(`invoke\\("${cmd}"`, "g")) ?? [];
+      expect(calls.length, `${cmd} is invoked more than once, outside the store that reports failures`).toBe(1);
+      expect(app, `${cmd} no longer saves through the store, so a failure is silent again`)
+        .toContain(`careStore.persist(() => invoke("${cmd}", { incidentId }))`);
     }
     expect(app, "the line is no longer rendered").toContain("<CareStoreLine trouble={careStore.trouble} />");
     const read = app.match(/invoke<PendingCareIncident \| null>\("get_pending_care_incident"\)([\s\S]*?)\}, \[/)?.[1] ?? "";

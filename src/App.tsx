@@ -1158,7 +1158,7 @@ function App() {
     return () => window.removeEventListener(INTERVIEW_ARRIVAL_EVENT, open);
   }, []);
   // CR-care-silent: a crash-notice record that can't be read or saved says so in one line.
-  const careStore = useCareStore(invoke);
+  const careStore = useCareStore();
   const { readOk: careReadOk, readFailed: careReadFailed } = careStore;
   const refreshPendingCare = useCallback(() => {
     invoke<PendingCareIncident | null>("get_pending_care_incident")
@@ -1181,16 +1181,16 @@ function App() {
   // an unacknowledged notice for something they just acknowledged.
   const openCareIncident = (incidentId: string) => {
     setPendingCare(null);
-    // A failed save shows one line and retries once; the card reappears on the next read, which
-    // is the safe direction.
-    careStore.persist("mark_care_incident_opened", incidentId);
+    // A failed save shows one line and retries with backoff; the card reappears on the next read,
+    // which is the safe direction.
+    careStore.persist(() => invoke("mark_care_incident_opened", { incidentId }));
     openLabStation("blackbox", incidentId);
   };
   // "Not now" — clears Compy's POINTER only. Every Windows record behind it (Event Log entry, WER
   // report, reliability row) is untouched and still readable from Crash & Freeze Rescue.
   const dismissCareIncident = (incidentId: string) => {
     setPendingCare(null);
-    careStore.persist("dismiss_care_incident", incidentId);
+    careStore.persist(() => invoke("dismiss_care_incident", { incidentId }));
   };
   const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
     Overview: "home",

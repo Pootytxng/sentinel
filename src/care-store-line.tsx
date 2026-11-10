@@ -14,9 +14,7 @@ export type CareStoreTrouble = "save" | "read" | null;
  */
 export const CARE_SAVE_RETRY_MS = [5_000, 30_000, 120_000] as const;
 
-type Invoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
-
-export function useCareStore(invokeFn: Invoke) {
+export function useCareStore() {
   const [trouble, setTrouble] = useState<CareStoreTrouble>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => {
@@ -24,11 +22,15 @@ export function useCareStore(invokeFn: Invoke) {
     return () => pending.forEach(clearTimeout);
   }, []);
   const saved = useCallback(() => setTrouble((t) => (t === "save" ? null : t)), []);
-  /** Save a choice about a crash notice. A failure shows the line and retries with backoff. */
+  /**
+   * Save a choice about a crash notice. `save` is the caller's own `invoke("command", …)`, written
+   * out at the call site so the command stays a plain literal there. A failure shows the line and
+   * retries with backoff.
+   */
   const persist = useCallback(
-    (command: string, incidentId: string) => {
+    (save: () => Promise<unknown>) => {
       const attempt = (retry: number) => {
-        invokeFn(command, { incidentId })
+        save()
           .then(saved)
           .catch(() => {
             setTrouble("save");
@@ -44,7 +46,7 @@ export function useCareStore(invokeFn: Invoke) {
       };
       attempt(0);
     },
-    [invokeFn, saved],
+    [saved],
   );
   const readFailed = useCallback(() => setTrouble((t) => t ?? "read"), []);
   const readOk = useCallback(() => setTrouble((t) => (t === "read" ? null : t)), []);
