@@ -1136,6 +1136,61 @@ pub(crate) fn bios_age_label(age_days: Option<i64>) -> &'static str {
 pub(crate) struct VirtualizationInfo {
     pub(crate) hypervisor_present: bool,
     pub(crate) cpu_virtualization_enabled: Option<bool>, // SVM/VT-x enabled in firmware
+    /// Whether virtualization-based security is actually RUNNING, from
+    /// `Win32_DeviceGuard.VirtualizationBasedSecurityStatus` (see `vbs_state`). The registry
+    /// switches only say it is configured; this is the live state. Read-only: Compy never changes
+    /// VBS (security settings are the owner's).
+    pub(crate) vbs_state: VbsState,
+}
+
+/// Live VBS state. `Unknown` when the Device Guard class can't be read or reports a value
+/// outside the documented 0/1/2, never guessed from the registry or the hypervisor flag.
+#[derive(Serialize, Clone, Copy, Default, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum VbsState {
+    Running,
+    EnabledNotRunning,
+    Off,
+    #[default]
+    Unknown,
+}
+
+/// Win32_DeviceGuard.VirtualizationBasedSecurityStatus: 0 = not enabled, 1 = enabled but not
+/// running, 2 = enabled and running.
+pub(crate) fn vbs_state(status: Option<u32>) -> VbsState {
+    match status {
+        Some(2) => VbsState::Running,
+        Some(1) => VbsState::EnabledNotRunning,
+        Some(0) => VbsState::Off,
+        _ => VbsState::Unknown,
+    }
+}
+
+/// The words the support view shows for a `VbsState`.
+pub(crate) fn vbs_state_label(state: VbsState) -> &'static str {
+    match state {
+        VbsState::Running => "Running",
+        VbsState::EnabledNotRunning => "Turned on, not running",
+        VbsState::Off => "Off",
+        VbsState::Unknown => "Unknown",
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename = "Win32_DeviceGuard")]
+#[serde(rename_all = "PascalCase")]
+pub(crate) struct Win32DeviceGuard {
+    pub(crate) virtualization_based_security_status: Option<u32>,
+}
+
+/// Reads the live VBS status from the Device Guard WMI namespace. Any failure (namespace
+/// missing on older builds, access denied, empty result) is `None`, which reads as unknown.
+fn read_vbs_status() -> Option<u32> {
+    let com = COMLibrary::new().ok()?;
+    let conn =
+        WMIConnection::with_namespace_path("ROOT\\Microsoft\\Windows\\DeviceGuard", com).ok()?;
+    let rows: Vec<Win32DeviceGuard> = conn.query().ok()?;
+    rows.into_iter().next()?.virtualization_based_security_status
 }
 
 #[derive(Deserialize)]
@@ -1168,6 +1223,8 @@ pub(crate) fn detect_virtualization() -> Option<VirtualizationInfo> {
     Some(VirtualizationInfo {
         hypervisor_present,
         cpu_virtualization_enabled,
+        // Its own namespace and connection: a Device Guard failure leaves the rest of the probe.
+        vbs_state: vbs_state(read_vbs_status()),
     })
 }
 
@@ -1184,6 +1241,26 @@ mod virtualization_detection_tests {
         let cpu: Win32ProcessorVirt =
             serde_json::from_str(r#"{"VirtualizationFirmwareEnabled":true}"#).expect("parses");
         assert_eq!(cpu.virtualization_firmware_enabled, Some(true));
+        let dg: Win32DeviceGuard =
+            serde_json::from_str(r#"{"VirtualizationBasedSecurityStatus":2}"#).expect("parses");
+        assert_eq!(dg.virtualization_based_security_status, Some(2));
+    }
+
+    // CR-vbs-running: the documented 0/1/2 map to off / turned-on-not-running / running; a missing
+    // or undocumented value is unknown, never a guess.
+    #[test]
+    fn vbs_status_maps_only_the_documented_values() {
+        assert_eq!(vbs_state(Some(2)), VbsState::Running);
+        assert_eq!(vbs_state(Some(1)), VbsState::EnabledNotRunning);
+        assert_eq!(vbs_state(Some(0)), VbsState::Off);
+        assert_eq!(vbs_state(Some(3)), VbsState::Unknown);
+        assert_eq!(vbs_state(None), VbsState::Unknown);
+        assert_eq!(VirtualizationInfo::default().vbs_state, VbsState::Unknown);
+        assert_eq!(vbs_state_label(VbsState::EnabledNotRunning), "Turned on, not running");
+        assert_eq!(
+            serde_json::to_value(VbsState::EnabledNotRunning).expect("serializes"),
+            serde_json::json!("enabled_not_running")
+        );
     }
 }
 

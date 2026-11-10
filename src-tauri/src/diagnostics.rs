@@ -43,6 +43,22 @@ pub(crate) fn yes_no(b: bool) -> String {
     if b { "Yes".into() } else { "No".into() }
 }
 
+/// The live VBS row: whether virtualization-based security is actually running
+/// (`Win32_DeviceGuard`), which the configured switches above it can't say. Read-only; an
+/// unreadable probe reads "Unknown".
+pub(crate) fn vbs_running_entry(
+    virt: Option<&crate::hardware::VirtualizationInfo>,
+) -> DiagnosticEntry {
+    let state = virt.map(|v| v.vbs_state).unwrap_or_default();
+    DiagnosticEntry {
+        label: "VBS running now".into(),
+        value: crate::hardware::vbs_state_label(state).into(),
+        note: Some(
+            "Read from Windows Device Guard. Compy only reads this; turning VBS on or off is your call in Windows Security.".into(),
+        ),
+    }
+}
+
 #[tauri::command]
 pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
     let hw = collect_hardware();
@@ -123,12 +139,14 @@ pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
         name: "Security".into(),
         entries: vec![
             DiagnosticEntry {
-                label: "Memory Integrity / VBS active".into(),
+                // The registry switches: what is configured, not whether it is running (next row).
+                label: "Memory Integrity / VBS turned on".into(),
                 value: yes_no(memory_integrity_or_vbs_active()),
                 note: Some(
                     "Hypervisor-based kernel protection. Strong against certain malware classes, with measurable FPS cost in some games.".into(),
                 ),
             },
+            vbs_running_entry(hw.virtualization.as_ref()),
             DiagnosticEntry {
                 label: "Hypervisor running".into(),
                 value: match &hw.virtualization {
@@ -750,6 +768,23 @@ mod diagnostics_tests {
         assert_eq!(yes_no(false), "No");
     }
 
+    // CR-vbs-running: the row says running / turned on but not running / off from the live
+    // Device Guard state, and Unknown when the probe could not read it.
+    #[test]
+    fn vbs_running_row_reads_the_live_state_and_unknown_when_unread() {
+        use crate::hardware::{VbsState, VirtualizationInfo};
+        let row = |s: VbsState| {
+            let v = VirtualizationInfo { vbs_state: s, ..Default::default() };
+            vbs_running_entry(Some(&v)).value
+        };
+        assert_eq!(row(VbsState::Running), "Running");
+        assert_eq!(row(VbsState::EnabledNotRunning), "Turned on, not running");
+        assert_eq!(row(VbsState::Off), "Off");
+        assert_eq!(row(VbsState::Unknown), "Unknown");
+        assert_eq!(vbs_running_entry(None).value, "Unknown");
+        assert_eq!(vbs_running_entry(None).label, "VBS running now");
+    }
+
     #[test]
     fn sections_are_the_fixed_set_in_order() {
         let names: Vec<String> = get_diagnostics().into_iter().map(|s| s.name).collect();
@@ -830,6 +865,7 @@ mod diagnostics_tests {
         assert!(power.iter().any(|l| l == "BIOS / firmware"));
         assert!(power.iter().any(|l| l == "Core parking policy"));
         assert!(labels_of("Security").iter().any(|l| l == "Hypervisor running"));
+        assert!(labels_of("Security").iter().any(|l| l == "VBS running now"));
         assert!(labels_of("Storage").iter().any(|l| l == "Reserved Storage active"));
         // The Wired-Ethernet row exists even when Windows returns no adapters (honest "Unknown").
         assert!(labels_of("Network").iter().any(|l| l == "Wired Ethernet"));
