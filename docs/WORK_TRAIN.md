@@ -233,8 +233,17 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       relabelled "Memory Integrity / VBS turned on". Owner's rig reads 2 (Running) without admin.
 - [ ] **CR-slow-async** Black Box, support export, capture start and the slow probes become async commands so the window
       keeps painting while they work. Rust; one review; test the commands still answer the same shapes.
-- [ ] **CR-care-silent** A Care state read or write failure gets a support event and one visible line ("Compy couldn't
-      save this; it'll try again"), never silence. Rust + TS; test a failed write shows the line.
+- [x] **CR-care-silent** A Care state read or write failure gets a support event and one visible line ("Compy couldn't
+      save this; it'll try again"), never silence. Rust + TS; test a failed write shows the line. Done `e77fba1e`,
+      `3f200258`, `263e0768` (2026-11-10): "Not now" / "Find out why" on the crash card and the Home card read now
+      answer an error on a failed read or save, with one support event (`care.*`, one per failure streak for the
+      reads and the scan); the window shows "Compy couldn't save this; it'll try again" (or "couldn't check for
+      crash notices") in the bottom-right stack and retries a failed save at 5 s / 30 s / 2 min. en + zh-CN.
+      Review r1 APPROVE-WITH-NITS (3 SHOULD-FIX taken), r2 APPROVE-WITH-NITS (2 SHOULD-FIX queued below).
+- [ ] **CR-care-line-truth** (from CR-care-silent review r2) The save line outlives its promise and its cause: after
+      the last retry (~2.6 min) it still says "it'll try again", and any later successful save clears it even when
+      a different choice is still unsaved. Track failures per incident and command, clear only when none remain,
+      and keep retrying (or reword) after the backoff ends. TS only; test both.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
