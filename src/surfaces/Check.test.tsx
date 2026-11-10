@@ -581,6 +581,51 @@ describe("Check", () => {
     expect(document.querySelector(".check-upgrade a")).toBeNull();
   });
 
+  // ── Session hint (P9-hint-shown) ──
+
+  it("prints the session GPU hint under the limiter rows, and nothing when it is absent", async () => {
+    const hint =
+      "Recent session hint: the GPU was busy at times (peak ~97%) but sat at or above 95% for only a fifth of the time Compy measured the game, so this session doesn't look GPU-limited overall.";
+    prioritiesMock.payload = {
+      limiters: [
+        {
+          id: "lim-x",
+          title: "Some limiter",
+          reason: "A reason.",
+          linked: null,
+          confidence: "medium",
+          status: "attention",
+        },
+      ],
+      already_fine: [],
+      not_worth_touching: [],
+      session_hint: hint,
+      upgrade_path: null,
+    };
+    const { unmount } = render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    const line = await screen.findByText(hint);
+    expect(line).toHaveClass("check-session-hint");
+    // Under the limiter rows: the limiter list comes before the hint in document order.
+    const list = document.querySelector(".check-list")!;
+    expect(list.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    unmount();
+
+    prioritiesMock.payload = { ...prioritiesMock.payload, session_hint: null };
+    invalidateProbe();
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("Some limiter")).toBeInTheDocument();
+    expect(document.querySelector(".check-session-hint")).toBeNull();
+    expect(screen.queryByText(/Recent session hint/)).toBeNull();
+  });
+
   // ── Exportable setup summary (A5) ──
 
   it("renders a dedicated setup-summary card once the scan settles, with a copy button", async () => {

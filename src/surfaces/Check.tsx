@@ -804,6 +804,14 @@ export default function Check({
           </>
           )}
 
+          {/* P9-hint-shown: the newest measured session's GPU-load hint ("busy at times" / "sat at
+              or above N% for X% of it"), one quiet line under the limiter rows, outside the
+              section above so it still shows when no limiter stands out. Hidden when absent.
+              The sentence comes whole from priorities.rs (it opens "Recent session hint:"). */}
+          {priorities?.session_hint && (
+            <p className="check-session-hint">{priorities.session_hint}</p>
+          )}
+
           {/* R3 Lane B: upgrade-path advisory — renders ONLY when a verdict already names hardware
               as the limiter (GPU-limited session / HDD install drive). Links are plain retailer
               searches, COPY-only in-app (no navigation, no opener); the disclosure always rides. */}
