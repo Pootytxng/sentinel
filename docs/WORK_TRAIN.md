@@ -243,10 +243,14 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       one-click restore here" and the Windows Virtual memory steps; a single fixed row keeps the one-click note.
       leftovers.rs only (actions.rs untouched). Test proven failing on the old note. cargo 1805/0, clippy clean.
       Review r1 APPROVE-WITH-NITS; SHOULD-FIX queued as CR-pagefile-note-refusals.
-- [ ] **CR-pagefile-note-refusals** (from CR-pagefile-multi review r1) The "Pagefile disabled" finding (no rows) still
+- [x] **CR-pagefile-note-refusals** (from CR-pagefile-multi review r1) The "Pagefile disabled" finding (no rows) still
       notes "Safe to restore to automatic", but the restore refuses zero entries too (`parse_manual_pagefile_entry`);
       check the `?:`-form single row the same way. Same non-mutating fix: say it is not one-click and the Windows
-      steps. Rust (leftovers.rs); one review.
+      steps. Rust (leftovers.rs); one review. Done `da22a28b` (2026-11-10): one note builder for every refused
+      layout, each with its reason (several drives, none configured, an entry not in the plain `X:\pagefile.sys` form
+      such as `?:` or a sub-folder, a row whose name wasn't read); a single row is one-click only when the restore's
+      own pure parser accepts it. actions.rs untouched; RELEASE_STATE restore_gate re-anchored. Test proven failing on
+      the old code. Review r1 APPROVE-WITH-NITS (WMI-vs-registry note comment and per-reason wording taken).
 - [x] **CR-dual-channel** Claim a memory-channel count only from slot or bank data that names it, otherwise
       "unknown" (never invent hardware specs); check first what the line reads today. Rust, read-only; one review.
       Done `ad5074ac` (2026-11-10): before, any 2+ sticks read "Running in dual-channel (or wider)". Now the
