@@ -516,6 +516,12 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       (CODE-ONLY); the owner-and-friend walkthrough is the next investment, not code.
 - [ ] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "Compy finished the supported
       tests" with nothing worth another run; record it in BACKLOG as the Phase 4 exit.
+      2026-11-10 desk session (not ticked): blocked before any Trial. The owner's PBZ Trial `exp:6-1793579868420`
+      (visual-effects, started 2026-11-02 00:37Z) is still Running with its change applied, and the backend refuses
+      a new Trial while one is Pending/Running (`experiment.rs:817-823`). Human step: the owner finishes it (one PBZ
+      session, then Conclude) or puts it back from the bench (~2 min, or ~15 min with the session), then plays the
+      WARDOGS Trials the panel asks for (~10 min of normal play per session). Read-back: `trial-wardogs\nav.js` output
+      in this session's report.
 
 ### Then — Roadmap Phase 5: Guided Optimization Journey (`product/ROADMAP.md` Phase 5)
 Planned 2026-10-25. Order is value order. Phase 5 exit on the owner rig: from one button to the summary,
@@ -550,6 +556,9 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
 - [ ] **P5-exit-proof** (owner, FULL) Run the journey on WARDOGS from the button to the summary with no manual
       Trial clicks; the friend repeats it once. Record in BACKLOG as the Phase 5 exit. Needs P5-guided through
       P5-learned. ROADMAP P5 exit.
+      2026-11-10 desk session (not ticked): needs a person. The exit is measured on normal play (Constitution 36,
+      P5-realplay), so an unattended idle scene is not a valid run, and the same open PBZ Trial blocks the button.
+      Human step: after P4's step, the owner presses Optimize my game on WARDOGS and plays (~25 min); the friend once.
 
 ### Then — Roadmap Phase 6: Care Journey convergence (`product/ROADMAP.md` Phase 6)
 Planned 2026-10-25. Order is value order. Converge, don't add rooms. Phase 6 exit on the owner rig: from Home,
@@ -588,6 +597,13 @@ room or station picked by hand.
 - [ ] **P6-exit-proof** (owner, FULL) From Home, follow a real (or past) WARDOGS crash and a stutter to a next
       step or honest unknown without picking a room; the friend repeats it once. Record in BACKLOG as the
       Phase 6 exit. Needs P6-changed through P6-unknown. ROADMAP P6 exit.
+      2026-11-10 desk session, driven on the installed `68f2272b` from Home with no room picked: Home > Something went
+      wrong lands on Problems with one next step for the newest crash (ROB RUN App crash, Nov 10 11:17: "Verify the
+      game's files, then update it", with receipt), and its "Stutters or runs slow?" button compares the latest
+      session (PBZ, Nov 2) with the last steady one and names one next test (roll back, play once, compare). No
+      WARDOGS crash is on this PC's record (the incident list names none) and the stutter path compares the latest
+      game, PBZ. Evidence `C:\Users\Kuya\code\_train\view-1110\p6-0*.png`. Not ticked: the friend's repeat
+      (~5 min) and a WARDOGS case are still needed.
 
 ### Then — Roadmap Phase 7: Contextual UX and education convergence (`product/ROADMAP.md` Phase 7)
 Planned 2026-10-25. Order is value order. Converge, don't add rooms, consoles or guards (directive rule 1:
@@ -772,6 +788,8 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       "it crashed" without asking what a word means; the owner opens the technical layer on each and finds the
       exact setting, measurement and source. Record in BACKLOG as the Phase 7 exit. Needs P7-route through
       P7-teach; P7-palette and the rig slices do not block it. ROADMAP P7 exit.
+      2026-11-10 desk session (not ticked): needs the friend at the keyboard (~10 min) and the owner opening the
+      technical layer on each answer (~5 min); not drivable unattended.
 
 ### Then — Roadmap Phase 8: Advanced tuning envelope (`product/ROADMAP.md` Phase 8, `product/RISK_MODEL.md`)
 Planned 2026-10-28 (scheduled refill). ROADMAP: broaden only after the Trial/risk/stability systems are
@@ -903,20 +921,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-02 ~22:45 to 11-03 ~00:45 (interactive from Claude HQ; owner: "well continue witha peristent full
-  codebase review and fix and any other details you find need resolving"): the codebase review, slices 1-6, landed
-  from `claude/train-review-1103` (`8f4037c1` stores never saved over after a failed read, the ledger set aside only
-  on a parse failure and synced, Gaming Mode's start proves its root, the comparison gates, the Nagle refusal;
-  `445c1baa` its round-1 follow-ups; `508b200f` the frontend fixes with GL-faint-ink, P8-label-ink,
-  GL-shell-overflow, P8-off-progress and P8-launch-flash) and `-1103b` (`4465e74b` Care toasts, the support export
-  and captures; `16479f4b`). Merges `1d9c7abb` and `93c3ff0a`. Rust: each branch reviewed twice, no MUST; frontend:
-  a logic review (9 MUST, all fixed) and a round 2 with no MUST. Desk review on his data PASS on `1d9c7abb` (339
-  Problems quiet lines and Test's quiet labels at 5.08:1 or more; no shift on a deep-link scroll; the risk picker
-  held through the 2.7 s flash); `-1103b` changes nothing on screen. Desk build `93c3ff0a` installed
-  (`ship-reinstall.ps1 -VerifyRuntime`, proof `93c3ff0a · release`); pushed with this line through the pre-push
-  gate. What the review left is CR-1102-left. The lane line (`87656201`) was never pushed: kept on
-  `keep/lane-87656201`; scheduled sessions may write again. Owner played; every launch was --no-activate on his
-  second monitor.
 - 2026-11-03 ~01:00 to ~08:07 (interactive from Claude HQ, the same ask): the codebase review's slices 7 and 8 landed
   from `claude/train-review-1103c` (`22d23584` advice that reads the machine honestly; `e50cc1e9` screens that say
   what Compy read: GPU temperature from the named GPU's own sensor, never coloured from NVML, check counts that name
@@ -1022,6 +1026,12 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   9687 tests (the 3 site-app suites need site-app/node_modules); cargo test 1805/0, clippy clean (idle priority).
   Review ran as `claude -p --model sonnet` on the diff. No screen check or install this session. Pushed with this
   line through the gate.
+- 2026-11-10 ~12:45-13:20 (scheduled desk install, FULL at start, owner idle in Firefox): built `68f2272b`
+  (no-updater config) and installed it with ship-reinstall -VerifyRuntime (runtime `68f2272b · release`); RELEASE_STATE
+  re-stamped `2962ad35` (verify-release-state 0 state-drift). Screen check: Check's session hint, VBS running now,
+  dual-channel (`_train\view-1110\`). Exit proofs: P6 partly driven (crash + stutter next steps from Home, no
+  WARDOGS crash on record), P4/P5 blocked by the owner's open PBZ Trial exp:6, P7 needs the friend. A first push
+  was stopped mid-gate when the preflight showed input at 12:58 (idle 107 s); pushed with this line once idle again.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
