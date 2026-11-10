@@ -315,6 +315,12 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       `persist(key, save)` keyed `dismissed:<id>` / `opened:<id>`; the line clears only when no choice is unsaved;
       after the last retry it reads "Compy couldn't save this; the crash notice may show again" (en + zh-CN). Reworded,
       not retried forever: each failed save writes a support event. 3 tests fail on the old logic. TS only.
+- [ ] **CR-tip-see-through** (desk self-review FAIL 2026-11-10, installed `1f4ed7a1`, Live room) The in-app term tip
+      `.kl-tip` (`src/design/Term.tsx`, shared by every `<Term>`) is painted on `rgba(14,20,27,0.74)` with no
+      backdrop blur, so the readings under it ("47°c", "14", the MEASURED pills) show through and collide with its
+      text on the "13 Compy changes were on · combined effect" tip. Screenshot
+      `C:\Users\Kuya\code\_train\view-1110b\c2-live-combined-effect-tooltip.png`. Make the tip ground opaque (or blur
+      what is under it); test the computed ground; recapture.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -968,27 +974,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-03 ~09:18 to ~12:35 (interactive from Claude HQ; owner: "ensure everything here that's actually deemed
-  necessary is completed by you alone", in WARDOGS throughout): from `claude/train-hq-1103`: the 08:43 refill's slices
-  (CR-tour-reject `a60b8068`, CR-ring-note `5e8cf37a`, CR-zh-gpu `eddf6c7e`), P9-bottleneck-sustained `88f15e9a` /
-  `3ed24a87` / `14d39b55`, P9-software-first `023da7d7`, P8-ack-enforce `81a9f14d`, P8-dims-grades `b46f2c6a` /
-  `14d39b55`, two CR-1102-left lines (`c127ce9b` stores, `8ef5772c` Lab count); review r2 `14d39b55`, the lock-order
-  guard's new back edge `df636307`, clippy `388f2d73`. Proof: tsc + vite build 0 errors; full vitest on `8ef5772c`
-  509/534 files, every failure environment-only (site deps, shallow clone, pwsh, Windows paths) except the lock-order
-  guard, fixed and 41/41 at head; desk cargo test 1769/0 and clippy clean on `388f2d73`, run at idle priority with a
-  shared target dir while the owner played (no FPS cost he reported). Rust review: one rust-tauri-reviewer round over
-  the four items (approve / approve / request-changes → fixed / approve-with-nits, every SHOULD taken). At 12:51 the owner said he was only
-  in the lobby and to complete everything, so FULL from there: desk build `ba332a25` installed 12:56 (proof `ba332a25 · release`);
-  desk self-review round 1 on his data FAIL on five findings (trace axis floored minutes above an hour; recap tabs, a placeholder
-  part name and the GPU profile summary English in zh-CN; the seatbelt step naming the retired "Lab" tab), fixed in `71f1df93`
-  (rebased over the 13:43 session's `e01561f7` / `e99a7a5c`), built and installed 14:03 (`ship-reinstall.ps1 -VerifyRuntime
-  -ExpectedCommit`, proof `71f1df93 · release`, installer `9E9C4A43…`). Round 2 of the desk review on `71f1df93` PASS 12 of 12 (a usage
-  limit paused the lane 14:10-19:43; CR-cmp-wait's positive case is unreachable on his data). The gate then caught two things and both
-  are fixed: the debrief's pinned mount lookups lacked CR-cmp-wait's `get_armed_comparison` (`d3b126c9`), and `useScan` let the mount's
-  rejected scan land its failure after a re-run's success (flaky 1 in 8; the newest scan owns the state now, test fails on old code).
-  Pushed through the gate with this line. Lane line removed. The #678 scheduled task could not be turned off
-  from here (the task tools refuse Claude); walkthroughs P4–P7 and P8-first-advanced stay the owner's, named under
-  Needs owner with clicks and minutes.
 - 2026-11-03 PM (scheduled, CODE-ONLY, owner in a game): queue refill (5 ready slices from CR-1102-left); CR-cmp-wait
   `e01561f7` (tsc 0; vitest 10 files / 116 passed; new test fails 2/5 on old code); stale `train-live-round` worktree
   removed (its work is on main as `8be87e12`). NOT pushed (main ahead of GitHub), NOT installed: the next FULL
@@ -1074,6 +1059,13 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   beside a vitest run, passed alone and on the rerun. The first push's gate caught test-room-parity-guard 5/5b pinning
   ArcGauge's old unit text; re-pinned to the width rule `6d189c19` (same property). No install, no screen check.
   Pushed with this line through the gate.
+- 2026-11-10 ~14:10-14:40 (coordinator-assigned desk session, FULL): #669, #668 and #677 were already fixed and pushed
+  (`2b1cd3f1`/`06e81e25` merged `e83017a5`; `4d5316d0` merged `3c3e7553`); re-proved on `1f4ed7a1` (their 10 cargo tests +
+  3 vitest files / 87 tests green) and closed on GitHub naming those commits. Built `1f4ed7a1` (no-updater config) and
+  installed it with ship-reinstall -VerifyRuntime (runtime `1f4ed7a1 · release`); RELEASE_STATE re-stamped (verify 31/31 ok,
+  0 state-drift; the installed-stamp scan SKIPs because a GUID literal abuts the stamp in rodata). Screen check
+  (`_train\view-1110b\`): zh safe-stack dial, stutter "Undoing it isn't suggested" with no rollback button, #677 rows;
+  sonnet self-review FAIL on the Live term tip showing text through it -> queued CR-tip-see-through. Language restored.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
