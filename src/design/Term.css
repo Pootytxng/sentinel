@@ -40,7 +40,15 @@
   display: block;
   padding: 10px 12px;
   border-radius: 10px;
-  background: var(--panel-2, #14181f);
+  /* The tip is a popover over live readings, so its ground must hide them. It used --panel-2, which
+     the glass rooms (Live, Test, Black Book) re-point to see-through glass (0.74 alpha on Glass, 0.9
+     on Frosted), and the readings under it showed through its text (desk review 2026-11-10,
+     CR-tip-see-through). It takes the popover ground the Look panel uses (0.96 alpha, plus the same
+     blur) and keeps the glass look through its border and shadow; outside V2 it falls back to the
+     opaque --panel-2. Pinned in term-style-guard.test.ts. */
+  background: var(--v2-panel-pop, var(--panel-2, #14181f));
+  -webkit-backdrop-filter: blur(var(--v2-glass-blur, 18px));
+  backdrop-filter: blur(var(--v2-glass-blur, 18px));
   border: 1px solid var(--border-strong, var(--border, #2a2f3a));
   box-shadow: var(--shadow-pop, 0 12px 32px rgba(0, 0, 0, 0.45));
   text-align: left;
