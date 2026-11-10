@@ -96,6 +96,13 @@ pub(crate) struct EventRecord {
     /// before the field existed: the frontend then shows `summary`, which stays the fallback.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parts: Option<EventParts>,
+    /// CR-stutter-rollback-trial: `change-applied` events ONLY, copied verbatim off the ledger
+    /// row's `justified_by_experiment` (the Trial whose measured result this apply was kept on).
+    /// `None` for every other event and every plain apply. Read by the What-Changed next test so
+    /// a later regression can say a Trial measured the opposite; never serialized, so the
+    /// timeline's answer shape is unchanged.
+    #[serde(skip)]
+    pub justified_by_experiment: Option<crate::history::TrialLink>,
 }
 
 /// The structured facts behind an [`EventRecord`]'s `summary`, by event kind. Built at the
@@ -532,6 +539,7 @@ impl IdentityDeltaScan {
             out.push(ObservedCandidate {
                 to_key: format!("hw|{gpu}|{ram_gb}|{display}"),
                 ev: EventRecord {
+                    justified_by_experiment: None,
                     id: format!("{id_seed}:{at}:hardware-change"),
                     timestamp: at.to_string(),
                     event_type: "hardware-change".into(),
@@ -561,6 +569,7 @@ impl IdentityDeltaScan {
                     out.push(ObservedCandidate {
                         to_key: format!("driver|{driver}"),
                         ev: EventRecord {
+                            justified_by_experiment: None,
                             id: format!("{id_seed}:{at}:gpu-driver-change"),
                             timestamp: at.to_string(),
                             event_type: "gpu-driver-change".into(),
@@ -594,6 +603,7 @@ impl IdentityDeltaScan {
                         out.push(ObservedCandidate {
                             to_key: format!("win|{build}|{ubr:?}"),
                             ev: EventRecord {
+                                justified_by_experiment: None,
                                 id: format!("{id_seed}:{at}:windows-build-change"),
                                 timestamp: at.to_string(),
                                 event_type: "windows-build-change".into(),
@@ -629,6 +639,7 @@ impl IdentityDeltaScan {
                     out.push(ObservedCandidate {
                         to_key: format!("power|{power}"),
                         ev: EventRecord {
+                            justified_by_experiment: None,
                             id: format!("{id_seed}:{at}:power-plan-change"),
                             timestamp: at.to_string(),
                             event_type: "power-plan-change".into(),
@@ -737,6 +748,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
         let rolled_back = c.status == "rolled_back";
         let adopted = c.provenance.as_deref() == Some("leftover_adopted");
         events.push(EventRecord {
+            justified_by_experiment: c.justified_by_experiment.clone(),
             id: format!("apply:{}", c.id),
             timestamp: c.applied_at.clone(),
             event_type: "change-applied".into(),
@@ -759,6 +771,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
                 dropped += 1;
             } else {
                 events.push(EventRecord {
+                    justified_by_experiment: None,
                     id: format!("rollback:{}", c.id),
                     timestamp: rb.clone(),
                     event_type: "change-rolled-back".into(),
@@ -792,6 +805,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             .filter(|a| parse_utc(a).is_some())
             .map(|a| (a.clone(), n.noticed_at.clone()));
         events.push(EventRecord {
+            justified_by_experiment: None,
             id: format!("drift:{}:{}", n.noticed_at, n.id),
             timestamp: n.noticed_at.clone(),
             event_type: "readiness-drift".into(),
@@ -816,6 +830,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             continue;
         }
         events.push(EventRecord {
+            justified_by_experiment: None,
             id: format!("session:{}", s.started_at),
             timestamp: s.started_at.clone(),
             event_type: "session".into(),
@@ -855,6 +870,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
     if let Some((started_at, label)) = &inp.gaming_slot {
         if parse_utc(started_at).is_some() {
             events.push(EventRecord {
+                justified_by_experiment: None,
                 id: format!("gaming-mode:{started_at}"),
                 timestamp: started_at.clone(),
                 event_type: "gaming-mode-active".into(),
@@ -880,6 +896,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
             continue;
         }
         events.push(EventRecord {
+            justified_by_experiment: None,
             id: format!("award:{}:{}", a.at, a.rec_id),
             timestamp: a.at.clone(),
             event_type: "verified-win".into(),
@@ -902,6 +919,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
     if let Some(at) = &inp.benchmark_baseline_at {
         if parse_utc(at).is_some() {
             events.push(EventRecord {
+                justified_by_experiment: None,
                 id: format!("benchmark-baseline:{at}"),
                 timestamp: at.clone(),
                 event_type: "benchmark-baseline".into(),
@@ -924,6 +942,7 @@ pub(crate) fn assemble_timeline(inp: &TimelineInputs) -> TimelineAssembly {
     if let Some(cmp) = inp.comparison {
         if parse_utc(&cmp.at).is_some() {
             events.push(EventRecord {
+                justified_by_experiment: None,
                 id: format!("comparison:{}:{}", cmp.at, cmp.rec_id),
                 timestamp: cmp.at.clone(),
                 event_type: "comparison-verdict".into(),
@@ -1602,6 +1621,22 @@ pub(crate) fn what_changed(inp: &WhatChangedInputs, ledger: LedgerHealth) -> Wha
     r
 }
 
+/// CR-stutter-rollback-trial: the next test for a REGRESSED pair whose one suspect change is
+/// still applied because a Trial judged it an improvement. Two measurements disagree; this names
+/// both (with the Trial's date when its record has one) and offers the rollback as the test that
+/// tells them apart, without saying which is right.
+fn trial_contradiction_next_test(trial: &crate::history::TrialLink) -> String {
+    let when = trial
+        .concluded_at
+        .as_deref()
+        .and_then(parse_utc)
+        .map(|t| format!(" on {}", t.format("%Y-%m-%d")))
+        .unwrap_or_default();
+    format!(
+        "A Trial measured this change as an improvement{when}, and this later comparison got worse. Roll it back in the Trust Ledger, play one more session, and compare — that is the next test of which result holds."
+    )
+}
+
 /// The deterministic core: same inputs → same report, every time. No randomness, no
 /// learned weights, every branch inspectable.
 fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChangedReport {
@@ -1938,13 +1973,29 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
             distinct.sort_unstable();
             distinct.dedup();
             if let [only] = distinct[..] {
-                let still_applied = ledger_events.iter().any(|e| {
-                    e.event_type == "change-applied"
-                        && e.rec_id.as_deref() == Some(only)
-                        && !e.since_rolled_back
-                });
-                if still_applied {
+                let still_applied: Vec<&&EventRecord> = ledger_events
+                    .iter()
+                    .filter(|e| {
+                        e.event_type == "change-applied"
+                            && e.rec_id.as_deref() == Some(only)
+                            && !e.since_rolled_back
+                    })
+                    .collect();
+                if !still_applied.is_empty() {
                     h.next_test_rec_id = Some(only.to_string());
+                    // CR-stutter-rollback-trial: this change was KEPT because a Trial measured it as
+                    // an improvement, and this later pair measured a regression. Both are
+                    // measurements; neither is overruled here. Say both, and still offer the
+                    // rollback (the rec id above stays), as the test that tells them apart. Any
+                    // still-applied apply of this rec may carry the link (a plain re-apply beside
+                    // it must not hide the Trial); the latest-concluded Trial is the one named.
+                    let trial = still_applied
+                        .iter()
+                        .filter_map(|e| e.justified_by_experiment.as_ref())
+                        .max_by(|x, y| x.concluded_at.cmp(&y.concluded_at));
+                    if let Some(trial) = trial {
+                        h.next_test = Some(trial_contradiction_next_test(trial));
+                    }
                 }
             }
         }
@@ -3092,6 +3143,7 @@ mod tests {
 
     fn apply_event(ts: &str, title: &str) -> EventRecord {
         EventRecord {
+            justified_by_experiment: None,
             id: format!("apply:{ts}"),
             timestamp: ts.into(),
             event_type: "change-applied".into(),
@@ -3642,6 +3694,7 @@ mod tests {
 
     fn rollback_event(ts: &str, title: &str) -> EventRecord {
         EventRecord {
+            justified_by_experiment: None,
             id: format!("rollback:{ts}"),
             timestamp: ts.into(),
             event_type: "change-rolled-back".into(),
@@ -3659,6 +3712,7 @@ mod tests {
 
     fn applied_event(ts: &str, title: &str, rec_id: &str, rolled_back: bool) -> EventRecord {
         EventRecord {
+            justified_by_experiment: None,
             id: format!("applied:{ts}"),
             timestamp: ts.into(),
             event_type: "change-applied".into(),
@@ -3853,8 +3907,119 @@ mod tests {
         assert!(r.next_action.as_deref().unwrap_or("").contains("Set the power plan back"));
     }
 
+    /// CR-stutter-rollback-trial (review r1 of CR-stutter-rollback-improved): a change KEPT because a
+    /// Trial judged it Better (`justified_by_experiment`) and then followed by a regressed pair got the
+    /// plain "Roll back the change" sentence, as if no measurement had ever backed it. Both results
+    /// are measurements: the next test names the Trial (with its date) and this later regression, still
+    /// offers the rollback (rec id kept) as the test that tells them apart, and picks no winner.
+    #[test]
+    fn a_regression_on_a_change_a_trial_measured_as_better_names_both_and_still_offers_rollback() {
+        let mut b = mk_session("2026-11-01T21:07:02Z", "PBZ.exe", 60.4, 80.0);
+        let mut c = mk_session("2026-11-04T10:48:00Z", "PBZ.exe", 45.0, 80.0);
+        b.hw_fingerprint = Some(mk_fp("32.0.32015.7029"));
+        c.hw_fingerprint = Some(mk_fp("32.0.32015.7029"));
+        b.gaming_mode_active = Some(false);
+        c.gaming_mode_active = Some(false);
+        let mut apply = applied_event("2026-11-02T00:37:48Z", "Trim Windows visual effects", "visual-effects", false);
+        apply.justified_by_experiment = Some(crate::history::TrialLink {
+            experiment_id: "exp:6".into(),
+            outcome: "recommended".into(),
+            concluded_at: Some("2026-11-02T00:30:00Z".into()),
+        });
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![apply.clone()],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert_eq!(r.verdict, "regressed", "{}", r.headline);
+        let next = r.next_action.as_deref().expect("a next test stands");
+        assert!(
+            next.contains("A Trial measured this change as an improvement on 2026-11-02"),
+            "the Trial's result and date must be named: {next}"
+        );
+        assert!(next.contains("this later comparison got worse"), "{next}");
+        assert!(next.contains("Roll it back in the Trust Ledger"), "the rollback is still offered: {next}");
+        assert!(!next.contains("isolates it"), "the plain sentence ignores the Trial: {next}");
+        assert_eq!(r.next_action_rec_id.as_deref(), Some("visual-effects"), "rollback button stays");
+
+        // A Trial record with no conclusion stamp: no invented date.
+        apply.justified_by_experiment.as_mut().unwrap().concluded_at = None;
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![apply.clone()],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        let next = r.next_action.as_deref().unwrap_or("");
+        assert!(next.starts_with("A Trial measured this change as an improvement, and"), "{next}");
+
+        // An unreadable conclusion stamp: still no invented date.
+        apply.justified_by_experiment.as_mut().unwrap().concluded_at = Some("not a time".into());
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![apply.clone()],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        let next = r.next_action.as_deref().unwrap_or("");
+        assert!(next.starts_with("A Trial measured this change as an improvement, and"), "{next}");
+
+        // Review r1: a plain re-apply of the same rec in the window (listed first) must not hide the
+        // Trial the other still-applied apply cites.
+        apply.justified_by_experiment.as_mut().unwrap().concluded_at = Some("2026-11-02T00:30:00Z".into());
+        let plain_first = applied_event("2026-11-02T00:20:00Z", "Trim Windows visual effects", "visual-effects", false);
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![plain_first, apply.clone()],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        let next = r.next_action.as_deref().unwrap_or("");
+        assert!(next.contains("as an improvement on 2026-11-02"), "{next}");
+        assert_eq!(r.next_action_rec_id.as_deref(), Some("visual-effects"));
+
+        // A plain apply (no Trial behind it) keeps the plain rollback sentence.
+        apply.justified_by_experiment = None;
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![apply],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert!(r.next_action.as_deref().unwrap_or("").contains("Roll back the change in the Trust Ledger"));
+        assert_eq!(r.next_action_rec_id.as_deref(), Some("visual-effects"));
+    }
+
+    /// The timeline copies the ledger row's Trial link onto its apply event (and only there).
+    #[test]
+    fn the_timeline_apply_event_carries_the_ledger_rows_trial_link() {
+        let link = crate::history::TrialLink {
+            experiment_id: "exp:6".into(),
+            outcome: "recommended".into(),
+            concluded_at: Some("2026-11-02T00:30:00Z".into()),
+        };
+        let mut row = mk_change("visual-effects", "Trim Windows visual effects", "2026-11-02T00:37:48Z", "applied");
+        row.justified_by_experiment = Some(link.clone());
+        let plain = mk_change("game-bar", "Turn off Xbox Game Bar", "2026-11-02T00:40:00Z", "applied");
+        let rows = [row, plain];
+        let a = assemble_timeline(&empty_inputs(&rows, &[], &[]));
+        let plain_ev = a.events.iter().find(|e| e.rec_id.as_deref() == Some("game-bar")).expect("plain apply");
+        assert_eq!(plain_ev.justified_by_experiment, None, "a plain apply cites no Trial");
+        let ev = a.events.iter().find(|e| e.rec_id.as_deref() == Some("visual-effects")).expect("apply event");
+        assert_eq!(ev.justified_by_experiment, Some(link));
+        let json = serde_json::to_value(ev).unwrap();
+        assert!(json.get("justified_by_experiment").is_none(), "never on the wire: {json}");
+    }
+
     fn drift_event(ts: &str, label: &str) -> EventRecord {
         EventRecord {
+            justified_by_experiment: None,
             id: format!("drift:{ts}"),
             timestamp: ts.into(),
             event_type: "readiness-drift".into(),
@@ -4333,6 +4498,7 @@ mod tests {
     fn ambiguous_observation_windows_surface_as_unknowns_not_evidence() {
         let (b, c) = two_sessions(100.0, 88.0);
         let ambiguous = EventRecord {
+            justified_by_experiment: None,
             id: "identity:x:windows-build-change".into(),
             timestamp: "2026-07-13T09:00:00Z".into(),
             event_type: "windows-build-change".into(),
@@ -4369,6 +4535,7 @@ mod tests {
     #[test]
     fn window_split_excludes_measurements_and_respects_bounds() {
         let mk_ev = |id: &str, ts: &str, event_type: &str, scope: EventScope| EventRecord {
+            justified_by_experiment: None,
             id: id.into(),
             timestamp: ts.into(),
             event_type: event_type.into(),

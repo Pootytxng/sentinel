@@ -1760,6 +1760,7 @@ mod machine_model_tests {
     fn chronology_entries_carry_the_source_records_time() {
         let mut f = Fixture::new();
         f.timeline.push(crate::intelligence::EventRecord {
+            justified_by_experiment: None,
             id: "obs:gpu-driver-change:2026-08-20T00:00:00Z".into(),
             timestamp: "2026-08-20T00:00:00Z".into(),
             event_type: "gpu-driver-change".into(),
@@ -2309,6 +2310,7 @@ mod machine_model_tests {
             Some(true), None, true,
         ));
         f.timeline.push(crate::intelligence::EventRecord {
+            justified_by_experiment: None,
             id: "applied:old".into(),
             timestamp: "2026-06-15T00:00:00Z".into(),
             event_type: "change-applied".into(),
@@ -2463,6 +2465,7 @@ mod machine_model_tests {
         for populated in [false, true] {
             if populated {
                 f.timeline.push(crate::intelligence::EventRecord {
+                    justified_by_experiment: None,
                     id: "scoped-identity".into(), timestamp: "2026-08-20T00:00:00Z".into(),
                     event_type: "gpu-driver-change".into(), source: "identity-snapshot".into(),
                     scope: EventScope::Observed, game: None, summary: "GPU driver changed".into(),
@@ -2836,6 +2839,7 @@ mod machine_model_tests {
         let mut f = Fixture::new();
         f.changes = ledger_gappy_only_beyond_the_cap();
         f.timeline.push(crate::intelligence::EventRecord {
+            justified_by_experiment: None,
             id: "applied:new-0".into(),
             timestamp: "2026-08-01T10:00:00Z".into(),
             event_type: "change-applied".into(),
@@ -3225,6 +3229,7 @@ mod machine_model_tests {
         // display cap must drop the five OLDEST.
         f.timeline = (0..MAX_CHRONOLOGY + 5)
             .map(|i| crate::intelligence::EventRecord {
+                justified_by_experiment: None,
                 id: format!("applied:evt-{i}"),
                 timestamp: format!("2026-01-{:02}T00:00:00Z", i + 1),
                 event_type: "change-applied".into(),
@@ -3278,6 +3283,7 @@ mod machine_model_tests {
         let mut f = Fixture::new();
         f.snapshots.clear();
         let event = |i: usize, scope: EventScope| crate::intelligence::EventRecord {
+            justified_by_experiment: None,
             id: format!("{}:evt-{i}", if scope == EventScope::Observed { "obs" } else { "applied" }),
             timestamp: format!("2026-01-{:02}T00:00:00Z", i + 1),
             event_type: "gpu-driver-change".into(),
@@ -3592,6 +3598,7 @@ mod machine_model_tests {
             .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
         };
         let event = |i: usize, scope: EventScope| crate::intelligence::EventRecord {
+            justified_by_experiment: None,
             id: format!("{}:evt-{i}", if scope == EventScope::Observed { "obs" } else { "applied" }),
             timestamp: stamp(i),
             event_type: "gpu-driver-change".into(),
@@ -3714,6 +3721,7 @@ mod machine_model_tests {
 
         // Other producers filling the view do not make the missing ledger rows disappear.
         f.timeline.push(crate::intelligence::EventRecord {
+            justified_by_experiment: None,
             id: "session:1".into(),
             timestamp: "2026-08-02T00:00:00Z".into(),
             event_type: "session-ended".into(),
@@ -3890,6 +3898,7 @@ mod machine_model_tests {
             true,
         ));
         f.timeline.push(crate::intelligence::EventRecord {
+            justified_by_experiment: None,
             id: "obs:gpu-driver-change:2026-08-20T00:00:00Z".into(),
             timestamp: "2026-08-20T00:00:00Z".into(),
             event_type: "gpu-driver-change".into(),
