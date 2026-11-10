@@ -289,10 +289,18 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       running the unchanged sync fn on the blocking pool; names, arguments and answer types identical (pinned at
       compile time). Review r1 APPROVE-WITH-NITS (SHOULD-FIX: doc of the panic path, taken). **Parked:** capture
       start, now CR-capture-async below.
-- [ ] **CR-capture-async** (parked from CR-slow-async) `start_fps_capture` off the main thread. It waits up to 5 s for
+- [x] **CR-capture-async** (parked from CR-slow-async) `start_fps_capture` off the main thread. It waits up to 5 s for
       an old helper and launches the elevated one; off the main thread it could interleave with
       `stop_fps_capture` (a stop landing mid-wait would be overtaken by the start). Serialize start and stop
       under one lock first, then make both async; test a stop during a start's wait leaves capture off.
+      Done `25af5dc5` (2026-11-10): one lock (monitoring.rs `capture_serialized`, LOCK_CENSUS "out") over both
+      bodies; both are async in lib.rs `off_main` on the blocking pool; names, arguments, answers unchanged. Test
+      (start→stop, stop during a start's wait runs after it and leaves capture off, panicked start doesn't lock stop
+      out) proven failing without the lock. cargo 1810/0, clippy clean. Review r1 APPROVE-WITH-NITS (MUST-FIX
+      census entry taken). Residual (reviewer: acceptable): two invokes within microseconds may take the lock in
+      either order; every caller awaits start and gates stop on `fps.active`/busy. Cheap close if ever needed: an
+      IPC-order ticket taken in the async wrapper. Test exes have no app manifest, so the type-parity check names
+      the capture pair by item type (a fn pointer links the helper launch in and the exe won't load).
 - [x] **CR-care-silent** A Care state read or write failure gets a support event and one visible line ("Compy couldn't
       save this; it'll try again"), never silence. Rust + TS; test a failed write shows the line. Done `e77fba1e`,
       `3f200258`, `263e0768` (2026-11-10): "Not now" / "Find out why" on the crash card and the Home card read now
@@ -960,12 +968,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-03 08:43-08:55 (scheduled, FULL, owner idle on Discord): queue refill (six slices from CR-1102-left and
-  Phase 9); CR-live-round (tsc 0; vitest src/surfaces+design+data 283 files / 4074, exit 0; 3 tests fail on old
-  code). TS display only, no review. Not landed by that session: at 08:51 an interactive session committed `2471184f`
-  to main and the owner came back (preflight BUSY, idle 0 s), so its three commits waited on `claude/train-live-round`;
-  the 09:18 HQ session cherry-picked the code as `8be87e12` and folded the queue refill and this line into its own
-  docs commit (the branch's docs commits restated the CR-1102-left overlay note that `2471184f` had already closed).
 - 2026-11-03 ~09:18 to ~12:35 (interactive from Claude HQ; owner: "ensure everything here that's actually deemed
   necessary is completed by you alone", in WARDOGS throughout): from `claude/train-hq-1103`: the 08:43 refill's slices
   (CR-tour-reject `a60b8068`, CR-ring-note `5e8cf37a`, CR-zh-gpu `eddf6c7e`), P9-bottleneck-sustained `88f15e9a` /
@@ -1063,6 +1065,13 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   CR-stutter-rollback-trial from review. CR-zh-dial PARKED: by-size fit conflicts with the 13px floor (note under the
   item). cargo test 1807/0, clippy clean; both new tests proven failing on the old code; reviews (sonnet, r1)
   APPROVE-WITH-NITS x2. No install, no screen check. Pushed with this line through the gate.
+- 2026-11-10 ~13:40-14:10 (coordinator-assigned desk session, FULL): landed CR-zh-dial `1bc687e6` (ArcGauge counts a
+  CJK character as two cells, so the zh safe-stack unit sits beside the label; 13px floor kept; visual check due at the
+  next FULL install session), CR-stutter-rollback-trial `d7004a9a` (a regression on a change a Trial kept names both
+  results and still offers the rollback) and CR-capture-async `25af5dc5` (capture start/stop off the main thread under
+  one lock). Each new test proven failing on the old code; cargo test 1810/0, clippy clean, tsc 0; reviews (sonnet, r1)
+  APPROVE-WITH-NITS x2, every MUST/SHOULD taken. One timing-race test (comparison_race_tests) failed once under load
+  beside a vitest run, passed alone and on the rerun. No install, no screen check. Pushed with this line through the gate.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
