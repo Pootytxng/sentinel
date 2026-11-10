@@ -207,14 +207,17 @@ pub(crate) fn evaluate_readiness(
     // mini-PCs) physically can't take a second stick, so the advice would be an impossible dead-end —
     // treat that as Ready, not Attention (flags must carry an actionable fix, never a dead-end). The
     // SMBIOS parser skips empty slots, so memory_modules.len() is the count of POPULATED sticks.
+    // Two or more sticks are NOT proof of dual-channel (both can sit on one channel): a channel
+    // count is claimed only when every module's bank/slot label names its channel, else unknown.
     {
         let populated = hw.memory_modules.len();
         let one = hw.memory_modules.first();
         let soldered_lpddr = one
             .map(|m| m.type_name.to_uppercase().starts_with("LPDDR"))
             .unwrap_or(false);
-        checks.push(match (populated, soldered_lpddr) {
-            (1, false) => check(
+        let channels = crate::hardware::named_memory_channel_count(&hw.memory_modules);
+        checks.push(match (populated, soldered_lpddr, channels) {
+            (1, false, _) => check(
                 "memory-channels",
                 "Memory running single-channel",
                 ReadinessStatus::Attention,
@@ -222,7 +225,7 @@ pub(crate) fn evaluate_readiness(
                  memory, a real bandwidth gain for gaming. It's a hardware add, not a BIOS setting.",
                 one.map(|m| format!("1 module ({})", m.type_name)),
             ),
-            (1, true) => check(
+            (1, true, _) => check(
                 "memory-channels",
                 "Memory channels",
                 ReadinessStatus::Ready,
@@ -230,19 +233,50 @@ pub(crate) fn evaluate_readiness(
                  design.",
                 one.map(|m| format!("1 soldered module ({})", m.type_name)),
             ),
-            (0, _) => check(
+            (0, _, _) => check(
                 "memory-channels",
                 "Memory channels",
                 ReadinessStatus::Unknown,
                 "Couldn't read the installed memory modules on this system.",
                 None,
             ),
-            (n, _) => check(
+            (n, _, None) => check(
+                "memory-channels",
+                "Memory channels",
+                ReadinessStatus::Unknown,
+                "Several memory modules are installed, but this PC's firmware doesn't name the \
+                 memory channel each one sits on, so Compy can't tell whether they run dual-channel.",
+                Some(format!("{n} modules")),
+            ),
+            (n, true, Some(1)) => check(
                 "memory-channels",
                 "Memory channels",
                 ReadinessStatus::Ready,
-                "Running in dual-channel (or wider) — multiple memory modules are populated.",
-                Some(format!("{n} modules")),
+                "This soldered memory reports a single memory channel; it can't be rearranged or \
+                 added to on this design.",
+                Some(format!("{n} modules on 1 channel")),
+            ),
+            (n, false, Some(1)) => check(
+                "memory-channels",
+                "Memory running single-channel",
+                ReadinessStatus::Attention,
+                "Your memory modules all report the same memory channel, so they share one channel's \
+                 bandwidth. Moving one stick to a slot on the other channel (your motherboard manual \
+                 shows which slots to use) enables dual-channel. It's a hardware move, not a BIOS \
+                 setting.",
+                Some(format!("{n} modules on 1 channel")),
+            ),
+            (n, _, Some(c)) => check(
+                "memory-channels",
+                "Memory channels",
+                ReadinessStatus::Ready,
+                if c == 2 {
+                    "Running dual-channel: the firmware places your memory modules on two channels."
+                        .to_string()
+                } else {
+                    format!("Running {c}-channel: the firmware places your memory modules on {c} channels.")
+                },
+                Some(format!("{n} modules on {c} channels")),
             ),
         });
     }
@@ -1668,6 +1702,7 @@ mod readiness_tests {
                 type_name: "DDR5".into(),
                 manufacturer: "G.Skill".into(),
                 xmp_expo_status: "running_below_rated".into(),
+                ..Default::default()
             }],
             ..Default::default()
         };
@@ -1690,6 +1725,7 @@ mod readiness_tests {
                 type_name: "DDR5".into(),
                 manufacturer: "G.Skill".into(),
                 xmp_expo_status: "running_at_rated".into(),
+                ..Default::default()
             }],
             ..Default::default()
         };
@@ -1707,7 +1743,13 @@ mod readiness_tests {
             type_name: type_name.into(),
             manufacturer: "Kit".into(),
             xmp_expo_status: "running_at_rated".into(),
+            bank_channel: None,
+            slot_channel: None,
         }
+    }
+
+    fn mem_on(type_name: &str, bank_channel: &str) -> crate::hardware::MemoryModuleInfo {
+        crate::hardware::MemoryModuleInfo { bank_channel: Some(bank_channel.into()), ..mem(type_name) }
     }
 
     #[test]
@@ -1730,10 +1772,72 @@ mod readiness_tests {
     }
 
     #[test]
-    fn memory_channels_two_modules_is_ready_dual_channel() {
+    fn memory_channels_two_modules_on_two_named_channels_is_ready_dual_channel() {
+        let hw = HardwareInfo {
+            memory_modules: vec![mem_on("DDR5", "P0 CHANNEL A"), mem_on("DDR5", "P0 CHANNEL B")],
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
+        let c = find(&r, "memory-channels");
+        assert_eq!(c.status, ReadinessStatus::Ready);
+        assert!(c.detail.contains("dual-channel"));
+        assert_eq!(c.value.as_deref(), Some("2 modules on 2 channels"));
+    }
+
+    // CR-dual-channel: two sticks were read as "dual-channel (or wider)" from the count alone.
+    #[test]
+    fn memory_channels_two_modules_without_channel_labels_is_unknown_not_dual() {
         let hw = HardwareInfo { memory_modules: vec![mem("DDR5"), mem("DDR5")], ..Default::default() };
         let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
-        assert_eq!(find(&r, "memory-channels").status, ReadinessStatus::Ready);
+        let c = find(&r, "memory-channels");
+        assert_eq!(c.status, ReadinessStatus::Unknown);
+        assert!(!c.detail.to_lowercase().contains("running"), "no channel claim: {}", c.detail);
+    }
+
+    #[test]
+    fn memory_channels_one_label_missing_is_unknown() {
+        let hw = HardwareInfo {
+            memory_modules: vec![mem_on("DDR4", "CHANNEL A"), mem("DDR4")],
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
+        assert_eq!(find(&r, "memory-channels").status, ReadinessStatus::Unknown);
+    }
+
+    #[test]
+    fn memory_channels_two_modules_on_one_named_channel_is_attention_single_channel() {
+        let hw = HardwareInfo {
+            memory_modules: vec![mem_on("DDR4", "CHANNEL A"), mem_on("DDR4", "CHANNEL A")],
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
+        let c = find(&r, "memory-channels");
+        assert_eq!(c.status, ReadinessStatus::Attention);
+        assert_eq!(c.value.as_deref(), Some("2 modules on 1 channel"));
+    }
+
+    #[test]
+    fn memory_channels_soldered_lpddr_on_one_channel_is_never_move_a_stick_advice() {
+        let hw = HardwareInfo {
+            memory_modules: vec![mem_on("LPDDR5", "CHANNEL A"), mem_on("LPDDR5", "CHANNEL A")],
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
+        let c = find(&r, "memory-channels");
+        assert_ne!(c.status, ReadinessStatus::Attention);
+        assert!(!c.detail.to_lowercase().contains("moving"));
+    }
+
+    #[test]
+    fn memory_channels_soldered_lpddr_on_two_named_channels_is_ready_dual_channel() {
+        let hw = HardwareInfo {
+            memory_modules: vec![mem_on("LPDDR5", "CHANNEL A"), mem_on("LPDDR5", "CHANNEL B")],
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
+        let c = find(&r, "memory-channels");
+        assert_eq!(c.status, ReadinessStatus::Ready);
+        assert!(c.detail.contains("dual-channel"));
     }
 
     #[test]

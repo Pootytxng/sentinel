@@ -65,6 +65,58 @@ pub(crate) struct MemoryModuleInfo {
     /// "running_below_rated" (actionable — XMP/EXPO likely off) | "running_at_rated" (no profile
     /// claim — a JEDEC kit also runs at rated) | "unknown". Never claims a profile is "active".
     pub(crate) xmp_expo_status: String,
+    /// The memory channel the firmware's BANK label names for this module ("P0 CHANNEL A"), via
+    /// `memory_channel_from_label`; `None` when the bank label names no channel ("BANK 0").
+    pub(crate) bank_channel: Option<String>,
+    /// The memory channel the firmware's SLOT label names ("Controller0-ChannelB-DIMM0" ->
+    /// "CONTROLLER0 CHANNEL B"); `None` when it names none ("DIMM A1"). Kept apart from
+    /// `bank_channel` so a count never mixes the two label kinds. Compy never guesses a channel
+    /// from slot order or module count.
+    pub(crate) slot_channel: Option<String>,
+}
+
+/// The channel one firmware memory label names, if any. The result keeps whatever scopes the
+/// channel inside that label (processor, controller) and is uppercased with separators collapsed,
+/// so "Controller0-ChannelA" and "CONTROLLER0 CHANNEL A" compare equal and two controllers'
+/// "Channel A" stay distinct. The id after "channel" must be one letter or a run of digits that
+/// ends the token ("ChannelA-DIMM0", "CHANNEL 1"); anything glued on ("ChannelADIMM0") is
+/// ambiguous and gives `None`, as does a label without "channel" ("BANK 0", "DIMM A1").
+pub(crate) fn memory_channel_from_label(label: &str) -> Option<String> {
+    let upper = label.to_uppercase();
+    let at = upper.find("CHANNEL")?;
+    let rest = upper[at + "CHANNEL".len()..].trim_start_matches([' ', '_', '-']);
+    let token: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+    // `token` is ASCII alphanumeric only: one character of either kind, or digits only.
+    let id_ok = token.len() == 1 || (!token.is_empty() && token.bytes().all(|b| b.is_ascii_digit()));
+    if !id_ok {
+        return None;
+    }
+    let scope: Vec<&str> = upper[..at]
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let mut key = scope.join(" ");
+    if !key.is_empty() {
+        key.push(' ');
+    }
+    key.push_str("CHANNEL ");
+    key.push_str(&token);
+    Some(key)
+}
+
+/// How many distinct memory channels the modules' labels name, or `None` when that can't be
+/// read. One label kind must name a channel for EVERY module: bank labels first (AMD boards),
+/// then slot labels (Intel). A set that names channels only partly, or only by mixing the two
+/// kinds, is unknown rather than guessed.
+pub(crate) fn named_memory_channel_count(modules: &[MemoryModuleInfo]) -> Option<usize> {
+    fn count<'a>(it: impl Iterator<Item = Option<&'a str>>) -> Option<usize> {
+        it.collect::<Option<std::collections::BTreeSet<&str>>>().map(|s| s.len())
+    }
+    if modules.is_empty() {
+        return None;
+    }
+    count(modules.iter().map(|m| m.bank_channel.as_deref()))
+        .or_else(|| count(modules.iter().map(|m| m.slot_channel.as_deref())))
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -102,6 +154,8 @@ pub(crate) struct Win32PhysicalMemory {
     #[serde(rename = "SMBIOSMemoryType")]
     pub(crate) smbios_memory_type: Option<u32>,
     pub(crate) manufacturer: Option<String>,
+    pub(crate) bank_label: Option<String>,
+    pub(crate) device_locator: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -628,6 +682,10 @@ pub(crate) fn parse_smbios_memory_devices(data: &[u8]) -> Vec<MemoryModuleInfo> 
                     String::new()
                 }
             };
+            // Device Locator (0x10, the slot) and Bank Locator (0x11) are SMBIOS 2.1+ strings.
+            // struct_len >= 0x18 (checked above) covers both bytes.
+            let slot_channel = memory_channel_from_label(&resolve(data[offset + 0x10]));
+            let bank_channel = memory_channel_from_label(&resolve(data[offset + 0x11]));
             let mfg = resolve(data[offset + 0x17]);
             let part = if struct_len > 0x1A {
                 resolve(data[offset + 0x1A])
@@ -658,6 +716,8 @@ pub(crate) fn parse_smbios_memory_devices(data: &[u8]) -> Vec<MemoryModuleInfo> 
                 manufacturer,
                 xmp_expo_status: mem_speed_status(peak_speed as u32, configured_speed as u32)
                     .to_string(),
+                bank_channel,
+                slot_channel,
             });
         }
 
@@ -692,6 +752,8 @@ pub(crate) fn detect_memory_modules_wmi() -> Vec<MemoryModuleInfo> {
             let rated = m.speed.unwrap_or(0);
             let configured = m.configured_clock_speed.unwrap_or(0);
             MemoryModuleInfo {
+                bank_channel: memory_channel_from_label(m.bank_label.as_deref().unwrap_or("")),
+                slot_channel: memory_channel_from_label(m.device_locator.as_deref().unwrap_or("")),
                 capacity_bytes: m.capacity.unwrap_or(0),
                 speed_mhz: m.configured_clock_speed.or(m.speed).unwrap_or(0),
                 rated_speed_mhz: rated,
@@ -3363,6 +3425,72 @@ mod parser_tests {
         assert_eq!(m.type_name, "DDR5");
         assert_eq!(m.speed_mhz, 6000); // configured preferred over peak
         assert_eq!(m.manufacturer, "Corsair CMK32");
+        assert_eq!((&m.bank_channel, &m.slot_channel), (&None, &None), "no locators -> no claim");
+    }
+
+    #[test]
+    fn smbios_mem_channel_read_from_bank_or_device_locator() {
+        // Bank locator (0x11) names the channel (AMD boards).
+        let mut amd = type17(0x22, 0x2000, 0x22, 5600, 6000, 0, 0, 0, &["DIMMA2", "P0 CHANNEL A"]);
+        amd[0x10] = 1;
+        amd[0x11] = 2;
+        // Only the device locator (0x10) names it (Intel: bank reads "BANK 0").
+        let mut intel =
+            type17(0x22, 0x2000, 0x22, 5600, 6000, 0, 0, 0, &["Controller0-ChannelB-DIMM0", "BANK 0"]);
+        intel[0x10] = 1;
+        intel[0x11] = 2;
+        // Neither label names a channel.
+        let mut plain = type17(0x22, 0x2000, 0x22, 5600, 6000, 0, 0, 0, &["DIMM 1", "BANK 1"]);
+        plain[0x10] = 1;
+        plain[0x11] = 2;
+        let data = [amd, intel, plain, type127()].concat();
+        let mods = parse_smbios_memory_devices(&data);
+        assert_eq!(mods.len(), 3);
+        assert_eq!(mods[0].bank_channel.as_deref(), Some("P0 CHANNEL A"));
+        assert_eq!(mods[0].slot_channel, None);
+        assert_eq!(mods[1].bank_channel, None);
+        assert_eq!(mods[1].slot_channel.as_deref(), Some("CONTROLLER0 CHANNEL B"));
+        assert_eq!((&mods[2].bank_channel, &mods[2].slot_channel), (&None, &None));
+    }
+
+    #[test]
+    fn memory_channel_label_only_claims_a_named_channel() {
+        let ch = memory_channel_from_label;
+        assert_eq!(ch("P0 CHANNEL A").as_deref(), Some("P0 CHANNEL A"));
+        assert_eq!(ch("ChannelA-DIMM0").as_deref(), Some("CHANNEL A"));
+        assert_eq!(ch("CHANNEL 1").as_deref(), Some("CHANNEL 1"));
+        // Two controllers' "Channel A" are different channels; two slots on one channel are one.
+        assert_ne!(ch("Controller0-ChannelA-DIMM0"), ch("Controller1-ChannelA-DIMM0"));
+        assert_eq!(ch("Controller0-ChannelA-DIMM0"), ch("Controller0-ChannelA-DIMM1"));
+        // Review r1: an id glued to the slot name is ambiguous, never two channels.
+        assert_eq!(ch("ChannelADIMM0"), None);
+        assert_eq!(ch("Channel0DIMM1"), None);
+        // Slot letters, bank numbers and empty labels never become a channel.
+        assert_eq!(ch("BANK 0"), None);
+        assert_eq!(ch("DIMM A1"), None);
+        assert_eq!(ch(""), None);
+        assert_eq!(ch("Channel-"), None);
+    }
+
+    #[test]
+    fn named_channel_count_needs_one_label_kind_for_every_module() {
+        let m = |bank: Option<&str>, slot: Option<&str>| MemoryModuleInfo {
+            bank_channel: bank.map(String::from),
+            slot_channel: slot.map(String::from),
+            ..Default::default()
+        };
+        let a_bank = Some("P0 CHANNEL A");
+        let b_bank = Some("P0 CHANNEL B");
+        assert_eq!(named_memory_channel_count(&[m(a_bank, None), m(b_bank, None)]), Some(2));
+        assert_eq!(named_memory_channel_count(&[m(a_bank, None), m(a_bank, None)]), Some(1));
+        assert_eq!(
+            named_memory_channel_count(&[m(None, Some("CHANNEL A")), m(None, Some("CHANNEL B"))]),
+            Some(2)
+        );
+        // Review r1: one module named by its bank, the other by its slot -> unknown, not 2.
+        assert_eq!(named_memory_channel_count(&[m(a_bank, None), m(None, Some("CHANNEL A"))]), None);
+        assert_eq!(named_memory_channel_count(&[m(a_bank, None), m(None, None)]), None);
+        assert_eq!(named_memory_channel_count(&[]), None);
     }
 
     #[test]
