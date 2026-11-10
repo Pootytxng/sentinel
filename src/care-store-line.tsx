@@ -8,8 +8,11 @@ import { useTranslation } from "react-i18next";
 /** Which half of the record let the user down, if any. `save` outranks `read`. */
 export type CareStoreTrouble = "save" | "read" | null;
 
-/** The one automatic retry after a failed save, so "it'll try again" is a promise kept. */
-export const CARE_SAVE_RETRY_MS = 5000;
+/**
+ * The automatic retries after a failed save, so "it'll try again" is a promise kept. After the
+ * last one the card comes back on the next read, and the user's own click is the next try.
+ */
+export const CARE_SAVE_RETRY_MS = [5_000, 30_000, 120_000] as const;
 
 type Invoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -21,22 +24,25 @@ export function useCareStore(invokeFn: Invoke) {
     return () => pending.forEach(clearTimeout);
   }, []);
   const saved = useCallback(() => setTrouble((t) => (t === "save" ? null : t)), []);
-  /** Save a choice about a crash notice. A failure shows the line and retries once. */
+  /** Save a choice about a crash notice. A failure shows the line and retries with backoff. */
   const persist = useCallback(
     (command: string, incidentId: string) => {
-      const attempt = () => invokeFn(command, { incidentId });
-      attempt()
-        .then(saved)
-        .catch(() => {
-          setTrouble("save");
-          timers.current.push(
-            setTimeout(() => {
-              // Still failing: the line stays, and the card comes back on the next read, so the
-              // user's own next click is the retry after this one.
-              attempt().then(saved).catch(() => {});
-            }, CARE_SAVE_RETRY_MS),
-          );
-        });
+      const attempt = (retry: number) => {
+        invokeFn(command, { incidentId })
+          .then(saved)
+          .catch(() => {
+            setTrouble("save");
+            const wait = CARE_SAVE_RETRY_MS[retry];
+            if (wait === undefined) return; // the line stays; the card comes back on the next read
+            const id = setTimeout(() => {
+              const at = timers.current.indexOf(id);
+              if (at >= 0) timers.current.splice(at, 1);
+              attempt(retry + 1);
+            }, wait);
+            timers.current.push(id);
+          });
+      };
+      attempt(0);
     },
     [invokeFn, saved],
   );

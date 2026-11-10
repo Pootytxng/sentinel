@@ -737,9 +737,16 @@ fn scan_now(trigger: ScanTrigger) {
     let report = crate::blackbox::collect_crash_blackbox();
     let now = Utc::now();
     let toast = match with_state_at(&state_path(), |state| observe(&report, now, state).toast) {
-        Ok(toast) => toast,
+        Ok(toast) => {
+            SCAN_STORE_FAILED.store(false, Ordering::Release);
+            toast
+        }
         Err(failure) => {
-            report_store_failure("care.scan", &failure);
+            // One support event per failure streak, and the Home read says so (see
+            // `card_answer`) until a scan saves again.
+            if !SCAN_STORE_FAILED.swap(true, Ordering::AcqRel) {
+                report_store_failure("care.scan", &failure);
+            }
             None
         }
     };
@@ -780,11 +787,29 @@ pub(crate) fn get_pending_care_incident() -> Result<Option<PendingCareIncident>,
             }
         }
     }
-    out.map_err(|_| CARE_READ_FAILED.to_string())
+    card_answer(out, SCAN_STORE_FAILED.load(Ordering::Acquire))
 }
 
 /// Set while the Home card's reads keep failing, so a failure streak is one support event.
 static READ_FAILURE_REPORTED: AtomicBool = AtomicBool::new(false);
+
+/// Set while the background scan can't read or save the record. The scan has no window of its
+/// own, so the Home read carries it: a crash it noticed may not have been kept.
+static SCAN_STORE_FAILED: AtomicBool = AtomicBool::new(false);
+
+/// What the Home read answers. A card always wins: it is real and the user should see it. With no
+/// card, a failing scan is an error rather than "nothing happened", because it may have been unable
+/// to keep the card it found.
+fn card_answer(
+    read: Result<Option<PendingCareIncident>, StoreFailure>,
+    scan_store_failed: bool,
+) -> Result<Option<PendingCareIncident>, String> {
+    match read {
+        Ok(None) if scan_store_failed => Err(CARE_READ_FAILED.to_string()),
+        Ok(card) => Ok(card),
+        Err(_) => Err(CARE_READ_FAILED.to_string()),
+    }
+}
 
 /// The Home card at `path`. Undecodable bytes are set aside and read as no card, exactly as before;
 /// only a read that fails right now is an `Err`.
@@ -1000,6 +1025,17 @@ mod tests {
         let missing = dir.join("b").join("incident-observer.json");
         assert_eq!(pending_at(&missing, Utc::now()), Ok(None));
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // Review r1: the background scan has no window, so a scan that couldn't keep what it found
+    // rides the Home read: no card + a failing scan is an error, never "nothing happened".
+    #[test]
+    fn a_failing_scan_turns_an_empty_home_read_into_an_error() {
+        let failed = || StoreFailure { code: "read_failed", detail: String::new() };
+        assert_eq!(card_answer(Ok(None), false), Ok(None));
+        assert_eq!(card_answer(Ok(None), true), Err(CARE_READ_FAILED.to_string()));
+        assert_eq!(card_answer(Err(failed()), false), Err(CARE_READ_FAILED.to_string()));
+        assert_eq!(card_answer(Err(failed()), true), Err(CARE_READ_FAILED.to_string()));
     }
 
     // ── Seeding ─────────────────────────────────────────────────────────────────────────────────

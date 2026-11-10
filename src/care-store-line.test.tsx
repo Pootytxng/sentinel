@@ -38,23 +38,29 @@ describe("a crash-notice choice that can't be saved says so (CR-care-silent)", (
     expect(screen.getByRole("status").textContent).toBe(SAVE_LINE);
     expect(invokeFn).toHaveBeenCalledWith("dismiss_care_incident", { incidentId: "inc-1" });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(CARE_SAVE_RETRY_MS);
+      await vi.advanceTimersByTimeAsync(CARE_SAVE_RETRY_MS[0]);
     });
     expect(invokeFn).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("status")).toBeNull();
   });
 
-  it("keeps the line when the retry fails too", async () => {
+  it("keeps trying with backoff, and keeps the line while every try fails", async () => {
     vi.useFakeTimers();
     const invokeFn = vi.fn().mockRejectedValue("care_save_failed");
     render(<Harness invokeFn={invokeFn} />);
     await act(async () => {
       fireEvent.click(screen.getByText("Not now"));
     });
+    for (const wait of CARE_SAVE_RETRY_MS) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(wait);
+      });
+    }
+    expect(invokeFn).toHaveBeenCalledTimes(1 + CARE_SAVE_RETRY_MS.length);
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(CARE_SAVE_RETRY_MS);
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
     });
-    expect(invokeFn).toHaveBeenCalledTimes(2);
+    expect(invokeFn, "retries stop after the last backoff step").toHaveBeenCalledTimes(1 + CARE_SAVE_RETRY_MS.length);
     expect(screen.getByRole("status").textContent).toBe(SAVE_LINE);
   });
 
