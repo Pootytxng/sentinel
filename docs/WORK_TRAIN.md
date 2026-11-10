@@ -1071,7 +1071,9 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   results and still offers the rollback) and CR-capture-async `25af5dc5` (capture start/stop off the main thread under
   one lock). Each new test proven failing on the old code; cargo test 1810/0, clippy clean, tsc 0; reviews (sonnet, r1)
   APPROVE-WITH-NITS x2, every MUST/SHOULD taken. One timing-race test (comparison_race_tests) failed once under load
-  beside a vitest run, passed alone and on the rerun. No install, no screen check. Pushed with this line through the gate.
+  beside a vitest run, passed alone and on the rerun. The first push's gate caught test-room-parity-guard 5/5b pinning
+  ArcGauge's old unit text; re-pinned to the width rule `6d189c19` (same property). No install, no screen check.
+  Pushed with this line through the gate.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
