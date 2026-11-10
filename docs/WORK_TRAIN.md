@@ -220,8 +220,12 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       row beside a managed one is the one named; no TS change needed (Check prints the Rust line).
 - [ ] **CR-pagefile-multi** A pagefile finding over several rows (managed C: plus fixed D:) offers a restore that
       refuses any multi-row layout: say it is not one-click, or support the layout. Rust; mutation boundary, one review.
-- [ ] **CR-dual-channel** Claim a memory-channel count only from slot or bank data that names it, otherwise
+- [x] **CR-dual-channel** Claim a memory-channel count only from slot or bank data that names it, otherwise
       "unknown" (never invent hardware specs); check first what the line reads today. Rust, read-only; one review.
+      Done `ad5074ac` (2026-11-10): before, any 2+ sticks read "Running in dual-channel (or wider)". Now the
+      SMBIOS/WMI bank or slot label must name each module's channel ("P0 CHANNEL A", "Controller0-ChannelB-DIMM0");
+      2+ channels Ready, all on one Attention (move a stick; Ready for soldered LPDDR), else Unknown. The owner's
+      rig reads "P0 CHANNEL A"/"P0 CHANNEL B" (WMI BankLabel), so it stays dual-channel.
 - [ ] **CR-vbs-running** Say whether VBS is actually running from `Win32_DeviceGuard.VirtualizationBasedSecurityStatus`
       (running / enabled-not-running / off; unreadable stays unknown). Read-only: Compy never changes it (security
       settings are the owner's). One review.
