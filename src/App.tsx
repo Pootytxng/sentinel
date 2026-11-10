@@ -1183,14 +1183,14 @@ function App() {
     setPendingCare(null);
     // A failed save shows one line and retries with backoff; the card reappears on the next read,
     // which is the safe direction.
-    careStore.persist(() => invoke("mark_care_incident_opened", { incidentId }));
+    careStore.persist(`opened:${incidentId}`, () => invoke("mark_care_incident_opened", { incidentId }));
     openLabStation("blackbox", incidentId);
   };
   // "Not now" — clears Compy's POINTER only. Every Windows record behind it (Event Log entry, WER
   // report, reliability row) is untouched and still readable from Crash & Freeze Rescue.
   const dismissCareIncident = (incidentId: string) => {
     setPendingCare(null);
-    careStore.persist(() => invoke("dismiss_care_incident", { incidentId }));
+    careStore.persist(`dismissed:${incidentId}`, () => invoke("dismiss_care_incident", { incidentId }));
   };
   const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
     Overview: "home",

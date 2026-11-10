@@ -54,6 +54,7 @@
   },
   "careStore": {
     "saveFailed": "Compy couldn't save this; it'll try again",
+    "saveStopped": "Compy couldn't save this; the crash notice may show again",
     "readFailed": "Compy couldn't check for crash notices; it'll try again"
   },
   "gamingToast": {

@@ -54,6 +54,7 @@
   },
   "careStore": {
     "saveFailed": "Compy 没能保存这项操作,稍后会再试一次",
+    "saveStopped": "Compy 没能保存这项操作,崩溃提醒可能会再次出现",
     "readFailed": "Compy 暂时没能检查崩溃提醒,稍后会再试一次"
   },
   "gamingToast": {
