@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 vi.mock("../use-motion", () => ({ useReducedMotion: () => true })); // reduced ⇒ useCountTo snaps (deterministic)
-import { ArcGauge } from "./ArcGauge";
+import { ArcGauge, unitVisualWidth } from "./ArcGauge";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -39,6 +39,33 @@ describe("ArcGauge", () => {
     rerender(<ArcGauge label="GPU temp" value={null} max={100} unit="°C" />);
     expect(container.querySelector(".ag-ctr .ag-u")).toBeNull();
     expect(container.querySelector(".ag-u-side")!.textContent).toMatch(/no reading/i);
+  });
+
+  // bug->guard (CR-zh-dial, desk review 2026-11-04): in zh-CN the Test room's safe-stack unit
+  // "已启用" is three characters, so a character count let it into the ring, but at the 13px floor
+  // it is ~43px wide against an ~18-40px interior and collided with the stroke and ticks. A CJK
+  // character is two Latin cells wide; the zh unit goes beside the label like "ready" does, at the
+  // same floor, string unchanged.
+  it("measures CJK units at double width: zh units sit beside the label, never in the ring", () => {
+    expect(unitVisualWidth("°C")).toBe(2);
+    expect(unitVisualWidth("fps")).toBe(3);
+    expect(unitVisualWidth("已启用")).toBe(6);
+    expect(unitVisualWidth("就绪")).toBe(4);
+
+    const { container, rerender } = render(
+      <ArcGauge label="安全组合" value={7} max={9} unit="已启用" measured />,
+    );
+    expect(container.querySelector(".ag-ctr .ag-u"), "a zh unit must NOT render inside the ring").toBeNull();
+    expect(container.querySelector(".ag-u-side")!.textContent).toBe("已启用");
+
+    rerender(<ArcGauge label="安全组合" value={7} max={9} unit="就绪" measured />);
+    expect(container.querySelector(".ag-ctr .ag-u")).toBeNull();
+    expect(container.querySelector(".ag-u-side")!.textContent).toBe("就绪");
+
+    // A zh-CN locale whose unit is still a short Latin symbol keeps it in the ring.
+    rerender(<ArcGauge label="GPU 温度" value={43} max={100} unit="°C" measured />);
+    expect(container.querySelector(".ag-ctr .ag-u")!.textContent).toBe("°C");
+    expect(container.querySelector(".ag-u-side")).toBeNull();
   });
 
   it("CSS: the gauge can shrink -- its label column cannot widen the instrument (bug->guard, issue #49)", () => {

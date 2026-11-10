@@ -16,6 +16,17 @@ const TICKS = Array.from({ length: 24 }, (_, i) => {
   return { x1: 28 + Math.cos(a) * 25, y1: 28 + Math.sin(a) * 25, x2: 28 + Math.cos(a) * 27.5, y2: 28 + Math.sin(a) * 27.5 };
 });
 
+/** The ring holds a unit only up to this many Latin-width cells (°C, %, fps, ms). */
+const RING_UNIT_MAX_WIDTH = 3;
+/** CJK, kana, hangul and fullwidth forms render about twice as wide as a Latin letter. */
+const WIDE_CHAR = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA960-\uA97F\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/u;
+/** Width of a unit in Latin-letter cells: a wide (CJK) character counts as two. */
+export function unitVisualWidth(unit: string): number {
+  let w = 0;
+  for (const ch of unit) w += WIDE_CHAR.test(ch) ? 2 : 1;
+  return w;
+}
+
 export function ArcGauge({
   label, value, max, unit, tone = "neutral", measured = true, note, grade, gradeTone = "good",
   variant = "ring",
@@ -57,6 +68,9 @@ export function ArcGauge({
   const empty = shown === null;
   const frac = empty ? 0 : Math.min(1, Math.max(0, shown / max));
   const dashoffset = CIRC * (1 - frac);
+  // CR-zh-dial (desk review 2026-11-04): "已启用" is 3 characters but ~43px at the 13px floor, so a
+  // character count let it into the ring and it hit the stroke. Measure in Latin-width cells.
+  const unitInRing = unit.length > 0 && unitVisualWidth(unit) <= RING_UNIT_MAX_WIDTH;
 
   // §A.2 data-tick (JARVIS layer, flag+motion gated) — the ring flashes ONLY when a REAL reading
   // CHANGES to a different real reading. Honesty contract: arrival (null→value) is the count-up's
@@ -109,14 +123,14 @@ export function ArcGauge({
             the old 8px fit was fine print, the exact disease TYPE-1 cures. The ring only ever
             carries a SHORT unit (°C, %, fps, ms); anything longer moves BESIDE the label, never
             below the floor. Guarded in arc-gauge.test.tsx. */}
-        {!empty && unit.length > 0 && unit.length <= 3 && <div className="ag-u">{unit}</div>}
+        {!empty && unitInRing && <div className="ag-u">{unit}</div>}
       </div>
       <div className="ag-label">
         <span>{label}</span>
         {/* An EMPTY unit is a caller saying "this number needs no unit" (Test's INSTRUMENTS READ,
             whose label already ends in the word). It must render nothing at all -- not an empty
             node in the ring, and not a blank line beside the label. */}
-        {(empty || unit.length > 3) && (
+        {(empty || (unit.length > 0 && !unitInRing)) && (
           <span className="ag-u ag-u-side">{empty ? t("common.arcGauge.noReading") : unit}</span>
         )}
         {empty ? <span className="ag-tag ag-tag-ny">{t("common.arcGauge.notYet")}</span>
