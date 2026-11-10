@@ -177,10 +177,28 @@ fn detect_pagefile(probes: &Value) -> Outcome {
         });
     }
 
-    let first = &files[0];
+    // A per-drive "System managed size" entry reads 0/0 (CR-pagefile-0): Windows sizes that file,
+    // so it is not a fixed pagefile (the restore path refuses that form too). Only an entry with both
+    // sizes read and non-zero is fixed (the restore refuses any zero, and a 0 MB cap would print a
+    // false verdict); one whose sizes can't be read, or are half zero, is never called either way.
+    let sizes = |f: &Value| {
+        (
+            f.get("initial_mb").and_then(Value::as_u64),
+            f.get("maximum_mb").and_then(Value::as_u64),
+        )
+    };
+    let fixed = files.iter().find_map(|f| match sizes(f) {
+        (Some(init), Some(max)) if init > 0 && max > 0 => Some((f, init, max)),
+        _ => None,
+    });
+    let Some((first, init, max)) = fixed else {
+        return if files.iter().all(|f| sizes(f) == (Some(0), Some(0))) {
+            Outcome::Clean
+        } else {
+            Outcome::Unavailable(REASON_UNREADABLE)
+        };
+    };
     let name = first.get("name").and_then(Value::as_str).unwrap_or("pagefile");
-    let init = first.get("initial_mb").and_then(Value::as_u64).unwrap_or(0);
-    let max = first.get("maximum_mb").and_then(Value::as_u64).unwrap_or(init);
     let max_gb = ((max as f64) / 1024.0).round() as u64;
     // Hardware-aware: with plentiful RAM a big fixed file is pure disk spend; with modest RAM the
     // sharper cost is the hard cap — Windows can't grow past it when a game overcommits.
@@ -973,6 +991,47 @@ mod leftovers_tests {
         assert!(unread.unavailable.iter().any(|u| u.id == "pagefile-fixed"), "it is named as unchecked");
         let none = evaluate_leftovers(&probes(Some(false), json!([]), Some(true), Some(16)), &no_endorsements());
         assert!(none.findings.iter().any(|f| f.id == "pagefile-fixed" && f.current_value.contains("Disabled")));
+    }
+
+    // CR-pagefile-0: a drive set to "System managed size" reads 0/0 and printed "Fixed at 0–0 MB",
+    // a finding whose restore refuses that very form.
+    #[test]
+    fn a_system_managed_size_entry_is_windows_managed_never_fixed() {
+        let managed = json!([{ "name": "C:\\pagefile.sys", "initial_mb": 0, "maximum_mb": 0 }]);
+        let r = evaluate_leftovers(&probes(Some(false), managed, Some(true), Some(32)), &no_endorsements());
+        assert!(r.findings.iter().all(|f| f.id != "pagefile-fixed"), "0/0 is Windows-sized");
+        assert!(r.unavailable.iter().all(|u| u.id != "pagefile-fixed"), "and it was read, not unchecked");
+    }
+
+    #[test]
+    fn a_fixed_entry_beside_a_system_managed_one_is_the_one_named() {
+        let mixed = json!([
+            { "name": "C:\\pagefile.sys", "initial_mb": 0, "maximum_mb": 0 },
+            { "name": "D:\\pagefile.sys", "initial_mb": 8192, "maximum_mb": 16384 },
+        ]);
+        let r = evaluate_leftovers(&probes(Some(false), mixed, Some(true), Some(32)), &no_endorsements());
+        let f = find(&r, "pagefile-fixed").expect("the D: file is fixed");
+        assert_eq!(f.current_value, "Fixed at 8192\u{2013}16384 MB (D:\\pagefile.sys)");
+    }
+
+    #[test]
+    fn a_pagefile_entry_with_unread_sizes_is_unavailable_never_fixed_at_zero() {
+        let unread = json!([{ "name": "C:\\pagefile.sys", "initial_mb": null, "maximum_mb": null }]);
+        let r = evaluate_leftovers(&probes(Some(false), unread, Some(true), Some(32)), &no_endorsements());
+        assert!(r.findings.iter().all(|f| f.id != "pagefile-fixed"), "no 0–0 finding");
+        assert!(r.unavailable.iter().any(|u| u.id == "pagefile-fixed"), "named as unchecked");
+    }
+
+    // Review r1: a half-zero row is neither the Windows-managed 0/0 form nor a size the restore
+    // accepts, and a 0 MB cap would print a false verdict.
+    #[test]
+    fn a_half_zero_pagefile_entry_is_unavailable_never_a_finding() {
+        for (init, max) in [(0, 4096), (4096, 0)] {
+            let odd = json!([{ "name": "C:\\pagefile.sys", "initial_mb": init, "maximum_mb": max }]);
+            let r = evaluate_leftovers(&probes(Some(false), odd, Some(true), Some(32)), &no_endorsements());
+            assert!(r.findings.iter().all(|f| f.id != "pagefile-fixed"), "{init}/{max} is no finding");
+            assert!(r.unavailable.iter().any(|u| u.id == "pagefile-fixed"), "{init}/{max} is unchecked");
+        }
     }
 
     #[test]
