@@ -206,9 +206,12 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       plan by its English name and otherwise duplicates it under a NEW GUID with a localized name, which then classes
       as Other: on a localized Windows the rec reads off after a successful apply and the verify can fail. Record the
       applied scheme GUID on the receipt (an AppliedAction/Snapshot change) or compare against the duplicate's source.
-- [ ] **P9-hint-shown** (desk review 2026-11-03) `get_priorities.session_hint` (the "GPU busy at times / sustained"
+- [x] **P9-hint-shown** (desk review 2026-11-03) `get_priorities.session_hint` (the "GPU busy at times / sustained"
       sentence) reaches the frontend typed but no screen prints it. Decide: show it on Home or Optimize under the
-      limiter rows, or drop the field. Code + one test either way.
+      limiter rows, or drop the field. Code + one test either way. Done `4a4265d4` (2026-11-10): shown (coordinator
+      call) as one quiet line in Optimize → Check directly under the "Biggest limiters" rows (where the full rows
+      render; Home shows only the top one), still shown when no limiter stands out, absent when there is no hint.
+      No new copy (the Rust sentence opens "Recent session hint:"). Check.test.tsx test proven failing on the old file.
 - [ ] **CR-zh-dial** (desk review 2026-11-04, pre-existing) In zh-CN the Test room's safe-stack dial label "已启用" collides
       with the ring stroke and ticks (en "ON" fits): fit the zh label inside the ring (a shorter string or a smaller size)
       and add a zh-width guard. TS/CSS; screen check at a FULL session.
@@ -218,8 +221,16 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       manages it (0/0 sizes or the automatic flag), the sizes only when they are set. Rust read + TS line; test with
       both shapes. Done `258b438f` (2026-11-10): all-0/0 rows read clean, unread or half-zero rows unavailable, a fixed
       row beside a managed one is the one named; no TS change needed (Check prints the Rust line).
-- [ ] **CR-pagefile-multi** A pagefile finding over several rows (managed C: plus fixed D:) offers a restore that
+- [x] **CR-pagefile-multi** A pagefile finding over several rows (managed C: plus fixed D:) offers a restore that
       refuses any multi-row layout: say it is not one-click, or support the layout. Rust; mutation boundary, one review.
+      Done `a4c2690d` (2026-11-10, non-mutating option, coordinator call): a finding over 2+ rows now notes "Not a
+      one-click restore here" and the Windows Virtual memory steps; a single fixed row keeps the one-click note.
+      leftovers.rs only (actions.rs untouched). Test proven failing on the old note. cargo 1805/0, clippy clean.
+      Review r1 APPROVE-WITH-NITS; SHOULD-FIX queued as CR-pagefile-note-refusals.
+- [ ] **CR-pagefile-note-refusals** (from CR-pagefile-multi review r1) The "Pagefile disabled" finding (no rows) still
+      notes "Safe to restore to automatic", but the restore refuses zero entries too (`parse_manual_pagefile_entry`);
+      check the `?:`-form single row the same way. Same non-mutating fix: say it is not one-click and the Windows
+      steps. Rust (leftovers.rs); one review.
 - [x] **CR-dual-channel** Claim a memory-channel count only from slot or bank data that names it, otherwise
       "unknown" (never invent hardware specs); check first what the line reads today. Rust, read-only; one review.
       Done `ad5074ac` (2026-11-10): before, any 2+ sticks read "Running in dual-channel (or wider)". Now the
@@ -250,10 +261,13 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       reads and the scan); the window shows "Compy couldn't save this; it'll try again" (or "couldn't check for
       crash notices") in the bottom-right stack and retries a failed save at 5 s / 30 s / 2 min. en + zh-CN.
       Review r1 APPROVE-WITH-NITS (3 SHOULD-FIX taken), r2 APPROVE-WITH-NITS (2 SHOULD-FIX queued below).
-- [ ] **CR-care-line-truth** (from CR-care-silent review r2) The save line outlives its promise and its cause: after
+- [x] **CR-care-line-truth** (from CR-care-silent review r2) The save line outlives its promise and its cause: after
       the last retry (~2.6 min) it still says "it'll try again", and any later successful save clears it even when
       a different choice is still unsaved. Track failures per incident and command, clear only when none remain,
-      and keep retrying (or reword) after the backoff ends. TS only; test both.
+      and keep retrying (or reword) after the backoff ends. TS only; test both. Done `49213302` (2026-11-10):
+      `persist(key, save)` keyed `dismissed:<id>` / `opened:<id>`; the line clears only when no choice is unsaved;
+      after the last retry it reads "Compy couldn't save this; the crash notice may show again" (en + zh-CN). Reworded,
+      not retried forever: each failed save writes a support event. 3 tests fail on the old logic. TS only.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
@@ -889,25 +903,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-31 ~14:00 to 11-02 ~22:45 (interactive from Claude HQ; owner: "get as much done as possible", "Try
-  again", then "ARE YOU CAPABLE OF COMPLETING EVERYTHING"): the idle-PC batch landed from
-  `claude/train-batch-1102`: the owed desk fixes `f3bd1e49`, GL-empty, P8-dims, P8-posture-show, P8-ack and
-  P5-realplay with P4-noise-stretch. Merges `e99085ef` (round-1 base `456707d7`), `eeb8f70d` (review fixes
-  `71f98969`..`18b65859`, closing round `136c85d6`), `5db5c556` (desk fixes `d93dfe7e`) and `1d53dfc8`
-  (`2901f21f`, for the gate: the affordance census read a ternary's keys as a dropped line). UI: two cloud-harness
-  rounds on stubbed data (round 1 both FAIL, fixed; round 2 real play PASS, the risk UI one MUST, fixed). Desk
-  review on his data, round 1 on `eeb8f70d`: FAIL on two older defects (Problems' "not a proven cause" tags under
-  AA; a running Trial saying "applied" over a change Windows read as off), fixed in `d93dfe7e`; round 2 on
-  `5db5c556`: both re-measured PASS (152 of 152 tags at 4.62:1 or more; the off panel leads with Restore now),
-  FAIL on the station's other faint lines, under AA since the glass redesign: filed as GL-faint-ink, and the batch
-  shipped under the directive's two-round rule. A scheduled session had landed P8-posture-show at 13:54
-  (`e4d22675`): reverted in `d6b0b1d3`, kept on `keep/train-p8-posture-show-e4d22675`. Owner played PBZ, then
-  WardogsClient: nothing heavy ran until he said so ("I DONT REALLY MIND IF COMPY POPS UP"); the desk reviews
-  launched Compy without focus, on his second monitor. Desk build `1d53dfc8` installed
-  (`ship-reinstall.ps1 -VerifyRuntime`, proof `1d53dfc8 · release`); pushed with this line through the pre-push
-  gate (its first run, on the dropped `32756cf8`, failed the census and a record's citation rule).
-  `claude/redesign-glass` kept on the owner's word (LANDED record); the batch's 7 branches go once this push
-  lands. Lane line removed: scheduled sessions may write again.
 - 2026-11-02 ~22:45 to 11-03 ~00:45 (interactive from Claude HQ; owner: "well continue witha peristent full
   codebase review and fix and any other details you find need resolving"): the codebase review, slices 1-6, landed
   from `claude/train-review-1103` (`8f4037c1` stores never saved over after a failed read, the ledger set aside only
@@ -1019,6 +1014,14 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   as CR-capture-async; review r1 APPROVE-WITH-NITS, SHOULD-FIX taken). cargo test 1804/0, clippy clean, tsc 0, full
   vitest 532/535 files (the 3 site-app suites need site-app/node_modules, absent in a worktree; pass on main).
   Reviews ran as `claude -p --model sonnet`. Not pushed (CODE-ONLY).
+- 2026-11-10 ~12:10-12:45 (scheduled, FULL, owner idle in Firefox): pushed local `main` first through the pre-push
+  gate (`776345f7..4c58fbed`, exit 0). Then P9-hint-shown `4a4265d4` (session hint shown under Check's limiter rows),
+  CR-care-line-truth `49213302` (per-choice save tracking; stopped line after the last retry) and CR-pagefile-multi
+  `a4c2690d` (multi-row pagefile note says not one-click; review r1 APPROVE-WITH-NITS, SHOULD-FIX queued as
+  CR-pagefile-note-refusals). New tests proven failing on the old code (1 + 3 + 1). tsc 0; full vitest 532/535 files,
+  9687 tests (the 3 site-app suites need site-app/node_modules); cargo test 1805/0, clippy clean (idle priority).
+  Review ran as `claude -p --model sonnet` on the diff. No screen check or install this session. Pushed with this
+  line through the gate.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
