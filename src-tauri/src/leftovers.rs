@@ -172,8 +172,10 @@ fn detect_pagefile(probes: &Value) -> Outcome {
                 "one over-committing game is an instant crash to desktop — automatic sizing costs nothing.",
             ),
             uncertain_source: true,
-            restore_note: "Safe to restore to automatic; fully reversible; takes effect after a reboot."
-                .into(),
+            // CR-pagefile-note-refusals: the restore refuses zero entries (`parse_manual_pagefile_entry`).
+            restore_note: pagefile_manual_note(
+                "this PC has no pagefile configured at all, and Compy's restore only resets an existing fixed pagefile",
+            ),
         });
     }
 
@@ -213,10 +215,23 @@ fn detect_pagefile(probes: &Value) -> Outcome {
     // CR-pagefile-multi: the restore takes exactly one fixed entry and refuses any other layout
     // (`actions::parse_manual_pagefile_entry`), so a finding over several rows (a managed C: beside
     // a fixed D:) must not read as restorable. Say it is not one-click and how to do it by hand.
+    // CR-pagefile-note-refusals: a single row gets the one-click note only when the restore's own
+    // parser accepts it (`<Letter>:\pagefile.sys <init> <max>`); the `?:` form, any other path, or an
+    // unread name is refused there, so the note says so instead. Read-only: the parse is pure. The
+    // note is a prediction from the WMI row; the restore re-reads the registry `PagingFiles` value and
+    // re-validates, so if the two ever disagree the worst case is a refusal message, never a mutation.
     let restore_note = if files.len() > 1 {
-        PAGEFILE_MULTI_ROW_NOTE
+        pagefile_manual_note(
+            "this PC has pagefile settings on more than one drive, and Compy's restore only handles a single fixed pagefile",
+        )
+    } else if crate::actions::parse_manual_pagefile_entry(&[format!("{name} {init} {max}")]).is_ok() {
+        "Safe to restore to automatic; fully reversible; takes effect after a reboot.".to_string()
+    } else if first.get("name").and_then(Value::as_str).is_some() {
+        pagefile_manual_note(&format!(
+            "this PC's pagefile entry ({name}) isn't the plain drive-letter form Compy's restore accepts"
+        ))
     } else {
-        "Safe to restore to automatic; fully reversible; takes effect after a reboot."
+        pagefile_manual_note("Compy couldn't read where this PC's pagefile is, so it won't change it")
     };
     Outcome::Finding(Leftover {
         id: "pagefile-fixed".into(),
@@ -228,13 +243,16 @@ fn detect_pagefile(probes: &Value) -> Outcome {
             .into(),
         verdict,
         uncertain_source: true,
-        restore_note: restore_note.into(),
+        restore_note,
     })
 }
 
-/// The pagefile note when settings sit on more than one drive: Compy's restore refuses that layout,
-/// so the note never offers it and names the Windows screen that does it instead.
-const PAGEFILE_MULTI_ROW_NOTE: &str = "Not a one-click restore here: this PC has pagefile settings on more than one drive, and Compy's restore only handles a single fixed pagefile. To go back to automatic yourself, open System Properties > Advanced > Performance Settings > Advanced > Virtual memory > Change, tick \"Automatically manage paging file size for all drives\", then reboot (it takes effect after a reboot).";
+/// The pagefile note for every layout Compy's restore refuses (several drives, none at all, an entry
+/// not in the plain drive-letter form): it never offers the restore, says why, and names the Windows
+/// screen that does it instead (CR-pagefile-multi, CR-pagefile-note-refusals).
+fn pagefile_manual_note(why: &str) -> String {
+    format!("Not a one-click restore here: {why}. To go back to automatic yourself, open System Properties > Advanced > Performance Settings > Advanced > Virtual memory > Change, tick \"Automatically manage paging file size for all drives\", then reboot (it takes effect after a reboot).")
+}
 
 // ── Detector 2: memory compression disabled — the second origin-story detector ─────────────────
 // Stock Windows compresses idle pages in RAM. Guides run `Disable-MMAgent -mc` to "cut CPU
@@ -1053,6 +1071,40 @@ mod leftovers_tests {
         let single = json!([{ "name": "C:\\pagefile.sys", "initial_mb": 8192, "maximum_mb": 8192 }]);
         let r = evaluate_leftovers(&probes(Some(false), single, Some(true), Some(32)), &no_endorsements());
         assert!(find(&r, "pagefile-fixed").expect("finding").restore_note.starts_with("Safe to restore"));
+    }
+
+    // CR-pagefile-note-refusals: "Pagefile disabled" (no rows) and the single rows the restore's own
+    // parser refuses (`?:` form, a non-root path, an unread name) all read "Safe to restore to
+    // automatic" while the restore refuses them. Each refused layout now gets the not-one-click note
+    // with its reason; the one-click note appears exactly when `parse_manual_pagefile_entry` accepts.
+    #[test]
+    fn every_pagefile_note_agrees_with_what_the_restore_will_do() {
+        let manual = |files: Value, why: &str| {
+            let r = evaluate_leftovers(&probes(Some(false), files.clone(), Some(true), Some(32)), &no_endorsements());
+            let f = find(&r, "pagefile-fixed").expect("a pagefile finding");
+            let note = f.restore_note.to_lowercase();
+            assert!(!note.contains("safe to restore"), "offers the restore it refuses: {files} -> {}", f.restore_note);
+            assert!(note.starts_with("not a one-click restore here"), "says so plainly: {}", f.restore_note);
+            assert!(note.contains(why), "names why ({why}): {}", f.restore_note);
+            assert!(note.contains("virtual memory") && note.contains("reboot"), "names the way: {}", f.restore_note);
+        };
+        // Disabled entirely: the restore refuses zero entries.
+        manual(json!([]), "no pagefile configured");
+        assert!(crate::actions::parse_manual_pagefile_entry(&[]).is_err());
+        // The `?:` form, a pagefile outside a drive root, and a row whose name wasn't read.
+        manual(json!([{ "name": "?:\\pagefile.sys", "initial_mb": 4096, "maximum_mb": 4096 }]), "(?:\\pagefile.sys)");
+        manual(json!([{ "name": "D:\\swap\\pagefile.sys", "initial_mb": 4096, "maximum_mb": 8192 }]), "(d:\\swap\\pagefile.sys)");
+        manual(json!([{ "initial_mb": 4096, "maximum_mb": 4096 }]), "couldn't read where");
+        for entry in ["?:\\pagefile.sys 4096 4096", "D:\\swap\\pagefile.sys 4096 8192", "pagefile 4096 4096"] {
+            assert!(crate::actions::parse_manual_pagefile_entry(&[entry.to_string()]).is_err(), "{entry}");
+        }
+        // The accepted form keeps the one-click note, lower-case letter too (the parser upper-cases it).
+        for name in ["C:\\pagefile.sys", "d:\\PAGEFILE.SYS"] {
+            let files = json!([{ "name": name, "initial_mb": 2048, "maximum_mb": 4096 }]);
+            let r = evaluate_leftovers(&probes(Some(false), files, Some(true), Some(32)), &no_endorsements());
+            assert!(find(&r, "pagefile-fixed").expect("finding").restore_note.starts_with("Safe to restore"), "{name}");
+            assert!(crate::actions::parse_manual_pagefile_entry(&[format!("{name} 2048 4096")]).is_ok());
+        }
     }
 
     #[test]
