@@ -212,6 +212,22 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       call) as one quiet line in Optimize → Check directly under the "Biggest limiters" rows (where the full rows
       render; Home shows only the top one), still shown when no limiter stands out, absent when there is no hint.
       No new copy (the Rust sentence opens "Recent session hint:"). Check.test.tsx test proven failing on the old file.
+- [x] **CR-stutter-rollback-improved** (installed build 68f2272b, 2026-11-10, Home → "Something went wrong" →
+      Problems; `_train\view-1110\p6-04`) The stutter comparison (PBZ latest vs last steady) measured 1% lows
+      RISING 14.6%, named "Trim Windows visual effects applied" as the likely cause, then said "Roll back the change
+      in the Trust Ledger". A change with a measured improvement must not be proposed for rollback as the stutter
+      suspect unless later evidence contradicts that measurement, and then the copy says so. Rust (intelligence.rs);
+      measurement-adjacent, one review. Done `895d253e` (2026-11-10): root cause was `what_changed_inner` choosing
+      the Compy-change (and power-plan) next test without the verdict's direction, so an "improved" pair got the
+      regression's rollback sentence and rec id. Owner data (read-only): visual-effects applied 2026-11-02T00:37Z
+      (still applied, Trial exp:6 still running), between the steady Nov 1 21:07Z baseline and the latest session.
+      Now an improved pair says "Keep things as they are ... Undoing it isn't suggested: these two sessions measured
+      an improvement", carries no rec id (no rollback button); the power plan likewise. Regressed path unchanged.
+      Test proven failing on the old code. Review r1 APPROVE-WITH-NITS (2 nits taken; SHOULD-FIX queued below).
+- [ ] **CR-stutter-rollback-trial** (from CR-stutter-rollback-improved review r1) A REGRESSED comparison whose suspect
+      change was kept on a Trial's measured improvement (`AppliedChange.justified_by_experiment`) still proposes the
+      plain rollback. The copy should say the Trial measured an improvement on <date> and this later session
+      contradicts it (the ledger event needs the Trial link). Rust (intelligence.rs); one review.
 - [ ] **CR-zh-dial** (desk review 2026-11-04, pre-existing) In zh-CN the Test room's safe-stack dial label "已启用" collides
       with the ring stroke and ticks (en "ON" fits): fit the zh label inside the ring (a shorter string or a smaller size)
       and add a zh-width guard. TS/CSS; screen check at a FULL session.
