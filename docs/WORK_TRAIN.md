@@ -231,8 +231,18 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       settings are the owner's). One review. Done `b2ed0cca` (2026-11-10): Diagnostics → Security gains "VBS running
       now" (Running / Turned on, not running / Off / Unknown) from the virtualization probe; the registry row is
       relabelled "Memory Integrity / VBS turned on". Owner's rig reads 2 (Running) without admin.
-- [ ] **CR-slow-async** Black Box, support export, capture start and the slow probes become async commands so the window
-      keeps painting while they work. Rust; one review; test the commands still answer the same shapes.
+- [x] **CR-slow-async** Black Box, support export, capture start and the slow probes become async commands so the window
+      keeps painting while they work. Rust; one review; test the commands still answer the same shapes. Done
+      `9cab29d0`, `27c10a75` (2026-11-10) except capture start: `get_crash_blackbox`, `export_report`,
+      `preview_support_evidence`, `export_support_evidence`, `get_leftovers`, `get_game_readiness`,
+      `get_priorities`, `get_diagnostics` and `get_trial_candidates` are async wrappers in lib.rs `off_main`
+      running the unchanged sync fn on the blocking pool; names, arguments and answer types identical (pinned at
+      compile time). Review r1 APPROVE-WITH-NITS (SHOULD-FIX: doc of the panic path, taken). **Parked:** capture
+      start, now CR-capture-async below.
+- [ ] **CR-capture-async** (parked from CR-slow-async) `start_fps_capture` off the main thread. It waits up to 5 s for
+      an old helper and launches the elevated one; off the main thread it could interleave with
+      `stop_fps_capture` (a stop landing mid-wait would be overtaken by the start). Serialize start and stop
+      under one lock first, then make both async; test a stop during a start's wait leaves capture off.
 - [x] **CR-care-silent** A Care state read or write failure gets a support event and one visible line ("Compy couldn't
       save this; it'll try again"), never silence. Rust + TS; test a failed write shows the line. Done `e77fba1e`,
       `3f200258`, `263e0768` (2026-11-10): "Not now" / "Find out why" on the crash card and the Home card read now
@@ -879,12 +889,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-31 (scheduled, CODE-ONLY, owner on Discord): P8-posture-show `e4d22675` (merge: this line's commit);
-  tsc 0; cargo experiment 146 passed; clippy clean; full vitest 526/530 files (3 site-app suites need
-  site-app/node_modules, absent in the worktree; branch-disposition fails the same on main: stale
-  `origin/claude/redesign-glass` in the ref cache, cleared by `git fetch origin --prune` next FULL session).
-  Review r1 LAND; SHOULD-FIX queued as P8-posture-lenient. One item only. Not pushed (CODE-ONLY); next FULL
-  session pushes.
 - 2026-10-31 ~14:00 to 11-02 ~22:45 (interactive from Claude HQ; owner: "get as much done as possible", "Try
   again", then "ARE YOU CAPABLE OF COMPLETING EVERYTHING"): the idle-PC batch landed from
   `claude/train-batch-1102`: the owed desk fixes `f3bd1e49`, GL-empty, P8-dims, P8-posture-show, P8-ack and
@@ -1009,6 +1013,12 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   and CR-vbs-running `b2ed0cca` (review r1 APPROVE-WITH-NITS, nothing queued). cargo test 1795/0, clippy clean (idle
   priority, shared target dir). Reviews ran as `claude -p --model sonnet` on the diff (no Agent tool in this session).
   Not pushed (CODE-ONLY); the next FULL session pushes local `main` through the gate.
+- 2026-11-10 ~11:38-12:15 (scheduled, CODE-ONLY, owner in Firefox): CR-care-silent `e77fba1e`..`263e0768` (doc
+  `55c04296`; App-wiring vitest proven failing on the old App.tsx; review r1 3 SHOULD-FIX taken, r2 2 queued as
+  CR-care-line-truth) and CR-slow-async `9cab29d0`, `27c10a75` (9 commands off the main thread; capture start parked
+  as CR-capture-async; review r1 APPROVE-WITH-NITS, SHOULD-FIX taken). cargo test 1804/0, clippy clean, tsc 0, full
+  vitest 532/535 files (the 3 site-app suites need site-app/node_modules, absent in a worktree; pass on main).
+  Reviews ran as `claude -p --model sonnet`. Not pushed (CODE-ONLY).
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
