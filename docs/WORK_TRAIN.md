@@ -226,9 +226,11 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       SMBIOS/WMI bank or slot label must name each module's channel ("P0 CHANNEL A", "Controller0-ChannelB-DIMM0");
       2+ channels Ready, all on one Attention (move a stick; Ready for soldered LPDDR), else Unknown. The owner's
       rig reads "P0 CHANNEL A"/"P0 CHANNEL B" (WMI BankLabel), so it stays dual-channel.
-- [ ] **CR-vbs-running** Say whether VBS is actually running from `Win32_DeviceGuard.VirtualizationBasedSecurityStatus`
+- [x] **CR-vbs-running** Say whether VBS is actually running from `Win32_DeviceGuard.VirtualizationBasedSecurityStatus`
       (running / enabled-not-running / off; unreadable stays unknown). Read-only: Compy never changes it (security
-      settings are the owner's). One review.
+      settings are the owner's). One review. Done `b2ed0cca` (2026-11-10): Diagnostics → Security gains "VBS running
+      now" (Running / Turned on, not running / Off / Unknown) from the virtualization probe; the registry row is
+      relabelled "Memory Integrity / VBS turned on". Owner's rig reads 2 (Running) without admin.
 - [ ] **CR-slow-async** Black Box, support export, capture start and the slow probes become async commands so the window
       keeps painting while they work. Rust; one review; test the commands still answer the same shapes.
 - [ ] **CR-care-silent** A Care state read or write failure gets a support event and one visible line ("Compy couldn't
@@ -868,15 +870,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-30 ~20:30 to 10-31 ~12:45 (interactive from Claude HQ; owner: "FULL send it", "RUN IT NOW", then "go"): the
-  glass redesign landed. Merge `bb06a585` (`claude/redesign-glass`: glass shell, Look panel, Health summary, Games,
-  Problems); desk review round 1 FAIL, 8 findings fixed in `5724dcec` (merge `a15e065a`); round 2 FAIL, 5 fixed in
-  `8bc28d32`, plus Live's session names `34734a7c` (merge `d9b87bf4`), each re-measured PASS on the installed build.
-  Owner played PBZ 22:13 to past 02:30: nothing heavy ran meanwhile, only `vitest run src` at idle priority (357 files /
-  5047). Desk build `d9b87bf4` installed (`ship-reinstall.ps1 -VerifyRuntime`, proof `d9b87bf4 · release`); pushed from
-  `03580297` with this line, through the pre-push gate. Lane line removed: scheduled sessions may write again. Lessons:
-  Desktop Commander drops output after a printed line ending in `>`; an unattended wake may not re-arm its own check, so
-  a long wait ends with "say go".
 - 2026-10-31 (scheduled, CODE-ONLY, owner on Discord): P8-posture-show `e4d22675` (merge: this line's commit);
   tsc 0; cargo experiment 146 passed; clippy clean; full vitest 526/530 files (3 site-app suites need
   site-app/node_modules, absent in the worktree; branch-disposition fails the same on main: stale
@@ -1002,6 +995,11 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   clean (idle priority, shared target dir); the first three new tests proven failing on the old code; one rust-tauri-reviewer round
   APPROVE-WITH-NITS, SHOULD-FIX 1 (half-zero row) taken, SHOULD-FIX 2 pre-existing and queued (CR-pagefile-multi). One
   item only. Not pushed (CODE-ONLY); the next FULL session pushes local `main` through the gate.
+- 2026-11-10 ~11:10-11:40 (scheduled, CODE-ONLY, owner on Discord): CR-dual-channel `ad5074ac` (4 new readiness tests
+  proven failing on the old logic; review r1 APPROVE-WITH-NITS, 3 SHOULD-FIX taken in `0c2912ce`, r2 APPROVE-WITH-NITS)
+  and CR-vbs-running `b2ed0cca` (review r1 APPROVE-WITH-NITS, nothing queued). cargo test 1795/0, clippy clean (idle
+  priority, shared target dir). Reviews ran as `claude -p --model sonnet` on the diff (no Agent tool in this session).
+  Not pushed (CODE-ONLY); the next FULL session pushes local `main` through the gate.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
