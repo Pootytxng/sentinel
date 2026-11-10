@@ -128,12 +128,14 @@ describe("Test room — approved-comp parity (structural)", () => {
     // The label already says INSTRUMENTS READ; `unitRead` printed "read" a second time under the
     // ring. The gauge takes an empty unit instead, and ArcGauge must render nothing for one.
     expect(LAB_TSX).not.toMatch(/unitRead\b/);
-    expect(ARC_TSX).toMatch(/unit\.length\s*>\s*0\s*&&\s*unit\.length\s*<=\s*3/);
+    // CR-zh-dial: the ring rule now measures width (a CJK character counts as two cells); the
+    // empty-unit exclusion stays.
+    expect(ARC_TSX).toMatch(/unit\.length\s*>\s*0\s*&&\s*unitVisualWidth\(unit\)\s*<=\s*RING_UNIT_MAX_WIDTH/);
   });
 
   it("5b. renders no empty unit node beside the label either", () => {
     // The side-unit branch must not fire on a caller-supplied empty string — only on `empty`
     // (no reading at all) or a unit too long for under the ring.
-    expect(ARC_TSX).toMatch(/\(empty \|\| unit\.length > 3\)/);
+    expect(ARC_TSX).toMatch(/\(empty \|\| \(unit\.length > 0 && !unitInRing\)\)/);
   });
 });
