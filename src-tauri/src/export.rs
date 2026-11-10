@@ -790,7 +790,7 @@ fn cap_feedback(feedback: Option<String>) -> Option<String> {
     feedback.map(|f| f.chars().take(FEEDBACK_MAX_CHARS).collect())
 }
 
-#[tauri::command]
+// The window reaches this through `off_main::export_report` (lib.rs), off the main thread.
 pub(crate) fn export_report(
     feedback: Option<String>,
     tier: Option<String>,

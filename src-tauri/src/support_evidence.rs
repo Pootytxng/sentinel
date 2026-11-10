@@ -730,7 +730,7 @@ pub struct EvidencePreview {
 
 /// Read the record and render all three projections. **Writes nothing** — this is what the user
 /// inspects before deciding whether to export anything at all.
-#[tauri::command]
+// The window reaches this through `off_main::preview_support_evidence` (lib.rs), off the main thread.
 pub fn preview_support_evidence() -> Result<EvidencePreview, String> {
     let bundle = build_bundle(
         &evidence_path(),
@@ -756,7 +756,7 @@ pub struct SupportExport {
 
 /// Write the chosen projection to disk, next to the report exports. Redaction runs again over every
 /// field on the way out — the second of the two gates §12 requires.
-#[tauri::command]
+// The window reaches this through `off_main::export_support_evidence` (lib.rs), off the main thread.
 pub fn export_support_evidence(projection: String) -> Result<SupportExport, String> {
     if !previewed().load(Ordering::Acquire) {
         return Err("Preview the support evidence before exporting it, so you can see exactly what leaves this app.".into());

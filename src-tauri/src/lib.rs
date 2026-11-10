@@ -59,11 +59,9 @@ mod support_evidence; // Local support evidence — bounded, redacted, on-disk-o
 mod trial_candidates; // P4-candidates: READ-ONLY "worth testing on this PC" filter for the Trial picker (OPTIMIZATION_ENGINE §3.1–3.3) — applies / already set / Compy can do it safely, with one reason per change. Mutates nothing.
 mod tray; // Opt-in "minimize to tray" (default OFF — §1 clean-exit unless the user opts in).
 use actions::*;
-use diagnostics::*;
 use export::*;
 use hardware::*;
 use history::*;
-use leftovers::*;
 use monitoring::*;
 use priorities::*;
 use readiness::*;
@@ -989,6 +987,184 @@ async fn latency_measure_mouse(duration_ms: u32) -> Option<latency::MouseMeasure
         .flatten()
 }
 
+/// CR-slow-async: the slow reads, served off the main thread.
+///
+/// A plain `#[tauri::command] fn` runs on the main thread, so while Black Box read the event logs,
+/// a report export gathered hardware and diagnostics, or a probe spawned PowerShell, the window
+/// stopped painting. Each command here keeps its name, its arguments and its answer type exactly;
+/// the work is the same function as before, run on the blocking pool the way `latency_measure_*`
+/// and `get_realplay_progress` already are. The sync functions stay callable in-process (export,
+/// priorities and the tests read them directly). Nothing here changes Windows or reaches
+/// `actions.rs`; the two exports write their files exactly as before.
+///
+/// Not here yet: `start_fps_capture`. It waits up to 5 s for an old helper and launches an
+/// elevated one, and off the main thread it could interleave with `stop_fps_capture`; it needs the
+/// two serialized first (parked under CR-slow-async in WORK_TRAIN.md).
+mod off_main {
+    /// Run `work` on the blocking pool and hand back exactly what it returned. The pool only fails
+    /// a task that panicked, which is what the main-thread command did too.
+    async fn blocking<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T {
+        match tauri::async_runtime::spawn_blocking(work).await {
+            Ok(answer) => answer,
+            Err(e) => panic!("a slow read stopped before it answered: {e}"),
+        }
+    }
+
+    /// The same, for a command that already answers `Result<_, String>`: a stopped task is an
+    /// `Err` in words rather than an unanswered invoke.
+    async fn blocking_result<T: Send + 'static>(
+        what: &'static str,
+        work: impl FnOnce() -> Result<T, String> + Send + 'static,
+    ) -> Result<T, String> {
+        tauri::async_runtime::spawn_blocking(work)
+            .await
+            .map_err(|e| format!("Compy couldn't finish {what} ({e})"))?
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_crash_blackbox() -> crate::blackbox::BlackBoxReport {
+        blocking(crate::blackbox::get_crash_blackbox).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn export_report(
+        feedback: Option<String>,
+        tier: Option<String>,
+    ) -> Result<crate::export::ExportResult, String> {
+        blocking_result("the report", move || crate::export::export_report(feedback, tier)).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn preview_support_evidence(
+    ) -> Result<crate::support_evidence::EvidencePreview, String> {
+        blocking_result("the support preview", crate::support_evidence::preview_support_evidence)
+            .await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn export_support_evidence(
+        projection: String,
+    ) -> Result<crate::support_evidence::SupportExport, String> {
+        blocking_result("the support export", move || {
+            crate::support_evidence::export_support_evidence(projection)
+        })
+        .await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_leftovers() -> crate::leftovers::LeftoversReport {
+        blocking(crate::leftovers::get_leftovers).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_game_readiness() -> crate::readiness::GameReadiness {
+        blocking(crate::readiness::get_game_readiness).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_priorities() -> crate::priorities::Priorities {
+        blocking(crate::priorities::get_priorities).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_diagnostics() -> Vec<crate::diagnostics::DiagnosticSection> {
+        blocking(crate::diagnostics::get_diagnostics).await
+    }
+
+    #[tauri::command]
+    pub(crate) async fn get_trial_candidates(
+        risk_choice: Option<crate::trial_candidates::RiskChoice>,
+    ) -> Vec<crate::trial_candidates::TrialCandidate> {
+        blocking(move || crate::trial_candidates::get_trial_candidates(risk_choice)).await
+    }
+
+    /// The commands served here, by the name the window invokes. The tests hold the handler list
+    /// and `build.rs` to it.
+    #[cfg(test)]
+    pub(crate) const SERVED: &[&str] = &[
+        "get_crash_blackbox",
+        "export_report",
+        "preview_support_evidence",
+        "export_support_evidence",
+        "get_leftovers",
+        "get_game_readiness",
+        "get_priorities",
+        "get_diagnostics",
+        "get_trial_candidates",
+    ];
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::future::Future;
+
+        // Compile-time: each async command takes the arguments the sync one took and answers the
+        // very type it answered, so the invoke and the JSON the window gets are unchanged.
+        fn answers<T, Fut: Future<Output = T>>(_sync: fn() -> T, _async: fn() -> Fut) {}
+        fn answers1<A, T, Fut: Future<Output = T>>(_sync: fn(A) -> T, _async: fn(A) -> Fut) {}
+        fn answers2<A, B, T, Fut: Future<Output = T>>(_sync: fn(A, B) -> T, _async: fn(A, B) -> Fut) {}
+
+        #[test]
+        fn every_command_answers_the_type_it_answered_before() {
+            answers(crate::blackbox::get_crash_blackbox, get_crash_blackbox);
+            answers(crate::support_evidence::preview_support_evidence, preview_support_evidence);
+            answers(crate::leftovers::get_leftovers, get_leftovers);
+            answers(crate::readiness::get_game_readiness, get_game_readiness);
+            answers(crate::priorities::get_priorities, get_priorities);
+            answers(crate::diagnostics::get_diagnostics, get_diagnostics);
+            answers1(crate::support_evidence::export_support_evidence, export_support_evidence);
+            answers1(crate::trial_candidates::get_trial_candidates, get_trial_candidates);
+            answers2(crate::export::export_report, export_report);
+        }
+
+        #[test]
+        fn the_work_runs_off_the_calling_thread_and_its_answer_comes_back_unchanged() {
+            let caller = std::thread::current().id();
+            let (answer, worker) = tauri::async_runtime::block_on(blocking(move || {
+                (vec![1, 2, 3], std::thread::current().id())
+            }));
+            assert_eq!(answer, vec![1, 2, 3]);
+            assert_ne!(worker, caller, "the work ran on the caller's thread");
+            let err = tauri::async_runtime::block_on(blocking_result::<()>("a test", || {
+                Err("refused".into())
+            }));
+            assert_eq!(err, Err("refused".to_string()), "an Err passes through untouched");
+        }
+
+        #[test]
+        fn a_panicking_result_command_answers_an_error_in_words() {
+            let out = tauri::async_runtime::block_on(blocking_result::<()>("a test", || {
+                panic!("boom")
+            }));
+            assert!(out.unwrap_err().starts_with("Compy couldn't finish a test"));
+        }
+
+        // Every served command is registered from here (async), under its own name, and the
+        // capability build still lists that name. Fails on the old code, where each was a sync
+        // command registered from its own module.
+        #[test]
+        fn the_handler_registers_each_served_command_from_here() {
+            let lib = include_str!("lib.rs");
+            // Built with concat! so this test's own text can't be found first.
+            let handler = &lib[lib.find(concat!("generate_handler", "![")).expect("handler")..];
+            let handler = &handler[..handler.find("])").expect("handler end")];
+            let build = include_str!("../build.rs");
+            for name in SERVED {
+                let entry = format!("off_main::{name},");
+                assert_eq!(handler.matches(entry.as_str()).count(), 1, "{name} is not registered from off_main");
+                let elsewhere = handler
+                    .lines()
+                    .map(str::trim)
+                    .filter(|l| l.trim_end_matches(',').rsplit("::").next() == Some(name))
+                    .count();
+                assert_eq!(elsewhere, 1, "{name} is registered twice");
+                assert!(lib.contains(&format!("pub(crate) async fn {name}(")), "{name} is not async");
+                assert!(build.contains(&format!("\"{name}\"")), "{name} left build.rs's APP_COMMANDS");
+            }
+        }
+    }
+}
+
 // ── Benchmark / measured-efficacy (read-only; measures, never mutates) ──
 // The engine is multi-second, so `start_benchmark` runs it on a background thread and
 // the UI polls `get_benchmark_state`. The baseline persists; efficacy = latest vs baseline
@@ -1464,17 +1640,17 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_hardware_info,
             get_recommendations,
-            get_diagnostics,
+            off_main::get_diagnostics,
             hwchange::get_hardware_changes,
             machine_model::get_machine_model,
             hwchange::acknowledge_hardware_changes,
-            blackbox::get_crash_blackbox,
+            off_main::get_crash_blackbox,
             incident_observer::get_pending_care_incident,
             incident_observer::mark_care_incident_opened,
             incident_observer::dismiss_care_incident,
             license::get_license_status,
             license::set_license_key,
-            get_leftovers,
+            off_main::get_leftovers,
             get_nic_driver_info,
             get_gpu_sensors,
             get_cpu_sensors,
@@ -1500,13 +1676,13 @@ pub fn run() {
             get_startup_entries,
             history::set_startup_entry_enabled,
             get_rules_source,
-            get_game_readiness,
+            off_main::get_game_readiness,
             dismiss_readiness_check,
             restore_readiness_check,
             get_session_summaries,
-            export_report,
+            off_main::export_report,
             open_export_folder,
-            get_priorities,
+            off_main::get_priorities,
             priorities_from,
             get_build_stamp,
             // #130 — read-only: which data root is live, which predicates fired, and any foreign ledgers.
@@ -1518,8 +1694,8 @@ pub fn run() {
             receipts::set_receipts_sharing_enabled,
             receipts::acknowledge_receipts_disclosure,
             receipts::get_receipts_endpoint,
-            support_evidence::preview_support_evidence,
-            support_evidence::export_support_evidence,
+            off_main::preview_support_evidence,
+            off_main::export_support_evidence,
             support_evidence::clear_support_evidence,
             get_latency_diagnostics,
             latency_measure_wake,
@@ -1575,7 +1751,7 @@ pub fn run() {
             experiment::restore_experiment,
             experiment::apply_outcome_choice,
             experiment::undo_outcome_choice,
-            trial_candidates::get_trial_candidates,
+            off_main::get_trial_candidates,
         ])
         .on_window_event(|window, event| {
             // Close behavior (Train #3 §1 — clean exit), now with the opt-in tray branch.

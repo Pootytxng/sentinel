@@ -570,7 +570,7 @@ fn read_gaming_mode() -> Option<(HashSet<String>, bool)> {
 /// Every catalog change with its pass/fail for the Trial picker, under the user's risk choice
 /// (`riskChoice` from the UI; absent = [`RiskChoice::default`], today's behaviour). P8-follow: it
 /// also remembers each change's stated risk ([`STATED_RISKS`]) for the start that follows. Read-only.
-#[tauri::command]
+// The window reaches this through `off_main::get_trial_candidates` (lib.rs), off the main thread.
 pub(crate) fn get_trial_candidates(risk_choice: Option<RiskChoice>) -> Vec<TrialCandidate> {
     let catalog = live_catalog().unwrap_or(Value::Null);
     remember_stated_risks(&STATED_RISKS, &catalog);

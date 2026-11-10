@@ -487,7 +487,7 @@ fn build_session_hint(sessions: &Value) -> Option<String> {
     }
 }
 
-#[tauri::command]
+// The window reaches this through `off_main::get_priorities` (lib.rs), off the main thread.
 pub(crate) fn get_priorities() -> Priorities {
     let readiness =
         serde_json::to_value(crate::readiness::get_game_readiness()).unwrap_or(Value::Null);

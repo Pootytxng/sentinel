@@ -1671,7 +1671,7 @@ fn minidump_skip_note() -> Option<String> {
 
 /// The IPC entry point (edge): fetch the read-only sources, correlate against the session history,
 /// return the plain-English report. Mirrors `get_diagnostics` / `get_session_summaries`.
-#[tauri::command]
+// The window reaches this through `off_main::get_crash_blackbox` (lib.rs), off the main thread.
 pub(crate) fn get_crash_blackbox() -> BlackBoxReport {
     let mut report = collect_crash_blackbox();
     // P6-changed: "Changed before this" on each incident — one read-only gather for the scan. Only

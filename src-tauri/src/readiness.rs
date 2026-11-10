@@ -1137,7 +1137,7 @@ fn restore_readiness_check_at(path: &std::path::Path, id: String) -> Result<(), 
     save_dismissals_to(path, &ids)
 }
 
-#[tauri::command]
+// The window reaches this through `off_main::get_game_readiness` (lib.rs), off the main thread.
 pub(crate) fn get_game_readiness() -> GameReadiness {
     let hw = get_hardware_info();
     let power_plan = current_power_plan();

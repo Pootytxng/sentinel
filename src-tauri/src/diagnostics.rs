@@ -59,7 +59,7 @@ pub(crate) fn vbs_running_entry(
     }
 }
 
-#[tauri::command]
+// The window reaches this through `off_main::get_diagnostics` (lib.rs), off the main thread.
 pub(crate) fn get_diagnostics() -> Vec<DiagnosticSection> {
     let hw = collect_hardware();
     let mut sections: Vec<DiagnosticSection> = Vec::new();

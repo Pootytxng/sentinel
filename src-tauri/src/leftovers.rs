@@ -872,7 +872,7 @@ fn endorsed_rec_ids() -> HashSet<String> {
 }
 
 /// The ONE new IPC for v1 (read-only, on-demand — no scan on launch, no background scanning).
-#[tauri::command]
+// The window reaches this through `off_main::get_leftovers` (lib.rs), off the main thread.
 pub(crate) fn get_leftovers() -> LeftoversReport {
     let probes = gather_probes();
     evaluate_leftovers(&probes, &endorsed_rec_ids())
