@@ -30,6 +30,44 @@ Care depends on.
 
 ---
 
+## First product train — done when
+
+*Derived, not new direction (#663): every line below comes from a phase's own **Exit:** line or from
+`../PRODUCT_CONSTITUTION.md`; it adds no product direction, price or date. The owner may amend it.*
+
+A phase is done when its Exit holds on the **installed build** on the owner's rig, never because one PR
+merged (`../BACKLOG.md` "False-done rule"). The train as a whole is done when the §35 product success
+condition is true for a normal user: told Compy what they wanted (Phases 4–5), it understood the PC
+(Phase 2), tested what actually mattered (Phases 3–4), explained what changed (Phase 7), kept what helped
+and put back what didn't (Phases 3, 5), and when something later went wrong helped them understand why
+(Phase 6).
+
+| Phase | Done when (source) | Current status (evidence) |
+|---|---|---|
+| 0 | Phase 0 Exit | Exited: `BACKLOG.md` P0 "COMPLETE 2026-09-05" (PR #371) |
+| 1 | Phase 1 Exit | Exited: `BACKLOG.md` P1 "Phase 1 exit holds" (re-derived at `901f090c`) |
+| 2 | Phase 2 Exit; §16 | Exited: `BACKLOG.md` P2 "Phase 2 owner-rig exit: met" (desk build `2afd7471`, 2026-10-24) |
+| 3 | Phase 3 Exit; §7 | Exited: `BACKLOG.md` P3 "Phase 3 owner-rig exit: met" (2026-10-23; `d1a5204d`, `39b591d6`) |
+| 4 | Phase 4 Exit; §8, §35 "tested what actually mattered" | Code landed (`WORK_TRAIN.md` P4-exit `e3d0420e`); exit walkthrough open (P4-exit-proof) |
+| 5 | Phase 5 Exit; §10, §36 | Code landed (P5-guided `2f33cc6b` to P5-outcomes-f1 `19c70a50`); exit walkthrough open (P5-exit-proof) |
+| 6 | Phase 6 Exit; §17, §18, §26 | Code landed (P6-changed `3216a6b2` to P6-timeline `02a00f5f`); exit walkthrough open (P6-exit-proof) |
+| 7 | Phase 7 Exit; §13, §14, §25 | Code landed (P7-route `9fefbf6d` to P7-rig-care `9f60e291`); exit walkthrough open (P7-exit-proof) |
+| 8 | Phase 8 Exit; §20 | Risk-choice slices landed (P8-posture-a `1eeef838` on); first Advanced candidate waits on P4-exit-proof and the owner's sign-off (P8-first-advanced) |
+| 9 | Phase 9 Exit (below); §23 | In progress: P9-hz `f1bfbb26`, P9-target `97ebbf7f`, P9-settings-done `25feba43` (its live case waits on P4-exit-proof), P9-bottleneck-sustained `14d39b5`, P9-software-first `023da7d`, P9-hint-shown `4a4265d4` |
+| 10 | Phase 10 Exit (below); §31 | Not started: no slice in `WORK_TRAIN.md` or `BACKLOG.md` |
+| 11 | Phase 11 Exit (below); §32 | Not started: no slice in `WORK_TRAIN.md` or `BACKLOG.md` |
+
+**What v1.0 means** (derived; owner may amend). Compy v1.0 is the first build a stranger can install from
+the public release path and for which the §35 sentence is true: Phases 0–7 exited on the installed build,
+so both flagship journeys work end to end on the same machine model, Trial and rollback. It also clears
+the `../ARCHITECTURE_LOCKS.md` §4 release/security checklist as it applies (code signing in the release
+pipeline, final license/EULA/privacy disclosures, permission/elevation explanation, rollback across
+upgrades, installer trust testing, security/privacy claims matching the binary), which today leaves the
+`../RELEASE_STATE.md` gates OPEN for code signing and legal. Those gates are the owner's; no executor or
+automated workflow closes them. Nothing in §35 needs Phases 8–11, so v1.0 does not wait on them.
+
+---
+
 ## Phase 0 — Constitutional migration and drift elimination
 
 **Goal:** prevent pre-rebirth product doctrine from steering future implementation.
@@ -246,6 +284,8 @@ Build system-level upgrade assessment around:
 
 Affiliate economics, if ever enabled, are firewalled from the technical recommendation.
 
+**Exit:** (derived from the Goal above and Constitution §23; owner may amend) for a measured workload, Compy can say whether software settings have reached what it can test, then name the measured limiter in system context or say "no upgrade recommended", never naming a part in isolation and never letting retail economics shape the answer.
+
 ---
 
 ## Phase 10 — Evidence network / public knowledge moat
@@ -269,6 +309,8 @@ Potential outputs:
 - compatibility intelligence;
 - upgrade evidence.
 
+**Exit:** (derived from the preconditions above and Constitution §31; owner may amend) at least one collective output ships from explicitly consented, scoped evidence, shows its sample size and confidence honestly, and leaves every local feature working without it.
+
 ---
 
 ## Phase 11 — Monetization and distribution scale
@@ -284,6 +326,8 @@ Before broad monetization:
 - make the official site/release path reliable.
 
 Consumer recurring subscriptions are not assumed. Lifetime, perpetual + maintenance, annual, or other structures remain hypotheses until evidence selects among them.
+
+**Exit:** (derived from the list above and Constitution §32; owner may amend) any charge Compy makes rests on measured activation, repeat value and willingness to pay, keeps safety fundamentals and undo outside it, and is sold through a code-signed, reliable public release path.
 
 ---
 

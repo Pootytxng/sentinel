@@ -88,14 +88,14 @@ baseline → prior-state snapshot → apply → verify → measure → noise-awa
 This is the first implementation milestone that proves the reborn optimizer architecture rather than
 adding another isolated tweak.
 
-- [~] #583 lane 1 — record-first start, backend single-active guard, restore on a failed §4.5 target
+- [x] #583 lane 1 — record-first start, backend single-active guard, restore on a failed §4.5 target
   check or unreadable watermark, read-only launch reconcile of interrupted starts, typed §8
   `TrialResult` + §9 keep rule (`experiment.rs`; guard `src/experiment-record-first-guard.test.ts`).
-- [~] #583 lane 2a — read-only `history::probe_rec_target`: §4.1 refuses a start unless the setting
+- [x] #583 lane 2a — read-only `history::probe_rec_target`: §4.1 refuses a start unless the setting
   reads unchanged; §4.5 aborts on an unread target too; §7 at conclude turns a reverted/unreadable
   target into no-keep; §4.10 reads back after every keep/restore and turns a still-changed restore
   into a loud `Aborted`; the simulator trusts the live read over the ledger.
-- [~] #583 lane 2b — start/conclude take session ids and read the readings from `sessions.json`,
+- [x] #583 lane 2b — start/conclude take session ids and read the readings from `sessions.json`,
   never UI-supplied fps; conclude refuses a missing, unmeasured, earlier, ambiguous or
   not-comparable pair (`comparability::derive`) and caps a Partial pair's confidence; a changed
   driver/Windows/resolution aborts and restores (§7), and a reported crash always restores; the §11
