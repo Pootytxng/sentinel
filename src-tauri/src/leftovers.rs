@@ -210,6 +210,14 @@ fn detect_pagefile(probes: &Value) -> Outcome {
             "the fixed cap is the sharper risk — if a game overcommits past {max} MB, Windows can't grow the file and the game crashes; automatic sizing avoids that."
         )),
     };
+    // CR-pagefile-multi: the restore takes exactly one fixed entry and refuses any other layout
+    // (`actions::parse_manual_pagefile_entry`), so a finding over several rows (a managed C: beside
+    // a fixed D:) must not read as restorable. Say it is not one-click and how to do it by hand.
+    let restore_note = if files.len() > 1 {
+        PAGEFILE_MULTI_ROW_NOTE
+    } else {
+        "Safe to restore to automatic; fully reversible; takes effect after a reboot."
+    };
     Outcome::Finding(Leftover {
         id: "pagefile-fixed".into(),
         title: "Pagefile manually fixed".into(),
@@ -220,10 +228,13 @@ fn detect_pagefile(probes: &Value) -> Outcome {
             .into(),
         verdict,
         uncertain_source: true,
-        restore_note: "Safe to restore to automatic; fully reversible; takes effect after a reboot."
-            .into(),
+        restore_note: restore_note.into(),
     })
 }
+
+/// The pagefile note when settings sit on more than one drive: Compy's restore refuses that layout,
+/// so the note never offers it and names the Windows screen that does it instead.
+const PAGEFILE_MULTI_ROW_NOTE: &str = "Not a one-click restore here: this PC has pagefile settings on more than one drive, and Compy's restore only handles a single fixed pagefile. To go back to automatic yourself, open System Properties > Advanced > Performance Settings > Advanced > Virtual memory > Change, tick \"Automatically manage paging file size for all drives\", then reboot (it takes effect after a reboot).";
 
 // ── Detector 2: memory compression disabled — the second origin-story detector ─────────────────
 // Stock Windows compresses idle pages in RAM. Guides run `Disable-MMAgent -mc` to "cut CPU
@@ -1012,6 +1023,36 @@ mod leftovers_tests {
         let r = evaluate_leftovers(&probes(Some(false), mixed, Some(true), Some(32)), &no_endorsements());
         let f = find(&r, "pagefile-fixed").expect("the D: file is fixed");
         assert_eq!(f.current_value, "Fixed at 8192\u{2013}16384 MB (D:\\pagefile.sys)");
+    }
+
+    // CR-pagefile-multi: that same managed-C: + fixed-D: layout read "Safe to restore to
+    // automatic", but the restore refuses every layout except one fixed entry. The finding stays
+    // (it is still a fixed pagefile); its note says plainly it is not one-click and how to do it.
+    #[test]
+    fn a_multi_row_pagefile_finding_never_offers_the_one_click_restore() {
+        let layouts = [
+            json!([
+                { "name": "C:\\pagefile.sys", "initial_mb": 0, "maximum_mb": 0 },
+                { "name": "D:\\pagefile.sys", "initial_mb": 8192, "maximum_mb": 16384 },
+            ]),
+            json!([
+                { "name": "C:\\pagefile.sys", "initial_mb": 4096, "maximum_mb": 4096 },
+                { "name": "D:\\pagefile.sys", "initial_mb": 8192, "maximum_mb": 16384 },
+            ]),
+        ];
+        for files in layouts {
+            let r = evaluate_leftovers(&probes(Some(false), files.clone(), Some(true), Some(32)), &no_endorsements());
+            let f = find(&r, "pagefile-fixed").expect("still a fixed-pagefile finding");
+            let note = f.restore_note.to_lowercase();
+            assert!(!note.contains("safe to restore"), "offers the restore it refuses: {files} -> {}", f.restore_note);
+            assert!(note.contains("not a one-click restore"), "says so plainly: {}", f.restore_note);
+            assert!(note.contains("virtual memory") && note.contains("automatically manage"), "names the way: {}", f.restore_note);
+            assert!(note.contains("reboot"), "reboot honesty kept: {}", f.restore_note);
+        }
+        // A single fixed row keeps the one-click note (the layout the restore accepts).
+        let single = json!([{ "name": "C:\\pagefile.sys", "initial_mb": 8192, "maximum_mb": 8192 }]);
+        let r = evaluate_leftovers(&probes(Some(false), single, Some(true), Some(32)), &no_endorsements());
+        assert!(find(&r, "pagefile-fixed").expect("finding").restore_note.starts_with("Safe to restore"));
     }
 
     #[test]
