@@ -231,6 +231,15 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 - [ ] **CR-zh-dial** (desk review 2026-11-04, pre-existing) In zh-CN the Test room's safe-stack dial label "已启用" collides
       with the ring stroke and ticks (en "ON" fits): fit the zh label inside the ring (a shorter string or a smaller size)
       and add a zh-width guard. TS/CSS; screen check at a FULL session.
+      PARKED 2026-11-10 (desk session, no code landed): the coordinator call was "fit it inside the ring by size,
+      keep the string", but by size alone it cannot fit at the 13px floor. Measured from the CSS: the Test ring is
+      64px (track inner edge r~21px); the unit row sits ~7-19px below centre, where the inner chord is ~18-40px wide;
+      "已启用" at 13px mono with .1em tracking is ~43px wide (39px untracked), "ON" ~18px. Fitting needs ~9-10px,
+      below the TYPE-1 floor that type-scale-guard.test.ts pins ("no token below 13px", no literal font sizes) and
+      that ArcGauge.tsx states ("nothing shrinks below the floor"); a transform-scale would dodge the same law.
+      Recommendation for a one-line re-call: count CJK as double width in ArcGauge's in-ring rule (unit visual
+      width <= 3), so "已启用"/"就绪" render beside the label like "ready" already does, string kept, 13px kept;
+      guard: a zh unit test in arc-gauge.test.tsx. Visual check of the Test room in zh-CN still due at a FULL session.
 
 ### Next — small visible slices (refill 2026-11-04: honest machine reads, Roadmap Phase 9 and the Care journey)
 - [x] **CR-pagefile-0** A system-managed pagefile reads "Fixed at 0-0 MB": say "Managed by Windows" when Windows
@@ -941,20 +950,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-03 ~01:00 to ~08:07 (interactive from Claude HQ, the same ask): the codebase review's slices 7 and 8 landed
-  from `claude/train-review-1103c` (`22d23584` advice that reads the machine honestly; `e50cc1e9` screens that say
-  what Compy read: GPU temperature from the named GPU's own sensor, never coloured from NVML, check counts that name
-  unread and advisory checks, Gaming Mode's leftover contract, Learn, the investigator, the GPU before/after; the
-  review rounds' follow-ups through `cd9e11c0`, with the GPU driver fields re-read in-session and three CR-1102-left
-  items). Merges `e2de00db`, `feb2e699`, `c152a383`, `49126983`, `fe2f6f82` (a script-only revert), `60a86db2` and
-  `50ceb38c`. Rust and frontend each reviewed twice, no MUST left. Desk self-review PASS 12 of 12 on `50ceb38c` with
-  his data, after five desk reviews (`e2de00db` to `60a86db2`) failed and were fixed. A Compy started from the Claude
-  app's Desktop Commander reads an overlay copy of its WebView2 profile (his picks); his own launches and
-  ship-reinstall's read the real one: nothing lost. On his call his settings became the only copy at 08:47 (the side
-  copy and the old store are kept in `C:\Users\Kuya\code\_train\merge-backup-1103`) and Claude's launches go through
-  the ship launcher (self-reviewer rubric). Desk build `50ceb38c` installed (`ship-reinstall.ps1 -VerifyRuntime`,
-  proof `50ceb38c · release`); pushed with this line through the pre-push gate. What the review left is CR-1102-left.
-  Every launch was --no-activate on his second monitor.
 - 2026-11-03 08:43-08:55 (scheduled, FULL, owner idle on Discord): queue refill (six slices from CR-1102-left and
   Phase 9); CR-live-round (tsc 0; vitest src/surfaces+design+data 283 files / 4074, exit 0; 3 tests fail on old
   code). TS display only, no review. Not landed by that session: at 08:51 an interactive session committed `2471184f`
@@ -1052,6 +1047,12 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   dual-channel (`_train\view-1110\`). Exit proofs: P6 partly driven (crash + stutter next steps from Home, no
   WARDOGS crash on record), P4/P5 blocked by the owner's open PBZ Trial exp:6, P7 needs the friend. A first push
   was stopped mid-gate when the preflight showed input at 12:58 (idle 107 s); pushed with this line once idle again.
+- 2026-11-10 ~13:10-13:45 (coordinator-assigned desk session, FULL): queued + landed CR-stutter-rollback-improved
+  `895d253e` (an improved comparison no longer offers to roll back the change it measured; owner data read-only) and
+  CR-pagefile-note-refusals `da22a28b` (every refused pagefile layout says not one-click, with why); queued
+  CR-stutter-rollback-trial from review. CR-zh-dial PARKED: by-size fit conflicts with the 13px floor (note under the
+  item). cargo test 1807/0, clippy clean; both new tests proven failing on the old code; reviews (sonnet, r1)
+  APPROVE-WITH-NITS x2. No install, no screen check. Pushed with this line through the gate.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
