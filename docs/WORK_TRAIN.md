@@ -228,7 +228,7 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       change was kept on a Trial's measured improvement (`AppliedChange.justified_by_experiment`) still proposes the
       plain rollback. The copy should say the Trial measured an improvement on <date> and this later session
       contradicts it (the ledger event needs the Trial link). Rust (intelligence.rs); one review.
-- [ ] **CR-zh-dial** (desk review 2026-11-04, pre-existing) In zh-CN the Test room's safe-stack dial label "已启用" collides
+- [x] **CR-zh-dial** (desk review 2026-11-04, pre-existing) In zh-CN the Test room's safe-stack dial label "已启用" collides
       with the ring stroke and ticks (en "ON" fits): fit the zh label inside the ring (a shorter string or a smaller size)
       and add a zh-width guard. TS/CSS; screen check at a FULL session.
       PARKED 2026-11-10 (desk session, no code landed): the coordinator call was "fit it inside the ring by size,
@@ -240,6 +240,10 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       Recommendation for a one-line re-call: count CJK as double width in ArcGauge's in-ring rule (unit visual
       width <= 3), so "已启用"/"就绪" render beside the label like "ready" already does, string kept, 13px kept;
       guard: a zh unit test in arc-gauge.test.tsx. Visual check of the Test room in zh-CN still due at a FULL session.
+      Done `1bc687e6` (2026-11-10, coordinator took the recommendation): ArcGauge counts a CJK/fullwidth character
+      as two Latin cells (`unitVisualWidth`, ring holds <= 3), so "已启用"/"就绪" render beside the label like "ready";
+      13px floor, string and type-scale guard unchanged. Test proven failing on the old rule. **Visual check of the
+      Test room in zh-CN is due at the next FULL install session.**
 
 ### Next — small visible slices (refill 2026-11-04: honest machine reads, Roadmap Phase 9 and the Care journey)
 - [x] **CR-pagefile-0** A system-managed pagefile reads "Fixed at 0-0 MB": say "Managed by Windows" when Windows
