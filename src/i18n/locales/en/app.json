@@ -52,6 +52,10 @@
   "errorBanner": {
     "dismiss": "Dismiss"
   },
+  "careStore": {
+    "saveFailed": "Compy couldn't save this; it'll try again",
+    "readFailed": "Compy couldn't check for crash notices; it'll try again"
+  },
   "gamingToast": {
     "hideRecoveryAria": "Hide this reminder — you can still restore from the Gaming panel",
     "hideRecoveryTitle": "Hide — you can still restore from the Gaming panel",

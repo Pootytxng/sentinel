@@ -277,7 +277,7 @@ describe("the observer is outside the mutation boundary and stays there", () => 
   });
 
   it("deletes no evidence on dismiss", () => {
-    const body = prod.match(/pub\(crate\) fn dismiss_care_incident\(incident_id: String\) \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const body = prod.match(/pub\(crate\) fn dismiss_care_incident\(incident_id: String\) -> Result<\(\), String> \{([\s\S]*?)\n\}/)?.[1] ?? "";
     expect(body, "dismiss_care_incident is gone").not.toBe("");
     expect(
       body,
@@ -289,7 +289,7 @@ describe("the observer is outside the mutation boundary and stays there", () => 
   });
 
   it("keeps the observation after a dismiss, so the same crash cannot come back", () => {
-    const body = prod.match(/pub\(crate\) fn dismiss_care_incident\(incident_id: String\) \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const body = prod.match(/pub\(crate\) fn dismiss_care_incident\(incident_id: String\) -> Result<\(\), String> \{([\s\S]*?)\n\}/)?.[1] ?? "";
     expect(body, "dismiss no longer stamps the observation — the next scan re-announces it")
       .toMatch(/dismissed_at = Some/);
     expect(body, "dismiss now removes the observation row, which makes the crash new again")
@@ -354,13 +354,16 @@ describe("a dismissed crash stays dismissed (bug->guard, #222 backend review)", 
     expect(prod, "the state lock is gone — a dismiss landing mid-scan is read before the click and " +
       "written back after it, and the card returns")
       .toMatch(/static STATE_LOCK: Mutex<\(\)> = Mutex::new\(\(\)\);/);
-    for (const fn of ["with_state", "read_state"]) {
+    for (const fn of ["with_state_at", "read_state", "pending_at"]) {
       expect(prod, `${fn} no longer takes the lock`).toMatch(
         new RegExp(`fn ${fn}[\\s\\S]{0,220}?lock_state\\(\\)`),
       );
     }
     expect(prod, "mutate bypasses the locked path again").toMatch(
-      /fn mutate\([\s\S]{0,200}?with_state\(/,
+      /fn mutate\([\s\S]{0,200}?mutate_at\(/,
+    );
+    expect(prod, "mutate_at bypasses the locked path again").toMatch(
+      /fn mutate_at\([\s\S]{0,300}?with_state_at\(/,
     );
   });
 
@@ -424,7 +427,7 @@ describe("the three commands agree across every authority", () => {
   it("reads the Home card without scanning", () => {
     // Mounting Home must cost one small JSON read, not a WMI probe. This is the standing
     // least-resource-hungry bar at the surface the user opens most often.
-    const body = prod.match(/pub\(crate\) fn get_pending_care_incident\(\) -> Option<PendingCareIncident> \{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const body = prod.match(/pub\(crate\) fn get_pending_care_incident\(\) -> Result<Option<PendingCareIncident>, String> \{([\s\S]*?)\n\}/)?.[1] ?? "";
     expect(body, "get_pending_care_incident is gone").not.toBe("");
     expect(body, "opening Home now triggers a crash scan")
       .not.toMatch(/scan_now|scan_async|get_crash_blackbox/);

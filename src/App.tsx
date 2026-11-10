@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
+import { CareStoreLine, useCareStore } from "./care-store-line";
 // The visible app version is the SAME canonical string the installer + all three manifests carry
 // (package.json === tauri.conf.json === Cargo.toml === Cargo.lock, pinned equal by
 // scripts/version-drift-guard.test.mjs Guard A). Importing it here, rather than hardcoding a
@@ -1156,11 +1157,20 @@ function App() {
     window.addEventListener(INTERVIEW_ARRIVAL_EVENT, open);
     return () => window.removeEventListener(INTERVIEW_ARRIVAL_EVENT, open);
   }, []);
+  // CR-care-silent: a crash-notice record that can't be read or saved says so in one line.
+  const careStore = useCareStore(invoke);
+  const { readOk: careReadOk, readFailed: careReadFailed } = careStore;
   const refreshPendingCare = useCallback(() => {
     invoke<PendingCareIncident | null>("get_pending_care_incident")
-      .then((c) => setPendingCare(c ?? null))
-      .catch(() => setPendingCare(null));
-  }, []);
+      .then((c) => {
+        careReadOk();
+        setPendingCare(c ?? null);
+      })
+      .catch(() => {
+        careReadFailed();
+        setPendingCare(null);
+      });
+  }, [careReadOk, careReadFailed]);
   // Read on every room change, not only on Health: the Problems door's badge shows the same pending
   // incident wherever the user is (glass redesign). One cheap read per navigation.
   useEffect(() => {
@@ -1171,16 +1181,16 @@ function App() {
   // an unacknowledged notice for something they just acknowledged.
   const openCareIncident = (incidentId: string) => {
     setPendingCare(null);
-    invoke("mark_care_incident_opened", { incidentId }).catch(() => {
-      /* non-fatal — the card reappears on the next read, which is the safe direction */
-    });
+    // A failed save shows one line and retries once; the card reappears on the next read, which
+    // is the safe direction.
+    careStore.persist("mark_care_incident_opened", incidentId);
     openLabStation("blackbox", incidentId);
   };
   // "Not now" — clears Compy's POINTER only. Every Windows record behind it (Event Log entry, WER
   // report, reliability row) is untouched and still readable from Crash & Freeze Rescue.
   const dismissCareIncident = (incidentId: string) => {
     setPendingCare(null);
-    invoke("dismiss_care_incident", { incidentId }).catch(() => {});
+    careStore.persist("dismiss_care_incident", incidentId);
   };
   const HOME_FOR_TAB: Partial<Record<Tab, HomeRailId>> = {
     Overview: "home",
@@ -1423,6 +1433,7 @@ function App() {
             gamingRecovery, so the pane's own card (and Review) keep offering the restore, and
             the next launch re-greets if the session is still unresolved. */}
       <div className="gaming-toast-stack">
+        <CareStoreLine trouble={careStore.trouble} />
         {showGlobalRecoveryBanner(gamingRecovery !== null, gamingPaneMounted) &&
           gamingRecovery &&
           !recoveryToastHidden && (

@@ -52,6 +52,10 @@
   "errorBanner": {
     "dismiss": "关闭"
   },
+  "careStore": {
+    "saveFailed": "Compy 没能保存这项操作,稍后会再试一次",
+    "readFailed": "Compy 暂时没能检查崩溃提醒,稍后会再试一次"
+  },
   "gamingToast": {
     "hideRecoveryAria": "隐藏这条提醒——你仍然可以在游戏面板中恢复设置",
     "hideRecoveryTitle": "隐藏——你仍然可以在游戏面板中恢复设置",

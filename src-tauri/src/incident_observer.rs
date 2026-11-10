@@ -576,24 +576,52 @@ static SAVE_SEQ: AtomicU64 = AtomicU64::new(0);
 /// noticing crashes — the state is re-read from disk on every entry, so a poisoned lock guards
 /// nothing that a fresh read does not already fix.
 fn lock_state() -> crate::race_seam::StoreGuard {
-    // #398 — see `comparison::lock_comparison`. Two paths take this lock (`with_state` writes,
-    // `read_state` reads); the recorder is what makes "one of them never runs inside the other"
-    // an observation rather than an assumption. No-op in a release build.
+    // #398 — see `comparison::lock_comparison`. Three paths take this lock (`with_state_at`
+    // writes, `read_state` and `pending_at` read); the recorder is what makes "one of them never
+    // runs inside the other" an observation rather than an assumption. No-op in a release build.
     crate::race_seam::hold_lock(crate::race_seam::StoreLock::IncidentObserver, || {
         STATE_LOCK.lock().unwrap_or_else(|e| e.into_inner())
     })
 }
 
-/// Read → apply → save, under the lock. The single writer path. `None` when the state couldn't be
+/// Why the state file couldn't be used (CR-care-silent). `code` is the stable code the support
+/// record carries; `detail` is the error text, redacted by `support_evidence` before it is stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StoreFailure {
+    pub(crate) code: &'static str,
+    pub(crate) detail: String,
+}
+
+/// What a failed save of a user's choice answers the window with. The window shows one line for it.
+pub(crate) const CARE_SAVE_FAILED: &str = "care_save_failed";
+/// What a failed read of the Home card answers the window with.
+pub(crate) const CARE_READ_FAILED: &str = "care_read_failed";
+
+/// Read → apply → save, under the lock. The single writer path. `Err` when the state couldn't be
 /// read right now (nothing is written over it) or the save failed: a caller acts on the outcome only
 /// once it is on disk, so a save that keeps failing can't toast the same crash on every scan.
-fn with_state<T>(f: impl FnOnce(&mut IncidentObserverState) -> T) -> Option<T> {
+fn with_state_at<T>(
+    path: &Path,
+    f: impl FnOnce(&mut IncidentObserverState) -> T,
+) -> Result<T, StoreFailure> {
     let _guard = lock_state();
-    let path = state_path();
-    let mut state = load_checked(&path).ok()?;
+    let mut state =
+        load_checked(path).map_err(|detail| StoreFailure { code: "read_failed", detail })?;
     let out = f(&mut state);
-    save_to(&path, &state).ok()?;
-    Some(out)
+    save_to(path, &state).map_err(|detail| StoreFailure { code: "save_failed", detail })?;
+    Ok(out)
+}
+
+/// Write the support event for a failure. Called only after the state lock is released: the
+/// support store is its own lock, and this keeps the two from ever nesting.
+fn report_store_failure(operation: &str, failure: &StoreFailure) {
+    crate::support_evidence::record(
+        crate::support_evidence::EventKind::Operation,
+        operation,
+        failure.code,
+        crate::support_evidence::Outcome::Failed,
+        &failure.detail,
+    );
 }
 
 /// Read without writing, under the same lock. The single reader path.
@@ -708,7 +736,13 @@ fn scan_now(trigger: ScanTrigger) {
     // the read-modify-write below, which is microseconds.
     let report = crate::blackbox::collect_crash_blackbox();
     let now = Utc::now();
-    let toast = with_state(|state| observe(&report, now, state).toast).flatten();
+    let toast = match with_state_at(&state_path(), |state| observe(&report, now, state).toast) {
+        Ok(toast) => toast,
+        Err(failure) => {
+            report_store_failure("care.scan", &failure);
+            None
+        }
+    };
 
     if let Some(card) = toast {
         notify(&card);
@@ -731,26 +765,52 @@ fn notify(card: &PendingCareIncident) {
 
 /// The Home card, or nothing. Cheap by construction — it reads the state file and never scans, so
 /// mounting Home costs one small JSON read.
+///
+/// A record that can't be read right now is an error, not "no crash" (CR-care-silent): the window
+/// shows one line, and the support record gets one event per run of failures, not one per room
+/// change.
 #[tauri::command]
-pub(crate) fn get_pending_care_incident() -> Option<PendingCareIncident> {
-    let mut state = read_state();
-    expire_pending(&mut state, Utc::now());
-    state.pending_card
+pub(crate) fn get_pending_care_incident() -> Result<Option<PendingCareIncident>, String> {
+    let out = pending_at(&state_path(), Utc::now());
+    match &out {
+        Ok(_) => READ_FAILURE_REPORTED.store(false, Ordering::Release),
+        Err(failure) => {
+            if !READ_FAILURE_REPORTED.swap(true, Ordering::AcqRel) {
+                report_store_failure("care.pending_read", failure);
+            }
+        }
+    }
+    out.map_err(|_| CARE_READ_FAILED.to_string())
+}
+
+/// Set while the Home card's reads keep failing, so a failure streak is one support event.
+static READ_FAILURE_REPORTED: AtomicBool = AtomicBool::new(false);
+
+/// The Home card at `path`. Undecodable bytes are set aside and read as no card, exactly as before;
+/// only a read that fails right now is an `Err`.
+fn pending_at(path: &Path, now: DateTime<Utc>) -> Result<Option<PendingCareIncident>, StoreFailure> {
+    let read = {
+        let _guard = lock_state();
+        load_checked(path)
+    };
+    let mut state = read.map_err(|detail| StoreFailure { code: "read_failed", detail })?;
+    expire_pending(&mut state, now);
+    Ok(state.pending_card)
 }
 
 /// The user followed the card into Crash & Freeze Rescue. Records that, and retires the card.
 ///
 /// The observation is KEPT — retiring the card must not make this incident announceable again.
 #[tauri::command]
-pub(crate) fn mark_care_incident_opened(incident_id: String) {
-    mutate(|state, now| {
+pub(crate) fn mark_care_incident_opened(incident_id: String) -> Result<(), String> {
+    mutate("care.incident_opened", |state, now| {
         if let Some(o) = state.find_mut(&incident_id) {
             o.opened_at = Some(now.to_rfc3339());
         }
         if state.pending_home_incident_id.as_deref() == Some(incident_id.as_str()) {
             state.clear_pending();
         }
-    });
+    })
 }
 
 /// The user dismissed the card.
@@ -759,21 +819,39 @@ pub(crate) fn mark_care_incident_opened(incident_id: String) {
 /// reliability record are all untouched and still readable from Crash & Freeze Rescue — dismissing
 /// a card is the user saying "I know", never "delete the evidence".
 #[tauri::command]
-pub(crate) fn dismiss_care_incident(incident_id: String) {
-    mutate(|state, now| {
+pub(crate) fn dismiss_care_incident(incident_id: String) -> Result<(), String> {
+    mutate("care.incident_dismissed", |state, now| {
         if let Some(o) = state.find_mut(&incident_id) {
             o.dismissed_at = Some(now.to_rfc3339());
         }
         if state.pending_home_incident_id.as_deref() == Some(incident_id.as_str()) {
             state.clear_pending();
         }
-    });
+    })
 }
 
-/// Read → apply → save. Best-effort: a save failure leaves the previous state, which at worst shows
-/// the card once more.
-fn mutate(f: impl FnOnce(&mut IncidentObserverState, DateTime<Utc>)) {
-    let _ = with_state(|state| f(state, Utc::now()));
+/// Read → apply → save. A failure leaves the previous state (at worst the card shows once more),
+/// writes one support event and answers the window with an error, which shows one line
+/// (CR-care-silent). It was `let _ =`: the user's "Not now" could fail with no trace anywhere.
+fn mutate(
+    operation: &str,
+    f: impl FnOnce(&mut IncidentObserverState, DateTime<Utc>),
+) -> Result<(), String> {
+    mutate_at(&state_path(), operation, f, report_store_failure)
+}
+
+/// `mutate` against any path, with the support record injected so a test can see the event
+/// without writing to the real support file.
+fn mutate_at(
+    path: &Path,
+    operation: &str,
+    f: impl FnOnce(&mut IncidentObserverState, DateTime<Utc>),
+    report: impl FnOnce(&str, &StoreFailure),
+) -> Result<(), String> {
+    with_state_at(path, |state| f(state, Utc::now())).map_err(|failure| {
+        report(operation, &failure);
+        CARE_SAVE_FAILED.to_string()
+    })
 }
 
 #[cfg(test)]
@@ -857,6 +935,70 @@ mod tests {
         assert!(load_checked(&path).is_err());
         assert_eq!(load_or_quarantine(&path), IncidentObserverState::fresh(), "the reader still gets a fresh view");
         assert!(path.is_dir(), "nothing was set aside or replaced");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // CR-care-silent: "Not now" / "Find out why" went through `let _ = with_state(..)`, so a save
+    // that failed left no support event and told the window nothing. It now does both.
+    #[test]
+    fn a_choice_that_cannot_be_saved_is_an_error_with_one_support_event() {
+        let dir = std::env::temp_dir().join(format!("compy-observer-nosave-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // The state's folder is a FILE, so the save's create_dir_all fails on every platform.
+        let blocker = dir.join("care");
+        std::fs::write(&blocker, b"not a folder").unwrap();
+        let path = blocker.join("incident-observer.json");
+        let mut events: Vec<(String, StoreFailure)> = Vec::new();
+        let out = mutate_at(&path, "care.incident_dismissed", |s, _| s.clear_pending(), |op, f| {
+            events.push((op.to_string(), f.clone()))
+        });
+        assert_eq!(out, Err(CARE_SAVE_FAILED.to_string()));
+        assert_eq!(events.len(), 1, "{events:?}");
+        assert_eq!(events[0].0, "care.incident_dismissed");
+        assert!(["read_failed", "save_failed"].contains(&events[0].1.code), "{events:?}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_choice_that_cannot_be_read_first_is_an_error_too_and_nothing_is_written() {
+        let dir = std::env::temp_dir().join(format!("compy-observer-noread-{}", std::process::id()));
+        let path = dir.join("incident-observer.json");
+        std::fs::create_dir_all(&path).unwrap(); // a read that fails on every platform
+        let mut events: Vec<StoreFailure> = Vec::new();
+        let out = mutate_at(&path, "care.incident_opened", |s, _| s.clear_pending(), |_, f| {
+            events.push(f.clone())
+        });
+        assert_eq!(out, Err(CARE_SAVE_FAILED.to_string()));
+        assert_eq!(events.iter().map(|f| f.code).collect::<Vec<_>>(), vec!["read_failed"]);
+        assert!(path.is_dir(), "nothing was written over the unreadable record");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_saved_choice_reports_nothing() {
+        let dir = std::env::temp_dir().join(format!("compy-observer-saves-{}", std::process::id()));
+        let path = dir.join("incident-observer.json");
+        let mut reported = false;
+        let out = mutate_at(&path, "care.incident_dismissed", |s, _| s.clear_pending(), |_, _| {
+            reported = true
+        });
+        assert_eq!(out, Ok(()));
+        assert!(!reported);
+        assert!(path.is_file(), "the choice is on disk");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // The Home card's read used `load_or_quarantine`, so a read that failed right now looked
+    // exactly like "no crash". It is now an error; undecodable bytes still read as no card.
+    #[test]
+    fn the_home_card_read_says_when_it_could_not_read() {
+        let dir = std::env::temp_dir().join(format!("compy-observer-cardread-{}", std::process::id()));
+        let unreadable = dir.join("a").join("incident-observer.json");
+        std::fs::create_dir_all(&unreadable).unwrap();
+        let err = pending_at(&unreadable, Utc::now()).unwrap_err();
+        assert_eq!(err.code, "read_failed");
+        let missing = dir.join("b").join("incident-observer.json");
+        assert_eq!(pending_at(&missing, Utc::now()), Ok(None));
         std::fs::remove_dir_all(&dir).ok();
     }
 
