@@ -315,12 +315,15 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       `persist(key, save)` keyed `dismissed:<id>` / `opened:<id>`; the line clears only when no choice is unsaved;
       after the last retry it reads "Compy couldn't save this; the crash notice may show again" (en + zh-CN). Reworded,
       not retried forever: each failed save writes a support event. 3 tests fail on the old logic. TS only.
-- [ ] **CR-tip-see-through** (desk self-review FAIL 2026-11-10, installed `1f4ed7a1`, Live room) The in-app term tip
+- [x] **CR-tip-see-through** (desk self-review FAIL 2026-11-10, installed `1f4ed7a1`, Live room) The in-app term tip
       `.kl-tip` (`src/design/Term.tsx`, shared by every `<Term>`) is painted on `rgba(14,20,27,0.74)` with no
       backdrop blur, so the readings under it ("47°c", "14", the MEASURED pills) show through and collide with its
       text on the "13 Compy changes were on · combined effect" tip. Screenshot
       `C:\Users\Kuya\code\_train\view-1110b\c2-live-combined-effect-tooltip.png`. Make the tip ground opaque (or blur
       what is under it); test the computed ground; recapture.
+      Done `0ab041dd`: the tip paints `--v2-panel-pop` (0.96, the Look panel's popover ground) plus its blur, opaque
+      `--panel-2` outside V2; `term-style-guard` resolves the ground through every theme, surface and room re-point
+      and fails on the old CSS (0.74). Visual re-check of the Live tip is due at the next FULL install session.
 
 ### Next — bugs a real user would hit (from the Sep 29 Trial batch)
 - [x] **FOCUS** Cause found 2026-10-24: `foreground-probe.ps1` named its parameter `$Args` (PowerShell's
