@@ -215,12 +215,7 @@ pub(crate) fn evaluate_readiness(
         let soldered_lpddr = one
             .map(|m| m.type_name.to_uppercase().starts_with("LPDDR"))
             .unwrap_or(false);
-        let named: Option<std::collections::BTreeSet<&str>> = hw
-            .memory_modules
-            .iter()
-            .map(|m| m.channel.as_deref())
-            .collect::<Option<_>>();
-        let channels = named.map(|s| s.len());
+        let channels = crate::hardware::named_memory_channel_count(&hw.memory_modules);
         checks.push(match (populated, soldered_lpddr, channels) {
             (1, false, _) => check(
                 "memory-channels",
@@ -1707,7 +1702,7 @@ mod readiness_tests {
                 type_name: "DDR5".into(),
                 manufacturer: "G.Skill".into(),
                 xmp_expo_status: "running_below_rated".into(),
-                channel: None,
+                ..Default::default()
             }],
             ..Default::default()
         };
@@ -1730,7 +1725,7 @@ mod readiness_tests {
                 type_name: "DDR5".into(),
                 manufacturer: "G.Skill".into(),
                 xmp_expo_status: "running_at_rated".into(),
-                channel: None,
+                ..Default::default()
             }],
             ..Default::default()
         };
@@ -1748,12 +1743,13 @@ mod readiness_tests {
             type_name: type_name.into(),
             manufacturer: "Kit".into(),
             xmp_expo_status: "running_at_rated".into(),
-            channel: None,
+            bank_channel: None,
+            slot_channel: None,
         }
     }
 
-    fn mem_on(type_name: &str, channel: &str) -> crate::hardware::MemoryModuleInfo {
-        crate::hardware::MemoryModuleInfo { channel: Some(channel.into()), ..mem(type_name) }
+    fn mem_on(type_name: &str, bank_channel: &str) -> crate::hardware::MemoryModuleInfo {
+        crate::hardware::MemoryModuleInfo { bank_channel: Some(bank_channel.into()), ..mem(type_name) }
     }
 
     #[test]
@@ -1830,6 +1826,18 @@ mod readiness_tests {
         let c = find(&r, "memory-channels");
         assert_ne!(c.status, ReadinessStatus::Attention);
         assert!(!c.detail.to_lowercase().contains("moving"));
+    }
+
+    #[test]
+    fn memory_channels_soldered_lpddr_on_two_named_channels_is_ready_dual_channel() {
+        let hw = HardwareInfo {
+            memory_modules: vec![mem_on("LPDDR5", "CHANNEL A"), mem_on("LPDDR5", "CHANNEL B")],
+            ..Default::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&AppliedChangesSummary::default()), None);
+        let c = find(&r, "memory-channels");
+        assert_eq!(c.status, ReadinessStatus::Ready);
+        assert!(c.detail.contains("dual-channel"));
     }
 
     #[test]
