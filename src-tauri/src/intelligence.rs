@@ -1908,6 +1908,17 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
                         .into(),
                 ),
             }
+        } else if !current_is_worse {
+            // CR-stutter-rollback-improved: these two sessions MEASURED the later one as better
+            // (1% lows rose past the floor). Proposing to roll the change back undid an improvement
+            // Compy itself measured, and the Care view's stutter comparison showed exactly that on
+            // the owner's rig ("1% lows rose 14.6%" above "Roll back the change"). Nothing here is
+            // evidence of a stutter, so nothing contradicts the measurement: the next test keeps the
+            // change and repeats, and no rec id rides along, so no surface can offer a rollback
+            // button for it.
+            h.next_test = Some(format!(
+                "Keep things as they are and play one more {game} session — if 1% lows stay up, that change is the likely factor. Undoing it isn't suggested: these two sessions measured an improvement."
+            ));
         } else {
             h.next_test = Some(
                 "Roll back the change in the Trust Ledger, play one more session, and compare — that isolates it.".into(),
@@ -1989,7 +2000,13 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
             for e in &plan_events {
                 h.supporting.push(e.summary.clone());
             }
-            h.next_test = Some("Set the power plan back and play one more session to compare.".into());
+            // CR-stutter-rollback-improved: never suggest undoing a change these sessions measured as
+            // an improvement (same rule as the Compy-change next test above).
+            h.next_test = Some(if current_is_worse {
+                "Set the power plan back and play one more session to compare.".into()
+            } else {
+                format!("Keep this power plan and play one more {game} session — if 1% lows stay up, the plan change is the likely factor.")
+            });
         } else {
             let covered_before = inp.snapshots.iter().any(|s| {
                 !s.power_plan.is_empty() && parse_utc(&s.observed_at).is_some_and(|t| t <= bt)
@@ -3762,6 +3779,78 @@ mod tests {
             }
             assert_eq!(r.next_action_rec_id, None, "no ledger apply in this window");
         }
+    }
+
+    /// CR-stutter-rollback-improved, the owner's rig 2026-11-10 (installed 68f2272b): Care →
+    /// "Stutters or runs slow?" compared PBZ's latest session with its last steady one (Nov 1
+    /// 21:07Z, 1% low 52.7), measured the 1% lows RISING 14.6%, named "Trim Windows visual
+    /// effects applied" (applied 2026-11-02T00:37Z, still applied) as the most likely cause, and
+    /// then told him to roll it back. A change the comparison itself measured as an improvement
+    /// is never the thing to undo: no rollback sentence, no rec id (so no rollback button), and
+    /// the sentence says why. The regressed mirror still names the rollback (pinned above).
+    #[test]
+    fn a_change_the_comparison_measured_as_an_improvement_is_never_offered_for_rollback() {
+        let mut b = mk_session("2026-11-01T21:07:02Z", "PBZ.exe", 52.7, 70.0);
+        let mut c = mk_session("2026-11-02T10:48:00Z", "PBZ.exe", 60.4, 80.0);
+        b.hw_fingerprint = Some(mk_fp("32.0.32015.7029"));
+        c.hw_fingerprint = Some(mk_fp("32.0.32015.7029"));
+        b.gaming_mode_active = Some(false);
+        c.gaming_mode_active = Some(false);
+        let apply = applied_event("2026-11-02T00:37:48Z", "Trim Windows visual effects", "visual-effects", false);
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![apply.clone()],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert_eq!(r.verdict, "improved", "{}", r.headline);
+        let leader = r.leading_hypotheses.first().expect("has a leader");
+        assert_eq!(leader.id, "compy-config-change");
+        let next = r.next_action.as_deref().expect("a next test still stands");
+        assert!(!next.to_lowercase().contains("roll back"), "rollback offered for a measured improvement: {next}");
+        assert!(next.contains("measured an improvement"), "the sentence must say why: {next}");
+        assert_eq!(leader.next_test_rec_id, None, "no rec id, so no rollback button");
+        assert_eq!(r.next_action_rec_id, None);
+
+        // Same rule for an observed power-plan change that came with an improvement.
+        let mut plan = rollback_event("2026-11-02T00:37:48Z", "unused");
+        plan.event_type = "power-plan-change".into();
+        plan.source = "identity-snapshot".into();
+        plan.scope = EventScope::Observed;
+        plan.summary = "Power plan changed: Balanced → Ultimate Performance".into();
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![plan.clone()],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert_eq!(r.verdict, "improved");
+        let next = r.next_action.as_deref().expect("a next test still stands");
+        assert!(!next.contains("back"), "undo offered for a measured improvement: {next}");
+        assert!(next.contains("Keep this power plan"), "{next}");
+
+        // The regressed mirror is unchanged: there the rollback IS the isolating test.
+        let worse = SessionSummary { low1_fps_est: 45.0, ..c.clone() };
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &worse,
+            events_window: vec![apply],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert_eq!(r.verdict, "regressed");
+        assert!(r.next_action.as_deref().unwrap_or("").contains("Roll back the change"));
+        assert_eq!(r.next_action_rec_id.as_deref(), Some("visual-effects"));
+        let r = report(&WhatChangedInputs {
+            baseline: &b,
+            current: &worse,
+            events_window: vec![plan],
+            events_ambiguous: vec![],
+            snapshots: &[],
+        });
+        assert!(r.next_action.as_deref().unwrap_or("").contains("Set the power plan back"));
     }
 
     fn drift_event(ts: &str, label: &str) -> EventRecord {
