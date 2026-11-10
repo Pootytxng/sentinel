@@ -214,9 +214,12 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       and add a zh-width guard. TS/CSS; screen check at a FULL session.
 
 ### Next — small visible slices (refill 2026-11-04: honest machine reads, Roadmap Phase 9 and the Care journey)
-- [ ] **CR-pagefile-0** A system-managed pagefile reads "Fixed at 0-0 MB": say "Managed by Windows" when Windows
+- [x] **CR-pagefile-0** A system-managed pagefile reads "Fixed at 0-0 MB": say "Managed by Windows" when Windows
       manages it (0/0 sizes or the automatic flag), the sizes only when they are set. Rust read + TS line; test with
-      both shapes.
+      both shapes. Done `258b438f` (2026-11-10): all-0/0 rows read clean, unread or half-zero rows unavailable, a fixed
+      row beside a managed one is the one named; no TS change needed (Check prints the Rust line).
+- [ ] **CR-pagefile-multi** A pagefile finding over several rows (managed C: plus fixed D:) offers a restore that
+      refuses any multi-row layout: say it is not one-click, or support the layout. Rust; mutation boundary, one review.
 - [ ] **CR-dual-channel** Claim a memory-channel count only from slot or bank data that names it, otherwise
       "unknown" (never invent hardware specs); check first what the line reads today. Rust, read-only; one review.
 - [ ] **CR-vbs-running** Say whether VBS is actually running from `Win32_DeviceGuard.VirtualizationBasedSecurityStatus`
@@ -861,10 +864,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-10-30 evening (scheduled, CODE-ONLY, owner playing WARDOGS): P9-settings-done `25feba43` (merge
-  `a84ba5a7`); tsc 0; bench + helper + i18n/locale/copy/census guards 17 files / 275, exit 0; two bench tests
-  proven failing on old code. TS display only, no review. Rust items left for a session with no game running.
-  One item only. Log trimmed to the newest 14. Not pushed (CODE-ONLY); next FULL session pushes.
 - 2026-10-30 ~20:30 to 10-31 ~12:45 (interactive from Claude HQ; owner: "FULL send it", "RUN IT NOW", then "go"): the
   glass redesign landed. Merge `bb06a585` (`claude/redesign-glass`: glass shell, Look panel, Health summary, Games,
   Problems); desk review round 1 FAIL, 8 findings fixed in `5724dcec` (merge `a15e065a`); round 2 FAIL, 5 fixed in
@@ -995,6 +994,10 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   check fails on `330235ad`); a non-catalog service name reads through `hardware::service_state_and_start_mode`.
   The lane branch `claude/train-hq-1104` (`9a7902a`, the same fix on the pre-batch code) is superseded and
   deleted. Installed build stays `e3d3b7fd`; the Friday desk install picks up main.
+- 2026-11-10 ~11:00 (scheduled, CODE-ONLY, owner in ROB RUN): CR-pagefile-0 `258b438f`; cargo test 1784/0, clippy
+  clean (idle priority, shared target dir); the first three new tests proven failing on the old code; one rust-tauri-reviewer round
+  APPROVE-WITH-NITS, SHOULD-FIX 1 (half-zero row) taken, SHOULD-FIX 2 pre-existing and queued (CR-pagefile-multi). One
+  item only. Not pushed (CODE-ONLY); the next FULL session pushes local `main` through the gate.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
