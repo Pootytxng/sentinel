@@ -1002,7 +1002,9 @@ async fn latency_measure_mouse(duration_ms: u32) -> Option<latency::MouseMeasure
 /// two serialized first (parked under CR-slow-async in WORK_TRAIN.md).
 mod off_main {
     /// Run `work` on the blocking pool and hand back exactly what it returned. The pool only fails
-    /// a task that panicked, which is what the main-thread command did too.
+    /// a task that panicked; that panic is re-raised here, so it is printed and that one invoke is
+    /// left unanswered while the app keeps running. These answer types have no error to carry it;
+    /// the `Result` commands use [`blocking_result`] and answer an error in words instead.
     async fn blocking<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> T {
         match tauri::async_runtime::spawn_blocking(work).await {
             Ok(answer) => answer,
