@@ -55,7 +55,9 @@ pub(crate) struct ReadinessCheck {
     /// Compy and have since drifted off. Downstream advisory layers (priorities) read this to
     /// dedup a drifted rec OUT of "safe tweaks not applied" — a drifted setting is
     /// applied-then-reverted, NOT never-applied, and listing it as both is contradictory.
-    /// Empty on every other check.
+    /// It also holds the changes the user chose to keep as set outside Compy (CR-outside-followups
+    /// (b), `with_kept_outside`), which are not drifts to fix: read it as "applied, now off", never
+    /// as a list of problems. Empty on every other check.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     drifted_titles: Vec<String>,
 }
@@ -110,6 +112,34 @@ fn check(
         action_label: None,
         drifted_titles: Vec::new(),
     }
+}
+
+/// CR-outside-followups (b): the applied-changes row once changes the user chose to keep as set
+/// outside Compy are known (`kept_outside`, never part of the drift count). They are not flagged,
+/// the row says how many there are, and their titles join `drifted_titles` so the priorities layer
+/// still keeps them out of "not applied" (they were applied, then changed outside Compy). A row that
+/// could not read the ledger is returned as it was.
+fn with_kept_outside(mut c: ReadinessCheck, hist: Result<&AppliedChangesSummary, &str>) -> ReadinessCheck {
+    let Ok(hist) = hist else { return c };
+    if hist.kept_outside == 0 {
+        return c;
+    }
+    c.drifted_titles.extend(hist.kept_outside_titles.iter().cloned());
+    c.drifted_titles.sort();
+    c.drifted_titles.dedup();
+    c.detail.push_str(&if hist.kept_outside == 1 {
+        format!(
+            " “{}” is off because you chose to keep what was set outside Compy.",
+            hist.kept_outside_titles.first().map(String::as_str).unwrap_or("A setting")
+        )
+    } else {
+        format!(
+            " {} settings ({}) are off because you chose to keep what was set outside Compy.",
+            hist.kept_outside,
+            hist.kept_outside_titles.join(", ")
+        )
+    });
+    c
 }
 
 /// Pure evaluation: maps already-detected inputs to advisory readiness rows.
@@ -966,7 +996,7 @@ pub(crate) fn evaluate_readiness(
                 check("applied-changes", "Applied Compy changes", ReadinessStatus::Ready, detail, Some(value))
             }
         };
-        checks.push(c);
+        checks.push(with_kept_outside(c, hist));
     }
 
     let ready_count = checks.iter().filter(|c| c.status == ReadinessStatus::Ready).count();
@@ -1676,6 +1706,40 @@ mod readiness_tests {
         // Structured drift titles are exposed so the priorities layer can dedup the drifted rec
         // out of "safe tweaks not applied" (owner-caught double-listing, 2026-07-08).
         assert_eq!(c.drifted_titles, vec!["Enable Windows Game Mode".to_string()]);
+    }
+
+    #[test]
+    fn a_change_kept_as_set_outside_compy_is_not_flagged_but_still_deduped() {
+        // CR-outside-followups (b): the user recorded the power plan as changed outside Compy and
+        // that plan is still the live one, so the row is not a drift to fix.
+        let hw = hw_with(None, vec![], vec![]);
+        let kept = AppliedChangesSummary {
+            total: 2,
+            active: 1,
+            kept_outside: 1,
+            kept_outside_titles: vec!["Switch to the Ultimate Performance power plan".into()],
+            ..AppliedChangesSummary::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&kept), None);
+        let c = find(&r, "applied-changes");
+        assert_eq!(c.status, ReadinessStatus::Ready, "{}", c.detail);
+        assert!(c.detail.contains("you chose to keep what was set outside Compy"), "{}", c.detail);
+        assert!(c.detail.contains("Ultimate Performance"), "names it: {}", c.detail);
+        assert_eq!(c.drifted_titles, vec!["Switch to the Ultimate Performance power plan".to_string()]);
+        // A real drift beside it still raises attention, and both titles are deduped.
+        let both = AppliedChangesSummary {
+            externally_reverted: 1,
+            drifted_titles: vec!["Enable Windows Game Mode".into()],
+            ..kept.clone()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&both), None);
+        let c = find(&r, "applied-changes");
+        assert_eq!(c.status, ReadinessStatus::Attention);
+        assert_eq!(c.drifted_titles.len(), 2);
+        // Nothing kept: the row is exactly as before.
+        let plain = AppliedChangesSummary { total: 1, active: 1, ..AppliedChangesSummary::default() };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&plain), None);
+        assert!(!find(&r, "applied-changes").detail.contains("outside Compy"));
     }
 
     #[test]

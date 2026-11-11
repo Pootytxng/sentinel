@@ -5,6 +5,7 @@ import { writeLedger } from "../data/ledger-write";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import type { AppliedChange, StartupEntry, TrialLink } from "../types";
+import { keptOutsideCompy } from "../types";
 import {
   LedgerHealthNotice,
   knownIncomplete,
@@ -925,8 +926,11 @@ function TrialReason({ link, kind }: { link?: TrialLink | null; kind: "applied" 
 function HistoryRow({ change }: { change: AppliedChange }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const rolledBack = change.status === "rolled_back" || !change.is_still_active;
-  const unconfirmed = !rolledBack && cantConfirmStillOn(change);
+  // CR-outside-followups (b): an applied row the user recorded as changed outside Compy says so,
+  // never "rolled back" (nothing was undone) and never "active" (it reads off).
+  const keptOutside = keptOutsideCompy(change);
+  const rolledBack = !keptOutside && (change.status === "rolled_back" || !change.is_still_active);
+  const unconfirmed = !keptOutside && !rolledBack && cantConfirmStillOn(change);
   return (
     <li className={`fix-hist-row ${rolledBack ? "fix-hist-rolledback" : ""}`}>
       <button className="fix-hist-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
@@ -940,15 +944,25 @@ function HistoryRow({ change }: { change: AppliedChange }) {
         )}
         <span className="fix-hist-when">{humanizeWhen(change.applied_at, t)}</span>
         <span className="fix-hist-status">
-          {rolledBack
-            ? t("optimize.fix.historyRolledBack")
-            : unconfirmed
-              ? t("optimize.fix.historyCantConfirm")
-              : t("optimize.fix.historyActive")}
+          {keptOutside
+            ? t("optimize.fix.historyChangedOutside")
+            : rolledBack
+              ? t("optimize.fix.historyRolledBack")
+              : unconfirmed
+                ? t("optimize.fix.historyCantConfirm")
+                : t("optimize.fix.historyActive")}
         </span>
       </button>
       {open && (
         <div className="fix-hist-detail">
+          {keptOutside && (
+            <div data-testid="fix-hist-kept-outside">
+              {t("optimize.fix.historyKeptOutside", {
+                plan: keptOutside.observed.name,
+                when: humanizeWhen(keptOutside.recorded_at, t),
+              })}
+            </div>
+          )}
           {change.restores_label && change.applied_label ? (
             change.restores_label === change.applied_label ? (
               <div>

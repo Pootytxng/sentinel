@@ -77,6 +77,21 @@ describe("deriveReverted (the flag-class drift core)", () => {
     expect(out).toEqual([{ rec_id: "game-mode", title: "game-mode title" }]);
   });
 
+  // CR-outside-followups (b): the user chose to keep the plan set outside Compy; it is not a drift
+  // to "turn back on". A record this build can't read is no record.
+  it("never names a row recorded as changed outside Compy", () => {
+    const outside = { schema: 1, recorded_at: "2026-11-10T20:00:00+00:00", observed: { kind: "power-plan", guid: "22222222-2222-2222-2222-222222222222", name: "Synez Power Plan" } };
+    const out = deriveReverted([
+      mk("power-ultimate", { changed_outside: outside, changed_outside_holds: true }),
+      mk("visual-effects", { changed_outside: { ...outside, schema: 2 }, changed_outside_holds: true }),
+      // The plan moved on since the record (Game Readiness flags it again): still a drift here.
+      mk("power-moved", { changed_outside: outside, changed_outside_holds: false }),
+      mk("power-unknown", { changed_outside: outside }),
+      mk("game-mode"),
+    ]);
+    expect(out.map((r) => r.rec_id)).toEqual(["visual-effects", "power-moved", "power-unknown", "game-mode"]);
+  });
+
   it("one entry per drifted rec, titled from rec_title", () => {
     const out = deriveReverted([mk("a", { rec_title: "Alpha" }), mk("b", { rec_title: "Beta" })]);
     expect(out).toEqual([
