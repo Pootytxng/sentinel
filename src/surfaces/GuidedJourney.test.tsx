@@ -28,6 +28,8 @@ const state = vi.hoisted(() => ({
   startCalls: 0,
   /** start_experiment refuses these "recId|baselineId" pairs with the backend's §3 baseline refusal. */
   refuseBaselines: [] as string[],
+  /** When set, start_experiment dates the Trial's start this many minutes from now (default: now). */
+  startedAtMin: null as number | null,
   /** P5-realplay: what get_realplay_progress answers for a game (null = no answer). */
   rpProgress: null as ((game: string) => unknown) | null,
   /** CR-refuse-early: what trial_start_precheck answers (null = nothing refuses now). */
@@ -130,7 +132,10 @@ vi.mock("@tauri-apps/api/core", () => ({
           args?.mode === "real-play"
             ? { mode: "real-play", real_play: { before: countable(String(anchor?.process_name ?? "")).slice(-8).map(numbers) } }
             : {};
-        const r = record({ id: `exp:${9 + state.startCalls}-0`, rec_id: args?.recId, rec_title: args?.recTitle, outcome: args?.outcome, baseline_session_id: args?.baselineSessionId ?? "b", ...realPlay });
+        // CR-next-reuse-moved: when set, the Trial's start (its apply) is dated this many minutes from now,
+        // so it can fall between the fixture's future-dated sessions as it does on a real PC.
+        const dated = state.startedAtMin != null ? { created_at: new Date(Date.now() + state.startedAtMin * 60_000).toISOString() } : {};
+        const r = record({ id: `exp:${9 + state.startCalls}-0`, rec_id: args?.recId, rec_title: args?.recTitle, outcome: args?.outcome, baseline_session_id: args?.baselineSessionId ?? "b", ...realPlay, ...dated });
         state.startCalls += 1;
         state.experiments = [...state.experiments, r];
         return Promise.resolve(r);
@@ -192,6 +197,7 @@ beforeEach(() => {
   state.failSecondCapture = false;
   state.startCalls = 0;
   state.refuseBaselines = [];
+  state.startedAtMin = null;
   state.rpProgress = null;
   state.precheck = null;
 });
@@ -848,6 +854,8 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     const asIs = session(later(1), 5400);
     const withHags = session(later(2), 5400);
     state.saves = [asIs, withHags, session(later(3), 5400)];
+    // HAGS went on between the two sessions, as on a real PC; keeping it moves nothing after withHags.
+    state.startedAtMin = 1.5;
     render(<ExperimentBench />);
     await press();
     expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
@@ -885,17 +893,24 @@ describe("P5-continue: the journey acts on the verdict and offers the next chang
     expect(calls("start_fps_capture")).toHaveLength(4);
   });
 
-  it("restored then next: the as-is session is reused when the start accepts it", async () => {
+  // CR-next-reuse-moved (evidence _train\view-1111a\o-06/o-07): HAGS went on after the as-is session and
+  // was put back, so the start's §3 check refuses that session. The offer said "about 10 min" and then
+  // asked for a new ~20 min before-session; it now says so up front and never tries the old session.
+  it("restored then next: the offer says a new before-session first and never tries the old one", async () => {
     const asIs = session(later(1), 5400);
-    state.saves = [asIs, session(later(2), 5400), session(later(3), 5400)];
+    const fresh = session(later(3), 5400);
+    state.saves = [asIs, session(later(2), 5400), fresh, session(later(4), 5400)];
+    state.startedAtMin = 1.5;
     state.concludeResult = { status: "restored", verdict: "regressed", treatment: { ...TREATMENT, delta_low1_pct: -6 } };
     render(<ExperimentBench />);
     await press();
     expect(await finalLine()).toBe("Put HAGS back: the game ran worse with it.");
-    fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 10 min" }));
-    await lineIs(/^Game Mode is on\. Compy uses your last session/);
-    expect(calls("start_experiment")[1]).toMatchObject({ baselineSessionId: asIs.started_at });
-    expect(calls("start_fps_capture")).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: "Next: Game Mode, about 10 min" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Next: Game Mode, about 20 min (a new before-session first)" }));
+    await lineIs(/^Session 1 of 2: play Valorant as usual/);
+    await waitFor(() => expect(calls("start_experiment")).toHaveLength(2), { timeout: 3000 });
+    expect(calls("start_experiment")[1]).toMatchObject({ recId: "game-mode", baselineSessionId: fresh.started_at });
+    expect(screen.getByTestId("journey-line").textContent).not.toMatch(/can't use your last session/);
   });
 
   it("next needs a new baseline when the last session was uneven, without trying to start on it", async () => {

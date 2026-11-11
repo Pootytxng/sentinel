@@ -677,11 +677,17 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       Trial has on as "trial": the row says "On for the test in progress; not kept yet." (en + zh-CN), it is left out
       of "stays applied", it is not the keep side of an outcome choice, and the journey's `stillOnFor` doesn't claim
       it. Test fails on the old summary. Review (sonnet) APPROVE-WITH-NITS; SHOULD-FIX (`stillOnFor`) and nits taken.
-- [ ] **CR-next-reuse-moved** (TS) After exp:8 put Ultimate back, the next offer said "Next: Trim Windows visual effects,
+- [x] **CR-next-reuse-moved** (TS) After exp:8 put Ultimate back, the next offer said "Next: Trim Windows visual effects,
       about 10 min" (reuse), then the start refused the reuse ("a Compy change was applied or undone after the baseline
       session") and asked for a new before-session (~20 min). `nextReuses` (`reusableAsIs`) should count the finished
       Trial's own rollback as a ledger move, as the start does. Evidence `_train\view-1111a\o-06-exp8-verdict.txt`,
       `o-07-next-start.txt`.
+      Done `3731f531` (2026-11-11, CODE-ONLY, TS only, not installed): `trialMovedSince` (GuidedJourney.tsx) counts a
+      Trial's apply after the as-is session and a put-back after it as moves (kept/running ends move nothing; an
+      unreadable date counts as moved). The result offer and the continue plan reuse only when nothing moved, so a
+      put-back Trial's next offer reads "about 20 min (a new before-session first)" and never tries the old session;
+      a kept Trial's next still reuses its with-change session (about 10 min). 5 tests fail on the old code. Changes
+      made outside a Trial (another room's apply) are still caught only by the start's own check and its fallback.
 
 ### Then — Roadmap Phase 5: Guided Optimization Journey (`product/ROADMAP.md` Phase 5)
 Planned 2026-10-25. Order is value order. Phase 5 exit on the owner rig: from one button to the summary,
