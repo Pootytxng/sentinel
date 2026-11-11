@@ -224,7 +224,38 @@ pub(crate) fn current_power_scheme() -> Option<history::ObservedPlan> {
 pub(crate) fn power_scheme_of(stdout: &str) -> Option<history::ObservedPlan> {
     let guid = scheme_guid_of(stdout)?;
     let (class, name) = power_plan_of(stdout)?;
-    Some(history::ObservedPlan { guid, name, class })
+    Some(history::ObservedPlan { guid, name, class, ultimate_copy: None })
+}
+
+/// CR-ultimate-identity: is scheme `guid` a copy of the Ultimate Performance template? Two read-only
+/// `powercfg /query` reads (the scheme, then the template by its GUID), compared by their settings
+/// ([`scheme_settings_of`]), never by name. `None` when either can't be read: unknown, never "no".
+pub(crate) fn ultimate_template_copy(guid: &str) -> Option<bool> {
+    let guid = scheme_guid_of(guid)?;
+    if guid == SCHEME_ULTIMATE {
+        return Some(true);
+    }
+    let query = |g: &str| {
+        let out = crate::actions::quiet_command("powercfg").args(["/query", g]).output().ok()?;
+        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+    let scheme = scheme_settings_of(&query(&guid)?)?;
+    let template = scheme_settings_of(&query(SCHEME_ULTIMATE)?)?;
+    Some(scheme == template)
+}
+
+/// Pure: a `powercfg /query <scheme>` output as its settings, in order: every GUID after the scheme's
+/// own and every `0x` value, lower-cased. The labels around them are Windows' words in the user's
+/// language and are never read. `None` when the output holds no scheme GUID or no setting.
+pub(crate) fn scheme_settings_of(stdout: &str) -> Option<Vec<String>> {
+    let tokens: Vec<String> = stdout
+        .split(|c: char| c.is_whitespace() || matches!(c, '(' | ')' | ':' | '：' | '{' | '}'))
+        .filter(|t| scheme_guid_of(t).is_some() || (t.len() > 2 && t.starts_with("0x") && t[2..].bytes().all(|b| b.is_ascii_hexdigit())))
+        .map(str::to_ascii_lowercase)
+        .collect();
+    let (first, rest) = tokens.split_first()?;
+    scheme_guid_of(first)?;
+    (!rest.is_empty()).then(|| rest.to_vec())
 }
 
 /// Pure: the class (by GUID, then by the English words for a non-stock GUID) and the printed name.
@@ -672,6 +703,24 @@ mod core_parking_tests {
         assert_eq!(power_plan_of(ryzen), Some((PowerPlanClass::Other, "AMD Ryzen Balanced".into())));
         let zh_copy = "电源方案 GUID: 12345678-1234-1234-1234-123456789abc  (卓越性能)";
         assert_eq!(power_plan_of(zh_copy).map(|p| p.0), Some(PowerPlanClass::Other), "a localized copy stays Other: not guessed");
+        // CR-ultimate-identity: whether that copy is of the Ultimate template is read from its
+        // settings, never its name or labels (labels illustrative, not captured output).
+        let query = |scheme: &str, label: &str, ac: &str| {
+            format!(
+                "{label} GUID: {scheme}  (x)\r\n  Subgroup GUID: 54533251-82be-4824-96c1-47b60b740d00  (y)\r\n    \
+                 Power Setting GUID: 0cc5b647-c1df-4637-891a-dec35c318583  (z)\r\n      \
+                 Minimum Possible Setting: 0x00000000\r\n      Current AC Power Setting Index: {ac}\r\n      \
+                 Current DC Power Setting Index: 0x00000064\r\n"
+            )
+        };
+        let template = crate::scheme_settings_of(&query(crate::SCHEME_ULTIMATE, "Power Scheme", "0x00000064")).unwrap();
+        let zh_dup = crate::scheme_settings_of(&query("12345678-1234-1234-1234-123456789abc", "电源方案", "0x00000064")).unwrap();
+        assert_eq!(zh_dup, template, "a copy in another language has the template's settings");
+        let edited = crate::scheme_settings_of(&query("12345678-1234-1234-1234-123456789abc", "电源方案", "0x00000032")).unwrap();
+        assert_ne!(edited, template);
+        assert_eq!(crate::scheme_settings_of("Power Scheme GUID: 12345678-1234-1234-1234-123456789abc  (x)"), None, "no setting read");
+        assert_eq!(crate::scheme_settings_of("nothing"), None);
+        assert_eq!(crate::ultimate_template_copy("not a guid"), None);
         assert_eq!(power_plan_of("nothing here"), None);
         assert_eq!(scheme_guid_of("GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635cXX"), None, "a 36-char token, exactly");
         // A label glued to the GUID (no space after the colon, ASCII or fullwidth) still yields it.
@@ -2319,6 +2368,7 @@ mod safety_tests {
             justified_by_experiment: None,
             rollback_justified_by_experiment: None,
             changed_outside: None,
+            applied_plan: None,
         }
     }
 
@@ -2396,6 +2446,7 @@ mod safety_tests {
             justified_by_experiment: None,
             rollback_justified_by_experiment: None,
             changed_outside: None,
+            applied_plan: None,
         };
         let back: AppliedChange =
             serde_json::from_value(serde_json::to_value(&change).unwrap()).unwrap();

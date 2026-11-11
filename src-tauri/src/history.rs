@@ -141,6 +141,62 @@ pub(crate) struct AppliedChange {
     /// rollback contract above: status, snapshot and the typed actions stay as they were applied.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "lenient_changed_outside")]
     pub(crate) changed_outside: Option<ChangedOutside>,
+    /// CR-ultimate-identity: the power scheme Compy found active right after its Ultimate apply (on a
+    /// localized Windows the apply duplicates Ultimate under a new GUID with a localized name). A
+    /// schema-versioned additive read-back record, not part of the rollback contract: every older entry
+    /// loads as None, and a row without it is written exactly as before (no key at all).
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "lenient_applied_plan")]
+    pub(crate) applied_plan: Option<AppliedPlan>,
+}
+
+/// An `applied_plan` this build can't parse loads as None, never as a ledger that fails to load.
+fn lenient_applied_plan<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<AppliedPlan>, D::Error> {
+    let raw = Option::<serde_json::Value>::deserialize(d)?;
+    Ok(raw.and_then(|v| serde_json::from_value(v).ok()))
+}
+
+/// The [`AppliedPlan`] schema this build writes and reads.
+pub(crate) const APPLIED_PLAN_SCHEMA: u32 = 1;
+
+/// CR-ultimate-identity: which scheme Compy's Ultimate apply left active, read back right after the
+/// apply returned (snapshot → apply → verify → receipt). Never a guess: written only when the read
+/// gave a GUID that differs from the plan Compy saved before switching.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AppliedPlan {
+    pub(crate) schema: u32,
+    /// Lower-case GUID.
+    pub(crate) guid: String,
+}
+
+impl AppliedPlan {
+    /// The GUID, when this build can act on the record.
+    pub(crate) fn usable(&self) -> Option<&str> {
+        (self.schema == APPLIED_PLAN_SCHEMA && crate::scheme_guid_of(&self.guid).as_deref() == Some(self.guid.as_str()))
+            .then_some(self.guid.as_str())
+    }
+}
+
+/// The GUID of the Ultimate plan Compy activated for this row, when it was recorded and usable.
+pub(crate) fn compys_plan_guid(c: &AppliedChange) -> Option<&str> {
+    c.applied_plan.as_ref().and_then(AppliedPlan::usable)
+}
+
+/// CR-ultimate-identity: the receipt's read-back of the scheme Compy activated. Only for the Ultimate
+/// apply, only after it returned (the caller hands in its result), and only when `read_active` gives a
+/// GUID that is not the plan Compy saved before switching (an unchanged or unread plan records nothing).
+fn activated_plan_from(result: &ApplyResult, read_active: impl FnOnce() -> Option<String>) -> Option<AppliedPlan> {
+    let Snapshot::PowerPlan { prior_guid } = &result.snapshot else { return None };
+    if !matches!(result.applied_action, AppliedAction::SetUltimatePerformancePlan) {
+        return None;
+    }
+    let guid = crate::scheme_guid_of(&read_active()?)?;
+    (!guid.eq_ignore_ascii_case(prior_guid.trim())).then_some(AppliedPlan { schema: APPLIED_PLAN_SCHEMA, guid })
+}
+
+/// Whether the live plan `seen` is Compy's Ultimate plan for row `c`: the stock Ultimate scheme or a
+/// plan whose words read as Ultimate (its class), or the very GUID Compy activated for this row.
+pub(crate) fn is_compys_ultimate(c: &AppliedChange, seen: &ObservedPlan) -> bool {
+    seen.class == crate::PowerPlanClass::Ultimate || compys_plan_guid(c).is_some_and(|g| seen.guid.eq_ignore_ascii_case(g))
 }
 
 /// A `changed_outside` this build can't parse loads as None (the row then blocks a Trial as it did
@@ -321,6 +377,11 @@ impl ActiveCheck {
 /// action agrees with its rec id, and is `Unrecognised` otherwise; every other row is
 /// [`probe_rec_target`]. Read-only, and takes no lock.
 pub(crate) fn check_row_state(c: &AppliedChange, reads: &LiveReads) -> ActiveCheck {
+    // CR-ultimate-identity: a row that recorded the scheme its apply activated reads On while that
+    // scheme (or any plan of the Ultimate class) is active, so a localized copy is not read as off.
+    if c.rec_id == "power-ultimate" && compys_plan_guid(c).is_some() {
+        return ActiveCheck::from_read(crate::current_power_scheme().map(|seen| is_compys_ultimate(c, &seen)));
+    }
     check_change_state(&c.rec_id, c.applied_action.as_ref(), reads)
 }
 
@@ -1061,6 +1122,8 @@ fn build_applied_change(
 ) -> Result<AppliedChange, String> {
     let snapshot_json = serde_json::to_value(&result.snapshot)
         .map_err(|e| format!("snapshot serialize: {}", e))?;
+    // CR-ultimate-identity: the verify read of the scheme the apply activated (read-only powercfg).
+    let applied_plan = activated_plan_from(&result, crate::actions::current_power_plan_guid);
     Ok(AppliedChange {
         id: format!("{}-{}", rec_id, Utc::now().timestamp_millis()),
         rec_id: rec_id.to_string(),
@@ -1081,6 +1144,7 @@ fn build_applied_change(
         justified_by_experiment: None,
         rollback_justified_by_experiment: None,
         changed_outside: None,
+        applied_plan,
     })
 }
 
@@ -2476,6 +2540,10 @@ pub(crate) struct ObservedPlan {
     /// The name Windows printed, in whatever language it prints it.
     pub(crate) name: String,
     pub(crate) class: crate::PowerPlanClass,
+    /// CR-ultimate-identity: whether this scheme's settings are a copy of the Ultimate template, by a
+    /// read-only `powercfg /query` of both. Read only for a row without a recorded GUID; None = not
+    /// read or unreadable, which never lets such a row be recorded as changed outside Compy.
+    pub(crate) ultimate_copy: Option<bool>,
 }
 
 /// Why `c` can't be recorded as changed outside Compy given the live read `observed`, or Ok. Only
@@ -2498,13 +2566,30 @@ pub(crate) fn changed_outside_refusal(c: &AppliedChange, observed: Option<&Obser
     let Some(seen) = observed else {
         return Err("Compy can't read which power plan is active right now".into());
     };
-    if seen.guid.len() != 36 || seen.class == crate::PowerPlanClass::Ultimate {
+    if seen.guid.len() != 36 || is_compys_ultimate(c, seen) {
         return Err("the active power plan may still be the one Compy set".into());
+    }
+    // CR-ultimate-identity: a row applied before Compy recorded the GUID it activated can't tell its
+    // own localized copy of Ultimate from the user's plan by name, so the scheme's settings decide; a
+    // copy of the Ultimate template, or an answer Compy couldn't read, is refused.
+    if compys_plan_guid(c).is_none() && seen.ultimate_copy != Some(false) {
+        return Err("the active power plan may be the copy of Ultimate Performance Compy made".into());
     }
     if seen.guid.eq_ignore_ascii_case(prior.trim()) {
         return Err("the active power plan is the one you had before Compy's change, so undo it instead".into());
     }
     Ok(())
+}
+
+/// CR-ultimate-identity: `observed` with its template-copy answer filled in, read (two read-only
+/// `powercfg /query` spawns) only when an applied power-ultimate row has no recorded GUID.
+fn with_copy_check(history: &[AppliedChange], observed: Option<ObservedPlan>) -> Option<ObservedPlan> {
+    let mut seen = observed?;
+    let legacy = history.iter().any(|c| c.rec_id == "power-ultimate" && c.status == "applied" && compys_plan_guid(c).is_none());
+    if legacy && seen.class != crate::PowerPlanClass::Ultimate {
+        seen.ultimate_copy = crate::ultimate_template_copy(&seen.guid);
+    }
+    Some(seen)
 }
 
 /// Records every applied, unrecorded row of `rec_id` as changed outside Compy, all or none, then
@@ -2638,7 +2723,7 @@ fn read_changed_outside_offers() -> Result<Vec<ChangedOutsideOffer>, String> {
         return Ok(Vec::new());
     }
     let history = load_history()?;
-    Ok(changed_outside_offers_from(&history, crate::current_power_scheme().as_ref()))
+    Ok(changed_outside_offers_from(&history, with_copy_check(&history, crate::current_power_scheme()).as_ref()))
 }
 
 /// Review r1: Gaming Mode switches the power plan itself and records that only in its own session
@@ -2674,6 +2759,8 @@ pub(crate) fn record_changed_outside(rec_id: String) -> Result<usize, String> {
     let _lock = lock_history()?;
     let root = crate::data_root::mutation_root()?;
     let mut history = load_history_for(&root)?;
+    // CR-ultimate-identity: the template-copy answer, when a row of this ledger needs it.
+    let observed = with_copy_check(&history, observed);
     let now = Utc::now().to_rfc3339();
     commit_changed_outside(&mut history, &rec_id, observed.as_ref(), &now, &|h| save_history(&root, h))
 }
@@ -4332,6 +4419,7 @@ mod history_tests {
             justified_by_experiment: None,
             rollback_justified_by_experiment: None,
             changed_outside: None,
+            applied_plan: None,
         }
     }
 
@@ -5354,6 +5442,7 @@ mod ledger_fuzz_tests {
             justified_by_experiment: None,
             rollback_justified_by_experiment: None,
             changed_outside: None,
+            applied_plan: None,
         }
     }
 
@@ -5759,7 +5848,7 @@ mod changed_outside_tests {
     }
 
     fn plan(guid: &str, name: &str, class: crate::PowerPlanClass) -> ObservedPlan {
-        ObservedPlan { guid: guid.into(), name: name.into(), class }
+        ObservedPlan { guid: guid.into(), name: name.into(), class, ultimate_copy: Some(false) }
     }
 
     fn synez() -> ObservedPlan {
@@ -6019,7 +6108,98 @@ mod changed_outside_tests {
     #[test]
     fn the_active_scheme_read_keeps_its_guid_and_name() {
         let seen = crate::power_scheme_of(&format!("Power Scheme GUID: {SYNEZ}  (Synez Power Plan)\r\n")).unwrap();
-        assert_eq!(seen, synez());
+        assert_eq!(seen.ultimate_copy, None, "the scheme read takes no settings query");
+        assert_eq!(ObservedPlan { ultimate_copy: Some(false), ..seen }, synez());
         assert!(crate::power_scheme_of("no plan here").is_none());
+    }
+}
+
+// CR-ultimate-identity: on a localized Windows the Ultimate apply duplicates the template under a new
+// GUID with a localized name; the row records that GUID so its read-back, the "changed outside Compy"
+// refusal and the Trial checks treat it as Compy's plan. Old ledgers load unchanged.
+#[cfg(test)]
+mod ultimate_identity_tests {
+    use super::*;
+
+    const PRIOR: &str = "22222222-2222-2222-2222-222222222222";
+    const COPY: &str = "3a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+
+    fn row(applied_plan: Option<serde_json::Value>) -> AppliedChange {
+        let mut v = serde_json::json!({
+            "id": "power-ultimate-1", "rec_id": "power-ultimate", "rec_title": "Switch to the Ultimate Performance power plan",
+            "applied_at": "2026-11-11T04:00:00+00:00", "status": "applied",
+            "snapshot": { "kind": "power-plan", "prior_guid": PRIOR },
+            "applied_action": { "kind": "set-ultimate-performance-plan" },
+            "rollback_action": { "kind": "restore-power-plan-from-snapshot" }
+        });
+        if let Some(p) = applied_plan {
+            v["applied_plan"] = p;
+        }
+        serde_json::from_value(v).expect("row")
+    }
+
+    fn seen(guid: &str, class: crate::PowerPlanClass, ultimate_copy: Option<bool>) -> ObservedPlan {
+        ObservedPlan { guid: guid.into(), name: "卓越性能".into(), class, ultimate_copy }
+    }
+
+    fn result(prior: &str) -> ApplyResult {
+        ApplyResult {
+            applied_action: AppliedAction::SetUltimatePerformancePlan,
+            rollback_action: RollbackAction::RestorePowerPlanFromSnapshot,
+            snapshot: Snapshot::PowerPlan { prior_guid: prior.into() },
+            elevation_used: true,
+        }
+    }
+
+    #[test]
+    fn the_receipt_records_the_scheme_the_apply_left_active_and_nothing_else() {
+        let got = activated_plan_from(&result(PRIOR), || Some(format!("Power Scheme GUID: {}  (卓越性能)", COPY.to_uppercase())));
+        assert_eq!(got, Some(AppliedPlan { schema: APPLIED_PLAN_SCHEMA, guid: COPY.into() }));
+        // Unread, or still the plan Compy saved: nothing is recorded (never a guess).
+        assert_eq!(activated_plan_from(&result(PRIOR), || None), None);
+        assert_eq!(activated_plan_from(&result(PRIOR), || Some(format!("GUID: {PRIOR}"))), None);
+        // Any other apply records nothing and takes no read.
+        let other = ApplyResult { snapshot: Snapshot::ReservedStorage { prior_enabled: true }, ..result(PRIOR) };
+        assert_eq!(activated_plan_from(&other, || panic!("no read for another apply")), None);
+    }
+
+    #[test]
+    fn an_old_ledger_row_loads_unchanged_and_saves_without_the_field() {
+        let old = row(None);
+        assert!(old.applied_plan.is_none());
+        let saved = serde_json::to_value(&old).unwrap();
+        assert!(saved.get("applied_plan").is_none(), "a row without it is written as before");
+        // A shape this build can't read loads as None, never a failed ledger.
+        assert!(row(Some(serde_json::json!("garbage"))).applied_plan.is_none());
+        assert!(compys_plan_guid(&row(Some(serde_json::json!({ "schema": 2, "guid": COPY })))).is_none());
+        assert!(compys_plan_guid(&row(Some(serde_json::json!({ "schema": 1, "guid": "not-a-guid" })))).is_none());
+        let new = row(Some(serde_json::json!({ "schema": 1, "guid": COPY })));
+        assert_eq!(compys_plan_guid(&new), Some(COPY));
+        let back: AppliedChange = serde_json::from_value(serde_json::to_value(&new).unwrap()).unwrap();
+        assert_eq!(back.applied_plan, new.applied_plan);
+    }
+
+    #[test]
+    fn compys_own_localized_copy_reads_as_its_plan_and_is_never_recordable_as_set_outside() {
+        let new = row(Some(serde_json::json!({ "schema": 1, "guid": COPY })));
+        let copy = seen(COPY, crate::PowerPlanClass::Other, None);
+        assert!(is_compys_ultimate(&new, &copy), "the GUID Compy activated is its Ultimate plan");
+        assert!(changed_outside_refusal(&new, Some(&copy)).is_err(), "Compy's own plan recorded as external");
+        // The user's own plan is still recordable on such a row, with no settings query needed.
+        let users = seen("44444444-4444-4444-4444-444444444444", crate::PowerPlanClass::Other, None);
+        assert!(!is_compys_ultimate(&new, &users));
+        assert_eq!(changed_outside_refusal(&new, Some(&users)), Ok(()));
+    }
+
+    #[test]
+    fn a_row_from_before_the_fix_is_recordable_only_when_the_plan_is_known_not_to_be_an_ultimate_copy() {
+        let old = row(None);
+        assert!(changed_outside_refusal(&old, Some(&seen(COPY, crate::PowerPlanClass::Other, Some(true)))).is_err());
+        assert!(changed_outside_refusal(&old, Some(&seen(COPY, crate::PowerPlanClass::Other, None))).is_err(), "unknown refuses");
+        assert_eq!(changed_outside_refusal(&old, Some(&seen(COPY, crate::PowerPlanClass::Other, Some(false)))), Ok(()));
+        // The copy answer is read only when such a row exists, and never for an Ultimate-class plan.
+        let history = vec![row(Some(serde_json::json!({ "schema": 1, "guid": COPY })))];
+        let kept = with_copy_check(&history, Some(seen(COPY, crate::PowerPlanClass::Other, None))).unwrap();
+        assert_eq!(kept.ultimate_copy, None, "no legacy row, no settings query");
     }
 }
