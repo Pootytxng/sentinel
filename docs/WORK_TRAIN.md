@@ -648,6 +648,10 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       change with only the undo, and Game Readiness stops flagging it as drifted; (c) the remedy panel re-fetches its offer
       on the ledger-changed event (a plan switched again while it is open); (d) a replaced record keeps the first record's
       time as a move too (today the newest replaces it).
+      (c) done `af23273d` (2026-11-11, CODE-ONLY, TS only, not installed): ChangedOutsideRemedy re-reads its offer on
+      `LEDGER_CHANGED_EVENT` and on window focus, so its words and button follow a plan switched again; a recorded
+      line keeps its own copy and stays after a re-read stops offering it. 2 tests fail on the old component.
+      Left: (a) and (d) touch the Trial/ledger record (Rust), (b) Applied & history + Game Readiness (TS + readiness).
 
 ### Then — Roadmap Phase 5: Guided Optimization Journey (`product/ROADMAP.md` Phase 5)
 Planned 2026-10-25. Order is value order. Phase 5 exit on the owner rig: from one button to the summary,
