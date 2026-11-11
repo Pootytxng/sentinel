@@ -2535,7 +2535,15 @@ pub(crate) fn changed_outside_offers_from(history: &[AppliedChange], observed: O
 
 /// Read-only: what the user could record as changed outside Compy right now. One plan read.
 #[tauri::command]
-pub(crate) fn changed_outside_offers() -> Result<Vec<ChangedOutsideOffer>, String> {
+pub(crate) async fn changed_outside_offers() -> Result<Vec<ChangedOutsideOffer>, String> {
+    // The plan read (a powercfg spawn) runs on the blocking pool, never the UI thread.
+    tauri::async_runtime::spawn_blocking(read_changed_outside_offers)
+        .await
+        .map_err(|e| format!("Compy couldn't read the active power plan ({e})"))?
+}
+
+/// The work [`changed_outside_offers`] runs on the blocking pool.
+fn read_changed_outside_offers() -> Result<Vec<ChangedOutsideOffer>, String> {
     if gaming_mode_may_hold_plan().is_some() {
         return Ok(Vec::new());
     }
@@ -5850,7 +5858,7 @@ mod changed_outside_tests {
         // so this test never reaches the real ledger.)
         let src = include_str!("history.rs");
         for (cmd, first_read) in [
-            ("pub(crate) fn changed_outside_offers()", "load_history()"),
+            ("fn read_changed_outside_offers()", "load_history()"),
             ("pub(crate) fn record_changed_outside(", "crate::current_power_scheme()"),
         ] {
             let body = &src[src.find(cmd).unwrap()..];

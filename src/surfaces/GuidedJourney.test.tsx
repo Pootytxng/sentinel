@@ -30,6 +30,8 @@ const state = vi.hoisted(() => ({
   refuseBaselines: [] as string[],
   /** P5-realplay: what get_realplay_progress answers for a game (null = no answer). */
   rpProgress: null as ((game: string) => unknown) | null,
+  /** CR-refuse-early: what trial_start_precheck answers (null = nothing refuses now). */
+  precheck: null as string | null,
 }));
 
 const session = (started_at: string, samples: number, process_name = "Valorant") => ({
@@ -141,6 +143,8 @@ vi.mock("@tauri-apps/api/core", () => ({
       }
       case "get_realplay_progress":
         return Promise.resolve(state.rpProgress ? state.rpProgress(String(args?.game)) : null);
+      case "trial_start_precheck":
+        return Promise.resolve(state.precheck);
       case "conclude_realplay": {
         const cur: Record<string, unknown> = state.experiments.find((x) => x.id === args?.experimentId) ?? record({});
         const r: Record<string, unknown> = { ...cur, ...(state.concludeResult ?? {}), concluded_at: new Date().toISOString() };
@@ -189,6 +193,7 @@ beforeEach(() => {
   state.startCalls = 0;
   state.refuseBaselines = [];
   state.rpProgress = null;
+  state.precheck = null;
 });
 
 afterEach(() => cleanup());
@@ -235,6 +240,34 @@ const finalLine = () =>
     },
     { timeout: 3000 },
   );
+
+describe("CR-refuse-early: a start refusal known now is said before any session", () => {
+  const SYNEZ_REFUSAL =
+    "experiment not started — another setting Compy changed earlier can't be confirmed as still in place, so a test couldn't show that its result is this setting's alone — undo it in Test → Applied & history, then start the test again";
+
+  it("the Synez-shaped ledger refuses on the press: no as-is session, nothing started; once recorded, the journey proceeds", async () => {
+    state.precheck = SYNEZ_REFUSAL;
+    render(<ExperimentBench />);
+    await press();
+    const line = await finalLine();
+    expect(line).toBe(`Compy didn't start the test, and nothing was changed: ${SYNEZ_REFUSAL}`);
+    expect(calls("trial_start_precheck")).toEqual([{ recId: "hags" }]);
+    expect(calls("start_fps_capture")).toHaveLength(0);
+    expect(calls("start_experiment")).toHaveLength(0);
+    // The same remedies as the start's own refusal: the record-it-outside offer is asked for.
+    await waitFor(() => expect(calls("changed_outside_offers")).toHaveLength(1));
+
+    // Recorded as changed outside Compy: the check passes and the journey goes on to its as-is session.
+    cleanup();
+    resetJourneyForTests({ pollMs: 5, saveWaitMs: 40 });
+    state.precheck = null;
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe("Kept HAGS: the frame rate in your worst moments (the 1% low) is up 4.2%.");
+    expect(calls("start_fps_capture").length).toBeGreaterThan(0);
+    expect(calls("start_experiment")).toHaveLength(1);
+  });
+});
 
 describe("P5-guided: one button runs the whole Trial", () => {
   it("says the plan and time in one line for the last-played game and the top-ranked change", async () => {
@@ -998,6 +1031,23 @@ describe("P5-realplay: the change stays on while you play", () => {
       look: 1,
     },
   };
+
+  // CR-refuse-early: real play asks the start's other-changes check before its first as-is session.
+  it("a start refusal known now is said on the tap, before any as-is session", async () => {
+    const why =
+      "experiment not started — another setting Compy changed earlier can't be confirmed as still in place, so a test couldn't show that its result is this setting's alone — undo it in Test → Applied & history, then start the test again";
+    state.precheck = why;
+    state.rpProgress = backendLike();
+    state.sessions = [OLD, AS_IS[0]];
+    render(<ExperimentBench />);
+    fireEvent.click(await enabled("Test it while I play normally"));
+    await waitFor(() => expect(screen.getByTestId("journey-line").textContent).toBe(`Compy didn't start the test, and nothing was changed: ${why}`), {
+      timeout: 3000,
+    });
+    expect(calls("trial_start_precheck")).toEqual([{ recId: "hags" }]);
+    expect(calls("start_fps_capture")).toHaveLength(0);
+    expect(calls("start_experiment")).toHaveLength(0);
+  });
 
   // ✗ on the code before real play: there was no real-play choice, and an uneven session 1 was retaken.
   it("an uneven as-is session counts toward real play, no retake", async () => {

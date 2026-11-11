@@ -1785,6 +1785,7 @@ pub fn run() {
             experiment::get_experiments,
             experiment::simulate_optimization,
             experiment::start_experiment,
+            experiment::trial_start_precheck,
             experiment::get_smoothest_readiness,
             experiment::conclude_experiment,
             experiment::get_realplay_progress,

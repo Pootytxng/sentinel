@@ -2141,6 +2141,33 @@ pub(crate) fn unverified_start_refusal(unverified: usize) -> Option<String> {
     ))
 }
 
+/// CR-refuse-early: the start's §3 other-changes check, asked when the user starts the journey (or a
+/// real-play Trial) for `rec_id`, BEFORE any as-is session is asked for, so a refusal known now is
+/// never said only after ~40 minutes of play. Read-only: one ledger load and the same live reads the
+/// start makes. The start itself checks again (the state can change mid-journey). `Ok(None)` = no
+/// such refusal now; `Err` = the ledger couldn't be read, which the start would refuse on too.
+#[tauri::command]
+pub(crate) async fn trial_start_precheck(rec_id: String) -> Result<Option<String>, String> {
+    // The reads (powercfg, WMI, the task listing) run on the blocking pool, never the UI thread.
+    tauri::async_runtime::spawn_blocking(move || read_start_precheck(&rec_id))
+        .await
+        .map_err(|e| format!("Compy couldn't check before the test ({e})"))?
+}
+
+/// The work [`trial_start_precheck`] runs on the blocking pool.
+fn read_start_precheck(rec_id: &str) -> Result<Option<String>, String> {
+    let changes = crate::history::load_history()?;
+    let rows = ledger_rows(&changes);
+    let unverified = unverified_others_live(&changes, &rows, rec_id, &crate::history::LiveReads::default());
+    Ok(precheck_refusal(unverified))
+}
+
+/// The precheck's answer in the start's own words, so the remedies keyed on them (the undo, and
+/// "changed outside Compy") are offered the same way.
+fn precheck_refusal(unverified: usize) -> Option<String> {
+    unverified_start_refusal(unverified).map(|why| format!("experiment not started — {why}"))
+}
+
 /// A live, read-only read of whether `rec_id`'s setting is changed, through its applied rows in
 /// `changes` (the ledger's own live re-check: a startup-app toggle's direction is on its row, not in
 /// its rec id); None when it can't be read or has no probe. `reads` is the pass this read belongs to.
@@ -8296,5 +8323,66 @@ mod changed_outside_trial_tests {
         let rows = ledger_rows(&changes);
         assert!(compy_change_moved_after(&rows, "2026-11-10T19:00:00+00:00", None), "the plan during that session is unknown");
         assert!(!compy_change_moved_after(&rows, "2026-11-10T20:05:00+00:00", None));
+    }
+}
+
+// CR-refuse-early: the journey's up-front check says the start's own refusal, in the start's words,
+// for the Synez-shaped ledger, and nothing once the plan is recorded as changed outside Compy.
+#[cfg(test)]
+mod refuse_early_tests {
+    use super::*;
+    use crate::history::{AppliedChange, ChangedOutside, ObservedPlan, ObservedState, CHANGED_OUTSIDE_SCHEMA};
+
+    const SYNEZ: &str = "22222222-2222-2222-2222-222222222222";
+
+    fn synez_shaped() -> Vec<AppliedChange> {
+        let row = |id: &str| {
+            serde_json::json!({
+                "id": id, "rec_id": "power-ultimate", "rec_title": "Ultimate", "applied_at": "2026-09-26T03:11:32+00:00",
+                "snapshot": { "kind": "power-plan", "prior_guid": "381b4222-f694-41f0-9685-ff5bb260df2e" },
+                "status": "applied",
+                "applied_action": { "kind": "set-ultimate-performance-plan" },
+                "rollback_action": { "kind": "restore-power-plan-from-snapshot" }
+            })
+        };
+        serde_json::from_value(serde_json::json!([row("u1"), row("u2")])).unwrap()
+    }
+
+    fn check(changes: &[AppliedChange]) -> Option<String> {
+        let rows = ledger_rows(changes);
+        let synez = || Some(ObservedPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into(), class: crate::PowerPlanClass::Other });
+        // The Ultimate rows read off: the active plan is Synez.
+        precheck_refusal(unverified_others_with(changes, &rows, "visual-effects", |_| Some(false), synez))
+    }
+
+    #[test]
+    fn the_synez_shaped_ledger_is_refused_up_front_in_the_starts_own_words() {
+        let why = check(&synez_shaped()).expect("refused before any session");
+        assert!(why.starts_with("experiment not started — "), "{why}");
+        assert!(why.contains("can't be confirmed as still in place"), "the remedies key on these words: {why}");
+        assert_eq!(Some(why), unverified_start_refusal(1).map(|w| format!("experiment not started — {w}")));
+    }
+
+    #[test]
+    fn once_recorded_as_changed_outside_compy_the_journey_may_start() {
+        let mut changes = synez_shaped();
+        for c in &mut changes {
+            c.changed_outside = Some(ChangedOutside {
+                schema: CHANGED_OUTSIDE_SCHEMA,
+                recorded_at: "2026-11-10T20:00:00+00:00".into(),
+                observed: ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() },
+            });
+        }
+        assert_eq!(check(&changes), None);
+    }
+
+    #[test]
+    fn the_command_reads_through_the_same_count_the_start_refuses_on() {
+        let src = include_str!("experiment.rs");
+        let body = &src[src.find("fn read_start_precheck(").unwrap()..];
+        let body = &body[..body.find("\n}").unwrap()];
+        assert!(body.contains("unverified_others_live(&changes, &rows, rec_id, &crate::history::LiveReads::default())"));
+        assert!(body.contains("precheck_refusal(unverified)"));
+        assert!(!body.contains("save") && !body.contains("apply"), "read-only");
     }
 }

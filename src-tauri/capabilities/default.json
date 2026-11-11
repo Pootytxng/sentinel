@@ -128,6 +128,7 @@
     "allow-stop-fps-capture",
     "allow-stop-gaming-session",
     "allow-suspend-known-service",
+    "allow-trial-start-precheck",
     "allow-undo-outcome-choice",
     "allow-what-changed-between",
     "allow-what-changed-for-session"
