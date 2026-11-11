@@ -79,7 +79,9 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 - **CR-unconfirmed-remedy** (2026-11-10 19:14): every Trial start is refused because Compy's two Ultimate-plan rows read
   off (your active plan is "Synez Power Plan"); Compy's suggested undo would set Balanced. Keep Synez (Compy then needs a
   code fix to stop tracking those rows), or let Compy put Balanced back (~1 min) so P4/P5 can run? *Keep Synez; fix the
-  code.*
+  code.* Decided by the coordinator (delegated): keep Synez. Code landed `12a791d0` (2026-11-10, not yet installed): the
+  refusal now offers a Keep "Synez Power Plan" button beside the undo; tapping it changes nothing on the PC. Then one new
+  as-is session before the next Trial.
 - **P8-first-advanced** waits on P4's walkthrough (the gate is Trial + Risk proof), then your sign-off on the
   candidate Claude recommends.
 
@@ -589,14 +591,29 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       can't be confirmed as still in place" (the two power-ultimate rows read off; active plan is "Synez Power Plan", set
       outside Compy). No ROB RUN verdict; nothing applied. Blocked on CR-unconfirmed-remedy (owner call). Evidence
       `C:\Users\Kuya\code\_train\view-1110d\` (s1-*, p4-*, p5-*, journey.log, fgwatch.log).
-- [ ] **CR-unconfirmed-remedy** (owner call) A Trial start is refused while a Compy change "can't be confirmed as still in
+- [x] **CR-unconfirmed-remedy** (owner call) A Trial start is refused while a Compy change "can't be confirmed as still in
       place", and the refusal says to undo it; here that undo restores Balanced (`381b4222…`) over the owner's later
       outside choice ("Synez Power Plan"), so following it changes his power plan. Needs a path that stops tracking a
       change replaced outside Compy without touching Windows, or his OK to put Balanced back. Blocks every Trial on this
       PC. Evidence `_train\view-1110d\p4-unconfirmed-rows.json`, `p5-05-trial-start.json`.
+      Done `12a791d0` (`ed0d9678`, `724e13ee`, `ae3792c2`; 2026-11-10, CODE-ONLY, not installed): coordinator call, keep
+      his plan. Ledger-only "changed outside Compy" record (`AppliedChange.changed_outside`, optional, schema 1; old
+      ledgers load unchanged): power-plan rows only, when the active scheme reads, is not Ultimate and is not the saved
+      prior plan; unreadable stays refused; not while a Gaming Mode contract is on disk. Recorded rows stop blocking a
+      Trial only while the recorded GUID is still live (start and conclude); the record time counts as a ledger move, so
+      as-is sessions from before it don't pair. Undo stays offered. Reviews: opus r1 one MUST-FIX (record once only) taken,
+      r2 APPROVE; sonnet r1 APPROVE. cargo 1823/0, clippy clean. Does not record the applied Ultimate GUID, so
+      CR-ultimate-identity stays open (on a localized Windows Compy's own duplicate could be offered). Follow-ups:
+      CR-outside-followups.
 - [ ] **CR-refuse-early** Optimize my game asked for two ~20 min as-is sessions and only refused at "Test anyway"
       for a reason known before the first session (the unconfirmed change above). Check the start precondition when the
       button is pressed and say so then. Evidence `_train\view-1110d\journey.log`, `p5-05-trial-start.json`.
+- [ ] **CR-outside-followups** (review SHOULD-FIX of CR-unconfirmed-remedy, Rust + TS) (a) stamp the active plan GUID on
+      each session or the Trial record, so a plan switched away and back between start and conclude is caught; (b) Test →
+      Applied & history shows a recorded row as "changed outside Compy" (`types.ts` field + a note) instead of an active
+      change with only the undo, and Game Readiness stops flagging it as drifted; (c) the remedy panel re-fetches its offer
+      on the ledger-changed event (a plan switched again while it is open); (d) a replaced record keeps the first record's
+      time as a move too (today the newest replaces it).
 
 ### Then — Roadmap Phase 5: Guided Optimization Journey (`product/ROADMAP.md` Phase 5)
 Planned 2026-10-25. Order is value order. Phase 5 exit on the owner rig: from one button to the summary,
