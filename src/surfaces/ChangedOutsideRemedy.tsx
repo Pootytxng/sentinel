@@ -48,7 +48,9 @@ export function ChangedOutsideRemedy({ reason, refresh }: { reason: string; refr
     setBusy(true);
     setFailed(null);
     try {
-      await writeLedger("record_changed_outside", { recId: o.rec_id }, refresh);
+      // Review r1: a refresh that fails after the record was saved is not a failed record, so it never
+      // reaches the "nothing changed" line; only the command's own refusal does.
+      await writeLedger("record_changed_outside", { recId: o.rec_id }, () => refresh().catch(() => {}));
       setDone((d) => [...d, o.rec_id]);
     } catch (e) {
       setFailed(String(e instanceof Error ? e.message : e));

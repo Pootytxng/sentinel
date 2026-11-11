@@ -181,7 +181,9 @@ pub(crate) struct ChangedOutside {
 pub(crate) enum ObservedState {
     /// The active power scheme: its GUID (lower-case) and the name Windows printed for it.
     PowerPlan { guid: String, name: String },
-    /// A kind a later build wrote. Never usable here.
+    /// A kind a later build wrote. Never usable here. A save by this build writes it back as
+    /// `{"kind":"unknown"}`, dropping the later build's detail; that fails safe (the row blocks a
+    /// Trial again until the user records it anew).
     #[serde(other)]
     Unknown,
 }
@@ -2396,7 +2398,7 @@ pub(crate) fn changed_outside_refusal(c: &AppliedChange, observed: Option<&Obser
     if c.status != "applied" {
         return Err("this change isn't applied".into());
     }
-    if c.changed_outside.is_some() {
+    if recorded_and_holding(c, observed) {
         return Err("this change is already recorded as changed outside Compy".into());
     }
     let prior = match (&c.applied_action, serde_json::from_value::<Snapshot>(c.snapshot.clone())) {
@@ -2427,7 +2429,7 @@ pub(crate) fn commit_changed_outside(
     save: &dyn Fn(&[AppliedChange]) -> Result<(), String>,
 ) -> Result<usize, String> {
     let rows: Vec<usize> = (0..history.len())
-        .filter(|&i| history[i].rec_id == rec_id && history[i].status == "applied" && history[i].changed_outside.is_none())
+        .filter(|&i| history[i].rec_id == rec_id && history[i].status == "applied" && !recorded_and_holding(&history[i], observed))
         .collect();
     if rows.is_empty() {
         return Err("Compy has no applied change of this setting left to record".into());
@@ -2443,15 +2445,24 @@ pub(crate) fn commit_changed_outside(
         recorded_at: now.to_string(),
         observed: ObservedState::PowerPlan { guid: seen.guid.clone(), name: seen.name.clone() },
     };
+    // A row recorded earlier for a plan no longer active (or in a shape this build can't act on) is
+    // recorded anew: the newer record replaces it, and its time counts as a move like the first did.
+    let before: Vec<Option<ChangedOutside>> = rows.iter().map(|&i| history[i].changed_outside.clone()).collect();
     for &i in &rows {
         history[i].changed_outside = Some(mark.clone());
     }
     save(history).inspect_err(|_| {
-        for &i in &rows {
-            history[i].changed_outside = None;
+        for (&i, was) in rows.iter().zip(&before) {
+            history[i].changed_outside = was.clone();
         }
     })?;
     Ok(rows.len())
+}
+
+/// Whether `c` already carries a record this build can act on whose state the live read `observed`
+/// still shows. Such a row has nothing left to record; any other applied row may be recorded.
+fn recorded_and_holding(c: &AppliedChange, observed: Option<&ObservedPlan>) -> bool {
+    c.changed_outside.as_ref().and_then(ChangedOutside::usable).is_some_and(|s| outside_state_holds(s, observed))
 }
 
 /// The state a Trial must find in place of `rec_id`, when every applied row of it carries a usable
@@ -2493,18 +2504,16 @@ pub(crate) struct ChangedOutsideOffer {
 /// Pure: the settings whose every applied, unrecorded row qualifies under one live read.
 pub(crate) fn changed_outside_offers_from(history: &[AppliedChange], observed: Option<&ObservedPlan>) -> Vec<ChangedOutsideOffer> {
     let Some(seen) = observed else { return Vec::new() };
+    let open = |c: &&AppliedChange| c.status == "applied" && !recorded_and_holding(c, Some(seen));
     let mut recs: Vec<&str> = Vec::new();
-    for c in history.iter().filter(|c| c.status == "applied" && c.changed_outside.is_none()) {
+    for c in history.iter().filter(open) {
         if !recs.contains(&c.rec_id.as_str()) {
             recs.push(&c.rec_id);
         }
     }
     recs.into_iter()
         .filter_map(|rec| {
-            let rows: Vec<&AppliedChange> = history
-                .iter()
-                .filter(|c| c.rec_id == rec && c.status == "applied" && c.changed_outside.is_none())
-                .collect();
+            let rows: Vec<&AppliedChange> = history.iter().filter(open).filter(|c| c.rec_id == rec).collect();
             rows.iter().all(|c| changed_outside_refusal(c, Some(seen)).is_ok()).then(|| ChangedOutsideOffer {
                 rec_id: rec.to_string(),
                 rec_title: rows[rows.len() - 1].rec_title.clone(),
@@ -2518,19 +2527,42 @@ pub(crate) fn changed_outside_offers_from(history: &[AppliedChange], observed: O
 /// Read-only: what the user could record as changed outside Compy right now. One plan read.
 #[tauri::command]
 pub(crate) fn changed_outside_offers() -> Result<Vec<ChangedOutsideOffer>, String> {
+    if gaming_mode_may_hold_plan().is_some() {
+        return Ok(Vec::new());
+    }
     let history = load_history()?;
     Ok(changed_outside_offers_from(&history, crate::current_power_scheme().as_ref()))
 }
 
+/// Review r1: Gaming Mode switches the power plan itself and records that only in its own session
+/// contract, never in the ledger. While any session contract is on disk (or the folder can't be
+/// read), the active plan may be one Compy set, so nothing is offered or recorded as outside Compy.
+fn gaming_mode_may_hold_plan() -> Option<String> {
+    match crate::gaming_session::has_pending_contract() {
+        Ok(false) => None,
+        Ok(true) => Some(
+            "Gaming Mode has temporary changes in place, so the active power plan may be one Compy set; \
+             try again after Gaming Mode has ended"
+                .into(),
+        ),
+        Err(e) => Some(e),
+    }
+}
+
 /// CR-unconfirmed-remedy: record `rec_id`'s applied rows as changed outside Compy. A ledger write
 /// only, under the ledger lock and the verified data root like every other write; nothing on
-/// Windows changes. Reads the active plan once, under the lock, and records what it read.
+/// Windows changes. Reads the active plan once, BEFORE taking the ledger lock (review r1: a powercfg
+/// that hangs must not hold every apply and undo), and records what it read; every Trial then checks
+/// that recorded plan against a fresh read, so a plan switched in between is caught there.
 #[tauri::command]
 pub(crate) fn record_changed_outside(rec_id: String) -> Result<usize, String> {
+    if let Some(why) = gaming_mode_may_hold_plan() {
+        return Err(why);
+    }
+    let observed = crate::current_power_scheme();
     let _lock = lock_history()?;
     let root = crate::data_root::mutation_root()?;
     let mut history = load_history_for(&root)?;
-    let observed = crate::current_power_scheme();
     let now = Utc::now().to_rfc3339();
     commit_changed_outside(&mut history, &rec_id, observed.as_ref(), &now, &|h| save_history(&root, h))
 }
@@ -5761,6 +5793,45 @@ mod changed_outside_tests {
         assert!(recorded_outside_state(&history, "power-ultimate").is_some());
         assert!(!outside_state_holds(recorded_outside_state(&history, "power-ultimate").unwrap(), None), "unreadable never holds");
         assert_eq!(recorded_outside_state(&history, "game-mode"), None);
+    }
+
+    #[test]
+    fn a_record_whose_plan_is_no_longer_active_can_be_recorded_anew_but_a_holding_one_cannot() {
+        let mut history = rows();
+        let ok = |_: &[AppliedChange]| Ok(());
+        commit_changed_outside(&mut history, "power-ultimate", Some(&synez()), "2026-11-10T20:00:00+00:00", &ok).unwrap();
+        assert!(commit_changed_outside(&mut history, "power-ultimate", Some(&synez()), "2026-11-10T20:01:00+00:00", &ok).is_err());
+        let other = plan("33333333-3333-3333-3333-333333333333", "Other Plan", crate::PowerPlanClass::Other);
+        assert_eq!(changed_outside_offers_from(&history, Some(&other)).len(), 1, "the user switched plans again");
+        commit_changed_outside(&mut history, "power-ultimate", Some(&other), "2026-11-10T21:00:00+00:00", &ok).unwrap();
+        let state = recorded_outside_state(&history, "power-ultimate").unwrap();
+        assert!(outside_state_holds(state, Some(&other)) && !outside_state_holds(state, Some(&synez())));
+        assert_eq!(history[0].changed_outside.as_ref().unwrap().recorded_at, "2026-11-10T21:00:00+00:00");
+        // A record in a shape this build can't act on is offered again, never stuck.
+        history[1].changed_outside.as_mut().unwrap().schema = 2;
+        assert_eq!(changed_outside_offers_from(&history, Some(&other))[0].rows, 1);
+    }
+
+    #[test]
+    fn nothing_is_offered_or_recorded_while_a_gaming_mode_contract_is_on_disk() {
+        let dir = std::env::temp_dir().join(format!("compy-hist-outside-gm-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
+        assert_eq!(gaming_mode_may_hold_plan(), None);
+        std::fs::write(dir.join("gaming-session.json"), "{}").unwrap();
+        assert!(gaming_mode_may_hold_plan().unwrap().contains("Gaming Mode"));
+        // Both commands ask first, before any read of the ledger or the plan. (Checked on the source,
+        // so this test never reaches the real ledger.)
+        let src = include_str!("history.rs");
+        for (cmd, first_read) in [
+            ("pub(crate) fn changed_outside_offers()", "load_history()"),
+            ("pub(crate) fn record_changed_outside(", "crate::current_power_scheme()"),
+        ] {
+            let body = &src[src.find(cmd).unwrap()..];
+            let ask = body.find("gaming_mode_may_hold_plan()").unwrap();
+            assert!(ask < body.find(first_read).unwrap() && ask < body.find("\n}").unwrap(), "{cmd}");
+        }
     }
 
     #[test]
