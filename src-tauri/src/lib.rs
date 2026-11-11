@@ -209,6 +209,24 @@ pub(crate) fn current_power_plan() -> Option<(PowerPlanClass, String)> {
     power_plan_of(&String::from_utf8_lossy(&output.stdout))
 }
 
+/// The active plan's GUID (lower-case), printed name and class, from one read-only
+/// `powercfg /getactivescheme`. `None` when no GUID can be read: unreadable, never guessed
+/// (CR-unconfirmed-remedy records the GUID it saw, so a later Trial can check it is still the one).
+pub(crate) fn current_power_scheme() -> Option<history::ObservedPlan> {
+    let output = crate::actions::quiet_command("powercfg")
+        .args(["/getactivescheme"])
+        .output()
+        .ok()?;
+    power_scheme_of(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Pure: [`current_power_scheme`] from the command's output.
+pub(crate) fn power_scheme_of(stdout: &str) -> Option<history::ObservedPlan> {
+    let guid = scheme_guid_of(stdout)?;
+    let (class, name) = power_plan_of(stdout)?;
+    Some(history::ObservedPlan { guid, name, class })
+}
+
 /// Pure: the class (by GUID, then by the English words for a non-stock GUID) and the printed name.
 /// `None` when the output holds no 36-character GUID — an unreadable plan, never a guessed one.
 pub(crate) fn power_plan_of(stdout: &str) -> Option<(PowerPlanClass, String)> {
@@ -1691,6 +1709,8 @@ pub fn run() {
             history::restore_leftover,
             get_preload_apps,
             rollback_change,
+            history::changed_outside_offers,
+            history::record_changed_outside,
             get_applied_changes,
             history::get_ledger_health,
             history::reveal_ledger_folder,
@@ -2184,6 +2204,7 @@ mod safety_tests {
             rolled_back_at: None,
             justified_by_experiment: None,
             rollback_justified_by_experiment: None,
+            changed_outside: None,
         }
     }
 
@@ -2260,6 +2281,7 @@ mod safety_tests {
             rolled_back_at: None,
             justified_by_experiment: None,
             rollback_justified_by_experiment: None,
+            changed_outside: None,
         };
         let back: AppliedChange =
             serde_json::from_value(serde_json::to_value(&change).unwrap()).unwrap();

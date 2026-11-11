@@ -22,6 +22,7 @@ export const LEDGER_WRITE_COMMANDS = [
   "restore_experiment",
   "apply_outcome_choice",
   "undo_outcome_choice",
+  "record_changed_outside",
 ] as const;
 
 export type LedgerWriteCommand = (typeof LEDGER_WRITE_COMMANDS)[number];

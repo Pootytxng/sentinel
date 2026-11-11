@@ -981,6 +981,17 @@ pub(crate) struct LedgerEntryRef<'a> {
     pub applied: bool,
     /// When it was rolled back. None while applied, and on rollbacks older than the stamp.
     pub rolled_back_at: Option<&'a str>,
+    /// CR-unconfirmed-remedy: when the user recorded this change as changed outside Compy. A move in
+    /// time like an apply or an undo: a session from before it can't say which state it ran on, so
+    /// every check that pairs sessions "with nothing moved between" treats this date as a move.
+    pub outside_recorded_at: Option<&'a str>,
+}
+
+impl<'a> LedgerEntryRef<'a> {
+    /// Every instant at which this row moved: applied, undone, recorded as changed outside Compy.
+    pub(crate) fn moved_at(&self) -> impl Iterator<Item = &'a str> {
+        [Some(self.applied_at), self.rolled_back_at, self.outside_recorded_at].into_iter().flatten()
+    }
 }
 
 /// The Trust Ledger the §3 one-change checks read, or why it can't back them, in words.
@@ -1065,6 +1076,7 @@ fn ledger_rows(history: &[crate::history::AppliedChange]) -> Vec<LedgerEntryRef<
             applied_at: &c.applied_at,
             applied: c.status == "applied",
             rolled_back_at: c.rolled_back_at.as_deref(),
+            outside_recorded_at: c.changed_outside.as_ref().map(|m| m.recorded_at.as_str()),
         })
         .collect()
 }
@@ -1131,7 +1143,7 @@ fn compy_change_moved_after(ledger: &[LedgerEntryRef<'_>], since: &str, own: Opt
     ledger
         .iter()
         .filter(|c| Some(c.id) != own)
-        .any(|c| after(c.applied_at) || c.rolled_back_at.is_some_and(after))
+        .any(|c| c.moved_at().any(after))
 }
 
 /// Which ledger entry, if any, an interrupted (`Pending`) start applied: the earliest still-applied
@@ -2149,7 +2161,32 @@ fn unverified_others_live(
     own_rec: &str,
     reads: &crate::history::LiveReads,
 ) -> usize {
-    unverified_other_changes(rows, own_rec, |other| read_back(changes, other, reads))
+    let plan = std::cell::OnceCell::new();
+    unverified_others_with(
+        changes,
+        rows,
+        own_rec,
+        |other| read_back(changes, other, reads),
+        || plan.get_or_init(crate::current_power_scheme).clone(),
+    )
+}
+
+/// [`unverified_others_live`] with its two reads handed in. CR-unconfirmed-remedy: a setting whose
+/// every applied row the user recorded as changed outside Compy is confirmed only while the state
+/// recorded then is still the live one (for a power plan: the same scheme GUID). Any other plan, or
+/// a plan that can't be read, leaves it unconfirmed, so the Trial is refused or left unjudged exactly
+/// as before. Every other setting is read back as before.
+fn unverified_others_with(
+    changes: &[crate::history::AppliedChange],
+    rows: &[LedgerEntryRef<'_>],
+    own_rec: &str,
+    read_back: impl Fn(&str) -> Option<bool>,
+    plan_now: impl Fn() -> Option<crate::history::ObservedPlan>,
+) -> usize {
+    unverified_other_changes(rows, own_rec, |other| match crate::history::recorded_outside_state(changes, other) {
+        Some(recorded) => Some(crate::history::outside_state_holds(recorded, plan_now().as_ref())),
+        None => read_back(other),
+    })
 }
 
 /// The session with this id, when there is exactly one.
@@ -5160,7 +5197,7 @@ mod experiment_tests {
     }
 
     fn row<'a>(id: &'a str, rec_id: &'a str, applied_at: &'a str, applied: bool) -> LedgerEntryRef<'a> {
-        LedgerEntryRef { id, rec_id, applied_at, applied, rolled_back_at: None }
+        LedgerEntryRef { id, rec_id, applied_at, applied, rolled_back_at: None, outside_recorded_at: None }
     }
 
     const START: &str = "2026-09-28T12:00:00+00:00";
@@ -7753,7 +7790,7 @@ mod experiment_tests {
     }
 
     fn rp_ledger() -> Vec<LedgerEntryRef<'static>> {
-        vec![LedgerEntryRef { id: "change-1", rec_id: "test-rec", applied_at: RP_APPLIED, applied: true, rolled_back_at: None }]
+        vec![LedgerEntryRef { id: "change-1", rec_id: "test-rec", applied_at: RP_APPLIED, applied: true, rolled_back_at: None, outside_recorded_at: None }]
     }
 
     fn rp_now() -> DateTime<Utc> {
@@ -7994,7 +8031,7 @@ mod experiment_tests {
         assert_eq!(outcome(&two, &rp_ledger(), Some(true), rp_now()), (None, None));
         // Another Compy change during the test: confounded.
         let mut moved = rp_ledger();
-        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T10:30:00+00:00", applied: true, rolled_back_at: None });
+        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T10:30:00+00:00", applied: true, rolled_back_at: None, outside_recorded_at: None });
         let (stop, o) = outcome(&two, &moved, Some(true), rp_now());
         let o = o.unwrap();
         assert_eq!((stop, o.verdict.as_str(), o.stop_reason.as_deref()), (Some(RealPlayStop::OtherChange), "confounded", Some("other-compy-change-during-trial")));
@@ -8124,7 +8161,7 @@ mod experiment_tests {
         assert!(pairing.is_some(), "the crash is judged against the as-is sessions' conditions");
         // Another Compy change applied during the test: the crash can't be pinned on this setting.
         let mut moved = rp_ledger();
-        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T10:30:00+00:00", applied: true, rolled_back_at: None });
+        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T10:30:00+00:00", applied: true, rolled_back_at: None, outside_recorded_at: None });
         let (o, _) = real_play_crash(&rec, &sessions, Some(&moved)).unwrap();
         assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("confounded", false, Some("other-compy-change-during-trial")));
         // So is a crash session that ran with Compy changes other than the as-is ones plus this one.
@@ -8182,5 +8219,82 @@ mod experiment_tests {
         let work = &src[src.find("fn read_realplay_progress(").unwrap()..];
         let work = &work[..work.find("\n}\n").unwrap()];
         assert!(!work.contains("lock_store(") && !work.contains("rollback_change(") && !work.contains("apply_recommendation("), "{work}");
+    }
+}
+
+// CR-unconfirmed-remedy: a Compy plan change the user recorded as changed outside Compy stops
+// blocking a Trial only while the plan recorded then is still the live one.
+#[cfg(test)]
+mod changed_outside_trial_tests {
+    use super::*;
+    use crate::history::{AppliedChange, ChangedOutside, ObservedPlan, ObservedState, CHANGED_OUTSIDE_SCHEMA};
+
+    const SYNEZ: &str = "22222222-2222-2222-2222-222222222222";
+
+    fn ultimate_rows() -> Vec<AppliedChange> {
+        let row = |id: &str, at: &str| {
+            serde_json::json!({
+                "id": id, "rec_id": "power-ultimate", "rec_title": "Ultimate", "applied_at": at,
+                "snapshot": { "kind": "power-plan", "prior_guid": "381b4222-f694-41f0-9685-ff5bb260df2e" },
+                "status": "applied",
+                "applied_action": { "kind": "set-ultimate-performance-plan" },
+                "rollback_action": { "kind": "restore-power-plan-from-snapshot" }
+            })
+        };
+        serde_json::from_value(serde_json::json!([
+            row("u1", "2026-06-03T13:08:01+00:00"),
+            row("u2", "2026-09-26T03:11:32+00:00")
+        ]))
+        .unwrap()
+    }
+
+    fn recorded(mut rows: Vec<AppliedChange>, at: &str) -> Vec<AppliedChange> {
+        for c in &mut rows {
+            c.changed_outside = Some(ChangedOutside {
+                schema: CHANGED_OUTSIDE_SCHEMA,
+                recorded_at: at.into(),
+                observed: ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() },
+            });
+        }
+        rows
+    }
+
+    fn plan(guid: &str) -> Option<ObservedPlan> {
+        Some(ObservedPlan { guid: guid.into(), name: "p".into(), class: crate::PowerPlanClass::Other })
+    }
+
+    #[test]
+    fn unrecorded_ultimate_rows_reading_off_still_refuse_the_start() {
+        let changes = ultimate_rows();
+        let rows = ledger_rows(&changes);
+        let n = unverified_others_with(&changes, &rows, "visual-effects", |_| Some(false), || plan(SYNEZ));
+        assert_eq!(n, 1);
+        assert!(unverified_start_refusal(n).unwrap().contains("can't be confirmed as still in place"));
+    }
+
+    #[test]
+    fn recorded_rows_pass_only_while_the_recorded_plan_is_live() {
+        let changes = recorded(ultimate_rows(), "2026-11-10T20:00:00+00:00");
+        let rows = ledger_rows(&changes);
+        let never = |_: &str| -> Option<bool> { panic!("a recorded rec is not read back as Compy's change") };
+        assert_eq!(unverified_others_with(&changes, &rows, "visual-effects", never, || plan(SYNEZ)), 0);
+        assert_eq!(unverified_others_with(&changes, &rows, "visual-effects", never, || plan("381b4222-f694-41f0-9685-ff5bb260df2e")), 1);
+        assert_eq!(unverified_others_with(&changes, &rows, "visual-effects", never, || None), 1, "unreadable stays a refusal");
+        // Another setting is still read back as before.
+        let mut more = changes.clone();
+        let mut gm = ultimate_rows().remove(0);
+        gm.id = "g".into();
+        gm.rec_id = "game-mode".into();
+        more.push(gm);
+        let rows = ledger_rows(&more);
+        assert_eq!(unverified_others_with(&more, &rows, "visual-effects", |r| Some(r != "game-mode"), || plan(SYNEZ)), 1);
+    }
+
+    #[test]
+    fn a_baseline_played_before_the_record_is_refused_and_one_after_it_is_not() {
+        let changes = recorded(ultimate_rows(), "2026-11-10T20:00:00+00:00");
+        let rows = ledger_rows(&changes);
+        assert!(compy_change_moved_after(&rows, "2026-11-10T19:00:00+00:00", None), "the plan during that session is unknown");
+        assert!(!compy_change_moved_after(&rows, "2026-11-10T20:05:00+00:00", None));
     }
 }

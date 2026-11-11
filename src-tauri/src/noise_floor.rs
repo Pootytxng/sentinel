@@ -272,7 +272,7 @@ fn compy_change_between(
 ) -> bool {
     let (Some(from), Some(to)) = (parse(&a.started_at), ended(b)) else { return true };
     let inside = |at: &str| parse(at).is_none_or(|at| at >= from && at <= to);
-    ledger.iter().any(|c| inside(c.applied_at) || c.rolled_back_at.is_some_and(inside))
+    ledger.iter().any(|c| c.moved_at().any(inside))
 }
 
 /// Two sessions of a game, `a` before `b`, between which Compy provably changed nothing: the same
@@ -752,7 +752,7 @@ mod tests {
     }
 
     fn change<'a>(id: &'a str, applied_at: &'a str, rolled_back_at: Option<&'a str>) -> LedgerEntryRef<'a> {
-        LedgerEntryRef { id, rec_id: id, applied_at, applied: rolled_back_at.is_none(), rolled_back_at }
+        LedgerEntryRef { id, rec_id: id, applied_at, applied: rolled_back_at.is_none(), rolled_back_at, outside_recorded_at: None }
     }
 
     /// An evening of play with nothing changed: four sessions, 1% low 150 / 156 / 147 / 153.

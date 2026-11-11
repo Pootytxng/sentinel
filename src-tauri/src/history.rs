@@ -135,6 +135,62 @@ pub(crate) struct AppliedChange {
     /// stamped with `rolled_back_at`. Additive + optional, None for every other undo.
     #[serde(default)]
     pub(crate) rollback_justified_by_experiment: Option<TrialLink>,
+    /// CR-unconfirmed-remedy: the user's record that this change was later replaced by a state Compy
+    /// did not set ([`ChangedOutside`]). Schema-versioned additive metadata: every older entry loads
+    /// as None, and an unmarked row is written exactly as before (no key at all). It never touches the
+    /// rollback contract above: status, snapshot and the typed actions stay as they were applied.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "lenient_changed_outside")]
+    pub(crate) changed_outside: Option<ChangedOutside>,
+}
+
+/// A `changed_outside` this build can't parse loads as None (the row then blocks a Trial as it did
+/// before it was recorded), never as a ledger that fails to load.
+fn lenient_changed_outside<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<ChangedOutside>, D::Error> {
+    let raw = Option::<serde_json::Value>::deserialize(d)?;
+    Ok(raw.and_then(|v| serde_json::from_value(v).ok()))
+}
+
+/// The [`ChangedOutside`] schema this build writes and reads.
+pub(crate) const CHANGED_OUTSIDE_SCHEMA: u32 = 1;
+
+/// CR-unconfirmed-remedy: a ledger-only event. The user saw that a change Compy applied no longer
+/// reads as in effect, and that what IS in effect is something Compy never set (for a power plan: a
+/// scheme that is neither Compy's Ultimate plan nor the plan Compy saved before switching), and chose
+/// to keep it. Writing this changes nothing on Windows. The row keeps `status: "applied"`, its
+/// snapshot and its typed rollback, so its undo still works and the setting can be applied again
+/// through the normal apply path (a new row). What changes is only how a Trial counts it: the row
+/// stops blocking a Trial start, and a Trial instead checks that the recorded `observed` state is
+/// still the live one (`experiment::unverified_others_live`).
+///
+/// No `deny_unknown_fields` here on purpose: this is not privileged data (nothing is applied or
+/// restored from it), and a shape a later build writes must never make this build fail to load the
+/// whole ledger. A schema this build doesn't know, or an observed kind it can't read, is treated as
+/// no record at all, so the row keeps blocking a Trial exactly as before ([`ChangedOutside::usable`]).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ChangedOutside {
+    pub(crate) schema: u32,
+    /// When the user recorded it (UTC RFC 3339, the ledger's clock).
+    pub(crate) recorded_at: String,
+    /// What Compy read on the machine at that moment.
+    pub(crate) observed: ObservedState,
+}
+
+/// The live state Compy read when a change was recorded as changed outside Compy.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub(crate) enum ObservedState {
+    /// The active power scheme: its GUID (lower-case) and the name Windows printed for it.
+    PowerPlan { guid: String, name: String },
+    /// A kind a later build wrote. Never usable here.
+    #[serde(other)]
+    Unknown,
+}
+
+impl ChangedOutside {
+    /// The record, when this build can act on it.
+    pub(crate) fn usable(&self) -> Option<&ObservedState> {
+        (self.schema == CHANGED_OUTSIDE_SCHEMA && !matches!(self.observed, ObservedState::Unknown)).then_some(&self.observed)
+    }
 }
 
 /// P5-outcomes-f1: which Trial an outcome-switch apply or undo was based on, as the Trust Ledger
@@ -198,6 +254,10 @@ pub(crate) struct AppliedChangeView {
     // driver-INsensitive, unlike the session hash: a driver update must not make your own
     // ledger read "different hardware". None = legacy entry with no stamp (honest unknown).
     pub(crate) on_this_rig: Option<bool>,
+    // CR-unconfirmed-remedy: the user's "changed outside Compy" record, passed through as stored.
+    // Omitted when None, so every other row keeps its existing wire shape.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) changed_outside: Option<ChangedOutside>,
     // Pass-through of the persisted rollback stamp. None = still applied, or rolled back
     // before the stamp existed — the UI must render that as "date unknown", never a guess.
     pub(crate) rolled_back_at: Option<String>,
@@ -645,6 +705,7 @@ fn into_view_with(c: AppliedChange, reads: &LiveReads) -> AppliedChangeView {
         rolled_back_at: c.rolled_back_at,
         justified_by_experiment: c.justified_by_experiment,
         rollback_justified_by_experiment: c.rollback_justified_by_experiment,
+        changed_outside: c.changed_outside,
     }
 }
 
@@ -706,6 +767,7 @@ pub(crate) fn test_view(
         rolled_back_at,
         justified_by_experiment: None,
         rollback_justified_by_experiment: None,
+        changed_outside: None,
     }
 }
 
@@ -990,6 +1052,7 @@ fn build_applied_change(
         rolled_back_at: None,
         justified_by_experiment: None,
         rollback_justified_by_experiment: None,
+        changed_outside: None,
     })
 }
 
@@ -2307,6 +2370,171 @@ fn summarize_checked(history: &[AppliedChange], checks: &[Option<ActiveCheck>]) 
     s
 }
 
+// ─── CR-unconfirmed-remedy: "changed outside Compy" ─────────────────────
+//
+// A ledger-only transition: nothing below runs a command, writes the registry or dispatches an
+// apply or rollback. The one live read (the active power scheme) is taken by the caller and handed
+// in, so the rules are pure and the tests drive them with no machine at all.
+
+/// The active power scheme as one read saw it ([`crate::current_power_scheme`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ObservedPlan {
+    /// Lower-case GUID.
+    pub(crate) guid: String,
+    /// The name Windows printed, in whatever language it prints it.
+    pub(crate) name: String,
+    pub(crate) class: crate::PowerPlanClass,
+}
+
+/// Why `c` can't be recorded as changed outside Compy given the live read `observed`, or Ok. Only
+/// a power-plan change qualifies: a plan is the one setting whose live state can be "something else
+/// entirely" and be read as exactly which something. Refused: a row not applied, one already
+/// recorded, one with no typed power-plan snapshot, an unreadable plan (unknown stays a refusal), a
+/// plan that reads as Ultimate (Compy's change may well be in effect), and the plan Compy saved
+/// before its change (that is an undo done outside Compy; Compy's own undo fits it).
+pub(crate) fn changed_outside_refusal(c: &AppliedChange, observed: Option<&ObservedPlan>) -> Result<(), String> {
+    if c.status != "applied" {
+        return Err("this change isn't applied".into());
+    }
+    if c.changed_outside.is_some() {
+        return Err("this change is already recorded as changed outside Compy".into());
+    }
+    let prior = match (&c.applied_action, serde_json::from_value::<Snapshot>(c.snapshot.clone())) {
+        (Some(AppliedAction::SetUltimatePerformancePlan), Ok(Snapshot::PowerPlan { prior_guid })) => prior_guid,
+        _ => return Err("Compy can only record a power plan change this way".into()),
+    };
+    let Some(seen) = observed else {
+        return Err("Compy can't read which power plan is active right now".into());
+    };
+    if seen.guid.len() != 36 || seen.class == crate::PowerPlanClass::Ultimate {
+        return Err("the active power plan may still be the one Compy set".into());
+    }
+    if seen.guid.eq_ignore_ascii_case(prior.trim()) {
+        return Err("the active power plan is the one you had before Compy's change, so undo it instead".into());
+    }
+    Ok(())
+}
+
+/// Records every applied, unrecorded row of `rec_id` as changed outside Compy, all or none, then
+/// saves. Every one of those rows must qualify ([`changed_outside_refusal`]); otherwise nothing is
+/// written. On a failed save the rows are put back as they were in memory. Returns how many rows
+/// were recorded. `save` is the only effect.
+pub(crate) fn commit_changed_outside(
+    history: &mut [AppliedChange],
+    rec_id: &str,
+    observed: Option<&ObservedPlan>,
+    now: &str,
+    save: &dyn Fn(&[AppliedChange]) -> Result<(), String>,
+) -> Result<usize, String> {
+    let rows: Vec<usize> = (0..history.len())
+        .filter(|&i| history[i].rec_id == rec_id && history[i].status == "applied" && history[i].changed_outside.is_none())
+        .collect();
+    if rows.is_empty() {
+        return Err("Compy has no applied change of this setting left to record".into());
+    }
+    for &i in &rows {
+        changed_outside_refusal(&history[i], observed)?;
+    }
+    let Some(seen) = observed else {
+        return Err("Compy can't read which power plan is active right now".into());
+    };
+    let mark = ChangedOutside {
+        schema: CHANGED_OUTSIDE_SCHEMA,
+        recorded_at: now.to_string(),
+        observed: ObservedState::PowerPlan { guid: seen.guid.clone(), name: seen.name.clone() },
+    };
+    for &i in &rows {
+        history[i].changed_outside = Some(mark.clone());
+    }
+    save(history).inspect_err(|_| {
+        for &i in &rows {
+            history[i].changed_outside = None;
+        }
+    })?;
+    Ok(rows.len())
+}
+
+/// The state a Trial must find in place of `rec_id`, when every applied row of it carries a usable
+/// "changed outside Compy" record of that one state; None otherwise (no applied row, a row not
+/// recorded, or records that disagree), and the rec is then checked as before.
+pub(crate) fn recorded_outside_state<'a>(changes: &'a [AppliedChange], rec_id: &str) -> Option<&'a ObservedState> {
+    let mut applied = changes.iter().filter(|c| c.rec_id == rec_id && c.status == "applied").peekable();
+    applied.peek()?;
+    let mut found: Option<&ObservedState> = None;
+    for c in applied {
+        let state = c.changed_outside.as_ref()?.usable()?;
+        match found {
+            Some(f) if f != state => return None,
+            _ => found = Some(state),
+        }
+    }
+    found
+}
+
+/// Does the live read `now` still show the recorded state? An unreadable read never does.
+pub(crate) fn outside_state_holds(recorded: &ObservedState, now: Option<&ObservedPlan>) -> bool {
+    match (recorded, now) {
+        (ObservedState::PowerPlan { guid, .. }, Some(now)) => guid.eq_ignore_ascii_case(&now.guid),
+        _ => false,
+    }
+}
+
+/// One setting the user can record as changed outside Compy, for the Trial refusal's second choice.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ChangedOutsideOffer {
+    pub(crate) rec_id: String,
+    pub(crate) rec_title: String,
+    /// The name of the plan Windows has active now.
+    pub(crate) observed_name: String,
+    /// How many applied rows of this setting the record covers.
+    pub(crate) rows: usize,
+}
+
+/// Pure: the settings whose every applied, unrecorded row qualifies under one live read.
+pub(crate) fn changed_outside_offers_from(history: &[AppliedChange], observed: Option<&ObservedPlan>) -> Vec<ChangedOutsideOffer> {
+    let Some(seen) = observed else { return Vec::new() };
+    let mut recs: Vec<&str> = Vec::new();
+    for c in history.iter().filter(|c| c.status == "applied" && c.changed_outside.is_none()) {
+        if !recs.contains(&c.rec_id.as_str()) {
+            recs.push(&c.rec_id);
+        }
+    }
+    recs.into_iter()
+        .filter_map(|rec| {
+            let rows: Vec<&AppliedChange> = history
+                .iter()
+                .filter(|c| c.rec_id == rec && c.status == "applied" && c.changed_outside.is_none())
+                .collect();
+            rows.iter().all(|c| changed_outside_refusal(c, Some(seen)).is_ok()).then(|| ChangedOutsideOffer {
+                rec_id: rec.to_string(),
+                rec_title: rows[rows.len() - 1].rec_title.clone(),
+                observed_name: seen.name.clone(),
+                rows: rows.len(),
+            })
+        })
+        .collect()
+}
+
+/// Read-only: what the user could record as changed outside Compy right now. One plan read.
+#[tauri::command]
+pub(crate) fn changed_outside_offers() -> Result<Vec<ChangedOutsideOffer>, String> {
+    let history = load_history()?;
+    Ok(changed_outside_offers_from(&history, crate::current_power_scheme().as_ref()))
+}
+
+/// CR-unconfirmed-remedy: record `rec_id`'s applied rows as changed outside Compy. A ledger write
+/// only, under the ledger lock and the verified data root like every other write; nothing on
+/// Windows changes. Reads the active plan once, under the lock, and records what it read.
+#[tauri::command]
+pub(crate) fn record_changed_outside(rec_id: String) -> Result<usize, String> {
+    let _lock = lock_history()?;
+    let root = crate::data_root::mutation_root()?;
+    let mut history = load_history_for(&root)?;
+    let observed = crate::current_power_scheme();
+    let now = Utc::now().to_rfc3339();
+    commit_changed_outside(&mut history, &rec_id, observed.as_ref(), &now, &|h| save_history(&root, h))
+}
+
 // ─── Trust Ledger tests ──────────────────────────────────────────────────
 //
 // History-owned behavior: the recomputed ledger view and the on-disk round
@@ -3063,9 +3291,11 @@ mod receipt_commit_tests {
             "only commit_receipts may build a receipt"
         );
         let save: std::collections::BTreeSet<String> = callers_of("save_history").into_iter().collect();
+        // CR-unconfirmed-remedy: `record_changed_outside` saves a ledger-only record and applies
+        // nothing (its pure core `commit_changed_outside` takes no apply or rollback effect at all).
         assert_eq!(
             save,
-            ["ensure_ledger_writable", "record_receipts", "rollback_change_inner", "save_history"]
+            ["ensure_ledger_writable", "record_changed_outside", "record_receipts", "rollback_change_inner", "save_history"]
                 .map(String::from)
                 .into(),
             "an apply gateway must never save the ledger itself"
@@ -3958,6 +4188,7 @@ mod history_tests {
             rolled_back_at: None,
             justified_by_experiment: None,
             rollback_justified_by_experiment: None,
+            changed_outside: None,
         }
     }
 
@@ -4979,6 +5210,7 @@ mod ledger_fuzz_tests {
             rolled_back_at: if rng.flag() { Some(hostile_string(rng, 1)) } else { None },
             justified_by_experiment: None,
             rollback_justified_by_experiment: None,
+            changed_outside: None,
         }
     }
 
@@ -5352,5 +5584,189 @@ mod row_probe_tests {
             assert_eq!(probe_rec_target_with(rec, &reads), ActiveCheck::Unreadable, "{rec}");
             assert_eq!(ASKED.load(Ordering::SeqCst), before + 1, "{rec} skipped the batched listing");
         }
+    }
+}
+
+// CR-unconfirmed-remedy: recording a Compy change as changed outside Compy. Fixtures only, shaped
+// like the owner's two Ultimate rows (2026-11-10); never the real ledger.
+#[cfg(test)]
+mod changed_outside_tests {
+    use super::*;
+    use std::cell::Cell;
+
+    const BALANCED: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+    const SYNEZ: &str = "22222222-2222-2222-2222-222222222222";
+
+    /// A ledger as builds before this change wrote it: no `changed_outside` key anywhere.
+    fn old_format_ledger() -> String {
+        let row = |id: &str, at: &str| {
+            format!(
+                r#"{{"id":"{id}","rec_id":"power-ultimate","rec_title":"Switch to the Ultimate Performance power plan","applied_at":"{at}","snapshot":{{"kind":"power-plan","prior_guid":"{BALANCED}"}},"status":"applied","applied_action":{{"kind":"set-ultimate-performance-plan"}},"rollback_action":{{"kind":"restore-power-plan-from-snapshot"}},"app_version_at_apply":"0.9.0","ruleset_version_at_apply":null,"elevation_used":true}}"#
+            )
+        };
+        format!(
+            "[{},{}]",
+            row("power-ultimate-1780492081786", "2026-06-03T13:08:01.786+00:00"),
+            row("power-ultimate-1790398692377", "2026-09-26T03:11:32.377+00:00")
+        )
+    }
+
+    fn rows() -> Vec<AppliedChange> {
+        serde_json::from_str(&old_format_ledger()).expect("an old-format ledger parses")
+    }
+
+    fn plan(guid: &str, name: &str, class: crate::PowerPlanClass) -> ObservedPlan {
+        ObservedPlan { guid: guid.into(), name: name.into(), class }
+    }
+
+    fn synez() -> ObservedPlan {
+        plan(SYNEZ, "Synez Power Plan", crate::PowerPlanClass::Other)
+    }
+
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("compy-hist-outside-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join("history.json")
+    }
+
+    #[test]
+    fn an_old_format_ledger_loads_unchanged_and_an_unmarked_row_is_written_without_the_key() {
+        let path = scratch("old");
+        std::fs::write(&path, old_format_ledger()).unwrap();
+        let loaded = load_history_from(&path).expect("old ledger loads");
+        assert_eq!(loaded.len(), 2);
+        assert!(loaded.iter().all(|c| c.changed_outside.is_none() && c.status == "applied"));
+        save_history_to(&path, &loaded).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("changed_outside"), "an unmarked row keeps its old shape");
+        assert!(text.contains(BALANCED) && text.contains("restore-power-plan-from-snapshot"));
+    }
+
+    #[test]
+    fn the_synez_shaped_rows_qualify_and_record_with_one_save_and_nothing_else() {
+        let mut history = rows();
+        let offers = changed_outside_offers_from(&history, Some(&synez()));
+        assert_eq!(offers.len(), 1);
+        assert_eq!((offers[0].rec_id.as_str(), offers[0].rows, offers[0].observed_name.as_str()), ("power-ultimate", 2, "Synez Power Plan"));
+
+        let before = serde_json::to_value(&history).unwrap();
+        let saves = Cell::new(0);
+        let n = commit_changed_outside(&mut history, "power-ultimate", Some(&synez()), "2026-11-10T20:00:00+00:00", &|_| {
+            saves.set(saves.get() + 1);
+            Ok(())
+        })
+        .expect("records");
+        assert_eq!((n, saves.get()), (2, 1), "one ledger save is the only effect");
+        for (c, was) in history.iter().zip(before.as_array().unwrap()) {
+            // The rollback contract is untouched: status, snapshot, typed actions as applied.
+            assert_eq!(c.status, "applied");
+            assert_eq!(c.snapshot, was["snapshot"]);
+            assert_eq!(serde_json::to_value(&c.rollback_action).unwrap(), was["rollback_action"]);
+            assert_eq!(serde_json::to_value(&c.applied_action).unwrap(), was["applied_action"]);
+            let mark = c.changed_outside.as_ref().unwrap();
+            assert_eq!(mark.recorded_at, "2026-11-10T20:00:00+00:00");
+            assert_eq!(mark.observed, ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() });
+        }
+        assert!(resolve_rollback(&history[1]).is_ok(), "the undo still resolves from the row");
+        assert!(changed_outside_offers_from(&history, Some(&synez())).is_empty(), "nothing left to offer");
+    }
+
+    #[test]
+    fn an_unreadable_plan_compys_own_plan_and_the_saved_prior_plan_are_all_refused() {
+        let ultimate_copy = plan("db9dd473-74ff-4582-ba26-39eaf4cdac4a", "Ultimate Performance", crate::PowerPlanClass::Ultimate);
+        let stock_ultimate = plan("e9a42b02-d5df-448d-aa00-03f14749eb61", "", crate::PowerPlanClass::Ultimate);
+        let prior = plan(BALANCED, "Balanced", crate::PowerPlanClass::Balanced);
+        for (observed, says) in [
+            (None, "can't read"),
+            (Some(&ultimate_copy), "may still be the one Compy set"),
+            (Some(&stock_ultimate), "may still be the one Compy set"),
+            (Some(&prior), "undo it instead"),
+        ] {
+            let mut history = rows();
+            let saves = Cell::new(0);
+            let why = commit_changed_outside(&mut history, "power-ultimate", observed, "2026-11-10T20:00:00+00:00", &|_| {
+                saves.set(saves.get() + 1);
+                Ok(())
+            })
+            .unwrap_err();
+            assert!(why.contains(says), "{why}");
+            assert_eq!(saves.get(), 0, "nothing written");
+            assert!(history.iter().all(|c| c.changed_outside.is_none()));
+            assert!(changed_outside_offers_from(&history, observed).is_empty());
+        }
+    }
+
+    #[test]
+    fn only_a_power_plan_change_qualifies() {
+        let mut history = rows();
+        history[0].rec_id = "game-mode".into();
+        history[0].applied_action = Some(AppliedAction::EnableGameMode);
+        assert!(changed_outside_refusal(&history[0], Some(&synez())).is_err());
+        let offers = changed_outside_offers_from(&history, Some(&synez()));
+        assert_eq!(offers.iter().map(|o| o.rec_id.as_str()).collect::<Vec<_>>(), ["power-ultimate"]);
+    }
+
+    #[test]
+    fn the_record_survives_a_reload_and_a_failed_save_leaves_nothing_recorded() {
+        let path = scratch("reload");
+        let mut history = rows();
+        commit_changed_outside(&mut history, "power-ultimate", Some(&synez()), "2026-11-10T20:00:00+00:00", &|h| save_history_to(&path, h))
+            .unwrap();
+        let back = load_history_from(&path).unwrap();
+        assert_eq!(back.len(), 2);
+        assert_eq!(recorded_outside_state(&back, "power-ultimate"), back[0].changed_outside.as_ref().unwrap().usable());
+        assert!(outside_state_holds(recorded_outside_state(&back, "power-ultimate").unwrap(), Some(&synez())));
+
+        let mut fresh = rows();
+        let err = commit_changed_outside(&mut fresh, "power-ultimate", Some(&synez()), "2026-11-10T20:00:00+00:00", &|_| Err("disk full".into()));
+        assert_eq!(err.unwrap_err(), "disk full");
+        assert!(fresh.iter().all(|c| c.changed_outside.is_none()), "put back in memory");
+    }
+
+    #[test]
+    fn a_record_this_build_cant_read_loads_as_none_and_never_fails_the_ledger() {
+        let mut v: serde_json::Value = serde_json::from_str(&old_format_ledger()).unwrap();
+        v[0]["changed_outside"] = serde_json::json!({ "schema": 1, "recorded_at": 5 });
+        v[1]["changed_outside"] = serde_json::json!({
+            "schema": 2, "recorded_at": "2026-11-10T20:00:00Z", "observed": { "kind": "power-plan", "guid": SYNEZ, "name": "x" }
+        });
+        let path = scratch("lenient");
+        std::fs::write(&path, v.to_string()).unwrap();
+        let loaded = load_history_from(&path).expect("the ledger still loads");
+        assert!(loaded[0].changed_outside.is_none(), "malformed reads as no record");
+        assert!(loaded[1].changed_outside.as_ref().unwrap().usable().is_none(), "a later schema is not acted on");
+        assert_eq!(recorded_outside_state(&loaded, "power-ultimate"), None, "so the rows keep blocking a Trial");
+
+        let unknown: ChangedOutside = serde_json::from_value(serde_json::json!({
+            "schema": 1, "recorded_at": "2026-11-10T20:00:00Z", "observed": { "kind": "something-new" }
+        }))
+        .unwrap();
+        assert!(unknown.usable().is_none());
+    }
+
+    #[test]
+    fn a_rec_with_one_row_unrecorded_or_records_that_disagree_has_no_recorded_state() {
+        let mut history = rows();
+        let mark = |guid: &str| ChangedOutside {
+            schema: CHANGED_OUTSIDE_SCHEMA,
+            recorded_at: "2026-11-10T20:00:00+00:00".into(),
+            observed: ObservedState::PowerPlan { guid: guid.into(), name: "p".into() },
+        };
+        history[0].changed_outside = Some(mark(SYNEZ));
+        assert_eq!(recorded_outside_state(&history, "power-ultimate"), None, "one row still unrecorded");
+        history[1].changed_outside = Some(mark("33333333-3333-3333-3333-333333333333"));
+        assert_eq!(recorded_outside_state(&history, "power-ultimate"), None, "two different states");
+        history[1].changed_outside = Some(mark(SYNEZ));
+        assert!(recorded_outside_state(&history, "power-ultimate").is_some());
+        assert!(!outside_state_holds(recorded_outside_state(&history, "power-ultimate").unwrap(), None), "unreadable never holds");
+        assert_eq!(recorded_outside_state(&history, "game-mode"), None);
+    }
+
+    #[test]
+    fn the_active_scheme_read_keeps_its_guid_and_name() {
+        let seen = crate::power_scheme_of(&format!("Power Scheme GUID: {SYNEZ}  (Synez Power Plan)\r\n")).unwrap();
+        assert_eq!(seen, synez());
+        assert!(crate::power_scheme_of("no plan here").is_none());
     }
 }
