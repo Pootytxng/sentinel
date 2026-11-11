@@ -129,6 +129,9 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       NVIDIA card only NVML reports leaves a session's peak graded (the ungrade rule reads DXGI only); `elevate_and_wait` waits with no timeout while
       the ledger is locked (`actions.rs`); core parking flags any non-performance plan with minimum cores at 100;
       drive health and memory speed or channels never rank as limiters.
+- [ ] **CR-vbs-row-truth** (whole-range review 2026-11-10, SHOULD-FIX) Diagnostics "Memory Integrity / VBS turned on" reads a definite "No" when the registry values are absent (VBS on by default/policy), beside "VBS running now: Running"; say "Not set in registry" instead. Read-only.
+- [ ] **CR-care-read-promise** (same review) Care's store-read failure says "it'll try again" but nothing re-reads; add a bounded backoff re-read and true final words (en + zh-CN); a save failing after unmount schedules nothing; an `opened:X` save-stopped clears when `dismissed:X` later succeeds.
+- [ ] **CR-capture-last-wins** (same review) `capture_serialized` is not FIFO, so start(pending) → stop → start can end off; stamp each request with a sequence at invoke time and skip one older than the newest applied.
 
 ### Next — small visible slices (refill 2026-11-03: CR-1102-left's fixable lines + Roadmap Phase 9)
 - [x] **CR-live-round** Live's session strip and the debrief floor a session's length (3h 28m) where History and
@@ -591,6 +594,15 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       can't be confirmed as still in place" (the two power-ultimate rows read off; active plan is "Synez Power Plan", set
       outside Compy). No ROB RUN verdict; nothing applied. Blocked on CR-unconfirmed-remedy (owner call). Evidence
       `C:\Users\Kuya\code\_train\view-1110d\` (s1-*, p4-*, p5-*, journey.log, fgwatch.log).
+      2026-11-10 ~20:13-21:21 session (killed with no report; recovered read-only 2026-11-11, not ticked). On installed
+      `6a2e6334` over CDP: [Keep "Synez Power Plan"] recorded `changed_outside` on both power-ultimate rows (04:15:43Z),
+      active scheme `22222222-…` (Synez) identical before/after/later. ROB RUN real play: as-is 1 (04:17-04:38Z) and
+      as-is 2 (04:39-04:59Z) both uneven at the cap, "Test anyway", then the Trial `exp:7-1794373260660` (visual-effects,
+      05:01-05:20Z, 1,112 readings): verdict too-noisy (avg 298.8→289.2, 1% low 205.7→197.5, floor ±3%), status
+      restored, ledger row rolled back 05:20:31Z; no Trial open. Not met: the panel still names "Switch to the Ultimate
+      Performance power plan" as worth testing, so it never said "Compy finished the supported tests". Remains: that
+      Trial (needs the risk confirm) until nothing is worth another run. Evidence `_train\view-1110e\` (s4-*.txt,
+      s4-powercfg.txt, journey.log, j-05-enough.png, j-06-end.png).
 - [x] **CR-unconfirmed-remedy** (owner call) A Trial start is refused while a Compy change "can't be confirmed as still in
       place", and the refusal says to undo it; here that undo restores Balanced (`381b4222…`) over the owner's later
       outside choice ("Synez Power Plan"), so following it changes his power plan. Needs a path that stops tracking a
@@ -659,6 +671,12 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
       ran two as-is sessions on his real play with no capture or Trial clicks (each stopped at Compy's own "Stop now"
       after the settle cap), offered "Test anyway", then refused to start (CR-unconfirmed-remedy). No summary reached;
       the friend's run not attempted. Evidence `_train\view-1110d\p5-0*.png/json`, `journey.log`.
+      2026-11-10 ~20:13-21:21 (killed session, recovered 2026-11-11; not ticked; ROB RUN per the 17:44 substitution):
+      from the button, two as-is sessions and one Trial session on real play, every step through journey buttons only
+      (Stop now ×2, Play one more as-is session, Test anyway, Done playing), no Start/Stop capture or Conclude click;
+      Compy concluded it itself (too-noisy, put back). The end screen is the verdict with a next offer ("I understand,
+      test it" / "Stop here"), not the end-of-journey summary. Remains: run to the summary, and the friend's repeat.
+      Evidence `_train\view-1110e\journey.log`, `j-01..j-06*.png`.
 
 ### Then — Roadmap Phase 6: Care Journey convergence (`product/ROADMAP.md` Phase 6)
 Planned 2026-10-25. Order is value order. Converge, don't add rooms. Phase 6 exit on the owner rig: from Home,
