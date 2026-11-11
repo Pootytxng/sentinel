@@ -1067,16 +1067,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-04 ~03:12 to ~04:40 (interactive from Claude HQ; owner 03:12: "yes please complete all of those required task you
-  mentioned before"): the #678 reminder deleted (03:14, on his go-ahead); the four CR slices of the PM refill landed from
-  `claude/train-hq-1104` — CR-gpu-picker `7e69760c`, CR-primary-gpu `0f0cb0bb`, CR-stopped-service `c552354c`,
-  CR-localized-reads `5e2a110d` with its review fixes `aded8095`..`e3d3b7fd`; tsc 0, touched TS suites and the census,
-  locale, orphan-key and copy guards green; one rust-tauri-reviewer round (A approve-with-nits, B request-changes → all
-  taken); desk cargo test 1775/0 and clippy clean on `e3d3b7fd`. Desk build `e3d3b7fd` built and installed 04:06
-  (`ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit`, proof `e3d3b7fd · release`, installer `0AC22D2F…`); desk
-  self-review PASS 12 of 12 (his Ultimate plan is a /duplicatescheme copy, so it classes Other and the English words still name it — the exact gap CR-ultimate-identity queues); one pre-existing zh-CN defect found and queued (CR-zh-dial). Three follow-ups queued (CR-service-batch, CR-ultimate-identity, P9-hint-shown). RELEASE_STATE
-  row re-stamped; meant to be pushed with this line through the gate, but it never reached GitHub (corrected
-  2026-11-04 08:58: GitHub `main` still `0b0f6afe`, local `main` ten commits ahead, `c631989a..261c6af4`). Lane line removed.
 - 2026-11-04 ~08:30-09:05 (scheduled, CODE-ONLY, owner using the PC): CR-service-batch `3cdfc782` (fast-forward onto
   `main` with this line's commit); cargo test 1781/0, clippy clean (idle priority, shared target dir); one rust-tauri-reviewer round, no
   blockers, both SHOULD-FIX taken inline. Queue refill: five slices (CR-pagefile-0, CR-dual-channel, CR-vbs-running,
@@ -1154,12 +1144,20 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   concluded by Compy (confounded, restored, read-back verified). P4/P5 on ROB RUN: three real-play as-is sessions, both
   journey baselines uneven at the cap, Trial start refused (CR-unconfirmed-remedy, CR-refuse-early queued). P6 owner half
   re-checked for ROB RUN. Nothing ticked. Docs only; evidence `_train\view-1110d\`. Not pushed (preflight CODE-ONLY).
-
 - 2026-11-10 ~19:16-20:10 (coordinator-assigned, CODE-ONLY throughout, owner in ROB RUN): CR-unconfirmed-remedy landed
   `12a791d0` (coordinator call delegated by the owner: keep his own plan; ledger-only "changed outside Compy" record,
   schema 1, nothing on Windows changes; opus r1 MUST-FIX taken, r2 APPROVE; sonnet APPROVE) and CR-refuse-early `5844c368`
   (journey and real play refuse before any as-is session; sonnet APPROVE). cargo 1826/0, clippy clean, tsc clean. Queued
   CR-outside-followups; CR-ultimate-identity stays open. Not installed, not pushed (main 10 ahead of GitHub with this line).
+- 2026-11-11 ~03:20-04:00 (coordinator-assigned, CODE-ONLY throughout; owner on Discord, then in ROB RUN from ~03:52):
+  recovered the session killed on 11-10 ~20:13 (no report): it had recorded Keep "Synez Power Plan" (both power-ultimate
+  rows `changed_outside`, plan GUID unchanged) and run P4/P5 on ROB RUN to a Compy-concluded Trial exp:7 (visual-effects,
+  too-noisy, restored, no Trial open); P4/P5 not ticked (notes under each). Its Compy was still on CDP port 9339; torn
+  down to a plain launch (no-debug-port CLEAN) and its idle s12 build shells closed. Landed CR-vbs-row-truth `27a217e9`
+  (sonnet r1/r2 APPROVE-WITH-NITS, CR-vbs-local-eq1 queued), CR-care-read-promise `54fecd47`, CR-capture-last-wins
+  `6b0db90d` (sonnet APPROVE-WITH-NITS) and CR-outside-followups (c) `e2629af6`; every new test proven failing on the old
+  code; cargo 1829/0 (24 ignored), clippy clean, tsc 0, vitest 533/536 files (3 site-app suites need site-app/node_modules
+  in a worktree). Not installed, not pushed (preflight never FULL; main 28 ahead of GitHub with this line).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
