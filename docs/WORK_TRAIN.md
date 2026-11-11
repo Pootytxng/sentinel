@@ -621,6 +621,22 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       Performance power plan" as worth testing, so it never said "Compy finished the supported tests". Remains: that
       Trial (needs the risk confirm) until nothing is worth another run. Evidence `_train\view-1110e\` (s4-*.txt,
       s4-powercfg.txt, journey.log, j-05-enough.png, j-06-end.png).
+      2026-11-11 ~04:02-06:38 session (not ticked; ROB RUN per the owner's 17:44 sentence, "i need you to complete these
+      task on your own you can use the game i have active now rather than wardogs"). Driven over CDP on installed
+      `6a2e6334` while he played; fgwatch 466 reads, Compy never in front. Ultimate decision: declining it inside Compy
+      only exists as lowering his own risk choice, which gives "finished-within-chosen-risk", not this wording; put-back
+      is `rollback_change(own row)` -> `powercfg /setactive <snapshot prior_guid>`, the snapshot read by
+      `/getactivescheme` at apply (`actions.rs` apply/rollback_power_ultimate), so it was run. Real play, all in focus:
+      exp:8 power-ultimate (12:19-12:40Z, Stop now at the cap) too-noisy, put back; exp:9 visual-effects retest (new
+      before-session forced; as-is uneven twice, Test anyway, 13:27-13:55Z) too-noisy (+2.4% 1% low), put back,
+      VisualFXSetting 0 read back; exp:10 power-ultimate retest (13:55-14:31Z, "Compy has enough" both sessions) no-change,
+      medium (1% low +1.7%, avg +0.7%, band ±3%), put back. Scheme `22222222-…` (Synez) before, Ultimate `db9dd473-…`
+      only inside exp:8/exp:10 session 2, Synez after each and at teardown. Not met: the panel ends at "Nothing on ROB RUN
+      is left for Compy to test right now. 1 change was measured. 1 couldn't be judged." Visual effects is now two
+      too-noisy runs (RETEST_CAP 2) and `test-summary.ts` says "finished the supported tests" only with no inconclusive
+      change, so on ROB RUN this wording can no longer be reached (coordinator/owner call: a steadier game, or accept
+      "nothing left" as the exit). Evidence `_train\view-1111a\` (journey.log, powercfg.txt, ledger-*.txt,
+      experiments-final.txt, o-*.json/txt, fgwatch.log, teardown.txt).
 - [x] **CR-unconfirmed-remedy** (owner call) A Trial start is refused while a Compy change "can't be confirmed as still in
       place", and the refusal says to undo it; here that undo restores Balanced (`381b4222…`) over the owner's later
       outside choice ("Synez Power Plan"), so following it changes his power plan. Needs a path that stops tracking a
@@ -652,6 +668,16 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       `LEDGER_CHANGED_EVENT` and on window focus, so its words and button follow a plan switched again; a recorded
       line keeps its own copy and stays after a re-read stops offering it. 2 tests fail on the old component.
       Left: (a) and (d) touch the Trial/ledger record (Rust), (b) Applied & history + Game Readiness (TS + readiness).
+- [ ] **CR-summary-running-trial** (TS) While a retest Trial runs, the game summary's row for that change reads "Applied
+      now" and "Stays applied from these tests: <change>", though the tested Trial put it back; "on" is the running
+      Trial's own apply (`stillAppliedFrom` reads the picker's already-set-by-compy). Say it is applied by the Trial in
+      progress, or leave it out of "stays applied" while a Trial on it runs. Reproduces the PBZ note from 11-10.
+      Evidence `_train\view-1111a\o-08-resume-midtrial.json` (exp:9 running; exp:7 restored).
+- [ ] **CR-next-reuse-moved** (TS) After exp:8 put Ultimate back, the next offer said "Next: Trim Windows visual effects,
+      about 10 min" (reuse), then the start refused the reuse ("a Compy change was applied or undone after the baseline
+      session") and asked for a new before-session (~20 min). `nextReuses` (`reusableAsIs`) should count the finished
+      Trial's own rollback as a ledger move, as the start does. Evidence `_train\view-1111a\o-06-exp8-verdict.txt`,
+      `o-07-next-start.txt`.
 
 ### Then — Roadmap Phase 5: Guided Optimization Journey (`product/ROADMAP.md` Phase 5)
 Planned 2026-10-25. Order is value order. Phase 5 exit on the owner rig: from one button to the summary,
@@ -699,6 +725,16 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
       Compy concluded it itself (too-noisy, put back). The end screen is the verdict with a next offer ("I understand,
       test it" / "Stop here"), not the end-of-journey summary. Remains: run to the summary, and the friend's repeat.
       Evidence `_train\view-1110e\journey.log`, `j-01..j-06*.png`.
+      2026-11-11 ~04:02-06:38 (not ticked: owner half met / friend half open; ROB RUN per the owner's 17:44 sentence,
+      "i need you to complete these task on your own you can use the game i have active now rather than wardogs"): the
+      journey resumed from its own offer and ran to its end on his real play through journey buttons only (I understand,
+      test it ×2, Next, Stop now ×4, Play one more as-is session, Test anyway, Done playing ×3, OK); no Start experiment,
+      Start/Stop capture or Conclude click, no setting picked. Three Trials (exp:8, exp:9, exp:10; see P4-exit-proof).
+      End: "1 of 2 tested. Nothing else here is worth testing on this PC. 1 try couldn't be judged.", and the summary
+      "Nothing on ROB RUN is left for Compy to test right now. 1 change was measured. 1 couldn't be judged." with both
+      put back and why, lesson "ROB RUN swings a lot between sessions…", "Nothing from these tests stays applied." Across
+      11-10 + 11-11 that is the button (11-10 ~20:15) to the summary. Friend's repeat cannot be done by Claude.
+      Evidence `_train\view-1111a\journey.log`, `o-12-journey-end.json`, `o-13-after-ok-summary.json`.
 
 ### Then — Roadmap Phase 6: Care Journey convergence (`product/ROADMAP.md` Phase 6)
 Planned 2026-10-25. Order is value order. Converge, don't add rooms. Phase 6 exit on the owner rig: from Home,
@@ -1067,11 +1103,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-04 ~08:30-09:05 (scheduled, CODE-ONLY, owner using the PC): CR-service-batch `3cdfc782` (fast-forward onto
-  `main` with this line's commit); cargo test 1781/0, clippy clean (idle priority, shared target dir); one rust-tauri-reviewer round, no
-  blockers, both SHOULD-FIX taken inline. Queue refill: five slices (CR-pagefile-0, CR-dual-channel, CR-vbs-running,
-  CR-slow-async, CR-care-silent). One item only. Not pushed (CODE-ONLY): local `main` was already ten commits ahead of
-  GitHub (the 03:12 line above said pushed; it wasn't); the next FULL session pushes it all through the gate.
 - 2026-11-04 ~10:50 (Claude HQ lane, owner in PBZ; gate at idle priority, no install): the 08:43 session's
   CR-service-batch (`3cdfc782`) had not been through the gate and broke two record-first guards (the probe's
   rec list and the reconcile's call read `probe_rec_target`, now a one-line call into `probe_rec_target_with`);
@@ -1158,6 +1189,12 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `6b0db90d` (sonnet APPROVE-WITH-NITS) and CR-outside-followups (c) `e2629af6`; every new test proven failing on the old
   code; cargo 1829/0 (24 ignored), clippy clean, tsc 0, vitest 533/536 files (3 site-app suites need site-app/node_modules
   in a worktree). Not installed, not pushed (preflight never FULL; main 28 ahead of GitHub with this line).
+- 2026-11-11 ~04:02-06:38 (coordinator-assigned, owner in ROB RUN; his 17:44 substitution): Compy restarted once with a
+  CDP port (`--no-activate`, port 9341), driven in the background, fgwatch 466 reads with Compy never in front, restored
+  to a plain launch (teardown CLEAN). Three Trials on real play: exp:8 Ultimate too-noisy, exp:9 visual effects
+  too-noisy (second, capped), exp:10 Ultimate no-change; all put back, Synez read back after each. Journey reached its
+  end summary (P5 owner half met, friend half open); P4 wording unreachable on ROB RUN (capped inconclusive). Queued
+  CR-summary-running-trial, CR-next-reuse-moved. Docs only; evidence `_train\view-1111a\`. Not pushed (owner gaming).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
