@@ -124,6 +124,9 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       NVIDIA card only NVML reports leaves a session's peak graded (the ungrade rule reads DXGI only); `elevate_and_wait` waits with no timeout while
       the ledger is locked (`actions.rs`); core parking flags any non-performance plan with minimum cores at 100;
       drive health and memory speed or channels never rank as limiters.
+      2026-11-11 s16: core parking PARKED UNVERIFIED on `claude/train-core-parking-plan` (`c9e7d511`, leftovers.rs only):
+      flag 100% only on stock Balanced (class or, for old probes, words); custom/unread plans not flagged; test added.
+      Outstanding: cargo test (`leftovers::`), clippy, one sonnet review, merge.
       Owner calls taken (owner delegated 2026-11-10; coordinator took the recommendation): a drift notice whose check
       now reads unknown stays, worded "last seen changed; Compy can't read it now" — done `8d855c05` (2026-11-11,
       CODE-ONLY, not installed; drift.rs re-emits it with `unreadable_now`, state unchanged; Home's count reads
@@ -158,6 +161,14 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       Trial's pre-test snapshot and that newer row still reads "applied" while the setting reads off. Refuse a second
       apply of a change a running Trial holds, or settle the newer row with the restore (history.rs
       `rollback_change_inner`). Rollback boundary: two reviews.
+      2026-11-11 s16 PARKED on branch `claude/train-rp-same-setting-row` (`3a64091a`, `c4033f99`): UI apply/batch
+      commands moved to experiment.rs wrappers that refuse a setting an open Trial holds (store gate, checked read).
+      cargo 1836/0 + clippy clean; opus and sonnet r1 APPROVE-WITH-NITS, no MUST-FIX. Merged as `638926e6` then
+      reverted (`c66b4d25`): a later full vitest showed `src/experiment-record-first-guard.test.ts` 2 failed (likely its
+      source-shape reads of experiment.rs vs the new `apply_recommendation` wrapper; not yet read). Next, with no game
+      running: `npx vitest run src/experiment-record-first-guard.test.ts` in the branch worktree, fix, then the full
+      vitest, cargo test, clippy, merge. Follow-ups found: benchmark tweak trial holding a setting; Gaming Mode spanning a
+      Trial restore (opus r1).
 - [x] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
       the consent modal, focus jumps to Enable (`autoFocus`) and key repeat presses it: either confirm can pass on one
       held key. Ignore repeated key presses on Enable, or focus Cancel first. TS only.
@@ -702,6 +713,15 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       2026-11-11 s15: (a) and (d) parked, not started: both change what the Trial start/conclude one-change checks
       read (the session ran under "no apply/rollback behaviour" for item 4); (b) parked for time (Rust readiness +
       TS history, one review); next step for (b): `types.ts` `changed_outside` on `AppliedChange`, a note on the row.
+      2026-11-11 s16: (b) PARKED UNVERIFIED on `claude/train-outside-followups-b` (`6b566221`, `59d40019`, rebased on the
+      then-main incl. the since-reverted rp merge: rebase onto main again first). Readiness counts a recorded row whose
+      plan still holds as kept, not drift (only `applied_changes_summary_checked` reads the plan; `summarize_history`
+      unchanged, test-pinned); view field `changed_outside_holds`; History says "changed outside Compy" + note; not a
+      "turn it back on" drift. r1 opus + sonnet REQUEST-CHANGES (MUST-FIX: TS kept without holds/off check; dead
+      `checked_summary` under clippy) both fixed; r2 sonnet APPROVE-WITH-NITS (plan read on the UI thread: gated to
+      recorded-off rows in `59d40019`); r2 opus killed before it answered. Proven: cargo 1837/0 + clippy clean on the
+      pre-r2 commit; TS tests fail on old code. Outstanding: cargo test + clippy on `59d40019`, full vitest, opus r2,
+      merge. (a), (d) not started (no time to show the one-change check gets no weaker).
 - [x] **CR-summary-running-trial** (TS) While a retest Trial runs, the game summary's row for that change reads "Applied
       now" and "Stays applied from these tests: <change>", though the tested Trial put it back; "on" is the running
       Trial's own apply (`stillAppliedFrom` reads the picker's already-set-by-compy). Say it is applied by the Trial in
@@ -1159,10 +1179,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-10 ~11:00 (scheduled, CODE-ONLY, owner in ROB RUN): CR-pagefile-0 `258b438f`; cargo test 1784/0, clippy
-  clean (idle priority, shared target dir); the first three new tests proven failing on the old code; one rust-tauri-reviewer round
-  APPROVE-WITH-NITS, SHOULD-FIX 1 (half-zero row) taken, SHOULD-FIX 2 pre-existing and queued (CR-pagefile-multi). One
-  item only. Not pushed (CODE-ONLY); the next FULL session pushes local `main` through the gate.
 - 2026-11-10 ~11:10-11:40 (scheduled, CODE-ONLY, owner on Discord): CR-dual-channel `ad5074ac` (4 new readiness tests
   proven failing on the old logic; review r1 APPROVE-WITH-NITS, 3 SHOULD-FIX taken in `0c2912ce`, r2 APPROVE-WITH-NITS)
   and CR-vbs-running `b2ed0cca` (review r1 APPROVE-WITH-NITS, nothing queued). cargo test 1795/0, clippy clean (idle
@@ -1251,6 +1267,12 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   on the old code; cargo 1834/0 (24 ignored), clippy clean, tsc 0, full vitest 532/536 (3 site-app suites + one
   census fixed before landing). Queued CR-rp-same-setting-row, CR-gm-confirm-repeat; CR-outside-followups (a), (b),
   (d) parked. Not installed, not pushed (never FULL).
+- 2026-11-11 ~08:00-08:50 (coordinator-assigned s16, CODE-ONLY throughout: ROB RUN in front): bundle
+  `main-unpushed-2026-11-11.bundle` verified; owner's no-tester statement recorded (`a067f006`); CR-gm-confirm-repeat
+  landed `b3aa742a` (full vitest 533/536, the 3 site-app suites; also fixes the affordance census). CR-rp-same-setting-row
+  merged then reverted (`c66b4d25`, experiment-record-first guard 2 failed), parked on its branch; CR-outside-followups
+  (b) and the core-parking line parked unverified on their branches. Stopped on the coordinator's order after the owner
+  reported ROB RUN stutter (my vitest + cargo ran while he played): no heavy commands while a game runs. Not pushed.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
