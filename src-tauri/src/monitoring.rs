@@ -949,22 +949,58 @@ fn support_stop(outcome: SupportOutcome, code: &str, detail: &str) {
 /// helper could run first, and the start would then raise the flag and launch a helper after the
 /// user had stopped. Under one lock a stop always sees a start that has finished (or failed) and
 /// undoes it; a start never sees half a stop. A panic in either leaves the lock usable.
-fn capture_ctl() -> &'static std::sync::Mutex<()> {
+///
+/// CR-capture-last-wins: the lock is not FIFO, so with a start holding it a later stop and a later
+/// start could take it in either order, and start(pending) → stop → start could end off. The lock
+/// holds the newest request ticket applied so far; each request takes its ticket when it is
+/// invoked ([`capture_ticket`], before it reaches the blocking pool) and, under the lock, one
+/// older than the newest applied is skipped: the user's last press wins.
+fn capture_ctl() -> &'static std::sync::Mutex<u64> {
     use std::sync::{Mutex, OnceLock};
-    static CTL: OnceLock<Mutex<()>> = OnceLock::new();
-    CTL.get_or_init(|| Mutex::new(()))
+    static CTL: OnceLock<Mutex<u64>> = OnceLock::new();
+    CTL.get_or_init(|| Mutex::new(0))
 }
 
-/// Run `f` holding the capture start/stop lock.
-fn capture_serialized<T>(f: impl FnOnce() -> T) -> T {
-    let _turn = capture_ctl().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+/// The next capture request ticket, in invoke order (starts at 1).
+pub(crate) fn capture_ticket() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    NEXT.fetch_add(1, Ordering::SeqCst) + 1
+}
+
+/// Run `f` holding the capture start/stop lock unless a newer request (higher ticket) already
+/// ran; then answer `superseded` and change nothing. A panic in `f` still counts its ticket.
+fn capture_in_order<T>(ticket: u64, superseded: T, f: impl FnOnce() -> T) -> T {
+    in_order_on(capture_ctl(), ticket, superseded, f)
+}
+
+/// [`capture_in_order`] on a given lock, so tests can use their own instead of the process one.
+fn in_order_on<T>(
+    lock: &std::sync::Mutex<u64>,
+    ticket: u64,
+    superseded: T,
+    f: impl FnOnce() -> T,
+) -> T {
+    let mut newest = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if ticket < *newest {
+        return superseded;
+    }
+    *newest = ticket;
     f()
 }
 
-/// Start FPS capture. Served to the window by lib.rs `off_main::start_fps_capture`, off the main
-/// thread; same answer as before.
+/// Start FPS capture with a fresh ticket. Test-only: the window's command takes its ticket at
+/// invoke time and calls the ticketed form; lib.rs's answer-type test still checks this one.
+#[cfg(test)]
 pub(crate) fn start_fps_capture() -> Result<(), String> {
-    capture_serialized(start_fps_capture_locked)
+    start_fps_capture_ticketed(capture_ticket())
+}
+
+/// Start FPS capture as request `ticket`. Served to the window by lib.rs
+/// `off_main::start_fps_capture`, off the main thread; same answer as before. Superseded by a
+/// newer request it answers Ok: what the user pressed last already ran.
+pub(crate) fn start_fps_capture_ticketed(ticket: u64) -> Result<(), String> {
+    capture_in_order(ticket, Ok(()), start_fps_capture_locked)
 }
 
 fn start_fps_capture_locked() -> Result<(), String> {
@@ -1376,10 +1412,17 @@ pub(crate) fn uac_disabled() -> bool {
         .unwrap_or(false)
 }
 
-/// Stop FPS capture. Served by lib.rs `off_main::stop_fps_capture`; waits its turn behind a start
-/// in progress (see [`capture_serialized`]), so it always stops what that start began.
+/// Stop FPS capture with a fresh ticket (test-only, as `start_fps_capture`). The served stop waits
+/// its turn behind a start in progress (see [`capture_in_order`]), so it stops what that start began.
+#[cfg(test)]
 pub(crate) fn stop_fps_capture() {
-    capture_serialized(stop_fps_capture_locked)
+    stop_fps_capture_ticketed(capture_ticket())
+}
+
+/// Stop FPS capture as request `ticket` (see [`capture_in_order`]); a stop older than a start
+/// that already ran changes nothing.
+pub(crate) fn stop_fps_capture_ticketed(ticket: u64) {
+    capture_in_order(ticket, (), stop_fps_capture_locked)
 }
 
 fn stop_fps_capture_locked() {
@@ -1767,18 +1810,25 @@ mod capture_generation_tests {
         use std::sync::{mpsc, Arc, Mutex};
         let on = Arc::new(AtomicBool::new(false));
         let log = Arc::new(Mutex::new(Vec::<&str>::new()));
+        // Its own lock and tickets, so tests running alongside can't move them.
+        let ctl = Arc::new(Mutex::new(0u64));
+        let seq = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let ticket = {
+            let seq = seq.clone();
+            move || seq.fetch_add(1, Ordering::SeqCst) + 1
+        };
 
         // Start, then stop, one after the other: off at the end.
-        capture_serialized(|| on.store(true, Ordering::SeqCst));
-        capture_serialized(|| on.store(false, Ordering::SeqCst));
+        in_order_on(&ctl, ticket(), (), || on.store(true, Ordering::SeqCst));
+        in_order_on(&ctl, ticket(), (), || on.store(false, Ordering::SeqCst));
         assert!(!on.load(Ordering::SeqCst));
 
         // A stop issued while a start is still waiting.
         let (entered_tx, entered_rx) = mpsc::channel();
         let start = {
-            let (on, log) = (on.clone(), log.clone());
+            let (on, log, ctl, t) = (on.clone(), log.clone(), ctl.clone(), ticket());
             std::thread::spawn(move || {
-                capture_serialized(|| {
+                in_order_on(&ctl, t, (), || {
                     log.lock().unwrap().push("start-begin");
                     entered_tx.send(()).unwrap();
                     std::thread::sleep(std::time::Duration::from_millis(300)); // the old-helper wait
@@ -1789,9 +1839,9 @@ mod capture_generation_tests {
         };
         entered_rx.recv().unwrap();
         let stop = {
-            let (on, log) = (on.clone(), log.clone());
+            let (on, log, ctl, t) = (on.clone(), log.clone(), ctl.clone(), ticket());
             std::thread::spawn(move || {
-                capture_serialized(|| {
+                in_order_on(&ctl, t, (), || {
                     log.lock().unwrap().push("stop");
                     on.store(false, Ordering::SeqCst);
                 })
@@ -1803,12 +1853,49 @@ mod capture_generation_tests {
         assert!(!on.load(Ordering::SeqCst), "capture left on after a stop");
 
         // A start that panicked must not leave stop locked out.
-        let _ = std::thread::spawn(|| capture_serialized(|| panic!("start failed"))).join();
-        capture_serialized(|| on.store(false, Ordering::SeqCst));
+        let t = ticket();
+        let ctl2 = ctl.clone();
+        let _ = std::thread::spawn(move || in_order_on(&ctl2, t, (), || panic!("start failed"))).join();
+        in_order_on(&ctl, ticket(), (), || on.store(false, Ordering::SeqCst));
 
-        // The served commands take that lock. Tokens built by concat! so this test can't match itself.
+        // The served commands take the process lock in ticket order. Tokens built by concat! so
+        // this test can't match itself.
         let src = include_str!("monitoring.rs");
-        assert!(src.contains(concat!("capture_serialized(", "start_fps_capture_locked)")));
-        assert!(src.contains(concat!("capture_serialized(", "stop_fps_capture_locked)")));
+        assert!(src.contains(concat!("capture_in_order(ticket, Ok(()), ", "start_fps_capture_locked)")));
+        assert!(src.contains(concat!("capture_in_order(ticket, (), ", "stop_fps_capture_locked)")));
+        assert!(src.contains(concat!("in_order_on(capture_", "ctl(), ticket, superseded, f)")));
+    }
+
+    // CR-capture-last-wins: the lock is not FIFO. With a start holding it, a later stop and a later
+    // start may take it in either order; the user's last press must win. The requests are replayed
+    // in every acquisition order (the race's possible outcomes) on fake bodies.
+    #[test]
+    fn the_last_capture_request_wins_whatever_order_the_lock_is_taken_in() {
+        use std::sync::Mutex;
+        // `presses`: (ticket, wants on). `order`: the order the lock is acquired in.
+        let replay = |presses: &[(u64, bool)], order: &[usize]| -> bool {
+            let ctl = Mutex::new(0u64);
+            let mut on = false;
+            for &i in order {
+                let (t, want) = presses[i];
+                in_order_on(&ctl, t, (), || on = want);
+            }
+            on
+        };
+        let start_stop_start = [(1, true), (2, false), (3, true)];
+        for order in [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] {
+            assert!(replay(&start_stop_start, &order), "start → stop → start ended off (lock order {order:?})");
+        }
+        let start_stop = [(1, true), (2, false)];
+        for order in [[0, 1], [1, 0]] {
+            assert!(!replay(&start_stop, &order), "start → stop ended on (lock order {order:?})");
+        }
+        // A superseded request answers what it was given and runs nothing.
+        let ctl = Mutex::new(0u64);
+        assert_eq!(in_order_on(&ctl, 5, "superseded", || "ran"), "ran");
+        assert_eq!(in_order_on(&ctl, 4, "superseded", || "ran"), "superseded");
+        // Tickets rise in the order they are taken.
+        let (a, b) = (capture_ticket(), capture_ticket());
+        assert!(b > a);
     }
 }

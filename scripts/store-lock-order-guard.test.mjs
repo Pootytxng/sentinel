@@ -758,9 +758,11 @@ const LOCK_CENSUS = {
     class: "out",
     why: "the sysinfo handle used for memory-pressure reads; a probe handle, not a store",
   },
-  "monitoring::CTL: OnceLock<Mutex<()>>": {
+  "monitoring::CTL: OnceLock<Mutex<u64>>": {
     class: "out",
     why:
+      "CR-capture-last-wins: it now holds the newest request ticket applied (an in-memory number), so an older " +
+      "request taking it after a newer one is skipped. " +
       "CR-capture-async: makes FPS capture start and stop take turns (held across start's up-to-5 s wait for " +
       "an old helper). It guards no store: inside it start and stop only create or delete the capture's own " +
       "throwaway heartbeat and sample files (fps.alive, fps.json) and set in-memory flags; the ledger read " +

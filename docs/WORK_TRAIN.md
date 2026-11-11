@@ -143,7 +143,15 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       30 s / 2 min (`CARE_READ_RETRY_MS`; reset by a good read, cleared on unmount), then "…it'll check again when you
       open another page" (`app.careStore.readStopped`, en + zh-CN). Unmount clears every chain and drops late answers;
       a saved `dismissed:X` settles a spent `opened:X`. 5 tests fail on the old code. TS only, no review required.
-- [ ] **CR-capture-last-wins** (same review) `capture_serialized` is not FIFO, so start(pending) → stop → start can end off; stamp each request with a sequence at invoke time and skip one older than the newest applied.
+- [x] **CR-capture-last-wins** (same review) `capture_serialized` is not FIFO, so start(pending) → stop → start can end off; stamp each request with a sequence at invoke time and skip one older than the newest applied.
+      Done `a7aeee23`, `f37f550a` (2026-11-11, CODE-ONLY, not installed): lib.rs `off_main` takes a ticket
+      (`capture_ticket`) before the blocking pool; monitoring.rs `capture_in_order` keeps the newest applied ticket in
+      the lock (`CTL: Mutex<u64>`, LOCK_CENSUS updated, still "out") and skips an older request (a skipped start
+      answers Ok). Replayed in all six lock orders: start→stop→start ends on, start→stop ends off; fails without the
+      check. UI reach: narrow; toggles await start and gate stop on `fps.active`, but the journey's abort fires a stop
+      while its own start may still be pending, and another room could then start. cargo 1829/0 (24 ignored), clippy
+      clean. Review (sonnet) APPROVE-WITH-NITS, SHOULD-FIX taken as a code note: the ticket is taken when the command
+      body first runs, so two invokes in the same instant on different runtime workers can still swap.
 
 ### Next — small visible slices (refill 2026-11-03: CR-1102-left's fixable lines + Roadmap Phase 9)
 - [x] **CR-live-round** Live's session strip and the debrief floor a session's length (3h 28m) where History and
@@ -315,9 +323,7 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       bodies; both are async in lib.rs `off_main` on the blocking pool; names, arguments, answers unchanged. Test
       (start→stop, stop during a start's wait runs after it and leaves capture off, panicked start doesn't lock stop
       out) proven failing without the lock. cargo 1810/0, clippy clean. Review r1 APPROVE-WITH-NITS (MUST-FIX
-      census entry taken). Residual (reviewer: acceptable): two invokes within microseconds may take the lock in
-      either order; every caller awaits start and gates stop on `fps.active`/busy. Cheap close if ever needed: an
-      IPC-order ticket taken in the async wrapper. Test exes have no app manifest, so the type-parity check names
+      census entry taken). The lock-order gap is closed by CR-capture-last-wins. Test exes have no app manifest, so the type-parity check names
       the capture pair by item type (a fn pointer links the helper launch in and the exe won't load).
 - [x] **CR-care-silent** A Care state read or write failure gets a support event and one visible line ("Compy couldn't
       save this; it'll try again"), never silence. Rust + TS; test a failed write shows the line. Done `e77fba1e`,
