@@ -59,3 +59,22 @@ export function bannerAfterPaneClose(
 export function contractLeftByFailedStart(slot: SessionSlot): GamingSessionFile | null {
   return slot.route === "recover" ? slot.session : null;
 }
+
+/** CR-1102-left owner call (delegated 2026-11-10): the update refusal's Recover asks App to show its
+ *  own recovery banner for this contract (`detail` is the session). App's banner is where the
+ *  restore is reviewed and confirmed, as at launch; this event changes nothing on the PC. */
+export const GAMING_RECOVERY_REQUEST_EVENT = "compy:gaming-recovery-request";
+
+/** What the update refusal's Recover found: a contract App's banner can restore from (shown there),
+ *  this run's live session (turn it off in Gaming Mode), or nothing Compy can read to restore from
+ *  (the named file stays, and so does the refusal). Read-only. */
+export type RecoverFromRefusal = "shown" | "live" | "unreadable";
+
+export async function recoverFromUpdateRefusal(): Promise<RecoverFromRefusal> {
+  const slot = await readSessionSlot();
+  if (slot.route === "recover") {
+    window.dispatchEvent(new CustomEvent(GAMING_RECOVERY_REQUEST_EVENT, { detail: slot.session }));
+    return "shown";
+  }
+  return slot.route === "resume" ? "live" : "unreadable";
+}

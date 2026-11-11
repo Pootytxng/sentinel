@@ -130,7 +130,16 @@
     "updateNow": "Update now",
     "later": "Later",
     "fineprint": "Signature-verified before install · Compy restarts itself",
-    "whatsNew": "What's new"
+    "whatsNew": "What's new",
+    "blocked": "finish Gaming Mode before updating",
+    "blockedAriaLabel": "Why the update is held back",
+    "recover": "Recover",
+    "tryAgain": "Try again",
+    "recoverNote": {
+      "shown": "Compy's Gaming Mode restore is open at the top of the window (or on the Gaming Mode card, when that page is open). Review it there, then try the update again.",
+      "live": "Gaming Mode is on right now. Turn it off in Gaming Mode, then try the update again.",
+      "unreadable": "Compy can't read a Gaming Mode session to restore from that file, so it leaves the file as it is and keeps holding the update."
+    }
   },
   "walkthrough": {
     "whichCard": "Which card?",

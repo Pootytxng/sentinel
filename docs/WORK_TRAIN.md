@@ -72,8 +72,6 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
     does when another change confounds it.*
   - After the one-time consent, should newly ticked UAC tiers and service suspends ask once more before they
     start? *Yes: one confirm naming only the newly added items.*
-  - A leftover `gaming-session` temp file blocks update and restart until removed: keep refusing, or clear a temp
-    older than the live contract? *Keep refusing, but name the file and offer Recover in the refusal.*
 - **CR-unconfirmed-remedy** (2026-11-10 19:14): every Trial start is refused because Compy's two Ultimate-plan rows read
   off (your active plan is "Synez Power Plan"); Compy's suggested undo would set Balanced. Keep Synez (Compy then needs a
   code fix to stop tracking those rows), or let Compy put Balanced back (~1 min) so P4/P5 can run? *Keep Synez; fix the
@@ -130,7 +128,11 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       Owner calls taken (owner delegated 2026-11-10; coordinator took the recommendation): a drift notice whose check
       now reads unknown stays, worded "last seen changed; Compy can't read it now" — done `8d855c05` (2026-11-11,
       CODE-ONLY, not installed; drift.rs re-emits it with `unreadable_now`, state unchanged; Home's count reads
-      "changed since they were last good"; cargo 1830/0, clippy clean; sonnet APPROVE-WITH-NITS).
+      "changed since they were last good"; cargo 1830/0, clippy clean; sonnet APPROVE-WITH-NITS). A leftover
+      `gaming-session` temp file keeps refusing update and restart, but the refusal names the file and its folder and
+      offers Recover — done `98e9f129` (2026-11-11, CODE-ONLY, not installed; `pending_contract_files`, same fail-closed
+      check; Recover shows App's existing recovery banner, or says Compy can't read a session from that file; no new
+      command; sonnet APPROVE-WITH-NITS, SHOULD-FIX taken).
 - [x] **CR-vbs-row-truth** (whole-range review 2026-11-10, SHOULD-FIX) Diagnostics "Memory Integrity / VBS turned on" reads a definite "No" when the registry values are absent (VBS on by default/policy), beside "VBS running now: Running"; say "Not set in registry" instead. Read-only.
       Done `13f46833`, `d8ab513d` (2026-11-11, CODE-ONLY, not installed): the row reads a separate tri-state
       `memory_integrity_or_vbs_configured` (lib.rs; local DeviceGuard keys plus the Group Policy keys, a written policy

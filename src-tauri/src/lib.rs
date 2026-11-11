@@ -870,6 +870,51 @@ fn gaming_mode_enabled() -> bool {
 // contract check. Poisoning fails closed rather than weakening the rollback law.
 static UPDATE_RESTART_BARRIER: std::sync::Mutex<bool> = std::sync::Mutex::new(false);
 
+/// CR-1102-left owner call (delegated 2026-11-10): the update stays refused while any Gaming Mode
+/// contract file is on disk, and the refusal names each file and its folder, so a leftover temp file
+/// is something the user can see rather than an unexplained block. The opening sentence is unchanged.
+fn update_refusal_words(found: &[String], dir: &std::path::Path) -> String {
+    format!(
+        "Finish Gaming Mode or recover its pending changes before updating Compy. Compy found {} in {}.",
+        found.join(", "),
+        dir.display()
+    )
+}
+
+/// The update/restart contract check, in words: `Some(refusal)` while any contract file is on disk,
+/// `None` when the folder holds none, `Err` when it can't be read (fail closed, as before).
+fn update_refusal() -> Result<Option<String>, String> {
+    let found = gaming_session::pending_contract_files()?;
+    Ok((!found.is_empty()).then(|| update_refusal_words(&found, &gaming_session::session_data_dir())))
+}
+
+#[cfg(test)]
+mod update_refusal_tests {
+    #[test]
+    fn a_leftover_temp_file_still_refuses_and_the_refusal_names_it_and_its_folder() {
+        // Review SHOULD-FIX: the check's own words, wired to what it found (no support log written).
+        let dir = std::env::temp_dir().join(format!("compy-update-refusal-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
+        assert_eq!(super::update_refusal().unwrap(), None);
+        std::fs::write(dir.join("gaming-session.json.tmp"), "x").unwrap();
+        let words = super::update_refusal().unwrap().expect("a leftover temp file still holds the update");
+        assert!(words.contains("gaming-session.json.tmp"), "{words}");
+        assert!(words.contains(&dir.display().to_string()), "{words}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_refusal_keeps_its_first_sentence_and_names_each_file_and_its_folder() {
+        let dir = std::path::Path::new(r"C:\Users\x\AppData\Roaming\Compy");
+        let words = super::update_refusal_words(&["gaming-session.json.tmp".into()], dir);
+        assert!(words.starts_with("Finish Gaming Mode or recover its pending changes before updating Compy."), "{words}");
+        assert!(words.contains("gaming-session.json.tmp"), "{words}");
+        assert!(words.contains(r"C:\Users\x\AppData\Roaming\Compy"), "{words}");
+    }
+}
+
 #[tauri::command]
 fn begin_update_restart() -> Result<(), String> {
     // Support evidence (spec §12): "I clicked Update and it just refused" is a report support
@@ -891,7 +936,7 @@ fn begin_update_restart() -> Result<(), String> {
             return Err("Update safety barrier is unavailable; restart/update refused.".into());
         }
     };
-    if gaming_session::has_pending_contract()? {
+    if let Some(words) = update_refusal()? {
         support_evidence::record(
             support_evidence::EventKind::Lifecycle,
             "update_restart",
@@ -899,7 +944,7 @@ fn begin_update_restart() -> Result<(), String> {
             support_evidence::Outcome::Refused,
             "a Gaming Mode session still has changes to restore, so the update was held back",
         );
-        return Err("Finish Gaming Mode or recover its pending changes before updating Compy.".into());
+        return Err(words);
     }
     *barrier = true;
     support_evidence::record(
