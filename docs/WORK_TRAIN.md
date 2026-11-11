@@ -605,9 +605,13 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       r2 APPROVE; sonnet r1 APPROVE. cargo 1823/0, clippy clean. Does not record the applied Ultimate GUID, so
       CR-ultimate-identity stays open (on a localized Windows Compy's own duplicate could be offered). Follow-ups:
       CR-outside-followups.
-- [ ] **CR-refuse-early** Optimize my game asked for two ~20 min as-is sessions and only refused at "Test anyway"
+- [x] **CR-refuse-early** Optimize my game asked for two ~20 min as-is sessions and only refused at "Test anyway"
       for a reason known before the first session (the unconfirmed change above). Check the start precondition when the
       button is pressed and say so then. Evidence `_train\view-1110d\journey.log`, `p5-05-trial-start.json`.
+      Done `5844c368` (`5a12ac1e`, `996bc3e1`; 2026-11-10, CODE-ONLY, not installed): the journey and the real-play tap
+      ask `trial_start_precheck` (read-only, blocking pool, the start's own count and words) before any as-is session
+      and say the refusal with the same remedies; an unreadable ledger stops there too. The start keeps its check as the
+      second gate. Review (sonnet) APPROVE; cargo 1826/0, clippy clean; the TS tests fail on the old GuidedJourney.tsx.
 - [ ] **CR-outside-followups** (review SHOULD-FIX of CR-unconfirmed-remedy, Rust + TS) (a) stamp the active plan GUID on
       each session or the Trial record, so a plan switched away and back between start and conclude is caught; (b) Test →
       Applied & history shows a recorded row as "changed outside Compy" (`types.ts` field + a note) instead of an active
@@ -1023,17 +1027,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-03 ~19:43 to 11-04 ~02:20 (interactive from Claude HQ, resumed after the usage limit; owner: "continue from where u
-  left off", then 01:47 "can you complete the last task"): the day's `main` pushed through the gate at 20:32 (`8be87e12..6958e512`)
-  after two red runs it was right to refuse: the debrief layout guard lacked CR-cmp-wait's `get_armed_comparison` (`d3b126c9`) and
-  `useScan` let a late older scan overwrite a newer one (flaky 1 in 8; fixed, test fails on old code, `6958e512`); a third red was a
-  race with the 19:43 session committing mid-gate. Desk self-review round 2 on `71f1df93` PASS 12 of 12. Then, on the owner's ask,
-  desk build `6958e512` built and installed 01:50 (`ship-reinstall.ps1 -VerifyRuntime -ExpectedCommit`, proof `6958e512 · release`,
-  installer `3490A339…`), desk self-review PASS 12 of 12 (CR-trial-zero-base's branch unreachable on his records; no row regressed).
-  RELEASE_STATE row re-stamped; pushed with this line through the gate. Lane branch deleted locally and on origin. Open for the train:
-  CR-gpu-picker, CR-primary-gpu, CR-stopped-service, CR-localized-reads. Disclosed: the 13:26 force-close of Compy by the round-1
-  reviewer ended that live PBZ measurement; `fps.alive` stayed absent while the same PBZ process kept running, so the running Trial
-  exp:6 collected nothing since — it resumes on the game's next launch.
 - 2026-11-04 ~03:12 to ~04:40 (interactive from Claude HQ; owner 03:12: "yes please complete all of those required task you
   mentioned before"): the #678 reminder deleted (03:14, on his go-ahead); the four CR slices of the PM refill landed from
   `claude/train-hq-1104` — CR-gpu-picker `7e69760c`, CR-primary-gpu `0f0cb0bb`, CR-stopped-service `c552354c`,
@@ -1122,6 +1115,11 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   journey baselines uneven at the cap, Trial start refused (CR-unconfirmed-remedy, CR-refuse-early queued). P6 owner half
   re-checked for ROB RUN. Nothing ticked. Docs only; evidence `_train\view-1110d\`. Not pushed (preflight CODE-ONLY).
 
+- 2026-11-10 ~19:16-20:10 (coordinator-assigned, CODE-ONLY throughout, owner in ROB RUN): CR-unconfirmed-remedy landed
+  `12a791d0` (coordinator call delegated by the owner: keep his own plan; ledger-only "changed outside Compy" record,
+  schema 1, nothing on Windows changes; opus r1 MUST-FIX taken, r2 APPROVE; sonnet APPROVE) and CR-refuse-early `5844c368`
+  (journey and real play refuse before any as-is session; sonnet APPROVE). cargo 1826/0, clippy clean, tsc clean. Queued
+  CR-outside-followups; CR-ultimate-identity stays open. Not installed, not pushed (main 10 ahead of GitHub with this line).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
