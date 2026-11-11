@@ -2198,28 +2198,18 @@ pub(crate) struct AppliedChangesSummary {
 /// disk is the only evidence that the silence is a loss (`set_aside` = [`ledger_was_quarantined`],
 /// as `experiment::ledger_for_one_change_checks` and `intelligence::gather` read it). Adds no
 /// write of its own and no retry; the one load it is handed may have set a damaged ledger aside.
-/// Production reads it through [`applied_changes_summary_checked`] (the readiness roll-up); this
-/// plain form, with [`summarize_history`], is what the tests drive.
-#[cfg(test)]
+/// Its one production caller is [`applied_changes_summary_checked`] (Game Readiness), so it rolls
+/// up through [`summarize_for_readiness`]: with no usable "changed outside Compy" record that is
+/// [`summarize_history`] exactly, and no power-plan read is taken.
 pub(crate) fn checked_summary(
     loaded: Result<Vec<AppliedChange>, String>,
     set_aside: bool,
-) -> Result<AppliedChangesSummary, String> {
-    checked_summary_with(loaded, set_aside, summarize_history)
-}
-
-/// [`checked_summary`] with the roll-up `summarize` chosen by the caller (the readiness one reads
-/// the live power plan too). Same two losses, same words.
-fn checked_summary_with(
-    loaded: Result<Vec<AppliedChange>, String>,
-    set_aside: bool,
-    summarize: impl FnOnce(&[AppliedChange]) -> AppliedChangesSummary,
 ) -> Result<AppliedChangesSummary, String> {
     let history = loaded?;
     if set_aside {
         return Err("Compy's change history was damaged earlier and set aside, so part of it is missing".into());
     }
-    Ok(summarize(&history))
+    Ok(summarize_for_readiness(&history))
 }
 
 /// The change counts a session records when it begins (453-f1), all from one ledger read.
@@ -2285,7 +2275,7 @@ pub(crate) fn session_start_counts(
 /// never summarized as zeros, for a surface that must show "can't read" rather than "0"
 /// (Game Readiness, #669). Adds no write of its own.
 pub(crate) fn applied_changes_summary_checked() -> Result<AppliedChangesSummary, String> {
-    checked_summary_with(load_history(), ledger_was_quarantined(), summarize_for_readiness)
+    checked_summary(load_history(), ledger_was_quarantined())
 }
 
 /// CR-outside-followups (b): [`summarize_history`] for Game Readiness, where a change the user
@@ -2300,7 +2290,7 @@ fn summarize_for_readiness(history: &[AppliedChange]) -> AppliedChangesSummary {
         .map(|c| (c.status != "rolled_back").then(|| check_row_state(c, &reads)))
         .collect();
     let observed = kept_outside_observed(history);
-    summarize_checked_keeping(history, &checks, |c| recorded_and_holding(c, observed.as_ref()))
+    summarize_checked(history, &checks, |c| recorded_and_holding(c, observed.as_ref()))
 }
 
 /// The one active-plan read a "kept outside Compy" decision is made against: taken only when an
@@ -2399,18 +2389,14 @@ pub(crate) fn summarize_history(history: &[AppliedChange]) -> AppliedChangesSumm
         .iter()
         .map(|c| (c.status != "rolled_back").then(|| check_row_state(c, &reads)))
         .collect();
-    summarize_checked(history, &checks)
+    summarize_checked(history, &checks, |_| false)
 }
 
 /// [`summarize_history`] with the live checks already read, one per row (`None` for a rolled-back
-/// row). Pure, so the shared parity fixture can drive it.
-fn summarize_checked(history: &[AppliedChange], checks: &[Option<ActiveCheck>]) -> AppliedChangesSummary {
-    summarize_checked_keeping(history, checks, |_| false)
-}
-
-/// [`summarize_checked`], where a newest row that reads off and for which `kept_outside` says yes
-/// counts as kept outside Compy instead of drifted. Pure.
-fn summarize_checked_keeping(
+/// row), where a newest row that reads off and for which `kept_outside` says yes counts as kept
+/// outside Compy instead of drifted (`|_| false` keeps nothing: the session/Trial roll-up). Pure, so
+/// the shared parity fixture can drive it.
+fn summarize_checked(
     history: &[AppliedChange],
     checks: &[Option<ActiveCheck>],
     kept_outside: impl Fn(&AppliedChange) -> bool,
@@ -4915,10 +4901,10 @@ mod history_tests {
             record("gamma", "rolled_back"),
         ];
         let on = Some(ActiveCheck::On);
-        let s = summarize_checked(&rows, &[on, None, on, on, None]);
+        let s = summarize_checked(&rows, &[on, None, on, on, None], |_| false);
         assert_eq!(s.active, 2);
         assert_eq!(s.active_recs, ["alpha", "beta"]);
-        assert_eq!(summarize_checked(&[], &[]).active, 0);
+        assert_eq!(summarize_checked(&[], &[], |_| false).active, 0);
     }
 
     fn parity_check(v: &serde_json::Value) -> Option<ActiveCheck> {
@@ -4952,7 +4938,7 @@ mod history_tests {
             })
             .collect();
         let checks: Vec<Option<ActiveCheck>> = rows.iter().map(|r| parity_check(&r["active_check"])).collect();
-        let summary = summarize_checked(&history, &checks);
+        let summary = summarize_checked(&history, &checks, |_| false);
         let want = |k: &str| fx["expected"][k].as_u64().expect("expected count") as usize;
         assert_eq!(summary.active, want("active"), "the session count is the shared active count");
         assert_eq!(summary.cant_confirm, want("cantConfirm"), "can't-confirm is counted apart, the shared count");
@@ -4979,7 +4965,7 @@ mod history_tests {
         ];
         let on = Some(ActiveCheck::On);
         let checks = [on, Some(ActiveCheck::Off), on, None, Some(ActiveCheck::Unreadable)];
-        let s = summarize_checked(&history, &checks);
+        let s = summarize_checked(&history, &checks, |_| false);
         assert_eq!((s.active, s.cant_confirm), (2, 1));
     }
 
@@ -5832,17 +5818,17 @@ mod changed_outside_tests {
         // CR-outside-followups (b). Both rows read off (Synez is active, not Ultimate).
         let off = Some(ActiveCheck::Off);
         let mut history = rows();
-        let unrecorded = summarize_checked(&history, &[off, off]);
+        let unrecorded = summarize_checked(&history, &[off, off], |_| false);
         assert_eq!((unrecorded.externally_reverted, unrecorded.kept_outside), (1, 0));
         commit_changed_outside(&mut history, "power-ultimate", Some(&synez()), "2026-11-10T20:00:00+00:00", &|_| Ok(()))
             .expect("records");
         let holds = |c: &AppliedChange| recorded_and_holding(c, Some(&synez()));
-        let kept = summarize_checked_keeping(&history, &[off, off], holds);
+        let kept = summarize_checked(&history, &[off, off], holds);
         assert_eq!((kept.externally_reverted, kept.kept_outside), (0, 1));
         assert!(kept.drifted_titles.is_empty());
         assert_eq!(kept.kept_outside_titles, ["Switch to the Ultimate Performance power plan"]);
         // Every count a Trial or a session reads is the same either way.
-        let plain = summarize_checked(&history, &[off, off]);
+        let plain = summarize_checked(&history, &[off, off], |_| false);
         assert_eq!(
             (plain.active, plain.cant_confirm, plain.legacy_active, &plain.active_recs, plain.total, plain.rolled_back),
             (kept.active, kept.cant_confirm, kept.legacy_active, &kept.active_recs, kept.total, kept.rolled_back)
@@ -5850,10 +5836,10 @@ mod changed_outside_tests {
         assert_eq!((plain.externally_reverted, plain.kept_outside), (1, 0), "only readiness reads the live plan");
         // The plan switched again (Balanced now): the record no longer holds, so it is a drift again.
         let balanced = plan(BALANCED, "Balanced", crate::PowerPlanClass::Balanced);
-        let moved = summarize_checked_keeping(&history, &[off, off], |c| recorded_and_holding(c, Some(&balanced)));
+        let moved = summarize_checked(&history, &[off, off], |c| recorded_and_holding(c, Some(&balanced)));
         assert_eq!((moved.externally_reverted, moved.kept_outside), (1, 0));
         // An unreadable plan keeps nothing.
-        let unread = summarize_checked_keeping(&history, &[off, off], |c| recorded_and_holding(c, None));
+        let unread = summarize_checked(&history, &[off, off], |c| recorded_and_holding(c, None));
         assert_eq!((unread.externally_reverted, unread.kept_outside), (1, 0));
     }
 
@@ -5878,7 +5864,7 @@ mod changed_outside_tests {
         assert_eq!(reads.get(), 1);
         // And Game Readiness's roll-up is the one that uses it; nothing else does.
         let src = include_str!("history.rs");
-        let body = src.split_once("pub(crate) fn applied_changes_summary_checked()").map(|(_, r)| r).expect("fn");
+        let body = src.split_once("pub(crate) fn checked_summary(").map(|(_, r)| r).expect("fn");
         let body = &body[..body.find("\n}\n").expect("end")];
         assert!(body.contains("summarize_for_readiness"), "{body}");
         let summarize = src.split_once("pub(crate) fn summarize_history(").map(|(_, r)| r).expect("fn");
