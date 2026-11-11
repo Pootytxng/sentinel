@@ -169,6 +169,9 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       running: `npx vitest run src/experiment-record-first-guard.test.ts` in the branch worktree, fix, then the full
       vitest, cargo test, clippy, merge. Follow-ups found: benchmark tweak trial holding a setting; Gaming Mode spanning a
       Trial restore (opus r1).
+      2026-11-11 s17 (read-only, ROB RUN in front): the new wrappers sit above `start_experiment`, so the guard's
+      `fnBody(start_experiment)` slices look unaffected; the 2 failing assertions are still unidentified. Running the
+      single file needs a no-game window.
 - [x] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
       the consent modal, focus jumps to Enable (`autoFocus`) and key repeat presses it: either confirm can pass on one
       held key. Ignore repeated key presses on Enable, or focus Cancel first. TS only.
@@ -1273,6 +1276,8 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   merged then reverted (`c66b4d25`, experiment-record-first guard 2 failed), parked on its branch; CR-outside-followups
   (b) and the core-parking line parked unverified on their branches. Stopped on the coordinator's order after the owner
   reported ROB RUN stutter (my vitest + cargo ran while he played): no heavy commands while a game runs. Not pushed.
+- 2026-11-11 s17 (scheduled, CODE-ONLY, ROB RUN in front): no heavy commands per the s16 order; read-only diagnosis
+  of the CR-rp guard failure (note under that item); 0 items landed; not pushed (main 61 ahead).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
