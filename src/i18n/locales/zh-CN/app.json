@@ -28,6 +28,12 @@
     "rollbackTitle": "回滚「{{title}}」？",
     "rollbackDest": "将恢复为 {{label}}。",
     "rollbackBody": "Compy 会把这项设置恢复到之前的状态。{{dest}}",
+    "rollbackKeptOutside": "你选择保留在 Compy 之外设置的“{{kept}}”。回滚会把电源计划切换为“{{saved}}”，即 Compy 更改之前保存的计划，不再是“{{kept}}”。",
+    "rollbackKeptOutsideSame": "你选择保留在 Compy 之外设置的“{{kept}}”。回滚会把电源计划切换为 Compy 更改之前保存的计划，它也是“{{kept}}”，所以你的计划保持不变。",
+    "rollbackKeptOutsideUnnamed": "你选择保留在 Compy 之外设置的“{{kept}}”。回滚会把电源计划切换为 Compy 更改之前保存的计划（Compy 没有保存它的名称），不再是“{{kept}}”。",
+    "planBalanced": "平衡",
+    "planHighPerformance": "高性能",
+    "planUltimate": "卓越性能",
     "rollback": "回滚"
   },
   "errors": {
