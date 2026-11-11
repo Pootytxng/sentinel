@@ -3866,7 +3866,9 @@ pub(crate) fn real_play_read<'s>(
 /// Pure (P5-realplay): what concluding `read` records before the conclude's own checks
 /// (`with_unverified_changes`, then `guard_target_at_conclude`), or `None` while Compy is still
 /// collecting. A decided look is its verdict, never above Medium, and never kept once the Trial's own
-/// change was put back in Test → Applied & history ([`put_back_before_conclude`]). A Trial stopped with
+/// change was put back in Test → Applied & history ([`put_back_before_conclude`]), nor once another
+/// Compy change moved or a permanent condition changed (`confounded`, restored; CR-1102-left owner
+/// call a, [`confounded_by_conditions`]). A Trial stopped with
 /// fewer than `realplay::MIN_SESSIONS` counted ends unjudged: `confounded` through [`with_compy_state`]
 /// when another Compy change moved, or [`with_comparability`] when a driver, Windows or game build
 /// changed (a change that reads off turns `confounded` at the target check); `insufficient-evidence`
@@ -3877,6 +3879,17 @@ pub(crate) fn real_play_outcome(read: &RealPlayRead<'_>) -> Option<ConcludeOutco
         let decided = ConcludeOutcome { confidence: outcome.confidence.min(Confidence::Medium), ..outcome.clone() };
         return Some(match read.arm.stop {
             Some(Stop::PutBackInHistory) => put_back_before_conclude(decided, look),
+            // CR-1102-left owner call (a), delegated 2026-11-10: a look that decided before another
+            // Compy change moved, or before a permanent condition changed, is not kept. It is
+            // folded exactly as a two-session Trial's confound is: `confounded`, keep false, so the
+            // shared restore in `finish_conclude` puts the change back.
+            // Review r1 (sonnet) SHOULD-FIX: `keep` is forced off after the fold too, so an early
+            // return inside it can never leave this stop keeping.
+            Some(Stop::OtherChange) => ConcludeOutcome {
+                keep: false,
+                ..with_compy_state(decided, Some("another Compy change was applied or undone during the test".into()))
+            },
+            Some(Stop::Conditions) => confounded_by_conditions(decided, read.arm.changed.as_ref().map(|(_, p)| p)),
             _ => decided,
         });
     }
@@ -3914,6 +3927,30 @@ pub(crate) fn real_play_outcome(read: &RealPlayRead<'_>) -> Option<ConcludeOutco
         },
         _ => base,
     })
+}
+
+/// CR-1102-left owner call (a): a decided look on a Trial stopped because a permanent condition
+/// changed is confounded in the shape of the two-session fold ([`with_comparability`]): verdict
+/// `confounded`, keep false, the same stop reason, Low confidence, so the shared restore runs and a
+/// `Conditions` stop never keeps. Its own note (review r1/r2, opus): it names what changed when the
+/// stop carries it, and doesn't claim the counted sessions differed (they matched the reference).
+fn confounded_by_conditions(decided: ConcludeOutcome, pairing: Option<&SessionComparability>) -> ConcludeOutcome {
+    let what = pairing
+        .map(|p| p.changed_context.join("; "))
+        .filter(|w| !w.is_empty())
+        .map(|w| format!(" ({w})"))
+        .unwrap_or_default();
+    ConcludeOutcome {
+        verdict: "confounded".into(),
+        keep: false,
+        stop_reason: Some("conditions-changed-between-sessions".into()),
+        confidence: Confidence::Low,
+        note: format!(
+            "The PC's conditions changed during the test{what}, so the result can't be pinned on this setting. \
+             Compy restored it; start a new test to measure it under the new conditions."
+        ),
+        ..decided
+    }
 }
 
 /// A decided look whose own change was put back in Test → Applied & history before the conclude
@@ -8085,6 +8122,50 @@ mod experiment_tests {
         let (stop, o) = outcome(&three, &rp_ledger(), Some(true), rp_now());
         let o = o.unwrap();
         assert_eq!((stop, o.verdict.as_str(), o.keep, o.confidence), (None, "improved", true, Confidence::Medium));
+    }
+
+    #[test]
+    fn a_decided_real_play_look_stopped_by_another_change_or_a_condition_puts_the_change_back() {
+        // CR-1102-left owner call (a), delegated 2026-11-10: put it back, as a Trial does when another
+        // change confounds it. Before, a look that decided (Likely better on three counted sessions)
+        // was kept even though another Compy change moved, or the driver changed, after them.
+        use crate::realplay::{Judgement, RealPlayStop};
+        let rec = rp_running();
+        let read_of = |sessions: &[SessionSummary], ledger: &[LedgerEntryRef<'_>]| {
+            let read = real_play_read(&rec, sessions, ledger, Some(true), rp_now()).unwrap();
+            let decided = matches!(read.judgement, Judgement::Decided { .. });
+            (read.arm.stop, decided, real_play_outcome(&read).map(|o| guard_target_at_conclude(o, Some(true))))
+        };
+        let three = rp_store(&[168.0, 170.0, 169.0]);
+        // Nothing moved: Likely better, kept (unchanged).
+        let (stop, decided, o) = read_of(&three, &rp_ledger());
+        assert_eq!((stop, decided, o.unwrap().keep), (None, true, true));
+        // Another Compy change after the three counted sessions: decided, but confounded and put back.
+        let mut moved = rp_ledger();
+        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T20:00:00+00:00", applied: true, rolled_back_at: None, outside_recorded_at: None });
+        let (stop, decided, o) = read_of(&three, &moved);
+        let o = o.unwrap();
+        assert_eq!((stop, decided), (Some(RealPlayStop::OtherChange), true));
+        assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("confounded", false, Some("other-compy-change-during-trial")));
+        assert_eq!(o.confidence, Confidence::Low);
+        // A driver update on a later session: decided on the three before it, but confounded and put back.
+        let mut updated = rp_store(&[168.0, 170.0, 169.0, 169.0]);
+        let last = updated.len() - 1;
+        updated[last].hw_fingerprint.as_mut().unwrap().gpu_driver = "25.9.1".into();
+        let (stop, decided, o) = read_of(&updated, &rp_ledger());
+        let o = o.unwrap();
+        assert_eq!((stop, decided), (Some(RealPlayStop::Conditions), true));
+        assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("confounded", false, Some("conditions-changed-between-sessions")));
+        assert_eq!(o.confidence, Confidence::Low);
+        assert!(o.note.contains("GPU driver") && o.note.contains("changed during the test"), "{}", o.note);
+        // The conclude's later checks only ever take a keep away.
+        for live in [Some(false), None] {
+            assert!(!guard_target_at_conclude(with_unverified_changes(o.clone(), 1), live).keep);
+        }
+        // With no pairing on the stop, the fold still never keeps.
+        let kept = ConcludeOutcome { verdict: "improved".into(), keep: true, delta_low1_pct: 12.0, stop_reason: None, confidence: Confidence::Medium, note: "n".into() };
+        let o = confounded_by_conditions(kept, None);
+        assert_eq!((o.verdict.as_str(), o.keep, o.delta_low1_pct), ("confounded", false, 12.0));
     }
 
     #[test]

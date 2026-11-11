@@ -150,10 +150,13 @@ describe("P5-realplay: what the progress read says", () => {
       const v = realPlayView(RUNNING, progress({ phase: "stopped", stop }), t, "en");
       expect(v.status, stop).toBe(line);
       expect(v.action, stop).toBe("close");
+      // CR-1102-left owner call (a): another change or a changed condition always puts it back.
       expect(v.closeHow, stop).toBe(
         stop === "put-back-in-history"
           ? "Closing records what the sessions Compy counted show, and keeps nothing, since HAGS was already put back."
-          : "Closing judges the sessions Compy counted. Unless they show HAGS likely better, Compy then writes the setting back exactly as it was before the test, even if it was changed outside Compy since.",
+          : stop === "other-change" || stop === "conditions"
+            ? "Closing records what the sessions Compy counted show, keeps nothing, and writes HAGS back exactly as it was before the test, since something else changed during it."
+            : "Closing judges the sessions Compy counted. Unless they show HAGS likely better, Compy then writes the setting back exactly as it was before the test, even if it was changed outside Compy since.",
       );
     }
   });
@@ -202,13 +205,17 @@ describe("P5-realplay: what the progress read says", () => {
         else expect(v.putBackHow).toBe(t("lab.experimentBench.journey.realPlay.putBackHow"));
         // Closing a test put back in history keeps nothing and writes nothing (experiment.rs
         // put_back_before_conclude, then a restore that meets "already rolled back"), so it never says
-        // "unless they show it likely better"; every other stop's close can still keep a Likely better.
+        // "unless they show it likely better"; another change or a changed condition always puts it back
+        // (CR-1102-left owner call a); every other stop's close can still keep a Likely better.
+        const confounded = stop === "other-change" || stop === "conditions";
         expect(v.closeHow).toBe(
           stop === "put-back-in-history"
             ? t("lab.experimentBench.journey.realPlay.closeHowPutBack", { change: "HAGS" })
-            : t("lab.experimentBench.journey.realPlay.closeHow", { change: "HAGS" }),
+            : confounded
+              ? t("lab.experimentBench.journey.realPlay.closeHowConfounded", { change: "HAGS" })
+              : t("lab.experimentBench.journey.realPlay.closeHow", { change: "HAGS" }),
         );
-        if (stop === "put-back-in-history") expect(v.closeHow).not.toMatch(/likely better|较可能更好/);
+        if (stop === "put-back-in-history" || confounded) expect(v.closeHow).not.toMatch(/likely better|较可能更好/);
         expect(v.action).toBe("close");
       });
   });
