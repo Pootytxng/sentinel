@@ -124,9 +124,10 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       NVIDIA card only NVML reports leaves a session's peak graded (the ungrade rule reads DXGI only); `elevate_and_wait` waits with no timeout while
       the ledger is locked (`actions.rs`); core parking flags any non-performance plan with minimum cores at 100;
       drive health and memory speed or channels never rank as limiters.
-      2026-11-11 s16: core parking PARKED UNVERIFIED on `claude/train-core-parking-plan` (`c9e7d511`, leftovers.rs only):
-      flag 100% only on stock Balanced (class or, for old probes, words); custom/unread plans not flagged; test added.
-      Outstanding: cargo test (`leftovers::`), clippy, one sonnet review, merge.
+      Core parking done `750b6034`, `0f6b6c4e` (2026-11-11 s16-s18, leftovers.rs only, read-only, not installed): 100%
+      is flagged only on the stock Balanced plan (class, or the words for an older probe without a class); custom,
+      vendor and unread plans are not flagged. cargo `leftovers::` 27/0, clippy clean; sonnet APPROVE-WITH-NITS, no
+      MUST-FIX; SHOULD-FIX (stale comments, test name) and the legacy custom-plan case taken.
       Owner calls taken (owner delegated 2026-11-10; coordinator took the recommendation): a drift notice whose check
       now reads unknown stays, worded "last seen changed; Compy can't read it now" — done `8d855c05` (2026-11-11,
       CODE-ONLY, not installed; drift.rs re-emits it with `unreadable_now`, state unchanged; Home's count reads
