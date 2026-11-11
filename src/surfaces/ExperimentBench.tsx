@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import type { AppliedChange, SessionSummary } from "../types";
+import { ChangedOutsideRemedy } from "./ChangedOutsideRemedy";
 import { LEDGER_CHANGED_EVENT } from "../types";
 import { writeLedger } from "../data/ledger-write";
 import { liveChangeGroups } from "../data/live-changes";
@@ -1242,6 +1243,7 @@ export default function ExperimentBench({
           {error}
         </p>
       )}
+      {error && <ChangedOutsideRemedy reason={error} refresh={settle} />}
 
       {ledgerBusy && !running && (
         <p className="exp-fineprint" data-testid="exp-ledger-busy" role="status">

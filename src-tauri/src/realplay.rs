@@ -493,8 +493,7 @@ fn other_change_since(ledger: &[LedgerEntryRef<'_>], own: &str, began: Option<Da
     ledger
         .iter()
         .filter(|c| c.id != own)
-        .flat_map(|c| [Some(c.applied_at), c.rolled_back_at])
-        .flatten()
+        .flat_map(|c| c.moved_at())
         .filter_map(moved)
         .min()
 }
@@ -1294,7 +1293,7 @@ mod tests {
     // ─── with_arm ──────────────────────────────────────────────────────────────
 
     fn change<'a>(id: &'a str, applied_at: &'a str, rolled_back_at: Option<&'a str>) -> LedgerEntryRef<'a> {
-        LedgerEntryRef { id, rec_id: id, applied_at, applied: rolled_back_at.is_none(), rolled_back_at }
+        LedgerEntryRef { id, rec_id: id, applied_at, applied: rolled_back_at.is_none(), rolled_back_at, outside_recorded_at: None }
     }
 
     /// The as-is evening (14 changes on), the change applied at 19:31, then the with-sessions (15).

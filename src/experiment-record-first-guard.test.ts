@@ -529,9 +529,11 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
   it("the setting under test is never counted as another setting, at the start or the conclude", () => {
     const count = fnBody(EXPERIMENT, "pub(crate) fn unverified_other_changes(");
     expect(count, "the count excludes only this Trial's change row again").toContain("c.rec_id != own_rec");
-    expect(fnBody(EXPERIMENT, "fn unverified_others_live("), "the live count drops the setting under test").toContain(
-      "unverified_other_changes(rows, own_rec, |other| read_back(changes, other, reads))",
+    // CR-unconfirmed-remedy: the live count hands its reads to unverified_others_with, which counts.
+    expect(fnBody(EXPERIMENT, "fn unverified_others_live("), "the live count drops the setting under test").toMatch(
+      /unverified_others_with\(\s*changes,\s*rows,\s*own_rec,\s*\|other\| read_back\(changes, other, reads\),/,
     );
+    expect(fnBody(EXPERIMENT, "fn unverified_others_with(")).toContain("unverified_other_changes(rows, own_rec, |other|");
     expect(fnBody(EXPERIMENT, "pub(crate) fn start_experiment(")).toContain(
       "unverified_others_live(changes, rows, &rec_id, &crate::history::LiveReads::default())",
     );

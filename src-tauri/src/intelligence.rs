@@ -3105,6 +3105,7 @@ mod tests {
             rolled_back_at: None,
             justified_by_experiment: None,
             rollback_justified_by_experiment: None,
+            changed_outside: None,
         }
     }
 

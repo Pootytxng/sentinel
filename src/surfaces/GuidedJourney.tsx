@@ -76,6 +76,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
 import { allBackground } from "../lib/session-metrics";
 import { writeLedger } from "../data/ledger-write";
+import { ChangedOutsideRemedy } from "./ChangedOutsideRemedy";
 import { prettyGameName } from "./game-name";
 import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
@@ -1311,6 +1312,8 @@ export function GuidedJourney({
       ) : (
         lineEl
       )}
+      {/* CR-unconfirmed-remedy: beside "undo it", record a plan the user chose as changed outside Compy. */}
+      {p.kind === "not-started" && <ChangedOutsideRemedy reason={p.reason} refresh={refresh} />}
       {live && (
         // P5-enough: quiet, in place; nothing here moves focus or brings a window forward.
         <p className="exp-fineprint" data-testid="journey-enough" aria-live="polite">

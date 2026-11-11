@@ -1,4 +1,12 @@
 {
+  "changedOutside": {
+    "saw": "Compy made this change earlier: {{change}}. It no longer reads as in place: the power plan active now is \"{{plan}}\", which Compy didn't set.",
+    "keepWhat": "If you keep \"{{plan}}\", nothing on your PC will change. Compy will stop counting its earlier change as active, so tests can start, and each test checks that \"{{plan}}\" is still the active plan. The next test needs a new as-is session.",
+    "keep": "Keep \"{{plan}}\"",
+    "orUndo": "Or undo Compy's change in Test → Applied & history instead: that switches your power plan back to the one you had before Compy's change.",
+    "done": "Recorded. Compy no longer counts its earlier change ({{change}}) as active. Nothing on your PC changed.",
+    "failed": "Compy couldn't record that, and nothing changed: {{reason}}"
+  },
   "gpuProfile": {
     "beforeAfterTitle": "Before & after",
     "beforeAfterIntro": "Capture your GPU's readable settings before and after a change you make in your driver tool, then see exactly what moved. Read-only — Compy changes nothing here.",
