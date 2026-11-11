@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { TFunction } from "i18next";
-import type { GameReadiness, ReadinessCheck, Priorities } from "../types";
+import type { GameReadiness, ReadinessCheck, Priorities, ChangedOutsideRecord } from "../types";
+import { keptOutsideCompy } from "../types";
 import { peekProbe, putProbe } from "../data/probe-cache";
 
 // buildSetupSummary (A5): turn the settled scan into a plain-English, paste-ready block the user can
@@ -83,6 +84,8 @@ export type AppliedChangeLite = {
   rec_title: string;
   status: string;
   is_still_active: boolean;
+  changed_outside?: ChangedOutsideRecord | null;
+  changed_outside_holds?: boolean | null;
 };
 
 const STAGGER_MS = 280; // legibility only (spec: ≤~350ms/row, never sleep for drama)
@@ -124,6 +127,9 @@ export function deriveReverted(changes: AppliedChangeLite[]): RevertedChange[] {
   for (const c of changes ?? []) newestByRec.set(c.rec_id, c); // later entries win (null-safe)
   return [...newestByRec.values()]
     .filter((c) => c.status === "applied" && !c.is_still_active)
+    // CR-outside-followups (b): the user chose to keep what was set outside Compy, so it is not
+    // a drift to turn back on (History names it; the setting stays appliable as a normal fix).
+    .filter((c) => keptOutsideCompy(c) == null)
     .filter((c) => !NOT_REAPPLIABLE_INLINE.some((prefix) => c.rec_id.startsWith(prefix)))
     .map((c) => ({ rec_id: c.rec_id, title: c.rec_title }));
 }

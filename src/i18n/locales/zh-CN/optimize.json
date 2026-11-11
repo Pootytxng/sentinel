@@ -252,6 +252,8 @@
     "historyRolledBack": "✓ 已回滚",
     "historyActive": "生效中",
     "historyCantConfirm": "无法确认",
+    "historyChangedOutside": "已在 Compy 之外更改",
+    "historyKeptOutside": "记录于 {{when}}：你选择保留在 Compy 之外设置的“{{plan}}”。记录这一点没有更改你电脑上的任何设置。",
     "historyAlreadyPre": "已经是 ",
     "historyAlreadyPost": "——无需更改",
     "historyBeforePrefix": "更改前 ",

@@ -272,6 +272,8 @@
     "historyRolledBack": "✓ rolled back",
     "historyActive": "active",
     "historyCantConfirm": "can't confirm",
+    "historyChangedOutside": "changed outside Compy",
+    "historyKeptOutside": "Recorded {{when}}: you chose to keep “{{plan}}”, which was set outside Compy. Recording that changed nothing on your PC.",
     "historyAlreadyPre": "Already ",
     "historyAlreadyPost": " — no change needed",
     "historyBeforePrefix": "Before ",

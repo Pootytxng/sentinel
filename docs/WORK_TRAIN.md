@@ -723,15 +723,23 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       2026-11-11 s15: (a) and (d) parked, not started: both change what the Trial start/conclude one-change checks
       read (the session ran under "no apply/rollback behaviour" for item 4); (b) parked for time (Rust readiness +
       TS history, one review); next step for (b): `types.ts` `changed_outside` on `AppliedChange`, a note on the row.
-      2026-11-11 s16: (b) PARKED UNVERIFIED on `claude/train-outside-followups-b` (`6b566221`, `59d40019`, rebased on the
-      then-main incl. the since-reverted rp merge: rebase onto main again first). Readiness counts a recorded row whose
-      plan still holds as kept, not drift (only `applied_changes_summary_checked` reads the plan; `summarize_history`
-      unchanged, test-pinned); view field `changed_outside_holds`; History says "changed outside Compy" + note; not a
-      "turn it back on" drift. r1 opus + sonnet REQUEST-CHANGES (MUST-FIX: TS kept without holds/off check; dead
-      `checked_summary` under clippy) both fixed; r2 sonnet APPROVE-WITH-NITS (plan read on the UI thread: gated to
-      recorded-off rows in `59d40019`); r2 opus killed before it answered. Proven: cargo 1837/0 + clippy clean on the
-      pre-r2 commit; TS tests fail on old code. Outstanding: cargo test + clippy on `59d40019`, full vitest, opus r2,
-      merge. (a), (d) not started (no time to show the one-change check gets no weaker).
+      (b) done `4ee91290`, `44d91648`, `db633af9`, `9d4553bb` (2026-11-11 s16-s18, not installed): Game Readiness counts
+      a recorded row whose plan still holds as kept, not drift (only the readiness roll-up `checked_summary` reads the
+      plan, through `summarize_for_readiness`; `summarize_history` unchanged, test-pinned); view field
+      `changed_outside_holds` (None when no read was taken); History says "changed outside Compy" + a "Recorded <when>"
+      note (en, zh-CN). `db633af9` restores the two shapes the experiment-record-first guard pins (`summarize_checked`
+      holds the roll-up; `checked_summary(load_history(), ledger_was_quarantined())`): those were the 2 guard failures
+      s16 put on CR-rp-same-setting-row. Reviews: r1 opus + sonnet REQUEST-CHANGES (fixed), r2 sonnet
+      APPROVE-WITH-NITS, r2 opus (s18) APPROVE-WITH-NITS, no MUST-FIX; SHOULD-FIX unknown-as-None and the date wording
+      taken, the shared plan read queued (CR-kept-plan-read-once). cargo 1839/0, clippy clean, guard 49/49, full vitest
+      532/536 (3 site-app suites + one Chromium launch flake, passed on rerun). (a), (d) not started.
+- [ ] **CR-kept-plan-read-once** (r2 opus SHOULD-FIX of CR-outside-followups b) Once a row is kept outside Compy, every
+      `get_applied_changes` poll (sync, UI thread) spawns a second `powercfg` beside the power-ultimate probe's: share one
+      plan read for the pass through `LiveReads` (history.rs `applied_change_views`, `kept_outside_observed`).
+- [ ] **CR-kept-outside-nits** (r2 opus NITs of CR-outside-followups b) Re-check Gaming Mode after the plan read, as
+      `record_changed_outside` does (history.rs `kept_outside_observed_with`); readiness row wording when every change is
+      kept outside ("0 settings active ..." first, readiness.rs ~978); a still-applied row that reads off shows
+      "rolled back" in History (Fix.tsx, pre-existing); the power-profile row still flags a kept custom plan (readiness.rs ~864).
 - [x] **CR-summary-running-trial** (TS) While a retest Trial runs, the game summary's row for that change reads "Applied
       now" and "Stays applied from these tests: <change>", though the tested Trial put it back; "on" is the running
       Trial's own apply (`stillAppliedFrom` reads the picker's already-set-by-compy). Say it is applied by the Trial in

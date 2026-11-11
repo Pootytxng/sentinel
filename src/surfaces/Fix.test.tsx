@@ -114,6 +114,58 @@ describe("Fix", () => {
     expect(onRollback).toHaveBeenCalled();
   });
 
+  it("CR-outside-followups (b): a row recorded as changed outside Compy says so in History, not 'rolled back'", () => {
+    const row = (id: string, rec: string, title: string, outside: boolean) => ({
+      id,
+      rec_id: rec,
+      rec_title: title,
+      applied_at: "2026-09-26T03:11:32.377+00:00",
+      snapshot: null,
+      status: "applied" as const,
+      is_still_active: false,
+      active_check: "off" as const,
+      ...(outside
+        ? {
+            changed_outside: {
+              schema: 1,
+              recorded_at: "2026-11-10T20:00:00+00:00",
+              observed: { kind: "power-plan", guid: "22222222-2222-2222-2222-222222222222", name: "Synez Power Plan" },
+            },
+            changed_outside_holds: true,
+          }
+        : {}),
+    });
+    const { container } = render(
+      <Fix
+        recs={[]}
+        {...baseProps}
+        view="ledger"
+        changes={[
+          row("p1", "power-ultimate", "Switch to the Ultimate Performance power plan", true),
+          row("g1", "game-mode", "Game Mode", false),
+          // A schema this build doesn't know is no record: it reads as before.
+          { ...row("v1", "visual-effects", "Visual effects", true), changed_outside: { schema: 2, recorded_at: "x", observed: { kind: "power-plan", name: "Y" } } },
+          // The plan moved on to a third one: the record no longer holds, as Game Readiness reads it.
+          { ...row("m1", "power-moved", "Moved plan", true), changed_outside_holds: false },
+          // Switched back to Compy's plan: on again, so active, not "changed outside".
+          { ...row("b1", "power-back", "Back on", true), is_still_active: true, active_check: "on" as const },
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByText("History"));
+    const status = (title: string) =>
+      [...container.querySelectorAll(".fix-hist-row")]
+        .find((r) => r.querySelector(".fix-hist-title")?.textContent === title)
+        ?.querySelector(".fix-hist-status")?.textContent;
+    expect(status("Switch to the Ultimate Performance power plan")).toBe("changed outside Compy");
+    expect(status("Game Mode")).toBe("✓ rolled back");
+    expect(status("Visual effects")).toBe("✓ rolled back");
+    expect(status("Moved plan")).toBe("✓ rolled back");
+    expect(status("Back on")).toBe("active");
+    fireEvent.click(screen.getByText("Switch to the Ultimate Performance power plan"));
+    expect(screen.getByTestId("fix-hist-kept-outside").textContent).toMatch(/to keep “Synez Power Plan”, which was set outside Compy/);
+  });
+
   // #638 (PR #634 follow-on): the legacy `is_still_active` stays true when the live re-check could
   // not read the machine. History and Health say "can't confirm" for such a change; Optimize used to
   // list it under "Active on this PC". It now sits under its own heading, rollback intact.

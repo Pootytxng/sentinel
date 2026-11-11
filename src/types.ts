@@ -89,6 +89,37 @@ export type HwFingerprint = {
 // refocus (focus/visibilitychange) covers cross-window applies; this covers same-window ones.
 export const LEDGER_CHANGED_EVENT = "compy:ledger-changed";
 
+/** history.rs `ChangedOutside` as the ledger stores it. Only schema 1 with a power-plan reading is
+ *  one this build understands ({@link usableChangedOutside}); anything else reads as no record. */
+export type ChangedOutsideRecord = {
+  schema: number;
+  recorded_at: string;
+  observed: { kind: string; guid?: string; name?: string };
+};
+
+/** The record when this build can act on it (history.rs `ChangedOutside::usable`), else null. */
+export function usableChangedOutside(
+  c: { changed_outside?: ChangedOutsideRecord | null },
+): (ChangedOutsideRecord & { observed: { kind: "power-plan"; name: string } }) | null {
+  const r = c.changed_outside;
+  if (!r || r.schema !== 1 || r.observed?.kind !== "power-plan" || typeof r.observed.name !== "string") return null;
+  return r as ChangedOutsideRecord & { observed: { kind: "power-plan"; name: string } };
+}
+
+/** CR-outside-followups (b): the record, when this row is one Game Readiness counts as kept outside
+ *  Compy (readiness.rs `with_kept_outside`): applied, reading off, a usable record, and the live read
+ *  still showing the recorded state (`changed_outside_holds`, from the same pass). Else null, and
+ *  the row reads as before (a plan switched back to Compy's, or on to a third one, is not kept). */
+export function keptOutsideCompy(c: {
+  status: string;
+  is_still_active: boolean;
+  changed_outside?: ChangedOutsideRecord | null;
+  changed_outside_holds?: boolean | null;
+}): ReturnType<typeof usableChangedOutside> {
+  if (c.status !== "applied" || c.is_still_active || c.changed_outside_holds !== true) return null;
+  return usableChangedOutside(c);
+}
+
 export type AppliedChange = {
   id: string;
   rec_id: string;
@@ -125,6 +156,11 @@ export type AppliedChange = {
   // Read-only, computed-at-read: stamped rig == today's rig, compared on stable identity fields only
   // (gpu · ram · display — deliberately driver-insensitive). null = legacy entry, honest "rig unknown".
   on_this_rig?: boolean | null;
+  // CR-outside-followups (b): history.rs `ChangedOutside`, the user's "changed outside Compy" record
+  // (ledger-only; nothing on Windows changed when it was written). Absent on every other row.
+  changed_outside?: ChangedOutsideRecord | null;
+  // Computed at read: whether the live read still shows the recorded state. Absent = not known.
+  changed_outside_holds?: boolean | null;
   // P5-outcomes-f1: the Trial behind an apply or undo made from the Trial bench's outcome switch.
   // Additive, #[serde(default)] on the Rust side; absent/null for every other apply and undo.
   justified_by_experiment?: TrialLink | null;
