@@ -969,8 +969,9 @@ pub(crate) fn capture_ticket() -> u64 {
 }
 
 /// Run `f` holding the capture start/stop lock unless a newer request (higher ticket) already
-/// ran; then answer `superseded` and change nothing. A panic in `f` still counts its ticket.
-fn capture_in_order<T>(ticket: u64, superseded: T, f: impl FnOnce() -> T) -> T {
+/// ran; then answer `superseded()`, read under the same lock, and change nothing. A panic in `f`
+/// still counts its ticket.
+fn capture_in_order<T>(ticket: u64, superseded: impl FnOnce() -> T, f: impl FnOnce() -> T) -> T {
     in_order_on(capture_ctl(), ticket, superseded, f)
 }
 
@@ -978,12 +979,12 @@ fn capture_in_order<T>(ticket: u64, superseded: T, f: impl FnOnce() -> T) -> T {
 fn in_order_on<T>(
     lock: &std::sync::Mutex<u64>,
     ticket: u64,
-    superseded: T,
+    superseded: impl FnOnce() -> T,
     f: impl FnOnce() -> T,
 ) -> T {
     let mut newest = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     if ticket < *newest {
-        return superseded;
+        return superseded();
     }
     *newest = ticket;
     f()
@@ -998,9 +999,31 @@ pub(crate) fn start_fps_capture() -> Result<(), String> {
 
 /// Start FPS capture as request `ticket`. Served to the window by lib.rs
 /// `off_main::start_fps_capture`, off the main thread; same answer as before. Superseded by a
-/// newer request it answers Ok: what the user pressed last already ran.
+/// newer request, what the user pressed last already ran: see [`superseded_start`].
 pub(crate) fn start_fps_capture_ticketed(ticket: u64) -> Result<(), String> {
-    capture_in_order(ticket, Ok(()), start_fps_capture_locked)
+    capture_in_order(ticket, superseded_start, start_fps_capture_locked)
+}
+
+/// The answer a start skipped for a newer request gives, which the window can tell apart
+/// (`src/surfaces/GuidedJourney.tsx` `CAPTURE_SUPERSEDED`).
+pub(crate) const CAPTURE_SUPERSEDED: &str = "capture-superseded";
+
+/// CR-capture-superseded: read under the capture lock, after the newer request ran. A newer start
+/// left capture on, so this start's wish holds: Ok. A newer stop left it off: a distinct Err, never
+/// an Ok that lets the window believe capture is on when it is off. The answer is the flag at read
+/// time: a helper exit clears it without the lock, and then "not running" is still the truth.
+fn superseded_start() -> Result<(), String> {
+    use std::sync::atomic::Ordering;
+    superseded_start_answer(fps_active().load(Ordering::Acquire))
+}
+
+/// [`superseded_start`] with the capture flag handed in. Pure.
+fn superseded_start_answer(capture_on: bool) -> Result<(), String> {
+    if capture_on {
+        Ok(())
+    } else {
+        Err(CAPTURE_SUPERSEDED.to_string())
+    }
 }
 
 fn start_fps_capture_locked() -> Result<(), String> {
@@ -1422,7 +1445,7 @@ pub(crate) fn stop_fps_capture() {
 /// Stop FPS capture as request `ticket` (see [`capture_in_order`]); a stop older than a start
 /// that already ran changes nothing.
 pub(crate) fn stop_fps_capture_ticketed(ticket: u64) {
-    capture_in_order(ticket, (), stop_fps_capture_locked)
+    capture_in_order(ticket, || (), stop_fps_capture_locked)
 }
 
 fn stop_fps_capture_locked() {
@@ -1819,8 +1842,8 @@ mod capture_generation_tests {
         };
 
         // Start, then stop, one after the other: off at the end.
-        in_order_on(&ctl, ticket(), (), || on.store(true, Ordering::SeqCst));
-        in_order_on(&ctl, ticket(), (), || on.store(false, Ordering::SeqCst));
+        in_order_on(&ctl, ticket(), || (), || on.store(true, Ordering::SeqCst));
+        in_order_on(&ctl, ticket(), || (), || on.store(false, Ordering::SeqCst));
         assert!(!on.load(Ordering::SeqCst));
 
         // A stop issued while a start is still waiting.
@@ -1828,7 +1851,7 @@ mod capture_generation_tests {
         let start = {
             let (on, log, ctl, t) = (on.clone(), log.clone(), ctl.clone(), ticket());
             std::thread::spawn(move || {
-                in_order_on(&ctl, t, (), || {
+                in_order_on(&ctl, t, || (), || {
                     log.lock().unwrap().push("start-begin");
                     entered_tx.send(()).unwrap();
                     std::thread::sleep(std::time::Duration::from_millis(300)); // the old-helper wait
@@ -1841,7 +1864,7 @@ mod capture_generation_tests {
         let stop = {
             let (on, log, ctl, t) = (on.clone(), log.clone(), ctl.clone(), ticket());
             std::thread::spawn(move || {
-                in_order_on(&ctl, t, (), || {
+                in_order_on(&ctl, t, || (), || {
                     log.lock().unwrap().push("stop");
                     on.store(false, Ordering::SeqCst);
                 })
@@ -1855,14 +1878,14 @@ mod capture_generation_tests {
         // A start that panicked must not leave stop locked out.
         let t = ticket();
         let ctl2 = ctl.clone();
-        let _ = std::thread::spawn(move || in_order_on(&ctl2, t, (), || panic!("start failed"))).join();
-        in_order_on(&ctl, ticket(), (), || on.store(false, Ordering::SeqCst));
+        let _ = std::thread::spawn(move || in_order_on(&ctl2, t, || (), || panic!("start failed"))).join();
+        in_order_on(&ctl, ticket(), || (), || on.store(false, Ordering::SeqCst));
 
         // The served commands take the process lock in ticket order. Tokens built by concat! so
         // this test can't match itself.
         let src = include_str!("monitoring.rs");
-        assert!(src.contains(concat!("capture_in_order(ticket, Ok(()), ", "start_fps_capture_locked)")));
-        assert!(src.contains(concat!("capture_in_order(ticket, (), ", "stop_fps_capture_locked)")));
+        assert!(src.contains(concat!("capture_in_order(ticket, superseded_start, ", "start_fps_capture_locked)")));
+        assert!(src.contains(concat!("capture_in_order(ticket, || (), ", "stop_fps_capture_locked)")));
         assert!(src.contains(concat!("in_order_on(capture_", "ctl(), ticket, superseded, f)")));
     }
 
@@ -1878,7 +1901,7 @@ mod capture_generation_tests {
             let mut on = false;
             for &i in order {
                 let (t, want) = presses[i];
-                in_order_on(&ctl, t, (), || on = want);
+                in_order_on(&ctl, t, || (), || on = want);
             }
             on
         };
@@ -1892,8 +1915,28 @@ mod capture_generation_tests {
         }
         // A superseded request answers what it was given and runs nothing.
         let ctl = Mutex::new(0u64);
-        assert_eq!(in_order_on(&ctl, 5, "superseded", || "ran"), "ran");
-        assert_eq!(in_order_on(&ctl, 4, "superseded", || "ran"), "superseded");
+        assert_eq!(in_order_on(&ctl, 5, || "superseded", || "ran"), "ran");
+        assert_eq!(in_order_on(&ctl, 4, || "superseded", || "ran"), "superseded");
+        // CR-capture-superseded: a start a later stop overtook says capture is not running; one a
+        // later start overtook says Ok (capture is on). The old code answered Ok to both.
+        assert_eq!(superseded_start_answer(false), Err(CAPTURE_SUPERSEDED.to_string()));
+        assert_eq!(superseded_start_answer(true), Ok(()));
+        let ctl = Mutex::new(0u64);
+        let on = std::cell::Cell::new(false);
+        let stop_ran = in_order_on(&ctl, 2, || "superseded", || {
+            on.set(false);
+            "ran"
+        });
+        assert_eq!(stop_ran, "ran");
+        let start = in_order_on(&ctl, 1, || superseded_start_answer(on.get()), || {
+            on.set(true);
+            Ok(())
+        });
+        assert_eq!(start, Err(CAPTURE_SUPERSEDED.to_string()), "a start the stop overtook answered Ok");
+        assert!(!on.get());
+        // The window matches the same words (review r1 NIT).
+        assert!(include_str!("../../src/surfaces/GuidedJourney.tsx")
+            .contains(&format!("CAPTURE_SUPERSEDED = \"{CAPTURE_SUPERSEDED}\"")));
         // Tickets rise in the order they are taken.
         let (a, b) = (capture_ticket(), capture_ticket());
         assert!(b > a);

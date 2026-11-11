@@ -83,6 +83,14 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 ## Queue
 
 ### Now — finish what's open
+- [x] **CR-capture-superseded** (second whole-range review) A capture start skipped because a later stop won still answered Ok (monitoring.rs `start_fps_capture_ticketed`).
+      Done `ce9d2c9e`, `e5df46fe` (2026-11-11 s18, not installed): the superseded answer is read under the capture lock:
+      Ok when a newer start left capture on, Err `capture-superseded` when a newer stop left it off. The journey's
+      measured session says "Compy couldn't start measuring" and, for any refused start, owns no capture to stop;
+      Benchmark, Monitor and Play already show the next poll. Start/stop behaviour unchanged. Tests fail on the old code
+      (Rust superseded answer; TS journey line). cargo 1839/0, clippy clean, tsc 0, full vitest 532/536 (3 site-app
+      suites + the overlay Chromium launch flake, passed on rerun). Sonnet APPROVE-WITH-NITS, no MUST-FIX; SHOULD-FIX and
+      the shared-words NIT taken.
 - [x] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
       (data-root tests), #661 (debrief unmeasured), #627 (ledger write announce), #604 (TS coverage).
       Process PRs (#685, #679, #654, #644, #642, #606, #605, #492, #471, #470, #464): close with a

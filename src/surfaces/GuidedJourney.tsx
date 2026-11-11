@@ -458,6 +458,10 @@ async function stopCapture(run: Run) {
   await invoke("stop_fps_capture").catch(() => {});
 }
 
+/** What `start_fps_capture` answers when a stop pressed after it was handled first (monitoring.rs
+ *  `CAPTURE_SUPERSEDED`): capture is not running. */
+export const CAPTURE_SUPERSEDED = "capture-superseded";
+
 /** One measured session, shared by the two-session flow (twice) and real play (once per tap): start
  *  measuring, wait until the game closes or "Done playing", stop, then wait for the saved session (of
  *  `game`, when given; never the one `not` names). `saving` is said while it saves. undefined: the
@@ -468,7 +472,16 @@ async function measureOneSession(
 ): Promise<SessionSummary | null | undefined> {
   const t0 = Date.now();
   run.capturing = true;
-  await invoke("start_fps_capture");
+  try {
+    await invoke("start_fps_capture");
+  } catch (e) {
+    // A refused start owns no capture: nothing for the cleanup to stop (review r1).
+    run.capturing = false;
+    // CR-capture-superseded: a stop pressed after this start ran first, so capture is off. Say the
+    // capture is not running, the words a capture that never came up gets; never wait on it.
+    if (String(e instanceof Error ? e.message : e) === CAPTURE_SUPERSEDED) throw new Error(opts.captureFailed);
+    throw e;
+  }
   await waitForPlay(opts.captureFailed, opts.mode);
   await stopCapture(run);
   if (run.aborted) return undefined;
