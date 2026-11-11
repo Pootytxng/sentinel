@@ -337,16 +337,18 @@ export function GamingMode() {
     });
   };
   const extrasOnly = !needConsent && needExtras != null;
+  // Literal t("…") calls on each side (not t(cond ? a : b)) so the affordance census still reads both.
+  const consentTitle = extrasOnly ? t("gaming.gamingMode.extrasConsentTitle") : t("gaming.gamingMode.consentTitle");
   const consentModal = (needConsent || needExtras != null) && (
     <div
       className="gaming-modal-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label={t(extrasOnly ? "gaming.gamingMode.extrasConsentTitle" : "gaming.gamingMode.consentTitle")}
+      aria-label={consentTitle}
     >
       <div className="gaming-modal">
-        <h3>{t(extrasOnly ? "gaming.gamingMode.extrasConsentTitle" : "gaming.gamingMode.consentTitle")}</h3>
-        <p>{t(extrasOnly ? "gaming.gamingMode.extrasConsentIntro" : "gaming.gamingMode.consentIntro")}</p>
+        <h3>{consentTitle}</h3>
+        <p>{extrasOnly ? t("gaming.gamingMode.extrasConsentIntro") : t("gaming.gamingMode.consentIntro")}</p>
         {extrasOnly ? (
           <ul className="gaming-diff" data-testid="gaming-extras-consent-list">
             {(needExtras ?? []).map((id) => (
@@ -376,7 +378,16 @@ export function GamingMode() {
           {t("gaming.gamingMode.guaranteePost")}
         </p>
         <div className="gaming-actions">
-          <button className="btn-small btn-small-on" onClick={extrasOnly ? confirmExtras : confirmConsent} autoFocus>
+          {/* CR-gm-confirm-repeat: a held Enter that pressed Start keeps repeating once focus lands
+              here (autoFocus), and each repeat would press Enable. Only a fresh press confirms. */}
+          <button
+            className="btn-small btn-small-on"
+            onClick={extrasOnly ? confirmExtras : confirmConsent}
+            onKeyDown={(e) => {
+              if (e.repeat && (e.key === "Enter" || e.key === " ")) e.preventDefault();
+            }}
+            autoFocus
+          >
             {t("gaming.gamingMode.enableButton")}
           </button>
           <button
