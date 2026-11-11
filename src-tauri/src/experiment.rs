@@ -2988,16 +2988,29 @@ pub(crate) fn undo_outcome_choice(change_id: String, experiment_id: String) -> R
 /// A second ledger row for that setting would snapshot the Trial's own applied state, and when the
 /// Trial puts its change back (a confounded or not-kept result restores the Trial's pre-test
 /// snapshot) that newer row would still read "applied" over a setting that reads off. So the second
-/// apply is refused before anything runs. `None` lets the apply go ahead. PURE. One Trial is open at
-/// a time ([`active_trial`]: the start refuses a second), so the first open record is the one.
+/// apply is refused before anything runs. `None` lets the apply go ahead. PURE. Every open record
+/// is checked (review r1: a leftover Pending beside a Running one), and a Pending one is a start
+/// that never finished, which the bench does not show, so it gets the start's own wording.
 pub(crate) fn held_by_trial_refusal<'a>(
     records: &[ExperimentRecord],
-    mut rec_ids: impl Iterator<Item = &'a str>,
+    rec_ids: impl Iterator<Item = &'a str>,
 ) -> Option<String> {
-    let held = records
+    let open: Vec<&ExperimentRecord> = records
         .iter()
-        .find(|e| matches!(e.status, ExperimentStatus::Pending | ExperimentStatus::Running))?;
-    rec_ids.any(|id| id == held.rec_id).then(|| {
+        .filter(|e| matches!(e.status, ExperimentStatus::Pending | ExperimentStatus::Running))
+        .collect();
+    if open.is_empty() {
+        return None;
+    }
+    let ids: Vec<&str> = rec_ids.collect();
+    let held = open.into_iter().find(|e| ids.contains(&e.rec_id.as_str()))?;
+    Some(if held.status == ExperimentStatus::Pending {
+        format!(
+            "An earlier Trial start of \u{201c}{}\u{201d} was interrupted and isn't resolved yet, so Compy won't \
+             apply it again. Check Test \u{2192} Applied & history, then try again. Nothing was changed.",
+            held.rec_title
+        )
+    } else {
         format!(
             "\u{201c}{}\u{201d} is being tested by a Trial right now, so Compy won't apply it again on top of \
              the test. Finish the Trial or put it back first. Nothing was changed.",
@@ -5147,6 +5160,15 @@ mod experiment_tests {
         // A concluded Trial holds nothing.
         assert_eq!(held_by_trial_refusal(std::slice::from_ref(&done), std::iter::once("hags-on")), None);
         assert_eq!(held_by_trial_refusal(&[], std::iter::once("hags-on")), None);
+        // Review r1: every open record counts, not only the first; a leftover Pending one says so.
+        let mut running = judged("exp:run", "game-mode-on", "no-change", TrialOutcome::Recommended);
+        running.status = ExperimentStatus::Running;
+        let mut stale = judged("exp:stale", "hags-on", "no-change", TrialOutcome::Recommended);
+        stale.status = ExperimentStatus::Pending;
+        let store = [running, stale];
+        let refused = held_by_trial_refusal(&store, std::iter::once("hags-on")).expect("the Pending one holds it too");
+        assert!(refused.contains("was interrupted") && refused.contains("Nothing was changed"), "{refused}");
+        assert!(held_by_trial_refusal(&store, std::iter::once("game-mode-on")).expect("running").contains("being tested"));
     }
 
     #[test]
@@ -5164,6 +5186,10 @@ mod experiment_tests {
         for bare in ["crate::history::apply_recommendation(", "crate::history::apply_recommendations_batch("] {
             assert!(!bench.contains(bare), "benchmark_trial.rs calls {bare}");
         }
+        for gated in ["crate::experiment::apply_recommendation(", "crate::experiment::apply_recommendations_batch("] {
+            assert!(bench.contains(gated), "benchmark_trial.rs applies through {gated}");
+        }
+        assert!(!bench.contains("use crate::history::apply"), "no bare import of history's applies");
         let src = include_str!("experiment.rs");
         for (sig, call) in [
             ("pub(crate) fn apply_recommendation(", "crate::history::apply_recommendation(rec_id, rec_title)\n}"),
