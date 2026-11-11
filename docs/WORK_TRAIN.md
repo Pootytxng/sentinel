@@ -147,8 +147,10 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       registry (Windows reports it on)". The rec engine's bool is unchanged. Test fails on the old yes/no. Reviews
       (sonnet) r1 APPROVE-WITH-NITS (policy precedence, turned-on-not-running: taken), r2 APPROVE-WITH-NITS (queued
       below). Owner's rig writes both local keys = 1, so it still reads "Yes".
-- [ ] **CR-vbs-local-eq1** (r2 SHOULD-FIX of CR-vbs-row-truth) `combine_vbs_switches` counts any non-zero local value as
+- [x] **CR-vbs-local-eq1** (r2 SHOULD-FIX of CR-vbs-row-truth) `combine_vbs_switches` counts any non-zero local value as
       on where the rec engine's bool needs `== 1`; use `== 1` for the two local keys (non-zero stays right for policy HVCI 2).
+      Done `c22641a7` (2026-11-11, CODE-ONLY, read-only, not installed): `vbs_configured_from` maps the local keys to on
+      only at 1 before combining; policy unchanged. New asserts in diagnostics.rs fail on the old code.
 - [ ] **CR-rp-same-setting-row** (r1 SHOULD-FIX of owner call a, opus + sonnet; pre-existing on the two-session confound
       path) When another Compy row applies the Trial's own setting while it runs, the confounded restore writes the
       Trial's pre-test snapshot and that newer row still reads "applied" while the setting reads off. Refuse a second
@@ -687,6 +689,9 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       `LEDGER_CHANGED_EVENT` and on window focus, so its words and button follow a plan switched again; a recorded
       line keeps its own copy and stays after a re-read stops offering it. 2 tests fail on the old component.
       Left: (a) and (d) touch the Trial/ledger record (Rust), (b) Applied & history + Game Readiness (TS + readiness).
+      2026-11-11 s15: (a) and (d) parked, not started: both change what the Trial start/conclude one-change checks
+      read (the session ran under "no apply/rollback behaviour" for item 4); (b) parked for time (Rust readiness +
+      TS history, one review); next step for (b): `types.ts` `changed_outside` on `AppliedChange`, a note on the row.
 - [x] **CR-summary-running-trial** (TS) While a retest Trial runs, the game summary's row for that change reads "Applied
       now" and "Stays applied from these tests: <change>", though the tested Trial put it back; "on" is the running
       Trial's own apply (`stillAppliedFrom` reads the picker's already-set-by-compy). Say it is applied by the Trial in
@@ -1132,14 +1137,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-04 ~10:50 (Claude HQ lane, owner in PBZ; gate at idle priority, no install): the 08:43 session's
-  CR-service-batch (`3cdfc782`) had not been through the gate and broke two record-first guards (the probe's
-  rec list and the reconcile's call read `probe_rec_target`, now a one-line call into `probe_rec_target_with`);
-  the read-only check passed on that one line while `LiveReads::service_disabled` still called
-  `actions::service_info`. Guards follow the probe to `probe_rec_target_with` and `service_disabled` (the new
-  check fails on `330235ad`); a non-catalog service name reads through `hardware::service_state_and_start_mode`.
-  The lane branch `claude/train-hq-1104` (`9a7902a`, the same fix on the pre-batch code) is superseded and
-  deleted. Installed build stays `e3d3b7fd`; the Friday desk install picks up main.
 - 2026-11-10 ~11:00 (scheduled, CODE-ONLY, owner in ROB RUN): CR-pagefile-0 `258b438f`; cargo test 1784/0, clippy
   clean (idle priority, shared target dir); the first three new tests proven failing on the old code; one rust-tauri-reviewer round
   APPROVE-WITH-NITS, SHOULD-FIX 1 (half-zero row) taken, SHOULD-FIX 2 pre-existing and queued (CR-pagefile-multi). One
@@ -1224,6 +1221,14 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   too-noisy (second, capped), exp:10 Ultimate no-change; all put back, Synez read back after each. Journey reached its
   end summary (P5 owner half met, friend half open); P4 wording unreachable on ROB RUN (capped inconclusive). Queued
   CR-summary-running-trial, CR-next-reuse-moved. Docs only; evidence `_train\view-1111a\`. Not pushed (owner gaming).
+- 2026-11-11 ~06:38-08:10 (coordinator-assigned s15, CODE-ONLY throughout: ROB RUN in front, idle 0 s): landed
+  CR-summary-running-trial `0af65ec9` (sonnet APPROVE-WITH-NITS), CR-next-reuse-moved `323cbe31`, and the four
+  CR-1102-left owner calls (delegated 2026-11-10): (c) drift-unknown `e3e144e7` (sonnet APPROVE-WITH-NITS), (d)
+  update-refusal `8082bf7a` (sonnet APPROVE-WITH-NITS), (a) real-play put-back `aa6f99c2` and (b) gaming extras
+  consent `ef59ad5d` (each opus + sonnet, two rounds, no MUST-FIX); CR-vbs-local-eq1 with this line. New tests fail
+  on the old code; cargo 1834/0 (24 ignored), clippy clean, tsc 0, full vitest 532/536 (3 site-app suites + one
+  census fixed before landing). Queued CR-rp-same-setting-row, CR-gm-confirm-repeat; CR-outside-followups (a), (b),
+  (d) parked. Not installed, not pushed (never FULL).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
