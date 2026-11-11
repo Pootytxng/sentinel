@@ -168,9 +168,11 @@ const STOP_KEY: Record<RealPlayStop, string> = {
  *  are gone. So the two stops that say the change is off are "no longer on"; an unreadable setting is
  *  "can't tell"; before-missing, reported only once every stop before it is ruled out, is the one with
  *  the setting reading on ("still on", and with no as-is session to compare against no result can
- *  come); every other stop can come first over a setting that reads off or can't be read, and can
- *  still close with a result from the sessions counted, so it says only what Compy did: it hasn't
- *  put the change back, and the test can't go on. A stop this build doesn't know says the same. */
+ *  come); every other stop can come first over a setting that reads off or can't be read, so it says
+ *  only what Compy did: it hasn't put the change back, and the test can't go on (closing then keeps
+ *  nothing after another change or a changed condition, CR-1102-left owner call a; after the window,
+ *  it can still close with a result from the sessions counted). A stop this build doesn't know says
+ *  the same. */
 const STOPPED_ON: Record<RealPlayStop, "noLongerOn" | "cantTell" | "stillOn" | "notPutBack"> = {
   "change-off": "noLongerOn",
   "put-back-in-history": "noLongerOn",
@@ -276,10 +278,16 @@ export function realPlayView(
       // Nothing is on to put back once the change reads off or was put back in history.
       putBackHow: on === "noLongerOn" ? null : putBackHow,
       // Put back in history, closing keeps nothing even on a Likely better and writes nothing
-      // (experiment.rs put_back_before_conclude; the restore meets "already rolled back"). Every
-      // other stop's close keeps a Likely better and otherwise writes the setting back.
+      // (experiment.rs put_back_before_conclude; the restore meets "already rolled back"). Another
+      // Compy change or a changed condition: closing keeps nothing even on a Likely better and writes
+      // the setting back (CR-1102-left owner call a; experiment.rs real_play_outcome). Every other
+      // stop's close keeps a Likely better and otherwise writes the setting back.
       closeHow: t(
-        known === "put-back-in-history" ? "lab.experimentBench.journey.realPlay.closeHowPutBack" : "lab.experimentBench.journey.realPlay.closeHow",
+        known === "put-back-in-history"
+          ? "lab.experimentBench.journey.realPlay.closeHowPutBack"
+          : known === "other-change" || known === "conditions"
+            ? "lab.experimentBench.journey.realPlay.closeHowConfounded"
+            : "lab.experimentBench.journey.realPlay.closeHow",
         { change },
       ),
       seeHow: null,

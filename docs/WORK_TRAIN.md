@@ -68,8 +68,6 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
   (~5 min); P7 — your friend asks Home for more FPS, a stutter and a crash without asking what a word means (his
   ~15 min). Each is recorded in BACKLOG as that phase's exit.
 - **CR-1102-left owner calls** (triaged 2026-11-10; Claude's recommendation after each):
-  - Real play stopped by an OtherChange or Conditions: keep the change on, or put it back? *Put it back, as a Trial
-    does when another change confounds it.*
   - After the one-time consent, should newly ticked UAC tiers and service suspends ask once more before they
     start? *Yes: one confirm naming only the newly added items.*
 - **CR-unconfirmed-remedy** (2026-11-10 19:14): every Trial start is refused because Compy's two Ultimate-plan rows read
@@ -132,7 +130,13 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       `gaming-session` temp file keeps refusing update and restart, but the refusal names the file and its folder and
       offers Recover — done `98e9f129` (2026-11-11, CODE-ONLY, not installed; `pending_contract_files`, same fail-closed
       check; Recover shows App's existing recovery banner, or says Compy can't read a session from that file; no new
-      command; sonnet APPROVE-WITH-NITS, SHOULD-FIX taken).
+      command; sonnet APPROVE-WITH-NITS, SHOULD-FIX taken). Real play whose look decided but which stopped on another
+      Compy change or a changed condition is put back, as a confounded Trial is — done `7b69b33a` (2026-11-11,
+      CODE-ONLY, not installed; `real_play_outcome` folds it to `confounded`, keep false, through `with_compy_state`
+      / `confounded_by_conditions`, so `finish_conclude`'s existing restore of the Trial's own change runs; "Close
+      this test" says it keeps nothing; reviews opus r1 APPROVE-WITH-NITS, r2 APPROVE-WITH-NITS; sonnet r1
+      APPROVE-WITH-NITS, r2 APPROVE; no MUST-FIX; SHOULD-FIX keep-forced-off and the note nits taken; same-setting
+      later row queued as CR-rp-same-setting-row).
 - [x] **CR-vbs-row-truth** (whole-range review 2026-11-10, SHOULD-FIX) Diagnostics "Memory Integrity / VBS turned on" reads a definite "No" when the registry values are absent (VBS on by default/policy), beside "VBS running now: Running"; say "Not set in registry" instead. Read-only.
       Done `13f46833`, `d8ab513d` (2026-11-11, CODE-ONLY, not installed): the row reads a separate tri-state
       `memory_integrity_or_vbs_configured` (lib.rs; local DeviceGuard keys plus the Group Policy keys, a written policy
@@ -142,6 +146,11 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       below). Owner's rig writes both local keys = 1, so it still reads "Yes".
 - [ ] **CR-vbs-local-eq1** (r2 SHOULD-FIX of CR-vbs-row-truth) `combine_vbs_switches` counts any non-zero local value as
       on where the rec engine's bool needs `== 1`; use `== 1` for the two local keys (non-zero stays right for policy HVCI 2).
+- [ ] **CR-rp-same-setting-row** (r1 SHOULD-FIX of owner call a, opus + sonnet; pre-existing on the two-session confound
+      path) When another Compy row applies the Trial's own setting while it runs, the confounded restore writes the
+      Trial's pre-test snapshot and that newer row still reads "applied" while the setting reads off. Refuse a second
+      apply of a change a running Trial holds, or settle the newer row with the restore (history.rs
+      `rollback_change_inner`). Rollback boundary: two reviews.
 - [x] **CR-care-read-promise** (same review) Care's store-read failure says "it'll try again" but nothing re-reads; add a bounded backoff re-read and true final words (en + zh-CN); a save failing after unmount schedules nothing; an `opened:X` save-stopped clears when `dismissed:X` later succeeds.
       Done `6982832a` (2026-11-11, CODE-ONLY, not installed): `readFailed(again)` re-runs App's own read after 5 s /
       30 s / 2 min (`CARE_READ_RETRY_MS`; reset by a good read, cleared on unmount), then "…it'll check again when you

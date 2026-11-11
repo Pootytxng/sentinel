@@ -533,6 +533,7 @@
         "closeTest": "结束这次测试",
         "closeHow": "结束测试时，Compy 会根据已统计的对局做出判定。除非结果显示{{change}}较可能更好，否则 Compy 会把该设置精确写回测试前的状态，即使之后在 Compy 之外改动过它。",
         "closeHowPutBack": "结束测试时，Compy 会记录已统计对局的结果，但不会保留任何更改，因为{{change}}已经恢复原样。",
+        "closeHowConfounded": "结束测试时，Compy 会记录已统计对局的结果，不保留任何更改，并把{{change}}精确写回测试前的状态，因为测试期间有其他东西发生了变化。",
         "seeHow": "查看结果会结束这次测试：只有结果为“较可能更好”时，Compy 才会保留{{change}}，否则会把它恢复到测试前的样子。",
         "progressUnread": "Compy 现在无法统计这次测试的对局。在你恢复原样之前，{{change}}会一直保持开启。",
         "noProgress": "Compy 无法读取你有多少局可以计入。",
