@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { writeLedger } from "../data/ledger-write";
+import { LEDGER_CHANGED_EVENT } from "../types";
 
 /** history.rs `ChangedOutsideOffer`: a setting whose Compy change reads as replaced by a state Compy
  *  didn't set (today: a power plan the user chose), which the user may record as changed outside Compy. */
@@ -23,9 +24,24 @@ export function ChangedOutsideRemedy({ reason, refresh }: { reason: string; refr
   const { t } = useTranslation();
   const relevant = isUnconfirmedRefusal(reason);
   const [offers, setOffers] = useState<ChangedOutsideOffer[]>([]);
-  const [done, setDone] = useState<string[]>([]);
+  // Recorded offers keep their own copy, so their line stays after a re-read stops offering them.
+  const [done, setDone] = useState<ChangedOutsideOffer[]>([]);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
+  // CR-outside-followups (c): the offer is re-read when the ledger changes or the window comes back
+  // into focus (the plan may have been switched again in Windows while this was open), so its words
+  // and its button never name a plan that is no longer the active one.
+  const [reread, setReread] = useState(0);
+  useEffect(() => {
+    if (!relevant) return;
+    const again = () => setReread((n) => n + 1);
+    window.addEventListener(LEDGER_CHANGED_EVENT, again);
+    window.addEventListener("focus", again);
+    return () => {
+      window.removeEventListener(LEDGER_CHANGED_EVENT, again);
+      window.removeEventListener("focus", again);
+    };
+  }, [relevant]);
 
   useEffect(() => {
     if (!relevant) return;
@@ -40,9 +56,10 @@ export function ChangedOutsideRemedy({ reason, refresh }: { reason: string; refr
     return () => {
       live = false;
     };
-  }, [relevant, reason]);
+  }, [relevant, reason, reread]);
 
-  if (!relevant || (offers.length === 0 && done.length === 0)) return null;
+  const open = offers.filter((o) => !done.some((d) => d.rec_id === o.rec_id));
+  if (!relevant || (open.length === 0 && done.length === 0)) return null;
 
   const record = async (o: ChangedOutsideOffer) => {
     setBusy(true);
@@ -51,7 +68,7 @@ export function ChangedOutsideRemedy({ reason, refresh }: { reason: string; refr
       // Review r1: a refresh that fails after the record was saved is not a failed record, so it never
       // reaches the "nothing changed" line; only the command's own refusal does.
       await writeLedger("record_changed_outside", { recId: o.rec_id }, () => refresh().catch(() => {}));
-      setDone((d) => [...d, o.rec_id]);
+      setDone((d) => [...d.filter((x) => x.rec_id !== o.rec_id), o]);
     } catch (e) {
       setFailed(String(e instanceof Error ? e.message : e));
     } finally {
@@ -61,12 +78,12 @@ export function ChangedOutsideRemedy({ reason, refresh }: { reason: string; refr
 
   return (
     <div className="exp-order" data-testid="changed-outside">
-      {offers.map((o) =>
-        done.includes(o.rec_id) ? (
-          <p key={o.rec_id} className="exp-note" role="status" data-testid="changed-outside-done">
-            {t("lab.changedOutside.done", { change: o.rec_title })}
-          </p>
-        ) : (
+      {done.map((o) => (
+        <p key={`done-${o.rec_id}`} className="exp-note" role="status" data-testid="changed-outside-done">
+          {t("lab.changedOutside.done", { change: o.rec_title })}
+        </p>
+      ))}
+      {open.map((o) => (
           <div key={o.rec_id}>
             <p className="exp-note">{t("lab.changedOutside.saw", { change: o.rec_title, plan: o.observed_name })}</p>
             <p className="exp-fineprint">{t("lab.changedOutside.keepWhat", { plan: o.observed_name })}</p>
@@ -77,8 +94,7 @@ export function ChangedOutsideRemedy({ reason, refresh }: { reason: string; refr
             </div>
             <p className="exp-fineprint">{t("lab.changedOutside.orUndo")}</p>
           </div>
-        ),
-      )}
+      ))}
       {failed && (
         <p className="exp-bench-warn" role="alert">
           {t("lab.changedOutside.failed", { reason: failed })}
