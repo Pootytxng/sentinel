@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/re
 import { invoke } from "@tauri-apps/api/core";
 import i18n from "../i18n";
 import { ChangedOutsideRemedy, isUnconfirmedRefusal } from "./ChangedOutsideRemedy";
+import { LEDGER_CHANGED_EVENT } from "../types";
 
 // CR-unconfirmed-remedy: the second choice beside "undo it" on the owner's Synez-shaped ledger.
 const offersMock = vi.hoisted(() => ({
@@ -59,6 +60,42 @@ describe("ChangedOutsideRemedy", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/couldn't record that, and nothing changed: Compy can't read/);
     await waitFor(() => expect(screen.queryByTestId("changed-outside-done")).toBeNull());
+  });
+
+  // CR-outside-followups (c): the plan switched again while the panel is open.
+  it("re-reads its offer when the ledger changes or the window regains focus", async () => {
+    const before = offersMock.value;
+    try {
+      render(<ChangedOutsideRemedy reason={REFUSAL} refresh={async () => {}} />);
+      await screen.findByRole("button", { name: 'Keep "Synez Power Plan"' });
+      offersMock.value = [{ ...before[0], observed_name: "Balanced" }];
+      window.dispatchEvent(new Event(LEDGER_CHANGED_EVENT));
+      expect(await screen.findByRole("button", { name: 'Keep "Balanced"' })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: 'Keep "Synez Power Plan"' })).toBeNull();
+      offersMock.value = [];
+      window.dispatchEvent(new Event("focus"));
+      await waitFor(() => expect(screen.queryByTestId("changed-outside")).toBeNull());
+    } finally {
+      offersMock.value = before;
+    }
+  });
+
+  it("keeps the recorded line after a re-read no longer offers it", async () => {
+    const before = offersMock.value;
+    try {
+      render(<ChangedOutsideRemedy reason={REFUSAL} refresh={async () => {}} />);
+      const keep = await screen.findByRole("button", { name: 'Keep "Synez Power Plan"' });
+      offersMock.value = [];
+      fireEvent.click(keep);
+      await screen.findByTestId("changed-outside-done");
+      window.dispatchEvent(new Event("focus"));
+      await waitFor(() =>
+        expect(vi.mocked(invoke).mock.calls.filter(([c]) => c === "changed_outside_offers").length).toBeGreaterThan(2),
+      );
+      expect(screen.getByTestId("changed-outside-done").textContent).toMatch(/Nothing on your PC changed/);
+    } finally {
+      offersMock.value = before;
+    }
   });
 
   it("has the same words in zh-CN", async () => {
