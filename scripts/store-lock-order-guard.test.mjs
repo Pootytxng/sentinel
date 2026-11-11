@@ -924,9 +924,7 @@ describe("#398: the source half of the Experiment -> History claim", () => {
   // tail, finish_conclude, which runs inside its caller's gate and takes none of its own. The seventh
   // is the launch reconcile (#583), which only READS the ledger through load_history under the gate
   // (via reconcile_pending_locked, which start_experiment also calls) — an
-  // Experiment -> SupportEvidence path on a corrupt ledger, never Experiment -> History. The eighth
-  // and ninth are the UI's apply commands (CR-rp-same-setting-row: `apply_recommendation`,
-  // `apply_recommendations_batch`), which refuse a setting a running Trial holds and then enter it.
+  // Experiment -> SupportEvidence path on a corrupt ledger, never Experiment -> History.
   const fnBody = (src, sig) => {
     const at = src.indexOf(sig);
     expect(at, `${sig} is missing`).toBeGreaterThanOrEqual(0);
@@ -935,8 +933,8 @@ describe("#398: the source half of the Experiment -> History claim", () => {
     return end === -1 ? rest : rest.slice(0, end);
   };
 
-  it("all nine experiment gate sections take the gate through the recorded helper", () => {
-    expect(experimentGateSections()).toHaveLength(9);
+  it("all seven experiment gate sections take the gate through the recorded helper", () => {
+    expect(experimentGateSections()).toHaveLength(7);
     expect(fnBody(code("experiment"), "fn reconcile_interrupted_starts()")).toMatch(
       /let\s+_g\s*=\s*lock_store\(\)\?;/,
     );
@@ -949,7 +947,7 @@ describe("#398: the source half of the Experiment -> History claim", () => {
 
   it("each of those sections still enters the Trust Ledger under the gate", () => {
     const entering = experimentGateSections().filter((s) =>
-      /crate::history::(apply_recommendations_batch|apply_recommendation|rollback_change)(?:_citing)?\s*\(|\bfinish_conclude\s*\(/.test(s),
+      /crate::history::(apply_recommendation|rollback_change)(?:_citing)?\s*\(|\bfinish_conclude\s*\(/.test(s),
     );
     // The concludes' shared tail is how two of them get there: it must reach the ledger itself, and
     // take no gate of its own (it runs inside its caller's, the outer half of Experiment -> History).
@@ -970,6 +968,6 @@ describe("#398: the source half of the Experiment -> History claim", () => {
         "race_seam::production_nesting_tests, but no experiment section reaches history any more. " +
         "Either the call moved (re-derive it), or the nesting is gone (delete the pair and the " +
         "tests that assert it).",
-    ).toHaveLength(8);
+    ).toHaveLength(6);
   });
 });

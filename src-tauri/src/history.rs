@@ -1344,9 +1344,7 @@ fn record_operation_failure(operation: &str, code: &str, err: &str) {
     );
 }
 
-/// The audited apply. The UI's `apply_recommendation` command is `experiment::apply_recommendation`,
-/// which refuses a setting a running Trial holds and then calls this under the Trial store gate
-/// (CR-rp-same-setting-row); the Trial lifecycle inside that gate calls this directly.
+#[tauri::command]
 pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChangeView, String> {
     apply_reported(&rec_id, &rec_title, None)
 }
@@ -1598,9 +1596,7 @@ fn admin_commit_error(e: String, recorded_before_admin: bool, admin_outcomes: &[
     text
 }
 
-/// The audited one-elevation batch. The UI's command of the same name is
-/// `experiment::apply_recommendations_batch`, which refuses the batch when it names a setting a
-/// running Trial holds (CR-rp-same-setting-row).
+#[tauri::command]
 pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<BatchApplyReport, String> {
     // ── Validation — BEFORE the lock and before any mutation. The whole batch is refused (not
     // partially run) on a malformed request: it indicates a caller bug, not a per-item condition.
