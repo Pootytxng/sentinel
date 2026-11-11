@@ -1396,4 +1396,20 @@ describe("P5-realplay: the change stays on while you play", () => {
     expect(calls("restore_experiment")).toHaveLength(0);
     expect(state.experiments[0]).toMatchObject({ status: "running" });
   });
+
+  // CR-capture-superseded: a start a later stop overtook answers a distinct refusal; the journey says
+  // measuring didn't start, never waits on a capture that is off, never shows the raw code.
+  it("a capture start a later stop overtook says measuring didn't start", async () => {
+    state.experiments = [running()];
+    state.sessions = [OLD, ...AS_IS];
+    state.rpProgress = backendLike();
+    state.refuse = { start_fps_capture: "capture-superseded" };
+    render(<ExperimentBench />);
+    fireEvent.click(await enabled("Measure my next session"));
+    const line = await finalLine();
+    expect(line).toContain("Compy couldn't start measuring.");
+    expect(line).not.toContain("capture-superseded");
+    expect(calls("stop_fps_capture")).toHaveLength(0);
+    expect(calls("restore_experiment")).toHaveLength(0);
+  });
 });
