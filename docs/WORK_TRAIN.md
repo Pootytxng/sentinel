@@ -6,6 +6,8 @@ and `product/ROADMAP.md`, build/install truth in `RELEASE_STATE.md`.
 
 **Testers (owner, 2026-10-23):** the owner and one trusted friend. No wider beta. Optimize for the owner's
 rig first; anything shipped to the friend goes through the normal updater.
+**No second tester now (owner, 2026-11-11 07:41, verbatim):** "I DO NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO
+LEAVE ANYTHING LIKE THAT ONLINE". Friend-dependent halves of P5/P6/P7-exit-proof are deferred (notes under each).
 
 ## How a session runs (every scheduled run follows this)
 
@@ -769,6 +771,10 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
       put back and why, lesson "ROB RUN swings a lot between sessions…", "Nothing from these tests stays applied." Across
       11-10 + 11-11 that is the button (11-10 ~20:15) to the summary. Friend's repeat cannot be done by Claude.
       Evidence `_train\view-1111a\journey.log`, `o-12-journey-end.json`, `o-13-after-ok-summary.json`.
+      2026-11-11: the friend-dependent part is deferred, no second tester available (owner, 2026-11-11 07:41: "I DO
+      NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO LEAVE ANYTHING LIKE THAT ONLINE"). Do not ask the owner for it again;
+      do not simulate it. Stays unticked until the owner either supplies a tester or decides in writing that the owner
+      half alone exits the phase.
 
 ### Then — Roadmap Phase 6: Care Journey convergence (`product/ROADMAP.md` Phase 6)
 Planned 2026-10-25. Order is value order. Converge, don't add rooms. Phase 6 exit on the owner rig: from Home,
@@ -819,6 +825,10 @@ room or station picked by hand.
       and "Compare my latest session with my last steady one" now gives an honest unknown for ROB RUN ("no steady
       ROB RUN session to compare … record a session in Live when the game runs well"). The owner's half holds for ROB RUN;
       the friend's repeat (~5 min) remains. Evidence `_train\view-1110d\p6-05-*`, `p6-06-stutter-now.png`.
+      2026-11-11: the friend-dependent part is deferred, no second tester available (owner, 2026-11-11 07:41: "I DO
+      NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO LEAVE ANYTHING LIKE THAT ONLINE"). Do not ask the owner for it again;
+      do not simulate it. Stays unticked until the owner either supplies a tester or decides in writing that the owner
+      half alone exits the phase.
 
 ### Then — Roadmap Phase 7: Contextual UX and education convergence (`product/ROADMAP.md` Phase 7)
 Planned 2026-10-25. Order is value order. Converge, don't add rooms, consoles or guards (directive rule 1:
@@ -1006,6 +1016,10 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       2026-11-10 desk session (not ticked): needs the friend at the keyboard (~10 min) and the owner opening the
       technical layer on each answer (~5 min); not drivable unattended.
       2026-11-10 ~19:16: not attempted or simulated (needs the friend); still open.
+      2026-11-11: the friend-dependent part is deferred, no second tester available (owner, 2026-11-11 07:41: "I DO
+      NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO LEAVE ANYTHING LIKE THAT ONLINE"). Do not ask the owner for it again;
+      do not simulate it. Stays unticked until the owner either supplies a tester or decides in writing that the owner
+      half alone exits the phase.
 
 ### Then — Roadmap Phase 8: Advanced tuning envelope (`product/ROADMAP.md` Phase 8, `product/RISK_MODEL.md`)
 Planned 2026-10-28 (scheduled refill). ROADMAP: broaden only after the Trial/risk/stability systems are
