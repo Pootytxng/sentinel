@@ -83,6 +83,10 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 ## Queue
 
 ### Now — finish what's open
+- [x] **CR-next-moved-outside** (second whole-range review) `trialMovedSince` (GuidedJourney.tsx) did not count `changed_outside.recorded_at` as a move, which the start's §3 check does, so the next-test offer could under-promise.
+      Done `93f679f3` (2026-11-11 s18, TS only, not installed): `trialMovedSince` takes the ledger rows (the bench's reload
+      reads `get_applied_changes`; unread counts as moved) and counts a record written after the as-is session began, or
+      undated. Test fails on the old helper. tsc 0, full vitest 533/536 (the 3 site-app suites).
 - [x] **PR-sweep** Product PRs: review once and land or close #673 (honest unknown FPS), #666
       (data-root tests), #661 (debrief unmeasured), #627 (ledger write announce), #604 (TS coverage).
       Process PRs (#685, #679, #654, #644, #642, #606, #605, #492, #471, #470, #464): close with a
