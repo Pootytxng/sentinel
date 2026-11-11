@@ -153,11 +153,28 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       on where the rec engine's bool needs `== 1`; use `== 1` for the two local keys (non-zero stays right for policy HVCI 2).
       Done `c22641a7` (2026-11-11, CODE-ONLY, read-only, not installed): `vbs_configured_from` maps the local keys to on
       only at 1 before combining; policy unchanged. New asserts in diagnostics.rs fail on the old code.
-- [ ] **CR-rp-same-setting-row** (r1 SHOULD-FIX of owner call a, opus + sonnet; pre-existing on the two-session confound
+- [x] **CR-rp-same-setting-row** (r1 SHOULD-FIX of owner call a, opus + sonnet; pre-existing on the two-session confound
       path) When another Compy row applies the Trial's own setting while it runs, the confounded restore writes the
       Trial's pre-test snapshot and that newer row still reads "applied" while the setting reads off. Refuse a second
       apply of a change a running Trial holds, or settle the newer row with the restore (history.rs
       `rollback_change_inner`). Rollback boundary: two reviews.
+      Done `3a64091a`, `c4033f99` (merge `638926e6`, 2026-11-11 s16, CODE-ONLY, not installed): the refusal option. The
+      UI's `apply_recommendation` / `apply_recommendations_batch` commands moved to experiment.rs wrappers that take the
+      Trial store gate, read the store checked (unreadable refuses), and refuse before anything runs when an open Trial
+      holds a named setting ("…is being tested by a Trial right now… Nothing was changed."; a batch naming it is
+      refused whole; a leftover Pending start gets the start's "was interrupted" wording); otherwise the unchanged
+      history apply. The benchmark trials use the same wrappers. Rollback code untouched. Tests: pure refusal + source
+      order (neither exists on the old code). cargo 1836/0, clippy clean. Reviews r1 opus APPROVE-WITH-NITS, sonnet
+      APPROVE-WITH-NITS, no MUST-FIX; nits taken (every open record, wording, race_seam notes, bench pin). Known cost: an
+      unreadable `experiments.json` (sharing violation) now refuses plain applies too, saying try again. Queued:
+      CR-bench-holds-setting, CR-gm-spans-trial.
+- [ ] **CR-bench-holds-setting** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) The benchmark tweak trial holds a
+      setting for minutes and rolls it back from its snapshot; a UI apply of that setting meanwhile makes the same
+      stale-"applied" row. The new refusal only knows experiment Trials (`benchmark_trial.rs` start_tweak_trial).
+- [ ] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game
+      Bar, the power plan, USB/PCIe and service suspends into its own contract; a session spanning a Trial's restore
+      re-applies the Trial's change on stop, after the Trial reads Restored (`gaming_orchestrator.rs` ~409-455; experiment.rs
+      never checks Gaming Mode state). Rollback boundary: two reviews.
 - [x] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
       the consent modal, focus jumps to Enable (`autoFocus`) and key repeat presses it: either confirm can pass on one
       held key. Ignore repeated key presses on Enable, or focus Cancel first. TS only.
