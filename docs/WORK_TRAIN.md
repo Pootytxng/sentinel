@@ -83,6 +83,12 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 ## Queue
 
 ### Now — finish what's open
+- [x] **CR-undo-kept-plan** (second whole-range review) Undo after "Keep <plan>": the Undo confirm for a row recorded as changed outside must say that undoing switches the plan to the one Compy saved (name it), en + zh-CN.
+      Done `d29d56ae` (2026-11-11 s18, TS only, not installed): App's rollback confirm for such a row says "You chose to
+      keep <plan> ... Rolling back switches your power plan to <saved>, the plan Compy saved before it changed anything":
+      named from the row's snapshot GUID (a Windows stock plan by name; the kept plan when it is the same GUID, "so your
+      plan stays the same"; otherwise "Compy didn't save its name"). Rollback unchanged. New test (module did not exist
+      before); tsc 0, full vitest 534/537 (the 3 site-app suites).
 - [x] **CR-next-moved-outside** (second whole-range review) `trialMovedSince` (GuidedJourney.tsx) did not count `changed_outside.recorded_at` as a move, which the start's §3 check does, so the next-test offer could under-promise.
       Done `93f679f3` (2026-11-11 s18, TS only, not installed): `trialMovedSince` takes the ledger rows (the bench's reload
       reads `get_applied_changes`; unread counts as moved) and counts a record written after the as-is session began, or
