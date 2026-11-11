@@ -67,9 +67,8 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
   Trial clicks (~25 min); P6 — Home → "Something's wrong", follow a WARDOGS crash and a stutter to one next step
   (~5 min); P7 — your friend asks Home for more FPS, a stutter and a crash without asking what a word means (his
   ~15 min). Each is recorded in BACKLOG as that phase's exit.
-- **CR-1102-left owner calls** (triaged 2026-11-10; Claude's recommendation after each):
-  - After the one-time consent, should newly ticked UAC tiers and service suspends ask once more before they
-    start? *Yes: one confirm naming only the newly added items.*
+- ~~**CR-1102-left owner calls**~~ all four taken 2026-11-11 (owner delegated 2026-11-10; coordinator took the
+  recommendation); recorded under CR-1102-left in the Queue.
 - **CR-unconfirmed-remedy** (2026-11-10 19:14): every Trial start is refused because Compy's two Ultimate-plan rows read
   off (your active plan is "Synez Power Plan"); Compy's suggested undo would set Balanced. Keep Synez (Compy then needs a
   code fix to stop tracking those rows), or let Compy put Balanced back (~1 min) so P4/P5 can run? *Keep Synez; fix the
@@ -136,7 +135,11 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       / `confounded_by_conditions`, so `finish_conclude`'s existing restore of the Trial's own change runs; "Close
       this test" says it keeps nothing; reviews opus r1 APPROVE-WITH-NITS, r2 APPROVE-WITH-NITS; sonnet r1
       APPROVE-WITH-NITS, r2 APPROVE; no MUST-FIX; SHOULD-FIX keep-forced-off and the note nits taken; same-setting
-      later row queued as CR-rp-same-setting-row).
+      later row queued as CR-rp-same-setting-row). After the one-time consent, newly ticked UAC tiers and service
+      suspends ask once, naming only the new ones — done `ff19db9a` (2026-11-11, CODE-ONLY, TS only, not installed;
+      agreed extras in `compy_gaming_consent_extras_v1`, the same modal tree, tier boxes shut while it is open; only
+      adds a confirm; reviews opus r1 APPROVE-WITH-NITS (SHOULD-FIX taken), r2 APPROVE-WITH-NITS; sonnet r1
+      APPROVE-WITH-NITS, r2 APPROVE; no MUST-FIX; held-Enter nit queued as CR-gm-confirm-repeat).
 - [x] **CR-vbs-row-truth** (whole-range review 2026-11-10, SHOULD-FIX) Diagnostics "Memory Integrity / VBS turned on" reads a definite "No" when the registry values are absent (VBS on by default/policy), beside "VBS running now: Running"; say "Not set in registry" instead. Read-only.
       Done `13f46833`, `d8ab513d` (2026-11-11, CODE-ONLY, not installed): the row reads a separate tri-state
       `memory_integrity_or_vbs_configured` (lib.rs; local DeviceGuard keys plus the Group Policy keys, a written policy
@@ -151,6 +154,9 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       Trial's pre-test snapshot and that newer row still reads "applied" while the setting reads off. Refuse a second
       apply of a change a running Trial holds, or settle the newer row with the restore (history.rs
       `rollback_change_inner`). Rollback boundary: two reviews.
+- [ ] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
+      the consent modal, focus jumps to Enable (`autoFocus`) and key repeat presses it: either confirm can pass on one
+      held key. Ignore repeated key presses on Enable, or focus Cancel first. TS only.
 - [x] **CR-care-read-promise** (same review) Care's store-read failure says "it'll try again" but nothing re-reads; add a bounded backoff re-read and true final words (en + zh-CN); a save failing after unmount schedules nothing; an `opened:X` save-stopped clears when `dismissed:X` later succeeds.
       Done `6982832a` (2026-11-11, CODE-ONLY, not installed): `readFailed(again)` re-runs App's own read after 5 s /
       30 s / 2 min (`CARE_READ_RETRY_MS`; reset by a good read, cleared on unmount), then "…it'll check again when you

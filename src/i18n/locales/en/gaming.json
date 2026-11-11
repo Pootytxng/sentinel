@@ -12,6 +12,8 @@
     "suspendServiceItem": "Suspend {{service}}",
     "consentTitle": "Turn on Gaming Mode?",
     "consentIntro": "For this session, Compy will change:",
+    "extrasConsentTitle": "Also turn these on?",
+    "extrasConsentIntro": "You agreed to Gaming Mode before. These are new since then, so Compy asks once before it changes them for this session:",
     "guaranteeLabel": "Guarantee:",
     "guaranteeMid": "every change is snapshotted before it's made and restored to your",
     "guaranteeEmph": "exact",
