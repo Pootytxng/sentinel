@@ -92,6 +92,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         return Promise.resolve(state.recs);
       case "get_session_summaries":
         return Promise.resolve(state.sessions);
+      case "get_applied_changes":
+        return Promise.resolve([]);
       case "start_fps_capture":
         state.startCaptureCalls += 1;
         state.reads = 0;
@@ -617,5 +619,15 @@ describe("CR-next-reuse-moved: a Trial's own apply and put-back count as moves",
     expect(trialMovedSince([], "not a date")).toBe(true);
     expect(trialMovedSince([trial("garbled", "kept")], AS_IS)).toBe(true);
     expect(trialMovedSince([trial("2026-11-10T12:00:00Z", "restored", "garbled")], AS_IS)).toBe(true);
+  });
+  // CR-next-moved-outside: the start's §3 check counts a "changed outside Compy" record's time as a
+  // move (experiment.rs `outside_recorded_at`), so the offer does too. Fails on the old helper.
+  it("a changed-outside record written after the session moves it; an unread ledger counts as moved", () => {
+    const rec = (recorded_at: string) => ({ changed_outside: { recorded_at } });
+    expect(trialMovedSince([], AS_IS, [rec("2026-11-11T12:30:00Z")])).toBe(true);
+    expect(trialMovedSince([], AS_IS, [rec("2026-11-10T12:30:00Z")])).toBe(false);
+    expect(trialMovedSince([], AS_IS, [rec("garbled")])).toBe(true);
+    expect(trialMovedSince([], AS_IS, [{ changed_outside: null }, {}])).toBe(false);
+    expect(trialMovedSince([], AS_IS, null)).toBe(true);
   });
 });

@@ -406,19 +406,25 @@ export function reusableAsIs(sessions: SessionSummary[], id: string | null, game
  *  starts, and one that ended without keeping it (restored, aborted) rolled it back when it ended; a
  *  kept or running Trial's end moved nothing. A date that can't be read counts as after (an unknown
  *  never passes as "nothing moved"); an end with no date counts only by its start, as an undo too old
- *  to carry a date does there. Changes made outside a Trial are the start's to catch. */
+ *  to carry a date does there. A "changed outside Compy" record written after it counts too, as the
+ *  start's `outside_recorded_at` does (`changes`; null = the ledger couldn't be read, which counts as
+ *  moved). Other changes made outside a Trial are the start's to catch. */
 export function trialMovedSince(
   experiments: readonly { created_at?: string | null; concluded_at?: string | null; status?: string | null }[],
   since: string | null,
+  changes: readonly { changed_outside?: { recorded_at?: string | null } | null }[] | null = [],
 ): boolean {
   const t0 = since == null ? NaN : Date.parse(since);
   if (!Number.isFinite(t0)) return true;
+  if (changes == null) return true;
   const after = (at: string | null | undefined) => {
     const t = at == null ? NaN : Date.parse(at);
     return !Number.isFinite(t) || t > t0;
   };
-  return experiments.some(
-    (x) => after(x.created_at) || (x.status !== "kept" && x.status !== "running" && x.concluded_at != null && after(x.concluded_at)),
+  return (
+    experiments.some(
+      (x) => after(x.created_at) || (x.status !== "kept" && x.status !== "running" && x.concluded_at != null && after(x.concluded_at)),
+    ) || changes.some((c) => c.changed_outside != null && after(c.changed_outside.recorded_at))
   );
 }
 
