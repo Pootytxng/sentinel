@@ -1346,7 +1346,7 @@ fn record_operation_failure(operation: &str, code: &str, err: &str) {
 
 /// The audited apply. The UI's `apply_recommendation` command is `experiment::apply_recommendation`,
 /// which refuses a setting a running Trial holds and then calls this under the Trial store gate
-/// (CR-rp-same-setting-row); the Trial start, the benchmark trial and real play call this directly.
+/// (CR-rp-same-setting-row); the Trial lifecycle inside that gate calls this directly.
 pub(crate) fn apply_recommendation(rec_id: String, rec_title: String) -> Result<AppliedChangeView, String> {
     apply_reported(&rec_id, &rec_title, None)
 }
