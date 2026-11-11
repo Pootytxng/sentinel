@@ -316,7 +316,8 @@ pub(crate) fn visual_effects_for_best_performance() -> bool {
 // VBS toggle covers the common configurations: some systems have VBS off but
 // HVCI on, some have VBS on without HVCI explicitly toggled. We report
 // "active" if either flag indicates protection is engaged, because the FPS
-// cost path applies in both cases.
+// cost path applies in both cases. The Diagnostics row reads `memory_integrity_or_vbs_configured`
+// instead (absent ≠ off, policy keys too), so the two can differ by design.
 pub(crate) fn memory_integrity_or_vbs_active() -> bool {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let hvci_on = hklm
@@ -343,15 +344,7 @@ pub(crate) fn memory_integrity_or_vbs_configured() -> Option<bool> {
     let read = |path: &str, name: &str| -> Option<u32> {
         hklm.open_subkey(path).and_then(|k| k.get_value::<u32, _>(name)).ok()
     };
-    combine_vbs_switches(&[
-        read(
-            "SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity",
-            "Enabled",
-        ),
-        read(
-            "SYSTEM\\CurrentControlSet\\Control\\DeviceGuard",
-            "EnableVirtualizationBasedSecurity",
-        ),
+    let policy = [
         read(
             "SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard",
             "EnableVirtualizationBasedSecurity",
@@ -361,7 +354,28 @@ pub(crate) fn memory_integrity_or_vbs_configured() -> Option<bool> {
             "SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard",
             "HypervisorEnforcedCodeIntegrity",
         ),
-    ])
+    ];
+    let local = [
+        read(
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity",
+            "Enabled",
+        ),
+        read(
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceGuard",
+            "EnableVirtualizationBasedSecurity",
+        ),
+    ];
+    vbs_configured_from(&policy, &local)
+}
+
+/// A written Group Policy value wins over the local keys (policy overrides them); with no policy
+/// written, the local keys decide.
+pub(crate) fn vbs_configured_from(policy: &[Option<u32>], local: &[Option<u32>]) -> Option<bool> {
+    if policy.iter().any(Option::is_some) {
+        combine_vbs_switches(policy)
+    } else {
+        combine_vbs_switches(local)
+    }
 }
 
 /// Pure half of `memory_integrity_or_vbs_configured`: any written switch that is non-zero = on;

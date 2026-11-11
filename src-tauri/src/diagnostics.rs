@@ -61,7 +61,8 @@ pub(crate) fn vbs_running_entry(
 
 /// The configured-switches row (CR-vbs-row-truth). Absent switches read "Not set in registry",
 /// never "No": VBS turned on by default or policy often writes none of them. A written "off" next
-/// to a live "Running" says both instead of a bare "No" the next row contradicts.
+/// to Device Guard reporting it on (running, or turned on and not running) says both instead of a
+/// bare "No" the next row contradicts.
 pub(crate) fn vbs_configured_entry(
     configured: Option<bool>,
     virt: Option<&crate::hardware::VirtualizationInfo>,
@@ -71,8 +72,8 @@ pub(crate) fn vbs_configured_entry(
     let value = match configured {
         Some(true) => "Yes".to_string(),
         None => "Not set in registry".to_string(),
-        Some(false) if running == VbsState::Running => {
-            "Off in registry, running anyway (see next row)".to_string()
+        Some(false) if matches!(running, VbsState::Running | VbsState::EnabledNotRunning) => {
+            "Off in registry (Windows reports it on)".to_string()
         }
         Some(false) => "No".to_string(),
     };
@@ -818,17 +819,29 @@ mod diagnostics_tests {
         let v = |c: Option<bool>, virt: Option<&VirtualizationInfo>| vbs_configured_entry(c, virt).value;
         assert_eq!(v(None, Some(&running)), "Not set in registry");
         assert_eq!(v(None, None), "Not set in registry");
-        assert_eq!(v(Some(false), Some(&running)), "Off in registry, running anyway (see next row)");
+        let pending = VirtualizationInfo { vbs_state: VbsState::EnabledNotRunning, ..Default::default() };
+        assert_eq!(v(Some(false), Some(&running)), "Off in registry (Windows reports it on)");
+        assert_eq!(v(Some(false), Some(&pending)), "Off in registry (Windows reports it on)");
         assert_eq!(v(Some(false), Some(&off)), "No");
         assert_eq!(v(Some(false), None), "No");
         assert_eq!(v(Some(true), Some(&running)), "Yes");
         assert_eq!(vbs_configured_entry(None, None).label, "Memory Integrity / VBS turned on");
+    }
 
-        use crate::combine_vbs_switches as c;
-        assert_eq!(c(&[None, None, None, None]), None);
-        assert_eq!(c(&[None, Some(0), None, None]), Some(false));
-        assert_eq!(c(&[Some(0), Some(0), Some(1), None]), Some(true));
-        assert_eq!(c(&[None, None, None, Some(2)]), Some(true));
+    #[test]
+    fn vbs_switches_read_absent_as_unset_and_policy_wins() {
+        use crate::{combine_vbs_switches as c, vbs_configured_from as from};
+        assert_eq!(c(&[None, None]), None);
+        assert_eq!(c(&[None, Some(0)]), Some(false));
+        assert_eq!(c(&[Some(0), Some(1)]), Some(true));
+        assert_eq!(c(&[None, Some(2)]), Some(true));
+        // Nothing written anywhere: unset, not off.
+        assert_eq!(from(&[None, None], &[None, None]), None);
+        // A written policy wins over a leftover local switch, either way.
+        assert_eq!(from(&[None, Some(0)], &[Some(1), None]), Some(false));
+        assert_eq!(from(&[Some(1), None], &[Some(0), Some(0)]), Some(true));
+        // No policy: the local keys decide.
+        assert_eq!(from(&[None, None], &[Some(0), Some(1)]), Some(true));
     }
 
     #[test]
