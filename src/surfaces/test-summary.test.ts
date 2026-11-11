@@ -23,6 +23,7 @@ import {
   type SummaryExperiment,
   type TestedChange,
 } from "./test-summary";
+import { stillOnFor, type ResumeExperiment } from "./journey-resume";
 
 const GAME = "WardogsClient-Win64-Shipping.exe";
 const experiments = fixture.experiments as unknown as SummaryExperiment[];
@@ -114,6 +115,30 @@ describe("P4-exit summary on the owner's WARDOGS records", () => {
     const unsure = summarizeGame(GAME, kept, [cand("visual-effects", false, "already-set-unconfirmed")], sessions)!;
     expect(unsure.cantConfirm.map((r) => r.recId)).toEqual(["visual-effects"]);
     expect(unsure.staysApplied).toEqual([]);
+  });
+
+  // CR-summary-running-trial (evidence _train\view-1111a\o-08-resume-midtrial.json): a retest Trial on
+  // a restored change is running, so the picker reads it "set by Compy". That is the running Trial's own
+  // apply: on for that test, never "Applied now" or "Stays applied". Fails on the old summary.
+  it("a change a running Trial has on reads as on for that test, never as staying applied", () => {
+    const retest = { ...experiments[0], id: "exp:retest", verdict: null, kept: false, concluded_at: null, status: "running", created_at: "2026-11-11T05:00:00Z" };
+    const xs = [...experiments, retest];
+    const s = summarizeGame(GAME, xs, [cand("visual-effects", false, "already-set-by-compy")], sessions)!;
+    expect(s.tested).toHaveLength(1);
+    expect(s.tested[0].stillApplied).toBe("trial");
+    expect(s.staysApplied).toEqual([]);
+    // The same answer with no Trial running is still "applied now" and stays.
+    const kept = experiments.map((x, i) => (i === 0 ? { ...x, verdict: "improved", kept: true } : x));
+    expect(summarizeGame(GAME, kept, [cand("visual-effects", false, "already-set-by-compy")], sessions)!.staysApplied.map((r) => r.recId)).toEqual(["visual-effects"]);
+    // A record no longer running does not count.
+    const done = [...experiments, { ...retest, status: "restored" }];
+    expect(summarizeGame(GAME, done, [cand("visual-effects", false, "already-set-by-compy")], sessions)!.tested[0].stillApplied).toBe("on");
+    // The journey's "still on" list does not claim a kept change a running retest has on again.
+    const keptThenRetest = [...kept, retest] as unknown as ResumeExperiment[];
+    expect(stillOnFor(GAME, keptThenRetest, [cand("visual-effects", false, "already-set-by-compy")])).toEqual([]);
+    expect(stillOnFor(GAME, kept as unknown as ResumeExperiment[], [cand("visual-effects", false, "already-set-by-compy")])).toEqual([
+      experiments[0].rec_title,
+    ]);
   });
 
   it("a tested change the picker now leaves out is listed as tested, not as skipped", () => {

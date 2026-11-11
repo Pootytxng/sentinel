@@ -668,11 +668,15 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       `LEDGER_CHANGED_EVENT` and on window focus, so its words and button follow a plan switched again; a recorded
       line keeps its own copy and stays after a re-read stops offering it. 2 tests fail on the old component.
       Left: (a) and (d) touch the Trial/ledger record (Rust), (b) Applied & history + Game Readiness (TS + readiness).
-- [ ] **CR-summary-running-trial** (TS) While a retest Trial runs, the game summary's row for that change reads "Applied
+- [x] **CR-summary-running-trial** (TS) While a retest Trial runs, the game summary's row for that change reads "Applied
       now" and "Stays applied from these tests: <change>", though the tested Trial put it back; "on" is the running
       Trial's own apply (`stillAppliedFrom` reads the picker's already-set-by-compy). Say it is applied by the Trial in
       progress, or leave it out of "stays applied" while a Trial on it runs. Reproduces the PBZ note from 11-10.
       Evidence `_train\view-1111a\o-08-resume-midtrial.json` (exp:9 running; exp:7 restored).
+      Done `3bacacdd` (2026-11-11, CODE-ONLY, TS only, not installed): `stillAppliedNow` reads a change a `running`
+      Trial has on as "trial": the row says "On for the test in progress; not kept yet." (en + zh-CN), it is left out
+      of "stays applied", it is not the keep side of an outcome choice, and the journey's `stillOnFor` doesn't claim
+      it. Test fails on the old summary. Review (sonnet) APPROVE-WITH-NITS; SHOULD-FIX (`stillOnFor`) and nits taken.
 - [ ] **CR-next-reuse-moved** (TS) After exp:8 put Ultimate back, the next offer said "Next: Trim Windows visual effects,
       about 10 min" (reuse), then the start refused the reuse ("a Compy change was applied or undone after the baseline
       session") and asked for a new before-session (~20 min). `nextReuses` (`reusableAsIs`) should count the finished

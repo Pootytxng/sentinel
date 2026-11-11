@@ -873,6 +873,7 @@
       "testedLabel": "已测试：",
       "trials_other": "测试了 {{count}} 次",
       "stillOn": "目前已应用。",
+      "stillTrial": "正在进行的测试开启了它；尚未保留。",
       "stillCantConfirm": "Compy 之前应用过，但无法确认现在是否仍然生效。",
       "stillOff": "目前未应用。",
       "stillUnknown": "无法读取目前是否已应用。",

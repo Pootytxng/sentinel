@@ -896,6 +896,7 @@
       "trials_one": "tested {{count}} time",
       "trials_other": "tested {{count}} times",
       "stillOn": "Applied now.",
+      "stillTrial": "On for the test in progress; not kept yet.",
       "stillCantConfirm": "Compy applied it earlier and can't confirm it's still on.",
       "stillOff": "Not applied now.",
       "stillUnknown": "Couldn't read whether it's applied now.",
