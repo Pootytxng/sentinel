@@ -101,6 +101,7 @@
     "seeWhatChanged": "查看发生了什么变化",
     "driftPointerLabel_other": "{{count}} 项设置自上次正常以来已漂移",
     "driftItem": "{{label}}:{{detail}}",
+    "driftUnreadable": "{{label}}:上次看到时已更改,Compy 现在无法读取它。",
     "driftPointer": "「崩溃与卡死救援」的「自上次正常以来」里列出了每一项,以及 Compy 发现它的时间。",
     "hwChangeSuffix": "——新部件可能需要不同的设置,值得重新检测一次。",
     "hwChangedLabel": "自上次设置以来,你的硬件发生了变化",

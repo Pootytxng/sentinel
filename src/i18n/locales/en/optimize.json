@@ -118,6 +118,7 @@
     "driftPointerLabel_one": "1 setting changed since it was last good",
     "driftPointerLabel_other": "{{count}} settings changed since they were last good",
     "driftItem": "{{label}}: {{detail}}",
+    "driftUnreadable": "{{label}}: last seen changed; Compy can't read it now.",
     "driftPointer": "Crash & Freeze Rescue lists each one with when Compy noticed it, under \"Since it last worked\".",
     "hwChangeSuffix": "— new parts can want different settings, so it's worth a re-check.",
     "hwChangedLabel": "Your hardware changed since last setup",
