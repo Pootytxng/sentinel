@@ -83,6 +83,14 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 ## Queue
 
 ### Now — finish what's open
+- [x] **CR-zh-drift-count** (second whole-range review) zh-CN `home.json` driftCount strings still said "已漂移" after the English was reworded to "changed since they were last good" (`8d855c05`).
+      Done `e49b53ed` (2026-11-11 s18, TS only, not installed): both read "{{count}} 项设置自上次正常以来已改变". Test fails on
+      the old file. Full vitest 535/538 (the 3 site-app suites).
+- [x] **CR-update-refusal-path** (second whole-range review) `update_refusal_words` (lib.rs) shows a folder path with the Windows user name: confirm it cannot reach an exported report, support bundle or support event.
+      Checked 2026-11-11 s18, no change needed: `begin_update_restart` records its support event with a fixed sentence
+      ("a Gaming Mode session still has changes to restore..."), never the words; the words return only as the command's
+      Err to `use-update.ts`, which keeps them in React state for the Update pill and `console.warn`s them; nothing in
+      Compy captures the webview console (no log plugin, no console hook) and `export_report` reads only backend stores.
 - [x] **CR-undo-kept-plan** (second whole-range review) Undo after "Keep <plan>": the Undo confirm for a row recorded as changed outside must say that undoing switches the plan to the one Compy saved (name it), en + zh-CN.
       Done `d29d56ae` (2026-11-11 s18, TS only, not installed): App's rollback confirm for such a row says "You chose to
       keep <plan> ... Rolling back switches your power plan to <saved>, the plan Compy saved before it changed anything":
