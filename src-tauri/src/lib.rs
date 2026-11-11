@@ -316,7 +316,8 @@ pub(crate) fn visual_effects_for_best_performance() -> bool {
 // VBS toggle covers the common configurations: some systems have VBS off but
 // HVCI on, some have VBS on without HVCI explicitly toggled. We report
 // "active" if either flag indicates protection is engaged, because the FPS
-// cost path applies in both cases.
+// cost path applies in both cases. The Diagnostics row reads `memory_integrity_or_vbs_configured`
+// instead (absent ≠ off, policy keys too), so the two can differ by design.
 pub(crate) fn memory_integrity_or_vbs_active() -> bool {
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let hvci_on = hklm
@@ -332,6 +333,61 @@ pub(crate) fn memory_integrity_or_vbs_active() -> bool {
         .map(|v| v == 1)
         .unwrap_or(false);
     hvci_on || vbs_on
+}
+
+/// Tri-state read of the same switches for the Diagnostics row only (CR-vbs-row-truth): `None`
+/// when none of them is written, which is how a default- or policy-enabled VBS often looks, so
+/// absent is never shown as a definite "off". Also reads the Group Policy keys. Read-only; the
+/// rec engine keeps `memory_integrity_or_vbs_active` unchanged.
+pub(crate) fn memory_integrity_or_vbs_configured() -> Option<bool> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let read = |path: &str, name: &str| -> Option<u32> {
+        hklm.open_subkey(path).and_then(|k| k.get_value::<u32, _>(name)).ok()
+    };
+    let policy = [
+        read(
+            "SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard",
+            "EnableVirtualizationBasedSecurity",
+        ),
+        // Policy HVCI: 1 = on with UEFI lock, 2 = on without lock, 0 = off.
+        read(
+            "SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard",
+            "HypervisorEnforcedCodeIntegrity",
+        ),
+    ];
+    let local = [
+        read(
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity",
+            "Enabled",
+        ),
+        read(
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceGuard",
+            "EnableVirtualizationBasedSecurity",
+        ),
+    ];
+    vbs_configured_from(&policy, &local)
+}
+
+/// A written Group Policy value wins over the local keys (policy overrides them); with no policy
+/// written, the local keys decide.
+pub(crate) fn vbs_configured_from(policy: &[Option<u32>], local: &[Option<u32>]) -> Option<bool> {
+    if policy.iter().any(Option::is_some) {
+        combine_vbs_switches(policy)
+    } else {
+        combine_vbs_switches(local)
+    }
+}
+
+/// Pure half of `memory_integrity_or_vbs_configured`: any written switch that is non-zero = on;
+/// otherwise any written switch = off; nothing written = `None`.
+pub(crate) fn combine_vbs_switches(values: &[Option<u32>]) -> Option<bool> {
+    if values.iter().any(|v| matches!(v, Some(n) if *n != 0)) {
+        Some(true)
+    } else if values.iter().any(|v| v.is_some()) {
+        Some(false)
+    } else {
+        None
+    }
 }
 
 pub(crate) fn reserved_storage_enabled() -> bool {

@@ -129,7 +129,15 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       NVIDIA card only NVML reports leaves a session's peak graded (the ungrade rule reads DXGI only); `elevate_and_wait` waits with no timeout while
       the ledger is locked (`actions.rs`); core parking flags any non-performance plan with minimum cores at 100;
       drive health and memory speed or channels never rank as limiters.
-- [ ] **CR-vbs-row-truth** (whole-range review 2026-11-10, SHOULD-FIX) Diagnostics "Memory Integrity / VBS turned on" reads a definite "No" when the registry values are absent (VBS on by default/policy), beside "VBS running now: Running"; say "Not set in registry" instead. Read-only.
+- [x] **CR-vbs-row-truth** (whole-range review 2026-11-10, SHOULD-FIX) Diagnostics "Memory Integrity / VBS turned on" reads a definite "No" when the registry values are absent (VBS on by default/policy), beside "VBS running now: Running"; say "Not set in registry" instead. Read-only.
+      Done `13f46833`, `d8ab513d` (2026-11-11, CODE-ONLY, not installed): the row reads a separate tri-state
+      `memory_integrity_or_vbs_configured` (lib.rs; local DeviceGuard keys plus the Group Policy keys, a written policy
+      wins): nothing written → "Not set in registry"; written off beside Device Guard Running / turned on → "Off in
+      registry (Windows reports it on)". The rec engine's bool is unchanged. Test fails on the old yes/no. Reviews
+      (sonnet) r1 APPROVE-WITH-NITS (policy precedence, turned-on-not-running: taken), r2 APPROVE-WITH-NITS (queued
+      below). Owner's rig writes both local keys = 1, so it still reads "Yes".
+- [ ] **CR-vbs-local-eq1** (r2 SHOULD-FIX of CR-vbs-row-truth) `combine_vbs_switches` counts any non-zero local value as
+      on where the rec engine's bool needs `== 1`; use `== 1` for the two local keys (non-zero stays right for policy HVCI 2).
 - [ ] **CR-care-read-promise** (same review) Care's store-read failure says "it'll try again" but nothing re-reads; add a bounded backoff re-read and true final words (en + zh-CN); a save failing after unmount schedules nothing; an `opened:X` save-stopped clears when `dismissed:X` later succeeds.
 - [ ] **CR-capture-last-wins** (same review) `capture_serialized` is not FIFO, so start(pending) → stop → start can end off; stamp each request with a sequence at invoke time and skip one older than the newest applied.
 
