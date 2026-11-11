@@ -1160,14 +1160,16 @@ function App() {
   // CR-care-silent: a crash-notice record that can't be read or saved says so in one line.
   const careStore = useCareStore();
   const { readOk: careReadOk, readFailed: careReadFailed } = careStore;
-  const refreshPendingCare = useCallback(() => {
+  // A failed read hands this same read back to the store, which re-reads it with backoff
+  // (CR-care-read-promise) so the line's "it'll try again" is kept.
+  const refreshPendingCare = useCallback(function refresh() {
     invoke<PendingCareIncident | null>("get_pending_care_incident")
       .then((c) => {
         careReadOk();
         setPendingCare(c ?? null);
       })
       .catch(() => {
-        careReadFailed();
+        careReadFailed(refresh);
         setPendingCare(null);
       });
   }, [careReadOk, careReadFailed]);

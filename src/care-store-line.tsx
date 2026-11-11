@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
  * try it again. `saveStopped`: a choice is unsaved and its retries are spent. `read`: the crash
  * notices couldn't be checked. A retrying save outranks a stopped one, and any save outranks a read.
  */
-export type CareStoreTrouble = "save" | "saveStopped" | "read" | null;
+export type CareStoreTrouble = "save" | "saveStopped" | "read" | "readStopped" | null;
 
 /**
  * The automatic retries after a failed save, so "it'll try again" is a promise kept. After the
@@ -24,16 +24,42 @@ export type CareStoreTrouble = "save" | "saveStopped" | "read" | null;
  */
 export const CARE_SAVE_RETRY_MS = [5_000, 30_000, 120_000] as const;
 
+/**
+ * CR-care-read-promise: the re-reads after a failed read of the crash notices, so the read line's
+ * "it'll try again" is kept too. After the last one the line says the next check comes when the
+ * user opens another page (App reads on every room change).
+ */
+export const CARE_READ_RETRY_MS = [5_000, 30_000, 120_000] as const;
+
+/**
+ * A good save of one choice settles a spent save of another about the same incident: once
+ * "Not now" (`dismissed:X`) is saved the notice is gone, so an `opened:X` that stopped retrying no
+ * longer leaves anything to show again.
+ */
+const SETTLES: Record<string, string[]> = { dismissed: ["opened"] };
+
 type Chain = { timer: ReturnType<typeof setTimeout> | null };
 
 export function useCareStore() {
   // Unsaved choices, by key: `true` once that choice's retries are spent.
   const [unsaved, setUnsaved] = useState<ReadonlyMap<string, boolean>>(() => new Map());
-  const [readTrouble, setReadTrouble] = useState(false);
+  // null = the last read was fine; false = it failed and a re-read is coming; true = re-reads spent.
+  const [readTrouble, setReadTrouble] = useState<boolean | null>(null);
   const chains = useRef(new Map<string, Chain>());
+  const read = useRef<{ timer: ReturnType<typeof setTimeout> | null; step: number }>({ timer: null, step: 0 });
+  const mounted = useRef(true);
   useEffect(() => {
+    mounted.current = true;
     const live = chains.current;
-    return () => live.forEach((c) => c.timer && clearTimeout(c.timer));
+    const reading = read.current;
+    return () => {
+      // Unmounted: nothing more is scheduled, and an answer still in flight is dropped.
+      mounted.current = false;
+      live.forEach((c) => c.timer && clearTimeout(c.timer));
+      live.clear();
+      if (reading.timer) clearTimeout(reading.timer);
+      reading.timer = null;
+    };
   }, []);
   /**
    * Save a choice about a crash notice. `key` names the choice (command and incident), so one
@@ -47,16 +73,20 @@ export function useCareStore() {
     if (earlier?.timer) clearTimeout(earlier.timer);
     const chain: Chain = { timer: null };
     chains.current.set(key, chain);
-    const current = () => chains.current.get(key) === chain;
+    const current = () => mounted.current && chains.current.get(key) === chain;
+    const colon = key.indexOf(":");
+    const settled =
+      colon < 0 ? [] : (SETTLES[key.slice(0, colon)] ?? []).map((kind) => `${kind}${key.slice(colon)}`);
     const attempt = (retry: number) => {
       save().then(
         () => {
           if (!current()) return;
           chains.current.delete(key);
           setUnsaved((m) => {
-            if (!m.has(key)) return m;
+            const gone = [key, ...settled.filter((k) => m.get(k) === true)].filter((k) => m.has(k));
+            if (gone.length === 0) return m;
             const next = new Map(m);
-            next.delete(key);
+            gone.forEach((k) => next.delete(k));
             return next;
           });
         },
@@ -75,16 +105,45 @@ export function useCareStore() {
     };
     attempt(0);
   }, []);
-  const readFailed = useCallback(() => setReadTrouble(true), []);
-  const readOk = useCallback(() => setReadTrouble(false), []);
+  /**
+   * The crash notices couldn't be read. `again` is the caller's own read: it runs once after each
+   * backoff step while the reads keep failing, then stops and the line says so. A failure while a
+   * re-read is already waiting schedules nothing more; a good read (`readOk`) resets the steps.
+   */
+  const readFailed = useCallback((again: () => void) => {
+    if (!mounted.current) return;
+    const r = read.current;
+    if (r.timer) {
+      setReadTrouble((s) => (s === false ? s : false));
+      return;
+    }
+    const wait = CARE_READ_RETRY_MS[r.step];
+    const stopped = wait === undefined;
+    setReadTrouble(stopped);
+    if (stopped) return;
+    r.timer = setTimeout(() => {
+      r.timer = null;
+      r.step += 1;
+      if (mounted.current) again();
+    }, wait);
+  }, []);
+  const readOk = useCallback(() => {
+    const r = read.current;
+    if (r.timer) clearTimeout(r.timer);
+    r.timer = null;
+    r.step = 0;
+    if (mounted.current) setReadTrouble(null);
+  }, []);
   const states = [...unsaved.values()];
   const trouble: CareStoreTrouble = states.some((stopped) => !stopped)
     ? "save"
     : states.length > 0
       ? "saveStopped"
-      : readTrouble
+      : readTrouble === false
         ? "read"
-        : null;
+        : readTrouble === true
+          ? "readStopped"
+          : null;
   return { trouble, persist, readFailed, readOk };
 }
 
@@ -99,7 +158,9 @@ export function CareStoreLine({ trouble }: { trouble: CareStoreTrouble }) {
           ? t("app.careStore.saveFailed")
           : trouble === "saveStopped"
             ? t("app.careStore.saveStopped")
-            : t("app.careStore.readFailed")}
+            : trouble === "read"
+              ? t("app.careStore.readFailed")
+              : t("app.careStore.readStopped")}
       </p>
     </div>
   );
