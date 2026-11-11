@@ -140,6 +140,47 @@ describe("UpdatePill", () => {
     },
   );
 
+  // CR-1102-left owner call (delegated 2026-11-10): keep refusing, but name the file and offer Recover.
+  // Recover only asks App's own banner to show the contract it reads; it restores nothing itself.
+  it.each([
+    ["a contract to recover", { status: "restore-pending", session_id: "gm-1", changes: [] }, "shown"],
+    ["only a leftover temp file", null, "unreadable"],
+  ] as const)("a held update names the file and offers Recover (%s)", async (_label, session, note) => {
+    const update = makeUpdate();
+    updaterMocks.check.mockResolvedValue(update);
+    const refusal =
+      "Finish Gaming Mode or recover its pending changes before updating Compy. Compy found gaming-session.json.tmp in C:\\Compy.";
+    updaterMocks.invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "begin_update_restart") throw new Error(refusal);
+      if (cmd === "get_gaming_session_state") return session;
+      if (cmd === "gaming_session_is_live") return false;
+      return undefined;
+    });
+    const requests: unknown[] = [];
+    const onRequest = (e: Event) => requests.push((e as CustomEvent).detail);
+    window.addEventListener("compy:gaming-recovery-request", onRequest);
+
+    render(<UpdatePill />);
+    fireEvent.click(await screen.findByText(/update ready/));
+    fireEvent.click(screen.getByText("Update now"));
+    fireEvent.click(await screen.findByRole("button", { name: /finish Gaming Mode before updating/i }));
+    expect(screen.getByTestId("update-blocked-why").textContent).toBe(refusal);
+    fireEvent.click(screen.getByRole("button", { name: "Recover" }));
+    const line = await screen.findByTestId("update-blocked-recover-note");
+    window.removeEventListener("compy:gaming-recovery-request", onRequest);
+    if (note === "shown") {
+      expect(line.textContent).toMatch(/restore is open at the top of the window/);
+      expect(requests).toEqual([session]);
+    } else {
+      expect(line.textContent).toMatch(/can't read a Gaming Mode session to restore from that file/);
+      expect(requests).toEqual([]);
+    }
+    // Recover changed nothing: no restore, no download, no relaunch.
+    expect(updaterMocks.invoke).not.toHaveBeenCalledWith("recover_gaming_session", expect.anything());
+    expect(update.downloadAndInstall).not.toHaveBeenCalled();
+    expect(updaterMocks.relaunch).not.toHaveBeenCalled();
+  });
+
   it("Later hides the current version but a newly offered version becomes visible", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const first = makeUpdate("9.9.9");

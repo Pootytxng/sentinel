@@ -40,7 +40,12 @@ import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./type
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { primaryGpu, sessionPeakVendor } from "./data/gpu-sensor";
-import { bannerAfterPaneClose, contractLeftByFailedStart, readSessionSlot } from "./data/gaming-session-route";
+import {
+  bannerAfterPaneClose,
+  contractLeftByFailedStart,
+  GAMING_RECOVERY_REQUEST_EVENT,
+  readSessionSlot,
+} from "./data/gaming-session-route";
 import { createGenerations } from "./data/latest-wins";
 import { invalidateProbe } from "./data/probe-cache";
 import { setStartupEntryEnabled } from "./data/startup-toggle";
@@ -727,6 +732,18 @@ function App() {
       setGamingRestoring(false);
     }
   };
+  // CR-1102-left owner call (delegated 2026-11-10): the update refusal's Recover brings back this
+  // banner for the contract it read, un-hidden; the restore itself is still the banner's own button.
+  useEffect(() => {
+    const onRequest = (e: Event) => {
+      const session = (e as CustomEvent<GamingSessionFile | null>).detail;
+      if (!session) return;
+      setGamingRecovery(session);
+      setRecoveryToastHidden(false);
+    };
+    window.addEventListener(GAMING_RECOVERY_REQUEST_EVENT, onRequest);
+    return () => window.removeEventListener(GAMING_RECOVERY_REQUEST_EVENT, onRequest);
+  }, []);
   // The Gaming pane resolved the session (Stop / Return to normal / Resume) → drop the
   // global banner's stale prompt, or it would re-prompt for an already-restored session
   // on the next tab switch (self-review catch, 2026-07-08). Never touches gamingRestored:

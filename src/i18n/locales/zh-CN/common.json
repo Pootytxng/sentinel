@@ -128,7 +128,16 @@
     "updateNow": "立即更新",
     "later": "以后再说",
     "fineprint": "安装前会验证签名 · Compy 会自动重启",
-    "whatsNew": "更新内容"
+    "whatsNew": "更新内容",
+    "blocked": "请先结束游戏模式再更新",
+    "blockedAriaLabel": "更新被暂缓的原因",
+    "recover": "恢复",
+    "tryAgain": "重试",
+    "recoverNote": {
+      "shown": "Compy 的游戏模式恢复提示已在窗口顶部打开(如果游戏模式页面开着,则在游戏模式卡片上)。请在那里查看,然后再试一次更新。",
+      "live": "游戏模式现在正开着。请在游戏模式里关闭它,然后再试一次更新。",
+      "unreadable": "Compy 无法从那个文件读出可以恢复的游戏模式会话,所以不会动这个文件,也会继续暂缓更新。"
+    }
   },
   "walkthrough": {
     "whichCard": "选择显卡",

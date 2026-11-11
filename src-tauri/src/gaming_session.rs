@@ -138,10 +138,17 @@ pub(crate) fn session_data_dir() -> PathBuf {
 /// unreadable, future-schema, temp, and quarantined contracts all block a restart instead of being
 /// collapsed into "no session." An unreadable directory also fails closed.
 pub(crate) fn has_pending_contract() -> Result<bool, String> {
+    pending_contract_files().map(|found| !found.is_empty())
+}
+
+/// CR-1102-left owner call (delegated 2026-11-10): the same check, naming what it found so the
+/// update refusal can say which file holds the update back. Every `gaming-session*` name in the
+/// session folder, sorted; the same fail-closed read as [`has_pending_contract`].
+pub(crate) fn pending_contract_files() -> Result<Vec<String>, String> {
     let dir = session_data_dir();
     let entries = match std::fs::read_dir(&dir) {
         Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => {
             return Err(format!(
                 "could not verify Gaming Mode recovery state at {}: {error}",
@@ -149,6 +156,7 @@ pub(crate) fn has_pending_contract() -> Result<bool, String> {
             ))
         }
     };
+    let mut found = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|error| {
             format!(
@@ -156,11 +164,13 @@ pub(crate) fn has_pending_contract() -> Result<bool, String> {
                 dir.display()
             )
         })?;
-        if entry.file_name().to_string_lossy().starts_with("gaming-session") {
-            return Ok(true);
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with("gaming-session") {
+            found.push(name);
         }
     }
-    Ok(false)
+    found.sort();
+    Ok(found)
 }
 
 fn session_path() -> PathBuf {
@@ -411,8 +421,21 @@ mod tests {
         ] {
             std::fs::write(dir.join(name), "unreadable-but-must-not-be-lost").unwrap();
             assert!(has_pending_contract().unwrap(), "{name} must block update/restart");
+            assert_eq!(pending_contract_files().unwrap(), vec![name.to_string()], "the refusal names {name}");
             std::fs::remove_file(dir.join(name)).unwrap();
         }
+    }
+
+    #[test]
+    fn the_refusal_names_every_contract_file_sorted_and_nothing_else() {
+        // CR-1102-left owner call (delegated 2026-11-10): keep refusing, but name the file.
+        let dir = temp_dir("update-restart-names");
+        let _redirect = SessionDirOverride::begin(&dir);
+        assert!(pending_contract_files().unwrap().is_empty());
+        std::fs::write(dir.join("history.json"), "[]").unwrap();
+        std::fs::write(dir.join("gaming-session.json.tmp"), "x").unwrap();
+        std::fs::write(dir.join(GAMING_SESSION_FILE), "x").unwrap();
+        assert_eq!(pending_contract_files().unwrap(), vec![GAMING_SESSION_FILE.to_string(), "gaming-session.json.tmp".to_string()]);
     }
 }
 

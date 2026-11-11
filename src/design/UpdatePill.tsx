@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import "./update-pill.css";
 import { useUpdate } from "./use-update";
+import { recoverFromUpdateRefusal, type RecoverFromRefusal } from "../data/gaming-session-route";
 
 /**
  * Release notes arrive as one prose blob (the GitHub release body via the updater manifest).
@@ -29,6 +30,7 @@ export function UpdatePill() {
   const { t } = useTranslation();
   const { phase, dismissed, install, dismiss } = useUpdate();
   const [open, setOpen] = useState(false);
+  const [recoverNote, setRecoverNote] = useState<RecoverFromRefusal | null>(null);
 
   if (phase.kind === "idle") return null;
   if (phase.kind === "available" && dismissed) return null;
@@ -58,15 +60,54 @@ export function UpdatePill() {
     );
   }
   if (phase.kind === "blocked") {
+    // CR-1102-left owner call (delegated 2026-11-10): the update stays refused, and the refusal says
+    // which file holds it back (the backend's words) and offers Recover, which opens Compy's own
+    // recovery banner where the restore is reviewed; it changes nothing on the PC by itself.
+    const recover = () => {
+      void recoverFromUpdateRefusal()
+        .then(setRecoverNote)
+        .catch(() => setRecoverNote("unreadable"));
+    };
     return (
-      <button
-        type="button"
-        className="v2-update v2-update-err"
-        onClick={install}
-        title={phase.message}
-      >
-        finish Gaming Mode before updating
-      </button>
+      <span className="v2-update-wrap">
+        <button
+          type="button"
+          className="v2-update v2-update-err"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          title={phase.message}
+        >
+          {t("common.updatePill.blocked")}
+        </button>
+        {open && (
+          <div className="v2-update-panel" role="dialog" aria-label={t("common.updatePill.blockedAriaLabel")}>
+            <div className="v2-update-fine" data-testid="update-blocked-why">
+              {phase.message}
+            </div>
+            {recoverNote && (
+              <div className="v2-update-fine" data-testid="update-blocked-recover-note">
+                {t(`common.updatePill.recoverNote.${recoverNote}`)}
+              </div>
+            )}
+            <div className="v2-update-row">
+              <button type="button" className="v2-update-go" onClick={recover}>
+                {t("common.updatePill.recover")}
+              </button>
+              <button
+                type="button"
+                className="v2-update-later"
+                onClick={() => {
+                  setOpen(false);
+                  setRecoverNote(null);
+                  install();
+                }}
+              >
+                {t("common.updatePill.tryAgain")}
+              </button>
+            </div>
+          </div>
+        )}
+      </span>
     );
   }
   if (phase.kind === "restart-required") {
