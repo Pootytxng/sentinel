@@ -93,6 +93,8 @@ export type SummaryExperiment = {
   mode?: string | null;
   /** P5-realplay: the sessions a real-play Trial judged on (experiment.rs `real_play`). */
   real_play?: { before?: readonly unknown[] | null; with?: readonly unknown[] | null } | null;
+  /** experiment.rs `status`: "running" while a Trial is open. Absent in older fixtures. */
+  status?: string | null;
 };
 
 /** P8-posture-show: a Trial's recorded risk choice; null when it isn't recorded or this build doesn't
@@ -112,7 +114,20 @@ export type SummaryCandidate = {
   too_small?: { effect_pct: number; band_pct: number } | null;
 };
 
-export type StillApplied = "on" | "cant-confirm" | "off" | "set-not-by-compy" | "gaming-mode" | "unknown";
+/** "trial" = on, but only because a Trial that is still running applied it: it is on for that test,
+ *  never kept (CR-summary-running-trial). */
+export type StillApplied = "on" | "trial" | "cant-confirm" | "off" | "set-not-by-compy" | "gaming-mode" | "unknown";
+
+/** The changes a Trial that is still running has on (any game: the change is PC-wide). */
+export function runningTrialRecs(experiments: readonly { rec_id: string; status?: string | null }[]): Set<string> {
+  return new Set(experiments.filter((x) => x.status === "running").map((x) => x.rec_id));
+}
+
+/** `stillAppliedFrom`, with a change a running Trial has on read as on for that test, not applied. */
+export function stillAppliedNow(c: SummaryCandidate | undefined, recId: string, running: ReadonlySet<string>): StillApplied {
+  const live = stillAppliedFrom(c);
+  return live === "on" && running.has(recId) ? "trial" : live;
+}
 
 /** What the picker's live answer for a tested change says about it being applied now. */
 export function stillAppliedFrom(c: SummaryCandidate | undefined): StillApplied {
@@ -520,7 +535,11 @@ export function summarizeGame(
   const judged = experiments.filter((x) => x.game === game && x.verdict != null);
   if (judged.length === 0) return null;
 
-  const stillApplied = (recId: string): StillApplied => stillAppliedFrom(candidates?.find((c) => c.id === recId));
+  // CR-summary-running-trial: a change a running Trial applied reads "on" in the picker, but it is on
+  // only for that test, so it is never "applied now" or "stays applied".
+  const running = runningTrialRecs(experiments);
+  const stillApplied = (recId: string): StillApplied =>
+    stillAppliedNow(candidates?.find((c) => c.id === recId), recId, running);
 
   const { context, contextAt, matchOf, sameContext } = contextCheckFor(game, sessions);
 
@@ -733,13 +752,15 @@ export function outcomeChoices(
     newest.set(x.rec_id, row);
   }
   const out: { first: number; choice: OutcomeChoice }[] = [];
+  const running = runningTrialRecs(experiments);
   for (const [recId, row] of newest) {
     const rec = row.recommended;
     const max = row["max-fps"];
     if (!rec || !max || rec.keeps === max.keeps) continue;
     const keep = rec.keeps ? rec : max;
     const other = rec.keeps ? max : rec;
-    const live = stillAppliedFrom(candidates?.find((c) => c.id === recId));
+    // A running Trial's own apply is not the keep side in effect (CR-summary-running-trial).
+    const live = stillAppliedNow(candidates?.find((c) => c.id === recId), recId, running);
     const keepContext = matchOf(baselineOf.get(keep.trialId));
     out.push({ first: row.first, choice: {
       recId,

@@ -29,7 +29,8 @@ import {
   unusableRunsOf,
   judgedAt,
   RETEST_CAP,
-  stillAppliedFrom,
+  runningTrialRecs,
+  stillAppliedNow,
   type ContextMatch,
   type RetestReason,
   type SummaryCandidate,
@@ -187,8 +188,10 @@ export function stillOnFor(
   const newest = new Map<string, ResumeExperiment>();
   for (const x of experiments.filter((x) => x.game === game && x.verdict != null).sort((a, b) => when(a) - when(b)))
     newest.set(x.rec_id, x);
+  const running = runningTrialRecs(experiments);
   return [...newest.values()]
-    .filter((x) => x.kept && stillAppliedFrom(candidates?.find((c) => c.id === x.rec_id)) === "on")
+    // A kept change a running retest has on again may end restored: not claimed (CR-summary-running-trial).
+    .filter((x) => x.kept && stillAppliedNow(candidates?.find((c) => c.id === x.rec_id), x.rec_id, running) === "on")
     .map((x) => x.rec_title);
 }
 

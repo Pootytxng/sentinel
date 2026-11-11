@@ -1700,6 +1700,7 @@ export default function ExperimentBench({
 
 const STILL_APPLIED_KEY: Record<StillApplied, string> = {
   on: "lab.experimentBench.summary.stillOn",
+  trial: "lab.experimentBench.summary.stillTrial",
   "cant-confirm": "lab.experimentBench.summary.stillCantConfirm",
   off: "lab.experimentBench.summary.stillOff",
   "set-not-by-compy": "lab.experimentBench.summary.stillSetNotByCompy",
