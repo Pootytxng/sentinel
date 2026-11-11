@@ -83,6 +83,10 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 ## Queue
 
 ### Now — finish what's open
+- [x] **CR-next-moved-outside** (second whole-range review) `trialMovedSince` (GuidedJourney.tsx) did not count `changed_outside.recorded_at` as a move, which the start's §3 check does, so the next-test offer could under-promise.
+      Done `93f679f3` (2026-11-11 s18, TS only, not installed): `trialMovedSince` takes the ledger rows (the bench's reload
+      reads `get_applied_changes`; unread counts as moved) and counts a record written after the as-is session began, or
+      undated. Test fails on the old helper. tsc 0, full vitest 533/536 (the 3 site-app suites).
 - [x] **CR-capture-superseded** (second whole-range review) A capture start skipped because a later stop won still answered Ok (monitoring.rs `start_fps_capture_ticketed`).
       Done `ce9d2c9e`, `e5df46fe` (2026-11-11 s18, not installed): the superseded answer is read under the capture lock:
       Ok when a newer start left capture on, Err `capture-superseded` when a newer stop left it off. The journey's

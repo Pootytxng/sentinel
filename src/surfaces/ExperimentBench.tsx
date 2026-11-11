@@ -749,6 +749,8 @@ export default function ExperimentBench({
   // Counts finished reloads, so a check that depends on more than what the bench holds (the change
   // history behind Smoothest's readiness) is asked again after each one.
   const [reloads, setReloads] = useState(0);
+  // The ledger rows as the last reload read them; null = not read (yet), which counts as moved.
+  const [ledger, setLedger] = useState<AppliedChange[] | null>(null);
 
   const [pickId, setPickId] = useState<string>("");
   const [sim, setSim] = useState<SimulatorReport | null>(null);
@@ -785,16 +787,20 @@ export default function ExperimentBench({
   const reloadReq = useRef(0);
   const reload = useCallback(async () => {
     const reqId = ++reloadReq.current;
-    const [xs, rs, ss] = await Promise.all([
+    const [xs, rs, ss, cs] = await Promise.all([
       invoke<Experiment[]>("get_experiments").catch(() => []),
       invoke<TrialCandidate[]>("get_trial_candidates", { riskChoice }).catch(() => null),
       invoke<SessionSummary[]>("get_session_summaries").catch(() => []),
+      // CR-next-moved-outside: a "changed outside Compy" record moves the as-is session for the
+      // start's §3 check, so the next-test offer reads the ledger too (unread = moved).
+      invoke<AppliedChange[]>("get_applied_changes").catch(() => null),
     ]);
     if (reloadReq.current !== reqId) return; // superseded by a newer read - drop it
     setExperiments(xs ?? []);
     setRecs(rs ?? []);
     if (rs != null) setRecsLoaded(true);
     setSessions(ss ?? []);
+    setLedger(Array.isArray(cs) ? cs : null);
     setReloads((n) => n + 1);
   }, [riskChoice]);
 
@@ -1270,13 +1276,13 @@ export default function ExperimentBench({
           nextReuses={
             journey.kind === "result" &&
             reusableAsIs(sessions, journey.asIs, journey.exp.game) != null &&
-            !trialMovedSince([...experiments, journey.exp], journey.asIs)
+            !trialMovedSince([...experiments, journey.exp], journey.asIs, ledger)
           }
           refresh={settle}
           riskChoice={riskChoice}
           progress={progress}
           resumeReuses={
-            progress != null && reusableAsIs(sessions, progress.asIs, progress.game) != null && !trialMovedSince(experiments, progress.asIs)
+            progress != null && reusableAsIs(sessions, progress.asIs, progress.game) != null && !trialMovedSince(experiments, progress.asIs, ledger)
           }
           stillOn={progress ? stillOnFor(progress.game, experiments, recs) : []}
           realPlay={running ? null : (rp?.progress ?? null)}

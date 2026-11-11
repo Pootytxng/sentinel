@@ -105,6 +105,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         return Promise.resolve(state.recs);
       case "get_session_summaries":
         return Promise.resolve(state.sessions);
+      case "get_applied_changes":
+        return Promise.resolve([]);
       case "start_fps_capture":
         state.startCaptureCalls += 1;
         state.reads = 0;
