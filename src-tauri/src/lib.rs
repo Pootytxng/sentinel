@@ -1073,8 +1073,9 @@ async fn latency_measure_mouse(duration_ms: u32) -> Option<latency::MouseMeasure
 ///
 /// CR-capture-async: `start_fps_capture` (which waits up to 5 s for an old helper and launches an
 /// elevated one) and `stop_fps_capture` are served here too. They take turns under one lock in
-/// monitoring.rs (`capture_serialized`), so a stop pressed during a start's wait runs after that
-/// start and leaves capture off.
+/// monitoring.rs (`capture_in_order`), so a stop pressed during a start's wait runs after that
+/// start and leaves capture off; each takes a ticket at invoke time and a request older than the
+/// newest one applied is skipped, so the last press wins (CR-capture-last-wins).
 mod off_main {
     /// Run `work` on the blocking pool and hand back exactly what it returned. The pool only fails
     /// a task that panicked; that panic is re-raised here, so it is printed and that one invoke is
@@ -1157,12 +1158,18 @@ mod off_main {
 
     #[tauri::command]
     pub(crate) async fn start_fps_capture() -> Result<(), String> {
-        blocking_result("starting the capture", crate::monitoring::start_fps_capture).await
+        // The ticket is taken here, in invoke order, before the blocking pool (CR-capture-last-wins).
+        let ticket = crate::monitoring::capture_ticket();
+        blocking_result("starting the capture", move || {
+            crate::monitoring::start_fps_capture_ticketed(ticket)
+        })
+        .await
     }
 
     #[tauri::command]
     pub(crate) async fn stop_fps_capture() {
-        blocking(crate::monitoring::stop_fps_capture).await
+        let ticket = crate::monitoring::capture_ticket();
+        blocking(move || crate::monitoring::stop_fps_capture_ticketed(ticket)).await
     }
 
     /// The commands served here, by the name the window invokes. The tests hold the handler list
