@@ -1158,7 +1158,9 @@ mod off_main {
 
     #[tauri::command]
     pub(crate) async fn start_fps_capture() -> Result<(), String> {
-        // The ticket is taken here, in invoke order, before the blocking pool (CR-capture-last-wins).
+        // The ticket is taken here, before the blocking pool (CR-capture-last-wins): when this
+        // command's body first runs, which follows the window's invoke order except for two
+        // invokes landing within the same instant on different runtime workers (residual).
         let ticket = crate::monitoring::capture_ticket();
         blocking_result("starting the capture", move || {
             crate::monitoring::start_fps_capture_ticketed(ticket)

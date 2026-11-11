@@ -1813,7 +1813,10 @@ mod capture_generation_tests {
         // Its own lock and tickets, so tests running alongside can't move them.
         let ctl = Arc::new(Mutex::new(0u64));
         let seq = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let ticket = { let seq = seq.clone(); move || seq.fetch_add(1, Ordering::SeqCst) + 1 };
+        let ticket = {
+            let seq = seq.clone();
+            move || seq.fetch_add(1, Ordering::SeqCst) + 1
+        };
 
         // Start, then stop, one after the other: off at the end.
         in_order_on(&ctl, ticket(), (), || on.store(true, Ordering::SeqCst));
