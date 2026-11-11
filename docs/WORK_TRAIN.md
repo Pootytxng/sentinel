@@ -138,7 +138,11 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       below). Owner's rig writes both local keys = 1, so it still reads "Yes".
 - [ ] **CR-vbs-local-eq1** (r2 SHOULD-FIX of CR-vbs-row-truth) `combine_vbs_switches` counts any non-zero local value as
       on where the rec engine's bool needs `== 1`; use `== 1` for the two local keys (non-zero stays right for policy HVCI 2).
-- [ ] **CR-care-read-promise** (same review) Care's store-read failure says "it'll try again" but nothing re-reads; add a bounded backoff re-read and true final words (en + zh-CN); a save failing after unmount schedules nothing; an `opened:X` save-stopped clears when `dismissed:X` later succeeds.
+- [x] **CR-care-read-promise** (same review) Care's store-read failure says "it'll try again" but nothing re-reads; add a bounded backoff re-read and true final words (en + zh-CN); a save failing after unmount schedules nothing; an `opened:X` save-stopped clears when `dismissed:X` later succeeds.
+      Done `6982832a` (2026-11-11, CODE-ONLY, not installed): `readFailed(again)` re-runs App's own read after 5 s /
+      30 s / 2 min (`CARE_READ_RETRY_MS`; reset by a good read, cleared on unmount), then "…it'll check again when you
+      open another page" (`app.careStore.readStopped`, en + zh-CN). Unmount clears every chain and drops late answers;
+      a saved `dismissed:X` settles a spent `opened:X`. 5 tests fail on the old code. TS only, no review required.
 - [ ] **CR-capture-last-wins** (same review) `capture_serialized` is not FIFO, so start(pending) → stop → start can end off; stamp each request with a sequence at invoke time and skip one older than the newest applied.
 
 ### Next — small visible slices (refill 2026-11-03: CR-1102-left's fixable lines + Roadmap Phase 9)

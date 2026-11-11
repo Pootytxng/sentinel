@@ -55,7 +55,8 @@
   "careStore": {
     "saveFailed": "Compy couldn't save this; it'll try again",
     "saveStopped": "Compy couldn't save this; the crash notice may show again",
-    "readFailed": "Compy couldn't check for crash notices; it'll try again"
+    "readFailed": "Compy couldn't check for crash notices; it'll try again",
+    "readStopped": "Compy couldn't check for crash notices; it'll check again when you open another page"
   },
   "gamingToast": {
     "hideRecoveryAria": "Hide this reminder — you can still restore from the Gaming panel",
