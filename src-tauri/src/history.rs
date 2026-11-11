@@ -730,20 +730,24 @@ fn into_view_with(c: AppliedChange, reads: &LiveReads) -> AppliedChangeView {
 /// `get_applied_changes`; this borrows so the raw rows survive for the caller's other projections.
 pub(crate) fn applied_change_views(history: &[AppliedChange]) -> Vec<AppliedChangeView> {
     let reads = LiveReads::default();
-    // CR-outside-followups (b): one active-plan read for the pass, only when a row carries a record.
-    let observed = kept_outside_observed(history);
-    history
-        .iter()
-        .cloned()
-        .map(|c| {
-            let holds = c
-                .changed_outside
-                .as_ref()
-                .and_then(ChangedOutside::usable)
-                .map(|_| recorded_and_holding(&c, observed.as_ref()));
-            AppliedChangeView { changed_outside_holds: holds, ..into_view_with(c, &reads) }
-        })
-        .collect()
+    let mut views: Vec<AppliedChangeView> = history.iter().cloned().map(|c| into_view_with(c, &reads)).collect();
+    // CR-outside-followups (b): whether each recorded row's state still holds. One active-plan read
+    // for the pass, and only when an applied row with a usable record reads off: the only case a
+    // surface uses it for (review r2: this view is read on the UI thread, so no read otherwise).
+    let recorded_off = |c: &AppliedChange, v: &AppliedChangeView| {
+        c.status == "applied"
+            && v.active_check == Some(ActiveCheck::Off)
+            && c.changed_outside.as_ref().and_then(ChangedOutside::usable).is_some()
+    };
+    if history.iter().zip(&views).any(|(c, v)| recorded_off(c, v)) {
+        let observed = kept_outside_observed(history);
+        for (c, v) in history.iter().zip(views.iter_mut()) {
+            if recorded_off(c, v) {
+                v.changed_outside_holds = Some(recorded_and_holding(c, observed.as_ref()));
+            }
+        }
+    }
+    views
 }
 
 /// Test-only constructor for a ledger VIEW with the computed-at-read fields set directly, so a
