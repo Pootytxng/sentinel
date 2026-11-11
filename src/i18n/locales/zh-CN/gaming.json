@@ -12,6 +12,8 @@
     "suspendServiceItem": "暂停 {{service}}",
     "consentTitle": "要开启游戏模式吗?",
     "consentIntro": "在本次会话中,Compy 将会更改:",
+    "extrasConsentTitle": "也开启这些吗?",
+    "extrasConsentIntro": "你之前已同意开启游戏模式。以下几项是之后新勾选的,所以 Compy 在本次会话更改它们之前会再问你一次:",
     "guaranteeLabel": "承诺:",
     "guaranteeMid": "每一项更改都会在生效前被快照记录,并在你停止时恢复到",
     "guaranteeEmph": "完全一致的",

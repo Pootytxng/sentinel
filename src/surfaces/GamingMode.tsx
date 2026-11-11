@@ -27,6 +27,36 @@ import "./GamingMode.css";
 import "./gaming-console.css";
 
 const CONSENT_KEY = "compy_gaming_consent_v1";
+// CR-1102-left owner call (b), delegated 2026-11-10: the extra tiers (UAC: USB, PCIe; service
+// suspends) the user has agreed to, as ids "usb", "pcie", "svc:<name>". A newly ticked one asks once
+// more, naming only the new ones. Unreadable or malformed storage reads as none agreed (asks again).
+const EXTRAS_KEY = "compy_gaming_consent_extras_v1";
+
+/** The extras a start would turn on, as consent ids. */
+function tickedExtras(usb: boolean, pcie: boolean, services: readonly string[]): string[] {
+  return [...(usb ? ["usb"] : []), ...(pcie ? ["pcie"] : []), ...services.map((n) => `svc:${n}`)];
+}
+
+/** The extras already agreed to; anything unreadable is none. */
+function agreedExtras(raw: string | null): Set<string> {
+  try {
+    const v: unknown = raw == null ? [] : JSON.parse(raw);
+    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** The ticked extras not yet agreed to, in tick order. */
+function newExtras(ticked: readonly string[], agreed: ReadonlySet<string>): string[] {
+  return ticked.filter((id) => !agreed.has(id));
+}
+
+function recordExtras(ids: readonly string[]) {
+  const agreed = agreedExtras(lsGet(EXTRAS_KEY));
+  for (const id of ids) agreed.add(id);
+  lsSet(EXTRAS_KEY, JSON.stringify([...agreed]));
+}
 
 // Static description of what the CORE (UAC-free) bundle changes — shown idle
 // and in the first-use consent modal. The live post-apply list comes from the
@@ -60,6 +90,8 @@ export function GamingMode() {
   const [error, setError] = useState<string | null>(null);
   const [showDiff, setShowDiff] = useState(false);
   const [needConsent, setNeedConsent] = useState(false);
+  // CR-1102-left owner call (b): the newly ticked extras the confirm names, or null.
+  const [needExtras, setNeedExtras] = useState<string[] | null>(null);
   const [advUsb, setAdvUsb] = useState(false);
   const [advPcie, setAdvPcie] = useState(false);
   const [suspendSvcs, setSuspendSvcs] = useState<string[]>([]);
@@ -135,18 +167,20 @@ export function GamingMode() {
     return () => window.removeEventListener(GAMING_SESSION_RESOLVED_EVENT, onResolved);
   }, []);
 
-  // Esc closes the first-use consent modal (a11y parity with the app's other modals).
+  // Esc closes the first-use consent modal (a11y parity with the app's other modals), and the
+  // newly-ticked-extras confirm the same way; closing either starts nothing.
   useEffect(() => {
-    if (!needConsent) return;
+    if (!needConsent && needExtras == null) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
         setNeedConsent(false);
+        setNeedExtras(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [needConsent]);
+  }, [needConsent, needExtras]);
 
   const active = session?.status === "active";
 
@@ -171,9 +205,19 @@ export function GamingMode() {
 
   // Guarded storage: a bare localStorage throws where WebView2 storage is disabled, and Engage
   // then did nothing at all. Unreadable consent just asks again.
+  const ticked = tickedExtras(advUsb, advPcie, suspendSvcs);
+  // Review r1 (opus) SHOULD-FIX: the tier boxes are shut while either confirm is open, so what a
+  // confirm names is what starts (keyboard focus could otherwise tick one behind the backdrop).
+  const dialogOpen = needConsent || needExtras != null;
   const onStartClick = () => {
     if (lsGet(CONSENT_KEY) !== "1") {
       setNeedConsent(true);
+      return;
+    }
+    // CR-1102-left owner call (b): after the one-time consent, extras ticked since ask once more.
+    const fresh = newExtras(ticked, agreedExtras(lsGet(EXTRAS_KEY)));
+    if (fresh.length > 0) {
+      setNeedExtras(fresh);
       return;
     }
     void doStart();
@@ -181,7 +225,25 @@ export function GamingMode() {
 
   const confirmConsent = () => {
     lsSet(CONSENT_KEY, "1");
+    // The first-use modal listed every ticked extra, so agreeing covers them.
+    recordExtras(ticked);
     setNeedConsent(false);
+    setNeedExtras(null); // review r2 (opus) nit: no stale extras confirm over the started session
+    void doStart();
+  };
+
+  // Only what this confirm named AND is still ticked is recorded (review r1 nit: an item un-ticked
+  // before Enable isn't agreed to); anything ticked since it opened asks again.
+  const confirmExtras = () => {
+    const named = (needExtras ?? []).filter((id) => ticked.includes(id));
+    const agreed = agreedExtras(lsGet(EXTRAS_KEY));
+    const still = newExtras(ticked, new Set([...agreed, ...named]));
+    recordExtras(named);
+    if (still.length > 0) {
+      setNeedExtras(still);
+      return;
+    }
+    setNeedExtras(null);
     void doStart();
   };
 
@@ -264,30 +326,49 @@ export function GamingMode() {
 
   // The first-use consent modal + error line render identically in both faces — the consent gate
   // is a mutation boundary, not a styling surface, so it stays ONE tree regardless of the flag.
-  const consentModal = needConsent && (
+  // CR-1102-left owner call (b): the same modal, after the one-time consent, names only the extras
+  // ticked since the user agreed (`needExtras`); the first-use form wins while it is open.
+  const extraLabel = (id: string) => {
+    if (id === "usb") return t("gaming.gamingMode.usbToggleLabel");
+    if (id === "pcie") return t("gaming.gamingMode.pcieToggleLabel");
+    const n = id.slice("svc:".length);
+    return t("gaming.gamingMode.suspendServiceItem", {
+      service: suspendableServices(t).find((s) => s.name === n)?.label ?? n,
+    });
+  };
+  const extrasOnly = !needConsent && needExtras != null;
+  const consentModal = (needConsent || needExtras != null) && (
     <div
       className="gaming-modal-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label={t("gaming.gamingMode.consentTitle")}
+      aria-label={t(extrasOnly ? "gaming.gamingMode.extrasConsentTitle" : "gaming.gamingMode.consentTitle")}
     >
       <div className="gaming-modal">
-        <h3>{t("gaming.gamingMode.consentTitle")}</h3>
-        <p>{t("gaming.gamingMode.consentIntro")}</p>
-        <ul className="gaming-diff">
-          {CORE_ITEMS.map((it) => (
-            <li key={it.key}>{t(`gaming.gamingMode.coreItems.${it.key}`)}</li>
-          ))}
-          {advUsb && <li>{t("gaming.gamingMode.usbToggleLabel")}</li>}
-          {advPcie && <li>{t("gaming.gamingMode.pcieToggleLabel")}</li>}
-          {suspendSvcs.map((n) => (
-            <li key={n}>
-              {t("gaming.gamingMode.suspendServiceItem", {
-                service: suspendableServices(t).find((s) => s.name === n)?.label ?? n,
-              })}
-            </li>
-          ))}
-        </ul>
+        <h3>{t(extrasOnly ? "gaming.gamingMode.extrasConsentTitle" : "gaming.gamingMode.consentTitle")}</h3>
+        <p>{t(extrasOnly ? "gaming.gamingMode.extrasConsentIntro" : "gaming.gamingMode.consentIntro")}</p>
+        {extrasOnly ? (
+          <ul className="gaming-diff" data-testid="gaming-extras-consent-list">
+            {(needExtras ?? []).map((id) => (
+              <li key={id}>{extraLabel(id)}</li>
+            ))}
+          </ul>
+        ) : (
+          <ul className="gaming-diff">
+            {CORE_ITEMS.map((it) => (
+              <li key={it.key}>{t(`gaming.gamingMode.coreItems.${it.key}`)}</li>
+            ))}
+            {advUsb && <li>{t("gaming.gamingMode.usbToggleLabel")}</li>}
+            {advPcie && <li>{t("gaming.gamingMode.pcieToggleLabel")}</li>}
+            {suspendSvcs.map((n) => (
+              <li key={n}>
+                {t("gaming.gamingMode.suspendServiceItem", {
+                  service: suspendableServices(t).find((s) => s.name === n)?.label ?? n,
+                })}
+              </li>
+            ))}
+          </ul>
+        )}
         <p className="gaming-guarantee">
           <strong>{t("gaming.gamingMode.guaranteeLabel")}</strong>{" "}
           {t("gaming.gamingMode.guaranteeMid")}{" "}
@@ -295,10 +376,16 @@ export function GamingMode() {
           {t("gaming.gamingMode.guaranteePost")}
         </p>
         <div className="gaming-actions">
-          <button className="btn-small btn-small-on" onClick={confirmConsent} autoFocus>
+          <button className="btn-small btn-small-on" onClick={extrasOnly ? confirmExtras : confirmConsent} autoFocus>
             {t("gaming.gamingMode.enableButton")}
           </button>
-          <button className="btn-small" onClick={() => setNeedConsent(false)}>
+          <button
+            className="btn-small"
+            onClick={() => {
+              setNeedConsent(false);
+              setNeedExtras(null);
+            }}
+          >
             {t("gaming.gamingMode.cancelButton")}
           </button>
         </div>
@@ -451,6 +538,7 @@ export function GamingMode() {
                   <input
                     type="checkbox"
                     checked={advUsb}
+                    disabled={dialogOpen}
                     onChange={(e) => setAdvUsb(e.target.checked)}
                   />
                   {t("gaming.gamingMode.usbToggleLabel")}
@@ -459,6 +547,7 @@ export function GamingMode() {
                   <input
                     type="checkbox"
                     checked={advPcie}
+                    disabled={dialogOpen}
                     onChange={(e) => setAdvPcie(e.target.checked)}
                   />
                   {t("gaming.gamingMode.pcieToggleLabel")}
@@ -471,6 +560,7 @@ export function GamingMode() {
                     <input
                       type="checkbox"
                       checked={suspendSvcs.includes(s.name)}
+                      disabled={dialogOpen}
                       onChange={() => toggleSvc(s.name)}
                     />
                     {s.label}
@@ -650,6 +740,7 @@ export function GamingMode() {
                 <input
                   type="checkbox"
                   checked={advUsb}
+                  disabled={dialogOpen}
                   onChange={(e) => setAdvUsb(e.target.checked)}
                 />
                 {t("gaming.gamingMode.usbToggleLabel")}
@@ -658,6 +749,7 @@ export function GamingMode() {
                 <input
                   type="checkbox"
                   checked={advPcie}
+                  disabled={dialogOpen}
                   onChange={(e) => setAdvPcie(e.target.checked)}
                 />
                 {t("gaming.gamingMode.pcieToggleLabel")}
@@ -670,6 +762,7 @@ export function GamingMode() {
                   <input
                     type="checkbox"
                     checked={suspendSvcs.includes(s.name)}
+                    disabled={dialogOpen}
                     onChange={() => toggleSvc(s.name)}
                   />
                   {s.label}

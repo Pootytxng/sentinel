@@ -282,3 +282,107 @@ describe("GamingMode never stands by over a contract still on disk", () => {
     expect(screen.getByText("Finish the last Gaming Mode session")).toBeTruthy();
   });
 });
+
+// CR-1102-left owner call (b), delegated 2026-11-10: after the one-time consent, newly ticked UAC
+// tiers and service suspends started with no fresh confirm. They now ask once, naming only the
+// newly added items; nothing starts until that confirm, and core-only starts are unchanged.
+describe("GamingMode asks once more for extras ticked after the one-time consent", () => {
+  const starts = () => invokeMock.mock.calls.filter(([c]) => c === "start_gaming_session");
+  // A start the backend refuses keeps the pane idle, so the same render can try again.
+  const refusingStart = () =>
+    invokeMock.mockImplementation((cmd) =>
+      cmd === "start_gaming_session" ? Promise.reject(new Error("UAC cancelled")) : Promise.resolve(null),
+    );
+
+  it("a newly ticked UAC tier asks once naming only it; the next new one names only itself", async () => {
+    refusingStart();
+    localStorage.setItem("compy_gaming_consent_v1", "1");
+    render(<GamingMode />);
+    fireEvent.click(await screen.findByLabelText("USB selective suspend off (AC)"));
+    fireEvent.click(screen.getByRole("button", { name: "Start Gaming Mode" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Also turn these on?" });
+    expect(screen.getByTestId("gaming-extras-consent-list").textContent).toBe("USB selective suspend off (AC)");
+    expect(dialog.textContent).not.toMatch(/Power plan|Game Bar/);
+    expect(starts()).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Enable Gaming Mode" }));
+    await waitFor(() => expect(starts()).toHaveLength(1));
+    expect(starts()[0][1]).toEqual({ opts: { advancedUsb: true, advancedPcie: false, suspendServices: [] } });
+
+    // USB is agreed now; ticking PCIe asks again, naming only PCIe.
+    fireEvent.click(screen.getByLabelText("PCIe ASPM off (AC)"));
+    fireEvent.click(screen.getByRole("button", { name: "Start Gaming Mode" }));
+    await screen.findByRole("dialog", { name: "Also turn these on?" });
+    expect(screen.getByTestId("gaming-extras-consent-list").textContent).toBe("PCIe ASPM off (AC)");
+    // Cancel starts nothing.
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog", { name: "Also turn these on?" })).toBeNull();
+    expect(starts()).toHaveLength(1);
+  });
+
+  it("a newly ticked service suspend asks too; core-only and already-agreed extras start straight away", async () => {
+    refusingStart();
+    localStorage.setItem("compy_gaming_consent_v1", "1");
+    localStorage.setItem("compy_gaming_consent_extras_v1", JSON.stringify(["usb"]));
+    render(<GamingMode />);
+    // Core only: no confirm, as before.
+    fireEvent.click(await screen.findByRole("button", { name: "Start Gaming Mode" }));
+    await waitFor(() => expect(starts()).toHaveLength(1));
+    // An agreed extra: no confirm.
+    fireEvent.click(screen.getByLabelText("USB selective suspend off (AC)"));
+    fireEvent.click(screen.getByRole("button", { name: "Start Gaming Mode" }));
+    await waitFor(() => expect(starts()).toHaveLength(2));
+    expect(screen.queryByRole("dialog", { name: "Also turn these on?" })).toBeNull();
+    // A service suspend not agreed yet: one confirm naming only it.
+    const svc = screen.getAllByRole("checkbox").find((b) => !(b as HTMLInputElement).checked && b.closest("label")?.textContent !== "PCIe ASPM off (AC)")!;
+    fireEvent.click(svc);
+    fireEvent.click(screen.getByRole("button", { name: "Start Gaming Mode" }));
+    await screen.findByRole("dialog", { name: "Also turn these on?" });
+    expect(screen.getByTestId("gaming-extras-consent-list").textContent).toMatch(/^Suspend /);
+    expect(starts()).toHaveLength(2);
+  });
+
+  it("an extra ticked while the confirm is open is never started without being named", async () => {
+    refusingStart();
+    localStorage.setItem("compy_gaming_consent_v1", "1");
+    render(<GamingMode />);
+    fireEvent.click(await screen.findByLabelText("USB selective suspend off (AC)"));
+    fireEvent.click(screen.getByRole("button", { name: "Start Gaming Mode" }));
+    await screen.findByRole("dialog", { name: "Also turn these on?" });
+    // Review r1 (opus): the tier boxes are shut while the confirm is open, so nothing can be ticked
+    // behind it; Esc closes it and starts nothing.
+    const pcie = screen.getByLabelText("PCIe ASPM off (AC)") as HTMLInputElement;
+    expect(pcie.disabled).toBe(true);
+    expect((screen.getByLabelText("USB selective suspend off (AC)") as HTMLInputElement).disabled).toBe(true);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Also turn these on?" })).toBeNull();
+    expect(pcie.disabled).toBe(false);
+    expect(starts()).toHaveLength(0);
+    // Asked again, Enable starts only what it named.
+    fireEvent.click(screen.getByRole("button", { name: "Start Gaming Mode" }));
+    await screen.findByRole("dialog", { name: "Also turn these on?" });
+    fireEvent.click(screen.getByRole("button", { name: "Enable Gaming Mode" }));
+    await waitFor(() => expect(starts()).toHaveLength(1));
+    expect(starts()[0][1]).toEqual({ opts: { advancedUsb: true, advancedPcie: false, suspendServices: [] } });
+  });
+
+  it("the first-use consent covers the extras it listed, and malformed storage asks again", async () => {
+    refusingStart();
+    render(<GamingMode />);
+    fireEvent.click(await screen.findByLabelText("USB selective suspend off (AC)"));
+    fireEvent.click(screen.getByRole("button", { name: "Start Gaming Mode" }));
+    await screen.findByRole("dialog", { name: "Turn on Gaming Mode?" });
+    fireEvent.click(screen.getByRole("button", { name: "Enable Gaming Mode" }));
+    await waitFor(() => expect(starts()).toHaveLength(1));
+    // Agreed in the first-use modal: the next start asks nothing more.
+    fireEvent.click(screen.getByRole("button", { name: "Start Gaming Mode" }));
+    await waitFor(() => expect(starts()).toHaveLength(2));
+    expect(screen.queryByRole("dialog", { name: "Also turn these on?" })).toBeNull();
+    // A damaged record agrees to nothing: asks again.
+    localStorage.setItem("compy_gaming_consent_extras_v1", "{not json");
+    fireEvent.click(screen.getByRole("button", { name: "Start Gaming Mode" }));
+    await screen.findByRole("dialog", { name: "Also turn these on?" });
+    expect(starts()).toHaveLength(2);
+  });
+});
