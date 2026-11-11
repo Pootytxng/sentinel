@@ -158,9 +158,17 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       Trial's pre-test snapshot and that newer row still reads "applied" while the setting reads off. Refuse a second
       apply of a change a running Trial holds, or settle the newer row with the restore (history.rs
       `rollback_change_inner`). Rollback boundary: two reviews.
-- [ ] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
+- [x] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
       the consent modal, focus jumps to Enable (`autoFocus`) and key repeat presses it: either confirm can pass on one
       held key. Ignore repeated key presses on Enable, or focus Cancel first. TS only.
+      Done `b3aa742a` (merge `97d0b032`, 2026-11-11 s16, CODE-ONLY, not installed): Enable cancels a repeated Enter/Space
+      keydown; a fresh press or a click still confirms (both faces share the modal). The modal's title/intro now call
+      t() with a literal key per side, which fixes the affordance census that failed on `e29da54b` (lost the two consent keys). Test
+      fails on the old component. Reviews opus APPROVE-WITH-NITS, sonnet APPROVE-WITH-NITS, no MUST-FIX; nits taken;
+      opus SHOULD-FIX (a live held-key check in WebView2) queued as CR-gm-repeat-live.
+- [ ] **CR-gm-repeat-live** (opus SHOULD-FIX of CR-gm-confirm-repeat; FULL, UI) On the installed build, send a held Enter
+      (CDP `Input.dispatchKeyEvent`, `autoRepeat: true`) to Gaming Mode's Enable: the repeats must start nothing, a fresh
+      press must. jsdom never turns a key into a click, so only a live check proves WebView2 honours the cancel.
 - [x] **CR-care-read-promise** (same review) Care's store-read failure says "it'll try again" but nothing re-reads; add a bounded backoff re-read and true final words (en + zh-CN); a save failing after unmount schedules nothing; an `opened:X` save-stopped clears when `dismissed:X` later succeeds.
       Done `6982832a` (2026-11-11, CODE-ONLY, not installed): `readFailed(again)` re-runs App's own read after 5 s /
       30 s / 2 min (`CARE_READ_RETRY_MS`; reset by a good read, cleared on unmount), then "…it'll check again when you
