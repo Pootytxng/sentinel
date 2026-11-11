@@ -251,11 +251,24 @@ describe("P5-resume: progress comes from the experiments store", () => {
     twoOfFive();
     render(<ExperimentBench />);
     expect(await progressLine()).toBe("2 of 5 tested · Next: Power plan");
-    // The button continues on the last as-is session, so the plan is one session.
+    // CR-next-reuse-moved: Game Mode went on after S1 and was put back, so the start's §3 check
+    // refuses S1; the plan says two sessions up front instead of promising one.
     expect(screen.getByTestId("journey-plan").textContent).toBe(
-      "Valorant: 1 session of about 10 min with Power plan. Your last as-is session still counts as the before-reading.",
+      "Valorant: 2 sessions of about 10 min: one as-is, then one with Power plan.",
     );
     expect(screen.getByRole("button", { name: "Stop here" })).toBeTruthy();
+  });
+
+  it("continues on the last session when nothing moved after it (a kept change was on throughout)", async () => {
+    // Only HAGS tested and kept: it went on before S1 (its with-change session) and stayed on.
+    state.experiments = [HAGS_KEPT];
+    state.recs = [cand("hags", "HAGS", null, false, "already-set-by-compy"), cand("game-mode", "Game Mode", 1), cand("power-plan", "Power plan", 2)];
+    state.sessions = [OLD, S1];
+    render(<ExperimentBench />);
+    await progressLine();
+    expect(screen.getByTestId("journey-plan").textContent).toBe(
+      "Valorant: 1 session of about 10 min with Game Mode. Your last as-is session still counts as the before-reading.",
+    );
   });
 
   it("a fresh install with nothing tested shows no progress line", async () => {
@@ -264,45 +277,51 @@ describe("P5-resume: progress comes from the experiments store", () => {
     expect(screen.queryByTestId("journey-progress")).toBeNull();
   });
 
-  it("continues after a restart with one tap, reusing the still-steady as-is session", async () => {
+  it("continues after a restart with one tap, on a new as-is session since Game Mode moved after S1", async () => {
     twoOfFive();
     render(<ExperimentBench />);
     expect(await progressLine()).toBe("2 of 5 tested · Next: Power plan");
     restart();
     render(<ExperimentBench />);
     expect(await progressLine()).toBe("2 of 5 tested · Next: Power plan");
-    state.saves = [session(later(1), 5400)];
+    const fresh = session(later(1), 5400);
+    state.saves = [fresh, session(later(2), 5400)];
     await press();
     await waitFor(() => expect(calls("start_experiment")).toHaveLength(1), { timeout: 3000 });
-    // P5-continue's rule: Game Mode was put back, so its before-session is how the PC is now.
-    expect(calls("start_experiment")[0]).toMatchObject({ recId: "power-plan", baselineSessionId: S1.started_at });
+    // CR-next-reuse-moved: Game Mode went on after S1 and was put back, so S1 is never tried.
+    expect(calls("start_experiment")[0]).toMatchObject({ recId: "power-plan", baselineSessionId: fresh.started_at });
     expect(await finalLine()).toBe("Kept Power plan: the frame rate in your worst moments (the 1% low) is up 4.2%.");
-    // Only the with-change session was measured.
-    expect(calls("start_fps_capture")).toHaveLength(1);
+    expect(calls("start_fps_capture")).toHaveLength(2);
   });
 
   // Codebase review 2026-11-02: a continuing journey sets no phase before its start, so its button
   // stayed live through the start (and any UAC prompt). A second tap started a second run, whose
   // error path put back the first run's change while the first run said it was on.
   it("a second tap while a continuing journey starts is ignored: one start, nothing put back", async () => {
-    twoOfFive();
+    // A journey that continues on its last session (nothing moved after S1; CR-next-reuse-moved).
+    state.experiments = [HAGS_KEPT];
+    state.recs = [cand("hags", "HAGS", null, false, "already-set-by-compy"), cand("game-mode", "Game Mode", 1), cand("power-plan", "Power plan", 2)];
+    state.sessions = [OLD, S1];
     render(<ExperimentBench />);
-    expect(await progressLine()).toBe("2 of 5 tested · Next: Power plan");
+    await progressLine();
     state.saves = [session(later(1), 5400)];
     const btn = await screen.findByRole("button", { name: "Optimize my game" });
     await waitFor(() => expect(btn).toBeEnabled());
     fireEvent.click(btn);
     fireEvent.click(btn);
-    expect(await finalLine()).toBe("Kept Power plan: the frame rate in your worst moments (the 1% low) is up 4.2%.");
+    expect(await finalLine()).toBe("Kept Game Mode: the frame rate in your worst moments (the 1% low) is up 4.2%.");
+    expect(calls("start_experiment")[0]).toMatchObject({ recId: "game-mode", baselineSessionId: S1.started_at });
     expect(calls("start_experiment")).toHaveLength(1);
     expect(calls("restore_experiment")).toHaveLength(0);
   });
 
   it("continuing measures a new as-is session when the last one isn't steady any more", async () => {
-    twoOfFive();
-    state.sessions = [OLD, { ...S1, fps_series: [] }, S2];
+    // Nothing moved after S1 (HAGS kept), so steadiness alone decides (CR-next-reuse-moved).
+    state.experiments = [HAGS_KEPT];
+    state.recs = [cand("hags", "HAGS", null, false, "already-set-by-compy"), cand("game-mode", "Game Mode", 1), cand("power-plan", "Power plan", 2)];
+    state.sessions = [OLD, { ...S1, fps_series: [] }];
     render(<ExperimentBench />);
-    expect(await progressLine()).toBe("2 of 5 tested · Next: Power plan");
+    await progressLine();
     expect(screen.getByTestId("journey-plan").textContent).toMatch(/^Valorant: 2 sessions of about 10 min/);
   });
 
@@ -569,5 +588,34 @@ describe("truthful completion, review round 1", () => {
     const two = [measured("exp:1-0", "2026-10-20T12:00:00Z"), measured("exp:2-0", "2026-10-21T12:00:00Z")];
     expect(journeyProgress("Valorant", two, [HAGS], [BEFORE, AFTER, bareNewest])).toMatchObject({ tested: 0, unverified: 1, next: null });
     expect(journeyProgress("Valorant", two.slice(0, 1), [HAGS], [BEFORE, AFTER, bareNewest]).next).toMatchObject({ retest: "unverified" });
+  });
+});
+
+// CR-next-reuse-moved: the offer's "about 10 min" holds only when no Trial moved a change after the
+// as-is session began, the start's §3 rule (experiment.rs `compy_change_moved_after`).
+import { trialMovedSince } from "./GuidedJourney";
+
+describe("CR-next-reuse-moved: a Trial's own apply and put-back count as moves", () => {
+  const AS_IS = "2026-11-11T12:05:50.928438400+00:00";
+  const trial = (created_at: string | undefined, status: string, concluded_at: string | null = null) => ({ created_at, status, concluded_at });
+  it("an apply after the session moves it; a put-back after it moves it; a kept or running end does not", () => {
+    expect(trialMovedSince([], AS_IS)).toBe(false);
+    // Applied after the session began (the finished Trial itself): moved.
+    expect(trialMovedSince([trial("2026-11-11T12:18:00Z", "restored", "2026-11-11T12:40:00Z")], AS_IS)).toBe(true);
+    // Applied before, kept: its end moved nothing; the session measured with it on is reusable.
+    expect(trialMovedSince([trial("2026-11-11T12:00:00Z", "kept", "2026-11-11T12:40:00Z")], AS_IS)).toBe(false);
+    // Applied before, put back after: moved.
+    expect(trialMovedSince([trial("2026-11-11T12:00:00Z", "restored", "2026-11-11T12:40:00Z")], AS_IS)).toBe(true);
+    expect(trialMovedSince([trial("2026-11-11T12:00:00Z", "aborted", "2026-11-11T12:40:00Z")], AS_IS)).toBe(true);
+    // Still running, applied before: nothing moved yet.
+    expect(trialMovedSince([trial("2026-11-11T12:00:00Z", "running")], AS_IS)).toBe(false);
+    // Everything before the session: nothing moved.
+    expect(trialMovedSince([trial("2026-11-10T12:00:00Z", "restored", "2026-11-10T13:00:00Z")], AS_IS)).toBe(false);
+  });
+  it("an unknown never passes as nothing moved", () => {
+    expect(trialMovedSince([], null)).toBe(true);
+    expect(trialMovedSince([], "not a date")).toBe(true);
+    expect(trialMovedSince([trial("garbled", "kept")], AS_IS)).toBe(true);
+    expect(trialMovedSince([trial("2026-11-10T12:00:00Z", "restored", "garbled")], AS_IS)).toBe(true);
   });
 });

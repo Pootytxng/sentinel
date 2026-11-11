@@ -47,6 +47,7 @@ import {
   needsCostAck,
   RealPlayPanel,
   reusableAsIs,
+  trialMovedSince,
   riskChoiceWord,
   useJourneyPhase,
 } from "./GuidedJourney";
@@ -1263,11 +1264,20 @@ export default function ExperimentBench({
           outcome={outcome === "smoothest" ? "recommended" : outcome}
           onOutcome={setOutcome}
           next={journeyNext}
-          nextReuses={journey.kind === "result" && reusableAsIs(sessions, journey.asIs, journey.exp.game) != null}
+          // CR-next-reuse-moved: the offer promises one session only when the start will accept the
+          // as-is session; a Trial that moved a change after it (the finished one's own put-back
+          // included) means a new before-session, and the offer says so up front.
+          nextReuses={
+            journey.kind === "result" &&
+            reusableAsIs(sessions, journey.asIs, journey.exp.game) != null &&
+            !trialMovedSince([...experiments, journey.exp], journey.asIs)
+          }
           refresh={settle}
           riskChoice={riskChoice}
           progress={progress}
-          resumeReuses={progress != null && reusableAsIs(sessions, progress.asIs, progress.game) != null}
+          resumeReuses={
+            progress != null && reusableAsIs(sessions, progress.asIs, progress.game) != null && !trialMovedSince(experiments, progress.asIs)
+          }
           stillOn={progress ? stillOnFor(progress.game, experiments, recs) : []}
           realPlay={running ? null : (rp?.progress ?? null)}
           heldByRisk={journeyHeldByRisk}

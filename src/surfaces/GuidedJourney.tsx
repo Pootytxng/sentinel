@@ -401,6 +401,27 @@ export function reusableAsIs(sessions: SessionSummary[], id: string | null, game
   if (contextCheckFor(game ?? s.process_name, sessions).matchOf(s.started_at) !== "matching") return null;
   return gradeBaseline(s).kind === "steady" ? s : null;
 }
+/** CR-next-reuse-moved: whether a Trial moved a Compy change after the session `since` began, as the
+ *  start's §3 check (`compy_change_moved_after`) will see it: every Trial applies its change when it
+ *  starts, and one that ended without keeping it (restored, aborted) rolled it back when it ended; a
+ *  kept or running Trial's end moved nothing. A date that can't be read counts as after (an unknown
+ *  never passes as "nothing moved"); an end with no date counts only by its start, as an undo too old
+ *  to carry a date does there. Changes made outside a Trial are the start's to catch. */
+export function trialMovedSince(
+  experiments: readonly { created_at?: string | null; concluded_at?: string | null; status?: string | null }[],
+  since: string | null,
+): boolean {
+  const t0 = since == null ? NaN : Date.parse(since);
+  if (!Number.isFinite(t0)) return true;
+  const after = (at: string | null | undefined) => {
+    const t = at == null ? NaN : Date.parse(at);
+    return !Number.isFinite(t) || t > t0;
+  };
+  return experiments.some(
+    (x) => after(x.created_at) || (x.status !== "kept" && x.status !== "running" && x.concluded_at != null && after(x.concluded_at)),
+  );
+}
+
 async function reusableSession(id: string, game: string | null): Promise<SessionSummary | null> {
   const ss = await invoke<SessionSummary[]>("get_session_summaries").catch(() => []);
   return reusableAsIs(ss ?? [], id, game);
@@ -1388,7 +1409,8 @@ export function GuidedJourney({
             void runJourney(
               { change: next, outcome, riskChoice, costAcknowledged: ack, hypothesis, refresh, captureFailed: t(`${k}.captureFailed`) },
               p.exp.game,
-              p.asIs,
+              // CR-next-reuse-moved: an offer that said "a new before-session first" never tries the old one.
+              nextReuses ? p.asIs : null,
             );
           };
           return (
