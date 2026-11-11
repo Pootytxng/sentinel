@@ -193,6 +193,18 @@ fn activated_plan_from(result: &ApplyResult, read_active: impl FnOnce() -> Optio
     (!guid.eq_ignore_ascii_case(prior_guid.trim())).then_some(AppliedPlan { schema: APPLIED_PLAN_SCHEMA, guid })
 }
 
+/// Review r1 (opus SHOULD-FIX 4): the GUID read after the apply is recorded only when that plan is
+/// Ultimate by class (stock GUID or its words) or a copy of the Ultimate template by its settings, so
+/// a plan another program switched to in between is never stamped as Compy's. Unknown records nothing.
+fn is_ultimate_plan(
+    guid: &str,
+    read_plan: impl FnOnce() -> Option<ObservedPlan>,
+    template_copy: impl FnOnce(&str) -> Option<bool>,
+) -> bool {
+    let by_class = read_plan().is_some_and(|o| o.guid.eq_ignore_ascii_case(guid) && o.class == crate::PowerPlanClass::Ultimate);
+    by_class || template_copy(guid) == Some(true)
+}
+
 /// Whether the live plan `seen` is Compy's Ultimate plan for row `c`: the stock Ultimate scheme or a
 /// plan whose words read as Ultimate (its class), or the very GUID Compy activated for this row.
 pub(crate) fn is_compys_ultimate(c: &AppliedChange, seen: &ObservedPlan) -> bool {
@@ -377,19 +389,7 @@ impl ActiveCheck {
 /// action agrees with its rec id, and is `Unrecognised` otherwise; every other row is
 /// [`probe_rec_target`]. Read-only, and takes no lock.
 pub(crate) fn check_row_state(c: &AppliedChange, reads: &LiveReads) -> ActiveCheck {
-    // CR-ultimate-identity: a row that recorded the scheme its apply activated reads On while that
-    // scheme (or any plan of the Ultimate class) is active, so a localized copy is not read as off.
-    if c.rec_id == "power-ultimate" && compys_plan_guid(c).is_some() {
-        return ultimate_row_check(c, crate::current_power_scheme);
-    }
     check_change_state(&c.rec_id, c.applied_action.as_ref(), reads)
-}
-
-/// [`check_row_state`] for a power-ultimate row that recorded the scheme its apply activated, with the
-/// one plan read handed in: On while that scheme or an Ultimate-class plan is active, Off on any other
-/// plan, Unreadable when the plan can't be read. Read-only.
-fn ultimate_row_check(c: &AppliedChange, read_plan: impl FnOnce() -> Option<ObservedPlan>) -> ActiveCheck {
-    ActiveCheck::from_read(read_plan().map(|seen| is_compys_ultimate(c, &seen)))
 }
 
 /// [`check_row_state`] from a rec id and its typed action, without a ledger row. The rollback-first
@@ -1127,7 +1127,9 @@ fn build_applied_change(
     rec_title: &str,
     result: ApplyResult,
 ) -> Result<AppliedChange, String> {
-    build_applied_change_with(rec_id, rec_title, result, crate::actions::current_power_plan_guid)
+    build_applied_change_with(rec_id, rec_title, result, crate::actions::current_power_plan_guid, |g| {
+        is_ultimate_plan(g, crate::current_power_scheme, crate::ultimate_template_copy)
+    })
 }
 
 /// [`build_applied_change`] with the read of the active scheme handed in (CR-ultimate-identity).
@@ -1136,11 +1138,12 @@ fn build_applied_change_with(
     rec_title: &str,
     result: ApplyResult,
     read_active_plan: impl FnOnce() -> Option<String>,
+    is_ultimate: impl FnOnce(&str) -> bool,
 ) -> Result<AppliedChange, String> {
     let snapshot_json = serde_json::to_value(&result.snapshot)
         .map_err(|e| format!("snapshot serialize: {}", e))?;
     // CR-ultimate-identity: the verify read of the scheme the apply activated (read-only powercfg).
-    let applied_plan = activated_plan_from(&result, read_active_plan);
+    let applied_plan = activated_plan_from(&result, read_active_plan).filter(|p| is_ultimate(&p.guid));
     Ok(AppliedChange {
         id: format!("{}-{}", rec_id, Utc::now().timestamp_millis()),
         rec_id: rec_id.to_string(),
@@ -6230,18 +6233,20 @@ mod ultimate_identity_tests {
     }
 
     #[test]
-    fn a_row_reads_on_while_its_own_localized_copy_is_active() {
-        let new = row(Some(serde_json::json!({ "schema": 1, "guid": COPY })));
-        assert_eq!(ultimate_row_check(&new, || Some(seen(COPY, crate::PowerPlanClass::Other, None))), ActiveCheck::On);
+    fn only_an_ultimate_plan_is_stamped_as_compys() {
         let other = || Some(seen("44444444-4444-4444-4444-444444444444", crate::PowerPlanClass::Other, None));
-        assert_eq!(ultimate_row_check(&new, other), ActiveCheck::Off);
-        assert_eq!(ultimate_row_check(&new, || None), ActiveCheck::Unreadable);
+        assert!(is_ultimate_plan(COPY, || Some(seen(COPY, crate::PowerPlanClass::Other, None)), |_| Some(true)), "a template copy");
+        assert!(is_ultimate_plan(COPY, || Some(seen(COPY, crate::PowerPlanClass::Ultimate, None)), |_| None), "Ultimate by class");
+        assert!(!is_ultimate_plan(COPY, other, |_| Some(false)), "another program's plan is never stamped");
+        assert!(!is_ultimate_plan(COPY, || None, |_| None), "unknown stamps nothing");
     }
 
     #[test]
     fn the_receipt_of_an_ultimate_apply_carries_the_scheme_it_activated() {
-        let got = build_applied_change_with("power-ultimate", "Ultimate", result(PRIOR), || Some(COPY.to_uppercase())).unwrap();
+        let got = build_applied_change_with("power-ultimate", "Ultimate", result(PRIOR), || Some(COPY.to_uppercase()), |g| g == COPY).unwrap();
         assert_eq!(compys_plan_guid(&got), Some(COPY));
+        let not = build_applied_change_with("power-ultimate", "Ultimate", result(PRIOR), || Some(COPY.into()), |_| false).unwrap();
+        assert_eq!(not.applied_plan, None, "a plan that isn't Ultimate is never stamped");
         // The rollback contract is the apply's own, untouched.
         assert!(matches!(got.rollback_action, Some(RollbackAction::RestorePowerPlanFromSnapshot)));
         assert_eq!(got.snapshot, serde_json::json!({ "kind": "power-plan", "prior_guid": PRIOR }));
