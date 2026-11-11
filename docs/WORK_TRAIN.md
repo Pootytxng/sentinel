@@ -156,22 +156,29 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       on where the rec engine's bool needs `== 1`; use `== 1` for the two local keys (non-zero stays right for policy HVCI 2).
       Done `c22641a7` (2026-11-11, CODE-ONLY, read-only, not installed): `vbs_configured_from` maps the local keys to on
       only at 1 before combining; policy unchanged. New asserts in diagnostics.rs fail on the old code.
-- [ ] **CR-rp-same-setting-row** (r1 SHOULD-FIX of owner call a, opus + sonnet; pre-existing on the two-session confound
+- [x] **CR-rp-same-setting-row** (r1 SHOULD-FIX of owner call a, opus + sonnet; pre-existing on the two-session confound
       path) When another Compy row applies the Trial's own setting while it runs, the confounded restore writes the
       Trial's pre-test snapshot and that newer row still reads "applied" while the setting reads off. Refuse a second
       apply of a change a running Trial holds, or settle the newer row with the restore (history.rs
       `rollback_change_inner`). Rollback boundary: two reviews.
-      2026-11-11 s16 PARKED on branch `claude/train-rp-same-setting-row` (`3a64091a`, `c4033f99`): UI apply/batch
-      commands moved to experiment.rs wrappers that refuse a setting an open Trial holds (store gate, checked read).
-      cargo 1836/0 + clippy clean; opus and sonnet r1 APPROVE-WITH-NITS, no MUST-FIX. Merged as `638926e6` then
-      reverted (`c66b4d25`): a later full vitest showed `src/experiment-record-first-guard.test.ts` 2 failed (likely its
-      source-shape reads of experiment.rs vs the new `apply_recommendation` wrapper; not yet read). Next, with no game
-      running: `npx vitest run src/experiment-record-first-guard.test.ts` in the branch worktree, fix, then the full
-      vitest, cargo test, clippy, merge. Follow-ups found: benchmark tweak trial holding a setting; Gaming Mode spanning a
-      Trial restore (opus r1).
-      2026-11-11 s17 (read-only, ROB RUN in front): the new wrappers sit above `start_experiment`, so the guard's
-      `fnBody(start_experiment)` slices look unaffected; the 2 failing assertions are still unidentified. Running the
-      single file needs a no-game window.
+      Done `186339f0`, `ae03363c` (cherry-picks of `3a64091a`, `c4033f99`; 2026-11-11 s18, not installed): the refusal
+      option. The UI's `apply_recommendation` / `apply_recommendations_batch` commands go through experiment.rs wrappers
+      that take the Trial store gate, read the store checked (unreadable refuses), and refuse before anything runs when
+      an open Trial holds a named setting (a batch naming it is refused whole); otherwise the unchanged history apply.
+      The benchmark trials use the same wrappers. Rollback code untouched. Reviews (s16) r1 opus APPROVE-WITH-NITS,
+      sonnet APPROVE-WITH-NITS, no MUST-FIX. The s16 revert (`c66b4d25`) was a misattribution: the 2
+      experiment-record-first guard failures came from the full vitest run on the CR-outside-followups (b) branch,
+      which held this change plus (b)'s own history.rs refactor (`summarize_checked` and the `checked_summary` call
+      moved); on this branch alone the guard is 49/49. s18: guard 49/49, full vitest 532/536 (3 site-app suites + the
+      doc-truth wording of this note, fixed here), cargo 1836/0, clippy clean. Known cost: an unreadable
+      `experiments.json` refuses plain applies too, saying try again. Queued: CR-bench-holds-setting, CR-gm-spans-trial.
+- [ ] **CR-bench-holds-setting** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) The benchmark tweak trial holds a
+      setting for minutes and rolls it back from its snapshot; a UI apply of that setting meanwhile makes the same
+      stale-"applied" row. The new refusal only knows experiment Trials (`benchmark_trial.rs` start_tweak_trial).
+- [ ] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game
+      Bar, the power plan, USB/PCIe and service suspends into its own contract; a session spanning a Trial's restore
+      re-applies the Trial's change on stop, after the Trial reads Restored (`gaming_orchestrator.rs` ~409-455; experiment.rs
+      never checks Gaming Mode state). Rollback boundary: two reviews.
 - [x] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
       the consent modal, focus jumps to Enable (`autoFocus`) and key repeat presses it: either confirm can pass on one
       held key. Ignore repeated key presses on Enable, or focus Cancel first. TS only.
