@@ -2475,11 +2475,20 @@ pub(crate) fn recorded_outside_state<'a>(changes: &'a [AppliedChange], rec_id: &
     for c in applied {
         let state = c.changed_outside.as_ref()?.usable()?;
         match found {
-            Some(f) if f != state => return None,
+            // Review r2: one state is one plan GUID, the rule `outside_state_holds` reads; a name
+            // Windows printed differently at two records is the same plan.
+            Some(f) if !same_state(f, state) => return None,
             _ => found = Some(state),
         }
     }
     found
+}
+
+fn same_state(a: &ObservedState, b: &ObservedState) -> bool {
+    match (a, b) {
+        (ObservedState::PowerPlan { guid: x, .. }, ObservedState::PowerPlan { guid: y, .. }) => x.eq_ignore_ascii_case(y),
+        _ => false,
+    }
 }
 
 /// Does the live read `now` still show the recorded state? An unreadable read never does.
@@ -2560,6 +2569,10 @@ pub(crate) fn record_changed_outside(rec_id: String) -> Result<usize, String> {
         return Err(why);
     }
     let observed = crate::current_power_scheme();
+    // Review r2: Gaming Mode may have started between the check above and the read; ask again.
+    if let Some(why) = gaming_mode_may_hold_plan() {
+        return Err(why);
+    }
     let _lock = lock_history()?;
     let root = crate::data_root::mutation_root()?;
     let mut history = load_history_for(&root)?;
@@ -5810,6 +5823,18 @@ mod changed_outside_tests {
         // A record in a shape this build can't act on is offered again, never stuck.
         history[1].changed_outside.as_mut().unwrap().schema = 2;
         assert_eq!(changed_outside_offers_from(&history, Some(&other))[0].rows, 1);
+        // A re-record whose save fails puts back each row's previous record exactly.
+        let before: Vec<Option<ChangedOutside>> = history.iter().map(|c| c.changed_outside.clone()).collect();
+        let third = plan("44444444-4444-4444-4444-444444444444", "Third", crate::PowerPlanClass::Other);
+        assert!(commit_changed_outside(&mut history, "power-ultimate", Some(&third), "2026-11-10T22:00:00+00:00", &|_| Err("x".into())).is_err());
+        assert_eq!(history.iter().map(|c| c.changed_outside.clone()).collect::<Vec<_>>(), before);
+        // The same plan printed under another name at another record is still one state.
+        history[1].changed_outside = Some(ChangedOutside {
+            schema: CHANGED_OUTSIDE_SCHEMA,
+            recorded_at: "2026-11-10T21:30:00+00:00".into(),
+            observed: ObservedState::PowerPlan { guid: other.guid.to_uppercase(), name: "Renamed".into() },
+        });
+        assert!(recorded_outside_state(&history, "power-ultimate").is_some());
     }
 
     #[test]
