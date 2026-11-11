@@ -411,9 +411,10 @@ fn detect_mmcss(probes: &Value) -> Outcome {
 }
 
 // ── Detector 5: core parking forced off via power-plan override ─────────────────────────────────
-// Only the UNAMBIGUOUS guide pattern is flagged: CPMINCORES forced to 100% on a plan whose stock
-// value isn't already 100 (High performance / Ultimate ship unparked — flagging there would be
-// noise). Anything subtler stays unflagged (charter rule #5: honest uncertainty beats a guess).
+// Only the UNAMBIGUOUS guide pattern is flagged: CPMINCORES forced to 100% on Windows' stock
+// Balanced plan, the one plan known to park by default (CR-1102-left). Every other plan (High
+// performance, Ultimate, vendor or custom plans, an unread plan) is left unflagged: it may ship
+// unparked as its own default (charter rule #5: honest uncertainty beats a guess).
 fn detect_core_parking(probes: &Value) -> Outcome {
     let p = match probe_obj(probes, "core_parking") {
         Some(p) => p,
@@ -427,16 +428,14 @@ fn detect_core_parking(probes: &Value) -> Outcome {
         None => return Outcome::Clean, // no override present = stock
     };
     let plan = p.get("plan_name").and_then(Value::as_str).unwrap_or("").to_lowercase();
-    // Plans that legitimately ship with parking off — incl. vendor plans (AMD "Ryzen Balanced"
-    // ships min-cores ~100 stock). Conservative direction: miss rot rather than false-flag stock.
-    // The stock performance plans are known by their class (from the scheme GUID, so a localized
-    // name cannot hide them, CR-localized-reads); the vendor plan and a probe from an older build
-    // without `plan_class` still go by the words.
+    // The stock plans are known by their class (from the scheme GUID, so a localized name cannot
+    // hide them, CR-localized-reads). Conservative direction: miss rot rather than false-flag stock.
     let plan_class = p.get("plan_class").and_then(Value::as_str).unwrap_or("");
     // CR-1102-left: only Windows' stock Balanced plan is known to park by default, so only there is
     // 100% the guide override. A custom or vendor plan (class "other", e.g. a gaming plan the user
     // installed) may ship unparked as its own default, and an unread plan is unknown: neither is
-    // flagged. A probe from an older build without `plan_class` still goes by the words.
+    // flagged. A probe from an older build without `plan_class` still goes by the words (AMD "Ryzen
+    // Balanced" ships min-cores ~100 stock, so it is not the stock Balanced plan).
     let stock_balanced = match plan_class {
         "balanced" => true,
         "" => plan.contains("balanced") && !plan.contains("ryzen"),
@@ -749,7 +748,7 @@ fn probe_bcdedit() -> Value {
 }
 
 /// powercfg /q for the core-parking min-cores override (READ-ONLY). Parses the AC index; the
-/// plan name rides along so the evaluator can excuse plans that ship unparked.
+/// plan name and class ride along so the evaluator flags only the stock Balanced plan.
 fn probe_core_parking() -> Value {
     let out = crate::actions::quiet_command("powercfg")
         .args(["/q", "SCHEME_CURRENT", "SUB_PROCESSOR", "CPMINCORES"])
@@ -1249,14 +1248,14 @@ mod leftovers_tests {
     }
 
     #[test]
-    fn core_parking_flags_balanced_at_100_but_excuses_plans_that_ship_unparked() {
+    fn core_parking_flags_only_stock_balanced_at_100() {
         let base = || probes(Some(true), json!([]), Some(true), Some(31));
         let forced = with(base(), "core_parking",
             json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": "Balanced" }));
         assert!(find(&evaluate_leftovers(&forced, &no_endorsements()), "core-parking-forced").is_some());
         // Vendor/high-perf plans ship unparked — flagging them would be a false positive
         // (the dev rig's own AMD Ryzen plan is the precedent).
-        for plan in ["High performance", "Ultimate Performance", "AMD Ryzen Balanced"] {
+        for plan in ["High performance", "Ultimate Performance", "AMD Ryzen Balanced", "Synez Power Plan"] {
             let stock = with(base(), "core_parking",
                 json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": plan }));
             assert!(
