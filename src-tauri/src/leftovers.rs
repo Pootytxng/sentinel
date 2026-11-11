@@ -433,11 +433,16 @@ fn detect_core_parking(probes: &Value) -> Outcome {
     // name cannot hide them, CR-localized-reads); the vendor plan and a probe from an older build
     // without `plan_class` still go by the words.
     let plan_class = p.get("plan_class").and_then(Value::as_str).unwrap_or("");
-    let plan_ships_unparked = matches!(plan_class, "high-performance" | "ultimate")
-        || plan.contains("high performance")
-        || plan.contains("ultimate")
-        || plan.contains("ryzen");
-    if min_pct < 100 || plan_ships_unparked {
+    // CR-1102-left: only Windows' stock Balanced plan is known to park by default, so only there is
+    // 100% the guide override. A custom or vendor plan (class "other", e.g. a gaming plan the user
+    // installed) may ship unparked as its own default, and an unread plan is unknown: neither is
+    // flagged. A probe from an older build without `plan_class` still goes by the words.
+    let stock_balanced = match plan_class {
+        "balanced" => true,
+        "" => plan.contains("balanced") && !plan.contains("ryzen"),
+        _ => false,
+    };
+    if min_pct < 100 || !stock_balanced {
         return Outcome::Clean;
     }
     Outcome::Finding(Leftover {
@@ -1268,6 +1273,16 @@ mod leftovers_tests {
         let zh_balanced = with(base(), "core_parking",
             json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": "平衡", "plan_class": "balanced" }));
         assert!(find(&evaluate_leftovers(&zh_balanced, &no_endorsements()), "core-parking-forced").is_some(), "平衡 at 100 is forced");
+        // CR-1102-left: a custom plan (the owner's "Synez Power Plan", class other) may ship unparked
+        // as its own default, and an unread plan is unknown: neither is called a leftover.
+        for (name, class) in [(json!("Synez Power Plan"), json!("other")), (json!(null), json!(null))] {
+            let custom = with(base(), "core_parking",
+                json!({ "readable": true, "min_cores_ac_pct": 100, "plan_name": name, "plan_class": class }));
+            assert!(
+                find(&evaluate_leftovers(&custom, &no_endorsements()), "core-parking-forced").is_none(),
+                "{name} ({class}) is not known to park by default"
+            );
+        }
     }
 
     #[test]
