@@ -2984,6 +2984,66 @@ pub(crate) fn undo_outcome_choice(change_id: String, experiment_id: String) -> R
     })
 }
 
+/// CR-rp-same-setting-row: the refusal for a plain apply of a setting a Trial is testing right now.
+/// A second ledger row for that setting would snapshot the Trial's own applied state, and when the
+/// Trial puts its change back (a confounded or not-kept result restores the Trial's pre-test
+/// snapshot) that newer row would still read "applied" over a setting that reads off. So the second
+/// apply is refused before anything runs. `None` lets the apply go ahead. PURE. One Trial is open at
+/// a time ([`active_trial`]: the start refuses a second), so the first open record is the one.
+pub(crate) fn held_by_trial_refusal<'a>(
+    records: &[ExperimentRecord],
+    mut rec_ids: impl Iterator<Item = &'a str>,
+) -> Option<String> {
+    let held = records
+        .iter()
+        .find(|e| matches!(e.status, ExperimentStatus::Pending | ExperimentStatus::Running))?;
+    rec_ids.any(|id| id == held.rec_id).then(|| {
+        format!(
+            "\u{201c}{}\u{201d} is being tested by a Trial right now, so Compy won't apply it again on top of \
+             the test. Finish the Trial or put it back first. Nothing was changed.",
+            held.rec_title
+        )
+    })
+}
+
+/// The UI's one-click apply (Fix, Optimize, the tour). The audited apply itself is
+/// `history::apply_recommendation`; this command adds one refusal in front of it,
+/// [`held_by_trial_refusal`], and holds the store gate across the check and the apply so a Trial
+/// can't start in between (the gate is the outer half of `Experiment -> History`, as the Trial
+/// start's own apply). A Trial store that can't be read refuses too: it could hold the running Trial.
+#[tauri::command]
+pub(crate) fn apply_recommendation(
+    rec_id: String,
+    rec_title: String,
+) -> Result<crate::history::AppliedChangeView, String> {
+    if !experiment_gate() {
+        return crate::history::apply_recommendation(rec_id, rec_title);
+    }
+    let _g = lock_store()?;
+    let records = load_store_checked()?.experiments;
+    if let Some(refusal) = held_by_trial_refusal(&records, std::iter::once(rec_id.as_str())) {
+        return Err(refusal);
+    }
+    crate::history::apply_recommendation(rec_id, rec_title)
+}
+
+/// The UI's one-elevation batch, with the same refusal and gate as [`apply_recommendation`]: a batch
+/// naming the setting a running Trial holds is refused whole, before anything runs.
+#[tauri::command]
+pub(crate) fn apply_recommendations_batch(
+    items: Vec<crate::history::BatchApplyItem>,
+) -> Result<crate::history::BatchApplyReport, String> {
+    if !experiment_gate() {
+        return crate::history::apply_recommendations_batch(items);
+    }
+    let _g = lock_store()?;
+    let records = load_store_checked()?.experiments;
+    if let Some(refusal) = held_by_trial_refusal(&records, items.iter().map(|i| i.rec_id.as_str())) {
+        return Err(refusal);
+    }
+    crate::history::apply_recommendations_batch(items)
+}
+
 /// The keep side's decision, run under the store gate: refuse while a Trial starts or runs, check
 /// the cited Trial, and only then call `apply` with its link.
 fn keep_outcome_locked<T>(
@@ -5062,6 +5122,59 @@ mod experiment_tests {
             let read = body.find("load_store()").expect("the store is read");
             let write = body.find(call).expect("the ledger is written");
             assert!(gate < read && read < write, "{sig}: gate, then read, then write");
+        }
+    }
+
+    #[test]
+    fn a_plain_apply_of_the_setting_a_pending_or_running_trial_holds_is_refused() {
+        // CR-rp-same-setting-row: a second row for the Trial's own setting would snapshot the Trial's
+        // applied state and keep reading "applied" after the Trial puts its change back.
+        let done = judged("exp:old", "hags-on", "no-change", TrialOutcome::Recommended);
+        for status in [ExperimentStatus::Pending, ExperimentStatus::Running] {
+            let mut busy = judged("exp:run", "game-mode-on", "no-change", TrialOutcome::Recommended);
+            busy.status = status;
+            busy.verdict = None;
+            let store = [done.clone(), busy];
+            let refused = held_by_trial_refusal(&store, std::iter::once("game-mode-on")).expect("refused");
+            assert!(refused.contains("Nothing was changed"), "{status:?}: {refused}");
+            assert!(
+                held_by_trial_refusal(&store, ["hags-on", "game-mode-on"].into_iter()).is_some(),
+                "{status:?}: a batch naming it is refused whole"
+            );
+            // Any other setting still applies (it confounds the Trial, which the Trial already reports).
+            assert_eq!(held_by_trial_refusal(&store, ["hags-on", "fast-startup-off"].into_iter()), None);
+        }
+        // A concluded Trial holds nothing.
+        assert_eq!(held_by_trial_refusal(std::slice::from_ref(&done), std::iter::once("hags-on")), None);
+        assert_eq!(held_by_trial_refusal(&[], std::iter::once("hags-on")), None);
+    }
+
+    #[test]
+    fn the_ui_apply_commands_refuse_under_the_store_gate_before_the_ledger_write() {
+        // The commands the webview reaches are this module's, not history's bare applies.
+        let lib = include_str!("lib.rs");
+        let handler = lib.split_once("generate_handler![").map(|(_, r)| r).expect("handler list");
+        for name in ["apply_recommendation,", "apply_recommendations_batch,"] {
+            assert!(handler.contains(&format!("experiment::{name}")), "{name} is registered from experiment");
+            assert!(!handler.contains(&format!("history::{name}")), "{name} is not registered from history");
+        }
+        // The benchmark trials apply (and later roll back) the same settings: they go through the
+        // Trial-aware commands too, never history's bare applies.
+        let bench = include_str!("benchmark_trial.rs");
+        for bare in ["crate::history::apply_recommendation(", "crate::history::apply_recommendations_batch("] {
+            assert!(!bench.contains(bare), "benchmark_trial.rs calls {bare}");
+        }
+        let src = include_str!("experiment.rs");
+        for (sig, call) in [
+            ("pub(crate) fn apply_recommendation(", "crate::history::apply_recommendation(rec_id, rec_title)\n}"),
+            ("pub(crate) fn apply_recommendations_batch(", "crate::history::apply_recommendations_batch(items)\n}"),
+        ] {
+            let body = src.split_once(sig).and_then(|(_, r)| r.split_once("\n}\n")).map(|(b, _)| b).expect(sig);
+            let gate = body.find("let _g = lock_store()?;").expect("the gate is taken");
+            let read = body.find("load_store_checked()?").expect("the store is read, an unreadable one refuses");
+            let refuse = body.find("held_by_trial_refusal(").expect("the refusal is checked");
+            let write = body.rfind(call.trim_end_matches("\n}")).expect("the ledger is written");
+            assert!(gate < read && read < refuse && refuse < write, "{sig}: gate, read, refuse, then write");
         }
     }
 
