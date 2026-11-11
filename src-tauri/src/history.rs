@@ -742,8 +742,10 @@ pub(crate) fn applied_change_views(history: &[AppliedChange]) -> Vec<AppliedChan
     if history.iter().zip(&views).any(|(c, v)| recorded_off(c, v)) {
         let observed = kept_outside_observed(history);
         for (c, v) in history.iter().zip(views.iter_mut()) {
+            // Review r2 (opus): no read taken (Gaming Mode on, or the plan unreadable) is unknown,
+            // never a measured "doesn't hold": the field stays None.
             if recorded_off(c, v) {
-                v.changed_outside_holds = Some(recorded_and_holding(c, observed.as_ref()));
+                v.changed_outside_holds = observed.as_ref().map(|o| recorded_and_holding(c, Some(o)));
             }
         }
     }
