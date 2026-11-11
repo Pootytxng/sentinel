@@ -76,6 +76,10 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
     changed; Compy can't read it now".*
   - A leftover `gaming-session` temp file blocks update and restart until removed: keep refusing, or clear a temp
     older than the live contract? *Keep refusing, but name the file and offer Recover in the refusal.*
+- **CR-unconfirmed-remedy** (2026-11-10 19:14): every Trial start is refused because Compy's two Ultimate-plan rows read
+  off (your active plan is "Synez Power Plan"); Compy's suggested undo would set Balanced. Keep Synez (Compy then needs a
+  code fix to stop tracking those rows), or let Compy put Balanced back (~1 min) so P4/P5 can run? *Keep Synez; fix the
+  code.*
 - **P8-first-advanced** waits on P4's walkthrough (the gate is Trial + Risk proof), then your sign-off on the
   candidate Claude recommends.
 
@@ -575,6 +579,24 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       session, then Conclude) or puts it back from the bench (~2 min, or ~15 min with the session), then plays the
       WARDOGS Trials the panel asks for (~10 min of normal play per session). Read-back: `trial-wardogs\nav.js` output
       in this session's report.
+      2026-11-10 ~17:44-19:16 desk session (not ticked). Owner 17:44: "i need you to complete these task on your own you
+      can use the game i have active now rather than wardogs" (ROB RUN substituted for WARDOGS). Driven over CDP, no focus
+      taken. PBZ Trial exp:6 cleared by Compy's own Conclude on its post-apply PBZ session (Nov 2, 4,860 readings):
+      verdict confounded ("13 active Compy changes, not 15"), visual-effects restored, `final_state_verified` true, ledger
+      row rolled back 01:48:06Z, no Trial open. ROB RUN, all real play: a Live capture (665 counted readings, 18 min in the
+      background left out) then Optimize my game: as-is 1 (1,211 readings) and as-is 2 (1,209) both hit the settle cap
+      uneven (335/284 and 239/316 fps); "Test anyway" was refused before any change: "another setting Compy changed earlier
+      can't be confirmed as still in place" (the two power-ultimate rows read off; active plan is "Synez Power Plan", set
+      outside Compy). No ROB RUN verdict; nothing applied. Blocked on CR-unconfirmed-remedy (owner call). Evidence
+      `C:\Users\Kuya\code\_train\view-1110d\` (s1-*, p4-*, p5-*, journey.log, fgwatch.log).
+- [ ] **CR-unconfirmed-remedy** (owner call) A Trial start is refused while a Compy change "can't be confirmed as still in
+      place", and the refusal says to undo it; here that undo restores Balanced (`381b4222…`) over the owner's later
+      outside choice ("Synez Power Plan"), so following it changes his power plan. Needs a path that stops tracking a
+      change replaced outside Compy without touching Windows, or his OK to put Balanced back. Blocks every Trial on this
+      PC. Evidence `_train\view-1110d\p4-unconfirmed-rows.json`, `p5-05-trial-start.json`.
+- [ ] **CR-refuse-early** Optimize my game asked for two ~20 min as-is sessions and only refused at "Test anyway"
+      for a reason known before the first session (the unconfirmed change above). Check the start precondition when the
+      button is pressed and say so then. Evidence `_train\view-1110d\journey.log`, `p5-05-trial-start.json`.
 
 ### Then — Roadmap Phase 5: Guided Optimization Journey (`product/ROADMAP.md` Phase 5)
 Planned 2026-10-25. Order is value order. Phase 5 exit on the owner rig: from one button to the summary,
@@ -612,6 +634,10 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
       2026-11-10 desk session (not ticked): needs a person. The exit is measured on normal play (Constitution 36,
       P5-realplay), so an unattended idle scene is not a valid run, and the same open PBZ Trial blocks the button.
       Human step: after P4's step, the owner presses Optimize my game on WARDOGS and plays (~25 min); the friend once.
+      2026-11-10 ~18:30-19:14 (not ticked; ROB RUN per the owner's 17:44 substitution, see P4-exit-proof): the button
+      ran two as-is sessions on his real play with no capture or Trial clicks (each stopped at Compy's own "Stop now"
+      after the settle cap), offered "Test anyway", then refused to start (CR-unconfirmed-remedy). No summary reached;
+      the friend's run not attempted. Evidence `_train\view-1110d\p5-0*.png/json`, `journey.log`.
 
 ### Then — Roadmap Phase 6: Care Journey convergence (`product/ROADMAP.md` Phase 6)
 Planned 2026-10-25. Order is value order. Converge, don't add rooms. Phase 6 exit on the owner rig: from Home,
@@ -657,6 +683,11 @@ room or station picked by hand.
       WARDOGS crash is on this PC's record (the incident list names none) and the stutter path compares the latest
       game, PBZ. Evidence `C:\Users\Kuya\code\_train\view-1110\p6-0*.png`. Not ticked: the friend's repeat
       (~5 min) and a WARDOGS case are still needed.
+      2026-11-10 ~19:14 re-check (not ticked; ROB RUN per the owner's 17:44 substitution, see P4-exit-proof): from Home,
+      Something went wrong → the ROB RUN crash (Nov 10 11:17) still reaches one next step (verify files, then update),
+      and "Compare my latest session with my last steady one" now gives an honest unknown for ROB RUN ("no steady
+      ROB RUN session to compare … record a session in Live when the game runs well"). The owner's half holds for ROB RUN;
+      the friend's repeat (~5 min) remains. Evidence `_train\view-1110d\p6-05-*`, `p6-06-stutter-now.png`.
 
 ### Then — Roadmap Phase 7: Contextual UX and education convergence (`product/ROADMAP.md` Phase 7)
 Planned 2026-10-25. Order is value order. Converge, don't add rooms, consoles or guards (directive rule 1:
@@ -843,6 +874,7 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       P7-teach; P7-palette and the rig slices do not block it. ROADMAP P7 exit.
       2026-11-10 desk session (not ticked): needs the friend at the keyboard (~10 min) and the owner opening the
       technical layer on each answer (~5 min); not drivable unattended.
+      2026-11-10 ~19:16: not attempted or simulated (needs the friend); still open.
 
 ### Then — Roadmap Phase 8: Advanced tuning envelope (`product/ROADMAP.md` Phase 8, `product/RISK_MODEL.md`)
 Planned 2026-10-28 (scheduled refill). ROADMAP: broaden only after the Trial/risk/stability systems are
@@ -974,9 +1006,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-04 (scheduled, CODE-ONLY, owner in PBZ): CR-trial-zero-base `4d5595fd` (rebased over `1e9ce481`); tsc 0;
-  ExperimentBench 161/161; the 3 new cases fail on main's code. TS display only, no review. One item only; no cargo
-  mid-game. Log trimmed to the newest 14. Not pushed (CODE-ONLY; main ahead of GitHub); next FULL session pushes.
 - 2026-11-03 ~19:43 to 11-04 ~02:20 (interactive from Claude HQ, resumed after the usage limit; owner: "continue from where u
   left off", then 01:47 "can you complete the last task"): the day's `main` pushed through the gate at 20:32 (`8be87e12..6958e512`)
   after two red runs it was right to refuse: the debrief layout guard lacked CR-cmp-wait's `get_armed_comparison` (`d3b126c9`) and
@@ -1070,6 +1099,11 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   lines left open. Three WORK_TRAIN SHAs were mistyped (`c552354c`/`7e69760c`/`0f0cb0bb` are `c5523543`/`7e697609`/
   `0f0cb0ba` on main). `5fb37609..5993d0ec` pushed through the gate (cargo 1810/0); #663 closed naming `5993d0ec`.
   No Rust, no install; tip visual re-check due at the next FULL install. Pushed with this line.
+- 2026-11-10 ~17:44-19:16 (coordinator-assigned, owner in ROB RUN; his 17:44 decision: ROB RUN for WARDOGS, drive Compy
+  while he plays): Compy restarted once with a CDP port (no focus taken), restored to a normal launch at 19:15. PBZ exp:6
+  concluded by Compy (confounded, restored, read-back verified). P4/P5 on ROB RUN: three real-play as-is sessions, both
+  journey baselines uneven at the cap, Trial start refused (CR-unconfirmed-remedy, CR-refuse-early queued). P6 owner half
+  re-checked for ROB RUN. Nothing ticked. Docs only; evidence `_train\view-1110d\`. Not pushed (preflight CODE-ONLY).
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
