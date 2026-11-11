@@ -334,6 +334,48 @@ pub(crate) fn memory_integrity_or_vbs_active() -> bool {
     hvci_on || vbs_on
 }
 
+/// Tri-state read of the same switches for the Diagnostics row only (CR-vbs-row-truth): `None`
+/// when none of them is written, which is how a default- or policy-enabled VBS often looks, so
+/// absent is never shown as a definite "off". Also reads the Group Policy keys. Read-only; the
+/// rec engine keeps `memory_integrity_or_vbs_active` unchanged.
+pub(crate) fn memory_integrity_or_vbs_configured() -> Option<bool> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let read = |path: &str, name: &str| -> Option<u32> {
+        hklm.open_subkey(path).and_then(|k| k.get_value::<u32, _>(name)).ok()
+    };
+    combine_vbs_switches(&[
+        read(
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceGuard\\Scenarios\\HypervisorEnforcedCodeIntegrity",
+            "Enabled",
+        ),
+        read(
+            "SYSTEM\\CurrentControlSet\\Control\\DeviceGuard",
+            "EnableVirtualizationBasedSecurity",
+        ),
+        read(
+            "SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard",
+            "EnableVirtualizationBasedSecurity",
+        ),
+        // Policy HVCI: 1 = on with UEFI lock, 2 = on without lock, 0 = off.
+        read(
+            "SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard",
+            "HypervisorEnforcedCodeIntegrity",
+        ),
+    ])
+}
+
+/// Pure half of `memory_integrity_or_vbs_configured`: any written switch that is non-zero = on;
+/// otherwise any written switch = off; nothing written = `None`.
+pub(crate) fn combine_vbs_switches(values: &[Option<u32>]) -> Option<bool> {
+    if values.iter().any(|v| matches!(v, Some(n) if *n != 0)) {
+        Some(true)
+    } else if values.iter().any(|v| v.is_some()) {
+        Some(false)
+    } else {
+        None
+    }
+}
+
 pub(crate) fn reserved_storage_enabled() -> bool {
     // Win10/11 stashes the reserved-storage configuration here. BaseHardReserveSize
     // is the byte count currently set aside; > 0 = reserved storage is active.
