@@ -237,7 +237,9 @@ pub(crate) fn start_tweak_trial(rec_id: String, rec_title: String) {
             }
             // 2. Apply. If it fails, nothing was mutated — bail cleanly (no guard armed).
             set(|s| s.status = "Applying the change…".into());
-            let view = match crate::history::apply_recommendation(rec_id.clone(), rec_title.clone()) {
+            // CR-rp-same-setting-row: through the Trial-aware apply, so a setting a running Trial
+            // holds is refused here too (this trial's own rollback would otherwise re-apply it).
+            let view = match crate::experiment::apply_recommendation(rec_id.clone(), rec_title.clone()) {
                 Ok(v) => v,
                 Err(e) => {
                     set(|s| {
@@ -468,7 +470,9 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
                     return;
                 }
             };
-            if let Err(e) = crate::history::apply_recommendations_batch(items) {
+            // CR-rp-same-setting-row: the Trial-aware batch, as the UI's (refused whole if it names a
+            // setting a running Trial holds).
+            if let Err(e) = crate::experiment::apply_recommendations_batch(items) {
                 set(|s| {
                     s.running = false;
                     s.error = Some(format!("Couldn't apply the stack: {e}"));

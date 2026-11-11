@@ -304,10 +304,14 @@ impl StoreLock {
 ///   entirely because the Experiment gate was not recorded. `start_experiment` holds
 ///   `experiment::store_write_gate` and calls `history::apply_recommendation` inside it;
 ///   `conclude_experiment` and `restore_experiment` hold it and call `history::rollback_change`.
-///   Each of those enters `HISTORY_LOCK`. **Direction matters and is asserted, not assumed:** nothing in the
-///   crate calls into `experiment` at all except `lib.rs` (its command registration, and the
-///   launch-time `reconcile_interrupted_starts` in `.setup`, which takes the Experiment gate first and
-///   only reads the ledger inside it), so no production path takes `History` and then `Experiment` — which is why
+///   Each of those enters `HISTORY_LOCK`, and so do the UI's `apply_recommendation` /
+///   `apply_recommendations_batch` commands, which live in `experiment` since CR-rp-same-setting-row.
+///   **Direction matters and is asserted, not assumed:** nothing in the crate takes the Experiment
+///   gate except `lib.rs` (its command registration, and the launch-time
+///   `reconcile_interrupted_starts` in `.setup`, which takes the Experiment gate first and only reads
+///   the ledger inside it) and `benchmark_trial`'s worker threads, which call those two apply
+///   commands holding no store lock (`state()` and `all_change_ids` are released first), so no
+///   production path takes `History` and then `Experiment` — which is why
 ///   `the_inverted_history_to_experiment_edge_is_undeclared_and_panics` can use that direction as a
 ///   live positive control.
 /// - `Experiment -> SupportEvidence` — required by the all-held-lock rule, on two distinct real
@@ -328,8 +332,9 @@ impl StoreLock {
 /// **An allowed pair claims the nesting is SAFE, not merely that it happens.** Safety here rests on
 /// two facts, not on the ordering looking sensible. `support_evidence` is a leaf — `record` appends
 /// and `clear_support_evidence` deletes, and neither reaches another store — so every `-> SupportEvidence`
-/// pair terminates. And `Experiment` is a root: `lib.rs`'s command registration is the only caller
-/// of the module, so no store lock is ever held when the Experiment gate is taken. A root, a middle
+/// pair terminates. And `Experiment` is a root: its gate is taken only from `lib.rs`'s command
+/// registration and `benchmark_trial`'s worker threads, none holding a store lock at that point, so
+/// no store lock is ever held when the Experiment gate is taken. A root, a middle
 /// and a leaf cannot close a cycle. That property is asserted rather than assumed:
 /// `declared_nestings_are_acyclic` fails if a future entry makes this graph cyclic, because a cycle
 /// in THIS table would let a real deadlock through while the recorder stayed green.
