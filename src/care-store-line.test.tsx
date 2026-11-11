@@ -5,16 +5,35 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
 import "./i18n";
-import { CARE_SAVE_RETRY_MS, CareStoreLine, useCareStore } from "./care-store-line";
+import { CARE_READ_RETRY_MS, CARE_SAVE_RETRY_MS, CareStoreLine, useCareStore } from "./care-store-line";
 
 const SAVE_LINE = "Compy couldn't save this; it'll try again";
 const READ_LINE = "Compy couldn't check for crash notices; it'll try again";
+const READ_STOPPED_LINE = "Compy couldn't check for crash notices; it'll check again when you open another page";
 const STOPPED_LINE = "Compy couldn't save this; the crash notice may show again";
 
-function Harness({ invokeFn }: { invokeFn: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> }) {
+function Harness({
+  invokeFn,
+  readFn = () => Promise.resolve(null),
+}: {
+  invokeFn: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+  readFn?: () => Promise<unknown>;
+}) {
   const store = useCareStore();
+  // The same shape as App's refreshPendingCare: a failed read hands itself back to the store.
+  const doRead = () => {
+    readFn().then(store.readOk, () => store.readFailed(doRead));
+  };
   return (
     <>
+      <button
+        onClick={() =>
+          store.persist("opened:inc-1", () => invokeFn("mark_care_incident_opened", { incidentId: "inc-1" }))
+        }
+      >
+        Find out why (inc-1)
+      </button>
+      <button onClick={doRead}>read</button>
       <button
         onClick={() =>
           store.persist("dismissed:inc-1", () => invokeFn("dismiss_care_incident", { incidentId: "inc-1" }))
@@ -29,8 +48,6 @@ function Harness({ invokeFn }: { invokeFn: (cmd: string, args?: Record<string, u
       >
         Find out why (inc-2)
       </button>
-      <button onClick={store.readFailed}>read failed</button>
-      <button onClick={store.readOk}>read ok</button>
       <CareStoreLine trouble={store.trouble} />
     </>
   );
@@ -140,11 +157,114 @@ describe("a crash-notice choice that can't be saved says so (CR-care-silent)", (
   });
 
   it("names a read failure separately, and a good read clears it", async () => {
-    render(<Harness invokeFn={vi.fn()} />);
-    fireEvent.click(screen.getByText("read failed"));
+    const readFn = vi.fn().mockRejectedValueOnce("care_read_failed").mockResolvedValue(null);
+    render(<Harness invokeFn={vi.fn()} readFn={readFn} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText("read"));
+    });
     expect(screen.getByRole("status").textContent).toBe(READ_LINE);
-    fireEvent.click(screen.getByText("read ok"));
+    await act(async () => {
+      fireEvent.click(screen.getByText("read"));
+    });
     expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  // CR-care-read-promise: the read line said "it'll try again" and nothing re-read.
+  it("re-reads on its own after a failed read, and the line goes when a re-read lands", async () => {
+    vi.useFakeTimers();
+    const readFn = vi.fn().mockRejectedValueOnce("care_read_failed").mockResolvedValue(null);
+    render(<Harness invokeFn={vi.fn()} readFn={readFn} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText("read"));
+    });
+    expect(screen.getByRole("status").textContent).toBe(READ_LINE);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CARE_READ_RETRY_MS[0]);
+    });
+    expect(readFn, "nothing re-read after the promise").toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("re-reads with backoff, then stops and stops promising another try", async () => {
+    vi.useFakeTimers();
+    const readFn = vi.fn().mockRejectedValue("care_read_failed");
+    render(<Harness invokeFn={vi.fn()} readFn={readFn} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText("read"));
+    });
+    for (const wait of CARE_READ_RETRY_MS) {
+      expect(screen.getByRole("status").textContent).toBe(READ_LINE);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(wait);
+      });
+    }
+    expect(readFn).toHaveBeenCalledTimes(1 + CARE_READ_RETRY_MS.length);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+    });
+    expect(readFn, "re-reads stop after the last backoff step").toHaveBeenCalledTimes(1 + CARE_READ_RETRY_MS.length);
+    expect(screen.getByRole("status").textContent).toBe(READ_STOPPED_LINE);
+  });
+
+  it("schedules nothing once unmounted, even for a save that fails after", async () => {
+    vi.useFakeTimers();
+    let reject: (e: unknown) => void = () => {};
+    const invokeFn = vi.fn(() => new Promise((_, r) => (reject = r)));
+    const readFn = vi.fn().mockRejectedValue("care_read_failed");
+    const { unmount } = render(<Harness invokeFn={invokeFn} readFn={readFn} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText("read"));
+      fireEvent.click(screen.getByText("Not now"));
+    });
+    unmount();
+    await act(async () => {
+      reject("care_save_failed");
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+    });
+    expect(invokeFn, "a save that failed after unmount retried").toHaveBeenCalledTimes(1);
+    expect(readFn, "a read re-ran after unmount").toHaveBeenCalledTimes(1);
+  });
+
+  it("a spent 'Find out why' save clears once 'Not now' for the same notice saves", async () => {
+    vi.useFakeTimers();
+    const invokeFn = vi.fn((cmd: string) =>
+      cmd === "mark_care_incident_opened" ? Promise.reject("care_save_failed") : Promise.resolve(undefined),
+    );
+    render(<Harness invokeFn={invokeFn} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText("Find out why (inc-1)"));
+    });
+    for (const wait of CARE_SAVE_RETRY_MS) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(wait);
+      });
+    }
+    expect(screen.getByRole("status").textContent).toBe(STOPPED_LINE);
+    await act(async () => {
+      fireEvent.click(screen.getByText("Not now"));
+    });
+    expect(invokeFn).toHaveBeenCalledWith("dismiss_care_incident", { incidentId: "inc-1" });
+    expect(screen.queryByRole("status"), "the notice is dismissed, yet the line says it may show again").toBeNull();
+  });
+
+  it("a spent save of another notice stays when 'Not now' saves", async () => {
+    vi.useFakeTimers();
+    const invokeFn = vi.fn((cmd: string) =>
+      cmd === "mark_care_incident_opened" ? Promise.reject("care_save_failed") : Promise.resolve(undefined),
+    );
+    render(<Harness invokeFn={invokeFn} />);
+    await act(async () => {
+      fireEvent.click(screen.getByText("Find out why (inc-2)"));
+    });
+    for (const wait of CARE_SAVE_RETRY_MS) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(wait);
+      });
+    }
+    await act(async () => {
+      fireEvent.click(screen.getByText("Not now"));
+    });
+    expect(screen.getByRole("status").textContent).toBe(STOPPED_LINE);
   });
 
   it("is what App uses: no crash-notice call swallows its failure, and the line is rendered", () => {
@@ -159,6 +279,9 @@ describe("a crash-notice choice that can't be saved says so (CR-care-silent)", (
     }
     expect(app, "the line is no longer rendered").toContain("<CareStoreLine trouble={careStore.trouble} />");
     const read = app.match(/invoke<PendingCareIncident \| null>\("get_pending_care_incident"\)([\s\S]*?)\}, \[/)?.[1] ?? "";
-    expect(read, "a failed read of the crash notice is silent again").toContain("careReadFailed()");
+    expect(read, "a failed read of the crash notice is silent again, or no longer re-reads itself").toContain(
+      "careReadFailed(refresh)",
+    );
+    expect(app).toContain("useCallback(function refresh()");
   });
 });
