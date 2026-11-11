@@ -35,6 +35,10 @@ pub(crate) struct Drift {
     pub label: String,
     pub detail: String,
     pub noticed_at: String,
+    /// CR-1102-left owner call (delegated 2026-11-10): the check that drifted now reads unknown. The
+    /// notice stays (it was last seen changed) and says Compy can't read the check now; `detail` is
+    /// then the unknown check's own detail, never the old regression's.
+    pub unreadable_now: bool,
 }
 
 // #283 — serialized so two concurrent readiness scans can't interleave load → detect → save.
@@ -125,9 +129,22 @@ fn detect(
                     label: label.clone(),
                     detail: detail.clone(),
                     noticed_at: noticed,
+                    unreadable_now: false,
                 });
             }
-            // advisory / unknown / attention-that-was-never-good → not a regression.
+            // An active drift whose check now reads unknown: still a notice (last seen changed), with
+            // its first stamp and label, said as unreadable now. Nothing in the state changes, so a
+            // later ready still clears it and a later attention keeps the original stamp.
+            "unknown" if state.noticed_at.contains_key(id) => {
+                drifts.push(Drift {
+                    id: id.clone(),
+                    label: state.labels.get(id).cloned().unwrap_or_else(|| label.clone()),
+                    detail: detail.clone(),
+                    noticed_at: state.noticed_at[id].clone(),
+                    unreadable_now: true,
+                });
+            }
+            // advisory / unknown with no active drift / attention-that-was-never-good → not a regression.
             _ => {}
         }
     }
@@ -426,6 +443,29 @@ mod drift_tests {
         );
         let (d3, _s3) = detect(&[obs("power-profile", "attention")], &s2, "T3");
         assert_eq!(d3[0].noticed_at, "T1", "original stamp survives the unknown-status gap");
+    }
+
+    #[test]
+    fn an_active_drift_whose_check_now_reads_unknown_stays_said_as_unreadable_now() {
+        // CR-1102-left owner call (delegated 2026-11-10): keep the notice, worded "last seen changed;
+        // Compy can't read it now". Before, the unknown scan emitted nothing and the notice vanished.
+        let (_d0, s0) = detect(&[obs("power-profile", "ready")], &DriftState::default(), "T0");
+        let (d1, s1) = detect(&[obs("power-profile", "attention")], &s0, "T1");
+        assert!(!d1[0].unreadable_now);
+        let (d2, s2) = detect(&[obs("power-profile", "unknown")], &s1, "T2");
+        assert_eq!(d2.len(), 1, "the notice stays while the check can't be read");
+        assert!(d2[0].unreadable_now);
+        assert_eq!(d2[0].noticed_at, "T1", "with the stamp of when it was noticed");
+        assert_eq!(s2.noticed_at, s1.noticed_at, "the unknown scan changes no state");
+        assert_eq!(s2.last_good, s1.last_good);
+        // A later ready clears it; a later attention keeps the original stamp and reads normally.
+        let (d3, _) = detect(&[obs("power-profile", "ready")], &s2, "T3");
+        assert!(d3.is_empty());
+        let (d4, _) = detect(&[obs("power-profile", "attention")], &s2, "T4");
+        assert_eq!((d4[0].noticed_at.as_str(), d4[0].unreadable_now), ("T1", false));
+        // An unknown check that never drifted is still no notice.
+        let (d5, _) = detect(&[obs("power-profile", "unknown")], &s0, "T5");
+        assert!(d5.is_empty());
     }
 
     #[test]

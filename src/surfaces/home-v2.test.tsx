@@ -303,7 +303,7 @@ describe("HomeV2 — glance cards (fill pass)", () => {
         ],
       },
     });
-    expect(screen.getByText("3 settings drifted off")).toBeTruthy();
+    expect(screen.getByText("3 settings changed since they were last good")).toBeTruthy();
     expect(screen.queryByText(/Game Mode/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "see what changed" }));
     expect(open).toHaveBeenCalledWith("blackbox");

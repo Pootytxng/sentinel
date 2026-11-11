@@ -222,7 +222,7 @@ describe("HomeHud drift module points to the Care view (P6-timeline)", () => {
     const open = vi.fn();
     const c = render(<HomeRoom {...props} readiness={drifted} onOpenLabStation={open} />).container;
     expect(c.querySelector("[data-hud-home]")).not.toBeNull();
-    expect(screen.getByText(/1 setting drifted off/)).toBeTruthy();
+    expect(screen.getByText(/1 setting changed since it was last good/)).toBeTruthy();
     expect(screen.queryByText(/Game Mode/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "see what changed" }));
     expect(open).toHaveBeenCalledWith("blackbox");
@@ -230,6 +230,6 @@ describe("HomeHud drift module points to the Care view (P6-timeline)", () => {
 
   it("without the deep-link, still names where the list is", () => {
     render(<HomeRoom {...props} readiness={drifted} />);
-    expect(screen.getByText(/1 setting drifted off · listed on Crash & Freeze Rescue/)).toBeTruthy();
+    expect(screen.getByText(/1 setting changed since it was last good · listed on Crash & Freeze Rescue/)).toBeTruthy();
   });
 });

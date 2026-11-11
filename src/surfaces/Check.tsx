@@ -570,7 +570,11 @@ export default function Check({
               </div>
               {checkDrifts.map((d) => (
                 <p key={d.id} className="check-drift-detail">
-                  {d.detail ? t("optimize.check.driftItem", { label: d.label, detail: d.detail }) : d.label}
+                  {d.unreadable_now
+                    ? t("optimize.check.driftUnreadable", { label: d.label })
+                    : d.detail
+                      ? t("optimize.check.driftItem", { label: d.label, detail: d.detail })
+                      : d.label}
                 </p>
               ))}
               <p className="check-drift-detail">{t("optimize.check.driftPointer")}</p>

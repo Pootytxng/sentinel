@@ -13,7 +13,7 @@ const leftoversMock = vi.hoisted(() => ({
 
 // Settable Drift Watch payload — a check that was good and has since regressed. Default: none.
 const readinessMock = vi.hoisted(() => ({
-  drifts: [] as { id: string; label: string; detail: string; noticed_at: string }[],
+  drifts: [] as { id: string; label: string; detail: string; noticed_at: string; unreadable_now?: boolean }[],
   // P6-timeline: the hardware-change advisory's payload (hwchange.rs). Default: no change.
   hw: null as null | { changed: boolean; changes: string[]; baseline_recorded: boolean },
   // Checks Compy could not read (each one an extra "unknown" row). Default: none.
@@ -275,6 +275,22 @@ describe("Check", () => {
     expect(screen.queryByText(/noticed \d|noticed just now|noticed yesterday/)).not.toBeInTheDocument();
     // ...and the banner NEVER attributes a cause. "outside Compy" is the retired false claim.
     expect(screen.queryByText(/outside Compy/i)).not.toBeInTheDocument();
+  });
+
+  // CR-1102-left owner call (delegated 2026-11-10): a drift whose check now reads unknown stays, said
+  // as last seen changed, never with the unknown check's detail as if it were the regression.
+  it("a drift whose check now reads unknown says last seen changed; Compy can't read it now", async () => {
+    readinessMock.drifts = [
+      { id: "power-profile", label: "Power profile", detail: "Couldn't read the active plan.", noticed_at: new Date().toISOString(), unreadable_now: true },
+    ];
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("Power profile: last seen changed; Compy can't read it now.")).toBeInTheDocument();
+    expect(screen.getByText("1 setting changed since it was last good")).toBeInTheDocument();
+    expect(screen.queryByText(/Couldn't read the active plan/)).not.toBeInTheDocument();
   });
 
   it("the hardware advisory names the parts, keeps its actions, and links to the Care view (P6-timeline)", async () => {
