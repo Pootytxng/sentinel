@@ -842,6 +842,11 @@ mod diagnostics_tests {
         assert_eq!(from(&[Some(1), None], &[Some(0), Some(0)]), Some(true));
         // No policy: the local keys decide.
         assert_eq!(from(&[None, None], &[Some(0), Some(1)]), Some(true));
+        // CR-vbs-local-eq1: a local key is on only at 1, as the rec engine reads it; any other
+        // written value is off. Policy HVCI 2 ("on without lock") stays on.
+        assert_eq!(from(&[None, None], &[Some(2), None]), Some(false));
+        assert_eq!(from(&[None, None], &[Some(2), Some(1)]), Some(true));
+        assert_eq!(from(&[None, Some(2)], &[Some(0), Some(0)]), Some(true));
     }
 
     #[test]

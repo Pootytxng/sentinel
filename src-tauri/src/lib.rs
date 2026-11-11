@@ -369,12 +369,15 @@ pub(crate) fn memory_integrity_or_vbs_configured() -> Option<bool> {
 }
 
 /// A written Group Policy value wins over the local keys (policy overrides them); with no policy
-/// written, the local keys decide.
+/// written, the local keys decide. CR-vbs-local-eq1: a local key counts as on only at `1`, the
+/// rec engine's own rule (`memory_integrity_or_vbs_active`); policy HVCI stays non-zero = on (2 is
+/// "on without UEFI lock").
 pub(crate) fn vbs_configured_from(policy: &[Option<u32>], local: &[Option<u32>]) -> Option<bool> {
     if policy.iter().any(Option::is_some) {
         combine_vbs_switches(policy)
     } else {
-        combine_vbs_switches(local)
+        let local: Vec<Option<u32>> = local.iter().map(|v| v.map(|n| u32::from(n == 1))).collect();
+        combine_vbs_switches(&local)
     }
 }
 
