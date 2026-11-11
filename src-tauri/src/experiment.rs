@@ -8376,6 +8376,8 @@ mod refuse_early_tests {
         assert_eq!(check(&changes), None);
     }
 
+    // A source-text change detector (review: not a proof of read-only): it pins that the command
+    // counts through the start's own function and names no save or apply of its own.
     #[test]
     fn the_command_reads_through_the_same_count_the_start_refuses_on() {
         let src = include_str!("experiment.rs");

@@ -267,6 +267,17 @@ describe("CR-refuse-early: a start refusal known now is said before any session"
     expect(calls("start_fps_capture").length).toBeGreaterThan(0);
     expect(calls("start_experiment")).toHaveLength(1);
   });
+
+  it("a check that can't be made (the ledger can't be read) stops before any session too, saying why", async () => {
+    state.refuse = { trial_start_precheck: "Compy couldn't read its change history (history.json is locked)" };
+    render(<ExperimentBench />);
+    await press();
+    expect(await finalLine()).toBe(
+      "Compy didn't start the test, and nothing was changed: Compy couldn't read its change history (history.json is locked)",
+    );
+    expect(calls("start_fps_capture")).toHaveLength(0);
+    expect(calls("start_experiment")).toHaveLength(0);
+  });
 });
 
 describe("P5-guided: one button runs the whole Trial", () => {
