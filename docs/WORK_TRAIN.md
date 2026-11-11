@@ -311,22 +311,21 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       plan by its English name and otherwise duplicates it under a NEW GUID with a localized name, which then classes
       as Other: on a localized Windows the rec reads off after a successful apply and the verify can fail. Record the
       applied scheme GUID on the receipt (an AppliedAction/Snapshot change) or compare against the duplicate's source.
-      2026-11-11 s18 PARKED on `claude/train-ultimate-identity` (`6b047ef7`, `e029ffeb`; cargo 1845/0, clippy clean;
-      not landed). Design: (1) `AppliedChange.applied_plan {schema 1, guid}`, additive, lenient, skipped when None, outside
-      the rollback contract; (2) `build_applied_change` (after the apply returned) records the active scheme from a
-      read-only `/getactivescheme` for the Ultimate apply when it differs from the saved prior; (3) `check_row_state` reads
-      that GUID (or an Ultimate-class plan) as On; `changed_outside_refusal` refuses it; (4) a row without a GUID is
-      recordable only when `powercfg /query` settings (GUID + 0x tokens) say the live plan is not an Ultimate-template copy.
-      Reviews r1: sonnet APPROVE-WITH-NITS (seams, query before the lock: taken in `e029ffeb`); opus REQUEST-CHANGES.
-      Blocker (opus MUST-FIX 1, open): exact settings equality calls an EDITED copy "not a copy", and Compy edits the active
-      plan itself (`usb-selective-suspend-off`, `pcie-aspm-off` write `setacvalueindex SCHEME_CURRENT`), so a pre-fix row
-      could still be recorded as external; opus's remedy (compare the printed name with the template's) conflicts with the
-      "never by name" rule. Candidate next design: a row without a GUID is recordable only on a Windows stock non-Ultimate
-      scheme (by GUID), no settings query at all. Also open (opus SHOULD-FIX 3): the Trial's own reads (`experiment.rs`
-      3672, 4249 and the other `probe_rec_target` sites) still class a localized copy Off, so with (3) a localized
-      power-ultimate Trial would start and then abort at conclude; read them through the Trial's applied row first.
-      SHOULD-FIX 4 (stamp only a plan that is Ultimate-class or a fresh template copy) and 5 (records written before the
-      fix that point at Compy's copy) not taken. Next: a second round on that design, then both reviewers again.
+      2026-11-11 s18 PARKED after two review rounds on `claude/train-ultimate-identity` (`6b047ef7`, `e029ffeb`,
+      `d7ee1557`, `a8559fe2` re-anchor; cargo 1845/0, clippy clean, full vitest 535/538; NOT landed).
+      Design: `AppliedChange.applied_plan {schema 1, guid}` (additive, lenient, skipped when None, outside the rollback
+      contract); the receipt records the scheme active after the Ultimate apply (read-only `/getactivescheme`) when it is
+      not the saved prior; `changed_outside_refusal` refuses that GUID; a row without one is recordable only when
+      `powercfg /query` settings say the live plan is not an Ultimate-template copy (unknown refuses). Reviews: r1 sonnet
+      APPROVE-WITH-NITS, opus REQUEST-CHANGES (edited copy; query under the lock; read-back would abort a localized Trial at
+      conclude: read-back change withdrawn in r2); r2 sonnet APPROVE-WITH-NITS (receipt reads have no timeout), opus
+      REQUEST-CHANGES. Blocker (opus r2 MUST-FIX, measured on the dev PC): `powercfg /query e9a42b02-...` exits 0 but prints
+      `UNKNOWN` for every AC/DC index when the template isn't in `/list`, so the settings comparison answers "not a copy"
+      (Some(false)) for every plan: a pre-fix row's localized copy is recordable as external again and new rows never
+      stamp a localized copy. Next design (opus r2): an unreadable template (any UNKNOWN / length mismatch) is None; record
+      the GUID by provenance (read `/list` GUIDs before the apply; stamp the plan active after it if Ultimate-class or not
+      in that list); a row without a GUID is recordable only on a Windows stock non-Ultimate scheme by GUID; take the
+      receipt reads off `lock_history` or bound them; test on real-shaped output (UNKNOWN template). Then both reviews.
 - [x] **P9-hint-shown** (desk review 2026-11-03) `get_priorities.session_hint` (the "GPU busy at times / sustained"
       sentence) reaches the frontend typed but no screen prints it. Decide: show it on Home or Optimize under the
       limiter rows, or drop the field. Code + one test either way. Done `4a4265d4` (2026-11-10): shown (coordinator
