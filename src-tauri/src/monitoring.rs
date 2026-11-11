@@ -1010,7 +1010,8 @@ pub(crate) const CAPTURE_SUPERSEDED: &str = "capture-superseded";
 
 /// CR-capture-superseded: read under the capture lock, after the newer request ran. A newer start
 /// left capture on, so this start's wish holds: Ok. A newer stop left it off: a distinct Err, never
-/// an Ok that lets the window believe capture is on when it is off.
+/// an Ok that lets the window believe capture is on when it is off. The answer is the flag at read
+/// time: a helper exit clears it without the lock, and then "not running" is still the truth.
 fn superseded_start() -> Result<(), String> {
     use std::sync::atomic::Ordering;
     superseded_start_answer(fps_active().load(Ordering::Acquire))
@@ -1933,6 +1934,9 @@ mod capture_generation_tests {
         });
         assert_eq!(start, Err(CAPTURE_SUPERSEDED.to_string()), "a start the stop overtook answered Ok");
         assert!(!on.get());
+        // The window matches the same words (review r1 NIT).
+        assert!(include_str!("../../src/surfaces/GuidedJourney.tsx")
+            .contains(&format!("CAPTURE_SUPERSEDED = \"{CAPTURE_SUPERSEDED}\"")));
         // Tickets rise in the order they are taken.
         let (a, b) = (capture_ticket(), capture_ticket());
         assert!(b > a);

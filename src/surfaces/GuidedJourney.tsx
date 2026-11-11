@@ -475,12 +475,11 @@ async function measureOneSession(
   try {
     await invoke("start_fps_capture");
   } catch (e) {
+    // A refused start owns no capture: nothing for the cleanup to stop (review r1).
+    run.capturing = false;
     // CR-capture-superseded: a stop pressed after this start ran first, so capture is off. Say the
     // capture is not running, the words a capture that never came up gets; never wait on it.
-    if (String(e instanceof Error ? e.message : e) === CAPTURE_SUPERSEDED) {
-      run.capturing = false;
-      throw new Error(opts.captureFailed);
-    }
+    if (String(e instanceof Error ? e.message : e) === CAPTURE_SUPERSEDED) throw new Error(opts.captureFailed);
     throw e;
   }
   await waitForPlay(opts.captureFailed, opts.mode);
