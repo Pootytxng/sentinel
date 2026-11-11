@@ -367,6 +367,34 @@ describe("GamingMode asks once more for extras ticked after the one-time consent
     expect(starts()[0][1]).toEqual({ opts: { advancedUsb: true, advancedPcie: false, suspendServices: [] } });
   });
 
+  it("a held key's repeats never press Enable on either confirm; a fresh press still does (CR-gm-confirm-repeat)", async () => {
+    refusingStart();
+    render(<GamingMode />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start Gaming Mode" }));
+    await screen.findByRole("dialog", { name: "Turn on Gaming Mode?" });
+    const enable = screen.getByRole("button", { name: "Enable Gaming Mode" });
+    expect(document.activeElement).toBe(enable); // autoFocus: where a held Start key lands
+    // fireEvent returns false when the default (the button's key activation) was prevented. These
+    // are the real checks: jsdom never turns a key into a click, so the starts() counts below only
+    // show nothing else started.
+    expect(fireEvent.keyDown(enable, { key: "Enter", repeat: true })).toBe(false);
+    expect(fireEvent.keyDown(enable, { key: " ", repeat: true })).toBe(false);
+    // A fresh press of either key keeps its activation (a keyboard user can still confirm).
+    expect(fireEvent.keyDown(enable, { key: "Enter", repeat: false })).toBe(true);
+    expect(fireEvent.keyDown(enable, { key: " ", repeat: false })).toBe(true);
+    expect(fireEvent.keyDown(enable, { key: "Tab", repeat: true })).toBe(true);
+    expect(starts()).toHaveLength(0);
+    fireEvent.click(enable);
+    await waitFor(() => expect(starts()).toHaveLength(1));
+    // The extras-only confirm is the same button.
+    fireEvent.click(screen.getByLabelText("PCIe ASPM off (AC)"));
+    fireEvent.click(screen.getByRole("button", { name: "Start Gaming Mode" }));
+    await screen.findByRole("dialog", { name: "Also turn these on?" });
+    const again = screen.getByRole("button", { name: "Enable Gaming Mode" });
+    expect(fireEvent.keyDown(again, { key: "Enter", repeat: true })).toBe(false);
+    expect(starts()).toHaveLength(1);
+  });
+
   it("the first-use consent covers the extras it listed, and malformed storage asks again", async () => {
     refusingStart();
     render(<GamingMode />);
