@@ -28,6 +28,12 @@
     "rollbackTitle": "Roll back \"{{title}}\"?",
     "rollbackDest": " It'll return to {{label}}.",
     "rollbackBody": "Compy restores the setting to how it was before.{{dest}}",
+    "rollbackKeptOutside": "You chose to keep “{{kept}}”, set outside Compy. Rolling back switches your power plan to “{{saved}}”, the plan Compy saved before it changed anything, away from “{{kept}}”.",
+    "rollbackKeptOutsideSame": "You chose to keep “{{kept}}”, set outside Compy. Rolling back switches your power plan to the plan Compy saved before it changed anything, which is “{{kept}}” too, so your plan stays the same.",
+    "rollbackKeptOutsideUnnamed": "You chose to keep “{{kept}}”, set outside Compy. Rolling back switches your power plan to the plan Compy saved before it changed anything (Compy didn't save its name), away from “{{kept}}”.",
+    "planBalanced": "Balanced",
+    "planHighPerformance": "High performance",
+    "planUltimate": "Ultimate Performance",
     "rollback": "Roll back"
   },
   "errors": {

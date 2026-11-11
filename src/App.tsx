@@ -37,6 +37,7 @@ import { prewarmScan } from "./surfaces/use-scan";
 import { inEffectCounts, useMachineModel } from "./data/machine-model";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
+import { keptOutsideUndoBody } from "./data/kept-outside-undo";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { primaryGpu, sessionPeakVendor } from "./data/gpu-sensor";
@@ -1003,7 +1004,9 @@ function App() {
       : "";
     const ok = await confirm({
       title: t("app.dialogs.rollbackTitle", { title: change.rec_title }),
-      body: t("app.dialogs.rollbackBody", { dest }),
+      // Undo after "Keep <plan>": a row recorded as changed outside Compy names the plan the undo
+      // switches to, not the generic "how it was before".
+      body: keptOutsideUndoBody(change, t) ?? t("app.dialogs.rollbackBody", { dest }),
       confirmLabel: t("app.dialogs.rollback"),
     });
     if (!ok) return false;
