@@ -130,6 +130,7 @@ const APP_COMMANDS: &[&str] = &[
     "stop_fps_capture",
     "stop_gaming_session",
     "suspend_known_service",
+    "trial_start_precheck",
     "undo_outcome_choice",
     "what_changed_between",
     "what_changed_for_session",

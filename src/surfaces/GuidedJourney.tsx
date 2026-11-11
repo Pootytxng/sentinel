@@ -497,6 +497,17 @@ async function recover(args: RunArgs, say: (p: JourneyPhase) => void, expId: str
   return say({ kind: "restore-failed", change, reason });
 }
 
+/** CR-refuse-early: the start's other-changes refusal, asked when the journey starts, before any
+ *  as-is session is asked for (experiment.rs `trial_start_precheck`). The start asks again. Null when
+ *  nothing refuses now; a check that couldn't be made says why, as the start would. */
+async function refusedUpFront(recId: string): Promise<string | null> {
+  try {
+    return (await invoke<string | null>("trial_start_precheck", { recId })) ?? null;
+  } catch (e) {
+    return String(e instanceof Error ? e.message : e);
+  }
+}
+
 async function runJourney(args: RunArgs, game: string | null, reuseId: string | null = null) {
   // One journey at a time (codebase review 2026-11-02). A continuing journey goes straight to the
   // start without a new phase, so its button stays live through the start and any UAC prompt; a
@@ -516,6 +527,10 @@ async function runJourney(args: RunArgs, game: string | null, reuseId: string | 
   };
   let expId: string | null = null;
   try {
+    // CR-refuse-early: a refusal known now is said now, not after the as-is sessions.
+    const early = await refusedUpFront(change.id);
+    if (left()) return;
+    if (early) return say({ kind: "not-started", reason: early });
     // P5-continue: a next journey starts from the last as-is session when it can be reused.
     let baseline: SessionSummary | null = reuseId ? await reusableSession(reuseId, game) : null;
     let reused = baseline != null;
@@ -705,6 +720,10 @@ async function runRealPlay(args: RunArgs, game: string, progress: RealPlayProgre
   let expId = progress.experiment_id;
   try {
     if (expId == null) {
+      // CR-refuse-early: before any as-is session (or the start) is asked for.
+      const early = await refusedUpFront(change.id);
+      if (left()) return;
+      if (early) return say({ kind: "not-started", reason: early });
       let now = progress;
       let startOnly = false;
       if (now.phase === "collecting-before") {
