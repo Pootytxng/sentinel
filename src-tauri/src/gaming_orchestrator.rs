@@ -39,14 +39,43 @@ static SESSION_OP: Mutex<()> = Mutex::new(());
 
 /// Also taken (still only by `try_lock`) by a Trial start and the benchmark's apply across their
 /// check of the session contract and their record/apply (CR-gm-spans-trial review r1), so a session
-/// can't start between that check and the Trial's record, and neither starts while a session starts
-/// or stops. Contention answers "try again"; nothing ever waits on it.
+/// can't start between that check and the Trial's record, and neither starts while a session starts.
+/// Contention answers "try again"; nothing ever waits on it.
+///
+/// CR-gm-stop-busy: stop and recover do NOT take it. A plain change, a Trial start or the
+/// benchmark's apply holds it through its Windows permission prompt (minutes, if the user leaves the
+/// prompt open), and a stop refused for that whole time with "still finishing" was false. They take
+/// [`RESTORE_OP`] instead, which start also takes, so start, stop and recover still never interleave
+/// over the contract and receipts files. Every holder of this gate checked its setting against the
+/// session contract on disk first and was refused if a session step holds it (a USB or PCIe power
+/// setting counts as held while the session holds the power plan, review r1 opus MUST-FIX), so a stop
+/// or recovery running beside one restores only settings that holder doesn't touch; and while a stop
+/// or recovery is putting changes back, a touchable change is refused outright ([`RestoreMark`]).
 pub(crate) fn session_op_guard() -> Result<std::sync::MutexGuard<'static, ()>, String> {
     match SESSION_OP.try_lock() {
         Ok(g) => Ok(g),
         Err(std::sync::TryLockError::Poisoned(p)) => Ok(p.into_inner()),
         Err(std::sync::TryLockError::WouldBlock) => Err(
-            "another Gaming Mode operation is still finishing — give it a second and try again"
+            "Compy is still finishing another change or a Gaming Mode start (if a Windows permission \
+             prompt is open, answer or cancel it) — give it a second and try again"
+                .to_string(),
+        ),
+    }
+}
+
+/// CR-gm-stop-busy: serializes the three session operations that write the contract and receipts
+/// files, start, stop and recover, without [`SESSION_OP`], which plain changes also hold. Taken only
+/// by `try_lock` (never waits; a poisoned lock is taken over, as above: refusing would strand the
+/// user's only restore path). Start takes it after `SESSION_OP`; stop and recover take only this.
+static RESTORE_OP: Mutex<()> = Mutex::new(());
+
+fn restore_op_guard() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    match RESTORE_OP.try_lock() {
+        Ok(g) => Ok(g),
+        Err(std::sync::TryLockError::Poisoned(p)) => Ok(p.into_inner()),
+        Err(std::sync::TryLockError::WouldBlock) => Err(
+            "Gaming Mode is still finishing a start, stop or recovery (if a Windows permission prompt is \
+             open, answer or cancel it) — give it a second and try again"
                 .to_string(),
         ),
     }
@@ -209,9 +238,23 @@ fn left_alone_labels(held: &[String], opts: &StartOptions, gate_open: bool) -> V
 /// PURE: the refusal for a Trial (or the benchmark) on `rec_id` while a Gaming Mode session's
 /// contract holds it. `contract` is the session file's changes when one is on disk.
 fn session_hold_refusal(rec_id: &str, contract: Option<&[SessionChange]>) -> Option<String> {
-    contract?.iter().any(|c| rec_of_label(&c.label) == Some(rec_id)).then(|| {
-        "Gaming Mode is on and holds this setting for its session, and puts it back when it stops. \
-         Stop Gaming Mode first. Nothing was changed."
+    let contract = contract?;
+    if contract.iter().any(|c| rec_of_label(&c.label) == Some(rec_id)) {
+        return Some(
+            "Gaming Mode is on and holds this setting for its session, and puts it back when it stops. \
+             Stop Gaming Mode first. Nothing was changed."
+                .to_string(),
+        );
+    }
+    // CR-gm-stop-busy review r1 (opus MUST-FIX): USB selective suspend and PCIe link power are
+    // settings OF the active power plan. While a session holds the plan, the active plan is the
+    // session's, so a change to either would be written to (and its undo recorded against) the
+    // session's plan, and a stop switching back to the user's plan in the middle of it would leave the
+    // user's own plan changed with no record. Held with the plan.
+    let plan_held = contract.iter().any(|c| rec_of_label(&c.label) == Some(REC_POWER));
+    (plan_held && (rec_id == REC_USB || rec_id == REC_PCIE)).then(|| {
+        "Gaming Mode is on and has switched your power plan for its session, and this setting belongs \
+         to the power plan. Stop Gaming Mode first, then change it. Nothing was changed."
             .to_string()
     })
 }
@@ -219,13 +262,98 @@ fn session_hold_refusal(rec_id: &str, contract: Option<&[SessionChange]>) -> Opt
 /// CR-gm-spans-trial: whether a Gaming Mode contract on disk holds `rec_id`. A contract that is on
 /// disk but can't be read refuses too (it could hold it).
 pub(crate) fn session_holds_refusal(rec_id: &str) -> Option<String> {
-    match crate::gaming_session::pending_contract_files() {
+    let window = RestoreWindow::open();
+    let read = match crate::gaming_session::pending_contract_files() {
         Ok(found) if found.is_empty() => None,
         Ok(found) => match load_session() {
             Some(file) => file_hold_refusal(rec_id, &file, live_session_id().as_deref()),
-            None => Some(unreadable_session_refusal(&found, &crate::gaming_session::session_data_dir())),
+            // CR-gm-stop-busy review r1 (sonnet SHOULD-FIX 2): a stop that just finished removes the
+            // file between the listing and the read; list again before calling it unreadable.
+            None => match crate::gaming_session::pending_contract_files() {
+                Ok(again) if again.is_empty() => None,
+                // Review r2 (opus nit 3): name what is there now.
+                Ok(again) => Some(unreadable_session_refusal(&again, &crate::gaming_session::session_data_dir())),
+                Err(_) => Some(unreadable_session_refusal(&found, &crate::gaming_session::session_data_dir())),
+            },
         },
         Err(e) => Some(format!("Compy couldn't check Gaming Mode's session ({e}). Nothing was changed.")),
+    };
+    // Checked AFTER the read (review r1, sonnet SHOULD-FIX 1): a stop that began before the read may
+    // be rewriting the contract under it, so while one runs (or ran during the read) nothing here
+    // goes ahead.
+    if window.touched() {
+        return Some(RESTORE_IN_FLIGHT_REFUSAL.to_string());
+    }
+    read
+}
+
+/// CR-gm-stop-busy review r1: the refusal for a Gaming Mode-touchable setting while a stop or
+/// recovery is putting a session's changes back. Its contract is being rewritten, so a read of it
+/// can fail for a moment, and the plain-change rule "a record this Compy can't read is not refused"
+/// would let a change land on a setting the restore is about to write.
+const RESTORE_IN_FLIGHT_REFUSAL: &str =
+    "Gaming Mode is putting its changes back right now (if a Windows permission prompt is open, answer \
+     or cancel it). Try again when it has finished. Nothing was changed.";
+
+/// Set by stop and recover (only) around their restore, so the checks above can tell a contract being
+/// rewritten from one this Compy can't read. Thread-local in tests, so one test's stop can never
+/// colour another test's read.
+/// Review r2 (sonnet SHOULD-FIX): the count goes up on every begin and every end, so a check that
+/// samples it before and after its read also sees a whole stop that began and ended (a RestoreFailed
+/// one included) between the two samples. Odd = a stop or recovery is in flight. The production arm is
+/// an atomic (a stop and a change run on different threads); the test arm is per thread, so the
+/// production arm itself is not exercised by a test.
+#[cfg(not(test))]
+static RESTORE_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+#[cfg(test)]
+thread_local! {
+    static RESTORE_GEN_T: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+fn bump_restore_gen() {
+    #[cfg(not(test))]
+    RESTORE_GEN.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    #[cfg(test)]
+    RESTORE_GEN_T.with(|c| c.set(c.get() + 1));
+}
+
+fn restore_gen() -> u64 {
+    #[cfg(not(test))]
+    {
+        RESTORE_GEN.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    #[cfg(test)]
+    {
+        RESTORE_GEN_T.with(|c| c.get())
+    }
+}
+
+/// Sampled before a check's read; [`RestoreWindow::touched`] after it says whether a stop or
+/// recovery was in flight at either point, or ran in between.
+struct RestoreWindow(u64);
+
+impl RestoreWindow {
+    fn open() -> Self {
+        RestoreWindow(restore_gen())
+    }
+    fn touched(&self) -> bool {
+        self.0 % 2 == 1 || restore_gen() != self.0
+    }
+}
+
+/// Marks a stop or recovery in flight until dropped (every return path, panics included).
+struct RestoreMark;
+
+impl RestoreMark {
+    fn begin() -> Self {
+        bump_restore_gen(); // even -> odd
+        RestoreMark
+    }
+}
+
+impl Drop for RestoreMark {
+    fn drop(&mut self) {
+        bump_restore_gen(); // odd -> even
     }
 }
 
@@ -244,7 +372,13 @@ pub(crate) fn plain_change_gate<'a>(
         return Ok(None); // no session step touches these settings: nothing to hold or read
     }
     let gate = session_op_guard()?;
-    match plain_change_refusal(&rec_ids) {
+    let window = RestoreWindow::open();
+    let refusal = plain_change_refusal(&rec_ids);
+    // CR-gm-stop-busy review r1/r2 (sonnet SHOULD-FIX): around the read, as in session_holds_refusal.
+    if window.touched() {
+        return Err(RESTORE_IN_FLIGHT_REFUSAL.to_string());
+    }
+    match refusal {
         Some(refusal) => Err(refusal),
         None => Ok(Some(gate)),
     }
@@ -293,6 +427,12 @@ fn file_hold_refusal(rec_id: &str, file: &SessionFile, live: Option<&str>) -> Op
     let refusal = session_hold_refusal(rec_id, Some(&file.changes))?;
     Some(if running_here {
         refusal
+    } else if refusal.contains("belongs to the power plan") {
+        // CR-gm-stop-busy review r2 (opus nit 2): keep the plan reason for a leftover session.
+        "A Gaming Mode session that didn't finish putting its changes back still holds your power plan, \
+         and this setting belongs to the power plan. Finish that session first in Gaming Mode (\"Finish \
+         the last Gaming Mode session\"). Nothing was changed."
+            .to_string()
     } else {
         "A Gaming Mode session that didn't finish putting its changes back holds this setting, and \
          puts it back when it's finished. Finish it first in Gaming Mode (\"Finish the last Gaming \
@@ -546,6 +686,7 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
 /// undo what landed, and return the error.
 pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
     let _op = session_op_guard()?; // held across the whole start (incl. its abort-restore)
+    let _restore = restore_op_guard()?; // CR-gm-stop-busy: and the stop/recover gate, same span
     // #130 on the start side (codebase review 2026-11-02): only the restore asked for a proven
     // canonical data root, so under a redirected, split or unknown root a start wrote its contract
     // where a normal launch can't see it and changed Windows, and its own undo then failed on the
@@ -603,6 +744,8 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
             let mut msg = $msg;
             file.status = SessionStatus::RestorePending;
             let _ = save_session(&file);
+            // No RestoreMark here (CR-gm-stop-busy): start still holds SESSION_OP, so every gated
+            // change and Trial start is refused before it reads.
             if let Err(undo_err) = restore(&mut file) {
                 msg.push_str(&format!(
                     " — and undoing the partial session also failed ({undo_err}); \
@@ -958,15 +1101,18 @@ pub(crate) fn recover(confirm: bool) -> Result<(), String> {
     if !confirm {
         return Ok(());
     }
-    let _op = session_op_guard()?;
+    // CR-gm-stop-busy: not SESSION_OP, which a change waiting on its Windows prompt holds.
+    let _op = restore_op_guard()?;
     let mut file = load_session().ok_or("no session to recover")?;
+    let _mark = RestoreMark::begin(); // after the read, before any rewrite of the contract
     restore(&mut file)
 }
 
 /// Normal end of a live session.
 pub(crate) fn stop() -> Result<(), String> {
-    let _op = session_op_guard()?;
+    let _op = restore_op_guard()?; // CR-gm-stop-busy, as in recover
     let mut file = load_session().ok_or("no active Gaming Mode session")?;
+    let _mark = RestoreMark::begin(); // after the read, before any rewrite of the contract
     restore(&mut file)
 }
 
@@ -1225,6 +1371,64 @@ mod spans_trial_tests {
         assert!(!step_free(&held, service_rec(&KnownService::SysMain)));
         assert!(step_free(&held, REC_POWER) && step_free(&held, REC_GAME_BAR) && step_free(&held, REC_USB));
         assert!(step_free(&[], REC_GAME_MODE), "nothing held: every step runs as before");
+    }
+
+    // CR-gm-stop-busy review r1 (opus MUST-FIX): USB selective suspend and PCIe link power belong to
+    // the active power plan, so while a session holds the plan they are held with it: a change written
+    // to the session's plan (and its undo recorded against it) would land on the user's own plan when a
+    // stop switches back mid-prompt, with no record. A session that doesn't hold the plan holds neither.
+    #[test]
+    fn a_power_plan_setting_is_held_while_the_session_holds_the_plan() {
+        let with_plan = vec![change(LABEL_POWER)];
+        for rec in [REC_USB, REC_PCIE] {
+            let words = session_hold_refusal(rec, Some(&with_plan)).expect("held with the plan");
+            assert!(words.contains("power plan") && words.contains("Nothing was changed"), "{words}");
+        }
+        assert_eq!(session_hold_refusal(REC_GAME_BAR, Some(&with_plan)), None, "not a setting of the plan");
+        let without_plan = vec![change(LABEL_GAME_MODE)];
+        assert_eq!(session_hold_refusal(REC_USB, Some(&without_plan)), None, "no plan held: free");
+        assert_eq!(session_hold_refusal(REC_PCIE, None), None, "no session");
+        assert!(session_hold_refusal(REC_POWER, Some(&with_plan)).expect("the plan itself").contains("holds this setting"));
+    }
+
+    // CR-gm-stop-busy review r1 (sonnet SHOULD-FIX 1): a stop no longer keeps changes out by holding
+    // SESSION_OP, and its contract can read as unreadable for a moment while it is rewritten. While a
+    // stop or recovery is in flight, a Gaming Mode-touchable change is refused with words that say so,
+    // even where the unreadable-record rule would let it through; a setting no step touches is not.
+    #[test]
+    fn a_change_is_refused_while_a_stop_is_putting_changes_back() {
+        let dir = std::env::temp_dir().join(format!("compy-gm-inflight-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
+        std::fs::write(dir.join("gaming-session.json"), "{}").unwrap(); // reads as unreadable
+        // SESSION_OP is process-wide; another test may hold it for a moment ("still finishing").
+        let gate = |recs: &[&'static str]| {
+            for _ in 0..200 {
+                match plain_change_gate(recs.iter().copied()) {
+                    Err(e) if e.contains("still finishing") => std::thread::sleep(std::time::Duration::from_millis(5)),
+                    other => return other.map(|g| g.is_some()),
+                }
+            }
+            panic!("SESSION_OP stayed held");
+        };
+        assert_eq!(gate(&[REC_GAME_MODE]), Ok(true), "no stop running: the unreadable-record rule lets it through");
+        {
+            let _mark = RestoreMark::begin();
+            let err = gate(&[REC_GAME_MODE]).expect_err("refused while a stop runs");
+            assert!(err.contains("putting its changes back") && err.contains("Nothing was changed"), "{err}");
+            let words = session_holds_refusal(REC_GAME_MODE).expect("a Trial start is refused too");
+            assert!(words.contains("putting its changes back"), "{words}");
+            assert_eq!(gate(&["hags-enable"]), Ok(false), "a setting no step touches is never held up");
+        }
+        assert_eq!(gate(&[REC_GAME_MODE]), Ok(true), "the mark is gone once the stop returns");
+        // Review r2 (sonnet SHOULD-FIX): a whole stop that began and ended between a check's two
+        // samples (a RestoreFailed one too) is still seen.
+        let window = RestoreWindow::open();
+        assert!(!window.touched(), "nothing ran");
+        drop(RestoreMark::begin());
+        assert!(window.touched(), "a stop ran between the samples");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1803,12 +2007,50 @@ mod elevation_batch_tests {
     // same thread returns WouldBlock — safe to pin without threads.)
     #[test]
     fn concurrent_session_command_is_refused_loudly() {
-        let _held = SESSION_OP.try_lock().expect("test acquires the op lock");
+        // A private session dir first (review of CR-gm-stop-busy's old-code proof): if a gate ever
+        // stops refusing, stop/recover/start below must read an empty temp dir, never the rig's.
+        let dir = temp_session_dir("stop-busy");
+        let _redirect = SessionDirOverride::begin(&dir);
+        // CR-gm-stop-busy: start, stop and recover serialize on RESTORE_OP (start takes it after
+        // SESSION_OP, so a start can't run beside a stop either).
+        let held = RESTORE_OP.try_lock().expect("test acquires the restore lock");
         let err = stop().expect_err("a concurrent session command must be refused");
         assert!(err.contains("still finishing"), "got: {err}");
         let err = recover(true).expect_err("recover must be serialized too");
         assert!(err.contains("still finishing"), "got: {err}");
         assert!(recover(false).is_ok(), "declining recovery takes no lock — always safe");
+        drop(held);
+        // Start is pinned by source order, not called: a test that calls start() would change Windows
+        // the day either gate stopped refusing. It takes SESSION_OP (the start race), then RESTORE_OP
+        // (start vs stop/recover), both before its data-root check and anything it writes.
+        let src = include_str!("gaming_orchestrator.rs");
+        let body = src.split_once("pub(crate) fn start(opts: StartOptions)").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        let op = body.find("let _op = session_op_guard()?;").expect("start takes SESSION_OP");
+        let restore = body.find("let _restore = restore_op_guard()?;").expect("start takes RESTORE_OP");
+        let root = body.find("mutation_root()").expect("then the data root");
+        assert!(op < restore && restore < root, "SESSION_OP, then RESTORE_OP, then the data root");
+        for f in ["pub(crate) fn stop()", "pub(crate) fn recover(confirm: bool)"] {
+            let b = src.split_once(f).and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+            assert!(b.contains("restore_op_guard()?") && !b.contains("session_op_guard()"), "{f}: RESTORE_OP only");
+        }
+
+        // CR-gm-stop-busy, in the same test so the two statics are never contended between tests:
+        // a plain change, a Trial start or the benchmark's apply holds SESSION_OP through its
+        // Windows prompt; Stop Gaming Mode and Recover must not be refused for that. With SESSION_OP
+        // held, stop and recover get past the gate and answer from the (empty) session dir.
+        let held = SESSION_OP.try_lock().expect("test acquires the session gate, as a waiting change does");
+        let err = stop().expect_err("no session in the temp dir");
+        assert!(!err.contains("still finishing"), "stop was refused by a change's gate: {err}");
+        assert!(err.contains("no active Gaming Mode session"), "got: {err}");
+        let err = recover(true).expect_err("no session in the temp dir");
+        assert!(!err.contains("still finishing"), "recover was refused by a change's gate: {err}");
+        assert!(err.contains("no session to recover"), "got: {err}");
+        // A Gaming Mode start is still kept out while a change holds the gate (the start race, pinned
+        // by the source order above), and that refusal says what may be holding it.
+        let err = session_op_guard().expect_err("the gate is held");
+        assert!(err.contains("Windows permission prompt") && err.contains("still finishing"), "got: {err}");
+        drop(held);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
