@@ -201,18 +201,30 @@ fn session_hold_refusal(rec_id: &str, contract: Option<&[SessionChange]>) -> Opt
 /// CR-gm-spans-trial: whether a Gaming Mode contract on disk holds `rec_id`. A contract that is on
 /// disk but can't be read refuses too (it could hold it).
 pub(crate) fn session_holds_refusal(rec_id: &str) -> Option<String> {
-    match crate::gaming_session::has_pending_contract() {
-        Ok(false) => None,
-        Ok(true) => match load_session() {
+    match crate::gaming_session::pending_contract_files() {
+        Ok(found) if found.is_empty() => None,
+        Ok(found) => match load_session() {
             Some(file) => session_hold_refusal(rec_id, Some(&file.changes)),
-            None => Some(
-                "Gaming Mode has a session record Compy can't read, and it could hold this setting. \
-                 Recover or end Gaming Mode first. Nothing was changed."
-                    .to_string(),
-            ),
+            None => Some(unreadable_session_refusal(&found, &crate::gaming_session::session_data_dir())),
         },
         Err(e) => Some(format!("Compy couldn't check Gaming Mode's session ({e}). Nothing was changed.")),
     }
+}
+
+/// PURE (CR-gm-spans-followups a): the refusal when a Gaming Mode record is on disk but this Compy
+/// can't read it (a set-aside `gaming-session.orphaned*` file, a leftover temp file, or a contract
+/// from another version). "Recover or end Gaming Mode" can't clear these — recovery reads only a
+/// readable session — so name the file(s) and the folder and say what the user can do.
+fn unreadable_session_refusal(found: &[String], dir: &std::path::Path) -> String {
+    let (what, it) = if found.len() == 1 { ("file", "that file") } else { ("files", "those files") };
+    format!(
+        "Compy can't read a Gaming Mode record ({what} {} in {}), and it could hold this setting. \
+         This Compy can't put back what it holds. If a newer Compy wrote it, end Gaming Mode there. \
+         Otherwise check this setting reads how you want it, then move {it} out of that folder (move, \
+         don't delete: another Compy version may read it). Nothing was changed.",
+        found.join(", "),
+        dir.display()
+    )
 }
 
 fn push(changes: &mut Vec<SessionChange>, label: &str, r: ApplyResult) {
@@ -969,6 +981,40 @@ mod spans_trial_tests {
         assert!(session_holds_refusal(REC_GAME_MODE).expect("held").contains("Stop Gaming Mode first"));
         assert_eq!(session_holds_refusal("hags-enable"), None, "a setting the session doesn't hold");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_set_aside_record_alone_refuses_naming_the_file_its_folder_and_a_way_out() {
+        // CR-gm-spans-followups (a): a quarantined orphan used to say "Recover or end Gaming Mode
+        // first", which the user can't do (recovery reads only a readable gaming-session.json).
+        let dir = std::env::temp_dir().join(format!("compy-gm-orphan-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
+        std::fs::write(dir.join("gaming-session.orphaned.json"), "{}").unwrap();
+        let words = session_holds_refusal(REC_GAME_MODE).expect("an unreadable record still refuses");
+        assert!(words.contains("can't read"), "{words}");
+        assert!(words.contains("gaming-session.orphaned.json"), "names the file: {words}");
+        assert!(words.contains(&dir.display().to_string()), "names the folder: {words}");
+        assert!(words.contains("move that file out of that folder"), "a way out: {words}");
+        assert!(!words.contains("Recover or end Gaming Mode first"), "{words}");
+        assert!(words.ends_with("Nothing was changed."), "{words}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_unreadable_refusal_lists_every_file_it_found() {
+        let dir = std::path::Path::new(r"C:\Users\x\AppData\Roaming\Compy");
+        let found = vec!["gaming-session.json.tmp".to_string(), "gaming-session.orphaned-1.json".to_string()];
+        let words = unreadable_session_refusal(&found, dir);
+        assert!(words.contains("files gaming-session.json.tmp, gaming-session.orphaned-1.json in C:\\Users\\x"), "{words}");
+        assert!(words.contains("move those files out"), "{words}");
+        // Review r1 SHOULD-FIX: a future-schema or temp record may hold a restore another version can
+        // do, so the way out moves it aside and never says delete or keep-a-copy-in-place.
+        assert!(words.contains("move, don't delete"), "{words}");
+        assert!(!words.contains("keep a copy"), "{words}");
+        let one = unreadable_session_refusal(&["gaming-session.json".to_string()], dir);
+        assert!(one.contains("If a newer Compy wrote it, end Gaming Mode there"), "{one}");
     }
 
     #[test]

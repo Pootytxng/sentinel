@@ -254,6 +254,13 @@ release checklist); no new rules.
       left alone because a Trial is testing it (en + zh-CN); (c) an Aborted Trial whose restore failed still has its
       change live and isn't treated as held; (d) a plain UI apply/undo of a setting a session holds (pre-existing class);
       (e) `rec_of_label` lists the four services by hand: iterate a `KnownService::ALL`.
+      (a) done (2026-11-12 s20, CODE-ONLY, Rust words only, not installed): an unreadable Gaming Mode record
+      (orphaned, temp or other-version file) now refuses naming the file(s) and the folder, says this Compy can't put
+      it back, and gives the way out (end it in the newer Compy, or check the setting and move the file aside, not
+      delete it). Same fail-closed arms (`pending_contract_files`). Test fails on the old words. cargo 1861/0, clippy
+      clean. Review (sonnet) APPROVE-WITH-NITS, SHOULD-FIX taken (move-don't-delete; dropped the recovery hedge, which
+      can't fire for an unreadable file). Left: (b), (c), (d); (e) needs `KnownService::ALL` in actions.rs (mutation-gate
+      file).
 - [x] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
       the consent modal, focus jumps to Enable (`autoFocus`) and key repeat presses it: either confirm can pass on one
       held key. Ignore repeated key presses on Enable, or focus Cancel first. TS only.
@@ -1416,6 +1423,10 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   bench hold; GM start race), one for C. cargo 1859/0, clippy clean, tsc 0, full vitest 535/538 (3 site-app suites).
   Pushed 3 times (cecd30c5, 94a02d85, a15986b8; gate PASS each). Installed `a15986b8` (runtime proof attempt 1).
   No screen capture or self-review (no window left). CR-outside-followups (a)(d) not started.
+- 2026-11-12 s20 (scheduled, CODE-ONLY: owner active in Explorer): CR-gm-spans-followups (a), an unreadable Gaming Mode
+  record's refusal names the file and folder and the way out (commit on this line). cargo 1861/0, clippy clean; review
+  (sonnet) APPROVE-WITH-NITS, SHOULD-FIX taken. One item (a mid-run device timeout cost the second). Not pushed: main is
+  2 ahead of GitHub (`e5d87456` + this); the next FULL session pushes.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
