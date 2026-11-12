@@ -265,6 +265,22 @@ pub(crate) fn scheme_guid_of(stdout: &str) -> Option<String> {
         .map(|g| g.to_ascii_lowercase())
 }
 
+/// CR-ultimate-identity: every scheme GUID one read-only `powercfg /list` shows, lower-cased. `None`
+/// when the read fails or lists none: unread, never "no plans".
+pub(crate) fn power_plan_guids() -> Option<Vec<String>> {
+    let output = crate::actions::quiet_command("powercfg").args(["/list"]).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    plan_guids_of(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Pure: [`power_plan_guids`] from the command's output, one GUID per line that holds one.
+pub(crate) fn plan_guids_of(stdout: &str) -> Option<Vec<String>> {
+    let guids: Vec<String> = stdout.lines().filter_map(scheme_guid_of).collect();
+    (!guids.is_empty()).then_some(guids)
+}
+
 pub(crate) fn game_mode_enabled() -> bool {
     // Game Mode is "on" only when BOTH halves of the pair are 1 — the exact state the Settings
     // toggle and apply_game_mode produce. Reading only AutoGameModeEnabled (as before) reported
@@ -2319,6 +2335,7 @@ mod safety_tests {
             justified_by_experiment: None,
             rollback_justified_by_experiment: None,
             changed_outside: None,
+            applied_plan: None,
         }
     }
 
@@ -2396,6 +2413,7 @@ mod safety_tests {
             justified_by_experiment: None,
             rollback_justified_by_experiment: None,
             changed_outside: None,
+            applied_plan: None,
         };
         let back: AppliedChange =
             serde_json::from_value(serde_json::to_value(&change).unwrap()).unwrap();
