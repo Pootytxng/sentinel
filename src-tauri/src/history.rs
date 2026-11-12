@@ -1151,13 +1151,13 @@ fn build_applied_change(
     result: ApplyResult,
     plans_before: Option<&[String]>,
 ) -> Result<AppliedChange, String> {
-    build_applied_change_with(
-        rec_id,
-        rec_title,
-        result,
-        || bounded_read(crate::actions::current_power_plan_guid),
-        |g| is_ultimate_plan(g, || bounded_read(crate::current_power_scheme), plans_before),
-    )
+    // Review r3 (sonnet): ONE bounded read of the active scheme serves both questions, and it reads
+    // the GUID with `scheme_guid_of`, which ignores the label Windows prints in the user's language
+    // (`actions::current_power_plan_guid` keys on the English "GUID:"). Taken only when asked, which
+    // is only for the Ultimate apply.
+    let seen: std::cell::OnceCell<Option<ObservedPlan>> = std::cell::OnceCell::new();
+    let read = || seen.get_or_init(|| bounded_read(crate::current_power_scheme)).clone();
+    build_applied_change_with(rec_id, rec_title, result, || read().map(|o| o.guid), |g| is_ultimate_plan(g, read, plans_before))
 }
 
 /// [`build_applied_change`] with the read of the active scheme handed in (CR-ultimate-identity).
@@ -2607,7 +2607,18 @@ const STOCK_NON_ULTIMATE_SCHEMES: [&str; 3] = [
 /// the active plan is not a stock Windows scheme (CR-ultimate-identity, review r2).
 pub(crate) const LEGACY_ULTIMATE_REFUSAL: &str = "Compy made this change before it kept a record of which plan it \
     switched to, so it can't tell whether the active plan is a copy of Ultimate Performance it made. Undo the \
-    change instead, or switch to Balanced or High performance first";
+    change instead, or switch to a standard Windows plan (Balanced, High performance or Power saver) first";
+
+/// Review r3 (opus SHOULD-FIX 1): the active plan is a copy Compy's Ultimate apply made for ANY row of
+/// the ledger (applied or undone: an undo leaves the copy in the plan list), so no row may record it
+/// as set outside Compy. Copies made by rows from before Compy recorded them can't be known; those
+/// rows' own records need a stock scheme anyway ([`changed_outside_refusal`]).
+pub(crate) const COMPYS_OTHER_COPY_REFUSAL: &str =
+    "the active power plan is a copy of Ultimate Performance Compy made for one of its changes";
+
+fn is_any_compy_copy(history: &[AppliedChange], seen: &ObservedPlan) -> bool {
+    history.iter().filter_map(compys_plan_guid).any(|g| g.eq_ignore_ascii_case(&seen.guid))
+}
 
 /// Why `c` can't be recorded as changed outside Compy given the live read `observed`, or Ok. Only
 /// a power-plan change qualifies: a plan is the one setting whose live state can be "something else
@@ -2669,6 +2680,9 @@ pub(crate) fn commit_changed_outside(
     let Some(seen) = observed else {
         return Err("Compy can't read which power plan is active right now".into());
     };
+    if is_any_compy_copy(history, seen) {
+        return Err(COMPYS_OTHER_COPY_REFUSAL.into());
+    }
     let mark = ChangedOutside {
         schema: CHANGED_OUTSIDE_SCHEMA,
         recorded_at: now.to_string(),
@@ -2742,6 +2756,9 @@ pub(crate) struct ChangedOutsideOffer {
 /// Pure: the settings whose every applied, unrecorded row qualifies under one live read.
 pub(crate) fn changed_outside_offers_from(history: &[AppliedChange], observed: Option<&ObservedPlan>) -> Vec<ChangedOutsideOffer> {
     let Some(seen) = observed else { return Vec::new() };
+    if is_any_compy_copy(history, seen) {
+        return Vec::new();
+    }
     let open = |c: &&AppliedChange| c.status == "applied" && !recorded_and_holding(c, Some(seen));
     let mut recs: Vec<&str> = Vec::new();
     for c in history.iter().filter(open) {
@@ -6216,8 +6233,8 @@ mod changed_outside_tests {
 }
 
 // CR-ultimate-identity: on a localized Windows the Ultimate apply duplicates the template under a new
-// GUID with a localized name; the row records that GUID so its read-back, the "changed outside Compy"
-// refusal and the Trial checks treat it as Compy's plan. Old ledgers load unchanged.
+// GUID with a localized name; the row records that GUID so the "changed outside Compy" refusal treats
+// it as Compy's plan. Old ledgers load unchanged.
 #[cfg(test)]
 mod ultimate_identity_tests {
     use super::*;
@@ -6329,6 +6346,53 @@ mod ultimate_identity_tests {
         );
         assert_eq!(crate::plan_guids_of(&list), Some(vec![PRIOR.to_string(), COPY.to_string()]));
         assert_eq!(crate::plan_guids_of("no schemes"), None, "unread, never an empty list");
+    }
+
+    #[test]
+    fn the_receipt_stamps_the_copy_the_apply_made_end_to_end_on_localized_output() {
+        // Review r3 (sonnet SHOULD-FIX): the provenance path wired through the receipt builder, on a
+        // localized `/getactivescheme` (German labels have no "GUID:"; the read ignores the label).
+        let active = format!("GUID des Energieschemas {}  (Ultimative Leistung)\r\n", COPY.to_uppercase());
+        let read = || crate::power_scheme_of(&active);
+        assert_eq!(read().map(|o| o.guid), Some(COPY.to_string()));
+        let listed = vec![PRIOR.to_string()];
+        let stamped = build_applied_change_with("power-ultimate", "Ultimate", result(PRIOR), || read().map(|o| o.guid), |g| {
+            is_ultimate_plan(g, read, Some(&listed))
+        })
+        .unwrap();
+        assert_eq!(compys_plan_guid(&stamped), Some(COPY), "made by the apply: stamped");
+        let already = vec![PRIOR.to_string(), COPY.to_string()];
+        let not = build_applied_change_with("power-ultimate", "Ultimate", result(PRIOR), || read().map(|o| o.guid), |g| {
+            is_ultimate_plan(g, read, Some(&already))
+        })
+        .unwrap();
+        assert_eq!(not.applied_plan, None, "a plan that was there before, not Ultimate by class: not stamped");
+        // And the single apply path reads the list before it dispatches (source pin).
+        let src = include_str!("history.rs");
+        let body = src.split_once("fn apply_recommendation_inner(").map(|(_, r)| r).expect("inner");
+        let (list, apply) = (body.find("plans_before_ultimate_apply(rec_id)").expect("list"), body.find("dispatch_apply(&root, rec_id)").expect("apply"));
+        assert!(list < apply && body[apply..].contains("plans_before, ..Made::new("), "read before, handed to the receipt");
+        let commit = src.split_once("fn commit_receipts(").map(|(_, r)| r).expect("commit");
+        assert!(commit[..commit.find("\n}\n").unwrap()].contains("m.plans_before.as_deref()"), "the builder gets the list");
+    }
+
+    #[test]
+    fn a_copy_compy_made_for_another_row_is_never_recorded_as_set_outside() {
+        // Review r3 (opus SHOULD-FIX 1): apply A (copy C1), undo A, apply B (copy C2), the user picks C1.
+        let mut a = row(Some(serde_json::json!({ "schema": 1, "guid": COPY })));
+        a.status = "rolled_back".into();
+        let c2 = "5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e";
+        let mut b = row(Some(serde_json::json!({ "schema": 1, "guid": c2 })));
+        b.id = "power-ultimate-2".into();
+        let mut history = vec![a, b];
+        let c1 = seen(COPY, crate::PowerPlanClass::Other);
+        assert_eq!(changed_outside_refusal(&history[1], Some(&c1)), Ok(()), "row B alone can't tell");
+        assert!(changed_outside_offers_from(&history, Some(&c1)).is_empty(), "no offer");
+        let refused = commit_changed_outside(&mut history, "power-ultimate", Some(&c1), "2026-11-11T20:00:00+00:00", &|_| panic!("no save"));
+        assert_eq!(refused, Err(COMPYS_OTHER_COPY_REFUSAL.to_string()));
+        // The user's own plan is still recordable.
+        let users = seen("44444444-4444-4444-4444-444444444444", crate::PowerPlanClass::Other);
+        assert_eq!(changed_outside_offers_from(&history, Some(&users)).len(), 1);
     }
 
     #[test]
