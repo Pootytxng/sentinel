@@ -78,6 +78,11 @@ pub(crate) struct GameGpuLimit {
     /// The per-reading load at or above which a reading counts toward `share_pct` (sessions.rs
     /// `GPU_LIMITED_PCT`), so the line can say what the share is a share of.
     threshold_pct: u64,
+    /// P9-summary-screen-limit: that same session's average FPS and recorded refresh; absent = unmeasured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    avg_fps: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    refresh_hz: Option<u64>,
 }
 
 // ── Upgrade path (R3 Lane B — advisory-only, doctrine money stack #1 groundwork) ──────────────
@@ -242,6 +247,8 @@ fn build_gpu_games(sessions: &Value) -> (Vec<GameGpuLimit>, Vec<GameGpuClear>) {
                     share_pct,
                     peak_pct: read.peak_pct,
                     threshold_pct: GPU_LIMITED_PCT,
+                    avg_fps: row_avg_fps(row),
+                    refresh_hz: row_refresh_hz(row),
                 });
             } else if let Some(l) = read.load.filter(|l| {
                 l.readings >= GPU_SUSTAINED_MIN_READINGS
@@ -280,16 +287,24 @@ fn measured_from(sessions: &Value, read: &GpuLoadRead) -> Option<MeasuredFrom> {
         busy: load.busy,
         readings: load.readings,
         threshold_pct: GPU_LIMITED_PCT,
-        // A 0 or missing average / refresh is unmeasured, never a number. The refresh is the display
-        // mode the session itself recorded (game_state.rs, the active display's current mode at
-        // capture); a fractional or other-shaped value reads as unmeasured (fail safe).
-        avg_fps: row.get("avg_fps").and_then(Value::as_f64).filter(|f| f.is_finite() && *f > 0.0),
-        refresh_hz: row
-            .get("game_state")
-            .and_then(|g| g.get("display_refresh_hz"))
-            .and_then(Value::as_u64)
-            .filter(|hz| *hz > 0),
+        avg_fps: row_avg_fps(row),
+        refresh_hz: row_refresh_hz(row),
     })
+}
+
+// A 0 or missing average / refresh is unmeasured, never a number. The refresh is the display
+// mode the session itself recorded (game_state.rs, the active display's current mode at
+// capture); a fractional or other-shaped value reads as unmeasured (fail safe). Known limit
+// (review): it is recorded once, so a mode change mid-session isn't seen.
+fn row_avg_fps(row: &Value) -> Option<f64> {
+    row.get("avg_fps").and_then(Value::as_f64).filter(|f| f.is_finite() && *f > 0.0)
+}
+
+fn row_refresh_hz(row: &Value) -> Option<u64> {
+    row.get("game_state")
+        .and_then(|g| g.get("display_refresh_hz"))
+        .and_then(Value::as_u64)
+        .filter(|hz| *hz > 0)
 }
 
 /// The newest session's GPU load and saturated share, only when sustained.
@@ -1099,10 +1114,22 @@ mod priority_tests {
         assert_eq!(
             got,
             vec![
-                GameGpuLimit { game: "a.exe".into(), share_pct: 80, peak_pct: 99, threshold_pct: 95 },
-                GameGpuLimit { game: "c.exe".into(), share_pct: 70, peak_pct: 99, threshold_pct: 95 },
+                GameGpuLimit { game: "a.exe".into(), share_pct: 80, peak_pct: 99, threshold_pct: 95, avg_fps: None, refresh_hz: None },
+                GameGpuLimit { game: "c.exe".into(), share_pct: 70, peak_pct: 99, threshold_pct: 95, avg_fps: None, refresh_hz: None },
             ]
         );
+        // P9-summary-screen-limit: the limited session's own average and refresh ride along; 0 = unmeasured.
+        let screen = json!([{ "process_name": "s.exe", "samples": 500, "peak_gpu_usage_pct": 99,
+            "gpu_load": { "readings": 100, "busy": 90 }, "avg_fps": 251.5, "game_state": { "display_refresh_hz": 250 } }]);
+        let got = build_gpu_limited_games(&screen);
+        assert_eq!((got[0].avg_fps, got[0].refresh_hz), (Some(251.5), Some(250)));
+        let json = serde_json::to_value(&got[0]).unwrap();
+        assert_eq!((json["avg_fps"].as_f64(), json["refresh_hz"].as_u64()), (Some(251.5), Some(250)));
+        let zero = json!([{ "process_name": "s.exe", "samples": 500, "peak_gpu_usage_pct": 99,
+            "gpu_load": { "readings": 100, "busy": 90 }, "avg_fps": 0.0, "game_state": { "display_refresh_hz": 0 } }]);
+        let got = build_gpu_limited_games(&zero);
+        assert_eq!((got[0].avg_fps, got[0].refresh_hz), (None, None));
+        assert!(serde_json::to_value(&got[0]).unwrap().get("avg_fps").is_none(), "unmeasured is absent, never 0");
         // Review r1: the case Windows reported the name in doesn't make a second game; and a game
         // whose newest measured session recorded no share is absent though an older one was limited.
         let cased = json!([row("Game.exe", 500, 10), row("game.exe", 500, 90)]);

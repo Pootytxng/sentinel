@@ -1911,11 +1911,19 @@ function TestSummary({ s }: { s: GameTestSummary }) {
             : settingsDone.kind === "part-limiter"
               ? t("lab.experimentBench.summary.settingsDone.partLimiter", { title: settingsDone.title })
               : settingsDone.kind === "gpu-limiter"
-                ? t("lab.experimentBench.summary.settingsDone.gpuLimiter", {
-                    game,
-                    share: settingsDone.sharePct,
-                    threshold: settingsDone.thresholdPct,
-                  })
+                ? settingsDone.screenCap
+                  ? t("lab.experimentBench.summary.settingsDone.gpuLimiterScreen", {
+                      game,
+                      share: settingsDone.sharePct,
+                      threshold: settingsDone.thresholdPct,
+                      hz: settingsDone.screenCap.hz,
+                      fps: settingsDone.screenCap.fps,
+                    })
+                  : t("lab.experimentBench.summary.settingsDone.gpuLimiter", {
+                      game,
+                      share: settingsDone.sharePct,
+                      threshold: settingsDone.thresholdPct,
+                    })
                 : settingsDone.kind === "nothing-limiting"
                   ? settingsDone.gpuClear
                     ? t("lab.experimentBench.summary.settingsDone.nothingLimitingMeasured", {

@@ -1684,9 +1684,23 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       summary: settings done + GPU-limited (limiter named with what Compy can't check), settings done + measured clear
       ("no upgrade recommended" with its source), settings not done (no part named). Pure tests; no UI claim (the Check
       half waits on P9-upgrade-block-reachable).
-- [ ] **P9-summary-screen-limit** The game summary's gpuLimiter line (reachable, unlike Check's block) says when that
+- [x] **P9-summary-screen-limit** The game summary's gpuLimiter line (reachable, unlike Check's block) says when that
       same session averaged at or above the screen's measured refresh that the screen, not the GPU, capped what you
       saw (mirror P9-screen-is-limit's wording and boundaries); unmeasured = today's line. en + zh-CN; tests.
+      Done (2026-11-12 s22, not installed; SHAs in the merge): `GameGpuLimit` carries that session's `avg_fps` and
+      recorded `refresh_hz` (0/missing = absent; one helper shared with MeasuredFrom); settings-done adds `screenCap`
+      at average >= refresh, and the summary reads "...80% of Compy's GPU readings were at 95% load or more, but your
+      250 Hz screen can't show more than 250 frames a second and that session averaged 252 fps, so on average a faster
+      GPU wouldn't show you more frames; the slowest moments can still depend on it. For frame rate, no upgrade is
+      recommended for this game." (zh-CN too). Tests: above, equal, 249.6, unmeasured either side, 0/NaN/Infinity/
+      negative, another game's session; a render test; they fail on main. cargo priorities 27/0 + clippy clean.
+      Review sonnet APPROVE-WITH-NITS, no MUST-FIX: parity with Check checked (both compare the raw average and round
+      only for display); wording kept as Check's reviewed text (VRR/tearing nuance not added); the refresh is
+      recorded once per session (commented); edge cases taken. Not visually checked.
+- [ ] **P9-summary-cpu-unknown** (summary twin of P9-cpu-gpu-balance) When the finished summary's measured-clear line
+      fires and that session averaged below its recorded refresh, add that Compy can't measure the CPU's share yet, so
+      "nothing holding this PC back" covers the GPU and the checked rows only; refresh/FPS unmeasured = today's line.
+      Rust (`GameGpuClear` gains avg_fps/refresh_hz via the shared helpers) + TS; en + zh-CN; tests.
 - [x] **P9-summary-no-dead-pointer** The gpuLimiter summary line ends "see Optimize → Check", whose upgrade block never
       renders (P9-upgrade-block-reachable). Until that lands, drop the pointer or point at what the summary itself
       shows; en + zh-CN; test that the line names no unreachable room.

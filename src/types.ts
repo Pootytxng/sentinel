@@ -243,7 +243,15 @@ export type Priorities = {
 
 export type GameGpuClear = { game: string; busy: number; readings: number; threshold_pct: number };
 
-export type GameGpuLimit = { game: string; share_pct: number; peak_pct: number; threshold_pct: number };
+export type GameGpuLimit = {
+  game: string;
+  share_pct: number;
+  peak_pct: number;
+  threshold_pct: number;
+  /** P9-summary-screen-limit: that session's average FPS and recorded refresh; absent = unmeasured. */
+  avg_fps?: number;
+  refresh_hz?: number;
+};
 
 export type SessionSummary = {
   started_at: string;
