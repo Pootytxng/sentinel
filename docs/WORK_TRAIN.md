@@ -1537,15 +1537,6 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-10 ~13:40-14:10 (coordinator-assigned desk session, FULL): landed CR-zh-dial `1bc687e6` (ArcGauge counts a
-  CJK character as two cells, so the zh safe-stack unit sits beside the label; 13px floor kept; visual check due at the
-  next FULL install session), CR-stutter-rollback-trial `d7004a9a` (a regression on a change a Trial kept names both
-  results and still offers the rollback) and CR-capture-async `25af5dc5` (capture start/stop off the main thread under
-  one lock). Each new test proven failing on the old code; cargo test 1810/0, clippy clean, tsc 0; reviews (sonnet, r1)
-  APPROVE-WITH-NITS x2, every MUST/SHOULD taken. One timing-race test (comparison_race_tests) failed once under load
-  beside a vitest run, passed alone and on the rerun. The first push's gate caught test-room-parity-guard 5/5b pinning
-  ArcGauge's old unit text; re-pinned to the width rule `6d189c19` (same property). No install, no screen check.
-  Pushed with this line through the gate.
 - 2026-11-10 ~14:10-14:40 (coordinator-assigned desk session, FULL): #669, #668 and #677 were already fixed and pushed
   (`2b1cd3f1`/`06e81e25` merged `e83017a5`; `4d5316d0` merged `3c3e7553`); re-proved on `1f4ed7a1` (their 10 cargo tests +
   3 vitest files / 87 tests green) and closed on GitHub naming those commits. Built `1f4ed7a1` (no-updater config) and
@@ -1634,6 +1625,18 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
   count (fixed) and wording (CR-view-1111d-wording); teardown CLEAN both times. The 23:00 docs push was stopped when
   the owner returned; pushed `25805ba2` at 23:47 (gate PASS) and installed it at 23:50 (runtime proof attempt 1,
   Synez before/after; not screen-checked); this line's commit pushes next.
+- 2026-11-12 ~23:57-01:51 (coordinator-assigned s21, CODE-ONLY with one FULL window 00:03-00:47, no game until ROB RUN at
+  01:42; server restart ~00:58): CR-view-1111d-wording `d46b2603`, `75b7e600` (merge `b27552f8`); CR-gm-stop-busy `3664f460`,
+  `f80082c2`, `2a83ea3f`, `91a043fb` (merge `ff478b88`); CR-fix-needs-trial-store `28292d57`, `a0aea6a3`, `121872c2` (merge
+  `ee0b22b3`); CR-range3-nits (a)(b) `f045f438`, `43f692e0` (merge `8eaa5e1b`; (c) parked). Reviews: A sonnet APPROVE-WITH-NITS;
+  stop-busy r1 opus REQUEST-CHANGES (MUST-FIX USB/PCIe with the plan, taken) + sonnet APPROVE-WITH-NITS, r2 both
+  APPROVE-WITH-NITS; trial-store r1 opus REQUEST-CHANGES (no MUST-FIX) + sonnet APPROVE-WITH-NITS, r2 both APPROVE-WITH-NITS;
+  nits sonnet APPROVE-WITH-NITS. cargo 1873/0, clippy clean, tsc 0, full vitest 535/538 (3 site-app suites) per item. Pushed
+  `119d07f8` and `b27552f8` (gate PASS both); installed `b27552f8` (runtime proof attempt 1, Synez before/after). Self-review
+  view-1112a: r1 FAIL (contrast/tip evidence, footer), r2 FAIL (footer "Every change reversible" only; P9 lines unverified, no
+  limiter on this rig); teardown CLEAN twice; queued CR-footer-reversible, CR-hist-today, CR-zh-backend-home,
+  CR-plan-read-prompt-write and four Phase 9 slices. P9-summary-gpu-limit parked UNTESTED on its branch (`64802f38`) when the
+  game started. Not pushed: `7bba7d3e` and everything after it.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
