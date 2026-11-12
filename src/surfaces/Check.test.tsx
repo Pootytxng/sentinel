@@ -113,7 +113,8 @@ import { KNOWLEDGE_BY_ID } from "../data/knowledge";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import { fireEvent } from "@testing-library/react";
 import { LEDGER_CHANGED_EVENT, type SessionSummary } from "../types";
-import { invalidateProbe } from "../data/probe-cache";
+import { invalidateProbe, putProbe } from "../data/probe-cache";
+import { useLayoutEffect, useRef } from "react";
 
 afterEach(() => {
   cleanup();
@@ -975,5 +976,64 @@ describe("Check", () => {
     await screen.findByText("SSD check"); // scan settled
     expect(screen.queryByText("Upgrade path (advisory)")).not.toBeInTheDocument();
     expect(screen.queryByText(/never affects verdicts/)).not.toBeInTheDocument();
+  });
+});
+
+// CR-check-expert-mount (same class as CR-bench-flake): with a cached verdict, the "measured fine" and
+// "not worth touching" piles are on screen in Check's first commit. A tap there that lands before
+// React runs the mount's passive effects must stay: the mount effect used to re-assert the Expert
+// view default (closed) and undo it. A layout effect is the deterministic stand-in for "on screen,
+// effects not run yet": it runs after the DOM is committed and before the passive mount effects.
+describe("CR-check-expert-mount: a pile tapped before the mount effects stays as tapped", () => {
+  const ITEM = (id: string, title: string) => ({ id, title, reason: "r", linked: null, confidence: "medium", status: "ready" });
+  const seedCachedVerdict = () =>
+    putProbe("readiness-scan", {
+      readiness: {
+        checks: [{ id: "a", label: "SSD check", status: "ready", detail: "", value: null }],
+        ready_count: 1,
+        attention_count: 0,
+        unknown_count: 0,
+        advisory_count: 0,
+        advisory: "",
+        dismissed_ids: [],
+        drifts: [],
+      },
+      priorities: {
+        limiters: [],
+        already_fine: [ITEM("fine-1", "Fine thing")],
+        not_worth_touching: [ITEM("nw-1", "Refused thing")],
+        session_hint: null,
+        upgrade_path: null,
+      },
+      recs: [],
+      reverted: [],
+      elapsed: 1,
+    });
+
+  function TapOnCommit({ name }: { name: RegExp }) {
+    const ref = useRef<HTMLDivElement>(null);
+    useLayoutEffect(() => {
+      const door = [...ref.current!.querySelectorAll("button")].find((b) => name.test(b.textContent ?? ""));
+      if (!door) throw new Error(`no ${name} button in the first commit`);
+      door.click();
+    }, [name]);
+    return (
+      <div ref={ref}>
+        <ConfirmProvider>
+          <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+        </ConfirmProvider>
+      </div>
+    );
+  }
+
+  it.each([
+    ["measured fine", /measured fine/, "Fine thing"],
+    ["not worth touching", /not worth touching/, "Refused thing"],
+  ])("the %s pile", (_n, name, shown) => {
+    seedCachedVerdict();
+    render(<TapOnCommit name={name} />);
+    const door = screen.getAllByRole("button").find((b) => name.test(b.textContent ?? ""))!;
+    expect(door).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(shown)).toBeInTheDocument();
   });
 });
