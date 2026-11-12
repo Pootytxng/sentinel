@@ -37,6 +37,12 @@ function sessionDate(iso: string, lang: string, now: Date = new Date()): string 
   return d.toLocaleDateString(lang, { month: "short", day: "numeric", ...year });
 }
 
+/** CR-view-1112c-zh-gap (screen check view-1112c 04-optimize-zh-CN.png): two sentences join with a
+ *  space in English and with none after a full-width stop in Chinese. */
+function sentenceGap(lang: string | undefined): string {
+  return (lang ?? "").startsWith("zh") ? "" : " ";
+}
+
 /** P9-screen-is-limit: a GPU row whose own session averaged at or above the refresh rate that session
  *  recorded. Both must be measured; null otherwise (the GPU row reads as before). */
 function screenIsLimit(item: UpgradeSuggestion): { hz: number; fps: number; game: string } | null {
@@ -1179,7 +1185,7 @@ export function UpgradePathBlock({ upgradePath, links }: { upgradePath: UpgradeP
                   if (!untied) return null;
                   return (
                     <span data-testid="check-upgrade-untied">
-                      {" "}
+                      {sentenceGap(i18n.resolvedLanguage ?? i18n.language)}
                       {untied === "not-recorded"
                         ? t("optimize.check.upgradeUntiedNotRecorded")
                         : t("optimize.check.upgradeUntiedCardUnread")}
@@ -1271,6 +1277,7 @@ export function NoUpgradeBlock({ priorities }: { priorities: Priorities }) {
       ? { fps: Math.round(fps) < hz ? String(Math.round(fps)) : fps.toFixed(1), hz }
       : null;
   const untied = clear ? gpuUntied(clear.gpu_tie) : undefined;
+  const gap = sentenceGap(i18n.resolvedLanguage ?? i18n.language);
   return (
     <div className="check-upgrade" data-testid="check-no-upgrade" data-links="off">
       <div className="check-section-label">
@@ -1285,7 +1292,7 @@ export function NoUpgradeBlock({ priorities }: { priorities: Priorities }) {
             : t("optimize.check.noUpgradeNotMeasured")}
           {clear && (
             <>
-              {" "}
+              {gap}
               {t("optimize.check.noUpgradeNewest", {
                 game: prettyGameName(clear.game) || clear.game,
                 date: sessionDate(clear.started_at, i18n.language),
@@ -1298,7 +1305,7 @@ export function NoUpgradeBlock({ priorities }: { priorities: Priorities }) {
           )}
           {untied && (
             <span data-testid="check-no-upgrade-untied">
-              {" "}
+              {gap}
               {untied === "not-recorded"
                 ? t("optimize.check.upgradeUntiedNotRecorded")
                 : t("optimize.check.upgradeUntiedCardUnread")}
