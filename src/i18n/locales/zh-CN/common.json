@@ -357,5 +357,64 @@
   },
   "problems": {
     "headline": "出了什么问题，为什么"
+  },
+  "backendWords": {
+    "kind": {
+      "appCrash": "应用崩溃",
+      "appHang": "应用无响应",
+      "gpuTimeout": "显卡超时",
+      "unexpectedShutdown": "意外关机或死机",
+      "blueScreen": "蓝屏",
+      "hardwareError": "硬件记录的错误"
+    },
+    "headline": {
+      "appCrash": "{{app}} 已停止工作并关闭 — {{when}}",
+      "appCrashNoApp": "一个应用程序崩溃了 — {{when}}",
+      "appHang": "{{app}} 停止响应（卡死）— {{when}}",
+      "appHangNoApp": "一个应用程序停止响应 — {{when}}",
+      "gpuTimeout": "你的显卡驱动停止响应后已恢复 — {{when}}",
+      "unexpectedShutdown": "你的电脑意外关机或卡死 — {{when}}",
+      "blueScreen": "你的电脑蓝屏并已重启 — {{when}}",
+      "hardwareError": "Windows 记录了一个硬件级错误 — {{when}}"
+    },
+    "applied": {
+      "on": "开启",
+      "off": "关闭",
+      "offOnAc": "关闭（接通电源时）",
+      "bestPerformance": "最佳性能",
+      "ultimatePerformance": "卓越性能",
+      "stopped": "已停止",
+      "startsWithWindows": "随 Windows 启动",
+      "wontStartWithWindows": "不随 Windows 启动",
+      "disabled": "已禁用",
+      "removedForUser": "已为此用户移除",
+      "windowsDefault": "Windows 默认值"
+    },
+    "friendly": {
+      "nagle-disable": "让在线游戏更流畅",
+      "windows-search-disable": "给老硬盘减负",
+      "game-mode": "让 Windows 专注于你的游戏",
+      "visual-effects": "精简 Windows 动画以提速",
+      "mouse-accel-off": "让你的瞄准保持一致",
+      "game-bar-disable": "关闭 Xbox 叠加层和后台录制",
+      "diagtrack-disable": "停止后台数据收集",
+      "usb-selective-suspend-off": "让你的 USB 设备保持唤醒",
+      "pcie-aspm-off": "别让显卡链路进入节能休眠",
+      "eee-disable": "让有线连接更稳定",
+      "memory-integrity-vbs-advisory": "由你决定：更多安全还是更多帧数",
+      "defender-game-folder-exclusions-advisory": "别让杀毒软件在游戏中途扫描游戏",
+      "vrr-advisory": "开启无撕裂游戏",
+      "audio-enhancements-advisory": "让游戏音频更干净",
+      "hdr-advisory": "按游戏决定是否开启 HDR",
+      "power-ultimate": "别让电脑自我降速",
+      "reserved-storage-off": "在 C 盘回收约 7–10 GB 空间",
+      "fast-startup-off": "修复重启和关机时的怪问题",
+      "nvidia-telemetry": "停止 NVIDIA 的后台上报",
+      "nvidia-low-latency": "降低 NVIDIA 显卡的输入延迟",
+      "amd-uxp": "退出 AMD 的数据收集",
+      "gpu-prefer-discrete": "让游戏使用你的独立显卡",
+      "sysmain-disable": "减少持续的后台磁盘活动",
+      "hags-enable": "让显卡自己调度任务"
+    }
   }
 }

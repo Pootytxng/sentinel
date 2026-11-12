@@ -57,6 +57,7 @@ import {
   type InterviewStep,
 } from "./home-interview-data";
 import { INTERVIEW_ARRIVAL_EVENT, takeInterviewArrival } from "./home-arrival";
+import { careHeadline, incidentKindLabel } from "../data/backend-words";
 import "./home-console.css";
 
 // HomeConsole — Home as the console cold-open (plan 2026-07-10-console-hud-phase2-home,
@@ -1620,16 +1621,17 @@ export function HomeConsole({
               <Icon name="burst" size={20} />
             </span>
             <div className="hc-notice-text">
-              <p className="hc-notice-head">{pendingCare.summary}</p>
+              {/* CR-zh-backend-home: headline and kind in the app's language (backend-words.ts). */}
+              <p className="hc-notice-head">{careHeadline(pendingCare, t, i18n.language)}</p>
               <p className="hc-notice-meta">
                 {pendingCare.app_label
                   ? t("home.homeConsole.care.notice.metaApp", {
-                      kind: pendingCare.kind,
+                      kind: incidentKindLabel(pendingCare.kind, t),
                       app: pendingCare.app_label,
                       when: pendingCare.occurred_display,
                     })
                   : t("home.homeConsole.care.notice.meta", {
-                      kind: pendingCare.kind,
+                      kind: incidentKindLabel(pendingCare.kind, t),
                       when: pendingCare.occurred_display,
                     })}
               </p>
