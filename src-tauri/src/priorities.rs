@@ -129,7 +129,7 @@ pub(crate) enum GpuTie {
 /// vendor driver loaded, e.g. during a driver install) stand in for whatever card is fitted, so a
 /// session or a startup read with one can't be tied to, or set against, a card. An exact-match list
 /// of the two names Windows uses (review nit): another fallback name reads as a card, as before.
-fn identifies_a_card(name: &str) -> bool {
+pub(crate) fn identifies_a_card(name: &str) -> bool {
     let n = name.trim().to_lowercase();
     !n.is_empty() && n != "microsoft basic display adapter" && n != "microsoft basic render driver"
 }
