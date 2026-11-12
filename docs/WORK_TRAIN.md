@@ -1438,18 +1438,6 @@ isolation"; read-only, no product names, prices or wattages guessed (unknown sta
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-10 ~12:45-13:20 (scheduled desk install, FULL at start, owner idle in Firefox): built `68f2272b`
-  (no-updater config) and installed it with ship-reinstall -VerifyRuntime (runtime `68f2272b · release`); RELEASE_STATE
-  re-stamped `2962ad35` (verify-release-state 0 state-drift). Screen check: Check's session hint, VBS running now,
-  dual-channel (`_train\view-1110\`). Exit proofs: P6 partly driven (crash + stutter next steps from Home, no
-  WARDOGS crash on record), P4/P5 blocked by the owner's open PBZ Trial exp:6, P7 needs the friend. A first push
-  was stopped mid-gate when the preflight showed input at 12:58 (idle 107 s); pushed with this line once idle again.
-- 2026-11-10 ~13:10-13:45 (coordinator-assigned desk session, FULL): queued + landed CR-stutter-rollback-improved
-  `895d253e` (an improved comparison no longer offers to roll back the change it measured; owner data read-only) and
-  CR-pagefile-note-refusals `da22a28b` (every refused pagefile layout says not one-click, with why); queued
-  CR-stutter-rollback-trial from review. CR-zh-dial PARKED: by-size fit conflicts with the 13px floor (note under the
-  item). cargo test 1807/0, clippy clean; both new tests proven failing on the old code; reviews (sonnet, r1)
-  APPROVE-WITH-NITS x2. No install, no screen check. Pushed with this line through the gate.
 - 2026-11-10 ~13:40-14:10 (coordinator-assigned desk session, FULL): landed CR-zh-dial `1bc687e6` (ArcGauge counts a
   CJK character as two cells, so the zh safe-stack unit sits beside the label; 13px floor kept; visual check due at the
   next FULL install session), CR-stutter-rollback-trial `d7004a9a` (a regression on a change a Trial kept names both
@@ -1535,6 +1523,17 @@ isolation"; read-only, no product names, prices or wattages guessed (unknown sta
   record's refusal names the file and folder and the way out (commit on this line). cargo 1861/0, clippy clean; review
   (sonnet) APPROVE-WITH-NITS, SHOULD-FIX taken. One item (a mid-run device timeout cost the second). Not pushed: main is
   2 ahead of GitHub (`e5d87456` + this); the next FULL session pushes.
+- 2026-11-11 ~20:52-23:45 (coordinator-assigned s20, CODE-ONLY with five FULL windows, no game; server restart
+  ~22:31-22:54): CR-gm-spans-followups (c)(d)(e) `4da520ea`, `ba4be8f0` (a plain apply/undo of a setting Gaming Mode
+  holds is refused); CR-bench-preapply-read `a2d49422`; CR-tip-see-through-2 `8c2566af`; CR-ultimate-followups (a)(e)
+  `fef0a937` ((b)(c)(d)(f) parked); CR-gm-service-suspend-rows `bdd77f41`, `4d7c157d`; P9-gpu-fit-unknowns `15a67af1`;
+  P9-ssd-fit-unknowns `6a61e7ce`; CR-gm-skipped-line `e502b93b`, `53b8f843`; CR-live-changes-twice `359da4f7`, `971058dd`. Two
+  reviews (opus + sonnet) for each rollback-boundary item, one sonnet for the UI ones; no MUST-FIX. cargo 1869/0,
+  clippy clean, tsc 0, full vitest 535/538 (3 site-app suites) per item. Pushed `0afbfb2c` (gate PASS) after
+  `ddada688`; installed `0afbfb2c` (runtime proof attempt 1, Synez before/after). Self-review view-1111c (a15986b8):
+  FAIL (tip see-through: ancestor opacity) → fixed; view-1111d (0afbfb2c): tip PASS, verdict FAIL on a duplicated
+  count (fixed) and wording (CR-view-1111d-wording); teardown CLEAN both times. Not pushed: main ahead of GitHub with
+  the RELEASE_STATE commit and everything after it (the 23:00 docs push was stopped when the owner returned).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
