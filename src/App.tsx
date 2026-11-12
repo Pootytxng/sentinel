@@ -559,9 +559,14 @@ function App() {
   // CR-footer-ledger-unknown: the newest read was rejected. App's banner already says so; the
   // footer says it couldn't read the ledger, and the read is retried until one lands.
   const [changesReadFailed, setChangesReadFailed] = useState(false);
+  // Review r2: a refresh that begins while a retry is reading makes that retry's rows stale.
+  const refreshSeq = useRef(0);
   useLedgerReadRetry(
     changesReadFailed,
-    () => invoke<AppliedChange[]>("get_applied_changes"),
+    () => {
+      const seq = refreshSeq.current;
+      return invoke<AppliedChange[]>("get_applied_changes").then((c) => (seq === refreshSeq.current ? c : null));
+    },
     (c) => {
       setChanges(c);
       setChangesRead(true);
@@ -855,6 +860,7 @@ function App() {
     // Latest wins (CR-1102-left): a refresh follows every apply and rollback, so two can overlap; an
     // older one's slow read must not land over the newer one's answer, nor its error re-raise a toast.
     const current = refreshGenerations.current.begin();
+    refreshSeq.current += 1;
     setError(null);
     // A refresh follows app start and every apply/rollback — drop the per-surface probe cache so
     // Advanced/Optimize re-read fresh after any change (between mutations the cache serves instantly).

@@ -14,10 +14,12 @@ export function ledgerRetryDelay(attempt: number): number {
 }
 
 /** While `failed`, call `read` on the backoff above; the first read that lands goes to `onRead` and
- *  the loop stops. Turning `failed` off (a refresh read it) or unmounting cancels it. */
+ *  the loop stops. Turning `failed` off (a refresh read it) or unmounting cancels it. `read` resolves
+ *  null when a refresh began while it was reading (review r2): its rows may be older than the
+ *  refresh's, so they are dropped and the loop waits its turn again (the refresh decides `failed`). */
 export function useLedgerReadRetry(
   failed: boolean,
-  read: () => Promise<AppliedChange[]>,
+  read: () => Promise<AppliedChange[] | null>,
   onRead: (changes: AppliedChange[]) => void,
 ): void {
   const readRef = useRef(read);
@@ -43,7 +45,9 @@ export function useLedgerReadRetry(
           .then((r) => {
             if (!live) return;
             if (r.ok) {
-              onReadRef.current(r.changes);
+              const changes = r.changes;
+              if (changes === null) schedule(); // superseded by a refresh: not a failure, not a read
+              else onReadRef.current(changes);
               return;
             }
             console.error("[compy] ledger re-read failed", r.error);

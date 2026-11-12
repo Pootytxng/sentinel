@@ -75,6 +75,22 @@ describe("useLedgerReadRetry", () => {
     expect(read).toHaveBeenCalledTimes(3);
   });
 
+  it("drops a read a refresh overtook (review r2) and keeps waiting, without counting it as a failure", async () => {
+    const read = vi
+      .fn<() => Promise<AppliedChange[] | null>>()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(rows);
+    const onRead = vi.fn();
+    renderHook(() => useLedgerReadRetry(true, read, onRead));
+    await tick(2000);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(onRead).not.toHaveBeenCalled();
+    expect(console.error).not.toHaveBeenCalled();
+    await tick(2000); // same step of the backoff: superseded is not a failure
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(onRead).toHaveBeenCalledWith(rows);
+  });
+
   it("reads nothing while the read hasn't failed, and stops when unmounted or read elsewhere", async () => {
     const read = vi.fn<() => Promise<AppliedChange[]>>().mockRejectedValue(new Error("ipc"));
     const onRead = vi.fn();

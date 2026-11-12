@@ -461,7 +461,7 @@ export function ShellV2({
                 bigger lie of the two. The incomplete branch therefore replaces the WHOLE line
                 rather than swapping the number out from under a prefix that stopped being true.
                 Known-incomplete ONLY — UNKNOWN health leaves this byte-identical to today. */}
-            {ledgerUnvouched ? (
+            {ledgerUnvouched && !ledgerReadFailed ? (
               <div className="v2-ledger-state">
                 <span className="v2-ledger-led" aria-hidden="true" />
                 {t("common.shellV2.footerIncompletePre")}{" "}
