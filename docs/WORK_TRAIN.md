@@ -1945,13 +1945,35 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       with `hardware.gpus.first()` (not the most-VRAM pick) and never checks that session ran on that card. Use
       `priorities::primary_gpu_of` and the session's own `hw_fingerprint.gpu`; another card's session is not named
       as this card's. Rust; one review.
-- [ ] **CR-glass-scroll-flake** (s24 push 2 gate) `src/surfaces/glass/glass-rooms.test.tsx:477` "arriving while a
+- [x] **CR-glass-scroll-flake** (s24 push 2 gate) `src/surfaces/glass/glass-rooms.test.tsx:477` "arriving while a
       record waits lands on THAT record" failed in the loaded pre-push run ("the selected row was never scrolled to:
       expected -1 to be greater than -1") and passes alone. Same class as CR-bench-flake: find whether the scroll
       runs from an effect a loaded render can outrun; fix in product code, never by loosening the test. TS.
+      Done (s25, TS only; `99ddefbf`, `9c4c795c`, `e21014d7`): product code. BlackBox's record row scrolled the
+      deep-linked record into view from a passive `useEffect`; the scan result commits outside act, so React ran that
+      effect in a later task than the commit that drew the row, and a loaded run's `findByText` resolved in the gap
+      (a user saw one frame of the list's top, then the jump). Now a `useLayoutEffect`: the scroll lands in the
+      drawing commit, before paint. New glass-rooms test (a DOM observer right after that commit checks the note's
+      own row was scrolled to) fails on main ("expected false to be true"). Proof: 10/10 + 10/10 consecutive file runs,
+      tsc clean, 2 full vitest 540/543 (3 site-app suites). Review sonnet r1 APPROVE-WITH-NITS (SHOULD-FIX taken: the
+      observer checks the note's own row, not any scroll; NIT taken: null sentinel).
 - [ ] **CR-firstcheck-flake** (s24 full vitest in train-P9-exit-fixture, tests-only branch) `FirstCheck.test.tsx`
       "unread and advisory together: the unread line counts graded checks only and names the advisory" got null in
       a loaded full run and passes alone (8/8). Same class; find the timing gap. TS.
+- [ ] **CR-upgrade-area-truth** (fifth whole-range review b4d2ec7f..d7e67ee5, SHIP-WITH-FOLLOW-UPS; one slice, one
+      sonnet review) The newly visible upgrade area: (1) SHOULD-FIX Check.tsx ~1256 `partNamed` counts the aggregate
+      rows `pending-safe-recs` / `applied-changes`, so with safe tweaks pending "No upgrade recommended" disappears;
+      filter them from one shared source with settings-done.ts. (2) SHOULD-FIX no guard for an UNKNOWN limiter: the
+      room says "No upgrade recommended" where the game summary says not measured; return the not-measured line. (3)
+      SHOULD-FIX Check.tsx ~1165 GPU/HDD upgrade rows render the Rust `title`/`why` as-is (English in zh-CN): i18n keys
+      by `kind` with share and peak, Rust strings the fallback for an unknown kind. (4) SHOULD-FIX `measured_sessions
+      == 0` keeps the title "No upgrade recommended": its own title "Nothing measured yet". NITs: (a) priorities.rs
+      `gpu_tie` / `sessions_on_this_gpu`: carry an excluded-session count in `UpgradeEvidence` and show it; a current
+      adapter that is the Basic Display Adapter or unreadable says the card can't be identified now instead of
+      excluding everything; (b) NoUpgradeBlock's `clear` lacks settings-done's `0 < limit_share_pct <= 100` guard: use
+      the shared one; (c) the footer ledger retry runs every 60 s forever and logs each time: back off (60 s, 5 min,
+      15 min) and log once per state change. Known limitation (record, not for action): HW_SNAPSHOT is read once at
+      startup, so an eGPU unplugged while the app runs stamps later sessions with the wrong card.
 Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the session log); each FAIL is an item:
 - [x] **CR-view-1112c-zh-gap** (`_train\view-1112c\04-optimize-zh-CN.png`) The zh-CN "No upgrade recommended" block
       joined its sentences with an ASCII space after "。" ("。 在最近一次"), and so did the GPU row's untied line.
