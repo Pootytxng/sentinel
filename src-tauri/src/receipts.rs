@@ -79,6 +79,9 @@ pub(crate) fn build_receipt_payload(
     // stamp, `priorities::primary_gpu_of`), not the first adapter (an iGPU on a hybrid rig). A session
     // recorded on another card is never paired with it: the receipt reads the newest session not
     // recorded on another card (P9-session-on-this-hardware's rule), or there is no receipt.
+    // Known limit (review nit): a session that recorded NO card (an older Compy) is kept and paired
+    // with this PC's card, as `hw_class` has always meant "this PC now"; saying "not tied" would need
+    // a schema field, and the payload stays schema v1.
     let gpu_now = crate::priorities::primary_gpu_of(hardware);
     let here = crate::priorities::sessions_on_this_gpu(sessions, gpu_now.as_deref());
     // The newest session that measured play: one behind another window the whole time has no
@@ -492,6 +495,10 @@ mod receipts_tests {
         // Only another card's sessions: no receipt at all.
         let elsewhere = json!([on_card("old-card.exe", Some("NVIDIA GeForce GTX 1060"))]);
         assert_eq!(build_receipt_payload(&hybrid(), &elsewhere, &json!([])), None);
+        // Review nit: a newer session that recorded no card is kept (the known limit above).
+        let unrecorded = json!([on_card("older.exe", None), on_card("here.exe", Some(HYBRID))]);
+        let p = build_receipt_payload(&hybrid(), &unrecorded, &json!([])).expect("kept");
+        assert_eq!(p.outcome.game, "older");
     }
 
     #[test]

@@ -1957,10 +1957,28 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       zh-CN). SessionSummary already carried `hw_fingerprint.gpu`. 9 new tests fail on main. Review sonnet r1
       APPROVE-WITH-NITS (no MUST/SHOULD; nits taken: OptimizeStation's gpus type carries vram_bytes, the VRAM-tie
       note; the `gpus = []` default reading card-unread is intended and tested).
-- [ ] **CR-receipt-gpu-other-card** (same review, SHOULD-FIX) `receipts.rs` ~80-90 pairs the newest measured session
+- [x] **CR-receipt-gpu-other-card** (same review, SHOULD-FIX) `receipts.rs` ~80-90 pairs the newest measured session
       with `hardware.gpus.first()` (not the most-VRAM pick) and never checks that session ran on that card. Use
       `priorities::primary_gpu_of` and the session's own `hw_fingerprint.gpu`; another card's session is not named
       as this card's. Rust; one review.
+      Done (s25, Rust, receipts dark; `c6b1a021` + review commit, SHAs in the merge). The receipt names
+      `primary_gpu_of` (most VRAM), reads the newest session not recorded on another card (`sessions_on_this_gpu`),
+      gives no receipt when every session is another card's, and an unread card or Windows' fallback adapter reads
+      "unknown". No schema change (v1, same fields). 3 new tests fail on main (iGPU named; another card's newer
+      session used; fallback adapter named). Two reviews (receipt contents): sonnet APPROVE-WITH-NITS (nits taken:
+      known-limit comment, a test pinning a no-card session kept; SHOULD-FIX outside the diff queued below), opus
+      APPROVE-WITH-NITS (SHOULD-FIX "a session with no card should read unknown": not taken here, it changes legacy
+      receipts and existing fixtures, queued CR-receipt-unrecorded-unknown; SHOULD-FIX other `gpus.first()` readers
+      queued CR-gpu-first-elsewhere; NITs left: dark-only preview wording, the row copy, "unknown" vendor reads
+      "other" as before).
+- [ ] **CR-gpu-first-elsewhere** (CR-receipt-gpu-other-card reviews, SHOULD-FIX) `case_evidence_upload.rs` ~636
+      (`hw_context_from`, Tier 3), `export.rs` ~555 and `case_intelligence.rs` ~1376 still name `gpus.first()` (an
+      iGPU on a hybrid rig). Use the most-VRAM pick (move it to `hw_class.rs`, which both tiers share) and
+      `identifies_a_card`. Rust; touches upload payload contents: two reviews, no schema change.
+- [ ] **CR-receipt-unrecorded-unknown** (opus SHOULD-FIX) a receipt still pairs a session that recorded no card
+      (sessions saved before fingerprints) with this PC's card; `gpu_model` "unknown" for it needs no schema change
+      but changes legacy receipts and the existing receipt fixtures (`payload_buckets_never_carry_exact_values`,
+      `adversarial_strings...` use card-less sessions). Rust; two reviews.
 - [x] **CR-glass-scroll-flake** (s24 push 2 gate) `src/surfaces/glass/glass-rooms.test.tsx:477` "arriving while a
       record waits lands on THAT record" failed in the loaded pre-push run ("the selected row was never scrolled to:
       expected -1 to be greater than -1") and passes alone. Same class as CR-bench-flake: find whether the scroll
