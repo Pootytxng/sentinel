@@ -1323,14 +1323,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-10 ~12:10-12:45 (scheduled, FULL, owner idle in Firefox): pushed local `main` first through the pre-push
-  gate (`776345f7..4c58fbed`, exit 0). Then P9-hint-shown `4a4265d4` (session hint shown under Check's limiter rows),
-  CR-care-line-truth `49213302` (per-choice save tracking; stopped line after the last retry) and CR-pagefile-multi
-  `a4c2690d` (multi-row pagefile note says not one-click; review r1 APPROVE-WITH-NITS, SHOULD-FIX queued as
-  CR-pagefile-note-refusals). New tests proven failing on the old code (1 + 3 + 1). tsc 0; full vitest 532/535 files,
-  9687 tests (the 3 site-app suites need site-app/node_modules); cargo test 1805/0, clippy clean (idle priority).
-  Review ran as `claude -p --model sonnet` on the diff. No screen check or install this session. Pushed with this
-  line through the gate.
 - 2026-11-10 ~12:45-13:20 (scheduled desk install, FULL at start, owner idle in Firefox): built `68f2272b`
   (no-updater config) and installed it with ship-reinstall -VerifyRuntime (runtime `68f2272b · release`); RELEASE_STATE
   re-stamped `2962ad35` (verify-release-state 0 state-drift). Screen check: Check's session hint, VBS running now,
@@ -1417,6 +1409,13 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   REQUEST-CHANGES both). New tests fail on the old code; cargo 1839/0, clippy clean, tsc 0, full vitest 535/538 (the 3
   site-app suites). Push started in the 15:27 window and stopped mid-gate (vitest stage) when the owner returned; not
   pushed, not installed, no screen capture (no later 10-minute idle window).
+- 2026-11-11 ~16:10-19:45 (coordinator-assigned s19, CODE-ONLY with FULL windows, no game; server restart ~18:25-19:02):
+  CR-bench-holds-setting `cecd30c5`, CR-gm-spans-trial `8bf4a2a9`, CR-ultimate-identity `ec326810` (redesign: stamp by
+  provenance, old rows record only on stock schemes), CR-kept-plan-read-once + CR-kept-outside-nits (a)-(d) `0b14d2f3`,
+  `94a02d85`, `e954f78b`; "Left for v1.0" pointers `a15986b8`. Two reviews each for A/B (MUST-FIX taken: Trial start vs
+  bench hold; GM start race), one for C. cargo 1859/0, clippy clean, tsc 0, full vitest 535/538 (3 site-app suites).
+  Pushed 3 times (cecd30c5, 94a02d85, a15986b8; gate PASS each). Installed `a15986b8` (runtime proof attempt 1).
+  No screen capture or self-review (no window left). CR-outside-followups (a)(d) not started.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
