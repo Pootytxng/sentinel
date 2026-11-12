@@ -80,6 +80,20 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
 - **P8-first-advanced** waits on P4's walkthrough (the gate is Trial + Risk proof), then your sign-off on the
   candidate Claude recommends.
 
+### Left for v1.0 (derived 2026-11-11)
+Pointers only, from `product/ROADMAP.md` "What v1.0 means" (Phases 0-7 exited on the installed build + the A4
+release checklist); no new rules.
+- Phase exits not yet recorded: **P4-exit-proof** (owner call recorded as is under the item: ROB RUN substitutes for
+  WARDOGS; last blocked on CR-unconfirmed-remedy, Keep "Synez" recorded 2026-11-11); **P5-exit-proof** and
+  **P6-exit-proof** (owner half; the friend half deferred per the owner's 2026-11-11 07:41 statement, top of file);
+  **P7-exit-proof** (friend-dependent half deferred the same way).
+- `RELEASE_STATE.md` gates still OPEN, owner territory: code signing (`STATE:code_signing=open`), legal
+  (`STATE:legal=open`).
+- Unticked queue items: CR-1102-left (engineering lines), CR-bench-preapply-read, CR-bench-stack-hold,
+  CR-gm-spans-followups, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
+  exit proofs above; P8-first-advanced waits on P4 (Phase 8, not needed for v1.0).
+- CR-ultimate-identity: landed `ec326810` (2026-11-11 s19), not installed yet; follow-ups in CR-ultimate-followups.
+
 ## Queue
 
 ### Now — finish what's open
