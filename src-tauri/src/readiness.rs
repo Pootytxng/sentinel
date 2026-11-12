@@ -977,7 +977,15 @@ pub(crate) fn evaluate_readiness(
             ),
             Ok(hist) => {
                 let settings = |n: usize| if n == 1 { "1 setting".to_string() } else { format!("{n} settings") };
-                let (detail, value) = if hist.cant_confirm == 0 {
+                let (detail, value) = if hist.cant_confirm == 0 && hist.active == 0 && hist.kept_outside > 0 {
+                    // CR-kept-outside-nits (b): every change left is one the user kept as set outside
+                    // Compy, so the row doesn't open on "0 settings active"; the kept line follows.
+                    (
+                        "No Compy change is in effect right now; any of them can still be undone from the Trust Ledger."
+                            .to_string(),
+                        "0 active".to_string(),
+                    )
+                } else if hist.cant_confirm == 0 {
                     (
                         format!("{} active and reversible from the Trust Ledger.", settings(hist.active)),
                         format!("{} active", hist.active),
@@ -1736,6 +1744,28 @@ mod readiness_tests {
         let c = find(&r, "applied-changes");
         assert_eq!(c.status, ReadinessStatus::Attention);
         assert_eq!(c.drifted_titles.len(), 2);
+        // CR-kept-outside-nits (b): every change left is kept outside Compy: no "0 settings active" lead.
+        let only_kept = AppliedChangesSummary { active: 0, ..kept.clone() };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&only_kept), None);
+        let c = find(&r, "applied-changes");
+        assert_eq!(c.status, ReadinessStatus::Ready, "{}", c.detail);
+        assert!(!c.detail.contains("0 settings active"), "{}", c.detail);
+        assert!(c.detail.starts_with("No Compy change is in effect right now"), "{}", c.detail);
+        assert!(c.detail.contains("you chose to keep what was set outside Compy"), "{}", c.detail);
+        // Review (sonnet): two kept rows, written out in full; the lead doesn't depend on the count.
+        let two_kept = AppliedChangesSummary {
+            total: 2,
+            active: 0,
+            cant_confirm: 0,
+            externally_reverted: 0,
+            kept_outside: 2,
+            kept_outside_titles: vec!["Enable Windows Game Mode".into(), "Switch to the Ultimate Performance power plan".into()],
+            ..AppliedChangesSummary::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&two_kept), None);
+        let c = find(&r, "applied-changes");
+        assert!(c.detail.starts_with("No Compy change is in effect right now"), "{}", c.detail);
+        assert!(c.detail.contains("2 settings (") && c.detail.contains("are off because"), "{}", c.detail);
         // Nothing kept: the row is exactly as before.
         let plain = AppliedChangesSummary { total: 1, active: 1, ..AppliedChangesSummary::default() };
         let r = evaluate_readiness(&hw, None, false, false, Ok(&plain), None);

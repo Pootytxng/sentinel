@@ -828,13 +828,25 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       APPROVE-WITH-NITS, r2 opus (s18) APPROVE-WITH-NITS, no MUST-FIX; SHOULD-FIX unknown-as-None and the date wording
       taken, the shared plan read queued (CR-kept-plan-read-once). cargo 1839/0, clippy clean, guard 49/49, full vitest
       532/536 (3 site-app suites + one Chromium launch flake, passed on rerun). (a), (d) not started.
-- [ ] **CR-kept-plan-read-once** (r2 opus SHOULD-FIX of CR-outside-followups b) Once a row is kept outside Compy, every
+      2026-11-11 s19: (a) and (d) still not started (session bound): both change what the Trial one-change checks read,
+      and need a test showing the check gets no weaker plus two reviews. Next step for (d): keep `recorded_at` of the
+      first record in a `first_recorded_at` field (additive) and count it as a move in `trial_moved_since`-style checks.
+- [x] **CR-kept-plan-read-once** (r2 opus SHOULD-FIX of CR-outside-followups b) Once a row is kept outside Compy, every
       `get_applied_changes` poll (sync, UI thread) spawns a second `powercfg` beside the power-ultimate probe's: share one
       plan read for the pass through `LiveReads` (history.rs `applied_change_views`, `kept_outside_observed`).
+      Done `0813fe8e` (2026-11-11 s19, CODE-ONLY, read-only, not installed): `LiveReads` carries the pass's one active
+      scheme read; the power-ultimate probe (same class rule) and the kept-outside check share it. Test counts one read
+      for the pass (two on the old code). sonnet APPROVE-WITH-NITS, no MUST-FIX/SHOULD-FIX.
 - [ ] **CR-kept-outside-nits** (r2 opus NITs of CR-outside-followups b) Re-check Gaming Mode after the plan read, as
       `record_changed_outside` does (history.rs `kept_outside_observed_with`); readiness row wording when every change is
       kept outside ("0 settings active ..." first, readiness.rs ~978); a still-applied row that reads off shows
       "rolled back" in History (Fix.tsx, pre-existing); the power-profile row still flags a kept custom plan (readiness.rs ~864).
+      (a) Gaming Mode re-asked after the read: done `0813fe8e` (test fails on the old code: kept on a read taken as a
+      session started). (b) done `2542fdcd` + test follow-up (2026-11-11 s19, not installed): with no change active and
+      every one left kept outside, the row reads "No Compy change is in effect right now; any of them can still be undone
+      from the Trust Ledger." then the kept line (English, like the rest of that row); sonnet APPROVE, SHOULD-FIX (plural
+      case test) taken. Left: (c) History's "rolled back" for a still-applied row that reads off (Fix.tsx), (d) the
+      power-profile row flagging a kept custom plan (needs the recorded plan in the readiness summary).
 - [x] **CR-summary-running-trial** (TS) While a retest Trial runs, the game summary's row for that change reads "Applied
       now" and "Stays applied from these tests: <change>", though the tested Trial put it back; "on" is the running
       Trial's own apply (`stillAppliedFrom` reads the picker's already-set-by-compy). Say it is applied by the Trial in
