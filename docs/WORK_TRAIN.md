@@ -1641,6 +1641,16 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
 - [ ] **P9-cpu-fit-unknowns** If Check shows a CPU-limited block, one line naming what Compy can't read before any
       CPU: the board's socket and BIOS support, and the cooler's fit; establish first whether such a block exists
       (if not, park with the finding). en + zh-CN; same test file.
+      PARKED 2026-11-12 s22 (finding): no such block exists. `priorities.rs build_upgrade_path` emits only "gpu" (a
+      sustained GPU-limited session) and "ssd" (install drive on an HDD); Compy has no CPU-limited measurement, so
+      there is nothing to put the line under. Revisit if a measured CPU limiter lands (P9-cpu-gpu-balance first).
+- [ ] **P9-upgrade-block-reachable** (s22 finding, blocks the Check half of the Phase 9 Exit) The upgrade advisory block
+      in Check.tsx renders only when `!v2Ia`, and the only shipped caller (OptimizeStation's "More cleanup" Check) passes
+      `v2Ia`; the comment's "OptimizeV2 renders its labeled-early card below" has no code. So the GPU/SSD rows and the
+      P9-gpu-fit-unknowns, P9-ssd-fit-unknowns, P9-limit-source and P9-screen-is-limit lines never reach a user. Give the
+      measured Phase 9 lines (limiter, what it was measured from, the screen limit, what Compy can't check) a home in
+      the shipped room; whether the retail links come with them is an owner call (Needs owner) and the default is no
+      links. TS; one review.
 - [ ] **P9-no-upgrade-named** When Check measured no limiter, the upgrade area says "No upgrade recommended" and the
       sessions it was read from (count and newest game), never an empty block; no sessions = "not measured yet".
       en + zh-CN; tests: measured clean / no sessions.
