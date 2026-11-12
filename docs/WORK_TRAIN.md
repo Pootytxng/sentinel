@@ -1825,9 +1825,15 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       full vitest 537/540 (3 site-app suites). Review sonnet APPROVE-WITH-NITS (no MUST-FIX; SHOULD-FIX "a summary
       remount would read the same": the summary sits at one tree position and this test's data is all set before
       render, so no remount path; if the flake returns, check for a remount first). Done with this line's merge.
-- [ ] **CR-check-expert-mount** (same class as CR-bench-flake) Check.tsx ~189 resets the measured-fine and
+- [x] **CR-check-expert-mount** (same class as CR-bench-flake) Check.tsx ~189 resets the measured-fine and
       not-worth-touching piles from a `useEffect([expert])` that also runs on mount, so a tap in the same gap is
       undone. Same render-phase fix; a layout-effect tap test. TS; one review.
+      Done (s25, TS only; `7b9dbe6b` (the parked df372a3b rebased), `8b4ccd4e`, SHAs in the merge): still needed after
+      CR-bench-flake (that fix was Depth's own). With a cached verdict both piles are in Check's first commit; a tap
+      from a layout effect (on screen, passive effects not run) was undone on main (aria-expanded "false", both piles)
+      and stays now. The piles follow only a CHANGE of the preference, adjusted during render. Review sonnet r1
+      APPROVE-WITH-NITS (SHOULD-FIX taken: a test flips Expert view on a mounted Check, both ways; NIT left: the
+      button lookup by text matches one button today). Full vitest in the merge.
 - [x] **CR-footer-undo-path** (s23 confirmation of the range review) After CR-footer-reversible a changed-outside row
       gets no Roll back. Finding from the code: no undo path was removed. The Applied cards (every Undo) come from
       `liveChangeGroups` (active + can't-confirm), which 7dfe87ef did not change; a kept row whose live check reads on

@@ -202,10 +202,15 @@ export default function Check({
   // "Not worth touching" (the refusal pile) is secondary noise — collapse it by default like the
   // "measured fine" pile, so the settled tab leads with what's actionable.
   const [notWorthOpen, setNotWorthOpen] = useState(expert);
-  useEffect(() => {
+  // CR-check-expert-mount (same class as CR-bench-flake): only a CHANGE of the preference re-baselines
+  // the piles, adjusted during render. A mount effect re-asserting the default undid a tap that landed
+  // after the cached verdict painted but before React ran its passive effects.
+  const [seenExpert, setSeenExpert] = useState(expert);
+  if (seenExpert !== expert) {
+    setSeenExpert(expert);
     setFineOpen(expert);
     setNotWorthOpen(expert);
-  }, [expert]);
+  }
   const confirm = useConfirm();
 
   const linkedRec = (lim: PriorityItem) => {
