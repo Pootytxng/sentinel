@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../../i18n";
 import Fix from "../Fix";
-import Check from "../Check";
+import Check, { UpgradePathBlock } from "../Check";
 import { GamingMode } from "../GamingMode";
 import { deriveReverted } from "../use-scan";
 import { useReducedMotion } from "../../design/use-motion";
@@ -14,6 +14,7 @@ import type {
   StartupEntry,
   AppliedChange,
   SessionSummary,
+  UpgradePath,
 } from "../../types";
 import type { GpuVendor } from "../walkthroughs";
 import "./OptimizeStation.css";
@@ -75,6 +76,10 @@ export function OptimizeStation(props: LabFastPathProps) {
   // §5 Power-features bay: lazy-mount Gaming Mode only when the user opens the disclosure, so the
   // Lab tab never spins up its session-state poll while the bay sits collapsed (the perf rails).
   const [powerOpen, setPowerOpen] = useState(false);
+  // P9-upgrade-block-reachable: Check (under "More cleanup") suppresses its upgrade block under v2Ia
+  // (V2-4b: demoted content never leads the room); the room renders it below its groups instead, from
+  // the same scan Check ran, handed up through onUpgradePath. null = no hardware limiter measured.
+  const [upgradePath, setUpgradePath] = useState<UpgradePath | null>(null);
   const reduced = useReducedMotion();
   // Expert view (spec §3 — stop de-emphasizing the long tail): the station's ledger + cleanup
   // disclosures render OPEN so the full panel sits inline. `open={true}` only re-asserts on pref
@@ -250,9 +255,16 @@ export function OptimizeStation(props: LabFastPathProps) {
             sessions={props.sessions}
             gpus={props.gpus}
             onOpenCare={props.onOpenCare}
+            onUpgradePath={setUpgradePath}
           />
         </div>
       </details>
+
+      {/* P9-upgrade-block-reachable: the measured hardware lines (the limiter, the session it was
+          measured from, the screen limit, what Compy can't check before any part), labeled early,
+          below the action groups. No retail links here (owner call, default none). Renders only
+          when the scan named a hardware limiter. */}
+      {upgradePath && <UpgradePathBlock upgradePath={upgradePath} links={false} />}
 
       {/* §5 Power features (spec 2026-07-08 §5, owner nod) — the bigger reversible changes you can
           make AND prove in the proving ground: Gaming Mode (foreground boost) + service-suspend,
