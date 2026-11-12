@@ -1537,7 +1537,7 @@ isolation"; read-only, no product names, prices or wattages guessed (unknown sta
       Done (2026-11-11 s20, TS only, not installed; SHA in the merge): "Before any drive: Compy can't read which free
       M.2 slots, SATA ports or drive bays your motherboard and case have. Check those first." Test fails without the
       line; review and gates in the session log.
-- [ ] **P9-summary-gpu-limit** The finished game summary's Phase 9 line reads that game's newest measured session:
+- [x] **P9-summary-gpu-limit** The finished game summary's Phase 9 line reads that game's newest measured session:
       when it was GPU-limited (the sustained rule of P9-bottleneck-sustained), it names the GPU as the measured
       limiter with its share instead of "nothing holding this PC back"; another game's session never counts. Rust read
       + TS line, en + zh-CN; one review (measurement).
@@ -1549,6 +1549,14 @@ isolation"; read-only, no product names, prices or wattages guessed (unknown sta
       --noEmit`; `npx vitest run src/surfaces/settings-done.test.ts src/surfaces/ExperimentBench.test.tsx`; full
       vitest; `cargo test` + `cargo clippy --all-targets -- -D warnings` (CARGO_TARGET_DIR = main's target); prove the
       tests fail on the old code; one sonnet review; merge.
+      Done `3088b200`, `78a908d1` (2026-11-12 s22, not installed): when Compy finished the supported Trials for a game
+      and that game's newest measured session was GPU-limited, the summary says "In your newest measured <game>
+      session, N% of Compy's GPU readings were at 95% load or more, so the GPU is the measured limiter for this game.
+      Compy can't check your power supply, case or the rest of the system for a new card; see Optimize → Check."
+      (zh-CN too); the threshold rides on the payload. Reviews sonnet r1 APPROVE-WITH-NITS (SHOULD-FIX taken: share
+      of readings not of time; case-folded game match both sides), r2 APPROVE-WITH-NITS (no SHOULD-FIX). The TS test
+      fails on main's settings-done.ts. cargo 1875/0, clippy clean, tsc 0, full vitest 536/539 (3 site-app).
+      Not visually checked (needs a finished game summary on a GPU-limited game; none on this rig yet).
 Refill 2026-11-12 s21 (Phase 9 Exit: "name the measured limiter in system context or say 'no upgrade recommended',
 never a part in isolation"; read-only, measured only, unknown stays unknown, no product names or prices):
 - [ ] **P9-limit-source** Under "GPU was the measured limiter" (Optimize → Check), the line names what it was measured
