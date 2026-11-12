@@ -2329,7 +2329,9 @@ pub(crate) struct AppliedChangesSummary {
     pub(crate) kept_outside_titles: Vec<String>,
     /// CR-kept-outside-nits (d): one of them is the power-plan change, so the plan active now is the
     /// one the user chose to keep (its record holds against the live read); the power-profile row
-    /// then doesn't flag it.
+    /// then doesn't flag it. That row prints the name from its own plan read, a moment apart from
+    /// this one: a switch in between can pair the words with the other plan until the next refresh
+    /// (review: accepted, the wording stays true of the record).
     pub(crate) kept_outside_plan: bool,
 }
 

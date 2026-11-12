@@ -1378,6 +1378,9 @@ mod readiness_tests {
         let c = r.checks.into_iter().find(|c| c.id == "power-profile").expect("row");
         assert_eq!(c.status, ReadinessStatus::Advisory, "{}", c.detail);
         assert!(c.detail.contains("Synez Power Plan") && c.detail.contains("you chose to keep"), "{}", c.detail);
+        // A performance plan reads as before even with the flag set.
+        let r = evaluate_readiness(&hw, Some((PowerPlanClass::HighPerformance, "High performance")), false, false, Ok(&kept), None);
+        assert_eq!(r.checks.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Ready);
         // Another kept setting (not the plan) changes nothing here; nor does an unreadable ledger.
         let other = AppliedChangesSummary { kept_outside: 1, ..AppliedChangesSummary::default() };
         let r = evaluate_readiness(&hw, Some((PowerPlanClass::Other, "Synez Power Plan")), false, false, Ok(&other), None);
