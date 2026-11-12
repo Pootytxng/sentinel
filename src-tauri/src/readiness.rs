@@ -1752,6 +1752,20 @@ mod readiness_tests {
         assert!(!c.detail.contains("0 settings active"), "{}", c.detail);
         assert!(c.detail.starts_with("No Compy change is in effect right now"), "{}", c.detail);
         assert!(c.detail.contains("you chose to keep what was set outside Compy"), "{}", c.detail);
+        // Review (sonnet): two kept rows, written out in full; the lead doesn't depend on the count.
+        let two_kept = AppliedChangesSummary {
+            total: 2,
+            active: 0,
+            cant_confirm: 0,
+            externally_reverted: 0,
+            kept_outside: 2,
+            kept_outside_titles: vec!["Enable Windows Game Mode".into(), "Switch to the Ultimate Performance power plan".into()],
+            ..AppliedChangesSummary::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&two_kept), None);
+        let c = find(&r, "applied-changes");
+        assert!(c.detail.starts_with("No Compy change is in effect right now"), "{}", c.detail);
+        assert!(c.detail.contains("2 settings (") && c.detail.contains("are off because"), "{}", c.detail);
         // Nothing kept: the row is exactly as before.
         let plain = AppliedChangesSummary { total: 1, active: 1, ..AppliedChangesSummary::default() };
         let r = evaluate_readiness(&hw, None, false, false, Ok(&plain), None);
