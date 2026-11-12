@@ -1702,13 +1702,6 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-10 ~14:10-14:40 (coordinator-assigned desk session, FULL): #669, #668 and #677 were already fixed and pushed
-  (`2b1cd3f1`/`06e81e25` merged `e83017a5`; `4d5316d0` merged `3c3e7553`); re-proved on `1f4ed7a1` (their 10 cargo tests +
-  3 vitest files / 87 tests green) and closed on GitHub naming those commits. Built `1f4ed7a1` (no-updater config) and
-  installed it with ship-reinstall -VerifyRuntime (runtime `1f4ed7a1 · release`); RELEASE_STATE re-stamped (verify 31/31 ok,
-  0 state-drift; the installed-stamp scan SKIPs because a GUID literal abuts the stamp in rodata). Screen check
-  (`_train\view-1110b\`): zh safe-stack dial, stutter "Undoing it isn't suggested" with no rollback button, #677 rows;
-  sonnet self-review FAIL on the Live term tip showing text through it -> queued CR-tip-see-through. Language restored.
 - 2026-11-10 ~14:30-15:20 (coordinator-assigned desk session, FULL): CR-tip-see-through `0ab041dd` (tip ground
   `--v2-panel-pop` 0.96 + blur; term-style-guard fails on the old 0.74; src/design + monitor + glass vitest 97 files /
   1150 passed, tsc 0); #663 `5993d0ec` (ROADMAP done-when table, derived Exit lines for Phases 9-11, "What v1.0
@@ -1802,6 +1795,16 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
   limiter on this rig); teardown CLEAN twice; queued CR-footer-reversible, CR-hist-today, CR-zh-backend-home,
   CR-plan-read-prompt-write and four Phase 9 slices. P9-summary-gpu-limit parked UNTESTED on its branch (`64802f38`) when the
   game started. Not pushed: `7bba7d3e` and everything after it.
+- 2026-11-12 ~06:50-10:00 (s22, coordinator-assigned, CODE-ONLY nearly throughout; no game seen): landed on main, each
+  in its own worktree with a full vitest 537/540 (3 site-app suites) or better: CR-footer-reversible `7dfe87ef`,
+  CR-hist-today `f1c4ef7b`, P9-summary-gpu-limit `0e3091a4`, CR-zh-backend-home `28f396e5`, CR-gm-restore-partial
+  `90261811`, CR-trial-gm-between `18cf0e58` (finding: a Trial missed Gaming Mode on for one session only; now Partial),
+  P9-limit-source `412ca74c`, P9-screen-is-limit `652a0469`, P9-no-upgrade-source `60b5abf2`, P9-retail-firewall
+  `02480f59`, P9-summary-no-dead-pointer `b136c126`; P9-cpu-fit-unknowns parked (no CPU block). Finding: Check's upgrade
+  block never renders in the shipped room (P9-upgrade-block-reachable). Reviews per item in its row. Two idle windows:
+  07:56 (push 1 failed in the gate on the ExperimentBench flake, which passes alone; push 2 killed by PID tree when
+  the owner returned) and 09:41 (push 3 killed the same way). Not pushed; no build, install or screen check
+  (installed stays `b27552f8`).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
