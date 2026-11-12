@@ -597,6 +597,55 @@ describe("Check", () => {
     expect(document.querySelector(".check-upgrade a")).toBeNull();
   });
 
+  // P9-gpu-fit-unknowns: under a GPU limiter, what Compy can't check before any card; never a capacity.
+  const fitGpuItem = {
+    kind: "gpu",
+    title: "GPU was the measured limiter",
+    why: "In your most recent monitored session the GPU sat at or above 95% for 80% of the time.",
+    links: [{ retailer: "Amazon", url: "https://www.amazon.com/s?k=graphics+card" }],
+  };
+  const showUpgrade = async (items: (typeof fitGpuItem)[]) => {
+    prioritiesMock.payload = {
+      limiters: [], already_fine: [], not_worth_touching: [], session_hint: null,
+      upgrade_path: { items, disclosure: "x" },
+    };
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    await screen.findByText("Upgrade path (advisory)");
+  };
+
+  it("P9-gpu-fit-unknowns: a GPU limiter names the power supply and case as unknown when the user added none", async () => {
+    localStorage.removeItem("compy_rig_manual_parts");
+    await showUpgrade([fitGpuItem]);
+    const line = screen.getByTestId("check-upgrade-fit");
+    expect(line.textContent).toBe(
+      "Before any card: Compy can't read your power supply's capacity or connectors, or how much room and airflow your case has. Check those first.",
+    );
+    // Under the GPU item's own words, inside that item.
+    expect(line.closest(".check-upgrade-item")?.textContent).toContain("GPU was the measured limiter");
+  });
+
+  it("P9-gpu-fit-unknowns: a power supply the user added is named as what they told Compy, never a capacity", async () => {
+    localStorage.setItem("compy_rig_manual_parts", JSON.stringify([{ id: "m1", kind: "psu", name: "Corsair RM850x" }]));
+    try {
+      await showUpgrade([fitGpuItem]);
+      expect(screen.getByTestId("check-upgrade-fit").textContent).toBe(
+        "Before any card: you told Compy your power supply is “Corsair RM850x”. Compy can't check its capacity or connectors, or how much room and airflow your case has. Check those first.",
+      );
+    } finally {
+      localStorage.removeItem("compy_rig_manual_parts");
+    }
+  });
+
+  it("P9-gpu-fit-unknowns: no GPU item, no fit line (the HDD item says nothing about a card)", async () => {
+    await showUpgrade([{ kind: "ssd", title: "Games are on an HDD", why: "HDD storage.", links: [] }]);
+    expect(screen.getByText("Games are on an HDD")).toBeInTheDocument();
+    expect(screen.queryByTestId("check-upgrade-fit")).toBeNull();
+  });
+
   // ── Session hint (P9-hint-shown) ──
 
   it("prints the session GPU hint under the limiter rows, and nothing when it is absent", async () => {

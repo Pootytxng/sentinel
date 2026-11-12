@@ -18,6 +18,8 @@ import { useScan, buildSetupSummary, rowVerdict } from "./use-scan";
 import { useExpertView } from "../design/use-expert-view";
 import { ScanStream } from "./ScanStream";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
+import { upgradeFitLine } from "./upgrade-fit";
+import { readManualParts } from "./rig/manual-parts";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
@@ -286,6 +288,8 @@ export default function Check({
 
   // Upgrade-path links are copy-only (R3 Lane B): clipboard, per-button feedback, no navigation.
   const [copiedRetail, setCopiedRetail] = useState<string | null>(null);
+  // P9-gpu-fit-unknowns: the parts the user added (Test → Add a part), read once, never written here.
+  const [manualParts] = useState(readManualParts);
   const copyRetailLink = async (key: string, url: string) => {
     try {
       await navigator.clipboard.writeText(url);
@@ -828,6 +832,19 @@ export default function Check({
                 <div key={item.kind} className="check-upgrade-item">
                   <span className="check-upgrade-title">{item.title}</span>
                   <p className="check-row-reason">{item.why}</p>
+                  {/* P9-gpu-fit-unknowns: what Compy can't check before any card, in the system's
+                      terms; a user-added power supply is what they told Compy, never a capacity. */}
+                  {(() => {
+                    const fit = upgradeFitLine(item.kind, manualParts);
+                    if (!fit) return null;
+                    return (
+                      <p className="check-row-reason check-upgrade-fit" data-testid="check-upgrade-fit">
+                        {fit.key === "optimize.check.upgradeFitGpuUserPsu"
+                          ? t("optimize.check.upgradeFitGpuUserPsu", { name: fit.name })
+                          : t("optimize.check.upgradeFitGpuUnknown")}
+                      </p>
+                    );
+                  })()}
                   <div className="check-upgrade-links">
                     {item.links.map((l) => (
                       <button

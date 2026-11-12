@@ -1388,10 +1388,16 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
       aggregate rows are skipped since `f3bd1e49`.
 Refill 2026-11-11 s20 (fewer than 5 ready items): smallest slices toward the Exit's "in system context, never a part in
 isolation"; read-only, no product names, prices or wattages guessed (unknown stays unknown).
-- [ ] **P9-gpu-fit-unknowns** Under "GPU was the measured limiter" (Optimize → Check upgrade block), one line naming
+- [x] **P9-gpu-fit-unknowns** Under "GPU was the measured limiter" (Optimize → Check upgrade block), one line naming
       what Compy can't check before any card: the power supply's capacity and connectors, and the case's room and
       airflow; a power supply the user added in Test → Add a part is named as what they told Compy, never read as
       a capacity. en + zh-CN; Check.test.tsx: no PSU / user-added PSU / no GPU item (no line).
+      Done `15a67af1` + r1 nit (2026-11-11 s20, TS only, not installed): "Before any card: Compy can't read your power
+      supply's capacity or connectors, or how much room and airflow your case has. Check those first." (or "you told
+      Compy your power supply is “<name>”" when the user added one); the user-added list is read, never written; a
+      malformed stored entry is skipped. Review (sonnet) APPROVE-WITH-NITS (malformed-entry guard taken). Three tests
+      fail without the line. Full vitest 535/538 (3 site-app suites), tsc 0. Not visually checked yet (the block shows
+      only after a GPU-limited session).
 - [ ] **P9-ssd-fit-unknowns** Under "Games are on an HDD", one line: Compy can't read which free M.2 slots, SATA
       ports or drive bays the board and case have; check before choosing a drive. en + zh-CN; same test file.
 - [ ] **P9-summary-gpu-limit** The finished game summary's Phase 9 line reads that game's newest measured session:
