@@ -4,7 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { writeLedger } from "../data/ledger-write";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import type { PriorityItem, SessionSummary, StartupEntry, UpgradePath, UpgradeSuggestion } from "../types";
+import type { Priorities, PriorityItem, SessionSummary, StartupEntry, UpgradePath, UpgradeSuggestion } from "../types";
+import { LIMITER_AWAY } from "./rig/limiter-part";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { useConfirm } from "../design/ConfirmDialog";
@@ -145,6 +146,7 @@ export default function Check({
   v2Ia = false,
   onOpenCare,
   onUpgradePath,
+  onScanPriorities,
 }: {
   isAppliable: (recId: string) => boolean;
   onOpenLibrary: (focusId?: string) => void;
@@ -172,6 +174,9 @@ export default function Check({
   /** P9-upgrade-block-reachable: called with this scan's upgrade path (null = none) each time it
    *  changes, for a room that renders `UpgradePathBlock` itself (Check suppresses it under v2Ia). */
   onUpgradePath?: (upgradePath: UpgradePath | null) => void;
+  /** P9-no-upgrade-named: called with this scan's priorities (null = no scan in hand) each time they
+   *  change, for a room that renders `NoUpgradeBlock` when the scan named no hardware limiter. */
+  onScanPriorities?: (priorities: Priorities | null) => void;
 }) {
   const { t, i18n } = useTranslation();
   // cache: true — Optimize/Fixes is the PERMANENT surface (vs the first-run FirstCheck/Tour arcs), so
@@ -318,6 +323,10 @@ export default function Check({
   useEffect(() => {
     onUpgradePath?.(upgradePath);
   }, [upgradePath, onUpgradePath]);
+  const scanPriorities = priorities ?? null;
+  useEffect(() => {
+    onScanPriorities?.(scanPriorities);
+  }, [scanPriorities, onScanPriorities]);
 
   const checks = readiness?.checks ?? [];
   // One-mention law (V2-4b): these two aggregate limiters re-render recommendations that the
@@ -1220,6 +1229,81 @@ export function UpgradePathBlock({ upgradePath, links }: { upgradePath: UpgradeP
           swap point. Swap back to {upgradePath.disclosure} in the SAME commit that arms
           tags — the Check guard test pins this. No links shown = nothing to disclose. */}
       {links && <p className="check-upgrade-disclosure">{t("optimize.check.upgradeDisclosure")}</p>}
+    </div>
+  );
+}
+
+/** P9-no-upgrade-named + P9-cpu-gpu-balance: the shipped Optimize room's upgrade area when the scan
+ *  named no hardware limiter. It says "No upgrade recommended" and what that was read from (how many
+ *  measured game sessions on this graphics card, and the newest one's GPU counts), or "not measured
+ *  yet" when there are none, never an empty block. When that newest session was not GPU-limited and
+ *  averaged below the refresh rate it ran at, it says the GPU wasn't counted as the limit there and
+ *  that Compy can't measure the CPU's share yet. Nothing when the scan named a part (the check's own
+ *  row says it), when there is an upgrade row, or when the backend sent no evidence. No retail links. */
+export function NoUpgradeBlock({ priorities }: { priorities: Priorities }) {
+  const { t, i18n } = useTranslation();
+  const ev = priorities.upgrade_evidence;
+  if (!ev || priorities.upgrade_path) return null;
+  const partNamed = (priorities.limiters ?? []).some((l) => l.status === "attention" && !LIMITER_AWAY.has(l.id));
+  if (partNamed) return null;
+  const n = ev.newest;
+  const finite = (x: number | undefined): x is number => x != null && Number.isFinite(x) && x > 0;
+  // The newest session, only when its counts can be a measurement and fall under the limit share.
+  const clear =
+    n &&
+    !n.gpu_limited &&
+    [n.busy, n.readings, n.threshold_pct, n.limit_share_pct].every(Number.isFinite) &&
+    n.readings > 0 &&
+    n.busy >= 0 &&
+    n.busy * 100 < n.readings * n.limit_share_pct
+      ? n
+      : null;
+  // P9-cpu-gpu-balance: that session's own average under the refresh rate it ran at; either unmeasured
+  // = no line (unknown stays unknown). The raw average is compared, as Check's screen-limit rule does.
+  const fps = clear?.avg_fps;
+  const hz = clear?.refresh_hz;
+  const below = clear && finite(fps) && finite(hz) && fps < hz ? { fps: Math.round(fps), hz } : null;
+  const untied = clear ? gpuUntied(clear.gpu_tie) : undefined;
+  return (
+    <div className="check-upgrade" data-testid="check-no-upgrade" data-links="off">
+      <div className="check-section-label">
+        {t("optimize.optimizeV2.upgradePathLabel")}{" "}
+        <span className="check-upgrade-early">{t("optimize.optimizeV2.upgradePathEarly")}</span>
+      </div>
+      <div className="check-upgrade-item">
+        <span className="check-upgrade-title">{t("optimize.check.noUpgradeTitle")}</span>
+        <p className="check-row-reason" data-testid="check-no-upgrade-source">
+          {ev.measured_sessions > 0
+            ? t("optimize.check.noUpgradeReadFrom", { count: ev.measured_sessions })
+            : t("optimize.check.noUpgradeNotMeasured")}
+          {clear && (
+            <>
+              {" "}
+              {t("optimize.check.noUpgradeNewest", {
+                game: prettyGameName(clear.game) || clear.game,
+                date: sessionDate(clear.started_at, i18n.language),
+                busy: clear.busy,
+                readings: clear.readings,
+                threshold: clear.threshold_pct,
+                limitShare: clear.limit_share_pct,
+              })}
+            </>
+          )}
+          {untied && (
+            <span data-testid="check-no-upgrade-untied">
+              {" "}
+              {untied === "not-recorded"
+                ? t("optimize.check.upgradeUntiedNotRecorded")
+                : t("optimize.check.upgradeUntiedCardUnread")}
+            </span>
+          )}
+        </p>
+        {below && (
+          <p className="check-row-reason" data-testid="check-no-upgrade-balance">
+            {t("optimize.check.noUpgradeCpuUnknown", { fps: below.fps, hz: below.hz })}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

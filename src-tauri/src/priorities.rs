@@ -54,6 +54,37 @@ pub(crate) struct Priorities {
     /// enough GPU readings to decide and was NOT GPU-limited by the same rule. A game in neither list
     /// was not measured (never read as "not limited").
     gpu_clear_games: Vec<GameGpuClear>,
+    /// P9-no-upgrade-named: what an upgrade area with no hardware row was read from.
+    upgrade_evidence: UpgradeEvidence,
+}
+
+/// P9-no-upgrade-named: what "no upgrade recommended" (Check's room, when the upgrade path has no
+/// row) was read from. Sessions on this card only, as every GPU line. `measured_sessions` counts the
+/// sessions that recorded enough GPU readings to decide anything (not behind another window, at least
+/// `GPU_SUSTAINED_MIN_READINGS` readings, busy within readings); `newest` is the newest of them.
+#[derive(Serialize, Debug, PartialEq)]
+pub(crate) struct UpgradeEvidence {
+    measured_sessions: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    newest: Option<NewestMeasured>,
+}
+
+/// P9-cpu-gpu-balance: the newest such session: its counts, whether the sustained rule called it
+/// GPU-limited, and its own average FPS and recorded refresh (absent = unmeasured, never filled in).
+#[derive(Serialize, Debug, PartialEq)]
+pub(crate) struct NewestMeasured {
+    game: String,
+    started_at: String,
+    busy: u32,
+    readings: u32,
+    threshold_pct: u64,
+    limit_share_pct: u64,
+    gpu_limited: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    avg_fps: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    refresh_hz: Option<u64>,
+    gpu_tie: GpuTie,
 }
 
 /// One game whose newest measured session recorded enough GPU readings and was not GPU-limited.
@@ -347,6 +378,47 @@ fn build_gpu_games(sessions: &Value, gpu_now: Option<&str>) -> (Vec<GameGpuLimit
         }
     }
     (out, clear)
+}
+
+/// P9-no-upgrade-named: `sessions` are already [`sessions_on_this_gpu`] (newest first). A session
+/// counts when it measured play (`samples` not 0) and recorded enough sane GPU readings; the first
+/// counted one is `newest` (None when it recorded no game or start: never a guess).
+fn build_upgrade_evidence(sessions: &Value, gpu_now: Option<&str>) -> UpgradeEvidence {
+    let mut measured_sessions = 0u32;
+    let mut newest = None;
+    for row in sessions.as_array().map(Vec::as_slice).unwrap_or_default() {
+        if row.get("samples").and_then(Value::as_u64) == Some(0) {
+            continue;
+        }
+        let Some(read) = gpu_load_read_row(row) else {
+            continue;
+        };
+        let Some(l) = read.load.filter(|l| l.readings >= GPU_SUSTAINED_MIN_READINGS && l.busy <= l.readings) else {
+            continue;
+        };
+        let Some(gpu_tie) = gpu_tie(row, gpu_now) else {
+            continue;
+        };
+        measured_sessions += 1;
+        if measured_sessions == 1 {
+            let text = |k: &str| row.get(k).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
+            if let (Some(game), Some(started_at)) = (text("process_name"), text("started_at")) {
+                newest = Some(NewestMeasured {
+                    game: game.to_string(),
+                    started_at: started_at.to_string(),
+                    busy: l.busy,
+                    readings: l.readings,
+                    threshold_pct: GPU_LIMITED_PCT,
+                    limit_share_pct: GPU_SUSTAINED_SHARE_PCT,
+                    gpu_limited: read.sustained_share().is_some(),
+                    avg_fps: row_avg_fps(row),
+                    refresh_hz: row_refresh_hz(row),
+                    gpu_tie,
+                });
+            }
+        }
+    }
+    UpgradeEvidence { measured_sessions, newest }
 }
 
 fn gpu_load_read_row(s: &Value) -> Option<GpuLoadRead> {
@@ -718,6 +790,7 @@ pub(crate) fn build_priorities_for(
         upgrade_path: upgrade_path_here(readiness, sessions, gpu_now),
         gpu_limited_games: limited_games,
         gpu_clear_games: clear_games,
+        upgrade_evidence: build_upgrade_evidence(sessions, gpu_now),
     }
 }
 
@@ -1385,6 +1458,40 @@ mod priority_tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn upgrade_evidence_counts_this_cards_measured_sessions_and_reads_the_newest() {
+        // P9-no-upgrade-named / P9-cpu-gpu-balance.
+        let now = Some("AMD Radeon RX 9070 XT");
+        let none = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &json!([]), now);
+        assert_eq!(none.upgrade_evidence, UpgradeEvidence { measured_sessions: 0, newest: None });
+        let mut newest = limited_on("g.exe", "2026-11-11T20:36:00Z", Some("AMD Radeon RX 9070 XT"), 120);
+        newest["avg_fps"] = json!(141.5);
+        newest["game_state"] = json!({ "display_refresh_hz": 250 });
+        let sessions = json!([
+            limited_on("old.exe", "2026-11-12T08:00:00Z", Some("NVIDIA GeForce GTX 1060"), 800), // another card
+            { "process_name": "idle.exe", "started_at": "2026-11-12T07:00:00Z", "samples": 0,
+              "peak_gpu_usage_pct": 99, "gpu_load": { "readings": 900, "busy": 900 } },            // behind a window
+            { "process_name": "brief.exe", "started_at": "2026-11-12T06:00:00Z", "samples": 20,
+              "peak_gpu_usage_pct": 99, "gpu_load": { "readings": 10, "busy": 10 } },              // too few readings
+            newest,
+            limited_on("g.exe", "2026-11-10T20:36:00Z", None, 800), // older, no card recorded: counted
+        ]);
+        let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &sessions, now);
+        assert_eq!(p.upgrade_evidence.measured_sessions, 2);
+        let n = p.upgrade_evidence.newest.as_ref().expect("the newest counted session");
+        assert_eq!((n.game.as_str(), n.busy, n.readings, n.gpu_limited), ("g.exe", 120, 900, false));
+        assert_eq!((n.avg_fps, n.refresh_hz, n.gpu_tie), (Some(141.5), Some(250), GpuTie::ThisCard));
+        assert_eq!((n.threshold_pct, n.limit_share_pct), (95, 50));
+        // A GPU-limited newest is marked so (the room shows the upgrade row then, not this).
+        let limited = json!([limited_on("g.exe", "2026-11-11T20:36:00Z", Some("AMD Radeon RX 9070 XT"), 800)]);
+        let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &limited, now);
+        assert!(p.upgrade_evidence.newest.as_ref().is_some_and(|n| n.gpu_limited));
+        let wire = serde_json::to_value(&p.upgrade_evidence).unwrap();
+        assert_eq!(wire["measured_sessions"], json!(1));
+        assert_eq!(wire["newest"]["gpu_tie"], json!("this-card"));
+        assert!(wire["newest"].get("avg_fps").is_none(), "unmeasured stays absent");
     }
 
     #[test]
