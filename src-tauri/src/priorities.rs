@@ -882,7 +882,9 @@ mod priority_tests {
         for item in &up.items {
             let text = format!("{} {}", item.title, item.why).to_lowercase();
             for l in &all {
+                // Review r2: "amazon.com" in a row must match, so drop the "www." the URL carries.
                 let host = l.url.trim_start_matches("https://").split('/').next().unwrap_or_default();
+                let host = host.trim_start_matches("www.");
                 assert!(!text.contains(&l.retailer.to_lowercase()), "{} row names {}: {text}", item.kind, l.retailer);
                 assert!(!text.contains(host), "{} row names {host}: {text}", item.kind);
             }
