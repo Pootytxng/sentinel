@@ -120,13 +120,15 @@ pub(crate) enum GpuTie {
     ThisCard,
     /// The session recorded no card (an older Compy, or none was read then).
     NotRecorded,
-    /// The session recorded a card, but Compy hasn't read which card this PC has now.
+    /// The session recorded a card, but Compy can't identify this PC's card now (not read yet, or
+    /// only Windows' fallback adapter was read).
     CardUnread,
 }
 
 /// CR-upgrade-area-truth NIT (a): a name that identifies no card. Windows' fallback adapters (no
 /// vendor driver loaded, e.g. during a driver install) stand in for whatever card is fitted, so a
-/// session or a startup read with one can't be tied to, or set against, a card.
+/// session or a startup read with one can't be tied to, or set against, a card. An exact-match list
+/// of the two names Windows uses (review nit): another fallback name reads as a card, as before.
 fn identifies_a_card(name: &str) -> bool {
     let n = name.trim().to_lowercase();
     !n.is_empty() && n != "microsoft basic display adapter" && n != "microsoft basic render driver"

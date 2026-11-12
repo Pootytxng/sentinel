@@ -1170,6 +1170,7 @@ export function UpgradePathBlock({ upgradePath, links }: { upgradePath: UpgradeP
       )}
       {upgradePath.items.map((item) => {
         const screen = screenIsLimit(item);
+        const rowText = upgradeRowText(item, t);
         return (
           <div key={item.kind} className="check-upgrade-item">
             {/* P9-screen-is-limit: the session averaged at or above the refresh rate it recorded,
@@ -1188,8 +1189,8 @@ export function UpgradePathBlock({ upgradePath, links }: { upgradePath: UpgradeP
               </>
             ) : (
               <>
-                <span className="check-upgrade-title">{upgradeRowText(item, t).title}</span>
-                <p className="check-row-reason">{upgradeRowText(item, t).why}</p>
+                <span className="check-upgrade-title">{rowText.title}</span>
+                <p className="check-row-reason">{rowText.why}</p>
               </>
             )}
             {/* P9-limit-source: which recorded session this was measured from (its game, its
