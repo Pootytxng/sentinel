@@ -165,6 +165,33 @@ describe("FirstCheck (audit M1)", () => {
     });
   });
 
+  // CR-firstcheck-flake: the record above was written from a passive effect, which React runs in a
+  // later task than the commit that draws the verdict (the scan resolves outside act). A loaded run
+  // read the verdict in that gap and found no record ("got null"). A DOM observer fires right after
+  // the commit, before any later task: the record must already be there.
+  it("the last-check record lands in the commit that draws the verdict", async () => {
+    let recordWhenDrawn: string | null | undefined;
+    const watch = new MutationObserver(() => {
+      if (recordWhenDrawn === undefined && document.body.textContent?.includes("Ready to play — this rig measured clean")) {
+        recordWhenDrawn = localStorage.getItem(LAST_CHECK_KEY);
+      }
+    });
+    watch.observe(document.body, { childList: true, subtree: true, characterData: true });
+    try {
+      render(
+        <ConfirmProvider>
+          <FirstCheck onDone={vi.fn()} />
+        </ConfirmProvider>,
+      );
+      await screen.findByText("Ready to play — this rig measured clean");
+      expect(recordWhenDrawn, "the observer never saw the verdict").not.toBeUndefined();
+      expect(recordWhenDrawn, "the verdict was drawn before its record was written").not.toBeNull();
+      expect(JSON.parse(recordWhenDrawn as string)).toMatchObject({ total: 1, green: 1, advisory: 0, unread: 0 });
+    } finally {
+      watch.disconnect();
+    }
+  });
+
   // bug→guard (owner screenshot 2026-07-06): the verdict state stacked the live run-list AND the
   // green collapsible — every check title rendered twice. Pin: in the verdict state each check
   // title renders exactly once (inside the expanded green detail), never in a persisted run-list.
