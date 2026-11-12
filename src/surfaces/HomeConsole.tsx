@@ -57,7 +57,7 @@ import {
   type InterviewStep,
 } from "./home-interview-data";
 import { INTERVIEW_ARRIVAL_EVENT, takeInterviewArrival } from "./home-arrival";
-import { careHeadline, incidentKindLabel } from "../data/backend-words";
+import { careHeadline, incidentKindLabel, incidentWhen } from "../data/backend-words";
 import "./home-console.css";
 
 // HomeConsole — Home as the console cold-open (plan 2026-07-10-console-hud-phase2-home,
@@ -1628,11 +1628,11 @@ export function HomeConsole({
                   ? t("home.homeConsole.care.notice.metaApp", {
                       kind: incidentKindLabel(pendingCare.kind, t),
                       app: pendingCare.app_label,
-                      when: pendingCare.occurred_display,
+                      when: incidentWhen(pendingCare, i18n.language),
                     })
                   : t("home.homeConsole.care.notice.meta", {
                       kind: incidentKindLabel(pendingCare.kind, t),
-                      when: pendingCare.occurred_display,
+                      when: incidentWhen(pendingCare, i18n.language),
                     })}
               </p>
             </div>

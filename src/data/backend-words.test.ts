@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import i18n from "../i18n";
-import { appliedValueLabel, careHeadline, friendlyHeadline, incidentKindLabel } from "./backend-words";
+import { appliedValueLabel, careHeadline, friendlyHeadline, incidentKindLabel, incidentWhen } from "./backend-words";
 import { FRIENDLY_LABELS } from "./friendly-labels";
 
 // CR-zh-backend-home (view-1112a/14-home-zh-CN.png): zh-CN Health printed backend English. Words with
@@ -31,6 +31,25 @@ describe("careHeadline", () => {
     expect(h).not.toMatch(/stopped|Nov/);
     expect(careHeadline({ ...crash, app_label: null }, zh, "zh-CN")).toContain("一个应用程序崩溃了");
     expect(careHeadline({ ...crash, kind: "Blue screen", app_label: null }, zh, "zh-CN")).toContain("蓝屏");
+  });
+
+  it("keeps Black Box's 'while <game> was running' clause, the game's name untranslated (review r1)", () => {
+    const s = { ...crash, app_label: "dllhost", summary: "dllhost stopped working and closed — Nov 11, 2:36 PM, while ROB RUN was running" };
+    const h = careHeadline(s, zh, "zh-CN");
+    expect(h).toContain("dllhost 已停止工作并关闭");
+    expect(h).toContain("当时 ROB RUN 正在运行");
+    expect(h).not.toMatch(/while|was running/);
+  });
+
+  it("dates at the stamp's own offset, as the backend does, whatever zone this machine is in (review r1)", () => {
+    // 00:30 at +09:00 is the 12th there; the machine's own zone must not move it to the 11th.
+    const late = { ...crash, occurred_at: "2026-11-12T00:30:00+09:00", occurred_display: "Nov 12, 12:30 AM" };
+    expect(incidentWhen(late, "zh-CN")).toContain("11月12日");
+    expect(incidentWhen(late, "zh-CN")).toMatch(/\b0?0:30\b/);
+    expect(incidentWhen({ ...crash, occurred_at: "2026-11-11T22:36:00Z" }, "zh-CN")).toContain("11月11日");
+    // English and a stamp with no readable offset keep the backend's display string.
+    expect(incidentWhen(late, "en")).toBe("Nov 12, 12:30 AM");
+    expect(incidentWhen({ ...late, occurred_at: "2026-11-12T00:30:00" }, "zh-CN")).toBe("Nov 12, 12:30 AM");
   });
 
   it("an unknown kind, an unreadable stamp or an empty sentence fall back honestly", () => {

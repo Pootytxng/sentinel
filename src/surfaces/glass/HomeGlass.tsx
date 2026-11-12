@@ -16,7 +16,7 @@ import { wordFromBand, confidenceWordKey } from "../../data/confidence-word";
 import { TubeChart, type TubeBar } from "./TubeChart";
 import { useDates } from "./GamesRoom";
 import { NavGlyph } from "../../design/NavGlyph";
-import { careHeadline, incidentKindLabel } from "../../data/backend-words";
+import { careHeadline, incidentKindLabel, incidentWhen } from "../../data/backend-words";
 import "../glass-rooms.css";
 
 const Arrow = () => (
@@ -129,7 +129,7 @@ export function HomeGlass({
   const careDetail = pendingCare
     ? careSummary
       ? t("home.glass.care.detailRecorded")
-      : t("home.glass.care.detail", { kind: incidentKindLabel(pendingCare.kind, t), when: pendingCare.occurred_display })
+      : t("home.glass.care.detail", { kind: incidentKindLabel(pendingCare.kind, t), when: incidentWhen(pendingCare, i18n.language) })
     : "";
 
   const topLimiter = priorities?.limiters?.[0] ?? null;

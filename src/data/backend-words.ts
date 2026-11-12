@@ -31,12 +31,29 @@ export function incidentKindLabel(kind: string, t: TFunction): string {
   }
 }
 
-/** "Nov 11, 2:36 PM" in the app's language from the incident's RFC3339 stamp; the backend's
- *  display string when the stamp doesn't parse. */
-function occurredIn(pc: Pick<PendingCareIncident, "occurred_at" | "occurred_display">, lang: string): string {
-  const d = new Date(pc.occurred_at);
-  if (isNaN(d.getTime())) return pc.occurred_display;
-  return d.toLocaleString(lang, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+/** "Nov 11, 2:36 PM" in the app's language from the incident's RFC3339 stamp, at the stamp's OWN
+ *  offset (as the backend's `occurred_display` is), never the machine's zone; English, or a stamp
+ *  without a readable offset, gets the backend's display string as sent. */
+export function incidentWhen(pc: Pick<PendingCareIncident, "occurred_at" | "occurred_display">, lang: string): string {
+  if (lang.toLowerCase().startsWith("en")) return pc.occurred_display;
+  const m = /(Z|([+-])(\d{2}):(\d{2}))$/.exec(pc.occurred_at.trim());
+  const ms = Date.parse(pc.occurred_at);
+  if (!m || isNaN(ms)) return pc.occurred_display;
+  const offsetMin = m[1] === "Z" ? 0 : (m[2] === "-" ? -1 : 1) * (Number(m[3]) * 60 + Number(m[4]));
+  // The wall-clock time at that offset, formatted as if it were UTC (so no zone is applied twice).
+  return new Date(ms + offsetMin * 60000).toLocaleString(lang, {
+    timeZone: "UTC",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+/** Black Box's ", while <game> was running" tail (blackbox.rs build_headline), or null. */
+function whileGame(summary: string): string | null {
+  const m = /, while (.+) was running$/.exec(summary);
+  return m ? m[1] : null;
 }
 
 /** The incident headline: English keeps the backend's sentence; another language composes it from
@@ -49,7 +66,19 @@ export function careHeadline(
 ): string {
   const summary = pc.summary.trim();
   if (!summary || lang.toLowerCase().startsWith("en")) return summary;
-  const when = occurredIn(pc, lang);
+  const head = composedHeadline(pc, t, lang);
+  if (head == null) return summary;
+  // Review r1: the game Black Box names as running keeps its place (a name, never translated).
+  const game = whileGame(summary);
+  return game ? head + t("common.backendWords.headline.whileGame", { game }) : head;
+}
+
+function composedHeadline(
+  pc: Pick<PendingCareIncident, "kind" | "app_label" | "occurred_at" | "occurred_display">,
+  t: TFunction,
+  lang: string,
+): string | null {
+  const when = incidentWhen(pc, lang);
   const app = pc.app_label?.trim() || null;
   switch (pc.kind) {
     case "App crash":
@@ -69,7 +98,7 @@ export function careHeadline(
     case "Hardware-logged error":
       return t("common.backendWords.headline.hardwareError", { when });
     default:
-      return summary;
+      return null;
   }
 }
 

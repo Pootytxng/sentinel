@@ -367,10 +367,25 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       month/year ends, DST-length days, zh-CN; the Fix History test fails on the old code. Review sonnet
       APPROVE-WITH-NITS (SHOULD-FIX taken: clock literals built from the same ICU; the language read stays the
       i18n singleton at render, which re-renders through useTranslation). tsc 0, full vitest 536/539 (3 site-app).
-- [ ] **CR-zh-backend-home** (`_train\view-1112a\14-home-zh-CN.png`) zh-CN Health shows backend English: the
+- [x] **CR-zh-backend-home** (`_train\view-1112a\14-home-zh-CN.png`) zh-CN Health shows backend English: the
       crash banner ("ROB RUN stopped working and closed — …"), the limiter title and body ("Power plan isn't
       performance-oriented …"), the last change's title ("Help Windows focus on your game") and "设为On".
       Establish which strings have a stable id to translate on the TS side; no invented translations of names.
+      Done (2026-11-12 s22, TS only, not installed; SHAs in the merge). Established: stable ids exist for the
+      incident kind tag (blackbox.rs `IncidentKind::tag`, 6 values), the ledger row's `applied_label` (history.rs, 11
+      values) and the friendly headline (rec id, friendly-labels.ts); `data/backend-words.ts` translates those and,
+      in zh-CN, composes the crash headline from kind + `app_label` + the stamp at its own offset, keeping Black Box's
+      ", while <game> was running" clause; names are never translated; English keeps Black Box's sentence byte for
+      byte. zh Home now reads "ROB RUN 已停止工作并关闭 — 11月11日 14:36" and "Compy 修改了 让 Windows 专注于你的游戏，
+      设为开启". The limiter card is NOT done: its title and body are formatted in Rust (readiness.rs / priorities.rs)
+      with the plan name inside; the readiness row carries a stable id + status + `value` (the plan name), so it can be
+      keyed on the TS side: queued as CR-zh-readiness-words. Review sonnet r1 REQUEST-CHANGES (MUST-FIX taken: dated in
+      the machine's zone, and the meta lines still used the English display date; SHOULD-FIX taken: the game clause);
+      r2 in the session log. The zh band test fails on main's HomeGlass.
+- [ ] **CR-zh-readiness-words** (CR-zh-backend-home finding) zh-CN Health's limiter card prints readiness.rs /
+      priorities.rs English ("Power plan isn't performance-oriented", "Active plan "Synez Power Plan". A performance
+      plan …"). Key each readiness check by (id, status) on the TS side with `value` (the plan or other name, never
+      translated) as a placeholder, en mirroring Rust; unknown (id, status) keeps the Rust text. TS.
 - [ ] **CR-plan-read-prompt-write** (CR-gm-stop-busy r1 opus SHOULD-FIX 3, pre-existing) Applies that read
       `SCHEME_CURRENT` before a UAC prompt and write it after (e.g. the CPMINCORES script, actions.rs ~4570) never
       took Gaming Mode's gate, so a session start or stop during the prompt changes which plan they write.

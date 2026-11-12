@@ -384,7 +384,8 @@
       "gpuTimeout": "Your graphics driver stopped responding and recovered — {{when}}",
       "unexpectedShutdown": "Your PC shut down unexpectedly or hard-froze — {{when}}",
       "blueScreen": "Your PC blue-screened and restarted — {{when}}",
-      "hardwareError": "Windows logged a hardware-level error — {{when}}"
+      "hardwareError": "Windows logged a hardware-level error — {{when}}",
+      "whileGame": ", while {{game}} was running"
     },
     "applied": {
       "on": "On",

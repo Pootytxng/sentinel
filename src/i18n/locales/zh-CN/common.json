@@ -375,7 +375,8 @@
       "gpuTimeout": "你的显卡驱动停止响应后已恢复 — {{when}}",
       "unexpectedShutdown": "你的电脑意外关机或卡死 — {{when}}",
       "blueScreen": "你的电脑蓝屏并已重启 — {{when}}",
-      "hardwareError": "Windows 记录了一个硬件级错误 — {{when}}"
+      "hardwareError": "Windows 记录了一个硬件级错误 — {{when}}",
+      "whileGame": "，当时 {{game}} 正在运行"
     },
     "applied": {
       "on": "开启",
