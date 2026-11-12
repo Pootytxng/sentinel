@@ -4426,9 +4426,19 @@ mod leftover_restore_tests {
         let before = load_history().expect("test ledger readable").len();
         let mut reached_elevation = 0;
         for id in ["mpo-disabled", "core-parking-forced", "tcp-autotuning-off"] {
-            let err = restore_leftover(id, "armed decline test")
-                .err()
-                .expect("declined or honestly refused — never a silent success");
+            // CR-core-parking-held-with-plan review r1 (opus SHOULD-FIX 1): core parking now takes
+            // Gaming Mode's process-wide gate (try_lock), which another test may hold for a moment
+            // ("still finishing"): wait for it, as the gate's own tests do. Nothing ran when it says so.
+            let mut err = String::new();
+            for _ in 0..200 {
+                err = restore_leftover(id, "armed decline test")
+                    .err()
+                    .expect("declined or honestly refused — never a silent success");
+                if !err.contains("still finishing") {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
             if err == ELEVATION_DECLINED_MSG {
                 reached_elevation += 1;
             } else {

@@ -37,7 +37,9 @@ static LIVE_SESSION: Mutex<Option<String>> = Mutex::new(None);
 /// than refused forever — refusing would strand the user's only restore path.
 static SESSION_OP: Mutex<()> = Mutex::new(());
 
-/// Also taken (still only by `try_lock`) by a Trial start and the benchmark's apply across their
+/// Also taken (still only by `try_lock`) by every plain apply and undo through [`plain_change_gate`]
+/// (the core-parking leftover restore, `history::restore_leftover`, included: before its ledger lock,
+/// CR-core-parking-held-with-plan), and by a Trial start and the benchmark's apply across their
 /// check of the session contract and their record/apply (CR-gm-spans-trial review r1), so a session
 /// can't start between that check and the Trial's record, and neither starts while a session starts.
 /// Contention answers "try again"; nothing ever waits on it.
@@ -170,6 +172,8 @@ const REC_CORE_PARKING: &str = "core-parking-forced";
 /// (every writer targets SCHEME_CURRENT). While a session holds the plan they are held with it; while
 /// one of them is held (a Trial), a session leaves the plan alone (CR-gm-start-respects-plan-holds).
 const PLAN_SCOPED: [&str; 3] = [REC_USB, REC_PCIE, REC_CORE_PARKING];
+/// The left-alone label for the plan step when what is held is a setting OF the plan, not the plan.
+const LABEL_POWER_SETTING_HELD: &str = "Power plan → max performance (a Trial is testing one of its settings)";
 
 /// The ledger rec id of the setting each service suspend touches.
 fn service_rec(svc: &actions::KnownService) -> &'static str {
@@ -241,7 +245,16 @@ fn left_alone_labels(held: &[String], opts: &StartOptions, gate_open: bool) -> V
     ]
     .into_iter()
     .filter(|(rec, _, asked)| *asked && !step_free(held, rec))
-    .map(|(_, label, _)| label.to_string())
+    .map(|(rec, label, _)| {
+        // CR-gm-start-respects-plan-holds review r1 (opus SHOULD-FIX 2): the plan left alone for a
+        // Trial on one of its settings (not on the plan itself) says so; the pane's line would
+        // otherwise claim the Trial was testing the plan.
+        if rec == REC_POWER && !held.iter().any(|h| h == REC_POWER) {
+            LABEL_POWER_SETTING_HELD.to_string()
+        } else {
+            label.to_string()
+        }
+    })
     .collect();
     for svc in services_to_suspend(opts, gate_open) {
         if !step_free(held, service_rec(&svc)) {
@@ -1408,7 +1421,7 @@ mod spans_trial_tests {
         // CR-gm-start-respects-plan-holds: a held USB setting (a setting OF the plan) leaves the plan alone too.
         assert_eq!(
             left_alone_labels(&held, &core_only, true),
-            vec![LABEL_POWER.to_string(), LABEL_GAME_MODE.to_string()],
+            vec![LABEL_POWER_SETTING_HELD.to_string(), LABEL_GAME_MODE.to_string()],
             "USB not asked: not named, but the plan it belongs to is left alone",
         );
         let all = StartOptions {
@@ -1419,7 +1432,7 @@ mod spans_trial_tests {
         assert_eq!(
             left_alone_labels(&held, &all, true),
             vec![
-                LABEL_POWER.to_string(),
+                LABEL_POWER_SETTING_HELD.to_string(),
                 LABEL_GAME_MODE.to_string(),
                 LABEL_USB.to_string(),
                 "Suspend SysMain for this session".to_string()
@@ -1427,7 +1440,7 @@ mod spans_trial_tests {
         );
         assert_eq!(
             left_alone_labels(&held, &all, false),
-            vec![LABEL_POWER.to_string(), LABEL_GAME_MODE.to_string(), LABEL_USB.to_string()],
+            vec![LABEL_POWER_SETTING_HELD.to_string(), LABEL_GAME_MODE.to_string(), LABEL_USB.to_string()],
             "suspend gate shut: no service step"
         );
         assert!(left_alone_labels(&[], &all, true).is_empty(), "nothing held: nothing left alone");
@@ -1556,7 +1569,11 @@ mod spans_trial_tests {
             assert!(step_free(&held, REC_GAME_MODE), "{rec} held: other steps run");
         }
         let held = vec![REC_USB.to_string()];
-        assert_eq!(left_alone_labels(&held, &StartOptions::default(), true), vec![LABEL_POWER.to_string()]);
+        // Review r1 (opus SHOULD-FIX 2): named as left alone for one of its settings, never as if the
+        // Trial were testing the plan; a Trial on the plan itself keeps the plain label.
+        assert_eq!(left_alone_labels(&held, &StartOptions::default(), true), vec![LABEL_POWER_SETTING_HELD.to_string()]);
+        let on_plan = vec![REC_POWER.to_string(), REC_USB.to_string()];
+        assert_eq!(left_alone_labels(&on_plan, &StartOptions::default(), true), vec![LABEL_POWER.to_string()]);
         assert!(step_free(&[REC_GAME_MODE.to_string()], REC_POWER), "a setting not of the plan leaves it free");
     }
 
