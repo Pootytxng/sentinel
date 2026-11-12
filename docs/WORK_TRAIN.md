@@ -322,10 +322,13 @@ Third whole-range review (e29da54b..119d07f8, 2026-11-12, SHIP-WITH-FOLLOW-UPS, 
       between the unlocked read and its rename would have moved the NEW ledger aside. The lookup now only reads
       (`read_history_unlocked`: never renames; damaged or unreadable = an error, the undo stops before anything
       runs, the next locked load sets it aside). Not the lock: an apply holds it through its UAC prompt and this
-      answers the UI's undo on the main thread. Tests fail on the old code. Left: `get_applied_changes` (and so the
-      History/Health views) still loads unlocked with the set-aside, the same window; locking it would freeze the UI
-      during an apply's prompt and a read-only view changes how the quarantine is first noticed, so it needs its own
-      design (park). (c) parked: `Held` is one (token, rec, title); the stack needs a set held under the store gate
+      answers the UI's undo on the main thread. Tests fail on the old code. Review (sonnet) APPROVE-WITH-NITS. Left
+      (park, needs its own design): the same unlocked load-with-set-aside is a class, not one function:
+      `get_applied_changes` (History/Health views), `rec_is_active`, comparison.rs ~219, experiment.rs ~2189 and
+      ~3751, intelligence.rs ~2398, machine_model.rs ~1470, trial_candidates.rs ~542; locking them would freeze the
+      UI during an apply's prompt, and read-only views change how the quarantine is first noticed. The lookup's
+      failure now records no `ledger_load` support event (the next locked load or view poll does), and its words
+      for a damaged ledger say only "could not be read (parse …). Nothing was changed." (c) parked: `Held` is one (token, rec, title); the stack needs a set held under the store gate
       before its batch (an `apply_for_bench_stack` beside `apply_for_bench_trial`), and `held_now()` callers
       (Gaming Mode's start, `bench_refusal`) read one. Dark (`stack_trial_gate()` false), nothing reaches it today;
       two reviews when done.
