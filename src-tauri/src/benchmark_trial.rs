@@ -69,7 +69,7 @@ fn set<F: FnOnce(&mut TrialState)>(f: F) {
     }
 }
 
-/// CR-bench-holds-setting: the setting the tweak trial holds, `(rec_id, rec_title)`, from the moment
+/// CR-bench-holds-setting: the setting the tweak trial holds, `(token, rec_id, rec_title)`, from the moment
 /// its apply is decided (under the Trial store gate, before the apply runs) until its rollback has
 /// finished. While held, another apply of that setting is refused: a second ledger row would snapshot
 /// the trial's applied state and keep reading "applied" after the trial rolls its change back.
@@ -724,6 +724,9 @@ mod trial_tests {
         // A run's release clears only its own hold, never a later run's.
         hold(7, "game-mode-on", "Turn on Game Mode");
         assert_eq!(held_now(), Some(held.clone()));
+        // Review r1: the commands' check reads the live hold (on the old code nothing was held).
+        assert!(crate::experiment::bench_refusal(std::iter::once("game-mode-on")).is_some(), "held: refused");
+        assert_eq!(crate::experiment::bench_refusal(std::iter::once("hags-on")), None);
         hold(8, "hags-on", "HAGS");
         drop(HoldRelease(7));
         assert_eq!(held_now().map(|h| h.0), Some("hags-on".to_string()), "run 7 can't clear run 8's hold");
@@ -742,6 +745,9 @@ mod trial_tests {
         let apply = body.find("crate::experiment::apply_for_bench_trial(").expect("held apply");
         let guard = body.find("let _guard = RollbackGuard").expect("rollback guard");
         assert!(hold < apply && apply < guard, "hold release, apply, then the rollback guard");
+        // Review r1 NIT: in the same block as the guard, so it can't be released before the rollback.
+        let between = &body[hold..guard];
+        assert_eq!(between.matches('{').count(), between.matches('}').count(), "no block opens between the hold release and the rollback guard");
         let exp = include_str!("experiment.rs");
         let f = exp.split_once("pub(crate) fn apply_for_bench_trial(").map(|(_, r)| r).expect("fn");
         let f = f.split_once("\n}\n").map(|(b, _)| b).expect("body");

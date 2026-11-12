@@ -3035,6 +3035,10 @@ pub(crate) fn apply_recommendation(
     rec_title: String,
 ) -> Result<crate::history::AppliedChangeView, String> {
     if !experiment_gate() {
+        // Review r1: the benchmark's hold holds with Trials switched off too.
+        if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
+            return Err(refusal);
+        }
         return crate::history::apply_recommendation(rec_id, rec_title);
     }
     let _g = lock_store()?;
@@ -3049,7 +3053,7 @@ pub(crate) fn apply_recommendation(
 }
 
 /// CR-bench-holds-setting: the benchmark tweak trial's hold, read now.
-fn bench_refusal<'a>(rec_ids: impl Iterator<Item = &'a str>) -> Option<String> {
+pub(crate) fn bench_refusal<'a>(rec_ids: impl Iterator<Item = &'a str>) -> Option<String> {
     crate::benchmark_trial::bench_held_refusal(crate::benchmark_trial::held_now().as_ref(), rec_ids)
 }
 
@@ -3086,6 +3090,9 @@ pub(crate) fn apply_recommendations_batch(
     items: Vec<crate::history::BatchApplyItem>,
 ) -> Result<crate::history::BatchApplyReport, String> {
     if !experiment_gate() {
+        if let Some(refusal) = bench_refusal(items.iter().map(|i| i.rec_id.as_str())) {
+            return Err(refusal);
+        }
         return crate::history::apply_recommendations_batch(items);
     }
     let _g = lock_store()?;
@@ -3373,6 +3380,11 @@ pub(crate) fn start_experiment(
     // reads as not yet changed can start, so the restore has a verified state to return to.
     if let Some(why) = pre_apply_refusal(crate::history::probe_rec_target(&rec_id)) {
         return Err(format!("experiment not started — {why}"));
+    }
+    // CR-bench-holds-setting (review r1): a setting the benchmark tweak trial holds is refused by name,
+    // even in the moment before its apply lands (its hold is set under this same gate).
+    if let Some(why) = bench_refusal(std::iter::once(rec_id.as_str())) {
+        return Err(why);
     }
 
     // Single-variable honesty context BEFORE we apply (§4F): how many changes are already active, by
@@ -5243,7 +5255,10 @@ mod experiment_tests {
             let read = body.find("load_store_checked()?").expect("the store is read, an unreadable one refuses");
             let refuse = body.find("held_by_trial_refusal(").expect("the refusal is checked");
             // CR-bench-holds-setting: and the benchmark tweak trial's hold, under the same gate.
-            let bench = body.find("bench_refusal(").expect("the benchmark hold is checked");
+            let bench = body.rfind("bench_refusal(").expect("the benchmark hold is checked");
+            // Review r1: and before the Trials-off early return too.
+            let off = body.find("if !experiment_gate() {").expect("gate-off branch");
+            assert!(body[off..gate].contains("bench_refusal("), "{sig}: the gate-off branch checks the hold");
             let write = body.rfind(call.trim_end_matches("\n}")).expect("the ledger is written");
             assert!(gate < read && read < refuse && refuse < bench && bench < write, "{sig}: gate, read, refuse, then write");
         }
@@ -5256,6 +5271,11 @@ mod experiment_tests {
         let (gate, bench) = (body.find("let _g = lock_store()?;").expect("gate"), body.find("bench_refusal(").expect("bench"));
         let write = body.find("crate::history::apply_recommendation_citing(").expect("write");
         assert!(gate < bench && bench < write, "keep: gate, bench hold, then write");
+        // Review r1 MUST-FIX (sonnet): a Trial start too, under its gate, before anything is recorded.
+        let start = src.split_once("pub(crate) fn start_experiment(").map(|(_, r)| r).expect("start");
+        let (gate, bench) = (start.find("let _g = lock_store()?;").expect("gate"), start.find("bench_refusal(").expect("bench"));
+        let record = start.find("store.experiments.push(").expect("record first");
+        assert!(gate < bench && bench < record, "start: gate, bench hold, then the record");
     }
 
     #[test]
