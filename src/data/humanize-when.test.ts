@@ -29,10 +29,12 @@ describe("humanizeWhen buckets by the local calendar day", () => {
     const row = at(2026, 11, 3, 9, 8).toISOString();
     expect(humanizeWhen(row, en, "en", now)).toMatch(/^Nov 3 · /);
     expect(humanizeWhen(row, zh, "zh-CN", now)).toContain("11月3日");
-    // The time follows the app's language too, not the OS locale.
-    // (zh-CN's own clock reads "9:08"; an en-US OS locale would have printed "9:08 AM" here.)
-    expect(humanizeWhen(row, zh, "zh-CN", now)).toBe("11月3日 · 9:08");
-    expect(humanizeWhen(row, en, "en", now)).toBe("Nov 3 · 9:08 AM");
+    // The time follows the app's language too, not the OS locale: each is exactly that language's
+    // own clock (built from the same ICU, so a narrow space or a 24 h zh-CN clock can't break it).
+    const clock = (lang: string) => new Date(row).toLocaleTimeString(lang, { hour: "numeric", minute: "2-digit" });
+    expect(humanizeWhen(row, zh, "zh-CN", now)).toBe(`11月3日 · ${clock("zh-CN")}`);
+    expect(humanizeWhen(row, en, "en", now)).toBe(`Nov 3 · ${clock("en")}`);
+    expect(clock("zh-CN")).not.toBe(clock("en"));
   });
 
   it("zh-CN buckets the same way", () => {
@@ -66,7 +68,8 @@ describe("calendarDaysBetween counts local dates, so a DST day is still one day"
   });
 
   it("a real DST week in this time zone still counts whole days", () => {
-    // Whatever zone the suite runs in, noon-to-noon across both 2026 US and EU change dates is 7.
+    // Whatever zone the suite runs in, 00:30 to 23:30 a week later across both 2026 US and EU
+    // change dates is 7 days.
     for (const [m, d] of [[3, 5], [3, 26], [10, 22], [10, 29]] as const) {
       expect(calendarDaysBetween(at(2026, m, d, 0, 30), at(2026, m, d + 7, 23, 30))).toBe(7);
     }
