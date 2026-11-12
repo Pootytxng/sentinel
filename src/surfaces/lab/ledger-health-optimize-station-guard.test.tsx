@@ -56,7 +56,10 @@ const HEALTHY = { complete: true, error: null, quarantined: false };
 const UNREADABLE = { complete: false, error: "failed to read history.json", quarantined: false };
 const QUARANTINED = { complete: false, error: null, quarantined: true };
 
-const VOUCH = "every change, undoable";
+// Reworded by CR-view-1111d-wording (a changed-outside row has no undo, so "every change, undoable"
+// over-promised even on a healthy ledger). Still the healthy-ledger claim this file swaps out.
+const VOUCH = "what Compy changed, and what you can undo";
+const OLD_VOUCH = "every change, undoable";
 const UNVOUCHED = "Compy can't promise every change here can be undone";
 const UNREADABLE_TITLE = "Compy can't read its own record right now";
 const QUARANTINED_TITLE = "Compy can't tell you everything it did";
@@ -195,6 +198,8 @@ describe("a healthy ledger is left exactly as it was", () => {
 
     expect(summary(container).textContent).toContain(VOUCH);
     expect(summary(container).textContent).not.toContain(UNVOUCHED);
+    // A changed-outside row carries no undo, so the old absolute is gone even here.
+    expect(container.textContent).not.toContain(OLD_VOUCH);
     // Collapsed on a healthy ledger is the control for the test above: without it, "open under
     // incomplete" would pass just as well on a disclosure that is always open.
     expect(disclosure(container).open).toBe(false);

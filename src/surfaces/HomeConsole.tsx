@@ -795,7 +795,8 @@ export function HomeConsole({
   const ledState = checking ? "scan" : (readiness?.attention_count ?? 0) > 0 ? "warn" : "ok";
 
   // The masthead dateline — the date this diagnostic is being read (today), never fabricated.
-  const dateline = new Date().toLocaleDateString(undefined, {
+  // In the app's language, not the OS's (CR-view-1111d-wording).
+  const dateline = new Date().toLocaleDateString(i18n.language, {
     month: "short",
     day: "numeric",
     year: "numeric",

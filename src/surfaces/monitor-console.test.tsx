@@ -283,9 +283,10 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     // no more "VS YOUR LAST VALORANT SESSION".
     expect(row.querySelector(".mc-delta-k")!.textContent).toBe("Compared with your last Valorant session");
     expect(row.textContent).not.toMatch(/different game/i);
-    expect(cell(row, "avg")).toEqual(["Avg FPS", "▲7"]);
-    expect(cell(row, "low1")).toEqual(["1% low", "▲4"]);
-    expect(cell(row, "spikes")).toEqual(["Spikes", "±0"]);
+    // CR-view-1111d-wording: every delta carries its unit, as History's "+2 fps vs last" does.
+    expect(cell(row, "avg")).toEqual(["Avg FPS", "▲7 fps"]);
+    expect(cell(row, "low1")).toEqual(["1% low", "▲4 fps"]);
+    expect(cell(row, "spikes")).toEqual(["Spikes", "±0 spikes"]);
     expect(row.querySelector(".mc-delta-tag")!.textContent).toContain("2 Compy changes were on");
     // …and NO cross-game caveat, because the prior IS the same game. A caveat that prints
     // unconditionally teaches the reader to stop reading caveats.

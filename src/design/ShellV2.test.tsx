@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
 import { ShellV2, ROOM_CRUMB } from "./ShellV2";
 import { railFor, HOME_RAIL } from "./homeRail";
 import { readFileSync } from "fs";
@@ -123,6 +123,25 @@ describe("ShellV2 rail", () => {
     render(shell());
     expect(screen.getByText("Outbound: signed update check only")).toBeTruthy();
     expect(screen.getByText("ledger 41")).toBeTruthy();
+  });
+
+  // CR-view-1111d-wording (view-1111d/11-test-zh-CN.png): the outbound line stayed English in zh-CN.
+  it("footer: the outbound-honesty line is in the app's language (zh-CN)", async () => {
+    const { default: i18n } = await import("../i18n");
+    await act(async () => {
+      await i18n.changeLanguage("zh-CN");
+    });
+    try {
+      const { container } = render(shell());
+      const line = container.querySelector(".v2-zero")!.textContent!;
+      expect(line).toBe(i18n.t("common.shellV2.footerOutbound"));
+      expect(line).toContain("签名更新检查");
+      expect(line).not.toContain("Outbound");
+    } finally {
+      await act(async () => {
+        await i18n.changeLanguage("en");
+      });
+    }
   });
 });
 

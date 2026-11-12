@@ -210,7 +210,7 @@
     "driftedRestore_one": "有 {{count}} 项在 Compy 之外被关闭——请在下方恢复。",
     "driftedRestore_other": "有 {{count}} 项在 Compy 之外被关闭——请在下方恢复。",
     "mixedLeft": "下方还有 {{totalLeft}} 项——{{fresh}} 项待开启,{{drifted}} 项在 Compy 之外被关闭。",
-    "appliedHistorySummary": "已应用与历史记录——每项更改均可撤销",
+    "appliedHistorySummary": "已应用与历史记录——Compy 做过的更改,以及哪些可以撤销",
     "appliedHistorySummaryUnvouched": "已应用与历史记录——Compy 无法保证这里的每一项更改都能撤销",
     "moreCleanupSummary": "更多清理项(可选)",
     "powerFeaturesSummary": "进阶功能——游戏模式(进阶,可撤销)",

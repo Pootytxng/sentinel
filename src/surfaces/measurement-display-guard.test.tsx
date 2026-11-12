@@ -141,8 +141,8 @@ describe.each(LOCALES)("Monitor readings state only measured values (%s)", (lang
 
     it("measured control: deltas against the last session are unchanged", () => {
       const { container } = renderConsole([sess(), prior()]);
-      expect(cellV(container, "avg")).toBe("▲40");
-      expect(cellV(container, "low1")).toBe("▲40");
+      expect(cellV(container, "avg")).toBe("▲40 fps");
+      expect(cellV(container, "low1")).toBe("▲40 fps");
     });
 
     it.each(UNKNOWN.map((v) => [String(v), v]))("an unknown side (%s) on either session yields the absent mark, never a delta against it", (_l, v) => {

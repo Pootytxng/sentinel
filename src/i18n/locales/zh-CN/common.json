@@ -25,6 +25,7 @@
     },
     "footerPre": "每一项更改均可撤销 ·",
     "footerEmph": "台账 {{n}}",
+    "footerOutbound": "对外连接：仅签名更新检查",
     "footerIncompletePre": "台账不完整 ·",
     "footerEmphFloor": "至少 {{n}} 项",
     "footerEmphUnknown": "数量未知",

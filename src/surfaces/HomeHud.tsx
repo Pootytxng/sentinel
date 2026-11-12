@@ -160,7 +160,7 @@ export function HomeHud({
   fixRoomLabel = "Lab",
   onOpenLabStation,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
   // Shared Machine Model (#451): the hardware grid's identity rows read its facts, not bare
   // inventory fields. One read-only IPC per hardware refresh — `hw` is App.refresh()'s product, so a
@@ -296,7 +296,8 @@ export function HomeHud({
   const ledState = checking ? "scan" : (readiness?.attention_count ?? 0) > 0 ? "warn" : "ok";
 
   // The masthead dateline — the date this diagnostic is being read (today), never fabricated.
-  const dateline = new Date().toLocaleDateString(undefined, {
+  // In the app's language, not the OS's (CR-view-1111d-wording).
+  const dateline = new Date().toLocaleDateString(i18n.language, {
     month: "short",
     day: "numeric",
     year: "numeric",
