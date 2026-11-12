@@ -90,7 +90,7 @@ release checklist); no new rules.
 - `RELEASE_STATE.md` gates still OPEN, owner territory: code signing (`STATE:code_signing=open`), legal
   (`STATE:legal=open`).
 - Unticked queue items: CR-1102-left (engineering lines), CR-bench-preapply-read, CR-bench-stack-hold,
-  CR-gm-spans-followups, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
+  CR-gm-skipped-line, CR-gm-restore-partial, CR-gm-service-suspend-rows, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
   exit proofs above; P8-first-advanced waits on P4 (Phase 8, not needed for v1.0).
 - CR-ultimate-identity: landed `ec326810` (2026-11-11 s19), not installed yet; follow-ups in CR-ultimate-followups.
 
@@ -248,7 +248,7 @@ release checklist); no new rules.
       Trial's setting alone (one fewer line in its change list); a Trial start, keep or put-back while Gaming Mode holds
       the setting says "Stop Gaming Mode first. Nothing was changed." (English, like the other Trial refusals). Queued:
       CR-gm-spans-followups.
-- [ ] **CR-gm-spans-followups** (r1/r2 reviews of CR-gm-spans-trial; pre-existing or UI) (a) a quarantined
+- [x] **CR-gm-spans-followups** (r1/r2 reviews of CR-gm-spans-trial; pre-existing or UI) (a) a quarantined
       `gaming-session.orphaned*` file alone blocks every Trial start with "Recover or end Gaming Mode first", which the
       user can't do: name the file (`pending_contract_files`) and say how; (b) a visible line in Gaming Mode for a step it
       left alone because a Trial is testing it (en + zh-CN); (c) an Aborted Trial whose restore failed still has its
@@ -261,6 +261,31 @@ release checklist); no new rules.
       clean. Review (sonnet) APPROVE-WITH-NITS, SHOULD-FIX taken (move-don't-delete; dropped the recovery hedge, which
       can't fire for an unreadable file). Left: (b), (c), (d); (e) needs `KnownService::ALL` in actions.rs (mutation-gate
       file).
+      (c)(d)(e) done `4da520ea`, `ba4be8f0` (2026-11-11 s20, not installed): the UI's apply, batch apply and undo (the
+      undo command moved to `experiment::rollback_change`, same name; `history::rollback_change` unchanged and still
+      what the Trial and benchmark restores call) refuse a setting a readable Gaming Mode session holds, through
+      `plain_change_gate`, which takes Gaming Mode's try_lock-only gate only for settings a session step touches and
+      holds it through the write. A session running in this Compy says "Stop Gaming Mode first"; one left from an
+      earlier run or that didn't finish putting its changes back says to finish it in Gaming Mode ("Finish the last
+      Gaming Mode session"), also for a Trial start. A record this Compy can't read doesn't refuse a plain change.
+      (c) needs no code: an Aborted Trial has no automatic restore left, so a session puts back the same applied state;
+      the later undo is (d). (e) `KnownService::ALL`. Reviews r1 opus + sonnet APPROVE-WITH-NITS (SHOULD-FIX taken:
+      gate only touchable settings, disk tests, wording by session state); r2 opus + sonnet APPROVE-WITH-NITS (citation
+      re-anchor taken). Tests fail on the old code (shape test proven failing). cargo 1865/0, clippy clean, tsc 0, full
+      vitest 535/538 (3 site-app suites). What a user sees: during Gaming Mode, a Fix, Optimize apply or Roll back of a
+      setting the session changed says "Stop Gaming Mode first. Nothing was changed." (English, like the Trial
+      refusals). (b) moved to CR-gm-skipped-line.
+- [ ] **CR-gm-skipped-line** ((b) of CR-gm-spans-followups; UI) A visible line in Gaming Mode for a step it left alone
+      because a Trial or the benchmark is testing it (en + zh-CN). Needs the skipped steps recorded on the session
+      (additive `SessionFile` field, `gaming_session.rs`) and shown in GamingMode.tsx; one review.
+- [ ] **CR-gm-restore-partial** (r2 opus SHOULD-FIX of CR-gm-spans-followups; pre-existing) A failed restore keeps the
+      whole contract, including changes it did restore, so one step that always fails (a removed service or plan)
+      leaves every setting of that session refused for Trials and plain apply/undo with no way out. Drop
+      confirmed-restored entries from the kept contract, or give the RestoreFailed refusal a way out. Rollback
+      boundary: two reviews.
+- [ ] **CR-gm-service-suspend-rows** (r1 opus SHOULD-FIX of CR-gm-spans-followups; latent, no UI caller today)
+      `suspend_known_service` records `service-suspend:<Name>` rows with the suspend Gaming Mode uses; the touch check
+      doesn't know that id. Map it into `session_can_touch` and gate the command, or unregister it. Two reviews.
 - [x] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
       the consent modal, focus jumps to Enable (`autoFocus`) and key repeat presses it: either confirm can pass on one
       held key. Ignore repeated key presses on Enable, or focus Cancel first. TS only.

@@ -160,7 +160,7 @@ fleet path has since carried real traffic — the owner reports at least two tes
   attribution (`elevation_outcome` — `actions.rs:1108`); helper runs ONLY hex byte-matching the
   one-time ticket (`mint_elevation_ticket` — `actions.rs:1344`).
 - Gaming-session advanced tier batches to ONE elevation per session start and per restore
-  (`apply_elevated_tier` — `gaming_orchestrator.rs:353`); no-partial abort+restore contract;
+  (`apply_elevated_tier` — `gaming_orchestrator.rs:391`); no-partial abort+restore contract;
   UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:1244`).
 
 ## Release blockers
