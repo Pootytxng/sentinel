@@ -199,9 +199,25 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       moved); on this branch alone the guard is 49/49. s18: guard 49/49, full vitest 532/536 (3 site-app suites + the
       doc-truth wording of this note, fixed here), cargo 1836/0, clippy clean. Known cost: an unreadable
       `experiments.json` refuses plain applies too, saying try again. Queued: CR-bench-holds-setting, CR-gm-spans-trial.
-- [ ] **CR-bench-holds-setting** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) The benchmark tweak trial holds a
+- [x] **CR-bench-holds-setting** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) The benchmark tweak trial holds a
       setting for minutes and rolls it back from its snapshot; a UI apply of that setting meanwhile makes the same
       stale-"applied" row. The new refusal only knows experiment Trials (`benchmark_trial.rs` start_tweak_trial).
+      Done `53c52905`, `9171bd8b` (2026-11-11 s19, CODE-ONLY, not installed): the tweak trial applies through
+      `experiment::apply_for_bench_trial`, which under the Trial store gate marks the setting held (token per run) before
+      the apply; a guard declared before the RollbackGuard releases it after the rollback ran, on every exit. The UI
+      apply, batch, Trial keep and Trial start refuse a held setting before anything runs ("... is being measured by the
+      benchmark right now ... Nothing was changed.", English like the Trial refusal). No new mutation path; rollback
+      untouched. Reviews r1 opus APPROVE-WITH-NITS, sonnet REQUEST-CHANGES (MUST-FIX: Trial start unchecked, taken);
+      r2 opus + sonnet APPROVE-WITH-NITS (prefix nit taken). cargo 1841/0, clippy clean, full vitest 535/538 (3 site-app
+      suites). Queued: CR-bench-preapply-read, CR-bench-stack-hold.
+- [ ] **CR-bench-preapply-read** (r1 opus SHOULD-FIX + r2 follow-up of CR-bench-holds-setting; pre-existing) The benchmark
+      applies without reading the setting first (only the Benchmark tab's mount-time list skips applied ones): over an
+      already-applied setting it snapshots "on", so a Ledger undo of the older row during the measurement is put back on by
+      the trial's rollback, and the "change off" baseline is wrong. Refuse in `apply_for_bench_trial` with
+      `pre_apply_refusal(probe_rec_target(..))` under the gate, as `start_experiment` does; also consider releasing the
+      hold only on a successful rollback. Rollback boundary: two reviews.
+- [ ] **CR-bench-stack-hold** (r1 sonnet SHOULD-FIX of CR-bench-holds-setting) The DARK aggregate-stack trial
+      (`stack_trial_gate()` false) holds nothing; before arming it, hold every setting it applies the way the tweak trial does.
 - [ ] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game
       Bar, the power plan, USB/PCIe and service suspends into its own contract; a session spanning a Trial's restore
       re-applies the Trial's change on stop, after the Trial reads Restored (`gaming_orchestrator.rs` ~409-455; experiment.rs

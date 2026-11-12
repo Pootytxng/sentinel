@@ -69,6 +69,63 @@ fn set<F: FnOnce(&mut TrialState)>(f: F) {
     }
 }
 
+/// CR-bench-holds-setting: the setting the tweak trial holds, `(token, rec_id, rec_title)`, from the moment
+/// its apply is decided (under the Trial store gate, before the apply runs) until its rollback has
+/// finished. While held, another apply of that setting is refused: a second ledger row would snapshot
+/// the trial's applied state and keep reading "applied" after the trial rolls its change back.
+/// Each held entry carries the token of the trial run that set it, so a run's release never clears
+/// a later run's hold.
+type Held = Option<(u64, String, String)>;
+
+fn held() -> &'static Mutex<Held> {
+    static H: OnceLock<Mutex<Held>> = OnceLock::new();
+    H.get_or_init(|| Mutex::new(None))
+}
+
+/// The setting the tweak trial holds right now. A poisoned lock still answers with what it holds.
+pub(crate) fn held_now() -> Option<(String, String)> {
+    held().lock().unwrap_or_else(|p| p.into_inner()).as_ref().map(|(_, id, title)| (id.clone(), title.clone()))
+}
+
+/// Called by `experiment::apply_for_bench_trial` under the store gate, right before the apply.
+pub(crate) fn hold(token: u64, rec_id: &str, rec_title: &str) {
+    *held().lock().unwrap_or_else(|p| p.into_inner()) = Some((token, rec_id.to_string(), rec_title.to_string()));
+}
+
+/// A fresh token for one tweak-trial run.
+fn next_token() -> u64 {
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    N.fetch_add(1, Ordering::Relaxed)
+}
+
+/// Releases this run's hold when dropped. Declared in the trial thread BEFORE the `RollbackGuard`, so
+/// it drops after it: the hold ends only once the rollback has run (or when the apply never happened).
+struct HoldRelease(u64);
+
+impl Drop for HoldRelease {
+    fn drop(&mut self) {
+        let mut h = held().lock().unwrap_or_else(|p| p.into_inner());
+        if h.as_ref().is_some_and(|(token, _, _)| *token == self.0) {
+            *h = None;
+        }
+    }
+}
+
+/// PURE: the refusal for an apply naming the setting the tweak trial holds. `None` lets it go ahead.
+pub(crate) fn bench_held_refusal<'a>(
+    held: Option<&(String, String)>,
+    mut rec_ids: impl Iterator<Item = &'a str>,
+) -> Option<String> {
+    let (id, title) = held?;
+    rec_ids.any(|r| r == id).then(|| {
+        format!(
+            "\u{201c}{title}\u{201d} is being measured by the benchmark right now, so Compy won't apply it \
+             again on top of the measurement. Wait for it to finish and roll back, or cancel it. Nothing \
+             was changed."
+        )
+    })
+}
+
 /// Start a calibration run (no tweak, no mutation). Needs the FPS capture active + a game
 /// presenting. No-op if a trial is already running.
 pub(crate) fn start_calibration() {
@@ -237,9 +294,13 @@ pub(crate) fn start_tweak_trial(rec_id: String, rec_title: String) {
             }
             // 2. Apply. If it fails, nothing was mutated — bail cleanly (no guard armed).
             set(|s| s.status = "Applying the change…".into());
+            // CR-bench-holds-setting: released on every exit, after `_guard` (declared below) rolls back.
+            let token = next_token();
+            let _hold = HoldRelease(token);
             // CR-rp-same-setting-row: through the Trial-aware apply, so a setting a running Trial
             // holds is refused here too (this trial's own rollback would otherwise re-apply it).
-            let view = match crate::experiment::apply_recommendation(rec_id.clone(), rec_title.clone()) {
+            // CR-bench-holds-setting: it also marks the setting held, under the same gate, before the apply.
+            let view = match crate::experiment::apply_for_bench_trial(rec_id.clone(), rec_title.clone(), token) {
                 Ok(v) => v,
                 Err(e) => {
                     set(|s| {
@@ -647,6 +708,52 @@ mod trial_tests {
             max_temp_c: 0.0,
             bg_load_flag: false,
         }
+    }
+
+    #[test]
+    fn an_apply_of_the_setting_the_tweak_trial_holds_is_refused_until_its_rollback_ran() {
+        // CR-bench-holds-setting: a UI apply while the benchmark measures a change would snapshot the
+        // trial's applied state and keep reading "applied" after the trial rolls it back.
+        let held = ("game-mode-on".to_string(), "Turn on Game Mode".to_string());
+        let refused = bench_held_refusal(Some(&held), std::iter::once("game-mode-on")).expect("refused");
+        assert!(refused.contains("Turn on Game Mode") && refused.contains("Nothing was changed"), "{refused}");
+        assert!(bench_held_refusal(Some(&held), ["hags-on", "game-mode-on"].into_iter()).is_some(), "a batch naming it");
+        assert_eq!(bench_held_refusal(Some(&held), ["hags-on"].into_iter()), None, "another setting applies");
+        assert_eq!(bench_held_refusal(None, std::iter::once("game-mode-on")), None, "nothing held");
+
+        // A run's release clears only its own hold, never a later run's.
+        hold(7, "game-mode-on", "Turn on Game Mode");
+        assert_eq!(held_now(), Some(held.clone()));
+        // Review r1: the commands' check reads the live hold (on the old code nothing was held).
+        assert!(crate::experiment::bench_refusal(std::iter::once("game-mode-on")).is_some(), "held: refused");
+        assert_eq!(crate::experiment::bench_refusal(std::iter::once("hags-on")), None);
+        hold(8, "hags-on", "HAGS");
+        drop(HoldRelease(7));
+        assert_eq!(held_now().map(|h| h.0), Some("hags-on".to_string()), "run 7 can't clear run 8's hold");
+        drop(HoldRelease(8));
+        assert_eq!(held_now(), None);
+    }
+
+    #[test]
+    fn the_tweak_trial_holds_the_setting_from_its_apply_until_after_its_rollback() {
+        // The hold is set by the gated apply (before the apply runs) and released by `_hold`, declared
+        // before `_guard` so it drops after the rollback has run, on every exit path.
+        let src = include_str!("benchmark_trial.rs");
+        let body = src.split_once("pub(crate) fn start_tweak_trial(").map(|(_, r)| r).expect("fn");
+        let body = body.split_once("\n}\n").map(|(b, _)| b).expect("body");
+        let hold = body.find("let _hold = HoldRelease(token);").expect("the hold release is armed");
+        let apply = body.find("crate::experiment::apply_for_bench_trial(").expect("held apply");
+        let guard = body.find("let _guard = RollbackGuard").expect("rollback guard");
+        assert!(hold < apply && apply < guard, "hold release, apply, then the rollback guard");
+        // Review r1 NIT: in the same block as the guard, so it can't be released before the rollback.
+        let between = &body[hold..guard];
+        assert_eq!(between.matches('{').count(), between.matches('}').count(), "no block opens between the hold release and the rollback guard");
+        let exp = include_str!("experiment.rs");
+        let f = exp.split_once("pub(crate) fn apply_for_bench_trial(").map(|(_, r)| r).expect("fn");
+        let f = f.split_once("\n}\n").map(|(b, _)| b).expect("body");
+        let (trial, bench) = (f.find("held_by_trial_refusal(").expect("trial"), f.find("bench_refusal(").expect("bench"));
+        let (mark, write) = (f.find("benchmark_trial::hold(").expect("marked"), f.find(concat!("crate::history::", "apply_recommendation(")).expect("apply"));
+        assert!(trial < bench && bench < mark && mark < write, "refusals, mark held, then the apply");
     }
 
     #[test]
