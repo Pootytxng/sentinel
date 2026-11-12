@@ -81,6 +81,36 @@
         "gpu_clear_games": []
       },
       "line": null
+    },
+    {
+      "name": "settings done, the check names a part (games on an HDD)",
+      "headline": "finished-supported-tests",
+      "readiness": {
+        "checks": [{ "id": "install-drive", "status": "attention", "label": "Game install drive", "detail": "HDD", "value": null }]
+      },
+      "sessions": [],
+      "payload": {
+        "upgrade_kinds": ["ssd"],
+        "limiters": [{ "id": "install-drive", "status": "attention", "title": "Game install drive" }],
+        "gpu_limited_games": [],
+        "gpu_clear_games": []
+      },
+      "line": "part-limiter"
+    },
+    {
+      "name": "settings not done, the check names a part: settings first",
+      "headline": "still-worth-testing",
+      "readiness": {
+        "checks": [{ "id": "install-drive", "status": "attention", "label": "Game install drive", "detail": "HDD", "value": null }]
+      },
+      "sessions": [],
+      "payload": {
+        "upgrade_kinds": ["ssd"],
+        "limiters": [{ "id": "install-drive", "status": "attention", "title": "Game install drive" }],
+        "gpu_limited_games": [],
+        "gpu_clear_games": []
+      },
+      "line": null
     }
   ]
 }

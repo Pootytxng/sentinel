@@ -1356,11 +1356,19 @@ mod priority_tests {
         let fx: Value = serde_json::from_str(include_str!("../../src/test/fixtures/p9-exit.json")).expect("fixture parses");
         let now = fx["gpu_now"].as_str();
         let cases = fx["cases"].as_array().expect("cases");
-        assert_eq!(cases.len(), 4, "one case per Exit branch");
+        assert_eq!(cases.len(), 6, "one case per Exit branch");
         for case in cases {
             let name = case["name"].as_str().unwrap_or("?");
-            let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &case["sessions"], now);
+            let checks = case.get("readiness").cloned().unwrap_or_else(|| readiness(vec![]));
+            let p = build_priorities_for(&checks, &json!([]), &json!([]), &case["sessions"], now);
             let wire = serde_json::to_value(&p).unwrap();
+            // Review r1: the check's own limiters ride the same contract (the part branch).
+            let limiters: Vec<Value> = wire["limiters"]
+                .as_array()
+                .map(|ls| ls.iter().map(|l| json!({ "id": l["id"], "status": l["status"], "title": l["title"] })).collect())
+                .unwrap_or_default();
+            let want = case["payload"].get("limiters").cloned().unwrap_or_else(|| json!([]));
+            assert_eq!(Value::Array(limiters), want, "{name}: the check's limiters");
             let kinds: Vec<Value> = wire["upgrade_path"]["items"]
                 .as_array()
                 .map(|items| items.iter().map(|i| i["kind"].clone()).collect())
@@ -1368,7 +1376,8 @@ mod priority_tests {
             assert_eq!(Value::Array(kinds), case["payload"]["upgrade_kinds"], "{name}: upgrade rows");
             assert_eq!(wire["gpu_limited_games"], case["payload"]["gpu_limited_games"], "{name}: GPU-limited");
             assert_eq!(wire["gpu_clear_games"], case["payload"]["gpu_clear_games"], "{name}: measured clear");
-            // Never retail economics in the verdict: the rows' words name no retailer or price.
+            // Retail words never in the verdict's text (a leak check, not proof of the firewall: the
+            // rows' links are attached after the verdict, see P9-retail-firewall).
             for item in wire["upgrade_path"]["items"].as_array().into_iter().flatten() {
                 let said = format!("{} {}", item["title"], item["why"]);
                 for word in ["Amazon", "Newegg", "$", "price", "buy"] {

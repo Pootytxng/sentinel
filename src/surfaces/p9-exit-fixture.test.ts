@@ -15,7 +15,13 @@ type Case = (typeof fx.cases)[number];
 
 const prioritiesOf = (c: Case): Priorities =>
   ({
-    limiters: [],
+    // Review r1: the check's own limiters ride the contract too (priorities.rs pins them per case).
+    limiters: ("limiters" in c.payload ? c.payload.limiters : []).map((l) => ({
+      ...l,
+      reason: "",
+      linked: null,
+      confidence: "medium",
+    })),
     already_fine: [],
     not_worth_touching: [],
     session_hint: null,
@@ -25,6 +31,8 @@ const prioritiesOf = (c: Case): Priorities =>
   }) as unknown as Priorities;
 
 const KEY = "lab.experimentBench.summary.settingsDone";
+// Review r1: this mirrors ExperimentBench.tsx's kind -> key choice (the summary's renderer); the
+// rendered lines themselves are pinned by ExperimentBench.test.tsx's settings-done render tests.
 const words = (c: Case): string | null => {
   const line = settingsDoneLine(c.headline as GameTestSummary["headline"], prioritiesOf(c), fx.game);
   if (!line) return null;
@@ -51,7 +59,7 @@ const words = (c: Case): string | null => {
 
 describe("P9-exit-fixture: each Phase 9 Exit branch, from priorities to the game summary", () => {
   it("covers every branch the Exit names", () => {
-    expect(fx.cases.map((c) => c.line)).toEqual(["gpu-limiter", "nothing-limiting", "nothing-limiting", null]);
+    expect(fx.cases.map((c) => c.line)).toEqual(["gpu-limiter", "nothing-limiting", "nothing-limiting", null, "part-limiter", null]);
   });
 
   it("with no check in hand (none cached, or the read failed), nothing is measured and no upgrade is recommended", () => {
@@ -91,17 +99,27 @@ describe("P9-exit-fixture: each Phase 9 Exit branch, from priorities to the game
           );
         }
         break;
-      default:
-        // Settings not done: no Phase 9 verdict, and with no part limiter in the check, no part named
-        // as what holds the game back either ("try these settings first" names a part only when the
-        // check named one).
+      case "part-limiter":
+        // FINDING (s24): the part the check named, with no system context in the summary's line
+        // (Check's room adds "Before any drive: Compy can't read ..."; the summary does not).
+        expect(text).toBe(
+          "Settings have reached what Compy can test here. The last check's top limiter is a part of this PC: Game install drive.",
+        );
+        break;
+      default: {
+        // Settings not done: no Phase 9 verdict. A part is named only through "try these settings
+        // before any upgrade", and only when the check named one.
         expect(text).toBeNull();
-        expect(
-          softwareFirstLine(
-            { headline: c.headline as GameTestSummary["headline"], leftToTest: [{ id: "visual-effects", title: "Trim Windows visual effects" }], retest: [] } as unknown as Pick<GameTestSummary, "headline" | "leftToTest" | "retest">,
-            prioritiesOf(c),
-          ),
-        ).toBeNull();
+        const first = softwareFirstLine(
+          { headline: c.headline as GameTestSummary["headline"], leftToTest: [{ id: "visual-effects", title: "Trim Windows visual effects" }], retest: [] } as unknown as Pick<GameTestSummary, "headline" | "leftToTest" | "retest">,
+          prioritiesOf(c),
+        );
+        if ("limiters" in c.payload) {
+          expect(first).toEqual({ kind: "software-first", part: "Game install drive", candidates: ["Trim Windows visual effects"] });
+        } else {
+          expect(first).toBeNull();
+        }
+      }
     }
   });
 });

@@ -1711,20 +1711,29 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       summary: settings done + GPU-limited (limiter named with what Compy can't check), settings done + measured clear
       ("no upgrade recommended" with its source), settings not done (no part named). Pure tests; no UI claim (the Check
       half waits on P9-upgrade-block-reachable).
-      Done (s24, tests only; SHAs in the merge): `src/test/fixtures/p9-exit.json` holds four cases on one game and this
-      PC's card (settings done + GPU-limited; done + measured clear; done + a clean check and no measured session;
-      not done with a GPU-limited session on record). priorities.rs `p9_exit_fixture_payloads_match_the_shared_fixture`
-      builds each payload from the sessions and pins it (upgrade rows, gpu_limited_games, gpu_clear_games, no retailer
-      or price in the verdict); `src/surfaces/p9-exit-fixture.test.ts` drives settingsDoneLine and the en words from
+      Done (s24, tests only; SHAs in the merge): `src/test/fixtures/p9-exit.json` holds six cases on one game and this
+      PC's card (settings done + GPU-limited; done + measured clear; done + no check rows and no measured session; not
+      done with a GPU-limited session on record; done + the check names a part (HDD); not done + a part). priorities.rs
+      `p9_exit_fixture_payloads_match_the_shared_fixture` builds each payload from its readiness and sessions and pins
+      it (the check's limiters, upgrade rows, gpu_limited_games, gpu_clear_games; a retail-word leak check on the
+      rows); `src/surfaces/p9-exit-fixture.test.ts` drives settingsDoneLine / softwareFirstLine and the en words from
       the same payload (limiter + "Compy can't check your power supply, case or the rest of the system"; measured clear
       with its counts and "No GPU upgrade is recommended"; no check in hand = "not measured ... no upgrade is
-      recommended"; not done = no line and no part named). Pins: they pass on main too. FINDING: with a clean check and
-      NO measured session the line is the plain "The last check found nothing holding this PC back, so no upgrade is
-      recommended" (the check's readiness rows only; queued P9-no-session-plain-line).
+      recommended"; not done = no Phase 9 line, a part only via "try these settings before any upgrade"). Pins: they
+      pass on main too. Review sonnet r1 APPROVE-WITH-NITS (SHOULD-FIX taken: limiters on the contract, the part
+      branches, a non-vacuous not-done case; the words() mirror of ExperimentBench is commented). FINDINGS: (1) no
+      check rows and NO measured session gives the plain "The last check found nothing holding this PC back, so no
+      upgrade is recommended" (queued P9-no-session-plain-line); (2) a part the check names is said with no system
+      context on the summary: "The last check's top limiter is a part of this PC: Game install drive." (queued
+      P9-part-line-context).
 - [ ] **P9-no-session-plain-line** (P9-exit-fixture finding) The finished summary's plain `nothingLimiting` ("The last
       check found nothing holding this PC back") fires when no session was measured for the game; it reads as a
       measured verdict. Say what it was read from (the check's rows, no session measured for this game) and keep "no
       upgrade recommended". en + zh-CN; settings-done + fixture tests. TS.
+- [ ] **P9-part-line-context** (P9-exit-fixture finding; Exit "never naming a part in isolation") The finished
+      summary's `partLimiter` says "The last check's top limiter is a part of this PC: <title>." with nothing about the
+      system; Check's room adds the fit line ("Before any drive: Compy can't read ..."). Add the same kind's fit line
+      (upgrade-fit.ts) to the summary line; unknown kinds say Compy can't check how a new part fits. en + zh-CN; TS.
 - [x] **P9-summary-screen-limit** The game summary's gpuLimiter line (reachable, unlike Check's block) says when that
       same session averaged at or above the screen's measured refresh that the screen, not the GPU, capped what you
       saw (mirror P9-screen-is-limit's wording and boundaries); unmeasured = today's line. en + zh-CN; tests.
