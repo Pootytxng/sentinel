@@ -757,6 +757,25 @@ mod trial_tests {
     }
 
     #[test]
+    fn the_tweak_trial_reads_the_setting_before_it_applies_and_refuses_one_already_changed() {
+        // CR-bench-preapply-read: as a Trial start (§4.1), only a setting that reads as not yet changed
+        // is applied: over an applied one the trial's snapshot is "on" and its rollback would re-apply
+        // a change the user undid during the measurement.
+        let exp = include_str!("experiment.rs");
+        let f = exp.split_once("pub(crate) fn apply_for_bench_trial(").map(|(_, r)| r).expect("fn");
+        let f = f.split_once("\n}\n").map(|(b, _)| b).expect("body");
+        let gate = f.find("let g = lock_store()?;").expect("the store gate");
+        let read = f.find("pre_apply_refusal(crate::history::probe_rec_target(&rec_id))").expect("the setting is read first");
+        let (mark, write) = (f.find("benchmark_trial::hold(").expect("marked"), f.find(concat!("crate::history::", "apply_recommendation(")).expect("apply"));
+        assert!(gate < read && read < mark && mark < write, "under the gate, read, then mark held and apply");
+        use crate::history::ActiveCheck;
+        assert_eq!(crate::experiment::pre_apply_refusal(ActiveCheck::Off), None, "not yet changed: measured");
+        for check in [ActiveCheck::On, ActiveCheck::Unreadable, ActiveCheck::Unrecognised] {
+            assert!(crate::experiment::pre_apply_refusal(check).is_some(), "{check:?} is refused before anything changes");
+        }
+    }
+
+    #[test]
     fn an_unrecorded_rollback_never_reads_as_failed() {
         // #631: the undo ran on Windows; only the history save failed.
         let e = format!("{} (disk full), so Test → Applied & history may still list this change \
