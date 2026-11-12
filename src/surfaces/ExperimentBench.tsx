@@ -1909,7 +1909,12 @@ function TestSummary({ s }: { s: GameTestSummary }) {
           {settingsDone.kind === "setting-limiter"
             ? t("lab.experimentBench.summary.settingsDone.settingLimiter", { title: settingsDone.title })
             : settingsDone.kind === "part-limiter"
-              ? t("lab.experimentBench.summary.settingsDone.partLimiter", { title: settingsDone.title })
+              ? // P9-part-line-context: the part, then what Compy can't check before replacing it.
+                `${t("lab.experimentBench.summary.settingsDone.partLimiter", { title: settingsDone.title })} ${
+                  settingsDone.fit === "drive"
+                    ? t("lab.experimentBench.summary.settingsDone.partFitDrive")
+                    : t("lab.experimentBench.summary.settingsDone.partFitUnknown")
+                }`
               : settingsDone.kind === "gpu-limiter"
                 ? settingsDone.screenCap
                   ? t("lab.experimentBench.summary.settingsDone.gpuLimiterScreen", {

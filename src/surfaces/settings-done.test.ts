@@ -54,13 +54,20 @@ describe("settingsDoneLine (P9-settings-done)", () => {
     // A real limiter behind them is still named.
     expect(
       settingsDoneLine("finished-supported-tests", pri([aggregate, item("ram-capacity", "attention", "Memory")])),
-    ).toEqual({ kind: "part-limiter", title: "Memory" });
+    ).toEqual({ kind: "part-limiter", title: "Memory", fit: "unknown" });
   });
 
-  it("names a hardware limiter by its title only", () => {
+  it("names a hardware limiter by its title, with what Compy can't check before replacing it", () => {
     expect(settingsDoneLine("finished-supported-tests", pri([item("ready-x", "ready"), item("ram-capacity", "attention", "Memory")]))).toEqual({
       kind: "part-limiter",
       title: "Memory",
+      fit: "unknown",
+    });
+    // P9-part-line-context: the install drive (Games are on an HDD) gets the drive's fit line.
+    expect(settingsDoneLine("finished-supported-tests", pri([item("install-drive", "attention", "Game install drive")]))).toEqual({
+      kind: "part-limiter",
+      title: "Game install drive",
+      fit: "drive",
     });
   });
 
@@ -90,7 +97,7 @@ describe("settingsDoneLine (P9-settings-done)", () => {
     expect(settingsDoneLine("finished-supported-tests", unread, "ROB RUN.exe")).toEqual(limited);
     // A scan's own attention limiter is still the one named first.
     const part = { ...pri([item("ram-capacity", "attention", "Memory")]), gpu_limited_games: withGpu.gpu_limited_games };
-    expect(settingsDoneLine("finished-supported-tests", part, "ROB RUN.exe")).toEqual({ kind: "part-limiter", title: "Memory" });
+    expect(settingsDoneLine("finished-supported-tests", part, "ROB RUN.exe")).toEqual({ kind: "part-limiter", title: "Memory", fit: "unknown" });
     // An older backend sends no list; no game given: as before.
     expect(settingsDoneLine("finished-supported-tests", pri([]), "ROB RUN.exe")).toEqual({ kind: "nothing-limiting" });
     expect(settingsDoneLine("finished-supported-tests", withGpu)).toEqual({ kind: "nothing-limiting" });
@@ -131,7 +138,7 @@ describe("settingsDoneLine (P9-settings-done)", () => {
     const unread = { ...clear, limiters: [item("b", "unknown")] };
     expect(settingsDoneLine("finished-supported-tests", unread, "ROB RUN.exe")).toEqual({ kind: "not-measured" });
     const part = { ...clear, limiters: [item("ram-capacity", "attention", "Memory")] };
-    expect(settingsDoneLine("finished-supported-tests", part, "ROB RUN.exe")).toEqual({ kind: "part-limiter", title: "Memory" });
+    expect(settingsDoneLine("finished-supported-tests", part, "ROB RUN.exe")).toEqual({ kind: "part-limiter", title: "Memory", fit: "unknown" });
     // A zero-reading entry claims nothing.
     const empty = { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 0, readings: 0, threshold_pct: 95, limit_share_pct: 50 }] };
     expect(settingsDoneLine("finished-supported-tests", empty, "ROB RUN.exe")).toEqual({ kind: "nothing-limiting" });

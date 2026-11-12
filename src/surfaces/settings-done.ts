@@ -32,7 +32,9 @@ export type SettingsDoneLine =
   // The top limiter is a setting or software item (monitor refresh, driver age, power plan...).
   | { kind: "setting-limiter"; title: string }
   // The top limiter is a part of the PC. Named only; Compy does not pick a part to buy.
-  | { kind: "part-limiter"; title: string }
+  // P9-part-line-context (Phase 9 Exit: never a part in isolation): `fit` says what Compy can't check
+  // before any replacement: a drive's free slots and bays, or, for any other part, how a new one fits.
+  | { kind: "part-limiter"; title: string; fit: "drive" | "unknown" }
   // P9-summary-gpu-limit: this game's newest measured session was GPU-limited (the sustained rule),
   // so the GPU is the measured limiter for this game, with its share; never "nothing holding it back".
   | {
@@ -71,7 +73,7 @@ export function settingsDoneLine(
   if (top) {
     return LIMITER_AWAY.has(top.id)
       ? { kind: "setting-limiter", title: top.title }
-      : { kind: "part-limiter", title: top.title };
+      : { kind: "part-limiter", title: top.title, fit: top.id === "install-drive" ? "drive" : "unknown" };
   }
   // A measured GPU limit for this game outranks "nothing limiting" and "not measured": it is a
   // measurement of this game, where the check's rows are PC-wide.
