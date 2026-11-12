@@ -1666,6 +1666,14 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
 - [ ] **P9-no-upgrade-named** When Check measured no limiter, the upgrade area says "No upgrade recommended" and the
       sessions it was read from (count and newest game), never an empty block; no sessions = "not measured yet".
       en + zh-CN; tests: measured clean / no sessions.
+- [ ] **P9-retail-firewall** (Phase 9 "affiliate economics firewalled") A test that the upgrade verdict (gpu/ssd row,
+      settings-done line, screen-is-limit) is computed with no retail data in scope: the same priorities payload with
+      and without retail links yields the same rows and wording; establish first where links are joined. Tests only
+      unless a leak is found (then park with the finding).
+- [ ] **P9-exit-fixture** (Phase 9 Exit proof) One fixture per Exit branch, driven through priorities + the game
+      summary: settings done + GPU-limited (limiter named with what Compy can't check), settings done + measured clear
+      ("no upgrade recommended" with its source), settings not done (no part named). Pure tests; no UI claim (the Check
+      half waits on P9-upgrade-block-reachable).
 
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
