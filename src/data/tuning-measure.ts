@@ -31,6 +31,42 @@ export const TUNING_HOT_MIN_SESSIONS = 3;
 // comparison engine's stale-baseline discipline (ARM_MAX_AGE_DAYS = 14 in comparison.rs).
 export const TUNING_HOT_WINDOW_DAYS = 14;
 
+// ── CR-tuning-gpu-other-card: sessions on the card in this PC now (P9-session-on-this-hardware's rule) ──
+// A GPU signal from a session recorded on another graphics card says nothing about the card fitted
+// now, so it is left out. `gpuNow` is this PC's card as App read it (the most-VRAM GPU, `primaryGpu`,
+// the pick session fingerprints stamp): `undefined` = the caller passed no card (no filtering, no
+// line: as before), `null` or a name that identifies no card = Compy can't identify the card now (every
+// session kept, and the line says it can't tie them). A session that recorded no card is kept and
+// counted, so the line can say how many can't be tied.
+
+/** Windows' fallback adapters identify no card (mirrors priorities.rs `identifies_a_card`). */
+function identifiesACard(name: string | null | undefined): name is string {
+  const n = (name ?? "").trim().toLowerCase();
+  return n !== "" && n !== "microsoft basic display adapter" && n !== "microsoft basic render driver";
+}
+
+/** How the sessions behind a GPU signal tie to the card in this PC now; absent = all on this card. */
+export type GpuSignalUntied = { kind: "not-recorded"; count: number } | { kind: "card-unread" };
+
+/** Sessions not recorded on another card than `gpuNow` (order kept). See the block comment above. */
+export function sessionsOnThisCard(sessions: SessionSummary[], gpuNow: string | null | undefined): SessionSummary[] {
+  if (gpuNow === undefined || !identifiesACard(gpuNow)) return sessions;
+  const now = gpuNow.trim().toLowerCase();
+  return sessions.filter((s) => {
+    const then = s.hw_fingerprint?.gpu;
+    return !identifiesACard(then) || then.trim().toLowerCase() === now;
+  });
+}
+
+/** The tie of the sessions a signal was read from; undefined when every one is on this card (or the
+ *  caller passed no card). */
+export function untiedSessions(used: SessionSummary[], gpuNow: string | null | undefined): GpuSignalUntied | undefined {
+  if (gpuNow === undefined) return undefined;
+  if (!identifiesACard(gpuNow)) return used.length > 0 ? { kind: "card-unread" } : undefined;
+  const count = used.filter((s) => !identifiesACard(s.hw_fingerprint?.gpu)).length;
+  return count > 0 ? { kind: "not-recorded", count } : undefined;
+}
+
 /**
  * Sustained-warm signal for the Check nudge: the last `TUNING_HOT_MIN_SESSIONS` sessions that recorded
  * a GPU temp — all started within the last `TUNING_HOT_WINDOW_DAYS` — are ALL at/above the threshold.
@@ -41,20 +77,22 @@ export const TUNING_HOT_WINDOW_DAYS = 14;
 export function gpuRunningHot(
   sessions: SessionSummary[],
   now: number = Date.now(),
-): { peakC: number; sessions: number } | null {
+  gpuNow?: string | null,
+): { peakC: number; sessions: number; untied?: GpuSignalUntied } | null {
   const windowMs = TUNING_HOT_WINDOW_DAYS * 24 * 3600 * 1000;
-  const temps = sessions
+  const used = sessionsOnThisCard(sessions, gpuNow)
     .filter((s) => {
       // P4-show-f1: a session behind another window the whole time is not a monitored play session.
       if (allBackground(s) || typeof s.peak_gpu_temp_c !== "number") return false;
       const started = Date.parse(s.started_at);
       return Number.isFinite(started) && now - started <= windowMs;
     })
-    .slice(0, TUNING_HOT_MIN_SESSIONS)
-    .map((s) => s.peak_gpu_temp_c as number);
+    .slice(0, TUNING_HOT_MIN_SESSIONS);
+  const temps = used.map((s) => s.peak_gpu_temp_c as number);
   if (temps.length < TUNING_HOT_MIN_SESSIONS) return null;
   if (temps.some((t) => t < TUNING_HOT_THRESHOLD_C)) return null; // not sustained
-  return { peakC: Math.max(...temps), sessions: temps.length };
+  const untied = untiedSessions(used, gpuNow);
+  return { peakC: Math.max(...temps), sessions: temps.length, ...(untied ? { untied } : {}) };
 }
 
 // Sustained near-limit usage (spec 2026-06-12 §A): the second admissible headroom-pain signal.
@@ -82,9 +120,10 @@ export function sessionHeldNearLimit(s: SessionSummary): boolean {
 export function gpuSustainedNearLimit(
   sessions: SessionSummary[],
   now: number = Date.now(),
-): { peakPct: number; sessions: number } | null {
+  gpuNow?: string | null,
+): { peakPct: number; sessions: number; untied?: GpuSignalUntied } | null {
   const windowMs = TUNING_HOT_WINDOW_DAYS * 24 * 3600 * 1000;
-  const recent = sessions
+  const recent = sessionsOnThisCard(sessions, gpuNow)
     .filter((s) => {
       if (allBackground(s) || typeof s.peak_gpu_usage_pct !== "number") return false;
       const started = Date.parse(s.started_at);
@@ -93,7 +132,12 @@ export function gpuSustainedNearLimit(
     .slice(0, TUNING_HOT_MIN_SESSIONS);
   if (recent.length < TUNING_HOT_MIN_SESSIONS) return null;
   if (!recent.every(sessionHeldNearLimit)) return null; // not sustained
-  return { peakPct: Math.max(...recent.map((s) => s.peak_gpu_usage_pct as number)), sessions: recent.length };
+  const untied = untiedSessions(recent, gpuNow);
+  return {
+    peakPct: Math.max(...recent.map((s) => s.peak_gpu_usage_pct as number)),
+    sessions: recent.length,
+    ...(untied ? { untied } : {}),
+  };
 }
 
 // ── Evidence gate for tuning/OC-class OFFERS (spec 2026-06-12 §A — the tailoring law) ──────────
@@ -101,26 +145,30 @@ export function gpuSustainedNearLimit(
 // stays free in Learn — this gates only the recommending surfaces (Lab card, offers).
 
 export type TuningEvidence =
-  | { qualifies: true; reason: string }
+  | { qualifies: true; reason: string; /** CR-tuning-gpu-other-card */ untied?: GpuSignalUntied }
   | { qualifies: false; reason: string };
 
-/** Vendor-blind measured-headroom verdict (vendor gating stays in tuningGuideForVendor). */
+/** Vendor-blind measured-headroom verdict (vendor gating stays in tuningGuideForVendor). `gpuNow`:
+ *  this PC's card (see `sessionsOnThisCard`); sessions recorded on another card never qualify it. */
 export function tuningEvidence(
   sessions: SessionSummary[],
   now: number = Date.now(),
+  gpuNow?: string | null,
 ): TuningEvidence {
-  const hot = gpuRunningHot(sessions, now);
+  const hot = gpuRunningHot(sessions, now, gpuNow);
   if (hot) {
     return {
       qualifies: true,
       reason: `your GPU peaked at ${hot.peakC}°C across your last ${hot.sessions} monitored sessions`,
+      ...(hot.untied ? { untied: hot.untied } : {}),
     };
   }
-  const limit = gpuSustainedNearLimit(sessions, now);
+  const limit = gpuSustainedNearLimit(sessions, now, gpuNow);
   if (limit) {
     return {
       qualifies: true,
       reason: `your GPU held ≥${TUNING_USAGE_LIMIT_PCT}% usage for at least half of each of your last ${limit.sessions} monitored sessions`,
+      ...(limit.untied ? { untied: limit.untied } : {}),
     };
   }
   return {

@@ -110,6 +110,8 @@
     "thisIsMyRigNow": "这就是我现在的主机",
     "gpuRunningWarmTitle": "你的 GPU 温度一直偏高",
     "gpuWarmReason": "最近 {{sessions}} 场对局峰值达到 {{peakC}}°C——降压通常能免费换来更低的温度、更安静的风扇,同时不掉帧。",
+    "gpuSignalUntiedNotRecorded_other": "其中 {{count}} 次会话没有记录它用的是哪块显卡，所以 Compy 无法把它们和这台电脑现在的显卡对应起来。",
+    "gpuSignalUntiedCardUnread": "Compy 现在无法识别这台电脑的显卡，所以无法把这些会话和它对应起来。",
     "coolerQuieterGuide": "更凉快、更安静——降压指南 →",
     "driverFreshnessTitle": "驱动新旧程度",
     "advisoryBadge": "仅供参考",

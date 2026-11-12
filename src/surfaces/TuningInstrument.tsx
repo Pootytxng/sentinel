@@ -60,6 +60,14 @@ export function TuningInstrument({
             {t("blackbook.tuningInstrument.qualifiesConnector")}
             {evidence.reason}.
           </p>
+          {/* CR-tuning-gpu-other-card: sessions that can't be tied to the card in this PC now say so. */}
+          {evidence.untied && (
+            <p className="tg-evidence" data-testid="tg-evidence-untied">
+              {evidence.untied.kind === "not-recorded"
+                ? t("blackbook.tuningInstrument.untiedNotRecorded", { count: evidence.untied.count })
+                : t("blackbook.tuningInstrument.untiedCardUnread")}
+            </p>
+          )}
           <TuningGuideBody guide={guide} />
           {walkthrough && (
             // Mounted only when opened (codebase review 2026-11-02): inside a closed <details> it ran its
