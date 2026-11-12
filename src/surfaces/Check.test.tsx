@@ -640,9 +640,19 @@ describe("Check", () => {
     }
   });
 
-  it("P9-gpu-fit-unknowns: no GPU item, no fit line (the HDD item says nothing about a card)", async () => {
+  it("P9-ssd-fit-unknowns: the HDD item names the board and case slots Compy can't read, and nothing about a card", async () => {
     await showUpgrade([{ kind: "ssd", title: "Games are on an HDD", why: "HDD storage.", links: [] }]);
-    expect(screen.getByText("Games are on an HDD")).toBeInTheDocument();
+    const line = screen.getByTestId("check-upgrade-fit");
+    expect(line.textContent).toBe(
+      "Before any drive: Compy can't read which free M.2 slots, SATA ports or drive bays your motherboard and case have. Check those first.",
+    );
+    expect(line.closest(".check-upgrade-item")?.textContent).toContain("Games are on an HDD");
+    expect(screen.queryByText(/Before any card/)).toBeNull();
+  });
+
+  it("P9-gpu-fit-unknowns: an item of another kind gets no fit line", async () => {
+    await showUpgrade([{ kind: "other", title: "Something else", why: "x.", links: [] }]);
+    expect(screen.getByText("Something else")).toBeInTheDocument();
     expect(screen.queryByTestId("check-upgrade-fit")).toBeNull();
   });
 

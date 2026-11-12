@@ -841,7 +841,9 @@ export default function Check({
                       <p className="check-row-reason check-upgrade-fit" data-testid="check-upgrade-fit">
                         {fit.key === "optimize.check.upgradeFitGpuUserPsu"
                           ? t("optimize.check.upgradeFitGpuUserPsu", { name: fit.name })
-                          : t("optimize.check.upgradeFitGpuUnknown")}
+                          : fit.key === "optimize.check.upgradeFitSsd"
+                            ? t("optimize.check.upgradeFitSsd")
+                            : t("optimize.check.upgradeFitGpuUnknown")}
                       </p>
                     );
                   })()}

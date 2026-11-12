@@ -1398,8 +1398,11 @@ isolation"; read-only, no product names, prices or wattages guessed (unknown sta
       malformed stored entry is skipped. Review (sonnet) APPROVE-WITH-NITS (malformed-entry guard taken). Three tests
       fail without the line. Full vitest 535/538 (3 site-app suites), tsc 0. Not visually checked yet (the block shows
       only after a GPU-limited session).
-- [ ] **P9-ssd-fit-unknowns** Under "Games are on an HDD", one line: Compy can't read which free M.2 slots, SATA
+- [x] **P9-ssd-fit-unknowns** Under "Games are on an HDD", one line: Compy can't read which free M.2 slots, SATA
       ports or drive bays the board and case have; check before choosing a drive. en + zh-CN; same test file.
+      Done (2026-11-11 s20, TS only, not installed; SHA in the merge): "Before any drive: Compy can't read which free
+      M.2 slots, SATA ports or drive bays your motherboard and case have. Check those first." Test fails without the
+      line; review and gates in the session log.
 - [ ] **P9-summary-gpu-limit** The finished game summary's Phase 9 line reads that game's newest measured session:
       when it was GPU-limited (the sustained rule of P9-bottleneck-sustained), it names the GPU as the measured
       limiter with its share instead of "nothing holding this PC back"; another game's session never counts. Rust read
