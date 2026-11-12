@@ -77,6 +77,10 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
   code.* Decided by the coordinator (delegated): keep Synez. Code landed `12a791d0` (2026-11-10, not yet installed): the
   refusal now offers a Keep "Synez Power Plan" button beside the undo; tapping it changes nothing on the PC. Then one new
   as-is session before the next Trial.
+- **Upgrade block retail links** (P9-upgrade-block-reachable, 2026-11-12 s23): the Optimize room now shows the measured
+  upgrade lines (GPU limiter / HDD) labeled early, with NO retail search links; the old card had copy-only Amazon-style
+  search links (no affiliate tag). Bring the copy-only search links back to the room, or keep it link-free? *Keep it
+  link-free* (Phase 9: retail economics never shape the answer; the measured lines stand alone).
 - **P8-first-advanced** waits on P4's walkthrough (the gate is Trial + Risk proof), then your sign-off on the
   candidate Claude recommends.
 
@@ -1656,13 +1660,29 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       PARKED 2026-11-12 s22 (finding): no such block exists. `priorities.rs build_upgrade_path` emits only "gpu" (a
       sustained GPU-limited session) and "ssd" (install drive on an HDD); Compy has no CPU-limited measurement, so
       there is nothing to put the line under. Revisit if a measured CPU limiter lands (P9-cpu-gpu-balance first).
-- [ ] **P9-upgrade-block-reachable** (s22 finding, blocks the Check half of the Phase 9 Exit) The upgrade advisory block
+- [x] **P9-upgrade-block-reachable** (s22 finding, blocks the Check half of the Phase 9 Exit) The upgrade advisory block
       in Check.tsx renders only when `!v2Ia`, and the only shipped caller (OptimizeStation's "More cleanup" Check) passes
       `v2Ia`; the comment's "OptimizeV2 renders its labeled-early card below" has no code. So the GPU/SSD rows and the
       P9-gpu-fit-unknowns, P9-ssd-fit-unknowns, P9-limit-source and P9-screen-is-limit lines never reach a user. Give the
       measured Phase 9 lines (limiter, what it was measured from, the screen limit, what Compy can't check) a home in
       the shipped room; whether the retail links come with them is an owner call (Needs owner) and the default is no
       links. TS; one review.
+      FINDING (s23): not hidden on purpose (no owner decision or RELEASE_STATE gate hides it). V2-4b demoted the block:
+      Check suppressed it under v2Ia and OptimizeV2 drew it as a labeled-early card below its action groups. OptimizeV2
+      was deleted with the dead room generations (`1ab831fb`, 2026-08-06) and no room took the card over, so it has
+      reached no user since. Done (s23, not installed; SHAs in the merge): Check's block is one exported
+      `UpgradePathBlock` (classic Check unchanged); Check hands its scan's upgrade path up (`onUpgradePath`) and
+      OptimizeStation renders it below "More cleanup", labeled "Upgrade path (advisory) early - being developed", with
+      no retail links or money disclosure; only when the scan named a hardware limiter, and a re-run without one takes
+      it away. lab/optimize-station-upgrade.test.tsx (GPU row with source and fit line, screen limit, HDD row, re-run,
+      empty, none); the positive tests fail on main. Review sonnet APPROVE-WITH-NITS: SHOULD-FIX "the row title/why are
+      English-only Rust strings now shown in zh-CN" queued (CR-upgrade-rows-zh; pre-existing in classic Check);
+      SHOULD-FIX test gaps taken (HDD, re-run, empty); NIT "optimize-v2-ia.test.tsx:258 still names OptimizeV2" left
+      (a guard; its assertion still holds: Check under v2Ia renders no block, the room does).
+- [ ] **CR-upgrade-rows-zh** (P9-upgrade-block-reachable review) The upgrade rows' title and why come whole from
+      priorities.rs in English and now show in the zh-CN room. Carry the numbers (share, peak) on the row and word both
+      rows in the UI by kind, en + zh-CN; also drop "a GPU upgrade is the hardware lever" (a part named before the fit
+      lines). Rust + TS; one review.
 - [ ] **P9-no-upgrade-named** When Check measured no limiter, the upgrade area says "No upgrade recommended" and the
       sessions it was read from (count and newest game), never an empty block; no sessions = "not measured yet".
       en + zh-CN; tests: measured clean / no sessions.

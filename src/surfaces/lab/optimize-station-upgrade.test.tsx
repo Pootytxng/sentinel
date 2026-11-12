@@ -5,7 +5,7 @@
 // measured from, the screen limit, what Compy can't check) never reached a user. The room renders it
 // again, below its groups, labeled early, with no retail links (owner call; the default is none).
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 
 const scan = vi.hoisted(() => ({ upgrade: null as unknown }));
 
@@ -114,6 +114,35 @@ describe("P9-upgrade-block-reachable: the Optimize room shows the measured upgra
     expect(screen.getByTestId("check-upgrade-screen")).toHaveTextContent("Your 250 Hz screen can't show more than 250 frames a second");
     expect(screen.queryByText("GPU was the measured limiter")).toBeNull();
     expect(screen.queryByTestId("check-upgrade-fit")).toBeNull();
+  });
+
+  it("an HDD install drive renders its row with what Compy can't check before any drive", async () => {
+    scan.upgrade = {
+      items: [{ kind: "ssd", title: "Games are on an HDD", why: "Your game install drive check found HDD storage.", links: GPU_ROW.links, measured_from: null }],
+      disclosure: "x",
+    };
+    mount();
+    const block = await screen.findByTestId("check-upgrade");
+    expect(block).toHaveTextContent("Games are on an HDD");
+    expect(screen.getByTestId("check-upgrade-fit")).toHaveTextContent(/^Before any drive: Compy can't read/);
+    expect(screen.queryByTestId("check-upgrade-source")).toBeNull();
+    expect(block.querySelectorAll("button, a")).toHaveLength(0);
+  });
+
+  it("a re-run that measures no limiter takes the block away (never a stale limiter)", async () => {
+    scan.upgrade = { items: [GPU_ROW], disclosure: "x" };
+    mount();
+    await screen.findByTestId("check-upgrade");
+    scan.upgrade = null;
+    fireEvent.click(screen.getByRole("button", { name: /re-run/i, hidden: true }));
+    await waitFor(() => expect(screen.queryByTestId("check-upgrade")).toBeNull());
+  });
+
+  it("an upgrade path with no rows renders no block in the room", async () => {
+    scan.upgrade = { items: [], disclosure: "x" };
+    mount();
+    await screen.findByText(/All 1 checks/);
+    expect(screen.queryByTestId("check-upgrade")).toBeNull();
   });
 
   it("no hardware limiter measured: no block at all", async () => {
