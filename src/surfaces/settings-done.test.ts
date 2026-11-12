@@ -95,6 +95,25 @@ describe("settingsDoneLine (P9-settings-done)", () => {
     expect(settingsDoneLine("finished-supported-tests", pri([]), "ROB RUN.exe")).toEqual({ kind: "nothing-limiting" });
     expect(settingsDoneLine("finished-supported-tests", withGpu)).toEqual({ kind: "nothing-limiting" });
   });
+
+  // P9-no-upgrade-source: "nothing holding it back" says what it was read from when this game's own
+  // newest measured session was measured clear of a GPU limit; another game's, or none, says no more.
+  it("names this game's measured-clear session behind 'no upgrade recommended', never another game's", () => {
+    const clear = { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 120, readings: 900, threshold_pct: 95 }] };
+    expect(settingsDoneLine("finished-supported-tests", clear, "rob run.exe")).toEqual({
+      kind: "nothing-limiting",
+      gpuClear: { busy: 120, readings: 900, thresholdPct: 95 },
+    });
+    expect(settingsDoneLine("finished-supported-tests", clear, "wardogs.exe")).toEqual({ kind: "nothing-limiting" });
+    // An unread PC-wide row still means "not measured"; an attention limiter still leads.
+    const unread = { ...clear, limiters: [item("b", "unknown")] };
+    expect(settingsDoneLine("finished-supported-tests", unread, "ROB RUN.exe")).toEqual({ kind: "not-measured" });
+    const part = { ...clear, limiters: [item("ram-capacity", "attention", "Memory")] };
+    expect(settingsDoneLine("finished-supported-tests", part, "ROB RUN.exe")).toEqual({ kind: "part-limiter", title: "Memory" });
+    // A zero-reading entry claims nothing.
+    const empty = { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 0, readings: 0, threshold_pct: 95 }] };
+    expect(settingsDoneLine("finished-supported-tests", empty, "ROB RUN.exe")).toEqual({ kind: "nothing-limiting" });
+  });
 });
 
 // P9-software-first: before a part is named as what holds a game back, the summary lists the

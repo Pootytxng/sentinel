@@ -10,7 +10,9 @@ export type SettingsDoneLine =
   // No scan in hand (or the priorities read failed): the limiter is unknown, never guessed.
   | { kind: "not-measured" }
   // A scan ran and nothing in it is marked as holding the PC back (and nothing was left unknown).
-  | { kind: "nothing-limiting" }
+  // P9-no-upgrade-source: `gpuClear` when this game's newest measured session was also measured
+  // clear of a GPU limit (its counts, for the words); absent = that session wasn't measured for it.
+  | { kind: "nothing-limiting"; gpuClear?: { busy: number; readings: number; thresholdPct: number } }
   // The top limiter is a setting or software item (monitor refresh, driver age, power plan...).
   | { kind: "setting-limiter"; title: string }
   // The top limiter is a part of the PC. Named only; Compy does not pick a part to buy.
@@ -54,6 +56,17 @@ export function settingsDoneLine(
   }
   // An unread limiter means the check could not say; "nothing is limiting" would be a claim it never made.
   if (limiters.some((l) => l.status === "unknown")) return { kind: "not-measured" };
+  // P9-no-upgrade-source: say what "nothing holding it back" was read from when this game's own
+  // newest measured session was measured clear of a GPU limit; never another game's session.
+  const clear = key
+    ? (priorities.gpu_clear_games ?? []).find((g) => g.game.trim().toLowerCase() === key)
+    : undefined;
+  if (clear && [clear.busy, clear.readings, clear.threshold_pct].every(Number.isFinite) && clear.readings > 0) {
+    return {
+      kind: "nothing-limiting",
+      gpuClear: { busy: clear.busy, readings: clear.readings, thresholdPct: clear.threshold_pct },
+    };
+  }
   return { kind: "nothing-limiting" };
 }
 

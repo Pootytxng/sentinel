@@ -50,6 +50,20 @@ pub(crate) struct Priorities {
     /// GPU-limited by the same sustained rule as the upgrade path. A game whose newest measured
     /// session wasn't, or recorded no share, is absent (never guessed).
     gpu_limited_games: Vec<GameGpuLimit>,
+    /// P9-no-upgrade-source: per game, its newest measured session, only when that session recorded
+    /// enough GPU readings to decide and was NOT GPU-limited by the same rule. A game in neither list
+    /// was not measured (never read as "not limited").
+    gpu_clear_games: Vec<GameGpuClear>,
+}
+
+/// One game whose newest measured session recorded enough GPU readings and was not GPU-limited.
+#[derive(Serialize, Debug, PartialEq)]
+pub(crate) struct GameGpuClear {
+    game: String,
+    /// Readings at or above `threshold_pct`, of `readings` (sessions.rs `GpuLoad`).
+    busy: u32,
+    readings: u32,
+    threshold_pct: u64,
 }
 
 /// One game whose newest measured session was GPU-limited (the sustained rule).
@@ -195,8 +209,21 @@ fn gpu_load_read(sessions: &Value) -> Option<GpuLoadRead> {
 /// first; a `samples: 0` row is skipped, as in `newest_measured_row`), kept only when sustained.
 /// Another game's session never counts for a game. A row with no game name is skipped.
 fn build_gpu_limited_games(sessions: &Value) -> Vec<GameGpuLimit> {
+    build_gpu_games(sessions).0
+}
+
+/// P9-no-upgrade-source: the games whose newest measured session was measured clear of a GPU limit.
+fn build_gpu_clear_games(sessions: &Value) -> Vec<GameGpuClear> {
+    build_gpu_games(sessions).1
+}
+
+/// One pass over the sessions (newest first): each game decided by its newest measured session,
+/// either GPU-limited (the sustained rule), measured clear (enough sane readings, not sustained),
+/// or neither (no share recorded, too few readings): absent from both, never guessed.
+fn build_gpu_games(sessions: &Value) -> (Vec<GameGpuLimit>, Vec<GameGpuClear>) {
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::new();
+    let mut clear = Vec::new();
     for row in sessions.as_array().map(Vec::as_slice).unwrap_or_default() {
         if row.get("samples").and_then(Value::as_u64) == Some(0) {
             continue;
@@ -216,10 +243,17 @@ fn build_gpu_limited_games(sessions: &Value) -> Vec<GameGpuLimit> {
                     peak_pct: read.peak_pct,
                     threshold_pct: GPU_LIMITED_PCT,
                 });
+            } else if let Some(l) = read.load.filter(|l| l.readings >= GPU_SUSTAINED_MIN_READINGS && l.busy <= l.readings) {
+                clear.push(GameGpuClear {
+                    game: game.to_string(),
+                    busy: l.busy,
+                    readings: l.readings,
+                    threshold_pct: GPU_LIMITED_PCT,
+                });
             }
         }
     }
-    out
+    (out, clear)
 }
 
 fn gpu_load_read_row(s: &Value) -> Option<GpuLoadRead> {
@@ -548,6 +582,7 @@ pub(crate) fn build_priorities(
         session_hint: build_session_hint(sessions),
         upgrade_path: build_upgrade_path(readiness, sessions),
         gpu_limited_games: build_gpu_limited_games(sessions),
+        gpu_clear_games: build_gpu_clear_games(sessions),
     }
 }
 
@@ -1060,5 +1095,15 @@ mod priority_tests {
         assert!(build_gpu_limited_games(&json!([{ "process_name": "d.exe", "peak_gpu_usage_pct": 99 }])).is_empty());
         let p = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &sessions);
         assert_eq!(p.gpu_limited_games.len(), 2, "carried on the priorities payload");
+        // P9-no-upgrade-source: B's newest (10 of 100 busy) is measured clear; C's samples-0 row and
+        // the unnamed row are skipped; A and C are limited. Too few readings or no share: neither list.
+        assert_eq!(
+            build_gpu_clear_games(&sessions),
+            vec![GameGpuClear { game: "b.exe".into(), busy: 10, readings: 100, threshold_pct: 95 }]
+        );
+        assert!(build_gpu_clear_games(&brief).is_empty(), "under the reading floor decides nothing");
+        assert!(build_gpu_clear_games(&json!([{ "process_name": "d.exe", "peak_gpu_usage_pct": 99 }])).is_empty());
+        assert_eq!(build_gpu_clear_games(&edge).len(), 1, "99 of 200 is measured, and not limited");
+        assert_eq!(p.gpu_clear_games.len(), 1, "carried on the priorities payload");
     }
 }
