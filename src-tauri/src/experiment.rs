@@ -5416,6 +5416,8 @@ mod experiment_tests {
             ("pub(crate) fn apply_recommendation(", concat!("crate::history::", "apply_recommendation(rec_id"), 2),
             ("pub(crate) fn apply_recommendations_batch(", concat!("crate::history::", "apply_recommendations_batch(items)"), 2),
             ("pub(crate) fn rollback_change(", concat!("crate::history::", "rollback_change(change_id)"), 1),
+            // CR-core-parking-held-with-plan review r3 (opus NIT): the leftover restore, the same standard.
+            ("pub(crate) fn restore_leftover(", concat!("crate::history::", "restore_leftover(&detector_id"), 1),
         ] {
             let body = src.split_once(sig).and_then(|(_, r)| r.split_once("\n}\n")).map(|(b, _)| b).expect(sig);
             // Every path to the ledger write (Trials on and off) takes the gate, then checks, then writes.

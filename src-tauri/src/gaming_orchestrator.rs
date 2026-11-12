@@ -164,7 +164,7 @@ const REC_GAME_MODE: &str = "game-mode";
 const REC_GAME_BAR: &str = "game-bar-disable";
 const REC_USB: &str = "usb-selective-suspend-off";
 const REC_PCIE: &str = "pcie-aspm-off";
-/// The core-parking leftover restore (`history::restore_leftover`), which writes the ACTIVE plan's
+/// The core-parking leftover restore (`experiment::restore_leftover`, gated, then history's), which writes the ACTIVE plan's
 /// CPMINCORES (SCHEME_CURRENT). No session step changes it; it is held with the plan.
 const REC_CORE_PARKING: &str = "core-parking-forced";
 
