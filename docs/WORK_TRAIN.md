@@ -89,7 +89,7 @@ release checklist); no new rules.
   **P7-exit-proof** (friend-dependent half deferred the same way).
 - `RELEASE_STATE.md` gates still OPEN, owner territory: code signing (`STATE:code_signing=open`), legal
   (`STATE:legal=open`).
-- Unticked queue items: CR-1102-left (engineering lines), CR-tip-see-through-2, CR-bench-stack-hold,
+- Unticked queue items: CR-1102-left (engineering lines), CR-bench-stack-hold,
   CR-gm-skipped-line, CR-gm-restore-partial, CR-gm-service-suspend-rows, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
   exit proofs above; P8-first-advanced waits on P4 (Phase 8, not needed for v1.0).
 - CR-ultimate-identity: landed `ec326810` (2026-11-11 s19), not installed yet; follow-ups in CR-ultimate-followups.
@@ -238,12 +238,19 @@ release checklist); no new rules.
       APPROVE-WITH-NITS (taken: the test pins the `return Err`, a comment on the read's place; not taken: bench-specific
       status wording, a read-only check before the ~12 s baseline, a probe-coverage test for `APPLIABLE_REC_IDS`).
       Test fails on the old code. cargo 1866/0, clippy clean, tsc 0, full vitest 535/538 (3 site-app suites).
-- [ ] **CR-tip-see-through-2** (self-review FAIL, installed `a15986b8`, 2026-11-11 s20;
+- [x] **CR-tip-see-through-2** (self-review FAIL, installed `a15986b8`, 2026-11-11 s20;
       `_train\view-1111c\03-live-combined-tip-hover.png`) The Live room's "14 Compy changes were on · combined effect" tip
       still shows the readings under it through its text although `.kl-tip` computes `rgba(14, 20, 27, 0.96)`. Likely
       cause: its ancestor `.mc-delta-tag` has `opacity: .85` (monitor-console.css:80), which fades the whole subtree,
       tip included, and makes a stacking context the later sensor strip can paint over. Fix the tag's dimming without
       opacity (text colour only), pin it in term-style-guard.test.ts, and re-capture with the tip open. TS/CSS; one review.
+      Done `8c2566af` + r1 nits (2026-11-11 s20, CSS only, not installed): `.mc-delta-tag` dims its text with
+      `color-mix(... 85%, transparent)` and sets no opacity; term-style-guard pins that the tag (the Term's only
+      wrapper) sets no opacity, filter, transform, isolation or will-change, and fails on the old sheet. Review (sonnet)
+      APPROVE-WITH-NITS (anchoring and wider property list taken). Full vitest 535/538 (3 site-app suites), tsc 0.
+      NOT visually proven: the self-review PASS on the installed build (tip open, readings hidden) is still owed at the
+      next install, with the rest of view-1111c (Optimize → Check session-hint shot, Test in zh-CN, panel heights at
+      1280×720 and 1920×1080).
 - [ ] **CR-bench-stack-hold** (r1 sonnet SHOULD-FIX of CR-bench-holds-setting) The DARK aggregate-stack trial
       (`stack_trial_gate()` false) holds nothing; before arming it, hold every setting it applies the way the tweak trial does.
 - [x] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game
