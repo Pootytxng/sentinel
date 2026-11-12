@@ -719,7 +719,17 @@ const LOCK_CENSUS = {
       "waits. Under it, a Gaming Mode start reads experiments.json without the store gate (an " +
       "atomic-rename file read, no lock) and briefly takes benchmark_trial::H, a leaf that is " +
       "never held across another lock, so neither adds a cycle edge. The try_lock property is what this " +
-      "verdict rests on, so it is asserted below rather than left as prose.",
+      "verdict rests on, so it is asserted below rather than left as prose. CR-gm-stop-busy: stop and " +
+      "recover no longer take it (a change waiting on its Windows prompt held it); they take RESTORE_OP.",
+  },
+  "gaming_orchestrator::RESTORE_OP: Mutex<()>": {
+    class: "out",
+    why:
+      "CR-gm-stop-busy: serializes Gaming Mode's start, stop and recover over the contract and receipts " +
+      "files, so a plain change holding SESSION_OP through its Windows prompt no longer refuses a stop. " +
+      "Taken ONLY through try_lock (restore_op_guard): contention answers 'try again', a poisoned lock is " +
+      "taken over, it never waits, so it can be neither a deadlock nor a cycle edge. Start takes it after " +
+      "SESSION_OP, stop and recover take it alone; asserted try_lock-only below.",
   },
   "gaming_orchestrator::LIVE_SESSION: Mutex<Option<String>>": {
     class: "out",
@@ -912,6 +922,18 @@ describe("#398 completeness: no process-wide lock can be left out of the lock mo
     expect(
       calls,
       "SESSION_OP gained a blocking acquisition; re-derive its classification in LOCK_CENSUS",
+    ).toEqual([]);
+  });
+
+  it("RESTORE_OP is try_lock-only too (CR-gm-stop-busy), the basis of its out-of-class verdict", () => {
+    const src = code("gaming_orchestrator");
+    expect(src).toContain("RESTORE_OP.try_lock()");
+    const calls = [...src.matchAll(/RESTORE_OP\s*\.\s*([a-z_]+)\s*\(/g)]
+      .map((m) => m[1])
+      .filter((f) => f !== "try_lock");
+    expect(
+      calls,
+      "RESTORE_OP gained a blocking acquisition; re-derive its classification in LOCK_CENSUS",
     ).toEqual([]);
   });
 });

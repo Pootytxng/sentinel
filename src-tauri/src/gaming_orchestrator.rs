@@ -39,14 +39,40 @@ static SESSION_OP: Mutex<()> = Mutex::new(());
 
 /// Also taken (still only by `try_lock`) by a Trial start and the benchmark's apply across their
 /// check of the session contract and their record/apply (CR-gm-spans-trial review r1), so a session
-/// can't start between that check and the Trial's record, and neither starts while a session starts
-/// or stops. Contention answers "try again"; nothing ever waits on it.
+/// can't start between that check and the Trial's record, and neither starts while a session starts.
+/// Contention answers "try again"; nothing ever waits on it.
+///
+/// CR-gm-stop-busy: stop and recover do NOT take it. A plain change, a Trial start or the
+/// benchmark's apply holds it through its Windows permission prompt (minutes, if the user leaves the
+/// prompt open), and a stop refused for that whole time with "still finishing" was false. They take
+/// [`RESTORE_OP`] instead, which start also takes, so start, stop and recover still never interleave
+/// over the contract and receipts files. Every holder of this gate checked its setting against the
+/// session contract on disk first and was refused if a session step holds it, so a stop or recovery
+/// running beside one restores only settings that holder doesn't touch.
 pub(crate) fn session_op_guard() -> Result<std::sync::MutexGuard<'static, ()>, String> {
     match SESSION_OP.try_lock() {
         Ok(g) => Ok(g),
         Err(std::sync::TryLockError::Poisoned(p)) => Ok(p.into_inner()),
         Err(std::sync::TryLockError::WouldBlock) => Err(
-            "another Gaming Mode operation is still finishing — give it a second and try again"
+            "Compy is still finishing another change or a Gaming Mode start (if a Windows permission \
+             prompt is open, answer or cancel it) — give it a second and try again"
+                .to_string(),
+        ),
+    }
+}
+
+/// CR-gm-stop-busy: serializes the three session operations that write the contract and receipts
+/// files, start, stop and recover, without [`SESSION_OP`], which plain changes also hold. Taken only
+/// by `try_lock` (never waits; a poisoned lock is taken over, as above: refusing would strand the
+/// user's only restore path). Start takes it after `SESSION_OP`; stop and recover take only this.
+static RESTORE_OP: Mutex<()> = Mutex::new(());
+
+fn restore_op_guard() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+    match RESTORE_OP.try_lock() {
+        Ok(g) => Ok(g),
+        Err(std::sync::TryLockError::Poisoned(p)) => Ok(p.into_inner()),
+        Err(std::sync::TryLockError::WouldBlock) => Err(
+            "Gaming Mode is still finishing a start, stop or recovery — give it a second and try again"
                 .to_string(),
         ),
     }
@@ -546,6 +572,7 @@ fn apply_elevated_tier(file: &mut SessionFile, items: Vec<ElevatedItem>) -> Resu
 /// undo what landed, and return the error.
 pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
     let _op = session_op_guard()?; // held across the whole start (incl. its abort-restore)
+    let _restore = restore_op_guard()?; // CR-gm-stop-busy: and the stop/recover gate, same span
     // #130 on the start side (codebase review 2026-11-02): only the restore asked for a proven
     // canonical data root, so under a redirected, split or unknown root a start wrote its contract
     // where a normal launch can't see it and changed Windows, and its own undo then failed on the
@@ -958,14 +985,15 @@ pub(crate) fn recover(confirm: bool) -> Result<(), String> {
     if !confirm {
         return Ok(());
     }
-    let _op = session_op_guard()?;
+    // CR-gm-stop-busy: not SESSION_OP, which a change waiting on its Windows prompt holds.
+    let _op = restore_op_guard()?;
     let mut file = load_session().ok_or("no session to recover")?;
     restore(&mut file)
 }
 
 /// Normal end of a live session.
 pub(crate) fn stop() -> Result<(), String> {
-    let _op = session_op_guard()?;
+    let _op = restore_op_guard()?; // CR-gm-stop-busy, as in recover
     let mut file = load_session().ok_or("no active Gaming Mode session")?;
     restore(&mut file)
 }
@@ -1803,12 +1831,37 @@ mod elevation_batch_tests {
     // same thread returns WouldBlock — safe to pin without threads.)
     #[test]
     fn concurrent_session_command_is_refused_loudly() {
-        let _held = SESSION_OP.try_lock().expect("test acquires the op lock");
+        // CR-gm-stop-busy: start, stop and recover serialize on RESTORE_OP (start takes it after
+        // SESSION_OP, so a start can't run beside a stop either).
+        let held = RESTORE_OP.try_lock().expect("test acquires the restore lock");
         let err = stop().expect_err("a concurrent session command must be refused");
         assert!(err.contains("still finishing"), "got: {err}");
         let err = recover(true).expect_err("recover must be serialized too");
         assert!(err.contains("still finishing"), "got: {err}");
         assert!(recover(false).is_ok(), "declining recovery takes no lock — always safe");
+        let err = start(StartOptions::default()).expect_err("a start beside a stop is refused");
+        assert!(err.contains("still finishing"), "got: {err}");
+        drop(held);
+
+        // CR-gm-stop-busy, in the same test so the two statics are never contended between tests:
+        // a plain change, a Trial start or the benchmark's apply holds SESSION_OP through its
+        // Windows prompt; Stop Gaming Mode and Recover must not be refused for that. With SESSION_OP
+        // held, stop and recover get past the gate and answer from the (empty) session dir.
+        let dir = temp_session_dir("stop-busy");
+        let _redirect = SessionDirOverride::begin(&dir);
+        let held = SESSION_OP.try_lock().expect("test acquires the session gate, as a waiting change does");
+        let err = stop().expect_err("no session in the temp dir");
+        assert!(!err.contains("still finishing"), "stop was refused by a change's gate: {err}");
+        assert!(err.contains("no active Gaming Mode session"), "got: {err}");
+        let err = recover(true).expect_err("no session in the temp dir");
+        assert!(!err.contains("still finishing"), "recover was refused by a change's gate: {err}");
+        assert!(err.contains("no session to recover"), "got: {err}");
+        // A Gaming Mode start is still kept out while a change holds the gate (the start race), and
+        // its refusal says what may be holding it.
+        let err = start(StartOptions::default()).expect_err("a start beside a change is refused");
+        assert!(err.contains("Windows permission prompt"), "got: {err}");
+        drop(held);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 

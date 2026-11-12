@@ -2968,7 +2968,8 @@ pub(crate) fn apply_outcome_choice(
         return Err(refusal);
     }
     // CR-gm-spans-trial (review r1): nor while a Gaming Mode session holds it (its stop would put its
-    // own snapshot back over the kept change), or is starting or stopping.
+    // own snapshot back over the kept change), or is starting (CR-gm-stop-busy: a stop may run
+    // beside it, over settings its contract holds, which this refuses).
     let _gm = crate::gaming_orchestrator::session_op_guard()?;
     if let Some(refusal) = crate::gaming_orchestrator::session_holds_refusal(&rec_id) {
         return Err(refusal);
@@ -2991,7 +2992,7 @@ pub(crate) fn undo_outcome_choice(change_id: String, experiment_id: String) -> R
     let _g = lock_store()?;
     let records = load_store().experiments;
     // CR-gm-spans-trial (review r1): an undo while a Gaming Mode session holds this Trial's setting
-    // would be put back by the session's stop; refused, as is one while a session starts or stops.
+    // would be put back by the session's stop; refused, as is one while a session starts.
     let _gm = crate::gaming_orchestrator::session_op_guard()?;
     if let Some(rec) = records.iter().find(|e| e.id == experiment_id) {
         if let Some(refusal) = crate::gaming_orchestrator::session_holds_refusal(&rec.rec_id) {
@@ -3467,7 +3468,9 @@ pub(crate) fn start_experiment(
     // CR-gm-spans-trial: a Gaming Mode session holding this setting would put its own snapshot back
     // when it stops, over the Trial's change or its restore. Review r1 (sonnet MUST-FIX): Gaming
     // Mode's own operation gate (try_lock only) is held from this check through the record and the
-    // apply, so a session can't start in between, and none is starting or stopping now.
+    // apply, so a session can't start in between, and none is starting now. (CR-gm-stop-busy: a stop
+    // or recovery may run beside it; it restores only steps its contract holds, and a contract on
+    // disk that holds this setting refused just below, so the two touch different settings.)
     let _gm = crate::gaming_orchestrator::session_op_guard().map_err(|why| format!("experiment not started — {why}"))?;
     if let Some(why) = crate::gaming_orchestrator::session_holds_refusal(&rec_id) {
         return Err(format!("experiment not started — {why}"));
