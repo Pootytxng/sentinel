@@ -431,6 +431,19 @@ describe("ShellV2 footer states only what the ledger it read can undo", () => {
     expect(undoLine(container)).toBe("1 not checked · ledger 4");
   });
 
+  // CR-footer-ledger-unknown: a rejected ledger read says so (App retries it).
+  it("a rejected ledger read says so (App retries it), never 'not read yet' forever", () => {
+    const { container } = render(shell({ ledger: null, ledgerReadFailed: true }));
+    expect(undoLine(container)).toBe("Couldn't read the ledger · trying again");
+    expect(foot(container)).not.toMatch(/ledger \d|can be undone|Nothing in effect/);
+  });
+
+  it("a rejected RE-read withdraws the rows read before it (review r1)", () => {
+    const { container } = render(shell({ ledger: ledgerOf(41, { 1: ON }), ledgerReadFailed: true }));
+    expect(undoLine(container)).toBe("Couldn't read the ledger · trying again");
+    expect(foot(container)).not.toMatch(/ledger \d|can be undone|Nothing in effect/);
+  });
+
   it("rows not read yet print no count and no claim", () => {
     const { container } = render(shell({ ledger: null }));
     expect(undoLine(container)).toBe("Ledger not read yet");
@@ -450,6 +463,8 @@ describe("ShellV2 footer states only what the ledger it read can undo", () => {
       expect(foot(container)).not.toContain("每一项更改均可撤销");
       cleanup();
       expect(undoLine(render(shell({ ledger: null })).container)).toBe("台账尚未读取");
+      cleanup();
+      expect(undoLine(render(shell({ ledger: null, ledgerReadFailed: true })).container)).toBe("无法读取台账 · 正在重试");
     } finally {
       await act(async () => {
         await i18n.changeLanguage("en");

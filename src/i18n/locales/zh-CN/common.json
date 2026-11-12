@@ -29,6 +29,7 @@
     "footerOffOutside_other": "{{count}} 项已在 Compy 之外更改，无法撤销",
     "footerUnchecked_other": "{{count}} 项未检查",
     "footerNotRead": "台账尚未读取",
+    "footerReadFailed": "无法读取台账 · 正在重试",
     "footerEmph": "台账 {{n}}",
     "footerOutbound": "对外连接：仅签名更新检查",
     "footerIncompletePre": "台账不完整 ·",

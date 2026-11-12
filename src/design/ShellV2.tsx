@@ -95,6 +95,7 @@ export function ShellV2({
   activeId,
   onNavigate,
   ledger,
+  ledgerReadFailed = false,
   rig,
   onOpenStation,
   tuningStation,
@@ -110,6 +111,8 @@ export function ShellV2({
   /** The Trust Ledger rows App last read (its `changes`); null until they have been read.
    *  The footer counts what can be undone from these (`undoTally`, the Applied cards' groups). */
   ledger: readonly AppliedChange[] | null;
+  /** CR-footer-ledger-unknown: App's newest read of those rows was rejected (it is retrying). */
+  ledgerReadFailed?: boolean;
   /** Glass redesign: a count shown on a dock door (Problems: an incident waiting to be looked at).
    *  Only real counts are passed; absent or 0 draws nothing. */
   badges?: Partial<Record<HomeRailId, number>>;
@@ -458,7 +461,7 @@ export function ShellV2({
                 bigger lie of the two. The incomplete branch therefore replaces the WHOLE line
                 rather than swapping the number out from under a prefix that stopped being true.
                 Known-incomplete ONLY — UNKNOWN health leaves this byte-identical to today. */}
-            {ledgerUnvouched ? (
+            {ledgerUnvouched && !ledgerReadFailed ? (
               <div className="v2-ledger-state">
                 <span className="v2-ledger-led" aria-hidden="true" />
                 {t("common.shellV2.footerIncompletePre")}{" "}
@@ -468,9 +471,13 @@ export function ShellV2({
                     : t("common.shellV2.footerEmphUnknown")}
                 </span>
               </div>
-            ) : tally === null ? (
-              // Rows not read yet (or the read failed): no count and no claim about undo.
-              <div className="v2-undo-state">{t("common.shellV2.footerNotRead")}</div>
+            ) : tally === null || ledgerReadFailed ? (
+              // Rows not read yet, or the newest read was rejected (App retries it): no count and no
+              // claim. Review r1: a rejected RE-read (after an apply) leaves the old rows in hand;
+              // they no longer vouch for the record, so they print nothing either.
+              <div className="v2-undo-state">
+                {ledgerReadFailed ? t("common.shellV2.footerReadFailed") : t("common.shellV2.footerNotRead")}
+              </div>
             ) : (
               // CR-footer-reversible: "Every change reversible" was printed on every screen while
               // rows had no undo. Now: how many changes the Applied cards can undo, then each kind

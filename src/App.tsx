@@ -39,6 +39,7 @@ import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
 import { keptOutsideUndoBody } from "./data/kept-outside-undo";
 import { hasUndo } from "./data/live-changes";
+import { settleLedgerRead, useLedgerReadRetry } from "./data/applied-changes-retry";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { primaryGpu, sessionPeakVendor } from "./data/gpu-sensor";
@@ -555,6 +556,23 @@ function App() {
   // CR-footer-reversible: false until get_applied_changes has answered once, so the footer never
   // reads the initial empty array as a ledger with nothing to undo.
   const [changesRead, setChangesRead] = useState(false);
+  // CR-footer-ledger-unknown: the newest read was rejected. App's banner already says so; the
+  // footer says it couldn't read the ledger, and the read is retried until one lands.
+  const [changesReadFailed, setChangesReadFailed] = useState(false);
+  // Review r2: a refresh that begins while a retry is reading makes that retry's rows stale.
+  const refreshSeq = useRef(0);
+  useLedgerReadRetry(
+    changesReadFailed,
+    () => {
+      const seq = refreshSeq.current;
+      return invoke<AppliedChange[]>("get_applied_changes").then((c) => (seq === refreshSeq.current ? c : null));
+    },
+    (c) => {
+      setChanges(c);
+      setChangesRead(true);
+      setChangesReadFailed(false);
+    },
+  );
   // Shared Machine Model (#452): the Lab verdict's "N safe changes are active" count is the model's
   // `active_now`, never a filter over the bare ledger list. `changes` is refresh()'s product, so a
   // new list re-reads the model alongside it (cached across surfaces, shared while in flight).
@@ -842,6 +860,7 @@ function App() {
     // Latest wins (CR-1102-left): a refresh follows every apply and rollback, so two can overlap; an
     // older one's slow read must not land over the newer one's answer, nor its error re-raise a toast.
     const current = refreshGenerations.current.begin();
+    refreshSeq.current += 1;
     setError(null);
     // A refresh follows app start and every apply/rollback — drop the per-surface probe cache so
     // Advanced/Optimize re-read fresh after any change (between mutations the cache serves instantly).
@@ -905,10 +924,18 @@ function App() {
         // channel) so its frametime graph can anchor a fixed scale + frame-budget line. Zero IPC.
         persistDisplayRefreshHz(info.display?.current_refresh_rate_hz);
       }),
-      run<AppliedChange[]>("get_applied_changes", (c) => {
-        setChanges(c);
-        setChangesRead(true);
-      }),
+      // CR-footer-ledger-unknown: `run` already surfaced a rejection; a rejected read (not a
+      // superseded one) also starts the retry (settleLedgerRead).
+      settleLedgerRead(
+        (set) => run<AppliedChange[]>("get_applied_changes", set),
+        current,
+        (c) => {
+          setChanges(c);
+          setChangesRead(true);
+          setChangesReadFailed(false);
+        },
+        () => setChangesReadFailed(true),
+      ),
       run<string>("get_rules_source", setRulesSource),
       run<DiagnosticSection[]>("get_diagnostics", setDiagnostics),
       recsP,
@@ -1587,6 +1614,7 @@ function App() {
           activeId={activeHomeId}
           onNavigate={navHome}
           ledger={changesRead ? changes : null}
+          ledgerReadFailed={changesReadFailed}
           badges={{ problems: pendingCare ? 1 : 0 }}
           rig={hw ? [hw.cpu_brand, primaryGpu(hw.gpus)?.name].filter(Boolean).join(" · ") : null}
           // Command-palette destinations. Each is the SAME single writer the rest of the app routes

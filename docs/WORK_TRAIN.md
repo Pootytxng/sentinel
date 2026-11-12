@@ -83,6 +83,13 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
   link-free* (Phase 9: retail economics never shape the answer; the measured lines stand alone).
 - **P8-first-advanced** waits on P4's walkthrough (the gate is Trial + Risk proof), then your sign-off on the
   candidate Claude recommends.
+- **Empty ledger while its health is unknown** (CR-footer-ledger-unknown, s24): Compy reads an unreadable change
+  ledger as an empty list, so with the health check still running or failed the rail footer can say "Nothing in
+  effect to undo · ledger 0". A standing guard (`ledger-health-home-guard.test.tsx`) requires unknown health to look
+  exactly like a healthy ledger, so the footer can't say "not confirmed" there without changing that rule. Keep the
+  rule as is, or allow "No changes listed · ledger not confirmed complete" for an EMPTY list only while health is
+  unknown? *Keep the rule* (the health check is a fast local file read; an unreadable ledger is already named
+  wherever it is known).
 
 ### Left for v1.0 (derived 2026-11-11)
 Pointers only, from `product/ROADMAP.md` "What v1.0 means" (Phases 0-7 exited on the installed build + the A4
@@ -1861,11 +1868,23 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       with `hardware.gpus.first()` (not the most-VRAM pick) and never checks that session ran on that card. Use
       `priorities::primary_gpu_of` and the session's own `hw_fingerprint.gpu`; another card's session is not named
       as this card's. Rust; one review.
-- [ ] **CR-footer-ledger-unknown** (NITs, ShellV2.tsx ~471, 52cd64de) `get_applied_changes` turns an unreadable
+- [x] **CR-footer-ledger-unknown** (NITs, ShellV2.tsx ~471, 52cd64de) `get_applied_changes` turns an unreadable
       ledger into [] so the footer can say "Nothing in effect to undo · ledger 0" while the health probe failed or is
       in flight; a rejected call can leave "Ledger not read yet" forever. Unknown reads unknown; a rejected call
       surfaces and retries. USB/PCIe undo refused during a session though rollback targets the saved plan GUID:
       leave unless trivially safe (two reviews if changed).
+      Done in part (s24, TS only, not installed; SHAs in the merge). The rejected-call half: App's banner already
+      surfaced it; now the footer reads "Couldn't read the ledger · trying again" (zh "无法读取台账 · 正在重试") whenever
+      the newest read was rejected, also over rows read before it (review r1), and App re-reads the ledger on a
+      backoff (2/5/15/30 s, then once a minute) until one lands (`data/applied-changes-retry.ts`, App's own read
+      passed in). Tests: ShellV2 (fail on main), settleLedgerRead (current/superseded x landed/rejected), the retry
+      hook with fake timers. NOT done, guard conflict: the empty-list half ("No changes listed · ledger not confirmed
+      complete" while health is unknown) failed `ledger-health-home-guard.test.tsx`, which pins that UNKNOWN health
+      leaves Home and the shell byte-identical to a healthy ledger; guards are not edited, so it is dropped and listed
+      under Needs owner (the residual case: rows read fine, an EMPTY list, health unknown, still reads "Nothing in
+      effect to undo · ledger 0"). USB/PCIe undo part left (not trivially safe). Reviews sonnet r1 APPROVE-WITH-NITS
+      (both SHOULD-FIX and the NIT taken), r2 APPROVE-WITH-NITS (SHOULD-FIX taken: a retry read a refresh overtook is
+      dropped, not shown over newer rows; NIT taken: a rejected read outranks the incomplete floor line).
 
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
