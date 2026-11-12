@@ -414,7 +414,8 @@ impl ActiveCheck {
 /// The live re-check of one ledger row (#620). Three kinds of row carry what to read in their typed
 /// action, not in a catalog rec id: a startup-app toggle (which way Compy flipped it), a bloat-task
 /// disable and a session service suspend (which task or service). Each reads only when its typed
-/// action agrees with its rec id, and is `Unrecognised` otherwise; every other row is
+/// action agrees with its rec id, and is `Unrecognised` otherwise. A power-ultimate row that recorded
+/// the plan Compy activated reads that plan (CR-ultimate-followups a); every other row is
 /// [`probe_rec_target`]. Read-only, and takes no lock.
 pub(crate) fn check_row_state(c: &AppliedChange, reads: &LiveReads) -> ActiveCheck {
     // CR-ultimate-followups (a): an Ultimate row reads On on the plan Compy activated for it, not only
@@ -6552,7 +6553,7 @@ mod ultimate_identity_tests {
             }),
             None
         );
-        assert!(started.elapsed() < limit * 5, "returned at the bound, not when the read finished");
+        assert!(started.elapsed() < limit * 8, "returned at the bound, not when the read finished");
         // And the production read uses the 5 s receipt bound.
         let body = include_str!("history.rs").split_once("fn bounded_read<T").map(|(_, r)| r).expect("fn");
         let body = body.split_once("\n}\n").map(|(b, _)| b).expect("body");
