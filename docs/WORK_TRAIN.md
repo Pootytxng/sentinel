@@ -1687,9 +1687,13 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
 - [ ] **P9-summary-screen-limit** The game summary's gpuLimiter line (reachable, unlike Check's block) says when that
       same session averaged at or above the screen's measured refresh that the screen, not the GPU, capped what you
       saw (mirror P9-screen-is-limit's wording and boundaries); unmeasured = today's line. en + zh-CN; tests.
-- [ ] **P9-summary-no-dead-pointer** The gpuLimiter summary line ends "see Optimize → Check", whose upgrade block never
+- [x] **P9-summary-no-dead-pointer** The gpuLimiter summary line ends "see Optimize → Check", whose upgrade block never
       renders (P9-upgrade-block-reachable). Until that lands, drop the pointer or point at what the summary itself
       shows; en + zh-CN; test that the line names no unreachable room.
+      Done (2026-11-12 s22, not installed; SHAs in the merge): the pointer is dropped in en and zh-CN; the line now
+      ends "Compy can't check your power supply, case or the rest of the system for a new card." New ExperimentBench
+      test renders the GPU-limiter line from a scan (it had no render test) and asserts no Optimize/→ pointer; it
+      fails on main's lab.json. When P9-upgrade-block-reachable lands, a pointer to the room that shows it may return.
 
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
