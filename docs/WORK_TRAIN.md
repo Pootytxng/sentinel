@@ -1694,6 +1694,10 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       GPU wouldn't show you more frames; the slowest moments can still depend on it. For frame rate, no upgrade is
       recommended for this game." (zh-CN too). Tests: above, equal, 249.6, unmeasured either side, NaN; a render test.
       cargo priorities 27/0 + clippy clean.
+- [ ] **P9-summary-cpu-unknown** (summary twin of P9-cpu-gpu-balance) When the finished summary's measured-clear line
+      fires and that session averaged below its recorded refresh, add that Compy can't measure the CPU's share yet, so
+      "nothing holding this PC back" covers the GPU and the checked rows only; refresh/FPS unmeasured = today's line.
+      Rust (`GameGpuClear` gains avg_fps/refresh_hz via the shared helpers) + TS; en + zh-CN; tests.
 - [x] **P9-summary-no-dead-pointer** The gpuLimiter summary line ends "see Optimize → Check", whose upgrade block never
       renders (P9-upgrade-block-reachable). Until that lands, drop the pointer or point at what the summary itself
       shows; en + zh-CN; test that the line names no unreachable room.
