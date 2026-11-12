@@ -502,10 +502,13 @@ describe("Problems (glass redesign)", () => {
       skipped_sources: [],
     };
     const scrolled = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
-    let scrollsWhenDrawn = -1;
+    // null = the observer never saw the note; otherwise whether the note's own row had been scrolled to.
+    let rowScrolledWhenDrawn: boolean | null = null;
     const watch = new MutationObserver(() => {
-      if (scrollsWhenDrawn === -1 && document.querySelector(".bb-selected-note")) {
-        scrollsWhenDrawn = scrolled.mock.calls.length;
+      const note = document.querySelector(".bb-selected-note");
+      if (rowScrolledWhenDrawn === null && note) {
+        const row = note.closest(".bb-item");
+        rowScrolledWhenDrawn = scrolled.mock.contexts.some((el) => el === row);
       }
     });
     watch.observe(document.body, { childList: true, subtree: true });
@@ -521,7 +524,8 @@ describe("Problems (glass redesign)", () => {
         />,
       );
       await screen.findByText("This is the one you came here to see.");
-      expect(scrollsWhenDrawn, "the row was drawn before it was scrolled to").toBeGreaterThan(0);
+      expect(rowScrolledWhenDrawn, "the observer never saw the note").not.toBeNull();
+      expect(rowScrolledWhenDrawn, "the row was drawn before it was scrolled to").toBe(true);
     } finally {
       watch.disconnect();
       scrolled.mockRestore();
