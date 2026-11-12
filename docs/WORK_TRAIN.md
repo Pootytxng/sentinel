@@ -1666,10 +1666,20 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
 - [ ] **P9-no-upgrade-named** When Check measured no limiter, the upgrade area says "No upgrade recommended" and the
       sessions it was read from (count and newest game), never an empty block; no sessions = "not measured yet".
       en + zh-CN; tests: measured clean / no sessions.
-- [ ] **P9-retail-firewall** (Phase 9 "affiliate economics firewalled") A test that the upgrade verdict (gpu/ssd row,
+- [x] **P9-retail-firewall** (Phase 9 "affiliate economics firewalled") A test that the upgrade verdict (gpu/ssd row,
       settings-done line, screen-is-limit) is computed with no retail data in scope: the same priorities payload with
       and without retail links yields the same rows and wording; establish first where links are joined. Tests only
       unless a leak is found (then park with the finding).
+      Done (2026-11-12 s22; SHAs in the merge). Finding: no leak. `priorities.rs build_upgrade_path` decides each row
+      from the sessions and readiness alone and attaches the const GPU_LINKS/SSD_LINKS after; settings-done.ts never
+      reads `upgrade_path`. New settings-done test: five payloads (GPU-limited, measured clear, part, unread, none)
+      each pin their own verdict and give it with links present, stripped or absent; a Rust test pins that
+      neither the gpu nor the ssd row's title/why names a retailer or its host. Pins, so they also pass on main.
+      The with/without-links comparison is TS-only and only for the settings-done line; the Rust rows can't vary
+      their links (consts), so "no leak" there rests on reading `build_upgrade_path`, not on a test. Check.tsx's
+      screen-is-limit is not covered here (unreachable; P9-upgrade-block-reachable). Review sonnet r1 (no verdict
+      line; coverage gap and self-comparing asserts, both taken), r2 APPROVE-WITH-NITS (host "www." and this
+      note's scope, both taken).
 - [ ] **P9-exit-fixture** (Phase 9 Exit proof) One fixture per Exit branch, driven through priorities + the game
       summary: settings done + GPU-limited (limiter named with what Compy can't check), settings done + measured clear
       ("no upgrade recommended" with its source), settings not done (no part named). Pure tests; no UI claim (the Check
