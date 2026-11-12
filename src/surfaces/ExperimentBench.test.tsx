@@ -2377,7 +2377,7 @@ describe("P4-exit: what Compy tested on this game", () => {
       const done = screen.getByTestId("exp-summary-settings-done");
       expect(done).toHaveAttribute("data-kind", "nothing-limiting");
       expect(done).toHaveTextContent(
-        "120 of 900 GPU readings were at 95% load or more, under the 50% Compy counts as GPU-limited, so the GPU wasn't the limit there. A GPU that often isn't busy usually means the CPU or a frame cap set the pace, and Compy measures neither, so it can't say the CPU didn't hold this game back. No GPU upgrade is recommended.",
+        "120 of 900 GPU readings were at 95% load or more, under the 50% Compy counts as GPU-limited, so Compy doesn't count the GPU as the limit there. A GPU that often isn't near full load usually means the CPU or a frame cap set the pace, and Compy measures neither, so it can't say the CPU didn't hold this game back. No GPU upgrade is recommended.",
       );
       expect(done.textContent).not.toMatch(/nothing holding this PC back|No upgrade is recommended/);
       const zh = (await import("../i18n/locales/zh-CN/lab.json")).default as {

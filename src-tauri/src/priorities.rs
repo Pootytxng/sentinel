@@ -330,7 +330,7 @@ pub(crate) fn build_upgrade_path(readiness: &Value, sessions: &Value) -> Option<
             why: format!(
                 "In your most recent monitored session the GPU sat at or above {GPU_LIMITED_PCT}% \
                  for {share}% of the time Compy measured the game (peak ~{peak}%) — the GPU was the \
-                 limiter for at least half of that session. If you want more headroom, a GPU \
+                 limiter for at least {GPU_SUSTAINED_SHARE_PCT}% of that session. If you want more headroom, a GPU \
                  upgrade is the hardware lever; no Windows tweak changes this."
             ),
             links: GPU_LINKS,
@@ -620,7 +620,7 @@ fn build_session_hint(sessions: &Value) -> Option<String> {
     let varied = avg > 0.0 && low1 > 0.0 && low1 < avg * 0.7;
     if let Some(share) = load.sustained_share() {
         Some(format!(
-            "Recent session hint: the GPU sat at or above {GPU_LIMITED_PCT}% for {share}% of the time Compy measured the game (peak ~{gpu}%), so this session looked GPU-limited for at least half of it."
+            "Recent session hint: the GPU sat at or above {GPU_LIMITED_PCT}% for {share}% of the time Compy measured the game (peak ~{gpu}%), so this session looked GPU-limited for at least {GPU_SUSTAINED_SHARE_PCT}% of it."
         ))
     } else if gpu >= GPU_LIMITED_PCT {
         // A peak alone is a moment, not the session (P9-bottleneck-sustained): say the GPU was busy
@@ -727,7 +727,7 @@ mod priority_tests {
             { "samples": 900, "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 900, "busy": 800 }, "avg_fps": 120.0, "low1_fps_est": 100.0 }
         ]);
         let p = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &sessions);
-        assert!(p.session_hint.as_deref().is_some_and(|h| h.contains("looked GPU-limited for at least half")), "{:?}", p.session_hint);
+        assert!(p.session_hint.as_deref().is_some_and(|h| h.contains("looked GPU-limited for at least 50% of it")), "{:?}", p.session_hint);
         assert!(build_upgrade_path(&readiness(vec![]), &sessions).is_some());
         let only = json!([{ "samples": 0, "peak_gpu_usage_pct": 99 }]);
         assert!(build_priorities(&readiness(vec![]), &json!([]), &json!([]), &only).session_hint.is_none());
@@ -746,7 +746,7 @@ mod priority_tests {
         let sessions = json!([{ "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 600, "busy": 540 }, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
         let p = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &sessions);
         let hint = p.session_hint.expect("hint present");
-        assert!(hint.contains("looked GPU-limited for at least half of it"), "{hint}");
+        assert!(hint.contains("looked GPU-limited for at least 50% of it"), "{hint}");
         assert!(hint.contains("for 90% of the time Compy measured the game"), "{hint}");
     }
 
@@ -860,7 +860,7 @@ mod priority_tests {
         assert_eq!(up.items[0].kind, "gpu");
         assert!(up.items[0].why.contains("~98%"), "why is sample-qualified with the measured peak");
         assert!(up.items[0].why.contains("for 80% of the time Compy measured the game"), "why names the sustained share: {}", up.items[0].why);
-        assert!(up.items[0].why.contains("limiter for at least half of that session"), "{}", up.items[0].why);
+        assert!(up.items[0].why.contains("limiter for at least 50% of that session"), "{}", up.items[0].why);
         assert!(up.items[0].why.contains("most recent monitored session"), "why is time-qualified");
         assert!(!up.items[0].links.is_empty());
         assert!(up.items[0].links.iter().all(|l| !l.url.contains("tag=") && !l.url.contains("affiliate")),
