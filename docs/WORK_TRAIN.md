@@ -446,6 +446,16 @@ release checklist); no new rules.
       step (actions.rs, mutation gate); (c) a copy no row stamped (old row or a timed-out read) that the user re-activates
       can be recorded on a stamped row; (d) out-of-order undo can restore Compy's own copy as a prior; (e) the 5 s timeout
       test sleeps 7 s: inject the timeout.
+      (a)(e) done `fef0a937` + r1 nits (2026-11-11 s20, not installed): a power-ultimate row that recorded the plan Compy
+      activated reads On on that plan (`check_row_state` through `is_compys_ultimate`), so History, Health, readiness and
+      the Trial's unverified-others check stop reading Compy's own localized copy as off; rows without the record read
+      by class as before. The hang test injects a 100 ms bound (`bounded_read_within`); production keeps 5 s. Read-only;
+      apply/rollback writes unchanged. Reviews r1 opus + sonnet APPROVE-WITH-NITS (taken: doc, looser timing bound).
+      Test fails on the old code. cargo 1867/0, clippy clean. Left parked: (b), (c), (d) (they change what apply,
+      record or rollback write), and (f) from r1: the setting-level Ultimate reads (`recommendations.rs:456`,
+      `probe_rec_target`, and the undo read-backs through `check_change_state`) still read the copy by class, so the
+      Optimize card and a Trial's reads of its own setting still say "off" on a localized Windows (fails safe:
+      unjudged); route them through the newest applied row with (b)-(d), two reviews.
 - [x] **P9-hint-shown** (desk review 2026-11-03) `get_priorities.session_hint` (the "GPU busy at times / sustained"
       sentence) reaches the frontend typed but no screen prints it. Decide: show it on Home or Optimize under the
       limiter rows, or drop the field. Code + one test either way. Done `4a4265d4` (2026-11-10): shown (coordinator
