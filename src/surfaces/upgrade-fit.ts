@@ -12,7 +12,9 @@ export type UpgradeFitLine =
 /** Pure: the fit line under an upgrade-path item, or null when the item has none. */
 export function upgradeFitLine(kind: string, manualParts: readonly ManualPart[]): UpgradeFitLine | null {
   if (kind !== "gpu") return null;
-  const psu = manualParts.find((p) => p.kind === "psu" && p.name.trim() !== "");
+  // Review r1 nit: the stored list is unchecked JSON, so a malformed entry is skipped, never a crash.
+  // The first named power supply is the one said (the user normally adds one).
+  const psu = manualParts.find((p) => p?.kind === "psu" && typeof p.name === "string" && p.name.trim() !== "");
   return psu
     ? { key: "optimize.check.upgradeFitGpuUserPsu", name: psu.name.trim() }
     : { key: "optimize.check.upgradeFitGpuUnknown" };
