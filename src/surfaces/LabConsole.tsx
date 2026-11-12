@@ -30,6 +30,7 @@ import { safeFixesReady } from "./optimize-v2-data";
 import { deriveReverted } from "./use-scan";
 import { peekProbe, cachedProbe } from "../data/probe-cache";
 import { measureTuning, tuningEvidence } from "../data/tuning-measure";
+import { primaryGpu } from "../data/gpu-sensor";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
@@ -221,7 +222,9 @@ export function LabConsole({
   }, [tuningGuide]);
 
   const measurement = measureTuning(armed, sessions, latestCmp);
-  const tuningEvidenceVerdict = tuningEvidence(sessions);
+  // CR-tuning-gpu-other-card: only sessions not recorded on another card can qualify this card for a
+  // tuning offer; this PC's card is the most-VRAM GPU App read (null when none was read).
+  const tuningEvidenceVerdict = tuningEvidence(sessions, Date.now(), primaryGpu(hw?.gpus)?.name ?? null);
 
   // Station 1's live reading inputs (§8.1) — the SAME measured count the room verdict shows
   // (safeFixesReady over the same recs, excluding drifted). Derived here; zero new IPC.

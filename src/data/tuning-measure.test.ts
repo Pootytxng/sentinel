@@ -378,3 +378,64 @@ describe("tuningEvidence", () => {
     expect(tuningGuideForVendor("amd")).not.toBeNull();
   });
 });
+
+// CR-tuning-gpu-other-card (P9-session-on-this-hardware review SHOULD-FIX): a GPU signal from sessions
+// recorded on another graphics card never qualifies the card in this PC now; sessions that can't be
+// tied (no card recorded, or this PC's card unidentified) still count, and say so.
+describe("CR-tuning-gpu-other-card: GPU signals read only sessions on this card", () => {
+  const NOW = Date.parse("2026-06-08T20:00:00Z");
+  const THIS = "AMD Radeon RX 9070 XT";
+  const OTHER = "NVIDIA GeForce GTX 1060";
+  const on = (gpu: string | null, over: Partial<SessionSummary>): SessionSummary =>
+    sess({ ...over, ...(gpu ? { hw_fingerprint: { hash: "h", gpu, gpu_driver: "1", ram_gb: 32, display: "" } } : {}) });
+  const held = (gpu: string | null, hour: number) =>
+    on(gpu, {
+      started_at: `2026-06-08T${String(hour).padStart(2, "0")}:00:00Z`,
+      peak_gpu_temp_c: 65,
+      peak_gpu_usage_pct: 99,
+      gpu_load: { readings: 600, busy: 540 },
+    });
+  const warm = (gpu: string | null, hour: number) =>
+    on(gpu, { started_at: `2026-06-08T${String(hour).padStart(2, "0")}:00:00Z`, peak_gpu_temp_c: 90, peak_gpu_usage_pct: 70 });
+
+  it("another card's sessions never make this card 'held near the limit' or 'running warm'", () => {
+    const heldElsewhere = [held(OTHER, 18), held(OTHER, 16), held(OTHER, 14)];
+    expect(gpuSustainedNearLimit(heldElsewhere, NOW, THIS)).toBeNull();
+    const warmElsewhere = [warm(OTHER, 18), warm(OTHER, 16), warm(OTHER, 14)];
+    expect(gpuRunningHot(warmElsewhere, NOW, THIS)).toBeNull();
+    expect(tuningEvidence([...heldElsewhere], NOW, THIS).qualifies).toBe(false);
+    expect(tuningEvidence([...warmElsewhere], NOW, THIS).qualifies).toBe(false);
+  });
+
+  it("this card's sessions decide past newer ones from another card; names compare trimmed, case-folded", () => {
+    const sessions = [held(OTHER, 19), warm(OTHER, 18), held(` ${THIS.toLowerCase()} `, 16), held(THIS, 14), held(THIS, 12)];
+    const limit = gpuSustainedNearLimit(sessions, NOW, THIS);
+    expect(limit).toMatchObject({ sessions: 3 });
+    expect(limit?.untied).toBeUndefined();
+    const e = tuningEvidence(sessions, NOW, THIS);
+    expect(e.qualifies).toBe(true);
+    expect(e.qualifies && e.untied).toBeFalsy();
+  });
+
+  it("sessions that recorded no card count, and say how many can't be tied", () => {
+    const sessions = [held(null, 18), held(THIS, 16), held(null, 14)];
+    expect(gpuSustainedNearLimit(sessions, NOW, THIS)?.untied).toEqual({ kind: "not-recorded", count: 2 });
+    const e = tuningEvidence(sessions, NOW, THIS);
+    expect(e.qualifies && e.untied).toEqual({ kind: "not-recorded", count: 2 });
+  });
+
+  it.each([null, "Microsoft Basic Display Adapter", "  "])(
+    "this PC's card unidentified (%j): every session kept, and the signal says it can't tie them",
+    (now) => {
+      const sessions = [warm(OTHER, 18), warm(THIS, 16), warm(null, 14)];
+      expect(gpuRunningHot(sessions, NOW, now)).toMatchObject({ sessions: 3, untied: { kind: "card-unread" } });
+    },
+  );
+
+  it("no card passed (an older caller): as before, nothing filtered and no tie line", () => {
+    const sessions = [held(OTHER, 18), held(OTHER, 16), held(OTHER, 14)];
+    const limit = gpuSustainedNearLimit(sessions, NOW);
+    expect(limit).toMatchObject({ sessions: 3 });
+    expect(limit?.untied).toBeUndefined();
+  });
+});

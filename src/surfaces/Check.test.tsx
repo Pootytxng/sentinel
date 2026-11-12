@@ -353,6 +353,44 @@ describe("Check", () => {
     expect(onOpenLibrary).toHaveBeenCalledWith("amd-gpu-undervolt");
   });
 
+  // CR-tuning-gpu-other-card: the nudge reads only sessions not recorded on another card, and says when
+  // the sessions it read can't be tied to the card in this PC now.
+  it("the warm nudge ignores another card's sessions and names the ones it can't tie to this card", async () => {
+    const card = (gpu: string) => ({ hash: "h", gpu, gpu_driver: "1", ram_gb: 32, display: "" });
+    const gpus = [
+      { name: "AMD Radeon(TM) Graphics", driver_age_days: null, vram_bytes: 536870912 },
+      { name: "AMD Radeon RX 9070 XT", driver_age_days: null, vram_bytes: 17163091968 },
+    ];
+    const elsewhere = HOT.map((s) => ({ ...s, hw_fingerprint: card("NVIDIA GeForce GTX 1060") }));
+    const { rerender } = render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="amd" sessions={elsewhere} gpus={gpus} />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("Limiters we measured")).toBeInTheDocument();
+    expect(screen.queryByText(/running warm/i)).not.toBeInTheDocument();
+    // Two of the three recorded this PC's card (the most-VRAM GPU), one recorded none.
+    const mixed = [{ ...HOT[0], hw_fingerprint: card("AMD Radeon RX 9070 XT") }, HOT[1], { ...HOT[2], hw_fingerprint: card("AMD Radeon RX 9070 XT") }];
+    rerender(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="amd" sessions={mixed} gpus={gpus} />
+      </ConfirmProvider>,
+    );
+    expect(screen.getByText(/Your GPU's been running warm/i)).toBeInTheDocument();
+    expect(screen.getByTestId("check-warm-untied").textContent).toBe(
+      "1 of those sessions didn't record which graphics card it ran on, so Compy can't tie it to the card in this PC now.",
+    );
+    // No GPU read: the card can't be identified, and the nudge says so.
+    rerender(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="amd" sessions={mixed} gpus={[]} />
+      </ConfirmProvider>,
+    );
+    expect(screen.getByTestId("check-warm-untied").textContent).toBe(
+      "Compy can't identify the graphics card in this PC right now, so it can't tie those sessions to it.",
+    );
+  });
+
   it("stays silent when temps are fine, or on a non-AMD rig (bathroom law / v1 scope)", async () => {
     const { rerender } = render(
       <ConfirmProvider>

@@ -13,6 +13,7 @@ import { WalkthroughDisclosure } from "../design/WalkthroughDisclosure";
 import { walkthroughForKeyForLanguage, gpuVendor, type GpuVendor } from "./walkthroughs";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { gpuRunningHot } from "../data/tuning-measure";
+import { primaryGpu } from "../data/gpu-sensor";
 import { setStartupEntryEnabled } from "../data/startup-toggle";
 import { useHardwareChange, summarizeHardwareChanges } from "../hooks/use-hardware-change";
 import { useScan, buildSetupSummary, rowVerdict } from "./use-scan";
@@ -55,7 +56,9 @@ function screenIsLimit(item: UpgradeSuggestion): { hz: number; fps: number; game
 }
 
 // Structural subset of App's GpuInfo — driver freshness needs only name + age (object covariance).
-type GpuDriverInfo = { name: string; driver_age_days: number | null };
+// `vram_bytes`: App passes its hardware read's GPUs, which carry it; the warm nudge picks this PC's card
+// by it, as session fingerprints do (CR-tuning-gpu-other-card).
+type GpuDriverInfo = { name: string; driver_age_days: number | null; vram_bytes?: number | null };
 
 // Leftovers v1 (read-only) — mirrors the Rust LeftoversReport shape.
 type Leftover = {
@@ -356,7 +359,9 @@ export default function Check({
   // AMD-only in v1 (the guide is AMD). It's a named-place link to the Learn guide (deliberate travel),
   // not a one-click fix (doorknob) — Compy never tunes the voltage for you.
   const tuningGuide = tuningGuideForVendorForLanguage(vendor, i18n.language);
-  const hot = tuningGuide ? gpuRunningHot(sessions) : null;
+  // CR-tuning-gpu-other-card: sessions recorded on another card never make this card "run warm";
+  // no GPU read yet = the card can't be identified (null), and the nudge says so.
+  const hot = tuningGuide ? gpuRunningHot(sessions, Date.now(), primaryGpu(gpus)?.name ?? null) : null;
 
   // Leftovers v1 — strictly ON-DEMAND (charter: no scan on launch, no background scanning).
   // Read-only: checking changes nothing; v1 wires no restore.
@@ -639,6 +644,13 @@ export default function Check({
                 <p className="check-nudge-reason">
                   {t("optimize.check.gpuWarmReason", { peakC: hot.peakC, sessions: hot.sessions })}
                 </p>
+                {hot.untied && (
+                  <p className="check-nudge-reason" data-testid="check-warm-untied">
+                    {hot.untied.kind === "not-recorded"
+                      ? t("optimize.check.gpuSignalUntiedNotRecorded", { count: hot.untied.count })
+                      : t("optimize.check.gpuSignalUntiedCardUnread")}
+                  </p>
+                )}
               </div>
               <button className="check-nudge-link" onClick={() => onOpenLibrary(tuningGuide.id)}>
                 {t("optimize.check.coolerQuieterGuide")}

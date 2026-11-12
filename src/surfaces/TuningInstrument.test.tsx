@@ -142,3 +142,21 @@ describe("TuningInstrument (Lab gauge)", () => {
     expect(screen.getByText(/Not for this rig right now:/)).toBeInTheDocument();
   });
 });
+
+// CR-tuning-gpu-other-card: evidence read from sessions that can't be tied to the card in this PC now
+// says so under the why-line; evidence from this card's sessions adds nothing.
+describe("TuningInstrument: evidence that can't be tied to this card", () => {
+  const qualifies = { qualifies: true as const, reason: "your GPU peaked at 92°C across your last 3 monitored sessions" };
+  it.each([
+    [{ kind: "not-recorded" as const, count: 2 }, "2 of those sessions didn't record which graphics card they ran on, so Compy can't tie them to the card in this PC now."],
+    [{ kind: "card-unread" as const }, "Compy can't identify the graphics card in this PC right now, so it can't tie those sessions to it."],
+  ])("%j", (untied, words) => {
+    render(<TuningInstrument guide={guide} vendor="amd" measurement={null} recentSessions={recent} evidence={{ ...qualifies, untied }} />);
+    expect(screen.getByTestId("tg-evidence-untied").textContent).toBe(words);
+  });
+
+  it("all on this card: no line", () => {
+    render(<TuningInstrument guide={guide} vendor="amd" measurement={null} recentSessions={recent} evidence={qualifies} />);
+    expect(screen.queryByTestId("tg-evidence-untied")).toBeNull();
+  });
+});

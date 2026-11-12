@@ -301,6 +301,8 @@
   "tuningInstrument": {
     "qualifiesMark": "这台设备符合条件的原因:",
     "qualifiesConnector": " 实测依据——",
+    "untiedNotRecorded_other": "其中 {{count}} 次会话没有记录它用的是哪块显卡，所以 Compy 无法把它们和这台电脑现在的显卡对应起来。",
+    "untiedCardUnread": "Compy 现在无法识别这台电脑的显卡，所以无法把这些会话和它对应起来。",
     "notForRigMark": "这台设备目前不符合条件:",
     "notForRigRest": "。Compy 只会在你自己的实测结果显示确实有帮助时才建议调校——如果你好奇,完整指南仍然保留在「历史」里(搜索“undervolt”即可找到)。",
     "readoutHead": "稳定性和散热",

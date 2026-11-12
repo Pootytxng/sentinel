@@ -1941,12 +1941,22 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       same-card session decides, case-folded; not-recorded / card-unread / blank; the report's pick); TS settings-done,
       Check, ExperimentBench render; 9 TS tests fail on main. Review sonnet r1 APPROVE-WITH-NITS (nits taken as
       comments); its two SHOULD-FIX are outside the diff: queued CR-tuning-gpu-other-card, CR-receipt-gpu-other-card.
-- [ ] **CR-tuning-gpu-other-card** (P9-session-on-this-hardware review SHOULD-FIX) `src/data/tuning-measure.ts`
+- [x] **CR-tuning-gpu-other-card** (P9-session-on-this-hardware review SHOULD-FIX) `src/data/tuning-measure.ts`
       `gpuSustainedNearLimit` reads the last sessions for "GPU held near the limit" with no card check; it gates
       tuning/OC offers in Check, TuningInstrument, TuningVerdict, TuningDebrief and lab-evidence-map. After a card
       swap, old-card sessions can fire it for the new card. Read each session's `hw_fingerprint.gpu` (add it to the TS
       SessionSummary type) against the card App already read (HardwareInfo, most-VRAM); another card's session
       doesn't count, none recorded = says so. TS; one review.
+      Done (s25, TS only; `7faf6b0e`, `d1d162a8`, SHAs in the merge). Only two places compute the signals (Check's
+      warm nudge, LabConsole's tuning evidence for TuningInstrument); TuningVerdict/TuningDebrief/lab-evidence-map
+      only read the measurement. `gpuSustainedNearLimit` and `gpuRunningHot` (same class) take this PC's card (App's
+      most-VRAM GPU, `primaryGpu`): another card's sessions are left out; sessions with no card count and the line
+      says "N of those sessions didn't record which graphics card they ran on, so Compy can't tie them to the card in
+      this PC now."; an unidentified card (none read, blank, Windows' fallback adapter) keeps every session and says
+      "Compy can't identify the graphics card in this PC right now, so it can't tie those sessions to it." (en +
+      zh-CN). SessionSummary already carried `hw_fingerprint.gpu`. 9 new tests fail on main. Review sonnet r1
+      APPROVE-WITH-NITS (no MUST/SHOULD; nits taken: OptimizeStation's gpus type carries vram_bytes, the VRAM-tie
+      note; the `gpus = []` default reading card-unread is intended and tested).
 - [ ] **CR-receipt-gpu-other-card** (same review, SHOULD-FIX) `receipts.rs` ~80-90 pairs the newest measured session
       with `hardware.gpus.first()` (not the most-VRAM pick) and never checks that session ran on that card. Use
       `priorities::primary_gpu_of` and the session's own `hw_fingerprint.gpu`; another card's session is not named

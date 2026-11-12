@@ -315,6 +315,9 @@
   "tuningInstrument": {
     "qualifiesMark": "Why this rig qualifies:",
     "qualifiesConnector": " measured here — ",
+    "untiedNotRecorded_one": "{{count}} of those sessions didn't record which graphics card it ran on, so Compy can't tie it to the card in this PC now.",
+    "untiedNotRecorded_other": "{{count}} of those sessions didn't record which graphics card they ran on, so Compy can't tie them to the card in this PC now.",
+    "untiedCardUnread": "Compy can't identify the graphics card in this PC right now, so it can't tie those sessions to it.",
     "notForRigMark": "Not for this rig right now:",
     "notForRigRest": ". Compy only suggests tuning when your own sessions show it would help — the full guide stays in History (search “undervolt”) if you're curious.",
     "readoutHead": "Stability & thermal",

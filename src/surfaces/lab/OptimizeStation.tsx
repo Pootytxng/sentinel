@@ -53,7 +53,8 @@ export type LabFastPathProps = {
    *  control stays disabled until it finishes. Optional so non-App callers (tests) pass nothing. */
   onLedgerBusy?: (busy: boolean) => void;
   sessions: SessionSummary[];
-  gpus: { name: string; driver_age_days: number | null }[];
+  // vram_bytes: Check picks this PC's card by it (CR-tuning-gpu-other-card review nit); App passes hw.gpus.
+  gpus: { name: string; driver_age_days: number | null; vram_bytes?: number | null }[];
   vendor: GpuVendor;
   // §5 armed-feature bay (spec 2026-07-08 §5, owner nod "all three"): whether Gaming Mode is armed
   // (gaming_mode_gate LIVE). When true, station 1 offers the "Power features" bay — Gaming Mode +
