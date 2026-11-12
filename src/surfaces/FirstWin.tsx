@@ -4,7 +4,7 @@ import { writeLedger } from "../data/ledger-write";
 import { isUnrecordedUndo } from "../data/rollback-error";
 import { useTranslation } from "react-i18next";
 import type { AppliedChange, Recommendation } from "../types";
-import { friendlyLabel } from "../data/friendly-labels";
+import { appliedValueLabel, friendlyHeadline } from "../data/backend-words";
 import {
   pickFirstWinChange,
   shouldOfferFirstWin,
@@ -126,7 +126,9 @@ export function FirstWin({
   if (done && phase === "intro") return null;
   if (!change) return null;
 
-  const name = friendlyLabel(change.rec_id)?.headline ?? change.rec_title;
+  // CR-zh-backend-home: the friendly headline and the "set to" value in the app's language (stable
+  // ids: the rec id and history.rs's closed set of applied labels); the catalog title stays as sent.
+  const name = friendlyHeadline(change.rec_id, t) ?? change.rec_title;
   // "First" vs "latest" is a fact about the ledger's HISTORY — is there another change the user
   // applied and has not undone — not a claim about what is in effect on the machine now, so it reads
   // the ledger rows, not the Machine Model's in-effect count (#452). A drifted or another-rig row was
@@ -155,7 +157,7 @@ export function FirstWin({
         <p className="fw-body">
           {t("home.firstWin.introPre")} <b>{name}</b>
           {change.applied_label
-            ? t("home.firstWin.introTailSet", { value: change.applied_label })
+            ? t("home.firstWin.introTailSet", { value: appliedValueLabel(change.applied_label, t) })
             : t("home.firstWin.introTail")}
         </p>
       )}

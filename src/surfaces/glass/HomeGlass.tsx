@@ -16,6 +16,7 @@ import { wordFromBand, confidenceWordKey } from "../../data/confidence-word";
 import { TubeChart, type TubeBar } from "./TubeChart";
 import { useDates } from "./GamesRoom";
 import { NavGlyph } from "../../design/NavGlyph";
+import { careHeadline, incidentKindLabel, incidentWhen } from "../../data/backend-words";
 import "../glass-rooms.css";
 
 const Arrow = () => (
@@ -63,7 +64,7 @@ export function HomeGlass({
    *  FirstWin's follow-through on the user's first live change (App owns both). */
   latestChange?: ReactNode;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const dates = useDates();
   const games = useMemo(() => gameLibrary(sessions), [sessions]);
   const noGames = games.length === 0;
@@ -116,16 +117,19 @@ export function HomeGlass({
   const newestLow = newest ? knownFps(newest.low1_fps_est) : null;
   // The headline is Black Box's own sentence for the record, the one the full check prints, so a
   // freeze reads "stopped responding" and a crash "closed unexpectedly". The fallback names no kind.
-  const careSummary = pendingCare ? pendingCare.summary.trim() : "";
-  const careHeadline = pendingCare
-    ? careSummary || t("home.glass.care.headline", { what: pendingCare.app_label ?? pendingCare.kind })
+  // CR-zh-backend-home: in another language the sentence is composed from the stable kind tag
+  // (backend-words.ts); English keeps Black Box's own.
+  const careSummary = pendingCare ? careHeadline(pendingCare, t, i18n.language) : "";
+  const careHead = pendingCare
+    ? careSummary ||
+      t("home.glass.care.headline", { what: pendingCare.app_label ?? incidentKindLabel(pendingCare.kind, t) })
     : "";
   // Black Box's sentence already carries what happened and when ("… — Sep 28, 11:57 AM"), so the
   // line under it says only where the record came from; the fallback headline keeps kind and time.
   const careDetail = pendingCare
     ? careSummary
       ? t("home.glass.care.detailRecorded")
-      : t("home.glass.care.detail", { kind: pendingCare.kind, when: pendingCare.occurred_display })
+      : t("home.glass.care.detail", { kind: incidentKindLabel(pendingCare.kind, t), when: incidentWhen(pendingCare, i18n.language) })
     : "";
 
   const topLimiter = priorities?.limiters?.[0] ?? null;
@@ -183,7 +187,7 @@ export function HomeGlass({
       {pendingCare && (
         <div className="gl-banner" data-tone="warn" role="group" aria-label={t("home.glass.care.label")}>
           <span className="gl-banner-text">
-            <b>{careHeadline}</b>
+            <b>{careHead}</b>
             <span>{careDetail}</span>
           </span>
           <span className="gl-banner-actions">

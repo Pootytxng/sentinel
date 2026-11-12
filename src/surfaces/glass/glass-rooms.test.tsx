@@ -133,6 +133,29 @@ describe("Health summary (glass redesign)", () => {
     expect(band.textContent).not.toContain("App hang");
   });
 
+  // CR-zh-backend-home (view-1112a/14-home-zh-CN.png): the band printed Black Box's English sentence.
+  it("in zh-CN the crash band is in Chinese, keeps the app's own name and says nothing in English", async () => {
+    const { default: i18n } = await import("../../i18n");
+    await i18n.changeLanguage("zh-CN");
+    try {
+      home({
+        pendingCare: {
+          ...care,
+          app_label: "ROB RUN",
+          occurred_at: "2026-11-11T14:36:00-08:00",
+          occurred_display: "Nov 11, 2:36 PM",
+          summary: "ROB RUN stopped working and closed — Nov 11, 2:36 PM",
+        },
+      });
+      const band = document.querySelector(".gl-banner")!;
+      expect(band.textContent).toContain("ROB RUN 已停止工作并关闭");
+      expect(band.textContent).toContain("11月11日");
+      expect(band.textContent).not.toMatch(/stopped working|Nov 11/);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
   it("the Last session card shows the 1% low the other cards lack, not the average again (desk review 2026-10-30)", () => {
     home();
     const last = screen.getByRole("button", { name: /Last session/ });

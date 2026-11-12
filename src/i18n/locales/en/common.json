@@ -366,5 +366,65 @@
   },
   "problems": {
     "headline": "What went wrong, and why"
+  },
+  "backendWords": {
+    "kind": {
+      "appCrash": "App crash",
+      "appHang": "App hang",
+      "gpuTimeout": "GPU timeout",
+      "unexpectedShutdown": "Unexpected shutdown / hard freeze",
+      "blueScreen": "Blue screen",
+      "hardwareError": "Hardware-logged error"
+    },
+    "headline": {
+      "appCrash": "{{app}} stopped working and closed — {{when}}",
+      "appCrashNoApp": "An application crashed — {{when}}",
+      "appHang": "{{app}} stopped responding (froze) — {{when}}",
+      "appHangNoApp": "An application stopped responding — {{when}}",
+      "gpuTimeout": "Your graphics driver stopped responding and recovered — {{when}}",
+      "unexpectedShutdown": "Your PC shut down unexpectedly or hard-froze — {{when}}",
+      "blueScreen": "Your PC blue-screened and restarted — {{when}}",
+      "hardwareError": "Windows logged a hardware-level error — {{when}}",
+      "whileGame": ", while {{game}} was running"
+    },
+    "applied": {
+      "on": "On",
+      "off": "Off",
+      "offOnAc": "Off (on AC)",
+      "bestPerformance": "Best performance",
+      "ultimatePerformance": "Ultimate performance",
+      "stopped": "Stopped",
+      "startsWithWindows": "Starts with Windows",
+      "wontStartWithWindows": "Won't start with Windows",
+      "disabled": "Disabled",
+      "removedForUser": "Removed for this user",
+      "windowsDefault": "Windows default"
+    },
+    "friendly": {
+      "nagle-disable": "Smoother online play",
+      "windows-search-disable": "Free up an older hard drive",
+      "game-mode": "Help Windows focus on your game",
+      "visual-effects": "Trim Windows animations for speed",
+      "mouse-accel-off": "Keep your aim consistent",
+      "game-bar-disable": "Stop the Xbox overlay & background recording",
+      "diagtrack-disable": "Stop background data collection",
+      "usb-selective-suspend-off": "Keep your USB gear awake",
+      "pcie-aspm-off": "Stop your GPU link from power-napping",
+      "eee-disable": "Steady your wired connection",
+      "memory-integrity-vbs-advisory": "Your call: extra security or extra frames",
+      "defender-game-folder-exclusions-advisory": "Stop antivirus from scanning games mid-play",
+      "vrr-advisory": "Turn on tear-free gaming",
+      "audio-enhancements-advisory": "Clean up your game audio",
+      "hdr-advisory": "Decide HDR game by game",
+      "power-ultimate": "Stop your PC from throttling itself",
+      "reserved-storage-off": "Reclaim ~7–10 GB on your C: drive",
+      "fast-startup-off": "Fix odd restart & shutdown glitches",
+      "nvidia-telemetry": "Stop NVIDIA's background reporting",
+      "nvidia-low-latency": "Cut input lag on NVIDIA",
+      "amd-uxp": "Opt out of AMD's data collection",
+      "gpu-prefer-discrete": "Force games onto your real GPU",
+      "sysmain-disable": "Calm constant background disk activity",
+      "hags-enable": "Let your GPU schedule its own work"
+    }
   }
 }
