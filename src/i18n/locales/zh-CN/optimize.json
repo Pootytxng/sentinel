@@ -137,6 +137,8 @@
     "showMeTheWay": "带我看看怎么做",
     "applyAriaLabel": "应用 {{title}}",
     "upgradePathTitle": "升级路径(仅供参考)",
+    "upgradeFitGpuUnknown": "更换显卡之前:Compy 无法读取电源的功率和接口,也无法得知机箱的空间和风道。请先检查这些。",
+    "upgradeFitGpuUserPsu": "更换显卡之前:你告诉 Compy 你的电源是“{{name}}”。Compy 无法核实它的功率和接口,也无法得知机箱的空间和风道。请先检查这些。",
     "copyRetailLinkTitle": "复制一个纯净的 {{retailer}} 搜索链接,可在浏览器中打开。目前不含任何联盟标记。",
     "copiedExclaim": "已复制!",
     "copyRetailSearchLink": "复制 {{retailer}} 搜索链接",

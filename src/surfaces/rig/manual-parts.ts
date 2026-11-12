@@ -49,6 +49,11 @@ function load(): ManualPart[] {
   }
 }
 
+/** Read-only: the user-added parts as stored now (no write, no broadcast). P9-gpu-fit-unknowns. */
+export function readManualParts(): ManualPart[] {
+  return load();
+}
+
 export function useManualParts() {
   const [parts, setParts] = useState<ManualPart[]>(load);
   // Receive: another instance in this document changed the list. Reference-equality bailout stops
