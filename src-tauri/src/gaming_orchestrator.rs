@@ -156,15 +156,10 @@ fn rec_of_label(label: &str) -> Option<&'static str> {
         LABEL_GAME_BAR => Some(REC_GAME_BAR),
         LABEL_USB => Some(REC_USB),
         LABEL_PCIE => Some(REC_PCIE),
-        _ => [
-            actions::KnownService::SysMain,
-            actions::KnownService::DiagTrack,
-            actions::KnownService::WSearch,
-            actions::KnownService::NvTelemetryContainer,
-        ]
-        .iter()
-        .find(|s| suspend_label(s) == label)
-        .map(service_rec),
+        _ => actions::KnownService::ALL
+            .iter()
+            .find(|s| suspend_label(s) == label)
+            .map(service_rec),
     }
 }
 
@@ -209,6 +204,46 @@ pub(crate) fn session_holds_refusal(rec_id: &str) -> Option<String> {
         },
         Err(e) => Some(format!("Compy couldn't check Gaming Mode's session ({e}). Nothing was changed.")),
     }
+}
+
+/// CR-gm-spans-followups (d): the refusal for a plain UI apply or undo of any of `rec_ids` while a
+/// Gaming Mode session this Compy can put back holds it. That session's stop writes its own snapshot
+/// back, so a newer apply would read "applied" over a setting put back off, and an undo would be put
+/// back on. Callers hold [`session_op_guard`] from this check through the ledger write.
+pub(crate) fn plain_change_refusal<'a>(rec_ids: impl Iterator<Item = &'a str>) -> Option<String> {
+    let rec_ids: Vec<&str> = rec_ids.filter(|r| session_can_touch(r)).collect();
+    if rec_ids.is_empty() {
+        return None; // no session step touches these settings: nothing to read
+    }
+    let listing = crate::gaming_session::pending_contract_files();
+    let contract = match &listing {
+        Ok(found) if !found.is_empty() => load_session(),
+        _ => None,
+    };
+    plain_hold_refusal(&rec_ids, listing.as_deref(), contract.as_ref().map(|f| f.changes.as_slice()))
+}
+
+/// PURE half of [`plain_change_refusal`]. `listing` is the Gaming Mode record files on disk;
+/// `contract` the readable session's changes. A record this Compy can't read is not refused here:
+/// this Compy's stop and recovery read only a readable session, so nothing here would write over the
+/// change (a Trial start still refuses it, `session_holds_refusal`). A folder that can't be listed
+/// refuses: a readable session in it could hold the setting.
+fn plain_hold_refusal(
+    rec_ids: &[&str],
+    listing: Result<&[String], &String>,
+    contract: Option<&[SessionChange]>,
+) -> Option<String> {
+    match listing {
+        Err(e) => Some(format!("Compy couldn't check Gaming Mode's session ({e}). Nothing was changed.")),
+        Ok([]) => None,
+        Ok(_) => rec_ids.iter().find_map(|r| session_hold_refusal(r, contract)),
+    }
+}
+
+/// PURE: whether any Gaming Mode session step of this version touches the setting `rec_id`.
+fn session_can_touch(rec_id: &str) -> bool {
+    [REC_POWER, REC_GAME_MODE, REC_GAME_BAR, REC_USB, REC_PCIE].contains(&rec_id)
+        || actions::KnownService::ALL.iter().any(|s| service_rec(s) == rec_id)
 }
 
 /// PURE (CR-gm-spans-followups a): the refusal when a Gaming Mode record is on disk but this Compy
@@ -937,6 +972,53 @@ mod spans_trial_tests {
         }
         assert_eq!(rec_of_label("Suspend nothing for this session"), None);
         assert_eq!(rec_of_label("Windows Game Mode on legacy"), None, "exact labels only");
+    }
+
+    #[test]
+    fn every_allowlisted_service_suspend_names_its_ledger_setting() {
+        // CR-gm-spans-followups (e): rec_of_label iterates KnownService::ALL, so ALL must list every
+        // variant. The match has no wildcard: a new variant fails to compile here until it is listed.
+        let mut listed = 0;
+        for svc in KnownService::ALL.iter() {
+            match svc {
+                KnownService::SysMain
+                | KnownService::DiagTrack
+                | KnownService::WSearch
+                | KnownService::NvTelemetryContainer => listed += 1,
+            }
+            assert_eq!(KnownService::from_name(svc.name()).as_ref(), Some(svc), "{}", svc.name());
+            assert_eq!(rec_of_label(&suspend_label(svc)), Some(service_rec(svc)), "{}", svc.name());
+        }
+        assert_eq!(listed, 4);
+        for name in ["SysMain", "DiagTrack", "WSearch", "NvTelemetryContainer"] {
+            let svc = KnownService::from_name(name).expect("allowlisted");
+            assert!(KnownService::ALL.contains(&svc), "{name} is in ALL");
+        }
+    }
+
+    #[test]
+    fn a_plain_apply_or_undo_is_refused_only_for_a_setting_a_readable_session_holds() {
+        // CR-gm-spans-followups (d).
+        let contract = [change(LABEL_POWER), change(LABEL_GAME_MODE)];
+        let found = vec!["gaming-session.json".to_string()];
+        let held = plain_hold_refusal(&["game-mode"], Ok(&found), Some(&contract)).expect("the session holds it");
+        assert!(held.contains("Stop Gaming Mode first") && held.contains("Nothing was changed"), "{held}");
+        // A batch naming it is refused whole.
+        assert!(plain_hold_refusal(&["hags-enable", "power-ultimate"], Ok(&found), Some(&contract)).is_some());
+        assert_eq!(plain_hold_refusal(&["game-bar-disable"], Ok(&found), Some(&contract)), None, "not held");
+        assert_eq!(plain_hold_refusal(&["game-mode"], Ok(&[]), None), None, "no session");
+        // A record this Compy can't read can't be put back by it, so it doesn't refuse a plain change.
+        let orphan = vec!["gaming-session.orphaned-1.json".to_string()];
+        assert_eq!(plain_hold_refusal(&["game-mode"], Ok(&orphan), None), None);
+        let err = "access denied".to_string();
+        let refused = plain_hold_refusal(&["game-mode"], Err(&err), None).expect("can't list: refused");
+        assert!(refused.contains("access denied") && refused.contains("Nothing was changed"), "{refused}");
+        // Only the settings a session step touches are read at all.
+        for rec in [REC_POWER, REC_GAME_MODE, REC_GAME_BAR, REC_USB, REC_PCIE, "sysmain-disable", "nvidia-telemetry"] {
+            assert!(session_can_touch(rec), "{rec}");
+        }
+        assert!(!session_can_touch("hags-enable") && !session_can_touch("visual-effects"));
+        assert_eq!(plain_change_refusal(["hags-enable"].into_iter()), None, "never read for an untouched setting");
     }
 
     #[test]

@@ -1906,9 +1906,18 @@ pub(crate) fn apply_recommendations_batch(items: Vec<BatchApplyItem>) -> Result<
     })
 }
 
-#[tauri::command]
+/// The audited undo. The UI's `rollback_change` command is `experiment::rollback_change`, which
+/// refuses a setting a Gaming Mode session holds and then calls this (CR-gm-spans-followups d); the
+/// Trial and benchmark restores call this directly.
 pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
     rollback_reported(&change_id, None)
+}
+
+/// CR-gm-spans-followups (d): the setting ledger row `change_id` changed, read without the ledger
+/// lock (a row's rec id never changes). `None` when no row has that id (the undo then says so). A
+/// ledger that can't be read is an error: the undo would refuse it too (H1).
+pub(crate) fn rec_id_of_change(change_id: &str) -> Result<Option<String>, String> {
+    Ok(load_history()?.into_iter().find(|c| c.id == change_id).map(|c| c.rec_id))
 }
 
 /// What an outcome-switch undo cites: given the ledger row's rec id, the checked Trial link, or why

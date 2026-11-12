@@ -3053,6 +3053,11 @@ pub(crate) fn apply_recommendation(
         if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
             return Err(refusal);
         }
+        // CR-gm-spans-followups (d): and a Gaming Mode session's, with its gate held through the write.
+        let _gm = crate::gaming_orchestrator::session_op_guard()?;
+        if let Some(refusal) = crate::gaming_orchestrator::plain_change_refusal(std::iter::once(rec_id.as_str())) {
+            return Err(refusal);
+        }
         return crate::history::apply_recommendation(rec_id, rec_title);
     }
     let _g = lock_store()?;
@@ -3063,7 +3068,26 @@ pub(crate) fn apply_recommendation(
     if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
         return Err(refusal);
     }
+    let _gm = crate::gaming_orchestrator::session_op_guard()?;
+    if let Some(refusal) = crate::gaming_orchestrator::plain_change_refusal(std::iter::once(rec_id.as_str())) {
+        return Err(refusal);
+    }
     crate::history::apply_recommendation(rec_id, rec_title)
+}
+
+/// CR-gm-spans-followups (d): the UI's undo (Test → Applied & history, the Trust Ledger). The audited
+/// undo itself is `history::rollback_change`, which the Trial and benchmark restores call directly;
+/// this command adds one refusal in front of it: an undo of a setting a Gaming Mode session holds
+/// would be put back on by that session's stop. Gaming Mode's operation gate (try_lock only) is held
+/// from the check through the undo, so a session can't start in between.
+#[tauri::command]
+pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
+    let _gm = crate::gaming_orchestrator::session_op_guard()?;
+    let rec_id = crate::history::rec_id_of_change(&change_id)?;
+    if let Some(refusal) = crate::gaming_orchestrator::plain_change_refusal(rec_id.iter().map(String::as_str)) {
+        return Err(refusal);
+    }
+    crate::history::rollback_change(change_id)
 }
 
 /// CR-gm-spans-trial: the settings every open (Pending or Running) Trial holds, for Gaming Mode's
@@ -3133,6 +3157,10 @@ pub(crate) fn apply_recommendations_batch(
         if let Some(refusal) = bench_refusal(items.iter().map(|i| i.rec_id.as_str())) {
             return Err(refusal);
         }
+        let _gm = crate::gaming_orchestrator::session_op_guard()?;
+        if let Some(refusal) = crate::gaming_orchestrator::plain_change_refusal(items.iter().map(|i| i.rec_id.as_str())) {
+            return Err(refusal);
+        }
         return crate::history::apply_recommendations_batch(items);
     }
     let _g = lock_store()?;
@@ -3141,6 +3169,10 @@ pub(crate) fn apply_recommendations_batch(
         return Err(refusal);
     }
     if let Some(refusal) = bench_refusal(items.iter().map(|i| i.rec_id.as_str())) {
+        return Err(refusal);
+    }
+    let _gm = crate::gaming_orchestrator::session_op_guard()?;
+    if let Some(refusal) = crate::gaming_orchestrator::plain_change_refusal(items.iter().map(|i| i.rec_id.as_str())) {
         return Err(refusal);
     }
     crate::history::apply_recommendations_batch(items)
@@ -5300,6 +5332,37 @@ mod experiment_tests {
             assert!(gate < check && check < write, "{sig}: gate, check, then the write");
             let held = &body[..write];
             assert!(held.contains(concat!("let _gm = crate::gaming_orchestrator::", "session_op_guard()")), "{sig}: held, not dropped");
+        }
+    }
+
+    #[test]
+    fn the_ui_apply_and_undo_refuse_a_setting_a_gaming_mode_session_holds() {
+        // CR-gm-spans-followups (d): the webview's undo is this module's, not history's bare undo.
+        let lib = include_str!("lib.rs");
+        let handler = lib.split_once("generate_handler![").map(|(_, r)| r).expect("handler list");
+        assert!(handler.contains("experiment::rollback_change,"), "the undo is registered from experiment");
+        let bare = handler.lines().any(|l| l.trim() == "rollback_change," || l.trim() == "history::rollback_change,");
+        assert!(!bare, "history's bare undo is not a command");
+        let src = include_str!("experiment.rs");
+        let gate = concat!("let _gm = crate::gaming_orchestrator::", "session_op_guard()?;");
+        let check = concat!("crate::gaming_orchestrator::", "plain_change_refusal(");
+        for (sig, write, arms) in [
+            ("pub(crate) fn apply_recommendation(", concat!("crate::history::", "apply_recommendation(rec_id"), 2),
+            ("pub(crate) fn apply_recommendations_batch(", concat!("crate::history::", "apply_recommendations_batch(items)"), 2),
+            ("pub(crate) fn rollback_change(", concat!("crate::history::", "rollback_change(change_id)"), 1),
+        ] {
+            let body = src.split_once(sig).and_then(|(_, r)| r.split_once("\n}\n")).map(|(b, _)| b).expect(sig);
+            // Every path to the ledger write (Trials on and off) takes the gate, then checks, then writes.
+            let mut from = 0;
+            for _ in 0..arms {
+                let rest = &body[from..];
+                let g = rest.find(gate).expect(sig);
+                let c = rest.find(check).expect(sig);
+                let w = rest.find(write).expect(sig);
+                assert!(g < c && c < w, "{sig}: gate, check, then the write");
+                from += w + write.len();
+            }
+            assert!(!body[from..].contains(write), "{sig}: no unchecked write");
         }
     }
 
