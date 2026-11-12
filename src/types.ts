@@ -222,7 +222,7 @@ export type MeasuredFrom = {
 };
 /** P9-session-on-this-hardware (priorities.rs `GpuTie`): a session recorded on another card is never
  *  sent. "not-recorded" = the session recorded no card; "card-unread" = this PC's card wasn't read.
- *  Absent (an older backend) = not tied either. */
+ *  Absent (only an older backend omits it; the two ship together) adds no line (settings-done `gpuUntied`). */
 export type GpuTie = "this-card" | "not-recorded" | "card-unread";
 export type UpgradeSuggestion = {
   kind: string;

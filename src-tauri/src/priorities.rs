@@ -95,7 +95,9 @@ fn session_gpu(row: &Value) -> Option<&str> {
 }
 
 /// The tie of one session to `gpu_now` (this PC's card, `hardware::cached_primary_gpu_name`).
-/// None = the session recorded a different card. Names compare trimmed and case-folded.
+/// None = the session recorded a different card. Names compare trimmed and case-folded. Review
+/// nit: two cards that tie on VRAM (WMI's AdapterRAM caps at 4 GB) could be picked in a different
+/// order; that skips a session (no verdict), never ties one to the wrong card.
 fn gpu_tie(row: &Value, gpu_now: Option<&str>) -> Option<GpuTie> {
     let Some(then) = session_gpu(row) else {
         return Some(GpuTie::NotRecorded);
