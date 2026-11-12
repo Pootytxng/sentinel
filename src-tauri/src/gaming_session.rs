@@ -53,6 +53,11 @@ pub(crate) struct SessionFile {
     /// Whether Compy started monitoring/overlay this session (so it knows to
     /// stop only what it started). Reserved for the deferred monitoring step.
     pub(crate) started_monitoring: bool,
+    /// CR-gm-skipped-line: the labels of the steps this session left alone because an open Trial or
+    /// the benchmark held their setting (CR-gm-spans-trial). Display only: never restored, never
+    /// read by stop or recovery. Additive: older files load as empty and an empty list isn't written.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) left_alone: Vec<String>,
 }
 
 // ─── Pure state logic ────────────────────────────────────────────────────
@@ -289,6 +294,7 @@ mod tests {
             app_version: "0.1.0".into(),
             changes: vec![change_stub("game-mode", false)],
             started_monitoring: false,
+            left_alone: Vec::new(),
         }
     }
 
@@ -477,6 +483,7 @@ mod session_fuzz_tests {
             app_version: hostile_string(rng, 1),
             changes,
             started_monitoring: rng.flag(),
+            left_alone: Vec::new(),
         }
     }
 

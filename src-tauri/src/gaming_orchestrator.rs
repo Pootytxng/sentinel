@@ -183,6 +183,29 @@ fn step_free(held: &[String], rec: &str) -> bool {
     !held.iter().any(|h| h == rec)
 }
 
+/// PURE (CR-gm-skipped-line): the labels of the steps a start with `opts` would have run but leaves
+/// alone because their setting is `held`, in the start's own step order. Mirrors `start`'s `free`
+/// checks: the core steps always, USB/PCIe only when opted in, a service only when selected.
+fn left_alone_labels(held: &[String], opts: &StartOptions, gate_open: bool) -> Vec<String> {
+    let mut out: Vec<String> = [
+        (REC_POWER, LABEL_POWER, true),
+        (REC_GAME_MODE, LABEL_GAME_MODE, true),
+        (REC_GAME_BAR, LABEL_GAME_BAR, true),
+        (REC_USB, LABEL_USB, opts.advanced_usb),
+        (REC_PCIE, LABEL_PCIE, opts.advanced_pcie),
+    ]
+    .into_iter()
+    .filter(|(rec, _, asked)| *asked && !step_free(held, rec))
+    .map(|(_, label, _)| label.to_string())
+    .collect();
+    for svc in services_to_suspend(opts, gate_open) {
+        if !step_free(held, service_rec(&svc)) {
+            out.push(suspend_label(&svc));
+        }
+    }
+    out
+}
+
 /// PURE: the refusal for a Trial (or the benchmark) on `rec_id` while a Gaming Mode session's
 /// contract holds it. `contract` is the session file's changes when one is on disk.
 fn session_hold_refusal(rec_id: &str, contract: Option<&[SessionChange]>) -> Option<String> {
@@ -562,6 +585,8 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         changes: vec![],
         started_monitoring: false,
+        // CR-gm-skipped-line: named for the pane, so a skipped step is said, not silently missing.
+        left_alone: left_alone_labels(&held, &opts, actions::service_suspend_gate()),
     };
     save_session(&file)?; // lock exists before any mutation
     set_live_session(&file.session_id); // mark this run as the live owner
@@ -1007,6 +1032,7 @@ mod spans_trial_tests {
             app_version: "0.9.26".into(),
             changes,
             started_monitoring: false,
+            left_alone: Vec::new(),
         }
     }
 
@@ -1157,6 +1183,40 @@ mod spans_trial_tests {
     }
 
     #[test]
+    fn a_session_names_the_steps_it_left_alone_for_a_trial() {
+        // CR-gm-skipped-line: the steps a Trial or the benchmark holds are named, not silently missing.
+        let held = vec!["game-mode".to_string(), "sysmain-disable".to_string(), "usb-selective-suspend-off".to_string()];
+        let core_only = StartOptions::default();
+        assert_eq!(left_alone_labels(&held, &core_only, true), vec![LABEL_GAME_MODE.to_string()], "USB not asked: not named");
+        let all = StartOptions {
+            advanced_usb: true,
+            advanced_pcie: true,
+            suspend_services: vec!["SysMain".into(), "WSearch".into()],
+        };
+        assert_eq!(
+            left_alone_labels(&held, &all, true),
+            vec![LABEL_GAME_MODE.to_string(), LABEL_USB.to_string(), "Suspend SysMain for this session".to_string()],
+        );
+        assert_eq!(left_alone_labels(&held, &all, false), vec![LABEL_GAME_MODE.to_string(), LABEL_USB.to_string()], "suspend gate shut: no service step");
+        assert!(left_alone_labels(&[], &all, true).is_empty(), "nothing held: nothing left alone");
+        // Additive on disk: an older file loads with none, and none isn't written.
+        let file = session_file("gm-1", SessionStatus::Active, vec![]);
+        let json = serde_json::to_value(&file).unwrap();
+        assert!(json.get("left_alone").is_none(), "{json}");
+        let back: SessionFile = serde_json::from_value(json).unwrap();
+        assert!(back.left_alone.is_empty());
+        let named = SessionFile { left_alone: vec![LABEL_GAME_MODE.into()], ..file };
+        let json = serde_json::to_value(&named).unwrap();
+        assert_eq!(json["left_alone"], serde_json::json!([LABEL_GAME_MODE]));
+        // And the start records them on the contract before anything changes.
+        let src = include_str!("gaming_orchestrator.rs");
+        let body = src.split_once("pub(crate) fn start(").map(|(_, r)| r).expect("start");
+        let rec = body.find("left_alone: left_alone_labels(&held, &opts,").expect("recorded");
+        let save = body.find("save_session(&file)?; // lock exists before any mutation").expect("first save");
+        assert!(rec < save);
+    }
+
+    #[test]
     fn a_step_is_free_only_when_nothing_holds_its_setting() {
         let held = vec!["game-mode".to_string(), "sysmain-disable".to_string()];
         assert!(!step_free(&held, REC_GAME_MODE), "a Trial holds it: skipped");
@@ -1186,6 +1246,7 @@ mod spans_trial_tests {
             app_version: "0.9.26".into(),
             changes: vec![change(LABEL_POWER), change(LABEL_GAME_MODE)],
             started_monitoring: false,
+            left_alone: Vec::new(),
         };
         crate::gaming_session::save_session(&file).unwrap();
         // Not started by this test process, so it reads as a session to finish (review r1, opus 3).
@@ -1351,6 +1412,7 @@ mod service_suspend_integration_tests {
                 },
             ],
             started_monitoring: false,
+            left_alone: Vec::new(),
         };
         let json = serde_json::to_string(&file).unwrap();
         let back = parse_session_json(&json).expect("round-trips at the current schema");
@@ -1411,6 +1473,7 @@ mod elevation_batch_tests {
             app_version: "test".into(),
             changes: vec![],
             started_monitoring: false,
+            left_alone: Vec::new(),
         }
     }
 
@@ -1980,6 +2043,7 @@ mod gaming_mode_qa {
                 elevated_restore: false,
             }],
             started_monitoring: false,
+            left_alone: Vec::new(),
         };
         save_session(&file).expect("save fixture");
 
@@ -2024,6 +2088,7 @@ mod gaming_mode_qa {
                 elevated_restore: true,
             }],
             started_monitoring: false,
+            left_alone: Vec::new(),
         };
         save_session(&file).expect("save fixture");
 
@@ -2065,6 +2130,7 @@ mod gaming_mode_qa {
                 elevated_restore: false,
             }],
             started_monitoring: false,
+            left_alone: Vec::new(),
         };
         save_session(&file).expect("save fixture");
 
@@ -2124,6 +2190,7 @@ mod gaming_mode_qa {
                 elevated_restore: true,
             }],
             started_monitoring: false,
+            left_alone: Vec::new(),
         };
         save_session(&file).expect("save fixture");
 

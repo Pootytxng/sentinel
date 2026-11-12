@@ -74,6 +74,8 @@
     "noChangesLine": "No changes needed on this PC",
     "changesLine_one": "{{count}} change · restored on exit",
     "changesLine_other": "{{count}} changes · restored on exit",
+    "leftAloneLine_one": "Left alone because a Trial or the benchmark is testing it: {{list}}.",
+    "leftAloneLine_other": "Left alone because a Trial or the benchmark is testing them: {{list}}.",
     "sessionEndedHeadline": "Session ended",
     "sessionEndedDetail": "This session hadn't changed anything, so there was nothing to restore.",
     "restoredHeadline": "Your settings are back",

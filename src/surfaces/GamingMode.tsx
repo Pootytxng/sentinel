@@ -318,6 +318,15 @@ export function GamingMode() {
   };
 
   const summary = session ? summarizeChanges(session.changes, t) : null;
+  // CR-gm-skipped-line: a step the session left alone because a Trial or the benchmark is testing
+  // its setting is said beside the honesty line (both faces), not silently missing from the list.
+  const leftAlone = session?.left_alone ?? [];
+  const leftAloneLine =
+    leftAlone.length > 0 ? (
+      <p className="gaming-left-alone" data-testid="gm-left-alone">
+        {t("gaming.gamingMode.leftAloneLine", { count: leftAlone.length, list: leftAlone.join(", ") })}
+      </p>
+    ) : null;
 
   // Console face (compy_gaming_console, DEFAULT ON — "0" devtools failsafe restores the classic
   // card below). Presentation only: both faces share every hook/handler above — same audited
@@ -524,6 +533,7 @@ export function GamingMode() {
                 ))}
               </ul>
               <p className="gc-honesty">{summary.line}</p>
+              {leftAloneLine}
               <button className="gc-engage gc-engage-on" disabled={busy} onClick={onStop}>
                 {busy ? t("gaming.gamingMode.restoringEllipsis") : t("gaming.gamingMode.disengageButton")}
               </button>
@@ -710,6 +720,7 @@ export function GamingMode() {
           )}
         </div>
 
+        {active && summary && leftAloneLine}
         {/* Always-visible honesty line (active) */}
         {active && summary && (
           <div className="gaming-honesty">

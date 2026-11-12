@@ -28,6 +28,9 @@ export type GamingSessionFile = {
   app_version: string;
   changes: SessionChange[];
   started_monitoring: boolean;
+  /** CR-gm-skipped-line: backend labels of steps left alone because a Trial or the benchmark held
+   *  their setting. Absent on older files and when nothing was left alone. */
+  left_alone?: string[];
 };
 
 export type StartOptions = {
