@@ -1837,7 +1837,7 @@ pub fn run() {
             history::remove_known_preload_app,
             history::restore_leftover,
             get_preload_apps,
-            rollback_change,
+            experiment::rollback_change,
             history::changed_outside_offers,
             history::record_changed_outside,
             get_applied_changes,

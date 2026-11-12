@@ -43,6 +43,14 @@ pub(crate) enum KnownService {
 }
 
 impl KnownService {
+    /// Every allowlisted service, so callers iterate the enum instead of listing it by hand.
+    pub(crate) const ALL: [KnownService; 4] = [
+        KnownService::SysMain,
+        KnownService::DiagTrack,
+        KnownService::WSearch,
+        KnownService::NvTelemetryContainer,
+    ];
+
     pub(crate) fn name(&self) -> &'static str {
         match self {
             KnownService::SysMain => "SysMain",

@@ -156,15 +156,10 @@ fn rec_of_label(label: &str) -> Option<&'static str> {
         LABEL_GAME_BAR => Some(REC_GAME_BAR),
         LABEL_USB => Some(REC_USB),
         LABEL_PCIE => Some(REC_PCIE),
-        _ => [
-            actions::KnownService::SysMain,
-            actions::KnownService::DiagTrack,
-            actions::KnownService::WSearch,
-            actions::KnownService::NvTelemetryContainer,
-        ]
-        .iter()
-        .find(|s| suspend_label(s) == label)
-        .map(service_rec),
+        _ => actions::KnownService::ALL
+            .iter()
+            .find(|s| suspend_label(s) == label)
+            .map(service_rec),
     }
 }
 
@@ -204,11 +199,89 @@ pub(crate) fn session_holds_refusal(rec_id: &str) -> Option<String> {
     match crate::gaming_session::pending_contract_files() {
         Ok(found) if found.is_empty() => None,
         Ok(found) => match load_session() {
-            Some(file) => session_hold_refusal(rec_id, Some(&file.changes)),
+            Some(file) => file_hold_refusal(rec_id, &file, live_session_id().as_deref()),
             None => Some(unreadable_session_refusal(&found, &crate::gaming_session::session_data_dir())),
         },
         Err(e) => Some(format!("Compy couldn't check Gaming Mode's session ({e}). Nothing was changed.")),
     }
+}
+
+/// CR-gm-spans-followups (d): the refusal for a plain UI apply or undo of any of `rec_ids` while a
+/// Gaming Mode session this Compy can put back holds it. That session's stop writes its own snapshot
+/// back, so a newer apply would read "applied" over a setting put back off, and an undo would be put
+/// back on. The caller keeps the returned gate ([`session_op_guard`], try_lock only) from this check
+/// through its ledger write, so a session can't start in between. Review r1 (opus SHOULD-FIX 1): the
+/// gate is taken only when a session step touches one of `rec_ids` (`None` otherwise), so a change
+/// Gaming Mode never touches neither waits on nor blocks a Gaming Mode start or stop.
+pub(crate) fn plain_change_gate<'a>(
+    rec_ids: impl Iterator<Item = &'a str>,
+) -> Result<Option<std::sync::MutexGuard<'static, ()>>, String> {
+    let rec_ids: Vec<&str> = rec_ids.filter(|r| session_can_touch(r)).collect();
+    if rec_ids.is_empty() {
+        return Ok(None); // no session step touches these settings: nothing to hold or read
+    }
+    let gate = session_op_guard()?;
+    match plain_change_refusal(&rec_ids) {
+        Some(refusal) => Err(refusal),
+        None => Ok(Some(gate)),
+    }
+}
+
+/// The read behind [`plain_change_gate`], for settings a session step touches.
+fn plain_change_refusal(rec_ids: &[&str]) -> Option<String> {
+    let listing = crate::gaming_session::pending_contract_files();
+    let file = match &listing {
+        Ok(found) if !found.is_empty() => load_session(),
+        _ => None,
+    };
+    plain_hold_refusal(rec_ids, listing.as_deref(), file.as_ref(), live_session_id().as_deref())
+}
+
+/// PURE half of [`plain_change_refusal`]. `listing` is the Gaming Mode record files on disk; `file`
+/// the readable session. A record this Compy can't read is not refused here: this Compy's stop and
+/// recovery read only a readable session, so nothing here would write over the change (a Trial start
+/// still refuses it, `session_holds_refusal`). A folder that can't be listed refuses: a readable
+/// session in it could hold the setting.
+fn plain_hold_refusal(
+    rec_ids: &[&str],
+    listing: Result<&[String], &String>,
+    file: Option<&SessionFile>,
+    live: Option<&str>,
+) -> Option<String> {
+    match listing {
+        Err(e) => Some(format!("Compy couldn't check Gaming Mode's session ({e}). Nothing was changed.")),
+        Ok([]) => None,
+        Ok(_) => rec_ids.iter().find_map(|r| file_hold_refusal(r, file?, live)),
+    }
+}
+
+/// The session id this process started, if any.
+fn live_session_id() -> Option<String> {
+    LIVE_SESSION.lock().ok().and_then(|g| g.clone())
+}
+
+/// PURE (review r1, opus SHOULD-FIX 3): the refusal for `rec_id` against a readable session `file`,
+/// worded by the session's state. "Stop Gaming Mode" is only the way out for a session running in
+/// this Compy; one left over from an earlier run, or one that didn't finish putting its changes
+/// back, is finished from the recovery panel.
+fn file_hold_refusal(rec_id: &str, file: &SessionFile, live: Option<&str>) -> Option<String> {
+    let running_here =
+        matches!(file.status, SessionStatus::Active) && same_session(Some(&file.session_id), live);
+    let refusal = session_hold_refusal(rec_id, Some(&file.changes))?;
+    Some(if running_here {
+        refusal
+    } else {
+        "A Gaming Mode session that didn't finish putting its changes back holds this setting, and \
+         puts it back when it's finished. Finish it first in Gaming Mode (\"Finish the last Gaming \
+         Mode session\"). Nothing was changed."
+            .to_string()
+    })
+}
+
+/// PURE: whether any Gaming Mode session step of this version touches the setting `rec_id`.
+fn session_can_touch(rec_id: &str) -> bool {
+    [REC_POWER, REC_GAME_MODE, REC_GAME_BAR, REC_USB, REC_PCIE].contains(&rec_id)
+        || actions::KnownService::ALL.iter().any(|s| service_rec(s) == rec_id)
 }
 
 /// PURE (CR-gm-spans-followups a): the refusal when a Gaming Mode record is on disk but this Compy
@@ -912,6 +985,18 @@ mod spans_trial_tests {
         }
     }
 
+    fn session_file(id: &str, status: SessionStatus, changes: Vec<SessionChange>) -> SessionFile {
+        SessionFile {
+            schema_version: SESSION_SCHEMA_VERSION,
+            session_id: id.into(),
+            status,
+            started_at: "2026-11-11T00:00:00Z".into(),
+            app_version: "0.9.26".into(),
+            changes,
+            started_monitoring: false,
+        }
+    }
+
     #[test]
     fn every_session_step_names_the_ledger_setting_it_touches() {
         // The labels stay byte-identical to the ones the webview pins (gaming-mode.test.ts).
@@ -937,6 +1022,81 @@ mod spans_trial_tests {
         }
         assert_eq!(rec_of_label("Suspend nothing for this session"), None);
         assert_eq!(rec_of_label("Windows Game Mode on legacy"), None, "exact labels only");
+    }
+
+    #[test]
+    fn every_allowlisted_service_suspend_names_its_ledger_setting() {
+        // CR-gm-spans-followups (e): rec_of_label iterates KnownService::ALL, so ALL must list every
+        // variant. The match has no wildcard: a new variant fails to compile here until it is listed.
+        let mut listed = 0;
+        for svc in KnownService::ALL.iter() {
+            match svc {
+                KnownService::SysMain
+                | KnownService::DiagTrack
+                | KnownService::WSearch
+                | KnownService::NvTelemetryContainer => listed += 1,
+            }
+            assert_eq!(KnownService::from_name(svc.name()).as_ref(), Some(svc), "{}", svc.name());
+            assert_eq!(rec_of_label(&suspend_label(svc)), Some(service_rec(svc)), "{}", svc.name());
+        }
+        assert_eq!(listed, 4);
+        for name in ["SysMain", "DiagTrack", "WSearch", "NvTelemetryContainer"] {
+            let svc = KnownService::from_name(name).expect("allowlisted");
+            assert!(KnownService::ALL.contains(&svc), "{name} is in ALL");
+        }
+    }
+
+    #[test]
+    fn a_plain_apply_or_undo_is_refused_only_for_a_setting_a_readable_session_holds() {
+        // CR-gm-spans-followups (d).
+        let file = session_file("gm-1", SessionStatus::Active, vec![change(LABEL_POWER), change(LABEL_GAME_MODE)]);
+        let live = Some("gm-1");
+        let found = vec!["gaming-session.json".to_string()];
+        let held = plain_hold_refusal(&["game-mode"], Ok(&found), Some(&file), live).expect("the session holds it");
+        assert!(held.contains("Stop Gaming Mode first") && held.contains("Nothing was changed"), "{held}");
+        // A batch naming it is refused whole.
+        assert!(plain_hold_refusal(&["hags-enable", "power-ultimate"], Ok(&found), Some(&file), live).is_some());
+        assert_eq!(plain_hold_refusal(&["game-bar-disable"], Ok(&found), Some(&file), live), None, "not held");
+        assert_eq!(plain_hold_refusal(&["game-mode"], Ok(&[]), None, None), None, "no session");
+        // A record this Compy can't read can't be put back by it, so it doesn't refuse a plain change.
+        let orphan = vec!["gaming-session.orphaned-1.json".to_string()];
+        assert_eq!(plain_hold_refusal(&["game-mode"], Ok(&orphan), None, None), None);
+        let err = "access denied".to_string();
+        let refused = plain_hold_refusal(&["game-mode"], Err(&err), None, None).expect("can't list: refused");
+        assert!(refused.contains("access denied") && refused.contains("Nothing was changed"), "{refused}");
+        // Only the settings a session step touches are read, or take Gaming Mode's gate, at all.
+        for rec in [REC_POWER, REC_GAME_MODE, REC_GAME_BAR, REC_USB, REC_PCIE, "sysmain-disable", "nvidia-telemetry"] {
+            assert!(session_can_touch(rec), "{rec}");
+        }
+        assert!(!session_can_touch("hags-enable") && !session_can_touch("visual-effects"));
+        let ungated = plain_change_gate(["hags-enable"].into_iter()).expect("never refused");
+        assert!(ungated.is_none(), "an untouched setting takes no gate");
+        let src = include_str!("gaming_orchestrator.rs");
+        let body = src.split_once("pub(crate) fn plain_change_gate<").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        let filter = body.find("session_can_touch(").expect("filters first");
+        let gate = body.find("let gate = session_op_guard()?;").expect("then the gate");
+        let read = body.find("plain_change_refusal(").expect("then the read");
+        assert!(filter < gate && gate < read && body.contains("None => Ok(Some(gate))"), "filter, gate, read, gate returned held");
+    }
+
+    #[test]
+    fn a_session_not_running_in_this_compy_is_finished_from_the_recovery_panel() {
+        // Review r1 (opus SHOULD-FIX 3): "Stop Gaming Mode" is only the way out for a session running here.
+        let changes = vec![change(LABEL_GAME_MODE)];
+        let running = session_file("gm-1", SessionStatus::Active, changes.clone());
+        let stop = file_hold_refusal("game-mode", &running, Some("gm-1")).expect("held");
+        assert!(stop.contains("Stop Gaming Mode first"), "{stop}");
+        for (file, live) in [
+            (running.clone(), None),                                                        // an earlier run's
+            (running.clone(), Some("gm-2")),                                                // another session id
+            (session_file("gm-1", SessionStatus::RestoreFailed, changes.clone()), Some("gm-1")), // didn't finish
+            (session_file("gm-1", SessionStatus::RestorePending, changes.clone()), Some("gm-1")),
+        ] {
+            let words = file_hold_refusal("game-mode", &file, live).expect("still held");
+            assert!(words.contains("Finish the last Gaming Mode session") && !words.contains("Stop Gaming Mode"), "{words}");
+            assert!(words.ends_with("Nothing was changed."), "{words}");
+        }
+        assert_eq!(file_hold_refusal("hags-enable", &running, None), None, "a setting it doesn't hold");
     }
 
     #[test]
@@ -966,8 +1126,11 @@ mod spans_trial_tests {
         std::fs::create_dir_all(&dir).unwrap();
         let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
         assert_eq!(session_holds_refusal(REC_GAME_MODE), None, "no session");
+        assert_eq!(plain_change_refusal(&[REC_GAME_MODE]), None, "no session: a plain change runs");
         std::fs::write(dir.join("gaming-session.json"), "{}").unwrap();
         assert!(session_holds_refusal(REC_GAME_MODE).expect("unreadable").contains("can't read"));
+        // CR-gm-spans-followups (d): an unreadable record can't be put back by this Compy.
+        assert_eq!(plain_change_refusal(&[REC_GAME_MODE]), None);
         let file = SessionFile {
             schema_version: crate::gaming_session::SESSION_SCHEMA_VERSION,
             session_id: "gm-1".into(),
@@ -978,8 +1141,12 @@ mod spans_trial_tests {
             started_monitoring: false,
         };
         crate::gaming_session::save_session(&file).unwrap();
-        assert!(session_holds_refusal(REC_GAME_MODE).expect("held").contains("Stop Gaming Mode first"));
+        // Not started by this test process, so it reads as a session to finish (review r1, opus 3).
+        assert!(session_holds_refusal(REC_GAME_MODE).expect("held").contains("holds this setting"));
         assert_eq!(session_holds_refusal("hags-enable"), None, "a setting the session doesn't hold");
+        let held = plain_change_refusal(&["hags-enable", REC_GAME_MODE]).expect("a batch naming it");
+        assert!(held.contains("holds this setting"), "{held}");
+        assert_eq!(plain_change_refusal(&[REC_GAME_BAR]), None, "touchable but not held");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -999,6 +1166,8 @@ mod spans_trial_tests {
         assert!(words.contains("move that file out of that folder"), "a way out: {words}");
         assert!(!words.contains("Recover or end Gaming Mode first"), "{words}");
         assert!(words.ends_with("Nothing was changed."), "{words}");
+        // CR-gm-spans-followups (d), review r1 (opus 2): a set-aside record alone doesn't refuse a plain change.
+        assert_eq!(plain_change_refusal(&[REC_GAME_MODE]), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
