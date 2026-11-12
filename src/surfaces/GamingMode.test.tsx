@@ -44,6 +44,46 @@ afterEach(() => {
   localStorage.clear();
 });
 
+describe("GamingMode names the steps it left alone (CR-gm-skipped-line)", () => {
+  it("a running session says which steps a Trial or the benchmark kept it from changing", async () => {
+    invokeMock.mockImplementation((cmd) => {
+      if (cmd === "get_gaming_session_state")
+        return Promise.resolve({ ...session("active"), left_alone: ["Windows Game Mode on", "Suspend SysMain for this session"] });
+      if (cmd === "gaming_session_is_live") return Promise.resolve(true);
+      return Promise.resolve(null);
+    });
+    render(<GamingMode />);
+    const line = await screen.findByTestId("gm-left-alone");
+    expect(line.textContent).toBe(
+      "Left alone because a Trial or the benchmark was testing them when this session started: Windows Game Mode on, Suspend SysMain for this session.",
+    );
+  });
+
+  it("says nothing when nothing was left alone, or on an older session file", async () => {
+    invokeMock.mockImplementation((cmd) => {
+      if (cmd === "get_gaming_session_state") return Promise.resolve(session("active"));
+      if (cmd === "gaming_session_is_live") return Promise.resolve(true);
+      return Promise.resolve(null);
+    });
+    render(<GamingMode />);
+    await screen.findByText("Stop Gaming Mode");
+    expect(screen.queryByTestId("gm-left-alone")).toBeNull();
+  });
+
+  it("the console face says it too", async () => {
+    localStorage.setItem("compy_gaming_console", "1");
+    invokeMock.mockImplementation((cmd) => {
+      if (cmd === "get_gaming_session_state")
+        return Promise.resolve({ ...session("active"), left_alone: ["Windows Game Mode on"] });
+      if (cmd === "gaming_session_is_live") return Promise.resolve(true);
+      return Promise.resolve(null);
+    });
+    render(<GamingMode />);
+    const line = await screen.findByTestId("gm-left-alone");
+    expect(line.textContent).toBe("Left alone because a Trial or the benchmark was testing it when this session started: Windows Game Mode on.");
+  });
+});
+
 describe("GamingMode restore-success confirmation", () => {
   it("Stop success renders a visible confirmation naming every restored change", async () => {
     invokeMock.mockImplementation((cmd) => {

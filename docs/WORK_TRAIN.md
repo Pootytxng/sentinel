@@ -90,7 +90,7 @@ release checklist); no new rules.
 - `RELEASE_STATE.md` gates still OPEN, owner territory: code signing (`STATE:code_signing=open`), legal
   (`STATE:legal=open`).
 - Unticked queue items: CR-1102-left (engineering lines), CR-bench-stack-hold,
-  CR-gm-skipped-line, CR-gm-restore-partial, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
+  CR-live-changes-twice, CR-view-1111d-wording, CR-gm-restore-partial, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
   exit proofs above; P8-first-advanced waits on P4 (Phase 8, not needed for v1.0).
 - CR-ultimate-identity: landed `ec326810` (2026-11-11 s19), not installed yet; follow-ups in CR-ultimate-followups.
 
@@ -251,6 +251,16 @@ release checklist); no new rules.
       NOT visually proven: the self-review PASS on the installed build (tip open, readings hidden) is still owed at the
       next install, with the rest of view-1111c (Optimize → Check session-hint shot, Test in zh-CN, panel heights at
       1280×720 and 1920×1080).
+      Installed `0afbfb2c` 2026-11-11 22:54; self-review of `_train\view-1111d\` (real CDP pointer hover): the tip is
+      opaque and readable (items 2, 4, 12 PASS); overall verdict FAIL on items 3 and 6, queued below.
+- [ ] **CR-live-changes-twice** (self-review FAIL item 3, installed `0afbfb2c`, `_train\view-1111d\02-live.png`) The
+      Live room's Last-session card says "14 Compy changes were on" twice (`.mc-ev-changes`, MonitorConsole.tsx ~508,
+      and the `.mc-delta-tag` Term ~599): render the count once, keeping the tagged one (it carries the tooltip). TS.
+- [ ] **CR-view-1111d-wording** (self-review FAIL item 6, installed `0afbfb2c`) (a) zh-CN Test room leaves the eyebrow
+      date and the footer "Outbound: signed update check only" in English (`_train\view-1111d\11-test-zh-CN.png`);
+      (b) "Applied & history — every change, undoable" (`06-test-applied.png`) while a changed-outside row has no undo
+      (`07-test-history-changed-outside-row.png`); (c) the Live comparison tiles show unitless "▲2 ▲3 ▲4"
+      (`02-live.png`) where History says "+2 fps vs last". Check whether each predates s20; en + zh-CN; TS.
 - [ ] **CR-bench-stack-hold** (r1 sonnet SHOULD-FIX of CR-bench-holds-setting) The DARK aggregate-stack trial
       (`stack_trial_gate()` false) holds nothing; before arming it, hold every setting it applies the way the tweak trial does.
 - [x] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game
@@ -296,9 +306,18 @@ release checklist); no new rules.
       vitest 535/538 (3 site-app suites). What a user sees: during Gaming Mode, a Fix, Optimize apply or Roll back of a
       setting the session changed says "Stop Gaming Mode first. Nothing was changed." (English, like the Trial
       refusals). (b) moved to CR-gm-skipped-line.
-- [ ] **CR-gm-skipped-line** ((b) of CR-gm-spans-followups; UI) A visible line in Gaming Mode for a step it left alone
+- [x] **CR-gm-skipped-line** ((b) of CR-gm-spans-followups; UI) A visible line in Gaming Mode for a step it left alone
       because a Trial or the benchmark is testing it (en + zh-CN). Needs the skipped steps recorded on the session
       (additive `SessionFile` field, `gaming_session.rs`) and shown in GamingMode.tsx; one review.
+      Done (2026-11-11 s20, not installed; SHA in the merge): the start records `left_alone` (the labels of the steps a
+      Trial or the benchmark held, in step order; core always, USB/PCIe when opted in, a service when selected) on
+      the contract before anything changes; additive, display only, never restored or read by stop/recovery; older
+      files load with none and none isn't written. Both faces say, right after the honesty line, "Left alone because a
+      Trial or the benchmark was testing it when this session started: <labels>." (en + zh-CN; muted label size).
+      Reviews r1 opus + sonnet APPROVE-WITH-NITS (taken: past-tense wording, styling, one order in both faces, test
+      cut at the end of `start`, the suspend gate read once). Tests fail without it. NOT visually checked: the line
+      shows only during a session started while a Trial or the benchmark holds a setting; a self-review of it is
+      owed when one is captured.
 - [ ] **CR-gm-restore-partial** (r2 opus SHOULD-FIX of CR-gm-spans-followups; pre-existing) A failed restore keeps the
       whole contract, including changes it did restore, so one step that always fails (a removed service or plan)
       leaves every setting of that session refused for Trials and plain apply/undo with no way out. Drop
