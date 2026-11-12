@@ -1608,9 +1608,16 @@ isolation"; read-only, no product names, prices or wattages guessed (unknown sta
       Not visually checked (needs a finished game summary on a GPU-limited game; none on this rig yet).
 Refill 2026-11-12 s21 (Phase 9 Exit: "name the measured limiter in system context or say 'no upgrade recommended',
 never a part in isolation"; read-only, measured only, unknown stays unknown, no product names or prices):
-- [ ] **P9-limit-source** Under "GPU was the measured limiter" (Optimize → Check), the line names what it was measured
+- [x] **P9-limit-source** Under "GPU was the measured limiter" (Optimize → Check), the line names what it was measured
       from: the game, the session's date and how many samples were GPU-busy, from the recorded session; none recorded
       = no line. en + zh-CN; Check.test.tsx: recorded / not recorded.
+      Done (2026-11-12 s22, not installed; SHAs in the merge): the row carries `measured_from` (the same
+      `newest_measured_row` the share came from: game, start, GpuLoad busy/readings, the 95% threshold) and Check says
+      "Measured from your ROB RUN session on Nov 11: 720 of 900 GPU readings were at 95% load or more." (zh-CN too;
+      the year when it isn't this one); no game or start recorded = no line. This also answers s21's "the GPU-limit
+      line follows the newest session overall": the line now says which game's session it is. Review sonnet
+      APPROVE-WITH-NITS (year nit taken; threshold is the same constant). The TS test fails on main's Check.tsx.
+      cargo 1879/0, clippy clean; full vitest in the session log. Not visually checked (no GPU-limited session here).
 - [ ] **P9-screen-is-limit** In the same block, when that session's measured average FPS is at or above the screen's
       measured refresh rate, say the screen is the limit ("your 250 Hz screen already shows every frame: no upgrade
       recommended for this game") instead of pointing at the GPU; refresh or FPS unmeasured = no line. en + zh-CN;
