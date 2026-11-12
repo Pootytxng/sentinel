@@ -243,7 +243,11 @@ fn build_gpu_games(sessions: &Value) -> (Vec<GameGpuLimit>, Vec<GameGpuClear>) {
                     peak_pct: read.peak_pct,
                     threshold_pct: GPU_LIMITED_PCT,
                 });
-            } else if let Some(l) = read.load.filter(|l| l.readings >= GPU_SUSTAINED_MIN_READINGS && l.busy <= l.readings) {
+            } else if let Some(l) = read.load.filter(|l| {
+                l.readings >= GPU_SUSTAINED_MIN_READINGS
+                    && l.busy <= l.readings
+                    && u64::from(l.busy) * 100 < u64::from(l.readings) * GPU_SUSTAINED_SHARE_PCT
+            }) {
                 clear.push(GameGpuClear {
                     game: game.to_string(),
                     busy: l.busy,
@@ -1104,6 +1108,10 @@ mod priority_tests {
         assert!(build_gpu_clear_games(&brief).is_empty(), "under the reading floor decides nothing");
         assert!(build_gpu_clear_games(&json!([{ "process_name": "d.exe", "peak_gpu_usage_pct": 99 }])).is_empty());
         assert_eq!(build_gpu_clear_games(&edge).len(), 1, "99 of 200 is measured, and not limited");
+        // Mostly-busy counts with a peak under the threshold fail the sustained rule on the peak alone:
+        // that row is contradictory, so it is neither limited nor "measured clear".
+        let odd = json!([{ "process_name": "e.exe", "peak_gpu_usage_pct": 80, "gpu_load": { "readings": 900, "busy": 600 } }]);
+        assert!(build_gpu_limited_games(&odd).is_empty() && build_gpu_clear_games(&odd).is_empty());
         assert_eq!(p.gpu_clear_games.len(), 1, "carried on the priorities payload");
     }
 }

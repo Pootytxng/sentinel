@@ -67,7 +67,7 @@ export function settingsDoneLine(
     [clear.busy, clear.readings, clear.threshold_pct].every(Number.isFinite) &&
     clear.readings > 0 &&
     clear.busy >= 0 &&
-    clear.busy <= clear.readings
+    clear.busy * 2 < clear.readings // under the half Compy counts as GPU-limited
   ) {
     return {
       kind: "nothing-limiting",
