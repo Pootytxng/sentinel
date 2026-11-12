@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, act } from "@testing-library/react";
 
 // Guard for the Lab overhaul (spec 2026-07-08-lab-proving-ground). LabGround IS the Lab now: the
 // 2026-08-06 generation prune deleted Lab.tsx and LabV2.tsx and retired the `compy_lab_ground`
@@ -211,5 +211,32 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
     )!;
     fireEvent.click(offNode);
     expect(off.querySelector(".lab-optimize-power")).toBeNull();
+  });
+
+  // CR-view-1111d-wording (view-1111d/11-test-zh-CN.png): the eyebrow's date followed the OS
+  // locale, so the zh-CN room read "NOV 11, 2026". It follows the app's language now.
+  it("the eyebrow date is written in the app's language (zh-CN), not the OS's", async () => {
+    const { default: i18n } = await import("../i18n");
+    const { invoke } = await import("@tauri-apps/api/core");
+    // The zh-CN tuning guide asks for the session list; the real command answers a list, never null.
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      Promise.resolve(cmd === "get_session_summaries" ? [] : null) as never,
+    );
+    await act(async () => {
+      await i18n.changeLanguage("zh-CN");
+    });
+    try {
+      const c = renderMerged([SAFE_REC]);
+      const date = c.querySelector(".v2-eyebrow-date")!.textContent!;
+      const expected = new Date().toLocaleDateString("zh-CN", { month: "short", day: "numeric", year: "numeric" });
+      expect(date).toBe(expected);
+      expect(date).toMatch(/年/);
+      expect(date).not.toMatch(/[A-Za-z]/);
+    } finally {
+      await act(async () => {
+        await i18n.changeLanguage("en");
+      });
+      vi.mocked(invoke).mockImplementation(() => Promise.resolve(null) as never);
+    }
   });
 });

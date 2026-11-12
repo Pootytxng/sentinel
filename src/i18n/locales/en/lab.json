@@ -213,7 +213,7 @@
     "driftedRestore_one": "{{count}} was turned off outside Compy — restore it below.",
     "driftedRestore_other": "{{count}} were turned off outside Compy — restore them below.",
     "mixedLeft": "{{totalLeft}} left below — {{fresh}} to enable, {{drifted}} turned off outside Compy.",
-    "appliedHistorySummary": "Applied & history — every change, undoable",
+    "appliedHistorySummary": "Applied & history — what Compy changed, and what you can undo",
     "appliedHistorySummaryUnvouched": "Applied & history — Compy can't promise every change here can be undone",
     "moreCleanupSummary": "More cleanup (optional)",
     "powerFeaturesSummary": "Power features — Gaming Mode (advanced, reversible)",

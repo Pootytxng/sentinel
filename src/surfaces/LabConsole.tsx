@@ -338,8 +338,9 @@ export function LabConsole({
   // draws it as the list's last row). Closed by default; the form stays mounted either way.
   const [manualOpen, setManualOpen] = useState(false);
   // The eyebrow's dateline — the date this bench is being read (today), never fabricated. Same
-  // rule, same helper shape as Health's masthead dateline.
-  const dateline = new Date().toLocaleDateString(undefined, {
+  // rule, same helper shape as Health's masthead dateline. In the app's language, not the OS's
+  // (CR-view-1111d-wording: the zh-CN eyebrow read "NOV 11, 2026").
+  const dateline = new Date().toLocaleDateString(i18n.language, {
     month: "short",
     day: "numeric",
     year: "numeric",

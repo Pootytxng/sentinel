@@ -78,6 +78,8 @@
     "deltaAvgFps": "Avg FPS",
     "deltaOneLow": "1% low",
     "deltaSpikes": "Spikes",
+    "deltaSpikesValue_one": "{{glyph}} spike",
+    "deltaSpikesValue_other": "{{glyph}} spikes",
     "changesOn_one": "{{count}} Compy change was on",
     "changesOn_other": "{{count}} Compy changes were on",
     "changesUnknown": "Compy changes on — not recorded",

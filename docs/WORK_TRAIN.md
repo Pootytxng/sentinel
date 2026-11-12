@@ -89,10 +89,13 @@ release checklist); no new rules.
   **P7-exit-proof** (friend-dependent half deferred the same way).
 - `RELEASE_STATE.md` gates still OPEN, owner territory: code signing (`STATE:code_signing=open`), legal
   (`STATE:legal=open`).
-- Unticked queue items: CR-1102-left (engineering lines), CR-bench-stack-hold,
-  CR-view-1111d-wording, CR-gm-restore-partial, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
+- Unticked queue items: CR-1102-left (engineering lines), CR-gm-stop-busy, CR-fix-needs-trial-store,
+  CR-range3-nits, CR-gm-restore-partial, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
   exit proofs above; P8-first-advanced waits on P4 (Phase 8, not needed for v1.0).
 - CR-ultimate-identity: landed `ec326810` (2026-11-11 s19), not installed yet; follow-ups in CR-ultimate-followups.
+- Known pre-existing gap (third range review, 2026-11-12), not for action yet: **CR-trial-gm-between**, establish first
+  whether a Trial notices a Gaming Mode session started and stopped between its two sessions (it would confound the
+  result).
 
 ## Queue
 
@@ -260,13 +263,38 @@ release checklist); no new rules.
       count of the same newest session, the readings strip leaves it out; with no comparison (or a background-only
       newest session) the strip still says it. Two tests; the duplicate one fails without the change. Visual PASS owed
       at the next install.
-- [ ] **CR-view-1111d-wording** (self-review FAIL item 6, installed `0afbfb2c`) (a) zh-CN Test room leaves the eyebrow
+- [x] **CR-view-1111d-wording** (self-review FAIL item 6, installed `0afbfb2c`) (a) zh-CN Test room leaves the eyebrow
       date and the footer "Outbound: signed update check only" in English (`_train\view-1111d\11-test-zh-CN.png`);
       (b) "Applied & history — every change, undoable" (`06-test-applied.png`) while a changed-outside row has no undo
       (`07-test-history-changed-outside-row.png`); (c) the Live comparison tiles show unitless "▲2 ▲3 ▲4"
       (`02-live.png`) where History says "+2 fps vs last". Check whether each predates s20; en + zh-CN; TS.
+      Done `d46b2603` + r1 nit (2026-11-12 s21, TS only, not installed; all three predate s20): the footer's outbound
+      line goes through t() (zh-CN "对外连接：仅签名更新检查"; en unchanged), the Test, Health and HUD eyebrow dates
+      use the app's language; the healthy-ledger summary reads "Applied & history — what Compy changed, and what you
+      can undo"; the comparison cells read "▲2 fps", "▲3 fps", "▲4 spikes" (zh-CN "▲4次"). Review (sonnet)
+      APPROVE-WITH-NITS (zh no-space spikes value taken). Tests fail on the old code (5 files). Left, same surfaces:
+      LogbookTape/monitor-stack-profile times follow the OS locale; Session Stack "VS PREVIOUS ▲N AVG" has no unit;
+      GamingMode `leftAloneLine` shows the backend's English step labels inside the zh-CN sentence (coordinator nit
+      (d): its neighbouring change rows are English too, so not localized here). Visual PASS owed at the next install.
+Third whole-range review (e29da54b..119d07f8, 2026-11-12, SHIP-WITH-FOLLOW-UPS, no MUST-FIX); do before more Phase 9:
+- [ ] **CR-gm-stop-busy** (SHOULD-FIX; `8bf4a2a9`, `4da520ea`) With Gaming Mode on, a Fix batch, Trial start or bench
+      apply holds `SESSION_OP` through its UAC wait; Stop Gaming Mode or Recover then says "another Gaming Mode
+      operation is still finishing", which is false and lasts until the prompt is answered. The user must always be
+      able to stop or recover honestly, without reopening the start race `SESSION_OP` closes. Rollback/consent
+      boundary: two reviews (opus + sonnet).
+- [ ] **CR-fix-needs-trial-store** (SHOULD-FIX; `1a740e66`) An unreadable Trial store blocks every Fix apply and batch
+      ("Compy couldn't read its Trial records right now… try again in a moment") with no way out. Establish
+      reachability first; refuse only where an open Trial could hold the setting when that can be known; any refusal
+      names the file and the recovery path; never let a Fix stack on a setting a Trial is measuring. Two reviews.
+- [ ] **CR-range3-nits** (a) `src/data/kept-outside-undo.ts` STOCK lacks Power saver (`a1841308-…`), so a Power saver
+      prior plan reads "Compy didn't save its name": add it, en + zh-CN; (b) `history::rec_id_of_change` loads the
+      ledger without `HISTORY_LOCK`: if that load can set a damaged file aside (a rename) unlocked, take the lock (and
+      check `get_applied_changes`); (c) the dark stack trial applies through `apply_recommendations_batch` with no
+      bench hold (benchmark_trial.rs ~534): add the hold before `stack_trial_gate` is ever enabled (supersedes
+      CR-bench-stack-hold).
 - [ ] **CR-bench-stack-hold** (r1 sonnet SHOULD-FIX of CR-bench-holds-setting) The DARK aggregate-stack trial
       (`stack_trial_gate()` false) holds nothing; before arming it, hold every setting it applies the way the tweak trial does.
+      Superseded by CR-range3-nits (c).
 - [x] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game
       Bar, the power plan, USB/PCIe and service suspends into its own contract; a session spanning a Trial's restore
       re-applies the Trial's change on stop, after the Trial reads Restored (`gaming_orchestrator.rs` ~409-455; experiment.rs

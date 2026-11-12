@@ -44,6 +44,12 @@ import { fmtDurCoarse } from "./Play";
 import "../i18n";
 import "./monitor-console.css";
 
+/** "▲2 fps" — the delta glyph with its unit; an absent delta stays the bare "—" (no unit on nothing). */
+function deltaWithUnit(v: number | null, unit: string): string {
+  const glyph = fmtDeltaGlyph(v);
+  return v == null ? glyph : `${glyph} ${unit}`;
+}
+
 // MonitorConsole — the Monitor room as v5 "Flight Deck + Session Stack" (owner pick 2026-07-11,
 // plan 2026-07-11-monitor-v5-deck-stack; replaces the rejected v4 Session Waterfall). ONE face,
 // two halves, no mode toggle: the FLIGHT DECK on top (readout strip · the full-width frametime
@@ -575,13 +581,25 @@ export function MonitorConsole({
               <div className="mc-delta-cells">
                 {(
                   [
-                    ["avg", t("monitor.monitorConsole.deltaAvgFps"), fmtDeltaGlyph(deck.avgFps)],
+                    // CR-view-1111d-wording: each delta carries its unit ("▲2 fps", "▲4 spikes"),
+                    // as History's "+2 fps vs last" does; an absent one stays a bare "—".
+                    ["avg", t("monitor.monitorConsole.deltaAvgFps"), deltaWithUnit(deck.avgFps, "fps")],
                     [
                       "low1",
                       <Term id="one-percent-lows">{t("monitor.monitorConsole.deltaOneLow")}</Term>,
-                      fmtDeltaGlyph(deck.low1),
+                      deltaWithUnit(deck.low1, "fps"),
                     ],
-                    ["spikes", t("monitor.monitorConsole.deltaSpikes"), fmtDeltaGlyph(deck.spikes)],
+                    [
+                      "spikes",
+                      t("monitor.monitorConsole.deltaSpikes"),
+                      // The whole value is the string (review r1 nit): zh-CN writes "▲4次", no space.
+                      deck.spikes == null
+                        ? fmtDeltaGlyph(null)
+                        : t("monitor.monitorConsole.deltaSpikesValue", {
+                            glyph: fmtDeltaGlyph(deck.spikes),
+                            count: Math.abs(Math.round(deck.spikes)),
+                          }),
+                    ],
                     // Widened from `as const` so the "1% low" cell can carry its glossary
                     // trigger — the OTHER two cells stay plain strings, which is the point:
                     // "Average FPS" and "Spikes" are ordinary English, "1% low" is not.

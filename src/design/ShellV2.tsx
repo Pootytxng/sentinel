@@ -437,12 +437,11 @@ export function ShellV2({
                 Compy's ONE outbound call, so the old "Zero outbound connections" absolute would
                 be a lie. Copy states exactly what leaves the machine; opt-in Receipts still
                 gates separately and would change this line again when (if) it ships.
-                Intentionally NOT run through t() — ShellV2.test.tsx pins this exact English
-                sentence literally (screen.getByText("Outbound: signed update check only")), so
-                this one line stays hardcoded English regardless of app language (i18n task note). */}
+                Through t() since CR-view-1111d-wording: the zh-CN footer printed this one line in
+                English. The en string is still exactly the sentence ShellV2.test.tsx pins. */}
             <div className="v2-zero">
               <span className="v2-zero-led" aria-hidden="true" />
-              Outbound: signed update check only
+              {t("common.shellV2.footerOutbound")}
             </div>
             {/* The reversible/ledger line, gated on the same health check HomeHud and HomeV2 use.
                 BOTH halves are false under an incomplete record, not just the count: changes made

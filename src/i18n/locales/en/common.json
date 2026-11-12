@@ -25,6 +25,7 @@
     },
     "footerPre": "Every change reversible ·",
     "footerEmph": "ledger {{n}}",
+    "footerOutbound": "Outbound: signed update check only",
     "footerIncompletePre": "Ledger incomplete ·",
     "footerEmphFloor": "at least {{n}}",
     "footerEmphUnknown": "count unknown",
