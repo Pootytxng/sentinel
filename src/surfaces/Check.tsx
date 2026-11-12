@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { writeLedger } from "../data/ledger-write";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import type { PriorityItem, SessionSummary, StartupEntry, UpgradeSuggestion } from "../types";
+import type { PriorityItem, SessionSummary, StartupEntry, UpgradePath, UpgradeSuggestion } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { useConfirm } from "../design/ConfirmDialog";
@@ -143,6 +143,7 @@ export default function Check({
   exporting = false,
   v2Ia = false,
   onOpenCare,
+  onUpgradePath,
 }: {
   isAppliable: (recId: string) => boolean;
   onOpenLibrary: (focusId?: string) => void;
@@ -167,6 +168,9 @@ export default function Check({
   /** P6-timeline: opens the Care view (Crash & Freeze Rescue), whose "Since it last worked" list is
    *  the one place drift and hardware changes are listed. Absent → the pointer is text only. */
   onOpenCare?: () => void;
+  /** P9-upgrade-block-reachable: called with this scan's upgrade path (null = none) each time it
+   *  changes, for a room that renders `UpgradePathBlock` itself (Check suppresses it under v2Ia). */
+  onUpgradePath?: (upgradePath: UpgradePath | null) => void;
 }) {
   const { t, i18n } = useTranslation();
   // cache: true — Optimize/Fixes is the PERMANENT surface (vs the first-run FirstCheck/Tour arcs), so
@@ -307,19 +311,12 @@ export default function Check({
     }
   };
 
-  // Upgrade-path links are copy-only (R3 Lane B): clipboard, per-button feedback, no navigation.
-  const [copiedRetail, setCopiedRetail] = useState<string | null>(null);
-  // P9-gpu-fit-unknowns: the parts the user added (Test → Add a part), read once, never written here.
-  const [manualParts] = useState(readManualParts);
-  const copyRetailLink = async (key: string, url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedRetail(key);
-      setTimeout(() => setCopiedRetail(null), 1500);
-    } catch {
-      /* clipboard blocked — the tooltip already names the retailer; nothing else to do */
-    }
-  };
+  // P9-upgrade-block-reachable: the room that composes Check under v2Ia renders the upgrade block
+  // itself, below its action groups (V2-4b), so it is handed the same scan's upgrade path.
+  const upgradePath = priorities?.upgrade_path ?? null;
+  useEffect(() => {
+    onUpgradePath?.(upgradePath);
+  }, [upgradePath, onUpgradePath]);
 
   const checks = readiness?.checks ?? [];
   // One-mention law (V2-4b): these two aggregate limiters re-render recommendations that the
@@ -844,91 +841,10 @@ export default function Check({
           {/* R3 Lane B: upgrade-path advisory — renders ONLY when a verdict already names hardware
               as the limiter (GPU-limited session / HDD install drive). Links are plain retailer
               searches, COPY-only in-app (no navigation, no opener); the disclosure always rides. */}
-          {/* V2-4b: suppressed in the v2 room — demoted content must not LEAD the room, so
-              OptimizeV2 renders its labeled-early card BELOW the action groups instead. */}
-          {!v2Ia && priorities?.upgrade_path && (
-            <div className="check-upgrade">
-              <div className="check-section-label">{t("optimize.check.upgradePathTitle")}</div>
-              {priorities.upgrade_path.items.map((item) => {
-                const screen = screenIsLimit(item);
-                return (
-                <div key={item.kind} className="check-upgrade-item">
-                  {/* P9-screen-is-limit: the session averaged at or above the refresh rate it recorded,
-                      so a faster GPU would not show more frames: the screen is named instead of the
-                      GPU, with no GPU fit line or shopping links. Unmeasured either side = as before. */}
-                  {screen ? (
-                    <>
-                      <span className="check-upgrade-title">{t("optimize.check.screenLimitTitle")}</span>
-                      <p className="check-row-reason" data-testid="check-upgrade-screen">
-                        {t("optimize.check.screenLimitBody", {
-                          hz: screen.hz,
-                          fps: screen.fps,
-                          game: prettyGameName(screen.game) || screen.game,
-                        })}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <span className="check-upgrade-title">{item.title}</span>
-                      <p className="check-row-reason">{item.why}</p>
-                    </>
-                  )}
-                  {/* P9-limit-source: which recorded session this was measured from (its game, its
-                      date in the app's language, the counts behind the share); none recorded, no line. */}
-                  {item.measured_from && (
-                    <p className="check-row-reason" data-testid="check-upgrade-source">
-                      {t("optimize.check.upgradeMeasuredFrom", {
-                        game: prettyGameName(item.measured_from.game) || item.measured_from.game,
-                        date: sessionDate(item.measured_from.started_at, i18n.language),
-                        busy: item.measured_from.busy,
-                        readings: item.measured_from.readings,
-                        threshold: item.measured_from.threshold_pct,
-                      })}
-                    </p>
-                  )}
-                  {/* P9-gpu-fit-unknowns: what Compy can't check before any card, in the system's
-                      terms; a user-added power supply is what they told Compy, never a capacity. */}
-                  {(() => {
-                    const fit = screen ? null : upgradeFitLine(item.kind, manualParts);
-                    if (!fit) return null;
-                    return (
-                      <p className="check-row-reason check-upgrade-fit" data-testid="check-upgrade-fit">
-                        {fit.key === "optimize.check.upgradeFitGpuUserPsu"
-                          ? t("optimize.check.upgradeFitGpuUserPsu", { name: fit.name })
-                          : fit.key === "optimize.check.upgradeFitSsd"
-                            ? t("optimize.check.upgradeFitSsd")
-                            : t("optimize.check.upgradeFitGpuUnknown")}
-                      </p>
-                    );
-                  })()}
-                  <div className="check-upgrade-links">
-                    {(screen ? [] : item.links).map((l) => (
-                      <button
-                        key={l.retailer}
-                        className="btn btn-small"
-                        title={t("optimize.check.copyRetailLinkTitle", { retailer: l.retailer })}
-                        onClick={() => copyRetailLink(`${item.kind}-${l.retailer}`, l.url)}
-                      >
-                        {copiedRetail === `${item.kind}-${l.retailer}`
-                          ? t("optimize.check.copiedExclaim")
-                          : t("optimize.check.copyRetailSearchLink", { retailer: l.retailer })}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                );
-              })}
-              {/* HONESTY (P5.5 owner catch 2026-07-02): the backend disclosure const still says
-                  "we may earn a commission" — FALSE while every link is a tag-free plain search
-                  (the A6 guard in priorities.rs pins exactly that). Until Phase D arms affiliate
-                  tags, render the truthful line; the backend const stays put as the single Phase-D
-                  swap point. Swap back to {priorities.upgrade_path.disclosure} in the SAME commit
-                  that arms tags — the Check guard test pins this. */}
-              <p className="check-upgrade-disclosure">
-                {t("optimize.check.upgradeDisclosure")}
-              </p>
-            </div>
-          )}
+          {/* V2-4b: suppressed in the v2 room — demoted content must not LEAD the room, so the
+              room (OptimizeStation, via onUpgradePath) renders it labeled early BELOW its action
+              groups instead. */}
+          {!v2Ia && priorities?.upgrade_path && <UpgradePathBlock upgradePath={priorities.upgrade_path} links />}
 
           {/* Side-piles (P5 calm chrome): under the merged shell's provider these teleport into the
               single "Nothing else needs attention" expander; classic/standalone render here as
@@ -1169,5 +1085,125 @@ export default function Check({
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * R3 Lane B / Phase 9: the upgrade-path advisory, from the scan's `upgrade_path` (a GPU-limited
+ * session or an HDD install drive). Each row says what was measured, where from, the screen limit
+ * when that session already filled the screen, and what Compy can't check before any part.
+ *
+ * `links`: the copy-only retailer searches and their disclosure (classic Check). Without them
+ * (P9-upgrade-block-reachable: the shipped Optimize room) the block is the measured lines only, under
+ * the "early" label V2-4b gave it; whether retail links return there is an owner call.
+ */
+export function UpgradePathBlock({ upgradePath, links }: { upgradePath: UpgradePath; links: boolean }) {
+  const { t, i18n } = useTranslation();
+  // Upgrade-path links are copy-only (R3 Lane B): clipboard, per-button feedback, no navigation.
+  const [copiedRetail, setCopiedRetail] = useState<string | null>(null);
+  // P9-gpu-fit-unknowns: the parts the user added (Test → Add a part), read once, never written here.
+  const [manualParts] = useState(readManualParts);
+  const copyRetailLink = async (key: string, url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedRetail(key);
+      setTimeout(() => setCopiedRetail(null), 1500);
+    } catch {
+      /* clipboard blocked — the tooltip already names the retailer; nothing else to do */
+    }
+  };
+  // The room's copy shows only what was measured: no rows, no block (classic keeps its shape).
+  if (!links && upgradePath.items.length === 0) return null;
+  return (
+    <div className="check-upgrade" data-testid="check-upgrade" data-links={links ? "on" : "off"}>
+      {links ? (
+        <div className="check-section-label">{t("optimize.check.upgradePathTitle")}</div>
+      ) : (
+        <div className="check-section-label">
+          {t("optimize.optimizeV2.upgradePathLabel")}{" "}
+          <span className="check-upgrade-early" data-testid="check-upgrade-early">
+            {t("optimize.optimizeV2.upgradePathEarly")}
+          </span>
+        </div>
+      )}
+      {upgradePath.items.map((item) => {
+        const screen = screenIsLimit(item);
+        return (
+          <div key={item.kind} className="check-upgrade-item">
+            {/* P9-screen-is-limit: the session averaged at or above the refresh rate it recorded,
+                so a faster GPU would not show more frames: the screen is named instead of the
+                GPU, with no GPU fit line or shopping links. Unmeasured either side = as before. */}
+            {screen ? (
+              <>
+                <span className="check-upgrade-title">{t("optimize.check.screenLimitTitle")}</span>
+                <p className="check-row-reason" data-testid="check-upgrade-screen">
+                  {t("optimize.check.screenLimitBody", {
+                    hz: screen.hz,
+                    fps: screen.fps,
+                    game: prettyGameName(screen.game) || screen.game,
+                  })}
+                </p>
+              </>
+            ) : (
+              <>
+                <span className="check-upgrade-title">{item.title}</span>
+                <p className="check-row-reason">{item.why}</p>
+              </>
+            )}
+            {/* P9-limit-source: which recorded session this was measured from (its game, its
+                date in the app's language, the counts behind the share); none recorded, no line. */}
+            {item.measured_from && (
+              <p className="check-row-reason" data-testid="check-upgrade-source">
+                {t("optimize.check.upgradeMeasuredFrom", {
+                  game: prettyGameName(item.measured_from.game) || item.measured_from.game,
+                  date: sessionDate(item.measured_from.started_at, i18n.language),
+                  busy: item.measured_from.busy,
+                  readings: item.measured_from.readings,
+                  threshold: item.measured_from.threshold_pct,
+                })}
+              </p>
+            )}
+            {/* P9-gpu-fit-unknowns: what Compy can't check before any card, in the system's
+                terms; a user-added power supply is what they told Compy, never a capacity. */}
+            {(() => {
+              const fit = screen ? null : upgradeFitLine(item.kind, manualParts);
+              if (!fit) return null;
+              return (
+                <p className="check-row-reason check-upgrade-fit" data-testid="check-upgrade-fit">
+                  {fit.key === "optimize.check.upgradeFitGpuUserPsu"
+                    ? t("optimize.check.upgradeFitGpuUserPsu", { name: fit.name })
+                    : fit.key === "optimize.check.upgradeFitSsd"
+                      ? t("optimize.check.upgradeFitSsd")
+                      : t("optimize.check.upgradeFitGpuUnknown")}
+                </p>
+              );
+            })()}
+            {links && (
+              <div className="check-upgrade-links">
+                {(screen ? [] : item.links).map((l) => (
+                  <button
+                    key={l.retailer}
+                    className="btn btn-small"
+                    title={t("optimize.check.copyRetailLinkTitle", { retailer: l.retailer })}
+                    onClick={() => copyRetailLink(`${item.kind}-${l.retailer}`, l.url)}
+                  >
+                    {copiedRetail === `${item.kind}-${l.retailer}`
+                      ? t("optimize.check.copiedExclaim")
+                      : t("optimize.check.copyRetailSearchLink", { retailer: l.retailer })}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {/* HONESTY (P5.5 owner catch 2026-07-02): the backend disclosure const still says
+          "we may earn a commission" — FALSE while every link is a tag-free plain search
+          (the A6 guard in priorities.rs pins exactly that). Until Phase D arms affiliate
+          tags, render the truthful line; the backend const stays put as the single Phase-D
+          swap point. Swap back to {upgradePath.disclosure} in the SAME commit that arms
+          tags — the Check guard test pins this. No links shown = nothing to disclose. */}
+      {links && <p className="check-upgrade-disclosure">{t("optimize.check.upgradeDisclosure")}</p>}
+    </div>
   );
 }
