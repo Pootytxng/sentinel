@@ -852,6 +852,15 @@ pub(crate) fn evaluate_readiness(
             "Couldn't read the active Windows power plan.",
             None,
         ),
+        // CR-kept-outside-nits (d): the plan the user chose to keep as set outside Compy (its record
+        // holds against the live read) is theirs to judge: an advisory, never a flag.
+        Some((class, p)) if !class.is_performance() && hist.is_ok_and(|h| h.kept_outside_plan) => check(
+            "power-profile",
+            "Power profile",
+            ReadinessStatus::Advisory,
+            format!("Active plan \"{p}\", which you chose to keep as set outside Compy. Compy won't flag or switch it."),
+            Some(p.to_string()),
+        ),
         Some((class, p)) => {
             if class.is_performance() {
                 check(
@@ -1363,6 +1372,18 @@ mod readiness_tests {
             "a plan this build cannot class is not called performance"
         );
         assert_eq!(row(None).status, ReadinessStatus::Unknown);
+        // CR-kept-outside-nits (d): a plan the user chose to keep as set outside Compy isn't flagged.
+        let kept = AppliedChangesSummary { kept_outside: 1, kept_outside_plan: true, ..AppliedChangesSummary::default() };
+        let r = evaluate_readiness(&hw, Some((PowerPlanClass::Other, "Synez Power Plan")), false, false, Ok(&kept), None);
+        let c = r.checks.into_iter().find(|c| c.id == "power-profile").expect("row");
+        assert_eq!(c.status, ReadinessStatus::Advisory, "{}", c.detail);
+        assert!(c.detail.contains("Synez Power Plan") && c.detail.contains("you chose to keep"), "{}", c.detail);
+        // Another kept setting (not the plan) changes nothing here; nor does an unreadable ledger.
+        let other = AppliedChangesSummary { kept_outside: 1, ..AppliedChangesSummary::default() };
+        let r = evaluate_readiness(&hw, Some((PowerPlanClass::Other, "Synez Power Plan")), false, false, Ok(&other), None);
+        assert_eq!(r.checks.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Attention);
+        let r = evaluate_readiness(&hw, Some((PowerPlanClass::Balanced, "Balanced")), false, false, Err("unreadable"), None);
+        assert_eq!(r.checks.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Attention);
     }
 
     #[test]

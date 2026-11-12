@@ -2327,6 +2327,10 @@ pub(crate) struct AppliedChangesSummary {
     pub(crate) kept_outside: usize,
     /// Their titles, sorted, so the priorities layer still dedups them out of "not applied".
     pub(crate) kept_outside_titles: Vec<String>,
+    /// CR-kept-outside-nits (d): one of them is the power-plan change, so the plan active now is the
+    /// one the user chose to keep (its record holds against the live read); the power-profile row
+    /// then doesn't flag it.
+    pub(crate) kept_outside_plan: bool,
 }
 
 /// The roll-up of one ledger read, or why it can't be trusted, in words (#669). Two losses count:
@@ -2594,6 +2598,7 @@ fn summarize_checked(
             if kept_outside(c) {
                 s.kept_outside += 1;
                 s.kept_outside_titles.push(c.rec_title.clone());
+                s.kept_outside_plan |= c.rec_id == "power-ultimate";
             } else {
                 s.externally_reverted += 1;
                 s.drifted_titles.push(c.rec_title.clone());
@@ -6029,6 +6034,8 @@ mod changed_outside_tests {
         assert_eq!((kept.externally_reverted, kept.kept_outside), (0, 1));
         assert!(kept.drifted_titles.is_empty());
         assert_eq!(kept.kept_outside_titles, ["Switch to the Ultimate Performance power plan"]);
+        assert!(kept.kept_outside_plan, "CR-kept-outside-nits (d): the kept one is the plan");
+        assert!(!unrecorded.kept_outside_plan);
         // Every count a Trial or a session reads is the same either way.
         let plain = summarize_checked(&history, &[off, off], |_| false);
         assert_eq!(
