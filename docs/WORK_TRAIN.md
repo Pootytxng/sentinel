@@ -1762,24 +1762,43 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       REC_POWER is not free while a plan-scoped setting is held. Rust; two reviews.
       Done with CR-core-parking-held-with-plan (one branch, s23; SHAs in the merge): `PLAN_SCOPED` = USB, PCIe,
       core-parking-forced. A session holding the plan holds all three (`session_hold_refusal`); `session_rec_of` maps
-      core parking so `plain_change_gate` reads the session for it; `history::restore_leftover` takes that gate before
-      the ledger lock and holds it through the write (the row's undo, `experiment::rollback_change`, was already
-      gated). The other SCHEME_CURRENT writers are the USB/PCIe apply (their undo targets the stored plan GUID) and the
+      core parking so `plain_change_gate` reads the session for it; the webview's `restore_leftover` is now
+      experiment's, which takes that gate before history's audited restore (ledger lock) and holds it through the
+      write, as `suspend_known_service` does (history must not call the orchestrator: store-lock-order guard, which
+      failed on the first shape); the row's undo, `experiment::rollback_change`, was already gated. The other SCHEME_CURRENT writers are the USB/PCIe apply (their undo targets the stored plan GUID) and the
       core-parking restore/undo; counted in a test. Start: `step_free(REC_POWER)` is false while a plan-scoped setting
-      is held, and the pane names it "Power plan → max performance (a Trial is testing one of its settings)". New
+      is held, and the pane names it "Power plan → max performance (one of its settings was being tested)". New
       tests fail on the old code (3 of 17 in spans_trial_tests). Reviews r1: sonnet APPROVE-WITH-NITS (no
       MUST-FIX/SHOULD-FIX); opus REQUEST-CHANGES, no MUST-FIX: SHOULD-FIX 1 (history.rs wave2 test now meets
-      SESSION_OP contention: retries on "still finishing", taken), SHOULD-FIX 2 (the left-alone line would say the
+      SESSION_OP contention: retries taken, then moot once the gate moved to experiment's command), SHOULD-FIX 2 (the left-alone line would say the
       Trial tested the plan: own label, taken), SHOULD-FIX 3 pre-existing (queued CR-core-parking-plan-guid); NITs:
       the session_op_guard doc names the new taker (taken; the store-lock-order guard's prose is a guard, left),
       writer count is a literal tripwire (kept, stated), unreadable record lets a plan-scoped change through (in
-      CR-core-parking-plan-guid), core parking can't be Trial-held (harmless). r2 in the session log.
-- [ ] **CR-core-parking-plan-guid** (CR-core-parking-held-with-plan opus r1 SHOULD-FIX 3, pre-existing) The
-      core-parking restore and its undo write SCHEME_CURRENT and its snapshot stores no plan GUID, so a plan switch
-      between apply and undo (a Trial on power-ultimate not kept; or a Gaming Mode record this Compy can't read)
-      lands the undo on another plan unrecorded. Record the active plan GUID in the core-parking snapshot (additive,
-      serde default) and undo against it as the USB/PCIe restore does; or refuse while a Trial or the bench holds
-      power-ultimate. Rust; two reviews.
+      CR-core-parking-plan-guid), core parking can't be Trial-held (harmless). Reviews r2: sonnet APPROVE-WITH-NITS
+      (no MUST-FIX); opus REQUEST-CHANGES, no MUST-FIX: SHOULD-FIX 2 (label: the holder may be the benchmark and the
+      line stays up all session: now "(one of its settings was being tested)", taken), SHOULD-FIX 3 (the
+      CR-gm-stop-busy test grabbed SESSION_OP with no retry: retries now, taken), SHOULD-FIX 1 (a Trial whose baseline
+      ran with Gaming Mode switching the plan and whose later sessions leave it alone compares two plans, and
+      comparability sees only "Gaming Mode on"; queued CR-trial-plan-switch-confound), SHOULD-FIX 4 (pre-existing,
+      plain apply of power-ultimate vs a held USB/PCIe Trial and the reverse: folded into CR-core-parking-plan-guid);
+      NITs: PLAN_SCOPED doc "every apply" (taken), the store-lock-order guard's SESSION_OP census does not list
+      restore_leftover (a guard, left; the gate never waits), writer count a literal tripwire (stated), the plan named
+      left alone even where the switch would have been a no-op (pre-existing class). Two rounds done; after r2 the
+      full vitest's store-lock-order guard failed (history -> gaming_orchestrator -> experiment -> comparison/drift),
+      so the gate moved from history's restore_leftover to the experiment.rs command, unreviewed as a third round
+      (same shape as suspend_known_service; pinned by the end-to-end test and the handler-list check).
+- [ ] **CR-core-parking-plan-guid** (CR-core-parking-held-with-plan opus r1 SHOULD-FIX 3 + r2 SHOULD-FIX 4,
+      pre-existing) The core-parking restore and its undo write SCHEME_CURRENT and its snapshot stores no plan GUID, so
+      a plan switch between apply and undo (a Trial on power-ultimate not kept; or a Gaming Mode record this Compy
+      can't read) lands the undo on another plan unrecorded. Record the active plan GUID in the core-parking snapshot
+      (additive, serde default) and undo against it as the USB/PCIe restore does. Same class: a plain UI/batch apply
+      or undo of power-ultimate while a Trial or the bench holds USB/PCIe (experiment.rs ~3078/~3110), and a plain
+      USB/PCIe/core-parking change while one holds power-ultimate, are not refused. Rust; two reviews.
+- [ ] **CR-trial-plan-switch-confound** (CR-core-parking-held-with-plan opus r2 SHOULD-FIX 1) Since a Gaming Mode start
+      leaves the plan alone while a USB/PCIe Trial is open, a Trial whose baseline ran with Gaming Mode switching the
+      plan and whose later sessions ran with it left alone compares two plans; comparability.rs ~360 and realplay.rs
+      ~622 compare only `gaming_mode_active`. Record per session whether Gaming Mode switched the plan (or its
+      left-alone list) and treat a difference as a changed condition. Rust; two reviews.
 - [x] **CR-restore-window-direct** (read-only finding first) Is every bench and Trial restore path that calls
       `history::rollback_change` directly (no gate) safe against the Gaming Mode restore window? Write the finding
       here; queue a fix only if one is not.

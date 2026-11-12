@@ -1469,7 +1469,9 @@ fn record_receipt(
 /// loops (`manual_restore_qa` — W32PS/MPO/memcompress). Mirrors apply_recommendation exactly:
 /// lock → load BEFORE mutate (H1) → one resolver → receipt with provenance "leftover_adopted" →
 /// atomic save. Undo rides the standard typed rollback path like any other ledger entry.
-#[tauri::command]
+/// CR-core-parking-held-with-plan: the webview's command is `experiment::restore_leftover`, which
+/// takes Gaming Mode's gate before this (core parking writes the ACTIVE plan); this module never
+/// calls into the Gaming Mode orchestrator (store-lock-order guard).
 pub(crate) fn restore_leftover(
     detector_id: &str,
     display_title: &str,
@@ -1485,13 +1487,6 @@ pub(crate) fn restore_leftover(
     if !gate_open {
         return Err("Leftovers restore is not enabled in this build.".to_string());
     }
-    // CR-core-parking-held-with-plan: the core-parking restore writes the ACTIVE plan (SCHEME_CURRENT).
-    // While a Gaming Mode session holds the plan that is the session's plan, and after its stop the row
-    // would read off and its undo would write the session plan's priors onto the user's own plan. So
-    // it is refused then, with Gaming Mode's gate (try_lock only) held through the ledger write, as
-    // every other plain apply (`experiment::apply_recommendation`). A leftover no session can touch
-    // takes no gate and reads nothing.
-    let _gm = crate::gaming_orchestrator::plain_change_gate(std::iter::once(detector_id))?;
     let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = match detector_id {
@@ -4426,19 +4421,9 @@ mod leftover_restore_tests {
         let before = load_history().expect("test ledger readable").len();
         let mut reached_elevation = 0;
         for id in ["mpo-disabled", "core-parking-forced", "tcp-autotuning-off"] {
-            // CR-core-parking-held-with-plan review r1 (opus SHOULD-FIX 1): core parking now takes
-            // Gaming Mode's process-wide gate (try_lock), which another test may hold for a moment
-            // ("still finishing"): wait for it, as the gate's own tests do. Nothing ran when it says so.
-            let mut err = String::new();
-            for _ in 0..200 {
-                err = restore_leftover(id, "armed decline test")
-                    .err()
-                    .expect("declined or honestly refused — never a silent success");
-                if !err.contains("still finishing") {
-                    break;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(5));
-            }
+            let err = restore_leftover(id, "armed decline test")
+                .err()
+                .expect("declined or honestly refused — never a silent success");
             if err == ELEVATION_DECLINED_MSG {
                 reached_elevation += 1;
             } else {

@@ -38,8 +38,8 @@ static LIVE_SESSION: Mutex<Option<String>> = Mutex::new(None);
 static SESSION_OP: Mutex<()> = Mutex::new(());
 
 /// Also taken (still only by `try_lock`) by every plain apply and undo through [`plain_change_gate`]
-/// (the core-parking leftover restore, `history::restore_leftover`, included: before its ledger lock,
-/// CR-core-parking-held-with-plan), and by a Trial start and the benchmark's apply across their
+/// (the core-parking leftover restore, `experiment::restore_leftover`, included: before history's
+/// ledger lock, CR-core-parking-held-with-plan), and by a Trial start and the benchmark's apply across their
 /// check of the session contract and their record/apply (CR-gm-spans-trial review r1), so a session
 /// can't start between that check and the Trial's record, and neither starts while a session starts.
 /// Contention answers "try again"; nothing ever waits on it.
@@ -169,11 +169,14 @@ const REC_PCIE: &str = "pcie-aspm-off";
 const REC_CORE_PARKING: &str = "core-parking-forced";
 
 /// CR-core-parking-held-with-plan: the ledger settings that are settings OF the active power plan
-/// (every writer targets SCHEME_CURRENT). While a session holds the plan they are held with it; while
-/// one of them is held (a Trial), a session leaves the plan alone (CR-gm-start-respects-plan-holds).
+/// (every apply targets SCHEME_CURRENT). While a session holds the plan they are held with it; while
+/// one of them is held (a Trial or the benchmark), a session leaves the plan alone
+/// (CR-gm-start-respects-plan-holds).
 const PLAN_SCOPED: [&str; 3] = [REC_USB, REC_PCIE, REC_CORE_PARKING];
 /// The left-alone label for the plan step when what is held is a setting OF the plan, not the plan.
-const LABEL_POWER_SETTING_HELD: &str = "Power plan → max performance (a Trial is testing one of its settings)";
+/// Review r2 (opus SHOULD-FIX 2): the holder may be the benchmark, and the pane keeps the line up for
+/// the whole session, so neither "a Trial" nor "is testing".
+const LABEL_POWER_SETTING_HELD: &str = "Power plan → max performance (one of its settings was being tested)";
 
 /// The ledger rec id of the setting each service suspend touches.
 fn service_rec(svc: &actions::KnownService) -> &'static str {
@@ -1538,7 +1541,7 @@ mod spans_trial_tests {
         let mut err = String::new();
         for _ in 0..200 {
             // SESSION_OP is process-wide; another test may hold it for a moment ("still finishing").
-            err = match crate::history::restore_leftover("core-parking-forced", "held-with-plan test") {
+            err = match crate::experiment::restore_leftover("core-parking-forced".into(), "held-with-plan test".into()) {
                 Err(e) => e,
                 Ok(_) => panic!("the restore ran while a session held the plan"),
             };
@@ -1548,12 +1551,17 @@ mod spans_trial_tests {
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         assert!(err.contains("belongs to the power plan") && err.contains("Nothing was changed"), "{err}");
-        // The source shape: the gate is taken before the ledger lock, and held through the write.
-        let hist = include_str!("history.rs");
-        let body = hist.split_once("pub(crate) fn restore_leftover(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
-        let gate = body.find("let _gm = crate::gaming_orchestrator::plain_change_gate(std::iter::once(detector_id))?;").expect("gated");
-        let lock = body.find("let _lock = lock_history()?;").expect("ledger lock");
-        assert!(gate < lock);
+        // The source shape: the webview's command is experiment's, which takes the gate (held through
+        // the write) before history's audited restore takes the ledger lock; history itself never
+        // calls this module (store-lock-order guard).
+        let lib = include_str!("lib.rs");
+        let handler = lib.split_once("generate_handler![").map(|(_, r)| r).expect("handler list");
+        assert!(handler.contains("experiment::restore_leftover,") && !handler.contains("history::restore_leftover,"));
+        let exp = include_str!("experiment.rs");
+        let body = exp.split_once("pub(crate) fn restore_leftover(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        let gate = body.find("let _gm = crate::gaming_orchestrator::plain_change_gate(").expect("gated");
+        let audited = body.find("crate::history::restore_leftover(").expect("history's restore");
+        assert!(gate < audited);
         drop(_redirect);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -2281,7 +2289,18 @@ mod elevation_batch_tests {
         // a plain change, a Trial start or the benchmark's apply holds SESSION_OP through its
         // Windows prompt; Stop Gaming Mode and Recover must not be refused for that. With SESSION_OP
         // held, stop and recover get past the gate and answer from the (empty) session dir.
-        let held = SESSION_OP.try_lock().expect("test acquires the session gate, as a waiting change does");
+        // CR-core-parking-held-with-plan review r2 (opus SHOULD-FIX 3): other tests now take this
+        // gate too (the core-parking restore); wait it out for a moment as they do, never block.
+        let held = (0..400)
+            .find_map(|_| match SESSION_OP.try_lock() {
+                Ok(g) => Some(g),
+                Err(std::sync::TryLockError::Poisoned(p)) => Some(p.into_inner()),
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                    None
+                }
+            })
+            .expect("test acquires the session gate, as a waiting change does");
         let err = stop().expect_err("no session in the temp dir");
         assert!(!err.contains("still finishing"), "stop was refused by a change's gate: {err}");
         assert!(err.contains("no active Gaming Mode session"), "got: {err}");
