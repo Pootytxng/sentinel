@@ -929,8 +929,11 @@ function HistoryRow({ change }: { change: AppliedChange }) {
   // CR-outside-followups (b): an applied row the user recorded as changed outside Compy says so,
   // never "rolled back" (nothing was undone) and never "active" (it reads off).
   const keptOutside = keptOutsideCompy(change);
-  const rolledBack = !keptOutside && (change.status === "rolled_back" || !change.is_still_active);
-  const unconfirmed = !keptOutside && !rolledBack && cantConfirmStillOn(change);
+  // CR-kept-outside-nits (c): only an undo is "rolled back". A row still applied that reads off was
+  // changed outside Compy and never undone, so it says it is off now, not undone.
+  const rolledBack = !keptOutside && change.status === "rolled_back";
+  const offNow = !keptOutside && !rolledBack && !change.is_still_active;
+  const unconfirmed = !keptOutside && !rolledBack && !offNow && cantConfirmStillOn(change);
   return (
     <li className={`fix-hist-row ${rolledBack ? "fix-hist-rolledback" : ""}`}>
       <button className="fix-hist-head cmp-door" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
@@ -948,7 +951,9 @@ function HistoryRow({ change }: { change: AppliedChange }) {
             ? t("optimize.fix.historyChangedOutside")
             : rolledBack
               ? t("optimize.fix.historyRolledBack")
-              : unconfirmed
+              : offNow
+                ? t("optimize.fix.historyOffNow")
+                : unconfirmed
                 ? t("optimize.fix.historyCantConfirm")
                 : t("optimize.fix.historyActive")}
         </span>

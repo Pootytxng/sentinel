@@ -149,6 +149,8 @@ describe("Fix", () => {
           { ...row("m1", "power-moved", "Moved plan", true), changed_outside_holds: false },
           // Switched back to Compy's plan: on again, so active, not "changed outside".
           { ...row("b1", "power-back", "Back on", true), is_still_active: true, active_check: "on" as const },
+          // An undo is still "rolled back".
+          { ...row("r1", "hags-enable", "Undone one", false), status: "rolled_back" as const },
         ]}
       />,
     );
@@ -158,10 +160,12 @@ describe("Fix", () => {
         .find((r) => r.querySelector(".fix-hist-title")?.textContent === title)
         ?.querySelector(".fix-hist-status")?.textContent;
     expect(status("Switch to the Ultimate Performance power plan")).toBe("changed outside Compy");
-    expect(status("Game Mode")).toBe("✓ rolled back");
-    expect(status("Visual effects")).toBe("✓ rolled back");
-    expect(status("Moved plan")).toBe("✓ rolled back");
+    // CR-kept-outside-nits (c): applied rows that read off were never undone: "off now", not "rolled back".
+    expect(status("Game Mode")).toBe("off now, not undone");
+    expect(status("Visual effects")).toBe("off now, not undone");
+    expect(status("Moved plan")).toBe("off now, not undone");
     expect(status("Back on")).toBe("active");
+    expect(status("Undone one")).toBe("✓ rolled back");
     fireEvent.click(screen.getByText("Switch to the Ultimate Performance power plan"));
     expect(screen.getByTestId("fix-hist-kept-outside").textContent).toMatch(/to keep “Synez Power Plan”, which was set outside Compy/);
   });
