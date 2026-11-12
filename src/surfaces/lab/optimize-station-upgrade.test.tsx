@@ -377,7 +377,7 @@ describe("CR-upgrade-area-truth: the upgrade area says what was and wasn't measu
     expect(screen.getByTestId("check-no-upgrade-source").textContent).not.toMatch(/left out/);
   });
 
-  it.each([0, 150])("NIT (b): an impossible share (%s%%) claims nothing about the newest session", async (limit) => {
+  it.each([0, 150])("NIT (b): an impossible share (%i percent) claims nothing about the newest session", async (limit) => {
     scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, newest: { ...NEWEST, limit_share_pct: limit } };
     mount();
     await screen.findByTestId("check-no-upgrade");
