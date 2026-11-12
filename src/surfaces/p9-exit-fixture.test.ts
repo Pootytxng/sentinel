@@ -16,7 +16,7 @@ type Case = (typeof fx.cases)[number];
 const prioritiesOf = (c: Case): Priorities =>
   ({
     // Review r1: the check's own limiters ride the contract too (priorities.rs pins them per case).
-    limiters: ("limiters" in c.payload ? c.payload.limiters : []).map((l) => ({
+    limiters: ((c.payload as { limiters?: { id: string; status: string; title: string }[] }).limiters ?? []).map((l) => ({
       ...l,
       reason: "",
       linked: null,
