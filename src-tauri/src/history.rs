@@ -210,6 +210,14 @@ const RECEIPT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs
 /// `read` on its own thread, bounded by [`RECEIPT_READ_TIMEOUT`]; None when it takes longer (the
 /// thread is left to finish on its own) or panics. Read-only reads only.
 fn bounded_read<T: Send + 'static>(read: impl FnOnce() -> Option<T> + Send + 'static) -> Option<T> {
+    bounded_read_within(RECEIPT_READ_TIMEOUT, read)
+}
+
+/// [`bounded_read`] with the bound passed in, so a test can use a short one (CR-ultimate-followups e).
+fn bounded_read_within<T: Send + 'static>(
+    limit: std::time::Duration,
+    read: impl FnOnce() -> Option<T> + Send + 'static,
+) -> Option<T> {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::Builder::new()
         .name("receipt-read".into())
@@ -217,7 +225,7 @@ fn bounded_read<T: Send + 'static>(read: impl FnOnce() -> Option<T> + Send + 'st
             let _ = tx.send(read());
         })
         .ok()?;
-    rx.recv_timeout(RECEIPT_READ_TIMEOUT).ok().flatten()
+    rx.recv_timeout(limit).ok().flatten()
 }
 
 /// The schemes `powercfg /list` shows right now, read before Compy's Ultimate apply (bounded).
@@ -409,6 +417,12 @@ impl ActiveCheck {
 /// action agrees with its rec id, and is `Unrecognised` otherwise; every other row is
 /// [`probe_rec_target`]. Read-only, and takes no lock.
 pub(crate) fn check_row_state(c: &AppliedChange, reads: &LiveReads) -> ActiveCheck {
+    // CR-ultimate-followups (a): an Ultimate row reads On on the plan Compy activated for it, not only
+    // on a plan whose words read as Ultimate, so Compy's own copy with a localized name isn't "off".
+    // A row without that record reads by class, as before.
+    if c.rec_id == "power-ultimate" && compys_plan_guid(c).is_some() {
+        return ActiveCheck::from_read(reads.scheme().map(|seen| is_compys_ultimate(c, &seen)));
+    }
     check_change_state(&c.rec_id, c.applied_action.as_ref(), reads)
 }
 
@@ -6395,6 +6409,35 @@ mod ultimate_identity_tests {
     }
 
     #[test]
+    fn the_rows_live_check_reads_compys_stamped_localized_copy_as_on() {
+        // CR-ultimate-followups (a): the row's live check read by class only, so Compy's own copy with
+        // a localized name ("卓越性能", class Other) read "off" on the very row that activated it.
+        fn copy_active() -> Option<ObservedPlan> {
+            Some(seen(COPY, crate::PowerPlanClass::Other))
+        }
+        fn users_plan() -> Option<ObservedPlan> {
+            Some(seen("44444444-4444-4444-4444-444444444444", crate::PowerPlanClass::Other))
+        }
+        fn stock_ultimate() -> Option<ObservedPlan> {
+            Some(seen("e9a42b02-d5df-448d-aa00-03f14749eb61", crate::PowerPlanClass::Ultimate))
+        }
+        fn unread() -> Option<ObservedPlan> {
+            None
+        }
+        let reads = |f: fn() -> Option<ObservedPlan>| LiveReads::default().with_scheme_read(f);
+        let stamped = row(Some(serde_json::json!({ "schema": 1, "guid": COPY })));
+        assert_eq!(check_row_state(&stamped, &reads(copy_active)), ActiveCheck::On);
+        assert_eq!(check_row_state(&stamped, &reads(stock_ultimate)), ActiveCheck::On, "an Ultimate plan by class still reads On");
+        assert_eq!(check_row_state(&stamped, &reads(users_plan)), ActiveCheck::Off);
+        assert_eq!(check_row_state(&stamped, &reads(unread)), ActiveCheck::Unreadable, "unread is never Off");
+        // A row without the record reads by class, exactly as before.
+        let old = row(None);
+        assert_eq!(check_row_state(&old, &reads(copy_active)), ActiveCheck::Off);
+        assert_eq!(check_row_state(&old, &reads(stock_ultimate)), ActiveCheck::On);
+        assert_eq!(check_row_state(&old, &reads(unread)), ActiveCheck::Unreadable);
+    }
+
+    #[test]
     fn compys_own_localized_copy_reads_as_its_plan_and_is_never_recordable_as_set_outside() {
         let new = row(Some(serde_json::json!({ "schema": 1, "guid": COPY })));
         let copy = seen(COPY, crate::PowerPlanClass::Other);
@@ -6499,15 +6542,22 @@ mod ultimate_identity_tests {
         // Review r2 (sonnet): the receipt reads run under the ledger lock, so they are bounded.
         assert_eq!(bounded_read(|| Some(7)), Some(7));
         assert_eq!(bounded_read::<u8>(|| None), None);
+        // CR-ultimate-followups (e): the hang is injected against a short bound (was a 7 s sleep).
+        let limit = std::time::Duration::from_millis(100);
         let started = std::time::Instant::now();
         assert_eq!(
-            bounded_read(|| {
-                std::thread::sleep(RECEIPT_READ_TIMEOUT + std::time::Duration::from_secs(2));
+            bounded_read_within(limit, move || {
+                std::thread::sleep(limit * 10);
                 Some(1)
             }),
             None
         );
-        assert!(started.elapsed() < RECEIPT_READ_TIMEOUT + std::time::Duration::from_secs(1));
+        assert!(started.elapsed() < limit * 5, "returned at the bound, not when the read finished");
+        // And the production read uses the 5 s receipt bound.
+        let body = include_str!("history.rs").split_once("fn bounded_read<T").map(|(_, r)| r).expect("fn");
+        let body = body.split_once("\n}\n").map(|(b, _)| b).expect("body");
+        assert!(body.contains("bounded_read_within(RECEIPT_READ_TIMEOUT, read)"), "{body}");
+        assert_eq!(RECEIPT_READ_TIMEOUT, std::time::Duration::from_secs(5));
     }
 
     #[test]
