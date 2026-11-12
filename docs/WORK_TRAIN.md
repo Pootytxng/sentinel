@@ -1651,7 +1651,7 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       tests taken), r2 found a peak-under-threshold row with most readings busy fell into "clear" (fixed both sides),
       r3 no MUST-FIX (no verdict line given). The TS test fails on main's settings-done.ts. cargo priorities 26/0 +
       clippy clean; full cargo 1879/0 before the r2 fix.
-- [ ] **CR-gpu-share-one-source** (P9-no-upgrade-source r3) The "under half" rule lives twice: Rust
+- [x] **CR-gpu-share-one-source** (done with P9-no-upgrade-cpu-unknown, s23) The "under half" rule lives twice: Rust
       `GPU_SUSTAINED_SHARE_PCT` and settings-done.ts's `busy * 2 < readings` (and "the half" in en/zh). Carry the share
       on `GameGpuClear` and use it in TS and the string. Rust + TS; one review.
 - [ ] **P9-cpu-fit-unknowns** If Check shows a CPU-limited block, one line naming what Compy can't read before any
@@ -1717,7 +1717,8 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       Review sonnet APPROVE-WITH-NITS, no MUST-FIX: parity with Check checked (both compare the raw average and round
       only for display); wording kept as Check's reviewed text (VRR/tearing nuance not added); the refresh is
       recorded once per session (commented); edge cases taken. Not visually checked.
-- [ ] **P9-summary-cpu-unknown** (summary twin of P9-cpu-gpu-balance) When the finished summary's measured-clear line
+- [x] **P9-summary-cpu-unknown** (superseded s23 by P9-no-upgrade-cpu-unknown: the measured-clear line now always
+      says Compy measures neither the CPU nor a frame cap, whatever the refresh) (summary twin of P9-cpu-gpu-balance) When the finished summary's measured-clear line
       fires and that session averaged below its recorded refresh, add that Compy can't measure the CPU's share yet, so
       "nothing holding this PC back" covers the GPU and the checked rows only; refresh/FPS unmeasured = today's line.
       Rust (`GameGpuClear` gains avg_fps/refresh_hz via the shared helpers) + TS; en + zh-CN; tests.
@@ -1811,10 +1812,20 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       (`held_by_trials` → `step_free`). The one cross-setting coupling was the power plan (a held USB/PCIe change is a
       setting OF the plan a session switches): closed by CR-gm-start-respects-plan-holds (same merge as this line).
       So a direct restore and a session's restore never write the same setting, in or out of the restore window.
-- [ ] **P9-no-upgrade-cpu-unknown** (SHOULD-FIX, honesty) lab.json `nothingLimitingMeasured` (00d5bd01, 2e67e38b,
+- [x] **P9-no-upgrade-cpu-unknown** (SHOULD-FIX, honesty) lab.json `nothingLimitingMeasured` (00d5bd01, 2e67e38b,
       a91c068c): "No upgrade is recommended" leans on a low GPU share, the usual sign of a CPU limit or a frame cap,
       neither of which Compy measures. Say so, or stop citing the share as support. en + zh-CN. Folds in
       CR-gpu-share-one-source (settings-done.ts `busy*2 < readings` vs Rust GPU_SUSTAINED_SHARE_PCT).
+      Done (s23, not installed; SHAs in the merge): the finished summary now reads "...the last check found nothing it
+      measures holding this PC back, and in your newest measured ROB RUN session 120 of 900 GPU readings were at 95%
+      load or more, under the 50% Compy counts as GPU-limited, so Compy doesn't count the GPU as the limit there. A
+      GPU that often isn't near full load usually means the CPU or a frame cap set the pace, and Compy measures
+      neither, so it can't say the CPU didn't hold this game back. No GPU upgrade is recommended." (zh-CN too).
+      `GameGpuClear` carries `limit_share_pct` (GPU_SUSTAINED_SHARE_PCT); settings-done.ts reads it (a row without a
+      sane share claims nothing); the upgrade row's why and the session hint format the share instead of "half".
+      Tests fail on main (settings-done share test; ExperimentBench render). Review sonnet r1 APPROVE-WITH-NITS
+      (SHOULD-FIX "wasn't the limit" over-claims at 90-94% load: taken; SHOULD-FIX "at least half" hand-written in
+      two Rust lines: taken).
 - [ ] **P9-session-on-this-hardware** (SHOULD-FIX, honesty) priorities.rs `build_gpu_games` (0e3091a4, c49f37af):
       the GPU-limiter and screen-limit lines never check the session ran on today's hardware; skip sessions recorded
       on another rig (the session's own stored identity; none stored = say it is a past session that can't be tied

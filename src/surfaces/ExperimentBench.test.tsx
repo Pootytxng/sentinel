@@ -2353,6 +2353,45 @@ describe("P4-exit: what Compy tested on this game", () => {
     }
   });
 
+  // P9-no-upgrade-cpu-unknown (fourth range review, honesty): a GPU that often wasn't busy is the
+  // usual sign of a CPU limit or a frame cap, neither of which Compy measures, so the measured-clear
+  // line says so and rules out only a GPU upgrade; the share is the rule's own, from the row.
+  it("P9-no-upgrade-cpu-unknown: the measured-clear line says what Compy can't measure and rules out only a GPU upgrade", async () => {
+    const scan = {
+      readiness: null,
+      priorities: {
+        limiters: [],
+        already_fine: [],
+        not_worth_touching: [],
+        session_hint: null,
+        upgrade_path: null,
+        gpu_clear_games: [{ game: "WardogsClient-Win64-Shipping.exe", busy: 120, readings: 900, threshold_pct: 95, limit_share_pct: 50 }],
+      },
+      recs: [],
+      reverted: [],
+      elapsed: null,
+    };
+    try {
+      putProbe("readiness-scan", scan);
+      await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
+      const done = screen.getByTestId("exp-summary-settings-done");
+      expect(done).toHaveAttribute("data-kind", "nothing-limiting");
+      expect(done).toHaveTextContent(
+        "120 of 900 GPU readings were at 95% load or more, under the 50% Compy counts as GPU-limited, so Compy doesn't count the GPU as the limit there. A GPU that often isn't near full load usually means the CPU or a frame cap set the pace, and Compy measures neither, so it can't say the CPU didn't hold this game back. No GPU upgrade is recommended.",
+      );
+      expect(done.textContent).not.toMatch(/nothing holding this PC back|No upgrade is recommended/);
+      const zh = (await import("../i18n/locales/zh-CN/lab.json")).default as {
+        experimentBench: { summary: { settingsDone: { nothingLimitingMeasured: string } } };
+      };
+      const line = zh.experimentBench.summary.settingsDone.nothingLimitingMeasured;
+      expect(line).toContain("{{limitShare}}%");
+      expect(line).toMatch(/CPU.*帧率上限.*都不测量/);
+      expect(line).toMatch(/不建议升级显卡。$/);
+    } finally {
+      invalidateProbe("readiness-scan");
+    }
+  });
+
   // P9-summary-screen-limit: the same session averaged at or above its screen's refresh.
   it("P9-summary-screen-limit: a GPU-limited session that out-ran its screen names the screen", async () => {
     const g = { game: "WardogsClient-Win64-Shipping.exe", share_pct: 80, peak_pct: 99, threshold_pct: 95, avg_fps: 251.6, refresh_hz: 250 };

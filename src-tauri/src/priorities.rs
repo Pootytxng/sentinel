@@ -64,6 +64,9 @@ pub(crate) struct GameGpuClear {
     busy: u32,
     readings: u32,
     threshold_pct: u64,
+    /// CR-gpu-share-one-source: the share of busy readings Compy counts as GPU-limited
+    /// (`GPU_SUSTAINED_SHARE_PCT`), so the summary's words and its check read the one rule.
+    limit_share_pct: u64,
 }
 
 /// One game whose newest measured session was GPU-limited (the sustained rule).
@@ -260,6 +263,7 @@ fn build_gpu_games(sessions: &Value) -> (Vec<GameGpuLimit>, Vec<GameGpuClear>) {
                     busy: l.busy,
                     readings: l.readings,
                     threshold_pct: GPU_LIMITED_PCT,
+                    limit_share_pct: GPU_SUSTAINED_SHARE_PCT,
                 });
             }
         }
@@ -326,7 +330,7 @@ pub(crate) fn build_upgrade_path(readiness: &Value, sessions: &Value) -> Option<
             why: format!(
                 "In your most recent monitored session the GPU sat at or above {GPU_LIMITED_PCT}% \
                  for {share}% of the time Compy measured the game (peak ~{peak}%) — the GPU was the \
-                 limiter for at least half of that session. If you want more headroom, a GPU \
+                 limiter for at least {GPU_SUSTAINED_SHARE_PCT}% of that session. If you want more headroom, a GPU \
                  upgrade is the hardware lever; no Windows tweak changes this."
             ),
             links: GPU_LINKS,
@@ -616,7 +620,7 @@ fn build_session_hint(sessions: &Value) -> Option<String> {
     let varied = avg > 0.0 && low1 > 0.0 && low1 < avg * 0.7;
     if let Some(share) = load.sustained_share() {
         Some(format!(
-            "Recent session hint: the GPU sat at or above {GPU_LIMITED_PCT}% for {share}% of the time Compy measured the game (peak ~{gpu}%), so this session looked GPU-limited for at least half of it."
+            "Recent session hint: the GPU sat at or above {GPU_LIMITED_PCT}% for {share}% of the time Compy measured the game (peak ~{gpu}%), so this session looked GPU-limited for at least {GPU_SUSTAINED_SHARE_PCT}% of it."
         ))
     } else if gpu >= GPU_LIMITED_PCT {
         // A peak alone is a moment, not the session (P9-bottleneck-sustained): say the GPU was busy
@@ -723,7 +727,7 @@ mod priority_tests {
             { "samples": 900, "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 900, "busy": 800 }, "avg_fps": 120.0, "low1_fps_est": 100.0 }
         ]);
         let p = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &sessions);
-        assert!(p.session_hint.as_deref().is_some_and(|h| h.contains("looked GPU-limited for at least half")), "{:?}", p.session_hint);
+        assert!(p.session_hint.as_deref().is_some_and(|h| h.contains("looked GPU-limited for at least 50% of it")), "{:?}", p.session_hint);
         assert!(build_upgrade_path(&readiness(vec![]), &sessions).is_some());
         let only = json!([{ "samples": 0, "peak_gpu_usage_pct": 99 }]);
         assert!(build_priorities(&readiness(vec![]), &json!([]), &json!([]), &only).session_hint.is_none());
@@ -742,7 +746,7 @@ mod priority_tests {
         let sessions = json!([{ "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 600, "busy": 540 }, "avg_fps": 120.0, "low1_fps_est": 100.0 }]);
         let p = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &sessions);
         let hint = p.session_hint.expect("hint present");
-        assert!(hint.contains("looked GPU-limited for at least half of it"), "{hint}");
+        assert!(hint.contains("looked GPU-limited for at least 50% of it"), "{hint}");
         assert!(hint.contains("for 90% of the time Compy measured the game"), "{hint}");
     }
 
@@ -856,7 +860,7 @@ mod priority_tests {
         assert_eq!(up.items[0].kind, "gpu");
         assert!(up.items[0].why.contains("~98%"), "why is sample-qualified with the measured peak");
         assert!(up.items[0].why.contains("for 80% of the time Compy measured the game"), "why names the sustained share: {}", up.items[0].why);
-        assert!(up.items[0].why.contains("limiter for at least half of that session"), "{}", up.items[0].why);
+        assert!(up.items[0].why.contains("limiter for at least 50% of that session"), "{}", up.items[0].why);
         assert!(up.items[0].why.contains("most recent monitored session"), "why is time-qualified");
         assert!(!up.items[0].links.is_empty());
         assert!(up.items[0].links.iter().all(|l| !l.url.contains("tag=") && !l.url.contains("affiliate")),
@@ -1152,8 +1156,12 @@ mod priority_tests {
         // the unnamed row are skipped; A and C are limited. Too few readings or no share: neither list.
         assert_eq!(
             build_gpu_clear_games(&sessions),
-            vec![GameGpuClear { game: "b.exe".into(), busy: 10, readings: 100, threshold_pct: 95 }]
+            vec![GameGpuClear { game: "b.exe".into(), busy: 10, readings: 100, threshold_pct: 95, limit_share_pct: 50 }]
         );
+        // CR-gpu-share-one-source: the row carries the rule's own share, so the UI never restates it.
+        assert_eq!(GPU_SUSTAINED_SHARE_PCT, 50);
+        let wire = serde_json::to_value(&build_gpu_clear_games(&sessions)[0]).unwrap();
+        assert_eq!(wire["limit_share_pct"], json!(GPU_SUSTAINED_SHARE_PCT));
         assert!(build_gpu_clear_games(&brief).is_empty(), "under the reading floor decides nothing");
         assert!(build_gpu_clear_games(&json!([{ "process_name": "d.exe", "peak_gpu_usage_pct": 99 }])).is_empty());
         assert_eq!(build_gpu_clear_games(&edge).len(), 1, "99 of 200 is measured, and not limited");

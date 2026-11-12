@@ -12,7 +12,12 @@ export type SettingsDoneLine =
   // A scan ran and nothing in it is marked as holding the PC back (and nothing was left unknown).
   // P9-no-upgrade-source: `gpuClear` when this game's newest measured session was also measured
   // clear of a GPU limit (its counts, for the words); absent = that session wasn't measured for it.
-  | { kind: "nothing-limiting"; gpuClear?: { busy: number; readings: number; thresholdPct: number } }
+  // P9-no-upgrade-cpu-unknown: the words say a GPU that often wasn't busy is the usual sign of a CPU
+  // limit or a frame cap, neither of which Compy measures, so only a GPU upgrade is ruled out.
+  | {
+      kind: "nothing-limiting";
+      gpuClear?: { busy: number; readings: number; thresholdPct: number; limitSharePct: number };
+    }
   // The top limiter is a setting or software item (monitor refresh, driver age, power plan...).
   | { kind: "setting-limiter"; title: string }
   // The top limiter is a part of the PC. Named only; Compy does not pick a part to buy.
@@ -79,16 +84,22 @@ export function settingsDoneLine(
     ? (priorities.gpu_clear_games ?? []).find((g) => g.game.trim().toLowerCase() === key)
     : undefined;
   // Review r1: counts that can't be a measurement (busy outside 0..readings) claim nothing.
+  // CR-gpu-share-one-source: the share Compy counts as GPU-limited comes on the row from the Rust
+  // rule; a row without it (an older backend) or with an impossible share claims nothing.
+  const limit = clear?.limit_share_pct;
   if (
     clear &&
-    [clear.busy, clear.readings, clear.threshold_pct].every(Number.isFinite) &&
+    limit != null &&
+    [clear.busy, clear.readings, clear.threshold_pct, limit].every(Number.isFinite) &&
+    limit > 0 &&
+    limit <= 100 &&
     clear.readings > 0 &&
     clear.busy >= 0 &&
-    clear.busy * 2 < clear.readings // under the half Compy counts as GPU-limited
+    clear.busy * 100 < clear.readings * limit // under the share Compy counts as GPU-limited
   ) {
     return {
       kind: "nothing-limiting",
-      gpuClear: { busy: clear.busy, readings: clear.readings, thresholdPct: clear.threshold_pct },
+      gpuClear: { busy: clear.busy, readings: clear.readings, thresholdPct: clear.threshold_pct, limitSharePct: limit },
     };
   }
   return { kind: "nothing-limiting" };
