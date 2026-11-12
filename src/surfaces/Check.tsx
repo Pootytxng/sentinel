@@ -1235,7 +1235,7 @@ export function UpgradePathBlock({ upgradePath, links }: { upgradePath: UpgradeP
 
 /** P9-no-upgrade-named + P9-cpu-gpu-balance: the shipped Optimize room's upgrade area when the scan
  *  named no hardware limiter. It says "No upgrade recommended" and what that was read from (how many
- *  measured game sessions on this graphics card, and the newest one's GPU counts), or "not measured
+ *  measured game sessions, none GPU-limited, other cards' left out, and the newest one's GPU counts), or "not measured
  *  yet" when there are none, never an empty block. When that newest session was not GPU-limited and
  *  averaged below the refresh rate it ran at, it says the GPU wasn't counted as the limit there and
  *  that Compy can't measure the CPU's share yet. Nothing when the scan named a part (the check's own
@@ -1244,6 +1244,9 @@ export function NoUpgradeBlock({ priorities }: { priorities: Priorities }) {
   const { t, i18n } = useTranslation();
   const ev = priorities.upgrade_evidence;
   if (!ev || priorities.upgrade_path) return null;
+  // Review r1: a GPU-limited session among those counted (an older one, or another game's) is not
+  // "no upgrade recommended" for the PC; the per-game summary speaks for it. A missing count = unknown.
+  if (!(ev.gpu_limited_sessions === 0)) return null;
   const partNamed = (priorities.limiters ?? []).some((l) => l.status === "attention" && !LIMITER_AWAY.has(l.id));
   if (partNamed) return null;
   const n = ev.newest;
@@ -1262,7 +1265,11 @@ export function NoUpgradeBlock({ priorities }: { priorities: Priorities }) {
   // = no line (unknown stays unknown). The raw average is compared, as Check's screen-limit rule does.
   const fps = clear?.avg_fps;
   const hz = clear?.refresh_hz;
-  const below = clear && finite(fps) && finite(hz) && fps < hz ? { fps: Math.round(fps), hz } : null;
+  // Review nit: a raw 59.6 under 60 Hz must not read "60 fps ... at 60 Hz"; one decimal then.
+  const below =
+    clear && finite(fps) && finite(hz) && fps < hz
+      ? { fps: Math.round(fps) < hz ? String(Math.round(fps)) : fps.toFixed(1), hz }
+      : null;
   const untied = clear ? gpuUntied(clear.gpu_tie) : undefined;
   return (
     <div className="check-upgrade" data-testid="check-no-upgrade" data-links="off">

@@ -59,12 +59,17 @@ pub(crate) struct Priorities {
 }
 
 /// P9-no-upgrade-named: what "no upgrade recommended" (Check's room, when the upgrade path has no
-/// row) was read from. Sessions on this card only, as every GPU line. `measured_sessions` counts the
+/// row) was read from. Sessions recorded on another card are left out, as for every GPU line (a
+/// session that recorded no card, or with this PC's card unread, still counts: review r1, the words
+/// say "left out", not "on this card"). `measured_sessions` counts the
 /// sessions that recorded enough GPU readings to decide anything (not behind another window, at least
 /// `GPU_SUSTAINED_MIN_READINGS` readings, busy within readings); `newest` is the newest of them.
 #[derive(Serialize, Debug, PartialEq)]
 pub(crate) struct UpgradeEvidence {
     measured_sessions: u32,
+    /// Review r1: how many of those were GPU-limited by the sustained rule (any game, any age). The
+    /// room says "no upgrade recommended" only when none was.
+    gpu_limited_sessions: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     newest: Option<NewestMeasured>,
 }
@@ -385,6 +390,7 @@ fn build_gpu_games(sessions: &Value, gpu_now: Option<&str>) -> (Vec<GameGpuLimit
 /// counted one is `newest` (None when it recorded no game or start: never a guess).
 fn build_upgrade_evidence(sessions: &Value, gpu_now: Option<&str>) -> UpgradeEvidence {
     let mut measured_sessions = 0u32;
+    let mut gpu_limited_sessions = 0u32;
     let mut newest = None;
     for row in sessions.as_array().map(Vec::as_slice).unwrap_or_default() {
         if row.get("samples").and_then(Value::as_u64) == Some(0) {
@@ -400,6 +406,9 @@ fn build_upgrade_evidence(sessions: &Value, gpu_now: Option<&str>) -> UpgradeEvi
             continue;
         };
         measured_sessions += 1;
+        if read.sustained_share().is_some() {
+            gpu_limited_sessions += 1;
+        }
         if measured_sessions == 1 {
             let text = |k: &str| row.get(k).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
             if let (Some(game), Some(started_at)) = (text("process_name"), text("started_at")) {
@@ -418,7 +427,7 @@ fn build_upgrade_evidence(sessions: &Value, gpu_now: Option<&str>) -> UpgradeEvi
             }
         }
     }
-    UpgradeEvidence { measured_sessions, newest }
+    UpgradeEvidence { measured_sessions, gpu_limited_sessions, newest }
 }
 
 fn gpu_load_read_row(s: &Value) -> Option<GpuLoadRead> {
@@ -1465,7 +1474,7 @@ mod priority_tests {
         // P9-no-upgrade-named / P9-cpu-gpu-balance.
         let now = Some("AMD Radeon RX 9070 XT");
         let none = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &json!([]), now);
-        assert_eq!(none.upgrade_evidence, UpgradeEvidence { measured_sessions: 0, newest: None });
+        assert_eq!(none.upgrade_evidence, UpgradeEvidence { measured_sessions: 0, gpu_limited_sessions: 0, newest: None });
         let mut newest = limited_on("g.exe", "2026-11-11T20:36:00Z", Some("AMD Radeon RX 9070 XT"), 120);
         newest["avg_fps"] = json!(141.5);
         newest["game_state"] = json!({ "display_refresh_hz": 250 });
@@ -1480,6 +1489,7 @@ mod priority_tests {
         ]);
         let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &sessions, now);
         assert_eq!(p.upgrade_evidence.measured_sessions, 2);
+        assert_eq!(p.upgrade_evidence.gpu_limited_sessions, 1, "the older g.exe session was GPU-limited");
         let n = p.upgrade_evidence.newest.as_ref().expect("the newest counted session");
         assert_eq!((n.game.as_str(), n.busy, n.readings, n.gpu_limited), ("g.exe", 120, 900, false));
         assert_eq!((n.avg_fps, n.refresh_hz, n.gpu_tie), (Some(141.5), Some(250), GpuTie::ThisCard));
@@ -1492,6 +1502,16 @@ mod priority_tests {
         assert_eq!(wire["measured_sessions"], json!(1));
         assert_eq!(wire["newest"]["gpu_tie"], json!("this-card"));
         assert!(wire["newest"].get("avg_fps").is_none(), "unmeasured stays absent");
+        assert_eq!(wire["gpu_limited_sessions"], json!(1));
+        // Review r1: a first counted session with no game or start is counted, and gives no newest
+        // (never an older session in its place).
+        let nameless = json!([
+            { "samples": 900, "peak_gpu_usage_pct": 97, "gpu_load": { "readings": 900, "busy": 100 } },
+            limited_on("g.exe", "2026-11-10T20:36:00Z", Some("AMD Radeon RX 9070 XT"), 100),
+        ]);
+        let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &nameless, now);
+        assert_eq!(p.upgrade_evidence.measured_sessions, 2);
+        assert_eq!(p.upgrade_evidence.newest, None);
     }
 
     #[test]

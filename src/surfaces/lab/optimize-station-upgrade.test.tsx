@@ -171,13 +171,13 @@ describe("P9-no-upgrade-named: the Optimize room names 'no upgrade recommended' 
   };
 
   it("measured clear: the count, the newest session's counts, and no retail anything", async () => {
-    scan.evidence = { measured_sessions: 3, newest: NEWEST };
+    scan.evidence = { measured_sessions: 3, gpu_limited_sessions: 0, newest: NEWEST };
     mount();
     const block = await screen.findByTestId("check-no-upgrade");
     expect(block.closest("details")).toBeNull();
     expect(block).toHaveTextContent("No upgrade recommended");
     expect(screen.getByTestId("check-no-upgrade-source").textContent).toMatch(
-      /^Read from the last check, which names no part holding this PC back, and 3 measured game sessions on this graphics card\. In the newest, your ROB RUN session on Nov 1[12](, 2026)?, 120 of 900 GPU readings were at 95% load or more, under the 50% Compy counts as GPU-limited, so Compy doesn't count the GPU as the limit there\.$/,
+      /^Read from the last check, which names no part holding this PC back, and 3 measured game sessions, none of them GPU-limited \(sessions recorded on another graphics card are left out\)\. In the newest, your ROB RUN session on Nov 1[12](, 2026)?, 120 of 900 GPU readings were at 95% load or more, under the 50% Compy counts as GPU-limited, so Compy doesn't count the GPU as the limit there\.$/,
     );
     // Its average and refresh unmeasured: no CPU line (unknown stays unknown).
     expect(screen.queryByTestId("check-no-upgrade-balance")).toBeNull();
@@ -187,13 +187,35 @@ describe("P9-no-upgrade-named: the Optimize room names 'no upgrade recommended' 
   });
 
   it("P9-cpu-gpu-balance: under the refresh rate it ran at, it says Compy can't measure the CPU's share", async () => {
-    scan.evidence = { measured_sessions: 1, newest: { ...NEWEST, avg_fps: 141.6, refresh_hz: 250 } };
+    scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, newest: { ...NEWEST, avg_fps: 141.6, refresh_hz: 250 } };
     mount();
     await screen.findByTestId("check-no-upgrade");
-    expect(screen.getByTestId("check-no-upgrade-source")).toHaveTextContent(/and 1 measured game session on this graphics card\./);
+    expect(screen.getByTestId("check-no-upgrade-source")).toHaveTextContent(/and 1 measured game session, none of them GPU-limited/);
+    // Review r1: the spec's two claims only (not the limit there; the CPU's share unmeasured), no guess.
     expect(screen.getByTestId("check-no-upgrade-balance").textContent).toBe(
-      "That session averaged 142 fps with the screen at 250 Hz. A GPU that often isn't near full load usually means the CPU or a frame cap set the pace; Compy can't measure the CPU's share yet, so it can't say the CPU didn't hold that game back.",
+      "That session averaged 142 fps, under the 250 Hz the screen ran at. Compy can't measure the CPU's share yet, so it can't say what held the frame rate there.",
     );
+  });
+
+  it("P9-cpu-gpu-balance: an average that would round up to the refresh rate keeps its decimal (review nit)", async () => {
+    scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, newest: { ...NEWEST, avg_fps: 59.6, refresh_hz: 60 } };
+    mount();
+    await screen.findByTestId("check-no-upgrade");
+    expect(screen.getByTestId("check-no-upgrade-balance")).toHaveTextContent(/^That session averaged 59\.6 fps, under the 60 Hz/);
+  });
+
+  it("a GPU-limited session among those counted (older, or another game's): no 'no upgrade recommended' (review r1)", async () => {
+    scan.evidence = { measured_sessions: 2, gpu_limited_sessions: 1, newest: NEWEST };
+    mount();
+    await screen.findByText(/All 1 checks/);
+    expect(screen.queryByTestId("check-no-upgrade")).toBeNull();
+  });
+
+  it("a setting the check names (not a part) still leaves 'no upgrade recommended' (review r1)", async () => {
+    scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, newest: NEWEST };
+    scan.limiters = [{ id: "power-profile", title: "Power plan", reason: "", linked: null, confidence: "medium", status: "attention" }];
+    mount();
+    expect(await screen.findByTestId("check-no-upgrade")).toHaveTextContent("No upgrade recommended");
   });
 
   it.each([
@@ -201,14 +223,14 @@ describe("P9-no-upgrade-named: the Optimize room names 'no upgrade recommended' 
     ["above it", { avg_fps: 252, refresh_hz: 250 }],
     ["refresh unmeasured", { avg_fps: 141 }],
   ])("P9-cpu-gpu-balance: %s, no CPU line", async (_n, extra) => {
-    scan.evidence = { measured_sessions: 1, newest: { ...NEWEST, ...extra } };
+    scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, newest: { ...NEWEST, ...extra } };
     mount();
     await screen.findByTestId("check-no-upgrade");
     expect(screen.queryByTestId("check-no-upgrade-balance")).toBeNull();
   });
 
   it("no measured session on this card: 'not measured yet', never an empty block", async () => {
-    scan.evidence = { measured_sessions: 0 };
+    scan.evidence = { measured_sessions: 0, gpu_limited_sessions: 0 };
     mount();
     await screen.findByTestId("check-no-upgrade");
     expect(screen.getByTestId("check-no-upgrade-source").textContent).toBe(
@@ -217,14 +239,14 @@ describe("P9-no-upgrade-named: the Optimize room names 'no upgrade recommended' 
   });
 
   it("a newest session that can't be tied to this card says so", async () => {
-    scan.evidence = { measured_sessions: 1, newest: { ...NEWEST, gpu_tie: "not-recorded" } };
+    scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, newest: { ...NEWEST, gpu_tie: "not-recorded" } };
     mount();
     await screen.findByTestId("check-no-upgrade");
     expect(screen.getByTestId("check-no-upgrade-untied")).toHaveTextContent("didn't record which graphics card it ran on");
   });
 
   it("a part the check names is not 'no upgrade': no block", async () => {
-    scan.evidence = { measured_sessions: 1, newest: NEWEST };
+    scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, newest: NEWEST };
     scan.limiters = [{ id: "ram-capacity", title: "Memory", reason: "", linked: null, confidence: "medium", status: "attention" }];
     mount();
     await screen.findByText(/All 1 checks/);
@@ -233,7 +255,7 @@ describe("P9-no-upgrade-named: the Optimize room names 'no upgrade recommended' 
 
   it("an upgrade row wins: the block with the row, never 'no upgrade recommended' beside it", async () => {
     scan.upgrade = { items: [GPU_ROW], disclosure: "x" };
-    scan.evidence = { measured_sessions: 1, newest: { ...NEWEST, gpu_limited: true, busy: 720 } };
+    scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, newest: { ...NEWEST, gpu_limited: true, busy: 720 } };
     mount();
     await screen.findByTestId("check-upgrade");
     expect(screen.queryByTestId("check-no-upgrade")).toBeNull();

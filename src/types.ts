@@ -252,8 +252,11 @@ export type Priorities = {
 
 /** P9-no-upgrade-named (priorities.rs `UpgradeEvidence`). */
 export type UpgradeEvidence = {
-  /** Sessions on this card that measured play with enough GPU readings to decide anything. */
+  /** Sessions that measured play with enough GPU readings to decide anything; sessions recorded on
+   *  another graphics card are left out. */
   measured_sessions: number;
+  /** How many of them were GPU-limited (any game, any age): "no upgrade recommended" only at 0. */
+  gpu_limited_sessions: number;
   /** The newest of them; absent when there is none, or it recorded no game or start. */
   newest?: {
     game: string;
