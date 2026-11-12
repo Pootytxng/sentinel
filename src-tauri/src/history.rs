@@ -1485,6 +1485,13 @@ pub(crate) fn restore_leftover(
     if !gate_open {
         return Err("Leftovers restore is not enabled in this build.".to_string());
     }
+    // CR-core-parking-held-with-plan: the core-parking restore writes the ACTIVE plan (SCHEME_CURRENT).
+    // While a Gaming Mode session holds the plan that is the session's plan, and after its stop the row
+    // would read off and its undo would write the session plan's priors onto the user's own plan. So
+    // it is refused then, with Gaming Mode's gate (try_lock only) held through the ledger write, as
+    // every other plain apply (`experiment::apply_recommendation`). A leftover no session can touch
+    // takes no gate and reads nothing.
+    let _gm = crate::gaming_orchestrator::plain_change_gate(std::iter::once(detector_id))?;
     let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = match detector_id {
