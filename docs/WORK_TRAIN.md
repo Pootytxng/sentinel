@@ -89,7 +89,7 @@ release checklist); no new rules.
   **P7-exit-proof** (friend-dependent half deferred the same way).
 - `RELEASE_STATE.md` gates still OPEN, owner territory: code signing (`STATE:code_signing=open`), legal
   (`STATE:legal=open`).
-- Unticked queue items: CR-1102-left (engineering lines), CR-bench-preapply-read, CR-bench-stack-hold,
+- Unticked queue items: CR-1102-left (engineering lines), CR-tip-see-through-2, CR-bench-stack-hold,
   CR-gm-skipped-line, CR-gm-restore-partial, CR-gm-service-suspend-rows, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
   exit proofs above; P8-first-advanced waits on P4 (Phase 8, not needed for v1.0).
 - CR-ultimate-identity: landed `ec326810` (2026-11-11 s19), not installed yet; follow-ups in CR-ultimate-followups.
@@ -224,12 +224,26 @@ release checklist); no new rules.
       untouched. Reviews r1 opus APPROVE-WITH-NITS, sonnet REQUEST-CHANGES (MUST-FIX: Trial start unchecked, taken);
       r2 opus + sonnet APPROVE-WITH-NITS (prefix nit taken). cargo 1841/0, clippy clean, full vitest 535/538 (3 site-app
       suites). Queued: CR-bench-preapply-read, CR-bench-stack-hold.
-- [ ] **CR-bench-preapply-read** (r1 opus SHOULD-FIX + r2 follow-up of CR-bench-holds-setting; pre-existing) The benchmark
+- [x] **CR-bench-preapply-read** (r1 opus SHOULD-FIX + r2 follow-up of CR-bench-holds-setting; pre-existing) The benchmark
       applies without reading the setting first (only the Benchmark tab's mount-time list skips applied ones): over an
       already-applied setting it snapshots "on", so a Ledger undo of the older row during the measurement is put back on by
       the trial's rollback, and the "change off" baseline is wrong. Refuse in `apply_for_bench_trial` with
       `pre_apply_refusal(probe_rec_target(..))` under the gate, as `start_experiment` does; also consider releasing the
       hold only on a successful rollback. Rollback boundary: two reviews.
+      Done `a2d49422` + r1 nits (2026-11-11 s20, not installed): `apply_for_bench_trial` reads the setting after the
+      Trial and benchmark refusals (under the store gate when Trials are on) and before Gaming Mode's gate, the hold and
+      the apply; only a setting that reads not yet changed is applied, otherwise "Couldn't apply the change: <why>" with
+      nothing changed. Hold release left as is (both reviews agree: after a failed rollback the re-run now reads On and
+      refuses; a hold that outlives the trial would make its own message false). Reviews r1 opus + sonnet
+      APPROVE-WITH-NITS (taken: the test pins the `return Err`, a comment on the read's place; not taken: bench-specific
+      status wording, a read-only check before the ~12 s baseline, a probe-coverage test for `APPLIABLE_REC_IDS`).
+      Test fails on the old code. cargo 1866/0, clippy clean, tsc 0, full vitest 535/538 (3 site-app suites).
+- [ ] **CR-tip-see-through-2** (self-review FAIL, installed `a15986b8`, 2026-11-11 s20;
+      `_train\view-1111c\03-live-combined-tip-hover.png`) The Live room's "14 Compy changes were on · combined effect" tip
+      still shows the readings under it through its text although `.kl-tip` computes `rgba(14, 20, 27, 0.96)`. Likely
+      cause: its ancestor `.mc-delta-tag` has `opacity: .85` (monitor-console.css:80), which fades the whole subtree,
+      tip included, and makes a stacking context the later sensor strip can paint over. Fix the tag's dimming without
+      opacity (text colour only), pin it in term-style-guard.test.ts, and re-capture with the tip open. TS/CSS; one review.
 - [ ] **CR-bench-stack-hold** (r1 sonnet SHOULD-FIX of CR-bench-holds-setting) The DARK aggregate-stack trial
       (`stack_trial_gate()` false) holds nothing; before arming it, hold every setting it applies the way the tweak trial does.
 - [x] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game

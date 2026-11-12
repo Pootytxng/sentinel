@@ -768,6 +768,8 @@ mod trial_tests {
         let read = f.find("pre_apply_refusal(crate::history::probe_rec_target(&rec_id))").expect("the setting is read first");
         let (mark, write) = (f.find("benchmark_trial::hold(").expect("marked"), f.find(concat!("crate::history::", "apply_recommendation(")).expect("apply"));
         assert!(gate < read && read < mark && mark < write, "under the gate, read, then mark held and apply");
+        // Review r1 (sonnet NIT): the read refuses, it doesn't just run.
+        assert!(f[read..mark].contains("return Err(why.to_string());"), "a refused read returns before the apply");
         use crate::history::ActiveCheck;
         assert_eq!(crate::experiment::pre_apply_refusal(ActiveCheck::Off), None, "not yet changed: measured");
         for check in [ActiveCheck::On, ActiveCheck::Unreadable, ActiveCheck::Unrecognised] {

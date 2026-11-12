@@ -3131,7 +3131,9 @@ pub(crate) fn apply_for_bench_trial(
     // CR-bench-preapply-read: read the setting first, as a Trial start does (§4.1). Over a setting
     // that already reads as changed, the trial's snapshot would be "on": its rollback would put back
     // on a change the user undoes in the ledger during the measurement, and the "change off" baseline
-    // was measured with it on. A setting that can't be read couldn't be verified either way.
+    // was measured with it on. A setting that can't be read couldn't be verified either way. Read
+    // before Gaming Mode's gate, as in a Trial start: its session check below still runs before the
+    // hold and the apply, and a UI apply is kept out by the store gate.
     if let Some(why) = pre_apply_refusal(crate::history::probe_rec_target(&rec_id)) {
         return Err(why.to_string());
     }
