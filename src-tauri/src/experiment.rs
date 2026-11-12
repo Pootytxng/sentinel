@@ -3384,7 +3384,7 @@ pub(crate) fn start_experiment(
     // CR-bench-holds-setting (review r1): a setting the benchmark tweak trial holds is refused by name,
     // even in the moment before its apply lands (its hold is set under this same gate).
     if let Some(why) = bench_refusal(std::iter::once(rec_id.as_str())) {
-        return Err(why);
+        return Err(format!("experiment not started — {why}"));
     }
 
     // Single-variable honesty context BEFORE we apply (§4F): how many changes are already active, by
