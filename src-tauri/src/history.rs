@@ -440,6 +440,11 @@ pub(crate) struct LiveReads {
     /// connection per service, ~100-500 ms each, in series.
     list_services: fn() -> Option<ServiceListing>,
     services: std::cell::OnceCell<Option<ServiceListing>>,
+    /// The active power scheme, read once per pass the first time a row asks (CR-kept-plan-read-once):
+    /// the power-ultimate row's probe and the "kept outside Compy" check share it, so a History or
+    /// readiness pass spawns one `powercfg`, not two.
+    read_scheme: fn() -> Option<ObservedPlan>,
+    scheme: std::cell::OnceCell<Option<ObservedPlan>>,
 }
 
 /// One row per service a [`disable_service_listing`] read returned: (name, state, start mode), as
@@ -473,7 +478,20 @@ impl LiveReads {
             tasks: std::cell::OnceCell::new(),
             list_services,
             services: std::cell::OnceCell::new(),
+            read_scheme: crate::current_power_scheme,
+            scheme: std::cell::OnceCell::new(),
         }
+    }
+
+    /// The same pass with its active-scheme read replaced. Tests pass a counting fake.
+    #[cfg(test)]
+    pub(crate) fn with_scheme_read(self, read_scheme: fn() -> Option<ObservedPlan>) -> Self {
+        LiveReads { read_scheme, ..self }
+    }
+
+    /// The active power scheme for this pass, read at most once.
+    pub(crate) fn scheme(&self) -> Option<ObservedPlan> {
+        self.scheme.get_or_init(self.read_scheme).clone()
     }
 
     fn task_disabled(&self, task: &KnownBloatTask) -> Option<bool> {
@@ -637,7 +655,8 @@ pub(crate) fn probe_rec_target_with(rec_id: &str, reads: &LiveReads) -> ActiveCh
         "nvidia-telemetry" => disabled("NvTelemetryContainer"),
         // The plan's class comes from its GUID, so a localized plan name cannot hide it; a copy of
         // Ultimate (a new GUID) still reads by its English words, as before (CR-localized-reads).
-        "power-ultimate" => read(crate::current_power_plan().map(|(class, _)| class == crate::PowerPlanClass::Ultimate)),
+        // CR-kept-plan-read-once: the pass's one scheme read (the same GUID-then-words class).
+        "power-ultimate" => read(reads.scheme().map(|seen| seen.class == crate::PowerPlanClass::Ultimate)),
         "nagle-disable" => read(Some(nagle_disabled_on_any_nic())),
         "hags-enable" => read(hags_state_checked().ok().map(|v| v == Some(2))),
         "mouse-accel-off" => read(Some(mouse_accel_disabled())),
@@ -828,7 +847,7 @@ pub(crate) fn applied_change_views(history: &[AppliedChange]) -> Vec<AppliedChan
             && c.changed_outside.as_ref().and_then(ChangedOutside::usable).is_some()
     };
     if history.iter().zip(&views).any(|(c, v)| recorded_off(c, v)) {
-        let observed = kept_outside_observed(history);
+        let observed = kept_outside_observed(history, &reads);
         for (c, v) in history.iter().zip(views.iter_mut()) {
             // Review r2 (opus): no read taken (Gaming Mode on, or the plan unreadable) is unknown,
             // never a measured "doesn't hold": the field stays None.
@@ -2408,21 +2427,22 @@ fn summarize_for_readiness(history: &[AppliedChange]) -> AppliedChangesSummary {
         .iter()
         .map(|c| (c.status != "rolled_back").then(|| check_row_state(c, &reads)))
         .collect();
-    let observed = kept_outside_observed(history);
+    let observed = kept_outside_observed(history, &reads);
     summarize_checked(history, &checks, |c| recorded_and_holding(c, observed.as_ref()))
 }
 
 /// The one active-plan read a "kept outside Compy" decision is made against: taken only when an
 /// applied row carries a usable record, and never while a Gaming Mode contract is on disk (the
-/// active plan may then be one Compy set). None = no read (nothing is kept on it).
-fn kept_outside_observed(history: &[AppliedChange]) -> Option<ObservedPlan> {
-    kept_outside_observed_with(history, || gaming_mode_may_hold_plan().is_some(), crate::current_power_scheme)
+/// active plan may then be one Compy set). None = no read (nothing is kept on it). The read is the
+/// pass's own (CR-kept-plan-read-once): the power-ultimate row's probe already took it.
+fn kept_outside_observed(history: &[AppliedChange], reads: &LiveReads) -> Option<ObservedPlan> {
+    kept_outside_observed_with(history, || gaming_mode_may_hold_plan().is_some(), || reads.scheme())
 }
 
 /// [`kept_outside_observed`] with its two reads handed in, so a test can count them. Pure.
 fn kept_outside_observed_with(
     history: &[AppliedChange],
-    gaming_mode_may_hold: impl FnOnce() -> bool,
+    gaming_mode_may_hold: impl Fn() -> bool,
     read_plan: impl FnOnce() -> Option<ObservedPlan>,
 ) -> Option<ObservedPlan> {
     let recorded = history
@@ -2431,7 +2451,13 @@ fn kept_outside_observed_with(
     if !recorded || gaming_mode_may_hold() {
         return None;
     }
-    read_plan()
+    let seen = read_plan();
+    // CR-kept-outside-nits (a): asked again after the read, as `record_changed_outside` does; a
+    // session that started meanwhile may have set the plan, so nothing is kept on that read.
+    if gaming_mode_may_hold() {
+        return None;
+    }
+    seen
 }
 
 /// Read-only: every ledger entry's id, in on-disk (apply) order. Used by the aggregate-stack A/B
@@ -6195,6 +6221,57 @@ mod changed_outside_tests {
         let seen = crate::power_scheme_of(&format!("Power Scheme GUID: {SYNEZ}  (Synez Power Plan)\r\n")).unwrap();
         assert_eq!(seen, synez());
         assert!(crate::power_scheme_of("no plan here").is_none());
+    }
+
+    #[test]
+    fn a_pass_reads_the_active_plan_once_for_the_ultimate_row_and_the_kept_outside_check() {
+        // CR-kept-plan-read-once: the power-ultimate probe and the kept-outside decision share the
+        // pass's one scheme read (each History poll used to spawn a second powercfg).
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static READS: AtomicUsize = AtomicUsize::new(0);
+        fn fake() -> Option<ObservedPlan> {
+            READS.fetch_add(1, Ordering::SeqCst);
+            Some(ObservedPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into(), class: crate::PowerPlanClass::Other })
+        }
+        let reads = LiveReads::default().with_scheme_read(fake);
+        let mut history = legacy_rows();
+        for c in &mut history {
+            c.changed_outside = Some(ChangedOutside {
+                schema: CHANGED_OUTSIDE_SCHEMA,
+                recorded_at: "2026-11-11T03:00:00+00:00".into(),
+                observed: ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() },
+            });
+        }
+        assert_eq!(probe_rec_target_with("power-ultimate", &reads), ActiveCheck::Off);
+        assert_eq!(probe_rec_target_with("power-ultimate", &reads), ActiveCheck::Off);
+        assert_eq!(kept_outside_observed_with(&history, || false, || reads.scheme()), Some(synez()));
+        assert_eq!(READS.load(Ordering::SeqCst), 1, "one powercfg for the whole pass");
+        // Both production passes hand their own reads to the kept-outside check.
+        let src = include_str!("history.rs");
+        for f in ["pub(crate) fn applied_change_views(", "fn summarize_for_readiness("] {
+            let body = src.split_once(f).map(|(_, r)| r).expect(f);
+            let body = &body[..body.find("\n}\n").expect("end")];
+            assert!(body.contains("kept_outside_observed(history, &reads)"), "{f}");
+        }
+    }
+
+    #[test]
+    fn the_kept_outside_read_is_dropped_if_gaming_mode_started_while_it_was_taken() {
+        // CR-kept-outside-nits (a): Gaming Mode is asked again after the plan read, as
+        // record_changed_outside does; a session that started in between keeps nothing.
+        let mut history = legacy_rows();
+        history[0].changed_outside = Some(ChangedOutside {
+            schema: CHANGED_OUTSIDE_SCHEMA,
+            recorded_at: "2026-11-11T03:00:00+00:00".into(),
+            observed: ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() },
+        });
+        let asks = std::cell::Cell::new(0);
+        let gaming_after_first_ask = || {
+            asks.set(asks.get() + 1);
+            asks.get() > 1
+        };
+        assert_eq!(kept_outside_observed_with(&history, gaming_after_first_ask, || Some(synez())), None);
+        assert_eq!(asks.get(), 2, "asked before and after the read");
     }
 
     #[test]
