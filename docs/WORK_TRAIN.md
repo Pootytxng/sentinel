@@ -1809,13 +1809,14 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
   limiter on this rig); teardown CLEAN twice; queued CR-footer-reversible, CR-hist-today, CR-zh-backend-home,
   CR-plan-read-prompt-write and four Phase 9 slices. P9-summary-gpu-limit parked UNTESTED on its branch (`64802f38`) when the
   game started. Not pushed: `7bba7d3e` and everything after it.
-- 2026-11-12 ~06:50-10:00 (s22, coordinator-assigned, CODE-ONLY nearly throughout; no game seen): landed on main, each
+- 2026-11-12 ~06:50-10:10 (s22, coordinator-assigned, CODE-ONLY nearly throughout; no game seen): landed on main, each
   in its own worktree with a full vitest 537/540 (3 site-app suites) or better: CR-footer-reversible `7dfe87ef`,
   CR-hist-today `f1c4ef7b`, P9-summary-gpu-limit `0e3091a4`, CR-zh-backend-home `28f396e5`, CR-gm-restore-partial
   `90261811`, CR-trial-gm-between `18cf0e58` (finding: a Trial missed Gaming Mode on for one session only; now Partial),
   P9-limit-source `412ca74c`, P9-screen-is-limit `652a0469`, P9-no-upgrade-source `60b5abf2`, P9-retail-firewall
-  `02480f59`, P9-summary-no-dead-pointer `b136c126`; P9-cpu-fit-unknowns parked (no CPU block). Finding: Check's upgrade
-  block never renders in the shipped room (P9-upgrade-block-reachable). Reviews per item in its row. Two idle windows:
+  `02480f59`, P9-summary-no-dead-pointer `b136c126`, P9-summary-screen-limit `c49f37af`; P9-cpu-fit-unknowns parked
+  (no CPU block). Finding: Check's upgrade block never renders in the shipped room (P9-upgrade-block-reachable).
+  Reviews per item in its row. Two idle windows:
   07:56 (push 1 failed in the gate on the ExperimentBench flake, which passes alone; push 2 killed by PID tree when
   the owner returned) and 09:41 (push 3 killed the same way). Not pushed; no build, install or screen check
   (installed stays `b27552f8`).
