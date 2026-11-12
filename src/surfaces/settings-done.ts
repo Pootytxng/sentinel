@@ -19,7 +19,13 @@ export type SettingsDoneLine =
   | { kind: "part-limiter"; title: string }
   // P9-summary-gpu-limit: this game's newest measured session was GPU-limited (the sustained rule),
   // so the GPU is the measured limiter for this game, with its share; never "nothing holding it back".
-  | { kind: "gpu-limiter"; sharePct: number; thresholdPct: number };
+  | {
+      kind: "gpu-limiter";
+      sharePct: number;
+      thresholdPct: number;
+      /** P9-summary-screen-limit: that session averaged at or above the refresh it recorded. */
+      screenCap?: { hz: number; fps: number };
+    };
 
 const AGGREGATE_REC_ROWS = new Set(["pending-safe-recs", "applied-changes"]);
 
@@ -52,7 +58,18 @@ export function settingsDoneLine(
   // A measured GPU limit for this game outranks "nothing limiting" and "not measured": it is a
   // measurement of this game, where the check's rows are PC-wide.
   if (gpu && Number.isFinite(gpu.share_pct) && Number.isFinite(gpu.threshold_pct)) {
-    return { kind: "gpu-limiter", sharePct: gpu.share_pct, thresholdPct: gpu.threshold_pct };
+    // P9-summary-screen-limit: Check's P9-screen-is-limit rule on the same session (both measured,
+    // average at or above the refresh); otherwise the GPU line as before.
+    const fps = gpu.avg_fps;
+    const hz = gpu.refresh_hz;
+    const capped =
+      fps != null && hz != null && Number.isFinite(fps) && Number.isFinite(hz) && fps > 0 && hz > 0 && fps >= hz;
+    return {
+      kind: "gpu-limiter",
+      sharePct: gpu.share_pct,
+      thresholdPct: gpu.threshold_pct,
+      ...(capped ? { screenCap: { hz, fps: Math.round(fps) } } : {}),
+    };
   }
   // An unread limiter means the check could not say; "nothing is limiting" would be a claim it never made.
   if (limiters.some((l) => l.status === "unknown")) return { kind: "not-measured" };

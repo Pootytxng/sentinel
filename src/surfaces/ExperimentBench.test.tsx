@@ -2353,6 +2353,30 @@ describe("P4-exit: what Compy tested on this game", () => {
     }
   });
 
+  // P9-summary-screen-limit: the same session averaged at or above its screen's refresh.
+  it("P9-summary-screen-limit: a GPU-limited session that out-ran its screen names the screen", async () => {
+    const g = { game: "WardogsClient-Win64-Shipping.exe", share_pct: 80, peak_pct: 99, threshold_pct: 95, avg_fps: 251.6, refresh_hz: 250 };
+    const scan = {
+      readiness: null,
+      priorities: { limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null, gpu_limited_games: [g] },
+      recs: [],
+      reverted: [],
+      elapsed: null,
+    };
+    try {
+      putProbe("readiness-scan", scan);
+      await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
+      const done = screen.getByTestId("exp-summary-settings-done");
+      expect(done).toHaveAttribute("data-kind", "gpu-limiter");
+      expect(done).toHaveTextContent(
+        "80% of Compy's GPU readings were at 95% load or more, but your 250 Hz screen can't show more than 250 frames a second and that session averaged 252 fps, so on average a faster GPU wouldn't show you more frames; the slowest moments can still depend on it. For frame rate, no upgrade is recommended for this game.",
+      );
+      expect(done.textContent).not.toMatch(/measured limiter for this game/);
+    } finally {
+      invalidateProbe("readiness-scan");
+    }
+  });
+
   it("P9-settings-done: no settings-done line while changes are still worth testing", async () => {
     const panel = await renderOwner([
       pass("visual-effects", "Trim Windows visual effects", 1),
