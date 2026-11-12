@@ -3082,6 +3082,17 @@ pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
     crate::history::rollback_change(change_id)
 }
 
+/// CR-gm-service-suspend-rows: the session service-suspend command (armed, no UI caller today).
+/// A Gaming Mode session that suspends the same service resumes it on stop, under this row ("applied"
+/// over a running service), so it is refused while one holds it, with Gaming Mode's try_lock-only gate
+/// held through the ledger write, as the UI's other applies. The audited suspend is history's.
+#[tauri::command]
+pub(crate) fn suspend_known_service(service_name: String) -> Result<crate::history::AppliedChangeView, String> {
+    let rec_id = crate::actions::KnownService::from_name(&service_name).map(|s| crate::history::suspend_rec_id(&s));
+    let _gm = crate::gaming_orchestrator::plain_change_gate(rec_id.iter().map(String::as_str))?;
+    crate::history::suspend_known_service(service_name)
+}
+
 /// CR-gm-spans-trial: the settings every open (Pending or Running) Trial holds, for Gaming Mode's
 /// start. Read checked and without the store gate (Gaming Mode's start never waits on a Trial); a
 /// store that can't be read is an error, since it could hold the running Trial.

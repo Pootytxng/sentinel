@@ -216,7 +216,7 @@ pub(crate) fn session_holds_refusal(rec_id: &str) -> Option<String> {
 pub(crate) fn plain_change_gate<'a>(
     rec_ids: impl Iterator<Item = &'a str>,
 ) -> Result<Option<std::sync::MutexGuard<'static, ()>>, String> {
-    let rec_ids: Vec<&str> = rec_ids.filter(|r| session_can_touch(r)).collect();
+    let rec_ids: Vec<&str> = rec_ids.filter_map(session_rec_of).collect();
     if rec_ids.is_empty() {
         return Ok(None); // no session step touches these settings: nothing to hold or read
     }
@@ -279,9 +279,22 @@ fn file_hold_refusal(rec_id: &str, file: &SessionFile, live: Option<&str>) -> Op
 }
 
 /// PURE: whether any Gaming Mode session step of this version touches the setting `rec_id`.
+#[cfg(test)]
 fn session_can_touch(rec_id: &str) -> bool {
-    [REC_POWER, REC_GAME_MODE, REC_GAME_BAR, REC_USB, REC_PCIE].contains(&rec_id)
-        || actions::KnownService::ALL.iter().any(|s| service_rec(s) == rec_id)
+    session_rec_of(rec_id).is_some()
+}
+
+/// PURE: the session setting a ledger rec id changes, when a session step of this version touches it:
+/// a catalog rec, or (CR-gm-service-suspend-rows) a `service-suspend:<Name>` row, which suspends the
+/// same allowlisted service a session's suspend step does.
+fn session_rec_of(rec_id: &str) -> Option<&'static str> {
+    if let Some(name) = rec_id.strip_prefix("service-suspend:") {
+        return actions::KnownService::from_name(name).map(|s| service_rec(&s));
+    }
+    [REC_POWER, REC_GAME_MODE, REC_GAME_BAR, REC_USB, REC_PCIE]
+        .into_iter()
+        .chain(actions::KnownService::ALL.iter().map(service_rec))
+        .find(|r| *r == rec_id)
 }
 
 /// PURE (CR-gm-spans-followups a): the refusal when a Gaming Mode record is on disk but this Compy
@@ -1073,10 +1086,44 @@ mod spans_trial_tests {
         assert!(ungated.is_none(), "an untouched setting takes no gate");
         let src = include_str!("gaming_orchestrator.rs");
         let body = src.split_once("pub(crate) fn plain_change_gate<").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
-        let filter = body.find("session_can_touch(").expect("filters first");
+        let filter = body.find("filter_map(session_rec_of)").expect("filters first");
         let gate = body.find("let gate = session_op_guard()?;").expect("then the gate");
         let read = body.find("plain_change_refusal(").expect("then the read");
         assert!(filter < gate && gate < read && body.contains("None => Ok(Some(gate))"), "filter, gate, read, gate returned held");
+    }
+
+    #[test]
+    fn a_session_suspend_row_names_the_service_a_session_suspends() {
+        // CR-gm-service-suspend-rows: `suspend_known_service` records `service-suspend:<Name>` rows
+        // with the suspend a session uses; the touch check didn't know that id, so neither the row's
+        // undo nor the command itself was refused while a session held the service.
+        for svc in KnownService::ALL.iter() {
+            let id = format!("service-suspend:{}", svc.name());
+            assert_eq!(session_rec_of(&id), Some(service_rec(svc)), "{id}");
+            assert!(session_can_touch(&id));
+        }
+        assert_eq!(session_rec_of("service-suspend:Spooler"), None, "off the allowlist: nothing a session touches");
+        assert_eq!(session_rec_of("service-suspend:sysmain"), None, "exact names only, as from_name");
+        assert_eq!(session_rec_of(REC_GAME_MODE), Some(REC_GAME_MODE));
+        assert_eq!(session_rec_of("hags-enable"), None);
+        // A session suspending SysMain holds a SysMain suspend row's setting.
+        let suspend = SessionChange { label: suspend_label(&KnownService::SysMain), ..change(LABEL_POWER) };
+        let file = session_file("gm-1", SessionStatus::Active, vec![suspend]);
+        let found = vec!["gaming-session.json".to_string()];
+        let mapped: Vec<&str> = ["service-suspend:SysMain"].into_iter().filter_map(session_rec_of).collect();
+        let held = plain_hold_refusal(&mapped, Ok(&found), Some(&file), Some("gm-1")).expect("held");
+        assert!(held.contains("Stop Gaming Mode first"), "{held}");
+        // The webview's suspend command is experiment's: it takes the gate, held, before history's
+        // audited suspend (which takes the ledger lock), and it gates the id history records.
+        let lib = include_str!("lib.rs");
+        let handler = lib.split_once("generate_handler![").map(|(_, r)| r).expect("handler list");
+        assert!(handler.contains("experiment::suspend_known_service,") && !handler.contains("history::suspend_known_service,"));
+        let src = include_str!("experiment.rs");
+        let body = src.split_once("pub(crate) fn suspend_known_service(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        let gate = body.find("let _gm = crate::gaming_orchestrator::plain_change_gate(").expect("gated");
+        let audited = body.find(concat!("crate::history::", "suspend_known_service(service_name)")).expect("history's suspend");
+        assert!(body.contains("crate::history::suspend_rec_id(") && gate < audited, "gate (on history's own id), then the suspend");
+        assert_eq!(crate::history::suspend_rec_id(&KnownService::SysMain), "service-suspend:SysMain");
     }
 
     #[test]
