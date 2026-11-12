@@ -1239,17 +1239,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-10 ~11:10-11:40 (scheduled, CODE-ONLY, owner on Discord): CR-dual-channel `ad5074ac` (4 new readiness tests
-  proven failing on the old logic; review r1 APPROVE-WITH-NITS, 3 SHOULD-FIX taken in `0c2912ce`, r2 APPROVE-WITH-NITS)
-  and CR-vbs-running `b2ed0cca` (review r1 APPROVE-WITH-NITS, nothing queued). cargo test 1795/0, clippy clean (idle
-  priority, shared target dir). Reviews ran as `claude -p --model sonnet` on the diff (no Agent tool in this session).
-  Not pushed (CODE-ONLY); the next FULL session pushes local `main` through the gate.
-- 2026-11-10 ~11:38-12:15 (scheduled, CODE-ONLY, owner in Firefox): CR-care-silent `e77fba1e`..`263e0768` (doc
-  `55c04296`; App-wiring vitest proven failing on the old App.tsx; review r1 3 SHOULD-FIX taken, r2 2 queued as
-  CR-care-line-truth) and CR-slow-async `9cab29d0`, `27c10a75` (9 commands off the main thread; capture start parked
-  as CR-capture-async; review r1 APPROVE-WITH-NITS, SHOULD-FIX taken). cargo test 1804/0, clippy clean, tsc 0, full
-  vitest 532/535 files (the 3 site-app suites need site-app/node_modules, absent in a worktree; pass on main).
-  Reviews ran as `claude -p --model sonnet`. Not pushed (CODE-ONLY).
 - 2026-11-10 ~12:10-12:45 (scheduled, FULL, owner idle in Firefox): pushed local `main` first through the pre-push
   gate (`776345f7..4c58fbed`, exit 0). Then P9-hint-shown `4a4265d4` (session hint shown under Check's limiter rows),
   CR-care-line-truth `49213302` (per-choice save tracking; stopped line after the last retry) and CR-pagefile-multi
@@ -1335,6 +1324,15 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   reported ROB RUN stutter (my vitest + cargo ran while he played): no heavy commands while a game runs. Not pushed.
 - 2026-11-11 s17 (scheduled, CODE-ONLY, ROB RUN in front): no heavy commands per the s16 order; read-only diagnosis
   of the CR-rp guard failure (note under that item); 0 items landed; not pushed (main 61 ahead).
+- 2026-11-11 ~14:39-16:15 (coordinator-assigned s18, CODE-ONLY, no game; owner on Discord, idle >= 10 min once at
+  15:27): CR-rp-same-setting-row re-landed `1a740e66` (the s16 revert was a misattribution: the 2 record-first guard
+  failures were CR-outside-followups (b)'s history.rs refactor, fixed in `db633af9`); (b) landed `3b5480ca` (opus r2
+  APPROVE-WITH-NITS); core parking `06b69362` (sonnet APPROVE-WITH-NITS); CR-capture-superseded `4512c1ad` (sonnet
+  APPROVE-WITH-NITS); CR-next-moved-outside `2aaac7e3`; CR-undo-kept-plan `6613a053`; CR-zh-drift-count `5d2e9942`;
+  CR-update-refusal-path checked, no change; CR-ultimate-identity parked on its branch after two rounds (opus
+  REQUEST-CHANGES both). New tests fail on the old code; cargo 1839/0, clippy clean, tsc 0, full vitest 535/538 (the 3
+  site-app suites). Push started in the 15:27 window and stopped mid-gate (vitest stage) when the owner returned; not
+  pushed, not installed, no screen capture (no later 10-minute idle window).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
