@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -311,7 +311,10 @@ function IncidentRow({
   const { t } = useTranslation();
   const [showReceipt, setShowReceipt] = useState(false);
   const ref = useRef<HTMLLIElement | null>(null);
-  useEffect(() => {
+  // A layout effect, not a passive one (CR-glass-scroll-flake): it runs in the commit that draws the
+  // row, before paint. The passive effect ran in a later task, so the list's top could paint first
+  // and then jump, and a loaded test run read the row before it was scrolled to.
+  useLayoutEffect(() => {
     // By its top: a record with its evidence open runs taller than the window, and centring it put
     // the "this is the one" note and the headline above the fold (desk review 2026-10-30).
     if (selected) ref.current?.scrollIntoView({ block: "start", behavior: "auto" });

@@ -480,6 +480,57 @@ describe("Problems (glass redesign)", () => {
     // Read-only: arriving does not mark the record opened.
     expect(invoked).not.toContain("mark_care_incident_opened");
   });
+
+  it("the record shows up already scrolled to: the scroll lands in the commit that draws it (CR-glass-scroll-flake)", async () => {
+    // The scroll ran from a passive effect, which React runs in a later task than the commit that
+    // draws the row. A loaded run (the pre-push gate) let the test read the row in that gap, and a
+    // user saw one frame of the list's top before it jumped. A DOM observer fires right after the
+    // commit, before any later task: the scroll must already have happened by then.
+    scan.report = {
+      incidents: [
+        {
+          incident_id: "tail0000000000002",
+          headline: "tail stopped responding (froze)",
+          tag: "App hang",
+          when: "2026-09-28T10:00:00Z",
+          when_display: "2026-09-28T10:00:00Z",
+          vitals: null,
+          receipt: { source: "Application log · 1002", event_ids: [1002], faulting_app: null, faulting_module: null, code: null, detail: "" },
+          assessment: null,
+        },
+      ],
+      skipped_sources: [],
+    };
+    const scrolled = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+    // null = the observer never saw the note; otherwise whether the note's own row had been scrolled to.
+    let rowScrolledWhenDrawn: boolean | null = null;
+    const watch = new MutationObserver(() => {
+      const note = document.querySelector(".bb-selected-note");
+      if (rowScrolledWhenDrawn === null && note) {
+        const row = note.closest(".bb-item");
+        rowScrolledWhenDrawn = scrolled.mock.contexts.some((el) => el === row);
+      }
+    });
+    watch.observe(document.body, { childList: true, subtree: true });
+    try {
+      render(
+        <ProblemsRoom
+          changes={[]}
+          onChanged={vi.fn()}
+          ledgerBusy={false}
+          onLedgerBusy={vi.fn()}
+          focusIncidentId={null}
+          pendingIncidentId="tail0000000000002"
+        />,
+      );
+      await screen.findByText("This is the one you came here to see.");
+      expect(rowScrolledWhenDrawn, "the observer never saw the note").not.toBeNull();
+      expect(rowScrolledWhenDrawn, "the row was drawn before it was scrolled to").toBe(true);
+    } finally {
+      watch.disconnect();
+      scrolled.mockRestore();
+    }
+  });
 });
 
 // Round-2 review 2026-10-31: games recorded but no frame rate measured (a session Compy saw but
