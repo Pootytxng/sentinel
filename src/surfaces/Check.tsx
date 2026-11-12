@@ -21,6 +21,7 @@ import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 import { upgradeFitLine } from "./upgrade-fit";
 import { prettyGameName } from "./game-name";
 import { readManualParts } from "./rig/manual-parts";
+import { gpuUntied } from "./settings-done";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
@@ -1161,6 +1162,21 @@ export function UpgradePathBlock({ upgradePath, links }: { upgradePath: UpgradeP
                   readings: item.measured_from.readings,
                   threshold: item.measured_from.threshold_pct,
                 })}
+                {/* P9-session-on-this-hardware: that session can't be tied to the card in this PC
+                    now (it recorded none, or this PC's card wasn't read); a session recorded on
+                    another card never reaches here (priorities.rs skips it). */}
+                {(() => {
+                  const untied = gpuUntied(item.measured_from.gpu_tie);
+                  if (!untied) return null;
+                  return (
+                    <span data-testid="check-upgrade-untied">
+                      {" "}
+                      {untied === "not-recorded"
+                        ? t("optimize.check.upgradeUntiedNotRecorded")
+                        : t("optimize.check.upgradeUntiedCardUnread")}
+                    </span>
+                  );
+                })()}
               </p>
             )}
             {/* P9-gpu-fit-unknowns: what Compy can't check before any card, in the system's

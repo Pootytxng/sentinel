@@ -2,9 +2,20 @@
 // tests for a game, the game summary adds ONE line: settings have reached what Compy can test here,
 // then the last check's limiter, or "not measured". "No upgrade recommended" is a valid answer and the
 // default whenever nothing is measured. Phase 9 law: never a product, price or shop recommendation here.
-import type { Priorities } from "../types";
+import type { GpuTie, Priorities } from "../types";
 import type { GameTestSummary } from "./test-summary";
 import { LIMITER_AWAY } from "./rig/limiter-part";
+
+/** P9-session-on-this-hardware: why a session's GPU reading can't be tied to the graphics card in
+ *  this PC now ("not-recorded": the session recorded no card; "card-unread": this PC's card wasn't
+ *  read). A session recorded on another card never reaches the webview (priorities.rs skips it). */
+export type GpuUntied = Exclude<GpuTie, "this-card">;
+
+/** The untied reason a row's `gpu_tie` names, or undefined when it ran on this card. Absent (only
+ *  an older backend omits it) adds nothing: no reason is invented for it. */
+export function gpuUntied(tie: GpuTie | undefined): GpuUntied | undefined {
+  return tie === "not-recorded" || tie === "card-unread" ? tie : undefined;
+}
 
 export type SettingsDoneLine =
   // No scan in hand (or the priorities read failed): the limiter is unknown, never guessed.
@@ -16,7 +27,7 @@ export type SettingsDoneLine =
   // limit or a frame cap, neither of which Compy measures, so only a GPU upgrade is ruled out.
   | {
       kind: "nothing-limiting";
-      gpuClear?: { busy: number; readings: number; thresholdPct: number; limitSharePct: number };
+      gpuClear?: { busy: number; readings: number; thresholdPct: number; limitSharePct: number; untied?: GpuUntied };
     }
   // The top limiter is a setting or software item (monitor refresh, driver age, power plan...).
   | { kind: "setting-limiter"; title: string }
@@ -30,6 +41,8 @@ export type SettingsDoneLine =
       thresholdPct: number;
       /** P9-summary-screen-limit: that session averaged at or above the refresh it recorded. */
       screenCap?: { hz: number; fps: number };
+      /** P9-session-on-this-hardware: that session can't be tied to the card in this PC now. */
+      untied?: GpuUntied;
     };
 
 const AGGREGATE_REC_ROWS = new Set(["pending-safe-recs", "applied-changes"]);
@@ -69,11 +82,13 @@ export function settingsDoneLine(
     const hz = gpu.refresh_hz;
     const capped =
       fps != null && hz != null && Number.isFinite(fps) && Number.isFinite(hz) && fps > 0 && hz > 0 && fps >= hz;
+    const untied = gpuUntied(gpu.gpu_tie);
     return {
       kind: "gpu-limiter",
       sharePct: gpu.share_pct,
       thresholdPct: gpu.threshold_pct,
       ...(capped ? { screenCap: { hz, fps: Math.round(fps) } } : {}),
+      ...(untied ? { untied } : {}),
     };
   }
   // An unread limiter means the check could not say; "nothing is limiting" would be a claim it never made.
@@ -97,9 +112,16 @@ export function settingsDoneLine(
     clear.busy >= 0 &&
     clear.busy * 100 < clear.readings * limit // under the share Compy counts as GPU-limited
   ) {
+    const untied = gpuUntied(clear.gpu_tie);
     return {
       kind: "nothing-limiting",
-      gpuClear: { busy: clear.busy, readings: clear.readings, thresholdPct: clear.threshold_pct, limitSharePct: limit },
+      gpuClear: {
+        busy: clear.busy,
+        readings: clear.readings,
+        thresholdPct: clear.threshold_pct,
+        limitSharePct: limit,
+        ...(untied ? { untied } : {}),
+      },
     };
   }
   return { kind: "nothing-limiting" };

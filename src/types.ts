@@ -217,7 +217,13 @@ export type MeasuredFrom = {
   /** P9-screen-is-limit: that session's measured average FPS and recorded refresh; absent = unmeasured. */
   avg_fps?: number;
   refresh_hz?: number;
+  /** P9-session-on-this-hardware: whether that session ran on the card in this PC now. */
+  gpu_tie?: GpuTie;
 };
+/** P9-session-on-this-hardware (priorities.rs `GpuTie`): a session recorded on another card is never
+ *  sent. "not-recorded" = the session recorded no card; "card-unread" = this PC's card wasn't read.
+ *  Absent (only an older backend omits it; the two ship together) adds no line (settings-done `gpuUntied`). */
+export type GpuTie = "this-card" | "not-recorded" | "card-unread";
 export type UpgradeSuggestion = {
   kind: string;
   title: string;
@@ -249,6 +255,8 @@ export type GameGpuClear = {
   /** CR-gpu-share-one-source: the busy share Compy counts as GPU-limited (Rust GPU_SUSTAINED_SHARE_PCT).
    *  Absent (an older backend) = the line claims nothing from this row. */
   limit_share_pct?: number;
+  /** P9-session-on-this-hardware: whether that session ran on the card in this PC now. */
+  gpu_tie?: GpuTie;
 };
 
 export type GameGpuLimit = {
@@ -259,6 +267,8 @@ export type GameGpuLimit = {
   /** P9-summary-screen-limit: that session's average FPS and recorded refresh; absent = unmeasured. */
   avg_fps?: number;
   refresh_hz?: number;
+  /** P9-session-on-this-hardware: whether that session ran on the card in this PC now. */
+  gpu_tie?: GpuTie;
 };
 
 export type SessionSummary = {

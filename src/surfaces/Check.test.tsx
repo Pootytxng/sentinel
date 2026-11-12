@@ -631,6 +631,32 @@ describe("Check", () => {
     expect(line.closest(".check-upgrade-item")?.textContent).toContain("GPU was the measured limiter");
   });
 
+  // P9-session-on-this-hardware: a session that can't be tied to the card in this PC now says so.
+  it.each([
+    ["not-recorded", "That session didn't record which graphics card it ran on, so Compy can't tie it to the card in this PC now."],
+    ["card-unread", "Compy hasn't read which graphics card this PC has now, so it can't tie this to the card that session ran on."],
+  ])("P9-session-on-this-hardware: a %s session says it can't be tied to this card", async (gpu_tie, words) => {
+    await showUpgrade([
+      {
+        ...fitGpuItem,
+        measured_from: { game: "ROB RUN.exe", started_at: "2026-11-11T20:36:00Z", busy: 720, readings: 900, threshold_pct: 95, gpu_tie },
+      } as typeof fitGpuItem,
+    ]);
+    expect(screen.getByTestId("check-upgrade-untied").textContent).toBe(` ${words}`);
+    expect(screen.getByTestId("check-upgrade-source")).toContainElement(screen.getByTestId("check-upgrade-untied"));
+  });
+
+  it("P9-session-on-this-hardware: a session on this card adds no tie line", async () => {
+    await showUpgrade([
+      {
+        ...fitGpuItem,
+        measured_from: { game: "ROB RUN.exe", started_at: "2026-11-11T20:36:00Z", busy: 720, readings: 900, threshold_pct: 95, gpu_tie: "this-card" },
+      } as typeof fitGpuItem,
+    ]);
+    expect(screen.getByTestId("check-upgrade-source")).toBeInTheDocument();
+    expect(screen.queryByTestId("check-upgrade-untied")).toBeNull();
+  });
+
   // P9-screen-is-limit: averaged at or above the refresh rate it recorded = the screen is the limit,
   // never a GPU pointer or shopping links; below it, or either side unmeasured, the GPU row as before.
   const sourced = (avg_fps?: number, refresh_hz?: number) =>
@@ -641,9 +667,11 @@ describe("Check", () => {
 
   it("P9-screen-is-limit: at or above the screen's refresh rate the screen is named and no upgrade is recommended", async () => {
     await showUpgrade([sourced(251.6, 250)]);
-    expect(screen.getByText("Your screen is the limit here")).toBeInTheDocument();
+    // P9-session-on-this-hardware: the rate is the mode that session ran at, and only a GPU upgrade
+    // at that rate is ruled out (a higher refresh mode could still be the answer).
+    expect(screen.getByText("Your screen's refresh rate was the limit in that session")).toBeInTheDocument();
     expect(screen.getByTestId("check-upgrade-screen").textContent).toBe(
-      "Your 250 Hz screen can't show more than 250 frames a second, and your ROB RUN session averaged 252 fps, so on average a faster GPU wouldn't show you more frames; the slowest moments can still depend on it. For frame rate, no upgrade is recommended for this game.",
+      "In your ROB RUN session your screen ran at 250 Hz, so it could show at most 250 frames a second, and the session averaged 252 fps: on average a faster GPU wouldn't have shown you more frames at that refresh rate; the slowest moments can still depend on it. For frame rate at 250 Hz, no GPU upgrade is recommended for this game.",
     );
     expect(screen.queryByText("GPU was the measured limiter")).toBeNull();
     expect(screen.queryByTestId("check-upgrade-fit")).toBeNull();

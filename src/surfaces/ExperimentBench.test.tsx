@@ -2408,9 +2408,42 @@ describe("P4-exit: what Compy tested on this game", () => {
       const done = screen.getByTestId("exp-summary-settings-done");
       expect(done).toHaveAttribute("data-kind", "gpu-limiter");
       expect(done).toHaveTextContent(
-        "80% of Compy's GPU readings were at 95% load or more, but your 250 Hz screen can't show more than 250 frames a second and that session averaged 252 fps, so on average a faster GPU wouldn't show you more frames; the slowest moments can still depend on it. For frame rate, no upgrade is recommended for this game.",
+        "80% of Compy's GPU readings were at 95% load or more, but your screen ran at 250 Hz in that session, so it could show at most 250 frames a second, and that session averaged 252 fps: on average a faster GPU wouldn't have shown you more frames at that refresh rate; the slowest moments can still depend on it. For frame rate at 250 Hz, no GPU upgrade is recommended for this game.",
       );
       expect(done.textContent).not.toMatch(/measured limiter for this game/);
+    } finally {
+      invalidateProbe("readiness-scan");
+    }
+  });
+
+  // P9-session-on-this-hardware: a session that can't be tied to the card in this PC now says so,
+  // under the GPU-limiter line and under the measured-clear line; a session on this card adds nothing.
+  it.each([
+    ["gpu-limiter", "not-recorded", "That session didn't record which graphics card it ran on, so Compy can't tie this line to the card in this PC now."],
+    ["gpu-limiter", "card-unread", "Compy hasn't read which graphics card this PC has now, so it can't tie this line to the card that session ran on."],
+    ["nothing-limiting", "not-recorded", "That session didn't record which graphics card it ran on, so Compy can't tie this line to the card in this PC now."],
+    ["gpu-limiter", "this-card", null],
+    ["nothing-limiting", "this-card", null],
+  ])("P9-session-on-this-hardware: a %s line from a %s session", async (kind, gpu_tie, words) => {
+    const game = "WardogsClient-Win64-Shipping.exe";
+    const rows =
+      kind === "gpu-limiter"
+        ? { gpu_limited_games: [{ game, share_pct: 80, peak_pct: 99, threshold_pct: 95, gpu_tie }] }
+        : { gpu_clear_games: [{ game, busy: 120, readings: 900, threshold_pct: 95, limit_share_pct: 50, gpu_tie }] };
+    const scan = {
+      readiness: null,
+      priorities: { limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null, ...rows },
+      recs: [],
+      reverted: [],
+      elapsed: null,
+    };
+    try {
+      putProbe("readiness-scan", scan);
+      await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
+      const done = screen.getByTestId("exp-summary-settings-done");
+      expect(done).toHaveAttribute("data-kind", kind);
+      if (words) expect(screen.getByTestId("exp-summary-settings-done-untied").textContent).toBe(` ${words}`);
+      else expect(screen.queryByTestId("exp-summary-settings-done-untied")).toBeNull();
     } finally {
       invalidateProbe("readiness-scan");
     }

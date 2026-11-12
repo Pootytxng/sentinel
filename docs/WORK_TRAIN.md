@@ -1826,7 +1826,7 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       Tests fail on main (settings-done share test; ExperimentBench render). Review sonnet r1 APPROVE-WITH-NITS
       (SHOULD-FIX "wasn't the limit" over-claims at 90-94% load: taken; SHOULD-FIX "at least half" hand-written in
       two Rust lines: taken).
-- [ ] **P9-session-on-this-hardware** (SHOULD-FIX, honesty) priorities.rs `build_gpu_games` (0e3091a4, c49f37af):
+- [x] **P9-session-on-this-hardware** (SHOULD-FIX, honesty) priorities.rs `build_gpu_games` (0e3091a4, c49f37af):
       the GPU-limiter and screen-limit lines never check the session ran on today's hardware; skip sessions recorded
       on another rig (the session's own stored identity; none stored = say it is a past session that can't be tied
       to the current card). The "{hz} Hz screen" is the mode recorded at session start, not what the monitor can do:
@@ -1837,6 +1837,30 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       Tauri command (main thread, every scan). Next step: pass the GPU name the frontend already read (App's
       HardwareInfo) into `priorities_from`, or cache the snapshot, then filter; the refresh-wording half and the
       no-fingerprint sentence are unchanged. Rust + TS; one review.
+      Done (s24, not installed; SHAs in the merge): this PC's card is read from the startup hardware snapshot already
+      in memory (`hardware::cached_primary_gpu_name`, the most-VRAM GPU as fingerprints pick it; it never starts the
+      WMI read, so the sync `priorities_from` stays cheap); the report reads it from its own hardware source
+      (`priorities::primary_gpu_of`). Every session-read GPU line (session hint, upgrade row, gpu_limited_games,
+      gpu_clear_games, the report's upgrade block) reads only sessions not recorded on another card, so an older
+      session on this card (or none) decides. Rows carry `gpu_tie` (this-card / not-recorded / card-unread); Check's
+      "measured from" line and the summary's GPU lines add "That session didn't record which graphics card it ran on,
+      so Compy can't tie ..." or "Compy hasn't read which graphics card this PC has now, ..." (zh-CN too). Screen
+      limit: "In your ROB RUN session your screen ran at 250 Hz, so it could show at most 250 frames a second ... For
+      frame rate at 250 Hz, no GPU upgrade is recommended for this game." (title "Your screen's refresh rate was the
+      limit in that session"; the summary twin the same). Tests: Rust 3 new (other card skipped everywhere, older
+      same-card session decides, case-folded; not-recorded / card-unread / blank; the report's pick); TS settings-done,
+      Check, ExperimentBench render; 9 TS tests fail on main. Review sonnet r1 APPROVE-WITH-NITS (nits taken as
+      comments); its two SHOULD-FIX are outside the diff: queued CR-tuning-gpu-other-card, CR-receipt-gpu-other-card.
+- [ ] **CR-tuning-gpu-other-card** (P9-session-on-this-hardware review SHOULD-FIX) `src/data/tuning-measure.ts`
+      `gpuSustainedNearLimit` reads the last sessions for "GPU held near the limit" with no card check; it gates
+      tuning/OC offers in Check, TuningInstrument, TuningVerdict, TuningDebrief and lab-evidence-map. After a card
+      swap, old-card sessions can fire it for the new card. Read each session's `hw_fingerprint.gpu` (add it to the TS
+      SessionSummary type) against the card App already read (HardwareInfo, most-VRAM); another card's session
+      doesn't count, none recorded = says so. TS; one review.
+- [ ] **CR-receipt-gpu-other-card** (same review, SHOULD-FIX) `receipts.rs` ~80-90 pairs the newest measured session
+      with `hardware.gpus.first()` (not the most-VRAM pick) and never checks that session ran on that card. Use
+      `priorities::primary_gpu_of` and the session's own `hw_fingerprint.gpu`; another card's session is not named
+      as this card's. Rust; one review.
 - [ ] **CR-footer-ledger-unknown** (NITs, ShellV2.tsx ~471, 52cd64de) `get_applied_changes` turns an unreadable
       ledger into [] so the footer can say "Nothing in effect to undo · ledger 0" while the health probe failed or is
       in flight; a rejected call can leave "Ledger not read yet" forever. Unknown reads unknown; a rejected call

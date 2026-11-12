@@ -67,6 +67,70 @@ pub(crate) struct GameGpuClear {
     /// CR-gpu-share-one-source: the share of busy readings Compy counts as GPU-limited
     /// (`GPU_SUSTAINED_SHARE_PCT`), so the summary's words and its check read the one rule.
     limit_share_pct: u64,
+    /// P9-session-on-this-hardware: whether that session ran on the card in this PC now.
+    gpu_tie: GpuTie,
+}
+
+/// P9-session-on-this-hardware: how a session's GPU reading ties to the graphics card in this PC
+/// now. A session that recorded a different card has no tie: it is skipped before any GPU verdict
+/// (`gpu_tie` returns None), so it never says "the GPU is the measured limiter" for this card.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum GpuTie {
+    /// The session recorded the same card this PC has now.
+    ThisCard,
+    /// The session recorded no card (an older Compy, or none was read then).
+    NotRecorded,
+    /// The session recorded a card, but Compy hasn't read which card this PC has now.
+    CardUnread,
+}
+
+/// The card a session recorded at its start (`hw_fingerprint.gpu`, the most-VRAM GPU).
+fn session_gpu(row: &Value) -> Option<&str> {
+    row.get("hw_fingerprint")
+        .and_then(|f| f.get("gpu"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|g| !g.is_empty())
+}
+
+/// The tie of one session to `gpu_now` (this PC's card, `hardware::cached_primary_gpu_name`).
+/// None = the session recorded a different card. Names compare trimmed and case-folded. Review
+/// nit: two cards that tie on VRAM (WMI's AdapterRAM caps at 4 GB) could be picked in a different
+/// order; that skips a session (no verdict), never ties one to the wrong card.
+fn gpu_tie(row: &Value, gpu_now: Option<&str>) -> Option<GpuTie> {
+    let Some(then) = session_gpu(row) else {
+        return Some(GpuTie::NotRecorded);
+    };
+    let Some(now) = gpu_now.map(str::trim).filter(|g| !g.is_empty()) else {
+        return Some(GpuTie::CardUnread);
+    };
+    (then.to_lowercase() == now.to_lowercase()).then_some(GpuTie::ThisCard)
+}
+
+/// This PC's card from a serialized hardware snapshot (the report's `hardware` source): the GPU with
+/// the most VRAM, the pick `hardware::current_fingerprint` stamps (on a tie, the last such GPU, as
+/// `Iterator::max_by_key` picks there). None = no GPU name in it: unknown.
+pub(crate) fn primary_gpu_of(hardware: &Value) -> Option<String> {
+    hardware
+        .get("gpus")
+        .and_then(Value::as_array)?
+        .iter()
+        .max_by_key(|g| g.get("vram_bytes").and_then(Value::as_u64).unwrap_or(0))
+        .and_then(|g| g.get("name"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .map(str::to_string)
+}
+
+/// The sessions whose GPU readings can speak for this PC now: every row except one that recorded a
+/// different card from `gpu_now`. Order kept (newest first); a non-array passes through.
+pub(crate) fn sessions_on_this_gpu(sessions: &Value, gpu_now: Option<&str>) -> Value {
+    match sessions.as_array() {
+        Some(rows) => Value::Array(rows.iter().filter(|r| gpu_tie(r, gpu_now).is_some()).cloned().collect()),
+        None => sessions.clone(),
+    }
 }
 
 /// One game whose newest measured session was GPU-limited (the sustained rule).
@@ -86,6 +150,8 @@ pub(crate) struct GameGpuLimit {
     avg_fps: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     refresh_hz: Option<u64>,
+    /// P9-session-on-this-hardware: whether that session ran on the card in this PC now.
+    gpu_tie: GpuTie,
 }
 
 // ── Upgrade path (R3 Lane B — advisory-only, doctrine money stack #1 groundwork) ──────────────
@@ -131,6 +197,8 @@ pub(crate) struct MeasuredFrom {
     pub(crate) avg_fps: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) refresh_hz: Option<u64>,
+    /// P9-session-on-this-hardware: whether that session ran on the card in this PC now.
+    pub(crate) gpu_tie: GpuTie,
 }
 
 #[derive(Serialize, Debug)]
@@ -216,19 +284,24 @@ fn gpu_load_read(sessions: &Value) -> Option<GpuLoadRead> {
 /// P9-summary-gpu-limit: for each game, its newest measured session (sessions arrive newest
 /// first; a `samples: 0` row is skipped, as in `newest_measured_row`), kept only when sustained.
 /// Another game's session never counts for a game. A row with no game name is skipped.
+/// Test view: the current card unread (`None`), as before the card was read.
+#[cfg(test)]
 fn build_gpu_limited_games(sessions: &Value) -> Vec<GameGpuLimit> {
-    build_gpu_games(sessions).0
+    build_gpu_games(sessions, None).0
 }
 
 /// P9-no-upgrade-source: the games whose newest measured session was measured clear of a GPU limit.
+#[cfg(test)]
 fn build_gpu_clear_games(sessions: &Value) -> Vec<GameGpuClear> {
-    build_gpu_games(sessions).1
+    build_gpu_games(sessions, None).1
 }
 
 /// One pass over the sessions (newest first): each game decided by its newest measured session,
 /// either GPU-limited (the sustained rule), measured clear (enough sane readings, not sustained),
 /// or neither (no share recorded, too few readings): absent from both, never guessed.
-fn build_gpu_games(sessions: &Value) -> (Vec<GameGpuLimit>, Vec<GameGpuClear>) {
+/// P9-session-on-this-hardware: a session that recorded a different card from `gpu_now` is skipped
+/// before it can decide its game, so an older session on this card (or none) decides instead.
+fn build_gpu_games(sessions: &Value, gpu_now: Option<&str>) -> (Vec<GameGpuLimit>, Vec<GameGpuClear>) {
     let mut seen = std::collections::HashSet::new();
     let mut out = Vec::new();
     let mut clear = Vec::new();
@@ -238,6 +311,9 @@ fn build_gpu_games(sessions: &Value) -> (Vec<GameGpuLimit>, Vec<GameGpuClear>) {
         }
         let Some(game) = row.get("process_name").and_then(Value::as_str).map(str::trim).filter(|g| !g.is_empty()) else {
             continue;
+        };
+        let Some(gpu_tie) = gpu_tie(row, gpu_now) else {
+            continue; // another card's session says nothing about this card
         };
         // Review r1: one game whatever the case Windows reported its process name in.
         if !seen.insert(game.to_lowercase()) {
@@ -252,6 +328,7 @@ fn build_gpu_games(sessions: &Value) -> (Vec<GameGpuLimit>, Vec<GameGpuClear>) {
                     threshold_pct: GPU_LIMITED_PCT,
                     avg_fps: row_avg_fps(row),
                     refresh_hz: row_refresh_hz(row),
+                    gpu_tie,
                 });
             } else if let Some(l) = read.load.filter(|l| {
                 l.readings >= GPU_SUSTAINED_MIN_READINGS
@@ -264,6 +341,7 @@ fn build_gpu_games(sessions: &Value) -> (Vec<GameGpuLimit>, Vec<GameGpuClear>) {
                     readings: l.readings,
                     threshold_pct: GPU_LIMITED_PCT,
                     limit_share_pct: GPU_SUSTAINED_SHARE_PCT,
+                    gpu_tie,
                 });
             }
         }
@@ -281,8 +359,10 @@ fn gpu_load_read_row(s: &Value) -> Option<GpuLoadRead> {
 
 /// P9-limit-source: the session `gpu_limited` read (the same `newest_measured_row`), named as it
 /// recorded itself. None when it recorded no game, no start or no counts: no line, never a guess.
-fn measured_from(sessions: &Value, read: &GpuLoadRead) -> Option<MeasuredFrom> {
+/// `sessions` are already [`sessions_on_this_gpu`], so the row has a tie.
+fn measured_from(sessions: &Value, read: &GpuLoadRead, gpu_now: Option<&str>) -> Option<MeasuredFrom> {
     let row = crate::sessions::newest_measured_row(sessions)?;
+    let gpu_tie = gpu_tie(row, gpu_now)?;
     let text = |k: &str| row.get(k).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
     let load = read.load?;
     Some(MeasuredFrom {
@@ -293,6 +373,7 @@ fn measured_from(sessions: &Value, read: &GpuLoadRead) -> Option<MeasuredFrom> {
         threshold_pct: GPU_LIMITED_PCT,
         avg_fps: row_avg_fps(row),
         refresh_hz: row_refresh_hz(row),
+        gpu_tie,
     })
 }
 
@@ -318,9 +399,22 @@ fn gpu_limited(sessions: &Value) -> Option<(GpuLoadRead, u64)> {
     Some((read, share))
 }
 
+/// Test view: the current card unread (`None`).
+#[cfg(test)]
+pub(crate) fn build_upgrade_path(readiness: &Value, sessions: &Value) -> Option<UpgradePath> {
+    build_upgrade_path_for(readiness, sessions, None)
+}
+
 /// Qualifying rows ONLY (right-room law): (1) the conservative GPU-limited session verdict,
 /// (2) the install-drive HDD readiness attention. Anything else → None (no block at all).
-pub(crate) fn build_upgrade_path(readiness: &Value, sessions: &Value) -> Option<UpgradePath> {
+/// P9-session-on-this-hardware: sessions that recorded a different card from `gpu_now` (this PC's
+/// card, `hardware::cached_primary_gpu_name`; None = unread) never decide the GPU row.
+pub(crate) fn build_upgrade_path_for(readiness: &Value, sessions: &Value, gpu_now: Option<&str>) -> Option<UpgradePath> {
+    upgrade_path_here(readiness, &sessions_on_this_gpu(sessions, gpu_now), gpu_now)
+}
+
+/// `sessions` are already [`sessions_on_this_gpu`].
+fn upgrade_path_here(readiness: &Value, sessions: &Value, gpu_now: Option<&str>) -> Option<UpgradePath> {
     let mut items = Vec::new();
     if let Some((gpu, share)) = gpu_limited(sessions) {
         let peak = gpu.peak_pct;
@@ -334,7 +428,7 @@ pub(crate) fn build_upgrade_path(readiness: &Value, sessions: &Value) -> Option<
                  upgrade is the hardware lever; no Windows tweak changes this."
             ),
             links: GPU_LINKS,
-            measured_from: measured_from(sessions, &gpu),
+            measured_from: measured_from(sessions, &gpu, gpu_now),
         });
     }
     if let Some((st, _, _)) = check(readiness, "install-drive") {
@@ -411,13 +505,30 @@ fn drifted_rec_titles(readiness: &Value) -> std::collections::HashSet<String> {
         .unwrap_or_default()
 }
 
-/// Pure: assemble the ranked priorities from already-gathered signals.
+/// Test view: the current card unread (`None`).
+#[cfg(test)]
 pub(crate) fn build_priorities(
     readiness: &Value,
     recommendations: &Value,
     startup: &Value,
     sessions: &Value,
 ) -> Priorities {
+    build_priorities_for(readiness, recommendations, startup, sessions, None)
+}
+
+/// Pure: assemble the ranked priorities from already-gathered signals. `gpu_now` is this PC's
+/// graphics card as the cached snapshot read it (None = unread): every session-read line (the
+/// hint, the upgrade row, the per-game GPU verdicts) reads only sessions not recorded on another
+/// card (P9-session-on-this-hardware).
+pub(crate) fn build_priorities_for(
+    readiness: &Value,
+    recommendations: &Value,
+    startup: &Value,
+    sessions: &Value,
+    gpu_now: Option<&str>,
+) -> Priorities {
+    let here = sessions_on_this_gpu(sessions, gpu_now);
+    let sessions = &here;
     let mut tagged: Vec<(Bucket, PriorityItem)> = Vec::new();
 
     // Readiness-derived rules: (check id, rank, confidence, advisory?).
@@ -597,15 +708,16 @@ pub(crate) fn build_priorities(
         .filter(|(b, _)| matches!(b, Bucket::NotWorth))
         .map(|(_, i)| i.clone())
         .collect();
+    let (limited_games, clear_games) = build_gpu_games(sessions, gpu_now);
 
     Priorities {
         limiters,
         already_fine,
         not_worth_touching,
         session_hint: build_session_hint(sessions),
-        upgrade_path: build_upgrade_path(readiness, sessions),
-        gpu_limited_games: build_gpu_limited_games(sessions),
-        gpu_clear_games: build_gpu_clear_games(sessions),
+        upgrade_path: upgrade_path_here(readiness, sessions, gpu_now),
+        gpu_limited_games: limited_games,
+        gpu_clear_games: clear_games,
     }
 }
 
@@ -655,14 +767,18 @@ pub(crate) fn get_priorities() -> Priorities {
     let startup = serde_json::to_value(crate::startup_entries()).unwrap_or(Value::Null);
     let sessions =
         serde_json::to_value(crate::sessions::get_session_summaries()).unwrap_or(Value::Null);
-    build_priorities(&readiness, &recommendations, &startup, &sessions)
+    // Readiness above filled the hardware snapshot; the card is read from that cache.
+    let gpu_now = crate::hardware::cached_primary_gpu_name();
+    build_priorities_for(&readiness, &recommendations, &startup, &sessions, gpu_now.as_deref())
 }
 
 /// Same ranking as `get_priorities`, but computed from signals the CALLER already fetched — so the
 /// scan (and the dashboard refresh) don't re-run readiness + recommendations a second time just to
-/// rank them. Pure pass-through to `build_priorities`; reads NO live Windows state, mutates nothing.
+/// rank them. Pure pass-through to `build_priorities_for`; reads NO live Windows state, mutates nothing.
 /// The frontend passes back the exact JSON it got from get_game_readiness / get_recommendations /
 /// get_startup_entries / get_session_summaries, so the shapes are identical to get_priorities'.
+/// This is a sync command (main thread): this PC's card comes from the hardware snapshot already in
+/// memory (`cached_primary_gpu_name` never starts a WMI read); not read yet = unknown.
 #[tauri::command]
 pub(crate) fn priorities_from(
     readiness: Value,
@@ -670,7 +786,8 @@ pub(crate) fn priorities_from(
     startup: Value,
     sessions: Value,
 ) -> Priorities {
-    build_priorities(&readiness, &recommendations, &startup, &sessions)
+    let gpu_now = crate::hardware::cached_primary_gpu_name();
+    build_priorities_for(&readiness, &recommendations, &startup, &sessions, gpu_now.as_deref())
 }
 
 #[cfg(test)]
@@ -831,6 +948,7 @@ mod priority_tests {
                 threshold_pct: 95,
                 avg_fps: None,
                 refresh_hz: None,
+                gpu_tie: GpuTie::NotRecorded,
             })
         );
         // P9-screen-is-limit: the session's own average and recorded refresh ride along; 0 = unmeasured.
@@ -1118,8 +1236,8 @@ mod priority_tests {
         assert_eq!(
             got,
             vec![
-                GameGpuLimit { game: "a.exe".into(), share_pct: 80, peak_pct: 99, threshold_pct: 95, avg_fps: None, refresh_hz: None },
-                GameGpuLimit { game: "c.exe".into(), share_pct: 70, peak_pct: 99, threshold_pct: 95, avg_fps: None, refresh_hz: None },
+                GameGpuLimit { game: "a.exe".into(), share_pct: 80, peak_pct: 99, threshold_pct: 95, avg_fps: None, refresh_hz: None, gpu_tie: GpuTie::NotRecorded },
+                GameGpuLimit { game: "c.exe".into(), share_pct: 70, peak_pct: 99, threshold_pct: 95, avg_fps: None, refresh_hz: None, gpu_tie: GpuTie::NotRecorded },
             ]
         );
         // P9-summary-screen-limit: the limited session's own average and refresh ride along; 0 = unmeasured.
@@ -1156,7 +1274,7 @@ mod priority_tests {
         // the unnamed row are skipped; A and C are limited. Too few readings or no share: neither list.
         assert_eq!(
             build_gpu_clear_games(&sessions),
-            vec![GameGpuClear { game: "b.exe".into(), busy: 10, readings: 100, threshold_pct: 95, limit_share_pct: 50 }]
+            vec![GameGpuClear { game: "b.exe".into(), busy: 10, readings: 100, threshold_pct: 95, limit_share_pct: 50, gpu_tie: GpuTie::NotRecorded }]
         );
         // CR-gpu-share-one-source: the row carries the rule's own share, so the UI never restates it.
         assert_eq!(GPU_SUSTAINED_SHARE_PCT, 50);
@@ -1170,5 +1288,76 @@ mod priority_tests {
         let odd = json!([{ "process_name": "e.exe", "peak_gpu_usage_pct": 80, "gpu_load": { "readings": 900, "busy": 600 } }]);
         assert!(build_gpu_limited_games(&odd).is_empty() && build_gpu_clear_games(&odd).is_empty());
         assert_eq!(p.gpu_clear_games.len(), 1, "carried on the priorities payload");
+    }
+
+    /// P9-session-on-this-hardware: a GPU-limited session on `gpu` (None = no card recorded).
+    fn limited_on(game: &str, started: &str, gpu: Option<&str>, busy: u32) -> Value {
+        let mut row = json!({ "process_name": game, "started_at": started, "samples": 900,
+            "peak_gpu_usage_pct": 99, "gpu_load": { "readings": 900, "busy": busy } });
+        if let Some(g) = gpu {
+            row["hw_fingerprint"] = json!({ "hash": "h", "gpu": g, "gpu_driver": "1", "ram_gb": 32, "display": "" });
+        }
+        row
+    }
+
+    #[test]
+    fn a_session_on_another_card_never_names_this_cards_gpu_as_the_limiter() {
+        // The newest session ran on another card and was GPU-limited; this PC now has a 9070 XT.
+        let now = Some("AMD Radeon RX 9070 XT");
+        let old_card = json!([limited_on("g.exe", "2026-11-10T20:00:00Z", Some("NVIDIA GeForce GTX 1060"), 800)]);
+        let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &old_card, now);
+        assert!(p.upgrade_path.is_none(), "another card's session decides no GPU row");
+        assert!(p.gpu_limited_games.is_empty() && p.gpu_clear_games.is_empty());
+        assert!(p.session_hint.is_none(), "nor the session hint");
+        assert!(build_upgrade_path_for(&readiness(vec![]), &old_card, now).is_none(), "the report's block too");
+        // An older session of the same game on this card decides instead (names compare case-folded).
+        let both = json!([
+            limited_on("g.exe", "2026-11-10T20:00:00Z", Some("NVIDIA GeForce GTX 1060"), 800),
+            limited_on("G.EXE", "2026-11-09T20:00:00Z", Some(" amd radeon rx 9070 xt "), 100),
+        ]);
+        let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &both, now);
+        assert!(p.upgrade_path.is_none() && p.gpu_limited_games.is_empty());
+        assert_eq!(p.gpu_clear_games.len(), 1);
+        assert_eq!(p.gpu_clear_games[0].gpu_tie, GpuTie::ThisCard);
+        // Same card, limited: the row is tied to this card on every surface.
+        let here = json!([limited_on("g.exe", "2026-11-10T20:00:00Z", Some("AMD Radeon RX 9070 XT"), 800)]);
+        let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &here, now);
+        assert_eq!(p.gpu_limited_games[0].gpu_tie, GpuTie::ThisCard);
+        let up = p.upgrade_path.expect("this card's session decides");
+        assert_eq!(up.items[0].measured_from.as_ref().map(|m| m.gpu_tie), Some(GpuTie::ThisCard));
+        let wire = serde_json::to_value(&p.gpu_limited_games[0]).unwrap();
+        assert_eq!(wire["gpu_tie"], json!("this-card"));
+    }
+
+    #[test]
+    fn a_session_that_cant_be_tied_to_this_card_says_so() {
+        // No card recorded on the session: the row stays, marked not-recorded, whatever is read now.
+        let bare = json!([limited_on("g.exe", "2026-11-10T20:00:00Z", None, 800)]);
+        for now in [Some("AMD Radeon RX 9070 XT"), None] {
+            let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &bare, now);
+            assert_eq!(p.gpu_limited_games[0].gpu_tie, GpuTie::NotRecorded);
+            let m = p.upgrade_path.unwrap().items[0].measured_from.clone().unwrap();
+            assert_eq!(m.gpu_tie, GpuTie::NotRecorded);
+        }
+        // A recorded card but this PC's card unread (or blank): unknown, never read as the same card
+        // and never skipped as another one.
+        let stamped = json!([limited_on("g.exe", "2026-11-10T20:00:00Z", Some("AMD Radeon RX 9070 XT"), 800)]);
+        for now in [None, Some("  ")] {
+            let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &stamped, now);
+            assert_eq!(p.gpu_limited_games[0].gpu_tie, GpuTie::CardUnread);
+            assert_eq!(serde_json::to_value(&p.gpu_limited_games[0]).unwrap()["gpu_tie"], json!("card-unread"));
+        }
+    }
+
+    #[test]
+    fn the_reports_card_is_the_snapshots_most_vram_gpu() {
+        let hw = json!({ "gpus": [
+            { "name": "AMD Radeon(TM) Graphics", "vram_bytes": 536870912u64 },
+            { "name": " AMD Radeon RX 9070 XT ", "vram_bytes": 17163091968u64 },
+        ] });
+        assert_eq!(primary_gpu_of(&hw).as_deref(), Some("AMD Radeon RX 9070 XT"));
+        assert_eq!(primary_gpu_of(&json!({ "gpus": [] })), None);
+        assert_eq!(primary_gpu_of(&json!({ "gpus": [{ "name": "", "vram_bytes": 1 }] })), None);
+        assert_eq!(primary_gpu_of(&Value::Null), None);
     }
 }

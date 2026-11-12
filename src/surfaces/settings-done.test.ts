@@ -96,6 +96,28 @@ describe("settingsDoneLine (P9-settings-done)", () => {
     expect(settingsDoneLine("finished-supported-tests", withGpu)).toEqual({ kind: "nothing-limiting" });
   });
 
+  // P9-session-on-this-hardware: the row's tie to the card in this PC now rides on the line; a
+  // session on this card (or an older backend's row with no tie) adds no untied reason.
+  it("carries a session's untied reason onto the GPU-limiter and measured-clear lines", () => {
+    const lim = (gpu_tie?: "this-card" | "not-recorded" | "card-unread") => ({
+      ...pri([]),
+      gpu_limited_games: [{ game: "ROB RUN.exe", share_pct: 72, peak_pct: 99, threshold_pct: 95, gpu_tie }],
+    });
+    const base = { kind: "gpu-limiter", sharePct: 72, thresholdPct: 95 };
+    expect(settingsDoneLine("finished-supported-tests", lim("not-recorded"), "ROB RUN.exe")).toEqual({ ...base, untied: "not-recorded" });
+    expect(settingsDoneLine("finished-supported-tests", lim("card-unread"), "ROB RUN.exe")).toEqual({ ...base, untied: "card-unread" });
+    expect(settingsDoneLine("finished-supported-tests", lim("this-card"), "ROB RUN.exe")).toEqual(base);
+    expect(settingsDoneLine("finished-supported-tests", lim(undefined), "ROB RUN.exe")).toEqual(base);
+    const clear = {
+      ...pri([]),
+      gpu_clear_games: [{ game: "ROB RUN.exe", busy: 120, readings: 900, threshold_pct: 95, limit_share_pct: 50, gpu_tie: "card-unread" as const }],
+    };
+    expect(settingsDoneLine("finished-supported-tests", clear, "ROB RUN.exe")).toEqual({
+      kind: "nothing-limiting",
+      gpuClear: { busy: 120, readings: 900, thresholdPct: 95, limitSharePct: 50, untied: "card-unread" },
+    });
+  });
+
   // P9-no-upgrade-source: "nothing holding it back" says what it was read from when this game's own
   // newest measured session was measured clear of a GPU limit; another game's, or none, says no more.
   it("names this game's measured-clear session behind 'no upgrade recommended', never another game's", () => {
