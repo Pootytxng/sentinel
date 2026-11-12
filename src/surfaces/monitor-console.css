@@ -386,6 +386,11 @@
   row-gap: 7px;
   column-gap: 14px;
 }
+/* CR-live-changes-twice: when the comparison below carries the changes-on count, the strip holds
+   only the two Readings, so it doesn't keep an empty third column. */
+:root[data-v2="on"] .mc-ev-readings.mc-ev-readings-two {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
 /* Not a Reading, so it opts into the shared rows by hand — otherwise it sits in the LABEL row
    alone and the strip grows a fourth line under it. */
 :root[data-v2="on"] .mc-ev-changes {

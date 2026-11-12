@@ -491,7 +491,7 @@ export function MonitorConsole({
               {/* READING_ROWS strip (see Reading.tsx): three row tracks, and the changes-on cell
                   spans all three so a wrapped label in any language cannot move one value out of
                   the row. It is the same contract Health's readout strip satisfies. */}
-              <div className="mc-ev-readings">
+              <div className={changesTaggedBelow ? "mc-ev-readings mc-ev-readings-two" : "mc-ev-readings"}>
                 <Reading
                   id="avgFps"
                   label={t("monitor.monitorConsole.deltaAvgFps")}

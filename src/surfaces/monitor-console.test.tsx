@@ -303,6 +303,15 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     await waitFor(() => expect(container.querySelector(".mc-delta-tag")).not.toBeNull());
     expect(container.querySelector(".mc-ev-changes")).toBeNull();
     expect((container.textContent!.match(/14 Compy changes were on/g) ?? []).length).toBe(1);
+    // Review nit: the strip drops its third column rather than leaving it empty.
+    expect(container.querySelector(".mc-ev-readings")!.classList.contains("mc-ev-readings-two")).toBe(true);
+  });
+
+  it("CR-live-changes-twice: one change on is also said once (the tag, without the combined-effect note)", async () => {
+    mockPolls(() => stoppedFps);
+    const { container } = mount({ sessions: [sess({ avg_fps: 247, compy_changes_active: 1 }), sess({ avg_fps: 240 })] });
+    await waitFor(() => expect(container.querySelector(".mc-delta-tag")).not.toBeNull());
+    expect(container.querySelector(".mc-ev-changes")).toBeNull();
   });
 
   it("CR-live-changes-twice: with no comparison (one session) the readings still say the count", async () => {
