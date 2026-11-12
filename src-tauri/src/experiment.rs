@@ -2962,6 +2962,11 @@ pub(crate) fn apply_outcome_choice(
         return Err("Trials aren't enabled in this build.".to_string());
     }
     let _g = lock_store()?;
+    // CR-bench-holds-setting: a keep re-apply on top of the benchmark's measurement would be the same
+    // stale "applied" row once the benchmark rolls back.
+    if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
+        return Err(refusal);
+    }
     let records = load_store().experiments;
     keep_outcome_locked(&records, &rec_id, &experiment_id, |link| {
         crate::history::apply_recommendation_citing(&rec_id, &rec_title, link)
@@ -3037,6 +3042,40 @@ pub(crate) fn apply_recommendation(
     if let Some(refusal) = held_by_trial_refusal(&records, std::iter::once(rec_id.as_str())) {
         return Err(refusal);
     }
+    if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
+        return Err(refusal);
+    }
+    crate::history::apply_recommendation(rec_id, rec_title)
+}
+
+/// CR-bench-holds-setting: the benchmark tweak trial's hold, read now.
+fn bench_refusal<'a>(rec_ids: impl Iterator<Item = &'a str>) -> Option<String> {
+    crate::benchmark_trial::bench_held_refusal(crate::benchmark_trial::held_now().as_ref(), rec_ids)
+}
+
+/// The benchmark tweak trial's apply: the same Trial refusal and gate as [`apply_recommendation`],
+/// and, under that gate before the apply runs, the setting is marked held by this trial run
+/// (`token`) so a UI apply of it is refused until the trial has rolled it back
+/// (CR-bench-holds-setting). A setting another bench run still holds is refused too.
+pub(crate) fn apply_for_bench_trial(
+    rec_id: String,
+    rec_title: String,
+    token: u64,
+) -> Result<crate::history::AppliedChangeView, String> {
+    let _g = if experiment_gate() {
+        let g = lock_store()?;
+        let records = load_store_checked()?.experiments;
+        if let Some(refusal) = held_by_trial_refusal(&records, std::iter::once(rec_id.as_str())) {
+            return Err(refusal);
+        }
+        Some(g)
+    } else {
+        None
+    };
+    if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
+        return Err(refusal);
+    }
+    crate::benchmark_trial::hold(token, &rec_id, &rec_title);
     crate::history::apply_recommendation(rec_id, rec_title)
 }
 
@@ -3052,6 +3091,9 @@ pub(crate) fn apply_recommendations_batch(
     let _g = lock_store()?;
     let records = load_store_checked()?.experiments;
     if let Some(refusal) = held_by_trial_refusal(&records, items.iter().map(|i| i.rec_id.as_str())) {
+        return Err(refusal);
+    }
+    if let Some(refusal) = bench_refusal(items.iter().map(|i| i.rec_id.as_str())) {
         return Err(refusal);
     }
     crate::history::apply_recommendations_batch(items)
@@ -5186,7 +5228,8 @@ mod experiment_tests {
         for bare in ["crate::history::apply_recommendation(", "crate::history::apply_recommendations_batch("] {
             assert!(!bench.contains(bare), "benchmark_trial.rs calls {bare}");
         }
-        for gated in ["crate::experiment::apply_recommendation(", "crate::experiment::apply_recommendations_batch("] {
+        // CR-bench-holds-setting: the tweak trial applies through the gated apply that also marks it held.
+        for gated in ["crate::experiment::apply_for_bench_trial(", "crate::experiment::apply_recommendations_batch("] {
             assert!(bench.contains(gated), "benchmark_trial.rs applies through {gated}");
         }
         assert!(!bench.contains("use crate::history::apply"), "no bare import of history's applies");
@@ -5199,9 +5242,20 @@ mod experiment_tests {
             let gate = body.find("let _g = lock_store()?;").expect("the gate is taken");
             let read = body.find("load_store_checked()?").expect("the store is read, an unreadable one refuses");
             let refuse = body.find("held_by_trial_refusal(").expect("the refusal is checked");
+            // CR-bench-holds-setting: and the benchmark tweak trial's hold, under the same gate.
+            let bench = body.find("bench_refusal(").expect("the benchmark hold is checked");
             let write = body.rfind(call.trim_end_matches("\n}")).expect("the ledger is written");
-            assert!(gate < read && read < refuse && refuse < write, "{sig}: gate, read, refuse, then write");
+            assert!(gate < read && read < refuse && refuse < bench && bench < write, "{sig}: gate, read, refuse, then write");
         }
+        // The keep re-apply too, under its gate, before its ledger write.
+        let body = src
+            .split_once("pub(crate) fn apply_outcome_choice(")
+            .and_then(|(_, r)| r.split_once("\n}\n"))
+            .map(|(b, _)| b)
+            .expect("keep");
+        let (gate, bench) = (body.find("let _g = lock_store()?;").expect("gate"), body.find("bench_refusal(").expect("bench"));
+        let write = body.find("crate::history::apply_recommendation_citing(").expect("write");
+        assert!(gate < bench && bench < write, "keep: gate, bench hold, then write");
     }
 
     #[test]

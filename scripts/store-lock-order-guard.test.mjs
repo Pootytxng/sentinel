@@ -722,6 +722,12 @@ const LOCK_CENSUS = {
       "in-memory trial state. Measured, not assumed: benchmark_trial.rs contains no save_*, no " +
       "write_atomic, no store_path and no compy_data_dir — it persists nothing at all.",
   },
+  "benchmark_trial::H: OnceLock<Mutex<Held>>": {
+    class: "out",
+    why:
+      "CR-bench-holds-setting: the in-memory (token, rec_id, title) the tweak trial holds; taken only to " +
+      "read, set or clear that value, never across an apply or any other lock, and persists nothing",
+  },
   "intelligence::GATE: OnceLock<Mutex<Option<Instant>>>": {
     class: "out",
     why: "refresh_gate — a throttle timestamp whose scope closes before the work is spawned",
