@@ -261,3 +261,51 @@ describe("P9-no-upgrade-named: the Optimize room names 'no upgrade recommended' 
     expect(screen.queryByTestId("check-no-upgrade")).toBeNull();
   });
 });
+
+// CR-view-1112c-zh-gap (screen check view-1112c, 04-optimize-zh-CN.png): in zh-CN the block's sentences
+// joined with an ASCII space after the full stop ("。 在最近一次"); English keeps its space.
+describe("CR-view-1112c-zh-gap: no space after a Chinese full stop in the upgrade area", () => {
+  it("zh-CN: the no-upgrade block and the untied line follow the full stop directly", async () => {
+    const { default: i18n } = await import("../../i18n");
+    await i18n.changeLanguage("zh-CN");
+    try {
+      scan.evidence = {
+        measured_sessions: 2,
+        gpu_limited_sessions: 0,
+        newest: { game: "ROB RUN.exe", started_at: "2026-11-11T20:36:00Z", busy: 1, readings: 996, threshold_pct: 95, limit_share_pct: 50, gpu_limited: false, gpu_tie: "not-recorded" },
+      };
+      mount();
+      await screen.findByTestId("check-no-upgrade");
+      const text = screen.getByTestId("check-no-upgrade-source").textContent ?? "";
+      expect(text).toContain("。在最近一次");
+      expect(text).not.toMatch(/。 /);
+      expect(screen.getByTestId("check-no-upgrade-untied").textContent).toMatch(/^那次会话/);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  it("zh-CN: the GPU row's untied line follows the measured-from sentence directly", async () => {
+    const { default: i18n } = await import("../../i18n");
+    await i18n.changeLanguage("zh-CN");
+    try {
+      scan.upgrade = { items: [{ ...GPU_ROW, measured_from: { ...GPU_ROW.measured_from, gpu_tie: "card-unread" } }], disclosure: "x" };
+      mount();
+      await screen.findByTestId("check-upgrade");
+      expect(screen.getByTestId("check-upgrade-source").textContent).not.toMatch(/。 /);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  it("en keeps one space between the sentences", async () => {
+    scan.evidence = {
+      measured_sessions: 2,
+      gpu_limited_sessions: 0,
+      newest: { game: "ROB RUN.exe", started_at: "2026-11-11T20:36:00Z", busy: 1, readings: 996, threshold_pct: 95, limit_share_pct: 50, gpu_limited: false, gpu_tie: "this-card" },
+    };
+    mount();
+    await screen.findByTestId("check-no-upgrade");
+    expect(screen.getByTestId("check-no-upgrade-source").textContent).toContain("are left out). In the newest");
+  });
+});

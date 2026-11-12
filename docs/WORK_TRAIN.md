@@ -1952,6 +1952,26 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
 - [ ] **CR-firstcheck-flake** (s24 full vitest in train-P9-exit-fixture, tests-only branch) `FirstCheck.test.tsx`
       "unread and advisory together: the unread line counts graded checks only and names the advisory" got null in
       a loaded full run and passes alone (8/8). Same class; find the timing gap. TS.
+Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the session log); each FAIL is an item:
+- [x] **CR-view-1112c-zh-gap** (`_train\view-1112c\04-optimize-zh-CN.png`) The zh-CN "No upgrade recommended" block
+      joined its sentences with an ASCII space after "。" ("。 在最近一次"), and so did the GPU row's untied line.
+      Done (s24, TS only, not installed; SHAs in the merge): Check.tsx `sentenceGap` (none after a Chinese full stop,
+      one space in English) for the no-upgrade block's newest line, both untied lines. Tests (zh-CN both blocks, en
+      keeps its space); the zh two fail on main. Not re-captured (installed build is `9d2f2b57`).
+- [ ] **CR-view-focus-1112c** (FULL; `_train\view-1112c\fgwatch.txt`: "fgwatch reads=107 compy_in_front=3
+      seen=compy:3,Discord:95,firefox:4,Idle:5"; s23's run read 0 of 187) Compy was in front 3 of 107 reads during the
+      background screen check (close the running copy, CDP launch with --no-activate and COMPY_NO_ACTIVATE=1,
+      SetWindowPos with SWP_NOACTIVATE, close, Start-NativeProcess -Detached -NoActivate relaunch). Re-run with a
+      timestamped watcher and a mark at each step to find the step; fix that step (or the app's show path) so the
+      check never takes the foreground. Script/app; no settings change.
+- [ ] **CR-view-overflow-1112c** (`_train\view-1112c\02-optimize-no-upgrade.png`) The verdict needs the Optimize
+      station's scroll containers measured (scrollHeight vs clientHeight at 1280x720, 1500x980 and 1920x1080) now that
+      the no-upgrade block sits below its groups. Measure on the next FULL screen check; fix any surplus.
+- [ ] **CR-view-upgrade-render** (`_train\view-1112c\03-optimize-upgrade-fixture.png`, identical to 02) The GPU upgrade
+      block has never been seen rendered in the real app: this rig's sessions aren't GPU-limited, and an in-memory
+      wrap of `window.__TAURI_INTERNALS__.invoke` does not take (not writable). Find a route that renders it in the
+      installed build without touching its data (a read-only dev/fixture route gated off in release, or the
+      Storybook-like lab route if one exists), or keep it unit-test-only and say so each check. Investigation first.
 - [x] **CR-footer-ledger-unknown** (NITs, ShellV2.tsx ~471, 52cd64de) `get_applied_changes` turns an unreadable
       ledger into [] so the footer can say "Nothing in effect to undo · ledger 0" while the health probe failed or is
       in flight; a rejected call can leave "Ledger not read yet" forever. Unknown reads unknown; a rejected call
