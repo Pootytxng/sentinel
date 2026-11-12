@@ -318,12 +318,13 @@ export function GamingMode() {
   };
 
   const summary = session ? summarizeChanges(session.changes, t) : null;
-  // CR-gm-skipped-line: a step the session left alone because a Trial or the benchmark is testing
-  // its setting is said beside the honesty line (both faces), not silently missing from the list.
+  // CR-gm-skipped-line: a step the session left alone because a Trial or the benchmark was testing
+  // its setting when it started is said right after the honesty line (both faces), not silently
+  // missing from the list.
   const leftAlone = session?.left_alone ?? [];
-  const leftAloneLine =
+  const leftAloneLine = (extraClass: string) =>
     leftAlone.length > 0 ? (
-      <p className="gaming-left-alone" data-testid="gm-left-alone">
+      <p className={`gaming-left-alone${extraClass}`} data-testid="gm-left-alone">
         {t("gaming.gamingMode.leftAloneLine", { count: leftAlone.length, list: leftAlone.join(", ") })}
       </p>
     ) : null;
@@ -533,7 +534,7 @@ export function GamingMode() {
                 ))}
               </ul>
               <p className="gc-honesty">{summary.line}</p>
-              {leftAloneLine}
+              {leftAloneLine(" gc-honesty")}
               <button className="gc-engage gc-engage-on" disabled={busy} onClick={onStop}>
                 {busy ? t("gaming.gamingMode.restoringEllipsis") : t("gaming.gamingMode.disengageButton")}
               </button>
@@ -720,7 +721,6 @@ export function GamingMode() {
           )}
         </div>
 
-        {active && summary && leftAloneLine}
         {/* Always-visible honesty line (active) */}
         {active && summary && (
           <div className="gaming-honesty">
@@ -742,6 +742,7 @@ export function GamingMode() {
             )}
           </div>
         )}
+        {active && summary && leftAloneLine("")}
 
         {/* Idle: what it WILL do + advanced opt-ins */}
         {!active && (

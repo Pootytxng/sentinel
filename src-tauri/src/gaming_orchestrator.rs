@@ -576,6 +576,8 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
     // CR-gm-spans-trial: read before the contract exists or anything changes.
     let held = held_by_trials()?;
     let free = |rec: &str| step_free(&held, rec);
+    // Read once: the left-alone line and the suspend tier below see the same gate.
+    let suspend_gate = actions::service_suspend_gate();
     let now = chrono::Utc::now();
     let mut file = SessionFile {
         schema_version: SESSION_SCHEMA_VERSION,
@@ -586,7 +588,7 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
         changes: vec![],
         started_monitoring: false,
         // CR-gm-skipped-line: named for the pane, so a skipped step is said, not silently missing.
-        left_alone: left_alone_labels(&held, &opts, actions::service_suspend_gate()),
+        left_alone: left_alone_labels(&held, &opts, suspend_gate),
     };
     save_session(&file)?; // lock exists before any mutation
     set_live_session(&file.session_id); // mark this run as the live owner
@@ -682,7 +684,7 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
             apply: Box::new(apply_pcie_aspm_off),
         });
     }
-    for svc in services_to_suspend(&opts, actions::service_suspend_gate()) {
+    for svc in services_to_suspend(&opts, suspend_gate) {
         if !free(service_rec(&svc)) {
             continue;
         }
@@ -1210,9 +1212,9 @@ mod spans_trial_tests {
         assert_eq!(json["left_alone"], serde_json::json!([LABEL_GAME_MODE]));
         // And the start records them on the contract before anything changes.
         let src = include_str!("gaming_orchestrator.rs");
-        let body = src.split_once("pub(crate) fn start(").map(|(_, r)| r).expect("start");
-        let rec = body.find("left_alone: left_alone_labels(&held, &opts,").expect("recorded");
-        let save = body.find("save_session(&file)?; // lock exists before any mutation").expect("first save");
+        let body = src.split_once("pub(crate) fn start(").and_then(|(_, r)| r.split_once("\n}\n")).expect("start").0;
+        let rec = body.find(concat!("left_alone: left_alone_labels(", "&held, &opts, suspend_gate)")).expect("recorded");
+        let save = body.find(concat!("save_session(&file)?; ", "// lock exists before any mutation")).expect("first save");
         assert!(rec < save);
     }
 

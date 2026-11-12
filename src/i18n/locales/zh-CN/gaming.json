@@ -73,7 +73,7 @@
     "recoveryReviewButton": "查看",
     "noChangesLine": "这台电脑无需任何更改",
     "changesLine_other": "{{count}} 项更改 · 退出时自动还原",
-    "leftAloneLine_other": "未改动(试验或基准测试正在测试):{{list}}。",
+    "leftAloneLine_other": "未改动(本次会话开始时,试验或基准测试正在测试它们):{{list}}。",
     "sessionEndedHeadline": "会话已结束",
     "sessionEndedDetail": "本次会话没有做任何更改,所以没有什么需要还原。",
     "restoredHeadline": "你的设置已还原",

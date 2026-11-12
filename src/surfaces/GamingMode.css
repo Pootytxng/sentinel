@@ -59,6 +59,14 @@
   padding-top: 6px;
 }
 
+/* CR-gm-skipped-line: the steps a session left alone, as quiet as the honesty line it follows
+   (the console face adds .gc-honesty for its own mono label look). */
+.gaming-left-alone {
+  margin: 6px 0 0;
+  font-size: var(--type-label);
+  color: var(--muted);
+}
+
 .gaming-honesty {
   margin-top: 12px;
   font-size: var(--type-label);

@@ -55,7 +55,7 @@ describe("GamingMode names the steps it left alone (CR-gm-skipped-line)", () => 
     render(<GamingMode />);
     const line = await screen.findByTestId("gm-left-alone");
     expect(line.textContent).toBe(
-      "Left alone because a Trial or the benchmark is testing them: Windows Game Mode on, Suspend SysMain for this session.",
+      "Left alone because a Trial or the benchmark was testing them when this session started: Windows Game Mode on, Suspend SysMain for this session.",
     );
   });
 
@@ -80,7 +80,7 @@ describe("GamingMode names the steps it left alone (CR-gm-skipped-line)", () => 
     });
     render(<GamingMode />);
     const line = await screen.findByTestId("gm-left-alone");
-    expect(line.textContent).toBe("Left alone because a Trial or the benchmark is testing it: Windows Game Mode on.");
+    expect(line.textContent).toBe("Left alone because a Trial or the benchmark was testing it when this session started: Windows Game Mode on.");
   });
 });
 

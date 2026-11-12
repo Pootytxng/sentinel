@@ -312,8 +312,12 @@ release checklist); no new rules.
       Done (2026-11-11 s20, not installed; SHA in the merge): the start records `left_alone` (the labels of the steps a
       Trial or the benchmark held, in step order; core always, USB/PCIe when opted in, a service when selected) on
       the contract before anything changes; additive, display only, never restored or read by stop/recovery; older
-      files load with none and none isn't written. Both faces say "Left alone because a Trial or the benchmark is
-      testing it: <labels>." (en + zh-CN). Tests fail without it; gates and reviews in the session log.
+      files load with none and none isn't written. Both faces say, right after the honesty line, "Left alone because a
+      Trial or the benchmark was testing it when this session started: <labels>." (en + zh-CN; muted label size).
+      Reviews r1 opus + sonnet APPROVE-WITH-NITS (taken: past-tense wording, styling, one order in both faces, test
+      cut at the end of `start`, the suspend gate read once). Tests fail without it. NOT visually checked: the line
+      shows only during a session started while a Trial or the benchmark holds a setting; a self-review of it is
+      owed when one is captured.
 - [ ] **CR-gm-restore-partial** (r2 opus SHOULD-FIX of CR-gm-spans-followups; pre-existing) A failed restore keeps the
       whole contract, including changes it did restore, so one step that always fails (a removed service or plan)
       leaves every setting of that session refused for Trials and plain apply/undo with no way out. Drop
