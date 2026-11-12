@@ -236,7 +236,12 @@ export type Priorities = {
   /** P9-summary-gpu-limit: per game (`process_name`), its newest measured session, only when that
    *  session was GPU-limited by the sustained rule (priorities.rs). Absent from an older backend. */
   gpu_limited_games?: GameGpuLimit[];
+  /** P9-no-upgrade-source: per game, its newest measured session when it recorded enough GPU
+   *  readings and was not GPU-limited. A game in neither list was not measured. */
+  gpu_clear_games?: GameGpuClear[];
 };
+
+export type GameGpuClear = { game: string; busy: number; readings: number; threshold_pct: number };
 
 export type GameGpuLimit = { game: string; share_pct: number; peak_pct: number; threshold_pct: number };
 

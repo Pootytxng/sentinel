@@ -1635,9 +1635,21 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       (enough readings, under half busy) and averaged below the screen's refresh rate, Check says the GPU was not the
       limit in that session (N of M readings busy) and that Compy can't measure the CPU's share yet; unknown stays
       unknown, no part named. en + zh-CN; tests.
-- [ ] **P9-no-upgrade-source** The finished game summary's "nothing holding this PC back" (settings-done) names what it
+- [x] **P9-no-upgrade-source** The finished game summary's "nothing holding this PC back" (settings-done) names what it
       was read from (the cached check's date and that the game's newest session was not GPU-limited, or "not
       measured"). en + zh-CN; tests.
+      Done (2026-11-12 s22, not installed; SHAs in the merge): priorities gains `gpu_clear_games` (per game, its newest
+      measured session with 30+ sane readings and busy under half; built in one pass with the limited list), and the
+      settings-done line, for this game only, reads "...in your newest measured ROB RUN session 120 of 900 GPU readings
+      were at 95% load or more, under the half Compy counts as GPU-limited. No upgrade is recommended." (zh-CN too);
+      unmeasured, another game's session or impossible counts = the plain line. The cached check's date is not named.
+      Reviews sonnet r1 REQUEST-CHANGES (MUST-FIX taken: "so the GPU wasn't the limit" became the rule; guard and
+      tests taken), r2 found a peak-under-threshold row with most readings busy fell into "clear" (fixed both sides),
+      r3 no MUST-FIX (no verdict line given). The TS test fails on main's settings-done.ts. cargo priorities 26/0 +
+      clippy clean; full cargo 1879/0 before the r2 fix.
+- [ ] **CR-gpu-share-one-source** (P9-no-upgrade-source r3) The "under half" rule lives twice: Rust
+      `GPU_SUSTAINED_SHARE_PCT` and settings-done.ts's `busy * 2 < readings` (and "the half" in en/zh). Carry the share
+      on `GameGpuClear` and use it in TS and the string. Rust + TS; one review.
 - [ ] **P9-cpu-fit-unknowns** If Check shows a CPU-limited block, one line naming what Compy can't read before any
       CPU: the board's socket and BIOS support, and the cooler's fit; establish first whether such a block exists
       (if not, park with the finding). en + zh-CN; same test file.

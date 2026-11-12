@@ -868,6 +868,7 @@
       "settingsDone": {
         "notMeasured": "Settings have reached what Compy can test here. What holds this PC back hasn't been measured, so no upgrade is recommended.",
         "nothingLimiting": "Settings have reached what Compy can test here. The last check found nothing holding this PC back, so no upgrade is recommended.",
+        "nothingLimitingMeasured": "Settings have reached what Compy can test here. The last check found nothing holding this PC back, and in your newest measured {{game}} session {{busy}} of {{readings}} GPU readings were at {{threshold}}% load or more, under the half Compy counts as GPU-limited. No upgrade is recommended.",
         "settingLimiter": "Settings have reached what Compy can test here. The last check's top limiter is a setting, not a part: {{title}}. No upgrade is recommended for it.",
         "partLimiter": "Settings have reached what Compy can test here. The last check's top limiter is a part of this PC: {{title}}.",
         "gpuLimiter": "Settings have reached what Compy can test here. In your newest measured {{game}} session, {{share}}% of Compy's GPU readings were at {{threshold}}% load or more, so the GPU is the measured limiter for this game. Compy can't check your power supply, case or the rest of the system for a new card; see Optimize → Check."

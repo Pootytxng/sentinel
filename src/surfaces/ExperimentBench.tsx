@@ -1917,7 +1917,14 @@ function TestSummary({ s }: { s: GameTestSummary }) {
                     threshold: settingsDone.thresholdPct,
                   })
                 : settingsDone.kind === "nothing-limiting"
-                  ? t("lab.experimentBench.summary.settingsDone.nothingLimiting")
+                  ? settingsDone.gpuClear
+                    ? t("lab.experimentBench.summary.settingsDone.nothingLimitingMeasured", {
+                        game,
+                        busy: settingsDone.gpuClear.busy,
+                        readings: settingsDone.gpuClear.readings,
+                        threshold: settingsDone.gpuClear.thresholdPct,
+                      })
+                    : t("lab.experimentBench.summary.settingsDone.nothingLimiting")
                   : t("lab.experimentBench.summary.settingsDone.notMeasured")}
         </p>
       )}
