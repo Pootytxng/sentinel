@@ -19,11 +19,21 @@ import { useExpertView } from "../design/use-expert-view";
 import { ScanStream } from "./ScanStream";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 import { upgradeFitLine } from "./upgrade-fit";
+import { prettyGameName } from "./game-name";
 import { readManualParts } from "./rig/manual-parts";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
 import "./Check.css";
+
+/** P9-limit-source: a recorded session's start as a date in the app's language ("Nov 11", with the
+ *  year when it isn't this year's); the stamp as sent when it doesn't parse. */
+function sessionDate(iso: string, lang: string, now: Date = new Date()): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const year = d.getFullYear() !== now.getFullYear() ? { year: "numeric" as const } : {};
+  return d.toLocaleDateString(lang, { month: "short", day: "numeric", ...year });
+}
 
 // Structural subset of App's GpuInfo — driver freshness needs only name + age (object covariance).
 type GpuDriverInfo = { name: string; driver_age_days: number | null };
@@ -832,6 +842,19 @@ export default function Check({
                 <div key={item.kind} className="check-upgrade-item">
                   <span className="check-upgrade-title">{item.title}</span>
                   <p className="check-row-reason">{item.why}</p>
+                  {/* P9-limit-source: which recorded session this was measured from (its game, its
+                      date in the app's language, the counts behind the share); none recorded, no line. */}
+                  {item.measured_from && (
+                    <p className="check-row-reason" data-testid="check-upgrade-source">
+                      {t("optimize.check.upgradeMeasuredFrom", {
+                        game: prettyGameName(item.measured_from.game) || item.measured_from.game,
+                        date: sessionDate(item.measured_from.started_at, i18n.language),
+                        busy: item.measured_from.busy,
+                        readings: item.measured_from.readings,
+                        threshold: item.measured_from.threshold_pct,
+                      })}
+                    </p>
+                  )}
                   {/* P9-gpu-fit-unknowns: what Compy can't check before any card, in the system's
                       terms; a user-added power supply is what they told Compy, never a capacity. */}
                   {(() => {

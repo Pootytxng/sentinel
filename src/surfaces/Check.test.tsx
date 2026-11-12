@@ -617,6 +617,25 @@ describe("Check", () => {
     await screen.findByText("Upgrade path (advisory)");
   };
 
+  // P9-limit-source: the line names the recorded session it was measured from; none recorded, no line.
+  it("P9-limit-source: a GPU limiter names the game, the session's date and the counts behind it", async () => {
+    await showUpgrade([
+      {
+        ...fitGpuItem,
+        measured_from: { game: "ROB RUN.exe", started_at: "2026-11-11T20:36:00Z", busy: 720, readings: 900, threshold_pct: 95 },
+      } as typeof fitGpuItem,
+    ]);
+    const line = screen.getByTestId("check-upgrade-source");
+    // The day is the local date of a 20:36 UTC stamp (11th or 12th by zone); a year only when it isn't this one.
+    expect(line.textContent).toMatch(/^Measured from your ROB RUN session on Nov 1[12](, 2026)?: 720 of 900 GPU readings were at 95% load or more\.$/);
+    expect(line.closest(".check-upgrade-item")?.textContent).toContain("GPU was the measured limiter");
+  });
+
+  it("P9-limit-source: no recorded session, no source line", async () => {
+    await showUpgrade([fitGpuItem]);
+    expect(screen.queryByTestId("check-upgrade-source")).toBeNull();
+  });
+
   it("P9-gpu-fit-unknowns: a GPU limiter names the power supply and case as unknown when the user added none", async () => {
     localStorage.removeItem("compy_rig_manual_parts");
     await showUpgrade([fitGpuItem]);

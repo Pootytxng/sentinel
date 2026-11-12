@@ -87,6 +87,22 @@ pub(crate) struct UpgradeSuggestion {
     /// Time-and-sample-qualified reason derived from the measured signal (receipts law).
     pub(crate) why: String,
     pub(crate) links: &'static [RetailLink],
+    /// P9-limit-source: the recorded session a measured row was read from (GPU only). Omitted when
+    /// the row isn't from a session, so the SSD row keeps its wire shape.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) measured_from: Option<MeasuredFrom>,
+}
+
+/// P9-limit-source: which recorded session a GPU-limited row was measured from, as the session
+/// recorded it: its game (`process_name`), its start, and the counts behind the share.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct MeasuredFrom {
+    pub(crate) game: String,
+    pub(crate) started_at: String,
+    /// Readings at or above `threshold_pct`, of `readings` (sessions.rs `GpuLoad`).
+    pub(crate) busy: u32,
+    pub(crate) readings: u32,
+    pub(crate) threshold_pct: u64,
 }
 
 #[derive(Serialize, Debug)]
@@ -208,6 +224,21 @@ fn gpu_load_read_row(s: &Value) -> Option<GpuLoadRead> {
     Some(GpuLoadRead { peak_pct, load })
 }
 
+/// P9-limit-source: the session `gpu_limited` read (the same `newest_measured_row`), named as it
+/// recorded itself. None when it recorded no game, no start or no counts: no line, never a guess.
+fn measured_from(sessions: &Value, read: &GpuLoadRead) -> Option<MeasuredFrom> {
+    let row = crate::sessions::newest_measured_row(sessions)?;
+    let text = |k: &str| row.get(k).and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty());
+    let load = read.load?;
+    Some(MeasuredFrom {
+        game: text("process_name")?.to_string(),
+        started_at: text("started_at")?.to_string(),
+        busy: load.busy,
+        readings: load.readings,
+        threshold_pct: GPU_LIMITED_PCT,
+    })
+}
+
 /// The newest session's GPU load and saturated share, only when sustained.
 fn gpu_limited(sessions: &Value) -> Option<(GpuLoadRead, u64)> {
     let read = gpu_load_read(sessions)?;
@@ -231,6 +262,7 @@ pub(crate) fn build_upgrade_path(readiness: &Value, sessions: &Value) -> Option<
                  upgrade is the hardware lever; no Windows tweak changes this."
             ),
             links: GPU_LINKS,
+            measured_from: measured_from(sessions, &gpu),
         });
     }
     if let Some((st, _, _)) = check(readiness, "install-drive") {
@@ -243,6 +275,7 @@ pub(crate) fn build_upgrade_path(readiness: &Value, sessions: &Value) -> Option<
                       can't apply for you."
                     .into(),
                 links: SSD_LINKS,
+                measured_from: None,
             });
         }
     }
@@ -703,6 +736,34 @@ mod priority_tests {
         assert!(p.upgrade_path.is_none(), "software limiters must never grow retail links");
         let inconclusive = json!([{ "peak_gpu_usage_pct": 90, "avg_fps": 100.0, "low1_fps_est": 90.0 }]);
         assert!(build_upgrade_path(&readiness(vec![]), &inconclusive).is_none(), "86–94% stays inconclusive");
+    }
+
+    #[test]
+    fn the_gpu_row_names_the_session_it_was_measured_from() {
+        // P9-limit-source: the newest measured session (a samples-0 row skipped), as it recorded
+        // itself; a session that recorded no game or start gives no source, never a guess.
+        let sessions = json!([
+            { "process_name": "other.exe", "started_at": "2026-11-12T09:00:00Z", "samples": 0 },
+            { "process_name": "ROB RUN.exe", "started_at": "2026-11-11T22:36:00Z", "samples": 900,
+              "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 900, "busy": 720 } },
+        ]);
+        let up = build_upgrade_path(&readiness(vec![]), &sessions).expect("qualifies");
+        assert_eq!(
+            up.items[0].measured_from,
+            Some(MeasuredFrom {
+                game: "ROB RUN.exe".into(),
+                started_at: "2026-11-11T22:36:00Z".into(),
+                busy: 720,
+                readings: 900,
+                threshold_pct: 95,
+            })
+        );
+        let json = serde_json::to_value(&up).unwrap();
+        assert_eq!(json["items"][0]["measured_from"]["busy"], 720, "{json}");
+        let unnamed = json!([{ "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 900, "busy": 720 } }]);
+        let up = build_upgrade_path(&readiness(vec![]), &unnamed).expect("still qualifies");
+        assert_eq!(up.items[0].measured_from, None);
+        assert!(serde_json::to_value(&up).unwrap()["items"][0].get("measured_from").is_none());
     }
 
     #[test]

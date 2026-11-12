@@ -207,7 +207,16 @@ export type PriorityItem = { id: string; title: string; reason: string; linked: 
 // R3 Lane B: advisory upgrade path — present only when a verdict names hardware as the limiter.
 // Links are plain retailer searches (no affiliate tags); in-app they are COPY-only, never opened.
 export type RetailLink = { retailer: string; url: string };
-export type UpgradeSuggestion = { kind: string; title: string; why: string; links: RetailLink[] };
+/** P9-limit-source: the recorded session a GPU-limited row was read from (priorities.rs). */
+export type MeasuredFrom = { game: string; started_at: string; busy: number; readings: number; threshold_pct: number };
+export type UpgradeSuggestion = {
+  kind: string;
+  title: string;
+  why: string;
+  links: RetailLink[];
+  /** Absent when the row isn't from a session, or the session didn't record its game or start. */
+  measured_from?: MeasuredFrom;
+};
 export type UpgradePath = { items: UpgradeSuggestion[]; disclosure: string };
 export type Priorities = {
   limiters: PriorityItem[];
