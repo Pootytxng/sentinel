@@ -1572,27 +1572,30 @@ fn apply_recommendation_inner(
 /// apply/record machinery: the typed snapshot lands in the ledger, so RESUME goes through the normal
 /// `rollback_change` → `dispatch_rollback` path (the new `ResumeServiceFromSnapshot` arm). The
 /// `KnownService` allowlist + `from_name` mean only the four safe services are ever suspendable.
-#[tauri::command]
+///
+/// The command the webview reaches is `experiment::suspend_known_service`, which refuses a service a
+/// Gaming Mode session holds and then calls this (CR-gm-service-suspend-rows).
 pub(crate) fn suspend_known_service(service_name: String) -> Result<AppliedChangeView, String> {
     if !crate::actions::service_suspend_gate() {
         return Err("Session service-suspend isn't enabled in this build.".to_string());
     }
     let service = crate::actions::KnownService::from_name(&service_name)
         .ok_or_else(|| format!("'{}' isn't a Compy-suspendable service.", service_name))?;
-    // CR-gm-service-suspend-rows: a Gaming Mode session that suspends the same service resumes it
-    // on stop, under this row ("applied" over a running service). Refused while one holds it, with
-    // Gaming Mode's try_lock-only gate held through the ledger write, as the UI's other applies.
-    let rec_id = format!("service-suspend:{}", service.name());
-    let _gm = crate::gaming_orchestrator::plain_change_gate(std::iter::once(rec_id.as_str()))?;
+    let rec_id = suspend_rec_id(&service);
     let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_service_suspend(service)?;
     let made = Made::new(
-        &format!("service-suspend:{}", service_name),
+        &rec_id,
         &format!("Suspend {} for this session", service_name),
         result,
     );
     record_receipt(&root, &mut history, made)
+}
+
+/// The ledger rec id of a session-suspend row (the command's gate checks the same id).
+pub(crate) fn suspend_rec_id(service: &crate::actions::KnownService) -> String {
+    format!("service-suspend:{}", service.name())
 }
 
 /// Startup-entry toggle — the audited replacement for the raw registry write that used to live in

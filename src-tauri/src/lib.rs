@@ -1832,7 +1832,7 @@ pub fn run() {
             set_overlay_corner,
             experiment::apply_recommendation,
             experiment::apply_recommendations_batch,
-            history::suspend_known_service,
+            experiment::suspend_known_service,
             history::disable_known_bloat_task,
             history::remove_known_preload_app,
             history::restore_leftover,

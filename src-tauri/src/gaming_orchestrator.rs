@@ -1113,13 +1113,17 @@ mod spans_trial_tests {
         let mapped: Vec<&str> = ["service-suspend:SysMain"].into_iter().filter_map(session_rec_of).collect();
         let held = plain_hold_refusal(&mapped, Ok(&found), Some(&file), Some("gm-1")).expect("held");
         assert!(held.contains("Stop Gaming Mode first"), "{held}");
-        // The suspend command takes the gate before the ledger lock and the suspend.
-        let src = include_str!("history.rs");
+        // The webview's suspend command is experiment's: it takes the gate, held, before history's
+        // audited suspend (which takes the ledger lock), and it gates the id history records.
+        let lib = include_str!("lib.rs");
+        let handler = lib.split_once("generate_handler![").map(|(_, r)| r).expect("handler list");
+        assert!(handler.contains("experiment::suspend_known_service,") && !handler.contains("history::suspend_known_service,"));
+        let src = include_str!("experiment.rs");
         let body = src.split_once("pub(crate) fn suspend_known_service(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
         let gate = body.find("let _gm = crate::gaming_orchestrator::plain_change_gate(").expect("gated");
-        let lock = body.find("let _lock = lock_history()?;").expect("ledger lock");
-        let apply = body.find("apply_service_suspend(").expect("suspend");
-        assert!(gate < lock && lock < apply, "gate, ledger lock, then the suspend");
+        let audited = body.find(concat!("crate::history::", "suspend_known_service(service_name)")).expect("history's suspend");
+        assert!(body.contains("crate::history::suspend_rec_id(") && gate < audited, "gate (on history's own id), then the suspend");
+        assert_eq!(crate::history::suspend_rec_id(&KnownService::SysMain), "service-suspend:SysMain");
     }
 
     #[test]
