@@ -46,10 +46,28 @@ describe("useLedgerReadRetry", () => {
     });
   };
 
-  it("backs off, then holds at once a minute", () => {
-    expect(LEDGER_RETRY_MS.map((_, i) => ledgerRetryDelay(i))).toEqual([2000, 5000, 15000, 30000, 60000]);
-    expect(ledgerRetryDelay(40)).toBe(60000);
+  // CR-upgrade-area-truth NIT (c): a minute, five minutes, then every fifteen (was once a minute forever).
+  it("backs off to a minute, five minutes, then holds at every fifteen minutes", () => {
+    expect(LEDGER_RETRY_MS.map((_, i) => ledgerRetryDelay(i))).toEqual([2000, 5000, 15000, 30000, 60000, 300000, 900000]);
+    expect(ledgerRetryDelay(40)).toBe(900000);
     expect(ledgerRetryDelay(-1)).toBe(2000);
+  });
+
+  it("logs a ledger that stays unreadable once, and again only when the failure reads differently", async () => {
+    const read = vi
+      .fn<() => Promise<AppliedChange[]>>()
+      .mockRejectedValueOnce(new Error("ipc"))
+      .mockRejectedValueOnce(new Error("ipc"))
+      .mockRejectedValueOnce(new Error("ipc"))
+      .mockRejectedValueOnce(new Error("locked"))
+      .mockResolvedValue(rows);
+    renderHook(() => useLedgerReadRetry(true, read, vi.fn()));
+    await tick(2000 + 5000 + 15000);
+    expect(read).toHaveBeenCalledTimes(3);
+    expect(console.error).toHaveBeenCalledTimes(1);
+    await tick(30000);
+    expect(read).toHaveBeenCalledTimes(4);
+    expect(console.error).toHaveBeenCalledTimes(2);
   });
 
   it("re-reads after each failure and hands over the first read that lands, then stops", async () => {

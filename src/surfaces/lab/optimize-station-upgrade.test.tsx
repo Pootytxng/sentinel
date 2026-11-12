@@ -293,7 +293,7 @@ describe("CR-view-1112c-zh-gap: no space after a Chinese full stop in the upgrad
       mount();
       await screen.findByTestId("check-upgrade");
       // Review r1: the untied line must be there, so the negative match can't pass vacuously.
-      expect(screen.getByTestId("check-upgrade-untied").textContent).toMatch(/^Compy 还没有读取到/);
+      expect(screen.getByTestId("check-upgrade-untied").textContent).toMatch(/^Compy 现在无法识别/);
       expect(screen.getByTestId("check-upgrade-source").textContent).not.toMatch(/。 /);
     } finally {
       await i18n.changeLanguage("en");
@@ -309,5 +309,122 @@ describe("CR-view-1112c-zh-gap: no space after a Chinese full stop in the upgrad
     mount();
     await screen.findByTestId("check-no-upgrade");
     expect(screen.getByTestId("check-no-upgrade-source").textContent).toContain("are left out). In the newest");
+  });
+});
+
+// CR-upgrade-area-truth (fifth whole-range review, b4d2ec7f..d7e67ee5): the upgrade area in the states
+// the review named: safe tweaks pending, an unread limiter, zh-CN rows, no measured session.
+describe("CR-upgrade-area-truth: the upgrade area says what was and wasn't measured", () => {
+  const NEWEST = {
+    game: "ROB RUN.exe",
+    started_at: "2026-11-11T20:36:00Z",
+    busy: 120,
+    readings: 900,
+    threshold_pct: 95,
+    limit_share_pct: 50,
+    gpu_limited: false,
+    gpu_tie: "this-card",
+  };
+  const row = (id: string, status: string) => ({ id, title: id, reason: "", linked: null, confidence: "medium", status });
+
+  it("(1) safe tweaks pending: still 'No upgrade recommended' (an aggregate row is a setting, never a part)", async () => {
+    scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, newest: NEWEST };
+    scan.limiters = [row("pending-safe-recs", "attention"), row("applied-changes", "attention")];
+    mount();
+    expect(await screen.findByTestId("check-no-upgrade-title")).toHaveTextContent("No upgrade recommended");
+  });
+
+  it("(2) a limiter the check couldn't read: no verdict, the not-measured line, no newest-session claim", async () => {
+    scan.evidence = { measured_sessions: 2, gpu_limited_sessions: 0, other_card_sessions: 1, newest: NEWEST };
+    scan.limiters = [row("install-drive", "unknown")];
+    mount();
+    expect(await screen.findByTestId("check-no-upgrade-title")).toHaveTextContent("No upgrade verdict yet");
+    expect(screen.getByTestId("check-no-upgrade-source").textContent).toBe(
+      "Not measured: the last check couldn't read all of its checks, so Compy can't say whether a part is holding this PC back.",
+    );
+    expect(screen.queryByText("No upgrade recommended")).toBeNull();
+    expect(screen.queryByTestId("check-no-upgrade-balance")).toBeNull();
+    expect(screen.queryByTestId("check-no-upgrade-left-out")).toBeNull();
+  });
+
+  it("(2) an unread aggregate row alone is not an unread part", async () => {
+    scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, newest: NEWEST };
+    scan.limiters = [row("pending-safe-recs", "unknown")];
+    mount();
+    expect(await screen.findByTestId("check-no-upgrade-title")).toHaveTextContent("No upgrade recommended");
+  });
+
+  it("(4) no measured session: its own title, the body unchanged", async () => {
+    scan.evidence = { measured_sessions: 0, gpu_limited_sessions: 0 };
+    mount();
+    expect(await screen.findByTestId("check-no-upgrade-title")).toHaveTextContent("Nothing measured yet");
+    expect(screen.queryByText("No upgrade recommended")).toBeNull();
+    expect(screen.getByTestId("check-no-upgrade-source").textContent).toMatch(/^Not measured yet: Compy hasn't recorded/);
+  });
+
+  it("NIT (a): names how many sessions on another card were left out, and nothing when none were", async () => {
+    scan.evidence = { measured_sessions: 3, gpu_limited_sessions: 0, other_card_sessions: 2, newest: NEWEST };
+    mount();
+    await screen.findByTestId("check-no-upgrade");
+    const text = screen.getByTestId("check-no-upgrade-source").textContent ?? "";
+    expect(text).toMatch(/^Read from the last check, which names no part holding this PC back, and 3 measured game sessions, none of them GPU-limited\. 2 sessions recorded on another graphics card are left out\. In the newest/);
+    cleanup();
+    invalidateProbe();
+    scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, other_card_sessions: 0, newest: NEWEST };
+    mount();
+    await screen.findByTestId("check-no-upgrade");
+    expect(screen.queryByTestId("check-no-upgrade-left-out")).toBeNull();
+    expect(screen.getByTestId("check-no-upgrade-source").textContent).not.toMatch(/left out/);
+  });
+
+  it.each([0, 150])("NIT (b): an impossible share (%i percent) claims nothing about the newest session", async (limit) => {
+    scan.evidence = { measured_sessions: 1, gpu_limited_sessions: 0, newest: { ...NEWEST, limit_share_pct: limit } };
+    mount();
+    await screen.findByTestId("check-no-upgrade");
+    expect(screen.getByTestId("check-no-upgrade-source").textContent).not.toMatch(/In the newest/);
+  });
+
+  it("(3) zh-CN: the GPU and HDD rows are in Chinese, worded from the GPU row's numbers", async () => {
+    const { default: i18n } = await import("../../i18n");
+    await i18n.changeLanguage("zh-CN");
+    try {
+      scan.upgrade = {
+        items: [
+          { ...GPU_ROW, gpu_numbers: { share_pct: 80, peak_pct: 99, threshold_pct: 95, limit_share_pct: 50 } },
+          { kind: "ssd", title: "Games are on an HDD", why: "Your game install drive check found HDD storage.", links: [], measured_from: null },
+        ],
+        disclosure: "x",
+      };
+      mount();
+      const block = await screen.findByTestId("check-upgrade");
+      expect(block).toHaveTextContent("显卡是实测的瓶颈");
+      expect(block).toHaveTextContent("有 80% 显卡负载达到 95% 或更高（峰值约 99%）");
+      expect(block).toHaveTextContent("游戏装在机械硬盘上");
+      expect(block).not.toHaveTextContent(/GPU was the measured limiter|Games are on an HDD|In your most recent|install drive check/);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  it("(3) en: the GPU row from its numbers; without them (an older backend) the Rust sentence; an unknown kind keeps the Rust strings", async () => {
+    scan.upgrade = {
+      items: [
+        { ...GPU_ROW, gpu_numbers: { share_pct: 80, peak_pct: 99, threshold_pct: 95, limit_share_pct: 50 } },
+        { kind: "psu", title: "Power supply row", why: "A row this build doesn't know.", links: [], measured_from: null },
+      ],
+      disclosure: "x",
+    };
+    mount();
+    const block = await screen.findByTestId("check-upgrade");
+    expect(block).toHaveTextContent(
+      "In your most recent monitored session the GPU sat at or above 95% for 80% of the time Compy measured the game (peak ~99%) — the GPU was the limiter for at least 50% of that session.",
+    );
+    expect(block).toHaveTextContent("Power supply row");
+    expect(block).toHaveTextContent("A row this build doesn't know.");
+    cleanup();
+    invalidateProbe();
+    scan.upgrade = { items: [GPU_ROW], disclosure: "x" };
+    mount();
+    expect(await screen.findByTestId("check-upgrade")).toHaveTextContent(GPU_ROW.why);
   });
 });

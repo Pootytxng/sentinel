@@ -47,7 +47,37 @@ export type SettingsDoneLine =
       untied?: GpuUntied;
     };
 
-const AGGREGATE_REC_ROWS = new Set(["pending-safe-recs", "applied-changes"]);
+/** The two aggregate rows that re-state recommendations; not limiters for a verdict about parts.
+ *  Shared with Check's upgrade area (CR-upgrade-area-truth): one list, not two. */
+export const AGGREGATE_REC_ROWS: ReadonlySet<string> = new Set(["pending-safe-recs", "applied-changes"]);
+
+/** CR-gpu-share-one-source + CR-upgrade-area-truth NIT (b): a measured-clear session's counts, sane
+ *  and under the share Compy counts as GPU-limited (the share comes from the Rust rule on the row).
+ *  Counts that can't be a measurement, or a missing or impossible share, claim nothing. Shared by the
+ *  game summary and Check's upgrade area. */
+export function measuredClearOfGpuLimit(row: {
+  busy: number;
+  readings: number;
+  threshold_pct: number;
+  limit_share_pct?: number | null;
+}): boolean {
+  const limit = row.limit_share_pct;
+  return (
+    limit != null &&
+    [row.busy, row.readings, row.threshold_pct, limit].every(Number.isFinite) &&
+    limit > 0 &&
+    limit <= 100 &&
+    row.readings > 0 &&
+    row.busy >= 0 &&
+    row.busy * 100 < row.readings * limit // under the share Compy counts as GPU-limited
+  );
+}
+
+/** CR-upgrade-area-truth (2): the check could not read one of its limiters (aggregate rows aside), so
+ *  "nothing is limiting" would be a claim it never made. Shared by the game summary and Check. */
+export function anyLimiterUnread(priorities: Pick<Priorities, "limiters">): boolean {
+  return (priorities.limiters ?? []).some((l) => !AGGREGATE_REC_ROWS.has(l.id) && l.status === "unknown");
+}
 
 /** The one Phase 9 line under a finished game summary, or null when the summary is not finished.
  *  `priorities`: undefined = no scan cached, null = the priorities read failed. Both are "not measured".
@@ -94,7 +124,7 @@ export function settingsDoneLine(
     };
   }
   // An unread limiter means the check could not say; "nothing is limiting" would be a claim it never made.
-  if (limiters.some((l) => l.status === "unknown")) return { kind: "not-measured" };
+  if (anyLimiterUnread(priorities)) return { kind: "not-measured" };
   // P9-no-upgrade-source: say what "nothing holding it back" was read from when this game's own
   // newest measured session was measured clear of a GPU limit; never another game's session.
   const clear = key
@@ -103,17 +133,7 @@ export function settingsDoneLine(
   // Review r1: counts that can't be a measurement (busy outside 0..readings) claim nothing.
   // CR-gpu-share-one-source: the share Compy counts as GPU-limited comes on the row from the Rust
   // rule; a row without it (an older backend) or with an impossible share claims nothing.
-  const limit = clear?.limit_share_pct;
-  if (
-    clear &&
-    limit != null &&
-    [clear.busy, clear.readings, clear.threshold_pct, limit].every(Number.isFinite) &&
-    limit > 0 &&
-    limit <= 100 &&
-    clear.readings > 0 &&
-    clear.busy >= 0 &&
-    clear.busy * 100 < clear.readings * limit // under the share Compy counts as GPU-limited
-  ) {
+  if (clear && measuredClearOfGpuLimit(clear)) {
     const untied = gpuUntied(clear.gpu_tie);
     return {
       kind: "nothing-limiting",
@@ -121,7 +141,7 @@ export function settingsDoneLine(
         busy: clear.busy,
         readings: clear.readings,
         thresholdPct: clear.threshold_pct,
-        limitSharePct: limit,
+        limitSharePct: clear.limit_share_pct as number,
         ...(untied ? { untied } : {}),
       },
     };

@@ -70,6 +70,9 @@ pub(crate) struct UpgradeEvidence {
     /// Review r1: how many of those were GPU-limited by the sustained rule (any game, any age). The
     /// room says "no upgrade recommended" only when none was.
     gpu_limited_sessions: u32,
+    /// CR-upgrade-area-truth NIT (a): sessions that measured enough readings the same way but were
+    /// recorded on another card, so they were left out of the counts above. The room names how many.
+    other_card_sessions: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     newest: Option<NewestMeasured>,
 }
@@ -117,17 +120,28 @@ pub(crate) enum GpuTie {
     ThisCard,
     /// The session recorded no card (an older Compy, or none was read then).
     NotRecorded,
-    /// The session recorded a card, but Compy hasn't read which card this PC has now.
+    /// The session recorded a card, but Compy can't identify this PC's card now (not read yet, or
+    /// only Windows' fallback adapter was read).
     CardUnread,
 }
 
-/// The card a session recorded at its start (`hw_fingerprint.gpu`, the most-VRAM GPU).
+/// CR-upgrade-area-truth NIT (a): a name that identifies no card. Windows' fallback adapters (no
+/// vendor driver loaded, e.g. during a driver install) stand in for whatever card is fitted, so a
+/// session or a startup read with one can't be tied to, or set against, a card. An exact-match list
+/// of the two names Windows uses (review nit): another fallback name reads as a card, as before.
+fn identifies_a_card(name: &str) -> bool {
+    let n = name.trim().to_lowercase();
+    !n.is_empty() && n != "microsoft basic display adapter" && n != "microsoft basic render driver"
+}
+
+/// The card a session recorded at its start (`hw_fingerprint.gpu`, the most-VRAM GPU). A fallback
+/// adapter name is no card recorded.
 fn session_gpu(row: &Value) -> Option<&str> {
     row.get("hw_fingerprint")
         .and_then(|f| f.get("gpu"))
         .and_then(Value::as_str)
         .map(str::trim)
-        .filter(|g| !g.is_empty())
+        .filter(|g| identifies_a_card(g))
 }
 
 /// The tie of one session to `gpu_now` (this PC's card, `hardware::cached_primary_gpu_name`).
@@ -138,7 +152,9 @@ fn gpu_tie(row: &Value, gpu_now: Option<&str>) -> Option<GpuTie> {
     let Some(then) = session_gpu(row) else {
         return Some(GpuTie::NotRecorded);
     };
-    let Some(now) = gpu_now.map(str::trim).filter(|g| !g.is_empty()) else {
+    // A fallback adapter read now (CR-upgrade-area-truth NIT (a)) is this PC's card unidentified:
+    // every session is kept and says the card can't be tied, never all of them dropped.
+    let Some(now) = gpu_now.map(str::trim).filter(|g| identifies_a_card(g)) else {
         return Some(GpuTie::CardUnread);
     };
     (then.to_lowercase() == now.to_lowercase()).then_some(GpuTie::ThisCard)
@@ -215,6 +231,21 @@ pub(crate) struct UpgradeSuggestion {
     /// the row isn't from a session, so the SSD row keeps its wire shape.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) measured_from: Option<MeasuredFrom>,
+    /// CR-upgrade-area-truth: the numbers `why` is written from, so the webview can say it in the
+    /// user's language (GPU row only; omitted elsewhere, so the SSD row keeps its wire shape).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) gpu_numbers: Option<GpuRowNumbers>,
+}
+
+/// CR-upgrade-area-truth: the GPU row's measured numbers, as its English `why` states them.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq)]
+pub(crate) struct GpuRowNumbers {
+    /// Share of the session's readings at or above `threshold_pct`.
+    pub(crate) share_pct: u64,
+    pub(crate) peak_pct: u64,
+    pub(crate) threshold_pct: u64,
+    /// The share Compy counts as GPU-limited (`GPU_SUSTAINED_SHARE_PCT`).
+    pub(crate) limit_share_pct: u64,
 }
 
 /// P9-limit-source: which recorded session a GPU-limited row was measured from, as the session
@@ -385,12 +416,15 @@ fn build_gpu_games(sessions: &Value, gpu_now: Option<&str>) -> (Vec<GameGpuLimit
     (out, clear)
 }
 
-/// P9-no-upgrade-named: `sessions` are already [`sessions_on_this_gpu`] (newest first). A session
-/// counts when it measured play (`samples` not 0) and recorded enough sane GPU readings; the first
-/// counted one is `newest` (None when it recorded no game or start: never a guess).
+/// P9-no-upgrade-named: `sessions` are every recorded session (newest first), NOT filtered by card:
+/// a session recorded on another card is counted in `other_card_sessions` and nothing else
+/// (CR-upgrade-area-truth). A session counts when it measured play (`samples` not 0) and recorded
+/// enough sane GPU readings; the first counted one is `newest` (None when it recorded no game or
+/// start: never a guess).
 fn build_upgrade_evidence(sessions: &Value, gpu_now: Option<&str>) -> UpgradeEvidence {
     let mut measured_sessions = 0u32;
     let mut gpu_limited_sessions = 0u32;
+    let mut other_card_sessions = 0u32;
     let mut newest = None;
     for row in sessions.as_array().map(Vec::as_slice).unwrap_or_default() {
         if row.get("samples").and_then(Value::as_u64) == Some(0) {
@@ -403,6 +437,7 @@ fn build_upgrade_evidence(sessions: &Value, gpu_now: Option<&str>) -> UpgradeEvi
             continue;
         };
         let Some(gpu_tie) = gpu_tie(row, gpu_now) else {
+            other_card_sessions += 1;
             continue;
         };
         measured_sessions += 1;
@@ -427,7 +462,7 @@ fn build_upgrade_evidence(sessions: &Value, gpu_now: Option<&str>) -> UpgradeEvi
             }
         }
     }
-    UpgradeEvidence { measured_sessions, gpu_limited_sessions, newest }
+    UpgradeEvidence { measured_sessions, gpu_limited_sessions, other_card_sessions, newest }
 }
 
 fn gpu_load_read_row(s: &Value) -> Option<GpuLoadRead> {
@@ -510,6 +545,12 @@ fn upgrade_path_here(readiness: &Value, sessions: &Value, gpu_now: Option<&str>)
             ),
             links: GPU_LINKS,
             measured_from: measured_from(sessions, &gpu, gpu_now),
+            gpu_numbers: Some(GpuRowNumbers {
+                share_pct: share,
+                peak_pct: peak,
+                threshold_pct: GPU_LIMITED_PCT,
+                limit_share_pct: GPU_SUSTAINED_SHARE_PCT,
+            }),
         });
     }
     if let Some((st, _, _)) = check(readiness, "install-drive") {
@@ -523,6 +564,7 @@ fn upgrade_path_here(readiness: &Value, sessions: &Value, gpu_now: Option<&str>)
                     .into(),
                 links: SSD_LINKS,
                 measured_from: None,
+                gpu_numbers: None,
             });
         }
     }
@@ -608,6 +650,8 @@ pub(crate) fn build_priorities_for(
     sessions: &Value,
     gpu_now: Option<&str>,
 ) -> Priorities {
+    // CR-upgrade-area-truth NIT (a): the evidence also counts the sessions left out, so it reads all.
+    let all_sessions = sessions;
     let here = sessions_on_this_gpu(sessions, gpu_now);
     let sessions = &here;
     let mut tagged: Vec<(Bucket, PriorityItem)> = Vec::new();
@@ -799,7 +843,7 @@ pub(crate) fn build_priorities_for(
         upgrade_path: upgrade_path_here(readiness, sessions, gpu_now),
         gpu_limited_games: limited_games,
         gpu_clear_games: clear_games,
-        upgrade_evidence: build_upgrade_evidence(sessions, gpu_now),
+        upgrade_evidence: build_upgrade_evidence(all_sessions, gpu_now),
     }
 }
 
@@ -1474,7 +1518,10 @@ mod priority_tests {
         // P9-no-upgrade-named / P9-cpu-gpu-balance.
         let now = Some("AMD Radeon RX 9070 XT");
         let none = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &json!([]), now);
-        assert_eq!(none.upgrade_evidence, UpgradeEvidence { measured_sessions: 0, gpu_limited_sessions: 0, newest: None });
+        assert_eq!(
+            none.upgrade_evidence,
+            UpgradeEvidence { measured_sessions: 0, gpu_limited_sessions: 0, other_card_sessions: 0, newest: None }
+        );
         let mut newest = limited_on("g.exe", "2026-11-11T20:36:00Z", Some("AMD Radeon RX 9070 XT"), 120);
         newest["avg_fps"] = json!(141.5);
         newest["game_state"] = json!({ "display_refresh_hz": 250 });
@@ -1490,6 +1537,8 @@ mod priority_tests {
         let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &sessions, now);
         assert_eq!(p.upgrade_evidence.measured_sessions, 2);
         assert_eq!(p.upgrade_evidence.gpu_limited_sessions, 1, "the older g.exe session was GPU-limited");
+        // CR-upgrade-area-truth NIT (a): the other card's session is counted as left out, nothing else.
+        assert_eq!(p.upgrade_evidence.other_card_sessions, 1);
         let n = p.upgrade_evidence.newest.as_ref().expect("the newest counted session");
         assert_eq!((n.game.as_str(), n.busy, n.readings, n.gpu_limited), ("g.exe", 120, 900, false));
         assert_eq!((n.avg_fps, n.refresh_hz, n.gpu_tie), (Some(141.5), Some(250), GpuTie::ThisCard));
@@ -1512,6 +1561,45 @@ mod priority_tests {
         let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &nameless, now);
         assert_eq!(p.upgrade_evidence.measured_sessions, 2);
         assert_eq!(p.upgrade_evidence.newest, None);
+    }
+
+    // CR-upgrade-area-truth NIT (a): Windows' fallback adapter names no card. Read now, it is this
+    // PC's card unidentified (every session kept, tied "card-unread"), never "another card" for all
+    // of them; recorded by a session, it is no card recorded.
+    #[test]
+    fn a_fallback_adapter_identifies_no_card() {
+        let sessions = json!([
+            limited_on("g.exe", "2026-11-11T20:36:00Z", Some("AMD Radeon RX 9070 XT"), 120),
+            limited_on("h.exe", "2026-11-10T20:36:00Z", Some("NVIDIA GeForce GTX 1060"), 120),
+        ]);
+        for now in ["Microsoft Basic Display Adapter", " microsoft basic render driver "] {
+            let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &sessions, Some(now));
+            assert_eq!(p.upgrade_evidence.measured_sessions, 2, "{now}: no session dropped");
+            assert_eq!(p.upgrade_evidence.other_card_sessions, 0, "{now}");
+            assert_eq!(p.upgrade_evidence.newest.as_ref().map(|n| n.gpu_tie), Some(GpuTie::CardUnread), "{now}");
+        }
+        let basic = json!([limited_on("g.exe", "2026-11-11T20:36:00Z", Some("Microsoft Basic Display Adapter"), 120)]);
+        let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &basic, Some("AMD Radeon RX 9070 XT"));
+        assert_eq!(p.upgrade_evidence.measured_sessions, 1);
+        assert_eq!(p.upgrade_evidence.newest.as_ref().map(|n| n.gpu_tie), Some(GpuTie::NotRecorded));
+    }
+
+    // CR-upgrade-area-truth (3): the GPU row carries the numbers its English `why` states, so the
+    // webview can word it in the user's language; the SSD row has none on the wire.
+    #[test]
+    fn the_gpu_row_carries_its_numbers() {
+        let sessions = json!([limited_on("g.exe", "2026-11-11T20:36:00Z", Some("AMD Radeon RX 9070 XT"), 720)]);
+        let path = build_upgrade_path_for(&readiness(vec![]), &sessions, Some("AMD Radeon RX 9070 XT")).expect("a GPU row");
+        let gpu = path.items.iter().find(|i| i.kind == "gpu").expect("gpu");
+        let n = gpu.gpu_numbers.expect("numbers");
+        assert_eq!((n.share_pct, n.threshold_pct, n.limit_share_pct), (80, GPU_LIMITED_PCT, GPU_SUSTAINED_SHARE_PCT));
+        assert!(gpu.why.contains(&format!("for {}% of the time", n.share_pct)));
+        assert!(gpu.why.contains(&format!("(peak ~{}%)", n.peak_pct)));
+        let wire = serde_json::to_value(gpu).unwrap();
+        assert_eq!(wire["gpu_numbers"]["share_pct"], json!(80));
+        let hdd = build_upgrade_path(&readiness(vec![chk("install-drive", "attention")]), &json!([])).expect("an HDD row");
+        let wire = serde_json::to_value(&hdd.items[0]).unwrap();
+        assert!(wire.get("gpu_numbers").is_none(), "the SSD row keeps its wire shape");
     }
 
     #[test]
