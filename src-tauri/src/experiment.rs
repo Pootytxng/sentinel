@@ -3470,7 +3470,8 @@ pub(crate) fn start_experiment(
     // Mode's own operation gate (try_lock only) is held from this check through the record and the
     // apply, so a session can't start in between, and none is starting now. (CR-gm-stop-busy: a stop
     // or recovery may run beside it; it restores only steps its contract holds, and a contract on
-    // disk that holds this setting refused just below, so the two touch different settings.)
+    // disk that holds this setting, or holds the power plan when this is a setting of the plan,
+    // refused just below, as does any check made while a stop is putting changes back.)
     let _gm = crate::gaming_orchestrator::session_op_guard().map_err(|why| format!("experiment not started — {why}"))?;
     if let Some(why) = crate::gaming_orchestrator::session_holds_refusal(&rec_id) {
         return Err(format!("experiment not started — {why}"));
