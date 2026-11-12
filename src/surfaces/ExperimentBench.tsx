@@ -1935,6 +1935,25 @@ function TestSummary({ s }: { s: GameTestSummary }) {
                       })
                     : t("lab.experimentBench.summary.settingsDone.nothingLimiting")
                   : t("lab.experimentBench.summary.settingsDone.notMeasured")}
+          {/* P9-session-on-this-hardware: the session this line reads can't be tied to the card in
+              this PC now (it recorded none, or this PC's card wasn't read): say so, never assume it. */}
+          {(() => {
+            const untied =
+              settingsDone.kind === "gpu-limiter"
+                ? settingsDone.untied
+                : settingsDone.kind === "nothing-limiting"
+                  ? settingsDone.gpuClear?.untied
+                  : undefined;
+            if (!untied) return null;
+            return (
+              <span data-testid="exp-summary-settings-done-untied">
+                {" "}
+                {untied === "not-recorded"
+                  ? t("lab.experimentBench.summary.settingsDone.gpuUntiedNotRecorded")
+                  : t("lab.experimentBench.summary.settingsDone.gpuUntiedCardUnread")}
+              </span>
+            );
+          })()}
         </p>
       )}
       {softwareFirst && (

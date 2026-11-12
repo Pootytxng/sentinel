@@ -1883,13 +1883,30 @@ pub(crate) fn collect_hardware() -> HardwareInfo {
     // startup misreports them all session (e.g. the user frees 50 GB and the panel still shows the
     // old figure). So overwrite ONLY those cheap, purely-local reads on each call; everything else
     // (the WMI identity sweep, network state) stays the startup snapshot.
-    static CACHE: std::sync::OnceLock<HardwareInfo> = std::sync::OnceLock::new();
-    let mut hw = CACHE
+    let mut hw = HW_SNAPSHOT
         .get_or_init(|| on_wmi_thread(collect_hardware_inner))
         .clone();
     refresh_live_fields(&mut hw);
     refresh_gpu_drivers(&mut hw.gpus);
     hw
+}
+
+/// The startup hardware snapshot `collect_hardware` fills once (WMI sweep, off the main thread).
+static HW_SNAPSHOT: std::sync::OnceLock<HardwareInfo> = std::sync::OnceLock::new();
+
+/// The graphics card a session fingerprint names: the GPU with the most VRAM, the same pick
+/// `current_fingerprint` stamps on every session.
+fn primary_gpu(hw: &HardwareInfo) -> Option<&GpuInfo> {
+    hw.gpus.iter().max_by_key(|g| g.vram_bytes)
+}
+
+/// P9-session-on-this-hardware: the name of this PC's graphics card from the startup snapshot,
+/// picked as session fingerprints pick it. Reads only what is already cached: it never starts the
+/// WMI sweep, so a sync command on the main thread can call it. `None` = not read yet, or no GPU
+/// name was read: unknown, never a guess.
+pub(crate) fn cached_primary_gpu_name() -> Option<String> {
+    let hw = HW_SNAPSHOT.get()?;
+    primary_gpu(hw).map(|g| g.name.trim().to_string()).filter(|n| !n.is_empty())
 }
 
 /// How long a GPU driver read stands before the next call re-reads it.
@@ -2721,7 +2738,7 @@ fn fingerprint_of(gpu: &str, gpu_driver: &str, ram_gb: u32, display: &str) -> Hw
 /// Fingerprint the current rig from the cached hardware snapshot. Local-only; no egress.
 pub(crate) fn current_fingerprint() -> HwFingerprint {
     let hw = get_hardware_info();
-    let primary = hw.gpus.iter().max_by_key(|g| g.vram_bytes);
+    let primary = primary_gpu(&hw);
     let ram_gb = (hw.ram_total_bytes as f64 / 1024f64.powi(3)).round() as u32;
     let display = hw
         .display

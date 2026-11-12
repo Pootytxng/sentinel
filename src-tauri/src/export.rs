@@ -382,8 +382,10 @@ pub(crate) fn build_markdown_report(
     // ── Upgrade path (R3 Lane B — advisory; ONLY when a verdict already names hardware) ──
     // Same pure source as the in-app block (priorities::build_upgrade_path) — one qualifying
     // logic, one link table; the report renders real Markdown anchors (the user's own browser
-    // opens them — no opener-allowlist involvement).
-    if let Some(up) = crate::priorities::build_upgrade_path(readiness, sessions) {
+    // opens them — no opener-allowlist involvement). P9-session-on-this-hardware: a session recorded
+    // on another card never decides the GPU row (this PC's card read from the `hardware` source).
+    let gpu_now = crate::priorities::primary_gpu_of(hardware);
+    if let Some(up) = crate::priorities::build_upgrade_path_for(readiness, sessions, gpu_now.as_deref()) {
         let _ = writeln!(o, "## Upgrade path (advisory)\n");
         for item in &up.items {
             let _ = writeln!(o, "- **{}** — {}", item.title, item.why);

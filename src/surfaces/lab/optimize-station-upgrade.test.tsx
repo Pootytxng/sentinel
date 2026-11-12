@@ -111,7 +111,7 @@ describe("P9-upgrade-block-reachable: the Optimize room shows the measured upgra
     };
     mount();
     await screen.findByTestId("check-upgrade");
-    expect(screen.getByTestId("check-upgrade-screen")).toHaveTextContent("Your 250 Hz screen can't show more than 250 frames a second");
+    expect(screen.getByTestId("check-upgrade-screen")).toHaveTextContent("your screen ran at 250 Hz, so it could show at most 250 frames a second");
     expect(screen.queryByText("GPU was the measured limiter")).toBeNull();
     expect(screen.queryByTestId("check-upgrade-fit")).toBeNull();
   });

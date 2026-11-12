@@ -641,9 +641,11 @@ describe("Check", () => {
 
   it("P9-screen-is-limit: at or above the screen's refresh rate the screen is named and no upgrade is recommended", async () => {
     await showUpgrade([sourced(251.6, 250)]);
-    expect(screen.getByText("Your screen is the limit here")).toBeInTheDocument();
+    // P9-session-on-this-hardware: the rate is the mode that session ran at, and only a GPU upgrade
+    // at that rate is ruled out (a higher refresh mode could still be the answer).
+    expect(screen.getByText("Your screen's refresh rate was the limit in that session")).toBeInTheDocument();
     expect(screen.getByTestId("check-upgrade-screen").textContent).toBe(
-      "Your 250 Hz screen can't show more than 250 frames a second, and your ROB RUN session averaged 252 fps, so on average a faster GPU wouldn't show you more frames; the slowest moments can still depend on it. For frame rate, no upgrade is recommended for this game.",
+      "In your ROB RUN session your screen ran at 250 Hz, so it could show at most 250 frames a second, and the session averaged 252 fps: on average a faster GPU wouldn't have shown you more frames at that refresh rate; the slowest moments can still depend on it. For frame rate at 250 Hz, no GPU upgrade is recommended for this game.",
     );
     expect(screen.queryByText("GPU was the measured limiter")).toBeNull();
     expect(screen.queryByTestId("check-upgrade-fit")).toBeNull();
