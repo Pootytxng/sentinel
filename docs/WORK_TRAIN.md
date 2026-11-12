@@ -1768,14 +1768,26 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       upgrade is recommended" (queued P9-no-session-plain-line); (2) a part the check names is said with no system
       context on the summary: "The last check's top limiter is a part of this PC: Game install drive." (queued
       P9-part-line-context).
-- [ ] **P9-no-session-plain-line** (P9-exit-fixture finding) The finished summary's plain `nothingLimiting` ("The last
+- [x] **P9-no-session-plain-line** (P9-exit-fixture finding) The finished summary's plain `nothingLimiting` ("The last
       check found nothing holding this PC back") fires when no session was measured for the game; it reads as a
       measured verdict. Say what it was read from (the check's rows, no session measured for this game) and keep "no
       upgrade recommended". en + zh-CN; settings-done + fixture tests. TS.
-- [ ] **P9-part-line-context** (P9-exit-fixture finding; Exit "never naming a part in isolation") The finished
+      Done with P9-part-line-context (s24, not installed; SHAs in the merge): "Settings have reached what Compy can test
+      here. The last check found nothing in its rows holding this PC back; Compy has no session of this game with enough
+      GPU readings, so its GPU load isn't measured. No upgrade is recommended." (zh-CN too). Known limit (review r1
+      SHOULD-FIX, recorded): a measured-clear row the line refuses as malformed (an old payload or impossible counts)
+      also falls to this wording.
+- [x] **P9-part-line-context** (P9-exit-fixture finding; Exit "never naming a part in isolation") The finished
       summary's `partLimiter` says "The last check's top limiter is a part of this PC: <title>." with nothing about the
       system; Check's room adds the fit line ("Before any drive: Compy can't read ..."). Add the same kind's fit line
       (upgrade-fit.ts) to the summary line; unknown kinds say Compy can't check how a new part fits. en + zh-CN; TS.
+      Done (s24, not installed; SHAs in the merge): the part line is followed by "Before any drive: Compy can't read
+      which free M.2 slots, SATA ports or drive bays your motherboard and case have. Check those first." for the install
+      drive (the only part limiter the backend emits) and "Before any part: Compy can't check how a new one would fit
+      the rest of this PC (its power supply, motherboard and case). Check those first." for any other (zh-CN too, no
+      space after the full stop). Tests: settings-done `fit`, the ExperimentBench render, the P9 fixture's part case;
+      they fail on main. Review sonnet r1 APPROVE-WITH-NITS (zh spacing and wording taken; SHOULD-FIX recorded above).
+      With these two, the Phase 9 Exit finding's two gaps are closed in code (live case still P4-exit-proof).
 - [x] **P9-summary-screen-limit** The game summary's gpuLimiter line (reachable, unlike Check's block) says when that
       same session averaged at or above the screen's measured refresh that the screen, not the GPU, capped what you
       saw (mirror P9-screen-is-limit's wording and boundaries); unmeasured = today's line. en + zh-CN; tests.
