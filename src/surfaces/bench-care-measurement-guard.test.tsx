@@ -185,7 +185,7 @@ const hw = {
 } as unknown as HardwareInfo;
 const mountHome = (sessions: SessionSummary[]) =>
   render(
-    <ShellV2 items={railFor(true)} activeId="home" onNavigate={() => {}} ledgerCount={0}>
+    <ShellV2 items={railFor(true)} activeId="home" onNavigate={() => {}} ledger={[]}>
       <HomeConsole
         hw={hw}
         readiness={null}
@@ -201,7 +201,7 @@ const mountHome = (sessions: SessionSummary[]) =>
 // HomeRoom's two flag-off faces of the same strip take the console's props.
 const mountFace = (Face: typeof HomeHud | typeof HomeV2, sessions: SessionSummary[]) =>
   render(
-    <ShellV2 items={railFor(true)} activeId="home" onNavigate={() => {}} ledgerCount={0}>
+    <ShellV2 items={railFor(true)} activeId="home" onNavigate={() => {}} ledger={[]}>
       <Face
         hw={hw}
         readiness={null}

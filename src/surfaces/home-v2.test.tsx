@@ -157,7 +157,7 @@ function mount(over?: Partial<Parameters<typeof HomeV2>[0]>) {
       items={railFor(true)}
       activeId="home"
       onNavigate={() => {}}
-      ledgerCount={props.changes.length}
+      ledger={props.changes}
      
     >
       <HomeV2 {...props} />

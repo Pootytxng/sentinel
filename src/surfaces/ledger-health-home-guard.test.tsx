@@ -276,7 +276,7 @@ async function mount(face: Face, changes: AppliedChange[] = []) {
       items={railFor(true)}
       activeId="home"
       onNavigate={() => {}}
-      ledgerCount={changes.length}
+      ledger={changes}
      
     >
       <Comp {...p} />
@@ -524,7 +524,7 @@ describe("the refusal reaches the user, not just the component", () => {
         items={railFor(true)}
         activeId="home"
         onNavigate={() => {}}
-        ledgerCount={0}
+        ledger={[]}
        
       >
         <HomeRoom {...p} />
@@ -555,7 +555,7 @@ describe("HomeConsole — the face a default-flag user actually lands on", () =>
         items={railFor(true)}
         activeId="home"
         onNavigate={() => {}}
-        ledgerCount={changes.length}
+        ledger={changes}
        
       >
         <HomeConsole {...props(changes)} />
@@ -691,7 +691,7 @@ describe("HomeConsole — the face a default-flag user actually lands on", () =>
         items={railFor(true)}
         activeId="home"
         onNavigate={() => {}}
-        ledgerCount={0}
+        ledger={[]}
        
       >
         <HomeRoom {...props([])} />

@@ -163,7 +163,7 @@ const shell = (child: React.ReactNode) => (
     items={railFor(true)}
     activeId="home"
     onNavigate={() => {}}
-    ledgerCount={1}
+    ledger={[]}
    
   >
     {child}

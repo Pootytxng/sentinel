@@ -145,7 +145,7 @@ describe("ForwardDoor — navigates via the rail handler, labels from the rail",
         items={railFor(true)}
         activeId="home"
         onNavigate={onNavigate}
-        ledgerCount={3}
+        ledger={[]}
        
       >
         <ForwardDoor to="fix" label="Find what's worth fixing" />
@@ -161,7 +161,7 @@ describe("ForwardDoor — navigates via the rail handler, labels from the rail",
         items={railFor(true)}
         activeId="home"
         onNavigate={() => {}}
-        ledgerCount={0}
+        ledger={[]}
        
       >
         <ForwardDoor to="fix" label="Find what's worth fixing" />

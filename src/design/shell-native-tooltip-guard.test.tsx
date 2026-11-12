@@ -72,7 +72,7 @@ function duplicateTitleOffenders(root: HTMLElement): string[] {
 
 function renderShell() {
   return render(
-    <ShellV2 items={ITEMS} activeId="home" onNavigate={() => {}} ledgerCount={3} rig="Ryzen 7 · RX 9070 XT">
+    <ShellV2 items={ITEMS} activeId="home" onNavigate={() => {}} ledger={[]} rig="Ryzen 7 · RX 9070 XT">
       <p>Room content</p>
     </ShellV2>,
   );

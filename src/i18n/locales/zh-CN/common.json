@@ -23,7 +23,11 @@
       "learn": "什么真正有用——用实测数据说话",
       "lab": "跑分、延迟、诊断"
     },
-    "footerPre": "每一项更改均可撤销 ·",
+    "footerUndoable_other": "{{count}} 项更改可撤销",
+    "footerNothingToUndo": "没有生效中的更改需要撤销",
+    "footerNoSavedUndo_other": "{{count}} 项没有保存的撤销方式",
+    "footerOffOutside_other": "{{count}} 项已在 Compy 之外更改，无法撤销",
+    "footerNotRead": "台账尚未读取",
     "footerEmph": "台账 {{n}}",
     "footerOutbound": "对外连接：仅签名更新检查",
     "footerIncompletePre": "台账不完整 ·",

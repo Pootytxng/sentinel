@@ -165,6 +165,10 @@ export type AppliedChange = {
   // Additive, #[serde(default)] on the Rust side; absent/null for every other apply and undo.
   justified_by_experiment?: TrialLink | null;
   rollback_justified_by_experiment?: TrialLink | null;
+  // CR-footer-reversible: history.rs computes at read whether the row's stored history resolves to
+  // an undo (the resolution the undo itself runs first). false = its undo would fail before
+  // anything runs. Absent = an older payload that didn't say.
+  undo_contract?: boolean;
 };
 
 /** Which Trial an outcome-switch apply or undo was based on, copied into the Trust Ledger row. */

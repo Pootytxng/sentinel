@@ -48,6 +48,7 @@
     "startupToggleFailed": "暂时无法修改该启动项——请重试。",
     "applyFailed": "未能应用这项更改——可能需要管理员授权,或提示被取消了。设置未发生任何改变,请重试。",
     "rollbackFailed": "暂时无法撤销这项更改——请重试,或前往「信任台账」手动撤销。",
+    "noSavedUndo": "Compy 没有为「{{title}}」保存撤销方式(它的记录没有写明如何恢复)。设置未发生任何改变。",
     "recAppliedExternally": "「{{title}}」目前是开启状态,但并非 Compy 应用的,因此没有可回滚的记录。请前往 Windows 原本的设置位置手动关闭。",
     "openExportsFolderFailed": "无法打开导出文件夹。"
   },

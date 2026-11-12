@@ -118,7 +118,7 @@ function mountFrame() {
   const host = document.getElementById("frames");
   createRoot(host).render(
     <main className="app app-v2">
-      <ShellV2 items={railFor(true, true)} activeId="home" onNavigate={() => {}} ledgerCount={3} rig={null}>
+      <ShellV2 items={railFor(true, true)} activeId="home" onNavigate={() => {}} ledger={[]} rig={null}>
         <HomeConsole hw={hw} readiness={null} priorities={null} sessions={[]} changes={[]} onRunCheck={() => {}} onSeeInFix={() => {}} />
       </ShellV2>
     </main>,

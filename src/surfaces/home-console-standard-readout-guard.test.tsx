@@ -202,7 +202,7 @@ const mount = () =>
       items={railFor(true)}
       activeId="home"
       onNavigate={() => {}}
-      ledgerCount={1}
+      ledger={[]}
      
     >
       <HomeConsole

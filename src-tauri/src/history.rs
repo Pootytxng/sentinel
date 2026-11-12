@@ -370,6 +370,11 @@ pub(crate) struct AppliedChangeView {
     justified_by_experiment: Option<TrialLink>,
     #[serde(skip_serializing_if = "Option::is_none")]
     rollback_justified_by_experiment: Option<TrialLink>,
+    // CR-footer-reversible, computed at read, never persisted: whether this row's stored history
+    // resolves to an undo (`resolve_rollback`, the same resolution `commit_rollback` runs first). A
+    // row with no typed contract that no legacy synthesizer matches, or a snapshot that no longer
+    // parses, reads false: its undo would fail before anything runs. Read-only; no Windows read.
+    pub(crate) undo_contract: bool,
 }
 
 impl AppliedChangeView {
@@ -812,6 +817,7 @@ fn into_view_with(c: AppliedChange, reads: &LiveReads) -> AppliedChangeView {
         .hw_fingerprint
         .as_ref()
         .map(|f| same_rig(f, &crate::hardware::current_fingerprint()));
+    let undo_contract = resolve_rollback(&c).is_ok();
     AppliedChangeView {
         id: c.id,
         rec_id: c.rec_id,
@@ -836,6 +842,7 @@ fn into_view_with(c: AppliedChange, reads: &LiveReads) -> AppliedChangeView {
         rollback_justified_by_experiment: c.rollback_justified_by_experiment,
         changed_outside: c.changed_outside,
         changed_outside_holds: None,
+        undo_contract,
     }
 }
 
@@ -918,6 +925,7 @@ pub(crate) fn test_view(
         rollback_justified_by_experiment: None,
         changed_outside: None,
         changed_outside_holds: None,
+        undo_contract: reversible,
     }
 }
 
@@ -3543,6 +3551,35 @@ mod receipt_commit_tests {
         let err = roll_back(&mut history, 0, Ok(()), Ok(()), ActiveCheck::Off, &seen).expect_err("no contract");
         assert!(matches!(err, RollbackError::Failed(_)), "{err:?}");
         assert!(seen.rollbacks.borrow().is_empty() && seen.saves.borrow().is_empty());
+    }
+
+    // CR-footer-reversible: the view says whether a row's undo resolves, by the same resolution the
+    // undo runs first, so the footer can't count a row as undoable whose undo fails before it starts.
+    // Rolled-back rows, so the view takes no live read.
+    #[test]
+    fn the_view_says_whether_a_rows_undo_resolves() {
+        let mut typed = applied_fast_startup();
+        typed.status = "rolled_back".into();
+        assert!(resolve_rollback(&typed).is_ok());
+        assert!(into_view(typed.clone()).undo_contract);
+
+        let mut none = typed.clone();
+        none.rollback_action = None;
+        none.rec_id = "no-such-rec".into();
+        assert!(!into_view(none).undo_contract, "no contract, no synthesizer");
+
+        let mut garbled = typed;
+        garbled.snapshot = serde_json::json!({ "kind": "not-a-snapshot-kind" });
+        assert!(!into_view(garbled).undo_contract, "a snapshot that no longer parses");
+
+        let json = serde_json::to_value(into_view(applied_fast_startup_rolled_back())).unwrap();
+        assert_eq!(json["undo_contract"], serde_json::Value::Bool(true), "on the wire: {json}");
+    }
+
+    fn applied_fast_startup_rolled_back() -> AppliedChange {
+        let mut c = applied_fast_startup();
+        c.status = "rolled_back".into();
+        c
     }
 
     // #616 review: when the admin step's receipts can't be committed, the warnings for the items it

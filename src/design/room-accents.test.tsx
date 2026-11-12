@@ -435,7 +435,7 @@ describe("room-accents: picker is flag-gated (DEFAULT ON 2026-07-13; '0' failsaf
   });
 
   const shell = () => (
-    <ShellV2 items={railFor(true)} activeId="play" onNavigate={() => {}} ledgerCount={0}>
+    <ShellV2 items={railFor(true)} activeId="play" onNavigate={() => {}} ledger={[]}>
       <div>room</div>
     </ShellV2>
   );

@@ -202,7 +202,7 @@ const baseProps = {
 function renderHomeRaw(extra: Partial<React.ComponentProps<typeof HomeRoom>> = {}) {
   return render(
     <ConfirmProvider>
-      <ShellV2 items={railFor(true, true)} activeId="home" onNavigate={() => {}} ledgerCount={1}>
+      <ShellV2 items={railFor(true, true)} activeId="home" onNavigate={() => {}} ledger={[]}>
         <HomeRoom {...baseProps} {...extra} />
       </ShellV2>
     </ConfirmProvider>,

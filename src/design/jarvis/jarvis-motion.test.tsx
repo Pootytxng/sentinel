@@ -24,7 +24,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 const ITEMS = railFor(true);
 
 const shell = (activeId: "home" | "play" = "home") => (
-  <ShellV2 items={ITEMS} activeId={activeId} onNavigate={() => {}} ledgerCount={1}>
+  <ShellV2 items={ITEMS} activeId={activeId} onNavigate={() => {}} ledger={[]}>
     <div data-testid="room">room</div>
   </ShellV2>
 );
