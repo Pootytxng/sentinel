@@ -30,6 +30,8 @@
     "footerNoSavedUndo_other": "{{count}} have no saved undo",
     "footerOffOutside_one": "{{count}} changed outside Compy, no undo",
     "footerOffOutside_other": "{{count}} changed outside Compy, no undo",
+    "footerUnchecked_one": "{{count}} not checked",
+    "footerUnchecked_other": "{{count}} not checked",
     "footerNotRead": "Ledger not read yet",
     "footerEmph": "ledger {{n}}",
     "footerOutbound": "Outbound: signed update check only",

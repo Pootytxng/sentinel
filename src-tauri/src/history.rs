@@ -373,7 +373,10 @@ pub(crate) struct AppliedChangeView {
     // CR-footer-reversible, computed at read, never persisted: whether this row's stored history
     // resolves to an undo (`resolve_rollback`, the same resolution `commit_rollback` runs first). A
     // row with no typed contract that no legacy synthesizer matches, or a snapshot that no longer
-    // parses, reads false: its undo would fail before anything runs. Read-only; no Windows read.
+    // parses, reads false: its undo would fail before anything runs (every UI undo reaches
+    // `commit_rollback`, whose first step is that resolution; pinned by
+    // `a_row_with_no_rollback_contract_fails_before_anything_runs`). `resolve_rollback` is a serde
+    // parse plus a pure match: no I/O, no Windows read, no log.
     pub(crate) undo_contract: bool,
 }
 

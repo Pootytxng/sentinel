@@ -107,7 +107,7 @@ export function ShellV2({
   items: HomeRailItem[];
   activeId: HomeRailId | undefined;
   onNavigate: (id: HomeRailId) => void;
-  /** The Trust Ledger rows as `get_applied_changes` returned them; null until they have been read.
+  /** The Trust Ledger rows App last read (its `changes`); null until they have been read.
    *  The footer counts what can be undone from these (`undoTally`, the Applied cards' groups). */
   ledger: readonly AppliedChange[] | null;
   /** Glass redesign: a count shown on a dock door (Problems: an incident waiting to be looked at).
@@ -479,9 +479,10 @@ export function ShellV2({
                 {[
                   tally.undoable > 0
                     ? t("common.shellV2.footerUndoable", { count: tally.undoable })
-                    : t("common.shellV2.footerNothingToUndo"),
+                    : tally.unchecked === 0 && t("common.shellV2.footerNothingToUndo"),
                   tally.noSavedUndo > 0 && t("common.shellV2.footerNoSavedUndo", { count: tally.noSavedUndo }),
                   tally.offOutside > 0 && t("common.shellV2.footerOffOutside", { count: tally.offOutside }),
+                  tally.unchecked > 0 && t("common.shellV2.footerUnchecked", { count: tally.unchecked }),
                 ]
                   .filter(Boolean)
                   .join(" · ")}{" "}

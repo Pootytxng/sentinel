@@ -77,6 +77,9 @@ export type UndoTally = {
   /** Changes Compy applied that read off now without being undone (changed outside Compy, incl.
    *  a "Keep <plan>" record): no Applied card, so no Undo. */
   offOutside: number;
+  /** Applied changes with no live-check verdict at all (an older payload; history.rs checks every
+   *  applied row). Named, so "Nothing in effect to undo" is never said over a row nobody read. */
+  unchecked: number;
 };
 
 /**
@@ -90,8 +93,11 @@ export function undoTally(changes: readonly AppliedChange[]): UndoTally {
   const liveRecs = new Set(live.map((c) => c.rec_id));
   const undoable = live.filter(hasUndo).length;
   const off = new Set<string>();
+  const unchecked = new Set<string>();
   for (const c of changes) {
-    if (c.status === "applied" && c.active_check === "off" && !liveRecs.has(c.rec_id)) off.add(c.rec_id);
+    if (c.status !== "applied" || liveRecs.has(c.rec_id)) continue;
+    if (c.active_check === "off") off.add(c.rec_id);
+    else if (c.active_check == null) unchecked.add(c.rec_id);
   }
-  return { undoable, noSavedUndo: live.length - undoable, offOutside: off.size };
+  return { undoable, noSavedUndo: live.length - undoable, offOutside: off.size, unchecked: unchecked.size };
 }

@@ -421,6 +421,11 @@ describe("ShellV2 footer states only what the ledger it read can undo", () => {
     expect(undoLine(container)).toBe("Nothing in effect to undo · ledger 41");
   });
 
+  it("an applied row with no live-check verdict is named, and 'nothing to undo' is not said over it", () => {
+    const { container } = render(shell({ ledger: ledgerOf(4, { 2: { status: "applied", is_still_active: true, active_check: null } }) }));
+    expect(undoLine(container)).toBe("1 not checked · ledger 4");
+  });
+
   it("rows not read yet print no count and no claim", () => {
     const { container } = render(shell({ ledger: null }));
     expect(undoLine(container)).toBe("Ledger not read yet");
