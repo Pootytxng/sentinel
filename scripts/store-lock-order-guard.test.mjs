@@ -711,8 +711,10 @@ const LOCK_CENSUS = {
       "race_seam measures. It also reaches no other store: gaming_orchestrator.rs contains no call " +
       "into history, comparison or support_evidence at all. CR-gm-spans-trial: experiment.rs also " +
       "takes it, through the same try_lock-only session_op_guard, around a Trial start, the " +
-      "benchmark's apply and the outcome switch, and (CR-gm-spans-followups d) around the UI's " +
-      "apply, batch apply and undo commands, each after its store-gate checks; contention still answers 'try again' and never " +
+      "benchmark's apply and the outcome switch, and (CR-gm-spans-followups d, through " +
+      "plain_change_gate) around the UI's apply and batch apply, after their store-gate checks, and " +
+      "the UI's undo, which takes no store gate; the batch apply is also the dark stack benchmark's " +
+      "apply, on its own thread. Only a change Gaming Mode can touch takes it. Contention still answers 'try again' and never " +
       "waits. Under it, a Gaming Mode start reads experiments.json without the store gate (an " +
       "atomic-rename file read, no lock) and briefly takes benchmark_trial::H, a leaf that is " +
       "never held across another lock, so neither adds a cycle edge. The try_lock property is what this " +

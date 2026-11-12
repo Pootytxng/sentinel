@@ -3054,10 +3054,7 @@ pub(crate) fn apply_recommendation(
             return Err(refusal);
         }
         // CR-gm-spans-followups (d): and a Gaming Mode session's, with its gate held through the write.
-        let _gm = crate::gaming_orchestrator::session_op_guard()?;
-        if let Some(refusal) = crate::gaming_orchestrator::plain_change_refusal(std::iter::once(rec_id.as_str())) {
-            return Err(refusal);
-        }
+        let _gm = crate::gaming_orchestrator::plain_change_gate(std::iter::once(rec_id.as_str()))?;
         return crate::history::apply_recommendation(rec_id, rec_title);
     }
     let _g = lock_store()?;
@@ -3068,10 +3065,7 @@ pub(crate) fn apply_recommendation(
     if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
         return Err(refusal);
     }
-    let _gm = crate::gaming_orchestrator::session_op_guard()?;
-    if let Some(refusal) = crate::gaming_orchestrator::plain_change_refusal(std::iter::once(rec_id.as_str())) {
-        return Err(refusal);
-    }
+    let _gm = crate::gaming_orchestrator::plain_change_gate(std::iter::once(rec_id.as_str()))?;
     crate::history::apply_recommendation(rec_id, rec_title)
 }
 
@@ -3079,14 +3073,12 @@ pub(crate) fn apply_recommendation(
 /// undo itself is `history::rollback_change`, which the Trial and benchmark restores call directly;
 /// this command adds one refusal in front of it: an undo of a setting a Gaming Mode session holds
 /// would be put back on by that session's stop. Gaming Mode's operation gate (try_lock only) is held
-/// from the check through the undo, so a session can't start in between.
+/// from the check through the undo, so a session can't start in between. The row's setting is read
+/// first, outside the gate (a row's rec id never changes).
 #[tauri::command]
 pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
-    let _gm = crate::gaming_orchestrator::session_op_guard()?;
     let rec_id = crate::history::rec_id_of_change(&change_id)?;
-    if let Some(refusal) = crate::gaming_orchestrator::plain_change_refusal(rec_id.iter().map(String::as_str)) {
-        return Err(refusal);
-    }
+    let _gm = crate::gaming_orchestrator::plain_change_gate(rec_id.iter().map(String::as_str))?;
     crate::history::rollback_change(change_id)
 }
 
@@ -3157,10 +3149,7 @@ pub(crate) fn apply_recommendations_batch(
         if let Some(refusal) = bench_refusal(items.iter().map(|i| i.rec_id.as_str())) {
             return Err(refusal);
         }
-        let _gm = crate::gaming_orchestrator::session_op_guard()?;
-        if let Some(refusal) = crate::gaming_orchestrator::plain_change_refusal(items.iter().map(|i| i.rec_id.as_str())) {
-            return Err(refusal);
-        }
+        let _gm = crate::gaming_orchestrator::plain_change_gate(items.iter().map(|i| i.rec_id.as_str()))?;
         return crate::history::apply_recommendations_batch(items);
     }
     let _g = lock_store()?;
@@ -3171,10 +3160,7 @@ pub(crate) fn apply_recommendations_batch(
     if let Some(refusal) = bench_refusal(items.iter().map(|i| i.rec_id.as_str())) {
         return Err(refusal);
     }
-    let _gm = crate::gaming_orchestrator::session_op_guard()?;
-    if let Some(refusal) = crate::gaming_orchestrator::plain_change_refusal(items.iter().map(|i| i.rec_id.as_str())) {
-        return Err(refusal);
-    }
+    let _gm = crate::gaming_orchestrator::plain_change_gate(items.iter().map(|i| i.rec_id.as_str()))?;
     crate::history::apply_recommendations_batch(items)
 }
 
@@ -5344,8 +5330,8 @@ mod experiment_tests {
         let bare = handler.lines().any(|l| l.trim() == "rollback_change," || l.trim() == "history::rollback_change,");
         assert!(!bare, "history's bare undo is not a command");
         let src = include_str!("experiment.rs");
-        let gate = concat!("let _gm = crate::gaming_orchestrator::", "session_op_guard()?;");
-        let check = concat!("crate::gaming_orchestrator::", "plain_change_refusal(");
+        // The gate is held (bound to `_gm`, not dropped) from the check through the write.
+        let gate = concat!("let _gm = crate::gaming_orchestrator::", "plain_change_gate(");
         for (sig, write, arms) in [
             ("pub(crate) fn apply_recommendation(", concat!("crate::history::", "apply_recommendation(rec_id"), 2),
             ("pub(crate) fn apply_recommendations_batch(", concat!("crate::history::", "apply_recommendations_batch(items)"), 2),
@@ -5357,9 +5343,8 @@ mod experiment_tests {
             for _ in 0..arms {
                 let rest = &body[from..];
                 let g = rest.find(gate).expect(sig);
-                let c = rest.find(check).expect(sig);
                 let w = rest.find(write).expect(sig);
-                assert!(g < c && c < w, "{sig}: gate, check, then the write");
+                assert!(g < w, "{sig}: the gate and check, then the write");
                 from += w + write.len();
             }
             assert!(!body[from..].contains(write), "{sig}: no unchecked write");
