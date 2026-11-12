@@ -617,14 +617,16 @@ fn count_session(
     if other_moved.is_some_and(|t| t <= end) {
         return Count::Not(R::OtherCompyChange);
     }
+    // CR-trial-gm-between: checked before the pairing, which now also lists a Gaming Mode difference
+    // as a changed condition; this keeps the session's own, more specific reason.
+    if reference.gaming_mode_active.is_none() || reference.gaming_mode_active != s.gaming_mode_active {
+        return Count::Not(R::GamingModeDiffers);
+    }
     let still_current = conditions
         .zip(crate::noise_floor::NoiseConditions::of_session(s))
         .is_some_and(|(then, now)| crate::noise_floor::still_current(then, &now));
     if !still_current || pairing.verdict != Comparability::Comparable || !pairing.changed_context.is_empty() {
         return Count::Not(R::ConditionsChanged);
-    }
-    if reference.gaming_mode_active.is_none() || reference.gaming_mode_active != s.gaming_mode_active {
-        return Count::Not(R::GamingModeDiffers);
     }
     match counts_vs(reference, s) {
         Counts::ThisOneMore => {}

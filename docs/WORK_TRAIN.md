@@ -93,9 +93,26 @@ release checklist); no new rules.
   CR-range3-nits, CR-gm-restore-partial, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
   exit proofs above; P8-first-advanced waits on P4 (Phase 8, not needed for v1.0).
 - CR-ultimate-identity: landed `ec326810` (2026-11-11 s19), not installed yet; follow-ups in CR-ultimate-followups.
-- Known pre-existing gap (third range review, 2026-11-12), not for action yet: **CR-trial-gm-between**, establish first
-  whether a Trial notices a Gaming Mode session started and stopped between its two sessions (it would confound the
-  result).
+- [x] **CR-trial-gm-between** (third range review, 2026-11-12) Establish first whether a Trial notices a Gaming Mode
+  session started and stopped between its two sessions (it would confound the result).
+  FINDING (s22, from the code): it did not notice Gaming Mode on for one session and off for the other. A Trial's
+  confound paths are the Trust Ledger watermark and `other_compy_change` (Gaming Mode writes its own contract, never
+  ledger rows) and `comparability::derive`, which compared GPU, RAM, display mode, driver, resolution, refresh,
+  graphics API, game build, frame generation, Windows build, display and capture method, never Gaming Mode; each FPS
+  session already recorded `gaming_mode_active` (any tick). A session that started AND stopped cleanly between the two
+  put its settings back (same measured state); one whose restore failed or is pending keeps its file, so later
+  sessions record Gaming Mode on and the difference is caught (an unparseable file reads off: residual).
+  FIX (s22, SHAs in the merge): `derive` checks `gaming_mode_active` like the other conditions (both recorded and
+  different = a changed condition, Partial; one side only = missing context), so the existing `with_comparability`
+  fold makes such a Trial `confounded` and restores; no new mutation path; real-play's own Gaming Mode check now runs
+  before the pairing so it keeps its specific reason; the pair receipt names it (en + zh-CN). Reviews r1 opus
+  REQUEST-CHANGES (MUST-FIX: realplay reason order, taken) + sonnet APPROVE-WITH-NITS; r2 in the session log. Queued:
+  CR-trial-gm-baseline-overlap.
+- [ ] **CR-trial-gm-baseline-overlap** (r1 opus + sonnet SHOULD-FIX of CR-trial-gm-between) Gaming Mode on for BOTH
+  sessions reads comparable, but a Gaming Mode session that set the Trial's setting during the baseline (e.g.
+  game-bar-disable, sysmain-disable; trial_candidates.rs ~656/668) makes both sessions run the same state, so the
+  Trial reads "no change" and puts the setting back as useless. Trial-side rule (not in `derive`): a baseline with
+  Gaming Mode on, for a setting Gaming Mode can change, is confounded or missing context. Two reviews.
 
 ## Queue
 
