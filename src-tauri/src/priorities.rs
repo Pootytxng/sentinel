@@ -46,6 +46,24 @@ pub(crate) struct Priorities {
     /// R3 Lane B: advisory upgrade-path block — present ONLY when a verdict
     /// already names hardware as the limiter. Never invents a detection.
     upgrade_path: Option<UpgradePath>,
+    /// P9-summary-gpu-limit: per game, its newest measured session, only when that session was
+    /// GPU-limited by the same sustained rule as the upgrade path. A game whose newest measured
+    /// session wasn't, or recorded no share, is absent (never guessed).
+    gpu_limited_games: Vec<GameGpuLimit>,
+}
+
+/// One game whose newest measured session was GPU-limited (the sustained rule).
+#[derive(Serialize, Debug, PartialEq)]
+pub(crate) struct GameGpuLimit {
+    /// The session's `process_name`, as the Trial summary keys games.
+    game: String,
+    /// Whole-percent share of that session's GPU readings at or above the saturation threshold.
+    share_pct: u64,
+    /// That session's peak GPU usage.
+    peak_pct: u64,
+    /// The per-reading load at or above which a reading counts toward `share_pct` (sessions.rs
+    /// `GPU_LIMITED_PCT`), so the line can say what the share is a share of.
+    threshold_pct: u64,
 }
 
 // ── Upgrade path (R3 Lane B — advisory-only, doctrine money stack #1 groundwork) ──────────────
@@ -148,7 +166,41 @@ impl GpuLoadRead {
 }
 
 fn gpu_load_read(sessions: &Value) -> Option<GpuLoadRead> {
-    let s = crate::sessions::newest_measured_row(sessions)?;
+    gpu_load_read_row(crate::sessions::newest_measured_row(sessions)?)
+}
+
+/// P9-summary-gpu-limit: for each game, its newest measured session (sessions arrive newest
+/// first; a `samples: 0` row is skipped, as in `newest_measured_row`), kept only when sustained.
+/// Another game's session never counts for a game. A row with no game name is skipped.
+fn build_gpu_limited_games(sessions: &Value) -> Vec<GameGpuLimit> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for row in sessions.as_array().map(Vec::as_slice).unwrap_or_default() {
+        if row.get("samples").and_then(Value::as_u64) == Some(0) {
+            continue;
+        }
+        let Some(game) = row.get("process_name").and_then(Value::as_str).map(str::trim).filter(|g| !g.is_empty()) else {
+            continue;
+        };
+        // Review r1: one game whatever the case Windows reported its process name in.
+        if !seen.insert(game.to_lowercase()) {
+            continue; // an older session of a game already decided by its newest
+        }
+        if let Some(read) = gpu_load_read_row(row) {
+            if let Some(share_pct) = read.sustained_share() {
+                out.push(GameGpuLimit {
+                    game: game.to_string(),
+                    share_pct,
+                    peak_pct: read.peak_pct,
+                    threshold_pct: GPU_LIMITED_PCT,
+                });
+            }
+        }
+    }
+    out
+}
+
+fn gpu_load_read_row(s: &Value) -> Option<GpuLoadRead> {
     let peak_pct = s.get("peak_gpu_usage_pct").and_then(Value::as_u64)?;
     let load = s
         .get("gpu_load")
@@ -447,6 +499,7 @@ pub(crate) fn build_priorities(
         not_worth_touching,
         session_hint: build_session_hint(sessions),
         upgrade_path: build_upgrade_path(readiness, sessions),
+        gpu_limited_games: build_gpu_limited_games(sessions),
     }
 }
 
@@ -870,5 +923,53 @@ mod priority_tests {
         // No panic; with no signals there are no limiters and no hint.
         assert!(p.limiters.is_empty());
         assert!(p.session_hint.is_none());
+        assert!(p.gpu_limited_games.is_empty());
+    }
+
+    // P9-summary-gpu-limit: per game, only its own newest measured session decides, by the same
+    // sustained rule as the upgrade path; another game's session never counts.
+    #[test]
+    fn each_game_is_gpu_limited_only_by_its_own_newest_measured_session() {
+        let row = |game: &str, samples: u64, busy: u64| {
+            json!({ "process_name": game, "samples": samples, "peak_gpu_usage_pct": 99, "gpu_load": { "readings": 100, "busy": busy } })
+        };
+        // Newest first: A's newest is limited (an older unlimited A row doesn't matter); B's newest is
+        // not limited (its older limited row doesn't count); C's newest measured nothing (samples 0,
+        // skipped), so its older limited row is its newest measured; a row with no game is skipped.
+        let sessions = json!([
+            row("a.exe", 500, 80),
+            row("b.exe", 500, 10),
+            row("c.exe", 0, 100),
+            { "samples": 500, "peak_gpu_usage_pct": 99, "gpu_load": { "readings": 100, "busy": 100 } },
+            row("a.exe", 500, 0),
+            row("b.exe", 500, 90),
+            row("c.exe", 500, 70),
+        ]);
+        let got = build_gpu_limited_games(&sessions);
+        assert_eq!(
+            got,
+            vec![
+                GameGpuLimit { game: "a.exe".into(), share_pct: 80, peak_pct: 99, threshold_pct: 95 },
+                GameGpuLimit { game: "c.exe".into(), share_pct: 70, peak_pct: 99, threshold_pct: 95 },
+            ]
+        );
+        // Review r1: the case Windows reported the name in doesn't make a second game; and a game
+        // whose newest measured session recorded no share is absent though an older one was limited.
+        let cased = json!([row("Game.exe", 500, 10), row("game.exe", 500, 90)]);
+        assert!(build_gpu_limited_games(&cased).is_empty(), "the newest of one game decides");
+        let no_share = json!([
+            { "process_name": "e.exe", "samples": 500, "peak_gpu_usage_pct": 99 },
+            row("e.exe", 500, 90),
+        ]);
+        assert!(build_gpu_limited_games(&no_share).is_empty(), "the newest measured session decides");
+        // The same sustained rule: 99 of 200 is not half; under the reading floor is no claim.
+        let edge = json!([{ "process_name": "d.exe", "peak_gpu_usage_pct": 99, "gpu_load": { "readings": 200, "busy": 99 } }]);
+        assert!(build_gpu_limited_games(&edge).is_empty());
+        let brief = json!([{ "process_name": "d.exe", "peak_gpu_usage_pct": 99, "gpu_load": { "readings": 10, "busy": 10 } }]);
+        assert!(build_gpu_limited_games(&brief).is_empty());
+        // A row that recorded no share (an older Compy) makes no claim.
+        assert!(build_gpu_limited_games(&json!([{ "process_name": "d.exe", "peak_gpu_usage_pct": 99 }])).is_empty());
+        let p = build_priorities(&readiness(vec![]), &json!([]), &json!([]), &sessions);
+        assert_eq!(p.gpu_limited_games.len(), 2, "carried on the priorities payload");
     }
 }

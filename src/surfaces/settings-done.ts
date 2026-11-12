@@ -14,7 +14,10 @@ export type SettingsDoneLine =
   // The top limiter is a setting or software item (monitor refresh, driver age, power plan...).
   | { kind: "setting-limiter"; title: string }
   // The top limiter is a part of the PC. Named only; Compy does not pick a part to buy.
-  | { kind: "part-limiter"; title: string };
+  | { kind: "part-limiter"; title: string }
+  // P9-summary-gpu-limit: this game's newest measured session was GPU-limited (the sustained rule),
+  // so the GPU is the measured limiter for this game, with its share; never "nothing holding it back".
+  | { kind: "gpu-limiter"; sharePct: number; thresholdPct: number };
 
 const AGGREGATE_REC_ROWS = new Set(["pending-safe-recs", "applied-changes"]);
 
@@ -25,9 +28,14 @@ const AGGREGATE_REC_ROWS = new Set(["pending-safe-recs", "applied-changes"]);
 export function settingsDoneLine(
   headline: GameTestSummary["headline"],
   priorities: Priorities | null | undefined,
+  game?: string,
 ): SettingsDoneLine | null {
   if (headline !== "finished-supported-tests") return null;
   if (!priorities) return { kind: "not-measured" };
+  // P9-summary-gpu-limit: this game's own newest measured session, never another game's.
+  // Review r1: matched on the trimmed, case-folded process name (Windows reports it in any case).
+  const key = game?.trim().toLowerCase();
+  const gpu = key ? (priorities.gpu_limited_games ?? []).find((g) => g.game.trim().toLowerCase() === key) : undefined;
   // The two aggregate rows that re-state recommendations (Check.tsx's one-mention law) are not
   // limiters here: on a finished summary, "safe tweaks not applied" are exactly the changes Compy
   // just tested and put back for no measured gain (desk review 2026-10-31: the line named Trim
@@ -38,6 +46,11 @@ export function settingsDoneLine(
     return LIMITER_AWAY.has(top.id)
       ? { kind: "setting-limiter", title: top.title }
       : { kind: "part-limiter", title: top.title };
+  }
+  // A measured GPU limit for this game outranks "nothing limiting" and "not measured": it is a
+  // measurement of this game, where the check's rows are PC-wide.
+  if (gpu && Number.isFinite(gpu.share_pct) && Number.isFinite(gpu.threshold_pct)) {
+    return { kind: "gpu-limiter", sharePct: gpu.share_pct, thresholdPct: gpu.threshold_pct };
   }
   // An unread limiter means the check could not say; "nothing is limiting" would be a claim it never made.
   if (limiters.some((l) => l.status === "unknown")) return { kind: "not-measured" };
