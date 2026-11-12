@@ -2962,6 +2962,17 @@ pub(crate) fn apply_outcome_choice(
         return Err("Trials aren't enabled in this build.".to_string());
     }
     let _g = lock_store()?;
+    // CR-bench-holds-setting: a keep re-apply on top of the benchmark's measurement would be the same
+    // stale "applied" row once the benchmark rolls back.
+    if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
+        return Err(refusal);
+    }
+    // CR-gm-spans-trial (review r1): nor while a Gaming Mode session holds it (its stop would put its
+    // own snapshot back over the kept change), or is starting or stopping.
+    let _gm = crate::gaming_orchestrator::session_op_guard()?;
+    if let Some(refusal) = crate::gaming_orchestrator::session_holds_refusal(&rec_id) {
+        return Err(refusal);
+    }
     let records = load_store().experiments;
     keep_outcome_locked(&records, &rec_id, &experiment_id, |link| {
         crate::history::apply_recommendation_citing(&rec_id, &rec_title, link)
@@ -2979,6 +2990,14 @@ pub(crate) fn undo_outcome_choice(change_id: String, experiment_id: String) -> R
     }
     let _g = lock_store()?;
     let records = load_store().experiments;
+    // CR-gm-spans-trial (review r1): an undo while a Gaming Mode session holds this Trial's setting
+    // would be put back by the session's stop; refused, as is one while a session starts or stops.
+    let _gm = crate::gaming_orchestrator::session_op_guard()?;
+    if let Some(rec) = records.iter().find(|e| e.id == experiment_id) {
+        if let Some(refusal) = crate::gaming_orchestrator::session_holds_refusal(&rec.rec_id) {
+            return Err(refusal);
+        }
+    }
     undo_outcome_locked(&records, &experiment_id, |cite| {
         crate::history::rollback_change_citing(&change_id, cite)
     })
@@ -3030,6 +3049,10 @@ pub(crate) fn apply_recommendation(
     rec_title: String,
 ) -> Result<crate::history::AppliedChangeView, String> {
     if !experiment_gate() {
+        // Review r1: the benchmark's hold holds with Trials switched off too.
+        if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
+            return Err(refusal);
+        }
         return crate::history::apply_recommendation(rec_id, rec_title);
     }
     let _g = lock_store()?;
@@ -3037,6 +3060,66 @@ pub(crate) fn apply_recommendation(
     if let Some(refusal) = held_by_trial_refusal(&records, std::iter::once(rec_id.as_str())) {
         return Err(refusal);
     }
+    if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
+        return Err(refusal);
+    }
+    crate::history::apply_recommendation(rec_id, rec_title)
+}
+
+/// CR-gm-spans-trial: the settings every open (Pending or Running) Trial holds, for Gaming Mode's
+/// start. Read checked and without the store gate (Gaming Mode's start never waits on a Trial); a
+/// store that can't be read is an error, since it could hold the running Trial.
+pub(crate) fn open_trial_rec_ids() -> Result<Vec<String>, String> {
+    if !experiment_gate() {
+        return Ok(Vec::new());
+    }
+    Ok(open_rec_ids(&load_store_checked()?.experiments))
+}
+
+/// PURE: the rec ids of the open (Pending or Running) Trials in `records`.
+fn open_rec_ids(records: &[ExperimentRecord]) -> Vec<String> {
+    records
+        .iter()
+        .filter(|e| matches!(e.status, ExperimentStatus::Pending | ExperimentStatus::Running))
+        .map(|e| e.rec_id.clone())
+        .collect()
+}
+
+/// CR-bench-holds-setting: the benchmark tweak trial's hold, read now.
+pub(crate) fn bench_refusal<'a>(rec_ids: impl Iterator<Item = &'a str>) -> Option<String> {
+    crate::benchmark_trial::bench_held_refusal(crate::benchmark_trial::held_now().as_ref(), rec_ids)
+}
+
+/// The benchmark tweak trial's apply: the same Trial refusal and gate as [`apply_recommendation`],
+/// and, under that gate before the apply runs, the setting is marked held by this trial run
+/// (`token`) so a UI apply of it is refused until the trial has rolled it back
+/// (CR-bench-holds-setting). A setting another bench run still holds is refused too.
+pub(crate) fn apply_for_bench_trial(
+    rec_id: String,
+    rec_title: String,
+    token: u64,
+) -> Result<crate::history::AppliedChangeView, String> {
+    let _g = if experiment_gate() {
+        let g = lock_store()?;
+        let records = load_store_checked()?.experiments;
+        if let Some(refusal) = held_by_trial_refusal(&records, std::iter::once(rec_id.as_str())) {
+            return Err(refusal);
+        }
+        Some(g)
+    } else {
+        None
+    };
+    if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
+        return Err(refusal);
+    }
+    // CR-gm-spans-trial: a Gaming Mode session holding this setting would put its snapshot back on
+    // stop, under the measurement (or over the benchmark's rollback). Gaming Mode's operation gate
+    // (try_lock only) is held through the hold and the apply, as in a Trial start.
+    let _gm = crate::gaming_orchestrator::session_op_guard()?;
+    if let Some(refusal) = crate::gaming_orchestrator::session_holds_refusal(&rec_id) {
+        return Err(refusal);
+    }
+    crate::benchmark_trial::hold(token, &rec_id, &rec_title);
     crate::history::apply_recommendation(rec_id, rec_title)
 }
 
@@ -3047,11 +3130,17 @@ pub(crate) fn apply_recommendations_batch(
     items: Vec<crate::history::BatchApplyItem>,
 ) -> Result<crate::history::BatchApplyReport, String> {
     if !experiment_gate() {
+        if let Some(refusal) = bench_refusal(items.iter().map(|i| i.rec_id.as_str())) {
+            return Err(refusal);
+        }
         return crate::history::apply_recommendations_batch(items);
     }
     let _g = lock_store()?;
     let records = load_store_checked()?.experiments;
     if let Some(refusal) = held_by_trial_refusal(&records, items.iter().map(|i| i.rec_id.as_str())) {
+        return Err(refusal);
+    }
+    if let Some(refusal) = bench_refusal(items.iter().map(|i| i.rec_id.as_str())) {
         return Err(refusal);
     }
     crate::history::apply_recommendations_batch(items)
@@ -3330,6 +3419,19 @@ pub(crate) fn start_experiment(
     // Step 1 (§4.1): read the setting before anything is recorded or changed. Only a setting that
     // reads as not yet changed can start, so the restore has a verified state to return to.
     if let Some(why) = pre_apply_refusal(crate::history::probe_rec_target(&rec_id)) {
+        return Err(format!("experiment not started — {why}"));
+    }
+    // CR-bench-holds-setting (review r1): a setting the benchmark tweak trial holds is refused by name,
+    // even in the moment before its apply lands (its hold is set under this same gate).
+    if let Some(why) = bench_refusal(std::iter::once(rec_id.as_str())) {
+        return Err(format!("experiment not started — {why}"));
+    }
+    // CR-gm-spans-trial: a Gaming Mode session holding this setting would put its own snapshot back
+    // when it stops, over the Trial's change or its restore. Review r1 (sonnet MUST-FIX): Gaming
+    // Mode's own operation gate (try_lock only) is held from this check through the record and the
+    // apply, so a session can't start in between, and none is starting or stopping now.
+    let _gm = crate::gaming_orchestrator::session_op_guard().map_err(|why| format!("experiment not started — {why}"))?;
+    if let Some(why) = crate::gaming_orchestrator::session_holds_refusal(&rec_id) {
         return Err(format!("experiment not started — {why}"));
     }
 
@@ -5172,6 +5274,36 @@ mod experiment_tests {
     }
 
     #[test]
+    fn gaming_mode_sees_every_open_trials_setting() {
+        // CR-gm-spans-trial: Gaming Mode skips the settings open Trials hold; a concluded one holds none.
+        let done = judged("exp:old", "hags-enable", "no-change", TrialOutcome::Recommended);
+        let mut running = judged("exp:run", "game-mode", "no-change", TrialOutcome::Recommended);
+        running.status = ExperimentStatus::Running;
+        let mut pending = judged("exp:pend", "power-ultimate", "no-change", TrialOutcome::Recommended);
+        pending.status = ExperimentStatus::Pending;
+        assert_eq!(open_rec_ids(&[done.clone(), running, pending]), vec!["game-mode", "power-ultimate"]);
+        assert!(open_rec_ids(&[done]).is_empty());
+        // And a Trial start (and the benchmark's apply) checks the session's contract under its gate.
+        let src = include_str!("experiment.rs");
+        for (sig, write) in [
+            ("pub(crate) fn start_experiment(", concat!("crate::history::", "apply_recommendation(")),
+            ("pub(crate) fn apply_for_bench_trial(", concat!("crate::history::", "apply_recommendation(")),
+            ("pub(crate) fn apply_outcome_choice(", concat!("crate::history::", "apply_recommendation_citing(")),
+            ("pub(crate) fn undo_outcome_choice(", concat!("crate::history::", "rollback_change_citing(")),
+        ] {
+            let body = src.split_once(sig).map(|(_, r)| r).expect(sig);
+            // Review r1 (sonnet MUST-FIX): Gaming Mode's operation gate is held from the check on, so
+            // a session can't start between the check and the record or the ledger write.
+            let gate = body.find(concat!("gaming_orchestrator::", "session_op_guard()")).expect(sig);
+            let check = body.find(concat!("gaming_orchestrator::", "session_holds_refusal(")).expect(sig);
+            let write = body.find(write).expect(sig);
+            assert!(gate < check && check < write, "{sig}: gate, check, then the write");
+            let held = &body[..write];
+            assert!(held.contains(concat!("let _gm = crate::gaming_orchestrator::", "session_op_guard()")), "{sig}: held, not dropped");
+        }
+    }
+
+    #[test]
     fn the_ui_apply_commands_refuse_under_the_store_gate_before_the_ledger_write() {
         // The commands the webview reaches are this module's, not history's bare applies.
         let lib = include_str!("lib.rs");
@@ -5186,7 +5318,8 @@ mod experiment_tests {
         for bare in ["crate::history::apply_recommendation(", "crate::history::apply_recommendations_batch("] {
             assert!(!bench.contains(bare), "benchmark_trial.rs calls {bare}");
         }
-        for gated in ["crate::experiment::apply_recommendation(", "crate::experiment::apply_recommendations_batch("] {
+        // CR-bench-holds-setting: the tweak trial applies through the gated apply that also marks it held.
+        for gated in ["crate::experiment::apply_for_bench_trial(", "crate::experiment::apply_recommendations_batch("] {
             assert!(bench.contains(gated), "benchmark_trial.rs applies through {gated}");
         }
         assert!(!bench.contains("use crate::history::apply"), "no bare import of history's applies");
@@ -5199,9 +5332,28 @@ mod experiment_tests {
             let gate = body.find("let _g = lock_store()?;").expect("the gate is taken");
             let read = body.find("load_store_checked()?").expect("the store is read, an unreadable one refuses");
             let refuse = body.find("held_by_trial_refusal(").expect("the refusal is checked");
+            // CR-bench-holds-setting: and the benchmark tweak trial's hold, under the same gate.
+            let bench = body.rfind("bench_refusal(").expect("the benchmark hold is checked");
+            // Review r1: and before the Trials-off early return too.
+            let off = body.find("if !experiment_gate() {").expect("gate-off branch");
+            assert!(body[off..gate].contains("bench_refusal("), "{sig}: the gate-off branch checks the hold");
             let write = body.rfind(call.trim_end_matches("\n}")).expect("the ledger is written");
-            assert!(gate < read && read < refuse && refuse < write, "{sig}: gate, read, refuse, then write");
+            assert!(gate < read && read < refuse && refuse < bench && bench < write, "{sig}: gate, read, refuse, then write");
         }
+        // The keep re-apply too, under its gate, before its ledger write.
+        let body = src
+            .split_once("pub(crate) fn apply_outcome_choice(")
+            .and_then(|(_, r)| r.split_once("\n}\n"))
+            .map(|(b, _)| b)
+            .expect("keep");
+        let (gate, bench) = (body.find("let _g = lock_store()?;").expect("gate"), body.find("bench_refusal(").expect("bench"));
+        let write = body.find("crate::history::apply_recommendation_citing(").expect("write");
+        assert!(gate < bench && bench < write, "keep: gate, bench hold, then write");
+        // Review r1 MUST-FIX (sonnet): a Trial start too, under its gate, before anything is recorded.
+        let start = src.split_once("pub(crate) fn start_experiment(").map(|(_, r)| r).expect("start");
+        let (gate, bench) = (start.find("let _g = lock_store()?;").expect("gate"), start.find("bench_refusal(").expect("bench"));
+        let record = start.find("store.experiments.push(").expect("record first");
+        assert!(gate < bench && bench < record, "start: gate, bench hold, then the record");
     }
 
     #[test]

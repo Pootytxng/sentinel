@@ -199,13 +199,47 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       moved); on this branch alone the guard is 49/49. s18: guard 49/49, full vitest 532/536 (3 site-app suites + the
       doc-truth wording of this note, fixed here), cargo 1836/0, clippy clean. Known cost: an unreadable
       `experiments.json` refuses plain applies too, saying try again. Queued: CR-bench-holds-setting, CR-gm-spans-trial.
-- [ ] **CR-bench-holds-setting** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) The benchmark tweak trial holds a
+- [x] **CR-bench-holds-setting** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) The benchmark tweak trial holds a
       setting for minutes and rolls it back from its snapshot; a UI apply of that setting meanwhile makes the same
       stale-"applied" row. The new refusal only knows experiment Trials (`benchmark_trial.rs` start_tweak_trial).
-- [ ] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game
+      Done `53c52905`, `9171bd8b` (2026-11-11 s19, CODE-ONLY, not installed): the tweak trial applies through
+      `experiment::apply_for_bench_trial`, which under the Trial store gate marks the setting held (token per run) before
+      the apply; a guard declared before the RollbackGuard releases it after the rollback ran, on every exit. The UI
+      apply, batch, Trial keep and Trial start refuse a held setting before anything runs ("... is being measured by the
+      benchmark right now ... Nothing was changed.", English like the Trial refusal). No new mutation path; rollback
+      untouched. Reviews r1 opus APPROVE-WITH-NITS, sonnet REQUEST-CHANGES (MUST-FIX: Trial start unchecked, taken);
+      r2 opus + sonnet APPROVE-WITH-NITS (prefix nit taken). cargo 1841/0, clippy clean, full vitest 535/538 (3 site-app
+      suites). Queued: CR-bench-preapply-read, CR-bench-stack-hold.
+- [ ] **CR-bench-preapply-read** (r1 opus SHOULD-FIX + r2 follow-up of CR-bench-holds-setting; pre-existing) The benchmark
+      applies without reading the setting first (only the Benchmark tab's mount-time list skips applied ones): over an
+      already-applied setting it snapshots "on", so a Ledger undo of the older row during the measurement is put back on by
+      the trial's rollback, and the "change off" baseline is wrong. Refuse in `apply_for_bench_trial` with
+      `pre_apply_refusal(probe_rec_target(..))` under the gate, as `start_experiment` does; also consider releasing the
+      hold only on a successful rollback. Rollback boundary: two reviews.
+- [ ] **CR-bench-stack-hold** (r1 sonnet SHOULD-FIX of CR-bench-holds-setting) The DARK aggregate-stack trial
+      (`stack_trial_gate()` false) holds nothing; before arming it, hold every setting it applies the way the tweak trial does.
+- [x] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game
       Bar, the power plan, USB/PCIe and service suspends into its own contract; a session spanning a Trial's restore
       re-applies the Trial's change on stop, after the Trial reads Restored (`gaming_orchestrator.rs` ~409-455; experiment.rs
       never checks Gaming Mode state). Rollback boundary: two reviews.
+      Done `d3aebc9e`, `0f0b6914`, `f45cd333` (2026-11-11 s19, CODE-ONLY, not installed): Gaming Mode's start reads the
+      settings every open Trial and the benchmark's tweak trial hold (an unreadable Trial store refuses the start) before
+      it writes its contract and skips those steps (never snapshotted, so never put back; each Trial rec moves the setting
+      in Gaming Mode's own direction). A Trial start, the benchmark's apply and the outcome switch (keep and put back)
+      refuse a setting a session contract on disk holds (an unreadable contract refuses), and hold Gaming Mode's
+      try_lock-only operation gate from that check through their record and ledger write, so neither side can slip in
+      between. Reviews r1 sonnet REQUEST-CHANGES (MUST-FIX: the start race, taken), opus APPROVE-WITH-NITS (3 SHOULD-FIX
+      taken); r2 opus + sonnet APPROVE-WITH-NITS (guard-pairing test and census wording taken). cargo 1847/0, clippy
+      clean, full vitest 535/538 (3 site-app suites). What a user sees: a Gaming Mode session during a Trial leaves the
+      Trial's setting alone (one fewer line in its change list); a Trial start, keep or put-back while Gaming Mode holds
+      the setting says "Stop Gaming Mode first. Nothing was changed." (English, like the other Trial refusals). Queued:
+      CR-gm-spans-followups.
+- [ ] **CR-gm-spans-followups** (r1/r2 reviews of CR-gm-spans-trial; pre-existing or UI) (a) a quarantined
+      `gaming-session.orphaned*` file alone blocks every Trial start with "Recover or end Gaming Mode first", which the
+      user can't do: name the file (`pending_contract_files`) and say how; (b) a visible line in Gaming Mode for a step it
+      left alone because a Trial is testing it (en + zh-CN); (c) an Aborted Trial whose restore failed still has its
+      change live and isn't treated as held; (d) a plain UI apply/undo of a setting a session holds (pre-existing class);
+      (e) `rec_of_label` lists the four services by hand: iterate a `KnownService::ALL`.
 - [x] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
       the consent modal, focus jumps to Enable (`autoFocus`) and key repeat presses it: either confirm can pass on one
       held key. Ignore repeated key presses on Enable, or focus Cancel first. TS only.
@@ -311,6 +345,21 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       plan by its English name and otherwise duplicates it under a NEW GUID with a localized name, which then classes
       as Other: on a localized Windows the rec reads off after a successful apply and the verify can fail. Record the
       applied scheme GUID on the receipt (an AppliedAction/Snapshot change) or compare against the duplicate's source.
+      2026-11-11 s18 PARKED after two review rounds on `claude/train-ultimate-identity` (`6b047ef7`, `e029ffeb`,
+      `d7ee1557`, `a8559fe2` re-anchor; cargo 1845/0, clippy clean, full vitest 535/538; NOT landed).
+      Design: `AppliedChange.applied_plan {schema 1, guid}` (additive, lenient, skipped when None, outside the rollback
+      contract); the receipt records the scheme active after the Ultimate apply (read-only `/getactivescheme`) when it is
+      not the saved prior; `changed_outside_refusal` refuses that GUID; a row without one is recordable only when
+      `powercfg /query` settings say the live plan is not an Ultimate-template copy (unknown refuses). Reviews: r1 sonnet
+      APPROVE-WITH-NITS, opus REQUEST-CHANGES (edited copy; query under the lock; read-back would abort a localized Trial at
+      conclude: read-back change withdrawn in r2); r2 sonnet APPROVE-WITH-NITS (receipt reads have no timeout), opus
+      REQUEST-CHANGES. Blocker (opus r2 MUST-FIX, measured on the dev PC): `powercfg /query e9a42b02-...` exits 0 but prints
+      `UNKNOWN` for every AC/DC index when the template isn't in `/list`, so the settings comparison answers "not a copy"
+      (Some(false)) for every plan: a pre-fix row's localized copy is recordable as external again and new rows never
+      stamp a localized copy. Next design (opus r2): an unreadable template (any UNKNOWN / length mismatch) is None; record
+      the GUID by provenance (read `/list` GUIDs before the apply; stamp the plan active after it if Ultimate-class or not
+      in that list); a row without a GUID is recordable only on a Windows stock non-Ultimate scheme by GUID; take the
+      receipt reads off `lock_history` or bound them; test on real-shaped output (UNKNOWN template). Then both reviews.
 - [x] **P9-hint-shown** (desk review 2026-11-03) `get_priorities.session_hint` (the "GPU busy at times / sustained"
       sentence) reaches the frontend typed but no screen prints it. Decide: show it on Home or Optimize under the
       limiter rows, or drop the field. Code + one test either way. Done `4a4265d4` (2026-11-10): shown (coordinator
@@ -1224,17 +1273,6 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-10 ~11:10-11:40 (scheduled, CODE-ONLY, owner on Discord): CR-dual-channel `ad5074ac` (4 new readiness tests
-  proven failing on the old logic; review r1 APPROVE-WITH-NITS, 3 SHOULD-FIX taken in `0c2912ce`, r2 APPROVE-WITH-NITS)
-  and CR-vbs-running `b2ed0cca` (review r1 APPROVE-WITH-NITS, nothing queued). cargo test 1795/0, clippy clean (idle
-  priority, shared target dir). Reviews ran as `claude -p --model sonnet` on the diff (no Agent tool in this session).
-  Not pushed (CODE-ONLY); the next FULL session pushes local `main` through the gate.
-- 2026-11-10 ~11:38-12:15 (scheduled, CODE-ONLY, owner in Firefox): CR-care-silent `e77fba1e`..`263e0768` (doc
-  `55c04296`; App-wiring vitest proven failing on the old App.tsx; review r1 3 SHOULD-FIX taken, r2 2 queued as
-  CR-care-line-truth) and CR-slow-async `9cab29d0`, `27c10a75` (9 commands off the main thread; capture start parked
-  as CR-capture-async; review r1 APPROVE-WITH-NITS, SHOULD-FIX taken). cargo test 1804/0, clippy clean, tsc 0, full
-  vitest 532/535 files (the 3 site-app suites need site-app/node_modules, absent in a worktree; pass on main).
-  Reviews ran as `claude -p --model sonnet`. Not pushed (CODE-ONLY).
 - 2026-11-10 ~12:10-12:45 (scheduled, FULL, owner idle in Firefox): pushed local `main` first through the pre-push
   gate (`776345f7..4c58fbed`, exit 0). Then P9-hint-shown `4a4265d4` (session hint shown under Check's limiter rows),
   CR-care-line-truth `49213302` (per-choice save tracking; stopped line after the last retry) and CR-pagefile-multi
@@ -1320,6 +1358,15 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
   reported ROB RUN stutter (my vitest + cargo ran while he played): no heavy commands while a game runs. Not pushed.
 - 2026-11-11 s17 (scheduled, CODE-ONLY, ROB RUN in front): no heavy commands per the s16 order; read-only diagnosis
   of the CR-rp guard failure (note under that item); 0 items landed; not pushed (main 61 ahead).
+- 2026-11-11 ~14:39-16:15 (coordinator-assigned s18, CODE-ONLY, no game; owner on Discord, idle >= 10 min once at
+  15:27): CR-rp-same-setting-row re-landed `1a740e66` (the s16 revert was a misattribution: the 2 record-first guard
+  failures were CR-outside-followups (b)'s history.rs refactor, fixed in `db633af9`); (b) landed `3b5480ca` (opus r2
+  APPROVE-WITH-NITS); core parking `06b69362` (sonnet APPROVE-WITH-NITS); CR-capture-superseded `4512c1ad` (sonnet
+  APPROVE-WITH-NITS); CR-next-moved-outside `2aaac7e3`; CR-undo-kept-plan `6613a053`; CR-zh-drift-count `5d2e9942`;
+  CR-update-refusal-path checked, no change; CR-ultimate-identity parked on its branch after two rounds (opus
+  REQUEST-CHANGES both). New tests fail on the old code; cargo 1839/0, clippy clean, tsc 0, full vitest 535/538 (the 3
+  site-app suites). Push started in the 15:27 window and stopped mid-gate (vitest stage) when the owner returned; not
+  pushed, not installed, no screen capture (no later 10-minute idle window).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`

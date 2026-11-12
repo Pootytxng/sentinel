@@ -709,7 +709,12 @@ const LOCK_CENSUS = {
       "a user-facing 'try again' and a poisoned lock is taken over. It never waits, and a lock " +
       "that never waits can neither deadlock nor be an edge of a cycle — which is the only hazard " +
       "race_seam measures. It also reaches no other store: gaming_orchestrator.rs contains no call " +
-      "into history, comparison or support_evidence at all. The try_lock property is what this " +
+      "into history, comparison or support_evidence at all. CR-gm-spans-trial: experiment.rs also " +
+      "takes it, through the same try_lock-only session_op_guard, around a Trial start, the " +
+      "benchmark's apply and the outcome switch; contention still answers 'try again' and never " +
+      "waits. Under it, a Gaming Mode start reads experiments.json without the store gate (an " +
+      "atomic-rename file read, no lock) and briefly takes benchmark_trial::H, a leaf that is " +
+      "never held across another lock, so neither adds a cycle edge. The try_lock property is what this " +
       "verdict rests on, so it is asserted below rather than left as prose.",
   },
   "gaming_orchestrator::LIVE_SESSION: Mutex<Option<String>>": {
@@ -721,6 +726,12 @@ const LOCK_CENSUS = {
     why:
       "in-memory trial state. Measured, not assumed: benchmark_trial.rs contains no save_*, no " +
       "write_atomic, no store_path and no compy_data_dir — it persists nothing at all.",
+  },
+  "benchmark_trial::H: OnceLock<Mutex<Held>>": {
+    class: "out",
+    why:
+      "CR-bench-holds-setting: the in-memory (token, rec_id, title) the tweak trial holds; taken only to " +
+      "read, set or clear that value, never across an apply or any other lock, and persists nothing",
   },
   "intelligence::GATE: OnceLock<Mutex<Option<Instant>>>": {
     class: "out",
