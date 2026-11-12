@@ -159,6 +159,8 @@
     "upgradeFitGpuUserPsu": "Before any card: you told Compy your power supply is “{{name}}”. Compy can't check its capacity or connectors, or how much room and airflow your case has. Check those first.",
     "upgradeFitSsd": "Before any drive: Compy can't read which free M.2 slots, SATA ports or drive bays your motherboard and case have. Check those first.",
     "upgradeMeasuredFrom": "Measured from your {{game}} session on {{date}}: {{busy}} of {{readings}} GPU readings were at {{threshold}}% load or more.",
+    "screenLimitTitle": "Your screen is the limit here",
+    "screenLimitBody": "Your {{hz}} Hz screen can't show more than {{hz}} frames a second, and your {{game}} session averaged {{fps}} fps, so on average a faster GPU wouldn't show you more frames; the slowest moments can still depend on it. For frame rate, no upgrade is recommended for this game.",
     "copyRetailLinkTitle": "Copies a plain {{retailer}} search link to open in your browser. No affiliate tag today.",
     "copiedExclaim": "Copied!",
     "copyRetailSearchLink": "Copy {{retailer}} search link",

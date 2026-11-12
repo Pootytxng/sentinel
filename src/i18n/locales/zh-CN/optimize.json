@@ -141,6 +141,8 @@
     "upgradeFitGpuUserPsu": "更换显卡之前:你告诉 Compy 你的电源是“{{name}}”。Compy 无法核实它的功率和接口,也无法得知机箱的空间和风道。请先检查这些。",
     "upgradeFitSsd": "更换硬盘之前:Compy 无法读取主板和机箱还有哪些空闲的 M.2 插槽、SATA 接口或硬盘位。请先检查这些。",
     "upgradeMeasuredFrom": "测量来源：你 {{date}} 的 {{game}} 会话，{{readings}} 个显卡读数中有 {{busy}} 个达到 {{threshold}}% 或更高负载。",
+    "screenLimitTitle": "这里的上限是你的屏幕",
+    "screenLimitBody": "你的 {{hz}} Hz 屏幕每秒最多只能显示 {{hz}} 帧，而你这次 {{game}} 会话的平均帧率是 {{fps}} fps，所以平均而言，更快的显卡也不会让你看到更多帧；最卡的时刻仍可能取决于显卡。就帧率而言，不建议为这款游戏升级。",
     "copyRetailLinkTitle": "复制一个纯净的 {{retailer}} 搜索链接,可在浏览器中打开。目前不含任何联盟标记。",
     "copiedExclaim": "已复制!",
     "copyRetailSearchLink": "复制 {{retailer}} 搜索链接",

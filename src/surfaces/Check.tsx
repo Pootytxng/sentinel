@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { writeLedger } from "../data/ledger-write";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import type { PriorityItem, SessionSummary, StartupEntry } from "../types";
+import type { PriorityItem, SessionSummary, StartupEntry, UpgradeSuggestion } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { WhatsThis } from "../design/WhatsThis";
 import { useConfirm } from "../design/ConfirmDialog";
@@ -33,6 +33,17 @@ function sessionDate(iso: string, lang: string, now: Date = new Date()): string 
   if (isNaN(d.getTime())) return iso;
   const year = d.getFullYear() !== now.getFullYear() ? { year: "numeric" as const } : {};
   return d.toLocaleDateString(lang, { month: "short", day: "numeric", ...year });
+}
+
+/** P9-screen-is-limit: a GPU row whose own session averaged at or above the refresh rate that session
+ *  recorded. Both must be measured; null otherwise (the GPU row reads as before). */
+function screenIsLimit(item: UpgradeSuggestion): { hz: number; fps: number; game: string } | null {
+  const m = item.measured_from;
+  if (item.kind !== "gpu" || !m) return null;
+  const fps = m.avg_fps;
+  const hz = m.refresh_hz;
+  if (fps == null || hz == null || !Number.isFinite(fps) || !Number.isFinite(hz) || fps <= 0 || hz <= 0) return null;
+  return fps >= hz ? { hz, fps: Math.round(fps), game: m.game } : null;
 }
 
 // Structural subset of App's GpuInfo — driver freshness needs only name + age (object covariance).
@@ -838,10 +849,30 @@ export default function Check({
           {!v2Ia && priorities?.upgrade_path && (
             <div className="check-upgrade">
               <div className="check-section-label">{t("optimize.check.upgradePathTitle")}</div>
-              {priorities.upgrade_path.items.map((item) => (
+              {priorities.upgrade_path.items.map((item) => {
+                const screen = screenIsLimit(item);
+                return (
                 <div key={item.kind} className="check-upgrade-item">
-                  <span className="check-upgrade-title">{item.title}</span>
-                  <p className="check-row-reason">{item.why}</p>
+                  {/* P9-screen-is-limit: the session averaged at or above the refresh rate it recorded,
+                      so a faster GPU would not show more frames: the screen is named instead of the
+                      GPU, with no GPU fit line or shopping links. Unmeasured either side = as before. */}
+                  {screen ? (
+                    <>
+                      <span className="check-upgrade-title">{t("optimize.check.screenLimitTitle")}</span>
+                      <p className="check-row-reason" data-testid="check-upgrade-screen">
+                        {t("optimize.check.screenLimitBody", {
+                          hz: screen.hz,
+                          fps: screen.fps,
+                          game: prettyGameName(screen.game) || screen.game,
+                        })}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <span className="check-upgrade-title">{item.title}</span>
+                      <p className="check-row-reason">{item.why}</p>
+                    </>
+                  )}
                   {/* P9-limit-source: which recorded session this was measured from (its game, its
                       date in the app's language, the counts behind the share); none recorded, no line. */}
                   {item.measured_from && (
@@ -858,7 +889,7 @@ export default function Check({
                   {/* P9-gpu-fit-unknowns: what Compy can't check before any card, in the system's
                       terms; a user-added power supply is what they told Compy, never a capacity. */}
                   {(() => {
-                    const fit = upgradeFitLine(item.kind, manualParts);
+                    const fit = screen ? null : upgradeFitLine(item.kind, manualParts);
                     if (!fit) return null;
                     return (
                       <p className="check-row-reason check-upgrade-fit" data-testid="check-upgrade-fit">
@@ -871,7 +902,7 @@ export default function Check({
                     );
                   })()}
                   <div className="check-upgrade-links">
-                    {item.links.map((l) => (
+                    {(screen ? [] : item.links).map((l) => (
                       <button
                         key={l.retailer}
                         className="btn btn-small"
@@ -885,7 +916,8 @@ export default function Check({
                     ))}
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {/* HONESTY (P5.5 owner catch 2026-07-02): the backend disclosure const still says
                   "we may earn a commission" — FALSE while every link is a tag-free plain search
                   (the A6 guard in priorities.rs pins exactly that). Until Phase D arms affiliate
