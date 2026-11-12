@@ -1579,6 +1579,11 @@ pub(crate) fn suspend_known_service(service_name: String) -> Result<AppliedChang
     }
     let service = crate::actions::KnownService::from_name(&service_name)
         .ok_or_else(|| format!("'{}' isn't a Compy-suspendable service.", service_name))?;
+    // CR-gm-service-suspend-rows: a Gaming Mode session that suspends the same service resumes it
+    // on stop, under this row ("applied" over a running service). Refused while one holds it, with
+    // Gaming Mode's try_lock-only gate held through the ledger write, as the UI's other applies.
+    let rec_id = format!("service-suspend:{}", service.name());
+    let _gm = crate::gaming_orchestrator::plain_change_gate(std::iter::once(rec_id.as_str()))?;
     let _lock = lock_history()?;
     let (root, mut history) = begin_mutation()?;
     let result = crate::actions::apply_service_suspend(service)?;

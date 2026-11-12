@@ -714,7 +714,8 @@ const LOCK_CENSUS = {
       "benchmark's apply and the outcome switch, and (CR-gm-spans-followups d, through " +
       "plain_change_gate) around the UI's apply and batch apply, after their store-gate checks, and " +
       "the UI's undo, which takes no store gate; the batch apply is also the dark stack benchmark's " +
-      "apply, on its own thread. Only a change Gaming Mode can touch takes it. Contention still answers 'try again' and never " +
+      "apply, on its own thread. history::suspend_known_service takes it the same way, before the " +
+      "ledger lock (CR-gm-service-suspend-rows). Only a change Gaming Mode can touch takes it. Contention still answers 'try again' and never " +
       "waits. Under it, a Gaming Mode start reads experiments.json without the store gate (an " +
       "atomic-rename file read, no lock) and briefly takes benchmark_trial::H, a leaf that is " +
       "never held across another lock, so neither adds a cycle edge. The try_lock property is what this " +
