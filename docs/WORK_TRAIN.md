@@ -277,11 +277,22 @@ release checklist); no new rules.
       GamingMode `leftAloneLine` shows the backend's English step labels inside the zh-CN sentence (coordinator nit
       (d): its neighbouring change rows are English too, so not localized here). Visual PASS owed at the next install.
 Third whole-range review (e29da54b..119d07f8, 2026-11-12, SHIP-WITH-FOLLOW-UPS, no MUST-FIX); do before more Phase 9:
-- [ ] **CR-gm-stop-busy** (SHOULD-FIX; `8bf4a2a9`, `4da520ea`) With Gaming Mode on, a Fix batch, Trial start or bench
+- [x] **CR-gm-stop-busy** (SHOULD-FIX; `8bf4a2a9`, `4da520ea`) With Gaming Mode on, a Fix batch, Trial start or bench
       apply holds `SESSION_OP` through its UAC wait; Stop Gaming Mode or Recover then says "another Gaming Mode
       operation is still finishing", which is false and lasts until the prompt is answered. The user must always be
       able to stop or recover honestly, without reopening the start race `SESSION_OP` closes. Rollback/consent
       boundary: two reviews (opus + sonnet).
+      Done `3664f460`, `f80082c2`, `2a83ea3f` + r2 nits (2026-11-12 s21, not installed; SHA in the merge): stop and
+      recover take a new try_lock-only `RESTORE_OP` instead of `SESSION_OP`; start takes both (the start race stays
+      closed); census entry + try_lock assertion. While a session holds the power plan, USB selective suspend and
+      PCIe link power are held with it. While a stop or recovery puts changes back (a generation count sampled
+      around each check's read), a change of a setting Gaming Mode can touch says "Gaming Mode is putting its
+      changes back right now …". Busy words name the permission prompt. Reviews r1 opus REQUEST-CHANGES (MUST-FIX:
+      a stop beside a waiting USB/PCIe change left the user's own plan changed with no record, taken), sonnet
+      APPROVE-WITH-NITS (SHOULD-FIX taken); r2 opus + sonnet APPROVE-WITH-NITS (generation count, nits taken). Tests
+      fail on the old code; they never call start() and read only a temp session dir. cargo 1871/0, clippy clean,
+      full vitest 535/538 (3 site-app suites). What a user sees: Stop Gaming Mode and Recover work while another
+      change waits on its Windows prompt.
 - [ ] **CR-fix-needs-trial-store** (SHOULD-FIX; `1a740e66`) An unreadable Trial store blocks every Fix apply and batch
       ("Compy couldn't read its Trial records right now… try again in a moment") with no way out. Establish
       reachability first; refuse only where an open Trial could hold the setting when that can be known; any refusal
@@ -292,6 +303,22 @@ Third whole-range review (e29da54b..119d07f8, 2026-11-12, SHIP-WITH-FOLLOW-UPS, 
       check `get_applied_changes`); (c) the dark stack trial applies through `apply_recommendations_batch` with no
       bench hold (benchmark_trial.rs ~534): add the hold before `stack_trial_gate` is ever enabled (supersedes
       CR-bench-stack-hold).
+From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAIL, teardown CLEAN):
+- [ ] **CR-footer-reversible** (FAIL item 6, `_train\view-1112a\05-test-history-changed-outside-row.png`, `03-test.png`)
+      The footer says "Every change reversible · ledger 84" (zh "每一项更改均可撤销") on every screen while a
+      changed-outside row has no undo: the same over-promise CR-view-1111d-wording took off the Applied & history
+      summary. Make the line true (no absolute), en + zh-CN; the incomplete-ledger branch stays as it is. TS.
+- [ ] **CR-hist-today** (`_train\view-1112a\04-test-applied.png`) History rows from Nov 11 6:14 AM and 4:19 AM read
+      "today" at 00:35 on Nov 12: `Fix.tsx` `humanizeWhen` buckets by elapsed 24 h, not calendar day, and formats
+      with the OS locale. Calendar days in the app's language; test fails on the old code. TS.
+- [ ] **CR-zh-backend-home** (`_train\view-1112a\14-home-zh-CN.png`) zh-CN Health shows backend English: the
+      crash banner ("ROB RUN stopped working and closed — …"), the limiter title and body ("Power plan isn't
+      performance-oriented …"), the last change's title ("Help Windows focus on your game") and "设为On".
+      Establish which strings have a stable id to translate on the TS side; no invented translations of names.
+- [ ] **CR-plan-read-prompt-write** (CR-gm-stop-busy r1 opus SHOULD-FIX 3, pre-existing) Applies that read
+      `SCHEME_CURRENT` before a UAC prompt and write it after (e.g. the CPMINCORES script, actions.rs ~4570) never
+      took Gaming Mode's gate, so a session start or stop during the prompt changes which plan they write.
+      Establish whether a live apply route reaches one first.
 - [ ] **CR-bench-stack-hold** (r1 sonnet SHOULD-FIX of CR-bench-holds-setting) The DARK aggregate-stack trial
       (`stack_trial_gate()` false) holds nothing; before arming it, hold every setting it applies the way the tweak trial does.
       Superseded by CR-range3-nits (c).

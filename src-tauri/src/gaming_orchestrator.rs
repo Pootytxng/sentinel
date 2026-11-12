@@ -262,6 +262,7 @@ fn session_hold_refusal(rec_id: &str, contract: Option<&[SessionChange]>) -> Opt
 /// CR-gm-spans-trial: whether a Gaming Mode contract on disk holds `rec_id`. A contract that is on
 /// disk but can't be read refuses too (it could hold it).
 pub(crate) fn session_holds_refusal(rec_id: &str) -> Option<String> {
+    let window = RestoreWindow::open();
     let read = match crate::gaming_session::pending_contract_files() {
         Ok(found) if found.is_empty() => None,
         Ok(found) => match load_session() {
@@ -270,14 +271,17 @@ pub(crate) fn session_holds_refusal(rec_id: &str) -> Option<String> {
             // file between the listing and the read; list again before calling it unreadable.
             None => match crate::gaming_session::pending_contract_files() {
                 Ok(again) if again.is_empty() => None,
-                _ => Some(unreadable_session_refusal(&found, &crate::gaming_session::session_data_dir())),
+                // Review r2 (opus nit 3): name what is there now.
+                Ok(again) => Some(unreadable_session_refusal(&again, &crate::gaming_session::session_data_dir())),
+                Err(_) => Some(unreadable_session_refusal(&found, &crate::gaming_session::session_data_dir())),
             },
         },
         Err(e) => Some(format!("Compy couldn't check Gaming Mode's session ({e}). Nothing was changed.")),
     };
     // Checked AFTER the read (review r1, sonnet SHOULD-FIX 1): a stop that began before the read may
-    // be rewriting the contract under it, so while one runs nothing here goes ahead.
-    if restore_in_flight() {
+    // be rewriting the contract under it, so while one runs (or ran during the read) nothing here
+    // goes ahead.
+    if window.touched() {
         return Some(RESTORE_IN_FLIGHT_REFUSAL.to_string());
     }
     read
@@ -288,33 +292,52 @@ pub(crate) fn session_holds_refusal(rec_id: &str) -> Option<String> {
 /// can fail for a moment, and the plain-change rule "a record this Compy can't read is not refused"
 /// would let a change land on a setting the restore is about to write.
 const RESTORE_IN_FLIGHT_REFUSAL: &str =
-    "Gaming Mode is putting its changes back right now. Try again when it has finished. Nothing was changed.";
+    "Gaming Mode is putting its changes back right now (if a Windows permission prompt is open, answer \
+     or cancel it). Try again when it has finished. Nothing was changed.";
 
 /// Set by stop and recover (only) around their restore, so the checks above can tell a contract being
 /// rewritten from one this Compy can't read. Thread-local in tests, so one test's stop can never
 /// colour another test's read.
+/// Review r2 (sonnet SHOULD-FIX): the count goes up on every begin and every end, so a check that
+/// samples it before and after its read also sees a whole stop that began and ended (a RestoreFailed
+/// one included) between the two samples. Odd = a stop or recovery is in flight. The production arm is
+/// an atomic (a stop and a change run on different threads); the test arm is per thread, so the
+/// production arm itself is not exercised by a test.
 #[cfg(not(test))]
-static RESTORE_IN_FLIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static RESTORE_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 #[cfg(test)]
 thread_local! {
-    static RESTORE_IN_FLIGHT_T: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static RESTORE_GEN_T: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
-fn set_restore_in_flight(v: bool) {
+fn bump_restore_gen() {
     #[cfg(not(test))]
-    RESTORE_IN_FLIGHT.store(v, std::sync::atomic::Ordering::SeqCst);
+    RESTORE_GEN.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     #[cfg(test)]
-    RESTORE_IN_FLIGHT_T.with(|c| c.set(v));
+    RESTORE_GEN_T.with(|c| c.set(c.get() + 1));
 }
 
-fn restore_in_flight() -> bool {
+fn restore_gen() -> u64 {
     #[cfg(not(test))]
     {
-        RESTORE_IN_FLIGHT.load(std::sync::atomic::Ordering::SeqCst)
+        RESTORE_GEN.load(std::sync::atomic::Ordering::SeqCst)
     }
     #[cfg(test)]
     {
-        RESTORE_IN_FLIGHT_T.with(|c| c.get())
+        RESTORE_GEN_T.with(|c| c.get())
+    }
+}
+
+/// Sampled before a check's read; [`RestoreWindow::touched`] after it says whether a stop or
+/// recovery was in flight at either point, or ran in between.
+struct RestoreWindow(u64);
+
+impl RestoreWindow {
+    fn open() -> Self {
+        RestoreWindow(restore_gen())
+    }
+    fn touched(&self) -> bool {
+        self.0 % 2 == 1 || restore_gen() != self.0
     }
 }
 
@@ -323,14 +346,14 @@ struct RestoreMark;
 
 impl RestoreMark {
     fn begin() -> Self {
-        set_restore_in_flight(true);
+        bump_restore_gen(); // even -> odd
         RestoreMark
     }
 }
 
 impl Drop for RestoreMark {
     fn drop(&mut self) {
-        set_restore_in_flight(false);
+        bump_restore_gen(); // odd -> even
     }
 }
 
@@ -349,9 +372,10 @@ pub(crate) fn plain_change_gate<'a>(
         return Ok(None); // no session step touches these settings: nothing to hold or read
     }
     let gate = session_op_guard()?;
+    let window = RestoreWindow::open();
     let refusal = plain_change_refusal(&rec_ids);
-    // CR-gm-stop-busy review r1 (sonnet SHOULD-FIX 1): after the read, as in session_holds_refusal.
-    if restore_in_flight() {
+    // CR-gm-stop-busy review r1/r2 (sonnet SHOULD-FIX): around the read, as in session_holds_refusal.
+    if window.touched() {
         return Err(RESTORE_IN_FLIGHT_REFUSAL.to_string());
     }
     match refusal {
@@ -403,6 +427,12 @@ fn file_hold_refusal(rec_id: &str, file: &SessionFile, live: Option<&str>) -> Op
     let refusal = session_hold_refusal(rec_id, Some(&file.changes))?;
     Some(if running_here {
         refusal
+    } else if refusal.contains("belongs to the power plan") {
+        // CR-gm-stop-busy review r2 (opus nit 2): keep the plan reason for a leftover session.
+        "A Gaming Mode session that didn't finish putting its changes back still holds your power plan, \
+         and this setting belongs to the power plan. Finish that session first in Gaming Mode (\"Finish \
+         the last Gaming Mode session\"). Nothing was changed."
+            .to_string()
     } else {
         "A Gaming Mode session that didn't finish putting its changes back holds this setting, and \
          puts it back when it's finished. Finish it first in Gaming Mode (\"Finish the last Gaming \
@@ -714,6 +744,8 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
             let mut msg = $msg;
             file.status = SessionStatus::RestorePending;
             let _ = save_session(&file);
+            // No RestoreMark here (CR-gm-stop-busy): start still holds SESSION_OP, so every gated
+            // change and Trial start is refused before it reads.
             if let Err(undo_err) = restore(&mut file) {
                 msg.push_str(&format!(
                     " — and undoing the partial session also failed ({undo_err}); \
@@ -1390,6 +1422,12 @@ mod spans_trial_tests {
             assert_eq!(gate(&["hags-enable"]), Ok(false), "a setting no step touches is never held up");
         }
         assert_eq!(gate(&[REC_GAME_MODE]), Ok(true), "the mark is gone once the stop returns");
+        // Review r2 (sonnet SHOULD-FIX): a whole stop that began and ended between a check's two
+        // samples (a RestoreFailed one too) is still seen.
+        let window = RestoreWindow::open();
+        assert!(!window.touched(), "nothing ran");
+        drop(RestoreMark::begin());
+        assert!(window.touched(), "a stop ran between the samples");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
