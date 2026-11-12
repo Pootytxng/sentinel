@@ -3052,6 +3052,25 @@ pub(crate) fn apply_recommendation(
     crate::history::apply_recommendation(rec_id, rec_title)
 }
 
+/// CR-gm-spans-trial: the settings every open (Pending or Running) Trial holds, for Gaming Mode's
+/// start. Read checked and without the store gate (Gaming Mode's start never waits on a Trial); a
+/// store that can't be read is an error, since it could hold the running Trial.
+pub(crate) fn open_trial_rec_ids() -> Result<Vec<String>, String> {
+    if !experiment_gate() {
+        return Ok(Vec::new());
+    }
+    Ok(open_rec_ids(&load_store_checked()?.experiments))
+}
+
+/// PURE: the rec ids of the open (Pending or Running) Trials in `records`.
+fn open_rec_ids(records: &[ExperimentRecord]) -> Vec<String> {
+    records
+        .iter()
+        .filter(|e| matches!(e.status, ExperimentStatus::Pending | ExperimentStatus::Running))
+        .map(|e| e.rec_id.clone())
+        .collect()
+}
+
 /// CR-bench-holds-setting: the benchmark tweak trial's hold, read now.
 pub(crate) fn bench_refusal<'a>(rec_ids: impl Iterator<Item = &'a str>) -> Option<String> {
     crate::benchmark_trial::bench_held_refusal(crate::benchmark_trial::held_now().as_ref(), rec_ids)
@@ -3077,6 +3096,11 @@ pub(crate) fn apply_for_bench_trial(
         None
     };
     if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
+        return Err(refusal);
+    }
+    // CR-gm-spans-trial: a Gaming Mode session holding this setting would put its snapshot back on
+    // stop, under the measurement (or over the benchmark's rollback).
+    if let Some(refusal) = crate::gaming_orchestrator::session_holds_refusal(&rec_id) {
         return Err(refusal);
     }
     crate::benchmark_trial::hold(token, &rec_id, &rec_title);
@@ -3384,6 +3408,11 @@ pub(crate) fn start_experiment(
     // CR-bench-holds-setting (review r1): a setting the benchmark tweak trial holds is refused by name,
     // even in the moment before its apply lands (its hold is set under this same gate).
     if let Some(why) = bench_refusal(std::iter::once(rec_id.as_str())) {
+        return Err(format!("experiment not started — {why}"));
+    }
+    // CR-gm-spans-trial: a Gaming Mode session holding this setting would put its own snapshot back
+    // when it stops, over the Trial's change or its restore.
+    if let Some(why) = crate::gaming_orchestrator::session_holds_refusal(&rec_id) {
         return Err(format!("experiment not started — {why}"));
     }
 
@@ -5223,6 +5252,26 @@ mod experiment_tests {
         let refused = held_by_trial_refusal(&store, std::iter::once("hags-on")).expect("the Pending one holds it too");
         assert!(refused.contains("was interrupted") && refused.contains("Nothing was changed"), "{refused}");
         assert!(held_by_trial_refusal(&store, std::iter::once("game-mode-on")).expect("running").contains("being tested"));
+    }
+
+    #[test]
+    fn gaming_mode_sees_every_open_trials_setting() {
+        // CR-gm-spans-trial: Gaming Mode skips the settings open Trials hold; a concluded one holds none.
+        let done = judged("exp:old", "hags-enable", "no-change", TrialOutcome::Recommended);
+        let mut running = judged("exp:run", "game-mode", "no-change", TrialOutcome::Recommended);
+        running.status = ExperimentStatus::Running;
+        let mut pending = judged("exp:pend", "power-ultimate", "no-change", TrialOutcome::Recommended);
+        pending.status = ExperimentStatus::Pending;
+        assert_eq!(open_rec_ids(&[done.clone(), running, pending]), vec!["game-mode", "power-ultimate"]);
+        assert!(open_rec_ids(&[done]).is_empty());
+        // And a Trial start (and the benchmark's apply) checks the session's contract under its gate.
+        let src = include_str!("experiment.rs");
+        for sig in ["pub(crate) fn start_experiment(", "pub(crate) fn apply_for_bench_trial("] {
+            let body = src.split_once(sig).map(|(_, r)| r).expect(sig);
+            let check = body.find(concat!("gaming_orchestrator::", "session_holds_refusal(")).expect(sig);
+            let write = body.find(concat!("crate::history::", "apply_recommendation(")).expect(sig);
+            assert!(check < write, "{sig}: checked before the apply");
+        }
     }
 
     #[test]
