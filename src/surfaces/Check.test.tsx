@@ -634,7 +634,7 @@ describe("Check", () => {
   // P9-session-on-this-hardware: a session that can't be tied to the card in this PC now says so.
   it.each([
     ["not-recorded", "That session didn't record which graphics card it ran on, so Compy can't tie it to the card in this PC now."],
-    ["card-unread", "Compy hasn't read which graphics card this PC has now, so it can't tie this to the card that session ran on."],
+    ["card-unread", "Compy can't identify the graphics card in this PC right now, so it can't tie this to the card that session ran on."],
   ])("P9-session-on-this-hardware: a %s session says it can't be tied to this card", async (gpu_tie, words) => {
     await showUpgrade([
       {

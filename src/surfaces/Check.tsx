@@ -22,7 +22,7 @@ import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 import { upgradeFitLine } from "./upgrade-fit";
 import { prettyGameName } from "./game-name";
 import { readManualParts } from "./rig/manual-parts";
-import { gpuUntied } from "./settings-done";
+import { gpuUntied, AGGREGATE_REC_ROWS, anyLimiterUnread, measuredClearOfGpuLimit } from "./settings-done";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
@@ -1104,6 +1104,32 @@ export default function Check({
   );
 }
 
+/** CR-upgrade-area-truth (3): an upgrade row's title and why in the app's language, keyed by its
+ *  `kind`. The GPU row's why is worded from the numbers it carries; without them (an older backend)
+ *  it falls back to the Rust sentence. A kind this build doesn't know keeps the Rust strings. */
+export function upgradeRowText(item: UpgradeSuggestion, t: TFunction): { title: string; why: string } {
+  if (item.kind === "ssd") {
+    return { title: t("optimize.check.upgradeRowSsdTitle"), why: t("optimize.check.upgradeRowSsdWhy") };
+  }
+  if (item.kind === "gpu") {
+    const n = item.gpu_numbers;
+    const pct = (x: unknown) => typeof x === "number" && Number.isFinite(x) && x >= 0 && x <= 100;
+    const sane = n && [n.share_pct, n.peak_pct, n.threshold_pct, n.limit_share_pct].every(pct) ? n : null;
+    return {
+      title: t("optimize.check.upgradeRowGpuTitle"),
+      why: sane
+        ? t("optimize.check.upgradeRowGpuWhy", {
+            share: sane.share_pct,
+            peak: sane.peak_pct,
+            threshold: sane.threshold_pct,
+            limitShare: sane.limit_share_pct,
+          })
+        : item.why,
+    };
+  }
+  return { title: item.title, why: item.why };
+}
+
 /**
  * R3 Lane B / Phase 9: the upgrade-path advisory, from the scan's `upgrade_path` (a GPU-limited
  * session or an HDD install drive). Each row says what was measured, where from, the screen limit
@@ -1162,8 +1188,8 @@ export function UpgradePathBlock({ upgradePath, links }: { upgradePath: UpgradeP
               </>
             ) : (
               <>
-                <span className="check-upgrade-title">{item.title}</span>
-                <p className="check-row-reason">{item.why}</p>
+                <span className="check-upgrade-title">{upgradeRowText(item, t).title}</span>
+                <p className="check-row-reason">{upgradeRowText(item, t).why}</p>
               </>
             )}
             {/* P9-limit-source: which recorded session this was measured from (its game, its
@@ -1253,19 +1279,24 @@ export function NoUpgradeBlock({ priorities }: { priorities: Priorities }) {
   // Review r1: a GPU-limited session among those counted (an older one, or another game's) is not
   // "no upgrade recommended" for the PC; the per-game summary speaks for it. A missing count = unknown.
   if (!(ev.gpu_limited_sessions === 0)) return null;
-  const partNamed = (priorities.limiters ?? []).some((l) => l.status === "attention" && !LIMITER_AWAY.has(l.id));
+  // CR-upgrade-area-truth (1): the aggregate rows (safe tweaks pending, applied changes drifting) are
+  // settings, never a part; filtered from the one list settings-done reads (they are also "away").
+  const limiters = (priorities.limiters ?? []).filter((l) => !AGGREGATE_REC_ROWS.has(l.id));
+  const partNamed = limiters.some((l) => l.status === "attention" && !LIMITER_AWAY.has(l.id));
   if (partNamed) return null;
+  // CR-upgrade-area-truth (2): a check it couldn't read means it can't say nothing holds this PC back,
+  // as the game summary says "not measured" for the same scan.
+  const unread = anyLimiterUnread(priorities);
   const n = ev.newest;
   const finite = (x: number | undefined): x is number => x != null && Number.isFinite(x) && x > 0;
-  // The newest session, only when its counts can be a measurement and fall under the limit share.
-  const clear =
-    n &&
-    !n.gpu_limited &&
-    [n.busy, n.readings, n.threshold_pct, n.limit_share_pct].every(Number.isFinite) &&
-    n.readings > 0 &&
-    n.busy >= 0 &&
-    n.busy * 100 < n.readings * n.limit_share_pct
-      ? n
+  // The newest session, only when its counts can be a measurement and fall under the limit share
+  // (CR-upgrade-area-truth NIT (b): the game summary's own guard, including a sane share).
+  const clear = !unread && n && !n.gpu_limited && measuredClearOfGpuLimit(n) ? n : null;
+  // NIT (a): how many sessions on another card were left out; absent from an older backend, which
+  // keeps the fixed note inside the count sentence.
+  const leftOut =
+    typeof ev.other_card_sessions === "number" && Number.isFinite(ev.other_card_sessions)
+      ? Math.max(0, Math.floor(ev.other_card_sessions))
       : null;
   // P9-cpu-gpu-balance: that session's own average under the refresh rate it ran at; either unmeasured
   // = no line (unknown stays unknown). The raw average is compared, as Check's screen-limit rule does.
@@ -1285,11 +1316,27 @@ export function NoUpgradeBlock({ priorities }: { priorities: Priorities }) {
         <span className="check-upgrade-early">{t("optimize.optimizeV2.upgradePathEarly")}</span>
       </div>
       <div className="check-upgrade-item">
-        <span className="check-upgrade-title">{t("optimize.check.noUpgradeTitle")}</span>
+        <span className="check-upgrade-title" data-testid="check-no-upgrade-title">
+          {unread
+            ? t("optimize.check.noUpgradeUnreadTitle")
+            : ev.measured_sessions > 0
+              ? t("optimize.check.noUpgradeTitle")
+              : t("optimize.check.noUpgradeNothingMeasuredTitle")}
+        </span>
         <p className="check-row-reason" data-testid="check-no-upgrade-source">
-          {ev.measured_sessions > 0
-            ? t("optimize.check.noUpgradeReadFrom", { count: ev.measured_sessions })
-            : t("optimize.check.noUpgradeNotMeasured")}
+          {unread
+            ? t("optimize.check.noUpgradeLimiterUnread")
+            : ev.measured_sessions > 0
+              ? leftOut === null
+                ? t("optimize.check.noUpgradeReadFrom", { count: ev.measured_sessions })
+                : t("optimize.check.noUpgradeReadFromCounted", { count: ev.measured_sessions })
+              : t("optimize.check.noUpgradeNotMeasured")}
+          {!unread && leftOut !== null && leftOut > 0 && (
+            <span data-testid="check-no-upgrade-left-out">
+              {gap}
+              {t("optimize.check.noUpgradeLeftOut", { count: leftOut })}
+            </span>
+          )}
           {clear && (
             <>
               {gap}

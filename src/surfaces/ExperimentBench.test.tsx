@@ -2424,7 +2424,7 @@ describe("P4-exit: what Compy tested on this game", () => {
   // under the GPU-limiter line and under the measured-clear line; a session on this card adds nothing.
   it.each([
     ["gpu-limiter", "not-recorded", "That session didn't record which graphics card it ran on, so Compy can't tie this line to the card in this PC now."],
-    ["gpu-limiter", "card-unread", "Compy hasn't read which graphics card this PC has now, so it can't tie this line to the card that session ran on."],
+    ["gpu-limiter", "card-unread", "Compy can't identify the graphics card in this PC right now, so it can't tie this line to the card that session ran on."],
     ["nothing-limiting", "not-recorded", "That session didn't record which graphics card it ran on, so Compy can't tie this line to the card in this PC now."],
     ["gpu-limiter", "this-card", null],
     ["nothing-limiting", "this-card", null],

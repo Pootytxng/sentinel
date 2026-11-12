@@ -6,8 +6,9 @@
 import { useEffect, useRef } from "react";
 import type { AppliedChange } from "../types";
 
-/** Waits before each re-read: quick at first, then once a minute for as long as it keeps failing. */
-export const LEDGER_RETRY_MS = [2_000, 5_000, 15_000, 30_000, 60_000] as const;
+/** Waits before each re-read: quick at first, then a minute, five minutes, and every fifteen minutes
+ *  for as long as it keeps failing (CR-upgrade-area-truth NIT (c): not once a minute forever). */
+export const LEDGER_RETRY_MS = [2_000, 5_000, 15_000, 30_000, 60_000, 300_000, 900_000] as const;
 
 export function ledgerRetryDelay(attempt: number): number {
   return LEDGER_RETRY_MS[Math.min(Math.max(0, attempt), LEDGER_RETRY_MS.length - 1)];
@@ -32,6 +33,9 @@ export function useLedgerReadRetry(
     if (!failed) return;
     let live = true;
     let attempt = 0;
+    // NIT (c): log once per state change (the first failure, or a failure that reads differently
+    // from the last one logged), not on every re-read of a ledger that stays unreadable.
+    let lastLogged: string | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
       timer = setTimeout(() => {
@@ -50,7 +54,11 @@ export function useLedgerReadRetry(
               else onReadRef.current(changes);
               return;
             }
-            console.error("[compy] ledger re-read failed", r.error);
+            const said = String(r.error);
+            if (said !== lastLogged) {
+              lastLogged = said;
+              console.error("[compy] ledger re-read failed", r.error);
+            }
             attempt += 1;
             schedule();
           });

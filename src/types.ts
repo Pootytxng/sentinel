@@ -231,6 +231,9 @@ export type UpgradeSuggestion = {
   links: RetailLink[];
   /** Absent when the row isn't from a session, or the session didn't record its game or start. */
   measured_from?: MeasuredFrom;
+  /** CR-upgrade-area-truth: the GPU row's numbers behind `why`, so it can be said in the user's
+   *  language (priorities.rs `GpuRowNumbers`). Absent on the SSD row and from an older backend. */
+  gpu_numbers?: { share_pct: number; peak_pct: number; threshold_pct: number; limit_share_pct: number };
 };
 export type UpgradePath = { items: UpgradeSuggestion[]; disclosure: string };
 export type Priorities = {
@@ -257,6 +260,9 @@ export type UpgradeEvidence = {
   measured_sessions: number;
   /** How many of them were GPU-limited (any game, any age): "no upgrade recommended" only at 0. */
   gpu_limited_sessions: number;
+  /** CR-upgrade-area-truth: sessions measured the same way but recorded on another graphics card,
+   *  left out of the counts above. Absent from an older backend (the room then keeps its fixed note). */
+  other_card_sessions?: number;
   /** The newest of them; absent when there is none, or it recorded no game or start. */
   newest?: {
     game: string;
