@@ -34,6 +34,7 @@
     "planBalanced": "平衡",
     "planHighPerformance": "高性能",
     "planUltimate": "卓越性能",
+    "planPowerSaver": "节能",
     "rollback": "回滚"
   },
   "errors": {

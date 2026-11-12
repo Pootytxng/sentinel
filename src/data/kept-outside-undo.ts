@@ -9,6 +9,8 @@ const STOCK: Record<string, (t: TFunction) => string> = {
   "381b4222-f694-41f0-9685-ff5bb260df2e": (t) => t("app.dialogs.planBalanced"),
   "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c": (t) => t("app.dialogs.planHighPerformance"),
   "e9a42b02-d5df-448d-aa00-03f14749eb61": (t) => t("app.dialogs.planUltimate"),
+  // Windows' stock Power saver scheme (CR-range3-nits a): a saved prior plan of Power saver is named.
+  "a1841308-3541-4fab-bc81-f71556f20b4a": (t) => t("app.dialogs.planPowerSaver"),
 };
 
 /** The prior plan GUID the row's typed snapshot holds (`{ kind: "power-plan", prior_guid }`), lower-cased. */

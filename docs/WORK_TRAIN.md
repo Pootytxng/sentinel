@@ -317,6 +317,18 @@ Third whole-range review (e29da54b..119d07f8, 2026-11-12, SHIP-WITH-FOLLOW-UPS, 
       check `get_applied_changes`); (c) the dark stack trial applies through `apply_recommendations_batch` with no
       bench hold (benchmark_trial.rs ~534): add the hold before `stack_trial_gate` is ever enabled (supersedes
       CR-bench-stack-hold).
+      (a)(b) done (2026-11-12 s21, not installed; SHA in the merge): (a) a saved Power saver plan is named ("Power
+      saver" / "节能"); (b) yes, it could: a locked writer setting the damaged file aside and saving a new ledger
+      between the unlocked read and its rename would have moved the NEW ledger aside. The lookup now only reads
+      (`read_history_unlocked`: never renames; damaged or unreadable = an error, the undo stops before anything
+      runs, the next locked load sets it aside). Not the lock: an apply holds it through its UAC prompt and this
+      answers the UI's undo on the main thread. Tests fail on the old code. Left: `get_applied_changes` (and so the
+      History/Health views) still loads unlocked with the set-aside, the same window; locking it would freeze the UI
+      during an apply's prompt and a read-only view changes how the quarantine is first noticed, so it needs its own
+      design (park). (c) parked: `Held` is one (token, rec, title); the stack needs a set held under the store gate
+      before its batch (an `apply_for_bench_stack` beside `apply_for_bench_trial`), and `held_now()` callers
+      (Gaming Mode's start, `bench_refusal`) read one. Dark (`stack_trial_gate()` false), nothing reaches it today;
+      two reviews when done.
 From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAIL, teardown CLEAN):
 - [ ] **CR-footer-reversible** (FAIL item 6, `_train\view-1112a\05-test-history-changed-outside-row.png`, `03-test.png`)
       The footer says "Every change reversible · ledger 84" (zh "每一项更改均可撤销") on every screen while a
@@ -1499,6 +1511,21 @@ isolation"; read-only, no product names, prices or wattages guessed (unknown sta
       when it was GPU-limited (the sustained rule of P9-bottleneck-sustained), it names the GPU as the measured
       limiter with its share instead of "nothing holding this PC back"; another game's session never counts. Rust read
       + TS line, en + zh-CN; one review (measurement).
+Refill 2026-11-12 s21 (Phase 9 Exit: "name the measured limiter in system context or say 'no upgrade recommended',
+never a part in isolation"; read-only, measured only, unknown stays unknown, no product names or prices):
+- [ ] **P9-limit-source** Under "GPU was the measured limiter" (Optimize → Check), the line names what it was measured
+      from: the game, the session's date and how many samples were GPU-busy, from the recorded session; none recorded
+      = no line. en + zh-CN; Check.test.tsx: recorded / not recorded.
+- [ ] **P9-screen-is-limit** In the same block, when that session's measured average FPS is at or above the screen's
+      measured refresh rate, say the screen is the limit ("your 250 Hz screen already shows every frame: no upgrade
+      recommended for this game") instead of pointing at the GPU; refresh or FPS unmeasured = no line. en + zh-CN;
+      tests: above / below / unmeasured.
+- [ ] **P9-cpu-fit-unknowns** If Check shows a CPU-limited block, one line naming what Compy can't read before any
+      CPU: the board's socket and BIOS support, and the cooler's fit; establish first whether such a block exists
+      (if not, park with the finding). en + zh-CN; same test file.
+- [ ] **P9-no-upgrade-named** When Check measured no limiter, the upgrade area says "No upgrade recommended" and the
+      sessions it was read from (count and newest game), never an empty block; no sessions = "not measured yet".
+      en + zh-CN; tests: measured clean / no sessions.
 
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.

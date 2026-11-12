@@ -34,6 +34,7 @@
     "planBalanced": "Balanced",
     "planHighPerformance": "High performance",
     "planUltimate": "Ultimate Performance",
+    "planPowerSaver": "Power saver",
     "rollback": "Roll back"
   },
   "errors": {

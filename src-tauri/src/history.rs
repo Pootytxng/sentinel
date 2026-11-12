@@ -1939,8 +1939,27 @@ pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
 /// CR-gm-spans-followups (d): the setting ledger row `change_id` changed, read without the ledger
 /// lock (a row's rec id never changes). `None` when no row has that id (the undo then says so). A
 /// ledger that can't be read is an error: the undo would refuse it too (H1).
+///
+/// CR-range3-nits (b): a READ only. `load_history` sets a damaged file aside (a rename), and this
+/// runs without the ledger lock, so a locked writer could set the damaged file aside and save a new
+/// ledger between this read and this rename, and the rename would then move the NEW ledger aside.
+/// So nothing is renamed here: a damaged or unreadable ledger is an error (the undo stops before
+/// anything runs) and is set aside by the next locked load. The lock isn't taken instead because an
+/// apply holds it through its Windows permission prompt, and this answers the UI's undo.
 pub(crate) fn rec_id_of_change(change_id: &str) -> Result<Option<String>, String> {
-    Ok(load_history()?.into_iter().find(|c| c.id == change_id).map(|c| c.rec_id))
+    Ok(read_history_unlocked(&history_path())?.into_iter().find(|c| c.id == change_id).map(|c| c.rec_id))
+}
+
+/// PURE-ish read of the ledger at `path` that never moves, writes or reports anything. Absent is an
+/// empty ledger; a file that can't be read or doesn't parse is an error naming which.
+fn read_history_unlocked(path: &Path) -> Result<Vec<AppliedChange>, String> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let bytes = std::fs::read(path)
+        .map_err(|e| format!("The Trust Ledger could not be read right now (read: {e}). Nothing was changed."))?;
+    serde_json::from_slice(&bytes)
+        .map_err(|e| format!("The Trust Ledger could not be read (parse: {e}). Nothing was changed."))
 }
 
 /// What an outcome-switch undo cites: given the ledger row's rec id, the checked Trial link, or why
@@ -5013,6 +5032,28 @@ mod history_tests {
         for began in [None, Some("not a time"), Some("")] {
             assert_eq!(ledger_coverage(through(), began), LedgerCoverage::Unknown, "{began:?}");
         }
+    }
+
+    // CR-range3-nits (b): the undo's unlocked rec-id lookup reads only. A damaged ledger is an error
+    // and stays exactly where it is (no `.corrupt` rename outside the lock); absent is empty.
+    #[test]
+    fn the_unlocked_rec_id_read_never_sets_a_damaged_ledger_aside() {
+        let dir = std::env::temp_dir().join(format!("compy-hist-unlocked-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        assert_eq!(read_history_unlocked(&path).map(|v| v.len()), Ok(0), "absent is empty");
+        std::fs::write(&path, b"{ damage").unwrap();
+        let err = read_history_unlocked(&path).map(|v| v.len()).expect_err("damaged is an error");
+        assert!(err.contains("could not be read (parse") && err.contains("Nothing was changed"), "{err}");
+        assert_eq!(std::fs::read(&path).unwrap(), b"{ damage", "left in place, byte for byte");
+        assert!(!path.with_extension("json.corrupt").exists(), "nothing set aside without the lock");
+        std::fs::write(&path, b"[]").unwrap();
+        assert_eq!(read_history_unlocked(&path).map(|v| v.len()), Ok(0));
+        let src = include_str!("history.rs");
+        let body = src.split_once("pub(crate) fn rec_id_of_change(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        assert!(body.contains("read_history_unlocked(") && !body.contains("load_history("), "the lookup reads only");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
