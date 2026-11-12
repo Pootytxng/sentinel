@@ -115,6 +115,8 @@ import { fireEvent } from "@testing-library/react";
 import { LEDGER_CHANGED_EVENT, type SessionSummary } from "../types";
 import { invalidateProbe, putProbe } from "../data/probe-cache";
 import { useLayoutEffect, useRef } from "react";
+import { act } from "@testing-library/react";
+import { setExpertView } from "../design/use-expert-view";
 
 afterEach(() => {
   cleanup();
@@ -1035,5 +1037,29 @@ describe("CR-check-expert-mount: a pile tapped before the mount effects stays as
     const door = screen.getAllByRole("button").find((b) => name.test(b.textContent ?? ""))!;
     expect(door).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText(shown)).toBeInTheDocument();
+  });
+
+  // Review r1 SHOULD-FIX: the piles still follow a CHANGE of the preference live, both ways.
+  it("flipping Expert view on a mounted Check opens both piles, and flipping it back closes them", () => {
+    seedCachedVerdict();
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    const pile = (name: RegExp) => screen.getAllByRole("button").filter((b) => name.test(b.textContent ?? ""));
+    expect(pile(/measured fine/)).toHaveLength(1);
+    expect(pile(/not worth touching/)).toHaveLength(1);
+    expect(pile(/measured fine/)[0]).toHaveAttribute("aria-expanded", "false");
+    try {
+      act(() => setExpertView(true));
+      expect(pile(/measured fine/)[0]).toHaveAttribute("aria-expanded", "true");
+      expect(pile(/not worth touching/)[0]).toHaveAttribute("aria-expanded", "true");
+      act(() => setExpertView(false));
+      expect(pile(/measured fine/)[0]).toHaveAttribute("aria-expanded", "false");
+      expect(pile(/not worth touching/)[0]).toHaveAttribute("aria-expanded", "false");
+    } finally {
+      act(() => setExpertView(false));
+    }
   });
 });
