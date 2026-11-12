@@ -30,8 +30,9 @@ describe("humanizeWhen buckets by the local calendar day", () => {
     expect(humanizeWhen(row, en, "en", now)).toMatch(/^Nov 3 · /);
     expect(humanizeWhen(row, zh, "zh-CN", now)).toContain("11月3日");
     // The time follows the app's language too, not the OS locale.
-    expect(humanizeWhen(row, zh, "zh-CN", now)).toMatch(/上午/);
-    expect(humanizeWhen(row, en, "en", now)).toMatch(/AM$/);
+    // (zh-CN's own clock reads "9:08"; an en-US OS locale would have printed "9:08 AM" here.)
+    expect(humanizeWhen(row, zh, "zh-CN", now)).toBe("11月3日 · 9:08");
+    expect(humanizeWhen(row, en, "en", now)).toBe("Nov 3 · 9:08 AM");
   });
 
   it("zh-CN buckets the same way", () => {
