@@ -245,6 +245,32 @@ export type Priorities = {
   /** P9-no-upgrade-source: per game, its newest measured session when it recorded enough GPU
    *  readings and was not GPU-limited. A game in neither list was not measured. */
   gpu_clear_games?: GameGpuClear[];
+  /** P9-no-upgrade-named: what an upgrade area with no hardware row was read from (this card's
+   *  sessions only). Absent from an older backend: the room then says nothing. */
+  upgrade_evidence?: UpgradeEvidence;
+};
+
+/** P9-no-upgrade-named (priorities.rs `UpgradeEvidence`). */
+export type UpgradeEvidence = {
+  /** Sessions that measured play with enough GPU readings to decide anything; sessions recorded on
+   *  another graphics card are left out. */
+  measured_sessions: number;
+  /** How many of them were GPU-limited (any game, any age): "no upgrade recommended" only at 0. */
+  gpu_limited_sessions: number;
+  /** The newest of them; absent when there is none, or it recorded no game or start. */
+  newest?: {
+    game: string;
+    started_at: string;
+    busy: number;
+    readings: number;
+    threshold_pct: number;
+    limit_share_pct: number;
+    gpu_limited: boolean;
+    /** P9-cpu-gpu-balance: that session's average FPS and recorded refresh; absent = unmeasured. */
+    avg_fps?: number;
+    refresh_hz?: number;
+    gpu_tie?: GpuTie;
+  };
 };
 
 export type GameGpuClear = {

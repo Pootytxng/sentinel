@@ -83,6 +83,8 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
   link-free* (Phase 9: retail economics never shape the answer; the measured lines stand alone).
 - **P8-first-advanced** waits on P4's walkthrough (the gate is Trial + Risk proof), then your sign-off on the
   candidate Claude recommends.
+- **Phase 9 Exit** (s24 finding under the Phase 9 heading): once P9-part-line-context and P9-no-session-plain-line
+  land, count the Phase 9 Exit met on code + fixtures, with the live case inside P4-exit-proof? *Yes* (recommended).
 - **Empty ledger while its health is unknown** (CR-footer-ledger-unknown, s24): Compy reads an unreadable change
   ledger as an empty list, so with the health check still running or failed the rail footer can say "Nothing in
   effect to undo · ledger 0". A standing guard (`ledger-health-home-guard.test.tsx`) requires unknown health to look
@@ -1563,6 +1565,30 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
       Trial + Risk proof". Needs the owner's sign-off and P4-exit-proof.
 
 ### Then — Roadmap Phase 9: Hardware decision intelligence (`product/ROADMAP.md` Phase 9)
+**PHASE 9 EXIT FINDING (s24, 2026-11-12; read from main after the s24 merges; not ticked: owner's call, see Needs
+owner).** Exit, `product/ROADMAP.md:287`, clause by clause:
+(1) "for a measured workload": met in code. Per game, its newest measured session's GPU readings, sessions from
+another card left out (priorities.rs `build_gpu_games`, `sessions_on_this_gpu`; tests
+`each_game_is_gpu_limited_only_by_its_own_newest_measured_session`, `a_session_on_another_card_never_names_this_cards_gpu_as_the_limiter`).
+(2) "say whether software settings have reached what it can test": met in code. The Phase 9 line exists only on a
+"finished-supported-tests" summary (settings-done.ts `settingsDoneLine`; `p9-exit-fixture.test.ts` cases done vs not
+done). Never seen live: the Test panel has not yet said "finished" on this rig (P4-exit-proof).
+(3) "name the measured limiter in system context": met for the GPU (summary: "...the GPU is the measured limiter for
+this game. Compy can't check your power supply, case or the rest of the system for a new card."; Optimize room:
+what it was measured from + "Before any card: ..." fit line, `optimize-station-upgrade.test.tsx`) and for the screen
+(P9-screen-is-limit, P9-summary-screen-limit). GAP: a part the check names reads "The last check's top limiter is a
+part of this PC: <title>." with no system context on the summary (fixture case 5; queued P9-part-line-context).
+(4) "or say 'no upgrade recommended'": met. Summary: measured-clear line with its counts, "not measured ... no upgrade
+is recommended", the screen cap; Optimize room: "No upgrade recommended" with what it was read from, or "Not measured
+yet" (P9-no-upgrade-named, s24). GAP: with no measured session the summary's plain line ("found nothing holding this PC
+back") reads as measured (fixture case 3; queued P9-no-session-plain-line).
+(5) "never naming a part in isolation": NOT met, the gap in (3).
+(6) "never letting retail economics shape the answer": met. P9-retail-firewall (settings-done payloads with/without
+links; `upgrade_row_wording_names_no_retailer`), the room shows no links (`optimize-station-upgrade.test.tsx`), the
+fixture's leak check.
+Verdict: not yet met. Two small TS gaps (P9-part-line-context, P9-no-session-plain-line), and the live case waits on
+P4-exit-proof. Recommendation: land the two gaps, then count the Exit met on code + fixtures, with the live walk inside
+P4/P5's exit proof.
 Planned 2026-10-28 (scheduled refill, second). Smallest read-only slices on what Compy already measures;
 no shopping, no product names, no prices (affiliate firewall), never an invented spec.
 - [x] **P9-hz** `f1bfbb26` The display-mode line shows the refresh rate with its unit ("1920×1080 @ 250 Hz", was
@@ -1642,10 +1668,13 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       wording softened; what the refresh field is, as a comment; boundary tests at = and 249.6). The disclosure line
       still renders under the block when no links show (pre-existing block shape). Tests fail on main's Check.tsx.
       cargo test priorities + clippy clean. Not visually checked.
-- [ ] **P9-cpu-gpu-balance** (Phase 9 "CPU/GPU balance") When a game's newest measured session was NOT GPU-limited
+- [x] **P9-cpu-gpu-balance** (Phase 9 "CPU/GPU balance") When a game's newest measured session was NOT GPU-limited
       (enough readings, under half busy) and averaged below the screen's refresh rate, Check says the GPU was not the
       limit in that session (N of M readings busy) and that Compy can't measure the CPU's share yet; unknown stays
       unknown, no part named. en + zh-CN; tests.
+      Done with P9-no-upgrade-named (s24; see its note): under "No upgrade recommended", "That session averaged 142
+      fps, under the 250 Hz the screen ran at. Compy can't measure the CPU's share yet, so it can't say what held the
+      frame rate there." Average or refresh unmeasured, or at/above the refresh = no line.
 - [x] **P9-no-upgrade-source** The finished game summary's "nothing holding this PC back" (settings-done) names what it
       was read from (the cached check's date and that the game's newest session was not GPU-limited, or "not
       measured"). en + zh-CN; tests.
@@ -1690,9 +1719,22 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       priorities.rs in English and now show in the zh-CN room. Carry the numbers (share, peak) on the row and word both
       rows in the UI by kind, en + zh-CN; also drop "a GPU upgrade is the hardware lever" (a part named before the fit
       lines). Rust + TS; one review.
-- [ ] **P9-no-upgrade-named** When Check measured no limiter, the upgrade area says "No upgrade recommended" and the
+- [x] **P9-no-upgrade-named** When Check measured no limiter, the upgrade area says "No upgrade recommended" and the
       sessions it was read from (count and newest game), never an empty block; no sessions = "not measured yet".
       en + zh-CN; tests: measured clean / no sessions.
+      Done with P9-cpu-gpu-balance (s24, not installed; SHAs in the merge): priorities.rs `upgrade_evidence` (sessions
+      from another card left out): sessions that measured play with 30+ sane GPU readings, how many were GPU-limited,
+      and the newest one's counts, sustained verdict, average FPS, recorded refresh and card tie. The Optimize room
+      (Check hands its scan's priorities up) shows, when the scan named no hardware limiter, no part, and no counted
+      session was GPU-limited: "No upgrade recommended. Read from the last check, which names no part holding this PC
+      back, and 3 measured game sessions, none of them GPU-limited (sessions recorded on another graphics card are left
+      out). In the newest, your ROB RUN session on Nov 11, 120 of 900 GPU readings were at 95% load or more, under the
+      50% Compy counts as GPU-limited, so Compy doesn't count the GPU as the limit there." (zh-CN too); none counted =
+      "Not measured yet: ...". Labeled early, no links. Tests: Rust evidence (other card, samples 0, too few readings,
+      untied, nameless first, limited count); room 12 cases, 7 fail on main. Reviews sonnet r1 REQUEST-CHANGES
+      (MUST-FIX taken: the count no longer says "on this graphics card"; SHOULD-FIX taken: a GPU-limited counted
+      session hides the block, the CPU line guesses no cause; tests), r2 APPROVE-WITH-NITS (comment nits left).
+      Not visually checked.
 - [x] **P9-retail-firewall** (Phase 9 "affiliate economics firewalled") A test that the upgrade verdict (gpu/ssd row,
       settings-done line, screen-is-limit) is computed with no retail data in scope: the same priorities payload with
       and without retail links yields the same rows and wording; establish first where links are joined. Tests only
@@ -1891,6 +1933,13 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       with `hardware.gpus.first()` (not the most-VRAM pick) and never checks that session ran on that card. Use
       `priorities::primary_gpu_of` and the session's own `hw_fingerprint.gpu`; another card's session is not named
       as this card's. Rust; one review.
+- [ ] **CR-glass-scroll-flake** (s24 push 2 gate) `src/surfaces/glass/glass-rooms.test.tsx:477` "arriving while a
+      record waits lands on THAT record" failed in the loaded pre-push run ("the selected row was never scrolled to:
+      expected -1 to be greater than -1") and passes alone. Same class as CR-bench-flake: find whether the scroll
+      runs from an effect a loaded render can outrun; fix in product code, never by loosening the test. TS.
+- [ ] **CR-firstcheck-flake** (s24 full vitest in train-P9-exit-fixture, tests-only branch) `FirstCheck.test.tsx`
+      "unread and advisory together: the unread line counts graded checks only and names the advisory" got null in
+      a loaded full run and passes alone (8/8). Same class; find the timing gap. TS.
 - [x] **CR-footer-ledger-unknown** (NITs, ShellV2.tsx ~471, 52cd64de) `get_applied_changes` turns an unreadable
       ledger into [] so the footer can say "Nothing in effect to undo · ledger 0" while the health probe failed or is
       in flight; a rejected call can leave "Ledger not read yet" forever. Unknown reads unknown; a rejected call

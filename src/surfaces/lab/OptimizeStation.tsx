@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import "../../i18n";
 import Fix from "../Fix";
-import Check, { UpgradePathBlock } from "../Check";
+import Check, { NoUpgradeBlock, UpgradePathBlock } from "../Check";
 import { GamingMode } from "../GamingMode";
 import { deriveReverted } from "../use-scan";
 import { useReducedMotion } from "../../design/use-motion";
@@ -15,6 +15,7 @@ import type {
   AppliedChange,
   SessionSummary,
   UpgradePath,
+  Priorities,
 } from "../../types";
 import type { GpuVendor } from "../walkthroughs";
 import "./OptimizeStation.css";
@@ -80,6 +81,9 @@ export function OptimizeStation(props: LabFastPathProps) {
   // (V2-4b: demoted content never leads the room); the room renders it below its groups instead, from
   // the same scan Check ran, handed up through onUpgradePath. null = no hardware limiter measured.
   const [upgradePath, setUpgradePath] = useState<UpgradePath | null>(null);
+  // P9-no-upgrade-named: the same scan's priorities, for "No upgrade recommended" and what it was
+  // read from when the scan named no hardware limiter. null = no scan in hand (nothing shown).
+  const [scanPriorities, setScanPriorities] = useState<Priorities | null>(null);
   const reduced = useReducedMotion();
   // Expert view (spec §3 — stop de-emphasizing the long tail): the station's ledger + cleanup
   // disclosures render OPEN so the full panel sits inline. `open={true}` only re-asserts on pref
@@ -256,6 +260,7 @@ export function OptimizeStation(props: LabFastPathProps) {
             gpus={props.gpus}
             onOpenCare={props.onOpenCare}
             onUpgradePath={setUpgradePath}
+            onScanPriorities={setScanPriorities}
           />
         </div>
       </details>
@@ -264,7 +269,13 @@ export function OptimizeStation(props: LabFastPathProps) {
           measured from, the screen limit, what Compy can't check before any part), labeled early,
           below the action groups. No retail links here (owner call, default none). Renders only
           when the scan named a hardware limiter. */}
-      {upgradePath && <UpgradePathBlock upgradePath={upgradePath} links={false} />}
+      {upgradePath ? (
+        <UpgradePathBlock upgradePath={upgradePath} links={false} />
+      ) : (
+        // P9-no-upgrade-named: no hardware limiter named: "No upgrade recommended" with what it was
+        // read from, or "not measured yet"; never an empty block (NoUpgradeBlock decides).
+        scanPriorities && <NoUpgradeBlock priorities={scanPriorities} />
+      )}
 
       {/* §5 Power features (spec 2026-07-08 §5, owner nod) — the bigger reversible changes you can
           make AND prove in the proving ground: Gaming Mode (foreground boost) + service-suspend,
