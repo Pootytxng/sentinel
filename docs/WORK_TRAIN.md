@@ -448,11 +448,28 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       cut at the end of `start`, the suspend gate read once). Tests fail without it. NOT visually checked: the line
       shows only during a session started while a Trial or the benchmark holds a setting; a self-review of it is
       owed when one is captured.
-- [ ] **CR-gm-restore-partial** (r2 opus SHOULD-FIX of CR-gm-spans-followups; pre-existing) A failed restore keeps the
+- [x] **CR-gm-restore-partial** (r2 opus SHOULD-FIX of CR-gm-spans-followups; pre-existing) A failed restore keeps the
       whole contract, including changes it did restore, so one step that always fails (a removed service or plan)
       leaves every setting of that session refused for Trials and plain apply/undo with no way out. Drop
       confirmed-restored entries from the kept contract, or give the RestoreFailed refusal a way out. Rollback
       boundary: two reviews.
+      Done (2026-11-12 s22, Rust only, not installed; SHAs in the merge): a failed restore now keeps only the changes
+      that did not confirm restored (Ok from `restore_one_change`, or an `ok` receipt under a successful elevation:
+      the same rule that clears the whole contract), in apply order, tracked by reference (never by label); the batch's
+      outcomes are zipped onto its staged changes; anything that can't be placed keeps the whole contract. No new
+      mutation path; the reported error is unchanged. What a user sees: after a restore where one step keeps failing,
+      only that step's setting is refused ("Finish the last Gaming Mode session"); the others can be tested and
+      changed again. Reviews r1 opus (plan mode) APPROVE-WITH-NITS and sonnet APPROVE-WITH-NITS, no MUST-FIX; nits taken
+      (dispatch-count assert, names, debug_assert); opus SHOULD-FIX (pre-existing: the power-setting restore's
+      `powercfg` exit code is unchecked, so a failed restore can report ok) queued as CR-powercfg-restore-exit; sonnet's
+      reader check done (only the hold checks, trial_candidates and orphan detection read `changes`; all want the
+      remainder). Tests on a temp session dir with a forced decline (nothing reaches Windows); the integration test
+      asserts the confirmed change is gone, which the old code keeps (not run against the old code: the pure test does
+      not compile there). Gates in the session log.
+- [ ] **CR-powercfg-restore-exit** (r1 opus SHOULD-FIX of CR-gm-restore-partial; pre-existing; rollback boundary) The
+      power-setting restore (USB selective suspend / PCIe ASPM, actions.rs ~3651, and its batch line ~1034) runs bare
+      `powercfg` with no `$LASTEXITCODE` check, so inside the batch's `try` a failed write still records `:ok` and the
+      change counts as restored. Check the exit code in the restore path as #617 did for apply. Two reviews.
 - [x] **CR-gm-service-suspend-rows** (r1 opus SHOULD-FIX of CR-gm-spans-followups; latent, no UI caller today)
       `suspend_known_service` records `service-suspend:<Name>` rows with the suspend Gaming Mode uses; the touch check
       doesn't know that id. Map it into `session_can_touch` and gate the command, or unregister it. Two reviews.

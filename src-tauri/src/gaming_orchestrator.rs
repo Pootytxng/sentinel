@@ -917,6 +917,9 @@ fn still_to_restore(
     failed: &[&SessionChange],
 ) -> Vec<SessionChange> {
     let n = changes.len();
+    // Review r1: a change to resolve_restore_order's shape must fail loudly in tests; in a release
+    // build the fallback below still keeps the whole contract.
+    debug_assert_eq!(ordered.len(), n, "restore order must be a permutation of the contract");
     let mut keep = vec![false; n];
     for f in failed {
         match ordered.iter().position(|o| std::ptr::eq(o, *f)) {
@@ -1021,13 +1024,13 @@ fn resolve_restore_batch(
 /// Restore a contiguous run of elevated changes under ONE UAC prompt. Phase 1: each
 /// rollback runs with the deferral sink armed — its reads happen, its elevated
 /// command parks (no mutation). Phase 2: the parked commands run in run order under
-/// a single elevation with per-item receipts. Failures land in `first_err` per change
+/// a single elevation with per-item receipts. Failures land in `errs` per change
 /// (the same collect-and-continue semantics as the inline path); the caller's
 /// RestoreFailed / retain / never-false-success contract is unchanged.
 fn restore_elevated_run<'a>(
     run: &'a [SessionChange],
     session_id: &str,
-    first_err: &mut RestoreErrs<'a>,
+    errs: &mut RestoreErrs<'a>,
 ) {
     // Phase 1 — sink armed: reads + parking only, no elevated mutation.
     struct Staged<'a> {
@@ -1042,9 +1045,9 @@ fn restore_elevated_run<'a>(
     // that mutated without deferring, reachable only from a mislabeled/disk-edited
     // contract) must not execute twice, and read-time failures are already recorded.
     // Staged items' parked commands never ran, so re-dispatching them is safe.
-    let staged_fallback = |staged: &[Staged<'a>], first_err: &mut RestoreErrs<'a>| {
+    let staged_fallback = |staged: &[Staged<'a>], errs: &mut RestoreErrs<'a>| {
         for s in staged {
-            record_restore_err(first_err, s.change, restore_one_change(s.change));
+            record_restore_err(errs, s.change, restore_one_change(s.change));
         }
     };
     let mut staged: Vec<Staged> = Vec::new();
@@ -1054,7 +1057,7 @@ fn restore_elevated_run<'a>(
             Err(_) => {
                 // Nothing has been dispatched yet — the whole run takes the per-item path.
                 for change in run {
-                    record_restore_err(first_err, change, restore_one_change(change));
+                    record_restore_err(errs, change, restore_one_change(change));
                 }
                 return;
             }
@@ -1074,7 +1077,7 @@ fn restore_elevated_run<'a>(
                 // commands it parked before refusing are DISCARDED below (they never ran —
                 // running a refused rollback's parked tail would mutate on a path the
                 // rollback itself abandoned).
-                Err(e) => record_restore_err(first_err, change, Err(e)),
+                Err(e) => record_restore_err(errs, change, Err(e)),
             }
             cursor = now;
         }
@@ -1090,7 +1093,7 @@ fn restore_elevated_run<'a>(
     for (i, s) in staged.iter().enumerate() {
         let Some(cmds) = all_cmds.get(s.cmds.clone()) else {
             // Impossible by construction — abort to the per-item path before anything runs.
-            return staged_fallback(&staged, first_err);
+            return staged_fallback(&staged, errs);
         };
         let id = format!("r{i}"); // ps_safe-shaped by construction
         script_items.push((id.clone(), cmds.to_vec()));
@@ -1101,20 +1104,20 @@ fn restore_elevated_run<'a>(
     // precedent). The id is internally generated ("gm-<millis>"), but shape-guard it
     // before it enters a filename so a disk-loaded contract can never open a traversal.
     if actions::ps_safe(session_id).is_err() {
-        return staged_fallback(&staged, first_err);
+        return staged_fallback(&staged, errs);
     }
     let receipts_path = crate::gaming_session::session_data_dir()
         .join(format!("gaming-restore-{session_id}.receipts"));
     if let Some(dir) = receipts_path.parent() {
         if std::fs::create_dir_all(dir).is_err() {
-            return staged_fallback(&staged, first_err);
+            return staged_fallback(&staged, errs);
         }
     }
     let _ = std::fs::remove_file(&receipts_path);
     let script =
         match actions::compose_batch_script(&script_items, &receipts_path.to_string_lossy()) {
             Ok(s) => s,
-            Err(_) => return staged_fallback(&staged, first_err),
+            Err(_) => return staged_fallback(&staged, errs),
         };
 
     // Phase 2 — the ONE elevation. Its outcome is final for this attempt: no per-item
@@ -1132,12 +1135,12 @@ fn restore_elevated_run<'a>(
     if outcomes.len() != staged.len() {
         // Impossible by construction; fail every staged change rather than guess which restored.
         for s in &staged {
-            record_restore_err(first_err, s.change, Err("the elevated restore step didn't finish".into()));
+            record_restore_err(errs, s.change, Err("the elevated restore step didn't finish".into()));
         }
         return;
     }
     for (s, (_label, res)) in staged.iter().zip(outcomes) {
-        record_restore_err(first_err, s.change, res);
+        record_restore_err(errs, s.change, res);
     }
 }
 
@@ -1997,7 +2000,6 @@ mod elevation_batch_tests {
             snapshot: Snapshot::Service { prior_state: prior.into(), prior_start_mode: "Manual".into() },
             elevated_restore: true,
         };
-        let before = file.changes.len();
         file.changes.push(svc(KnownService::SysMain, "Running")); // applied first → restored last
         file.changes.push(svc(KnownService::WSearch, "Stopped")); // applied last → restored first, no-op
         save_session(&file).expect("fixture save");
@@ -2008,12 +2010,13 @@ mod elevation_batch_tests {
             restore(&mut file)
         };
         assert!(res.is_err(), "a declined restore still fails loudly");
+        assert_eq!(elevation_dispatch_count(), 1, "one prompt, no per-item re-prompt after the decline");
         assert_eq!(file.status, SessionStatus::RestoreFailed);
         let kept = load_session().expect("contract retained");
         let labels: Vec<&str> = kept.changes.iter().map(|c| c.label.as_str()).collect();
         assert!(labels.contains(&"Suspend SysMain for this session"), "the failed change stays: {labels:?}");
         assert!(!labels.contains(&"Suspend WSearch for this session"), "the confirmed one goes: {labels:?}");
-        assert_eq!(kept.changes.len(), before + 1, "nothing else is dropped: {labels:?}");
+        assert_eq!(kept.changes.len(), 1, "nothing else is kept: {labels:?}");
         assert_eq!(file.changes.len(), kept.changes.len(), "memory matches disk");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -2034,7 +2037,6 @@ mod elevation_batch_tests {
         // The newest "a" (ordered[0]) and "b" failed: same labels never confuse which one.
         let kept = still_to_restore(&changes, &ordered, &[&ordered[0], &ordered[2]]);
         assert_eq!(labels(&kept), vec!["b", "a"]);
-        assert!(std::ptr::eq(kept.last().map(|c| &c.label).unwrap(), &kept[1].label));
         assert_eq!(still_to_restore(&changes, &ordered, &[]).len(), 0);
         let stranger = stub("x");
         assert_eq!(labels(&still_to_restore(&changes, &ordered, &[&stranger])), labels(&changes));
