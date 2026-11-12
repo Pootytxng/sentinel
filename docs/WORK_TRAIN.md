@@ -837,7 +837,7 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       Done `0813fe8e` (2026-11-11 s19, CODE-ONLY, read-only, not installed): `LiveReads` carries the pass's one active
       scheme read; the power-ultimate probe (same class rule) and the kept-outside check share it. Test counts one read
       for the pass (two on the old code). sonnet APPROVE-WITH-NITS, no MUST-FIX/SHOULD-FIX.
-- [ ] **CR-kept-outside-nits** (r2 opus NITs of CR-outside-followups b) Re-check Gaming Mode after the plan read, as
+- [x] **CR-kept-outside-nits** (r2 opus NITs of CR-outside-followups b) Re-check Gaming Mode after the plan read, as
       `record_changed_outside` does (history.rs `kept_outside_observed_with`); readiness row wording when every change is
       kept outside ("0 settings active ..." first, readiness.rs ~978); a still-applied row that reads off shows
       "rolled back" in History (Fix.tsx, pre-existing); the power-profile row still flags a kept custom plan (readiness.rs ~864).
@@ -847,8 +847,11 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       from the Trust Ledger." then the kept line (English, like the rest of that row); sonnet APPROVE, SHOULD-FIX (plural
       case test) taken. (c) done `95eac0f8` (2026-11-11 s19, TS only, not installed): History says "off now, not
       undone" (zh-CN "当前已关闭，未撤销") for an applied row that reads off; only an undo says "rolled back" (no longer
-      dimmed: it is a live ledger entry). Test fails on the old component. sonnet APPROVE. Left: (d) the power-profile
-      row flagging a kept custom plan (needs the recorded plan in the readiness summary).
+      dimmed: it is a live ledger entry). Test fails on the old component. sonnet APPROVE. (d) done `f8e7aa3e` + review
+      follow-up (2026-11-11 s19, read-only, not installed): when the kept change is the power plan (its record holds),
+      the Power profile row is an advisory "Active plan "<name>", which you chose to keep as set outside Compy. Compy
+      won't flag or switch it." (English, like that row) instead of "isn't performance-oriented". sonnet Accept;
+      SHOULD-FIX (two separate plan reads) documented as accepted, nit test taken.
 - [x] **CR-summary-running-trial** (TS) While a retest Trial runs, the game summary's row for that change reads "Applied
       now" and "Stays applied from these tests: <change>", though the tested Trial put it back; "on" is the running
       Trial's own apply (`stillAppliedFrom` reads the picker's already-set-by-compy). Say it is applied by the Trial in
