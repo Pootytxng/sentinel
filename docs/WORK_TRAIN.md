@@ -358,9 +358,15 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
 - [ ] **CR-home-reversible-note** (same class as CR-footer-reversible) Home's Active changes card says "every one
       reversible from the ledger" (ledger-health-home-guard.test.tsx `REVERSIBLE_NOTE`); make it count from
       `undoTally` like the footer, en + zh-CN. TS.
-- [ ] **CR-hist-today** (`_train\view-1112a\04-test-applied.png`) History rows from Nov 11 6:14 AM and 4:19 AM read
+- [x] **CR-hist-today** (`_train\view-1112a\04-test-applied.png`) History rows from Nov 11 6:14 AM and 4:19 AM read
       "today" at 00:35 on Nov 12: `Fix.tsx` `humanizeWhen` buckets by elapsed 24 h, not calendar day, and formats
       with the OS locale. Calendar days in the app's language; test fails on the old code. TS.
+      Done `00f63468`, `7294db89` + r1 nits (2026-11-12 s22, not installed): `data/humanize-when.ts` counts local
+      calendar dates (Date.UTC on the local y/m/d, so a 23 h / 25 h DST day is one day) and formats date and time in
+      the app's language; those rows now read "yesterday · 6:14 AM" (zh "昨天 · 6:14"). Tests: just after midnight,
+      month/year ends, DST-length days, zh-CN; the Fix History test fails on the old code. Review sonnet
+      APPROVE-WITH-NITS (SHOULD-FIX taken: clock literals built from the same ICU; the language read stays the
+      i18n singleton at render, which re-renders through useTranslation). tsc 0, full vitest 536/539 (3 site-app).
 - [ ] **CR-zh-backend-home** (`_train\view-1112a\14-home-zh-CN.png`) zh-CN Health shows backend English: the
       crash banner ("ROB RUN stopped working and closed — …"), the limiter title and body ("Power plan isn't
       performance-oriented …"), the last change's title ("Help Windows focus on your game") and "设为On".

@@ -32,7 +32,8 @@ import { gameModeRevertedExternally } from "./dashboard-data";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
-import "../i18n";
+import i18n from "../i18n";
+import { humanizeWhen as humanizeWhenIn } from "../data/humanize-when";
 import "./Fix.css";
 
 // Whether the Living Instrument preview is on (DOM-read; the surface re-renders fresh on navigation,
@@ -150,19 +151,10 @@ type Props = {
   reverted?: { rec_id: string; title: string }[];
 };
 
-// Humanized timestamp (ledger §2): "3 days ago · 6:08 AM", never raw seconds.
+// Humanized timestamp (ledger §2): "3 days ago · 6:08 AM", never raw seconds. Buckets by local
+// calendar day and formats in the app's language (CR-hist-today; data/humanize-when.ts).
 function humanizeWhen(iso: string, t: TFunction): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return t("optimize.fix.humanizeRecently");
-  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
-  if (days <= 0) return t("optimize.fix.humanizeToday", { time });
-  if (days === 1) return t("optimize.fix.humanizeYesterday", { time });
-  if (days < 7) return t("optimize.fix.humanizeDaysAgo", { days, time });
-  return t("optimize.fix.humanizeDateTime", {
-    date: d.toLocaleDateString([], { month: "short", day: "numeric" }),
-    time,
-  });
+  return humanizeWhenIn(iso, t, i18n.language);
 }
 
 // Labels come from the shared provenance source of truth so they can't drift from the

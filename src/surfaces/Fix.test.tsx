@@ -143,6 +143,30 @@ describe("Fix", () => {
     expect(onRollback).not.toHaveBeenCalled();
   });
 
+  it("CR-hist-today: just after midnight, History calls the previous morning's rows yesterday", () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 10, 12, 0, 35) });
+    try {
+      const row = (id: string, h: number, m: number) => ({
+        id,
+        rec_id: `rec-${id}`,
+        rec_title: `Row ${id}`,
+        applied_at: new Date(2026, 10, 11, h, m).toISOString(),
+        snapshot: null,
+        status: "rolled_back" as const,
+        is_still_active: false,
+      });
+      const { container } = render(
+        <Fix recs={[]} {...baseProps} view="history" changes={[row("a", 6, 14), row("b", 4, 19)]} />,
+      );
+      fireEvent.click(screen.getByText("History"));
+      const whens = [...container.querySelectorAll(".fix-hist-when")].map((e) => e.textContent ?? "");
+      expect(whens).toHaveLength(2);
+      for (const w of whens) expect(w).toMatch(/^yesterday · /);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("CR-outside-followups (b): a row recorded as changed outside Compy says so in History, not 'rolled back'", () => {
     const row = (id: string, rec: string, title: string, outside: boolean) => ({
       id,
