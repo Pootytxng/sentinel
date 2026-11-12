@@ -293,6 +293,16 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     expect(row.querySelector(".mc-delta-note")).toBeNull();
   });
 
+  it("CR-view-1111d-wording: the spikes value says its unit, singular at one, and zh-CN writes it with no space", async () => {
+    const { default: i18n } = await import("../i18n");
+    const v = (glyph: string, count: number, lng: string) =>
+      i18n.t("monitor.monitorConsole.deltaSpikesValue", { glyph, count, lng });
+    expect(v("▲1", 1, "en")).toBe("▲1 spike");
+    expect(v("▼2", 2, "en")).toBe("▼2 spikes");
+    expect(v("±0", 0, "en")).toBe("±0 spikes");
+    expect(v("▲4", 4, "zh-CN")).toBe("▲4次");
+  });
+
   it("CR-live-changes-twice: the changes-on count is said once, in the comparison's tag, not again in the readings", async () => {
     mockPolls(() => stoppedFps);
     const { container } = mount({

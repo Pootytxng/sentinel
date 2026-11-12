@@ -592,12 +592,13 @@ export function MonitorConsole({
                     [
                       "spikes",
                       t("monitor.monitorConsole.deltaSpikes"),
-                      deltaWithUnit(
-                        deck.spikes,
-                        t("monitor.monitorConsole.deltaSpikesUnit", {
-                          count: Math.abs(Math.round(deck.spikes ?? 0)),
-                        }),
-                      ),
+                      // The whole value is the string (review r1 nit): zh-CN writes "▲4次", no space.
+                      deck.spikes == null
+                        ? fmtDeltaGlyph(null)
+                        : t("monitor.monitorConsole.deltaSpikesValue", {
+                            glyph: fmtDeltaGlyph(deck.spikes),
+                            count: Math.abs(Math.round(deck.spikes)),
+                          }),
                     ],
                     // Widened from `as const` so the "1% low" cell can carry its glossary
                     // trigger — the OTHER two cells stay plain strings, which is the point:
