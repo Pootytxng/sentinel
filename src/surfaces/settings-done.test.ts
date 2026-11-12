@@ -155,3 +155,32 @@ describe("softwareFirstLine (P9-software-first)", () => {
     });
   });
 });
+
+// P9-retail-firewall (Phase 9: retail economics never shape the answer): the summary's verdict is the
+// same whether the payload carries retail links, carries them stripped, or has no upgrade rows at all.
+describe("settingsDoneLine ignores retail data (P9-retail-firewall)", () => {
+  const link = { retailer: "Amazon", url: "https://www.amazon.com/s?k=graphics+card" };
+  const row = (links: { retailer: string; url: string }[]) => ({
+    kind: "gpu",
+    title: "Graphics card",
+    why: "",
+    links,
+  });
+  const withPath = (p: Priorities, links: { retailer: string; url: string }[] | null): Priorities => ({
+    ...p,
+    upgrade_path: links ? { items: [row(links)], disclosure: "x" } : null,
+  });
+  const cases: [string, Priorities][] = [
+    ["gpu-limited", { ...pri([]), gpu_limited_games: [{ game: "ROB RUN.exe", share_pct: 80, peak_pct: 99, threshold_pct: 95 }] }],
+    ["measured clear", { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 120, readings: 900, threshold_pct: 95 }] }],
+    ["part limiter", pri([item("ram-capacity", "attention", "Memory")])],
+    ["setting limiter", pri([item("power-plan", "attention", "Power plan")])],
+    ["unread limiter", pri([item("b", "unknown")])],
+    ["nothing", pri([])],
+  ];
+  it.each(cases)("%s: links present, stripped or absent give one verdict", (_name, p) => {
+    const bare = settingsDoneLine("finished-supported-tests", withPath(p, null), "ROB RUN.exe");
+    expect(settingsDoneLine("finished-supported-tests", withPath(p, [link, link]), "ROB RUN.exe")).toEqual(bare);
+    expect(settingsDoneLine("finished-supported-tests", withPath(p, []), "ROB RUN.exe")).toEqual(bare);
+  });
+});

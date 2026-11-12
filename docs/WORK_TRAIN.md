@@ -1666,10 +1666,15 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
 - [ ] **P9-no-upgrade-named** When Check measured no limiter, the upgrade area says "No upgrade recommended" and the
       sessions it was read from (count and newest game), never an empty block; no sessions = "not measured yet".
       en + zh-CN; tests: measured clean / no sessions.
-- [ ] **P9-retail-firewall** (Phase 9 "affiliate economics firewalled") A test that the upgrade verdict (gpu/ssd row,
+- [x] **P9-retail-firewall** (Phase 9 "affiliate economics firewalled") A test that the upgrade verdict (gpu/ssd row,
       settings-done line, screen-is-limit) is computed with no retail data in scope: the same priorities payload with
       and without retail links yields the same rows and wording; establish first where links are joined. Tests only
       unless a leak is found (then park with the finding).
+      Done (2026-11-12 s22; SHAs in the merge). Finding: no leak. `priorities.rs build_upgrade_path` decides each row
+      from the sessions and readiness alone and attaches the const GPU_LINKS/SSD_LINKS after; settings-done.ts never
+      reads `upgrade_path`. New settings-done test: six payloads (GPU-limited, measured clear, part, setting, unread,
+      none) give one verdict with links present, stripped or absent. A pin, so it also passes on main. Check.tsx's
+      screen-is-limit is not covered here (unreachable; P9-upgrade-block-reachable).
 - [ ] **P9-exit-fixture** (Phase 9 Exit proof) One fixture per Exit branch, driven through priorities + the game
       summary: settings done + GPU-limited (limiter named with what Compy can't check), settings done + measured clear
       ("no upgrade recommended" with its source), settings not done (no part named). Pure tests; no UI claim (the Check
