@@ -1967,7 +1967,7 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       (a DOM observer right after that commit reads the record) fails on main ("expected null not to be null").
       Proof: 10/10 consecutive file runs (during a push gate's load), tsc clean, 2 full vitest 540/543 (3 site-app
       suites). Review sonnet r1 APPROVE (one NIT, no change).
-- [ ] **CR-upgrade-area-truth** (fifth whole-range review b4d2ec7f..d7e67ee5, SHIP-WITH-FOLLOW-UPS; one slice, one
+- [x] **CR-upgrade-area-truth** (fifth whole-range review b4d2ec7f..d7e67ee5, SHIP-WITH-FOLLOW-UPS; one slice, one
       sonnet review) The newly visible upgrade area: (1) SHOULD-FIX Check.tsx ~1256 `partNamed` counts the aggregate
       rows `pending-safe-recs` / `applied-changes`, so with safe tweaks pending "No upgrade recommended" disappears;
       filter them from one shared source with settings-done.ts. (2) SHOULD-FIX no guard for an UNKNOWN limiter: the
@@ -1981,6 +1981,24 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       the shared one; (c) the footer ledger retry runs every 60 s forever and logs each time: back off (60 s, 5 min,
       15 min) and log once per state change. Known limitation (record, not for action): HW_SNAPSHOT is read once at
       startup, so an eGPU unplugged while the app runs stamps later sessions with the wrong card.
+      Done (s25, Rust + TS, not installed; `d21e04b9`, `5f123ac9`, `022fde98`). (1) did not reproduce: `LIMITER_AWAY`
+      (rig/limiter-part.ts) already held both aggregate ids, so pending tweaks never hid the block; the room now
+      filters settings-done's exported `AGGREGATE_REC_ROWS` and a test pins "No upgrade recommended" with both rows in
+      attention. (2) any non-aggregate limiter unread: title "No upgrade verdict yet", body "Not measured: the last
+      check couldn't read all of its checks, so Compy can't say whether a part is holding this PC back." (shared
+      `anyLimiterUnread` with the game summary; no newest-session line). (3) GPU/HDD rows worded by `kind` (en +
+      zh-CN: "显卡是实测的瓶颈", "游戏装在机械硬盘上"); the GPU row carries additive `gpu_numbers` (share, peak,
+      threshold, limit share) from the same values as the Rust sentence; Rust strings stay the fallback (older backend,
+      unknown kind). (4) zero sessions: title "Nothing measured yet" (zh "尚未测量"), body unchanged. NIT (a): additive
+      `UpgradeEvidence.other_card_sessions`, shown as "N sessions recorded on another graphics card are left out." (none
+      = no sentence; absent = the old fixed note); Windows' fallback adapter names no card (read now: every session
+      kept, tied card-unread; recorded by a session: not recorded); the card-unread line now reads "Compy can't
+      identify the graphics card in this PC right now, ...". NIT (b): settings-done's `measuredClearOfGpuLimit` (0 <
+      share <= 100) shared. NIT (c): ledger re-read 2/5/15/30/60 s, 5 min, then every 15 min; logs once per distinct
+      failure. Tests: 11 TS fail on main's product files (2 of them only for the new title test id: the (1) and
+      aggregate-unread pins); Rust 2 new + 1 extended (do not compile on main). cargo 1889/0, clippy clean, full vitest
+      540/543 (3 site-app suites). Review sonnet r1 APPROVE-WITH-NITS (nits taken: one row-text call, exact-match
+      list documented; third already covered by the existing older-backend test).
 Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the session log); each FAIL is an item:
 - [x] **CR-view-1112c-zh-gap** (`_train\view-1112c\04-optimize-zh-CN.png`) The zh-CN "No upgrade recommended" block
       joined its sentences with an ASCII space after "。" ("。 在最近一次"), and so did the GPU row's untied line.
