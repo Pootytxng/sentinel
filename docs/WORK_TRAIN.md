@@ -2050,11 +2050,23 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
 - [ ] **CR-view-overflow-1112c** (`_train\view-1112c\02-optimize-no-upgrade.png`) The verdict needs the Optimize
       station's scroll containers measured (scrollHeight vs clientHeight at 1280x720, 1500x980 and 1920x1080) now that
       the no-upgrade block sits below its groups. Measure on the next FULL screen check; fix any surplus.
-- [ ] **CR-view-upgrade-render** (`_train\view-1112c\03-optimize-upgrade-fixture.png`, identical to 02) The GPU upgrade
+- [x] **CR-view-upgrade-render** (`_train\view-1112c\03-optimize-upgrade-fixture.png`, identical to 02) The GPU upgrade
       block has never been seen rendered in the real app: this rig's sessions aren't GPU-limited, and an in-memory
       wrap of `window.__TAURI_INTERNALS__.invoke` does not take (not writable). Find a route that renders it in the
       installed build without touching its data (a read-only dev/fixture route gated off in release, or the
       Storybook-like lab route if one exists), or keep it unit-test-only and say so each check. Investigation first.
+      Done (s25, dev-fixture evidence, NOT installed-build evidence; `0775c189`). The installed build still has no
+      route (its IPC is frozen by design; no fixture route ships). The repo's existing fixture preview
+      (`docs/ui-sweep/fixture`, build-time stub, banner "invented data, not a measurement") gains `upgrade-gpu` and
+      `upgrade-none` states built from the P9 exit fixture's numbers and `?lang=`; captured headless (own temp Chrome
+      profile, no window) into `_train\view-1112d\fixture-upgrade\upgrade-{gpu,none}-{en,zh-CN}.png`. Seen: the GPU row
+      in zh-CN ("显卡是实测的瓶颈", its why from `gpu_numbers`, measured-from line, fit line) and "No upgrade
+      recommended" with "1 session recorded on another graphics card is left out." Observed in passing: the
+      pre-existing zh `upgradeFitGpuUnknown` line uses half-width ":" and "," (queued CR-zh-fit-punctuation). The
+      blocks sit flush left: the fixture mounts them without OptimizeStation's own padding (an estimate, stated).
+- [ ] **CR-zh-fit-punctuation** (s25 fixture capture) zh-CN `optimize.check.upgradeFitGpuUnknown`,
+      `upgradeFitGpuUserPsu`, `upgradeFitSsd` use half-width ":" and "," where the newer zh strings use full-width
+      "：" "，". Align them (strings only; their tests pin the en text). TS; no review needed beyond the merge gate.
 - [x] **CR-footer-ledger-unknown** (NITs, ShellV2.tsx ~471, 52cd64de) `get_applied_changes` turns an unreadable
       ledger into [] so the footer can say "Nothing in effect to undo · ledger 0" while the health probe failed or is
       in flight; a rejected call can leave "Ledger not read yet" forever. Unknown reads unknown; a rejected call
