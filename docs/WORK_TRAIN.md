@@ -90,7 +90,7 @@ release checklist); no new rules.
 - `RELEASE_STATE.md` gates still OPEN, owner territory: code signing (`STATE:code_signing=open`), legal
   (`STATE:legal=open`).
 - Unticked queue items: CR-1102-left (engineering lines), CR-bench-stack-hold,
-  CR-gm-skipped-line, CR-gm-restore-partial, CR-gm-service-suspend-rows, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
+  CR-gm-skipped-line, CR-gm-restore-partial, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
   exit proofs above; P8-first-advanced waits on P4 (Phase 8, not needed for v1.0).
 - CR-ultimate-identity: landed `ec326810` (2026-11-11 s19), not installed yet; follow-ups in CR-ultimate-followups.
 
@@ -304,9 +304,17 @@ release checklist); no new rules.
       leaves every setting of that session refused for Trials and plain apply/undo with no way out. Drop
       confirmed-restored entries from the kept contract, or give the RestoreFailed refusal a way out. Rollback
       boundary: two reviews.
-- [ ] **CR-gm-service-suspend-rows** (r1 opus SHOULD-FIX of CR-gm-spans-followups; latent, no UI caller today)
+- [x] **CR-gm-service-suspend-rows** (r1 opus SHOULD-FIX of CR-gm-spans-followups; latent, no UI caller today)
       `suspend_known_service` records `service-suspend:<Name>` rows with the suspend Gaming Mode uses; the touch check
       doesn't know that id. Map it into `session_can_touch` and gate the command, or unregister it. Two reviews.
+      Done `bdd77f41`, `4d7c157d` (2026-11-11 s20, not installed): `session_rec_of` maps `service-suspend:<Name>`
+      (allowlisted names only) to the session's service setting, so the row's undo is refused while a session holds
+      that service; the command the webview reaches is now `experiment::suspend_known_service` (same name), which takes
+      `plain_change_gate` on history's own row id before history's audited suspend (unchanged). The first version
+      gated inside history.rs and failed the store-lock-order guard (a static history → gaming_orchestrator →
+      experiment path); moved, guard unchanged. Reviews r1 sonnet APPROVE, opus APPROVE-WITH-NITS (one row id taken);
+      r2 opus + sonnet APPROVE-WITH-NITS (comment wording taken). Test fails on the old code. cargo 1868/0, clippy clean,
+      full vitest 535/538 (3 site-app suites).
 - [x] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
       the consent modal, focus jumps to Enable (`autoFocus`) and key repeat presses it: either confirm can pass on one
       held key. Ignore repeated key presses on Enable, or focus Cancel first. TS only.
@@ -1378,6 +1386,18 @@ no shopping, no product names, no prices (affiliate firewall), never an invented
       setting named as a setting, a part named only), no scan/unread = "not measured". Live case still needs
       P4-exit-proof; the 2026-10-31 desk review found the line naming "1 safe tweak not applied" as the limiter:
       aggregate rows are skipped since `f3bd1e49`.
+Refill 2026-11-11 s20 (fewer than 5 ready items): smallest slices toward the Exit's "in system context, never a part in
+isolation"; read-only, no product names, prices or wattages guessed (unknown stays unknown).
+- [ ] **P9-gpu-fit-unknowns** Under "GPU was the measured limiter" (Optimize → Check upgrade block), one line naming
+      what Compy can't check before any card: the power supply's capacity and connectors, and the case's room and
+      airflow; a power supply the user added in Test → Add a part is named as what they told Compy, never read as
+      a capacity. en + zh-CN; Check.test.tsx: no PSU / user-added PSU / no GPU item (no line).
+- [ ] **P9-ssd-fit-unknowns** Under "Games are on an HDD", one line: Compy can't read which free M.2 slots, SATA
+      ports or drive bays the board and case have; check before choosing a drive. en + zh-CN; same test file.
+- [ ] **P9-summary-gpu-limit** The finished game summary's Phase 9 line reads that game's newest measured session:
+      when it was GPU-limited (the sustained rule of P9-bottleneck-sustained), it names the GPU as the measured
+      limiter with its share instead of "nothing holding this PC back"; another game's session never counts. Rust read
+      + TS line, en + zh-CN; one review (measurement).
 
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.

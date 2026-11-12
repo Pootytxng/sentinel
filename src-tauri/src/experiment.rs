@@ -3082,7 +3082,7 @@ pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
     crate::history::rollback_change(change_id)
 }
 
-/// CR-gm-service-suspend-rows: the session service-suspend command (built dark, no UI caller today).
+/// CR-gm-service-suspend-rows: the session service-suspend command (armed, no UI caller today).
 /// A Gaming Mode session that suspends the same service resumes it on stop, under this row ("applied"
 /// over a running service), so it is refused while one holds it, with Gaming Mode's try_lock-only gate
 /// held through the ledger write, as the UI's other applies. The audited suspend is history's.
