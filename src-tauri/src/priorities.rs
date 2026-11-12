@@ -242,7 +242,9 @@ fn measured_from(sessions: &Value, read: &GpuLoadRead) -> Option<MeasuredFrom> {
         busy: load.busy,
         readings: load.readings,
         threshold_pct: GPU_LIMITED_PCT,
-        // A 0 or missing average / refresh is unmeasured, never a number.
+        // A 0 or missing average / refresh is unmeasured, never a number. The refresh is the display
+        // mode the session itself recorded (game_state.rs, the active display's current mode at
+        // capture); a fractional or other-shaped value reads as unmeasured (fail safe).
         avg_fps: row.get("avg_fps").and_then(Value::as_f64).filter(|f| f.is_finite() && *f > 0.0),
         refresh_hz: row
             .get("game_state")

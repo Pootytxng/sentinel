@@ -1618,10 +1618,26 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       line follows the newest session overall": the line now says which game's session it is. Review sonnet
       APPROVE-WITH-NITS (year nit taken; threshold is the same constant). The TS test fails on main's Check.tsx.
       cargo 1879/0, clippy clean; full vitest in the session log. Not visually checked (no GPU-limited session here).
-- [ ] **P9-screen-is-limit** In the same block, when that session's measured average FPS is at or above the screen's
+- [x] **P9-screen-is-limit** In the same block, when that session's measured average FPS is at or above the screen's
       measured refresh rate, say the screen is the limit ("your 250 Hz screen already shows every frame: no upgrade
       recommended for this game") instead of pointing at the GPU; refresh or FPS unmeasured = no line. en + zh-CN;
       tests: above / below / unmeasured.
+      Done (2026-11-12 s22, not installed; SHAs in the merge): both numbers from that session (MeasuredFrom gains
+      `avg_fps` and the session's own `game_state.display_refresh_hz`; 0 or missing = unmeasured). At or above: "Your
+      screen is the limit here: Your 250 Hz screen can't show more than 250 frames a second, and your ROB RUN session
+      averaged 252 fps, so on average a faster GPU wouldn't show you more frames; the slowest moments can still depend
+      on it. For frame rate, no upgrade is recommended for this game." (zh-CN too), no GPU fit line, no retail links;
+      below or unmeasured = the GPU row as before. Review sonnet APPROVE-WITH-NITS (SHOULD-FIX taken: average-only
+      wording softened; what the refresh field is, as a comment; boundary tests at = and 249.6). The disclosure line
+      still renders under the block when no links show (pre-existing block shape). Tests fail on main's Check.tsx.
+      cargo test priorities + clippy clean. Not visually checked.
+- [ ] **P9-cpu-gpu-balance** (Phase 9 "CPU/GPU balance") When a game's newest measured session was NOT GPU-limited
+      (enough readings, under half busy) and averaged below the screen's refresh rate, Check says the GPU was not the
+      limit in that session (N of M readings busy) and that Compy can't measure the CPU's share yet; unknown stays
+      unknown, no part named. en + zh-CN; tests.
+- [ ] **P9-no-upgrade-source** The finished game summary's "nothing holding this PC back" (settings-done) names what it
+      was read from (the cached check's date and that the game's newest session was not GPU-limited, or "not
+      measured"). en + zh-CN; tests.
 - [ ] **P9-cpu-fit-unknowns** If Check shows a CPU-limited block, one line naming what Compy can't read before any
       CPU: the board's socket and BIOS support, and the cooler's fit; establish first whether such a block exists
       (if not, park with the finding). en + zh-CN; same test file.

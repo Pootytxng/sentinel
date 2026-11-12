@@ -643,7 +643,7 @@ describe("Check", () => {
     await showUpgrade([sourced(251.6, 250)]);
     expect(screen.getByText("Your screen is the limit here")).toBeInTheDocument();
     expect(screen.getByTestId("check-upgrade-screen").textContent).toBe(
-      "Your 250 Hz screen can't show more than 250 frames a second, and your ROB RUN session averaged 252 fps, so a faster GPU wouldn't show you more frames. No upgrade recommended for this game.",
+      "Your 250 Hz screen can't show more than 250 frames a second, and your ROB RUN session averaged 252 fps, so on average a faster GPU wouldn't show you more frames; the slowest moments can still depend on it. For frame rate, no upgrade is recommended for this game.",
     );
     expect(screen.queryByText("GPU was the measured limiter")).toBeNull();
     expect(screen.queryByTestId("check-upgrade-fit")).toBeNull();
@@ -652,7 +652,13 @@ describe("Check", () => {
     expect(screen.getByTestId("check-upgrade-source")).toBeInTheDocument();
   });
 
+  it("P9-screen-is-limit: exactly at the refresh rate counts (review r1 boundary)", async () => {
+    await showUpgrade([sourced(250, 250)]);
+    expect(screen.getByTestId("check-upgrade-screen")).toBeInTheDocument();
+  });
+
   it.each([
+    ["just below the refresh rate (249.6 never rounds up to it)", sourced(249.6, 250)],
     ["below the refresh rate", sourced(180, 250)],
     ["refresh unmeasured", sourced(251.6, undefined)],
     ["FPS unmeasured", sourced(undefined, 250)],
