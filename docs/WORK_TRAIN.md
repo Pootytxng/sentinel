@@ -90,7 +90,7 @@ release checklist); no new rules.
 - `RELEASE_STATE.md` gates still OPEN, owner territory: code signing (`STATE:code_signing=open`), legal
   (`STATE:legal=open`).
 - Unticked queue items: CR-1102-left (engineering lines), CR-bench-stack-hold,
-  CR-live-changes-twice, CR-view-1111d-wording, CR-gm-restore-partial, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
+  CR-view-1111d-wording, CR-gm-restore-partial, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
   exit proofs above; P8-first-advanced waits on P4 (Phase 8, not needed for v1.0).
 - CR-ultimate-identity: landed `ec326810` (2026-11-11 s19), not installed yet; follow-ups in CR-ultimate-followups.
 
@@ -253,9 +253,13 @@ release checklist); no new rules.
       1280×720 and 1920×1080).
       Installed `0afbfb2c` 2026-11-11 22:54; self-review of `_train\view-1111d\` (real CDP pointer hover): the tip is
       opaque and readable (items 2, 4, 12 PASS); overall verdict FAIL on items 3 and 6, queued below.
-- [ ] **CR-live-changes-twice** (self-review FAIL item 3, installed `0afbfb2c`, `_train\view-1111d\02-live.png`) The
+- [x] **CR-live-changes-twice** (self-review FAIL item 3, installed `0afbfb2c`, `_train\view-1111d\02-live.png`) The
       Live room's Last-session card says "14 Compy changes were on" twice (`.mc-ev-changes`, MonitorConsole.tsx ~508,
       and the `.mc-delta-tag` Term ~599): render the count once, keeping the tagged one (it carries the tooltip). TS.
+      Done (2026-11-11 s20, TS only, not installed; SHA in the merge): when the comparison's tag names the changes-on
+      count of the same newest session, the readings strip leaves it out; with no comparison (or a background-only
+      newest session) the strip still says it. Two tests; the duplicate one fails without the change. Visual PASS owed
+      at the next install.
 - [ ] **CR-view-1111d-wording** (self-review FAIL item 6, installed `0afbfb2c`) (a) zh-CN Test room leaves the eyebrow
       date and the footer "Outbound: signed update check only" in English (`_train\view-1111d\11-test-zh-CN.png`);
       (b) "Applied & history — every change, undoable" (`06-test-applied.png`) while a changed-outside row has no undo

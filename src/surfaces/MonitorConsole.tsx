@@ -326,6 +326,11 @@ export function MonitorConsole({
   // The deck's delta row is SESSION-scoped, not live-scoped: it debriefs the last COMPLETED
   // session against its comparable prior, so it holds steady while capture starts/stops.
   const deck = deckDeltaFrom(sessions);
+  // CR-live-changes-twice: the comparison's tag (rendered when it has a count above zero) names the
+  // changes-on count of its CURRENT session; when that is the newest session the readings strip
+  // shows, the strip leaves the count to the tag (which carries the combined-effect tooltip).
+  const changesTaggedBelow =
+    deck != null && deck.current === sessions[0] && deck.changesOn != null && deck.changesOn > 0;
 
   // The hottest snapshot, graded by the vendor whose sensor produced it — never by hw.gpus[0]'s,
   // which on a hybrid laptop is the iGPU (LOCKED rule 5; codebase review 2026-11-03).
@@ -505,11 +510,16 @@ export function MonitorConsole({
                       : arcTone(gradeLow1(latestLow, latestAvg))
                   }
                 />
-                <span className="mc-ev-changes">
-                  {latest.compy_changes_active == null
-                    ? t("monitor.monitorConsole.changesUnknown")
-                    : t("monitor.monitorConsole.changesOn", { count: latest.compy_changes_active })}
-                </span>
+                {/* CR-live-changes-twice (self-review 2026-11-11, view-1111d/02-live.png): when the
+                    comparison below already tags THIS session's changes-on count (with its
+                    combined-effect tooltip), the count is said there once, not twice. */}
+                {!changesTaggedBelow && (
+                  <span className="mc-ev-changes">
+                    {latest.compy_changes_active == null
+                      ? t("monitor.monitorConsole.changesUnknown")
+                      : t("monitor.monitorConsole.changesOn", { count: latest.compy_changes_active })}
+                  </span>
+                )}
               </div>
             </>
           ) : (
