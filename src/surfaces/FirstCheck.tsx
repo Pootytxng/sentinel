@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { writeLedger } from "../data/ledger-write";
 import type { PriorityItem } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
@@ -125,7 +125,10 @@ export default function FirstCheck({
   // never pairs a live count with an implied time (honesty law).
   // A scan that rejected measured nothing: no record, or Home's band would say "0/0 clean".
   const nothingRead = failed && !readiness;
-  useEffect(() => {
+  // A layout effect (CR-firstcheck-flake): the record is written in the commit that draws the
+  // verdict. A passive effect ran in a later task, so a verdict could be on screen briefly with no
+  // record written yet (a loaded test run read it in that gap).
+  useLayoutEffect(() => {
     if (phase !== "verdict" || nothingRead) return;
     recordLastCheck({ total: checks.length, green: greenChecks.length, advisory, unread, fixCount });
   }, [phase, nothingRead, checks.length, greenChecks.length, advisory, unread, fixCount]);

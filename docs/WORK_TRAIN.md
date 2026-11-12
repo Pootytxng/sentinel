@@ -1957,9 +1957,16 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       own row was scrolled to) fails on main ("expected false to be true"). Proof: 10/10 + 10/10 consecutive file runs,
       tsc clean, 2 full vitest 540/543 (3 site-app suites). Review sonnet r1 APPROVE-WITH-NITS (SHOULD-FIX taken: the
       observer checks the note's own row, not any scroll; NIT taken: null sentinel).
-- [ ] **CR-firstcheck-flake** (s24 full vitest in train-P9-exit-fixture, tests-only branch) `FirstCheck.test.tsx`
+- [x] **CR-firstcheck-flake** (s24 full vitest in train-P9-exit-fixture, tests-only branch) `FirstCheck.test.tsx`
       "unread and advisory together: the unread line counts graded checks only and names the advisory" got null in
       a loaded full run and passes alone (8/8). Same class; find the timing gap. TS.
+      Done (s25, TS only; `87f2a06c`, `571202e0`): product code. FirstCheck wrote Home's last-check record from a
+      passive `useEffect`; use-scan flips `phase` to "verdict" from a timer (outside act), so React ran that effect in
+      a later task than the commit that drew the verdict, and a loaded run's `findByText` resolved in the gap with no
+      record ("got null"). Now a `useLayoutEffect`: the record is written in the drawing commit. New FirstCheck test
+      (a DOM observer right after that commit reads the record) fails on main ("expected null not to be null").
+      Proof: 10/10 consecutive file runs (during a push gate's load), tsc clean, 2 full vitest 540/543 (3 site-app
+      suites). Review sonnet r1 APPROVE (one NIT, no change).
 - [ ] **CR-upgrade-area-truth** (fifth whole-range review b4d2ec7f..d7e67ee5, SHIP-WITH-FOLLOW-UPS; one slice, one
       sonnet review) The newly visible upgrade area: (1) SHOULD-FIX Check.tsx ~1256 `partNamed` counts the aggregate
       rows `pending-safe-recs` / `applied-changes`, so with safe tweaks pending "No upgrade recommended" disappears;
