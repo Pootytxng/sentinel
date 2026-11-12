@@ -680,7 +680,7 @@ pub(crate) fn load_store_checked_from(path: &Path) -> Result<ExperimentStore, St
                 "Compy couldn't read its Trial records right now ({e}). Nothing was changed. {STORE_WHERE} \
                  This is usually another program, such as a backup, sync or antivirus scan, holding the file \
                  for a moment: try again shortly. If it keeps happening, restart Compy and check that your \
-                 Windows account can open that file; if it still does, close Compy and move that file to another \
+                 Windows account can open that file; if the problem continues, close Compy and move that file to another \
                  folder (don't delete it: it is the record of your Trials). {TRIAL_CHANGES_STAY}"
             ))
         }
@@ -712,8 +712,10 @@ const STORE_WHERE: &str = "The file is experiments.json in Compy's data folder (
 /// the ledger can't stand in for the store in the check itself (review r1 nit 1): a Trial start's
 /// row carries no Trial link (only outcome-switch rows do), and a Pending start whose change landed
 /// without a receipt is named nowhere but the store. "Recorded", not "made", for that same case.
-const TRIAL_CHANGES_STAY: &str = "Any change a Trial recorded stays in Test \u{2192} Applied & history, where you can \
-     undo it; a Trial in that file is no longer shown once it's moved.";
+/// Review r2 (opus SHOULD-FIX): "with its undo there when it has one", never an absolute: a row that
+/// reads "changed outside Compy" or was already put back has none.
+const TRIAL_CHANGES_STAY: &str = "Any change a Trial recorded stays in Test \u{2192} Applied & history, with its \
+     undo there when it has one; a Trial in that file, and its result, is no longer shown once it's moved.";
 
 fn load_store() -> ExperimentStore {
     load_store_from(&store_path())

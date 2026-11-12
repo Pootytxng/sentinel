@@ -304,8 +304,13 @@ Third whole-range review (e29da54b..119d07f8, 2026-11-12, SHIP-WITH-FOLLOW-UPS, 
       only in the store, so the refusal stays (fail closed). Both refusals now name experiments.json in Compy's data
       folder (normally %APPDATA%\Compy, never the expanded path) and the way out: try again shortly, restart Compy,
       check the account can open it, then close Compy and move it aside (never delete it); any change a Trial
-      recorded stays undoable in Test → Applied & history. Gaming Mode's start says one reason, then those words
-      whole. Reviews: see the session log. cargo green, clippy clean, full vitest 535/538.
+      recorded stays in Test → Applied & history, with its undo there when it has one. Gaming Mode's start says
+      one reason, then those words whole. Reviews r1 opus REQUEST-CHANGES (no MUST-FIX; SHOULD-FIX: nested words
+      at Gaming Mode's start, no way out for a lasting cause, both taken), sonnet APPROVE-WITH-NITS (same two);
+      r2 opus + sonnet APPROVE-WITH-NITS (no absolute undo promise, "if the problem continues", taken). Left (opus
+      r2 nit): a one-click Fix hands the store's words over without saying why a Fix reads the Trial store (the
+      `load_store_checked()?` call shape is pinned by a guard). Tests fail on the old words. cargo 1872/0, clippy
+      clean, full vitest 535/538.
 - [ ] **CR-range3-nits** (a) `src/data/kept-outside-undo.ts` STOCK lacks Power saver (`a1841308-…`), so a Power saver
       prior plan reads "Compy didn't save its name": add it, en + zh-CN; (b) `history::rec_id_of_change` loads the
       ledger without `HISTORY_LOCK`: if that load can set a damaged file aside (a rename) unlocked, take the lock (and
