@@ -52,8 +52,12 @@ const words = (c: Case): string | null => {
         : i18n.t(`${KEY}.nothingLimiting`);
     case "not-measured":
       return i18n.t(`${KEY}.notMeasured`);
+    case "part-limiter":
+      return `${i18n.t(`${KEY}.partLimiter`, { title: line.title })} ${i18n.t(
+        `${KEY}.${line.fit === "drive" ? "partFitDrive" : "partFitUnknown"}`,
+      )}`;
     default:
-      return i18n.t(`${KEY}.${line.kind === "part-limiter" ? "partLimiter" : "settingLimiter"}`, { title: line.title });
+      return i18n.t(`${KEY}.settingLimiter`, { title: line.title });
   }
 };
 
@@ -93,17 +97,17 @@ describe("P9-exit-fixture: each Phase 9 Exit branch, from priorities to the game
           expect(text).toContain("Compy measures neither");
           expect(text).toMatch(/No GPU upgrade is recommended\.$/);
         } else {
-          // A clean check and no measured session: the check's own rows only (finding: see WORK_TRAIN).
+          // A clean check and no measured session: the check's own rows only, and it says the game's GPU
+          // load isn't measured (P9-no-session-plain-line).
           expect(text).toBe(
-            "Settings have reached what Compy can test here. The last check found nothing holding this PC back, so no upgrade is recommended.",
+            "Settings have reached what Compy can test here. The last check found nothing in its rows holding this PC back; Compy has no session of this game with enough GPU readings, so its GPU load isn't measured. No upgrade is recommended.",
           );
         }
         break;
       case "part-limiter":
-        // FINDING (s24): the part the check named, with no system context in the summary's line
-        // (Check's room adds "Before any drive: Compy can't read ..."; the summary does not).
+        // P9-part-line-context: the part the check named, then what Compy can't check before replacing it.
         expect(text).toBe(
-          "Settings have reached what Compy can test here. The last check's top limiter is a part of this PC: Game install drive.",
+          "Settings have reached what Compy can test here. The last check's top limiter is a part of this PC: Game install drive. Before any drive: Compy can't read which free M.2 slots, SATA ports or drive bays your motherboard and case have. Check those first.",
         );
         break;
       default: {

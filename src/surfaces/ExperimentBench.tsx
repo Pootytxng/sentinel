@@ -1783,8 +1783,11 @@ function LessonBlock({ lesson, game }: { lesson: Lesson; game: string }) {
 // band (unknown/low/medium/high); the only percentages are noise bands Compy measured or its stated
 // minimum.
 function TestSummary({ s }: { s: GameTestSummary }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const game = prettyGameName(s.game) || s.game;
+  // Review nit (P9-part-line-context): two sentences join with a space in English, with none after a
+  // full-width stop in Chinese.
+  const sentenceGap = (i18n.resolvedLanguage ?? i18n.language ?? "").startsWith("zh") ? "" : " ";
   const verdicts = verdictCopy(t);
   const sep = t("lab.experimentBench.summary.contextSeparator");
   const list = t("lab.experimentBench.pairListSeparator");
@@ -1909,7 +1912,12 @@ function TestSummary({ s }: { s: GameTestSummary }) {
           {settingsDone.kind === "setting-limiter"
             ? t("lab.experimentBench.summary.settingsDone.settingLimiter", { title: settingsDone.title })
             : settingsDone.kind === "part-limiter"
-              ? t("lab.experimentBench.summary.settingsDone.partLimiter", { title: settingsDone.title })
+              ? // P9-part-line-context: the part, then what Compy can't check before replacing it.
+                `${t("lab.experimentBench.summary.settingsDone.partLimiter", { title: settingsDone.title })}${sentenceGap}${
+                  settingsDone.fit === "drive"
+                    ? t("lab.experimentBench.summary.settingsDone.partFitDrive")
+                    : t("lab.experimentBench.summary.settingsDone.partFitUnknown")
+                }`
               : settingsDone.kind === "gpu-limiter"
                 ? settingsDone.screenCap
                   ? t("lab.experimentBench.summary.settingsDone.gpuLimiterScreen", {
@@ -1947,7 +1955,7 @@ function TestSummary({ s }: { s: GameTestSummary }) {
             if (!untied) return null;
             return (
               <span data-testid="exp-summary-settings-done-untied">
-                {" "}
+                {sentenceGap}
                 {untied === "not-recorded"
                   ? t("lab.experimentBench.summary.settingsDone.gpuUntiedNotRecorded")
                   : t("lab.experimentBench.summary.settingsDone.gpuUntiedCardUnread")}

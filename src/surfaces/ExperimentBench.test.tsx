@@ -2310,6 +2310,10 @@ describe("P4-exit: what Compy tested on this game", () => {
       const done = screen.getByTestId("exp-summary-settings-done");
       expect(done).toHaveAttribute("data-kind", "part-limiter");
       expect(done).toHaveTextContent("The last check's top limiter is a part of this PC: Graphics card.");
+      // P9-part-line-context (Phase 9 Exit: never a part in isolation): what Compy can't check.
+      expect(done).toHaveTextContent(
+        "Graphics card. Before any part: Compy can't check how a new one would fit the rest of this PC (its power supply, motherboard and case). Check those first.",
+      );
       // Phase 9 law: a named part is never a shopping line.
       expect(done.textContent).not.toMatch(/buy|\$|price|upgrade to/i);
     } finally {
