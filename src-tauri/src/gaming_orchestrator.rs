@@ -37,7 +37,11 @@ static LIVE_SESSION: Mutex<Option<String>> = Mutex::new(None);
 /// than refused forever — refusing would strand the user's only restore path.
 static SESSION_OP: Mutex<()> = Mutex::new(());
 
-fn session_op_guard() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+/// Also taken (still only by `try_lock`) by a Trial start and the benchmark's apply across their
+/// check of the session contract and their record/apply (CR-gm-spans-trial review r1), so a session
+/// can't start between that check and the Trial's record, and neither starts while a session starts
+/// or stops. Contention answers "try again"; nothing ever waits on it.
+pub(crate) fn session_op_guard() -> Result<std::sync::MutexGuard<'static, ()>, String> {
     match SESSION_OP.try_lock() {
         Ok(g) => Ok(g),
         Err(std::sync::TryLockError::Poisoned(p)) => Ok(p.into_inner()),
@@ -109,6 +113,106 @@ fn services_to_suspend(opts: &StartOptions, gate_open: bool) -> Vec<actions::Kno
         }
     }
     out
+}
+
+// ─── CR-gm-spans-trial — Gaming Mode and a Trial never hold the same setting ───────────
+// A session snapshots each setting it changes and puts that snapshot back on stop. If a Trial (or
+// the benchmark's tweak trial) holds the same setting, the session's snapshot is the Trial's applied
+// state, so a stop after the Trial's restore would put the Trial's change back. So a session skips
+// every step whose setting an open Trial or the benchmark holds (the Trial already has it in the
+// session's direction), and a Trial won't start on a setting a session's contract holds.
+
+const LABEL_POWER: &str = "Power plan → max performance";
+const LABEL_GAME_MODE: &str = "Windows Game Mode on";
+const LABEL_GAME_BAR: &str = "Game Bar / DVR off";
+const LABEL_USB: &str = "USB selective suspend off (AC)";
+const LABEL_PCIE: &str = "PCIe ASPM off (AC)";
+/// The ledger rec id of the setting each core and advanced step touches.
+const REC_POWER: &str = "power-ultimate";
+const REC_GAME_MODE: &str = "game-mode";
+const REC_GAME_BAR: &str = "game-bar-disable";
+const REC_USB: &str = "usb-selective-suspend-off";
+const REC_PCIE: &str = "pcie-aspm-off";
+
+/// The ledger rec id of the setting each service suspend touches.
+fn service_rec(svc: &actions::KnownService) -> &'static str {
+    match svc {
+        actions::KnownService::SysMain => "sysmain-disable",
+        actions::KnownService::DiagTrack => "diagtrack-disable",
+        actions::KnownService::WSearch => "windows-search-disable",
+        actions::KnownService::NvTelemetryContainer => "nvidia-telemetry",
+    }
+}
+
+fn suspend_label(svc: &actions::KnownService) -> String {
+    format!("Suspend {} for this session", svc.name())
+}
+
+/// PURE: the ledger rec id of the setting a session change touches, by its label.
+fn rec_of_label(label: &str) -> Option<&'static str> {
+    match label {
+        LABEL_POWER => Some(REC_POWER),
+        LABEL_GAME_MODE => Some(REC_GAME_MODE),
+        LABEL_GAME_BAR => Some(REC_GAME_BAR),
+        LABEL_USB => Some(REC_USB),
+        LABEL_PCIE => Some(REC_PCIE),
+        _ => [
+            actions::KnownService::SysMain,
+            actions::KnownService::DiagTrack,
+            actions::KnownService::WSearch,
+            actions::KnownService::NvTelemetryContainer,
+        ]
+        .iter()
+        .find(|s| suspend_label(s) == label)
+        .map(service_rec),
+    }
+}
+
+/// The settings an open Trial or the benchmark's tweak trial holds right now. An unreadable Trial
+/// store refuses the start: it could hold the running Trial.
+fn held_by_trials() -> Result<Vec<String>, String> {
+    let mut held = crate::experiment::open_trial_rec_ids().map_err(|e| {
+        format!(
+            "Gaming Mode didn't start: Compy couldn't read its Trial records ({e}), and a running Trial \
+             could be testing a setting Gaming Mode changes. Nothing was changed; try again."
+        )
+    })?;
+    if let Some((id, _)) = crate::benchmark_trial::held_now() {
+        held.push(id);
+    }
+    Ok(held)
+}
+
+/// PURE: whether a session may change the setting `rec` (no open Trial or benchmark holds it).
+fn step_free(held: &[String], rec: &str) -> bool {
+    !held.iter().any(|h| h == rec)
+}
+
+/// PURE: the refusal for a Trial (or the benchmark) on `rec_id` while a Gaming Mode session's
+/// contract holds it. `contract` is the session file's changes when one is on disk.
+fn session_hold_refusal(rec_id: &str, contract: Option<&[SessionChange]>) -> Option<String> {
+    contract?.iter().any(|c| rec_of_label(&c.label) == Some(rec_id)).then(|| {
+        "Gaming Mode is on and holds this setting for its session, and puts it back when it stops. \
+         Stop Gaming Mode first. Nothing was changed."
+            .to_string()
+    })
+}
+
+/// CR-gm-spans-trial: whether a Gaming Mode contract on disk holds `rec_id`. A contract that is on
+/// disk but can't be read refuses too (it could hold it).
+pub(crate) fn session_holds_refusal(rec_id: &str) -> Option<String> {
+    match crate::gaming_session::has_pending_contract() {
+        Ok(false) => None,
+        Ok(true) => match load_session() {
+            Some(file) => session_hold_refusal(rec_id, Some(&file.changes)),
+            None => Some(
+                "Gaming Mode has a session record Compy can't read, and it could hold this setting. \
+                 Recover or end Gaming Mode first. Nothing was changed."
+                    .to_string(),
+            ),
+        },
+        Err(e) => Some(format!("Compy couldn't check Gaming Mode's session ({e}). Nothing was changed.")),
+    }
 }
 
 fn push(changes: &mut Vec<SessionChange>, label: &str, r: ApplyResult) {
@@ -348,6 +452,9 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
         }
         SessionSlot::Empty => {}
     }
+    // CR-gm-spans-trial: read before the contract exists or anything changes.
+    let held = held_by_trials()?;
+    let free = |rec: &str| step_free(&held, rec);
     let now = chrono::Utc::now();
     let mut file = SessionFile {
         schema_version: SESSION_SCHEMA_VERSION,
@@ -405,13 +512,15 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
         }};
     }
 
-    // Core (UAC-free). Power plan may skip (Ok(None)) with no error.
-    match apply_power_plan_switch_core() {
+    // Core (UAC-free). Power plan may skip (Ok(None)) with no error. CR-gm-spans-trial: a step whose
+    // setting a Trial or the benchmark holds is skipped (never snapshotted, so never put back on stop).
+    let power = if free(REC_POWER) { apply_power_plan_switch_core() } else { Ok(None) };
+    match power {
         Ok(Some(r)) => {
-            push(&mut file.changes, "Power plan → max performance", r);
+            push(&mut file.changes, LABEL_POWER, r);
             if let Err(save_err) = save_session(&file) {
                 undo_and_report!(format!(
-                    "Power plan → max performance: the change was applied but recording it failed ({save_err})"
+                    "{LABEL_POWER}: the change was applied but recording it failed ({save_err})"
                 ));
             }
         }
@@ -420,8 +529,12 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
             undo_and_report!(format!("Power plan: {}", e));
         }
     }
-    apply_step!("Windows Game Mode on", apply_game_mode());
-    apply_step!("Game Bar / DVR off", apply_game_bar_disable());
+    if free(REC_GAME_MODE) {
+        apply_step!(LABEL_GAME_MODE, apply_game_mode());
+    }
+    if free(REC_GAME_BAR) {
+        apply_step!(LABEL_GAME_BAR, apply_game_bar_disable());
+    }
 
     // Advanced opt-in tier — ONE UAC prompt for everything selected (T6; was one prompt PER item).
     // Items keep their exact pre-T6 order and labels, so the contract, restore order and QA copy
@@ -432,24 +545,27 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
     // happens automatically on stop / restore / crash-recovery — no new restore path. Only
     // allowlisted services reach the primitive.
     let mut tier: Vec<ElevatedItem> = Vec::new();
-    if opts.advanced_usb {
+    if opts.advanced_usb && free(REC_USB) {
         tier.push(ElevatedItem {
             id: "adv-usb",
-            label: "USB selective suspend off (AC)".into(),
+            label: LABEL_USB.into(),
             apply: Box::new(apply_usb_selective_suspend_off),
         });
     }
-    if opts.advanced_pcie {
+    if opts.advanced_pcie && free(REC_PCIE) {
         tier.push(ElevatedItem {
             id: "adv-pcie",
-            label: "PCIe ASPM off (AC)".into(),
+            label: LABEL_PCIE.into(),
             apply: Box::new(apply_pcie_aspm_off),
         });
     }
     for svc in services_to_suspend(&opts, actions::service_suspend_gate()) {
+        if !free(service_rec(&svc)) {
+            continue;
+        }
         tier.push(ElevatedItem {
             id: svc.name(),
-            label: format!("Suspend {} for this session", svc.name()),
+            label: suspend_label(&svc),
             apply: Box::new(move || actions::apply_service_suspend(svc)),
         });
     }
@@ -765,6 +881,121 @@ mod start_root_tests {
         let quarantine = body.find(concat!("quarantine_", "session()")).expect("start may set a bad slot aside");
         let save = body.find(concat!("save_", "session(&file)?")).expect("start writes its contract");
         assert!(root < quarantine && root < save, "the data root must be proven first");
+    }
+}
+
+#[cfg(test)]
+mod spans_trial_tests {
+    // CR-gm-spans-trial: a session snapshots each setting it changes and puts it back on stop, so it
+    // must never hold a setting a Trial (or the benchmark) holds, in either order.
+    use super::*;
+    use crate::actions::{KnownService, RollbackAction, Snapshot};
+
+    fn change(label: &str) -> SessionChange {
+        SessionChange {
+            label: label.into(),
+            rollback_action: RollbackAction::RestorePowerPlanFromSnapshot,
+            snapshot: Snapshot::PowerPlan { prior_guid: "x".into() },
+            elevated_restore: false,
+        }
+    }
+
+    #[test]
+    fn every_session_step_names_the_ledger_setting_it_touches() {
+        // The labels stay byte-identical to the ones the webview pins (gaming-mode.test.ts).
+        assert_eq!(LABEL_POWER, "Power plan \u{2192} max performance");
+        assert_eq!(LABEL_GAME_MODE, "Windows Game Mode on");
+        assert_eq!(LABEL_GAME_BAR, "Game Bar / DVR off");
+        assert_eq!(LABEL_USB, "USB selective suspend off (AC)");
+        assert_eq!(LABEL_PCIE, "PCIe ASPM off (AC)");
+        assert_eq!(suspend_label(&KnownService::WSearch), "Suspend WSearch for this session");
+        for (label, rec) in [
+            (LABEL_POWER, "power-ultimate"),
+            (LABEL_GAME_MODE, "game-mode"),
+            (LABEL_GAME_BAR, "game-bar-disable"),
+            (LABEL_USB, "usb-selective-suspend-off"),
+            (LABEL_PCIE, "pcie-aspm-off"),
+            ("Suspend SysMain for this session", "sysmain-disable"),
+            ("Suspend DiagTrack for this session", "diagtrack-disable"),
+            ("Suspend WSearch for this session", "windows-search-disable"),
+            ("Suspend NvTelemetryContainer for this session", "nvidia-telemetry"),
+        ] {
+            assert_eq!(rec_of_label(label), Some(rec), "{label}");
+            assert!(crate::history::APPLIABLE_REC_IDS.contains(&rec), "{rec} is a ledger setting");
+        }
+        assert_eq!(rec_of_label("Suspend nothing for this session"), None);
+        assert_eq!(rec_of_label("Windows Game Mode on legacy"), None, "exact labels only");
+    }
+
+    #[test]
+    fn a_trial_wont_start_on_a_setting_the_session_holds() {
+        let contract = [change(LABEL_POWER), change(LABEL_GAME_MODE)];
+        let refused = session_hold_refusal("game-mode", Some(&contract)).expect("held by the session");
+        assert!(refused.contains("Stop Gaming Mode first") && refused.contains("Nothing was changed"), "{refused}");
+        assert!(session_hold_refusal("power-ultimate", Some(&contract)).is_some());
+        assert_eq!(session_hold_refusal("hags-enable", Some(&contract)), None, "a setting it doesn't hold");
+        assert_eq!(session_hold_refusal("game-mode", None), None, "no session");
+    }
+
+    #[test]
+    fn a_step_is_free_only_when_nothing_holds_its_setting() {
+        let held = vec!["game-mode".to_string(), "sysmain-disable".to_string()];
+        assert!(!step_free(&held, REC_GAME_MODE), "a Trial holds it: skipped");
+        assert!(!step_free(&held, service_rec(&KnownService::SysMain)));
+        assert!(step_free(&held, REC_POWER) && step_free(&held, REC_GAME_BAR) && step_free(&held, REC_USB));
+        assert!(step_free(&[], REC_GAME_MODE), "nothing held: every step runs as before");
+    }
+
+    #[test]
+    fn the_session_check_reads_the_contract_on_disk_and_refuses_one_it_cant_read() {
+        // Review r1 (opus SHOULD-FIX 3): the fail-closed arms, on a scratch session folder.
+        let dir = std::env::temp_dir().join(format!("compy-gm-spans-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
+        assert_eq!(session_holds_refusal(REC_GAME_MODE), None, "no session");
+        std::fs::write(dir.join("gaming-session.json"), "{}").unwrap();
+        assert!(session_holds_refusal(REC_GAME_MODE).expect("unreadable").contains("can't read"));
+        let file = SessionFile {
+            schema_version: crate::gaming_session::SESSION_SCHEMA_VERSION,
+            session_id: "gm-1".into(),
+            status: crate::gaming_session::SessionStatus::Active,
+            started_at: "2026-11-11T00:00:00Z".into(),
+            app_version: "0.9.26".into(),
+            changes: vec![change(LABEL_POWER), change(LABEL_GAME_MODE)],
+            started_monitoring: false,
+        };
+        crate::gaming_session::save_session(&file).unwrap();
+        assert!(session_holds_refusal(REC_GAME_MODE).expect("held").contains("Stop Gaming Mode first"));
+        assert_eq!(session_holds_refusal("hags-enable"), None, "a setting the session doesn't hold");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_session_skips_every_step_a_trial_holds_before_it_writes_its_contract() {
+        let src = include_str!("gaming_orchestrator.rs");
+        let start = src.find(concat!("pub(crate) fn ", "start(opts: StartOptions)")).expect("start fn");
+        let body = &src[start..];
+        let body = &body[..body.find("\n}\n").expect("end")];
+        let held = body.find(concat!("held_by_", "trials()?")).expect("the holds are read");
+        let save = body.find(concat!("save_", "session(&file)?")).expect("contract");
+        assert!(held < save, "read before the contract exists");
+        // Each apply sits behind its own `free(` check, a few lines before it at most.
+        // Review r2 (opus): each apply's nearest guard is its OWN setting's, so a removed or swapped
+        // guard fails here.
+        for (apply, guard) in [
+            (concat!("apply_power_plan_", "switch_core()"), "free(REC_POWER)"),
+            (concat!("apply_game_", "mode())"), "free(REC_GAME_MODE)"),
+            (concat!("apply_game_bar_", "disable())"), "free(REC_GAME_BAR)"),
+            (concat!("Box::new(apply_usb_", "selective_suspend_off)"), "free(REC_USB)"),
+            (concat!("Box::new(apply_pcie_", "aspm_off)"), "free(REC_PCIE)"),
+            (concat!("actions::apply_service_", "suspend(svc)"), "free(service_rec(&svc))"),
+        ] {
+            let at = body.find(apply).unwrap_or_else(|| panic!("{apply}"));
+            let gate = body[..at].rfind("free(").unwrap_or_else(|| panic!("{apply} unguarded"));
+            assert!(body[gate..].starts_with(guard), "{apply}: guarded by {guard}");
+            assert!(body[gate..at].lines().count() <= 8, "{apply}: guarded right before it");
+        }
     }
 }
 

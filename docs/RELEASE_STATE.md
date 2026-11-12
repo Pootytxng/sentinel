@@ -25,7 +25,7 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=428110e1 -->
+<!-- STATE:source_main_commit=cecd30c5 -->
 <!-- STATE:latest_release_version=0.9.26 -->
 <!-- STATE:candidate_version=0.9.26 -->
 <!-- STATE:candidate_branch=main -->
@@ -160,7 +160,7 @@ fleet path has since carried real traffic — the owner reports at least two tes
   attribution (`elevation_outcome` — `actions.rs:1100`); helper runs ONLY hex byte-matching the
   one-time ticket (`mint_elevation_ticket` — `actions.rs:1336`).
 - Gaming-session advanced tier batches to ONE elevation per session start and per restore
-  (`apply_elevated_tier` — `gaming_orchestrator.rs:202`); no-partial abort+restore contract;
+  (`apply_elevated_tier` — `gaming_orchestrator.rs:306`); no-partial abort+restore contract;
   UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:1236`).
 
 ## Release blockers

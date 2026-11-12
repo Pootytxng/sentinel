@@ -218,10 +218,28 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       hold only on a successful rollback. Rollback boundary: two reviews.
 - [ ] **CR-bench-stack-hold** (r1 sonnet SHOULD-FIX of CR-bench-holds-setting) The DARK aggregate-stack trial
       (`stack_trial_gate()` false) holds nothing; before arming it, hold every setting it applies the way the tweak trial does.
-- [ ] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game
+- [x] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game
       Bar, the power plan, USB/PCIe and service suspends into its own contract; a session spanning a Trial's restore
       re-applies the Trial's change on stop, after the Trial reads Restored (`gaming_orchestrator.rs` ~409-455; experiment.rs
       never checks Gaming Mode state). Rollback boundary: two reviews.
+      Done `d3aebc9e`, `0f0b6914`, `f45cd333` (2026-11-11 s19, CODE-ONLY, not installed): Gaming Mode's start reads the
+      settings every open Trial and the benchmark's tweak trial hold (an unreadable Trial store refuses the start) before
+      it writes its contract and skips those steps (never snapshotted, so never put back; each Trial rec moves the setting
+      in Gaming Mode's own direction). A Trial start, the benchmark's apply and the outcome switch (keep and put back)
+      refuse a setting a session contract on disk holds (an unreadable contract refuses), and hold Gaming Mode's
+      try_lock-only operation gate from that check through their record and ledger write, so neither side can slip in
+      between. Reviews r1 sonnet REQUEST-CHANGES (MUST-FIX: the start race, taken), opus APPROVE-WITH-NITS (3 SHOULD-FIX
+      taken); r2 opus + sonnet APPROVE-WITH-NITS (guard-pairing test and census wording taken). cargo 1847/0, clippy
+      clean, full vitest 535/538 (3 site-app suites). What a user sees: a Gaming Mode session during a Trial leaves the
+      Trial's setting alone (one fewer line in its change list); a Trial start, keep or put-back while Gaming Mode holds
+      the setting says "Stop Gaming Mode first. Nothing was changed." (English, like the other Trial refusals). Queued:
+      CR-gm-spans-followups.
+- [ ] **CR-gm-spans-followups** (r1/r2 reviews of CR-gm-spans-trial; pre-existing or UI) (a) a quarantined
+      `gaming-session.orphaned*` file alone blocks every Trial start with "Recover or end Gaming Mode first", which the
+      user can't do: name the file (`pending_contract_files`) and say how; (b) a visible line in Gaming Mode for a step it
+      left alone because a Trial is testing it (en + zh-CN); (c) an Aborted Trial whose restore failed still has its
+      change live and isn't treated as held; (d) a plain UI apply/undo of a setting a session holds (pre-existing class);
+      (e) `rec_of_label` lists the four services by hand: iterate a `KnownService::ALL`.
 - [x] **CR-gm-confirm-repeat** (r2 NIT of owner call b, opus; pre-existing) Holding Enter on Gaming Mode's Start opens
       the consent modal, focus jumps to Enable (`autoFocus`) and key repeat presses it: either confirm can pass on one
       held key. Ignore repeated key presses on Enable, or focus Cancel first. TS only.
