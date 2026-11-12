@@ -1709,6 +1709,54 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       test renders the GPU-limiter line from a scan (it had no render test) and asserts no Optimize/→ pointer; it
       fails on main's lab.json. When P9-upgrade-block-reachable lands, a pointer to the room that shows it may return.
 
+Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f, SHIP-WITH-FOLLOW-UPS):
+- [x] **CR-bench-flake** ExperimentBench "each tested row's receipt names the risk allowed" failed in the loaded full
+      run / pre-push gate (2026-11-11, 2026-11-12 07:56: "expected 1 to be greater than 1", receipt door never opened)
+      and passed alone. Cause, product code: `Depth` re-applied the Expert-view default to both doors from a
+      `useEffect` on `[expert]` that also ran on mount; when a render outside act yielded before its passive effects,
+      a tap on the already-visible door was undone by the late mount effect (a real user tap in that gap too). Fix:
+      the doors follow only a CHANGE of the preference, adjusted during render; no mount effect. Depth.test.tsx taps
+      each door from a layout effect; fails on the old Depth. Proof: 10/10 consecutive ExperimentBench file runs, 2
+      full vitest 537/540 (3 site-app suites). Review sonnet APPROVE-WITH-NITS (no MUST-FIX; SHOULD-FIX "a summary
+      remount would read the same": the summary sits at one tree position and this test's data is all set before
+      render, so no remount path; if the flake returns, check for a remount first). Done with this line's merge.
+- [ ] **CR-check-expert-mount** (same class as CR-bench-flake) Check.tsx ~189 resets the measured-fine and
+      not-worth-touching piles from a `useEffect([expert])` that also runs on mount, so a tap in the same gap is
+      undone. Same render-phase fix; a layout-effect tap test. TS; one review.
+- [x] **CR-footer-undo-path** (s23 confirmation of the range review) After CR-footer-reversible a changed-outside row
+      gets no Roll back. Finding from the code: no undo path was removed. The Applied cards (every Undo) come from
+      `liveChangeGroups` (active + can't-confirm), which 7dfe87ef did not change; a kept row whose live check reads on
+      still has its card, and its Undo confirm names the saved plan (`keptOutsideUndoBody`, 6613a053). A kept row that
+      reads off had no card before either. The only new refusal (`hasUndo`) is for rows whose stored history resolves
+      to no undo (`resolve_rollback` fails), whose undo failed before anything ran anyway. No change.
+- [ ] **CR-core-parking-held-with-plan** (SHOULD-FIX, same class as CR-gm-stop-busy's opus MUST-FIX)
+      gaming_orchestrator.rs ~258 holds only USB and PCIe with the power plan. The core-parking leftover restore
+      (history.rs ~1499 `restore_leftover`, no gate) writes SCHEME_CURRENT (actions.rs ~4570-4617): during a Gaming
+      Mode session it lands on the session's plan; after Stop the row reads off ("changed outside Compy") and its undo
+      writes session-plan priors onto the user's plan unrecorded. Route `core-parking-forced` through
+      `plain_change_gate`, held with the plan; grep SCHEME_CURRENT / setacvalueindex / setdcvalueindex across
+      src-tauri and cover each other writer. Rust; two reviews (opus + sonnet).
+- [ ] **CR-gm-start-respects-plan-holds** (SHOULD-FIX) gaming_orchestrator.rs ~787 `free(REC_POWER)`: Gaming Mode
+      start switches the plan while an open Trial holds USB or PCIe, so that Trial measures a plan without its change.
+      REC_POWER is not free while a plan-scoped setting is held. Rust; two reviews.
+- [ ] **CR-restore-window-direct** (read-only finding first) Is every bench and Trial restore path that calls
+      `history::rollback_change` directly (no gate) safe against the Gaming Mode restore window? Write the finding
+      here; queue a fix only if one is not.
+- [ ] **P9-no-upgrade-cpu-unknown** (SHOULD-FIX, honesty) lab.json `nothingLimitingMeasured` (00d5bd01, 2e67e38b,
+      a91c068c): "No upgrade is recommended" leans on a low GPU share, the usual sign of a CPU limit or a frame cap,
+      neither of which Compy measures. Say so, or stop citing the share as support. en + zh-CN. Folds in
+      CR-gpu-share-one-source (settings-done.ts `busy*2 < readings` vs Rust GPU_SUSTAINED_SHARE_PCT).
+- [ ] **P9-session-on-this-hardware** (SHOULD-FIX, honesty) priorities.rs `build_gpu_games` (0e3091a4, c49f37af):
+      the GPU-limiter and screen-limit lines never check the session ran on today's hardware; skip sessions recorded
+      on another rig (the session's own stored identity; none stored = say it is a past session that can't be tied
+      to the current card). The "{hz} Hz screen" is the mode recorded at session start, not what the monitor can do:
+      word it as the mode the session ran at, and never "no upgrade" where a higher refresh could be the answer.
+- [ ] **CR-footer-ledger-unknown** (NITs, ShellV2.tsx ~471, 52cd64de) `get_applied_changes` turns an unreadable
+      ledger into [] so the footer can say "Nothing in effect to undo · ledger 0" while the health probe failed or is
+      in flight; a rejected call can leave "Ledger not read yet" forever. Unknown reads unknown; a rejected call
+      surfaces and retries. USB/PCIe undo refused during a session though rollback targets the saved plan GUID:
+      leave unless trivially safe (two reviews if changed).
+
 ### Before deadlines
 - [x] **fflate** 0.6.11 `53a1c9de`; dev-only body-parser/zod advisories cleared (shadcn 4.22.1) `89fc1add`.
 - [x] **tokio** `fcc64291` (1.54.1; only tokio's lock entry changed). Desk install at the next ship.
