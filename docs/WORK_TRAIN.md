@@ -1532,8 +1532,9 @@ isolation"; read-only, no product names, prices or wattages guessed (unknown sta
   clippy clean, tsc 0, full vitest 535/538 (3 site-app suites) per item. Pushed `0afbfb2c` (gate PASS) after
   `ddada688`; installed `0afbfb2c` (runtime proof attempt 1, Synez before/after). Self-review view-1111c (a15986b8):
   FAIL (tip see-through: ancestor opacity) → fixed; view-1111d (0afbfb2c): tip PASS, verdict FAIL on a duplicated
-  count (fixed) and wording (CR-view-1111d-wording); teardown CLEAN both times. Not pushed: main ahead of GitHub with
-  the RELEASE_STATE commit and everything after it (the 23:00 docs push was stopped when the owner returned).
+  count (fixed) and wording (CR-view-1111d-wording); teardown CLEAN both times. The 23:00 docs push was stopped when
+  the owner returned; pushed `25805ba2` at 23:47 (gate PASS) and installed it at 23:50 (runtime proof attempt 1,
+  Synez before/after; not screen-checked); this line's commit pushes next.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
