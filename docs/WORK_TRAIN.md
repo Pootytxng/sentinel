@@ -1831,6 +1831,12 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       on another rig (the session's own stored identity; none stored = say it is a past session that can't be tied
       to the current card). The "{hz} Hz screen" is the mode recorded at session start, not what the monitor can do:
       word it as the mode the session ran at, and never "no upgrade" where a higher refresh could be the answer.
+      PARKED s23 (finding, no commit): sessions do store `hw_fingerprint.gpu`, so filtering other-card sessions out
+      before `build_priorities` is a small pure step, but the current card has no cheap source there:
+      `hardware::current_fingerprint()` runs `collect_hardware()` (WMI, uncached) and `priorities_from` is a sync
+      Tauri command (main thread, every scan). Next step: pass the GPU name the frontend already read (App's
+      HardwareInfo) into `priorities_from`, or cache the snapshot, then filter; the refresh-wording half and the
+      no-fingerprint sentence are unchanged. Rust + TS; one review.
 - [ ] **CR-footer-ledger-unknown** (NITs, ShellV2.tsx ~471, 52cd64de) `get_applied_changes` turns an unreadable
       ledger into [] so the footer can say "Nothing in effect to undo · ledger 0" while the health probe failed or is
       in flight; a rejected call can leave "Ledger not read yet" forever. Unknown reads unknown; a rejected call
@@ -1844,14 +1850,6 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-10 ~14:30-15:20 (coordinator-assigned desk session, FULL): CR-tip-see-through `0ab041dd` (tip ground
-  `--v2-panel-pop` 0.96 + blur; term-style-guard fails on the old 0.74; src/design + monitor + glass vitest 97 files /
-  1150 passed, tsc 0); #663 `5993d0ec` (ROADMAP done-when table, derived Exit lines for Phases 9-11, "What v1.0
-  means"; BACKLOG's #583 lanes ticked; 10 docs-guard files green, doc-budget ALL PASS, verify-release-state 31/31);
-  CR-1102-left triaged: 15 already fixed and struck, 0 fixed now, 4 owner calls under Needs owner, 11 engineering
-  lines left open. Three WORK_TRAIN SHAs were mistyped (`c552354c`/`7e69760c`/`0f0cb0bb` are `c5523543`/`7e697609`/
-  `0f0cb0ba` on main). `5fb37609..5993d0ec` pushed through the gate (cargo 1810/0); #663 closed naming `5993d0ec`.
-  No Rust, no install; tip visual re-check due at the next FULL install. Pushed with this line.
 - 2026-11-10 ~17:44-19:16 (coordinator-assigned, owner in ROB RUN; his 17:44 decision: ROB RUN for WARDOGS, drive Compy
   while he plays): Compy restarted once with a CDP port (no focus taken), restored to a normal launch at 19:15. PBZ exp:6
   concluded by Compy (confounded, restored, read-back verified). P4/P5 on ROB RUN: three real-play as-is sessions, both
@@ -1948,6 +1946,19 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
   07:56 (push 1 failed in the gate on the ExperimentBench flake, which passes alone; push 2 killed by PID tree when
   the owner returned) and 09:41 (push 3 killed the same way). Not pushed; no build, install or screen check
   (installed stays `b27552f8`).
+- 2026-11-12 ~10:10-12:10 (s23, coordinator-assigned; no game seen; owner's 10:43 rule: push/install need only no game;
+  server restart ~11:08-11:30): bundle `main-unpushed-2026-11-12.bundle` verified. Landed, each in its own worktree:
+  CR-bench-flake `4d51ba9b` (merge `f2062190`; Depth's mount effect re-closed a door tapped before it ran; 10/10 file
+  runs, 2 full vitest 537/540; sonnet APPROVE-WITH-NITS), P9-upgrade-block-reachable `fce48019`, `11a2a2dc` (merge
+  `17b23abf`; OptimizeV2, which drew the block under v2Ia, was deleted in `1ab831fb`; sonnet APPROVE-WITH-NITS),
+  CR-core-parking-held-with-plan + CR-gm-start-respects-plan-holds `17034899`..`45d27ca3` (merge `46354cbb`; opus r1/r2
+  REQUEST-CHANGES without MUST-FIX, sonnet APPROVE-WITH-NITS x2, r3 both APPROVE-WITH-NITS), P9-no-upgrade-cpu-unknown +
+  CR-gpu-share-one-source `9009dee1`, `9173e337` (merge `a69eaa1f`; sonnet APPROVE-WITH-NITS); findings CR-footer-undo-path
+  (no undo path removed) and CR-restore-window-direct (safe by disjointness); P9-session-on-this-hardware parked.
+  cargo 1882/0, clippy clean, full vitest 538/541 (3 site-app suites). Pushes: 1 stopped mid-gate (owner returned,
+  before the 10:43 rule), 2-5 PASS (`17b23abf`, `25ddeafa`, `418e5d91`, `a69eaa1f`). Installed `17b23abf` then
+  `a69eaa1f` (runtime proof attempt 1 each, Synez before/after). Screen check view-1112b on `a69eaa1f` (background,
+  Compy in front 0 of 187 reads): VERDICT PASS (upgrade block not visible on this rig; unit tests only); teardown CLEAN.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
