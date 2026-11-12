@@ -61,7 +61,14 @@ export function settingsDoneLine(
   const clear = key
     ? (priorities.gpu_clear_games ?? []).find((g) => g.game.trim().toLowerCase() === key)
     : undefined;
-  if (clear && [clear.busy, clear.readings, clear.threshold_pct].every(Number.isFinite) && clear.readings > 0) {
+  // Review r1: counts that can't be a measurement (busy outside 0..readings) claim nothing.
+  if (
+    clear &&
+    [clear.busy, clear.readings, clear.threshold_pct].every(Number.isFinite) &&
+    clear.readings > 0 &&
+    clear.busy >= 0 &&
+    clear.busy <= clear.readings
+  ) {
     return {
       kind: "nothing-limiting",
       gpuClear: { busy: clear.busy, readings: clear.readings, thresholdPct: clear.threshold_pct },

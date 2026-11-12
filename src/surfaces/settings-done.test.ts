@@ -113,6 +113,11 @@ describe("settingsDoneLine (P9-settings-done)", () => {
     // A zero-reading entry claims nothing.
     const empty = { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 0, readings: 0, threshold_pct: 95 }] };
     expect(settingsDoneLine("finished-supported-tests", empty, "ROB RUN.exe")).toEqual({ kind: "nothing-limiting" });
+    // Review r1: counts that can't be a measurement claim nothing.
+    for (const [busy, readings] of [[901, 900], [-1, 900]]) {
+      const bad = { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy, readings, threshold_pct: 95 }] };
+      expect(settingsDoneLine("finished-supported-tests", bad, "ROB RUN.exe")).toEqual({ kind: "nothing-limiting" });
+    }
   });
 });
 
