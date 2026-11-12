@@ -981,16 +981,19 @@ mod spans_trial_tests {
         let save = body.find(concat!("save_", "session(&file)?")).expect("contract");
         assert!(held < save, "read before the contract exists");
         // Each apply sits behind its own `free(` check, a few lines before it at most.
-        for apply in [
-            concat!("apply_power_plan_", "switch_core()"),
-            concat!("apply_game_", "mode())"),
-            concat!("apply_game_bar_", "disable())"),
-            concat!("Box::new(apply_usb_", "selective_suspend_off)"),
-            concat!("Box::new(apply_pcie_", "aspm_off)"),
-            concat!("actions::apply_service_", "suspend(svc)"),
+        // Review r2 (opus): each apply's nearest guard is its OWN setting's, so a removed or swapped
+        // guard fails here.
+        for (apply, guard) in [
+            (concat!("apply_power_plan_", "switch_core()"), "free(REC_POWER)"),
+            (concat!("apply_game_", "mode())"), "free(REC_GAME_MODE)"),
+            (concat!("apply_game_bar_", "disable())"), "free(REC_GAME_BAR)"),
+            (concat!("Box::new(apply_usb_", "selective_suspend_off)"), "free(REC_USB)"),
+            (concat!("Box::new(apply_pcie_", "aspm_off)"), "free(REC_PCIE)"),
+            (concat!("actions::apply_service_", "suspend(svc)"), "free(service_rec(&svc))"),
         ] {
             let at = body.find(apply).unwrap_or_else(|| panic!("{apply}"));
             let gate = body[..at].rfind("free(").unwrap_or_else(|| panic!("{apply} unguarded"));
+            assert!(body[gate..].starts_with(guard), "{apply}: guarded by {guard}");
             assert!(body[gate..at].lines().count() <= 8, "{apply}: guarded right before it");
         }
     }
