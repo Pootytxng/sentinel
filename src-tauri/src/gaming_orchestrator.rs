@@ -1831,6 +1831,10 @@ mod elevation_batch_tests {
     // same thread returns WouldBlock — safe to pin without threads.)
     #[test]
     fn concurrent_session_command_is_refused_loudly() {
+        // A private session dir first (review of CR-gm-stop-busy's old-code proof): if a gate ever
+        // stops refusing, stop/recover/start below must read an empty temp dir, never the rig's.
+        let dir = temp_session_dir("stop-busy");
+        let _redirect = SessionDirOverride::begin(&dir);
         // CR-gm-stop-busy: start, stop and recover serialize on RESTORE_OP (start takes it after
         // SESSION_OP, so a start can't run beside a stop either).
         let held = RESTORE_OP.try_lock().expect("test acquires the restore lock");
@@ -1839,16 +1843,25 @@ mod elevation_batch_tests {
         let err = recover(true).expect_err("recover must be serialized too");
         assert!(err.contains("still finishing"), "got: {err}");
         assert!(recover(false).is_ok(), "declining recovery takes no lock — always safe");
-        let err = start(StartOptions::default()).expect_err("a start beside a stop is refused");
-        assert!(err.contains("still finishing"), "got: {err}");
         drop(held);
+        // Start is pinned by source order, not called: a test that calls start() would change Windows
+        // the day either gate stopped refusing. It takes SESSION_OP (the start race), then RESTORE_OP
+        // (start vs stop/recover), both before its data-root check and anything it writes.
+        let src = include_str!("gaming_orchestrator.rs");
+        let body = src.split_once("pub(crate) fn start(opts: StartOptions)").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        let op = body.find("let _op = session_op_guard()?;").expect("start takes SESSION_OP");
+        let restore = body.find("let _restore = restore_op_guard()?;").expect("start takes RESTORE_OP");
+        let root = body.find("mutation_root()").expect("then the data root");
+        assert!(op < restore && restore < root, "SESSION_OP, then RESTORE_OP, then the data root");
+        for f in ["pub(crate) fn stop()", "pub(crate) fn recover(confirm: bool)"] {
+            let b = src.split_once(f).and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+            assert!(b.contains("restore_op_guard()?") && !b.contains("session_op_guard()"), "{f}: RESTORE_OP only");
+        }
 
         // CR-gm-stop-busy, in the same test so the two statics are never contended between tests:
         // a plain change, a Trial start or the benchmark's apply holds SESSION_OP through its
         // Windows prompt; Stop Gaming Mode and Recover must not be refused for that. With SESSION_OP
         // held, stop and recover get past the gate and answer from the (empty) session dir.
-        let dir = temp_session_dir("stop-busy");
-        let _redirect = SessionDirOverride::begin(&dir);
         let held = SESSION_OP.try_lock().expect("test acquires the session gate, as a waiting change does");
         let err = stop().expect_err("no session in the temp dir");
         assert!(!err.contains("still finishing"), "stop was refused by a change's gate: {err}");
@@ -1856,10 +1869,10 @@ mod elevation_batch_tests {
         let err = recover(true).expect_err("no session in the temp dir");
         assert!(!err.contains("still finishing"), "recover was refused by a change's gate: {err}");
         assert!(err.contains("no session to recover"), "got: {err}");
-        // A Gaming Mode start is still kept out while a change holds the gate (the start race), and
-        // its refusal says what may be holding it.
-        let err = start(StartOptions::default()).expect_err("a start beside a change is refused");
-        assert!(err.contains("Windows permission prompt"), "got: {err}");
+        // A Gaming Mode start is still kept out while a change holds the gate (the start race, pinned
+        // by the source order above), and that refusal says what may be holding it.
+        let err = session_op_guard().expect_err("the gate is held");
+        assert!(err.contains("Windows permission prompt") && err.contains("still finishing"), "got: {err}");
         drop(held);
         let _ = std::fs::remove_dir_all(&dir);
     }
