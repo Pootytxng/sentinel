@@ -2317,6 +2317,42 @@ describe("P4-exit: what Compy tested on this game", () => {
     }
   });
 
+  // P9-summary-no-dead-pointer: Check's upgrade block never renders in the shipped room
+  // (P9-upgrade-block-reachable), so the GPU-limiter line must not send the user there.
+  it("P9-summary-no-dead-pointer: the GPU-limiter line names no room it can't be read in", async () => {
+    const scan = {
+      readiness: null,
+      priorities: {
+        limiters: [],
+        already_fine: [],
+        not_worth_touching: [],
+        session_hint: null,
+        upgrade_path: null,
+        gpu_limited_games: [{ game: "WardogsClient-Win64-Shipping.exe", share_pct: 80, peak_pct: 99, threshold_pct: 95 }],
+      },
+      recs: [],
+      reverted: [],
+      elapsed: null,
+    };
+    try {
+      putProbe("readiness-scan", scan);
+      await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
+      const done = screen.getByTestId("exp-summary-settings-done");
+      expect(done).toHaveAttribute("data-kind", "gpu-limiter");
+      expect(done).toHaveTextContent(
+        "80% of Compy's GPU readings were at 95% load or more, so the GPU is the measured limiter for this game. Compy can't check your power supply, case or the rest of the system for a new card.",
+      );
+      expect(done.textContent).not.toMatch(/Optimize|\bCheck\b|→/);
+      // Review nit: zh-CN too, straight from the locale files.
+      const en = (await import("../i18n/locales/en/lab.json")).default as { experimentBench: { summary: { settingsDone: { gpuLimiter: string } } } };
+      const zh = (await import("../i18n/locales/zh-CN/lab.json")).default as typeof en;
+      expect(en.experimentBench.summary.settingsDone.gpuLimiter).not.toMatch(/Optimize|\bCheck\b|→/);
+      expect(zh.experimentBench.summary.settingsDone.gpuLimiter).not.toMatch(/「优化」|「检查」|→/);
+    } finally {
+      invalidateProbe("readiness-scan");
+    }
+  });
+
   it("P9-settings-done: no settings-done line while changes are still worth testing", async () => {
     const panel = await renderOwner([
       pass("visual-effects", "Trim Windows visual effects", 1),
