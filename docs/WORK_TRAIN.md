@@ -845,8 +845,10 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       session started). (b) done `2542fdcd` + test follow-up (2026-11-11 s19, not installed): with no change active and
       every one left kept outside, the row reads "No Compy change is in effect right now; any of them can still be undone
       from the Trust Ledger." then the kept line (English, like the rest of that row); sonnet APPROVE, SHOULD-FIX (plural
-      case test) taken. Left: (c) History's "rolled back" for a still-applied row that reads off (Fix.tsx), (d) the
-      power-profile row flagging a kept custom plan (needs the recorded plan in the readiness summary).
+      case test) taken. (c) done `95eac0f8` (2026-11-11 s19, TS only, not installed): History says "off now, not
+      undone" (zh-CN "当前已关闭，未撤销") for an applied row that reads off; only an undo says "rolled back" (no longer
+      dimmed: it is a live ledger entry). Test fails on the old component. sonnet APPROVE. Left: (d) the power-profile
+      row flagging a kept custom plan (needs the recorded plan in the readiness summary).
 - [x] **CR-summary-running-trial** (TS) While a retest Trial runs, the game summary's row for that change reads "Applied
       now" and "Stays applied from these tests: <change>", though the tested Trial put it back; "on" is the running
       Trial's own apply (`stillAppliedFrom` reads the picker's already-set-by-compy). Say it is applied by the Trial in
