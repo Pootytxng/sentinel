@@ -83,17 +83,22 @@ describe("Term tip ground hides what is under it", () => {
   // computed 0.96, yet the Live readings still showed through the tip's text, because the Term sat
   // inside `.mc-delta-tag { opacity: .85 }`. An ancestor's opacity fades the whole subtree, the open
   // tip included, and makes a stacking context later siblings paint over. No rule for the Live
-  // room's Term wrapper may set opacity.
+  // room's Term wrapper may set opacity, nor (review r1 nit) another property that makes a stacking
+  // context the strip below could paint over.
   it("the Live room's combined-effect Term sits in no faded ancestor", () => {
     const tsx = readFileSync(join("src", "surfaces", "MonitorConsole.tsx"), "utf8");
     const at = tsx.indexOf('t("monitor.monitorConsole.combinedEffectTooltip")');
+    const tag = tsx.lastIndexOf('className="mc-delta-tag"', at);
     expect(at, "the combined-effect Term is still in MonitorConsole.tsx").toBeGreaterThan(0);
-    const wrappers = [...tsx.slice(0, at).matchAll(/className="([\w-]+)"/g)].map((m) => m[1]).slice(-3);
-    expect(wrappers).toContain("mc-delta-tag");
-    const sheet = readFileSync(join("src", "surfaces", "monitor-console.css"), "utf8");
-    for (const cls of wrappers) {
-      for (const m of sheet.matchAll(new RegExp(`\\.${cls}(?![\\w-])[^{,]*\\{([^}]*)\\}`, "g"))) {
-        expect(m[1], `.${cls} must not set opacity (it fades the open tip)`).not.toMatch(/(^|[;\s])opacity\s*:/);
+    expect(tag, "the Term still sits in .mc-delta-tag").toBeGreaterThan(0);
+    const between = tsx.slice(tag + 'className="mc-delta-tag"'.length, at);
+    expect(between, "no other wrapper between the tag and the Term").not.toMatch(/className=/);
+    const sheets = ["monitor-console.css", "monitor-v2.css"].map((f) => readFileSync(join("src", "surfaces", f), "utf8"));
+    for (const sheet of sheets) {
+      for (const m of sheet.matchAll(/\.mc-delta-tag(?![\w-])[^{]*\{([^}]*)\}/g)) {
+        expect(m[1], ".mc-delta-tag must not fade or isolate the open tip").not.toMatch(
+          /(^|[;\s])(opacity|filter|backdrop-filter|transform|isolation|will-change)\s*:/,
+        );
       }
     }
   });
