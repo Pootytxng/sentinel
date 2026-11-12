@@ -870,6 +870,26 @@ mod priority_tests {
     }
 
     #[test]
+    fn upgrade_row_wording_names_no_retailer() {
+        // P9-retail-firewall: what a row says is decided by the measurement; no retailer name or
+        // host reaches its title or why (the links are attached beside the wording, never in it).
+        let sessions = json!([{ "process_name": "ROB RUN.exe", "started_at": "2026-11-11T20:00:00Z",
+            "peak_gpu_usage_pct": 99, "gpu_load": { "readings": 900, "busy": 720 } }]);
+        let r = readiness(vec![chk("install-drive", "attention")]);
+        let up = build_upgrade_path(&r, &sessions).expect("both qualify");
+        assert_eq!(up.items.len(), 2);
+        let all: Vec<&RetailLink> = GPU_LINKS.iter().chain(SSD_LINKS.iter()).collect();
+        for item in &up.items {
+            let text = format!("{} {}", item.title, item.why).to_lowercase();
+            for l in &all {
+                let host = l.url.trim_start_matches("https://").split('/').next().unwrap_or_default();
+                assert!(!text.contains(&l.retailer.to_lowercase()), "{} row names {}: {text}", item.kind, l.retailer);
+                assert!(!text.contains(host), "{} row names {host}: {text}", item.kind);
+            }
+        }
+    }
+
+    #[test]
     fn every_retail_link_is_a_plain_search_never_affiliate_or_tracking() {
         // Affiliate-safety guard (Receipts Doctrine, money stack #1): the Phase-D tag swap must happen
         // ONLY by editing this module's link table — never slip in silently. Until then EVERY shipped

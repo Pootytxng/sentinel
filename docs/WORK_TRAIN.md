@@ -1672,9 +1672,11 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       unless a leak is found (then park with the finding).
       Done (2026-11-12 s22; SHAs in the merge). Finding: no leak. `priorities.rs build_upgrade_path` decides each row
       from the sessions and readiness alone and attaches the const GPU_LINKS/SSD_LINKS after; settings-done.ts never
-      reads `upgrade_path`. New settings-done test: six payloads (GPU-limited, measured clear, part, setting, unread,
-      none) give one verdict with links present, stripped or absent. A pin, so it also passes on main. Check.tsx's
-      screen-is-limit is not covered here (unreachable; P9-upgrade-block-reachable).
+      reads `upgrade_path`. New settings-done test: five payloads (GPU-limited, measured clear, part, unread, none)
+      each pin their own verdict and give it with links present, stripped or absent; a Rust test pins that
+      neither the gpu nor the ssd row's title/why names a retailer or its host. Pins, so they also pass on main.
+      Check.tsx's screen-is-limit is not covered here (unreachable; P9-upgrade-block-reachable). Review sonnet r1
+      (no verdict line; coverage gap and self-comparing asserts, both taken).
 - [ ] **P9-exit-fixture** (Phase 9 Exit proof) One fixture per Exit branch, driven through priorities + the game
       summary: settings done + GPU-limited (limiter named with what Compy can't check), settings done + measured clear
       ("no upgrade recommended" with its source), settings not done (no part named). Pure tests; no UI claim (the Check

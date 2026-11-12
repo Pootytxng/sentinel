@@ -170,16 +170,17 @@ describe("settingsDoneLine ignores retail data (P9-retail-firewall)", () => {
     ...p,
     upgrade_path: links ? { items: [row(links)], disclosure: "x" } : null,
   });
-  const cases: [string, Priorities][] = [
-    ["gpu-limited", { ...pri([]), gpu_limited_games: [{ game: "ROB RUN.exe", share_pct: 80, peak_pct: 99, threshold_pct: 95 }] }],
-    ["measured clear", { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 120, readings: 900, threshold_pct: 95 }] }],
-    ["part limiter", pri([item("ram-capacity", "attention", "Memory")])],
-    ["setting limiter", pri([item("power-plan", "attention", "Power plan")])],
-    ["unread limiter", pri([item("b", "unknown")])],
-    ["nothing", pri([])],
+  const cases: [string, Priorities, string][] = [
+    ["gpu-limited", { ...pri([]), gpu_limited_games: [{ game: "ROB RUN.exe", share_pct: 80, peak_pct: 99, threshold_pct: 95 }] }, "gpu-limiter"],
+    ["measured clear", { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 120, readings: 900, threshold_pct: 95 }] }, "nothing-limiting"],
+    ["part limiter", pri([item("ram-capacity", "attention", "Memory")]), "part-limiter"],
+    ["unread limiter", pri([item("b", "unknown")]), "not-measured"],
+    ["nothing", pri([]), "nothing-limiting"],
   ];
-  it.each(cases)("%s: links present, stripped or absent give one verdict", (_name, p) => {
+  it.each(cases)("%s: links present, stripped or absent give one verdict", (_name, p, kind) => {
     const bare = settingsDoneLine("finished-supported-tests", withPath(p, null), "ROB RUN.exe");
+    // Review r1: each case pins its own verdict, so a regression to one shared verdict fails.
+    expect(bare?.kind).toBe(kind);
     expect(settingsDoneLine("finished-supported-tests", withPath(p, [link, link]), "ROB RUN.exe")).toEqual(bare);
     expect(settingsDoneLine("finished-supported-tests", withPath(p, []), "ROB RUN.exe")).toEqual(bare);
   });
