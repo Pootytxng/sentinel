@@ -33,6 +33,8 @@
     "footerUnchecked_one": "{{count}} not checked",
     "footerUnchecked_other": "{{count}} not checked",
     "footerNotRead": "Ledger not read yet",
+    "footerReadFailed": "Couldn't read the ledger · trying again",
+    "footerEmptyUnconfirmed": "No changes listed · ledger not confirmed complete",
     "footerEmph": "ledger {{n}}",
     "footerOutbound": "Outbound: signed update check only",
     "footerIncompletePre": "Ledger incomplete ·",

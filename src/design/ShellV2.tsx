@@ -95,6 +95,7 @@ export function ShellV2({
   activeId,
   onNavigate,
   ledger,
+  ledgerReadFailed = false,
   rig,
   onOpenStation,
   tuningStation,
@@ -110,6 +111,8 @@ export function ShellV2({
   /** The Trust Ledger rows App last read (its `changes`); null until they have been read.
    *  The footer counts what can be undone from these (`undoTally`, the Applied cards' groups). */
   ledger: readonly AppliedChange[] | null;
+  /** CR-footer-ledger-unknown: App's newest read of those rows was rejected (it is retrying). */
+  ledgerReadFailed?: boolean;
   /** Glass redesign: a count shown on a dock door (Problems: an incident waiting to be looked at).
    *  Only real counts are passed; absent or 0 draws nothing. */
   badges?: Partial<Record<HomeRailId, number>>;
@@ -228,8 +231,14 @@ export function ShellV2({
   // App.tsx on purpose: a prop can be forgotten at a call site, and this gate must not be
   // forgettable. Cost is one cheap file-existence read per shell mount. Fails → UNKNOWN → the
   // footer reads exactly as it does today.
-  const ledgerUnvouched = knownIncomplete(useLedgerHealth(ledger));
+  const ledgerHealth = useLedgerHealth(ledger);
+  const ledgerUnvouched = knownIncomplete(ledgerHealth);
   const ledgerCount = ledger?.length ?? 0;
+  // CR-footer-ledger-unknown: `get_applied_changes` reads an unreadable ledger as []. So an EMPTY list
+  // is only "nothing to undo · ledger 0" once the health probe says the record is complete; while it
+  // is in flight or failed (UNKNOWN), the empty list is not evidence of anything. A non-empty list is
+  // rows the ledger really returned, so it keeps today's line whatever the probe says.
+  const emptyUnvouched = ledger !== null && ledger.length === 0 && ledgerHealth?.complete !== true;
   // CR-footer-reversible: the line says only what the ledger it read can undo, counted from the
   // groups the Applied cards draw their Undo buttons from; rows not read yet print no claim.
   const tally = useMemo(() => (ledger ? undoTally(ledger) : null), [ledger]);
@@ -469,8 +478,13 @@ export function ShellV2({
                 </span>
               </div>
             ) : tally === null ? (
-              // Rows not read yet (or the read failed): no count and no claim about undo.
-              <div className="v2-undo-state">{t("common.shellV2.footerNotRead")}</div>
+              // Rows not read yet, or the read was rejected (App retries it): no count and no claim.
+              <div className="v2-undo-state">
+                {ledgerReadFailed ? t("common.shellV2.footerReadFailed") : t("common.shellV2.footerNotRead")}
+              </div>
+            ) : emptyUnvouched ? (
+              // CR-footer-ledger-unknown: an empty list the health probe hasn't vouched for.
+              <div className="v2-undo-state">{t("common.shellV2.footerEmptyUnconfirmed")}</div>
             ) : (
               // CR-footer-reversible: "Every change reversible" was printed on every screen while
               // rows had no undo. Now: how many changes the Applied cards can undo, then each kind
