@@ -75,18 +75,24 @@ describe("settingsDoneLine (P9-settings-done)", () => {
 
   // P9-summary-gpu-limit: the game's own newest measured session was GPU-limited (sustained rule).
   it("names the GPU with its share when this game's newest session was GPU-limited, never another game's", () => {
-    const withGpu = { ...pri([]), gpu_limited_games: [{ game: "robrun.exe", share_pct: 72, peak_pct: 99 }] };
-    expect(settingsDoneLine("finished-supported-tests", withGpu, "robrun.exe")).toEqual({ kind: "gpu-limiter", sharePct: 72 });
+    const withGpu = {
+      ...pri([]),
+      gpu_limited_games: [{ game: "ROB RUN.exe", share_pct: 72, peak_pct: 99, threshold_pct: 95 }],
+    };
+    const limited = { kind: "gpu-limiter", sharePct: 72, thresholdPct: 95 };
+    expect(settingsDoneLine("finished-supported-tests", withGpu, "ROB RUN.exe")).toEqual(limited);
+    // Review r1: Windows' case for the process name doesn't decide the match.
+    expect(settingsDoneLine("finished-supported-tests", withGpu, "rob run.exe ")).toEqual(limited);
     // Another game's limit never counts for this one.
     expect(settingsDoneLine("finished-supported-tests", withGpu, "wardogs.exe")).toEqual({ kind: "nothing-limiting" });
     // It also outranks "not measured" from an unread PC-wide row: it is a measurement of this game.
     const unread = { ...pri([item("b", "unknown")]), gpu_limited_games: withGpu.gpu_limited_games };
-    expect(settingsDoneLine("finished-supported-tests", unread, "robrun.exe")).toEqual({ kind: "gpu-limiter", sharePct: 72 });
+    expect(settingsDoneLine("finished-supported-tests", unread, "ROB RUN.exe")).toEqual(limited);
     // A scan's own attention limiter is still the one named first.
     const part = { ...pri([item("ram-capacity", "attention", "Memory")]), gpu_limited_games: withGpu.gpu_limited_games };
-    expect(settingsDoneLine("finished-supported-tests", part, "robrun.exe")).toEqual({ kind: "part-limiter", title: "Memory" });
+    expect(settingsDoneLine("finished-supported-tests", part, "ROB RUN.exe")).toEqual({ kind: "part-limiter", title: "Memory" });
     // An older backend sends no list; no game given: as before.
-    expect(settingsDoneLine("finished-supported-tests", pri([]), "robrun.exe")).toEqual({ kind: "nothing-limiting" });
+    expect(settingsDoneLine("finished-supported-tests", pri([]), "ROB RUN.exe")).toEqual({ kind: "nothing-limiting" });
     expect(settingsDoneLine("finished-supported-tests", withGpu)).toEqual({ kind: "nothing-limiting" });
   });
 });

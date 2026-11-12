@@ -1909,7 +1909,11 @@ function TestSummary({ s }: { s: GameTestSummary }) {
             : settingsDone.kind === "part-limiter"
               ? t("lab.experimentBench.summary.settingsDone.partLimiter", { title: settingsDone.title })
               : settingsDone.kind === "gpu-limiter"
-                ? t("lab.experimentBench.summary.settingsDone.gpuLimiter", { game, share: settingsDone.sharePct })
+                ? t("lab.experimentBench.summary.settingsDone.gpuLimiter", {
+                    game,
+                    share: settingsDone.sharePct,
+                    threshold: settingsDone.thresholdPct,
+                  })
                 : settingsDone.kind === "nothing-limiting"
                   ? t("lab.experimentBench.summary.settingsDone.nothingLimiting")
                   : t("lab.experimentBench.summary.settingsDone.notMeasured")}

@@ -220,7 +220,7 @@ export type Priorities = {
   gpu_limited_games?: GameGpuLimit[];
 };
 
-export type GameGpuLimit = { game: string; share_pct: number; peak_pct: number };
+export type GameGpuLimit = { game: string; share_pct: number; peak_pct: number; threshold_pct: number };
 
 export type SessionSummary = {
   started_at: string;

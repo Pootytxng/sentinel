@@ -61,6 +61,9 @@ pub(crate) struct GameGpuLimit {
     share_pct: u64,
     /// That session's peak GPU usage.
     peak_pct: u64,
+    /// The per-reading load at or above which a reading counts toward `share_pct` (sessions.rs
+    /// `GPU_LIMITED_PCT`), so the line can say what the share is a share of.
+    threshold_pct: u64,
 }
 
 // ── Upgrade path (R3 Lane B — advisory-only, doctrine money stack #1 groundwork) ──────────────
@@ -176,15 +179,21 @@ fn build_gpu_limited_games(sessions: &Value) -> Vec<GameGpuLimit> {
         if row.get("samples").and_then(Value::as_u64) == Some(0) {
             continue;
         }
-        let Some(game) = row.get("process_name").and_then(Value::as_str).filter(|g| !g.is_empty()) else {
+        let Some(game) = row.get("process_name").and_then(Value::as_str).map(str::trim).filter(|g| !g.is_empty()) else {
             continue;
         };
-        if !seen.insert(game.to_string()) {
+        // Review r1: one game whatever the case Windows reported its process name in.
+        if !seen.insert(game.to_lowercase()) {
             continue; // an older session of a game already decided by its newest
         }
         if let Some(read) = gpu_load_read_row(row) {
             if let Some(share_pct) = read.sustained_share() {
-                out.push(GameGpuLimit { game: game.to_string(), share_pct, peak_pct: read.peak_pct });
+                out.push(GameGpuLimit {
+                    game: game.to_string(),
+                    share_pct,
+                    peak_pct: read.peak_pct,
+                    threshold_pct: GPU_LIMITED_PCT,
+                });
             }
         }
     }
@@ -940,10 +949,19 @@ mod priority_tests {
         assert_eq!(
             got,
             vec![
-                GameGpuLimit { game: "a.exe".into(), share_pct: 80, peak_pct: 99 },
-                GameGpuLimit { game: "c.exe".into(), share_pct: 70, peak_pct: 99 },
+                GameGpuLimit { game: "a.exe".into(), share_pct: 80, peak_pct: 99, threshold_pct: 95 },
+                GameGpuLimit { game: "c.exe".into(), share_pct: 70, peak_pct: 99, threshold_pct: 95 },
             ]
         );
+        // Review r1: the case Windows reported the name in doesn't make a second game; and a game
+        // whose newest measured session recorded no share is absent though an older one was limited.
+        let cased = json!([row("Game.exe", 500, 10), row("game.exe", 500, 90)]);
+        assert!(build_gpu_limited_games(&cased).is_empty(), "the newest of one game decides");
+        let no_share = json!([
+            { "process_name": "e.exe", "samples": 500, "peak_gpu_usage_pct": 99 },
+            row("e.exe", 500, 90),
+        ]);
+        assert!(build_gpu_limited_games(&no_share).is_empty(), "the newest measured session decides");
         // The same sustained rule: 99 of 200 is not half; under the reading floor is no claim.
         let edge = json!([{ "process_name": "d.exe", "peak_gpu_usage_pct": 99, "gpu_load": { "readings": 200, "busy": 99 } }]);
         assert!(build_gpu_limited_games(&edge).is_empty());
