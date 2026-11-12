@@ -158,6 +158,7 @@
     "upgradeFitGpuUnknown": "Before any card: Compy can't read your power supply's capacity or connectors, or how much room and airflow your case has. Check those first.",
     "upgradeFitGpuUserPsu": "Before any card: you told Compy your power supply is “{{name}}”. Compy can't check its capacity or connectors, or how much room and airflow your case has. Check those first.",
     "upgradeFitSsd": "Before any drive: Compy can't read which free M.2 slots, SATA ports or drive bays your motherboard and case have. Check those first.",
+    "upgradeMeasuredFrom": "Measured from your {{game}} session on {{date}}: {{busy}} of {{readings}} GPU readings were at {{threshold}}% load or more.",
     "copyRetailLinkTitle": "Copies a plain {{retailer}} search link to open in your browser. No affiliate tag today.",
     "copiedExclaim": "Copied!",
     "copyRetailSearchLink": "Copy {{retailer}} search link",
