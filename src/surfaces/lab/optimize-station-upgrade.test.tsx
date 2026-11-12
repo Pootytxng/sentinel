@@ -292,6 +292,8 @@ describe("CR-view-1112c-zh-gap: no space after a Chinese full stop in the upgrad
       scan.upgrade = { items: [{ ...GPU_ROW, measured_from: { ...GPU_ROW.measured_from, gpu_tie: "card-unread" } }], disclosure: "x" };
       mount();
       await screen.findByTestId("check-upgrade");
+      // Review r1: the untied line must be there, so the negative match can't pass vacuously.
+      expect(screen.getByTestId("check-upgrade-untied").textContent).toMatch(/^Compy 还没有读取到/);
       expect(screen.getByTestId("check-upgrade-source").textContent).not.toMatch(/。 /);
     } finally {
       await i18n.changeLanguage("en");

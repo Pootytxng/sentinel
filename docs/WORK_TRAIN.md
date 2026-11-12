@@ -1957,7 +1957,9 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
       joined its sentences with an ASCII space after "。" ("。 在最近一次"), and so did the GPU row's untied line.
       Done (s24, TS only, not installed; SHAs in the merge): Check.tsx `sentenceGap` (none after a Chinese full stop,
       one space in English) for the no-upgrade block's newest line, both untied lines. Tests (zh-CN both blocks, en
-      keeps its space); the zh two fail on main. Not re-captured (installed build is `9d2f2b57`).
+      keeps its space); the zh two fail on main. Not re-captured (installed build is `9d2f2b57`). Review sonnet
+      APPROVE-WITH-NITS (SHOULD-FIX taken: the GPU-row test asserts the untied line is there; NITs left: one
+      language source with `sessionDate`, hoist the per-row call).
 - [ ] **CR-view-focus-1112c** (FULL; `_train\view-1112c\fgwatch.txt`: "fgwatch reads=107 compy_in_front=3
       seen=compy:3,Discord:95,firefox:4,Idle:5"; s23's run read 0 of 187) Compy was in front 3 of 107 reads during the
       background screen check (close the running copy, CDP launch with --no-activate and COMPY_NO_ACTIVATE=1,
@@ -1997,11 +1999,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-10 ~17:44-19:16 (coordinator-assigned, owner in ROB RUN; his 17:44 decision: ROB RUN for WARDOGS, drive Compy
-  while he plays): Compy restarted once with a CDP port (no focus taken), restored to a normal launch at 19:15. PBZ exp:6
-  concluded by Compy (confounded, restored, read-back verified). P4/P5 on ROB RUN: three real-play as-is sessions, both
-  journey baselines uneven at the cap, Trial start refused (CR-unconfirmed-remedy, CR-refuse-early queued). P6 owner half
-  re-checked for ROB RUN. Nothing ticked. Docs only; evidence `_train\view-1110d\`. Not pushed (preflight CODE-ONLY).
 - 2026-11-10 ~19:16-20:10 (coordinator-assigned, CODE-ONLY throughout, owner in ROB RUN): CR-unconfirmed-remedy landed
   `12a791d0` (coordinator call delegated by the owner: keep his own plan; ledger-only "changed outside Compy" record,
   schema 1, nothing on Windows changes; opus r1 MUST-FIX taken, r2 APPROVE; sonnet APPROVE) and CR-refuse-early `5844c368`
@@ -2106,6 +2103,18 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   before the 10:43 rule), 2-5 PASS (`17b23abf`, `25ddeafa`, `418e5d91`, `a69eaa1f`). Installed `17b23abf` then
   `a69eaa1f` (runtime proof attempt 1 each, Synez before/after). Screen check view-1112b on `a69eaa1f` (background,
   Compy in front 0 of 187 reads): VERDICT PASS (upgrade block not visible on this rig; unit tests only); teardown CLEAN.
+- 2026-11-12 ~12:32-14:15 (s24, coordinator-assigned; no game seen; push/install per the 10:43 rule): landed, each in its
+  own worktree: P9-session-on-this-hardware (merge `da0aeb46`; sonnet APPROVE-WITH-NITS), CR-footer-ledger-unknown
+  in part (merge `1ea41596`; empty-list half dropped: ledger-health-home-guard; sonnet r1, r2 APPROVE-WITH-NITS),
+  P9-exit-fixture (merge `6ba0d038`; tests only; APPROVE-WITH-NITS), P9-no-upgrade-named + P9-cpu-gpu-balance (merge
+  `2d527abc`; sonnet r1 REQUEST-CHANGES, MUST-FIX taken, r2 APPROVE-WITH-NITS), P9-part-line-context +
+  P9-no-session-plain-line (merge `9d2f2b57`; APPROVE-WITH-NITS), CR-view-1112c-zh-gap (this merge). Phase 9 Exit
+  finding under its heading (not ticked; Needs owner). cargo 1887/0, clippy clean, full vitest 540/543 (3 site-app).
+  Pushes 1, 3-6 PASS (`da0aeb46`, `1ea41596`, `6ba0d038`, `2d527abc`, `9d2f2b57`); push 2 failed in the gate on a
+  load flake (glass-rooms.test.tsx:477, queued CR-glass-scroll-flake), retried once as push 3. Installed `9d2f2b57`
+  (runtime proof attempt 1, Synez before/after). Screen check view-1112c (background): VERDICT FAIL (Compy in front 3
+  of 107 reads; Optimize overflow not measured at 3 sizes; zh space after "。"; upgrade block still unseen: the invoke
+  wrap does not take); teardown CLEAN; FAILs queued, the zh one fixed here.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
