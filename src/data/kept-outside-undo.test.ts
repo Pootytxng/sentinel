@@ -30,6 +30,14 @@ describe("Undo after Keep <plan> names the plan the undo switches to", () => {
     expect(keptOutsideUndoBody({ snapshot: { kind: "power-plan", prior_guid: BALANCED }, changed_outside: kept(SYNEZ) }, tFor(zh))).toContain("“平衡”");
   });
 
+  // CR-range3-nits (a): Windows' stock Power saver is a stock plan too, so a saved Power saver is named.
+  it("a saved Power saver plan is named, en and zh-CN", () => {
+    const POWER_SAVER = "a1841308-3541-4fab-bc81-f71556f20b4a";
+    const change = { snapshot: { kind: "power-plan", prior_guid: POWER_SAVER }, changed_outside: kept(SYNEZ) };
+    expect(keptOutsideUndoBody(change, tFor(en))).toContain("switches your power plan to “Power saver”");
+    expect(keptOutsideUndoBody(change, tFor(zh))).toContain("“节能”");
+  });
+
   it("a saved plan that is the kept plan says the plan stays the same", () => {
     const body = keptOutsideUndoBody({ snapshot: { kind: "power-plan", prior_guid: SYNEZ.toUpperCase() }, changed_outside: kept(SYNEZ) }, tFor(en));
     expect(body).toContain("which is “Synez Power Plan” too, so your plan stays the same.");
