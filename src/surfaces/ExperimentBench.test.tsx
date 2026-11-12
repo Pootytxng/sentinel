@@ -2342,7 +2342,12 @@ describe("P4-exit: what Compy tested on this game", () => {
       expect(done).toHaveTextContent(
         "80% of Compy's GPU readings were at 95% load or more, so the GPU is the measured limiter for this game. Compy can't check your power supply, case or the rest of the system for a new card.",
       );
-      expect(done.textContent).not.toMatch(/Optimize|Check →|→/);
+      expect(done.textContent).not.toMatch(/Optimize|\bCheck\b|→/);
+      // Review nit: zh-CN too, straight from the locale files.
+      const en = (await import("../i18n/locales/en/lab.json")).default as { experimentBench: { summary: { settingsDone: { gpuLimiter: string } } } };
+      const zh = (await import("../i18n/locales/zh-CN/lab.json")).default as typeof en;
+      expect(en.experimentBench.summary.settingsDone.gpuLimiter).not.toMatch(/Optimize|\bCheck\b|→/);
+      expect(zh.experimentBench.summary.settingsDone.gpuLimiter).not.toMatch(/「优化」|「检查」|→/);
     } finally {
       invalidateProbe("readiness-scan");
     }
