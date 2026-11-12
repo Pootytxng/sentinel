@@ -248,6 +248,7 @@
     "lastSeenWorkingOnPre": "最后一次确认生效于 ",
     "lastSeenWorkingOnPost": "——在你的硬件变更之前应用的。仍可从台账中回滚。",
     "rollingBackEllipsis": "正在回滚…",
+    "noSavedUndo": "Compy 没有为这项更改保存撤销方式。",
     "unknownGpu": "未知 GPU",
     "rigLabelFormat": "{{gpu}} · {{ramGb}} GB 内存",
     "historyOtherRigTitle": "在你的硬件变更之前应用的",

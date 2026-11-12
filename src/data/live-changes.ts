@@ -62,3 +62,42 @@ export function liveChangeGroups(changes: readonly AppliedChange[] | null | unde
     cantConfirm: all.filter((g) => g.state.unconfirmed).map((g) => g.row),
   };
 }
+
+/** Whether the Undo on a live change's card can run: false only when history.rs said its stored
+ *  history resolves to no undo. An older payload that didn't say keeps the button it always had. */
+export function hasUndo(c: Pick<AppliedChange, "undo_contract">): boolean {
+  return c.undo_contract !== false;
+}
+
+export type UndoTally = {
+  /** Changes (one per `rec_id`) with an Undo button that can run: the Applied cards. */
+  undoable: number;
+  /** Live changes whose stored history resolves to no undo (`undo_contract` false). */
+  noSavedUndo: number;
+  /** Changes Compy applied that read off now without being undone (changed outside Compy, incl.
+   *  a "Keep <plan>" record): no Applied card, so no Undo. */
+  offOutside: number;
+  /** Applied changes with no live-check verdict at all (an older payload; history.rs checks every
+   *  applied row). Named, so "Nothing in effect to undo" is never said over a row nobody read. */
+  unchecked: number;
+};
+
+/**
+ * CR-footer-reversible: what the ledger can undo, counted from `liveChangeGroups`, the same groups
+ * the Applied cards (and so every Undo button) are drawn from, so the footer and the buttons can't
+ * disagree. Rolled-back rows count nowhere: they are already undone.
+ */
+export function undoTally(changes: readonly AppliedChange[]): UndoTally {
+  const { active, cantConfirm } = liveChangeGroups(changes);
+  const live = [...active, ...cantConfirm];
+  const liveRecs = new Set(live.map((c) => c.rec_id));
+  const undoable = live.filter(hasUndo).length;
+  const off = new Set<string>();
+  const unchecked = new Set<string>();
+  for (const c of changes) {
+    if (c.status !== "applied" || liveRecs.has(c.rec_id)) continue;
+    if (c.active_check === "off") off.add(c.rec_id);
+    else if (c.active_check == null) unchecked.add(c.rec_id);
+  }
+  return { undoable, noSavedUndo: live.length - undoable, offOutside: off.size, unchecked: unchecked.size };
+}

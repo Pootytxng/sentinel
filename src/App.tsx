@@ -38,6 +38,7 @@ import { inEffectCounts, useMachineModel } from "./data/machine-model";
 import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
 import { keptOutsideUndoBody } from "./data/kept-outside-undo";
+import { hasUndo } from "./data/live-changes";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { primaryGpu, sessionPeakVendor } from "./data/gpu-sensor";
@@ -264,6 +265,8 @@ type AppliedChange = {
   elevation_used?: boolean | null;
   // Human-readable prior the trust-switch reveals (computed read-only by the backend; see types.ts).
   restores_label?: string | null;
+  // CR-footer-reversible: whether the row's stored history resolves to an undo (see types.ts).
+  undo_contract?: boolean;
 };
 
 type StartupEntry = {
@@ -549,6 +552,9 @@ function App() {
   const [hw, setHw] = useState<HardwareInfo | null>(null);
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
   const [changes, setChanges] = useState<AppliedChange[]>([]);
+  // CR-footer-reversible: false until get_applied_changes has answered once, so the footer never
+  // reads the initial empty array as a ledger with nothing to undo.
+  const [changesRead, setChangesRead] = useState(false);
   // Shared Machine Model (#452): the Lab verdict's "N safe changes are active" count is the model's
   // `active_now`, never a filter over the bare ledger list. `changes` is refresh()'s product, so a
   // new list re-reads the model alongside it (cached across surfaces, shared while in flight).
@@ -899,7 +905,10 @@ function App() {
         // channel) so its frametime graph can anchor a fixed scale + frame-budget line. Zero IPC.
         persistDisplayRefreshHz(info.display?.current_refresh_rate_hz);
       }),
-      run<AppliedChange[]>("get_applied_changes", setChanges),
+      run<AppliedChange[]>("get_applied_changes", (c) => {
+        setChanges(c);
+        setChangesRead(true);
+      }),
       run<string>("get_rules_source", setRulesSource),
       run<DiagnosticSection[]>("get_diagnostics", setDiagnostics),
       recsP,
@@ -999,6 +1008,12 @@ function App() {
 
   // Resolves true only when the undo was recorded, as apply does.
   const rollback = async (change: AppliedChange): Promise<boolean> => {
+    // CR-footer-reversible: every undo route (Applied card, a rec's Roll back, the debrief) lands
+    // here, so a row whose stored history resolves to no undo is refused before any confirm.
+    if (!hasUndo(change)) {
+      fail(t("app.errors.noSavedUndo", { title: change.rec_title }));
+      return false;
+    }
     const dest = change.restores_label
       ? t("app.dialogs.rollbackDest", { label: change.restores_label })
       : "";
@@ -1571,7 +1586,7 @@ function App() {
           items={rail}
           activeId={activeHomeId}
           onNavigate={navHome}
-          ledgerCount={changes.length}
+          ledger={changesRead ? changes : null}
           badges={{ problems: pendingCare ? 1 : 0 }}
           rig={hw ? [hw.cpu_brand, primaryGpu(hw.gpus)?.name].filter(Boolean).join(" · ") : null}
           // Command-palette destinations. Each is the SAME single writer the rest of the app routes

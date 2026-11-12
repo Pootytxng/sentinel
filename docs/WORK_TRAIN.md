@@ -333,10 +333,31 @@ Third whole-range review (e29da54b..119d07f8, 2026-11-12, SHIP-WITH-FOLLOW-UPS, 
       (Gaming Mode's start, `bench_refusal`) read one. Dark (`stack_trial_gate()` false), nothing reaches it today;
       two reviews when done.
 From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAIL, teardown CLEAN):
-- [ ] **CR-footer-reversible** (FAIL item 6, `_train\view-1112a\05-test-history-changed-outside-row.png`, `03-test.png`)
+- [x] **CR-footer-reversible** (FAIL item 6, `_train\view-1112a\05-test-history-changed-outside-row.png`, `03-test.png`)
       The footer says "Every change reversible · ledger 84" (zh "每一项更改均可撤销") on every screen while a
       changed-outside row has no undo: the same over-promise CR-view-1111d-wording took off the Applied & history
       summary. Make the line true (no absolute), en + zh-CN; the incomplete-ledger branch stays as it is. TS.
+      Done `52cd64de`, `02393901`, `57602f97` (2026-11-12 s22, not installed). Rows with no undo, from the ledger model:
+      (1) applied rows that read off and were never undone (changed outside Compy, incl. a Keep-plan record): no Applied
+      card, so no Undo; (2) live rows whose stored history resolves to no undo (no typed contract and no legacy
+      synthesizer, or a snapshot that no longer parses), now `undo_contract` on the view (history.rs, read-only,
+      `resolve_rollback`, the first step of every undo); (3) applied rows with no live check (older payload only).
+      None are one-way cleanups (every apply writes a rollback contract); a kept-outside row whose live read is on again
+      is an ordinary Applied card whose confirm names the plan it switches to. The footer now counts from
+      `liveChangeGroups` (the Applied cards' groups): "2 changes can be undone · 1 changed outside Compy, no undo ·
+      ledger 84" (zh "2 项更改可撤销 · 1 项已在 Compy 之外更改，无法撤销 · 台账 84"), "N have no saved undo", "N not
+      checked", "Nothing in effect to undo" only when none of those; rows not read yet: "Ledger not read yet". A card
+      with no saved undo says so and its Roll back can't run; App's rollback refuses such a row before the confirm.
+      Affordance census re-recorded to retire `footerPre`. Reviews sonnet r1 REQUEST-CHANGES (MUST-FIX was a misread:
+      the health hook takes any refresh key; SHOULD-FIX unchecked rows taken), r2 APPROVE-WITH-NITS (SHOULD-FIX taken).
+      12 new tests fail on the old code. cargo 1874/0, clippy clean, tsc 0, full vitest 535/538 (3 site-app suites).
+      Queued: CR-undo-entry-disable, CR-home-reversible-note.
+- [ ] **CR-undo-entry-disable** (r2 NIT of CR-footer-reversible) Only the Applied card disables Roll back for a row with
+      no saved undo (`hasUndo`); a rec's Roll back and the debrief's stay enabled and end in App's refusal. Share the
+      disable and the reason line. TS.
+- [ ] **CR-home-reversible-note** (same class as CR-footer-reversible) Home's Active changes card says "every one
+      reversible from the ledger" (ledger-health-home-guard.test.tsx `REVERSIBLE_NOTE`); make it count from
+      `undoTally` like the footer, en + zh-CN. TS.
 - [ ] **CR-hist-today** (`_train\view-1112a\04-test-applied.png`) History rows from Nov 11 6:14 AM and 4:19 AM read
       "today" at 00:35 on Nov 12: `Fix.tsx` `humanizeWhen` buckets by elapsed 24 h, not calendar day, and formats
       with the OS locale. Calendar days in the app's language; test fails on the old code. TS.

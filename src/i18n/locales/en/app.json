@@ -48,6 +48,7 @@
     "startupToggleFailed": "Couldn't change that startup item just now — try again.",
     "applyFailed": "Couldn't apply that change — it may need an admin OK, or the prompt was cancelled. Nothing was changed; try again.",
     "rollbackFailed": "Couldn't undo that change just now — try again, or undo it from the Trust Ledger.",
+    "noSavedUndo": "Compy has no saved undo for \"{{title}}\" (its record doesn't say how to put it back). Nothing was changed.",
     "recAppliedExternally": "\"{{title}}\" is currently on but Compy didn't apply it, so there's no rollback record. Toggle it off in the original Windows location instead.",
     "openExportsFolderFailed": "Couldn't open the exports folder."
   },

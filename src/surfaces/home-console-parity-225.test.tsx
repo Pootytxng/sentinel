@@ -198,7 +198,7 @@ const priorities: Priorities = {
 
 const mount = () =>
   render(
-    <ShellV2 items={railFor(true)} activeId="home" onNavigate={() => {}} ledgerCount={0}>
+    <ShellV2 items={railFor(true)} activeId="home" onNavigate={() => {}} ledger={[]}>
       <HomeConsole
         hw={hw}
         readiness={readiness}

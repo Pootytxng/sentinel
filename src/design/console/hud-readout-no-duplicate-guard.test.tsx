@@ -52,7 +52,7 @@ function renderIn(activeId: HomeRailId) {
       items={ITEMS}
       activeId={activeId}
       onNavigate={() => {}}
-      ledgerCount={3}
+      ledger={[]}
       rig={RIG}
     >
       <p>Room content</p>

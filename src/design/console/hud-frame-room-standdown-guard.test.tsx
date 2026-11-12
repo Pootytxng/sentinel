@@ -58,7 +58,7 @@ function shellIn(activeId: HomeRailId) {
       items={ITEMS}
       activeId={activeId}
       onNavigate={() => {}}
-      ledgerCount={3}
+      ledger={[]}
       rig="Ryzen 7 · RX 9070 XT"
     >
       <p>Room content</p>

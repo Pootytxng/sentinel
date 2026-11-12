@@ -16,7 +16,7 @@ function renderShell() {
       items={railFor(false, true)}
       activeId="home"
       onNavigate={() => {}}
-      ledgerCount={0}
+      ledger={[]}
      
       onOpenStation={() => {}}
       onOpenEntry={() => {}}
@@ -95,7 +95,7 @@ describe("ON (default) — the box is visible, not just a shortcut", () => {
         items={railFor(false, true)}
         activeId="home"
         onNavigate={onNavigate}
-        ledgerCount={0}
+        ledger={[]}
        
       >
         <div>room</div>
@@ -129,7 +129,7 @@ describe('OFF ("0") — the pre-palette shell, byte-identical', () => {
         items={railFor(false, true)}
         activeId="home"
         onNavigate={onNavigate}
-        ledgerCount={0}
+        ledger={[]}
        
       >
         <div>room</div>

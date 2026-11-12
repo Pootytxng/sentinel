@@ -145,7 +145,7 @@ type Props = Parameters<typeof HomeConsole>[0];
 
 const mount = (over: Partial<Props> = {}) =>
   render(
-    <ShellV2 items={railFor(false, true)} activeId="home" onNavigate={() => {}} ledgerCount={0}>
+    <ShellV2 items={railFor(false, true)} activeId="home" onNavigate={() => {}} ledger={[]}>
       <HomeConsole
         hw={hw}
         readiness={clean}

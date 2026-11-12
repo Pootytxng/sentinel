@@ -13,6 +13,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -37,6 +38,8 @@ import { MagneticLayer } from "./jarvis/MagneticLayer";
 import { HudFrame } from "./console/HudFrame";
 import { ReticleCursor } from "./console/ReticleCursor";
 import { useLedgerHealth, knownIncomplete } from "./LedgerHealthNotice";
+import { undoTally } from "../data/live-changes";
+import type { AppliedChange } from "../types";
 import { LookButton, useLook } from "./LookPanel";
 import "./shell-v2.css";
 import "./jarvis/jarvis.css";
@@ -91,7 +94,7 @@ export function ShellV2({
   items,
   activeId,
   onNavigate,
-  ledgerCount,
+  ledger,
   rig,
   onOpenStation,
   tuningStation,
@@ -104,7 +107,9 @@ export function ShellV2({
   items: HomeRailItem[];
   activeId: HomeRailId | undefined;
   onNavigate: (id: HomeRailId) => void;
-  ledgerCount: number;
+  /** The Trust Ledger rows App last read (its `changes`); null until they have been read.
+   *  The footer counts what can be undone from these (`undoTally`, the Applied cards' groups). */
+  ledger: readonly AppliedChange[] | null;
   /** Glass redesign: a count shown on a dock door (Problems: an incident waiting to be looked at).
    *  Only real counts are passed; absent or 0 draws nothing. */
   badges?: Partial<Record<HomeRailId, number>>;
@@ -223,7 +228,11 @@ export function ShellV2({
   // App.tsx on purpose: a prop can be forgotten at a call site, and this gate must not be
   // forgettable. Cost is one cheap file-existence read per shell mount. Fails → UNKNOWN → the
   // footer reads exactly as it does today.
-  const ledgerUnvouched = knownIncomplete(useLedgerHealth(ledgerCount));
+  const ledgerUnvouched = knownIncomplete(useLedgerHealth(ledger));
+  const ledgerCount = ledger?.length ?? 0;
+  // CR-footer-reversible: the line says only what the ledger it read can undo, counted from the
+  // groups the Applied cards draw their Undo buttons from; rows not read yet print no claim.
+  const tally = useMemo(() => (ledger ? undoTally(ledger) : null), [ledger]);
 
   // Digit shortcuts 1..N (the rail's kbd hints must WORK — a hint that does nothing is a fake
   // affordance). Never while typing, never with a modifier held.
@@ -459,10 +468,27 @@ export function ShellV2({
                     : t("common.shellV2.footerEmphUnknown")}
                 </span>
               </div>
+            ) : tally === null ? (
+              // Rows not read yet (or the read failed): no count and no claim about undo.
+              <div className="v2-undo-state">{t("common.shellV2.footerNotRead")}</div>
             ) : (
-              <div>
-                {t("common.shellV2.footerPre")}{" "}
-                <span className="v2-mono">{t("common.shellV2.footerEmph", { n: ledgerCount })}</span>
+              // CR-footer-reversible: "Every change reversible" was printed on every screen while
+              // rows had no undo. Now: how many changes the Applied cards can undo, then each kind
+              // that can't be, by count. Nothing absolute.
+              <div className="v2-undo-state">
+                {[
+                  tally.undoable > 0
+                    ? t("common.shellV2.footerUndoable", { count: tally.undoable })
+                    : tally.unchecked === 0 &&
+                      tally.noSavedUndo === 0 &&
+                      t("common.shellV2.footerNothingToUndo"),
+                  tally.noSavedUndo > 0 && t("common.shellV2.footerNoSavedUndo", { count: tally.noSavedUndo }),
+                  tally.offOutside > 0 && t("common.shellV2.footerOffOutside", { count: tally.offOutside }),
+                  tally.unchecked > 0 && t("common.shellV2.footerUnchecked", { count: tally.unchecked }),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}{" "}
+                · <span className="v2-mono">{t("common.shellV2.footerEmph", { n: ledgerCount })}</span>
               </div>
             )}
           </div>

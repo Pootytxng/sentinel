@@ -114,6 +114,35 @@ describe("Fix", () => {
     expect(onRollback).toHaveBeenCalled();
   });
 
+  it("CR-footer-reversible: a live change whose record resolves to no undo says so and its Roll back can't run", () => {
+    const onRollback = vi.fn();
+    render(
+      <Fix
+        recs={[]}
+        {...baseProps}
+        changes={[
+          {
+            id: "c9",
+            rec_id: "game-mode",
+            rec_title: "Game Mode",
+            applied_at: new Date().toISOString(),
+            snapshot: null,
+            status: "applied",
+            is_still_active: true,
+            active_check: "on",
+            undo_contract: false,
+          },
+        ]}
+        onRollback={onRollback}
+      />,
+    );
+    expect(screen.getByText("Compy has no saved undo for this change.")).toBeTruthy();
+    const button = screen.getByRole("button", { name: /Roll back/ }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    fireEvent.click(button);
+    expect(onRollback).not.toHaveBeenCalled();
+  });
+
   it("CR-outside-followups (b): a row recorded as changed outside Compy says so in History, not 'rolled back'", () => {
     const row = (id: string, rec: string, title: string, outside: boolean) => ({
       id,

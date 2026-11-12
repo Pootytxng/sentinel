@@ -3,6 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-libra
 import { ShellV2, ROOM_CRUMB } from "./ShellV2";
 import { railFor, HOME_RAIL } from "./homeRail";
 import { readFileSync } from "fs";
+import type { AppliedChange } from "../types";
 
 // V2-2 shell guards: the rail renders the blessed room set with WORKING digit hints (a hint that
 // does nothing is a fake affordance), the topbar carries the room title + the real build stamp
@@ -34,13 +35,30 @@ const ITEMS = railFor(true); // merged: Health · Games · Problems · Optimize 
 // room renames (owner-approved 2026-08-12: Blackbook→History, Lab→Test, Monitor→Live) land here.
 const RAIL_TEXT: Record<string, string> = { home: "Health", games: "Games", problems: "Problems", check: "Check", fix: "Optimize", play: "Live", learn: "History", lab: "Test", optimize: "Optimize" };
 
+// A ledger of `n` rows, all rolled back unless `live` says otherwise (CR-footer-reversible).
+const row = (i: number, over: Partial<AppliedChange> = {}): AppliedChange => ({
+  id: `c${i}`,
+  rec_id: `rec-${i}`,
+  rec_title: `Change ${i}`,
+  applied_at: `2026-11-${String(1 + (i % 28)).padStart(2, "0")}T10:00:00Z`,
+  snapshot: null,
+  status: "rolled_back",
+  is_still_active: false,
+  active_check: null,
+  undo_contract: true,
+  ...over,
+});
+const ledgerOf = (n: number, live: Record<number, Partial<AppliedChange>> = {}) =>
+  Array.from({ length: n }, (_, i) => row(i, live[i]));
+const ON: Partial<AppliedChange> = { status: "applied", is_still_active: true, active_check: "on" };
+const OFF: Partial<AppliedChange> = { status: "applied", is_still_active: false, active_check: "off" };
+
 const shell = (over: Partial<Parameters<typeof ShellV2>[0]> = {}) => (
   <ShellV2
     items={ITEMS}
     activeId="home"
     onNavigate={() => {}}
-    ledgerCount={41}
-   
+    ledger={ledgerOf(41)}
     {...over}
   >
     <div data-testid="room">room</div>
@@ -183,7 +201,7 @@ describe("ShellV2 footer may not promise reversibility off a ledger it can't rea
     // Zero is where the record is indistinguishable from a genuine first run — the shape that
     // lands this defect. "ledger 0" would read as a measurement; it is an absence.
     health.value = QUARANTINED;
-    const { container } = render(shell({ ledgerCount: 0 }));
+    const { container } = render(shell({ ledger: [] }));
 
     await waitFor(() => expect(container.querySelector(".v2-ledger-state")).toBeTruthy());
     expect(foot(container)).toContain("count unknown");
@@ -220,7 +238,7 @@ describe("ShellV2 digit shortcuts (the kbd hints must WORK)", () => {
   it("never fires while typing or with a modifier held", () => {
     const onNavigate = vi.fn();
     render(
-      <ShellV2 items={ITEMS} activeId="home" onNavigate={onNavigate} ledgerCount={0}>
+      <ShellV2 items={ITEMS} activeId="home" onNavigate={onNavigate} ledger={[]}>
         <input aria-label="field" />
       </ShellV2>,
     );
@@ -331,7 +349,7 @@ describe("ShellV2 content lane — every room opens at its own top", () => {
     lane(container).scrollTop = 300;
     // Same room, a re-render for any other reason (a probe resolving, a flag reading, a prop
     // changing). Yanking the reader back to the top here would be its own wayfinding defect.
-    rerender(shell({ activeId: "learn", ledgerCount: 42 }));
+    rerender(shell({ activeId: "learn", ledger: ledgerOf(42) }));
     expect(lane(container).scrollTop, "a same-room re-render stole the reader's place").toBe(300);
   });
 
@@ -362,4 +380,82 @@ describe("ShellV2 content lane — every room opens at its own top", () => {
       "lenis?.scrollTo?.(0, { immediate: true })",
     );
   });
+});
+
+// CR-footer-reversible (view-1112a/05-test-history-changed-outside-row.png, 03-test.png): the footer
+// printed "Every change reversible · ledger 84" on every screen while a changed-outside row had no
+// undo. It now counts what the Applied cards can undo and names each kind that can't be.
+describe("ShellV2 footer states only what the ledger it read can undo", () => {
+  const undoLine = (c: HTMLElement) => c.querySelector(".v2-undo-state")?.textContent ?? "";
+
+  it("counts the undoable changes and names a change that reads off with no undo", async () => {
+    // rec-1 and rec-2 on (Applied cards with Undo), rec-3 applied but reading off: no card.
+    const { container } = render(shell({ ledger: ledgerOf(41, { 1: ON, 2: ON, 3: OFF }) }));
+    await waitFor(() => expect(undoLine(container)).toContain("ledger 41"));
+    expect(undoLine(container)).toContain("2 changes can be undone");
+    expect(undoLine(container)).toContain("1 changed outside Compy, no undo");
+    expect(undoLine(container)).not.toContain("Every change reversible");
+  });
+
+  it("one change applied twice is one Undo, and a kept-outside row is named, not counted", () => {
+    const keptOutside: Partial<AppliedChange> = {
+      ...OFF,
+      rec_id: "power-ultimate",
+      changed_outside: { schema: 1, recorded_at: "2026-11-11T08:15:00Z", observed: { kind: "power-plan", name: "Synez" } },
+      changed_outside_holds: true,
+    };
+    const ledger = ledgerOf(6, { 0: { ...ON, rec_id: "game-mode" }, 1: { ...ON, rec_id: "game-mode" }, 2: keptOutside });
+    const { container } = render(shell({ ledger }));
+    expect(undoLine(container)).toContain("1 change can be undone");
+    expect(undoLine(container)).toContain("1 changed outside Compy, no undo");
+  });
+
+  it("a live change whose record resolves to no undo is named, never counted as undoable", () => {
+    const { container } = render(shell({ ledger: ledgerOf(5, { 0: ON, 1: { ...ON, undo_contract: false } }) }));
+    expect(undoLine(container)).toContain("1 change can be undone");
+    expect(undoLine(container)).toContain("1 has no saved undo");
+  });
+
+  it("a change in effect with no saved undo is never 'nothing in effect to undo' (r2)", () => {
+    const { container } = render(shell({ ledger: ledgerOf(3, { 0: { ...ON, undo_contract: false } }) }));
+    expect(undoLine(container)).toBe("1 has no saved undo · ledger 3");
+  });
+
+  it("everything undone: nothing in effect to undo, still with the measured count", () => {
+    const { container } = render(shell({ ledger: ledgerOf(41) }));
+    expect(undoLine(container)).toBe("Nothing in effect to undo · ledger 41");
+  });
+
+  it("an applied row with no live-check verdict is named, and 'nothing to undo' is not said over it", () => {
+    const { container } = render(shell({ ledger: ledgerOf(4, { 2: { status: "applied", is_still_active: true, active_check: null } }) }));
+    expect(undoLine(container)).toBe("1 not checked · ledger 4");
+  });
+
+  it("rows not read yet print no count and no claim", () => {
+    const { container } = render(shell({ ledger: null }));
+    expect(undoLine(container)).toBe("Ledger not read yet");
+    expect(foot(container)).not.toMatch(/ledger \d|can be undone|reversible|Nothing in effect/);
+  });
+
+  it("zh-CN says the same, never the old absolute", async () => {
+    const { default: i18n } = await import("../i18n");
+    await act(async () => {
+      await i18n.changeLanguage("zh-CN");
+    });
+    try {
+      const { container } = render(shell({ ledger: ledgerOf(41, { 1: ON, 3: OFF }) }));
+      expect(undoLine(container)).toContain("1 项更改可撤销");
+      expect(undoLine(container)).toContain("1 项已在 Compy 之外更改，无法撤销");
+      expect(undoLine(container)).toContain("台账 41");
+      expect(foot(container)).not.toContain("每一项更改均可撤销");
+      cleanup();
+      expect(undoLine(render(shell({ ledger: null })).container)).toBe("台账尚未读取");
+    } finally {
+      await act(async () => {
+        await i18n.changeLanguage("en");
+      });
+    }
+  });
+
+  const foot = (c: HTMLElement) => c.querySelector(".v2-foot")!.textContent ?? "";
 });

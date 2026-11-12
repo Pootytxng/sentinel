@@ -19,7 +19,7 @@ import { useDismissed } from "./dismissed";
 import { useEligibilityOverrides } from "./eligibility-override";
 import { GUIDED_STEPS, openGuidedUri } from "./guided";
 import { friendlyLabel } from "../data/friendly-labels";
-import { liveChangeGroups } from "../data/live-changes";
+import { hasUndo, liveChangeGroups } from "../data/live-changes";
 import { expertTarget, EXPERT_TARGET_DISCLAIMER } from "../data/expert-targets";
 import { useExpertView } from "../design/use-expert-view";
 import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
@@ -878,8 +878,11 @@ function ActiveChangeCard({
             {t("optimize.fix.lastSeenWorkingOnPost")}
           </p>
         )}
+        {/* CR-footer-reversible: a row whose stored history resolves to no undo says so; its
+            button stays visible but can't run (the footer counts it the same way). */}
+        {!hasUndo(change) && <p className="fix-rig-note">{t("optimize.fix.noSavedUndo")}</p>}
       </div>
-      <button className="fix-ghost-rollback" disabled={busy} onClick={onRollback}>
+      <button className="fix-ghost-rollback" disabled={busy || !hasUndo(change)} onClick={onRollback}>
         {busy ? t("optimize.fix.rollingBackEllipsis") : t("optimize.fix.rollBack")}
       </button>
     </li>

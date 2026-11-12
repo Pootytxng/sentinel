@@ -32,7 +32,7 @@ const shell = (over: Partial<Parameters<typeof ShellV2>[0]> = {}) => (
     items={ITEMS}
     activeId="home"
     onNavigate={() => {}}
-    ledgerCount={41}
+    ledger={[]}
    
     {...over}
   >

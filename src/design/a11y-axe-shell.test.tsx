@@ -51,7 +51,7 @@ const shell = (activeId: HomeRailItem["id"] = "home") => (
     items={ITEMS}
     activeId={activeId}
     onNavigate={() => {}}
-    ledgerCount={3}
+    ledger={[]}
     rig="Ryzen 7 · RX 9070 XT"
     onOpenStation={() => {}}
     onOpenEntry={() => {}}
@@ -77,7 +77,7 @@ describe("axe · the app shell a user meets on every screen", () => {
         items={ITEMS}
         activeId="fix"
         onNavigate={() => {}}
-        ledgerCount={0}
+        ledger={[]}
         rig={null}
       >
         <RoomShell
@@ -97,7 +97,7 @@ describe("axe · the app shell a user meets on every screen", () => {
 
   it("ForwardDoor", async () => {
     const { container } = render(
-      <ShellV2 items={ITEMS} activeId="fix" onNavigate={() => {}} ledgerCount={0} rig={null}>
+      <ShellV2 items={ITEMS} activeId="fix" onNavigate={() => {}} ledger={[]} rig={null}>
         <ForwardDoor to="play" label="Watch it live" />
       </ShellV2>,
     );
