@@ -1931,6 +1931,7 @@ function TestSummary({ s }: { s: GameTestSummary }) {
                         busy: settingsDone.gpuClear.busy,
                         readings: settingsDone.gpuClear.readings,
                         threshold: settingsDone.gpuClear.thresholdPct,
+                        limitShare: settingsDone.gpuClear.limitSharePct,
                       })
                     : t("lab.experimentBench.summary.settingsDone.nothingLimiting")
                   : t("lab.experimentBench.summary.settingsDone.notMeasured")}

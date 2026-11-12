@@ -64,6 +64,9 @@ pub(crate) struct GameGpuClear {
     busy: u32,
     readings: u32,
     threshold_pct: u64,
+    /// CR-gpu-share-one-source: the share of busy readings Compy counts as GPU-limited
+    /// (`GPU_SUSTAINED_SHARE_PCT`), so the summary's words and its check read the one rule.
+    limit_share_pct: u64,
 }
 
 /// One game whose newest measured session was GPU-limited (the sustained rule).
@@ -260,6 +263,7 @@ fn build_gpu_games(sessions: &Value) -> (Vec<GameGpuLimit>, Vec<GameGpuClear>) {
                     busy: l.busy,
                     readings: l.readings,
                     threshold_pct: GPU_LIMITED_PCT,
+                    limit_share_pct: GPU_SUSTAINED_SHARE_PCT,
                 });
             }
         }
@@ -1152,8 +1156,12 @@ mod priority_tests {
         // the unnamed row are skipped; A and C are limited. Too few readings or no share: neither list.
         assert_eq!(
             build_gpu_clear_games(&sessions),
-            vec![GameGpuClear { game: "b.exe".into(), busy: 10, readings: 100, threshold_pct: 95 }]
+            vec![GameGpuClear { game: "b.exe".into(), busy: 10, readings: 100, threshold_pct: 95, limit_share_pct: 50 }]
         );
+        // CR-gpu-share-one-source: the row carries the rule's own share, so the UI never restates it.
+        assert_eq!(GPU_SUSTAINED_SHARE_PCT, 50);
+        let wire = serde_json::to_value(&build_gpu_clear_games(&sessions)[0]).unwrap();
+        assert_eq!(wire["limit_share_pct"], json!(GPU_SUSTAINED_SHARE_PCT));
         assert!(build_gpu_clear_games(&brief).is_empty(), "under the reading floor decides nothing");
         assert!(build_gpu_clear_games(&json!([{ "process_name": "d.exe", "peak_gpu_usage_pct": 99 }])).is_empty());
         assert_eq!(build_gpu_clear_games(&edge).len(), 1, "99 of 200 is measured, and not limited");

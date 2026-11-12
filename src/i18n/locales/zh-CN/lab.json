@@ -855,7 +855,7 @@
       "settingsDone": {
         "notMeasured": "设置已经达到 Compy 在这里能测试的程度。是什么在拖慢这台主机还没有测过，所以不建议升级。",
         "nothingLimiting": "设置已经达到 Compy 在这里能测试的程度。上次检查没有发现拖慢这台主机的因素，所以不建议升级。",
-        "nothingLimitingMeasured": "设置已经达到 Compy 在这里能测试的程度。上次检查没有发现拖慢这台主机的因素，而且在你最近一次实测的 {{game}} 会话中，{{readings}} 个显卡读数中有 {{busy}} 个达到 {{threshold}}% 或更高负载，不到 Compy 判定为显卡瓶颈所需的一半。不建议升级。",
+        "nothingLimitingMeasured": "设置已经达到 Compy 在这里能测试的程度。上次检查在它能测量的项目中没有发现拖慢这台主机的因素，而且在你最近一次实测的 {{game}} 会话中，{{readings}} 个显卡读数中有 {{busy}} 个达到 {{threshold}}% 或更高负载，低于 Compy 判定为显卡瓶颈的 {{limitShare}}%，所以那次显卡不是瓶颈。显卡经常不满载通常意味着是 CPU 或帧率上限决定了速度，而这两者 Compy 都不测量，所以它无法确定 CPU 没有拖慢这款游戏。不建议升级显卡。",
         "settingLimiter": "设置已经达到 Compy 在这里能测试的程度。上次检查的首要瓶颈是一项设置，而不是硬件：{{title}}。不建议为此升级。",
         "partLimiter": "设置已经达到 Compy 在这里能测试的程度。上次检查的首要瓶颈是这台主机的一个部件：{{title}}。",
         "gpuLimiter": "设置已经达到 Compy 在这里能测试的程度。在你最近一次实测的 {{game}} 会话中，Compy 的显卡读数有 {{share}}% 达到 {{threshold}}% 或更高负载，所以显卡是这款游戏实测的瓶颈。Compy 无法检查你的电源、机箱或系统其他部分是否适合新显卡。",

@@ -241,7 +241,15 @@ export type Priorities = {
   gpu_clear_games?: GameGpuClear[];
 };
 
-export type GameGpuClear = { game: string; busy: number; readings: number; threshold_pct: number };
+export type GameGpuClear = {
+  game: string;
+  busy: number;
+  readings: number;
+  threshold_pct: number;
+  /** CR-gpu-share-one-source: the busy share Compy counts as GPU-limited (Rust GPU_SUSTAINED_SHARE_PCT).
+   *  Absent (an older backend) = the line claims nothing from this row. */
+  limit_share_pct?: number;
+};
 
 export type GameGpuLimit = {
   game: string;

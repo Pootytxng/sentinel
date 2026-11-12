@@ -99,10 +99,10 @@ describe("settingsDoneLine (P9-settings-done)", () => {
   // P9-no-upgrade-source: "nothing holding it back" says what it was read from when this game's own
   // newest measured session was measured clear of a GPU limit; another game's, or none, says no more.
   it("names this game's measured-clear session behind 'no upgrade recommended', never another game's", () => {
-    const clear = { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 120, readings: 900, threshold_pct: 95 }] };
+    const clear = { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 120, readings: 900, threshold_pct: 95, limit_share_pct: 50 }] };
     expect(settingsDoneLine("finished-supported-tests", clear, "rob run.exe")).toEqual({
       kind: "nothing-limiting",
-      gpuClear: { busy: 120, readings: 900, thresholdPct: 95 },
+      gpuClear: { busy: 120, readings: 900, thresholdPct: 95, limitSharePct: 50 },
     });
     expect(settingsDoneLine("finished-supported-tests", clear, "wardogs.exe")).toEqual({ kind: "nothing-limiting" });
     // An unread PC-wide row still means "not measured"; an attention limiter still leads.
@@ -111,12 +111,29 @@ describe("settingsDoneLine (P9-settings-done)", () => {
     const part = { ...clear, limiters: [item("ram-capacity", "attention", "Memory")] };
     expect(settingsDoneLine("finished-supported-tests", part, "ROB RUN.exe")).toEqual({ kind: "part-limiter", title: "Memory" });
     // A zero-reading entry claims nothing.
-    const empty = { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 0, readings: 0, threshold_pct: 95 }] };
+    const empty = { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 0, readings: 0, threshold_pct: 95, limit_share_pct: 50 }] };
     expect(settingsDoneLine("finished-supported-tests", empty, "ROB RUN.exe")).toEqual({ kind: "nothing-limiting" });
     // Review r1: counts that can't be a measurement claim nothing.
     for (const [busy, readings] of [[901, 900], [-1, 900], [450, 900], [600, 900]]) {
-      const bad = { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy, readings, threshold_pct: 95 }] };
+      const bad = { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy, readings, threshold_pct: 95, limit_share_pct: 50 }] };
       expect(settingsDoneLine("finished-supported-tests", bad, "ROB RUN.exe")).toEqual({ kind: "nothing-limiting" });
+    }
+  });
+
+  // CR-gpu-share-one-source: the share Compy counts as GPU-limited is read from the row (the Rust
+  // rule), never restated here; a row without it, or with an impossible one, claims nothing.
+  it("reads the GPU-limited share from the row, and claims nothing without a sane one", () => {
+    const row = (limit_share_pct?: number) => ({
+      ...pri([]),
+      gpu_clear_games: [{ game: "ROB RUN.exe", busy: 500, readings: 900, threshold_pct: 95, limit_share_pct }],
+    });
+    // 500 of 900 is 55.6%: under a 60% rule, over a 50% one.
+    expect(settingsDoneLine("finished-supported-tests", row(60), "ROB RUN.exe")).toEqual({
+      kind: "nothing-limiting",
+      gpuClear: { busy: 500, readings: 900, thresholdPct: 95, limitSharePct: 60 },
+    });
+    for (const bad of [50, undefined, 0, -5, 150, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(settingsDoneLine("finished-supported-tests", row(bad), "ROB RUN.exe")).toEqual({ kind: "nothing-limiting" });
     }
   });
 });
@@ -172,7 +189,7 @@ describe("settingsDoneLine ignores retail data (P9-retail-firewall)", () => {
   });
   const cases: [string, Priorities, string][] = [
     ["gpu-limited", { ...pri([]), gpu_limited_games: [{ game: "ROB RUN.exe", share_pct: 80, peak_pct: 99, threshold_pct: 95 }] }, "gpu-limiter"],
-    ["measured clear", { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 120, readings: 900, threshold_pct: 95 }] }, "nothing-limiting"],
+    ["measured clear", { ...pri([]), gpu_clear_games: [{ game: "ROB RUN.exe", busy: 120, readings: 900, threshold_pct: 95, limit_share_pct: 50 }] }, "nothing-limiting"],
     ["part limiter", pri([item("ram-capacity", "attention", "Memory")]), "part-limiter"],
     ["unread limiter", pri([item("b", "unknown")]), "not-measured"],
     ["nothing", pri([]), "nothing-limiting"],
