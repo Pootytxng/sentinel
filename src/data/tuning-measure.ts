@@ -37,7 +37,9 @@ export const TUNING_HOT_WINDOW_DAYS = 14;
 // the pick session fingerprints stamp): `undefined` = the caller passed no card (no filtering, no
 // line: as before), `null` or a name that identifies no card = Compy can't identify the card now (every
 // session kept, and the line says it can't tie them). A session that recorded no card is kept and
-// counted, so the line can say how many can't be tied.
+// counted, so the line can say how many can't be tied. Two cards that tie on VRAM (WMI's AdapterRAM caps
+// at 4 GB) could be picked in a different order here and at session start: that drops a session (no
+// signal), never ties one to the wrong card (review nit; priorities.rs notes the same).
 
 /** Windows' fallback adapters identify no card (mirrors priorities.rs `identifies_a_card`). */
 function identifiesACard(name: string | null | undefined): name is string {
