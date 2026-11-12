@@ -250,6 +250,7 @@
     "historyOtherRigTitle": "在你的硬件变更之前应用的",
     "historyOtherRigTag": "其他主机",
     "historyRolledBack": "✓ 已回滚",
+    "historyOffNow": "当前已关闭，未撤销",
     "historyActive": "生效中",
     "historyCantConfirm": "无法确认",
     "historyChangedOutside": "已在 Compy 之外更改",
