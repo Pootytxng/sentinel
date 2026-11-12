@@ -37,7 +37,11 @@ static LIVE_SESSION: Mutex<Option<String>> = Mutex::new(None);
 /// than refused forever — refusing would strand the user's only restore path.
 static SESSION_OP: Mutex<()> = Mutex::new(());
 
-fn session_op_guard() -> Result<std::sync::MutexGuard<'static, ()>, String> {
+/// Also taken (still only by `try_lock`) by a Trial start and the benchmark's apply across their
+/// check of the session contract and their record/apply (CR-gm-spans-trial review r1), so a session
+/// can't start between that check and the Trial's record, and neither starts while a session starts
+/// or stops. Contention answers "try again"; nothing ever waits on it.
+pub(crate) fn session_op_guard() -> Result<std::sync::MutexGuard<'static, ()>, String> {
     match SESSION_OP.try_lock() {
         Ok(g) => Ok(g),
         Err(std::sync::TryLockError::Poisoned(p)) => Ok(p.into_inner()),
@@ -123,6 +127,12 @@ const LABEL_GAME_MODE: &str = "Windows Game Mode on";
 const LABEL_GAME_BAR: &str = "Game Bar / DVR off";
 const LABEL_USB: &str = "USB selective suspend off (AC)";
 const LABEL_PCIE: &str = "PCIe ASPM off (AC)";
+/// The ledger rec id of the setting each core and advanced step touches.
+const REC_POWER: &str = "power-ultimate";
+const REC_GAME_MODE: &str = "game-mode";
+const REC_GAME_BAR: &str = "game-bar-disable";
+const REC_USB: &str = "usb-selective-suspend-off";
+const REC_PCIE: &str = "pcie-aspm-off";
 
 /// The ledger rec id of the setting each service suspend touches.
 fn service_rec(svc: &actions::KnownService) -> &'static str {
@@ -141,11 +151,11 @@ fn suspend_label(svc: &actions::KnownService) -> String {
 /// PURE: the ledger rec id of the setting a session change touches, by its label.
 fn rec_of_label(label: &str) -> Option<&'static str> {
     match label {
-        LABEL_POWER => Some("power-ultimate"),
-        LABEL_GAME_MODE => Some("game-mode"),
-        LABEL_GAME_BAR => Some("game-bar-disable"),
-        LABEL_USB => Some("usb-selective-suspend-off"),
-        LABEL_PCIE => Some("pcie-aspm-off"),
+        LABEL_POWER => Some(REC_POWER),
+        LABEL_GAME_MODE => Some(REC_GAME_MODE),
+        LABEL_GAME_BAR => Some(REC_GAME_BAR),
+        LABEL_USB => Some(REC_USB),
+        LABEL_PCIE => Some(REC_PCIE),
         _ => [
             actions::KnownService::SysMain,
             actions::KnownService::DiagTrack,
@@ -171,6 +181,11 @@ fn held_by_trials() -> Result<Vec<String>, String> {
         held.push(id);
     }
     Ok(held)
+}
+
+/// PURE: whether a session may change the setting `rec` (no open Trial or benchmark holds it).
+fn step_free(held: &[String], rec: &str) -> bool {
+    !held.iter().any(|h| h == rec)
 }
 
 /// PURE: the refusal for a Trial (or the benchmark) on `rec_id` while a Gaming Mode session's
@@ -439,7 +454,7 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
     }
     // CR-gm-spans-trial: read before the contract exists or anything changes.
     let held = held_by_trials()?;
-    let free = |rec: &str| !held.iter().any(|h| h == rec);
+    let free = |rec: &str| step_free(&held, rec);
     let now = chrono::Utc::now();
     let mut file = SessionFile {
         schema_version: SESSION_SCHEMA_VERSION,
@@ -499,7 +514,7 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
 
     // Core (UAC-free). Power plan may skip (Ok(None)) with no error. CR-gm-spans-trial: a step whose
     // setting a Trial or the benchmark holds is skipped (never snapshotted, so never put back on stop).
-    let power = if free(rec_of_label(LABEL_POWER).unwrap_or_default()) { apply_power_plan_switch_core() } else { Ok(None) };
+    let power = if free(REC_POWER) { apply_power_plan_switch_core() } else { Ok(None) };
     match power {
         Ok(Some(r)) => {
             push(&mut file.changes, LABEL_POWER, r);
@@ -514,10 +529,10 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
             undo_and_report!(format!("Power plan: {}", e));
         }
     }
-    if free(rec_of_label(LABEL_GAME_MODE).unwrap_or_default()) {
+    if free(REC_GAME_MODE) {
         apply_step!(LABEL_GAME_MODE, apply_game_mode());
     }
-    if free(rec_of_label(LABEL_GAME_BAR).unwrap_or_default()) {
+    if free(REC_GAME_BAR) {
         apply_step!(LABEL_GAME_BAR, apply_game_bar_disable());
     }
 
@@ -530,14 +545,14 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
     // happens automatically on stop / restore / crash-recovery — no new restore path. Only
     // allowlisted services reach the primitive.
     let mut tier: Vec<ElevatedItem> = Vec::new();
-    if opts.advanced_usb && free(rec_of_label(LABEL_USB).unwrap_or_default()) {
+    if opts.advanced_usb && free(REC_USB) {
         tier.push(ElevatedItem {
             id: "adv-usb",
             label: LABEL_USB.into(),
             apply: Box::new(apply_usb_selective_suspend_off),
         });
     }
-    if opts.advanced_pcie && free(rec_of_label(LABEL_PCIE).unwrap_or_default()) {
+    if opts.advanced_pcie && free(REC_PCIE) {
         tier.push(ElevatedItem {
             id: "adv-pcie",
             label: LABEL_PCIE.into(),
@@ -920,6 +935,40 @@ mod spans_trial_tests {
         assert!(session_hold_refusal("power-ultimate", Some(&contract)).is_some());
         assert_eq!(session_hold_refusal("hags-enable", Some(&contract)), None, "a setting it doesn't hold");
         assert_eq!(session_hold_refusal("game-mode", None), None, "no session");
+    }
+
+    #[test]
+    fn a_step_is_free_only_when_nothing_holds_its_setting() {
+        let held = vec!["game-mode".to_string(), "sysmain-disable".to_string()];
+        assert!(!step_free(&held, REC_GAME_MODE), "a Trial holds it: skipped");
+        assert!(!step_free(&held, service_rec(&KnownService::SysMain)));
+        assert!(step_free(&held, REC_POWER) && step_free(&held, REC_GAME_BAR) && step_free(&held, REC_USB));
+        assert!(step_free(&[], REC_GAME_MODE), "nothing held: every step runs as before");
+    }
+
+    #[test]
+    fn the_session_check_reads_the_contract_on_disk_and_refuses_one_it_cant_read() {
+        // Review r1 (opus SHOULD-FIX 3): the fail-closed arms, on a scratch session folder.
+        let dir = std::env::temp_dir().join(format!("compy-gm-spans-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
+        assert_eq!(session_holds_refusal(REC_GAME_MODE), None, "no session");
+        std::fs::write(dir.join("gaming-session.json"), "{}").unwrap();
+        assert!(session_holds_refusal(REC_GAME_MODE).expect("unreadable").contains("can't read"));
+        let file = SessionFile {
+            schema_version: crate::gaming_session::SESSION_SCHEMA_VERSION,
+            session_id: "gm-1".into(),
+            status: crate::gaming_session::SessionStatus::Active,
+            started_at: "2026-11-11T00:00:00Z".into(),
+            app_version: "0.9.26".into(),
+            changes: vec![change(LABEL_POWER), change(LABEL_GAME_MODE)],
+            started_monitoring: false,
+        };
+        crate::gaming_session::save_session(&file).unwrap();
+        assert!(session_holds_refusal(REC_GAME_MODE).expect("held").contains("Stop Gaming Mode first"));
+        assert_eq!(session_holds_refusal("hags-enable"), None, "a setting the session doesn't hold");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

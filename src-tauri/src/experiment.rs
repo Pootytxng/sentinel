@@ -2967,6 +2967,12 @@ pub(crate) fn apply_outcome_choice(
     if let Some(refusal) = bench_refusal(std::iter::once(rec_id.as_str())) {
         return Err(refusal);
     }
+    // CR-gm-spans-trial (review r1): nor while a Gaming Mode session holds it (its stop would put its
+    // own snapshot back over the kept change), or is starting or stopping.
+    let _gm = crate::gaming_orchestrator::session_op_guard()?;
+    if let Some(refusal) = crate::gaming_orchestrator::session_holds_refusal(&rec_id) {
+        return Err(refusal);
+    }
     let records = load_store().experiments;
     keep_outcome_locked(&records, &rec_id, &experiment_id, |link| {
         crate::history::apply_recommendation_citing(&rec_id, &rec_title, link)
@@ -2984,6 +2990,14 @@ pub(crate) fn undo_outcome_choice(change_id: String, experiment_id: String) -> R
     }
     let _g = lock_store()?;
     let records = load_store().experiments;
+    // CR-gm-spans-trial (review r1): an undo while a Gaming Mode session holds this Trial's setting
+    // would be put back by the session's stop; refused, as is one while a session starts or stops.
+    let _gm = crate::gaming_orchestrator::session_op_guard()?;
+    if let Some(rec) = records.iter().find(|e| e.id == experiment_id) {
+        if let Some(refusal) = crate::gaming_orchestrator::session_holds_refusal(&rec.rec_id) {
+            return Err(refusal);
+        }
+    }
     undo_outcome_locked(&records, &experiment_id, |cite| {
         crate::history::rollback_change_citing(&change_id, cite)
     })
@@ -3099,7 +3113,9 @@ pub(crate) fn apply_for_bench_trial(
         return Err(refusal);
     }
     // CR-gm-spans-trial: a Gaming Mode session holding this setting would put its snapshot back on
-    // stop, under the measurement (or over the benchmark's rollback).
+    // stop, under the measurement (or over the benchmark's rollback). Gaming Mode's operation gate
+    // (try_lock only) is held through the hold and the apply, as in a Trial start.
+    let _gm = crate::gaming_orchestrator::session_op_guard()?;
     if let Some(refusal) = crate::gaming_orchestrator::session_holds_refusal(&rec_id) {
         return Err(refusal);
     }
@@ -3411,7 +3427,10 @@ pub(crate) fn start_experiment(
         return Err(format!("experiment not started — {why}"));
     }
     // CR-gm-spans-trial: a Gaming Mode session holding this setting would put its own snapshot back
-    // when it stops, over the Trial's change or its restore.
+    // when it stops, over the Trial's change or its restore. Review r1 (sonnet MUST-FIX): Gaming
+    // Mode's own operation gate (try_lock only) is held from this check through the record and the
+    // apply, so a session can't start in between, and none is starting or stopping now.
+    let _gm = crate::gaming_orchestrator::session_op_guard().map_err(|why| format!("experiment not started — {why}"))?;
     if let Some(why) = crate::gaming_orchestrator::session_holds_refusal(&rec_id) {
         return Err(format!("experiment not started — {why}"));
     }
@@ -5266,11 +5285,21 @@ mod experiment_tests {
         assert!(open_rec_ids(&[done]).is_empty());
         // And a Trial start (and the benchmark's apply) checks the session's contract under its gate.
         let src = include_str!("experiment.rs");
-        for sig in ["pub(crate) fn start_experiment(", "pub(crate) fn apply_for_bench_trial("] {
+        for (sig, write) in [
+            ("pub(crate) fn start_experiment(", concat!("crate::history::", "apply_recommendation(")),
+            ("pub(crate) fn apply_for_bench_trial(", concat!("crate::history::", "apply_recommendation(")),
+            ("pub(crate) fn apply_outcome_choice(", concat!("crate::history::", "apply_recommendation_citing(")),
+            ("pub(crate) fn undo_outcome_choice(", concat!("crate::history::", "rollback_change_citing(")),
+        ] {
             let body = src.split_once(sig).map(|(_, r)| r).expect(sig);
+            // Review r1 (sonnet MUST-FIX): Gaming Mode's operation gate is held from the check on, so
+            // a session can't start between the check and the record or the ledger write.
+            let gate = body.find(concat!("gaming_orchestrator::", "session_op_guard()")).expect(sig);
             let check = body.find(concat!("gaming_orchestrator::", "session_holds_refusal(")).expect(sig);
-            let write = body.find(concat!("crate::history::", "apply_recommendation(")).expect(sig);
-            assert!(check < write, "{sig}: checked before the apply");
+            let write = body.find(write).expect(sig);
+            assert!(gate < check && check < write, "{sig}: gate, check, then the write");
+            let held = &body[..write];
+            assert!(held.contains(concat!("let _gm = crate::gaming_orchestrator::", "session_op_guard()")), "{sig}: held, not dropped");
         }
     }
 
