@@ -1349,6 +1349,35 @@ mod priority_tests {
         }
     }
 
+    /// P9-exit-fixture (Phase 9 Exit): one case per Exit branch, shared with
+    /// src/surfaces/p9-exit-fixture.test.ts, which drives the game summary from the payload pinned here.
+    #[test]
+    fn p9_exit_fixture_payloads_match_the_shared_fixture() {
+        let fx: Value = serde_json::from_str(include_str!("../../src/test/fixtures/p9-exit.json")).expect("fixture parses");
+        let now = fx["gpu_now"].as_str();
+        let cases = fx["cases"].as_array().expect("cases");
+        assert_eq!(cases.len(), 4, "one case per Exit branch");
+        for case in cases {
+            let name = case["name"].as_str().unwrap_or("?");
+            let p = build_priorities_for(&readiness(vec![]), &json!([]), &json!([]), &case["sessions"], now);
+            let wire = serde_json::to_value(&p).unwrap();
+            let kinds: Vec<Value> = wire["upgrade_path"]["items"]
+                .as_array()
+                .map(|items| items.iter().map(|i| i["kind"].clone()).collect())
+                .unwrap_or_default();
+            assert_eq!(Value::Array(kinds), case["payload"]["upgrade_kinds"], "{name}: upgrade rows");
+            assert_eq!(wire["gpu_limited_games"], case["payload"]["gpu_limited_games"], "{name}: GPU-limited");
+            assert_eq!(wire["gpu_clear_games"], case["payload"]["gpu_clear_games"], "{name}: measured clear");
+            // Never retail economics in the verdict: the rows' words name no retailer or price.
+            for item in wire["upgrade_path"]["items"].as_array().into_iter().flatten() {
+                let said = format!("{} {}", item["title"], item["why"]);
+                for word in ["Amazon", "Newegg", "$", "price", "buy"] {
+                    assert!(!said.contains(word), "{name}: the verdict names {word:?}: {said}");
+                }
+            }
+        }
+    }
+
     #[test]
     fn the_reports_card_is_the_snapshots_most_vram_gpu() {
         let hw = json!({ "gpus": [

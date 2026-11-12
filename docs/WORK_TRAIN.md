@@ -1707,10 +1707,24 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       screen-is-limit is not covered here (unreachable; P9-upgrade-block-reachable). Review sonnet r1 (no verdict
       line; coverage gap and self-comparing asserts, both taken), r2 APPROVE-WITH-NITS (host "www." and this
       note's scope, both taken).
-- [ ] **P9-exit-fixture** (Phase 9 Exit proof) One fixture per Exit branch, driven through priorities + the game
+- [x] **P9-exit-fixture** (Phase 9 Exit proof) One fixture per Exit branch, driven through priorities + the game
       summary: settings done + GPU-limited (limiter named with what Compy can't check), settings done + measured clear
       ("no upgrade recommended" with its source), settings not done (no part named). Pure tests; no UI claim (the Check
       half waits on P9-upgrade-block-reachable).
+      Done (s24, tests only; SHAs in the merge): `src/test/fixtures/p9-exit.json` holds four cases on one game and this
+      PC's card (settings done + GPU-limited; done + measured clear; done + a clean check and no measured session;
+      not done with a GPU-limited session on record). priorities.rs `p9_exit_fixture_payloads_match_the_shared_fixture`
+      builds each payload from the sessions and pins it (upgrade rows, gpu_limited_games, gpu_clear_games, no retailer
+      or price in the verdict); `src/surfaces/p9-exit-fixture.test.ts` drives settingsDoneLine and the en words from
+      the same payload (limiter + "Compy can't check your power supply, case or the rest of the system"; measured clear
+      with its counts and "No GPU upgrade is recommended"; no check in hand = "not measured ... no upgrade is
+      recommended"; not done = no line and no part named). Pins: they pass on main too. FINDING: with a clean check and
+      NO measured session the line is the plain "The last check found nothing holding this PC back, so no upgrade is
+      recommended" (the check's readiness rows only; queued P9-no-session-plain-line).
+- [ ] **P9-no-session-plain-line** (P9-exit-fixture finding) The finished summary's plain `nothingLimiting` ("The last
+      check found nothing holding this PC back") fires when no session was measured for the game; it reads as a
+      measured verdict. Say what it was read from (the check's rows, no session measured for this game) and keep "no
+      upgrade recommended". en + zh-CN; settings-done + fixture tests. TS.
 - [x] **P9-summary-screen-limit** The game summary's gpuLimiter line (reachable, unlike Check's block) says when that
       same session averaged at or above the screen's measured refresh that the screen, not the GPU, capped what you
       saw (mirror P9-screen-is-limit's wording and boundaries); unmeasured = today's line. en + zh-CN; tests.
