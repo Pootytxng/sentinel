@@ -416,6 +416,11 @@ describe("ShellV2 footer states only what the ledger it read can undo", () => {
     expect(undoLine(container)).toContain("1 has no saved undo");
   });
 
+  it("a change in effect with no saved undo is never 'nothing in effect to undo' (r2)", () => {
+    const { container } = render(shell({ ledger: ledgerOf(3, { 0: { ...ON, undo_contract: false } }) }));
+    expect(undoLine(container)).toBe("1 has no saved undo · ledger 3");
+  });
+
   it("everything undone: nothing in effect to undo, still with the measured count", () => {
     const { container } = render(shell({ ledger: ledgerOf(41) }));
     expect(undoLine(container)).toBe("Nothing in effect to undo · ledger 41");

@@ -479,7 +479,9 @@ export function ShellV2({
                 {[
                   tally.undoable > 0
                     ? t("common.shellV2.footerUndoable", { count: tally.undoable })
-                    : tally.unchecked === 0 && t("common.shellV2.footerNothingToUndo"),
+                    : tally.unchecked === 0 &&
+                      tally.noSavedUndo === 0 &&
+                      t("common.shellV2.footerNothingToUndo"),
                   tally.noSavedUndo > 0 && t("common.shellV2.footerNoSavedUndo", { count: tally.noSavedUndo }),
                   tally.offOutside > 0 && t("common.shellV2.footerOffOutside", { count: tally.offOutside }),
                   tally.unchecked > 0 && t("common.shellV2.footerUnchecked", { count: tally.unchecked }),
