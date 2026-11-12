@@ -823,8 +823,8 @@ fn probe_tcp() -> Value {
 /// Flipped after the owner-present live-UAC QA harness (`history::manual_restore_qa`) passed all
 /// three full loops on real machine state — W32PS, MPO, memcompress: seed → detect → restore
 /// (receipt + prior banked) → rollback exact → cleanup to stock, owner approving every prompt.
-/// `history::restore_leftover` was registered as a Tauri command in the same commit (the second
-/// dark layer); restores ledger into the Trust Ledger with provenance "leftover_adopted".
+/// `history::restore_leftover` was registered as a Tauri command in the same commit (the second dark
+/// layer; since s23 the command is `experiment::restore_leftover`, Gaming Mode's gate then history's).
 pub(crate) fn restore_gate() -> bool {
     true
 }

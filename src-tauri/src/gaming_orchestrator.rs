@@ -37,7 +37,9 @@ static LIVE_SESSION: Mutex<Option<String>> = Mutex::new(None);
 /// than refused forever — refusing would strand the user's only restore path.
 static SESSION_OP: Mutex<()> = Mutex::new(());
 
-/// Also taken (still only by `try_lock`) by a Trial start and the benchmark's apply across their
+/// Also taken (still only by `try_lock`) by every plain apply and undo through [`plain_change_gate`]
+/// (the core-parking leftover restore, `experiment::restore_leftover`, included: before history's
+/// ledger lock, CR-core-parking-held-with-plan), and by a Trial start and the benchmark's apply across their
 /// check of the session contract and their record/apply (CR-gm-spans-trial review r1), so a session
 /// can't start between that check and the Trial's record, and neither starts while a session starts.
 /// Contention answers "try again"; nothing ever waits on it.
@@ -162,6 +164,19 @@ const REC_GAME_MODE: &str = "game-mode";
 const REC_GAME_BAR: &str = "game-bar-disable";
 const REC_USB: &str = "usb-selective-suspend-off";
 const REC_PCIE: &str = "pcie-aspm-off";
+/// The core-parking leftover restore (`experiment::restore_leftover`, gated, then history's), which writes the ACTIVE plan's
+/// CPMINCORES (SCHEME_CURRENT). No session step changes it; it is held with the plan.
+const REC_CORE_PARKING: &str = "core-parking-forced";
+
+/// CR-core-parking-held-with-plan: the ledger settings that are settings OF the active power plan
+/// (every apply targets SCHEME_CURRENT). While a session holds the plan they are held with it; while
+/// one of them is held (a Trial or the benchmark), a session leaves the plan alone
+/// (CR-gm-start-respects-plan-holds).
+const PLAN_SCOPED: [&str; 3] = [REC_USB, REC_PCIE, REC_CORE_PARKING];
+/// The left-alone label for the plan step when what is held is a setting OF the plan, not the plan.
+/// Review r2 (opus SHOULD-FIX 2): the holder may be the benchmark, and the pane keeps the line up for
+/// the whole session, so neither "a Trial" nor "is testing".
+const LABEL_POWER_SETTING_HELD: &str = "Power plan → max performance (one of its settings was being tested)";
 
 /// The ledger rec id of the setting each service suspend touches.
 fn service_rec(svc: &actions::KnownService) -> &'static str {
@@ -211,7 +226,12 @@ fn trial_store_start_refusal(why: &str) -> String {
 }
 
 /// PURE: whether a session may change the setting `rec` (no open Trial or benchmark holds it).
+/// CR-gm-start-respects-plan-holds: the power plan is not free while a setting OF the plan is held:
+/// switching plans would leave that Trial measuring a plan without its change.
 fn step_free(held: &[String], rec: &str) -> bool {
+    if rec == REC_POWER && held.iter().any(|h| PLAN_SCOPED.contains(&h.as_str())) {
+        return false;
+    }
     !held.iter().any(|h| h == rec)
 }
 
@@ -228,7 +248,16 @@ fn left_alone_labels(held: &[String], opts: &StartOptions, gate_open: bool) -> V
     ]
     .into_iter()
     .filter(|(rec, _, asked)| *asked && !step_free(held, rec))
-    .map(|(_, label, _)| label.to_string())
+    .map(|(rec, label, _)| {
+        // CR-gm-start-respects-plan-holds review r1 (opus SHOULD-FIX 2): the plan left alone for a
+        // Trial on one of its settings (not on the plan itself) says so; the pane's line would
+        // otherwise claim the Trial was testing the plan.
+        if rec == REC_POWER && !held.iter().any(|h| h == REC_POWER) {
+            LABEL_POWER_SETTING_HELD.to_string()
+        } else {
+            label.to_string()
+        }
+    })
     .collect();
     for svc in services_to_suspend(opts, gate_open) {
         if !step_free(held, service_rec(&svc)) {
@@ -254,8 +283,9 @@ fn session_hold_refusal(rec_id: &str, contract: Option<&[SessionChange]>) -> Opt
     // session's, so a change to either would be written to (and its undo recorded against) the
     // session's plan, and a stop switching back to the user's plan in the middle of it would leave the
     // user's own plan changed with no record. Held with the plan.
+    // CR-core-parking-held-with-plan: the core-parking restore writes the active plan too.
     let plan_held = contract.iter().any(|c| rec_of_label(&c.label) == Some(REC_POWER));
-    (plan_held && (rec_id == REC_USB || rec_id == REC_PCIE)).then(|| {
+    (plan_held && PLAN_SCOPED.contains(&rec_id)).then(|| {
         "Gaming Mode is on and has switched your power plan for its session, and this setting belongs \
          to the power plan. Stop Gaming Mode first, then change it. Nothing was changed."
             .to_string()
@@ -452,12 +482,13 @@ fn session_can_touch(rec_id: &str) -> bool {
 
 /// PURE: the session setting a ledger rec id changes, when a session step of this version touches it:
 /// a catalog rec, or (CR-gm-service-suspend-rows) a `service-suspend:<Name>` row, which suspends the
-/// same allowlisted service a session's suspend step does.
+/// same allowlisted service a session's suspend step does, or (CR-core-parking-held-with-plan) the
+/// core-parking restore, which no step changes but a session holding the plan holds with it.
 fn session_rec_of(rec_id: &str) -> Option<&'static str> {
     if let Some(name) = rec_id.strip_prefix("service-suspend:") {
         return actions::KnownService::from_name(name).map(|s| service_rec(&s));
     }
-    [REC_POWER, REC_GAME_MODE, REC_GAME_BAR, REC_USB, REC_PCIE]
+    [REC_POWER, REC_GAME_MODE, REC_GAME_BAR, REC_USB, REC_PCIE, REC_CORE_PARKING]
         .into_iter()
         .chain(actions::KnownService::ALL.iter().map(service_rec))
         .find(|r| *r == rec_id)
@@ -1390,7 +1421,12 @@ mod spans_trial_tests {
         // CR-gm-skipped-line: the steps a Trial or the benchmark holds are named, not silently missing.
         let held = vec!["game-mode".to_string(), "sysmain-disable".to_string(), "usb-selective-suspend-off".to_string()];
         let core_only = StartOptions::default();
-        assert_eq!(left_alone_labels(&held, &core_only, true), vec![LABEL_GAME_MODE.to_string()], "USB not asked: not named");
+        // CR-gm-start-respects-plan-holds: a held USB setting (a setting OF the plan) leaves the plan alone too.
+        assert_eq!(
+            left_alone_labels(&held, &core_only, true),
+            vec![LABEL_POWER_SETTING_HELD.to_string(), LABEL_GAME_MODE.to_string()],
+            "USB not asked: not named, but the plan it belongs to is left alone",
+        );
         let all = StartOptions {
             advanced_usb: true,
             advanced_pcie: true,
@@ -1398,9 +1434,18 @@ mod spans_trial_tests {
         };
         assert_eq!(
             left_alone_labels(&held, &all, true),
-            vec![LABEL_GAME_MODE.to_string(), LABEL_USB.to_string(), "Suspend SysMain for this session".to_string()],
+            vec![
+                LABEL_POWER_SETTING_HELD.to_string(),
+                LABEL_GAME_MODE.to_string(),
+                LABEL_USB.to_string(),
+                "Suspend SysMain for this session".to_string()
+            ],
         );
-        assert_eq!(left_alone_labels(&held, &all, false), vec![LABEL_GAME_MODE.to_string(), LABEL_USB.to_string()], "suspend gate shut: no service step");
+        assert_eq!(
+            left_alone_labels(&held, &all, false),
+            vec![LABEL_POWER_SETTING_HELD.to_string(), LABEL_GAME_MODE.to_string(), LABEL_USB.to_string()],
+            "suspend gate shut: no service step"
+        );
         assert!(left_alone_labels(&[], &all, true).is_empty(), "nothing held: nothing left alone");
         // Additive on disk: an older file loads with none, and none isn't written.
         let file = session_file("gm-1", SessionStatus::Active, vec![]);
@@ -1461,6 +1506,83 @@ mod spans_trial_tests {
         assert_eq!(session_hold_refusal(REC_USB, Some(&without_plan)), None, "no plan held: free");
         assert_eq!(session_hold_refusal(REC_PCIE, None), None, "no session");
         assert!(session_hold_refusal(REC_POWER, Some(&with_plan)).expect("the plan itself").contains("holds this setting"));
+    }
+
+    // CR-core-parking-held-with-plan (fourth range review, SHOULD-FIX): the core-parking leftover
+    // restore writes the ACTIVE plan's CPMINCORES (SCHEME_CURRENT), as USB and PCIe do, so it is held
+    // with the plan; it went through no gate at all, so during a session it landed on the session's
+    // plan and its undo after the stop wrote the session plan's priors onto the user's own plan.
+    #[test]
+    fn the_core_parking_restore_is_held_with_the_plan() {
+        let with_plan = vec![change(LABEL_POWER)];
+        let words = session_hold_refusal(REC_CORE_PARKING, Some(&with_plan)).expect("held with the plan");
+        assert!(words.contains("belongs to the power plan") && words.contains("Nothing was changed"), "{words}");
+        assert_eq!(session_hold_refusal(REC_CORE_PARKING, Some(&[change(LABEL_GAME_MODE)])), None, "no plan held: free");
+        // It reaches the gate (and so its row's undo, `experiment::rollback_change`, is refused too).
+        assert_eq!(session_rec_of("core-parking-forced"), Some(REC_CORE_PARKING));
+        // Every writer of SCHEME_CURRENT in actions.rs is a plan-scoped setting's (USB/PCIe apply and
+        // the core-parking restore and its undo); a new one has to be named here.
+        let writers: Vec<&str> = include_str!("actions.rs")
+            .lines()
+            .filter(|l| l.contains("valueindex SCHEME_CURRENT") && !l.trim_start().starts_with("//") && !l.contains("assert"))
+            .collect();
+        assert_eq!(writers.len(), 5, "SCHEME_CURRENT writers changed: hold the new one with the plan\n{writers:#?}");
+
+        // End to end: a readable session holding the plan refuses the restore before anything runs.
+        let dir = std::env::temp_dir().join(format!("compy-gm-coreparking-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let _redirect = crate::gaming_session::SessionDirOverride::begin(&dir);
+        save_session(&session_file("gm-1", SessionStatus::Active, with_plan.clone())).unwrap();
+        let _qa = crate::leftovers::QaRestoreGateBypass::begin();
+        // Belt and braces: were the gate missing, the restore would decline at the elevation seam
+        // instead of touching this machine (and the assertion below names that).
+        let _force = crate::actions::ForceElevationError::begin();
+        let mut err = String::new();
+        for _ in 0..200 {
+            // SESSION_OP is process-wide; another test may hold it for a moment ("still finishing").
+            err = match crate::experiment::restore_leftover("core-parking-forced".into(), "held-with-plan test".into()) {
+                Err(e) => e,
+                Ok(_) => panic!("the restore ran while a session held the plan"),
+            };
+            if !err.contains("still finishing") {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(err.contains("belongs to the power plan") && err.contains("Nothing was changed"), "{err}");
+        // The source shape: the webview's command is experiment's, which takes the gate (held through
+        // the write) before history's audited restore takes the ledger lock; history itself never
+        // calls this module (store-lock-order guard).
+        let lib = include_str!("lib.rs");
+        let handler = lib.split_once("generate_handler![").map(|(_, r)| r).expect("handler list");
+        assert!(handler.contains("experiment::restore_leftover,") && !handler.contains("history::restore_leftover,"));
+        let exp = include_str!("experiment.rs");
+        let body = exp.split_once("pub(crate) fn restore_leftover(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        let gate = body.find("let _gm = crate::gaming_orchestrator::plain_change_gate(").expect("gated");
+        let audited = body.find("crate::history::restore_leftover(").expect("history's restore");
+        assert!(gate < audited);
+        drop(_redirect);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // CR-gm-start-respects-plan-holds (fourth range review, SHOULD-FIX): a start switched the plan even
+    // while an open Trial held USB or PCIe (settings OF the plan), so that Trial measured a plan
+    // without its change. The plan step is left alone (and named) while a plan-scoped setting is held.
+    #[test]
+    fn a_start_leaves_the_plan_alone_while_a_plan_setting_is_held() {
+        for rec in [REC_USB, REC_PCIE, REC_CORE_PARKING] {
+            let held = vec![rec.to_string()];
+            assert!(!step_free(&held, REC_POWER), "{rec} held: the plan is not free");
+            assert!(step_free(&held, REC_GAME_MODE), "{rec} held: other steps run");
+        }
+        let held = vec![REC_USB.to_string()];
+        // Review r1 (opus SHOULD-FIX 2): named as left alone for one of its settings, never as if the
+        // Trial were testing the plan; a Trial on the plan itself keeps the plain label.
+        assert_eq!(left_alone_labels(&held, &StartOptions::default(), true), vec![LABEL_POWER_SETTING_HELD.to_string()]);
+        let on_plan = vec![REC_POWER.to_string(), REC_USB.to_string()];
+        assert_eq!(left_alone_labels(&on_plan, &StartOptions::default(), true), vec![LABEL_POWER.to_string()]);
+        assert!(step_free(&[REC_GAME_MODE.to_string()], REC_POWER), "a setting not of the plan leaves it free");
     }
 
     // CR-gm-stop-busy review r1 (sonnet SHOULD-FIX 1): a stop no longer keeps changes out by holding
@@ -2167,7 +2289,18 @@ mod elevation_batch_tests {
         // a plain change, a Trial start or the benchmark's apply holds SESSION_OP through its
         // Windows prompt; Stop Gaming Mode and Recover must not be refused for that. With SESSION_OP
         // held, stop and recover get past the gate and answer from the (empty) session dir.
-        let held = SESSION_OP.try_lock().expect("test acquires the session gate, as a waiting change does");
+        // CR-core-parking-held-with-plan review r2 (opus SHOULD-FIX 3): other tests now take this
+        // gate too (the core-parking restore); wait it out for a moment as they do, never block.
+        let held = (0..400)
+            .find_map(|_| match SESSION_OP.try_lock() {
+                Ok(g) => Some(g),
+                Err(std::sync::TryLockError::Poisoned(p)) => Some(p.into_inner()),
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                    None
+                }
+            })
+            .expect("test acquires the session gate, as a waiting change does");
         let err = stop().expect_err("no session in the temp dir");
         assert!(!err.contains("still finishing"), "stop was refused by a change's gate: {err}");
         assert!(err.contains("no active Gaming Mode session"), "got: {err}");

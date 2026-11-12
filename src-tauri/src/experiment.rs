@@ -3113,6 +3113,21 @@ pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
     crate::history::rollback_change(change_id)
 }
 
+/// CR-core-parking-held-with-plan: the webview's leftover restore. The core-parking restore writes the
+/// ACTIVE plan (SCHEME_CURRENT): while a Gaming Mode session holds the plan that is the session's plan,
+/// and after its stop the row would read off and its undo would write the session plan's priors onto
+/// the user's own plan with no record. So it is refused then, with Gaming Mode's gate (try_lock only)
+/// held through the ledger write, as every other plain apply. A leftover no session can touch takes no
+/// gate and reads nothing. The audited restore is history's.
+#[tauri::command]
+pub(crate) fn restore_leftover(
+    detector_id: String,
+    display_title: String,
+) -> Result<crate::history::AppliedChangeView, String> {
+    let _gm = crate::gaming_orchestrator::plain_change_gate(std::iter::once(detector_id.as_str()))?;
+    crate::history::restore_leftover(&detector_id, &display_title)
+}
+
 /// CR-gm-service-suspend-rows: the session service-suspend command (armed, no UI caller today).
 /// A Gaming Mode session that suspends the same service resumes it on stop, under this row ("applied"
 /// over a running service), so it is refused while one holds it, with Gaming Mode's try_lock-only gate
@@ -5401,6 +5416,8 @@ mod experiment_tests {
             ("pub(crate) fn apply_recommendation(", concat!("crate::history::", "apply_recommendation(rec_id"), 2),
             ("pub(crate) fn apply_recommendations_batch(", concat!("crate::history::", "apply_recommendations_batch(items)"), 2),
             ("pub(crate) fn rollback_change(", concat!("crate::history::", "rollback_change(change_id)"), 1),
+            // CR-core-parking-held-with-plan review r3 (opus NIT): the leftover restore, the same standard.
+            ("pub(crate) fn restore_leftover(", concat!("crate::history::", "restore_leftover(&detector_id"), 1),
         ] {
             let body = src.split_once(sig).and_then(|(_, r)| r.split_once("\n}\n")).map(|(b, _)| b).expect(sig);
             // Every path to the ledger write (Trials on and off) takes the gate, then checks, then writes.

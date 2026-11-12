@@ -1835,7 +1835,7 @@ pub fn run() {
             experiment::suspend_known_service,
             history::disable_known_bloat_task,
             history::remove_known_preload_app,
-            history::restore_leftover,
+            experiment::restore_leftover,
             get_preload_apps,
             experiment::rollback_change,
             history::changed_outside_offers,

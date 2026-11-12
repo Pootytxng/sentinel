@@ -1749,19 +1749,68 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       still has its card, and its Undo confirm names the saved plan (`keptOutsideUndoBody`, 6613a053). A kept row that
       reads off had no card before either. The only new refusal (`hasUndo`) is for rows whose stored history resolves
       to no undo (`resolve_rollback` fails), whose undo failed before anything ran anyway. No change.
-- [ ] **CR-core-parking-held-with-plan** (SHOULD-FIX, same class as CR-gm-stop-busy's opus MUST-FIX)
+- [x] **CR-core-parking-held-with-plan** (SHOULD-FIX, same class as CR-gm-stop-busy's opus MUST-FIX; done with the
+      next item, see its note)
       gaming_orchestrator.rs ~258 holds only USB and PCIe with the power plan. The core-parking leftover restore
       (history.rs ~1499 `restore_leftover`, no gate) writes SCHEME_CURRENT (actions.rs ~4570-4617): during a Gaming
       Mode session it lands on the session's plan; after Stop the row reads off ("changed outside Compy") and its undo
       writes session-plan priors onto the user's plan unrecorded. Route `core-parking-forced` through
       `plain_change_gate`, held with the plan; grep SCHEME_CURRENT / setacvalueindex / setdcvalueindex across
       src-tauri and cover each other writer. Rust; two reviews (opus + sonnet).
-- [ ] **CR-gm-start-respects-plan-holds** (SHOULD-FIX) gaming_orchestrator.rs ~787 `free(REC_POWER)`: Gaming Mode
+- [x] **CR-gm-start-respects-plan-holds** (SHOULD-FIX) gaming_orchestrator.rs ~787 `free(REC_POWER)`: Gaming Mode
       start switches the plan while an open Trial holds USB or PCIe, so that Trial measures a plan without its change.
       REC_POWER is not free while a plan-scoped setting is held. Rust; two reviews.
-- [ ] **CR-restore-window-direct** (read-only finding first) Is every bench and Trial restore path that calls
+      Done with CR-core-parking-held-with-plan (one branch, s23; SHAs in the merge): `PLAN_SCOPED` = USB, PCIe,
+      core-parking-forced. A session holding the plan holds all three (`session_hold_refusal`); `session_rec_of` maps
+      core parking so `plain_change_gate` reads the session for it; the webview's `restore_leftover` is now
+      experiment's, which takes that gate before history's audited restore (ledger lock) and holds it through the
+      write, as `suspend_known_service` does (history must not call the orchestrator: store-lock-order guard, which
+      failed on the first shape); the row's undo, `experiment::rollback_change`, was already gated. The other SCHEME_CURRENT writers are the USB/PCIe apply (their undo targets the stored plan GUID) and the
+      core-parking restore/undo; counted in a test. Start: `step_free(REC_POWER)` is false while a plan-scoped setting
+      is held, and the pane names it "Power plan → max performance (one of its settings was being tested)". New
+      tests fail on the old code (3 of 17 in spans_trial_tests). Reviews r1: sonnet APPROVE-WITH-NITS (no
+      MUST-FIX/SHOULD-FIX); opus REQUEST-CHANGES, no MUST-FIX: SHOULD-FIX 1 (history.rs wave2 test now meets
+      SESSION_OP contention: retries taken, then moot once the gate moved to experiment's command), SHOULD-FIX 2 (the left-alone line would say the
+      Trial tested the plan: own label, taken), SHOULD-FIX 3 pre-existing (queued CR-core-parking-plan-guid); NITs:
+      the session_op_guard doc names the new taker (taken; the store-lock-order guard's prose is a guard, left),
+      writer count is a literal tripwire (kept, stated), unreadable record lets a plan-scoped change through (in
+      CR-core-parking-plan-guid), core parking can't be Trial-held (harmless). Reviews r2: sonnet APPROVE-WITH-NITS
+      (no MUST-FIX); opus REQUEST-CHANGES, no MUST-FIX: SHOULD-FIX 2 (label: the holder may be the benchmark and the
+      line stays up all session: now "(one of its settings was being tested)", taken), SHOULD-FIX 3 (the
+      CR-gm-stop-busy test grabbed SESSION_OP with no retry: retries now, taken), SHOULD-FIX 1 (a Trial whose baseline
+      ran with Gaming Mode switching the plan and whose later sessions leave it alone compares two plans, and
+      comparability sees only "Gaming Mode on"; queued CR-trial-plan-switch-confound), SHOULD-FIX 4 (pre-existing,
+      plain apply of power-ultimate vs a held USB/PCIe Trial and the reverse: folded into CR-core-parking-plan-guid);
+      NITs: PLAN_SCOPED doc "every apply" (taken), the store-lock-order guard's SESSION_OP census does not list
+      restore_leftover (a guard, left; the gate never waits), writer count a literal tripwire (stated), the plan named
+      left alone even where the switch would have been a no-op (pre-existing class). Two rounds done; after r2 the
+      full vitest's store-lock-order guard failed (history -> gaming_orchestrator -> experiment -> comparison/drift),
+      so the gate moved from history's restore_leftover to the experiment.rs command, unreviewed as a third round
+      (same shape as suspend_known_service; pinned by the end-to-end test and the handler-list check).
+- [ ] **CR-core-parking-plan-guid** (CR-core-parking-held-with-plan opus r1 SHOULD-FIX 3 + r2 SHOULD-FIX 4,
+      pre-existing) The core-parking restore and its undo write SCHEME_CURRENT and its snapshot stores no plan GUID, so
+      a plan switch between apply and undo (a Trial on power-ultimate not kept; or a Gaming Mode record this Compy
+      can't read) lands the undo on another plan unrecorded. Record the active plan GUID in the core-parking snapshot
+      (additive, serde default) and undo against it as the USB/PCIe restore does. Same class: a plain UI/batch apply
+      or undo of power-ultimate while a Trial or the bench holds USB/PCIe (experiment.rs ~3078/~3110), and a plain
+      USB/PCIe/core-parking change while one holds power-ultimate, are not refused. Rust; two reviews.
+- [ ] **CR-trial-plan-switch-confound** (CR-core-parking-held-with-plan opus r2 SHOULD-FIX 1) Since a Gaming Mode start
+      leaves the plan alone while a USB/PCIe Trial is open, a Trial whose baseline ran with Gaming Mode switching the
+      plan and whose later sessions ran with it left alone compares two plans; comparability.rs ~360 and realplay.rs
+      ~622 compare only `gaming_mode_active`. Record per session whether Gaming Mode switched the plan (or its
+      left-alone list) and treat a difference as a changed condition. Rust; two reviews.
+- [x] **CR-restore-window-direct** (read-only finding first) Is every bench and Trial restore path that calls
       `history::rollback_change` directly (no gate) safe against the Gaming Mode restore window? Write the finding
       here; queue a fix only if one is not.
+      FINDING (s23, from the code; no change): safe, by disjointness. The direct callers are experiment.rs
+      `abort_start`, `finish_conclude`, `restore_experiment` (+ `undo_outcome_choice`, which takes SESSION_OP and
+      `session_holds_refusal` first) and benchmark_trial.rs ~210/~385. Each undoes the one setting its Trial or bench
+      holds. A session never holds that setting: a Trial start refuses a setting a session holds
+      (`session_holds_refusal`, experiment.rs ~3004/~3186/~3506, which also refuses while a stop is in flight via
+      RestoreWindow), and a session start leaves alone every setting an open Trial or the bench holds
+      (`held_by_trials` → `step_free`). The one cross-setting coupling was the power plan (a held USB/PCIe change is a
+      setting OF the plan a session switches): closed by CR-gm-start-respects-plan-holds (same merge as this line).
+      So a direct restore and a session's restore never write the same setting, in or out of the restore window.
 - [ ] **P9-no-upgrade-cpu-unknown** (SHOULD-FIX, honesty) lab.json `nothingLimitingMeasured` (00d5bd01, 2e67e38b,
       a91c068c): "No upgrade is recommended" leans on a low GPU share, the usual sign of a CPU limit or a frame cap,
       neither of which Compy measures. Say so, or stop citing the share as support. en + zh-CN. Folds in

@@ -1464,12 +1464,14 @@ fn record_receipt(
 }
 
 /// Leftovers v2 (R2-5) — ARMED 2026-07-16: restore one leftover to its Windows default.
-/// Registered Tauri command since the arming commit (previously double-dark: unregistered AND
+/// The registered Tauri command from the arming commit until s23 (previously double-dark: unregistered AND
 /// gate-refused), flipped only after the owner-present live-UAC QA harness passed all three
 /// loops (`manual_restore_qa` — W32PS/MPO/memcompress). Mirrors apply_recommendation exactly:
 /// lock → load BEFORE mutate (H1) → one resolver → receipt with provenance "leftover_adopted" →
 /// atomic save. Undo rides the standard typed rollback path like any other ledger entry.
-#[tauri::command]
+/// CR-core-parking-held-with-plan: the webview's command is `experiment::restore_leftover`, which
+/// takes Gaming Mode's gate before this (core parking writes the ACTIVE plan); this module never
+/// calls into the Gaming Mode orchestrator (store-lock-order guard).
 pub(crate) fn restore_leftover(
     detector_id: &str,
     display_title: &str,
