@@ -821,6 +821,7 @@
       "windowsBuild": "the Windows version",
       "display": "the monitor",
       "captureMethod": "the capture method",
+      "gamingMode": "Gaming Mode",
       "other": "a condition"
     },
     "stretchBefore": "Before session",

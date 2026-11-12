@@ -509,8 +509,8 @@ enum Count {
 /// Pure (P5-realplay): which sessions of the game, played while the Trial ran, count right now. A
 /// session counts only when it began after the change took effect and within [`WINDOW_DAYS`], is
 /// long enough, measured and in front, with a length that adds up, ran with no other Compy change
-/// applied or undone before it ended, under the reference's rig, driver, Windows and game build and
-/// fully comparable conditions, with the same Gaming Mode state and the reference's Compy changes
+/// applied or undone before it ended, with the same Gaming Mode state, under the reference's rig,
+/// driver, Windows and game build and fully comparable conditions, with the reference's Compy changes
 /// plus this one, read as on (never one Compy couldn't confirm), at its start, and is bracketed: the
 /// next observation after it still shows the change on (the next session's start counts, in any
 /// game, unless another Compy change moved before it began; for the newest session, `live`, the
@@ -617,14 +617,16 @@ fn count_session(
     if other_moved.is_some_and(|t| t <= end) {
         return Count::Not(R::OtherCompyChange);
     }
+    // CR-trial-gm-between: checked before the pairing, which now also lists a Gaming Mode difference
+    // as a changed condition; this keeps the session's own, more specific reason.
+    if reference.gaming_mode_active.is_none() || reference.gaming_mode_active != s.gaming_mode_active {
+        return Count::Not(R::GamingModeDiffers);
+    }
     let still_current = conditions
         .zip(crate::noise_floor::NoiseConditions::of_session(s))
         .is_some_and(|(then, now)| crate::noise_floor::still_current(then, &now));
     if !still_current || pairing.verdict != Comparability::Comparable || !pairing.changed_context.is_empty() {
         return Count::Not(R::ConditionsChanged);
-    }
-    if reference.gaming_mode_active.is_none() || reference.gaming_mode_active != s.gaming_mode_active {
-        return Count::Not(R::GamingModeDiffers);
     }
     match counts_vs(reference, s) {
         Counts::ThisOneMore => {}

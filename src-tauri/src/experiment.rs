@@ -6078,8 +6078,16 @@ mod experiment_tests {
         let mut new_res = session(TREAT_ID, 180.0);
         new_res.game_state.as_mut().unwrap().resolution_width = Some(1920);
         new_res.game_state.as_mut().unwrap().resolution_height = Some(1080);
+        // CR-trial-gm-between: a Gaming Mode session that ran during the after-session only.
+        let mut new_gm = session(TREAT_ID, 180.0);
+        new_gm.gaming_mode_active = Some(true);
 
-        for (what, treatment) in [("GPU driver", new_driver), ("Windows build", new_windows), ("Resolution", new_res)] {
+        for (what, treatment) in [
+            ("GPU driver", new_driver),
+            ("Windows build", new_windows),
+            ("Resolution", new_res),
+            ("Gaming Mode", new_gm),
+        ] {
             // Accepted as the after-reading, so the Trial can end (§7 abort) rather than be refused
             // forever.
             let sessions = [session(BASE_ID, 150.0), treatment];

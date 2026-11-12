@@ -561,6 +561,8 @@ const PAIR_CONDITION_KEY: Record<string, string> = {
   "windows-build": "windowsBuild",
   display: "display",
   "capture-method": "captureMethod",
+  // CR-trial-gm-between (comparability.rs): Gaming Mode on for one session and off for the other.
+  "gaming-mode": "gamingMode",
 };
 
 function pairList(keys: string[], t: Translate): string {
