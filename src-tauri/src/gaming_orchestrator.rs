@@ -863,31 +863,68 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
 /// restores FIRST as one contiguous block) — an interleaved disk-edited contract
 /// legitimately yields one prompt PER elevated run, order and fail-loud semantics
 /// intact.
+///
+/// CR-gm-restore-partial: a failed attempt keeps only the changes it could NOT confirm restored
+/// (in their apply order); a change whose restore confirmed is dropped from the retained contract,
+/// so one step that always fails (a removed service or plan) holds only its own setting, never
+/// every setting the session touched. "Confirmed" is exactly what clearing the whole contract
+/// already relied on: `Ok` from `restore_one_change`, or an `ok` receipt under a successful
+/// elevation. Each change's snapshot carries what it restores to (a power-plan setting names its
+/// plan GUID), so a retry of what is left restores the same prior state it would have before.
 pub(crate) fn restore(file: &mut SessionFile) -> Result<(), String> {
     clear_live_session(); // this session is ending/recovering — no longer resumable
     file.status = next_on_stop(file.status); // -> Ending
     save_session(file)?;
-    let mut first_err: Option<String> = None;
     let ordered = resolve_restore_order(&file.changes);
+    let mut errs = RestoreErrs::default();
     let mut idx = 0usize;
     while idx < ordered.len() {
         let run_end = contiguous_run_end(&ordered, idx);
         if ordered[idx].elevated_restore {
-            restore_elevated_run(&ordered[idx..run_end], &file.session_id, &mut first_err);
+            restore_elevated_run(&ordered[idx..run_end], &file.session_id, &mut errs);
         } else {
             for change in &ordered[idx..run_end] {
-                record_restore_err(&mut first_err, &change.label, restore_one_change(change));
+                record_restore_err(&mut errs, change, restore_one_change(change));
             }
         }
         idx = run_end;
     }
-    if let Some(e) = first_err {
+    if let Some(e) = errs.first.take() {
+        file.changes = still_to_restore(&file.changes, &ordered, &errs.failed);
         file.status = SessionStatus::RestoreFailed;
         save_session(file)?;
         return Err(e);
     }
     clear_session()?; // only after every restore confirmed
     Ok(())
+}
+
+/// What one restore attempt could not confirm: the first error (the one reported) and every
+/// change that failed, as references into that attempt's restore order.
+#[derive(Default)]
+struct RestoreErrs<'a> {
+    first: Option<String>,
+    failed: Vec<&'a SessionChange>,
+}
+
+/// PURE (CR-gm-restore-partial): the contract to retain after a failed attempt. `ordered` is
+/// `resolve_restore_order(changes)` (reverse apply order) and `failed` points into it; the result
+/// is the failed changes in their original apply order. A failure that can't be placed (never by
+/// construction) keeps the whole contract: fail-safe toward restoring more, never less.
+fn still_to_restore(
+    changes: &[SessionChange],
+    ordered: &[SessionChange],
+    failed: &[&SessionChange],
+) -> Vec<SessionChange> {
+    let n = changes.len();
+    let mut keep = vec![false; n];
+    for f in failed {
+        match ordered.iter().position(|o| std::ptr::eq(o, *f)) {
+            Some(i) if ordered.len() == n && i < n => keep[n - 1 - i] = true,
+            _ => return changes.to_vec(),
+        }
+    }
+    changes.iter().zip(keep).filter(|(_, k)| *k).map(|(c, _)| c.clone()).collect()
 }
 
 /// PURE: the end (exclusive) of the contiguous run sharing `changes[start]`'s
@@ -928,10 +965,12 @@ fn restore_one_change(change: &SessionChange) -> Result<(), String> {
 }
 
 /// Collect-and-continue error semantics (unchanged from the pre-T6b loop): every change
-/// is attempted; the FIRST failure becomes the reported error.
-fn record_restore_err(first_err: &mut Option<String>, label: &str, res: Result<(), String>) {
+/// is attempted; the FIRST failure becomes the reported error, and every failed change is
+/// remembered so the retained contract keeps exactly those (CR-gm-restore-partial).
+fn record_restore_err<'a>(errs: &mut RestoreErrs<'a>, change: &'a SessionChange, res: Result<(), String>) {
     if let Err(e) = res {
-        first_err.get_or_insert(format!("{label}: {e}"));
+        errs.first.get_or_insert(format!("{}: {e}", change.label));
+        errs.failed.push(change);
     }
 }
 
@@ -985,10 +1024,10 @@ fn resolve_restore_batch(
 /// a single elevation with per-item receipts. Failures land in `first_err` per change
 /// (the same collect-and-continue semantics as the inline path); the caller's
 /// RestoreFailed / retain / never-false-success contract is unchanged.
-fn restore_elevated_run(
-    run: &[SessionChange],
+fn restore_elevated_run<'a>(
+    run: &'a [SessionChange],
     session_id: &str,
-    first_err: &mut Option<String>,
+    first_err: &mut RestoreErrs<'a>,
 ) {
     // Phase 1 — sink armed: reads + parking only, no elevated mutation.
     struct Staged<'a> {
@@ -1003,9 +1042,9 @@ fn restore_elevated_run(
     // that mutated without deferring, reachable only from a mislabeled/disk-edited
     // contract) must not execute twice, and read-time failures are already recorded.
     // Staged items' parked commands never ran, so re-dispatching them is safe.
-    let staged_fallback = |staged: &[Staged], first_err: &mut Option<String>| {
+    let staged_fallback = |staged: &[Staged<'a>], first_err: &mut RestoreErrs<'a>| {
         for s in staged {
-            record_restore_err(first_err, &s.change.label, restore_one_change(s.change));
+            record_restore_err(first_err, s.change, restore_one_change(s.change));
         }
     };
     let mut staged: Vec<Staged> = Vec::new();
@@ -1015,7 +1054,7 @@ fn restore_elevated_run(
             Err(_) => {
                 // Nothing has been dispatched yet — the whole run takes the per-item path.
                 for change in run {
-                    record_restore_err(first_err, &change.label, restore_one_change(change));
+                    record_restore_err(first_err, change, restore_one_change(change));
                 }
                 return;
             }
@@ -1035,7 +1074,7 @@ fn restore_elevated_run(
                 // commands it parked before refusing are DISCARDED below (they never ran —
                 // running a refused rollback's parked tail would mutate on a path the
                 // rollback itself abandoned).
-                Err(e) => record_restore_err(first_err, &change.label, Err(e)),
+                Err(e) => record_restore_err(first_err, change, Err(e)),
             }
             cursor = now;
         }
@@ -1087,8 +1126,18 @@ fn restore_elevated_run(
         String::new()
     };
     let _ = std::fs::remove_file(&receipts_path);
-    for (label, res) in resolve_restore_batch(elevation, &receipts_text, &id_labels) {
-        record_restore_err(first_err, &label, res);
+    // resolve_restore_batch answers one outcome per item, in `id_labels` order, which is `staged`
+    // order: zip so each outcome lands on its own change (CR-gm-restore-partial), never by label.
+    let outcomes = resolve_restore_batch(elevation, &receipts_text, &id_labels);
+    if outcomes.len() != staged.len() {
+        // Impossible by construction; fail every staged change rather than guess which restored.
+        for s in &staged {
+            record_restore_err(first_err, s.change, Err("the elevated restore step didn't finish".into()));
+        }
+        return;
+    }
+    for (s, (_label, res)) in staged.iter().zip(outcomes) {
+        record_restore_err(first_err, s.change, res);
     }
 }
 
@@ -1931,6 +1980,64 @@ mod elevation_batch_tests {
         res.expect("a no-op restore succeeds");
         assert!(load_session().is_none(), "contract cleared after every restore confirmed");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // CR-gm-restore-partial: a failed restore keeps only what it could not confirm. Here WSearch's
+    // resume is a confirmed no-op (prior Stopped) and SysMain's is declined at the one elevation:
+    // the retained contract holds SysMain alone, so a Trial or a plain change of WSearch is no
+    // longer refused on the session's behalf; a retry restores SysMain from the same snapshot.
+    #[test]
+    fn a_failed_restore_keeps_only_the_changes_it_could_not_confirm() {
+        let dir = temp_session_dir("restore-partial");
+        let _redirect = SessionDirOverride::begin(&dir);
+        let mut file = fixture_file("gm-partial");
+        let svc = |s: KnownService, prior: &str| SessionChange {
+            label: format!("Suspend {} for this session", s.name()),
+            rollback_action: RollbackAction::ResumeServiceFromSnapshot { service: s },
+            snapshot: Snapshot::Service { prior_state: prior.into(), prior_start_mode: "Manual".into() },
+            elevated_restore: true,
+        };
+        let before = file.changes.len();
+        file.changes.push(svc(KnownService::SysMain, "Running")); // applied first → restored last
+        file.changes.push(svc(KnownService::WSearch, "Stopped")); // applied last → restored first, no-op
+        save_session(&file).expect("fixture save");
+
+        reset_elevation_dispatch_count();
+        let res = {
+            let _decline = ForceElevationError::begin();
+            restore(&mut file)
+        };
+        assert!(res.is_err(), "a declined restore still fails loudly");
+        assert_eq!(file.status, SessionStatus::RestoreFailed);
+        let kept = load_session().expect("contract retained");
+        let labels: Vec<&str> = kept.changes.iter().map(|c| c.label.as_str()).collect();
+        assert!(labels.contains(&"Suspend SysMain for this session"), "the failed change stays: {labels:?}");
+        assert!(!labels.contains(&"Suspend WSearch for this session"), "the confirmed one goes: {labels:?}");
+        assert_eq!(kept.changes.len(), before + 1, "nothing else is dropped: {labels:?}");
+        assert_eq!(file.changes.len(), kept.changes.len(), "memory matches disk");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // The pure mapping: failures point into the reverse-order clone; the kept contract is in
+    // apply order; a failure that can't be placed keeps everything (restore more, never less).
+    #[test]
+    fn still_to_restore_keeps_failures_in_apply_order_and_fails_safe() {
+        let stub = |l: &str| SessionChange {
+            label: l.into(),
+            rollback_action: RollbackAction::RestoreGameModeFromSnapshot,
+            snapshot: Snapshot::GameMode { prior_enabled: None, prior_allow: None },
+            elevated_restore: false,
+        };
+        let changes = vec![stub("a"), stub("b"), stub("c"), stub("a")];
+        let ordered = resolve_restore_order(&changes); // a', c, b, a
+        let labels = |v: &[SessionChange]| v.iter().map(|c| c.label.clone()).collect::<Vec<_>>();
+        // The newest "a" (ordered[0]) and "b" failed: same labels never confuse which one.
+        let kept = still_to_restore(&changes, &ordered, &[&ordered[0], &ordered[2]]);
+        assert_eq!(labels(&kept), vec!["b", "a"]);
+        assert!(std::ptr::eq(kept.last().map(|c| &c.label).unwrap(), &kept[1].label));
+        assert_eq!(still_to_restore(&changes, &ordered, &[]).len(), 0);
+        let stranger = stub("x");
+        assert_eq!(labels(&still_to_restore(&changes, &ordered, &[&stranger])), labels(&changes));
     }
 
     // The pure restore-batch decision — every arm pinned (no elevation needed). Fail-safe
