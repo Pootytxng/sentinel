@@ -1541,6 +1541,14 @@ isolation"; read-only, no product names, prices or wattages guessed (unknown sta
       when it was GPU-limited (the sustained rule of P9-bottleneck-sustained), it names the GPU as the measured
       limiter with its share instead of "nothing holding this PC back"; another game's session never counts. Rust read
       + TS line, en + zh-CN; one review (measurement).
+      PARKED 2026-11-12 s21 (ROB RUN started 01:42; nothing heavy run since): code + tests committed UNTESTED on
+      `claude/train-P9-summary-gpu-limit` (worktree `.claude\worktrees\train-P9-summary-gpu-limit`): priorities.rs
+      `gpu_limited_games` (per game, its newest measured session, the sustained rule; `build_gpu_limited_games`),
+      types.ts, settings-done.ts `gpu-limiter` kind (outranks nothing-limiting / not-measured, never a scan's own
+      attention limiter), ExperimentBench line, en + zh-CN `settingsDone.gpuLimiter`. Still to run, no game: `npx tsc
+      --noEmit`; `npx vitest run src/surfaces/settings-done.test.ts src/surfaces/ExperimentBench.test.tsx`; full
+      vitest; `cargo test` + `cargo clippy --all-targets -- -D warnings` (CARGO_TARGET_DIR = main's target); prove the
+      tests fail on the old code; one sonnet review; merge.
 Refill 2026-11-12 s21 (Phase 9 Exit: "name the measured limiter in system context or say 'no upgrade recommended',
 never a part in isolation"; read-only, measured only, unknown stays unknown, no product names or prices):
 - [ ] **P9-limit-source** Under "GPU was the measured limiter" (Optimize → Check), the line names what it was measured

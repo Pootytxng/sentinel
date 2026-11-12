@@ -1849,7 +1849,7 @@ function TestSummary({ s }: { s: GameTestSummary }) {
   const staleAsked = s.staleAsked;
   // P9-settings-done: the last cached scan's limiters, read with no IPC; no scan = "not measured".
   const scanPriorities = peekScanPriorities();
-  const settingsDone = settingsDoneLine(s.headline, scanPriorities);
+  const settingsDone = settingsDoneLine(s.headline, scanPriorities, s.game);
   // P9-software-first: while changes are still untested (or worth another run), a part the last
   // check named as the limiter is said AFTER the settings to try first; never a shopping line.
   const softwareFirst = softwareFirstLine(s, scanPriorities);
@@ -1908,9 +1908,11 @@ function TestSummary({ s }: { s: GameTestSummary }) {
             ? t("lab.experimentBench.summary.settingsDone.settingLimiter", { title: settingsDone.title })
             : settingsDone.kind === "part-limiter"
               ? t("lab.experimentBench.summary.settingsDone.partLimiter", { title: settingsDone.title })
-              : settingsDone.kind === "nothing-limiting"
-                ? t("lab.experimentBench.summary.settingsDone.nothingLimiting")
-                : t("lab.experimentBench.summary.settingsDone.notMeasured")}
+              : settingsDone.kind === "gpu-limiter"
+                ? t("lab.experimentBench.summary.settingsDone.gpuLimiter", { game, share: settingsDone.sharePct })
+                : settingsDone.kind === "nothing-limiting"
+                  ? t("lab.experimentBench.summary.settingsDone.nothingLimiting")
+                  : t("lab.experimentBench.summary.settingsDone.notMeasured")}
         </p>
       )}
       {softwareFirst && (

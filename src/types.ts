@@ -209,7 +209,18 @@ export type PriorityItem = { id: string; title: string; reason: string; linked: 
 export type RetailLink = { retailer: string; url: string };
 export type UpgradeSuggestion = { kind: string; title: string; why: string; links: RetailLink[] };
 export type UpgradePath = { items: UpgradeSuggestion[]; disclosure: string };
-export type Priorities = { limiters: PriorityItem[]; already_fine: PriorityItem[]; not_worth_touching: PriorityItem[]; session_hint: string | null; upgrade_path: UpgradePath | null };
+export type Priorities = {
+  limiters: PriorityItem[];
+  already_fine: PriorityItem[];
+  not_worth_touching: PriorityItem[];
+  session_hint: string | null;
+  upgrade_path: UpgradePath | null;
+  /** P9-summary-gpu-limit: per game (`process_name`), its newest measured session, only when that
+   *  session was GPU-limited by the sustained rule (priorities.rs). Absent from an older backend. */
+  gpu_limited_games?: GameGpuLimit[];
+};
+
+export type GameGpuLimit = { game: string; share_pct: number; peak_pct: number };
 
 export type SessionSummary = {
   started_at: string;
