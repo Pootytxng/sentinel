@@ -193,16 +193,36 @@ fn activated_plan_from(result: &ApplyResult, read_active: impl FnOnce() -> Optio
     (!guid.eq_ignore_ascii_case(prior_guid.trim())).then_some(AppliedPlan { schema: APPLIED_PLAN_SCHEMA, guid })
 }
 
-/// Review r1 (opus SHOULD-FIX 4): the GUID read after the apply is recorded only when that plan is
-/// Ultimate by class (stock GUID or its words) or a copy of the Ultimate template by its settings, so
-/// a plan another program switched to in between is never stamped as Compy's. Unknown records nothing.
-fn is_ultimate_plan(
-    guid: &str,
-    read_plan: impl FnOnce() -> Option<ObservedPlan>,
-    template_copy: impl FnOnce(&str) -> Option<bool>,
-) -> bool {
+/// The GUID read after the apply is recorded only when that plan is Ultimate by class (stock GUID or
+/// its words), or by provenance (review r2): it was not in `powercfg /list` read just before the
+/// apply, so the apply's own `/duplicatescheme` made it. A plan another program switched to that
+/// already existed is never stamped as Compy's; an unread list or plan records nothing.
+fn is_ultimate_plan(guid: &str, read_plan: impl FnOnce() -> Option<ObservedPlan>, plans_before: Option<&[String]>) -> bool {
     let by_class = read_plan().is_some_and(|o| o.guid.eq_ignore_ascii_case(guid) && o.class == crate::PowerPlanClass::Ultimate);
-    by_class || template_copy(guid) == Some(true)
+    let made_by_the_apply = plans_before.is_some_and(|before| !before.iter().any(|b| b.eq_ignore_ascii_case(guid)));
+    by_class || made_by_the_apply
+}
+
+/// How long one receipt read of `powercfg` may take before it counts as unread (review r2: the
+/// receipt reads run under the ledger lock, so a hung `powercfg` must not hold every apply and undo).
+const RECEIPT_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// `read` on its own thread, bounded by [`RECEIPT_READ_TIMEOUT`]; None when it takes longer (the
+/// thread is left to finish on its own) or panics. Read-only reads only.
+fn bounded_read<T: Send + 'static>(read: impl FnOnce() -> Option<T> + Send + 'static) -> Option<T> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("receipt-read".into())
+        .spawn(move || {
+            let _ = tx.send(read());
+        })
+        .ok()?;
+    rx.recv_timeout(RECEIPT_READ_TIMEOUT).ok().flatten()
+}
+
+/// The schemes `powercfg /list` shows right now, read before Compy's Ultimate apply (bounded).
+fn plans_before_ultimate_apply(rec_id: &str) -> Option<Vec<String>> {
+    (rec_id == "power-ultimate").then(|| bounded_read(crate::power_plan_guids)).flatten()
 }
 
 /// Whether the live plan `seen` is Compy's Ultimate plan for row `c`: the stock Ultimate scheme or a
@@ -1122,14 +1142,22 @@ const MAX_REC_TITLE_LEN: usize = 200;
 
 /// Build the full-contract ledger receipt for a completed apply. Shared by the single apply and
 /// the batch (identical receipt either way — rollback granularity is per item, unchanged).
+///
+/// CR-ultimate-identity (review r2): `plans_before` is the scheme list read before an Ultimate apply
+/// (provenance); the post-apply reads are bounded and run only for the Ultimate apply.
 fn build_applied_change(
     rec_id: &str,
     rec_title: &str,
     result: ApplyResult,
+    plans_before: Option<&[String]>,
 ) -> Result<AppliedChange, String> {
-    build_applied_change_with(rec_id, rec_title, result, crate::actions::current_power_plan_guid, |g| {
-        is_ultimate_plan(g, crate::current_power_scheme, crate::ultimate_template_copy)
-    })
+    build_applied_change_with(
+        rec_id,
+        rec_title,
+        result,
+        || bounded_read(crate::actions::current_power_plan_guid),
+        |g| is_ultimate_plan(g, || bounded_read(crate::current_power_scheme), plans_before),
+    )
 }
 
 /// [`build_applied_change`] with the read of the active scheme handed in (CR-ultimate-identity).
@@ -1176,6 +1204,8 @@ struct Made {
     provenance: Option<&'static str>,
     /// P5-outcomes-f1: the Trial an outcome-switch apply cites (None everywhere else).
     justified_by: Option<TrialLink>,
+    /// CR-ultimate-identity: the schemes listed just before an Ultimate apply (None everywhere else).
+    plans_before: Option<Vec<String>>,
     result: ApplyResult,
 }
 
@@ -1186,6 +1216,7 @@ impl Made {
             rec_title: rec_title.to_string(),
             provenance: None,
             justified_by: None,
+            plans_before: None,
             result,
         }
     }
@@ -1218,7 +1249,7 @@ fn commit_receipts(
     effects: &UndoEffects,
 ) -> Result<Vec<AppliedChange>, String> {
     let build = |m: Made| -> Result<AppliedChange, String> {
-        let mut change = build_applied_change(&m.rec_id, &m.rec_title, m.result)?;
+        let mut change = build_applied_change(&m.rec_id, &m.rec_title, m.result, m.plans_before.as_deref())?;
         change.provenance = m.provenance.map(str::to_string);
         change.justified_by_experiment = m.justified_by;
         Ok(change)
@@ -1494,9 +1525,11 @@ fn apply_recommendation_inner(
     // unwritable ledger, or a redirected root, would let the mutation succeed and then orphan or
     // misfile its receipt. Refuse before elevation.
     let (root, mut history) = begin_mutation()?;
+    // CR-ultimate-identity: read-only, bounded, and only for the Ultimate apply.
+    let plans_before = plans_before_ultimate_apply(rec_id);
     let result = dispatch_apply(&root, rec_id)?;
     // Rollback-first (#616): a receipt that can't be saved undoes the change it describes.
-    record_receipt(&root, &mut history, Made { justified_by, ..Made::new(rec_id, rec_title, result) })
+    record_receipt(&root, &mut history, Made { justified_by, plans_before, ..Made::new(rec_id, rec_title, result) })
 }
 
 /// Session-scoped service SUSPEND (Services module, BUILT DARK). Gated by `service_suspend_gate()` —
@@ -2560,11 +2593,21 @@ pub(crate) struct ObservedPlan {
     /// The name Windows printed, in whatever language it prints it.
     pub(crate) name: String,
     pub(crate) class: crate::PowerPlanClass,
-    /// CR-ultimate-identity: whether this scheme's settings are a copy of the Ultimate template, by a
-    /// read-only `powercfg /query` of both. Read only for a row without a recorded GUID; None = not
-    /// read or unreadable, which never lets such a row be recorded as changed outside Compy.
-    pub(crate) ultimate_copy: Option<bool>,
 }
+
+/// The schemes Windows ships under fixed GUIDs that are not Ultimate: Balanced, High performance and
+/// Power saver. A copy Compy's Ultimate apply makes always gets a new GUID, so it is never one of these.
+const STOCK_NON_ULTIMATE_SCHEMES: [&str; 3] = [
+    "381b4222-f694-41f0-9685-ff5bb260df2e",
+    "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+    "a1841308-3541-4fab-bc81-f71556f20b4a",
+];
+
+/// The refusal for a row applied before Compy recorded which plan its Ultimate apply activated, when
+/// the active plan is not a stock Windows scheme (CR-ultimate-identity, review r2).
+pub(crate) const LEGACY_ULTIMATE_REFUSAL: &str = "Compy made this change before it kept a record of which plan it \
+    switched to, so it can't tell whether the active plan is a copy of Ultimate Performance it made. Undo the \
+    change instead, or switch to Balanced or High performance first";
 
 /// Why `c` can't be recorded as changed outside Compy given the live read `observed`, or Ok. Only
 /// a power-plan change qualifies: a plan is the one setting whose live state can be "something else
@@ -2592,32 +2635,15 @@ pub(crate) fn changed_outside_refusal(c: &AppliedChange, observed: Option<&Obser
     if seen.guid.eq_ignore_ascii_case(prior.trim()) {
         return Err("the active power plan is the one you had before Compy's change, so undo it instead".into());
     }
-    // CR-ultimate-identity: a row applied before Compy recorded the GUID it activated can't tell its
-    // own localized copy of Ultimate from the user's plan by name, so the scheme's settings decide; a
-    // copy of the Ultimate template, or an answer Compy couldn't read, is refused.
-    if compys_plan_guid(c).is_none() && seen.ultimate_copy != Some(false) {
-        return Err("the active power plan may be the copy of Ultimate Performance Compy made".into());
+    // CR-ultimate-identity (review r2): a row applied before Compy recorded the GUID its apply
+    // activated can't tell its own localized copy of Ultimate (a new GUID, a name in the user's
+    // language) from the user's plan. Only a stock Windows scheme, which no copy can be, is known
+    // not to be it; anything else stays a refusal (the undo remains the user's other choice). A
+    // record made earlier is kept as it is; this only refuses a new one.
+    if compys_plan_guid(c).is_none() && !STOCK_NON_ULTIMATE_SCHEMES.iter().any(|g| seen.guid.eq_ignore_ascii_case(g)) {
+        return Err(LEGACY_ULTIMATE_REFUSAL.into());
     }
     Ok(())
-}
-
-/// CR-ultimate-identity: `observed` with its template-copy answer filled in, read (two read-only
-/// `powercfg /query` spawns) only when an applied power-ultimate row has no recorded GUID.
-fn with_copy_check(history: &[AppliedChange], observed: Option<ObservedPlan>) -> Option<ObservedPlan> {
-    let mut seen = observed?;
-    let legacy = history.iter().any(|c| c.rec_id == "power-ultimate" && c.status == "applied" && compys_plan_guid(c).is_none());
-    if legacy {
-        seen = with_template_answer(seen);
-    }
-    Some(seen)
-}
-
-/// `seen` with its template-copy answer read (none for an Ultimate-class plan, which is refused anyway).
-fn with_template_answer(mut seen: ObservedPlan) -> ObservedPlan {
-    if seen.class != crate::PowerPlanClass::Ultimate {
-        seen.ultimate_copy = crate::ultimate_template_copy(&seen.guid);
-    }
-    seen
 }
 
 /// Records every applied, unrecorded row of `rec_id` as changed outside Compy, all or none, then
@@ -2751,7 +2777,7 @@ fn read_changed_outside_offers() -> Result<Vec<ChangedOutsideOffer>, String> {
         return Ok(Vec::new());
     }
     let history = load_history()?;
-    Ok(changed_outside_offers_from(&history, with_copy_check(&history, crate::current_power_scheme()).as_ref()))
+    Ok(changed_outside_offers_from(&history, crate::current_power_scheme().as_ref()))
 }
 
 /// Review r1: Gaming Mode switches the power plan itself and records that only in its own session
@@ -2780,9 +2806,6 @@ pub(crate) fn record_changed_outside(rec_id: String) -> Result<usize, String> {
         return Err(why);
     }
     let observed = crate::current_power_scheme();
-    // CR-ultimate-identity: the template-copy answer, read before the ledger lock (review r1); the
-    // refusal reads it only for a row applied before Compy recorded the GUID it activated.
-    let observed = observed.map(with_template_answer);
     // Review r2: Gaming Mode may have started between the check above and the read; ask again.
     if let Some(why) = gaming_mode_may_hold_plan() {
         return Err(why);
@@ -2898,7 +2921,7 @@ mod batch_apply_tests {
             },
             elevation_used: true,
         };
-        let c = build_applied_change("fast-startup-off", "Disable Fast Startup", result)
+        let c = build_applied_change("fast-startup-off", "Disable Fast Startup", result, None)
             .expect("build");
         assert_eq!(c.rec_id, "fast-startup-off");
         assert_eq!(c.status, "applied");
@@ -2923,10 +2946,10 @@ mod batch_apply_tests {
             elevation_used: true,
         };
         let real = "Disable Fast Startup";
-        let c = build_applied_change("fast-startup-off", real, result()).expect("build");
+        let c = build_applied_change("fast-startup-off", real, result(), None).expect("build");
         assert_eq!(c.rec_title, real, "a real catalog title passes through unchanged");
         let huge = "x".repeat(1_000_000);
-        let c = build_applied_change("fast-startup-off", &huge, result()).expect("build");
+        let c = build_applied_change("fast-startup-off", &huge, result(), None).expect("build");
         assert_eq!(c.rec_title.chars().count(), MAX_REC_TITLE_LEN, "a hostile title is capped");
     }
 }
@@ -2996,7 +3019,7 @@ mod receipt_commit_tests {
     }
 
     fn earlier() -> AppliedChange {
-        build_applied_change("game-mode-on", "An earlier change", game_mode()).expect("build")
+        build_applied_change("game-mode-on", "An earlier change", game_mode(), None).expect("build")
     }
 
     #[test]
@@ -3224,7 +3247,7 @@ mod receipt_commit_tests {
     }
 
     fn applied_fast_startup() -> AppliedChange {
-        build_applied_change("fast-startup-off", "Disable Fast Startup", fast_startup()).expect("build")
+        build_applied_change("fast-startup-off", "Disable Fast Startup", fast_startup(), None).expect("build")
     }
 
     #[test]
@@ -3238,6 +3261,7 @@ mod receipt_commit_tests {
             "fast-startup-off",
             "Disable Fast Startup",
             ApplyResult { snapshot: Snapshot::FastStartup { prior_hiberboot: Some(0) }, ..fast_startup() },
+            None,
         )
         .expect("build");
         newer.id = "fast-startup-off-2".into();
@@ -3459,7 +3483,7 @@ mod receipt_commit_tests {
             if m.rec_id == "game-mode-on" {
                 return Err("snapshot serialize: boom".to_string());
             }
-            build_applied_change(&m.rec_id, &m.rec_title, m.result)
+            build_applied_change(&m.rec_id, &m.rec_title, m.result, None)
         };
         let save = |h: &[AppliedChange]| {
             seen.saves.borrow_mut().push(h.len());
@@ -4490,7 +4514,7 @@ mod history_tests {
             snapshot: Snapshot::FastStartup { prior_hiberboot: Some(1) },
             elevation_used: false,
         };
-        let c = build_applied_change("fast-startup-off", "t", result).expect("build");
+        let c = build_applied_change("fast-startup-off", "t", result, None).expect("build");
         let f = c.hw_fingerprint.as_ref().expect("new receipts must carry the rig stamp");
         assert!(!f.hash.is_empty(), "stamp carries the digest");
         // Stamped-on-THIS-rig entries read as this rig in the view.
@@ -5872,12 +5896,25 @@ mod changed_outside_tests {
         )
     }
 
+    /// The plan Compy's Ultimate apply activated for the rows below (CR-ultimate-identity).
+    const COPY: &str = "3a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+
+    /// Rows applied after CR-ultimate-identity, which record the plan Compy activated; the rules for
+    /// recording such rows are what these tests pin. Rows from before it: `legacy_rows`.
     fn rows() -> Vec<AppliedChange> {
+        let mut rows = legacy_rows();
+        for c in &mut rows {
+            c.applied_plan = Some(AppliedPlan { schema: APPLIED_PLAN_SCHEMA, guid: COPY.into() });
+        }
+        rows
+    }
+
+    fn legacy_rows() -> Vec<AppliedChange> {
         serde_json::from_str(&old_format_ledger()).expect("an old-format ledger parses")
     }
 
     fn plan(guid: &str, name: &str, class: crate::PowerPlanClass) -> ObservedPlan {
-        ObservedPlan { guid: guid.into(), name: name.into(), class, ultimate_copy: Some(false) }
+        ObservedPlan { guid: guid.into(), name: name.into(), class }
     }
 
     fn synez() -> ObservedPlan {
@@ -6137,9 +6174,44 @@ mod changed_outside_tests {
     #[test]
     fn the_active_scheme_read_keeps_its_guid_and_name() {
         let seen = crate::power_scheme_of(&format!("Power Scheme GUID: {SYNEZ}  (Synez Power Plan)\r\n")).unwrap();
-        assert_eq!(seen.ultimate_copy, None, "the scheme read takes no settings query");
-        assert_eq!(ObservedPlan { ultimate_copy: Some(false), ..seen }, synez());
+        assert_eq!(seen, synez());
         assert!(crate::power_scheme_of("no plan here").is_none());
+    }
+
+    #[test]
+    fn the_owners_rows_recorded_before_the_fix_stay_recorded_but_a_new_record_for_them_is_refused() {
+        // CR-ultimate-identity, review r2: rows from before Compy recorded the plan its apply activated
+        // can't tell Compy's own localized copy of Ultimate from the user's plan, so a NEW record for
+        // them needs a stock Windows scheme; a record made earlier is kept as it is.
+        let mut history = legacy_rows();
+        assert!(changed_outside_offers_from(&history, Some(&synez())).is_empty(), "no offer on Synez now");
+        let refused = commit_changed_outside(&mut history, "power-ultimate", Some(&synez()), "2026-11-11T20:00:00+00:00", &|_| {
+            panic!("nothing is saved")
+        })
+        .expect_err("refused");
+        assert_eq!(refused, LEGACY_ULTIMATE_REFUSAL);
+        assert!(history.iter().all(|c| c.changed_outside.is_none()));
+        // High performance is a stock scheme no copy can be: recordable (the prior here is Balanced).
+        let high = plan("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", "High performance", crate::PowerPlanClass::HighPerformance);
+        assert_eq!(changed_outside_refusal(&history[0], Some(&high)), Ok(()));
+        // The owner's ledger: both rows were recorded with Synez before this change. They load as they
+        // are, read as kept outside while Synez is active, and a Trial still finds that recorded state.
+        for c in &mut history {
+            c.changed_outside = Some(ChangedOutside {
+                schema: CHANGED_OUTSIDE_SCHEMA,
+                recorded_at: "2026-11-11T03:00:00+00:00".into(),
+                observed: ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() },
+            });
+        }
+        let back: Vec<AppliedChange> = serde_json::from_value(serde_json::to_value(&history).unwrap()).unwrap();
+        assert!(back.iter().all(|c| recorded_and_holding(c, Some(&synez())) && c.applied_plan.is_none()));
+        assert_eq!(
+            recorded_outside_state(&back, "power-ultimate"),
+            Some(&ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() })
+        );
+        let off = Some(ActiveCheck::Off);
+        let kept = summarize_checked(&back, &[off, off], |c| recorded_and_holding(c, Some(&synez())));
+        assert_eq!((kept.externally_reverted, kept.kept_outside), (0, 1));
     }
 }
 
@@ -6167,8 +6239,8 @@ mod ultimate_identity_tests {
         serde_json::from_value(v).expect("row")
     }
 
-    fn seen(guid: &str, class: crate::PowerPlanClass, ultimate_copy: Option<bool>) -> ObservedPlan {
-        ObservedPlan { guid: guid.into(), name: "卓越性能".into(), class, ultimate_copy }
+    fn seen(guid: &str, class: crate::PowerPlanClass) -> ObservedPlan {
+        ObservedPlan { guid: guid.into(), name: "卓越性能".into(), class }
     }
 
     fn result(prior: &str) -> ApplyResult {
@@ -6211,34 +6283,68 @@ mod ultimate_identity_tests {
     #[test]
     fn compys_own_localized_copy_reads_as_its_plan_and_is_never_recordable_as_set_outside() {
         let new = row(Some(serde_json::json!({ "schema": 1, "guid": COPY })));
-        let copy = seen(COPY, crate::PowerPlanClass::Other, None);
+        let copy = seen(COPY, crate::PowerPlanClass::Other);
         assert!(is_compys_ultimate(&new, &copy), "the GUID Compy activated is its Ultimate plan");
         assert!(changed_outside_refusal(&new, Some(&copy)).is_err(), "Compy's own plan recorded as external");
-        // The user's own plan is still recordable on such a row, with no settings query needed.
-        let users = seen("44444444-4444-4444-4444-444444444444", crate::PowerPlanClass::Other, None);
+        // The user's own plan is still recordable on such a row: the recorded GUID decides.
+        let users = seen("44444444-4444-4444-4444-444444444444", crate::PowerPlanClass::Other);
         assert!(!is_compys_ultimate(&new, &users));
         assert_eq!(changed_outside_refusal(&new, Some(&users)), Ok(()));
     }
 
     #[test]
-    fn a_row_from_before_the_fix_is_recordable_only_when_the_plan_is_known_not_to_be_an_ultimate_copy() {
+    fn a_row_from_before_the_fix_is_recordable_only_on_a_stock_windows_scheme() {
+        // Review r2 MUST-FIX (opus): a settings comparison read UNKNOWN on a real PC and answered "not
+        // a copy" for every plan. Nothing is guessed now: only a scheme no copy can be qualifies.
         let old = row(None);
-        assert!(changed_outside_refusal(&old, Some(&seen(COPY, crate::PowerPlanClass::Other, Some(true)))).is_err());
-        assert!(changed_outside_refusal(&old, Some(&seen(COPY, crate::PowerPlanClass::Other, None))).is_err(), "unknown refuses");
-        assert_eq!(changed_outside_refusal(&old, Some(&seen(COPY, crate::PowerPlanClass::Other, Some(false)))), Ok(()));
-        // The copy answer is read only when such a row exists, and never for an Ultimate-class plan.
-        let history = vec![row(Some(serde_json::json!({ "schema": 1, "guid": COPY })))];
-        let kept = with_copy_check(&history, Some(seen(COPY, crate::PowerPlanClass::Other, None))).unwrap();
-        assert_eq!(kept.ultimate_copy, None, "no legacy row, no settings query");
+        let localized_copy = seen(COPY, crate::PowerPlanClass::Other);
+        assert_eq!(changed_outside_refusal(&old, Some(&localized_copy)), Err(LEGACY_ULTIMATE_REFUSAL.to_string()));
+        let users = seen("44444444-4444-4444-4444-444444444444", crate::PowerPlanClass::Other);
+        assert_eq!(changed_outside_refusal(&old, Some(&users)), Err(LEGACY_ULTIMATE_REFUSAL.to_string()), "unknown refuses");
+        for stock in STOCK_NON_ULTIMATE_SCHEMES {
+            assert_eq!(changed_outside_refusal(&old, Some(&seen(&stock.to_uppercase(), crate::PowerPlanClass::Other))), Ok(()), "{stock}");
+        }
+        assert!(changed_outside_refusal(&old, Some(&seen(PRIOR, crate::PowerPlanClass::Other))).is_err(), "the prior: undo instead");
     }
 
     #[test]
-    fn only_an_ultimate_plan_is_stamped_as_compys() {
-        let other = || Some(seen("44444444-4444-4444-4444-444444444444", crate::PowerPlanClass::Other, None));
-        assert!(is_ultimate_plan(COPY, || Some(seen(COPY, crate::PowerPlanClass::Other, None)), |_| Some(true)), "a template copy");
-        assert!(is_ultimate_plan(COPY, || Some(seen(COPY, crate::PowerPlanClass::Ultimate, None)), |_| None), "Ultimate by class");
-        assert!(!is_ultimate_plan(COPY, other, |_| Some(false)), "another program's plan is never stamped");
-        assert!(!is_ultimate_plan(COPY, || None, |_| None), "unknown stamps nothing");
+    fn a_plan_is_stamped_as_compys_only_by_its_class_or_because_the_apply_made_it() {
+        let listed = vec![PRIOR.to_string(), "381b4222-f694-41f0-9685-ff5bb260df2e".to_string()];
+        let unread = || None;
+        // Not listed before the apply: the apply's own duplicate (any language, any name).
+        assert!(is_ultimate_plan(COPY, unread, Some(&listed)), "made by the apply");
+        assert!(is_ultimate_plan(COPY, || Some(seen(COPY, crate::PowerPlanClass::Ultimate)), None), "Ultimate by class");
+        // A plan that existed before the apply (another program switched to it) is never stamped.
+        let other = "44444444-4444-4444-4444-444444444444";
+        let with_other = vec![PRIOR.to_string(), other.to_uppercase()];
+        assert!(!is_ultimate_plan(other, || Some(seen(other, crate::PowerPlanClass::Other)), Some(&with_other)));
+        assert!(!is_ultimate_plan(COPY, unread, None), "an unread list and plan stamp nothing");
+        // The list read before the apply runs only for the Ultimate apply.
+        assert_eq!(plans_before_ultimate_apply("game-mode"), None);
+        // `powercfg /list` output, labels in any language: one GUID per scheme line.
+        let list = format!(
+            "现有电源使用方案 (* Active)\r\n-----------------------------------\r\n电源方案 GUID: {PRIOR}  (Synez)\r\n\
+             电源方案 GUID: {}  (卓越性能) *\r\n",
+            COPY.to_uppercase()
+        );
+        assert_eq!(crate::plan_guids_of(&list), Some(vec![PRIOR.to_string(), COPY.to_string()]));
+        assert_eq!(crate::plan_guids_of("no schemes"), None, "unread, never an empty list");
+    }
+
+    #[test]
+    fn a_receipt_read_that_hangs_counts_as_unread() {
+        // Review r2 (sonnet): the receipt reads run under the ledger lock, so they are bounded.
+        assert_eq!(bounded_read(|| Some(7)), Some(7));
+        assert_eq!(bounded_read::<u8>(|| None), None);
+        let started = std::time::Instant::now();
+        assert_eq!(
+            bounded_read(|| {
+                std::thread::sleep(RECEIPT_READ_TIMEOUT + std::time::Duration::from_secs(2));
+                Some(1)
+            }),
+            None
+        );
+        assert!(started.elapsed() < RECEIPT_READ_TIMEOUT + std::time::Duration::from_secs(1));
     }
 
     #[test]

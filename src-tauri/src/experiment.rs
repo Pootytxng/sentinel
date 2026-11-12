@@ -8507,7 +8507,7 @@ mod changed_outside_trial_tests {
     }
 
     fn plan(guid: &str) -> Option<ObservedPlan> {
-        Some(ObservedPlan { guid: guid.into(), name: "p".into(), class: crate::PowerPlanClass::Other, ultimate_copy: Some(false) })
+        Some(ObservedPlan { guid: guid.into(), name: "p".into(), class: crate::PowerPlanClass::Other })
     }
 
     #[test]
@@ -8570,7 +8570,7 @@ mod refuse_early_tests {
 
     fn check(changes: &[AppliedChange]) -> Option<String> {
         let rows = ledger_rows(changes);
-        let synez = || Some(ObservedPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into(), class: crate::PowerPlanClass::Other, ultimate_copy: Some(false) });
+        let synez = || Some(ObservedPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into(), class: crate::PowerPlanClass::Other });
         // The Ultimate rows read off: the active plan is Synez.
         precheck_refusal(unverified_others_with(changes, &rows, "visual-effects", |_| Some(false), synez))
     }

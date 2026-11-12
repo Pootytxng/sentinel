@@ -224,60 +224,7 @@ pub(crate) fn current_power_scheme() -> Option<history::ObservedPlan> {
 pub(crate) fn power_scheme_of(stdout: &str) -> Option<history::ObservedPlan> {
     let guid = scheme_guid_of(stdout)?;
     let (class, name) = power_plan_of(stdout)?;
-    Some(history::ObservedPlan { guid, name, class, ultimate_copy: None })
-}
-
-/// CR-ultimate-identity: is scheme `guid` a copy of the Ultimate Performance template? Two read-only
-/// `powercfg /query` reads (the scheme, then the template by its GUID), compared by their settings
-/// ([`template_copy_of`]), never by name. `None` when either can't be read: unknown, never "no".
-pub(crate) fn ultimate_template_copy(guid: &str) -> Option<bool> {
-    let guid = scheme_guid_of(guid)?;
-    if guid == SCHEME_ULTIMATE {
-        return Some(true);
-    }
-    let query = |g: &str| {
-        let out = crate::actions::quiet_command("powercfg").args(["/query", g]).output().ok()?;
-        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
-    };
-    let scheme = scheme_settings_of(&query(&guid)?)?;
-    let template = scheme_settings_of(&query(SCHEME_ULTIMATE)?)?;
-    Some(template_copy_of(&scheme, &template))
-}
-
-/// How many setting values a copy of the template may differ in and still count as one (review r1:
-/// Compy's own `usb-selective-suspend-off` and `pcie-aspm-off` write the active plan, and a user may
-/// change a timeout or two). A plan built from another template differs in far more.
-pub(crate) const TEMPLATE_COPY_MAX_EDITS: usize = 8;
-
-/// Pure: `scheme` is a copy of `template` when both list the same settings (every GUID, in order) and
-/// at most [`TEMPLATE_COPY_MAX_EDITS`] of their `0x` values differ.
-pub(crate) fn template_copy_of(scheme: &[String], template: &[String]) -> bool {
-    let guids = |v: &[String]| v.iter().filter(|t| !t.starts_with("0x")).cloned().collect::<Vec<_>>();
-    let values = |v: &[String]| v.iter().filter(|t| t.starts_with("0x")).cloned().collect::<Vec<_>>();
-    let (a, b) = (values(scheme), values(template));
-    guids(scheme) == guids(template)
-        && a.len() == b.len()
-        && a.iter().zip(&b).filter(|(x, y)| x != y).count() <= TEMPLATE_COPY_MAX_EDITS
-}
-
-/// Pure: a `powercfg /query <scheme>` output as its settings, in order: every GUID after the scheme's
-/// own and every `0x` value, lower-cased. The labels around them are Windows' words in the user's
-/// language and are never read. `None` when the output holds no scheme GUID or no setting.
-pub(crate) fn scheme_settings_of(stdout: &str) -> Option<Vec<String>> {
-    let tokens: Vec<String> = stdout
-        .split(|c: char| c.is_whitespace() || matches!(c, '(' | ')' | ':' | '：' | '{' | '}'))
-        .filter_map(|t| scheme_guid_of(t).or_else(|| hex_value_in(t)))
-        .collect();
-    let (first, rest) = tokens.split_first()?;
-    scheme_guid_of(first)?;
-    (!rest.is_empty()).then(|| rest.to_vec())
-}
-
-/// The `0x` value inside `token` (after any glued label), lower-cased; None when it holds none.
-fn hex_value_in(token: &str) -> Option<String> {
-    let at = token.find("0x")?;
-    let digits: String = token[at + 2..].chars().take_while(|c| c.is_ascii_hexdigit()).collect();
-    (!digits.is_empty()).then(|| format!("0x{}", digits.to_ascii_lowercase()))
+    Some(history::ObservedPlan { guid, name, class })
 }
 
 /// Pure: the class (by GUID, then by the English words for a non-stock GUID) and the printed name.
@@ -316,6 +263,22 @@ pub(crate) fn scheme_guid_of(stdout: &str) -> Option<String> {
                 })
         })
         .map(|g| g.to_ascii_lowercase())
+}
+
+/// CR-ultimate-identity: every scheme GUID one read-only `powercfg /list` shows, lower-cased. `None`
+/// when the read fails or lists none: unread, never "no plans".
+pub(crate) fn power_plan_guids() -> Option<Vec<String>> {
+    let output = crate::actions::quiet_command("powercfg").args(["/list"]).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    plan_guids_of(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Pure: [`power_plan_guids`] from the command's output, one GUID per line that holds one.
+pub(crate) fn plan_guids_of(stdout: &str) -> Option<Vec<String>> {
+    let guids: Vec<String> = stdout.lines().filter_map(scheme_guid_of).collect();
+    (!guids.is_empty()).then_some(guids)
 }
 
 pub(crate) fn game_mode_enabled() -> bool {
@@ -725,35 +688,6 @@ mod core_parking_tests {
         assert_eq!(power_plan_of(ryzen), Some((PowerPlanClass::Other, "AMD Ryzen Balanced".into())));
         let zh_copy = "电源方案 GUID: 12345678-1234-1234-1234-123456789abc  (卓越性能)";
         assert_eq!(power_plan_of(zh_copy).map(|p| p.0), Some(PowerPlanClass::Other), "a localized copy stays Other: not guessed");
-        // CR-ultimate-identity: whether that copy is of the Ultimate template is read from its
-        // settings, never its name or labels (labels illustrative, not captured output).
-        let query = |scheme: &str, label: &str, ac: &str| {
-            format!(
-                "{label} GUID: {scheme}  (x)\r\n  Subgroup GUID: 54533251-82be-4824-96c1-47b60b740d00  (y)\r\n    \
-                 Power Setting GUID: 0cc5b647-c1df-4637-891a-dec35c318583  (z)\r\n      \
-                 Minimum Possible Setting: 0x00000000\r\n      Current AC Power Setting Index: {ac}\r\n      \
-                 Current DC Power Setting Index: 0x00000064\r\n"
-            )
-        };
-        let template = crate::scheme_settings_of(&query(crate::SCHEME_ULTIMATE, "Power Scheme", "0x00000064")).unwrap();
-        let zh_dup = crate::scheme_settings_of(&query("12345678-1234-1234-1234-123456789abc", "电源方案", "0x00000064")).unwrap();
-        assert_eq!(zh_dup, template, "a copy in another language has the template's settings");
-        assert!(crate::template_copy_of(&zh_dup, &template));
-        // A copy Compy or the user edited (one value) is still a copy (review r1 MUST-FIX 1).
-        let edited = crate::scheme_settings_of(&query("12345678-1234-1234-1234-123456789abc", "电源方案", "0x00000032")).unwrap();
-        assert_ne!(edited, template);
-        assert!(crate::template_copy_of(&edited, &template), "an edited copy of the template is still a copy");
-        // A plan whose settings differ in more values than a copy's edits is not one.
-        let other: Vec<String> = template.iter().map(|t| if t.starts_with("0x") { "0x00000099".into() } else { t.clone() }).collect();
-        let many: Vec<String> = (0..20).flat_map(|_| template.clone()).collect();
-        let many_other: Vec<String> = (0..20).flat_map(|_| other.clone()).collect();
-        assert!(!crate::template_copy_of(&many_other, &many), "far more edits than a copy carries");
-        // A value glued to a localized label still counts (review r1 NIT).
-        let glued = crate::scheme_settings_of(&format!("方案 GUID: {} (x)\r\n 设置 GUID: 0cc5b647-c1df-4637-891a-dec35c318583\r\n 当前索引：0x00000064", crate::SCHEME_ULTIMATE)).unwrap();
-        assert_eq!(glued.last().map(String::as_str), Some("0x00000064"));
-        assert_eq!(crate::scheme_settings_of("Power Scheme GUID: 12345678-1234-1234-1234-123456789abc  (x)"), None, "no setting read");
-        assert_eq!(crate::scheme_settings_of("nothing"), None);
-        assert_eq!(crate::ultimate_template_copy("not a guid"), None);
         assert_eq!(power_plan_of("nothing here"), None);
         assert_eq!(scheme_guid_of("GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635cXX"), None, "a 36-char token, exactly");
         // A label glued to the GUID (no space after the colon, ASCII or fullwidth) still yields it.
