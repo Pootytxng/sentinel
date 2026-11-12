@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import "../i18n";
 import { useExpertView } from "./use-expert-view";
@@ -38,11 +38,15 @@ export function Depth({
   const expert = useExpertView();
   const [why, setWhy] = useState(expert);
   const [rec, setRec] = useState(expert);
-  // Flipping Expert view in Settings opens (or closes) every mounted block, live.
-  useEffect(() => {
+  // Flipping Expert view in Settings opens (or closes) every mounted block, live. Only a CHANGE of the
+  // preference does that, adjusted during render: an effect also ran on mount, re-asserting the
+  // default after the block was already on screen, so a tap in that gap was undone (CR-bench-flake).
+  const [seenExpert, setSeenExpert] = useState(expert);
+  if (seenExpert !== expert) {
+    setSeenExpert(expert);
     setWhy(expert);
     setRec(expert);
-  }, [expert]);
+  }
   return (
     <div className={`depth${className ? ` ${className}` : ""}`} data-testid={testId} data-expert={expert ? "on" : "off"}>
       <div className="depth-answer">{answer}</div>

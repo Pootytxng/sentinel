@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Depth, ReceiptRow, receiptBand, receiptPct } from "./Depth";
 import { setExpertView } from "./use-expert-view";
 
@@ -65,6 +65,33 @@ describe("Depth", () => {
     // The user can still open a layer by hand under the default face.
     fireEvent.click(screen.getByText("Technical receipt"));
     expect(screen.getByText("exact")).toBeInTheDocument();
+  });
+
+  // CR-bench-flake (ExperimentBench's receipt door stayed shut under a loaded full run, 2026-11-11/12):
+  // a tap that lands after a block is on screen but before React has run its mount effects must not be
+  // undone by them. The mount effect used to re-assert Expert view's default (closed), wiping the tap.
+  // A layout effect is the deterministic stand-in for "on screen, effects not run yet": it always runs
+  // after the DOM is committed and before the passive mount effects.
+  it("a tap between the block appearing and its mount effects is kept, not reset to the default", () => {
+    function TapOnCommit({ label }: { label: string }) {
+      const ref = useRef<HTMLDivElement>(null);
+      useLayoutEffect(() => {
+        const door = [...ref.current!.querySelectorAll("summary")].find((s) => s.textContent === label)!;
+        door.click();
+      }, [label]);
+      return (
+        <div ref={ref}>
+          <Depth testId="d" answer={<p>A</p>} explanation={<p>because</p>} receipt={<p>exact</p>} />
+        </div>
+      );
+    }
+    render(<TapOnCommit label="Technical receipt" />);
+    expect(screen.getByTestId("d-receipt")).toHaveAttribute("open");
+    expect(screen.getByText("exact")).toBeInTheDocument();
+    cleanup();
+    render(<TapOnCommit label="Why this, for this PC" />);
+    expect(screen.getByTestId("d-why")).toHaveAttribute("open");
+    expect(screen.getByText("because")).toBeInTheDocument();
   });
 
   // Review of P7-depth-verdicts, SHOULD-FIX 4: one sign rule for every receipt — a delta that rounds
