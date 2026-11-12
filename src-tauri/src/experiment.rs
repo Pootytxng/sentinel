@@ -669,9 +669,19 @@ pub(crate) fn load_store_checked_from(path: &Path) -> Result<ExperimentStore, St
     let raw = match std::fs::read(path) {
         Ok(raw) => raw,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(ExperimentStore::default()),
+        // CR-fix-needs-trial-store (third range review): this refusal now also stands in front of every
+        // one-click Fix, which can't know whether a Trial is testing its setting without this file, so
+        // it still refuses (a Fix never stacks on a setting a Trial measures), but it names the file and
+        // the way out. Reached by a read error other than "not found": another program holding the file
+        // (a backup, sync or antivirus scan; usually a moment), a permissions change on the file, or
+        // something that is not a file at that path. The io error's text carries no path.
         Err(e) => {
             return Err(format!(
-                "Compy couldn't read its Trial records right now ({e}). Nothing was changed; try again in a moment."
+                "Compy couldn't read its Trial records right now ({e}). Nothing was changed. {STORE_WHERE} \
+                 This is usually another program, such as a backup, sync or antivirus scan, holding the file \
+                 for a moment: try again shortly. If it keeps happening, restart Compy and check that your \
+                 Windows account can open that file; if the problem continues, close Compy and move that file to another \
+                 folder (don't delete it: it is the record of your Trials). {TRIAL_CHANGES_STAY}"
             ))
         }
     };
@@ -681,11 +691,31 @@ pub(crate) fn load_store_checked_from(path: &Path) -> Result<ExperimentStore, St
         // could NOT be set aside is still in place, so this read refuses rather than hand back an
         // empty store whose save would write over the only copy of every Trial (review round 2).
         Err(_) if crate::atomic_write::set_aside_damaged(path) => Ok(ExperimentStore::default()),
-        Err(_) => Err(
-            "Compy couldn't read its Trial records (the file is damaged) and couldn't set the damaged file aside right now. Nothing was changed; try again in a moment.".to_string(),
-        ),
+        // Reached in practice when a rename is blocked: this file, or an earlier `.corrupt` copy that
+        // must move first, held open by another program. Every dated `.corrupt` name being taken needs
+        // 100 set-asides sharing one modified-time second (review r1 nits).
+        Err(_) => Err(format!(
+            "Compy couldn't read its Trial records (the file is damaged) and couldn't set the damaged file aside \
+             right now. Nothing was changed. {STORE_WHERE} Try again shortly: another program may be holding it. \
+             If it keeps happening, close Compy and move that file to another folder yourself (don't delete it: \
+             it is the record of your Trials). {TRIAL_CHANGES_STAY}"
+        )),
     }
 }
+
+/// Where the Trial store lives, for the refusals above. Folder named by its environment form, never
+/// the expanded path (that would carry the Windows user name into words a support record may keep);
+/// "normally" because a measurement sandbox or a redirected root keeps it elsewhere (review r1 nit 4).
+const STORE_WHERE: &str = "The file is experiments.json in Compy's data folder (normally %APPDATA%\\Compy).";
+
+/// A recorded Trial change is an ordinary ledger row, undone from the ledger alone (review r1). Why
+/// the ledger can't stand in for the store in the check itself (review r1 nit 1): a Trial start's
+/// row carries no Trial link (only outcome-switch rows do), and a Pending start whose change landed
+/// without a receipt is named nowhere but the store. "Recorded", not "made", for that same case.
+/// Review r2 (opus SHOULD-FIX): "with its undo there when it has one", never an absolute: a row that
+/// reads "changed outside Compy" or was already put back has none.
+const TRIAL_CHANGES_STAY: &str = "Any change a Trial recorded stays in Test \u{2192} Applied & history, with its \
+     undo there when it has one; a Trial in that file, and its result, is no longer shown once it's moved.";
 
 fn load_store() -> ExperimentStore {
     load_store_from(&store_path())
@@ -5097,6 +5127,10 @@ mod experiment_tests {
         }
         let err = load_store_checked_from(&path).expect_err("a damaged file still in place refuses the read");
         assert!(err.contains("couldn't set the damaged file aside"), "{err}");
+        // CR-fix-needs-trial-store: the refusal names the file and the way out, never the expanded path.
+        assert!(err.contains("experiments.json") && err.contains("%APPDATA%\\Compy"), "{err}");
+        assert!(err.contains("move that file to another folder") && err.contains("don't delete it"), "{err}");
+        assert!(!err.contains(&*dir.to_string_lossy()), "no expanded path in the words: {err}");
         assert_eq!(std::fs::read(&path).unwrap(), b"{ damage", "the damaged bytes are untouched");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -5111,6 +5145,13 @@ mod experiment_tests {
         std::fs::create_dir_all(&path).unwrap();
         let err = load_store_checked_from(&path).expect_err("a write never builds on an unread store");
         assert!(err.contains("couldn't read its Trial records right now"), "{err}");
+        // CR-fix-needs-trial-store: the refusal names the file and the way out, never the expanded path.
+        assert!(err.contains("experiments.json") && err.contains("%APPDATA%\\Compy"), "{err}");
+        assert!(err.contains("try again shortly") && err.contains("restart Compy"), "{err}");
+        // Review r1 (both): a lasting cause (this test's directory at the path) gets the move-aside way out.
+        assert!(err.contains("move that file to another folder") && err.contains("don't delete it"), "{err}");
+        assert!(err.contains("Any change a Trial recorded stays in Test"), "{err}");
+        assert!(!err.contains(&*dir.to_string_lossy()), "no expanded path in the words: {err}");
         assert!(path.is_dir() && !path.with_extension("json.corrupt").exists(), "nothing set aside or replaced");
         assert!(load_store_from(&path).experiments.is_empty(), "a read that only shows the store still shows nothing");
         assert_eq!(load_store_checked_from(&dir.join("absent.json")).map(|s| s.experiments.len()), Ok(0), "absent is a first run");

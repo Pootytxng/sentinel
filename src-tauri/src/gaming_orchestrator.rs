@@ -195,16 +195,19 @@ fn rec_of_label(label: &str) -> Option<&'static str> {
 /// The settings an open Trial or the benchmark's tweak trial holds right now. An unreadable Trial
 /// store refuses the start: it could hold the running Trial.
 fn held_by_trials() -> Result<Vec<String>, String> {
-    let mut held = crate::experiment::open_trial_rec_ids().map_err(|e| {
-        format!(
-            "Gaming Mode didn't start: Compy couldn't read its Trial records ({e}), and a running Trial \
-             could be testing a setting Gaming Mode changes. Nothing was changed; try again."
-        )
-    })?;
+    let mut held = crate::experiment::open_trial_rec_ids().map_err(|e| trial_store_start_refusal(&e))?;
     if let Some((id, _)) = crate::benchmark_trial::held_now() {
         held.push(id);
     }
     Ok(held)
+}
+
+/// PURE (CR-fix-needs-trial-store review r1, sonnet SHOULD-FIX 1): the Gaming Mode start's refusal
+/// for an unreadable Trial store. `why` is the store's own refusal, which already names the file, says
+/// nothing was changed and gives the way out, so it is used whole after one short reason, never
+/// wrapped in parentheses inside another sentence.
+fn trial_store_start_refusal(why: &str) -> String {
+    format!("Gaming Mode didn't start, because a running Trial could be testing a setting it changes. {why}")
 }
 
 /// PURE: whether a session may change the setting `rec` (no open Trial or benchmark holds it).
@@ -1362,6 +1365,23 @@ mod spans_trial_tests {
         let rec = body.find(concat!("left_alone: left_alone_labels(", "&held, &opts, suspend_gate)")).expect("recorded");
         let save = body.find(concat!("save_session(&file)?; ", "// lock exists before any mutation")).expect("first save");
         assert!(rec < save);
+    }
+
+    // CR-fix-needs-trial-store review r1 (sonnet SHOULD-FIX 1): the start's refusal carries the store's
+    // own words once, whole, after one reason, not nested in parentheses inside its own sentence.
+    #[test]
+    fn a_start_refused_for_an_unreadable_trial_store_says_it_once() {
+        let dir = std::env::temp_dir().join(format!("compy-gm-store-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("experiments.json");
+        std::fs::create_dir_all(&path).unwrap(); // a directory at the store's path: unreadable
+        let why = crate::experiment::load_store_checked_from(&path).expect_err("unreadable");
+        let words = trial_store_start_refusal(&why);
+        assert!(words.starts_with("Gaming Mode didn't start, because a running Trial"), "{words}");
+        assert_eq!(words.matches("couldn't read its Trial records").count(), 1, "{words}");
+        assert!(words.contains("experiments.json") && words.contains("move that file"), "{words}");
+        assert!(words.ends_with(&why), "the store's words are kept whole");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

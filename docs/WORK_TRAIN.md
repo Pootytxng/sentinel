@@ -293,10 +293,24 @@ Third whole-range review (e29da54b..119d07f8, 2026-11-12, SHIP-WITH-FOLLOW-UPS, 
       fail on the old code; they never call start() and read only a temp session dir. cargo 1871/0, clippy clean,
       full vitest 535/538 (3 site-app suites). What a user sees: Stop Gaming Mode and Recover work while another
       change waits on its Windows prompt.
-- [ ] **CR-fix-needs-trial-store** (SHOULD-FIX; `1a740e66`) An unreadable Trial store blocks every Fix apply and batch
+- [x] **CR-fix-needs-trial-store** (SHOULD-FIX; `1a740e66`) An unreadable Trial store blocks every Fix apply and batch
       ("Compy couldn't read its Trial records right now… try again in a moment") with no way out. Establish
       reachability first; refuse only where an open Trial could hold the setting when that can be known; any refusal
       names the file and the recovery path; never let a Fix stack on a setting a Trial is measuring. Two reviews.
+      Done `28292d57` + r1 (2026-11-12 s21, Rust words only, not installed; SHA in the merge). Reachability: a read
+      error other than "not found" (another program holding the file, a permissions change, a non-file at the path)
+      or a damaged file whose set-aside rename is blocked (it, or an earlier `.corrupt` copy, held open). Narrowing
+      can't be known: a Trial start's ledger row carries no Trial link and a Pending start with no receipt is named
+      only in the store, so the refusal stays (fail closed). Both refusals now name experiments.json in Compy's data
+      folder (normally %APPDATA%\Compy, never the expanded path) and the way out: try again shortly, restart Compy,
+      check the account can open it, then close Compy and move it aside (never delete it); any change a Trial
+      recorded stays in Test → Applied & history, with its undo there when it has one. Gaming Mode's start says
+      one reason, then those words whole. Reviews r1 opus REQUEST-CHANGES (no MUST-FIX; SHOULD-FIX: nested words
+      at Gaming Mode's start, no way out for a lasting cause, both taken), sonnet APPROVE-WITH-NITS (same two);
+      r2 opus + sonnet APPROVE-WITH-NITS (no absolute undo promise, "if the problem continues", taken). Left (opus
+      r2 nit): a one-click Fix hands the store's words over without saying why a Fix reads the Trial store (the
+      `load_store_checked()?` call shape is pinned by a guard). Tests fail on the old words. cargo 1872/0, clippy
+      clean, full vitest 535/538.
 - [ ] **CR-range3-nits** (a) `src/data/kept-outside-undo.ts` STOCK lacks Power saver (`a1841308-…`), so a Power saver
       prior plan reads "Compy didn't save its name": add it, en + zh-CN; (b) `history::rec_id_of_change` loads the
       ledger without `HISTORY_LOCK`: if that load can set a damaged file aside (a rename) unlocked, take the lock (and
