@@ -78,4 +78,23 @@ describe("Term tip ground hides what is under it", () => {
     expect(found.length).toBeGreaterThan(0);
     expect(Math.min(...found)).toBeGreaterThanOrEqual(0.96);
   });
+
+  // bug→guard (self-review FAIL of installed a15986b8, 2026-11-11, CR-tip-see-through-2): the ground
+  // computed 0.96, yet the Live readings still showed through the tip's text, because the Term sat
+  // inside `.mc-delta-tag { opacity: .85 }`. An ancestor's opacity fades the whole subtree, the open
+  // tip included, and makes a stacking context later siblings paint over. No rule for the Live
+  // room's Term wrapper may set opacity.
+  it("the Live room's combined-effect Term sits in no faded ancestor", () => {
+    const tsx = readFileSync(join("src", "surfaces", "MonitorConsole.tsx"), "utf8");
+    const at = tsx.indexOf('t("monitor.monitorConsole.combinedEffectTooltip")');
+    expect(at, "the combined-effect Term is still in MonitorConsole.tsx").toBeGreaterThan(0);
+    const wrappers = [...tsx.slice(0, at).matchAll(/className="([\w-]+)"/g)].map((m) => m[1]).slice(-3);
+    expect(wrappers).toContain("mc-delta-tag");
+    const sheet = readFileSync(join("src", "surfaces", "monitor-console.css"), "utf8");
+    for (const cls of wrappers) {
+      for (const m of sheet.matchAll(new RegExp(`\\.${cls}(?![\\w-])[^{,]*\\{([^}]*)\\}`, "g"))) {
+        expect(m[1], `.${cls} must not set opacity (it fades the open tip)`).not.toMatch(/(^|[;\s])opacity\s*:/);
+      }
+    }
+  });
 });

@@ -77,7 +77,12 @@
 :root[data-v2="on"] .mc-delta-vk { font-size: var(--type-label); color: var(--ix-text-3); white-space: nowrap; }
 :root[data-v2="on"] .mc-delta-vv { font-family: var(--ix-mono); font-size: var(--type-card); font-weight: 600;
   color: var(--ix-text-1); font-variant-numeric: tabular-nums; line-height: 1.1; }
-:root[data-v2="on"] .mc-delta-tag { font-size: var(--type-label); color: var(--ix-accent-text); opacity: .85; }
+/* Dimmed by its text colour, never `opacity`: the tag holds the "combined effect" Term, and an
+   ancestor's opacity fades the open tip with it (and makes a stacking context the sensor strip below
+   paints over), so the readings showed through the tip's text (self-review FAIL 2026-11-11,
+   CR-tip-see-through-2). Pinned in src/design/term-style-guard.test.ts. */
+:root[data-v2="on"] .mc-delta-tag { font-size: var(--type-label);
+  color: color-mix(in srgb, var(--ix-accent-text) 85%, transparent); }
 /* The cross-game caveat: quiet body copy, not a tag. It qualifies the three numbers above
    it rather than labelling them, and a pill here would read as a fourth cell. */
 :root[data-v2="on"] .mc-delta-note { font-size: var(--type-label); color: var(--v2-faint);
