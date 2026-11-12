@@ -208,7 +208,16 @@ export type PriorityItem = { id: string; title: string; reason: string; linked: 
 // Links are plain retailer searches (no affiliate tags); in-app they are COPY-only, never opened.
 export type RetailLink = { retailer: string; url: string };
 /** P9-limit-source: the recorded session a GPU-limited row was read from (priorities.rs). */
-export type MeasuredFrom = { game: string; started_at: string; busy: number; readings: number; threshold_pct: number };
+export type MeasuredFrom = {
+  game: string;
+  started_at: string;
+  busy: number;
+  readings: number;
+  threshold_pct: number;
+  /** P9-screen-is-limit: that session's measured average FPS and recorded refresh; absent = unmeasured. */
+  avg_fps?: number;
+  refresh_hz?: number;
+};
 export type UpgradeSuggestion = {
   kind: string;
   title: string;

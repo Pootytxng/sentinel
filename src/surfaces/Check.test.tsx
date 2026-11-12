@@ -631,6 +631,38 @@ describe("Check", () => {
     expect(line.closest(".check-upgrade-item")?.textContent).toContain("GPU was the measured limiter");
   });
 
+  // P9-screen-is-limit: averaged at or above the refresh rate it recorded = the screen is the limit,
+  // never a GPU pointer or shopping links; below it, or either side unmeasured, the GPU row as before.
+  const sourced = (avg_fps?: number, refresh_hz?: number) =>
+    ({
+      ...fitGpuItem,
+      measured_from: { game: "ROB RUN.exe", started_at: "2026-11-11T20:36:00Z", busy: 720, readings: 900, threshold_pct: 95, avg_fps, refresh_hz },
+    }) as typeof fitGpuItem;
+
+  it("P9-screen-is-limit: at or above the screen's refresh rate the screen is named and no upgrade is recommended", async () => {
+    await showUpgrade([sourced(251.6, 250)]);
+    expect(screen.getByText("Your screen is the limit here")).toBeInTheDocument();
+    expect(screen.getByTestId("check-upgrade-screen").textContent).toBe(
+      "Your 250 Hz screen can't show more than 250 frames a second, and your ROB RUN session averaged 252 fps, so a faster GPU wouldn't show you more frames. No upgrade recommended for this game.",
+    );
+    expect(screen.queryByText("GPU was the measured limiter")).toBeNull();
+    expect(screen.queryByTestId("check-upgrade-fit")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Copy Amazon search link/ })).toBeNull();
+    // What it was measured from still says so.
+    expect(screen.getByTestId("check-upgrade-source")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["below the refresh rate", sourced(180, 250)],
+    ["refresh unmeasured", sourced(251.6, undefined)],
+    ["FPS unmeasured", sourced(undefined, 250)],
+  ])("P9-screen-is-limit: %s keeps the GPU row and its links", async (_n, item) => {
+    await showUpgrade([item]);
+    expect(screen.getByText("GPU was the measured limiter")).toBeInTheDocument();
+    expect(screen.queryByTestId("check-upgrade-screen")).toBeNull();
+    expect(screen.getByRole("button", { name: /Copy Amazon search link/ })).toBeInTheDocument();
+  });
+
   it("P9-limit-source: no recorded session, no source line", async () => {
     await showUpgrade([fitGpuItem]);
     expect(screen.queryByTestId("check-upgrade-source")).toBeNull();

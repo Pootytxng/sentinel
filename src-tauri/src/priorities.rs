@@ -103,6 +103,12 @@ pub(crate) struct MeasuredFrom {
     pub(crate) busy: u32,
     pub(crate) readings: u32,
     pub(crate) threshold_pct: u64,
+    /// P9-screen-is-limit: that session's measured average FPS and the screen refresh rate it
+    /// recorded (game_state), each None when not measured; never filled in from elsewhere.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) avg_fps: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) refresh_hz: Option<u64>,
 }
 
 #[derive(Serialize, Debug)]
@@ -236,6 +242,13 @@ fn measured_from(sessions: &Value, read: &GpuLoadRead) -> Option<MeasuredFrom> {
         busy: load.busy,
         readings: load.readings,
         threshold_pct: GPU_LIMITED_PCT,
+        // A 0 or missing average / refresh is unmeasured, never a number.
+        avg_fps: row.get("avg_fps").and_then(Value::as_f64).filter(|f| f.is_finite() && *f > 0.0),
+        refresh_hz: row
+            .get("game_state")
+            .and_then(|g| g.get("display_refresh_hz"))
+            .and_then(Value::as_u64)
+            .filter(|hz| *hz > 0),
     })
 }
 
@@ -756,8 +769,21 @@ mod priority_tests {
                 busy: 720,
                 readings: 900,
                 threshold_pct: 95,
+                avg_fps: None,
+                refresh_hz: None,
             })
         );
+        // P9-screen-is-limit: the session's own average and recorded refresh ride along; 0 = unmeasured.
+        let measured = json!([{ "process_name": "g.exe", "started_at": "2026-11-11T22:36:00Z", "samples": 900,
+            "avg_fps": 251.5, "game_state": { "display_refresh_hz": 250 },
+            "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 900, "busy": 720 } }]);
+        let m = build_upgrade_path(&readiness(vec![]), &measured).unwrap().items[0].measured_from.clone().unwrap();
+        assert_eq!((m.avg_fps, m.refresh_hz), (Some(251.5), Some(250)));
+        let zero = json!([{ "process_name": "g.exe", "started_at": "2026-11-11T22:36:00Z", "samples": 900,
+            "avg_fps": 0.0, "game_state": { "display_refresh_hz": 0 },
+            "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 900, "busy": 720 } }]);
+        let m = build_upgrade_path(&readiness(vec![]), &zero).unwrap().items[0].measured_from.clone().unwrap();
+        assert_eq!((m.avg_fps, m.refresh_hz), (None, None));
         let json = serde_json::to_value(&up).unwrap();
         assert_eq!(json["items"][0]["measured_from"]["busy"], 720, "{json}");
         let unnamed = json!([{ "peak_gpu_usage_pct": 98, "gpu_load": { "readings": 900, "busy": 720 } }]);
