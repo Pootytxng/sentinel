@@ -199,8 +199,11 @@ describe("settingsDoneLine screen cap (P9-summary-screen-limit)", () => {
   });
   it("keeps the GPU line below the refresh or when either number is unmeasured", () => {
     const plain = { kind: "gpu-limiter", sharePct: 80, thresholdPct: 95 };
-    for (const [fps, hz] of [[249.6, 250], [undefined, 250], [300, undefined], [0, 0], [Number.NaN, 250]] as const) {
+    const odd = [[249.6, 250], [undefined, 250], [300, undefined], [0, 0], [300, 0], [0, 250], [Number.NaN, 250], [Infinity, 250], [-1, -2]] as const;
+    for (const [fps, hz] of odd) {
       expect(line(lim(fps, hz))).toEqual(plain);
     }
+    // Another game's session never caps this one.
+    expect(settingsDoneLine("finished-supported-tests", lim(300, 250), "wardogs.exe")).toEqual({ kind: "nothing-limiting" });
   });
 });

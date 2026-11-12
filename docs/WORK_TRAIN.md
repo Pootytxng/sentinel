@@ -1692,8 +1692,11 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       at average >= refresh, and the summary reads "...80% of Compy's GPU readings were at 95% load or more, but your
       250 Hz screen can't show more than 250 frames a second and that session averaged 252 fps, so on average a faster
       GPU wouldn't show you more frames; the slowest moments can still depend on it. For frame rate, no upgrade is
-      recommended for this game." (zh-CN too). Tests: above, equal, 249.6, unmeasured either side, NaN; a render test.
-      cargo priorities 27/0 + clippy clean.
+      recommended for this game." (zh-CN too). Tests: above, equal, 249.6, unmeasured either side, 0/NaN/Infinity/
+      negative, another game's session; a render test; they fail on main. cargo priorities 27/0 + clippy clean.
+      Review sonnet APPROVE-WITH-NITS, no MUST-FIX: parity with Check checked (both compare the raw average and round
+      only for display); wording kept as Check's reviewed text (VRR/tearing nuance not added); the refresh is
+      recorded once per session (commented); edge cases taken. Not visually checked.
 - [ ] **P9-summary-cpu-unknown** (summary twin of P9-cpu-gpu-balance) When the finished summary's measured-clear line
       fires and that session averaged below its recorded refresh, add that Compy can't measure the CPU's share yet, so
       "nothing holding this PC back" covers the GPU and the checked rows only; refresh/FPS unmeasured = today's line.
