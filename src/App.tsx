@@ -39,7 +39,7 @@ import { gpuVendor } from "./surfaces/walkthroughs";
 import type { BatchApplyReport, ExportResult, PendingCareIncident } from "./types";
 import { keptOutsideUndoBody } from "./data/kept-outside-undo";
 import { hasUndo } from "./data/live-changes";
-import { useLedgerReadRetry } from "./data/applied-changes-retry";
+import { settleLedgerRead, useLedgerReadRetry } from "./data/applied-changes-retry";
 import { bumpLocalStat, readLocalStats, statsLine } from "./data/local-stats";
 import { lsGet } from "./data/safe-storage";
 import { primaryGpu, sessionPeakVendor } from "./data/gpu-sensor";
@@ -559,11 +559,15 @@ function App() {
   // CR-footer-ledger-unknown: the newest read was rejected. App's banner already says so; the
   // footer says it couldn't read the ledger, and the read is retried until one lands.
   const [changesReadFailed, setChangesReadFailed] = useState(false);
-  useLedgerReadRetry(changesReadFailed, (c) => {
-    setChanges(c);
-    setChangesRead(true);
-    setChangesReadFailed(false);
-  });
+  useLedgerReadRetry(
+    changesReadFailed,
+    () => invoke<AppliedChange[]>("get_applied_changes"),
+    (c) => {
+      setChanges(c);
+      setChangesRead(true);
+      setChangesReadFailed(false);
+    },
+  );
   // Shared Machine Model (#452): the Lab verdict's "N safe changes are active" count is the model's
   // `active_now`, never a filter over the bare ledger list. `changes` is refresh()'s product, so a
   // new list re-reads the model alongside it (cached across surfaces, shared while in flight).
@@ -875,8 +879,6 @@ function App() {
     // readiness/recs/startup/sessions feed BOTH their own state AND the priority ranking — compute
     // priorities from THEM via the pure priorities_from, instead of get_priorities which re-ran
     // get_game_readiness + get_recommendations a second time (the heaviest, spawn-dominated work).
-    // CR-footer-ledger-unknown: set when this refresh's ledger read lands (run calls `set` only then).
-    let changesLanded = false;
     const recsP = run<Recommendation[]>("get_recommendations", setRecs);
     const startupP = run<StartupEntry[]>("get_startup_entries", setStartup);
     const readinessP = run<GameReadiness>("get_game_readiness", setReadiness);
@@ -916,15 +918,18 @@ function App() {
         // channel) so its frametime graph can anchor a fixed scale + frame-budget line. Zero IPC.
         persistDisplayRefreshHz(info.display?.current_refresh_rate_hz);
       }),
-      run<AppliedChange[]>("get_applied_changes", (c) => {
-        changesLanded = true;
-        setChanges(c);
-        setChangesRead(true);
-        setChangesReadFailed(false);
-      }).then(() => {
-        // `run` already surfaced the error; a rejected read (not a superseded one) starts the retry.
-        if (!changesLanded && current()) setChangesReadFailed(true);
-      }),
+      // CR-footer-ledger-unknown: `run` already surfaced a rejection; a rejected read (not a
+      // superseded one) also starts the retry (settleLedgerRead).
+      settleLedgerRead(
+        (set) => run<AppliedChange[]>("get_applied_changes", set),
+        current,
+        (c) => {
+          setChanges(c);
+          setChangesRead(true);
+          setChangesReadFailed(false);
+        },
+        () => setChangesReadFailed(true),
+      ),
       run<string>("get_rules_source", setRulesSource),
       run<DiagnosticSection[]>("get_diagnostics", setDiagnostics),
       recsP,

@@ -30,7 +30,6 @@
     "footerUnchecked_other": "{{count}} 项未检查",
     "footerNotRead": "台账尚未读取",
     "footerReadFailed": "无法读取台账 · 正在重试",
-    "footerEmptyUnconfirmed": "没有列出更改 · 台账尚未确认完整",
     "footerEmph": "台账 {{n}}",
     "footerOutbound": "对外连接：仅签名更新检查",
     "footerIncompletePre": "台账不完整 ·",
