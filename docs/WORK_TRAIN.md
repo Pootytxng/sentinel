@@ -341,7 +341,7 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       build, the session-end notice and the pending reconcile; pre-apply and post-keep/restore probes still read fresh.
       Same answers; other service names keep their single read. cargo 1781/0, clippy clean; review r1 no blockers, both
       SHOULD-FIX taken (exact-query test, drift guard). Latency on his rig not measured yet (next FULL desk session).
-- [ ] **CR-ultimate-identity** (owner call + mutation-gate: `actions.rs`) `apply_power_ultimate` finds the Ultimate
+- [x] **CR-ultimate-identity** (owner call + mutation-gate: `actions.rs`) `apply_power_ultimate` finds the Ultimate
       plan by its English name and otherwise duplicates it under a NEW GUID with a localized name, which then classes
       as Other: on a localized Windows the rec reads off after a successful apply and the verify can fail. Record the
       applied scheme GUID on the receipt (an AppliedAction/Snapshot change) or compare against the duplicate's source.
@@ -360,6 +360,25 @@ the recorded original, 5). Every other security setting stays owner-gated (CLAUD
       the GUID by provenance (read `/list` GUIDs before the apply; stamp the plan active after it if Ultimate-class or not
       in that list); a row without a GUID is recordable only on a Windows stock non-Ultimate scheme by GUID; take the
       receipt reads off `lock_history` or bound them; test on real-shaped output (UNKNOWN template). Then both reviews.
+      Done (2026-11-11 s19, CODE-ONLY, not installed) `f491ae6b`, `725be922`, `a5804b7f` + this tick, on top of the parked
+      commits: the settings comparison is gone. Stamping by provenance: the Ultimate apply reads `powercfg /list` before
+      it runs; the receipt stamps the plan active after it when that plan is Ultimate by class or was not in the list (one
+      label-free read). Rows from before the fix (no stamp): a NEW "changed outside Compy" record only on Balanced, High
+      performance or Power saver, which no copy can be; otherwise "Compy made this change before it kept a record of which
+      plan it switched to ... Undo the change instead, or switch to a standard Windows plan ... first". A copy stamped for
+      any row is never recordable. Every powercfg receipt read is bounded (5 s). Owner's ledger: his two Ultimate rows
+      recorded with Synez stay recorded and still let a Trial start while Synez is active (test); a new record for them on
+      another non-stock plan is refused (the code can't know Synez isn't Compy's copy: no pre-apply plan list was stored).
+      Nothing in apply/rollback writes changed; `applied_plan` additive and lenient. Reviews: r3 opus + sonnet
+      APPROVE-WITH-NITS (SHOULD-FIX taken: any row's copy, one localized read, wiring tests, re-anchors); r4 opus + sonnet
+      APPROVE-WITH-NITS (test bound + gap comment taken). cargo 1857/0, clippy clean, full vitest 535/538 (3 site-app).
+      Queued: CR-ultimate-followups.
+- [ ] **CR-ultimate-followups** (r3/r4 reviews of CR-ultimate-identity; pre-existing) (a) the row's live check
+      (`recommendations.rs` / `probe_rec_target` "power-ultimate", class only) still reads a stamped localized copy as off:
+      use `compys_plan_guid`; (b) `actions::current_power_plan_guid` keys on the English "GUID:" at the apply's snapshot
+      step (actions.rs, mutation gate); (c) a copy no row stamped (old row or a timed-out read) that the user re-activates
+      can be recorded on a stamped row; (d) out-of-order undo can restore Compy's own copy as a prior; (e) the 5 s timeout
+      test sleeps 7 s: inject the timeout.
 - [x] **P9-hint-shown** (desk review 2026-11-03) `get_priorities.session_hint` (the "GPU busy at times / sustained"
       sentence) reaches the frontend typed but no screen prints it. Decide: show it on Home or Optimize under the
       limiter rows, or drop the field. Code + one test either way. Done `4a4265d4` (2026-11-10): shown (coordinator

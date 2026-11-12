@@ -2611,8 +2611,10 @@ pub(crate) const LEGACY_ULTIMATE_REFUSAL: &str = "Compy made this change before 
 
 /// Review r3 (opus SHOULD-FIX 1): the active plan is a copy Compy's Ultimate apply made for ANY row of
 /// the ledger (applied or undone: an undo leaves the copy in the plan list), so no row may record it
-/// as set outside Compy. Copies made by rows from before Compy recorded them can't be known; those
-/// rows' own records need a stock scheme anyway ([`changed_outside_refusal`]).
+/// as set outside Compy. Copies no row stamped can't be known: rows from before Compy recorded them,
+/// and rows whose list or post-apply read timed out (review r4); those rows' own records need a stock
+/// scheme ([`changed_outside_refusal`]), but a stamped row could still record such a copy if the user
+/// switched back to it in Windows (a residual, kept as a known gap).
 pub(crate) const COMPYS_OTHER_COPY_REFUSAL: &str =
     "the active power plan is a copy of Ultimate Performance Compy made for one of its changes";
 
@@ -6370,6 +6372,8 @@ mod ultimate_identity_tests {
         // And the single apply path reads the list before it dispatches (source pin).
         let src = include_str!("history.rs");
         let body = src.split_once("fn apply_recommendation_inner(").map(|(_, r)| r).expect("inner");
+        // Review r4 (opus): bounded to the function, so the hand-off check can fail.
+        let body = &body[..body.find("\n}\n").expect("end of fn")];
         let (list, apply) = (body.find("plans_before_ultimate_apply(rec_id)").expect("list"), body.find("dispatch_apply(&root, rec_id)").expect("apply"));
         assert!(list < apply && body[apply..].contains("plans_before, ..Made::new("), "read before, handed to the receipt");
         let commit = src.split_once("fn commit_receipts(").map(|(_, r)| r).expect("commit");
