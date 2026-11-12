@@ -1,0 +1,116 @@
+{
+  "_doc": "P9-exit-fixture (Phase 9 Exit, docs/product/ROADMAP.md): one case per Exit branch, on one game and this PC's card. priorities.rs `p9_exit_fixture_payloads_match_the_shared_fixture` builds each case's priorities payload from its sessions and pins `payload`; src/surfaces/p9-exit-fixture.test.ts drives the finished game summary's Phase 9 line from the same payload. Edit both sides together.",
+  "gpu_now": "AMD Radeon RX 9070 XT",
+  "game": "WardogsClient-Win64-Shipping.exe",
+  "cases": [
+    {
+      "name": "settings done, GPU-limited",
+      "headline": "finished-supported-tests",
+      "sessions": [
+        {
+          "process_name": "WardogsClient-Win64-Shipping.exe",
+          "started_at": "2026-11-11T20:36:00Z",
+          "samples": 900,
+          "peak_gpu_usage_pct": 99,
+          "gpu_load": { "readings": 900, "busy": 720 },
+          "avg_fps": 141.5,
+          "game_state": { "display_refresh_hz": 250 },
+          "hw_fingerprint": { "hash": "h", "gpu": "AMD Radeon RX 9070 XT", "gpu_driver": "25.9.1", "ram_gb": 32, "display": "2560x1440@250" }
+        }
+      ],
+      "payload": {
+        "upgrade_kinds": ["gpu"],
+        "gpu_limited_games": [
+          { "game": "WardogsClient-Win64-Shipping.exe", "share_pct": 80, "peak_pct": 99, "threshold_pct": 95, "avg_fps": 141.5, "refresh_hz": 250, "gpu_tie": "this-card" }
+        ],
+        "gpu_clear_games": []
+      },
+      "line": "gpu-limiter"
+    },
+    {
+      "name": "settings done, measured clear",
+      "headline": "finished-supported-tests",
+      "sessions": [
+        {
+          "process_name": "WardogsClient-Win64-Shipping.exe",
+          "started_at": "2026-11-11T20:36:00Z",
+          "samples": 900,
+          "peak_gpu_usage_pct": 97,
+          "gpu_load": { "readings": 900, "busy": 120 },
+          "avg_fps": 141.5,
+          "game_state": { "display_refresh_hz": 250 },
+          "hw_fingerprint": { "hash": "h", "gpu": "AMD Radeon RX 9070 XT", "gpu_driver": "25.9.1", "ram_gb": 32, "display": "2560x1440@250" }
+        }
+      ],
+      "payload": {
+        "upgrade_kinds": [],
+        "gpu_limited_games": [],
+        "gpu_clear_games": [
+          { "game": "WardogsClient-Win64-Shipping.exe", "busy": 120, "readings": 900, "threshold_pct": 95, "limit_share_pct": 50, "gpu_tie": "this-card" }
+        ]
+      },
+      "line": "nothing-limiting"
+    },
+    {
+      "name": "settings done, a clean check and no measured session",
+      "headline": "finished-supported-tests",
+      "sessions": [],
+      "payload": { "upgrade_kinds": [], "gpu_limited_games": [], "gpu_clear_games": [] },
+      "line": "nothing-limiting"
+    },
+    {
+      "name": "settings not done (a GPU-limited session on record)",
+      "headline": "still-worth-testing",
+      "sessions": [
+        {
+          "process_name": "WardogsClient-Win64-Shipping.exe",
+          "started_at": "2026-11-11T20:36:00Z",
+          "samples": 900,
+          "peak_gpu_usage_pct": 99,
+          "gpu_load": { "readings": 900, "busy": 720 },
+          "avg_fps": 141.5,
+          "game_state": { "display_refresh_hz": 250 },
+          "hw_fingerprint": { "hash": "h", "gpu": "AMD Radeon RX 9070 XT", "gpu_driver": "25.9.1", "ram_gb": 32, "display": "2560x1440@250" }
+        }
+      ],
+      "payload": {
+        "upgrade_kinds": ["gpu"],
+        "gpu_limited_games": [
+          { "game": "WardogsClient-Win64-Shipping.exe", "share_pct": 80, "peak_pct": 99, "threshold_pct": 95, "avg_fps": 141.5, "refresh_hz": 250, "gpu_tie": "this-card" }
+        ],
+        "gpu_clear_games": []
+      },
+      "line": null
+    },
+    {
+      "name": "settings done, the check names a part (games on an HDD)",
+      "headline": "finished-supported-tests",
+      "readiness": {
+        "checks": [{ "id": "install-drive", "status": "attention", "label": "Game install drive", "detail": "HDD", "value": null }]
+      },
+      "sessions": [],
+      "payload": {
+        "upgrade_kinds": ["ssd"],
+        "limiters": [{ "id": "install-drive", "status": "attention", "title": "Game install drive" }],
+        "gpu_limited_games": [],
+        "gpu_clear_games": []
+      },
+      "line": "part-limiter"
+    },
+    {
+      "name": "settings not done, the check names a part: settings first",
+      "headline": "still-worth-testing",
+      "readiness": {
+        "checks": [{ "id": "install-drive", "status": "attention", "label": "Game install drive", "detail": "HDD", "value": null }]
+      },
+      "sessions": [],
+      "payload": {
+        "upgrade_kinds": ["ssd"],
+        "limiters": [{ "id": "install-drive", "status": "attention", "title": "Game install drive" }],
+        "gpu_limited_games": [],
+        "gpu_clear_games": []
+      },
+      "line": null
+    }
+  ]
+}
