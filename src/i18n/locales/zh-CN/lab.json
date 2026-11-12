@@ -810,6 +810,7 @@
       "windowsBuild": "Windows 版本",
       "display": "显示器",
       "captureMethod": "采集方式",
+      "gamingMode": "游戏模式",
       "other": "某项条件"
     },
     "stretchBefore": "基准那局",

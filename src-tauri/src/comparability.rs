@@ -350,6 +350,29 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
         ));
     }
 
+    // ── Gaming Mode (CR-trial-gm-between): a Gaming Mode session lays its own temporary changes over
+    // the PC (power plan, Game Bar, USB/PCIe power, service suspends), so a session it was on for at
+    // any point and one it was off for ran on different settings. Recorded per session
+    // (`gaming_mode_active`, any tick); compared only when both sides recorded it. A changed value is
+    // a changed condition, which a Trial already folds into `confounded` (experiment.rs
+    // `with_comparability`): the result is not pinned on the Trial's setting. ─────────────────────
+    let on_off = |v: bool| if v { "on" } else { "off" };
+    condition_check(
+        "gaming-mode",
+        a.gaming_mode_active.as_ref(),
+        b.gaming_mode_active.as_ref(),
+        |x, y| format!("Gaming Mode: {} → {}", on_off(*x), on_off(*y)),
+        "Gaming Mode was on for one of these sessions and off for the other — it changes Windows \
+         settings for its session, so the two ran on different settings.",
+        "Whether Gaming Mode was on wasn't recorded on one of these sessions.",
+        Comparability::Partial,
+        &mut changed,
+        &mut missing,
+        &mut reasons,
+        &mut verdict,
+        &mut lower,
+    );
+
     // ── Capture method + shared metrics: only metrics BOTH backends captured may be compared. ─────
     let shared_metrics = shared_metrics_of(a, b);
     match (a.capture_capabilities.as_ref(), b.capture_capabilities.as_ref()) {
@@ -676,6 +699,31 @@ mod tests {
         assert!(c.missing_context.is_empty());
         assert_eq!(c.shared_metrics, vec!["app_fps"]);
         assert!(!c.reasons.is_empty());
+    }
+
+    // CR-trial-gm-between: a Trial never noticed Gaming Mode being on for one of its sessions and off
+    // for the other. It is now a changed condition (Partial), which a Trial folds into `confounded`.
+    #[test]
+    fn gaming_mode_on_for_one_session_only_is_a_changed_condition() {
+        let a = session();
+        let mut b = session();
+        b.gaming_mode_active = Some(true);
+        let c = derive(&a, &b);
+        assert_eq!(c.verdict, Comparability::Partial);
+        assert_eq!(c.changed_keys, vec!["gaming-mode"]);
+        assert_eq!(c.changed_context, vec!["Gaming Mode: off → on"]);
+        // (experiment.rs pins the Trial fold: a changed condition is `confounded` and restores.)
+        // On for both, off for both: the same condition.
+        let mut both = session();
+        both.gaming_mode_active = Some(true);
+        assert_eq!(derive(&both, &b).verdict, Comparability::Comparable);
+        assert_eq!(derive(&a, &session()).verdict, Comparability::Comparable);
+        // Recorded on one side only: missing context, never "equal", never a changed condition.
+        let mut old = session();
+        old.gaming_mode_active = None;
+        let m = derive(&old, &b);
+        assert!(m.changed_keys.is_empty());
+        assert!(m.missing_keys.contains(&"gaming-mode".to_string()), "{:?}", m.missing_keys);
     }
 
     #[test]
