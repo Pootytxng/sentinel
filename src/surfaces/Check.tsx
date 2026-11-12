@@ -26,11 +26,13 @@ import { readManualParts } from "./rig/manual-parts";
 import "../i18n";
 import "./Check.css";
 
-/** P9-limit-source: a recorded session's start as a date in the app's language ("Nov 11"); the stamp
- *  as sent when it doesn't parse. */
-function sessionDate(iso: string, lang: string): string {
+/** P9-limit-source: a recorded session's start as a date in the app's language ("Nov 11", with the
+ *  year when it isn't this year's); the stamp as sent when it doesn't parse. */
+function sessionDate(iso: string, lang: string, now: Date = new Date()): string {
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? iso : d.toLocaleDateString(lang, { month: "short", day: "numeric" });
+  if (isNaN(d.getTime())) return iso;
+  const year = d.getFullYear() !== now.getFullYear() ? { year: "numeric" as const } : {};
+  return d.toLocaleDateString(lang, { month: "short", day: "numeric", ...year });
 }
 
 // Structural subset of App's GpuInfo — driver freshness needs only name + age (object covariance).

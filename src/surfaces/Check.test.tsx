@@ -626,7 +626,8 @@ describe("Check", () => {
       } as typeof fitGpuItem,
     ]);
     const line = screen.getByTestId("check-upgrade-source");
-    expect(line.textContent).toMatch(/^Measured from your ROB RUN session on Nov 1[12]: 720 of 900 GPU readings were at 95% load or more\.$/);
+    // The day is the local date of a 20:36 UTC stamp (11th or 12th by zone); a year only when it isn't this one.
+    expect(line.textContent).toMatch(/^Measured from your ROB RUN session on Nov 1[12](, 2026)?: 720 of 900 GPU readings were at 95% load or more\.$/);
     expect(line.closest(".check-upgrade-item")?.textContent).toContain("GPU was the measured limiter");
   });
 
