@@ -935,6 +935,9 @@ export type WhatChangedReport = {
   headline: string;
   observations: IntelObservation[];
   noise_floor_pct: number;
+  /** P4-judge-noisy: whether `noise_floor_pct` is this game's measured band. false = not measured, and
+   *  the report called nothing better or worse. Absent from an older backend: read as not measured. */
+  noise_measured?: boolean;
   /** Non-measurement events strictly between the two sessions. */
   events_between: IntelEvent[];
   leading_hypotheses: IntelHypothesis[];

@@ -458,6 +458,7 @@
     "whatChangedTag": "发生了什么变化?",
     "headlineDefault": "发生了什么变化? · 对比你上一局 {{game}}",
     "noiseFloor": "噪声下限 ±{{pct}}%",
+    "noiseUnmeasured": "这款游戏的波动尚未测量",
     "mostLikelyCause": "最可能的原因",
     "nextTest": "下一步验证",
     "rollBackNamed": "回滚“{{title}}”",

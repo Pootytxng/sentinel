@@ -226,8 +226,9 @@ release checklist); no new rules.
       - Band, measured not assumed (`noise_floor::measure_game_noise`, one source for Trials, the session-end notice and
         "what changed?"): this game's as-is sessions on this PC (rig, driver, Windows build, last 14 days, same Compy
         change counts, Gaming Mode, comparable conditions, SAME CAP STATE); per metric (1% low, average) the root mean
-        square of each session's difference from the next, times the 95% Student-t multiplier for that many
-        differences, never below 3% (the smallest effect Compy claims; never used alone). Differences of neighbours, not
+        square of each session's difference from the next, times the 95% Student-t multiplier at the
+        differences' effective degrees of freedom (neighbouring differences share a session: 2(n-1)^2/(3n-4)),
+        rounded up, never below 3% (the smallest effect Compy claims; never used alone). Differences of neighbours, not
         the design's max-min spread: a Trial compares one session with the next, max-min only grows with more sessions,
         and a day-long drift counts once. ROB RUN from its nine as-is sessions: see the session log.
       - Trials between as-is sessions: a change applied AND put back entirely between two as-is sessions (an
@@ -238,14 +239,19 @@ release checklist); no new rules.
         then, or judges nothing. Never 3%.
       - Verdict: Better/Worse only past the measured band (1% low on its band, average on its own); inside it the result
         is "negligible at this game's noise" (no-change, Negligible, change put back; the keep path is unchanged).
-        "too-noisy" is retired for new Trials: an uneven session is part of the whole-session noise the band measures.
+        "too-noisy" is retired for new Trials: an uneven session is part of the whole-session noise the band measures;
+        real play's final look with a wide band reads negligible at this game's noise, not "too varied". Smoothest's
+        pacing band is measured the same way (one cap state, RMS x t). `noise_floor_pct` keeps the P4-noise band an
+        older Compy judges on (the record-first guard pins it); this build judges only on `game_noise`.
       - Window rule: whole sessions, no window selection (per-window 1% lows aren't recorded; a window picked after
         seeing data could bias it). Fixed before any comparison; the design's steady-window idea is not built.
-      - Cap (owner fact 17:02): read from the 10 s buckets only (>=5 min of trace; capped = half the buckets within 1.5%
-        of the 90th-percentile bucket and <=5% above it; uncapped = <=25%; otherwise unknown), never from the refresh
-        rate. Different cap states confound a Trial ("The frame cap changed between these sessions ..."), an unreadable
+      - Cap (owner fact 17:02): read from the 10 s buckets only, never from the refresh rate (>=5 min of trace; capped
+        = a cap's own shape: half the buckets within 0.5% of the 95th-percentile ceiling, <=5% above it, >=10% dipping
+        2% under it; uncapped = <=25% of buckets within 1.5% of the 90th percentile; anything else, e.g. a frame rate
+        held flat with no dips, is "can't tell"). Different cap states confound a Trial ("The frame cap changed between these sessions ..."), an unreadable
         one confounds it too; a shared cap judges Recommended on the 1% low and says the cap hides the average; Maximum
-        FPS under a cap is not judged ("lift the cap"), nor anything when the 1% low itself sits at the cap. Bands never
+        FPS and Smoothest under a cap are not judged ("lift the cap"), nor a "no change" when the 1% low sits too close
+        under the cap for a gain past the band to show (two-session and real-play Trials alike). Bands never
         pool across cap states; real play pins only as-is sessions in the anchor's cap state and leaves out a
         with-change session in another or unreadable one ("frame-cap-changed"). "What changed?" calls nothing better
         or worse across a changed or unreadable cap, nor without the game's measured noise.

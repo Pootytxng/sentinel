@@ -1283,7 +1283,10 @@ fn what_changed_noise(g: &Gathered, baseline: &crate::sessions::SessionSummary) 
         return None;
     }
     let rows = crate::experiment::ledger_rows(&g.applied);
-    crate::noise_floor::measure_game_noise(&g.sessions, baseline, &rows).ok()
+    // #618: only the sessions the change history covers can be shown unchanged (review r1).
+    let coverage = crate::history::ledger_coverage(g.set_aside_through.clone(), Some(&baseline.started_at));
+    let covered = crate::experiment::sessions_the_ledger_covers(&g.sessions, coverage);
+    crate::noise_floor::measure_game_noise(&covered, baseline, &rows).ok()
 }
 
 /// Split the assembled timeline around a comparison window (baseline start, current
@@ -3735,7 +3738,7 @@ mod tests {
         assert_eq!((quiet.verdict.as_str(), quiet.noise_measured), ("regressed", true));
         // One session held at 240 fps by a cap, the other free: nothing is called better or worse.
         let (mut b2, mut c2) = two_sessions(100.0, 80.0);
-        b2.fps_series = (0..120u32).map(|i| (i * 10, 240.0)).collect();
+        b2.fps_series = (0..120u32).map(|i| (i * 10, if i % 10 == 3 { 200.0 } else { 240.0 })).collect();
         c2.fps_series = (0..120u32).map(|i| (i * 10, 150.0 + f64::from((i * 37) % 120))).collect();
         let capped = report(&WhatChangedInputs {
             baseline: &b2,

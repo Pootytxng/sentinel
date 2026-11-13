@@ -326,6 +326,9 @@ pub(crate) fn between_session_noise(
 /// spread under ~2% is at the limit of what the histogram can resolve; a band that small must not
 /// be read as "this game is that steady".
 /// Smoothest is offered from it (`experiment::smoothest_admission`, P4-smooth-offer).
+/// P4-judge-noisy (review r1): replaced by [`measure_pacing_noise`] (one cap state, RMS x t); kept,
+/// test-only, to pin how Smoothest Trials started before it were admitted.
+#[cfg(test)]
 pub(crate) fn between_session_pacing_noise(
     sessions: &[crate::sessions::SessionSummary],
     now: &crate::sessions::SessionSummary,
@@ -458,6 +461,26 @@ pub(crate) fn t95(df: usize) -> f64 {
     }
 }
 
+/// The 95% multiplier for the root mean square of the `n - 1` successive differences of `n` sessions
+/// (review r1): neighbouring differences share a session, so they are correlated (rho = -1/2) and
+/// carry fewer degrees of freedom than their count: about 2(n-1)^2 / (3n-4) (1.6 at n = 3, 5.6 at
+/// n = 9). The t value at that fractional count is interpolated in 1/df between the table's whole
+/// counts, which is never narrower than the next whole count's.
+pub(crate) fn t95_eff(n: usize) -> f64 {
+    if n < 2 {
+        return f64::INFINITY;
+    }
+    let k = (n - 1) as f64;
+    let df = (2.0 * k * k / (3.0 * n as f64 - 4.0)).max(1.0);
+    let (lo, hi) = (df.floor(), df.ceil());
+    if lo >= 30.0 || (hi - lo).abs() < f64::EPSILON {
+        return t95(lo as usize);
+    }
+    let (t_lo, t_hi) = (t95(lo as usize), t95(hi as usize));
+    let w = (1.0 / lo - 1.0 / df) / (1.0 / lo - 1.0 / hi);
+    t_lo + w * (t_hi - t_lo)
+}
+
 /// Fewest 10 s buckets a session needs before Compy reads whether a cap held it (five minutes).
 pub(crate) const CAP_MIN_BUCKETS: usize = 30;
 /// How close to the ceiling a bucket must sit to count as held there (1.5%).
@@ -471,29 +494,42 @@ const CAP_HOLD_FRACTION: f64 = 0.015;
 pub(crate) enum CapRead {
     /// The frame rate moved freely: few buckets sat at the session's ceiling.
     Uncapped,
-    /// At least half the buckets sat within 1.5% of one ceiling and almost none above it, the way a
-    /// frame cap (or a limit that acts like one) holds it.
+    /// A hard ceiling with dips under it, the way a frame cap (or a limit that acts like one) holds
+    /// the frame rate ([`cap_read`]).
     Capped { at_fps: f64 },
     /// Too little trace to read, or a pattern in between: Compy can't tell, and says so.
     Unknown,
 }
 
-/// Pure: read a session's cap state from its frame-rate buckets ([`CapRead`]). The ceiling is the
-/// 90th-percentile bucket; "held" is within 1.5% of it.
+/// How tightly a hard ceiling holds its buckets (0.5%), and how far below it a dip must reach (2%).
+const CAP_CEILING_FRACTION: f64 = 0.005;
+const CAP_DIP_FRACTION: f64 = 0.02;
+
+/// Pure: read a session's cap state from its frame-rate buckets ([`CapRead`]).
+/// - Capped only with a cap's own shape (review r1: a steady uncapped game is not a cap): at least half
+///   the buckets within 0.5% of the 95th-percentile bucket (the ceiling), at most 5% above it by more
+///   than that, and at least 10% dipping more than 2% below it (a cap clips the top and leaves the
+///   dips; a merely steady game sits evenly around its average).
+/// - Uncapped: at most a quarter of the buckets within 1.5% of the 90th-percentile bucket.
+/// - Anything else (a frame rate held almost flat with no dips, which a cap or a very steady game can
+///   both produce; too little trace) is Unknown: Compy says it can't tell.
 pub(crate) fn cap_read(s: &crate::sessions::SessionSummary) -> CapRead {
     let mut fps: Vec<f64> = s.fps_series.iter().map(|&(_, f)| f).filter(|f| f.is_finite() && *f > 0.0).collect();
     if fps.len() < CAP_MIN_BUCKETS {
         return CapRead::Unknown;
     }
     fps.sort_by(f64::total_cmp);
-    let ceiling = fps[(fps.len() - 1) * 9 / 10];
     let n = fps.len() as f64;
-    let held: Vec<f64> = fps.iter().copied().filter(|f| (f - ceiling).abs() <= ceiling * CAP_HOLD_FRACTION).collect();
-    let above = fps.iter().filter(|&&f| f > ceiling * (1.0 + CAP_HOLD_FRACTION)).count() as f64;
-    let share = held.len() as f64 / n;
-    if share >= 0.5 && above / n <= 0.05 {
-        CapRead::Capped { at_fps: (held[held.len() / 2] * 10.0).round() / 10.0 }
-    } else if share <= 0.25 {
+    let share = |pred: &dyn Fn(f64) -> bool| fps.iter().filter(|&&f| pred(f)).count() as f64 / n;
+    let ceiling = fps[(fps.len() - 1) * 95 / 100];
+    let held: Vec<f64> = fps.iter().copied().filter(|f| (f - ceiling).abs() <= ceiling * CAP_CEILING_FRACTION).collect();
+    let above = share(&|f| f > ceiling * (1.0 + CAP_CEILING_FRACTION));
+    let dips = share(&|f| f < ceiling * (1.0 - CAP_DIP_FRACTION));
+    if held.len() as f64 / n >= 0.5 && above <= 0.05 && dips >= 0.1 {
+        return CapRead::Capped { at_fps: (held[held.len() / 2] * 10.0).round() / 10.0 };
+    }
+    let p90 = fps[(fps.len() - 1) * 9 / 10];
+    if share(&|f| (f - p90).abs() <= p90 * CAP_HOLD_FRACTION) <= 0.25 {
         CapRead::Uncapped
     } else {
         CapRead::Unknown
@@ -634,6 +670,32 @@ pub(crate) fn as_is_run<'s>(
     run
 }
 
+/// Pure (P4-judge-noisy, review r1): this game's measured frame-pacing noise for a Smoothest Trial from
+/// `now`: the p99/p50 ratio of the same as-is sessions [`measure_game_noise`] reads ([`as_is_run`], so
+/// never across cap states), as the root mean square of each session's difference from the next times
+/// [`t95_eff`]. `spread_pct` is that band (the Smoothest start floors it at its resolution). Sessions
+/// that recorded no pacing aren't counted; under [`MIN_UNCHANGED_SESSIONS`] is `None`.
+pub(crate) fn measure_pacing_noise(
+    sessions: &[crate::sessions::SessionSummary],
+    now: &crate::sessions::SessionSummary,
+    ledger: &[crate::experiment::LedgerEntryRef<'_>],
+) -> Option<BetweenSessionNoise> {
+    if cap_read(now) == CapRead::Unknown {
+        return None;
+    }
+    let ratios: Vec<f64> = as_is_run(sessions, now, ledger, crate::comparison::ARM_MAX_AGE_DAYS)
+        .into_iter()
+        .filter_map(|s| s.frame_pacing.as_ref().and_then(|p| p.p99_over_p50()))
+        .filter(|r| r.is_finite() && *r > 0.0)
+        .collect();
+    if ratios.len() < MIN_UNCHANGED_SESSIONS {
+        return None;
+    }
+    let band = ((t95_eff(ratios.len()) * step_pct(&ratios)) * 10.0).ceil() / 10.0;
+    let sessions = u32::try_from(ratios.len()).ok()?;
+    band.is_finite().then_some(BetweenSessionNoise { spread_pct: band, sessions })
+}
+
 /// Root mean square of the difference between each value and the next, in percent of the pair's mean.
 fn step_pct(xs: &[f64]) -> f64 {
     let d: Vec<f64> = xs.windows(2).map(|w| (w[1] - w[0]) / ((w[0] + w[1]) / 2.0) * 100.0).collect();
@@ -665,9 +727,10 @@ pub(crate) fn measure_game_noise(
     }
     let low: Vec<f64> = read.iter().map(|r| r.0).collect();
     let avg: Vec<f64> = read.iter().map(|r| r.1).collect();
-    let t = t95(read.len() - 1);
+    let t = t95_eff(read.len());
     let (low1_step_pct, avg_step_pct) = (step_pct(&low), step_pct(&avg));
-    let band = |step: f64| round1((t * step).max(MIN_CLAIM_PCT));
+    // Rounded up, so rounding never narrows the band (review r1).
+    let band = |step: f64| ((t * step).max(MIN_CLAIM_PCT) * 10.0).ceil() / 10.0;
     let sessions = u32::try_from(read.len()).unwrap_or(u32::MAX);
     (low1_step_pct.is_finite() && avg_step_pct.is_finite())
         .then(|| GameNoise {
@@ -1453,7 +1516,31 @@ mod tests {
         // Three is enough, with the widest multiplier (t for two differences).
         let n = measure_game_noise(&s, &s[2], &rob_trials()).unwrap();
         assert_eq!(n.sessions, 3);
-        assert!((n.low1_band_pct - (t95(2) * n.low1_step_pct).max(MIN_CLAIM_PCT)).abs() < 0.2, "{n:?}");
+        // (the stored step is rounded to 0.1, so the band is checked to within that rounding times t)
+        assert!((n.low1_band_pct - (t95_eff(3) * n.low1_step_pct).max(MIN_CLAIM_PCT)).abs() < 0.5, "{n:?}");
+    }
+
+    #[test]
+    fn the_multiplier_counts_the_correlated_differences_as_fewer() {
+        // 2(n-1)^2/(3n-4) degrees of freedom: 1.6 at three sessions, 5.6 at nine; never narrower than
+        // the whole count above it, and wider than treating the n-1 differences as independent.
+        assert!(t95_eff(3) > t95(2) && t95_eff(3) < t95(1), "{}", t95_eff(3));
+        assert!(t95_eff(9) > t95(6) && t95_eff(9) < t95(5) && t95_eff(9) > t95(8), "{}", t95_eff(9));
+        assert!(t95_eff(200) >= 1.96 && t95_eff(200) <= 2.05, "{}", t95_eff(200));
+        assert_eq!(t95_eff(1), f64::INFINITY);
+    }
+
+    #[test]
+    fn a_steady_uncapped_game_is_never_read_as_capped() {
+        // Review r1: a game that holds ~200 fps evenly, with no ceiling and no dips, could be a cap or
+        // just steady: Compy says it can't tell, never "capped".
+        let mut s = played("2026-11-11T01:49:34+00:00", 200.0, 13);
+        s.fps_series = (0..120u32).map(|i| (i * 10, 200.0 + f64::from(i % 5) * 0.4 - 0.8)).collect();
+        assert_eq!(cap_read(&s), CapRead::Unknown);
+        // Steady around 200 then a 5% faster steady session: no "the cap changed" claim either.
+        let mut faster = s.clone();
+        faster.fps_series = s.fps_series.iter().map(|&(t, f)| (t, f * 1.05)).collect();
+        assert_eq!(cap_pair(cap_read(&s), cap_read(&faster)), CapPair::Unknown);
     }
 
     #[test]

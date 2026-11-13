@@ -21,6 +21,11 @@ describe("assumedBandLine", () => {
     expect(line).toContain("lab.experimentBench.assumedBandWiderNoClaim");
   });
 
+  it("an old too-noisy result is said to have judged nothing", () => {
+    const line = assumedBandLine({ assumed_pct: 3, measured_low1_pct: 20.6, measured_sessions: 9, claimed_change: false, judged: false }, "ROB RUN.exe", t);
+    expect(line).toContain("lab.experimentBench.assumedBandWiderUnjudged");
+  });
+
   it("says so when the game's noise still isn't measured, never filling a number in", () => {
     const line = assumedBandLine({ assumed_pct: 3, measured_low1_pct: null, measured_sessions: null }, "ROB RUN.exe", t);
     expect(line).toContain("lab.experimentBench.assumedBandUnmeasured");
@@ -33,7 +38,7 @@ describe("assumedBandLine", () => {
   });
 
   it("every new line exists in English and Simplified Chinese", () => {
-    for (const key of ["noiseMeasuredBands", "assumedBandUnmeasured", "assumedBandWider", "assumedBandWiderNoClaim", "assumedBandNarrower"]) {
+    for (const key of ["noiseMeasuredBands", "assumedBandUnmeasured", "assumedBandWider", "assumedBandWiderNoClaim", "assumedBandWiderUnjudged", "assumedBandNarrower"]) {
       const enBench = (en as unknown as { experimentBench: Record<string, string> }).experimentBench;
       const zhBench = (zh as unknown as { experimentBench: Record<string, string> }).experimentBench;
       expect(enBench[key], key).toBeTruthy();

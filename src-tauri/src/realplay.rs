@@ -767,17 +767,17 @@ fn measure(before: &[&RealPlaySession], with: &[&RealPlaySession], ordinal: u8) 
     numbers.iter().all(|x| x.is_finite()).then_some(look)
 }
 
-fn too_noisy(judged: ConcludeOutcome, look: &Look) -> ConcludeOutcome {
+/// P4-judge-noisy (owner 2026-11-12: "couldn't be judged" is not finished; review r1): at the final
+/// look, a result inside a wide band is a judged outcome, negligible at this game's noise, never
+/// "too varied to judge". It stays No clear difference: the default wins and the change is put back.
+fn negligible_at_noise(judged: ConcludeOutcome, look: &Look) -> ConcludeOutcome {
     ConcludeOutcome {
-        verdict: "too-noisy".into(),
-        keep: false,
-        stop_reason: Some("sessions-too-varied".into()),
-        confidence: Confidence::Unknown,
+        confidence: judged.confidence.min(Confidence::Low),
         note: format!(
-            "Too varied to judge: your sessions varied by about ±{}% on their own, too much to tell this \
-             change's effect after {} sessions with it on and {} without, so Compy restored it and judged \
-             nothing.",
-            look.band_pct, look.with, look.before
+            "{} After {} sessions with the change on and {} without, nothing it did stood out from how much \
+             these sessions vary on their own (about ±{}%): negligible at this game's noise. The default \
+             wins, so the change was put back.",
+            judged.note, look.with, look.before, look.band_pct
         ),
         ..judged
     }
@@ -787,7 +787,8 @@ fn too_noisy(judged: ConcludeOutcome, look: &Look) -> ConcludeOutcome {
 /// 1% low against the band, read as the picked outcome (`experiment::with_recommended_outcome` /
 /// `with_max_fps_outcome`). Better or Worse decides; otherwise a band of [`SETTLED_BAND_PCT`] or
 /// less decides No clear difference; at the final look a band of [`USEFUL_BAND_PCT`] or less does,
-/// and a wider one is Unknown. Smoothest isn't judged in real play: frame pacing isn't compared
+/// and a wider one is No clear difference too, worded as negligible at this game's noise
+/// ([`negligible_at_noise`], P4-judge-noisy). Smoothest isn't judged in real play: frame pacing isn't compared
 /// across real-play sessions, so such a record ends unjudged at its first look.
 fn decide(look: &Look, outcome: TrialOutcome, is_final: bool) -> Option<ConcludeOutcome> {
     let verdict = crate::comparison::classify(look.delta_low1_pct, look.band_pct).to_string();
@@ -825,7 +826,7 @@ fn decide(look: &Look, outcome: TrialOutcome, is_final: bool) -> Option<Conclude
         "improved" | "regressed" => Some(judged),
         _ if look.band_pct <= SETTLED_BAND_PCT => Some(judged),
         _ if is_final && look.band_pct <= USEFUL_BAND_PCT => Some(judged),
-        _ if is_final => Some(too_noisy(judged, look)),
+        _ if is_final => Some(negligible_at_noise(judged, look)),
         _ => None,
     }
 }
@@ -1128,9 +1129,13 @@ mod tests {
         let (look, o) = decided(j);
         assert_eq!((look.ordinal, look.with), (3, 8));
         assert!(look.band_pct > USEFUL_BAND_PCT, "{look:?}");
-        assert_eq!((o.verdict.as_str(), o.keep), ("too-noisy", false));
-        assert_eq!((o.stop_reason.as_deref(), o.confidence), (Some("sessions-too-varied"), Confidence::Unknown));
-        assert!(o.note.starts_with("Too varied to judge: your sessions varied by about ±"), "{}", o.note);
+        // P4-judge-noisy (owner 2026-11-12: "couldn't be judged" is not finished): at the final look a
+        // wide band is a judged result, negligible at this game's noise, the change put back; it used to
+        // read "too varied to judge".
+        assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("no-change", false, None));
+        assert_eq!(o.confidence, Confidence::Low);
+        assert!(o.note.contains("negligible at this game's noise") && o.note.contains("put back"), "{}", o.note);
+        assert!(!o.note.contains("Too varied to judge"), "{}", o.note);
     }
 
     #[test]
