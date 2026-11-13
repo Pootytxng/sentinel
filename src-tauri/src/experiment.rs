@@ -2654,6 +2654,28 @@ fn band_pct_text(band: f64) -> String {
     if band.fract() == 0.0 { format!("{band}") } else { format!("{band:.1}") }
 }
 
+/// Opus r2 (s27): a band as the verdict judges it: "±3%" when its fall is the same size, else the
+/// rise and the fall that matches it ("+20.6% / -17%", `noise_floor::fall_pct`).
+fn band_words(band: f64) -> String {
+    let fall = crate::noise_floor::fall_pct(band);
+    if (fall - band).abs() < 1e-9 {
+        format!("±{}%", band_pct_text(band))
+    } else {
+        format!("+{}% / -{}%", band_pct_text(band), band_pct_text(fall))
+    }
+}
+
+/// Opus r2 (s27): "fell by more than {what}" when the band's fall is the band itself, else the fall
+/// it actually passed.
+fn fell_words(band: f64, what: &str) -> String {
+    let fall = crate::noise_floor::fall_pct(band);
+    if (fall - band).abs() < 1e-9 {
+        format!("fell by more than {what}")
+    } else {
+        format!("fell past -{}%, the fall matching the +{}% band", band_pct_text(fall), band_pct_text(band))
+    }
+}
+
 /// P4-recommended (ENGINE §2 `recommended`, §6 "default wins ties"; TRIAL_PROTOCOL §8/§9): the
 /// Recommended outcome of a measured verdict, judged on the same band (`noise_floor_pct`, a % of the
 /// baseline) for both numbers:
@@ -2695,18 +2717,18 @@ pub(crate) fn with_recommended_outcome_bands(
         "improved" if avg_fell => "no-change".to_string(),
         v => v.to_string(),
     };
-    let band = band_pct_text(band_pct);
+    let band = band_words(band_pct);
     let avg_text = delta_avg.map_or_else(
         || "the average frame rate couldn't be compared".to_string(),
         |avg| format!("the average frame rate {}", signed_pct(avg)),
     );
     let compared = if (avg_band_pct - band_pct).abs() < 1e-9 {
-        format!("Compared with the baseline: the 1% low {}, {avg_text}, both against a ±{band}% band.", signed_pct(low))
+        format!("Compared with the baseline: the 1% low {}, {avg_text}, both against a {band} band.", signed_pct(low))
     } else {
         format!(
-            "Compared with the baseline: the 1% low {} against a ±{band}% band, {avg_text} against a ±{}% band.",
+            "Compared with the baseline: the 1% low {} against a {band} band, {avg_text} against a {} band.",
             signed_pct(low),
-            band_pct_text(avg_band_pct)
+            band_words(avg_band_pct)
         )
     };
     let why = match (verdict.as_str(), outcome.verdict.as_str()) {
@@ -2720,12 +2742,12 @@ pub(crate) fn with_recommended_outcome_bands(
              didn't fall, so this isn't a clear win: the default was kept and the change restored."
                 .to_string()
         }
-        ("no-change", "improved") => {
-            "The 1% low rose by more than the band, but the average fell by more than it, so this \
-             isn't a clear win: the default was kept and the change restored."
-                .to_string()
-        }
-        ("regressed", _) => "The 1% low fell by more than the band, so the change was restored.".to_string(),
+        ("no-change", "improved") => format!(
+            "The 1% low rose by more than the band, but the average {}, so this isn't a clear win: the \
+             default was kept and the change restored.",
+            fell_words(avg_band_pct, "it")
+        ),
+        ("regressed", _) => format!("The 1% low {}, so the change was restored.", fell_words(band_pct, "the band")),
         _ => "The 1% low stayed inside the band, so the default was kept and the change restored.".to_string(),
     };
     let keep = keep_rule(trial_result_for(&verdict));
@@ -3000,13 +3022,16 @@ pub(crate) struct NoiseDeltas {
 }
 
 /// Smoothest's frame-pacing change and band, as [`with_smoothest_outcome`] judges it: the p99/p50
-/// ratio's change as a % of the lower of the two ratios (rounded 0.1), and the band recorded at start.
+/// ratio's change as a % of the start ratio (rounded 0.1; s27, was the lower of the two), and the band
+/// recorded at start.
 /// `None` when either ratio is missing.
 pub(crate) fn pacing_change(evidence: Option<&SmoothestEvidence>, after_ratio: Option<f64>) -> Option<(f64, f64)> {
     evidence
         .zip(after_ratio.filter(|r| r.is_finite() && *r > 0.0))
         .filter(|(ev, _)| ev.start_ratio.is_finite() && ev.start_ratio > 0.0)
-        .map(|(ev, after)| (((after - ev.start_ratio) / after.min(ev.start_ratio) * 1000.0).round() / 10.0, ev.band_pct))
+        // Opus r2 (s27): a % of the start ratio, never larger than the pair-mean change the band was
+        // measured on, so no win is called inside it.
+        .map(|(ev, after)| (((after - ev.start_ratio) / ev.start_ratio * 1000.0).round() / 10.0, ev.band_pct))
 }
 
 /// P4-judge-noisy: the measured band in plain words on a judged verdict, and a result inside it named
@@ -3040,17 +3065,17 @@ pub(crate) fn with_noise_words(
     // Review r1: name the bands this outcome was actually judged on.
     let must_beat = match picked {
         TrialOutcome::Recommended => format!(
-            "±{}% on the 1% low (±{}% on the average)",
-            band_pct_text(noise.low1_band_pct),
-            band_pct_text(noise.avg_band_pct)
+            "{} on the 1% low ({} on the average)",
+            band_words(noise.low1_band_pct),
+            band_words(noise.avg_band_pct)
         ),
         TrialOutcome::MaxFps => format!(
-            "±{}% on both the average and the 1% low (the wider of their two bands)",
-            band_pct_text(noise.low1_band_pct.max(noise.avg_band_pct))
+            "{} on both the average and the 1% low (the wider of their two bands)",
+            band_words(noise.low1_band_pct.max(noise.avg_band_pct))
         ),
         TrialOutcome::Smoothest => format!(
-            "±{}% on the 1% low, beside the frame-pacing band named above",
-            band_pct_text(noise.low1_band_pct)
+            "{} on the 1% low, beside the frame-pacing band named above",
+            band_words(noise.low1_band_pct)
         ),
     };
     let measured = format!(
@@ -3204,10 +3229,11 @@ pub(crate) fn with_smoothest_outcome(
     }
     let low = outcome.delta_low1_pct;
     let low_fell = low < -crate::noise_floor::fall_pct(low_band_pct);
-    let low_band = band_pct_text(low_band_pct);
+    let low_band = band_words(low_band_pct);
+    let low_fell_why = format!("The 1% low {}, so the change was restored.", fell_words(low_band_pct, "its band"));
     let Some((delta, band_pct)) = pacing_change(evidence, after_ratio) else {
         let (verdict, why) = if low_fell {
-            ("regressed", "The 1% low fell by more than its band, so the change was restored.")
+            ("regressed", low_fell_why.as_str())
         } else {
             (
                 "no-change",
@@ -3217,7 +3243,7 @@ pub(crate) fn with_smoothest_outcome(
         };
         let note = format!(
             "{} Judged for Smoothest. Compared with the start: frame pacing couldn't be compared, the 1% low \
-             {} against a ±{low_band}% band. {why}",
+             {} against a {low_band} band. {why}",
             outcome.note,
             signed_pct(low)
         );
@@ -3226,7 +3252,7 @@ pub(crate) fn with_smoothest_outcome(
     let (verdict, why) = if delta > band_pct {
         ("regressed", "Frames got more uneven by more than the band, so the change was restored.")
     } else if low_fell {
-        ("regressed", "The 1% low fell by more than its band, so the change was restored.")
+        ("regressed", low_fell_why.as_str())
     } else if delta < -band_pct {
         (
             "improved",
@@ -3238,7 +3264,7 @@ pub(crate) fn with_smoothest_outcome(
     };
     let note = format!(
         "{} Judged for Smoothest. Compared with the start: the gap between the slowest 1% of frames and a \
-         typical frame {} against a ±{}% band, the 1% low {} against a ±{low_band}% band. {why}",
+         typical frame {} against a ±{}% band, the 1% low {} against a {low_band} band. {why}",
         outcome.note,
         signed_pct(delta),
         band_pct_text(band_pct),
@@ -3265,38 +3291,40 @@ pub(crate) fn with_max_fps_outcome(outcome: ConcludeOutcome, band_pct: f64, delt
     let low = outcome.delta_low1_pct;
     let fall = crate::noise_floor::fall_pct(band_pct);
     let low_fell = low < -fall;
-    let band = band_pct_text(band_pct);
+    let band = band_words(band_pct);
+    let fell_why = |what: &str| format!("The {what} {}, so the change was restored.", fell_words(band_pct, "the band"));
     let Some(avg) = delta_avg else {
         let verdict = if low_fell { "regressed" } else { "no-change" };
         let why = if low_fell {
-            "The 1% low fell by more than the band, so the change was restored."
+            fell_why("1% low")
         } else {
             "Without the average Compy can't tell whether it rose, so the default was kept and the change \
              restored."
+                .to_string()
         };
         let note = format!(
             "{} Judged for Maximum FPS. Compared with the baseline: the average frame rate couldn't be \
-             compared, the 1% low {}, against a ±{band}% band. {why}",
+             compared, the 1% low {}, against a {band} band. {why}",
             outcome.note,
             signed_pct(low)
         );
         return rebuilt(outcome, verdict, note);
     };
     let (verdict, why) = if avg < -fall {
-        ("regressed", "The average fell by more than the band, so the change was restored.")
+        ("regressed", fell_why("average"))
     } else if low_fell {
-        ("regressed", "The 1% low fell by more than the band, so the change was restored.")
+        ("regressed", fell_why("1% low"))
     } else if avg > band_pct {
         (
             "improved",
-            "The average rose by more than the band and the 1% low didn't fall by more, so the change was kept.",
+            "The average rose by more than the band and the 1% low didn't fall by more, so the change was kept.".to_string(),
         )
     } else {
-        ("no-change", "The average stayed inside the band, so the default was kept and the change restored.")
+        ("no-change", "The average stayed inside the band, so the default was kept and the change restored.".to_string())
     };
     let note = format!(
         "{} Judged for Maximum FPS. Compared with the baseline: the average frame rate {}, the 1% low {}, \
-         both against a ±{band}% band. {why}",
+         both against a {band} band. {why}",
         outcome.note,
         signed_pct(avg),
         signed_pct(low)
@@ -4569,7 +4597,13 @@ pub(crate) fn conclude_experiment(
     // record (`game_noise`), also for a record started before it and measured here.
     let measured_noise = noise.ok();
     let band_pct = measured_noise.as_ref().map_or(store.experiments[idx].noise_floor_pct, |n| n.low1_band_pct);
-    if store.experiments[idx].game_noise.is_none() {
+    // Opus r2: a band stored by an older model was read on this build's base (`on_baseline_base`);
+    // the record keeps the band the verdict was judged on, so the receipt shows the same band.
+    let older = store.experiments[idx]
+        .game_noise
+        .as_ref()
+        .is_some_and(|n| n.model < crate::noise_floor::NOISE_MODEL_VERSION);
+    if store.experiments[idx].game_noise.is_none() || older {
         store.experiments[idx].game_noise = measured_noise;
     }
     let between = store.experiments[idx].between_session_noise.clone();
@@ -9616,7 +9650,8 @@ mod refuse_early_tests {
     fn judge_on(noise: &GameNoise, low_pct: f64, avg_pct: f64, base: CapRead, after: CapRead, picked: TrialOutcome) -> ConcludeOutcome {
         let r = ExperimentRecord { noise_floor_pct: noise.low1_band_pct, game_noise: Some(noise.clone()), ..rec(150.0, 5) };
         let o = conclude_outcome(&r, 150.0 * (1.0 + low_pct / 100.0), 5000, false, Some("Test"), Some(5), Utc::now());
-        let o = with_measured_fall(with_cap_check(o, base, after), noise.low1_band_pct);
+        let low_band = if picked == TrialOutcome::MaxFps { noise.low1_band_pct.max(noise.avg_band_pct) } else { noise.low1_band_pct };
+        let o = with_measured_fall(with_cap_check(o, base, after), low_band);
         let o = match picked {
             TrialOutcome::MaxFps => with_max_fps_outcome(o, noise.low1_band_pct.max(noise.avg_band_pct), Some(avg_pct)),
             _ => with_recommended_outcome_bands(o, noise.low1_band_pct, noise.avg_band_pct, Some(avg_pct)),
@@ -9666,6 +9701,19 @@ mod refuse_early_tests {
         // (16.4%) still vetoes the win; before, -15% let +30% through as a kept improvement.
         let veto = judge(&WIDE, 30.0, -15.0);
         assert_eq!((veto.verdict.as_str(), veto.keep), ("no-change", false), "{}", veto.note);
+        assert!(veto.note.contains("the average fell past -14%, the fall matching the +16.4% band"), "{}", veto.note);
+        // Opus r2 MUST-FIX: a 1% low down 19% (past -17%, inside +20.6%) says the fall it passed.
+        let worse = judge(&WIDE, -19.0, 0.0);
+        assert_eq!(worse.verdict, "regressed", "{}", worse.note);
+        assert!(worse.note.contains("against a +20.6% / -17% band"), "{}", worse.note);
+        assert!(worse.note.contains("The 1% low fell past -17%, the fall matching the +20.6% band"), "{}", worse.note);
+        assert!(!worse.note.contains("±20.6%"), "{}", worse.note);
+        // A 3% band reads as it always did.
+        assert!(judge(&QUIET, -5.0, 0.0).note.contains("±3%"));
+        // Opus r2 MUST-FIX: Smoothest's change is a % of the start ratio: 1.60 -> 1.48 is -7.5%, inside
+        // an 8% band (as a % of the lower ratio it read -8.1%, a win inside the noise).
+        let ev: SmoothestEvidence = serde_json::from_value(serde_json::json!({ "band_pct": 8.0, "start_ratio": 1.6 })).unwrap();
+        assert_eq!(pacing_change(Some(&ev), Some(1.48)), Some((-7.5, 8.0)));
         // A 1% low inside the band with an average that couldn't be compared is never "negligible".
         let r0 = ExperimentRecord { noise_floor_pct: WIDE.low1_band_pct, game_noise: Some(WIDE.clone()), ..rec(150.0, 5) };
         let o0 = conclude_outcome(&r0, 150.0 * 1.05, 5000, false, Some("Test"), Some(5), Utc::now());

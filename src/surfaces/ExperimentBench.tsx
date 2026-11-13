@@ -137,6 +137,8 @@ type NoiseEvidence = {
 
 /** P4-judge-noisy (noise_floor.rs `GameNoise`). */
 type GameNoise = {
+  /** The noise model the band was measured under (noise_floor.rs `NOISE_MODEL_VERSION`). */
+  model?: number;
   low1_band_pct: number;
   avg_band_pct: number;
   low1_step_pct: number;
@@ -385,6 +387,10 @@ const MIN_CLAIM_PCT = 3;
 // Fewer as-is sessions than this measure the band loosely (experiment.rs `FULL_CONFIDENCE_SESSIONS`).
 const FULL_CONFIDENCE_SESSIONS = 6;
 
+// The noise model from which a band is a rise over the baseline judged at its matching fall
+// (noise_floor.rs `NOISE_MODEL_VERSION` 3); earlier models judged the same band both ways.
+const NOISE_MODEL_LOG = 3;
+
 // The fall that matches a band stored as a rise over the baseline (noise_floor.rs `fall_pct`, the same
 // rule): B / (1 + B), rounded down to 0.1, never under the smallest claim; a band at it is it both ways.
 export function fallPct(band: number): number {
@@ -406,15 +412,17 @@ export function measuredBandsLine(g: GameNoise, outcome: TrialOutcome | null | u
   const maxBand = Math.max(g.low1_band_pct, g.avg_band_pct);
   // Sonnet r1: a band is a rise over the baseline; a fall is judged at the same distance in the game's
   // own terms (noise_floor.rs `fall_pct`), and the line says both numbers.
+  // Opus r2: a verdict judged before noise model 3 was judged on the same band both ways.
+  const fall = (b: number) => ((g.model ?? 0) >= NOISE_MODEL_LOG ? fallPct(b) : b);
   const [low, lowFall, avg, avgFall] = [
     pct(g.low1_band_pct),
-    pct(fallPct(g.low1_band_pct)),
+    pct(fall(g.low1_band_pct)),
     pct(g.avg_band_pct),
-    pct(fallPct(g.avg_band_pct)),
+    pct(fall(g.avg_band_pct)),
   ];
   const [judged, named] =
     goal === "max-fps"
-      ? [t("lab.experimentBench.noiseMeasuredBandsMaxFps", { band: pct(maxBand), bandFall: pct(fallPct(maxBand)) }), [maxBand]]
+      ? [t("lab.experimentBench.noiseMeasuredBandsMaxFps", { band: pct(maxBand), bandFall: pct(fall(maxBand)) }), [maxBand]]
       : goal === "smoothest"
         ? [t("lab.experimentBench.noiseMeasuredBandsSmoothest", { low, lowFall }), [g.low1_band_pct]]
         : capped

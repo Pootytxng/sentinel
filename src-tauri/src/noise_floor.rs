@@ -605,7 +605,8 @@ pub(crate) struct GameNoise {
     /// [`NOISE_MODEL_VERSION`] when measured.
     #[serde(default)]
     pub model: u32,
-    /// ± band on the 1% low, in percent: what a change must beat to be called better or worse.
+    /// Band on the 1% low, in percent: from model 3 the rise over the baseline a change must beat to be
+    /// called better (a fall is judged at its matching `fall_pct`); before it, the same band both ways.
     pub low1_band_pct: f64,
     /// ± band on the average frame rate, in percent.
     pub avg_band_pct: f64,
@@ -622,8 +623,7 @@ pub(crate) struct GameNoise {
     #[serde(default, skip_serializing_if = "is_zero")]
     pub cap_unread: u32,
     /// Coordinator SHOULD-FIX (s27): the longest time, in minutes, from one measured session's start to
-    /// the next one's. The band holds for two sessions that far apart; past it (a day's drift) it
-    /// doesn't. Additive: 0 on older records, which then can't say (no gap rule is applied to them).
+    /// the next one's. The band was measured across gaps up to this; past it, it can't say. Additive: 0 on older records, which then can't say (no gap rule is applied to them).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub max_gap_mins: u32,
 }
@@ -806,10 +806,12 @@ pub(crate) fn on_baseline_base(n: GameNoise) -> GameNoise {
         return n;
     }
     let t = t95_eff(n.sessions as usize);
+    // The stored step is rounded to 0.1; half of that is added back so the rise is never under it.
     let rise = |stored: f64, step: f64| {
-        stored.max(((100.0 * (t * step / 100.0).exp_m1()).max(MIN_CLAIM_PCT) * 10.0).ceil() / 10.0)
+        stored.max(((100.0 * (t * (step + 0.05) / 100.0).exp_m1()).max(MIN_CLAIM_PCT) * 10.0).ceil() / 10.0)
     };
     GameNoise {
+        model: NOISE_MODEL_VERSION,
         low1_band_pct: rise(n.low1_band_pct, n.low1_step_pct),
         avg_band_pct: rise(n.avg_band_pct, n.avg_step_pct),
         ..n
@@ -849,9 +851,8 @@ pub(crate) fn measure_game_noise(
     // Rounded up, so rounding never narrows the band (review r1). Coordinator SHOULD-FIX (s27): the
     // steps are log ratios, the same either way round; the band is stored as the RISE over the
     // baseline that matches it (e^b - 1), on the base a Trial's change is taken on (a % of its
-    // baseline), so a win is never called inside the measured band. A fall is judged on the same
-    // ± band from the baseline: a little stricter than the log distance (1 - 1/(1 + band)) for calling
-    // Worse, never looser for calling Better; a change is put back either way.
+    // baseline), so a win is never called inside the measured band. A fall is judged at the matching
+    // fall, B / (1 + B) (`fall_pct`), the same log distance below.
     let band = |step: f64| ((100.0 * (t * step / 100.0).exp_m1()).max(MIN_CLAIM_PCT) * 10.0).ceil() / 10.0;
     let sessions = u32::try_from(read.len()).unwrap_or(u32::MAX);
     (low1_step_pct.is_finite() && avg_step_pct.is_finite())

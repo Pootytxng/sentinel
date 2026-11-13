@@ -7,7 +7,7 @@ import zh from "../i18n/locales/zh-CN/lab.json";
 import { fallPct, measuredBandsLine, notComparableNote } from "./ExperimentBench";
 
 const t = ((key: string, opts?: Record<string, unknown>) => `${key} ${JSON.stringify(opts ?? {})}`) as never;
-const WIDE = { low1_band_pct: 23, avg_band_pct: 18, low1_step_pct: 9.2, avg_step_pct: 7.2, sessions: 9, cap: { state: "uncapped" as const } };
+const WIDE = { model: 3, low1_band_pct: 23, avg_band_pct: 18, low1_step_pct: 9.2, avg_step_pct: 7.2, sessions: 9, cap: { state: "uncapped" as const } };
 
 describe("measuredBandsLine", () => {
   it("Recommended names both bands; a wide band is never called the minimum", () => {
@@ -64,6 +64,8 @@ describe("measuredBandsLine", () => {
   it("says the fall each band matches, as the backend judges it", () => {
     expect([fallPct(25), fallPct(23), fallPct(3), fallPct(3.05)]).toEqual([20, 18.6, 3, 3]);
     expect(measuredBandsLine(WIDE, "recommended", "ROB RUN.exe", t)).toContain('"lowFall":"18.6"');
+    // Opus r2: a verdict judged under an older noise model was judged on the same band both ways.
+    expect(measuredBandsLine({ ...WIDE, model: 2 }, "recommended", "ROB RUN.exe", t)).toContain('"low":"23","lowFall":"23"');
   });
 
   it("a Trial not judged for the gap between its sessions says so in the user's language", () => {
