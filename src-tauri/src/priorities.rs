@@ -125,14 +125,9 @@ pub(crate) enum GpuTie {
     CardUnread,
 }
 
-/// CR-upgrade-area-truth NIT (a): a name that identifies no card. Windows' fallback adapters (no
-/// vendor driver loaded, e.g. during a driver install) stand in for whatever card is fitted, so a
-/// session or a startup read with one can't be tied to, or set against, a card. An exact-match list
-/// of the two names Windows uses (review nit): another fallback name reads as a card, as before.
-pub(crate) fn identifies_a_card(name: &str) -> bool {
-    let n = name.trim().to_lowercase();
-    !n.is_empty() && n != "microsoft basic display adapter" && n != "microsoft basic render driver"
-}
+// CR-gpu-first-elsewhere (opus r1 MUST-FIX): the card pick and the fallback-adapter rule live in the
+// tier-neutral `hw_class`, so every reader (this module, the receipt, the case upload) shares one.
+pub(crate) use crate::hw_class::{identifies_a_card, primary_gpu_of};
 
 /// The card a session recorded at its start (`hw_fingerprint.gpu`, the most-VRAM GPU). A fallback
 /// adapter name is no card recorded.
@@ -158,22 +153,6 @@ fn gpu_tie(row: &Value, gpu_now: Option<&str>) -> Option<GpuTie> {
         return Some(GpuTie::CardUnread);
     };
     (then.to_lowercase() == now.to_lowercase()).then_some(GpuTie::ThisCard)
-}
-
-/// This PC's card from a serialized hardware snapshot (the report's `hardware` source): the GPU with
-/// the most VRAM, the pick `hardware::current_fingerprint` stamps (on a tie, the last such GPU, as
-/// `Iterator::max_by_key` picks there). None = no GPU name in it: unknown.
-pub(crate) fn primary_gpu_of(hardware: &Value) -> Option<String> {
-    hardware
-        .get("gpus")
-        .and_then(Value::as_array)?
-        .iter()
-        .max_by_key(|g| g.get("vram_bytes").and_then(Value::as_u64).unwrap_or(0))
-        .and_then(|g| g.get("name"))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|n| !n.is_empty())
-        .map(str::to_string)
 }
 
 /// The sessions whose GPU readings can speak for this PC now: every row except one that recorded a
