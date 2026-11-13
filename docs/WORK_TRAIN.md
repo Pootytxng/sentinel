@@ -102,6 +102,26 @@ release checklist); no new rules.
   **P7-exit-proof** (friend-dependent half deferred the same way).
 - `RELEASE_STATE.md` gates still OPEN, owner territory: code signing (`STATE:code_signing=open`), legal
   (`STATE:legal=open`).
+- **Owner decisions, 2026-11-12 16:43 (verbatim, via the coordinator):**
+  - "p4 exit answer is no you decide a more fitting resolution"
+  - "p5, p6 exit not sure what this means if you are capable of delegating the resolution for this task then do so
+    yourself"
+  - "p7 exit whenever optimal give me a downloadable file of the app that can be easily shared to a friend to have
+    test whatever is needed for this exit"
+  - "code signing i may have funds for I just want to completely clarify anything financially related prior to the
+    final execution of allocating finances towards anything to sure its definitive"
+  - "Legal I think we will have to circle back to when the timing makes most sense and make sure we have covered
+    every possible angle and legal basis for the app and i will probably have you ask me whatever questions that
+    entails to make sure we get it all done correctly"
+  - "a release to testers presumably goes hand in hand with p7 i think or clarify thhhe p7 task"
+  Resolutions (owner delegated 2026-11-12; coordinator resolution): P4: "1 change couldn't be judged" does NOT count
+  as finished; the exit wording stays; make the unjudged case judgeable honestly (P4-judge-noisy, top product item),
+  then re-run the proof on the owner's real play. P5 and P6: the exit wording stays (owner half met on ROB RUN, friend
+  half open); resolved together with P7 by one friend test using the shareable installer (P7-tester-package). P7: the
+  owner hands a friend a no-updater installer (P7-tester-package, next worker); a formal updater-published release
+  needs the updater signing key (not on this PC) and is not required for P7. Code signing: owner-held, no spend; the
+  coordinator is preparing a definitive cost breakdown. Legal: owner-held, deferred; the coordinator brings questions
+  when the timing fits.
 - Unticked queue items: CR-1102-left (engineering lines), CR-gm-stop-busy, CR-fix-needs-trial-store,
   CR-range3-nits, CR-gm-restore-partial, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
   exit proofs above; P8-first-advanced waits on P4 (Phase 8, not needed for v1.0).
@@ -130,6 +150,18 @@ release checklist); no new rules.
 ## Queue
 
 ### Now — finish what's open
+- [ ] **P4-judge-noisy** (TOP product item; owner decision 2026-11-12 16:43 "p4 exit answer is no you decide a more
+      fitting resolution", coordinator resolution) "1 change couldn't be judged" does not count as finished. Establish
+      from the recorded data (read-only: the owner's experiments/history for exp:7, exp:8, exp:9, exp:10 and the as-is
+      sessions of 2026-11-10/11 on ROB RUN; evidence `_train\view-1110e`, `view-1111a`) exactly WHY those sessions were
+      "uneven" and the Trials "too-noisy" (a frame cap saturating average fps; first/second-half drift from scene
+      changes; session length; the noise threshold), and what the Trial Protocol could do to reach an honest verdict on
+      a capped or scene-varying game without lowering the bar for claiming an improvement (1% lows / frame-time spread
+      when the average is cap-saturated; longer or segmented sessions; steady-window selection; telling the user the
+      cap hides the effect and offering to test with it lifted). Never relabel noise as a result; "no measurable
+      benefit beyond credible noise means the default wins" stays law. Findings + a concrete design under this item
+      (read `docs/product/TRIAL_PROTOCOL.md` and PRODUCT_CONSTITUTION §9/§26 first). Implementation is the NEXT
+      worker's, two reviews; then the P4 proof is re-run on the owner's real play.
 - [x] **CR-zh-drift-count** (second whole-range review) zh-CN `home.json` driftCount strings still said "已漂移" after the English was reworded to "changed since they were last good" (`8d855c05`).
       Done `e49b53ed` (2026-11-11 s18, TS only, not installed): both read "{{count}} 项设置自上次正常以来已改变". Test fails on
       the old file. Full vitest 535/538 (the 3 site-app suites).
@@ -1024,6 +1056,9 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       (CODE-ONLY); the owner-and-friend walkthrough is the next investment, not code.
 - [ ] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "Compy finished the supported
       tests" with nothing worth another run; record it in BACKLOG as the Phase 4 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p4 exit answer is no you decide a more fitting resolution". Owner delegated
+      2026-11-12; coordinator resolution: "1 change couldn't be judged" does not count as finished; the wording stays;
+      P4-judge-noisy makes the unjudged case judgeable honestly, then the proof is re-run on the owner's real play.
       2026-11-10 desk session (not ticked): blocked before any Trial. The owner's PBZ Trial `exp:6-1793579868420`
       (visual-effects, started 2026-11-02 00:37Z) is still Running with its change applied, and the backend refuses
       a new Trial while one is Pending/Running (`experiment.rs:817-823`). Human step: the owner finishes it (one PBZ
@@ -1187,6 +1222,10 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
 - [ ] **P5-exit-proof** (owner, FULL) Run the journey on WARDOGS from the button to the summary with no manual
       Trial clicks; the friend repeats it once. Record in BACKLOG as the Phase 5 exit. Needs P5-guided through
       P5-learned. ROADMAP P5 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p5, p6 exit not sure what this means if you are capable of delegating the
+      resolution for this task then do so yourself". Owner delegated 2026-11-12; coordinator resolution: the wording
+      stays (owner half met on ROB RUN; friend half open), resolved with P6 and P7 by one friend test using the
+      shareable installer (P7-tester-package). No tick now.
       2026-11-10 desk session (not ticked): needs a person. The exit is measured on normal play (Constitution 36,
       P5-realplay), so an unattended idle scene is not a valid run, and the same open PBZ Trial blocks the button.
       Human step: after P4's step, the owner presses Optimize my game on WARDOGS and plays (~25 min); the friend once.
@@ -1252,6 +1291,9 @@ room or station picked by hand.
 - [ ] **P6-exit-proof** (owner, FULL) From Home, follow a real (or past) WARDOGS crash and a stutter to a next
       step or honest unknown without picking a room; the friend repeats it once. Record in BACKLOG as the
       Phase 6 exit. Needs P6-changed through P6-unknown. ROADMAP P6 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p5, p6 exit not sure what this means if you are capable of delegating the
+      resolution for this task then do so yourself". Owner delegated 2026-11-12; coordinator resolution: as P5-exit-
+      proof (wording stays; the friend half closes with P7's friend test on the P7-tester-package installer). No tick.
       2026-11-10 desk session, driven on the installed `68f2272b` from Home with no room picked: Home > Something went
       wrong lands on Problems with one next step for the newest crash (ROB RUN App crash, Nov 10 11:17: "Verify the
       game's files, then update it", with receipt), and its "Stutters or runs slow?" button compares the latest
@@ -1452,6 +1494,10 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       "it crashed" without asking what a word means; the owner opens the technical layer on each and finds the
       exact setting, measurement and source. Record in BACKLOG as the Phase 7 exit. Needs P7-route through
       P7-teach; P7-palette and the rig slices do not block it. ROADMAP P7 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p7 exit whenever optimal give me a downloadable file of the app that can be
+      easily shared to a friend to have test whatever is needed for this exit" and "a release to testers presumably
+      goes hand in hand with p7 i think or clarify thhhe p7 task". Owner delegated 2026-11-12; coordinator resolution:
+      one friend test on a shareable installer (P7-tester-package) closes the friend halves of P5, P6 and P7.
       2026-11-10 desk session (not ticked): needs the friend at the keyboard (~10 min) and the owner opening the
       technical layer on each answer (~5 min); not drivable unattended.
       2026-11-10 ~19:16: not attempted or simulated (needs the friend); still open.
@@ -1459,6 +1505,12 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO LEAVE ANYTHING LIKE THAT ONLINE"). Do not ask the owner for it again;
       do not simulate it. Stays unticked until the owner either supplies a tester or decides in writing that the owner
       half alone exits the phase.
+- [ ] **P7-tester-package** (owner decision 2026-11-12; NEXT worker, not built in s25) A no-updater installer of
+      `main` after the tester-blocking fixes are in, plus a one-page plain-language tester guide (what to click for
+      "more FPS", "it stutters", "it crashed"; how to undo; what to send back), handed to the owner as one
+      downloadable file to share with a friend. Note: a formal updater-published release is a separate thing that
+      needs the updater signing key (not on this PC) and is not required for P7. Owner-held, separate: code signing
+      (no spend; the coordinator prepares a definitive cost breakdown) and legal (deferred by the owner).
 
 ### Then — Roadmap Phase 8: Advanced tuning envelope (`product/ROADMAP.md` Phase 8, `product/RISK_MODEL.md`)
 Planned 2026-10-28 (scheduled refill). ROADMAP: broaden only after the Trial/risk/stability systems are
