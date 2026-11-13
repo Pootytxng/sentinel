@@ -95,7 +95,7 @@ pub(crate) fn build_receipt_payload(
     let gpu_model_raw = gpu_now
         .as_deref()
         .filter(|g| crate::priorities::identifies_a_card(g))
-        .filter(|_| crate::priorities::session_gpu(&session).is_some())
+        .filter(|_| crate::priorities::session_gpu(session).is_some())
         .unwrap_or("unknown");
     let cpu_family = hardware
         .get("cpu_arch")
@@ -517,13 +517,19 @@ mod receipts_tests {
         let old_shape = json!([{ "process_name": "older.exe", "avg_fps": 120.0, "low1_fps_est": 90.0, "duration_secs": 2400 }]);
         let p = build_receipt_payload(&hybrid(), &old_shape, &json!([])).expect("an old session still makes a receipt");
         assert_eq!(p.hw_class.gpu_model, "unknown");
-        assert_eq!(p.hw_class.gpu_vendor, gpu_vendor_token("unknown"));
+        assert_eq!(p.hw_class.gpu_vendor, "other");
         assert_eq!((p.outcome.game.as_str(), p.outcome.avg_fps, p.outcome.low1_fps_est), ("older", 120.0, 90.0));
         assert_eq!(p.outcome.duration_bucket, "30-60min");
         // A fingerprint that recorded only Windows' fallback adapter is no card recorded either.
         let fallback = json!([on_card("g.exe", Some("Microsoft Basic Display Adapter"))]);
         let p = build_receipt_payload(&hybrid(), &fallback, &json!([])).expect("kept");
         assert_eq!(p.hw_class.gpu_model, "unknown");
+        // Opus nit: a blank card name, or a fingerprint with no card key, is no card recorded.
+        for fp in [json!({ "gpu": "   " }), json!({ "hash": "h" })] {
+            let row = json!([{ "process_name": "g.exe", "avg_fps": 120.0, "low1_fps_est": 90.0, "duration_secs": 2400, "hw_fingerprint": fp.clone() }]);
+            let p = build_receipt_payload(&hybrid(), &row, &json!([])).expect("kept");
+            assert_eq!(p.hw_class.gpu_model, "unknown", "{fp}");
+        }
         // The same session recorded on this card names it.
         let p = build_receipt_payload(&hybrid(), &json!([on_card("g.exe", Some(HYBRID))]), &json!([])).expect("present");
         assert_eq!(p.hw_class.gpu_model, "amd radeon rx 9070 xt");
