@@ -823,6 +823,7 @@
       "display": "the monitor",
       "captureMethod": "the capture method",
       "gamingMode": "Gaming Mode",
+      "gamingModePlan": "the power plan under Gaming Mode",
       "other": "a condition"
     },
     "stretchBefore": "Before session",

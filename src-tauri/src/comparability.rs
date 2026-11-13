@@ -372,6 +372,30 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
         &mut verdict,
         &mut lower,
     );
+    // CR-trial-plan-switch-confound: Gaming Mode on for both, but it leaves the power plan alone while
+    // a Trial or the benchmark holds a setting of it, so one session can have run on its plan and the
+    // other on the user's. Compared only when Gaming Mode was on for both. A session it switched the
+    // plan for only part of ("mixed") never matches another: how much of each ran on which plan is
+    // not recorded.
+    if a.gaming_mode_active == Some(true) && b.gaming_mode_active == Some(true) {
+        use crate::sessions::GamingModePlan;
+        match (a.gaming_mode_plan, b.gaming_mode_plan) {
+            (Some(x), Some(y)) if x != y || x == GamingModePlan::Mixed => {
+                changed.push(("gaming-mode-plan", format!("Gaming Mode: {x} → {y}")));
+                reasons.push(
+                    "Gaming Mode was on for both sessions, but it didn't do the same with the power plan in \
+                     each, so the two ran on different power plans."
+                        .into(),
+                );
+                lower(Comparability::Partial, &mut verdict);
+            }
+            (Some(_), None) | (None, Some(_)) => missing.push((
+                "gaming-mode-plan",
+                "Whether Gaming Mode switched the power plan wasn't recorded on one of these sessions.".into(),
+            )),
+            _ => {}
+        }
+    }
 
     // ── Capture method + shared metrics: only metrics BOTH backends captured may be compared. ─────
     let shared_metrics = shared_metrics_of(a, b);
@@ -674,6 +698,7 @@ mod tests {
             compy_changes_since_set_aside: None,
             hw_fingerprint: Some(fp("Radeon RX 9070 XT", "25.7.1", 32, "2560x1440@165")),
             gaming_mode_active: Some(false),
+            gaming_mode_plan: None,
             stutter_insight: None,
             stutter_timeline: Vec::new(),
             stutter_events: Vec::new(),
@@ -724,6 +749,37 @@ mod tests {
         let m = derive(&old, &b);
         assert!(m.changed_keys.is_empty());
         assert!(m.missing_keys.contains(&"gaming-mode".to_string()), "{:?}", m.missing_keys);
+    }
+
+    // CR-trial-plan-switch-confound: Gaming Mode on for both sessions, but it switched the power plan
+    // for one (the baseline) and left it alone for the other (a USB/PCIe Trial held a setting of it).
+    #[test]
+    fn gaming_mode_on_for_both_but_the_plan_handled_differently_is_a_changed_condition() {
+        use crate::sessions::GamingModePlan as P;
+        let gm = |plan: Option<P>| {
+            let mut s = session();
+            (s.gaming_mode_active, s.gaming_mode_plan) = (Some(true), plan);
+            s
+        };
+        let c = derive(&gm(Some(P::Switched)), &gm(Some(P::LeftAlone)));
+        assert_eq!(c.verdict, Comparability::Partial);
+        assert_eq!(c.changed_keys, vec!["gaming-mode-plan"]);
+        assert_eq!(c.changed_context, vec!["Gaming Mode: switched the power plan → left the power plan alone"]);
+        // The same handling both times: the same condition.
+        assert_eq!(derive(&gm(Some(P::Switched)), &gm(Some(P::Switched))).verdict, Comparability::Comparable);
+        assert_eq!(derive(&gm(Some(P::LeftAlone)), &gm(Some(P::LeftAlone))).verdict, Comparability::Comparable);
+        // Part of each session on each plan: never the same condition, even as another such session.
+        let mixed = derive(&gm(Some(P::Mixed)), &gm(Some(P::Mixed)));
+        assert_eq!((mixed.verdict, mixed.changed_keys.clone()), (Comparability::Partial, vec!["gaming-mode-plan".to_string()]));
+        // Recorded on one side only (a session saved before this was recorded): missing context.
+        let m = derive(&gm(None), &gm(Some(P::Switched)));
+        assert!(m.changed_keys.is_empty());
+        assert!(m.missing_keys.contains(&"gaming-mode-plan".to_string()), "{:?}", m.missing_keys);
+        // Gaming Mode off for both: nothing to compare (the field is None there anyway).
+        assert_eq!(derive(&session(), &session()).verdict, Comparability::Comparable);
+        // On for one only: the Gaming Mode condition already names it; the plan isn't listed twice.
+        let one = derive(&session(), &gm(Some(P::Switched)));
+        assert_eq!(one.changed_keys, vec!["gaming-mode"]);
     }
 
     #[test]

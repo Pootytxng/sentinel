@@ -812,6 +812,7 @@
       "display": "显示器",
       "captureMethod": "采集方式",
       "gamingMode": "游戏模式",
+      "gamingModePlan": "游戏模式下的电源计划",
       "other": "某项条件"
     },
     "stretchBefore": "基准那局",

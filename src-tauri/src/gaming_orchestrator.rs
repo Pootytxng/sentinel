@@ -207,6 +207,13 @@ fn rec_of_label(label: &str) -> Option<&'static str> {
     }
 }
 
+/// PURE (CR-trial-plan-switch-confound): whether a Gaming Mode session's contract switched the power
+/// plan. A start leaves the plan alone while a setting of it is held, so two Gaming Mode sessions can
+/// run on different plans.
+pub(crate) fn switched_plan(contract: &[SessionChange]) -> bool {
+    contract.iter().any(|c| rec_of_label(&c.label) == Some(REC_POWER))
+}
+
 /// The settings an open Trial or the benchmark's tweak trial holds right now. An unreadable Trial
 /// store refuses the start: it could hold the running Trial.
 fn held_by_trials() -> Result<Vec<String>, String> {
@@ -1506,6 +1513,17 @@ mod spans_trial_tests {
         assert_eq!(session_hold_refusal(REC_USB, Some(&without_plan)), None, "no plan held: free");
         assert_eq!(session_hold_refusal(REC_PCIE, None), None, "no session");
         assert!(session_hold_refusal(REC_POWER, Some(&with_plan)).expect("the plan itself").contains("holds this setting"));
+    }
+
+    // CR-trial-plan-switch-confound: what a session records about the plan is read from the contract,
+    // the same way the holds above read it.
+    #[test]
+    fn a_contract_switched_the_plan_only_when_it_holds_the_plan_step() {
+        assert!(switched_plan(&[change(LABEL_GAME_MODE), change(LABEL_POWER)]));
+        assert!(!switched_plan(&[change(LABEL_GAME_MODE), change(LABEL_GAME_BAR)]), "the plan left alone");
+        assert!(!switched_plan(&[]));
+        // The left-alone label for a held plan setting is display only, never a plan step.
+        assert!(!switched_plan(&[change(LABEL_POWER_SETTING_HELD)]));
     }
 
     // CR-core-parking-held-with-plan (fourth range review, SHOULD-FIX): the core-parking leftover

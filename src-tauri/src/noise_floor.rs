@@ -1068,6 +1068,7 @@ mod tests {
                 display: "1920x1080@250".into(),
             }),
             gaming_mode_active: Some(false),
+            gaming_mode_plan: None,
             stutter_insight: None,
             stutter_timeline: Vec::new(),
             stutter_events: Vec::new(),

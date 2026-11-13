@@ -158,6 +158,12 @@ pub(crate) struct SessionSummary {
     /// monitoring stopped). Additive: pre-field records parse as None → honestly Unknown.
     #[serde(default)]
     pub(crate) gaming_mode_active: Option<bool>,
+    /// CR-trial-plan-switch-confound: what Gaming Mode did with the power plan while it was on for
+    /// this session (it leaves the plan alone while a Trial or the benchmark holds a setting of it).
+    /// None when Gaming Mode was never on, or for a session saved before this was recorded. Additive:
+    /// not written when None; an unknown value reads as None.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "gaming_mode_plan_lenient")]
+    pub(crate) gaming_mode_plan: Option<GamingModePlan>,
     /// Stutter Forensics: at most one hedged insight correlating the worst dips with a signal, or
     /// None when there's no clear pattern. Computed at finalize from the read-only session timeline.
     #[serde(default)]
@@ -722,6 +728,7 @@ impl SessionAccumulator {
             // Stamped by the monitoring loop at save time (finalize stays pure/system-free).
             hw_fingerprint: None,
             gaming_mode_active: None,
+            gaming_mode_plan: None,
             stutter_insight: None,
             stutter_timeline: Vec::new(),
             stutter_events: Vec::new(),
@@ -735,6 +742,47 @@ impl SessionAccumulator {
             gpu_load: self.gpu_load,
         }
     }
+}
+
+/// CR-trial-plan-switch-confound: what Gaming Mode did with the power plan during a session it was on
+/// for. Two sessions that both ran with Gaming Mode on but differ here ran on different power plans.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum GamingModePlan {
+    /// Gaming Mode switched the power plan for its session.
+    Switched,
+    /// Gaming Mode left the power plan as it was (a Trial or the benchmark held a setting of it).
+    LeftAlone,
+    /// Both, at different points of this session (Gaming Mode was started more than once).
+    Mixed,
+}
+
+impl std::fmt::Display for GamingModePlan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Switched => "switched the power plan",
+            Self::LeftAlone => "left the power plan alone",
+            Self::Mixed => "switched the power plan for part of the session",
+        })
+    }
+}
+
+impl GamingModePlan {
+    /// PURE: what a session reads once a Gaming Mode session that `switched` (or didn't) the plan is
+    /// seen during it, given what was seen before.
+    pub(crate) fn seen(before: Option<Self>, switched: bool) -> Self {
+        let now = if switched { Self::Switched } else { Self::LeftAlone };
+        match before {
+            None => now,
+            Some(b) if b == now => now,
+            Some(_) => Self::Mixed,
+        }
+    }
+}
+
+/// An unknown or damaged `gaming_mode_plan` value reads as not recorded, never as a failed load.
+fn gaming_mode_plan_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<GamingModePlan>, D::Error> {
+    Ok(serde_json::from_value(serde_json::Value::deserialize(d)?).ok())
 }
 
 fn sessions_path() -> PathBuf {
@@ -1537,6 +1585,44 @@ mod session_tests {
         // today's backend or back-filled with fabricated conditions.
         assert!(all[0].capture_capabilities.is_none());
         assert!(all[0].game_state.is_none());
+        // CR-trial-plan-switch-confound: an old session predates gaming_mode_plan: not recorded.
+        assert!(all[0].gaming_mode_plan.is_none());
+    }
+
+    // CR-trial-plan-switch-confound: what Gaming Mode did with the power plan, recorded per session.
+    #[test]
+    fn gaming_mode_plan_is_recorded_per_session_and_reads_leniently() {
+        use GamingModePlan as P;
+        // One Gaming Mode session, or several that did the same: that handling; ones that differed: mixed.
+        assert_eq!(P::seen(None, true), P::Switched);
+        assert_eq!(P::seen(None, false), P::LeftAlone);
+        assert_eq!(P::seen(Some(P::Switched), true), P::Switched);
+        assert_eq!(P::seen(Some(P::Switched), false), P::Mixed);
+        assert_eq!(P::seen(Some(P::LeftAlone), true), P::Mixed);
+        assert_eq!(P::seen(Some(P::Mixed), true), P::Mixed);
+        let row = |plan: serde_json::Value| {
+            serde_json::json!({
+                "started_at": "t", "duration_secs": 120, "process_name": "g.exe", "samples": 3,
+                "avg_fps": 100.0, "avg_frametime_ms": 10.0, "low1_fps_est": 80.0,
+                "peak_gpu_temp_c": null, "peak_gpu_usage_pct": null, "peak_ram_used_bytes": null,
+                "ram_total_bytes": null, "compy_changes_active": 0, "gaming_mode_active": true,
+                "gaming_mode_plan": plan
+            })
+        };
+        let s: SessionSummary = serde_json::from_value(row(serde_json::json!("left-alone"))).unwrap();
+        assert_eq!(s.gaming_mode_plan, Some(P::LeftAlone));
+        // A value a newer Compy may write, or a damaged one, reads as not recorded; the row still loads.
+        for odd in [serde_json::json!("something-new"), serde_json::json!(7), serde_json::Value::Null] {
+            let s: SessionSummary = serde_json::from_value(row(odd.clone())).unwrap();
+            assert_eq!(s.gaming_mode_plan, None, "{odd}");
+        }
+        // Written kebab-case, and not written at all when not recorded (an older Compy never sees it).
+        let mut unrecorded = s.clone();
+        unrecorded.gaming_mode_plan = None;
+        assert!(serde_json::to_value(&unrecorded).unwrap().get("gaming_mode_plan").is_none());
+        let mut with = s.clone();
+        with.gaming_mode_plan = Some(P::Switched);
+        assert_eq!(serde_json::to_value(&with).unwrap()["gaming_mode_plan"], "switched");
     }
 
     // P4-comparable: a tick the game presented behind another window is not play, so it stays out of

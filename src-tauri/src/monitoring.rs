@@ -1223,8 +1223,13 @@ fn start_fps_capture_locked() -> Result<(), String> {
             let mut ram_logged = false;
             // Gaming Mode presence: a valid session slot at ANY tick marks the whole session —
             // a save-time-only probe would read false for a Gaming Mode session that ended
-            // before monitoring stopped. Read-only 1 Hz file check, stops once seen.
+            // before monitoring stopped. Read-only 1 Hz file check (the same read a session without
+            // Gaming Mode makes every tick).
             let mut gaming_mode_seen = false;
+            // CR-trial-plan-switch-confound: what each Gaming Mode session seen did with the power plan
+            // (read once per Gaming Mode session id), so a Trial never compares two plans unawares.
+            let mut gaming_mode_plan: Option<crate::sessions::GamingModePlan> = None;
+            let mut gaming_mode_ids: Vec<String> = Vec::new();
             // OS chatter that constantly starts/stops — never the culprit, would drown the signal.
             let proc_ignore: [&str; 8] = [
                 "svchost",
@@ -1324,8 +1329,13 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 // is running; never fabricated. Session-scoped peak, same as the GPU sensors above.
                 let cpu_temp = crate::cpu_temp::read_cpu_temp().map(|t| t.temp_c.round() as u32);
                 acc.record_thermals(cpu_temp, gpu_hotspot_temp);
-                if !gaming_mode_seen && crate::gaming_session::load_session().is_some() {
+                if let Some(gm) = crate::gaming_session::load_session() {
                     gaming_mode_seen = true;
+                    if !gaming_mode_ids.contains(&gm.session_id) {
+                        let switched = crate::gaming_orchestrator::switched_plan(&gm.changes);
+                        gaming_mode_plan = Some(crate::sessions::GamingModePlan::seen(gaming_mode_plan, switched));
+                        gaming_mode_ids.push(gm.session_id);
+                    }
                 }
 
                 // ── Stutter signals (capped at 50, read-only) ──
@@ -1392,6 +1402,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 let mut summary = acc.finalize(start.elapsed().as_secs());
                 summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
                 summary.gaming_mode_active = Some(gaming_mode_seen);
+                summary.gaming_mode_plan = gaming_mode_plan;
                 summary.stutter_insight = crate::stutter::analyze(&timeline, &events);
                 summary.stutter_timeline = timeline;
                 summary.stutter_events = events;

@@ -615,6 +615,8 @@ const PAIR_CONDITION_KEY: Record<string, string> = {
   "capture-method": "captureMethod",
   // CR-trial-gm-between (comparability.rs): Gaming Mode on for one session and off for the other.
   "gaming-mode": "gamingMode",
+  // CR-trial-plan-switch-confound (comparability.rs): Gaming Mode on for both, the power plan not handled alike.
+  "gaming-mode-plan": "gamingModePlan",
 };
 
 function pairList(keys: string[], t: Translate): string {

@@ -871,6 +871,7 @@ mod comparison_tests {
             compy_changes_since_set_aside: None,
             hw_fingerprint: None,
             gaming_mode_active: None,
+            gaming_mode_plan: None,
             stutter_insight: None,
             stutter_timeline: Vec::new(),
             stutter_events: Vec::new(),
