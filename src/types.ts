@@ -398,6 +398,12 @@ export type GameStateFingerprint = {
   hardware_fingerprint_hash?: string | null;
   active_compy_change_ids?: string[];
   gaming_mode_active?: boolean | null;
+  /** TG-context: active power plan GUID at capture start (lower-case); absent = unread. */
+  power_plan_guid?: string | null;
+  /** TG-context: plan differed at the end; present only when both ends were read. */
+  power_plan_changed?: boolean | null;
+  /** TG-context schema version; absent = recorded before context was collected. */
+  context_version?: number | null;
   collected_at?: string | null;
 };
 

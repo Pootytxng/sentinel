@@ -1212,6 +1212,9 @@ fn start_fps_capture_locked() -> Result<(), String> {
             // P5-enough: a new capture starts from nothing, never the last capture's count.
             *lock_progress() = None;
             let start = std::time::Instant::now();
+            // TG-context: the active power plan as the capture starts (read-only powercfg query, once;
+            // read again at save to see whether it changed). Unread stays unknown.
+            let plan_at_start = crate::actions::current_power_plan_guid();
             // Stutter Forensics: a read-only per-second timeline (elapsed, 1% low) + a capped log of
             // signals (process starts / RAM 90% / GPU clock drop), analyzed once at finalize. Only
             // runs while monitoring (the user opted in); bounded so it never grows unbounded.
@@ -1414,7 +1417,8 @@ fn start_fps_capture_locked() -> Result<(), String> {
                     &summary.process_name,
                     &summary.started_at,
                     Some(gaming_mode_seen),
-                ));
+                )
+                .with_power_plan(plan_at_start, crate::actions::current_power_plan_guid()));
                 // P7-notify (Constitution §15, §33): a saved session toasts only when it settles a
                 // decision or a state change (a Trial's after-session, a before/after verdict, a
                 // regression against the game's last steady session). Otherwise the debrief waits

@@ -116,6 +116,20 @@ pub(crate) struct GameStateFingerprint {
     /// Whether Gaming Mode was active during the session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gaming_mode_active: Option<bool>,
+    /// TG-context: the active power plan's GUID (lower-case, as powercfg prints it) when the capture
+    /// STARTED. `None` = unread (powercfg failed or printed no GUID), never a guessed plan.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_plan_guid: Option<String>,
+    /// TG-context: whether the active plan at the session's END differed from the start one.
+    /// `Some(false)` only when both ends were read and match; `None` when either end is unread. Two
+    /// reads, not a per-tick watch: a switch and back within the session is not seen here (what
+    /// Gaming Mode itself did to the plan is on the session's `gaming_mode_plan`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_plan_changed: Option<bool>,
+    /// TG-context: which context fields this build collects ([`CONTEXT_VERSION`]); `None` = a session
+    /// recorded before the Trial conditions guard, whose missing context fields mean "not collected".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_version: Option<u32>,
 
     /// When this fingerprint was collected (session start, ISO-8601), for provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -127,7 +141,24 @@ pub(crate) struct GameStateFingerprint {
     pub unknown_fields: HashMap<String, serde_json::Value>,
 }
 
+/// TG-context schema version: 1 = the power plan at start + whether it changed by the end.
+pub(crate) const CONTEXT_VERSION: u32 = 1;
+
 impl GameStateFingerprint {
+    /// PURE (TG-context): record the plan read at the capture's start and end. A start that can't be
+    /// read leaves the plan unknown; "changed" needs both reads (GUIDs compared case-insensitively).
+    pub(crate) fn with_power_plan(mut self, at_start: Option<String>, at_end: Option<String>) -> Self {
+        let clean = |g: Option<String>| g.map(|g| g.trim().to_ascii_lowercase()).filter(|g| !g.is_empty());
+        let (start, end) = (clean(at_start), clean(at_end));
+        self.power_plan_changed = match (&start, &end) {
+            (Some(s), Some(e)) => Some(s != e),
+            _ => None,
+        };
+        self.power_plan_guid = start;
+        self.context_version = Some(CONTEXT_VERSION);
+        self
+    }
+
     /// Collect the V1 (highest-confidence, already-available) fields from the cached hardware
     /// snapshot. Everything not provable stays `None`/empty — honestly unknown, never inferred.
     ///
@@ -176,6 +207,11 @@ impl GameStateFingerprint {
             windows_build,
             hardware_fingerprint_hash: (!fp.hash.is_empty()).then(|| fp.hash.clone()),
             gaming_mode_active,
+            // TG-context fields are filled by `with_power_plan` at the capture boundary (it holds
+            // the start read); a fingerprint built without it says "not collected".
+            power_plan_guid: None,
+            power_plan_changed: None,
+            context_version: None,
             collected_at: (!collected_at.trim().is_empty()).then(|| collected_at.to_string()),
             // --- Not provable in V1 → honestly unknown (documented on each field above) ---
             executable_version: None,
@@ -231,6 +267,49 @@ mod tests {
         assert!(g.upscaler.is_none());
         assert!(g.frame_generation_state.is_none());
         assert!(g.active_compy_change_ids.is_empty());
+    }
+
+    const BAL: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+    const SYNEZ: &str = "6c1e3f42-0d2b-4a77-9e1f-3b7a7f6e1c10";
+
+    #[test]
+    fn power_plan_same_at_both_ends_reads_unchanged() {
+        let g = GameStateFingerprint::default().with_power_plan(Some(BAL.into()), Some(BAL.to_uppercase()));
+        assert_eq!(g.power_plan_guid.as_deref(), Some(BAL));
+        assert_eq!(g.power_plan_changed, Some(false));
+        assert_eq!(g.context_version, Some(CONTEXT_VERSION));
+    }
+
+    #[test]
+    fn power_plan_switched_by_the_end_reads_changed_and_keeps_the_start_plan() {
+        let g = GameStateFingerprint::default().with_power_plan(Some(SYNEZ.into()), Some(BAL.into()));
+        assert_eq!(g.power_plan_guid.as_deref(), Some(SYNEZ));
+        assert_eq!(g.power_plan_changed, Some(true));
+    }
+
+    #[test]
+    fn an_unread_end_leaves_changed_unknown_never_false() {
+        let start_only = GameStateFingerprint::default().with_power_plan(Some(BAL.into()), None);
+        assert_eq!((start_only.power_plan_guid.as_deref(), start_only.power_plan_changed), (Some(BAL), None));
+        // An unread start is unknown, even when the end was read: never borrow the end plan.
+        let end_only = GameStateFingerprint::default().with_power_plan(Some("  ".into()), Some(BAL.into()));
+        assert_eq!((end_only.power_plan_guid, end_only.power_plan_changed), (None, None));
+        // Collected-but-unread still says which context version tried (unknown, not "not collected").
+        assert_eq!(end_only.context_version, Some(CONTEXT_VERSION));
+    }
+
+    #[test]
+    fn a_session_from_before_tg_context_loads_with_its_context_not_collected() {
+        let old = r#"{"process_name":"RobRun.exe","gpu_driver":"32.0.1","gaming_mode_active":false}"#;
+        let g: GameStateFingerprint = serde_json::from_str(old).unwrap();
+        assert_eq!((&g.power_plan_guid, g.power_plan_changed, g.context_version), (&None, None, None));
+        assert!(g.unknown_fields.is_empty(), "the new keys are known fields, not catch-all: {:?}", g.unknown_fields);
+        let v = serde_json::to_value(&g).unwrap();
+        assert!(v.get("context_version").is_none() && v.get("power_plan_guid").is_none(), "{v}");
+        // And a new row round-trips its context.
+        let new = GameStateFingerprint::default().with_power_plan(Some(BAL.into()), Some(SYNEZ.into()));
+        let back: GameStateFingerprint = serde_json::from_value(serde_json::to_value(&new).unwrap()).unwrap();
+        assert_eq!(back, new);
     }
 
     #[test]
