@@ -727,6 +727,23 @@ fn clear_result_at(path: &std::path::Path) {
 
 /// #281 — the armed store's `Option` semantics and `clear_result` are UNCHANGED by the
 /// atomic-write lane. Explicit temp paths only; nothing reads the real data root.
+/// Test isolation (item 4): a scratch folder under the temp dir that starts EMPTY. Test folders are
+/// named by process id and a counter, and Windows reuses process ids, so a name can come back in a
+/// later test run with that run's files still inside; whatever is there is removed first. A folder
+/// that can't be cleared (a file held open) stops the test rather than handing it stale state.
+#[cfg(test)]
+fn fresh_scratch(name: String) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(name);
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => panic!("a leftover scratch folder {} couldn't be cleared: {e}", dir.display()),
+    }
+    std::fs::create_dir_all(&dir).unwrap();
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "scratch folder {} starts empty", dir.display());
+    dir
+}
+
 #[cfg(test)]
 mod comparison_persistence_tests {
     use super::*;
@@ -1242,17 +1259,6 @@ mod comparison_tests {
 /// open from inside the critical section, so the interleaving lands every run instead of once in a
 /// thousand. The widening does not create the defect — removing only the lock, with the widening
 /// left in place, is what turns these red.
-/// Test isolation (item 4): a scratch folder under the temp dir that starts EMPTY. Test folders are
-/// named by process id and a counter, and Windows reuses process ids, so a name can come back in a
-/// later test run with that run's files still inside; whatever is there is removed first.
-#[cfg(test)]
-fn fresh_scratch(name: String) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(name);
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
-}
-
 #[cfg(test)]
 mod comparison_race_tests {
     use super::*;
