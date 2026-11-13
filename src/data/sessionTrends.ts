@@ -17,9 +17,12 @@ export type SessionTrendsData = {
   total: number;
   games: GameTrend[];
   overallBestFps: number;
-  /** recent-half vs earlier-half average of avg_fps; null when too few sessions to compare honestly. */
-  trend: "up" | "down" | "flat" | null;
 };
+
+// Measurement item 8: no overall up/down/flat arrow. It compared the recent half of every game's
+// sessions with the earlier half against a fixed 3%/2 fps, across games and changes, where no measured
+// band exists; a direction is described only with the game's measured band (the session patterns), or
+// not at all.
 
 // Display grouping key = the pretty name (prettyGameName also strips Unreal/GDK
 // "-Win64-Shipping" wrappers, so the same game's binaries aggregate as one row).
@@ -49,16 +52,5 @@ export function computeSessionTrends(all: SessionSummary[]): SessionTrendsData {
   );
   const overallBestFps = sessions.reduce((m, s) => Math.max(m, s.avg_fps), 0);
 
-  // Trend: compare the recent half vs the earlier half (need ≥4 sessions to be meaningful, and a
-  // ≥3%/≥2fps move to count as up/down rather than noise — honest, not a fabricated arrow).
-  let trend: SessionTrendsData["trend"] = null;
-  if (total >= 4) {
-    const half = Math.floor(total / 2);
-    const avg = (arr: SessionSummary[]) => arr.reduce((a, s) => a + s.avg_fps, 0) / arr.length;
-    const recent = avg(sessions.slice(0, half));
-    const earlier = avg(sessions.slice(total - half));
-    const delta = recent - earlier;
-    trend = Math.abs(delta) < Math.max(2, earlier * 0.03) ? "flat" : delta > 0 ? "up" : "down";
-  }
-  return { total, games, overallBestFps, trend };
+  return { total, games, overallBestFps };
 }

@@ -755,7 +755,9 @@ function EfficacyCard({
         ))}
       </div>
       <p className="bench-fine">
-        {t("gaming.benchmark.noiseFloorNote", { pct: efficacy.noise_floor_pct })}
+        {efficacy.noise_floor_pct == null
+            ? t("gaming.benchmark.noiseUnmeasuredNote")
+            : t("gaming.benchmark.noiseFloorNote", { pct: efficacy.noise_floor_pct })}
       </p>
     </Card>
   );

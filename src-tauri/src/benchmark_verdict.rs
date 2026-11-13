@@ -11,7 +11,6 @@
 //! hardcoded percent. `Keep` only when the CI excludes zero AND clears that floor.
 #![allow(dead_code)] // engine core: wired to commands + scoreboard in P2/P3.
 
-use crate::benchmark::DEFAULT_NOISE_FLOOR_PCT; // fallback floor when calibration is weak
 use serde::Serialize;
 
 // ── Tiny deterministic PRNG (SplitMix64) — bootstrap resampling without a `rand` dep ──
@@ -251,7 +250,7 @@ impl MetricEval {
 /// spread, never below the conservative default.
 fn eval_metric(name: &'static str, baseline: &[f64], treatment: &[f64]) -> Option<MetricEval> {
     let (effect, lo, hi) = bootstrap_median_pct_change(baseline, treatment)?;
-    let floor = cov_pct(baseline).max(DEFAULT_NOISE_FLOOR_PCT);
+    let floor = cov_pct(baseline).max(crate::noise_floor::MIN_CLAIM_PCT);
     Some(MetricEval { name, effect_pct: effect, ci_lo: lo, ci_hi: hi, floor_pct: floor })
 }
 

@@ -93,7 +93,9 @@ export function TwoFutures({
           ))}
         </div>
         <p className="bench-fine">
-          {t("gaming.twoFutures.scoresNote", { pct: eff.noise_floor_pct })}
+          {eff.noise_floor_pct == null
+            ? t("gaming.twoFutures.scoresUnmeasuredNote")
+            : t("gaming.twoFutures.scoresNote", { pct: eff.noise_floor_pct })}
         </p>
       </div>
     </Card>

@@ -165,6 +165,7 @@
     "sinceBaselineTitle": "Since your baseline",
     "noChangesRecorded": "No Compy changes recorded since the baseline — this reflects manual or ambient changes.",
     "noiseFloorNote": "Changes within ±{{pct}}% are reported as “no measurable change” — below the run-to-run noise floor, so we won’t call them a win or a loss.",
+    "noiseUnmeasuredNote": "Compy hasn't measured how much these scores move between runs with nothing changed, so it won't call a change better or worse. The numbers are what each run measured.",
     "componentLabels": {
       "cpu": "CPU",
       "ram": "Memory",
@@ -173,6 +174,7 @@
     },
     "verdictLabels": {
       "improved": "Improved",
+      "unmeasured": "Can't call it",
       "noChange": "No measurable change",
       "regressed": "Regressed"
     },
@@ -553,6 +555,7 @@
     "baselineLabel": "Baseline",
     "nowLabel": "Now",
     "loadingSplit": "Loading the split…",
+    "scoresUnmeasuredNote": "Relative scores (0-100) from your own two runs. How much they move between runs with nothing changed isn't measured, so Compy calls no change better or worse.",
     "scoresNote": "Relative scores (0–100) from your own two runs — changes within ±{{pct}}% read as “no measurable change”."
   },
   "scanStream": {

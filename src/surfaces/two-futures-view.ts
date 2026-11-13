@@ -50,6 +50,7 @@ export function partGlow(efficacy: Efficacy | null | undefined, partId: string):
   const component = PART_COMPONENT[partId];
   if (!efficacy || !component) return 1;
   const row = efficacy.per_component.find((c) => c.component === component);
-  if (!row || row.verdict === "no-measurable-change") return 1;
+  // Item 8: an "unmeasured" row is not a measured effect either: neutral.
+  if (!row || row.verdict === "no-measurable-change" || row.verdict === "unmeasured") return 1;
   return Math.min(2.2, Math.max(0.6, 1 + row.delta_pct * 0.08));
 }

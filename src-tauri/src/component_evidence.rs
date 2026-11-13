@@ -158,7 +158,8 @@ pub(crate) fn attribute(report: &PatternReport) -> ComponentEvidenceReport {
 
 #[tauri::command]
 pub(crate) fn get_component_evidence() -> ComponentEvidenceReport {
-    attribute(&detect_patterns(&crate::sessions::get_session_summaries()))
+    let sessions = crate::sessions::get_session_summaries();
+    attribute(&detect_patterns(&sessions, &|s| crate::experiment::measured_noise_at(&sessions, s).map(|n| n.low1_band_pct)))
 }
 
 // ─── Guard tests (§5G anti-fabrication) ──────────────────────────────────

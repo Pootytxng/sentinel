@@ -305,6 +305,9 @@ export type GameGpuLimit = {
 
 export type SessionSummary = {
   started_at: string;
+  /** sessions.rs `frame_cap`: the cap state read from this session's frames while its trace was kept;
+   *  absent when never read. */
+  frame_cap?: FrameCapRead | null;
   duration_secs: number;
   process_name: string;
   samples: number;
@@ -455,15 +458,27 @@ export type ComparisonResult = {
   after_low1_fps: number;
   delta_avg_pct: number;
   delta_low1_pct: number;
+  /** The 1% low band the verdict used (a rise; a fall is judged at its matching fall). 0 when the
+   *  verdict is "unmeasured". */
   noise_floor_pct: number;
-  verdict: "improved" | "no-change" | "regressed" | "confounded" | "expired";
+  /** "unmeasured" (measurement item 8): no measured band for this comparison; nothing is called. */
+  verdict: "improved" | "no-change" | "regressed" | "confounded" | "expired" | "unmeasured";
+  /** When the result was written (RFC 3339). */
+  at?: string;
   // Tuning extension (spec 2026-06-08) — optional/back-compat (older result files omit them).
   kind?: ComparisonKind;
   baseline_peak_temp_c?: number | null;
   after_peak_temp_c?: number | null;
   delta_temp_c?: number | null;
   crash_reported?: boolean;
+  /** Item 8: this game's measured as-is band (comparison.rs `game_noise`); absent on older results. */
+  game_noise?: { low1_band_pct: number; sessions: number; cap?: FrameCapRead } | null;
+  /** Item 8: why the verdict is "unmeasured". */
+  unmeasured?: "noise-unmeasured" | "frame-cap-changed" | null;
 };
+
+/** noise_floor.rs `CapRead` (serde tag "state"). */
+export type FrameCapRead = { state: "uncapped" } | { state: "capped"; at_fps: number } | { state: "unknown" };
 
 // §4 one-elevation batch apply (mirrors history.rs BatchApplyReport / BatchItemOutcome serde).
 export type BatchItemOutcome = {
@@ -538,7 +553,8 @@ export type MouseMeasurement = { polling: PollingRate; note: string };
 // ── Benchmark / measured-efficacy (mirrors src-tauri/src/benchmark.rs serde) ──
 export type BenchComponent = "cpu" | "ram" | "gpu" | "disk";
 export type RunConfidence = "clean" | "low";
-export type Verdict = "improved" | "no-measurable-change" | "regressed";
+/** "unmeasured" (measurement item 8): no measured run-to-run band exists for the comparison. */
+export type Verdict = "improved" | "no-measurable-change" | "regressed" | "unmeasured";
 
 export type ComponentScore = { component: BenchComponent; score: number; measured: boolean };
 export type RunReport = { components: ComponentScore[]; confidence: RunConfidence; notes: string[] };
@@ -552,7 +568,8 @@ export type ComponentEfficacy = {
 export type Efficacy = {
   per_component: ComponentEfficacy[];
   overall: Verdict;
-  noise_floor_pct: number;
+  /** null: no measured band (item 8), every verdict "unmeasured". */
+  noise_floor_pct: number | null;
 };
 export type BenchmarkState = {
   running: boolean;

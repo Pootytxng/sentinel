@@ -20,6 +20,25 @@ use crate::sessions::SessionSummary;
 /// experiment engine (Intelligence Phase 3) references the ONE 3% floor rather than re-declaring it.
 pub(crate) const DEFAULT_NOISE_FLOOR_PCT: f64 = 3.0;
 
+/// Measurement item 8: what an armed Fix/Tuning comparison is judged on. Never the fixed 3%: this
+/// game's measured as-is band at the baseline session (`noise_floor::measure_game_noise`, the one
+/// source Trials and "what changed?" judge on: same rig, driver, Windows build, change counts and cap
+/// state, at least `noise_floor::MIN_UNCHANGED_SESSIONS` sessions), or nothing, and then no verdict.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ArmNoise {
+    /// The band measured for the baseline session; the after-session read the same cap state.
+    Measured(crate::noise_floor::GameNoise),
+    /// No band for this comparison ([`UNMEASURED_NOISE`] or [`UNMEASURED_CAP`]): the result shows the
+    /// numbers and calls nothing better or worse.
+    Unmeasured(&'static str),
+}
+
+/// The game's noise between as-is sessions isn't measured for this baseline (too few such sessions,
+/// the baseline session not found, its cap state unreadable, or a change history that can't be read).
+pub(crate) const UNMEASURED_NOISE: &str = "noise-unmeasured";
+/// The after-session's frame-cap state differs from the baseline's, or can't be read.
+pub(crate) const UNMEASURED_CAP: &str = "frame-cap-changed";
+
 /// Owner-tunable: an armed baseline older than this (days) at finalize is too stale to compare
 /// fairly — drivers/games/Windows move on, so we discard rather than attribute a misleading delta.
 /// Real play reads its as-is sessions by the same age (`realplay`).
@@ -84,8 +103,11 @@ pub(crate) struct ComparisonResult {
     pub after_low1_fps: f64,
     pub delta_avg_pct: f64,
     pub delta_low1_pct: f64,
+    /// The 1% low band the verdict used (a rise; a fall is judged at `noise_floor::fall_pct` of it).
+    /// 0 when the verdict is "unmeasured" (item 8: no band for this comparison, see `unmeasured`).
     pub noise_floor_pct: f64,
-    /// "improved" | "no-change" | "regressed" | "confounded" | "expired" — judged on the 1% low.
+    /// "improved" | "no-change" | "regressed" | "confounded" | "expired" | "unmeasured" (item 8: no
+    /// measured band, see `unmeasured`) — judged on the 1% low.
     pub verdict: String,
     pub at: String,
     /// Fix vs Tuning (back-compat default Fix). Lets the UI render the tuning temp/stability readout.
@@ -102,6 +124,14 @@ pub(crate) struct ComparisonResult {
     /// Carried from the armed baseline so the surfaced verdict reflects a reported crash.
     #[serde(default)]
     pub crash_reported: bool,
+    /// Item 8: this game's measured as-is band the verdict was judged on. Additive: `None` on an
+    /// older result (judged on the fixed 3%) and when no band was measured.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_noise: Option<crate::noise_floor::GameNoise>,
+    /// Item 8: why no band judged this comparison ([`UNMEASURED_NOISE`] / [`UNMEASURED_CAP`]); set
+    /// exactly when the verdict is "unmeasured".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unmeasured: Option<String>,
 }
 
 // #283 — ONE lock for both of this module's files, because every racy sequence here spans them:
@@ -380,6 +410,19 @@ pub(crate) fn classify(delta_low1_pct: f64, noise_floor_pct: f64) -> &'static st
     }
 }
 
+/// Item 8, pure: an armed comparison's verdict on this game's measured band. `band_pct` is the
+/// measured rise a change must beat; a fall is judged at the matching fall (`noise_floor::fall_pct`),
+/// the way Trials judge a measured band, so the band is the same log distance both ways.
+pub(crate) fn classify_measured(delta_low1_pct: f64, band_pct: f64) -> &'static str {
+    if delta_low1_pct > band_pct {
+        "improved"
+    } else if delta_low1_pct < -crate::noise_floor::fall_pct(band_pct) {
+        "regressed"
+    } else {
+        "no-change"
+    }
+}
+
 /// Pure verdict WITH the honesty guards layered over `classify`. Expiry + confound take precedence
 /// over the measured delta — no credit when the comparison isn't fair. `ledger_now` and `now` are
 /// injected (not read from disk/clock) so this is unit-testable. `ledger_now` is `None` when the
@@ -391,9 +434,15 @@ pub(crate) fn classify_with_guards(
     ledger_now: Option<usize>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> &'static str {
+    unfair(armed, ledger_now, now).unwrap_or_else(|| classify(delta_low1_pct, noise_floor_pct))
+}
+
+/// The fairness guards alone: `Some("expired")` or `Some("confounded")`, else `None` (the delta may be
+/// judged).
+fn unfair(armed: &ArmedComparison, ledger_now: Option<usize>, now: chrono::DateTime<chrono::Utc>) -> Option<&'static str> {
     if let Ok(t) = chrono::DateTime::parse_from_rfc3339(&armed.armed_at) {
         if (now - t.with_timezone(&chrono::Utc)).num_days() > ARM_MAX_AGE_DAYS {
-            return "expired"; // baseline too old to compare fairly
+            return Some("expired"); // baseline too old to compare fairly
         }
     }
     // The watermark's contract is "the SAME ledger", so the test is equality, not growth. A `>` test
@@ -404,9 +453,9 @@ pub(crate) fn classify_with_guards(
     // ledger, unseen. `None` (unreadable) is the same refusal for the same reason: no reading at all
     // can prove the comparison was fair.
     if ledger_now != Some(armed.ledger_watermark) {
-        return "confounded"; // not the ledger this baseline was measured against
+        return Some("confounded"); // not the ledger this baseline was measured against
     }
-    classify(delta_low1_pct, noise_floor_pct)
+    None
 }
 
 fn round1(x: f64) -> f64 {
@@ -433,14 +482,22 @@ pub(crate) fn should_disarm(kind: ComparisonKind) -> bool {
 pub(crate) fn build_result(
     armed: &ArmedComparison,
     s: &SessionSummary,
-    nf: f64,
+    noise: &ArmNoise,
     ledger_now: Option<usize>,
     active_now: Option<usize>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> ComparisonResult {
     let pct = |after: f64, base: f64| if base > 0.0 { (after - base) / base * 100.0 } else { 0.0 };
     let delta_low1 = pct(s.low1_fps_est, armed.baseline_low1_fps);
-    let mut verdict = classify_with_guards(armed, delta_low1, nf, ledger_now, now).to_string();
+    let (band, game_noise) = match noise {
+        ArmNoise::Measured(n) => (Some(n.low1_band_pct), Some(n.clone())),
+        ArmNoise::Unmeasured(_) => (None, None),
+    };
+    // Item 8: judged on the measured band; with none, no verdict (never the fixed 3%). The fairness
+    // guards still come first.
+    let mut verdict = unfair(armed, ledger_now, now)
+        .unwrap_or_else(|| band.map_or("unmeasured", |b| classify_measured(delta_low1, b)))
+        .to_string();
     // The other half of the confound watermark (see `ledger_active`): an undo since the arm, the
     // fix's own included, leaves the entry count equal and is caught here. Expiry still wins.
     if verdict != "expired" && armed.ledger_active.is_some_and(|a| active_now != Some(a)) {
@@ -456,7 +513,12 @@ pub(crate) fn build_result(
         after_low1_fps: s.low1_fps_est,
         delta_avg_pct: round1(pct(s.avg_fps, armed.baseline_avg_fps)),
         delta_low1_pct: round1(delta_low1),
-        noise_floor_pct: nf,
+        noise_floor_pct: band.unwrap_or(0.0),
+        unmeasured: match noise {
+            ArmNoise::Unmeasured(why) if verdict == "unmeasured" => Some((*why).to_string()),
+            _ => None,
+        },
+        game_noise,
         verdict,
         at: now.to_rfc3339(),
         kind: armed.kind,
@@ -494,7 +556,53 @@ pub(crate) fn on_session_finalized(s: &SessionSummary) -> Option<ComparisonKind>
             let off = crate::history::newest_applied_reads_off(&a.rec_id) == Some(true);
             (a.rec_id, off)
         });
-    on_session_finalized_at(&armed_path(), &result_path(), s, fix_off)
+    // Item 8: the band this settle is judged on, measured BEFORE the lock (it reads the session store
+    // and the change history; nothing under COMPARISON_LOCK reaches them), for the arm it was measured
+    // for. Only for a session that could settle it, like the probe above.
+    let noise = load_armed()
+        .filter(|a| could_settle && !s.process_name.is_empty() && a.game.eq_ignore_ascii_case(&s.process_name))
+        .map(|a| {
+            let sessions = crate::sessions::get_session_summaries();
+            let n = arm_noise_from(&a, &sessions, s, |b| crate::experiment::measured_noise_at(&sessions, b));
+            (a.armed_at, n)
+        });
+    on_session_finalized_at(&armed_path(), &result_path(), s, fix_off, noise)
+}
+
+/// Item 8, pure: the session an armed comparison's baseline was read from: the newest session of its
+/// game that started before the arm and carries exactly the armed readings (both arm paths copy them
+/// from that session's summary). `None` when no stored session matches; nothing is guessed.
+pub(crate) fn arm_baseline_session<'s>(a: &ArmedComparison, sessions: &'s [SessionSummary]) -> Option<&'s SessionSummary> {
+    let armed_at = chrono::DateTime::parse_from_rfc3339(&a.armed_at).ok()?;
+    let same = |x: f64, y: f64| (x - y).abs() <= 1e-9 * y.abs().max(1.0);
+    sessions
+        .iter()
+        .filter(|s| s.process_name.eq_ignore_ascii_case(&a.game))
+        .filter(|s| same(s.avg_fps, a.baseline_avg_fps) && same(s.low1_fps_est, a.baseline_low1_fps))
+        .filter_map(|s| Some((chrono::DateTime::parse_from_rfc3339(&s.started_at).ok()?, s)))
+        .filter(|(at, _)| *at < armed_at)
+        .max_by_key(|(at, _)| *at)
+        .map(|(_, s)| s)
+}
+
+/// Item 8, pure: what the comparison of `after` against the arm `a` is judged on. `measure` is this
+/// game's measured as-is noise up to a session (`experiment::measured_noise_at` in the app, the one
+/// source). No baseline session, no measured band, or a different/unreadable cap state on the
+/// after-session: unmeasured, and the result calls nothing better or worse.
+pub(crate) fn arm_noise_from(
+    a: &ArmedComparison,
+    sessions: &[SessionSummary],
+    after: &SessionSummary,
+    measure: impl FnOnce(&SessionSummary) -> Option<crate::noise_floor::GameNoise>,
+) -> ArmNoise {
+    let Some(n) = arm_baseline_session(a, sessions).and_then(measure) else {
+        return ArmNoise::Unmeasured(UNMEASURED_NOISE);
+    };
+    let cap = crate::noise_floor::cap_pair(n.cap, crate::noise_floor::cap_read(after));
+    if cap != crate::noise_floor::CapPair::Same {
+        return ArmNoise::Unmeasured(UNMEASURED_CAP);
+    }
+    ArmNoise::Measured(n)
 }
 
 /// Path-parameterized for the same reason as [`report_tuning_crash_at`]. The disarm at the end
@@ -505,6 +613,7 @@ fn on_session_finalized_at(
     result_path_: &std::path::Path,
     s: &SessionSummary,
     fix_off: Option<(String, bool)>,
+    noise: Option<(String, ArmNoise)>,
 ) -> Option<ComparisonKind> {
     let _lock = lock_comparison();
     let armed = load_armed_from(armed_path_)?;
@@ -523,10 +632,15 @@ fn on_session_finalized_at(
     }
     // Both confound marks from one read (`ledger_marks`).
     let marks = ledger_marks().ok();
+    // Item 8: the band measured for THIS arm (keyed by its arm time), or none; a band measured for an
+    // arm that has since been replaced never judges the new one.
+    let noise = noise
+        .filter(|(armed_at, _)| *armed_at == armed.armed_at)
+        .map_or(ArmNoise::Unmeasured(UNMEASURED_NOISE), |(_, n)| n);
     let mut result = build_result(
         &armed,
         s,
-        DEFAULT_NOISE_FLOOR_PCT,
+        &noise,
         // `.ok()` here is the honest direction, not a collapse: an unreadable ledger becomes `None`,
         // which the guard above refuses to attribute. It is never silently treated as a count.
         //
@@ -681,6 +795,8 @@ mod comparison_persistence_tests {
             after_peak_temp_c: None,
             delta_temp_c: None,
             crash_reported: false,
+            game_noise: None,
+            unmeasured: None,
         }
     }
 
@@ -783,6 +899,123 @@ mod comparison_tests {
         assert_eq!(classify(3.0, 3.0), "no-change"); // boundary inclusive
         assert_eq!(classify(8.0, 3.0), "improved");
         assert_eq!(classify(-8.0, 3.0), "regressed");
+    }
+
+    #[test]
+    fn a_measured_band_is_judged_the_same_log_distance_both_ways() {
+        assert_eq!(classify_measured(20.0, 20.6), "no-change");
+        assert_eq!(classify_measured(20.7, 20.6), "improved");
+        // The fall matching +20.6% is -17.08%.
+        assert_eq!(classify_measured(-17.0, 20.6), "no-change");
+        assert_eq!(classify_measured(-17.2, 20.6), "regressed");
+    }
+
+    /// A measured band of `low1_band_pct` on the 1% low (uncapped), for the verdict tests.
+    pub(super) fn band(low1_band_pct: f64) -> ArmNoise {
+        ArmNoise::Measured(crate::noise_floor::GameNoise {
+            model: crate::noise_floor::NOISE_MODEL_VERSION,
+            low1_band_pct,
+            avg_band_pct: low1_band_pct,
+            low1_step_pct: 1.0,
+            avg_step_pct: 1.0,
+            sessions: 6,
+            cap: crate::noise_floor::CapRead::Uncapped,
+            cap_unread: 0,
+            max_gap_mins: 0,
+        })
+    }
+
+    /// Item 8: an armed comparison on the owner's ROB RUN day, armed from the 13:55 as-is session.
+    fn rob_arm(day: &[SessionSummary]) -> ArmedComparison {
+        let b = &day[11];
+        ArmedComparison {
+            game: b.process_name.clone(),
+            baseline_avg_fps: b.avg_fps,
+            baseline_low1_fps: b.low1_fps_est,
+            ..armed_fixture("2026-11-11T14:13:00+00:00".into(), 0)
+        }
+    }
+
+    #[test]
+    fn an_armed_comparison_is_judged_on_the_games_measured_band_not_3_percent() {
+        // Item 8: the owner's ROB RUN day. The 1% low moves far more than 3% between sessions with
+        // nothing changed, so a +12% after-session is inside this game's own swing: no win claimed.
+        let day = crate::noise_floor::tests::rob_day();
+        let ledger = crate::noise_floor::tests::rob_trials();
+        let a = rob_arm(&day);
+        let mut after = day[12].clone();
+        after.low1_fps_est = a.baseline_low1_fps * 1.12;
+        let noise = arm_noise_from(&a, &day, &after, |b| crate::noise_floor::measure_game_noise(&day, b, &ledger).ok());
+        let ArmNoise::Measured(n) = &noise else { panic!("measured: {noise:?}") };
+        assert!(n.low1_band_pct > 12.0, "the game's own band: {}", n.low1_band_pct);
+        let now = chrono::DateTime::parse_from_rfc3339("2026-11-11T15:00:00+00:00").unwrap().with_timezone(&chrono::Utc);
+        let r = build_result(&a, &after, &noise, Some(0), None, now);
+        assert_eq!(r.verdict, "no-change", "+12% inside a {}% band", n.low1_band_pct);
+        assert_eq!(r.noise_floor_pct, n.low1_band_pct);
+        assert_eq!(r.game_noise.as_ref(), Some(n));
+        assert_eq!(r.unmeasured, None);
+        // Past the band it is a real result, both ways.
+        let big = |f: f64| {
+            let mut s = after.clone();
+            s.low1_fps_est = a.baseline_low1_fps * f;
+            build_result(&a, &s, &noise, Some(0), None, now).verdict
+        };
+        assert_eq!(big(1.0 + n.low1_band_pct / 100.0 + 0.01), "improved");
+        assert_eq!(big(1.0 - n.low1_band_pct / 100.0), "regressed");
+    }
+
+    #[test]
+    fn without_a_measured_band_an_armed_comparison_calls_nothing() {
+        // Item 8: never the fixed 3%. A +12.5% 1% low with no band is shown, not called.
+        let now = chrono::Utc::now();
+        let a = armed_fixture(now.to_rfc3339(), 0);
+        let r = build_result(&a, &session_fixture(90.0, None), &ArmNoise::Unmeasured(UNMEASURED_NOISE), Some(0), None, now);
+        assert_eq!(r.verdict, "unmeasured");
+        assert_eq!(r.noise_floor_pct, 0.0);
+        assert_eq!(r.unmeasured.as_deref(), Some(UNMEASURED_NOISE));
+        assert_eq!(r.game_noise, None);
+        assert_eq!(r.delta_low1_pct, 12.5, "the numbers still show");
+        // The fairness guards still win over "unmeasured".
+        let r = build_result(&a, &session_fixture(90.0, None), &ArmNoise::Unmeasured(UNMEASURED_NOISE), Some(1), None, now);
+        assert_eq!((r.verdict.as_str(), r.unmeasured), ("confounded", None));
+    }
+
+    #[test]
+    fn an_armed_comparison_finds_its_baseline_session_and_its_cap_state() {
+        let day = crate::noise_floor::tests::rob_day();
+        let ledger = crate::noise_floor::tests::rob_trials();
+        let a = rob_arm(&day);
+        assert_eq!(arm_baseline_session(&a, &day).map(|s| s.started_at.as_str()), Some(day[11].started_at.as_str()));
+        // Not a session after the arm, nor one with other readings, nor another game.
+        let late = ArmedComparison { armed_at: "2026-11-11T13:00:00+00:00".into(), ..a.clone() };
+        assert!(arm_baseline_session(&late, &day).is_none());
+        let other = ArmedComparison { baseline_low1_fps: 171.0, ..a.clone() };
+        assert!(arm_baseline_session(&other, &day).is_none());
+        let game = ArmedComparison { game: "other.exe".into(), ..a.clone() };
+        assert!(arm_baseline_session(&game, &day).is_none());
+        let measure = |b: &SessionSummary| crate::noise_floor::measure_game_noise(&day, b, &ledger).ok();
+        assert_eq!(arm_noise_from(&other, &day, &day[12], measure), ArmNoise::Unmeasured(UNMEASURED_NOISE));
+        // An after-session whose cap state differs from the band's, or can't be read: no verdict.
+        let mut capped = day[12].clone();
+        capped.fps_series = crate::noise_floor::tests::capped_series(240.0);
+        assert_eq!(arm_noise_from(&a, &day, &capped, measure), ArmNoise::Unmeasured(UNMEASURED_CAP));
+        let mut unread = day[12].clone();
+        unread.fps_series.clear();
+        unread.frame_cap = None;
+        assert_eq!(arm_noise_from(&a, &day, &unread, measure), ArmNoise::Unmeasured(UNMEASURED_CAP));
+        // Too few as-is sessions before the baseline: unmeasured.
+        assert_eq!(arm_noise_from(&a, &day, &day[12], |_| None), ArmNoise::Unmeasured(UNMEASURED_NOISE));
+    }
+
+    #[test]
+    fn an_older_result_without_a_band_still_loads() {
+        let old = serde_json::json!({
+            "rec_id": "r", "rec_title": "R", "game": "g.exe", "baseline_avg_fps": 1.0, "baseline_low1_fps": 1.0,
+            "after_avg_fps": 1.0, "after_low1_fps": 1.0, "delta_avg_pct": 0.0, "delta_low1_pct": 0.0,
+            "noise_floor_pct": 3.0, "verdict": "no-change", "at": "t"
+        });
+        let r: ComparisonResult = serde_json::from_value(old).unwrap();
+        assert_eq!((r.game_noise, r.unmeasured), (None, None));
     }
 
     fn armed_fixture(armed_at: String, watermark: usize) -> ArmedComparison {
@@ -922,7 +1155,7 @@ mod comparison_tests {
         let now = chrono::Utc::now();
         let armed = tuning_fixture(Some(84));
         // 1% low held inside the noise floor; peak temp dropped 84 → 71.
-        let r = build_result(&armed, &session_fixture(81.0, Some(71)), 3.0, Some(0), None, now);
+        let r = build_result(&armed, &session_fixture(81.0, Some(71)), &band(3.0), Some(0), None, now);
         assert_eq!(r.kind, ComparisonKind::Tuning);
         assert_eq!(r.baseline_peak_temp_c, Some(84));
         assert_eq!(r.after_peak_temp_c, Some(71));
@@ -936,7 +1169,7 @@ mod comparison_tests {
         let now = chrono::Utc::now();
         let armed = tuning_fixture(Some(84));
         // 1% low 80 → 70 = −12.5%, well past the 3% floor → "too aggressive" signal upstream.
-        let r = build_result(&armed, &session_fixture(70.0, Some(72)), 3.0, Some(0), None, now);
+        let r = build_result(&armed, &session_fixture(70.0, Some(72)), &band(3.0), Some(0), None, now);
         assert_eq!(r.verdict, "regressed");
         assert_eq!(r.delta_temp_c, Some(-12));
     }
@@ -946,7 +1179,7 @@ mod comparison_tests {
         let now = chrono::Utc::now();
         let mut armed = tuning_fixture(Some(84));
         armed.crash_reported = true;
-        let r = build_result(&armed, &session_fixture(81.0, Some(71)), 3.0, Some(0), None, now);
+        let r = build_result(&armed, &session_fixture(81.0, Some(71)), &band(3.0), Some(0), None, now);
         assert!(r.crash_reported, "a reported crash rides into the result");
     }
 
@@ -1072,7 +1305,7 @@ mod comparison_race_tests {
 
         let (a, r) = (armed.clone(), result.clone());
         let left = arm_lands_mid_seam(&armed, move || {
-            let _ = on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None), None);
+            let _ = on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None), None, None);
         });
         assert_survived(left, "session finalize");
     }
@@ -1095,11 +1328,11 @@ mod comparison_race_tests {
         behind.avg_fps = 0.0;
         behind.avg_frametime_ms = 0.0;
         behind.background_secs_excluded = Some(900);
-        assert_eq!(on_session_finalized_at(&armed, &result, &behind, None), None, "nothing settled");
+        assert_eq!(on_session_finalized_at(&armed, &result, &behind, None, None), None, "nothing settled");
         assert!(!result.exists(), "no result from a session with no reading");
         assert_eq!(load_armed_from(&armed).map(|a| a.rec_id), Some("waiting".to_string()), "the arm waits");
         assert_eq!(
-            on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None), None),
+            on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None), None, None),
             Some(ComparisonKind::Fix),
             "the settle is reported to the session-end toast (P7-notify)"
         );
@@ -1121,12 +1354,12 @@ mod comparison_race_tests {
         let mut short = super::comparison_tests::session_fixture(84.0, None);
         short.samples = crate::experiment::MIN_TREATMENT_SAMPLES - 1;
         for s in [&lowless, &short] {
-            assert_eq!(on_session_finalized_at(&armed, &result, s, None), None, "nothing settled");
+            assert_eq!(on_session_finalized_at(&armed, &result, s, None, None), None, "nothing settled");
             assert!(!result.exists() && load_armed_from(&armed).is_some(), "the arm waits");
         }
         let mut upper = super::comparison_tests::session_fixture(84.0, None);
         upper.process_name = upper.process_name.to_uppercase();
-        assert_eq!(on_session_finalized_at(&armed, &result, &upper, None), Some(ComparisonKind::Fix), "same game, other case");
+        assert_eq!(on_session_finalized_at(&armed, &result, &upper, None, None), Some(ComparisonKind::Fix), "same game, other case");
     }
 
     /// The probe runs before the lock, and only for a session that could settle the arm (slice 6
@@ -1152,7 +1385,7 @@ mod comparison_race_tests {
         let mut armed = armed_of(ComparisonKind::Fix, "fix");
         armed.armed_at = now.to_rfc3339();
         let s = super::comparison_tests::session_fixture(84.0, None);
-        let fair = |a: &ArmedComparison| build_result(a, &s, 3.0, Some(a.ledger_watermark), None, now);
+        let fair = |a: &ArmedComparison| build_result(a, &s, &super::comparison_tests::band(3.0), Some(a.ledger_watermark), None, now);
         let mut r = fair(&armed);
         assert_ne!(r.verdict, "confounded");
         confound_if_fix_was_off(&mut r, &armed, Some(("fix".into(), true)));
@@ -1179,7 +1412,7 @@ mod comparison_race_tests {
         armed.ledger_active = Some(2);
         let s = super::comparison_tests::session_fixture(84.0, None);
         let verdict = |a: &ArmedComparison, active: Option<usize>| {
-            build_result(a, &s, 3.0, Some(a.ledger_watermark), active, now).verdict
+            build_result(a, &s, &super::comparison_tests::band(3.0), Some(a.ledger_watermark), active, now).verdict
         };
         assert_eq!(verdict(&armed, Some(1)), "confounded", "a change was undone since the arm");
         assert_eq!(verdict(&armed, None), "confounded", "an unreadable count proves nothing fair");
@@ -1208,7 +1441,7 @@ mod comparison_race_tests {
         let result = blocker.join("compy_comparison_result.json"); // parent is a regular file
         arm_at(&armed, armed_of(ComparisonKind::Fix, "write-fails")).unwrap();
         assert_eq!(
-            on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None), None),
+            on_session_finalized_at(&armed, &result, &super::comparison_tests::session_fixture(84.0, None), None, None),
             None,
             "no result on disk, so no settle reaches the toast"
         );
@@ -1291,7 +1524,7 @@ mod comparison_race_tests {
         let (a, r) = (armed.clone(), result.clone());
         let _seam = crate::race_seam::PanicAt::arm(crate::race_seam::AFTER_RESULT_WRITE);
         let died = std::thread::spawn(move || {
-            let _ = on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None), None);
+            let _ = on_session_finalized_at(&a, &r, &super::comparison_tests::session_fixture(80.0, None), None, None);
         })
         .join();
         assert!(died.is_err(), "the armed seam was supposed to panic mid-sequence");

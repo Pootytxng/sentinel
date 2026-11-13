@@ -1825,6 +1825,22 @@ pub(crate) fn realplay_ready_notice(
     (last.started_at == session.started_at).then_some(SessionEndNotice::RealPlayReady)
 }
 
+/// Measurement item 8: this game's measured as-is noise up to `baseline` (`noise_floor::measure_game_noise`
+/// over the sessions Compy's change history covers, the same read the old-verdict label makes), for the
+/// comparisons outside a Trial: the armed Fix/Tuning comparison and the session-pattern trends. `None`
+/// when it isn't measured (too few as-is sessions, an unreadable cap state, or a change history that
+/// can't be read): the caller then calls nothing better or worse.
+pub(crate) fn measured_noise_at(sessions: &[SessionSummary], baseline: &SessionSummary) -> Option<crate::noise_floor::GameNoise> {
+    let (history, coverage) = ledger_view_for_one_change_checks(
+        crate::history::load_history,
+        crate::history::ledger_set_aside_through,
+        Some(baseline.started_at.as_str()),
+    );
+    let history = ledger_for_one_change_checks(history, coverage).ok()?;
+    let covered = sessions_the_ledger_covers(sessions, coverage);
+    crate::noise_floor::measure_game_noise(&covered, baseline, &ledger_rows(&history)).ok()
+}
+
 /// P4-rank: the band the NEXT Trial would be judged against, only when it is measured — the
 /// between-session spread of the game the bench offers as baseline (the newest session with a frame
 /// reading and a known game, the same pick `ExperimentBench` makes), never below the fixed default.
@@ -3589,16 +3605,7 @@ pub(crate) fn get_experiments() -> Vec<ExperimentRecord> {
         // At most the newest ten readable sessions are tried, so a refresh stays bounded.
         let mut candidates = readings_newest_first(&sessions, game);
         candidates.truncate(10);
-        first_measured(candidates, |from| {
-            let (history, coverage) = ledger_view_for_one_change_checks(
-                crate::history::load_history,
-                crate::history::ledger_set_aside_through,
-                Some(from.started_at.as_str()),
-            );
-            let history = ledger_for_one_change_checks(history, coverage).ok()?;
-            let covered = sessions_the_ledger_covers(&sessions, coverage);
-            crate::noise_floor::measure_game_noise(&covered, from, &ledger_rows(&history)).ok()
-        })
+        first_measured(candidates, |from| measured_noise_at(&sessions, from))
     };
     with_assumed_band_labels(experiments, measure_now)
 }

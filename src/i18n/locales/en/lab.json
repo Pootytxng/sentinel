@@ -290,11 +290,13 @@
     },
     "verdictReading": {
       "improved": "Last verdict: Improved — the change moved more than the run's own noise.",
+      "unmeasured": "Can't call it: how much these scores move between runs with nothing changed isn't measured.",
       "noMeasurableChange": "Last verdict: No measurable change — it stayed inside the noise floor. That's noise, not a win.",
       "regressed": "Last verdict: Regressed — things measured worse. Worth undoing."
     },
     "verdictReadingStacked": {
       "improved": "Last verdict: Improved — your changes together moved more than the run's own noise.",
+      "unmeasured": "Can't call these changes: how much these scores move between runs with nothing changed isn't measured.",
       "noMeasurableChange": "Last verdict: No measurable change — the stack stayed inside the noise floor. That's noise, not a win.",
       "regressed": "Last verdict: Regressed — things measured worse together. Worth undoing."
     },

@@ -155,6 +155,19 @@ function ComparisonCard({
           </p>
         </>
       )}
+      {r.verdict === "unmeasured" && (
+        <>
+          <h2 className="cmp-headline">{t("monitor.sessionDebrief.unmeasuredHeadline")}</h2>
+          <p className="cmp-sub" data-testid="cmp-unmeasured">
+            {t(
+              r.unmeasured === "frame-cap-changed"
+                ? "monitor.sessionDebrief.unmeasuredCapSub"
+                : "monitor.sessionDebrief.unmeasuredNoiseSub",
+              { game: prettyGameName(r.game) },
+            )}
+          </p>
+        </>
+      )}
       {r.verdict === "expired" && (
         <>
           <h2 className="cmp-headline">{t("monitor.sessionDebrief.expiredHeadline")}</h2>
@@ -206,6 +219,16 @@ function ComparisonCard({
                 />
               )}
             </>
+          ) : r.verdict === "unmeasured" ? (
+            // Item 8: no measured band, so the numbers show and nothing is called.
+            <p className="cmp-delta" data-testid="cmp-unmeasured-delta">
+              {t("monitor.sessionDebrief.unmeasuredDeltaLine", {
+                avgSign: sign(dAvgFps),
+                avgPct: sign(r.delta_avg_pct),
+                lowSign: sign(dLowFps),
+                lowPct: sign(r.delta_low1_pct),
+              })}
+            </p>
           ) : undefined
         }
         receipt={

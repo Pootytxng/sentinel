@@ -365,3 +365,18 @@ describe("benchmarkAttribution — the Test verdict's claim, read off the Machin
     expect(benchmarkAttribution(window, modelWith([inside]), false)).toMatchObject({ truncated: false });
   });
 });
+
+describe("measurement item 8: an unmeasured benchmark verdict", () => {
+  it("is labelled 'Can't call it', neutral, and never glows a part", async () => {
+    const { verdictLabel, verdictTone } = await import("./benchmark-view");
+    const { partGlow } = await import("./two-futures-view");
+    expect(verdictLabel("unmeasured")).toBe("Can't call it");
+    expect(verdictTone("unmeasured")).toBe("info");
+    const eff = {
+      per_component: [{ component: "cpu" as const, before: 50, after: 80, delta_pct: 60, verdict: "unmeasured" as const }],
+      overall: "unmeasured" as const,
+      noise_floor_pct: null,
+    };
+    for (const part of ["cpu", "gpu", "ram", "disk"]) expect(partGlow(eff, part)).toBe(1);
+  });
+});

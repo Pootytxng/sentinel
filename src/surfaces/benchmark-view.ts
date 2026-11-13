@@ -21,11 +21,13 @@ const VERDICT_LABELS: Record<Verdict, string> = {
   improved: "Improved",
   "no-measurable-change": "No measurable change",
   regressed: "Regressed",
+  unmeasured: "Can't call it",
 };
 
 export function verdictLabel(v: Verdict, t?: TFunction): string {
   if (!t) return VERDICT_LABELS[v];
-  const key = v === "improved" ? "improved" : v === "regressed" ? "regressed" : "noChange";
+  const key =
+    v === "improved" ? "improved" : v === "regressed" ? "regressed" : v === "unmeasured" ? "unmeasured" : "noChange";
   return t(`gaming.benchmark.verdictLabels.${key}`, { defaultValue: VERDICT_LABELS[v] });
 }
 
