@@ -147,11 +147,16 @@ release checklist); no new rules.
   before the pairing so it keeps its specific reason; the pair receipt names it (en + zh-CN). Reviews r1 opus
   REQUEST-CHANGES (MUST-FIX: realplay reason order, taken) + sonnet APPROVE-WITH-NITS; r2 in the session log. Queued:
   CR-trial-gm-baseline-overlap.
-- [ ] **CR-trial-gm-baseline-overlap** (r1 opus + sonnet SHOULD-FIX of CR-trial-gm-between) Gaming Mode on for BOTH
+- [x] **CR-trial-gm-baseline-overlap** (r1 opus + sonnet SHOULD-FIX of CR-trial-gm-between) Gaming Mode on for BOTH
   sessions reads comparable, but a Gaming Mode session that set the Trial's setting during the baseline (e.g.
   game-bar-disable, sysmain-disable; trial_candidates.rs ~656/668) makes both sessions run the same state, so the
   Trial reads "no change" and puts the setting back as useless. Trial-side rule (not in `derive`): a baseline with
   Gaming Mode on, for a setting Gaming Mode can change, is confounded or missing context. Two reviews.
+  Done (s27 code, s28 landed; merge `457c3ff0`): a two-session or real-play Trial whose baseline ran with Gaming
+  Mode on (or unrecorded), for a setting Gaming Mode can change, is refused at start and confounded at conclude
+  (real play against its reference session, opus r1 MUST-FIX). s28 re-review of that fix: opus + sonnet
+  APPROVE-WITH-NITS. Not taken: a source-order pin (sessions add no source-text tests); a behaviour test through
+  `conclude_realplay` waits on the judging-chain extraction (Trial measurement refactor).
 
 ## Queue
 
