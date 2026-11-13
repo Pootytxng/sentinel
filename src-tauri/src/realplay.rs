@@ -164,6 +164,9 @@ pub(crate) enum NotCountedReason {
     /// Gaming Mode was on in this session and not in the as-is sessions, or the other way round, or
     /// it wasn't recorded.
     GamingModeDiffers,
+    /// P4-judge-noisy: a frame cap held it differently from the as-is sessions, read from frame data,
+    /// or its cap state couldn't be read. Additive: an older Compy reads it as `Other`.
+    FrameCapChanged,
     /// It began more than [`WINDOW_DAYS`] after the change took effect.
     AfterWindow,
     /// Anything else: a session record Compy can't read in full (a length that can't be added to its
@@ -184,6 +187,7 @@ impl<'de> Deserialize<'de> for NotCountedReason {
             Some("change-not-on") => Self::ChangeNotOn,
             Some("other-compy-change") => Self::OtherCompyChange,
             Some("gaming-mode-differs") => Self::GamingModeDiffers,
+            Some("frame-cap-changed") => Self::FrameCapChanged,
             Some("after-window") => Self::AfterWindow,
             _ => Self::Other,
         })
@@ -371,10 +375,14 @@ pub(crate) fn before_arm(
 /// ([`unpinnable_anchor`] says why it isn't).
 fn pin_before(run: &[&SessionSummary], anchor: &SessionSummary, now: DateTime<Utc>) -> Vec<RealPlaySession> {
     let from = now - Duration::days(crate::comparison::ARM_MAX_AGE_DAYS);
+    // P4-judge-noisy: only as-is sessions in the anchor's own frame-cap state, read from frame data;
+    // an anchor whose cap state can't be read pins nothing (a start says why first).
+    let cap = crate::noise_floor::cap_read(anchor);
     let kept: Vec<&SessionSummary> = run
         .iter()
         .copied()
         .filter(|s| countable(s) && counts_each_change(s))
+        .filter(|s| crate::noise_floor::cap_pair(crate::noise_floor::cap_read(s), cap) == crate::noise_floor::CapPair::Same)
         .filter(|s| instant(&s.started_at).is_some_and(|at| at >= from && at <= now))
         .collect();
     if kept.last().map(|s| s.started_at.as_str()) != Some(anchor.started_at.as_str()) {
@@ -627,6 +635,13 @@ fn count_session(
         .is_some_and(|(then, now)| crate::noise_floor::still_current(then, &now));
     if !still_current || pairing.verdict != Comparability::Comparable || !pairing.changed_context.is_empty() {
         return Count::Not(R::ConditionsChanged);
+    }
+    // P4-judge-noisy: a session held by a frame cap the as-is sessions weren't (or whose cap state
+    // can't be read from its frame data) is never pooled into the with-change arm.
+    if crate::noise_floor::cap_pair(crate::noise_floor::cap_read(reference), crate::noise_floor::cap_read(s))
+        != crate::noise_floor::CapPair::Same
+    {
+        return Count::Not(R::FrameCapChanged);
     }
     match counts_vs(reference, s) {
         Counts::ThisOneMore => {}
@@ -1012,7 +1027,8 @@ mod tests {
             stutter_insight: None,
             stutter_timeline: Vec::new(),
             stutter_events: Vec::new(),
-            fps_series: Vec::new(),
+            // P4-judge-noisy: a trace that moves freely, so the session's cap state reads (uncapped).
+            fps_series: (0..120u32).map(|i| (i * 10, avg * (0.78 + 0.44 * f64::from((i * 37) % 120) / 120.0))).collect(),
             capture_capabilities: Some(crate::capture::CaptureCapabilities::etw_dxgi(None)),
             game_state: Some(crate::game_state::GameStateFingerprint {
                 process_name: Some(WARDOGS.into()),
@@ -1388,6 +1404,26 @@ mod tests {
         assert!(a.counted.iter().all(|s| s.compy_changes_active == Some(15)));
         // A resolution change leaves the session out but doesn't stop the Trial.
         assert_eq!((a.stop, a.changed.is_some()), (None, false));
+    }
+
+    #[test]
+    fn a_with_change_session_in_another_frame_cap_state_is_never_counted() {
+        // P4-judge-noisy (owner 2026-11-12 17:02, a frame cap was on for a while): read from frame data.
+        use NotCountedReason as R;
+        let at = |t: &str| format!("2026-10-22T{t}:00+00:00");
+        let mut capped = played(&at("11:00"), 230.0, 240.0, 15);
+        capped.fps_series = (0..120u32).map(|i| (i * 10, if i % 10 == 3 { 200.0 } else { 240.0 })).collect();
+        let mut unread = played(&at("12:00"), 230.0, 240.0, 15);
+        unread.fps_series.truncate(10);
+        let ok = played(&at("14:00"), 213.0, 240.0, 15);
+        let sessions = all(vec![capped, unread, ok]);
+        let a = arm(&sessions, &ledger(), Some(true), &pinned());
+        assert_eq!(reasons(&a), vec![(at("11:00"), R::FrameCapChanged), (at("12:00"), R::FrameCapChanged)]);
+        assert!(a.counted.iter().all(|s| crate::noise_floor::cap_read(s) == crate::noise_floor::CapRead::Uncapped));
+        let v = serde_json::to_value(NotCounted { session_id: "x".into(), reason: R::FrameCapChanged }).unwrap();
+        assert_eq!(v["reason"], "frame-cap-changed");
+        let back: NotCounted = serde_json::from_value(v).unwrap();
+        assert_eq!(back.reason, R::FrameCapChanged);
     }
 
     #[test]

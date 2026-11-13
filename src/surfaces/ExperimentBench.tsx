@@ -150,7 +150,13 @@ type GameNoise = {
 
 /** P4-judge-noisy (experiment.rs `AssumedBandLabel`, read-only): a verdict judged on the assumed ±3%
  *  band before Compy measured each game's noise, and that game's noise as measured now (null = not yet). */
-type AssumedBand = { assumed_pct: number; measured_low1_pct: number | null; measured_sessions: number | null };
+type AssumedBand = {
+  assumed_pct: number;
+  measured_low1_pct: number | null;
+  measured_sessions: number | null;
+  /** The old verdict claimed better or worse: only then did a wider noise mean it over-claimed. */
+  claimed_change?: boolean;
+};
 
 /** P4-comparable — what one session's records say about stretches that weren't play. */
 type SessionStretches = {
@@ -402,9 +408,11 @@ export function assumedBandLine(a: AssumedBand, game: string, t: Translate): str
   const name = prettyGameName(game) || game;
   if (a.measured_low1_pct == null) return t("lab.experimentBench.assumedBandUnmeasured", { assumed: pct(a.assumed_pct), game: name });
   const opts = { assumed: pct(a.assumed_pct), measured: pct(a.measured_low1_pct), sessions: a.measured_sessions ?? 0, game: name };
-  return a.measured_low1_pct > a.assumed_pct
+  if (a.measured_low1_pct <= a.assumed_pct) return t("lab.experimentBench.assumedBandNarrower", opts);
+  // Only a claimed better/worse over-claimed; a "no change" against a wider noise did not.
+  return a.claimed_change
     ? t("lab.experimentBench.assumedBandWider", opts)
-    : t("lab.experimentBench.assumedBandNarrower", opts);
+    : t("lab.experimentBench.assumedBandWiderNoClaim", opts);
 }
 
 function whenLabel(iso: string, t: Translate): string {

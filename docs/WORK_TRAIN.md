@@ -245,8 +245,10 @@ release checklist); no new rules.
         of the 90th-percentile bucket and <=5% above it; uncapped = <=25%; otherwise unknown), never from the refresh
         rate. Different cap states confound a Trial ("The frame cap changed between these sessions ..."), an unreadable
         one confounds it too; a shared cap judges Recommended on the 1% low and says the cap hides the average; Maximum
-        FPS under a cap is not judged ("lift the cap"). Bands never pool across cap states. "What changed?" refuses a
-        changed cap and notes an unreadable one.
+        FPS under a cap is not judged ("lift the cap"), nor anything when the 1% low itself sits at the cap. Bands never
+        pool across cap states; real play pins only as-is sessions in the anchor's cap state and leaves out a
+        with-change session in another or unreadable one ("frame-cap-changed"). "What changed?" calls nothing better
+        or worse across a changed or unreadable cap, nor without the game's measured noise.
       - Wording: the note names the measured bands and the session count; fewer than 6 sessions caps confidence at Medium.
         Older verdicts judged on the assumed band are labelled on read (`assumed_band`, never stored), en + zh-CN.
 - [x] **CR-zh-drift-count** (second whole-range review) zh-CN `home.json` driftCount strings still said "已漂移" after the English was reworded to "changed since they were last good" (`8d855c05`).
@@ -665,6 +667,8 @@ under P4-judge-noisy. Coordinator's reading (delegated): real people don't hold 
 they didn't, says exactly what differed in plain words, and has a contingency other than "too noisy". Honest-measurement
 law applies to every item; nothing lowers the bar for claiming an improvement. P4-judge-noisy built the first piece
 (frame-cap state read from frame data as part of a session's context; a changed cap named in the verdict).
+Constitution: `PRODUCT_CONSTITUTION.md` §37 "Expect real human behaviour; never present an unclean result" (owner
+amendment 2026-11-12, approved 17:21 "add it"; `4d5217d5`).
 - [ ] **TG-context** Every session records a measurement-context fingerprint from what Compy can read: cap state (from
       frame data), resolution/refresh mode, share of time the game was in front, active power plan, GPU driver and
       adapter, known heavy background work (recording/streaming encoders, high CPU from non-game processes), length;

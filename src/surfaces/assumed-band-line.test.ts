@@ -9,11 +9,16 @@ const t = ((key: string, opts?: Record<string, unknown>) => `${key} ${JSON.strin
 
 describe("assumedBandLine", () => {
   it("names the assumed band and the game's wider measured noise", () => {
-    const line = assumedBandLine({ assumed_pct: 3, measured_low1_pct: 20.6, measured_sessions: 9 }, "ROB RUN.exe", t);
-    expect(line).toContain("lab.experimentBench.assumedBandWider");
+    const line = assumedBandLine({ assumed_pct: 3, measured_low1_pct: 20.6, measured_sessions: 9, claimed_change: true }, "ROB RUN.exe", t);
+    expect(line).toContain("lab.experimentBench.assumedBandWider ");
     expect(line).toContain('"assumed":"3"');
     expect(line).toContain('"measured":"20.6"');
     expect(line).toContain('"sessions":9');
+  });
+
+  it("a 'no change' judged on the narrower assumed band is not said to have over-claimed", () => {
+    const line = assumedBandLine({ assumed_pct: 3, measured_low1_pct: 20.6, measured_sessions: 9, claimed_change: false }, "ROB RUN.exe", t);
+    expect(line).toContain("lab.experimentBench.assumedBandWiderNoClaim");
   });
 
   it("says so when the game's noise still isn't measured, never filling a number in", () => {
@@ -28,7 +33,7 @@ describe("assumedBandLine", () => {
   });
 
   it("every new line exists in English and Simplified Chinese", () => {
-    for (const key of ["noiseMeasuredBands", "assumedBandUnmeasured", "assumedBandWider", "assumedBandNarrower"]) {
+    for (const key of ["noiseMeasuredBands", "assumedBandUnmeasured", "assumedBandWider", "assumedBandWiderNoClaim", "assumedBandNarrower"]) {
       const enBench = (en as unknown as { experimentBench: Record<string, string> }).experimentBench;
       const zhBench = (zh as unknown as { experimentBench: Record<string, string> }).experimentBench;
       expect(enBench[key], key).toBeTruthy();

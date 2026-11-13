@@ -190,6 +190,7 @@ const REASON_KEY: Record<string, string> = {
   "change-not-on": "changeNotOn",
   "other-compy-change": "otherCompyChange",
   "gaming-mode-differs": "gamingModeDiffers",
+  "frame-cap-changed": "frameCapChanged",
   "after-window": "afterWindow",
   "no-reading": "noReading",
   other: "other",

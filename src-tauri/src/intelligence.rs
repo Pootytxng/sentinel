@@ -1781,20 +1781,20 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
     // P4-judge-noisy: a frame cap that held one session and not the other (or can't be read) is a
     // difference in how the game ran, not in the PC: compare nothing.
     let cap = crate::noise_floor::cap_pair(crate::noise_floor::cap_read(b), crate::noise_floor::cap_read(c));
-    if cap == crate::noise_floor::CapPair::Changed {
-        let mut r = base(
-            "inconclusive",
-            format!("The frame cap changed between these {game} sessions (one was held at a ceiling the other wasn't), so Compy won't call this better or worse."),
-        );
+    if cap != crate::noise_floor::CapPair::Same {
+        let headline = if cap == crate::noise_floor::CapPair::Changed {
+            format!("The frame cap changed between these {game} sessions (one was held at a ceiling the other wasn't), so Compy won't call this better or worse.")
+        } else {
+            format!("Compy can't tell from these {game} sessions' frame-rate traces whether a frame cap held them the same way, so it won't call this better or worse.")
+        };
+        let mut r = base("inconclusive", headline);
+        if let Some(o) = observations.first_mut() {
+            o.meaningful = false;
+        }
         r.observations = observations;
         r.gap_days = gap_days;
         r.notes = notes;
         return r;
-    }
-    if cap == crate::noise_floor::CapPair::Unknown {
-        notes.push(
-            "Compy couldn't read from the frame-rate traces whether a frame cap held both sessions the same way, so a cap change can't be ruled out.".into(),
-        );
     }
     // P4-judge-noisy: without this game's measured noise, no difference is called a change either way.
     if inp.noise.is_none() {
@@ -3139,7 +3139,8 @@ mod tests {
             stutter_insight: None,
             stutter_timeline: vec![],
             stutter_events: vec![],
-            fps_series: vec![],
+            // P4-judge-noisy: a trace that moves freely, so the session's cap state reads (uncapped).
+            fps_series: (0..120u32).map(|i| (i * 10, avg * (0.78 + 0.44 * f64::from((i * 37) % 120) / 120.0))).collect(),
             capture_capabilities: None,
             game_state: None,
             peak_cpu_temp_c: None,

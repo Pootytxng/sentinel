@@ -576,6 +576,7 @@
           "changeNotOn": "the change didn't read as on during it",
           "otherCompyChange": "another Compy change was on or moved",
           "gamingModeDiffers": "Gaming Mode wasn't the same as in the sessions before the change",
+          "frameCapChanged": "a frame cap held it differently from the sessions before the change, or Compy couldn't tell from its frame rate whether one did",
           "afterWindow": "played after the test's time ran out",
           "noReading": "no frame-rate reading",
           "other": "a reason this version of Compy doesn't know"
@@ -858,6 +859,7 @@
     "noiseMeasuredBands": "Judged against ±{{low}}% on the 1% low and ±{{avg}}% on the average: how much {{game}} moved from one session to the next across {{sessions}} of your sessions with nothing changed. A change inside that is negligible at this game's noise.",
     "assumedBandUnmeasured": "This result was judged against an assumed ±{{assumed}}% band, before Compy measured each game's own noise. {{game}}'s noise still isn't measured, so treat it as unconfirmed.",
     "assumedBandWider": "This result was judged against an assumed ±{{assumed}}% band, before Compy measured each game's own noise. {{game}}'s measured noise is ±{{measured}}% (from {{sessions}} sessions), wider, so the result claimed more than was measured.",
+    "assumedBandWiderNoClaim": "This result was judged against an assumed ±{{assumed}}% band, before Compy measured each game's own noise. {{game}}'s measured noise is ±{{measured}}% (from {{sessions}} sessions), wider than that band; the result claimed no change, which still stands, at that wider noise.",
     "assumedBandNarrower": "This result was judged against an assumed ±{{assumed}}% band, before Compy measured each game's own noise. {{game}}'s measured noise is ±{{measured}}% (from {{sessions}} sessions), no wider than that band.",
     "noiseMeasured": "Judged against Compy's fixed {{band}}% noise floor. In one 25-second calibration on your PC, this game's 1% low varied by ±{{measured}}%. That number isn't used to judge yet, and the game version isn't checked.",
     "noiseStaleChanged": "Judged against Compy's {{band}}% noise floor. This game's spread on your PC was measured before a driver or Windows update, so it wasn't used. The game version isn't checked.",

@@ -567,6 +567,7 @@
           "changeNotOn": "这一局中更改没有显示为开启",
           "otherCompyChange": "另一项 Compy 更改处于开启状态或发生了变动",
           "gamingModeDiffers": "游戏模式的状态与更改前的对局不同",
+          "frameCapChanged": "帧率上限对这局的限制与更改前的对局不同，或 Compy 无法从帧率判断是否有上限",
           "afterWindow": "在测试时间结束后玩的",
           "noReading": "没有帧率读数",
           "other": "这个版本的 Compy 无法识别的原因"
@@ -847,6 +848,7 @@
     "noiseMeasuredBands": "按 1% 低帧 ±{{low}}%、平均帧率 ±{{avg}}% 判定：这是在你 {{sessions}} 次未做任何更改的 {{game}} 游戏中，相邻两次之间的波动幅度。落在其中的变化，在这款游戏的波动下可忽略不计。",
     "assumedBandUnmeasured": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 的波动至今仍未测量，因此请视为未经确认。",
     "assumedBandWider": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 实测的波动为 ±{{measured}}%（来自 {{sessions}} 次游戏），比该范围更宽，因此该结果的结论超出了实际测量所能支持的程度。",
+    "assumedBandWiderNoClaim": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 实测的波动为 ±{{measured}}%（来自 {{sessions}} 次游戏），比该范围更宽；该结果判定为没有变化，在这一更宽的波动下这一结论仍然成立。",
     "assumedBandNarrower": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 实测的波动为 ±{{measured}}%（来自 {{sessions}} 次游戏），不比该范围更宽。",
     "noiseMeasured": "按 Compy 固定的 {{band}}% 噪声下限判定。在你电脑上一次 25 秒的校准中，这款游戏的 1% 低帧波动为 ±{{measured}}%。该数值暂不用于判定，且未检查游戏版本。",
     "noiseStaleChanged": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的波动是在驱动或 Windows 更新之前测量的，因此未采用。未检查游戏版本。",
