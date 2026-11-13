@@ -787,8 +787,14 @@ fn round1(x: f64) -> f64 {
 /// (`GameNoise::low1_band_pct`, `avg_band_pct`): the same log distance below, `B / (1 + B)`, rounded
 /// down to 0.1 so it is never wider than that. A veto on a win ("didn't fall by more than the band")
 /// and a Worse are judged on this, so a fall the game's own noise can't hold never lets a win through.
+///
+/// Never under the smallest change Compy claims either way (`MIN_CLAIM_PCT`): a band at that minimum
+/// (an assumed 3%, or a measured band floored there) is that minimum both ways, as it always was.
 pub(crate) fn fall_pct(band_pct: f64) -> f64 {
-    (100.0 * band_pct / (100.0 + band_pct) * 10.0).floor() / 10.0
+    if band_pct <= MIN_CLAIM_PCT + 1e-9 {
+        return band_pct;
+    }
+    ((100.0 * band_pct / (100.0 + band_pct) * 10.0).floor() / 10.0).max(MIN_CLAIM_PCT)
 }
 
 /// Opus r1 SHOULD-FIX (s27): a band measured under noise model 2 (each step a % of the pair's mean,
@@ -1632,7 +1638,11 @@ pub(crate) mod tests {
     fn a_fall_is_judged_at_the_same_log_distance_and_an_older_band_is_never_narrower() {
         // Opus r1 (s27): +25% and -20% are the same distance (1.25 x 0.8 = 1).
         assert_eq!(fall_pct(25.0), 20.0);
-        assert_eq!(fall_pct(3.0), 2.9, "rounded down, never wider than the matching fall");
+        assert_eq!(fall_pct(20.6), 17.0, "rounded down, never wider than the matching fall");
+        // The smallest claim is the smallest claim both ways.
+        assert_eq!(fall_pct(3.0), 3.0);
+        assert_eq!(fall_pct(3.05), 3.0);
+        assert_eq!(fall_pct(3.2), 3.1);
         // A model-2 band (pair-mean step, the band itself) is read on this build's base.
         let old = GameNoise {
             model: 2,

@@ -385,6 +385,13 @@ const MIN_CLAIM_PCT = 3;
 // Fewer as-is sessions than this measure the band loosely (experiment.rs `FULL_CONFIDENCE_SESSIONS`).
 const FULL_CONFIDENCE_SESSIONS = 6;
 
+// The fall that matches a band stored as a rise over the baseline (noise_floor.rs `fall_pct`, the same
+// rule): B / (1 + B), rounded down to 0.1, never under the smallest claim; a band at it is it both ways.
+export function fallPct(band: number): number {
+  if (band <= MIN_CLAIM_PCT + 1e-9) return band;
+  return Math.max(Math.floor(((100 * band) / (100 + band)) * 10) / 10, MIN_CLAIM_PCT);
+}
+
 // P4-noise-sf: the measured bands this goal was actually judged on (experiment.rs `with_noise_words`:
 // Recommended on the 1% low with the average on its own band, or the 1% low only under a shared cap;
 // Maximum FPS on the wider of the two on both; Smoothest on its pacing band and the 1% low; neither of
@@ -397,20 +404,22 @@ export function measuredBandsLine(g: GameNoise, outcome: TrialOutcome | null | u
   const goal = outcome ?? "recommended";
   if (capped && goal !== "recommended") return t("lab.experimentBench.noiseMeasuredCappedUnjudged", { game: name });
   const maxBand = Math.max(g.low1_band_pct, g.avg_band_pct);
+  // Sonnet r1: a band is a rise over the baseline; a fall is judged at the same distance in the game's
+  // own terms (noise_floor.rs `fall_pct`), and the line says both numbers.
+  const [low, lowFall, avg, avgFall] = [
+    pct(g.low1_band_pct),
+    pct(fallPct(g.low1_band_pct)),
+    pct(g.avg_band_pct),
+    pct(fallPct(g.avg_band_pct)),
+  ];
   const [judged, named] =
     goal === "max-fps"
-      ? [t("lab.experimentBench.noiseMeasuredBandsMaxFps", { band: pct(maxBand) }), [maxBand]]
+      ? [t("lab.experimentBench.noiseMeasuredBandsMaxFps", { band: pct(maxBand), bandFall: pct(fallPct(maxBand)) }), [maxBand]]
       : goal === "smoothest"
-        ? [t("lab.experimentBench.noiseMeasuredBandsSmoothest", { low: pct(g.low1_band_pct) }), [g.low1_band_pct]]
+        ? [t("lab.experimentBench.noiseMeasuredBandsSmoothest", { low, lowFall }), [g.low1_band_pct]]
         : capped
-          ? [
-              t("lab.experimentBench.noiseMeasuredBandsCapped", { low: pct(g.low1_band_pct), avg: pct(g.avg_band_pct) }),
-              [g.low1_band_pct],
-            ]
-          : [
-              t("lab.experimentBench.noiseMeasuredBands", { low: pct(g.low1_band_pct), avg: pct(g.avg_band_pct) }),
-              [g.low1_band_pct, g.avg_band_pct],
-            ];
+          ? [t("lab.experimentBench.noiseMeasuredBandsCapped", { low, lowFall, avgFall }), [g.low1_band_pct]]
+          : [t("lab.experimentBench.noiseMeasuredBands", { low, lowFall, avg, avgFall }), [g.low1_band_pct, g.avg_band_pct]];
   // Coordinator SHOULD-FIX (s27): the typical session-to-session move and the band are two different
   // numbers, and both are said plainly.
   const parts = [

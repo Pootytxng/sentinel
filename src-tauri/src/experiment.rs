@@ -3101,10 +3101,14 @@ pub(crate) fn with_noise_words(
         ],
     };
     // A rise past the band, or a fall past the fall that matches it (`noise_floor::fall_pct`).
+    // Sonnet r1: frame pacing's change is already a % of the lower ratio, judged on its raw band both
+    // ways (as `with_smoothest_outcome` does); only the 1% low and the average use the matching fall.
+    let fall_of = |what: &str, band: f64| if what == "frame pacing" { band } else { crate::noise_floor::fall_pct(band) };
     let rose = |d: f64, band: f64| d > band + 1e-9;
-    let fell = |d: f64, band: f64| d < -crate::noise_floor::fall_pct(band) - 1e-9;
-    let inside = |d: Option<f64>, band: f64, required: bool| d.map_or(!required, |d| !rose(d, band) && !fell(d, band));
-    let all_inside = judged.iter().all(|&(_, d, band, required)| inside(d, band, required));
+    let fell = |what: &str, d: f64, band: f64| d < -fall_of(what, band) - 1e-9;
+    let inside =
+        |what: &str, d: Option<f64>, band: f64, required: bool| d.map_or(!required, |d| !rose(d, band) && !fell(what, d, band));
+    let all_inside = judged.iter().all(|&(what, d, band, required)| inside(what, d, band, required));
     let negligible = if outcome.verdict != "no-change" {
         String::new()
     } else if all_inside {
@@ -3120,10 +3124,10 @@ pub(crate) fn with_noise_words(
                 Some(d) if rose(d, band) => {
                     format!("the {what} rose past {name}'s noise ({} against +{}%)", signed_pct(d), band_pct_text(band))
                 }
-                Some(d) if fell(d, band) => format!(
+                Some(d) if fell(what, d, band) => format!(
                     "the {what} fell past {name}'s noise ({} against -{}%)",
                     signed_pct(d),
-                    band_pct_text(crate::noise_floor::fall_pct(band))
+                    band_pct_text(fall_of(what, band))
                 ),
                 Some(d) => {
                     format!("the {what} stayed inside {name}'s noise ({} against ±{}%)", signed_pct(d), band_pct_text(band))
@@ -4502,7 +4506,10 @@ pub(crate) fn conclude_experiment(
                     // s27: two sessions further apart than the band was measured at can't be judged on it.
                     let paired =
                         with_gap_check(paired, n, rec.baseline_session_id.as_deref(), Some(treatment.started_at.as_str()));
-                    let paired = with_measured_fall(paired, n.low1_band_pct);
+                    // Sonnet r1 NIT: the 1% low's band as the picked goal judges it (Maximum FPS: the wider).
+                    let low_band =
+                        if rec.outcome == TrialOutcome::MaxFps { n.low1_band_pct.max(n.avg_band_pct) } else { n.low1_band_pct };
+                    let paired = with_measured_fall(paired, low_band);
                     // P4-recommended: a verdict still judged on the band is read as the Recommended
                     // outcome, the average beside the 1% low, each on its measured band.
                     // P4-maxfps-smooth: or as the outcome the user picked at start (Maximum FPS on the

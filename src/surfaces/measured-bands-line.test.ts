@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import en from "../i18n/locales/en/lab.json";
 import zh from "../i18n/locales/zh-CN/lab.json";
-import { measuredBandsLine, notComparableNote } from "./ExperimentBench";
+import { fallPct, measuredBandsLine, notComparableNote } from "./ExperimentBench";
 
 const t = ((key: string, opts?: Record<string, unknown>) => `${key} ${JSON.stringify(opts ?? {})}`) as never;
 const WIDE = { low1_band_pct: 23, avg_band_pct: 18, low1_step_pct: 9.2, avg_step_pct: 7.2, sessions: 9, cap: { state: "uncapped" as const } };
@@ -21,9 +21,9 @@ describe("measuredBandsLine", () => {
   });
 
   it("Maximum FPS names the one wider band; Smoothest names the 1% low beside its pacing band", () => {
-    expect(measuredBandsLine(WIDE, "max-fps", "ROB RUN.exe", t)).toContain('noiseMeasuredBandsMaxFps {"band":"23"}');
+    expect(measuredBandsLine(WIDE, "max-fps", "ROB RUN.exe", t)).toContain('noiseMeasuredBandsMaxFps {"band":"23","bandFall":"18.6"}');
     const smooth = measuredBandsLine(WIDE, "smoothest", "ROB RUN.exe", t);
-    expect(smooth).toContain('noiseMeasuredBandsSmoothest {"low":"23"}');
+    expect(smooth).toContain('noiseMeasuredBandsSmoothest {"low":"23","lowFall":"18.6"}');
     expect(smooth).not.toContain('"avg"');
   });
 
@@ -59,6 +59,11 @@ describe("measuredBandsLine", () => {
     // Every named band at the 3% minimum: the "wide because few sessions" line would contradict it.
     const floored = measuredBandsLine({ ...WIDE, sessions: 3, low1_band_pct: 3, avg_band_pct: 3 }, "recommended", "cs2.exe", t);
     expect(floored).not.toContain("noiseMeasuredFewSessions");
+  });
+
+  it("says the fall each band matches, as the backend judges it", () => {
+    expect([fallPct(25), fallPct(23), fallPct(3), fallPct(3.05)]).toEqual([20, 18.6, 3, 3]);
+    expect(measuredBandsLine(WIDE, "recommended", "ROB RUN.exe", t)).toContain('"lowFall":"18.6"');
   });
 
   it("a Trial not judged for the gap between its sessions says so in the user's language", () => {
