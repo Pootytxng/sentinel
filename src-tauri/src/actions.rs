@@ -3689,6 +3689,27 @@ fn power_plan_exists(guid: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// CR-core-parking-plan-gone: whether `guid` is in Windows' plan list, as a read that can fail.
+/// `None` = the list couldn't be read (powercfg didn't run, exited non-zero, or printed no plan at
+/// all: every Windows install lists at least one), never read as "gone". Read-only, no elevation.
+fn power_plan_listed(guid: &str) -> Option<bool> {
+    let out = quiet_command("powercfg").args(["/list"]).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    plan_list_names(&String::from_utf8_lossy(&out.stdout), guid)
+}
+
+/// PURE (CR-core-parking-plan-gone): `guid` against a `powercfg /list` print. `None` when the print
+/// names no plan GUID at all (an unreadable list), otherwise whether one of its GUIDs is `guid`.
+pub(crate) fn plan_list_names(list: &str, guid: &str) -> Option<bool> {
+    let guids: Vec<String> = list.lines().filter_map(crate::scheme_guid_of).collect();
+    if guids.is_empty() {
+        return None;
+    }
+    Some(guids.iter().any(|g| g.eq_ignore_ascii_case(guid.trim())))
+}
+
 /// Pure: build the powercfg restore command for one power-plan setting,
 /// targeting the EXACT stored plan GUID (never SCHEME_CURRENT, which may be a
 /// different plan at rollback time). `reactivate` re-commits the change live
@@ -4691,7 +4712,34 @@ pub(crate) fn restore_core_parking_default() -> Result<ApplyResult, String> {
         elevation_used: true,
     })
 }
-pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan_guid: Option<&str>) -> Result<(), String> {
+pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan_guid: Option<&str>) -> Result<UndoDone, String> {
+    match core_parking_undo_step(ac, dc, plan_guid, &power_plan_listed, &current_power_plan_guid)? {
+        CoreParkingUndo::Run(script) => run_elevated_powershell(&script).map(|()| UndoDone::Restored),
+        CoreParkingUndo::PlanGone { plan_guid } => Ok(UndoDone::NothingToRestore(NothingRestored::plan_gone(plan_guid))),
+    }
+}
+
+/// What a core-parking undo does, decided from the row and two read-only machine reads.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum CoreParkingUndo {
+    /// Run this elevated script.
+    Run(String),
+    /// CR-core-parking-plan-gone: the plan the apply wrote to no longer exists. The value Compy
+    /// changed went with it, so there is nothing left on the machine to put back; nothing runs.
+    PlanGone { plan_guid: String },
+}
+
+/// PURE given its reads (CR-core-parking-plan-gone): the core-parking undo for a ledger row.
+/// `plan_listed` and `active_plan` are the read-only powercfg queries in production, fakes in tests.
+/// `plan_listed` is `None` when the plan list couldn't be read: then the plan is NOT known to be
+/// gone, and the undo stops with nothing changed rather than closing the row on a failed read.
+pub(crate) fn core_parking_undo_step(
+    ac: Option<u32>,
+    dc: Option<u32>,
+    plan_guid: Option<&str>,
+    plan_listed: &dyn Fn(&str) -> Option<bool>,
+    active_plan: &dyn Fn() -> Option<String>,
+) -> Result<CoreParkingUndo, String> {
     let Some(a) = ac else {
         return Err("This entry has no recorded prior core-parking value — cannot roll back blind.".to_string());
     };
@@ -4699,24 +4747,58 @@ pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan
     let d = dc.unwrap_or(a);
     let Some(plan) = plan_guid else {
         // A row written before the plan was recorded undoes as it always did.
-        return run_elevated_powershell(&core_parking_script(a, d));
+        return Ok(CoreParkingUndo::Run(core_parking_script(a, d)));
     };
     // CR-core-parking-plan-guid: back to the plan the apply wrote to, never onto whatever plan is
     // active now. The GUID comes from the user-writable history, so it is checked before it can
-    // reach the elevated command line, and a plan that no longer exists fails loud.
+    // reach the elevated command line.
     ps_safe(plan)?;
     // Sonnet r1: only a whole 8-4-4-4-12 GUID is a plan (`power_plan_exists` matches substrings).
     if !crate::scheme_guid_of(plan).is_some_and(|g| g.eq_ignore_ascii_case(plan)) {
         return Err(format!("This entry's recorded power plan ({plan}) isn't a plan id — cannot roll back blind."));
     }
-    if !power_plan_exists(plan) {
-        return Err(format!(
-            "cannot roll this back: the power plan it was applied to ({plan}) no longer exists. Compy will not \
-             restore the value to a different plan — reselect or recreate that plan and try again."
-        ));
+    let Some(listed) = plan_listed(plan) else {
+        return Err("Compy couldn't read Windows' list of power plans just now, so it can't undo this safely. \
+                    Nothing was changed; try again in a moment."
+            .to_string());
+    };
+    if !listed {
+        // CR-core-parking-plan-gone: the setting lived inside that plan, so deleting the plan took
+        // Compy's change with it. Writing the value onto another plan would be a quiet lie, and
+        // refusing for good would leave the row "applied" forever; the row closes as nothing to
+        // restore instead, with that reason on its receipt.
+        return Ok(CoreParkingUndo::PlanGone { plan_guid: plan.to_ascii_lowercase() });
     }
-    let reactivate = current_power_plan_guid().is_some_and(|g| g.eq_ignore_ascii_case(plan.trim()));
-    run_elevated_powershell(&core_parking_plan_script(plan, a, d, reactivate))
+    let reactivate = active_plan().is_some_and(|g| g.eq_ignore_ascii_case(plan.trim()));
+    Ok(CoreParkingUndo::Run(core_parking_plan_script(plan, a, d, reactivate)))
+}
+
+/// How an undo that succeeded ended (CR-core-parking-plan-gone).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum UndoDone {
+    /// The prior value was written back.
+    Restored,
+    /// Nothing was left on the machine to restore, so nothing ran; the reason goes on the receipt.
+    NothingToRestore(NothingRestored),
+}
+
+/// The Trust Ledger receipt for an undo that had nothing to restore (CR-core-parking-plan-gone).
+/// Additive metadata on the row: no key at all on every other row.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NothingRestored {
+    /// Why: "plan-gone" (the power plan the change was made on no longer exists). A plain string so
+    /// a reason a later build writes still loads here.
+    pub(crate) reason: String,
+    /// The plan the change was made on (lower-case GUID).
+    #[serde(default)]
+    pub(crate) plan_guid: Option<String>,
+}
+
+impl NothingRestored {
+    pub(crate) const PLAN_GONE: &'static str = "plan-gone";
+    pub(crate) fn plan_gone(plan_guid: String) -> Self {
+        Self { reason: Self::PLAN_GONE.to_string(), plan_guid: Some(plan_guid) }
+    }
 }
 
 /// Pure (CR-core-parking-plan-guid): the core-parking undo against the stored plan GUID, as
@@ -5125,6 +5207,20 @@ pub(crate) fn rollback_visual_effects_typed(
 // this token exists only when Compy has verified the data root is the machine's own, so a
 // container-redirected launch cannot reach a rollback at all. Undoing a real Windows change on the
 // strength of a receipt read out of someone else's sandbox is the failure this prevents.
+pub(crate) fn dispatch_rollback_outcome(
+    root: &crate::data_root::MutationRoot,
+    action: &RollbackAction,
+    snapshot: &Snapshot,
+) -> Result<UndoDone, String> {
+    // CR-core-parking-plan-gone: the one undo that can end with nothing to restore.
+    if let (RollbackAction::RestoreCoreParkingFromSnapshot, Snapshot::CoreParking { prior_ac_pct, prior_dc_pct, plan_guid }) =
+        (action, snapshot)
+    {
+        return rollback_core_parking_typed(*prior_ac_pct, *prior_dc_pct, plan_guid.as_deref());
+    }
+    dispatch_rollback(root, action, snapshot).map(|()| UndoDone::Restored)
+}
+
 pub(crate) fn dispatch_rollback(
     _root: &crate::data_root::MutationRoot,
     action: &RollbackAction,
@@ -5230,7 +5326,9 @@ pub(crate) fn dispatch_rollback(
             rollback_mpo_typed(*prior_overlay_test_mode)
         }
         (R::RestoreCoreParkingFromSnapshot, S::CoreParking { prior_ac_pct, prior_dc_pct, plan_guid }) => {
-            rollback_core_parking_typed(*prior_ac_pct, *prior_dc_pct, plan_guid.as_deref())
+            // Callers that only need "did the undo finish" read nothing-to-restore as finished;
+            // the user's undo reads the outcome through `dispatch_rollback_outcome`.
+            rollback_core_parking_typed(*prior_ac_pct, *prior_dc_pct, plan_guid.as_deref()).map(|_| ())
         }
         (R::RestoreTcpAutotuningFromSnapshot, S::TcpAutotuning { prior_disabled }) => {
             rollback_tcp_autotuning_typed(*prior_disabled)
@@ -5588,6 +5686,7 @@ mod rollback_tests {
             rollback_justified_by_experiment: None,
             changed_outside: None,
             applied_plan: None,
+            nothing_restored: None,
         }
     }
 
@@ -6243,6 +6342,7 @@ mod ipc_input_fuzz_tests {
             rollback_justified_by_experiment: None,
             changed_outside: None,
             applied_plan: None,
+            nothing_restored: None,
         }
     }
 

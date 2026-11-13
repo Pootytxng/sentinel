@@ -161,6 +161,9 @@ export type AppliedChange = {
   changed_outside?: ChangedOutsideRecord | null;
   // Computed at read: whether the live read still shows the recorded state. Absent = not known.
   changed_outside_holds?: boolean | null;
+  // CR-core-parking-plan-gone: on a row an undo closed with nothing to restore, why ("plan-gone":
+  // the power plan the change was made on no longer exists). Absent on every other row.
+  nothing_restored?: { reason: string; plan_guid?: string | null } | null;
   // P5-outcomes-f1: the Trial behind an apply or undo made from the Trial bench's outcome switch.
   // Additive, #[serde(default)] on the Rust side; absent/null for every other apply and undo.
   justified_by_experiment?: TrialLink | null;

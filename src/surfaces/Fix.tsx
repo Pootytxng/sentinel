@@ -927,6 +927,9 @@ function HistoryRow({ change }: { change: AppliedChange }) {
   // CR-kept-outside-nits (c): only an undo is "rolled back". A row still applied that reads off was
   // changed outside Compy and never undone, so it says it is off now, not undone.
   const rolledBack = !keptOutside && change.status === "rolled_back";
+  // CR-core-parking-plan-gone: an undo that had nothing left to restore closed the row without
+  // writing anything, so it says that, not "rolled back".
+  const nothingRestored = rolledBack && change.nothing_restored ? change.nothing_restored : null;
   const offNow = !keptOutside && !rolledBack && !change.is_still_active;
   const unconfirmed = !keptOutside && !rolledBack && !offNow && cantConfirmStillOn(change);
   return (
@@ -944,7 +947,9 @@ function HistoryRow({ change }: { change: AppliedChange }) {
         <span className="fix-hist-status">
           {keptOutside
             ? t("optimize.fix.historyChangedOutside")
-            : rolledBack
+            : nothingRestored
+              ? t("optimize.fix.historyNothingRestored")
+              : rolledBack
               ? t("optimize.fix.historyRolledBack")
               : offNow
                 ? t("optimize.fix.historyOffNow")
@@ -961,6 +966,14 @@ function HistoryRow({ change }: { change: AppliedChange }) {
                 plan: keptOutside.observed.name,
                 when: humanizeWhen(keptOutside.recorded_at, t),
               })}
+            </div>
+          )}
+          {nothingRestored && (
+            <div data-testid="fix-hist-nothing-restored">
+              {/* The one reason this build writes; any other reason still says nothing was restored. */}
+              {nothingRestored.reason === "plan-gone"
+                ? t("optimize.fix.historyNothingRestoredPlanGone")
+                : t("optimize.fix.historyNothingRestored")}
             </div>
           )}
           {change.restores_label && change.applied_label ? (

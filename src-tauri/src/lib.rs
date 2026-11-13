@@ -2336,6 +2336,7 @@ mod safety_tests {
             rollback_justified_by_experiment: None,
             changed_outside: None,
             applied_plan: None,
+            nothing_restored: None,
         }
     }
 
@@ -2414,6 +2415,7 @@ mod safety_tests {
             rollback_justified_by_experiment: None,
             changed_outside: None,
             applied_plan: None,
+            nothing_restored: None,
         };
         let back: AppliedChange =
             serde_json::from_value(serde_json::to_value(&change).unwrap()).unwrap();

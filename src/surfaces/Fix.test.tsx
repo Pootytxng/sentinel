@@ -223,6 +223,43 @@ describe("Fix", () => {
     expect(screen.getByTestId("fix-hist-kept-outside").textContent).toMatch(/to keep “Synez Power Plan”, which was set outside Compy/);
   });
 
+  it("CR-core-parking-plan-gone: an undo closed with nothing to restore says so in History, not 'rolled back'", () => {
+    const row = (id: string, title: string, extra: object) => ({
+      id,
+      rec_id: "core-parking-forced",
+      rec_title: title,
+      applied_at: "2026-09-26T03:11:32.377+00:00",
+      snapshot: null,
+      status: "rolled_back" as const,
+      is_still_active: false,
+      ...extra,
+    });
+    const { container } = render(
+      <Fix
+        recs={[]}
+        {...baseProps}
+        view="ledger"
+        changes={[
+          row("c1", "Plan gone", { nothing_restored: { reason: "plan-gone", plan_guid: "6c1e3f42-0d2b-4a77-9e1f-3b7a7f6e1c10" } }),
+          row("c2", "Later reason", { nothing_restored: { reason: "something-newer" } }),
+          row("c3", "Plain undo", {}),
+        ]}
+      />,
+    );
+    fireEvent.click(screen.getByText("History"));
+    const status = (title: string) =>
+      [...container.querySelectorAll(".fix-hist-row")]
+        .find((r) => r.querySelector(".fix-hist-title")?.textContent === title)
+        ?.querySelector(".fix-hist-status")?.textContent;
+    expect(status("Plan gone")).toBe("closed, nothing to restore");
+    expect(status("Later reason")).toBe("closed, nothing to restore");
+    expect(status("Plain undo")).toBe("✓ rolled back");
+    fireEvent.click(screen.getByText("Plan gone"));
+    expect(screen.getByTestId("fix-hist-nothing-restored").textContent).toMatch(
+      /power plan this change was made on no longer exists.*without changing anything on your PC/,
+    );
+  });
+
   // #638 (PR #634 follow-on): the legacy `is_still_active` stays true when the live re-check could
   // not read the machine. History and Health say "can't confirm" for such a change; Optimize used to
   // list it under "Active on this PC". It now sits under its own heading, rollback intact.
