@@ -131,6 +131,9 @@ type JourneyExperiment = {
   verdict_confidence?: string | null;
   noise_evidence?: { band_pct?: number | null; measured_noise_pct?: number | null } | null;
   noise_floor_pct?: number | null;
+  /** P4-judge-noisy: the game's measured noise the verdict was judged on; when present, the stored
+   *  `noise_floor_pct` is only what an older Compy would read, never shown as this result's floor. */
+  game_noise?: { low1_band_pct: number; avg_band_pct: number; sessions: number } | null;
   /** P8-dims: what the catalog stated about the change's risk when this Trial started (experiment.rs
    *  `stated_risk`): its one overall word and each dimension it states (null = not stated). Absent on
    *  records started before Compy kept it. */
@@ -1031,7 +1034,10 @@ function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
       <ReceiptRow label={rk("afterLow")} value={tr ? [fps(tr.low1_fps), pct(tr.delta_low1_pct)].filter(Boolean).join(" ") || null : null} />
       {/* The band the verdict was judged against, when recorded; a legacy record shows its floor AS a floor. */}
       <ReceiptRow label={rk("band")} value={receiptBand(exp.noise_evidence?.band_pct)} />
-      <ReceiptRow label={rk("noiseFloor")} value={exp.noise_evidence?.band_pct == null ? receiptBand(exp.noise_floor_pct) : null} />
+      <ReceiptRow
+        label={rk("noiseFloor")}
+        value={exp.noise_evidence?.band_pct == null && exp.game_noise == null ? receiptBand(exp.noise_floor_pct) : null}
+      />
       <ReceiptRow label={rk("measuredNoise")} value={receiptBand(exp.noise_evidence?.measured_noise_pct)} />
       <ReceiptRow label={rk("samples")} value={tr?.samples != null ? String(tr.samples) : null} />
       <ReceiptRow label={rk("baselineSession")} value={exp.baseline_session_id ?? null} />

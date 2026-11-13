@@ -314,11 +314,6 @@ pub(crate) struct NoiseEvidence {
     /// default). Additive: older records load as `None`.
     #[serde(default)]
     pub between_sessions: Option<crate::noise_floor::BetweenSessionNoise>,
-    /// P4-judge-noisy: this game's measured as-is noise the verdict was judged against
-    /// (`noise_floor::measure_game_noise`): `band_pct` is its 1% low band. Additive: written only
-    /// when present, so a record judged before it stays byte-for-byte what it was.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub game_noise: Option<crate::noise_floor::GameNoise>,
 }
 
 /// P4-judge-noisy (immutability: never stored). A verdict judged against the fixed ±3% default, before
@@ -421,10 +416,11 @@ pub(crate) struct ExperimentRecord {
     /// measured (the floor is then the fixed default), and on older records.
     #[serde(default)]
     pub between_session_noise: Option<crate::noise_floor::BetweenSessionNoise>,
-    /// P4-judge-noisy: this game's measured as-is noise at start (`noise_floor::measure_game_noise`).
-    /// `noise_floor_pct` is its 1% low band, so an older Compy that reads only that judges on it too.
-    /// `None` on records started before it (they are measured at conclude, never judged on 3%).
-    /// Additive: written only when present.
+    /// P4-judge-noisy: this game's measured as-is noise (`noise_floor::measure_game_noise`), measured at
+    /// start; this build judges the verdict on it alone (never on `noise_floor_pct`, which keeps the
+    /// P4-noise band for an older Compy). `None` on records started before it: they are measured at
+    /// conclude, and judged nothing when that can't be done, never on 3%. Additive: written only when
+    /// present.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub game_noise: Option<crate::noise_floor::GameNoise>,
     /// Read-only label for a verdict judged on the assumed band ([`AssumedBandLabel`]): set only on
@@ -2551,7 +2547,7 @@ pub(crate) fn noise_evidence_for(
     };
     let between_sessions = between_sessions.cloned();
     judged_against_noise(outcome)
-        .then_some(NoiseEvidence { band_pct, measured_noise_pct, measured_noise_stale, between_sessions, game_noise: None })
+        .then_some(NoiseEvidence { band_pct, measured_noise_pct, measured_noise_stale, between_sessions })
 }
 
 /// The record's view of one session's steadiness: the grade's check and halves, `(None, None)` for a
@@ -2958,7 +2954,7 @@ pub(crate) fn assumed_band_label(
     measured_now: Option<&crate::noise_floor::GameNoise>,
 ) -> Option<AssumedBandLabel> {
     let judged_on_fixed = match &rec.noise_evidence {
-        Some(n) => n.game_noise.is_none() && n.between_sessions.is_none(),
+        Some(n) => n.between_sessions.is_none(),
         // A too-noisy verdict carried no evidence but was graded on the fixed halves floor.
         None => rec.verdict.as_deref() == Some("too-noisy") && rec.game_noise.is_none(),
     };
@@ -3817,6 +3813,14 @@ pub(crate) fn start_experiment(
     let halves_floor = DEFAULT_NOISE_FLOOR_PCT;
     let (baseline_check, baseline_halves) = baseline_for_start(baseline, halves_floor)
         .map_err(|why| format!("experiment not started — {why}"))?;
+    // P4-noise, kept on the record as evidence and for an older Compy, which judges only on
+    // `noise_floor_pct`: the largest spread between whole unchanged sessions, never below the fixed
+    // default. This build never judges on it: the verdict is judged on `game_noise` (P4-judge-noisy).
+    let between = history
+        .as_deref()
+        .ok()
+        .and_then(|changes| crate::noise_floor::between_session_noise(&covered, baseline, &ledger_rows(changes)));
+    let noise_floor_pct = crate::noise_floor::noise_band_pct(between.as_ref());
     let game_noise = match history.as_deref() {
         Ok(changes) => Some(
             crate::noise_floor::measure_game_noise(&covered, baseline, &ledger_rows(changes))
@@ -3834,7 +3838,6 @@ pub(crate) fn start_experiment(
                     sessions ran with nothing changed or measure how much this game varies on its own"
             .into());
     };
-    let noise_floor_pct = game_noise.low1_band_pct;
     // P4-smooth-offer: Smoothest starts only when this game's frame pacing was measured between
     // unchanged sessions on this PC, and is judged on that band; refused before anything is recorded.
     // After the §3 view, so a history that can't cover this baseline is refused in its own words.
@@ -3909,7 +3912,7 @@ pub(crate) fn start_experiment(
         applied_at: None,
         session_pairing: None,
         noise_evidence: None,
-        between_session_noise: None,
+        between_session_noise: between,
         game_noise: Some(game_noise),
         assumed_band: None,
         halves_floor_pct: Some(halves_floor),
@@ -4327,12 +4330,16 @@ pub(crate) fn conclude_experiment(
         .or(crash_pairing.as_ref())
         .map(|pairing| SessionPairing::of(pairing, baseline, treatment));
     // §11: the band this verdict was judged against, when it was.
+    // P4-judge-noisy: the band is the measured 1% low band; the measurement itself is kept on the
+    // record (`game_noise`), also for a record started before it and measured here.
     let measured_noise = noise.ok();
     let band_pct = measured_noise.as_ref().map_or(store.experiments[idx].noise_floor_pct, |n| n.low1_band_pct);
+    if store.experiments[idx].game_noise.is_none() {
+        store.experiments[idx].game_noise = measured_noise;
+    }
     let between = store.experiments[idx].between_session_noise.clone();
     let game_noise = treatment.map_or(crate::noise_floor::NoiseLookup::Unmeasured, crate::noise_floor::lookup_for_session);
-    store.experiments[idx].noise_evidence = noise_evidence_for(&outcome, band_pct, &game_noise, between.as_ref())
-        .map(|ev| NoiseEvidence { game_noise: measured_noise, ..ev });
+    store.experiments[idx].noise_evidence = noise_evidence_for(&outcome, band_pct, &game_noise, between.as_ref());
     store.experiments[idx].verdict = Some(outcome.verdict.clone());
     store.experiments[idx].trial_result = Some(trial_result_for(&outcome.verdict));
     store.experiments[idx].verdict_confidence = Some(outcome.confidence);
@@ -6586,7 +6593,7 @@ mod experiment_tests {
             assert_eq!(o.verdict, verdict);
             assert_eq!(
                 noise_evidence_for(&o, band, &NoiseLookup::Unmeasured, None),
-                Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None, game_noise: None }),
+                Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None }),
                 "{verdict} was judged against the band"
             );
         }
@@ -6610,15 +6617,15 @@ mod experiment_tests {
         let o = measured(180.0);
         assert_eq!(
             noise_evidence_for(&o, band, &NoiseLookup::Measured(1.8), None),
-            Some(NoiseEvidence { band_pct: band, measured_noise_pct: Some(1.8), measured_noise_stale: None, between_sessions: None, game_noise: None })
+            Some(NoiseEvidence { band_pct: band, measured_noise_pct: Some(1.8), measured_noise_stale: None, between_sessions: None })
         );
         assert_eq!(
             noise_evidence_for(&o, band, &NoiseLookup::Stale(StaleReason::Unconfirmed), None),
-            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: Some(StaleReason::Unconfirmed), between_sessions: None, game_noise: None })
+            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: Some(StaleReason::Unconfirmed), between_sessions: None })
         );
         assert_eq!(
             noise_evidence_for(&o, band, &NoiseLookup::Unmeasured, None),
-            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None, game_noise: None })
+            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None })
         );
         let crash = conclude_outcome(&rec(150.0, 5), 180.0, 5000, true, Some("Test"), Some(5), Utc::now());
         assert_eq!(noise_evidence_for(&crash, band, &NoiseLookup::Measured(1.8), None), None, "nothing was judged");
@@ -6668,10 +6675,10 @@ mod experiment_tests {
             experiments: Vec<OldRecord>,
         }
         let mut stale = rec(150.0, 5);
-        stale.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: Some(StaleReason::Changed), between_sessions: None, game_noise: None });
+        stale.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: Some(StaleReason::Changed), between_sessions: None });
         let mut measured = rec(150.0, 5);
         measured.id = "exp:2-0".into();
-        measured.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: Some(1.8), measured_noise_stale: None, between_sessions: None, game_noise: None });
+        measured.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: Some(1.8), measured_noise_stale: None, between_sessions: None });
         let path = std::env::temp_dir().join(format!("compy-exp-noise-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let store = ExperimentStore { schema_version: STORE_SCHEMA_VERSION, experiments: vec![stale, measured] };
@@ -6692,7 +6699,7 @@ mod experiment_tests {
 
     #[test]
     fn an_unmeasured_game_noise_is_written_as_unknown_not_guessed() {
-        let v = serde_json::to_value(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None, game_noise: None }).unwrap();
+        let v = serde_json::to_value(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None }).unwrap();
         assert!(v["measured_noise_pct"].is_null(), "{v}");
         assert_eq!(v["band_pct"], 3.0);
     }
@@ -7792,7 +7799,6 @@ mod experiment_tests {
             measured_noise_pct: None,
             measured_noise_stale: None,
             between_sessions: r.between_session_noise.clone(),
-            game_noise: None,
         });
         let text = serde_json::to_string(&ExperimentStore { schema_version: STORE_SCHEMA_VERSION, experiments: vec![r] }).unwrap();
         #[derive(Deserialize)]
@@ -9471,8 +9477,11 @@ mod refuse_early_tests {
         let body = &body[..body.find("\n}\n").unwrap()];
         assert!(body.contains("crate::noise_floor::measure_game_noise(&covered, baseline, &ledger_rows(changes))"));
         assert!(body.contains("noise_unmeasured_message(&why, &baseline.process_name)"));
-        assert!(body.contains("let noise_floor_pct = game_noise.low1_band_pct;"), "the stored band is the measured one");
-        assert!(!body.contains("noise_band_pct("), "no fallback to the fixed default");
+        assert!(body.contains("game_noise: Some(game_noise),"), "the measurement is on the record");
+        // The verdict is classified on the measured band, never on the stored `noise_floor_pct`.
+        let conclude = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
+        assert!(conclude.contains("Ok(n) => ExperimentRecord { noise_floor_pct: n.low1_band_pct, ..rec.clone() },"));
+        assert!(conclude.contains("Err(why) => unmeasured_noise_outcome(paired, why, &rec.game),"));
     }
 
     /// An exp:10-shaped record as an older Compy wrote it (shape only, from the owner's data).
@@ -9510,8 +9519,14 @@ mod refuse_early_tests {
     }
 
     #[test]
-    fn a_new_record_keeps_its_measured_noise_and_an_older_compy_judges_on_its_band() {
-        let r = ExperimentRecord { noise_floor_pct: WIDE.low1_band_pct, game_noise: Some(WIDE), ..rec(150.0, 5) };
+    fn a_new_record_keeps_its_measured_noise_and_an_older_compy_judges_on_its_own_band() {
+        // As a start records it: `noise_floor_pct` keeps the P4-noise band an older Compy judges on (here
+        // nothing measured by that model, so its floor); this build judges on `game_noise` alone.
+        let r = ExperimentRecord {
+            noise_floor_pct: crate::noise_floor::noise_band_pct(None),
+            game_noise: Some(WIDE),
+            ..rec(150.0, 5)
+        };
         let v = serde_json::to_value(&r).unwrap();
         assert_eq!(v["game_noise"]["low1_band_pct"], serde_json::json!(20.6));
         assert_eq!(v["game_noise"]["cap"], serde_json::json!({ "state": "uncapped" }));
@@ -9520,9 +9535,10 @@ mod refuse_early_tests {
             noise_floor_pct: f64,
         }
         let older: OlderRecord = serde_json::from_value(v.clone()).unwrap();
-        assert_eq!(older.noise_floor_pct, 20.6, "an older Compy reads the measured band, never 3%");
+        assert_eq!(older.noise_floor_pct, 3.0, "an older Compy judges it as it always did");
         let back: ExperimentRecord = serde_json::from_value(v).unwrap();
         assert_eq!(back.game_noise, Some(WIDE));
+        assert_eq!(noise_for_conclude(&back, &[], None, None).map(|n| n.low1_band_pct), Ok(20.6), "this build: the measurement");
     }
 
     #[test]

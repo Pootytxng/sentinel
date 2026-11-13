@@ -133,9 +133,6 @@ type NoiseEvidence = {
   /** P4-noise: this game's 1% low spread between whole unchanged sessions on this PC, which set the
    *  band (never below the fixed floor). Absent/null when too few unchanged sessions existed. */
   between_sessions?: { spread_pct: number; sessions: number } | null;
-  /** P4-judge-noisy: this game's measured as-is noise the verdict was judged on (noise_floor.rs
-   *  `GameNoise`): bands on the 1% low and the average, from that many sessions. Absent on older records. */
-  game_noise?: GameNoise | null;
 };
 
 /** P4-judge-noisy (noise_floor.rs `GameNoise`). */
@@ -225,6 +222,9 @@ type Experiment = {
   real_play?: RealPlayEvidence | null;
   /** P4-judge-noisy: the label for a verdict judged on the assumed band (never stored). */
   assumed_band?: AssumedBand | null;
+  /** P4-judge-noisy: this game's measured as-is noise the verdict was judged on (noise_floor.rs
+   *  `GameNoise`): bands on the 1% low and the average, from that many sessions. Absent on older records. */
+  game_noise?: GameNoise | null;
 };
 
 type SimulatorReport = {
@@ -373,11 +373,10 @@ function BenchWord({ c, kind }: { c: Confidence; kind: "estimate" | "measured" |
 
 // §11 receipt line: the band the verdict was judged against, and whether this game's own noise on
 // this PC is known. An unmeasured noise level is said to be unmeasured, never filled in.
-function noiseLine(n: NoiseEvidence, game: string, t: Translate): string {
+function noiseLine(n: NoiseEvidence, game: string, t: Translate, g?: GameNoise | null): string {
   const pct = (v: number) => String(Math.round(v * 10) / 10);
   const name = prettyGameName(game) || game;
   // P4-judge-noisy: the bands measured from this game's own as-is sessions, in plain words.
-  const g = n.game_noise;
   if (g != null)
     return t("lab.experimentBench.noiseMeasuredBands", {
       low: pct(g.low1_band_pct),
@@ -407,12 +406,13 @@ export function assumedBandLine(a: AssumedBand, game: string, t: Translate): str
   const pct = (v: number) => String(Math.round(v * 10) / 10);
   const name = prettyGameName(game) || game;
   if (a.measured_low1_pct == null) return t("lab.experimentBench.assumedBandUnmeasured", { assumed: pct(a.assumed_pct), game: name });
-  const opts = { assumed: pct(a.assumed_pct), measured: pct(a.measured_low1_pct), sessions: a.measured_sessions ?? 0, game: name };
-  if (a.measured_low1_pct <= a.assumed_pct) return t("lab.experimentBench.assumedBandNarrower", opts);
+  const [assumed, measured, sessions] = [pct(a.assumed_pct), pct(a.measured_low1_pct), a.measured_sessions ?? 0];
+  if (a.measured_low1_pct <= a.assumed_pct)
+    return t("lab.experimentBench.assumedBandNarrower", { assumed, measured, sessions, game: name });
   // Only a claimed better/worse over-claimed; a "no change" against a wider noise did not.
   return a.claimed_change
-    ? t("lab.experimentBench.assumedBandWider", opts)
-    : t("lab.experimentBench.assumedBandWiderNoClaim", opts);
+    ? t("lab.experimentBench.assumedBandWider", { assumed, measured, sessions, game: name })
+    : t("lab.experimentBench.assumedBandWiderNoClaim", { assumed, measured, sessions, game: name });
 }
 
 function whenLabel(iso: string, t: Translate): string {
@@ -1017,7 +1017,7 @@ export default function ExperimentBench({
     const judged = x.noise_evidence
       ? isRealPlay(x)
         ? realPlayNoiseLine(x.noise_evidence.band_pct, realPlayCounts(x), prettyGameName(x.game) || x.game, t)
-        : noiseLine(x.noise_evidence, x.game, t)
+        : noiseLine(x.noise_evidence, x.game, t, x.game_noise)
       : null;
     // P4-judge-noisy: a result judged on the assumed band says so beside its own line.
     const assumed = x.assumed_band ? assumedBandLine(x.assumed_band, x.game, t) : null;

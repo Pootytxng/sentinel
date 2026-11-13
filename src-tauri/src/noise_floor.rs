@@ -229,9 +229,9 @@ pub(crate) struct BetweenSessionNoise {
 
 /// The band a Trial is judged against: the measured between-session spread, but never below the
 /// fixed default; the fixed default when the spread isn't measured.
-/// P4-judge-noisy: no verdict judges on this any more (it fell back to the fixed default when nothing
-/// was measured); kept, test-only, to pin the rule older records were judged by.
-#[cfg(test)]
+/// P4-judge-noisy: no verdict in this build judges on this (it falls back to the fixed default when
+/// nothing is measured). A start still records it as `noise_floor_pct`, the band an older Compy, which
+/// knows only this model, would judge the record on.
 pub(crate) fn noise_band_pct(measured: Option<&BetweenSessionNoise>) -> f64 {
     let floor = crate::comparison::DEFAULT_NOISE_FLOOR_PCT;
     measured.map_or(floor, |m| m.spread_pct.max(floor))
@@ -306,9 +306,8 @@ fn unchanged_between(
 /// P4-noise-stretch): the spread is the largest 1% low difference inside that run. A session in
 /// another run (something changed between them) or older than that is never compared. Fewer than
 /// [`MIN_UNCHANGED_SESSIONS`] counted sessions is `None`: unmeasured, never estimated.
-/// P4-judge-noisy: replaced for every verdict by [`measure_game_noise`]; kept, test-only, to pin the
-/// spread older records (`between_session_noise`) were judged by.
-#[cfg(test)]
+/// P4-judge-noisy: replaced for every verdict by [`measure_game_noise`]; a start still records it as
+/// evidence (`between_session_noise`) beside the band an older Compy judges on.
 pub(crate) fn between_session_noise(
     sessions: &[crate::sessions::SessionSummary],
     now: &crate::sessions::SessionSummary,
