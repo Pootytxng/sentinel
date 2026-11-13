@@ -25,7 +25,7 @@
 <!-- latest_release_version is enforced by check (1) to equal src-tauri/tauri.conf.json's version, so it
      means "the version THIS TREE is configured to build" — NOT "the newest published release".
      Published truth is carried separately by published_release_* below. Do not conflate them. -->
-<!-- STATE:source_main_commit=3630e0a6 -->
+<!-- STATE:source_main_commit=773156f0 -->
 <!-- STATE:latest_release_version=0.9.26 -->
 <!-- STATE:candidate_version=0.9.26 -->
 <!-- STATE:candidate_branch=main -->
@@ -112,9 +112,9 @@ fleet path has since carried real traffic — the owner reports at least two tes
 | **Gaming Mode (F1)** | **LIVE** (`true`) | `gaming_mode_gate()` — `lib.rs:878` | Flipped 2026-06-18 w/ owner sign-off. §7 QA harness passed; **GAMING_MODE_QA.md 10/10 PASSED 2026-07-14**; **owner SIGNED OFF 2026-07-14** — field-proven for 1.0. |
 | **Service-suspend** | **ARMED** (`true`) | `service_suspend_gate()` — `actions.rs:2323` | Armed 2026-06-25. Live exact-restore + UAC-cancel=no-partial + critical-service block proven. Session start/restore ride the ONE batched elevation (T6/T6b). |
 | **Debloat (telemetry task disable)** | **ARMED** (`true`) | `bloat_removal_gate()` — `actions.rs:2396` | Armed 2026-06-26. Live exact disable→enable restore + off-list/Defender rejected. |
-| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:253` | REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
+| **Benchmark tweak A/B trial** | **LIVE / UI-reachable, NO dedicated gate** | `start_tweak_trial` — `benchmark_trial.rs:269` | REAL mutation via the audited `apply_recommendation` path, protected by a `RollbackGuard` (auto-rollback on every exit). |
 | **Preload-app removal** | **DARK** (`false`) | `preload_removal_gate()` — `actions.rs:2609` | Built dark 2026-07-06. Command refuses while dark; FE renders nothing. Arming needs live remove→reinstall QA + owner sign-off. |
-| **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs:356` | Built dark 2026-07-09 (reuses audited batch path; multi-change Drop-guard rollback; corrupt-ledger read ABORTS pre-mutation). No FE surface. |
+| **Aggregate-stack A/B trial (§2a)** | **DARK** (`false`) | `stack_trial_gate()` — `benchmark_trial.rs:372` | Built dark 2026-07-09 (reuses audited batch path; multi-change Drop-guard rollback; corrupt-ledger read ABORTS pre-mutation). No FE surface. |
 | **Experiment engine + simulator (Intelligence P3)** | **ARMED** (`true`, 2026-07-17) | `experiment_gate()` — `experiment.rs:59` | Armed after owner sign-off + live apply→rollback round-trip. No new mutation primitive; resolve stays history-only; simulator reads catalog READ-ONLY. |
 | **Leftovers restore** | **ARMED** (`true`, 2026-07-16) | `restore_gate()` — `leftovers.rs:828` | Armed after owner-present live-UAC QA (3 loops PASS); receipts ride the Trust Ledger (`leftover_adopted`). |
 | **Receipts telemetry** | **DARK** (`false`) — **path BUILT 2026-08-25** | `receipts_gate()` — `receipts.rs:28` | Q9a (#217) built the Tier 2 path dark: receiver `functions/api/usage.ts` (D1 `compy_reports`, no per-row ip_hash, rate hash self-deletes in 1h), sender `receipts.rs` (`send_decision` refuses in order gate → disclosure → opt-in; `post_receipt` via the crate's one `reqwest`), consent store `receipts-consent.json`. Receiver **DEPLOYED 2026-08-25** (`compy_reports` migration 0001 applied, `IP_PEPPER` set; `/api/usage` answers GET 405, junk POST 400) and **empty** — standing it up before the arming commit is the sequence it was designed around. **Gate still hard-false — nothing sends, preview refuses.** Sharing is **opt-in, default OFF even after arming** (#207). Disclosed ahead of arming in `PRIVACY.md` v0.6. Arming = its own security review + owner sign-off. |
@@ -160,7 +160,7 @@ fleet path has since carried real traffic — the owner reports at least two tes
   attribution (`elevation_outcome` — `actions.rs:1114`); helper runs ONLY hex byte-matching the
   one-time ticket (`mint_elevation_ticket` — `actions.rs:1350`).
 - Gaming-session advanced tier batches to ONE elevation per session start and per restore
-  (`apply_elevated_tier` — `gaming_orchestrator.rs:634`); no-partial abort+restore contract;
+  (`apply_elevated_tier` — `gaming_orchestrator.rs:649`); no-partial abort+restore contract;
   UAC-decline drops only verifiably-never-ran staged entries (`elevation_error_nothing_ran` — `actions.rs:1250`).
 
 ## Release blockers
