@@ -590,6 +590,18 @@ normal play (first slice: a real-play mode that compares several normal sessions
 change). No conflict with `ARCHITECTURE_LOCKS.md`: nothing here widens privilege, mutation or outbound
 data.
 
+## 37. Expect real human behaviour; never present an unclean result
+
+*Owner amendment, 2026-11-12.* Compy expects real human behaviour. People change settings, switch windows and play differently from one session to the next. Compy detects when conditions were not comparable, says what differed in plain words, offers one next step, and never presents a result it could not measure cleanly.
+
+Provenance: owner statement 2026-11-12 17:14 ("this app is made to expect all variables in the human
+behavior to adapt and align with proper and easy intuitive usability"); owner approval 2026-11-12 17:21
+("add it"), both via the coordinator. Reason and expected effect: Trials on the owner's rig were judged
+against an assumed noise band and could not tell a changed frame cap from a changed setting; P4-judge-noisy
+makes Compy measure each game's own noise and read the frame cap from its own data, and the "Trial
+conditions guard" items in `WORK_TRAIN.md` extend that to every condition it can read. No conflict with
+`ARCHITECTURE_LOCKS.md`: nothing here widens privilege, mutation or outbound data.
+
 ---
 
 ## Constitutional anti-goals
