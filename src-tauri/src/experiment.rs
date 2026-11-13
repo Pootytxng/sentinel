@@ -8184,7 +8184,7 @@ mod experiment_tests {
         assert_eq!(judged(165.0, 114.0).verdict, "improved", "+10% low, -5% avg: inside a 6% band");
         let fell = judged(165.0, 112.0);
         assert_eq!(fell.verdict, "no-change", "-6.7% avg is beyond a 6% band");
-        assert!(fell.note.contains("±6% band"), "{}", fell.note);
+        assert!(fell.note.contains("+6% / -5.6% band"), "{}", fell.note);
     }
 
     #[test]
@@ -8542,7 +8542,7 @@ mod experiment_tests {
         // Ratio 1.5 → 1.44 (-4.2% of the lower ratio), 1% low unchanged: kept.
         let kept = smoothest(150.0, Some(1.44));
         assert_eq!((kept.verdict.as_str(), kept.keep), ("improved", true));
-        assert!(kept.note.contains("Judged for Smoothest. Compared with the start: the gap between the slowest 1% of frames and a typical frame -4.2% against a ±2% band, the 1% low 0% against a ±3% band."), "{}", kept.note);
+        assert!(kept.note.contains("Judged for Smoothest. Compared with the start: the gap between the slowest 1% of frames and a typical frame -4% against a ±2% band, the 1% low 0% against a ±3% band."), "{}", kept.note);
         assert!(kept.note.contains("Frames got steadier by more than the band"), "{}", kept.note);
         // Steadier, but the 1% low fell beyond its band (150 → 140, -6.7%): Worse.
         let low_fell = smoothest(140.0, Some(1.44));
@@ -9671,7 +9671,7 @@ mod refuse_early_tests {
         assert_eq!((small.verdict.as_str(), small.keep), ("no-change", false), "{}", small.note);
         assert_eq!(trial_result_for(&small.verdict), TrialResult::Negligible, "a judged outcome, not 'couldn't be judged'");
         assert!(small.note.contains("negligible at ROB RUN's noise") && small.note.contains("put back"), "{}", small.note);
-        assert!(small.note.contains("Between 9 sessions") && small.note.contains("must beat ±20.6%"), "{}", small.note);
+        assert!(small.note.contains("Between 9 sessions") && small.note.contains("must beat +20.6% / -17%"), "{}", small.note);
         assert!(!small.note.contains("smallest change Compy ever claims"), "not floored: {}", small.note);
         // A quiet game's band is the 3% minimum, and the words say so instead of calling it measured.
         assert!(judge(&QUIET, 2.0, 0.0).note.contains("the smallest change Compy ever claims"));
@@ -9712,7 +9712,7 @@ mod refuse_early_tests {
         assert!(judge(&QUIET, -5.0, 0.0).note.contains("±3%"));
         // Opus r2 MUST-FIX: Smoothest's change is a % of the start ratio: 1.60 -> 1.48 is -7.5%, inside
         // an 8% band (as a % of the lower ratio it read -8.1%, a win inside the noise).
-        let ev: SmoothestEvidence = serde_json::from_value(serde_json::json!({ "band_pct": 8.0, "start_ratio": 1.6 })).unwrap();
+        let ev: SmoothestEvidence = serde_json::from_value(serde_json::json!({ "band_pct": 8.0, "start_ratio": 1.6, "between_sessions": { "spread_pct": 8.0, "sessions": 4 } })).unwrap();
         assert_eq!(pacing_change(Some(&ev), Some(1.48)), Some((-7.5, 8.0)));
         // A 1% low inside the band with an average that couldn't be compared is never "negligible".
         let r0 = ExperimentRecord { noise_floor_pct: WIDE.low1_band_pct, game_noise: Some(WIDE.clone()), ..rec(150.0, 5) };
