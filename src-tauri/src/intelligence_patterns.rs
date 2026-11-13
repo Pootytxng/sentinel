@@ -228,7 +228,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
             let (first_fit, last_fit) = fitted_span(&ys);
             if first_fit > 0.0 {
                 let change_pct = round1((last_fit - first_fit) / first_fit * 100.0);
-                if change_pct.abs() >= floor {
+                if change_pct.abs() > floor {
                     let degrading = change_pct < 0.0;
                     if degrading {
                         degrading_games.push(game.clone());
@@ -439,7 +439,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                     let med_new = median(new_ys.clone());
                     if med_old > 0.0 {
                         let delta = round1((med_new - med_old) / med_old * 100.0);
-                        if delta.abs() >= floor {
+                        if delta.abs() > floor {
                             let strong = old_ys.len().min(new_ys.len()) >= STRONG_GROUP_SESSIONS
                                 || delta.abs() >= 2.0 * floor;
                             patterns.push(SessionPattern {
@@ -491,7 +491,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                 let med_off = median(off.clone());
                 if med_off > 0.0 {
                     let delta = round1((med_on - med_off) / med_off * 100.0);
-                    if delta.abs() >= floor {
+                    if delta.abs() > floor {
                         let strong = on.len().min(off.len()) >= STRONG_GROUP_SESSIONS
                             || delta.abs() >= 2.0 * floor;
                         patterns.push(SessionPattern {
@@ -521,60 +521,15 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
             }
         }
 
-        // ── session-fade: FPS decaying within sessions ──
-        {
-            let mut usable = 0usize;
-            let mut fades: Vec<f64> = Vec::new();
-            for s in lane.sessions.iter().rev() {
-                // fps_series is only kept for recent sessions; walk newest-first.
-                if s.fps_series.len() < MIN_FADE_BUCKETS {
-                    continue;
-                }
-                usable += 1;
-                let third = s.fps_series.len() / 3;
-                let first: Vec<f64> = s.fps_series[..third].iter().map(|(_, f)| *f).collect();
-                let last: Vec<f64> = s.fps_series[s.fps_series.len() - third..]
-                    .iter()
-                    .map(|(_, f)| *f)
-                    .collect();
-                let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len().max(1) as f64;
-                let (mf, ml) = (mean(&first), mean(&last));
-                if mf > 0.0 {
-                    let fade_pct = round1((ml - mf) / mf * 100.0);
-                    if fade_pct <= -floor {
-                        fades.push(fade_pct);
-                    }
-                }
-            }
-            if usable >= MIN_FADE_SESSIONS && fades.len() * 4 >= usable * 3 {
-                let med_fade = round1(median(fades.clone()));
-                patterns.push(SessionPattern {
-                    id: "session-fade".into(),
-                    game: Some(game.clone()),
-                    title: format!("{game} slows down the longer you play"),
-                    detail: format!(
-                        "FPS ended lower than it started in {} of the last {usable} {game} sessions with a full trace (median fade {med_fade:+.1}% from the first third to the last).",
-                        fades.len()
-                    ),
-                    confidence: if usable >= STRONG_GROUP_SESSIONS { Confidence::Medium } else { Confidence::Low },
-                    confidence_reason: format!(
-                        "The same in-session shape repeated in {} of {usable} sessions — but a game's later areas can simply be heavier.",
-                        fades.len()
-                    ),
-                    supporting_evidence: vec![
-                        "Computed from each session's recorded FPS trace (10-second buckets), not projected.".into(),
-                    ],
-                    raises_confidence: vec![
-                        "Temps or RAM climbing across the same sessions (something building up).".into(),
-                        "FPS recovering right after a restart mid-play.".into(),
-                    ],
-                    next_test: Some("Watch one long session in Live — if temps or RAM climb as FPS fades, that is the lead to chase.".into()),
-                });
-            } else if usable > 0 && usable < MIN_FADE_SESSIONS && n >= MIN_TREND_SESSIONS {
-                coverage.push(format!(
-                    "In-session fade for {game}: needs {MIN_FADE_SESSIONS} sessions with a full FPS trace; have {usable} (traces are kept for recent sessions only)."
-                ));
-            }
+        // session-fade (item 8, opus r2): an in-session fade compares a session's first third with its
+        // last. No band for that comparison (how much a game's frame rate moves within a session with
+        // nothing changed) is measured, and the between-session 1% low band is another metric and
+        // another comparison, so no fade is called; the coverage line says so.
+        let traced = lane.sessions.iter().filter(|s| s.fps_series.len() >= MIN_FADE_BUCKETS).count();
+        if traced >= MIN_FADE_SESSIONS {
+            coverage.push(format!(
+                "In-session fade for {game}: not called. Compy hasn't measured how much {game}'s frame rate moves within a session with nothing changed."
+            ));
         }
     }
 
@@ -889,23 +844,26 @@ mod tests {
     }
 
     #[test]
-    fn session_fade_uses_recorded_traces_only() {
+    fn an_in_session_fade_is_never_called_without_a_measured_within_session_band() {
+        // Item 8 (opus r2), changed deliberately: this test pinned a -20% first-third to last-third
+        // fade as a "session-fade" past the fixed floor. No band for that comparison is measured, so
+        // no fade is called (even on a measured between-session band), and the coverage line says so.
         let mk_fading = |i: usize| {
             let mut x = mk_session(&day(i), "cp2077.exe", 100.0);
-            // 36 buckets fading 120 → ~96 (-20%).
+            // 36 buckets fading 120 -> ~96 (-20%).
             x.fps_series = (0..36).map(|b| (b as u32 * 10, 120.0 - b as f64 * 0.67)).collect();
             x
         };
         let s: Vec<SessionSummary> = (0..5).map(mk_fading).collect();
         let r = detect(&s);
-        let p = r.patterns.iter().find(|p| p.id == "session-fade").expect("fires");
-        assert!(p.detail.contains("5 of the last 5") || p.detail.contains("of the last 5"));
-        assert_eq!(p.confidence, Confidence::Medium);
-        // Without traces, silence + no invented fade.
+        assert!(r.patterns.iter().all(|p| p.id != "session-fade"), "{:?}", r.patterns);
+        assert!(r.coverage.iter().any(|c| c.contains("In-session fade") && c.contains("not called")), "{:?}", r.coverage);
+        // Without traces, silence: no fade and no line about one.
         let bare: Vec<SessionSummary> =
             (0..5).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
         let r2 = detect(&bare);
         assert!(r2.patterns.iter().all(|p| p.id != "session-fade"));
+        assert!(r2.coverage.iter().all(|c| !c.contains("In-session fade")));
     }
 
     #[test]

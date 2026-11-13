@@ -38,6 +38,10 @@ pub(crate) enum ArmNoise {
 pub(crate) const UNMEASURED_NOISE: &str = "noise-unmeasured";
 /// The after-session's frame-cap state differs from the baseline's, or can't be read.
 pub(crate) const UNMEASURED_CAP: &str = "frame-cap-changed";
+/// The baseline and after-session aren't comparable, or share no recorded conditions
+/// (`comparability::derive`, the check a Trial refuses on): a band measured in one context doesn't
+/// judge a session played in another.
+pub(crate) const UNMEASURED_CONDITIONS: &str = "not-comparable";
 
 /// Owner-tunable: an armed baseline older than this (days) at finalize is too stale to compare
 /// fairly — drivers/games/Windows move on, so we discard rather than attribute a misleading delta.
@@ -602,7 +606,18 @@ pub(crate) fn arm_noise_from(
     after: &SessionSummary,
     measure: impl FnOnce(&SessionSummary) -> Option<crate::noise_floor::GameNoise>,
 ) -> ArmNoise {
-    let Some(n) = arm_baseline_session(a, sessions).and_then(measure) else {
+    let Some(baseline) = arm_baseline_session(a, sessions) else {
+        return ArmNoise::Unmeasured(UNMEASURED_NOISE);
+    };
+    // Opus r2: the same comparability check a Trial refuses on (a GPU, game or rig change, or no
+    // shared conditions at all).
+    if matches!(
+        crate::comparability::derive(baseline, after).verdict,
+        crate::comparability::Comparability::NotComparable | crate::comparability::Comparability::Unknown
+    ) {
+        return ArmNoise::Unmeasured(UNMEASURED_CONDITIONS);
+    }
+    let Some(n) = measure(baseline) else {
         return ArmNoise::Unmeasured(UNMEASURED_NOISE);
     };
     let cap = crate::noise_floor::cap_pair(n.cap, crate::noise_floor::cap_read(after));
@@ -1023,6 +1038,12 @@ mod comparison_tests {
         assert_eq!(arm_noise_from(&a, &day, &unread, measure), ArmNoise::Unmeasured(UNMEASURED_CAP));
         // Too few as-is sessions before the baseline: unmeasured.
         assert_eq!(arm_noise_from(&a, &day, &day[12], |_| None), ArmNoise::Unmeasured(UNMEASURED_NOISE));
+        // Another GPU in the after-session: not comparable, whatever the band says (opus r2).
+        let mut other_gpu = day[12].clone();
+        if let Some(fp) = other_gpu.hw_fingerprint.as_mut() {
+            fp.gpu = "Some Other GPU".into();
+        }
+        assert_eq!(arm_noise_from(&a, &day, &other_gpu, measure), ArmNoise::Unmeasured(UNMEASURED_CONDITIONS));
     }
 
     #[test]
