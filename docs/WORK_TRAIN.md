@@ -102,6 +102,26 @@ release checklist); no new rules.
   **P7-exit-proof** (friend-dependent half deferred the same way).
 - `RELEASE_STATE.md` gates still OPEN, owner territory: code signing (`STATE:code_signing=open`), legal
   (`STATE:legal=open`).
+- **Owner decisions, 2026-11-12 16:43 (verbatim, via the coordinator):**
+  - "p4 exit answer is no you decide a more fitting resolution"
+  - "p5, p6 exit not sure what this means if you are capable of delegating the resolution for this task then do so
+    yourself"
+  - "p7 exit whenever optimal give me a downloadable file of the app that can be easily shared to a friend to have
+    test whatever is needed for this exit"
+  - "code signing i may have funds for I just want to completely clarify anything financially related prior to the
+    final execution of allocating finances towards anything to sure its definitive"
+  - "Legal I think we will have to circle back to when the timing makes most sense and make sure we have covered
+    every possible angle and legal basis for the app and i will probably have you ask me whatever questions that
+    entails to make sure we get it all done correctly"
+  - "a release to testers presumably goes hand in hand with p7 i think or clarify thhhe p7 task"
+  Resolutions (owner delegated 2026-11-12; coordinator resolution): P4: "1 change couldn't be judged" does NOT count
+  as finished; the exit wording stays; make the unjudged case judgeable honestly (P4-judge-noisy, top product item),
+  then re-run the proof on the owner's real play. P5 and P6: the exit wording stays (owner half met on ROB RUN, friend
+  half open); resolved together with P7 by one friend test using the shareable installer (P7-tester-package). P7: the
+  owner hands a friend a no-updater installer (P7-tester-package, next worker); a formal updater-published release
+  needs the updater signing key (not on this PC) and is not required for P7. Code signing: owner-held, no spend; the
+  coordinator is preparing a definitive cost breakdown. Legal: owner-held, deferred; the coordinator brings questions
+  when the timing fits.
 - Unticked queue items: CR-1102-left (engineering lines), CR-gm-stop-busy, CR-fix-needs-trial-store,
   CR-range3-nits, CR-gm-restore-partial, CR-gm-repeat-live (FULL, UI), CR-ultimate-followups, CR-outside-followups (a)(d), and the four
   exit proofs above; P8-first-advanced waits on P4 (Phase 8, not needed for v1.0).
@@ -130,6 +150,60 @@ release checklist); no new rules.
 ## Queue
 
 ### Now — finish what's open
+- [ ] **P4-judge-noisy** (TOP product item; owner decision 2026-11-12 16:43 "p4 exit answer is no you decide a more
+      fitting resolution", coordinator resolution) "1 change couldn't be judged" does not count as finished. Establish
+      from the recorded data (read-only: the owner's experiments/history for exp:7, exp:8, exp:9, exp:10 and the as-is
+      sessions of 2026-11-10/11 on ROB RUN; evidence `_train\view-1110e`, `view-1111a`) exactly WHY those sessions were
+      "uneven" and the Trials "too-noisy" (a frame cap saturating average fps; first/second-half drift from scene
+      changes; session length; the noise threshold), and what the Trial Protocol could do to reach an honest verdict on
+      a capped or scene-varying game without lowering the bar for claiming an improvement (1% lows / frame-time spread
+      when the average is cap-saturated; longer or segmented sessions; steady-window selection; telling the user the
+      cap hides the effect and offering to test with it lifted). Never relabel noise as a result; "no measurable
+      benefit beyond credible noise means the default wins" stays law. Findings + a concrete design under this item
+      (read `docs/product/TRIAL_PROTOCOL.md` and PRODUCT_CONSTITUTION §9/§26 first). Implementation is the NEXT
+      worker's, two reviews; then the P4 proof is re-run on the owner's real play.
+      FINDINGS (s25, read-only from `%APPDATA%\Compy\experiments.json` / `sessions.json`, nothing written; script
+      `s25-p4read.mjs`, output `_train\s25-p4read.txt`):
+      1. Not a frame cap. Every ROB RUN session averaged ABOVE the 250 Hz it ran at (262-328 fps), and the sustained
+         GPU rule saw almost no GPU-limited readings (0-6 of ~800-1,600 at >=95%; peaks 72-99%). The game is
+         CPU/engine-paced, uncapped. Judging on lows "because the average is cap-saturated" does not apply here.
+      2. The noise is real and large, between sessions and within them. Nine as-is sessions with nothing changed
+         (Nov 11 01:49-13:55, 13 Compy changes on throughout) averaged 327.9, 309.1, 278.2, 262.0, 298.8, 284.7, 271.0,
+         266.9, 274.8 fps (262-328: about -6%/+18% around the 278 median) and 1% lows 171.7-227.6 (a 25% spread),
+         drifting DOWN over the day while the GPU hotspot rose 60 -> 81 C. Within a session the halves moved 3.3%
+         (exp:7 baseline 304/294), 6.5% (exp:9 baseline 276/258) and 24% (exp:8 after-session 304/231). The fixed band
+         (`noise_floor_pct` 3, `halves_floor_pct` 3) is well inside the game's own spread, and
+         `between_session_noise` / `measured_noise_pct` were null in all four Trials: Compy never measured this game's
+         A/A noise, so 3% was an assumption.
+      3. The four Trials: exp:7 (visual effects) too-noisy, baseline uneven (304/294 = 3.3% > 3%); exp:8 (Ultimate)
+         too-noisy, after-session uneven (304/231); exp:9 (visual effects again) too-noisy, both uneven; exp:10
+         (Ultimate again) "no-change" at +1.7% lows / +0.7% avg against +-3%, judged on two steady sessions. Each
+         session starts with a high first bucket (e.g. 382.5, 340.4, 335.9 fps at t=0: menu/loading), included in the
+         halves. Session length (13-28 min) was not the problem.
+      4. Consequence for honesty: even exp:10's "no-change" is stated against a 3% band the game's own sessions
+         exceed; it is the right DECISION (default wins) but its confidence is overstated.
+      DESIGN (for the next worker; measurement logic, two reviews; nothing implemented in s25):
+      a. Measure, don't assume, the game's noise: keep a per-game A/A record from consecutive as-is sessions
+         (session-mean spread and 10 s-bucket spread of avg and 1% low, with time-of-day/thermal context), stored
+         additively; until there are >=3 as-is sessions, say the noise is unmeasured rather than "+-3%".
+      b. Band = max(3%, measured A/A spread at the chosen confidence). Claiming an improvement still requires beating
+         that band (never lowered); the default still wins inside it.
+      c. Compare steady windows, not halves: drop the first 60 s and background stretches (already traced), split
+         each session into 10 s buckets, and compare bucket distributions (median + IQR, or a rank test) between
+         baseline and after; "uneven" becomes a property of the bucket spread vs the measured A/A spread, not a fixed
+         3% halves gap.
+      d. A finished answer for a noisy game (TRIAL_PROTOCOL §5: "If the likely effect cannot be distinguished from
+         noise within a reasonable test cost, classify it as negligible/unmeasurable and prefer the default"): after
+         two too-noisy attempts for the same change on the same game (or measured A/A spread above a stated ceiling,
+         e.g. 8%), conclude "negligible at this game's noise (+-X% between your sessions with nothing changed)", keep
+         the default, and count the change as JUDGED for the exit panel. This is a verdict about detectability, worded
+         as such ("no benefit Compy could tell apart from this game's +-X% swing"), never "no effect" and never an
+         improvement.
+      e. Tell the user plainly when the game itself is the noise (drift over the session/day, rising hotspot) and that
+         shorter, same-scene, back-to-back sessions measure tighter; offer, never require, a repeatable scene.
+      f. Cap case (other games): when an average sits at a recorded cap/refresh, judge on 1% lows and frame-time
+         spread only, and say the cap hides average gains; offer to test with the cap lifted (the user's choice).
+      Exit re-run: with (a)-(d) the P4 panel can reach "finished the supported tests" honestly on ROB RUN.
 - [x] **CR-zh-drift-count** (second whole-range review) zh-CN `home.json` driftCount strings still said "已漂移" after the English was reworded to "changed since they were last good" (`8d855c05`).
       Done `e49b53ed` (2026-11-11 s18, TS only, not installed): both read "{{count}} 项设置自上次正常以来已改变". Test fails on
       the old file. Full vitest 535/538 (the 3 site-app suites).
@@ -1024,6 +1098,9 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       (CODE-ONLY); the owner-and-friend walkthrough is the next investment, not code.
 - [ ] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "Compy finished the supported
       tests" with nothing worth another run; record it in BACKLOG as the Phase 4 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p4 exit answer is no you decide a more fitting resolution". Owner delegated
+      2026-11-12; coordinator resolution: "1 change couldn't be judged" does not count as finished; the wording stays;
+      P4-judge-noisy makes the unjudged case judgeable honestly, then the proof is re-run on the owner's real play.
       2026-11-10 desk session (not ticked): blocked before any Trial. The owner's PBZ Trial `exp:6-1793579868420`
       (visual-effects, started 2026-11-02 00:37Z) is still Running with its change applied, and the backend refuses
       a new Trial while one is Pending/Running (`experiment.rs:817-823`). Human step: the owner finishes it (one PBZ
@@ -1187,6 +1264,10 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
 - [ ] **P5-exit-proof** (owner, FULL) Run the journey on WARDOGS from the button to the summary with no manual
       Trial clicks; the friend repeats it once. Record in BACKLOG as the Phase 5 exit. Needs P5-guided through
       P5-learned. ROADMAP P5 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p5, p6 exit not sure what this means if you are capable of delegating the
+      resolution for this task then do so yourself". Owner delegated 2026-11-12; coordinator resolution: the wording
+      stays (owner half met on ROB RUN; friend half open), resolved with P6 and P7 by one friend test using the
+      shareable installer (P7-tester-package). No tick now.
       2026-11-10 desk session (not ticked): needs a person. The exit is measured on normal play (Constitution 36,
       P5-realplay), so an unattended idle scene is not a valid run, and the same open PBZ Trial blocks the button.
       Human step: after P4's step, the owner presses Optimize my game on WARDOGS and plays (~25 min); the friend once.
@@ -1252,6 +1333,9 @@ room or station picked by hand.
 - [ ] **P6-exit-proof** (owner, FULL) From Home, follow a real (or past) WARDOGS crash and a stutter to a next
       step or honest unknown without picking a room; the friend repeats it once. Record in BACKLOG as the
       Phase 6 exit. Needs P6-changed through P6-unknown. ROADMAP P6 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p5, p6 exit not sure what this means if you are capable of delegating the
+      resolution for this task then do so yourself". Owner delegated 2026-11-12; coordinator resolution: as P5-exit-
+      proof (wording stays; the friend half closes with P7's friend test on the P7-tester-package installer). No tick.
       2026-11-10 desk session, driven on the installed `68f2272b` from Home with no room picked: Home > Something went
       wrong lands on Problems with one next step for the newest crash (ROB RUN App crash, Nov 10 11:17: "Verify the
       game's files, then update it", with receipt), and its "Stutters or runs slow?" button compares the latest
@@ -1452,6 +1536,10 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       "it crashed" without asking what a word means; the owner opens the technical layer on each and finds the
       exact setting, measurement and source. Record in BACKLOG as the Phase 7 exit. Needs P7-route through
       P7-teach; P7-palette and the rig slices do not block it. ROADMAP P7 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p7 exit whenever optimal give me a downloadable file of the app that can be
+      easily shared to a friend to have test whatever is needed for this exit" and "a release to testers presumably
+      goes hand in hand with p7 i think or clarify thhhe p7 task". Owner delegated 2026-11-12; coordinator resolution:
+      one friend test on a shareable installer (P7-tester-package) closes the friend halves of P5, P6 and P7.
       2026-11-10 desk session (not ticked): needs the friend at the keyboard (~10 min) and the owner opening the
       technical layer on each answer (~5 min); not drivable unattended.
       2026-11-10 ~19:16: not attempted or simulated (needs the friend); still open.
@@ -1459,6 +1547,12 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO LEAVE ANYTHING LIKE THAT ONLINE"). Do not ask the owner for it again;
       do not simulate it. Stays unticked until the owner either supplies a tester or decides in writing that the owner
       half alone exits the phase.
+- [ ] **P7-tester-package** (owner decision 2026-11-12; NEXT worker, not built in s25) A no-updater installer of
+      `main` after the tester-blocking fixes are in, plus a one-page plain-language tester guide (what to click for
+      "more FPS", "it stutters", "it crashed"; how to undo; what to send back), handed to the owner as one
+      downloadable file to share with a friend. Note: a formal updater-published release is a separate thing that
+      needs the updater signing key (not on this PC) and is not required for P7. Owner-held, separate: code signing
+      (no spend; the coordinator prepares a definitive cost breakdown) and legal (deferred by the owner).
 
 ### Then — Roadmap Phase 8: Advanced tuning envelope (`product/ROADMAP.md` Phase 8, `product/RISK_MODEL.md`)
 Planned 2026-10-28 (scheduled refill). ROADMAP: broaden only after the Trial/risk/stability systems are
@@ -2062,9 +2156,22 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
       SetWindowPos with SWP_NOACTIVATE, close, Start-NativeProcess -Detached -NoActivate relaunch). Re-run with a
       timestamped watcher and a mark at each step to find the step; fix that step (or the app's show path) so the
       check never takes the foreground. Script/app; no settings change.
+      s25 (not ticked; no capture run): the capture scripts are session tooling in the salvage folder, not repo product
+      test tooling, so no fix there. Finding so far: the s24 watcher (`s24-fgwatch.ps1`) counted cumulatively with no
+      timestamps and started BEFORE `s24-view.ps1` closed the running Compy, so reads of the owner's own Compy window
+      (already in front; s25's 14:36 preflight saw the foreground on 'Compy') count as "compy_in_front"; the 3 reads
+      are not yet tied to a step. s25 wrote `s25-fgwatch.ps1` (4 reads/s, each timestamped) and `s25-view.ps1` (a
+      MARK line per phase: watcher-up, close-running begin/end, cdp-launch, resize, drive, cdp-close, normal-relaunch,
+      teardown) to tie any read to its step; not run, because the owner was never idle 10+ min (polls 16:14-16:45:
+      idle 0-104 s) and activation is not yet disproven. Next: run `s25-view.ps1` when the owner is idle.
 - [ ] **CR-view-overflow-1112c** (`_train\view-1112c\02-optimize-no-upgrade.png`) The verdict needs the Optimize
       station's scroll containers measured (scrollHeight vs clientHeight at 1280x720, 1500x980 and 1920x1080) now that
       the no-upgrade block sits below its groups. Measure on the next FULL screen check; fix any surplus.
+      s25 (not ticked): measurement steps written (`s25-steps.mjs`: CDP viewport 1280x720 / 1500x980 / 1920x1080, every
+      scroll container's scrollHeight vs clientHeight, clipped-wide elements, document overflow, the upgrade block's
+      scrollWidth vs clientWidth; plus computed contrast and hover before/after); not run (owner never idle, see
+      CR-view-focus-1112c). Dev-fixture shots (`view-1112d\fixture-upgrade`) show no overflow at 1500x980 but are not
+      the station's layout.
 - [x] **CR-view-upgrade-render** (`_train\view-1112c\03-optimize-upgrade-fixture.png`, identical to 02) The GPU upgrade
       block has never been seen rendered in the real app: this rig's sessions aren't GPU-limited, and an in-memory
       wrap of `window.__TAURI_INTERNALS__.invoke` does not take (not writable). Find a route that renders it in the
@@ -2110,11 +2217,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-10 ~19:16-20:10 (coordinator-assigned, CODE-ONLY throughout, owner in ROB RUN): CR-unconfirmed-remedy landed
-  `12a791d0` (coordinator call delegated by the owner: keep his own plan; ledger-only "changed outside Compy" record,
-  schema 1, nothing on Windows changes; opus r1 MUST-FIX taken, r2 APPROVE; sonnet APPROVE) and CR-refuse-early `5844c368`
-  (journey and real play refuse before any as-is session; sonnet APPROVE). cargo 1826/0, clippy clean, tsc clean. Queued
-  CR-outside-followups; CR-ultimate-identity stays open. Not installed, not pushed (main 10 ahead of GitHub with this line).
 - 2026-11-11 ~03:20-04:00 (coordinator-assigned, CODE-ONLY throughout; owner on Discord, then in ROB RUN from ~03:52):
   recovered the session killed on 11-10 ~20:13 (no report): it had recorded Keep "Synez Power Plan" (both power-ultimate
   rows `changed_outside`, plan GUID unchanged) and run P4/P5 on ROB RUN to a Compy-concluded Trial exp:7 (visual-effects,
@@ -2226,6 +2328,20 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   (runtime proof attempt 1, Synez before/after). Screen check view-1112c (background): VERDICT FAIL (Compy in front 3
   of 107 reads; Optimize overflow not measured at 3 sizes; zh space after "。"; upgrade block still unseen: the invoke
   wrap does not take); teardown CLEAN; FAILs queued, the zh one fixed here.
+- 2026-11-12 ~14:36-17:00 (s25, coordinator-assigned; no game seen at any check; owner on Discord/Firefox/Claude, never
+  idle 10+ min; restarted once by the server ~15:37): landed, each in its own worktree: CR-glass-scroll-flake (merge
+  `973aace2`; BlackBox scroll moved to a layout effect; 20/20 file runs, 2 full vitest; sonnet APPROVE-WITH-NITS),
+  CR-firstcheck-flake (merge `d01db9c4`; last-check record in a layout effect; 10/10 under load, 2 full vitest; sonnet
+  APPROVE), CR-upgrade-area-truth (merge `2b37bc42`; (1) did not reproduce, pinned; (2)-(4) + nits a-c; sonnet
+  APPROVE-WITH-NITS), CR-check-expert-mount (merge `16c1a75c`; parked df372a3b rebased + its test, fails on main;
+  sonnet APPROVE-WITH-NITS), CR-tuning-gpu-other-card (merge `4dfc4313`; sonnet APPROVE-WITH-NITS),
+  CR-receipt-gpu-other-card (merge `b9425757`; opus + sonnet APPROVE-WITH-NITS), CR-view-upgrade-render (merge
+  `05d25c6a`; dev-fixture shots only), CR-zh-fit-punctuation (merge `2dcd67d1`), CR-gpu-first-elsewhere (merge
+  `42a37087`; opus r1 REQUEST-CHANGES, MUST-FIX taken, r2 APPROVE-WITH-NITS; sonnet APPROVE-WITH-NITS); owner decisions
+  of 16:43 recorded verbatim; P4-judge-noisy findings + design (no code). cargo 1895/0, clippy clean, full vitest
+  540/543 (3 site-app). Pushes 1-10 PASS. Installed `05d25c6a` (runtime proof attempt 1, Synez before/after);
+  RELEASE_STATE re-stamped (`e5cdbf3f`). Screen check view-1112d NOT run (owner never idle 10+ min; activation not
+  disproven); upgrade block seen only in the dev fixture. Closed #638 (a6bca54e, fca76591).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
