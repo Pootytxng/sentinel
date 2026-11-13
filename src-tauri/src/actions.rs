@@ -3662,6 +3662,11 @@ Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n";
         assert!(matches!(back, Snapshot::CoreParking { plan_guid: Some(ref g), .. } if g == PLAN));
         // A tampered GUID never reaches the elevated command line.
         assert!(super::rollback_core_parking_typed(Some(40), Some(30), Some("x; Remove-Item C:\\")).is_err());
+        // Sonnet r1: a fragment that `powercfg /list` would contain is not a plan id either.
+        for bad in ["e", "-", "8c5e7fda", "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c-x"] {
+            let err = super::rollback_core_parking_typed(Some(40), Some(30), Some(bad)).unwrap_err();
+            assert!(err.contains("isn't a plan id") || err.contains("cannot roll back"), "{bad}: {err}");
+        }
     }
 }
 
@@ -4700,6 +4705,10 @@ pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan
     // active now. The GUID comes from the user-writable history, so it is checked before it can
     // reach the elevated command line, and a plan that no longer exists fails loud.
     ps_safe(plan)?;
+    // Sonnet r1: only a whole 8-4-4-4-12 GUID is a plan (`power_plan_exists` matches substrings).
+    if plan.trim().len() != 36 || crate::scheme_guid_of(plan).as_deref() != Some(plan.trim().to_ascii_lowercase().as_str()) {
+        return Err(format!("This entry's recorded power plan ({plan}) isn't a plan id — cannot roll back blind."));
+    }
     if !power_plan_exists(plan) {
         return Err(format!(
             "cannot roll this back: the power plan it was applied to ({plan}) no longer exists. Compy will not \
