@@ -2242,10 +2242,16 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
 - [ ] **CR-tier3-import-allowlist** (opus r1 on CR-gpu-first-elsewhere) the Tier 3 separation guard blocks four named
       modules only; an allowlist of what Tier 3 may import would keep it from reaching `priorities`-style modules.
       A guard change: owner call (sessions add no guards).
-- [ ] **CR-receipt-unrecorded-unknown** (opus SHOULD-FIX) a receipt still pairs a session that recorded no card
+- [x] **CR-receipt-unrecorded-unknown** (opus SHOULD-FIX) a receipt still pairs a session that recorded no card
       (sessions saved before fingerprints) with this PC's card; `gpu_model` "unknown" for it needs no schema change
       but changes legacy receipts and the existing receipt fixtures (`payload_buckets_never_carry_exact_values`,
       `adversarial_strings...` use card-less sessions). Rust; two reviews.
+      Done (s28; `dfabb86e`, `f4425fee`, merge `14e64e28`): a session with no recorded card (no fingerprint, a
+      blank name, no card key, or only Windows' fallback adapter; `priorities::session_gpu`) still makes a receipt,
+      but its card reads "unknown" (vendor "other"). Coordinator call: the two fixtures encoded the bug (a card-less
+      session asserted to carry this PC's card), so each session now records the card it ran on; both tests still pin
+      what they pinned. No schema change and no stored receipt: the payload is Serialize-only and rebuilt on demand.
+      Reviews r1 opus + sonnet APPROVE-WITH-NITS (nits taken). cargo 1935/0, clippy clean, vitest 542/545.
 - [x] **CR-glass-scroll-flake** (s24 push 2 gate) `src/surfaces/glass/glass-rooms.test.tsx:477` "arriving while a
       record waits lands on THAT record" failed in the loaded pre-push run ("the selected row was never scrolled to:
       expected -1 to be greater than -1") and passes alone. Same class as CR-bench-flake: find whether the scroll
