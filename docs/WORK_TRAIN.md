@@ -303,7 +303,9 @@ release checklist); no new rules.
       are reachable; benchmark.rs / intelligence_patterns.rs not established; none changed this session; (C) the two
       include_str! tests b1529907 added (`an_uneven_session_is_no_longer_a_reason_to_judge_nothing`,
       `the_start_measures_the_band_and_refuses_when_it_cant`) need the conclude/start judging chain extracted into a
-      pure function before a behaviour test can drive it (Trial measurement refactor, three reviews); (opus r1
+      pure function before a behaviour test can drive it (Trial measurement refactor, three reviews; PARKED s29:
+      at least eight other include_str! tests pin text inside conclude_experiment/start_experiment, so the
+      extraction moves what they pin too: a slice of its own, not started); (opus r1
       SHOULD 2) Smoothest's pacing change is still a % of the lower ratio against a pair-mean band; NITs: no
       algorithm version on `frame_cap`; measured-now tries the newest 10 readable sessions only.
       LANDED s29 (not ticked; the proof is still a Trial on the owner's play): (8) merge `b85f78cd`: the armed
@@ -2138,9 +2140,16 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       REQUEST-CHANGES (MUST-FIX English "GUID:" label, resolved by the rebase onto main's shape read) + sonnet
       (fix taken); s28 re-review opus + sonnet APPROVE-WITH-NITS. NIT left: the plan is read before the UAC prompt
       while the apply still writes SCHEME_CURRENT. The "same class" half is queued as CR-plan-held-refusal.
-- [ ] **CR-plan-held-refusal** (the "same class" half of CR-core-parking-plan-guid, not in its slice) A plain UI/batch
+- [x] **CR-plan-held-refusal** (the "same class" half of CR-core-parking-plan-guid, not in its slice) A plain UI/batch
       apply or undo of power-ultimate while a Trial or the bench holds USB/PCIe (experiment.rs ~3078/~3110), and a
       plain USB/PCIe/core-parking change while one holds power-ultimate, are not refused. Rust; two reviews.
+      Done (s29, merge `c9ac9313`): `gaming_orchestrator::plan_class_clash` (the class Gaming Mode holds) feeds the
+      Trial and benchmark holds for the plain apply and batch, and a class-only check (the held setting's own undo
+      unchanged) for the undo, the outcome put-back and the core-parking restore, under the store gate through the
+      write; other settings untouched. Sonnet r1 APPROVE-WITH-NITS; opus r1 REQUEST-CHANGES (undo/restore not
+      covered: fixed); opus r2 REQUEST-CHANGES: SHOULD taken; its MUST (source-order tests pinning the wiring) not
+      taken under the no-source-pinning rule; OPEN: a behaviour test through rollback_change/restore_leftover on a
+      temp data root.
 - [x] **CR-trial-plan-switch-confound** (CR-core-parking-held-with-plan opus r2 SHOULD-FIX 1) Since a Gaming Mode start
       leaves the plan alone while a USB/PCIe Trial is open, a Trial whose baseline ran with Gaming Mode switching the
       plan and whose later sessions ran with it left alone compares two plans; comparability.rs ~360 and realplay.rs
