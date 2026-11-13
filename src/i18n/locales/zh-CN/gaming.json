@@ -162,6 +162,7 @@
     "sinceBaselineTitle": "相较于你的基准",
     "noChangesRecorded": "自基准以来没有记录到 Compy 的更改——这反映的是手动或环境因素导致的变化。",
     "noiseFloorNote": "±{{pct}}% 以内的变化会被判定为「无可测量的变化」——因为它低于重复测试的噪声下限,所以我们不会将其计为提升或退步。",
+    "noiseUnmeasuredNote": "Compy 尚未测量在没有任何改动时这些分数在两次运行之间的波动幅度,因此不会判断改动是变好还是变差。这些数字是每次运行实际测得的结果。",
     "componentLabels": {
       "cpu": "CPU",
       "ram": "内存",
@@ -170,6 +171,7 @@
     },
     "verdictLabels": {
       "improved": "已提升",
+      "unmeasured": "无法判断",
       "noChange": "无可测量的变化",
       "regressed": "已退步"
     },
@@ -525,6 +527,7 @@
     "baselineLabel": "基准",
     "nowLabel": "现在",
     "loadingSplit": "正在加载对比视图…",
+    "scoresUnmeasuredNote": "相对分数(0-100)来自你自己的两次运行。没有改动时它们在两次运行之间的波动尚未测量,因此 Compy 不判断任何改动是变好还是变差。",
     "scoresNote": "相对分数(0–100)来自你自己的这两次测量——±{{pct}}% 以内的变化会被判定为「无可测量的变化」。"
   },
   "scanStream": {

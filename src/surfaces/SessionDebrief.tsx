@@ -79,17 +79,16 @@ function ComparisonCard({
   const dFps = (d: number) => (expert ? Number(d.toFixed(1)) : Math.round(d));
   const dAvgFps = dFps(r.after_avg_fps - r.baseline_avg_fps);
   const dLowFps = dFps(r.after_low1_fps - r.baseline_low1_fps);
-  const deltaLine = t("monitor.sessionDebrief.deltaLine", {
-    avgSign: sign(dAvgFps),
-    avgPct: sign(r.delta_avg_pct),
-    lowSign: sign(dLowFps),
-    lowPct: sign(r.delta_low1_pct),
-    inOut:
-      r.verdict === "no-change"
-        ? t("monitor.sessionDebrief.insideNoiseFloor")
-        : t("monitor.sessionDebrief.outsideNoiseFloor"),
-    noiseFloor: r.noise_floor_pct,
-  });
+  // Item 8 (opus r1): a measured band is judged +rise / -fall, so it is shown that way; an older
+  // result (fixed 3%, the same both ways) keeps its own line.
+  const fall = r.game_noise != null && r.noise_fall_pct != null ? r.noise_fall_pct : null;
+  const inOut =
+    r.verdict === "no-change" ? t("monitor.sessionDebrief.insideNoiseFloor") : t("monitor.sessionDebrief.outsideNoiseFloor");
+  const [avgSign, avgPct, lowSign, lowPct] = [sign(dAvgFps), sign(r.delta_avg_pct), sign(dLowFps), sign(r.delta_low1_pct)];
+  const deltaLine =
+    fall != null
+      ? t("monitor.sessionDebrief.deltaLineMeasured", { avgSign, avgPct, lowSign, lowPct, inOut, rise: r.noise_floor_pct, fall })
+      : t("monitor.sessionDebrief.deltaLine", { avgSign, avgPct, lowSign, lowPct, inOut, noiseFloor: r.noise_floor_pct });
 
   // P7-depth-verdicts (Constitution §13): ANSWER = the verdict and what to do about it; EXPLANATION =
   // the comparison in both units against the noise floor, and what a null result means; RECEIPT = the
@@ -155,6 +154,21 @@ function ComparisonCard({
           </p>
         </>
       )}
+      {r.verdict === "unmeasured" && (
+        <>
+          <h2 className="cmp-headline">{t("monitor.sessionDebrief.unmeasuredHeadline")}</h2>
+          <p className="cmp-sub" data-testid="cmp-unmeasured">
+            {t(
+              r.unmeasured === "frame-cap-changed"
+                ? "monitor.sessionDebrief.unmeasuredCapSub"
+                : r.unmeasured === "not-comparable"
+                  ? "monitor.sessionDebrief.unmeasuredConditionsSub"
+                  : "monitor.sessionDebrief.unmeasuredNoiseSub",
+              { game: prettyGameName(r.game) },
+            )}
+          </p>
+        </>
+      )}
       {r.verdict === "expired" && (
         <>
           <h2 className="cmp-headline">{t("monitor.sessionDebrief.expiredHeadline")}</h2>
@@ -206,12 +220,26 @@ function ComparisonCard({
                 />
               )}
             </>
+          ) : r.verdict === "unmeasured" ? (
+            // Item 8: no measured band, so the numbers show and nothing is called.
+            <p className="cmp-delta" data-testid="cmp-unmeasured-delta">
+              {t("monitor.sessionDebrief.unmeasuredDeltaLine", {
+                avgSign: sign(dAvgFps),
+                avgPct: sign(r.delta_avg_pct),
+                lowSign: sign(dLowFps),
+                lowPct: sign(r.delta_low1_pct),
+              })}
+            </p>
           ) : undefined
         }
         receipt={
           isMeasured ? (
             <>
-              <span className="cmp-nf">{t("monitor.sessionDebrief.noiseFloor", { pct: r.noise_floor_pct })}</span>
+              <span className="cmp-nf">
+                {fall != null
+                  ? t("monitor.sessionDebrief.measuredBand", { rise: r.noise_floor_pct, fall, sessions: r.game_noise?.sessions ?? 0 })
+                  : t("monitor.sessionDebrief.noiseFloor", { pct: r.noise_floor_pct })}
+              </span>
               <div className="cmp-receipts">
                 <CmpReceipt label={t("monitor.sessionDebrief.avgFpsLabel")} before={r.baseline_avg_fps} after={r.after_avg_fps} />
                 <CmpReceipt

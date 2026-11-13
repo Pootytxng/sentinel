@@ -468,10 +468,11 @@ describe("locale parity: no missing string, no raw {{braces}} in any language", 
   });
 
   it("harvests the calls a renamed t makes (guard is not vacuous)", () => {
-    // SessionTrends.tsx calls `const { t: translate } = useTranslation()` — eight calls a `t(` scan never saw.
+    // SessionTrends.tsx calls `const { t: translate } = useTranslation()` — calls a `t(` scan never saw.
     const st = sites.filter((s) => s.file.endsWith("SessionTrends.tsx"));
-    expect(st.length).toBeGreaterThanOrEqual(8);
-    expect(st.flatMap((s) => s.keys)).toContain("monitor.sessionTrends.trendUp");
+    // Item 8 removed the three trend-arrow calls; five remain.
+    expect(st.length).toBeGreaterThanOrEqual(5);
+    expect(st.flatMap((s) => s.keys)).toContain("monitor.sessionTrends.bestFps");
     expect(supplied.get("monitor.sessionTrends.gameStat")).toEqual(new Set(["count", "fps"]));
   });
 

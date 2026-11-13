@@ -181,6 +181,8 @@ function verdictReadingText(overall: Verdict, t: TFunction): string {
       return t("lab.stations.verdictReading.noMeasurableChange");
     case "regressed":
       return t("lab.stations.verdictReading.regressed");
+    case "unmeasured":
+      return t("lab.stations.verdictReading.unmeasured");
   }
 }
 
@@ -195,6 +197,8 @@ function verdictReadingStackedText(overall: Verdict, t: TFunction): string {
       return t("lab.stations.verdictReadingStacked.noMeasurableChange");
     case "regressed":
       return t("lab.stations.verdictReadingStacked.regressed");
+    case "unmeasured":
+      return t("lab.stations.verdictReadingStacked.unmeasured");
   }
 }
 

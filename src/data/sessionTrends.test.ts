@@ -29,7 +29,7 @@ describe("computeSessionTrends", () => {
     expect(t.total).toBe(0);
     expect(t.games).toEqual([]);
     expect(t.overallBestFps).toBe(0);
-    expect(t.trend).toBeNull();
+    expect("trend" in t).toBe(false);
   });
 
   it("skips a session that was behind another window the whole time (P4-show-f1)", () => {
@@ -65,19 +65,16 @@ describe("computeSessionTrends", () => {
     expect(t.games).toHaveLength(1);
   });
 
-  it("flags an upward trend when the recent half is clearly higher", () => {
-    // newest-first: recent half high, earlier half low
-    const t = computeSessionTrends([s("g.exe", 160), s("g.exe", 158), s("g.exe", 120), s("g.exe", 118)]);
-    expect(t.trend).toBe("up");
-  });
-
-  it("calls it flat when the move is within noise (never a fabricated arrow)", () => {
-    const t = computeSessionTrends([s("g.exe", 121), s("g.exe", 120), s("g.exe", 120), s("g.exe", 119)]);
-    expect(t.trend).toBe("flat");
-  });
-
-  it("needs ≥4 sessions to claim a trend at all", () => {
-    expect(computeSessionTrends([s("g.exe", 160), s("g.exe", 100)]).trend).toBeNull();
+  it("calls no direction at all, whatever the halves do (measurement item 8: no measured band)", () => {
+    // Was "up" past a fixed 3%/2 fps across every game's sessions; no band exists for that comparison.
+    for (const t of [
+      computeSessionTrends([s("g.exe", 160), s("g.exe", 158), s("g.exe", 120), s("g.exe", 118)]),
+      computeSessionTrends([s("g.exe", 100), s("g.exe", 101), s("g.exe", 160), s("g.exe", 158)]),
+      computeSessionTrends([s("g.exe", 121), s("g.exe", 120), s("g.exe", 120), s("g.exe", 119)]),
+    ]) {
+      expect("trend" in t).toBe(false);
+      expect(t.total).toBe(4);
+    }
   });
 
   it("game rows carry the pretty name, never the raw shipping binary (bug→guard 2026-07-17)", () => {

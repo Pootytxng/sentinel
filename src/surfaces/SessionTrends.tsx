@@ -22,17 +22,8 @@ export function SessionTrends({
   const { t: translate } = useTranslation();
   const trends = computeSessionTrends(sessions);
   if (trends.total < 2) return null; // nothing to trend yet
-  const arrow =
-    trends.trend === "up"
-      ? translate("monitor.sessionTrends.trendUp")
-      : trends.trend === "down"
-        ? translate("monitor.sessionTrends.trendDown")
-        : trends.trend === "flat"
-          ? translate("monitor.sessionTrends.trendFlat")
-          : "";
   const subParts = [
     ...(hideCount ? [] : [translate("monitor.sessionTrends.sessionsKept", { count: trends.total })]),
-    ...(arrow ? [arrow] : []),
     ...(trends.overallBestFps > 0
       ? [translate("monitor.sessionTrends.bestFps", { fps: trends.overallBestFps.toFixed(0) })]
       : []),

@@ -48,8 +48,23 @@ function sess(over: Partial<SessionSummary> = {}): SessionSummary {
     ram_total_bytes: null,
     compy_changes_active: 0,
     stutter_insight: null,
+    frame_cap: { state: "uncapped" },
     ...over,
   };
+}
+
+// Measurement item 8: the tune's own result, written after the arm, carrying this game's measured
+// as-is band (comparison.rs `game_noise`). The frames are judged on it, never on a fixed 3%.
+function measured(low1_band_pct = 3): ComparisonResult {
+  return {
+    verdict: "no-change",
+    kind: "tuning",
+    game: "game.exe",
+    at: "2026-06-08T19:00:00Z",
+    game_noise: { low1_band_pct, sessions: 6, cap: { state: "uncapped" } },
+    // noise_floor::fall_pct, as the Rust result carries it: 3 -> 3, 10 -> 9.0, 20.6 -> 17.0.
+    noise_fall_pct: low1_band_pct <= 3 ? low1_band_pct : Math.floor(((100 * low1_band_pct) / (100 + low1_band_pct)) * 10) / 10,
+  } as ComparisonResult;
 }
 
 // Three same-game, post-tune sessions of ~1h each → clears both the ≥3 and ~3h gates.
@@ -126,7 +141,7 @@ describe("measureTuning", () => {
       sess({ started_at: "2026-06-08T16:00:00Z" }),
       sess({ started_at: "2026-06-08T14:00:00Z" }),
     ];
-    const m = measureTuning(baseline(), sessions)!;
+    const m = measureTuning(baseline(), sessions, measured())!;
     expect(m.verdict).toBe("too-aggressive");
     expect(m.fpsRegressed).toBe(true);
     expect(m.detail).toMatch(/step back up one increment/i);
@@ -146,7 +161,7 @@ describe("measureTuning", () => {
       sess({ started_at: "2026-06-08T16:00:00Z", peak_gpu_temp_c: 82 }),
       sess({ started_at: "2026-06-08T14:00:00Z", peak_gpu_temp_c: 83 }),
     ];
-    const m = measureTuning(baseline(), sessions)!;
+    const m = measureTuning(baseline(), sessions, measured())!;
     expect(m.verdict).toBe("no-change");
     expect(m.tempReal).toBe(false);
     expect(m.headline).toBe("No measurable change");
@@ -161,7 +176,7 @@ describe("measureTuning", () => {
       sess({ started_at: "2026-06-08T16:00:00Z", peak_gpu_temp_c: 89 }),
       sess({ started_at: "2026-06-08T14:00:00Z", peak_gpu_temp_c: 90 }),
     ];
-    const m = measureTuning(baseline(), sessions)!;
+    const m = measureTuning(baseline(), sessions, measured())!;
     expect(m.tempReal).toBe(false);
     expect(m.tempDropC).toBe(-6); // 84 → worst post peak 90
     expect(m.headline).toBe("Frames held — but it's running warmer");
@@ -213,10 +228,66 @@ describe("measureTuning", () => {
       sess({ started_at: "2026-06-08T16:00:00Z", low1_fps_est: 150, peak_gpu_temp_c: 84 }),
       sess({ started_at: "2026-06-08T14:00:00Z", low1_fps_est: 150, peak_gpu_temp_c: 84 }),
     ];
-    const m = measureTuning(baseline(), sessions)!;
+    const m = measureTuning(baseline(), sessions, measured())!;
     expect(m.fpsImproved).toBe(true);
     expect(m.tempReal).toBe(false);
     expect(m.verdict).toBe("holding");
+  });
+
+  it("item 8: with no measured band the frames are shown, never called on a fixed 3%", () => {
+    // A −13% 1% low was "too aggressive" past ±3%; a +9% was a gain. No band: neither is called.
+    const drop = [
+      sess({ started_at: "2026-06-08T18:00:00Z", low1_fps_est: 120 }),
+      sess({ started_at: "2026-06-08T16:00:00Z" }),
+      sess({ started_at: "2026-06-08T14:00:00Z" }),
+    ];
+    const d = measureTuning(baseline(), drop)!;
+    expect(d.fpsRegressed).toBe(false);
+    expect(d.fpsUnmeasured).toBe(true);
+    expect(d.verdict).toBe("holding"); // the real temp drop still stands on its own
+    expect(d.detail).toMatch(/Frames not judged/);
+    const gain = [84, 84, 84].map((t, i) =>
+      sess({ started_at: `2026-06-08T1${4 + 2 * i}:00:00Z`, low1_fps_est: 150, peak_gpu_temp_c: t }),
+    );
+    const g = measureTuning(baseline(), gain)!;
+    expect(g.fpsImproved).toBe(false);
+    expect(g.verdict).toBe("unmeasured");
+    expect(g.headline).toBe("Can't call the frames");
+    expect(g.detail).toMatch(/\+8\.7% vs your baseline/);
+    expect(g.detail).not.toMatch(/noise floor|±3%/);
+    // A result written before this arm (an older tune's) carries no band for this one.
+    const old = { ...measured(), at: "2026-06-08T11:00:00Z" } as ComparisonResult;
+    expect(measureTuning(baseline(), gain, old)!.verdict).toBe("unmeasured");
+  });
+
+  it("item 8: judged on the game's measured band, both ways, and only sessions that read uncapped", () => {
+    const drop = [
+      sess({ started_at: "2026-06-08T18:00:00Z", low1_fps_est: 120 }), // −13%
+      sess({ started_at: "2026-06-08T16:00:00Z" }),
+      sess({ started_at: "2026-06-08T14:00:00Z" }),
+    ];
+    // Inside a measured ±20.6% band (its matching fall is −17.1%): not too aggressive.
+    expect(measureTuning(baseline(), drop, measured(20.6))!.fpsRegressed).toBe(false);
+    expect(measureTuning(baseline(), drop, measured(10))!.fpsRegressed).toBe(true);
+    // The matching fall is noise_floor::fall_pct's B/(1+B): +20.6% ↔ −17.08% (the Rust test's numbers).
+    const at = (low1: number) => [sess({ started_at: "2026-06-08T18:00:00Z", low1_fps_est: low1 })];
+    expect(measureTuning(baseline(), at(138 * 0.828), measured(20.6))!.fpsRegressed).toBe(true); // −17.2%
+    expect(measureTuning(baseline(), at(138 * 0.83), measured(20.6))!.fpsRegressed).toBe(false); // −17.0%
+    // At a 3% band the fall is 3% too (MIN_CLAIM_PCT): a −2.9% drop is not "too aggressive".
+    expect(measureTuning(baseline(), at(138 * 0.971), measured(3))!.fpsRegressed).toBe(false);
+    // A result without the Rust fall carries no band for the frames.
+    const noFall = { ...measured(20.6), noise_fall_pct: null } as ComparisonResult;
+    expect(measureTuning(baseline(), drop, noFall)!.fpsUnmeasured).toBe(true);
+    // One unjudged session means the frames aren't "held".
+    const mixed = [drop[1], { ...drop[2], frame_cap: null }];
+    const mm = measureTuning(baseline(), mixed, measured(20.6))!;
+    expect(mm.fpsUnmeasured).toBe(true);
+    expect(mm.detail).not.toMatch(/Frames held/);
+    // A session whose cap state isn't read uncapped isn't judged here.
+    const capped = drop.map((s) => ({ ...s, frame_cap: { state: "capped" as const, at_fps: 144 } }));
+    const c = measureTuning(baseline(), capped, measured(10))!;
+    expect(c.fpsRegressed).toBe(false);
+    expect(c.fpsUnmeasured).toBe(true);
   });
 });
 

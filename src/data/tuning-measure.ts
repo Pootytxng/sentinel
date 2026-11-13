@@ -17,7 +17,8 @@ import { allBackground } from "../lib/session-metrics";
 //   artifacts?" (a yes lands as crashReported — never fabricated).
 
 // Owner-resolved thresholds.
-export const TUNING_NOISE_FLOOR_PCT = 3; // matches comparison.rs DEFAULT_NOISE_FLOOR_PCT (FPS floor)
+// Measurement item 8: no fixed FPS floor. The frames are judged on this game's measured as-is band
+// (comparison.rs `game_noise` on the tune's own result), or not judged at all.
 export const TUNING_MIN_SESSIONS = 3; // "holding up so far" needs ≥ 3 sessions …
 export const TUNING_MIN_SECS = 3 * 3600; // … AND ~3 hours of play with no crash
 export const TUNING_REAL_TEMP_DROP_C = 3; // a real temp improvement is a ≥3 °C drop (else sensor noise)
@@ -185,7 +186,8 @@ export type TuningVerdict =
   | "too-aggressive" // step back one increment
   | "too-early" // too early to call — keep playing
   | "no-change" // honest null
-  | "confounded"; // another change landed → can't attribute
+  | "confounded" // another change landed → can't attribute
+  | "unmeasured"; // item 8: this game's noise isn't measured, so the frames are shown, not called
 
 export type TuningMeasurement = {
   verdict: TuningVerdict;
@@ -206,6 +208,8 @@ export type TuningMeasurement = {
   low1DeltaPct: number | null;
   fpsRegressed: boolean; // any post session's 1% low fell past the floor (= new instability/stutter)
   fpsImproved: boolean; // latest post session's 1% low rose past the floor
+  /** Item 8: no measured band for this game (or no post session it can judge): frames not called. */
+  fpsUnmeasured: boolean;
   crashReported: boolean;
 };
 
@@ -258,18 +262,47 @@ export function measureTuning(
   const crashReported = baseline.crash_reported === true;
   const baselinePeakTempC = baseline.baseline_peak_temp_c ?? null;
 
-  // FPS held? Judge every post session's 1% low against the baseline on the existing noise floor.
-  // A drop past the floor is the measurable form of "new stutters / instability".
+  // Only the tune's OWN result may confound it: it must be a TUNING result for THIS baseline's game.
+  // A stale fix result — or another game's tuning result — left un-dismissed must never flip this
+  // measurement (Lab passes the unfiltered latest comparison; the filter lives here so no caller can
+  // get it wrong). Fix-era results without a kind field count as fix → filtered out.
+  const ownResult =
+    result != null && result.kind === "tuning" && result.game === baseline.game ? result : null;
+
+  // FPS held? Measurement item 8: every post session's 1% low is judged against the baseline on this
+  // game's MEASURED as-is band: the band comparison.rs measured for this tune's baseline session (the
+  // one source Trials judge on), carried on the tune's own result written since this arm. A drop past
+  // its matching fall is the measurable form of "new stutters / instability"; a rise past the band an
+  // improvement. Only sessions that read uncapped, like the band, are judged here (a capped game is
+  // judged on the Rust side, never by a second cap rule here). No band: the frames aren't called.
+  const band =
+    ownResult?.at != null &&
+    Date.parse(ownResult.at) >= Date.parse(baseline.armed_at) &&
+    ownResult.game_noise != null &&
+    ownResult.noise_fall_pct != null
+      ? { ...ownResult.game_noise, fall_pct: ownResult.noise_fall_pct }
+      : null;
+  const comparable = (s: SessionSummary) =>
+    band != null && band.cap?.state === "uncapped" && s.frame_cap?.state === "uncapped";
+  const fallPct = band?.fall_pct ?? null;
   const baseLow1 = baseline.baseline_low1_fps;
   const deltaPct = (low1: number): number | null =>
     baseLow1 > 0 ? round1(((low1 - baseLow1) / baseLow1) * 100) : null;
-  const fpsRegressed = post.some((s) => {
-    const d = deltaPct(s.low1_fps_est);
-    return d != null && d < -TUNING_NOISE_FLOOR_PCT;
-  });
+  const judged = post.filter(comparable);
+  const fpsRegressed =
+    fallPct != null &&
+    judged.some((s) => {
+      const d = deltaPct(s.low1_fps_est);
+      return d != null && d < -fallPct;
+    });
   const latest = post[0] ?? null;
   const low1DeltaPct = latest ? deltaPct(latest.low1_fps_est) : null;
-  const fpsImproved = low1DeltaPct != null && low1DeltaPct > TUNING_NOISE_FLOOR_PCT;
+  const fpsImproved =
+    band != null && latest != null && comparable(latest) && low1DeltaPct != null && low1DeltaPct > band.low1_band_pct;
+  // Frames "held" only when every post session was judged on the band (opus r1).
+  const fpsUnmeasured = band == null || judged.length < post.length;
+  const bandText = band != null ? `+${band.low1_band_pct}% / −${band.fall_pct}%` : "";
+  const fallText = band != null ? `−${band.fall_pct}%` : "";
 
   // Thermal payoff: compare the baseline peak to the WORST (hottest) post-tune peak — honest "it runs
   // cooler even at its hottest". A ≥3 °C drop clears sensor/ambient noise.
@@ -306,12 +339,6 @@ export function measureTuning(
   let headline: string;
   let detail: string;
 
-  // Only the tune's OWN result may confound it: it must be a TUNING result for THIS baseline's game.
-  // A stale fix result — or another game's tuning result — left un-dismissed must never flip this
-  // measurement (Lab passes the unfiltered latest comparison; the filter lives here so no caller can
-  // get it wrong). Fix-era results without a kind field count as fix → filtered out.
-  const ownResult =
-    result != null && result.kind === "tuning" && result.game === baseline.game ? result : null;
   const confounded =
     ownResult != null && (ownResult.verdict === "confounded" || ownResult.verdict === "expired");
 
@@ -337,12 +364,12 @@ export function measureTuning(
   } else if (fpsRegressed) {
     verdict = "too-aggressive";
     headline = "Too aggressive";
-    detail = `Your 1% low dropped past the ±${TUNING_NOISE_FLOOR_PCT}% noise floor — new stutters. Step back up one increment in your tool.`;
+    detail = `Your 1% low dropped past the ${fallText} this game moves between your sessions with nothing changed — new stutters. Step back up one increment in your tool.`;
   } else if (tempReal || fpsImproved) {
     if (windowMet) {
       verdict = "holding";
       headline = "Holding up so far";
-      detail = `${tempLine} Frames held, no crashes flagged across ${progress}. Only your continued play proves it — keep playing and tell Compy if anything resets.`;
+      detail = `${tempLine} ${fpsUnmeasured ? "Frames not judged (this game's noise between sessions isn't measured), no" : "Frames held, no"} crashes flagged across ${progress}. Only your continued play proves it — keep playing and tell Compy if anything resets.`;
     } else {
       verdict = "too-early";
       headline = "Too early to call — keep playing";
@@ -354,8 +381,13 @@ export function measureTuning(
     // axis (frames/crashes) didn't move, and peak-to-peak across sessions carries load/ambient swing
     // so this is a flag to watch, not proof the tune caused it (never over-claim causation either).
     verdict = "no-change";
-    headline = "Frames held — but it's running warmer";
-    detail = `${tempLine} Your 1% lows stayed inside the ±${TUNING_NOISE_FLOOR_PCT}% floor, but the hottest peak came in higher this window. Peak-to-peak swings with load and ambient, so watch it across another session or two rather than reading it as the tune backfiring — ${progress} so far.`;
+    headline = fpsUnmeasured ? "Running warmer — frames not judged" : "Frames held — but it's running warmer";
+    detail = `${tempLine} ${fpsUnmeasured ? "Compy can't call your 1% lows (this game's noise between sessions isn't measured)" : `Your 1% lows stayed inside this game's measured ${bandText} band`}, but the hottest peak came in higher this window. Peak-to-peak swings with load and ambient, so watch it across another session or two rather than reading it as the tune backfiring — ${progress} so far.`;
+  } else if (fpsUnmeasured) {
+    // Item 8: nothing to call the frames on. Show them; never a null invented from a fixed floor.
+    verdict = "unmeasured";
+    headline = "Can't call the frames";
+    detail = `${tempLine} Compy hasn't measured how much this game moves between your sessions with nothing changed, so it won't call the frames better or worse${low1DeltaPct != null ? ` (latest 1% low ${low1DeltaPct > 0 ? "+" : ""}${low1DeltaPct}% vs your baseline)` : ""} — ${progress} so far.`;
   } else {
     verdict = "no-change";
     headline = "No measurable change";
@@ -376,6 +408,7 @@ export function measureTuning(
     low1DeltaPct,
     fpsRegressed,
     fpsImproved,
+    fpsUnmeasured,
     crashReported,
   };
 }

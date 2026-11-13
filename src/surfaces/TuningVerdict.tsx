@@ -15,6 +15,7 @@ const VERDICT_CLASS: Record<TuningMeasurement["verdict"], string> = {
   "too-early": "tg-v-early",
   "no-change": "tg-v-neutral",
   confounded: "tg-v-neutral",
+  unmeasured: "tg-v-neutral",
 };
 
 export function TuningVerdictCard({ m }: { m: TuningMeasurement }) {

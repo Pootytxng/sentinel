@@ -551,7 +551,10 @@ export function LabConsole({
   // one, else the fallback already fetched for Tuning (get_latest_comparison, same field, same
   // measurement kind). Deliberately NEVER bench.efficacy.noise_floor_pct — that is the synthetic
   // bench's run-to-run spread, a different measurement wearing the same field name.
-  const noiseFloorPct = trial && trial.noise_floor_pct != null ? trial.noise_floor_pct : (latestCmp?.noise_floor_pct ?? null);
+  // Item 8: a comparison's band only when it was measured (`game_noise`); an older result's fixed 3%
+  // and an "unmeasured" result's 0 are not a measurement of this rig.
+  const cmpBand = latestCmp?.game_noise != null && latestCmp.verdict !== "unmeasured" ? latestCmp.noise_floor_pct : null;
+  const noiseFloorPct = trial && trial.noise_floor_pct != null ? trial.noise_floor_pct : cmpBand;
 
   // BR — Instruments read: how far through the bench this rig has gone. Same `stationHasReading`
   // the dock already uses to mark nodes measured, so the gauge and the dock can never disagree.

@@ -175,8 +175,10 @@ fn lanes(sessions: &[SessionSummary]) -> (Vec<GameLane<'_>>, usize) {
     (out, unparseable)
 }
 
-pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
-    let floor = crate::benchmark::DEFAULT_NOISE_FLOOR_PCT;
+/// Measurement item 8: `band_at` is the game's measured 1% low band up to a session (`experiment::measured_noise_at`,
+/// the one source Trials judge on). A game without one gets no direction on its 1% lows: no trend,
+/// split or fade is called past a fixed 3%, and it is not counted as trend-free either.
+pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&SessionSummary) -> Option<f64>) -> PatternReport {
     let (lanes, unparseable) = lanes(sessions);
     let sessions_considered: usize = lanes.iter().map(|l| l.sessions.len()).sum();
     let games_considered = lanes.len();
@@ -192,6 +194,8 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
     // Cross-game synthesis bookkeeping for the performance trend.
     let mut degrading_games: Vec<String> = Vec::new();
     let mut trend_eligible_games: Vec<String> = Vec::new();
+    // Item 8 (opus r1): only lanes with a measured band were looked at for a direction.
+    let (mut band_games, mut band_sessions) = (0usize, 0usize);
 
     for lane in &lanes {
         let n = lane.sessions.len();
@@ -199,19 +203,36 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
         if n < 2 {
             continue; // one session of a game is not a lane worth narrating
         }
+        // Item 8: this game's measured band at its newest session; none, and no 1% low direction is
+        // called for it (an infinite floor is never crossed).
+        let band = band_at(lane.sessions[n - 1]);
+        if band.is_none() {
+            coverage.push(format!(
+                "1% low directions for {game}: not called. Compy hasn't measured how much {game} moves between your sessions with nothing changed."
+            ));
+        }
+        let floor = band.unwrap_or(f64::INFINITY);
+        // A fall is judged at the fall matching the band (`noise_floor::fall_pct`), as Trials and the
+        // armed comparison judge it (opus r3); never computed without a band.
+        let fall = band.map_or(f64::INFINITY, crate::noise_floor::fall_pct);
+        let past = |pct: f64| pct > floor || pct < -fall;
+        if band.is_some() {
+            band_games += 1;
+            band_sessions += n;
+        }
 
         // ── performance-trend: 1% lows over time ──
         if n < MIN_TREND_SESSIONS {
             coverage.push(format!(
                 "Performance trend for {game}: needs {MIN_TREND_SESSIONS} comparable sessions; have {n}."
             ));
-        } else {
+        } else if band.is_some() {
             trend_eligible_games.push(game.clone());
             let ys: Vec<f64> = lane.sessions.iter().map(|s| s.low1_fps_est).collect();
             let (first_fit, last_fit) = fitted_span(&ys);
             if first_fit > 0.0 {
                 let change_pct = round1((last_fit - first_fit) / first_fit * 100.0);
-                if change_pct.abs() >= floor {
+                if past(change_pct) {
                     let degrading = change_pct < 0.0;
                     if degrading {
                         degrading_games.push(game.clone());
@@ -228,7 +249,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
                             format!("{game} has been getting faster")
                         },
                         detail: format!(
-                            "1% lows in {game} moved about {change_pct:+.1}% across {n} sessions between {first_date} and {last_date} — past the {floor:.0}% noise floor."
+                            "1% lows in {game} moved about {change_pct:+.1}% across {n} sessions between {first_date} and {last_date} — past the {floor:.1}% {game} moves between your sessions with nothing changed."
                         ),
                         confidence: if strong { Confidence::Medium } else { Confidence::Low },
                         confidence_reason: if strong {
@@ -422,7 +443,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
                     let med_new = median(new_ys.clone());
                     if med_old > 0.0 {
                         let delta = round1((med_new - med_old) / med_old * 100.0);
-                        if delta.abs() >= floor {
+                        if past(delta) {
                             let strong = old_ys.len().min(new_ys.len()) >= STRONG_GROUP_SESSIONS
                                 || delta.abs() >= 2.0 * floor;
                             patterns.push(SessionPattern {
@@ -474,7 +495,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
                 let med_off = median(off.clone());
                 if med_off > 0.0 {
                     let delta = round1((med_on - med_off) / med_off * 100.0);
-                    if delta.abs() >= floor {
+                    if past(delta) {
                         let strong = on.len().min(off.len()) >= STRONG_GROUP_SESSIONS
                             || delta.abs() >= 2.0 * floor;
                         patterns.push(SessionPattern {
@@ -504,60 +525,15 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
             }
         }
 
-        // ── session-fade: FPS decaying within sessions ──
-        {
-            let mut usable = 0usize;
-            let mut fades: Vec<f64> = Vec::new();
-            for s in lane.sessions.iter().rev() {
-                // fps_series is only kept for recent sessions; walk newest-first.
-                if s.fps_series.len() < MIN_FADE_BUCKETS {
-                    continue;
-                }
-                usable += 1;
-                let third = s.fps_series.len() / 3;
-                let first: Vec<f64> = s.fps_series[..third].iter().map(|(_, f)| *f).collect();
-                let last: Vec<f64> = s.fps_series[s.fps_series.len() - third..]
-                    .iter()
-                    .map(|(_, f)| *f)
-                    .collect();
-                let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len().max(1) as f64;
-                let (mf, ml) = (mean(&first), mean(&last));
-                if mf > 0.0 {
-                    let fade_pct = round1((ml - mf) / mf * 100.0);
-                    if fade_pct <= -floor {
-                        fades.push(fade_pct);
-                    }
-                }
-            }
-            if usable >= MIN_FADE_SESSIONS && fades.len() * 4 >= usable * 3 {
-                let med_fade = round1(median(fades.clone()));
-                patterns.push(SessionPattern {
-                    id: "session-fade".into(),
-                    game: Some(game.clone()),
-                    title: format!("{game} slows down the longer you play"),
-                    detail: format!(
-                        "FPS ended lower than it started in {} of the last {usable} {game} sessions with a full trace (median fade {med_fade:+.1}% from the first third to the last).",
-                        fades.len()
-                    ),
-                    confidence: if usable >= STRONG_GROUP_SESSIONS { Confidence::Medium } else { Confidence::Low },
-                    confidence_reason: format!(
-                        "The same in-session shape repeated in {} of {usable} sessions — but a game's later areas can simply be heavier.",
-                        fades.len()
-                    ),
-                    supporting_evidence: vec![
-                        "Computed from each session's recorded FPS trace (10-second buckets), not projected.".into(),
-                    ],
-                    raises_confidence: vec![
-                        "Temps or RAM climbing across the same sessions (something building up).".into(),
-                        "FPS recovering right after a restart mid-play.".into(),
-                    ],
-                    next_test: Some("Watch one long session in Live — if temps or RAM climb as FPS fades, that is the lead to chase.".into()),
-                });
-            } else if usable > 0 && usable < MIN_FADE_SESSIONS && n >= MIN_TREND_SESSIONS {
-                coverage.push(format!(
-                    "In-session fade for {game}: needs {MIN_FADE_SESSIONS} sessions with a full FPS trace; have {usable} (traces are kept for recent sessions only)."
-                ));
-            }
+        // session-fade (item 8, opus r2): an in-session fade compares a session's first third with its
+        // last. No band for that comparison (how much a game's frame rate moves within a session with
+        // nothing changed) is measured, and the between-session 1% low band is another metric and
+        // another comparison, so no fade is called; the coverage line says so.
+        let traced = lane.sessions.iter().filter(|s| s.fps_series.len() >= MIN_FADE_BUCKETS).count();
+        if traced >= MIN_FADE_SESSIONS {
+            coverage.push(format!(
+                "In-session fade for {game}: not called. Compy hasn't measured how much {game}'s frame rate moves within a session with nothing changed."
+            ));
         }
     }
 
@@ -624,7 +600,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
     // coverage notes don't suppress it — below the threshold we say "needs more" instead.
     if patterns.is_empty() && !trend_eligible_games.is_empty() {
         coverage.push(format!(
-            "Checked {sessions_considered} comparable session(s) across {games_considered} game(s) — no repeated pattern past the noise floor. Quiet is a real answer."
+            "Checked {band_sessions} comparable session(s) across {band_games} game(s) with a measured band — no repeated pattern past it. Quiet is a real answer."
         ));
     }
 
@@ -635,7 +611,8 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary]) -> PatternReport {
 
 #[tauri::command]
 pub(crate) fn get_intelligence_patterns() -> PatternReport {
-    detect_patterns(&crate::sessions::get_session_summaries())
+    let sessions = crate::sessions::get_session_summaries();
+    detect_patterns(&sessions, &|s| crate::experiment::measured_noise_at(&sessions, s).map(|n| n.low1_band_pct))
 }
 
 // ─── Guard tests ─────────────────────────────────────────────────────────
@@ -643,6 +620,11 @@ pub(crate) fn get_intelligence_patterns() -> PatternReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The detectors' mechanics on a measured 3% band (item 8: the band is always measured now).
+    fn detect(s: &[SessionSummary]) -> PatternReport {
+        detect_patterns(s, &|_| Some(3.0))
+    }
 
     fn mk_session(started_at: &str, game: &str, low1: f64) -> SessionSummary {
         SessionSummary {
@@ -699,14 +681,14 @@ mod tests {
         let mut behind = mk_session("2026-07-02T10:00:00Z", "cp2077.exe", 0.0);
         (behind.samples, behind.avg_fps, behind.background_secs_excluded) = (0, 0.0, Some(600));
         assert!(!comparable(&behind));
-        assert_eq!(detect_patterns(&[behind]).sessions_considered, 0);
+        assert_eq!(detect(&[behind]).sessions_considered, 0);
     }
 
     #[test]
     fn too_few_sessions_is_flagged_coverage_not_silence() {
         let s: Vec<SessionSummary> =
             (0..3).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
-        let r = detect_patterns(&s);
+        let r = detect(&s);
         assert!(r.patterns.is_empty());
         assert!(
             r.coverage.iter().any(|c| c.contains("needs 5") && c.contains("have 3")),
@@ -716,10 +698,51 @@ mod tests {
     }
 
     #[test]
+    fn without_a_measured_band_no_direction_is_called() {
+        // Item 8: a 1% low falling 20% over eight sessions was "getting slower" past a fixed 3%. With
+        // no measured band for the game, no direction is called, and it isn't counted as trend-free.
+        let s: Vec<SessionSummary> =
+            (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0 - 2.5 * i as f64)).collect();
+        assert!(detect(&s).patterns.iter().any(|p| p.id == "performance-trend"), "on a measured 3% band");
+        let r = detect_patterns(&s, &|_| None);
+        assert!(r.patterns.iter().all(|p| p.id != "performance-trend"), "{:?}", r.patterns);
+        assert!(r.coverage.iter().any(|c| c.contains("not called") && c.contains("nothing changed")), "{:?}", r.coverage);
+        // A band wider than the move: no direction either.
+        let r = detect_patterns(&s, &|_| Some(25.0));
+        assert!(r.patterns.iter().all(|p| p.id != "performance-trend"), "{:?}", r.patterns);
+    }
+
+    #[test]
+    fn a_move_exactly_at_the_band_gets_no_direction_and_a_fall_is_judged_at_its_matching_fall() {
+        // Opus r3: "past" the band, strictly. Eight sessions whose fitted 1% low rises exactly 10%.
+        let up: Vec<SessionSummary> =
+            (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0 + 10.0 / 7.0 * i as f64)).collect();
+        let trend = |s: &[SessionSummary], b: f64| detect_patterns(s, &|_| Some(b)).patterns.into_iter().any(|p| p.id == "performance-trend");
+        assert!(!trend(&up, 10.0), "a 10% rise exactly at a 10% band is not past it");
+        assert!(trend(&up, 9.9));
+        // A 10% fall: past the 9.9% fall matching an 11% band, inside the 10.7% matching a 12% band.
+        let down: Vec<SessionSummary> =
+            (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0 - 10.0 / 7.0 * i as f64)).collect();
+        assert!(trend(&down, 11.0));
+        assert!(!trend(&down, 12.0));
+    }
+
+    #[test]
+    fn quiet_counts_only_the_games_with_a_measured_band() {
+        // Item 8 (opus r1): a game whose directions weren't called isn't "checked, nothing found".
+        let mut s: Vec<SessionSummary> = (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
+        s.extend((0..8).map(|i| mk_session(&day(i), "other.exe", 100.0 - 2.5 * i as f64)));
+        let r = detect_patterns(&s, &|x| (x.process_name == "cp2077.exe").then_some(3.0));
+        assert!(r.patterns.iter().all(|p| p.id != "performance-trend"), "{:?}", r.patterns);
+        let quiet = r.coverage.iter().find(|c| c.contains("Quiet is a real answer")).expect("quiet line");
+        assert!(quiet.contains("8 comparable session(s) across 1 game(s) with a measured band"), "{quiet}");
+    }
+
+    #[test]
     fn flat_sessions_fire_nothing_and_say_quiet_is_real() {
         let s: Vec<SessionSummary> =
             (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
-        let r = detect_patterns(&s);
+        let r = detect(&s);
         assert!(r.patterns.is_empty());
         assert!(r.coverage.iter().any(|c| c.contains("Quiet is a real answer")));
     }
@@ -730,7 +753,7 @@ mod tests {
         let short: Vec<SessionSummary> = (0..5)
             .map(|i| mk_session(&day(i), "cp2077.exe", 100.0 - 2.0 * i as f64))
             .collect();
-        let r = detect_patterns(&short);
+        let r = detect(&short);
         let p = r
             .patterns
             .iter()
@@ -742,7 +765,7 @@ mod tests {
         let long: Vec<SessionSummary> = (0..10)
             .map(|i| mk_session(&day(i), "cp2077.exe", 100.0 - 2.0 * i as f64))
             .collect();
-        let r2 = detect_patterns(&long);
+        let r2 = detect(&long);
         let p2 = r2
             .patterns
             .iter()
@@ -762,7 +785,7 @@ mod tests {
                 s
             })
             .collect();
-        let r = detect_patterns(&s);
+        let r = detect(&s);
         let p = r.patterns.iter().find(|p| p.id == "thermal-trend").expect("fires");
         assert!(p.detail.contains("°C"));
         assert!(p.title.contains("hotter"));
@@ -777,7 +800,7 @@ mod tests {
                 s
             })
             .collect();
-        let r = detect_patterns(&s);
+        let r = detect(&s);
         let p = r.patterns.iter().find(|p| p.id == "cpu-thermal-trend").expect("fires");
         assert!(p.detail.contains("°C"));
         assert!(p.title.contains("hotter"));
@@ -787,7 +810,7 @@ mod tests {
     fn cpu_thermal_trend_stays_silent_without_readings() {
         // No monitor running (peak_cpu_temp_c always None) — never fabricate a trend.
         let s: Vec<SessionSummary> = (0..6).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
-        let r = detect_patterns(&s);
+        let r = detect(&s);
         assert!(r.patterns.iter().all(|p| p.id != "cpu-thermal-trend"));
     }
 
@@ -805,7 +828,7 @@ mod tests {
             x.hw_fingerprint = Some(fp("25.6.0"));
             s.push(x);
         }
-        let r = detect_patterns(&s);
+        let r = detect(&s);
         let p = r.patterns.iter().find(|p| p.id == "driver-split").expect("fires");
         assert!(p.detail.contains("25.5.1") && p.detail.contains("25.6.0"));
         assert!(p.title.contains("slower"));
@@ -814,7 +837,7 @@ mod tests {
         if let Some(f) = s2[6].hw_fingerprint.as_mut() {
             f.display = "3840x2160@144".into();
         }
-        let r2 = detect_patterns(&s2);
+        let r2 = detect(&s2);
         assert!(r2.patterns.iter().all(|p| p.id != "driver-split"));
         assert!(r2.coverage.iter().any(|c| c.contains("rig itself changed")));
     }
@@ -832,7 +855,7 @@ mod tests {
             x.gaming_mode_active = Some(false);
             s.push(x);
         }
-        let r = detect_patterns(&s);
+        let r = detect(&s);
         let p = r.patterns.iter().find(|p| p.id == "gaming-mode-split").expect("fires");
         assert_eq!(p.confidence, Confidence::Medium);
         assert!(p.title.contains("faster"));
@@ -840,23 +863,26 @@ mod tests {
     }
 
     #[test]
-    fn session_fade_uses_recorded_traces_only() {
+    fn an_in_session_fade_is_never_called_without_a_measured_within_session_band() {
+        // Item 8 (opus r2), changed deliberately: this test pinned a -20% first-third to last-third
+        // fade as a "session-fade" past the fixed floor. No band for that comparison is measured, so
+        // no fade is called (even on a measured between-session band), and the coverage line says so.
         let mk_fading = |i: usize| {
             let mut x = mk_session(&day(i), "cp2077.exe", 100.0);
-            // 36 buckets fading 120 → ~96 (-20%).
+            // 36 buckets fading 120 -> ~96 (-20%).
             x.fps_series = (0..36).map(|b| (b as u32 * 10, 120.0 - b as f64 * 0.67)).collect();
             x
         };
         let s: Vec<SessionSummary> = (0..5).map(mk_fading).collect();
-        let r = detect_patterns(&s);
-        let p = r.patterns.iter().find(|p| p.id == "session-fade").expect("fires");
-        assert!(p.detail.contains("5 of the last 5") || p.detail.contains("of the last 5"));
-        assert_eq!(p.confidence, Confidence::Medium);
-        // Without traces, silence + no invented fade.
+        let r = detect(&s);
+        assert!(r.patterns.iter().all(|p| p.id != "session-fade"), "{:?}", r.patterns);
+        assert!(r.coverage.iter().any(|c| c.contains("In-session fade") && c.contains("not called")), "{:?}", r.coverage);
+        // Without traces, silence: no fade and no line about one.
         let bare: Vec<SessionSummary> =
             (0..5).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
-        let r2 = detect_patterns(&bare);
+        let r2 = detect(&bare);
         assert!(r2.patterns.iter().all(|p| p.id != "session-fade"));
+        assert!(r2.coverage.iter().all(|c| !c.contains("In-session fade")));
     }
 
     #[test]
@@ -866,7 +892,7 @@ mod tests {
             s.push(mk_session(&day(i), "cp2077.exe", 100.0 - 2.5 * i as f64));
             s.push(mk_session(&format!("2026-07-{:02}T20:00:00Z", i + 1), "valorant.exe", 200.0 - 5.0 * i as f64));
         }
-        let r = detect_patterns(&s);
+        let r = detect(&s);
         let p = r
             .patterns
             .iter()
@@ -884,7 +910,7 @@ mod tests {
             s.push(mk_session(&day(i), "cp2077.exe", 100.0 - 2.5 * i as f64)); // down
             s.push(mk_session(&format!("2026-07-{:02}T20:00:00Z", i + 1), "valorant.exe", 200.0)); // flat
         }
-        let r = detect_patterns(&s);
+        let r = detect(&s);
         let p = r
             .patterns
             .iter()
@@ -899,9 +925,9 @@ mod tests {
         let mut s: Vec<SessionSummary> = (0..8)
             .map(|i| mk_session(&day(i), "cp2077.exe", 100.0 - 2.0 * i as f64))
             .collect();
-        let a = detect_patterns(&s);
+        let a = detect(&s);
         s.reverse();
-        let b = detect_patterns(&s);
+        let b = detect(&s);
         let ser = |r: &PatternReport| serde_json::to_string(r).unwrap();
         assert_eq!(ser(&a), ser(&b), "input order must not change the report");
         assert!(!ser(&a).to_lowercase().contains("caused"));
@@ -912,7 +938,7 @@ mod tests {
         let mut s: Vec<SessionSummary> =
             (0..5).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
         s.push(mk_session("last tuesday", "cp2077.exe", 10.0));
-        let r = detect_patterns(&s);
+        let r = detect(&s);
         // The garbage session is excluded (no fake trend from its 10 FPS)…
         assert!(r.patterns.iter().all(|p| p.id != "performance-trend"));
         // …and the exclusion is stated, not silent.

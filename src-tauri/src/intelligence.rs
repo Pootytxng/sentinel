@@ -17,7 +17,7 @@
 //     "caused by". Multiple simultaneous changes ⇒ attribution is refused (confounded),
 //     mirroring comparison.rs semantics.
 //   - Metric judgment reuses METHODOLOGY.md rails verbatim: flat 3% cross-session noise
-//     floor (benchmark::DEFAULT_NOISE_FLOOR_PCT) judged on the 1%-low delta, boundary
+//     floor (noise_floor::MIN_CLAIM_PCT) judged on the 1%-low delta, boundary
 //     inclusive (a delta of exactly 3% is "no meaningful difference"); average FPS is
 //     reference-only; "No meaningful difference" is a first-class verdict.
 

@@ -746,6 +746,9 @@ pub(crate) enum Verdict {
     Improved,
     NoMeasurableChange,
     Regressed,
+    /// Measurement item 8: no measured run-to-run band exists for this comparison, so Compy shows the
+    /// numbers and calls nothing better or worse.
+    Unmeasured,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -761,8 +764,9 @@ pub(crate) struct ComponentEfficacy {
 pub(crate) struct Efficacy {
     pub per_component: Vec<ComponentEfficacy>,
     pub overall: Verdict,
-    /// The significance threshold actually used (%), after any low-confidence widening.
-    pub noise_floor_pct: f64,
+    /// The significance threshold actually used (%), after any low-confidence widening. None: no
+    /// measured band for this comparison (item 8), and every verdict is Unmeasured.
+    pub noise_floor_pct: Option<f64>,
 }
 
 /// Significance threshold: a base %, **widened** if either run was low-confidence — a noisy
@@ -785,21 +789,21 @@ fn verdict_for(delta_pct: f64, floor: f64) -> Verdict {
     }
 }
 
-/// Conservative default significance threshold (%). A delta must clear this (plus the
-/// low-confidence widening) to count as real — we'd rather report "no measurable change"
-/// than overclaim a win. Tunable later; conservative on purpose (owner-approved default).
-pub(crate) const DEFAULT_NOISE_FLOOR_PCT: f64 = 3.0;
-
-/// Convenience: efficacy with the conservative default threshold.
+/// Measurement item 8: the synthetic benchmark has no measured run-to-run band (no as-is pool of
+/// repeated runs on this PC), so the efficacy of a change is shown, never called: no fixed 3%.
+/// The efficacy the app shows: no measured band exists for the synthetic benchmark (item 8).
 pub(crate) fn measure_efficacy(before: &RunReport, after: &RunReport) -> Efficacy {
-    compute_efficacy(before, after, DEFAULT_NOISE_FLOOR_PCT)
+    compute_efficacy(before, after, None)
 }
 
 /// Compare two benchmark runs and emit an honest per-component + overall efficacy verdict.
 /// Only components measured in **both** runs are compared. The delta is reference-independent
 /// (normalization cancels), so it's meaningful even while absolute baselines are placeholders.
-pub(crate) fn compute_efficacy(before: &RunReport, after: &RunReport, base_floor_pct: f64) -> Efficacy {
-    let floor = noise_floor(before.confidence, after.confidence, base_floor_pct);
+/// `band_pct`: a MEASURED run-to-run band for this comparison, or `None` (item 8): then every
+/// verdict is `Unmeasured` and only the numbers show.
+pub(crate) fn compute_efficacy(before: &RunReport, after: &RunReport, band_pct: Option<f64>) -> Efficacy {
+    let floor = band_pct.map(|b| noise_floor(before.confidence, after.confidence, b));
+    let judge = |delta: f64| floor.map_or(Verdict::Unmeasured, |f| verdict_for(delta, f));
     let mut per_component = Vec::new();
     for b in &before.components {
         if !b.measured {
@@ -826,15 +830,15 @@ pub(crate) fn compute_efficacy(before: &RunReport, after: &RunReport, base_floor
             before: b.score,
             after: a.score,
             delta_pct,
-            verdict: verdict_for(delta_pct, floor),
+            verdict: judge(delta_pct),
         });
     }
     // Overall: average the measured component deltas, then the same significance test.
     let overall = if per_component.is_empty() {
-        Verdict::NoMeasurableChange
+        floor.map_or(Verdict::Unmeasured, |_| Verdict::NoMeasurableChange)
     } else {
         let avg = per_component.iter().map(|c| c.delta_pct).sum::<f64>() / per_component.len() as f64;
-        verdict_for(avg, floor)
+        judge(avg)
     };
     Efficacy { per_component, overall, noise_floor_pct: floor }
 }
@@ -939,7 +943,7 @@ fn lock_state() -> Result<crate::race_seam::StoreGuard<BenchmarkState>, ()> {
 /// Recompute `efficacy` from the current baseline + latest (both must exist).
 fn recompute_efficacy(state: &mut BenchmarkState) {
     state.efficacy = match (&state.baseline, &state.latest) {
-        (Some(b), Some(a)) => Some(compute_efficacy(b, a, DEFAULT_NOISE_FLOOR_PCT)),
+        (Some(b), Some(a)) => Some(measure_efficacy(b, a)),
         _ => None,
     };
 }
@@ -1422,7 +1426,7 @@ mod benchmark_tests {
     fn efficacy_flags_real_improvement() {
         let before = report(RunConfidence::Clean, &[(Component::Cpu, 50, true)]);
         let after = report(RunConfidence::Clean, &[(Component::Cpu, 60, true)]);
-        let e = compute_efficacy(&before, &after, 3.0);
+        let e = compute_efficacy(&before, &after, Some(3.0));
         assert_eq!(e.per_component[0].verdict, Verdict::Improved);
         assert_eq!(e.overall, Verdict::Improved);
     }
@@ -1431,7 +1435,7 @@ mod benchmark_tests {
     fn efficacy_calls_a_tiny_delta_no_measurable_change() {
         let before = report(RunConfidence::Clean, &[(Component::Cpu, 100, true)]);
         let after = report(RunConfidence::Clean, &[(Component::Cpu, 102, true)]); // +2% < 3% floor
-        let e = compute_efficacy(&before, &after, 3.0);
+        let e = compute_efficacy(&before, &after, Some(3.0));
         assert_eq!(e.per_component[0].verdict, Verdict::NoMeasurableChange);
         assert_eq!(e.overall, Verdict::NoMeasurableChange);
     }
@@ -1440,7 +1444,7 @@ mod benchmark_tests {
     fn efficacy_flags_regression() {
         let before = report(RunConfidence::Clean, &[(Component::Gpu, 80, true)]);
         let after = report(RunConfidence::Clean, &[(Component::Gpu, 60, true)]);
-        let e = compute_efficacy(&before, &after, 3.0);
+        let e = compute_efficacy(&before, &after, Some(3.0));
         assert_eq!(e.per_component[0].verdict, Verdict::Regressed);
         assert_eq!(e.overall, Verdict::Regressed);
     }
@@ -1450,8 +1454,8 @@ mod benchmark_tests {
         // +6% would be "Improved" at a 3% floor, but a noisy run widens it to 8% → no claim.
         let before = report(RunConfidence::Low, &[(Component::Cpu, 100, true)]);
         let after = report(RunConfidence::Clean, &[(Component::Cpu, 106, true)]);
-        let e = compute_efficacy(&before, &after, 3.0);
-        assert!(e.noise_floor_pct >= 8.0);
+        let e = compute_efficacy(&before, &after, Some(3.0));
+        assert!(e.noise_floor_pct.is_some_and(|f| f >= 8.0));
         assert_eq!(e.per_component[0].verdict, Verdict::NoMeasurableChange);
     }
 
@@ -1459,18 +1463,24 @@ mod benchmark_tests {
     fn efficacy_skips_components_not_measured_in_both_runs() {
         let before = report(RunConfidence::Clean, &[(Component::Cpu, 50, true), (Component::Gpu, 0, false)]);
         let after = report(RunConfidence::Clean, &[(Component::Cpu, 60, true), (Component::Gpu, 70, true)]);
-        let e = compute_efficacy(&before, &after, 3.0);
+        let e = compute_efficacy(&before, &after, Some(3.0));
         assert_eq!(e.per_component.len(), 1); // GPU unmeasured in `before` → skipped
         assert_eq!(e.per_component[0].component, Component::Cpu);
     }
 
     #[test]
-    fn default_floor_is_conservative() {
+    fn the_shipped_efficacy_calls_nothing_without_a_measured_band() {
+        // Item 8 (changed deliberately): the old test pinned +5% as Improved on a fixed 3% floor. No
+        // run-to-run band is measured for the synthetic benchmark, so nothing is called either way.
         let b = report(RunConfidence::Clean, &[(Component::Cpu, 100, true)]);
-        let near = report(RunConfidence::Clean, &[(Component::Cpu, 102, true)]); // +2% < 3% default
-        let real = report(RunConfidence::Clean, &[(Component::Cpu, 105, true)]); // +5% > 3% default
-        assert_eq!(measure_efficacy(&b, &near).overall, Verdict::NoMeasurableChange);
-        assert_eq!(measure_efficacy(&b, &real).overall, Verdict::Improved);
+        for after in [102, 105, 160, 40] {
+            let e = measure_efficacy(&b, &report(RunConfidence::Clean, &[(Component::Cpu, after, true)]));
+            assert_eq!(e.overall, Verdict::Unmeasured, "{after}");
+            assert_eq!(e.per_component[0].verdict, Verdict::Unmeasured);
+            assert_eq!(e.per_component[0].after, after, "the numbers still show");
+            assert_eq!(e.noise_floor_pct, None);
+        }
+        assert_eq!(measure_efficacy(&b, &report(RunConfidence::Clean, &[])).overall, Verdict::Unmeasured);
     }
 
     #[test]

@@ -23,6 +23,7 @@ const holding: TuningMeasurement = {
   low1DeltaPct: 2,
   fpsRegressed: false,
   fpsImproved: false,
+  fpsUnmeasured: false,
   crashReported: false,
 };
 

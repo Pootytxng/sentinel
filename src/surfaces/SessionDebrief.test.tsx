@@ -169,6 +169,76 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
     noise_floor_pct: 3,
     verdict: "no-change" as const,
   };
+  it("measurement item 8: no measured band shows the numbers and calls nothing (never a fixed 3%)", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const unmeasured = {
+      ...comparison,
+      after_low1_fps: 124.0,
+      delta_low1_pct: 12.5,
+      noise_floor_pct: 0,
+      verdict: "unmeasured" as const,
+      unmeasured: "noise-unmeasured" as const,
+    };
+    vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? unmeasured : null));
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    let card = await screen.findByTestId("cmp-card");
+    expect(card.textContent).toMatch(/Can't call this one/);
+    expect(screen.getByTestId("cmp-unmeasured").textContent).toMatch(/hasn't measured how much eldenring moves between your sessions/i);
+    expect(card.textContent).not.toMatch(/improvement|made it worse|No measurable change|noise floor/i);
+    card = await openWhy();
+    expect(card.querySelector(".cmp-delta")!.textContent).toMatch(/\+12\.5%\), not judged/);
+    expect(card.querySelector(".cmp-nf")).toBeNull();
+    // A changed frame cap says so.
+    cleanup();
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      Promise.resolve(cmd === "get_latest_comparison" ? { ...unmeasured, unmeasured: "frame-cap-changed" } : null),
+    );
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    expect((await screen.findByTestId("cmp-unmeasured")).textContent).toMatch(/frame cap wasn't the same/);
+    cleanup();
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      Promise.resolve(cmd === "get_latest_comparison" ? { ...unmeasured, unmeasured: "not-comparable" } : null),
+    );
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    expect((await screen.findByTestId("cmp-unmeasured")).textContent).toMatch(/couldn't confirm the two eldenring sessions were played under comparable conditions/);
+  });
+
+  it("measurement item 8: a measured band reads +rise / -fall, the way it was judged", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const worse = {
+      ...comparison,
+      after_low1_fps: 90.4,
+      delta_low1_pct: -18.0,
+      noise_floor_pct: 20.6,
+      noise_fall_pct: 17.0,
+      game_noise: { low1_band_pct: 20.6, sessions: 9, cap: { state: "uncapped" as const } },
+      verdict: "regressed" as const,
+    };
+    vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? worse : null));
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    await screen.findByTestId("cmp-card");
+    const card = await openWhy();
+    const line = card.querySelector(".cmp-delta")!.textContent ?? "";
+    expect(line).toMatch(/outside the \+20\.6% \/ -17% this game moves between your sessions with nothing changed/);
+    expect(line).not.toMatch(/±20\.6%/);
+  });
+
   it("a null result: the answer carries the verdict and the choice; the numbers wait behind the doors", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? comparison : null));

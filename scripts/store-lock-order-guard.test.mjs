@@ -92,9 +92,19 @@ const LOCK_ENTRY_POINTS = ["history"];
  * `MIN_TREATMENT_SAMPLES` constant and `has_frame_reading`, which reads two fields of the session it
  * is handed. Neither takes a lock or calls out, so neither can nest anything inside COMPARISON_LOCK;
  * that is also why `experiment` is not a LOCK_ENTRY_POINT.
+ *
+ * Measurement item 8 (re-derived for the three calls it added): `experiment::measured_noise_at` DOES
+ * reach locks (it loads the change history: HISTORY and, on a corrupt ledger, SUPPORT_EVIDENCE) and
+ * so does `sessions::get_session_summaries` (the session store read), but both are called only in
+ * `on_session_finalized`, BEFORE `lock_comparison()` is taken, with no lock held (its caller,
+ * `sessions::save_session`, has released the session store), and the result is passed in. Under
+ * COMPARISON_LOCK the new calls are leaves only: `noise_floor::fall_pct` (arithmetic) inside
+ * `build_result`. `comparability::derive`, `noise_floor::cap_read` and `noise_floor::cap_pair` read
+ * the sessions they are handed and take no lock, and run before the lock too. So nothing new can be
+ * held inside COMPARISON_LOCK, and `noise_floor`'s own store lock (`lock_gate`) is never reached.
  */
 const ALLOWED_EDGES = {
-  comparison: ["atomic_write", "experiment", "history", "race_seam", "sessions"],
+  comparison: ["atomic_write", "comparability", "experiment", "history", "noise_floor", "race_seam", "sessions"],
   drift: ["atomic_write", "race_seam"],
   readiness: ["atomic_write", "drift", "hardware", "history", "monitoring", "race_seam"],
 };
