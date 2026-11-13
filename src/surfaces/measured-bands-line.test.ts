@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import en from "../i18n/locales/en/lab.json";
 import zh from "../i18n/locales/zh-CN/lab.json";
-import { measuredBandsLine } from "./ExperimentBench";
+import { measuredBandsLine, notComparableNote } from "./ExperimentBench";
 
 const t = ((key: string, opts?: Record<string, unknown>) => `${key} ${JSON.stringify(opts ?? {})}`) as never;
 const WIDE = { low1_band_pct: 23, avg_band_pct: 18, low1_step_pct: 9.2, avg_step_pct: 7.2, sessions: 9, cap: { state: "uncapped" as const } };
@@ -52,9 +52,20 @@ describe("measuredBandsLine", () => {
     expect(line).toContain('"lowStep":"9.2"');
     expect(line).toContain('"avgStep":"7.2"');
     expect(line).not.toContain("noiseMeasuredFewSessions");
-    expect(line).toContain("noiseMeasuredCantRead");
+    // Opus r1: what Compy can't read is said once under the list, not in every row's line.
+    expect(line).not.toContain("noiseMeasuredCantRead");
     const three = measuredBandsLine({ ...WIDE, sessions: 3, low1_band_pct: 58 }, "recommended", "ROB RUN.exe", t);
     expect(three).toContain('noiseMeasuredFewSessions {"sessions":3}');
+    // Every named band at the 3% minimum: the "wide because few sessions" line would contradict it.
+    const floored = measuredBandsLine({ ...WIDE, sessions: 3, low1_band_pct: 3, avg_band_pct: 3 }, "recommended", "cs2.exe", t);
+    expect(floored).not.toContain("noiseMeasuredFewSessions");
+  });
+
+  it("a Trial not judged for the gap between its sessions says so in the user's language", () => {
+    const x = { stop_reason: "gap-past-band", verdict_note: "English from the backend", game_noise: { ...WIDE, max_gap_mins: 446 } };
+    expect(notComparableNote(x, t)).toContain('lab.experimentBench.gapPastBand {"max":"7.4"}');
+    expect(notComparableNote({ ...x, stop_reason: "frame-cap-changed" }, t)).toBe("English from the backend");
+    expect(notComparableNote({ ...x, game_noise: { ...WIDE } }, t)).toBe("English from the backend");
   });
 
   it("every line exists in English and Simplified Chinese", () => {
@@ -68,7 +79,8 @@ describe("measuredBandsLine", () => {
       "noiseMeasuredCappedUnjudged",
       "noiseMeasuredSource",
       "noiseMeasuredFloor",
-      "noiseMeasuredCapUnread",
+      "noiseMeasuredCapUnread_other",
+      "gapPastBand",
       "noiseMeasuredFewSessions",
       "noiseMeasuredCantRead",
     ]) {

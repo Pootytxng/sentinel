@@ -539,8 +539,21 @@ fn cap_read_series(s: &crate::sessions::SessionSummary) -> CapRead {
     // Coordinator SHOULD-FIX (s27): the ceiling is the densest plateau (the most buckets within 0.5% of
     // one value), not the 95th-percentile bucket, so a cap that holds the play while menus or loading
     // screens run far above it (more than 5% of the buckets) still reads as a cap.
-    let near = |v: f64| fps.iter().filter(|&&f| (f - v).abs() <= v * CAP_CEILING_FRACTION).count();
-    let plateau = fps.iter().copied().max_by_key(|&v| near(v)).unwrap_or(0.0);
+    // `fps` is sorted, so the buckets within 0.5% of each value form a window whose ends only move
+    // forward: one pass (opus r1: the plateau search runs on every save and walk).
+    let (mut lo, mut hi, mut best) = (0usize, 0usize, (0usize, 0.0f64));
+    for &v in &fps {
+        while fps[lo] < v - v * CAP_CEILING_FRACTION {
+            lo += 1;
+        }
+        while hi < fps.len() && fps[hi] <= v + v * CAP_CEILING_FRACTION {
+            hi += 1;
+        }
+        if hi - lo >= best.0 {
+            best = (hi - lo, v);
+        }
+    }
+    let plateau = best.1;
     let held: Vec<f64> = fps.iter().copied().filter(|f| (f - plateau).abs() <= plateau * CAP_CEILING_FRACTION).collect();
     let ceiling = held[held.len() / 2];
     // A cap clips: nothing sits just above it. A steady uncapped game spreads both ways around its
@@ -768,6 +781,33 @@ fn log_step_pct(xs: &[f64]) -> f64 {
 
 fn round1(x: f64) -> f64 {
     (x * 10.0).round() / 10.0
+}
+
+/// Opus r1 MUST-FIX (s27): the fall that matches a measured band stored as a rise over the baseline
+/// (`GameNoise::low1_band_pct`, `avg_band_pct`): the same log distance below, `B / (1 + B)`, rounded
+/// down to 0.1 so it is never wider than that. A veto on a win ("didn't fall by more than the band")
+/// and a Worse are judged on this, so a fall the game's own noise can't hold never lets a win through.
+pub(crate) fn fall_pct(band_pct: f64) -> f64 {
+    (100.0 * band_pct / (100.0 + band_pct) * 10.0).floor() / 10.0
+}
+
+/// Opus r1 SHOULD-FIX (s27): a band measured under noise model 2 (each step a % of the pair's mean,
+/// stored as the band itself) read on this build's base: never narrower than the rise over the
+/// baseline that matches its own step, so a Trial started before this build doesn't conclude on a
+/// band that calls wins inside its noise.
+pub(crate) fn on_baseline_base(n: GameNoise) -> GameNoise {
+    if n.model >= NOISE_MODEL_VERSION || n.sessions < 2 {
+        return n;
+    }
+    let t = t95_eff(n.sessions as usize);
+    let rise = |stored: f64, step: f64| {
+        stored.max(((100.0 * (t * step / 100.0).exp_m1()).max(MIN_CLAIM_PCT) * 10.0).ceil() / 10.0)
+    };
+    GameNoise {
+        low1_band_pct: rise(n.low1_band_pct, n.low1_step_pct),
+        avg_band_pct: rise(n.avg_band_pct, n.avg_step_pct),
+        ..n
+    }
 }
 
 /// Pure (P4-judge-noisy): this game's measured noise for a comparison against `now`, or why it isn't
@@ -1586,6 +1626,29 @@ pub(crate) mod tests {
         let t = t95_eff(9);
         let want = ((100.0 * (t * log_step_pct(&s_lows(&s)) / 100.0).exp_m1()) * 10.0).ceil() / 10.0;
         assert!((n.low1_band_pct - want).abs() < 1e-9, "{} vs {want}", n.low1_band_pct);
+    }
+
+    #[test]
+    fn a_fall_is_judged_at_the_same_log_distance_and_an_older_band_is_never_narrower() {
+        // Opus r1 (s27): +25% and -20% are the same distance (1.25 x 0.8 = 1).
+        assert_eq!(fall_pct(25.0), 20.0);
+        assert_eq!(fall_pct(3.0), 2.9, "rounded down, never wider than the matching fall");
+        // A model-2 band (pair-mean step, the band itself) is read on this build's base.
+        let old = GameNoise {
+            model: 2,
+            low1_band_pct: 23.0,
+            avg_band_pct: 18.0,
+            low1_step_pct: 9.2,
+            avg_step_pct: 7.2,
+            sessions: 9,
+            cap: CapRead::Uncapped,
+            cap_unread: 0,
+            max_gap_mins: 0,
+        };
+        let now = on_baseline_base(old.clone());
+        assert!(now.low1_band_pct > 25.0 && now.avg_band_pct > 19.0, "{now:?}");
+        let current = GameNoise { model: NOISE_MODEL_VERSION, ..old };
+        assert_eq!(on_baseline_base(current.clone()), current, "a band on this model is untouched");
     }
 
     /// The nine as-is sessions' 1% lows, oldest first (`rob_day` minus the four after-sessions).

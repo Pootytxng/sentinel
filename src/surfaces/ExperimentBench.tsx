@@ -145,6 +145,8 @@ type GameNoise = {
   cap?: { state: "uncapped" | "capped" | "unknown"; at_fps?: number } | null;
   /** P4-noise-sf: sessions left out because their frame-cap state can't be read. Absent = 0. */
   cap_unread?: number;
+  /** s27: the longest start-to-start gap between one measured session and the next, minutes. Absent = unknown. */
+  max_gap_mins?: number;
 };
 
 /** P4-judge-noisy (experiment.rs `AssumedBandLabel`, read-only): a verdict judged on the assumed ±3%
@@ -401,7 +403,10 @@ export function measuredBandsLine(g: GameNoise, outcome: TrialOutcome | null | u
       : goal === "smoothest"
         ? [t("lab.experimentBench.noiseMeasuredBandsSmoothest", { low: pct(g.low1_band_pct) }), [g.low1_band_pct]]
         : capped
-          ? [t("lab.experimentBench.noiseMeasuredBandsCapped", { low: pct(g.low1_band_pct) }), [g.low1_band_pct]]
+          ? [
+              t("lab.experimentBench.noiseMeasuredBandsCapped", { low: pct(g.low1_band_pct), avg: pct(g.avg_band_pct) }),
+              [g.low1_band_pct],
+            ]
           : [
               t("lab.experimentBench.noiseMeasuredBands", { low: pct(g.low1_band_pct), avg: pct(g.avg_band_pct) }),
               [g.low1_band_pct, g.avg_band_pct],
@@ -419,13 +424,25 @@ export function measuredBandsLine(g: GameNoise, outcome: TrialOutcome | null | u
   ];
   if (named.some((b) => b <= MIN_CLAIM_PCT + 1e-9))
     parts.push(t("lab.experimentBench.noiseMeasuredFloor", { game: name, min: pct(MIN_CLAIM_PCT) }));
-  // Fewer than six sessions measure the band loosely (experiment.rs `FULL_CONFIDENCE_SESSIONS`).
-  if (g.sessions < FULL_CONFIDENCE_SESSIONS)
+  // Fewer than six sessions measure the band loosely (experiment.rs `FULL_CONFIDENCE_SESSIONS`); not
+  // said when every band named is the 3% minimum (as the backend's note).
+  if (g.sessions < FULL_CONFIDENCE_SESSIONS && !named.every((b) => b <= MIN_CLAIM_PCT + 1e-9))
     parts.push(t("lab.experimentBench.noiseMeasuredFewSessions", { sessions: g.sessions }));
   if ((g.cap_unread ?? 0) > 0)
     parts.push(t("lab.experimentBench.noiseMeasuredCapUnread", { game: name, count: g.cap_unread }));
-  parts.push(t("lab.experimentBench.noiseMeasuredCantRead"));
   return parts.join(" ");
+}
+
+// s27 (opus r1): a Trial not judged because its two sessions were further apart than the band was
+// measured at says so in the user's language; any other "not comparable" keeps the backend's reason.
+export function notComparableNote(
+  x: { stop_reason: string | null; verdict_note: string | null; game_noise?: GameNoise | null },
+  t: Translate,
+): string | null {
+  const max = x.game_noise?.max_gap_mins;
+  if (x.stop_reason === "gap-past-band" && max != null && max > 0)
+    return t("lab.experimentBench.gapPastBand", { max: String(Math.round((max / 60) * 10) / 10) });
+  return x.verdict_note;
 }
 
 function noiseLine(
@@ -1083,7 +1100,8 @@ export default function ExperimentBench({
     return judged && assumed ? `${judged} ${assumed}` : (assumed ?? judged);
   });
   const rowNotes = history.map((x, i): RowNote | null =>
-    noiseLines[i] ?? (looksJudged(x) ? NO_RECORD : x.verdict === "not-comparable" ? x.verdict_note || null : null),
+    noiseLines[i] ??
+    (looksJudged(x) ? NO_RECORD : x.verdict === "not-comparable" ? notComparableNote(x, t) || null : null),
   );
   const judgedLines = new Set(noiseLines.filter((n): n is string => n !== null));
   const sharedNoise = judgedLines.size === 1 ? [...judgedLines][0] : null;
@@ -1819,6 +1837,10 @@ export default function ExperimentBench({
               <span className="exp-bench-noise-mark">{noteMark(k)}</span> <span>{withTerms(footnoteText(n))}</span>
             </p>
           ))}
+          {/* s27 (opus r1): said once under the list, wherever a measured band is explained. */}
+          {history.some((x) => x.game_noise != null) && (
+            <p className="exp-fineprint exp-bench-noise">{t("lab.experimentBench.noiseMeasuredCantRead")}</p>
+          )}
         </div>
       )}
       </div>
