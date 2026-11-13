@@ -623,7 +623,8 @@ pub(crate) struct GameNoise {
     #[serde(default, skip_serializing_if = "is_zero")]
     pub cap_unread: u32,
     /// Coordinator SHOULD-FIX (s27): the longest time, in minutes, from one measured session's start to
-    /// the next one's. The band was measured across gaps up to this; past it, it can't say. Additive: 0 on older records, which then can't say (no gap rule is applied to them).
+    /// the next one's: the band was measured across gaps up to this. Additive: 0 on older records,
+    /// to which no gap rule is applied.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub max_gap_mins: u32,
 }
@@ -806,9 +807,10 @@ pub(crate) fn on_baseline_base(n: GameNoise) -> GameNoise {
         return n;
     }
     let t = t95_eff(n.sessions as usize);
-    // The stored step is rounded to 0.1; half of that is added back so the rise is never under it.
+    // Opus r3: no pad on the stored step. The matching fall of this rise (1 - e^-b) is then never wider
+    // than the stored model-2 band (about b), so a veto or a Worse is never looser than it was.
     let rise = |stored: f64, step: f64| {
-        stored.max(((100.0 * (t * (step + 0.05) / 100.0).exp_m1()).max(MIN_CLAIM_PCT) * 10.0).ceil() / 10.0)
+        stored.max(((100.0 * (t * step / 100.0).exp_m1()).max(MIN_CLAIM_PCT) * 10.0).ceil() / 10.0)
     };
     GameNoise {
         model: NOISE_MODEL_VERSION,

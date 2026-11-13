@@ -427,7 +427,10 @@ export function measuredBandsLine(g: GameNoise, outcome: TrialOutcome | null | u
         ? [t("lab.experimentBench.noiseMeasuredBandsSmoothest", { low, lowFall }), [g.low1_band_pct]]
         : capped
           ? [t("lab.experimentBench.noiseMeasuredBandsCapped", { low, lowFall, avgFall }), [g.low1_band_pct]]
-          : [t("lab.experimentBench.noiseMeasuredBands", { low, lowFall, avg, avgFall }), [g.low1_band_pct, g.avg_band_pct]];
+          : (g.model ?? 0) >= NOISE_MODEL_LOG
+            ? [t("lab.experimentBench.noiseMeasuredBands", { low, lowFall, avg, avgFall }), [g.low1_band_pct, g.avg_band_pct]]
+            : // Opus r3: an older verdict was judged on the same band both ways, and says so.
+              [t("lab.experimentBench.noiseMeasuredBandsSameBothWays", { low, avg }), [g.low1_band_pct, g.avg_band_pct]];
   // Coordinator SHOULD-FIX (s27): the typical session-to-session move and the band are two different
   // numbers, and both are said plainly.
   const parts = [

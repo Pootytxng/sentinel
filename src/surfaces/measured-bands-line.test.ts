@@ -65,7 +65,10 @@ describe("measuredBandsLine", () => {
     expect([fallPct(25), fallPct(23), fallPct(3), fallPct(3.05)]).toEqual([20, 18.6, 3, 3]);
     expect(measuredBandsLine(WIDE, "recommended", "ROB RUN.exe", t)).toContain('"lowFall":"18.6"');
     // Opus r2: a verdict judged under an older noise model was judged on the same band both ways.
-    expect(measuredBandsLine({ ...WIDE, model: 2 }, "recommended", "ROB RUN.exe", t)).toContain('"low":"23","lowFall":"23"');
+    expect(measuredBandsLine({ ...WIDE, model: 2 }, "recommended", "ROB RUN.exe", t)).toContain(
+      'noiseMeasuredBandsSameBothWays {"low":"23","avg":"18"}',
+    );
+    expect(measuredBandsLine({ ...WIDE, model: 2 }, "max-fps", "ROB RUN.exe", t)).toContain('"band":"23","bandFall":"23"');
   });
 
   it("a Trial not judged for the gap between its sessions says so in the user's language", () => {
@@ -81,6 +84,7 @@ describe("measuredBandsLine", () => {
     for (const key of [
       "noiseMeasuredBands",
       "noiseMeasuredBandsCapped",
+      "noiseMeasuredBandsSameBothWays",
       "noiseMeasuredBandsMaxFps",
       "noiseMeasuredBandsSmoothest",
       "noiseMeasuredCappedUnjudged",

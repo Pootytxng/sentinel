@@ -36,6 +36,12 @@ item you cannot finish in the time left.
    the change touches the machine or the UI and MODE is FULL.
 7. **Review.** Rust, rollback, privilege or measurement changes: one independent review agent on the diff
    only, before landing. Two rounds maximum (rule 3); SHOULD-FIX findings become new queue items.
+   **Review models (owner decision 2026-11-12 20:23, "yes to all of it", on the coordinator's two usage
+   economies):** reviews run on Sonnet, except changes at the mutation boundary (what apply, record,
+   rollback, Gaming Mode restore or the plan-holds gates do) and Trial/benchmark/"what changed"
+   measurement logic that decides a verdict: those get one opus + one sonnet review, and a second opus
+   pass only if the first returned a MUST-FIX. Each review prompt is the diff plus the item text only.
+   Sessions are spaced out to stretch the usage allowance.
 8. **Land.** Merge to `main` (fast-forward or `--no-ff`), tick the item here with the SHA in the same
    commit, push if MODE is FULL. Then remove the worktree: `rmdir <worktree>\node_modules` first (it is a
    link to the shared folder), then `git worktree remove --force`, then delete the branch.

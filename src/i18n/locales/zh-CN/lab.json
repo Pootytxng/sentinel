@@ -847,6 +847,7 @@
     "noiseBetweenSessionsBelowFloor": "按 Compy 最低 {{band}}% 的噪声下限判定：在你这台电脑上 {{sessions}} 次未作改动的 {{game}} 游戏中，中间没有任何改动的场次之间，1% 低帧最多相差 {{measured}}%，低于这个最低值。改动前后的场次从不互相比较。",
     "noiseUnmeasured": "按 Compy 的 {{band}}% 噪声下限判定。这款游戏在你电脑上的自身波动尚未测量。",
     "noiseMeasuredBands": "1% 低帧按 +{{low}}% / −{{lowFall}}% 判定，平均帧率按 +{{avg}}% / −{{avgFall}}% 判定（就这款游戏自身而言，上升和下降的幅度相当）。",
+    "noiseMeasuredBandsSameBothWays": "1% 低帧按 ±{{low}}% 判定，平均帧率按 ±{{avg}}% 判定（上升和下降用同一范围，这是 Compy 改为按游戏自身幅度相当的上升和下降来判定之前的做法）。",
     "noiseMeasuredBandsCapped": "1% 低帧按 +{{low}}% / −{{lowFall}}% 判定。帧率上限限制住了平均帧率，因此平均帧率只会作为否定这项更改的依据（下降超过 −{{avgFall}}%），不会作为支持它的依据。",
     "gapPastBand": "未作判定：更改后的对局与基准对局之间相隔的时间，长于已测量对局中相邻两次之间的最长间隔（{{max}} 小时），因此测得的范围无法说明游戏在这么长的间隔里会波动多少。Compy 已恢复这项更改。请在基准对局之后更早地玩更改后的对局，然后再测试。",
     "noiseMeasuredBandsMaxFps": "平均帧率和 1% 低帧都按 +{{band}}% / −{{bandFall}}% 判定（取两者中较宽的范围）。",

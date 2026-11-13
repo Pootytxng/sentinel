@@ -2823,6 +2823,20 @@ pub(crate) fn unmeasured_noise_outcome(outcome: ConcludeOutcome, why: &crate::no
     }
 }
 
+/// Opus r2/r3 (s27): what a concluded record keeps as its noise: the measurement a record started
+/// without one was judged on, and, for a band stored by an older noise model, the band this build
+/// read it as (`noise_floor::on_baseline_base`), so the receipt shows the band the verdict used. A
+/// band of this model stays exactly as the start stored it.
+pub(crate) fn keep_judged_noise(
+    stored: &mut Option<crate::noise_floor::GameNoise>,
+    judged_on: Option<crate::noise_floor::GameNoise>,
+) {
+    let older = stored.as_ref().is_some_and(|n| n.model < crate::noise_floor::NOISE_MODEL_VERSION);
+    if stored.is_none() || older {
+        *stored = judged_on;
+    }
+}
+
 /// Opus r1 (s27): the 1% low is classified on the measured band stored as a rise over the baseline; a
 /// fall past the matching fall (`noise_floor::fall_pct`, a little under the band) is Worse, as a fall
 /// past the band was before. The outcome rules then read it as they read any Worse.
@@ -3029,8 +3043,9 @@ pub(crate) fn pacing_change(evidence: Option<&SmoothestEvidence>, after_ratio: O
     evidence
         .zip(after_ratio.filter(|r| r.is_finite() && *r > 0.0))
         .filter(|(ev, _)| ev.start_ratio.is_finite() && ev.start_ratio > 0.0)
-        // Opus r2 (s27): a % of the start ratio, never larger than the pair-mean change the band was
-        // measured on, so no win is called inside it.
+        // Opus r2 (s27): a % of the start ratio. For a fall (steadier) that is never larger than the
+        // pair-mean change the band was measured on, so no win is called inside it; for a rise it is a
+        // little larger, so "more uneven" is called slightly early (the change is put back either way).
         .map(|(ev, after)| (((after - ev.start_ratio) / ev.start_ratio * 1000.0).round() / 10.0, ev.band_pct))
 }
 
@@ -3154,8 +3169,11 @@ pub(crate) fn with_noise_words(
                     signed_pct(d),
                     band_pct_text(fall_of(what, band))
                 ),
+                // Opus r3: the 1% low and the average name the rise and fall they were judged on; frame
+                // pacing is judged on its raw band both ways.
                 Some(d) => {
-                    format!("the {what} stayed inside {name}'s noise ({} against ±{}%)", signed_pct(d), band_pct_text(band))
+                    let words = if what == "frame pacing" { format!("±{}%", band_pct_text(band)) } else { band_words(band) };
+                    format!("the {what} stayed inside {name}'s noise ({} against {words})", signed_pct(d))
                 }
             })
             .collect();
@@ -4599,13 +4617,7 @@ pub(crate) fn conclude_experiment(
     let band_pct = measured_noise.as_ref().map_or(store.experiments[idx].noise_floor_pct, |n| n.low1_band_pct);
     // Opus r2: a band stored by an older model was read on this build's base (`on_baseline_base`);
     // the record keeps the band the verdict was judged on, so the receipt shows the same band.
-    let older = store.experiments[idx]
-        .game_noise
-        .as_ref()
-        .is_some_and(|n| n.model < crate::noise_floor::NOISE_MODEL_VERSION);
-    if store.experiments[idx].game_noise.is_none() || older {
-        store.experiments[idx].game_noise = measured_noise;
-    }
+    keep_judged_noise(&mut store.experiments[idx].game_noise, measured_noise);
     let between = store.experiments[idx].between_session_noise.clone();
     let game_noise = treatment.map_or(crate::noise_floor::NoiseLookup::Unmeasured, crate::noise_floor::lookup_for_session);
     store.experiments[idx].noise_evidence = noise_evidence_for(&outcome, band_pct, &game_noise, between.as_ref());
@@ -9721,6 +9733,7 @@ mod refuse_early_tests {
         let o0 = with_noise_words(o0, &WIDE, "ROB RUN.exe", TrialOutcome::Recommended, NoiseDeltas::default());
         assert!(!o0.note.contains("negligible at ROB RUN's noise"), "{}", o0.note);
         assert!(o0.note.contains("the average couldn't be compared"), "{}", o0.note);
+        assert!(o0.note.contains("the 1% low stayed inside ROB RUN's noise (+5% against +20.6% / -17%)"), "{}", o0.note);
         // A 1% low that fell past the matching fall (17%) but not the rise band (20.6%) is Worse.
         let r1 = ExperimentRecord { noise_floor_pct: WIDE.low1_band_pct, game_noise: Some(WIDE.clone()), ..rec(150.0, 5) };
         let fell = with_measured_fall(conclude_outcome(&r1, 150.0 * 0.81, 5000, false, Some("Test"), Some(5), Utc::now()), WIDE.low1_band_pct);
@@ -9739,6 +9752,23 @@ mod refuse_early_tests {
         let avg_only = judge(&WIDE, 5.0, 25.0);
         assert_eq!(avg_only.verdict, "no-change");
         assert!(avg_only.note.contains("the average rose past ROB RUN's noise"), "{}", avg_only.note);
+    }
+
+    #[test]
+    fn a_concluded_record_keeps_the_band_its_verdict_was_judged_on() {
+        // Opus r3 SHOULD-FIX: a model-2 band is rewritten with the band this build judged on; a band of
+        // this model stays exactly as the start stored it; a record with none keeps the measurement.
+        let old = GameNoise { model: 2, low1_band_pct: 23.0, ..WIDE };
+        let judged = crate::noise_floor::on_baseline_base(old.clone());
+        let mut stored = Some(old);
+        keep_judged_noise(&mut stored, Some(judged.clone()));
+        assert_eq!(stored, Some(judged));
+        let mut current = Some(WIDE);
+        keep_judged_noise(&mut current, Some(GameNoise { low1_band_pct: 40.0, ..WIDE }));
+        assert_eq!(current, Some(WIDE));
+        let mut none = None;
+        keep_judged_noise(&mut none, Some(WIDE));
+        assert_eq!(none, Some(WIDE));
     }
 
     #[test]
