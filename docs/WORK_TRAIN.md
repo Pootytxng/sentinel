@@ -743,6 +743,10 @@ amendment 2026-11-12, approved 17:21 "add it"; `4d5217d5`).
       adapter, known heavy background work (recording/streaming encoders, high CPU from non-game processes), length;
       additive, schema-versioned; unknown stays unknown. User sees: nothing new until TG-drift-words. Tested: fixtures
       per field, old sessions load unchanged.
+      LANDED s30 (not ticked): merge `c825378e` adds the power plan at capture start + changed-by-end and
+      `context_version` 1 to `game_state` (cap, focus share, resolution/refresh, driver were already recorded).
+      Left: known heavy background work (recorder/streaming encoder, high non-game CPU) as context v2; note the
+      per-tick process-name set in monitoring.rs only refreshes while the signal log has < 50 events.
 - [ ] **TG-drift-words** When two sessions' contexts differ, the verdict names the difference and the fix ("the frame
       cap was on in one session", "the game was in the background for 18 of 40 minutes", "a recorder was running in one
       session") and offers the one next step. Tested: one fixture per difference, en + zh-CN.
@@ -2546,6 +2550,10 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   clean, full vitest 543/546 and 544/547. Pushes PASS (`773156f0`, `45f07fd9`; one push stopped by me on citation
   drift, re-anchored). Installed `45f07fd9` (runtime proof attempt 1, Synez before/after). Tester folder unchanged
   (item 3 not landed). No game at any check.
+- 2026-11-13 s30 (scheduled, CODE-ONLY): TG-context v1 (merge `c825378e`, commit `9d651144`: power plan at start +
+  changed-by-end + context_version on every session; sonnet PASS, SHOULD-FIX TS mirror taken). Not ticked: heavy
+  background work left. cargo --lib 1954/0, clippy clean, tsc clean. `cargo fmt --check` is not a usable gate (main
+  itself has ~3.3k diffs). Not pushed (CODE-ONLY). One item.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
