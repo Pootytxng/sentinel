@@ -306,6 +306,18 @@ release checklist); no new rules.
       pure function before a behaviour test can drive it (Trial measurement refactor, three reviews); (opus r1
       SHOULD 2) Smoothest's pacing change is still a % of the lower ratio against a pair-mean band; NITs: no
       algorithm version on `frame_cap`; measured-now tries the newest 10 readable sessions only.
+      LANDED s29 (not ticked; the proof is still a Trial on the owner's play): (8) merge `b85f78cd`: the armed
+      Fix/Tuning comparison (SessionDebrief, Lab), Lab tuning and the session patterns judge on this game's measured
+      band (one loader, `experiment::measured_noise_at`; same cap state and comparability as a Trial; falls at
+      fall_pct) or say "can't call it"; the synthetic benchmark has no measured band, so it calls nothing; the History
+      & trends arrow and the in-session fade are not called (no band measures them). Reviews: sonnet r1
+      APPROVE-WITH-NITS; opus r1 REQUEST-CHANGES (2 MUST taken), r2 REQUEST-CHANGES (1 MUST taken), r3
+      APPROVE-WITH-NITS (SHOULDs taken). (7) merge `63f19440`: one shared label (`assumed-band.tsx`) on the bench,
+      the Guided Journey result and receipt, and the Home interview's tested count; no "what changed" surface shows
+      an old Trial verdict. Sonnet r1 REQUEST-CHANGES (2 MUST resolved). OPEN: tuning-measure and pattern strings
+      are English-only (as before); the TS tuning view judges uncapped sessions only and doesn't re-check a rig
+      change on older post-tune sessions (the newest is checked in Rust); `TUNING_REAL_TEMP_DROP_C` (3 C) is a
+      fixed sensor threshold, not measured.
 - [x] **CR-zh-drift-count** (second whole-range review) zh-CN `home.json` driftCount strings still said "已漂移" after the English was reworded to "changed since they were last good" (`8d855c05`).
       Done `e49b53ed` (2026-11-11 s18, TS only, not installed): both read "{{count}} 项设置自上次正常以来已改变". Test fails on
       the old file. Full vitest 535/538 (the 3 site-app suites).
