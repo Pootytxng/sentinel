@@ -2064,9 +2064,12 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
       recommended" with "1 session recorded on another graphics card is left out." Observed in passing: the
       pre-existing zh `upgradeFitGpuUnknown` line uses half-width ":" and "," (queued CR-zh-fit-punctuation). The
       blocks sit flush left: the fixture mounts them without OptimizeStation's own padding (an estimate, stated).
-- [ ] **CR-zh-fit-punctuation** (s25 fixture capture) zh-CN `optimize.check.upgradeFitGpuUnknown`,
+- [x] **CR-zh-fit-punctuation** (s25 fixture capture) zh-CN `optimize.check.upgradeFitGpuUnknown`,
       `upgradeFitGpuUserPsu`, `upgradeFitSsd` use half-width ":" and "," where the newer zh strings use full-width
       "：" "，". Align them (strings only; their tests pin the en text). TS; no review needed beyond the merge gate.
+      Done (s25, strings only; `3bfd5d4e`, SHAs in the merge): "更换显卡之前：Compy 无法读取电源的功率和接口，也无法…" (all
+      three). A test pins full-width punctuation; 3 fail on main. Other older zh strings in optimize.json still use
+      half-width brackets/colons (e.g. "升级路径(仅供参考)"); not in this item.
 - [x] **CR-footer-ledger-unknown** (NITs, ShellV2.tsx ~471, 52cd64de) `get_applied_changes` turns an unreadable
       ledger into [] so the footer can say "Nothing in effect to undo · ledger 0" while the health probe failed or is
       in flight; a rejected call can leave "Ledger not read yet" forever. Unknown reads unknown; a rejected call
