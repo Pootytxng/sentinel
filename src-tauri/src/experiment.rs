@@ -3708,6 +3708,12 @@ pub(crate) fn undo_outcome_choice(change_id: String, experiment_id: String) -> R
         if let Some(refusal) = crate::gaming_orchestrator::session_holds_refusal(&rec.rec_id) {
             return Err(refusal);
         }
+        // CR-plan-held-refusal (opus r2): putting back a kept plan (or plan setting) while the benchmark
+        // measures the other half writes the plan it is measuring; the apply twin is checked already.
+        let held = crate::benchmark_trial::held_now();
+        if let Some(refusal) = crate::benchmark_trial::bench_plan_class_refusal(held.as_ref(), std::iter::once(rec.rec_id.as_str())) {
+            return Err(refusal);
+        }
     }
     undo_outcome_locked(&records, &experiment_id, |cite| {
         crate::history::rollback_change_citing(&change_id, cite)
@@ -3737,12 +3743,8 @@ pub(crate) fn held_by_trial_refusal<'a>(
     // holds either; checked after a direct match, which keeps its own wording.
     let held = match open.iter().copied().find(|e| ids.contains(&e.rec_id.as_str())) {
         Some(held) => held,
-        None => {
-            let held = open.iter().copied().find(|e| {
-                ids.iter().any(|w| crate::gaming_orchestrator::plan_class_clash(&e.rec_id, w))
-            })?;
-            return Some(plan_class_refusal(&held.rec_title, held.status == ExperimentStatus::Pending, "a Trial"));
-        }
+        // Opus r2 NIT: the class half is the one helper the undo uses too.
+        None => return plan_class_trial_refusal(records, ids.iter().copied()),
     };
     Some(if held.status == ExperimentStatus::Pending {
         format!(
@@ -3829,6 +3831,7 @@ pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
 /// setting in the plan class takes the store gate and reads the store, so every other undo and restore
 /// runs as before. The gate is returned and held through the write, so a Trial can't start between
 /// the check and the write; a Trial store that can't be read refuses (it could hold the running Trial).
+/// Like the apply, it waits on the store gate (a lock, not a try-lock) behind a Trial start in progress.
 fn plan_class_hold_check<'a>(rec_ids: impl Iterator<Item = &'a str> + Clone) -> Result<Option<crate::race_seam::StoreGuard>, String> {
     if !rec_ids.clone().any(crate::gaming_orchestrator::in_plan_class) {
         return Ok(None);

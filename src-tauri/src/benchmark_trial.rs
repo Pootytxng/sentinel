@@ -120,10 +120,7 @@ pub(crate) fn bench_held_refusal<'a>(
     let ids: Vec<&str> = rec_ids.collect();
     // CR-plan-held-refusal: the plan and a setting of it are one class while the benchmark holds either.
     if !ids.contains(&id.as_str()) {
-        return ids
-            .iter()
-            .any(|w| crate::gaming_orchestrator::plan_class_clash(id, w))
-            .then(|| crate::experiment::plan_class_refusal(title, false, "the benchmark"));
+        return bench_plan_class_refusal(held, ids.into_iter());
     }
     Some(format!(
         "\u{201c}{title}\u{201d} is being measured by the benchmark right now, so Compy won't apply it \
