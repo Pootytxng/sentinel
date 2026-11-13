@@ -588,6 +588,15 @@ pub(crate) fn gather() -> RootProbe {
     p
 }
 
+/// Test-only (s31): one test at a time for the tests that write this process's own test-root ledger
+/// or Trial store, or set the benchmark hold, and the tests that count or read those, so no test sees
+/// another's files. Poison-tolerant: a failed test never blocks the rest.
+#[cfg(test)]
+pub(crate) fn shared_root_files() -> std::sync::MutexGuard<'static, ()> {
+    static FILES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    FILES.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 /// The capability the pre-existing rollback-contract suites need to keep calling `dispatch_rollback`
 /// directly. Those tests assert that a mismatched (action, snapshot) pair is REFUSED, so the root is
 /// never consulted — but the type still has to be produced, which is exactly the point. It names the

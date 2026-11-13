@@ -3761,8 +3761,11 @@ pub(crate) fn held_by_trial_refusal<'a>(
     })
 }
 
+/// Who holds the plan in [`plan_class_refusal`] when it is the benchmark.
+pub(crate) const BY_BENCHMARK: &str = "the benchmark";
+
 /// CR-plan-held-refusal: the refusal for a change to the power plan, or to a setting of it, while a
-/// Trial (`by` = "a Trial") or the benchmark (`by` = "the benchmark") is measuring the other.
+/// Trial (`by` = "a Trial") or the benchmark (`by` = [`BY_BENCHMARK`]) is measuring the other.
 pub(crate) fn plan_class_refusal(held_title: &str, interrupted: bool, by: &str) -> String {
     if interrupted {
         format!(
@@ -3772,7 +3775,7 @@ pub(crate) fn plan_class_refusal(held_title: &str, interrupted: bool, by: &str) 
         )
     } else {
         // CR-plan-held-behaviour-tests: the benchmark can be cancelled, as its direct-hold refusal says.
-        let next = if by == "the benchmark" { "Let it finish, or cancel it, first." } else { "Let it finish first." };
+        let next = if by == BY_BENCHMARK { "Let it finish, or cancel it, first." } else { "Let it finish first." };
         format!(
             "\u{201c}{held_title}\u{201d} is being measured by {by} right now, and this change writes to the \
              same power plan, so Compy won't make it during the measurement. {next} Nothing was changed."
@@ -3839,7 +3842,15 @@ fn plan_class_hold_check<'a>(rec_ids: impl Iterator<Item = &'a str> + Clone) -> 
     }
     let gate = if experiment_gate() {
         let g = lock_store()?;
-        let records = load_store_checked()?.experiments;
+        // CR-plan-held-behaviour-tests (opus r1 nit): an unreadable store says why this change needs it.
+        let records = load_store_checked()
+            .map_err(|e| {
+                format!(
+                    "This change writes to your power plan, which a Trial may be measuring, so Compy checks its \
+                     Trial records first. {e}"
+                )
+            })?
+            .experiments;
         if let Some(refusal) = plan_class_trial_refusal(&records, rec_ids.clone()) {
             return Err(refusal);
         }
@@ -9711,8 +9722,9 @@ mod experiment_tests {
         crate::compy_data_dir().join("history.json")
     }
 
-    /// The shared test-root files for one scene, cleared again on drop; serialized with every other
-    /// test that sets the benchmark hold.
+    /// The shared test-root files for one scene, cleared again on drop; held under
+    /// `data_root::shared_root_files` with every test that sets the benchmark hold or reads or counts
+    /// those files (opus r1 MUST-FIX).
     struct PlanScene {
         _serial: std::sync::MutexGuard<'static, ()>,
     }
@@ -9726,7 +9738,7 @@ mod experiment_tests {
     }
 
     fn scene(trial_on_the_plan: Option<ExperimentStatus>) -> PlanScene {
-        let serial = crate::benchmark_trial::TEST_SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        let serial = crate::data_root::shared_root_files();
         std::fs::create_dir_all(crate::compy_data_dir()).unwrap();
         let _ = std::fs::remove_dir(store_path());
         std::fs::write(ledger_file(), serde_json::to_vec(&plan_ledger_rows()).unwrap()).unwrap();
@@ -9806,13 +9818,19 @@ mod experiment_tests {
         let _release = crate::benchmark_trial::TestHoldRelease(9_002);
         let sink = crate::actions::ElevationDeferral::begin().unwrap();
         // Two settings of the plan don't clash: the restore goes on to its own reads and apply (whose
-        // elevated write the sink catches). Whatever this machine's reads give, it is not the hold.
+        // elevated write the sink catches). Machine-dependent past the hold (sonnet r1): on a PC whose
+        // read-only core-parking query works it records a receipt here; otherwise it fails on that
+        // read. Either way, what this proves is that the hold did not refuse it.
         match crate::experiment::restore_leftover("core-parking-forced".into(), "Core parking".into()) {
             Ok(view) => {
                 assert_eq!(view.rec_id, "core-parking-forced");
                 assert_eq!(sink.deferred_count(), 1, "the restore's one elevated write, caught");
             }
-            Err(why) => assert!(!why.contains("same power plan") && !why.contains("by the benchmark"), "{why}"),
+            // Opus r1: and not the hold check's own store read either.
+            Err(why) => assert!(
+                !why.contains("same power plan") && !why.contains("by the benchmark") && !why.contains("Trial records"),
+                "{why}"
+            ),
         }
     }
 
@@ -9827,6 +9845,7 @@ mod experiment_tests {
         let why = crate::experiment::rollback_change("ph-usb".into()).expect_err("refused");
         assert!(why.contains("couldn't read its Trial records") && why.contains("Nothing was changed"), "{why}");
         assert!(why.contains("try again shortly") && why.contains("experiments.json"), "the way out: {why}");
+        assert!(why.starts_with("This change writes to your power plan, which a Trial may be measuring"), "why: {why}");
         assert_eq!(sink.deferred_count(), 0);
         assert_eq!(row_status("ph-usb"), "applied");
     }

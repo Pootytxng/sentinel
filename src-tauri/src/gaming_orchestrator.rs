@@ -1597,6 +1597,8 @@ mod spans_trial_tests {
     // plan and its undo after the stop wrote the session plan's priors onto the user's own plan.
     #[test]
     fn the_core_parking_restore_is_held_with_the_plan() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         let with_plan = vec![change(LABEL_POWER)];
         let words = session_hold_refusal(REC_CORE_PARKING, Some(&with_plan)).expect("held with the plan");
         assert!(words.contains("belongs to the power plan") && words.contains("Nothing was changed"), "{words}");
