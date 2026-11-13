@@ -441,8 +441,9 @@ fn unchanged_spread(
 //   session: per-window 1% lows aren't recorded, and a window chosen after seeing the data could bias
 //   the result. A session uneven inside itself is part of the noise this band already measures.
 
-/// The noise model a Trial was judged under; stored on the record. 2 = P4-judge-noisy.
-pub(crate) const NOISE_MODEL_VERSION: u32 = 2;
+/// The noise model a Trial was judged under; stored on the record. 2 = P4-judge-noisy; 3 = s27: steps
+/// as log ratios, the band stored as the matching rise over the baseline ([`measure_game_noise`]).
+pub(crate) const NOISE_MODEL_VERSION: u32 = 3;
 
 /// The smallest effect Compy ever claims as better or worse, in percent. Only ever applied on top of a
 /// measured band, never in place of one.
@@ -504,13 +505,16 @@ pub(crate) enum CapRead {
 /// How tightly a hard ceiling holds its buckets (0.5%), and how far below it a dip must reach (2%).
 const CAP_CEILING_FRACTION: f64 = 0.005;
 const CAP_DIP_FRACTION: f64 = 0.02;
+/// How far above a cap a bucket must run to be a menu or loading screen the cap doesn't hold (10%).
+const CAP_TAIL_FRACTION: f64 = 0.10;
 
 /// Pure: read a session's cap state from its frame-rate buckets ([`CapRead`]).
 /// - Capped only with a cap's own shape (review r1: a steady uncapped game is not a cap): at least half
-///   the buckets within 0.5% of the 95th-percentile bucket (the ceiling), at most 5% above it by more
-///   than that, and at least 10% dipping more than 2% below it (a cap clips the top and leaves the
-///   dips; a merely steady game sits evenly around its average).
-/// - Uncapped: at most a quarter of the buckets within 1.5% of the 90th-percentile bucket.
+///   the buckets within 0.5% of the densest plateau (the ceiling), at most 2% just above it (0.5-10%
+///   over: a cap clips, a steady game spreads both ways), at most a quarter far above it (menus and
+///   loading screens a cap doesn't hold, s27), and at least 10% dipping more than 2% below it.
+/// - Uncapped: no plateau holds more than a quarter of the buckets, and at most a quarter sit within
+///   1.5% of the 90th-percentile bucket.
 /// - Anything else (a frame rate held almost flat with no dips, which a cap or a very steady game can
 ///   both produce; too little trace) is Unknown: Compy says it can't tell.
 ///
@@ -532,15 +536,25 @@ fn cap_read_series(s: &crate::sessions::SessionSummary) -> CapRead {
     fps.sort_by(f64::total_cmp);
     let n = fps.len() as f64;
     let share = |pred: &dyn Fn(f64) -> bool| fps.iter().filter(|&&f| pred(f)).count() as f64 / n;
-    let ceiling = fps[(fps.len() - 1) * 95 / 100];
-    let held: Vec<f64> = fps.iter().copied().filter(|f| (f - ceiling).abs() <= ceiling * CAP_CEILING_FRACTION).collect();
-    let above = share(&|f| f > ceiling * (1.0 + CAP_CEILING_FRACTION));
+    // Coordinator SHOULD-FIX (s27): the ceiling is the densest plateau (the most buckets within 0.5% of
+    // one value), not the 95th-percentile bucket, so a cap that holds the play while menus or loading
+    // screens run far above it (more than 5% of the buckets) still reads as a cap.
+    let near = |v: f64| fps.iter().filter(|&&f| (f - v).abs() <= v * CAP_CEILING_FRACTION).count();
+    let plateau = fps.iter().copied().max_by_key(|&v| near(v)).unwrap_or(0.0);
+    let held: Vec<f64> = fps.iter().copied().filter(|f| (f - plateau).abs() <= plateau * CAP_CEILING_FRACTION).collect();
+    let ceiling = held[held.len() / 2];
+    // A cap clips: nothing sits just above it. A steady uncapped game spreads both ways around its
+    // average, so buckets just above the plateau tell it apart; a menu runs far above (>10%).
+    let just_above = share(&|f| f > ceiling * (1.0 + CAP_CEILING_FRACTION) && f <= ceiling * (1.0 + CAP_TAIL_FRACTION));
+    let far_above = share(&|f| f > ceiling * (1.0 + CAP_TAIL_FRACTION));
     let dips = share(&|f| f < ceiling * (1.0 - CAP_DIP_FRACTION));
-    if held.len() as f64 / n >= 0.5 && above <= 0.05 && dips >= 0.1 {
-        return CapRead::Capped { at_fps: (held[held.len() / 2] * 10.0).round() / 10.0 };
+    if held.len() as f64 / n >= 0.5 && just_above <= 0.02 && far_above <= 0.25 && dips >= 0.1 {
+        return CapRead::Capped { at_fps: (ceiling * 10.0).round() / 10.0 };
     }
+    // Uncapped only when no plateau holds much of the session either: a dense plateau that isn't read
+    // as a cap (a near-miss of the shape above) is "can't tell", never "no cap".
     let p90 = fps[(fps.len() - 1) * 9 / 10];
-    if share(&|f| (f - p90).abs() <= p90 * CAP_HOLD_FRACTION) <= 0.25 {
+    if held.len() as f64 / n <= 0.25 && share(&|f| (f - p90).abs() <= p90 * CAP_HOLD_FRACTION) <= 0.25 {
         CapRead::Uncapped
     } else {
         CapRead::Unknown
@@ -594,6 +608,11 @@ pub(crate) struct GameNoise {
     /// their frame-cap state can't be read ([`as_is_run_skipping`]). Additive: 0 on older records.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub cap_unread: u32,
+    /// Coordinator SHOULD-FIX (s27): the longest time, in minutes, from one measured session's start to
+    /// the next one's. The band holds for two sessions that far apart; past it (a day's drift) it
+    /// doesn't. Additive: 0 on older records, which then can't say (no gap rule is applied to them).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub max_gap_mins: u32,
 }
 
 fn is_zero(n: &u32) -> bool {
@@ -739,6 +758,14 @@ fn step_pct(xs: &[f64]) -> f64 {
     (d.iter().map(|x| x * x).sum::<f64>() / d.len() as f64).sqrt()
 }
 
+/// Coordinator SHOULD-FIX (s27): root mean square of the log ratio of each value to the next, in
+/// percent (100 ln(b/a)): a rise and the equal fall back weigh the same, and the band built from it is
+/// read on the baseline's own base ([`measure_game_noise`]).
+fn log_step_pct(xs: &[f64]) -> f64 {
+    let d: Vec<f64> = xs.windows(2).map(|w| 100.0 * (w[1] / w[0]).ln()).collect();
+    (d.iter().map(|x| x * x).sum::<f64>() / d.len() as f64).sqrt()
+}
+
 fn round1(x: f64) -> f64 {
     (x * 10.0).round() / 10.0
 }
@@ -755,20 +782,31 @@ pub(crate) fn measure_game_noise(
         return Err(NoiseUnmeasured { have: 0, need: MIN_UNCHANGED_SESSIONS, cap_unknown: true });
     }
     let (run, cap_unread) = as_is_run_skipping(sessions, now, ledger, crate::comparison::ARM_MAX_AGE_DAYS);
-    let read: Vec<(f64, f64)> = run
+    let counted: Vec<&crate::sessions::SessionSummary> = run
         .into_iter()
         .filter(|s| s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0 && s.avg_fps.is_finite() && s.avg_fps > 0.0)
-        .map(|s| (s.low1_fps_est, s.avg_fps))
         .collect();
+    let read: Vec<(f64, f64)> = counted.iter().map(|s| (s.low1_fps_est, s.avg_fps)).collect();
+    let max_gap_mins = counted
+        .windows(2)
+        .filter_map(|w| Some((parse(&w[1].started_at)? - parse(&w[0].started_at)?).num_minutes()))
+        .max()
+        .and_then(|m| u32::try_from(m.max(1)).ok())
+        .unwrap_or(0);
     if read.len() < MIN_UNCHANGED_SESSIONS {
         return Err(NoiseUnmeasured { have: read.len(), need: MIN_UNCHANGED_SESSIONS, cap_unknown: false });
     }
     let low: Vec<f64> = read.iter().map(|r| r.0).collect();
     let avg: Vec<f64> = read.iter().map(|r| r.1).collect();
     let t = t95_eff(read.len());
-    let (low1_step_pct, avg_step_pct) = (step_pct(&low), step_pct(&avg));
-    // Rounded up, so rounding never narrows the band (review r1).
-    let band = |step: f64| ((t * step).max(MIN_CLAIM_PCT) * 10.0).ceil() / 10.0;
+    let (low1_step_pct, avg_step_pct) = (log_step_pct(&low), log_step_pct(&avg));
+    // Rounded up, so rounding never narrows the band (review r1). Coordinator SHOULD-FIX (s27): the
+    // steps are log ratios, the same either way round; the band is stored as the RISE over the
+    // baseline that matches it (e^b - 1), on the base a Trial's change is taken on (a % of its
+    // baseline), so a win is never called inside the measured band. A fall is judged on the same
+    // ± band from the baseline: a little stricter than the log distance (1 - 1/(1 + band)) for calling
+    // Worse, never looser for calling Better; a change is put back either way.
+    let band = |step: f64| ((100.0 * (t * step / 100.0).exp_m1()).max(MIN_CLAIM_PCT) * 10.0).ceil() / 10.0;
     let sessions = u32::try_from(read.len()).unwrap_or(u32::MAX);
     (low1_step_pct.is_finite() && avg_step_pct.is_finite())
         .then(|| GameNoise {
@@ -780,6 +818,7 @@ pub(crate) fn measure_game_noise(
             sessions,
             cap,
             cap_unread: u32::try_from(cap_unread).unwrap_or(u32::MAX),
+            max_gap_mins,
         })
         .ok_or(NoiseUnmeasured { have: read.len(), need: MIN_UNCHANGED_SESSIONS, cap_unknown: false })
 }
@@ -878,7 +917,7 @@ pub(crate) fn lookup_for_session(s: &crate::sessions::SessionSummary) -> NoiseLo
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn rig(driver: &str) -> HwFingerprint {
@@ -1506,7 +1545,7 @@ mod tests {
     }
 
     /// The four Trials' changes: applied just after an as-is session ended, put back before the next.
-    fn rob_trials() -> Vec<LedgerEntryRef<'static>> {
+    pub(crate) fn rob_trials() -> Vec<LedgerEntryRef<'static>> {
         let mut l = settled();
         l.push(change("ve-7", "2026-11-11T05:01:00+00:00", Some("2026-11-11T05:20:29+00:00")));
         l.push(change("pu-8", "2026-11-11T12:19:27+00:00", Some("2026-11-11T12:40:28+00:00")));
@@ -1525,9 +1564,33 @@ mod tests {
         let n = measure_game_noise(&s, &s[11], &rob_trials()).expect("measured");
         eprintln!("ROB RUN measured noise: {n:?}");
         assert_eq!((n.sessions, n.cap, n.model), (9, CapRead::Uncapped, NOISE_MODEL_VERSION));
-        // Wide: far past the old assumed ±3%.
-        assert!(n.low1_band_pct > 15.0 && n.low1_band_pct < 25.0, "{n:?}");
-        assert!(n.avg_band_pct > 10.0 && n.avg_band_pct < 20.0, "{n:?}");
+        // Wide: far past the old assumed ±3%. (s27: the band is now the rise over the baseline matching
+        // the log step, so it sits above the pair-mean 23.0% / 18.0% the review measured.)
+        assert!(n.low1_band_pct > 15.0 && n.low1_band_pct < 27.0, "{n:?}");
+        assert!(n.avg_band_pct > 10.0 && n.avg_band_pct < 21.0, "{n:?}");
+    }
+
+    #[test]
+    fn the_band_is_read_on_the_baselines_own_base_so_no_win_is_called_inside_it() {
+        // Coordinator SHOULD-FIX (s27): the review measured ROB RUN at RMS 9.20% / 7.18% of each pair's
+        // mean, t 2.495, a 23.0% / 18.0% band. A Trial's change is a % of its baseline, and a session
+        // 23% of the pair's mean above the one before is about 26% above it: on that base a "win" at 24%
+        // was inside the game's own swing. The band is now that swing as a rise over the baseline.
+        let s = rob_day();
+        let n = measure_game_noise(&s, &s[11], &rob_trials()).expect("measured");
+        assert!(n.low1_band_pct >= 25.0 && n.low1_band_pct <= 26.5, "{n:?}");
+        assert!(n.avg_band_pct >= 19.0 && n.avg_band_pct <= 20.5, "{n:?}");
+        // The log step is the same rise or fall: 100 -> 125 and 125 -> 100 are one step each way.
+        assert!((log_step_pct(&[100.0, 125.0]) - log_step_pct(&[125.0, 100.0])).abs() < 1e-12);
+        // And the band is exactly the rise that matches t times the step, rounded up.
+        let t = t95_eff(9);
+        let want = ((100.0 * (t * log_step_pct(&s_lows(&s)) / 100.0).exp_m1()) * 10.0).ceil() / 10.0;
+        assert!((n.low1_band_pct - want).abs() < 1e-9, "{} vs {want}", n.low1_band_pct);
+    }
+
+    /// The nine as-is sessions' 1% lows, oldest first (`rob_day` minus the four after-sessions).
+    fn s_lows(s: &[SessionSummary]) -> Vec<f64> {
+        [0, 1, 2, 3, 4, 6, 8, 9, 11].iter().map(|&i| s[i].low1_fps_est).collect()
     }
 
     #[test]
@@ -1558,7 +1621,9 @@ mod tests {
         let n = measure_game_noise(&s, &s[2], &rob_trials()).unwrap();
         assert_eq!(n.sessions, 3);
         // (the stored step is rounded to 0.1, so the band is checked to within that rounding times t)
-        assert!((n.low1_band_pct - (t95_eff(3) * n.low1_step_pct).max(MIN_CLAIM_PCT)).abs() < 0.5, "{n:?}");
+        // (s27: the band is the rise over the baseline matching t times the log step)
+        let rise = (100.0 * (t95_eff(3) * n.low1_step_pct / 100.0).exp_m1()).max(MIN_CLAIM_PCT);
+        assert!((n.low1_band_pct - rise).abs() < 1.0, "{n:?}");
     }
 
     #[test]
@@ -1635,6 +1700,34 @@ mod tests {
         let mut short = s.clone();
         short[11].fps_series.truncate(10);
         assert!(measure_game_noise(&short, &short[11], &rob_trials()).unwrap_err().cap_unknown);
+    }
+
+    #[test]
+    fn a_cap_still_reads_as_a_cap_when_menus_run_far_above_it() {
+        // Coordinator SHOULD-FIX (s27): a 144 fps cap holds the play, but a fifth of the buckets are
+        // menus or loading at 360 fps. The 95th-percentile bucket is a menu, which read "uncapped".
+        let mut s = played("2026-11-11T01:49:34+00:00", 140.0, 13);
+        s.fps_series = (0..120u32)
+            .map(|i| (i * 10, match i % 10 { 3 => 115.0, 7 | 8 => 360.0, _ => 144.0 }))
+            .collect();
+        assert_eq!(cap_read(&s), CapRead::Capped { at_fps: 144.0 });
+        // A steady uncapped game with the same menus is never read as capped: no dips under its plateau.
+        s.fps_series = (0..120u32)
+            .map(|i| (i * 10, if matches!(i % 10, 7 | 8) { 360.0 } else { 200.0 + f64::from(i % 5) * 0.4 - 0.8 }))
+            .collect();
+        assert_eq!(cap_read(&s), CapRead::Unknown);
+        // A steady game spread a little both ways (just above its plateau too) isn't a cap either.
+        s.fps_series = (0..120u32)
+            .map(|i| (i * 10, match i % 10 { 3 => 180.0, 5 | 6 => 204.0, _ => 200.0 }))
+            .collect();
+        assert!(!matches!(cap_read(&s), CapRead::Capped { .. }), "{:?}", cap_read(&s));
+        // A freely moving game with menus far above is still uncapped.
+        let mut free = free_series(250.0);
+        for b in free.iter_mut().filter(|(t, _)| matches!((t / 10) % 10, 7 | 8)) {
+            b.1 = 700.0;
+        }
+        s.fps_series = free;
+        assert_eq!(cap_read(&s), CapRead::Uncapped);
     }
 
     #[test]

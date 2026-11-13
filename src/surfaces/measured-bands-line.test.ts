@@ -47,6 +47,16 @@ describe("measuredBandsLine", () => {
     );
   });
 
+  it("says the typical move and the band apart, a band from few sessions is wide for that, and what Compy can't read", () => {
+    const line = measuredBandsLine(WIDE, "recommended", "ROB RUN.exe", t);
+    expect(line).toContain('"lowStep":"9.2"');
+    expect(line).toContain('"avgStep":"7.2"');
+    expect(line).not.toContain("noiseMeasuredFewSessions");
+    expect(line).toContain("noiseMeasuredCantRead");
+    const three = measuredBandsLine({ ...WIDE, sessions: 3, low1_band_pct: 58 }, "recommended", "ROB RUN.exe", t);
+    expect(three).toContain('noiseMeasuredFewSessions {"sessions":3}');
+  });
+
   it("every line exists in English and Simplified Chinese", () => {
     const enBench = (en as unknown as { experimentBench: Record<string, string> }).experimentBench;
     const zhBench = (zh as unknown as { experimentBench: Record<string, string> }).experimentBench;
@@ -59,6 +69,8 @@ describe("measuredBandsLine", () => {
       "noiseMeasuredSource",
       "noiseMeasuredFloor",
       "noiseMeasuredCapUnread",
+      "noiseMeasuredFewSessions",
+      "noiseMeasuredCantRead",
     ]) {
       expect(enBench[key], key).toBeTruthy();
       expect(zhBench[key], key).toBeTruthy();

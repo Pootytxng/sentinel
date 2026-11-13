@@ -380,6 +380,8 @@ function BenchWord({ c, kind }: { c: Confidence; kind: "estimate" | "measured" |
 // The smallest change Compy ever claims (noise_floor.rs `MIN_CLAIM_PCT`): a measured band is never
 // narrower, so a band at it is that minimum, not a measured swing.
 const MIN_CLAIM_PCT = 3;
+// Fewer as-is sessions than this measure the band loosely (experiment.rs `FULL_CONFIDENCE_SESSIONS`).
+const FULL_CONFIDENCE_SESSIONS = 6;
 
 // P4-noise-sf: the measured bands this goal was actually judged on (experiment.rs `with_noise_words`:
 // Recommended on the 1% low with the average on its own band, or the 1% low only under a shared cap;
@@ -404,11 +406,25 @@ export function measuredBandsLine(g: GameNoise, outcome: TrialOutcome | null | u
               t("lab.experimentBench.noiseMeasuredBands", { low: pct(g.low1_band_pct), avg: pct(g.avg_band_pct) }),
               [g.low1_band_pct, g.avg_band_pct],
             ];
-  const parts = [judged, t("lab.experimentBench.noiseMeasuredSource", { game: name, sessions: g.sessions })];
+  // Coordinator SHOULD-FIX (s27): the typical session-to-session move and the band are two different
+  // numbers, and both are said plainly.
+  const parts = [
+    judged,
+    t("lab.experimentBench.noiseMeasuredSource", {
+      game: name,
+      sessions: g.sessions,
+      lowStep: pct(g.low1_step_pct),
+      avgStep: pct(g.avg_step_pct),
+    }),
+  ];
   if (named.some((b) => b <= MIN_CLAIM_PCT + 1e-9))
     parts.push(t("lab.experimentBench.noiseMeasuredFloor", { game: name, min: pct(MIN_CLAIM_PCT) }));
+  // Fewer than six sessions measure the band loosely (experiment.rs `FULL_CONFIDENCE_SESSIONS`).
+  if (g.sessions < FULL_CONFIDENCE_SESSIONS)
+    parts.push(t("lab.experimentBench.noiseMeasuredFewSessions", { sessions: g.sessions }));
   if ((g.cap_unread ?? 0) > 0)
     parts.push(t("lab.experimentBench.noiseMeasuredCapUnread", { game: name, count: g.cap_unread }));
+  parts.push(t("lab.experimentBench.noiseMeasuredCantRead"));
   return parts.join(" ");
 }
 
