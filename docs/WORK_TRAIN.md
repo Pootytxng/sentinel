@@ -1688,6 +1688,12 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       downloadable file to share with a friend. Note: a formal updater-published release is a separate thing that
       needs the updater signing key (not on this PC) and is not required for P7. Owner-held, separate: code signing
       (no spend; the coordinator prepares a definitive cost breakdown) and legal (deferred by the owner).
+      s28 (package built, not ticked, not sent): `C:\Users\Kuya\Desktop\Compy-tester\` holds the proved desk installer
+      of `3630e0a6` as `Compy-0.9.26-3630e0a6-tester-setup.exe`, `SHA256.txt` and the guide (`Compy-tester-guide.txt`
+      + `.html`). Paths and labels taken from the en locale and the code (Test -> Optimize my game; Health ->
+      Something's wrong -> Open; Test -> Optimize -> Applied & history -> Roll back; Settings -> Support record ->
+      Save this as a file); not checked on screen. The guide keeps the tester off the Benchmark and Tuning stations and
+      the Live/History session comparisons (still fixed ±3%, parked item 8).
 
 ### Then — Roadmap Phase 8: Advanced tuning envelope (`product/ROADMAP.md` Phase 8, `product/RISK_MODEL.md`)
 Planned 2026-10-28 (scheduled refill). ROADMAP: broaden only after the Trial/risk/stability systems are
@@ -2381,12 +2387,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-11 ~04:02-06:38 (coordinator-assigned, owner in ROB RUN; his 17:44 substitution): Compy restarted once with a
-  CDP port (`--no-activate`, port 9341), driven in the background, fgwatch 466 reads with Compy never in front, restored
-  to a plain launch (teardown CLEAN). Three Trials on real play: exp:8 Ultimate too-noisy, exp:9 visual effects
-  too-noisy (second, capped), exp:10 Ultimate no-change; all put back, Synez read back after each. Journey reached its
-  end summary (P5 owner half met, friend half open); P4 wording unreachable on ROB RUN (capped inconclusive). Queued
-  CR-summary-running-trial, CR-next-reuse-moved. Docs only; evidence `_train\view-1111a\`. Not pushed (owner gaming).
 - 2026-11-11 ~06:38-08:10 (coordinator-assigned s15, CODE-ONLY throughout: ROB RUN in front, idle 0 s): landed
   CR-summary-running-trial `0af65ec9` (sonnet APPROVE-WITH-NITS), CR-next-reuse-moved `323cbe31`, and the four
   CR-1102-left owner calls (delegated 2026-11-10): (c) drift-unknown `e3e144e7` (sonnet APPROVE-WITH-NITS), (d)
@@ -2507,6 +2507,20 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `36ae8929` (runtime proof attempt 1, Synez before/after); RELEASE_STATE re-stamped (`b6aaf772`). Screen check
   view-1112d NOT run (owner active again by 18:30). ITEM 2 not reached: CR-trial-gm-baseline-overlap,
   CR-core-parking-plan-guid, CR-receipt-unrecorded-unknown, CR-ts-gpu-first.
+- 2026-11-12 ~22:45-23:55 (coordinator-assigned s28, no game throughout; the owner on Firefox/Discord): pushed s27's
+  main `6e064cd8` (PASS). Landed CR-trial-gm-baseline-overlap (merge `457c3ff0`; re-review of its opus r1 MUST-FIX
+  fix, opus + sonnet APPROVE-WITH-NITS), CR-core-parking-plan-guid plan-GUID half (merge `8890d34d`; re-review opus +
+  sonnet APPROVE-WITH-NITS; RELEASE_STATE citations re-anchored on the branch; "same class" half queued as
+  CR-plan-held-refusal), CR-ts-gpu-first (merge `cad72727`) and CR-receipt-unrecorded-unknown (merge `14e64e28`;
+  coordinator call on the two fixtures that encoded the bug; opus + sonnet APPROVE-WITH-NITS, nits taken). Per
+  branch: cargo 1935/0 (CR-ts-gpu-first's full run 1932/2 in comparison_race_tests, 11/11 alone), clippy clean, tsc
+  clean, full vitest 542/545 (543/546 on CR-ts-gpu-first; CR-core-parking-plan-guid also hit the source_main_commit
+  stamp, stale for every tree once origin/main reached `6e064cd8`; re-stamped in `394f161e`). Pushes PASS (`6e064cd8`,
+  `6bf4c563`, `3630e0a6`, `30967564`, this one). Installed `3630e0a6` (runtime proof attempt 1, Synez before/after);
+  RELEASE_STATE re-stamped (`30967564`). P7-tester-package built at `C:\Users\Kuya\Desktop\Compy-tester\` (the proved
+  installer as `Compy-0.9.26-3630e0a6-tester-setup.exe`, SHA256.txt, guide .txt + .html); not sent anywhere; item
+  left unticked (the friend test is the exit). Not started: measurement items 7/8, the judging-chain refactor,
+  TG-context. Screen check not run.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
