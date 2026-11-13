@@ -18,6 +18,7 @@
 //      stated, not scored.
 
 import type { HardwareInfo } from "../App";
+import { primaryGpu } from "../data/gpu-sensor";
 import { fmtGB, fmtGHz } from "./hardware-format";
 import type { RigPart, RigPartKind } from "./rig/rig-parts";
 
@@ -147,9 +148,10 @@ export function subsystemReadings(sub: LabSubsystem, hw: HardwareInfo): LabReadi
     }
 
     case "gpu": {
-      // The FIRST reported GPU, matching what the hologram highlights (`gpu-0`). Driver version is
-      // here because half the GPU catalog is driver-side: it is the thing being changed.
-      const gpu = hw.gpus[0];
+      // CR-ts-gpu-first: the card games run on (the most-VRAM GPU, `primaryGpu`), never the first
+      // reported adapter (on a hybrid laptop the iGPU). Driver version is here because half the GPU
+      // catalog is driver-side: it is the thing being changed.
+      const gpu = primaryGpu(hw.gpus);
       if (!gpu) return out;
       if (gpu.vram_bytes > 0) out.push({ kind: "fact", key: "vram", value: fmtGB(gpu.vram_bytes) });
       if (gpu.driver_version.trim()) {
