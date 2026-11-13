@@ -17,6 +17,7 @@ import { useConfirm } from "../design/ConfirmDialog";
 import { TuningDebrief } from "./TuningDebrief";
 import { WhatChangedPanel, SessionInvestigator } from "./WhatChangedPanel";
 import { prettyGameName } from "./game-name";
+import { AssumedBandNote } from "./assumed-band";
 import { type GpuVendor } from "./walkthroughs";
 import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
@@ -145,6 +146,11 @@ function ComparisonCard({
             {t("monitor.sessionDebrief.regressedSubPost", { game: prettyGameName(r.game) })}
           </p>
         </>
+      )}
+      {/* CR-debrief-assumed-label: a stored better/worse judged on the old fixed band says so, with
+          the game's noise as measured now (labelled on read by the backend; never rewritten). */}
+      {(r.verdict === "improved" || r.verdict === "regressed") && (
+        <AssumedBandNote band={r.assumed_band} game={r.game} testId="cmp-assumed-band" />
       )}
       {r.verdict === "confounded" && (
         <>

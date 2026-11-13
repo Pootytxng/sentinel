@@ -3599,15 +3599,17 @@ pub(crate) fn get_experiments() -> Vec<ExperimentRecord> {
         return experiments;
     }
     let sessions = crate::sessions::get_session_summaries();
-    // The same reads a start makes for that session (#618 coverage included), so the label's "measured
-    // now" is the band a Trial from the game's newest session would be judged on.
-    let measure_now = |game: &str| {
-        // At most the newest ten readable sessions are tried, so a refresh stays bounded.
-        let mut candidates = readings_newest_first(&sessions, game);
-        candidates.truncate(10);
-        first_measured(candidates, |from| measured_noise_at(&sessions, from))
-    };
-    with_assumed_band_labels(experiments, measure_now)
+    with_assumed_band_labels(experiments, |game: &str| game_noise_now(&sessions, game))
+}
+
+/// `game`'s noise as measured now, for an assumed-band label: the same reads a start makes for that
+/// session (#618 coverage included), so "measured now" is the band a Trial from the game's newest
+/// session would be judged on. CR-debrief-assumed-label: the stored comparison result's label reads it too.
+pub(crate) fn game_noise_now(sessions: &[SessionSummary], game: &str) -> Option<crate::noise_floor::GameNoise> {
+    // At most the newest ten readable sessions are tried, so a refresh stays bounded.
+    let mut candidates = readings_newest_first(sessions, game);
+    candidates.truncate(10);
+    first_measured(candidates, |from| measured_noise_at(sessions, from))
 }
 
 /// Sessions of `game` with a frame-rate reading whose frame-cap state can be read, newest first.
