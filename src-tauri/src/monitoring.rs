@@ -1223,8 +1223,9 @@ fn start_fps_capture_locked() -> Result<(), String> {
             let mut ram_logged = false;
             // Gaming Mode presence: a valid session slot at ANY tick marks the whole session —
             // a save-time-only probe would read false for a Gaming Mode session that ended
-            // before monitoring stopped. Read-only 1 Hz file check (the same read a session without
-            // Gaming Mode makes every tick).
+            // before monitoring stopped. Read-only 1 Hz file check; while Gaming Mode is on it now reads
+            // and parses the small session file every tick (a torn read parses as None: that tick is
+            // skipped), so a second Gaming Mode session during the same game session is seen too.
             let mut gaming_mode_seen = false;
             // CR-trial-plan-switch-confound: what each Gaming Mode session seen did with the power plan
             // (read once per Gaming Mode session id), so a Trial never compares two plans unawares.
@@ -1331,11 +1332,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 acc.record_thermals(cpu_temp, gpu_hotspot_temp);
                 if let Some(gm) = crate::gaming_session::load_session() {
                     gaming_mode_seen = true;
-                    if !gaming_mode_ids.contains(&gm.session_id) {
-                        let switched = crate::gaming_orchestrator::switched_plan(&gm.changes);
-                        gaming_mode_plan = Some(crate::sessions::GamingModePlan::seen(gaming_mode_plan, switched));
-                        gaming_mode_ids.push(gm.session_id);
-                    }
+                    gaming_mode_plan = crate::gaming_orchestrator::observe_plan(&gm, &mut gaming_mode_ids, gaming_mode_plan);
                 }
 
                 // ── Stutter signals (capped at 50, read-only) ──

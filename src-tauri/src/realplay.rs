@@ -1442,6 +1442,23 @@ mod tests {
     }
 
     #[test]
+    fn a_with_change_session_whose_gaming_mode_left_the_plan_alone_is_never_counted() {
+        // CR-trial-plan-switch-confound: Gaming Mode on for every session, but for the 14:00 one it
+        // left the power plan alone (a test held a setting of it), so it ran on another plan.
+        use crate::sessions::GamingModePlan as P;
+        let mut other_plan = played("2026-10-22T14:00:00+00:00", 213.0, 240.0, 15);
+        other_plan.gaming_mode_plan = Some(P::LeftAlone);
+        let mut sessions = all(vec![other_plan]);
+        for s in &mut sessions {
+            s.gaming_mode_active = Some(true);
+            s.gaming_mode_plan.get_or_insert(P::Switched);
+        }
+        let a = arm(&sessions, &ledger(), Some(true), &pinned());
+        assert_eq!(reasons(&a), vec![("2026-10-22T14:00:00+00:00".into(), NotCountedReason::ConditionsChanged)]);
+        assert_eq!(a.counted.len(), 3, "the three that ran on the same plan as the as-is sessions");
+    }
+
+    #[test]
     fn a_reference_whose_trace_was_shed_still_compares_on_the_cap_state_the_start_stored() {
         // Opus review r2: the store keeps the 10 s trace only for the newest 20 measured sessions, so
         // during a 14-day Trial the reference's trace can be shed. Its cap state read live would be

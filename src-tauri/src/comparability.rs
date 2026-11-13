@@ -389,6 +389,26 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
                 );
                 lower(Comparability::Partial, &mut verdict);
             }
+            // Review r1 (opus SHOULD-FIX 2): a session saved before this was recorded ran Gaming Mode as
+            // every older start did, setting its plan unless a test held it. Against a session that
+            // left the plan alone (or did both), that is two plans at least as likely as one: a
+            // changed condition, so a Trial across the upgrade can't claim a result on two plans.
+            // Against one that set its plan, only missing context.
+            (Some(x), None) | (None, Some(x)) if x != GamingModePlan::Switched => {
+                let (from, to) = if a.gaming_mode_plan.is_some() {
+                    (x.to_string(), "not recorded".to_string())
+                } else {
+                    ("not recorded".to_string(), x.to_string())
+                };
+                changed.push(("gaming-mode-plan", format!("Gaming Mode: {from} → {to}")));
+                reasons.push(
+                    "Gaming Mode was on for both sessions, but what it did with the power plan wasn't recorded \
+                     on one of them and the other ran without its plan for a test, so the two may have run on \
+                     different power plans."
+                        .into(),
+                );
+                lower(Comparability::Partial, &mut verdict);
+            }
             (Some(_), None) | (None, Some(_)) => missing.push((
                 "gaming-mode-plan",
                 "Whether Gaming Mode switched the power plan wasn't recorded on one of these sessions.".into(),
@@ -764,17 +784,30 @@ mod tests {
         let c = derive(&gm(Some(P::Switched)), &gm(Some(P::LeftAlone)));
         assert_eq!(c.verdict, Comparability::Partial);
         assert_eq!(c.changed_keys, vec!["gaming-mode-plan"]);
-        assert_eq!(c.changed_context, vec!["Gaming Mode: switched the power plan → left the power plan alone"]);
+        assert_eq!(c.changed_context, vec!["Gaming Mode: set its power plan → left the power plan alone for a test"]);
+        let half = derive(&gm(Some(P::Mixed)), &gm(Some(P::Switched)));
+        assert_eq!(half.changed_keys, vec!["gaming-mode-plan"], "part of one session on each plan");
         // The same handling both times: the same condition.
         assert_eq!(derive(&gm(Some(P::Switched)), &gm(Some(P::Switched))).verdict, Comparability::Comparable);
         assert_eq!(derive(&gm(Some(P::LeftAlone)), &gm(Some(P::LeftAlone))).verdict, Comparability::Comparable);
         // Part of each session on each plan: never the same condition, even as another such session.
         let mixed = derive(&gm(Some(P::Mixed)), &gm(Some(P::Mixed)));
         assert_eq!((mixed.verdict, mixed.changed_keys.clone()), (Comparability::Partial, vec!["gaming-mode-plan".to_string()]));
-        // Recorded on one side only (a session saved before this was recorded): missing context.
+        // Recorded on one side only (a session saved before this was recorded): against one that set its
+        // plan, missing context; against one that left it alone for a test (or did both), a changed
+        // condition (review r1, opus SHOULD-FIX 2: a Trial across the upgrade never claims on two plans).
         let m = derive(&gm(None), &gm(Some(P::Switched)));
         assert!(m.changed_keys.is_empty());
         assert!(m.missing_keys.contains(&"gaming-mode-plan".to_string()), "{:?}", m.missing_keys);
+        for later in [P::LeftAlone, P::Mixed] {
+            let u = derive(&gm(None), &gm(Some(later)));
+            assert_eq!((u.verdict, u.changed_keys.clone()), (Comparability::Partial, vec!["gaming-mode-plan".to_string()]), "{later:?}");
+            assert_eq!(derive(&gm(Some(later)), &gm(None)).verdict, Comparability::Partial, "either order");
+        }
+        assert_eq!(
+            derive(&gm(None), &gm(Some(P::LeftAlone))).changed_context,
+            vec!["Gaming Mode: not recorded → left the power plan alone for a test"]
+        );
         // Gaming Mode off for both: nothing to compare (the field is None there anyway).
         assert_eq!(derive(&session(), &session()).verdict, Comparability::Comparable);
         // On for one only: the Gaming Mode condition already names it; the plan isn't listed twice.

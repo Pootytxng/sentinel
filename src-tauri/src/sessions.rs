@@ -749,9 +749,11 @@ impl SessionAccumulator {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum GamingModePlan {
-    /// Gaming Mode switched the power plan for its session.
+    /// Gaming Mode set the max-performance power plan for its session (or found it already active, or
+    /// found none on this PC: the same plan every time here).
     Switched,
-    /// Gaming Mode left the power plan as it was (a Trial or the benchmark held a setting of it).
+    /// Gaming Mode left the power plan as it was, because a Trial or the benchmark held the plan or a
+    /// setting of it.
     LeftAlone,
     /// Both, at different points of this session (Gaming Mode was started more than once).
     Mixed,
@@ -760,9 +762,9 @@ pub(crate) enum GamingModePlan {
 impl std::fmt::Display for GamingModePlan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Switched => "switched the power plan",
-            Self::LeftAlone => "left the power plan alone",
-            Self::Mixed => "switched the power plan for part of the session",
+            Self::Switched => "set its power plan",
+            Self::LeftAlone => "left the power plan alone for a test",
+            Self::Mixed => "set its power plan for part of the session",
         })
     }
 }

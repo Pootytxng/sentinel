@@ -207,11 +207,34 @@ fn rec_of_label(label: &str) -> Option<&'static str> {
     }
 }
 
-/// PURE (CR-trial-plan-switch-confound): whether a Gaming Mode session's contract switched the power
-/// plan. A start leaves the plan alone while a setting of it is held, so two Gaming Mode sessions can
-/// run on different plans.
-pub(crate) fn switched_plan(contract: &[SessionChange]) -> bool {
-    contract.iter().any(|c| rec_of_label(&c.label) == Some(REC_POWER))
+/// PURE (CR-trial-plan-switch-confound): what a Gaming Mode session does with the power plan, read
+/// from the decision its start writes first (`left_alone`, saved before any change is made), never
+/// from the contract, which a start fills step by step: a read in between would see no plan step yet.
+/// Left alone = a Trial or the benchmark held the plan or a setting of it; otherwise the start set the
+/// max-performance plan (or found it already active, or found none: the same plan in every session
+/// on this PC, so it compares alike).
+pub(crate) fn plan_handling(file: &SessionFile) -> crate::sessions::GamingModePlan {
+    if file.left_alone.iter().any(|l| l == LABEL_POWER || l == LABEL_POWER_SETTING_HELD) {
+        crate::sessions::GamingModePlan::LeftAlone
+    } else {
+        crate::sessions::GamingModePlan::Switched
+    }
+}
+
+/// PURE (CR-trial-plan-switch-confound): fold one read of the Gaming Mode session file into what an
+/// FPS session records: each Gaming Mode session id counts once; two that handled the plan
+/// differently make the session "mixed".
+pub(crate) fn observe_plan(
+    file: &SessionFile,
+    seen_ids: &mut Vec<String>,
+    plan: Option<crate::sessions::GamingModePlan>,
+) -> Option<crate::sessions::GamingModePlan> {
+    if seen_ids.contains(&file.session_id) {
+        return plan;
+    }
+    seen_ids.push(file.session_id.clone());
+    let now = plan_handling(file);
+    Some(crate::sessions::GamingModePlan::seen(plan, now == crate::sessions::GamingModePlan::Switched))
 }
 
 /// The settings an open Trial or the benchmark's tweak trial holds right now. An unreadable Trial
@@ -1515,15 +1538,33 @@ mod spans_trial_tests {
         assert!(session_hold_refusal(REC_POWER, Some(&with_plan)).expect("the plan itself").contains("holds this setting"));
     }
 
-    // CR-trial-plan-switch-confound: what a session records about the plan is read from the contract,
-    // the same way the holds above read it.
+    // CR-trial-plan-switch-confound: what an FPS session records about the plan is read from the
+    // start's first save (`left_alone`, written before any change), so a read while the start is still
+    // applying its steps (status Active, contract still empty) records what the session will do.
     #[test]
-    fn a_contract_switched_the_plan_only_when_it_holds_the_plan_step() {
-        assert!(switched_plan(&[change(LABEL_GAME_MODE), change(LABEL_POWER)]));
-        assert!(!switched_plan(&[change(LABEL_GAME_MODE), change(LABEL_GAME_BAR)]), "the plan left alone");
-        assert!(!switched_plan(&[]));
-        // The left-alone label for a held plan setting is display only, never a plan step.
-        assert!(!switched_plan(&[change(LABEL_POWER_SETTING_HELD)]));
+    fn the_plan_handling_is_read_from_the_starts_decision_never_from_a_half_filled_contract() {
+        use crate::sessions::GamingModePlan as P;
+        let with = |id: &str, left_alone: Vec<String>, changes: Vec<SessionChange>| SessionFile {
+            left_alone,
+            ..session_file(id, SessionStatus::Active, changes)
+        };
+        // Mid-start: no plan step yet, nothing held: the start is switching it.
+        assert_eq!(plan_handling(&with("gm-1", Vec::new(), Vec::new())), P::Switched);
+        assert_eq!(plan_handling(&with("gm-1", Vec::new(), vec![change(LABEL_POWER)])), P::Switched);
+        // Held (the plan, or a setting of it): left alone, before and after the other steps land.
+        let held = vec![LABEL_POWER_SETTING_HELD.to_string()];
+        assert_eq!(plan_handling(&with("gm-2", held.clone(), Vec::new())), P::LeftAlone);
+        assert_eq!(plan_handling(&with("gm-2", held.clone(), vec![change(LABEL_GAME_MODE)])), P::LeftAlone);
+        assert_eq!(plan_handling(&with("gm-3", vec![LABEL_POWER.to_string()], Vec::new())), P::LeftAlone);
+        // Another step left alone (Game Bar held) says nothing about the plan.
+        assert_eq!(plan_handling(&with("gm-4", vec![LABEL_GAME_BAR.to_string()], Vec::new())), P::Switched);
+        // Each Gaming Mode session counts once per FPS session; two that differed make it mixed.
+        let mut ids = Vec::new();
+        let mut plan = observe_plan(&with("gm-1", Vec::new(), Vec::new()), &mut ids, None);
+        plan = observe_plan(&with("gm-1", Vec::new(), vec![change(LABEL_POWER)]), &mut ids, plan);
+        assert_eq!(plan, Some(P::Switched));
+        plan = observe_plan(&with("gm-2", held, Vec::new()), &mut ids, plan);
+        assert_eq!((plan, ids.len()), (Some(P::Mixed), 2));
     }
 
     // CR-core-parking-held-with-plan (fourth range review, SHOULD-FIX): the core-parking leftover
