@@ -2900,23 +2900,26 @@ pub(crate) fn with_gap_check(
 /// record whether Gaming Mode was on can't show it wasn't. Settings Gaming Mode never touches are not
 /// affected (`comparability::derive` still compares Gaming Mode on vs off between the two sessions).
 pub(crate) fn gaming_mode_baseline_overlap(baseline: &SessionSummary, rec_id: &str) -> Option<String> {
+    gaming_mode_overlap_words(baseline, rec_id, "then start the test. Nothing was changed.")
+}
+
+/// [`gaming_mode_baseline_overlap`]'s words with the closing step the caller needs.
+fn gaming_mode_overlap_words(baseline: &SessionSummary, rec_id: &str, next: &str) -> Option<String> {
     if !crate::gaming_orchestrator::session_can_touch(rec_id) {
         return None;
     }
     match baseline.gaming_mode_active {
         Some(false) => None,
-        Some(true) => Some(
-            "Gaming Mode was on during the baseline session, and Gaming Mode changes this setting itself, so \
-             that session may already have run with it changed. Play a baseline session with Gaming Mode off, \
-             then start the test. Nothing was changed."
-                .into(),
-        ),
-        None => Some(
-            "Compy didn't record whether Gaming Mode was on during the baseline session, and Gaming Mode \
-             changes this setting itself, so that session can't show it ran without it. Play a baseline \
-             session with Gaming Mode off, then start the test. Nothing was changed."
-                .into(),
-        ),
+        Some(true) => Some(format!(
+            "Gaming Mode was on during the baseline session, and Gaming Mode can change this setting itself, \
+             so that session may already have run with it changed. Play a baseline session with Gaming Mode \
+             off, {next}"
+        )),
+        None => Some(format!(
+            "Compy didn't record whether Gaming Mode was on during the baseline session, and Gaming Mode can \
+             change this setting itself, so that session can't show it ran without it. Play a baseline session \
+             with Gaming Mode off, {next}"
+        )),
     }
 }
 
@@ -2932,10 +2935,9 @@ pub(crate) fn with_gaming_mode_baseline_check(
     if !judged_against_noise(&outcome) {
         return outcome;
     }
-    let Some(why) = baseline.and_then(|b| gaming_mode_baseline_overlap(b, rec_id)) else {
+    let Some(why) = baseline.and_then(|b| gaming_mode_overlap_words(b, rec_id, "then test again.")) else {
         return outcome;
     };
-    let why = why.trim_end_matches(" Nothing was changed.").replace("then start the test", "then test again");
     ConcludeOutcome {
         verdict: "confounded".into(),
         keep: false,
