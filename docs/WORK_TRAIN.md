@@ -1971,10 +1971,25 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       receipts and existing fixtures, queued CR-receipt-unrecorded-unknown; SHOULD-FIX other `gpus.first()` readers
       queued CR-gpu-first-elsewhere; NITs left: dark-only preview wording, the row copy, "unknown" vendor reads
       "other" as before).
-- [ ] **CR-gpu-first-elsewhere** (CR-receipt-gpu-other-card reviews, SHOULD-FIX) `case_evidence_upload.rs` ~636
+- [x] **CR-gpu-first-elsewhere** (CR-receipt-gpu-other-card reviews, SHOULD-FIX) `case_evidence_upload.rs` ~636
       (`hw_context_from`, Tier 3), `export.rs` ~555 and `case_intelligence.rs` ~1376 still name `gpus.first()` (an
       iGPU on a hybrid rig). Use the most-VRAM pick (move it to `hw_class.rs`, which both tiers share) and
       `identifies_a_card`. Rust; touches upload payload contents: two reviews, no schema change.
+      Done (s25, Rust, Tier 1/3 dark; `bc08540e` + review commit, SHAs in the merge). The Tier 3 hardware block, the
+      Tier 1 local facts and the Discord card name the most-VRAM card; the Tier 3 block reads "unknown" and Tier 1
+      reads no driver for Windows' fallback adapter. `primary_gpu_of` / `identifies_a_card` moved to `hw_class.rs`
+      (priorities re-exports them). No schema change. 3 new tests fail on main's bodies. Reviews r1: sonnet
+      APPROVE-WITH-NITS (nit taken: fallback driver; nit left: a nameless most-VRAM adapter shows "—" on the card);
+      opus REQUEST-CHANGES, MUST-FIX taken (Tier 3 imported `priorities`: the pick moved to `hw_class`; the suggested
+      Tier 3 import allowlist is a guard, not added here, see CR-tier3-import-allowlist), SHOULD-FIX taken (fallback
+      driver), TS readers queued (CR-ts-gpu-first). r2 in the session log.
+- [ ] **CR-ts-gpu-first** (CR-gpu-first-elsewhere reviews) `src/surfaces/lab-evidence-map.ts` ~152 reads
+      `hw.gpus[0]` (the Lab shows the iGPU's VRAM and driver on a hybrid rig; coupled to the hologram's `gpu-0`) and
+      Check.tsx ~117 picks the first adapter with a readable driver age for driver freshness. Use `primaryGpu`
+      (most VRAM). TS; one review.
+- [ ] **CR-tier3-import-allowlist** (opus r1 on CR-gpu-first-elsewhere) the Tier 3 separation guard blocks four named
+      modules only; an allowlist of what Tier 3 may import would keep it from reaching `priorities`-style modules.
+      A guard change: owner call (sessions add no guards).
 - [ ] **CR-receipt-unrecorded-unknown** (opus SHOULD-FIX) a receipt still pairs a session that recorded no card
       (sessions saved before fingerprints) with this PC's card; `gpu_model` "unknown" for it needs no schema change
       but changes legacy receipts and the existing receipt fixtures (`payload_buckets_never_carry_exact_values`,

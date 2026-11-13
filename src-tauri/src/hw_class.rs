@@ -48,6 +48,32 @@ pub(crate) fn gpu_vendor_token(name: &str) -> &'static str {
     }
 }
 
+/// CR-gpu-first-elsewhere (moved here from the priorities module so every tier shares one pick): this
+/// PC's card from a serialized hardware snapshot, the GPU with the most VRAM, the pick session
+/// fingerprints stamp (on a tie, the last such GPU, as `Iterator::max_by_key` picks). Trimmed; None =
+/// no GPU name in it: unknown. Pure value read.
+pub(crate) fn primary_gpu_of(hardware: &serde_json::Value) -> Option<String> {
+    hardware
+        .get("gpus")
+        .and_then(serde_json::Value::as_array)?
+        .iter()
+        .max_by_key(|g| g.get("vram_bytes").and_then(serde_json::Value::as_u64).unwrap_or(0))
+        .and_then(|g| g.get("name"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .map(str::to_string)
+}
+
+/// CR-upgrade-area-truth NIT (a) (moved here with the pick above): a name that identifies no card.
+/// Windows' fallback adapters (no vendor driver loaded, e.g. during a driver install) stand in for
+/// whatever card is fitted, so a session or a startup read with one can't be tied to, or set against,
+/// a card. An exact-match list of the two names Windows uses.
+pub(crate) fn identifies_a_card(name: &str) -> bool {
+    let n = name.trim().to_lowercase();
+    !n.is_empty() && n != "microsoft basic display adapter" && n != "microsoft basic render driver"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

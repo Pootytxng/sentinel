@@ -1378,7 +1378,10 @@ pub(crate) fn local_facts_from(hw: &crate::hardware::HardwareInfo) -> CaseLocalF
     let gpu = crate::hardware::primary_gpu(hw);
     CaseLocalFacts {
         gpu_vendor: gpu.and_then(|g| vendor_token(&g.name)).map(str::to_string),
+        // Review r1 SHOULD-FIX (opus, sonnet nit): Windows' fallback adapter's inbox driver is no
+        // card's driver, so it is absent, never a version a catalog range could match.
         gpu_driver_version: gpu
+            .filter(|g| crate::hw_class::identifies_a_card(&g.name))
             .map(|g| g.driver_version.trim())
             .filter(|v| !v.is_empty())
             .map(str::to_string),
@@ -4613,6 +4616,8 @@ mod tests {
                 ..HardwareInfo::default()
             };
             assert_eq!(local_facts_from(&hw).gpu_vendor, None);
+            // CR-gpu-first-elsewhere review r1: its inbox driver is no card's driver.
+            assert_eq!(local_facts_from(&hw).gpu_driver_version, None);
         }
 
         #[test]

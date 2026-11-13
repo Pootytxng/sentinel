@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::blackbox::{Incident, IncidentKind};
-use crate::hw_class::{gpu_vendor_token, ram_gb_bucket, sanitize_token};
+use crate::hw_class::{gpu_vendor_token, identifies_a_card, primary_gpu_of, ram_gb_bucket, sanitize_token};
 
 /// The receiver refuses any other version (§5); bumping it is a schema change with its own review.
 pub(crate) const CASE_SCHEMA_VERSION: u32 = 1;
@@ -632,11 +632,8 @@ pub(crate) struct HwContext {
 pub(crate) fn hw_context_from(hardware: &Value) -> HwContext {
     // CR-gpu-first-elsewhere: the same card the Tier 2 receipt names (the most-VRAM GPU, not the
     // first adapter, an iGPU on a hybrid rig); unread or Windows' fallback adapter = "unknown".
-    let gpu_now = crate::priorities::primary_gpu_of(hardware);
-    let gpu_model_raw = gpu_now
-        .as_deref()
-        .filter(|g| crate::priorities::identifies_a_card(g))
-        .unwrap_or("unknown");
+    let gpu_now = primary_gpu_of(hardware);
+    let gpu_model_raw = gpu_now.as_deref().filter(|g| identifies_a_card(g)).unwrap_or("unknown");
     let cpu_family_raw = hardware
         .get("cpu_arch")
         .and_then(|a| a.get("family_label"))
