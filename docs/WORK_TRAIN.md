@@ -257,6 +257,19 @@ release checklist); no new rules.
         or worse across a changed or unreadable cap, nor without the game's measured noise.
       - Wording: the note names the measured bands and the session count; fewer than 6 sessions caps confidence at Medium.
         Older verdicts judged on the assumed band are labelled on read (`assumed_band`, never stored), en + zh-CN.
+      LANDED s26 (not ticked: the proof is a Trial on the owner's real play): `b1529907`, `90ec58d7`, `581d356d`,
+      `0a0d5ca2`, `41598576`, `4068adec`, `f078126e`, `53757f85` (merge in the session log). Reviews: sonnet r1
+      REQUEST-CHANGES (2 MUST taken); opus r1 REQUEST-CHANGES (3 MUST taken); opus r2 REQUEST-CHANGES (MUST: real play
+      read the reference's cap live from a trace the store sheds after 20 newer sessions; now the start's stored cap);
+      opus r3 APPROVE-WITH-NITS. OPEN, queued here: (SHOULD) a counted with-change session's own trace can be shed
+      within the 14-day window and it drops to "frame-cap-changed" (fails closed; freeze each session's cap read on the
+      record, or keep traces a running Trial uses); (SHOULD) the bench's `noiseMeasuredBands` line names both bands for
+      every outcome and says "moved" for the 3% minimum; (SHOULD) sessions past the newest 20 read cap "can't tell" and
+      are skipped from a band; NITs: too-noisy label uses `noise_floor_pct` not the halves floor; no test pins
+      `real_play_trial`'s `cap:` wiring; "turn it off for both sessions" after the baseline was played; a flat-tight
+      uncapped trace with heavy dips can read capped; old-Compy-concluded record of a new start is unlabelled; a
+      pre-branch Smoothest Trial keeps the old pacing band; real play's headroom check uses an arithmetic mean;
+      session-end notice `last_steady` still on the 3% halves grade; `get_experiments` reloads history per game.
 - [x] **CR-zh-drift-count** (second whole-range review) zh-CN `home.json` driftCount strings still said "已漂移" after the English was reworded to "changed since they were last good" (`8d855c05`).
       Done `e49b53ed` (2026-11-11 s18, TS only, not installed): both read "{{count}} 项设置自上次正常以来已改变". Test fails on
       the old file. Full vitest 535/538 (the 3 site-app suites).
