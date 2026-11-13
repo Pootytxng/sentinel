@@ -2744,9 +2744,10 @@ pub(crate) fn noise_unmeasured_message(why: &crate::noise_floor::NoiseUnmeasured
             "Compy can't tell from the baseline session's frame-rate trace whether a frame cap held it: either \
              the session has under 5 minutes of trace, or its frame rate held almost flat, which is how a cap \
              holds it too. So it can't pool that session with others to measure how much {name} varies on its \
-             own, and it won't compare it as if it knew. If the baseline session was short, play one of 10 \
-             minutes or more; if your frame rate is simply very steady, Compy can't tell that apart from a cap \
-             yet and won't test this game this way."
+             own, and it won't compare it as if it knew. If a frame cap (in the game, the driver or an overlay) \
+             was on, turn it off and play a session of 10 minutes or more; if the baseline session was short, \
+             play one of 10 minutes or more; if your frame rate is simply very steady with no cap, Compy can't \
+             tell that apart from a cap yet and won't test this game this way."
         );
     }
     let more = why.need.saturating_sub(why.have).max(1);
@@ -2836,8 +2837,9 @@ pub(crate) fn with_cap_check(
             format!(
                 "Compy can't tell from the frame-rate traces whether a frame cap held both sessions the same \
                  way (in the baseline {}; in the after-session {}), so it can't confirm they ran alike. Compy \
-                 restored the change and judged nothing; play an after-session of at least 10 minutes with \
-                 the game in front, then test again.",
+                 restored the change and judged nothing. If a frame cap was on, turn it off for both \
+                 sessions; otherwise play an after-session of at least 10 minutes with the game in front; \
+                 then test again.",
                 cap_words(baseline),
                 cap_words(after)
             ),
@@ -3006,14 +3008,18 @@ pub(crate) fn assumed_band_label(
 ) -> Option<AssumedBandLabel> {
     let judged_on_fixed = match &rec.noise_evidence {
         Some(n) => n.between_sessions.is_none(),
-        // A too-noisy verdict carried no evidence but was graded on the fixed halves floor.
-        None => rec.verdict.as_deref() == Some("too-noisy") && rec.game_noise.is_none(),
+        // A verdict from before Compy kept noise evidence (engine armed 2026-07-17, evidence from
+        // 2026-09-28) was judged on the record's fixed band, and a too-noisy one on the fixed halves floor.
+        None => {
+            matches!(rec.verdict.as_deref(), Some("improved" | "no-change" | "regressed" | "too-noisy")) && rec.game_noise.is_none()
+        }
     };
     if !judged_on_fixed || rec.game_noise.is_some() || rec.between_session_noise.is_some() || rec.mode != TrialMode::Pair {
         return None;
     }
+    let fixed_pct = if rec.noise_floor_pct.is_finite() && rec.noise_floor_pct > 0.0 { rec.noise_floor_pct } else { DEFAULT_NOISE_FLOOR_PCT };
     Some(AssumedBandLabel {
-        assumed_pct: rec.noise_evidence.as_ref().map_or(DEFAULT_NOISE_FLOOR_PCT, |n| n.band_pct),
+        assumed_pct: rec.noise_evidence.as_ref().map_or(fixed_pct, |n| n.band_pct),
         measured_low1_pct: measured_now.map(|n| n.low1_band_pct),
         measured_sessions: measured_now.map(|n| n.sessions),
         claimed_change: matches!(rec.verdict.as_deref(), Some("improved" | "regressed")),
@@ -4547,6 +4553,7 @@ fn real_play_trial(rec: &ExperimentRecord) -> Result<crate::realplay::Running<'_
         applied_at,
         applied_change_id: &rec.applied_change_id,
         before: &evidence.before,
+        cap: rec.game_noise.as_ref().map(|n| n.cap),
     })
 }
 
@@ -9635,6 +9642,21 @@ mod refuse_early_tests {
         noisy["noise_evidence"] = serde_json::Value::Null;
         let noisy: ExperimentRecord = serde_json::from_value(noisy).unwrap();
         assert_eq!(assumed_band_label(&noisy, Some(&WIDE)).map(|l| (l.judged, l.claimed_change)), Some((false, false)));
+        // Opus review r2: a verdict from before Compy kept noise evidence (2026-07-17..09-28) was judged
+        // on the record's fixed band; it is labelled with that band, whatever it claimed.
+        for verdict in ["improved", "no-change", "regressed"] {
+            let mut early = legacy_no_change();
+            early["verdict"] = serde_json::json!(verdict);
+            early["noise_evidence"] = serde_json::Value::Null;
+            let early: ExperimentRecord = serde_json::from_value(early).unwrap();
+            let l = assumed_band_label(&early, Some(&WIDE)).expect(verdict);
+            assert_eq!((l.assumed_pct, l.judged, l.claimed_change), (early.noise_floor_pct, true, verdict != "no-change"), "{verdict}");
+        }
+        let mut aborted = legacy_no_change();
+        aborted["verdict"] = serde_json::json!("confounded");
+        aborted["noise_evidence"] = serde_json::Value::Null;
+        let aborted: ExperimentRecord = serde_json::from_value(aborted).unwrap();
+        assert_eq!(assumed_band_label(&aborted, Some(&WIDE)), None, "never judged against a band");
         // Judged on a measurement: no label.
         let measured_rec = ExperimentRecord { game_noise: Some(WIDE), ..old.clone() };
         assert_eq!(assumed_band_label(&measured_rec, Some(&WIDE)), None);

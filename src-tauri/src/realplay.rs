@@ -440,6 +440,11 @@ pub(crate) struct Running<'a> {
     pub applied_change_id: &'a str,
     /// The pinned as-is sessions, oldest first.
     pub before: &'a [RealPlaySession],
+    /// P4-judge-noisy: the as-is sessions' frame-cap state as the start read it from their frame data
+    /// (the record's `game_noise.cap`). Read live from the reference only when the record has none: a
+    /// session's 10 s trace is shed once 20 newer ones are measured, and a cap state read from a shed
+    /// trace would be "can't tell", un-counting every with-change session.
+    pub cap: Option<crate::noise_floor::CapRead>,
 }
 
 /// Which with-change sessions count right now, which don't and why, and whether the Trial can go on.
@@ -549,6 +554,7 @@ pub(crate) fn with_arm<'s>(
     let mut permanent = false;
     if let (Some(reference), Some(applied), Some(began)) = (reference, applied, began) {
         let conditions = crate::noise_floor::NoiseConditions::of_session(reference);
+        let before_cap = trial.cap.unwrap_or_else(|| crate::noise_floor::cap_read(reference));
         for (i, &(at, s)) in timeline.iter().enumerate() {
             if !same_game(s, trial.game) || at <= began {
                 continue;
@@ -561,7 +567,8 @@ pub(crate) fn with_arm<'s>(
                 }
             }
             let next = timeline.get(i + 1).copied();
-            let count = count_session(s, at, applied, until, other_moved, reference, conditions.as_ref(), &pairing, next, live);
+            let count =
+                count_session(s, at, applied, until, other_moved, reference, before_cap, conditions.as_ref(), &pairing, next, live);
             match count {
                 Count::Counted => arm.counted.push(s),
                 Count::Not(reason) => arm.not_counted.push(NotCounted { session_id: s.started_at.clone(), reason }),
@@ -598,6 +605,7 @@ fn count_session(
     until: Option<DateTime<Utc>>,
     other_moved: Option<DateTime<Utc>>,
     reference: &SessionSummary,
+    before_cap: crate::noise_floor::CapRead,
     conditions: Option<&crate::noise_floor::NoiseConditions>,
     pairing: &SessionComparability,
     next: Option<(DateTime<Utc>, &SessionSummary)>,
@@ -637,8 +645,9 @@ fn count_session(
         return Count::Not(R::ConditionsChanged);
     }
     // P4-judge-noisy: a session held by a frame cap the as-is sessions weren't (or whose cap state
-    // can't be read from its frame data) is never pooled into the with-change arm.
-    if crate::noise_floor::cap_pair(crate::noise_floor::cap_read(reference), crate::noise_floor::cap_read(s))
+    // can't be read from its frame data) is never pooled into the with-change arm. The as-is side is
+    // the cap state the start stored, so a reference whose trace has since been shed still compares.
+    if crate::noise_floor::cap_pair(before_cap, crate::noise_floor::cap_read(s))
         != crate::noise_floor::CapPair::Same
     {
         return Count::Not(R::FrameCapChanged);
@@ -1345,7 +1354,7 @@ mod tests {
     }
 
     fn arm<'s>(sessions: &'s [SessionSummary], ledger: &[LedgerEntryRef<'_>], live: Option<bool>, before: &[RealPlaySession]) -> WithArm<'s> {
-        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before };
+        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before, cap: None };
         with_arm(&trial, sessions, ledger, live, now())
     }
 
@@ -1429,6 +1438,31 @@ mod tests {
         assert_eq!(v["reason"], "frame-cap-changed");
         let back: NotCounted = serde_json::from_value(v).unwrap();
         assert_eq!(back.reason, R::FrameCapChanged);
+    }
+
+    #[test]
+    fn a_reference_whose_trace_was_shed_still_compares_on_the_cap_state_the_start_stored() {
+        // Opus review r2: the store keeps the 10 s trace only for the newest 20 measured sessions, so
+        // during a 14-day Trial the reference's trace can be shed. Its cap state read live would be
+        // "can't tell" and would un-count every with-change session; the start's stored read is used.
+        use crate::noise_floor::CapRead;
+        let mut sessions = all(Vec::new());
+        for s in sessions.iter_mut().filter(|s| s.started_at.as_str() <= "2026-10-20T19:00:00+00:00") {
+            s.fps_series = Vec::new();
+        }
+        let shed = arm(&sessions, &ledger(), Some(true), &pinned());
+        assert_eq!(shed.counted.len(), 0, "without a stored cap state, a shed reference reads 'can't tell'");
+        let before = pinned();
+        let trial =
+            Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &before, cap: Some(CapRead::Uncapped) };
+        let a = with_arm(&trial, &sessions, &ledger(), Some(true), now());
+        assert_eq!(a.counted.len(), 3);
+        assert!(a.not_counted.is_empty(), "{:?}", a.not_counted);
+        // The stored state is still the one compared: a start that read a cap never counts uncapped play.
+        let capped = Running { cap: Some(CapRead::Capped { at_fps: 144.0 }), ..trial };
+        let c = with_arm(&capped, &sessions, &ledger(), Some(true), now());
+        assert_eq!(c.counted.len(), 0);
+        assert!(c.not_counted.iter().all(|n| n.reason == NotCountedReason::FrameCapChanged));
     }
 
     #[test]
@@ -1520,7 +1554,7 @@ mod tests {
     fn a_session_after_the_window_doesnt_count_and_the_window_ends_the_trial() {
         let late = played("2026-11-04T12:00:00+00:00", 200.0, 240.0, 15);
         let sessions = all(vec![late]);
-        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &pinned() };
+        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &pinned(), cap: None };
         let a = with_arm(&trial, &sessions, &ledger(), Some(true), instant("2026-11-05T00:00:00+00:00").unwrap());
         assert_eq!(reasons(&a), vec![("2026-11-04T12:00:00+00:00".into(), NotCountedReason::AfterWindow)]);
         assert_eq!((a.counted.len(), a.stop), (3, Some(RealPlayStop::WindowOver)));
@@ -1609,7 +1643,7 @@ mod tests {
     #[test]
     fn progress_says_collecting_ready_or_stopped_from_the_arms_alone() {
         let before = pinned();
-        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &before };
+        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &before, cap: None };
         let sessions = all(Vec::new());
         let two: Vec<SessionSummary> = sessions[..5].to_vec();
         let a = with_arm(&trial, &two, &ledger(), Some(true), now());
