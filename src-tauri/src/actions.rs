@@ -3237,18 +3237,16 @@ mod bloat_task_tests {
 
 pub(crate) fn current_power_plan_guid() -> Option<String> {
     let output = quiet_command("powercfg").args(["/getactivescheme"]).output().ok()?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    // Format: "Power Scheme GUID: <36-char-guid>  (Plan Name)"
-    for line in stdout.lines() {
-        if let Some(idx) = line.find("GUID:") {
-            let after = line[idx + 5..].trim_start();
-            let guid = after.split_whitespace().next()?.trim();
-            if guid.len() == 36 {
-                return Some(guid.to_string());
-            }
-        }
-    }
-    None
+    active_plan_guid_of(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// PURE (P4-noise-sf): the active scheme's GUID from `powercfg /getactivescheme` output, read by the
+/// GUID's own `8-4-4-4-12` shape ([`crate::scheme_guid_of`]), never by the label before it: Windows
+/// prints that label in the user's language ("Power Scheme GUID:", "GUID des Energieschemas:"), so
+/// keying on the English "GUID:" read nothing on a Windows whose label lacks it. Lower-cased, as
+/// powercfg prints it.
+pub(crate) fn active_plan_guid_of(stdout: &str) -> Option<String> {
+    crate::scheme_guid_of(stdout)
 }
 
 /// Issue 617 assessment: the only setting change is the one `setactive`, now exit-checked so a
@@ -3612,6 +3610,24 @@ Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n";
     fn none_when_only_balanced() {
         let list = "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced) *\n";
         assert_eq!(select_best_existing_high_perf_plan(list), None);
+    }
+
+    #[test]
+    fn the_active_plan_is_read_by_the_guid_shape_whatever_language_labels_it() {
+        // P4-noise-sf: `/getactivescheme` labels the GUID in the user's language; the read keys on the
+        // GUID's own shape, never on the English "GUID:".
+        use super::active_plan_guid_of;
+        const BAL: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+        for out in [
+            format!("Power Scheme GUID: {BAL}  (Balanced)\r\n"),
+            format!("GUID des Energieschemas: {BAL}  (Ausbalanciert)\r\n"),
+            format!("电源方案 GUID：{BAL}  (平衡)\r\n"),
+            format!("Schéma de gestion de l'alimentation GUID : {}  (Utilisation normale)\r\n", BAL.to_uppercase()),
+        ] {
+            assert_eq!(active_plan_guid_of(&out).as_deref(), Some(BAL), "{out}");
+        }
+        assert_eq!(active_plan_guid_of("Power Scheme GUID: not-a-guid  (Balanced)\r\n"), None);
+        assert_eq!(active_plan_guid_of(""), None);
     }
 }
 

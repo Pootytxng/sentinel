@@ -224,6 +224,18 @@ pub(crate) struct SessionSummary {
     /// written only when present, and an older Compy ignores the key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) gpu_load: Option<GpuLoad>,
+    /// P4-noise-sf: the frame-cap state read from this session's own `fps_series`
+    /// (`noise_floor::cap_read`), written on every save while the series is still kept, so the read
+    /// outlives the series once [`FPS_SERIES_KEEP`] newer sessions shed it. `None` on a row whose series
+    /// was shed before this was recorded: its cap state stays unknown, never guessed. Additive: written
+    /// only when present; an unknown value reads as `None`; an older Compy ignores the key.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "frame_cap_lenient")]
+    pub(crate) frame_cap: Option<crate::noise_floor::CapRead>,
+}
+
+/// An unknown or damaged `frame_cap` value reads as not recorded, never as a failed load.
+fn frame_cap_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<crate::noise_floor::CapRead>, D::Error> {
+    Ok(serde_json::from_value(serde_json::Value::deserialize(d)?).ok())
 }
 
 /// #618: change counts counted from a fresh change history after a damaged one was set aside.
@@ -740,6 +752,7 @@ impl SessionAccumulator {
             background_secs_excluded: self.background_secs_excluded,
             frame_pacing,
             gpu_load: self.gpu_load,
+            frame_cap: None,
         }
     }
 }
@@ -911,6 +924,11 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
     // free Sessions view's 20) before it too is shed. P4-show-f1: both windows count measured
     // sessions only; a row that measured nothing has neither, so alt-tabbed sessions never strip
     // the last measured session's detail.
+    // P4-noise-sf: the cap state is read from each kept series and written on the row, so a Trial or a
+    // noise band still reads it once the series below is shed.
+    for s in all.iter_mut().filter(|s| !s.fps_series.is_empty()) {
+        s.frame_cap = Some(crate::noise_floor::cap_read(s));
+    }
     let mut measured = 0usize;
     for s in all.iter_mut().rev().filter(|s| s.samples > 0) {
         measured += 1;
@@ -1870,6 +1888,37 @@ mod session_tests {
         for s in all.iter().skip(total - FPS_SERIES_KEEP) {
             assert_eq!(s.fps_series, vec![(0, 100.0)], "the {FPS_SERIES_KEEP} most recent keep their real series");
         }
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn a_shed_series_keeps_the_frame_cap_state_read_while_it_was_kept() {
+        // P4-noise-sf: a session past the keep window sheds its series; the cap state read from that
+        // series while it was kept stays on the row, so a Trial or a noise band still reads it.
+        let path = std::env::temp_dir().join(format!("compy-sessions-capkeep-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let total = FPS_SERIES_KEEP + 3;
+        for i in 0..total {
+            let mut acc = SessionAccumulator::new(format!("t{i:02}"), Some(0));
+            for b in 0..40u32 {
+                acc.record_fps("g.exe", 200.0 + f64::from((b * 7) % 50), 5.0, 150.0, b * 10);
+            }
+            save_session_to(&path, acc.finalize(400)).unwrap();
+        }
+        let all = load_sessions_from(&path);
+        assert_eq!(all.len(), total);
+        let oldest = &all[0];
+        assert!(oldest.fps_series.is_empty(), "the oldest has shed its series");
+        assert_eq!(oldest.frame_cap, Some(crate::noise_floor::CapRead::Uncapped), "its cap state stays on the row");
+        assert_eq!(crate::noise_floor::cap_read(oldest), crate::noise_floor::CapRead::Uncapped);
+        // A row whose series was shed before the cap state was written stays unknown, never guessed.
+        let mut before = oldest.clone();
+        before.frame_cap = None;
+        assert_eq!(crate::noise_floor::cap_read(&before), crate::noise_floor::CapRead::Unknown);
+        // An unknown value on disk reads as not recorded, never as a failed load.
+        let mut row = disk_row(oldest).unwrap();
+        row["frame_cap"] = serde_json::json!({ "state": "something-new" });
+        assert_eq!(from_disk_row(row).unwrap().frame_cap, None);
         std::fs::remove_file(&path).ok();
     }
 

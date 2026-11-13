@@ -143,6 +143,8 @@ type GameNoise = {
   avg_step_pct: number;
   sessions: number;
   cap?: { state: "uncapped" | "capped" | "unknown"; at_fps?: number } | null;
+  /** P4-noise-sf: sessions left out because their frame-cap state can't be read. Absent = 0. */
+  cap_unread?: number;
 };
 
 /** P4-judge-noisy (experiment.rs `AssumedBandLabel`, read-only): a verdict judged on the assumed ±3%
@@ -375,17 +377,52 @@ function BenchWord({ c, kind }: { c: Confidence; kind: "estimate" | "measured" |
 
 // §11 receipt line: the band the verdict was judged against, and whether this game's own noise on
 // this PC is known. An unmeasured noise level is said to be unmeasured, never filled in.
-function noiseLine(n: NoiseEvidence, game: string, t: Translate, g?: GameNoise | null): string {
+// The smallest change Compy ever claims (noise_floor.rs `MIN_CLAIM_PCT`): a measured band is never
+// narrower, so a band at it is that minimum, not a measured swing.
+const MIN_CLAIM_PCT = 3;
+
+// P4-noise-sf: the measured bands this goal was actually judged on (experiment.rs `with_noise_words`:
+// Recommended on the 1% low with the average on its own band, or the 1% low only under a shared cap;
+// Maximum FPS on the wider of the two on both; Smoothest on its pacing band and the 1% low; neither of
+// those two is judged under a cap), where they come from, a band that is only the minimum claim, and
+// the sessions left out because their cap state can't be read.
+export function measuredBandsLine(g: GameNoise, outcome: TrialOutcome | null | undefined, game: string, t: Translate): string {
+  const pct = (v: number) => String(Math.round(v * 10) / 10);
+  const name = prettyGameName(game) || game;
+  const capped = g.cap?.state === "capped";
+  const goal = outcome ?? "recommended";
+  if (capped && goal !== "recommended") return t("lab.experimentBench.noiseMeasuredCappedUnjudged", { game: name });
+  const maxBand = Math.max(g.low1_band_pct, g.avg_band_pct);
+  const [judged, named] =
+    goal === "max-fps"
+      ? [t("lab.experimentBench.noiseMeasuredBandsMaxFps", { band: pct(maxBand) }), [maxBand]]
+      : goal === "smoothest"
+        ? [t("lab.experimentBench.noiseMeasuredBandsSmoothest", { low: pct(g.low1_band_pct) }), [g.low1_band_pct]]
+        : capped
+          ? [t("lab.experimentBench.noiseMeasuredBandsCapped", { low: pct(g.low1_band_pct) }), [g.low1_band_pct]]
+          : [
+              t("lab.experimentBench.noiseMeasuredBands", { low: pct(g.low1_band_pct), avg: pct(g.avg_band_pct) }),
+              [g.low1_band_pct, g.avg_band_pct],
+            ];
+  const parts = [judged, t("lab.experimentBench.noiseMeasuredSource", { game: name, sessions: g.sessions })];
+  if (named.some((b) => b <= MIN_CLAIM_PCT + 1e-9))
+    parts.push(t("lab.experimentBench.noiseMeasuredFloor", { game: name, min: pct(MIN_CLAIM_PCT) }));
+  if ((g.cap_unread ?? 0) > 0)
+    parts.push(t("lab.experimentBench.noiseMeasuredCapUnread", { game: name, count: g.cap_unread }));
+  return parts.join(" ");
+}
+
+function noiseLine(
+  n: NoiseEvidence,
+  game: string,
+  t: Translate,
+  g?: GameNoise | null,
+  outcome?: TrialOutcome | null,
+): string {
   const pct = (v: number) => String(Math.round(v * 10) / 10);
   const name = prettyGameName(game) || game;
   // P4-judge-noisy: the bands measured from this game's own as-is sessions, in plain words.
-  if (g != null)
-    return t("lab.experimentBench.noiseMeasuredBands", {
-      low: pct(g.low1_band_pct),
-      avg: pct(g.avg_band_pct),
-      sessions: g.sessions,
-      game: name,
-    });
+  if (g != null) return measuredBandsLine(g, outcome, game, t);
   const b = n.between_sessions;
   if (b != null) {
     const [band, measured, sessions] = [pct(n.band_pct), pct(b.spread_pct), b.sessions];
@@ -1023,7 +1060,7 @@ export default function ExperimentBench({
     const judged = x.noise_evidence
       ? isRealPlay(x)
         ? realPlayNoiseLine(x.noise_evidence.band_pct, realPlayCounts(x), prettyGameName(x.game) || x.game, t)
-        : noiseLine(x.noise_evidence, x.game, t, x.game_noise)
+        : noiseLine(x.noise_evidence, x.game, t, x.game_noise, x.outcome)
       : null;
     // P4-judge-noisy: a result judged on the assumed band says so beside its own line.
     const assumed = x.assumed_band ? assumedBandLine(x.assumed_band, x.game, t) : null;

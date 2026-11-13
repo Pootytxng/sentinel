@@ -513,7 +513,18 @@ const CAP_DIP_FRACTION: f64 = 0.02;
 /// - Uncapped: at most a quarter of the buckets within 1.5% of the 90th-percentile bucket.
 /// - Anything else (a frame rate held almost flat with no dips, which a cap or a very steady game can
 ///   both produce; too little trace) is Unknown: Compy says it can't tell.
+///
+/// P4-noise-sf: a session whose series has been shed (`sessions::FPS_SERIES_KEEP`) reads the state
+/// written on its row while the series was kept (`SessionSummary::frame_cap`); a row shed before that
+/// was recorded reads Unknown. While the series is kept it is read afresh, so the row never overrides it.
 pub(crate) fn cap_read(s: &crate::sessions::SessionSummary) -> CapRead {
+    if s.fps_series.is_empty() {
+        return s.frame_cap.unwrap_or(CapRead::Unknown);
+    }
+    cap_read_series(s)
+}
+
+fn cap_read_series(s: &crate::sessions::SessionSummary) -> CapRead {
     let mut fps: Vec<f64> = s.fps_series.iter().map(|&(_, f)| f).filter(|f| f.is_finite() && *f > 0.0).collect();
     if fps.len() < CAP_MIN_BUCKETS {
         return CapRead::Unknown;
@@ -579,6 +590,14 @@ pub(crate) struct GameNoise {
     pub sessions: u32,
     /// The cap state every measured session shared.
     pub cap: CapRead,
+    /// P4-noise-sf: sessions of this game under the same Compy changes that were left out because
+    /// their frame-cap state can't be read ([`as_is_run_skipping`]). Additive: 0 on older records.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub cap_unread: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 /// Why this game's noise isn't measured yet: too few as-is sessions, or the cap state of the session
@@ -638,12 +657,26 @@ pub(crate) fn as_is_run<'s>(
     ledger: &[crate::experiment::LedgerEntryRef<'_>],
     window_days: i64,
 ) -> Vec<&'s crate::sessions::SessionSummary> {
+    as_is_run_skipping(sessions, now, ledger, window_days).0
+}
+
+/// [`as_is_run`], and how many sessions the walk passed over only because their frame-cap state
+/// can't be read (P4-noise-sf: a series shed before its cap state was written on the row, or a
+/// pattern Compy can't tell): ran under `now`'s change counts, so they would otherwise have been
+/// considered. Left out, never pooled, and counted so the band can say so.
+pub(crate) fn as_is_run_skipping<'s>(
+    sessions: &'s [crate::sessions::SessionSummary],
+    now: &crate::sessions::SessionSummary,
+    ledger: &[crate::experiment::LedgerEntryRef<'_>],
+    window_days: i64,
+) -> (Vec<&'s crate::sessions::SessionSummary>, usize) {
     let (Some(conditions), Some(began)) = (NoiseConditions::of_session(now), parse(&now.started_at)) else {
-        return Vec::new();
+        return (Vec::new(), 0);
     };
     let cap_now = cap_read(now);
     let from = began - chrono::Duration::days(window_days);
     let mut run: Vec<&crate::sessions::SessionSummary> = Vec::new();
+    let mut cap_unread = 0usize;
     let mut next = now;
     for &(at, s) in sessions_like(sessions, &conditions).iter().rev() {
         if at > began {
@@ -657,7 +690,11 @@ pub(crate) fn as_is_run<'s>(
             continue;
         }
         let same_counts = matches!(crate::sessions::comparable_change_counts(s, now), Ok((x, y)) if x == y);
-        if !same_counts || cap_pair(cap_read(s), cap_now) != CapPair::Same {
+        let cap = cap_read(s);
+        if same_counts && cap == CapRead::Unknown {
+            cap_unread += 1;
+        }
+        if !same_counts || cap_pair(cap, cap_now) != CapPair::Same {
             continue;
         }
         if !same_configuration(s, next, ledger) {
@@ -667,7 +704,7 @@ pub(crate) fn as_is_run<'s>(
         next = s;
     }
     run.reverse();
-    run
+    (run, cap_unread)
 }
 
 /// Pure (P4-judge-noisy, review r1): this game's measured frame-pacing noise for a Smoothest Trial from
@@ -717,7 +754,8 @@ pub(crate) fn measure_game_noise(
     if cap == CapRead::Unknown {
         return Err(NoiseUnmeasured { have: 0, need: MIN_UNCHANGED_SESSIONS, cap_unknown: true });
     }
-    let read: Vec<(f64, f64)> = as_is_run(sessions, now, ledger, crate::comparison::ARM_MAX_AGE_DAYS)
+    let (run, cap_unread) = as_is_run_skipping(sessions, now, ledger, crate::comparison::ARM_MAX_AGE_DAYS);
+    let read: Vec<(f64, f64)> = run
         .into_iter()
         .filter(|s| s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0 && s.avg_fps.is_finite() && s.avg_fps > 0.0)
         .map(|s| (s.low1_fps_est, s.avg_fps))
@@ -741,6 +779,7 @@ pub(crate) fn measure_game_noise(
             avg_step_pct: round1(avg_step_pct),
             sessions,
             cap,
+            cap_unread: u32::try_from(cap_unread).unwrap_or(u32::MAX),
         })
         .ok_or(NoiseUnmeasured { have: read.len(), need: MIN_UNCHANGED_SESSIONS, cap_unknown: false })
 }
@@ -1087,6 +1126,7 @@ mod tests {
             background_secs_excluded: None,
             frame_pacing: None,
             gpu_load: None,
+            frame_cap: None,
         }
     }
 
@@ -1595,5 +1635,35 @@ mod tests {
         let mut short = s.clone();
         short[11].fps_series.truncate(10);
         assert!(measure_game_noise(&short, &short[11], &rob_trials()).unwrap_err().cap_unknown);
+    }
+
+    #[test]
+    fn a_shed_series_counts_on_its_written_cap_state_and_an_unreadable_one_is_named() {
+        // P4-noise-sf: the two oldest as-is sessions have shed their series (past the newest 20).
+        let mut s = rob_day();
+        for i in [0, 1] {
+            s[i].fps_series = Vec::new();
+            s[i].frame_cap = Some(CapRead::Uncapped);
+        }
+        // Their cap state was written on the row while the series was kept: they still count.
+        let n = measure_game_noise(&s, &s[11], &rob_trials()).expect("measured");
+        assert_eq!((n.sessions, n.cap_unread), (9, 0), "{n:?}");
+        // Shed before the cap state was recorded: left out, and the band says how many.
+        for i in [0, 1] {
+            s[i].frame_cap = None;
+        }
+        let n = measure_game_noise(&s, &s[11], &rob_trials()).expect("measured");
+        assert_eq!((n.sessions, n.cap_unread), (7, 2), "{n:?}");
+        // After-sessions under other change counts are never counted as unread.
+        s[5].fps_series = Vec::new();
+        assert_eq!(measure_game_noise(&s, &s[11], &rob_trials()).unwrap().cap_unread, 2);
+        // Additive: an older record without the count reads 0, and 0 isn't written.
+        let json = serde_json::to_value(&n).unwrap();
+        assert_eq!(json["cap_unread"], 2);
+        let mut old = json.clone();
+        old.as_object_mut().unwrap().remove("cap_unread");
+        assert_eq!(serde_json::from_value::<GameNoise>(old).unwrap().cap_unread, 0);
+        let zero = GameNoise { cap_unread: 0, ..n };
+        assert!(serde_json::to_value(&zero).unwrap().get("cap_unread").is_none());
     }
 }

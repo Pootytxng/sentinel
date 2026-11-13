@@ -2983,6 +2983,19 @@ pub(crate) fn with_noise_words(
         band_pct_text(noise.low1_step_pct),
         band_pct_text(noise.avg_step_pct),
     );
+    // P4-noise-sf: sessions passed over because their frame-cap state can't be read are named, never
+    // dropped silently.
+    let measured = match noise.cap_unread {
+        0 => measured,
+        1 => format!(
+            "{measured} 1 other session of {name} under the same changes wasn't counted: Compy couldn't read \
+             whether a frame cap held it."
+        ),
+        n => format!(
+            "{measured} {n} other sessions of {name} under the same changes weren't counted: Compy couldn't read \
+             whether a frame cap held them."
+        ),
+    };
     let negligible = if outcome.verdict == "no-change" {
         format!(
             " So this result is negligible at {name}'s noise: no difference Compy could tell apart from how much \
@@ -6386,6 +6399,7 @@ mod experiment_tests {
             background_secs_excluded: None,
             frame_pacing: None,
             gpu_load: None,
+            frame_cap: None,
         }
     }
 
@@ -9420,6 +9434,7 @@ mod refuse_early_tests {
         avg_step_pct: 7.1,
         sessions: 9,
         cap: CapRead::Uncapped,
+        cap_unread: 0,
     };
     /// A quiet game: sessions within about half a percent of each other.
     const QUIET: GameNoise = GameNoise {
@@ -9430,6 +9445,7 @@ mod refuse_early_tests {
         avg_step_pct: 0.4,
         sessions: 8,
         cap: CapRead::Uncapped,
+        cap_unread: 0,
     };
 
     /// The conclude's chain for a Recommended Trial on `rec(150, 5)` (baseline 150 fps 1% low, 120 avg).
@@ -9466,6 +9482,18 @@ mod refuse_early_tests {
         assert_eq!(judge(&WIDE, -30.0, -10.0).verdict, "regressed");
         // The average is judged on its own measured band: a +30% low with the average down 20% is no win.
         assert_eq!(judge(&WIDE, 30.0, -20.0).verdict, "no-change");
+    }
+
+    #[test]
+    fn sessions_left_out_for_an_unreadable_cap_state_are_named_in_the_note() {
+        // P4-noise-sf: the band says how many sessions it used and how many it couldn't read.
+        assert!(!judge(&WIDE, 5.0, 4.0).note.contains("weren't counted"));
+        let two = GameNoise { cap_unread: 2, ..WIDE };
+        let note = judge(&two, 5.0, 4.0).note;
+        assert!(note.contains("Between 9 sessions"), "{note}");
+        assert!(note.contains("2 other sessions of ROB RUN under the same changes weren't counted"), "{note}");
+        let one = judge(&GameNoise { cap_unread: 1, ..WIDE }, 5.0, 4.0).note;
+        assert!(one.contains("1 other session of ROB RUN under the same changes wasn't counted"), "{one}");
     }
 
     #[test]

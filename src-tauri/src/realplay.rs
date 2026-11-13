@@ -1054,6 +1054,7 @@ mod tests {
             background_secs_excluded: None,
             frame_pacing: None,
             gpu_load: None,
+            frame_cap: None,
         }
     }
 
@@ -1481,6 +1482,32 @@ mod tests {
         let c = with_arm(&capped, &sessions, &ledger(), Some(true), now());
         assert_eq!(c.counted.len(), 0);
         assert!(c.not_counted.iter().all(|n| n.reason == NotCountedReason::FrameCapChanged));
+    }
+
+    #[test]
+    fn a_counted_with_change_session_whose_trace_was_shed_stays_counted_on_its_written_cap_state() {
+        // P4-noise-sf (opus r3 SHOULD-FIX): during a 14-day Trial a counted with-change session's own
+        // trace can be shed; its cap state written on the row while the trace was kept still counts it.
+        use crate::noise_floor::{cap_read, CapRead};
+        let mut sessions = all(Vec::new());
+        let before = pinned();
+        let trial =
+            Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &before, cap: Some(CapRead::Uncapped) };
+        let kept = with_arm(&trial, &sessions, &ledger(), Some(true), now()).counted.len();
+        assert_eq!(kept, 3);
+        for s in sessions.iter_mut() {
+            s.frame_cap = Some(cap_read(s));
+            s.fps_series = Vec::new();
+        }
+        let a = with_arm(&trial, &sessions, &ledger(), Some(true), now());
+        assert_eq!(a.counted.len(), kept, "{:?}", a.not_counted);
+        // Shed before the cap state was written: it can't be read, and it isn't counted as clean.
+        for s in sessions.iter_mut() {
+            s.frame_cap = None;
+        }
+        let a = with_arm(&trial, &sessions, &ledger(), Some(true), now());
+        assert_eq!(a.counted.len(), 0);
+        assert!(a.not_counted.iter().filter(|n| n.session_id.as_str() > APPLIED).all(|n| n.reason == NotCountedReason::FrameCapChanged));
     }
 
     #[test]

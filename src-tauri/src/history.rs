@@ -1198,7 +1198,7 @@ fn build_applied_change(
 ) -> Result<AppliedChange, String> {
     // Review r3 (sonnet): ONE bounded read of the active scheme serves both questions, and it reads
     // the GUID with `scheme_guid_of`, which ignores the label Windows prints in the user's language
-    // (`actions::current_power_plan_guid` keys on the English "GUID:"). Taken only when asked, which
+    // (as `actions::current_power_plan_guid` now does too). Taken only when asked, which
     // is only for the Ultimate apply.
     let seen: std::cell::OnceCell<Option<ObservedPlan>> = std::cell::OnceCell::new();
     let read = || seen.get_or_init(|| bounded_read(crate::current_power_scheme)).clone();
