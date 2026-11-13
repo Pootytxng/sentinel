@@ -507,9 +507,9 @@ fn file_hold_refusal(rec_id: &str, file: &SessionFile, live: Option<&str>) -> Op
     })
 }
 
-/// PURE: whether any Gaming Mode session step of this version touches the setting `rec_id`.
-#[cfg(test)]
-fn session_can_touch(rec_id: &str) -> bool {
+/// PURE: whether any Gaming Mode session step of this version touches the setting `rec_id`
+/// (CR-trial-gm-baseline-overlap: a Trial whose baseline ran with Gaming Mode on can't test it).
+pub(crate) fn session_can_touch(rec_id: &str) -> bool {
     session_rec_of(rec_id).is_some()
 }
 
