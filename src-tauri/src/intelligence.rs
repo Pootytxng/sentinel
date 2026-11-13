@@ -3117,6 +3117,8 @@ mod tests {
         avg_step_pct: 1.0,
         sessions: 8,
         cap: crate::noise_floor::CapRead::Uncapped,
+        cap_unread: 0,
+        max_gap_mins: 0,
     };
 
     fn mk_session(started_at: &str, game: &str, low1: f64, avg: f64) -> SessionSummary {
@@ -3152,6 +3154,7 @@ mod tests {
             background_secs_excluded: None,
             frame_pacing: None,
             gpu_load: None,
+            frame_cap: None,
         }
     }
 

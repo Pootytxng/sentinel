@@ -730,6 +730,7 @@ mod tests {
             background_secs_excluded: None,
             frame_pacing: None,
             gpu_load: None,
+            frame_cap: None,
         }
     }
 
