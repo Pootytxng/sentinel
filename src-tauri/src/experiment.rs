@@ -3708,6 +3708,12 @@ pub(crate) fn undo_outcome_choice(change_id: String, experiment_id: String) -> R
         if let Some(refusal) = crate::gaming_orchestrator::session_holds_refusal(&rec.rec_id) {
             return Err(refusal);
         }
+        // CR-plan-held-refusal (opus r2): putting back a kept plan (or plan setting) while the benchmark
+        // measures the other half writes the plan it is measuring; the apply twin is checked already.
+        let held = crate::benchmark_trial::held_now();
+        if let Some(refusal) = crate::benchmark_trial::bench_plan_class_refusal(held.as_ref(), std::iter::once(rec.rec_id.as_str())) {
+            return Err(refusal);
+        }
     }
     undo_outcome_locked(&records, &experiment_id, |cite| {
         crate::history::rollback_change_citing(&change_id, cite)
@@ -3733,7 +3739,13 @@ pub(crate) fn held_by_trial_refusal<'a>(
         return None;
     }
     let ids: Vec<&str> = rec_ids.collect();
-    let held = open.into_iter().find(|e| ids.contains(&e.rec_id.as_str()))?;
+    // CR-plan-held-refusal: the power plan and the settings OF the plan are one class while a Trial
+    // holds either; checked after a direct match, which keeps its own wording.
+    let held = match open.iter().copied().find(|e| ids.contains(&e.rec_id.as_str())) {
+        Some(held) => held,
+        // Opus r2 NIT: the class half is the one helper the undo uses too.
+        None => return plan_class_trial_refusal(records, ids.iter().copied()),
+    };
     Some(if held.status == ExperimentStatus::Pending {
         format!(
             "An earlier Trial start of \u{201c}{}\u{201d} was interrupted and isn't resolved yet, so Compy won't \
@@ -3747,6 +3759,24 @@ pub(crate) fn held_by_trial_refusal<'a>(
             held.rec_title
         )
     })
+}
+
+/// CR-plan-held-refusal: the refusal for a change to the power plan, or to a setting of it, while a
+/// Trial (`by` = "a Trial") or the benchmark (`by` = "the benchmark") is measuring the other.
+pub(crate) fn plan_class_refusal(held_title: &str, interrupted: bool, by: &str) -> String {
+    if interrupted {
+        format!(
+            "An earlier Trial start of \u{201c}{held_title}\u{201d} was interrupted and isn't resolved yet. \
+             This change writes to the same power plan, so Compy won't make it now. Check Test \u{2192} \
+             Applied & history, then try again. Nothing was changed."
+        )
+    } else {
+        format!(
+            "\u{201c}{held_title}\u{201d} is being measured by {by} right now, and this change writes to the \
+             same power plan, so Compy won't make it during the measurement. Let it finish first. \
+             Nothing was changed."
+        )
+    }
 }
 
 /// The UI's one-click apply (Fix, Optimize, the tour). The audited apply itself is
@@ -3789,8 +3819,49 @@ pub(crate) fn apply_recommendation(
 #[tauri::command]
 pub(crate) fn rollback_change(change_id: String) -> Result<(), String> {
     let rec_id = crate::history::rec_id_of_change(&change_id)?;
+    // CR-plan-held-refusal (opus r1): an undo in the power-plan class while a Trial or the benchmark
+    // measures the other half writes the plan being measured. Store gate, then Gaming Mode's, as the apply.
+    let _g = plan_class_hold_check(rec_id.iter().map(String::as_str))?;
     let _gm = crate::gaming_orchestrator::plain_change_gate(rec_id.iter().map(String::as_str))?;
     crate::history::rollback_change(change_id)
+}
+
+/// CR-plan-held-refusal (opus r1): for the undo and the core-parking restore, the plan-class half of the
+/// Trial and benchmark holds (an undo of the held setting itself keeps today's behaviour). Only a
+/// setting in the plan class takes the store gate and reads the store, so every other undo and restore
+/// runs as before. The gate is returned and held through the write, so a Trial can't start between
+/// the check and the write; a Trial store that can't be read refuses (it could hold the running Trial).
+/// Like the apply, it waits on the store gate (a lock, not a try-lock) behind a Trial start in progress.
+fn plan_class_hold_check<'a>(rec_ids: impl Iterator<Item = &'a str> + Clone) -> Result<Option<crate::race_seam::StoreGuard>, String> {
+    if !rec_ids.clone().any(crate::gaming_orchestrator::in_plan_class) {
+        return Ok(None);
+    }
+    let gate = if experiment_gate() {
+        let g = lock_store()?;
+        let records = load_store_checked()?.experiments;
+        if let Some(refusal) = plan_class_trial_refusal(&records, rec_ids.clone()) {
+            return Err(refusal);
+        }
+        Some(g)
+    } else {
+        None
+    };
+    let held = crate::benchmark_trial::held_now();
+    if let Some(refusal) = crate::benchmark_trial::bench_plan_class_refusal(held.as_ref(), rec_ids) {
+        return Err(refusal);
+    }
+    Ok(gate)
+}
+
+/// CR-plan-held-refusal (opus r1), PURE: only the plan-class half of [`held_by_trial_refusal`]: an open
+/// Trial on the power plan or a setting of it, and a change to the other half.
+pub(crate) fn plan_class_trial_refusal<'a>(records: &[ExperimentRecord], rec_ids: impl Iterator<Item = &'a str>) -> Option<String> {
+    let ids: Vec<&str> = rec_ids.collect();
+    let held = records
+        .iter()
+        .filter(|e| matches!(e.status, ExperimentStatus::Pending | ExperimentStatus::Running))
+        .find(|e| ids.iter().any(|w| crate::gaming_orchestrator::plan_class_clash(&e.rec_id, w)))?;
+    Some(plan_class_refusal(&held.rec_title, held.status == ExperimentStatus::Pending, "a Trial"))
 }
 
 /// CR-core-parking-held-with-plan: the webview's leftover restore. The core-parking restore writes the
@@ -3804,6 +3875,9 @@ pub(crate) fn restore_leftover(
     detector_id: String,
     display_title: String,
 ) -> Result<crate::history::AppliedChangeView, String> {
+    // CR-plan-held-refusal (opus r1): the core-parking restore writes the plan a Trial or the benchmark
+    // may be measuring.
+    let _g = plan_class_hold_check(std::iter::once(detector_id.as_str()))?;
     let _gm = crate::gaming_orchestrator::plain_change_gate(std::iter::once(detector_id.as_str()))?;
     crate::history::restore_leftover(&detector_id, &display_title)
 }
@@ -6096,6 +6170,66 @@ mod experiment_tests {
             let write = body.find(call).expect("the ledger is written");
             assert!(gate < read && read < write, "{sig}: gate, then read, then write");
         }
+    }
+
+    #[test]
+    fn a_plain_change_to_the_power_plan_or_a_setting_of_it_is_refused_while_a_trial_holds_the_other() {
+        // CR-plan-held-refusal: USB selective suspend, PCIe link power and core parking are settings OF
+        // the active power plan; changing the plan while a Trial holds one of them (or one of them while
+        // a Trial holds the plan) writes the plan the Trial is measuring.
+        let open = |rec: &str, status: ExperimentStatus| {
+            let mut e = judged("exp:run", rec, "no-change", TrialOutcome::Recommended);
+            e.status = status;
+            e.verdict = None;
+            e
+        };
+        for status in [ExperimentStatus::Running, ExperimentStatus::Pending] {
+            let plan = [open("power-ultimate", status)];
+            for wanted in ["usb-selective-suspend-off", "pcie-aspm-off", "core-parking-forced"] {
+                let why = held_by_trial_refusal(&plan, std::iter::once(wanted)).expect("refused");
+                assert!(why.contains("same power plan") && why.contains("Nothing was changed"), "{status:?} {wanted}: {why}");
+                let setting = [open(wanted, status)];
+                let why = held_by_trial_refusal(&setting, std::iter::once("power-ultimate")).expect("refused");
+                assert!(why.contains("same power plan"), "{status:?} {wanted}: {why}");
+                // A batch naming one of them is refused whole.
+                assert!(held_by_trial_refusal(&setting, ["game-mode-on", "power-ultimate"].into_iter()).is_some());
+            }
+            assert_eq!(status == ExperimentStatus::Pending, held_by_trial_refusal(&plan, std::iter::once("pcie-aspm-off")).unwrap().contains("was interrupted"));
+            // Settings outside the plan class still apply; two settings of the plan don't clash with each other.
+            assert_eq!(held_by_trial_refusal(&plan, std::iter::once("game-mode-on")), None);
+            let usb = [open("usb-selective-suspend-off", status)];
+            assert_eq!(held_by_trial_refusal(&usb, std::iter::once("pcie-aspm-off")), None);
+        }
+        // A concluded Trial holds nothing.
+        let done = judged("exp:old", "power-ultimate", "no-change", TrialOutcome::Recommended);
+        assert_eq!(held_by_trial_refusal(&[done], std::iter::once("pcie-aspm-off")), None);
+    }
+
+    #[test]
+    fn an_undo_or_restore_in_the_plan_class_is_refused_while_a_trial_holds_the_other_half() {
+        // CR-plan-held-refusal (opus r1): the undo and the core-parking restore check the class only.
+        let open = |rec: &str, status: ExperimentStatus| {
+            let mut e = judged("exp:run", rec, "no-change", TrialOutcome::Recommended);
+            e.status = status;
+            e.verdict = None;
+            e
+        };
+        let usb = [open("usb-selective-suspend-off", ExperimentStatus::Running)];
+        let why = plan_class_trial_refusal(&usb, std::iter::once("power-ultimate")).expect("refused");
+        assert!(why.contains("same power plan") && why.contains("by a Trial"), "{why}");
+        let plan = [open("power-ultimate", ExperimentStatus::Pending)];
+        assert!(plan_class_trial_refusal(&plan, std::iter::once("core-parking-forced")).unwrap().contains("was interrupted"));
+        // The held setting's own undo keeps today's behaviour; outside the class, nothing.
+        assert_eq!(plan_class_trial_refusal(&usb, std::iter::once("usb-selective-suspend-off")), None);
+        assert_eq!(plan_class_trial_refusal(&usb, std::iter::once("pcie-aspm-off")), None);
+        assert_eq!(plan_class_trial_refusal(&plan, std::iter::once("game-mode-on")), None);
+        let done = judged("exp:old", "power-ultimate", "no-change", TrialOutcome::Recommended);
+        assert_eq!(plan_class_trial_refusal(&[done], std::iter::once("pcie-aspm-off")), None);
+        // Only the plan class takes the check (every other undo and restore runs as before).
+        for rec in ["power-ultimate", "usb-selective-suspend-off", "pcie-aspm-off", "core-parking-forced"] {
+            assert!(crate::gaming_orchestrator::in_plan_class(rec), "{rec}");
+        }
+        assert!(!crate::gaming_orchestrator::in_plan_class("game-mode-on"));
     }
 
     #[test]
