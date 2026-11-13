@@ -79,9 +79,10 @@ pub(crate) fn build_receipt_payload(
     // stamp, `priorities::primary_gpu_of`), not the first adapter (an iGPU on a hybrid rig). A session
     // recorded on another card is never paired with it: the receipt reads the newest session not
     // recorded on another card (P9-session-on-this-hardware's rule), or there is no receipt.
-    // Known limit (review nit): a session that recorded NO card (an older Compy) is kept and paired
-    // with this PC's card, as `hw_class` has always meant "this PC now"; saying "not tied" would need
-    // a schema field, and the payload stays schema v1.
+    // CR-receipt-unrecorded-unknown: a session that recorded NO card (saved by an older Compy, before
+    // session fingerprints) is kept, but it can't show which card it ran on, so the receipt's card
+    // reads "unknown" for it, never this PC's card now. No schema change: "unknown" is already a
+    // value of the v1 payload (an unread card); the payload is built on demand, never stored.
     let gpu_now = crate::priorities::primary_gpu_of(hardware);
     let here = crate::priorities::sessions_on_this_gpu(sessions, gpu_now.as_deref());
     // The newest session that measured play: one behind another window the whole time has no
@@ -89,10 +90,12 @@ pub(crate) fn build_receipt_payload(
     let session = crate::sessions::newest_measured_row(&here)?;
     let game_raw = session.get("process_name").and_then(Value::as_str)?;
 
-    // Unread, or only Windows' fallback adapter read: the card is unknown, never a guess.
+    // Unread, or only Windows' fallback adapter read, or a session that recorded no card: the card
+    // is unknown, never a guess. (A recorded card is this card: `sessions_on_this_gpu` dropped the rest.)
     let gpu_model_raw = gpu_now
         .as_deref()
         .filter(|g| crate::priorities::identifies_a_card(g))
+        .filter(|_| crate::priorities::session_gpu(session).is_some())
         .unwrap_or("unknown");
     let cpu_family = hardware
         .get("cpu_arch")
@@ -424,9 +427,12 @@ mod receipts_tests {
             "cpu_arch": { "family_label": "C:/Users/kuya/Ryzen X3D" },
             "ram_total_bytes": 31550000000u64
         });
+        // CR-receipt-unrecorded-unknown: the session records the card it ran on (a card-less one now
+        // reads "unknown", which would leave the model-class check below nothing to check).
         let sessions = json!([{
             "process_name": "C:\\Users\\kuya\\AppData\\game.exe",
-            "avg_fps": 141.2, "low1_fps_est": 118.0, "duration_secs": 2400
+            "avg_fps": 141.2, "low1_fps_est": 118.0, "duration_secs": 2400,
+            "hw_fingerprint": { "gpu": "C:\\Users\\kuya\\Radeon RX 9070 XT" }
         }]);
         let ledger = json!([{ "rec_id": "C:\\Users\\kuya\\game-dvr-off", "status": "applied", "is_still_active": true }]);
         let p = build_receipt_payload(&hardware, &sessions, &ledger).expect("session present");
@@ -441,7 +447,9 @@ mod receipts_tests {
     #[test]
     fn payload_buckets_never_carry_exact_values() {
         let hardware = json!({ "gpus": [{ "name": "GeForce RTX 3060 Ti" }], "cpu_arch": { "family_label": "Core i7" }, "ram_total_bytes": 17110000000u64 });
-        let sessions = json!([{ "process_name": "game.exe", "avg_fps": 100.0, "low1_fps_est": 80.0, "duration_secs": 2400 }]);
+        // CR-receipt-unrecorded-unknown: recorded on this card, so the vendor below is the card's.
+        let sessions = json!([{ "process_name": "game.exe", "avg_fps": 100.0, "low1_fps_est": 80.0, "duration_secs": 2400,
+            "hw_fingerprint": { "gpu": "GeForce RTX 3060 Ti" } }]);
         let p = build_receipt_payload(&hardware, &sessions, &json!([])).expect("present");
         let s = serde_json::to_string(&p).expect("serializes");
         assert!(s.contains("\"ram_gb_bucket\":\"9-16\""));
@@ -495,10 +503,36 @@ mod receipts_tests {
         // Only another card's sessions: no receipt at all.
         let elsewhere = json!([on_card("old-card.exe", Some("NVIDIA GeForce GTX 1060"))]);
         assert_eq!(build_receipt_payload(&hybrid(), &elsewhere, &json!([])), None);
-        // Review nit: a newer session that recorded no card is kept (the known limit above).
+        // Review nit: a newer session that recorded no card is kept (its card reads "unknown", below).
         let unrecorded = json!([on_card("older.exe", None), on_card("here.exe", Some(HYBRID))]);
         let p = build_receipt_payload(&hybrid(), &unrecorded, &json!([])).expect("kept");
         assert_eq!(p.outcome.game, "older");
+    }
+
+    // CR-receipt-unrecorded-unknown (opus SHOULD-FIX of CR-receipt-gpu-other-card): a session saved
+    // before fingerprints (no `hw_fingerprint`, the shape older Compy wrote) still makes a receipt,
+    // every other field read as before, but its card reads "unknown", never this PC's card now.
+    #[test]
+    fn a_session_that_recorded_no_card_reads_unknown_not_this_card() {
+        let old_shape = json!([{ "process_name": "older.exe", "avg_fps": 120.0, "low1_fps_est": 90.0, "duration_secs": 2400 }]);
+        let p = build_receipt_payload(&hybrid(), &old_shape, &json!([])).expect("an old session still makes a receipt");
+        assert_eq!(p.hw_class.gpu_model, "unknown");
+        assert_eq!(p.hw_class.gpu_vendor, "other");
+        assert_eq!((p.outcome.game.as_str(), p.outcome.avg_fps, p.outcome.low1_fps_est), ("older", 120.0, 90.0));
+        assert_eq!(p.outcome.duration_bucket, "30-60min");
+        // A fingerprint that recorded only Windows' fallback adapter is no card recorded either.
+        let fallback = json!([on_card("g.exe", Some("Microsoft Basic Display Adapter"))]);
+        let p = build_receipt_payload(&hybrid(), &fallback, &json!([])).expect("kept");
+        assert_eq!(p.hw_class.gpu_model, "unknown");
+        // Opus nit: a blank card name, or a fingerprint with no card key, is no card recorded.
+        for fp in [json!({ "gpu": "   " }), json!({ "hash": "h" })] {
+            let row = json!([{ "process_name": "g.exe", "avg_fps": 120.0, "low1_fps_est": 90.0, "duration_secs": 2400, "hw_fingerprint": fp.clone() }]);
+            let p = build_receipt_payload(&hybrid(), &row, &json!([])).expect("kept");
+            assert_eq!(p.hw_class.gpu_model, "unknown", "{fp}");
+        }
+        // The same session recorded on this card names it.
+        let p = build_receipt_payload(&hybrid(), &json!([on_card("g.exe", Some(HYBRID))]), &json!([])).expect("present");
+        assert_eq!(p.hw_class.gpu_model, "amd radeon rx 9070 xt");
     }
 
     #[test]

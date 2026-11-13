@@ -130,8 +130,8 @@ pub(crate) enum GpuTie {
 pub(crate) use crate::hw_class::{identifies_a_card, primary_gpu_of};
 
 /// The card a session recorded at its start (`hw_fingerprint.gpu`, the most-VRAM GPU). A fallback
-/// adapter name is no card recorded.
-fn session_gpu(row: &Value) -> Option<&str> {
+/// adapter name is no card recorded. The receipt reads it too (CR-receipt-unrecorded-unknown).
+pub(crate) fn session_gpu(row: &Value) -> Option<&str> {
     row.get("hw_fingerprint")
         .and_then(|f| f.get("gpu"))
         .and_then(Value::as_str)
