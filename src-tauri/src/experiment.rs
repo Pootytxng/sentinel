@@ -2892,6 +2892,60 @@ pub(crate) fn with_gap_check(
     }
 }
 
+/// CR-trial-gm-baseline-overlap (opus + sonnet SHOULD-FIX of CR-trial-gm-between): why a session can't
+/// be the "without" side of a Trial of `rec_id`, or `None` when it can. A Gaming Mode session sets
+/// some catalog settings itself (`gaming_orchestrator::session_can_touch`); a baseline it was on for
+/// may have run with the setting already in the Trial's target state, so both sessions would run the
+/// same way and the change would read "no change" and be put back as useless. A baseline that didn't
+/// record whether Gaming Mode was on can't show it wasn't. Settings Gaming Mode never touches are not
+/// affected (`comparability::derive` still compares Gaming Mode on vs off between the two sessions).
+pub(crate) fn gaming_mode_baseline_overlap(baseline: &SessionSummary, rec_id: &str) -> Option<String> {
+    if !crate::gaming_orchestrator::session_can_touch(rec_id) {
+        return None;
+    }
+    match baseline.gaming_mode_active {
+        Some(false) => None,
+        Some(true) => Some(
+            "Gaming Mode was on during the baseline session, and Gaming Mode changes this setting itself, so \
+             that session may already have run with it changed. Play a baseline session with Gaming Mode off, \
+             then start the test. Nothing was changed."
+                .into(),
+        ),
+        None => Some(
+            "Compy didn't record whether Gaming Mode was on during the baseline session, and Gaming Mode \
+             changes this setting itself, so that session can't show it ran without it. Play a baseline \
+             session with Gaming Mode off, then start the test. Nothing was changed."
+                .into(),
+        ),
+    }
+}
+
+/// CR-trial-gm-baseline-overlap: a Trial started before the start refused such a baseline is not
+/// judged on it: confounded, restored, and says why. A verdict that already says it wasn't judged
+/// keeps its own reason; a baseline that can't be found keeps the verdict it has (the pairing already
+/// refuses a missing session).
+pub(crate) fn with_gaming_mode_baseline_check(
+    outcome: ConcludeOutcome,
+    baseline: Option<&SessionSummary>,
+    rec_id: &str,
+) -> ConcludeOutcome {
+    if !judged_against_noise(&outcome) {
+        return outcome;
+    }
+    let Some(why) = baseline.and_then(|b| gaming_mode_baseline_overlap(b, rec_id)) else {
+        return outcome;
+    };
+    let why = why.trim_end_matches(" Nothing was changed.").replace("then start the test", "then test again");
+    ConcludeOutcome {
+        verdict: "confounded".into(),
+        keep: false,
+        stop_reason: Some("gaming-mode-baseline".into()),
+        confidence: Confidence::Unknown,
+        note: format!("{why} Compy restored the change and judged nothing."),
+        ..outcome
+    }
+}
+
 fn cap_words(c: crate::noise_floor::CapRead) -> String {
     match c {
         crate::noise_floor::CapRead::Uncapped => "no cap held it".to_string(),
@@ -4083,6 +4137,11 @@ pub(crate) fn start_experiment(
     let halves_floor = DEFAULT_NOISE_FLOOR_PCT;
     let (baseline_check, baseline_halves) = baseline_for_start(baseline, halves_floor)
         .map_err(|why| format!("experiment not started — {why}"))?;
+    // CR-trial-gm-baseline-overlap: a baseline played with Gaming Mode on (or not recorded) can't
+    // stand for "without" a setting Gaming Mode itself changes.
+    if let Some(why) = gaming_mode_baseline_overlap(baseline, &rec_id) {
+        return Err(format!("experiment not started — {why}"));
+    }
     // P4-noise, kept on the record as evidence and for an older Compy, which judges only on
     // `noise_floor_pct`: the largest spread between whole unchanged sessions, never below the fixed
     // default. This build never judges on it: the verdict is judged on `game_noise` (P4-judge-noisy).
@@ -4546,6 +4605,7 @@ pub(crate) fn conclude_experiment(
             };
             let after_cap = crate::noise_floor::cap_read(treatment);
             let paired = with_cap_check(measured, baseline_cap, after_cap);
+            let paired = with_gaming_mode_baseline_check(paired, baseline, &rec.rec_id);
             let picked = match &noise {
                 Err(why) => unmeasured_noise_outcome(paired, why, &rec.game),
                 Ok(n) => {
@@ -10024,5 +10084,31 @@ mod refuse_early_tests {
         let labelled = with_assumed_band_labels(vec![old.clone()], |_| None);
         assert_eq!((labelled[0].verdict.clone(), labelled[0].verdict_note.clone()), (old.verdict, old.verdict_note));
         assert_eq!(labelled[0].assumed_band.as_ref().map(|l| l.measured_low1_pct), Some(None));
+    }
+
+    #[test]
+    fn a_baseline_played_with_gaming_mode_on_never_stands_for_without_a_setting_gaming_mode_sets() {
+        // CR-trial-gm-baseline-overlap: Gaming Mode on for both sessions reads comparable, but if it set
+        // the Trial's setting during the baseline, both ran the same state and a real effect reads
+        // "no change" and is put back as useless.
+        let mut baseline = crate::sessions::SessionAccumulator::new("2026-11-12T10:00:00+00:00".into(), Some(13)).finalize(600);
+        for rec_id in ["game-bar-disable", "sysmain-disable", "power-ultimate", "pcie-aspm-off"] {
+            baseline.gaming_mode_active = Some(true);
+            let why = gaming_mode_baseline_overlap(&baseline, rec_id).expect(rec_id);
+            assert!(why.contains("Gaming Mode was on during the baseline") && why.contains("Nothing was changed"), "{why}");
+            baseline.gaming_mode_active = None;
+            assert!(gaming_mode_baseline_overlap(&baseline, rec_id).unwrap().contains("didn't record"), "{rec_id}");
+            baseline.gaming_mode_active = Some(false);
+            assert_eq!(gaming_mode_baseline_overlap(&baseline, rec_id), None, "{rec_id}: Gaming Mode off");
+        }
+        // A setting Gaming Mode never touches is unaffected either way.
+        baseline.gaming_mode_active = Some(true);
+        assert_eq!(gaming_mode_baseline_overlap(&baseline, "hags-enable"), None);
+        // A Trial already running on such a baseline is confounded at conclude, restored, judged nothing.
+        let o = with_gaming_mode_baseline_check(measured(200.0), Some(&baseline), "game-bar-disable");
+        assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("confounded", false, Some("gaming-mode-baseline")));
+        assert!(o.note.contains("judged nothing") && o.note.contains("then test again") && !o.note.contains("Nothing was changed"), "{}", o.note);
+        assert_eq!(with_gaming_mode_baseline_check(measured(200.0), Some(&baseline), "hags-enable").verdict, measured(200.0).verdict);
+        assert_eq!(with_gaming_mode_baseline_check(measured(200.0), None, "game-bar-disable").verdict, measured(200.0).verdict);
     }
 }
