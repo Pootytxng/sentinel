@@ -280,7 +280,7 @@
     "historyCantConfirm": "无法确认",
     "historyChangedOutside": "已在 Compy 之外更改",
     "historyNothingRestored": "已关闭，无需恢复",
-    "historyNothingRestoredPlanGone": "无需恢复：做这项更改时所在的电源计划已不存在，这项更改也随之消失。Compy 关闭了这条记录，没有更改你电脑上的任何设置。",
+    "historyNothingRestoredPlanGone": "无需恢复：做这项更改时所在的电源计划已不存在，Compy 没有可以恢复到的计划。Compy 关闭了这条记录，没有更改你电脑上的任何设置。",
     "historyKeptOutside": "记录于 {{when}}：你选择保留在 Compy 之外设置的“{{plan}}”。记录这一点没有更改你电脑上的任何设置。",
     "historyAlreadyPre": "已经是 ",
     "historyAlreadyPost": "——无需更改",

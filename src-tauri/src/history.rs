@@ -3407,8 +3407,8 @@ mod receipt_commit_tests {
         build_applied_change("core-parking-forced", "Re-allow core parking", result, None).expect("build")
     }
 
-    /// The user's undo of `row`, with the production decision (`core_parking_undo_step`) run on
-    /// faked powercfg reads; `ran` collects every script that would have run elevated.
+    /// The user's undo of `row` through the production dispatch (`dispatch_rollback_outcome_with`),
+    /// with the powercfg reads faked; `ran` collects every script that would have run elevated.
     fn undo_core_parking(
         history: &mut [AppliedChange],
         listed: Option<bool>,
@@ -3419,15 +3419,15 @@ mod receipt_commit_tests {
             saves.set(saves.get() + 1);
             Ok(())
         };
-        let rollback = |_: &RollbackAction, s: &Snapshot| {
-            let Snapshot::CoreParking { prior_ac_pct, prior_dc_pct, plan_guid } = s else { panic!("core parking") };
-            match core_parking_undo_step(*prior_ac_pct, *prior_dc_pct, plan_guid.as_deref(), &|_| listed, &|| None)? {
-                CoreParkingUndo::Run(script) => {
-                    ran.borrow_mut().push(script);
-                    Ok(UndoDone::Restored)
-                }
-                CoreParkingUndo::PlanGone { plan_guid } => Ok(UndoDone::NothingToRestore(NothingRestored::plan_gone(plan_guid))),
-            }
+        let plan_listed = |_: &str| listed;
+        let active_plan = || None;
+        let run_elevated = |script: &str| {
+            ran.borrow_mut().push(script.to_string());
+            Ok(())
+        };
+        let fx = CoreParkingEffects { plan_listed: &plan_listed, active_plan: &active_plan, run_elevated: &run_elevated };
+        let rollback = |a: &RollbackAction, s: &Snapshot| {
+            dispatch_rollback_outcome_with(&crate::data_root::test_mutation_root(), a, s, &fx)
         };
         let probe = |_: &str, _: Option<&AppliedAction>| ActiveCheck::Unrecognised;
         commit_rollback(history, 0, None, &save, &RollbackEffects { rollback: &rollback, probe: &probe })
@@ -3488,16 +3488,25 @@ mod receipt_commit_tests {
     }
 
     #[test]
+    fn an_active_plan_the_list_leaves_out_is_not_gone() {
+        // Sonnet r1 nit: `powercfg /list` can omit a hidden scheme; the active one is there.
+        let step = core_parking_undo_step(Some(40), Some(30), Some(PLAN_A), &|_| Some(false), &|| Some(PLAN_A.to_uppercase()));
+        let Ok(CoreParkingUndo::Run(script)) = step else { panic!("{step:?}") };
+        assert!(script.contains(PLAN_A) && script.contains("-setactive"), "restored and re-committed live: {script}");
+    }
+
+    #[test]
     fn the_plan_list_read_tells_a_missing_plan_from_an_unreadable_list() {
         let list = "Existing Power Schemes (* Active)\n-----------------------------------\n\
                     Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced) *\n\
                     Power Scheme GUID: 6C1E3F42-0D2B-4A77-9E1F-3B7A7F6E1C10  (Synez)\n";
-        assert_eq!(plan_list_names(list, PLAN_A), Some(true), "GUIDs compare case-insensitively");
-        assert_eq!(plan_list_names(list, "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"), Some(false));
-        assert_eq!(plan_list_names("", PLAN_A), None, "an empty print is unreadable, never 'gone'");
-        assert_eq!(plan_list_names("Access is denied.\n", PLAN_A), None);
+        let read = |print: &str, guid: &str| plan_listed_in(crate::plan_guids_of(print), guid);
+        assert_eq!(read(list, PLAN_A), Some(true), "GUIDs compare case-insensitively");
+        assert_eq!(read(list, "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"), Some(false));
+        assert_eq!(read("", PLAN_A), None, "an empty print is unreadable, never 'gone'");
+        assert_eq!(read("Access is denied.\n", PLAN_A), None);
         // A substring of a listed GUID is not that plan (power_plan_exists matched substrings).
-        assert_eq!(plan_list_names(list, "6c1e3f42-0d2b-4a77-9e1f-3b7a7f6e1c1"), Some(false));
+        assert_eq!(read(list, "6c1e3f42-0d2b-4a77-9e1f-3b7a7f6e1c1"), Some(false));
     }
 
     #[test]

@@ -3690,24 +3690,15 @@ fn power_plan_exists(guid: &str) -> bool {
 }
 
 /// CR-core-parking-plan-gone: whether `guid` is in Windows' plan list, as a read that can fail.
-/// `None` = the list couldn't be read (powercfg didn't run, exited non-zero, or printed no plan at
-/// all: every Windows install lists at least one), never read as "gone". Read-only, no elevation.
+/// `None` = the list couldn't be read ([`crate::power_plan_guids`]: powercfg didn't run, exited
+/// non-zero, or listed no plan), never read as "gone". Whole GUIDs only. Read-only, no elevation.
 fn power_plan_listed(guid: &str) -> Option<bool> {
-    let out = quiet_command("powercfg").args(["/list"]).output().ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    plan_list_names(&String::from_utf8_lossy(&out.stdout), guid)
+    plan_listed_in(crate::power_plan_guids(), guid)
 }
 
-/// PURE (CR-core-parking-plan-gone): `guid` against a `powercfg /list` print. `None` when the print
-/// names no plan GUID at all (an unreadable list), otherwise whether one of its GUIDs is `guid`.
-pub(crate) fn plan_list_names(list: &str, guid: &str) -> Option<bool> {
-    let guids: Vec<String> = list.lines().filter_map(crate::scheme_guid_of).collect();
-    if guids.is_empty() {
-        return None;
-    }
-    Some(guids.iter().any(|g| g.eq_ignore_ascii_case(guid.trim())))
+/// PURE (CR-core-parking-plan-gone): `guid` against a read plan list (`None` = unread).
+pub(crate) fn plan_listed_in(guids: Option<Vec<String>>, guid: &str) -> Option<bool> {
+    guids.map(|gs| gs.iter().any(|g| g.eq_ignore_ascii_case(guid.trim())))
 }
 
 /// Pure: build the powercfg restore command for one power-plan setting,
@@ -4713,8 +4704,34 @@ pub(crate) fn restore_core_parking_default() -> Result<ApplyResult, String> {
     })
 }
 pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan_guid: Option<&str>) -> Result<UndoDone, String> {
-    match core_parking_undo_step(ac, dc, plan_guid, &power_plan_listed, &current_power_plan_guid)? {
-        CoreParkingUndo::Run(script) => run_elevated_powershell(&script).map(|()| UndoDone::Restored),
+    rollback_core_parking_with(ac, dc, plan_guid, &CoreParkingEffects::LIVE)
+}
+
+/// What a core-parking undo needs from the machine (CR-core-parking-plan-gone): the two read-only
+/// powercfg queries and the elevated run. Production is [`CoreParkingEffects::LIVE`]; tests pass fakes.
+pub(crate) struct CoreParkingEffects<'a> {
+    pub(crate) plan_listed: &'a dyn Fn(&str) -> Option<bool>,
+    pub(crate) active_plan: &'a dyn Fn() -> Option<String>,
+    pub(crate) run_elevated: &'a dyn Fn(&str) -> Result<(), String>,
+}
+
+impl CoreParkingEffects<'static> {
+    pub(crate) const LIVE: CoreParkingEffects<'static> = CoreParkingEffects {
+        plan_listed: &power_plan_listed,
+        active_plan: &current_power_plan_guid,
+        run_elevated: &run_elevated_powershell,
+    };
+}
+
+/// [`rollback_core_parking_typed`] with its effects passed in.
+pub(crate) fn rollback_core_parking_with(
+    ac: Option<u32>,
+    dc: Option<u32>,
+    plan_guid: Option<&str>,
+    fx: &CoreParkingEffects,
+) -> Result<UndoDone, String> {
+    match core_parking_undo_step(ac, dc, plan_guid, fx.plan_listed, fx.active_plan)? {
+        CoreParkingUndo::Run(script) => (fx.run_elevated)(&script).map(|()| UndoDone::Restored),
         CoreParkingUndo::PlanGone { plan_guid } => Ok(UndoDone::NothingToRestore(NothingRestored::plan_gone(plan_guid))),
     }
 }
@@ -4724,8 +4741,8 @@ pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan
 pub(crate) enum CoreParkingUndo {
     /// Run this elevated script.
     Run(String),
-    /// CR-core-parking-plan-gone: the plan the apply wrote to no longer exists. The value Compy
-    /// changed went with it, so there is nothing left on the machine to put back; nothing runs.
+    /// CR-core-parking-plan-gone: the plan the apply wrote to no longer exists, so there is no plan
+    /// left for Compy to put the value back on (and never another one); nothing runs.
     PlanGone { plan_guid: String },
 }
 
@@ -4762,15 +4779,18 @@ pub(crate) fn core_parking_undo_step(
                     Nothing was changed; try again in a moment."
             .to_string());
     };
-    if !listed {
-        // CR-core-parking-plan-gone: the setting lived inside that plan, so deleting the plan took
-        // Compy's change with it. Writing the value onto another plan would be a quiet lie, and
+    let active = active_plan();
+    let is_active = active.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(plan.trim()));
+    // Sonnet r1 nit: `powercfg /list` can leave out a hidden scheme; one that is active is there.
+    if !listed && !is_active {
+        // CR-core-parking-plan-gone: the setting lived inside that plan, so there is no plan left to
+        // put it back on (a copy the user made of it is a different plan). Writing the value onto
+        // another plan would be a quiet lie, and
         // refusing for good would leave the row "applied" forever; the row closes as nothing to
         // restore instead, with that reason on its receipt.
         return Ok(CoreParkingUndo::PlanGone { plan_guid: plan.to_ascii_lowercase() });
     }
-    let reactivate = active_plan().is_some_and(|g| g.eq_ignore_ascii_case(plan.trim()));
-    Ok(CoreParkingUndo::Run(core_parking_plan_script(plan, a, d, reactivate)))
+    Ok(CoreParkingUndo::Run(core_parking_plan_script(plan, a, d, is_active)))
 }
 
 /// How an undo that succeeded ended (CR-core-parking-plan-gone).
@@ -5199,6 +5219,33 @@ pub(crate) fn rollback_visual_effects_typed(
     Ok(())
 }
 
+/// CR-core-parking-plan-gone: [`dispatch_rollback`] for the user's undo, which also says when there
+/// was nothing left to restore. Same `MutationRoot` capability, same typed undos.
+pub(crate) fn dispatch_rollback_outcome(
+    root: &crate::data_root::MutationRoot,
+    action: &RollbackAction,
+    snapshot: &Snapshot,
+) -> Result<UndoDone, String> {
+    dispatch_rollback_outcome_with(root, action, snapshot, &CoreParkingEffects::LIVE)
+}
+
+/// [`dispatch_rollback_outcome`] with the core-parking undo's effects passed in (tests pass fakes;
+/// every other undo goes to [`dispatch_rollback`] unchanged).
+pub(crate) fn dispatch_rollback_outcome_with(
+    root: &crate::data_root::MutationRoot,
+    action: &RollbackAction,
+    snapshot: &Snapshot,
+    core_parking: &CoreParkingEffects,
+) -> Result<UndoDone, String> {
+    // The one undo that can end with nothing to restore.
+    if let (RollbackAction::RestoreCoreParkingFromSnapshot, Snapshot::CoreParking { prior_ac_pct, prior_dc_pct, plan_guid }) =
+        (action, snapshot)
+    {
+        return rollback_core_parking_with(*prior_ac_pct, *prior_dc_pct, plan_guid.as_deref(), core_parking);
+    }
+    dispatch_rollback(root, action, snapshot).map(|()| UndoDone::Restored)
+}
+
 // Dispatches a RollbackAction against its corresponding Snapshot. The match
 // is exhaustive on the (action, snapshot) pair — a mismatch is a contract
 // violation and returns Err rather than performing the wrong rollback.
@@ -5207,20 +5254,6 @@ pub(crate) fn rollback_visual_effects_typed(
 // this token exists only when Compy has verified the data root is the machine's own, so a
 // container-redirected launch cannot reach a rollback at all. Undoing a real Windows change on the
 // strength of a receipt read out of someone else's sandbox is the failure this prevents.
-pub(crate) fn dispatch_rollback_outcome(
-    root: &crate::data_root::MutationRoot,
-    action: &RollbackAction,
-    snapshot: &Snapshot,
-) -> Result<UndoDone, String> {
-    // CR-core-parking-plan-gone: the one undo that can end with nothing to restore.
-    if let (RollbackAction::RestoreCoreParkingFromSnapshot, Snapshot::CoreParking { prior_ac_pct, prior_dc_pct, plan_guid }) =
-        (action, snapshot)
-    {
-        return rollback_core_parking_typed(*prior_ac_pct, *prior_dc_pct, plan_guid.as_deref());
-    }
-    dispatch_rollback(root, action, snapshot).map(|()| UndoDone::Restored)
-}
-
 pub(crate) fn dispatch_rollback(
     _root: &crate::data_root::MutationRoot,
     action: &RollbackAction,

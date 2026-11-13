@@ -304,7 +304,7 @@
     "historyCantConfirm": "can't confirm",
     "historyChangedOutside": "changed outside Compy",
     "historyNothingRestored": "closed, nothing to restore",
-    "historyNothingRestoredPlanGone": "Nothing to restore: the power plan this change was made on no longer exists, and the change went with it. Compy closed this entry without changing anything on your PC.",
+    "historyNothingRestoredPlanGone": "Nothing to restore: the power plan this change was made on no longer exists, so there's no plan for Compy to put it back on. Compy closed this entry without changing anything on your PC.",
     "historyKeptOutside": "Recorded {{when}}: you chose to keep “{{plan}}”, which was set outside Compy. Recording that changed nothing on your PC.",
     "historyAlreadyPre": "Already ",
     "historyAlreadyPost": " — no change needed",
