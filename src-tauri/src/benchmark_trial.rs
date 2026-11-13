@@ -114,10 +114,10 @@ impl Drop for HoldRelease {
 /// PURE: the refusal for an apply naming the setting the tweak trial holds. `None` lets it go ahead.
 pub(crate) fn bench_held_refusal<'a>(
     held: Option<&(String, String)>,
-    mut rec_ids: impl Iterator<Item = &'a str>,
+    rec_ids: impl Iterator<Item = &'a str>,
 ) -> Option<String> {
     let (id, title) = held?;
-    let ids: Vec<&str> = rec_ids.by_ref().collect();
+    let ids: Vec<&str> = rec_ids.collect();
     // CR-plan-held-refusal: the plan and a setting of it are one class while the benchmark holds either.
     if !ids.contains(&id.as_str()) {
         return ids
@@ -125,13 +125,24 @@ pub(crate) fn bench_held_refusal<'a>(
             .any(|w| crate::gaming_orchestrator::plan_class_clash(id, w))
             .then(|| crate::experiment::plan_class_refusal(title, false, "the benchmark"));
     }
-    Some(()).map(|_| {
-        format!(
-            "\u{201c}{title}\u{201d} is being measured by the benchmark right now, so Compy won't apply it \
-             again on top of the measurement. Wait for it to finish and roll back, or cancel it. Nothing \
-             was changed."
-        )
-    })
+    Some(format!(
+        "\u{201c}{title}\u{201d} is being measured by the benchmark right now, so Compy won't apply it \
+         again on top of the measurement. Wait for it to finish and roll back, or cancel it. Nothing \
+         was changed."
+    ))
+}
+
+/// CR-plan-held-refusal (opus r1), PURE: only the plan-class half of [`bench_held_refusal`], for the undo
+/// and the core-parking restore: a change to the plan class while the benchmark measures the other
+/// half. An undo of the held setting itself keeps today's behaviour.
+pub(crate) fn bench_plan_class_refusal<'a>(
+    held: Option<&(String, String)>,
+    mut rec_ids: impl Iterator<Item = &'a str>,
+) -> Option<String> {
+    let (id, title) = held?;
+    rec_ids
+        .any(|w| crate::gaming_orchestrator::plan_class_clash(id, w))
+        .then(|| crate::experiment::plan_class_refusal(title, false, "the benchmark"))
 }
 
 /// Start a calibration run (no tweak, no mutation). Needs the FPS capture active + a game
@@ -716,6 +727,21 @@ mod trial_tests {
             max_temp_c: 0.0,
             bg_load_flag: false,
         }
+    }
+
+    #[test]
+    fn an_undo_or_restore_in_the_plan_class_is_refused_while_the_benchmark_holds_the_other_half() {
+        // CR-plan-held-refusal (opus r1): the undo and the core-parking restore check the class only.
+        let pcie = ("pcie-aspm-off".to_string(), "PCIe link power off".to_string());
+        let why = bench_plan_class_refusal(Some(&pcie), std::iter::once("power-ultimate")).expect("refused");
+        assert!(why.contains("same power plan") && why.contains("by the benchmark"), "{why}");
+        let plan = ("power-ultimate".to_string(), "Ultimate Performance".to_string());
+        assert!(bench_plan_class_refusal(Some(&plan), std::iter::once("core-parking-forced")).is_some());
+        // The held setting's own undo, another plan setting, or anything else: not this refusal.
+        assert_eq!(bench_plan_class_refusal(Some(&pcie), std::iter::once("pcie-aspm-off")), None);
+        assert_eq!(bench_plan_class_refusal(Some(&pcie), std::iter::once("usb-selective-suspend-off")), None);
+        assert_eq!(bench_plan_class_refusal(Some(&plan), std::iter::once("hags-on")), None);
+        assert_eq!(bench_plan_class_refusal(None, std::iter::once("power-ultimate")), None);
     }
 
     #[test]
