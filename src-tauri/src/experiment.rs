@@ -2912,13 +2912,13 @@ fn gaming_mode_overlap_words(baseline: &SessionSummary, rec_id: &str, next: &str
         Some(false) => None,
         Some(true) => Some(format!(
             "Gaming Mode was on during the baseline session, and Gaming Mode can change this setting itself, \
-             so that session may already have run with it changed. Play a baseline session with Gaming Mode \
-             off, {next}"
+             so that session may already have run with it changed. Play this game with Gaming Mode off for the \
+             baseline sessions Compy compares against, {next}"
         )),
         None => Some(format!(
             "Compy didn't record whether Gaming Mode was on during the baseline session, and Gaming Mode can \
-             change this setting itself, so that session can't show it ran without it. Play a baseline session \
-             with Gaming Mode off, {next}"
+             change this setting itself, so that session can't show it ran without the change. Play this game \
+             with Gaming Mode off for the baseline sessions Compy compares against, {next}"
         )),
     }
 }
@@ -5200,6 +5200,10 @@ pub(crate) fn conclude_realplay(experiment_id: String, crashed: bool) -> Result<
         // P4-judge-noisy (review r1): under a frame cap all the counted sessions shared (they were
         // pooled within one cap state), "no change" can't be told from the ceiling, and Maximum FPS
         // isn't judged at all, exactly as for a two-session Trial.
+        // CR-trial-gm-baseline-overlap (opus r1 MUST-FIX): a real-play Trial started before the start
+        // refused it, on as-is sessions played with Gaming Mode on, isn't judged on them either (its
+        // with-change sessions match that state, so both ran the setting the same way).
+        let outcome = with_gaming_mode_baseline_check(outcome, read.arm.reference, &rec.rec_id);
         let cap = rec.game_noise.as_ref().map_or(crate::noise_floor::CapRead::Unknown, |n| n.cap);
         let lows: Vec<f64> = read.arm.counted.iter().map(|s| s.low1_fps_est).filter(|x| x.is_finite() && *x > 0.0).collect();
         let with_low = if lows.is_empty() { f64::NAN } else { lows.iter().sum::<f64>() / lows.len() as f64 };
