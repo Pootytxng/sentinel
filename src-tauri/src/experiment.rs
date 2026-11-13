@@ -4212,7 +4212,11 @@ pub(crate) fn conclude_experiment(
                 ),
                 pairing,
             );
-            let baseline_cap = baseline.map_or(crate::noise_floor::CapRead::Unknown, crate::noise_floor::cap_read);
+            // The baseline's cap state as the start read it (its trace may be shed by now), else read now.
+            let baseline_cap = match &noise {
+                Ok(n) => n.cap,
+                Err(_) => baseline.map_or(crate::noise_floor::CapRead::Unknown, crate::noise_floor::cap_read),
+            };
             let after_cap = crate::noise_floor::cap_read(treatment);
             let paired = with_cap_check(measured, baseline_cap, after_cap);
             let picked = match &noise {
