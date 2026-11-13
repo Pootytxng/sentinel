@@ -224,6 +224,7 @@
         "lastSession": "最近一次记录的会话——{{game}}：平均 {{avg}} FPS，最差 {{low}} FPS。",
         "sessionCount_other": "有 {{count}} 次已记录的会话可供对比。",
         "tested_other": "Compy 已在这台电脑上用前后对比试验实测了 {{count}} 项改动。",
+        "testedAssumed_other": "其中 {{count}} 项改动最近一次是按假定的 ±3% 波动范围判定的,当时 Compy 还未测量每款游戏自身的波动。",
         "gpuTemp": "你的显卡当前读数为 {{temp}}°C。",
         "peakTemp": "最近一次记录的会话中峰值为 {{temp}}°C。"
       },

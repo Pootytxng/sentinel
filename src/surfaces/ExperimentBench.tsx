@@ -20,6 +20,9 @@ import { LEDGER_CHANGED_EVENT } from "../types";
 import { writeLedger } from "../data/ledger-write";
 import { liveChangeGroups } from "../data/live-changes";
 import { prettyGameName } from "./game-name";
+import { assumedBandLine, type AssumedBand } from "./assumed-band";
+// Item 7: the label lives in one shared module; re-exported for existing importers.
+export { assumedBandLine };
 import { knownFps } from "../lib/session-metrics";
 import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome";
 import { BentoTile } from "../design/bento/BentoGrid";
@@ -151,17 +154,6 @@ type GameNoise = {
   max_gap_mins?: number;
 };
 
-/** P4-judge-noisy (experiment.rs `AssumedBandLabel`, read-only): a verdict judged on the assumed ±3%
- *  band before Compy measured each game's noise, and that game's noise as measured now (null = not yet). */
-type AssumedBand = {
-  assumed_pct: number;
-  measured_low1_pct: number | null;
-  measured_sessions: number | null;
-  /** The old verdict claimed better or worse: only then did a wider noise mean it over-claimed. */
-  claimed_change?: boolean;
-  /** The old verdict judged anything at all (an old too-noisy result did not). */
-  judged?: boolean;
-};
 
 /** P4-comparable — what one session's records say about stretches that weren't play. */
 type SessionStretches = {
@@ -492,22 +484,6 @@ function noiseLine(
   return t("lab.experimentBench.noiseUnmeasured", { band: pct(n.band_pct) });
 }
 
-// P4-judge-noisy (immutability): a verdict judged on the assumed band is labelled, never rewritten,
-// with this game's noise as measured now; still unmeasured is said so.
-export function assumedBandLine(a: AssumedBand, game: string, t: Translate): string {
-  const pct = (v: number) => String(Math.round(v * 10) / 10);
-  const name = prettyGameName(game) || game;
-  if (a.measured_low1_pct == null) return t("lab.experimentBench.assumedBandUnmeasured", { assumed: pct(a.assumed_pct), game: name });
-  const [assumed, measured, sessions] = [pct(a.assumed_pct), pct(a.measured_low1_pct), a.measured_sessions ?? 0];
-  if (a.measured_low1_pct <= a.assumed_pct)
-    return t("lab.experimentBench.assumedBandNarrower", { assumed, measured, sessions, game: name });
-  // Only a claimed better/worse was judged against too little noise; a "no change" still stands; an old
-  // too-noisy result judged nothing.
-  if (a.judged === false) return t("lab.experimentBench.assumedBandWiderUnjudged", { assumed, measured, sessions, game: name });
-  return a.claimed_change
-    ? t("lab.experimentBench.assumedBandWider", { assumed, measured, sessions, game: name })
-    : t("lab.experimentBench.assumedBandWiderNoClaim", { assumed, measured, sessions, game: name });
-}
 
 function whenLabel(iso: string, t: Translate): string {
   const then = new Date(iso).getTime();

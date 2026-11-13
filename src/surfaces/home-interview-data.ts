@@ -384,7 +384,8 @@ export type InterviewFacts = {
    * dark bench does, never to a panel that may not be there. Absent or null as a whole = not read at
    * all yet (the interview just opened): the same routing, and the unread wording.
    */
-  trials?: { armed: boolean | null; judged: number | null } | null;
+  /** `assumed` (item 7): how many of the judged changes were judged on the assumed ±3% band. */
+  trials?: { armed: boolean | null; judged: number | null; assumed?: number | null } | null;
   /**
    * Does the Lab render a Tuning station on this PC? Only a GPU with a tuning guide gets one (AMD in
    * v1), and the Lab drops a deep-link to a station it can't render, so false routes nothing there
@@ -492,6 +493,9 @@ export function interviewFinding(
   const benchArmed = facts.trials?.armed === true;
   const testedLine = () => {
     if (testedCount > 0) ev.push(k("ev.tested", { count: testedCount }));
+    // Item 7: an old verdict judged on the assumed band is labelled wherever it is counted.
+    const assumed = facts.trials?.assumed ?? 0;
+    if (testedCount > 0 && assumed > 0) ev.push(k("ev.testedAssumed", { count: assumed }));
   };
   const sessionCountLine = () => {
     if (facts.sessionCount > 0) ev.push(k("ev.sessionCount", { count: facts.sessionCount }));

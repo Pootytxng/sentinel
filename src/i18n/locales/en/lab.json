@@ -431,6 +431,7 @@
         "outcome": "Outcome",
         "verdict": "Verdict",
         "notJudged": "not judged",
+        "assumedBand": "Band it was judged on",
         "confidence": "Confidence",
         "baselineAvg": "Before, average",
         "afterAvg": "After, average",

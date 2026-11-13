@@ -1,3 +1,4 @@
+import type { AssumedBand } from "./assumed-band";
 // P4-exit (ROADMAP Phase 4 exit, OPTIMIZATION_ENGINE §7–9): the per-game "We tested what mattered on
 // this PC" summary. READ-ONLY and pure: it derives everything from records Compy already keeps and
 // changes nothing.
@@ -71,6 +72,8 @@ export type SummaryNoise = {
 
 /** The experiment fields the summary reads (experiment.rs `ExperimentRecord`). */
 export type SummaryExperiment = {
+  /** Item 7: set on read when the verdict was judged on the assumed ±3% band. */
+  assumed_band?: AssumedBand | null;
   id: string;
   rec_id: string;
   rec_title: string;

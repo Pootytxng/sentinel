@@ -49,6 +49,7 @@ import { headlineFit } from "../design/headline-fit";
 import { homeCareEntry, fastPathReadyHeadline, fastPathApplyLabel } from "./home-intake-data";
 import { HomeInterview } from "./HomeInterview";
 import { isMeasuredVerdict, type SummaryExperiment } from "./test-summary";
+import { assumedBandCount } from "./assumed-band";
 import {
   INTERVIEW_ROOT,
   interviewQuestions,
@@ -463,7 +464,9 @@ export function HomeConsole({
         const judged = Array.isArray(exps)
           ? new Set(exps.filter((e) => isMeasuredVerdict(e.verdict)).map((e) => e.rec_id)).size
           : null;
-        if (live) setInterviewTrials({ armed: true, judged });
+        // Item 7: how many of those changes were judged on the assumed ±3% band (labelled on read).
+        const assumed = Array.isArray(exps) ? assumedBandCount(exps, isMeasuredVerdict) : null;
+        if (live) setInterviewTrials({ armed: true, judged, assumed });
       } catch {
         // Follow-up review 2026-10-26 §5 (and round 3 §4): a failed read is "couldn't read", never
         // "nothing measured", whichever call failed. The gate's answer, if it came, is kept; when even

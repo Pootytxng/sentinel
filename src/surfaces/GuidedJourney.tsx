@@ -82,6 +82,7 @@ import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
 import { asProgress, enoughLine, enoughState, setJourneyRecording, type CaptureProgress, type JourneyMode } from "./journey-enough";
 import { journeyStopped, pickUpJourney, stopJourneyHere, type JourneyProgress } from "./journey-resume";
+import { AssumedBandNote, assumedBandLine, type AssumedBand } from "./assumed-band";
 import { contextCheckFor, type RetestReason } from "./test-summary";
 import {
   asRealPlayProgress,
@@ -134,6 +135,8 @@ type JourneyExperiment = {
   /** P4-judge-noisy: the game's measured noise the verdict was judged on; when present, the stored
    *  `noise_floor_pct` is only what an older Compy would read, never shown as this result's floor. */
   game_noise?: { low1_band_pct: number; avg_band_pct: number; sessions: number } | null;
+  /** Item 7: set on read when the verdict was judged on the assumed ±3% band (never stored). */
+  assumed_band?: AssumedBand | null;
   /** P8-dims: what the catalog stated about the change's risk when this Trial started (experiment.rs
    *  `stated_risk`): its one overall word and each dimension it states (null = not stated). Absent on
    *  records started before Compy kept it. */
@@ -1039,6 +1042,8 @@ function ResultReceipt({ exp }: { exp: JourneyExperiment }) {
         value={exp.noise_evidence?.band_pct == null && exp.game_noise == null ? receiptBand(exp.noise_floor_pct) : null}
       />
       <ReceiptRow label={rk("measuredNoise")} value={receiptBand(exp.noise_evidence?.measured_noise_pct)} />
+      {/* Item 7: a verdict judged on the assumed band says so on its receipt too. */}
+      <ReceiptRow label={rk("assumedBand")} value={exp.assumed_band ? assumedBandLine(exp.assumed_band, exp.game, t) : null} />
       <ReceiptRow label={rk("samples")} value={tr?.samples != null ? String(tr.samples) : null} />
       <ReceiptRow label={rk("baselineSession")} value={exp.baseline_session_id ?? null} />
       <ReceiptRow label={rk("afterSession")} value={tr?.session_id ?? null} />
@@ -1373,7 +1378,17 @@ export function GuidedJourney({
     <div className="exp-order exp-journey" data-testid="journey" data-phase={p.kind}>
       {p.kind === "result" ? (
         // P7-depth-verdicts: the result at three depths; the line itself is unchanged.
-        <Depth testId="journey-depth" answer={lineEl} explanation={<p className="exp-fineprint journey-why">{resultWhy(p.exp, t)}</p>} receipt={<ResultReceipt exp={p.exp} />} />
+        <Depth
+          testId="journey-depth"
+          answer={lineEl}
+          explanation={
+            <>
+              <p className="exp-fineprint journey-why">{resultWhy(p.exp, t)}</p>
+              <AssumedBandNote band={p.exp.assumed_band} game={p.exp.game} testId="journey-assumed-band" />
+            </>
+          }
+          receipt={<ResultReceipt exp={p.exp} />}
+        />
       ) : (
         lineEl
       )}
