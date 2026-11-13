@@ -1896,7 +1896,7 @@ static HW_SNAPSHOT: std::sync::OnceLock<HardwareInfo> = std::sync::OnceLock::new
 
 /// The graphics card a session fingerprint names: the GPU with the most VRAM, the same pick
 /// `current_fingerprint` stamps on every session.
-fn primary_gpu(hw: &HardwareInfo) -> Option<&GpuInfo> {
+pub(crate) fn primary_gpu(hw: &HardwareInfo) -> Option<&GpuInfo> {
     hw.gpus.iter().max_by_key(|g| g.vram_bytes)
 }
 

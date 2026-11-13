@@ -630,12 +630,12 @@ pub(crate) struct HwContext {
 }
 
 pub(crate) fn hw_context_from(hardware: &Value) -> HwContext {
-    let gpu_model_raw = hardware
-        .get("gpus")
-        .and_then(Value::as_array)
-        .and_then(|g| g.first())
-        .and_then(|g| g.get("name"))
-        .and_then(Value::as_str)
+    // CR-gpu-first-elsewhere: the same card the Tier 2 receipt names (the most-VRAM GPU, not the
+    // first adapter, an iGPU on a hybrid rig); unread or Windows' fallback adapter = "unknown".
+    let gpu_now = crate::priorities::primary_gpu_of(hardware);
+    let gpu_model_raw = gpu_now
+        .as_deref()
+        .filter(|g| crate::priorities::identifies_a_card(g))
         .unwrap_or("unknown");
     let cpu_family_raw = hardware
         .get("cpu_arch")
@@ -1183,6 +1183,20 @@ mod tests {
         assert_eq!(hw.cpu_family, "ryzen x3d");
         assert_eq!(hw.ram_gb_bucket, "25-32", "bucketed, never exact bytes");
         assert!(!format!("{hw:?}").contains("kuya"), "username leaked: {hw:?}");
+    }
+
+    // CR-gpu-first-elsewhere: the card games run on (most VRAM), not the first adapter (the iGPU on a
+    // hybrid rig); Windows' fallback adapter is "unknown", as the Tier 2 receipt reads it.
+    #[test]
+    fn hw_context_names_the_most_vram_card_not_the_first_adapter() {
+        let hybrid = json!({ "gpus": [
+            { "name": "AMD Radeon(TM) Graphics", "vram_bytes": 536870912u64 },
+            { "name": "NVIDIA GeForce RTX 4070", "vram_bytes": 12884901888u64 },
+        ] });
+        let hw = hw_context_from(&hybrid);
+        assert_eq!((hw.gpu_vendor.as_str(), hw.gpu_model.as_str()), ("nvidia", "nvidia geforce rtx 4070"));
+        let basic = json!({ "gpus": [{ "name": "Microsoft Basic Display Adapter", "vram_bytes": 0u64 }] });
+        assert_eq!(hw_context_from(&basic).gpu_model, "unknown");
     }
 
     // ---- Assembly + shape (§1) ----

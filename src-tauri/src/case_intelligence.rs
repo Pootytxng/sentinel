@@ -1373,7 +1373,9 @@ impl CaseIncidentFacts {
 ///
 /// Reads, never collects: the hardware snapshot is `hardware.rs`'s job and is not duplicated here.
 pub(crate) fn local_facts_from(hw: &crate::hardware::HardwareInfo) -> CaseLocalFacts {
-    let gpu = hw.gpus.first();
+    // CR-gpu-first-elsewhere: the card games run on (the most-VRAM GPU, as session fingerprints
+    // pick it), not the first adapter, which is the iGPU on a hybrid rig.
+    let gpu = crate::hardware::primary_gpu(hw);
     CaseLocalFacts {
         gpu_vendor: gpu.and_then(|g| vendor_token(&g.name)).map(str::to_string),
         gpu_driver_version: gpu
@@ -4586,6 +4588,22 @@ mod tests {
                 assert_eq!(local_facts_from(&hw).gpu_vendor.as_deref(), Some(expect), "{name}");
                 assert!(CASE_GPU_VENDORS.contains(&expect));
             }
+        }
+
+        // CR-gpu-first-elsewhere: the local facts are the card games run on (most VRAM), not the
+        // first adapter (the iGPU on a hybrid rig).
+        #[test]
+        fn local_facts_read_the_most_vram_card_not_the_first_adapter() {
+            let hw = HardwareInfo {
+                gpus: vec![
+                    GpuInfo { vram_bytes: 536_870_912, ..gpu("AMD Radeon(TM) Graphics", "31.0.1") },
+                    GpuInfo { vram_bytes: 12_884_901_888, ..gpu("NVIDIA GeForce RTX 4070", "566.36") },
+                ],
+                ..HardwareInfo::default()
+            };
+            let f = local_facts_from(&hw);
+            assert_eq!(f.gpu_vendor.as_deref(), Some("nvidia"));
+            assert_eq!(f.gpu_driver_version.as_deref(), Some("566.36"));
         }
 
         #[test]

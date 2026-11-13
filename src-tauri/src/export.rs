@@ -552,7 +552,8 @@ fn build_discord_block(
     trust_ledger: &Value,
     exported_at: &str,
 ) -> String {
-    let gpu = obj_arr(hardware, "gpus").first().map(|g| vstr(g, "name")).unwrap_or_else(|| "—".into());
+    // CR-gpu-first-elsewhere: the card games run on (most VRAM), not the first adapter (an iGPU).
+    let gpu = crate::priorities::primary_gpu_of(hardware).unwrap_or_else(|| "—".into());
     let cpu = hardware
         .get("cpu_arch")
         .and_then(|a| a.get("family_label"))
@@ -1123,6 +1124,19 @@ mod export_tests {
         assert!(card.contains("measured, not promised"), "card carries the tagline line");
         assert!(card.contains(site_host()), "card carries the bare host");
         assert!(card.trim_end().ends_with("```"), "card stays a closed code fence");
+    }
+
+    // CR-gpu-first-elsewhere: the Discord card's rig line names the card games run on (most VRAM),
+    // not the first adapter (the iGPU on a hybrid rig).
+    #[test]
+    fn the_discord_card_names_the_most_vram_card() {
+        let hybrid = json!({ "gpus": [
+            { "name": "AMD Radeon(TM) Graphics", "vram_bytes": 536870912u64 },
+            { "name": "NVIDIA GeForce RTX 4070", "vram_bytes": 12884901888u64 },
+        ] });
+        let card = build_discord_block(&hybrid, &json!({}), &json!([]), &json!([]), "t");
+        assert!(card.contains("NVIDIA GeForce RTX 4070"), "{card}");
+        assert!(!card.contains("AMD Radeon(TM) Graphics"), "{card}");
     }
 
     #[test]
