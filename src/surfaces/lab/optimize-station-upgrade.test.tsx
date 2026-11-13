@@ -428,3 +428,17 @@ describe("CR-upgrade-area-truth: the upgrade area says what was and wasn't measu
     expect(await screen.findByTestId("check-upgrade")).toHaveTextContent(GPU_ROW.why);
   });
 });
+
+// CR-zh-fit-punctuation (s25 fixture capture): the zh-CN "before any part" lines used half-width ":"
+// and "," beside the full-width punctuation of every newer line in the upgrade area.
+describe("CR-zh-fit-punctuation: the zh-CN fit lines use full-width punctuation", () => {
+  it.each(["optimize.check.upgradeFitGpuUnknown", "optimize.check.upgradeFitGpuUserPsu", "optimize.check.upgradeFitSsd"])(
+    "%s",
+    async (key) => {
+      const { default: i18n } = await import("../../i18n");
+      const line = i18n.getFixedT("zh-CN")(key, { name: "X" });
+      expect(line).toMatch(/^更换(显卡|硬盘)之前：/);
+      expect(line).not.toMatch(/[:,]/);
+    },
+  );
+});
