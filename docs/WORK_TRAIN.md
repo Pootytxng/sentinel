@@ -2107,13 +2107,22 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       full vitest's store-lock-order guard failed (history -> gaming_orchestrator -> experiment -> comparison/drift),
       so the gate moved from history's restore_leftover to the experiment.rs command, unreviewed as a third round
       (same shape as suspend_known_service; pinned by the end-to-end test and the handler-list check).
-- [ ] **CR-core-parking-plan-guid** (CR-core-parking-held-with-plan opus r1 SHOULD-FIX 3 + r2 SHOULD-FIX 4,
+- [x] **CR-core-parking-plan-guid** (CR-core-parking-held-with-plan opus r1 SHOULD-FIX 3 + r2 SHOULD-FIX 4,
       pre-existing) The core-parking restore and its undo write SCHEME_CURRENT and its snapshot stores no plan GUID, so
       a plan switch between apply and undo (a Trial on power-ultimate not kept; or a Gaming Mode record this Compy
       can't read) lands the undo on another plan unrecorded. Record the active plan GUID in the core-parking snapshot
       (additive, serde default) and undo against it as the USB/PCIe restore does. Same class: a plain UI/batch apply
       or undo of power-ultimate while a Trial or the bench holds USB/PCIe (experiment.rs ~3078/~3110), and a plain
       USB/PCIe/core-parking change while one holds power-ultimate, are not refused. Rust; two reviews.
+      Done, plan-GUID half (s27 code, s28 landed; merge `8890d34d`): the apply records the active plan GUID
+      (`plan_guid`, additive, not written when None; read by GUID shape, locale-proof) and the undo writes that
+      plan (whole-GUID check, plan must exist); older rows undo against SCHEME_CURRENT as before. Reviews r1 opus
+      REQUEST-CHANGES (MUST-FIX English "GUID:" label, resolved by the rebase onto main's shape read) + sonnet
+      (fix taken); s28 re-review opus + sonnet APPROVE-WITH-NITS. NIT left: the plan is read before the UAC prompt
+      while the apply still writes SCHEME_CURRENT. The "same class" half is queued as CR-plan-held-refusal.
+- [ ] **CR-plan-held-refusal** (the "same class" half of CR-core-parking-plan-guid, not in its slice) A plain UI/batch
+      apply or undo of power-ultimate while a Trial or the bench holds USB/PCIe (experiment.rs ~3078/~3110), and a
+      plain USB/PCIe/core-parking change while one holds power-ultimate, are not refused. Rust; two reviews.
 - [x] **CR-trial-plan-switch-confound** (CR-core-parking-held-with-plan opus r2 SHOULD-FIX 1) Since a Gaming Mode start
       leaves the plan alone while a USB/PCIe Trial is open, a Trial whose baseline ran with Gaming Mode switching the
       plan and whose later sessions ran with it left alone compares two plans; comparability.rs ~360 and realplay.rs
