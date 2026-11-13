@@ -2078,11 +2078,23 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       (additive, serde default) and undo against it as the USB/PCIe restore does. Same class: a plain UI/batch apply
       or undo of power-ultimate while a Trial or the bench holds USB/PCIe (experiment.rs ~3078/~3110), and a plain
       USB/PCIe/core-parking change while one holds power-ultimate, are not refused. Rust; two reviews.
-- [ ] **CR-trial-plan-switch-confound** (CR-core-parking-held-with-plan opus r2 SHOULD-FIX 1) Since a Gaming Mode start
+- [x] **CR-trial-plan-switch-confound** (CR-core-parking-held-with-plan opus r2 SHOULD-FIX 1) Since a Gaming Mode start
       leaves the plan alone while a USB/PCIe Trial is open, a Trial whose baseline ran with Gaming Mode switching the
       plan and whose later sessions ran with it left alone compares two plans; comparability.rs ~360 and realplay.rs
       ~622 compare only `gaming_mode_active`. Record per session whether Gaming Mode switched the plan (or its
       left-alone list) and treat a difference as a changed condition. Rust; two reviews.
+      Done (s26, Rust + TS strings; `636a9e11`, `777cc9fa` + r2 commit, merge in the session log): each session
+      records `gaming_mode_plan` (switched / left-alone / mixed; additive, lenient, not written when None), read from
+      the Gaming Mode start's first save (`left_alone`, before any change; Active sessions only), once per Gaming
+      Mode session id. Gaming Mode on for both with a different (or mixed) handling is a changed condition (Partial,
+      "gaming-mode-plan"; receipt names it, en + zh-CN); unrecorded vs left-alone/mixed is changed too, unrecorded vs
+      set is missing context. Reviews: r1 opus + sonnet REQUEST-CHANGES (same MUST-FIX: a tick mid-start read an
+      empty contract as "left alone"; taken), r2 opus + sonnet APPROVE-WITH-NITS (sonnet SHOULD-FIX: a failed start
+      read as "set"; taken). Known limits (NITs, open): a start that can't read the plan GUID skips the switch yet
+      reads "set"; a running real-play Trial with Gaming Mode on whose reference predates this counts no Gaming Mode
+      session after the upgrade (Partial on missing context, "conditions changed") until its window ends; the
+      changed-context line is English (as every other). Unverified, separate: `current_power_plan_guid` matches the
+      literal "GUID:" (non-English Windows may never switch).
 - [x] **CR-restore-window-direct** (read-only finding first) Is every bench and Trial restore path that calls
       `history::rollback_change` directly (no gate) safe against the Gaming Mode restore window? Write the finding
       here; queue a fix only if one is not.
@@ -2316,15 +2328,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-11 ~03:20-04:00 (coordinator-assigned, CODE-ONLY throughout; owner on Discord, then in ROB RUN from ~03:52):
-  recovered the session killed on 11-10 ~20:13 (no report): it had recorded Keep "Synez Power Plan" (both power-ultimate
-  rows `changed_outside`, plan GUID unchanged) and run P4/P5 on ROB RUN to a Compy-concluded Trial exp:7 (visual-effects,
-  too-noisy, restored, no Trial open); P4/P5 not ticked (notes under each). Its Compy was still on CDP port 9339; torn
-  down to a plain launch (no-debug-port CLEAN) and its idle s12 build shells closed. Landed CR-vbs-row-truth `27a217e9`
-  (sonnet r1/r2 APPROVE-WITH-NITS, CR-vbs-local-eq1 queued), CR-care-read-promise `54fecd47`, CR-capture-last-wins
-  `6b0db90d` (sonnet APPROVE-WITH-NITS) and CR-outside-followups (c) `e2629af6`; every new test proven failing on the old
-  code; cargo 1829/0 (24 ignored), clippy clean, tsc 0, vitest 533/536 files (3 site-app suites need site-app/node_modules
-  in a worktree). Not installed, not pushed (preflight never FULL; main 28 ahead of GitHub with this line).
 - 2026-11-11 ~04:02-06:38 (coordinator-assigned, owner in ROB RUN; his 17:44 substitution): Compy restarted once with a
   CDP port (`--no-activate`, port 9341), driven in the background, fgwatch 466 reads with Compy never in front, restored
   to a plain launch (teardown CLEAN). Three Trials on real play: exp:8 Ultimate too-noisy, exp:9 visual effects
@@ -2441,6 +2444,16 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   540/543 (3 site-app). Pushes 1-10 PASS. Installed `05d25c6a` (runtime proof attempt 1, Synez before/after);
   RELEASE_STATE re-stamped (`e5cdbf3f`). Screen check view-1112d NOT run (owner never idle 10+ min; activation not
   disproven); upgrade block seen only in the dev fixture. Closed #638 (a6bca54e, fca76591).
+- 2026-11-12 ~17:00-18:55 (s26, coordinator-assigned; no game at any check; owner on Discord/ChatGPT/Claude, idle 10+
+  min only ~18:20-18:30, during the build): PRODUCT_CONSTITUTION §37 owner amendment ("add it", `4d5217d5`); landed
+  P4-judge-noisy (merge `36ae8929`; sonnet r1 + opus r1/r2 REQUEST-CHANGES, every MUST-FIX taken, opus r3
+  APPROVE-WITH-NITS; ROB RUN fixture: 9 as-is sessions, all read uncapped, 1% low band 23.0%, average 18.0%) and
+  CR-trial-plan-switch-confound (r1 opus + sonnet REQUEST-CHANGES, MUST-FIX taken; r2 both APPROVE-WITH-NITS);
+  owner fact 17:02, idea 17:08 and standard 17:14 recorded verbatim; TG items queued. cargo 1918/0 (P4) and 1922/0,
+  clippy clean, full vitest 541/544 both (3 site-app). Pushes PASS (`36ae8929`, `b6aaf772`, this one). Installed
+  `36ae8929` (runtime proof attempt 1, Synez before/after); RELEASE_STATE re-stamped (`b6aaf772`). Screen check
+  view-1112d NOT run (owner active again by 18:30). ITEM 2 not reached: CR-trial-gm-baseline-overlap,
+  CR-core-parking-plan-guid, CR-receipt-unrecorded-unknown, CR-ts-gpu-first.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`

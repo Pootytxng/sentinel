@@ -1224,8 +1224,8 @@ fn start_fps_capture_locked() -> Result<(), String> {
             // Gaming Mode presence: a valid session slot at ANY tick marks the whole session —
             // a save-time-only probe would read false for a Gaming Mode session that ended
             // before monitoring stopped. Read-only 1 Hz file check; while Gaming Mode is on it now reads
-            // and parses the small session file every tick (a torn read parses as None: that tick is
-            // skipped), so a second Gaming Mode session during the same game session is seen too.
+            // and parses the small session file every tick (it is saved by temp file and rename), so a
+            // second Gaming Mode session during the same game session is seen too.
             let mut gaming_mode_seen = false;
             // CR-trial-plan-switch-confound: what each Gaming Mode session seen did with the power plan
             // (read once per Gaming Mode session id), so a Trial never compares two plans unawares.

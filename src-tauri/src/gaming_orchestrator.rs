@@ -212,7 +212,8 @@ fn rec_of_label(label: &str) -> Option<&'static str> {
 /// from the contract, which a start fills step by step: a read in between would see no plan step yet.
 /// Left alone = a Trial or the benchmark held the plan or a setting of it; otherwise the start set the
 /// max-performance plan (or found it already active, or found none: the same plan in every session
-/// on this PC, so it compares alike).
+/// on this PC, so it compares alike). Known limit (review r2, opus NIT 1): a start that couldn't read
+/// the current plan's GUID skips the switch and still reads as "set".
 pub(crate) fn plan_handling(file: &SessionFile) -> crate::sessions::GamingModePlan {
     if file.left_alone.iter().any(|l| l == LABEL_POWER || l == LABEL_POWER_SETTING_HELD) {
         crate::sessions::GamingModePlan::LeftAlone
@@ -223,13 +224,15 @@ pub(crate) fn plan_handling(file: &SessionFile) -> crate::sessions::GamingModePl
 
 /// PURE (CR-trial-plan-switch-confound): fold one read of the Gaming Mode session file into what an
 /// FPS session records: each Gaming Mode session id counts once; two that handled the plan
-/// differently make the session "mixed".
+/// differently make the session "mixed". Review r2 (sonnet SHOULD-FIX 1): only an Active session is
+/// read; a start that failed and is undoing (or a restore that failed) is never recorded as having
+/// set its plan.
 pub(crate) fn observe_plan(
     file: &SessionFile,
     seen_ids: &mut Vec<String>,
     plan: Option<crate::sessions::GamingModePlan>,
 ) -> Option<crate::sessions::GamingModePlan> {
-    if seen_ids.contains(&file.session_id) {
+    if file.status != SessionStatus::Active || seen_ids.contains(&file.session_id) {
         return plan;
     }
     seen_ids.push(file.session_id.clone());
@@ -1565,6 +1568,12 @@ mod spans_trial_tests {
         assert_eq!(plan, Some(P::Switched));
         plan = observe_plan(&with("gm-2", held, Vec::new()), &mut ids, plan);
         assert_eq!((plan, ids.len()), (Some(P::Mixed), 2));
+        // A start that failed and is undoing (or a failed restore) is never read as having set its plan.
+        for status in [SessionStatus::Ending, SessionStatus::RestorePending, SessionStatus::RestoreFailed] {
+            let mut none = Vec::new();
+            let undoing = SessionFile { status, ..with("gm-9", Vec::new(), Vec::new()) };
+            assert_eq!((observe_plan(&undoing, &mut none, None), none.len()), (None, 0));
+        }
     }
 
     // CR-core-parking-held-with-plan (fourth range review, SHOULD-FIX): the core-parking leftover
