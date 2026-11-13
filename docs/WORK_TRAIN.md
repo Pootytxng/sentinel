@@ -270,6 +270,31 @@ release checklist); no new rules.
       uncapped trace with heavy dips can read capped; old-Compy-concluded record of a new start is unlabelled; a
       pre-branch Smoothest Trial keeps the old pacing band; real play's headroom check uses an arithmetic mean;
       session-end notice `last_steady` still on the 3% halves grade; `get_experiments` reloads history per game.
+      REVIEW FACT (independent measurement review d7e67ee5..cab9b957, 2026-11-12, via the coordinator): the band math
+      checks out on the owner's data (RMS 9.20% / 7.18%, Satterthwaite df 5.57, t 2.495 -> 23.0% / 18.0% under model
+      2); all 13 ROB RUN sessions are uncapped; the frame cap the owner remembers was in WARDOGS, 2026-10-29
+      22:37-23:17: four sessions flat at ~320 fps that read "can't tell", so those Trials are refused (honest).
+      LANDED s27 (P4-noise-sf, merge in the session log; not ticked: the proof is still a Trial on the owner's play):
+      (1 MUST) "negligible" only when every number the goal judged stayed inside its band; a mixed result says what
+      moved which way, default wins; (2) steps as log ratios, band stored as the matching rise over the baseline,
+      falls judged at B/(1+B) (`fall_pct`; a 3% band stays 3% both ways), model 3; a model-2 band on a running Trial
+      is read on this base, never narrower; (3) "measured now" for old-verdict labels walks back to the newest
+      measurable session; (4) a baseline and after-session further apart than the longest gap between measured
+      sessions are not judged (`gap-past-band`, localized); (5) each session's cap state is written on its row
+      while its trace is kept (`frame_cap`), unread ones are counted and named (`cap_unread`); (6) bench wording:
+      rise/fall bands, typical move vs band, few sessions, can't-read once; (9) cap ceiling = densest plateau
+      (menus far above don't hide a cap; a near-miss plateau is "can't tell"). Also: `current_power_plan_guid` read
+      the English "GUID:" label (German Windows has none); now by GUID shape. Reviews: opus r1 REQUEST-CHANGES (3
+      MUST taken), sonnet r1 APPROVE-WITH-NITS (SHOULD taken), opus r2 in the session log.
+      PARKED (s27, with reasons): (7) the assumed-band label shows only on the Trial bench, not Home/Journey/
+      receipts/"what changed" links (UI slice, not reached); (8) other fixed-3% verdicts: `arm_comparison` IS
+      reachable (SessionDebrief.tsx ~653), `tuning-measure.ts` (LabConsole) and `sessionTrends.ts` (SessionTrends)
+      are reachable; benchmark.rs / intelligence_patterns.rs not established; none changed this session; (C) the two
+      include_str! tests b1529907 added (`an_uneven_session_is_no_longer_a_reason_to_judge_nothing`,
+      `the_start_measures_the_band_and_refuses_when_it_cant`) need the conclude/start judging chain extracted into a
+      pure function before a behaviour test can drive it (Trial measurement refactor, three reviews); (opus r1
+      SHOULD 2) Smoothest's pacing change is still a % of the lower ratio against a pair-mean band; NITs: no
+      algorithm version on `frame_cap`; measured-now tries the newest 10 readable sessions only.
 - [x] **CR-zh-drift-count** (second whole-range review) zh-CN `home.json` driftCount strings still said "已漂移" after the English was reworded to "changed since they were last good" (`8d855c05`).
       Done `e49b53ed` (2026-11-11 s18, TS only, not installed): both read "{{count}} 项设置自上次正常以来已改变". Test fails on
       the old file. Full vitest 535/538 (the 3 site-app suites).
