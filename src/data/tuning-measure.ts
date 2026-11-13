@@ -276,12 +276,15 @@ export function measureTuning(
   // improvement. Only sessions that read uncapped, like the band, are judged here (a capped game is
   // judged on the Rust side, never by a second cap rule here). No band: the frames aren't called.
   const band =
-    ownResult?.at != null && Date.parse(ownResult.at) >= Date.parse(baseline.armed_at)
-      ? (ownResult.game_noise ?? null)
+    ownResult?.at != null &&
+    Date.parse(ownResult.at) >= Date.parse(baseline.armed_at) &&
+    ownResult.game_noise != null &&
+    ownResult.noise_fall_pct != null
+      ? { ...ownResult.game_noise, fall_pct: ownResult.noise_fall_pct }
       : null;
   const comparable = (s: SessionSummary) =>
     band != null && band.cap?.state === "uncapped" && s.frame_cap?.state === "uncapped";
-  const fallPct = band != null ? (100 * band.low1_band_pct) / (100 + band.low1_band_pct) : null;
+  const fallPct = band?.fall_pct ?? null;
   const baseLow1 = baseline.baseline_low1_fps;
   const deltaPct = (low1: number): number | null =>
     baseLow1 > 0 ? round1(((low1 - baseLow1) / baseLow1) * 100) : null;
@@ -296,8 +299,10 @@ export function measureTuning(
   const low1DeltaPct = latest ? deltaPct(latest.low1_fps_est) : null;
   const fpsImproved =
     band != null && latest != null && comparable(latest) && low1DeltaPct != null && low1DeltaPct > band.low1_band_pct;
-  const fpsUnmeasured = band == null || judged.length === 0;
-  const bandText = band != null ? `±${band.low1_band_pct}%` : "";
+  // Frames "held" only when every post session was judged on the band (opus r1).
+  const fpsUnmeasured = band == null || judged.length < post.length;
+  const bandText = band != null ? `+${band.low1_band_pct}% / −${band.fall_pct}%` : "";
+  const fallText = band != null ? `−${band.fall_pct}%` : "";
 
   // Thermal payoff: compare the baseline peak to the WORST (hottest) post-tune peak — honest "it runs
   // cooler even at its hottest". A ≥3 °C drop clears sensor/ambient noise.
@@ -359,7 +364,7 @@ export function measureTuning(
   } else if (fpsRegressed) {
     verdict = "too-aggressive";
     headline = "Too aggressive";
-    detail = `Your 1% low dropped past the ${bandText} this game moves between your sessions with nothing changed — new stutters. Step back up one increment in your tool.`;
+    detail = `Your 1% low dropped past the ${fallText} this game moves between your sessions with nothing changed — new stutters. Step back up one increment in your tool.`;
   } else if (tempReal || fpsImproved) {
     if (windowMet) {
       verdict = "holding";

@@ -39,6 +39,7 @@ export function verdictLabel(v: Verdict, t?: TFunction): string {
 export function verdictTone(v: Verdict): Status {
   if (v === "improved") return "ready";
   if (v === "regressed") return "attention";
+  if (v === "unmeasured") return "info"; // item 8: not a finding, nothing called
   return "info";
 }
 

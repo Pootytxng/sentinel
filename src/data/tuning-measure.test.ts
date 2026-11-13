@@ -62,6 +62,8 @@ function measured(low1_band_pct = 3): ComparisonResult {
     game: "game.exe",
     at: "2026-06-08T19:00:00Z",
     game_noise: { low1_band_pct, sessions: 6, cap: { state: "uncapped" } },
+    // noise_floor::fall_pct, as the Rust result carries it: 3 -> 3, 10 -> 9.0, 20.6 -> 17.0.
+    noise_fall_pct: low1_band_pct <= 3 ? low1_band_pct : Math.floor(((100 * low1_band_pct) / (100 + low1_band_pct)) * 10) / 10,
   } as ComparisonResult;
 }
 
@@ -267,6 +269,20 @@ describe("measureTuning", () => {
     // Inside a measured ±20.6% band (its matching fall is −17.1%): not too aggressive.
     expect(measureTuning(baseline(), drop, measured(20.6))!.fpsRegressed).toBe(false);
     expect(measureTuning(baseline(), drop, measured(10))!.fpsRegressed).toBe(true);
+    // The matching fall is noise_floor::fall_pct's B/(1+B): +20.6% ↔ −17.08% (the Rust test's numbers).
+    const at = (low1: number) => [sess({ started_at: "2026-06-08T18:00:00Z", low1_fps_est: low1 })];
+    expect(measureTuning(baseline(), at(138 * 0.828), measured(20.6))!.fpsRegressed).toBe(true); // −17.2%
+    expect(measureTuning(baseline(), at(138 * 0.83), measured(20.6))!.fpsRegressed).toBe(false); // −17.0%
+    // At a 3% band the fall is 3% too (MIN_CLAIM_PCT): a −2.9% drop is not "too aggressive".
+    expect(measureTuning(baseline(), at(138 * 0.971), measured(3))!.fpsRegressed).toBe(false);
+    // A result without the Rust fall carries no band for the frames.
+    const noFall = { ...measured(20.6), noise_fall_pct: null } as ComparisonResult;
+    expect(measureTuning(baseline(), drop, noFall)!.fpsUnmeasured).toBe(true);
+    // One unjudged session means the frames aren't "held".
+    const mixed = [drop[1], { ...drop[2], frame_cap: null }];
+    const mm = measureTuning(baseline(), mixed, measured(20.6))!;
+    expect(mm.fpsUnmeasured).toBe(true);
+    expect(mm.detail).not.toMatch(/Frames held/);
     // A session whose cap state isn't read uncapped isn't judged here.
     const capped = drop.map((s) => ({ ...s, frame_cap: { state: "capped" as const, at_fps: 144 } }));
     const c = measureTuning(baseline(), capped, measured(10))!;

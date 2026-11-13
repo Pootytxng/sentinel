@@ -791,10 +791,6 @@ fn verdict_for(delta_pct: f64, floor: f64) -> Verdict {
 
 /// Measurement item 8: the synthetic benchmark has no measured run-to-run band (no as-is pool of
 /// repeated runs on this PC), so the efficacy of a change is shown, never called: no fixed 3%.
-/// Formerly a conservative default threshold: a delta had to clear 3% (plus the
-/// low-confidence widening) to count as real — we'd rather report "no measurable change"
-/// than overclaim a win. Tunable later; conservative on purpose (owner-approved default).
-///
 /// The efficacy the app shows: no measured band exists for the synthetic benchmark (item 8).
 pub(crate) fn measure_efficacy(before: &RunReport, after: &RunReport) -> Efficacy {
     compute_efficacy(before, after, None)

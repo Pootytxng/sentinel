@@ -205,6 +205,30 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
     expect((await screen.findByTestId("cmp-unmeasured")).textContent).toMatch(/frame cap wasn't the same/);
   });
 
+  it("measurement item 8: a measured band reads +rise / -fall, the way it was judged", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const worse = {
+      ...comparison,
+      after_low1_fps: 90.4,
+      delta_low1_pct: -18.0,
+      noise_floor_pct: 20.6,
+      noise_fall_pct: 17.0,
+      game_noise: { low1_band_pct: 20.6, sessions: 9, cap: { state: "uncapped" as const } },
+      verdict: "regressed" as const,
+    };
+    vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? worse : null));
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    await screen.findByTestId("cmp-card");
+    const card = await openWhy();
+    const line = card.querySelector(".cmp-delta")!.textContent ?? "";
+    expect(line).toMatch(/outside the \+20\.6% \/ -17% this game moves between your sessions with nothing changed/);
+    expect(line).not.toMatch(/±20\.6%/);
+  });
+
   it("a null result: the answer carries the verdict and the choice; the numbers wait behind the doors", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? comparison : null));

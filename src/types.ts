@@ -475,6 +475,8 @@ export type ComparisonResult = {
   game_noise?: { low1_band_pct: number; sessions: number; cap?: FrameCapRead } | null;
   /** Item 8: why the verdict is "unmeasured". */
   unmeasured?: "noise-unmeasured" | "frame-cap-changed" | null;
+  /** Item 8: the fall matching the band (noise_floor::fall_pct), the one "regressed" is judged on. */
+  noise_fall_pct?: number | null;
 };
 
 /** noise_floor.rs `CapRead` (serde tag "state"). */

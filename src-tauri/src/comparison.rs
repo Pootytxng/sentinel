@@ -132,6 +132,10 @@ pub(crate) struct ComparisonResult {
     /// exactly when the verdict is "unmeasured".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unmeasured: Option<String>,
+    /// Item 8 (opus r1): the fall that matches the band (`noise_floor::fall_pct`), the one a
+    /// "regressed" is judged on, so every surface reads the same number. Set with `game_noise`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub noise_fall_pct: Option<f64>,
 }
 
 // #283 — ONE lock for both of this module's files, because every racy sequence here spans them:
@@ -518,6 +522,7 @@ pub(crate) fn build_result(
             ArmNoise::Unmeasured(why) if verdict == "unmeasured" => Some((*why).to_string()),
             _ => None,
         },
+        noise_fall_pct: band.map(crate::noise_floor::fall_pct),
         game_noise,
         verdict,
         at: now.to_rfc3339(),
@@ -534,6 +539,8 @@ pub(crate) fn build_result(
 fn confound_if_fix_was_off(result: &mut ComparisonResult, armed: &ArmedComparison, fix_off: Option<(String, bool)>) {
     if result.verdict != "expired" && fix_off.is_some_and(|(rec, off)| off && rec == armed.rec_id) {
         result.verdict = "confounded".into();
+        // Item 8 (opus r1): `unmeasured` is set exactly when the verdict is "unmeasured".
+        result.unmeasured = None;
     }
 }
 
@@ -797,6 +804,7 @@ mod comparison_persistence_tests {
             crash_reported: false,
             game_noise: None,
             unmeasured: None,
+            noise_fall_pct: None,
         }
     }
 
@@ -905,7 +913,7 @@ mod comparison_tests {
     fn a_measured_band_is_judged_the_same_log_distance_both_ways() {
         assert_eq!(classify_measured(20.0, 20.6), "no-change");
         assert_eq!(classify_measured(20.7, 20.6), "improved");
-        // The fall matching +20.6% is -17.08%.
+        // The fall matching +20.6% is -17.0% (B/(1+B) = 17.08, rounded down to 0.1).
         assert_eq!(classify_measured(-17.0, 20.6), "no-change");
         assert_eq!(classify_measured(-17.2, 20.6), "regressed");
     }
@@ -954,6 +962,7 @@ mod comparison_tests {
         assert_eq!(r.noise_floor_pct, n.low1_band_pct);
         assert_eq!(r.game_noise.as_ref(), Some(n));
         assert_eq!(r.unmeasured, None);
+        assert_eq!(r.noise_fall_pct, Some(crate::noise_floor::fall_pct(n.low1_band_pct)));
         // Past the band it is a real result, both ways.
         let big = |f: f64| {
             let mut s = after.clone();
@@ -962,6 +971,11 @@ mod comparison_tests {
         };
         assert_eq!(big(1.0 + n.low1_band_pct / 100.0 + 0.01), "improved");
         assert_eq!(big(1.0 - n.low1_band_pct / 100.0), "regressed");
+        // Between the matching fall and the band: a fall is judged on the fall, so "regressed".
+        let fall = crate::noise_floor::fall_pct(n.low1_band_pct);
+        assert!(fall < n.low1_band_pct);
+        assert_eq!(big(1.0 - (fall + n.low1_band_pct) / 200.0), "regressed");
+        assert_eq!(big(1.0 - (fall - 0.2) / 100.0), "no-change");
     }
 
     #[test]
@@ -973,8 +987,12 @@ mod comparison_tests {
         assert_eq!(r.verdict, "unmeasured");
         assert_eq!(r.noise_floor_pct, 0.0);
         assert_eq!(r.unmeasured.as_deref(), Some(UNMEASURED_NOISE));
-        assert_eq!(r.game_noise, None);
+        assert_eq!((r.game_noise, r.noise_fall_pct), (None, None));
         assert_eq!(r.delta_low1_pct, 12.5, "the numbers still show");
+        // A fix read Off turns it "confounded", and the unmeasured reason goes with the verdict.
+        let mut r = build_result(&a, &session_fixture(90.0, None), &ArmNoise::Unmeasured(UNMEASURED_NOISE), Some(0), None, now);
+        confound_if_fix_was_off(&mut r, &a, Some((a.rec_id.clone(), true)));
+        assert_eq!((r.verdict.as_str(), r.unmeasured), ("confounded", None));
         // The fairness guards still win over "unmeasured".
         let r = build_result(&a, &session_fixture(90.0, None), &ArmNoise::Unmeasured(UNMEASURED_NOISE), Some(1), None, now);
         assert_eq!((r.verdict.as_str(), r.unmeasured), ("confounded", None));

@@ -194,6 +194,8 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
     // Cross-game synthesis bookkeeping for the performance trend.
     let mut degrading_games: Vec<String> = Vec::new();
     let mut trend_eligible_games: Vec<String> = Vec::new();
+    // Item 8 (opus r1): only lanes with a measured band were looked at for a direction.
+    let (mut band_games, mut band_sessions) = (0usize, 0usize);
 
     for lane in &lanes {
         let n = lane.sessions.len();
@@ -210,6 +212,10 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
             ));
         }
         let floor = band.unwrap_or(f64::INFINITY);
+        if band.is_some() {
+            band_games += 1;
+            band_sessions += n;
+        }
 
         // ── performance-trend: 1% lows over time ──
         if n < MIN_TREND_SESSIONS {
@@ -635,7 +641,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
     // coverage notes don't suppress it — below the threshold we say "needs more" instead.
     if patterns.is_empty() && !trend_eligible_games.is_empty() {
         coverage.push(format!(
-            "Checked {sessions_considered} comparable session(s) across {games_considered} game(s) — no repeated pattern past the noise floor. Quiet is a real answer."
+            "Checked {band_sessions} comparable session(s) across {band_games} game(s) with a measured band — no repeated pattern past it. Quiet is a real answer."
         ));
     }
 
@@ -745,6 +751,17 @@ mod tests {
         // A band wider than the move: no direction either.
         let r = detect_patterns(&s, &|_| Some(25.0));
         assert!(r.patterns.iter().all(|p| p.id != "performance-trend"), "{:?}", r.patterns);
+    }
+
+    #[test]
+    fn quiet_counts_only_the_games_with_a_measured_band() {
+        // Item 8 (opus r1): a game whose directions weren't called isn't "checked, nothing found".
+        let mut s: Vec<SessionSummary> = (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
+        s.extend((0..8).map(|i| mk_session(&day(i), "other.exe", 100.0 - 2.5 * i as f64)));
+        let r = detect_patterns(&s, &|x| (x.process_name == "cp2077.exe").then_some(3.0));
+        assert!(r.patterns.iter().all(|p| p.id != "performance-trend"), "{:?}", r.patterns);
+        let quiet = r.coverage.iter().find(|c| c.contains("Quiet is a real answer")).expect("quiet line");
+        assert!(quiet.contains("8 comparable session(s) across 1 game(s) with a measured band"), "{quiet}");
     }
 
     #[test]
