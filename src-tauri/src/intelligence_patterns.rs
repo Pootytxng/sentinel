@@ -205,7 +205,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
         }
         // Item 8: this game's measured band at its newest session; none, and no 1% low direction is
         // called for it (an infinite floor is never crossed).
-        let band = band_at(&lane.sessions[n - 1]);
+        let band = band_at(lane.sessions[n - 1]);
         if band.is_none() {
             coverage.push(format!(
                 "1% low directions for {game}: not called. Compy hasn't measured how much {game} moves between your sessions with nothing changed."
