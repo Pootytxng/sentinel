@@ -3651,13 +3651,13 @@ Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n";
         // A row from before the plan was recorded still undoes as it always did.
         assert!(core_parking_script(40, 30).contains("SCHEME_CURRENT"));
         // Additive: an older row loads with no plan, and none isn't written.
-        let old: Snapshot = serde_json::from_value(serde_json::json!({ "CoreParking": { "prior_ac_pct": 40, "prior_dc_pct": 30 } }))
-            .or_else(|_| serde_json::from_value(serde_json::json!({ "type": "CoreParking", "prior_ac_pct": 40, "prior_dc_pct": 30 })))
-            .expect("an older core-parking snapshot loads");
+        let with = Snapshot::CoreParking { prior_ac_pct: Some(40), prior_dc_pct: Some(30), plan_guid: Some(PLAN.into()) };
+        let mut older = serde_json::to_value(&with).unwrap();
+        older.as_object_mut().unwrap().remove("plan_guid").expect("written when present");
+        let old: Snapshot = serde_json::from_value(older).expect("an older core-parking snapshot loads");
         assert!(matches!(old, Snapshot::CoreParking { plan_guid: None, .. }));
         let v = serde_json::to_value(&old).unwrap();
         assert!(!v.to_string().contains("plan_guid"), "{v}");
-        let with = Snapshot::CoreParking { prior_ac_pct: Some(40), prior_dc_pct: Some(30), plan_guid: Some(PLAN.into()) };
         let back: Snapshot = serde_json::from_value(serde_json::to_value(&with).unwrap()).unwrap();
         assert!(matches!(back, Snapshot::CoreParking { plan_guid: Some(ref g), .. } if g == PLAN));
         // A tampered GUID never reaches the elevated command line.
