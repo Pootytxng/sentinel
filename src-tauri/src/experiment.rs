@@ -3733,7 +3733,17 @@ pub(crate) fn held_by_trial_refusal<'a>(
         return None;
     }
     let ids: Vec<&str> = rec_ids.collect();
-    let held = open.into_iter().find(|e| ids.contains(&e.rec_id.as_str()))?;
+    // CR-plan-held-refusal: the power plan and the settings OF the plan are one class while a Trial
+    // holds either; checked after a direct match, which keeps its own wording.
+    let held = match open.iter().copied().find(|e| ids.contains(&e.rec_id.as_str())) {
+        Some(held) => held,
+        None => {
+            let held = open.iter().copied().find(|e| {
+                ids.iter().any(|w| crate::gaming_orchestrator::plan_class_clash(&e.rec_id, w))
+            })?;
+            return Some(plan_class_refusal(&held.rec_title, held.status == ExperimentStatus::Pending, "a Trial"));
+        }
+    };
     Some(if held.status == ExperimentStatus::Pending {
         format!(
             "An earlier Trial start of \u{201c}{}\u{201d} was interrupted and isn't resolved yet, so Compy won't \
@@ -3747,6 +3757,24 @@ pub(crate) fn held_by_trial_refusal<'a>(
             held.rec_title
         )
     })
+}
+
+/// CR-plan-held-refusal: the refusal for a change to the power plan, or to a setting of it, while a
+/// Trial (`by` = "a Trial") or the benchmark (`by` = "the benchmark") is measuring the other.
+pub(crate) fn plan_class_refusal(held_title: &str, interrupted: bool, by: &str) -> String {
+    if interrupted {
+        format!(
+            "An earlier Trial start of \u{201c}{held_title}\u{201d} was interrupted and isn't resolved yet. \
+             This change writes to the same power plan, so Compy won't make it now. Check Test \u{2192} \
+             Applied & history, then try again. Nothing was changed."
+        )
+    } else {
+        format!(
+            "\u{201c}{held_title}\u{201d} is being measured by {by} right now, and this change writes to the \
+             same power plan, so Compy won't make it during the measurement. Let it finish first. \
+             Nothing was changed."
+        )
+    }
 }
 
 /// The UI's one-click apply (Fix, Optimize, the tour). The audited apply itself is
@@ -6096,6 +6124,39 @@ mod experiment_tests {
             let write = body.find(call).expect("the ledger is written");
             assert!(gate < read && read < write, "{sig}: gate, then read, then write");
         }
+    }
+
+    #[test]
+    fn a_plain_change_to_the_power_plan_or_a_setting_of_it_is_refused_while_a_trial_holds_the_other() {
+        // CR-plan-held-refusal: USB selective suspend, PCIe link power and core parking are settings OF
+        // the active power plan; changing the plan while a Trial holds one of them (or one of them while
+        // a Trial holds the plan) writes the plan the Trial is measuring.
+        let open = |rec: &str, status: ExperimentStatus| {
+            let mut e = judged("exp:run", rec, "no-change", TrialOutcome::Recommended);
+            e.status = status;
+            e.verdict = None;
+            e
+        };
+        for status in [ExperimentStatus::Running, ExperimentStatus::Pending] {
+            let plan = [open("power-ultimate", status)];
+            for wanted in ["usb-selective-suspend-off", "pcie-aspm-off", "core-parking-forced"] {
+                let why = held_by_trial_refusal(&plan, std::iter::once(wanted)).expect("refused");
+                assert!(why.contains("same power plan") && why.contains("Nothing was changed"), "{status:?} {wanted}: {why}");
+                let setting = [open(wanted, status)];
+                let why = held_by_trial_refusal(&setting, std::iter::once("power-ultimate")).expect("refused");
+                assert!(why.contains("same power plan"), "{status:?} {wanted}: {why}");
+                // A batch naming one of them is refused whole.
+                assert!(held_by_trial_refusal(&setting, ["game-mode-on", "power-ultimate"].into_iter()).is_some());
+            }
+            assert_eq!(status == ExperimentStatus::Pending, held_by_trial_refusal(&plan, std::iter::once("pcie-aspm-off")).unwrap().contains("was interrupted"));
+            // Settings outside the plan class still apply; two settings of the plan don't clash with each other.
+            assert_eq!(held_by_trial_refusal(&plan, std::iter::once("game-mode-on")), None);
+            let usb = [open("usb-selective-suspend-off", status)];
+            assert_eq!(held_by_trial_refusal(&usb, std::iter::once("pcie-aspm-off")), None);
+        }
+        // A concluded Trial holds nothing.
+        let done = judged("exp:old", "power-ultimate", "no-change", TrialOutcome::Recommended);
+        assert_eq!(held_by_trial_refusal(&[done], std::iter::once("pcie-aspm-off")), None);
     }
 
     #[test]

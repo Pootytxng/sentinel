@@ -117,7 +117,15 @@ pub(crate) fn bench_held_refusal<'a>(
     mut rec_ids: impl Iterator<Item = &'a str>,
 ) -> Option<String> {
     let (id, title) = held?;
-    rec_ids.any(|r| r == id).then(|| {
+    let ids: Vec<&str> = rec_ids.by_ref().collect();
+    // CR-plan-held-refusal: the plan and a setting of it are one class while the benchmark holds either.
+    if !ids.contains(&id.as_str()) {
+        return ids
+            .iter()
+            .any(|w| crate::gaming_orchestrator::plan_class_clash(id, w))
+            .then(|| crate::experiment::plan_class_refusal(title, false, "the benchmark"));
+    }
+    Some(()).map(|_| {
         format!(
             "\u{201c}{title}\u{201d} is being measured by the benchmark right now, so Compy won't apply it \
              again on top of the measurement. Wait for it to finish and roll back, or cancel it. Nothing \
@@ -708,6 +716,20 @@ mod trial_tests {
             max_temp_c: 0.0,
             bg_load_flag: false,
         }
+    }
+
+    #[test]
+    fn a_change_to_the_power_plan_class_is_refused_while_the_benchmark_holds_the_other() {
+        // CR-plan-held-refusal: the benchmark measuring the plan holds its settings, and the reverse.
+        let plan = ("power-ultimate".to_string(), "Ultimate Performance".to_string());
+        let why = bench_held_refusal(Some(&plan), std::iter::once("pcie-aspm-off")).expect("refused");
+        assert!(why.contains("by the benchmark") && why.contains("same power plan") && why.contains("Nothing was changed"), "{why}");
+        let usb = ("usb-selective-suspend-off".to_string(), "USB selective suspend off".to_string());
+        assert!(bench_held_refusal(Some(&usb), ["hags-on", "power-ultimate"].into_iter()).is_some(), "a batch naming the plan");
+        assert_eq!(bench_held_refusal(Some(&usb), std::iter::once("pcie-aspm-off")), None, "two plan settings don't clash");
+        assert_eq!(bench_held_refusal(Some(&plan), std::iter::once("hags-on")), None, "outside the class applies");
+        // The direct hold keeps its own wording.
+        assert!(bench_held_refusal(Some(&plan), std::iter::once("power-ultimate")).unwrap().contains("measured by the benchmark right now, so Compy won't apply it"));
     }
 
     #[test]

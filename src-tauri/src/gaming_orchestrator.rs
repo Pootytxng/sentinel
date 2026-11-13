@@ -258,6 +258,15 @@ fn trial_store_start_refusal(why: &str) -> String {
     format!("Gaming Mode didn't start, because a running Trial could be testing a setting it changes. {why}")
 }
 
+/// CR-plan-held-refusal, PURE: whether changing `wanted` would change the power plan a Trial or the
+/// benchmark is measuring on `held` (or the reverse): the plan itself while a setting OF the plan is
+/// held, or a setting of the plan (USB selective suspend, PCIe link power, core parking) while the plan
+/// is held. Either write lands on the plan the test is measuring, so the test would measure two
+/// changes. A plain apply or undo is refused the way a second apply of the held setting is.
+pub(crate) fn plan_class_clash(held: &str, wanted: &str) -> bool {
+    (held == REC_POWER && PLAN_SCOPED.contains(&wanted)) || (wanted == REC_POWER && PLAN_SCOPED.contains(&held))
+}
+
 /// PURE: whether a session may change the setting `rec` (no open Trial or benchmark holds it).
 /// CR-gm-start-respects-plan-holds: the power plan is not free while a setting OF the plan is held:
 /// switching plans would leave that Trial measuring a plan without its change.
