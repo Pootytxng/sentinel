@@ -374,11 +374,11 @@ export function WhatChangedReportView({
         </span>
         <span className="wcp-nf">
           {/* P4-judge-noisy: the band is shown only when it was measured for this game; never a default. */}
-          <Term id="noise-floor">
-            {r.noise_measured
-              ? t("optimize.whatChangedPanel.noiseFloor", { pct: r.noise_floor_pct.toFixed(1) })
-              : t("optimize.whatChangedPanel.noiseUnmeasured")}
-          </Term>
+          {r.noise_measured ? (
+            <Term id="noise-floor">{t("optimize.whatChangedPanel.noiseFloor", { pct: r.noise_floor_pct.toFixed(1) })}</Term>
+          ) : (
+            <Term id="noise-floor">{t("optimize.whatChangedPanel.noiseUnmeasured")}</Term>
+          )}
         </span>
       </div>
 
