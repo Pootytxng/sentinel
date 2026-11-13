@@ -203,6 +203,16 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
       </ConfirmProvider>,
     );
     expect((await screen.findByTestId("cmp-unmeasured")).textContent).toMatch(/frame cap wasn't the same/);
+    cleanup();
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      Promise.resolve(cmd === "get_latest_comparison" ? { ...unmeasured, unmeasured: "not-comparable" } : null),
+    );
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    expect((await screen.findByTestId("cmp-unmeasured")).textContent).toMatch(/weren't played under comparable conditions/);
   });
 
   it("measurement item 8: a measured band reads +rise / -fall, the way it was judged", async () => {

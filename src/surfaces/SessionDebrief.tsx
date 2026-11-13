@@ -167,7 +167,9 @@ function ComparisonCard({
             {t(
               r.unmeasured === "frame-cap-changed"
                 ? "monitor.sessionDebrief.unmeasuredCapSub"
-                : "monitor.sessionDebrief.unmeasuredNoiseSub",
+                : r.unmeasured === "not-comparable"
+                  ? "monitor.sessionDebrief.unmeasuredConditionsSub"
+                  : "monitor.sessionDebrief.unmeasuredNoiseSub",
               { game: prettyGameName(r.game) },
             )}
           </p>
