@@ -236,6 +236,8 @@
         "sessionCount_other": "{{count}} recorded sessions to compare against.",
         "tested_one": "Compy has measured {{count}} change on this PC with a before-and-after Trial.",
         "tested_other": "Compy has measured {{count}} changes on this PC with a before-and-after Trial.",
+        "testedAssumed_one": "{{count}} of those verdicts was judged on an assumed ±3% band, before Compy measured each game's own noise.",
+        "testedAssumed_other": "{{count}} of those verdicts were judged on an assumed ±3% band, before Compy measured each game's own noise.",
         "gpuTemp": "Your graphics card is reading {{temp}}°C right now.",
         "peakTemp": "It peaked at {{temp}}°C during your last recorded session."
       },

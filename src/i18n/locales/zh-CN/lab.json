@@ -424,6 +424,7 @@
         "outcome": "目标",
         "verdict": "判定",
         "notJudged": "未判定",
+        "assumedBand": "判定所用的波动范围",
         "confidence": "置信度",
         "baselineAvg": "之前，平均",
         "afterAvg": "之后，平均",

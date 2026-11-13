@@ -402,6 +402,36 @@ describe("P5-guided: one button runs the whole Trial", () => {
   // catalog's overall word AND each risk dimension it states for the change, from the record the
   // Trial started with; a dimension it doesn't state reads "not stated", never filled in from the
   // overall word. Fails on the code before this slice, whose receipt had no risk row at all.
+  // Item 7: a verdict judged on the assumed ±3% band (labelled on read by get_experiments) says so in
+  // the Guided Journey's explanation and on its receipt, from the one shared label.
+  it("item 7: an old verdict judged on the assumed band is labelled in the result and its receipt", async () => {
+    state.concludeResult = {
+      status: "kept",
+      kept: true,
+      verdict: "improved",
+      treatment: TREATMENT,
+      game: "Valorant.exe",
+      assumed_band: { assumed_pct: 3, measured_low1_pct: 20.6, measured_sessions: 9, claimed_change: true, judged: true },
+    };
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    const rows = await receiptRows();
+    expect(rows["Band it was judged on"]).toMatch(/assumed ±3% band.*measured noise is ±20\.6% \(from 9 sessions\), wider/);
+    const journey = screen.getByTestId("journey");
+    fireEvent.click(journey.querySelector('[data-testid="journey-depth-why"] > summary')!);
+    expect((await screen.findByTestId("journey-assumed-band")).textContent).toBe(rows["Band it was judged on"]);
+  });
+
+  it("item 7: a verdict judged on a measured band carries no assumed-band label", async () => {
+    render(<ExperimentBench />);
+    await press();
+    await finalLine();
+    const rows = await receiptRows();
+    expect(rows["Band it was judged on"]).toBeUndefined();
+    expect(screen.queryByTestId("journey-assumed-band")).toBeNull();
+  });
+
   it("the receipt lists each risk dimension the catalog states, and says so for one it doesn't", async () => {
     state.concludeResult = {
       status: "kept",

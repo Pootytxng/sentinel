@@ -267,6 +267,17 @@ describe("LAW 3 — evidence is quoted, never synthesised", () => {
     expect(find("didItHelp", { ...RICH, trials: { armed: false, judged: 4 } }).level).not.toBe("measured");
   });
 
+  it("item 7: the tested count says how many verdicts were judged on the assumed band", () => {
+    const ev = (assumed: number | null | undefined) =>
+      find("didItHelp", { ...RICH, trials: { armed: true, judged: 2, assumed } }).evidence.join(" ");
+    expect(ev(1)).toMatch(/1 of those verdicts was judged on an assumed ±3% band/);
+    expect(ev(0)).not.toMatch(/assumed/);
+    expect(ev(null)).not.toMatch(/assumed/);
+    expect(ev(undefined)).not.toMatch(/assumed/);
+    // Never more than the count it qualifies.
+    expect(ev(5)).toMatch(/2 of those verdicts were judged on an assumed/);
+  });
+
   it("quotes the reading it was handed, not a rounded-up version of it", () => {
     const f = find("slowSometimes", RICH);
     const joined = f.evidence.join(" ");

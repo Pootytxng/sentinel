@@ -71,6 +71,8 @@ export type SummaryNoise = {
 
 /** The experiment fields the summary reads (experiment.rs `ExperimentRecord`). */
 export type SummaryExperiment = {
+  /** Item 7: set on read when the verdict was judged on the assumed ±3% band. */
+  assumed_band?: import("./assumed-band").AssumedBand | null;
   id: string;
   rec_id: string;
   rec_title: string;
