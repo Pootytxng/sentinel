@@ -82,19 +82,13 @@ function ComparisonCard({
   // Item 8 (opus r1): a measured band is judged +rise / -fall, so it is shown that way; an older
   // result (fixed 3%, the same both ways) keeps its own line.
   const fall = r.game_noise != null && r.noise_fall_pct != null ? r.noise_fall_pct : null;
-  const deltaLine = t(fall != null ? "monitor.sessionDebrief.deltaLineMeasured" : "monitor.sessionDebrief.deltaLine", {
-    avgSign: sign(dAvgFps),
-    avgPct: sign(r.delta_avg_pct),
-    lowSign: sign(dLowFps),
-    lowPct: sign(r.delta_low1_pct),
-    inOut:
-      r.verdict === "no-change"
-        ? t("monitor.sessionDebrief.insideNoiseFloor")
-        : t("monitor.sessionDebrief.outsideNoiseFloor"),
-    noiseFloor: r.noise_floor_pct,
-    rise: r.noise_floor_pct,
-    fall: fall ?? r.noise_floor_pct,
-  });
+  const inOut =
+    r.verdict === "no-change" ? t("monitor.sessionDebrief.insideNoiseFloor") : t("monitor.sessionDebrief.outsideNoiseFloor");
+  const [avgSign, avgPct, lowSign, lowPct] = [sign(dAvgFps), sign(r.delta_avg_pct), sign(dLowFps), sign(r.delta_low1_pct)];
+  const deltaLine =
+    fall != null
+      ? t("monitor.sessionDebrief.deltaLineMeasured", { avgSign, avgPct, lowSign, lowPct, inOut, rise: r.noise_floor_pct, fall })
+      : t("monitor.sessionDebrief.deltaLine", { avgSign, avgPct, lowSign, lowPct, inOut, noiseFloor: r.noise_floor_pct });
 
   // P7-depth-verdicts (Constitution §13): ANSWER = the verdict and what to do about it; EXPLANATION =
   // the comparison in both units against the noise floor, and what a null result means; RECEIPT = the

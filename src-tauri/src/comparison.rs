@@ -1040,9 +1040,7 @@ mod comparison_tests {
         assert_eq!(arm_noise_from(&a, &day, &day[12], |_| None), ArmNoise::Unmeasured(UNMEASURED_NOISE));
         // Another GPU in the after-session: not comparable, whatever the band says (opus r2).
         let mut other_gpu = day[12].clone();
-        if let Some(fp) = other_gpu.hw_fingerprint.as_mut() {
-            fp.gpu = "Some Other GPU".into();
-        }
+        other_gpu.hw_fingerprint.as_mut().expect("the ROB fixture carries a rig").gpu = "Some Other GPU".into();
         assert_eq!(arm_noise_from(&a, &day, &other_gpu, measure), ArmNoise::Unmeasured(UNMEASURED_CONDITIONS));
     }
 

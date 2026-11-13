@@ -212,7 +212,7 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
         <SessionDebrief {...baseProps} />
       </ConfirmProvider>,
     );
-    expect((await screen.findByTestId("cmp-unmeasured")).textContent).toMatch(/weren't played under comparable conditions/);
+    expect((await screen.findByTestId("cmp-unmeasured")).textContent).toMatch(/couldn't confirm the two eldenring sessions were played under comparable conditions/);
   });
 
   it("measurement item 8: a measured band reads +rise / -fall, the way it was judged", async () => {

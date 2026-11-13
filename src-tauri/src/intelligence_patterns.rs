@@ -212,6 +212,10 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
             ));
         }
         let floor = band.unwrap_or(f64::INFINITY);
+        // A fall is judged at the fall matching the band (`noise_floor::fall_pct`), as Trials and the
+        // armed comparison judge it (opus r3); never computed without a band.
+        let fall = band.map_or(f64::INFINITY, crate::noise_floor::fall_pct);
+        let past = |pct: f64| pct > floor || pct < -fall;
         if band.is_some() {
             band_games += 1;
             band_sessions += n;
@@ -228,7 +232,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
             let (first_fit, last_fit) = fitted_span(&ys);
             if first_fit > 0.0 {
                 let change_pct = round1((last_fit - first_fit) / first_fit * 100.0);
-                if change_pct.abs() > floor {
+                if past(change_pct) {
                     let degrading = change_pct < 0.0;
                     if degrading {
                         degrading_games.push(game.clone());
@@ -439,7 +443,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                     let med_new = median(new_ys.clone());
                     if med_old > 0.0 {
                         let delta = round1((med_new - med_old) / med_old * 100.0);
-                        if delta.abs() > floor {
+                        if past(delta) {
                             let strong = old_ys.len().min(new_ys.len()) >= STRONG_GROUP_SESSIONS
                                 || delta.abs() >= 2.0 * floor;
                             patterns.push(SessionPattern {
@@ -491,7 +495,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                 let med_off = median(off.clone());
                 if med_off > 0.0 {
                     let delta = round1((med_on - med_off) / med_off * 100.0);
-                    if delta.abs() > floor {
+                    if past(delta) {
                         let strong = on.len().min(off.len()) >= STRONG_GROUP_SESSIONS
                             || delta.abs() >= 2.0 * floor;
                         patterns.push(SessionPattern {
@@ -706,6 +710,21 @@ mod tests {
         // A band wider than the move: no direction either.
         let r = detect_patterns(&s, &|_| Some(25.0));
         assert!(r.patterns.iter().all(|p| p.id != "performance-trend"), "{:?}", r.patterns);
+    }
+
+    #[test]
+    fn a_move_exactly_at_the_band_gets_no_direction_and_a_fall_is_judged_at_its_matching_fall() {
+        // Opus r3: "past" the band, strictly. Eight sessions whose fitted 1% low rises exactly 10%.
+        let up: Vec<SessionSummary> =
+            (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0 + 10.0 / 7.0 * i as f64)).collect();
+        let trend = |s: &[SessionSummary], b: f64| detect_patterns(s, &|_| Some(b)).patterns.into_iter().any(|p| p.id == "performance-trend");
+        assert!(!trend(&up, 10.0), "a 10% rise exactly at a 10% band is not past it");
+        assert!(trend(&up, 9.9));
+        // A 10% fall: past the 9.9% fall matching an 11% band, inside the 10.7% matching a 12% band.
+        let down: Vec<SessionSummary> =
+            (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0 - 10.0 / 7.0 * i as f64)).collect();
+        assert!(trend(&down, 11.0));
+        assert!(!trend(&down, 12.0));
     }
 
     #[test]

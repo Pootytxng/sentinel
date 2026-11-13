@@ -254,7 +254,7 @@
     "unmeasuredHeadline": "Can't call this one",
     "unmeasuredNoiseSub": "Compy hasn't measured how much {{game}} moves between your sessions with nothing changed, so it won't call this better or worse. A few more sessions of {{game}} with nothing changed let the next comparison be judged.",
     "unmeasuredCapSub": "The frame cap wasn't the same in both {{game}} sessions, or Compy couldn't read it, so this comparison can't be judged.",
-    "unmeasuredConditionsSub": "The two {{game}} sessions weren't played under comparable conditions (a different GPU, game or rig), so this comparison can't be judged.",
+    "unmeasuredConditionsSub": "Compy couldn't confirm the two {{game}} sessions were played under comparable conditions (for example, a different GPU), so this comparison can't be judged.",
     "unmeasuredDeltaLine": "Average {{avgSign}} FPS ({{avgPct}}%), worst-moment FPS (1% low) {{lowSign}} FPS ({{lowPct}}%), not judged.",
     "deltaLineMeasured": "Average {{avgSign}} FPS ({{avgPct}}%), worst-moment FPS (1% low) {{lowSign}} FPS ({{lowPct}}%) - {{inOut}} the +{{rise}}% / -{{fall}}% this game moves between your sessions with nothing changed",
     "measuredBand": "measured band +{{rise}}% / -{{fall}}% ({{sessions}} sessions)",

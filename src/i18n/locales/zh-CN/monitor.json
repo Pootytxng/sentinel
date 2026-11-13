@@ -254,7 +254,7 @@
     "unmeasuredHeadline": "这次无法判断",
     "unmeasuredNoiseSub": "Compy 尚未测量在没有任何改动时 {{game}} 在你的各次游戏之间的波动幅度,因此不会判断这次是变好还是变差。在不做任何改动的情况下再玩几次 {{game}},下一次比较就能做出判断。",
     "unmeasuredCapSub": "两次 {{game}} 游戏的帧率上限不一致,或 Compy 无法读取,因此这次比较无法判断。",
-    "unmeasuredConditionsSub": "两次 {{game}} 游戏的条件不可比(显卡、游戏或硬件不同),因此这次比较无法判断。",
+    "unmeasuredConditionsSub": "Compy 无法确认两次 {{game}} 游戏是在可比条件下进行的(例如显卡不同),因此这次比较无法判断。",
     "unmeasuredDeltaLine": "平均 {{avgSign}} FPS({{avgPct}}%),最差时刻帧率(1% low){{lowSign}} FPS({{lowPct}}%),未作判断。",
     "deltaLineMeasured": "平均 {{avgSign}} FPS({{avgPct}}%),最差时刻帧率(1% low){{lowSign}} FPS({{lowPct}}%),{{inOut}}这款游戏在未做任何改动时各次游戏之间的波动范围(+{{rise}}% / -{{fall}}%)",
     "measuredBand": "实测波动范围 +{{rise}}% / -{{fall}}%({{sessions}} 次游戏)",
