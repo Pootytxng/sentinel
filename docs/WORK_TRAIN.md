@@ -2233,10 +2233,12 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       opus REQUEST-CHANGES, MUST-FIX taken (Tier 3 imported `priorities`: the pick moved to `hw_class`; the suggested
       Tier 3 import allowlist is a guard, not added here, see CR-tier3-import-allowlist), SHOULD-FIX taken (fallback
       driver), TS readers queued (CR-ts-gpu-first). r2 in the session log.
-- [ ] **CR-ts-gpu-first** (CR-gpu-first-elsewhere reviews) `src/surfaces/lab-evidence-map.ts` ~152 reads
+- [x] **CR-ts-gpu-first** (CR-gpu-first-elsewhere reviews) `src/surfaces/lab-evidence-map.ts` ~152 reads
       `hw.gpus[0]` (the Lab shows the iGPU's VRAM and driver on a hybrid rig; coupled to the hologram's `gpu-0`) and
       Check.tsx ~117 picks the first adapter with a readable driver age for driver freshness. Use `primaryGpu`
       (most VRAM). TS; one review.
+      Done (s27 code, sonnet APPROVE; s28 landed, merge `cad72727`): both read `primaryGpu`. s28 full cargo run had
+      2 comparison_race_tests failures on untouched Rust (11/11 alone; a load flake, not chased here).
 - [ ] **CR-tier3-import-allowlist** (opus r1 on CR-gpu-first-elsewhere) the Tier 3 separation guard blocks four named
       modules only; an allowlist of what Tier 3 may import would keep it from reaching `priorities`-style modules.
       A guard change: owner call (sessions add no guards).
