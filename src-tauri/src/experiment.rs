@@ -3771,10 +3771,11 @@ pub(crate) fn plan_class_refusal(held_title: &str, interrupted: bool, by: &str) 
              Applied & history, then try again. Nothing was changed."
         )
     } else {
+        // CR-plan-held-behaviour-tests: the benchmark can be cancelled, as its direct-hold refusal says.
+        let next = if by == "the benchmark" { "Let it finish, or cancel it, first." } else { "Let it finish first." };
         format!(
             "\u{201c}{held_title}\u{201d} is being measured by {by} right now, and this change writes to the \
-             same power plan, so Compy won't make it during the measurement. Let it finish first. \
-             Nothing was changed."
+             same power plan, so Compy won't make it during the measurement. {next} Nothing was changed."
         )
     }
 }
@@ -9672,6 +9673,162 @@ mod experiment_tests {
         let work = &src[src.find("fn read_realplay_progress(").unwrap()..];
         let work = &work[..work.find("\n}\n").unwrap()];
         assert!(!work.contains("lock_store(") && !work.contains("rollback_change(") && !work.contains("apply_recommendation("), "{work}");
+    }
+
+    // ── CR-plan-held-behaviour-tests: the UI's undo and the core-parking restore under a plan-class
+    // hold, run through the real commands against this test process's own data root. Every elevated
+    // command is caught by the batching sink (counted, never run), and both ledger rows point at a
+    // plan that doesn't exist, so an undo that gets past the hold fails inside the undo itself,
+    // before anything could elevate. ──
+
+    /// A valid plan-GUID shape no Windows install has.
+    const GONE_PLAN: &str = "0badf00d-0000-4000-8000-00000000c0de";
+
+    fn plan_ledger_rows() -> serde_json::Value {
+        serde_json::json!([
+            {
+                "id": "ph-usb", "rec_id": "usb-selective-suspend-off", "rec_title": "USB selective suspend off",
+                "applied_at": "2026-11-13T09:00:00+00:00", "status": "applied",
+                "snapshot": {
+                    "kind": "power-plan-setting", "plan_guid": GONE_PLAN,
+                    "subgroup_guid": "2a737441-1930-4402-8d77-b2bebba308a3",
+                    "setting_guid": "48e6b7a6-50f5-4782-a5d4-53bb8f07e226",
+                    "prior_ac_value": 1, "prior_dc_value": 1
+                },
+                "rollback_action": { "kind": "restore-power-plan-setting-from-snapshot" }
+            },
+            {
+                "id": "ph-ult", "rec_id": "power-ultimate", "rec_title": "Ultimate Performance",
+                "applied_at": "2026-11-13T09:01:00+00:00", "status": "applied",
+                "snapshot": { "kind": "power-plan", "prior_guid": GONE_PLAN },
+                "applied_action": { "kind": "set-ultimate-performance-plan" },
+                "rollback_action": { "kind": "restore-power-plan-from-snapshot" }
+            }
+        ])
+    }
+
+    fn ledger_file() -> PathBuf {
+        crate::compy_data_dir().join("history.json")
+    }
+
+    /// The shared test-root files for one scene, cleared again on drop; serialized with every other
+    /// test that sets the benchmark hold.
+    struct PlanScene {
+        _serial: std::sync::MutexGuard<'static, ()>,
+    }
+
+    impl Drop for PlanScene {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(store_path());
+            let _ = std::fs::remove_dir(store_path());
+            let _ = std::fs::remove_file(ledger_file());
+        }
+    }
+
+    fn scene(trial_on_the_plan: Option<ExperimentStatus>) -> PlanScene {
+        let serial = crate::benchmark_trial::TEST_SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+        std::fs::create_dir_all(crate::compy_data_dir()).unwrap();
+        let _ = std::fs::remove_dir(store_path());
+        std::fs::write(ledger_file(), serde_json::to_vec(&plan_ledger_rows()).unwrap()).unwrap();
+        let experiments = trial_on_the_plan
+            .map(|status| {
+                vec![ExperimentRecord {
+                    rec_id: "power-ultimate".into(),
+                    rec_title: "Ultimate Performance".into(),
+                    status,
+                    ..rec(150.0, 0)
+                }]
+            })
+            .unwrap_or_default();
+        save_store(&ExperimentStore { experiments, ..Default::default() }).unwrap();
+        PlanScene { _serial: serial }
+    }
+
+    fn ledger_now() -> Vec<crate::history::AppliedChange> {
+        serde_json::from_slice(&std::fs::read(ledger_file()).unwrap()).unwrap()
+    }
+
+    fn row_status(id: &str) -> String {
+        ledger_now().into_iter().find(|c| c.id == id).map(|c| c.status).expect("row")
+    }
+
+    #[test]
+    fn an_undo_of_a_plan_setting_is_refused_while_a_trial_measures_the_plan_and_nothing_runs() {
+        let _scene = scene(Some(ExperimentStatus::Running));
+        let sink = crate::actions::ElevationDeferral::begin().unwrap();
+        let why = crate::experiment::rollback_change("ph-usb".into()).expect_err("refused");
+        assert!(why.contains("same power plan") && why.contains("by a Trial") && why.contains("Nothing was changed"), "{why}");
+        assert_eq!(sink.deferred_count(), 0, "no elevated run");
+        assert_eq!(row_status("ph-usb"), "applied", "the row is still active");
+    }
+
+    #[test]
+    fn once_the_trial_has_concluded_the_same_undo_reaches_the_rollback() {
+        let _scene = scene(Some(ExperimentStatus::Kept));
+        let sink = crate::actions::ElevationDeferral::begin().unwrap();
+        // Past the hold, the undo itself runs: it finds the row's plan gone, which only the dispatched
+        // power-plan-setting undo says.
+        let why = crate::experiment::rollback_change("ph-usb".into()).expect_err("the gone plan fails in the undo");
+        assert!(why.contains("no longer exists") && !why.contains("same power plan"), "{why}");
+        assert_eq!(sink.deferred_count(), 0);
+    }
+
+    #[test]
+    fn the_trials_own_plan_row_is_not_refused_by_the_class_hold() {
+        // Its undo keeps today's behaviour (the direct hold is the Trial's own restore's business).
+        let _scene = scene(Some(ExperimentStatus::Running));
+        let sink = crate::actions::ElevationDeferral::begin().unwrap();
+        // It reaches the plan undo, whose one elevated write the sink catches (nothing runs).
+        crate::experiment::rollback_change("ph-ult".into()).expect("not refused by the class hold");
+        assert_eq!(sink.deferred_count(), 1, "the undo's elevated write, caught");
+        assert_eq!(row_status("ph-ult"), "rolled_back");
+    }
+
+    #[test]
+    fn a_core_parking_restore_is_refused_while_the_benchmark_measures_the_plan_and_records_nothing() {
+        let _scene = scene(None);
+        crate::benchmark_trial::hold(9_001, "power-ultimate", "Ultimate Performance");
+        let _release = crate::benchmark_trial::TestHoldRelease(9_001);
+        let sink = crate::actions::ElevationDeferral::begin().unwrap();
+        let why = crate::experiment::restore_leftover("core-parking-forced".into(), "Core parking".into())
+            .err()
+            .expect("refused");
+        assert!(why.contains("by the benchmark") && why.contains("same power plan"), "{why}");
+        assert!(why.contains("Let it finish, or cancel it, first.") && why.contains("Nothing was changed"), "{why}");
+        assert_eq!(sink.deferred_count(), 0, "no elevated run");
+        assert!(ledger_now().iter().all(|c| c.rec_id != "core-parking-forced"), "no receipt");
+    }
+
+    #[test]
+    fn a_core_parking_restore_is_not_refused_while_the_benchmark_holds_another_plan_setting() {
+        let _scene = scene(None);
+        crate::benchmark_trial::hold(9_002, "pcie-aspm-off", "PCIe link power off");
+        let _release = crate::benchmark_trial::TestHoldRelease(9_002);
+        let sink = crate::actions::ElevationDeferral::begin().unwrap();
+        // Two settings of the plan don't clash: the restore goes on to its own reads and apply (whose
+        // elevated write the sink catches). Whatever this machine's reads give, it is not the hold.
+        match crate::experiment::restore_leftover("core-parking-forced".into(), "Core parking".into()) {
+            Ok(view) => {
+                assert_eq!(view.rec_id, "core-parking-forced");
+                assert_eq!(sink.deferred_count(), 1, "the restore's one elevated write, caught");
+            }
+            Err(why) => assert!(!why.contains("same power plan") && !why.contains("by the benchmark"), "{why}"),
+        }
+    }
+
+    #[test]
+    fn a_plan_class_undo_with_an_unreadable_trial_store_says_so_and_changes_nothing() {
+        // The honest behaviour: the store could hold the Trial measuring this plan, so the undo stops,
+        // and the refusal says the Trial record couldn't be read and how to get past it.
+        let _scene = scene(None);
+        std::fs::remove_file(store_path()).unwrap();
+        std::fs::create_dir(store_path()).unwrap(); // something that is not a file at that path
+        let sink = crate::actions::ElevationDeferral::begin().unwrap();
+        let why = crate::experiment::rollback_change("ph-usb".into()).expect_err("refused");
+        assert!(why.contains("couldn't read its Trial records") && why.contains("Nothing was changed"), "{why}");
+        assert!(why.contains("try again shortly") && why.contains("experiments.json"), "the way out: {why}");
+        assert_eq!(sink.deferred_count(), 0);
+        assert_eq!(row_status("ph-usb"), "applied");
     }
 }
 

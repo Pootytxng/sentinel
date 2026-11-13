@@ -111,6 +111,22 @@ impl Drop for HoldRelease {
     }
 }
 
+/// Test-only: one test at a time may set the process-wide hold (or write the shared test data root
+/// files the hold tests read), so two tests never see each other's hold.
+#[cfg(test)]
+pub(crate) static TEST_SERIAL: Mutex<()> = Mutex::new(());
+
+/// Test-only: releases a test's hold on drop, as a run's own release does.
+#[cfg(test)]
+pub(crate) struct TestHoldRelease(pub(crate) u64);
+
+#[cfg(test)]
+impl Drop for TestHoldRelease {
+    fn drop(&mut self) {
+        drop(HoldRelease(self.0));
+    }
+}
+
 /// PURE: the refusal for an apply naming the setting the tweak trial holds. `None` lets it go ahead.
 pub(crate) fn bench_held_refusal<'a>(
     held: Option<&(String, String)>,
@@ -767,6 +783,7 @@ mod trial_tests {
         assert_eq!(bench_held_refusal(None, std::iter::once("game-mode-on")), None, "nothing held");
 
         // A run's release clears only its own hold, never a later run's.
+        let _serial = TEST_SERIAL.lock().unwrap_or_else(|p| p.into_inner());
         hold(7, "game-mode-on", "Turn on Game Mode");
         assert_eq!(held_now(), Some(held.clone()));
         // Review r1: the commands' check reads the live hold (on the old code nothing was held).
