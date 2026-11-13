@@ -108,14 +108,16 @@ const NIC_SUPPORT: Record<string, { label: string; url: string }> = {
 // know the latest driver without the network (remote fetch is gated off), so never "out of date",
 // never a version claim. Unreadable date → neutral skip, no alarm. Vendor comes from the GPU's own
 // name (not the app-level vendor prop) so the advisory names the right driver on mixed rigs.
-function driverFreshness(
+export function driverFreshness(
   gpus: GpuDriverInfo[],
   t: TFunction,
 ):
   | { tone: "skip" | "pass"; message: string; url?: undefined; label?: undefined }
   | { tone: "advisory"; message: string; label: string; url: string | null } {
-  const gpu = gpus.find((g) => g.driver_age_days != null);
-  if (!gpu)
+  // CR-ts-gpu-first: the card games run on (most VRAM), never the first adapter with a readable
+  // date (on a hybrid laptop the iGPU). Its date unreadable reads as unreadable, not another card's.
+  const gpu = primaryGpu(gpus);
+  if (!gpu || gpu.driver_age_days == null)
     return {
       tone: "skip",
       message: t("optimize.check.driverUnreadable"),
