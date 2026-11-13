@@ -4379,7 +4379,7 @@ mod leftover_restore_tests {
     #[test]
     fn wave2_blind_rollback_fails_loud_and_pairs_are_contract_checked() {
         // Core-parking with no recorded AC prior must fail loud, never guess.
-        assert!(rollback_core_parking_typed(None, Some(50)).is_err());
+        assert!(rollback_core_parking_typed(None, Some(50), None).is_err());
         // A desktop with no DC profile mirrors AC — not an error.
         assert!(core_parking_script(75, 75).contains("75"));
         // Mismatched (action, snapshot) pairs are contract violations for every wave-2 variant.
@@ -4394,7 +4394,7 @@ mod leftover_restore_tests {
             ),
             (
                 RollbackAction::RestoreTcpAutotuningFromSnapshot,
-                Snapshot::CoreParking { prior_ac_pct: Some(0), prior_dc_pct: Some(0) },
+                Snapshot::CoreParking { prior_ac_pct: Some(0), prior_dc_pct: Some(0), plan_guid: None },
             ),
         ] {
             assert!(dispatch_rollback(&crate::data_root::test_mutation_root(), &a, &s).is_err(), "mismatched pair must be rejected");

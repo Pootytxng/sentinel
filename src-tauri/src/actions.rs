@@ -360,6 +360,12 @@ pub(crate) enum Snapshot {
     CoreParking {
         prior_ac_pct: Option<u32>,
         prior_dc_pct: Option<u32>,
+        /// CR-core-parking-plan-guid: the plan that was active when the apply read and wrote the
+        /// index (SCHEME_CURRENT then); the undo writes back to THIS plan, as the USB/PCIe restore
+        /// does. Additive: `None` on rows written before it was recorded, which undo as they always
+        /// did (SCHEME_CURRENT).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plan_guid: Option<String>,
     },
     TcpAutotuning {
         prior_disabled: bool,
@@ -3629,6 +3635,39 @@ Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n";
         assert_eq!(active_plan_guid_of("Power Scheme GUID: not-a-guid  (Balanced)\r\n"), None);
         assert_eq!(active_plan_guid_of(""), None);
     }
+
+    #[test]
+    fn a_core_parking_undo_goes_back_to_the_plan_it_was_applied_to() {
+        // CR-core-parking-plan-guid: a plan switch between apply and undo (a Trial on the power plan
+        // not kept, a Gaming Mode session) must not land the undo on another plan unrecorded.
+        use super::{core_parking_plan_script, core_parking_script, Snapshot, CPMINCORES_GUID, SUB_PROCESSOR_GUID};
+        const PLAN: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+        let off = core_parking_plan_script(PLAN, 40, 30, false);
+        assert!(!off.contains("SCHEME_CURRENT"), "{off}");
+        assert!(off.contains(&format!("setacvalueindex {PLAN} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 40")));
+        assert!(off.contains(&format!("setdcvalueindex {PLAN} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 30")));
+        assert!(!off.contains("setactive"), "a plan the user has left is never switched back on");
+        assert!(core_parking_plan_script(PLAN, 40, 30, true).ends_with(&format!("; powercfg -setactive {PLAN}")));
+        // A row from before the plan was recorded still undoes as it always did.
+        assert!(core_parking_script(40, 30).contains("SCHEME_CURRENT"));
+        // Additive: an older row loads with no plan, and none isn't written.
+        let with = Snapshot::CoreParking { prior_ac_pct: Some(40), prior_dc_pct: Some(30), plan_guid: Some(PLAN.into()) };
+        let mut older = serde_json::to_value(&with).unwrap();
+        older.as_object_mut().unwrap().remove("plan_guid").expect("written when present");
+        let old: Snapshot = serde_json::from_value(older).expect("an older core-parking snapshot loads");
+        assert!(matches!(old, Snapshot::CoreParking { plan_guid: None, .. }));
+        let v = serde_json::to_value(&old).unwrap();
+        assert!(!v.to_string().contains("plan_guid"), "{v}");
+        let back: Snapshot = serde_json::from_value(serde_json::to_value(&with).unwrap()).unwrap();
+        assert!(matches!(back, Snapshot::CoreParking { plan_guid: Some(ref g), .. } if g == PLAN));
+        // A tampered GUID never reaches the elevated command line.
+        assert!(super::rollback_core_parking_typed(Some(40), Some(30), Some("x; Remove-Item C:\\")).is_err());
+        // Sonnet r1: a fragment that `powercfg /list` would contain is not a plan id either.
+        for bad in ["e", "-", "8c5e7fda", "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c-x"] {
+            let err = super::rollback_core_parking_typed(Some(40), Some(30), Some(bad)).unwrap_err();
+            assert!(err.contains("isn't a plan id"), "{bad}: {err}");
+        }
+    }
 }
 
 /// True if `guid` is a currently-installed power scheme. Read-only `powercfg
@@ -4583,10 +4622,10 @@ pub(crate) fn mpo_rollback_script(prior: Option<u32>) -> String {
     set_or_remove_dword(DWM_PATH, "OverlayTestMode", prior)
 }
 pub(crate) fn core_parking_script(ac_pct: u32, dc_pct: u32) -> String {
-    // ONE elevated PS invocation runs all three statements. SCHEME_CURRENT (not an explicit GUID)
-    // is the standard powercfg idiom for a SETTING-index write — the 070c3c9 stored-GUID contract
-    // concerns whole-plan SWITCHING (force-activating a plan), not a per-setting index on the
-    // already-active plan, so there's no plan-switch to drift here.
+    // ONE elevated PS invocation runs all three statements against SCHEME_CURRENT. CR-core-parking-
+    // plan-guid: a plan switch between apply and undo DID drift this onto another plan, so it is now
+    // the undo only for rows written before the plan was recorded; newer rows undo against their
+    // recorded plan (`core_parking_plan_script`).
     format!(
         "powercfg -setacvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {ac_pct}; \
          powercfg -setdcvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {dc_pct}; \
@@ -4639,24 +4678,59 @@ pub(crate) fn core_parking_apply_script(prior_ac: u32, prior_dc: Option<u32>) ->
 
 // ── Core parking: re-allow parking (min unparked → 0% AC+DC) so the override is lifted ──
 pub(crate) fn restore_core_parking_default() -> Result<ApplyResult, String> {
+    // CR-core-parking-plan-guid: the plan SCHEME_CURRENT names right now, recorded with the priors
+    // (a read only; the apply's writes are unchanged).
+    let plan_guid = current_power_plan_guid();
     let (ac, dc) = read_core_parking_priors()?;
     let prior_ac = ac.ok_or("could not parse the core-parking AC index — refusing to restore blind")?;
     run_elevated_powershell(&core_parking_apply_script(prior_ac, dc))?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreCoreParkingDefault,
         rollback_action: RollbackAction::RestoreCoreParkingFromSnapshot,
-        snapshot: Snapshot::CoreParking { prior_ac_pct: ac, prior_dc_pct: dc },
+        snapshot: Snapshot::CoreParking { prior_ac_pct: ac, prior_dc_pct: dc, plan_guid },
         elevation_used: true,
     })
 }
-pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>) -> Result<(), String> {
-    match (ac, dc) {
-        // DC may legitimately be absent on a desktop with no battery profile — restore AC, mirror to DC.
-        (Some(a), dc) => run_elevated_powershell(&core_parking_script(a, dc.unwrap_or(a))),
-        (None, _) => {
-            Err("This entry has no recorded prior core-parking value — cannot roll back blind.".to_string())
-        }
+pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan_guid: Option<&str>) -> Result<(), String> {
+    let Some(a) = ac else {
+        return Err("This entry has no recorded prior core-parking value — cannot roll back blind.".to_string());
+    };
+    // DC may legitimately be absent on a desktop with no battery profile — restore AC, mirror to DC.
+    let d = dc.unwrap_or(a);
+    let Some(plan) = plan_guid else {
+        // A row written before the plan was recorded undoes as it always did.
+        return run_elevated_powershell(&core_parking_script(a, d));
+    };
+    // CR-core-parking-plan-guid: back to the plan the apply wrote to, never onto whatever plan is
+    // active now. The GUID comes from the user-writable history, so it is checked before it can
+    // reach the elevated command line, and a plan that no longer exists fails loud.
+    ps_safe(plan)?;
+    // Sonnet r1: only a whole 8-4-4-4-12 GUID is a plan (`power_plan_exists` matches substrings).
+    if !crate::scheme_guid_of(plan).is_some_and(|g| g.eq_ignore_ascii_case(plan)) {
+        return Err(format!("This entry's recorded power plan ({plan}) isn't a plan id — cannot roll back blind."));
     }
+    if !power_plan_exists(plan) {
+        return Err(format!(
+            "cannot roll this back: the power plan it was applied to ({plan}) no longer exists. Compy will not \
+             restore the value to a different plan — reselect or recreate that plan and try again."
+        ));
+    }
+    let reactivate = current_power_plan_guid().is_some_and(|g| g.eq_ignore_ascii_case(plan.trim()));
+    run_elevated_powershell(&core_parking_plan_script(plan, a, d, reactivate))
+}
+
+/// Pure (CR-core-parking-plan-guid): the core-parking undo against the stored plan GUID, as
+/// `build_power_setting_restore_cmd` does for USB/PCIe: re-commits live only when that plan is the
+/// active one, so undoing on a plan the user has since left never switches them onto it.
+pub(crate) fn core_parking_plan_script(plan_guid: &str, ac_pct: u32, dc_pct: u32, reactivate: bool) -> String {
+    let mut cmd = format!(
+        "powercfg -setacvalueindex {plan_guid} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {ac_pct}; \
+         powercfg -setdcvalueindex {plan_guid} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {dc_pct}"
+    );
+    if reactivate {
+        cmd.push_str(&format!("; powercfg -setactive {plan_guid}"));
+    }
+    cmd
 }
 
 // ── Pagefile (the origin-story resolver — option (a), Cowork call 2026-06-11) ──
@@ -5155,8 +5229,8 @@ pub(crate) fn dispatch_rollback(
         (R::RestoreMpoFromSnapshot, S::Mpo { prior_overlay_test_mode }) => {
             rollback_mpo_typed(*prior_overlay_test_mode)
         }
-        (R::RestoreCoreParkingFromSnapshot, S::CoreParking { prior_ac_pct, prior_dc_pct }) => {
-            rollback_core_parking_typed(*prior_ac_pct, *prior_dc_pct)
+        (R::RestoreCoreParkingFromSnapshot, S::CoreParking { prior_ac_pct, prior_dc_pct, plan_guid }) => {
+            rollback_core_parking_typed(*prior_ac_pct, *prior_dc_pct, plan_guid.as_deref())
         }
         (R::RestoreTcpAutotuningFromSnapshot, S::TcpAutotuning { prior_disabled }) => {
             rollback_tcp_autotuning_typed(*prior_disabled)
