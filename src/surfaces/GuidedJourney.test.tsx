@@ -22,6 +22,8 @@ const state = vi.hoisted(() => ({
   statusAt: null as ((n: number) => Status) | null,
   reads: 0,
   concludeResult: null as Record<string, unknown> | null,
+  /** Item 7: conclude_experiment stores the record, then rejects (the journey recovers from get_experiments). */
+  concludeStoresThenFails: false,
   refuse: {} as Record<string, string>,
   startCaptureCalls: 0,
   failSecondCapture: false,
@@ -146,6 +148,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         const cur: Record<string, unknown> = state.experiments.find((x) => x.id === args?.experimentId) ?? record({});
         const r: Record<string, unknown> = { ...cur, ...(state.concludeResult ?? {}), concluded_at: new Date().toISOString() };
         state.experiments = state.experiments.map((x) => (x.id === r.id ? r : x));
+        // Item 7: the record is stored, then the answer is lost; the journey recovers from get_experiments.
+        if (state.concludeStoresThenFails) return Promise.reject("the answer was lost on the way back");
         return Promise.resolve(r);
       }
       case "get_realplay_progress":
@@ -197,6 +201,7 @@ beforeEach(() => {
   state.refuse = {};
   state.startCaptureCalls = 0;
   state.failSecondCapture = false;
+  state.concludeStoresThenFails = false;
   state.startCalls = 0;
   state.refuseBaselines = [];
   state.startedAtMin = null;
@@ -398,12 +403,10 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(rows.Outcome).toBe("max-fps");
   });
 
-  // P8-dims (RISK_MODEL §3, "do not collapse these into one arbitrary score"): the receipt names the
-  // catalog's overall word AND each risk dimension it states for the change, from the record the
-  // Trial started with; a dimension it doesn't state reads "not stated", never filled in from the
-  // overall word. Fails on the code before this slice, whose receipt had no risk row at all.
-  // Item 7: a verdict judged on the assumed ±3% band (labelled on read by get_experiments) says so in
-  // the Guided Journey's explanation and on its receipt, from the one shared label.
+  // Item 7: a verdict judged on the assumed ±3% band says so in the Guided Journey's explanation and on
+  // its receipt, from the one shared label. The label arrives the way the app gets it: on a record read
+  // back through get_experiments (a conclude that errored, recovered from the stored record), since a
+  // Trial concluded by this build is never judged on the assumed band.
   it("item 7: an old verdict judged on the assumed band is labelled in the result and its receipt", async () => {
     state.concludeResult = {
       status: "kept",
@@ -413,6 +416,7 @@ describe("P5-guided: one button runs the whole Trial", () => {
       game: "Valorant.exe",
       assumed_band: { assumed_pct: 3, measured_low1_pct: 20.6, measured_sessions: 9, claimed_change: true, judged: true },
     };
+    state.concludeStoresThenFails = true;
     render(<ExperimentBench />);
     await press();
     await finalLine();
@@ -432,6 +436,10 @@ describe("P5-guided: one button runs the whole Trial", () => {
     expect(screen.queryByTestId("journey-assumed-band")).toBeNull();
   });
 
+  // P8-dims (RISK_MODEL §3, "do not collapse these into one arbitrary score"): the receipt names the
+  // catalog's overall word AND each risk dimension it states for the change, from the record the
+  // Trial started with; a dimension it doesn't state reads "not stated", never filled in from the
+  // overall word. Fails on the code before this slice, whose receipt had no risk row at all.
   it("the receipt lists each risk dimension the catalog states, and says so for one it doesn't", async () => {
     state.concludeResult = {
       status: "kept",

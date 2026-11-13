@@ -495,7 +495,7 @@ export function interviewFinding(
     if (testedCount > 0) ev.push(k("ev.tested", { count: testedCount }));
     // Item 7: an old verdict judged on the assumed band is labelled wherever it is counted.
     const assumed = facts.trials?.assumed ?? 0;
-    if (testedCount > 0 && assumed > 0) ev.push(k("ev.testedAssumed", { count: Math.min(assumed, testedCount) }));
+    if (testedCount > 0 && assumed > 0) ev.push(k("ev.testedAssumed", { count: assumed }));
   };
   const sessionCountLine = () => {
     if (facts.sessionCount > 0) ev.push(k("ev.sessionCount", { count: facts.sessionCount }));

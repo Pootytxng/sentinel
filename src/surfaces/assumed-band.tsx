@@ -47,11 +47,29 @@ export function AssumedBandNote({ band, game, testId = "assumed-band-note" }: { 
   );
 }
 
-/** How many changes counted as measured (`isMeasured` on their verdict) have a measured verdict that
- *  was judged on the assumed band, counted per change the way the tested count is. */
+/** How many changes counted as measured (`isMeasured` on a verdict) have their NEWEST measured verdict
+ *  judged on the assumed band: per change, the same filter the tested count uses, so it never exceeds it.
+ *  Newest by `concluded_at`, else `created_at`, else list order. */
 export function assumedBandCount(
-  exps: { rec_id: string; verdict: string | null; assumed_band?: AssumedBand | null }[],
+  exps: {
+    rec_id: string;
+    verdict: string | null;
+    assumed_band?: AssumedBand | null;
+    concluded_at?: string | null;
+    created_at?: string | null;
+  }[],
   isMeasured: (v: string | null) => boolean,
 ): number {
-  return new Set(exps.filter((e) => isMeasured(e.verdict) && e.assumed_band != null).map((e) => e.rec_id)).size;
+  const when = (e: (typeof exps)[number], i: number) => {
+    const t = Date.parse(e.concluded_at ?? e.created_at ?? "");
+    return Number.isFinite(t) ? t : i;
+  };
+  const newest = new Map<string, { at: number; assumed: boolean }>();
+  exps.forEach((e, i) => {
+    if (!isMeasured(e.verdict)) return;
+    const at = when(e, i);
+    const cur = newest.get(e.rec_id);
+    if (!cur || at >= cur.at) newest.set(e.rec_id, { at, assumed: e.assumed_band != null });
+  });
+  return [...newest.values()].filter((v) => v.assumed).length;
 }
