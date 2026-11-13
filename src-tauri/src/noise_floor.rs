@@ -229,6 +229,9 @@ pub(crate) struct BetweenSessionNoise {
 
 /// The band a Trial is judged against: the measured between-session spread, but never below the
 /// fixed default; the fixed default when the spread isn't measured.
+/// P4-judge-noisy: no verdict judges on this any more (it fell back to the fixed default when nothing
+/// was measured); kept, test-only, to pin the rule older records were judged by.
+#[cfg(test)]
 pub(crate) fn noise_band_pct(measured: Option<&BetweenSessionNoise>) -> f64 {
     let floor = crate::comparison::DEFAULT_NOISE_FLOOR_PCT;
     measured.map_or(floor, |m| m.spread_pct.max(floor))
@@ -303,6 +306,9 @@ fn unchanged_between(
 /// P4-noise-stretch): the spread is the largest 1% low difference inside that run. A session in
 /// another run (something changed between them) or older than that is never compared. Fewer than
 /// [`MIN_UNCHANGED_SESSIONS`] counted sessions is `None`: unmeasured, never estimated.
+/// P4-judge-noisy: replaced for every verdict by [`measure_game_noise`]; kept, test-only, to pin the
+/// spread older records (`between_session_noise`) were judged by.
+#[cfg(test)]
 pub(crate) fn between_session_noise(
     sessions: &[crate::sessions::SessionSummary],
     now: &crate::sessions::SessionSummary,
@@ -405,6 +411,276 @@ fn unchanged_spread(
     let spread_pct = (hi - lo) / lo * 100.0;
     let sessions = u32::try_from(xs.len()).ok()?;
     spread_pct.is_finite().then_some(BetweenSessionNoise { spread_pct, sessions })
+}
+
+// ─── Measured as-is noise (P4-judge-noisy) ────────────────────────────────
+//
+// The one source every verdict that calls something better or worse judges against: a Trial
+// (`experiment`), the session-end regression notice and "what changed?" (`intelligence`). How it is
+// measured, all fixed before any comparison is made:
+//
+// - Which sessions: this game's as-is sessions on this PC, the ones [`as_is_run`] reads: long enough
+//   to be a baseline, under the session's own rig, driver and Windows build, within the last 14 days,
+//   in the same Compy configuration (same change counts, Gaming Mode, comparable conditions) and the
+//   same frame-cap state ([`cap_read`]). A Trial that applied a change and put it back between two
+//   as-is sessions leaves them in the same configuration (an "excursion"); its own after-session ran
+//   under another one and is skipped, never pooled. Any other Compy move between two sessions ends
+//   the run, as before.
+// - Which number: for the 1% low and the average separately, the root mean square of the difference
+//   between each session and the next, in percent of the pair's mean. A Trial compares one session
+//   with the next one, so this is the noise a Trial actually faces; differences of neighbours also
+//   keep a slow drift over a day (a GPU warming up) from counting more than once.
+// - The band: that root mean square times the two-sided 95% Student-t multiplier for that many
+//   differences (fewer sessions, a wider band), never below `MIN_CLAIM_PCT`, the smallest effect
+//   Compy ever claims. Under `MIN_UNCHANGED_SESSIONS` sessions nothing is measured and nothing is
+//   assumed: the caller says so and asks for the sessions it needs.
+// - Whole sessions: a Trial compares the two sessions' whole numbers (every reading taken with the
+//   game in front) against a band measured on the same whole numbers. No window is picked inside a
+//   session: per-window 1% lows aren't recorded, and a window chosen after seeing the data could bias
+//   the result. A session uneven inside itself is part of the noise this band already measures.
+
+/// The noise model a Trial was judged under; stored on the record. 2 = P4-judge-noisy.
+pub(crate) const NOISE_MODEL_VERSION: u32 = 2;
+
+/// The smallest effect Compy ever claims as better or worse, in percent. Only ever applied on top of a
+/// measured band, never in place of one.
+pub(crate) const MIN_CLAIM_PCT: f64 = crate::comparison::DEFAULT_NOISE_FLOOR_PCT;
+
+/// Two-sided 95% Student-t multiplier for `df` degrees of freedom (the normal 1.96 past 30).
+pub(crate) fn t95(df: usize) -> f64 {
+    const T: [f64; 30] = [
+        12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131,
+        2.120, 2.110, 2.101, 2.093, 2.086, 2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042,
+    ];
+    match df {
+        0 => f64::INFINITY,
+        d if d <= T.len() => T[d - 1],
+        _ => 1.96,
+    }
+}
+
+/// Fewest 10 s buckets a session needs before Compy reads whether a cap held it (five minutes).
+pub(crate) const CAP_MIN_BUCKETS: usize = 30;
+/// How close to the ceiling a bucket must sit to count as held there (1.5%).
+const CAP_HOLD_FRACTION: f64 = 0.015;
+
+/// Whether a frame cap held a session's frame rate, read from its measured 10 s frame-rate buckets only
+/// (never from the display's refresh rate, never from a setting Compy can't read). Stored on the
+/// record (kebab-case, tagged).
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(tag = "state", rename_all = "kebab-case")]
+pub(crate) enum CapRead {
+    /// The frame rate moved freely: few buckets sat at the session's ceiling.
+    Uncapped,
+    /// At least half the buckets sat within 1.5% of one ceiling and almost none above it, the way a
+    /// frame cap (or a limit that acts like one) holds it.
+    Capped { at_fps: f64 },
+    /// Too little trace to read, or a pattern in between: Compy can't tell, and says so.
+    Unknown,
+}
+
+/// Pure: read a session's cap state from its frame-rate buckets ([`CapRead`]). The ceiling is the
+/// 90th-percentile bucket; "held" is within 1.5% of it.
+pub(crate) fn cap_read(s: &crate::sessions::SessionSummary) -> CapRead {
+    let mut fps: Vec<f64> = s.fps_series.iter().map(|&(_, f)| f).filter(|f| f.is_finite() && *f > 0.0).collect();
+    if fps.len() < CAP_MIN_BUCKETS {
+        return CapRead::Unknown;
+    }
+    fps.sort_by(f64::total_cmp);
+    let ceiling = fps[(fps.len() - 1) * 9 / 10];
+    let n = fps.len() as f64;
+    let held: Vec<f64> = fps.iter().copied().filter(|f| (f - ceiling).abs() <= ceiling * CAP_HOLD_FRACTION).collect();
+    let above = fps.iter().filter(|&&f| f > ceiling * (1.0 + CAP_HOLD_FRACTION)).count() as f64;
+    let share = held.len() as f64 / n;
+    if share >= 0.5 && above / n <= 0.05 {
+        CapRead::Capped { at_fps: (held[held.len() / 2] * 10.0).round() / 10.0 }
+    } else if share <= 0.25 {
+        CapRead::Uncapped
+    } else {
+        CapRead::Unknown
+    }
+}
+
+/// How two sessions' cap states compare.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CapPair {
+    /// Both uncapped, or both held at the same ceiling (within 3%).
+    Same,
+    /// Both read, and they differ: a cap went on, came off or moved.
+    Changed,
+    /// At least one side can't be read.
+    Unknown,
+}
+
+pub(crate) fn cap_pair(a: CapRead, b: CapRead) -> CapPair {
+    match (a, b) {
+        (CapRead::Unknown, _) | (_, CapRead::Unknown) => CapPair::Unknown,
+        (CapRead::Uncapped, CapRead::Uncapped) => CapPair::Same,
+        (CapRead::Capped { at_fps: x }, CapRead::Capped { at_fps: y })
+            if (x - y).abs() <= x.min(y) * 2.0 * CAP_HOLD_FRACTION =>
+        {
+            CapPair::Same
+        }
+        _ => CapPair::Changed,
+    }
+}
+
+/// This game's measured as-is noise on this PC (P4-judge-noisy). Persisted on the Trial record and its
+/// noise evidence; additive, so older records load as `None`.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub(crate) struct GameNoise {
+    /// [`NOISE_MODEL_VERSION`] when measured.
+    #[serde(default)]
+    pub model: u32,
+    /// ± band on the 1% low, in percent: what a change must beat to be called better or worse.
+    pub low1_band_pct: f64,
+    /// ± band on the average frame rate, in percent.
+    pub avg_band_pct: f64,
+    /// The measured session-to-session difference of the 1% low (root mean square, percent).
+    pub low1_step_pct: f64,
+    /// The same for the average frame rate.
+    pub avg_step_pct: f64,
+    /// How many as-is sessions were measured.
+    pub sessions: u32,
+    /// The cap state every measured session shared.
+    pub cap: CapRead,
+}
+
+/// Why this game's noise isn't measured yet: too few as-is sessions, or the cap state of the session
+/// it would be measured for can't be read. Never filled in with a guess.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct NoiseUnmeasured {
+    /// As-is sessions Compy could count.
+    pub have: usize,
+    /// As-is sessions it needs ([`MIN_UNCHANGED_SESSIONS`]).
+    pub need: usize,
+    /// The session's cap state couldn't be read, so no sessions could be pooled with it.
+    pub cap_unknown: bool,
+}
+
+/// A Compy change that was applied and put back entirely inside `(from, to)`: Compy's own dated apply
+/// and undo, never recorded as changed outside. Sessions on either side ran in the same configuration.
+fn excursion_inside(
+    c: &crate::experiment::LedgerEntryRef<'_>,
+    from: chrono::DateTime<chrono::FixedOffset>,
+    to: chrono::DateTime<chrono::FixedOffset>,
+) -> bool {
+    let inside = |at: Option<&str>| at.and_then(parse).is_some_and(|t| t > from && t < to);
+    !c.applied && c.outside_recorded_at.is_none() && inside(Some(c.applied_at)) && inside(c.rolled_back_at)
+}
+
+/// Two as-is sessions, `a` before `b`, in the same configuration: as [`unchanged_between`], except that
+/// a change applied and put back entirely between `a`'s end and `b`'s start doesn't count as a move.
+fn same_configuration(
+    a: &crate::sessions::SessionSummary,
+    b: &crate::sessions::SessionSummary,
+    ledger: &[crate::experiment::LedgerEntryRef<'_>],
+) -> bool {
+    let (Some(from), Some(a_end), Some(b_start), Some(to)) = (parse(&a.started_at), ended(a), parse(&b.started_at), ended(b))
+    else {
+        return false;
+    };
+    let pairing = crate::comparability::derive(a, b);
+    matches!(crate::sessions::comparable_change_counts(a, b), Ok((x, y)) if x == y)
+        && a.gaming_mode_active.is_some()
+        && a.gaming_mode_active == b.gaming_mode_active
+        && pairing.verdict == crate::comparability::Comparability::Comparable
+        && pairing.changed_context.is_empty()
+        && ledger.iter().all(|c| {
+            let moved_inside = c.moved_at().any(|at| parse(at).is_none_or(|t| t >= from && t <= to));
+            !moved_inside || excursion_inside(c, a_end, b_start)
+        })
+}
+
+/// Pure (P4-judge-noisy): the as-is sessions `now`'s noise is measured from, oldest first. Walked back
+/// from `now` over the sessions [`sessions_like`] reads within `window_days`: a session that ran under
+/// other change counts than `now` (a Trial's after-session) or in another cap state is skipped, never
+/// pooled; one that joins must be in the same configuration as the next one already in the run
+/// ([`same_configuration`]); the first that isn't ends the walk.
+pub(crate) fn as_is_run<'s>(
+    sessions: &'s [crate::sessions::SessionSummary],
+    now: &crate::sessions::SessionSummary,
+    ledger: &[crate::experiment::LedgerEntryRef<'_>],
+    window_days: i64,
+) -> Vec<&'s crate::sessions::SessionSummary> {
+    let (Some(conditions), Some(began)) = (NoiseConditions::of_session(now), parse(&now.started_at)) else {
+        return Vec::new();
+    };
+    let cap_now = cap_read(now);
+    let from = began - chrono::Duration::days(window_days);
+    let mut run: Vec<&crate::sessions::SessionSummary> = Vec::new();
+    let mut next = now;
+    for &(at, s) in sessions_like(sessions, &conditions).iter().rev() {
+        if at > began {
+            continue;
+        }
+        if at < from {
+            break;
+        }
+        if s.started_at == now.started_at {
+            run.push(s);
+            continue;
+        }
+        let same_counts = matches!(crate::sessions::comparable_change_counts(s, now), Ok((x, y)) if x == y);
+        if !same_counts || cap_pair(cap_read(s), cap_now) != CapPair::Same {
+            continue;
+        }
+        if !same_configuration(s, next, ledger) {
+            break;
+        }
+        run.push(s);
+        next = s;
+    }
+    run.reverse();
+    run
+}
+
+/// Root mean square of the difference between each value and the next, in percent of the pair's mean.
+fn step_pct(xs: &[f64]) -> f64 {
+    let d: Vec<f64> = xs.windows(2).map(|w| (w[1] - w[0]) / ((w[0] + w[1]) / 2.0) * 100.0).collect();
+    (d.iter().map(|x| x * x).sum::<f64>() / d.len() as f64).sqrt()
+}
+
+fn round1(x: f64) -> f64 {
+    (x * 10.0).round() / 10.0
+}
+
+/// Pure (P4-judge-noisy): this game's measured noise for a comparison against `now`, or why it isn't
+/// measured. See the section note above for every rule; nothing here falls back to a default.
+pub(crate) fn measure_game_noise(
+    sessions: &[crate::sessions::SessionSummary],
+    now: &crate::sessions::SessionSummary,
+    ledger: &[crate::experiment::LedgerEntryRef<'_>],
+) -> Result<GameNoise, NoiseUnmeasured> {
+    let cap = cap_read(now);
+    if cap == CapRead::Unknown {
+        return Err(NoiseUnmeasured { have: 0, need: MIN_UNCHANGED_SESSIONS, cap_unknown: true });
+    }
+    let read: Vec<(f64, f64)> = as_is_run(sessions, now, ledger, crate::comparison::ARM_MAX_AGE_DAYS)
+        .into_iter()
+        .filter(|s| s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0 && s.avg_fps.is_finite() && s.avg_fps > 0.0)
+        .map(|s| (s.low1_fps_est, s.avg_fps))
+        .collect();
+    if read.len() < MIN_UNCHANGED_SESSIONS {
+        return Err(NoiseUnmeasured { have: read.len(), need: MIN_UNCHANGED_SESSIONS, cap_unknown: false });
+    }
+    let low: Vec<f64> = read.iter().map(|r| r.0).collect();
+    let avg: Vec<f64> = read.iter().map(|r| r.1).collect();
+    let t = t95(read.len() - 1);
+    let (low1_step_pct, avg_step_pct) = (step_pct(&low), step_pct(&avg));
+    let band = |step: f64| round1((t * step).max(MIN_CLAIM_PCT));
+    let sessions = u32::try_from(read.len()).unwrap_or(u32::MAX);
+    (low1_step_pct.is_finite() && avg_step_pct.is_finite())
+        .then(|| GameNoise {
+            model: NOISE_MODEL_VERSION,
+            low1_band_pct: band(low1_step_pct),
+            avg_band_pct: band(avg_step_pct),
+            low1_step_pct: round1(low1_step_pct),
+            avg_step_pct: round1(avg_step_pct),
+            sessions,
+            cap,
+        })
+        .ok_or(NoiseUnmeasured { have: read.len(), need: MIN_UNCHANGED_SESSIONS, cap_unknown: false })
 }
 
 // ─── Persistence ──────────────────────────────────────────────────────────
@@ -1078,5 +1354,159 @@ mod tests {
         let n = BetweenSessionNoise { spread_pct: 4.2, sessions: 3 };
         let back: BetweenSessionNoise = serde_json::from_value(serde_json::to_value(&n).unwrap()).unwrap();
         assert_eq!(back, n);
+    }
+
+    // ─── P4-judge-noisy: measured as-is noise, cap state ──────────────────
+    //
+    // Fixtures shaped on the owner's ROB RUN day of 2026-11-11 (read-only from his session store; no
+    // file copied): nine as-is sessions with 13 Compy changes on, four Trials whose change was applied
+    // just after an as-is session and put back before the next one, their after-sessions with 14 on.
+    // Each session's frame rate moved freely (no bucket ceiling held), so every one reads uncapped.
+
+    /// 120 ten-second buckets that move freely around `avg` (no ceiling holds them).
+    pub(crate) fn free_series(avg: f64) -> Vec<(u32, f64)> {
+        (0..120u32).map(|i| (i * 10, avg * (0.78 + 0.44 * f64::from((i * 37) % 120) / 120.0))).collect()
+    }
+
+    /// 120 buckets held at `cap`, one in ten dipping under it, none above.
+    pub(crate) fn capped_series(cap: f64) -> Vec<(u32, f64)> {
+        (0..120u32).map(|i| (i * 10, if i % 10 == 3 { cap * 0.8 } else { cap })).collect()
+    }
+
+    fn rob(started_at: &str, secs: u64, avg: f64, low1: f64, active: usize) -> SessionSummary {
+        let mut s = played(started_at, low1, active);
+        s.duration_secs = secs;
+        s.avg_fps = avg;
+        s.fps_series = free_series(avg);
+        s
+    }
+
+    /// (started_at, duration s, avg fps, 1% low, active changes) of the owner's 13 ROB RUN sessions.
+    const ROB_DAY: [(&str, u64, f64, f64, usize); 13] = [
+        ("2026-11-11T01:49:34+00:00", 2315, 327.9, 227.6, 13),
+        ("2026-11-11T02:29:57+00:00", 1350, 309.1, 226.0, 13),
+        ("2026-11-11T02:52:43+00:00", 1221, 278.2, 209.6, 13),
+        ("2026-11-11T04:17:26+00:00", 1247, 262.0, 179.3, 13),
+        ("2026-11-11T04:39:20+00:00", 1230, 298.8, 205.7, 13),
+        ("2026-11-11T05:01:14+00:00", 1152, 289.2, 197.5, 14), // exp:7 after
+        ("2026-11-11T12:05:50+00:00", 808, 284.7, 180.5, 13),
+        ("2026-11-11T12:19:41+00:00", 1243, 266.3, 167.4, 14), // exp:8 after
+        ("2026-11-11T12:42:41+00:00", 1267, 271.0, 173.0, 13),
+        ("2026-11-11T13:04:53+00:00", 1264, 266.9, 172.7, 13),
+        ("2026-11-11T13:27:19+00:00", 1658, 278.8, 176.9, 14), // exp:9 after
+        ("2026-11-11T13:55:50+00:00", 1089, 274.8, 171.7, 13),
+        ("2026-11-11T14:14:22+00:00", 1002, 276.7, 174.7, 14), // exp:10 after
+    ];
+
+    pub(crate) fn rob_day() -> Vec<SessionSummary> {
+        ROB_DAY.iter().map(|&(at, secs, avg, low1, n)| rob(at, secs, avg, low1, n)).collect()
+    }
+
+    /// The four Trials' changes: applied just after an as-is session ended, put back before the next.
+    fn rob_trials() -> Vec<LedgerEntryRef<'static>> {
+        let mut l = settled();
+        l.push(change("ve-7", "2026-11-11T05:01:00+00:00", Some("2026-11-11T05:20:29+00:00")));
+        l.push(change("pu-8", "2026-11-11T12:19:27+00:00", Some("2026-11-11T12:40:28+00:00")));
+        l.push(change("ve-9", "2026-11-11T13:27:06+00:00", Some("2026-11-11T13:55:01+00:00")));
+        l.push(change("pu-10", "2026-11-11T14:14:08+00:00", Some("2026-11-11T14:31:08+00:00")));
+        l
+    }
+
+    #[test]
+    fn rob_runs_noise_is_measured_from_its_nine_as_is_sessions_across_the_trials() {
+        let s = rob_day();
+        // exp:10's baseline (13:55): every as-is session of the day is in the run; no after-session is.
+        let run = as_is_run(&s, &s[11], &rob_trials(), 14);
+        assert_eq!(run.len(), 9, "{:?}", run.iter().map(|r| &r.started_at).collect::<Vec<_>>());
+        assert!(run.iter().all(|r| r.compy_changes_active == Some(13)));
+        let n = measure_game_noise(&s, &s[11], &rob_trials()).expect("measured");
+        eprintln!("ROB RUN measured noise: {n:?}");
+        assert_eq!((n.sessions, n.cap, n.model), (9, CapRead::Uncapped, NOISE_MODEL_VERSION));
+        // Wide: far past the old assumed ±3%.
+        assert!(n.low1_band_pct > 15.0 && n.low1_band_pct < 25.0, "{n:?}");
+        assert!(n.avg_band_pct > 10.0 && n.avg_band_pct < 20.0, "{n:?}");
+    }
+
+    #[test]
+    fn a_change_kept_between_sessions_still_ends_the_run() {
+        let s = rob_day();
+        // The 04:39 -> 12:05 Trial's change never put back: everything before it is another configuration.
+        let mut l = rob_trials();
+        l[1] = change("ve-7", "2026-11-11T05:01:00+00:00", None);
+        let run = as_is_run(&s, &s[11], &l, 14);
+        assert!(run.iter().all(|r| r.started_at.as_str() >= "2026-11-11T12:05"), "{}", run.len());
+        // A put-back recorded as changed outside Compy is a move too.
+        let mut outside = rob_trials();
+        outside[3].outside_recorded_at = Some("2026-11-11T13:40:00+00:00");
+        assert_eq!(as_is_run(&s, &s[11], &outside, 14).len(), 1, "only 13:55 itself");
+        // An undo inside an after-session (not entirely between two as-is sessions) is no excursion.
+        let mut late = rob_trials();
+        late[3] = change("ve-9", "2026-11-11T13:27:06+00:00", Some("2026-11-11T13:56:30+00:00"));
+        assert_eq!(as_is_run(&s, &s[11], &late, 14).len(), 1);
+    }
+
+    #[test]
+    fn too_few_as_is_sessions_measure_nothing_and_say_how_many_are_needed() {
+        let s = rob_day();
+        // At 02:29 only two as-is sessions exist.
+        let why = measure_game_noise(&s, &s[1], &rob_trials()).expect_err("unmeasured");
+        assert_eq!(why, NoiseUnmeasured { have: 2, need: MIN_UNCHANGED_SESSIONS, cap_unknown: false });
+        // Three is enough, with the widest multiplier (t for two differences).
+        let n = measure_game_noise(&s, &s[2], &rob_trials()).unwrap();
+        assert_eq!(n.sessions, 3);
+        assert!((n.low1_band_pct - (t95(2) * n.low1_step_pct).max(MIN_CLAIM_PCT)).abs() < 0.2, "{n:?}");
+    }
+
+    #[test]
+    fn a_quiet_game_measures_a_narrow_band_never_below_the_smallest_claim() {
+        let mut s = evening();
+        for (x, low) in s.iter_mut().zip([150.0, 150.6, 150.2, 150.9]) {
+            x.low1_fps_est = low;
+            x.fps_series = free_series(240.0);
+        }
+        let n = measure_game_noise(&s, &s[3], &settled()).unwrap();
+        assert_eq!((n.low1_band_pct, n.avg_band_pct), (MIN_CLAIM_PCT, MIN_CLAIM_PCT), "{n:?}");
+    }
+
+    #[test]
+    fn the_cap_state_is_read_from_the_frame_trace_never_from_the_refresh_rate() {
+        let mut s = played("2026-11-11T01:49:34+00:00", 200.0, 13);
+        s.fps_series = free_series(300.0);
+        assert_eq!(cap_read(&s), CapRead::Uncapped, "refresh 250, frame rate free: uncapped");
+        s.fps_series = capped_series(144.0);
+        assert_eq!(cap_read(&s), CapRead::Capped { at_fps: 144.0 }, "held at 144 on a 250 Hz screen");
+        s.fps_series = capped_series(250.0);
+        assert_eq!(cap_read(&s), CapRead::Capped { at_fps: 250.0 });
+        s.fps_series = free_series(300.0)[..20].to_vec();
+        assert_eq!(cap_read(&s), CapRead::Unknown, "too little trace to tell");
+        s.fps_series = Vec::new();
+        assert_eq!(cap_read(&s), CapRead::Unknown);
+        // A pattern in between (a third of the time at a ceiling) can't be told either way.
+        s.fps_series = (0..120u32).map(|i| (i * 10, if i % 3 == 0 { 240.0 } else { 150.0 + f64::from(i % 50) })).collect();
+        assert_eq!(cap_read(&s), CapRead::Unknown);
+        assert_eq!(cap_pair(CapRead::Capped { at_fps: 144.0 }, CapRead::Capped { at_fps: 145.0 }), CapPair::Same);
+        assert_eq!(cap_pair(CapRead::Capped { at_fps: 144.0 }, CapRead::Capped { at_fps: 240.0 }), CapPair::Changed);
+        assert_eq!(cap_pair(CapRead::Capped { at_fps: 144.0 }, CapRead::Uncapped), CapPair::Changed);
+        assert_eq!(cap_pair(CapRead::Unknown, CapRead::Uncapped), CapPair::Unknown);
+    }
+
+    #[test]
+    fn capped_and_uncapped_sessions_are_never_pooled_into_one_band() {
+        let mut s = rob_day();
+        // The owner had a cap on for a while (2026-11-12 17:02): say 02:52 and 04:17 ran held at 240.
+        for i in [2, 3] {
+            s[i].fps_series = capped_series(240.0);
+            s[i].avg_fps = 238.0;
+        }
+        let uncapped = as_is_run(&s, &s[11], &rob_trials(), 14);
+        assert_eq!(uncapped.len(), 7, "the capped two are left out of an uncapped band");
+        assert!(uncapped.iter().all(|r| cap_read(r) == CapRead::Uncapped));
+        // Measured from a capped session, only capped sessions count: two, so not measured.
+        let why = measure_game_noise(&s, &s[3], &rob_trials()).expect_err("two capped sessions");
+        assert_eq!((why.have, why.cap_unknown), (2, false));
+        // A session whose cap state can't be read measures nothing and says so.
+        let mut short = s.clone();
+        short[11].fps_series.truncate(10);
+        assert!(measure_game_noise(&short, &short[11], &rob_trials()).unwrap_err().cap_unknown);
     }
 }

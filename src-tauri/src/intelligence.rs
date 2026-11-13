@@ -1106,6 +1106,9 @@ pub(crate) struct WhatChangedReport {
     pub headline: String,
     pub observations: Vec<Observation>,
     pub noise_floor_pct: f64,
+    /// P4-judge-noisy: whether `noise_floor_pct` is this game's measured band. `false` = not measured,
+    /// and the report called nothing better or worse.
+    pub noise_measured: bool,
     /// Non-measurement events strictly inside (baseline start, current start].
     pub events_between: Vec<EventRecord>,
     pub leading_hypotheses: Vec<Hypothesis>,
@@ -1266,6 +1269,21 @@ pub(crate) struct WhatChangedInputs<'a> {
     /// it — Compy can't place them before vs between, so they count as unknowns.
     pub events_ambiguous: Vec<EventRecord>,
     pub snapshots: &'a [IdentitySnapshot],
+    /// P4-judge-noisy: this game's measured as-is noise up to the baseline session
+    /// (`noise_floor::measure_game_noise`, the one source Trials judge on). `None` = not measured:
+    /// the report then calls nothing better or worse.
+    pub noise: Option<&'a crate::noise_floor::GameNoise>,
+}
+
+/// P4-judge-noisy: this game's measured noise for a what-changed report against `baseline`, from the
+/// same rows and sessions the report reads. A change history that didn't load, or doesn't cover the
+/// window, measures nothing.
+fn what_changed_noise(g: &Gathered, baseline: &crate::sessions::SessionSummary) -> Option<crate::noise_floor::GameNoise> {
+    if !matches!(g.ledger_since(&baseline.started_at), LedgerHealth::Complete) {
+        return None;
+    }
+    let rows = crate::experiment::ledger_rows(&g.applied);
+    crate::noise_floor::measure_game_noise(&g.sessions, baseline, &rows).ok()
 }
 
 /// Split the assembled timeline around a comparison window (baseline start, current
@@ -1640,7 +1658,9 @@ fn trial_contradiction_next_test(trial: &crate::history::TrialLink) -> String {
 /// The deterministic core: same inputs → same report, every time. No randomness, no
 /// learned weights, every branch inspectable.
 fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChangedReport {
-    let floor = crate::benchmark::DEFAULT_NOISE_FLOOR_PCT;
+    // P4-judge-noisy: the band is this game's measured 1% low band; unmeasured calls nothing better or
+    // worse (below), and the number carried for display is then only the smallest claim Compy makes.
+    let floor = inp.noise.map_or(crate::noise_floor::MIN_CLAIM_PCT, |n| n.low1_band_pct);
     let b = inp.baseline;
     let c = inp.current;
     // Display-only prettification — every sentence below interpolates {game}. Matching
@@ -1655,6 +1675,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         headline,
         observations: Vec::new(),
         noise_floor_pct: floor,
+        noise_measured: inp.noise.is_some(),
         events_between: inp.events_window.clone(),
         leading_hypotheses: Vec::new(),
         ruled_out: Vec::new(),
@@ -1755,6 +1776,42 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         notes.push(format!(
             "These sessions are {gap_days} days apart — a baseline older than {STALE_GAP_DAYS} days is stale by Compy's own methodology, so treat this comparison with caution."
         ));
+    }
+
+    // P4-judge-noisy: a frame cap that held one session and not the other (or can't be read) is a
+    // difference in how the game ran, not in the PC: compare nothing.
+    let cap = crate::noise_floor::cap_pair(crate::noise_floor::cap_read(b), crate::noise_floor::cap_read(c));
+    if cap == crate::noise_floor::CapPair::Changed {
+        let mut r = base(
+            "inconclusive",
+            format!("The frame cap changed between these {game} sessions (one was held at a ceiling the other wasn't), so Compy won't call this better or worse."),
+        );
+        r.observations = observations;
+        r.gap_days = gap_days;
+        r.notes = notes;
+        return r;
+    }
+    if cap == crate::noise_floor::CapPair::Unknown {
+        notes.push(
+            "Compy couldn't read from the frame-rate traces whether a frame cap held both sessions the same way, so a cap change can't be ruled out.".into(),
+        );
+    }
+    // P4-judge-noisy: without this game's measured noise, no difference is called a change either way.
+    if inp.noise.is_none() {
+        let mut r = base(
+            "inconclusive",
+            format!(
+                "The 1% low moved {delta_low1:+.1}%, but how much {game} varies on its own isn't measured yet (Compy needs {} sessions of it with nothing changed), so Compy won't call this better or worse.",
+                crate::noise_floor::MIN_UNCHANGED_SESSIONS
+            ),
+        );
+        if let Some(o) = observations.first_mut() {
+            o.meaningful = false;
+        }
+        r.observations = observations;
+        r.gap_days = gap_days;
+        r.notes = notes;
+        return r;
     }
 
     if !meaningful {
@@ -2468,6 +2525,7 @@ fn what_changed_impl(g: &Gathered, started_at: &str) -> WhatChangedOutcome {
     let bt = parse_utc(&baseline.started_at).unwrap_or(ct);
     let asm = assemble_from(g);
     let (events_window, events_ambiguous) = split_window_events(&asm.events, bt, ct);
+    let noise = what_changed_noise(g, baseline);
     WhatChangedOutcome::Report(Box::new(what_changed(
         &WhatChangedInputs {
             baseline,
@@ -2475,6 +2533,7 @@ fn what_changed_impl(g: &Gathered, started_at: &str) -> WhatChangedOutcome {
             events_window,
             events_ambiguous,
             snapshots: &g.snapshots,
+            noise: noise.as_ref(),
         },
         g.ledger_since(&baseline.started_at),
     )))
@@ -2539,6 +2598,7 @@ fn what_changed_between_impl(
     }
     let asm = assemble_from(g);
     let (events_window, events_ambiguous) = split_window_events(&asm.events, bt, ct);
+    let noise = what_changed_noise(g, baseline);
     WhatChangedOutcome::Report(Box::new(what_changed(
         &WhatChangedInputs {
             baseline,
@@ -2546,6 +2606,7 @@ fn what_changed_between_impl(
             events_window,
             events_ambiguous,
             snapshots: &g.snapshots,
+            noise: noise.as_ref(),
         },
         g.ledger_since(&baseline.started_at),
     )))
@@ -3042,6 +3103,18 @@ mod tests {
     use super::*;
     use crate::hardware::HwFingerprint;
     use crate::sessions::SessionSummary;
+
+    /// P4-judge-noisy: the report tests below judge against a MEASURED 1% low band of 3% (a quiet
+    /// game measured between eight unchanged sessions), never an assumed one.
+    const TEST_NOISE: crate::noise_floor::GameNoise = crate::noise_floor::GameNoise {
+        model: crate::noise_floor::NOISE_MODEL_VERSION,
+        low1_band_pct: 3.0,
+        avg_band_pct: 3.0,
+        low1_step_pct: 1.0,
+        avg_step_pct: 1.0,
+        sessions: 8,
+        cap: crate::noise_floor::CapRead::Uncapped,
+    };
 
     fn mk_session(started_at: &str, game: &str, low1: f64, avg: f64) -> SessionSummary {
         SessionSummary {
@@ -3570,6 +3643,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.observations.len(), 1, "only the 1% low was measured on both sides");
         assert_eq!(r.observations[0].metric, "1% low FPS");
@@ -3585,6 +3659,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         let avg = r2.observations.iter().find(|o| o.metric == "average FPS").expect("avg row");
         assert!(avg.reference_only);
@@ -3600,6 +3675,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.verdict, "no-change");
         assert!(r.headline.contains("No meaningful difference"));
@@ -3617,6 +3693,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.verdict, "no-change");
         // And just past it is meaningful.
@@ -3627,8 +3704,48 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r2.verdict, "regressed");
+    }
+
+    // P4-judge-noisy (f): "what changed?" calls nothing better or worse without this game's measured
+    // noise, judges on that measured band (one source with Trials), and never compares a capped
+    // session with an uncapped one.
+    #[test]
+    fn what_changed_judges_only_on_the_measured_band_and_the_same_cap_state() {
+        let (b, c) = two_sessions(100.0, 80.0);
+        let inputs = |noise| WhatChangedInputs {
+            baseline: &b,
+            current: &c,
+            events_window: vec![],
+            events_ambiguous: vec![],
+            snapshots: &[],
+            noise,
+        };
+        let unmeasured = report(&inputs(None));
+        assert_eq!((unmeasured.verdict.as_str(), unmeasured.noise_measured), ("inconclusive", false));
+        assert!(unmeasured.headline.contains("isn't measured yet"), "{}", unmeasured.headline);
+        assert!(unmeasured.observations.iter().all(|o| !o.meaningful));
+        // A -20% drop inside ROB RUN's measured ±20.6% is no regression; past a quiet game's 3% it is.
+        let wide = crate::noise_floor::GameNoise { low1_band_pct: 20.6, ..TEST_NOISE };
+        assert_eq!(report(&inputs(Some(&wide))).verdict, "no-change");
+        let quiet = report(&inputs(Some(&TEST_NOISE)));
+        assert_eq!((quiet.verdict.as_str(), quiet.noise_measured), ("regressed", true));
+        // One session held at 240 fps by a cap, the other free: nothing is called better or worse.
+        let (mut b2, mut c2) = two_sessions(100.0, 80.0);
+        b2.fps_series = (0..120u32).map(|i| (i * 10, 240.0)).collect();
+        c2.fps_series = (0..120u32).map(|i| (i * 10, 150.0 + f64::from((i * 37) % 120))).collect();
+        let capped = report(&WhatChangedInputs {
+            baseline: &b2,
+            current: &c2,
+            events_window: vec![],
+            events_ambiguous: vec![],
+            snapshots: &[],
+            noise: Some(&TEST_NOISE),
+        });
+        assert_eq!(capped.verdict, "inconclusive");
+        assert!(capped.headline.contains("frame cap changed"), "{}", capped.headline);
     }
 
     #[test]
@@ -3644,6 +3761,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.verdict, "regressed");
         assert!(!r.confounded);
@@ -3678,6 +3796,7 @@ mod tests {
             events_window: vec![apply_event("2026-07-11T10:00:00Z", "HAGS on")],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert!(r.confounded, "driver change + Compy apply = confounded");
         assert!(r.headline.contains("no single cause"));
@@ -3751,6 +3870,7 @@ mod tests {
                 events_window: ev,
                 events_ambiguous: vec![],
                 snapshots: &[],
+                noise: Some(&TEST_NOISE),
             })
         };
 
@@ -3859,6 +3979,7 @@ mod tests {
             events_window: vec![apply.clone()],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.verdict, "improved", "{}", r.headline);
         let leader = r.leading_hypotheses.first().expect("has a leader");
@@ -3881,6 +4002,7 @@ mod tests {
             events_window: vec![plan.clone()],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.verdict, "improved");
         let next = r.next_action.as_deref().expect("a next test still stands");
@@ -3895,6 +4017,7 @@ mod tests {
             events_window: vec![apply],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.verdict, "regressed");
         assert!(r.next_action.as_deref().unwrap_or("").contains("Roll back the change"));
@@ -3905,6 +4028,7 @@ mod tests {
             events_window: vec![plan],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert!(r.next_action.as_deref().unwrap_or("").contains("Set the power plan back"));
     }
@@ -3934,6 +4058,7 @@ mod tests {
             events_window: vec![apply.clone()],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.verdict, "regressed", "{}", r.headline);
         let next = r.next_action.as_deref().expect("a next test stands");
@@ -3954,6 +4079,7 @@ mod tests {
             events_window: vec![apply.clone()],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         let next = r.next_action.as_deref().unwrap_or("");
         assert!(next.starts_with("A Trial measured this change as an improvement, and"), "{next}");
@@ -3966,6 +4092,7 @@ mod tests {
             events_window: vec![apply.clone()],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         let next = r.next_action.as_deref().unwrap_or("");
         assert!(next.starts_with("A Trial measured this change as an improvement, and"), "{next}");
@@ -3980,6 +4107,7 @@ mod tests {
             events_window: vec![plain_first, apply.clone()],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         let next = r.next_action.as_deref().unwrap_or("");
         assert!(next.contains("as an improvement on 2026-11-02"), "{next}");
@@ -3993,6 +4121,7 @@ mod tests {
             events_window: vec![apply],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert!(r.next_action.as_deref().unwrap_or("").contains("Roll back the change in the Trust Ledger"));
         assert_eq!(r.next_action_rec_id.as_deref(), Some("visual-effects"));
@@ -4081,6 +4210,7 @@ mod tests {
             events_window: vec![rollback_event("2026-07-11T10:00:00Z", "HAGS on")],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert!(!r.confounded);
         let leader = r.leading_hypotheses.first().expect("has a leader");
@@ -4102,6 +4232,7 @@ mod tests {
             events_window: vec![drift_event("2026-07-11T10:00:00Z", "Power profile")],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert!(!r.confounded);
         let leader = r.leading_hypotheses.first().expect("has a leader");
@@ -4135,6 +4266,7 @@ mod tests {
             ],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert!(!r.confounded, "one family member + a drift is NOT a confound");
         let ids: Vec<(&str, &Confidence)> = r
@@ -4157,6 +4289,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert!(r.leading_hypotheses.iter().all(|h| h.id != "setting-drift"));
         assert!(r.ruled_out.iter().all(|h| h.id != "setting-drift"));
@@ -4173,6 +4306,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         let drv = r
             .ruled_out
@@ -4198,6 +4332,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         };
 
         // Known-good ledger: silence IS evidence, and eliminating the hypothesis is correct.
@@ -4247,6 +4382,7 @@ mod tests {
                 events_window: vec![],
                 events_ambiguous: vec![],
                 snapshots: &[],
+                noise: Some(&TEST_NOISE),
             };
             let r = what_changed(&inp, LedgerHealth::Complete);
             assert!(
@@ -4278,6 +4414,7 @@ mod tests {
                 events_window: vec![],
                 events_ambiguous: vec![],
                 snapshots: &[],
+                noise: Some(&TEST_NOISE),
             };
             format!("{:?}", what_changed(&inp, LedgerHealth::Complete))
         };
@@ -4307,6 +4444,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.leading_hypotheses.len(), 1);
         assert_eq!(r.leading_hypotheses[0].id, "insufficient-evidence");
@@ -4330,6 +4468,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.verdict, "inconclusive");
         assert!(r.headline.contains("Not enough data"));
@@ -4346,6 +4485,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.verdict, "inconclusive");
     }
@@ -4363,6 +4503,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.verdict, "inconclusive");
         assert!(r.headline.contains("different hardware"));
@@ -4395,6 +4536,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         let leader = r.leading_hypotheses.first().unwrap();
         assert_eq!(leader.id, "gpu-driver-change");
@@ -4416,6 +4558,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         let mem = r
             .leading_hypotheses
@@ -4435,6 +4578,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert!(r2.ruled_out.iter().any(|h| h.id == "memory-pressure"));
     }
@@ -4450,6 +4594,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert!(r.leading_hypotheses.iter().any(|h| h.id == "thermal"));
     }
@@ -4465,6 +4610,7 @@ mod tests {
             events_window: vec![apply_event("2026-07-11T10:00:00Z", "HAGS on")],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         let v = serde_json::to_value(&r).unwrap();
         fn walk(v: &serde_json::Value, check: &mut impl FnMut(&str, &serde_json::Value)) {
@@ -4523,6 +4669,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![ambiguous],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert!(
             r.unknowns.iter().any(|u| u.contains("can't place it")),
@@ -4581,6 +4728,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         let json = serde_json::to_string(&r).unwrap().to_lowercase();
         for banned in ["caused by", "ai-powered", "optimization score"] {
@@ -4607,6 +4755,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         let rj = serde_json::to_value(WhatChangedOutcome::Report(Box::new(r))).unwrap();
         assert_eq!(rj["kind"], "report");
@@ -4634,6 +4783,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.game, "Palworld");
         assert_eq!(r.baseline.game, "Palworld");
@@ -4693,8 +4843,9 @@ mod tests {
         };
         assert_eq!(r.baseline.started_at, "2026-07-01T10:00:00Z");
         assert_eq!(r.current.started_at, "2026-07-03T10:00:00Z");
-        // 100 → 80 in the 1% low is a clear regression, well past the 3% noise floor.
-        assert_eq!(r.verdict, "regressed", "{}", r.headline);
+        // P4-judge-noisy: 100 → 80 in the 1% low used to read as a regression against an ASSUMED 3%
+        // floor; with only these sessions this game's noise isn't measured, so nothing is called worse.
+        assert_eq!((r.verdict.as_str(), r.noise_measured), ("inconclusive", false), "{}", r.headline);
     }
 
     /// P4-show-f1: a session behind another window the whole time is never a "what changed" side:
@@ -4713,7 +4864,8 @@ mod tests {
             panic!("expected a report against the last measured session");
         };
         assert_eq!(r.baseline.started_at, "2026-07-01T10:00:00Z", "skips the session with no reading");
-        assert_eq!(r.verdict, "regressed", "{}", r.headline);
+        // P4-judge-noisy: this game's noise isn't measured from two sessions, so no regression is claimed.
+        assert_eq!(r.verdict, "inconclusive", "{}", r.headline);
         let out = what_changed_impl(&g, "2026-07-02T10:00:00Z");
         assert!(unavailable_reason(&out).contains("another window was in front"), "{out:?}");
         let out = what_changed_between_impl(&g, "2026-07-01T10:00:00Z", "2026-07-02T10:00:00Z");
@@ -4818,6 +4970,7 @@ mod tests {
                 events_window: vec![apply_event("2026-07-11T12:00:00Z", "HAGS on")],
                 events_ambiguous: vec![],
                 snapshots: &[],
+                noise: Some(&TEST_NOISE),
             })
             .evidence_graph
         };
@@ -4858,6 +5011,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(r.verdict, "regressed");
         let g = &r.evidence_graph;
@@ -4876,6 +5030,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert_eq!(flat.verdict, "no-change");
         assert!(!flat.evidence_graph.nodes.iter().any(|n| n.id == "symptom"));
@@ -4902,6 +5057,7 @@ mod tests {
             events_window: vec![],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         assert!(!r.ruled_out.is_empty(), "this scenario rules some out");
         let g = &r.evidence_graph;
@@ -4941,6 +5097,7 @@ mod tests {
             events_window: vec![apply_event("2026-07-11T12:00:00Z", "HAGS on")],
             events_ambiguous: vec![],
             snapshots: &[],
+            noise: Some(&TEST_NOISE),
         });
         let j = serde_json::to_value(&r.evidence_graph).unwrap();
         let node_types: std::collections::HashSet<String> = j["nodes"]

@@ -314,6 +314,21 @@ pub(crate) struct NoiseEvidence {
     /// default). Additive: older records load as `None`.
     #[serde(default)]
     pub between_sessions: Option<crate::noise_floor::BetweenSessionNoise>,
+    /// P4-judge-noisy: this game's measured as-is noise the verdict was judged against
+    /// (`noise_floor::measure_game_noise`): `band_pct` is its 1% low band. Additive: written only
+    /// when present, so a record judged before it stays byte-for-byte what it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_noise: Option<crate::noise_floor::GameNoise>,
+}
+
+/// P4-judge-noisy (immutability: never stored). A verdict judged against the fixed ±3% default, before
+/// Compy measured each game's noise, is labelled on read: the band it assumed, and this game's noise as
+/// measured now (`None` = still not measured). The record itself is never rewritten.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct AssumedBandLabel {
+    pub assumed_pct: f64,
+    pub measured_low1_pct: Option<f64>,
+    pub measured_sessions: Option<u32>,
 }
 
 /// How comparable the baseline and treatment sessions were (`comparability::derive` at conclude) —
@@ -403,6 +418,16 @@ pub(crate) struct ExperimentRecord {
     /// measured (the floor is then the fixed default), and on older records.
     #[serde(default)]
     pub between_session_noise: Option<crate::noise_floor::BetweenSessionNoise>,
+    /// P4-judge-noisy: this game's measured as-is noise at start (`noise_floor::measure_game_noise`).
+    /// `noise_floor_pct` is its 1% low band, so an older Compy that reads only that judges on it too.
+    /// `None` on records started before it (they are measured at conclude, never judged on 3%).
+    /// Additive: written only when present.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_noise: Option<crate::noise_floor::GameNoise>,
+    /// Read-only label for a verdict judged on the assumed band ([`AssumedBandLabel`]): set only on
+    /// the copy `get_experiments` hands the UI, never read from or written to the store.
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub assumed_band: Option<AssumedBandLabel>,
     #[serde(default)]
     pub treatment: Option<TreatmentRecord>,
     /// "improved" | "no-change" | "regressed" | "confounded" | "expired" | "insufficient-evidence" |
@@ -1097,7 +1122,7 @@ fn sessions_the_ledger_covers(sessions: &[SessionSummary], coverage: LedgerCover
 }
 
 /// The Trust Ledger as the pure checks here read it.
-fn ledger_rows(history: &[crate::history::AppliedChange]) -> Vec<LedgerEntryRef<'_>> {
+pub(crate) fn ledger_rows(history: &[crate::history::AppliedChange]) -> Vec<LedgerEntryRef<'_>> {
     history
         .iter()
         .map(|c| LedgerEntryRef {
@@ -1709,6 +1734,13 @@ pub(crate) fn session_end_notice(
         Comparability::Comparable => {}
         Comparability::Partial | Comparability::NotComparable | Comparability::Unknown => return None,
     }
+    // P4-judge-noisy: a session held by a frame cap the other wasn't (or whose cap can't be read) is
+    // not compared: the cap, not the PC, could be the difference.
+    if crate::noise_floor::cap_pair(crate::noise_floor::cap_read(last_steady), crate::noise_floor::cap_read(session))
+        != crate::noise_floor::CapPair::Same
+    {
+        return None;
+    }
     let delta = delta_low1_pct(last_steady.low1_fps_est, session.low1_fps_est);
     (comparison::classify(delta, band_pct) == "regressed").then_some(SessionEndNotice::Regressed)
 }
@@ -1733,10 +1765,12 @@ pub(crate) fn session_end_notice_now(
         crate::history::ledger_set_aside_through,
         Some(session.started_at.as_str()),
     );
-    let between = history.as_deref().ok().and_then(|h| {
-        crate::noise_floor::between_session_noise(&sessions_the_ledger_covers(&others, coverage), session, &ledger_rows(h))
+    // P4-judge-noisy: the same measured band a Trial is judged on (its 1% low band); unmeasured is None.
+    let band = history.as_deref().ok().and_then(|h| {
+        crate::noise_floor::measure_game_noise(&sessions_the_ledger_covers(&others, coverage), session, &ledger_rows(h))
+            .ok()
+            .map(|n| n.low1_band_pct)
     });
-    let band = between.as_ref().map(|b| crate::noise_floor::noise_band_pct(Some(b)));
     // P5-realplay: a real-play Trial of this game is told only when this session makes a look give a
     // result; the setting is read only when such a Trial runs.
     let rows = history.as_deref().ok().map(ledger_rows);
@@ -1809,8 +1843,7 @@ pub(crate) fn next_trial_measured_band_pct() -> Option<f64> {
     );
     let history = history.ok()?;
     let covered = sessions_the_ledger_covers(&sessions, coverage);
-    let between = crate::noise_floor::between_session_noise(&covered, baseline, &ledger_rows(&history))?;
-    Some(crate::noise_floor::noise_band_pct(Some(&between)))
+    crate::noise_floor::measure_game_noise(&covered, baseline, &ledger_rows(&history)).ok().map(|n| n.low1_band_pct)
 }
 
 /// §4.2 — the baseline session a start is judged against, looked up in Compy's own session store.
@@ -2515,7 +2548,7 @@ pub(crate) fn noise_evidence_for(
     };
     let between_sessions = between_sessions.cloned();
     judged_against_noise(outcome)
-        .then_some(NoiseEvidence { band_pct, measured_noise_pct, measured_noise_stale, between_sessions })
+        .then_some(NoiseEvidence { band_pct, measured_noise_pct, measured_noise_stale, between_sessions, game_noise: None })
 }
 
 /// The record's view of one session's steadiness: the grade's check and halves, `(None, None)` for a
@@ -2532,6 +2565,9 @@ pub(crate) fn session_check(grade: BaselineGrade) -> (Option<BaselineCheck>, Opt
 /// The baseline's halves when it was uneven, at conclude: the start's grade when the record has one
 /// (the session may have shed its trace since), else the baseline session graded now (a Trial started
 /// before baselines were graded). Untraced or steady is `None`: only a measured unevenness counts.
+/// P4-judge-noisy: no longer read by a conclude (an uneven session is judged against the measured
+/// band); kept, test-only, to pin how records concluded before it were graded.
+#[cfg(test)]
 pub(crate) fn uneven_baseline_at_conclude(
     rec: &ExperimentRecord,
     baseline: Option<&SessionSummary>,
@@ -2562,6 +2598,12 @@ pub(crate) fn uneven_baseline_at_conclude(
 ///
 /// A verdict that already says it wasn't judged (a crash, too few readings, a confound, another game)
 /// keeps its own reason. The measured delta stays as evidence; no noise band is recorded.
+///
+/// P4-judge-noisy (owner 2026-11-12: "couldn't be judged" is not finished): retired from the conclude.
+/// Graded on an ASSUMED 3% halves gap, it left every Trial on a game that swings more than that
+/// unjudged; the measured whole-session band now carries that swing. Kept, test-only, to pin how the
+/// records it produced ("too-noisy") were judged.
+#[cfg(test)]
 pub(crate) fn with_steady_sessions(
     outcome: ConcludeOutcome,
     uneven_baseline: Option<&BaselineHalves>,
@@ -2629,11 +2671,23 @@ pub(crate) fn with_recommended_outcome(
     band_pct: f64,
     delta_avg: Option<f64>,
 ) -> ConcludeOutcome {
+    with_recommended_outcome_bands(outcome, band_pct, band_pct, delta_avg)
+}
+
+/// P4-judge-noisy: [`with_recommended_outcome`] with the 1% low and the average each judged on its own
+/// measured band (`GameNoise::low1_band_pct`, `avg_band_pct`). The same rules; only the bands differ,
+/// and the note names both when they do.
+pub(crate) fn with_recommended_outcome_bands(
+    outcome: ConcludeOutcome,
+    band_pct: f64,
+    avg_band_pct: f64,
+    delta_avg: Option<f64>,
+) -> ConcludeOutcome {
     if !judged_against_noise(&outcome) {
         return outcome;
     }
     let low = outcome.delta_low1_pct;
-    let avg_fell = delta_avg.is_none_or(|avg| avg < -band_pct);
+    let avg_fell = delta_avg.is_none_or(|avg| avg < -avg_band_pct);
     let verdict = match outcome.verdict.as_str() {
         "improved" if avg_fell => "no-change".to_string(),
         v => v.to_string(),
@@ -2643,10 +2697,15 @@ pub(crate) fn with_recommended_outcome(
         || "the average frame rate couldn't be compared".to_string(),
         |avg| format!("the average frame rate {}", signed_pct(avg)),
     );
-    let compared = format!(
-        "Compared with the baseline: the 1% low {}, {avg_text}, both against a ±{band}% band.",
-        signed_pct(low)
-    );
+    let compared = if (avg_band_pct - band_pct).abs() < 1e-9 {
+        format!("Compared with the baseline: the 1% low {}, {avg_text}, both against a ±{band}% band.", signed_pct(low))
+    } else {
+        format!(
+            "Compared with the baseline: the 1% low {} against a ±{band}% band, {avg_text} against a ±{}% band.",
+            signed_pct(low),
+            band_pct_text(avg_band_pct)
+        )
+    };
     let why = match (verdict.as_str(), outcome.verdict.as_str()) {
         ("improved", _) => {
             "The 1% low rose by more than the band and the average didn't fall by more, so the change \
@@ -2668,6 +2727,212 @@ pub(crate) fn with_recommended_outcome(
     };
     let keep = keep_rule(trial_result_for(&verdict));
     ConcludeOutcome { verdict, keep, note: format!("{} {compared} {why}", outcome.note), ..outcome }
+}
+
+// ─── P4-judge-noisy: measured noise, cap state and plain words ─────────────
+
+/// Why a Trial can't start (or a pre-P4-judge-noisy one can't be judged) because this game's noise
+/// isn't measured, in plain words that ask for exactly what is missing. Says "baseline session", so
+/// the guided journey offers to record one.
+pub(crate) fn noise_unmeasured_message(why: &crate::noise_floor::NoiseUnmeasured, game: &str) -> String {
+    let name = crate::intelligence::pretty_game_name(game);
+    let name = if name.is_empty() { "this game".to_string() } else { name };
+    if why.cap_unknown {
+        return format!(
+            "Compy can't tell from the baseline session's frame-rate trace whether a frame cap held it (it \
+             needs at least 5 minutes of trace with a pattern it can read), so it can't pool that session \
+             with others to measure how much {name} varies on its own. Play a new baseline session of at \
+             least 10 minutes, then start."
+        );
+    }
+    let more = why.need.saturating_sub(why.have).max(1);
+    let sessions = if more == 1 { "session" } else { "sessions" };
+    format!(
+        "Compy hasn't measured how much {name} varies on its own yet, and it won't guess: it needs {} \
+         baseline sessions of it played with nothing changed and the frame cap the same, and found {}. Play \
+         {more} more baseline {sessions} like that, then start.",
+        why.need, why.have
+    )
+}
+
+/// The noise a Trial is concluded against: the start's measurement, or, for a record started before
+/// P4-judge-noisy (none stored), one measured now from the as-is sessions up to its baseline. Never the
+/// fixed default.
+pub(crate) fn noise_for_conclude(
+    rec: &ExperimentRecord,
+    sessions: &[SessionSummary],
+    baseline: Option<&SessionSummary>,
+    rows: Option<&[LedgerEntryRef<'_>]>,
+) -> Result<crate::noise_floor::GameNoise, crate::noise_floor::NoiseUnmeasured> {
+    if let Some(n) = &rec.game_noise {
+        return Ok(n.clone());
+    }
+    let unmeasured = crate::noise_floor::NoiseUnmeasured {
+        have: 0,
+        need: crate::noise_floor::MIN_UNCHANGED_SESSIONS,
+        cap_unknown: false,
+    };
+    match (baseline, rows) {
+        (Some(b), Some(rows)) => crate::noise_floor::measure_game_noise(sessions, b, rows),
+        _ => Err(unmeasured),
+    }
+}
+
+/// A Trial whose game's noise isn't measured is not judged: restored, with the sessions it needs named.
+pub(crate) fn unmeasured_noise_outcome(outcome: ConcludeOutcome, why: &crate::noise_floor::NoiseUnmeasured, game: &str) -> ConcludeOutcome {
+    if !judged_against_noise(&outcome) {
+        return outcome;
+    }
+    ConcludeOutcome {
+        verdict: "not-comparable".into(),
+        keep: false,
+        stop_reason: Some("noise-unmeasured".into()),
+        confidence: Confidence::Unknown,
+        note: format!("{} Compy restored the change and judged nothing.", noise_unmeasured_message(why, game)),
+        ..outcome
+    }
+}
+
+fn cap_words(c: crate::noise_floor::CapRead) -> String {
+    match c {
+        crate::noise_floor::CapRead::Uncapped => "no cap held it".to_string(),
+        crate::noise_floor::CapRead::Capped { at_fps } => format!("held at about {} fps", at_fps.round()),
+        crate::noise_floor::CapRead::Unknown => "Compy couldn't read it".to_string(),
+    }
+}
+
+/// P4-judge-noisy (owner fact 2026-11-12 17:02, a frame cap was on for a while): the two sessions'
+/// cap states, read from their frame-rate traces, must be the same for a comparison. A cap that went
+/// on, came off or moved confounds the Trial; a cap state Compy can't read on either side means it
+/// can't confirm the sessions ran the same way. Both restore and say why. A verdict that already says
+/// it wasn't judged keeps its own reason.
+pub(crate) fn with_cap_check(
+    outcome: ConcludeOutcome,
+    baseline: crate::noise_floor::CapRead,
+    after: crate::noise_floor::CapRead,
+) -> ConcludeOutcome {
+    use crate::noise_floor::{cap_pair, CapPair};
+    if !judged_against_noise(&outcome) {
+        return outcome;
+    }
+    let (stop, note) = match cap_pair(baseline, after) {
+        CapPair::Same => return outcome,
+        CapPair::Changed => (
+            "frame-cap-changed",
+            format!(
+                "The frame cap changed between these sessions (in the baseline {}; in the after-session {}), \
+                 so they can't be compared and the result can't be pinned on this setting. Compy restored it; \
+                 play both sessions with the cap set the same way, then test again.",
+                cap_words(baseline),
+                cap_words(after)
+            ),
+        ),
+        CapPair::Unknown => (
+            "frame-cap-unread",
+            format!(
+                "Compy can't tell from the frame-rate traces whether a frame cap held both sessions the same \
+                 way (in the baseline {}; in the after-session {}), so it can't confirm they ran alike. Compy \
+                 restored the change and judged nothing; play an after-session of at least 10 minutes with \
+                 the game in front, then test again.",
+                cap_words(baseline),
+                cap_words(after)
+            ),
+        ),
+    };
+    ConcludeOutcome {
+        verdict: "confounded".into(),
+        keep: false,
+        stop_reason: Some(stop.into()),
+        confidence: Confidence::Low.min(outcome.confidence),
+        note,
+        ..outcome
+    }
+}
+
+/// P4-judge-noisy: under a cap both sessions shared, the average frame rate can't rise past the cap, so
+/// Maximum FPS (judged on the average) can't be judged: restored, saying the cap hides it and offering
+/// a test with the cap lifted. Other outcomes are judged on the 1% low (and frame pacing), which the
+/// cap doesn't flatten, and their note says the average is held.
+pub(crate) fn with_cap_saturation(outcome: ConcludeOutcome, cap: crate::noise_floor::CapRead, picked: TrialOutcome) -> ConcludeOutcome {
+    let crate::noise_floor::CapRead::Capped { at_fps } = cap else { return outcome };
+    if !judged_against_noise(&outcome) {
+        return outcome;
+    }
+    let at = at_fps.round();
+    if picked == TrialOutcome::MaxFps {
+        return ConcludeOutcome {
+            verdict: "not-comparable".into(),
+            keep: false,
+            stop_reason: Some("frame-cap-hides-average".into()),
+            confidence: Confidence::Unknown,
+            note: format!(
+                "Both sessions were held at about {at} fps, the way a frame cap holds them. A cap hides any rise in \
+                 the average frame rate, which is what Maximum FPS is judged on, so Compy can't judge it here and \
+                 restored the change. To test it, lift the cap (your choice) and play both sessions without it."
+            ),
+            ..outcome
+        };
+    }
+    let note = format!(
+        "{} Both sessions were held at about {at} fps, the way a frame cap holds them, which hides any rise in \
+         the average frame rate: this result rests on the 1% low, which the cap doesn't flatten.",
+        outcome.note
+    );
+    ConcludeOutcome { note, ..outcome }
+}
+
+/// P4-judge-noisy: the measured band in plain words on a judged verdict, and a result inside it named
+/// for what it is: negligible at this game's noise (the default wins; the change was put back), never
+/// "no effect". Confidence follows how many as-is sessions measured the band: fewer than six cap it at
+/// Medium.
+pub(crate) fn with_noise_words(outcome: ConcludeOutcome, noise: &crate::noise_floor::GameNoise, game: &str) -> ConcludeOutcome {
+    if !judged_against_noise(&outcome) {
+        return outcome;
+    }
+    let name = crate::intelligence::pretty_game_name(game);
+    let name = if name.is_empty() { "this game".to_string() } else { name };
+    let measured = format!(
+        "The bands are measured, not assumed: between {} sessions of {name} played on this PC with nothing \
+         changed, the 1% low moved by {}% and the average by {}% from one session to the next (typical size), \
+         so a change must beat ±{}% on the 1% low (±{}% on the average) to count.",
+        noise.sessions,
+        band_pct_text(noise.low1_step_pct),
+        band_pct_text(noise.avg_step_pct),
+        band_pct_text(noise.low1_band_pct),
+        band_pct_text(noise.avg_band_pct)
+    );
+    let negligible = if outcome.verdict == "no-change" {
+        format!(
+            " So this result is negligible at {name}'s noise: no difference Compy could tell apart from how much \
+             the game moves on its own. The default wins, so the change was put back."
+        )
+    } else {
+        String::new()
+    };
+    let confidence = if noise.sessions < 6 { outcome.confidence.min(Confidence::Medium) } else { outcome.confidence };
+    ConcludeOutcome { note: format!("{} {measured}{negligible}", outcome.note), confidence, ..outcome }
+}
+
+/// P4-judge-noisy (§ immutability): the read-only label for a verdict judged on the fixed band before
+/// Compy measured each game's noise. A record judged against a measurement (`game_noise`, or the
+/// earlier between-session spread) or never judged against a band gets none.
+pub(crate) fn assumed_band_label(
+    rec: &ExperimentRecord,
+    measured_now: Option<&crate::noise_floor::GameNoise>,
+) -> Option<AssumedBandLabel> {
+    let judged_on_fixed = match &rec.noise_evidence {
+        Some(n) => n.game_noise.is_none() && n.between_sessions.is_none(),
+        // A too-noisy verdict carried no evidence but was graded on the fixed halves floor.
+        None => rec.verdict.as_deref() == Some("too-noisy") && rec.game_noise.is_none(),
+    };
+    if !judged_on_fixed || rec.game_noise.is_some() || rec.between_session_noise.is_some() || rec.mode != TrialMode::Pair {
+        return None;
+    }
+    Some(AssumedBandLabel {
+        assumed_pct: rec.noise_evidence.as_ref().map_or(DEFAULT_NOISE_FLOOR_PCT, |n| n.band_pct),
+        measured_low1_pct: measured_now.map(|n| n.low1_band_pct),
+        measured_sessions: measured_now.map(|n| n.sessions),
+    })
 }
 
 fn rebuilt(outcome: ConcludeOutcome, verdict: &str, note: String) -> ConcludeOutcome {
@@ -2970,7 +3235,41 @@ pub(crate) fn get_experiments() -> Vec<ExperimentRecord> {
     // `Pending` is the start's own bookkeeping, only on disk while `start_experiment` holds the store
     // lock (or until the launch reconcile resolves it). This read takes no lock, so a refresh during
     // the apply (a UAC prompt steals focus) must not render it as a finished row.
-    load_store().experiments.into_iter().filter(|e| e.status != ExperimentStatus::Pending).collect()
+    let experiments: Vec<ExperimentRecord> =
+        load_store().experiments.into_iter().filter(|e| e.status != ExperimentStatus::Pending).collect();
+    // P4-judge-noisy: a verdict judged on the assumed band is labelled on this copy only, with this
+    // game's noise as measured now; the store is never written here.
+    if !experiments.iter().any(|e| assumed_band_label(e, None).is_some()) {
+        return experiments;
+    }
+    let sessions = crate::sessions::get_session_summaries();
+    let history = crate::history::load_history();
+    let rows = history.as_deref().ok().map(ledger_rows);
+    with_assumed_band_labels(experiments, &sessions, rows.as_deref())
+}
+
+/// Pure (P4-judge-noisy): label every verdict judged on the assumed band with its game's noise as
+/// measured now, from that game's newest session ([`assumed_band_label`]). `rows` `None` (an unreadable
+/// change history) measures nothing, so the label says the noise isn't measured.
+pub(crate) fn with_assumed_band_labels(
+    mut experiments: Vec<ExperimentRecord>,
+    sessions: &[SessionSummary],
+    rows: Option<&[LedgerEntryRef<'_>]>,
+) -> Vec<ExperimentRecord> {
+    for e in &mut experiments {
+        if assumed_band_label(e, None).is_none() {
+            continue;
+        }
+        let newest = sessions
+            .iter()
+            .filter(|s| has_frame_reading(s) && game_match(&e.game, Some(&s.process_name)) == GameMatch::Match)
+            .filter_map(|s| Some((DateTime::parse_from_rfc3339(&s.started_at).ok()?, s)))
+            .max_by_key(|(at, _)| *at)
+            .map(|(_, s)| s);
+        let now = newest.zip(rows).and_then(|(s, rows)| crate::noise_floor::measure_game_noise(sessions, s, rows).ok());
+        e.assumed_band = assumed_band_label(e, now.as_ref());
+    }
+    experiments
 }
 
 /// P5-outcomes-f1: the Trial bench's outcome switch, "keep" side. Re-applies `rec_id` through the
@@ -3455,25 +3754,35 @@ pub(crate) fn start_experiment(
     );
     // #618: after a set-aside, only sessions past its edge can be paired as unchanged.
     let covered = sessions_the_ledger_covers(&sessions, coverage);
-    // §5 (P4-noise): the band this Trial is judged against, from this game's unchanged sessions on
-    // this PC when there are enough, never below the fixed default; an unreadable ledger can't prove
-    // any pair unchanged, so it measures nothing.
-    let between = history
-        .as_deref()
-        .ok()
-        .and_then(|changes| crate::noise_floor::between_session_noise(&covered, baseline, &ledger_rows(changes)));
-    let noise_floor_pct = crate::noise_floor::noise_band_pct(between.as_ref());
+    // §5 (P4-judge-noisy): the bands this Trial is judged against, measured from this game's as-is
+    // sessions on this PC; never assumed. Unmeasured (too few as-is sessions, or the baseline's cap
+    // state can't be read) is refused before anything is recorded or changed, asking for the sessions
+    // it needs. An unreadable ledger can't prove any pair unchanged; the §3 view below refuses it in
+    // its own words first.
     // §2: a baseline too short to judge a change against is refused; an uneven or untraced one starts
     // and the record says so. Its halves are graded on the fixed default, which the record keeps as
     // `halves_floor_pct`, never on the verdict band (average fps vs a 1% low spread).
     let halves_floor = DEFAULT_NOISE_FLOOR_PCT;
     let (baseline_check, baseline_halves) = baseline_for_start(baseline, halves_floor)
         .map_err(|why| format!("experiment not started — {why}"))?;
+    let game_noise = match history.as_deref() {
+        Ok(changes) => Some(
+            crate::noise_floor::measure_game_noise(&covered, baseline, &ledger_rows(changes))
+                .map_err(|why| format!("experiment not started — {}", noise_unmeasured_message(&why, &baseline.process_name)))?,
+        ),
+        Err(_) => None,
+    };
     // #668: every count below is folded from the rows this one load returned, never read again — a
     // second read that failed used to record 0 changes active on a rig that had some.
     let view = baseline_checked_view(baseline, &history, coverage)
         .map_err(|why| format!("experiment not started — {why}"))?;
     let (changes, rows) = (view.changes, view.rows.as_slice());
+    let Some(game_noise) = game_noise else {
+        return Err("experiment not started — Compy can't read its change history, so it can't tell which \
+                    sessions ran with nothing changed or measure how much this game varies on its own"
+            .into());
+    };
+    let noise_floor_pct = game_noise.low1_band_pct;
     // P4-smooth-offer: Smoothest starts only when this game's frame pacing was measured between
     // unchanged sessions on this PC, and is judged on that band; refused before anything is recorded.
     // After the §3 view, so a history that can't cover this baseline is refused in its own words.
@@ -3548,7 +3857,9 @@ pub(crate) fn start_experiment(
         applied_at: None,
         session_pairing: None,
         noise_evidence: None,
-        between_session_noise: between,
+        between_session_noise: None,
+        game_noise: Some(game_noise),
+        assumed_band: None,
         halves_floor_pct: Some(halves_floor),
         ledger_watermark: 0,
         applied_change_id: String::new(),
@@ -3862,48 +4173,64 @@ pub(crate) fn conclude_experiment(
     let rec = &store.experiments[idx];
     let baseline = found(&sessions, rec.baseline_session_id.as_deref());
     let treatment = found(&sessions, Some(&treatment_session_id));
-    // P4-sessions: each session graded on its own halves against the band the verdict is judged on.
-    let uneven_baseline = uneven_baseline_at_conclude(rec, baseline);
+    // P4-sessions: the after-session graded on its own halves, kept on the receipt as evidence.
     let (after_check, after_halves) = resolved
         .as_ref()
         .map_or((None, None), |(treatment, _)| session_check(grade_baseline(treatment, halves_floor_pct(rec))));
-    let uneven_after = after_halves.as_ref().filter(|_| after_check == Some(BaselineCheck::Uneven));
     // P4-smooth-offer: the after-session's frame pacing, judged only for Smoothest and kept on its record.
     let after_ratio = resolved
         .as_ref()
         .and_then(|(treatment, _)| treatment.frame_pacing.as_ref().and_then(|p| p.p99_over_p50()));
+    // P4-judge-noisy: the measured noise this Trial is judged against (the start's, or measured now for
+    // a record started before it), never the fixed default; unmeasured judges nothing.
+    let noise = noise_for_conclude(rec, &sessions, baseline, rows.as_deref());
     let (judged, crash_pairing) = match &resolved {
         Some((treatment, pairing)) => {
-            // Steadiness first, so a Partial pairing appends its "not every condition could be
-            // checked" to the too-noisy note, as it does for every verdict that wasn't judged.
-            let paired = with_comparability(
-                with_steady_sessions(
-                    with_left_out_readings(
-                        conclude_outcome(
-                            rec,
-                            treatment.low1_fps_est,
-                            treatment.samples,
-                            crashed,
-                            Some(&treatment.process_name),
-                            ledger_now,
-                            now,
-                        ),
-                        treatment,
+            // P4-judge-noisy: an uneven session is no longer a reason to judge nothing. Both sessions'
+            // whole numbers are compared against a band measured on whole as-is sessions of this game,
+            // which already holds swings like these; the halves stay on the receipt as evidence
+            // (`baseline_halves` / `after_check`). Only sessions Compy must reject (too short, another
+            // game, changed conditions or cap, unmeasured noise) go unjudged.
+            // The 1% low is classified on the measured band itself, also for a record started before it
+            // (whose stored `noise_floor_pct` was the fixed default), so no win is called inside it.
+            let judged_rec = match &noise {
+                Ok(n) => ExperimentRecord { noise_floor_pct: n.low1_band_pct, ..rec.clone() },
+                Err(_) => rec.clone(),
+            };
+            let measured = with_comparability(
+                with_left_out_readings(
+                    conclude_outcome(
+                        &judged_rec,
+                        treatment.low1_fps_est,
+                        treatment.samples,
+                        crashed,
+                        Some(&treatment.process_name),
+                        ledger_now,
+                        now,
                     ),
-                    uneven_baseline.as_ref(),
-                    uneven_after,
+                    treatment,
                 ),
                 pairing,
             );
-            // P4-recommended: a verdict still judged on the band is read as the Recommended outcome,
-            // the average beside the 1% low, on that same band.
-            // P4-maxfps-smooth: or as the outcome the user picked at start.
-            let avg = delta_avg_pct(rec.baseline_avg_fps, treatment.avg_fps);
-            let picked = match rec.outcome {
-                TrialOutcome::Recommended => with_recommended_outcome(paired, rec.noise_floor_pct, avg),
-                TrialOutcome::MaxFps => with_max_fps_outcome(paired, rec.noise_floor_pct, avg),
-                TrialOutcome::Smoothest => {
-                    with_smoothest_outcome(paired, rec.smoothest.as_ref(), after_ratio, rec.noise_floor_pct)
+            let baseline_cap = baseline.map_or(crate::noise_floor::CapRead::Unknown, crate::noise_floor::cap_read);
+            let after_cap = crate::noise_floor::cap_read(treatment);
+            let paired = with_cap_check(measured, baseline_cap, after_cap);
+            let picked = match &noise {
+                Err(why) => unmeasured_noise_outcome(paired, why, &rec.game),
+                Ok(n) => {
+                    // P4-recommended: a verdict still judged on the band is read as the Recommended
+                    // outcome, the average beside the 1% low, each on its measured band.
+                    // P4-maxfps-smooth: or as the outcome the user picked at start (Maximum FPS on the
+                    // wider of the two bands, so neither number is judged on less than its own).
+                    let avg = delta_avg_pct(rec.baseline_avg_fps, treatment.avg_fps);
+                    let picked = match rec.outcome {
+                        TrialOutcome::Recommended => with_recommended_outcome_bands(paired, n.low1_band_pct, n.avg_band_pct, avg),
+                        TrialOutcome::MaxFps => with_max_fps_outcome(paired, n.low1_band_pct.max(n.avg_band_pct), avg),
+                        TrialOutcome::Smoothest => {
+                            with_smoothest_outcome(paired, rec.smoothest.as_ref(), after_ratio, n.low1_band_pct)
+                        }
+                    };
+                    with_noise_words(with_cap_saturation(picked, after_cap, rec.outcome), n, &rec.game)
                 }
             };
             (picked, None)
@@ -3943,10 +4270,12 @@ pub(crate) fn conclude_experiment(
         .or(crash_pairing.as_ref())
         .map(|pairing| SessionPairing::of(pairing, baseline, treatment));
     // §11: the band this verdict was judged against, when it was.
-    let band_pct = store.experiments[idx].noise_floor_pct;
+    let measured_noise = noise.ok();
+    let band_pct = measured_noise.as_ref().map_or(store.experiments[idx].noise_floor_pct, |n| n.low1_band_pct);
     let between = store.experiments[idx].between_session_noise.clone();
     let game_noise = treatment.map_or(crate::noise_floor::NoiseLookup::Unmeasured, crate::noise_floor::lookup_for_session);
-    store.experiments[idx].noise_evidence = noise_evidence_for(&outcome, band_pct, &game_noise, between.as_ref());
+    store.experiments[idx].noise_evidence = noise_evidence_for(&outcome, band_pct, &game_noise, between.as_ref())
+        .map(|ev| NoiseEvidence { game_noise: measured_noise, ..ev });
     store.experiments[idx].verdict = Some(outcome.verdict.clone());
     store.experiments[idx].trial_result = Some(trial_result_for(&outcome.verdict));
     store.experiments[idx].verdict_confidence = Some(outcome.confidence);
@@ -4605,6 +4934,8 @@ mod experiment_tests {
             session_pairing: None,
             noise_evidence: None,
             between_session_noise: None,
+            game_noise: None,
+            assumed_band: None,
             halves_floor_pct: None,
             ledger_watermark: watermark,
             applied_change_id: "change-1".into(),
@@ -6198,7 +6529,7 @@ mod experiment_tests {
             assert_eq!(o.verdict, verdict);
             assert_eq!(
                 noise_evidence_for(&o, band, &NoiseLookup::Unmeasured, None),
-                Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None }),
+                Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None, game_noise: None }),
                 "{verdict} was judged against the band"
             );
         }
@@ -6222,15 +6553,15 @@ mod experiment_tests {
         let o = measured(180.0);
         assert_eq!(
             noise_evidence_for(&o, band, &NoiseLookup::Measured(1.8), None),
-            Some(NoiseEvidence { band_pct: band, measured_noise_pct: Some(1.8), measured_noise_stale: None, between_sessions: None })
+            Some(NoiseEvidence { band_pct: band, measured_noise_pct: Some(1.8), measured_noise_stale: None, between_sessions: None, game_noise: None })
         );
         assert_eq!(
             noise_evidence_for(&o, band, &NoiseLookup::Stale(StaleReason::Unconfirmed), None),
-            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: Some(StaleReason::Unconfirmed), between_sessions: None })
+            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: Some(StaleReason::Unconfirmed), between_sessions: None, game_noise: None })
         );
         assert_eq!(
             noise_evidence_for(&o, band, &NoiseLookup::Unmeasured, None),
-            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None })
+            Some(NoiseEvidence { band_pct: band, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None, game_noise: None })
         );
         let crash = conclude_outcome(&rec(150.0, 5), 180.0, 5000, true, Some("Test"), Some(5), Utc::now());
         assert_eq!(noise_evidence_for(&crash, band, &NoiseLookup::Measured(1.8), None), None, "nothing was judged");
@@ -6280,10 +6611,10 @@ mod experiment_tests {
             experiments: Vec<OldRecord>,
         }
         let mut stale = rec(150.0, 5);
-        stale.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: Some(StaleReason::Changed), between_sessions: None });
+        stale.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: Some(StaleReason::Changed), between_sessions: None, game_noise: None });
         let mut measured = rec(150.0, 5);
         measured.id = "exp:2-0".into();
-        measured.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: Some(1.8), measured_noise_stale: None, between_sessions: None });
+        measured.noise_evidence = Some(NoiseEvidence { band_pct: 3.0, measured_noise_pct: Some(1.8), measured_noise_stale: None, between_sessions: None, game_noise: None });
         let path = std::env::temp_dir().join(format!("compy-exp-noise-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let store = ExperimentStore { schema_version: STORE_SCHEMA_VERSION, experiments: vec![stale, measured] };
@@ -6304,7 +6635,7 @@ mod experiment_tests {
 
     #[test]
     fn an_unmeasured_game_noise_is_written_as_unknown_not_guessed() {
-        let v = serde_json::to_value(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None }).unwrap();
+        let v = serde_json::to_value(NoiseEvidence { band_pct: 3.0, measured_noise_pct: None, measured_noise_stale: None, between_sessions: None, game_noise: None }).unwrap();
         assert!(v["measured_noise_pct"].is_null(), "{v}");
         assert_eq!(v["band_pct"], 3.0);
     }
@@ -7348,11 +7679,10 @@ mod experiment_tests {
         let src = include_str!("experiment.rs");
         let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
         let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
-        assert!(body.contains("uneven_baseline_at_conclude(rec, baseline)"), "the baseline is graded");
+        // P4-judge-noisy (owner 2026-11-12): the grades stay on the receipt as evidence, but an uneven
+        // session no longer turns the verdict too-noisy; see
+        // `an_uneven_session_is_no_longer_a_reason_to_judge_nothing`.
         assert!(body.contains("grade_baseline(treatment, halves_floor_pct(rec))"), "the after-session is graded");
-        assert!(body.contains("with_steady_sessions("), "an uneven session makes the verdict too noisy");
-        let (steady, comparable) = (body.find("with_steady_sessions(").unwrap(), body.find("with_comparability(").unwrap());
-        assert!(comparable < steady, "steadiness is judged inside the pairing, so a Partial caveat is kept");
         assert!(body.contains("check: after_check"), "the receipt keeps the after-session's grade");
     }
 
@@ -7405,6 +7735,7 @@ mod experiment_tests {
             measured_noise_pct: None,
             measured_noise_stale: None,
             between_sessions: r.between_session_noise.clone(),
+            game_noise: None,
         });
         let text = serde_json::to_string(&ExperimentStore { schema_version: STORE_SCHEMA_VERSION, experiments: vec![r] }).unwrap();
         #[derive(Deserialize)]
@@ -7562,7 +7893,10 @@ mod experiment_tests {
         let src = include_str!("experiment.rs");
         let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
         let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
-        assert!(body.contains("with_recommended_outcome(paired, rec.noise_floor_pct, avg)"), "the verdict is read as Recommended");
+        assert!(
+            body.contains("with_recommended_outcome_bands(paired, n.low1_band_pct, n.avg_band_pct, avg)"),
+            "the verdict is read as Recommended, each number on its measured band (P4-judge-noisy)"
+        );
         assert!(body.contains("delta_avg_pct: delta_avg_pct(rec_baseline_avg, treatment.avg_fps)"), "the receipt keeps it");
         let t = TreatmentRecord {
             avg_fps: 110.0,
@@ -7925,7 +8259,7 @@ mod experiment_tests {
         let src = include_str!("experiment.rs");
         let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
         let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
-        assert!(body.contains("with_smoothest_outcome(paired, rec.smoothest.as_ref(), after_ratio, rec.noise_floor_pct)"));
+        assert!(body.contains("with_smoothest_outcome(paired, rec.smoothest.as_ref(), after_ratio, n.low1_band_pct)"));
         assert!(body.contains("ev.after_ratio = after_ratio;"));
         // Absent on every other outcome's record, so their stored shape is unchanged.
         let plain = serde_json::to_value(rec(150.0, 5)).unwrap();
@@ -7955,7 +8289,7 @@ mod experiment_tests {
         let src = include_str!("experiment.rs");
         let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
         let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
-        assert!(body.contains("TrialOutcome::MaxFps => with_max_fps_outcome(paired, rec.noise_floor_pct, avg)"));
+        assert!(body.contains("TrialOutcome::MaxFps => with_max_fps_outcome(paired, n.low1_band_pct.max(n.avg_band_pct), avg)"));
 
         let t = TreatmentRecord {
             avg_fps: 130.0,
@@ -8075,11 +8409,26 @@ mod experiment_tests {
 
     // ─── P7-notify: the session-end toast fires only on a decision or a state change ───
 
-    /// A steady cs2 session (eight even 10 s buckets) at `at` with this 1% low.
+    /// A steady cs2 session at `at` with this 1% low: forty 10 s buckets whose two halves are the same
+    /// run (so its halves are even), moving freely enough that no frame cap reads as holding it
+    /// (P4-judge-noisy: a session's cap state must be readable and the same to compare).
     fn steady(at: &str, low1: f64) -> SessionSummary {
         let mut s = session(at, low1);
-        s.fps_series = (0..8).map(|i| (10 * i, 200.0)).collect();
+        s.fps_series = (0..40u32).map(|i| (10 * i, 170.0 + f64::from((i % 20) * 7 % 60))).collect();
         s
+    }
+
+    #[test]
+    fn a_frame_cap_that_changed_or_cant_be_read_never_toasts_a_regression() {
+        let before = steady(BEFORE, 150.0);
+        let mut capped = steady(NOW, 120.0);
+        capped.fps_series = (0..40u32).map(|i| (10 * i, 144.0)).collect();
+        assert_eq!(notice(&capped, &[before.clone(), capped.clone()]), None, "a cap went on: not the PC");
+        let mut short = steady(NOW, 120.0);
+        short.fps_series.truncate(8);
+        assert_eq!(notice(&short, &[before.clone(), short.clone()]), None, "cap state can't be read");
+        let now = steady(NOW, 120.0);
+        assert_eq!(notice(&now, &[before, now.clone()]), Some(SessionEndNotice::Regressed), "same cap state: compared");
     }
 
     const BEFORE: &str = "2026-09-02T18:00:00+00:00";
@@ -8896,5 +9245,246 @@ mod refuse_early_tests {
         assert!(body.contains("unverified_others_live(&changes, &rows, rec_id, &crate::history::LiveReads::default())"));
         assert!(body.contains("precheck_refusal(unverified)"));
         assert!(!body.contains("save") && !body.contains("apply"), "read-only");
+    }
+
+    // ─── P4-judge-noisy: verdicts on the measured band ───────────────────────
+
+    use crate::noise_floor::{CapRead, GameNoise, NoiseUnmeasured};
+
+    /// A running Trial of "Test" (baseline 1% low `baseline_low1`, average 120 fps), built from the
+    /// older-record shape below: this module's own copy of `experiment_tests::rec`.
+    fn rec(baseline_low1: f64, watermark: usize) -> ExperimentRecord {
+        let mut r: ExperimentRecord = serde_json::from_value(legacy_no_change()).unwrap();
+        r.game = "Test".into();
+        r.created_at = Utc::now().to_rfc3339();
+        r.status = ExperimentStatus::Running;
+        r.baseline_low1_fps = baseline_low1;
+        r.baseline_avg_fps = 120.0;
+        r.ledger_watermark = watermark;
+        r.treatment = None;
+        r.verdict = None;
+        r.verdict_note = None;
+        r.noise_evidence = None;
+        r.trial_result = None;
+        r
+    }
+
+    fn measured(treatment_low1: f64) -> ConcludeOutcome {
+        conclude_outcome(&rec(150.0, 5), treatment_low1, 5000, false, Some("Test"), Some(5), Utc::now())
+    }
+
+    /// ROB RUN's shape (owner's 2026-11-11 as-is sessions; `noise_floor` measures it from them): wide.
+    const WIDE: GameNoise = GameNoise {
+        model: crate::noise_floor::NOISE_MODEL_VERSION,
+        low1_band_pct: 20.6,
+        avg_band_pct: 16.4,
+        low1_step_pct: 8.9,
+        avg_step_pct: 7.1,
+        sessions: 9,
+        cap: CapRead::Uncapped,
+    };
+    /// A quiet game: sessions within about half a percent of each other.
+    const QUIET: GameNoise = GameNoise {
+        model: crate::noise_floor::NOISE_MODEL_VERSION,
+        low1_band_pct: 3.0,
+        avg_band_pct: 3.0,
+        low1_step_pct: 0.5,
+        avg_step_pct: 0.4,
+        sessions: 8,
+        cap: CapRead::Uncapped,
+    };
+
+    /// The conclude's chain for a Recommended Trial on `rec(150, 5)` (baseline 150 fps 1% low, 120 avg).
+    fn judge_on(noise: &GameNoise, low_pct: f64, avg_pct: f64, base: CapRead, after: CapRead, picked: TrialOutcome) -> ConcludeOutcome {
+        let r = ExperimentRecord { noise_floor_pct: noise.low1_band_pct, game_noise: Some(noise.clone()), ..rec(150.0, 5) };
+        let o = conclude_outcome(&r, 150.0 * (1.0 + low_pct / 100.0), 5000, false, Some("Test"), Some(5), Utc::now());
+        let o = with_cap_check(o, base, after);
+        let o = match picked {
+            TrialOutcome::MaxFps => with_max_fps_outcome(o, noise.low1_band_pct.max(noise.avg_band_pct), Some(avg_pct)),
+            _ => with_recommended_outcome_bands(o, noise.low1_band_pct, noise.avg_band_pct, Some(avg_pct)),
+        };
+        with_noise_words(with_cap_saturation(o, after, picked), noise, "ROB RUN.exe")
+    }
+
+    fn judge(noise: &GameNoise, low_pct: f64, avg_pct: f64) -> ConcludeOutcome {
+        judge_on(noise, low_pct, avg_pct, CapRead::Uncapped, CapRead::Uncapped, TrialOutcome::Recommended)
+    }
+
+    #[test]
+    fn on_a_wide_noise_game_plus_5_is_negligible_and_plus_30_is_better() {
+        let small = judge(&WIDE, 5.0, 4.0);
+        assert_eq!((small.verdict.as_str(), small.keep), ("no-change", false), "{}", small.note);
+        assert_eq!(trial_result_for(&small.verdict), TrialResult::Negligible, "a judged outcome, not 'couldn't be judged'");
+        assert!(small.note.contains("negligible at ROB RUN's noise") && small.note.contains("put back"), "{}", small.note);
+        assert!(small.note.contains("measured, not assumed") && small.note.contains("9 sessions"), "{}", small.note);
+        assert!(!small.note.contains("±3%"), "no assumed band: {}", small.note);
+        let big = judge(&WIDE, 30.0, 5.0);
+        assert_eq!((big.verdict.as_str(), big.keep), ("improved", true), "{}", big.note);
+        assert_eq!(judge(&WIDE, -5.0, -4.0).verdict, "no-change", "a drop inside the band is no regression either");
+        assert_eq!(judge(&WIDE, -30.0, -10.0).verdict, "regressed");
+        // The average is judged on its own measured band: a +30% low with the average down 20% is no win.
+        assert_eq!(judge(&WIDE, 30.0, -20.0).verdict, "no-change");
+    }
+
+    #[test]
+    fn on_a_quiet_game_plus_5_is_better() {
+        let o = judge(&QUIET, 5.0, 1.0);
+        assert_eq!((o.verdict.as_str(), o.keep), ("improved", true), "{}", o.note);
+        assert_eq!(judge(&QUIET, 2.0, 0.0).verdict, "no-change");
+    }
+
+    #[test]
+    fn the_owners_four_rob_run_trials_are_all_judged_on_the_measured_band() {
+        // exp:7 -4% / -3.2%, exp:8 -7.3% / -6.5% (an after-session uneven 304/231), exp:9 +2.4% / +4.5%
+        // (both uneven), exp:10 +1.7% / +0.7%: every one now a judged, negligible result.
+        for (low, avg) in [(-4.0, -3.2), (-7.3, -6.5), (2.4, 4.5), (1.7, 0.7)] {
+            let o = judge(&WIDE, low, avg);
+            assert_eq!((o.verdict.as_str(), o.stop_reason.as_deref()), ("no-change", None), "{low}: {}", o.note);
+        }
+    }
+
+    #[test]
+    fn an_uneven_session_is_no_longer_a_reason_to_judge_nothing() {
+        let src = include_str!("experiment.rs");
+        let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
+        let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
+        assert!(!body.contains(concat!("with_steady", "_sessions(")), "uneven halves no longer turn a verdict too-noisy");
+        assert!(body.contains("noise_for_conclude(rec, &sessions, baseline, rows.as_deref())"), "judged on measured noise");
+        assert!(body.contains("noise_floor_pct: n.low1_band_pct, ..rec.clone()"), "the 1% low is classified on it");
+        assert!(body.contains("with_cap_check(measured, baseline_cap, after_cap)"), "cap state compared");
+        assert!(body.contains("check: after_check"), "the receipt still keeps the after-session's grade");
+    }
+
+    #[test]
+    fn a_frame_cap_that_changed_or_cant_be_read_confounds_the_trial() {
+        let changed = judge_on(&WIDE, 30.0, 5.0, CapRead::Uncapped, CapRead::Capped { at_fps: 240.0 }, TrialOutcome::Recommended);
+        assert_eq!((changed.verdict.as_str(), changed.keep, changed.stop_reason.as_deref()), ("confounded", false, Some("frame-cap-changed")));
+        assert!(changed.note.contains("The frame cap changed between these sessions") && changed.note.contains("about 240 fps"), "{}", changed.note);
+        let unread = judge_on(&WIDE, 30.0, 5.0, CapRead::Unknown, CapRead::Uncapped, TrialOutcome::Recommended);
+        assert_eq!((unread.verdict.as_str(), unread.stop_reason.as_deref()), ("confounded", Some("frame-cap-unread")));
+        assert!(unread.note.contains("can't tell"), "{}", unread.note);
+        // A cap moved from 144 to 240 is a change too.
+        let moved = judge_on(&QUIET, 1.0, 1.0, CapRead::Capped { at_fps: 144.0 }, CapRead::Capped { at_fps: 240.0 }, TrialOutcome::Recommended);
+        assert_eq!(moved.verdict, "confounded");
+    }
+
+    #[test]
+    fn under_a_shared_cap_the_average_is_never_read_as_no_change() {
+        let capped = CapRead::Capped { at_fps: 240.0 };
+        let max_fps = judge_on(&QUIET, 1.0, 0.0, capped, capped, TrialOutcome::MaxFps);
+        assert_eq!((max_fps.verdict.as_str(), max_fps.keep), ("not-comparable", false), "{}", max_fps.note);
+        assert_eq!(max_fps.stop_reason.as_deref(), Some("frame-cap-hides-average"));
+        assert!(max_fps.note.contains("lift the cap"), "{}", max_fps.note);
+        let rec = judge_on(&QUIET, 1.0, 0.0, capped, capped, TrialOutcome::Recommended);
+        assert_eq!(rec.verdict, "no-change");
+        assert!(rec.note.contains("hides any rise in the average") && rec.note.contains("rests on the 1% low"), "{}", rec.note);
+        // The 1% low, which the cap doesn't flatten, still decides a real gain.
+        assert_eq!(judge_on(&QUIET, 8.0, 0.0, capped, capped, TrialOutcome::Recommended).verdict, "improved");
+    }
+
+    #[test]
+    fn unmeasured_noise_judges_nothing_and_asks_for_the_sessions_it_needs() {
+        let why = NoiseUnmeasured { have: 1, need: 3, cap_unknown: false };
+        let m = noise_unmeasured_message(&why, "ROB RUN.exe");
+        assert!(m.contains("won't guess") && m.contains("found 1") && m.contains("Play 2 more baseline sessions"), "{m}");
+        let o = unmeasured_noise_outcome(measured(180.0), &why, "ROB RUN.exe");
+        assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("not-comparable", false, Some("noise-unmeasured")));
+        let cap = noise_unmeasured_message(&NoiseUnmeasured { have: 0, need: 3, cap_unknown: true }, "ROB RUN.exe");
+        assert!(cap.contains("frame cap") && cap.contains("baseline session"), "{cap}");
+        // A record started before P4-judge-noisy, with nothing to measure from, is never judged on its 3%.
+        assert!(noise_for_conclude(&rec(150.0, 5), &[], None, None).is_err());
+        let started = ExperimentRecord { game_noise: Some(WIDE), ..rec(150.0, 5) };
+        assert_eq!(noise_for_conclude(&started, &[], None, None), Ok(WIDE));
+    }
+
+    #[test]
+    fn the_start_measures_the_band_and_refuses_when_it_cant() {
+        let src = include_str!("experiment.rs");
+        let body = &src[src.find("pub(crate) fn start_experiment(").unwrap()..];
+        let body = &body[..body.find("\n}\n").unwrap()];
+        assert!(body.contains("crate::noise_floor::measure_game_noise(&covered, baseline, &ledger_rows(changes))"));
+        assert!(body.contains("noise_unmeasured_message(&why, &baseline.process_name)"));
+        assert!(body.contains("let noise_floor_pct = game_noise.low1_band_pct;"), "the stored band is the measured one");
+        assert!(!body.contains("noise_band_pct("), "no fallback to the fixed default");
+    }
+
+    /// An exp:10-shaped record as an older Compy wrote it (shape only, from the owner's data).
+    fn legacy_no_change() -> serde_json::Value {
+        serde_json::json!({
+            "id": "exp:10-1", "rec_id": "power-ultimate", "rec_title": "Ultimate", "game": "ROB RUN.exe",
+            "hypothesis": "h", "created_at": "2026-11-11T14:14:07+00:00", "status": "restored",
+            "baseline_avg_fps": 274.8, "baseline_low1_fps": 171.7, "ledger_watermark": 84,
+            "applied_change_id": "power-ultimate-1", "active_changes_at_start": 13, "noise_floor_pct": 3.0,
+            "halves_floor_pct": 3.0, "between_session_noise": null,
+            "treatment": { "avg_fps": 276.7, "low1_fps": 174.7, "samples": 996, "crashed": false, "delta_low1_pct": 1.7,
+                "recorded_at": "2026-11-11T14:31:08+00:00", "delta_avg_pct": 0.7 },
+            "verdict": "no-change", "kept": false, "verdict_confidence": "medium",
+            "verdict_note": "… both against a ±3% band …", "trial_result": "negligible",
+            "noise_evidence": { "band_pct": 3.0, "measured_noise_pct": null, "measured_noise_stale": null, "between_sessions": null }
+        })
+    }
+
+    #[test]
+    fn old_records_load_unchanged_and_save_back_without_new_keys() {
+        let old = legacy_no_change();
+        let back: ExperimentRecord = serde_json::from_value(old.clone()).expect("an older record loads");
+        assert_eq!((back.game_noise.as_ref(), back.assumed_band.as_ref()), (None, None));
+        let out = serde_json::to_value(&back).unwrap();
+        assert!(out.get("game_noise").is_none() && out.get("assumed_band").is_none(), "nothing added on save");
+        assert!(out["noise_evidence"].get("game_noise").is_none());
+        for k in ["verdict", "verdict_note", "noise_floor_pct", "trial_result", "noise_evidence", "verdict_confidence"] {
+            assert_eq!(out[k], old[k], "{k} is history: never rewritten");
+        }
+        // A label the UI was handed is never read back from a store either.
+        let mut labelled = out.clone();
+        labelled["assumed_band"] = serde_json::json!({ "assumed_pct": 3.0, "measured_low1_pct": 20.6, "measured_sessions": 9 });
+        let reread: ExperimentRecord = serde_json::from_value(labelled).unwrap();
+        assert_eq!(reread.assumed_band, None);
+    }
+
+    #[test]
+    fn a_new_record_keeps_its_measured_noise_and_an_older_compy_judges_on_its_band() {
+        let r = ExperimentRecord { noise_floor_pct: WIDE.low1_band_pct, game_noise: Some(WIDE), ..rec(150.0, 5) };
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["game_noise"]["low1_band_pct"], serde_json::json!(20.6));
+        assert_eq!(v["game_noise"]["cap"], serde_json::json!({ "state": "uncapped" }));
+        #[derive(Deserialize)]
+        struct OlderRecord {
+            noise_floor_pct: f64,
+        }
+        let older: OlderRecord = serde_json::from_value(v.clone()).unwrap();
+        assert_eq!(older.noise_floor_pct, 20.6, "an older Compy reads the measured band, never 3%");
+        let back: ExperimentRecord = serde_json::from_value(v).unwrap();
+        assert_eq!(back.game_noise, Some(WIDE));
+    }
+
+    #[test]
+    fn a_verdict_judged_on_the_assumed_band_is_labelled_never_rewritten() {
+        let old: ExperimentRecord = serde_json::from_value(legacy_no_change()).unwrap();
+        assert_eq!(
+            assumed_band_label(&old, Some(&WIDE)),
+            Some(AssumedBandLabel { assumed_pct: 3.0, measured_low1_pct: Some(20.6), measured_sessions: Some(9) })
+        );
+        assert_eq!(
+            assumed_band_label(&old, None),
+            Some(AssumedBandLabel { assumed_pct: 3.0, measured_low1_pct: None, measured_sessions: None }),
+            "still unmeasured is said so"
+        );
+        // An older too-noisy result (no band recorded, graded on the fixed 3% halves gap) is labelled too.
+        let mut noisy = legacy_no_change();
+        noisy["verdict"] = serde_json::json!("too-noisy");
+        noisy["noise_evidence"] = serde_json::Value::Null;
+        let noisy: ExperimentRecord = serde_json::from_value(noisy).unwrap();
+        assert!(assumed_band_label(&noisy, Some(&WIDE)).is_some());
+        // Judged on a measurement: no label.
+        let measured_rec = ExperimentRecord { game_noise: Some(WIDE), ..old.clone() };
+        assert_eq!(assumed_band_label(&measured_rec, Some(&WIDE)), None);
+        let mut spread = old.clone();
+        spread.between_session_noise = Some(crate::noise_floor::BetweenSessionNoise { spread_pct: 21.6, sessions: 4 });
+        assert_eq!(assumed_band_label(&spread, Some(&WIDE)), None, "exp:5's band was measured");
+        // Labelling hands a copy; the verdict and note stay exactly as stored.
+        let labelled = with_assumed_band_labels(vec![old.clone()], &[], None);
+        assert_eq!((labelled[0].verdict.clone(), labelled[0].verdict_note.clone()), (old.verdict, old.verdict_note));
+        assert_eq!(labelled[0].assumed_band.as_ref().map(|l| l.measured_low1_pct), Some(None));
     }
 }

@@ -133,7 +133,24 @@ type NoiseEvidence = {
   /** P4-noise: this game's 1% low spread between whole unchanged sessions on this PC, which set the
    *  band (never below the fixed floor). Absent/null when too few unchanged sessions existed. */
   between_sessions?: { spread_pct: number; sessions: number } | null;
+  /** P4-judge-noisy: this game's measured as-is noise the verdict was judged on (noise_floor.rs
+   *  `GameNoise`): bands on the 1% low and the average, from that many sessions. Absent on older records. */
+  game_noise?: GameNoise | null;
 };
+
+/** P4-judge-noisy (noise_floor.rs `GameNoise`). */
+type GameNoise = {
+  low1_band_pct: number;
+  avg_band_pct: number;
+  low1_step_pct: number;
+  avg_step_pct: number;
+  sessions: number;
+  cap?: { state: "uncapped" | "capped" | "unknown"; at_fps?: number } | null;
+};
+
+/** P4-judge-noisy (experiment.rs `AssumedBandLabel`, read-only): a verdict judged on the assumed ±3%
+ *  band before Compy measured each game's noise, and that game's noise as measured now (null = not yet). */
+type AssumedBand = { assumed_pct: number; measured_low1_pct: number | null; measured_sessions: number | null };
 
 /** P4-comparable — what one session's records say about stretches that weren't play. */
 type SessionStretches = {
@@ -200,6 +217,8 @@ type Experiment = {
   mode?: string | null;
   /** P5-realplay: its sessions and verdict numbers (experiment.rs `real_play`). */
   real_play?: RealPlayEvidence | null;
+  /** P4-judge-noisy: the label for a verdict judged on the assumed band (never stored). */
+  assumed_band?: AssumedBand | null;
 };
 
 type SimulatorReport = {
@@ -350,10 +369,19 @@ function BenchWord({ c, kind }: { c: Confidence; kind: "estimate" | "measured" |
 // this PC is known. An unmeasured noise level is said to be unmeasured, never filled in.
 function noiseLine(n: NoiseEvidence, game: string, t: Translate): string {
   const pct = (v: number) => String(Math.round(v * 10) / 10);
+  const name = prettyGameName(game) || game;
+  // P4-judge-noisy: the bands measured from this game's own as-is sessions, in plain words.
+  const g = n.game_noise;
+  if (g != null)
+    return t("lab.experimentBench.noiseMeasuredBands", {
+      low: pct(g.low1_band_pct),
+      avg: pct(g.avg_band_pct),
+      sessions: g.sessions,
+      game: name,
+    });
   const b = n.between_sessions;
   if (b != null) {
     const [band, measured, sessions] = [pct(n.band_pct), pct(b.spread_pct), b.sessions];
-    const name = prettyGameName(game) || game;
     // The band is the measured spread unless that was below the fixed floor, which then judged.
     return b.spread_pct >= n.band_pct
       ? t("lab.experimentBench.noiseBetweenSessions", { band, measured, sessions, game: name })
@@ -365,6 +393,18 @@ function noiseLine(n: NoiseEvidence, game: string, t: Translate): string {
   if (n.measured_noise_stale === "unconfirmed")
     return t("lab.experimentBench.noiseStaleUnconfirmed", { band: pct(n.band_pct) });
   return t("lab.experimentBench.noiseUnmeasured", { band: pct(n.band_pct) });
+}
+
+// P4-judge-noisy (immutability): a verdict judged on the assumed band is labelled, never rewritten,
+// with this game's noise as measured now; still unmeasured is said so.
+export function assumedBandLine(a: AssumedBand, game: string, t: Translate): string {
+  const pct = (v: number) => String(Math.round(v * 10) / 10);
+  const name = prettyGameName(game) || game;
+  if (a.measured_low1_pct == null) return t("lab.experimentBench.assumedBandUnmeasured", { assumed: pct(a.assumed_pct), game: name });
+  const opts = { assumed: pct(a.assumed_pct), measured: pct(a.measured_low1_pct), sessions: a.measured_sessions ?? 0, game: name };
+  return a.measured_low1_pct > a.assumed_pct
+    ? t("lab.experimentBench.assumedBandWider", opts)
+    : t("lab.experimentBench.assumedBandNarrower", opts);
 }
 
 function whenLabel(iso: string, t: Translate): string {
@@ -965,13 +1005,16 @@ export default function ExperimentBench({
   // other note — a row that LOOKS judged (Better / No change / Worse) but has no record (a crash, an
   // older result), or noise lines that differ between rows — is said once under the list, and its
   // rows carry only its mark.
-  const noiseLines = history.map((x) =>
-    x.noise_evidence
+  const noiseLines = history.map((x) => {
+    const judged = x.noise_evidence
       ? isRealPlay(x)
         ? realPlayNoiseLine(x.noise_evidence.band_pct, realPlayCounts(x), prettyGameName(x.game) || x.game, t)
         : noiseLine(x.noise_evidence, x.game, t)
-      : null,
-  );
+      : null;
+    // P4-judge-noisy: a result judged on the assumed band says so beside its own line.
+    const assumed = x.assumed_band ? assumedBandLine(x.assumed_band, x.game, t) : null;
+    return judged && assumed ? `${judged} ${assumed}` : (assumed ?? judged);
+  });
   const rowNotes = history.map((x, i): RowNote | null =>
     noiseLines[i] ?? (looksJudged(x) ? NO_RECORD : x.verdict === "not-comparable" ? x.verdict_note || null : null),
   );

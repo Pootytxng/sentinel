@@ -204,6 +204,51 @@ release checklist); no new rules.
       f. Cap case (other games): when an average sits at a recorded cap/refresh, judge on 1% lows and frame-time
          spread only, and say the cap hides average gains; offer to test with the cap lifted (the user's choice).
       Exit re-run: with (a)-(d) the P4 panel can reach "finished the supported tests" honestly on ROB RUN.
+      OWNER FACT 2026-11-12 17:02 (verbatim, via the coordinator): "i think there was a brief time frame where i had
+      frame cap enabled which is hwy those results seemingly came up at some point i shouldve mentioned this earlier".
+      CAP READ (s26, read-only from `%APPDATA%\Compy\sessions.json`, script `s26-capread.mjs`; nothing written): all 13
+      ROB RUN sessions (the nine as-is and the four Trials' after-sessions, the only ROB RUN sessions stored) read
+      UNCAPPED from their own frame data: no 10 s bucket ceiling holds (6-11% of buckets within 1.5% of the
+      95th-percentile bucket; the longest run of buckets within 1% of each other is 6 x 10 s, at a different value in
+      each session: 312, 283, 191, 314, 280, 270, 246, 243, 258, 259, 229 fps); per-frame median 258-315 fps, never a
+      round value. So the cap the owner remembers did not hold any stored ROB RUN session for as long as 5 minutes, and
+      none of exp:7-10 compared a capped with an uncapped session; the nine-session spread is the game's own. The
+      "+14.6% 1% lows, an improvement" was PBZ (exp:6, Nov 1-2, already `confounded`), not ROB RUN; those PBZ sessions
+      have shed their traces, so their cap state can't be read now.
+      OWNER IDEA 2026-11-12 17:08 (verbatim, via the coordinator): "with all the volatility and spontaneous
+      inconsistencies with our trials can these irresponsible human tendencies be taken into consideration for
+      rethinking the overall apps functionallity and accuracy capability like some sort of contingency plan or user
+      guidance when these kind of contengency patterns are detected. idk just an idea not sure if i even worded it
+      correctly but if you can interpret the gist of what im saying and find a solution that'd be remarkable".
+      Queued under "Trial conditions guard (owner idea 2026-11-12)" below; this item is its first piece (cap state as
+      measurement context, TG-context/TG-drift-words for the cap only).
+      BUILT (s26, design as built; deviations from the design above and why):
+      - Band, measured not assumed (`noise_floor::measure_game_noise`, one source for Trials, the session-end notice and
+        "what changed?"): this game's as-is sessions on this PC (rig, driver, Windows build, last 14 days, same Compy
+        change counts, Gaming Mode, comparable conditions, SAME CAP STATE); per metric (1% low, average) the root mean
+        square of each session's difference from the next, times the 95% Student-t multiplier for that many
+        differences, never below 3% (the smallest effect Compy claims; never used alone). Differences of neighbours, not
+        the design's max-min spread: a Trial compares one session with the next, max-min only grows with more sessions,
+        and a day-long drift counts once. ROB RUN from its nine as-is sessions: see the session log.
+      - Trials between as-is sessions: a change applied AND put back entirely between two as-is sessions (an
+        "excursion") leaves them in the same configuration; the Trial's after-session is skipped, never pooled. Without
+        this the owner's nine sessions were split by every Trial and the noise could never be measured.
+      - Under 3 as-is sessions, or a baseline whose cap state can't be read: the start is refused with the sessions it
+        needs ("Play N more baseline sessions ..."); a Trial started before this build concludes on a measurement taken
+        then, or judges nothing. Never 3%.
+      - Verdict: Better/Worse only past the measured band (1% low on its band, average on its own); inside it the result
+        is "negligible at this game's noise" (no-change, Negligible, change put back; the keep path is unchanged).
+        "too-noisy" is retired for new Trials: an uneven session is part of the whole-session noise the band measures.
+      - Window rule: whole sessions, no window selection (per-window 1% lows aren't recorded; a window picked after
+        seeing data could bias it). Fixed before any comparison; the design's steady-window idea is not built.
+      - Cap (owner fact 17:02): read from the 10 s buckets only (>=5 min of trace; capped = half the buckets within 1.5%
+        of the 90th-percentile bucket and <=5% above it; uncapped = <=25%; otherwise unknown), never from the refresh
+        rate. Different cap states confound a Trial ("The frame cap changed between these sessions ..."), an unreadable
+        one confounds it too; a shared cap judges Recommended on the 1% low and says the cap hides the average; Maximum
+        FPS under a cap is not judged ("lift the cap"). Bands never pool across cap states. "What changed?" refuses a
+        changed cap and notes an unreadable one.
+      - Wording: the note names the measured bands and the session count; fewer than 6 sessions caps confidence at Medium.
+        Older verdicts judged on the assumed band are labelled on read (`assumed_band`, never stored), en + zh-CN.
 - [x] **CR-zh-drift-count** (second whole-range review) zh-CN `home.json` driftCount strings still said "已漂移" after the English was reworded to "changed since they were last good" (`8d855c05`).
       Done `e49b53ed` (2026-11-11 s18, TS only, not installed): both read "{{count}} 项设置自上次正常以来已改变". Test fails on
       the old file. Full vitest 535/538 (the 3 site-app suites).
@@ -610,6 +655,37 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       while its own start may still be pending, and another room could then start. cargo 1829/0 (24 ignored), clippy
       clean. Review (sonnet) APPROVE-WITH-NITS, SHOULD-FIX taken as a code note: the ticket is taken when the command
       body first runs, so two invokes in the same instant on different runtime workers can still swap.
+
+### Trial conditions guard (owner idea 2026-11-12)
+The standard these are built to (owner, 2026-11-12 17:14, verbatim, via the coordinator): "i expect this to be a
+fairly complex thing to code in to the functionality of compy but this is the level of accuracy and quality that i
+have expected to be applied in the development of compy since the beginning. this app is made to expect all variables
+in the human behavior to adapt and align with proper and easy intuitive usability". The idea itself (17:08) is quoted
+under P4-judge-noisy. Coordinator's reading (delegated): real people don't hold conditions steady; Compy detects when
+they didn't, says exactly what differed in plain words, and has a contingency other than "too noisy". Honest-measurement
+law applies to every item; nothing lowers the bar for claiming an improvement. P4-judge-noisy built the first piece
+(frame-cap state read from frame data as part of a session's context; a changed cap named in the verdict).
+- [ ] **TG-context** Every session records a measurement-context fingerprint from what Compy can read: cap state (from
+      frame data), resolution/refresh mode, share of time the game was in front, active power plan, GPU driver and
+      adapter, known heavy background work (recording/streaming encoders, high CPU from non-game processes), length;
+      additive, schema-versioned; unknown stays unknown. User sees: nothing new until TG-drift-words. Tested: fixtures
+      per field, old sessions load unchanged.
+- [ ] **TG-drift-words** When two sessions' contexts differ, the verdict names the difference and the fix ("the frame
+      cap was on in one session", "the game was in the background for 18 of 40 minutes", "a recorder was running in one
+      session") and offers the one next step. Tested: one fixture per difference, en + zh-CN.
+- [ ] **TG-preflight** Before a Trial's second session, Compy compares live context with the baseline's and says what
+      differs up front ("your frame cap is off now; it was on for the baseline: turn it back on, or re-record the
+      baseline"), with a proceed-anyway recorded as confounded. Tested: live-vs-baseline fixtures; proceed-anyway path.
+- [ ] **TG-salvage** A contingency instead of a dead end: use only matching, steady segments when a fixed,
+      pre-declared rule allows; otherwise ask for the smallest extra play needed; never pick windows after seeing the
+      result. Tested: the rule fixed before the comparison, adversarial fixtures that would reward cherry-picking.
+- [ ] **TG-interleave** (design note only, no code; two reviews and an owner go before any code) For settings that can
+      be toggled live and safely through the existing apply/rollback, alternate on/off in blocks within one play
+      session (ABAB) so drift, scene changes and habits cancel out: which catalog settings qualify, the mutation-boundary
+      and consent implications (each toggle is an apply/rollback: one explicit consent for the whole run), the statistics.
+- [ ] **TG-passive-band** Learn each game's noise band from ordinary play over time with no instructions, so a Trial
+      rarely has to ask for extra as-is sessions. Tested: a band appears from ordinary sessions alone; never pooled across
+      contexts.
 
 ### Next — small visible slices (refill 2026-11-03: CR-1102-left's fixable lines + Roadmap Phase 9)
 - [x] **CR-live-round** Live's session strip and the debrief floor a session's length (3h 28m) where History and
