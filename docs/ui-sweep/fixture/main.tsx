@@ -132,7 +132,18 @@ import {
   isDebriefState,
   isFirstWinState,
   isReceiptsState,
+  isUpgradeState,
+  upgradeProps,
 } from "./stub-core";
+// Optimize's upgrade area (CR-view-upgrade-render): the two blocks OptimizeStation renders below its
+// groups. Both are pure renders of the scan's Priorities, so they mount with the fixture payload.
+import { NoUpgradeBlock, UpgradePathBlock } from "../../../src/surfaces/Check";
+import i18n from "../../../src/i18n";
+
+// `?lang=zh-CN` renders the page in that language, so one URL per language is one capture; without
+// it the page follows the stored preference, as the app does.
+const langParam = new URLSearchParams(window.location.search).get("lang");
+if (langParam) void i18n.changeLanguage(langParam);
 
 // ══ src/main.tsx's pre-paint dataset block, hand-replicated ════════════════════════════════════
 // The overlay branch is dropped on purpose: detecting it needs getCurrentWindow(). This page is
@@ -219,6 +230,7 @@ try {
 applyMotionAttribute();
 
 document.documentElement.lang = readLanguage();
+if (langParam) document.documentElement.lang = langParam;
 
 // ── The banner ────────────────────────────────────────────────────────────────────────────────
 // Loud, fixed, and it names the state. A screenshot from this page must be unmistakable as a
@@ -255,7 +267,9 @@ function FixtureBanner() {
                   ? "the session below was never played and the offer is inert — pressing it changes nothing"
                   : isCaseState()
                     ? "Tier 3 has NO send path in any build — case_evidence_gate() is hard-false, the screen below has no route in the app, and Send does nothing"
-                    : "Start / Conclude / Restore are blocked"}
+                    : isUpgradeState()
+                      ? "dev fixture, not the installed app — the sessions and the limiter below were never measured (P9 exit fixture numbers)"
+                      : "Start / Conclude / Restore are blocked"}
       </span>
     </div>
   );
@@ -370,6 +384,22 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
               />
             </ConfirmProvider>
           </div>
+        </div>
+      </section>
+    ) : isUpgradeState() ? (
+      // The Lab room: OptimizeStation (src/surfaces/lab/OptimizeStation.tsx) is a Lab station and
+      // renders these blocks directly in its body, below its action groups, with no retail links.
+      // The groups above them are chrome around the subject and are not replicated.
+      <section className="v2-room" data-room="lab">
+        <div className="v2-room-body">
+          {(() => {
+            const p = upgradeProps()!.priorities as unknown as Priorities;
+            return p.upgrade_path ? (
+              <UpgradePathBlock upgradePath={p.upgrade_path} links={false} />
+            ) : (
+              <NoUpgradeBlock priorities={p} />
+            );
+          })()}
         </div>
       </section>
     ) : isCaseState() ? (

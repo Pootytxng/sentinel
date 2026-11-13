@@ -731,8 +731,72 @@ const CASE_STATES: Record<string, CaseFixtureState> = {
 /** The case fixture's shape — null when the current state is not a case one. */
 export const caseProps = () => CASE_STATES[current] ?? null;
 
+// ── Optimize's upgrade area (CR-view-upgrade-render) ──────────────────────────────────────────
+// The upgrade block needs a GPU-limited session on THIS card, which the owner's rig has never
+// recorded, and the installed app's IPC cannot be intercepted (see vite.config.mts). The blocks are
+// pure renders of a Priorities payload, so these states hand them one built from the P9 exit fixture
+// (src/test/fixtures/p9-exit.json: share 80%, peak 99%, 95% threshold, 50% limit share). Every
+// session here is invented; nothing calls IPC.
+const P9_GAME = "WardogsClient-Win64-Shipping.exe";
+const UPGRADE_BASE = { limiters: [], already_fine: [], not_worth_touching: [], session_hint: null };
+const UPGRADE_STATES: Record<string, { priorities: Record<string, unknown> }> = {
+  "upgrade-gpu": {
+    priorities: {
+      ...UPGRADE_BASE,
+      upgrade_path: {
+        items: [
+          {
+            kind: "gpu",
+            title: "GPU was the measured limiter",
+            why:
+              "In your most recent monitored session the GPU sat at or above 95% for 80% of the time Compy measured the game (peak ~99%) — the GPU was the limiter for at least 50% of that session. If you want more headroom, a GPU upgrade is the hardware lever; no Windows tweak changes this.",
+            links: [],
+            measured_from: {
+              game: P9_GAME,
+              started_at: "2026-11-11T20:36:00Z",
+              busy: 720,
+              readings: 900,
+              threshold_pct: 95,
+              avg_fps: 141.5,
+              refresh_hz: 250,
+              gpu_tie: "this-card",
+            },
+            gpu_numbers: { share_pct: 80, peak_pct: 99, threshold_pct: 95, limit_share_pct: 50 },
+          },
+        ],
+        disclosure: "",
+      },
+    },
+  },
+  "upgrade-none": {
+    priorities: {
+      ...UPGRADE_BASE,
+      upgrade_path: null,
+      upgrade_evidence: {
+        measured_sessions: 3,
+        gpu_limited_sessions: 0,
+        other_card_sessions: 1,
+        newest: {
+          game: P9_GAME,
+          started_at: "2026-11-11T20:36:00Z",
+          busy: 120,
+          readings: 900,
+          threshold_pct: 95,
+          limit_share_pct: 50,
+          gpu_limited: false,
+          gpu_tie: "this-card",
+        },
+      },
+    },
+  },
+};
+
+/** The upgrade-area fixture's Priorities payload — null when the current state is not one. */
+export const upgradeProps = () => UPGRADE_STATES[current] ?? null;
+
 export const STATE_NAMES = [
   ...Object.keys(STATES),
+  ...Object.keys(UPGRADE_STATES),
   ...Object.keys(CPU_TEMP_STATES),
   ...Object.keys(RECEIPTS_STATES),
   ...Object.keys(BLACKBOX_STATES),
@@ -759,6 +823,9 @@ export const isDebriefState = (name: string = current) => name in DEBRIEF_STATES
 /** And for the Tier 3 consent screen, which has no shipped host yet — see CASE_STATES above. */
 export const isCaseState = (name: string = current) => name in CASE_STATES;
 
+/** And for Optimize's upgrade area, which mounts in the Lab room like the Optimize station. */
+export const isUpgradeState = (name: string = current) => name in UPGRADE_STATES;
+
 // The state is chosen by `?state=` on the URL so a capture run is a plain navigation — one page
 // load per shot, no leftover state from the previous one, and the URL in the address bar names the
 // state the screenshot shows.
@@ -773,7 +840,8 @@ function initialState(): string {
         BLACKBOX_STATES[q] ||
         FIRSTWIN_STATES[q] ||
         DEBRIEF_STATES[q] ||
-        CASE_STATES[q])
+        CASE_STATES[q] ||
+        UPGRADE_STATES[q])
     ) {
       return q;
     }
@@ -802,7 +870,8 @@ export function setState(name: string): boolean {
     !BLACKBOX_STATES[name] &&
     !FIRSTWIN_STATES[name] &&
     !DEBRIEF_STATES[name] &&
-    !CASE_STATES[name]
+    !CASE_STATES[name] &&
+    !UPGRADE_STATES[name]
   ) {
     return false;
   }
