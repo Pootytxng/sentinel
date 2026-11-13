@@ -2408,14 +2408,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-11 ~06:38-08:10 (coordinator-assigned s15, CODE-ONLY throughout: ROB RUN in front, idle 0 s): landed
-  CR-summary-running-trial `0af65ec9` (sonnet APPROVE-WITH-NITS), CR-next-reuse-moved `323cbe31`, and the four
-  CR-1102-left owner calls (delegated 2026-11-10): (c) drift-unknown `e3e144e7` (sonnet APPROVE-WITH-NITS), (d)
-  update-refusal `8082bf7a` (sonnet APPROVE-WITH-NITS), (a) real-play put-back `aa6f99c2` and (b) gaming extras
-  consent `ef59ad5d` (each opus + sonnet, two rounds, no MUST-FIX); CR-vbs-local-eq1 with this line. New tests fail
-  on the old code; cargo 1834/0 (24 ignored), clippy clean, tsc 0, full vitest 532/536 (3 site-app suites + one
-  census fixed before landing). Queued CR-rp-same-setting-row, CR-gm-confirm-repeat; CR-outside-followups (a), (b),
-  (d) parked. Not installed, not pushed (never FULL).
 - 2026-11-11 ~08:00-08:50 (coordinator-assigned s16, CODE-ONLY throughout: ROB RUN in front): bundle
   `main-unpushed-2026-11-11.bundle` verified; owner's no-tester statement recorded (`a067f006`); CR-gm-confirm-repeat
   landed `b3aa742a` (full vitest 533/536, the 3 site-app suites; also fixes the affordance census). CR-rp-same-setting-row
@@ -2542,6 +2534,18 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   installer as `Compy-0.9.26-3630e0a6-tester-setup.exe`, SHA256.txt, guide .txt + .html); not sent anywhere; item
   left unticked (the friend test is the exit). Not started: measurement items 7/8, the judging-chain refactor,
   TG-context. Screen check not run.
+
+- 2026-11-13 s29 (FULL; resumed 03:43 after the device bridge dropped 02:15-03:42): measurement item 8 (merge
+  `b85f78cd`: armed comparison, Lab tuning, session patterns judged on the measured band or "can't call it"; synthetic
+  benchmark calls nothing; trends arrow and in-session fade not called; sonnet APPROVE-WITH-NITS, opus r1/r2
+  REQUEST-CHANGES (3 MUST taken), opus r3 APPROVE-WITH-NITS), item 7 (merge `63f19440`, assumed-band label; sonnet
+  REQUEST-CHANGES, 2 MUST resolved), item 4 race-test isolation (merge `886e3044`: scratch folders reused via Windows
+  PID reuse held an earlier run's result file; 10x `cargo test --lib comparison` 42/0, full 1946/0), CR-plan-held-refusal
+  (merge `c9ac9313`; opus r2 MUST = source-order pinning tests, not taken under the no-pinning rule). Judging-chain
+  refactor PARKED (8+ include_str! tests pin conclude/start text). TG-context left. cargo 1945/1946/1950/0, clippy
+  clean, full vitest 543/546 and 544/547. Pushes PASS (`773156f0`, `45f07fd9`; one push stopped by me on citation
+  drift, re-anchored). Installed `45f07fd9` (runtime proof attempt 1, Synez before/after). Tester folder unchanged
+  (item 3 not landed). No game at any check.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
