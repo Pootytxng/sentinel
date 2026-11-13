@@ -147,6 +147,17 @@ pub(crate) struct AppliedChange {
     /// loads as None, and a row without it is written exactly as before (no key at all).
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "lenient_applied_plan")]
     pub(crate) applied_plan: Option<AppliedPlan>,
+    /// CR-core-parking-plan-gone: on a row closed by an undo that had nothing left to restore (the
+    /// power plan the change was made on no longer exists), why nothing was written. Additive: every
+    /// older row, and every undo that restored a value, has no key at all.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "lenient_nothing_restored")]
+    pub(crate) nothing_restored: Option<NothingRestored>,
+}
+
+/// A `nothing_restored` this build can't parse loads as None, never as a ledger that fails to load.
+fn lenient_nothing_restored<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<NothingRestored>, D::Error> {
+    let raw = Option::<serde_json::Value>::deserialize(d)?;
+    Ok(raw.and_then(|v| serde_json::from_value(v).ok()))
 }
 
 /// An `applied_plan` this build can't parse loads as None, never as a ledger that fails to load.
@@ -361,6 +372,9 @@ pub(crate) struct AppliedChangeView {
     // Omitted when the row has no usable record or the read is not part of the pass.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) changed_outside_holds: Option<bool>,
+    // CR-core-parking-plan-gone pass-through: why an undo had nothing to restore. Omitted when None.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) nothing_restored: Option<NothingRestored>,
     // Pass-through of the persisted rollback stamp. None = still applied, or rolled back
     // before the stamp existed — the UI must render that as "date unknown", never a guess.
     pub(crate) rolled_back_at: Option<String>,
@@ -845,6 +859,7 @@ fn into_view_with(c: AppliedChange, reads: &LiveReads) -> AppliedChangeView {
         rollback_justified_by_experiment: c.rollback_justified_by_experiment,
         changed_outside: c.changed_outside,
         changed_outside_holds: None,
+        nothing_restored: c.nothing_restored,
         undo_contract,
     }
 }
@@ -928,6 +943,7 @@ pub(crate) fn test_view(
         rollback_justified_by_experiment: None,
         changed_outside: None,
         changed_outside_holds: None,
+        nothing_restored: None,
         undo_contract: reversible,
     }
 }
@@ -1238,6 +1254,7 @@ fn build_applied_change_with(
         rollback_justified_by_experiment: None,
         changed_outside: None,
         applied_plan,
+        nothing_restored: None,
     })
 }
 
@@ -1275,6 +1292,14 @@ impl Made {
 struct UndoEffects<'a> {
     rollback: &'a dyn Fn(&RollbackAction, &Snapshot) -> Result<(), String>,
     /// The rec id and the typed action the row carries (`None` for a legacy row without one).
+    probe: &'a dyn Fn(&str, Option<&AppliedAction>) -> ActiveCheck,
+}
+
+/// [`UndoEffects`] for the user's undo ([`commit_rollback`]): production passes
+/// `actions::dispatch_rollback_outcome`, which also says when there was nothing left to restore
+/// (CR-core-parking-plan-gone).
+struct RollbackEffects<'a> {
+    rollback: &'a dyn Fn(&RollbackAction, &Snapshot) -> Result<UndoDone, String>,
     probe: &'a dyn Fn(&str, Option<&AppliedAction>) -> ActiveCheck,
 }
 
@@ -2053,11 +2078,11 @@ fn rollback_change_inner(change_id: &str, cite: Option<CiteTrial>) -> Result<(),
     let justified_by = cite.map(|cite| cite(&history[idx].rec_id)).transpose()?;
 
     let save = |h: &[AppliedChange]| save_history(&root, h);
-    let rollback = |a: &RollbackAction, s: &Snapshot| dispatch_rollback(&root, a, s);
+    let rollback = |a: &RollbackAction, s: &Snapshot| dispatch_rollback_outcome(&root, a, s);
     let probe = |rec_id: &str, applied: Option<&AppliedAction>| {
         check_change_state(rec_id, applied, &LiveReads::default())
     };
-    commit_rollback(&mut history, idx, justified_by, &save, &UndoEffects { rollback: &rollback, probe: &probe })
+    commit_rollback(&mut history, idx, justified_by, &save, &RollbackEffects { rollback: &rollback, probe: &probe })
 }
 
 /// The user's rollback of ledger row `idx`, after the lookup: resolve its typed rollback, run it,
@@ -2073,13 +2098,19 @@ fn commit_rollback(
     idx: usize,
     justified_by: Option<TrialLink>,
     save: &dyn Fn(&[AppliedChange]) -> Result<(), String>,
-    effects: &UndoEffects,
+    effects: &RollbackEffects,
 ) -> Result<(), RollbackError> {
     let change = history[idx].clone();
     let (action, snapshot) = resolve_rollback(&change)?;
-    (effects.rollback)(&action, &snapshot)?;
+    let done = (effects.rollback)(&action, &snapshot)?;
 
     history[idx].status = "rolled_back".into();
+    // CR-core-parking-plan-gone: an undo with nothing left to restore closes the row the same way,
+    // and its receipt says why nothing was written.
+    history[idx].nothing_restored = match done {
+        UndoDone::Restored => None,
+        UndoDone::NothingToRestore(why) => Some(why),
+    };
     // Honest rollback dating (Intelligence Phase 2): stamped at the moment the rollback
     // actually dispatched. Only entries rolled back from this stamp onward carry a date.
     history[idx].rolled_back_at = Some(Utc::now().to_rfc3339());
@@ -3353,13 +3384,137 @@ mod receipt_commit_tests {
         };
         let rollback = |a: &RollbackAction, s: &Snapshot| {
             seen.rollbacks.borrow_mut().push(contract(a, s));
-            undo.clone()
+            undo.clone().map(|()| UndoDone::Restored)
         };
         let probe = |rec_id: &str, _: Option<&AppliedAction>| {
             seen.probes.borrow_mut().push(rec_id.to_string());
             read
         };
-        commit_rollback(history, idx, link, &save, &UndoEffects { rollback: &rollback, probe: &probe })
+        commit_rollback(history, idx, link, &save, &RollbackEffects { rollback: &rollback, probe: &probe })
+    }
+
+    // ── CR-core-parking-plan-gone: an undo whose power plan no longer exists ──
+
+    const PLAN_A: &str = "6c1e3f42-0d2b-4a77-9e1f-3b7a7f6e1c10";
+
+    fn applied_core_parking(plan: Option<&str>) -> AppliedChange {
+        let result = ApplyResult {
+            applied_action: AppliedAction::RestoreCoreParkingDefault,
+            rollback_action: RollbackAction::RestoreCoreParkingFromSnapshot,
+            snapshot: Snapshot::CoreParking { prior_ac_pct: Some(40), prior_dc_pct: Some(30), plan_guid: plan.map(str::to_string) },
+            elevation_used: true,
+        };
+        build_applied_change("core-parking-forced", "Re-allow core parking", result, None).expect("build")
+    }
+
+    /// The user's undo of `row` through the production dispatch (`dispatch_rollback_outcome_with`),
+    /// with the powercfg reads faked; `ran` collects every script that would have run elevated.
+    fn undo_core_parking(
+        history: &mut [AppliedChange],
+        listed: Option<bool>,
+        ran: &std::cell::RefCell<Vec<String>>,
+        saves: &std::cell::Cell<usize>,
+    ) -> Result<(), RollbackError> {
+        let save = |_: &[AppliedChange]| {
+            saves.set(saves.get() + 1);
+            Ok(())
+        };
+        let plan_listed = |_: &str| listed;
+        let active_plan = || None;
+        let run_elevated = |script: &str| {
+            ran.borrow_mut().push(script.to_string());
+            Ok(())
+        };
+        let fx = CoreParkingEffects { plan_listed: &plan_listed, active_plan: &active_plan, run_elevated: &run_elevated };
+        let rollback = |a: &RollbackAction, s: &Snapshot| {
+            dispatch_rollback_outcome_with(&crate::data_root::test_mutation_root(), a, s, &fx)
+        };
+        let probe = |_: &str, _: Option<&AppliedAction>| ActiveCheck::Unrecognised;
+        commit_rollback(history, 0, None, &save, &RollbackEffects { rollback: &rollback, probe: &probe })
+    }
+
+    #[test]
+    fn a_core_parking_undo_whose_plan_is_gone_closes_the_row_with_a_receipt_and_runs_nothing() {
+        let mut history = vec![applied_core_parking(Some(&PLAN_A.to_uppercase()))];
+        let (ran, saves) = (std::cell::RefCell::new(Vec::new()), std::cell::Cell::new(0));
+        undo_core_parking(&mut history, Some(false), &ran, &saves).expect("a gone plan closes, never fails for good");
+        assert!(ran.borrow().is_empty(), "nothing may run elevated against a plan that isn't there");
+        assert_eq!(saves.get(), 1, "the closed row is saved");
+        assert_eq!(history[0].status, "rolled_back");
+        assert!(history[0].rolled_back_at.is_some());
+        assert_eq!(history[0].nothing_restored, Some(NothingRestored::plan_gone(PLAN_A.to_string())));
+        // The receipt survives a save and load, and reaches the view the History row reads.
+        let json = serde_json::to_string(&history).expect("save");
+        let back: Vec<AppliedChange> = serde_json::from_str(&json).expect("load");
+        let view = serde_json::to_value(into_view(back[0].clone())).expect("view");
+        assert_eq!(view["nothing_restored"]["reason"], "plan-gone");
+        assert_eq!(view["nothing_restored"]["plan_guid"], PLAN_A);
+    }
+
+    #[test]
+    fn a_core_parking_undo_whose_plan_exists_restores_onto_that_plan_and_records_no_note() {
+        let mut history = vec![applied_core_parking(Some(PLAN_A))];
+        let (ran, saves) = (std::cell::RefCell::new(Vec::new()), std::cell::Cell::new(0));
+        undo_core_parking(&mut history, Some(true), &ran, &saves).expect("undo");
+        assert_eq!(ran.borrow().len(), 1);
+        assert!(ran.borrow()[0].contains(PLAN_A) && ran.borrow()[0].contains(" 40"), "{:?}", ran.borrow());
+        assert_eq!(history[0].status, "rolled_back");
+        assert_eq!(history[0].nothing_restored, None);
+        let json = serde_json::to_string(&history).expect("save");
+        assert!(!json.contains("nothing_restored"), "a normal undo writes no new key: {json}");
+    }
+
+    #[test]
+    fn a_core_parking_undo_that_cant_read_the_plan_list_changes_nothing_and_says_so() {
+        let mut history = vec![applied_core_parking(Some(PLAN_A))];
+        let (ran, saves) = (std::cell::RefCell::new(Vec::new()), std::cell::Cell::new(0));
+        let err = undo_core_parking(&mut history, None, &ran, &saves).expect_err("an unread list is not a gone plan");
+        let RollbackError::Failed(msg) = err else { panic!("a failed undo") };
+        assert!(msg.contains("couldn't read") && msg.contains("Nothing was changed"), "{msg}");
+        assert!(ran.borrow().is_empty());
+        assert_eq!(saves.get(), 0);
+        assert_eq!(history[0].status, "applied", "the row stays open");
+        assert_eq!(history[0].nothing_restored, None);
+    }
+
+    #[test]
+    fn a_core_parking_row_from_before_the_plan_was_recorded_undoes_as_before() {
+        let mut history = vec![applied_core_parking(None)];
+        let (ran, saves) = (std::cell::RefCell::new(Vec::new()), std::cell::Cell::new(0));
+        // Never asks for the plan list: a legacy row restores onto the current plan, as it always did.
+        undo_core_parking(&mut history, None, &ran, &saves).expect("legacy undo");
+        assert_eq!(ran.borrow().len(), 1);
+        assert_eq!(history[0].nothing_restored, None);
+    }
+
+    #[test]
+    fn an_active_plan_the_list_leaves_out_is_not_gone() {
+        // Sonnet r1 nit: `powercfg /list` can omit a hidden scheme; the active one is there.
+        let step = core_parking_undo_step(Some(40), Some(30), Some(PLAN_A), &|_| Some(false), &|| Some(PLAN_A.to_uppercase()));
+        let Ok(CoreParkingUndo::Run(script)) = step else { panic!("{step:?}") };
+        assert!(script.contains(PLAN_A) && script.contains("-setactive"), "restored and re-committed live: {script}");
+    }
+
+    #[test]
+    fn the_plan_list_read_tells_a_missing_plan_from_an_unreadable_list() {
+        let list = "Existing Power Schemes (* Active)\n-----------------------------------\n\
+                    Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced) *\n\
+                    Power Scheme GUID: 6C1E3F42-0D2B-4A77-9E1F-3B7A7F6E1C10  (Synez)\n";
+        let read = |print: &str, guid: &str| plan_listed_in(crate::plan_guids_of(print), guid);
+        assert_eq!(read(list, PLAN_A), Some(true), "GUIDs compare case-insensitively");
+        assert_eq!(read(list, "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"), Some(false));
+        assert_eq!(read("", PLAN_A), None, "an empty print is unreadable, never 'gone'");
+        assert_eq!(read("Access is denied.\n", PLAN_A), None);
+        // A substring of a listed GUID is not that plan (power_plan_exists matched substrings).
+        assert_eq!(read(list, "6c1e3f42-0d2b-4a77-9e1f-3b7a7f6e1c1"), Some(false));
+    }
+
+    #[test]
+    fn an_unknown_nothing_restored_shape_loads_as_none_not_a_failed_ledger() {
+        let raw = r#"[{"id":"cp-1","rec_id":"core-parking-forced","rec_title":"x","applied_at":"2026-11-13T09:00:00Z",
+            "snapshot":{},"status":"rolled_back","nothing_restored":42}]"#;
+        let rows: Vec<AppliedChange> = serde_json::from_str(raw).expect("loads");
+        assert_eq!(rows[0].nothing_restored, None);
     }
 
     fn applied_fast_startup() -> AppliedChange {
@@ -3743,7 +3898,12 @@ mod receipt_commit_tests {
         ] {
             assert!(recording.contains(gateway), "{gateway} must record through record_receipt(s)");
         }
-        let undoing: std::collections::BTreeSet<String> = callers_of("dispatch_rollback").into_iter().collect();
+        // CR-core-parking-plan-gone: `dispatch_rollback_outcome` is the same boundary (it delegates
+        // to `dispatch_rollback` and also says when nothing was left to restore), so both count.
+        let undoing: std::collections::BTreeSet<String> = callers_of("dispatch_rollback")
+            .into_iter()
+            .chain(callers_of("dispatch_rollback_outcome"))
+            .collect();
         assert_eq!(
             undoing,
             ["record_receipts", "rollback_change_inner"].map(String::from).into(),
@@ -4618,6 +4778,7 @@ mod history_tests {
             rollback_justified_by_experiment: None,
             changed_outside: None,
             applied_plan: None,
+            nothing_restored: None,
         }
     }
 
@@ -5663,6 +5824,7 @@ mod ledger_fuzz_tests {
             rollback_justified_by_experiment: None,
             changed_outside: None,
             applied_plan: None,
+            nothing_restored: None,
         }
     }
 
