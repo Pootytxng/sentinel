@@ -3665,7 +3665,7 @@ Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n";
         // Sonnet r1: a fragment that `powercfg /list` would contain is not a plan id either.
         for bad in ["e", "-", "8c5e7fda", "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c-x"] {
             let err = super::rollback_core_parking_typed(Some(40), Some(30), Some(bad)).unwrap_err();
-            assert!(err.contains("isn't a plan id") || err.contains("cannot roll back"), "{bad}: {err}");
+            assert!(err.contains("isn't a plan id"), "{bad}: {err}");
         }
     }
 }
@@ -4622,10 +4622,10 @@ pub(crate) fn mpo_rollback_script(prior: Option<u32>) -> String {
     set_or_remove_dword(DWM_PATH, "OverlayTestMode", prior)
 }
 pub(crate) fn core_parking_script(ac_pct: u32, dc_pct: u32) -> String {
-    // ONE elevated PS invocation runs all three statements. SCHEME_CURRENT (not an explicit GUID)
-    // is the standard powercfg idiom for a SETTING-index write — the 070c3c9 stored-GUID contract
-    // concerns whole-plan SWITCHING (force-activating a plan), not a per-setting index on the
-    // already-active plan, so there's no plan-switch to drift here.
+    // ONE elevated PS invocation runs all three statements against SCHEME_CURRENT. CR-core-parking-
+    // plan-guid: a plan switch between apply and undo DID drift this onto another plan, so it is now
+    // the undo only for rows written before the plan was recorded; newer rows undo against their
+    // recorded plan (`core_parking_plan_script`).
     format!(
         "powercfg -setacvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {ac_pct}; \
          powercfg -setdcvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {dc_pct}; \
@@ -4706,7 +4706,7 @@ pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan
     // reach the elevated command line, and a plan that no longer exists fails loud.
     ps_safe(plan)?;
     // Sonnet r1: only a whole 8-4-4-4-12 GUID is a plan (`power_plan_exists` matches substrings).
-    if plan.trim().len() != 36 || crate::scheme_guid_of(plan).as_deref() != Some(plan.trim().to_ascii_lowercase().as_str()) {
+    if !crate::scheme_guid_of(plan).is_some_and(|g| g.eq_ignore_ascii_case(plan)) {
         return Err(format!("This entry's recorded power plan ({plan}) isn't a plan id — cannot roll back blind."));
     }
     if !power_plan_exists(plan) {
