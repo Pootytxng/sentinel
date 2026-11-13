@@ -162,6 +162,48 @@ release checklist); no new rules.
       benefit beyond credible noise means the default wins" stays law. Findings + a concrete design under this item
       (read `docs/product/TRIAL_PROTOCOL.md` and PRODUCT_CONSTITUTION §9/§26 first). Implementation is the NEXT
       worker's, two reviews; then the P4 proof is re-run on the owner's real play.
+      FINDINGS (s25, read-only from `%APPDATA%\Compy\experiments.json` / `sessions.json`, nothing written; script
+      `s25-p4read.mjs`, output `_train\s25-p4read.txt`):
+      1. Not a frame cap. Every ROB RUN session averaged ABOVE the 250 Hz it ran at (262-328 fps), and the sustained
+         GPU rule saw almost no GPU-limited readings (0-6 of ~800-1,600 at >=95%; peaks 72-99%). The game is
+         CPU/engine-paced, uncapped. Judging on lows "because the average is cap-saturated" does not apply here.
+      2. The noise is real and large, between sessions and within them. Nine as-is sessions with nothing changed
+         (Nov 11 01:49-13:55, 13 Compy changes on throughout) averaged 327.9, 309.1, 278.2, 262.0, 298.8, 284.7, 271.0,
+         266.9, 274.8 fps (262-328: about -6%/+18% around the 278 median) and 1% lows 171.7-227.6 (a 25% spread),
+         drifting DOWN over the day while the GPU hotspot rose 60 -> 81 C. Within a session the halves moved 3.3%
+         (exp:7 baseline 304/294), 6.5% (exp:9 baseline 276/258) and 24% (exp:8 after-session 304/231). The fixed band
+         (`noise_floor_pct` 3, `halves_floor_pct` 3) is well inside the game's own spread, and
+         `between_session_noise` / `measured_noise_pct` were null in all four Trials: Compy never measured this game's
+         A/A noise, so 3% was an assumption.
+      3. The four Trials: exp:7 (visual effects) too-noisy, baseline uneven (304/294 = 3.3% > 3%); exp:8 (Ultimate)
+         too-noisy, after-session uneven (304/231); exp:9 (visual effects again) too-noisy, both uneven; exp:10
+         (Ultimate again) "no-change" at +1.7% lows / +0.7% avg against +-3%, judged on two steady sessions. Each
+         session starts with a high first bucket (e.g. 382.5, 340.4, 335.9 fps at t=0: menu/loading), included in the
+         halves. Session length (13-28 min) was not the problem.
+      4. Consequence for honesty: even exp:10's "no-change" is stated against a 3% band the game's own sessions
+         exceed; it is the right DECISION (default wins) but its confidence is overstated.
+      DESIGN (for the next worker; measurement logic, two reviews; nothing implemented in s25):
+      a. Measure, don't assume, the game's noise: keep a per-game A/A record from consecutive as-is sessions
+         (session-mean spread and 10 s-bucket spread of avg and 1% low, with time-of-day/thermal context), stored
+         additively; until there are >=3 as-is sessions, say the noise is unmeasured rather than "+-3%".
+      b. Band = max(3%, measured A/A spread at the chosen confidence). Claiming an improvement still requires beating
+         that band (never lowered); the default still wins inside it.
+      c. Compare steady windows, not halves: drop the first 60 s and background stretches (already traced), split
+         each session into 10 s buckets, and compare bucket distributions (median + IQR, or a rank test) between
+         baseline and after; "uneven" becomes a property of the bucket spread vs the measured A/A spread, not a fixed
+         3% halves gap.
+      d. A finished answer for a noisy game (TRIAL_PROTOCOL §5: "If the likely effect cannot be distinguished from
+         noise within a reasonable test cost, classify it as negligible/unmeasurable and prefer the default"): after
+         two too-noisy attempts for the same change on the same game (or measured A/A spread above a stated ceiling,
+         e.g. 8%), conclude "negligible at this game's noise (+-X% between your sessions with nothing changed)", keep
+         the default, and count the change as JUDGED for the exit panel. This is a verdict about detectability, worded
+         as such ("no benefit Compy could tell apart from this game's +-X% swing"), never "no effect" and never an
+         improvement.
+      e. Tell the user plainly when the game itself is the noise (drift over the session/day, rising hotspot) and that
+         shorter, same-scene, back-to-back sessions measure tighter; offer, never require, a repeatable scene.
+      f. Cap case (other games): when an average sits at a recorded cap/refresh, judge on 1% lows and frame-time
+         spread only, and say the cap hides average gains; offer to test with the cap lifted (the user's choice).
+      Exit re-run: with (a)-(d) the P4 panel can reach "finished the supported tests" honestly on ROB RUN.
 - [x] **CR-zh-drift-count** (second whole-range review) zh-CN `home.json` driftCount strings still said "已漂移" after the English was reworded to "changed since they were last good" (`8d855c05`).
       Done `e49b53ed` (2026-11-11 s18, TS only, not installed): both read "{{count}} 项设置自上次正常以来已改变". Test fails on
       the old file. Full vitest 535/538 (the 3 site-app suites).
@@ -2114,9 +2156,22 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
       SetWindowPos with SWP_NOACTIVATE, close, Start-NativeProcess -Detached -NoActivate relaunch). Re-run with a
       timestamped watcher and a mark at each step to find the step; fix that step (or the app's show path) so the
       check never takes the foreground. Script/app; no settings change.
+      s25 (not ticked; no capture run): the capture scripts are session tooling in the salvage folder, not repo product
+      test tooling, so no fix there. Finding so far: the s24 watcher (`s24-fgwatch.ps1`) counted cumulatively with no
+      timestamps and started BEFORE `s24-view.ps1` closed the running Compy, so reads of the owner's own Compy window
+      (already in front; s25's 14:36 preflight saw the foreground on 'Compy') count as "compy_in_front"; the 3 reads
+      are not yet tied to a step. s25 wrote `s25-fgwatch.ps1` (4 reads/s, each timestamped) and `s25-view.ps1` (a
+      MARK line per phase: watcher-up, close-running begin/end, cdp-launch, resize, drive, cdp-close, normal-relaunch,
+      teardown) to tie any read to its step; not run, because the owner was never idle 10+ min (polls 16:14-16:45:
+      idle 0-104 s) and activation is not yet disproven. Next: run `s25-view.ps1` when the owner is idle.
 - [ ] **CR-view-overflow-1112c** (`_train\view-1112c\02-optimize-no-upgrade.png`) The verdict needs the Optimize
       station's scroll containers measured (scrollHeight vs clientHeight at 1280x720, 1500x980 and 1920x1080) now that
       the no-upgrade block sits below its groups. Measure on the next FULL screen check; fix any surplus.
+      s25 (not ticked): measurement steps written (`s25-steps.mjs`: CDP viewport 1280x720 / 1500x980 / 1920x1080, every
+      scroll container's scrollHeight vs clientHeight, clipped-wide elements, document overflow, the upgrade block's
+      scrollWidth vs clientWidth; plus computed contrast and hover before/after); not run (owner never idle, see
+      CR-view-focus-1112c). Dev-fixture shots (`view-1112d\fixture-upgrade`) show no overflow at 1500x980 but are not
+      the station's layout.
 - [x] **CR-view-upgrade-render** (`_train\view-1112c\03-optimize-upgrade-fixture.png`, identical to 02) The GPU upgrade
       block has never been seen rendered in the real app: this rig's sessions aren't GPU-limited, and an in-memory
       wrap of `window.__TAURI_INTERNALS__.invoke` does not take (not writable). Find a route that renders it in the
@@ -2162,11 +2217,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-10 ~19:16-20:10 (coordinator-assigned, CODE-ONLY throughout, owner in ROB RUN): CR-unconfirmed-remedy landed
-  `12a791d0` (coordinator call delegated by the owner: keep his own plan; ledger-only "changed outside Compy" record,
-  schema 1, nothing on Windows changes; opus r1 MUST-FIX taken, r2 APPROVE; sonnet APPROVE) and CR-refuse-early `5844c368`
-  (journey and real play refuse before any as-is session; sonnet APPROVE). cargo 1826/0, clippy clean, tsc clean. Queued
-  CR-outside-followups; CR-ultimate-identity stays open. Not installed, not pushed (main 10 ahead of GitHub with this line).
 - 2026-11-11 ~03:20-04:00 (coordinator-assigned, CODE-ONLY throughout; owner on Discord, then in ROB RUN from ~03:52):
   recovered the session killed on 11-10 ~20:13 (no report): it had recorded Keep "Synez Power Plan" (both power-ultimate
   rows `changed_outside`, plan GUID unchanged) and run P4/P5 on ROB RUN to a Compy-concluded Trial exp:7 (visual-effects,
@@ -2278,6 +2328,20 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   (runtime proof attempt 1, Synez before/after). Screen check view-1112c (background): VERDICT FAIL (Compy in front 3
   of 107 reads; Optimize overflow not measured at 3 sizes; zh space after "。"; upgrade block still unseen: the invoke
   wrap does not take); teardown CLEAN; FAILs queued, the zh one fixed here.
+- 2026-11-12 ~14:36-17:00 (s25, coordinator-assigned; no game seen at any check; owner on Discord/Firefox/Claude, never
+  idle 10+ min; restarted once by the server ~15:37): landed, each in its own worktree: CR-glass-scroll-flake (merge
+  `973aace2`; BlackBox scroll moved to a layout effect; 20/20 file runs, 2 full vitest; sonnet APPROVE-WITH-NITS),
+  CR-firstcheck-flake (merge `d01db9c4`; last-check record in a layout effect; 10/10 under load, 2 full vitest; sonnet
+  APPROVE), CR-upgrade-area-truth (merge `2b37bc42`; (1) did not reproduce, pinned; (2)-(4) + nits a-c; sonnet
+  APPROVE-WITH-NITS), CR-check-expert-mount (merge `16c1a75c`; parked df372a3b rebased + its test, fails on main;
+  sonnet APPROVE-WITH-NITS), CR-tuning-gpu-other-card (merge `4dfc4313`; sonnet APPROVE-WITH-NITS),
+  CR-receipt-gpu-other-card (merge `b9425757`; opus + sonnet APPROVE-WITH-NITS), CR-view-upgrade-render (merge
+  `05d25c6a`; dev-fixture shots only), CR-zh-fit-punctuation (merge `2dcd67d1`), CR-gpu-first-elsewhere (merge
+  `42a37087`; opus r1 REQUEST-CHANGES, MUST-FIX taken, r2 APPROVE-WITH-NITS; sonnet APPROVE-WITH-NITS); owner decisions
+  of 16:43 recorded verbatim; P4-judge-noisy findings + design (no code). cargo 1895/0, clippy clean, full vitest
+  540/543 (3 site-app). Pushes 1-10 PASS. Installed `05d25c6a` (runtime proof attempt 1, Synez before/after);
+  RELEASE_STATE re-stamped (`e5cdbf3f`). Screen check view-1112d NOT run (owner never idle 10+ min; activation not
+  disproven); upgrade block seen only in the dev fixture. Closed #638 (a6bca54e, fca76591).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
