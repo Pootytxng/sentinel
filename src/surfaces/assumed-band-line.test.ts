@@ -29,8 +29,8 @@ describe("assumedBandLine", () => {
 
   it("every new line exists in English and Simplified Chinese", () => {
     for (const key of ["noiseMeasuredBands", "assumedBandUnmeasured", "assumedBandWider", "assumedBandNarrower"]) {
-      const enBench = (en as { experimentBench: Record<string, string> }).experimentBench;
-      const zhBench = (zh as { experimentBench: Record<string, string> }).experimentBench;
+      const enBench = (en as unknown as { experimentBench: Record<string, string> }).experimentBench;
+      const zhBench = (zh as unknown as { experimentBench: Record<string, string> }).experimentBench;
       expect(enBench[key], key).toBeTruthy();
       expect(zhBench[key], key).toBeTruthy();
       expect(zhBench[key]).not.toBe(enBench[key]);
