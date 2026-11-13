@@ -3483,7 +3483,7 @@ fn readings_newest_first<'a>(sessions: &'a [SessionSummary], game: &str) -> Vec<
         .filter(|s| crate::noise_floor::cap_read(s) != crate::noise_floor::CapRead::Unknown)
         .filter_map(|s| Some((DateTime::parse_from_rfc3339(&s.started_at).ok()?, s)))
         .collect();
-    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found.sort_by_key(|a| std::cmp::Reverse(a.0));
     found.into_iter().map(|(_, s)| s).collect()
 }
 
@@ -3493,9 +3493,9 @@ fn readings_newest_first<'a>(sessions: &'a [SessionSummary], game: &str) -> Vec<
 /// as-is session whose cap state can be read. `None` only when no session of the game measures.
 fn first_measured(
     candidates: Vec<&SessionSummary>,
-    mut measure: impl FnMut(&SessionSummary) -> Option<crate::noise_floor::GameNoise>,
+    measure: impl FnMut(&SessionSummary) -> Option<crate::noise_floor::GameNoise>,
 ) -> Option<crate::noise_floor::GameNoise> {
-    candidates.into_iter().find_map(|s| measure(s))
+    candidates.into_iter().find_map(measure)
 }
 
 /// P4-judge-noisy: label every verdict judged on the assumed band with its game's noise as measured
