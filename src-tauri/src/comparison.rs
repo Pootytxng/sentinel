@@ -727,6 +727,23 @@ fn clear_result_at(path: &std::path::Path) {
 
 /// #281 — the armed store's `Option` semantics and `clear_result` are UNCHANGED by the
 /// atomic-write lane. Explicit temp paths only; nothing reads the real data root.
+/// Test isolation (item 4): a scratch folder under the temp dir that starts EMPTY. Test folders are
+/// named by process id and a counter, and Windows reuses process ids, so a name can come back in a
+/// later test run with that run's files still inside; whatever is there is removed first. A folder
+/// that can't be cleared (a file held open) stops the test rather than handing it stale state.
+#[cfg(test)]
+fn fresh_scratch(name: String) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(name);
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => panic!("a leftover scratch folder {} couldn't be cleared: {e}", dir.display()),
+    }
+    std::fs::create_dir_all(&dir).unwrap();
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "scratch folder {} starts empty", dir.display());
+    dir
+}
+
 #[cfg(test)]
 mod comparison_persistence_tests {
     use super::*;
@@ -734,13 +751,7 @@ mod comparison_persistence_tests {
     fn scratch(tag: &str) -> std::path::PathBuf {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static N: AtomicUsize = AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "compy-cmp-{tag}-{}-{}",
-            std::process::id(),
-            N.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+        super::fresh_scratch(format!("compy-cmp-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)))
     }
 
     fn armed(at: &str) -> ArmedComparison {
@@ -1256,13 +1267,24 @@ mod comparison_race_tests {
     fn scratch(tag: &str) -> std::path::PathBuf {
         use std::sync::atomic::AtomicUsize;
         static N: AtomicUsize = AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "compy-cmp-race-{tag}-{}-{}",
-            std::process::id(),
-            N.fetch_add(1, Ordering::Relaxed)
-        ));
+        super::fresh_scratch(format!("compy-cmp-race-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)))
+    }
+
+    /// Item 4: the two "flaky" race tests read an EARLIER run's files. A scratch folder named by
+    /// process id and counter is handed out again when Windows reuses the id (seen: a folder made on
+    /// 2026-11-12 00:24 reused by the 2026-11-13 02:02 run with its old result file still inside), and
+    /// a test asserting "no result yet" then failed with nothing racing. A reused name starts empty.
+    #[test]
+    fn a_scratch_folder_left_by_an_earlier_run_starts_empty() {
+        let name = format!("compy-cmp-race-reused-{}", std::process::id());
+        let dir = std::env::temp_dir().join(&name);
         std::fs::create_dir_all(&dir).unwrap();
-        dir
+        std::fs::write(dir.join("compy_comparison_result.json"), "{}").unwrap();
+        std::fs::write(dir.join("compy_comparison.json"), "{}").unwrap();
+        let fresh = super::fresh_scratch(name);
+        assert_eq!(fresh, dir);
+        assert_eq!(std::fs::read_dir(&fresh).unwrap().count(), 0, "nothing from the earlier run is left");
+        let _ = std::fs::remove_dir_all(&fresh);
     }
 
     fn armed_of(kind: ComparisonKind, tag: &str) -> ArmedComparison {
