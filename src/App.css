@@ -3114,6 +3114,12 @@ body::before {
   padding: 18px 20px;
   margin-bottom: 18px;
 }
+/* CR-debrief-no-undo-dismiss: "Dismiss" clears the card and changes nothing on the PC, so it never
+   takes the bare .btn-small hover's --danger red (button-legibility-guard's census). */
+.cmp-actions .btn-small.cmp-dismiss:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
 .debrief-head {
   display: flex;
   align-items: center;
