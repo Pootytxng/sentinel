@@ -2391,10 +2391,15 @@ function RunningPanel({
       return;
     }
     let live = true;
-    const read = () =>
+    // Opus r2 NIT: focus and visibilitychange can both fire; only the newest read lands.
+    let seq = 0;
+    const read = () => {
+      const mine = ++seq;
+      const ok = () => live && mine === seq;
       invoke<PreflightDiff[] | null>("trial_preflight", { experimentId: exp.id })
-        .then((d) => live && setPreflight(Array.isArray(d) ? d : null))
-        .catch(() => live && setPreflight(null));
+        .then((d) => ok() && setPreflight(Array.isArray(d) ? d : null))
+        .catch(() => ok() && setPreflight(null));
+    };
     read();
     // Sonnet r1: re-read when the user comes back to Compy, so a fixed difference stops showing.
     const onFocus = () => document.visibilityState !== "hidden" && read();

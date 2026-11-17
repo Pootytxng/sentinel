@@ -25,7 +25,10 @@ describe("preflightLine", () => {
       ["power-plan", "22222222-2222-2222-2222-222222222222", "381b4222-f694-41f0-9685-ff5bb260df2e", /a different Windows power plan is active now than the one the baseline ran on\. Next: switch back to the power plan the baseline ran on/],
       ["power-plan", "Balanced", "High performance", /the High performance power plan is active now, the baseline ran on Balanced\. Next: switch back to the Balanced power plan/],
       ["refresh", "165 Hz", "60 Hz", /the display refreshes at 60 Hz now, the baseline ran at 165 Hz\. Next: set the display back to 165 Hz/],
-      ["display", "AOC 24G2", "DEL U2720Q", /another monitor is in use now \(DEL U2720Q\), the baseline ran on AOC 24G2\. Next: play on the monitor the baseline ran on \(AOC 24G2\)/],
+      // Opus r2 MUST-FIX: the monitor is Compy's startup read, so the step is a fresh Trial, never "now".
+      ["display", "AOC 24G2", "DEL U2720Q", /Compy read a different monitor \(DEL U2720Q\) than the one the baseline ran on \(AOC 24G2\)\. Next: restore the change and start the Trial again/],
+      ["gaming-mode", "off", "on", /Gaming Mode is on now, it was off for the baseline\. Next: turn Gaming Mode off before you play\./],
+      ["gaming-mode", "on", "off", /Gaming Mode is off now, it was on for the baseline\. Next: turn Gaming Mode on before you play/],
     ];
     for (const [key, before, after, re] of cases) {
       const line = preflightLine([{ key, before, after }], tEn)!;

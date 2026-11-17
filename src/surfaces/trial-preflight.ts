@@ -10,7 +10,7 @@ type Translate = (key: string, opts?: Record<string, unknown>) => string;
 /** experiment.rs `PreflightDiff`. */
 export type PreflightDiff = { key: string; before: string; after: string };
 
-const KNOWN = new Set(["gpu-driver", "windows-build", "resolution", "refresh", "display", "power-plan"]);
+const KNOWN = new Set(["gpu-driver", "windows-build", "resolution", "refresh", "display", "gaming-mode", "power-plan"]);
 
 /** experiment.rs `plan_name` names Windows' own plans; any other plan arrives as its GUID. */
 const isGuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(v.trim());
@@ -23,17 +23,21 @@ function itemKey(d: PreflightDiff): string {
       return "windowsBuild";
     case "power-plan":
       return isGuid(d.before) || isGuid(d.after) ? "powerPlan" : "powerPlanNamed";
+    case "gaming-mode":
+      return d.after === "on" ? "gamingModeOnNow" : "gamingModeOffNow";
     default:
       return d.key;
   }
 }
 
-/** The one fix step: a driver or Windows build that moved can't be set back from here, so the honest
- *  step is a fresh Trial; otherwise the first difference's own fix. */
+/** The one fix step: a driver or Windows build that moved can't be set back from here, and the monitor
+ *  Compy reads is its startup snapshot (opus r2), so the honest step is a fresh Trial; otherwise the
+ *  first difference's own fix. */
 function stepFor(diffs: readonly PreflightDiff[], t: Translate): string {
   const k = (key: string, o?: Record<string, unknown>) => t(`lab.experimentBench.preflight.step.${key}`, o);
-  if (diffs.some((d) => d.key === "gpu-driver" || d.key === "windows-build")) return k("rebaseline");
+  if (diffs.some((d) => d.key === "gpu-driver" || d.key === "windows-build" || d.key === "display")) return k("rebaseline");
   const first = diffs[0];
+  if (first.key === "gaming-mode") return k(first.after === "on" ? "gamingModeOff" : "gamingModeOn");
   if (first.key === "power-plan") return k(isGuid(first.before) ? "powerPlan" : "powerPlanNamed", { before: first.before });
   return k(first.key, { before: first.before });
 }

@@ -922,13 +922,16 @@
         "powerPlan": "a different Windows power plan is active now than the one the baseline ran on",
         "powerPlanNamed": "the {{after}} power plan is active now, the baseline ran on {{before}}",
         "refresh": "the display refreshes at {{after}} now, the baseline ran at {{before}}",
-        "display": "another monitor is in use now ({{after}}), the baseline ran on {{before}}"
+        "display": "Compy read a different monitor ({{after}}) than the one the baseline ran on ({{before}})",
+        "gamingModeOnNow": "Gaming Mode is on now, it was off for the baseline",
+        "gamingModeOffNow": "Gaming Mode is off now, it was on for the baseline"
       },
       "step": {
         "rebaseline": "Next: restore the change and start the Trial again, so both sessions run under the same conditions.",
         "resolution": "Next: set the display back to {{before}} before you play.",
         "refresh": "Next: set the display back to {{before}} before you play.",
-        "display": "Next: play on the monitor the baseline ran on ({{before}}).",
+        "gamingModeOff": "Next: turn Gaming Mode off before you play.",
+        "gamingModeOn": "Next: turn Gaming Mode on before you play, as it was for the baseline.",
         "powerPlan": "Next: switch back to the power plan the baseline ran on before you play.",
         "powerPlanNamed": "Next: switch back to the {{before}} power plan before you play."
       },

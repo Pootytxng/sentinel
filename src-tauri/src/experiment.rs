@@ -2283,9 +2283,15 @@ pub(crate) fn preflight_diffs(
     // (`comparability::derive`), so it is said up front as well.
     push("refresh", baseline.display_refresh_hz.map(|h| format!("{h} Hz")), live.display_refresh_hz.map(|h| format!("{h} Hz")));
     push("display", clean(&baseline.active_display_identity), clean(&live.active_display_identity));
+    // Opus r2 SHOULD-FIX: Gaming Mode on now and not for the baseline (or the reverse) is itself the
+    // difference the conclude confounds on (`comparability::derive`), and its own plan is not one to
+    // switch back from: named as Gaming Mode, never as the plan.
+    let on_off = |v: Option<bool>| v.map(|on| if on { "on" } else { "off" }.to_string());
+    push("gaming-mode", on_off(baseline.gaming_mode_active), on_off(live.gaming_mode_active));
     // Opus r1 MUST-FIX: only a Trial of the plan itself moves the active plan by design; a setting OF
     // the plan (USB, PCIe, core parking) writes SCHEME_CURRENT and leaves the plan where it was.
-    if rec_id != POWER_PLAN_REC && baseline.gaming_mode_active != Some(true) {
+    let gm = |g: &crate::game_state::GameStateFingerprint| g.gaming_mode_active == Some(true);
+    if rec_id != POWER_PLAN_REC && !gm(baseline) && !gm(live) {
         let named = |g: Option<String>| g.map(|g| plan_name(&g).map_or(g, str::to_string));
         push("power-plan", named(clean(&baseline.power_plan_guid)), named(clean(&live.power_plan_guid)));
     }
@@ -2332,7 +2338,9 @@ fn read_preflight(experiment_id: &str) -> Vec<PreflightDiff> {
     let Some(baseline) = sessions.iter().find(|s| s.started_at == base_id).and_then(|s| s.game_state.as_ref()) else {
         return Vec::new();
     };
-    let live = crate::game_state::GameStateFingerprint::collect_v1(&rec.game, "", None)
+    // Opus r2 SHOULD-FIX: whether a Gaming Mode session is live now (its session file).
+    let gaming_mode_now = Some(crate::gaming_session::load_session().is_some());
+    let live = crate::game_state::GameStateFingerprint::collect_v1(&rec.game, "", gaming_mode_now)
         .with_power_plan(crate::actions::current_power_plan_guid(), None);
     preflight_diffs(baseline, &live, &rec.rec_id)
 }
@@ -7324,8 +7332,15 @@ mod experiment_tests {
         let plan_only = G { power_plan_guid: Some(HIGH.into()), ..base.clone() };
         assert!(preflight_diffs(&base, &plan_only, "power-ultimate").is_empty());
         assert_eq!(preflight_diffs(&base, &plan_only, "pcie-aspm-off").len(), 1);
+        // Opus r2 SHOULD-FIX: Gaming Mode on for one side is named as Gaming Mode, never as its plan.
         let gm_base = G { gaming_mode_active: Some(true), ..base.clone() };
-        assert!(preflight_diffs(&gm_base, &plan_only, "visual-effects").is_empty());
+        let keys: Vec<String> = preflight_diffs(&gm_base, &plan_only, "visual-effects").into_iter().map(|d| d.key).collect();
+        assert_eq!(keys, ["gaming-mode"]);
+        let gm_now = G { gaming_mode_active: Some(true), ..plan_only.clone() };
+        let d = preflight_diffs(&base, &gm_now, "visual-effects");
+        assert_eq!(d.len(), 1, "{d:?}");
+        assert_eq!((d[0].key.as_str(), d[0].before.as_str(), d[0].after.as_str()), ("gaming-mode", "off", "on"));
+        assert!(preflight_diffs(&gm_base, &gm_now, "visual-effects").is_empty());
     }
 
     #[test]
