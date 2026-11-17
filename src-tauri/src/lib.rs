@@ -1460,6 +1460,19 @@ fn get_armed_comparison() -> Option<comparison::ArmedComparison> {
     comparison::armed()
 }
 
+/// CR-tuning-comparability (read-only): for an armed TUNING baseline, each later session of its game
+/// and whether it can be judged against the baseline session, by the same comparability check the
+/// armed comparison judges its first session on. Anything else armed, or none: an empty list.
+#[tauri::command]
+fn get_tuning_comparability() -> Vec<comparison::PostComparability> {
+    match comparison::armed() {
+        Some(a) if a.kind == comparison::ComparisonKind::Tuning => {
+            comparison::post_comparability(&a, &sessions::get_session_summaries())
+        }
+        _ => Vec::new(),
+    }
+}
+
 #[tauri::command]
 fn dismiss_comparison() {
     comparison::clear_result();
@@ -1887,6 +1900,7 @@ pub fn run() {
             arm_comparison,
             get_latest_comparison,
             get_armed_comparison,
+            get_tuning_comparability,
             dismiss_comparison,
             arm_tuning,
             report_tuning_crash,

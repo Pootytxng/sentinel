@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary, ArmedComparison, ComparisonResult } from "../types";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
-import { measureTuning } from "../data/tuning-measure";
+import { measureTuning, type PostComparability } from "../data/tuning-measure";
 import { type GpuVendor } from "./walkthroughs";
 import { useConfirm } from "../design/ConfirmDialog";
 import { TuningVerdictCard } from "./TuningVerdict";
@@ -30,11 +30,14 @@ export function TuningDebrief({
   const guide = tuningGuideForVendorForLanguage(vendor, i18n.language);
   const [armed, setArmed] = useState<ArmedComparison | null>(null);
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
+  const [postComparability, setPostComparability] = useState<PostComparability[] | null>(null);
   const [busy, setBusy] = useState(false);
   const confirm = useConfirm();
 
   const refresh = useCallback(() => {
     invoke<ArmedComparison | null>("get_armed_comparison").then(setArmed).catch(() => {});
+    // CR-tuning-comparability: which later sessions can be judged against the tune's baseline session.
+    invoke<PostComparability[]>("get_tuning_comparability").then(setPostComparability).catch(() => {});
     // Only a TUNING result for THIS game feeds the verdict's confound/expiry guard — a stale fix
     // result must never flip a tuning measurement to "confounded".
     invoke<ComparisonResult | null>("get_latest_comparison")
@@ -49,7 +52,7 @@ export function TuningDebrief({
 
   const tuneLabel = guide.name.split(" — ")[0]; // "Undervolt your Radeon"
   const armedForThisGame = armed?.kind === "tuning" && armed.game === s.process_name;
-  const measurement = armedForThisGame ? measureTuning(armed, sessions, comparison) : null;
+  const measurement = armedForThisGame ? measureTuning(armed, sessions, comparison, postComparability) : null;
 
   const armTune = async () => {
     // Don't silently clobber another pending comparison (a fix arm or another game's tune).

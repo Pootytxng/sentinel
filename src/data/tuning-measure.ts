@@ -1,9 +1,13 @@
 import type { SessionSummary, ArmedComparison, ComparisonResult } from "../types";
 import { allBackground } from "../lib/session-metrics";
 
+/** comparison.rs `PostComparability` (CR-tuning-comparability). */
+export type PostComparability = { started_at: string; comparable: boolean };
+
 // THE honest-measurement verdict for a tuning baseline (spec 2026-06-08) — ONE pure source shared by
 // the Lab Tuning instrument and the Play debrief so the verdict can't drift. It is a function of
-// (baseline, post-tune sessions) only, computed from data the surfaces already hold (zero new IPC).
+// (baseline, post-tune sessions), computed from data the surfaces already hold, plus the backend's
+// per-session comparability with the baseline session (CR-tuning-comparability, one read).
 //
 // The honest-measurement law, verbatim and non-negotiable:
 //   Stability is a function of TIME, not one run. Compy NEVER flashes a green "STABLE". The verdict is
@@ -253,6 +257,10 @@ export function measureTuning(
   baseline: ArmedComparison | null | undefined,
   sessions: SessionSummary[],
   result?: ComparisonResult | null,
+  /** CR-tuning-comparability: `get_tuning_comparability` (comparison.rs `post_comparability`): each
+   *  later session and whether it can be judged against the tune's baseline session. A session not
+   *  listed as comparable (or no list at all) is never judged: its frames are "can't call it". */
+  postComparability?: readonly PostComparability[] | null,
 ): TuningMeasurement | null {
   if (!baseline || baseline.kind !== "tuning") return null;
 
@@ -282,8 +290,13 @@ export function measureTuning(
     ownResult.noise_fall_pct != null
       ? { ...ownResult.game_noise, fall_pct: ownResult.noise_fall_pct }
       : null;
+  // CR-tuning-comparability: and only sessions the backend's comparability check (the one the tune's
+  // first comparison is judged on: GPU, rig, driver, game build and the rest of `comparability.rs`)
+  // reads as comparable with the baseline session. Any other session is not judged, never "too aggressive".
+  const conditionsComparable = (s: SessionSummary) =>
+    postComparability?.some((p) => p.started_at === s.started_at && p.comparable) === true;
   const comparable = (s: SessionSummary) =>
-    band != null && band.cap?.state === "uncapped" && s.frame_cap?.state === "uncapped";
+    band != null && band.cap?.state === "uncapped" && s.frame_cap?.state === "uncapped" && conditionsComparable(s);
   const fallPct = band?.fall_pct ?? null;
   const baseLow1 = baseline.baseline_low1_fps;
   const deltaPct = (low1: number): number | null =>
