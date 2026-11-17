@@ -592,6 +592,7 @@
         "enoughCountsShort": "Long enough to count. Stop anytime.",
         "likelyBetter": "Likely better: {{action}} With it on, your {{metric}} was {{pct}}% higher across {{with}} sessions than across {{before}} without it, more than the ±{{band}}% allowance for normal swings between sessions.",
         "likelyWorse": "Likely worse: {{action}} With it on, your {{metric}} was {{pct}}% lower across {{with}} sessions than across {{before}} without it, more than the ±{{band}}% allowance for normal swings between sessions.",
+        "likelyWorseEither": "Likely worse: {{action}} With it on, your average frame rate was {{avg}}% lower and your 1% low (the worst moments) {{low}}% lower across {{with}} sessions than across {{before}} without it; one of them fell by more than the ±{{band}}% allowance for normal swings between sessions.",
         "noClearDifference": "No clear difference: {{action}} Across {{with}} sessions with it on and {{before}} without, your {{metric}} stayed within the ±{{band}}% allowance for normal swings between sessions.",
         "noClearWin": "No clear difference: {{action}} With it on, your 1% low (the worst moments) was {{low}}% higher but your average frame rate was {{avg}}% lower, so it isn't clearly better.",
         "unknown": "Unknown: {{action}} Your {{game}} sessions swung so much that the allowance for normal swings came to ±{{band}}%, too wide to tell after {{with}} sessions with it on. Playing the same area each time can give a clearer answer.",
@@ -758,6 +759,7 @@
     "receiptRuleMaxKept": "The average rose by more than the band and the 1% low didn't fall by more, so the change was kept.",
     "receiptRuleMaxPutBack": "The average rose by more than the band and the 1% low didn't fall by more, but the change was put back before Compy kept it.",
     "receiptRuleMaxAvgFell": "The average fell by more than the band, so the change was restored.",
+    "receiptRuleMaxEitherFell": "The average or the 1% low fell by more than the band, so the change was restored.",
     "receiptRuleMaxInside": "The average stayed inside the band, so the default was kept and the change restored.",
     "outcomeLabel": "What to aim for",
     "receiptComparedSmoothest": "Judged for Smoothest. Compared with the baseline: the gap between the slowest 1% of frames and a typical frame {{pacing}}% against a ±{{pacingBand}}% band, 1% low {{low}}% against a ±{{band}}% band. {{rule}}",
@@ -793,7 +795,8 @@
         "avgFell": "average fell {{pct}}%",
         "lowFlat": "1% lows didn't rise beyond the noise ({{pct}}%)",
         "avgFlat": "average didn't rise beyond the noise ({{pct}}%)",
-        "avgUnknown": "the average couldn't be compared"
+        "avgUnknown": "the average couldn't be compared",
+        "fallUncalled": "Compy can't tell whether the average fell beyond the noise"
       },
       "inEffect": "In effect now: {{outcome}}.",
       "useKeep": "Use {{outcome}}: apply {{change}} again",

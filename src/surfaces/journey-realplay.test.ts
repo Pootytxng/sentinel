@@ -295,6 +295,25 @@ describe("P5-realplay: what a concluded real-play Trial says", () => {
     );
   });
 
+  // CR-lesson-fall-band (s37 sonnet SHOULD-FIX): a real-play average is judged at the matching fall
+  // of its look's band (10% <-> -9.0%) on a build that proves it (model-3 noise); otherwise a fall
+  // between the two can't be called and is never named.
+  it("names a fall at the fall the record was judged at, and none it can't call", () => {
+    const worse = { verdict: "regressed", outcome: "max-fps", game_noise: { model: 3 } };
+    expect(realPlayResult(concluded(worse, { band_pct: 10, delta_low1_pct: -2, delta_avg_pct: -9.5 }), "W", t)).toMatch(
+      /your average frame rate was 9\.5% lower/,
+    );
+    const won = { game_noise: { model: 3 } };
+    expect(realPlayResult(concluded(won, { band_pct: 10, delta_low1_pct: 12, delta_avg_pct: -9.5 }), "W", t)).toMatch(
+      /was 12% higher but your average frame rate was 9\.5% lower/,
+    );
+    expect(realPlayResult(concluded({}, { band_pct: 10, delta_low1_pct: 12, delta_avg_pct: -9.5 }), "W", t)).toMatch(/^No clear difference: .*stayed within/);
+    // s37 opus MUST-FIX: a Maximum FPS Worse whose two falls can't be called names neither as the one.
+    expect(realPlayResult(concluded({ verdict: "regressed", outcome: "max-fps" }, { band_pct: 10, delta_low1_pct: -9.4, delta_avg_pct: -9.6 }), "W", t)).toBe(
+      "Likely worse: Compy put HAGS back. With it on, your average frame rate was 9.6% lower and your 1% low (the worst moments) 9.4% lower across 3 sessions than across 3 without it; one of them fell by more than the ±10% allowance for normal swings between sessions.",
+    );
+  });
+
   it("Unknown: sessions too varied (PBZ-style swings), or too few counted before the test stopped, with why", () => {
     expect(
       realPlayResult(concluded({ verdict: "too-noisy", stop_reason: "sessions-too-varied" }, { band_pct: 23.44, delta_low1_pct: 2, delta_avg_pct: 1, look: 3 }, 3, 8), "Phantom Blade Zero", t),

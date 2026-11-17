@@ -28,8 +28,13 @@ import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome"
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
 import {
+  avgBandOf,
   fallPct,
+  fallsOf,
+  fellOn,
+  lowBandOf,
   NOISE_MODEL_LOG,
+  worseOn,
   outcomeChoices,
   summarizeGame,
   type GameTestSummary,
@@ -384,8 +389,7 @@ const MIN_CLAIM_PCT = 3;
 const FULL_CONFIDENCE_SESSIONS = 6;
 
 // `fallPct` and `NOISE_MODEL_LOG` live in test-summary.ts (CR-lesson-fall-band: the lessons and the
-// outcome switch read falls the same way); re-exported for existing importers.
-export { fallPct };
+// outcome switch read falls the same way).
 
 // P4-noise-sf: the measured bands this goal was actually judged on (experiment.rs `with_noise_words`:
 // Recommended on the 1% low with the average on its own band, or the 1% low only under a shared cap;
@@ -627,15 +631,18 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
   const putBackAfterBetter = rp != null && x.verdict === "improved" && !x.kept;
   // P4-maxfps-smooth: a Maximum FPS row leads with the average.
   if (x.outcome === "max-fps") {
+    // CR-lesson-fall-band (s37 sonnet SHOULD-FIX): which number fell, read at the fall the record
+    // was judged at (`fallsOf`), on the band each was judged on (Maximum FPS: the wider).
+    const falls = fallsOf(x);
+    const avgFell = () => fellOn(avg, avgBandOf(x) ?? band, falls.avg);
+    const lowFell = () => fellOn(low, lowBandOf(x) ?? band, falls.low);
     const rule =
       x.verdict === "improved"
         ? putBackAfterBetter
           ? "receiptRuleMaxPutBack"
           : "receiptRuleMaxKept"
         : x.verdict === "regressed"
-          ? avg < -band
-            ? "receiptRuleMaxAvgFell"
-            : "receiptRuleLowFell"
+          ? { avg: "receiptRuleMaxAvgFell", low: "receiptRuleLowFell", either: "receiptRuleMaxEitherFell" }[worseOn(avgFell(), lowFell())]
           : "receiptRuleMaxInside";
     if (rp)
       return t("lab.experimentBench.journey.realPlay.comparedMaxFps", {
@@ -2279,6 +2286,7 @@ const RESULT_REASON_KEY: Record<OutcomeResult["reason"], string> = {
   "low-flat": "lowFlat",
   "avg-flat": "avgFlat",
   "avg-unknown": "avgUnknown",
+  "fall-uncalled": "fallUncalled",
 };
 const RESULT_OUTCOME_KEY: Record<ResultOutcome, string> = { recommended: "recommended", "max-fps": "maxFps" };
 

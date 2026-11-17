@@ -322,6 +322,22 @@ const dirOf = (v: number, band: number, rule: FallRule = "same"): Dir | null => 
   return v < -hi ? "down" : v >= -lo ? "flat" : null;
 };
 
+/** CR-lesson-fall-band (s37 sonnet SHOULD-FIX): whether `v` fell past `band` by `rule`; null = a
+ *  fall the rule can't call. For the receipt and real-play lines that name which number fell. */
+export function fellOn(v: number, band: number, rule: FallRule): boolean | null {
+  const d = dirOf(v, band, rule);
+  return d == null ? null : d === "down";
+}
+
+/** Which number a Maximum FPS Worse fell on (the verdict says one of them did): the average when it
+ *  fell by the record's rule, or when the record can't call it and the 1% low clearly didn't fall;
+ *  "either" when neither fall can be called (s37 opus MUST-FIX: then neither is named); otherwise the
+ *  1% low, as before. */
+export function worseOn(avgFell: boolean | null, lowFell: boolean | null): "avg" | "low" | "either" {
+  if (avgFell === true || (avgFell == null && lowFell === false)) return "avg";
+  return avgFell == null && lowFell == null ? "either" : "low";
+}
+
 /** CR-lesson-fall-band: the fall rules a Trial record was judged on (experiment.rs / realplay.rs).
  *  A two-session Trial judged on measured noise of model 3 on judges both falls at the matching fall
  *  (`with_measured_fall`, `with_recommended_outcome_bands`, `with_max_fps_outcome`; the conclude
@@ -329,7 +345,8 @@ const dirOf = (v: number, band: number, rule: FallRule = "same"): Dir | null => 
  *  older or no measured noise was judged the same band both ways. A real-play Trial classifies its 1%
  *  low on its look's band both ways (`comparison::classify`) except under Maximum FPS, which judges
  *  both falls at the matching fall, as the average always is there; its stored noise is the start's,
- *  so only model 3 on proves the build that judged it read falls that way: otherwise "unknown". */
+ *  so only model 3 on proves the build that judged it read falls that way (a model-3 start was
+ *  concluded by the same build or a newer one): otherwise "unknown". */
 export function fallsOf(x: Pick<SummaryExperiment, "game_noise" | "outcome" | "mode">): Falls {
   const log = (x.game_noise?.model ?? 0) >= NOISE_MODEL_LOG;
   if (x.mode === "real-play") {
@@ -782,8 +799,10 @@ export function summarizeGame(
 
 export type ResultOutcome = "recommended" | "max-fps";
 
-/** Why a result kept or put back the change, in the words of its own outcome's rule. */
-export type ResultReason = "low-up" | "avg-up" | "low-fell" | "avg-fell" | "low-flat" | "avg-flat" | "avg-unknown";
+/** Why a result kept or put back the change, in the words of its own outcome's rule.
+ *  "fall-uncalled" (CR-lesson-fall-band, s37 opus SHOULD-FIX): the average was compared, but the
+ *  record doesn't say at which fall it was judged, and its fall sits between the two. */
+export type ResultReason = "low-up" | "avg-up" | "low-fell" | "avg-fell" | "low-flat" | "avg-flat" | "avg-unknown" | "fall-uncalled";
 
 export type OutcomeResult = {
   outcome: ResultOutcome;
@@ -792,7 +811,7 @@ export type OutcomeResult = {
   /** It judged the change Better under this outcome. */
   keeps: boolean;
   reason: ResultReason;
-  /** The delta the reason names (null only for avg-unknown). */
+  /** The delta the reason names (null only for avg-unknown and fall-uncalled). */
   pct: number | null;
 };
 
@@ -841,7 +860,7 @@ function resultOf(x: SummaryExperiment): OutcomeResult | null {
       const avgDir = dirOf(avg, avgBand, falls.avg);
       if (avgDir === "down") return r("avg-fell", avg);
       // A fall the record's rule can't call: Compy can't say the average fell, nor that it didn't.
-      if (avgDir == null) return r("avg-unknown", null);
+      if (avgDir == null) return r("fall-uncalled", null);
     }
     return r("low-flat", low);
   }
@@ -854,7 +873,7 @@ function resultOf(x: SummaryExperiment): OutcomeResult | null {
     const lowBand = lowBandOf(x);
     const lowDir = lowBand != null ? dirOf(low, lowBand, falls.low) : null;
     // Neither fall can be called on the record's rule: the reason isn't known.
-    return avgDir == null && lowDir !== "down" ? r("avg-unknown", null) : r("low-fell", low);
+    return avgDir == null && lowDir !== "down" ? r("fall-uncalled", null) : r("low-fell", low);
   }
   return avg == null ? r("avg-unknown", null) : r("avg-flat", avg);
 }

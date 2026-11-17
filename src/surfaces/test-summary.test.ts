@@ -14,6 +14,8 @@ import {
   LESSON_RULES,
   avgBandOf,
   fallsOf,
+  fellOn,
+  worseOn,
   lessonDirs,
   lowBandOf,
   lessonFor,
@@ -878,6 +880,20 @@ describe("CR-lesson-fall-band: a fall is read at the fall it was judged at", () 
     expect(lessonRuleFor("regressed", -3.1, 0, 3, 3, m)).toBe("less-steady-not-slower");
     // The stored verdict still wins.
     expect(lessonRuleForVerdict("no-change", -18, 0, 20.6, 10, m)).toBeNull();
+    // Unknown, at exactly the band: a fall at the matching fall, none at the band (the engine's fall is
+    // strict), so it can't be called; just past the band it is a fall either way.
+    expect(lessonRuleFor("improved", 25, -10, 20.6, 10, u)).toBe("steadier");
+    expect(lessonRuleFor("improved", 25, -10.01, 20.6, 10, u)).toBe("steadier-but-slower");
+  });
+
+  it("fellOn / worseOn: which number a Worse fell on, by the record's rule", () => {
+    expect([fellOn(-9.5, 10, "matching"), fellOn(-9.5, 10, "same"), fellOn(-9.5, 10, "unknown")]).toEqual([true, false, null]);
+    expect([fellOn(-10.1, 10, "unknown"), fellOn(-8, 10, "unknown"), fellOn(12, 10, "matching")]).toEqual([true, false, false]);
+    expect(worseOn(true, true)).toBe("avg");
+    expect(worseOn(null, false)).toBe("avg"); // the verdict says one fell; the 1% low didn't
+    expect(worseOn(null, null)).toBe("either"); // neither can be called: name neither
+    expect(worseOn(false, null)).toBe("low");
+    expect(worseOn(null, true)).toBe("low");
   });
 
   it("the Trial summary teaches the fall the engine judged", () => {
@@ -899,7 +915,14 @@ describe("CR-lesson-fall-band: a fall is read at the fall it was judged at", () 
     expect(outcomeChoices(GAME, [old, max], on, sessions)[0].recommended).toMatchObject({ reason: "low-flat" });
     // A real-play record whose build isn't known: a fall between -9.0% and -10% can't be called.
     const rp = { ...rec, mode: "real-play", game_noise: null, noise_evidence: { band_pct: 10, measured_noise_pct: null } } as SummaryExperiment;
-    expect(outcomeChoices(GAME, [rp, max], on, sessions)[0].recommended).toMatchObject({ reason: "avg-unknown", pct: null });
+    expect(outcomeChoices(GAME, [rp, max], on, sessions)[0].recommended).toMatchObject({ reason: "fall-uncalled", pct: null });
+    // The same real-play record from a build that proves it (model-3 noise): the average fell.
+    const rp3 = { ...rp, game_noise: { model: 3 } } as SummaryExperiment;
+    expect(outcomeChoices(GAME, [rp3, max], on, sessions)[0].recommended).toMatchObject({ reason: "avg-fell", pct: -9.5 });
+    // A real-play Maximum FPS Worse whose two falls the record can't call names neither.
+    const rpWorse = { ...rp, id: "exp:rw", outcome: "max-fps" as const, verdict: "regressed", treatment: { delta_low1_pct: -9.5, delta_avg_pct: -9.5 } } as SummaryExperiment;
+    const rpKeep = { ...rp, id: "exp:rk", verdict: "improved", kept: true, treatment: { delta_low1_pct: 30, delta_avg_pct: 0 } } as SummaryExperiment;
+    expect(outcomeChoices(GAME, [rpKeep, rpWorse], on, sessions)[0].maxFps).toMatchObject({ reason: "fall-uncalled", pct: null });
     // Maximum FPS judges both on the wider band (20.6%): an average -18% fell past its matching -17.0%.
     const keep = trial({ verdict: "improved", kept: true, treatment: { delta_low1_pct: 30, delta_avg_pct: 0 } });
     const worse = { ...rec, id: "exp:w", outcome: "max-fps" as const, verdict: "regressed", treatment: { delta_low1_pct: 1, delta_avg_pct: -18 } } as SummaryExperiment;

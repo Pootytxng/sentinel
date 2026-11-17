@@ -111,7 +111,9 @@ function ComparisonCard({
     r.game_noise == null ? r.noise_floor_pct : Number.isFinite(r.game_noise.avg_band_pct) ? r.game_noise.avg_band_pct : null;
   // CR-lesson-fall-band: a measured band judged its fall at the matching fall (comparison.rs
   // `classify_measured`, carried as `noise_fall_pct`), so the lesson reads both falls that way; an
-  // older result was judged on one band both ways.
+  // older result was judged on one band both ways. The comparison never judges the average itself
+  // (s37 review): its measured band is stored as a rise the same way, so its fall is read at the
+  // same matching fall a Trial's average is judged at (`with_recommended_outcome_bands`).
   const falls: Falls | undefined = fall != null ? { low: "matching", avg: "matching" } : undefined;
   const lessonRule = lessonRuleForVerdict(r.verdict, r.delta_low1_pct, r.delta_avg_pct, r.noise_floor_pct, avgBand, falls);
   return (
