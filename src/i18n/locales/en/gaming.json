@@ -335,6 +335,7 @@
         "trialUnknown": "Compy couldn't check whether a Trial is in progress, so it won't undo anything from here right now.",
         "turnedOnAgain": "Not offered: {{titles}}. Turned on again after this crash, so Compy won't undo it from here.",
         "notLive": "Not offered: {{titles}}. Compy can't confirm these are still on, so it won't undo them from here.",
+        "noSavedUndo": "Not offered: {{titles}}. Compy has no saved undo for these, so it can't put them back from here.",
         "notRecorded": "Compy didn't make or record this change, so it can't put it back.",
         "summaryAll_one": "The undo finished.",
         "summaryAll_other": "All {{count}} undos finished.",

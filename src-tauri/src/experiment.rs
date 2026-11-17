@@ -2330,19 +2330,42 @@ pub(crate) async fn trial_preflight(experiment_id: String) -> Result<Vec<Preflig
 fn read_preflight(experiment_id: &str) -> Vec<PreflightDiff> {
     let store = load_store();
     let Some(rec) = store.experiments.iter().find(|e| e.id == experiment_id) else { return Vec::new() };
-    if rec.status != ExperimentStatus::Running || rec.mode != TrialMode::Pair || rec.treatment.is_some() {
-        return Vec::new();
-    }
-    let Some(base_id) = rec.baseline_session_id.as_deref() else { return Vec::new() };
+    let Some(base_id) = preflight_waiting_baseline(rec) else { return Vec::new() };
     let sessions = crate::sessions::get_session_summaries();
-    let Some(baseline) = sessions.iter().find(|s| s.started_at == base_id).and_then(|s| s.game_state.as_ref()) else {
-        return Vec::new();
-    };
+    let Some(baseline) = preflight_baseline_context(&sessions, base_id) else { return Vec::new() };
     // Opus r2 SHOULD-FIX: whether a Gaming Mode session is live now (its session file).
-    let gaming_mode_now = Some(crate::gaming_session::load_session().is_some());
+    let gaming_mode_now = gaming_mode_now_of(&crate::gaming_session::read_session_slot());
     let live = crate::game_state::GameStateFingerprint::collect_v1(&rec.game, "", gaming_mode_now)
         .with_power_plan(crate::actions::current_power_plan_guid(), None);
     preflight_diffs(baseline, &live, &rec.rec_id)
+}
+
+/// PURE (TG-preflight NIT, s35): the baseline session id of a Trial waiting for its after-session
+/// (running, two-session, no after-session yet), the only Trial the preflight speaks for.
+pub(crate) fn preflight_waiting_baseline(rec: &ExperimentRecord) -> Option<&str> {
+    if rec.status != ExperimentStatus::Running || rec.mode != TrialMode::Pair || rec.treatment.is_some() {
+        return None;
+    }
+    rec.baseline_session_id.as_deref()
+}
+
+/// PURE (TG-preflight NIT, s35): the baseline session's recorded conditions, if Compy still holds
+/// the session and it recorded any.
+pub(crate) fn preflight_baseline_context<'s>(
+    sessions: &'s [SessionSummary],
+    base_id: &str,
+) -> Option<&'s crate::game_state::GameStateFingerprint> {
+    sessions.iter().find(|s| s.started_at == base_id).and_then(|s| s.game_state.as_ref())
+}
+
+/// PURE (s35): whether a Gaming Mode session is live now, from its session slot. A file that exists
+/// but can't be read or parsed is unknown, never "off" (it may hold a live session another build wrote).
+pub(crate) fn gaming_mode_now_of(slot: &crate::gaming_session::SessionSlot) -> Option<bool> {
+    match slot {
+        crate::gaming_session::SessionSlot::Empty => Some(false),
+        crate::gaming_session::SessionSlot::Loaded => Some(true),
+        crate::gaming_session::SessionSlot::Unreadable => None,
+    }
 }
 
 /// PURE (TG-preflight): a two-session Trial whose sessions ran on different Windows power plans, or
@@ -7341,6 +7364,61 @@ mod experiment_tests {
         assert_eq!(d.len(), 1, "{d:?}");
         assert_eq!((d[0].key.as_str(), d[0].before.as_str(), d[0].after.as_str()), ("gaming-mode", "off", "on"));
         assert!(preflight_diffs(&gm_base, &gm_now, "visual-effects").is_empty());
+    }
+
+    // TG-preflight NIT (s35): the preflight speaks only for a two-session Trial waiting for its
+    // after-session whose baseline Compy still holds with recorded conditions.
+    #[test]
+    fn the_preflight_speaks_only_for_a_pair_trial_waiting_for_its_after_session() {
+        let waiting = running();
+        assert_eq!(preflight_waiting_baseline(&waiting), Some(BASE_ID));
+        let t = TreatmentRecord {
+            avg_fps: 110.0,
+            low1_fps: 180.0,
+            samples: 900,
+            crashed: false,
+            delta_low1_pct: 20.0,
+            recorded_at: TREAT_ID.into(),
+            session_id: Some(TREAT_ID.into()),
+            check: None,
+            halves: None,
+            delta_avg_pct: None,
+        };
+        let done = ExperimentRecord { treatment: Some(t), ..running() };
+        assert_eq!(preflight_waiting_baseline(&done), None, "the after-session is already in");
+        for status in [ExperimentStatus::Pending, ExperimentStatus::Kept, ExperimentStatus::Restored, ExperimentStatus::Aborted] {
+            assert_eq!(preflight_waiting_baseline(&ExperimentRecord { status, ..running() }), None);
+        }
+        let real_play = ExperimentRecord { mode: TrialMode::RealPlay, ..running() };
+        assert_eq!(preflight_waiting_baseline(&real_play), None);
+        assert_eq!(preflight_waiting_baseline(&ExperimentRecord { baseline_session_id: None, ..running() }), None);
+
+        let with_ctx = |id: &str| SessionSummary {
+            game_state: Some(crate::game_state::GameStateFingerprint {
+                gpu_driver: Some("25.7.1".into()),
+                ..Default::default()
+            }),
+            ..session(id, 150.0)
+        };
+        let sessions = [session("2026-08-31T09:00:00+00:00", 90.0), with_ctx(BASE_ID)];
+        assert_eq!(preflight_baseline_context(&sessions, BASE_ID).and_then(|g| g.gpu_driver.as_deref()), Some("25.7.1"));
+        assert!(preflight_baseline_context(&sessions, "gone").is_none(), "a baseline Compy no longer holds");
+        let bare = [SessionSummary { game_state: None, ..session(BASE_ID, 150.0) }];
+        assert!(preflight_baseline_context(&bare, BASE_ID).is_none(), "no recorded conditions, nothing to compare");
+    }
+
+    // s35: an existing but unparseable Gaming Mode session file is unknown, never "off".
+    #[test]
+    fn a_gaming_mode_session_file_that_cant_be_read_is_unknown_not_off() {
+        use crate::gaming_session::SessionSlot;
+        assert_eq!(gaming_mode_now_of(&SessionSlot::Empty), Some(false));
+        assert_eq!(gaming_mode_now_of(&SessionSlot::Loaded), Some(true));
+        assert_eq!(gaming_mode_now_of(&SessionSlot::Unreadable), None);
+        // Unknown is never a difference from the baseline's recorded "off".
+        use crate::game_state::GameStateFingerprint as G;
+        let base = G { gaming_mode_active: Some(false), ..G::default() };
+        let live = G { gaming_mode_active: gaming_mode_now_of(&SessionSlot::Unreadable), ..G::default() };
+        assert!(preflight_diffs(&base, &live, "visual-effects").is_empty());
     }
 
     #[test]
