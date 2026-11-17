@@ -28,7 +28,7 @@ import { Depth, ReceiptRow, receiptPct } from "../design/Depth";
 import { LessonLine } from "../design/LessonLine";
 import { LESSON_KEY, lessonRuleForVerdict } from "./test-summary";
 import { knownFps, leftOutSecs, allBackground, leftOutSpan } from "../lib/session-metrics";
-import { liveChangeGroups } from "../data/live-changes";
+import { hasUndo, liveChangeGroups } from "../data/live-changes";
 import "../i18n";
 
 // Session debrief cluster — extracted verbatim from App.tsx so it can render in place inside Play
@@ -62,12 +62,15 @@ function ComparisonCard({
   onRevert,
   onDismiss,
   reverting,
+  noUndo = false,
 }: {
   r: ComparisonResult;
   nextSuspect: string | null;
   onRevert: () => void;
   onDismiss: () => void;
   reverting: boolean;
+  /** CR-undo-entry-disable: the live row "Revert it" would undo has no saved undo. */
+  noUndo?: boolean;
 }) {
   const { t } = useTranslation();
   const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
@@ -195,11 +198,14 @@ function ComparisonCard({
             {t("monitor.sessionDebrief.keepIt")}
           </button>
         ) : (
-          <button className="btn-small" disabled={reverting} onClick={onRevert}>
+          <button className="btn-small" disabled={reverting || noUndo} onClick={onRevert}>
             {reverting ? t("monitor.sessionDebrief.reverting") : t("monitor.sessionDebrief.revertIt")}
           </button>
         )}
       </div>
+      {r.verdict !== "improved" && noUndo && (
+        <p className="fix-rig-note cmp-noundo">{t("optimize.fix.noSavedUndo")}</p>
+      )}
 
       <div className="cmp-tally">{t("monitor.sessionDebrief.honestTally")}</div>
           </>
@@ -481,12 +487,15 @@ export function SessionDebrief({
     await invoke("dismiss_comparison").catch(() => {});
     setComparison(null);
   };
-  const revertCmp = async () => {
-    // The newest live apply of this change is the one an undo targets (liveChangeGroups), and the
-    // result card goes only once that undo is recorded: a cancelled confirm or a failed undo leaves
-    // the measured result where it was (codebase review 2026-11-02).
+  // The newest live apply of this change is the one an undo targets (liveChangeGroups).
+  const cmpRow = useMemo(() => {
     const { active, cantConfirm } = liveChangeGroups(changes);
-    const row = [...active, ...cantConfirm].find((c) => c.rec_id === comparison?.rec_id);
+    return [...active, ...cantConfirm].find((c) => c.rec_id === comparison?.rec_id);
+  }, [changes, comparison?.rec_id]);
+  const revertCmp = async () => {
+    // The result card goes only once that undo is recorded: a cancelled confirm or a failed undo
+    // leaves the measured result where it was (codebase review 2026-11-02).
+    const row = cmpRow;
     if (row) {
       setReverting(true);
       const undone = await rollback(row);
@@ -574,6 +583,7 @@ export function SessionDebrief({
           onRevert={revertCmp}
           onDismiss={dismissCmp}
           reverting={reverting}
+          noUndo={!!cmpRow && !hasUndo(cmpRow)}
         />
       ) : (
         shownInsight && (

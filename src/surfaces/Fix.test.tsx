@@ -143,6 +143,41 @@ describe("Fix", () => {
     expect(onRollback).not.toHaveBeenCalled();
   });
 
+  it("CR-undo-entry-disable: the details sheet opened from that card disables its Roll back the same way", () => {
+    document.documentElement.dataset.dashV2 = "on";
+    try {
+      const onRollback = vi.fn();
+      const { container } = render(
+        <Fix
+          recs={[]}
+          {...baseProps}
+          changes={[
+            {
+              id: "c9",
+              rec_id: "game-mode",
+              rec_title: "Game Mode",
+              applied_at: new Date().toISOString(),
+              snapshot: null,
+              status: "applied",
+              is_still_active: true,
+              active_check: "on",
+              undo_contract: false,
+            },
+          ]}
+          onRollback={onRollback}
+        />,
+      );
+      fireEvent.click(container.querySelector<HTMLButtonElement>(".fix-details")!);
+      const sheetRollback = document.querySelector<HTMLButtonElement>(".ad-rollback")!;
+      expect(sheetRollback.disabled).toBe(true);
+      expect(document.querySelector(".ad-noundo")?.textContent).toBe("Compy has no saved undo for this change.");
+      fireEvent.click(sheetRollback);
+      expect(onRollback).not.toHaveBeenCalled();
+    } finally {
+      delete document.documentElement.dataset.dashV2;
+    }
+  });
+
   it("CR-hist-today: just after midnight, History calls the previous morning's rows yesterday", () => {
     vi.useFakeTimers({ toFake: ["Date"], now: new Date(2026, 10, 12, 0, 35) });
     try {
