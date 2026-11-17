@@ -211,7 +211,7 @@ function ComparisonCard({
             "Revert it" was the card's only control, so it could never be cleared. Dismiss clears
             the card and changes nothing on the PC. */}
         {r.verdict !== "improved" && noUndo && !nextSuspect && (
-          <button className="btn-small" data-testid="cmp-dismiss" onClick={onDismiss}>
+          <button className="btn-small cmp-dismiss" data-testid="cmp-dismiss" onClick={onDismiss}>
             {t("monitor.sessionDebrief.dismiss")}
           </button>
         )}

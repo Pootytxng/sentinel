@@ -99,7 +99,9 @@ describe("false-danger hover census (bare .btn-small)", () => {
     "src/surfaces/CpuTempOffer.tsx": 2, // FIXED: scoped hover in CpuTempOffer.css
     "src/surfaces/GamingMode.tsx": 4, // FIXED for the toast subset by App.css:2941
     "src/surfaces/rig/RigViewer.tsx": 1, // rig nudge CTA — not reviewed
-    "src/surfaces/SessionDebrief.tsx": 3, // dismiss/export non-destructive, revert IS — not reviewed
+    // dismiss/export non-destructive, revert IS — not reviewed; +1 (s35): the no-undo "Dismiss"
+    // (CR-debrief-no-undo-dismiss) is non-destructive: FIXED, scoped hover `.cmp-dismiss` in App.css.
+    "src/surfaces/SessionDebrief.tsx": 4,
     "src/surfaces/setup/SetupTour.tsx": 1, // "Back" — not reviewed
   };
 
