@@ -200,7 +200,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
             // candidate to check. Correlation, never automatic cause.
             // s37 (s35 opus NIT): the same driver written in another case is the same driver, as the
             // Trial preflight compares it (`trial_preflight`).
-            if !fa.gpu_driver.eq_ignore_ascii_case(&fb.gpu_driver) && fa.gpu == fb.gpu {
+            if !fa.gpu_driver.trim().eq_ignore_ascii_case(fb.gpu_driver.trim()) && fa.gpu == fb.gpu {
                 changed.push(("gpu-driver", format!("GPU driver: {} → {}", fa.gpu_driver, fb.gpu_driver)));
                 candidates.push(format!(
                     "The GPU driver changed ({} → {}) — a candidate explanation to check first, not a \
@@ -1012,7 +1012,7 @@ mod tests {
         f.gpu_driver = format!("{}Abc", f.gpu_driver);
         let mut d = session();
         let g = d.hw_fingerprint.as_mut().unwrap();
-        g.gpu_driver = format!("{}aBC", g.gpu_driver);
+        g.gpu_driver = format!("{}aBC ", g.gpu_driver);
         let p = derive(&c, &d);
         assert!(p.changed_keys.is_empty(), "{:?}", p.changed_context);
         assert!(p.candidate_causes.iter().all(|s| !s.contains("driver")), "{:?}", p.candidate_causes);

@@ -3727,11 +3727,14 @@ fn power_plan_queried(guid: &str) -> Option<bool> {
 }
 
 /// s37 (s35 opus NIT): how long a read-only powercfg read behind the plan-gone check may take. One
-/// that doesn't answer in time is unread (its process is ended), so nothing changes.
-pub(crate) const POWERCFG_READ_LIMIT: std::time::Duration = std::time::Duration::from_secs(10);
+/// that doesn't answer in time is unread (its process is ended), so nothing changes. 5 s, as the
+/// receipt reads (sonnet SHOULD-FIX: the plan check makes up to four reads in a row).
+pub(crate) const POWERCFG_READ_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// A command's output, or `None` when it couldn't start, its output couldn't be read, or it didn't
-/// finish within `limit` (then it is killed and waited on, never left running).
+/// finish within `limit` (then it is killed and waited on, never left running). On a timeout the
+/// two pipe readers are left to end on their own once the pipes close; a program that started a
+/// child of its own holding them could keep them open (powercfg starts none).
 pub(crate) fn output_within(mut cmd: Command, limit: std::time::Duration) -> Option<std::process::Output> {
     use std::io::Read;
     use std::process::Stdio;
@@ -3820,6 +3823,12 @@ mod output_within_tests {
         assert!(String::from_utf8_lossy(&out.stdout).contains("plan-read"));
         // A program that can't start is unread too.
         assert!(output_within(quiet_command("no-such-program-s37"), Duration::from_secs(1)).is_none());
+        // s37 sonnet SHOULD-FIX: output far past a pipe's buffer is drained while it runs, never a
+        // deadlock: all of it is read (20000 lines of 20 bytes plus CRLF = 440000 bytes).
+        let mut loud = quiet_command("cmd");
+        loud.args(["/C", "for /L %i in (1,1,20000) do @echo xxxxxxxxxxxxxxxxxxxx"]);
+        let out = output_within(loud, Duration::from_secs(60)).expect("answered in time");
+        assert_eq!(out.stdout.len(), 20000 * 22, "{}", out.stdout.len());
     }
 }
 
