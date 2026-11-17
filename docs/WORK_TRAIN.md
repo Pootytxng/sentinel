@@ -727,6 +727,39 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       clean. Review (sonnet) APPROVE-WITH-NITS, SHOULD-FIX taken as a code note: the ticket is taken when the command
       body first runs, so two invokes in the same instant on different runtime workers can still swap.
 
+### s31 follow-ups (coordinator-assigned 2026-11-13, resumed 2026-11-16)
+- [x] **CR-core-parking-plan-gone** merge `4119f3d5`: a core-parking undo whose recorded plan no longer exists closes the
+      row as "nothing to restore" with a `nothing_restored` receipt (History: "closed, nothing to restore", en + zh-CN);
+      an unreadable plan list never reads as gone; an active plan the list omits is present. opus + sonnet r1 AWN.
+- [x] **CR-plan-held-behaviour-tests** merge `373a820d`: closes the s29 opus MUST-FIX with behaviour tests through the
+      real `rollback_change` / `restore_leftover` on the test root (elevation sink counts, nothing runs); benchmark
+      plan-class refusal says "Let it finish, or cancel it, first."; an unreadable Trial store says why a plan-class
+      change needs it. opus r1 + r2 REQUEST-CHANGES (shared test files; all MUST/SHOULD taken; second round closes it),
+      sonnet r1 AWN. Test-only `data_root::shared_root_files` serializes the tests sharing the test root (lock census
+      entry, class "out", `c56b8a4f`).
+- [x] **CR-pattern-cap-and-words** merge `19140a9d`: trend / driver / Gaming Mode lanes keep only sessions whose cap
+      matches the newest; a fall quotes the fall it was judged on. opus + sonnet AWN.
+- [x] **CR-debrief-assumed-label** merge `eb8607f5`: an old fixed-3% better/worse shows the assumed-band note with the
+      game's noise as measured now (labelled on read, never stored). sonnet AWN.
+- [x] **CR-whatchanged-band-words** merge `390edf16`: method note names the measured band; band printed to one decimal;
+      an inconclusive report names no band. sonnet AWN.
+- [x] **CR-tuning-comparability** merge `375ac530`: every post-tune session goes through the arm's comparability rule
+      (`get_tuning_comparability`); a non-comparable session is "can't call it", with the real reason. opus + sonnet AWN.
+- [ ] **CR-tuning-temp-comparability** (opus SHOULD-FIX on CR-tuning-comparability, pre-existing): the temperature
+      drop/rise claim still reads every post-tune session, comparable or not; take peaks only from sessions the same
+      list marks comparable.
+- [ ] **CR-lesson-avg-band** (s31 nit check: a real wrong call): `lessonRuleFor` reads the average's direction against
+      the 1% low band; with measured per-metric bands (`GameNoise.avg_band_pct`) an average past its own band can read
+      "barely moved" and the reverse. Carry the avg band to the three callers (Debrief has it in `game_noise`;
+      `WhatChangedReport` and `SummaryNoise` don't); where it is unknown on a measured band, read the average as not
+      compared.
+- [ ] **TG-drift-words** PARKED s31 (stays in the Trial conditions guard list): did not fit with two reviews before
+      the install window. TG-interleave design note: not written (no time left after the install).
+- Inventory (no move, no delete): `.claude\worktrees\train-same-rig` (created 2026-11-12 12:00) and
+  `.claude\worktrees\train-plan-held` (2026-11-13 04:01) are EMPTY folders, no `.git`, no files: leftovers of worktree
+  removals whose directory delete was refused while a shell's working directory was inside. Nothing to salvage; the
+  owner may delete them (they make preflight list stale worktrees).
+
 ### Trial conditions guard (owner idea 2026-11-12)
 The standard these are built to (owner, 2026-11-12 17:14, verbatim, via the coordinator): "i expect this to be a
 fairly complex thing to code in to the functionality of compy but this is the level of accuracy and quality that i
@@ -2554,6 +2587,17 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   changed-by-end + context_version on every session; sonnet PASS, SHOULD-FIX TS mirror taken). Not ticked: heavy
   background work left. cargo --lib 1954/0, clippy clean, tsc clean. `cargo fmt --check` is not a usable gate (main
   itself has ~3.3k diffs). Not pushed (CODE-ONLY). One item.
+- 2026-11-13/16 s31 (FULL; stopped 2026-11-13 ~10:26 by the weekly usage limit, resumed 2026-11-16 17:40; a server
+  restart at ~18:17 during the install's verification): pushed s30's TG-context v1 (`401e9772`, PASS; its s30 sonnet
+  review stood; no verdict change). Landed CR-core-parking-plan-gone (`4119f3d5`), CR-plan-held-behaviour-tests
+  (`373a820d`), CR-pattern-cap-and-words (`19140a9d`), CR-debrief-assumed-label (`eb8607f5`), CR-whatchanged-band-words
+  (`390edf16`), CR-tuning-comparability (`375ac530`); reviews in the s31 follow-ups section. Guard work: the
+  history.rs class guard's dispatch_rollback callers now count dispatch_rollback_outcome (same boundary); the #398 lock
+  census classifies the test-only data_root::FILES as "out" (`c56b8a4f`). Pushes: `401e9772`, `061e19b8` (first
+  attempt stopped by the gate on RELEASE_STATE citation drift, re-anchored), `c56b8a4f`; all PASS. cargo --lib 1974/0 on
+  main, clippy clean, tsc clean. Installed `c56b8a4fb09e36df6b246815650f21956960fdab` (runtime proof attempt 1, Synez
+  before/after); RELEASE_STATE re-stamped. Parked: TG-drift-words, CR-tuning-temp-comparability, CR-lesson-avg-band,
+  TG-interleave note. Tester folder untouched. No game at any check.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
