@@ -230,13 +230,18 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
             })
             .collect();
         let m = low_lane.len();
-        if band.is_some() && m < n {
+        if newest_cap == crate::noise_floor::CapRead::Unknown {
+            coverage.push(format!(
+                "1% low directions for {game}: not called. Compy couldn't read whether your newest {game} session had a frame cap, so no other session can be matched to it."
+            ));
+        } else if m < n {
             coverage.push(format!(
                 "1% low directions for {game}: {} of {n} sessions left out. Their frame cap differed from your newest session's, or Compy couldn't read it.",
                 n - m
             ));
         }
-        if band.is_some() {
+        // Opus r1 SHOULD-FIX: "checked" only where enough sessions were left to check a trend.
+        if band.is_some() && m >= MIN_TREND_SESSIONS {
             band_games += 1;
             band_sessions += m;
         }
@@ -700,11 +705,28 @@ mod tests {
         let r = detect(&s);
         assert!(r.patterns.iter().all(|p| p.id != "performance-trend"), "{:?}", r.patterns);
         assert!(r.coverage.iter().any(|c| c.contains("3 of 8 sessions left out") && c.contains("frame cap")), "{:?}", r.coverage);
-        // The same split by Gaming Mode: the capped sessions don't make "on" look slower.
+    }
+
+    #[test]
+    fn capped_sessions_dont_tip_the_gaming_mode_split() {
+        // Five early capped sessions with Gaming Mode on read ~50 FPS; eight uncapped ones split four
+        // on, four off, all at 100. Pooled, "on" has a median of 50 (a big "slower"); with the cap
+        // filter the split still runs (four a side) and finds nothing.
+        let mut s: Vec<SessionSummary> = (0..13).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
         for (i, x) in s.iter_mut().enumerate() {
-            x.gaming_mode_active = Some(i < 3 || i % 2 == 0);
+            if i < 5 {
+                x.low1_fps_est = 50.0;
+                x.frame_cap = Some(crate::noise_floor::CapRead::Capped { at_fps: 60.0 });
+            }
+            x.gaming_mode_active = Some(i < 5 || i % 2 == 1);
         }
-        assert!(detect(&s).patterns.iter().all(|p| p.id != "gaming-mode-split"), "{:?}", detect(&s).patterns);
+        let r = detect(&s);
+        assert!(r.patterns.iter().all(|p| p.id != "gaming-mode-split"), "{:?}", r.patterns);
+        // The capped ones alone would have called it: the filter is what keeps it quiet.
+        for x in s.iter_mut().take(5) {
+            x.frame_cap = Some(crate::noise_floor::CapRead::Uncapped);
+        }
+        assert!(detect(&s).patterns.iter().any(|p| p.id == "gaming-mode-split"), "{:?}", detect(&s).patterns);
     }
 
     #[test]
@@ -715,7 +737,8 @@ mod tests {
         s[7].frame_cap = None; // shed series, cap never recorded: Unknown
         let r = detect(&s);
         assert!(r.patterns.iter().all(|p| p.id != "performance-trend"), "{:?}", r.patterns);
-        assert!(r.coverage.iter().any(|c| c.contains("8 of 8 sessions left out")), "{:?}", r.coverage);
+        assert!(r.coverage.iter().any(|c| c.contains("couldn't read whether your newest")), "{:?}", r.coverage);
+        assert!(r.coverage.iter().all(|c| !c.contains("Quiet is a real answer") || c.contains("0 comparable")), "{:?}", r.coverage);
     }
 
     #[test]
