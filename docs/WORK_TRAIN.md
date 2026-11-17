@@ -2710,8 +2710,9 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
 - 2026-11-17 s36 (scheduled, FULL; owner idle, no game): CR-zh-readiness-words `79b52634` (merged --no-ff with this
   docs commit; queued CR-zh-readiness-rest). TS only, no rollback logic: no review. tsc 0; full vitest 547/551 files
   (the 3 site-app suites + the i18n orphan-key guard, fixed by writing the keys whole, then its suite passes). The two
-  `train-*` folders preflight lists are the empty leftovers inventoried under s31 follow-ups. Pushed yes (this line's
-  commit). Not installed (Friday install, or the next FULL session); zh-CN screen check owed then.
+  `train-*` folders preflight lists are the empty leftovers inventoried under s31 follow-ups. Not pushed: the owner
+  came back (idle 49 s) before the push, so CODE-ONLY; main is 4 ahead of GitHub, the next FULL session pushes. Not
+  installed (Friday install, or the next FULL session); zh-CN screen check owed then.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
