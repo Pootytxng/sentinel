@@ -627,8 +627,13 @@ pub(crate) fn arm_baseline_session<'s>(a: &ArmedComparison, sessions: &'s [Sessi
 /// or no shared conditions at all), between an arm's baseline session and a later one. The one rule
 /// the armed comparison and the tuning measurement's later sessions both judge on.
 pub(crate) fn arm_conditions_comparable(baseline: &SessionSummary, after: &SessionSummary) -> bool {
+    conditions_comparable(&crate::comparability::derive(baseline, after).verdict)
+}
+
+/// [`arm_conditions_comparable`]'s rule on an already-derived verdict.
+fn conditions_comparable(verdict: &crate::comparability::Comparability) -> bool {
     !matches!(
-        crate::comparability::derive(baseline, after).verdict,
+        verdict,
         crate::comparability::Comparability::NotComparable | crate::comparability::Comparability::Unknown
     )
 }
@@ -640,6 +645,9 @@ pub(crate) struct PostComparability {
     pub started_at: String,
     /// [`arm_conditions_comparable`] against the arm's baseline session.
     pub comparable: bool,
+    /// CR-tuning-frames-unread-reason: not comparable only because the two sessions share no
+    /// recorded conditions (`Comparability::Unknown`), so no GPU, driver or build is the reason.
+    pub conditions_unknown: bool,
 }
 
 /// CR-tuning-comparability, PURE: every session of the arm's game that started at or after the arm,
@@ -656,7 +664,15 @@ pub(crate) fn post_comparability(a: &ArmedComparison, sessions: &[SessionSummary
         .iter()
         .filter(|s| s.process_name.eq_ignore_ascii_case(&a.game))
         .filter(|s| chrono::DateTime::parse_from_rfc3339(&s.started_at).is_ok_and(|at| at >= armed_at))
-        .map(|s| PostComparability { started_at: s.started_at.clone(), comparable: arm_conditions_comparable(baseline, s) })
+        .map(|s| {
+            // Sonnet NIT: one derive per session for both fields.
+            let verdict = crate::comparability::derive(baseline, s).verdict;
+            PostComparability {
+                started_at: s.started_at.clone(),
+                comparable: conditions_comparable(&verdict),
+                conditions_unknown: matches!(verdict, crate::comparability::Comparability::Unknown),
+            }
+        })
         .collect()
 }
 
@@ -1165,6 +1181,19 @@ mod comparison_tests {
         let list = post_comparability(&a, &day);
         assert_eq!(list.last().map(|p| p.comparable), Some(false));
         assert_eq!(list.last().map(|p| p.comparable), Some(arm_conditions_comparable(&day[11], &day[last])));
+        // CR-tuning-frames-unread-reason: a known difference is not "no recorded conditions".
+        assert_eq!(list.last().map(|p| p.conditions_unknown), Some(false));
+        assert!(list.iter().all(|p| !(p.comparable && p.conditions_unknown)), "{list:?}");
+        // A later session that recorded no conditions, beside a baseline with no capture record either
+        // (`comparability::derive`'s Unknown): not comparable, and said to be unknown.
+        day[last].hw_fingerprint = None;
+        day[last].game_state = None;
+        day[last].capture_capabilities = None;
+        day[11].capture_capabilities = None;
+        assert_eq!(crate::comparability::derive(&day[11], &day[last]).verdict, crate::comparability::Comparability::Unknown);
+        let list = post_comparability(&a, &day);
+        let p = list.last().expect("the session is listed");
+        assert!(!p.comparable && p.conditions_unknown, "{p:?}");
         // No stored baseline session: nothing is judged.
         let other = ArmedComparison { baseline_low1_fps: 171.0, ..a.clone() };
         assert!(post_comparability(&other, &day).is_empty());
