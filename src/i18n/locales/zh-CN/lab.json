@@ -901,6 +901,31 @@
         "asIs": "下一步：在不做任何更改的情况下再玩几局 {{game}}，让 Compy 测量它的波动幅度，然后再测试一次。"
       }
     },
+    "preflight": {
+      "lead": "在玩更改后的对局之前：{{list}}。",
+      "joiner": "；",
+      "item": {
+        "gpuDriver": "显卡驱动现在是 {{after}}，基准对局使用的是 {{before}}",
+        "windowsBuild": "Windows 现在是 {{after}} 版本，基准对局使用的是 {{before}}",
+        "resolution": "显示分辨率现在是 {{after}}，基准对局时是 {{before}}",
+        "powerPlan": "现在启用的 Windows 电源计划与基准对局时的不同",
+        "powerPlanNamed": "现在启用的是“{{after}}”电源计划，基准对局使用的是“{{before}}”",
+        "refresh": "显示器刷新率现在是 {{after}}，基准对局时是 {{before}}",
+        "display": "Compy 读到的显示器（{{after}}）与基准对局使用的（{{before}}）不同",
+        "gamingModeOnNow": "游戏模式现在已开启，基准对局时是关闭的",
+        "gamingModeOffNow": "游戏模式现在已关闭，基准对局时是开启的"
+      },
+      "step": {
+        "rebaseline": "下一步：恢复这项更改并重新开始测试，让两次对局在相同条件下进行。",
+        "resolution": "下一步：开始游戏前把显示分辨率改回 {{before}}。",
+        "refresh": "下一步：开始游戏前把刷新率改回 {{before}}。",
+        "gamingModeOff": "下一步：开始游戏前关闭游戏模式。",
+        "gamingModeOn": "下一步：开始游戏前开启游戏模式，与基准对局时一致。",
+        "powerPlan": "下一步：开始游戏前切换回基准对局时使用的电源计划。",
+        "powerPlanNamed": "下一步：开始游戏前切换回“{{before}}”电源计划。"
+      },
+      "anyway": "如果仍然开始游戏，结果就无法归因于这项更改：Compy 会记录有其他条件发生了变化，不作判定，并恢复这项更改。"
+    },
     "gapPastBand": "未作判定：更改后的对局与基准对局之间相隔的时间，长于已测量对局中相邻两次之间的最长间隔（{{max}} 小时），因此测得的范围无法说明游戏在这么长的间隔里会波动多少。Compy 已恢复这项更改。请在基准对局之后更早地玩更改后的对局，然后再测试。",
     "noiseMeasuredBandsMaxFps": "平均帧率和 1% 低帧都按 +{{band}}% / −{{bandFall}}% 判定（取两者中较宽的范围）。",
     "noiseMeasuredBandsSmoothest": "帧时间平稳度按其自身测得的范围判定，1% 低帧按 +{{low}}% / −{{lowFall}}% 判定。",

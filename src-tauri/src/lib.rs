@@ -1938,6 +1938,7 @@ pub fn run() {
             experiment::simulate_optimization,
             experiment::start_experiment,
             experiment::trial_start_precheck,
+            experiment::trial_preflight,
             experiment::get_smoothest_readiness,
             experiment::conclude_experiment,
             experiment::get_realplay_progress,

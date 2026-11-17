@@ -2243,6 +2243,158 @@ fn read_start_precheck(rec_id: &str) -> Result<Option<String>, String> {
     Ok(precheck_refusal(unverified))
 }
 
+/// TG-preflight: one recorded condition that differs between a running Trial's baseline session and
+/// the PC as it is now, before the after-session is played. `key` is stable ("gpu-driver",
+/// "windows-build", "resolution", "power-plan") so the surface words it in the reader's language.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct PreflightDiff {
+    pub key: String,
+    pub before: String,
+    pub after: String,
+}
+
+/// PURE (TG-preflight): what differs between the baseline session's recorded context and `live`,
+/// compared only where both sides are known (never "the same" from a missing value, never a
+/// difference from one either). The power plan is left out for a Trial of the plan itself (it moves
+/// the plan by design) and when Gaming Mode was on for the
+/// baseline (it lays its own plan over the session; the conclude's Gaming Mode checks cover that).
+pub(crate) fn preflight_diffs(
+    baseline: &crate::game_state::GameStateFingerprint,
+    live: &crate::game_state::GameStateFingerprint,
+    rec_id: &str,
+) -> Vec<PreflightDiff> {
+    let mut out = Vec::new();
+    let mut push = |key: &str, b: Option<String>, a: Option<String>| {
+        if let (Some(b), Some(a)) = (b, a) {
+            if !b.eq_ignore_ascii_case(&a) {
+                out.push(PreflightDiff { key: key.into(), before: b, after: a });
+            }
+        }
+    };
+    let clean = |v: &Option<String>| v.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
+    push("gpu-driver", clean(&baseline.gpu_driver), clean(&live.gpu_driver));
+    push("windows-build", clean(&baseline.windows_build), clean(&live.windows_build));
+    let res = |g: &crate::game_state::GameStateFingerprint| match (g.resolution_width, g.resolution_height) {
+        (Some(w), Some(h)) if w > 0 && h > 0 => Some(format!("{w}×{h}")),
+        _ => None,
+    };
+    push("resolution", res(baseline), res(live));
+    // Opus r1 SHOULD-FIX: a refresh change or another monitor confounds at the conclude too
+    // (`comparability::derive`), so it is said up front as well.
+    push("refresh", baseline.display_refresh_hz.map(|h| format!("{h} Hz")), live.display_refresh_hz.map(|h| format!("{h} Hz")));
+    push("display", clean(&baseline.active_display_identity), clean(&live.active_display_identity));
+    // Opus r2 SHOULD-FIX: Gaming Mode on now and not for the baseline (or the reverse) is itself the
+    // difference the conclude confounds on (`comparability::derive`), and its own plan is not one to
+    // switch back from: named as Gaming Mode, never as the plan.
+    let on_off = |v: Option<bool>| v.map(|on| if on { "on" } else { "off" }.to_string());
+    push("gaming-mode", on_off(baseline.gaming_mode_active), on_off(live.gaming_mode_active));
+    // Opus r1 MUST-FIX: only a Trial of the plan itself moves the active plan by design; a setting OF
+    // the plan (USB, PCIe, core parking) writes SCHEME_CURRENT and leaves the plan where it was.
+    let gm = |g: &crate::game_state::GameStateFingerprint| g.gaming_mode_active == Some(true);
+    if rec_id != POWER_PLAN_REC && !gm(baseline) && !gm(live) {
+        let named = |g: Option<String>| g.map(|g| plan_name(&g).map_or(g, str::to_string));
+        push("power-plan", named(clean(&baseline.power_plan_guid)), named(clean(&live.power_plan_guid)));
+    }
+    out
+}
+
+/// The ledger rec id of the power plan itself (gaming_orchestrator.rs `REC_POWER`).
+const POWER_PLAN_REC: &str = "power-ultimate";
+
+/// Opus r1 SHOULD-FIX: Windows' own plans by their fixed GUIDs, so the fix step can name the plan to
+/// switch back to; any other plan is left unnamed (never guessed).
+fn plan_name(guid: &str) -> Option<&'static str> {
+    match guid.trim().to_ascii_lowercase().as_str() {
+        "381b4222-f694-41f0-9685-ff5bb260df2e" => Some("Balanced"),
+        "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" => Some("High performance"),
+        "a1841308-3541-4fab-bc81-f71556f20b4a" => Some("Power saver"),
+        "e9a42b02-d5df-448d-aa00-03f14749eb61" => Some("Ultimate Performance"),
+        _ => None,
+    }
+}
+
+/// TG-preflight (read-only): for a running two-session Trial with no after-session yet, what differs
+/// between its baseline session's recorded context and the PC now. Empty when nothing differs, when
+/// the Trial isn't waiting for its after-session, or when the baseline recorded no context. Blocks
+/// nothing: a Trial played anyway under a changed condition is folded into `confounded` at the
+/// conclude, as it always was (`with_comparability`, [`with_power_plan_check`]).
+#[tauri::command]
+pub(crate) async fn trial_preflight(experiment_id: String) -> Result<Vec<PreflightDiff>, String> {
+    // The reads (hardware snapshot, powercfg) run on the blocking pool, never the UI thread.
+    tauri::async_runtime::spawn_blocking(move || read_preflight(&experiment_id))
+        .await
+        .map_err(|e| format!("Compy couldn't compare the PC with the baseline ({e})"))
+}
+
+/// The work [`trial_preflight`] runs on the blocking pool.
+fn read_preflight(experiment_id: &str) -> Vec<PreflightDiff> {
+    let store = load_store();
+    let Some(rec) = store.experiments.iter().find(|e| e.id == experiment_id) else { return Vec::new() };
+    if rec.status != ExperimentStatus::Running || rec.mode != TrialMode::Pair || rec.treatment.is_some() {
+        return Vec::new();
+    }
+    let Some(base_id) = rec.baseline_session_id.as_deref() else { return Vec::new() };
+    let sessions = crate::sessions::get_session_summaries();
+    let Some(baseline) = sessions.iter().find(|s| s.started_at == base_id).and_then(|s| s.game_state.as_ref()) else {
+        return Vec::new();
+    };
+    // Opus r2 SHOULD-FIX: whether a Gaming Mode session is live now (its session file).
+    let gaming_mode_now = Some(crate::gaming_session::load_session().is_some());
+    let live = crate::game_state::GameStateFingerprint::collect_v1(&rec.game, "", gaming_mode_now)
+        .with_power_plan(crate::actions::current_power_plan_guid(), None);
+    preflight_diffs(baseline, &live, &rec.rec_id)
+}
+
+/// PURE (TG-preflight): a two-session Trial whose sessions ran on different Windows power plans, or
+/// whose plan changed during either session (TG-context v1, recorded on both), is folded into
+/// `confounded` exactly as a changed recorded condition is ([`with_comparability`]): keep false, so
+/// the shared restore runs. Compared only where recorded; a Trial of the plan itself (`power-ultimate`)
+/// skips only the between-sessions comparison (it moves the plan by design), and every check is skipped
+/// when Gaming Mode was on for either session (it lays its own plan over the
+/// session; `comparability::derive` already compares Gaming Mode and its plan handling). A stronger
+/// reason already given stands.
+pub(crate) fn with_power_plan_check(
+    outcome: ConcludeOutcome,
+    baseline: Option<&SessionSummary>,
+    treatment: &SessionSummary,
+    rec_id: &str,
+) -> ConcludeOutcome {
+    let Some(baseline) = baseline else { return outcome };
+    if matches!(outcome.verdict.as_str(), "not-comparable" | "confounded") {
+        return outcome;
+    }
+    // Opus r1 MUST-FIX + SHOULD-FIX: only a Trial of the plan itself changes the plan between the
+    // sessions by design; a switch during either session is still a confound, for it too.
+    let plan_trial = rec_id == POWER_PLAN_REC;
+    let gm_on = |s: &SessionSummary| s.gaming_mode_active == Some(true);
+    if gm_on(baseline) || gm_on(treatment) {
+        return outcome;
+    }
+    let (Some(b), Some(a)) = (baseline.game_state.as_ref(), treatment.game_state.as_ref()) else { return outcome };
+    let guid = |g: &crate::game_state::GameStateFingerprint| {
+        g.power_plan_guid.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_ascii_lowercase)
+    };
+    let what = match (guid(b), guid(a)) {
+        (Some(x), Some(y)) if x != y && !plan_trial => Some("the Windows power plan differed between the two sessions"),
+        _ if b.power_plan_changed == Some(true) => Some("the Windows power plan changed during the baseline"),
+        _ if a.power_plan_changed == Some(true) => Some("the Windows power plan changed during the after-session"),
+        _ => None,
+    };
+    let Some(what) = what else { return outcome };
+    ConcludeOutcome {
+        verdict: "confounded".into(),
+        keep: false,
+        stop_reason: Some("conditions-changed-between-sessions".into()),
+        confidence: Confidence::Low,
+        note: format!(
+            "Something besides this setting changed between the before and after readings ({what}), so the \
+             result can't be pinned on this setting. Compy restored it; start a new test to measure it under \
+             the new conditions."
+        ),
+        ..outcome
+    }
+}
+
 /// The precheck's answer in the start's own words, so the remedies keyed on them (the undo, and
 /// "changed outside Compy") are offered the same way.
 fn precheck_refusal(unverified: usize) -> Option<String> {
@@ -4695,6 +4847,9 @@ pub(crate) fn conclude_experiment(
                 ),
                 pairing,
             );
+            // TG-preflight: a power plan that differed between the sessions, or changed during one,
+            // confounds exactly as a changed recorded condition does (played anyway after the warning).
+            let measured = with_power_plan_check(measured, baseline, treatment, &rec.rec_id);
             // The baseline's cap state as the start read it (its trace may be shed by now), else read now.
             let baseline_cap = match &noise {
                 Ok(n) => n.cap,
@@ -7083,6 +7238,109 @@ mod experiment_tests {
         let o = measured(180.0);
         assert_eq!(o.verdict, "improved");
         assert_eq!(with_comparability(o.clone(), &pairing_for(session(TREAT_ID, 180.0))), o);
+    }
+
+    // TG-preflight: a power plan that differed between the two sessions, or changed during one,
+    // confounds and restores like any changed recorded condition; unrecorded never does.
+    fn with_plan(mut s: SessionSummary, guid: Option<&str>, changed: Option<bool>) -> SessionSummary {
+        let g = s.game_state.get_or_insert_with(Default::default);
+        g.power_plan_guid = guid.map(str::to_string);
+        g.power_plan_changed = changed;
+        s
+    }
+    const BAL: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+    const HIGH: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+
+    #[test]
+    fn a_power_plan_that_differed_or_changed_confounds_and_restores() {
+        let m = measured(180.0);
+        let base = with_plan(session(BASE_ID, 150.0), Some(BAL), Some(false));
+        let same = with_plan(session(TREAT_ID, 180.0), Some(&BAL.to_uppercase()), Some(false));
+        assert_eq!(with_power_plan_check(m.clone(), Some(&base), &same, "visual-effects"), m.clone());
+        let other = with_plan(session(TREAT_ID, 180.0), Some(HIGH), Some(false));
+        let o = with_power_plan_check(m.clone(), Some(&base), &other, "visual-effects");
+        assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false));
+        assert_eq!(o.stop_reason.as_deref(), Some("conditions-changed-between-sessions"));
+        assert!(o.note.contains("the Windows power plan differed between the two sessions"), "{}", o.note);
+        let mid = with_plan(session(TREAT_ID, 180.0), Some(BAL), Some(true));
+        let o = with_power_plan_check(m.clone(), Some(&base), &mid, "visual-effects");
+        assert!(!o.keep && o.note.contains("changed during the after-session"), "{}", o.note);
+    }
+
+    #[test]
+    fn the_power_plan_check_never_reads_a_difference_it_did_not_record() {
+        let m = measured(180.0);
+        let base = with_plan(session(BASE_ID, 150.0), Some(BAL), None);
+        let unread = with_plan(session(TREAT_ID, 180.0), None, None);
+        assert_eq!(with_power_plan_check(m.clone(), Some(&base), &unread, "visual-effects"), m.clone());
+        assert_eq!(with_power_plan_check(m.clone(), None, &unread, "visual-effects"), m.clone());
+        // The plan itself moves the plan between the sessions by design: no confound for that alone.
+        let other = with_plan(session(TREAT_ID, 180.0), Some(HIGH), Some(false));
+        assert_eq!(with_power_plan_check(m.clone(), Some(&base), &other, "power-ultimate"), m.clone());
+        // Opus r1 MUST-FIX: a setting OF the plan leaves the plan where it was, so a switch is a confound.
+        assert_eq!(with_power_plan_check(m.clone(), Some(&base), &other, "pcie-aspm-off").verdict, "confounded");
+        // Opus r1 SHOULD-FIX: a switch DURING a session confounds a Trial of the plan too.
+        let mid = with_plan(session(TREAT_ID, 180.0), Some(HIGH), Some(true));
+        assert_eq!(with_power_plan_check(m.clone(), Some(&base), &mid, "power-ultimate").verdict, "confounded");
+        // Gaming Mode lays its own plan over a session; its checks (comparability) cover that.
+        let mut gm = other.clone();
+        gm.gaming_mode_active = Some(true);
+        assert_eq!(with_power_plan_check(m.clone(), Some(&base), &gm, "visual-effects"), m.clone());
+        // A stronger reason already given stands.
+        let already = with_comparability(m.clone(), &pairing_for(session(TREAT_ID, 180.0)));
+        let first = ConcludeOutcome { verdict: "not-comparable".into(), ..already };
+        assert_eq!(with_power_plan_check(first.clone(), Some(&base), &other, "visual-effects"), first);
+    }
+
+    #[test]
+    fn preflight_names_each_recorded_difference_and_nothing_unrecorded() {
+        use crate::game_state::GameStateFingerprint as G;
+        let base = G {
+            gpu_driver: Some("25.7.1".into()),
+            windows_build: Some("26200.7000".into()),
+            resolution_width: Some(2560),
+            resolution_height: Some(1440),
+            power_plan_guid: Some(BAL.into()),
+            gaming_mode_active: Some(false),
+            ..G::default()
+        };
+        assert!(preflight_diffs(&base, &base.clone(), "visual-effects").is_empty());
+        let live = G {
+            gpu_driver: Some("25.8.1".into()),
+            windows_build: Some("26200.7100".into()),
+            resolution_width: Some(1920),
+            resolution_height: Some(1080),
+            power_plan_guid: Some(HIGH.into()),
+            ..G::default()
+        };
+        let keys: Vec<String> = preflight_diffs(&base, &live, "visual-effects").into_iter().map(|d| d.key).collect();
+        assert_eq!(keys, ["gpu-driver", "windows-build", "resolution", "power-plan"]);
+        let d = &preflight_diffs(&base, &live, "visual-effects")[2];
+        assert_eq!((d.before.as_str(), d.after.as_str()), ("2560×1440", "1920×1080"));
+        // Opus r1 SHOULD-FIX: Windows' own plans are named, so the step can say which to switch back to.
+        let p = &preflight_diffs(&base, &live, "visual-effects")[3];
+        assert_eq!((p.before.as_str(), p.after.as_str()), ("Balanced", "High performance"));
+        let custom = G { power_plan_guid: Some("22222222-2222-2222-2222-222222222222".into()), ..base.clone() };
+        assert_eq!(preflight_diffs(&base, &custom, "visual-effects")[0].after, "22222222-2222-2222-2222-222222222222");
+        // Opus r1 SHOULD-FIX: refresh and monitor, which the conclude also compares.
+        let refresh = G { display_refresh_hz: Some(60), active_display_identity: Some("DEL U2720Q".into()), ..base.clone() };
+        let screen = G { display_refresh_hz: Some(165), active_display_identity: Some("AOC 24G2".into()), ..base.clone() };
+        let keys: Vec<String> = preflight_diffs(&refresh, &screen, "visual-effects").into_iter().map(|d| d.key).collect();
+        assert_eq!(keys, ["refresh", "display"]);
+        // Unread live values are never a difference; only a Trial of the plan itself never names it.
+        assert!(preflight_diffs(&base, &G::default(), "visual-effects").is_empty());
+        let plan_only = G { power_plan_guid: Some(HIGH.into()), ..base.clone() };
+        assert!(preflight_diffs(&base, &plan_only, "power-ultimate").is_empty());
+        assert_eq!(preflight_diffs(&base, &plan_only, "pcie-aspm-off").len(), 1);
+        // Opus r2 SHOULD-FIX: Gaming Mode on for one side is named as Gaming Mode, never as its plan.
+        let gm_base = G { gaming_mode_active: Some(true), ..base.clone() };
+        let keys: Vec<String> = preflight_diffs(&gm_base, &plan_only, "visual-effects").into_iter().map(|d| d.key).collect();
+        assert_eq!(keys, ["gaming-mode"]);
+        let gm_now = G { gaming_mode_active: Some(true), ..plan_only.clone() };
+        let d = preflight_diffs(&base, &gm_now, "visual-effects");
+        assert_eq!(d.len(), 1, "{d:?}");
+        assert_eq!((d[0].key.as_str(), d[0].before.as_str(), d[0].after.as_str()), ("gaming-mode", "off", "on"));
+        assert!(preflight_diffs(&gm_base, &gm_now, "visual-effects").is_empty());
     }
 
     #[test]
