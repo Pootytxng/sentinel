@@ -2700,7 +2700,7 @@ describe("P5-learned: what Compy learned on this PC", () => {
     await screen.findByTestId("exp-summary");
     expect(screen.getByTestId("exp-summary-lesson")).toHaveAttribute("data-rule", "faster-and-steadier");
     expect(screen.getByTestId("exp-summary-lesson-detail")).toHaveTextContent(
-      "From the Trial of Trim Windows visual effects: 1% low +30% against its 23% noise band, average +20% against its 18% noise band.",
+      "From the Trial of Trim Windows visual effects: 1% low +30% against a noise band of 23%, average +20% against a noise band of 18%.",
     );
   });
 

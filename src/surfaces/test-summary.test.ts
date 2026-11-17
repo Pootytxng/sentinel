@@ -14,6 +14,7 @@ import {
   LESSON_RULES,
   avgBandOf,
   lessonDirs,
+  lowBandOf,
   lessonFor,
   lessonRuleFor,
   lessonRuleForVerdict,
@@ -775,6 +776,34 @@ describe("CR-lesson-avg-band: the average reads against its own band", () => {
     expect(inside.lesson).toMatchObject({ recId: "hags", rule: "steadier-not-faster" });
     const noAvgBand = summarizeGame(GAME, [...experiments, trial({ game_noise: { low1_band_pct: 23 } })], [VFX], sessions)!;
     expect(noAvgBand.lesson).toMatchObject({ recId: "hags", rule: "steadier" });
+  });
+
+  // Opus r2 MUST-FIX: a real-play Trial judges both numbers on its look's one band, never on the
+  // start-time game_noise it also stores.
+  it("a real-play Trial reads the average on the band it was judged on", () => {
+    const rp = trial({ mode: "real-play", noise_evidence: { band_pct: 5, measured_noise_pct: null }, treatment: { delta_low1_pct: 8, delta_avg_pct: 10 } });
+    expect(avgBandOf(rp)).toBe(5);
+    const s = summarizeGame(GAME, [...experiments, rp], [VFX], sessions)!;
+    expect(s.lesson).toMatchObject({ recId: "hags", rule: "faster-and-steadier", bandPct: 5, avgBandPct: 5 });
+    const max = { ...rp, id: "exp:x", outcome: "max-fps" as const, verdict: "improved", kept: true, treatment: { delta_low1_pct: 8, delta_avg_pct: 30 } } as SummaryExperiment;
+    const fell = { ...rp, verdict: "no-change", kept: false, treatment: { delta_low1_pct: 8, delta_avg_pct: -10 } } as SummaryExperiment;
+    const on = [cand("hags", false, "already-set-by-compy")];
+    expect(outcomeChoices(GAME, [fell, max], on, sessions)[0].recommended).toMatchObject({ reason: "avg-fell", pct: -10 });
+  });
+
+  // Opus r2 SHOULD-FIX: Maximum FPS judges the 1% low on the wider band too.
+  it("a Maximum FPS Trial reads both numbers on the wider measured band", () => {
+    const wide = { noise_evidence: { band_pct: 3, measured_noise_pct: null }, game_noise: { low1_band_pct: 3, avg_band_pct: 10 } };
+    // 1% low +6: past its own 3%, inside the wider 10% the verdict used: no 1% low lesson.
+    const max = trial({ outcome: "max-fps", verdict: "improved", kept: true, ...wide, treatment: { delta_low1_pct: 6, delta_avg_pct: 12 } });
+    expect(lowBandOf(max)).toBe(10);
+    const s = summarizeGame(GAME, [...experiments, max], [VFX], sessions)!;
+    expect(s.lesson).toMatchObject({ recId: "hags", rule: "faster-not-steadier", bandPct: 10, avgBandPct: 10 });
+    // Regressed on Maximum FPS with the average -8%: inside the wider band, so the reason is the 1% low.
+    const rec = trial({ outcome: "recommended", verdict: "improved", kept: true, ...wide, treatment: { delta_low1_pct: 6, delta_avg_pct: 1 } });
+    const worse = { ...max, id: "exp:w", verdict: "regressed", treatment: { delta_low1_pct: -12, delta_avg_pct: -8 } } as SummaryExperiment;
+    const on = [cand("hags", false, "already-set-by-compy")];
+    expect(outcomeChoices(GAME, [rec, worse], on, sessions)[0].maxFps).toMatchObject({ reason: "low-fell" });
   });
 
   it("the outcome switch names 'the average fell' only past the average's own band", () => {

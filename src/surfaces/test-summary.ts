@@ -191,6 +191,8 @@ export type TestedChange = {
   deltaAvgPct: number | null;
   /** The band the newest judged Trial's average was judged on (`avgBandOf`); null = not compared. */
   avgBandPct: number | null;
+  /** The band its 1% low was judged on (`lowBandOf`); absent = `noise.band_pct`. */
+  lowBandPct?: number | null;
   at: string;
   /** P8-posture-show: the risk the user allowed when the newest judged Trial started; null = not
    *  recorded. */
@@ -310,7 +312,10 @@ export function lessonRuleFor(
  *  `conclude`), so: a Maximum FPS Trial judges the average on the wider of the two measured bands
  *  (`with_max_fps_outcome`); a Recommended Trial on the average's own (`with_recommended_outcome_bands`).
  *  null = not compared. */
-export function avgBandOf(x: Pick<SummaryExperiment, "noise_evidence" | "game_noise" | "outcome">): number | null {
+export function avgBandOf(x: Pick<SummaryExperiment, "noise_evidence" | "game_noise" | "outcome" | "mode">): number | null {
+  // Opus r2 MUST-FIX: a real-play Trial judges both numbers on its look's one band (realplay.rs),
+  // stored as `noise_evidence.band_pct`; its start-time `game_noise` is not what it was judged on.
+  if (x.mode === "real-play") return x.noise_evidence?.band_pct ?? null;
   if (x.outcome === "smoothest") return null;
   if (x.game_noise == null) return x.noise_evidence?.band_pct ?? null;
   const fin = (v: number | undefined) => (v != null && Number.isFinite(v) ? v : null);
@@ -320,6 +325,16 @@ export function avgBandOf(x: Pick<SummaryExperiment, "noise_evidence" | "game_no
     return avg != null && low != null ? Math.max(low, avg) : null;
   }
   return avg;
+}
+
+/** Opus r2 SHOULD-FIX: the band a Trial's 1% LOW was judged on: a Maximum FPS Trial on measured bands
+ *  judges it on the wider of the two (experiment.rs `low_band`); every other Trial on
+ *  `noise_evidence.band_pct`. */
+export function lowBandOf(x: Pick<SummaryExperiment, "noise_evidence" | "game_noise" | "outcome" | "mode">): number | null {
+  const band = x.noise_evidence?.band_pct ?? null;
+  if (x.mode === "real-play" || x.outcome !== "max-fps" || x.game_noise == null) return band;
+  const wider = avgBandOf(x);
+  return wider != null && band != null ? Math.max(band, wider) : band;
 }
 
 /** `lessonRuleFor`, plus the verdict-wins guard for a result judged on the 1% low against its floor
@@ -382,7 +397,7 @@ export const LESSON_LIBRARY_ID: Readonly<Record<LessonRule, string>> = {
 export function lessonFor(tested: readonly TestedChange[]): Lesson | null {
   const newest = [...tested].sort((a, b) => time(b.at) - time(a.at));
   for (const r of newest) {
-    const band = r.noise?.band_pct;
+    const band = r.lowBandPct !== undefined ? r.lowBandPct : r.noise?.band_pct;
     const rule = lessonRuleFor(r.verdict, r.deltaLow1Pct, r.deltaAvgPct, band, r.avgBandPct);
     if (rule && band != null && r.deltaLow1Pct != null)
       return {
@@ -604,6 +619,7 @@ export function summarizeGame(
       deltaLow1Pct: x.treatment?.delta_low1_pct ?? null,
       deltaAvgPct: x.treatment?.delta_avg_pct ?? null,
       avgBandPct: avgBandOf(x),
+      lowBandPct: lowBandOf(x),
       at: x.created_at,
       riskChoice: recordedRiskChoice(x.risk_choice),
       realPlay: x.mode === "real-play" ? { before: x.real_play?.before?.length ?? 0, with: x.real_play?.with?.length ?? 0 } : null,
