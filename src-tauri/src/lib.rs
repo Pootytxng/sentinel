@@ -266,9 +266,12 @@ pub(crate) fn scheme_guid_of(stdout: &str) -> Option<String> {
 }
 
 /// CR-ultimate-identity: every scheme GUID one read-only `powercfg /list` shows, lower-cased. `None`
-/// when the read fails or lists none: unread, never "no plans".
+/// when the read fails, doesn't answer within `POWERCFG_READ_LIMIT` (s37) or lists none: unread,
+/// never "no plans".
 pub(crate) fn power_plan_guids() -> Option<Vec<String>> {
-    let output = crate::actions::quiet_command("powercfg").args(["/list"]).output().ok()?;
+    let mut cmd = crate::actions::quiet_command("powercfg");
+    cmd.args(["/list"]);
+    let output = crate::actions::output_within(cmd, crate::actions::POWERCFG_READ_LIMIT)?;
     if !output.status.success() {
         return None;
     }
