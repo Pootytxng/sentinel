@@ -5490,6 +5490,8 @@ mod experiment_tests {
 
     #[test]
     fn armed_lifecycle_commands_no_longer_refuse_for_the_gate() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         // With the gate armed, the defense-in-depth "isn't part of this build" short-circuit is
         // unreachable: a lookup command falls through to its REAL not-found path. We exercise only the
         // no-op lookup commands here (bogus id ⇒ nothing matches ⇒ no mutation). `start_experiment` is
@@ -9371,6 +9373,8 @@ mod experiment_tests {
 
     #[test]
     fn a_two_session_conclude_refuses_a_real_play_trial_before_judging_anything() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         let src = include_str!("experiment.rs");
         let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
         let body = &body[..body.find("\n}\n").unwrap()];
@@ -9741,7 +9745,10 @@ mod experiment_tests {
         let serial = crate::data_root::shared_root_files();
         std::fs::create_dir_all(crate::compy_data_dir()).unwrap();
         let _ = std::fs::remove_dir(store_path());
-        std::fs::write(ledger_file(), serde_json::to_vec(&plan_ledger_rows()).unwrap()).unwrap();
+        // Opus r2: temp + rename, so a test reading the ledger unlocked never sees it half written.
+        let tmp = ledger_file().with_extension("json.scene-tmp");
+        std::fs::write(&tmp, serde_json::to_vec(&plan_ledger_rows()).unwrap()).unwrap();
+        std::fs::rename(&tmp, ledger_file()).unwrap();
         let experiments = trial_on_the_plan
             .map(|status| {
                 vec![ExperimentRecord {
