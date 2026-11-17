@@ -748,6 +748,10 @@ describe("ExperimentBench (armed)", () => {
     expect(vi.mocked(invoke).mock.calls.some(([c, a]) => c === "trial_preflight" && (a as { experimentId: string }).experimentId === "exp:2-0")).toBe(true);
     // Nothing new is blocked: Restore stays, and the conclude waits only for a session as before.
     expect(screen.getByRole("button", { name: "Restore now" })).toBeEnabled();
+    // Sonnet r1: fixed, and back in Compy: the line is read again and goes.
+    state.preflight = [];
+    fireEvent.focus(window);
+    await waitFor(() => expect(screen.queryByTestId("exp-preflight")).toBeNull());
     state.preflight = null;
   });
 

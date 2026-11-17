@@ -22,7 +22,10 @@ describe("preflightLine", () => {
       ["gpu-driver", "25.7.1", "25.8.1", /the graphics driver is 25\.8\.1 now, the baseline ran on 25\.7\.1\. Next: restore the change and start the Trial again/],
       ["windows-build", "26200.7000", "26200.7100", /Windows is on build 26200\.7100 now, the baseline ran on 26200\.7000\. Next: restore the change/],
       ["resolution", "2560×1440", "1920×1080", /the display is at 1920×1080 now, the baseline ran at 2560×1440\. Next: set the display back to 2560×1440/],
-      ["power-plan", "x", "y", /a different Windows power plan is active now than the one the baseline ran on\. Next: switch back to the power plan/],
+      ["power-plan", "22222222-2222-2222-2222-222222222222", "381b4222-f694-41f0-9685-ff5bb260df2e", /a different Windows power plan is active now than the one the baseline ran on\. Next: switch back to the power plan the baseline ran on/],
+      ["power-plan", "Balanced", "High performance", /the High performance power plan is active now, the baseline ran on Balanced\. Next: switch back to the Balanced power plan/],
+      ["refresh", "165 Hz", "60 Hz", /the display refreshes at 60 Hz now, the baseline ran at 165 Hz\. Next: set the display back to 165 Hz/],
+      ["display", "AOC 24G2", "DEL U2720Q", /another monitor is in use now \(DEL U2720Q\), the baseline ran on AOC 24G2\. Next: play on the monitor the baseline ran on \(AOC 24G2\)/],
     ];
     for (const [key, before, after, re] of cases) {
       const line = preflightLine([{ key, before, after }], tEn)!;

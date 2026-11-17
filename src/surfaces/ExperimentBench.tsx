@@ -2391,11 +2391,19 @@ function RunningPanel({
       return;
     }
     let live = true;
-    invoke<PreflightDiff[] | null>("trial_preflight", { experimentId: exp.id })
-      .then((d) => live && setPreflight(Array.isArray(d) ? d : null))
-      .catch(() => live && setPreflight(null));
+    const read = () =>
+      invoke<PreflightDiff[] | null>("trial_preflight", { experimentId: exp.id })
+        .then((d) => live && setPreflight(Array.isArray(d) ? d : null))
+        .catch(() => live && setPreflight(null));
+    read();
+    // Sonnet r1: re-read when the user comes back to Compy, so a fixed difference stops showing.
+    const onFocus = () => document.visibilityState !== "hidden" && read();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
     return () => {
       live = false;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
     };
   }, [waiting, exp.id]);
   const preflightText = waiting ? preflightLine(preflight, t) : null;

@@ -908,12 +908,18 @@
         "gpuDriver": "显卡驱动现在是 {{after}}，基准对局使用的是 {{before}}",
         "windowsBuild": "Windows 现在是 {{after}} 版本，基准对局使用的是 {{before}}",
         "resolution": "显示分辨率现在是 {{after}}，基准对局时是 {{before}}",
-        "powerPlan": "现在启用的 Windows 电源计划与基准对局时的不同"
+        "powerPlan": "现在启用的 Windows 电源计划与基准对局时的不同",
+        "powerPlanNamed": "现在启用的是“{{after}}”电源计划，基准对局使用的是“{{before}}”",
+        "refresh": "显示器刷新率现在是 {{after}}，基准对局时是 {{before}}",
+        "display": "现在使用的是另一台显示器（{{after}}），基准对局使用的是 {{before}}"
       },
       "step": {
         "rebaseline": "下一步：恢复这项更改并重新开始测试，让两次对局在相同条件下进行。",
         "resolution": "下一步：开始游戏前把显示分辨率改回 {{before}}。",
-        "powerPlan": "下一步：开始游戏前切换回基准对局时使用的电源计划。"
+        "refresh": "下一步：开始游戏前把刷新率改回 {{before}}。",
+        "display": "下一步：在基准对局使用的显示器（{{before}}）上玩。",
+        "powerPlan": "下一步：开始游戏前切换回基准对局时使用的电源计划。",
+        "powerPlanNamed": "下一步：开始游戏前切换回“{{before}}”电源计划。"
       },
       "anyway": "如果仍然开始游戏，结果就无法归因于这项更改：Compy 会记录有其他条件发生了变化，不作判定，并恢复这项更改。"
     },

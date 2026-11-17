@@ -919,12 +919,18 @@
         "gpuDriver": "the graphics driver is {{after}} now, the baseline ran on {{before}}",
         "windowsBuild": "Windows is on build {{after}} now, the baseline ran on {{before}}",
         "resolution": "the display is at {{after}} now, the baseline ran at {{before}}",
-        "powerPlan": "a different Windows power plan is active now than the one the baseline ran on"
+        "powerPlan": "a different Windows power plan is active now than the one the baseline ran on",
+        "powerPlanNamed": "the {{after}} power plan is active now, the baseline ran on {{before}}",
+        "refresh": "the display refreshes at {{after}} now, the baseline ran at {{before}}",
+        "display": "another monitor is in use now ({{after}}), the baseline ran on {{before}}"
       },
       "step": {
         "rebaseline": "Next: restore the change and start the Trial again, so both sessions run under the same conditions.",
         "resolution": "Next: set the display back to {{before}} before you play.",
-        "powerPlan": "Next: switch back to the power plan the baseline ran on before you play."
+        "refresh": "Next: set the display back to {{before}} before you play.",
+        "display": "Next: play on the monitor the baseline ran on ({{before}}).",
+        "powerPlan": "Next: switch back to the power plan the baseline ran on before you play.",
+        "powerPlanNamed": "Next: switch back to the {{before}} power plan before you play."
       },
       "anyway": "If you play anyway, Compy can't pin the result on this change: it records that something else changed, judges nothing and puts the change back."
     },
