@@ -141,8 +141,10 @@ export function friendlyHeadline(recId: string, t: TFunction): string | null {
 // CR-zh-readiness-words: a readiness check's label and detail are formatted in Rust (readiness.rs)
 // with a name or number inside ("Active plan "Synez Power Plan". ..."), and the limiter card prints
 // them through priorities.rs (title = label, reason = detail). Each check below is keyed by its
-// stable (id, status) and matched against the exact English sentence Rust sends (mirrored here);
-// the name and numbers it carries are lifted out of that sentence and put back untranslated. A
+// stable (id, status) plus the exact English sentence Rust sends (mirrored here): (id, status) alone
+// is not unique (two Unknown sentences per check). The check's `value` is not used as the
+// placeholder: it is formatted differently from the sentence ("60 / 250 Hz", "412 days") and the GPU
+// name is not in it, so the name and numbers are lifted out of the sentence and put back untranslated. A
 // sentence that matches no mirror (a newer backend, a check not listed here) is shown as sent, and
 // English always gets the backend's own words.
 type ReadinessVariant = {
