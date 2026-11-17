@@ -10397,6 +10397,9 @@ mod refuse_early_tests {
         let o = pair_verdict(&case, Ok(WIDE));
         assert_eq!(o.verdict, "no-change", "+10% sits inside ROB RUN's measured 20.6%: {}", o.note);
         assert_eq!(pair_verdict(&pair_case(30.0, 0.0, TrialOutcome::Recommended), Ok(WIDE)).verdict, "improved");
+        // Opus r1 NIT: +18% beats the average's 16.4% band but not the 1% low's own 20.6%.
+        let o = pair_verdict(&pair_case(18.0, 0.0, TrialOutcome::Recommended), Ok(WIDE));
+        assert_eq!(o.verdict, "no-change", "the 1% low is judged on its own band: {}", o.note);
     }
 
     // Replaces `the_average_delta_is_stored_additively_and_older_records_load_without_it`'s pin on
@@ -10407,6 +10410,11 @@ mod refuse_early_tests {
         assert_eq!(pair_verdict(&pair_case(30.0, 5.0, TrialOutcome::Recommended), Ok(WIDE)).verdict, "improved");
         let fell = pair_verdict(&pair_case(30.0, -20.0, TrialOutcome::Recommended), Ok(WIDE));
         assert_eq!(fell.verdict, "no-change", "the average fell past its 16.4% band: {}", fell.note);
+        // Opus r1 MUST-FIX / sonnet SHOULD-FIX: -15.5% falls past the 16.4% band's matching fall
+        // (about 14.1%) but not past the 1% low's 20.6% band's (about 17.1%), so only the average's
+        // own band calls it a fall.
+        let own = pair_verdict(&pair_case(30.0, -15.5, TrialOutcome::Recommended), Ok(WIDE));
+        assert_eq!(own.verdict, "no-change", "judged on the average's own band: {}", own.note);
     }
 
     // Replaces `the_picked_outcome_is_stored_additively_and_an_older_compy_still_loads_the_record`'s
@@ -10418,8 +10426,15 @@ mod refuse_early_tests {
         let rec_case = pair_case(10.0, 10.0, TrialOutcome::Recommended);
         let max_case = pair_case(10.0, 10.0, TrialOutcome::MaxFps);
         assert_eq!(pair_verdict(&rec_case, Ok(narrow_low.clone())).verdict, "improved", "+10% beats the 1% low's 5%");
-        let o = pair_verdict(&max_case, Ok(narrow_low));
+        let o = pair_verdict(&max_case, Ok(narrow_low.clone()));
         assert_eq!(o.verdict, "no-change", "+10% is inside the wider 20%: {}", o.note);
+        // Opus r1 MUST-FIX: the wider band is the 1% low's here (20.6% vs 16.4%), so a +18% gain on
+        // both numbers is inside it; judged on the average's band alone it would be a win.
+        let o = pair_verdict(&pair_case(18.0, 18.0, TrialOutcome::MaxFps), Ok(WIDE));
+        assert_eq!(o.verdict, "no-change", "+18% is inside the wider 20.6%: {}", o.note);
+        // And a gain past the wider band is a Maximum FPS win (the average is read, never dropped).
+        let o = pair_verdict(&pair_case(10.0, 25.0, TrialOutcome::MaxFps), Ok(narrow_low));
+        assert_eq!(o.verdict, "improved", "+25% average beats the wider 20%: {}", o.note);
     }
 
     // Replaces `an_uneven_session_is_no_longer_a_reason_to_judge_nothing`'s pin on
@@ -10432,6 +10447,7 @@ mod refuse_early_tests {
         let o = pair_verdict(&case, Ok(WIDE));
         assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false), "{}", o.note);
         assert_eq!(o.stop_reason.as_deref(), Some("frame-cap-changed"));
+        assert!(o.note.contains("The frame cap changed between these sessions"), "{}", o.note);
     }
 
     // Replaces `the_start_measures_the_band_and_refuses_when_it_cant`'s pin on
@@ -10455,6 +10471,8 @@ mod refuse_early_tests {
             after_ratio: None,
         });
         assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("not-comparable", false, Some("noise-unmeasured")));
+        let game = crate::intelligence::pretty_game_name(&r.game).to_string();
+        assert!(!game.is_empty() && o.note.contains(&game), "the note names the game: {}", o.note);
         // And with no baseline session to read the cap from, the unread cap confounds first.
         let o = pair_verdict(&(r, t, p), noise);
         assert_eq!((o.verdict.as_str(), o.stop_reason.as_deref()), ("confounded", Some("frame-cap-unread")));
