@@ -40,8 +40,11 @@ import type { AssumedBand } from "./assumed-band";
 //
 // LESSON RULES. b = the noise band the Trial was judged on (`noise_evidence.band_pct`); L = the
 // stored 1% low %-delta (`treatment.delta_low1_pct`); A = the stored average %-delta
-// (`treatment.delta_avg_pct`, null = the average wasn't compared). Each delta reads "up" when > +b,
-// "down" when < -b, otherwise "flat" (within the band). A measured rule applies only to a Trial whose
+// (`treatment.delta_avg_pct`, null = the average wasn't compared); a = the band the AVERAGE was judged
+// on (`avgBandOf`: the game's measured `avg_band_pct`, the wider band on Maximum FPS, b itself on an
+// older result judged on one band both ways; unknown on a measured band = the average wasn't compared).
+// L reads "up" when > +b, "down" when < -b, otherwise "flat" (within the band); A the same against a.
+// A measured rule applies only to a Trial whose
 // verdict is improved, no-change or regressed and that recorded both b and L:
 //   L up,   A flat    -> steadier-not-faster       ("1% lows rose, average barely moved")
 //   L up,   A up      -> faster-and-steadier
@@ -84,6 +87,9 @@ export type SummaryExperiment = {
   concluded_at: string | null;
   verdict_confidence?: SummaryConfidence | null;
   noise_evidence?: SummaryNoise | null;
+  /** P4-judge-noisy: the game's measured as-is bands the verdict was judged on (noise_floor.rs
+   *  `GameNoise`); absent on older records, which were judged on `noise_evidence.band_pct` both ways. */
+  game_noise?: { low1_band_pct?: number; avg_band_pct?: number } | null;
   baseline_session_id?: string | null;
   /** The stored after-session deltas. null while running and on records that never measured one. */
   treatment?: { delta_low1_pct: number; delta_avg_pct?: number | null } | null;
@@ -183,6 +189,8 @@ export type TestedChange = {
   /** The newest judged Trial's stored deltas (null when it recorded none) and when it started. */
   deltaLow1Pct: number | null;
   deltaAvgPct: number | null;
+  /** The band the newest judged Trial's average was judged on (`avgBandOf`); null = not compared. */
+  avgBandPct: number | null;
   at: string;
   /** P8-posture-show: the risk the user allowed when the newest judged Trial started; null = not
    *  recorded. */
@@ -277,16 +285,35 @@ const dirOf = (v: number, band: number): Dir => (v > band ? "up" : v < -band ? "
 /** P7-teach: the measured rule for ONE result, shared by every surface that teaches from personal
  *  evidence (the Trial summary, the Debrief's comparison card, the Care stutter comparison). null =
  *  no rule, so no lesson: the verdict wasn't a measured result, the band or the 1% low delta is
- *  missing, or both deltas sit inside the band (that is the verdict itself, not a lesson). */
+ *  missing, or both deltas sit inside the band (that is the verdict itself, not a lesson).
+ *  CR-lesson-avg-band: the 1% low reads against `bandPct`, the average against `avgBandPct`, its own
+ *  band; a missing average band reads the average as not compared (never against the 1% low's band). */
 export function lessonRuleFor(
   verdict: string | null | undefined,
   low1Pct: number | null | undefined,
   avgPct: number | null | undefined,
   bandPct: number | null | undefined,
+  avgBandPct: number | null | undefined,
 ): LessonRule | null {
   if (!isMeasuredVerdict(verdict) || bandPct == null || low1Pct == null) return null;
   if (!Number.isFinite(low1Pct) || !Number.isFinite(bandPct) || (avgPct != null && !Number.isFinite(avgPct))) return null;
-  return LESSON_RULES[`${dirOf(low1Pct, bandPct)}/${avgPct == null ? "unknown" : dirOf(avgPct, bandPct)}`] ?? null;
+  const avgBand = avgBandPct != null && Number.isFinite(avgBandPct) && avgBandPct >= 0 ? avgBandPct : null;
+  const avgDir = avgPct == null || avgBand == null ? "unknown" : dirOf(avgPct, avgBand);
+  return LESSON_RULES[`${dirOf(low1Pct, bandPct)}/${avgDir}`] ?? null;
+}
+
+/** CR-lesson-avg-band: the band a Trial's AVERAGE was judged on. An older record without the game's
+ *  measured bands was judged on `noise_evidence.band_pct` both ways; a Maximum FPS Trial judges both
+ *  numbers on the wider band (experiment.rs `with_max_fps_outcome`), which is that same band; a
+ *  Recommended Trial judges the average on its own measured band (`with_recommended_outcome_bands`);
+ *  a Smoothest Trial never judges the average. null = not compared. */
+export function avgBandOf(x: Pick<SummaryExperiment, "noise_evidence" | "game_noise" | "outcome">): number | null {
+  const band = x.noise_evidence?.band_pct ?? null;
+  if (x.game_noise == null) return band;
+  if (x.outcome === "smoothest") return null;
+  if (x.outcome === "max-fps") return band;
+  const avg = x.game_noise.avg_band_pct;
+  return avg != null && Number.isFinite(avg) ? avg : null;
 }
 
 /** `lessonRuleFor`, plus the verdict-wins guard for a result judged on the 1% low against its floor
@@ -298,8 +325,9 @@ export function lessonRuleForVerdict(
   low1Pct: number | null | undefined,
   avgPct: number | null | undefined,
   bandPct: number | null | undefined,
+  avgBandPct: number | null | undefined,
 ): LessonRule | null {
-  const rule = lessonRuleFor(verdict, low1Pct, avgPct, bandPct);
+  const rule = lessonRuleFor(verdict, low1Pct, avgPct, bandPct, avgBandPct);
   if (!rule) return null;
   const want = verdict === "improved" ? "up" : verdict === "regressed" ? "down" : "flat";
   return lessonDirs(rule)?.low1 === want ? rule : null;
@@ -349,7 +377,7 @@ export function lessonFor(tested: readonly TestedChange[]): Lesson | null {
   const newest = [...tested].sort((a, b) => time(b.at) - time(a.at));
   for (const r of newest) {
     const band = r.noise?.band_pct;
-    const rule = lessonRuleFor(r.verdict, r.deltaLow1Pct, r.deltaAvgPct, band);
+    const rule = lessonRuleFor(r.verdict, r.deltaLow1Pct, r.deltaAvgPct, band, r.avgBandPct);
     if (rule && band != null && r.deltaLow1Pct != null)
       return {
         rule,
@@ -568,6 +596,7 @@ export function summarizeGame(
       context: matchOf(x.baseline_session_id),
       deltaLow1Pct: x.treatment?.delta_low1_pct ?? null,
       deltaAvgPct: x.treatment?.delta_avg_pct ?? null,
+      avgBandPct: avgBandOf(x),
       at: x.created_at,
       riskChoice: recordedRiskChoice(x.risk_choice),
       realPlay: x.mode === "real-play" ? { before: x.real_play?.before?.length ?? 0, with: x.real_play?.with?.length ?? 0 } : null,
@@ -720,8 +749,10 @@ function resultOf(x: SummaryExperiment): OutcomeResult | null {
   if (outcome === "recommended") {
     if (keeps) return r("low-up", low);
     if (x.verdict === "regressed") return r("low-fell", low);
-    if (low > band && avg == null) return r("avg-unknown", null);
-    if (low > band && avg != null && avg < -band) return r("avg-fell", avg);
+    // CR-lesson-avg-band: the average fell past ITS OWN band (`avgBandOf`); unknown band = not compared.
+    const avgBand = avgBandOf(x);
+    if (low > band && (avg == null || avgBand == null)) return r("avg-unknown", null);
+    if (low > band && avg != null && avgBand != null && avg < -avgBand) return r("avg-fell", avg);
     return r("low-flat", low);
   }
   if (keeps) return avg == null ? null : r("avg-up", avg);

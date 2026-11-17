@@ -322,6 +322,17 @@ describe("P7-teach: the stutter comparison teaches one lesson from this pair's o
     expect(stutterLessonRule(report({ verdict: "regressed", ...refs(80, 0) }))).toBe("less-steady-not-slower");
   });
 
+  // CR-lesson-avg-band: the report carries only the 1% low's band. On a measured band the average's
+  // own band is unknown here, so the average is not compared (never read against the 1% low's band).
+  it("on a measured band the average is not compared; an older single-band report reads both on it", () => {
+    const measured = { noise_measured: true, noise_floor_pct: 3 };
+    expect(stutterLessonRule(report({ verdict: "regressed", ...measured, ...refs(80, 70, 120, 110) }))).toBe("less-steady");
+    expect(stutterLessonRule(report({ verdict: "improved", ...measured, ...refs(80, 90, 120, 130) }))).toBe("steadier");
+    expect(stutterLessonRule(report({ verdict: "no-change", ...measured, ...refs(80, 81, 120, 130) }))).toBeNull();
+    const older = { noise_measured: undefined, noise_floor_pct: 3 };
+    expect(stutterLessonRule(report({ verdict: "regressed", ...older, ...refs(80, 70, 120, 110) }))).toBe("slower-and-less-steady");
+  });
+
   it("the stored verdict wins: a re-derived 1% low direction that disagrees with it teaches nothing", () => {
     // The engine said regressed, the stored readings read flat on the 1% low: no lesson, never a
     // lesson that contradicts the verdict.
