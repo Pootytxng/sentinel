@@ -34,6 +34,16 @@ function capWords(s: SessionSummary): string | null {
   return c.at_fps != null ? `on@${Math.round(c.at_fps)}` : "on";
 }
 
+/** Opus r1 MUST-FIX: the backend's own cap rule (noise_floor.rs `cap_pair`): two caps within 3% of
+ *  each other are the same cap; a cap whose rate wasn't read is not a recorded difference from another. */
+export const DRIFT_SAME_CAP_FRAC = 0.03;
+function capsDiffer(b: string, a: string): boolean {
+  if ((b === "off") !== (a === "off")) return true;
+  if (b === "off" || !b.startsWith("on@") || !a.startsWith("on@")) return false;
+  const [x, y] = [Number(b.slice(3)), Number(a.slice(3))];
+  return Math.abs(x - y) > Math.min(x, y) * DRIFT_SAME_CAP_FRAC;
+}
+
 function resolution(s: SessionSummary): string | null {
   const w = s.game_state?.resolution_width;
   const h = s.game_state?.resolution_height;
@@ -43,11 +53,27 @@ function resolution(s: SessionSummary): string | null {
 const driverOf = (s: SessionSummary) => text(s.game_state?.gpu_driver) ?? text(s.hw_fingerprint?.gpu_driver);
 const gamingMode = (s: SessionSummary): boolean | null => s.gaming_mode_active ?? s.game_state?.gaming_mode_active ?? null;
 
+/** Sonnet r1: how many context fields BOTH sessions recorded (session length aside, which every
+ *  session has). 0 = nothing was compared, so "nothing differs" would be a claim from no data. */
+export function contextComparedCount(baseline: SessionSummary, after: SessionSummary): number {
+  const both = <T>(f: (s: SessionSummary) => T | null | undefined) => f(baseline) != null && f(after) != null;
+  return [
+    both(capWords),
+    both((s) => text(s.game_state?.power_plan_guid)),
+    both((s) => (s.game_state?.power_plan_changed != null ? true : null)),
+    both(driverOf),
+    both((s) => text(s.game_state?.windows_build)),
+    both(gamingMode),
+    both(resolution),
+    both((s) => s.background_secs_excluded),
+  ].filter(Boolean).length;
+}
+
 /** What differed between the two sessions, from recorded context only, most actionable first. */
 export function sessionDrift(baseline: SessionSummary, after: SessionSummary): DriftItem[] {
   const out: DriftItem[] = [];
   const [capB, capA] = [capWords(baseline), capWords(after)];
-  if (capB != null && capA != null && capB !== capA) out.push({ key: "cap", before: capB, after: capA });
+  if (capB != null && capA != null && capsDiffer(capB, capA)) out.push({ key: "cap", before: capB, after: capA });
   const [planB, planA] = [text(baseline.game_state?.power_plan_guid), text(after.game_state?.power_plan_guid)];
   if (planB != null && planA != null && planB.toLowerCase() !== planA.toLowerCase()) out.push({ key: "power-plan" });
   const [chB, chA] = [baseline.game_state?.power_plan_changed === true, after.game_state?.power_plan_changed === true];
@@ -64,12 +90,14 @@ export function sessionDrift(baseline: SessionSummary, after: SessionSummary): D
   // that the other didn't.
   const [bgB, bgA] = [baseline.background_secs_excluded, after.background_secs_excluded];
   if (bgB != null && bgA != null && Math.abs(bgB - bgA) >= DRIFT_BACKGROUND_MIN_SECS) {
+    // Opus r1 NIT: name how much MORE the one session spent behind another window.
     const which = bgB > bgA ? "baseline" : "after";
-    out.push({ key: "background", which, mins: Math.max(1, Math.round(Math.max(bgB, bgA) / 60)) });
+    out.push({ key: "background", which, mins: Math.max(1, Math.round(Math.abs(bgB - bgA) / 60)) });
   }
   const [lenB, lenA] = [baseline.duration_secs, after.duration_secs];
+  const mins = (secs: number) => Math.max(1, Math.round(secs / 60));
   if (lenB > 0 && lenA > 0 && Math.max(lenB, lenA) >= DRIFT_LENGTH_RATIO * Math.min(lenB, lenA))
-    out.push({ key: "length", beforeMins: Math.round(lenB / 60), afterMins: Math.round(lenA / 60) });
+    out.push({ key: "length", beforeMins: mins(lenB), afterMins: mins(lenA) });
   return out;
 }
 
@@ -127,7 +155,10 @@ export function driftWords(
   if (baseline == null || after == null) return null;
   const items = sessionDrift(baseline, after);
   if (items.length === 0)
-    return `${t("lab.experimentBench.drift.nothingDiffers", { game })} ${t("lab.experimentBench.drift.step.asIs", { game })}`;
+    return `${t(
+      contextComparedCount(baseline, after) === 0 ? "lab.experimentBench.drift.noContext" : "lab.experimentBench.drift.nothingDiffers",
+      { game },
+    )} ${t("lab.experimentBench.drift.step.asIs", { game })}`;
   const list = items.map((d) => itemWords(d, t)).join(t("lab.experimentBench.drift.joiner"));
   return `${t("lab.experimentBench.drift.differed", { list })} ${t(`lab.experimentBench.drift.step.${STEP_KEY[items[0].key]}`)}`;
 }

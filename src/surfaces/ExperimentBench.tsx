@@ -446,9 +446,10 @@ export function measuredBandsLine(g: GameNoise, outcome: TrialOutcome | null | u
   return parts.join(" ");
 }
 
-// TG-drift-words: the words for a two-session Trial judged too noisy (its sessions varied more than
-// its band): what Compy recorded differently between the baseline and the after-session, or that
-// nothing did, and one next step. null for any other verdict, a real-play Trial (many sessions a
+// TG-drift-words: the words for a two-session Trial judged too noisy (experiment.rs
+// `with_steady_sessions`: a session swung within itself, its halves further apart than the floor; the
+// row already names which): what Compy recorded differently between or during the baseline and the
+// after-session, or that none of it changed, and one next step. null for any other verdict, a real-play Trial (many sessions a
 // side), or a session Compy no longer holds (nothing honest to compare).
 export function trialDriftWords(
   x: { verdict: string | null; mode?: string | null; game: string; baseline_session_id?: string | null; treatment: { session_id?: string | null } | null },

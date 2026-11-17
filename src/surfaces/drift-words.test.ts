@@ -62,7 +62,7 @@ describe("sessionDrift: one fixture per recorded difference", () => {
     ["windows-build", after({}, { windows_build: "26200.7100" }), "Windows updated (26200.7000 to 26200.7100)", /fresh baseline/],
     ["gaming-mode", after({ gaming_mode_active: true }), "Gaming Mode was off for the baseline and on after", /Gaming Mode set the same way/],
     ["resolution", after({}, { resolution_width: 1920, resolution_height: 1080 }), "the display resolution was 2560×1440 for the baseline and 1920×1080 after", /same display resolution/],
-    ["background", after({ background_secs_excluded: 18 * 60 }), "the game was behind another window for about 18 min of the after-session", /keep the game in front/],
+    ["background", after({ background_secs_excluded: 18 * 60 }), "the game was behind another window for about 18 min more during the after-session", /keep the game in front/],
     ["length", after({ duration_secs: 4200 }), "the baseline ran 30 min and the after-session 70 min", /about the same length/],
   ];
   for (const [key, a, words, step] of cases)
@@ -97,13 +97,38 @@ describe("sessionDrift: one fixture per recorded difference", () => {
     expect(sessionDrift(base(), after({ background_secs_excluded: 30, duration_secs: 3000 }))).toEqual([]);
   });
 
-  it("nothing recorded differs: says the game moved more than the band, with one as-is step (en + zh-CN)", () => {
+  it("nothing recorded differs: the swing came from the game itself, with one as-is step (en + zh-CN)", () => {
     const line = driftWords(base(), after(), "ROB RUN", tEn)!;
     expect(line).toBe(
-      "Nothing Compy recorded differs between the two sessions: ROB RUN simply moved more than the band this Trial was judged on. " +
+      "None of the conditions Compy recorded changed between or during the two sessions, so the swing came from ROB RUN itself. " +
         "Next: play a few more sessions of ROB RUN with nothing changed, so Compy can measure how much it moves, then run the Trial again.",
     );
     expect(driftWords(base(), after(), "ROB RUN", tZh)).toContain("没有任何不同");
+  });
+
+  // Opus r1 MUST-FIX: the backend's cap rule: caps within 3% are the same cap.
+  it("frame caps within 3% of each other are the same cap; a cap whose rate wasn't read is no difference", () => {
+    // An older record may carry a capped state without its rate; the type says at_fps is always set.
+    const capped = (fps?: number) =>
+      ({ frame_cap: { state: "capped" as const, ...(fps != null ? { at_fps: fps } : {}) } }) as Partial<SessionSummary>;
+    expect(sessionDrift(base(capped(144)), after(capped(146)))).toEqual([]);
+    expect(sessionDrift(base(capped(144)), after(capped(145)))).toEqual([]);
+    expect(sessionDrift(base(capped(144)), after(capped(240))).map((d) => d.key)).toEqual(["cap"]);
+    expect(sessionDrift(base(capped(144)), after(capped()))).toEqual([]);
+    expect(sessionDrift(base(capped()), after()).map((d) => d.key)).toEqual(["cap"]); // on vs off
+  });
+
+  // Sonnet r1 SHOULD-FIX: no context recorded on both sides is never "nothing differs".
+  it("no context recorded on both sessions: says it can't tell what differed, never 'nothing differs'", () => {
+    const bare = (over: Partial<SessionSummary>) =>
+      base({ game_state: null, hw_fingerprint: null, frame_cap: null, gaming_mode_active: null, background_secs_excluded: null, ...over });
+    const b = bare({});
+    const a = bare({ started_at: "2026-11-16T11:00:00Z" });
+    const line = driftWords(b, a, "ROB RUN", tEn)!;
+    expect(line).toMatch(/^Compy recorded no conditions it can compare for these two sessions, so it can't say what changed\. Next:/);
+    expect(line).not.toMatch(/None of the conditions/);
+    expect(line.match(/Next:/g)).toHaveLength(1);
+    expect(driftWords(b, a, "ROB RUN", tZh)).toContain("无法说明哪里不同");
   });
 
   it("a session Compy no longer holds: no words at all", () => {

@@ -866,7 +866,8 @@
     "drift": {
       "differed": "What Compy recorded differently between the two sessions: {{list}}.",
       "joiner": "; ",
-      "nothingDiffers": "Nothing Compy recorded differs between the two sessions: {{game}} simply moved more than the band this Trial was judged on.",
+      "nothingDiffers": "None of the conditions Compy recorded changed between or during the two sessions, so the swing came from {{game}} itself.",
+      "noContext": "Compy recorded no conditions it can compare for these two sessions, so it can't say what changed.",
       "capOff": "off",
       "capOn": "on",
       "capOnAt": "on at {{fps}} fps",
@@ -884,8 +885,8 @@
         "gamingModeOffThenOn": "Gaming Mode was off for the baseline and on after",
         "resolution": "the display resolution was {{before}} for the baseline and {{after}} after",
         "background": {
-          "baseline": "the game was behind another window for about {{mins}} min of the baseline",
-          "after": "the game was behind another window for about {{mins}} min of the after-session"
+          "baseline": "the game was behind another window for about {{mins}} min more during the baseline",
+          "after": "the game was behind another window for about {{mins}} min more during the after-session"
         },
         "length": "the baseline ran {{before}} min and the after-session {{after}} min"
       },

@@ -855,7 +855,8 @@
     "drift": {
       "differed": "Compy 记录到两次对局之间的不同之处：{{list}}。",
       "joiner": "；",
-      "nothingDiffers": "Compy 记录的内容在两次对局之间没有任何不同：只是 {{game}} 的波动超出了这次测试所依据的范围。",
+      "nothingDiffers": "Compy 记录的各项条件在两次对局之间和对局过程中都没有任何不同，因此波动来自 {{game}} 本身。",
+      "noContext": "这两次对局没有 Compy 可以比较的记录条件，因此无法说明哪里不同。",
       "capOff": "关闭",
       "capOn": "开启",
       "capOnAt": "开启（{{fps}} fps）",
@@ -873,8 +874,8 @@
         "gamingModeOffThenOn": "游戏模式在基准对局时关闭，之后开启",
         "resolution": "显示分辨率在基准对局时为 {{before}}，之后为 {{after}}",
         "background": {
-          "baseline": "在基准对局中，游戏约有 {{mins}} 分钟处于其他窗口之后",
-          "after": "在更改后的对局中，游戏约有 {{mins}} 分钟处于其他窗口之后"
+          "baseline": "在基准对局中，游戏处于其他窗口之后的时间多出约 {{mins}} 分钟",
+          "after": "在更改后的对局中，游戏处于其他窗口之后的时间多出约 {{mins}} 分钟"
         },
         "length": "基准对局持续 {{before}} 分钟，更改后的对局持续 {{after}} 分钟"
       },
