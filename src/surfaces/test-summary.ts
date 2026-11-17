@@ -329,13 +329,13 @@ export function fellOn(v: number, band: number, rule: FallRule): boolean | null 
   return d == null ? null : d === "down";
 }
 
-/** Which number a Maximum FPS Worse fell on (the verdict says one of them did): the average when it
- *  fell by the record's rule, or when the record can't call it and the 1% low clearly didn't fall;
- *  "either" when neither fall can be called (s37 opus MUST-FIX: then neither is named); otherwise the
- *  1% low, as before. */
-export function worseOn(avgFell: boolean | null, lowFell: boolean | null): "avg" | "low" | "either" {
-  if (avgFell === true || (avgFell == null && lowFell === false)) return "avg";
-  return avgFell == null && lowFell == null ? "either" : "low";
+/** Which number a Maximum FPS Worse fell on: the average when it fell by the record's rule, or when
+ *  the record can't call it and the 1% low didn't clearly fall past the band. s37 opus r2 MUST-FIX:
+ *  the stored verdict settles a fall the rule can't call. Read the band both ways, neither number
+ *  fell, so only the matching fall can have called it Worse, and there the average fell (the engine
+ *  checks it first). Otherwise the 1% low, which fell past the band either way. */
+export function worseOn(avgFell: boolean | null, lowFell: boolean | null): "avg" | "low" {
+  return avgFell === true || (avgFell == null && lowFell !== true) ? "avg" : "low";
 }
 
 /** CR-lesson-fall-band: the fall rules a Trial record was judged on (experiment.rs / realplay.rs).
@@ -374,6 +374,7 @@ export function lessonRuleFor(
   if (!Number.isFinite(low1Pct) || !Number.isFinite(bandPct) || (avgPct != null && !Number.isFinite(avgPct))) return null;
   // CR-lesson-fall-band: each fall is read at the fall it was judged at (`falls`); a 1% low fall the
   // rule can't call is no lesson, an average fall it can't call reads the average as not compared.
+  // Deliberately conservative (s37 opus r2 NIT): a lesson reads the numbers, not the verdict.
   const lowDir = dirOf(low1Pct, bandPct, falls.low);
   if (lowDir == null) return null;
   const avgBand = avgBandPct != null && Number.isFinite(avgBandPct) && avgBandPct >= 0 ? avgBandPct : null;
@@ -799,10 +800,8 @@ export function summarizeGame(
 
 export type ResultOutcome = "recommended" | "max-fps";
 
-/** Why a result kept or put back the change, in the words of its own outcome's rule.
- *  "fall-uncalled" (CR-lesson-fall-band, s37 opus SHOULD-FIX): the average was compared, but the
- *  record doesn't say at which fall it was judged, and its fall sits between the two. */
-export type ResultReason = "low-up" | "avg-up" | "low-fell" | "avg-fell" | "low-flat" | "avg-flat" | "avg-unknown" | "fall-uncalled";
+/** Why a result kept or put back the change, in the words of its own outcome's rule. */
+export type ResultReason = "low-up" | "avg-up" | "low-fell" | "avg-fell" | "low-flat" | "avg-flat" | "avg-unknown";
 
 export type OutcomeResult = {
   outcome: ResultOutcome;
@@ -811,7 +810,7 @@ export type OutcomeResult = {
   /** It judged the change Better under this outcome. */
   keeps: boolean;
   reason: ResultReason;
-  /** The delta the reason names (null only for avg-unknown and fall-uncalled). */
+  /** The delta the reason names (null only for avg-unknown). */
   pct: number | null;
 };
 
@@ -857,10 +856,10 @@ function resultOf(x: SummaryExperiment): OutcomeResult | null {
     const avgBand = avgBandOf(x);
     if (low > band && (avg == null || avgBand == null)) return r("avg-unknown", null);
     if (low > band && avg != null && avgBand != null) {
+      // A No change whose 1% low rose past the band was the average's veto, so a fall the record's
+      // rule can't call is settled by the verdict: it fell (s37 opus r2 MUST-FIX).
       const avgDir = dirOf(avg, avgBand, falls.avg);
-      if (avgDir === "down") return r("avg-fell", avg);
-      // A fall the record's rule can't call: Compy can't say the average fell, nor that it didn't.
-      if (avgDir == null) return r("fall-uncalled", null);
+      if (avgDir === "down" || avgDir == null) return r("avg-fell", avg);
     }
     return r("low-flat", low);
   }
@@ -869,11 +868,11 @@ function resultOf(x: SummaryExperiment): OutcomeResult | null {
   const maxAvgBand = avgBandOf(x);
   if (x.verdict === "regressed") {
     const avgDir = avg != null && maxAvgBand != null ? dirOf(avg, maxAvgBand, falls.avg) : "flat";
-    if (avgDir === "down") return r("avg-fell", avg);
     const lowBand = lowBandOf(x);
     const lowDir = lowBand != null ? dirOf(low, lowBand, falls.low) : null;
-    // Neither fall can be called on the record's rule: the reason isn't known.
-    return avgDir == null && lowDir !== "down" ? r("fall-uncalled", null) : r("low-fell", low);
+    const fell = (d: Dir | null) => (d == null ? null : d === "down");
+    // The verdict settles a fall the record's rule can't call (`worseOn`).
+    return avg != null && worseOn(fell(avgDir), fell(lowDir)) === "avg" ? r("avg-fell", avg) : r("low-fell", low);
   }
   return avg == null ? r("avg-unknown", null) : r("avg-flat", avg);
 }

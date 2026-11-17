@@ -439,18 +439,8 @@ export function realPlayResult(exp: RealPlayRecord, game: string, t: Translate):
       // Maximum FPS is put back when the average OR the 1% low fell beyond the band: name the one that did.
       // CR-lesson-fall-band (s37 sonnet SHOULD-FIX): each fall read at the fall it was judged at.
       const falls = realPlayFalls(exp);
-      const side = maxFps ? worseOn(fellOn(avg, band, falls.avg), fellOn(low, band, falls.low)) : "low";
-      // Neither fall can be called on this record's rule: both numbers, naming neither as the one.
-      if (side === "either")
-        return t("lab.experimentBench.journey.realPlay.likelyWorseEither", {
-          action,
-          avg: one(Math.abs(avg)),
-          low: one(Math.abs(low)),
-          with: counted,
-          before,
-          band: one(band),
-        });
-      const avgSide = side === "avg";
+      // A fall the rule can't call is settled by the verdict (`worseOn`).
+      const avgSide = maxFps && worseOn(fellOn(avg, band, falls.avg), fellOn(low, band, falls.low)) === "avg";
       return t("lab.experimentBench.journey.realPlay.likelyWorse", {
         action,
         metric: metric(avgSide),
@@ -462,8 +452,9 @@ export function realPlayResult(exp: RealPlayRecord, game: string, t: Translate):
     }
     if (exp.verdict === "no-change") {
       // Recommended's "no clear win": the 1% low rose beyond the band but the average fell beyond it
-      // (CR-lesson-fall-band: at the fall it was judged at; one the record can't call isn't named).
-      if (!maxFps && low > band && fellOn(avg, band, realPlayFalls(exp).avg) === true)
+      // (CR-lesson-fall-band: at the fall it was judged at; a No change with the 1% low past the band
+      // was the average's veto, so a fall the record's rule can't call is settled by the verdict).
+      if (!maxFps && low > band && fellOn(avg, band, realPlayFalls(exp).avg) !== false)
         return t("lab.experimentBench.journey.realPlay.noClearWin", { action, low: one(low), avg: one(Math.abs(avg)) });
       return t("lab.experimentBench.journey.realPlay.noClearDifference", { action, metric: metric(maxFps), with: counted, before, band: one(band) });
     }

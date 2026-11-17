@@ -642,7 +642,9 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
           ? "receiptRuleMaxPutBack"
           : "receiptRuleMaxKept"
         : x.verdict === "regressed"
-          ? { avg: "receiptRuleMaxAvgFell", low: "receiptRuleLowFell", either: "receiptRuleMaxEitherFell" }[worseOn(avgFell(), lowFell())]
+          ? worseOn(avgFell(), lowFell()) === "avg"
+            ? "receiptRuleMaxAvgFell"
+            : "receiptRuleLowFell"
           : "receiptRuleMaxInside";
     if (rp)
       return t("lab.experimentBench.journey.realPlay.comparedMaxFps", {
@@ -2286,7 +2288,6 @@ const RESULT_REASON_KEY: Record<OutcomeResult["reason"], string> = {
   "low-flat": "lowFlat",
   "avg-flat": "avgFlat",
   "avg-unknown": "avgUnknown",
-  "fall-uncalled": "fallUncalled",
 };
 const RESULT_OUTCOME_KEY: Record<ResultOutcome, string> = { recommended: "recommended", "max-fps": "maxFps" };
 
