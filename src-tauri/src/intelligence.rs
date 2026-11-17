@@ -18,7 +18,7 @@
 //     mirroring comparison.rs semantics.
 //   - Metric judgment: the game's measured as-is band (P4-judge-noisy; `MIN_CLAIM_PCT` only as the
 //     fallback number when none is measured, and then nothing is called) judged on the 1%-low delta, boundary
-//     inclusive (a delta of exactly 3% is "no meaningful difference"); average FPS is
+//     inclusive (a delta of exactly the band is "no meaningful difference"); average FPS is
 //     reference-only; "No meaningful difference" is a first-class verdict.
 
 use serde::{Deserialize, Serialize};
@@ -3716,7 +3716,7 @@ mod tests {
         let r = report(&inputs(None));
         assert_eq!(r.verdict, "inconclusive");
         let edge = r.evidence_graph.edges.iter().find(|e| e.explanation.contains("1% low moved")).expect("edge");
-        assert!(edge.explanation.contains("not judged") && !edge.explanation.contains("band."), "{}", edge.explanation);
+        assert!(edge.explanation.contains("not judged") && !edge.explanation.contains("measured noise band"), "{}", edge.explanation);
     }
 
     #[test]
