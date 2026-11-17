@@ -3706,18 +3706,56 @@ pub(crate) fn plan_listed_in(guids: Option<Vec<String>>, guid: &str) -> Option<b
 /// scheme that still exists, so a plan the list omits is only gone when this query also fails.
 /// `None` = the query couldn't be run or read: never "gone".
 fn power_plan_queried(guid: &str) -> Option<bool> {
-    let status = quiet_command("powercfg").args(["/query", guid.trim()]).output().ok()?.status;
-    plan_query_read(status.code())
+    let query = |g: &str| {
+        quiet_command("powercfg").args(["/query", g]).output().ok().map(|o| PowercfgRead {
+            code: o.status.code(),
+            text: format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)).trim().to_string(),
+        })
+    };
+    let plan = query(guid.trim())?;
+    if plan.code == Some(0) {
+        return Some(true);
+    }
+    // s35 opus r1 MUST-FIX: exit 1 is powercfg's catch-all failure, so a failed plan query alone is
+    // not "gone". Two controls: the nil GUID (a plan that can't exist) must fail the same way, and
+    // the active plan must still answer (the power service works). Read-only, no elevation.
+    let nil = query(NIL_PLAN_GUID)?;
+    let current = query("SCHEME_CURRENT")?;
+    plan_query_read(&plan, &nil, current.code == Some(0))
 }
 
-/// PURE (CR-core-parking-hidden-plan): what a `powercfg /query <plan>` exit code says. 0 = the
-/// plan exists; 1 = powercfg ran and refused the plan ("does not exist"); anything else, or no
-/// exit code at all (killed), is unread.
-pub(crate) fn plan_query_read(code: Option<i32>) -> Option<bool> {
-    match code {
-        Some(0) => Some(true),
-        Some(1) => Some(false),
-        _ => None,
+/// The all-zero GUID: never a power scheme, so its query shows how powercfg says "does not exist"
+/// on this PC, in this PC's language.
+const NIL_PLAN_GUID: &str = "00000000-0000-0000-0000-000000000000";
+
+/// One `powercfg /query` run: its exit code (`None` = no code) and its printed text, trimmed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PowercfgRead {
+    pub(crate) code: Option<i32>,
+    pub(crate) text: String,
+}
+
+/// PURE (CR-core-parking-hidden-plan): whether the plan exists, from its query and two controls.
+/// Exit 0 = it exists. It is gone only when its query failed exactly as the nil GUID's did (both
+/// exit 1, the same non-empty words) while the active plan still answered. Anything else (another
+/// code, no code, different or no words, a power service that didn't answer) is unread: never gone.
+pub(crate) fn plan_query_read(plan: &PowercfgRead, nil: &PowercfgRead, current_answered: bool) -> Option<bool> {
+    if plan.code == Some(0) {
+        return Some(true);
+    }
+    let same_refusal = plan.code == Some(1) && nil.code == Some(1) && !plan.text.is_empty() && plan.text == nil.text;
+    (same_refusal && current_answered).then_some(false)
+}
+
+#[cfg(test)]
+mod plan_query_live_tests {
+    // s35 opus r1 SHOULD-FIX: the exit-code reading against the real powercfg (read-only queries).
+    #[test]
+    #[ignore = "manual: read-only powercfg queries on a real PC"]
+    fn qa_the_live_plan_query_finds_the_active_plan_and_never_the_nil_plan() {
+        let active = super::current_power_plan_guid().expect("an active plan");
+        assert_eq!(super::power_plan_queried(&active), Some(true));
+        assert_eq!(super::power_plan_queried(super::NIL_PLAN_GUID), Some(false));
     }
 }
 
@@ -4823,9 +4861,8 @@ pub(crate) fn core_parking_undo_step(
         }
         // CR-core-parking-plan-gone: the setting lived inside that plan, so there is no plan left to
         // put it back on (a copy the user made of it is a different plan). Writing the value onto
-        // another plan would be a quiet lie, and
-        // refusing for good would leave the row "applied" forever; the row closes as nothing to
-        // restore instead, with that reason on its receipt.
+        // another plan would be a quiet lie, and refusing for good would leave the row "applied"
+        // forever; the row closes as nothing to restore instead, with that reason on its receipt.
         return Ok(CoreParkingUndo::PlanGone { plan_guid: plan.to_ascii_lowercase() });
     }
     Ok(CoreParkingUndo::Run(core_parking_plan_script(plan, a, d, is_active)))

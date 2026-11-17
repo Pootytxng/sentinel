@@ -3605,12 +3605,20 @@ mod receipt_commit_tests {
     }
 
     #[test]
-    fn the_plan_query_read_tells_a_refused_plan_from_an_unread_query() {
-        assert_eq!(plan_query_read(Some(0)), Some(true));
-        assert_eq!(plan_query_read(Some(1)), Some(false), "powercfg ran and said the plan doesn't exist");
-        assert_eq!(plan_query_read(None), None, "killed: unread");
-        assert_eq!(plan_query_read(Some(-1)), None);
-        assert_eq!(plan_query_read(Some(5)), None, "an access error is not a gone plan");
+    fn the_plan_query_read_calls_a_plan_gone_only_when_it_fails_exactly_as_the_nil_plan_does() {
+        // The words this PC's powercfg prints for a scheme that doesn't exist (measured s35).
+        const GONE: &str = "The power scheme, subgroup or setting specified does not exist.";
+        let read = |code: Option<i32>, text: &str| PowercfgRead { code, text: text.to_string() };
+        let nil = read(Some(1), GONE);
+        assert_eq!(plan_query_read(&read(Some(0), "Power Scheme GUID: ..."), &nil, true), Some(true));
+        assert_eq!(plan_query_read(&read(Some(1), GONE), &nil, true), Some(false), "refused exactly as the nil plan");
+        // s35 opus r1 MUST-FIX: exit 1 is powercfg's catch-all; anything but the same refusal is unread.
+        assert_eq!(plan_query_read(&read(Some(1), "Access is denied."), &nil, true), None, "other words");
+        assert_eq!(plan_query_read(&read(Some(1), ""), &read(Some(1), ""), true), None, "no words");
+        assert_eq!(plan_query_read(&read(Some(1), GONE), &read(Some(0), ""), true), None, "the nil control didn't refuse");
+        assert_eq!(plan_query_read(&read(Some(1), GONE), &nil, false), None, "the power service didn't answer");
+        assert_eq!(plan_query_read(&read(None, ""), &nil, true), None, "killed: no exit code");
+        assert_eq!(plan_query_read(&read(Some(-1), GONE), &nil, true), None);
     }
 
     #[test]
