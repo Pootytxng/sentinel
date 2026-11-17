@@ -10415,6 +10415,14 @@ mod refuse_early_tests {
         // own band calls it a fall.
         let own = pair_verdict(&pair_case(30.0, -15.5, TrialOutcome::Recommended), Ok(WIDE));
         assert_eq!(own.verdict, "no-change", "judged on the average's own band: {}", own.note);
+        // Opus r2 SHOULD-FIX: and the receipt names each number's own band.
+        assert!(
+            own.note.contains(
+                "the 1% low +30% against a +20.6% / -17% band, the average frame rate -15.5% against a +16.4% / -14% band"
+            ),
+            "{}",
+            own.note
+        );
     }
 
     // Replaces `the_picked_outcome_is_stored_additively_and_an_older_compy_still_loads_the_record`'s
@@ -10447,7 +10455,8 @@ mod refuse_early_tests {
         let o = pair_verdict(&case, Ok(WIDE));
         assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false), "{}", o.note);
         assert_eq!(o.stop_reason.as_deref(), Some("frame-cap-changed"));
-        assert!(o.note.contains("The frame cap changed between these sessions"), "{}", o.note);
+        // Opus r2 SHOULD-FIX: and the receipt says which session was the capped one.
+        assert!(o.note.contains("in the baseline no cap held it; in the after-session held at about 240 fps"), "{}", o.note);
     }
 
     // Replaces `the_start_measures_the_band_and_refuses_when_it_cant`'s pin on
