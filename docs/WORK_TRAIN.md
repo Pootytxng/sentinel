@@ -620,10 +620,23 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       keyed on the TS side: queued as CR-zh-readiness-words. Review sonnet r1 REQUEST-CHANGES (MUST-FIX taken: dated in
       the machine's zone, and the meta lines still used the English display date; SHOULD-FIX taken: the game clause);
       r2 in the session log. The zh band test fails on main's HomeGlass.
-- [ ] **CR-zh-readiness-words** (CR-zh-backend-home finding) zh-CN Health's limiter card prints readiness.rs /
+- [x] **CR-zh-readiness-words** (CR-zh-backend-home finding) zh-CN Health's limiter card prints readiness.rs /
       priorities.rs English ("Power plan isn't performance-oriented", "Active plan "Synez Power Plan". A performance
       plan …"). Key each readiness check by (id, status) on the TS side with `value` (the plan or other name, never
       translated) as a placeholder, en mirroring Rust; unknown (id, status) keeps the Rust text. TS.
+      Done `79b52634` (s36, TS only, not installed): `readinessWords` (backend-words.ts) mirrors the exact English of
+      the power-plan (4 variants), monitor-refresh (4) and GPU-driver-age (5) checks; (id, status) alone is not unique
+      (two Unknown sentences per check), so the label must match and the detail must match its mirror, the plan / GPU
+      name and the numbers lifted out of the sentence and put back untranslated (matching on the sentence, not
+      `value`: the GPU name is not in `value`). Health's limiter card uses it only when its text IS that readiness
+      check's text. Anything unmatched is shown as sent; English unchanged. A test pins every mirror against
+      readiness.rs and the en locale; the HomeGlass zh test fails on the old code. Screen check (zh-CN Health) owed at
+      the next desk install. Left: CR-zh-readiness-rest.
+- [ ] **CR-zh-readiness-rest** (left by CR-zh-readiness-words) The other limiter rows are still English in zh-CN: the
+      install-drive (9 sentences), applied-changes (drift counts + kept-outside titles) and fps-monitoring checks, and
+      priorities.rs's own rows (pending safe tweaks, startup load, Memory Integrity); and the console / Check rows print
+      the same readiness label and detail. Mirror them in `readinessWords` (or the priorities rows by id) the same way.
+      TS.
 - [ ] **CR-plan-read-prompt-write** (CR-gm-stop-busy r1 opus SHOULD-FIX 3, pre-existing) Applies that read
       `SCHEME_CURRENT` before a UAC prompt and write it after (e.g. the CPMINCORES script, actions.rs ~4570) never
       took Gaming Mode's gate, so a session start or stop during the prompt changes which plan they write.
@@ -2561,30 +2574,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-11 ~20:52-23:45 (coordinator-assigned s20, CODE-ONLY with five FULL windows, no game; server restart
-  ~22:31-22:54): CR-gm-spans-followups (c)(d)(e) `4da520ea`, `ba4be8f0` (a plain apply/undo of a setting Gaming Mode
-  holds is refused); CR-bench-preapply-read `a2d49422`; CR-tip-see-through-2 `8c2566af`; CR-ultimate-followups (a)(e)
-  `fef0a937` ((b)(c)(d)(f) parked); CR-gm-service-suspend-rows `bdd77f41`, `4d7c157d`; P9-gpu-fit-unknowns `15a67af1`;
-  P9-ssd-fit-unknowns `6a61e7ce`; CR-gm-skipped-line `e502b93b`, `53b8f843`; CR-live-changes-twice `359da4f7`, `971058dd`. Two
-  reviews (opus + sonnet) for each rollback-boundary item, one sonnet for the UI ones; no MUST-FIX. cargo 1869/0,
-  clippy clean, tsc 0, full vitest 535/538 (3 site-app suites) per item. Pushed `0afbfb2c` (gate PASS) after
-  `ddada688`; installed `0afbfb2c` (runtime proof attempt 1, Synez before/after). Self-review view-1111c (a15986b8):
-  FAIL (tip see-through: ancestor opacity) → fixed; view-1111d (0afbfb2c): tip PASS, verdict FAIL on a duplicated
-  count (fixed) and wording (CR-view-1111d-wording); teardown CLEAN both times. The 23:00 docs push was stopped when
-  the owner returned; pushed `25805ba2` at 23:47 (gate PASS) and installed it at 23:50 (runtime proof attempt 1,
-  Synez before/after; not screen-checked); this line's commit pushes next.
-- 2026-11-12 ~23:57-01:51 (coordinator-assigned s21, CODE-ONLY with one FULL window 00:03-00:47, no game until ROB RUN at
-  01:42; server restart ~00:58): CR-view-1111d-wording `d46b2603`, `75b7e600` (merge `b27552f8`); CR-gm-stop-busy `3664f460`,
-  `f80082c2`, `2a83ea3f`, `91a043fb` (merge `ff478b88`); CR-fix-needs-trial-store `28292d57`, `a0aea6a3`, `121872c2` (merge
-  `ee0b22b3`); CR-range3-nits (a)(b) `f045f438`, `43f692e0` (merge `8eaa5e1b`; (c) parked). Reviews: A sonnet APPROVE-WITH-NITS;
-  stop-busy r1 opus REQUEST-CHANGES (MUST-FIX USB/PCIe with the plan, taken) + sonnet APPROVE-WITH-NITS, r2 both
-  APPROVE-WITH-NITS; trial-store r1 opus REQUEST-CHANGES (no MUST-FIX) + sonnet APPROVE-WITH-NITS, r2 both APPROVE-WITH-NITS;
-  nits sonnet APPROVE-WITH-NITS. cargo 1873/0, clippy clean, tsc 0, full vitest 535/538 (3 site-app suites) per item. Pushed
-  `119d07f8` and `b27552f8` (gate PASS both); installed `b27552f8` (runtime proof attempt 1, Synez before/after). Self-review
-  view-1112a: r1 FAIL (contrast/tip evidence, footer), r2 FAIL (footer "Every change reversible" only; P9 lines unverified, no
-  limiter on this rig); teardown CLEAN twice; queued CR-footer-reversible, CR-hist-today, CR-zh-backend-home,
-  CR-plan-read-prompt-write and four Phase 9 slices. P9-summary-gpu-limit parked UNTESTED on its branch (`64802f38`) when the
-  game started. Not pushed: `7bba7d3e` and everything after it.
 - 2026-11-12 ~06:50-10:10 (s22, coordinator-assigned, CODE-ONLY nearly throughout; no game seen): landed on main, each
   in its own worktree with a full vitest 537/540 (3 site-app suites) or better: CR-footer-reversible `7dfe87ef`,
   CR-hist-today `f1c4ef7b`, P9-summary-gpu-limit `0e3091a4`, CR-zh-backend-home `28f396e5`, CR-gm-restore-partial
@@ -2718,6 +2707,11 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   timing flake in tree-kill-stale-parent-guard under load, passed on retry). Installed
   `8c818b0d348ed190b430abdddadc46e21ea432d5` (runtime proof attempt 1, Synez plan before/after); RELEASE_STATE
   re-stamped. Tester folder untouched.
+- 2026-11-17 s36 (scheduled, FULL; owner idle, no game): CR-zh-readiness-words `79b52634` (merged --no-ff with this
+  docs commit; queued CR-zh-readiness-rest). TS only, no rollback logic: no review. tsc 0; full vitest 547/551 files
+  (the 3 site-app suites + the i18n orphan-key guard, fixed by writing the keys whole, then its suite passes). The two
+  `train-*` folders preflight lists are the empty leftovers inventoried under s31 follow-ups. Pushed yes (this line's
+  commit). Not installed (Friday install, or the next FULL session); zh-CN screen check owed then.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
