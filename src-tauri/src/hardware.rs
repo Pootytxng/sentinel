@@ -2737,8 +2737,13 @@ fn fingerprint_of(gpu: &str, gpu_driver: &str, ram_gb: u32, display: &str) -> Hw
 
 /// Fingerprint the current rig from the cached hardware snapshot. Local-only; no egress.
 pub(crate) fn current_fingerprint() -> HwFingerprint {
-    let hw = get_hardware_info();
-    let primary = primary_gpu(&hw);
+    fingerprint_from_info(&get_hardware_info())
+}
+
+/// PURE: the rig fingerprint of one hardware read (TG-preflight NIT: a caller that already holds
+/// the read fingerprints that same read instead of taking a second one).
+pub(crate) fn fingerprint_from_info(hw: &HardwareInfo) -> HwFingerprint {
+    let primary = primary_gpu(hw);
     let ram_gb = (hw.ram_total_bytes as f64 / 1024f64.powi(3)).round() as u32;
     let display = hw
         .display

@@ -170,8 +170,18 @@ impl GameStateFingerprint {
         collected_at: &str,
         gaming_mode_active: Option<bool>,
     ) -> Self {
-        let hw = crate::hardware::get_hardware_info();
-        let fp = crate::hardware::current_fingerprint();
+        Self::collect_v1_from(&crate::hardware::get_hardware_info(), process_name, collected_at, gaming_mode_active)
+    }
+
+    /// PURE: [`Self::collect_v1`] from one hardware read (TG-preflight NIT: the hardware is read
+    /// once, so the driver and fingerprint hash come from the same snapshot as the display fields).
+    pub(crate) fn collect_v1_from(
+        hw: &crate::hardware::HardwareInfo,
+        process_name: &str,
+        collected_at: &str,
+        gaming_mode_active: Option<bool>,
+    ) -> Self {
+        let fp = crate::hardware::fingerprint_from_info(hw);
 
         let (resolution_width, resolution_height, display_refresh_hz) = hw
             .display
@@ -267,6 +277,32 @@ mod tests {
         assert!(g.upscaler.is_none());
         assert!(g.frame_generation_state.is_none());
         assert!(g.active_compy_change_ids.is_empty());
+    }
+
+    // TG-preflight NIT (s35): one hardware read gives the display fields, the driver and the rig hash.
+    #[test]
+    fn collect_from_one_read_takes_the_driver_and_hash_from_that_same_read() {
+        use crate::hardware::{DisplayInfo, GpuInfo, HardwareInfo};
+        let gpu = |name: &str, vram: u64, drv: &str| GpuInfo {
+            name: name.into(),
+            vram_bytes: vram,
+            driver_version: drv.into(),
+            ..GpuInfo::default()
+        };
+        let hw = HardwareInfo {
+            gpus: vec![gpu("iGPU", 1, "1.0"), gpu("RX 7800 XT", 16 << 30, "32.0.21025")],
+            display: Some(DisplayInfo { width: 2560, height: 1440, current_refresh_rate_hz: 165, max_refresh_rate_hz: 165, hdr_capable: false }),
+            ram_total_bytes: 32 << 30,
+            ..HardwareInfo::default()
+        };
+        let g = GameStateFingerprint::collect_v1_from(&hw, "ROB RUN.exe", "2026-11-17T10:00:00Z", None);
+        let fp = crate::hardware::fingerprint_from_info(&hw);
+        assert_eq!(g.gpu_driver.as_deref(), Some("32.0.21025"), "the primary (most-VRAM) card's driver");
+        assert_eq!(g.hardware_fingerprint_hash.as_deref(), Some(fp.hash.as_str()));
+        assert_eq!((g.resolution_width, g.resolution_height, g.display_refresh_hz), (Some(2560), Some(1440), Some(165)));
+        // A read with no card and no display records nothing it didn't read.
+        let bare = GameStateFingerprint::collect_v1_from(&HardwareInfo::default(), "x.exe", "t", None);
+        assert!(bare.gpu_driver.is_none() && bare.resolution_width.is_none() && bare.display_refresh_hz.is_none());
     }
 
     const BAL: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";

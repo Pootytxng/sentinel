@@ -1,5 +1,5 @@
 import type { AppliedChange, ChangedBeforeIncident } from "../types";
-import { liveChangeGroups } from "../data/live-changes";
+import { hasUndo, liveChangeGroups } from "../data/live-changes";
 import { isUnrecordedUndo } from "../data/rollback-error";
 
 // P6-restore: "Put back how it was on <date>" for one incident's "Changed before this" block.
@@ -37,6 +37,8 @@ export type RestorePlan = {
   turnedOnAgain: string[];
   /** Window changes Compy can't confirm are on now. */
   unconfirmed: string[];
+  /** s35: window changes that are on, but with an in-window row that has no saved undo. */
+  noSavedUndo: string[];
 };
 
 const APPLY_ID = "apply:";
@@ -64,11 +66,18 @@ export function restorePlan(
   const unsureByRec = new Map(cantConfirm.map((c) => [c.rec_id, c]));
 
   const groups: RestoreGroup[] = [];
+  const noSavedUndo = new Map<string, string>();
   for (const live of active) {
     if (!inWindow.has(live.id)) continue;
     const rows = changes
       .filter((c) => c.rec_id === live.rec_id && c.status === "applied" && inWindow.has(c.id))
       .sort(newestFirst);
+    // s35: a row with no saved undo can't be undone, and undoing only the rows that can would stop
+    // at a middle state, so the whole change is left out and named, never offered and then failed.
+    if (rows.some((c) => !hasUndo(c))) {
+      noSavedUndo.set(live.rec_id, live.rec_title);
+      continue;
+    }
     groups.push({
       recId: live.rec_id,
       title: live.rec_title,
@@ -76,7 +85,7 @@ export function restorePlan(
       restoresLabel: rows[rows.length - 1]?.restores_label ?? null,
     });
   }
-  const offered = new Set(groups.map((g) => g.recId));
+  const offered = new Set([...groups.map((g) => g.recId), ...noSavedUndo.keys()]);
 
   const windowEnd = ms(cb.window_end);
   const turnedOnAgain = new Map<string, string>();
@@ -92,13 +101,14 @@ export function restorePlan(
     }
     // Otherwise it is off now (read off, or rolled back since): nothing to put back.
   }
-  if (groups.length === 0 && turnedOnAgain.size === 0 && unconfirmed.size === 0) return null;
+  if (groups.length === 0 && turnedOnAgain.size === 0 && unconfirmed.size === 0 && noSavedUndo.size === 0) return null;
   return {
     date: cb.anchor.started_at,
     groups,
     steps: groups.flatMap((g) => g.rows).sort(newestFirst),
     turnedOnAgain: [...turnedOnAgain.values()],
     unconfirmed: [...unconfirmed.values()],
+    noSavedUndo: [...noSavedUndo.values()],
   };
 }
 

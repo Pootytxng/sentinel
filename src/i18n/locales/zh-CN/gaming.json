@@ -326,6 +326,7 @@
         "trialUnknown": "Compy 无法确认是否有试验正在进行,因此现在不会在这里撤销任何更改。",
         "turnedOnAgain": "未列出:{{titles}}。这次崩溃之后它又被重新开启,因此 Compy 不会在这里撤销它。",
         "notLive": "未列出:{{titles}}。Compy 无法确认这些更改仍然生效,因此不会在这里撤销它们。",
+        "noSavedUndo": "未列出:{{titles}}。Compy 没有为这些更改保存撤销记录,因此无法在这里把它们恢复原样。",
         "notRecorded": "这项变化不是 Compy 做的,Compy 也没有记录原来的状态,因此无法恢复。",
         "summaryAll_other": "全部 {{count}} 次撤销已完成。",
         "summaryPartial": "{{total}} 次撤销中完成了 {{done}} 次。Compy 在下面出问题的那一项停了下来;没有撤销的更改仍然生效,你可以在「已应用与历史记录」中撤销。",

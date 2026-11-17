@@ -69,6 +69,31 @@ describe("restorePlan", () => {
     expect(plan.unconfirmed, "the older row of an offered change is not 'not offered'").toEqual([]);
   });
 
+  // s35: a row with no saved undo was offered, and its undo could only fail.
+  it("never offers a change with an in-window row that has no saved undo, and names it", () => {
+    const plan = restorePlan(
+      cb([apply("a1", "2026-10-23T17:00:00Z"), apply("b1", "2026-10-23T18:00:00Z"), apply("c1", "2026-10-23T18:30:00Z"), apply("c2", "2026-10-23T19:00:00Z")]),
+      [
+        row("a1", "a", "2026-10-23T17:00:00Z"),
+        row("b1", "b", "2026-10-23T18:00:00Z", { undo_contract: false }),
+        // The newest apply has an undo, but the older one doesn't: undoing only the newest would stop halfway.
+        row("c1", "c", "2026-10-23T18:30:00Z", { undo_contract: false }),
+        row("c2", "c", "2026-10-23T19:00:00Z"),
+      ],
+    )!;
+    expect(plan.groups.map((g) => g.recId)).toEqual(["a"]);
+    expect(plan.steps.map((s) => s.id)).toEqual(["a1"]);
+    expect([...plan.noSavedUndo].sort()).toEqual(["B", "C"]);
+    expect(plan.unconfirmed).toEqual([]);
+    expect(plan.turnedOnAgain).toEqual([]);
+    // Only such a change in the window: the plan still says why nothing is offered.
+    const only = restorePlan(cb([apply("b1", "2026-10-23T18:00:00Z")]), [
+      row("b1", "b", "2026-10-23T18:00:00Z", { undo_contract: false }),
+    ])!;
+    expect(only.steps).toEqual([]);
+    expect(only.noSavedUndo).toEqual(["B"]);
+  });
+
   it("never undoes an apply from before the window, or one already rolled back", () => {
     const plan = restorePlan(cb([apply("a2", "2026-10-23T19:00:00Z")]), [
       row("a0", "a", "2026-10-20T10:00:00Z"),

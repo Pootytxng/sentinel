@@ -830,6 +830,11 @@ function RestoreOffer({
           {t("gaming.blackBox.changedBefore.restore.notLive", { titles: plan.unconfirmed.join("; ") })}
         </p>
       )}
+      {plan && plan.noSavedUndo.length > 0 && !results && (
+        <p className="bb-restore-notlive" data-reason="no-saved-undo">
+          {t("gaming.blackBox.changedBefore.restore.noSavedUndo", { titles: plan.noSavedUndo.join("; ") })}
+        </p>
+      )}
       {results && (
         <div className="bb-restore-results" role="status">
           {(undone > 0 || unsaved === 0) && (
