@@ -10620,8 +10620,8 @@ mod refuse_early_tests {
     }
 
     // s37 opus r1 MUST-FIX: a record started before its game's noise was kept is measured at
-    // conclude over the sessions the ledger covers (#618), up to the RECORD's baseline session, on
-    // the ledger rows the conclude read; nothing else stands in for it.
+    // conclude over the sessions the ledger covers (#618), up to the RECORD's baseline session, with
+    // the ledger read (an unread ledger measures nothing); nothing else stands in for it.
     #[test]
     fn a_record_without_kept_noise_is_measured_at_conclude_over_the_covered_sessions() {
         let now = Utc::now();

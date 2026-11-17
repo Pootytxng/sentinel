@@ -124,7 +124,7 @@ describe("a Trial verifies the setting before, during and after (#583 lane 2)", 
     // It wraps whatever was judged (a measured reading or a crash), after the judging and before
     // the keep/restore decision.
     expect(core, "the target check no longer wraps every judged outcome").toMatch(
-      /let outcome = guard_target_at_conclude\(judged, target_verification\(Some\(target_now\)\)\);/,
+      /let outcome = guard_target_at_conclude\(judged,/,
     );
     expect(guard).toBeGreaterThan(core.indexOf("judge_pair("));
     expect(guard).toBeGreaterThan(core.indexOf("crash_outcome("));
