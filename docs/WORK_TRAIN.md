@@ -2763,7 +2763,13 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   under it). Queued: CR-lesson-crash-not-result, CR-fall-words-band, CR-what-changed-fall,
   CR-driver-compare-everywhere. Guard re-derived: experiment-record-first-guard.test.ts's six conclude assertions onto
   `conclude_two_session` (same strength; one order check that was vacuous since s35 now compares against
-  `judge_pair(` / `crash_outcome(`). Install and tester folder: see the next lines.
+  `judge_pair(` / `crash_outcome(`). Pushes: `72bda27a` PASS; `f03cfdde` FAIL (RELEASE_STATE citation drift from
+  the NITs merge, re-anchored `0a0cf626`), `0a0cf626` PASS (cargo --lib 1997/0, vitest 551/551). Installed
+  `0a0cf626efef0047cb13b949c578771165fb8a1e` (runtime proof attempt 1, Synez plan before/after); RELEASE_STATE
+  re-stamped. Tester folder refreshed: `Compy-0.9.26-0a0cf626-tester-setup.exe` added beside the old installer (SHA-256
+  verified), SHA256.txt lists both (old marked older), guide txt + html: the new installer name, the conditions check
+  when a test waits for its second session, the other stations now optional, Roll back greyed out with no saved undo.
+  Screen check (zh-CN Health, the lessons) not run.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
