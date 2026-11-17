@@ -70,6 +70,7 @@ import { takeBenchArrival, type BenchArrival } from "./lab-arrival";
 import { settingsDoneLine, softwareFirstLine } from "./settings-done";
 import { peekScanPriorities } from "./use-scan";
 import { driftWords } from "./drift-words";
+import { preflightLine, type PreflightDiff } from "./trial-preflight";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -2380,6 +2381,24 @@ function RunningPanel({
   const legacy = !canConclude(exp);
   const baselineAvg = knownFps(exp.baseline_avg_fps);
   const baselineLow = knownFps(exp.baseline_low1_fps);
+  // TG-preflight: while the Trial waits for its after-session, what differs between the PC now and
+  // what the baseline recorded, with one fix step. Read-only; it blocks nothing.
+  const waiting = !legacy && !changeOff && treatment == null && !isRealPlay(exp);
+  const [preflight, setPreflight] = useState<PreflightDiff[] | null>(null);
+  useEffect(() => {
+    if (!waiting) {
+      setPreflight(null);
+      return;
+    }
+    let live = true;
+    invoke<PreflightDiff[] | null>("trial_preflight", { experimentId: exp.id })
+      .then((d) => live && setPreflight(Array.isArray(d) ? d : null))
+      .catch(() => live && setPreflight(null));
+    return () => {
+      live = false;
+    };
+  }, [waiting, exp.id]);
+  const preflightText = waiting ? preflightLine(preflight, t) : null;
   return (
     <div className="exp-running" data-testid="experiment-running" data-change-off={changeOff || undefined}>
       {interrupted && (
@@ -2461,6 +2480,11 @@ function RunningPanel({
       ) : (
         <p className="exp-fineprint">
           {t("lab.experimentBench.runningNoTreatment", { game })}
+        </p>
+      )}
+      {preflightText && (
+        <p className="exp-bench-warn" data-testid="exp-preflight" role="status">
+          {preflightText}
         </p>
       )}
     </div>

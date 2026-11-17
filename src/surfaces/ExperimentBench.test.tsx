@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
   changes: [] as unknown[], // get_applied_changes (the P5-outcomes undo reads it)
   smoothReady: null as unknown, // get_smoothest_readiness; "reject" = the check failed
   realPlay: null as unknown, // P5-realplay: get_realplay_progress; "reject" = the read failed
+  preflight: null as unknown, // TG-preflight: trial_preflight; "reject" = the read failed
 }));
 
 /** Hold the initial ledger reads until the returned function is called.
@@ -142,6 +143,8 @@ vi.mock("@tauri-apps/api/core", () => ({
         return state.realPlay === "reject"
           ? Promise.reject("Compy can't read its change history: the ledger was set aside")
           : Promise.resolve(state.realPlay);
+      case "trial_preflight":
+        return state.preflight === "reject" ? Promise.reject("unreadable") : Promise.resolve(state.preflight);
       case "simulate_optimization":
         if (state.simHang) return new Promise(() => {}); // never resolves
         return state.sim ? Promise.resolve(state.sim) : Promise.reject("no sim");
@@ -726,6 +729,49 @@ describe("ExperimentBench (armed)", () => {
     expect(screen.getByRole("button", { name: "Restore now" })).toBeInTheDocument();
     // Single-variable honesty: the launcher picker is hidden while an experiment is in flight.
     expect(screen.queryByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") })).toBeNull();
+  });
+
+  // TG-preflight: while the Trial waits for its after-session, what differs from the baseline's
+  // recorded conditions is said up front with one fix step, and nothing is blocked.
+  it("waiting for the after-session: names what differs from the baseline, one step, nothing blocked", async () => {
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [];
+    state.preflight = [{ key: "resolution", before: "2560×1440", after: "1920×1080" }];
+    render(<ExperimentBench />);
+    const line = await screen.findByTestId("exp-preflight");
+    expect(line).toHaveTextContent(
+      "Before you play the after-session: the display is at 1920×1080 now, the baseline ran at 2560×1440. " +
+        "Next: set the display back to 2560×1440 before you play. " +
+        "If you play anyway, Compy can't pin the result on this change: it records that something else changed, judges nothing and puts the change back.",
+    );
+    expect(vi.mocked(invoke).mock.calls.some(([c, a]) => c === "trial_preflight" && (a as { experimentId: string }).experimentId === "exp:2-0")).toBe(true);
+    // Nothing new is blocked: Restore stays, and the conclude waits only for a session as before.
+    expect(screen.getByRole("button", { name: "Restore now" })).toBeEnabled();
+    state.preflight = null;
+  });
+
+  it("waiting for the after-session: no line when nothing differs, the read fails, or a session was played", async () => {
+    state.gate = true;
+    state.experiments = [RUNNING_EXPERIMENT];
+    state.sessions = [];
+    state.preflight = [];
+    const { unmount } = render(<ExperimentBench />);
+    await screen.findByTestId("experiment-running");
+    expect(screen.queryByTestId("exp-preflight")).toBeNull();
+    unmount();
+    state.preflight = "reject";
+    const second = render(<ExperimentBench />);
+    await screen.findByTestId("experiment-running");
+    expect(screen.queryByTestId("exp-preflight")).toBeNull();
+    second.unmount();
+    // An after-session exists: the line is about the session to come, so it's gone.
+    state.preflight = [{ key: "power-plan", before: "a", after: "b" }];
+    state.sessions = [VALORANT_SESSION];
+    render(<ExperimentBench />);
+    await screen.findByRole("button", { name: /Conclude with my latest/ });
+    expect(screen.queryByTestId("exp-preflight")).toBeNull();
+    state.preflight = null;
   });
 
   // Desk review 2026-11-02, on his rig: his running Trial said "The change is applied. Play a PBZ

@@ -912,6 +912,22 @@
         "asIs": "Next: play a few more sessions of {{game}} with nothing changed, so Compy can measure how much it moves, then run the Trial again."
       }
     },
+    "preflight": {
+      "lead": "Before you play the after-session: {{list}}.",
+      "joiner": "; ",
+      "item": {
+        "gpuDriver": "the graphics driver is {{after}} now, the baseline ran on {{before}}",
+        "windowsBuild": "Windows is on build {{after}} now, the baseline ran on {{before}}",
+        "resolution": "the display is at {{after}} now, the baseline ran at {{before}}",
+        "powerPlan": "a different Windows power plan is active now than the one the baseline ran on"
+      },
+      "step": {
+        "rebaseline": "Next: restore the change and start the Trial again, so both sessions run under the same conditions.",
+        "resolution": "Next: set the display back to {{before}} before you play.",
+        "powerPlan": "Next: switch back to the power plan the baseline ran on before you play."
+      },
+      "anyway": "If you play anyway, Compy can't pin the result on this change: it records that something else changed, judges nothing and puts the change back."
+    },
     "gapPastBand": "Not judged: the after-session came longer after the baseline than the longest gap between one measured session and the next ({{max}} hours), so the measured band can't say how much the game moves across a gap that long. Compy restored the change. Play the after-session sooner after the baseline, then test again.",
     "noiseMeasuredBandsMaxFps": "Judged against +{{band}}% / −{{bandFall}}% on both the average and the 1% low (the wider of their two bands).",
     "noiseMeasuredBandsSmoothest": "Judged on frame pacing against its own measured band, and against +{{low}}% / −{{lowFall}}% on the 1% low.",
