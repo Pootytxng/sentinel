@@ -16,9 +16,9 @@
 //   - Correlation is never causation: copy says "changed between these sessions", never
 //     "caused by". Multiple simultaneous changes ⇒ attribution is refused (confounded),
 //     mirroring comparison.rs semantics.
-//   - Metric judgment reuses METHODOLOGY.md rails verbatim: flat 3% cross-session noise
-//     floor (noise_floor::MIN_CLAIM_PCT) judged on the 1%-low delta, boundary
-//     inclusive (a delta of exactly 3% is "no meaningful difference"); average FPS is
+//   - Metric judgment: the game's measured as-is band (P4-judge-noisy; `MIN_CLAIM_PCT` only as the
+//     fallback number when none is measured, and then nothing is called) judged on the 1%-low delta, boundary
+//     inclusive (a delta of exactly the band is "no meaningful difference"); average FPS is
 //     reference-only; "No meaningful difference" is a first-class verdict.
 
 use serde::{Deserialize, Serialize};
@@ -1161,7 +1161,7 @@ pub(crate) const MIN_COMPARE_SAMPLES: u32 = 60;
 /// Baseline older than this is stale — METHODOLOGY's expired-baseline rail. Caps High.
 const STALE_GAP_DAYS: i64 = 14;
 
-const METHOD_NOTE: &str = "Verdicts key on the 1% low with a flat 3% cross-session noise floor; average FPS is reference-only. Confidence is a rule-derived band (unknown/low/medium/high) — Compy has no calibrated probabilities, so it never shows a number. Changes listed between sessions are correlations in time, not proven causes.";
+const METHOD_NOTE: &str = "Verdicts key on the 1% low, judged against how much this game's 1% low moves between your sessions with nothing changed, as Compy measured it on this PC; until that is measured, nothing is called better or worse. Average FPS is reference-only. Confidence is a rule-derived band (unknown/low/medium/high) — Compy has no calibrated probabilities, so it never shows a number. Changes listed between sessions are correlations in time, not proven causes.";
 
 fn round1(x: f64) -> f64 {
     (x * 10.0).round() / 10.0
@@ -1494,17 +1494,24 @@ pub(crate) fn evidence_graph(r: &WhatChangedReport) -> EvidenceGraph {
             (
                 EvidenceRelation::Supports,
                 format!(
-                    "The 1% low moved {:+.1}% — past the {:.0}% noise floor.",
+                    "The 1% low moved {:+.1}% — past the {:.1}% measured noise band.",
+                    o.delta_pct, r.noise_floor_pct
+                ),
+            )
+        } else if r.noise_measured && r.verdict != "inconclusive" {
+            (
+                EvidenceRelation::CorrelatesWith,
+                format!(
+                    "The 1% low moved only {:+.1}% — inside the {:.1}% measured noise band.",
                     o.delta_pct, r.noise_floor_pct
                 ),
             )
         } else {
+            // CR-whatchanged-band-words: an inconclusive report (no measured band, or a frame cap that
+            // differed) judged the move against nothing, so it names no band.
             (
                 EvidenceRelation::CorrelatesWith,
-                format!(
-                    "The 1% low moved only {:+.1}% — inside the {:.0}% noise floor.",
-                    o.delta_pct, r.noise_floor_pct
-                ),
+                format!("The 1% low moved {:+.1}%, not judged against a band (the headline says why).", o.delta_pct),
             )
         };
         edges.push(EvidenceEdge {
@@ -1821,7 +1828,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         let mut r = base(
             "no-change",
             format!(
-                "No meaningful difference vs your previous {game} session ({delta_low1:+.1}% 1% lows — inside the {floor:.0}% noise floor)."
+                "No meaningful difference vs your previous {game} session ({delta_low1:+.1}% 1% lows — inside the {floor:.1}% band {game} moves between your sessions with nothing changed)."
             ),
         );
         r.observations = observations;
@@ -3690,6 +3697,26 @@ mod tests {
         assert!(r.headline.contains("No meaningful difference"));
         assert!(r.leading_hypotheses.is_empty(), "no fake cause for no delta");
         assert!(r.ruled_out.is_empty());
+    }
+
+    #[test]
+    fn the_band_is_printed_to_one_decimal_and_named_as_measured() {
+        // CR-whatchanged-band-words: a 3.4% band never reads as "3%", and the method note no longer
+        // claims a flat 3% floor.
+        let band = crate::noise_floor::GameNoise { low1_band_pct: 3.4, ..TEST_NOISE };
+        let (b, c) = two_sessions(100.0, 98.0);
+        let inputs = |noise| WhatChangedInputs { baseline: &b, current: &c, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise };
+        let r = report(&inputs(Some(&band)));
+        assert_eq!(r.verdict, "no-change");
+        assert!(r.headline.contains("inside the 3.4% band"), "{}", r.headline);
+        let inside = r.evidence_graph.edges.iter().find(|e| e.explanation.contains("1% low moved")).expect("edge");
+        assert!(inside.explanation.contains("inside the 3.4% measured noise band"), "{}", inside.explanation);
+        assert!(!r.method_note.contains("flat 3%") && r.method_note.contains("measured"), "{}", r.method_note);
+        // Unmeasured: the move is not judged, so no band is named for it.
+        let r = report(&inputs(None));
+        assert_eq!(r.verdict, "inconclusive");
+        let edge = r.evidence_graph.edges.iter().find(|e| e.explanation.contains("1% low moved")).expect("edge");
+        assert!(edge.explanation.contains("not judged") && !edge.explanation.contains("measured noise band"), "{}", edge.explanation);
     }
 
     #[test]
