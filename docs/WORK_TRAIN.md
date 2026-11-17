@@ -572,9 +572,14 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       the health hook takes any refresh key; SHOULD-FIX unchecked rows taken), r2 APPROVE-WITH-NITS (SHOULD-FIX taken).
       12 new tests fail on the old code. cargo 1874/0, clippy clean, tsc 0, full vitest 535/538 (3 site-app suites).
       Queued: CR-undo-entry-disable, CR-home-reversible-note.
-- [ ] **CR-undo-entry-disable** (r2 NIT of CR-footer-reversible) Only the Applied card disables Roll back for a row with
+- [x] **CR-undo-entry-disable** (r2 NIT of CR-footer-reversible) Only the Applied card disables Roll back for a row with
       no saved undo (`hasUndo`); a rec's Roll back and the debrief's stay enabled and end in App's refusal. Share the
       disable and the reason line. TS.
+      Done `f5f2feae` (2026-11-17 s32, CODE-ONLY, not installed; merge in the session log): the details sheet opened
+      from an Applied card, the debrief's "Revert it" and What changed's "Roll back X" are disabled for such a row and
+      show the Applied card's line ("Compy has no saved undo for this change.", en + zh-CN keys already present); App's
+      refusal unchanged. Rec rows never render as applied, so no other entry exists. 4 tests fail on the old code. No
+      review (TS UI only, no rollback logic touched). tsc 0, full vitest 545/548 (3 site-app suites).
 - [ ] **CR-home-reversible-note** (same class as CR-footer-reversible) Home's Active changes card says "every one
       reversible from the ledger" (ledger-health-home-guard.test.tsx `REVERSIBLE_NOTE`); make it count from
       `undoTally` like the footer, en + zh-CN. TS.
@@ -2598,6 +2603,9 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   main, clippy clean, tsc clean. Installed `c56b8a4fb09e36df6b246815650f21956960fdab` (runtime proof attempt 1, Synez
   before/after); RELEASE_STATE re-stamped. Parked: TG-drift-words, CR-tuning-temp-comparability, CR-lesson-avg-band,
   TG-interleave note. Tester folder untouched. No game at any check.
+- 2026-11-17 s32 (scheduled, CODE-ONLY: owner in Firefox, no game): CR-undo-entry-disable `f5f2feae` (this docs commit on
+  the same branch, merged --no-ff to main; TS only, no review needed). tsc 0, full vitest 545/548 (3 site-app). One
+  item. Not pushed (CODE-ONLY): main is 3 ahead of GitHub; the next FULL session pushes and installs.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
