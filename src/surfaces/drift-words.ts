@@ -1,8 +1,8 @@
-// TG-drift-words (Trial conditions guard, owner idea 2026-11-12; Constitution §37): when a Trial's
-// two sessions varied too much to judge, say in plain words what differed between them, using only
-// what Compy RECORDED for each session, and give exactly one next step. Nothing is inferred: a field
-// either session didn't record is never compared. When nothing recorded differs, say the sessions
-// varied more than the band the Trial was judged on. Words only: no verdict changes, no bar moves.
+// TG-drift-words (Trial conditions guard, owner idea 2026-11-12; Constitution §37): when a Trial was
+// too noisy to judge, say in plain words what differed between its two sessions, using only what
+// Compy RECORDED for each session, and give exactly one next step. Nothing is inferred: a field either
+// session didn't record is never compared. When nothing recorded differs, name exactly what was
+// compared and claim no cause. Words only: no verdict changes, no bar moves.
 import type { SessionSummary } from "../types";
 
 type Translate = (key: string, opts?: Record<string, unknown>) => string;
@@ -53,20 +53,21 @@ function resolution(s: SessionSummary): string | null {
 const driverOf = (s: SessionSummary) => text(s.game_state?.gpu_driver) ?? text(s.hw_fingerprint?.gpu_driver);
 const gamingMode = (s: SessionSummary): boolean | null => s.gaming_mode_active ?? s.game_state?.gaming_mode_active ?? null;
 
-/** Sonnet r1: how many context fields BOTH sessions recorded (session length aside, which every
- *  session has). 0 = nothing was compared, so "nothing differs" would be a claim from no data. */
-export function contextComparedCount(baseline: SessionSummary, after: SessionSummary): number {
+/** The context fields BOTH sessions recorded, by copy key (session length aside, which every session
+ *  has). Sonnet r1: none = nothing was compared, so "nothing differed" would be a claim from no data.
+ *  Opus r2: the "nothing differed" line names exactly these, never more. */
+export function comparedFields(baseline: SessionSummary, after: SessionSummary): string[] {
   const both = <T>(f: (s: SessionSummary) => T | null | undefined) => f(baseline) != null && f(after) != null;
-  return [
-    both(capWords),
-    both((s) => text(s.game_state?.power_plan_guid)),
-    both((s) => (s.game_state?.power_plan_changed != null ? true : null)),
-    both(driverOf),
-    both((s) => text(s.game_state?.windows_build)),
-    both(gamingMode),
-    both(resolution),
-    both((s) => s.background_secs_excluded),
-  ].filter(Boolean).length;
+  const fields: [string, boolean][] = [
+    ["cap", both(capWords)],
+    ["powerPlan", both((s) => text(s.game_state?.power_plan_guid)) || both((s) => s.game_state?.power_plan_changed)],
+    ["driver", both(driverOf)],
+    ["windowsBuild", both((s) => text(s.game_state?.windows_build))],
+    ["gamingMode", both(gamingMode)],
+    ["resolution", both(resolution)],
+    ["background", both((s) => s.background_secs_excluded)],
+  ];
+  return fields.filter(([, on]) => on).map(([k]) => k);
 }
 
 /** What differed between the two sessions, from recorded context only, most actionable first. */
@@ -154,11 +155,13 @@ export function driftWords(
 ): string | null {
   if (baseline == null || after == null) return null;
   const items = sessionDrift(baseline, after);
-  if (items.length === 0)
-    return `${t(
-      contextComparedCount(baseline, after) === 0 ? "lab.experimentBench.drift.noContext" : "lab.experimentBench.drift.nothingDiffers",
-      { game },
-    )} ${t("lab.experimentBench.drift.step.asIs", { game })}`;
+  if (items.length === 0) {
+    const compared = comparedFields(baseline, after);
+    const fields = [...compared, "length"].map((k) => t(`lab.experimentBench.drift.field.${k}`)).join(t("lab.experimentBench.drift.fieldJoiner"));
+    return `${
+      compared.length === 0 ? t("lab.experimentBench.drift.noContext") : t("lab.experimentBench.drift.nothingDiffers", { fields })
+    } ${t("lab.experimentBench.drift.step.asIs", { game })}`;
+  }
   const list = items.map((d) => itemWords(d, t)).join(t("lab.experimentBench.drift.joiner"));
   return `${t("lab.experimentBench.drift.differed", { list })} ${t(`lab.experimentBench.drift.step.${STEP_KEY[items[0].key]}`)}`;
 }

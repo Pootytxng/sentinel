@@ -866,7 +866,18 @@
     "drift": {
       "differed": "What Compy recorded differently between the two sessions: {{list}}.",
       "joiner": "; ",
-      "nothingDiffers": "None of the conditions Compy recorded changed between or during the two sessions, so the swing came from {{game}} itself.",
+      "nothingDiffers": "Compy compared what it recorded for both sessions ({{fields}}) and found no difference worth naming, so it can't point to any of them.",
+      "fieldJoiner": ", ",
+      "field": {
+        "cap": "frame cap",
+        "powerPlan": "power plan",
+        "driver": "graphics driver",
+        "windowsBuild": "Windows build",
+        "gamingMode": "Gaming Mode",
+        "resolution": "display resolution",
+        "background": "time behind other windows",
+        "length": "session length"
+      },
       "noContext": "Compy recorded no conditions it can compare for these two sessions, so it can't say what changed.",
       "capOff": "off",
       "capOn": "on",

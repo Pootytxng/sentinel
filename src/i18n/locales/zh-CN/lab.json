@@ -855,7 +855,18 @@
     "drift": {
       "differed": "Compy 记录到两次对局之间的不同之处：{{list}}。",
       "joiner": "；",
-      "nothingDiffers": "Compy 记录的各项条件在两次对局之间和对局过程中都没有任何不同，因此波动来自 {{game}} 本身。",
+      "nothingDiffers": "Compy 比较了两次对局都有记录的内容（{{fields}}），没有发现值得指出的不同，因此无法归因于其中任何一项。",
+      "fieldJoiner": "、",
+      "field": {
+        "cap": "帧率上限",
+        "powerPlan": "电源计划",
+        "driver": "显卡驱动",
+        "windowsBuild": "Windows 版本",
+        "gamingMode": "游戏模式",
+        "resolution": "显示分辨率",
+        "background": "处于其他窗口之后的时间",
+        "length": "对局时长"
+      },
       "noContext": "这两次对局没有 Compy 可以比较的记录条件，因此无法说明哪里不同。",
       "capOff": "关闭",
       "capOn": "开启",

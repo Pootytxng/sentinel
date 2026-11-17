@@ -1109,16 +1109,20 @@ export default function ExperimentBench({
       : null;
     // P4-judge-noisy: a result judged on the assumed band says so beside its own line.
     const assumed = x.assumed_band ? assumedBandLine(x.assumed_band, x.game, t) : null;
-    const line = judged && assumed ? `${judged} ${assumed}` : (assumed ?? judged);
-    // TG-drift-words: a Trial whose two sessions varied too much to judge names what Compy recorded
-    // differently between them (or that nothing did) and one next step. Words only, no verdict change.
-    const drift = trialDriftWords(x, sessions, t);
-    return line && drift ? `${line} ${drift}` : (drift ?? line);
+    return judged && assumed ? `${judged} ${assumed}` : (assumed ?? judged);
   });
-  const rowNotes = history.map((x, i): RowNote | null =>
-    noiseLines[i] ??
-    (looksJudged(x) ? NO_RECORD : x.verdict === "not-comparable" ? notComparableNote(x, t) || null : null),
-  );
+  // TG-drift-words: a Trial judged too noisy names what Compy recorded differently between its two
+  // sessions (or that none of it was) and one next step. Words only, no verdict change. Opus r2: the
+  // words stay on that row's own note (its own mark), never in the list's shared line.
+  const driftNotes = history.map((x) => trialDriftWords(x, sessions, t));
+  const rowNotes = history.map((x, i): RowNote | null => {
+    const note =
+      noiseLines[i] ??
+      (looksJudged(x) ? NO_RECORD : x.verdict === "not-comparable" ? notComparableNote(x, t) || null : null);
+    const drift = driftNotes[i];
+    if (drift == null) return note;
+    return typeof note === "string" ? `${note} ${drift}` : drift;
+  });
   const judgedLines = new Set(noiseLines.filter((n): n is string => n !== null));
   const sharedNoise = judgedLines.size === 1 ? [...judgedLines][0] : null;
   const footnotes = [...new Set(rowNotes.filter((n): n is RowNote => n !== null && n !== sharedNoise))];

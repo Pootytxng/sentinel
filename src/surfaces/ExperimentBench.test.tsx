@@ -2707,13 +2707,22 @@ describe("P5-learned: what Compy learned on this PC", () => {
   // TG-drift-words: on the owner's real Aniimo Trial judged too noisy, the history says what Compy
   // recorded differently between its two sessions (or that nothing did), with one next step.
   it("Aniimo today: the too-noisy Trial's note names what differed between its sessions, with one next step", async () => {
-    // Opus r1 SHOULD-FIX: on the owner's records driver, build, resolution, Gaming Mode and cap match,
-    // background is 24 s vs 36 s and length 1083 s vs 1057 s: nothing recorded changed.
+    // Opus r1 SHOULD-FIX: on the owner's records driver, build, resolution and Gaming Mode match (no cap
+    // or power plan recorded), background is 24 s vs 36 s and length 1083 s vs 1057 s.
+    // Opus r2 MUST-FIX: the line names exactly what was compared and claims no cause.
     const panel = await renderWith("p5-learned-today");
-    expect(panel.ownerDocument.body).toHaveTextContent(
-      "None of the conditions Compy recorded changed between or during the two sessions, so the swing came from Aniimo itself. " +
+    const body = panel.ownerDocument.body;
+    expect(body).toHaveTextContent(
+      "Compy compared what it recorded for both sessions (graphics driver, Windows build, Gaming Mode, display resolution, time behind other windows, session length) and found no difference worth naming, so it can't point to any of them. " +
         "Next: play a few more sessions of Aniimo with nothing changed, so Compy can measure how much it moves, then run the Trial again.",
     );
+    // Opus r2 SHOULD-FIX: the words sit on the too-noisy row's own footnote, never in the list's
+    // shared line (which stays the one noise line the judged rows share).
+    const shared = body.querySelector(".exp-bench-noise-shared");
+    expect(shared).not.toBeNull();
+    expect(shared!.textContent).not.toMatch(/Compy compared/);
+    const marked = [...body.querySelectorAll(".exp-bench-noise-mark")].map((m) => m.parentElement?.textContent ?? "");
+    expect(marked.some((txt) => /Compy compared what it recorded/.test(txt))).toBe(true);
   });
 
   it("Aniimo today: put back as too noisy; lesson: the game swings between sessions", async () => {

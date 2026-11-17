@@ -97,13 +97,15 @@ describe("sessionDrift: one fixture per recorded difference", () => {
     expect(sessionDrift(base(), after({ background_secs_excluded: 30, duration_secs: 3000 }))).toEqual([]);
   });
 
-  it("nothing recorded differs: the swing came from the game itself, with one as-is step (en + zh-CN)", () => {
+  it("nothing recorded differs: names exactly what was compared, claims no cause, one as-is step (en + zh-CN)", () => {
     const line = driftWords(base(), after(), "ROB RUN", tEn)!;
     expect(line).toBe(
-      "None of the conditions Compy recorded changed between or during the two sessions, so the swing came from ROB RUN itself. " +
+      "Compy compared what it recorded for both sessions (frame cap, power plan, graphics driver, Windows build, Gaming Mode, display resolution, time behind other windows, session length) and found no difference worth naming, so it can't point to any of them. " +
         "Next: play a few more sessions of ROB RUN with nothing changed, so Compy can measure how much it moves, then run the Trial again.",
     );
-    expect(driftWords(base(), after(), "ROB RUN", tZh)).toContain("没有任何不同");
+    // Only fields both sessions recorded are named.
+    expect(driftWords(base({}, { windows_build: null }), after(), "ROB RUN", tEn)).not.toMatch(/Windows build/);
+    expect(driftWords(base(), after(), "ROB RUN", tZh)).toContain("没有发现值得指出的不同");
   });
 
   // Opus r1 MUST-FIX: the backend's cap rule: caps within 3% are the same cap.
