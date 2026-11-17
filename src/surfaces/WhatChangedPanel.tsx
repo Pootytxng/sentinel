@@ -22,6 +22,7 @@ import { useExpertView } from "../design/use-expert-view";
 import { SectionLabel, VerdictBand, COMPARABILITY_TONE } from "./measurement-chrome";
 import { Picker } from "../design/Picker";
 import { knownFps } from "../lib/session-metrics";
+import { hasUndo } from "../data/live-changes";
 // Side-effect import: guarantees the i18next singleton is initialized even when this component
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
@@ -408,7 +409,9 @@ export function WhatChangedReportView({
             <button
               type="button"
               className="wcp-next-rollback"
-              disabled={busy}
+              // CR-undo-entry-disable: a row whose stored history resolves to no undo would only end
+              // in App's refusal; disabled here, with the Applied card's reason line below it.
+              disabled={busy || !hasUndo(rollbackTarget)}
               onClick={() => {
                 void onRollback!(rollbackTarget);
               }}
@@ -419,6 +422,9 @@ export function WhatChangedReportView({
                     title: rollbackTarget.rec_title,
                   })}
             </button>
+          )}
+          {rollbackTarget && !hasUndo(rollbackTarget) && (
+            <p className="fix-rig-note wcp-next-noundo">{t("optimize.fix.noSavedUndo")}</p>
           )}
         </div>
       )}

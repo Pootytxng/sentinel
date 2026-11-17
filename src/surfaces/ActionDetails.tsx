@@ -46,6 +46,7 @@ export function ActionDetailsSheet({
   busy,
   origin,
   restoresLabel,
+  noUndo = false,
   onApply,
   onRollback,
   onClose,
@@ -53,6 +54,9 @@ export function ActionDetailsSheet({
   rec: ActionRec;
   applied: boolean;
   busy: boolean;
+  /** CR-undo-entry-disable: the change's stored history resolves to no undo (`hasUndo` false), so
+   *  Roll back is disabled here with the same reason line the Applied card shows. */
+  noUndo?: boolean;
   /** The rect of the "Details ›" row, so the panel grows out of the row you opened it from. */
   origin?: DOMRect | null;
   restoresLabel?: string | null;
@@ -87,7 +91,7 @@ export function ActionDetailsSheet({
             {t("optimize.actionDrawer.close")}
           </button>
           {applied ? (
-            <button className="ad-action ad-rollback" disabled={busy} onClick={onRollback}>
+            <button className="ad-action ad-rollback" disabled={busy || noUndo} onClick={onRollback}>
               {busy ? t("optimize.actionDrawer.rollingBack") : t("optimize.actionDrawer.rollBack")}
             </button>
           ) : (
@@ -98,6 +102,7 @@ export function ActionDetailsSheet({
         </>
       }
     >
+      {applied && noUndo && <p className="fix-rig-note ad-noundo">{t("optimize.fix.noSavedUndo")}</p>}
       {what && (
         <section className="ad-block">
           <span className="ad-eyebrow">{t("optimize.actionDrawer.whatItDoes")}</span>

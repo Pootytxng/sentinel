@@ -1204,6 +1204,8 @@ export default function Fix({
       applied: boolean;
       origin: DOMRect | null;
       restoresLabel?: string | null;
+      /** CR-undo-entry-disable: opened from a live change whose stored history resolves to no undo. */
+      noUndo?: boolean;
       primary: () => void;
     }
   >(null);
@@ -1460,6 +1462,7 @@ export default function Fix({
                           applied: true,
                           origin,
                           restoresLabel: c.restores_label,
+                          noUndo: !hasUndo(c),
                           primary: () => onRollback(c),
                         })
                     : undefined
@@ -1491,6 +1494,7 @@ export default function Fix({
                           applied: true,
                           origin,
                           restoresLabel: c.restores_label,
+                          noUndo: !hasUndo(c),
                           primary: () => onRollback(c),
                         })
                     : undefined
@@ -1736,6 +1740,7 @@ export default function Fix({
           busy={busyId !== null}
           origin={details.origin}
           restoresLabel={details.restoresLabel}
+          noUndo={details.noUndo}
           onApply={() => {
             details.primary();
             setDetails(null);
