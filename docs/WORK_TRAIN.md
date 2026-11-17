@@ -2507,30 +2507,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-11 ~08:00-08:50 (coordinator-assigned s16, CODE-ONLY throughout: ROB RUN in front): bundle
-  `main-unpushed-2026-11-11.bundle` verified; owner's no-tester statement recorded (`a067f006`); CR-gm-confirm-repeat
-  landed `b3aa742a` (full vitest 533/536, the 3 site-app suites; also fixes the affordance census). CR-rp-same-setting-row
-  merged then reverted (`c66b4d25`, experiment-record-first guard 2 failed), parked on its branch; CR-outside-followups
-  (b) and the core-parking line parked unverified on their branches. Stopped on the coordinator's order after the owner
-  reported ROB RUN stutter (my vitest + cargo ran while he played): no heavy commands while a game runs. Not pushed.
-- 2026-11-11 s17 (scheduled, CODE-ONLY, ROB RUN in front): no heavy commands per the s16 order; read-only diagnosis
-  of the CR-rp guard failure (note under that item); 0 items landed; not pushed (main 61 ahead).
-- 2026-11-11 ~14:39-16:15 (coordinator-assigned s18, CODE-ONLY, no game; owner on Discord, idle >= 10 min once at
-  15:27): CR-rp-same-setting-row re-landed `1a740e66` (the s16 revert was a misattribution: the 2 record-first guard
-  failures were CR-outside-followups (b)'s history.rs refactor, fixed in `db633af9`); (b) landed `3b5480ca` (opus r2
-  APPROVE-WITH-NITS); core parking `06b69362` (sonnet APPROVE-WITH-NITS); CR-capture-superseded `4512c1ad` (sonnet
-  APPROVE-WITH-NITS); CR-next-moved-outside `2aaac7e3`; CR-undo-kept-plan `6613a053`; CR-zh-drift-count `5d2e9942`;
-  CR-update-refusal-path checked, no change; CR-ultimate-identity parked on its branch after two rounds (opus
-  REQUEST-CHANGES both). New tests fail on the old code; cargo 1839/0, clippy clean, tsc 0, full vitest 535/538 (the 3
-  site-app suites). Push started in the 15:27 window and stopped mid-gate (vitest stage) when the owner returned; not
-  pushed, not installed, no screen capture (no later 10-minute idle window).
-- 2026-11-11 ~16:10-19:45 (coordinator-assigned s19, CODE-ONLY with FULL windows, no game; server restart ~18:25-19:02):
-  CR-bench-holds-setting `cecd30c5`, CR-gm-spans-trial `8bf4a2a9`, CR-ultimate-identity `ec326810` (redesign: stamp by
-  provenance, old rows record only on stock schemes), CR-kept-plan-read-once + CR-kept-outside-nits (a)-(d) `0b14d2f3`,
-  `94a02d85`, `e954f78b`; "Left for v1.0" pointers `a15986b8`. Two reviews each for A/B (MUST-FIX taken: Trial start vs
-  bench hold; GM start race), one for C. cargo 1859/0, clippy clean, tsc 0, full vitest 535/538 (3 site-app suites).
-  Pushed 3 times (cecd30c5, 94a02d85, a15986b8; gate PASS each). Installed `a15986b8` (runtime proof attempt 1).
-  No screen capture or self-review (no window left). CR-outside-followups (a)(d) not started.
 - 2026-11-12 s20 (scheduled, CODE-ONLY: owner active in Explorer): CR-gm-spans-followups (a), an unreadable Gaming Mode
   record's refusal names the file and folder and the way out (commit on this line). cargo 1861/0, clippy clean; review
   (sonnet) APPROVE-WITH-NITS, SHOULD-FIX taken. One item (a mid-run device timeout cost the second). Not pushed: main is
@@ -2663,6 +2639,16 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
 - 2026-11-17 s32 (scheduled, CODE-ONLY: owner in Firefox, no game): CR-undo-entry-disable `f5f2feae` (this docs commit on
   the same branch, merged --no-ff to main; TS only, no review needed). tsc 0, full vitest 545/548 (3 site-app). One
   item. Not pushed (CODE-ONLY): main is 3 ahead of GitHub; the next FULL session pushes and installs.
+- 2026-11-16/17 s33 (FULL; coordinator-assigned; a server restart at ~21:20 ended the first half, then the owner's game
+  ran until after 01:31; resumed 03:03): reviewed s32's CR-undo-entry-disable (opus + sonnet AWN, no MUST-FIX).
+  Landed CR-tuning-temp-comparability (`eb81a9f2`), CR-lesson-avg-band (`1a3882a7`, adds
+  `WhatChangedReport.noise_avg_band_pct`), TG-drift-words (`bbb3dd40`), TG-preflight (`10b7bc47`, new read-only
+  command `trial_preflight` in build.rs / capabilities / lib.rs; power plan confound at conclude); reviews in the s31
+  follow-ups and the Trial conditions guard list. TG-interleave design note written (owner decision). Parked: the
+  judging-chain refactor slice (reason under s31 follow-ups). No guard or census re-derived. Pushes: `622e07a7`,
+  `bbb3dd40`, `5bcf29a2`, all PASS. cargo --lib 1977/0, clippy clean, tsc 0, full vitest 550 files pass on `main`.
+  Installed `5bcf29a255d275d5572b4e73481db64ccccd25ac` (runtime proof attempt 1, Synez plan before/after);
+  RELEASE_STATE re-stamped. Tester folder untouched. No game at any check.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
