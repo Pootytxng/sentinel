@@ -269,6 +269,7 @@
     "chaseSuspect": "追查嫌疑 #2 — {{suspect}}",
     "keepIt": "保留它——实测有效，已记录",
     "reverting": "撤销中…",
+    "dismiss": "关闭",
     "revertIt": "撤销它——不丢人",
     "honestTally": "诚实结论：1 次 · 虚假胜利：0 次",
       "receipt": {

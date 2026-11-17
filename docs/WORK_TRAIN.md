@@ -582,12 +582,20 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       review (TS UI only, no rollback logic touched). tsc 0, full vitest 545/548 (3 site-app suites).
       s33 review (touches the undo entry points): opus APPROVE-WITH-NITS, sonnet APPROVE-WITH-NITS, no MUST-FIX.
       Opus SHOULD-FIX (pre-existing, now visible) queued as CR-debrief-no-undo-dismiss.
-- [ ] **CR-debrief-no-undo-dismiss** (s33 opus SHOULD-FIX on CR-undo-entry-disable) A debrief card whose change has no
+- [x] **CR-debrief-no-undo-dismiss** (s33 opus SHOULD-FIX on CR-undo-entry-disable) A debrief card whose change has no
       saved undo, a non-improved result and no next suspect shows only a disabled "Revert it": the user can never clear
       it. Offer a plain Dismiss beside it that clears the card; behaviour test that it clears.
-- [ ] **CR-home-reversible-note** (same class as CR-footer-reversible) Home's Active changes card says "every one
+      Done `55979f1c` (2026-11-17 s34, CODE-ONLY, not installed): "Dismiss" / "关闭" beside the disabled Revert it runs
+      the card's existing `dismiss_comparison` (nothing on the PC changes); absent when Revert it can run or a
+      "Chase suspect #2" button already dismisses. The behaviour test fails on the old code.
+- [x] **CR-home-reversible-note** (same class as CR-footer-reversible) Home's Active changes card says "every one
       reversible from the ledger" (ledger-health-home-guard.test.tsx `REVERSIBLE_NOTE`); make it count from
       `undoTally` like the footer, en + zh-CN. TS.
+      Done `a2426213` (merge `0f293a6e`, 2026-11-17 s34, CODE-ONLY, not installed): the footer's words moved to
+      `data/undo-tally-words.ts`; HomeHud and HomeV2 print them on a healthy ledger ("1 change can be undone · 1 has no
+      saved undo · 1 changed outside Compy, no undo", "Nothing in effect to undo"; zh from the same keys); incomplete
+      branches unchanged. The two `activeChangesNote` keys are retired (census re-recorded). 6 guard cases fail on the
+      old code. HomeConsole (the default face) never printed the line.
 - [x] **CR-hist-today** (`_train\view-1112a\04-test-applied.png`) History rows from Nov 11 6:14 AM and 4:19 AM read
       "today" at 00:35 on Nov 12: `Fix.tsx` `humanizeWhen` buckets by elapsed 24 h, not calendar day, and formats
       with the OS locale. Calendar days in the app's language; test fails on the old code. TS.
@@ -2507,10 +2515,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-12 s20 (scheduled, CODE-ONLY: owner active in Explorer): CR-gm-spans-followups (a), an unreadable Gaming Mode
-  record's refusal names the file and folder and the way out (commit on this line). cargo 1861/0, clippy clean; review
-  (sonnet) APPROVE-WITH-NITS, SHOULD-FIX taken. One item (a mid-run device timeout cost the second). Not pushed: main is
-  2 ahead of GitHub (`e5d87456` + this); the next FULL session pushes.
 - 2026-11-11 ~20:52-23:45 (coordinator-assigned s20, CODE-ONLY with five FULL windows, no game; server restart
   ~22:31-22:54): CR-gm-spans-followups (c)(d)(e) `4da520ea`, `ba4be8f0` (a plain apply/undo of a setting Gaming Mode
   holds is refused); CR-bench-preapply-read `a2d49422`; CR-tip-see-through-2 `8c2566af`; CR-ultimate-followups (a)(e)
@@ -2649,6 +2653,11 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `bbb3dd40`, `5bcf29a2`, all PASS. cargo --lib 1977/0, clippy clean, tsc 0, full vitest 550 files pass on `main`.
   Installed `5bcf29a255d275d5572b4e73481db64ccccd25ac` (runtime proof attempt 1, Synez plan before/after);
   RELEASE_STATE re-stamped. Tester folder untouched. No game at any check.
+- 2026-11-17 s34 (scheduled, CODE-ONLY: owner in Steam, no game): CR-home-reversible-note `a2426213` (merge `0f293a6e`;
+  census re-recorded for the two retired note keys), CR-debrief-no-undo-dismiss `55979f1c` (merged --no-ff with this
+  docs commit). TS only, no rollback logic: no review. tsc 0; full vitest 547/551 files on item 1 (3 site-app suites +
+  the census, re-recorded and passing); item 2's touched suites + i18n guards pass. Not pushed (CODE-ONLY): main is 4+
+  ahead of GitHub; the next FULL session pushes and installs.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`

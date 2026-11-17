@@ -207,6 +207,14 @@ function ComparisonCard({
             {reverting ? t("monitor.sessionDebrief.reverting") : t("monitor.sessionDebrief.revertIt")}
           </button>
         )}
+        {/* CR-debrief-no-undo-dismiss: with no saved undo and no next suspect, the disabled
+            "Revert it" was the card's only control, so it could never be cleared. Dismiss clears
+            the card and changes nothing on the PC. */}
+        {r.verdict !== "improved" && noUndo && !nextSuspect && (
+          <button className="btn-small" data-testid="cmp-dismiss" onClick={onDismiss}>
+            {t("monitor.sessionDebrief.dismiss")}
+          </button>
+        )}
       </div>
       {r.verdict !== "improved" && noUndo && (
         <p className="fix-rig-note cmp-noundo">{t("optimize.fix.noSavedUndo")}</p>
