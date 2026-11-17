@@ -154,7 +154,7 @@ fleet path has since carried real traffic — the owner reports at least two tes
   registration, the declaration, the grants and the overlay's real `invoke()` sites in agreement.
   Owner GO given 2026-08-03. **Open sub-item:** the spec's per-command main-window caller check
   (defense in depth behind the ACL) is deliberately deferred — see the PR for the reasoning.
-- Rollback resolves from `history.json` alone, never the live catalog (`resolve_rollback` — `actions.rs:5476`).
+- Rollback resolves from `history.json` alone, never the live catalog (`resolve_rollback` — `actions.rs:5546`).
 - Ledger save is crash-safe atomic temp-write+rename, test-pinned (`save_history_to` — `history.rs:1093`).
 - Elevation: relaunch `compy.exe --run-elevated <hex> <ticket>` (windowless), 4-way honest UAC
   attribution (`elevation_outcome` — `actions.rs:1114`); helper runs ONLY hex byte-matching the
