@@ -392,6 +392,33 @@
       "removedForUser": "已为此用户移除",
       "windowsDefault": "Windows 默认值"
     },
+    "readiness": {
+      "powerProfile": {
+        "label": "电源计划",
+        "labelAttention": "电源计划不是性能优先",
+        "unknown": "无法读取当前的 Windows 电源计划。",
+        "kept": "当前计划为“{{plan}}”，这是你选择保留的 Compy 之外的设置。Compy 不会标记或切换它。",
+        "ready": "当前计划“{{plan}}”是性能优先的。",
+        "attention": "当前计划为“{{plan}}”。性能计划（高性能 / 卓越性能）可以降低延迟。Compy 不会替你切换。"
+      },
+      "monitorRefresh": {
+        "label": "显示器刷新率",
+        "labelAttention": "显示器未以最高刷新率运行",
+        "noDisplay": "未检测到显示器信息。",
+        "noRates": "无法读取显示器支持的刷新率。",
+        "ready": "正以支持的最高 {{max}} Hz 运行。",
+        "attention": "当前为 {{current}} Hz，但显示器支持 {{max}} Hz。请在 Windows 设置 → 显示 → 高级显示中设置更高的刷新率。"
+      },
+      "gpuDriverAge": {
+        "label": "显卡驱动时间",
+        "labelAttention": "显卡驱动已超过一年",
+        "noGpu": "未检测到显卡。",
+        "noDate": "无法读取 {{gpu}} 的驱动日期。",
+        "ready": "{{gpu}} 的驱动是最新的（{{days}} 天前发布）。",
+        "advisory": "{{gpu}} 的驱动已有 {{days}} 天，仍然没问题。新游戏发售前后值得更新以获得首日修复，但这里没有任何问题；在两次发布之间更新很少会改变实测帧数。",
+        "attention": "{{gpu}} 的驱动已超过一年（{{days}} 天）。建议更新。"
+      }
+    },
     "friendly": {
       "nagle-disable": "让在线游戏更流畅",
       "windows-search-disable": "给老硬盘减负",
