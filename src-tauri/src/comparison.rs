@@ -627,8 +627,13 @@ pub(crate) fn arm_baseline_session<'s>(a: &ArmedComparison, sessions: &'s [Sessi
 /// or no shared conditions at all), between an arm's baseline session and a later one. The one rule
 /// the armed comparison and the tuning measurement's later sessions both judge on.
 pub(crate) fn arm_conditions_comparable(baseline: &SessionSummary, after: &SessionSummary) -> bool {
+    conditions_comparable(&crate::comparability::derive(baseline, after).verdict)
+}
+
+/// [`arm_conditions_comparable`]'s rule on an already-derived verdict.
+fn conditions_comparable(verdict: &crate::comparability::Comparability) -> bool {
     !matches!(
-        crate::comparability::derive(baseline, after).verdict,
+        verdict,
         crate::comparability::Comparability::NotComparable | crate::comparability::Comparability::Unknown
     )
 }
@@ -659,13 +664,14 @@ pub(crate) fn post_comparability(a: &ArmedComparison, sessions: &[SessionSummary
         .iter()
         .filter(|s| s.process_name.eq_ignore_ascii_case(&a.game))
         .filter(|s| chrono::DateTime::parse_from_rfc3339(&s.started_at).is_ok_and(|at| at >= armed_at))
-        .map(|s| PostComparability {
-            started_at: s.started_at.clone(),
-            comparable: arm_conditions_comparable(baseline, s),
-            conditions_unknown: matches!(
-                crate::comparability::derive(baseline, s).verdict,
-                crate::comparability::Comparability::Unknown
-            ),
+        .map(|s| {
+            // Sonnet NIT: one derive per session for both fields.
+            let verdict = crate::comparability::derive(baseline, s).verdict;
+            PostComparability {
+                started_at: s.started_at.clone(),
+                comparable: conditions_comparable(&verdict),
+                conditions_unknown: matches!(verdict, crate::comparability::Comparability::Unknown),
+            }
         })
         .collect()
 }
