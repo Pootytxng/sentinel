@@ -632,6 +632,9 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       check's text. Anything unmatched is shown as sent; English unchanged. A test pins every mirror against
       readiness.rs and the en locale; the HomeGlass zh test fails on the old code. Screen check (zh-CN Health) owed at
       the next desk install. Left: CR-zh-readiness-rest.
+      s37 review (sonnet) APPROVE-WITH-NITS, no MUST-FIX: SHOULD-FIX taken as a comment saying why the sentence, not
+      `value`, carries the name (`ffce3574`, merge `72bda27a`); NITs left (greedy name slot, a negative-age case).
+      Pushed s37.
 - [ ] **CR-zh-readiness-rest** (left by CR-zh-readiness-words) The other limiter rows are still English in zh-CN: the
       install-drive (9 sentences), applied-changes (drift counts + kept-outside titles) and fps-monitoring checks, and
       priorities.rs's own rows (pending safe tweaks, startup load, Memory Integrity); and the console / Check rows print
@@ -791,12 +794,34 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       "couldn't match these sessions to your baseline"; GPU/driver/build only when the list marks a session different,
       the cap only when a cap read left a session out; the temperature path's `listedNotComparable` excludes Unknown
       too. sonnet AWN (NIT taken: one derive per session).
-- [ ] **CR-lesson-fall-band** (s33 review, pre-existing): lessons and the outcome switch read a fall at the symmetric
+- [x] **CR-lesson-fall-band** (s33 review, pre-existing): lessons and the outcome switch read a fall at the symmetric
       band; the engine judges a fall at `fall_pct(band)` (model 3). Read falls at the matching fall.
       PARKED s35: not a small fix. `lessonRuleFor`'s three callers (Trial summary, Debrief, Care stutter compare) and
       the outcome switch would each need the record's noise model (`game_noise.model`, absent from the TS lesson types)
       and the average's own fall (only the 1% low's `noise_fall_pct` is carried); needs its own slice with an opus +
       sonnet review (it decides which lesson a verdict teaches).
+      Done s37 merge `8fd27fd3` (`efa49108`, `2f660c50`, `289039aa`): `fallsOf(record)` (test-summary.ts) gives each
+      number's fall rule: a two-session record with model-3 noise was judged at the matching fall (`fallPct`, moved
+      here from ExperimentBench), older or no noise the band both ways; real play classifies the 1% low both ways except
+      under Maximum FPS, and its stored noise is the start's, so without model 3 the rule is "unknown". The Trial
+      summary's lesson, the Debrief card (matching when the result carries `noise_fall_pct`), the outcome switch, the
+      Maximum FPS receipt and the real-play lines read falls that way; the Care stutter compare stays the band both
+      ways (What changed judges `|delta| > band`). "Unknown": a lesson calls nothing in between (no lesson / average
+      not compared); the switch, receipt and real-play lines let the stored verdict settle it (opus r2 MUST-FIX).
+      opus r1 REQUEST-CHANGES (MUST-FIX missed callers, taken), sonnet r1 APPROVE-WITH-NITS, opus r2 REQUEST-CHANGES
+      (MUST-FIX taken). Left: CR-lesson-crash-not-result, CR-fall-words-band, CR-what-changed-fall (below).
+- [ ] **CR-lesson-crash-not-result** (s37 opus r1 SHOULD-FIX 2, pre-existing) A crash stored as `regressed`
+      (`crash-during-treatment`) judged no fall, yet `lessonFor` / `resultOf` read it as a measured result (and now at
+      the matching fall). Treat a crashed treatment / crash stop_reason as no result there. TS.
+- [ ] **CR-fall-words-band** (s37 opus r2 SHOULD-FIX, pre-existing wording from s27) Likely worse, the receipt rules
+      and "fell by more than the band" name the band where the fall was judged at the matching fall (-9.5% against a
+      10% band reads "more than the ±10% allowance"). Word it as the engine's `fell_words` does, en + zh-CN. TS.
+- [ ] **CR-what-changed-fall** (s37 opus r1 NIT 2, engine question) What changed judges a measured model-3 band (a
+      rise) the same both ways (`intelligence.rs` `what_changed_inner`), unlike Trials and comparisons. Decide one rule;
+      then the Care stutter lesson (`StutterCompare.tsx`, `{ low: "same", avg: "same" }`) follows it.
+- [ ] **CR-driver-compare-everywhere** (s37 sonnet SHOULD-FIX on the s37 NITs) comparability.rs now compares the GPU
+      driver trimmed and case-insensitively (as the preflight); noise_floor.rs (~166, ~246) and intelligence.rs (~1891)
+      still compare exactly. One shared `same_driver` at all sites. Rust.
 - [x] **CR-core-parking-hidden-plan** (coordinator, s35) merge `91d59341`: a core-parking undo whose plan `powercfg /list`
       omits (and isn't active) asks for the plan itself (`powercfg /query <guid>`, read-only): exit 0 = restore onto it
       (never made active); gone only when it fails exactly as the nil GUID does (exit 1, same words) while
@@ -808,12 +833,15 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       AWN (SHOULD-FIX taken: non-nil missing GUID in the live test), sonnet AWN. Left (opus NITs): a crate-wide
       callers-of check; powercfg calls have no timeout (as the existing reads); a Windows build that puts the GUID in
       its "does not exist" words would leave such rows open (fails safe).
+      s37 NIT done (merge `ac1108fe`): the powercfg `/query` and `/list` reads behind the plan-gone check run through
+      `output_within` (actions.rs) with a 5 s limit; past it the read is unread and the undo stops with nothing changed.
 - [x] **CR-drift-words-own-plan** (coordinator, s35) merge `1cb7b2e6`: a too-noisy Trial of the power plan itself
       (`power-ultimate`) never names its own between-sessions plan move (a plan switched during a session still is);
       the plan counts as "compared" only when both plan GUIDs were read; drivers compare case-insensitively; with
       Gaming Mode on in either session the plan isn't compared at all (sonnet SHOULD-FIX, as the backend does).
       opus AWN, sonnet AWN. Left (opus NITs): the TS `POWER_PLAN_REC` copy of the Rust constant; comparability.rs
-      compares driver names case-sensitively (cause list only).
+      compares driver names case-sensitively (cause list only). s37 (merge `ac1108fe`): comparability.rs now compares
+      them trimmed and case-insensitively, as the preflight (sonnet AWN); the other sites: CR-driver-compare-everywhere.
 - [x] **s35 small fixes** merge `c80a00ff`: `read_preflight` reads Gaming Mode from the session slot (an unreadable
       file is unknown, never "off"); the Black Box "Put back how it was" leaves out and names a change with an
       in-window row that has no saved undo (en + zh-CN); TG-preflight's gating is pure and tested, and `collect_v1`
@@ -841,6 +869,26 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       `a_start_keeps_the_cost_acknowledgement_...`, `smoothest_starts_only_when_...`, `a_start_reads_real_play_...`);
       start_experiment's band/refusal decision is not extracted yet; nothing tests that `conclude_experiment` passes
       the right values into `judge_pair` (opus NIT).
+      Slice 2 LANDED s37 (merge `1d12730f`; `d105cc29`, `300c5f10`, `677afea1`), no behaviour change: everything
+      between the conclude's reads and its keep/restore tail (the after-session's grade and pacing, the noise it is
+      judged on, `judge_pair` / `crash_outcome`, the Compy-state, unconfirmed-changes and target checks, every record
+      write) moved into `conclude_two_session(&mut ExperimentRecord, ConcludeReads)` (no IO, no store);
+      `conclude_experiment` keeps the store lock, the refusals and the live reads (two read-only reads moved earlier,
+      nothing written between). Retired -> behaviour tests: `conclude_grades_both_sessions_...` and the receipt line of
+      `the_average_delta_...` -> `the_conclude_stores_the_after_sessions_grade_the_average_delta_and_the_band_it_judged_on`;
+      `smoothest_is_judged_at_conclude_...`'s pins -> `a_smoothest_conclude_judges_and_keeps_the_after_sessions_pacing`;
+      `an_uneven_session_is_no_longer_...` -> `an_uneven_after_session_is_still_judged` (+ the stores test and
+      `a_record_without_kept_noise_is_measured_at_conclude_over_the_covered_sessions`);
+      `a_two_session_conclude_refuses_...`'s target-order pin -> `the_target_read_has_the_last_word_at_conclude`. New
+      (s35 opus NIT): `the_conclude_hands_judge_pair_the_picked_session_the_crash_report_and_its_noise`. Guard
+      re-derived: experiment-record-first-guard.test.ts's six conclude assertions now read the core and pin the hand-off
+      (resolved, target_now, rows, unverified, game_noise) into its one call. opus r1 REQUEST-CHANGES (MUST-FIX: the
+      noise measurement's arguments were unguarded; taken), sonnet r1 AWN (SHOULD-FIXes taken), opus r2 AWN.
+      Still pinned (8 of the 13 named above): `a_two_session_conclude_refuses_a_real_play_trial_...` (the refusal
+      before `resolve_treatment`, in the IO shell), the start half of `the_start_measures_the_band_...`, and the six
+      start_experiment pins; next slice: extract start_experiment's band/refusal decision. Left (opus r2 NIT 3): on the
+      test fixture the baseline, ledger length and clock don't change `judge_pair`'s result, so their hand-off is shown
+      only by equality.
 - Inventory (no move, no delete): `.claude\worktrees\train-same-rig` (created 2026-11-12 12:00) and
   `.claude\worktrees\train-plan-held` (2026-11-13 04:01) are EMPTY folders, no `.git`, no files: leftovers of worktree
   removals whose directory delete was refused while a shell's working directory was inside. Nothing to salvage; the
@@ -892,6 +940,11 @@ amendment 2026-11-12, approved 17:21 "add it"; `4d5217d5`).
 - [ ] **TG-salvage** A contingency instead of a dead end: use only matching, steady segments when a fixed,
       pre-declared rule allows; otherwise ask for the smallest extra play needed; never pick windows after seeing the
       result. Tested: the rule fixed before the comparison, adversarial fixtures that would reward cherry-picking.
+      PARKED s37, untouched: the judged number is the session's 1% low (`low1_fps_est`, a mean of per-second 1% lows),
+      and the per-time series a segment rule would need (`fps_series`, `stutter_timeline`) is shed from all but the
+      most recent sessions on save, so a baseline's segments are usually gone by its second session. A first slice
+      must keep segment-level 1% lows for a Trial's baseline (additive, schema-versioned), then the pre-declared rule,
+      its words (en + zh-CN) and opus + sonnet reviews: more than fits beside an install in one session.
 - [ ] **TG-interleave** (design note only, no code; two reviews and an owner go before any code) For settings that can
       be toggled live and safely through the existing apply/rollback, alternate on/off in blocks within one play
       session (ABAB) so drift, scene changes and habits cancel out: which catalog settings qualify, the mutation-boundary
@@ -2574,17 +2627,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-12 ~06:50-10:10 (s22, coordinator-assigned, CODE-ONLY nearly throughout; no game seen): landed on main, each
-  in its own worktree with a full vitest 537/540 (3 site-app suites) or better: CR-footer-reversible `7dfe87ef`,
-  CR-hist-today `f1c4ef7b`, P9-summary-gpu-limit `0e3091a4`, CR-zh-backend-home `28f396e5`, CR-gm-restore-partial
-  `90261811`, CR-trial-gm-between `18cf0e58` (finding: a Trial missed Gaming Mode on for one session only; now Partial),
-  P9-limit-source `412ca74c`, P9-screen-is-limit `652a0469`, P9-no-upgrade-source `60b5abf2`, P9-retail-firewall
-  `02480f59`, P9-summary-no-dead-pointer `b136c126`, P9-summary-screen-limit `c49f37af`; P9-cpu-fit-unknowns parked
-  (no CPU block). Finding: Check's upgrade block never renders in the shipped room (P9-upgrade-block-reachable).
-  Reviews per item in its row. Two idle windows:
-  07:56 (push 1 failed in the gate on the ExperimentBench flake, which passes alone; push 2 killed by PID tree when
-  the owner returned) and 09:41 (push 3 killed the same way). Not pushed; no build, install or screen check
-  (installed stays `b27552f8`).
 - 2026-11-12 ~10:10-12:10 (s23, coordinator-assigned; no game seen; owner's 10:43 rule: push/install need only no game;
   server restart ~11:08-11:30): bundle `main-unpushed-2026-11-12.bundle` verified. Landed, each in its own worktree:
   CR-bench-flake `4d51ba9b` (merge `f2062190`; Depth's mount effect re-closed a door tapped before it ran; 10/10 file
@@ -2713,6 +2755,15 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `train-*` folders preflight lists are the empty leftovers inventoried under s31 follow-ups. Not pushed: the owner
   came back (idle 49 s) before the push, so CODE-ONLY; main is 4 ahead of GitHub, the next FULL session pushes. Not
   installed (Friday install, or the next FULL session); zh-CN screen check owed then.
+- 2026-11-17 s37 (coordinator-assigned; preflight CODE-ONLY: the owner at the PC, so pushes ran on the
+  coordinator's order; no game at any check): reviewed s36's CR-zh-readiness-words (sonnet AWN; comment `ffce3574`,
+  merge `72bda27a`) and pushed it (`72bda27a`, gate PASS). Landed CR-lesson-fall-band (merge `8fd27fd3`), judging-chain
+  refactor slice 2 (merge `1d12730f`, no behaviour change, 5 of the 13 named pins retired), the s35 NITs (merge
+  `ac1108fe`: powercfg read timeout, driver compare); reviews under each item. Parked TG-salvage untouched (reason
+  under it). Queued: CR-lesson-crash-not-result, CR-fall-words-band, CR-what-changed-fall,
+  CR-driver-compare-everywhere. Guard re-derived: experiment-record-first-guard.test.ts's six conclude assertions onto
+  `conclude_two_session` (same strength; one order check that was vacuous since s35 now compares against
+  `judge_pair(` / `crash_outcome(`). Install and tester folder: see the next lines.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
