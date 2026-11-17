@@ -2710,7 +2710,9 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   3 -> 4); pushed `744acb22` PASS. Landed CR-drift-words-own-plan (`1cb7b2e6`), CR-tuning-frames-unread-reason
   (`a9e681b1`), s35 small fixes (`c80a00ff`), CR-core-parking-hidden-plan (`91d59341`), judging-chain refactor slice 1
   (`de49b37a`); reviews under each item. Parked: CR-lesson-fall-band (reason under it). Guards: the callers-of guard
-  also matches `dispatch_rollback_outcome_with` (tightening); the false-danger census +1 with its fix. RELEASE_STATE
+  also matches `dispatch_rollback_outcome_with` (tightening); the false-danger census +1 with its fix; the record-first
+  guard's §4.6 order check (`experiment-record-first-guard.test.ts`) re-derived onto `judge_pair` (the conclude calls
+  it after the treatment check; its body holds `conclude_outcome(` / `with_comparability(`), same strength. RELEASE_STATE
   re-anchored (`resolve_rollback`). cargo --lib 1982/0 on the last branch, clippy clean, tsc 0. Tester folder untouched.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
