@@ -401,6 +401,33 @@
       "removedForUser": "Removed for this user",
       "windowsDefault": "Windows default"
     },
+    "readiness": {
+      "powerProfile": {
+        "label": "Power profile",
+        "labelAttention": "Power plan isn't performance-oriented",
+        "unknown": "Couldn't read the active Windows power plan.",
+        "kept": "Active plan \"{{plan}}\", which you chose to keep as set outside Compy. Compy won't flag or switch it.",
+        "ready": "Active plan \"{{plan}}\" is performance-oriented.",
+        "attention": "Active plan \"{{plan}}\". A performance plan (High performance / Ultimate Performance) can reduce latency. Compy won't switch it for you."
+      },
+      "monitorRefresh": {
+        "label": "Monitor refresh rate",
+        "labelAttention": "Monitor below max refresh",
+        "noDisplay": "No display information was detected.",
+        "noRates": "Couldn't read the display's supported refresh rates.",
+        "ready": "Running at the maximum supported {{max}} Hz.",
+        "attention": "Running at {{current}} Hz but the display supports {{max}} Hz. Set the higher rate in Windows Display settings → Advanced display."
+      },
+      "gpuDriverAge": {
+        "label": "GPU driver age",
+        "labelAttention": "GPU driver over a year old",
+        "noGpu": "No GPU was detected.",
+        "noDate": "Couldn't read a driver date for {{gpu}}.",
+        "ready": "{{gpu}} driver is current ({{days}} days old).",
+        "advisory": "{{gpu}} driver is {{days}} days old — still fine. Worth updating around a new game's launch for day-one fixes, but nothing's broken here; updating mid-cycle rarely moves measured FPS.",
+        "attention": "{{gpu}} driver is over a year old ({{days}} days). Updating is recommended."
+      }
+    },
     "friendly": {
       "nagle-disable": "Smoother online play",
       "windows-search-disable": "Free up an older hard drive",

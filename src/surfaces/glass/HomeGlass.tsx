@@ -16,7 +16,7 @@ import { wordFromBand, confidenceWordKey } from "../../data/confidence-word";
 import { TubeChart, type TubeBar } from "./TubeChart";
 import { useDates } from "./GamesRoom";
 import { NavGlyph } from "../../design/NavGlyph";
-import { careHeadline, incidentKindLabel, incidentWhen } from "../../data/backend-words";
+import { careHeadline, incidentKindLabel, incidentWhen, readinessWords } from "../../data/backend-words";
 import "../glass-rooms.css";
 
 const Arrow = () => (
@@ -133,6 +133,20 @@ export function HomeGlass({
     : "";
 
   const topLimiter = priorities?.limiters?.[0] ?? null;
+  // CR-zh-readiness-words: a limiter read from a readiness check carries that check's own label and
+  // detail (priorities.rs); its words come from the check's (id, status), only when the card's text
+  // is that very check's text, so the sentence translated is the one shown.
+  const limiterCheck =
+    topLimiter && readiness
+      ? readiness.checks.find(
+          (c) => c.id === topLimiter.linked && c.label === topLimiter.title && c.detail === topLimiter.reason,
+        ) ?? null
+      : null;
+  const limiterWords = topLimiter
+    ? limiterCheck
+      ? readinessWords(limiterCheck, t, i18n.language)
+      : { label: topLimiter.title, detail: topLimiter.reason }
+    : null;
 
   const chartGame = games.find((g) => g.key === chartKey) ?? null;
   const bars: TubeBar[] = chartGame
@@ -351,8 +365,8 @@ export function HomeGlass({
               <div className="gl-rows">
                 <div className="gl-row">
                   <span>
-                    <span className="gl-row-title">{topLimiter.title}</span>
-                    <span className="gl-row-sub">{topLimiter.reason}</span>
+                    <span className="gl-row-title">{limiterWords!.label}</span>
+                    <span className="gl-row-sub">{limiterWords!.detail}</span>
                   </span>
                   <span className="gl-chip" data-tone="accent">
                     {t(confidenceWordKey(wordFromBand(topLimiter.confidence)))}

@@ -255,6 +255,40 @@ describe("GL-empty — 'What's holding FPS back' speaks for what it read: the se
       expect(zh[k], k).not.toMatch(/实测|游戏记录|会话|上一次/);
     }
   });
+
+  // CR-zh-readiness-words (view-1112a/14-home-zh-CN.png): zh-CN printed readiness.rs's English title
+  // and body for the owner's power plan; the plan's own name stays as Windows has it.
+  it("zh-CN: the power-plan limiter reads in Chinese with the plan's name untranslated; English unchanged", async () => {
+    const label = "Power plan isn't performance-oriented";
+    const detail =
+      'Active plan "Synez Power Plan". A performance plan (High performance / Ultimate Performance) can reduce latency. Compy won\'t switch it for you.';
+    const r = readiness(0);
+    const withPlan: GameReadiness = {
+      ...r,
+      checks: [...r.checks, { id: "power-profile", label, status: "attention", detail, value: "Synez Power Plan" }],
+      attention_count: 1,
+    };
+    const priorities: Priorities = {
+      ...noLimiters,
+      limiters: [{ id: "power-profile", title: label, reason: detail, linked: "power-profile", confidence: "medium", status: "attention" }],
+    };
+    home({ readiness: withPlan, priorities });
+    expect(limiter().textContent).toContain(label);
+    expect(limiter().textContent).toContain(detail);
+    cleanup();
+    const { default: i18n } = await import("../../i18n");
+    await i18n.changeLanguage("zh-CN");
+    try {
+      home({ readiness: withPlan, priorities });
+      // The card's name is Chinese here too; found by its heading's id.
+      const text = document.querySelector('[aria-labelledby="gl-home-limiter"]')!.textContent!;
+      expect(text).toContain("电源计划不是性能优先");
+      expect(text).toContain("“Synez Power Plan”");
+      expect(text).not.toMatch(/performance-oriented|Active plan|switch it/);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
 });
 
 describe("GL-empty F3 — no measured game: one block, one pointer at Live", () => {

@@ -1,7 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "fs";
 import i18n from "../i18n";
-import { appliedValueLabel, careHeadline, friendlyHeadline, incidentKindLabel, incidentWhen } from "./backend-words";
+import {
+  appliedValueLabel,
+  careHeadline,
+  friendlyHeadline,
+  incidentKindLabel,
+  incidentWhen,
+  READINESS_MIRROR,
+  readinessWords,
+} from "./backend-words";
 import { FRIENDLY_LABELS } from "./friendly-labels";
 
 // CR-zh-backend-home (view-1112a/14-home-zh-CN.png): zh-CN Health printed backend English. Words with
@@ -94,5 +102,82 @@ describe("friendlyHeadline", () => {
     expect(friendlyHeadline("game-mode", zh)).toBe("让 Windows 专注于你的游戏");
     expect(friendlyHeadline("no-such-rec", zh)).toBeNull();
     expect(friendlyHeadline("constructor", zh)).toBeNull();
+  });
+});
+
+// CR-zh-readiness-words: zh-CN Health's limiter card printed readiness.rs English ("Power plan isn't
+// performance-oriented", "Active plan "Synez Power Plan". A performance plan ...").
+describe("readinessWords", () => {
+  const plan = {
+    id: "power-profile",
+    status: "attention",
+    label: "Power plan isn't performance-oriented",
+    detail:
+      'Active plan "Synez Power Plan". A performance plan (High performance / Ultimate Performance) can reduce latency. Compy won\'t switch it for you.',
+  };
+
+  it("English gets the backend's own words, byte for byte", () => {
+    expect(readinessWords(plan, en, "en")).toEqual({ label: plan.label, detail: plan.detail });
+  });
+
+  it("zh-CN translates by (id, status), keeping the plan's name as Windows has it", () => {
+    const w = readinessWords(plan, zh, "zh-CN");
+    expect(w.label).toBe("电源计划不是性能优先");
+    expect(w.detail).toBe("当前计划为“Synez Power Plan”。性能计划（高性能 / 卓越性能）可以降低延迟。Compy 不会替你切换。");
+  });
+
+  it("names and numbers are lifted from the sentence and put back untranslated", () => {
+    const gpu = readinessWords(
+      {
+        id: "gpu-driver-age",
+        status: "attention",
+        label: "GPU driver over a year old",
+        detail: "AMD Radeon RX 7800 XT (2) driver is over a year old (412 days). Updating is recommended.",
+      },
+      zh,
+      "zh-CN",
+    );
+    expect(gpu.detail).toBe("AMD Radeon RX 7800 XT (2) 的驱动已超过一年（412 天）。建议更新。");
+    const hz = readinessWords(
+      {
+        id: "monitor-refresh",
+        status: "attention",
+        label: "Monitor below max refresh",
+        detail: "Running at 60 Hz but the display supports 250 Hz. Set the higher rate in Windows Display settings → Advanced display.",
+      },
+      zh,
+      "zh-CN",
+    );
+    expect(hz.detail).toContain("60 Hz");
+    expect(hz.detail).toContain("250 Hz");
+    expect(hz.detail).not.toMatch(/Running|display/);
+    // A plan named like a template slot or with regex characters is taken as sent.
+    const odd = readinessWords({ ...plan, status: "ready", label: "Power profile", detail: 'Active plan "a.*(b) {{x}}" is performance-oriented.' }, zh, "zh-CN");
+    expect(odd.detail).toBe("当前计划“a.*(b) {{x}}”是性能优先的。");
+  });
+
+  it("a sentence, status or label that matches no mirror is shown as sent (never guessed)", () => {
+    for (const c of [
+      { ...plan, detail: plan.detail + " Something newer." },
+      { ...plan, status: "ready" },
+      { ...plan, label: "Power plan" },
+      { ...plan, id: "install-drive" },
+    ]) {
+      expect(readinessWords(c, zh, "zh-CN")).toEqual({ label: c.label, detail: c.detail });
+    }
+  });
+
+  it("every mirrored sentence is still what readiness.rs says, and the en locale says it too", () => {
+    const rs = readFileSync("src-tauri/src/readiness.rs", "utf8").replace(/\\\r?\n\s*/g, "").replace(/\\"/g, '"');
+    for (const v of READINESS_MIRROR) {
+      expect(rs, v.label).toContain(`"${v.label}"`);
+      for (const part of v.detail.split(/\{\{\w+\}\}/).filter(Boolean)) {
+        expect(rs, v.detail).toContain(part);
+      }
+      expect(en(v.labelKey)).toBe(v.label);
+      expect(en(v.detailKey, { interpolation: { escapeValue: false } })).toBe(v.detail);
+      expect(zh(v.labelKey)).not.toBe(v.label);
+      expect(zh(v.detailKey)).not.toBe(v.detail);
+    }
   });
 });
