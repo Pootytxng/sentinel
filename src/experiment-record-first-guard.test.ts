@@ -242,10 +242,14 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
       /None => crash_outcome\(rec\.applied_at\.as_deref\(\), baseline, treatment\)/,
     );
     // The restore and the save are the shared keep/restore tail's (P5-realplay), called last.
-    for (const later of ["conclude_outcome(", ".treatment = resolved", "finish_conclude("]) {
+    // s35 judging-chain refactor: the verdict chain (`conclude_outcome`, `with_comparability`, ...)
+    // moved unchanged into the pure `judge_pair`, which only the conclude calls, after the check.
+    for (const later of ["judge_pair(", ".treatment = resolved", "finish_conclude("]) {
       expect(conclude.indexOf(later), `${later} moved ahead of the treatment check`).toBeGreaterThan(resolve);
     }
-    expect(conclude).toMatch(/with_comparability\(/);
+    const judge = fnBody(EXPERIMENT, "pub(crate) fn judge_pair(");
+    expect(judge).toMatch(/conclude_outcome\(/);
+    expect(judge).toMatch(/with_comparability\(/);
   });
 
   // A changed condition is not a wrong pick: no later session undoes a driver or Windows update, so
