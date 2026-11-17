@@ -32,6 +32,20 @@ function fnBody(src: string, signature: string): string {
   return end === -1 ? rest : rest.slice(0, end);
 }
 
+// s37 judging-chain refactor slice 2: the two-session conclude's judging and record writes moved
+// unchanged into `conclude_two_session` (no IO, no store), which `conclude_experiment` calls after it
+// resolved the treatment and read the target, handing the outcome it returns to the keep/restore
+// tail. Assertions on that work read the core's body; the conclude must make that call.
+const CORE_SIG = "pub(crate) fn conclude_two_session(";
+const CORE_CALL = "let outcome = conclude_two_session(&mut store.experiments[idx], reads);";
+function concludeCore(): { conclude: string; core: string; call: number } {
+  const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
+  const call = conclude.indexOf(CORE_CALL);
+  expect(call, "the conclude no longer judges through conclude_two_session").toBeGreaterThanOrEqual(0);
+  expect(conclude.indexOf("finish_conclude(&mut store, idx, outcome, target_now)"), "the keep/restore tail no longer gets the core's outcome").toBeGreaterThan(call);
+  return { conclude, core: fnBody(EXPERIMENT, CORE_SIG), call };
+}
+
 describe("experiment start is record-first and single-active (#583)", () => {
   const start = fnBody(EXPERIMENT, "pub(crate) fn start_experiment(");
 
@@ -100,20 +114,25 @@ describe("a Trial verifies the setting before, during and after (#583 lane 2)", 
   });
 
   it("§7 at conclude: the target is read before the keep/restore decision and can overrule it", () => {
-    const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
+    // s37: the check runs in the core (`concludeCore`), which the conclude calls after the read.
+    const { conclude, core, call } = concludeCore();
     const read = conclude.indexOf(PROBE);
-    const guard = conclude.indexOf("guard_target_at_conclude(");
     expect(read, "conclude no longer reads the target").toBeGreaterThanOrEqual(0);
-    expect(guard).toBeGreaterThan(read);
+    expect(call, "the core is called before the target is read").toBeGreaterThan(read);
+    expect(conclude.slice(read, call), "the core is no longer handed the target read").toMatch(/\n\s*target_now,\n/);
+    const guard = core.indexOf("guard_target_at_conclude(");
     // It wraps whatever was judged (a measured reading or a crash), after the judging and before
     // the keep/restore decision.
-    expect(conclude, "the target check no longer wraps every judged outcome").toMatch(
+    expect(core, "the target check no longer wraps every judged outcome").toMatch(
       /let outcome = guard_target_at_conclude\(judged,/,
     );
-    expect(guard).toBeGreaterThan(conclude.indexOf("conclude_outcome("));
+    expect(guard).toBeGreaterThan(core.indexOf("judge_pair("));
+    expect(guard).toBeGreaterThan(core.indexOf("crash_outcome("));
+    // That the core returns the checked outcome is proven by what it decides (experiment.rs
+    // `the_target_read_has_the_last_word_at_conclude`).
     // P5-realplay: the keep/restore decision is the tail both concludes share, handed the checked outcome.
     const finish = conclude.indexOf("finish_conclude(&mut store, idx, outcome, target_now)");
-    expect(finish, "conclude no longer hands the checked outcome to the shared keep/restore").toBeGreaterThan(guard);
+    expect(finish, "conclude no longer hands the checked outcome to the shared keep/restore").toBeGreaterThan(call);
     expect(fnBody(EXPERIMENT, "fn finish_conclude("), "the shared tail no longer decides keep or restore").toContain(
       "if outcome.keep",
     );
@@ -238,14 +257,20 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
     expect(conclude, "a refused treatment no longer returns early, or a crash no longer overrides it").toMatch(
       /crash_overrides_refusal\(\s*resolve_treatment\([\s\S]*?\),\s*crashed,?\s*\)\s*\.map_err\([\s\S]*?\)\?;/,
     );
-    expect(conclude, "a crash whose session can't be used no longer restores").toMatch(
+    // s37: judged and recorded in the core (`concludeCore`), called after the check with what it resolved.
+    const { core, call } = concludeCore();
+    expect(core, "a crash whose session can't be used no longer restores").toMatch(
       /None => crash_outcome\(rec\.applied_at\.as_deref\(\), baseline, treatment\)/,
     );
+    expect(conclude.slice(resolve, call), "the core is no longer handed what the check resolved").toMatch(/\n\s*resolved,\n/);
     // The restore and the save are the shared keep/restore tail's (P5-realplay), called last.
     // s35 judging-chain refactor: the verdict chain (`conclude_outcome`, `with_comparability`, ...)
-    // moved unchanged into the pure `judge_pair`, which only the conclude calls, after the check.
-    for (const later of ["judge_pair(", ".treatment = resolved", "finish_conclude("]) {
+    // moved unchanged into the pure `judge_pair`, which only the conclude's core calls, after the check.
+    for (const later of [CORE_CALL, "finish_conclude("]) {
       expect(conclude.indexOf(later), `${later} moved ahead of the treatment check`).toBeGreaterThan(resolve);
+    }
+    for (const inCore of ["judge_pair(", ".treatment = resolved"]) {
+      expect(core.indexOf(inCore), `${inCore} left the core`).toBeGreaterThanOrEqual(0);
     }
     const judge = fnBody(EXPERIMENT, "pub(crate) fn judge_pair(");
     expect(judge).toMatch(/conclude_outcome\(/);
@@ -281,7 +306,10 @@ describe("a Trial's evidence comes from Compy's own session store (#583 lane 2b)
     expect(conclude, "a Trial with no treatment session reads a noise level again").toContain(
       "treatment.map_or(crate::noise_floor::NoiseLookup::Unmeasured, crate::noise_floor::lookup_for_session)",
     );
-    expect(conclude).toContain("noise_evidence_for(&outcome, band_pct, &game_noise, between.as_ref())");
+    // s37: the level read is handed to the core (`concludeCore`), which records it.
+    const { core, call } = concludeCore();
+    expect(conclude.slice(0, call), "the core is no longer handed the level the conclude read").toMatch(/\n\s*game_noise,\n/);
+    expect(core).toContain("noise_evidence_for(&outcome, band_pct, &game_noise, between.as_ref())");
   });
 
   it("§5 (P4-noise): the verdict band is the measured between-session spread; the halves stay on the fixed floor", () => {
@@ -343,10 +371,13 @@ describe("a Trial measures one change, and says so only when it can (#611 review
   });
 
   it("§3 at conclude: another Compy change during the test confounds, ahead of the target check", () => {
-    const fold = conclude.indexOf("with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()))");
+    // s37: in the core (`concludeCore`), on the ledger rows the conclude read and handed it.
+    const { core, call } = concludeCore();
+    expect(conclude.slice(0, call), "the core is no longer handed the conclude's ledger rows").toMatch(/\n\s*rows: rows\.as_deref\(\),\n/);
+    const fold = core.indexOf("with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows))");
     expect(fold, "the conclude no longer checks Compy's other changes").toBeGreaterThanOrEqual(0);
-    expect(fold).toBeGreaterThan(conclude.indexOf("crash_outcome(rec.applied_at.as_deref(), baseline, treatment)"));
-    expect(fold).toBeLessThan(conclude.indexOf("guard_target_at_conclude(judged,"));
+    expect(fold).toBeGreaterThan(core.indexOf("crash_outcome(rec.applied_at.as_deref(), baseline, treatment)"));
+    expect(fold).toBeLessThan(core.indexOf("guard_target_at_conclude(judged,"));
   });
 
   it("a crash is checked against the baseline's conditions when both sessions exist", () => {
@@ -506,11 +537,15 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
   });
 
   it("§3/§7/§9 at conclude: other settings not confirmed in place leave the result unjudged, ahead of the target check", () => {
-    const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
-    const fold = conclude.indexOf("with_unverified_changes(judged, unverified)");
+    // s37: the conclude reads the count live and hands it to the core (`concludeCore`), which weighs it.
+    const { conclude, core, call } = concludeCore();
+    const read = conclude.indexOf("unverified_others_live(");
+    expect(read, "the conclude no longer reads settings it can't read back").toBeGreaterThanOrEqual(0);
+    expect(conclude.slice(read, call), "the core is no longer handed the count").toMatch(/\n\s*unverified,\n/);
+    const fold = core.indexOf("with_unverified_changes(judged, unverified)");
     expect(fold, "the conclude no longer weighs settings it can't read back").toBeGreaterThanOrEqual(0);
-    expect(fold).toBeGreaterThan(conclude.indexOf("with_compy_state(judged,"));
-    expect(fold).toBeLessThan(conclude.indexOf("guard_target_at_conclude(judged,"));
+    expect(fold).toBeGreaterThan(core.indexOf("with_compy_state(judged,"));
+    expect(fold).toBeLessThan(core.indexOf("guard_target_at_conclude(judged,"));
     const unverified = fnBody(EXPERIMENT, "pub(crate) fn with_unverified_changes(");
     expect(unverified).toMatch(/verdict: "insufficient-evidence"\.into\(\),\s*keep: false,/);
     expect(unverified, "an unconfirmed result is only capped again, and can still keep").not.toContain("confidence.min(");
@@ -610,9 +645,10 @@ describe("a Trial claims nothing it can't tie to its own change (#611 review rou
 // a "+0%" reading the real app can never write, and a review judged a measurement that doesn't exist.
 describe("the fixture preview shows only Trial rows the backend can write", () => {
   it("an unpinned crash row carries no treatment, because none was resolved", () => {
-    const conclude = fnBody(EXPERIMENT, "pub(crate) fn conclude_experiment(");
-    expect(conclude).toContain("None => crash_outcome(");
-    expect(conclude).toContain("store.experiments[idx].treatment = resolved.as_ref().map(");
+    // s37: the conclude's record writes moved into its core (`concludeCore`), on the conclude's record.
+    const { core } = concludeCore();
+    expect(core).toContain("None => crash_outcome(");
+    expect(core).toContain("record.treatment = resolved.as_ref().map(");
     const stub = readFileSync(join("docs", "ui-sweep", "fixture", "stub-core.ts"), "utf8");
     const rows = stub.split(/(?=\bid: "fx-)/).slice(1);
     const unpinned = rows.filter((r) => /stop_reason: "crash-(?:session|baseline)-/.test(r));
