@@ -453,13 +453,21 @@ export function measuredBandsLine(g: GameNoise, outcome: TrialOutcome | null | u
 // after-session, or that none of it changed, and one next step. null for any other verdict, a real-play Trial (many sessions a
 // side), or a session Compy no longer holds (nothing honest to compare).
 export function trialDriftWords(
-  x: { verdict: string | null; mode?: string | null; game: string; baseline_session_id?: string | null; treatment: { session_id?: string | null } | null },
+  x: {
+    verdict: string | null;
+    mode?: string | null;
+    game: string;
+    rec_id: string;
+    baseline_session_id?: string | null;
+    treatment: { session_id?: string | null } | null;
+  },
   sessions: readonly SessionSummary[],
   t: Translate,
 ): string | null {
   if (x.verdict !== "too-noisy" || x.mode === "real-play") return null;
   const find = (id: string | null | undefined) => (id ? sessions.find((s) => s.started_at === id) : undefined);
-  return driftWords(find(x.baseline_session_id), find(x.treatment?.session_id), prettyGameName(x.game) || x.game, t);
+  // CR-drift-words-own-plan: the Trial's setting, so a Trial of the power plan never names its own move.
+  return driftWords(find(x.baseline_session_id), find(x.treatment?.session_id), prettyGameName(x.game) || x.game, t, x.rec_id);
 }
 
 // s27 (opus r1): a Trial not judged because its two sessions were further apart than the band was

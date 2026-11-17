@@ -53,14 +53,21 @@ function resolution(s: SessionSummary): string | null {
 const driverOf = (s: SessionSummary) => text(s.game_state?.gpu_driver) ?? text(s.hw_fingerprint?.gpu_driver);
 const gamingMode = (s: SessionSummary): boolean | null => s.gaming_mode_active ?? s.game_state?.gaming_mode_active ?? null;
 
+/** The ledger rec id of the power plan itself (experiment.rs `POWER_PLAN_REC`). A Trial of it moves
+ *  the plan between its sessions by design, so that move is never named as a difference
+ *  (CR-drift-words-own-plan; the backend's `with_power_plan_check` exempts it the same way). */
+export const POWER_PLAN_REC = "power-ultimate";
+
 /** The context fields BOTH sessions recorded, by copy key (session length aside, which every session
  *  has). Sonnet r1: none = nothing was compared, so "nothing differed" would be a claim from no data.
- *  Opus r2: the "nothing differed" line names exactly these, never more. */
-export function comparedFields(baseline: SessionSummary, after: SessionSummary): string[] {
+ *  Opus r2: the "nothing differed" line names exactly these, never more. CR-drift-words-own-plan: the
+ *  power plan counts only when both sessions' plans were actually compared (never for a Trial of the
+ *  plan itself, never from the changed-during flags alone). */
+export function comparedFields(baseline: SessionSummary, after: SessionSummary, recId?: string | null): string[] {
   const both = <T>(f: (s: SessionSummary) => T | null | undefined) => f(baseline) != null && f(after) != null;
   const fields: [string, boolean][] = [
     ["cap", both(capWords)],
-    ["powerPlan", both((s) => text(s.game_state?.power_plan_guid)) || both((s) => s.game_state?.power_plan_changed)],
+    ["powerPlan", recId !== POWER_PLAN_REC && both((s) => text(s.game_state?.power_plan_guid))],
     ["driver", both(driverOf)],
     ["windowsBuild", both((s) => text(s.game_state?.windows_build))],
     ["gamingMode", both(gamingMode)],
@@ -70,17 +77,22 @@ export function comparedFields(baseline: SessionSummary, after: SessionSummary):
   return fields.filter(([, on]) => on).map(([k]) => k);
 }
 
-/** What differed between the two sessions, from recorded context only, most actionable first. */
-export function sessionDrift(baseline: SessionSummary, after: SessionSummary): DriftItem[] {
+/** What differed between the two sessions, from recorded context only, most actionable first.
+ *  `recId` is the Trial's setting: for the power plan itself the between-sessions plan is not a
+ *  difference (a plan switched during a session still is, as at the conclude). */
+export function sessionDrift(baseline: SessionSummary, after: SessionSummary, recId?: string | null): DriftItem[] {
   const out: DriftItem[] = [];
   const [capB, capA] = [capWords(baseline), capWords(after)];
   if (capB != null && capA != null && capsDiffer(capB, capA)) out.push({ key: "cap", before: capB, after: capA });
   const [planB, planA] = [text(baseline.game_state?.power_plan_guid), text(after.game_state?.power_plan_guid)];
-  if (planB != null && planA != null && planB.toLowerCase() !== planA.toLowerCase()) out.push({ key: "power-plan" });
+  if (recId !== POWER_PLAN_REC && planB != null && planA != null && planB.toLowerCase() !== planA.toLowerCase())
+    out.push({ key: "power-plan" });
   const [chB, chA] = [baseline.game_state?.power_plan_changed === true, after.game_state?.power_plan_changed === true];
   if (chB || chA) out.push({ key: "power-plan-changed", which: chB && chA ? "both" : chB ? "baseline" : "after" });
+  // CR-drift-words-own-plan: driver strings compare case-insensitively, as the backend preflight does.
   const [drvB, drvA] = [driverOf(baseline), driverOf(after)];
-  if (drvB != null && drvA != null && drvB !== drvA) out.push({ key: "driver", before: drvB, after: drvA });
+  if (drvB != null && drvA != null && drvB.toLowerCase() !== drvA.toLowerCase())
+    out.push({ key: "driver", before: drvB, after: drvA });
   const [winB, winA] = [text(baseline.game_state?.windows_build), text(after.game_state?.windows_build)];
   if (winB != null && winA != null && winB !== winA) out.push({ key: "windows-build", before: winB, after: winA });
   const [gmB, gmA] = [gamingMode(baseline), gamingMode(after)];
@@ -152,11 +164,12 @@ export function driftWords(
   after: SessionSummary | null | undefined,
   game: string,
   t: Translate,
+  recId?: string | null,
 ): string | null {
   if (baseline == null || after == null) return null;
-  const items = sessionDrift(baseline, after);
+  const items = sessionDrift(baseline, after, recId);
   if (items.length === 0) {
-    const compared = comparedFields(baseline, after);
+    const compared = comparedFields(baseline, after, recId);
     const fields = [...compared, "length"].map((k) => t(`lab.experimentBench.drift.field.${k}`)).join(t("lab.experimentBench.drift.fieldJoiner"));
     return `${
       compared.length === 0 ? t("lab.experimentBench.drift.noContext") : t("lab.experimentBench.drift.nothingDiffers", { fields })
