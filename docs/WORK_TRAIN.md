@@ -2713,7 +2713,11 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   also matches `dispatch_rollback_outcome_with` (tightening); the false-danger census +1 with its fix; the record-first
   guard's §4.6 order check (`experiment-record-first-guard.test.ts`) re-derived onto `judge_pair` (the conclude calls
   it after the treatment check; its body holds `conclude_outcome(` / `with_comparability(`), same strength. RELEASE_STATE
-  re-anchored (`resolve_rollback`). cargo --lib 1982/0 on the last branch, clippy clean, tsc 0. Tester folder untouched.
+  re-anchored (`resolve_rollback`). cargo --lib 1982/0 on the last branch, clippy clean, tsc 0. Pushes: `744acb22`,
+  `8c818b0d`, both PASS (two gate failures fixed forward: RELEASE_STATE drift, the record-first guard above; one
+  timing flake in tree-kill-stale-parent-guard under load, passed on retry). Installed
+  `8c818b0d348ed190b430abdddadc46e21ea432d5` (runtime proof attempt 1, Synez plan before/after); RELEASE_STATE
+  re-stamped. Tester folder untouched.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
