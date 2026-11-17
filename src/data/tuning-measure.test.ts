@@ -306,11 +306,51 @@ describe("measureTuning", () => {
     expect(m.fpsUnmeasured).toBe(true);
     expect(m.verdict).not.toBe("too-aggressive");
     // The reason given is the real one: the noise IS measured; a session couldn't be compared.
-    expect(m.detail).toMatch(/can't be compared with your baseline: another GPU, driver, game build or frame cap/);
-    expect(m.detail).not.toMatch(/isn't measured/);
+    expect(m.detail).toMatch(/can't be compared with your baseline: another GPU, driver or game build/);
+    expect(m.detail).not.toMatch(/isn't measured|frame cap|couldn't match/);
     // A session the list doesn't name, or no list at all: not judged either.
     expect(measureTuning(baseline(), drop, measured(10), ok(drop.slice(1)))!.fpsRegressed).toBe(false);
     expect(measureTuning(baseline(), drop, measured(10), null)!.fpsUnmeasured).toBe(true);
+  });
+
+  // CR-tuning-frames-unread-reason: with a band but no usable list, the frames line names no cause.
+  it("CR-tuning-frames-unread-reason: unmatched sessions are 'couldn't match', never a GPU, driver, build or cap", () => {
+    const ss = [sess({ started_at: "2026-06-08T18:00:00Z" }), sess({ started_at: "2026-06-08T16:00:00Z" })];
+    const cause = /another GPU|driver|game build|frame cap/;
+    // No list (still loading, the read failed, no baseline session) with a band present.
+    const none = measureTuning(baseline(), ss, measured(10), null)!;
+    expect(none.fpsUnmeasured).toBe(true);
+    expect(none.detail).toMatch(/couldn't match these sessions to your baseline/);
+    expect(none.detail).not.toMatch(cause);
+    // An empty list (the backend found no baseline session), and a list that doesn't name a session.
+    expect(measureTuning(baseline(), ss, measured(10), [])!.detail).not.toMatch(cause);
+    expect(measureTuning(baseline(), ss, measured(10), ok(ss.slice(1)))!.detail).not.toMatch(cause);
+    // A session with no recorded conditions (Comparability::Unknown) is not a listed difference.
+    const unknown = ok(ss).map((p, i) => (i === 0 ? { ...p, comparable: false, conditions_unknown: true } : p));
+    const u = measureTuning(baseline(), ss, measured(10), unknown)!;
+    expect(u.detail).toMatch(/couldn't match these sessions to your baseline/);
+    expect(u.detail).not.toMatch(cause);
+    // A real listed difference beside an unmatched session: both said, each for what it is.
+    const mixed = [
+      { started_at: ss[0].started_at, comparable: false },
+      { started_at: ss[1].started_at, comparable: false, conditions_unknown: true },
+    ];
+    expect(measureTuning(baseline(), ss, measured(10), mixed)!.detail).toMatch(
+      /another GPU, driver or game build, and Compy couldn't match the others to it/,
+    );
+    // A session left out only by its cap read names the cap, and nothing else.
+    const capped = [ss[0], { ...ss[1], frame_cap: null }];
+    const c = measureTuning(baseline(), capped, measured(10), ok(capped))!;
+    expect(c.detail).toMatch(/can't be compared with your baseline: a different or unread frame cap/);
+    expect(c.detail).not.toMatch(/another GPU|couldn't match/);
+  });
+
+  it("CR-tuning-frames-unread-reason: an unknown-conditions session's peak is 'couldn't match' for temps too", () => {
+    const cool = threeGoodSessions();
+    const unknown = ok(cool).map((p) => ({ ...p, comparable: false, conditions_unknown: true }));
+    const m = measureTuning(baseline(), cool, null, unknown)!;
+    expect(m.detail).toMatch(/Temps not compared yet: Compy couldn't match these sessions to your baseline/);
+    expect(m.detail).not.toMatch(/another GPU, driver or game build/);
   });
 
   // CR-tuning-temp-comparability: the temperature claim reads peaks only from sessions the same

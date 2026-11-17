@@ -2,7 +2,13 @@ import type { SessionSummary, ArmedComparison, ComparisonResult } from "../types
 import { allBackground } from "../lib/session-metrics";
 
 /** comparison.rs `PostComparability` (CR-tuning-comparability). */
-export type PostComparability = { started_at: string; comparable: boolean };
+export type PostComparability = {
+  started_at: string;
+  comparable: boolean;
+  /** CR-tuning-frames-unread-reason: not comparable only because no conditions were recorded to
+   *  compare (`Comparability::Unknown`). The backend always sends it; absent reads as false. */
+  conditions_unknown?: boolean;
+};
 
 // THE honest-measurement verdict for a tuning baseline (spec 2026-06-08) — ONE pure source shared by
 // the Lab Tuning instrument and the Play debrief so the verdict can't drift. It is a function of
@@ -296,6 +302,11 @@ export function measureTuning(
   // `started_at` is the session's id on both sides (the same recorded field); never normalise one side.
   const conditionsComparable = (s: SessionSummary) =>
     postComparability?.some((p) => p.started_at === s.started_at && p.comparable) === true;
+  // CR-tuning-frames-unread-reason: the list itself names a real difference (GPU, rig, driver,
+  // build) for this session. Not read, not listed, or no conditions recorded is never that.
+  const listedDifferent = (s: SessionSummary) =>
+    postComparability?.some((p) => p.started_at === s.started_at && !p.comparable && p.conditions_unknown !== true) ===
+    true;
   const comparable = (s: SessionSummary) =>
     band != null && band.cap?.state === "uncapped" && s.frame_cap?.state === "uncapped" && conditionsComparable(s);
   const fallPct = band?.fall_pct ?? null;
@@ -318,11 +329,26 @@ export function measureTuning(
   const bandText = band != null ? `+${band.low1_band_pct}% / −${band.fall_pct}%` : "";
   const fallText = band != null ? `−${band.fall_pct}%` : "";
   // CR-tuning-comparability (opus r1): why frames went unjudged, in plain words. No band at all, or a
-  // band with some sessions left out (another GPU, driver, game build, or frame cap).
+  // band with some sessions left out.
+  // CR-tuning-frames-unread-reason: each named cause is one the data shows. GPU/driver/build only when
+  // the list marks a left-out session different; the frame cap only when a cap read is what left a
+  // session out; a list not read (still loading, read failed, no baseline session), a session it
+  // doesn't name, or one with no recorded conditions is "couldn't match", never a measured cause.
+  const leftOut = post.filter((s) => !comparable(s));
+  const capLeftOut = (s: SessionSummary) => band?.cap?.state !== "uncapped" || s.frame_cap?.state !== "uncapped";
+  const causes = [
+    leftOut.some(listedDifferent) && "another GPU, driver or game build",
+    leftOut.some((s) => conditionsComparable(s) && capLeftOut(s)) && "a different or unread frame cap",
+  ].filter((c): c is string => typeof c === "string");
+  const unmatched = leftOut.some((s) => !conditionsComparable(s) && !listedDifferent(s));
   const unjudgedWhy =
     band == null
       ? "this game's noise between sessions isn't measured"
-      : "some sessions since the tune can't be compared with your baseline: another GPU, driver, game build or frame cap";
+      : causes.length === 0
+        ? "Compy couldn't match these sessions to your baseline"
+        : `some sessions since the tune can't be compared with your baseline: ${causes.join(" or ")}${
+            unmatched ? ", and Compy couldn't match the others to it" : ""
+          }`;
 
   // Thermal payoff: compare the baseline peak to the WORST (hottest) post-tune peak — honest "it runs
   // cooler even at its hottest". A ≥3 °C drop clears sensor/ambient noise.
@@ -337,9 +363,8 @@ export function measureTuning(
   const peaksLeftOut = post.some((s) => peakOf(s) != null && !conditionsComparable(s));
   // Opus r1 SHOULD-FIX: name GPU/driver/build only when the list actually marks a session not
   // comparable; a list not read yet (or empty) is "couldn't match", never a measured reason.
-  const listedNotComparable = post.some(
-    (s) => peakOf(s) != null && postComparability?.some((p) => p.started_at === s.started_at && !p.comparable) === true,
-  );
+  // CR-tuning-frames-unread-reason: a session with no recorded conditions is not a listed difference.
+  const listedNotComparable = post.some((s) => peakOf(s) != null && listedDifferent(s));
   // Opus r1 MUST-FIX: a temperature claim needs the same qualifying window, counted on the
   // comparable sessions it was read from (never on sessions it left out).
   const cmpSecs = cmpPost.reduce((sum, s) => sum + s.duration_secs, 0);
@@ -438,7 +463,7 @@ export function measureTuning(
     // Item 8: nothing to call the frames on. Show them; never a null invented from a fixed floor.
     verdict = "unmeasured";
     headline = "Can't call the frames";
-    detail = `${tempLine} ${band == null ? "Compy hasn't measured how much this game moves between your sessions with nothing changed" : "Compy can't compare every session since the tune with your baseline (another GPU, driver, game build or frame cap)"}, so it won't call the frames better or worse${low1DeltaPct != null ? ` (latest 1% low ${low1DeltaPct > 0 ? "+" : ""}${low1DeltaPct}% vs your baseline)` : ""} — ${progress} so far.`;
+    detail = `${tempLine} ${band == null ? "Compy hasn't measured how much this game moves between your sessions with nothing changed, so it won't call the frames better or worse" : `Compy won't call the frames better or worse (${unjudgedWhy})`}${low1DeltaPct != null ? ` (latest 1% low ${low1DeltaPct > 0 ? "+" : ""}${low1DeltaPct}% vs your baseline)` : ""} — ${progress} so far.`;
   } else {
     verdict = "no-change";
     headline = "No measurable change";
