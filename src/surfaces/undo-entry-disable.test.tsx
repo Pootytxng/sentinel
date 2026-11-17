@@ -13,11 +13,16 @@ import type { WhatChangedOutcome, IntelSessionRef, AppliedChange, ComparisonResu
 
 const REASON = "Compy has no saved undo for this change.";
 
-const harness = vi.hoisted(() => ({ outcome: null as unknown, comparison: null as unknown }));
+const harness = vi.hoisted(() => ({ outcome: null as unknown, comparison: null as unknown, dismissed: 0 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string) => {
     if (cmd === "what_changed_for_session") return Promise.resolve(harness.outcome);
     if (cmd === "get_latest_comparison") return Promise.resolve(harness.comparison);
+    if (cmd === "dismiss_comparison") {
+      harness.dismissed += 1;
+      harness.comparison = null;
+      return Promise.resolve(null);
+    }
     return Promise.resolve(null);
   },
 }));
@@ -81,6 +86,7 @@ const row = (undo_contract?: boolean): AppliedChange => ({
 beforeEach(() => {
   harness.outcome = report;
   harness.comparison = null;
+  harness.dismissed = 0;
 });
 afterEach(() => {
   cleanup();
@@ -180,6 +186,29 @@ describe("debrief's Revert it", () => {
     expect(container.querySelector(".cmp-noundo")?.textContent).toBe(REASON);
     fireEvent.click(revert(container)!);
     expect(rollback).not.toHaveBeenCalled();
+  });
+
+  // CR-debrief-no-undo-dismiss (s33 opus SHOULD-FIX): no saved undo, a non-improved result and no
+  // next suspect left only the disabled "Revert it", so the card could never be cleared.
+  it("offers a Dismiss that clears the card and undoes nothing when Revert it can't run", async () => {
+    harness.comparison = cmp;
+    const rollback = vi.fn().mockResolvedValue(true);
+    const { container } = mount(row(false), rollback);
+    await waitFor(() => expect(revert(container)).toBeTruthy());
+    const dismiss = container.querySelector<HTMLButtonElement>('[data-testid="cmp-dismiss"]');
+    expect(dismiss?.textContent).toBe("Dismiss");
+    expect(dismiss!.disabled).toBe(false);
+    fireEvent.click(dismiss!);
+    await waitFor(() => expect(container.querySelector('[data-testid="cmp-card"]')).toBeNull());
+    expect(harness.dismissed).toBe(1);
+    expect(rollback).not.toHaveBeenCalled();
+  });
+
+  it("shows no extra Dismiss when Revert it can run", async () => {
+    harness.comparison = cmp;
+    const { container } = mount(row(true));
+    await waitFor(() => expect(revert(container)).toBeTruthy());
+    expect(container.querySelector('[data-testid="cmp-dismiss"]')).toBeNull();
   });
 
   it("stays enabled, with no reason line, when the change has an undo", async () => {
