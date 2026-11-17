@@ -133,6 +133,32 @@ describe("sessionDrift: one fixture per recorded difference", () => {
     expect(driftWords(b, a, "ROB RUN", tZh)).toContain("无法说明哪里不同");
   });
 
+  // CR-drift-words-own-plan: "compared" means both plans were read, never the changed-during flags alone.
+  it("the power plan is listed as compared only when both sessions' plans were read", () => {
+    const noPlans = driftWords(base({}, { power_plan_guid: null }), after({}, { power_plan_guid: null }), "ROB RUN", tEn)!;
+    expect(noPlans).toMatch(/^Compy compared what it recorded/);
+    expect(noPlans).not.toMatch(/power plan/);
+    expect(driftWords(base(), after(), "ROB RUN", tEn)).toMatch(/frame cap, power plan, graphics driver/);
+  });
+
+  // s35 sonnet SHOULD-FIX: with Gaming Mode on in either session the plan isn't compared (it lays
+  // its own plan), as at the conclude and the preflight; the Gaming Mode difference is the one named.
+  it("with Gaming Mode on in a session, the power plan is neither named nor listed as compared", () => {
+    const gm = after({ gaming_mode_active: true }, { power_plan_guid: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", power_plan_changed: true });
+    expect(sessionDrift(base(), gm).map((d) => d.key)).toEqual(["gaming-mode"]);
+    expect(driftWords(base(), gm, "ROB RUN", tEn)).toMatch(/Next: .*Gaming Mode set the same way/);
+    const both = driftWords(base({ gaming_mode_active: true }), after({ gaming_mode_active: true }, { power_plan_guid: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" }), "ROB RUN", tEn)!;
+    expect(both).toMatch(/^Compy compared what it recorded/);
+    expect(both).not.toMatch(/power plan/);
+  });
+
+  // CR-drift-words-own-plan: the backend preflight compares driver strings case-insensitively.
+  it("a driver string that differs only in letter case is the same driver", () => {
+    const upper = after({}, { gpu_driver: "Adrenalin 25.10.1" });
+    expect(sessionDrift(base({}, { gpu_driver: "adrenalin 25.10.1" }), upper)).toEqual([]);
+    expect(sessionDrift(base({}, { gpu_driver: "adrenalin 25.9.1" }), upper).map((d) => d.key)).toEqual(["driver"]);
+  });
+
   it("a session Compy no longer holds: no words at all", () => {
     expect(driftWords(base(), undefined, "ROB RUN", tEn)).toBeNull();
     expect(driftWords(null, after(), "ROB RUN", tEn)).toBeNull();
@@ -141,9 +167,34 @@ describe("sessionDrift: one fixture per recorded difference", () => {
 
 describe("trialDriftWords: only a two-session Trial judged too noisy", () => {
   const sessions = [base(), after({ frame_cap: { state: "capped", at_fps: 144 } })];
-  const rec = { verdict: "too-noisy", game: "ROB RUN.exe", baseline_session_id: sessions[0].started_at, treatment: { session_id: sessions[1].started_at } };
+  const rec = {
+    verdict: "too-noisy",
+    game: "ROB RUN.exe",
+    rec_id: "hags-on",
+    baseline_session_id: sessions[0].started_at,
+    treatment: { session_id: sessions[1].started_at },
+  };
   it("names the difference from the Trial's own two sessions", () => {
     expect(trialDriftWords(rec, sessions, tEn)).toMatch(/the frame cap was off for the baseline and on at 144 fps after/);
+  });
+  // CR-drift-words-own-plan: a Trial of the power plan moves the plan between its sessions by design.
+  it("a Trial of the power plan itself never names its own plan move as a difference", () => {
+    const planned = [base(), after({}, { power_plan_guid: "e9a42b02-d5df-448d-aa00-03f14749eb61" })];
+    const ids = { baseline_session_id: planned[0].started_at, treatment: { session_id: planned[1].started_at } };
+    const own = trialDriftWords({ ...rec, ...ids, rec_id: "power-ultimate" }, planned, tEn)!;
+    expect(own).not.toMatch(/power plan/);
+    expect(own).not.toMatch(/keep one Windows power plan/);
+    // Nothing else differed: and the plan, never compared, isn't listed as compared either.
+    expect(own).toMatch(/^Compy compared what it recorded for both sessions \(frame cap, graphics driver,/);
+    // Any other setting's Trial still names it.
+    expect(trialDriftWords({ ...rec, ...ids }, planned, tEn)).toMatch(/a different Windows power plan was active/);
+  });
+  it("a plan switched during a session is still named for a Trial of the power plan", () => {
+    const planned = [base(), after({}, { power_plan_changed: true })];
+    const ids = { baseline_session_id: planned[0].started_at, treatment: { session_id: planned[1].started_at } };
+    expect(trialDriftWords({ ...rec, ...ids, rec_id: "power-ultimate" }, planned, tEn)).toMatch(
+      /the Windows power plan changed during the after-session/,
+    );
   });
   it("changes nothing for any other verdict, a real-play Trial, or a missing session", () => {
     for (const verdict of ["improved", "no-change", "regressed", "not-comparable", null])
