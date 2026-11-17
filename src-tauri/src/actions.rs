@@ -3701,6 +3701,26 @@ pub(crate) fn plan_listed_in(guids: Option<Vec<String>>, guid: &str) -> Option<b
     guids.map(|gs| gs.iter().any(|g| g.eq_ignore_ascii_case(guid.trim())))
 }
 
+/// CR-core-parking-hidden-plan: whether Windows still knows the plan `guid`, asked directly with a
+/// read-only `powercfg /query <guid>` (no elevation). `powercfg /list` can leave out a hidden
+/// scheme that still exists, so a plan the list omits is only gone when this query also fails.
+/// `None` = the query couldn't be run or read: never "gone".
+fn power_plan_queried(guid: &str) -> Option<bool> {
+    let status = quiet_command("powercfg").args(["/query", guid.trim()]).output().ok()?.status;
+    plan_query_read(status.code())
+}
+
+/// PURE (CR-core-parking-hidden-plan): what a `powercfg /query <plan>` exit code says. 0 = the
+/// plan exists; 1 = powercfg ran and refused the plan ("does not exist"); anything else, or no
+/// exit code at all (killed), is unread.
+pub(crate) fn plan_query_read(code: Option<i32>) -> Option<bool> {
+    match code {
+        Some(0) => Some(true),
+        Some(1) => Some(false),
+        _ => None,
+    }
+}
+
 /// Pure: build the powercfg restore command for one power-plan setting,
 /// targeting the EXACT stored plan GUID (never SCHEME_CURRENT, which may be a
 /// different plan at rollback time). `reactivate` re-commits the change live
@@ -4711,6 +4731,8 @@ pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan
 /// powercfg queries and the elevated run. Production is [`CoreParkingEffects::LIVE`]; tests pass fakes.
 pub(crate) struct CoreParkingEffects<'a> {
     pub(crate) plan_listed: &'a dyn Fn(&str) -> Option<bool>,
+    /// CR-core-parking-hidden-plan: a direct query of the plan (`None` = couldn't run or read).
+    pub(crate) plan_queried: &'a dyn Fn(&str) -> Option<bool>,
     pub(crate) active_plan: &'a dyn Fn() -> Option<String>,
     pub(crate) run_elevated: &'a dyn Fn(&str) -> Result<(), String>,
 }
@@ -4718,6 +4740,7 @@ pub(crate) struct CoreParkingEffects<'a> {
 impl CoreParkingEffects<'static> {
     pub(crate) const LIVE: CoreParkingEffects<'static> = CoreParkingEffects {
         plan_listed: &power_plan_listed,
+        plan_queried: &power_plan_queried,
         active_plan: &current_power_plan_guid,
         run_elevated: &run_elevated_powershell,
     };
@@ -4730,7 +4753,7 @@ pub(crate) fn rollback_core_parking_with(
     plan_guid: Option<&str>,
     fx: &CoreParkingEffects,
 ) -> Result<UndoDone, String> {
-    match core_parking_undo_step(ac, dc, plan_guid, fx.plan_listed, fx.active_plan)? {
+    match core_parking_undo_step(ac, dc, plan_guid, fx.plan_listed, fx.plan_queried, fx.active_plan)? {
         CoreParkingUndo::Run(script) => (fx.run_elevated)(&script).map(|()| UndoDone::Restored),
         CoreParkingUndo::PlanGone { plan_guid } => Ok(UndoDone::NothingToRestore(NothingRestored::plan_gone(plan_guid))),
     }
@@ -4750,11 +4773,14 @@ pub(crate) enum CoreParkingUndo {
 /// `plan_listed` and `active_plan` are the read-only powercfg queries in production, fakes in tests.
 /// `plan_listed` is `None` when the plan list couldn't be read: then the plan is NOT known to be
 /// gone, and the undo stops with nothing changed rather than closing the row on a failed read.
+/// `plan_queried` (CR-core-parking-hidden-plan) asks Windows for the plan directly; it is only
+/// consulted when the list omits a plan that isn't active, and only its clean failure means gone.
 pub(crate) fn core_parking_undo_step(
     ac: Option<u32>,
     dc: Option<u32>,
     plan_guid: Option<&str>,
     plan_listed: &dyn Fn(&str) -> Option<bool>,
+    plan_queried: &dyn Fn(&str) -> Option<bool>,
     active_plan: &dyn Fn() -> Option<String>,
 ) -> Result<CoreParkingUndo, String> {
     let Some(a) = ac else {
@@ -4783,6 +4809,18 @@ pub(crate) fn core_parking_undo_step(
     let is_active = active.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(plan.trim()));
     // Sonnet r1 nit: `powercfg /list` can leave out a hidden scheme; one that is active is there.
     if !listed && !is_active {
+        // CR-core-parking-hidden-plan: the list can omit a hidden scheme that still exists and still
+        // holds the changed value, so ask for the plan itself. It exists: restore onto it. The
+        // query couldn't run or be read: stop with nothing changed, as for an unreadable list.
+        match plan_queried(plan) {
+            Some(true) => return Ok(CoreParkingUndo::Run(core_parking_plan_script(plan, a, d, false))),
+            None => {
+                return Err("Compy couldn't confirm with Windows whether this power plan still exists, so it \
+                            can't undo this safely. Nothing was changed; try again in a moment."
+                    .to_string())
+            }
+            Some(false) => {}
+        }
         // CR-core-parking-plan-gone: the setting lived inside that plan, so there is no plan left to
         // put it back on (a copy the user made of it is a different plan). Writing the value onto
         // another plan would be a quiet lie, and
