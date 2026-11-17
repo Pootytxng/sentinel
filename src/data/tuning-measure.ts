@@ -326,9 +326,24 @@ export function measureTuning(
 
   // Thermal payoff: compare the baseline peak to the WORST (hottest) post-tune peak — honest "it runs
   // cooler even at its hottest". A ≥3 °C drop clears sensor/ambient noise.
-  const postPeaks = post
-    .map((s) => s.peak_gpu_temp_c)
-    .filter((t): t is number => typeof t === "number");
+  // CR-tuning-temp-comparability: peaks come only from sessions the same comparability list marks
+  // comparable with the baseline session (another GPU, driver or game build is not this tune's heat).
+  // A peak from any other session is never compared: no drop, no rise, no claim.
+  const peakOf = (s: SessionSummary) => (typeof s.peak_gpu_temp_c === "number" ? s.peak_gpu_temp_c : null);
+  const cmpPost = post.filter(conditionsComparable);
+  const postPeaks = cmpPost
+    .map(peakOf)
+    .filter((t): t is number => t != null);
+  const peaksLeftOut = post.some((s) => peakOf(s) != null && !conditionsComparable(s));
+  // Opus r1 SHOULD-FIX: name GPU/driver/build only when the list actually marks a session not
+  // comparable; a list not read yet (or empty) is "couldn't match", never a measured reason.
+  const listedNotComparable = post.some(
+    (s) => peakOf(s) != null && postComparability?.some((p) => p.started_at === s.started_at && !p.comparable) === true,
+  );
+  // Opus r1 MUST-FIX: a temperature claim needs the same qualifying window, counted on the
+  // comparable sessions it was read from (never on sessions it left out).
+  const cmpSecs = cmpPost.reduce((sum, s) => sum + s.duration_secs, 0);
+  const tempWindowMet = cmpPost.length >= TUNING_MIN_SESSIONS && cmpSecs >= TUNING_MIN_SECS && !crashReported;
   const afterPeakTempC = postPeaks.length > 0 ? Math.max(...postPeaks) : null;
   const tempDropC =
     baselinePeakTempC != null && afterPeakTempC != null ? baselinePeakTempC - afterPeakTempC : null;
@@ -344,14 +359,23 @@ export function measureTuning(
   const progress = `${sessionsSince} session${sessionsSince === 1 ? "" : "s"}, ${fmtPlaytime(
     secsSince,
   )}`;
+  const leftOutNote = peaksLeftOut
+    ? listedNotComparable
+      ? " Sessions that can't be compared with your baseline (another GPU, driver or game build) are left out."
+      : " Sessions Compy couldn't match to your baseline are left out."
+    : "";
   const tempLine =
     tempDropC == null
-      ? "Temps will show once a monitored session reports a peak."
-      : tempReal
-        ? `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C (−${tempDropC}°C) — a real drop.`
-        : tempRose
-          ? `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C (+${-tempDropC}°C) — hotter, not cooler.`
-          : `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C — within sensor noise so far.`;
+      ? peaksLeftOut && baselinePeakTempC != null
+        ? listedNotComparable
+          ? "Temps not compared: the sessions with a peak reading since the tune can't be compared with your baseline (another GPU, driver or game build)."
+          : "Temps not compared yet: Compy couldn't match these sessions to your baseline."
+        : "Temps will show once a monitored session reports a peak."
+      : (tempReal
+          ? `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C (−${tempDropC}°C) — a real drop.`
+          : tempRose
+            ? `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C (+${-tempDropC}°C) — hotter, not cooler.`
+            : `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C — within sensor noise so far.`) + leftOutNote;
 
   // Precedence (honest): a reported crash is real regardless of anything else; then a confound voids
   // attribution; then a measured regression; then an improvement (gated on the window); else a null.
@@ -386,14 +410,21 @@ export function measureTuning(
     headline = "Too aggressive";
     detail = `Your 1% low dropped past the ${fallText} this game moves between your sessions with nothing changed — new stutters. Step back up one increment in your tool.`;
   } else if (tempReal || fpsImproved) {
-    if (windowMet) {
+    if ((tempReal && tempWindowMet) || (fpsImproved && windowMet)) {
       verdict = "holding";
       headline = "Holding up so far";
       detail = `${tempLine} ${fpsUnmeasured ? `Frames not judged (${unjudgedWhy}), no` : "Frames held, no"} crashes flagged across ${progress}. Only your continued play proves it — keep playing and tell Compy if anything resets.`;
     } else {
       verdict = "too-early";
       headline = "Too early to call — keep playing";
-      detail = `${tempLine} Looking good, but stability shows over time: ${progress} so far (needs ≥${TUNING_MIN_SESSIONS} sessions and ~3h with no crash).`;
+      // Opus r1 MUST-FIX: the window met on every session but not on the comparable ones the temps
+      // were read from says how much of that play counts.
+      const counted =
+        cmpPost.length < post.length
+          ? ` (${cmpPost.length} of them, ${fmtPlaytime(cmpSecs)}, can be compared with your baseline)`
+          : "";
+      const framesWhy = fpsUnmeasured && sessionsSince > 0 ? ` Frames not judged (${unjudgedWhy}).` : "";
+      detail = `${tempLine}${framesWhy} Looking good, but stability shows over time: ${progress} so far${counted} (needs ≥${TUNING_MIN_SESSIONS} sessions and ~3h with no crash).`;
     }
   } else if (tempRose) {
     // Frames held (no regression above), but the peak measured HOTTER — the opposite of what a cooling

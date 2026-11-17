@@ -37,11 +37,15 @@ const renderTD = (s: SessionSummary, sessions: SessionSummary[]) =>
   );
 
 let armedValue: ArmedComparison | null = null;
+// CR-tuning-temp-comparability: the backend's per-session comparability list (null = not read).
+let comparableValue: { started_at: string; comparable: boolean }[] | null = null;
 beforeEach(() => {
   armedValue = null;
+  comparableValue = null;
   invokeMock.mockReset();
   invokeMock.mockImplementation((cmd: string) => {
     if (cmd === "get_armed_comparison") return Promise.resolve(armedValue);
+    if (cmd === "get_tuning_comparability") return Promise.resolve(comparableValue);
     if (cmd === "get_latest_comparison") return Promise.resolve(null);
     return Promise.resolve(null);
   });
@@ -91,6 +95,7 @@ describe("TuningDebrief (Play before/after)", () => {
       session({ started_at: "2026-06-08T16:00:00Z", peak_gpu_temp_c: 70 }),
       session({ started_at: "2026-06-08T14:00:00Z", peak_gpu_temp_c: 71 }),
     ];
+    comparableValue = post.map((p) => ({ started_at: p.started_at, comparable: true }));
     renderTD(session({ started_at: "2026-06-08T11:00:00Z" }), post);
     // Holding up so far — temps down, frames held, window met (never a bare "stable").
     expect(await screen.findByText("Holding up so far")).toBeInTheDocument();

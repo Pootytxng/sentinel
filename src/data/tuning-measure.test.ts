@@ -107,7 +107,7 @@ describe("measureTuning", () => {
   });
 
   it("HOLDING: ≥3 sessions, ~3h, temp dropped ≥3 °C, frames held, no crash", () => {
-    const m = measureTuning(baseline(), threeGoodSessions())!;
+    const m = measureTuning(baseline(), threeGoodSessions(), null, ok(threeGoodSessions()))!;
     expect(m.verdict).toBe("holding");
     expect(m.headline).toBe("Holding up so far");
     expect(m.windowMet).toBe(true);
@@ -119,7 +119,7 @@ describe("measureTuning", () => {
   });
 
   it("TOO EARLY: temp dropped but the window isn't met yet (only 1 session)", () => {
-    const m = measureTuning(baseline(), [sess({ started_at: "2026-06-08T14:00:00Z" })])!;
+    const m = measureTuning(baseline(), [sess({ started_at: "2026-06-08T14:00:00Z" })], null, ok([sess({ started_at: "2026-06-08T14:00:00Z" })]))!;
     expect(m.verdict).toBe("too-early");
     expect(m.headline).toMatch(/Too early to call/i);
     expect(m.windowMet).toBe(false);
@@ -132,7 +132,7 @@ describe("measureTuning", () => {
       sess({ started_at: "2026-06-08T16:00:00Z", duration_secs: 1200 }),
       sess({ started_at: "2026-06-08T14:00:00Z", duration_secs: 1200 }),
     ];
-    const m = measureTuning(baseline(), short)!;
+    const m = measureTuning(baseline(), short, null, ok(short))!;
     expect(m.sessionsSince).toBe(3);
     expect(m.secsSince).toBeLessThan(TUNING_MIN_SECS);
     expect(m.verdict).toBe("too-early");
@@ -216,13 +216,13 @@ describe("measureTuning", () => {
   it("only the tune's OWN result confounds — a stale fix result or another game's never does", () => {
     // A stale, un-dismissed FIX result (Lab passes the unfiltered latest comparison) — no flip.
     const staleFix = { verdict: "confounded", kind: "fix", game: "game.exe" } as ComparisonResult;
-    expect(measureTuning(baseline(), threeGoodSessions(), staleFix)!.verdict).toBe("holding");
+    expect(measureTuning(baseline(), threeGoodSessions(), staleFix, ok(threeGoodSessions()))!.verdict).toBe("holding");
     // A fix-era result without a kind field counts as fix → also filtered out.
     const fixEra = { verdict: "expired", game: "game.exe" } as ComparisonResult;
-    expect(measureTuning(baseline(), threeGoodSessions(), fixEra)!.verdict).toBe("holding");
+    expect(measureTuning(baseline(), threeGoodSessions(), fixEra, ok(threeGoodSessions()))!.verdict).toBe("holding");
     // Another game's tuning result — no flip either.
     const otherGame = { verdict: "confounded", kind: "tuning", game: "other.exe" } as ComparisonResult;
-    expect(measureTuning(baseline(), threeGoodSessions(), otherGame)!.verdict).toBe("holding");
+    expect(measureTuning(baseline(), threeGoodSessions(), otherGame, ok(threeGoodSessions()))!.verdict).toBe("holding");
   });
 
   it("HOLDING via an FPS gain even without a temp drop, once the window is met", () => {
@@ -244,7 +244,7 @@ describe("measureTuning", () => {
       sess({ started_at: "2026-06-08T16:00:00Z" }),
       sess({ started_at: "2026-06-08T14:00:00Z" }),
     ];
-    const d = measureTuning(baseline(), drop)!;
+    const d = measureTuning(baseline(), drop, null, ok(drop))!;
     expect(d.fpsRegressed).toBe(false);
     expect(d.fpsUnmeasured).toBe(true);
     expect(d.verdict).toBe("holding"); // the real temp drop still stands on its own
@@ -252,7 +252,7 @@ describe("measureTuning", () => {
     const gain = [84, 84, 84].map((t, i) =>
       sess({ started_at: `2026-06-08T1${4 + 2 * i}:00:00Z`, low1_fps_est: 150, peak_gpu_temp_c: t }),
     );
-    const g = measureTuning(baseline(), gain)!;
+    const g = measureTuning(baseline(), gain, null, ok(gain))!;
     expect(g.fpsImproved).toBe(false);
     expect(g.verdict).toBe("unmeasured");
     expect(g.headline).toBe("Can't call the frames");
@@ -311,6 +311,49 @@ describe("measureTuning", () => {
     // A session the list doesn't name, or no list at all: not judged either.
     expect(measureTuning(baseline(), drop, measured(10), ok(drop.slice(1)))!.fpsRegressed).toBe(false);
     expect(measureTuning(baseline(), drop, measured(10), null)!.fpsUnmeasured).toBe(true);
+  });
+
+  // CR-tuning-temp-comparability: the temperature claim reads peaks only from sessions the same
+  // comparability list marks comparable; a peak from any other session is never compared.
+  it("CR-tuning-temp-comparability: a non-comparable session's peak makes no temperature claim", () => {
+    const cool = threeGoodSessions(); // 84 → 71: a real drop when every session is comparable
+    expect(measureTuning(baseline(), cool, null, ok(cool))!.tempReal).toBe(true);
+    // Every session on another GPU / driver / build: no drop is claimed and the line says why.
+    const none = ok(cool).map((p) => ({ ...p, comparable: false }));
+    const m = measureTuning(baseline(), cool, null, none)!;
+    expect(m).toMatchObject({ afterPeakTempC: null, tempDropC: null, tempReal: false });
+    expect(m.verdict).not.toBe("holding");
+    expect(m.detail).toMatch(/Temps not compared: the sessions with a peak reading since the tune can't be compared with your baseline/);
+    expect(m.detail).not.toMatch(/a real drop/);
+    // No list at all (not read yet, or the read failed): nothing is claimed, and no reason is invented.
+    const unread = measureTuning(baseline(), cool, null, null)!;
+    expect(unread.tempReal).toBe(false);
+    expect(unread.detail).toMatch(/Temps not compared yet: Compy couldn't match these sessions to your baseline/);
+    expect(unread.detail).not.toMatch(/another GPU, driver or game build\)/);
+  });
+
+  it("CR-tuning-temp-comparability: the hottest peak and a 'hotter' claim come only from comparable sessions", () => {
+    // The 95 °C session ran on another driver: it is neither the worst peak nor a 'hotter' claim.
+    const ss = [sess({ started_at: "2026-06-08T18:00:00Z", peak_gpu_temp_c: 95 }), ...threeGoodSessions().slice(1)];
+    const list = ok(ss).map((p, i) => (i === 0 ? { ...p, comparable: false } : p));
+    const m = measureTuning(baseline(), ss, null, list)!;
+    expect(m.afterPeakTempC).toBe(71);
+    expect(m.tempDropC).toBe(13);
+    expect(m.detail).not.toMatch(/hotter/);
+    expect(m.detail).toMatch(/Sessions that can't be compared with your baseline \(another GPU, driver or game build\) are left out/);
+    // Opus r1 MUST-FIX: the drop rests on 2 comparable sessions (2h): never "holding" on less than
+    // the window, which is counted on the sessions the temps were read from.
+    expect(m.windowMet).toBe(true);
+    expect(m.verdict).toBe("too-early");
+    expect(m.detail).toMatch(/3 sessions, 3h so far \(2 of them, 2h, can be compared with your baseline\)/);
+    // A third comparable session completes the window.
+    const more = [...ss, sess({ started_at: "2026-06-08T13:00:00Z", peak_gpu_temp_c: 70 })];
+    const moreList = ok(more).map((p, i) => (i === 0 ? { ...p, comparable: false } : p));
+    expect(measureTuning(baseline(), more, null, moreList)!.verdict).toBe("holding");
+    // The same hot session counted as comparable would be a real rise.
+    const rose = measureTuning(baseline(), ss, null, ok(ss))!;
+    expect(rose.afterPeakTempC).toBe(95);
+    expect(rose.detail).toMatch(/hotter, not cooler/);
   });
 });
 
