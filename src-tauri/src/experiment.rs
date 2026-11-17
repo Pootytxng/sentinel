@@ -4843,74 +4843,10 @@ pub(crate) fn conclude_experiment(
     let covered_now = sessions_the_ledger_covers(&sessions, coverage);
     let noise = noise_for_conclude(rec, &covered_now, baseline, rows.as_deref());
     let (judged, crash_pairing) = match &resolved {
-        Some((treatment, pairing)) => {
-            // P4-judge-noisy: an uneven session is no longer a reason to judge nothing. Both sessions'
-            // whole numbers are compared against a band measured on whole as-is sessions of this game,
-            // which already holds swings like these; the halves stay on the receipt as evidence
-            // (`baseline_halves` / `after_check`). Only sessions Compy must reject (too short, another
-            // game, changed conditions or cap, unmeasured noise) go unjudged.
-            // The 1% low is classified on the measured band itself, also for a record started before it
-            // (whose stored `noise_floor_pct` was the fixed default), so no win is called inside it.
-            let judged_rec = match &noise {
-                Ok(n) => ExperimentRecord { noise_floor_pct: n.low1_band_pct, ..rec.clone() },
-                Err(_) => rec.clone(),
-            };
-            let measured = with_comparability(
-                with_left_out_readings(
-                    conclude_outcome(
-                        &judged_rec,
-                        treatment.low1_fps_est,
-                        treatment.samples,
-                        crashed,
-                        Some(&treatment.process_name),
-                        ledger_now,
-                        now,
-                    ),
-                    treatment,
-                ),
-                pairing,
-            );
-            // TG-preflight: a power plan that differed between the sessions, or changed during one,
-            // confounds exactly as a changed recorded condition does (played anyway after the warning).
-            let measured = with_power_plan_check(measured, baseline, treatment, &rec.rec_id);
-            // The baseline's cap state as the start read it (its trace may be shed by now), else read now.
-            let baseline_cap = match &noise {
-                Ok(n) => n.cap,
-                Err(_) => baseline.map_or(crate::noise_floor::CapRead::Unknown, crate::noise_floor::cap_read),
-            };
-            let after_cap = crate::noise_floor::cap_read(treatment);
-            let paired = with_cap_check(measured, baseline_cap, after_cap);
-            let paired = with_gaming_mode_baseline_check(paired, baseline, &rec.rec_id);
-            let picked = match &noise {
-                Err(why) => unmeasured_noise_outcome(paired, why, &rec.game),
-                Ok(n) => {
-                    // s27: two sessions further apart than the band was measured at can't be judged on it.
-                    let paired =
-                        with_gap_check(paired, n, rec.baseline_session_id.as_deref(), Some(treatment.started_at.as_str()));
-                    // Sonnet r1 NIT: the 1% low's band as the picked goal judges it (Maximum FPS: the wider).
-                    let low_band =
-                        if rec.outcome == TrialOutcome::MaxFps { n.low1_band_pct.max(n.avg_band_pct) } else { n.low1_band_pct };
-                    let paired = with_measured_fall(paired, low_band);
-                    // P4-recommended: a verdict still judged on the band is read as the Recommended
-                    // outcome, the average beside the 1% low, each on its measured band.
-                    // P4-maxfps-smooth: or as the outcome the user picked at start (Maximum FPS on the
-                    // wider of the two bands, so neither number is judged on less than its own).
-                    let avg = delta_avg_pct(rec.baseline_avg_fps, treatment.avg_fps);
-                    let picked = match rec.outcome {
-                        TrialOutcome::Recommended => with_recommended_outcome_bands(paired, n.low1_band_pct, n.avg_band_pct, avg),
-                        TrialOutcome::MaxFps => with_max_fps_outcome(paired, n.low1_band_pct.max(n.avg_band_pct), avg),
-                        TrialOutcome::Smoothest => {
-                            with_smoothest_outcome(paired, rec.smoothest.as_ref(), after_ratio, n.low1_band_pct)
-                        }
-                    };
-                    let lows = (rec.baseline_low1_fps, treatment.low1_fps_est);
-                    let deltas = NoiseDeltas { avg, pacing: pacing_change(rec.smoothest.as_ref(), after_ratio) };
-                    let capped = with_cap_saturation(picked, after_cap, rec.outcome, lows, n.low1_band_pct);
-                    with_noise_words(capped, n, &rec.game, rec.outcome, deltas)
-                }
-            };
-            (picked, None)
-        }
+        Some((treatment, pairing)) => (
+            judge_pair(&PairInputs { rec, treatment, pairing, baseline, noise: &noise, crashed, ledger_now, now, after_ratio }),
+            None,
+        ),
         None => crash_outcome(rec.applied_at.as_deref(), baseline, treatment),
     };
     let judged = with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()));
@@ -4963,6 +4899,95 @@ pub(crate) fn conclude_experiment(
     store.experiments[idx].concluded_at = Some(now.to_rfc3339());
 
     finish_conclude(&mut store, idx, outcome, target_now)
+}
+
+/// What [`judge_pair`] reads: the Trial, its after-session and pairing, the baseline session, the
+/// game's measured noise (or why it is unmeasured), the crash report, the ledger length now, the
+/// conclude's clock and the after-session's frame pacing (Smoothest).
+pub(crate) struct PairInputs<'a> {
+    pub rec: &'a ExperimentRecord,
+    pub treatment: &'a SessionSummary,
+    pub pairing: &'a crate::comparability::SessionComparability,
+    pub baseline: Option<&'a SessionSummary>,
+    pub noise: &'a Result<crate::noise_floor::GameNoise, crate::noise_floor::NoiseUnmeasured>,
+    pub crashed: bool,
+    pub ledger_now: Option<usize>,
+    pub now: DateTime<Utc>,
+    pub after_ratio: Option<f64>,
+}
+
+/// PURE (judging-chain refactor, s35): the verdict of a two-session Trial with an after-session,
+/// before the ledger-wide checks `conclude_experiment` adds after it (other Compy changes, settings
+/// not confirmed in place, the target read). Moved out of `conclude_experiment` unchanged, so the
+/// chain is tested by what it decides instead of by its source text.
+pub(crate) fn judge_pair(i: &PairInputs) -> ConcludeOutcome {
+    let PairInputs { rec, treatment, pairing, baseline, noise, crashed, ledger_now, now, after_ratio } = *i;
+    // P4-judge-noisy: an uneven session is no longer a reason to judge nothing. Both sessions'
+    // whole numbers are compared against a band measured on whole as-is sessions of this game,
+    // which already holds swings like these; the halves stay on the receipt as evidence
+    // (`baseline_halves` / `after_check`). Only sessions Compy must reject (too short, another
+    // game, changed conditions or cap, unmeasured noise) go unjudged.
+    // The 1% low is classified on the measured band itself, also for a record started before it
+    // (whose stored `noise_floor_pct` was the fixed default), so no win is called inside it.
+    let judged_rec = match &noise {
+        Ok(n) => ExperimentRecord { noise_floor_pct: n.low1_band_pct, ..rec.clone() },
+        Err(_) => rec.clone(),
+    };
+    let measured = with_comparability(
+        with_left_out_readings(
+            conclude_outcome(
+                &judged_rec,
+                treatment.low1_fps_est,
+                treatment.samples,
+                crashed,
+                Some(&treatment.process_name),
+                ledger_now,
+                now,
+            ),
+            treatment,
+        ),
+        pairing,
+    );
+    // TG-preflight: a power plan that differed between the sessions, or changed during one,
+    // confounds exactly as a changed recorded condition does (played anyway after the warning).
+    let measured = with_power_plan_check(measured, baseline, treatment, &rec.rec_id);
+    // The baseline's cap state as the start read it (its trace may be shed by now), else read now.
+    let baseline_cap = match &noise {
+        Ok(n) => n.cap,
+        Err(_) => baseline.map_or(crate::noise_floor::CapRead::Unknown, crate::noise_floor::cap_read),
+    };
+    let after_cap = crate::noise_floor::cap_read(treatment);
+    let paired = with_cap_check(measured, baseline_cap, after_cap);
+    let paired = with_gaming_mode_baseline_check(paired, baseline, &rec.rec_id);
+    let picked = match &noise {
+        Err(why) => unmeasured_noise_outcome(paired, why, &rec.game),
+        Ok(n) => {
+            // s27: two sessions further apart than the band was measured at can't be judged on it.
+            let paired =
+                with_gap_check(paired, n, rec.baseline_session_id.as_deref(), Some(treatment.started_at.as_str()));
+            // Sonnet r1 NIT: the 1% low's band as the picked goal judges it (Maximum FPS: the wider).
+            let low_band =
+                if rec.outcome == TrialOutcome::MaxFps { n.low1_band_pct.max(n.avg_band_pct) } else { n.low1_band_pct };
+            let paired = with_measured_fall(paired, low_band);
+            // P4-recommended: a verdict still judged on the band is read as the Recommended
+            // outcome, the average beside the 1% low, each on its measured band.
+            // P4-maxfps-smooth: or as the outcome the user picked at start (Maximum FPS on the
+            // wider of the two bands, so neither number is judged on less than its own).
+            let avg = delta_avg_pct(rec.baseline_avg_fps, treatment.avg_fps);
+            let picked = match rec.outcome {
+                TrialOutcome::Recommended => with_recommended_outcome_bands(paired, n.low1_band_pct, n.avg_band_pct, avg),
+                TrialOutcome::MaxFps => with_max_fps_outcome(paired, n.low1_band_pct.max(n.avg_band_pct), avg),
+                TrialOutcome::Smoothest => {
+                    with_smoothest_outcome(paired, rec.smoothest.as_ref(), after_ratio, n.low1_band_pct)
+                }
+            };
+            let lows = (rec.baseline_low1_fps, treatment.low1_fps_est);
+            let deltas = NoiseDeltas { avg, pacing: pacing_change(rec.smoothest.as_ref(), after_ratio) };
+            let capped = with_cap_saturation(picked, after_cap, rec.outcome, lows, n.low1_band_pct);
+            with_noise_words(capped, n, &rec.game, rec.outcome, deltas)
+        }
+    };
+    picked
 }
 
 /// The keep-or-restore tail both concludes share (`conclude_experiment`, `conclude_realplay`), run
@@ -8809,10 +8834,8 @@ mod experiment_tests {
         let src = include_str!("experiment.rs");
         let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
         let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
-        assert!(
-            body.contains("with_recommended_outcome_bands(paired, n.low1_band_pct, n.avg_band_pct, avg)"),
-            "the verdict is read as Recommended, each number on its measured band (P4-judge-noisy)"
-        );
+        // s35: the Recommended reading is now proven by what `judge_pair` decides
+        // (`a_recommended_trial_reads_the_average_on_its_own_measured_band`).
         assert!(body.contains("delta_avg_pct: delta_avg_pct(rec_baseline_avg, treatment.avg_fps)"), "the receipt keeps it");
         let t = TreatmentRecord {
             avg_fps: 110.0,
@@ -9202,10 +9225,8 @@ mod experiment_tests {
 
     #[test]
     fn the_picked_outcome_is_stored_additively_and_an_older_compy_still_loads_the_record() {
-        let src = include_str!("experiment.rs");
-        let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
-        let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
-        assert!(body.contains("TrialOutcome::MaxFps => with_max_fps_outcome(paired, n.low1_band_pct.max(n.avg_band_pct), avg)"));
+        // s35: the Maximum FPS band is now proven by what `judge_pair` decides
+        // (`a_max_fps_trial_is_judged_on_the_wider_of_the_two_measured_bands`).
 
         let t = TreatmentRecord {
             avg_fps: 130.0,
@@ -10405,6 +10426,145 @@ mod refuse_early_tests {
         judge_on(noise, low_pct, avg_pct, CapRead::Uncapped, CapRead::Uncapped, TrialOutcome::Recommended)
     }
 
+    // ─── Judging-chain refactor (s35): the conclude's real two-session chain (`judge_pair`), ───
+    // judged by what it decides. These replace source-text pins on `conclude_experiment`'s body.
+
+    /// A ROB RUN after-session (uncapped, the owner's shape) whose 1% low and average moved by
+    /// `low_pct` / `avg_pct` from the Trial's baseline (150 / 120 fps), the Trial picked for
+    /// `outcome`, and the pairing the conclude would derive for it.
+    fn pair_case(
+        low_pct: f64,
+        avg_pct: f64,
+        outcome: TrialOutcome,
+    ) -> (ExperimentRecord, SessionSummary, crate::comparability::SessionComparability) {
+        let day = crate::noise_floor::tests::rob_day();
+        let mut t = day[12].clone();
+        t.low1_fps_est = 150.0 * (1.0 + low_pct / 100.0);
+        t.avg_fps = 120.0 * (1.0 + avg_pct / 100.0);
+        t.fps_series = crate::noise_floor::tests::free_series(t.avg_fps);
+        let pairing = crate::comparability::derive(&day[11], &t);
+        let r = ExperimentRecord { game: t.process_name.clone(), outcome, baseline_session_id: None, ..rec(150.0, 5) };
+        (r, t, pairing)
+    }
+
+    fn pair_verdict(
+        (r, t, p): &(ExperimentRecord, SessionSummary, crate::comparability::SessionComparability),
+        noise: Result<GameNoise, NoiseUnmeasured>,
+    ) -> ConcludeOutcome {
+        judge_pair(&PairInputs {
+            rec: r,
+            treatment: t,
+            pairing: p,
+            baseline: None,
+            noise: &noise,
+            crashed: false,
+            ledger_now: Some(5),
+            now: Utc::now(),
+            after_ratio: None,
+        })
+    }
+
+    // Replaces `an_uneven_session_is_no_longer_a_reason_to_judge_nothing`'s and
+    // `the_start_measures_the_band_and_refuses_when_it_cant`'s pin on
+    // "noise_floor_pct: n.low1_band_pct, ..rec.clone()": the 1% low is classified on the measured
+    // band, never on the record's stored (older, fixed 3%) band.
+    #[test]
+    fn the_conclude_classifies_the_1pct_low_on_the_measured_band_not_the_stored_one() {
+        let case = pair_case(10.0, 0.0, TrialOutcome::Recommended);
+        assert!(case.0.noise_floor_pct < 10.0, "the stored band alone would call +10% a win");
+        let o = pair_verdict(&case, Ok(WIDE));
+        assert_eq!(o.verdict, "no-change", "+10% sits inside ROB RUN's measured 20.6%: {}", o.note);
+        assert_eq!(pair_verdict(&pair_case(30.0, 0.0, TrialOutcome::Recommended), Ok(WIDE)).verdict, "improved");
+        // Opus r1 NIT: +18% beats the average's 16.4% band but not the 1% low's own 20.6%.
+        let o = pair_verdict(&pair_case(18.0, 0.0, TrialOutcome::Recommended), Ok(WIDE));
+        assert_eq!(o.verdict, "no-change", "the 1% low is judged on its own band: {}", o.note);
+    }
+
+    // Replaces `the_average_delta_is_stored_additively_and_older_records_load_without_it`'s pin on
+    // "with_recommended_outcome_bands(paired, n.low1_band_pct, n.avg_band_pct, avg)": a Recommended
+    // Trial reads the average beside the 1% low, on its own measured band.
+    #[test]
+    fn a_recommended_trial_reads_the_average_on_its_own_measured_band() {
+        assert_eq!(pair_verdict(&pair_case(30.0, 5.0, TrialOutcome::Recommended), Ok(WIDE)).verdict, "improved");
+        let fell = pair_verdict(&pair_case(30.0, -20.0, TrialOutcome::Recommended), Ok(WIDE));
+        assert_eq!(fell.verdict, "no-change", "the average fell past its 16.4% band: {}", fell.note);
+        // Opus r1 MUST-FIX / sonnet SHOULD-FIX: -15.5% falls past the 16.4% band's matching fall
+        // (about 14.1%) but not past the 1% low's 20.6% band's (about 17.1%), so only the average's
+        // own band calls it a fall.
+        let own = pair_verdict(&pair_case(30.0, -15.5, TrialOutcome::Recommended), Ok(WIDE));
+        assert_eq!(own.verdict, "no-change", "judged on the average's own band: {}", own.note);
+        // Opus r2 SHOULD-FIX: and the receipt names each number's own band.
+        assert!(
+            own.note.contains(
+                "the 1% low +30% against a +20.6% / -17% band, the average frame rate -15.5% against a +16.4% / -14% band"
+            ),
+            "{}",
+            own.note
+        );
+    }
+
+    // Replaces `the_picked_outcome_is_stored_additively_and_an_older_compy_still_loads_the_record`'s
+    // pin on "TrialOutcome::MaxFps => with_max_fps_outcome(paired, n.low1_band_pct.max(n.avg_band_pct), avg)":
+    // Maximum FPS judges on the wider of the two measured bands.
+    #[test]
+    fn a_max_fps_trial_is_judged_on_the_wider_of_the_two_measured_bands() {
+        let narrow_low = GameNoise { low1_band_pct: 5.0, avg_band_pct: 20.0, ..WIDE };
+        let rec_case = pair_case(10.0, 10.0, TrialOutcome::Recommended);
+        let max_case = pair_case(10.0, 10.0, TrialOutcome::MaxFps);
+        assert_eq!(pair_verdict(&rec_case, Ok(narrow_low.clone())).verdict, "improved", "+10% beats the 1% low's 5%");
+        let o = pair_verdict(&max_case, Ok(narrow_low.clone()));
+        assert_eq!(o.verdict, "no-change", "+10% is inside the wider 20%: {}", o.note);
+        // Opus r1 MUST-FIX: the wider band is the 1% low's here (20.6% vs 16.4%), so a +18% gain on
+        // both numbers is inside it; judged on the average's band alone it would be a win.
+        let o = pair_verdict(&pair_case(18.0, 18.0, TrialOutcome::MaxFps), Ok(WIDE));
+        assert_eq!(o.verdict, "no-change", "+18% is inside the wider 20.6%: {}", o.note);
+        // And a gain past the wider band is a Maximum FPS win (the average is read, never dropped).
+        let o = pair_verdict(&pair_case(10.0, 25.0, TrialOutcome::MaxFps), Ok(narrow_low));
+        assert_eq!(o.verdict, "improved", "+25% average beats the wider 20%: {}", o.note);
+    }
+
+    // Replaces `an_uneven_session_is_no_longer_a_reason_to_judge_nothing`'s pin on
+    // "with_cap_check(measured, baseline_cap, after_cap)": the after-session's cap is compared with
+    // the band's.
+    #[test]
+    fn an_after_session_that_ran_capped_against_an_uncapped_band_is_confounded() {
+        let mut case = pair_case(30.0, 5.0, TrialOutcome::Recommended);
+        case.1.fps_series = crate::noise_floor::tests::capped_series(240.0);
+        let o = pair_verdict(&case, Ok(WIDE));
+        assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false), "{}", o.note);
+        assert_eq!(o.stop_reason.as_deref(), Some("frame-cap-changed"));
+        // Opus r2 SHOULD-FIX: and the receipt says which session was the capped one.
+        assert!(o.note.contains("in the baseline no cap held it; in the after-session held at about 240 fps"), "{}", o.note);
+    }
+
+    // Replaces `the_start_measures_the_band_and_refuses_when_it_cant`'s pin on
+    // "Err(why) => unmeasured_noise_outcome(paired, why, &rec.game),": no measured band judges nothing.
+    #[test]
+    fn a_conclude_with_no_measured_band_judges_nothing_and_restores() {
+        let why = NoiseUnmeasured { have: 1, need: 3, cap_unknown: false };
+        let (r, t, p) = pair_case(30.0, 5.0, TrialOutcome::Recommended);
+        // With no band, the baseline's cap is read from the baseline session itself.
+        let day = crate::noise_floor::tests::rob_day();
+        let noise = Err(why);
+        let o = judge_pair(&PairInputs {
+            rec: &r,
+            treatment: &t,
+            pairing: &p,
+            baseline: Some(&day[11]),
+            noise: &noise,
+            crashed: false,
+            ledger_now: Some(5),
+            now: Utc::now(),
+            after_ratio: None,
+        });
+        assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("not-comparable", false, Some("noise-unmeasured")));
+        let game = crate::intelligence::pretty_game_name(&r.game).to_string();
+        assert!(!game.is_empty() && o.note.contains(&game), "the note names the game: {}", o.note);
+        // And with no baseline session to read the cap from, the unread cap confounds first.
+        let o = pair_verdict(&(r, t, p), noise);
+        assert_eq!((o.verdict.as_str(), o.stop_reason.as_deref()), ("confounded", Some("frame-cap-unread")));
+    }
+
     #[test]
     fn on_a_wide_noise_game_plus_5_is_negligible_and_plus_30_is_better() {
         let small = judge(&WIDE, 5.0, 4.0);
@@ -10576,8 +10736,9 @@ mod refuse_early_tests {
         let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
         assert!(!body.contains(concat!("with_steady", "_sessions(")), "uneven halves no longer turn a verdict too-noisy");
         assert!(body.contains("noise_for_conclude(rec, &covered_now, baseline, rows.as_deref())"), "judged on measured noise");
-        assert!(body.contains("noise_floor_pct: n.low1_band_pct, ..rec.clone()"), "the 1% low is classified on it");
-        assert!(body.contains("with_cap_check(measured, baseline_cap, after_cap)"), "cap state compared");
+        // s35: the measured-band classification and the cap comparison are now proven by what
+        // `judge_pair` decides (`the_conclude_classifies_the_1pct_low_on_the_measured_band_not_the_stored_one`,
+        // `an_after_session_that_ran_capped_against_an_uncapped_band_is_confounded`).
         assert!(body.contains("check: after_check"), "the receipt still keeps the after-session's grade");
     }
 
@@ -10643,10 +10804,10 @@ mod refuse_early_tests {
         assert!(body.contains("crate::noise_floor::measure_game_noise(&covered, baseline, &ledger_rows(changes))"));
         assert!(body.contains("noise_unmeasured_message(&why, &baseline.process_name)"));
         assert!(body.contains("game_noise: Some(game_noise),"), "the measurement is on the record");
-        // The verdict is classified on the measured band, never on the stored `noise_floor_pct`.
-        let conclude = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
-        assert!(conclude.contains("Ok(n) => ExperimentRecord { noise_floor_pct: n.low1_band_pct, ..rec.clone() },"));
-        assert!(conclude.contains("Err(why) => unmeasured_noise_outcome(paired, why, &rec.game),"));
+        // s35: that the verdict is classified on the measured band, and that no band judges nothing,
+        // is now proven by what `judge_pair` decides
+        // (`the_conclude_classifies_the_1pct_low_on_the_measured_band_not_the_stored_one`,
+        // `a_conclude_with_no_measured_band_judges_nothing_and_restores`).
     }
 
     /// An exp:10-shaped record as an older Compy wrote it (shape only, from the owner's data).
