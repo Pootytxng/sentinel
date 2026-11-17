@@ -852,6 +852,55 @@
     "noiseMeasuredBands": "1% 低帧按 +{{low}}% / −{{lowFall}}% 判定，平均帧率按 +{{avg}}% / −{{avgFall}}% 判定（就这款游戏自身而言，上升和下降的幅度相当）。",
     "noiseMeasuredBandsSameBothWays": "1% 低帧按 ±{{low}}% 判定，平均帧率按 ±{{avg}}% 判定（上升和下降用同一范围，这是 Compy 改为按游戏自身幅度相当的上升和下降来判定之前的做法）。",
     "noiseMeasuredBandsCapped": "1% 低帧按 +{{low}}% / −{{lowFall}}% 判定。帧率上限限制住了平均帧率，因此平均帧率只会作为否定这项更改的依据（下降超过 −{{avgFall}}%），不会作为支持它的依据。",
+    "drift": {
+      "differed": "Compy 记录到两次对局之间的不同之处：{{list}}。",
+      "joiner": "；",
+      "nothingDiffers": "Compy 比较了两次对局都有记录的内容（{{fields}}），没有发现值得指出的不同，因此无法归因于其中任何一项。",
+      "fieldJoiner": "、",
+      "field": {
+        "cap": "帧率上限",
+        "powerPlan": "电源计划",
+        "driver": "显卡驱动",
+        "windowsBuild": "Windows 版本",
+        "gamingMode": "游戏模式",
+        "resolution": "显示分辨率",
+        "background": "处于其他窗口之后的时间",
+        "length": "对局时长"
+      },
+      "noContext": "这两次对局没有 Compy 可以比较的记录条件，因此无法说明哪里不同。",
+      "capOff": "关闭",
+      "capOn": "开启",
+      "capOnAt": "开启（{{fps}} fps）",
+      "item": {
+        "cap": "帧率上限在基准对局时为{{before}}，之后为{{after}}",
+        "powerPlan": "使用了不同的 Windows 电源计划",
+        "powerPlanChanged": {
+          "baseline": "Windows 电源计划在基准对局中途发生了变化",
+          "after": "Windows 电源计划在更改后的对局中途发生了变化",
+          "both": "Windows 电源计划在两次对局中途都发生了变化"
+        },
+        "driver": "显卡驱动发生了变化（从 {{before}} 到 {{after}}）",
+        "windowsBuild": "Windows 已更新（从 {{before}} 到 {{after}}）",
+        "gamingModeOnThenOff": "游戏模式在基准对局时开启，之后关闭",
+        "gamingModeOffThenOn": "游戏模式在基准对局时关闭，之后开启",
+        "resolution": "显示分辨率在基准对局时为 {{before}}，之后为 {{after}}",
+        "background": {
+          "baseline": "在基准对局中，游戏处于其他窗口之后的时间多出约 {{mins}} 分钟",
+          "after": "在更改后的对局中，游戏处于其他窗口之后的时间多出约 {{mins}} 分钟"
+        },
+        "length": "基准对局持续 {{before}} 分钟，更改后的对局持续 {{after}} 分钟"
+      },
+      "step": {
+        "cap": "下一步：把帧率上限设回基准对局时的样子，然后再测试一次。",
+        "powerPlan": "下一步：两次对局使用同一个 Windows 电源计划，然后再测试一次。",
+        "rebaseline": "下一步：从新的基准对局开始再测试一次，让两次对局使用相同的驱动和 Windows 版本。",
+        "gamingMode": "下一步：两次对局都以相同的方式设置游戏模式，然后再测试一次。",
+        "resolution": "下一步：两次对局使用相同的显示分辨率，然后再测试一次。",
+        "background": "下一步：整局都让游戏保持在最前面，然后再测试一次。",
+        "length": "下一步：两次对局玩差不多相同的时长，然后再测试一次。",
+        "asIs": "下一步：在不做任何更改的情况下再玩几局 {{game}}，让 Compy 测量它的波动幅度，然后再测试一次。"
+      }
+    },
     "gapPastBand": "未作判定：更改后的对局与基准对局之间相隔的时间，长于已测量对局中相邻两次之间的最长间隔（{{max}} 小时），因此测得的范围无法说明游戏在这么长的间隔里会波动多少。Compy 已恢复这项更改。请在基准对局之后更早地玩更改后的对局，然后再测试。",
     "noiseMeasuredBandsMaxFps": "平均帧率和 1% 低帧都按 +{{band}}% / −{{bandFall}}% 判定（取两者中较宽的范围）。",
     "noiseMeasuredBandsSmoothest": "帧时间平稳度按其自身测得的范围判定，1% 低帧按 +{{low}}% / −{{lowFall}}% 判定。",

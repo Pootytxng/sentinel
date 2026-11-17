@@ -69,6 +69,7 @@ import { displayModeLabel } from "../data/display-mode";
 import { takeBenchArrival, type BenchArrival } from "./lab-arrival";
 import { settingsDoneLine, softwareFirstLine } from "./settings-done";
 import { peekScanPriorities } from "./use-scan";
+import { driftWords } from "./drift-words";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -443,6 +444,21 @@ export function measuredBandsLine(g: GameNoise, outcome: TrialOutcome | null | u
   if ((g.cap_unread ?? 0) > 0)
     parts.push(t("lab.experimentBench.noiseMeasuredCapUnread", { game: name, count: g.cap_unread }));
   return parts.join(" ");
+}
+
+// TG-drift-words: the words for a two-session Trial judged too noisy (experiment.rs
+// `with_steady_sessions`: a session swung within itself, its halves further apart than the floor; the
+// row already names which): what Compy recorded differently between or during the baseline and the
+// after-session, or that none of it changed, and one next step. null for any other verdict, a real-play Trial (many sessions a
+// side), or a session Compy no longer holds (nothing honest to compare).
+export function trialDriftWords(
+  x: { verdict: string | null; mode?: string | null; game: string; baseline_session_id?: string | null; treatment: { session_id?: string | null } | null },
+  sessions: readonly SessionSummary[],
+  t: Translate,
+): string | null {
+  if (x.verdict !== "too-noisy" || x.mode === "real-play") return null;
+  const find = (id: string | null | undefined) => (id ? sessions.find((s) => s.started_at === id) : undefined);
+  return driftWords(find(x.baseline_session_id), find(x.treatment?.session_id), prettyGameName(x.game) || x.game, t);
 }
 
 // s27 (opus r1): a Trial not judged because its two sessions were further apart than the band was
@@ -1095,10 +1111,18 @@ export default function ExperimentBench({
     const assumed = x.assumed_band ? assumedBandLine(x.assumed_band, x.game, t) : null;
     return judged && assumed ? `${judged} ${assumed}` : (assumed ?? judged);
   });
-  const rowNotes = history.map((x, i): RowNote | null =>
-    noiseLines[i] ??
-    (looksJudged(x) ? NO_RECORD : x.verdict === "not-comparable" ? notComparableNote(x, t) || null : null),
-  );
+  // TG-drift-words: a Trial judged too noisy names what Compy recorded differently between its two
+  // sessions (or that none of it was) and one next step. Words only, no verdict change. Opus r2: the
+  // words stay on that row's own note (its own mark), never in the list's shared line.
+  const driftNotes = history.map((x) => trialDriftWords(x, sessions, t));
+  const rowNotes = history.map((x, i): RowNote | null => {
+    const note =
+      noiseLines[i] ??
+      (looksJudged(x) ? NO_RECORD : x.verdict === "not-comparable" ? notComparableNote(x, t) || null : null);
+    const drift = driftNotes[i];
+    if (drift == null) return note;
+    return typeof note === "string" ? `${note} ${drift}` : drift;
+  });
   const judgedLines = new Set(noiseLines.filter((n): n is string => n !== null));
   const sharedNoise = judgedLines.size === 1 ? [...judgedLines][0] : null;
   const footnotes = [...new Set(rowNotes.filter((n): n is RowNote => n !== null && n !== sharedNoise))];
