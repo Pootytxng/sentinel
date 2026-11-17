@@ -486,6 +486,16 @@ export type ComparisonResult = {
   unmeasured?: "noise-unmeasured" | "frame-cap-changed" | "not-comparable" | null;
   /** Item 8: the fall matching the band (noise_floor::fall_pct), the one "regressed" is judged on. */
   noise_fall_pct?: number | null;
+  /** CR-debrief-assumed-label: comparison.rs `assumed_band_for`, attached on read only: an old
+   *  better/worse judged on the fixed band, with the game's noise as measured now (surfaces/assumed-band
+   *  `AssumedBand`). Absent on every result judged on a measured band. */
+  assumed_band?: {
+    assumed_pct: number;
+    measured_low1_pct: number | null;
+    measured_sessions: number | null;
+    claimed_change?: boolean;
+    judged?: boolean;
+  } | null;
 };
 
 /** noise_floor.rs `CapRead` (serde tag "state"). */

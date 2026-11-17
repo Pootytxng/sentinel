@@ -1452,7 +1452,16 @@ fn arm_comparison(
 
 #[tauri::command]
 fn get_latest_comparison() -> Option<comparison::ComparisonResult> {
-    comparison::latest_result()
+    let mut r = comparison::latest_result()?;
+    // CR-debrief-assumed-label: an old better/worse judged on the fixed band is labelled on this copy
+    // with the game's noise as measured now; the stored result is never rewritten. The sessions are
+    // read only when there is a label to attach.
+    if comparison::assumed_band_for(&r, None).is_some() {
+        let sessions = sessions::get_session_summaries();
+        let now = experiment::game_noise_now(&sessions, &r.game);
+        r.assumed_band = comparison::assumed_band_for(&r, now.as_ref());
+    }
+    Some(r)
 }
 
 #[tauri::command]

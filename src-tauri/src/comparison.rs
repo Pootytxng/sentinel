@@ -140,6 +140,32 @@ pub(crate) struct ComparisonResult {
     /// "regressed" is judged on, so every surface reads the same number. Set with `game_noise`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub noise_fall_pct: Option<f64>,
+    /// CR-debrief-assumed-label: the read-only label for a better/worse judged on the old fixed band
+    /// ([`assumed_band_for`]), attached by the read command with this game's noise as measured now.
+    /// Never stored: always `None` on disk, never read from it.
+    #[serde(skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub assumed_band: Option<crate::experiment::AssumedBandLabel>,
+}
+
+/// CR-debrief-assumed-label, PURE: the label for a stored result whose better/worse was judged on the
+/// old fixed band (no `game_noise`: written before Compy measured each game's noise), with
+/// `measured_now` as the game's noise today (`None` = still not measured). A "no change", a result
+/// judged on a measured band, and every other verdict get none. The result itself is never rewritten.
+pub(crate) fn assumed_band_for(
+    r: &ComparisonResult,
+    measured_now: Option<&crate::noise_floor::GameNoise>,
+) -> Option<crate::experiment::AssumedBandLabel> {
+    let claimed = matches!(r.verdict.as_str(), "improved" | "regressed");
+    if !claimed || r.game_noise.is_some() || !(r.noise_floor_pct.is_finite() && r.noise_floor_pct > 0.0) {
+        return None;
+    }
+    Some(crate::experiment::AssumedBandLabel {
+        assumed_pct: r.noise_floor_pct,
+        measured_low1_pct: measured_now.map(|n| n.low1_band_pct),
+        measured_sessions: measured_now.map(|n| n.sessions),
+        claimed_change: true,
+        judged: true,
+    })
 }
 
 // #283 — ONE lock for both of this module's files, because every racy sequence here spans them:
@@ -527,6 +553,7 @@ pub(crate) fn build_result(
             _ => None,
         },
         noise_fall_pct: band.map(crate::noise_floor::fall_pct),
+        assumed_band: None,
         game_noise,
         verdict,
         at: now.to_rfc3339(),
@@ -831,7 +858,40 @@ mod comparison_persistence_tests {
             game_noise: None,
             unmeasured: None,
             noise_fall_pct: None,
+            assumed_band: None,
         }
+    }
+
+    #[test]
+    fn an_old_better_or_worse_judged_on_the_fixed_band_is_labelled_on_read_only() {
+        // CR-debrief-assumed-label: a stored improved/regressed with no game_noise was judged on the
+        // fixed band; it carries the label, with the game's noise as measured now.
+        let wide = crate::noise_floor::GameNoise {
+            model: crate::noise_floor::NOISE_MODEL_VERSION,
+            low1_band_pct: 8.4,
+            avg_band_pct: 6.0,
+            low1_step_pct: 3.6,
+            avg_step_pct: 2.6,
+            sessions: 9,
+            cap: crate::noise_floor::CapRead::Uncapped,
+            cap_unread: 0,
+            max_gap_mins: 0,
+        };
+        let l = assumed_band_for(&result("improved"), Some(&wide)).expect("labelled");
+        assert_eq!((l.assumed_pct, l.measured_low1_pct, l.measured_sessions), (DEFAULT_NOISE_FLOOR_PCT, Some(8.4), Some(9)));
+        assert!(l.claimed_change && l.judged);
+        assert_eq!(assumed_band_for(&result("regressed"), None).and_then(|l| l.measured_low1_pct), None, "still unmeasured says so");
+        // A no-change, a result judged on a measured band, and an unmeasured one get none.
+        assert_eq!(assumed_band_for(&result("no-change"), Some(&wide)), None);
+        assert_eq!(assumed_band_for(&ComparisonResult { game_noise: Some(wide.clone()), ..result("improved") }, Some(&wide)), None);
+        assert_eq!(assumed_band_for(&ComparisonResult { noise_floor_pct: 0.0, ..result("unmeasured") }, None), None);
+        // Never stored, never read back from disk.
+        let labelled = ComparisonResult { assumed_band: assumed_band_for(&result("improved"), None), ..result("improved") };
+        let json = serde_json::to_value(&labelled).expect("serialize");
+        assert!(json.get("assumed_band").is_some(), "the read command sends it");
+        let back: ComparisonResult = serde_json::from_value(json).expect("load");
+        assert!(back.assumed_band.is_none(), "a stored label is never read back");
+        assert!(serde_json::to_value(result("improved")).unwrap().get("assumed_band").is_none());
     }
 
     #[test]

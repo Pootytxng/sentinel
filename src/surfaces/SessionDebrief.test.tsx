@@ -215,6 +215,39 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
     expect((await screen.findByTestId("cmp-unmeasured")).textContent).toMatch(/couldn't confirm the two eldenring sessions were played under comparable conditions/);
   });
 
+  it("CR-debrief-assumed-label: an old better/worse judged on the fixed 3% carries the assumed-band note", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const old = {
+      ...comparison,
+      after_low1_fps: 118.9,
+      delta_low1_pct: 7.9,
+      verdict: "improved" as const,
+      assumed_band: { assumed_pct: 3, measured_low1_pct: 8.4, measured_sessions: 9, claimed_change: true, judged: true },
+    };
+    vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? old : null));
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    expect((await screen.findByTestId("cmp-assumed-band")).textContent).toMatch(
+      /judged against an assumed ±3% band.*measured noise is ±8\.4% \(from 9 sessions\), wider/,
+    );
+    // A result judged on a measured band (no label) shows no note.
+    cleanup();
+    const measured = { ...old, assumed_band: null };
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      Promise.resolve(cmd === "get_latest_comparison" ? { ...measured, game_noise: { low1_band_pct: 3, sessions: 8 }, noise_fall_pct: 2.9 } : null),
+    );
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    await screen.findByTestId("cmp-card");
+    expect(screen.queryByTestId("cmp-assumed-band")).toBeNull();
+  });
+
   it("measurement item 8: a measured band reads +rise / -fall, the way it was judged", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     const worse = {
