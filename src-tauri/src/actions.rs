@@ -3756,6 +3756,9 @@ mod plan_query_live_tests {
         let active = super::current_power_plan_guid().expect("an active plan");
         assert_eq!(super::power_plan_queried(&active), Some(true));
         assert_eq!(super::power_plan_queried(super::NIL_PLAN_GUID), Some(false));
+        // s35 opus r2 SHOULD-FIX: a real, non-nil GUID no scheme has prints the nil GUID's words, so
+        // the text match is what decides "gone" here, not a comparison of the nil GUID with itself.
+        assert_eq!(super::power_plan_queried("11111111-2222-3333-4444-555555555555"), Some(false));
     }
 }
 
