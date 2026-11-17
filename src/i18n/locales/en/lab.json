@@ -863,6 +863,43 @@
     "noiseMeasuredBands": "Judged against +{{low}}% / −{{lowFall}}% on the 1% low and +{{avg}}% / −{{avgFall}}% on the average (a rise and a fall the same size in this game's own terms).",
     "noiseMeasuredBandsSameBothWays": "Judged against ±{{low}}% on the 1% low and ±{{avg}}% on the average (the same band both ways, as Compy judged before it measured a rise and a fall the same size in the game's own terms).",
     "noiseMeasuredBandsCapped": "Judged against +{{low}}% / −{{lowFall}}% on the 1% low. A frame cap held the average, so the average could only count against the change (a fall past −{{avgFall}}%), never for it.",
+    "drift": {
+      "differed": "What Compy recorded differently between the two sessions: {{list}}.",
+      "joiner": "; ",
+      "nothingDiffers": "Nothing Compy recorded differs between the two sessions: {{game}} simply moved more than the band this Trial was judged on.",
+      "capOff": "off",
+      "capOn": "on",
+      "capOnAt": "on at {{fps}} fps",
+      "item": {
+        "cap": "the frame cap was {{before}} for the baseline and {{after}} after",
+        "powerPlan": "a different Windows power plan was active",
+        "powerPlanChanged": {
+          "baseline": "the Windows power plan changed during the baseline",
+          "after": "the Windows power plan changed during the after-session",
+          "both": "the Windows power plan changed during both sessions"
+        },
+        "driver": "the graphics driver changed ({{before}} to {{after}})",
+        "windowsBuild": "Windows updated ({{before}} to {{after}})",
+        "gamingModeOnThenOff": "Gaming Mode was on for the baseline and off after",
+        "gamingModeOffThenOn": "Gaming Mode was off for the baseline and on after",
+        "resolution": "the display resolution was {{before}} for the baseline and {{after}} after",
+        "background": {
+          "baseline": "the game was behind another window for about {{mins}} min of the baseline",
+          "after": "the game was behind another window for about {{mins}} min of the after-session"
+        },
+        "length": "the baseline ran {{before}} min and the after-session {{after}} min"
+      },
+      "step": {
+        "cap": "Next: set the frame cap the way it was for the baseline, then run the Trial again.",
+        "powerPlan": "Next: keep one Windows power plan for both sessions, then run the Trial again.",
+        "rebaseline": "Next: run the Trial again from a fresh baseline, so both sessions run on the same driver and Windows build.",
+        "gamingMode": "Next: run both sessions with Gaming Mode set the same way, then run the Trial again.",
+        "resolution": "Next: play both sessions at the same display resolution, then run the Trial again.",
+        "background": "Next: keep the game in front for the whole session, then run the Trial again.",
+        "length": "Next: play both sessions for about the same length, then run the Trial again.",
+        "asIs": "Next: play a few more sessions of {{game}} with nothing changed, so Compy can measure how much it moves, then run the Trial again."
+      }
+    },
     "gapPastBand": "Not judged: the after-session came longer after the baseline than the longest gap between one measured session and the next ({{max}} hours), so the measured band can't say how much the game moves across a gap that long. Compy restored the change. Play the after-session sooner after the baseline, then test again.",
     "noiseMeasuredBandsMaxFps": "Judged against +{{band}}% / −{{bandFall}}% on both the average and the 1% low (the wider of their two bands).",
     "noiseMeasuredBandsSmoothest": "Judged on frame pacing against its own measured band, and against +{{low}}% / −{{lowFall}}% on the 1% low.",

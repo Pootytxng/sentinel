@@ -2704,6 +2704,16 @@ describe("P5-learned: what Compy learned on this PC", () => {
     );
   });
 
+  // TG-drift-words: on the owner's real Aniimo Trial judged too noisy, the history says what Compy
+  // recorded differently between its two sessions (or that nothing did), with one next step.
+  it("Aniimo today: the too-noisy Trial's note names what differed between its sessions, with one next step", async () => {
+    const panel = await renderWith("p5-learned-today");
+    const text = panel.ownerDocument.body.textContent ?? "";
+    const m = text.match(/(What Compy recorded differently between the two sessions|Nothing Compy recorded differs between the two sessions)[^]*?run the Trial again\./);
+    expect(m).not.toBeNull();
+    expect(m![0].match(/Next:/g)).toHaveLength(1);
+  });
+
   it("Aniimo today: put back as too noisy; lesson: the game swings between sessions", async () => {
     const panel = await renderWith("p5-learned-today");
     expect(panel).toHaveTextContent("What Compy tested on Aniimo");

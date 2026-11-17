@@ -69,6 +69,7 @@ import { displayModeLabel } from "../data/display-mode";
 import { takeBenchArrival, type BenchArrival } from "./lab-arrival";
 import { settingsDoneLine, softwareFirstLine } from "./settings-done";
 import { peekScanPriorities } from "./use-scan";
+import { driftWords } from "./drift-words";
 import "./ExperimentBench.css";
 
 type ExperimentStatus = "running" | "kept" | "restored" | "aborted";
@@ -443,6 +444,20 @@ export function measuredBandsLine(g: GameNoise, outcome: TrialOutcome | null | u
   if ((g.cap_unread ?? 0) > 0)
     parts.push(t("lab.experimentBench.noiseMeasuredCapUnread", { game: name, count: g.cap_unread }));
   return parts.join(" ");
+}
+
+// TG-drift-words: the words for a two-session Trial judged too noisy (its sessions varied more than
+// its band): what Compy recorded differently between the baseline and the after-session, or that
+// nothing did, and one next step. null for any other verdict, a real-play Trial (many sessions a
+// side), or a session Compy no longer holds (nothing honest to compare).
+export function trialDriftWords(
+  x: { verdict: string | null; mode?: string | null; game: string; baseline_session_id?: string | null; treatment: { session_id?: string | null } | null },
+  sessions: readonly SessionSummary[],
+  t: Translate,
+): string | null {
+  if (x.verdict !== "too-noisy" || x.mode === "real-play") return null;
+  const find = (id: string | null | undefined) => (id ? sessions.find((s) => s.started_at === id) : undefined);
+  return driftWords(find(x.baseline_session_id), find(x.treatment?.session_id), prettyGameName(x.game) || x.game, t);
 }
 
 // s27 (opus r1): a Trial not judged because its two sessions were further apart than the band was
@@ -1093,7 +1108,11 @@ export default function ExperimentBench({
       : null;
     // P4-judge-noisy: a result judged on the assumed band says so beside its own line.
     const assumed = x.assumed_band ? assumedBandLine(x.assumed_band, x.game, t) : null;
-    return judged && assumed ? `${judged} ${assumed}` : (assumed ?? judged);
+    const line = judged && assumed ? `${judged} ${assumed}` : (assumed ?? judged);
+    // TG-drift-words: a Trial whose two sessions varied too much to judge names what Compy recorded
+    // differently between them (or that nothing did) and one next step. Words only, no verdict change.
+    const drift = trialDriftWords(x, sessions, t);
+    return line && drift ? `${line} ${drift}` : (drift ?? line);
   });
   const rowNotes = history.map((x, i): RowNote | null =>
     noiseLines[i] ??
