@@ -3707,7 +3707,9 @@ pub(crate) fn plan_listed_in(guids: Option<Vec<String>>, guid: &str) -> Option<b
 /// `None` = the query couldn't be run or read: never "gone".
 fn power_plan_queried(guid: &str) -> Option<bool> {
     let query = |g: &str| {
-        quiet_command("powercfg").args(["/query", g]).output().ok().map(|o| PowercfgRead {
+        let mut cmd = quiet_command("powercfg");
+        cmd.args(["/query", g]);
+        output_within(cmd, POWERCFG_READ_LIMIT).map(|o| PowercfgRead {
             code: o.status.code(),
             text: format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)).trim().to_string(),
         })
@@ -3722,6 +3724,44 @@ fn power_plan_queried(guid: &str) -> Option<bool> {
     let nil = query(NIL_PLAN_GUID)?;
     let current = query("SCHEME_CURRENT")?;
     plan_query_read(&plan, &nil, current.code == Some(0))
+}
+
+/// s37 (s35 opus NIT): how long a read-only powercfg read behind the plan-gone check may take. One
+/// that doesn't answer in time is unread (its process is ended), so nothing changes. 5 s, as the
+/// receipt reads (sonnet SHOULD-FIX: the plan check makes up to four reads in a row).
+pub(crate) const POWERCFG_READ_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// A command's output, or `None` when it couldn't start, its output couldn't be read, or it didn't
+/// finish within `limit` (then it is killed and waited on, never left running). On a timeout the
+/// two pipe readers are left to end on their own once the pipes close; a program that started a
+/// child of its own holding them could keep them open (powercfg starts none).
+pub(crate) fn output_within(mut cmd: Command, limit: std::time::Duration) -> Option<std::process::Output> {
+    use std::io::Read;
+    use std::process::Stdio;
+    fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> std::thread::JoinHandle<Vec<u8>> {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            if let Some(mut p) = pipe {
+                let _ = p.read_to_end(&mut buf);
+            }
+            buf
+        })
+    }
+    let mut child = cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().ok()?;
+    let (out, err) = (drain(child.stdout.take()), drain(child.stderr.take()));
+    let deadline = std::time::Instant::now() + limit;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if std::time::Instant::now() < deadline => std::thread::sleep(std::time::Duration::from_millis(20)),
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    };
+    Some(std::process::Output { status, stdout: out.join().ok()?, stderr: err.join().ok()? })
 }
 
 /// The all-zero GUID: never a power scheme, so its query shows how powercfg says "does not exist"
@@ -3759,6 +3799,36 @@ mod plan_query_live_tests {
         // s35 opus r2 SHOULD-FIX: a real, non-nil GUID no scheme has prints the nil GUID's words, so
         // the text match is what decides "gone" here, not a comparison of the nil GUID with itself.
         assert_eq!(super::power_plan_queried("11111111-2222-3333-4444-555555555555"), Some(false));
+    }
+}
+
+#[cfg(test)]
+mod output_within_tests {
+    use super::{output_within, quiet_command};
+    use std::time::{Duration, Instant};
+
+    // s37 (s35 opus NIT): a read that doesn't answer in time is unread (`None`), and is ended, not
+    // left running; one that answers in time is read as it printed.
+    #[test]
+    fn a_command_that_doesnt_answer_in_time_is_unread_and_ended() {
+        let mut slow = quiet_command("ping");
+        slow.args(["-n", "6", "127.0.0.1"]);
+        let t = Instant::now();
+        assert!(output_within(slow, Duration::from_millis(300)).is_none());
+        assert!(t.elapsed() < Duration::from_secs(3), "waited {:?}", t.elapsed());
+        let mut quick = quiet_command("cmd");
+        quick.args(["/C", "echo plan-read"]);
+        let out = output_within(quick, Duration::from_secs(10)).expect("answered in time");
+        assert!(out.status.success());
+        assert!(String::from_utf8_lossy(&out.stdout).contains("plan-read"));
+        // A program that can't start is unread too.
+        assert!(output_within(quiet_command("no-such-program-s37"), Duration::from_secs(1)).is_none());
+        // s37 sonnet SHOULD-FIX: output far past a pipe's buffer is drained while it runs, never a
+        // deadlock: all of it is read (20000 lines of 20 bytes plus CRLF = 440000 bytes).
+        let mut loud = quiet_command("cmd");
+        loud.args(["/C", "for /L %i in (1,1,20000) do @echo xxxxxxxxxxxxxxxxxxxx"]);
+        let out = output_within(loud, Duration::from_secs(60)).expect("answered in time");
+        assert_eq!(out.stdout.len(), 20000 * 22, "{}", out.stdout.len());
     }
 }
 

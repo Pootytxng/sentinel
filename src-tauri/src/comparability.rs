@@ -198,7 +198,9 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
             }
             // Driver change → KEEP comparable for regression detection, but flag as the first
             // candidate to check. Correlation, never automatic cause.
-            if fa.gpu_driver != fb.gpu_driver && fa.gpu == fb.gpu {
+            // s37 (s35 opus NIT): the same driver written in another case is the same driver, as the
+            // Trial preflight compares it (`trial_preflight`).
+            if !fa.gpu_driver.trim().eq_ignore_ascii_case(fb.gpu_driver.trim()) && fa.gpu == fb.gpu {
                 changed.push(("gpu-driver", format!("GPU driver: {} → {}", fa.gpu_driver, fb.gpu_driver)));
                 candidates.push(format!(
                     "The GPU driver changed ({} → {}) — a candidate explanation to check first, not a \
@@ -995,6 +997,25 @@ mod tests {
             f.ram_gb = 16;
         }
         assert_eq!(derive(&a, &newer).changed_keys, vec!["ram", "gpu-driver"]);
+    }
+
+    // s37 (s35 opus NIT): the driver is compared as the Trial preflight compares it, case-insensitively.
+    #[test]
+    fn the_same_driver_written_in_another_case_is_not_a_change() {
+        let a = session();
+        let mut b = session();
+        let f = b.hw_fingerprint.as_mut().expect("the fixture has a fingerprint");
+        f.gpu_driver = f.gpu_driver.to_uppercase() + "-RC";
+        assert_eq!(derive(&a, &b).changed_keys, vec!["gpu-driver"], "a different driver is still a change");
+        let mut c = session();
+        let f = c.hw_fingerprint.as_mut().unwrap();
+        f.gpu_driver = format!("{}Abc", f.gpu_driver);
+        let mut d = session();
+        let g = d.hw_fingerprint.as_mut().unwrap();
+        g.gpu_driver = format!("{}aBC ", g.gpu_driver);
+        let p = derive(&c, &d);
+        assert!(p.changed_keys.is_empty(), "{:?}", p.changed_context);
+        assert!(p.candidate_causes.iter().all(|s| !s.contains("driver")), "{:?}", p.candidate_causes);
     }
 
     #[test]
