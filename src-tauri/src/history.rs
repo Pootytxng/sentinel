@@ -2107,6 +2107,7 @@ fn commit_rollback(
     history[idx].status = "rolled_back".into();
     // CR-core-parking-plan-gone: an undo with nothing left to restore closes the row the same way,
     // and its receipt says why nothing was written.
+    let nothing_ran = matches!(done, UndoDone::NothingToRestore(_));
     history[idx].nothing_restored = match done {
         UndoDone::Restored => None,
         UndoDone::NothingToRestore(why) => Some(why),
@@ -2116,10 +2117,26 @@ fn commit_rollback(
     history[idx].rolled_back_at = Some(Utc::now().to_rfc3339());
     history[idx].rollback_justified_by_experiment = justified_by;
     save(history).map_err(|why| {
+        if nothing_ran {
+            // CR-core-parking-hidden-plan: nothing ran on Windows, so never "the undo ran". The row
+            // stays as it was and the undo can simply be tried again.
+            history[idx] = change;
+            return RollbackError::Failed(nothing_to_restore_unsaved_message(&why));
+        }
         let read = (effects.probe)(&change.rec_id, change.applied_action.as_ref());
         history[idx] = change;
         RollbackError::Unrecorded(rollback_unrecorded_message(&why, read))
     })
+}
+
+/// PURE (CR-core-parking-hidden-plan): an undo found nothing left to restore, so nothing ran on
+/// Windows, but the ledger couldn't be saved to close the row.
+fn nothing_to_restore_unsaved_message(why: &str) -> String {
+    format!(
+        "Compy found nothing left to restore for this change and ran nothing on Windows, but it couldn't \
+         save that to its history ({why}), so the change still shows as applied. Nothing was changed; \
+         try again in a moment."
+    )
 }
 
 /// PURE: what to tell the user when their undo ran on Windows but the ledger couldn't record it.
@@ -3417,17 +3434,37 @@ mod receipt_commit_tests {
         ran: &std::cell::RefCell<Vec<String>>,
         saves: &std::cell::Cell<usize>,
     ) -> Result<(), RollbackError> {
+        // The direct query agrees with the list unless a test says otherwise.
+        undo_core_parking_queried(history, listed, listed, ran, saves, Ok(()))
+    }
+
+    /// [`undo_core_parking`] with the direct plan query (CR-core-parking-hidden-plan) and the
+    /// ledger save's result faked too.
+    fn undo_core_parking_queried(
+        history: &mut [AppliedChange],
+        listed: Option<bool>,
+        queried: Option<bool>,
+        ran: &std::cell::RefCell<Vec<String>>,
+        saves: &std::cell::Cell<usize>,
+        saved: Result<(), String>,
+    ) -> Result<(), RollbackError> {
         let save = |_: &[AppliedChange]| {
             saves.set(saves.get() + 1);
-            Ok(())
+            saved.clone()
         };
         let plan_listed = |_: &str| listed;
+        let plan_queried = |_: &str| queried;
         let active_plan = || None;
         let run_elevated = |script: &str| {
             ran.borrow_mut().push(script.to_string());
             Ok(())
         };
-        let fx = CoreParkingEffects { plan_listed: &plan_listed, active_plan: &active_plan, run_elevated: &run_elevated };
+        let fx = CoreParkingEffects {
+            plan_listed: &plan_listed,
+            plan_queried: &plan_queried,
+            active_plan: &active_plan,
+            run_elevated: &run_elevated,
+        };
         let rollback = |a: &RollbackAction, s: &Snapshot| {
             dispatch_rollback_outcome_with(&crate::data_root::test_mutation_root(), a, s, &fx)
         };
@@ -3492,9 +3529,96 @@ mod receipt_commit_tests {
     #[test]
     fn an_active_plan_the_list_leaves_out_is_not_gone() {
         // Sonnet r1 nit: `powercfg /list` can omit a hidden scheme; the active one is there.
-        let step = core_parking_undo_step(Some(40), Some(30), Some(PLAN_A), &|_| Some(false), &|| Some(PLAN_A.to_uppercase()));
+        let step = core_parking_undo_step(
+            Some(40),
+            Some(30),
+            Some(PLAN_A),
+            &|_| Some(false),
+            &|_| panic!("an active plan is never queried"),
+            &|| Some(PLAN_A.to_uppercase()),
+        );
         let Ok(CoreParkingUndo::Run(script)) = step else { panic!("{step:?}") };
         assert!(script.contains(PLAN_A) && script.contains("-setactive"), "restored and re-committed live: {script}");
+    }
+
+    #[test]
+    fn a_hidden_plan_the_list_omits_but_windows_still_has_is_restored_onto_and_not_closed_as_gone() {
+        // CR-core-parking-hidden-plan: not listed, not active, but a direct query finds it.
+        let mut history = vec![applied_core_parking(Some(PLAN_A))];
+        let (ran, saves) = (std::cell::RefCell::new(Vec::new()), std::cell::Cell::new(0));
+        undo_core_parking_queried(&mut history, Some(false), Some(true), &ran, &saves, Ok(())).expect("undo");
+        assert_eq!(ran.borrow().len(), 1, "the value goes back onto the hidden plan");
+        assert!(ran.borrow()[0].contains(PLAN_A) && ran.borrow()[0].contains(" 40"), "{:?}", ran.borrow());
+        assert!(!ran.borrow()[0].contains("-setactive"), "a plan that isn't active is never switched to");
+        assert_eq!(history[0].status, "rolled_back");
+        assert_eq!(history[0].nothing_restored, None, "a restored row carries no nothing-restored receipt");
+    }
+
+    #[test]
+    fn a_plan_the_list_omits_and_the_query_refuses_closes_as_gone_with_its_receipt() {
+        let mut history = vec![applied_core_parking(Some(PLAN_A))];
+        let (ran, saves) = (std::cell::RefCell::new(Vec::new()), std::cell::Cell::new(0));
+        undo_core_parking_queried(&mut history, Some(false), Some(false), &ran, &saves, Ok(())).expect("closes");
+        assert!(ran.borrow().is_empty());
+        assert_eq!(history[0].status, "rolled_back");
+        assert_eq!(history[0].nothing_restored, Some(NothingRestored::plan_gone(PLAN_A.to_string())));
+    }
+
+    #[test]
+    fn a_plan_query_that_cant_be_read_changes_nothing_and_leaves_the_row_open() {
+        let mut history = vec![applied_core_parking(Some(PLAN_A))];
+        let (ran, saves) = (std::cell::RefCell::new(Vec::new()), std::cell::Cell::new(0));
+        let err = undo_core_parking_queried(&mut history, Some(false), None, &ran, &saves, Ok(()))
+            .expect_err("an unread query is not a gone plan");
+        let RollbackError::Failed(msg) = err else { panic!("a failed undo") };
+        assert!(msg.contains("couldn't confirm") && msg.contains("Nothing was changed"), "{msg}");
+        assert!(ran.borrow().is_empty());
+        assert_eq!(saves.get(), 0);
+        assert_eq!(history[0].status, "applied");
+        assert_eq!(history[0].nothing_restored, None);
+    }
+
+    #[test]
+    fn a_gone_plan_whose_close_cant_be_saved_never_says_the_undo_ran() {
+        let mut history = vec![applied_core_parking(Some(PLAN_A))];
+        let (ran, saves) = (std::cell::RefCell::new(Vec::new()), std::cell::Cell::new(0));
+        let err = undo_core_parking_queried(&mut history, Some(false), Some(false), &ran, &saves, Err("disk full".into()))
+            .expect_err("the save failed");
+        let RollbackError::Failed(msg) = err else { panic!("nothing ran, so this is not an unrecorded undo: {err:?}") };
+        assert!(!is_unrecorded_rollback(&msg) && !msg.contains("The undo ran"), "{msg}");
+        assert!(msg.contains("ran nothing on Windows") && msg.contains("disk full"), "{msg}");
+        assert!(ran.borrow().is_empty());
+        assert_eq!(history[0].status, "applied", "the row is put back as it was");
+        assert_eq!(history[0].nothing_restored, None);
+        assert!(history[0].rolled_back_at.is_none());
+    }
+
+    #[test]
+    fn a_restored_undo_whose_save_fails_still_says_the_undo_ran() {
+        let mut history = vec![applied_core_parking(Some(PLAN_A))];
+        let (ran, saves) = (std::cell::RefCell::new(Vec::new()), std::cell::Cell::new(0));
+        let err = undo_core_parking_queried(&mut history, Some(true), Some(true), &ran, &saves, Err("disk full".into()))
+            .expect_err("the save failed");
+        let RollbackError::Unrecorded(msg) = err else { panic!("{err:?}") };
+        assert!(is_unrecorded_rollback(&msg), "{msg}");
+        assert_eq!(ran.borrow().len(), 1);
+    }
+
+    #[test]
+    fn the_plan_query_read_calls_a_plan_gone_only_when_it_fails_exactly_as_the_nil_plan_does() {
+        // The words this PC's powercfg prints for a scheme that doesn't exist (measured s35).
+        const GONE: &str = "The power scheme, subgroup or setting specified does not exist.";
+        let read = |code: Option<i32>, text: &str| PowercfgRead { code, text: text.to_string() };
+        let nil = read(Some(1), GONE);
+        assert_eq!(plan_query_read(&read(Some(0), "Power Scheme GUID: ..."), &nil, true), Some(true));
+        assert_eq!(plan_query_read(&read(Some(1), GONE), &nil, true), Some(false), "refused exactly as the nil plan");
+        // s35 opus r1 MUST-FIX: exit 1 is powercfg's catch-all; anything but the same refusal is unread.
+        assert_eq!(plan_query_read(&read(Some(1), "Access is denied."), &nil, true), None, "other words");
+        assert_eq!(plan_query_read(&read(Some(1), ""), &read(Some(1), ""), true), None, "no words");
+        assert_eq!(plan_query_read(&read(Some(1), GONE), &read(Some(0), ""), true), None, "the nil control didn't refuse");
+        assert_eq!(plan_query_read(&read(Some(1), GONE), &nil, false), None, "the power service didn't answer");
+        assert_eq!(plan_query_read(&read(None, ""), &nil, true), None, "killed: no exit code");
+        assert_eq!(plan_query_read(&read(Some(-1), GONE), &nil, true), None);
     }
 
     #[test]
@@ -3905,6 +4029,9 @@ mod receipt_commit_tests {
         let undoing: std::collections::BTreeSet<String> = callers_of("dispatch_rollback")
             .into_iter()
             .chain(callers_of("dispatch_rollback_outcome"))
+            // CR-core-parking-hidden-plan: the `_with` form (effects passed in, so tests can fake
+            // powercfg) is the same boundary; no history.rs production code may call it directly.
+            .chain(callers_of("dispatch_rollback_outcome_with"))
             .collect();
         assert_eq!(
             undoing,

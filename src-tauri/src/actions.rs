@@ -3701,6 +3701,67 @@ pub(crate) fn plan_listed_in(guids: Option<Vec<String>>, guid: &str) -> Option<b
     guids.map(|gs| gs.iter().any(|g| g.eq_ignore_ascii_case(guid.trim())))
 }
 
+/// CR-core-parking-hidden-plan: whether Windows still knows the plan `guid`, asked directly with a
+/// read-only `powercfg /query <guid>` (no elevation). `powercfg /list` can leave out a hidden
+/// scheme that still exists, so a plan the list omits is only gone when this query also fails.
+/// `None` = the query couldn't be run or read: never "gone".
+fn power_plan_queried(guid: &str) -> Option<bool> {
+    let query = |g: &str| {
+        quiet_command("powercfg").args(["/query", g]).output().ok().map(|o| PowercfgRead {
+            code: o.status.code(),
+            text: format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr)).trim().to_string(),
+        })
+    };
+    let plan = query(guid.trim())?;
+    if plan.code == Some(0) {
+        return Some(true);
+    }
+    // s35 opus r1 MUST-FIX: exit 1 is powercfg's catch-all failure, so a failed plan query alone is
+    // not "gone". Two controls: the nil GUID (a plan that can't exist) must fail the same way, and
+    // the active plan must still answer (the power service works). Read-only, no elevation.
+    let nil = query(NIL_PLAN_GUID)?;
+    let current = query("SCHEME_CURRENT")?;
+    plan_query_read(&plan, &nil, current.code == Some(0))
+}
+
+/// The all-zero GUID: never a power scheme, so its query shows how powercfg says "does not exist"
+/// on this PC, in this PC's language.
+const NIL_PLAN_GUID: &str = "00000000-0000-0000-0000-000000000000";
+
+/// One `powercfg /query` run: its exit code (`None` = no code) and its printed text, trimmed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PowercfgRead {
+    pub(crate) code: Option<i32>,
+    pub(crate) text: String,
+}
+
+/// PURE (CR-core-parking-hidden-plan): whether the plan exists, from its query and two controls.
+/// Exit 0 = it exists. It is gone only when its query failed exactly as the nil GUID's did (both
+/// exit 1, the same non-empty words) while the active plan still answered. Anything else (another
+/// code, no code, different or no words, a power service that didn't answer) is unread: never gone.
+pub(crate) fn plan_query_read(plan: &PowercfgRead, nil: &PowercfgRead, current_answered: bool) -> Option<bool> {
+    if plan.code == Some(0) {
+        return Some(true);
+    }
+    let same_refusal = plan.code == Some(1) && nil.code == Some(1) && !plan.text.is_empty() && plan.text == nil.text;
+    (same_refusal && current_answered).then_some(false)
+}
+
+#[cfg(test)]
+mod plan_query_live_tests {
+    // s35 opus r1 SHOULD-FIX: the exit-code reading against the real powercfg (read-only queries).
+    #[test]
+    #[ignore = "manual: read-only powercfg queries on a real PC"]
+    fn qa_the_live_plan_query_finds_the_active_plan_and_never_the_nil_plan() {
+        let active = super::current_power_plan_guid().expect("an active plan");
+        assert_eq!(super::power_plan_queried(&active), Some(true));
+        assert_eq!(super::power_plan_queried(super::NIL_PLAN_GUID), Some(false));
+        // s35 opus r2 SHOULD-FIX: a real, non-nil GUID no scheme has prints the nil GUID's words, so
+        // the text match is what decides "gone" here, not a comparison of the nil GUID with itself.
+        assert_eq!(super::power_plan_queried("11111111-2222-3333-4444-555555555555"), Some(false));
+    }
+}
+
 /// Pure: build the powercfg restore command for one power-plan setting,
 /// targeting the EXACT stored plan GUID (never SCHEME_CURRENT, which may be a
 /// different plan at rollback time). `reactivate` re-commits the change live
@@ -4711,6 +4772,8 @@ pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan
 /// powercfg queries and the elevated run. Production is [`CoreParkingEffects::LIVE`]; tests pass fakes.
 pub(crate) struct CoreParkingEffects<'a> {
     pub(crate) plan_listed: &'a dyn Fn(&str) -> Option<bool>,
+    /// CR-core-parking-hidden-plan: a direct query of the plan (`None` = couldn't run or read).
+    pub(crate) plan_queried: &'a dyn Fn(&str) -> Option<bool>,
     pub(crate) active_plan: &'a dyn Fn() -> Option<String>,
     pub(crate) run_elevated: &'a dyn Fn(&str) -> Result<(), String>,
 }
@@ -4718,6 +4781,7 @@ pub(crate) struct CoreParkingEffects<'a> {
 impl CoreParkingEffects<'static> {
     pub(crate) const LIVE: CoreParkingEffects<'static> = CoreParkingEffects {
         plan_listed: &power_plan_listed,
+        plan_queried: &power_plan_queried,
         active_plan: &current_power_plan_guid,
         run_elevated: &run_elevated_powershell,
     };
@@ -4730,7 +4794,7 @@ pub(crate) fn rollback_core_parking_with(
     plan_guid: Option<&str>,
     fx: &CoreParkingEffects,
 ) -> Result<UndoDone, String> {
-    match core_parking_undo_step(ac, dc, plan_guid, fx.plan_listed, fx.active_plan)? {
+    match core_parking_undo_step(ac, dc, plan_guid, fx.plan_listed, fx.plan_queried, fx.active_plan)? {
         CoreParkingUndo::Run(script) => (fx.run_elevated)(&script).map(|()| UndoDone::Restored),
         CoreParkingUndo::PlanGone { plan_guid } => Ok(UndoDone::NothingToRestore(NothingRestored::plan_gone(plan_guid))),
     }
@@ -4750,11 +4814,14 @@ pub(crate) enum CoreParkingUndo {
 /// `plan_listed` and `active_plan` are the read-only powercfg queries in production, fakes in tests.
 /// `plan_listed` is `None` when the plan list couldn't be read: then the plan is NOT known to be
 /// gone, and the undo stops with nothing changed rather than closing the row on a failed read.
+/// `plan_queried` (CR-core-parking-hidden-plan) asks Windows for the plan directly; it is only
+/// consulted when the list omits a plan that isn't active, and only its clean failure means gone.
 pub(crate) fn core_parking_undo_step(
     ac: Option<u32>,
     dc: Option<u32>,
     plan_guid: Option<&str>,
     plan_listed: &dyn Fn(&str) -> Option<bool>,
+    plan_queried: &dyn Fn(&str) -> Option<bool>,
     active_plan: &dyn Fn() -> Option<String>,
 ) -> Result<CoreParkingUndo, String> {
     let Some(a) = ac else {
@@ -4783,11 +4850,22 @@ pub(crate) fn core_parking_undo_step(
     let is_active = active.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(plan.trim()));
     // Sonnet r1 nit: `powercfg /list` can leave out a hidden scheme; one that is active is there.
     if !listed && !is_active {
+        // CR-core-parking-hidden-plan: the list can omit a hidden scheme that still exists and still
+        // holds the changed value, so ask for the plan itself. It exists: restore onto it. The
+        // query couldn't run or be read: stop with nothing changed, as for an unreadable list.
+        match plan_queried(plan) {
+            Some(true) => return Ok(CoreParkingUndo::Run(core_parking_plan_script(plan, a, d, false))),
+            None => {
+                return Err("Compy couldn't confirm with Windows whether this power plan still exists, so it \
+                            can't undo this safely. Nothing was changed; try again in a moment."
+                    .to_string())
+            }
+            Some(false) => {}
+        }
         // CR-core-parking-plan-gone: the setting lived inside that plan, so there is no plan left to
         // put it back on (a copy the user made of it is a different plan). Writing the value onto
-        // another plan would be a quiet lie, and
-        // refusing for good would leave the row "applied" forever; the row closes as nothing to
-        // restore instead, with that reason on its receipt.
+        // another plan would be a quiet lie, and refusing for good would leave the row "applied"
+        // forever; the row closes as nothing to restore instead, with that reason on its receipt.
         return Ok(CoreParkingUndo::PlanGone { plan_guid: plan.to_ascii_lowercase() });
     }
     Ok(CoreParkingUndo::Run(core_parking_plan_script(plan, a, d, is_active)))
