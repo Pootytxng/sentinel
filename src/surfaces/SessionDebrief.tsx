@@ -104,7 +104,12 @@ function ComparisonCard({
   // worded for a Trial of this change. No rule = no lesson, and the stored verdict wins: a rule whose
   // 1% low direction disagrees with it is never shown. It sits in the explanation: the answer stays
   // the verdict and the choice.
-  const lessonRule = lessonRuleForVerdict(r.verdict, r.delta_low1_pct, r.delta_avg_pct, r.noise_floor_pct);
+  // CR-lesson-avg-band: the average reads against its own measured band; an older result without
+  // the game's measured bands was judged on one band both ways; a measured band with no average band
+  // reads the average as not compared.
+  const avgBand =
+    r.game_noise == null ? r.noise_floor_pct : Number.isFinite(r.game_noise.avg_band_pct) ? r.game_noise.avg_band_pct : null;
+  const lessonRule = lessonRuleForVerdict(r.verdict, r.delta_low1_pct, r.delta_avg_pct, r.noise_floor_pct, avgBand);
   return (
     <div className={`cmp cmp-${r.verdict}`} data-testid="cmp-card">
       <Depth

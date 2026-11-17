@@ -1879,16 +1879,28 @@ function LessonBlock({ lesson, game }: { lesson: Lesson; game: string }) {
   const one = (v: number) => String(Math.round(v * 10) / 10);
   const signed = (v: number) => `${v > 0 ? "+" : ""}${one(v)}`;
   const rule = t(`lab.experimentBench.summary.rule.${key}`);
+  // CR-lesson-avg-band (opus r1): the receipt names the band each number was read against; an
+  // average with no band of its own was not compared, and says so.
+  const avgCompared = lesson.avgPct != null && lesson.avgBandPct != null;
   const detail =
     lesson.rule === "too-noisy" || lesson.low1Pct == null || lesson.bandPct == null
       ? t("lab.experimentBench.summary.lessonDetailNoisy", { change: lesson.title, rule })
-      : t("lab.experimentBench.summary.lessonDetail", {
-          change: lesson.title,
-          low: signed(lesson.low1Pct),
-          avg: lesson.avgPct == null ? t("lab.experimentBench.summary.lessonAvgNotCompared") : `${signed(lesson.avgPct)}%`,
-          band: one(lesson.bandPct),
-          rule,
-        });
+      : avgCompared && lesson.avgBandPct !== lesson.bandPct
+        ? t("lab.experimentBench.summary.lessonDetailBands", {
+            change: lesson.title,
+            low: signed(lesson.low1Pct),
+            band: one(lesson.bandPct),
+            avg: signed(lesson.avgPct as number),
+            avgBand: one(lesson.avgBandPct as number),
+            rule,
+          })
+        : t("lab.experimentBench.summary.lessonDetail", {
+            change: lesson.title,
+            low: signed(lesson.low1Pct),
+            avg: avgCompared ? `${signed(lesson.avgPct as number)}%` : t("lab.experimentBench.summary.lessonAvgNotCompared"),
+            band: one(lesson.bandPct),
+            rule,
+          });
   return (
     <>
       <p className="exp-order-label">{t("lab.experimentBench.summary.lessonLabel")}</p>

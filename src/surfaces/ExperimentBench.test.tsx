@@ -2678,6 +2678,32 @@ describe("P5-learned: what Compy learned on this PC", () => {
     expect(panel.querySelectorAll("button:not(.kl-term)")).toHaveLength(0);
   });
 
+  // CR-lesson-avg-band (opus r1): on measured per-metric bands the receipt names the band each
+  // number was read against, so an average called "faster" is never shown inside the stated band.
+  it("measured bands: the receipt names the 1% low's band and the average's own band", async () => {
+    const f = (await fixtures["wardogs-p4-exit"]()).default;
+    const judged = f.experiments.find((x: { verdict: string | null }) => x.verdict != null)!;
+    state.gate = true;
+    state.experiments = [
+      {
+        ...judged,
+        verdict: "improved",
+        kept: true,
+        noise_evidence: { band_pct: 23, measured_noise_pct: null },
+        game_noise: { low1_band_pct: 23, avg_band_pct: 18, low1_step_pct: 9.2, avg_step_pct: 7.2, sessions: 9 },
+        treatment: { ...(judged.treatment as object), delta_low1_pct: 30, delta_avg_pct: 20 },
+      },
+    ];
+    state.sessions = f.sessions;
+    state.recs = [pass("visual-effects", "Trim Windows visual effects", 1)];
+    render(<ExperimentBench />);
+    await screen.findByTestId("exp-summary");
+    expect(screen.getByTestId("exp-summary-lesson")).toHaveAttribute("data-rule", "faster-and-steadier");
+    expect(screen.getByTestId("exp-summary-lesson-detail")).toHaveTextContent(
+      "From the Trial of Trim Windows visual effects: 1% low +30% against a noise band of 23%, average +20% against a noise band of 18%.",
+    );
+  });
+
   it("Aniimo today: put back as too noisy; lesson: the game swings between sessions", async () => {
     const panel = await renderWith("p5-learned-today");
     expect(panel).toHaveTextContent("What Compy tested on Aniimo");

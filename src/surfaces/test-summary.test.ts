@@ -12,7 +12,9 @@ import {
   LESSON_KEY,
   LESSON_LIBRARY_ID,
   LESSON_RULES,
+  avgBandOf,
   lessonDirs,
+  lowBandOf,
   lessonFor,
   lessonRuleFor,
   lessonRuleForVerdict,
@@ -246,6 +248,7 @@ describe("P5-learned on the owner's records today", () => {
       low1Pct: -18.5,
       avgPct: null,
       bandPct: 3.0,
+      avgBandPct: null,
     });
   });
 
@@ -261,6 +264,7 @@ describe("P5-learned on the owner's records today", () => {
       low1Pct: null,
       avgPct: null,
       bandPct: null,
+      avgBandPct: null,
     });
   });
 });
@@ -281,6 +285,7 @@ describe("P5-learned lesson rules", () => {
     context: "unverified",
     deltaLow1Pct: 0,
     deltaAvgPct: 0,
+    avgBandPct: 3,
     at: "2026-10-25T10:00:00Z",
     riskChoice: null,
     ...over,
@@ -324,31 +329,31 @@ describe("P5-learned lesson rules", () => {
   // rule links. Fails on the code before the slice (no shared `lessonRuleFor`).
   describe("lessonRuleFor is the shared rule for one measured result", () => {
     it("reads the same table as lessonFor, with the band as the line", () => {
-      expect(lessonRuleFor("improved", 4.2, 0.8, 3)).toBe("steadier-not-faster");
-      expect(lessonRuleFor("regressed", -12.5, -0.8, 3)).toBe("less-steady-not-slower");
-      expect(lessonRuleFor("no-change", 5, 5, 3)).toBe("faster-and-steadier");
-      expect(lessonRuleFor("improved", 4, null, 3)).toBe("steadier");
-      expect(lessonRuleFor("improved", 3, 3, 3)).toBeNull(); // exactly the band = flat/flat
-      expect(lessonRuleFor("regressed", -2, 1, 3)).toBeNull();
+      expect(lessonRuleFor("improved", 4.2, 0.8, 3, 3)).toBe("steadier-not-faster");
+      expect(lessonRuleFor("regressed", -12.5, -0.8, 3, 3)).toBe("less-steady-not-slower");
+      expect(lessonRuleFor("no-change", 5, 5, 3, 3)).toBe("faster-and-steadier");
+      expect(lessonRuleFor("improved", 4, null, 3, 3)).toBe("steadier");
+      expect(lessonRuleFor("improved", 3, 3, 3, 3)).toBeNull(); // exactly the band = flat/flat
+      expect(lessonRuleFor("regressed", -2, 1, 3, 3)).toBeNull();
     });
     it("no rule without a measured verdict, a band and a 1% low delta, or with a non-finite number", () => {
       for (const v of ["too-noisy", "confounded", "expired", "inconclusive", "insufficient-evidence", null, undefined])
-        expect(lessonRuleFor(v, 20, 0, 3)).toBeNull();
-      expect(lessonRuleFor("improved", null, 20, 3)).toBeNull();
-      expect(lessonRuleFor("improved", 20, 0, null)).toBeNull();
-      expect(lessonRuleFor("improved", Number.NaN, 0, 3)).toBeNull();
-      expect(lessonRuleFor("improved", 20, Number.POSITIVE_INFINITY, 3)).toBeNull();
+        expect(lessonRuleFor(v, 20, 0, 3, 3)).toBeNull();
+      expect(lessonRuleFor("improved", null, 20, 3, 3)).toBeNull();
+      expect(lessonRuleFor("improved", 20, 0, null, null)).toBeNull();
+      expect(lessonRuleFor("improved", Number.NaN, 0, 3, 3)).toBeNull();
+      expect(lessonRuleFor("improved", 20, Number.POSITIVE_INFINITY, 3, 3)).toBeNull();
     });
     it("lessonRuleForVerdict drops a rule whose 1% low direction disagrees with the stored verdict", () => {
-      expect(lessonRuleForVerdict("improved", 7.9, 0.9, 3)).toBe("steadier-not-faster");
-      expect(lessonRuleForVerdict("regressed", -12.5, -0.8, 3)).toBe("less-steady-not-slower");
+      expect(lessonRuleForVerdict("improved", 7.9, 0.9, 3, 3)).toBe("steadier-not-faster");
+      expect(lessonRuleForVerdict("regressed", -12.5, -0.8, 3, 3)).toBe("less-steady-not-slower");
       // The verdict is judged on the 1% low; the average may still move beyond the floor.
-      expect(lessonRuleForVerdict("no-change", 0.7, 8, 3)).toBe("faster-not-steadier");
+      expect(lessonRuleForVerdict("no-change", 0.7, 8, 3, 3)).toBe("faster-not-steadier");
       // Contradictions: the stored verdict wins, so nothing is taught.
-      expect(lessonRuleForVerdict("no-change", 5, 5, 3)).toBeNull();
-      expect(lessonRuleForVerdict("improved", -12.5, 0, 3)).toBeNull();
-      expect(lessonRuleForVerdict("regressed", 0, 8, 3)).toBeNull();
-      expect(lessonRuleForVerdict("confounded", 20, 0, 3)).toBeNull();
+      expect(lessonRuleForVerdict("no-change", 5, 5, 3, 3)).toBeNull();
+      expect(lessonRuleForVerdict("improved", -12.5, 0, 3, 3)).toBeNull();
+      expect(lessonRuleForVerdict("regressed", 0, 8, 3, 3)).toBeNull();
+      expect(lessonRuleForVerdict("confounded", 20, 0, 3, 3)).toBeNull();
     });
     it("every rule's copy exists where the Debrief and the stutter comparison read it (en + zh-CN)", () => {
       const load = (lang: string, area: string) =>
@@ -705,5 +710,108 @@ describe("round 3: combinations of context, result and availability", () => {
     const none = summarizeGame(GAME, experiments, [VFX], bare)!;
     expect(none.context).toBeNull();
     expect(none.contextAt).toBeNull();
+  });
+});
+
+// CR-lesson-avg-band: the average's direction is read against the band the AVERAGE was judged on,
+// never the 1% low's. ROB RUN's measured bands (1% low ±23%, average ±18%) make the two differ.
+describe("CR-lesson-avg-band: the average reads against its own band", () => {
+  const judged = experiments.find((x) => x.verdict != null)!;
+  const base = sessions[0].started_at;
+  const trial = (over: Partial<SummaryExperiment>): SummaryExperiment =>
+    ({
+      ...judged,
+      id: "exp:avg",
+      rec_id: "hags",
+      rec_title: "HAGS",
+      outcome: "recommended",
+      verdict: "improved",
+      kept: true,
+      created_at: "2099-01-01T00:00:00Z",
+      concluded_at: "2099-01-01T01:00:00Z",
+      baseline_session_id: base,
+      noise_evidence: { band_pct: 23, measured_noise_pct: null },
+      game_noise: { low1_band_pct: 23, avg_band_pct: 18 },
+      treatment: { delta_low1_pct: 30, delta_avg_pct: 20 },
+      ...over,
+    }) as SummaryExperiment;
+
+  it("an average past its own band reads as moved even inside the 1% low's band, and the reverse", () => {
+    // +20% average: inside the 1% low's ±23%, past its own ±18%.
+    expect(lessonRuleFor("improved", 30, 20, 23, 18)).toBe("faster-and-steadier");
+    // +5% average: past a ±3% 1% low band, inside its own ±10%.
+    expect(lessonRuleFor("improved", 8, 5, 3, 10)).toBe("steadier-not-faster");
+    expect(lessonRuleFor("regressed", -30, -20, 23, 18)).toBe("slower-and-less-steady");
+    expect(lessonRuleForVerdict("no-change", 1, 20, 23, 18)).toBe("faster-not-steadier");
+  });
+
+  it("an unknown average band reads the average as not compared, never against the 1% low's band", () => {
+    expect(lessonRuleFor("improved", 30, 20, 23, null)).toBe("steadier");
+    expect(lessonRuleFor("regressed", -30, 0, 23, undefined)).toBe("less-steady");
+    expect(lessonRuleFor("improved", 30, 20, 23, Number.NaN)).toBe("steadier");
+    // 1% low flat with the average not compared: no rule.
+    expect(lessonRuleFor("no-change", 1, 40, 23, null)).toBeNull();
+  });
+
+  it("avgBandOf: the band the average was judged on, per outcome", () => {
+    expect(avgBandOf(trial({}))).toBe(18);
+    expect(avgBandOf(trial({ outcome: null }))).toBe(18); // older records were judged as Recommended
+    expect(avgBandOf(trial({ outcome: "max-fps" }))).toBe(23); // the wider band, both numbers
+    // Opus r1: on a measured record noise_evidence holds the 1% low's band; Maximum FPS takes the wider.
+    const narrowLow = { noise_evidence: { band_pct: 3, measured_noise_pct: null }, game_noise: { low1_band_pct: 3, avg_band_pct: 10 } };
+    expect(avgBandOf(trial({ outcome: "max-fps", ...narrowLow }))).toBe(10);
+    expect(avgBandOf(trial({ outcome: "max-fps", game_noise: { avg_band_pct: 10 } }))).toBeNull();
+    expect(avgBandOf(trial({ outcome: "smoothest", game_noise: null }))).toBeNull();
+    expect(avgBandOf(trial({ outcome: "smoothest" }))).toBeNull(); // the average is never judged
+    expect(avgBandOf(trial({ game_noise: { low1_band_pct: 23 } }))).toBeNull(); // measured, no avg band
+    // An older record without measured bands was judged on one band both ways.
+    expect(avgBandOf(trial({ game_noise: null, noise_evidence: { band_pct: 3, measured_noise_pct: null } }))).toBe(3);
+    expect(avgBandOf(trial({ game_noise: undefined, noise_evidence: null }))).toBeNull();
+  });
+
+  it("the Trial summary's lesson reads the stored average against the game's average band", () => {
+    const s = summarizeGame(GAME, [...experiments, trial({})], [VFX], sessions)!;
+    expect(s.lesson).toMatchObject({ recId: "hags", rule: "faster-and-steadier", bandPct: 23, avgBandPct: 18 });
+    const inside = summarizeGame(GAME, [...experiments, trial({ treatment: { delta_low1_pct: 30, delta_avg_pct: 15 } })], [VFX], sessions)!;
+    expect(inside.lesson).toMatchObject({ recId: "hags", rule: "steadier-not-faster" });
+    const noAvgBand = summarizeGame(GAME, [...experiments, trial({ game_noise: { low1_band_pct: 23 } })], [VFX], sessions)!;
+    expect(noAvgBand.lesson).toMatchObject({ recId: "hags", rule: "steadier" });
+  });
+
+  // Opus r2 MUST-FIX: a real-play Trial judges both numbers on its look's one band, never on the
+  // start-time game_noise it also stores.
+  it("a real-play Trial reads the average on the band it was judged on", () => {
+    const rp = trial({ mode: "real-play", noise_evidence: { band_pct: 5, measured_noise_pct: null }, treatment: { delta_low1_pct: 8, delta_avg_pct: 10 } });
+    expect(avgBandOf(rp)).toBe(5);
+    const s = summarizeGame(GAME, [...experiments, rp], [VFX], sessions)!;
+    expect(s.lesson).toMatchObject({ recId: "hags", rule: "faster-and-steadier", bandPct: 5, avgBandPct: 5 });
+    const max = { ...rp, id: "exp:x", outcome: "max-fps" as const, verdict: "improved", kept: true, treatment: { delta_low1_pct: 8, delta_avg_pct: 30 } } as SummaryExperiment;
+    const fell = { ...rp, verdict: "no-change", kept: false, treatment: { delta_low1_pct: 8, delta_avg_pct: -10 } } as SummaryExperiment;
+    const on = [cand("hags", false, "already-set-by-compy")];
+    expect(outcomeChoices(GAME, [fell, max], on, sessions)[0].recommended).toMatchObject({ reason: "avg-fell", pct: -10 });
+  });
+
+  // Opus r2 SHOULD-FIX: Maximum FPS judges the 1% low on the wider band too.
+  it("a Maximum FPS Trial reads both numbers on the wider measured band", () => {
+    const wide = { noise_evidence: { band_pct: 3, measured_noise_pct: null }, game_noise: { low1_band_pct: 3, avg_band_pct: 10 } };
+    // 1% low +6: past its own 3%, inside the wider 10% the verdict used: no 1% low lesson.
+    const max = trial({ outcome: "max-fps", verdict: "improved", kept: true, ...wide, treatment: { delta_low1_pct: 6, delta_avg_pct: 12 } });
+    expect(lowBandOf(max)).toBe(10);
+    const s = summarizeGame(GAME, [...experiments, max], [VFX], sessions)!;
+    expect(s.lesson).toMatchObject({ recId: "hags", rule: "faster-not-steadier", bandPct: 10, avgBandPct: 10 });
+    // Regressed on Maximum FPS with the average -8%: inside the wider band, so the reason is the 1% low.
+    const rec = trial({ outcome: "recommended", verdict: "improved", kept: true, ...wide, treatment: { delta_low1_pct: 6, delta_avg_pct: 1 } });
+    const worse = { ...max, id: "exp:w", verdict: "regressed", treatment: { delta_low1_pct: -12, delta_avg_pct: -8 } } as SummaryExperiment;
+    const on = [cand("hags", false, "already-set-by-compy")];
+    expect(outcomeChoices(GAME, [rec, worse], on, sessions)[0].maxFps).toMatchObject({ reason: "low-fell" });
+  });
+
+  it("the outcome switch names 'the average fell' only past the average's own band", () => {
+    const rec = trial({ verdict: "no-change", kept: false, treatment: { delta_low1_pct: 30, delta_avg_pct: -12 }, game_noise: { low1_band_pct: 23, avg_band_pct: 10 } });
+    const max = { ...rec, id: "exp:x", outcome: "max-fps" as const, verdict: "improved", kept: true, treatment: { delta_low1_pct: 30, delta_avg_pct: 30 } } as SummaryExperiment;
+    const on = [cand("hags", false, "already-set-by-compy")];
+    expect(outcomeChoices(GAME, [rec, max], on, sessions)[0].recommended).toMatchObject({ reason: "avg-fell", pct: -12 });
+    const noBand = { ...rec, game_noise: { low1_band_pct: 23 } } as SummaryExperiment;
+    expect(outcomeChoices(GAME, [noBand, max], on, sessions)[0].recommended).toMatchObject({ reason: "avg-unknown", pct: null });
   });
 });

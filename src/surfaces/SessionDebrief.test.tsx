@@ -368,6 +368,38 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
     vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
   });
 
+  // CR-lesson-avg-band: on a measured band the average reads against its OWN band (ROB RUN: 1% low
+  // ±23%, average ±18%), and a measured result without the average's band compares no average.
+  it("the lesson reads the average against the game's measured average band, never the 1% low's", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const measured = {
+      ...comparison,
+      delta_low1_pct: 30,
+      delta_avg_pct: 20,
+      noise_floor_pct: 23,
+      verdict: "improved" as const,
+      game_noise: { low1_band_pct: 23, avg_band_pct: 18, sessions: 9 },
+    };
+    const show = async (r: typeof measured | Record<string, unknown>) => {
+      vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? r : null));
+      render(
+        <ConfirmProvider>
+          <SessionDebrief {...baseProps} />
+        </ConfirmProvider>,
+      );
+      await screen.findByTestId("cmp-card");
+      const card = await openWhy();
+      const rule = card.querySelector('[data-testid="cmp-lesson"]')?.getAttribute("data-rule") ?? null;
+      cleanup();
+      return rule;
+    };
+    // +20% average: inside the 1% low's ±23%, past its own ±18%.
+    expect(await show(measured)).toBe("faster-and-steadier");
+    // No average band on a measured result: the average is not compared.
+    expect(await show({ ...measured, game_noise: { low1_band_pct: 23, sessions: 9 } })).toBe("steadier");
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
+  });
+
   it("the stored verdict wins: a null verdict with the average above the floor teaches 'faster, not steadier'; contradicting readings teach nothing", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     const avgUp = { ...comparison, after_avg_fps: 151.6, delta_avg_pct: 8, verdict: "no-change" as const };

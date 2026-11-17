@@ -481,7 +481,7 @@ export type ComparisonResult = {
   delta_temp_c?: number | null;
   crash_reported?: boolean;
   /** Item 8: this game's measured as-is band (comparison.rs `game_noise`); absent on older results. */
-  game_noise?: { low1_band_pct: number; sessions: number; cap?: FrameCapRead } | null;
+  game_noise?: { low1_band_pct: number; avg_band_pct?: number; sessions: number; cap?: FrameCapRead } | null;
   /** Item 8: why the verdict is "unmeasured". */
   unmeasured?: "noise-unmeasured" | "frame-cap-changed" | "not-comparable" | null;
   /** Item 8: the fall matching the band (noise_floor::fall_pct), the one "regressed" is judged on. */
@@ -976,6 +976,9 @@ export type WhatChangedReport = {
   /** P4-judge-noisy: whether `noise_floor_pct` is this game's measured band. false = not measured, and
    *  the report called nothing better or worse. Absent from an older backend: read as not measured. */
   noise_measured?: boolean;
+  /** CR-lesson-avg-band: the game's measured band on the average (intelligence.rs
+   *  `noise_avg_band_pct`); absent from an older backend or when not measured. */
+  noise_avg_band_pct?: number | null;
   /** Non-measurement events strictly between the two sessions. */
   events_between: IntelEvent[];
   leading_hypotheses: IntelHypothesis[];
