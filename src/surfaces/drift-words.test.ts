@@ -141,6 +141,17 @@ describe("sessionDrift: one fixture per recorded difference", () => {
     expect(driftWords(base(), after(), "ROB RUN", tEn)).toMatch(/frame cap, power plan, graphics driver/);
   });
 
+  // s35 sonnet SHOULD-FIX: with Gaming Mode on in either session the plan isn't compared (it lays
+  // its own plan), as at the conclude and the preflight; the Gaming Mode difference is the one named.
+  it("with Gaming Mode on in a session, the power plan is neither named nor listed as compared", () => {
+    const gm = after({ gaming_mode_active: true }, { power_plan_guid: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", power_plan_changed: true });
+    expect(sessionDrift(base(), gm).map((d) => d.key)).toEqual(["gaming-mode"]);
+    expect(driftWords(base(), gm, "ROB RUN", tEn)).toMatch(/Next: .*Gaming Mode set the same way/);
+    const both = driftWords(base({ gaming_mode_active: true }), after({ gaming_mode_active: true }, { power_plan_guid: "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" }), "ROB RUN", tEn)!;
+    expect(both).toMatch(/^Compy compared what it recorded/);
+    expect(both).not.toMatch(/power plan/);
+  });
+
   // CR-drift-words-own-plan: the backend preflight compares driver strings case-insensitively.
   it("a driver string that differs only in letter case is the same driver", () => {
     const upper = after({}, { gpu_driver: "Adrenalin 25.10.1" });

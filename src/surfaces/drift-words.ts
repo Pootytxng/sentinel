@@ -58,6 +58,9 @@ const gamingMode = (s: SessionSummary): boolean | null => s.gaming_mode_active ?
  *  (CR-drift-words-own-plan; the backend's `with_power_plan_check` exempts it the same way). */
 export const POWER_PLAN_REC = "power-ultimate";
 
+const gamingModeOnIn = (baseline: SessionSummary, after: SessionSummary) =>
+  gamingMode(baseline) === true || gamingMode(after) === true;
+
 /** The context fields BOTH sessions recorded, by copy key (session length aside, which every session
  *  has). Sonnet r1: none = nothing was compared, so "nothing differed" would be a claim from no data.
  *  Opus r2: the "nothing differed" line names exactly these, never more. CR-drift-words-own-plan: the
@@ -67,7 +70,12 @@ export function comparedFields(baseline: SessionSummary, after: SessionSummary, 
   const both = <T>(f: (s: SessionSummary) => T | null | undefined) => f(baseline) != null && f(after) != null;
   const fields: [string, boolean][] = [
     ["cap", both(capWords)],
-    ["powerPlan", recId !== POWER_PLAN_REC && both((s) => text(s.game_state?.power_plan_guid))],
+    // The changed-during flags never make the plan "compared": they say whether a plan moved within a
+    // session (named as its own item), not which plan each session ran on.
+    [
+      "powerPlan",
+      recId !== POWER_PLAN_REC && !gamingModeOnIn(baseline, after) && both((s) => text(s.game_state?.power_plan_guid)),
+    ],
     ["driver", both(driverOf)],
     ["windowsBuild", both((s) => text(s.game_state?.windows_build))],
     ["gamingMode", both(gamingMode)],
@@ -84,11 +92,16 @@ export function sessionDrift(baseline: SessionSummary, after: SessionSummary, re
   const out: DriftItem[] = [];
   const [capB, capA] = [capWords(baseline), capWords(after)];
   if (capB != null && capA != null && capsDiffer(capB, capA)) out.push({ key: "cap", before: capB, after: capA });
+  // s35 sonnet SHOULD-FIX: Gaming Mode lays its own plan over a session, so with it on in either
+  // session the plan is not compared at all (the backend's `with_power_plan_check` / preflight skip it
+  // the same way); the Gaming Mode difference itself is named below.
+  const planCompared = !gamingModeOnIn(baseline, after);
   const [planB, planA] = [text(baseline.game_state?.power_plan_guid), text(after.game_state?.power_plan_guid)];
-  if (recId !== POWER_PLAN_REC && planB != null && planA != null && planB.toLowerCase() !== planA.toLowerCase())
+  if (planCompared && recId !== POWER_PLAN_REC && planB != null && planA != null && planB.toLowerCase() !== planA.toLowerCase())
     out.push({ key: "power-plan" });
   const [chB, chA] = [baseline.game_state?.power_plan_changed === true, after.game_state?.power_plan_changed === true];
-  if (chB || chA) out.push({ key: "power-plan-changed", which: chB && chA ? "both" : chB ? "baseline" : "after" });
+  if (planCompared && (chB || chA))
+    out.push({ key: "power-plan-changed", which: chB && chA ? "both" : chB ? "baseline" : "after" });
   // CR-drift-words-own-plan: driver strings compare case-insensitively, as the backend preflight does.
   const [drvB, drvA] = [driverOf(baseline), driverOf(after)];
   if (drvB != null && drvA != null && drvB.toLowerCase() !== drvA.toLowerCase())
