@@ -4827,8 +4827,75 @@ pub(crate) fn conclude_experiment(
     // Read before the keep/restore decision so a reverted or unreadable setting can overrule a keep.
     let target_now = crate::history::probe_rec_target(&store.experiments[idx].rec_id);
     let rec = &store.experiments[idx];
-    let baseline = found(&sessions, rec.baseline_session_id.as_deref());
+    // §3: other settings Compy changed that aren't confirmed in place limit what this result can claim
+    // (read live here; `conclude_two_session` weighs the count).
+    let unverified = match (history.as_deref(), rows.as_deref()) {
+        (Ok(changes), Some(rows)) => {
+            unverified_others_live(changes, rows, &rec.rec_id, &crate::history::LiveReads::default())
+        }
+        _ => 0,
+    };
+    // The noise store's entry for the after-session's game, kept on the receipt (`noise_evidence_for`).
     let treatment = found(&sessions, Some(&treatment_session_id));
+    let game_noise = treatment.map_or(crate::noise_floor::NoiseLookup::Unmeasured, crate::noise_floor::lookup_for_session);
+    let reads = ConcludeReads {
+        sessions: &sessions,
+        resolved,
+        treatment_session_id: &treatment_session_id,
+        crashed,
+        now,
+        rows: rows.as_deref(),
+        ledger_now,
+        coverage,
+        target_now,
+        unverified,
+        game_noise,
+    };
+    let outcome = conclude_two_session(&mut store.experiments[idx], reads);
+
+    finish_conclude(&mut store, idx, outcome, target_now)
+}
+
+/// What [`conclude_two_session`] reads: the sessions on file, the after-session the user picked
+/// and its pairing (`resolve_treatment`; `None` = refused, judged anyway after a reported crash),
+/// the crash report, the conclude's clock, the ledger's rows, length and coverage, and the live
+/// reads `conclude_experiment` took: the change's own target, how many other Compy changes aren't
+/// confirmed in place, and the noise store's entry for the after-session's game.
+pub(crate) struct ConcludeReads<'a> {
+    pub sessions: &'a [SessionSummary],
+    pub resolved: Option<(&'a SessionSummary, crate::comparability::SessionComparability)>,
+    pub treatment_session_id: &'a str,
+    pub crashed: bool,
+    pub now: DateTime<Utc>,
+    pub rows: Option<&'a [LedgerEntryRef<'a>]>,
+    pub ledger_now: Option<usize>,
+    pub coverage: LedgerCoverage,
+    pub target_now: crate::history::ActiveCheck,
+    pub unverified: usize,
+    pub game_noise: crate::noise_floor::NoiseLookup,
+}
+
+/// PURE (judging-chain refactor slice 2, s37): a two-session Trial's verdict and everything the
+/// conclude stores on its record, from what `conclude_experiment` read. Moved out of it unchanged,
+/// so what the conclude hands `judge_pair` and stores is tested by what it decides; the
+/// keep-or-restore tail (`finish_conclude`) stays with the store.
+pub(crate) fn conclude_two_session(record: &mut ExperimentRecord, reads: ConcludeReads<'_>) -> ConcludeOutcome {
+    let ConcludeReads {
+        sessions,
+        resolved,
+        treatment_session_id,
+        crashed,
+        now,
+        rows,
+        ledger_now,
+        coverage,
+        target_now,
+        unverified,
+        game_noise,
+    } = reads;
+    let rec = &*record;
+    let baseline = found(sessions, rec.baseline_session_id.as_deref());
+    let treatment = found(sessions, Some(treatment_session_id));
     // P4-sessions: the after-session graded on its own halves, kept on the receipt as evidence.
     let (after_check, after_halves) = resolved
         .as_ref()
@@ -4840,8 +4907,8 @@ pub(crate) fn conclude_experiment(
     // P4-judge-noisy: the measured noise this Trial is judged against (the start's, or measured now for
     // a record started before it, over the sessions the ledger covers, #618), never the fixed default;
     // unmeasured judges nothing.
-    let covered_now = sessions_the_ledger_covers(&sessions, coverage);
-    let noise = noise_for_conclude(rec, &covered_now, baseline, rows.as_deref());
+    let covered_now = sessions_the_ledger_covers(sessions, coverage);
+    let noise = noise_for_conclude(rec, &covered_now, baseline, rows);
     let (judged, crash_pairing) = match &resolved {
         Some((treatment, pairing)) => (
             judge_pair(&PairInputs { rec, treatment, pairing, baseline, noise: &noise, crashed, ledger_now, now, after_ratio }),
@@ -4849,19 +4916,13 @@ pub(crate) fn conclude_experiment(
         ),
         None => crash_outcome(rec.applied_at.as_deref(), baseline, treatment),
     };
-    let judged = with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows.as_deref()));
+    let judged = with_compy_state(judged, other_compy_change(rec, baseline, treatment, rows));
     // §3: other settings Compy changed that aren't confirmed in place limit what this result can claim.
-    let unverified = match (history.as_deref(), rows.as_deref()) {
-        (Ok(changes), Some(rows)) => {
-            unverified_others_live(changes, rows, &rec.rec_id, &crate::history::LiveReads::default())
-        }
-        _ => 0,
-    };
     let judged = with_unverified_changes(judged, unverified);
     let outcome = guard_target_at_conclude(judged, target_verification(Some(target_now)));
-    let rec_baseline_avg = store.experiments[idx].baseline_avg_fps;
+    let rec_baseline_avg = record.baseline_avg_fps;
 
-    store.experiments[idx].treatment = resolved.as_ref().map(|(treatment, _)| TreatmentRecord {
+    record.treatment = resolved.as_ref().map(|(treatment, _)| TreatmentRecord {
         avg_fps: treatment.avg_fps,
         low1_fps: treatment.low1_fps_est,
         samples: treatment.samples,
@@ -4873,10 +4934,10 @@ pub(crate) fn conclude_experiment(
         halves: after_halves.clone(),
         delta_avg_pct: delta_avg_pct(rec_baseline_avg, treatment.avg_fps),
     });
-    if let Some(ev) = store.experiments[idx].smoothest.as_mut() {
+    if let Some(ev) = record.smoothest.as_mut() {
         ev.after_ratio = after_ratio;
     }
-    store.experiments[idx].session_pairing = resolved
+    record.session_pairing = resolved
         .as_ref()
         .map(|(_, pairing)| pairing)
         .or(crash_pairing.as_ref())
@@ -4885,20 +4946,18 @@ pub(crate) fn conclude_experiment(
     // P4-judge-noisy: the band is the measured 1% low band; the measurement itself is kept on the
     // record (`game_noise`), also for a record started before it and measured here.
     let measured_noise = noise.ok();
-    let band_pct = measured_noise.as_ref().map_or(store.experiments[idx].noise_floor_pct, |n| n.low1_band_pct);
+    let band_pct = measured_noise.as_ref().map_or(record.noise_floor_pct, |n| n.low1_band_pct);
     // Opus r2: a band stored by an older model was read on this build's base (`on_baseline_base`);
     // the record keeps the band the verdict was judged on, so the receipt shows the same band.
-    keep_judged_noise(&mut store.experiments[idx].game_noise, measured_noise);
-    let between = store.experiments[idx].between_session_noise.clone();
-    let game_noise = treatment.map_or(crate::noise_floor::NoiseLookup::Unmeasured, crate::noise_floor::lookup_for_session);
-    store.experiments[idx].noise_evidence = noise_evidence_for(&outcome, band_pct, &game_noise, between.as_ref());
-    store.experiments[idx].verdict = Some(outcome.verdict.clone());
-    store.experiments[idx].trial_result = Some(trial_result_for(&outcome.verdict));
-    store.experiments[idx].verdict_confidence = Some(outcome.confidence);
-    store.experiments[idx].verdict_note = Some(outcome.note.clone());
-    store.experiments[idx].concluded_at = Some(now.to_rfc3339());
-
-    finish_conclude(&mut store, idx, outcome, target_now)
+    keep_judged_noise(&mut record.game_noise, measured_noise);
+    let between = record.between_session_noise.clone();
+    record.noise_evidence = noise_evidence_for(&outcome, band_pct, &game_noise, between.as_ref());
+    record.verdict = Some(outcome.verdict.clone());
+    record.trial_result = Some(trial_result_for(&outcome.verdict));
+    record.verdict_confidence = Some(outcome.confidence);
+    record.verdict_note = Some(outcome.note.clone());
+    record.concluded_at = Some(now.to_rfc3339());
+    outcome
 }
 
 /// What [`judge_pair`] reads: the Trial, its after-session and pairing, the baseline session, the
@@ -8616,17 +8675,8 @@ mod experiment_tests {
         assert_eq!((t.check, t.halves), (None, None));
     }
 
-    #[test]
-    fn conclude_grades_both_sessions_before_it_records_a_verdict() {
-        let src = include_str!("experiment.rs");
-        let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
-        let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
-        // P4-judge-noisy (owner 2026-11-12): the grades stay on the receipt as evidence, but an uneven
-        // session no longer turns the verdict too-noisy; see
-        // `an_uneven_session_is_no_longer_a_reason_to_judge_nothing`.
-        assert!(body.contains("grade_baseline(treatment, halves_floor_pct(rec))"), "the after-session is graded");
-        assert!(body.contains("check: after_check"), "the receipt keeps the after-session's grade");
-    }
+    // `conclude_grades_both_sessions_before_it_records_a_verdict` (a source pin) retired s37: see
+    // `the_conclude_stores_the_after_sessions_grade_the_average_delta_and_the_band_it_judged_on`.
 
     // ─── P4-noise: the band comes from this game's unchanged sessions ─────────
 
@@ -8831,12 +8881,10 @@ mod experiment_tests {
 
     #[test]
     fn the_average_delta_is_stored_additively_and_older_records_load_without_it() {
-        let src = include_str!("experiment.rs");
-        let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
-        let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
-        // s35: the Recommended reading is now proven by what `judge_pair` decides
-        // (`a_recommended_trial_reads_the_average_on_its_own_measured_band`).
-        assert!(body.contains("delta_avg_pct: delta_avg_pct(rec_baseline_avg, treatment.avg_fps)"), "the receipt keeps it");
+        // s35: the Recommended reading is proven by what `judge_pair` decides
+        // (`a_recommended_trial_reads_the_average_on_its_own_measured_band`); s37: the receipt line by
+        // what the conclude stores
+        // (`the_conclude_stores_the_after_sessions_grade_the_average_delta_and_the_band_it_judged_on`).
         let t = TreatmentRecord {
             avg_fps: 110.0,
             low1_fps: 180.0,
@@ -9195,11 +9243,8 @@ mod experiment_tests {
 
     #[test]
     fn smoothest_is_judged_at_conclude_and_its_evidence_is_stored_additively() {
-        let src = include_str!("experiment.rs");
-        let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
-        let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
-        assert!(body.contains("with_smoothest_outcome(paired, rec.smoothest.as_ref(), after_ratio, n.low1_band_pct)"));
-        assert!(body.contains("ev.after_ratio = after_ratio;"));
+        // s37: that the conclude judges Smoothest on the after-session's pacing and keeps it is proven
+        // by what it decides (`a_smoothest_conclude_judges_and_keeps_the_after_sessions_pacing`).
         // Absent on every other outcome's record, so their stored shape is unchanged.
         let plain = serde_json::to_value(rec(150.0, 5)).unwrap();
         assert!(plain.get("smoothest").is_none());
@@ -9740,8 +9785,8 @@ mod experiment_tests {
         let refuse = body.find("if store.experiments[idx].mode == TrialMode::RealPlay {").expect("the refusal");
         assert!(refuse < body.find("resolve_treatment(").unwrap(), "before any session is read");
         assert!(body[refuse..].starts_with("if store.experiments[idx].mode == TrialMode::RealPlay {\n        return Err("));
-        // The keep/restore tail is the shared one, after the target check.
-        assert!(body.find("let outcome = guard_target_at_conclude(judged,").unwrap() < body.find("finish_conclude(&mut store, idx, outcome, target_now)").unwrap());
+        // s37: that the target check has the last word before the shared keep/restore tail is proven
+        // by what the conclude decides (`the_target_read_has_the_last_word_at_conclude`).
         let unknown = conclude_realplay("nonexistent".into(), false).unwrap_err();
         assert!(unknown.contains("not found"), "{unknown}");
     }
@@ -10464,6 +10509,181 @@ mod refuse_early_tests {
         })
     }
 
+    // ─── Judging-chain refactor slice 2 (s37): the conclude itself (`conclude_two_session`), ───
+    // judged by what it hands `judge_pair` and what it stores. These replace source-text pins on
+    // `conclude_experiment`'s body.
+
+    /// The owner's ROB RUN day on file with `pair_case`'s after-session in it (index 12), the Trial's
+    /// baseline the session before it (index 11), measured `noise` kept from the start, and the
+    /// after-session's frame pacing at `p99_over_p50` (p50 5 ms).
+    fn conclude_case(
+        low_pct: f64,
+        avg_pct: f64,
+        outcome: TrialOutcome,
+        noise: GameNoise,
+        p99_over_p50: f64,
+    ) -> (ExperimentRecord, Vec<SessionSummary>) {
+        let (r, mut t, _) = pair_case(low_pct, avg_pct, outcome);
+        t.frame_pacing = Some(crate::sessions::FramePacing { frames: 100_000, p50_ms: 5.0, p99_ms: 5.0 * p99_over_p50, p999_ms: None });
+        let mut day = crate::noise_floor::tests::rob_day();
+        day[12] = t;
+        let r = ExperimentRecord { baseline_session_id: Some(day[11].started_at.clone()), game_noise: Some(noise), ..r };
+        (r, day)
+    }
+
+    /// `conclude_two_session` on `conclude_case`, the after-session picked by its own id and resolved
+    /// against the record's baseline; a quiet ledger, the change read as applied, nothing unconfirmed.
+    fn conclude_on(r: &mut ExperimentRecord, day: &[SessionSummary], picked: usize, now: DateTime<Utc>) -> ConcludeOutcome {
+        let pairing = crate::comparability::derive(&day[11], &day[picked]);
+        conclude_two_session(
+            r,
+            ConcludeReads {
+                sessions: day,
+                resolved: Some((&day[picked], pairing)),
+                treatment_session_id: &day[picked].started_at,
+                crashed: false,
+                now,
+                rows: Some(&[]),
+                ledger_now: Some(5),
+                coverage: LedgerCoverage::Whole,
+                target_now: crate::history::ActiveCheck::On,
+                unverified: 0,
+                game_noise: crate::noise_floor::NoiseLookup::Measured(4.2),
+            },
+        )
+    }
+
+    // Opus NIT (s35): nothing tested that the conclude hands `judge_pair` the right values. It hands
+    // it the picked after-session and its pairing, the RECORD's baseline session, the record's
+    // measured noise, the crash report, the ledger length, its clock and the after-session's pacing:
+    // the verdict is exactly `judge_pair`'s on those values, and a +30% / +20% move on ROB RUN's
+    // band is a win only with the baseline and after-session the right way round.
+    #[test]
+    fn the_conclude_hands_judge_pair_the_picked_session_the_records_baseline_and_its_noise() {
+        let now = Utc::now();
+        let (mut r, day) = conclude_case(30.0, 20.0, TrialOutcome::Recommended, WIDE, 1.3);
+        let before = r.clone();
+        let o = conclude_on(&mut r, &day, 12, now);
+        let pairing = crate::comparability::derive(&day[11], &day[12]);
+        let direct = judge_pair(&PairInputs {
+            rec: &before,
+            treatment: &day[12],
+            pairing: &pairing,
+            baseline: Some(&day[11]),
+            noise: &Ok(WIDE),
+            crashed: false,
+            ledger_now: Some(5),
+            now,
+            after_ratio: Some(1.3),
+        });
+        assert_eq!(o, direct);
+        assert_eq!((o.verdict.as_str(), o.keep), ("improved", true), "{}", o.note);
+        // The same move judged on a quiet game's band (not the record's) would be a different note;
+        // the conclude judged on the record's own.
+        assert!(o.note.contains("20.6"), "judged on the record's measured band: {}", o.note);
+        // The baseline as the after-session reads a fall, not a win: the roles are not swapped.
+        let (mut r2, day2) = conclude_case(30.0, 20.0, TrialOutcome::Recommended, WIDE, 1.3);
+        assert_ne!(conclude_on(&mut r2, &day2, 11, now).verdict, "improved");
+    }
+
+    // Replaces `conclude_grades_both_sessions_before_it_records_a_verdict` (pins on
+    // "grade_baseline(treatment, halves_floor_pct(rec))" and "check: after_check"), the receipt pin
+    // of `the_average_delta_is_stored_additively_...` ("delta_avg_pct: delta_avg_pct(rec_baseline_avg,
+    // treatment.avg_fps)"), and `an_uneven_session_is_no_longer_a_reason_to_judge_nothing`'s pins on
+    // "check: after_check" and "noise_for_conclude(...)": the record keeps the after-session's own
+    // grade, the average's delta against the record's baseline average, the measured noise it was
+    // judged on and the band, and the verdict it reached.
+    #[test]
+    fn the_conclude_stores_the_after_sessions_grade_the_average_delta_and_the_band_it_judged_on() {
+        let now = Utc::now();
+        let (mut r, day) = conclude_case(30.0, 20.0, TrialOutcome::Recommended, WIDE, 1.3);
+        let grade = session_check(grade_baseline(&day[12], halves_floor_pct(&r)));
+        let o = conclude_on(&mut r, &day, 12, now);
+        let t = r.treatment.clone().expect("the after-session is kept");
+        assert_eq!(t.session_id.as_deref(), Some(day[12].started_at.as_str()));
+        assert_eq!((t.check, t.halves), grade, "the after-session's own grade is on the receipt");
+        assert_eq!(t.delta_avg_pct, delta_avg_pct(120.0, day[12].avg_fps));
+        assert!((t.delta_avg_pct.unwrap() - 20.0).abs() < 0.01, "{:?}", t.delta_avg_pct);
+        assert_eq!((t.avg_fps, t.low1_fps, t.delta_low1_pct), (day[12].avg_fps, day[12].low1_fps_est, o.delta_low1_pct));
+        assert_eq!(r.game_noise, Some(WIDE), "judged on the measured noise, kept on the record");
+        let ev = r.noise_evidence.clone().expect("a judged verdict names its band");
+        assert_eq!((ev.band_pct, ev.measured_noise_pct), (WIDE.low1_band_pct, Some(4.2)));
+        assert_eq!((r.verdict.as_deref(), r.verdict_note.as_deref()), (Some("improved"), Some(o.note.as_str())));
+        assert_eq!(r.concluded_at, Some(now.to_rfc3339()));
+    }
+
+    // Replaces `smoothest_is_judged_at_conclude_and_its_evidence_is_stored_additively`'s pins on
+    // "with_smoothest_outcome(paired, rec.smoothest.as_ref(), after_ratio, n.low1_band_pct)" and
+    // "ev.after_ratio = after_ratio;": a Smoothest Trial is judged on the after-session's frame
+    // pacing against its start ratio, and keeps that ratio on its record.
+    #[test]
+    fn a_smoothest_conclude_judges_and_keeps_the_after_sessions_pacing() {
+        let now = Utc::now();
+        let ev = smoothest_admission(true, Some(&crate::noise_floor::BetweenSessionNoise { spread_pct: 1.0, sessions: 3 }), Some(1.5)).unwrap();
+        let steadier = |ratio: f64| {
+            let (r, day) = conclude_case(0.0, 0.0, TrialOutcome::Smoothest, WIDE, ratio);
+            let mut r = ExperimentRecord { smoothest: Some(ev.clone()), ..r };
+            let o = conclude_on(&mut r, &day, 12, now);
+            (o, r.smoothest.and_then(|e| e.after_ratio))
+        };
+        let (better, kept) = steadier(1.2);
+        assert_eq!(better.verdict, "improved", "1.5 -> 1.2 is steadier past a 2% band: {}", better.note);
+        assert_eq!(kept, Some(1.2));
+        let (same, kept) = steadier(1.5);
+        assert_ne!(same.verdict, "improved", "{}", same.note);
+        assert_eq!(kept, Some(1.5));
+    }
+
+    // Replaces `a_two_session_conclude_refuses_a_real_play_trial_before_judging_anything`'s pin on
+    // "let outcome = guard_target_at_conclude(judged," before "finish_conclude(": a win whose setting
+    // reads off (or can't be read) when the conclude decides is never kept, and what the record
+    // stores is that checked verdict, the one the keep/restore tail is handed.
+    #[test]
+    fn the_target_read_has_the_last_word_at_conclude() {
+        for target in [crate::history::ActiveCheck::Off, crate::history::ActiveCheck::Unreadable] {
+            let (mut r, day) = conclude_case(30.0, 20.0, TrialOutcome::Recommended, WIDE, 1.3);
+            let pairing = crate::comparability::derive(&day[11], &day[12]);
+            let o = conclude_two_session(
+                &mut r,
+                ConcludeReads {
+                    sessions: &day,
+                    resolved: Some((&day[12], pairing)),
+                    treatment_session_id: &day[12].started_at,
+                    crashed: false,
+                    now: Utc::now(),
+                    rows: Some(&[]),
+                    ledger_now: Some(5),
+                    coverage: LedgerCoverage::Whole,
+                    target_now: target,
+                    unverified: 0,
+                    game_noise: crate::noise_floor::NoiseLookup::Unmeasured,
+                },
+            );
+            assert!(!o.keep && o.verdict != "improved", "{target:?}: {} / {}", o.verdict, o.note);
+            assert_eq!(r.verdict.as_deref(), Some(o.verdict.as_str()));
+        }
+    }
+
+    // Replaces `an_uneven_session_is_no_longer_a_reason_to_judge_nothing`'s negative pin on
+    // "with_steady_sessions(": an after-session whose halves differ widely is still judged on the
+    // measured band (its grade stays on the receipt), never turned too-noisy.
+    #[test]
+    fn an_uneven_after_session_is_still_judged() {
+        let (mut r, mut day) = conclude_case(30.0, 20.0, TrialOutcome::Recommended, WIDE, 1.3);
+        let steady = session_check(grade_baseline(&day[12], halves_floor_pct(&r)));
+        let n = day[12].fps_series.len();
+        for (i, p) in day[12].fps_series.iter_mut().enumerate() {
+            p.1 *= if i < n / 2 { 0.7 } else { 1.3 };
+        }
+        let uneven = session_check(grade_baseline(&day[12], halves_floor_pct(&r)));
+        assert_ne!(uneven, steady, "the halves now differ by far more than the halves floor");
+        let o = conclude_on(&mut r, &day, 12, Utc::now());
+        assert_ne!(o.verdict, "too-noisy", "{}", o.note);
+        assert_eq!(o.verdict, "improved", "{}", o.note);
+        let t = r.treatment.expect("kept");
+        assert_eq!((t.check, t.halves), uneven, "its grade stays on the receipt as evidence");
+    }
+
     // Replaces `an_uneven_session_is_no_longer_a_reason_to_judge_nothing`'s and
     // `the_start_measures_the_band_and_refuses_when_it_cant`'s pin on
     // "noise_floor_pct: n.low1_band_pct, ..rec.clone()": the 1% low is classified on the measured
@@ -10729,18 +10949,11 @@ mod refuse_early_tests {
         }
     }
 
-    #[test]
-    fn an_uneven_session_is_no_longer_a_reason_to_judge_nothing() {
-        let src = include_str!("experiment.rs");
-        let body = &src[src.find("pub(crate) fn conclude_experiment(").unwrap()..];
-        let body = &body[..body.find("pub(crate) fn restore_experiment(").unwrap()];
-        assert!(!body.contains(concat!("with_steady", "_sessions(")), "uneven halves no longer turn a verdict too-noisy");
-        assert!(body.contains("noise_for_conclude(rec, &covered_now, baseline, rows.as_deref())"), "judged on measured noise");
-        // s35: the measured-band classification and the cap comparison are now proven by what
-        // `judge_pair` decides (`the_conclude_classifies_the_1pct_low_on_the_measured_band_not_the_stored_one`,
-        // `an_after_session_that_ran_capped_against_an_uncapped_band_is_confounded`).
-        assert!(body.contains("check: after_check"), "the receipt still keeps the after-session's grade");
-    }
+    // `an_uneven_session_is_no_longer_a_reason_to_judge_nothing` (source pins) retired: s35 by
+    // `the_conclude_classifies_the_1pct_low_on_the_measured_band_not_the_stored_one` and
+    // `an_after_session_that_ran_capped_against_an_uncapped_band_is_confounded`; s37 by
+    // `an_uneven_after_session_is_still_judged` and
+    // `the_conclude_stores_the_after_sessions_grade_the_average_delta_and_the_band_it_judged_on`.
 
     #[test]
     fn a_frame_cap_that_changed_or_cant_be_read_confounds_the_trial() {
