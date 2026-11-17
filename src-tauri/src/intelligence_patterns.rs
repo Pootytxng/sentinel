@@ -216,19 +216,44 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
         // armed comparison judge it (opus r3); never computed without a band.
         let fall = band.map_or(f64::INFINITY, crate::noise_floor::fall_pct);
         let past = |pct: f64| pct > floor || pct < -fall;
-        if band.is_some() {
+        // CR-pattern-cap-and-words (a): the band is measured for the newest session's frame-cap state,
+        // so the 1% low lanes (trend, driver split, Gaming Mode split) keep only the sessions whose cap
+        // pair with the newest is Same. A cap that went on, came off, moved or can't be read is left
+        // out, never pooled; a newest session whose cap can't be read leaves nothing to call.
+        let newest_cap = crate::noise_floor::cap_read(lane.sessions[n - 1]);
+        let low_lane: Vec<&SessionSummary> = lane
+            .sessions
+            .iter()
+            .copied()
+            .filter(|s| {
+                crate::noise_floor::cap_pair(crate::noise_floor::cap_read(s), newest_cap) == crate::noise_floor::CapPair::Same
+            })
+            .collect();
+        let m = low_lane.len();
+        if newest_cap == crate::noise_floor::CapRead::Unknown {
+            coverage.push(format!(
+                "1% low directions for {game}: not called. Compy couldn't read whether your newest {game} session had a frame cap, so no other session can be matched to it."
+            ));
+        } else if m < n {
+            coverage.push(format!(
+                "1% low directions for {game}: {} of {n} sessions left out. Their frame cap differed from your newest session's, or Compy couldn't read it.",
+                n - m
+            ));
+        }
+        // Opus r1 SHOULD-FIX: "checked" only where enough sessions were left to check a trend.
+        if band.is_some() && m >= MIN_TREND_SESSIONS {
             band_games += 1;
-            band_sessions += n;
+            band_sessions += m;
         }
 
         // ── performance-trend: 1% lows over time ──
-        if n < MIN_TREND_SESSIONS {
+        if m < MIN_TREND_SESSIONS {
             coverage.push(format!(
-                "Performance trend for {game}: needs {MIN_TREND_SESSIONS} comparable sessions; have {n}."
+                "Performance trend for {game}: needs {MIN_TREND_SESSIONS} comparable sessions; have {m}."
             ));
         } else if band.is_some() {
             trend_eligible_games.push(game.clone());
-            let ys: Vec<f64> = lane.sessions.iter().map(|s| s.low1_fps_est).collect();
+            let ys: Vec<f64> = low_lane.iter().map(|s| s.low1_fps_est).collect();
             let (first_fit, last_fit) = fitted_span(&ys);
             if first_fit > 0.0 {
                 let change_pct = round1((last_fit - first_fit) / first_fit * 100.0);
@@ -237,9 +262,16 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                     if degrading {
                         degrading_games.push(game.clone());
                     }
-                    let first_date = date_of(&lane.sessions[0].started_at);
-                    let last_date = date_of(&lane.sessions[n - 1].started_at);
-                    let strong = n >= STRONG_TREND_SESSIONS && change_pct.abs() >= 2.0 * floor;
+                    let first_date = date_of(&low_lane[0].started_at);
+                    let last_date = date_of(&low_lane[m - 1].started_at);
+                    let strong = m >= STRONG_TREND_SESSIONS && change_pct.abs() >= 2.0 * floor;
+                    // CR-pattern-cap-and-words (b): quote the line the move was judged against: a
+                    // fall is judged at the fall matching the band, a rise at the band itself.
+                    let line = if degrading {
+                        format!("the {fall:.1}% fall that matches how much {game} moves between your sessions with nothing changed")
+                    } else {
+                        format!("the {floor:.1}% {game} moves between your sessions with nothing changed")
+                    };
                     patterns.push(SessionPattern {
                         id: "performance-trend".into(),
                         game: Some(game.clone()),
@@ -249,13 +281,13 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                             format!("{game} has been getting faster")
                         },
                         detail: format!(
-                            "1% lows in {game} moved about {change_pct:+.1}% across {n} sessions between {first_date} and {last_date} — past the {floor:.1}% {game} moves between your sessions with nothing changed."
+                            "1% lows in {game} moved about {change_pct:+.1}% across {m} sessions between {first_date} and {last_date} — past {line}."
                         ),
                         confidence: if strong { Confidence::Medium } else { Confidence::Low },
                         confidence_reason: if strong {
-                            format!("{n} sessions and a move at least twice the noise floor — but sessions aren't controlled runs, so this stays a correlation.")
+                            format!("{m} sessions and a move at least twice the noise floor — but sessions aren't controlled runs, so this stays a correlation.")
                         } else {
-                            format!("Only {n} sessions, or a move close to the noise floor — could still be run-to-run variance.")
+                            format!("Only {m} sessions, or a move close to the noise floor — could still be run-to-run variance.")
                         },
                         supporting_evidence: vec![format!(
                             "Fitted 1% lows: ~{:.0} FPS at the start of the window vs ~{:.0} FPS now.",
@@ -402,8 +434,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
 
         // ── driver-split: last driver version vs the one before it ──
         {
-            let fp_sessions: Vec<&&SessionSummary> = lane
-                .sessions
+            let fp_sessions: Vec<&&SessionSummary> = low_lane
                 .iter()
                 .filter(|s| s.hw_fingerprint.is_some())
                 .collect();
@@ -478,14 +509,12 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
 
         // ── gaming-mode-split: sessions with Gaming Mode on vs off ──
         {
-            let on: Vec<f64> = lane
-                .sessions
+            let on: Vec<f64> = low_lane
                 .iter()
                 .filter(|s| s.gaming_mode_active == Some(true))
                 .map(|s| s.low1_fps_est)
                 .collect();
-            let off: Vec<f64> = lane
-                .sessions
+            let off: Vec<f64> = low_lane
                 .iter()
                 .filter(|s| s.gaming_mode_active == Some(false))
                 .map(|s| s.low1_fps_est)
@@ -658,8 +687,75 @@ mod tests {
             background_secs_excluded: None,
             frame_pacing: None,
             gpu_load: None,
-            frame_cap: None,
+            // A read "no cap" (CR-pattern-cap-and-words: an unread cap is left out of 1% low lanes).
+            frame_cap: Some(crate::noise_floor::CapRead::Uncapped),
         }
+    }
+
+    #[test]
+    fn sessions_whose_cap_differs_from_the_newest_are_left_out_of_the_1pct_low_lanes() {
+        // CR-pattern-cap-and-words (a): three early sessions capped at 60 FPS read ~50 FPS 1% lows,
+        // five later uncapped ones a flat 100. Pooled, that is a big "getting faster" trend; judged on
+        // the newest session's (uncapped) band, only the five flat sessions count.
+        let mut s: Vec<SessionSummary> = (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
+        for x in s.iter_mut().take(3) {
+            x.low1_fps_est = 50.0;
+            x.frame_cap = Some(crate::noise_floor::CapRead::Capped { at_fps: 60.0 });
+        }
+        let r = detect(&s);
+        assert!(r.patterns.iter().all(|p| p.id != "performance-trend"), "{:?}", r.patterns);
+        assert!(r.coverage.iter().any(|c| c.contains("3 of 8 sessions left out") && c.contains("frame cap")), "{:?}", r.coverage);
+    }
+
+    #[test]
+    fn capped_sessions_dont_tip_the_gaming_mode_split() {
+        // Five early capped sessions with Gaming Mode on read ~50 FPS; eight uncapped ones split four
+        // on, four off, all at 100. Pooled, "on" has a median of 50 (a big "slower"); with the cap
+        // filter the split still runs (four a side) and finds nothing.
+        let mut s: Vec<SessionSummary> = (0..13).map(|i| mk_session(&day(i), "cp2077.exe", 100.0)).collect();
+        for (i, x) in s.iter_mut().enumerate() {
+            if i < 5 {
+                x.low1_fps_est = 50.0;
+                x.frame_cap = Some(crate::noise_floor::CapRead::Capped { at_fps: 60.0 });
+            }
+            x.gaming_mode_active = Some(i < 5 || i % 2 == 1);
+        }
+        let r = detect(&s);
+        assert!(r.patterns.iter().all(|p| p.id != "gaming-mode-split"), "{:?}", r.patterns);
+        // The capped ones alone would have called it: the filter is what keeps it quiet.
+        for x in s.iter_mut().take(5) {
+            x.frame_cap = Some(crate::noise_floor::CapRead::Uncapped);
+        }
+        assert!(detect(&s).patterns.iter().any(|p| p.id == "gaming-mode-split"), "{:?}", detect(&s).patterns);
+    }
+
+    #[test]
+    fn a_newest_session_whose_cap_cant_be_read_leaves_no_1pct_low_direction() {
+        let mut s: Vec<SessionSummary> =
+            (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0 - 2.5 * i as f64)).collect();
+        assert!(detect(&s).patterns.iter().any(|p| p.id == "performance-trend"), "read caps: the fall is called");
+        s[7].frame_cap = None; // shed series, cap never recorded: Unknown
+        let r = detect(&s);
+        assert!(r.patterns.iter().all(|p| p.id != "performance-trend"), "{:?}", r.patterns);
+        assert!(r.coverage.iter().any(|c| c.contains("couldn't read whether your newest")), "{:?}", r.coverage);
+        assert!(r.coverage.iter().all(|c| !c.contains("Quiet is a real answer") || c.contains("0 comparable")), "{:?}", r.coverage);
+    }
+
+    #[test]
+    fn a_falling_trend_quotes_the_fall_it_was_judged_on() {
+        // CR-pattern-cap-and-words (b): an 11% band is judged as a 9.9% fall (noise_floor::fall_pct).
+        let down: Vec<SessionSummary> =
+            (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0 - 10.0 / 7.0 * i as f64)).collect();
+        let r = detect_patterns(&down, &|_| Some(11.0));
+        let p = r.patterns.iter().find(|p| p.id == "performance-trend").expect("called");
+        assert!(p.detail.contains("past the 9.9% fall"), "{}", p.detail);
+        assert!(!p.detail.contains("11.0%"), "{}", p.detail);
+        // A rise still quotes the band itself.
+        let up: Vec<SessionSummary> =
+            (0..8).map(|i| mk_session(&day(i), "cp2077.exe", 100.0 + 12.0 / 7.0 * i as f64)).collect();
+        let r = detect_patterns(&up, &|_| Some(11.0));
+        let p = r.patterns.iter().find(|p| p.id == "performance-trend").expect("called");
+        assert!(p.detail.contains("past the 11.0% "), "{}", p.detail);
     }
 
     fn day(i: usize) -> String {
