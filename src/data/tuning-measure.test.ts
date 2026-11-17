@@ -323,7 +323,7 @@ describe("measureTuning", () => {
     const m = measureTuning(baseline(), cool, null, none)!;
     expect(m).toMatchObject({ afterPeakTempC: null, tempDropC: null, tempReal: false });
     expect(m.verdict).not.toBe("holding");
-    expect(m.detail).toMatch(/Temps not compared: the sessions since the tune can't be compared with your baseline/);
+    expect(m.detail).toMatch(/Temps not compared: the sessions with a peak reading since the tune can't be compared with your baseline/);
     expect(m.detail).not.toMatch(/a real drop/);
     // No list at all (not read yet, or the read failed): nothing is claimed, and no reason is invented.
     const unread = measureTuning(baseline(), cool, null, null)!;

@@ -330,8 +330,8 @@ export function measureTuning(
   // comparable with the baseline session (another GPU, driver or game build is not this tune's heat).
   // A peak from any other session is never compared: no drop, no rise, no claim.
   const peakOf = (s: SessionSummary) => (typeof s.peak_gpu_temp_c === "number" ? s.peak_gpu_temp_c : null);
-  const postPeaks = post
-    .filter(conditionsComparable)
+  const cmpPost = post.filter(conditionsComparable);
+  const postPeaks = cmpPost
     .map(peakOf)
     .filter((t): t is number => t != null);
   const peaksLeftOut = post.some((s) => peakOf(s) != null && !conditionsComparable(s));
@@ -342,7 +342,6 @@ export function measureTuning(
   );
   // Opus r1 MUST-FIX: a temperature claim needs the same qualifying window, counted on the
   // comparable sessions it was read from (never on sessions it left out).
-  const cmpPost = post.filter(conditionsComparable);
   const cmpSecs = cmpPost.reduce((sum, s) => sum + s.duration_secs, 0);
   const tempWindowMet = cmpPost.length >= TUNING_MIN_SESSIONS && cmpSecs >= TUNING_MIN_SECS && !crashReported;
   const afterPeakTempC = postPeaks.length > 0 ? Math.max(...postPeaks) : null;
@@ -369,7 +368,7 @@ export function measureTuning(
     tempDropC == null
       ? peaksLeftOut && baselinePeakTempC != null
         ? listedNotComparable
-          ? "Temps not compared: the sessions since the tune can't be compared with your baseline (another GPU, driver or game build)."
+          ? "Temps not compared: the sessions with a peak reading since the tune can't be compared with your baseline (another GPU, driver or game build)."
           : "Temps not compared yet: Compy couldn't match these sessions to your baseline."
         : "Temps will show once a monitored session reports a peak."
       : (tempReal
@@ -421,7 +420,7 @@ export function measureTuning(
       // Opus r1 MUST-FIX: the window met on every session but not on the comparable ones the temps
       // were read from says how much of that play counts.
       const counted =
-        windowMet && cmpPost.length < post.length
+        cmpPost.length < post.length
           ? ` (${cmpPost.length} of them, ${fmtPlaytime(cmpSecs)}, can be compared with your baseline)`
           : "";
       const framesWhy = fpsUnmeasured && sessionsSince > 0 ? ` Frames not judged (${unjudgedWhy}).` : "";
