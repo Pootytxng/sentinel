@@ -85,7 +85,9 @@ export function stutterLessonRule(r: WhatChangedReport): LessonRule | null {
   const avgPct = ((c.avg_fps - b.avg_fps) / b.avg_fps) * 100;
   const ownAvgBand = Number.isFinite(r.noise_avg_band_pct) ? (r.noise_avg_band_pct as number) : null;
   const avgBand = r.noise_measured === true ? ownAvgBand : r.noise_floor_pct;
-  return lessonRuleForVerdict(r.verdict, low1Pct, avgPct, r.noise_floor_pct, avgBand);
+  // CR-lesson-fall-band: What changed judges `|delta| > band` (intelligence.rs `what_changed_inner`),
+  // the same band both ways even when it is measured, so the falls read that way here too.
+  return lessonRuleForVerdict(r.verdict, low1Pct, avgPct, r.noise_floor_pct, avgBand, { low: "same", avg: "same" });
 }
 
 /** The engine's comparability verdicts that make an earlier steady session a good baseline. */

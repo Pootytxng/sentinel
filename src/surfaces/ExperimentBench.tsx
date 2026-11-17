@@ -28,6 +28,8 @@ import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome"
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
 import {
+  fallPct,
+  NOISE_MODEL_LOG,
   outcomeChoices,
   summarizeGame,
   type GameTestSummary,
@@ -381,16 +383,9 @@ const MIN_CLAIM_PCT = 3;
 // Fewer as-is sessions than this measure the band loosely (experiment.rs `FULL_CONFIDENCE_SESSIONS`).
 const FULL_CONFIDENCE_SESSIONS = 6;
 
-// The noise model from which a band is a rise over the baseline judged at its matching fall
-// (noise_floor.rs `NOISE_MODEL_VERSION` 3); earlier models judged the same band both ways.
-const NOISE_MODEL_LOG = 3;
-
-// The fall that matches a band stored as a rise over the baseline (noise_floor.rs `fall_pct`, the same
-// rule): B / (1 + B), rounded down to 0.1, never under the smallest claim; a band at it is it both ways.
-export function fallPct(band: number): number {
-  if (band <= MIN_CLAIM_PCT + 1e-9) return band;
-  return Math.max(Math.floor(((100 * band) / (100 + band)) * 10) / 10, MIN_CLAIM_PCT);
-}
+// `fallPct` and `NOISE_MODEL_LOG` live in test-summary.ts (CR-lesson-fall-band: the lessons and the
+// outcome switch read falls the same way); re-exported for existing importers.
+export { fallPct };
 
 // P4-noise-sf: the measured bands this goal was actually judged on (experiment.rs `with_noise_words`:
 // Recommended on the 1% low with the average on its own band, or the 1% low only under a shared cap;

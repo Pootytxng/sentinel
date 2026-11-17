@@ -400,6 +400,42 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
     vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
   });
 
+  // CR-lesson-fall-band: a measured result judged its fall at the matching fall (comparison.rs
+  // `classify_measured`, carried as `noise_fall_pct`): a +20.6% band is a -17.0% fall, a 10% one -9.0%.
+  it("a measured result teaches a fall at the matching fall the engine judged it at", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const worse = {
+      ...comparison,
+      delta_low1_pct: -18,
+      delta_avg_pct: 0,
+      noise_floor_pct: 20.6,
+      verdict: "regressed" as const,
+      game_noise: { low1_band_pct: 20.6, avg_band_pct: 10, sessions: 9 },
+      noise_fall_pct: 17.0,
+    };
+    const show = async (r: Record<string, unknown>) => {
+      vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? r : null));
+      render(
+        <ConfirmProvider>
+          <SessionDebrief {...baseProps} />
+        </ConfirmProvider>,
+      );
+      await screen.findByTestId("cmp-card");
+      const card = await openWhy();
+      const rule = card.querySelector('[data-testid="cmp-lesson"]')?.getAttribute("data-rule") ?? null;
+      cleanup();
+      return rule;
+    };
+    // -18%: past the matching -17.0%, inside the band read both ways (the engine called it Worse).
+    expect(await show(worse)).toBe("less-steady-not-slower");
+    // The average -9.5%: past its own band's matching -9.0%, so it fell.
+    expect(await show({ ...worse, delta_low1_pct: 25, delta_avg_pct: -9.5, verdict: "improved" })).toBe("steadier-but-slower");
+    // An older result (no measured band) was judged on one band both ways: -9.5% inside ±10% is flat.
+    const older = { ...worse, delta_low1_pct: 25, delta_avg_pct: -9.5, noise_floor_pct: 10, verdict: "improved", game_noise: null, noise_fall_pct: null };
+    expect(await show(older)).toBe("steadier-not-faster");
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
+  });
+
   it("the stored verdict wins: a null verdict with the average above the floor teaches 'faster, not steadier'; contradicting readings teach nothing", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
     const avgUp = { ...comparison, after_avg_fps: 151.6, delta_avg_pct: 8, verdict: "no-change" as const };
