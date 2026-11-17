@@ -44,9 +44,11 @@ export function TuningDebrief({
       .then((c) => setComparison(c && c.kind === "tuning" && c.game === s.process_name ? c : null))
       .catch(() => {});
   }, [s.process_name]);
+  // CR-tuning-comparability (sonnet r1): a newly recorded session re-reads the comparability list with it.
+  const sessionCount = sessions.length;
   useEffect(() => {
     if (guide) refresh();
-  }, [guide, refresh]);
+  }, [guide, refresh, sessionCount]);
 
   if (!guide || !s.process_name) return null;
 

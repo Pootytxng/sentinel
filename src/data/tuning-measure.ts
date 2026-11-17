@@ -293,6 +293,7 @@ export function measureTuning(
   // CR-tuning-comparability: and only sessions the backend's comparability check (the one the tune's
   // first comparison is judged on: GPU, rig, driver, game build and the rest of `comparability.rs`)
   // reads as comparable with the baseline session. Any other session is not judged, never "too aggressive".
+  // `started_at` is the session's id on both sides (the same recorded field); never normalise one side.
   const conditionsComparable = (s: SessionSummary) =>
     postComparability?.some((p) => p.started_at === s.started_at && p.comparable) === true;
   const comparable = (s: SessionSummary) =>
@@ -316,6 +317,12 @@ export function measureTuning(
   const fpsUnmeasured = band == null || judged.length < post.length;
   const bandText = band != null ? `+${band.low1_band_pct}% / −${band.fall_pct}%` : "";
   const fallText = band != null ? `−${band.fall_pct}%` : "";
+  // CR-tuning-comparability (opus r1): why frames went unjudged, in plain words. No band at all, or a
+  // band with some sessions left out (another GPU, driver, game build, or frame cap).
+  const unjudgedWhy =
+    band == null
+      ? "this game's noise between sessions isn't measured"
+      : "some sessions since the tune can't be compared with your baseline: another GPU, driver, game build or frame cap";
 
   // Thermal payoff: compare the baseline peak to the WORST (hottest) post-tune peak — honest "it runs
   // cooler even at its hottest". A ≥3 °C drop clears sensor/ambient noise.
@@ -382,7 +389,7 @@ export function measureTuning(
     if (windowMet) {
       verdict = "holding";
       headline = "Holding up so far";
-      detail = `${tempLine} ${fpsUnmeasured ? "Frames not judged (this game's noise between sessions isn't measured), no" : "Frames held, no"} crashes flagged across ${progress}. Only your continued play proves it — keep playing and tell Compy if anything resets.`;
+      detail = `${tempLine} ${fpsUnmeasured ? `Frames not judged (${unjudgedWhy}), no` : "Frames held, no"} crashes flagged across ${progress}. Only your continued play proves it — keep playing and tell Compy if anything resets.`;
     } else {
       verdict = "too-early";
       headline = "Too early to call — keep playing";
@@ -395,12 +402,12 @@ export function measureTuning(
     // so this is a flag to watch, not proof the tune caused it (never over-claim causation either).
     verdict = "no-change";
     headline = fpsUnmeasured ? "Running warmer — frames not judged" : "Frames held — but it's running warmer";
-    detail = `${tempLine} ${fpsUnmeasured ? "Compy can't call your 1% lows (this game's noise between sessions isn't measured)" : `Your 1% lows stayed inside this game's measured ${bandText} band`}, but the hottest peak came in higher this window. Peak-to-peak swings with load and ambient, so watch it across another session or two rather than reading it as the tune backfiring — ${progress} so far.`;
+    detail = `${tempLine} ${fpsUnmeasured ? `Compy can't call your 1% lows (${unjudgedWhy})` : `Your 1% lows stayed inside this game's measured ${bandText} band`}, but the hottest peak came in higher this window. Peak-to-peak swings with load and ambient, so watch it across another session or two rather than reading it as the tune backfiring — ${progress} so far.`;
   } else if (fpsUnmeasured) {
     // Item 8: nothing to call the frames on. Show them; never a null invented from a fixed floor.
     verdict = "unmeasured";
     headline = "Can't call the frames";
-    detail = `${tempLine} Compy hasn't measured how much this game moves between your sessions with nothing changed, so it won't call the frames better or worse${low1DeltaPct != null ? ` (latest 1% low ${low1DeltaPct > 0 ? "+" : ""}${low1DeltaPct}% vs your baseline)` : ""} — ${progress} so far.`;
+    detail = `${tempLine} ${band == null ? "Compy hasn't measured how much this game moves between your sessions with nothing changed" : "Compy can't compare every session since the tune with your baseline (another GPU, driver, game build or frame cap)"}, so it won't call the frames better or worse${low1DeltaPct != null ? ` (latest 1% low ${low1DeltaPct > 0 ? "+" : ""}${low1DeltaPct}% vs your baseline)` : ""} — ${progress} so far.`;
   } else {
     verdict = "no-change";
     headline = "No measurable change";

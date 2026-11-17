@@ -305,6 +305,9 @@ describe("measureTuning", () => {
     expect(m.fpsRegressed).toBe(false);
     expect(m.fpsUnmeasured).toBe(true);
     expect(m.verdict).not.toBe("too-aggressive");
+    // The reason given is the real one: the noise IS measured; a session couldn't be compared.
+    expect(m.detail).toMatch(/can't be compared with your baseline: another GPU, driver, game build or frame cap/);
+    expect(m.detail).not.toMatch(/isn't measured/);
     // A session the list doesn't name, or no list at all: not judged either.
     expect(measureTuning(baseline(), drop, measured(10), ok(drop.slice(1)))!.fpsRegressed).toBe(false);
     expect(measureTuning(baseline(), drop, measured(10), null)!.fpsUnmeasured).toBe(true);

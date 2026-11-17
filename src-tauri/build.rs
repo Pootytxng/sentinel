@@ -48,6 +48,7 @@ const APP_COMMANDS: &[&str] = &[
     "get_appliable_rec_ids",
     "get_applied_changes",
     "get_armed_comparison",
+    "get_tuning_comparability",
     "get_benchmark_state",
     "get_build_stamp",
     "get_component_evidence",
