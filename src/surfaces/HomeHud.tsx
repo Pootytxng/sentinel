@@ -21,6 +21,8 @@ import { gradeFps, gradeLow1, gradeColor, type Grade } from "../data/metric-grad
 import { useManualParts } from "./rig/manual-parts";
 import { HardwareGrid } from "./HardwareGrid";
 import { inEffectCounts, useMachineModel } from "../data/machine-model";
+import { undoTally } from "../data/live-changes";
+import { undoTallyWords } from "../data/undo-tally-words";
 import { SetupLauncherCard } from "./setup/SetupLauncherCard";
 import { useV2Accent } from "./HomeV2";
 import CountUp from "../design/vendor/CountUp/CountUp";
@@ -330,6 +332,9 @@ export function HomeHud({
   // quarantined keeps the pre-quarantine changes off this list and out of reach. So the promise is
   // withdrawn on health alone, independent of the count.
   const ledgerUnvouched = !!knownIncomplete(health);
+  // CR-home-reversible-note: on a healthy ledger the note says what the footer says, counted from
+  // the same groups the Applied cards draw their Undo buttons from, never "every one reversible".
+  const undoWords = useMemo(() => undoTallyWords(undoTally(changes), t), [changes, t]);
   // The model's own "can't read" is the same absence as a blank ledger: a word, never a 0.
   const activeWithdrawn = ledgerBlank || inEffect.kind === "unreadable";
 
@@ -639,7 +644,7 @@ export function HomeHud({
                 <span className="hud-note">
                   {ledgerUnvouched
                     ? t("common.ledgerHealth.activeChangesUnvouched")
-                    : t("home.homeHud.ledger.activeChangesNote")}
+                    : undoWords}
                   {inEffect.unknown > 0 &&
                     ` · ${t("common.ledgerHealth.activeUnchecked", { count: inEffect.unknown })}`}
                 </span>

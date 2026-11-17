@@ -39,6 +39,7 @@ import { HudFrame } from "./console/HudFrame";
 import { ReticleCursor } from "./console/ReticleCursor";
 import { useLedgerHealth, knownIncomplete } from "./LedgerHealthNotice";
 import { undoTally } from "../data/live-changes";
+import { undoTallyWords } from "../data/undo-tally-words";
 import type { AppliedChange } from "../types";
 import { LookButton, useLook } from "./LookPanel";
 import "./shell-v2.css";
@@ -483,18 +484,7 @@ export function ShellV2({
               // rows had no undo. Now: how many changes the Applied cards can undo, then each kind
               // that can't be, by count. Nothing absolute.
               <div className="v2-undo-state">
-                {[
-                  tally.undoable > 0
-                    ? t("common.shellV2.footerUndoable", { count: tally.undoable })
-                    : tally.unchecked === 0 &&
-                      tally.noSavedUndo === 0 &&
-                      t("common.shellV2.footerNothingToUndo"),
-                  tally.noSavedUndo > 0 && t("common.shellV2.footerNoSavedUndo", { count: tally.noSavedUndo }),
-                  tally.offOutside > 0 && t("common.shellV2.footerOffOutside", { count: tally.offOutside }),
-                  tally.unchecked > 0 && t("common.shellV2.footerUnchecked", { count: tally.unchecked }),
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}{" "}
+                {undoTallyWords(tally, t)}{" "}
                 · <span className="v2-mono">{t("common.shellV2.footerEmph", { n: ledgerCount })}</span>
               </div>
             )}

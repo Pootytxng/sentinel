@@ -195,7 +195,11 @@ const QUARANTINED_TITLE = "Compy can't tell you everything it did";
 
 // The sentence this file exists to keep off an unreadable ledger.
 const FABRICATED = "nothing applied yet — your PC is untouched";
+// CR-home-reversible-note: retired. It was printed on a healthy ledger even beside a change with no
+// saved undo or one changed outside Compy; no state may print it now.
 const REVERSIBLE_NOTE = "every one reversible from the ledger";
+// What replaced it on a healthy ledger: the footer's count (data/undo-tally-words.ts).
+const NOTHING_TO_UNDO = "Nothing in effect to undo";
 const ACTIVE_WITHDRAWN = "unknown — Compy can't read its own record";
 const TRACKED_WITHDRAWN = "unknown — not the same as nothing applied";
 const UNVOUCHED = "Compy can't promise every change here can be undone";
@@ -355,7 +359,8 @@ describe.each(FACES)("$name may not report a ledger it can't read as an untouche
 
     const active = cardFor(container, face, face.activeLabel);
     expect(active.querySelector(face.num)?.textContent).toContain("0");
-    expect(active.textContent).toContain(REVERSIBLE_NOTE);
+    expect(active.textContent).toContain(NOTHING_TO_UNDO);
+    expect(active.textContent).not.toContain(REVERSIBLE_NOTE);
     expect(container.textContent).toContain(FABRICATED);
     expect(container.querySelector(".ledger-health")).toBeNull();
   });
@@ -404,14 +409,44 @@ describe.each(FACES)("$name may not report a ledger it can't read as an untouche
     expect(active.textContent).toContain(UNVOUCHED);
   });
 
-  it("a HEALTHY list keeps the promise at the same count — the swap is health-gated, not count-gated", async () => {
+  it("a HEALTHY list keeps its count and says what the ledger can undo — the swap is health-gated, not count-gated", async () => {
     const { container } = await mount(face, [CHANGE]);
 
     const active = cardFor(container, face, face.activeLabel);
     expect(active.querySelector(face.num)?.textContent).toContain("1");
-    expect(active.textContent).toContain(REVERSIBLE_NOTE);
+    // CHANGE carries no live check, so the footer's words call it unchecked; never an absolute.
+    expect(active.textContent).toContain("1 not checked");
+    expect(active.textContent).not.toContain(REVERSIBLE_NOTE);
     expect(active.textContent).not.toContain(UNVOUCHED);
     expect(container.querySelector(".ledger-health")).toBeNull();
+  });
+
+  // CR-home-reversible-note: "every one reversible from the ledger" sat beside a change with no
+  // saved undo and one changed outside Compy. The note now counts each kind, like the footer.
+  it("a HEALTHY list with rows that can't be undone names them by count, never 'every one reversible'", async () => {
+    const undoable = { ...CHANGE, id: "u1", rec_id: "hags-enable", active_check: "on" };
+    const noUndo = {
+      ...CHANGE,
+      id: "u2",
+      rec_id: "game-mode",
+      rec_title: "Game Mode",
+      active_check: "on",
+      undo_contract: false,
+    };
+    const outside = { ...CHANGE, id: "u3", rec_id: "game-bar-disable", rec_title: "Game Bar", active_check: "off" };
+    const rows = [undoable, noUndo, outside] as unknown as AppliedChange[];
+    model.value = countedModel(2);
+    const { container } = await mount(face, rows);
+
+    const active = cardFor(container, face, face.activeLabel);
+    expect(active.textContent).toContain(
+      "1 change can be undone · 1 has no saved undo · 1 changed outside Compy, no undo",
+    );
+    expect(active.textContent).not.toContain(REVERSIBLE_NOTE);
+    // The footer says the same about the same rows.
+    expect(container.querySelector(".v2-undo-state")?.textContent).toContain(
+      "1 change can be undone · 1 has no saved undo · 1 changed outside Compy, no undo",
+    );
   });
 
   // #452: the count is the Machine Model's answer, not a filter over the list handed in as a prop.
