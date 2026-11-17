@@ -4,7 +4,8 @@
 import { describe, expect, it } from "vitest";
 import en from "../i18n/locales/en/lab.json";
 import zh from "../i18n/locales/zh-CN/lab.json";
-import { fallPct, measuredBandsLine, notComparableNote } from "./ExperimentBench";
+import { measuredBandsLine, notComparableNote } from "./ExperimentBench";
+import { fallPct } from "./test-summary";
 
 const t = ((key: string, opts?: Record<string, unknown>) => `${key} ${JSON.stringify(opts ?? {})}`) as never;
 const WIDE = { model: 3, low1_band_pct: 23, avg_band_pct: 18, low1_step_pct: 9.2, avg_step_pct: 7.2, sessions: 9, cap: { state: "uncapped" as const } };

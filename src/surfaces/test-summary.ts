@@ -89,7 +89,7 @@ export type SummaryExperiment = {
   noise_evidence?: SummaryNoise | null;
   /** P4-judge-noisy: the game's measured as-is bands the verdict was judged on (noise_floor.rs
    *  `GameNoise`); absent on older records, which were judged on `noise_evidence.band_pct` both ways. */
-  game_noise?: { low1_band_pct?: number; avg_band_pct?: number } | null;
+  game_noise?: { low1_band_pct?: number; avg_band_pct?: number; model?: number } | null;
   baseline_session_id?: string | null;
   /** The stored after-session deltas. null while running and on records that never measured one. */
   treatment?: { delta_low1_pct: number; delta_avg_pct?: number | null } | null;
@@ -193,6 +193,8 @@ export type TestedChange = {
   avgBandPct: number | null;
   /** The band its 1% low was judged on (`lowBandOf`); absent = `noise.band_pct`. */
   lowBandPct?: number | null;
+  /** CR-lesson-fall-band: the falls it was judged at (`fallsOf`); absent = the band both ways. */
+  falls?: Falls;
   at: string;
   /** P8-posture-show: the risk the user allowed when the newest judged Trial started; null = not
    *  recorded. */
@@ -284,7 +286,75 @@ export type Lesson = {
   avgBandPct: number | null;
 };
 
-const dirOf = (v: number, band: number): Dir => (v > band ? "up" : v < -band ? "down" : "flat");
+// The smallest change Compy ever claims (noise_floor.rs `MIN_CLAIM_PCT`).
+const MIN_CLAIM_PCT = 3;
+
+/** The noise model from which a measured band is a rise over the baseline judged at its matching fall
+ *  (noise_floor.rs `NOISE_MODEL_VERSION` 3); earlier models judged the same band both ways. */
+export const NOISE_MODEL_LOG = 3;
+
+/** The fall that matches a band stored as a rise over the baseline (noise_floor.rs `fall_pct`, the
+ *  same rule): B / (1 + B), rounded down to 0.1, never under the smallest claim; a band at it is it
+ *  both ways. */
+export function fallPct(band: number): number {
+  if (band <= MIN_CLAIM_PCT + 1e-9) return band;
+  return Math.max(Math.floor(((100 * band) / (100 + band)) * 10) / 10, MIN_CLAIM_PCT);
+}
+
+/** CR-lesson-fall-band: how a number's FALL was judged against its band. "same": the band both ways
+ *  (records judged before noise model 3, and What changed, which judges `|delta| > band`); "matching":
+ *  a fall past `fallPct(band)` (noise model 3 on); "unknown": the record doesn't say which, so a fall
+ *  between the two can't be called either way. */
+export type FallRule = "same" | "matching" | "unknown";
+
+/** The fall rule of a result's 1% low and of its average. */
+export type Falls = { low: FallRule; avg: FallRule };
+
+/** A fall past `hi` is a fall; one inside `lo` is not; between them can't be called. */
+const fallRange = (band: number, rule: FallRule): { lo: number; hi: number } =>
+  rule === "same" ? { lo: band, hi: band } : rule === "matching" ? { lo: fallPct(band), hi: fallPct(band) } : { lo: fallPct(band), hi: band };
+
+/** A number's direction against its band: a rise past the band, a fall past its fall; null = a fall
+ *  the rule can't call (only under "unknown"). */
+const dirOf = (v: number, band: number, rule: FallRule = "same"): Dir | null => {
+  if (v > band) return "up";
+  const { lo, hi } = fallRange(band, rule);
+  return v < -hi ? "down" : v >= -lo ? "flat" : null;
+};
+
+/** CR-lesson-fall-band (s37 sonnet SHOULD-FIX): whether `v` fell past `band` by `rule`; null = a
+ *  fall the rule can't call. For the receipt and real-play lines that name which number fell. */
+export function fellOn(v: number, band: number, rule: FallRule): boolean | null {
+  const d = dirOf(v, band, rule);
+  return d == null ? null : d === "down";
+}
+
+/** Which number a Maximum FPS Worse fell on: the average when it fell by the record's rule, or when
+ *  the record can't call it and the 1% low didn't clearly fall past the band. s37 opus r2 MUST-FIX:
+ *  the stored verdict settles a fall the rule can't call. Read the band both ways, neither number
+ *  fell, so only the matching fall can have called it Worse, and there the average fell (the engine
+ *  checks it first). Otherwise the 1% low, which fell past the band either way. */
+export function worseOn(avgFell: boolean | null, lowFell: boolean | null): "avg" | "low" {
+  return avgFell === true || (avgFell == null && lowFell !== true) ? "avg" : "low";
+}
+
+/** CR-lesson-fall-band: the fall rules a Trial record was judged on (experiment.rs / realplay.rs).
+ *  A two-session Trial judged on measured noise of model 3 on judges both falls at the matching fall
+ *  (`with_measured_fall`, `with_recommended_outcome_bands`, `with_max_fps_outcome`; the conclude
+ *  re-stores an older model's noise as the one it judged on, `keep_judged_noise`), so a record with
+ *  older or no measured noise was judged the same band both ways. A real-play Trial classifies its 1%
+ *  low on its look's band both ways (`comparison::classify`) except under Maximum FPS, which judges
+ *  both falls at the matching fall, as the average always is there; its stored noise is the start's,
+ *  so only model 3 on proves the build that judged it read falls that way (a model-3 start was
+ *  concluded by the same build or a newer one): otherwise "unknown". */
+export function fallsOf(x: Pick<SummaryExperiment, "game_noise" | "outcome" | "mode">): Falls {
+  const log = (x.game_noise?.model ?? 0) >= NOISE_MODEL_LOG;
+  if (x.mode === "real-play") {
+    const matching: FallRule = log ? "matching" : "unknown";
+    return { low: x.outcome === "max-fps" ? matching : "same", avg: matching };
+  }
+  return log ? { low: "matching", avg: "matching" } : { low: "same", avg: "same" };
+}
 
 /** P7-teach: the measured rule for ONE result, shared by every surface that teaches from personal
  *  evidence (the Trial summary, the Debrief's comparison card, the Care stutter comparison). null =
@@ -298,12 +368,18 @@ export function lessonRuleFor(
   avgPct: number | null | undefined,
   bandPct: number | null | undefined,
   avgBandPct: number | null | undefined,
+  falls: Falls = { low: "same", avg: "same" },
 ): LessonRule | null {
   if (!isMeasuredVerdict(verdict) || bandPct == null || low1Pct == null) return null;
   if (!Number.isFinite(low1Pct) || !Number.isFinite(bandPct) || (avgPct != null && !Number.isFinite(avgPct))) return null;
+  // CR-lesson-fall-band: each fall is read at the fall it was judged at (`falls`); a 1% low fall the
+  // rule can't call is no lesson, an average fall it can't call reads the average as not compared.
+  // Deliberately conservative (s37 opus r2 NIT): a lesson reads the numbers, not the verdict.
+  const lowDir = dirOf(low1Pct, bandPct, falls.low);
+  if (lowDir == null) return null;
   const avgBand = avgBandPct != null && Number.isFinite(avgBandPct) && avgBandPct >= 0 ? avgBandPct : null;
-  const avgDir = avgPct == null || avgBand == null ? "unknown" : dirOf(avgPct, avgBand);
-  return LESSON_RULES[`${dirOf(low1Pct, bandPct)}/${avgDir}`] ?? null;
+  const avgDir = avgPct == null || avgBand == null ? "unknown" : (dirOf(avgPct, avgBand, falls.avg) ?? "unknown");
+  return LESSON_RULES[`${lowDir}/${avgDir}`] ?? null;
 }
 
 /** CR-lesson-avg-band: the band a Trial's AVERAGE was judged on. A Smoothest Trial never judges the
@@ -347,8 +423,9 @@ export function lessonRuleForVerdict(
   avgPct: number | null | undefined,
   bandPct: number | null | undefined,
   avgBandPct: number | null | undefined,
+  falls?: Falls,
 ): LessonRule | null {
-  const rule = lessonRuleFor(verdict, low1Pct, avgPct, bandPct, avgBandPct);
+  const rule = lessonRuleFor(verdict, low1Pct, avgPct, bandPct, avgBandPct, falls);
   if (!rule) return null;
   const want = verdict === "improved" ? "up" : verdict === "regressed" ? "down" : "flat";
   return lessonDirs(rule)?.low1 === want ? rule : null;
@@ -398,7 +475,7 @@ export function lessonFor(tested: readonly TestedChange[]): Lesson | null {
   const newest = [...tested].sort((a, b) => time(b.at) - time(a.at));
   for (const r of newest) {
     const band = r.lowBandPct !== undefined ? r.lowBandPct : r.noise?.band_pct;
-    const rule = lessonRuleFor(r.verdict, r.deltaLow1Pct, r.deltaAvgPct, band, r.avgBandPct);
+    const rule = lessonRuleFor(r.verdict, r.deltaLow1Pct, r.deltaAvgPct, band, r.avgBandPct, r.falls);
     if (rule && band != null && r.deltaLow1Pct != null)
       return {
         rule,
@@ -620,6 +697,7 @@ export function summarizeGame(
       deltaAvgPct: x.treatment?.delta_avg_pct ?? null,
       avgBandPct: avgBandOf(x),
       lowBandPct: lowBandOf(x),
+      falls: fallsOf(x),
       at: x.created_at,
       riskChoice: recordedRiskChoice(x.risk_choice),
       realPlay: x.mode === "real-play" ? { before: x.real_play?.before?.length ?? 0, with: x.real_play?.with?.length ?? 0 } : null,
@@ -769,20 +847,33 @@ function resultOf(x: SummaryExperiment): OutcomeResult | null {
   const outcome = outcomeOf(x);
   const keeps = x.verdict === "improved";
   const r = (reason: ResultReason, pct: number | null): OutcomeResult => ({ outcome, trialId: x.id, keeps, reason, pct });
+  // CR-lesson-fall-band: a fall is read at the fall the record was judged at (`fallsOf`).
+  const falls = fallsOf(x);
   if (outcome === "recommended") {
     if (keeps) return r("low-up", low);
     if (x.verdict === "regressed") return r("low-fell", low);
     // CR-lesson-avg-band: the average fell past ITS OWN band (`avgBandOf`); unknown band = not compared.
     const avgBand = avgBandOf(x);
     if (low > band && (avg == null || avgBand == null)) return r("avg-unknown", null);
-    if (low > band && avg != null && avgBand != null && avg < -avgBand) return r("avg-fell", avg);
+    if (low > band && avg != null && avgBand != null) {
+      // A No change whose 1% low rose past the band was the average's veto, so a fall the record's
+      // rule can't call is settled by the verdict: it fell (s37 opus r2 MUST-FIX).
+      const avgDir = dirOf(avg, avgBand, falls.avg);
+      if (avgDir === "down" || avgDir == null) return r("avg-fell", avg);
+    }
     return r("low-flat", low);
   }
   if (keeps) return avg == null ? null : r("avg-up", avg);
   // CR-lesson-avg-band (opus r1): Maximum FPS judges the average on the wider measured band.
   const maxAvgBand = avgBandOf(x);
-  if (x.verdict === "regressed")
-    return avg != null && maxAvgBand != null && avg < -maxAvgBand ? r("avg-fell", avg) : r("low-fell", low);
+  if (x.verdict === "regressed") {
+    const avgDir = avg != null && maxAvgBand != null ? dirOf(avg, maxAvgBand, falls.avg) : "flat";
+    const lowBand = lowBandOf(x);
+    const lowDir = lowBand != null ? dirOf(low, lowBand, falls.low) : null;
+    const fell = (d: Dir | null) => (d == null ? null : d === "down");
+    // The verdict settles a fall the record's rule can't call (`worseOn`).
+    return avg != null && worseOn(fell(avgDir), fell(lowDir)) === "avg" ? r("avg-fell", avg) : r("low-fell", low);
+  }
   return avg == null ? r("avg-unknown", null) : r("avg-flat", avg);
 }
 

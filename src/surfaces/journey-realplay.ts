@@ -10,6 +10,12 @@
 // Real play never records High confidence (experiment.rs `conclude_realplay`), and nothing here shows
 // it either (`realPlayConfidence`).
 
+import { fallsOf, fellOn, worseOn, type Falls } from "./test-summary";
+
+/** CR-lesson-fall-band: the falls a real-play record was judged at (`fallsOf`). */
+const realPlayFalls = (exp: RealPlayRecord): Falls =>
+  fallsOf({ game_noise: exp.game_noise, outcome: exp.outcome === "max-fps" ? "max-fps" : "recommended", mode: "real-play" });
+
 /** realplay.rs `RealPlayPhase`, serde names. */
 export type RealPlayPhase = "collecting-before" | "ready-to-start" | "collecting" | "ready" | "stopped";
 /** realplay.rs `RealPlayStop`: why a running real-play Trial can't go on as it is. `change-off` and
@@ -86,6 +92,8 @@ export type RealPlayRecord = {
   stop_reason?: string | null;
   mode?: string | null;
   real_play?: RealPlayEvidence | null;
+  /** The game's measured noise the start kept (noise_floor.rs `GameNoise`); only its model is read. */
+  game_noise?: { model?: number; low1_band_pct?: number } | null;
 };
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -429,7 +437,10 @@ export function realPlayResult(exp: RealPlayRecord, game: string, t: Translate):
     }
     if (exp.verdict === "regressed") {
       // Maximum FPS is put back when the average OR the 1% low fell beyond the band: name the one that did.
-      const avgSide = maxFps && avg < -band;
+      // CR-lesson-fall-band (s37 sonnet SHOULD-FIX): each fall read at the fall it was judged at.
+      const falls = realPlayFalls(exp);
+      // A fall the rule can't call is settled by the verdict (`worseOn`).
+      const avgSide = maxFps && worseOn(fellOn(avg, band, falls.avg), fellOn(low, band, falls.low)) === "avg";
       return t("lab.experimentBench.journey.realPlay.likelyWorse", {
         action,
         metric: metric(avgSide),
@@ -440,8 +451,10 @@ export function realPlayResult(exp: RealPlayRecord, game: string, t: Translate):
       });
     }
     if (exp.verdict === "no-change") {
-      // Recommended's "no clear win": the 1% low rose beyond the band but the average fell beyond it.
-      if (!maxFps && low > band && avg < -band)
+      // Recommended's "no clear win": the 1% low rose beyond the band but the average fell beyond it
+      // (CR-lesson-fall-band: at the fall it was judged at; a No change with the 1% low past the band
+      // was the average's veto, so a fall the record's rule can't call is settled by the verdict).
+      if (!maxFps && low > band && fellOn(avg, band, realPlayFalls(exp).avg) !== false)
         return t("lab.experimentBench.journey.realPlay.noClearWin", { action, low: one(low), avg: one(Math.abs(avg)) });
       return t("lab.experimentBench.journey.realPlay.noClearDifference", { action, metric: metric(maxFps), with: counted, before, band: one(band) });
     }

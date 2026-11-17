@@ -295,6 +295,34 @@ describe("P5-realplay: what a concluded real-play Trial says", () => {
     );
   });
 
+  // CR-lesson-fall-band (s37 sonnet SHOULD-FIX): a real-play average is judged at the matching fall
+  // of its look's band (10% <-> -9.0%) on a build that proves it (model-3 noise); otherwise a fall
+  // between the two can't be called from the numbers, and the stored verdict settles it.
+  it("names a fall at the fall the record was judged at; the verdict settles one the numbers can't", () => {
+    const worse = { verdict: "regressed", outcome: "max-fps", game_noise: { model: 3 } };
+    expect(realPlayResult(concluded(worse, { band_pct: 10, delta_low1_pct: -2, delta_avg_pct: -9.5 }), "W", t)).toMatch(
+      /your average frame rate was 9\.5% lower/,
+    );
+    const won = { game_noise: { model: 3 } };
+    expect(realPlayResult(concluded(won, { band_pct: 10, delta_low1_pct: 12, delta_avg_pct: -9.5 }), "W", t)).toMatch(
+      /was 12% higher but your average frame rate was 9\.5% lower/,
+    );
+    // s37 opus r2 MUST-FIX: a record that doesn't prove its build can't call -9.5% from the numbers,
+    // but a No change with the 1% low past the band was the average's veto: it fell.
+    expect(realPlayResult(concluded({}, { band_pct: 10, delta_low1_pct: 12, delta_avg_pct: -9.5 }), "W", t)).toMatch(
+      /was 12% higher but your average frame rate was 9\.5% lower/,
+    );
+    // Read the band both ways neither number fell, so only the matching fall judged this Worse: the
+    // average fell there (the engine checks it first).
+    expect(realPlayResult(concluded({ verdict: "regressed", outcome: "max-fps" }, { band_pct: 10, delta_low1_pct: -9.4, delta_avg_pct: -9.6 }), "W", t)).toMatch(
+      /your average frame rate was 9\.6% lower/,
+    );
+    // A 1% low past the band fell either way: it is named.
+    expect(realPlayResult(concluded({ verdict: "regressed", outcome: "max-fps" }, { band_pct: 10, delta_low1_pct: -12, delta_avg_pct: -9.6 }), "W", t)).toMatch(
+      /your 1% low \(the worst moments\) was 12% lower/,
+    );
+  });
+
   it("Unknown: sessions too varied (PBZ-style swings), or too few counted before the test stopped, with why", () => {
     expect(
       realPlayResult(concluded({ verdict: "too-noisy", stop_reason: "sessions-too-varied" }, { band_pct: 23.44, delta_low1_pct: 2, delta_avg_pct: 1, look: 3 }, 3, 8), "Phantom Blade Zero", t),
