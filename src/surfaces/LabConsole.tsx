@@ -29,7 +29,7 @@ import { changesInWindowCount } from "./benchmark-view";
 import { safeFixesReady } from "./optimize-v2-data";
 import { deriveReverted } from "./use-scan";
 import { peekProbe, cachedProbe } from "../data/probe-cache";
-import { measureTuning, tuningEvidence } from "../data/tuning-measure";
+import { measureTuning, tuningEvidence, type PostComparability } from "../data/tuning-measure";
 import { primaryGpu } from "../data/gpu-sensor";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
 import { BenchmarkTab } from "./Benchmark";
@@ -197,6 +197,7 @@ export function LabConsole({
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [armed, setArmed] = useState<ArmedComparison | null>(null);
   const [latestCmp, setLatestCmp] = useState<ComparisonResult | null>(null);
+  const [postComparability, setPostComparability] = useState<PostComparability[] | null>(null);
   // Black Box is on-demand — null until the user scans this visit (honest "Not yet").
   const [bbReport, setBbReport] = useState<BlackBoxReport | null>(null);
   // Test's own reading set (spec 2026-08-21-test-rig-reading-set) — the bench's evidence, not the
@@ -218,10 +219,12 @@ export function LabConsole({
       invoke<SessionSummary[]>("get_session_summaries").then(setSessions).catch(() => {});
       invoke<ArmedComparison | null>("get_armed_comparison").then(setArmed).catch(() => {});
       invoke<ComparisonResult | null>("get_latest_comparison").then(setLatestCmp).catch(() => {});
+      // CR-tuning-comparability: which later sessions can be judged against the tune's baseline session.
+      invoke<PostComparability[]>("get_tuning_comparability").then(setPostComparability).catch(() => {});
     }
   }, [tuningGuide]);
 
-  const measurement = measureTuning(armed, sessions, latestCmp);
+  const measurement = measureTuning(armed, sessions, latestCmp, postComparability);
   // CR-tuning-gpu-other-card: only sessions not recorded on another card can qualify this card for a
   // tuning offer; this PC's card is the most-VRAM GPU App read (null when none was read).
   const tuningEvidenceVerdict = tuningEvidence(sessions, Date.now(), primaryGpu(hw?.gpus)?.name ?? null);

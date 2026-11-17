@@ -46,6 +46,7 @@
     "allow-get-appliable-rec-ids",
     "allow-get-applied-changes",
     "allow-get-armed-comparison",
+    "allow-get-tuning-comparability",
     "allow-get-benchmark-state",
     "allow-get-build-stamp",
     "allow-get-component-evidence",

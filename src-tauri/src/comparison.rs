@@ -623,6 +623,43 @@ pub(crate) fn arm_baseline_session<'s>(a: &ArmedComparison, sessions: &'s [Sessi
         .map(|(_, s)| s)
 }
 
+/// Opus r2 (item 8), pure: the same comparability check a Trial refuses on (a GPU, game or rig change,
+/// or no shared conditions at all), between an arm's baseline session and a later one. The one rule
+/// the armed comparison and the tuning measurement's later sessions both judge on.
+pub(crate) fn arm_conditions_comparable(baseline: &SessionSummary, after: &SessionSummary) -> bool {
+    !matches!(
+        crate::comparability::derive(baseline, after).verdict,
+        crate::comparability::Comparability::NotComparable | crate::comparability::Comparability::Unknown
+    )
+}
+
+/// CR-tuning-comparability: whether one session after a tuning arm can be judged against its baseline.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PostComparability {
+    /// The session's recorded start (its id).
+    pub started_at: String,
+    /// [`arm_conditions_comparable`] against the arm's baseline session.
+    pub comparable: bool,
+}
+
+/// CR-tuning-comparability, PURE: every session of the arm's game that started at or after the arm,
+/// with whether it can be judged against the arm's baseline session ([`arm_baseline_session`]). No
+/// baseline session stored: an empty list, so no later session is judged (nothing is guessed).
+pub(crate) fn post_comparability(a: &ArmedComparison, sessions: &[SessionSummary]) -> Vec<PostComparability> {
+    let Some(baseline) = arm_baseline_session(a, sessions) else {
+        return Vec::new();
+    };
+    let Ok(armed_at) = chrono::DateTime::parse_from_rfc3339(&a.armed_at) else {
+        return Vec::new();
+    };
+    sessions
+        .iter()
+        .filter(|s| s.process_name.eq_ignore_ascii_case(&a.game))
+        .filter(|s| chrono::DateTime::parse_from_rfc3339(&s.started_at).is_ok_and(|at| at >= armed_at))
+        .map(|s| PostComparability { started_at: s.started_at.clone(), comparable: arm_conditions_comparable(baseline, s) })
+        .collect()
+}
+
 /// Item 8, pure: what the comparison of `after` against the arm `a` is judged on. `measure` is this
 /// game's measured as-is noise up to a session (`experiment::measured_noise_at` in the app, the one
 /// source). No baseline session, no measured band, or a different/unreadable cap state on the
@@ -636,12 +673,7 @@ pub(crate) fn arm_noise_from(
     let Some(baseline) = arm_baseline_session(a, sessions) else {
         return ArmNoise::Unmeasured(UNMEASURED_NOISE);
     };
-    // Opus r2: the same comparability check a Trial refuses on (a GPU, game or rig change, or no
-    // shared conditions at all).
-    if matches!(
-        crate::comparability::derive(baseline, after).verdict,
-        crate::comparability::Comparability::NotComparable | crate::comparability::Comparability::Unknown
-    ) {
+    if !arm_conditions_comparable(baseline, after) {
         return ArmNoise::Unmeasured(UNMEASURED_CONDITIONS);
     }
     let Some(n) = measure(baseline) else {
@@ -1113,6 +1145,29 @@ mod comparison_tests {
         let mut other_gpu = day[12].clone();
         other_gpu.hw_fingerprint.as_mut().expect("the ROB fixture carries a rig").gpu = "Some Other GPU".into();
         assert_eq!(arm_noise_from(&a, &day, &other_gpu, measure), ArmNoise::Unmeasured(UNMEASURED_CONDITIONS));
+    }
+
+    #[test]
+    fn every_session_after_a_tuning_arm_is_checked_against_its_baseline_with_the_same_rule() {
+        // CR-tuning-comparability: later sessions get the comparability check the first one gets.
+        let mut day = crate::noise_floor::tests::rob_day();
+        let a = rob_arm(&day);
+        let after: Vec<&str> = day[12..].iter().map(|s| s.started_at.as_str()).collect();
+        let list = post_comparability(&a, &day);
+        assert_eq!(list.iter().map(|p| p.started_at.as_str()).collect::<Vec<_>>(), after, "only sessions after the arm");
+        for (p, s) in list.iter().zip(&day[12..]) {
+            assert_eq!(p.comparable, arm_conditions_comparable(&day[11], s), "{list:?}");
+        }
+        assert!(list[0].comparable, "the session the arm's own comparison judged: {list:?}");
+        // A later session on another GPU can't be judged against the baseline.
+        let last = day.len() - 1;
+        day[last].hw_fingerprint.as_mut().expect("rig").gpu = "Some Other GPU".into();
+        let list = post_comparability(&a, &day);
+        assert_eq!(list.last().map(|p| p.comparable), Some(false));
+        assert_eq!(list.last().map(|p| p.comparable), Some(arm_conditions_comparable(&day[11], &day[last])));
+        // No stored baseline session: nothing is judged.
+        let other = ArmedComparison { baseline_low1_fps: 171.0, ..a.clone() };
+        assert!(post_comparability(&other, &day).is_empty());
     }
 
     #[test]
