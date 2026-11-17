@@ -3031,6 +3031,8 @@ mod batch_apply_tests {
     // nothing (they only read + defer), keeping this test side-effect-free on the real system.
     #[test]
     fn elevation_failure_skips_every_deferred_item_honestly() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         let _force = ForceElevationError::begin();
         let before = load_history().expect("test ledger readable");
         let before_ids: std::collections::HashSet<String> =
@@ -4343,6 +4345,8 @@ mod leftover_restore_tests {
 
     #[test]
     fn armed_gate_admits_and_a_declined_elevation_writes_nothing() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         // ARMED world (2026-07-16): the gate admits the call, the resolver reads the prior
         // (W32PS — non-elevated HKLM read, succeeds on any rig) and reaches the elevation seam;
         // a forced decline there must leave ZERO receipt. No real prompt, no mutation.
@@ -4358,6 +4362,8 @@ mod leftover_restore_tests {
 
     #[test]
     fn production_gate_ships_armed_and_unknown_ids_still_refuse_loud() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         // The arming contract: restore_gate() ships true (flipped 2026-07-16 after the
         // owner-present live-UAC QA passed all three loops), and an unknown leftover id still
         // refuses loudly BEFORE any elevation — the typed-allowlist rule survives arming.
@@ -4380,6 +4386,8 @@ mod leftover_restore_tests {
     /// receipt-count assertions above stayed green, because a content-identical save adds nothing.
     #[test]
     fn a_refused_gateway_call_writes_its_canary_only_into_the_test_root() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         let _force = ForceElevationError::begin();
         let before = load_history().expect("test ledger readable").len();
         let err = restore_leftover("totally-unknown-id", "#665 canary-root guard")
@@ -4439,6 +4447,8 @@ mod leftover_restore_tests {
 
     #[test]
     fn memcompress_unreadable_prior_now_rides_one_elevation_and_a_decline_writes_nothing() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         // The redesign: an admin-only prior no longer refuses outright — it takes the prior
         // INSIDE one elevated context. Deterministically: with elevation forced to decline and
         // the QA seam open, the resolver reaches the elevation seam (decline) regardless of which
@@ -4563,6 +4573,8 @@ mod leftover_restore_tests {
 
     #[test]
     fn wave2_armed_detectors_reach_elevation_and_a_decline_writes_nothing() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         // ARMED world: every wave-2 resolver is admitted by the gate and refuses WITHOUT mutating.
         //
         // bug->guard (CI, 2026-08-01). This used to assert all three reach the elevation seam, on
@@ -4606,6 +4618,8 @@ mod leftover_restore_tests {
 
     #[test]
     fn permanently_excluded_detectors_have_no_resolver_even_armed() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         // The two by-design exclusions (bcdedit timer flags — boot-config risk class; Defender
         // policy — security-settings owner territory) must stay restore-less FOREVER: even with
         // the gate armed and elevation theoretically available, dispatch refuses loudly before
@@ -4687,6 +4701,8 @@ mod leftover_restore_tests {
 
     #[test]
     fn pagefile_armed_pair_contract_and_snapshot_roundtrip_hold() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         // ARMED world, rig-state-dependent by design — three honest outcomes, all mutation-free:
         // an unreadable prior refuses with "cannot snapshot" BEFORE elevation (the fail-safe
         // idiom); a non-single-fixed-entry layout refuses with the honest left-as-is message

@@ -1597,6 +1597,8 @@ mod spans_trial_tests {
     // plan and its undo after the stop wrote the session plan's priors onto the user's own plan.
     #[test]
     fn the_core_parking_restore_is_held_with_the_plan() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         let with_plan = vec![change(LABEL_POWER)];
         let words = session_hold_refusal(REC_CORE_PARKING, Some(&with_plan)).expect("held with the plan");
         assert!(words.contains("belongs to the power plan") && words.contains("Nothing was changed"), "{words}");
@@ -1674,6 +1676,8 @@ mod spans_trial_tests {
     // even where the unreadable-record rule would let it through; a setting no step touches is not.
     #[test]
     fn a_change_is_refused_while_a_stop_is_putting_changes_back() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         let dir = std::env::temp_dir().join(format!("compy-gm-inflight-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -2341,6 +2345,8 @@ mod elevation_batch_tests {
     // same thread returns WouldBlock — safe to pin without threads.)
     #[test]
     fn concurrent_session_command_is_refused_loudly() {
+        // Shares this test process's data-root files with the plan-held scenes (s31 opus r1).
+        let _files = crate::data_root::shared_root_files();
         // A private session dir first (review of CR-gm-stop-busy's old-code proof): if a gate ever
         // stops refusing, stop/recover/start below must read an empty temp dir, never the rig's.
         let dir = temp_session_dir("stop-busy");

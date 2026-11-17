@@ -111,6 +111,17 @@ impl Drop for HoldRelease {
     }
 }
 
+/// Test-only: releases a test's hold on drop, as a run's own release does.
+#[cfg(test)]
+pub(crate) struct TestHoldRelease(pub(crate) u64);
+
+#[cfg(test)]
+impl Drop for TestHoldRelease {
+    fn drop(&mut self) {
+        drop(HoldRelease(self.0));
+    }
+}
+
 /// PURE: the refusal for an apply naming the setting the tweak trial holds. `None` lets it go ahead.
 pub(crate) fn bench_held_refusal<'a>(
     held: Option<&(String, String)>,
@@ -139,7 +150,7 @@ pub(crate) fn bench_plan_class_refusal<'a>(
     let (id, title) = held?;
     rec_ids
         .any(|w| crate::gaming_orchestrator::plan_class_clash(id, w))
-        .then(|| crate::experiment::plan_class_refusal(title, false, "the benchmark"))
+        .then(|| crate::experiment::plan_class_refusal(title, false, crate::experiment::BY_BENCHMARK))
 }
 
 /// Start a calibration run (no tweak, no mutation). Needs the FPS capture active + a game
@@ -767,6 +778,8 @@ mod trial_tests {
         assert_eq!(bench_held_refusal(None, std::iter::once("game-mode-on")), None, "nothing held");
 
         // A run's release clears only its own hold, never a later run's.
+        // The process-wide hold is shared with the plan-held scenes (s31).
+        let _files = crate::data_root::shared_root_files();
         hold(7, "game-mode-on", "Turn on Game Mode");
         assert_eq!(held_now(), Some(held.clone()));
         // Review r1: the commands' check reads the live hold (on the old code nothing was held).
