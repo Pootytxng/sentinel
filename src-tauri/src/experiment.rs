@@ -4875,8 +4875,9 @@ pub(crate) struct ConcludeReads<'a> {
     pub game_noise: crate::noise_floor::NoiseLookup,
 }
 
-/// PURE (judging-chain refactor slice 2, s37): a two-session Trial's verdict and everything the
-/// conclude stores on its record, from what `conclude_experiment` read. Moved out of it unchanged,
+/// No IO, no store (judging-chain refactor slice 2, s37): it writes only the record it is handed. A
+/// two-session Trial's verdict and everything the conclude stores on its record, from what
+/// `conclude_experiment` read. Moved out of it unchanged,
 /// so what the conclude hands `judge_pair` and stores is tested by what it decides; the
 /// keep-or-restore tail (`finish_conclude`) stays with the store.
 pub(crate) fn conclude_two_session(record: &mut ExperimentRecord, reads: ConcludeReads<'_>) -> ConcludeOutcome {
@@ -10534,6 +10535,18 @@ mod refuse_early_tests {
     /// `conclude_two_session` on `conclude_case`, the after-session picked by its own id and resolved
     /// against the record's baseline; a quiet ledger, the change read as applied, nothing unconfirmed.
     fn conclude_on(r: &mut ExperimentRecord, day: &[SessionSummary], picked: usize, now: DateTime<Utc>) -> ConcludeOutcome {
+        conclude_with(r, day, picked, now, LedgerCoverage::Whole, false)
+    }
+
+    /// `conclude_on` with the ledger's coverage and the crash report given.
+    fn conclude_with(
+        r: &mut ExperimentRecord,
+        day: &[SessionSummary],
+        picked: usize,
+        now: DateTime<Utc>,
+        coverage: LedgerCoverage,
+        crashed: bool,
+    ) -> ConcludeOutcome {
         let pairing = crate::comparability::derive(&day[11], &day[picked]);
         conclude_two_session(
             r,
@@ -10541,11 +10554,11 @@ mod refuse_early_tests {
                 sessions: day,
                 resolved: Some((&day[picked], pairing)),
                 treatment_session_id: &day[picked].started_at,
-                crashed: false,
+                crashed,
                 now,
                 rows: Some(&[]),
                 ledger_now: Some(5),
-                coverage: LedgerCoverage::Whole,
+                coverage,
                 target_now: crate::history::ActiveCheck::On,
                 unverified: 0,
                 game_noise: crate::noise_floor::NoiseLookup::Measured(4.2),
@@ -10554,12 +10567,12 @@ mod refuse_early_tests {
     }
 
     // Opus NIT (s35): nothing tested that the conclude hands `judge_pair` the right values. It hands
-    // it the picked after-session and its pairing, the RECORD's baseline session, the record's
-    // measured noise, the crash report, the ledger length, its clock and the after-session's pacing:
-    // the verdict is exactly `judge_pair`'s on those values, and a +30% / +20% move on ROB RUN's
-    // band is a win only with the baseline and after-session the right way round.
+    // it the picked after-session and its pairing, the record's measured noise, the crash report,
+    // the ledger length, its clock and the after-session's pacing: the verdict is exactly
+    // `judge_pair`'s on those values. (The record's baseline session reaching the noise measurement
+    // is proven by `a_record_without_kept_noise_is_measured_at_conclude_over_the_covered_sessions`.)
     #[test]
-    fn the_conclude_hands_judge_pair_the_picked_session_the_records_baseline_and_its_noise() {
+    fn the_conclude_hands_judge_pair_the_picked_session_the_crash_report_and_its_noise() {
         let now = Utc::now();
         let (mut r, day) = conclude_case(30.0, 20.0, TrialOutcome::Recommended, WIDE, 1.3);
         let before = r.clone();
@@ -10581,9 +10594,53 @@ mod refuse_early_tests {
         // The same move judged on a quiet game's band (not the record's) would be a different note;
         // the conclude judged on the record's own.
         assert!(o.note.contains("20.6"), "judged on the record's measured band: {}", o.note);
-        // The baseline as the after-session reads a fall, not a win: the roles are not swapped.
+        // s37 sonnet SHOULD-FIX: another session picked is another judgement, kept as that session's.
         let (mut r2, day2) = conclude_case(30.0, 20.0, TrialOutcome::Recommended, WIDE, 1.3);
-        assert_ne!(conclude_on(&mut r2, &day2, 11, now).verdict, "improved");
+        let other = conclude_on(&mut r2, &day2, 10, now);
+        assert_ne!(other.note, o.note);
+        assert_eq!(r2.treatment.and_then(|t| t.session_id), Some(day2[10].started_at.clone()));
+        // s37 opus SHOULD-FIX: a reported crash reaches `judge_pair`, and the record keeps it.
+        let (mut r3, day3) = conclude_case(30.0, 20.0, TrialOutcome::Recommended, WIDE, 1.3);
+        let before3 = r3.clone();
+        let crashed = conclude_with(&mut r3, &day3, 12, now, LedgerCoverage::Whole, true);
+        let direct_crash = judge_pair(&PairInputs {
+            rec: &before3,
+            treatment: &day3[12],
+            pairing: &crate::comparability::derive(&day3[11], &day3[12]),
+            baseline: Some(&day3[11]),
+            noise: &Ok(WIDE),
+            crashed: true,
+            ledger_now: Some(5),
+            now,
+            after_ratio: Some(1.3),
+        });
+        assert_eq!(crashed, direct_crash);
+        assert_ne!(crashed.verdict, o.verdict, "{}", crashed.note);
+        assert!(r3.treatment.is_some_and(|t| t.crashed));
+    }
+
+    // s37 opus r1 MUST-FIX: a record started before its game's noise was kept is measured at
+    // conclude over the sessions the ledger covers (#618), up to the RECORD's baseline session, on
+    // the ledger rows the conclude read; nothing else stands in for it.
+    #[test]
+    fn a_record_without_kept_noise_is_measured_at_conclude_over_the_covered_sessions() {
+        let now = Utc::now();
+        let (r, day) = conclude_case(30.0, 20.0, TrialOutcome::Recommended, WIDE, 1.3);
+        let older = ExperimentRecord { game_noise: None, ..r };
+        let expected = crate::noise_floor::measure_game_noise(&day, &day[11], &[]);
+        assert!(expected.is_ok(), "the owner's ROB RUN day measures: {expected:?}");
+        let mut whole = older.clone();
+        conclude_on(&mut whole, &day, 12, now);
+        assert_eq!(whole.game_noise, expected.as_ref().ok().cloned());
+        assert_eq!(whole.noise_evidence.map(|e| e.band_pct), expected.as_ref().ok().map(|n| n.low1_band_pct));
+        // Measured up to another session (the after-session) it would differ: the baseline matters.
+        assert_ne!(crate::noise_floor::measure_game_noise(&day, &day[12], &[]).ok(), whole.game_noise);
+        // A ledger set aside just before the baseline covers too few sessions: unmeasured, judged nothing.
+        let at = DateTime::parse_from_rfc3339(&day[11].started_at).unwrap().with_timezone(&Utc) - chrono::TimeDelta::seconds(1);
+        let mut since = older.clone();
+        let o = conclude_with(&mut since, &day, 12, now, LedgerCoverage::SinceSetAside(at), false);
+        assert_eq!(since.game_noise, None);
+        assert_eq!(o.stop_reason.as_deref(), Some("noise-unmeasured"), "{}", o.note);
     }
 
     // Replaces `conclude_grades_both_sessions_before_it_records_a_verdict` (pins on
@@ -10602,7 +10659,7 @@ mod refuse_early_tests {
         let t = r.treatment.clone().expect("the after-session is kept");
         assert_eq!(t.session_id.as_deref(), Some(day[12].started_at.as_str()));
         assert_eq!((t.check, t.halves), grade, "the after-session's own grade is on the receipt");
-        assert_eq!(t.delta_avg_pct, delta_avg_pct(120.0, day[12].avg_fps));
+        assert_eq!(t.delta_avg_pct, delta_avg_pct(r.baseline_avg_fps, day[12].avg_fps));
         assert!((t.delta_avg_pct.unwrap() - 20.0).abs() < 0.01, "{:?}", t.delta_avg_pct);
         assert_eq!((t.avg_fps, t.low1_fps, t.delta_low1_pct), (day[12].avg_fps, day[12].low1_fps_est, o.delta_low1_pct));
         assert_eq!(r.game_noise, Some(WIDE), "judged on the measured noise, kept on the record");
