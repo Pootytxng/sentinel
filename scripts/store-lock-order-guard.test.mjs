@@ -712,6 +712,14 @@ const LOCK_CENSUS = {
   },
 
   // ── out of class ───────────────────────────────────────────────────────────────────────────
+  "data_root::FILES: Mutex<()>": {
+    class: "out",
+    why:
+      "test-only (`#[cfg(test)] mod shared_files`, s31): serializes the tests that write or count this " +
+      "test process's own test-root history.json / experiments.json or set the benchmark hold, so no " +
+      "test sees another's files. Not compiled into the shipped binary; it serializes tests, not a " +
+      "read-modify-write of user state, and production code never takes it.",
+  },
   "gaming_orchestrator::SESSION_OP: Mutex<()>": {
     class: "out",
     why:

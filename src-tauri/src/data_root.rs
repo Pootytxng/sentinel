@@ -592,10 +592,16 @@ pub(crate) fn gather() -> RootProbe {
 /// or Trial store, or set the benchmark hold, and the tests that count or read those, so no test sees
 /// another's files. Poison-tolerant: a failed test never blocks the rest.
 #[cfg(test)]
-pub(crate) fn shared_root_files() -> std::sync::MutexGuard<'static, ()> {
-    static FILES: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    FILES.lock().unwrap_or_else(|p| p.into_inner())
+mod shared_files {
+    /// See [`super::shared_root_files`]. A test-only module: the lock serializes tests, never a
+    /// production read-modify-write, so it sits with the other test code (`cfg(test)` modules).
+    pub(crate) fn guard() -> std::sync::MutexGuard<'static, ()> {
+        static FILES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        FILES.lock().unwrap_or_else(|p| p.into_inner())
+    }
 }
+#[cfg(test)]
+pub(crate) use shared_files::guard as shared_root_files;
 
 /// The capability the pre-existing rollback-contract suites need to keep calling `dispatch_rollback`
 /// directly. Those tests assert that a mismatched (action, snapshot) pair is REFUSED, so the root is
