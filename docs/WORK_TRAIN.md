@@ -769,8 +769,12 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       "another GPU, driver, game build or frame cap"; say "couldn't match these sessions to your baseline" instead.
 - [ ] **CR-lesson-fall-band** (s33 review, pre-existing): lessons and the outcome switch read a fall at the symmetric
       band; the engine judges a fall at `fall_pct(band)` (model 3). Read falls at the matching fall.
-- [ ] **TG-drift-words** PARKED s31 (stays in the Trial conditions guard list): did not fit with two reviews before
-      the install window. TG-interleave design note: not written (no time left after the install).
+- [x] **TG-drift-words** parked s31, landed s33 (merge `bbb3dd40`; details in the Trial conditions guard list). The
+      TG-interleave design note is written there (s33).
+- [ ] **Judging-chain refactor slice** PARKED s33, untouched: extract the verdict decision inside
+      `conclude_experiment` / `start_experiment` into pure functions (no behaviour change), behaviour tests, retire only
+      the include_str! tests they cover. Did not fit before the 04:50 install with opus + sonnet and the likely second
+      opus round: about fifteen include_str! tests pin the conclude body and each retirement needs its replacement named.
 - Inventory (no move, no delete): `.claude\worktrees\train-same-rig` (created 2026-11-12 12:00) and
   `.claude\worktrees\train-plan-held` (2026-11-13 04:01) are EMPTY folders, no `.git`, no files: leftovers of worktree
   removals whose directory delete was refused while a shell's working directory was inside. Nothing to salvage; the
@@ -799,9 +803,25 @@ amendment 2026-11-12, approved 17:21 "add it"; `4d5217d5`).
 - [ ] **TG-drift-words** When two sessions' contexts differ, the verdict names the difference and the fix ("the frame
       cap was on in one session", "the game was in the background for 18 of 40 minutes", "a recorder was running in one
       session") and offers the one next step. Tested: one fixture per difference, en + zh-CN.
-- [ ] **TG-preflight** Before a Trial's second session, Compy compares live context with the baseline's and says what
+      LANDED s33 (merge `bbb3dd40`, ticked as a first slice): a two-session Trial judged too noisy names, in its Lab
+      history note, what Compy recorded differently between its two sessions (cap within 3% = same cap, power plan
+      and plan changes, driver, Windows build, Gaming Mode, resolution, time behind other windows >= 1 min, length
+      >= 2x) with one next step; nothing differing names exactly what was compared and claims no cause; no context
+      on both says Compy can't tell. Words only. opus r1 + r2 REQUEST-CHANGES (all MUST/SHOULD taken), sonnet AWN.
+      Left: comparison verdicts (What changed / Debrief "can't tell") and a recorder/background-load difference
+      (needs TG-context v2).
+- [x] **TG-preflight** Before a Trial's second session, Compy compares live context with the baseline's and says what
       differs up front ("your frame cap is off now; it was on for the baseline: turn it back on, or re-record the
       baseline"), with a proceed-anyway recorded as confounded. Tested: live-vs-baseline fixtures; proceed-anyway path.
+      Done s33 merge `10b7bc47`: the Lab bench's waiting Trial reads `trial_preflight` (read-only) and names what
+      differs from the baseline's recorded conditions (driver, Windows build, resolution, refresh, monitor, Gaming
+      Mode, power plan by name for Windows' own plans), one fix step, and what playing anyway means; re-read on focus.
+      Proceed-anyway: driver/build/resolution/refresh/monitor/Gaming Mode were already confounded at conclude
+      (`with_comparability`); a power plan that differed or changed during a session now is too
+      (`with_power_plan_check`, only `power-ultimate` exempt between sessions). The frame cap can't be read before
+      play (it is read from frames; a changed cap stays unjudged at conclude). Not covered: the guided journey, which
+      plays both sessions in one sitting. opus r1 + r2 REQUEST-CHANGES (all MUST/SHOULD taken), sonnet AWN. NITs not
+      taken: pure tests for `read_preflight`'s gating; `collect_v1` reads the hardware twice.
 - [ ] **TG-salvage** A contingency instead of a dead end: use only matching, steady segments when a fixed,
       pre-declared rule allows; otherwise ask for the smallest extra play needed; never pick windows after seeing the
       result. Tested: the rule fixed before the comparison, adversarial fixtures that would reward cherry-picking.
