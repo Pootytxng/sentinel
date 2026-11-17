@@ -72,9 +72,10 @@ export function pickStutterPair(sessions: SessionSummary[]): StutterPick {
  *  (two or more change families moved, so no single reading is a lesson), a zero or missing baseline
  *  reading, a zero floor, or both deltas inside the floor. A partly comparable pair still teaches:
  *  the report's own comparability banner says how far the pair may be compared. Too-noisy can't
- *  fire from this surface. CR-lesson-avg-band: the report carries only the 1% low's band; on a
- *  measured band (`noise_measured`) the average's own band is unknown here, so the average is read
- *  as not compared (steadier / less-steady); an older report judged on one band reads both on it. */
+ *  fire from this surface. CR-lesson-avg-band: on a measured band (`noise_measured`) the average
+ *  reads against its own measured band (`noise_avg_band_pct`); a measured report without it (an
+ *  older backend) reads the average as not compared (steadier / less-steady), never against the 1%
+ *  low's band; an older report judged on one band reads both on it. */
 export function stutterLessonRule(r: WhatChangedReport): LessonRule | null {
   const b = r.baseline;
   const c = r.current;
@@ -82,7 +83,9 @@ export function stutterLessonRule(r: WhatChangedReport): LessonRule | null {
   if (!(b.low1_fps > 0) || !(b.avg_fps > 0) || !Number.isFinite(c.low1_fps) || !Number.isFinite(c.avg_fps)) return null;
   const low1Pct = ((c.low1_fps - b.low1_fps) / b.low1_fps) * 100;
   const avgPct = ((c.avg_fps - b.avg_fps) / b.avg_fps) * 100;
-  return lessonRuleForVerdict(r.verdict, low1Pct, avgPct, r.noise_floor_pct, r.noise_measured === true ? null : r.noise_floor_pct);
+  const ownAvgBand = Number.isFinite(r.noise_avg_band_pct) ? (r.noise_avg_band_pct as number) : null;
+  const avgBand = r.noise_measured === true ? ownAvgBand : r.noise_floor_pct;
+  return lessonRuleForVerdict(r.verdict, low1Pct, avgPct, r.noise_floor_pct, avgBand);
 }
 
 /** The engine's comparability verdicts that make an earlier steady session a good baseline. */

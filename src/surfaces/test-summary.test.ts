@@ -247,6 +247,7 @@ describe("P5-learned on the owner's records today", () => {
       low1Pct: -18.5,
       avgPct: null,
       bandPct: 3.0,
+      avgBandPct: null,
     });
   });
 
@@ -262,6 +263,7 @@ describe("P5-learned on the owner's records today", () => {
       low1Pct: null,
       avgPct: null,
       bandPct: null,
+      avgBandPct: null,
     });
   });
 });
@@ -754,6 +756,11 @@ describe("CR-lesson-avg-band: the average reads against its own band", () => {
     expect(avgBandOf(trial({}))).toBe(18);
     expect(avgBandOf(trial({ outcome: null }))).toBe(18); // older records were judged as Recommended
     expect(avgBandOf(trial({ outcome: "max-fps" }))).toBe(23); // the wider band, both numbers
+    // Opus r1: on a measured record noise_evidence holds the 1% low's band; Maximum FPS takes the wider.
+    const narrowLow = { noise_evidence: { band_pct: 3, measured_noise_pct: null }, game_noise: { low1_band_pct: 3, avg_band_pct: 10 } };
+    expect(avgBandOf(trial({ outcome: "max-fps", ...narrowLow }))).toBe(10);
+    expect(avgBandOf(trial({ outcome: "max-fps", game_noise: { avg_band_pct: 10 } }))).toBeNull();
+    expect(avgBandOf(trial({ outcome: "smoothest", game_noise: null }))).toBeNull();
     expect(avgBandOf(trial({ outcome: "smoothest" }))).toBeNull(); // the average is never judged
     expect(avgBandOf(trial({ game_noise: { low1_band_pct: 23 } }))).toBeNull(); // measured, no avg band
     // An older record without measured bands was judged on one band both ways.
@@ -763,7 +770,7 @@ describe("CR-lesson-avg-band: the average reads against its own band", () => {
 
   it("the Trial summary's lesson reads the stored average against the game's average band", () => {
     const s = summarizeGame(GAME, [...experiments, trial({})], [VFX], sessions)!;
-    expect(s.lesson).toMatchObject({ recId: "hags", rule: "faster-and-steadier", bandPct: 23 });
+    expect(s.lesson).toMatchObject({ recId: "hags", rule: "faster-and-steadier", bandPct: 23, avgBandPct: 18 });
     const inside = summarizeGame(GAME, [...experiments, trial({ treatment: { delta_low1_pct: 30, delta_avg_pct: 15 } })], [VFX], sessions)!;
     expect(inside.lesson).toMatchObject({ recId: "hags", rule: "steadier-not-faster" });
     const noAvgBand = summarizeGame(GAME, [...experiments, trial({ game_noise: { low1_band_pct: 23 } })], [VFX], sessions)!;

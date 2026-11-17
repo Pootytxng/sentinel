@@ -960,6 +960,7 @@
       },
       "lessonDetailToggle": "Compy 是怎么得出这个结论的",
       "lessonDetail": "来自 {{change}} 的测试：1% 低帧 {{low}}%，平均帧率 {{avg}}，对照 {{band}}% 的噪声范围。所用规则：{{rule}}",
+      "lessonDetailBands": "来自 {{change}} 的测试：1% 低帧 {{low}}%，对照其 {{band}}% 的噪声范围；平均帧率 {{avg}}%，对照其 {{avgBand}}% 的噪声范围。所用规则：{{rule}}",
       "lessonAvgNotCompared": "未比较",
       "lessonDetailNoisy": "{{change}} 最近一次测试被判定为波动太大，所以 Compy 没有比较任何数字。所用规则：{{rule}}",
       "lessonRulesNote": "Compy 只根据一组固定规则和它自己保存的结果得出结论，从不猜测原因。没有规则适用时，就不显示结论。",

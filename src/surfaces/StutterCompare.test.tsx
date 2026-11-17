@@ -322,9 +322,13 @@ describe("P7-teach: the stutter comparison teaches one lesson from this pair's o
     expect(stutterLessonRule(report({ verdict: "regressed", ...refs(80, 0) }))).toBe("less-steady-not-slower");
   });
 
-  // CR-lesson-avg-band: the report carries only the 1% low's band. On a measured band the average's
-  // own band is unknown here, so the average is not compared (never read against the 1% low's band).
-  it("on a measured band the average is not compared; an older single-band report reads both on it", () => {
+  // CR-lesson-avg-band: on a measured band the average reads against its own measured band; a
+  // measured report without one is not compared (never read against the 1% low's band).
+  it("on a measured band the average reads against its own band; without one it is not compared", () => {
+    // Average -8.3% (120 -> 110): past a 3% band, inside its own 10%.
+    const own = { noise_measured: true, noise_floor_pct: 3, noise_avg_band_pct: 10 };
+    expect(stutterLessonRule(report({ verdict: "regressed", ...own, ...refs(80, 70, 120, 110) }))).toBe("less-steady-not-slower");
+    expect(stutterLessonRule(report({ verdict: "regressed", ...own, ...refs(80, 70, 120, 100) }))).toBe("slower-and-less-steady");
     const measured = { noise_measured: true, noise_floor_pct: 3 };
     expect(stutterLessonRule(report({ verdict: "regressed", ...measured, ...refs(80, 70, 120, 110) }))).toBe("less-steady");
     expect(stutterLessonRule(report({ verdict: "improved", ...measured, ...refs(80, 90, 120, 130) }))).toBe("steadier");

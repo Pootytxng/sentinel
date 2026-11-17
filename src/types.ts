@@ -976,6 +976,9 @@ export type WhatChangedReport = {
   /** P4-judge-noisy: whether `noise_floor_pct` is this game's measured band. false = not measured, and
    *  the report called nothing better or worse. Absent from an older backend: read as not measured. */
   noise_measured?: boolean;
+  /** CR-lesson-avg-band: the game's measured band on the average (intelligence.rs
+   *  `noise_avg_band_pct`); absent from an older backend or when not measured. */
+  noise_avg_band_pct?: number | null;
   /** Non-measurement events strictly between the two sessions. */
   events_between: IntelEvent[];
   leading_hypotheses: IntelHypothesis[];

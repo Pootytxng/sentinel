@@ -278,6 +278,8 @@ export type Lesson = {
   low1Pct: number | null;
   avgPct: number | null;
   bandPct: number | null;
+  /** CR-lesson-avg-band: the band the average was read against (null = the average wasn't compared). */
+  avgBandPct: number | null;
 };
 
 const dirOf = (v: number, band: number): Dir => (v > band ? "up" : v < -band ? "down" : "flat");
@@ -302,18 +304,22 @@ export function lessonRuleFor(
   return LESSON_RULES[`${dirOf(low1Pct, bandPct)}/${avgDir}`] ?? null;
 }
 
-/** CR-lesson-avg-band: the band a Trial's AVERAGE was judged on. An older record without the game's
- *  measured bands was judged on `noise_evidence.band_pct` both ways; a Maximum FPS Trial judges both
- *  numbers on the wider band (experiment.rs `with_max_fps_outcome`), which is that same band; a
- *  Recommended Trial judges the average on its own measured band (`with_recommended_outcome_bands`);
- *  a Smoothest Trial never judges the average. null = not compared. */
+/** CR-lesson-avg-band: the band a Trial's AVERAGE was judged on. A Smoothest Trial never judges the
+ *  average. An older record without the game's measured bands was judged on `noise_evidence.band_pct`
+ *  both ways. On a measured record `noise_evidence.band_pct` is the 1% low's band (experiment.rs
+ *  `conclude`), so: a Maximum FPS Trial judges the average on the wider of the two measured bands
+ *  (`with_max_fps_outcome`); a Recommended Trial on the average's own (`with_recommended_outcome_bands`).
+ *  null = not compared. */
 export function avgBandOf(x: Pick<SummaryExperiment, "noise_evidence" | "game_noise" | "outcome">): number | null {
-  const band = x.noise_evidence?.band_pct ?? null;
-  if (x.game_noise == null) return band;
   if (x.outcome === "smoothest") return null;
-  if (x.outcome === "max-fps") return band;
-  const avg = x.game_noise.avg_band_pct;
-  return avg != null && Number.isFinite(avg) ? avg : null;
+  if (x.game_noise == null) return x.noise_evidence?.band_pct ?? null;
+  const fin = (v: number | undefined) => (v != null && Number.isFinite(v) ? v : null);
+  const avg = fin(x.game_noise.avg_band_pct);
+  if (x.outcome === "max-fps") {
+    const low = fin(x.game_noise.low1_band_pct);
+    return avg != null && low != null ? Math.max(low, avg) : null;
+  }
+  return avg;
 }
 
 /** `lessonRuleFor`, plus the verdict-wins guard for a result judged on the 1% low against its floor
@@ -387,11 +393,12 @@ export function lessonFor(tested: readonly TestedChange[]): Lesson | null {
         low1Pct: r.deltaLow1Pct,
         avgPct: r.deltaAvgPct,
         bandPct: band,
+        avgBandPct: lessonDirs(rule)?.avg === "unknown" ? null : r.avgBandPct,
       };
   }
   const noisy = newest.find((r) => r.verdict === "too-noisy");
   return noisy
-    ? { rule: "too-noisy", recId: noisy.recId, title: noisy.title, confidence: noisy.confidence, low1Pct: null, avgPct: null, bandPct: null }
+    ? { rule: "too-noisy", recId: noisy.recId, title: noisy.title, confidence: noisy.confidence, low1Pct: null, avgPct: null, bandPct: null, avgBandPct: null }
     : null;
 }
 
@@ -756,7 +763,10 @@ function resultOf(x: SummaryExperiment): OutcomeResult | null {
     return r("low-flat", low);
   }
   if (keeps) return avg == null ? null : r("avg-up", avg);
-  if (x.verdict === "regressed") return avg != null && avg < -band ? r("avg-fell", avg) : r("low-fell", low);
+  // CR-lesson-avg-band (opus r1): Maximum FPS judges the average on the wider measured band.
+  const maxAvgBand = avgBandOf(x);
+  if (x.verdict === "regressed")
+    return avg != null && maxAvgBand != null && avg < -maxAvgBand ? r("avg-fell", avg) : r("low-fell", low);
   return avg == null ? r("avg-unknown", null) : r("avg-flat", avg);
 }
 

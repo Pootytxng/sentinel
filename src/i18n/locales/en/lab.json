@@ -987,6 +987,7 @@
       },
       "lessonDetailToggle": "How Compy worked this out",
       "lessonDetail": "From the Trial of {{change}}: 1% low {{low}}%, average {{avg}}, against a {{band}}% noise band. Rule used: {{rule}}",
+      "lessonDetailBands": "From the Trial of {{change}}: 1% low {{low}}% against its {{band}}% noise band, average {{avg}}% against its {{avgBand}}% noise band. Rule used: {{rule}}",
       "lessonAvgNotCompared": "not compared",
       "lessonDetailNoisy": "The newest Trial of {{change}} was judged too noisy, so Compy compared no numbers. Rule used: {{rule}}",
       "lessonRulesNote": "Compy draws a lesson only from a fixed set of rules over its own stored results, never from guesses about causes. When no rule fits, it shows none.",

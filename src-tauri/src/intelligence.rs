@@ -1109,6 +1109,9 @@ pub(crate) struct WhatChangedReport {
     /// P4-judge-noisy: whether `noise_floor_pct` is this game's measured band. `false` = not measured,
     /// and the report called nothing better or worse.
     pub noise_measured: bool,
+    /// CR-lesson-avg-band: the game's measured band on the AVERAGE (`GameNoise::avg_band_pct`), so a
+    /// surface reads the average against its own band, never the 1% low's. `None` = not measured.
+    pub noise_avg_band_pct: Option<f64>,
     /// Non-measurement events strictly inside (baseline start, current start].
     pub events_between: Vec<EventRecord>,
     pub leading_hypotheses: Vec<Hypothesis>,
@@ -1686,6 +1689,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         observations: Vec::new(),
         noise_floor_pct: floor,
         noise_measured: inp.noise.is_some(),
+        noise_avg_band_pct: inp.noise.map(|n| n.avg_band_pct),
         events_between: inp.events_window.clone(),
         leading_hypotheses: Vec::new(),
         ruled_out: Vec::new(),
@@ -3768,6 +3772,10 @@ mod tests {
         assert_eq!(report(&inputs(Some(&wide))).verdict, "no-change");
         let quiet = report(&inputs(Some(&TEST_NOISE)));
         assert_eq!((quiet.verdict.as_str(), quiet.noise_measured), ("regressed", true));
+        // CR-lesson-avg-band: the average's own measured band rides along; none when unmeasured.
+        let split = crate::noise_floor::GameNoise { low1_band_pct: 23.0, avg_band_pct: 18.0, ..TEST_NOISE };
+        assert_eq!(report(&inputs(Some(&split))).noise_avg_band_pct, Some(18.0));
+        assert_eq!(unmeasured.noise_avg_band_pct, None);
         // One session held at 240 fps by a cap, the other free: nothing is called better or worse.
         let (mut b2, mut c2) = two_sessions(100.0, 80.0);
         b2.fps_series = (0..120u32).map(|i| (i * 10, if i % 10 == 3 { 200.0 } else { 240.0 })).collect();
