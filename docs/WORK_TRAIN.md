@@ -580,6 +580,11 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       show the Applied card's line ("Compy has no saved undo for this change.", en + zh-CN keys already present); App's
       refusal unchanged. Rec rows never render as applied, so no other entry exists. 4 tests fail on the old code. No
       review (TS UI only, no rollback logic touched). tsc 0, full vitest 545/548 (3 site-app suites).
+      s33 review (touches the undo entry points): opus APPROVE-WITH-NITS, sonnet APPROVE-WITH-NITS, no MUST-FIX.
+      Opus SHOULD-FIX (pre-existing, now visible) queued as CR-debrief-no-undo-dismiss.
+- [ ] **CR-debrief-no-undo-dismiss** (s33 opus SHOULD-FIX on CR-undo-entry-disable) A debrief card whose change has no
+      saved undo, a non-improved result and no next suspect shows only a disabled "Revert it": the user can never clear
+      it. Offer a plain Dismiss beside it that clears the card; behaviour test that it clears.
 - [ ] **CR-home-reversible-note** (same class as CR-footer-reversible) Home's Active changes card says "every one
       reversible from the ledger" (ledger-health-home-guard.test.tsx `REVERSIBLE_NOTE`); make it count from
       `undoTally` like the footer, en + zh-CN. TS.
@@ -750,14 +755,20 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       an inconclusive report names no band. sonnet AWN.
 - [x] **CR-tuning-comparability** merge `375ac530`: every post-tune session goes through the arm's comparability rule
       (`get_tuning_comparability`); a non-comparable session is "can't call it", with the real reason. opus + sonnet AWN.
-- [ ] **CR-tuning-temp-comparability** (opus SHOULD-FIX on CR-tuning-comparability, pre-existing): the temperature
-      drop/rise claim still reads every post-tune session, comparable or not; take peaks only from sessions the same
-      list marks comparable.
-- [ ] **CR-lesson-avg-band** (s31 nit check: a real wrong call): `lessonRuleFor` reads the average's direction against
-      the 1% low band; with measured per-metric bands (`GameNoise.avg_band_pct`) an average past its own band can read
-      "barely moved" and the reverse. Carry the avg band to the three callers (Debrief has it in `game_noise`;
-      `WhatChangedReport` and `SummaryNoise` don't); where it is unknown on a measured band, read the average as not
-      compared.
+- [x] **CR-tuning-temp-comparability** merge `eb81a9f2` (s33): temperature peaks come only from sessions
+      `get_tuning_comparability` marks comparable; a temperature "Holding up so far" needs the qualifying window on
+      those sessions; GPU/driver/build named only when the list says so. opus r1 REQUEST-CHANGES (MUST-FIX + SHOULD-FIX
+      taken), opus r2 AWN, sonnet AWN.
+- [x] **CR-lesson-avg-band** merge `1a3882a7` (s33): every lesson reads the average on the band it was judged on
+      (Recommended: `avg_band_pct`; Maximum FPS: the wider, for the 1% low too; real-play: the look's band; older:
+      the one band); unknown = not compared; the receipt names both bands; `WhatChangedReport.noise_avg_band_pct`
+      (Rust) carries it to the stutter comparison. opus r1 + r2 REQUEST-CHANGES (all MUST/SHOULD taken; second round
+      closes it), sonnet AWN.
+- [ ] **CR-tuning-frames-unread-reason** (s33 opus r2 SHOULD-FIX on CR-tuning-temp-comparability, pre-existing): with a
+      band but no comparability list (still loading, read failed, no baseline session), the frames line still names
+      "another GPU, driver, game build or frame cap"; say "couldn't match these sessions to your baseline" instead.
+- [ ] **CR-lesson-fall-band** (s33 review, pre-existing): lessons and the outcome switch read a fall at the symmetric
+      band; the engine judges a fall at `fall_pct(band)` (model 3). Read falls at the matching fall.
 - [ ] **TG-drift-words** PARKED s31 (stays in the Trial conditions guard list): did not fit with two reviews before
       the install window. TG-interleave design note: not written (no time left after the install).
 - Inventory (no move, no delete): `.claude\worktrees\train-same-rig` (created 2026-11-12 12:00) and
@@ -798,6 +809,32 @@ amendment 2026-11-12, approved 17:21 "add it"; `4d5217d5`).
       be toggled live and safely through the existing apply/rollback, alternate on/off in blocks within one play
       session (ABAB) so drift, scene changes and habits cancel out: which catalog settings qualify, the mutation-boundary
       and consent implications (each toggle is an apply/rollback: one explicit consent for the whole run), the statistics.
+      **Design note (s33, no code; for the owner to decide):**
+      - *What it asks of the user:* one longer session of normal play (about 40 min) instead of two separate ones.
+        Compy switches the setting on and off in blocks of about 5 minutes, in the order off-on-on-off-off-on-on-off
+        (ABBA pairs, so a slow drift over the session cancels instead of favouring one side). The user keeps playing
+        the same mode and scene; a small cue says "switching now". The first ~30 s after each switch are left out.
+      - *What accuracy it buys:* today a two-session Trial must beat the between-session band, which on ROB RUN is
+        1% low ±23% and average ±18%, so only very large effects can be called there. Interleaving compares blocks
+        inside one session, so what changes between sessions (driver warm-up, a cap or power plan left different,
+        time of day, habits) drops out; the band that matters becomes the block-to-block spread. With n on/off pairs
+        the uncertainty of the average difference shrinks about as 1/sqrt(n). Even in the worst case (blocks as
+        noisy as whole sessions), 4 pairs roughly halve ROB RUN's band (about ±11% on the 1% low); if blocks are
+        steadier, more. Block-level noise has never been measured on this PC, so no number above is a claim yet.
+      - *Which settings qualify:* only a change that takes effect without restarting the game or the PC, whose undo is
+        confirmed by read-back, and that touches no game process or file (anti-cheat). The list is derived from the
+        catalog at build time, never assumed here; anything needing a relaunch or reboot never qualifies.
+      - *When Compy would offer it:* never by default. Only after a two-session Trial of a qualifying change came back
+        "can't tell" on a game whose measured band is wider than the effect the change could have, as an opt-in.
+      - *Mutation boundary and consent:* each switch is a real apply/rollback through the existing audited path, so
+        the run needs one explicit consent covering every switch, one ledger record for the run, and a guaranteed
+        restore to the user's original state on finish, cancel, crash or app exit (the riskiest part to build).
+      - *What it would cost:* (1) a measurement-only first slice: record "as-is" blocks inside ordinary sessions
+        (no switching) to learn whether blocks are steadier than sessions; 1-2 sessions, plus owner play to collect
+        data. (2) If blocks are steadier: the switching run (Rust scheduler on the existing apply/rollback, restore on
+        every exit path, one-consent run record), a pre-declared paired-block verdict rule, and the UI cue; about 4-6
+        sessions with opus + sonnet reviews at the mutation boundary.
+      - *Decision for the owner:* approve slice (1) only, and say whether Compy may switch a setting while you play.
 - [ ] **TG-passive-band** Learn each game's noise band from ordinary play over time with no instructions, so a Trial
       rarely has to ask for extra as-is sessions. Tested: a band appears from ordinary sessions alone; never pooled across
       contexts.
