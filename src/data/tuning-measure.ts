@@ -335,6 +335,16 @@ export function measureTuning(
     .map(peakOf)
     .filter((t): t is number => t != null);
   const peaksLeftOut = post.some((s) => peakOf(s) != null && !conditionsComparable(s));
+  // Opus r1 SHOULD-FIX: name GPU/driver/build only when the list actually marks a session not
+  // comparable; a list not read yet (or empty) is "couldn't match", never a measured reason.
+  const listedNotComparable = post.some(
+    (s) => peakOf(s) != null && postComparability?.some((p) => p.started_at === s.started_at && !p.comparable) === true,
+  );
+  // Opus r1 MUST-FIX: a temperature claim needs the same qualifying window, counted on the
+  // comparable sessions it was read from (never on sessions it left out).
+  const cmpPost = post.filter(conditionsComparable);
+  const cmpSecs = cmpPost.reduce((sum, s) => sum + s.duration_secs, 0);
+  const tempWindowMet = cmpPost.length >= TUNING_MIN_SESSIONS && cmpSecs >= TUNING_MIN_SECS && !crashReported;
   const afterPeakTempC = postPeaks.length > 0 ? Math.max(...postPeaks) : null;
   const tempDropC =
     baselinePeakTempC != null && afterPeakTempC != null ? baselinePeakTempC - afterPeakTempC : null;
@@ -350,11 +360,17 @@ export function measureTuning(
   const progress = `${sessionsSince} session${sessionsSince === 1 ? "" : "s"}, ${fmtPlaytime(
     secsSince,
   )}`;
-  const leftOutNote = peaksLeftOut ? " Sessions that can't be compared with your baseline are left out." : "";
+  const leftOutNote = peaksLeftOut
+    ? listedNotComparable
+      ? " Sessions that can't be compared with your baseline (another GPU, driver or game build) are left out."
+      : " Sessions Compy couldn't match to your baseline are left out."
+    : "";
   const tempLine =
     tempDropC == null
-      ? peaksLeftOut && baselinePeakTempC != null && postPeaks.length === 0
-        ? "Temps not compared: the sessions since the tune can't be compared with your baseline (another GPU, driver or game build)."
+      ? peaksLeftOut && baselinePeakTempC != null
+        ? listedNotComparable
+          ? "Temps not compared: the sessions since the tune can't be compared with your baseline (another GPU, driver or game build)."
+          : "Temps not compared yet: Compy couldn't match these sessions to your baseline."
         : "Temps will show once a monitored session reports a peak."
       : (tempReal
           ? `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C (−${tempDropC}°C) — a real drop.`
@@ -395,14 +411,21 @@ export function measureTuning(
     headline = "Too aggressive";
     detail = `Your 1% low dropped past the ${fallText} this game moves between your sessions with nothing changed — new stutters. Step back up one increment in your tool.`;
   } else if (tempReal || fpsImproved) {
-    if (windowMet) {
+    if ((tempReal && tempWindowMet) || (fpsImproved && windowMet)) {
       verdict = "holding";
       headline = "Holding up so far";
       detail = `${tempLine} ${fpsUnmeasured ? `Frames not judged (${unjudgedWhy}), no` : "Frames held, no"} crashes flagged across ${progress}. Only your continued play proves it — keep playing and tell Compy if anything resets.`;
     } else {
       verdict = "too-early";
       headline = "Too early to call — keep playing";
-      detail = `${tempLine} Looking good, but stability shows over time: ${progress} so far (needs ≥${TUNING_MIN_SESSIONS} sessions and ~3h with no crash).`;
+      // Opus r1 MUST-FIX: the window met on every session but not on the comparable ones the temps
+      // were read from says how much of that play counts.
+      const counted =
+        windowMet && cmpPost.length < post.length
+          ? ` (${cmpPost.length} of them, ${fmtPlaytime(cmpSecs)}, can be compared with your baseline)`
+          : "";
+      const framesWhy = fpsUnmeasured && sessionsSince > 0 ? ` Frames not judged (${unjudgedWhy}).` : "";
+      detail = `${tempLine}${framesWhy} Looking good, but stability shows over time: ${progress} so far${counted} (needs ≥${TUNING_MIN_SESSIONS} sessions and ~3h with no crash).`;
     }
   } else if (tempRose) {
     // Frames held (no regression above), but the peak measured HOTTER — the opposite of what a cooling

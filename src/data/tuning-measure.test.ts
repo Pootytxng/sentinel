@@ -325,8 +325,11 @@ describe("measureTuning", () => {
     expect(m.verdict).not.toBe("holding");
     expect(m.detail).toMatch(/Temps not compared: the sessions since the tune can't be compared with your baseline/);
     expect(m.detail).not.toMatch(/a real drop/);
-    // No list at all: nothing is comparable, so nothing is claimed either.
-    expect(measureTuning(baseline(), cool, null, null)!.tempReal).toBe(false);
+    // No list at all (not read yet, or the read failed): nothing is claimed, and no reason is invented.
+    const unread = measureTuning(baseline(), cool, null, null)!;
+    expect(unread.tempReal).toBe(false);
+    expect(unread.detail).toMatch(/Temps not compared yet: Compy couldn't match these sessions to your baseline/);
+    expect(unread.detail).not.toMatch(/another GPU, driver or game build\)/);
   });
 
   it("CR-tuning-temp-comparability: the hottest peak and a 'hotter' claim come only from comparable sessions", () => {
@@ -337,7 +340,16 @@ describe("measureTuning", () => {
     expect(m.afterPeakTempC).toBe(71);
     expect(m.tempDropC).toBe(13);
     expect(m.detail).not.toMatch(/hotter/);
-    expect(m.detail).toMatch(/Sessions that can't be compared with your baseline are left out/);
+    expect(m.detail).toMatch(/Sessions that can't be compared with your baseline \(another GPU, driver or game build\) are left out/);
+    // Opus r1 MUST-FIX: the drop rests on 2 comparable sessions (2h): never "holding" on less than
+    // the window, which is counted on the sessions the temps were read from.
+    expect(m.windowMet).toBe(true);
+    expect(m.verdict).toBe("too-early");
+    expect(m.detail).toMatch(/3 sessions, 3h so far \(2 of them, 2h, can be compared with your baseline\)/);
+    // A third comparable session completes the window.
+    const more = [...ss, sess({ started_at: "2026-06-08T13:00:00Z", peak_gpu_temp_c: 70 })];
+    const moreList = ok(more).map((p, i) => (i === 0 ? { ...p, comparable: false } : p));
+    expect(measureTuning(baseline(), more, null, moreList)!.verdict).toBe("holding");
     // The same hot session counted as comparable would be a real rise.
     const rose = measureTuning(baseline(), ss, null, ok(ss))!;
     expect(rose.afterPeakTempC).toBe(95);
