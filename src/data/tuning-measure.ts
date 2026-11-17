@@ -326,9 +326,15 @@ export function measureTuning(
 
   // Thermal payoff: compare the baseline peak to the WORST (hottest) post-tune peak — honest "it runs
   // cooler even at its hottest". A ≥3 °C drop clears sensor/ambient noise.
+  // CR-tuning-temp-comparability: peaks come only from sessions the same comparability list marks
+  // comparable with the baseline session (another GPU, driver or game build is not this tune's heat).
+  // A peak from any other session is never compared: no drop, no rise, no claim.
+  const peakOf = (s: SessionSummary) => (typeof s.peak_gpu_temp_c === "number" ? s.peak_gpu_temp_c : null);
   const postPeaks = post
-    .map((s) => s.peak_gpu_temp_c)
-    .filter((t): t is number => typeof t === "number");
+    .filter(conditionsComparable)
+    .map(peakOf)
+    .filter((t): t is number => t != null);
+  const peaksLeftOut = post.some((s) => peakOf(s) != null && !conditionsComparable(s));
   const afterPeakTempC = postPeaks.length > 0 ? Math.max(...postPeaks) : null;
   const tempDropC =
     baselinePeakTempC != null && afterPeakTempC != null ? baselinePeakTempC - afterPeakTempC : null;
@@ -344,14 +350,17 @@ export function measureTuning(
   const progress = `${sessionsSince} session${sessionsSince === 1 ? "" : "s"}, ${fmtPlaytime(
     secsSince,
   )}`;
+  const leftOutNote = peaksLeftOut ? " Sessions that can't be compared with your baseline are left out." : "";
   const tempLine =
     tempDropC == null
-      ? "Temps will show once a monitored session reports a peak."
-      : tempReal
-        ? `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C (−${tempDropC}°C) — a real drop.`
-        : tempRose
-          ? `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C (+${-tempDropC}°C) — hotter, not cooler.`
-          : `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C — within sensor noise so far.`;
+      ? peaksLeftOut && baselinePeakTempC != null && postPeaks.length === 0
+        ? "Temps not compared: the sessions since the tune can't be compared with your baseline (another GPU, driver or game build)."
+        : "Temps will show once a monitored session reports a peak."
+      : (tempReal
+          ? `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C (−${tempDropC}°C) — a real drop.`
+          : tempRose
+            ? `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C (+${-tempDropC}°C) — hotter, not cooler.`
+            : `Peak GPU temp ${baselinePeakTempC}°C → ${afterPeakTempC}°C — within sensor noise so far.`) + leftOutNote;
 
   // Precedence (honest): a reported crash is real regardless of anything else; then a confound voids
   // attribution; then a measured regression; then an improvement (gated on the window); else a null.
