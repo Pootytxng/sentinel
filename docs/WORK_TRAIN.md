@@ -772,17 +772,62 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       the one band); unknown = not compared; the receipt names both bands; `WhatChangedReport.noise_avg_band_pct`
       (Rust) carries it to the stutter comparison. opus r1 + r2 REQUEST-CHANGES (all MUST/SHOULD taken; second round
       closes it), sonnet AWN.
-- [ ] **CR-tuning-frames-unread-reason** (s33 opus r2 SHOULD-FIX on CR-tuning-temp-comparability, pre-existing): with a
-      band but no comparability list (still loading, read failed, no baseline session), the frames line still names
-      "another GPU, driver, game build or frame cap"; say "couldn't match these sessions to your baseline" instead.
+- [x] **CR-tuning-frames-unread-reason** merge `a9e681b1` (s35): with a band but no usable list (still loading, read
+      failed, no baseline session, a session it doesn't name) or a session with no recorded conditions
+      (`PostComparability.conditions_unknown`, new, from `comparability::derive`'s Unknown), the frames line says
+      "couldn't match these sessions to your baseline"; GPU/driver/build only when the list marks a session different,
+      the cap only when a cap read left a session out; the temperature path's `listedNotComparable` excludes Unknown
+      too. sonnet AWN (NIT taken: one derive per session).
 - [ ] **CR-lesson-fall-band** (s33 review, pre-existing): lessons and the outcome switch read a fall at the symmetric
       band; the engine judges a fall at `fall_pct(band)` (model 3). Read falls at the matching fall.
+      PARKED s35: not a small fix. `lessonRuleFor`'s three callers (Trial summary, Debrief, Care stutter compare) and
+      the outcome switch would each need the record's noise model (`game_noise.model`, absent from the TS lesson types)
+      and the average's own fall (only the 1% low's `noise_fall_pct` is carried); needs its own slice with an opus +
+      sonnet review (it decides which lesson a verdict teaches).
+- [x] **CR-core-parking-hidden-plan** (coordinator, s35) merge `91d59341`: a core-parking undo whose plan `powercfg /list`
+      omits (and isn't active) asks for the plan itself (`powercfg /query <guid>`, read-only): exit 0 = restore onto it
+      (never made active); gone only when it fails exactly as the nil GUID does (exit 1, same words) while
+      `SCHEME_CURRENT` still answers; anything else stops with nothing changed. A failed ledger save after "nothing to
+      restore" is a plain failed undo ("ran nothing on Windows"), never "The undo ran on Windows". The existing
+      callers-of guard (history.rs `every_apply_gateway_...`) also matches `dispatch_rollback_outcome_with`
+      (tightening). Manual live test `qa_the_live_plan_query_...` (#[ignore], read-only) passed on the owner's PC.
+      opus r1 REQUEST-CHANGES (MUST-FIX: exit 1 is powercfg's catch-all; SHOULD-FIX: live test; both taken), opus r2
+      AWN (SHOULD-FIX taken: non-nil missing GUID in the live test), sonnet AWN. Left (opus NITs): a crate-wide
+      callers-of check; powercfg calls have no timeout (as the existing reads); a Windows build that puts the GUID in
+      its "does not exist" words would leave such rows open (fails safe).
+- [x] **CR-drift-words-own-plan** (coordinator, s35) merge `1cb7b2e6`: a too-noisy Trial of the power plan itself
+      (`power-ultimate`) never names its own between-sessions plan move (a plan switched during a session still is);
+      the plan counts as "compared" only when both plan GUIDs were read; drivers compare case-insensitively; with
+      Gaming Mode on in either session the plan isn't compared at all (sonnet SHOULD-FIX, as the backend does).
+      opus AWN, sonnet AWN. Left (opus NITs): the TS `POWER_PLAN_REC` copy of the Rust constant; comparability.rs
+      compares driver names case-sensitively (cause list only).
+- [x] **s35 small fixes** merge `c80a00ff`: `read_preflight` reads Gaming Mode from the session slot (an unreadable
+      file is unknown, never "off"); the Black Box "Put back how it was" leaves out and names a change with an
+      in-window row that has no saved undo (en + zh-CN); TG-preflight's gating is pure and tested, and `collect_v1`
+      reads the hardware once (`collect_v1_from`, `hardware::fingerprint_from_info`). sonnet AWN. Also (gate catch,
+      `069f1c85` merge `744acb22`): s34's no-undo "Dismiss" took the bare `.btn-small` danger-red hover; scoped a
+      non-danger hover and recorded it in the false-danger census (SessionDebrief 3 -> 4) as that guard documents.
 - [x] **TG-drift-words** parked s31, landed s33 (merge `bbb3dd40`; details in the Trial conditions guard list). The
       TG-interleave design note is written there (s33).
-- [ ] **Judging-chain refactor slice** PARKED s33, untouched: extract the verdict decision inside
-      `conclude_experiment` / `start_experiment` into pure functions (no behaviour change), behaviour tests, retire only
-      the include_str! tests they cover. Did not fit before the 04:50 install with opus + sonnet and the likely second
-      opus round: about fifteen include_str! tests pin the conclude body and each retirement needs its replacement named.
+- [ ] **Judging-chain refactor slice** PARKED s33. First slice LANDED s35 (merge `de49b37a`): the two-session verdict
+      chain inside `conclude_experiment` moved unchanged into a pure `judge_pair(&PairInputs)` (placed right after
+      it); behaviour tests in `refuse_early_tests` on the owner's session shape retire five include_str! assertions:
+      measured-band classification (`the_conclude_classifies_the_1pct_low_on_the_measured_band_not_the_stored_one`),
+      Recommended bands (`a_recommended_trial_reads_the_average_on_its_own_measured_band`), Maximum FPS wider band
+      (`a_max_fps_trial_is_judged_on_the_wider_of_the_two_measured_bands`), cap check
+      (`an_after_session_that_ran_capped_against_an_uncapped_band_is_confounded`), unmeasured noise
+      (`a_conclude_with_no_measured_band_judges_nothing_and_restores`). opus r1 REQUEST-CHANGES (2 MUST-FIX: tests
+      couldn't tell the bands apart; taken), opus r2 AWN (2 SHOULD-FIX note asserts taken), sonnet AWN.
+      Left, still pinned (next slices): `conclude_grades_both_sessions_before_it_records_a_verdict`, the receipt line of
+      `the_average_delta_is_stored_additively_...`, `smoothest_is_judged_at_conclude_...`,
+      `a_two_session_conclude_refuses_a_real_play_trial_before_judging_anything`, the rest of
+      `an_uneven_session_is_no_longer_a_reason_to_judge_nothing` (its negative `with_steady_sessions(` pin and the
+      Smoothest pin still match only because `judge_pair` sits inside their search range: retire or re-scope them
+      when it moves), the start half of `the_start_measures_the_band_...`, and the start_experiment pins
+      (`a_start_reads_smoothest_...`, `a_start_keeps_the_catalogs_stated_risk_...`, `a_start_keeps_the_risk_choice_...`,
+      `a_start_keeps_the_cost_acknowledgement_...`, `smoothest_starts_only_when_...`, `a_start_reads_real_play_...`);
+      start_experiment's band/refusal decision is not extracted yet; nothing tests that `conclude_experiment` passes
+      the right values into `judge_pair` (opus NIT).
 - Inventory (no move, no delete): `.claude\worktrees\train-same-rig` (created 2026-11-12 12:00) and
   `.claude\worktrees\train-plan-held` (2026-11-13 04:01) are EMPTY folders, no `.git`, no files: leftovers of worktree
   removals whose directory delete was refused while a shell's working directory was inside. Nothing to salvage; the
@@ -829,7 +874,8 @@ amendment 2026-11-12, approved 17:21 "add it"; `4d5217d5`).
       (`with_power_plan_check`, only `power-ultimate` exempt between sessions). The frame cap can't be read before
       play (it is read from frames; a changed cap stays unjudged at conclude). Not covered: the guided journey, which
       plays both sessions in one sitting. opus r1 + r2 REQUEST-CHANGES (all MUST/SHOULD taken), sonnet AWN. NITs not
-      taken: pure tests for `read_preflight`'s gating; `collect_v1` reads the hardware twice.
+      taken: pure tests for `read_preflight`'s gating; `collect_v1` reads the hardware twice (both done s35, merge
+      `c80a00ff`).
 - [ ] **TG-salvage** A contingency instead of a dead end: use only matching, steady segments when a fixed,
       pre-declared rule allows; otherwise ask for the smallest extra play needed; never pick windows after seeing the
       result. Tested: the rule fixed before the comparison, adversarial fixtures that would reward cherry-picking.
@@ -2658,6 +2704,14 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   docs commit). TS only, no rollback logic: no review. tsc 0; full vitest 547/551 files on item 1 (3 site-app suites +
   the census, re-recorded and passing); item 2's touched suites + i18n guards pass. Not pushed (CODE-ONLY): main is 4+
   ahead of GitHub; the next FULL session pushes and installs.
+- 2026-11-17 s35 (FULL; coordinator-assigned; no game at any check): reviewed s34's two items (sonnet AWN; its one
+  SHOULD-FIX, "not checked" said twice on Home, checked and not taken: the ledger tally and the model's unknown count
+  count disjoint rows). The first push's gate caught s34's Dismiss on the danger-red hover (fixed `069f1c85`, census
+  3 -> 4); pushed `744acb22` PASS. Landed CR-drift-words-own-plan (`1cb7b2e6`), CR-tuning-frames-unread-reason
+  (`a9e681b1`), s35 small fixes (`c80a00ff`), CR-core-parking-hidden-plan (`91d59341`), judging-chain refactor slice 1
+  (`de49b37a`); reviews under each item. Parked: CR-lesson-fall-band (reason under it). Guards: the callers-of guard
+  also matches `dispatch_rollback_outcome_with` (tightening); the false-danger census +1 with its fix. RELEASE_STATE
+  re-anchored (`resolve_rollback`). cargo --lib 1982/0 on the last branch, clippy clean, tsc 0. Tester folder untouched.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
