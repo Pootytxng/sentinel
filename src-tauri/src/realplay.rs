@@ -153,8 +153,8 @@ pub(crate) enum NotCountedReason {
     /// It began before the change took effect.
     BeforeChange,
     /// A recorded condition differs from the as-is sessions (rig, driver, Windows or game build,
-    /// resolution, refresh, graphics API, frame generation, capture method), or couldn't be
-    /// confirmed the same.
+    /// resolution, refresh, graphics API, frame generation, capture method, and since
+    /// CR-plan-compare-rest the Windows power plan), or couldn't be confirmed the same.
     ConditionsChanged,
     /// The change didn't read as on when the session began, or at the next check after it.
     ChangeNotOn,
@@ -383,6 +383,10 @@ fn pin_before(run: &[&SessionSummary], anchor: &SessionSummary, now: DateTime<Ut
         .copied()
         .filter(|s| countable(s) && counts_each_change(s))
         .filter(|s| crate::noise_floor::cap_pair(crate::noise_floor::cap_read(s), cap) == crate::noise_floor::CapPair::Same)
+        // CR-plan-compare-rest: only as-is sessions shown to have run on the anchor's Windows power
+        // plan, held through each (`experiment::plan_mismatch`); the anchor itself must show its plan
+        // held, or nothing is pinned ([`unpinnable_anchor`] says why).
+        .filter(|s| crate::experiment::plan_mismatch(s, anchor, false).is_none())
         .filter(|s| instant(&s.started_at).is_some_and(|at| at >= from && at <= now))
         .collect();
     if kept.last().map(|s| s.started_at.as_str()) != Some(anchor.started_at.as_str()) {
@@ -417,6 +421,13 @@ pub(crate) fn unpinnable_anchor(anchor: &SessionSummary, sessions: &[SessionSumm
         None => return Some("its start time can't be read".into()),
         Some(_) => {}
     }
+    if crate::experiment::plan_mismatch(anchor, anchor, false).is_some() {
+        return Some(
+            "Compy can't show the Windows power plan held through it (the plan changed during it, or couldn't be read \
+             at its start or end)"
+                .into(),
+        );
+    }
     if unique(sessions, &anchor.started_at).is_none() || crate::noise_floor::NoiseConditions::of_session(anchor).is_none() {
         return Some(
             "Compy can't show what the PC was like during it (its rig and conditions weren't recorded, or the change \
@@ -445,6 +456,9 @@ pub(crate) struct Running<'a> {
     /// session's 10 s trace is shed once 20 newer ones are measured, and a cap state read from a shed
     /// trace would be "can't tell", un-counting every with-change session.
     pub cap: Option<crate::noise_floor::CapRead>,
+    /// CR-plan-compare-rest: a Trial of the power plan itself (`power-ultimate`), which moves the plan
+    /// between the as-is and with-change sessions by design (`experiment::plan_mismatch`).
+    pub plan_trial: bool,
 }
 
 /// Which with-change sessions count right now, which don't and why, and whether the Trial can go on.
@@ -568,7 +582,7 @@ pub(crate) fn with_arm<'s>(
             }
             let next = timeline.get(i + 1).copied();
             let count =
-                count_session(s, at, applied, until, other_moved, reference, before_cap, conditions.as_ref(), &pairing, next, live);
+                count_session(s, at, applied, until, other_moved, reference, before_cap, conditions.as_ref(), &pairing, next, live, trial.plan_trial);
             match count {
                 Count::Counted => arm.counted.push(s),
                 Count::Not(reason) => arm.not_counted.push(NotCounted { session_id: s.started_at.clone(), reason }),
@@ -610,6 +624,7 @@ fn count_session(
     pairing: &SessionComparability,
     next: Option<(DateTime<Utc>, &SessionSummary)>,
     live: Option<bool>,
+    plan_trial: bool,
 ) -> Count {
     use NotCountedReason as R;
     if at <= applied {
@@ -642,6 +657,12 @@ fn count_session(
         .zip(crate::noise_floor::NoiseConditions::of_session(s))
         .is_some_and(|(then, now)| crate::noise_floor::still_current(then, &now));
     if !still_current || pairing.verdict != Comparability::Comparable || !pairing.changed_context.is_empty() {
+        return Count::Not(R::ConditionsChanged);
+    }
+    // CR-plan-compare-rest: `comparability::derive` doesn't compare the Windows power plan; a session
+    // on another plan than the as-is sessions', one whose plan changed during it, or one that couldn't
+    // read its plan isn't pooled, as a two-session Trial confounds on it (`with_power_plan_check`).
+    if crate::experiment::plan_mismatch(reference, s, plan_trial).is_some() {
         return Count::Not(R::ConditionsChanged);
     }
     // P4-judge-noisy: a session held by a frame cap the as-is sessions weren't (or whose cap state
@@ -1356,7 +1377,7 @@ mod tests {
     }
 
     fn arm<'s>(sessions: &'s [SessionSummary], ledger: &[LedgerEntryRef<'_>], live: Option<bool>, before: &[RealPlaySession]) -> WithArm<'s> {
-        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before, cap: None };
+        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before, cap: None, plan_trial: false };
         with_arm(&trial, sessions, ledger, live, now())
     }
 
@@ -1377,6 +1398,60 @@ mod tests {
         assert_eq!((a.stop, a.reference.map(|s| s.started_at.as_str())), (None, Some("2026-10-20T19:00:00+00:00")));
         let j = judge(&pinned(), &a.counted_numbers(), TrialOutcome::Recommended, false);
         assert_eq!(decided(j).1.verdict, "no-change");
+    }
+
+    /// CR-plan-compare-rest: real play pools only sessions shown to run on the as-is sessions' Windows
+    /// power plan, held through each, as a two-session Trial confounds on it; a Trial of the plan
+    /// itself may differ between the arms, never switch during a session. The as-is sessions it pins
+    /// share the anchor's plan, and an anchor whose plan didn't hold pins nothing and says why.
+    #[test]
+    fn a_session_on_another_power_plan_is_never_pooled() {
+        use NotCountedReason as R;
+        const BAL: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+        const HIGH: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+        let on = |mut s: SessionSummary, start: Option<&str>, end: Option<&str>| {
+            let g = s.game_state.take().unwrap_or_default();
+            s.game_state = Some(g.with_power_plan(start.map(Into::into), end.map(Into::into)));
+            s
+        };
+        let before: Vec<SessionSummary> = as_is().into_iter().map(|s| on(s, Some(BAL), Some(BAL))).collect();
+        let w = with_sessions();
+        let at = |t: &str| format!("2026-10-21T{t}:00+00:00");
+        let with = [
+            on(w[0].clone(), Some(BAL), Some(BAL)),
+            on(w[1].clone(), Some(HIGH), Some(HIGH)),
+            on(w[2].clone(), Some(BAL), Some(HIGH)),
+            on(played(&at("19:30"), 213.0, 240.0, 15), Some(BAL), None),
+        ];
+        let sessions: Vec<SessionSummary> = before.iter().cloned().chain(with.iter().cloned()).collect();
+        let pins: Vec<RealPlaySession> = before.iter().map(RealPlaySession::of).collect();
+        let a = arm(&sessions, &ledger(), Some(true), &pins);
+        assert_eq!(a.counted.iter().map(|s| s.started_at.as_str()).collect::<Vec<_>>(), vec![with[0].started_at.as_str()]);
+        assert_eq!(
+            reasons(&a),
+            vec![
+                (with[1].started_at.clone(), R::ConditionsChanged),
+                (with[2].started_at.clone(), R::ConditionsChanged),
+                (with[3].started_at.clone(), R::ConditionsChanged),
+            ]
+        );
+        // A Trial of the plan itself: the other plan held through the session counts.
+        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &pins, cap: None, plan_trial: true };
+        let a = with_arm(&trial, &sessions, &ledger(), Some(true), now());
+        assert_eq!(a.counted.len(), 2, "{:?}", reasons(&a));
+        assert_eq!(reasons(&a).len(), 2);
+        // The pins: an as-is session on another plan is left out; the anchor's plan must hold.
+        let mixed = vec![before[0].clone(), on(as_is()[1].clone(), Some(HIGH), Some(HIGH)), before[2].clone()];
+        let got = before_arm(&mixed, &mixed[2], &ledger(), now());
+        assert_eq!(
+            got.iter().map(|p| p.session_id.as_str()).collect::<Vec<_>>(),
+            vec![mixed[0].started_at.as_str(), mixed[2].started_at.as_str()]
+        );
+        let switched = vec![before[0].clone(), before[1].clone(), on(as_is()[2].clone(), Some(BAL), Some(HIGH))];
+        assert!(before_arm(&switched, &switched[2], &ledger(), now()).is_empty());
+        let why = unpinnable_anchor(&switched[2], &switched, now()).expect("says why");
+        assert!(why.contains("power plan"), "{why}");
+        assert_eq!(unpinnable_anchor(&before[2], &before, now()), None);
     }
 
     #[test]
@@ -1473,7 +1548,7 @@ mod tests {
         assert_eq!(shed.counted.len(), 0, "without a stored cap state, a shed reference reads 'can't tell'");
         let before = pinned();
         let trial =
-            Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &before, cap: Some(CapRead::Uncapped) };
+            Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &before, cap: Some(CapRead::Uncapped), plan_trial: false };
         let a = with_arm(&trial, &sessions, &ledger(), Some(true), now());
         assert_eq!(a.counted.len(), 3);
         assert!(a.not_counted.is_empty(), "{:?}", a.not_counted);
@@ -1492,7 +1567,7 @@ mod tests {
         let mut sessions = all(Vec::new());
         let before = pinned();
         let trial =
-            Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &before, cap: Some(CapRead::Uncapped) };
+            Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &before, cap: Some(CapRead::Uncapped), plan_trial: false };
         let kept = with_arm(&trial, &sessions, &ledger(), Some(true), now()).counted.len();
         assert_eq!(kept, 3);
         for s in sessions.iter_mut() {
@@ -1599,7 +1674,7 @@ mod tests {
     fn a_session_after_the_window_doesnt_count_and_the_window_ends_the_trial() {
         let late = played("2026-11-04T12:00:00+00:00", 200.0, 240.0, 15);
         let sessions = all(vec![late]);
-        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &pinned(), cap: None };
+        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &pinned(), cap: None, plan_trial: false };
         let a = with_arm(&trial, &sessions, &ledger(), Some(true), instant("2026-11-05T00:00:00+00:00").unwrap());
         assert_eq!(reasons(&a), vec![("2026-11-04T12:00:00+00:00".into(), NotCountedReason::AfterWindow)]);
         assert_eq!((a.counted.len(), a.stop), (3, Some(RealPlayStop::WindowOver)));
@@ -1688,7 +1763,7 @@ mod tests {
     #[test]
     fn progress_says_collecting_ready_or_stopped_from_the_arms_alone() {
         let before = pinned();
-        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &before, cap: None };
+        let trial = Running { game: WARDOGS, created_at: CREATED, applied_at: APPLIED, applied_change_id: OWN, before: &before, cap: None, plan_trial: false };
         let sessions = all(Vec::new());
         let two: Vec<SessionSummary> = sessions[..5].to_vec();
         let a = with_arm(&trial, &two, &ledger(), Some(true), now());

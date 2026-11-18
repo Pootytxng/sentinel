@@ -692,6 +692,13 @@ pub(crate) fn arm_noise_from(
     if !arm_conditions_comparable(baseline, after) {
         return ArmNoise::Unmeasured(UNMEASURED_CONDITIONS);
     }
+    // CR-plan-compare-rest: the same power-plan rule a Trial confounds on (`experiment::plan_mismatch`):
+    // another plan, a plan switched during either session, or a plan that couldn't be read calls
+    // nothing better or worse. An armed Fix of the plan itself moves it between the two by design.
+    let plan_fix = a.kind == ComparisonKind::Fix && a.rec_id == "power-ultimate";
+    if crate::experiment::plan_mismatch(baseline, after, plan_fix).is_some() {
+        return ArmNoise::Unmeasured(UNMEASURED_CONDITIONS);
+    }
     let Some(n) = measure(baseline) else {
         return ArmNoise::Unmeasured(UNMEASURED_NOISE);
     };
@@ -1161,6 +1168,40 @@ mod comparison_tests {
         let mut other_gpu = day[12].clone();
         other_gpu.hw_fingerprint.as_mut().expect("the ROB fixture carries a rig").gpu = "Some Other GPU".into();
         assert_eq!(arm_noise_from(&a, &day, &other_gpu, measure), ArmNoise::Unmeasured(UNMEASURED_CONDITIONS));
+    }
+
+    /// CR-plan-compare-rest: the session-debrief before/after judges only sessions shown to share a
+    /// Windows power plan, held through both, as a two-session Trial does; an armed fix of the plan
+    /// itself may differ between them, never switch during one.
+    #[test]
+    fn a_debrief_comparison_across_power_plans_calls_nothing() {
+        const BAL: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+        const HIGH: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+        let plan = |s: &SessionSummary, start: Option<&str>, end: Option<&str>| {
+            let mut s = s.clone();
+            let g = s.game_state.take().unwrap_or_default();
+            s.game_state = Some(g.with_power_plan(start.map(Into::into), end.map(Into::into)));
+            s
+        };
+        let mut day = crate::noise_floor::tests::rob_day();
+        let ledger = crate::noise_floor::tests::rob_trials();
+        day[11] = plan(&day[11], Some(BAL), Some(BAL));
+        let a = rob_arm(&day);
+        let measure = |b: &SessionSummary| crate::noise_floor::measure_game_noise(&day, b, &ledger).ok();
+        let measured = |n: &ArmNoise| matches!(n, ArmNoise::Measured(_));
+        let after = &day[12];
+        assert!(measured(&arm_noise_from(&a, &day, &plan(after, Some(BAL), Some(BAL)), measure)), "same plan");
+        let not = ArmNoise::Unmeasured(UNMEASURED_CONDITIONS);
+        assert_eq!(arm_noise_from(&a, &day, &plan(after, Some(HIGH), Some(HIGH)), measure), not, "another plan");
+        assert_eq!(arm_noise_from(&a, &day, &plan(after, Some(BAL), Some(HIGH)), measure), not, "switched during");
+        assert_eq!(arm_noise_from(&a, &day, &plan(after, Some(BAL), None), measure), not, "end unread");
+        assert_eq!(arm_noise_from(&a, &day, &plan(after, None, None), measure), not, "unread");
+        // A fix of the plan itself moves it between the sessions by design, never during one.
+        let pu = ArmedComparison { rec_id: "power-ultimate".into(), kind: ComparisonKind::Fix, ..a.clone() };
+        assert!(measured(&arm_noise_from(&pu, &day, &plan(after, Some(HIGH), Some(HIGH)), measure)));
+        assert_eq!(arm_noise_from(&pu, &day, &plan(after, Some(HIGH), Some(BAL)), measure), not);
+        // A session recorded before the plan was collected stays unchecked, as in a Trial.
+        assert!(measured(&arm_noise_from(&a, &day, after, measure)), "no plan recorded on the after-session");
     }
 
     #[test]
