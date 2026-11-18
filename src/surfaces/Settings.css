@@ -255,6 +255,13 @@
   flex: 1 1 220px;
   min-width: 0;
 }
+/* In a narrow tile the row is a COLUMN (rule near the top of this file), where a flex-basis is a
+   HEIGHT: the 220px above would leave an empty gap under every row's text. The basis only belongs
+   to rows laid out as rows, so the stacked rows go back to their natural height. */
+.v2-tile-third .set-row-text,
+.v2-tile-quarter .set-row-text {
+  flex: 0 1 auto;
+}
 /* A set-row nested inside the Appearance controls column (the Living Instrument toggle). */
 .set-row-inset {
   margin-top: 16px;

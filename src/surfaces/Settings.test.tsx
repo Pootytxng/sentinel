@@ -100,4 +100,13 @@ describe("Settings layout (CSS contract)", () => {
     expect(rule(".set-row")).toContain("flex-wrap: wrap");
     expect(rule(".set-row-text")).toMatch(/flex:\s*1 1 \d+px/);
   });
+
+  it("in a narrow tile, where the row is a column, the text has no flex-basis (it would become a height)", () => {
+    expect(rule(".v2-tile-third .set-row,\n.v2-tile-quarter .set-row")).toContain("flex-direction: column");
+    expect(css).toContain(".v2-tile-third .set-row-text,\n.v2-tile-quarter .set-row-text {");
+    const narrow = rule(".v2-tile-quarter .set-row-text");
+    expect(narrow).toMatch(/flex:\s*0 1 auto/);
+    // It must come AFTER the base rule, or equal-or-lower specificity order would let the 220px win.
+    expect(css.indexOf(".v2-tile-quarter .set-row-text {")).toBeGreaterThan(css.indexOf("\n.set-row-text {"));
+  });
 });
