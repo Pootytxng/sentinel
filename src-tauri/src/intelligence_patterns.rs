@@ -443,7 +443,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
             for s in &fp_sessions {
                 let fp = s.hw_fingerprint.as_ref().expect("filtered Some");
                 match runs.last_mut() {
-                    Some((v, ys)) if *v == fp.gpu_driver => ys.push(s.low1_fps_est),
+                    Some((v, ys)) if crate::hardware::same_driver(v, &fp.gpu_driver) => ys.push(s.low1_fps_est),
                     _ => runs.push((fp.gpu_driver.clone(), vec![s.low1_fps_est])),
                 }
             }
@@ -936,6 +936,26 @@ mod tests {
         let r2 = detect(&s2);
         assert!(r2.patterns.iter().all(|p| p.id != "driver-split"));
         assert!(r2.coverage.iter().any(|c| c.contains("rig itself changed")));
+    }
+
+    #[test]
+    fn a_driver_written_in_another_case_is_one_driver_run() {
+        // CR-driver-compare-rest (s38 opus SHOULD-FIX): the same version in another case or
+        // spacing is one run (`hardware::same_driver`), never a driver split.
+        let mut s: Vec<SessionSummary> = Vec::new();
+        for i in 0..4 {
+            let mut x = mk_session(&day(i), "cp2077.exe", 100.0);
+            x.hw_fingerprint = Some(fp("Adrenalin 25.5.1"));
+            s.push(x);
+        }
+        for i in 4..8 {
+            let mut x = mk_session(&day(i), "cp2077.exe", 90.0);
+            x.hw_fingerprint = Some(fp(" ADRENALIN 25.5.1 "));
+            s.push(x);
+        }
+        let r = detect(&s);
+        assert!(r.patterns.iter().all(|p| p.id != "driver-split"));
+        assert!(r.coverage.iter().all(|c| !c.contains("Driver comparison")), "{:?}", r.coverage);
     }
 
     #[test]
