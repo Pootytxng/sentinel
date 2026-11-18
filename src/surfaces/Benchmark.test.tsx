@@ -101,6 +101,23 @@ describe("BenchmarkTab (audit M1)", () => {
     expect(screen.queryByText(/run-to-run noise:/i)).toBeNull();
   });
 
+  // s44 tester pass: the saved-baseline date read "7/23/2026, 2:55:25 AM" (the OS format), unlike every
+  // other date in the app ("Jul 23 · 2:55 AM").
+  it("writes the baseline date in the app's own date style, not the OS date-time string", async () => {
+    mocks.benchState = {
+      running: false,
+      baseline: { components: [], confidence: "clean", notes: [] },
+      baseline_at: "2026-07-23T09:55:25Z",
+      latest: null,
+      latest_at: null,
+      efficacy: null,
+    };
+    render(<BenchmarkTab />);
+    const line = await screen.findByText(/Baseline saved/);
+    expect(line.textContent).toMatch(/ · Jul 23 · \d{1,2}:55 [AP]M\./);
+    expect(line.textContent).not.toMatch(/2026|\d+\/\d+\/\d+/);
+  });
+
   it("A2: segments the surface by hardware tier from measured specs (like-to-like framing)", async () => {
     mocks.benchState = { running: false, baseline: null, baseline_at: null, latest: null, latest_at: null, efficacy: null };
     render(<BenchmarkTab />);
