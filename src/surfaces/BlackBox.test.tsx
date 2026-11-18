@@ -684,7 +684,7 @@ describe("BlackBox — Put back how it was (P6-restore)", () => {
     expect(rollbackCalls(), "something ran before the user confirmed").toEqual([]);
     const scans = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "get_crash_blackbox").length;
     fireEvent.click(screen.getByRole("button", { name: "Undo these changes" }));
-    expect(await screen.findByText("All 2 undos finished.")).toBeInTheDocument();
+    expect(await screen.findByText("All 2 undos offered here finished. The changes marked not offered were not undone.")).toBeInTheDocument();
     expect(rollbackCalls()).toEqual(["c-new", "c-old"]);
     expect(resultLines(container)).toEqual(["Undone: Visual effects trimmed", "Undone: Game Mode"]);
     expect(heard).toHaveBeenCalled();
@@ -711,7 +711,7 @@ describe("BlackBox — Put back how it was (P6-restore)", () => {
       "Game Mode (applied 2 times here; each apply is undone in turn). It'll return to Off.",
     );
     fireEvent.click(screen.getByRole("button", { name: "Undo these changes" }));
-    expect(await screen.findByText("All 3 undos finished.")).toBeInTheDocument();
+    expect(await screen.findByText("All 3 undos offered here finished. The changes marked not offered were not undone.")).toBeInTheDocument();
     expect(rollbackCalls()).toEqual(["c-new", "c-old-2", "c-old"]);
   });
 
@@ -728,8 +728,52 @@ describe("BlackBox — Put back how it was (P6-restore)", () => {
     );
     expect(container.querySelector('[data-reason="unconfirmed"]')!.textContent).not.toMatch(/Visual effects/);
     await runIt();
-    await screen.findByText("The undo finished.");
+    await screen.findByText("The undo offered here finished. The changes marked not offered were not undone.");
     expect(rollbackCalls()).toEqual(["c-old"]);
+  });
+
+  it("keeps naming a change with no saved undo after the restore runs, beside the results", async () => {
+    // CR-restore-notes-stay: one undoable change, one with no saved undo (left out and named).
+    const rows = [
+      row("c-old", "Game Mode", "2026-10-23T17:00:00+00:00", { undo_contract: false }),
+      row("c-new", "Visual effects trimmed", "2026-10-23T19:00:00+00:00", { restores_label: "Let Windows decide" }),
+    ];
+    const inc = incident([apply("c-old", "Game Mode", "2026-10-23T17:00:00+00:00"), apply("c-new", "Visual effects trimmed", "2026-10-23T19:00:00+00:00")]);
+    const { container } = mount({}, rows, inc);
+    const before = await screen.findByText(/Compy has no saved undo for these/);
+    expect(before.getAttribute("data-reason")).toBe("no-saved-undo");
+    await runIt();
+    await screen.findByText(`The undo offered here finished. The changes marked not offered were not undone.`);
+    expect(rollbackCalls()).toEqual(["c-new"]);
+    expect(resultLines(container)).toEqual(["Undone: Visual effects trimmed"]);
+    const after = container.querySelector('[data-reason="no-saved-undo"]');
+    expect(after, "the left-out change vanished once the results showed").not.toBeNull();
+    expect(after!.textContent).toBe(
+      "Not offered: Game Mode. Compy has no saved undo for these, so it can't put them back from here.",
+    );
+    expect(container.querySelector(".bb-restore-results")).not.toBeNull();
+    expect(container.textContent, "reads as if nothing else is applied").not.toContain("All 1 undos finished");
+    expect(container.textContent).not.toMatch(/^The undo finished\.$/m);
+  });
+
+  it("keeps the turned-on-again and unconfirmed notes after the restore runs", async () => {
+    const rows = [
+      ...ledger(),
+      row("c-new-later", "Visual effects trimmed", "2026-10-25T09:00:00+00:00", { rec_id: "rec-c-new" }),
+    ];
+    const { container } = mount({}, rows);
+    await runIt();
+    await screen.findByText(`The undo offered here finished. The changes marked not offered were not undone.`);
+    expect(container.querySelector('[data-reason="turned-on-again"]')!.textContent).toMatch(/Not offered: Visual effects trimmed\./);
+    expect(container.querySelector('[data-reason="unconfirmed"]')!.textContent).toMatch(/Not offered: Power throttling off\./);
+  });
+
+  it("says all undos finished, plainly, only when nothing was left out", async () => {
+    const rows = ledger().filter((r) => r.id !== "c-unsure");
+    const { container } = mount({}, rows);
+    await runIt();
+    expect(await screen.findByText("All 2 undos finished.")).toBeInTheDocument();
+    expect(container.querySelector(".bb-restore-notlive")).toBeNull();
   });
 
   it("holds the shared busy flag for the whole run, and waits while another ledger write is in flight", async () => {
@@ -741,7 +785,7 @@ describe("BlackBox — Put back how it was (P6-restore)", () => {
     };
     mount({ onLedgerBusy });
     await runIt();
-    await screen.findByText("All 2 undos finished.");
+    await screen.findByText("All 2 undos offered here finished. The changes marked not offered were not undone.");
     expect(order).toEqual(["busy:true", "undo:c-new", "undo:c-old", "busy:false"]);
     cleanup();
     mount({ ledgerBusy: true });

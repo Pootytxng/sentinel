@@ -339,6 +339,8 @@
         "notRecorded": "Compy didn't make or record this change, so it can't put it back.",
         "summaryAll_one": "The undo finished.",
         "summaryAll_other": "All {{count}} undos finished.",
+        "summaryAllOffered_one": "The undo offered here finished. The changes marked not offered were not undone.",
+        "summaryAllOffered_other": "All {{count}} undos offered here finished. The changes marked not offered were not undone.",
         "summaryPartial": "{{done}} of {{total}} undos finished. Compy stopped at the problem below; anything not undone is still on, and you can undo it from Applied & history.",
         "summaryNone": "Nothing was undone. Compy's changes are still on, and you can undo them from Applied & history.",
         "summaryUnsaved_one": "1 undo ran on Windows but wasn't saved to Compy's history; check the setting in Windows.",
