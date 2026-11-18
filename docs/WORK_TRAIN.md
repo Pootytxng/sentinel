@@ -473,6 +473,7 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       Something's wrong -> Open; Test -> Optimize -> Applied & history -> Roll back; Settings -> Support record ->
       Save this as a file); not checked on screen. The guide keeps the tester off the Benchmark and Tuning stations and
       the Live/History session comparisons (still fixed ±3%, parked item 8).
+      s43 package refreshed to `a29c7b62` (`Compy-0.9.26-a29c7b62-tester-setup.exe`, SHA-256 in `SHA256.txt`); shareable zip `C:\Users\Kuya\Desktop\Compy-tester-a29c7b62.zip`; the three older installers moved to `Compy-tester\older\`; not ticked, not sent.
 - [ ] [CORRECT] **CR-1102-left** (codebase review 2026-11-02 to 11-03, slices 1-8; fixed in `8f4037c1`..`508b200f`, `4465e74b`, `16479f4b`, `22d23584`..`cd9e11c0`)
       Triaged 2026-11-10 (coordinator desk session). Already fixed on `main`, struck: the Trial delta on a 0/NaN
       baseline (`4d5595fd`), Black Box/export/capture start and the slow probes off the UI thread (`9cab29d0`,
@@ -2773,17 +2774,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-13 s29 (FULL; resumed 03:43 after the device bridge dropped 02:15-03:42): measurement item 8 (merge
-  `b85f78cd`: armed comparison, Lab tuning, session patterns judged on the measured band or "can't call it"; synthetic
-  benchmark calls nothing; trends arrow and in-session fade not called; sonnet APPROVE-WITH-NITS, opus r1/r2
-  REQUEST-CHANGES (3 MUST taken), opus r3 APPROVE-WITH-NITS), item 7 (merge `63f19440`, assumed-band label; sonnet
-  REQUEST-CHANGES, 2 MUST resolved), item 4 race-test isolation (merge `886e3044`: scratch folders reused via Windows
-  PID reuse held an earlier run's result file; 10x `cargo test --lib comparison` 42/0, full 1946/0), CR-plan-held-refusal
-  (merge `c9ac9313`; opus r2 MUST = source-order pinning tests, not taken under the no-pinning rule). Judging-chain
-  refactor PARKED (8+ include_str! tests pin conclude/start text). TG-context left. cargo 1945/1946/1950/0, clippy
-  clean, full vitest 543/546 and 544/547. Pushes PASS (`773156f0`, `45f07fd9`; one push stopped by me on citation
-  drift, re-anchored). Installed `45f07fd9` (runtime proof attempt 1, Synez before/after). Tester folder unchanged
-  (item 3 not landed). No game at any check.
 - 2026-11-13 s30 (scheduled, CODE-ONLY): TG-context v1 (merge `c825378e`, commit `9d651144`: power plan at start +
   changed-by-end + context_version on every session; sonnet PASS, SHOULD-FIX TS mirror taken). Not ticked: heavy
   background work left. cargo --lib 1954/0, clippy clean, tsc clean. `cargo fmt --check` is not a usable gate (main
@@ -2897,6 +2887,7 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   10824 tests, cargo --lib 2014/0). Installed `ddac9d82be54d4ecee72aefa391d0cba53b69e73` (runtime proof attempt 1, Synez
   plan before/after); RELEASE_STATE stamped, the d7fff9e7 row moved to the archive. Then stopped (list done).
 - 2026-11-18 ~08:30-09:00 s42 (scheduled; preflight CODE-ONLY, owner on Firefox, no game): no catch-up (main = GitHub; the two train-* folders were empty leftovers, no branch). CR-plan-read-prompt-write established read-only (no live route; residual queued CR-plan-write-recorded-guid). Landed CR-fall-words-band (merge `03c1e99a`, `4a6e7f5b`; sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken; old-code proof 3 fail). Not pushed, not installed (CODE-ONLY): the next FULL session pushes main.
+- 2026-11-18 ~11:50-12:48 s43 (coordinator-assigned from the HQ session; preflight CODE-ONLY, owner at the PC; pushes and install on the owner's 11:49 "go all"): catch-up push of s42 refused twice by the gate (affordance census lost realPlay.likelyWorse to a chosen-key t() call, then the locale parity guard on the first fix); fixed `2e22996b`, push PASS. Landed CR-plan-write-recorded-guid + CR-care-unread-rig (merge `b09c4443`; opus r1 + sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken `ffbf619e`, no r2); old-code proof 3 + 1 + 1 tests fail; cargo --lib 2016/0, clippy clean. CR-plan-compare-rest ticked (rest is POLISH). TG-salvage and TG-passive-band parked as POLISH on the owner's word. Push 2 PASS (`2e22996b..a29c7b62`, vitest 551 files / 10828 tests, cargo --lib 2016/0). Installed `a29c7b62fa89a74791dfeb19f771bab10758324f` (runtime proof `a29c7b62` release, shell 0.9.26, attempt 1); RELEASE_STATE stamped. Tester package refreshed (`C:\Users\Kuya\Desktop\Compy-tester-a29c7b62.zip`), not sent.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
