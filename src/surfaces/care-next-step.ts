@@ -413,6 +413,8 @@ export function storedStutterStep(
     const then = baselineRig(best.baseline, stutter.sessions);
     if (now_ && then && !sameRig(now_, then)) return retire("rig");
     const p = payoffFor(step, { at: best.at, basis: "shown", baseline: best.baseline }, [], stutter.sessions, now);
+    // CR-care-unread-rig: with a known baseline rig, sessions whose rig is unread no longer count
+    // toward this total, so a stored step waits on sessions whose rig was read.
     if ("total" in p && p.total > STORED_STEP_END_SESSIONS) {
       const e = map.get(best.key) as ShownEntry;
       // Follow-up review 2026-10-26 §4: the final read is "shown" only once a Care view actually

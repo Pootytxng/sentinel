@@ -3489,11 +3489,13 @@ fn is_whole_plan_guid(guid: &str) -> bool {
 /// prompt): a plan that is still the active one is re-committed so the new index goes live; a plan
 /// the user (Windows Settings, a vendor tool) switched away from while the prompt was open is left
 /// alone, its index already written. An active plan that cannot be read throws, so the earlier
-/// index writes are put back and nothing is recorded: never a silent skip. `plan_guid` is a whole
+/// index writes are put back and nothing is recorded: never a silent skip. So does an answer that
+/// exits 0 but holds no plan GUID (empty or truncated), which is not "switched away". `plan_guid` is a whole
 /// GUID that already passed [`is_whole_plan_guid`]. Not `native`: its own throws carry the checks.
 fn setactive_if_still_active_step(plan_guid: &str) -> String {
     format!(
         "$compyActive = powercfg /getactivescheme; if (-not $?) {{ throw 'compy: step 2 failed' }}; \
+         if (-not ($compyActive -match '[0-9a-fA-F]{{8}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{12}}')) {{ throw 'compy: step 2 failed' }}; \
          if ($compyActive -match '{plan_guid}') {{ powercfg /setactive {plan_guid}; \
          if (-not $?) {{ throw 'compy: step 2 failed' }} }}"
     )
@@ -5003,9 +5005,10 @@ pub(crate) fn restore_core_parking_default_with(
     run_elevated: &dyn Fn(&str) -> Result<(), String>,
 ) -> Result<ApplyResult, String> {
     // CR-core-parking-plan-guid: the plan SCHEME_CURRENT names right now, recorded with the priors
-    // (and, CR-plan-write-recorded-guid, the plan the apply's writes target). CR-plan-unread-rollbacks B: an unread plan
-    // stops the apply before anything runs. Recording no plan would send its undo down the legacy
-    // SCHEME_CURRENT path, which after a plan switch writes the old values onto another plan.
+    // (and, CR-plan-write-recorded-guid, the plan the apply's writes target).
+    // CR-plan-unread-rollbacks B: an unread plan stops the apply before anything runs. Recording
+    // no plan would send its undo down the legacy SCHEME_CURRENT path, which after a plan switch
+    // writes the old values onto another plan.
     let Some(plan) = active_plan() else {
         return Err("Compy couldn't read which power plan Windows is using just now, so it can't record \
                     where this change goes. Nothing was changed; try again in a moment."
@@ -7322,12 +7325,13 @@ mod all_or_nothing_tests {
     const OTHER_PLAN: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
 
     /// Runs `script` in a real PowerShell with `powercfg` replaced by a recording function (nothing
-    /// touches the machine): `/getactivescheme` answers `active` (None = it fails), every call is
-    /// logged to `$compyLog`, then `check` (PowerShell, may throw) judges the log.
+    /// touches the machine): `/getactivescheme` answers `active` (None = it exits 0 but prints an
+    /// empty answer), every call is logged to `$compyLog`, then `check` (PowerShell, may throw)
+    /// judges the log.
     fn run_with_fake_powercfg(active: Option<&str>, script: &str, check: &str) -> bool {
         let answer = match active {
             Some(g) => format!("'Power Scheme GUID: {g}  (Balanced)'"),
-            None => "cmd /c exit 1".to_string(),
+            None => "''".to_string(),
         };
         let fake = format!(
             "$global:compyLog=@(); function powercfg {{ $global:compyLog += ($args -join ' '); \
@@ -7361,6 +7365,20 @@ mod all_or_nothing_tests {
                  if ($compyLog -match 'valueindex {OTHER_PLAN}') {{ throw 'wrote the other plan' }}"
             );
             assert!(run_with_fake_powercfg(Some(OTHER_PLAN), script, &away), "switched away: {script}");
+        }
+        // An answer that exits 0 but holds no plan GUID is not "switched away": the apply fails, the
+        // index write is put back, and setactive is never run blind.
+        for script in [&usb, &cp] {
+            let undone = if std::ptr::eq(script, &usb) {
+                format!("$compyLog -contains '/setacvalueindex {TEST_PLAN} {PWR_SUBGROUP_USB} {PWR_SETTING_USB_SELECTIVE_SUSPEND} 1'")
+            } else {
+                format!("$compyLog -contains '-setacvalueindex {TEST_PLAN} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 40'")
+            };
+            let empty = format!(
+                "try {{ {script}; $ok=$true }} catch {{ $ok=$false }}; if ($ok) {{ throw 'recorded ok on an empty answer' }}; \
+                 if (-not ({undone})) {{ throw 'not put back' }}; if ($compyLog -match 'setactive') {{ throw 'activated blind' }}"
+            );
+            assert!(run_with_fake_powercfg(None, "$null=1", &empty), "empty answer: {script}");
         }
         // Active plan unreadable at run time (a REAL native exiting 1: a powercfg.cmd first on PATH
         // that logs its calls and fails /getactivescheme, so `$?` is the one the script reads): the
