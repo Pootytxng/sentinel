@@ -3573,16 +3573,18 @@ pub(crate) fn apply_power_plan_switch_core_with(
     list_plans: &dyn Fn() -> Option<String>,
     set_active: &dyn Fn(&str) -> Result<(), String>,
 ) -> Result<Option<ApplyResult>, String> {
+    let list = list_plans().ok_or("powercfg /list failed")?;
+    let Some(target) = select_best_existing_high_perf_plan(&list) else {
+        return Ok(None); // no existing high-perf plan -> skip, stay UAC-free (no read needed)
+    };
+    // s40 opus SHOULD-FIX: the prior plan is read only once there is a plan to switch to, so an
+    // unread plan never blocks a start on a PC with no high-performance plan.
     let prior_guid = active_plan().unwrap_or_default();
     if prior_guid.trim().len() != 36 {
         return Err("couldn't read which power plan Windows is using just now, so Gaming Mode can't \
                     switch it and put it back. Nothing was changed; try again in a moment."
             .to_string());
     }
-    let list = list_plans().ok_or("powercfg /list failed")?;
-    let Some(target) = select_best_existing_high_perf_plan(&list) else {
-        return Ok(None); // no existing high-perf plan -> skip, stay UAC-free
-    };
     if target.eq_ignore_ascii_case(prior_guid.trim()) {
         return Ok(None); // already active -> nothing to change or restore
     }
@@ -3640,6 +3642,10 @@ mod gaming_power_tests {
         assert_eq!(switched.get(), 0);
         let on_balanced = || Some("381b4222-f694-41f0-9685-ff5bb260df2e".to_string());
         assert!(matches!(super::apply_power_plan_switch_core_with(&on_balanced, &list, &set), Ok(Some(_))));
+        assert_eq!(switched.get(), 1);
+        // s40 opus SHOULD-FIX: no high-performance plan on this PC is a clean skip, read or not.
+        let none = || Some("Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced) *\n".to_string());
+        assert!(matches!(super::apply_power_plan_switch_core_with(&|| None, &none, &set), Ok(None)));
         assert_eq!(switched.get(), 1);
     }
 
