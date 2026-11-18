@@ -456,6 +456,19 @@
   bottom: 36px;
   border-left: 1px dotted var(--v2-line);
 }
+/* NARROW WINDOWS WRAP TO TWO BY TWO (s44 tester pass). Four 64 px rings and their labels need about
+   130 px a cell; at ~820 px the bench is too narrow for four across and the cells ran into each
+   other. Two rows of two keep every cell its full width. The dotted rule only belongs between the
+   two cells of a row, so the cell that starts the second row loses it. */
+@media (max-width: 900px) {
+  :root[data-v2="on"] .lc-readings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 28px;
+  }
+  :root[data-v2="on"] .lc-reading:nth-child(odd)::before {
+    display: none;
+  }
+}
 
 /* THE READING, STACKED (2026-08-26). The kit's ArcGauge is a two-column instrument -- ring on the
    left, label/tag/note on the right -- which is right for Health's wide cells and wrong for this

@@ -733,6 +733,23 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
 //
 // Neither guard may pass by the strip having been deleted, so each asserts its own population.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
+describe("the bench reading strip wraps at narrow window widths", () => {
+  const css = readFileSync(resolve("src/surfaces/lab-console.css"), "utf8").replace(/\r\n/g, "\n");
+  const start = css.indexOf("@media (max-width: 900px)");
+  // The wrap rule is the first @media block after the strip's own rules; read just its body.
+  const block = start < 0 ? "" : css.slice(start, css.indexOf("\n}\n", start));
+
+  it("goes two by two under 900px so four rings never run into each other", () => {
+    expect(start, "a max-width: 900px block exists in the hub's own stylesheet").toBeGreaterThan(-1);
+    expect(block).toMatch(/\.lc-readings \{[^}]*grid-template-columns:\s*repeat\(2,/);
+    expect(block).toMatch(/\.lc-readings \{[^}]*row-gap:/);
+  });
+
+  it("drops the dotted rule on the cell that starts the second row", () => {
+    expect(block).toMatch(/\.lc-reading:nth-child\(odd\)::before \{[^}]*display:\s*none/);
+  });
+});
+
 describe("the bench reading set keeps the approved rhythm", () => {
   const cells = () => Array.from(document.querySelectorAll(".lc-readings > .lc-reading"));
 
