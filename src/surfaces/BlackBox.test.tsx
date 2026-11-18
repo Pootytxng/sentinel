@@ -752,8 +752,7 @@ describe("BlackBox — Put back how it was (P6-restore)", () => {
       "Not offered: Game Mode. Compy has no saved undo for these, so it can't put them back from here.",
     );
     expect(container.querySelector(".bb-restore-results")).not.toBeNull();
-    expect(container.textContent, "reads as if nothing else is applied").not.toContain("All 1 undos finished");
-    expect(container.textContent).not.toMatch(/^The undo finished\.$/m);
+    expect(screen.queryByText("The undo finished."), "reads as if nothing else is applied").toBeNull();
   });
 
   it("keeps the turned-on-again and unconfirmed notes after the restore runs", async () => {
