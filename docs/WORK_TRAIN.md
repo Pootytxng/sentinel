@@ -322,7 +322,7 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       are English-only (as before); the TS tuning view judges uncapped sessions only and doesn't re-check a rig
       change on older post-tune sessions (the newest is checked in Rust); `TUNING_REAL_TEMP_DROP_C` (3 C) is a
       fixed sensor threshold, not measured.
-- [ ] [LAUNCH] **TG-salvage** A contingency instead of a dead end: use only matching, steady segments when a fixed,
+- [ ] [POLISH] **TG-salvage** (owner 2026-11-18 11:49 "go all" on the coordinator's recommendation: not needed for P4, parked until v1.0) A contingency instead of a dead end: use only matching, steady segments when a fixed,
       pre-declared rule allows; otherwise ask for the smallest extra play needed; never pick windows after seeing the
       result. Tested: the rule fixed before the comparison, adversarial fixtures that would reward cherry-picking.
       PARKED s37, untouched: the judged number is the session's 1% low (`low1_fps_est`, a mean of per-second 1% lows),
@@ -338,7 +338,7 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       data only, with adversarial fixtures. (3) P4 does not need it: on ROB RUN's band a Trial already ends judged ("negligible
       at this game's noise", change put back, a measured no-change). Salvage would only narrow the band to see smaller effects.
       (4) Size: about 2 work sessions (schema + rule + en/zh words + opus/sonnet), then 3+ new as-is play sessions before it helps.
-- [ ] [LAUNCH] **TG-passive-band** Learn each game's noise band from ordinary play over time with no instructions, so a Trial
+- [ ] [POLISH] **TG-passive-band** (owner 2026-11-18 11:49 "go all" on the coordinator's recommendation: not needed for P4, parked until v1.0) Learn each game's noise band from ordinary play over time with no instructions, so a Trial
       rarely has to ask for extra as-is sessions. Tested: a band appears from ordinary sessions alone; never pooled across
       contexts.
       Why LAUNCH: P4-exit-proof needs ROB RUN's remaining Trials judged on a measured band; a band kept current from ordinary play lets a Trial judge without asking for extra as-is sessions.
@@ -550,12 +550,17 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       contract holds it, and then every one of the three is refused at its check (`session_hold_refusal`, plan-held
       + `PLAN_SCOPED`), and any check made while a restore runs is refused (`RestoreWindow`). The undos write the
       recorded plan GUID (legacy core-parking rows without one excepted). Residual queued: CR-plan-write-recorded-guid.
-- [ ] [CORRECT] **CR-plan-write-recorded-guid** (s42, from CR-plan-read-prompt-write) The USB/PCIe apply and the
+- [x] [CORRECT] **CR-plan-write-recorded-guid** (s42, from CR-plan-read-prompt-write) The USB/PCIe apply and the
       core-parking restore read the active plan's GUID and priors before their UAC prompt but write `SCHEME_CURRENT`
       after it, so a plan switched OUTSIDE Compy while the prompt is open (Windows Settings, a vendor tool) gets the
       write while the row records the old plan: the undo then puts back a plan that was never changed and leaves the
       other one changed with no record. Write the recorded GUID instead (and setactive only when it is still
       active), as the undos do. Mutation boundary: opus + sonnet. Low odds on the owner's PC (admin prompts off).
+      Done s43 merge `b09c4443` (`7f58a4fe`, `ffbf619e`): the USB/PCIe apply and the core-parking apply write the recorded plan
+      GUID, refuse an unread plan or an alias before any elevation, and re-activate only a plan still active; an active-plan
+      answer that fails or holds no GUID puts the write back and records nothing. 3 tests fail on the old code; cargo --lib
+      2016/0, clippy clean. Reviews r1: opus + sonnet APPROVE-WITH-NITS (SHOULD-FIX taken). Not proven elevated on the PC.
+      Left (POLISH): the priors are still read from the active plan in a separate call from the plan read.
 - [x] [CORRECT] **CR-powercfg-restore-exit** (r1 opus SHOULD-FIX of CR-gm-restore-partial; pre-existing; rollback boundary) The
       power-setting restore (USB selective suspend / PCIe ASPM, actions.rs ~3651, and its batch line ~1034) runs bare
       `powercfg` with no `$LASTEXITCODE` check, so inside the batch's `try` a failed write still records `:ok` and the
@@ -567,10 +572,13 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
 - [ ] [CORRECT] **CR-gm-repeat-live** (opus SHOULD-FIX of CR-gm-confirm-repeat; FULL, UI) On the installed build, send a held Enter
       (CDP `Input.dispatchKeyEvent`, `autoRepeat: true`) to Gaming Mode's Enable: the repeats must start nothing, a fresh
       press must. jsdom never turns a key into a click, so only a live check proves WebView2 honours the cancel.
-- [ ] [CORRECT] **CR-care-unread-rig** (s40, parked from the s40 small item) care-next-step.ts `payoffFor` counts a session
+- [x] [CORRECT] **CR-care-unread-rig** (s40, parked from the s40 small item) care-next-step.ts `payoffFor` counts a session
       whose rig is unread (or a baseline whose rig is unknown) as the same rig (`!rig || !baseRig || sameRig`), so
       "stayed steady" can rest on sessions from another machine. Needs a decision first: excluding them makes an old
       baseline with no recorded rig read "not enough sessions" forever, which misleads the other way. TS.
+      Decision (coordinator, s43): a known baseline rig excludes a session whose rig is unread; an unknown baseline rig
+      keeps today's behaviour. Done s43 merge `b09c4443` (`88c8aca2`): 1 test fails on the old code; no words changed.
+      A stored stutter step now waits on sessions whose rig was read (sonnet r1, noted at the call site).
 - [x] [CORRECT] **CR-fall-words-band** (s37 opus r2 SHOULD-FIX, pre-existing wording from s27) Likely worse, the receipt rules
       and "fell by more than the band" name the band where the fall was judged at the matching fall (-9.5% against a
       10% band reads "more than the ±10% allowance"). Word it as the engine's `fell_words` does, en + zh-CN. TS.
@@ -582,14 +590,14 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       the old code; tsc 0, the touched suites 304/304. Review: sonnet r1 APPROVE-WITH-NITS (SHOULD-FIX taken). Left
       (POLISH, NITs): no test drives the Smoothest and real-play receipt call sites; the receipt header still says
       "both against a ±X% band".
-- [ ] [CORRECT] **CR-plan-compare-rest** (s40 opus on CR-trial-plan-unread, outside its diff) Real-play Trials (realplay.rs,
+- [x] [CORRECT] **CR-plan-compare-rest** (s40 opus on CR-trial-plan-unread, outside its diff) Real-play Trials (realplay.rs,
       `comparability::derive` only) and the session-debrief before/after verdict (comparison.rs) don't compare the
       power plan at all, even one that clearly differed; the Trial preflight says nothing about an unread baseline
       plan (that Trial now always ends confounded); on those two paths a plan unread at a session's start or end
       isn't checked either. Mutation-free; measurement logic: opus + sonnet.
       s41 merge `047365a7` (`45e217b3`, `d0350d82`): one pure `experiment::plan_mismatch` backs the Trial check (unchanged), real
       play (with-change sessions and as-is pins; an anchor whose plan didn't hold pins nothing and says why), the debrief and a
-      tune's later sessions. Left (not ticked): the Trial preflight line for an unread baseline plan (wording only, POLISH);
+      tune's later sessions. Ticked s43 (what is left is POLISH). Left: the Trial preflight line for an unread baseline plan (wording only, POLISH);
       real-play Trials started before this build keep their unfiltered pins (opus NIT). Reviews: opus r1 REQUEST-CHANGES
       (SHOULD-FIX only, taken), sonnet r1 APPROVE-WITH-NITS (2 of 3 SHOULD-FIX taken; undo reads on the command thread: pre-existing).
 - [ ] [CORRECT] **CR-ultimate-followups** (r3/r4 reviews of CR-ultimate-identity; pre-existing) (a) the row's live check
