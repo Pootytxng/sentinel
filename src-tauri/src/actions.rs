@@ -3604,8 +3604,10 @@ pub(crate) fn restore_power_plan_unelevated(prior_guid: &str) -> Result<(), Stri
     if g.len() != 36 {
         return Err("no valid prior plan GUID in snapshot".into());
     }
-    if !power_plan_exists(g) {
-        return Err(format!("prior power plan {} no longer exists", g));
+    match power_plan_known(g) {
+        Some(true) => {}
+        Some(false) => return Err(format!("prior power plan {} no longer exists", g)),
+        None => return Err(PLAN_LIST_UNREAD.to_string()),
     }
     powercfg_setactive_unelevated(g)
 }
@@ -3706,7 +3708,9 @@ Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n";
         assert!(off.contains(&format!("setacvalueindex {PLAN} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 40")));
         assert!(off.contains(&format!("setdcvalueindex {PLAN} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 30")));
         assert!(!off.contains("setactive"), "a plan the user has left is never switched back on");
-        assert!(core_parking_plan_script(PLAN, 40, 30, true).ends_with(&format!("; powercfg -setactive {PLAN}")));
+        let live = core_parking_plan_script(PLAN, 40, 30, true);
+        assert!(live.contains(&format!("; powercfg -setactive {PLAN}; if (-not $?)")), "{live}");
+        assert_eq!(live.matches("powercfg").count(), live.matches("if (-not $?)").count(), "{live}");
         // A row from before the plan was recorded still undoes as it always did.
         assert!(core_parking_script(40, 30).contains("SCHEME_CURRENT"));
         // Additive: an older row loads with no plan, and none isn't written.
@@ -3729,24 +3733,32 @@ Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n";
     }
 }
 
-/// True if `guid` is a currently-installed power scheme. Read-only `powercfg
-/// /list`, no elevation — so we can fail safe before ever prompting for UAC.
-fn power_plan_exists(guid: &str) -> bool {
+/// CR-plan-exists-timeout: whether `guid` is a power scheme Windows still knows, as a read that can
+/// fail. Read-only, no elevation, each read time-limited (`POWERCFG_READ_LIMIT`), so an undo can
+/// fail safe before ever prompting for UAC. `None` = it couldn't be read: never "gone" (before, a
+/// `powercfg /list` that failed read as "no longer exists" and one that hung held the undo with no
+/// time limit). The list first, by whole GUID; a plan it leaves out is asked for directly, since the
+/// list can omit a hidden scheme that still exists (as the core-parking undo does).
+fn power_plan_known(guid: &str) -> Option<bool> {
     let g = guid.trim();
     if g.is_empty() {
-        return false;
+        return Some(false);
     }
-    quiet_command("powercfg")
-        .args(["/list"])
-        .output()
-        .ok()
-        .map(|o| {
-            String::from_utf8_lossy(&o.stdout)
-                .to_lowercase()
-                .contains(&g.to_lowercase())
-        })
-        .unwrap_or(false)
+    plan_known_from(power_plan_listed(g), || power_plan_queried(g))
 }
+
+/// PURE (CR-plan-exists-timeout): [`power_plan_known`] from the list read and the direct query.
+pub(crate) fn plan_known_from(listed: Option<bool>, query: impl FnOnce() -> Option<bool>) -> Option<bool> {
+    match listed {
+        Some(true) => Some(true),
+        Some(false) => query(),
+        None => None,
+    }
+}
+
+/// What an undo says when Windows' power plans couldn't be read (CR-plan-exists-timeout).
+const PLAN_LIST_UNREAD: &str = "Compy couldn't read Windows' list of power plans just now, so it can't undo this \
+                                safely. Nothing was changed; try again in a moment.";
 
 /// CR-core-parking-plan-gone: whether `guid` is in Windows' plan list, as a read that can fail.
 /// `None` = the list couldn't be read ([`crate::power_plan_guids`]: powercfg didn't run, exited
@@ -3904,15 +3916,48 @@ fn build_power_setting_restore_cmd(
     prior_dc_value: u32,
     reactivate: bool,
 ) -> String {
-    let mut cmd = format!(
-        "powercfg /setacvalueindex {0} {1} {2} {3}; \
-         powercfg /setdcvalueindex {0} {1} {2} {4}",
-        plan_guid, subgroup_guid, setting_guid, prior_ac_value, prior_dc_value
-    );
+    checked_powercfg_steps(&power_setting_restore_steps(
+        plan_guid,
+        subgroup_guid,
+        setting_guid,
+        prior_ac_value,
+        prior_dc_value,
+        reactivate,
+    ))
+}
+
+/// The bare powercfg steps of [`build_power_setting_restore_cmd`], in order.
+fn power_setting_restore_steps(
+    plan_guid: &str,
+    subgroup_guid: &str,
+    setting_guid: &str,
+    prior_ac_value: u32,
+    prior_dc_value: u32,
+    reactivate: bool,
+) -> Vec<String> {
+    let mut steps = vec![
+        format!("powercfg /setacvalueindex {plan_guid} {subgroup_guid} {setting_guid} {prior_ac_value}"),
+        format!("powercfg /setdcvalueindex {plan_guid} {subgroup_guid} {setting_guid} {prior_dc_value}"),
+    ];
     if reactivate {
-        cmd.push_str(&format!("; powercfg /setactive {}", plan_guid));
+        steps.push(format!("powercfg /setactive {plan_guid}"));
     }
-    cmd
+    steps
+}
+
+/// CR-powercfg-restore-exit: an undo's powercfg steps as one script in which every step checks its
+/// own exit (`$?` is false after a program that exited non-zero, as `ps_all_or_restore` reads it for
+/// the applies, #617). A failed write throws, so a single elevation exits non-zero and a batch item
+/// writes its `fail` receipt: the change is never recorded as restored while its value stays
+/// changed. Before, a powercfg that failed left `$?` false and the script ran on to `:ok`. `throw`
+/// is not an exit token, so the script still rides a batch (`compose_batch_script`).
+pub(crate) fn checked_powercfg_steps(steps: &[String]) -> String {
+    steps
+        .iter()
+        .enumerate()
+        .map(|(i, step)| format!("{step}; if (-not $?) {{ throw 'compy: restore step {} failed' }}", i + 1))
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 /// Pure given the active-plan read (CR-plan-unread-rollbacks A): the elevated restore script for one
@@ -3940,10 +3985,10 @@ pub(crate) fn power_setting_restore_script(
             active.trim().eq_ignore_ascii_case(plan_guid.trim()),
         ),
         None => {
-            let mut cmd =
-                build_power_setting_restore_cmd(plan_guid, subgroup_guid, setting_guid, prior_ac_value, prior_dc_value, false);
-            cmd.push_str("; powercfg /setactive SCHEME_CURRENT");
-            cmd
+            let mut steps =
+                power_setting_restore_steps(plan_guid, subgroup_guid, setting_guid, prior_ac_value, prior_dc_value, false);
+            steps.push("powercfg /setactive SCHEME_CURRENT".to_string());
+            checked_powercfg_steps(&steps)
         }
     }
 }
@@ -3971,7 +4016,11 @@ pub(crate) fn rollback_power_plan_setting_typed(
     // happens to be active now (e.g. after the user switched plans, or rolled
     // back Ultimate Performance first). Restoring to the wrong plan would make
     // the snapshot a quiet lie.
-    if !power_plan_exists(plan_guid) {
+    let known = power_plan_known(plan_guid);
+    if known.is_none() {
+        return Err(PLAN_LIST_UNREAD.to_string());
+    }
+    if known != Some(true) {
         return Err(format!(
             "cannot roll this back: the power plan it was applied to ({}) no longer exists. \
              Compy will not restore the value to a different plan — reselect or recreate that \
@@ -4860,11 +4909,12 @@ pub(crate) fn core_parking_script(ac_pct: u32, dc_pct: u32) -> String {
     // plan-guid: a plan switch between apply and undo DID drift this onto another plan, so it is now
     // the undo only for rows written before the plan was recorded; newer rows undo against their
     // recorded plan (`core_parking_plan_script`).
-    format!(
-        "powercfg -setacvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {ac_pct}; \
-         powercfg -setdcvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {dc_pct}; \
-         powercfg -setactive SCHEME_CURRENT"
-    )
+    // CR-powercfg-restore-exit: every step checks its own exit.
+    checked_powercfg_steps(&[
+        format!("powercfg -setacvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {ac_pct}"),
+        format!("powercfg -setdcvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {dc_pct}"),
+        "powercfg -setactive SCHEME_CURRENT".to_string(),
+    ])
 }
 pub(crate) fn tcp_autotuning_script(disabled: bool) -> &'static str {
     if disabled {
@@ -5128,14 +5178,15 @@ impl NothingRestored {
 /// `build_power_setting_restore_cmd` does for USB/PCIe: re-commits live only when that plan is the
 /// active one, so undoing on a plan the user has since left never switches them onto it.
 pub(crate) fn core_parking_plan_script(plan_guid: &str, ac_pct: u32, dc_pct: u32, reactivate: bool) -> String {
-    let mut cmd = format!(
-        "powercfg -setacvalueindex {plan_guid} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {ac_pct}; \
-         powercfg -setdcvalueindex {plan_guid} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {dc_pct}"
-    );
+    let mut steps = vec![
+        format!("powercfg -setacvalueindex {plan_guid} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {ac_pct}"),
+        format!("powercfg -setdcvalueindex {plan_guid} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {dc_pct}"),
+    ];
     if reactivate {
-        cmd.push_str(&format!("; powercfg -setactive {plan_guid}"));
+        steps.push(format!("powercfg -setactive {plan_guid}"));
     }
-    cmd
+    // CR-powercfg-restore-exit: every step checks its own exit.
+    checked_powercfg_steps(&steps)
 }
 
 // ── Pagefile (the origin-story resolver — option (a), Cowork call 2026-06-11) ──
@@ -6093,7 +6144,9 @@ mod rollback_tests {
     fn an_unread_active_plan_still_ends_the_power_setting_undo_with_a_re_commit() {
         let plan = "11111111-2222-3333-4444-555555555555";
         let unread = power_setting_restore_script(plan, "SUB", "SET", 5, 7, None);
-        let steps: Vec<String> = unread.split(';').map(|s| s.trim().to_string()).collect();
+        // CR-powercfg-restore-exit: each step is followed by its own exit check.
+        let steps: Vec<String> =
+            unread.split(';').map(|s| s.trim().to_string()).filter(|s| !s.starts_with("if (-not $?)")).collect();
         let want = [
             format!("powercfg /setacvalueindex {plan} SUB SET 5"),
             format!("powercfg /setdcvalueindex {plan} SUB SET 7"),
@@ -6102,7 +6155,7 @@ mod rollback_tests {
         assert_eq!(steps, want, "{unread}");
         // The live plan read as the stored one (any case): re-commit that plan by its GUID.
         let live = power_setting_restore_script(plan, "SUB", "SET", 5, 7, Some(&plan.to_ascii_uppercase()));
-        assert!(live.trim_end().ends_with(&format!("powercfg /setactive {plan}")), "{live}");
+        assert!(live.contains(&format!("powercfg /setactive {plan}; if (-not $?)")), "{live}");
         assert!(!live.contains("SCHEME_CURRENT"), "{live}");
         // Another plan read as live: write the stored plan only, never switch the user onto it.
         let other = power_setting_restore_script(plan, "SUB", "SET", 5, 7, Some("99999999-2222-3333-4444-555555555555"));
@@ -6125,13 +6178,80 @@ mod rollback_tests {
     }
 
     #[test]
-    fn power_plan_exists_rejects_empty_and_bogus() {
-        assert!(!power_plan_exists(""), "empty GUID is not a plan");
-        assert!(!power_plan_exists("   "), "whitespace GUID is not a plan");
-        assert!(
-            !power_plan_exists("00000000-0000-0000-0000-000000000000"),
+    fn power_plan_known_rejects_empty_and_bogus() {
+        assert_eq!(power_plan_known(""), Some(false), "empty GUID is not a plan");
+        assert_eq!(power_plan_known("   "), Some(false), "whitespace GUID is not a plan");
+        assert_eq!(
+            power_plan_known("00000000-0000-0000-0000-000000000000"),
+            Some(false),
             "all-zeros GUID is not a real plan"
         );
+    }
+
+    /// CR-plan-exists-timeout: a plan list that couldn't be read is unread, never "the plan no longer
+    /// exists" (before, a failed or hung `powercfg /list` refused the undo as if the plan were gone);
+    /// a plan the list leaves out is asked for directly, so a hidden scheme still counts as there.
+    #[test]
+    fn an_unread_plan_list_is_never_a_gone_plan() {
+        use std::cell::Cell;
+        let asked = Cell::new(0);
+        let query = |answer: Option<bool>| {
+            let asked = &asked;
+            move || {
+                asked.set(asked.get() + 1);
+                answer
+            }
+        };
+        assert_eq!(plan_known_from(None, query(Some(false))), None, "an unread list is unread");
+        assert_eq!(plan_known_from(Some(true), query(Some(false))), Some(true));
+        assert_eq!(asked.get(), 0, "a listed plan, or an unread list, asks nothing more");
+        assert_eq!(plan_known_from(Some(false), query(Some(true))), Some(true), "a hidden plan is still there");
+        assert_eq!(plan_known_from(Some(false), query(None)), None, "an unread query is unread");
+        assert_eq!(plan_known_from(Some(false), query(Some(false))), Some(false));
+        assert_eq!(asked.get(), 3);
+    }
+
+    /// CR-powercfg-restore-exit: every powercfg step of every power-plan undo checks its own exit,
+    /// and in a real PowerShell batch a step that exits non-zero makes the item's receipt `fail`,
+    /// where the bare chain it replaced wrote `ok`. Run unelevated with `findstr` / `where.exe` standing in
+    /// for powercfg: nothing on the machine is written.
+    #[test]
+    fn a_failed_powercfg_step_fails_the_undo_receipt() {
+        const PLAN: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+        for script in [
+            build_power_setting_restore_cmd(PLAN, "SUB", "SET", 1, 1, true),
+            build_power_setting_restore_cmd(PLAN, "SUB", "SET", 1, 1, false),
+            power_setting_restore_script(PLAN, "SUB", "SET", 1, 1, None),
+            core_parking_script(40, 30),
+            core_parking_plan_script(PLAN, 40, 30, true),
+            core_parking_plan_script(PLAN, 40, 30, false),
+        ] {
+            let steps: Vec<&str> = script.split("; ").collect();
+            let runs = steps.iter().filter(|s| s.starts_with("powercfg")).count();
+            assert!(runs >= 2, "{script}");
+            for (i, s) in steps.iter().enumerate() {
+                if s.starts_with("powercfg") {
+                    let next = steps.get(i + 1).copied().unwrap_or("");
+                    assert!(next.starts_with("if (-not $?) { throw"), "step {i} unchecked: {script}");
+                }
+            }
+        }
+        let dir = std::env::temp_dir().join(format!("compy-s41-restore-exit-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let run = |rec: &str, body: String| -> String {
+            let receipts = dir.join(format!("{rec}.txt"));
+            let _ = std::fs::remove_file(&receipts);
+            let script = compose_batch_script(&[(rec.to_string(), vec![body])], &receipts.to_string_lossy()).unwrap();
+            let out = quiet_command("powershell").args(["-NoProfile", "-NonInteractive", "-Command", &script]).output();
+            assert!(out.is_ok(), "powershell ran");
+            std::fs::read_to_string(&receipts).unwrap_or_default().trim().to_string()
+        };
+        let fail_then_ok = ["findstr /c:compy-s41-none NUL".to_string(), "where.exe cmd".to_string()];
+        assert_eq!(run("checked", checked_powercfg_steps(&fail_then_ok)), "checked:fail");
+        assert_eq!(run("bare", fail_then_ok.join("; ")), "bare:ok", "the old chain receipted a failed step as ok");
+        let ok_ok = ["where.exe cmd".to_string(), "where.exe cmd".to_string()];
+        assert_eq!(run("clean", checked_powercfg_steps(&ok_ok)), "clean:ok");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
