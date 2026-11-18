@@ -599,6 +599,14 @@ export function LabConsole({
   // read "12 on · all applied" once the stack is in, instead of "0 ready" on an empty ring, which
   // the installed build showed as the room's bottom-left alarm (intimidation pass 2026-08-21).
   const safeOn = (fast.recs ?? []).filter((r) => r.severity === "safe" && r.currently_applied).length;
+  // s44 batch 2 (B1): the SAME stack the Optimize station counts (safe, eligible, appliable) -- when work is
+  // left only because a change reads off, the line says "N of M on" instead of "all N applied".
+  const safeStackRecs = (fast.recs ?? []).filter(
+    (r) => r.severity === "safe" && r.eligible !== false && (fast.isAppliable ?? (() => false))(r.id),
+  );
+  const safeStackTotal = safeStackRecs.length;
+  const safeStackOn = safeStackRecs.filter((r) => r.currently_applied).length;
+  const safeStackOff = safeStackTotal - safeStackOn;
 
   // ── THE SELECTED STATION IS THE ROOM (Mission 1, 2026-08-28) ──────────────────────────────────
   // Nothing is selected → the overview below is exactly what it always was. Something IS selected
@@ -833,7 +841,9 @@ export function LabConsole({
                   note={
                     fast.recs != null && safeReady === 0
                       ? safeOn > 0
-                        ? t("lab.labConsole.safeStackAllOn", { count: safeOn })
+                        ? safeStackOff > 0
+                          ? t("lab.labConsole.safeStackSomeOff", { count: safeStackOff, on: safeStackOn, total: safeStackTotal })
+                          : t("lab.labConsole.safeStackAllOn", { count: safeOn })
                         : t("lab.labConsole.safeStackNone")
                       : undefined
                   }
@@ -1074,7 +1084,9 @@ export function LabConsole({
                   note={
                     fast.recs != null && safeReady === 0
                       ? safeOn > 0
-                        ? t("lab.labConsole.safeStackAllOn", { count: safeOn })
+                        ? safeStackOff > 0
+                          ? t("lab.labConsole.safeStackSomeOff", { count: safeStackOff, on: safeStackOn, total: safeStackTotal })
+                          : t("lab.labConsole.safeStackAllOn", { count: safeOn })
                         : t("lab.labConsole.safeStackNone")
                       : undefined
                   }

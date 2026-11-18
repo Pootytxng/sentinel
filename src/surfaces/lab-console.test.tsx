@@ -432,6 +432,21 @@ describe("LabConsole", () => {
     expect(Number.parseFloat(fill.style.strokeDashoffset || fill.getAttribute("stroke-dashoffset") || "1")).toBeCloseTo(0, 3);
   });
 
+  // s44 batch 2 (B1): "all 8 applied" beside Optimize's "8/9 ... 1 was turned off outside Compy".
+  it("the safe-stack note agrees with Optimize when a change the user turned on now reads off", () => {
+    const recs: Array<Record<string, unknown>> = (recsFixture as Array<Record<string, unknown>>).map((r, i) => ({
+      ...r,
+      currently_applied: i === 0,
+    }));
+    const changes = [
+      { rec_id: String(recs[1].id), rec_title: String(recs[1].title), status: "applied", is_still_active: false },
+    ];
+    renderConsole({ ...base, fast: { ...fast, recs: recs as never[], changes: changes as never[] } });
+    const note = reading(3).querySelector(".ag-note")!.textContent;
+    expect(note).toBe("1 of 2 on · 1 was turned off outside Compy");
+    expect(note).not.toContain("all");
+  });
+
   it("the dock says where to start: 'Start here' on Optimize and a plain when-line under the row", () => {
     renderConsole();
     const dock = document.querySelector(".dock")!;

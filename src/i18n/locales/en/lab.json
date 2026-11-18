@@ -141,6 +141,8 @@
     "unitKept": "kept",
     "safeStackAllOn_one": "all {{count}} applied",
     "safeStackAllOn_other": "all {{count}} applied",
+    "safeStackSomeOff_one": "{{on}} of {{total}} on · {{count}} was turned off outside Compy",
+    "safeStackSomeOff_other": "{{on}} of {{total}} on · {{count}} were turned off outside Compy",
     "safeStackNone": "nothing to apply on this rig",
     "startHere": "Start here",
     "backToRoom": "Back to Test",

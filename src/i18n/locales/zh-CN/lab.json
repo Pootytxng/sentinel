@@ -140,6 +140,7 @@
     "unitOn": "已启用",
     "unitKept": "项",
     "safeStackAllOn_other": "全部 {{count}} 项已应用",
+    "safeStackSomeOff_other": "{{total}} 项中 {{on}} 项已开启 · {{count}} 项在 Compy 之外被关闭",
     "safeStackNone": "此整机没有可应用的项",
     "startHere": "从这里开始",
     "backToRoom": "返回“测试”",
