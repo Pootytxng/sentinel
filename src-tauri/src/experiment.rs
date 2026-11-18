@@ -2299,7 +2299,7 @@ pub(crate) fn preflight_diffs(
 }
 
 /// The ledger rec id of the power plan itself (gaming_orchestrator.rs `REC_POWER`).
-const POWER_PLAN_REC: &str = "power-ultimate";
+pub(crate) const POWER_PLAN_REC: &str = "power-ultimate";
 
 /// Opus r1 SHOULD-FIX: Windows' own plans by their fixed GUIDs, so the fix step can name the plan to
 /// switch back to; any other plan is left unnamed (never guessed).

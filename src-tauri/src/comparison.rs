@@ -643,7 +643,8 @@ fn conditions_comparable(verdict: &crate::comparability::Comparability) -> bool 
 pub(crate) struct PostComparability {
     /// The session's recorded start (its id).
     pub started_at: String,
-    /// [`arm_conditions_comparable`] against the arm's baseline session.
+    /// [`arm_conditions_comparable`] against the arm's baseline session, and the same Windows power
+    /// plan held through both (`experiment::plan_mismatch`, s41).
     pub comparable: bool,
     /// CR-tuning-frames-unread-reason: not comparable only because the two sessions share no
     /// recorded conditions (`Comparability::Unknown`), so no GPU, driver or build is the reason.
@@ -667,9 +668,12 @@ pub(crate) fn post_comparability(a: &ArmedComparison, sessions: &[SessionSummary
         .map(|s| {
             // Sonnet NIT: one derive per session for both fields.
             let verdict = crate::comparability::derive(baseline, s).verdict;
+            // s41 opus SHOULD-FIX (CR-plan-compare-rest): the plan rule the first session after the arm
+            // is judged on (`arm_noise_from`) holds for every later one too.
+            let same_plan = crate::experiment::plan_mismatch(baseline, s, false).is_none();
             PostComparability {
                 started_at: s.started_at.clone(),
-                comparable: conditions_comparable(&verdict),
+                comparable: conditions_comparable(&verdict) && same_plan,
                 conditions_unknown: matches!(verdict, crate::comparability::Comparability::Unknown),
             }
         })
@@ -695,7 +699,7 @@ pub(crate) fn arm_noise_from(
     // CR-plan-compare-rest: the same power-plan rule a Trial confounds on (`experiment::plan_mismatch`):
     // another plan, a plan switched during either session, or a plan that couldn't be read calls
     // nothing better or worse. An armed Fix of the plan itself moves it between the two by design.
-    let plan_fix = a.kind == ComparisonKind::Fix && a.rec_id == "power-ultimate";
+    let plan_fix = a.kind == ComparisonKind::Fix && a.rec_id == crate::experiment::POWER_PLAN_REC;
     if crate::experiment::plan_mismatch(baseline, after, plan_fix).is_some() {
         return ArmNoise::Unmeasured(UNMEASURED_CONDITIONS);
     }
@@ -1202,6 +1206,12 @@ mod comparison_tests {
         assert_eq!(arm_noise_from(&pu, &day, &plan(after, Some(HIGH), Some(BAL)), measure), not);
         // A session recorded before the plan was collected stays unchecked, as in a Trial.
         assert!(measured(&arm_noise_from(&a, &day, after, measure)), "no plan recorded on the after-session");
+        // Every later session of a tune is held to the same rule (s41 opus SHOULD-FIX).
+        let mut later = day.clone();
+        later[12] = plan(after, Some(HIGH), Some(HIGH));
+        assert!(!post_comparability(&a, &later)[0].comparable, "another plan");
+        later[12] = plan(after, Some(BAL), Some(BAL));
+        assert_eq!(post_comparability(&a, &later)[0].comparable, arm_conditions_comparable(&later[11], &later[12]));
     }
 
     #[test]

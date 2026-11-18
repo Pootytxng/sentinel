@@ -3741,7 +3741,10 @@ Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n";
 /// list can omit a hidden scheme that still exists (as the core-parking undo does).
 fn power_plan_known(guid: &str) -> Option<bool> {
     let g = guid.trim();
-    if g.is_empty() {
+    // s41 opus SHOULD-FIX: whole GUIDs only. `powercfg /query` also answers its aliases
+    // (`SCHEME_CURRENT`, `SCHEME_MAX`, ...), so a garbled or tampered row naming one would otherwise
+    // read as a plan that exists and restore onto whatever plan is active.
+    if !crate::scheme_guid_of(g).is_some_and(|s| s.eq_ignore_ascii_case(g)) {
         return Some(false);
     }
     plan_known_from(power_plan_listed(g), || power_plan_queried(g))
@@ -3756,9 +3759,11 @@ pub(crate) fn plan_known_from(listed: Option<bool>, query: impl FnOnce() -> Opti
     }
 }
 
-/// What an undo says when Windows' power plans couldn't be read (CR-plan-exists-timeout).
-const PLAN_LIST_UNREAD: &str = "Compy couldn't read Windows' list of power plans just now, so it can't undo this \
-                                safely. Nothing was changed; try again in a moment.";
+/// What an undo says when Windows couldn't confirm whether the plan exists (CR-plan-exists-timeout):
+/// the list, or the direct query of a plan it leaves out, couldn't be read (s41 opus NIT: worded for
+/// both).
+const PLAN_LIST_UNREAD: &str = "Compy couldn't confirm with Windows just now whether this power plan still exists, \
+                                so it can't undo this safely. Nothing was changed; try again in a moment.";
 
 /// CR-core-parking-plan-gone: whether `guid` is in Windows' plan list, as a read that can fail.
 /// `None` = the list couldn't be read ([`crate::power_plan_guids`]: powercfg didn't run, exited
@@ -6181,9 +6186,15 @@ mod rollback_tests {
     fn power_plan_known_rejects_empty_and_bogus() {
         assert_eq!(power_plan_known(""), Some(false), "empty GUID is not a plan");
         assert_eq!(power_plan_known("   "), Some(false), "whitespace GUID is not a plan");
-        assert_eq!(
+        // s41 opus SHOULD-FIX: powercfg's aliases are not a stored plan, whatever /query answers.
+        for alias in ["SCHEME_CURRENT", "scheme_max", "SCHEME_BALANCED", "8c5e7fda", "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c-x"] {
+            assert_eq!(power_plan_known(alias), Some(false), "{alias}");
+        }
+        // s41 sonnet SHOULD-FIX: a live powercfg read may also come back unread (`None`) on a slow
+        // service; either way the all-zeros GUID is never read as a plan.
+        assert_ne!(
             power_plan_known("00000000-0000-0000-0000-000000000000"),
-            Some(false),
+            Some(true),
             "all-zeros GUID is not a real plan"
         );
     }
@@ -6251,6 +6262,19 @@ mod rollback_tests {
         assert_eq!(run("bare", fail_then_ok.join("; ")), "bare:ok", "the old chain receipted a failed step as ok");
         let ok_ok = ["where.exe cmd".to_string(), "where.exe cmd".to_string()];
         assert_eq!(run("clean", checked_powercfg_steps(&ok_ok)), "clean:ok");
+        // s41 opus NIT: the single elevation runs the same text through `-Command` with
+        // `$ErrorActionPreference='Stop'` in front; a failed step exits non-zero (an Err), where the
+        // bare chain exited 0 when its last step succeeded.
+        let single = |body: String| {
+            let out = quiet_command("powershell")
+                .args(["-NoProfile", "-NonInteractive", "-Command", with_error_action_stop(&body).as_ref()])
+                .output()
+                .expect("powershell ran");
+            out.status.code()
+        };
+        assert_ne!(single(checked_powercfg_steps(&fail_then_ok)), Some(0));
+        assert_eq!(single(fail_then_ok.join("; ")), Some(0), "the old chain exited 0 past a failed step");
+        assert_eq!(single(checked_powercfg_steps(&ok_ok)), Some(0));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
