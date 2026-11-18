@@ -96,6 +96,16 @@ export function measuredGameNoise(
     : null;
 }
 
+/** The measured noise ONLY when exactly one game has one. With several games measured, no single
+ *  figure belongs to "the" game, and a tile that quotes the newest one disagrees with the per-game
+ *  line beside it, so the answer is null (unmeasured) rather than a guess. */
+export function soleGameNoise(
+  experiments: readonly Pick<SummaryExperiment, "game" | "assumed_band" | "created_at" | "concluded_at">[],
+): MeasuredGameNoise | null {
+  const games = new Set(experiments.filter((e) => e.assumed_band?.measured_low1_pct != null).map((e) => e.game));
+  return games.size === 1 ? measuredGameNoise(experiments, [...games][0]) : null;
+}
+
 /** The experiment fields the summary reads (experiment.rs `ExperimentRecord`). */
 export type SummaryExperiment = {
   /** Item 7: set on read when the verdict was judged on the assumed ±3% band. */

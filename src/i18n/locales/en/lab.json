@@ -132,6 +132,7 @@
     "provenNoteNone": "nothing proved yet",
     "noiseFloorLabel": "Noise floor",
     "noiseFloorNote": "a change must beat this to count",
+    "noiseFloorNoteGame": "{{game}} · a change must beat this to count",
     "safeStackLabel": "Safe stack",
     "instrumentsReadLabel": "Instruments read",
     "instrumentsReadNote": "{{read}} of {{total}} stations",

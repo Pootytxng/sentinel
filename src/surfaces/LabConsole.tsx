@@ -32,7 +32,7 @@ import { peekProbe, cachedProbe } from "../data/probe-cache";
 import { measureTuning, tuningEvidence, type PostComparability } from "../data/tuning-measure";
 import { primaryGpu } from "../data/gpu-sensor";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
-import { measuredGameNoise, type MeasuredGameNoise, type SummaryExperiment } from "./test-summary";
+import { soleGameNoise, type MeasuredGameNoise, type SummaryExperiment } from "./test-summary";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
 import { BlackBox } from "./BlackBox";
@@ -210,7 +210,7 @@ export function LabConsole({
 
   useEffect(() => {
     invoke<SummaryExperiment[] | null>("get_experiments")
-      .then((xs) => setGameNoiseNow(Array.isArray(xs) ? measuredGameNoise(xs) : null))
+      .then((xs) => setGameNoiseNow(Array.isArray(xs) ? soleGameNoise(xs) : null))
       .catch(() => {});
     cachedProbe("benchmark-state", () => invoke<BenchmarkState>("get_benchmark_state"), 30_000)
       .then(setBench)
@@ -565,7 +565,10 @@ export function LabConsole({
   // s44 tester pass: else the game's own measured noise from its Trial records (the figure the Test
   // room's "measured noise is ±N% (from M sessions)" line quotes), so this tile never says "not yet"
   // beside that line.
-  const noiseFloorPct = trial && trial.noise_floor_pct != null ? trial.noise_floor_pct : (cmpBand ?? gameNoiseNow?.pct ?? null);
+  // Review r1: the game's figure is quoted only when exactly ONE game has one (soleGameNoise), and the
+  // tile's note then names that game, so it can never sit beside a different game's per-game line.
+  const noiseFromGame = trial?.noise_floor_pct == null && cmpBand == null ? gameNoiseNow : null;
+  const noiseFloorPct = trial && trial.noise_floor_pct != null ? trial.noise_floor_pct : (cmpBand ?? noiseFromGame?.pct ?? null);
 
   // BR — Instruments read: how far through the bench this rig has gone. Same `stationHasReading`
   // the dock already uses to mark nodes measured, so the gauge and the dock can never disagree.
@@ -805,7 +808,10 @@ export function LabConsole({
                   max={10}
                   unit={t("lab.labConsole.unitPct")}
                   variant="numeral"
-                  measured={noiseFloorPct != null}
+                  /* A figure that belongs to one named game says so on its one supporting line (the
+                     stamp and the note share that row, so the stamp stands down for it). */
+                  measured={noiseFloorPct != null && !noiseFromGame}
+                  note={noiseFromGame ? t("lab.labConsole.noiseFloorNoteGame", { game: noiseFromGame.game }) : undefined}
                 />
               </div>
               <div className="lc-reading">
@@ -1065,7 +1071,13 @@ export function LabConsole({
                   max={10}
                   unit={t("lab.labConsole.unitPct")}
                   measured={noiseFloorPct != null}
-                  note={noiseFloorPct != null ? t("lab.labConsole.noiseFloorNote") : undefined}
+                  note={
+                    noiseFloorPct == null
+                      ? undefined
+                      : noiseFromGame
+                        ? t("lab.labConsole.noiseFloorNoteGame", { game: noiseFromGame.game })
+                        : t("lab.labConsole.noiseFloorNote")
+                  }
                 />
               </div>
               <div className="lc-corner lc-bl">

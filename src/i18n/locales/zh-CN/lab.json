@@ -132,6 +132,7 @@
     "provenNoteNone": "目前还没有验证结果",
     "noiseFloorLabel": "噪声基线",
     "noiseFloorNote": "改动必须超过此幅度才算数",
+    "noiseFloorNoteGame": "{{game}} · 改动必须超过此幅度才算数",
     "safeStackLabel": "安全优化组合",
     "instrumentsReadLabel": "读取进度",
     "instrumentsReadNote": "{{total}} 站中已读 {{read}} 站",

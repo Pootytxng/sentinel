@@ -730,6 +730,34 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     const tr = reading(1);
     await waitFor(() => expect(tr.querySelector(".ag-v")!.textContent).toBe("29"));
     expect(tr.querySelector(".ag-tag-ny")).toBeNull();
+    // Review r1 S1: the tile names the game the figure belongs to.
+    expect(tr.querySelector(".ag-note")!.textContent).toBe("robrun.exe · a change must beat this to count");
+  });
+
+  // Review r1 S1: with two games measured no single figure is "the" noise floor; quoting the newest
+  // one would disagree with the other game's per-game line, so the tile stays unmeasured.
+  it("Noise floor stays unmeasured when two games each have a measured noise and none is known", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const exp = (id: string, game: string, pct: number, day: string) => ({
+      id, rec_id: "visual-effects", rec_title: "x", game, created_at: `2026-11-${day}T10:00:00Z`,
+      concluded_at: `2026-11-${day}T11:00:00Z`, verdict: "too-noisy", kept: false,
+      assumed_band: { assumed_pct: 3, measured_low1_pct: pct, measured_sessions: 6 },
+    });
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      cmd === "get_experiments"
+        ? Promise.resolve([exp("e1", "robrun.exe", 29, "11"), exp("e2", "other.exe", 8, "12")])
+        : cmd === "get_session_summaries"
+          ? Promise.resolve([])
+          : Promise.resolve(null),
+    );
+    renderConsole();
+    const tr = reading(1);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(tr.querySelector(".ag-tag-ny")).not.toBeNull();
+    expect(tr.querySelector(".ag-v")!.textContent).not.toBe("8");
+    expect(tr.querySelector(".ag-v")!.textContent).not.toBe("29");
   });
 });
 
