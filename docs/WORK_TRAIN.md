@@ -810,18 +810,61 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       not compared); the switch, receipt and real-play lines let the stored verdict settle it (opus r2 MUST-FIX).
       opus r1 REQUEST-CHANGES (MUST-FIX missed callers, taken), sonnet r1 APPROVE-WITH-NITS, opus r2 REQUEST-CHANGES
       (MUST-FIX taken). Left: CR-lesson-crash-not-result, CR-fall-words-band, CR-what-changed-fall (below).
-- [ ] **CR-lesson-crash-not-result** (s37 opus r1 SHOULD-FIX 2, pre-existing) A crash stored as `regressed`
-      (`crash-during-treatment`) judged no fall, yet `lessonFor` / `resultOf` read it as a measured result (and now at
-      the matching fall). Treat a crashed treatment / crash stop_reason as no result there. TS.
+- [x] **CR-lesson-crash-not-result** (s37 opus r1 SHOULD-FIX 2) merge `0654320c`: `crashedTrial` (test-summary.ts) reads a
+      crash from the record (`treatment.crashed`, or a `crash-during-treatment` tag in `stop_reason`, stacked or not);
+      `lessonFor` skips such a row (the next measured result still teaches) and `resultOf` gives it no reason, so no
+      Recommended / Maximum FPS choice is built from it; the row keeps its numbers for the receipt. opus AWN (SHOULD-FIX
+      taken: a guard on the record's shape; the backend stores no noise band beside a stop reason, so on real records
+      the s37 finding was not reachable), sonnet AWN.
+- [ ] **CR-debrief-lesson-crash** (s38 opus, out of scope) SessionDebrief's tuning comparison card shows a lesson
+      without reading the result's `crash_reported` (comparison.rs ~130). Decide whether a crash beside a comparison
+      withholds its lesson, as a Trial's does. TS.
 - [ ] **CR-fall-words-band** (s37 opus r2 SHOULD-FIX, pre-existing wording from s27) Likely worse, the receipt rules
       and "fell by more than the band" name the band where the fall was judged at the matching fall (-9.5% against a
       10% band reads "more than the ±10% allowance"). Word it as the engine's `fell_words` does, en + zh-CN. TS.
-- [ ] **CR-what-changed-fall** (s37 opus r1 NIT 2, engine question) What changed judges a measured model-3 band (a
-      rise) the same both ways (`intelligence.rs` `what_changed_inner`), unlike Trials and comparisons. Decide one rule;
-      then the Care stutter lesson (`StutterCompare.tsx`, `{ low: "same", avg: "same" }`) follows it.
-- [ ] **CR-driver-compare-everywhere** (s37 sonnet SHOULD-FIX on the s37 NITs) comparability.rs now compares the GPU
-      driver trimmed and case-insensitively (as the preflight); noise_floor.rs (~166, ~246) and intelligence.rs (~1891)
-      still compare exactly. One shared `same_driver` at all sites. Rust.
+      s38: left queued (not small: receipt and rule wording in en + zh-CN across several surfaces).
+- [x] **CR-what-changed-fall** (coordinator decision s38: one rule, never easier to claim an improvement) merge
+      `134fdeaf`: `what_changed_inner` classifies the 1% low with `comparison::classify_measured` (a rise past the band,
+      a fall past `fall_pct(band)`, both inclusive); the evidence graph quotes the fall line for a fall; the What
+      changed panel header reads "+band% / -fall%" (en + zh-CN); the Care stutter lesson (`stutterLessonRule`) reads a
+      measured report's falls at the matching fall (an older report both ways); the Care step's payoff
+      (`payoffFor`) counts a session back at the matching fall and its copy quotes it. Re-derived test:
+      `what_changed_judges_only_on_the_measured_band_...`'s -20% drop inside ROB RUN's 20.6% band (now past its 17.0%
+      fall) moved to -16%, and -20% is asserted regressed. opus r1 REQUEST-CHANGES (MUST-FIX evidence words, SHOULD-FIX
+      panel header: taken), sonnet r1 AWN, opus r2 REQUEST-CHANGES (MUST-FIX Care payoff: taken; SHOULD-FIX panel
+      test: taken; no further round). Left: the NITs below (CR-what-changed-fall-words).
+- [ ] **CR-what-changed-fall-words** (s38 opus NITs) The no-change headline and the "inside" evidence edge say
+      "inside the X% band" for a fall (true, since the fall line is never wider, but the fall line is hidden); at a
+      band of 3% or less the fall edge reads "the 3.0% fall that matches the 3.0% band". Rust words only.
+- [x] **CR-driver-compare-everywhere** merge `c237b160`: `hardware::same_driver` (trimmed, case-insensitive) at
+      comparability.rs, intelligence.rs's gpu-driver-change hypothesis and noise_floor.rs's `lookup` / `still_current`;
+      those two compared the fingerprint hash (which digests the driver as written) and now compare its own fields
+      (`same_rig`) plus `same_driver`. Tests: `a_driver_written_in_another_case_does_not_split_the_band`,
+      `a_driver_written_in_another_case_is_the_same_driver_in_what_changed`. opus AWN (SHOULD-FIX: the What changed
+      test, taken; the other exact compares, queued), sonnet AWN.
+- [ ] **CR-driver-compare-rest** (s38 opus SHOULD-FIX) Three driver compares are still exact: the timeline's
+      gpu-driver-change event (intelligence.rs ~568), the hardware snapshot save (~265), the driver-split pattern
+      (intelligence_patterns.rs ~446). Route them through `same_driver`. Rust.
+- [x] **CR-active-plan-unread** (coordinator, s38) merge `2a1f3814`: `current_power_plan_guid` reads through
+      `output_within` with `POWERCFG_READ_LIMIT` (and a non-zero exit is unread); `core_parking_undo_step` returns Err
+      with nothing changed on an unread active plan (before the gone check, the direct query and the re-commit). Tests:
+      `an_unread_active_plan_is_not_another_plan_...`, `a_listed_plan_with_an_unread_active_plan_runs_nothing_...`
+      (production dispatch); the existing fakes now name another active plan. opus AWN, sonnet AWN.
+- [ ] **CR-active-plan-unread-callers** (s38 opus + sonnet SHOULD-FIX; the same "failed read" assumption elsewhere)
+      actions.rs power-setting rollback: `reactivate = current_power_plan_guid()...unwrap_or(false)` (~3910) skips the
+      live re-commit on an unread active plan and still reports success; `restore_core_parking_default` (~4834)
+      records no plan GUID on an unread read, so its undo takes the legacy SCHEME_CURRENT path. Both now see an unread
+      plan after 5 s or a non-zero exit (before: waited). Read-only, no time limit: lib.rs `current_power_plan_name`,
+      `current_power_plan`, `current_power_scheme`. Mutation boundary: opus + sonnet.
+- [x] **CR-restore-notes-stay** (coordinator, s38) merge `045733a9`: the Black Box "Put back" keeps the
+      turned-on-again / unconfirmed / no-saved-undo notes beside the results (what the run left out, as it ran); with
+      changes left out the summary reads "All N undos offered here finished. The changes marked not offered were not
+      undone." (en + zh-CN). sonnet AWN.
+- [x] **CR-home-unchecked-once** (coordinator, s38) merge `7795dfc7`: Home's Active changes card (HomeHud, HomeV2)
+      names one unchecked count: the Machine Model's when it has one, else the ledger's words as the footer says them
+      (`activeChangesNote`). sonnet AWN. The other half (narrow what `conclude_two_session` can reach): checked, no
+      change needed: it already takes plain data (`ConcludeReads`) and calls nothing in crate::history or the store;
+      it only names two plain types from there (`ActiveCheck`, `LedgerCoverage`).
 - [x] **CR-core-parking-hidden-plan** (coordinator, s35) merge `91d59341`: a core-parking undo whose plan `powercfg /list`
       omits (and isn't active) asks for the plan itself (`powercfg /query <guid>`, read-only): exit 0 = restore onto it
       (never made active); gone only when it fails exactly as the nil GUID does (exit 1, same words) while
@@ -889,6 +932,7 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       start_experiment pins; next slice: extract start_experiment's band/refusal decision. Left (opus r2 NIT 3): on the
       test fixture the baseline, ledger length and clock don't change `judge_pair`'s result, so their hand-off is shown
       only by equality.
+      s38: untouched (under 50 minutes before the 18:40 batch once items 1-5 were in).
 - Inventory (no move, no delete): `.claude\worktrees\train-same-rig` (created 2026-11-12 12:00) and
   `.claude\worktrees\train-plan-held` (2026-11-13 04:01) are EMPTY folders, no `.git`, no files: leftovers of worktree
   removals whose directory delete was refused while a shell's working directory was inside. Nothing to salvage; the
@@ -2770,6 +2814,14 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   verified), SHA256.txt lists both (old marked older), guide txt + html: the new installer name, the conditions check
   when a test waits for its second session, the other stations now optional, Roll back greyed out with no saved undo.
   Screen check (zh-CN Health, the lessons) not run.
+- 2026-11-17 s38 (coordinator-assigned; preflight CODE-ONLY, the owner at the PC: all pushes and the install as one
+  batch from 18:40; no game at any check): landed CR-active-plan-unread (merge `2a1f3814`), CR-restore-notes-stay
+  (`045733a9`), CR-home-unchecked-once (`7795dfc7`), CR-driver-compare-everywhere (`c237b160`), CR-what-changed-fall
+  (`134fdeaf`), CR-lesson-crash-not-result (`0654320c`); reviews under each item. Queued: CR-active-plan-unread-callers,
+  CR-driver-compare-rest, CR-what-changed-fall-words; CR-fall-words-band left queued (not small). Judging-chain slice 3
+  untouched (time). No guard or census re-derived; existing behaviour tests re-derived with the product change:
+  BlackBox restore summaries (offered wording), the What changed measured-band test (-20% -> -16% inside the fall),
+  the core-parking undo fakes (name another active plan). Old-code proof run for every new test.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
