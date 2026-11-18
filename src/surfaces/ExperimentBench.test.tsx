@@ -2324,6 +2324,29 @@ describe("P4-exit: what Compy tested on this game", () => {
     );
   });
 
+  // s40: a Trial whose treatment crashed has no result to read: its receipt row names the crash and
+  // prints no verdict, deltas or band (the crash decided it, as `crashedTrial` says for its lesson).
+  it("a crashed Trial's receipt row names the crash and prints no verdict or percentages", async () => {
+    const f = await owner();
+    state.gate = true;
+    state.experiments = f.experiments.map((x: Record<string, unknown>) => ({
+      ...x,
+      treatment: { ...(x.treatment as Record<string, unknown>), crashed: true },
+    }));
+    state.sessions = f.sessions;
+    state.recs = [pass("visual-effects", "Trim Windows visual effects", 1)];
+    render(<ExperimentBench />);
+    const panel = await screen.findByTestId("exp-summary");
+    const door = panel.querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!;
+    fireEvent.click(door);
+    await waitFor(() => expect(door.parentElement!.children.length).toBeGreaterThan(1), { timeout: 3000 });
+    const row = screen.getByTestId("exp-summary-receipt").querySelector("dd")!.textContent!;
+    expect(row).toBe(
+      "the game crashed during the test, so it has no result · 1 trial · matching · risk you allowed: not recorded",
+    );
+    expect(row).not.toMatch(/1% low|average|band|regressed|%/);
+  });
+
   it("says it finished the supported tests only when the picker has nothing untested or worth another run", async () => {
     const panel = await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
     expect(panel).toHaveAttribute("data-headline", "finished-supported-tests");

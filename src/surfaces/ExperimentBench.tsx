@@ -2256,10 +2256,16 @@ function TestSummary({ s }: { s: GameTestSummary }) {
             key={r.recId}
             label={r.recId}
             value={[
-              r.verdict,
-              receiptPct(r.deltaLow1Pct) != null ? t("lab.experimentBench.summary.receiptLow", { pct: receiptPct(r.deltaLow1Pct) }) : null,
-              receiptPct(r.deltaAvgPct) != null ? t("lab.experimentBench.summary.receiptAvg", { pct: receiptPct(r.deltaAvgPct) }) : null,
-              receiptBand(r.noise?.band_pct) != null ? t("lab.experimentBench.summary.receiptBand", { band: receiptBand(r.noise?.band_pct) }) : null,
+              // A crashed Trial: the crash decided it, so its row names the crash and prints no verdict,
+              // deltas or band (the same rule that withholds its lesson, `crashedTrial`).
+              ...(r.crashed
+                ? [t("lab.experimentBench.summary.receiptCrashed")]
+                : [
+                    r.verdict,
+                    receiptPct(r.deltaLow1Pct) != null ? t("lab.experimentBench.summary.receiptLow", { pct: receiptPct(r.deltaLow1Pct) }) : null,
+                    receiptPct(r.deltaAvgPct) != null ? t("lab.experimentBench.summary.receiptAvg", { pct: receiptPct(r.deltaAvgPct) }) : null,
+                    receiptBand(r.noise?.band_pct) != null ? t("lab.experimentBench.summary.receiptBand", { band: receiptBand(r.noise?.band_pct) }) : null,
+                  ]),
               t("lab.experimentBench.summary.receiptTrials", { count: r.trials }),
               r.context,
               // P8-posture-show: the risk allowed when this row's Trial started, or "not recorded".

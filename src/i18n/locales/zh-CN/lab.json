@@ -1000,6 +1000,7 @@
       "noiseLabel": "噪声范围：",
       "receiptLow": "1% low {{pct}}",
       "receiptAvg": "平均 {{pct}}",
+      "receiptCrashed": "测试期间游戏崩溃，因此没有结果",
       "receiptBand": "区间 {{band}}",
       "receiptRiskChoice": "你允许的风险：{{choice}}",
       "receiptTrials_other": "{{count}} 次试验",
