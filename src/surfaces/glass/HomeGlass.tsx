@@ -351,7 +351,7 @@ export function HomeGlass({
                 {!checksKnown
                   ? leftOut || t("home.glass.checks.unknownNote")
                   : worthNames.length > 0
-                    ? t("home.glass.checks.worth", { names: worthNames.slice(0, 2).join(", ") })
+                    ? t("home.glass.checks.worth", { names: worthNames.join(", ") })
                     : leftOut || t("home.glass.checks.allGood")}
               </span>
             </button>
