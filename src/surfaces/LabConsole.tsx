@@ -16,7 +16,7 @@ import { buildRigParts, type RigSelection } from "./rig/rig-parts";
 import { incidentFocus } from "./rig/incident-part";
 import { newestAssessedIncident } from "./care-next-step";
 import { rigPartReadings, subsystemForRigPart, type LabReadingKey, type LabSubsystem } from "./lab-evidence-map";
-import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
+import { OptimizeStation, safeStackOf, type LabFastPathProps } from "./lab/OptimizeStation";
 import {
   LAB_STATION_ORDER,
   labStations,
@@ -601,9 +601,7 @@ export function LabConsole({
   const safeOn = (fast.recs ?? []).filter((r) => r.severity === "safe" && r.currently_applied).length;
   // s44 batch 2 (B1): the SAME stack the Optimize station counts (safe, eligible, appliable) -- when work is
   // left only because a change reads off, the line says "N of M on" instead of "all N applied".
-  const safeStackRecs = (fast.recs ?? []).filter(
-    (r) => r.severity === "safe" && r.eligible !== false && (fast.isAppliable ?? (() => false))(r.id),
-  );
+  const safeStackRecs = safeStackOf(fast.recs, fast.isAppliable ?? (() => false));
   const safeStackTotal = safeStackRecs.length;
   const safeStackOn = safeStackRecs.filter((r) => r.currently_applied).length;
   const safeStackOff = safeStackTotal - safeStackOn;

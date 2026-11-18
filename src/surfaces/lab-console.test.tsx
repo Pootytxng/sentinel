@@ -66,7 +66,7 @@ vi.mock("./rig/RigViewer", () => ({
 
 const { LabConsole } = await import("./LabConsole");
 const { ConfirmProvider } = await import("../design/ConfirmDialog");
-import type { LabFastPathProps } from "./lab/OptimizeStation";
+import { safeStackOf, type LabFastPathProps } from "./lab/OptimizeStation";
 import type { HardwareInfo } from "../App";
 import type { RigSelection } from "./rig/rig-parts";
 
@@ -445,6 +445,22 @@ describe("LabConsole", () => {
     const note = reading(3).querySelector(".ag-note")!.textContent;
     expect(note).toBe("1 of 2 on · 1 was turned off outside Compy");
     expect(note).not.toContain("all");
+  });
+
+  // Review r1 S3: the hub and Optimize read ONE helper for the stack, so they cannot disagree.
+  it("the safe stack is one shared set: safe, eligible and appliable; an off rec counts even when it is not a drift", () => {
+    const rec = (id: string, over: Record<string, unknown>) =>
+      ({ id, title: id, severity: "safe", eligible: true, currently_applied: false, ...over }) as never;
+    const recs = [
+      rec("a", { currently_applied: true }),
+      rec("b", {}), // off + eligible, never applied by Compy: not in any reverted set
+      rec("c", { eligible: false }),
+      rec("d", { severity: "risky" }),
+      rec("e", {}), // not appliable on this rig
+    ];
+    const ids = safeStackOf(recs as never[], (id) => id !== "e").map((r) => r.id);
+    expect(ids).toEqual(["a", "b"]);
+    expect(safeStackOf(null, () => true)).toEqual([]);
   });
 
   it("the dock says where to start: 'Start here' on Optimize and a plain when-line under the row", () => {

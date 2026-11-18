@@ -70,6 +70,15 @@ export type LabFastPathProps = {
 const GAUGE_R = 32;
 const GAUGE_C = 2 * Math.PI * GAUGE_R;
 
+/** THE safe stack: safe-tier, eligible, appliable recs. Optimize's "N /M" gauge and the Test hub's
+ *  safe-stack line both read it, so the two can never count different sets. */
+export function safeStackOf(
+  recs: Recommendation[] | null | undefined,
+  isAppliable: (recId: string) => boolean,
+): Recommendation[] {
+  return (recs ?? []).filter((r) => r.severity === "safe" && r.eligible !== false && isAppliable(r.id));
+}
+
 export function OptimizeStation(props: LabFastPathProps) {
   const { t } = useTranslation();
   // Same drift derivation the Optimize room + verdict use — a drifted rec renders ONCE in Fix's
@@ -110,10 +119,7 @@ export function OptimizeStation(props: LabFastPathProps) {
   // exists — recs still loading (null) or no safe stack for this rig → target null → nothing
   // animates (no placeholder zero). Every animated value traces to the catalog eval, not a guess.
   const safeStack = useMemo(
-    () =>
-      (props.recs ?? []).filter(
-        (r) => r.severity === "safe" && r.eligible !== false && props.isAppliable(r.id),
-      ),
+    () => safeStackOf(props.recs, props.isAppliable),
     [props.recs, props.isAppliable],
   );
   const totalSafe = safeStack.length;
