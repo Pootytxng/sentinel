@@ -323,6 +323,35 @@ describe("P5-realplay: what a concluded real-play Trial says", () => {
     );
   });
 
+  // CR-fall-words-band (s37 opus r2 SHOULD-FIX): a fall judged at the matching fall (model-3 noise,
+  // 10% <-> -9.0%) is named at that fall, never "more than the ±10% allowance".
+  it("Likely worse names the fall it was judged at, not the band", () => {
+    const worse = { verdict: "regressed", outcome: "max-fps", game_noise: { model: 3 } };
+    expect(realPlayResult(concluded(worse, { band_pct: 10, delta_low1_pct: -2, delta_avg_pct: -9.5 }, 4, 5), "W", t)).toBe(
+      "Likely worse: Compy put HAGS back. With it on, your average frame rate was 9.5% lower across 5 sessions than across 4 without it, past −9%, the fall that matches the +10% allowance for normal swings between sessions.",
+    );
+    // Recommended's 1% low in real play is read on the band both ways: the band words stand.
+    expect(realPlayResult(concluded({ verdict: "regressed", game_noise: { model: 3 } }, { band_pct: 10, delta_low1_pct: -12, delta_avg_pct: 0 }), "W", t)).toMatch(
+      /more than the ±10% allowance/,
+    );
+    // A record that doesn't prove its build ("unknown"): a fall past the band keeps the band words
+    // (true either way); one that didn't pass the band can only have been called at the matching
+    // fall, so it names that fall (review r1, sonnet SHOULD-FIX).
+    expect(realPlayResult(concluded({ verdict: "regressed", outcome: "max-fps" }, { band_pct: 10, delta_low1_pct: -2, delta_avg_pct: -12 }), "W", t)).toMatch(
+      /more than the ±10% allowance/,
+    );
+    expect(realPlayResult(concluded({ verdict: "regressed", outcome: "max-fps" }, { band_pct: 10, delta_low1_pct: -2, delta_avg_pct: -9.5 }), "W", t)).toMatch(
+      /was 9\.5% lower .* past −9%, the fall that matches the \+10% allowance/,
+    );
+  });
+
+  it("Likely worse at the matching fall, in zh-CN", async () => {
+    await i18n.changeLanguage("zh-CN");
+    const worse = { verdict: "regressed", outcome: "max-fps", game_noise: { model: 3 } };
+    const line = clean(realPlayResult(concluded(worse, { band_pct: 10, delta_low1_pct: -2, delta_avg_pct: -9.5 }), "W", t));
+    expect(line).toContain("超过了 −9%，即与各局之间正常波动的 +10% 余量相对应的降幅");
+  });
+
   it("Unknown: sessions too varied (PBZ-style swings), or too few counted before the test stopped, with why", () => {
     expect(
       realPlayResult(concluded({ verdict: "too-noisy", stop_reason: "sessions-too-varied" }, { band_pct: 23.44, delta_low1_pct: 2, delta_avg_pct: 1, look: 3 }, 3, 8), "Phantom Blade Zero", t),
