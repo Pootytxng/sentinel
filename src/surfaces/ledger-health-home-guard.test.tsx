@@ -471,6 +471,9 @@ describe.each(FACES)("$name may not report a ledger it can't read as an untouche
     const active = cardFor(container, face, face.activeLabel);
     expect(active.querySelector(face.num)?.textContent?.trim()).toBe("1");
     expect(active.textContent).toContain("1 more couldn't be checked just now");
+    // CR-home-unchecked-once: the ledger's own "2 not checked" never sits beside the model's count.
+    expect(active.textContent).not.toMatch(/\d+ not checked/);
+    expect(active.textContent).not.toContain("Nothing in effect to undo");
   });
 
   it("a model not read yet prints no stand-in number", async () => {
