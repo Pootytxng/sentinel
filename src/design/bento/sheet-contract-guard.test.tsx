@@ -300,6 +300,16 @@ describe("the body scrolls by design below the sheet's minimum height (#501)", (
     expect(rule(".v2-sheet-backdrop")).toContain("padding: 40px");
   });
 
+  // s44 tester pass: on the glass surfaces `--v2-panel` is a 64% / 86% tint, so the Health page's own
+  // text showed through the "Let us figure it out" panel and overlapped its question. A modal panel
+  // takes the near-opaque popover surface, which exists for exactly this ("their own text never sits
+  // on the busy backdrop").
+  it("the panel paints the near-opaque popover surface, never the see-through room tint", () => {
+    const panel = rule(".v2-sheet");
+    expect(panel).toContain("background: var(--v2-panel-pop)");
+    expect(panel).not.toMatch(/background:\s*var\(--v2-panel\)/);
+  });
+
   it("the comment above the body rule states the minimum inner height and why 720p is below it — the pin is not a blanket exemption", () => {
     const at = css.indexOf(`:root[data-v2="on"] .v2-sheet-body {`);
     const comment = css.slice(css.lastIndexOf("/*", at), at);
