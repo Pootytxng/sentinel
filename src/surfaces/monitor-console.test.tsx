@@ -287,7 +287,7 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     expect(cell(row, "avg")).toEqual(["Avg FPS", "▲7 fps"]);
     expect(cell(row, "low1")).toEqual(["1% low", "▲4 fps"]);
     expect(cell(row, "spikes")).toEqual(["Spikes", "±0 spikes"]);
-    expect(row.querySelector(".mc-delta-tag")!.textContent).toContain("2 Compy changes were on");
+    expect(row.querySelector(".mc-delta-tag")!.textContent).toContain("2 Compy changes were on at session start");
     // …and NO cross-game caveat, because the prior IS the same game. A caveat that prints
     // unconditionally teaches the reader to stop reading caveats.
     expect(row.querySelector(".mc-delta-note")).toBeNull();
@@ -313,7 +313,7 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     });
     await waitFor(() => expect(container.querySelector(".mc-delta-tag")).not.toBeNull());
     expect(container.querySelector(".mc-ev-changes")).toBeNull();
-    expect((container.textContent!.match(/14 Compy changes were on/g) ?? []).length).toBe(1);
+    expect((container.textContent!.match(/14 Compy changes were on at session start/g) ?? []).length).toBe(1);
     // Review nit: the strip drops its third column rather than leaving it empty.
     expect(container.querySelector(".mc-ev-readings")!.classList.contains("mc-ev-readings-two")).toBe(true);
   });
@@ -330,7 +330,7 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     const { container } = mount({ sessions: [sess({ avg_fps: 247, compy_changes_active: 14 })] });
     await waitFor(() => expect(container.querySelector(".mc-ev-changes")).not.toBeNull());
     expect(container.querySelector(".mc-delta-tag")).toBeNull();
-    expect(container.querySelector(".mc-ev-changes")!.textContent).toBe("14 Compy changes were on");
+    expect(container.querySelector(".mc-ev-changes")!.textContent).toBe("14 Compy changes were on at session start");
   });
 
   it("multiple changes on → the tag says COMBINED EFFECT (no per-change attribution implied); a single change doesn't", async () => {
@@ -343,14 +343,14 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     });
     await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
     const tag = container.querySelector(".mc-delta-tag")!;
-    expect(tag.textContent).toBe("11 Compy changes were on · combined effect");
+    expect(tag.textContent).toBe("11 Compy changes were on at session start · combined effect");
     // #677: the caveat is the app's own styled tooltip, not a native `title` on a labelled span.
     // No element in the tag carries a title; the tag's text is a real trigger that hover, focus
     // and tap all open, and the opened tooltip is announced as the trigger's description.
     expect(tag.getAttribute("title")).toBeNull();
     expect(tag.querySelector("[title]")).toBeNull();
     const trigger = tag.querySelector<HTMLButtonElement>("button.kl-term")!;
-    expect(trigger.textContent).toBe("11 Compy changes were on · combined effect");
+    expect(trigger.textContent).toBe("11 Compy changes were on at session start · combined effect");
     expect(tag.querySelector('[role="tooltip"]')).toBeNull();
     fireEvent.focus(trigger);
     const tip = tag.querySelector('[role="tooltip"]')!;
@@ -373,7 +373,7 @@ describe("MonitorConsole — the v5 deck delta row (session-scoped, honest) (f)"
     });
     await waitFor(() => expect(container.querySelector(".mc-delta")).not.toBeNull());
     const tag = container.querySelector(".mc-delta-tag")!;
-    expect(tag.textContent).toBe("1 Compy change was on");
+    expect(tag.textContent).toBe("1 Compy change was on at session start");
     expect(tag.textContent).not.toMatch(/combined/i);
     expect(tag.getAttribute("title")).toBeNull();
     // One change IS attributable, so there is no caveat to open: plain text, no trigger.
