@@ -1348,7 +1348,7 @@ mod tests {
     // ─── with_arm ──────────────────────────────────────────────────────────────
 
     fn change<'a>(id: &'a str, applied_at: &'a str, rolled_back_at: Option<&'a str>) -> LedgerEntryRef<'a> {
-        LedgerEntryRef { id, rec_id: id, applied_at, applied: rolled_back_at.is_none(), rolled_back_at, outside_recorded_at: None }
+        LedgerEntryRef { id, rec_id: id, applied_at, applied: rolled_back_at.is_none(), rolled_back_at, outside_recorded_at: None, outside_earlier_at: &[] }
     }
 
     /// The as-is evening (14 changes on), the change applied at 19:31, then the with-sessions (15).

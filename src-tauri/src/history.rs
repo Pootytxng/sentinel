@@ -280,6 +280,14 @@ pub(crate) struct ChangedOutside {
     pub(crate) recorded_at: String,
     /// What Compy read on the machine at that moment.
     pub(crate) observed: ObservedState,
+    /// CR-outside-followups (d): when each earlier record that this one replaced was made, oldest
+    /// first. Each was a move in time like this one (a session from before it can't say which plan it
+    /// ran on), so the checks that pair sessions "with nothing moved between" keep counting them after
+    /// a newer record replaces them. Additive: absent on records made before this field, and in the
+    /// file only when not empty. A value this build can't read makes the whole record unreadable
+    /// (`lenient_changed_outside`), and the row then blocks a Trial as an unrecorded one does.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) earlier_recorded_at: Vec<String>,
 }
 
 /// The live state Compy read when a change was recorded as changed outside Compy.
@@ -2830,16 +2838,22 @@ pub(crate) fn commit_changed_outside(
     if is_any_compy_copy(history, seen) {
         return Err(COMPYS_OTHER_COPY_REFUSAL.into());
     }
-    let mark = ChangedOutside {
+    // A row recorded earlier for a plan no longer active (or in a shape this build can't act on) is
+    // recorded anew: the newer record replaces it, and its time counts as a move like the first did.
+    // The replaced record's own time, and any it had kept, stay on the row as earlier moves
+    // (CR-outside-followups (d)): a session pair straddling only the earlier record is not "nothing
+    // moved".
+    let mark = |was: Option<&ChangedOutside>| ChangedOutside {
         schema: CHANGED_OUTSIDE_SCHEMA,
         recorded_at: now.to_string(),
         observed: ObservedState::PowerPlan { guid: seen.guid.clone(), name: seen.name.clone() },
+        earlier_recorded_at: was
+            .map(|w| w.earlier_recorded_at.iter().cloned().chain([w.recorded_at.clone()]).collect())
+            .unwrap_or_default(),
     };
-    // A row recorded earlier for a plan no longer active (or in a shape this build can't act on) is
-    // recorded anew: the newer record replaces it, and its time counts as a move like the first did.
     let before: Vec<Option<ChangedOutside>> = rows.iter().map(|&i| history[i].changed_outside.clone()).collect();
-    for &i in &rows {
-        history[i].changed_outside = Some(mark.clone());
+    for (&i, was) in rows.iter().zip(&before) {
+        history[i].changed_outside = Some(mark(was.as_ref()));
     }
     save(history).inspect_err(|_| {
         for (&i, was) in rows.iter().zip(&before) {
@@ -6627,6 +6641,7 @@ mod changed_outside_tests {
             schema: CHANGED_OUTSIDE_SCHEMA,
             recorded_at: "2026-11-10T20:00:00+00:00".into(),
             observed: ObservedState::PowerPlan { guid: guid.into(), name: "p".into() },
+            earlier_recorded_at: vec![],
         };
         history[0].changed_outside = Some(mark(SYNEZ));
         assert_eq!(recorded_outside_state(&history, "power-ultimate"), None, "one row still unrecorded");
@@ -6663,8 +6678,50 @@ mod changed_outside_tests {
             schema: CHANGED_OUTSIDE_SCHEMA,
             recorded_at: "2026-11-10T21:30:00+00:00".into(),
             observed: ObservedState::PowerPlan { guid: other.guid.to_uppercase(), name: "Renamed".into() },
+            earlier_recorded_at: vec![],
         });
         assert!(recorded_outside_state(&history, "power-ultimate").is_some());
+    }
+
+    // CR-outside-followups (d): a newer record replaces the older one but keeps its time as a move.
+    #[test]
+    fn a_record_made_anew_keeps_every_earlier_records_time() {
+        let mut history = rows();
+        let ok = |_: &[AppliedChange]| Ok(());
+        commit_changed_outside(&mut history, "power-ultimate", Some(&synez()), "2026-11-10T20:00:00+00:00", &ok).unwrap();
+        assert!(history[0].changed_outside.as_ref().unwrap().earlier_recorded_at.is_empty(), "a first record has none");
+        let other = plan("33333333-3333-3333-3333-333333333333", "Other Plan", crate::PowerPlanClass::Other);
+        commit_changed_outside(&mut history, "power-ultimate", Some(&other), "2026-11-10T21:00:00+00:00", &ok).unwrap();
+        let third = plan("44444444-4444-4444-4444-444444444444", "Third", crate::PowerPlanClass::Other);
+        commit_changed_outside(&mut history, "power-ultimate", Some(&third), "2026-11-10T22:00:00+00:00", &ok).unwrap();
+        for c in &history {
+            let m = c.changed_outside.as_ref().unwrap();
+            assert_eq!(m.recorded_at, "2026-11-10T22:00:00+00:00");
+            assert_eq!(m.earlier_recorded_at, ["2026-11-10T20:00:00+00:00", "2026-11-10T21:00:00+00:00"]);
+        }
+        let rows = crate::experiment::ledger_rows(&history);
+        let moves: Vec<&str> = rows[0].moved_at().collect();
+        for at in ["2026-11-10T20:00:00+00:00", "2026-11-10T21:00:00+00:00", "2026-11-10T22:00:00+00:00"] {
+            assert!(moves.contains(&at), "{at} is a move: {moves:?}");
+        }
+        // A save that fails puts the earlier times back as they were too.
+        let before: Vec<Option<ChangedOutside>> = history.iter().map(|c| c.changed_outside.clone()).collect();
+        assert!(commit_changed_outside(&mut history, "power-ultimate", Some(&other), "2026-11-10T23:00:00+00:00", &|_| Err("x".into())).is_err());
+        assert_eq!(history.iter().map(|c| c.changed_outside.clone()).collect::<Vec<_>>(), before);
+    }
+
+    #[test]
+    fn a_record_without_earlier_times_keeps_its_old_shape_on_disk() {
+        let old = serde_json::json!({
+            "schema": 1, "recorded_at": "2026-11-10T20:00:00+00:00",
+            "observed": { "kind": "power-plan", "guid": SYNEZ, "name": "Synez Power Plan" }
+        });
+        let m: ChangedOutside = serde_json::from_value(old.clone()).unwrap();
+        assert!(m.earlier_recorded_at.is_empty() && m.usable().is_some());
+        assert_eq!(serde_json::to_value(&m).unwrap(), old, "no new key on a record replaced nothing");
+        let mut bad = old;
+        bad["earlier_recorded_at"] = serde_json::json!("not a list");
+        assert!(serde_json::from_value::<ChangedOutside>(bad).is_err(), "unreadable -> no record, which blocks a Trial");
     }
 
     #[test]
@@ -6713,6 +6770,7 @@ mod changed_outside_tests {
                 schema: CHANGED_OUTSIDE_SCHEMA,
                 recorded_at: "2026-11-11T03:00:00+00:00".into(),
                 observed: ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() },
+                earlier_recorded_at: vec![],
             });
         }
         assert_eq!(probe_rec_target_with("power-ultimate", &reads), ActiveCheck::Off);
@@ -6737,6 +6795,7 @@ mod changed_outside_tests {
             schema: CHANGED_OUTSIDE_SCHEMA,
             recorded_at: "2026-11-11T03:00:00+00:00".into(),
             observed: ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() },
+            earlier_recorded_at: vec![],
         });
         let asks = std::cell::Cell::new(0);
         let gaming_after_first_ask = || {
@@ -6770,6 +6829,7 @@ mod changed_outside_tests {
                 schema: CHANGED_OUTSIDE_SCHEMA,
                 recorded_at: "2026-11-11T03:00:00+00:00".into(),
                 observed: ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() },
+                earlier_recorded_at: vec![],
             });
         }
         let back: Vec<AppliedChange> = serde_json::from_value(serde_json::to_value(&history).unwrap()).unwrap();

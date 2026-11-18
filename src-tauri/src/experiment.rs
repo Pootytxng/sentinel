@@ -1042,12 +1042,19 @@ pub(crate) struct LedgerEntryRef<'a> {
     /// time like an apply or an undo: a session from before it can't say which state it ran on, so
     /// every check that pairs sessions "with nothing moved between" treats this date as a move.
     pub outside_recorded_at: Option<&'a str>,
+    /// CR-outside-followups (d): the times of earlier "changed outside Compy" records the newest one
+    /// replaced. Moves like `outside_recorded_at`; empty for a row recorded once or never.
+    pub outside_earlier_at: &'a [String],
 }
 
 impl<'a> LedgerEntryRef<'a> {
-    /// Every instant at which this row moved: applied, undone, recorded as changed outside Compy.
+    /// Every instant at which this row moved: applied, undone, recorded as changed outside Compy
+    /// (every record, not only the newest).
     pub(crate) fn moved_at(&self) -> impl Iterator<Item = &'a str> {
-        [Some(self.applied_at), self.rolled_back_at, self.outside_recorded_at].into_iter().flatten()
+        [Some(self.applied_at), self.rolled_back_at, self.outside_recorded_at]
+            .into_iter()
+            .flatten()
+            .chain(self.outside_earlier_at.iter().map(String::as_str))
     }
 }
 
@@ -1134,6 +1141,7 @@ pub(crate) fn ledger_rows(history: &[crate::history::AppliedChange]) -> Vec<Ledg
             applied: c.status == "applied",
             rolled_back_at: c.rolled_back_at.as_deref(),
             outside_recorded_at: c.changed_outside.as_ref().map(|m| m.recorded_at.as_str()),
+            outside_earlier_at: c.changed_outside.as_ref().map_or(&[], |m| m.earlier_recorded_at.as_slice()),
         })
         .collect()
 }
@@ -6921,7 +6929,7 @@ mod experiment_tests {
     }
 
     fn row<'a>(id: &'a str, rec_id: &'a str, applied_at: &'a str, applied: bool) -> LedgerEntryRef<'a> {
-        LedgerEntryRef { id, rec_id, applied_at, applied, rolled_back_at: None, outside_recorded_at: None }
+        LedgerEntryRef { id, rec_id, applied_at, applied, rolled_back_at: None, outside_recorded_at: None, outside_earlier_at: &[] }
     }
 
     const START: &str = "2026-09-28T12:00:00+00:00";
@@ -9739,7 +9747,7 @@ mod experiment_tests {
     }
 
     fn rp_ledger() -> Vec<LedgerEntryRef<'static>> {
-        vec![LedgerEntryRef { id: "change-1", rec_id: "test-rec", applied_at: RP_APPLIED, applied: true, rolled_back_at: None, outside_recorded_at: None }]
+        vec![LedgerEntryRef { id: "change-1", rec_id: "test-rec", applied_at: RP_APPLIED, applied: true, rolled_back_at: None, outside_recorded_at: None, outside_earlier_at: &[] }]
     }
 
     fn rp_now() -> DateTime<Utc> {
@@ -9982,7 +9990,7 @@ mod experiment_tests {
         assert_eq!(outcome(&two, &rp_ledger(), Some(true), rp_now()), (None, None));
         // Another Compy change during the test: confounded.
         let mut moved = rp_ledger();
-        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T10:30:00+00:00", applied: true, rolled_back_at: None, outside_recorded_at: None });
+        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T10:30:00+00:00", applied: true, rolled_back_at: None, outside_recorded_at: None, outside_earlier_at: &[] });
         let (stop, o) = outcome(&two, &moved, Some(true), rp_now());
         let o = o.unwrap();
         assert_eq!((stop, o.verdict.as_str(), o.stop_reason.as_deref()), (Some(RealPlayStop::OtherChange), "confounded", Some("other-compy-change-during-trial")));
@@ -10029,7 +10037,7 @@ mod experiment_tests {
         assert_eq!((stop, decided, o.unwrap().keep), (None, true, true));
         // Another Compy change after the three counted sessions: decided, but confounded and put back.
         let mut moved = rp_ledger();
-        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T20:00:00+00:00", applied: true, rolled_back_at: None, outside_recorded_at: None });
+        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T20:00:00+00:00", applied: true, rolled_back_at: None, outside_recorded_at: None, outside_earlier_at: &[] });
         let (stop, decided, o) = read_of(&three, &moved);
         let o = o.unwrap();
         assert_eq!((stop, decided), (Some(RealPlayStop::OtherChange), true));
@@ -10156,7 +10164,7 @@ mod experiment_tests {
         assert!(pairing.is_some(), "the crash is judged against the as-is sessions' conditions");
         // Another Compy change applied during the test: the crash can't be pinned on this setting.
         let mut moved = rp_ledger();
-        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T10:30:00+00:00", applied: true, rolled_back_at: None, outside_recorded_at: None });
+        moved.push(LedgerEntryRef { id: "game-mode", rec_id: "game-mode", applied_at: "2026-09-04T10:30:00+00:00", applied: true, rolled_back_at: None, outside_recorded_at: None, outside_earlier_at: &[] });
         let (o, _) = real_play_crash(&rec, &sessions, Some(&moved)).unwrap();
         assert_eq!((o.verdict.as_str(), o.keep, o.stop_reason.as_deref()), ("confounded", false, Some("other-compy-change-during-trial")));
         // So is a crash session that ran with Compy changes other than the as-is ones plus this one.
@@ -10416,6 +10424,7 @@ mod changed_outside_trial_tests {
                 schema: CHANGED_OUTSIDE_SCHEMA,
                 recorded_at: at.into(),
                 observed: ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() },
+                earlier_recorded_at: vec![],
             });
         }
         rows
@@ -10506,6 +10515,7 @@ mod refuse_early_tests {
                 schema: CHANGED_OUTSIDE_SCHEMA,
                 recorded_at: "2026-11-10T20:00:00+00:00".into(),
                 observed: ObservedState::PowerPlan { guid: SYNEZ.into(), name: "Synez Power Plan".into() },
+                earlier_recorded_at: vec![],
             });
         }
         assert_eq!(check(&changes), None);
