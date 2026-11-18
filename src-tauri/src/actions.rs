@@ -3271,7 +3271,7 @@ pub(crate) fn apply_power_ultimate() -> Result<ApplyResult, String> {
     // Capture the EXACT plan we're switching away from. Refuse if we can't read it —
     // applying a plan switch whose prior we don't know is a switch we can't honestly roll
     // back (the rollback would error on the empty GUID, leaving the user stuck on Ultimate).
-    // Mirrors apply_power_setting_off_on_ac and the clean-skip in apply_power_plan_switch_core.
+    // Mirrors apply_power_setting_off_on_ac and the refusal in apply_power_plan_switch_core.
     let prior_guid = current_power_plan_guid().ok_or_else(|| {
         "could not determine the active power plan to snapshot; refusing to switch to \
          Ultimate Performance rather than apply a change that could not be rolled back"
@@ -3558,21 +3558,35 @@ fn powercfg_setactive_unelevated(guid: &str) -> Result<(), String> {
 
 /// CORE (UAC-free) power-plan switch. Switches to the best existing high-perf
 /// plan, capturing the prior GUID for an exact restore. Returns Ok(None) — a
-/// clean skip, no error — when there's no valid prior plan to restore to, no
-/// existing high-perf plan to switch to, or we're already on it.
+/// clean skip, no error — when there's no existing high-perf plan to switch to,
+/// or we're already on it; Err, nothing changed, when the prior plan is unread.
 pub(crate) fn apply_power_plan_switch_core() -> Result<Option<ApplyResult>, String> {
-    let prior_guid = current_power_plan_guid().unwrap_or_default();
+    apply_power_plan_switch_core_with(&current_power_plan_guid, &list_power_plans_stdout, &powercfg_setactive_unelevated)
+}
+
+/// [`apply_power_plan_switch_core`] with its reads and the switch passed in (tests pass fakes).
+/// CR-plan-unread-rollbacks: an unread active plan is an Err with nothing changed, never the quiet
+/// skip that a session then records as "set its power plan" (the skip is kept for a plan already
+/// active or no high-performance plan on this PC, where that wording is true).
+pub(crate) fn apply_power_plan_switch_core_with(
+    active_plan: &dyn Fn() -> Option<String>,
+    list_plans: &dyn Fn() -> Option<String>,
+    set_active: &dyn Fn(&str) -> Result<(), String>,
+) -> Result<Option<ApplyResult>, String> {
+    let prior_guid = active_plan().unwrap_or_default();
     if prior_guid.trim().len() != 36 {
-        return Ok(None); // can't capture a restorable prior plan -> don't switch
+        return Err("couldn't read which power plan Windows is using just now, so Gaming Mode can't \
+                    switch it and put it back. Nothing was changed; try again in a moment."
+            .to_string());
     }
-    let list = list_power_plans_stdout().ok_or("powercfg /list failed")?;
+    let list = list_plans().ok_or("powercfg /list failed")?;
     let Some(target) = select_best_existing_high_perf_plan(&list) else {
         return Ok(None); // no existing high-perf plan -> skip, stay UAC-free
     };
     if target.eq_ignore_ascii_case(prior_guid.trim()) {
         return Ok(None); // already active -> nothing to change or restore
     }
-    powercfg_setactive_unelevated(&target)?;
+    set_active(&target)?;
     Ok(Some(ApplyResult {
         applied_action: AppliedAction::SetUltimatePerformancePlan,
         rollback_action: RollbackAction::RestorePowerPlanFromSnapshot,
@@ -3597,6 +3611,37 @@ pub(crate) fn restore_power_plan_unelevated(prior_guid: &str) -> Result<(), Stri
 #[cfg(test)]
 mod gaming_power_tests {
     use super::select_best_existing_high_perf_plan;
+
+    /// CR-plan-unread-rollbacks: Gaming Mode's plan switch on an unread active plan fails with
+    /// nothing changed, never the quiet skip a session records as "set its power plan". A read plan
+    /// that is already the best one still skips cleanly (that wording is true).
+    #[test]
+    fn an_unread_plan_fails_the_gaming_plan_switch_with_nothing_switched() {
+        use std::cell::Cell;
+        let switched = Cell::new(0);
+        let set = |_: &str| -> Result<(), String> {
+            switched.set(switched.get() + 1);
+            Ok(())
+        };
+        let list = || {
+            Some(
+                "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced) *\n\
+                 Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)\n"
+                    .to_string(),
+            )
+        };
+        match super::apply_power_plan_switch_core_with(&|| None, &list, &set) {
+            Err(e) => assert!(e.contains("Nothing was changed"), "{e}"),
+            Ok(_) => panic!("an unread plan must not read as a skip or a switch"),
+        }
+        assert_eq!(switched.get(), 0);
+        let on_best = || Some("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c".to_string());
+        assert!(matches!(super::apply_power_plan_switch_core_with(&on_best, &list, &set), Ok(None)));
+        assert_eq!(switched.get(), 0);
+        let on_balanced = || Some("381b4222-f694-41f0-9685-ff5bb260df2e".to_string());
+        assert!(matches!(super::apply_power_plan_switch_core_with(&on_balanced, &list, &set), Ok(Some(_))));
+        assert_eq!(switched.get(), 1);
+    }
 
     #[test]
     fn selects_ultimate_over_high_performance() {
@@ -3864,6 +3909,39 @@ fn build_power_setting_restore_cmd(
     cmd
 }
 
+/// Pure given the active-plan read (CR-plan-unread-rollbacks A): the elevated restore script for one
+/// power-plan setting. `active_plan` is `None` when the active plan couldn't be read: then whether
+/// the stored plan is the live one is unknown, so the script ends with `powercfg /setactive
+/// SCHEME_CURRENT`. That re-commits whichever plan Windows is running, with no read: if it is the
+/// stored plan, the restored index goes live; if it is another plan, that plan is re-applied as it
+/// is and the stored plan's saved index waits for it. It never switches the user onto another plan,
+/// and the undo is never reported done while the changed value stays live.
+pub(crate) fn power_setting_restore_script(
+    plan_guid: &str,
+    subgroup_guid: &str,
+    setting_guid: &str,
+    prior_ac_value: u32,
+    prior_dc_value: u32,
+    active_plan: Option<&str>,
+) -> String {
+    match active_plan {
+        Some(active) => build_power_setting_restore_cmd(
+            plan_guid,
+            subgroup_guid,
+            setting_guid,
+            prior_ac_value,
+            prior_dc_value,
+            active.trim().eq_ignore_ascii_case(plan_guid.trim()),
+        ),
+        None => {
+            let mut cmd =
+                build_power_setting_restore_cmd(plan_guid, subgroup_guid, setting_guid, prior_ac_value, prior_dc_value, false);
+            cmd.push_str("; powercfg /setactive SCHEME_CURRENT");
+            cmd
+        }
+    }
+}
+
 pub(crate) fn rollback_power_plan_setting_typed(
     plan_guid: &str,
     subgroup_guid: &str,
@@ -3899,17 +3977,16 @@ pub(crate) fn rollback_power_plan_setting_typed(
             }
         ));
     }
-    // Only re-activate (commit live) if the restored plan is the active one.
-    let reactivate = current_power_plan_guid()
-        .map(|g| g.eq_ignore_ascii_case(plan_guid.trim()))
-        .unwrap_or(false);
-    let cmd = build_power_setting_restore_cmd(
+    // Re-commit live when the restored plan is the active one; an unread active plan re-commits
+    // whichever plan is live (CR-plan-unread-rollbacks A), never skips the commit.
+    let active = current_power_plan_guid();
+    let cmd = power_setting_restore_script(
         plan_guid,
         subgroup_guid,
         setting_guid,
         prior_ac_value,
         prior_dc_value,
-        reactivate,
+        active.as_deref(),
     );
     run_elevated_powershell(&cmd)?;
     Ok(())
@@ -4829,18 +4906,72 @@ pub(crate) fn core_parking_apply_script(prior_ac: u32, prior_dc: Option<u32>) ->
 
 // ── Core parking: re-allow parking (min unparked → 0% AC+DC) so the override is lifted ──
 pub(crate) fn restore_core_parking_default() -> Result<ApplyResult, String> {
+    restore_core_parking_default_with(&current_power_plan_guid, &read_core_parking_priors, &run_elevated_powershell)
+}
+
+/// [`restore_core_parking_default`] with its machine reads and the elevated run passed in (tests pass
+/// fakes).
+pub(crate) fn restore_core_parking_default_with(
+    active_plan: &dyn Fn() -> Option<String>,
+    read_priors: &dyn Fn() -> Result<(Option<u32>, Option<u32>), String>,
+    run_elevated: &dyn Fn(&str) -> Result<(), String>,
+) -> Result<ApplyResult, String> {
     // CR-core-parking-plan-guid: the plan SCHEME_CURRENT names right now, recorded with the priors
-    // (a read only; the apply's writes are unchanged).
-    let plan_guid = current_power_plan_guid();
-    let (ac, dc) = read_core_parking_priors()?;
+    // (a read only; the apply's writes are unchanged). CR-plan-unread-rollbacks B: an unread plan
+    // stops the apply before anything runs. Recording no plan would send its undo down the legacy
+    // SCHEME_CURRENT path, which after a plan switch writes the old values onto another plan.
+    let Some(plan) = active_plan() else {
+        return Err("Compy couldn't read which power plan Windows is using just now, so it can't record \
+                    where this change goes. Nothing was changed; try again in a moment."
+            .to_string());
+    };
+    let (ac, dc) = read_priors()?;
     let prior_ac = ac.ok_or("could not parse the core-parking AC index — refusing to restore blind")?;
-    run_elevated_powershell(&core_parking_apply_script(prior_ac, dc))?;
+    run_elevated(&core_parking_apply_script(prior_ac, dc))?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreCoreParkingDefault,
         rollback_action: RollbackAction::RestoreCoreParkingFromSnapshot,
-        snapshot: Snapshot::CoreParking { prior_ac_pct: ac, prior_dc_pct: dc, plan_guid },
+        snapshot: Snapshot::CoreParking { prior_ac_pct: ac, prior_dc_pct: dc, plan_guid: Some(plan) },
         elevation_used: true,
     })
+}
+
+#[cfg(test)]
+mod core_parking_restore_tests {
+    use super::*;
+    use std::cell::Cell;
+
+    /// CR-plan-unread-rollbacks B: an unread active plan stops the core-parking apply before anything
+    /// runs elevated: no ApplyResult, so no ledger row and no receipt. A read plan is recorded with
+    /// the priors, so its undo goes back to that plan.
+    #[test]
+    fn an_unread_plan_stops_the_core_parking_apply_before_anything_runs() {
+        let ran = Cell::new(0);
+        let run = |_: &str| -> Result<(), String> {
+            ran.set(ran.get() + 1);
+            Ok(())
+        };
+        let priors = || -> Result<(Option<u32>, Option<u32>), String> { Ok((Some(100), Some(100))) };
+        match restore_core_parking_default_with(&|| None, &priors, &run) {
+            Err(e) => assert!(e.contains("Nothing was changed"), "{e}"),
+            Ok(_) => panic!("an unread plan must not apply"),
+        }
+        assert_eq!(ran.get(), 0, "nothing runs elevated on an unread plan");
+
+        let plan = "11111111-2222-3333-4444-555555555555";
+        let done = restore_core_parking_default_with(&|| Some(plan.to_string()), &priors, &run);
+        assert_eq!(ran.get(), 1);
+        match done {
+            Ok(r) => match r.snapshot {
+                Snapshot::CoreParking { prior_ac_pct, prior_dc_pct, plan_guid } => {
+                    assert_eq!((prior_ac_pct, prior_dc_pct), (Some(100), Some(100)));
+                    assert_eq!(plan_guid.as_deref(), Some(plan));
+                }
+                _ => panic!("wrong snapshot"),
+            },
+            Err(e) => panic!("a read plan applies: {e}"),
+        }
+    }
 }
 pub(crate) fn rollback_core_parking_typed(ac: Option<u32>, dc: Option<u32>, plan_guid: Option<&str>) -> Result<UndoDone, String> {
     rollback_core_parking_with(ac, dc, plan_guid, &CoreParkingEffects::LIVE)
@@ -5946,6 +6077,30 @@ mod rollback_tests {
             "must not switch active plan when restoring a non-active plan"
         );
         assert!(!cmd2.contains("SCHEME_CURRENT"));
+    }
+
+    /// CR-plan-unread-rollbacks A: the plan exists but the active-plan read failed. The undo still
+    /// writes the old AC/DC index onto the stored plan only, and the script ends with a live
+    /// re-commit that needs no read, so the row is never closed as restored while the changed value
+    /// keeps running. A read that names the plan or another plan keeps its old script.
+    #[test]
+    fn an_unread_active_plan_still_ends_the_power_setting_undo_with_a_re_commit() {
+        let plan = "11111111-2222-3333-4444-555555555555";
+        let unread = power_setting_restore_script(plan, "SUB", "SET", 5, 7, None);
+        let steps: Vec<String> = unread.split(';').map(|s| s.trim().to_string()).collect();
+        let want = [
+            format!("powercfg /setacvalueindex {plan} SUB SET 5"),
+            format!("powercfg /setdcvalueindex {plan} SUB SET 7"),
+            "powercfg /setactive SCHEME_CURRENT".to_string(),
+        ];
+        assert_eq!(steps, want, "{unread}");
+        // The live plan read as the stored one (any case): re-commit that plan by its GUID.
+        let live = power_setting_restore_script(plan, "SUB", "SET", 5, 7, Some(&plan.to_ascii_uppercase()));
+        assert!(live.trim_end().ends_with(&format!("powercfg /setactive {plan}")), "{live}");
+        assert!(!live.contains("SCHEME_CURRENT"), "{live}");
+        // Another plan read as live: write the stored plan only, never switch the user onto it.
+        let other = power_setting_restore_script(plan, "SUB", "SET", 5, 7, Some("99999999-2222-3333-4444-555555555555"));
+        assert!(!other.contains("setactive"), "{other}");
     }
 
     #[test]
