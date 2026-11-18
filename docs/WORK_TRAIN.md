@@ -160,8 +160,10 @@ release checklist); no new rules.
 
 ## Queue
 
-### Now — finish what's open
-- [ ] **P4-judge-noisy** (TOP product item; owner decision 2026-11-12 16:43 "p4 exit answer is no you decide a more
+Queue priority (owner, 2026-11-17 23:37): take items in this order and no other. [LAUNCH] first — work that an open v1.0 exit or release-checklist item is waiting on. [CORRECT] second — a user could see a wrong result, a wrong receipt, or lose a way to undo. [POLISH] is parked until v1.0 ships: refactors with no user-visible change, test re-plumbing, wording nits, small review NITs. A session with no LAUNCH or CORRECT item ready does not pull POLISH to fill time: it logs 'nothing on the launch path is ready' and stops. Review findings enter the queue tagged; a NIT is POLISH unless it meets the CORRECT test.
+
+### Open items in priority order (LAUNCH, then CORRECT, then POLISH)
+- [ ] [LAUNCH] **P4-judge-noisy** (TOP product item; owner decision 2026-11-12 16:43 "p4 exit answer is no you decide a more
       fitting resolution", coordinator resolution) "1 change couldn't be judged" does not count as finished. Establish
       from the recorded data (read-only: the owner's experiments/history for exp:7, exp:8, exp:9, exp:10 and the as-is
       sessions of 2026-11-10/11 on ROB RUN; evidence `_train\view-1110e`, `view-1111a`) exactly WHY those sessions were
@@ -320,6 +322,426 @@ release checklist); no new rules.
       are English-only (as before); the TS tuning view judges uncapped sessions only and doesn't re-check a rig
       change on older post-tune sessions (the newest is checked in Rust); `TUNING_REAL_TEMP_DROP_C` (3 C) is a
       fixed sensor threshold, not measured.
+- [ ] [LAUNCH] **TG-salvage** A contingency instead of a dead end: use only matching, steady segments when a fixed,
+      pre-declared rule allows; otherwise ask for the smallest extra play needed; never pick windows after seeing the
+      result. Tested: the rule fixed before the comparison, adversarial fixtures that would reward cherry-picking.
+      PARKED s37, untouched: the judged number is the session's 1% low (`low1_fps_est`, a mean of per-second 1% lows),
+      and the per-time series a segment rule would need (`fps_series`, `stutter_timeline`) is shed from all but the
+      most recent sessions on save, so a baseline's segments are usually gone by its second session. A first slice
+      must keep segment-level 1% lows for a Trial's baseline (additive, schema-versioned), then the pre-declared rule,
+      its words (en + zh-CN) and opus + sonnet reviews: more than fits beside an install in one session.
+      Why LAUNCH: P4-exit-proof does not count an unjudged change as finished; salvage is the pre-declared contingency for a Trial too noisy to judge.
+- [ ] [LAUNCH] **TG-passive-band** Learn each game's noise band from ordinary play over time with no instructions, so a Trial
+      rarely has to ask for extra as-is sessions. Tested: a band appears from ordinary sessions alone; never pooled across
+      contexts.
+      Why LAUNCH: P4-exit-proof needs ROB RUN's remaining Trials judged on a measured band; a band kept current from ordinary play lets a Trial judge without asking for extra as-is sessions.
+- [ ] [LAUNCH] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "Compy finished the supported
+      tests" with nothing worth another run; record it in BACKLOG as the Phase 4 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p4 exit answer is no you decide a more fitting resolution". Owner delegated
+      2026-11-12; coordinator resolution: "1 change couldn't be judged" does not count as finished; the wording stays;
+      P4-judge-noisy makes the unjudged case judgeable honestly, then the proof is re-run on the owner's real play.
+      2026-11-10 desk session (not ticked): blocked before any Trial. The owner's PBZ Trial `exp:6-1793579868420`
+      (visual-effects, started 2026-11-02 00:37Z) is still Running with its change applied, and the backend refuses
+      a new Trial while one is Pending/Running (`experiment.rs:817-823`). Human step: the owner finishes it (one PBZ
+      session, then Conclude) or puts it back from the bench (~2 min, or ~15 min with the session), then plays the
+      WARDOGS Trials the panel asks for (~10 min of normal play per session). Read-back: `trial-wardogs\nav.js` output
+      in this session's report.
+      2026-11-10 ~17:44-19:16 desk session (not ticked). Owner 17:44: "i need you to complete these task on your own you
+      can use the game i have active now rather than wardogs" (ROB RUN substituted for WARDOGS). Driven over CDP, no focus
+      taken. PBZ Trial exp:6 cleared by Compy's own Conclude on its post-apply PBZ session (Nov 2, 4,860 readings):
+      verdict confounded ("13 active Compy changes, not 15"), visual-effects restored, `final_state_verified` true, ledger
+      row rolled back 01:48:06Z, no Trial open. ROB RUN, all real play: a Live capture (665 counted readings, 18 min in the
+      background left out) then Optimize my game: as-is 1 (1,211 readings) and as-is 2 (1,209) both hit the settle cap
+      uneven (335/284 and 239/316 fps); "Test anyway" was refused before any change: "another setting Compy changed earlier
+      can't be confirmed as still in place" (the two power-ultimate rows read off; active plan is "Synez Power Plan", set
+      outside Compy). No ROB RUN verdict; nothing applied. Blocked on CR-unconfirmed-remedy (owner call). Evidence
+      `C:\Users\Kuya\code\_train\view-1110d\` (s1-*, p4-*, p5-*, journey.log, fgwatch.log).
+      2026-11-10 ~20:13-21:21 session (killed with no report; recovered read-only 2026-11-11, not ticked). On installed
+      `6a2e6334` over CDP: [Keep "Synez Power Plan"] recorded `changed_outside` on both power-ultimate rows (04:15:43Z),
+      active scheme `22222222-…` (Synez) identical before/after/later. ROB RUN real play: as-is 1 (04:17-04:38Z) and
+      as-is 2 (04:39-04:59Z) both uneven at the cap, "Test anyway", then the Trial `exp:7-1794373260660` (visual-effects,
+      05:01-05:20Z, 1,112 readings): verdict too-noisy (avg 298.8→289.2, 1% low 205.7→197.5, floor ±3%), status
+      restored, ledger row rolled back 05:20:31Z; no Trial open. Not met: the panel still names "Switch to the Ultimate
+      Performance power plan" as worth testing, so it never said "Compy finished the supported tests". Remains: that
+      Trial (needs the risk confirm) until nothing is worth another run. Evidence `_train\view-1110e\` (s4-*.txt,
+      s4-powercfg.txt, journey.log, j-05-enough.png, j-06-end.png).
+      2026-11-11 ~04:02-06:38 session (not ticked; ROB RUN per the owner's 17:44 sentence, "i need you to complete these
+      task on your own you can use the game i have active now rather than wardogs"). Driven over CDP on installed
+      `6a2e6334` while he played; fgwatch 466 reads, Compy never in front. Ultimate decision: declining it inside Compy
+      only exists as lowering his own risk choice, which gives "finished-within-chosen-risk", not this wording; put-back
+      is `rollback_change(own row)` -> `powercfg /setactive <snapshot prior_guid>`, the snapshot read by
+      `/getactivescheme` at apply (`actions.rs` apply/rollback_power_ultimate), so it was run. Real play, all in focus:
+      exp:8 power-ultimate (12:19-12:40Z, Stop now at the cap) too-noisy, put back; exp:9 visual-effects retest (new
+      before-session forced; as-is uneven twice, Test anyway, 13:27-13:55Z) too-noisy (+2.4% 1% low), put back,
+      VisualFXSetting 0 read back; exp:10 power-ultimate retest (13:55-14:31Z, "Compy has enough" both sessions) no-change,
+      medium (1% low +1.7%, avg +0.7%, band ±3%), put back. Scheme `22222222-…` (Synez) before, Ultimate `db9dd473-…`
+      only inside exp:8/exp:10 session 2, Synez after each and at teardown. Not met: the panel ends at "Nothing on ROB RUN
+      is left for Compy to test right now. 1 change was measured. 1 couldn't be judged." Visual effects is now two
+      too-noisy runs (RETEST_CAP 2) and `test-summary.ts` says "finished the supported tests" only with no inconclusive
+      change, so on ROB RUN this wording can no longer be reached (coordinator/owner call: a steadier game, or accept
+      "nothing left" as the exit). Evidence `_train\view-1111a\` (journey.log, powercfg.txt, ledger-*.txt,
+      experiments-final.txt, o-*.json/txt, fgwatch.log, teardown.txt).
+- [ ] [LAUNCH] **P5-exit-proof** (owner, FULL) Run the journey on WARDOGS from the button to the summary with no manual
+      Trial clicks; the friend repeats it once. Record in BACKLOG as the Phase 5 exit. Needs P5-guided through
+      P5-learned. ROADMAP P5 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p5, p6 exit not sure what this means if you are capable of delegating the
+      resolution for this task then do so yourself". Owner delegated 2026-11-12; coordinator resolution: the wording
+      stays (owner half met on ROB RUN; friend half open), resolved with P6 and P7 by one friend test using the
+      shareable installer (P7-tester-package). No tick now.
+      2026-11-10 desk session (not ticked): needs a person. The exit is measured on normal play (Constitution 36,
+      P5-realplay), so an unattended idle scene is not a valid run, and the same open PBZ Trial blocks the button.
+      Human step: after P4's step, the owner presses Optimize my game on WARDOGS and plays (~25 min); the friend once.
+      2026-11-10 ~18:30-19:14 (not ticked; ROB RUN per the owner's 17:44 substitution, see P4-exit-proof): the button
+      ran two as-is sessions on his real play with no capture or Trial clicks (each stopped at Compy's own "Stop now"
+      after the settle cap), offered "Test anyway", then refused to start (CR-unconfirmed-remedy). No summary reached;
+      the friend's run not attempted. Evidence `_train\view-1110d\p5-0*.png/json`, `journey.log`.
+      2026-11-10 ~20:13-21:21 (killed session, recovered 2026-11-11; not ticked; ROB RUN per the 17:44 substitution):
+      from the button, two as-is sessions and one Trial session on real play, every step through journey buttons only
+      (Stop now ×2, Play one more as-is session, Test anyway, Done playing), no Start/Stop capture or Conclude click;
+      Compy concluded it itself (too-noisy, put back). The end screen is the verdict with a next offer ("I understand,
+      test it" / "Stop here"), not the end-of-journey summary. Remains: run to the summary, and the friend's repeat.
+      Evidence `_train\view-1110e\journey.log`, `j-01..j-06*.png`.
+      2026-11-11 ~04:02-06:38 (not ticked: owner half met / friend half open; ROB RUN per the owner's 17:44 sentence,
+      "i need you to complete these task on your own you can use the game i have active now rather than wardogs"): the
+      journey resumed from its own offer and ran to its end on his real play through journey buttons only (I understand,
+      test it ×2, Next, Stop now ×4, Play one more as-is session, Test anyway, Done playing ×3, OK); no Start experiment,
+      Start/Stop capture or Conclude click, no setting picked. Three Trials (exp:8, exp:9, exp:10; see P4-exit-proof).
+      End: "1 of 2 tested. Nothing else here is worth testing on this PC. 1 try couldn't be judged.", and the summary
+      "Nothing on ROB RUN is left for Compy to test right now. 1 change was measured. 1 couldn't be judged." with both
+      put back and why, lesson "ROB RUN swings a lot between sessions…", "Nothing from these tests stays applied." Across
+      11-10 + 11-11 that is the button (11-10 ~20:15) to the summary. Friend's repeat cannot be done by Claude.
+      Evidence `_train\view-1111a\journey.log`, `o-12-journey-end.json`, `o-13-after-ok-summary.json`.
+      2026-11-11: the friend-dependent part is deferred, no second tester available (owner, 2026-11-11 07:41: "I DO
+      NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO LEAVE ANYTHING LIKE THAT ONLINE"). Do not ask the owner for it again;
+      do not simulate it. Stays unticked until the owner either supplies a tester or decides in writing that the owner
+      half alone exits the phase.
+- [ ] [LAUNCH] **P6-exit-proof** (owner, FULL) From Home, follow a real (or past) WARDOGS crash and a stutter to a next
+      step or honest unknown without picking a room; the friend repeats it once. Record in BACKLOG as the
+      Phase 6 exit. Needs P6-changed through P6-unknown. ROADMAP P6 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p5, p6 exit not sure what this means if you are capable of delegating the
+      resolution for this task then do so yourself". Owner delegated 2026-11-12; coordinator resolution: as P5-exit-
+      proof (wording stays; the friend half closes with P7's friend test on the P7-tester-package installer). No tick.
+      2026-11-10 desk session, driven on the installed `68f2272b` from Home with no room picked: Home > Something went
+      wrong lands on Problems with one next step for the newest crash (ROB RUN App crash, Nov 10 11:17: "Verify the
+      game's files, then update it", with receipt), and its "Stutters or runs slow?" button compares the latest
+      session (PBZ, Nov 2) with the last steady one and names one next test (roll back, play once, compare). No
+      WARDOGS crash is on this PC's record (the incident list names none) and the stutter path compares the latest
+      game, PBZ. Evidence `C:\Users\Kuya\code\_train\view-1110\p6-0*.png`. Not ticked: the friend's repeat
+      (~5 min) and a WARDOGS case are still needed.
+      2026-11-10 ~19:14 re-check (not ticked; ROB RUN per the owner's 17:44 substitution, see P4-exit-proof): from Home,
+      Something went wrong → the ROB RUN crash (Nov 10 11:17) still reaches one next step (verify files, then update),
+      and "Compare my latest session with my last steady one" now gives an honest unknown for ROB RUN ("no steady
+      ROB RUN session to compare … record a session in Live when the game runs well"). The owner's half holds for ROB RUN;
+      the friend's repeat (~5 min) remains. Evidence `_train\view-1110d\p6-05-*`, `p6-06-stutter-now.png`.
+      2026-11-11: the friend-dependent part is deferred, no second tester available (owner, 2026-11-11 07:41: "I DO
+      NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO LEAVE ANYTHING LIKE THAT ONLINE"). Do not ask the owner for it again;
+      do not simulate it. Stays unticked until the owner either supplies a tester or decides in writing that the owner
+      half alone exits the phase.
+- [ ] [LAUNCH] **P7-exit-proof** (owner, FULL) The friend goes from Home to an answer on "more FPS", "it stutters" and
+      "it crashed" without asking what a word means; the owner opens the technical layer on each and finds the
+      exact setting, measurement and source. Record in BACKLOG as the Phase 7 exit. Needs P7-route through
+      P7-teach; P7-palette and the rig slices do not block it. ROADMAP P7 exit.
+      Owner 2026-11-12 16:43 (verbatim): "p7 exit whenever optimal give me a downloadable file of the app that can be
+      easily shared to a friend to have test whatever is needed for this exit" and "a release to testers presumably
+      goes hand in hand with p7 i think or clarify thhhe p7 task". Owner delegated 2026-11-12; coordinator resolution:
+      one friend test on a shareable installer (P7-tester-package) closes the friend halves of P5, P6 and P7.
+      2026-11-10 desk session (not ticked): needs the friend at the keyboard (~10 min) and the owner opening the
+      technical layer on each answer (~5 min); not drivable unattended.
+      2026-11-10 ~19:16: not attempted or simulated (needs the friend); still open.
+      2026-11-11: the friend-dependent part is deferred, no second tester available (owner, 2026-11-11 07:41: "I DO
+      NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO LEAVE ANYTHING LIKE THAT ONLINE"). Do not ask the owner for it again;
+      do not simulate it. Stays unticked until the owner either supplies a tester or decides in writing that the owner
+      half alone exits the phase.
+- [ ] [LAUNCH] **P7-tester-package** (owner decision 2026-11-12; NEXT worker, not built in s25) A no-updater installer of
+      `main` after the tester-blocking fixes are in, plus a one-page plain-language tester guide (what to click for
+      "more FPS", "it stutters", "it crashed"; how to undo; what to send back), handed to the owner as one
+      downloadable file to share with a friend. Note: a formal updater-published release is a separate thing that
+      needs the updater signing key (not on this PC) and is not required for P7. Owner-held, separate: code signing
+      (no spend; the coordinator prepares a definitive cost breakdown) and legal (deferred by the owner).
+      s28 (package built, not ticked, not sent): `C:\Users\Kuya\Desktop\Compy-tester\` holds the proved desk installer
+      of `3630e0a6` as `Compy-0.9.26-3630e0a6-tester-setup.exe`, `SHA256.txt` and the guide (`Compy-tester-guide.txt`
+      + `.html`). Paths and labels taken from the en locale and the code (Test -> Optimize my game; Health ->
+      Something's wrong -> Open; Test -> Optimize -> Applied & history -> Roll back; Settings -> Support record ->
+      Save this as a file); not checked on screen. The guide keeps the tester off the Benchmark and Tuning stations and
+      the Live/History session comparisons (still fixed ±3%, parked item 8).
+- [ ] [CORRECT] **CR-1102-left** (codebase review 2026-11-02 to 11-03, slices 1-8; fixed in `8f4037c1`..`508b200f`, `4465e74b`, `16479f4b`, `22d23584`..`cd9e11c0`)
+      Triaged 2026-11-10 (coordinator desk session). Already fixed on `main`, struck: the Trial delta on a 0/NaN
+      baseline (`4d5595fd`), Black Box/export/capture start and the slow probes off the UI thread (`9cab29d0`,
+      `25af5dc5`), a silent Care state (`e77fba1e`), a stopped service read as Compy's (`c5523543`), English-word
+      power/parking/bcdedit reads (`5e2a110d`; the Ultimate apply stays CR-ultimate-identity), the GPU picker
+      (`7e697609`), zh-CN GPU labels and lessons (`eddf6c7e`), the tour on a rejected scan (`a60b8068`), the first-DXGI
+      vendor (`0f0cb0ba`), the ring note (`5e8cf37a`), Live's floored durations (`8be87e12`), "Fixed at 0-0 MB"
+      (`258b438f`), VBS configured-not-running (`b2ed0cca`), dual-channel (`ad5074ac`); earlier: the `.corrupt`
+      overwrite (`c127ce9`, `14d39b5`), the waiting comparison (`e01561f7`), "measured together" (`8ef5772`), one peak
+      GPU sample (P9-bottleneck-sustained). Four owner calls moved to **Needs owner**. Still open, engineering, none
+      a one-session fix: one ledger row a downgraded build can't parse fails the whole ledger; a partial batch apply
+      carries no flag over IPC; nothing stops a double apply of one change; Care's first-ever scan seeds an empty
+      world when its readers fail; a crash's vitals come from the whole capture window, not the game's own; a wedged
+      old FPS helper can clear the new one's running flag (`monitoring.rs` stores `helper_running` false on any exit;
+      gating it on the generation would leave it stuck true after a failed relaunch, so it needs a live-helper
+      count); App's banner wiring and refresh guard are tested through helpers only (no App render harness); a TCC
+      NVIDIA card only NVML reports leaves a session's peak graded (the ungrade rule reads DXGI only); `elevate_and_wait` waits with no timeout while
+      the ledger is locked (`actions.rs`); core parking flags any non-performance plan with minimum cores at 100;
+      drive health and memory speed or channels never rank as limiters.
+      Core parking done `750b6034`, `0f6b6c4e` (2026-11-11 s16-s18, leftovers.rs only, read-only, not installed): 100%
+      is flagged only on the stock Balanced plan (class, or the words for an older probe without a class); custom,
+      vendor and unread plans are not flagged. cargo `leftovers::` 27/0, clippy clean; sonnet APPROVE-WITH-NITS, no
+      MUST-FIX; SHOULD-FIX (stale comments, test name) and the legacy custom-plan case taken.
+      Owner calls taken (owner delegated 2026-11-10; coordinator took the recommendation): a drift notice whose check
+      now reads unknown stays, worded "last seen changed; Compy can't read it now" — done `8d855c05` (2026-11-11,
+      CODE-ONLY, not installed; drift.rs re-emits it with `unreadable_now`, state unchanged; Home's count reads
+      "changed since they were last good"; cargo 1830/0, clippy clean; sonnet APPROVE-WITH-NITS). A leftover
+      `gaming-session` temp file keeps refusing update and restart, but the refusal names the file and its folder and
+      offers Recover — done `98e9f129` (2026-11-11, CODE-ONLY, not installed; `pending_contract_files`, same fail-closed
+      check; Recover shows App's existing recovery banner, or says Compy can't read a session from that file; no new
+      command; sonnet APPROVE-WITH-NITS, SHOULD-FIX taken). Real play whose look decided but which stopped on another
+      Compy change or a changed condition is put back, as a confounded Trial is — done `7b69b33a` (2026-11-11,
+      CODE-ONLY, not installed; `real_play_outcome` folds it to `confounded`, keep false, through `with_compy_state`
+      / `confounded_by_conditions`, so `finish_conclude`'s existing restore of the Trial's own change runs; "Close
+      this test" says it keeps nothing; reviews opus r1 APPROVE-WITH-NITS, r2 APPROVE-WITH-NITS; sonnet r1
+      APPROVE-WITH-NITS, r2 APPROVE; no MUST-FIX; SHOULD-FIX keep-forced-off and the note nits taken; same-setting
+      later row queued as CR-rp-same-setting-row). After the one-time consent, newly ticked UAC tiers and service
+      suspends ask once, naming only the new ones — done `ff19db9a` (2026-11-11, CODE-ONLY, TS only, not installed;
+      agreed extras in `compy_gaming_consent_extras_v1`, the same modal tree, tier boxes shut while it is open; only
+      adds a confirm; reviews opus r1 APPROVE-WITH-NITS (SHOULD-FIX taken), r2 APPROVE-WITH-NITS; sonnet r1
+      APPROVE-WITH-NITS, r2 APPROVE; no MUST-FIX; held-Enter nit queued as CR-gm-confirm-repeat).
+- [ ] [CORRECT] **CR-range3-nits** (a) `src/data/kept-outside-undo.ts` STOCK lacks Power saver (`a1841308-…`), so a Power saver
+      prior plan reads "Compy didn't save its name": add it, en + zh-CN; (b) `history::rec_id_of_change` loads the
+      ledger without `HISTORY_LOCK`: if that load can set a damaged file aside (a rename) unlocked, take the lock (and
+      check `get_applied_changes`); (c) the dark stack trial applies through `apply_recommendations_batch` with no
+      bench hold (benchmark_trial.rs ~534): add the hold before `stack_trial_gate` is ever enabled (supersedes
+      CR-bench-stack-hold).
+      (a)(b) done (2026-11-12 s21, not installed; SHA in the merge): (a) a saved Power saver plan is named ("Power
+      saver" / "节能"); (b) yes, it could: a locked writer setting the damaged file aside and saving a new ledger
+      between the unlocked read and its rename would have moved the NEW ledger aside. The lookup now only reads
+      (`read_history_unlocked`: never renames; damaged or unreadable = an error, the undo stops before anything
+      runs, the next locked load sets it aside). Not the lock: an apply holds it through its UAC prompt and this
+      answers the UI's undo on the main thread. Tests fail on the old code. Review (sonnet) APPROVE-WITH-NITS. Left
+      (park, needs its own design): the same unlocked load-with-set-aside is a class, not one function:
+      `get_applied_changes` (History/Health views), `rec_is_active`, comparison.rs ~219, experiment.rs ~2189 and
+      ~3751, intelligence.rs ~2398, machine_model.rs ~1470, trial_candidates.rs ~542; locking them would freeze the
+      UI during an apply's prompt, and read-only views change how the quarantine is first noticed. The lookup's
+      failure now records no `ledger_load` support event (the next locked load or view poll does), and its words
+      for a damaged ledger say only "could not be read (parse …). Nothing was changed." (c) parked: `Held` is one (token, rec, title); the stack needs a set held under the store gate
+      before its batch (an `apply_for_bench_stack` beside `apply_for_bench_trial`), and `held_now()` callers
+      (Gaming Mode's start, `bench_refusal`) read one. Dark (`stack_trial_gate()` false), nothing reaches it today;
+      two reviews when done.
+- [ ] [CORRECT] **CR-plan-read-prompt-write** (CR-gm-stop-busy r1 opus SHOULD-FIX 3, pre-existing) Applies that read
+      `SCHEME_CURRENT` before a UAC prompt and write it after (e.g. the CPMINCORES script, actions.rs ~4570) never
+      took Gaming Mode's gate, so a session start or stop during the prompt changes which plan they write.
+      Establish whether a live apply route reaches one first.
+- [ ] [CORRECT] **CR-powercfg-restore-exit** (r1 opus SHOULD-FIX of CR-gm-restore-partial; pre-existing; rollback boundary) The
+      power-setting restore (USB selective suspend / PCIe ASPM, actions.rs ~3651, and its batch line ~1034) runs bare
+      `powercfg` with no `$LASTEXITCODE` check, so inside the batch's `try` a failed write still records `:ok` and the
+      change counts as restored. Check the exit code in the restore path as #617 did for apply. Two reviews.
+      s40 opus NIT (same finding, single undo): `power_setting_restore_script` chains bare powercfg steps too;
+      `ps_all_or_restore` with `native: true` (the core-parking apply) already exists for this.
+- [ ] [CORRECT] **CR-gm-repeat-live** (opus SHOULD-FIX of CR-gm-confirm-repeat; FULL, UI) On the installed build, send a held Enter
+      (CDP `Input.dispatchKeyEvent`, `autoRepeat: true`) to Gaming Mode's Enable: the repeats must start nothing, a fresh
+      press must. jsdom never turns a key into a click, so only a live check proves WebView2 honours the cancel.
+- [ ] [CORRECT] **CR-care-unread-rig** (s40, parked from the s40 small item) care-next-step.ts `payoffFor` counts a session
+      whose rig is unread (or a baseline whose rig is unknown) as the same rig (`!rig || !baseRig || sameRig`), so
+      "stayed steady" can rest on sessions from another machine. Needs a decision first: excluding them makes an old
+      baseline with no recorded rig read "not enough sessions" forever, which misleads the other way. TS.
+- [ ] [CORRECT] **CR-fall-words-band** (s37 opus r2 SHOULD-FIX, pre-existing wording from s27) Likely worse, the receipt rules
+      and "fell by more than the band" name the band where the fall was judged at the matching fall (-9.5% against a
+      10% band reads "more than the ±10% allowance"). Word it as the engine's `fell_words` does, en + zh-CN. TS.
+      s38: left queued (not small: receipt and rule wording in en + zh-CN across several surfaces).
+- [ ] [CORRECT] **CR-plan-compare-rest** (s40 opus on CR-trial-plan-unread, outside its diff) Real-play Trials (realplay.rs,
+      `comparability::derive` only) and the session-debrief before/after verdict (comparison.rs) don't compare the
+      power plan at all, even one that clearly differed; the Trial preflight says nothing about an unread baseline
+      plan (that Trial now always ends confounded); on those two paths a plan unread at a session's start or end
+      isn't checked either. Mutation-free; measurement logic: opus + sonnet.
+- [ ] [CORRECT] **CR-ultimate-followups** (r3/r4 reviews of CR-ultimate-identity; pre-existing) (a) the row's live check
+      (`recommendations.rs` / `probe_rec_target` "power-ultimate", class only) still reads a stamped localized copy as off:
+      use `compys_plan_guid`; (b) `actions::current_power_plan_guid` keys on the English "GUID:" at the apply's snapshot
+      step (actions.rs, mutation gate); (c) a copy no row stamped (old row or a timed-out read) that the user re-activates
+      can be recorded on a stamped row; (d) out-of-order undo can restore Compy's own copy as a prior; (e) the 5 s timeout
+      test sleeps 7 s: inject the timeout.
+      (a)(e) done `fef0a937` + r1 nits (2026-11-11 s20, not installed): a power-ultimate row that recorded the plan Compy
+      activated reads On on that plan (`check_row_state` through `is_compys_ultimate`), so History, Health, readiness and
+      the Trial's unverified-others check stop reading Compy's own localized copy as off; rows without the record read
+      by class as before. The hang test injects a 100 ms bound (`bounded_read_within`); production keeps 5 s. Read-only;
+      apply/rollback writes unchanged. Reviews r1 opus + sonnet APPROVE-WITH-NITS (taken: doc, looser timing bound).
+      Test fails on the old code. cargo 1867/0, clippy clean. Left parked: (b), (c), (d) (they change what apply,
+      record or rollback write), and (f) from r1: the setting-level Ultimate reads (`recommendations.rs:456`,
+      `probe_rec_target`, and the undo read-backs through `check_change_state`) still read the copy by class, so the
+      Optimize card and a Trial's reads of its own setting still say "off" on a localized Windows (fails safe:
+      unjudged); route them through the newest applied row with (b)-(d), two reviews.
+- [ ] [CORRECT] **CR-outside-followups** (review SHOULD-FIX of CR-unconfirmed-remedy, Rust + TS) (a) stamp the active plan GUID on
+      each session or the Trial record, so a plan switched away and back between start and conclude is caught; (b) Test →
+      Applied & history shows a recorded row as "changed outside Compy" (`types.ts` field + a note) instead of an active
+      change with only the undo, and Game Readiness stops flagging it as drifted; (c) the remedy panel re-fetches its offer
+      on the ledger-changed event (a plan switched again while it is open); (d) a replaced record keeps the first record's
+      time as a move too (today the newest replaces it).
+      (c) done `af23273d` (2026-11-11, CODE-ONLY, TS only, not installed): ChangedOutsideRemedy re-reads its offer on
+      `LEDGER_CHANGED_EVENT` and on window focus, so its words and button follow a plan switched again; a recorded
+      line keeps its own copy and stays after a re-read stops offering it. 2 tests fail on the old component.
+      Left: (a) and (d) touch the Trial/ledger record (Rust), (b) Applied & history + Game Readiness (TS + readiness).
+      2026-11-11 s15: (a) and (d) parked, not started: both change what the Trial start/conclude one-change checks
+      read (the session ran under "no apply/rollback behaviour" for item 4); (b) parked for time (Rust readiness +
+      TS history, one review); next step for (b): `types.ts` `changed_outside` on `AppliedChange`, a note on the row.
+      (b) done `4ee91290`, `44d91648`, `db633af9`, `9d4553bb` (2026-11-11 s16-s18, not installed): Game Readiness counts
+      a recorded row whose plan still holds as kept, not drift (only the readiness roll-up `checked_summary` reads the
+      plan, through `summarize_for_readiness`; `summarize_history` unchanged, test-pinned); view field
+      `changed_outside_holds` (None when no read was taken); History says "changed outside Compy" + a "Recorded <when>"
+      note (en, zh-CN). `db633af9` restores the two shapes the experiment-record-first guard pins (`summarize_checked`
+      holds the roll-up; `checked_summary(load_history(), ledger_was_quarantined())`): those were the 2 guard failures
+      s16 put on CR-rp-same-setting-row. Reviews: r1 opus + sonnet REQUEST-CHANGES (fixed), r2 sonnet
+      APPROVE-WITH-NITS, r2 opus (s18) APPROVE-WITH-NITS, no MUST-FIX; SHOULD-FIX unknown-as-None and the date wording
+      taken, the shared plan read queued (CR-kept-plan-read-once). cargo 1839/0, clippy clean, guard 49/49, full vitest
+      532/536 (3 site-app suites + one Chromium launch flake, passed on rerun). (a), (d) not started.
+      2026-11-11 s19: (a) and (d) still not started (session bound): both change what the Trial one-change checks read,
+      and need a test showing the check gets no weaker plus two reviews. Next step for (d): keep `recorded_at` of the
+      first record in a `first_recorded_at` field (additive) and count it as a move in `trial_moved_since`-style checks.
+- [ ] [POLISH] **CR-zh-readiness-rest** (left by CR-zh-readiness-words) The other limiter rows are still English in zh-CN: the
+      install-drive (9 sentences), applied-changes (drift counts + kept-outside titles) and fps-monitoring checks, and
+      priorities.rs's own rows (pending safe tweaks, startup load, Memory Integrity); and the console / Check rows print
+      the same readiness label and detail. Mirror them in `readinessWords` (or the priorities rows by id) the same way.
+      TS.
+- [ ] [POLISH] **CR-bench-stack-hold** (r1 sonnet SHOULD-FIX of CR-bench-holds-setting) The DARK aggregate-stack trial
+      (`stack_trial_gate()` false) holds nothing; before arming it, hold every setting it applies the way the tweak trial does.
+      Superseded by CR-range3-nits (c).
+- [ ] [POLISH] **CR-active-plan-unread-callers** (s38 opus + sonnet SHOULD-FIX; the same "failed read" assumption elsewhere)
+      actions.rs power-setting rollback: `reactivate = current_power_plan_guid()...unwrap_or(false)` (~3910) skips the
+      live re-commit on an unread active plan and still reports success; `restore_core_parking_default` (~4834)
+      records no plan GUID on an unread read, so its undo takes the legacy SCHEME_CURRENT path. Both now see an unread
+      plan after 5 s or a non-zero exit (before: waited). Read-only, no time limit: lib.rs `current_power_plan_name`,
+      `current_power_plan`, `current_power_scheme`. Mutation boundary: opus + sonnet.
+      s40: both actions.rs parts done by CR-plan-unread-rollbacks (merge `573f600d`, below); left: the lib.rs
+      read-only reads with no time limit.
+- [ ] [POLISH] **CR-plan-exists-timeout** (s40 opus NIT, pre-existing) `power_plan_exists` (actions.rs, the USB/PCIe undo's
+      plan-gone check) runs `powercfg /list` with no `output_within` limit, and a failed or hung list reads as "the
+      plan no longer exists" (fails safe: Err, nothing claimed). Use `power_plan_listed` (an Option) instead.
+- [ ] [POLISH] **Judging-chain refactor slice** PARKED s33. First slice LANDED s35 (merge `de49b37a`): the two-session verdict
+      chain inside `conclude_experiment` moved unchanged into a pure `judge_pair(&PairInputs)` (placed right after
+      it); behaviour tests in `refuse_early_tests` on the owner's session shape retire five include_str! assertions:
+      measured-band classification (`the_conclude_classifies_the_1pct_low_on_the_measured_band_not_the_stored_one`),
+      Recommended bands (`a_recommended_trial_reads_the_average_on_its_own_measured_band`), Maximum FPS wider band
+      (`a_max_fps_trial_is_judged_on_the_wider_of_the_two_measured_bands`), cap check
+      (`an_after_session_that_ran_capped_against_an_uncapped_band_is_confounded`), unmeasured noise
+      (`a_conclude_with_no_measured_band_judges_nothing_and_restores`). opus r1 REQUEST-CHANGES (2 MUST-FIX: tests
+      couldn't tell the bands apart; taken), opus r2 AWN (2 SHOULD-FIX note asserts taken), sonnet AWN.
+      Left, still pinned (next slices): `conclude_grades_both_sessions_before_it_records_a_verdict`, the receipt line of
+      `the_average_delta_is_stored_additively_...`, `smoothest_is_judged_at_conclude_...`,
+      `a_two_session_conclude_refuses_a_real_play_trial_before_judging_anything`, the rest of
+      `an_uneven_session_is_no_longer_a_reason_to_judge_nothing` (its negative `with_steady_sessions(` pin and the
+      Smoothest pin still match only because `judge_pair` sits inside their search range: retire or re-scope them
+      when it moves), the start half of `the_start_measures_the_band_...`, and the start_experiment pins
+      (`a_start_reads_smoothest_...`, `a_start_keeps_the_catalogs_stated_risk_...`, `a_start_keeps_the_risk_choice_...`,
+      `a_start_keeps_the_cost_acknowledgement_...`, `smoothest_starts_only_when_...`, `a_start_reads_real_play_...`);
+      start_experiment's band/refusal decision is not extracted yet; nothing tests that `conclude_experiment` passes
+      the right values into `judge_pair` (opus NIT).
+      Slice 2 LANDED s37 (merge `1d12730f`; `d105cc29`, `300c5f10`, `677afea1`), no behaviour change: everything
+      between the conclude's reads and its keep/restore tail (the after-session's grade and pacing, the noise it is
+      judged on, `judge_pair` / `crash_outcome`, the Compy-state, unconfirmed-changes and target checks, every record
+      write) moved into `conclude_two_session(&mut ExperimentRecord, ConcludeReads)` (no IO, no store);
+      `conclude_experiment` keeps the store lock, the refusals and the live reads (two read-only reads moved earlier,
+      nothing written between). Retired -> behaviour tests: `conclude_grades_both_sessions_...` and the receipt line of
+      `the_average_delta_...` -> `the_conclude_stores_the_after_sessions_grade_the_average_delta_and_the_band_it_judged_on`;
+      `smoothest_is_judged_at_conclude_...`'s pins -> `a_smoothest_conclude_judges_and_keeps_the_after_sessions_pacing`;
+      `an_uneven_session_is_no_longer_...` -> `an_uneven_after_session_is_still_judged` (+ the stores test and
+      `a_record_without_kept_noise_is_measured_at_conclude_over_the_covered_sessions`);
+      `a_two_session_conclude_refuses_...`'s target-order pin -> `the_target_read_has_the_last_word_at_conclude`. New
+      (s35 opus NIT): `the_conclude_hands_judge_pair_the_picked_session_the_crash_report_and_its_noise`. Guard
+      re-derived: experiment-record-first-guard.test.ts's six conclude assertions now read the core and pin the hand-off
+      (resolved, target_now, rows, unverified, game_noise) into its one call. opus r1 REQUEST-CHANGES (MUST-FIX: the
+      noise measurement's arguments were unguarded; taken), sonnet r1 AWN (SHOULD-FIXes taken), opus r2 AWN.
+      Still pinned (8 of the 13 named above): `a_two_session_conclude_refuses_a_real_play_trial_...` (the refusal
+      before `resolve_treatment`, in the IO shell), the start half of `the_start_measures_the_band_...`, and the six
+      start_experiment pins; next slice: extract start_experiment's band/refusal decision. Left (opus r2 NIT 3): on the
+      test fixture the baseline, ledger length and clock don't change `judge_pair`'s result, so their hand-off is shown
+      only by equality.
+      s38: untouched (under 50 minutes before the 18:40 batch once items 1-5 were in).
+- [ ] [POLISH] **TG-context** Every session records a measurement-context fingerprint from what Compy can read: cap state (from
+      frame data), resolution/refresh mode, share of time the game was in front, active power plan, GPU driver and
+      adapter, known heavy background work (recording/streaming encoders, high CPU from non-game processes), length;
+      additive, schema-versioned; unknown stays unknown. User sees: nothing new until TG-drift-words. Tested: fixtures
+      per field, old sessions load unchanged.
+      LANDED s30 (not ticked): merge `c825378e` adds the power plan at capture start + changed-by-end and
+      `context_version` 1 to `game_state` (cap, focus share, resolution/refresh, driver were already recorded).
+      Left: known heavy background work (recorder/streaming encoder, high non-game CPU) as context v2; note the
+      per-tick process-name set in monitoring.rs only refreshes while the signal log has < 50 events.
+- [ ] [POLISH] **TG-drift-words** When two sessions' contexts differ, the verdict names the difference and the fix ("the frame
+      cap was on in one session", "the game was in the background for 18 of 40 minutes", "a recorder was running in one
+      session") and offers the one next step. Tested: one fixture per difference, en + zh-CN.
+      LANDED s33 (merge `bbb3dd40`, ticked as a first slice): a two-session Trial judged too noisy names, in its Lab
+      history note, what Compy recorded differently between its two sessions (cap within 3% = same cap, power plan
+      and plan changes, driver, Windows build, Gaming Mode, resolution, time behind other windows >= 1 min, length
+      >= 2x) with one next step; nothing differing names exactly what was compared and claims no cause; no context
+      on both says Compy can't tell. Words only. opus r1 + r2 REQUEST-CHANGES (all MUST/SHOULD taken), sonnet AWN.
+      Left: comparison verdicts (What changed / Debrief "can't tell") and a recorder/background-load difference
+      (needs TG-context v2).
+- [ ] [POLISH] **TG-interleave** (design note only, no code; two reviews and an owner go before any code) For settings that can
+      be toggled live and safely through the existing apply/rollback, alternate on/off in blocks within one play
+      session (ABAB) so drift, scene changes and habits cancel out: which catalog settings qualify, the mutation-boundary
+      and consent implications (each toggle is an apply/rollback: one explicit consent for the whole run), the statistics.
+      **Design note (s33, no code; for the owner to decide):**
+      - *What it asks of the user:* one longer session of normal play (about 40 min) instead of two separate ones.
+        Compy switches the setting on and off in blocks of about 5 minutes, in the order off-on-on-off-off-on-on-off
+        (ABBA pairs, so a slow drift over the session cancels instead of favouring one side). The user keeps playing
+        the same mode and scene; a small cue says "switching now". The first ~30 s after each switch are left out.
+      - *What accuracy it buys:* today a two-session Trial must beat the between-session band, which on ROB RUN is
+        1% low ±23% and average ±18%, so only very large effects can be called there. Interleaving compares blocks
+        inside one session, so what changes between sessions (driver warm-up, a cap or power plan left different,
+        time of day, habits) drops out; the band that matters becomes the block-to-block spread. With n on/off pairs
+        the uncertainty of the average difference shrinks about as 1/sqrt(n). Even in the worst case (blocks as
+        noisy as whole sessions), 4 pairs roughly halve ROB RUN's band (about ±11% on the 1% low); if blocks are
+        steadier, more. Block-level noise has never been measured on this PC, so no number above is a claim yet.
+      - *Which settings qualify:* only a change that takes effect without restarting the game or the PC, whose undo is
+        confirmed by read-back, and that touches no game process or file (anti-cheat). The list is derived from the
+        catalog at build time, never assumed here; anything needing a relaunch or reboot never qualifies.
+      - *When Compy would offer it:* never by default. Only after a two-session Trial of a qualifying change came back
+        "can't tell" on a game whose measured band is wider than the effect the change could have, as an opt-in.
+      - *Mutation boundary and consent:* each switch is a real apply/rollback through the existing audited path, so
+        the run needs one explicit consent covering every switch, one ledger record for the run, and a guaranteed
+        restore to the user's original state on finish, cancel, crash or app exit (the riskiest part to build).
+      - *What it would cost:* (1) a measurement-only first slice: record "as-is" blocks inside ordinary sessions
+        (no switching) to learn whether blocks are steadier than sessions; 1-2 sessions, plus owner play to collect
+        data. (2) If blocks are steadier: the switching run (Rust scheduler on the existing apply/rollback, restore on
+        every exit path, one-consent run record), a pre-declared paired-block verdict rule, and the UI cue; about 4-6
+        sessions with opus + sonnet reviews at the mutation boundary.
+      - *Decision for the owner:* approve slice (1) only, and say whether Compy may switch a setting while you play.
+- [ ] [POLISH] **P8-first-advanced** (owner) Pick the first Advanced candidate (deeper power/scheduling behaviour)
+      and admit it through `.claude/rules/tweak-catalog.md` + ARCHITECTURE_LOCKS "candidate only after
+      Trial + Risk proof". Needs the owner's sign-off and P4-exit-proof.
+- [ ] [POLISH] **P9-cpu-fit-unknowns** If Check shows a CPU-limited block, one line naming what Compy can't read before any
+      CPU: the board's socket and BIOS support, and the cooler's fit; establish first whether such a block exists
+      (if not, park with the finding). en + zh-CN; same test file.
+      PARKED 2026-11-12 s22 (finding): no such block exists. `priorities.rs build_upgrade_path` emits only "gpu" (a
+      sustained GPU-limited session) and "ssd" (install drive on an HDD); Compy has no CPU-limited measurement, so
+      there is nothing to put the line under. Revisit if a measured CPU limiter lands (P9-cpu-gpu-balance first).
+- [ ] [POLISH] **CR-upgrade-rows-zh** (P9-upgrade-block-reachable review) The upgrade rows' title and why come whole from
+      priorities.rs in English and now show in the zh-CN room. Carry the numbers (share, peak) on the row and word both
+      rows in the UI by kind, en + zh-CN; also drop "a GPU upgrade is the hardware lever" (a part named before the fit
+      lines). Rust + TS; one review.
+- [ ] [POLISH] **CR-tier3-import-allowlist** (opus r1 on CR-gpu-first-elsewhere) the Tier 3 separation guard blocks four named
+      modules only; an allowlist of what Tier 3 may import would keep it from reaching `priorities`-style modules.
+      A guard change: owner call (sessions add no guards).
+- [ ] [POLISH] **CR-view-focus-1112c** (FULL; `_train\view-1112c\fgwatch.txt`: "fgwatch reads=107 compy_in_front=3
+      seen=compy:3,Discord:95,firefox:4,Idle:5"; s23's run read 0 of 187) Compy was in front 3 of 107 reads during the
+      background screen check (close the running copy, CDP launch with --no-activate and COMPY_NO_ACTIVATE=1,
+      SetWindowPos with SWP_NOACTIVATE, close, Start-NativeProcess -Detached -NoActivate relaunch). Re-run with a
+      timestamped watcher and a mark at each step to find the step; fix that step (or the app's show path) so the
+      check never takes the foreground. Script/app; no settings change.
+      s25 (not ticked; no capture run): the capture scripts are session tooling in the salvage folder, not repo product
+      test tooling, so no fix there. Finding so far: the s24 watcher (`s24-fgwatch.ps1`) counted cumulatively with no
+      timestamps and started BEFORE `s24-view.ps1` closed the running Compy, so reads of the owner's own Compy window
+      (already in front; s25's 14:36 preflight saw the foreground on 'Compy') count as "compy_in_front"; the 3 reads
+      are not yet tied to a step. s25 wrote `s25-fgwatch.ps1` (4 reads/s, each timestamped) and `s25-view.ps1` (a
+      MARK line per phase: watcher-up, close-running begin/end, cdp-launch, resize, drive, cdp-close, normal-relaunch,
+      teardown) to tie any read to its step; not run, because the owner was never idle 10+ min (polls 16:14-16:45:
+      idle 0-104 s) and activation is not yet disproven. Next: run `s25-view.ps1` when the owner is idle.
+- [ ] [POLISH] **CR-view-overflow-1112c** (`_train\view-1112c\02-optimize-no-upgrade.png`) The verdict needs the Optimize
+      station's scroll containers measured (scrollHeight vs clientHeight at 1280x720, 1500x980 and 1920x1080) now that
+      the no-upgrade block sits below its groups. Measure on the next FULL screen check; fix any surplus.
+      s25 (not ticked): measurement steps written (`s25-steps.mjs`: CDP viewport 1280x720 / 1500x980 / 1920x1080, every
+      scroll container's scrollHeight vs clientHeight, clipped-wide elements, document overflow, the upgrade block's
+      scrollWidth vs clientWidth; plus computed contrast and hover before/after); not run (owner never idle, see
+      CR-view-focus-1112c). Dev-fixture shots (`view-1112d\fixture-upgrade`) show no overflow at 1500x980 but are not
+      the station's layout.
+
+### Now — finish what's open
 - [x] **CR-zh-drift-count** (second whole-range review) zh-CN `home.json` driftCount strings still said "已漂移" after the English was reworded to "changed since they were last good" (`8d855c05`).
       Done `e49b53ed` (2026-11-11 s18, TS only, not installed): both read "{{count}} 项设置自上次正常以来已改变". Test fails on
       the old file. Full vitest 535/538 (the 3 site-app suites).
@@ -368,47 +790,6 @@ release checklist); no new rules.
       empty block, notes and a tag on the wrong tokens, no mask under Solid, a Benchmark link meant for Live), fixed
       in `6d99f36c`; then one first-run demo at a time across remounts `59df7cb7`, and a recorded but unmeasured
       game never called measured `3b542b0a`; round 2 PASS. Installed in `1d53dfc8`.
-- [ ] **CR-1102-left** (codebase review 2026-11-02 to 11-03, slices 1-8; fixed in `8f4037c1`..`508b200f`, `4465e74b`, `16479f4b`, `22d23584`..`cd9e11c0`)
-      Triaged 2026-11-10 (coordinator desk session). Already fixed on `main`, struck: the Trial delta on a 0/NaN
-      baseline (`4d5595fd`), Black Box/export/capture start and the slow probes off the UI thread (`9cab29d0`,
-      `25af5dc5`), a silent Care state (`e77fba1e`), a stopped service read as Compy's (`c5523543`), English-word
-      power/parking/bcdedit reads (`5e2a110d`; the Ultimate apply stays CR-ultimate-identity), the GPU picker
-      (`7e697609`), zh-CN GPU labels and lessons (`eddf6c7e`), the tour on a rejected scan (`a60b8068`), the first-DXGI
-      vendor (`0f0cb0ba`), the ring note (`5e8cf37a`), Live's floored durations (`8be87e12`), "Fixed at 0-0 MB"
-      (`258b438f`), VBS configured-not-running (`b2ed0cca`), dual-channel (`ad5074ac`); earlier: the `.corrupt`
-      overwrite (`c127ce9`, `14d39b5`), the waiting comparison (`e01561f7`), "measured together" (`8ef5772`), one peak
-      GPU sample (P9-bottleneck-sustained). Four owner calls moved to **Needs owner**. Still open, engineering, none
-      a one-session fix: one ledger row a downgraded build can't parse fails the whole ledger; a partial batch apply
-      carries no flag over IPC; nothing stops a double apply of one change; Care's first-ever scan seeds an empty
-      world when its readers fail; a crash's vitals come from the whole capture window, not the game's own; a wedged
-      old FPS helper can clear the new one's running flag (`monitoring.rs` stores `helper_running` false on any exit;
-      gating it on the generation would leave it stuck true after a failed relaunch, so it needs a live-helper
-      count); App's banner wiring and refresh guard are tested through helpers only (no App render harness); a TCC
-      NVIDIA card only NVML reports leaves a session's peak graded (the ungrade rule reads DXGI only); `elevate_and_wait` waits with no timeout while
-      the ledger is locked (`actions.rs`); core parking flags any non-performance plan with minimum cores at 100;
-      drive health and memory speed or channels never rank as limiters.
-      Core parking done `750b6034`, `0f6b6c4e` (2026-11-11 s16-s18, leftovers.rs only, read-only, not installed): 100%
-      is flagged only on the stock Balanced plan (class, or the words for an older probe without a class); custom,
-      vendor and unread plans are not flagged. cargo `leftovers::` 27/0, clippy clean; sonnet APPROVE-WITH-NITS, no
-      MUST-FIX; SHOULD-FIX (stale comments, test name) and the legacy custom-plan case taken.
-      Owner calls taken (owner delegated 2026-11-10; coordinator took the recommendation): a drift notice whose check
-      now reads unknown stays, worded "last seen changed; Compy can't read it now" — done `8d855c05` (2026-11-11,
-      CODE-ONLY, not installed; drift.rs re-emits it with `unreadable_now`, state unchanged; Home's count reads
-      "changed since they were last good"; cargo 1830/0, clippy clean; sonnet APPROVE-WITH-NITS). A leftover
-      `gaming-session` temp file keeps refusing update and restart, but the refusal names the file and its folder and
-      offers Recover — done `98e9f129` (2026-11-11, CODE-ONLY, not installed; `pending_contract_files`, same fail-closed
-      check; Recover shows App's existing recovery banner, or says Compy can't read a session from that file; no new
-      command; sonnet APPROVE-WITH-NITS, SHOULD-FIX taken). Real play whose look decided but which stopped on another
-      Compy change or a changed condition is put back, as a confounded Trial is — done `7b69b33a` (2026-11-11,
-      CODE-ONLY, not installed; `real_play_outcome` folds it to `confounded`, keep false, through `with_compy_state`
-      / `confounded_by_conditions`, so `finish_conclude`'s existing restore of the Trial's own change runs; "Close
-      this test" says it keeps nothing; reviews opus r1 APPROVE-WITH-NITS, r2 APPROVE-WITH-NITS; sonnet r1
-      APPROVE-WITH-NITS, r2 APPROVE; no MUST-FIX; SHOULD-FIX keep-forced-off and the note nits taken; same-setting
-      later row queued as CR-rp-same-setting-row). After the one-time consent, newly ticked UAC tiers and service
-      suspends ask once, naming only the new ones — done `ff19db9a` (2026-11-11, CODE-ONLY, TS only, not installed;
-      agreed extras in `compy_gaming_consent_extras_v1`, the same modal tree, tier boxes shut while it is open; only
-      adds a confirm; reviews opus r1 APPROVE-WITH-NITS (SHOULD-FIX taken), r2 APPROVE-WITH-NITS; sonnet r1
-      APPROVE-WITH-NITS, r2 APPROVE; no MUST-FIX; held-Enter nit queued as CR-gm-confirm-repeat).
 - [x] **CR-vbs-row-truth** (whole-range review 2026-11-10, SHOULD-FIX) Diagnostics "Memory Integrity / VBS turned on" reads a definite "No" when the registry values are absent (VBS on by default/policy), beside "VBS running now: Running"; say "Not set in registry" instead. Read-only.
       Done `13f46833`, `d8ab513d` (2026-11-11, CODE-ONLY, not installed): the row reads a separate tri-state
       `memory_integrity_or_vbs_configured` (lib.rs; local DeviceGuard keys plus the Group Policy keys, a written policy
@@ -531,27 +912,6 @@ Third whole-range review (e29da54b..119d07f8, 2026-11-12, SHIP-WITH-FOLLOW-UPS, 
       r2 nit): a one-click Fix hands the store's words over without saying why a Fix reads the Trial store (the
       `load_store_checked()?` call shape is pinned by a guard). Tests fail on the old words. cargo 1872/0, clippy
       clean, full vitest 535/538.
-- [ ] **CR-range3-nits** (a) `src/data/kept-outside-undo.ts` STOCK lacks Power saver (`a1841308-…`), so a Power saver
-      prior plan reads "Compy didn't save its name": add it, en + zh-CN; (b) `history::rec_id_of_change` loads the
-      ledger without `HISTORY_LOCK`: if that load can set a damaged file aside (a rename) unlocked, take the lock (and
-      check `get_applied_changes`); (c) the dark stack trial applies through `apply_recommendations_batch` with no
-      bench hold (benchmark_trial.rs ~534): add the hold before `stack_trial_gate` is ever enabled (supersedes
-      CR-bench-stack-hold).
-      (a)(b) done (2026-11-12 s21, not installed; SHA in the merge): (a) a saved Power saver plan is named ("Power
-      saver" / "节能"); (b) yes, it could: a locked writer setting the damaged file aside and saving a new ledger
-      between the unlocked read and its rename would have moved the NEW ledger aside. The lookup now only reads
-      (`read_history_unlocked`: never renames; damaged or unreadable = an error, the undo stops before anything
-      runs, the next locked load sets it aside). Not the lock: an apply holds it through its UAC prompt and this
-      answers the UI's undo on the main thread. Tests fail on the old code. Review (sonnet) APPROVE-WITH-NITS. Left
-      (park, needs its own design): the same unlocked load-with-set-aside is a class, not one function:
-      `get_applied_changes` (History/Health views), `rec_is_active`, comparison.rs ~219, experiment.rs ~2189 and
-      ~3751, intelligence.rs ~2398, machine_model.rs ~1470, trial_candidates.rs ~542; locking them would freeze the
-      UI during an apply's prompt, and read-only views change how the quarantine is first noticed. The lookup's
-      failure now records no `ledger_load` support event (the next locked load or view poll does), and its words
-      for a damaged ledger say only "could not be read (parse …). Nothing was changed." (c) parked: `Held` is one (token, rec, title); the stack needs a set held under the store gate
-      before its batch (an `apply_for_bench_stack` beside `apply_for_bench_trial`), and `held_now()` callers
-      (Gaming Mode's start, `bench_refusal`) read one. Dark (`stack_trial_gate()` false), nothing reaches it today;
-      two reviews when done.
 From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAIL, teardown CLEAN):
 - [x] **CR-footer-reversible** (FAIL item 6, `_train\view-1112a\05-test-history-changed-outside-row.png`, `03-test.png`)
       The footer says "Every change reversible · ledger 84" (zh "每一项更改均可撤销") on every screen while a
@@ -635,18 +995,6 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       s37 review (sonnet) APPROVE-WITH-NITS, no MUST-FIX: SHOULD-FIX taken as a comment saying why the sentence, not
       `value`, carries the name (`ffce3574`, merge `72bda27a`); NITs left (greedy name slot, a negative-age case).
       Pushed s37.
-- [ ] **CR-zh-readiness-rest** (left by CR-zh-readiness-words) The other limiter rows are still English in zh-CN: the
-      install-drive (9 sentences), applied-changes (drift counts + kept-outside titles) and fps-monitoring checks, and
-      priorities.rs's own rows (pending safe tweaks, startup load, Memory Integrity); and the console / Check rows print
-      the same readiness label and detail. Mirror them in `readinessWords` (or the priorities rows by id) the same way.
-      TS.
-- [ ] **CR-plan-read-prompt-write** (CR-gm-stop-busy r1 opus SHOULD-FIX 3, pre-existing) Applies that read
-      `SCHEME_CURRENT` before a UAC prompt and write it after (e.g. the CPMINCORES script, actions.rs ~4570) never
-      took Gaming Mode's gate, so a session start or stop during the prompt changes which plan they write.
-      Establish whether a live apply route reaches one first.
-- [ ] **CR-bench-stack-hold** (r1 sonnet SHOULD-FIX of CR-bench-holds-setting) The DARK aggregate-stack trial
-      (`stack_trial_gate()` false) holds nothing; before arming it, hold every setting it applies the way the tweak trial does.
-      Superseded by CR-range3-nits (c).
 - [x] **CR-gm-spans-trial** (opus SHOULD-FIX of CR-rp-same-setting-row; pre-existing) Gaming Mode snapshots Game Mode, Game
       Bar, the power plan, USB/PCIe and service suspends into its own contract; a session spanning a Trial's restore
       re-applies the Trial's change on stop, after the Trial reads Restored (`gaming_orchestrator.rs` ~409-455; experiment.rs
@@ -720,10 +1068,6 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       remainder). Tests on a temp session dir with a forced decline (nothing reaches Windows); the integration test
       asserts the confirmed change is gone, which the old code keeps (not run against the old code: the pure test does
       not compile there). Gates in the session log.
-- [ ] **CR-powercfg-restore-exit** (r1 opus SHOULD-FIX of CR-gm-restore-partial; pre-existing; rollback boundary) The
-      power-setting restore (USB selective suspend / PCIe ASPM, actions.rs ~3651, and its batch line ~1034) runs bare
-      `powercfg` with no `$LASTEXITCODE` check, so inside the batch's `try` a failed write still records `:ok` and the
-      change counts as restored. Check the exit code in the restore path as #617 did for apply. Two reviews.
 - [x] **CR-gm-service-suspend-rows** (r1 opus SHOULD-FIX of CR-gm-spans-followups; latent, no UI caller today)
       `suspend_known_service` records `service-suspend:<Name>` rows with the suspend Gaming Mode uses; the touch check
       doesn't know that id. Map it into `session_can_touch` and gate the command, or unregister it. Two reviews.
@@ -743,9 +1087,6 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       t() with a literal key per side, which fixes the affordance census that failed on `e29da54b` (lost the two consent keys). Test
       fails on the old component. Reviews opus APPROVE-WITH-NITS, sonnet APPROVE-WITH-NITS, no MUST-FIX; nits taken;
       opus SHOULD-FIX (a live held-key check in WebView2) queued as CR-gm-repeat-live.
-- [ ] **CR-gm-repeat-live** (opus SHOULD-FIX of CR-gm-confirm-repeat; FULL, UI) On the installed build, send a held Enter
-      (CDP `Input.dispatchKeyEvent`, `autoRepeat: true`) to Gaming Mode's Enable: the repeats must start nothing, a fresh
-      press must. jsdom never turns a key into a click, so only a live check proves WebView2 honours the cancel.
 - [x] **CR-care-read-promise** (same review) Care's store-read failure says "it'll try again" but nothing re-reads; add a bounded backoff re-read and true final words (en + zh-CN); a save failing after unmount schedules nothing; an `opened:X` save-stopped clears when `dismissed:X` later succeeds.
       Done `6982832a` (2026-11-11, CODE-ONLY, not installed): `readFailed(again)` re-runs App's own read after 5 s /
       30 s / 2 min (`CARE_READ_RETRY_MS`; reset by a good read, cleared on unmount), then "…it'll check again when you
@@ -816,13 +1157,15 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       Recommended / Maximum FPS choice is built from it; the row keeps its numbers for the receipt. opus AWN (SHOULD-FIX
       taken: a guard on the record's shape; the backend stores no noise band beside a stop reason, so on real records
       the s37 finding was not reachable), sonnet AWN.
-- [ ] **CR-debrief-lesson-crash** (s38 opus, out of scope) SessionDebrief's tuning comparison card shows a lesson
+- [x] **CR-debrief-lesson-crash** (s38 opus, out of scope) SessionDebrief's tuning comparison card shows a lesson
       without reading the result's `crash_reported` (comparison.rs ~130). Decide whether a crash beside a comparison
       withholds its lesson, as a Trial's does. TS.
-- [ ] **CR-fall-words-band** (s37 opus r2 SHOULD-FIX, pre-existing wording from s27) Likely worse, the receipt rules
-      and "fell by more than the band" name the band where the fall was judged at the matching fall (-9.5% against a
-      10% band reads "more than the ±10% allowance"). Word it as the engine's `fell_words` does, en + zh-CN. TS.
-      s38: left queued (not small: receipt and rule wording in en + zh-CN across several surfaces).
+      Done s40 merge `57a7b737` (`d09899a0`): a crash reported beside the comparison withholds its lesson (the card
+      still shows the verdict and deltas). Test `a comparison with a crash reported beside it teaches no lesson` (old
+      code: a lesson). Same commit: a crashed Trial's summary receipt row prints the crash wording and no verdict,
+      deltas or band (en + zh-CN `receiptCrashed`); blank drivers read as unknown in intelligence.rs /
+      comparability.rs (`hardware::driver_changed`) and stay out of the driver split (s39 sonnet SHOULD-FIX). sonnet
+      AWN (NITs: more driver-split fixtures; the debrief still shows verdict + deltas beside a crash, as decided).
 - [x] **CR-what-changed-fall** (coordinator decision s38: one rule, never easier to claim an improvement) merge
       `134fdeaf`: `what_changed_inner` classifies the 1% low with `comparison::classify_measured` (a rise past the band,
       a fall past `fall_pct(band)`, both inclusive); the evidence graph quotes the fall line for a fall; the What
@@ -854,12 +1197,26 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       with nothing changed on an unread active plan (before the gone check, the direct query and the re-commit). Tests:
       `an_unread_active_plan_is_not_another_plan_...`, `a_listed_plan_with_an_unread_active_plan_runs_nothing_...`
       (production dispatch); the existing fakes now name another active plan. opus AWN, sonnet AWN.
-- [ ] **CR-active-plan-unread-callers** (s38 opus + sonnet SHOULD-FIX; the same "failed read" assumption elsewhere)
-      actions.rs power-setting rollback: `reactivate = current_power_plan_guid()...unwrap_or(false)` (~3910) skips the
-      live re-commit on an unread active plan and still reports success; `restore_core_parking_default` (~4834)
-      records no plan GUID on an unread read, so its undo takes the legacy SCHEME_CURRENT path. Both now see an unread
-      plan after 5 s or a non-zero exit (before: waited). Read-only, no time limit: lib.rs `current_power_plan_name`,
-      `current_power_plan`, `current_power_scheme`. Mutation boundary: opus + sonnet.
+- [x] **CR-plan-unread-rollbacks** (coordinator, s40; two MUST-FIX of the independent review) merge `573f600d`
+      (`5c215c6e`, `50524e76`): (A) the USB/PCIe power-setting undo (`power_setting_restore_script`) ends with
+      `powercfg /setactive SCHEME_CURRENT` when the active plan is unread (index writes still name the stored plan;
+      the re-commit applies whichever plan is live and never switches plans; chosen over Err because it finishes the
+      undo honestly with no read); (B) `restore_core_parking_default_with`: an unread plan is Err before anything runs
+      elevated (no row, no receipt); Gaming Mode's plan switch (`apply_power_plan_switch_core_with`): an unread plan
+      is Err with nothing changed instead of a skip recorded as "set its power plan"; the prior plan is read only
+      once there is a high-performance plan to switch to. Tests (old code: all three fail):
+      `an_unread_active_plan_still_ends_the_power_setting_undo_with_a_re_commit`,
+      `an_unread_plan_stops_the_core_parking_apply_before_anything_runs`,
+      `an_unread_plan_fails_the_gaming_plan_switch_with_nothing_switched`. opus AWN (SHOULD-FIX taken: read after the
+      plan list; NITs -> CR-plan-exists-timeout and CR-powercfg-restore-exit), sonnet AWN (NITs only).
+- [x] **CR-trial-plan-unread** (coordinator, s40) merge `d7fff9e7` (`8b9b6cfb`, `e7aff211`, `73be6d50`): `with_power_plan_check`
+      (experiment.rs): with no known plan difference, a session that collected the plan (`context_version` set) but
+      couldn't read it at the start or end makes a judged outcome `confounded` (stop_reason `power-plan-unread`, keep
+      false so the change is restored, confidence Low), worded for the side; sessions from before the plan was
+      collected stay unchecked; a stronger reason already given stands; Gaming Mode still hands the plan to
+      comparability. Stricter only. Test `an_unread_plan_on_either_side_gives_no_clean_result` (old code: fails).
+      opus AWN (SHOULD-FIX taken: keep a stronger reason; SHOULD-FIX 2 -> CR-plan-compare-rest), sonnet AWN
+      (SHOULD-FIX taken: an end read that failed is unread too).
 - [x] **CR-restore-notes-stay** (coordinator, s38) merge `045733a9`: the Black Box "Put back" keeps the
       turned-on-again / unconfirmed / no-saved-undo notes beside the results (what the run left out, as it ran); with
       changes left out the summary reads "All N undos offered here finished. The changes marked not offered were not
@@ -897,46 +1254,6 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       non-danger hover and recorded it in the false-danger census (SessionDebrief 3 -> 4) as that guard documents.
 - [x] **TG-drift-words** parked s31, landed s33 (merge `bbb3dd40`; details in the Trial conditions guard list). The
       TG-interleave design note is written there (s33).
-- [ ] **Judging-chain refactor slice** PARKED s33. First slice LANDED s35 (merge `de49b37a`): the two-session verdict
-      chain inside `conclude_experiment` moved unchanged into a pure `judge_pair(&PairInputs)` (placed right after
-      it); behaviour tests in `refuse_early_tests` on the owner's session shape retire five include_str! assertions:
-      measured-band classification (`the_conclude_classifies_the_1pct_low_on_the_measured_band_not_the_stored_one`),
-      Recommended bands (`a_recommended_trial_reads_the_average_on_its_own_measured_band`), Maximum FPS wider band
-      (`a_max_fps_trial_is_judged_on_the_wider_of_the_two_measured_bands`), cap check
-      (`an_after_session_that_ran_capped_against_an_uncapped_band_is_confounded`), unmeasured noise
-      (`a_conclude_with_no_measured_band_judges_nothing_and_restores`). opus r1 REQUEST-CHANGES (2 MUST-FIX: tests
-      couldn't tell the bands apart; taken), opus r2 AWN (2 SHOULD-FIX note asserts taken), sonnet AWN.
-      Left, still pinned (next slices): `conclude_grades_both_sessions_before_it_records_a_verdict`, the receipt line of
-      `the_average_delta_is_stored_additively_...`, `smoothest_is_judged_at_conclude_...`,
-      `a_two_session_conclude_refuses_a_real_play_trial_before_judging_anything`, the rest of
-      `an_uneven_session_is_no_longer_a_reason_to_judge_nothing` (its negative `with_steady_sessions(` pin and the
-      Smoothest pin still match only because `judge_pair` sits inside their search range: retire or re-scope them
-      when it moves), the start half of `the_start_measures_the_band_...`, and the start_experiment pins
-      (`a_start_reads_smoothest_...`, `a_start_keeps_the_catalogs_stated_risk_...`, `a_start_keeps_the_risk_choice_...`,
-      `a_start_keeps_the_cost_acknowledgement_...`, `smoothest_starts_only_when_...`, `a_start_reads_real_play_...`);
-      start_experiment's band/refusal decision is not extracted yet; nothing tests that `conclude_experiment` passes
-      the right values into `judge_pair` (opus NIT).
-      Slice 2 LANDED s37 (merge `1d12730f`; `d105cc29`, `300c5f10`, `677afea1`), no behaviour change: everything
-      between the conclude's reads and its keep/restore tail (the after-session's grade and pacing, the noise it is
-      judged on, `judge_pair` / `crash_outcome`, the Compy-state, unconfirmed-changes and target checks, every record
-      write) moved into `conclude_two_session(&mut ExperimentRecord, ConcludeReads)` (no IO, no store);
-      `conclude_experiment` keeps the store lock, the refusals and the live reads (two read-only reads moved earlier,
-      nothing written between). Retired -> behaviour tests: `conclude_grades_both_sessions_...` and the receipt line of
-      `the_average_delta_...` -> `the_conclude_stores_the_after_sessions_grade_the_average_delta_and_the_band_it_judged_on`;
-      `smoothest_is_judged_at_conclude_...`'s pins -> `a_smoothest_conclude_judges_and_keeps_the_after_sessions_pacing`;
-      `an_uneven_session_is_no_longer_...` -> `an_uneven_after_session_is_still_judged` (+ the stores test and
-      `a_record_without_kept_noise_is_measured_at_conclude_over_the_covered_sessions`);
-      `a_two_session_conclude_refuses_...`'s target-order pin -> `the_target_read_has_the_last_word_at_conclude`. New
-      (s35 opus NIT): `the_conclude_hands_judge_pair_the_picked_session_the_crash_report_and_its_noise`. Guard
-      re-derived: experiment-record-first-guard.test.ts's six conclude assertions now read the core and pin the hand-off
-      (resolved, target_now, rows, unverified, game_noise) into its one call. opus r1 REQUEST-CHANGES (MUST-FIX: the
-      noise measurement's arguments were unguarded; taken), sonnet r1 AWN (SHOULD-FIXes taken), opus r2 AWN.
-      Still pinned (8 of the 13 named above): `a_two_session_conclude_refuses_a_real_play_trial_...` (the refusal
-      before `resolve_treatment`, in the IO shell), the start half of `the_start_measures_the_band_...`, and the six
-      start_experiment pins; next slice: extract start_experiment's band/refusal decision. Left (opus r2 NIT 3): on the
-      test fixture the baseline, ledger length and clock don't change `judge_pair`'s result, so their hand-off is shown
-      only by equality.
-      s38: untouched (under 50 minutes before the 18:40 batch once items 1-5 were in).
 - Inventory (no move, no delete): `.claude\worktrees\train-same-rig` (created 2026-11-12 12:00) and
   `.claude\worktrees\train-plan-held` (2026-11-13 04:01) are EMPTY folders, no `.git`, no files: leftovers of worktree
   removals whose directory delete was refused while a shell's working directory was inside. Nothing to salvage; the
@@ -953,25 +1270,6 @@ law applies to every item; nothing lowers the bar for claiming an improvement. P
 (frame-cap state read from frame data as part of a session's context; a changed cap named in the verdict).
 Constitution: `PRODUCT_CONSTITUTION.md` §37 "Expect real human behaviour; never present an unclean result" (owner
 amendment 2026-11-12, approved 17:21 "add it"; `4d5217d5`).
-- [ ] **TG-context** Every session records a measurement-context fingerprint from what Compy can read: cap state (from
-      frame data), resolution/refresh mode, share of time the game was in front, active power plan, GPU driver and
-      adapter, known heavy background work (recording/streaming encoders, high CPU from non-game processes), length;
-      additive, schema-versioned; unknown stays unknown. User sees: nothing new until TG-drift-words. Tested: fixtures
-      per field, old sessions load unchanged.
-      LANDED s30 (not ticked): merge `c825378e` adds the power plan at capture start + changed-by-end and
-      `context_version` 1 to `game_state` (cap, focus share, resolution/refresh, driver were already recorded).
-      Left: known heavy background work (recorder/streaming encoder, high non-game CPU) as context v2; note the
-      per-tick process-name set in monitoring.rs only refreshes while the signal log has < 50 events.
-- [ ] **TG-drift-words** When two sessions' contexts differ, the verdict names the difference and the fix ("the frame
-      cap was on in one session", "the game was in the background for 18 of 40 minutes", "a recorder was running in one
-      session") and offers the one next step. Tested: one fixture per difference, en + zh-CN.
-      LANDED s33 (merge `bbb3dd40`, ticked as a first slice): a two-session Trial judged too noisy names, in its Lab
-      history note, what Compy recorded differently between its two sessions (cap within 3% = same cap, power plan
-      and plan changes, driver, Windows build, Gaming Mode, resolution, time behind other windows >= 1 min, length
-      >= 2x) with one next step; nothing differing names exactly what was compared and claims no cause; no context
-      on both says Compy can't tell. Words only. opus r1 + r2 REQUEST-CHANGES (all MUST/SHOULD taken), sonnet AWN.
-      Left: comparison verdicts (What changed / Debrief "can't tell") and a recorder/background-load difference
-      (needs TG-context v2).
 - [x] **TG-preflight** Before a Trial's second session, Compy compares live context with the baseline's and says what
       differs up front ("your frame cap is off now; it was on for the baseline: turn it back on, or re-record the
       baseline"), with a proceed-anyway recorded as confounded. Tested: live-vs-baseline fixtures; proceed-anyway path.
@@ -985,47 +1283,6 @@ amendment 2026-11-12, approved 17:21 "add it"; `4d5217d5`).
       plays both sessions in one sitting. opus r1 + r2 REQUEST-CHANGES (all MUST/SHOULD taken), sonnet AWN. NITs not
       taken: pure tests for `read_preflight`'s gating; `collect_v1` reads the hardware twice (both done s35, merge
       `c80a00ff`).
-- [ ] **TG-salvage** A contingency instead of a dead end: use only matching, steady segments when a fixed,
-      pre-declared rule allows; otherwise ask for the smallest extra play needed; never pick windows after seeing the
-      result. Tested: the rule fixed before the comparison, adversarial fixtures that would reward cherry-picking.
-      PARKED s37, untouched: the judged number is the session's 1% low (`low1_fps_est`, a mean of per-second 1% lows),
-      and the per-time series a segment rule would need (`fps_series`, `stutter_timeline`) is shed from all but the
-      most recent sessions on save, so a baseline's segments are usually gone by its second session. A first slice
-      must keep segment-level 1% lows for a Trial's baseline (additive, schema-versioned), then the pre-declared rule,
-      its words (en + zh-CN) and opus + sonnet reviews: more than fits beside an install in one session.
-- [ ] **TG-interleave** (design note only, no code; two reviews and an owner go before any code) For settings that can
-      be toggled live and safely through the existing apply/rollback, alternate on/off in blocks within one play
-      session (ABAB) so drift, scene changes and habits cancel out: which catalog settings qualify, the mutation-boundary
-      and consent implications (each toggle is an apply/rollback: one explicit consent for the whole run), the statistics.
-      **Design note (s33, no code; for the owner to decide):**
-      - *What it asks of the user:* one longer session of normal play (about 40 min) instead of two separate ones.
-        Compy switches the setting on and off in blocks of about 5 minutes, in the order off-on-on-off-off-on-on-off
-        (ABBA pairs, so a slow drift over the session cancels instead of favouring one side). The user keeps playing
-        the same mode and scene; a small cue says "switching now". The first ~30 s after each switch are left out.
-      - *What accuracy it buys:* today a two-session Trial must beat the between-session band, which on ROB RUN is
-        1% low ±23% and average ±18%, so only very large effects can be called there. Interleaving compares blocks
-        inside one session, so what changes between sessions (driver warm-up, a cap or power plan left different,
-        time of day, habits) drops out; the band that matters becomes the block-to-block spread. With n on/off pairs
-        the uncertainty of the average difference shrinks about as 1/sqrt(n). Even in the worst case (blocks as
-        noisy as whole sessions), 4 pairs roughly halve ROB RUN's band (about ±11% on the 1% low); if blocks are
-        steadier, more. Block-level noise has never been measured on this PC, so no number above is a claim yet.
-      - *Which settings qualify:* only a change that takes effect without restarting the game or the PC, whose undo is
-        confirmed by read-back, and that touches no game process or file (anti-cheat). The list is derived from the
-        catalog at build time, never assumed here; anything needing a relaunch or reboot never qualifies.
-      - *When Compy would offer it:* never by default. Only after a two-session Trial of a qualifying change came back
-        "can't tell" on a game whose measured band is wider than the effect the change could have, as an opt-in.
-      - *Mutation boundary and consent:* each switch is a real apply/rollback through the existing audited path, so
-        the run needs one explicit consent covering every switch, one ledger record for the run, and a guaranteed
-        restore to the user's original state on finish, cancel, crash or app exit (the riskiest part to build).
-      - *What it would cost:* (1) a measurement-only first slice: record "as-is" blocks inside ordinary sessions
-        (no switching) to learn whether blocks are steadier than sessions; 1-2 sessions, plus owner play to collect
-        data. (2) If blocks are steadier: the switching run (Rust scheduler on the existing apply/rollback, restore on
-        every exit path, one-consent run record), a pre-declared paired-block verdict rule, and the UI cue; about 4-6
-        sessions with opus + sonnet reviews at the mutation boundary.
-      - *Decision for the owner:* approve slice (1) only, and say whether Compy may switch a setting while you play.
-- [ ] **TG-passive-band** Learn each game's noise band from ordinary play over time with no instructions, so a Trial
-      rarely has to ask for extra as-is sessions. Tested: a band appears from ordinary sessions alone; never pooled across
-      contexts.
 
 ### Next — small visible slices (refill 2026-11-03: CR-1102-left's fixable lines + Roadmap Phase 9)
 - [x] **CR-live-round** Live's session strip and the debrief floor a session's length (3h 28m) where History and
@@ -1134,22 +1391,6 @@ amendment 2026-11-12, approved 17:21 "add it"; `4d5217d5`).
       APPROVE-WITH-NITS (SHOULD-FIX taken: any row's copy, one localized read, wiring tests, re-anchors); r4 opus + sonnet
       APPROVE-WITH-NITS (test bound + gap comment taken). cargo 1857/0, clippy clean, full vitest 535/538 (3 site-app).
       Queued: CR-ultimate-followups.
-- [ ] **CR-ultimate-followups** (r3/r4 reviews of CR-ultimate-identity; pre-existing) (a) the row's live check
-      (`recommendations.rs` / `probe_rec_target` "power-ultimate", class only) still reads a stamped localized copy as off:
-      use `compys_plan_guid`; (b) `actions::current_power_plan_guid` keys on the English "GUID:" at the apply's snapshot
-      step (actions.rs, mutation gate); (c) a copy no row stamped (old row or a timed-out read) that the user re-activates
-      can be recorded on a stamped row; (d) out-of-order undo can restore Compy's own copy as a prior; (e) the 5 s timeout
-      test sleeps 7 s: inject the timeout.
-      (a)(e) done `fef0a937` + r1 nits (2026-11-11 s20, not installed): a power-ultimate row that recorded the plan Compy
-      activated reads On on that plan (`check_row_state` through `is_compys_ultimate`), so History, Health, readiness and
-      the Trial's unverified-others check stop reading Compy's own localized copy as off; rows without the record read
-      by class as before. The hang test injects a 100 ms bound (`bounded_read_within`); production keeps 5 s. Read-only;
-      apply/rollback writes unchanged. Reviews r1 opus + sonnet APPROVE-WITH-NITS (taken: doc, looser timing bound).
-      Test fails on the old code. cargo 1867/0, clippy clean. Left parked: (b), (c), (d) (they change what apply,
-      record or rollback write), and (f) from r1: the setting-level Ultimate reads (`recommendations.rs:456`,
-      `probe_rec_target`, and the undo read-backs through `check_change_state`) still read the copy by class, so the
-      Optimize card and a Trial's reads of its own setting still say "off" on a localized Windows (fails safe:
-      unjudged); route them through the newest applied row with (b)-(d), two reviews.
 - [x] **P9-hint-shown** (desk review 2026-11-03) `get_priorities.session_hint` (the "GPU busy at times / sustained"
       sentence) reaches the frontend typed but no screen prints it. Decide: show it on Home or Optimize under the
       limiter rows, or drop the field. Code + one test either way. Done `4a4265d4` (2026-11-10): shown (coordinator
@@ -1512,52 +1753,6 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       only; no "Invalid Date"; reasons say "couldn't be judged" and "a different driver, build or GPU".
       Guards fail on the old code: summary 2, journey 1, bench 4, Home 1. Not pushed, not installed
       (CODE-ONLY); the owner-and-friend walkthrough is the next investment, not code.
-- [ ] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "Compy finished the supported
-      tests" with nothing worth another run; record it in BACKLOG as the Phase 4 exit.
-      Owner 2026-11-12 16:43 (verbatim): "p4 exit answer is no you decide a more fitting resolution". Owner delegated
-      2026-11-12; coordinator resolution: "1 change couldn't be judged" does not count as finished; the wording stays;
-      P4-judge-noisy makes the unjudged case judgeable honestly, then the proof is re-run on the owner's real play.
-      2026-11-10 desk session (not ticked): blocked before any Trial. The owner's PBZ Trial `exp:6-1793579868420`
-      (visual-effects, started 2026-11-02 00:37Z) is still Running with its change applied, and the backend refuses
-      a new Trial while one is Pending/Running (`experiment.rs:817-823`). Human step: the owner finishes it (one PBZ
-      session, then Conclude) or puts it back from the bench (~2 min, or ~15 min with the session), then plays the
-      WARDOGS Trials the panel asks for (~10 min of normal play per session). Read-back: `trial-wardogs\nav.js` output
-      in this session's report.
-      2026-11-10 ~17:44-19:16 desk session (not ticked). Owner 17:44: "i need you to complete these task on your own you
-      can use the game i have active now rather than wardogs" (ROB RUN substituted for WARDOGS). Driven over CDP, no focus
-      taken. PBZ Trial exp:6 cleared by Compy's own Conclude on its post-apply PBZ session (Nov 2, 4,860 readings):
-      verdict confounded ("13 active Compy changes, not 15"), visual-effects restored, `final_state_verified` true, ledger
-      row rolled back 01:48:06Z, no Trial open. ROB RUN, all real play: a Live capture (665 counted readings, 18 min in the
-      background left out) then Optimize my game: as-is 1 (1,211 readings) and as-is 2 (1,209) both hit the settle cap
-      uneven (335/284 and 239/316 fps); "Test anyway" was refused before any change: "another setting Compy changed earlier
-      can't be confirmed as still in place" (the two power-ultimate rows read off; active plan is "Synez Power Plan", set
-      outside Compy). No ROB RUN verdict; nothing applied. Blocked on CR-unconfirmed-remedy (owner call). Evidence
-      `C:\Users\Kuya\code\_train\view-1110d\` (s1-*, p4-*, p5-*, journey.log, fgwatch.log).
-      2026-11-10 ~20:13-21:21 session (killed with no report; recovered read-only 2026-11-11, not ticked). On installed
-      `6a2e6334` over CDP: [Keep "Synez Power Plan"] recorded `changed_outside` on both power-ultimate rows (04:15:43Z),
-      active scheme `22222222-…` (Synez) identical before/after/later. ROB RUN real play: as-is 1 (04:17-04:38Z) and
-      as-is 2 (04:39-04:59Z) both uneven at the cap, "Test anyway", then the Trial `exp:7-1794373260660` (visual-effects,
-      05:01-05:20Z, 1,112 readings): verdict too-noisy (avg 298.8→289.2, 1% low 205.7→197.5, floor ±3%), status
-      restored, ledger row rolled back 05:20:31Z; no Trial open. Not met: the panel still names "Switch to the Ultimate
-      Performance power plan" as worth testing, so it never said "Compy finished the supported tests". Remains: that
-      Trial (needs the risk confirm) until nothing is worth another run. Evidence `_train\view-1110e\` (s4-*.txt,
-      s4-powercfg.txt, journey.log, j-05-enough.png, j-06-end.png).
-      2026-11-11 ~04:02-06:38 session (not ticked; ROB RUN per the owner's 17:44 sentence, "i need you to complete these
-      task on your own you can use the game i have active now rather than wardogs"). Driven over CDP on installed
-      `6a2e6334` while he played; fgwatch 466 reads, Compy never in front. Ultimate decision: declining it inside Compy
-      only exists as lowering his own risk choice, which gives "finished-within-chosen-risk", not this wording; put-back
-      is `rollback_change(own row)` -> `powercfg /setactive <snapshot prior_guid>`, the snapshot read by
-      `/getactivescheme` at apply (`actions.rs` apply/rollback_power_ultimate), so it was run. Real play, all in focus:
-      exp:8 power-ultimate (12:19-12:40Z, Stop now at the cap) too-noisy, put back; exp:9 visual-effects retest (new
-      before-session forced; as-is uneven twice, Test anyway, 13:27-13:55Z) too-noisy (+2.4% 1% low), put back,
-      VisualFXSetting 0 read back; exp:10 power-ultimate retest (13:55-14:31Z, "Compy has enough" both sessions) no-change,
-      medium (1% low +1.7%, avg +0.7%, band ±3%), put back. Scheme `22222222-…` (Synez) before, Ultimate `db9dd473-…`
-      only inside exp:8/exp:10 session 2, Synez after each and at teardown. Not met: the panel ends at "Nothing on ROB RUN
-      is left for Compy to test right now. 1 change was measured. 1 couldn't be judged." Visual effects is now two
-      too-noisy runs (RETEST_CAP 2) and `test-summary.ts` says "finished the supported tests" only with no inconclusive
-      change, so on ROB RUN this wording can no longer be reached (coordinator/owner call: a steadier game, or accept
-      "nothing left" as the exit). Evidence `_train\view-1111a\` (journey.log, powercfg.txt, ledger-*.txt,
-      experiments-final.txt, o-*.json/txt, fgwatch.log, teardown.txt).
 - [x] **CR-unconfirmed-remedy** (owner call) A Trial start is refused while a Compy change "can't be confirmed as still in
       place", and the refusal says to undo it; here that undo restores Balanced (`381b4222…`) over the owner's later
       outside choice ("Synez Power Plan"), so following it changes his power plan. Needs a path that stops tracking a
@@ -1579,32 +1774,6 @@ reads honest to the owner. First check: does `sessions.rs` keep per-second fps (
       ask `trial_start_precheck` (read-only, blocking pool, the start's own count and words) before any as-is session
       and say the refusal with the same remedies; an unreadable ledger stops there too. The start keeps its check as the
       second gate. Review (sonnet) APPROVE; cargo 1826/0, clippy clean; the TS tests fail on the old GuidedJourney.tsx.
-- [ ] **CR-outside-followups** (review SHOULD-FIX of CR-unconfirmed-remedy, Rust + TS) (a) stamp the active plan GUID on
-      each session or the Trial record, so a plan switched away and back between start and conclude is caught; (b) Test →
-      Applied & history shows a recorded row as "changed outside Compy" (`types.ts` field + a note) instead of an active
-      change with only the undo, and Game Readiness stops flagging it as drifted; (c) the remedy panel re-fetches its offer
-      on the ledger-changed event (a plan switched again while it is open); (d) a replaced record keeps the first record's
-      time as a move too (today the newest replaces it).
-      (c) done `af23273d` (2026-11-11, CODE-ONLY, TS only, not installed): ChangedOutsideRemedy re-reads its offer on
-      `LEDGER_CHANGED_EVENT` and on window focus, so its words and button follow a plan switched again; a recorded
-      line keeps its own copy and stays after a re-read stops offering it. 2 tests fail on the old component.
-      Left: (a) and (d) touch the Trial/ledger record (Rust), (b) Applied & history + Game Readiness (TS + readiness).
-      2026-11-11 s15: (a) and (d) parked, not started: both change what the Trial start/conclude one-change checks
-      read (the session ran under "no apply/rollback behaviour" for item 4); (b) parked for time (Rust readiness +
-      TS history, one review); next step for (b): `types.ts` `changed_outside` on `AppliedChange`, a note on the row.
-      (b) done `4ee91290`, `44d91648`, `db633af9`, `9d4553bb` (2026-11-11 s16-s18, not installed): Game Readiness counts
-      a recorded row whose plan still holds as kept, not drift (only the readiness roll-up `checked_summary` reads the
-      plan, through `summarize_for_readiness`; `summarize_history` unchanged, test-pinned); view field
-      `changed_outside_holds` (None when no read was taken); History says "changed outside Compy" + a "Recorded <when>"
-      note (en, zh-CN). `db633af9` restores the two shapes the experiment-record-first guard pins (`summarize_checked`
-      holds the roll-up; `checked_summary(load_history(), ledger_was_quarantined())`): those were the 2 guard failures
-      s16 put on CR-rp-same-setting-row. Reviews: r1 opus + sonnet REQUEST-CHANGES (fixed), r2 sonnet
-      APPROVE-WITH-NITS, r2 opus (s18) APPROVE-WITH-NITS, no MUST-FIX; SHOULD-FIX unknown-as-None and the date wording
-      taken, the shared plan read queued (CR-kept-plan-read-once). cargo 1839/0, clippy clean, guard 49/49, full vitest
-      532/536 (3 site-app suites + one Chromium launch flake, passed on rerun). (a), (d) not started.
-      2026-11-11 s19: (a) and (d) still not started (session bound): both change what the Trial one-change checks read,
-      and need a test showing the check gets no weaker plus two reviews. Next step for (d): keep `recorded_at` of the
-      first record in a `first_recorded_at` field (additive) and count it as a move in `trial_moved_since`-style checks.
 - [x] **CR-kept-plan-read-once** (r2 opus SHOULD-FIX of CR-outside-followups b) Once a row is kept outside Compy, every
       `get_applied_changes` poll (sync, UI thread) spawns a second `powercfg` beside the power-ultimate probe's: share one
       plan read for the pass through `LiveReads` (history.rs `applied_change_views`, `kept_outside_observed`).
@@ -1677,40 +1846,6 @@ the owner never clicks Start experiment, Start capture, Stop capture or Conclude
       with the actual trade in one sentence; one result = no choice shown. Needs P5-learned. ROADMAP P5
       step 6; ENGINE §5, §6 (default wins ties).
 - [x] **P5-outcomes-f1** (`19c70a50`) Record which Trial justified an outcome-switch keep in the Trust Ledger (needs a Rust change).
-- [ ] **P5-exit-proof** (owner, FULL) Run the journey on WARDOGS from the button to the summary with no manual
-      Trial clicks; the friend repeats it once. Record in BACKLOG as the Phase 5 exit. Needs P5-guided through
-      P5-learned. ROADMAP P5 exit.
-      Owner 2026-11-12 16:43 (verbatim): "p5, p6 exit not sure what this means if you are capable of delegating the
-      resolution for this task then do so yourself". Owner delegated 2026-11-12; coordinator resolution: the wording
-      stays (owner half met on ROB RUN; friend half open), resolved with P6 and P7 by one friend test using the
-      shareable installer (P7-tester-package). No tick now.
-      2026-11-10 desk session (not ticked): needs a person. The exit is measured on normal play (Constitution 36,
-      P5-realplay), so an unattended idle scene is not a valid run, and the same open PBZ Trial blocks the button.
-      Human step: after P4's step, the owner presses Optimize my game on WARDOGS and plays (~25 min); the friend once.
-      2026-11-10 ~18:30-19:14 (not ticked; ROB RUN per the owner's 17:44 substitution, see P4-exit-proof): the button
-      ran two as-is sessions on his real play with no capture or Trial clicks (each stopped at Compy's own "Stop now"
-      after the settle cap), offered "Test anyway", then refused to start (CR-unconfirmed-remedy). No summary reached;
-      the friend's run not attempted. Evidence `_train\view-1110d\p5-0*.png/json`, `journey.log`.
-      2026-11-10 ~20:13-21:21 (killed session, recovered 2026-11-11; not ticked; ROB RUN per the 17:44 substitution):
-      from the button, two as-is sessions and one Trial session on real play, every step through journey buttons only
-      (Stop now ×2, Play one more as-is session, Test anyway, Done playing), no Start/Stop capture or Conclude click;
-      Compy concluded it itself (too-noisy, put back). The end screen is the verdict with a next offer ("I understand,
-      test it" / "Stop here"), not the end-of-journey summary. Remains: run to the summary, and the friend's repeat.
-      Evidence `_train\view-1110e\journey.log`, `j-01..j-06*.png`.
-      2026-11-11 ~04:02-06:38 (not ticked: owner half met / friend half open; ROB RUN per the owner's 17:44 sentence,
-      "i need you to complete these task on your own you can use the game i have active now rather than wardogs"): the
-      journey resumed from its own offer and ran to its end on his real play through journey buttons only (I understand,
-      test it ×2, Next, Stop now ×4, Play one more as-is session, Test anyway, Done playing ×3, OK); no Start experiment,
-      Start/Stop capture or Conclude click, no setting picked. Three Trials (exp:8, exp:9, exp:10; see P4-exit-proof).
-      End: "1 of 2 tested. Nothing else here is worth testing on this PC. 1 try couldn't be judged.", and the summary
-      "Nothing on ROB RUN is left for Compy to test right now. 1 change was measured. 1 couldn't be judged." with both
-      put back and why, lesson "ROB RUN swings a lot between sessions…", "Nothing from these tests stays applied." Across
-      11-10 + 11-11 that is the button (11-10 ~20:15) to the summary. Friend's repeat cannot be done by Claude.
-      Evidence `_train\view-1111a\journey.log`, `o-12-journey-end.json`, `o-13-after-ok-summary.json`.
-      2026-11-11: the friend-dependent part is deferred, no second tester available (owner, 2026-11-11 07:41: "I DO
-      NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO LEAVE ANYTHING LIKE THAT ONLINE"). Do not ask the owner for it again;
-      do not simulate it. Stays unticked until the owner either supplies a tester or decides in writing that the owner
-      half alone exits the phase.
 
 ### Then — Roadmap Phase 6: Care Journey convergence (`product/ROADMAP.md` Phase 6)
 Planned 2026-10-25. Order is value order. Converge, don't add rooms. Phase 6 exit on the owner rig: from Home,
@@ -1746,28 +1881,6 @@ room or station picked by hand.
 - [x] **P6-timeline** (`02a00f5f`) One "Since it last worked" list on the Care view (incidents, Compy changes, drift,
       hardware changes, sessions); the duplicate drift/hardware notices in Check, HomeHud and HomeV2 point
       there. Needs P6-door. ROADMAP P6 bullet 2; Constitution §16, §27.
-- [ ] **P6-exit-proof** (owner, FULL) From Home, follow a real (or past) WARDOGS crash and a stutter to a next
-      step or honest unknown without picking a room; the friend repeats it once. Record in BACKLOG as the
-      Phase 6 exit. Needs P6-changed through P6-unknown. ROADMAP P6 exit.
-      Owner 2026-11-12 16:43 (verbatim): "p5, p6 exit not sure what this means if you are capable of delegating the
-      resolution for this task then do so yourself". Owner delegated 2026-11-12; coordinator resolution: as P5-exit-
-      proof (wording stays; the friend half closes with P7's friend test on the P7-tester-package installer). No tick.
-      2026-11-10 desk session, driven on the installed `68f2272b` from Home with no room picked: Home > Something went
-      wrong lands on Problems with one next step for the newest crash (ROB RUN App crash, Nov 10 11:17: "Verify the
-      game's files, then update it", with receipt), and its "Stutters or runs slow?" button compares the latest
-      session (PBZ, Nov 2) with the last steady one and names one next test (roll back, play once, compare). No
-      WARDOGS crash is on this PC's record (the incident list names none) and the stutter path compares the latest
-      game, PBZ. Evidence `C:\Users\Kuya\code\_train\view-1110\p6-0*.png`. Not ticked: the friend's repeat
-      (~5 min) and a WARDOGS case are still needed.
-      2026-11-10 ~19:14 re-check (not ticked; ROB RUN per the owner's 17:44 substitution, see P4-exit-proof): from Home,
-      Something went wrong → the ROB RUN crash (Nov 10 11:17) still reaches one next step (verify files, then update),
-      and "Compare my latest session with my last steady one" now gives an honest unknown for ROB RUN ("no steady
-      ROB RUN session to compare … record a session in Live when the game runs well"). The owner's half holds for ROB RUN;
-      the friend's repeat (~5 min) remains. Evidence `_train\view-1110d\p6-05-*`, `p6-06-stutter-now.png`.
-      2026-11-11: the friend-dependent part is deferred, no second tester available (owner, 2026-11-11 07:41: "I DO
-      NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO LEAVE ANYTHING LIKE THAT ONLINE"). Do not ask the owner for it again;
-      do not simulate it. Stays unticked until the owner either supplies a tester or decides in writing that the owner
-      half alone exits the phase.
 
 ### Then — Roadmap Phase 7: Contextual UX and education convergence (`product/ROADMAP.md` Phase 7)
 Planned 2026-10-25. Order is value order. Converge, don't add rooms, consoles or guards (directive rule 1:
@@ -1948,33 +2061,6 @@ Parallel: slices marked "Parallel-safe" touch files no other open P7 slice touch
       Desk build `e6db699e` installed. Round 4 verdict: "OVERALL: PASS, except the per-row footnote half
       of (a), which is BLOCKED because no such row exists here" (shared noise line, Lab gauge, tooltip
       flip, rig note, stutter-first, bench words all PASS). Evidence `C:\Users\Kuya\code\_train\review\r4\`.
-- [ ] **P7-exit-proof** (owner, FULL) The friend goes from Home to an answer on "more FPS", "it stutters" and
-      "it crashed" without asking what a word means; the owner opens the technical layer on each and finds the
-      exact setting, measurement and source. Record in BACKLOG as the Phase 7 exit. Needs P7-route through
-      P7-teach; P7-palette and the rig slices do not block it. ROADMAP P7 exit.
-      Owner 2026-11-12 16:43 (verbatim): "p7 exit whenever optimal give me a downloadable file of the app that can be
-      easily shared to a friend to have test whatever is needed for this exit" and "a release to testers presumably
-      goes hand in hand with p7 i think or clarify thhhe p7 task". Owner delegated 2026-11-12; coordinator resolution:
-      one friend test on a shareable installer (P7-tester-package) closes the friend halves of P5, P6 and P7.
-      2026-11-10 desk session (not ticked): needs the friend at the keyboard (~10 min) and the owner opening the
-      technical layer on each answer (~5 min); not drivable unattended.
-      2026-11-10 ~19:16: not attempted or simulated (needs the friend); still open.
-      2026-11-11: the friend-dependent part is deferred, no second tester available (owner, 2026-11-11 07:41: "I DO
-      NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO LEAVE ANYTHING LIKE THAT ONLINE"). Do not ask the owner for it again;
-      do not simulate it. Stays unticked until the owner either supplies a tester or decides in writing that the owner
-      half alone exits the phase.
-- [ ] **P7-tester-package** (owner decision 2026-11-12; NEXT worker, not built in s25) A no-updater installer of
-      `main` after the tester-blocking fixes are in, plus a one-page plain-language tester guide (what to click for
-      "more FPS", "it stutters", "it crashed"; how to undo; what to send back), handed to the owner as one
-      downloadable file to share with a friend. Note: a formal updater-published release is a separate thing that
-      needs the updater signing key (not on this PC) and is not required for P7. Owner-held, separate: code signing
-      (no spend; the coordinator prepares a definitive cost breakdown) and legal (deferred by the owner).
-      s28 (package built, not ticked, not sent): `C:\Users\Kuya\Desktop\Compy-tester\` holds the proved desk installer
-      of `3630e0a6` as `Compy-0.9.26-3630e0a6-tester-setup.exe`, `SHA256.txt` and the guide (`Compy-tester-guide.txt`
-      + `.html`). Paths and labels taken from the en locale and the code (Test -> Optimize my game; Health ->
-      Something's wrong -> Open; Test -> Optimize -> Applied & history -> Roll back; Settings -> Support record ->
-      Save this as a file); not checked on screen. The guide keeps the tester off the Benchmark and Tuning stations and
-      the Live/History session comparisons (still fixed ±3%, parked item 8).
 
 ### Then — Roadmap Phase 8: Advanced tuning envelope (`product/ROADMAP.md` Phase 8, `product/RISK_MODEL.md`)
 Planned 2026-10-28 (scheduled refill). ROADMAP: broaden only after the Trial/risk/stability systems are
@@ -2076,9 +2162,6 @@ each change's risk word. New capabilities wait for the owner and the Phase 4 exi
       progress line still says "Testing now: X". Pass the off read to `JourneyProgressLine`, as `136c85d6` did for
       a stopped real-play test.
       Done in `508b200f`: "N of M tested · Compy reads X as off (see below)". Desk review on his data PASS on `1d9c7abb`. Installed in `93c3ff0a`.
-- [ ] **P8-first-advanced** (owner) Pick the first Advanced candidate (deeper power/scheduling behaviour)
-      and admit it through `.claude/rules/tweak-catalog.md` + ARCHITECTURE_LOCKS "candidate only after
-      Trial + Risk proof". Needs the owner's sign-off and P4-exit-proof.
 
 ### Then — Roadmap Phase 9: Hardware decision intelligence (`product/ROADMAP.md` Phase 9)
 **PHASE 9 EXIT FINDING (s24, 2026-11-12; read from main after the s24 merges; not ticked: owner's call, see Needs
@@ -2206,12 +2289,6 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
 - [x] **CR-gpu-share-one-source** (done with P9-no-upgrade-cpu-unknown, s23) The "under half" rule lives twice: Rust
       `GPU_SUSTAINED_SHARE_PCT` and settings-done.ts's `busy * 2 < readings` (and "the half" in en/zh). Carry the share
       on `GameGpuClear` and use it in TS and the string. Rust + TS; one review.
-- [ ] **P9-cpu-fit-unknowns** If Check shows a CPU-limited block, one line naming what Compy can't read before any
-      CPU: the board's socket and BIOS support, and the cooler's fit; establish first whether such a block exists
-      (if not, park with the finding). en + zh-CN; same test file.
-      PARKED 2026-11-12 s22 (finding): no such block exists. `priorities.rs build_upgrade_path` emits only "gpu" (a
-      sustained GPU-limited session) and "ssd" (install drive on an HDD); Compy has no CPU-limited measurement, so
-      there is nothing to put the line under. Revisit if a measured CPU limiter lands (P9-cpu-gpu-balance first).
 - [x] **P9-upgrade-block-reachable** (s22 finding, blocks the Check half of the Phase 9 Exit) The upgrade advisory block
       in Check.tsx renders only when `!v2Ia`, and the only shipped caller (OptimizeStation's "More cleanup" Check) passes
       `v2Ia`; the comment's "OptimizeV2 renders its labeled-early card below" has no code. So the GPU/SSD rows and the
@@ -2231,10 +2308,6 @@ never a part in isolation"; read-only, measured only, unknown stays unknown, no 
       English-only Rust strings now shown in zh-CN" queued (CR-upgrade-rows-zh; pre-existing in classic Check);
       SHOULD-FIX test gaps taken (HDD, re-run, empty); NIT "optimize-v2-ia.test.tsx:258 still names OptimizeV2" left
       (a guard; its assertion still holds: Check under v2Ia renders no block, the room does).
-- [ ] **CR-upgrade-rows-zh** (P9-upgrade-block-reachable review) The upgrade rows' title and why come whole from
-      priorities.rs in English and now show in the zh-CN room. Carry the numbers (share, peak) on the row and word both
-      rows in the UI by kind, en + zh-CN; also drop "a GPU upgrade is the hardware lever" (a part named before the fit
-      lines). Rust + TS; one review.
 - [x] **P9-no-upgrade-named** When Check measured no limiter, the upgrade area says "No upgrade recommended" and the
       sessions it was read from (count and newest game), never an empty block; no sessions = "not measured yet".
       en + zh-CN; tests: measured clean / no sessions.
@@ -2533,9 +2606,6 @@ Refill 2026-11-12 s23 (coordinator; fourth whole-range review 119d07f8..b4d2ec7f
       (most VRAM). TS; one review.
       Done (s27 code, sonnet APPROVE; s28 landed, merge `cad72727`): both read `primaryGpu`. s28 full cargo run had
       2 comparison_race_tests failures on untouched Rust (11/11 alone; a load flake, not chased here).
-- [ ] **CR-tier3-import-allowlist** (opus r1 on CR-gpu-first-elsewhere) the Tier 3 separation guard blocks four named
-      modules only; an allowlist of what Tier 3 may import would keep it from reaching `priorities`-style modules.
-      A guard change: owner call (sessions add no guards).
 - [x] **CR-receipt-unrecorded-unknown** (opus SHOULD-FIX) a receipt still pairs a session that recorded no card
       (sessions saved before fingerprints) with this PC's card; `gpu_model` "unknown" for it needs no schema change
       but changes legacy receipts and the existing receipt fixtures (`payload_buckets_never_carry_exact_values`,
@@ -2608,28 +2678,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
       keeps its space); the zh two fail on main. Not re-captured (installed build is `9d2f2b57`). Review sonnet
       APPROVE-WITH-NITS (SHOULD-FIX taken: the GPU-row test asserts the untied line is there; NITs left: one
       language source with `sessionDate`, hoist the per-row call).
-- [ ] **CR-view-focus-1112c** (FULL; `_train\view-1112c\fgwatch.txt`: "fgwatch reads=107 compy_in_front=3
-      seen=compy:3,Discord:95,firefox:4,Idle:5"; s23's run read 0 of 187) Compy was in front 3 of 107 reads during the
-      background screen check (close the running copy, CDP launch with --no-activate and COMPY_NO_ACTIVATE=1,
-      SetWindowPos with SWP_NOACTIVATE, close, Start-NativeProcess -Detached -NoActivate relaunch). Re-run with a
-      timestamped watcher and a mark at each step to find the step; fix that step (or the app's show path) so the
-      check never takes the foreground. Script/app; no settings change.
-      s25 (not ticked; no capture run): the capture scripts are session tooling in the salvage folder, not repo product
-      test tooling, so no fix there. Finding so far: the s24 watcher (`s24-fgwatch.ps1`) counted cumulatively with no
-      timestamps and started BEFORE `s24-view.ps1` closed the running Compy, so reads of the owner's own Compy window
-      (already in front; s25's 14:36 preflight saw the foreground on 'Compy') count as "compy_in_front"; the 3 reads
-      are not yet tied to a step. s25 wrote `s25-fgwatch.ps1` (4 reads/s, each timestamped) and `s25-view.ps1` (a
-      MARK line per phase: watcher-up, close-running begin/end, cdp-launch, resize, drive, cdp-close, normal-relaunch,
-      teardown) to tie any read to its step; not run, because the owner was never idle 10+ min (polls 16:14-16:45:
-      idle 0-104 s) and activation is not yet disproven. Next: run `s25-view.ps1` when the owner is idle.
-- [ ] **CR-view-overflow-1112c** (`_train\view-1112c\02-optimize-no-upgrade.png`) The verdict needs the Optimize
-      station's scroll containers measured (scrollHeight vs clientHeight at 1280x720, 1500x980 and 1920x1080) now that
-      the no-upgrade block sits below its groups. Measure on the next FULL screen check; fix any surplus.
-      s25 (not ticked): measurement steps written (`s25-steps.mjs`: CDP viewport 1280x720 / 1500x980 / 1920x1080, every
-      scroll container's scrollHeight vs clientHeight, clipped-wide elements, document overflow, the upgrade block's
-      scrollWidth vs clientWidth; plus computed contrast and hover before/after); not run (owner never idle, see
-      CR-view-focus-1112c). Dev-fixture shots (`view-1112d\fixture-upgrade`) show no overflow at 1500x980 but are not
-      the station's layout.
 - [x] **CR-view-upgrade-render** (`_train\view-1112c\03-optimize-upgrade-fixture.png`, identical to 02) The GPU upgrade
       block has never been seen rendered in the real app: this rig's sessions aren't GPU-limited, and an in-memory
       wrap of `window.__TAURI_INTERNALS__.invoke` does not take (not writable). Find a route that renders it in the
@@ -2675,20 +2723,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-12 ~14:36-17:00 (s25, coordinator-assigned; no game seen at any check; owner on Discord/Firefox/Claude, never
-  idle 10+ min; restarted once by the server ~15:37): landed, each in its own worktree: CR-glass-scroll-flake (merge
-  `973aace2`; BlackBox scroll moved to a layout effect; 20/20 file runs, 2 full vitest; sonnet APPROVE-WITH-NITS),
-  CR-firstcheck-flake (merge `d01db9c4`; last-check record in a layout effect; 10/10 under load, 2 full vitest; sonnet
-  APPROVE), CR-upgrade-area-truth (merge `2b37bc42`; (1) did not reproduce, pinned; (2)-(4) + nits a-c; sonnet
-  APPROVE-WITH-NITS), CR-check-expert-mount (merge `16c1a75c`; parked df372a3b rebased + its test, fails on main;
-  sonnet APPROVE-WITH-NITS), CR-tuning-gpu-other-card (merge `4dfc4313`; sonnet APPROVE-WITH-NITS),
-  CR-receipt-gpu-other-card (merge `b9425757`; opus + sonnet APPROVE-WITH-NITS), CR-view-upgrade-render (merge
-  `05d25c6a`; dev-fixture shots only), CR-zh-fit-punctuation (merge `2dcd67d1`), CR-gpu-first-elsewhere (merge
-  `42a37087`; opus r1 REQUEST-CHANGES, MUST-FIX taken, r2 APPROVE-WITH-NITS; sonnet APPROVE-WITH-NITS); owner decisions
-  of 16:43 recorded verbatim; P4-judge-noisy findings + design (no code). cargo 1895/0, clippy clean, full vitest
-  540/543 (3 site-app). Pushes 1-10 PASS. Installed `05d25c6a` (runtime proof attempt 1, Synez before/after);
-  RELEASE_STATE re-stamped (`e5cdbf3f`). Screen check view-1112d NOT run (owner never idle 10+ min; activation not
-  disproven); upgrade block seen only in the dev fixture. Closed #638 (a6bca54e, fca76591).
 - 2026-11-12 ~17:00-18:55 (s26, coordinator-assigned; no game at any check; owner on Discord/ChatGPT/Claude, idle 10+
   min only ~18:20-18:30, during the build): PRODUCT_CONSTITUTION §37 owner amendment ("add it", `4d5217d5`); landed
   P4-judge-noisy (merge `36ae8929`; sonnet r1 + opus r1/r2 REQUEST-CHANGES, every MUST-FIX taken, opus r3
@@ -2809,6 +2843,23 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `fbd1a8f6`); review under the item. Old-code proof run for both new tests. cargo --lib 2004/0 + clippy clean on the
   branch before the SHOULD-FIX, intelligence tests 249/0 + clippy clean after. One item (time). NOT PUSHED, NOT
   INSTALLED: main is ahead of origin (s38's batch + this); the next FULL session pushes first and installs.
+- 2026-11-17/18 s40 (coordinator-assigned; preflight CODE-ONLY: owner idle 0 s with Medal in front, no game at any
+  check; pushes and installs on the coordinator's order): reviewed s39 (sonnet AWN; its SHOULD-FIX, blank drivers in
+  the driver split, taken in the small item). Push 1 FAILED on the self-review guard's term shape (s38's What Changed
+  chip re-laid; fixed in the product code, merge `6f2f93ca`, no guard change), push 2 PASS (`550c996e..6f2f93ca`,
+  vitest 551/551). Landed CR-plan-unread-rollbacks (merge `573f600d`; fix A = re-commit `SCHEME_CURRENT`), the small
+  item (merge `57a7b737`: crashed-Trial receipt row, CR-debrief-lesson-crash, blank drivers), CR-trial-plan-unread
+  (merge `d7fff9e7`); reviews under each item; old-code proof run for every new test. RELEASE_STATE re-anchored
+  `resolve_rollback` (actions.rs:5701) and re-stamped `source_main_commit`. Pushes: `86d7799a`, `57a7b737`,
+  `d7fff9e7` all PASS (last gate: vitest 551/551, cargo --lib 2010/0). Installs: `86d7799a319908b20970b9bb5f72cf35e7c3c8ed`
+  then `d7fff9e7d39e86ff7e83a0a023e282f085468bb1` (each runtime proof attempt 1, Synez plan before/after);
+  RELEASE_STATE stamped, the superseded rows moved to the archive. Tester folder: `Compy-0.9.26-d7fff9e7-tester-setup.exe`
+  added (SHA-256 verified), the 0a0cf626 and 3630e0a6 installers kept, SHA256.txt lists all three (new first, older
+  marked), guide txt + html: installer name lines only. Parked: CR-care-unread-rig (needs a decision, reason under
+  it). Dropped by the coordinator's scope change (left queued, untouched): judging-chain refactor slice 3,
+  CR-zh-readiness-rest, TG-passive-band. Queue: the owner's priority note (2026-11-17 23:37) added; every open item
+  tagged LAUNCH / CORRECT / POLISH and ordered (no item reworded or ticked by the tagging). No guard or census
+  re-derived.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
