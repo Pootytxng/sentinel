@@ -1888,7 +1888,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         let mut h = HypoEval::new("gpu-driver-change");
         match (b.hw_fingerprint.as_ref(), c.hw_fingerprint.as_ref()) {
             (Some(bf), Some(cf)) if !bf.gpu_driver.is_empty() && !cf.gpu_driver.is_empty() => {
-                if bf.gpu_driver != cf.gpu_driver {
+                if !crate::hardware::same_driver(&bf.gpu_driver, &cf.gpu_driver) {
                     h.direct = true;
                     h.supporting.push(format!(
                         "The baseline ran GPU driver {}; this session ran {}.",

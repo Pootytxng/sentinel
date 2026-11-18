@@ -200,7 +200,7 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
             // candidate to check. Correlation, never automatic cause.
             // s37 (s35 opus NIT): the same driver written in another case is the same driver, as the
             // Trial preflight compares it (`trial_preflight`).
-            if !fa.gpu_driver.trim().eq_ignore_ascii_case(fb.gpu_driver.trim()) && fa.gpu == fb.gpu {
+            if !crate::hardware::same_driver(&fa.gpu_driver, &fb.gpu_driver) && fa.gpu == fb.gpu {
                 changed.push(("gpu-driver", format!("GPU driver: {} → {}", fa.gpu_driver, fb.gpu_driver)));
                 candidates.push(format!(
                     "The GPU driver changed ({} → {}) — a candidate explanation to check first, not a \
