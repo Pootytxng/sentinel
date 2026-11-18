@@ -2371,7 +2371,8 @@ pub(crate) fn gaming_mode_now_of(slot: &crate::gaming_session::SessionSlot) -> O
 /// PURE (TG-preflight): a two-session Trial whose sessions ran on different Windows power plans, or
 /// whose plan changed during either session (TG-context v1, recorded on both), is folded into
 /// `confounded` exactly as a changed recorded condition is ([`with_comparability`]): keep false, so
-/// the shared restore runs. Compared only where recorded; a Trial of the plan itself (`power-ultimate`)
+/// the shared restore runs. Compared only where recorded (a plan collected but unread on either side
+/// is confounded as unconfirmed, CR-trial-plan-unread); a Trial of the plan itself (`power-ultimate`)
 /// skips only the between-sessions comparison (it moves the plan by design), and every check is skipped
 /// when Gaming Mode was on for either session (it lays its own plan over the
 /// session; `comparability::derive` already compares Gaming Mode and its plan handling). A stronger
@@ -2403,7 +2404,40 @@ pub(crate) fn with_power_plan_check(
         _ if a.power_plan_changed == Some(true) => Some("the Windows power plan changed during the after-session"),
         _ => None,
     };
-    let Some(what) = what else { return outcome };
+    let Some(what) = what else {
+        // CR-trial-plan-unread: a session that collected the plan (TG-context) but couldn't read it
+        // can't confirm both sessions ran on the same plan, so it gives no clean result either. Like
+        // an unread frame cap (`with_cap_check`), the change is restored and nothing is judged. A
+        // session recorded before the plan was collected (`context_version` None) stays unchecked.
+        // s40 opus SHOULD-FIX: a verdict that already says it wasn't judged (a crash, too little
+        // evidence, ...) keeps its own reason, as `with_cap_check` does.
+        if !judged_against_noise(&outcome) {
+            return outcome;
+        }
+        // s40 sonnet SHOULD-FIX: an end read that failed (`power_plan_changed` None) can't confirm the
+        // plan held through the session either.
+        let unread = |g: &crate::game_state::GameStateFingerprint| {
+            g.context_version.is_some() && (guid(g).is_none() || g.power_plan_changed.is_none())
+        };
+        let side = match (unread(b), unread(a)) {
+            (true, true) => "both sessions",
+            (true, false) => "the baseline",
+            (false, true) => "the after-session",
+            (false, false) => return outcome,
+        };
+        return ConcludeOutcome {
+            verdict: "confounded".into(),
+            keep: false,
+            stop_reason: Some("power-plan-unread".into()),
+            confidence: Confidence::Low.min(outcome.confidence),
+            note: format!(
+                "Compy couldn't read the Windows power plan at the start or end of {side}, so it can't confirm \
+                 both sessions ran on the same plan, and the result can't be pinned on this setting. Compy restored \
+                 it and judged nothing; start a new test to measure it again."
+            ),
+            ..outcome
+        };
+    };
     ConcludeOutcome {
         verdict: "confounded".into(),
         keep: false,
@@ -7398,6 +7432,61 @@ mod experiment_tests {
         let already = with_comparability(m.clone(), &pairing_for(session(TREAT_ID, 180.0)));
         let first = ConcludeOutcome { verdict: "not-comparable".into(), ..already };
         assert_eq!(with_power_plan_check(first.clone(), Some(&base), &other, "visual-effects"), first);
+    }
+
+    /// CR-trial-plan-unread: a session that collected the plan but couldn't read it (on either side)
+    /// can't confirm the plan stayed the same, so an improved verdict is never left standing as a clean
+    /// result: it is confounded, restored, low confidence. A session from before the plan was
+    /// collected stays unchecked (the test above), and Gaming Mode still hands the check to
+    /// comparability.
+    #[test]
+    fn an_unread_plan_on_either_side_gives_no_clean_result() {
+        let m = measured(180.0);
+        assert_eq!((m.verdict.as_str(), m.keep), ("improved", true));
+        let collected = |mut s: SessionSummary| {
+            s.game_state.get_or_insert_with(Default::default).context_version = Some(1);
+            s
+        };
+        let base = collected(with_plan(session(BASE_ID, 150.0), Some(BAL), Some(false)));
+        let unread_after = collected(with_plan(session(TREAT_ID, 180.0), None, None));
+        let o = with_power_plan_check(m.clone(), Some(&base), &unread_after, "visual-effects");
+        assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false), "{}", o.note);
+        assert_eq!(o.stop_reason.as_deref(), Some("power-plan-unread"));
+        assert_eq!(o.confidence, Confidence::Low);
+        assert!(o.note.contains("of the after-session"), "{}", o.note);
+        // Unread on the baseline side, read after: the same.
+        let unread_base = collected(with_plan(session(BASE_ID, 150.0), None, None));
+        let read_after = collected(with_plan(session(TREAT_ID, 180.0), Some(BAL), Some(false)));
+        let o = with_power_plan_check(m.clone(), Some(&unread_base), &read_after, "power-ultimate");
+        assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false), "{}", o.note);
+        assert!(o.note.contains("of the baseline"), "{}", o.note);
+        // Unread on both sides: named as both sessions.
+        let o = with_power_plan_check(m.clone(), Some(&unread_base), &unread_after, "visual-effects");
+        assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false), "{}", o.note);
+        assert!(o.note.contains("of both sessions"), "{}", o.note);
+        // An old baseline (plan never collected) with an unread after-session: the after-session's unread
+        // read is still unconfirmed.
+        let old_base = with_plan(session(BASE_ID, 150.0), None, None);
+        let o = with_power_plan_check(m.clone(), Some(&old_base), &unread_after, "visual-effects");
+        assert_eq!(o.stop_reason.as_deref(), Some("power-plan-unread"), "{}", o.note);
+        // s40 sonnet SHOULD-FIX: the start read worked but the end read failed: still unconfirmed.
+        let end_unread = collected(with_plan(session(TREAT_ID, 180.0), Some(BAL), None));
+        let o = with_power_plan_check(m.clone(), Some(&base), &end_unread, "visual-effects");
+        assert_eq!((o.verdict.as_str(), o.stop_reason.as_deref()), ("confounded", Some("power-plan-unread")), "{}", o.note);
+        // s40 opus SHOULD-FIX: a verdict that already says it wasn't judged keeps its own reason.
+        let crashed = ConcludeOutcome {
+            verdict: "regressed".into(),
+            keep: false,
+            stop_reason: Some("crash-during-treatment".into()),
+            ..m.clone()
+        };
+        assert_eq!(with_power_plan_check(crashed.clone(), Some(&base), &unread_after, "visual-effects"), crashed);
+        // Both read and the same: the outcome stands untouched.
+        assert_eq!(with_power_plan_check(m.clone(), Some(&base), &read_after, "visual-effects"), m.clone());
+        // Gaming Mode on: comparability covers the plan; this check stays out.
+        let mut gm = unread_after.clone();
+        gm.gaming_mode_active = Some(true);
+        assert_eq!(with_power_plan_check(m.clone(), Some(&base), &gm, "visual-effects"), m);
     }
 
     #[test]
