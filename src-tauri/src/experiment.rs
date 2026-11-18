@@ -2299,7 +2299,7 @@ pub(crate) fn preflight_diffs(
 }
 
 /// The ledger rec id of the power plan itself (gaming_orchestrator.rs `REC_POWER`).
-const POWER_PLAN_REC: &str = "power-ultimate";
+pub(crate) const POWER_PLAN_REC: &str = "power-ultimate";
 
 /// Opus r1 SHOULD-FIX: Windows' own plans by their fixed GUIDs, so the fix step can name the plan to
 /// switch back to; any other plan is left unnamed (never guessed).
@@ -2368,6 +2368,55 @@ pub(crate) fn gaming_mode_now_of(slot: &crate::gaming_session::SessionSlot) -> O
     }
 }
 
+/// CR-plan-compare-rest: how two sessions' recorded Windows power plans fail to show they ran on the
+/// same plan, if they do. One rule for every comparison that judges a session against another: the
+/// two-session Trial ([`with_power_plan_check`]), real play's with-change and pinned as-is sessions
+/// (`realplay`), and the session-debrief before/after (`comparison::arm_noise_from`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PlanMismatch {
+    /// The two sessions ran on different plans.
+    Differed,
+    /// The plan changed during the first (baseline / as-is) session.
+    ChangedDuringFirst,
+    /// The plan changed during the second (after / with-change) session.
+    ChangedDuringSecond,
+    /// A session that collected the plan (TG-context) couldn't read it at its start or end, so the
+    /// same plan can't be confirmed. `first` / `second` say which.
+    Unread { first: bool, second: bool },
+}
+
+/// PURE (CR-plan-compare-rest): [`PlanMismatch`] between `first` and `second`, or `None` when they
+/// can be shown to share a plan, or aren't checked: Gaming Mode on in either (it lays its own plan
+/// over the session; `comparability::derive` compares Gaming Mode), either without recorded
+/// conditions, or both recorded before the plan was collected (`context_version` None). `plan_trial`
+/// (a Trial of the plan itself, `power-ultimate`) skips only the between-sessions comparison: it moves
+/// the plan by design, but a switch during either session still differs.
+pub(crate) fn plan_mismatch(first: &SessionSummary, second: &SessionSummary, plan_trial: bool) -> Option<PlanMismatch> {
+    let gm_on = |s: &SessionSummary| s.gaming_mode_active == Some(true);
+    if gm_on(first) || gm_on(second) {
+        return None;
+    }
+    let (Some(b), Some(a)) = (first.game_state.as_ref(), second.game_state.as_ref()) else { return None };
+    let guid = |g: &crate::game_state::GameStateFingerprint| {
+        g.power_plan_guid.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_ascii_lowercase)
+    };
+    match (guid(b), guid(a)) {
+        (Some(x), Some(y)) if x != y && !plan_trial => return Some(PlanMismatch::Differed),
+        _ if b.power_plan_changed == Some(true) => return Some(PlanMismatch::ChangedDuringFirst),
+        _ if a.power_plan_changed == Some(true) => return Some(PlanMismatch::ChangedDuringSecond),
+        _ => {}
+    }
+    // CR-trial-plan-unread: a session that collected the plan but couldn't read it can't confirm both
+    // sessions ran on the same plan. s40 sonnet SHOULD-FIX: an end read that failed
+    // (`power_plan_changed` None) can't confirm the plan held through the session either. A session
+    // recorded before the plan was collected (`context_version` None) stays unchecked.
+    let unread = |g: &crate::game_state::GameStateFingerprint| {
+        g.context_version.is_some() && (guid(g).is_none() || g.power_plan_changed.is_none())
+    };
+    let (first, second) = (unread(b), unread(a));
+    (first || second).then_some(PlanMismatch::Unread { first, second })
+}
+
 /// PURE (TG-preflight): a two-session Trial whose sessions ran on different Windows power plans, or
 /// whose plan changed during either session (TG-context v1, recorded on both), is folded into
 /// `confounded` exactly as a changed recorded condition is ([`with_comparability`]): keep false, so
@@ -2376,7 +2425,7 @@ pub(crate) fn gaming_mode_now_of(slot: &crate::gaming_session::SessionSlot) -> O
 /// skips only the between-sessions comparison (it moves the plan by design), and every check is skipped
 /// when Gaming Mode was on for either session (it lays its own plan over the
 /// session; `comparability::derive` already compares Gaming Mode and its plan handling). A stronger
-/// reason already given stands.
+/// reason already given stands. The rule itself is [`plan_mismatch`] (CR-plan-compare-rest).
 pub(crate) fn with_power_plan_check(
     outcome: ConcludeOutcome,
     baseline: Option<&SessionSummary>,
@@ -2389,54 +2438,36 @@ pub(crate) fn with_power_plan_check(
     }
     // Opus r1 MUST-FIX + SHOULD-FIX: only a Trial of the plan itself changes the plan between the
     // sessions by design; a switch during either session is still a confound, for it too.
-    let plan_trial = rec_id == POWER_PLAN_REC;
-    let gm_on = |s: &SessionSummary| s.gaming_mode_active == Some(true);
-    if gm_on(baseline) || gm_on(treatment) {
-        return outcome;
-    }
-    let (Some(b), Some(a)) = (baseline.game_state.as_ref(), treatment.game_state.as_ref()) else { return outcome };
-    let guid = |g: &crate::game_state::GameStateFingerprint| {
-        g.power_plan_guid.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_ascii_lowercase)
-    };
-    let what = match (guid(b), guid(a)) {
-        (Some(x), Some(y)) if x != y && !plan_trial => Some("the Windows power plan differed between the two sessions"),
-        _ if b.power_plan_changed == Some(true) => Some("the Windows power plan changed during the baseline"),
-        _ if a.power_plan_changed == Some(true) => Some("the Windows power plan changed during the after-session"),
-        _ => None,
-    };
-    let Some(what) = what else {
-        // CR-trial-plan-unread: a session that collected the plan (TG-context) but couldn't read it
-        // can't confirm both sessions ran on the same plan, so it gives no clean result either. Like
-        // an unread frame cap (`with_cap_check`), the change is restored and nothing is judged. A
-        // session recorded before the plan was collected (`context_version` None) stays unchecked.
-        // s40 opus SHOULD-FIX: a verdict that already says it wasn't judged (a crash, too little
-        // evidence, ...) keeps its own reason, as `with_cap_check` does.
-        if !judged_against_noise(&outcome) {
-            return outcome;
+    let what = match plan_mismatch(baseline, treatment, rec_id == POWER_PLAN_REC) {
+        None => return outcome,
+        Some(PlanMismatch::Differed) => "the Windows power plan differed between the two sessions",
+        Some(PlanMismatch::ChangedDuringFirst) => "the Windows power plan changed during the baseline",
+        Some(PlanMismatch::ChangedDuringSecond) => "the Windows power plan changed during the after-session",
+        Some(PlanMismatch::Unread { first, second }) => {
+            // CR-trial-plan-unread: like an unread frame cap (`with_cap_check`), the change is restored
+            // and nothing is judged. s40 opus SHOULD-FIX: a verdict that already says it wasn't judged
+            // (a crash, too little evidence, ...) keeps its own reason, as `with_cap_check` does.
+            if !judged_against_noise(&outcome) {
+                return outcome;
+            }
+            let side = match (first, second) {
+                (true, true) => "both sessions",
+                (true, false) => "the baseline",
+                _ => "the after-session",
+            };
+            return ConcludeOutcome {
+                verdict: "confounded".into(),
+                keep: false,
+                stop_reason: Some("power-plan-unread".into()),
+                confidence: Confidence::Low.min(outcome.confidence),
+                note: format!(
+                    "Compy couldn't read the Windows power plan at the start or end of {side}, so it can't confirm \
+                     both sessions ran on the same plan, and the result can't be pinned on this setting. Compy restored \
+                     it and judged nothing; start a new test to measure it again."
+                ),
+                ..outcome
+            };
         }
-        // s40 sonnet SHOULD-FIX: an end read that failed (`power_plan_changed` None) can't confirm the
-        // plan held through the session either.
-        let unread = |g: &crate::game_state::GameStateFingerprint| {
-            g.context_version.is_some() && (guid(g).is_none() || g.power_plan_changed.is_none())
-        };
-        let side = match (unread(b), unread(a)) {
-            (true, true) => "both sessions",
-            (true, false) => "the baseline",
-            (false, true) => "the after-session",
-            (false, false) => return outcome,
-        };
-        return ConcludeOutcome {
-            verdict: "confounded".into(),
-            keep: false,
-            stop_reason: Some("power-plan-unread".into()),
-            confidence: Confidence::Low.min(outcome.confidence),
-            note: format!(
-                "Compy couldn't read the Windows power plan at the start or end of {side}, so it can't confirm \
-                 both sessions ran on the same plan, and the result can't be pinned on this setting. Compy restored \
-                 it and judged nothing; start a new test to measure it again."
-            ),
-            ..outcome
-        };
     };
     ConcludeOutcome {
         verdict: "confounded".into(),
@@ -5229,6 +5260,7 @@ fn real_play_trial(rec: &ExperimentRecord) -> Result<crate::realplay::Running<'_
         applied_change_id: &rec.applied_change_id,
         before: &evidence.before,
         cap: rec.game_noise.as_ref().map(|n| n.cap),
+        plan_trial: rec.rec_id == POWER_PLAN_REC,
     })
 }
 
