@@ -109,6 +109,7 @@
     "chipNeedsAttention_other": "{{count}} worth a look",
     "chipUnknown": "{{count}} unknown",
     "allChecks": "All {{count}} checks",
+    "allChecksGraded": "All {{count}} checks · {{graded}} graded, {{advisory}} advisory",
     "resultOk": "came back fine",
     "resultFix": "worth fixing",
     "resultUnknown": "couldn't read",

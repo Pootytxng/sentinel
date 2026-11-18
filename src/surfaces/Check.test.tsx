@@ -232,6 +232,22 @@ describe("Check", () => {
 
   // Desk review 2026-11-03 (third pass): the receipt gave network QoS and VRR the accent ✓ of a check
   // that came back right, beside a verdict that called them noted, not graded.
+  // s44 batch 2 (B3): Health says "12 of 14 checks look good"; this toggle said "All 16 checks" with no
+  // hint that 2 of them are advisory.
+  it("the 'All N checks' line names how many are graded and how many advisory", async () => {
+    readinessMock.advisories = 1;
+    try {
+      render(
+        <ConfirmProvider>
+          <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+        </ConfirmProvider>,
+      );
+      expect(await screen.findByRole("button", { name: /All 2 checks · 1 graded, 1 advisory/ })).toBeInTheDocument();
+    } finally {
+      readinessMock.advisories = 0;
+    }
+  });
+
   it("the receipt marks an advisory row noted, not graded, never with the ✓", async () => {
     readinessMock.advisories = 1;
     try {
