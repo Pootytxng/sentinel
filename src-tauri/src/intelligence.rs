@@ -1496,24 +1496,11 @@ pub(crate) fn evidence_graph(r: &WhatChangedReport) -> EvidenceGraph {
         } else if o.meaningful {
             // CR-what-changed-fall (opus MUST-FIX): a fall is judged at the fall matching the band,
             // so it quotes that line; a rise is judged at the band itself.
-            let line = if o.delta_pct < 0.0 {
-                format!(
-                    "the {:.1}% fall that matches the {:.1}% measured noise band",
-                    crate::noise_floor::fall_pct(r.noise_floor_pct),
-                    r.noise_floor_pct
-                )
-            } else {
-                format!("the {:.1}% measured noise band", r.noise_floor_pct)
-            };
+            let line = judged_line(o.delta_pct, r.noise_floor_pct, "measured noise band");
             (EvidenceRelation::Supports, format!("The 1% low moved {:+.1}% — past {line}.", o.delta_pct))
         } else if r.noise_measured && r.verdict != "inconclusive" {
-            (
-                EvidenceRelation::CorrelatesWith,
-                format!(
-                    "The 1% low moved only {:+.1}% — inside the {:.1}% measured noise band.",
-                    o.delta_pct, r.noise_floor_pct
-                ),
-            )
+            let line = judged_line(o.delta_pct, r.noise_floor_pct, "measured noise band");
+            (EvidenceRelation::CorrelatesWith, format!("The 1% low moved only {:+.1}% — inside {line}.", o.delta_pct))
         } else {
             // CR-whatchanged-band-words: an inconclusive report (no measured band, or a frame cap that
             // differed) judged the move against nothing, so it names no band.
@@ -1671,6 +1658,18 @@ fn trial_contradiction_next_test(trial: &crate::history::TrialLink) -> String {
     format!(
         "A Trial measured this change as an improvement{when}, and this later comparison got worse. Roll it back in the Trust Ledger, play one more session, and compare — that is the next test of which result holds."
     )
+}
+
+/// CR-what-changed-fall-words: the line a 1% low move was judged against, in words: a fall names the
+/// band's matching fall ([`crate::noise_floor::fall_pct`]) when that is narrower than the band; a rise,
+/// or a band at the 3% minimum (where the two are the same), names the band itself.
+fn judged_line(delta_pct: f64, band_pct: f64, band_word: &str) -> String {
+    let fall = crate::noise_floor::fall_pct(band_pct);
+    if delta_pct < 0.0 && fall < band_pct {
+        format!("the {fall:.1}% fall that matches the {band_pct:.1}% {band_word}")
+    } else {
+        format!("the {band_pct:.1}% {band_word}")
+    }
 }
 
 /// The deterministic core: same inputs → same report, every time. No randomness, no
@@ -1842,7 +1841,8 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         let mut r = base(
             "no-change",
             format!(
-                "No meaningful difference vs your previous {game} session ({delta_low1:+.1}% 1% lows — inside the {floor:.1}% band {game} moves between your sessions with nothing changed)."
+                "No meaningful difference vs your previous {game} session ({delta_low1:+.1}% 1% lows — inside {} {game} moves between your sessions with nothing changed).",
+                judged_line(delta_low1, floor, "band")
             ),
         );
         r.observations = observations;
@@ -3785,9 +3785,16 @@ mod tests {
         let inputs = |noise| WhatChangedInputs { baseline: &b, current: &c, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise };
         let r = report(&inputs(Some(&band)));
         assert_eq!(r.verdict, "no-change");
-        assert!(r.headline.contains("inside the 3.4% band"), "{}", r.headline);
+        // CR-what-changed-fall-words: a fall is inside the band's matching fall (3.2%), named with the band.
+        assert!(r.headline.contains("inside the 3.2% fall that matches the 3.4% band"), "{}", r.headline);
         let inside = r.evidence_graph.edges.iter().find(|e| e.explanation.contains("1% low moved")).expect("edge");
-        assert!(inside.explanation.contains("inside the 3.4% measured noise band"), "{}", inside.explanation);
+        assert!(inside.explanation.contains("inside the 3.2% fall that matches the 3.4% measured noise band"), "{}", inside.explanation);
+        // A rise is inside the band itself; at the 3% minimum the fall is the band, so it names the band only.
+        let (b_up, c_up) = two_sessions(100.0, 102.0);
+        let up = report(&WhatChangedInputs { baseline: &b_up, current: &c_up, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise: Some(&band) });
+        assert!(up.headline.contains("inside the 3.4% band"), "{}", up.headline);
+        let at_min = report(&WhatChangedInputs { baseline: &b, current: &c, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise: Some(&TEST_NOISE) });
+        assert!(at_min.headline.contains("inside the 3.0% band") && !at_min.headline.contains("fall that matches"), "{}", at_min.headline);
         assert!(!r.method_note.contains("flat 3%") && r.method_note.contains("measured"), "{}", r.method_note);
         // Unmeasured: the move is not judged, so no band is named for it.
         let r = report(&inputs(None));
