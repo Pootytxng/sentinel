@@ -225,7 +225,10 @@ export function payoffFor(
       Number.isFinite(ms(s.started_at)) &&
       ms(s.started_at) > anchor.at &&
       Number.isFinite(s.low1_fps_est) &&
-      (!rig || !baseRig || sameRig(rig, baseRig))
+      // CR-care-unread-rig: with the baseline's rig known, a session whose rig is unread is not
+      // provably the same machine, so it is left out like another rig's; only an unknown baseline
+      // rig keeps counting every session (an old baseline must not read "not enough" forever).
+      (!baseRig || (rig !== null && sameRig(rig, baseRig)))
     );
   });
   // CR-what-changed-fall (s38 opus r2 MUST-FIX): a session is back below the steady 1% low by the
