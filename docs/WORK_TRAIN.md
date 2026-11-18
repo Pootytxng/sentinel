@@ -2876,7 +2876,9 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   (not built). Landed CR-powercfg-restore-exit + CR-plan-exists-timeout + CR-plan-compare-rest (merge `047365a7`;
   opus r1 REQUEST-CHANGES SHOULD-FIX only, all taken, no r2; sonnet r1 APPROVE-WITH-NITS); old-behaviour proof: 5
   tests fail with the fixes neutralized. cargo --lib 2014/0, clippy clean. RELEASE_STATE: `resolve_rollback`
-  re-anchored (actions.rs:5757). No guard or census re-derived. Push/install: see RELEASE_STATE and the s41 checkpoint.
+  re-anchored (actions.rs:5757). No guard or census re-derived. Push 1 PASS (`daac874c..ddac9d82`, vitest 551 files /
+  10824 tests, cargo --lib 2014/0). Installed `ddac9d82be54d4ecee72aefa391d0cba53b69e73` (runtime proof attempt 1, Synez
+  plan before/after); RELEASE_STATE stamped, the d7fff9e7 row moved to the archive. Then stopped (list done).
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
