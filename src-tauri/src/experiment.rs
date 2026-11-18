@@ -2409,6 +2409,11 @@ pub(crate) fn with_power_plan_check(
         // can't confirm both sessions ran on the same plan, so it gives no clean result either. Like
         // an unread frame cap (`with_cap_check`), the change is restored and nothing is judged. A
         // session recorded before the plan was collected (`context_version` None) stays unchecked.
+        // s40 opus SHOULD-FIX: a verdict that already says it wasn't judged (a crash, too little
+        // evidence, ...) keeps its own reason, as `with_cap_check` does.
+        if !judged_against_noise(&outcome) {
+            return outcome;
+        }
         let unread = |g: &crate::game_state::GameStateFingerprint| g.context_version.is_some() && guid(g).is_none();
         let side = match (unread(b), unread(a)) {
             (true, true) => "either session",
@@ -7451,6 +7456,23 @@ mod experiment_tests {
         let o = with_power_plan_check(m.clone(), Some(&unread_base), &read_after, "power-ultimate");
         assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false), "{}", o.note);
         assert!(o.note.contains("in the baseline"), "{}", o.note);
+        // Unread on both sides: named as either session.
+        let o = with_power_plan_check(m.clone(), Some(&unread_base), &unread_after, "visual-effects");
+        assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false), "{}", o.note);
+        assert!(o.note.contains("in either session"), "{}", o.note);
+        // An old baseline (plan never collected) with an unread after-session: the after-session's unread
+        // read is still unconfirmed.
+        let old_base = with_plan(session(BASE_ID, 150.0), None, None);
+        let o = with_power_plan_check(m.clone(), Some(&old_base), &unread_after, "visual-effects");
+        assert_eq!(o.stop_reason.as_deref(), Some("power-plan-unread"), "{}", o.note);
+        // s40 opus SHOULD-FIX: a verdict that already says it wasn't judged keeps its own reason.
+        let crashed = ConcludeOutcome {
+            verdict: "regressed".into(),
+            keep: false,
+            stop_reason: Some("crash-during-treatment".into()),
+            ..m.clone()
+        };
+        assert_eq!(with_power_plan_check(crashed.clone(), Some(&base), &unread_after, "visual-effects"), crashed);
         // Both read and the same: the outcome stands untouched.
         assert_eq!(with_power_plan_check(m.clone(), Some(&base), &read_after, "visual-effects"), m.clone());
         // Gaming Mode on: comparability covers the plan; this check stays out.
