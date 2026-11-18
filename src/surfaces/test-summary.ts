@@ -843,9 +843,11 @@ const outcomeOf = (x: SummaryExperiment): ResultOutcome => (x.outcome === "max-f
 
 /** CR-lesson-crash-not-result: a Trial whose treatment crashed is stored as Slower (a crash restores
  *  the change), but the crash decided it, not a measured fall (experiment.rs `crash_outcome`): its
- *  numbers are no result to read a reason or a lesson from. */
+ *  numbers are no result to read a reason or a lesson from. A guard on the record's shape (s38 opus):
+ *  the backend stores no noise band beside a stop reason (`noise_evidence_for`), so a real crash
+ *  record already reached no reason or lesson; this keeps that true if a band is ever stored. */
 export function crashedTrial(x: Pick<SummaryExperiment, "treatment" | "stop_reason">): boolean {
-  return x.treatment?.crashed === true || (x.stop_reason ?? "").split(/[;:]\s*/).includes("crash-during-treatment");
+  return x.treatment?.crashed === true || (x.stop_reason ?? "").split(/;\s*/).includes("crash-during-treatment");
 }
 
 /** The reason a measured Trial gives, by its outcome's own rule (experiment.rs
