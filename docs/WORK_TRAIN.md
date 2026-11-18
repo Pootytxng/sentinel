@@ -617,6 +617,8 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       `probe_rec_target`, and the undo read-backs through `check_change_state`) still read the copy by class, so the
       Optimize card and a Trial's reads of its own setting still say "off" on a localized Windows (fails safe:
       unjudged); route them through the newest applied row with (b)-(d), two reviews.
+      s44 note: (b) is already done on `main` (s27, P4-noise-sf: `current_power_plan_guid` reads the GUID by shape via
+      `active_plan_guid_of`, no English label). Left: (c), (d), (f).
 - [ ] [CORRECT] **CR-outside-followups** (review SHOULD-FIX of CR-unconfirmed-remedy, Rust + TS) (a) stamp the active plan GUID on
       each session or the Trial record, so a plan switched away and back between start and conclude is caught; (b) Test →
       Applied & history shows a recorded row as "changed outside Compy" (`types.ts` field + a note) instead of an active
@@ -643,6 +645,14 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       2026-11-11 s19: (a) and (d) still not started (session bound): both change what the Trial one-change checks read,
       and need a test showing the check gets no weaker plus two reviews. Next step for (d): keep `recorded_at` of the
       first record in a `first_recorded_at` field (additive) and count it as a move in `trial_moved_since`-style checks.
+      (d) done s44 (CODE-ONLY, not pushed, not installed; SHA in the session log): a record made anew keeps EVERY earlier
+      record's time (`ChangedOutside.earlier_recorded_at`, oldest first, additive, absent when empty), and
+      `LedgerEntryRef::moved_at` counts them, so the noise band, Trial and real-play "nothing moved between" checks no
+      longer pool sessions across a replaced record (all times kept, not only the first: a middle record was a move too).
+      Checks only gain moves; a failed save restores the earlier times. ROB RUN-shaped test: newest time alone keeps 9
+      as-is sessions, with the earlier time 4. cargo --lib 2018/0, clippy clean. Reviews r1 opus + sonnet
+      APPROVE-WITH-NITS (exact-count NIT taken; unbounded list and corrupt-value NITs not taken). TS `trialMovedSince`
+      unchanged (it asks "moved after", which the newest time already answers). Left: (a).
 - [ ] [POLISH] **CR-zh-readiness-rest** (left by CR-zh-readiness-words) The other limiter rows are still English in zh-CN: the
       install-drive (9 sentences), applied-changes (drift counts + kept-outside titles) and fps-monitoring checks, and
       priorities.rs's own rows (pending safe tweaks, startup load, Memory Integrity); and the console / Check rows print
@@ -2774,10 +2784,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-13 s30 (scheduled, CODE-ONLY): TG-context v1 (merge `c825378e`, commit `9d651144`: power plan at start +
-  changed-by-end + context_version on every session; sonnet PASS, SHOULD-FIX TS mirror taken). Not ticked: heavy
-  background work left. cargo --lib 1954/0, clippy clean, tsc clean. `cargo fmt --check` is not a usable gate (main
-  itself has ~3.3k diffs). Not pushed (CODE-ONLY). One item.
 - 2026-11-13/16 s31 (FULL; stopped 2026-11-13 ~10:26 by the weekly usage limit, resumed 2026-11-16 17:40; a server
   restart at ~18:17 during the install's verification): pushed s30's TG-context v1 (`401e9772`, PASS; its s30 sonnet
   review stood; no verdict change). Landed CR-core-parking-plan-gone (`4119f3d5`), CR-plan-held-behaviour-tests
@@ -2888,6 +2894,7 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   plan before/after); RELEASE_STATE stamped, the d7fff9e7 row moved to the archive. Then stopped (list done).
 - 2026-11-18 ~08:30-09:00 s42 (scheduled; preflight CODE-ONLY, owner on Firefox, no game): no catch-up (main = GitHub; the two train-* folders were empty leftovers, no branch). CR-plan-read-prompt-write established read-only (no live route; residual queued CR-plan-write-recorded-guid). Landed CR-fall-words-band (merge `03c1e99a`, `4a6e7f5b`; sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken; old-code proof 3 fail). Not pushed, not installed (CODE-ONLY): the next FULL session pushes main.
 - 2026-11-18 ~11:50-12:48 s43 (coordinator-assigned from the HQ session; preflight CODE-ONLY, owner at the PC; pushes and install on the owner's 11:49 "go all"): catch-up push of s42 refused twice by the gate (affordance census lost realPlay.likelyWorse to a chosen-key t() call, then the locale parity guard on the first fix); fixed `2e22996b`, push PASS. Landed CR-plan-write-recorded-guid + CR-care-unread-rig (merge `b09c4443`; opus r1 + sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken `ffbf619e`, no r2); old-code proof 3 + 1 + 1 tests fail; cargo --lib 2016/0, clippy clean. CR-plan-compare-rest ticked (rest is POLISH). TG-salvage and TG-passive-band parked as POLISH on the owner's word. Push 2 PASS (`2e22996b..a29c7b62`, vitest 551 files / 10828 tests, cargo --lib 2016/0). Installed `a29c7b62fa89a74791dfeb19f771bab10758324f` (runtime proof `a29c7b62` release, shell 0.9.26, attempt 1); RELEASE_STATE stamped. Tester package refreshed (`C:\Users\Kuya\Desktop\Compy-tester-a29c7b62.zip`), not sent.
+- 2026-11-18 ~13:30-14:00 s44 (scheduled; preflight CODE-ONLY, owner on Discord, no game): no catch-up (main = GitHub; the two train-* folders are empty leftovers). Landed CR-outside-followups (d) (code `20054995`, merge `5985289e`; opus r1 + sonnet r1 APPROVE-WITH-NITS, exact-count NIT taken); in-test old-behaviour contrast (newest time alone 9 sessions, with the earlier time 4). cargo --lib 2018/0, clippy clean. CR-ultimate-followups (b) found already done (s27), noted. NOT PUSHED, NOT INSTALLED (CODE-ONLY): the next FULL session pushes main.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
