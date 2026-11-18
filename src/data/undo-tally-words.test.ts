@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import i18n from "../i18n";
-import { undoTallyWords } from "./undo-tally-words";
+import { activeChangesNote, undoTallyWords } from "./undo-tally-words";
 
 // CR-home-reversible-note: Home's Active changes card and the footer share these words.
 afterEach(async () => {
@@ -24,6 +24,17 @@ describe("undoTallyWords", () => {
     expect(undoTallyWords(tally(0, 0, 0, 2), t)).toBe("2 not checked");
     expect(undoTallyWords(tally(0), t)).toBe("Nothing in effect to undo");
     expect(undoTallyWords(tally(3, 2), t)).not.toMatch(/every/i);
+  });
+
+  // CR-home-unchecked-once: Home's card shows one unchecked count, never the ledger's beside the model's.
+  it("Home's note names one unchecked count: the model's when it has one, else the ledger's", () => {
+    expect(activeChangesNote(tally(1, 0, 0, 2), 1, t)).toBe("1 change can be undone · 1 more couldn't be checked just now");
+    expect(activeChangesNote(tally(0, 0, 0, 2), 1, t)).toBe("1 more couldn't be checked just now");
+    expect(activeChangesNote(tally(1, 0, 0, 2), 0, t)).toBe("1 change can be undone · 2 not checked");
+    expect(activeChangesNote(tally(0), 0, t)).toBe("Nothing in effect to undo");
+    expect(activeChangesNote(tally(3), 2, t, "LEAD")).toBe("LEAD · 2 more couldn't be checked just now");
+    // The footer's words are unchanged.
+    expect(undoTallyWords(tally(1, 0, 0, 2), t)).toBe("1 change can be undone · 2 not checked");
   });
 
   it("zh-CN says the same counts in its own words", async () => {
