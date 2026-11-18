@@ -833,9 +833,10 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       fall) moved to -16%, and -20% is asserted regressed. opus r1 REQUEST-CHANGES (MUST-FIX evidence words, SHOULD-FIX
       panel header: taken), sonnet r1 AWN, opus r2 REQUEST-CHANGES (MUST-FIX Care payoff: taken; SHOULD-FIX panel
       test: taken; no further round). Left: the NITs below (CR-what-changed-fall-words).
-- [ ] **CR-what-changed-fall-words** (s38 opus NITs) The no-change headline and the "inside" evidence edge say
-      "inside the X% band" for a fall (true, since the fall line is never wider, but the fall line is hidden); at a
-      band of 3% or less the fall edge reads "the 3.0% fall that matches the 3.0% band". Rust words only.
+- [x] **CR-what-changed-fall-words** (s38 opus NITs) merge `5546e427`: `judged_line` (intelligence.rs) words the line a
+      move was judged against: a fall names the matching fall with the band when narrower, a rise or a band at the 3%
+      minimum names the band (headline, both evidence edges). Re-derived: `the_band_is_printed_..._as_measured`'s -2% at
+      3.4% now reads "inside the 3.2% fall that matches the 3.4% band". sonnet AWN.
 - [x] **CR-driver-compare-everywhere** merge `c237b160`: `hardware::same_driver` (trimmed, case-insensitive) at
       comparability.rs, intelligence.rs's gpu-driver-change hypothesis and noise_floor.rs's `lookup` / `still_current`;
       those two compared the fingerprint hash (which digests the driver as written) and now compare its own fields
@@ -2815,13 +2816,17 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   when a test waits for its second session, the other stations now optional, Roll back greyed out with no saved undo.
   Screen check (zh-CN Health, the lessons) not run.
 - 2026-11-17 s38 (coordinator-assigned; preflight CODE-ONLY, the owner at the PC: all pushes and the install as one
-  batch from 18:40; no game at any check): landed CR-active-plan-unread (merge `2a1f3814`), CR-restore-notes-stay
-  (`045733a9`), CR-home-unchecked-once (`7795dfc7`), CR-driver-compare-everywhere (`c237b160`), CR-what-changed-fall
-  (`134fdeaf`), CR-lesson-crash-not-result (`0654320c`); reviews under each item. Queued: CR-active-plan-unread-callers,
-  CR-driver-compare-rest, CR-what-changed-fall-words; CR-fall-words-band left queued (not small). Judging-chain slice 3
+  batch from 18:40): landed CR-active-plan-unread (merge `2a1f3814`), CR-restore-notes-stay (`045733a9`),
+  CR-home-unchecked-once (`7795dfc7`), CR-driver-compare-everywhere (`c237b160`), CR-what-changed-fall (`134fdeaf`),
+  CR-lesson-crash-not-result (`0654320c`), CR-what-changed-fall-words (`5546e427`); reviews under each item; RELEASE_STATE
+  re-anchored `resolve_rollback` (actions.rs:5564, `d1f80aae`). Queued: CR-active-plan-unread-callers,
+  CR-driver-compare-rest, CR-debrief-lesson-crash; CR-fall-words-band left queued (not small). Judging-chain slice 3
   untouched (time). No guard or census re-derived; existing behaviour tests re-derived with the product change:
-  BlackBox restore summaries (offered wording), the What changed measured-band test (-20% -> -16% inside the fall),
-  the core-parking undo fakes (name another active plan). Old-code proof run for every new test.
+  BlackBox restore summaries (offered wording), the What changed measured-band test (-20% -> -16% inside the fall) and
+  band-words test (fall line), the core-parking undo fakes (name another active plan). Old-code proof run for every
+  new test. Game (ROB RUN, EAC, Steam app 4262460) from 18:10 through 19:10: per the game rule, NOT PUSHED and NOT
+  INSTALLED; main is ahead of origin with all of the above (gates last run: cargo --lib 2002/0, clippy, tsc clean on
+  main at `134fdeaf`+; targeted vitest per item). The next session pushes first (step 2, catch up) and installs.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
