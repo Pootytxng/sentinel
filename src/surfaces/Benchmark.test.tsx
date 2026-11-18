@@ -107,14 +107,15 @@ describe("BenchmarkTab (audit M1)", () => {
     mocks.benchState = {
       running: false,
       baseline: { components: [], confidence: "clean", notes: [] },
-      baseline_at: "2026-07-23T09:55:25Z",
+      // Mid-day UTC on a whole hour: every real UTC offset lands on :00, and the day is the 23rd or 24th.
+      baseline_at: "2026-07-23T12:00:00Z",
       latest: null,
       latest_at: null,
       efficacy: null,
     };
     render(<BenchmarkTab />);
     const line = await screen.findByText(/Baseline saved/);
-    expect(line.textContent).toMatch(/ · Jul 23 · \d{1,2}:55 [AP]M\./);
+    expect(line.textContent).toMatch(/ · Jul 2[34] · \d{1,2}:00 [AP]M\./);
     expect(line.textContent).not.toMatch(/2026|\d+\/\d+\/\d+/);
   });
 

@@ -2,9 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { Card, StatusPill, SectionHeader } from "../design";
-// Side-effect import: guarantees the i18next singleton is initialized even when this component
-// is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
-import "../i18n";
+// Importing the singleton guarantees it is initialized even when this component is the first (or
+// only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import i18n from "../i18n";
 import { humanizeWhen } from "../data/humanize-when";
 import { Term } from "../design/Term";
