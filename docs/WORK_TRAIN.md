@@ -535,10 +535,27 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       before its batch (an `apply_for_bench_stack` beside `apply_for_bench_trial`), and `held_now()` callers
       (Gaming Mode's start, `bench_refusal`) read one. Dark (`stack_trial_gate()` false), nothing reaches it today;
       two reviews when done.
-- [ ] [CORRECT] **CR-plan-read-prompt-write** (CR-gm-stop-busy r1 opus SHOULD-FIX 3, pre-existing) Applies that read
+- [x] [CORRECT] **CR-plan-read-prompt-write** (CR-gm-stop-busy r1 opus SHOULD-FIX 3, pre-existing) Applies that read
       `SCHEME_CURRENT` before a UAC prompt and write it after (e.g. the CPMINCORES script, actions.rs ~4570) never
       took Gaming Mode's gate, so a session start or stop during the prompt changes which plan they write.
       Establish whether a live apply route reaches one first.
+      FINDING (s42, read-only from the code at `8c82fbe0`; nothing changed): no live route reaches one now. The three
+      such applies (USB selective suspend and PCIe link power, `apply_power_setting_off_on_ac`; the core-parking
+      restore, `restore_core_parking_default`) are reached only through `experiment::apply_recommendation`,
+      `apply_recommendations_batch`, `restore_leftover` (each `plain_change_gate`, which takes Gaming Mode's
+      `SESSION_OP` for these three recs via `session_rec_of` and holds it through the write), the Trial start
+      (`session_op_guard` held from its check through `history::apply_recommendation`) and the bench apply
+      (`apply_for_bench_trial`, same). A Gaming Mode start takes `SESSION_OP` by try_lock first, so it is refused
+      while any of them sits in its prompt. Stop and recover don't take it, but they switch the plan only when the
+      contract holds it, and then every one of the three is refused at its check (`session_hold_refusal`, plan-held
+      + `PLAN_SCOPED`), and any check made while a restore runs is refused (`RestoreWindow`). The undos write the
+      recorded plan GUID (legacy core-parking rows without one excepted). Residual queued: CR-plan-write-recorded-guid.
+- [ ] [CORRECT] **CR-plan-write-recorded-guid** (s42, from CR-plan-read-prompt-write) The USB/PCIe apply and the
+      core-parking restore read the active plan's GUID and priors before their UAC prompt but write `SCHEME_CURRENT`
+      after it, so a plan switched OUTSIDE Compy while the prompt is open (Windows Settings, a vendor tool) gets the
+      write while the row records the old plan: the undo then puts back a plan that was never changed and leaves the
+      other one changed with no record. Write the recorded GUID instead (and setactive only when it is still
+      active), as the undos do. Mutation boundary: opus + sonnet. Low odds on the owner's PC (admin prompts off).
 - [x] [CORRECT] **CR-powercfg-restore-exit** (r1 opus SHOULD-FIX of CR-gm-restore-partial; pre-existing; rollback boundary) The
       power-setting restore (USB selective suspend / PCIe ASPM, actions.rs ~3651, and its batch line ~1034) runs bare
       `powercfg` with no `$LASTEXITCODE` check, so inside the batch's `try` a failed write still records `:ok` and the
@@ -554,10 +571,17 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       whose rig is unread (or a baseline whose rig is unknown) as the same rig (`!rig || !baseRig || sameRig`), so
       "stayed steady" can rest on sessions from another machine. Needs a decision first: excluding them makes an old
       baseline with no recorded rig read "not enough sessions" forever, which misleads the other way. TS.
-- [ ] [CORRECT] **CR-fall-words-band** (s37 opus r2 SHOULD-FIX, pre-existing wording from s27) Likely worse, the receipt rules
+- [x] [CORRECT] **CR-fall-words-band** (s37 opus r2 SHOULD-FIX, pre-existing wording from s27) Likely worse, the receipt rules
       and "fell by more than the band" name the band where the fall was judged at the matching fall (-9.5% against a
       10% band reads "more than the ±10% allowance"). Word it as the engine's `fell_words` does, en + zh-CN. TS.
       s38: left queued (not small: receipt and rule wording in en + zh-CN across several surfaces).
+      Done s42 merge `03c1e99a` (`4a6e7f5b`): the receipt rules (1% low fell, average fell, Recommended's "no clear
+      win") and real play's Likely worse name the fall a model-3 record was judged at ("fell past -9%, the fall that
+      matches the +10% band", en + zh-CN; `judgedFallOf`); older records keep the band words; a record that can't
+      say which names the matching fall only when the number didn't pass the band. Words only. 3 new tests fail on
+      the old code; tsc 0, the touched suites 304/304. Review: sonnet r1 APPROVE-WITH-NITS (SHOULD-FIX taken). Left
+      (POLISH, NITs): no test drives the Smoothest and real-play receipt call sites; the receipt header still says
+      "both against a ±X% band".
 - [ ] [CORRECT] **CR-plan-compare-rest** (s40 opus on CR-trial-plan-unread, outside its diff) Real-play Trials (realplay.rs,
       `comparability::derive` only) and the session-debrief before/after verdict (comparison.rs) don't compare the
       power plan at all, even one that clearly differed; the Trial preflight says nothing about an unread baseline
@@ -2741,21 +2765,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-12 ~22:45-23:55 (coordinator-assigned s28, no game throughout; the owner on Firefox/Discord): pushed s27's
-  main `6e064cd8` (PASS). Landed CR-trial-gm-baseline-overlap (merge `457c3ff0`; re-review of its opus r1 MUST-FIX
-  fix, opus + sonnet APPROVE-WITH-NITS), CR-core-parking-plan-guid plan-GUID half (merge `8890d34d`; re-review opus +
-  sonnet APPROVE-WITH-NITS; RELEASE_STATE citations re-anchored on the branch; "same class" half queued as
-  CR-plan-held-refusal), CR-ts-gpu-first (merge `cad72727`) and CR-receipt-unrecorded-unknown (merge `14e64e28`;
-  coordinator call on the two fixtures that encoded the bug; opus + sonnet APPROVE-WITH-NITS, nits taken). Per
-  branch: cargo 1935/0 (CR-ts-gpu-first's full run 1932/2 in comparison_race_tests, 11/11 alone), clippy clean, tsc
-  clean, full vitest 542/545 (543/546 on CR-ts-gpu-first; CR-core-parking-plan-guid also hit the source_main_commit
-  stamp, stale for every tree once origin/main reached `6e064cd8`; re-stamped in `394f161e`). Pushes PASS (`6e064cd8`,
-  `6bf4c563`, `3630e0a6`, `30967564`, this one). Installed `3630e0a6` (runtime proof attempt 1, Synez before/after);
-  RELEASE_STATE re-stamped (`30967564`). P7-tester-package built at `C:\Users\Kuya\Desktop\Compy-tester\` (the proved
-  installer as `Compy-0.9.26-3630e0a6-tester-setup.exe`, SHA256.txt, guide .txt + .html); not sent anywhere; item
-  left unticked (the friend test is the exit). Not started: measurement items 7/8, the judging-chain refactor,
-  TG-context. Screen check not run.
-
 - 2026-11-13 s29 (FULL; resumed 03:43 after the device bridge dropped 02:15-03:42): measurement item 8 (merge
   `b85f78cd`: armed comparison, Lab tuning, session patterns judged on the measured band or "can't call it"; synthetic
   benchmark calls nothing; trends arrow and in-session fade not called; sonnet APPROVE-WITH-NITS, opus r1/r2
@@ -2879,6 +2888,7 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   re-anchored (actions.rs:5757). No guard or census re-derived. Push 1 PASS (`daac874c..ddac9d82`, vitest 551 files /
   10824 tests, cargo --lib 2014/0). Installed `ddac9d82be54d4ecee72aefa391d0cba53b69e73` (runtime proof attempt 1, Synez
   plan before/after); RELEASE_STATE stamped, the d7fff9e7 row moved to the archive. Then stopped (list done).
+- 2026-11-18 ~08:30-09:00 s42 (scheduled; preflight CODE-ONLY, owner on Firefox, no game): no catch-up (main = GitHub; the two train-* folders were empty leftovers, no branch). CR-plan-read-prompt-write established read-only (no live route; residual queued CR-plan-write-recorded-guid). Landed CR-fall-words-band (merge `03c1e99a`, `4a6e7f5b`; sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken; old-code proof 3 fail). Not pushed, not installed (CODE-ONLY): the next FULL session pushes main.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
