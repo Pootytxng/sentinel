@@ -234,6 +234,15 @@ describe("WhatChangedPanel — compy_intelligence default ON", () => {
     expect(container.querySelector(".wcp-detail")).toBeNull();
   });
 
+  // CR-what-changed-fall (s38 opus SHOULD-FIX): a measured band reads as the rise and the fall it judges.
+  it("names a measured band's rise and matching fall in the header, never ±band", async () => {
+    harness.outcome = { ...report, noise_measured: true, noise_floor_pct: 25 } as WhatChangedOutcome;
+    const { container } = mountPanel();
+    await waitFor(() => expect(container.querySelector(".wcp-improved")).toBeTruthy());
+    expect(container.querySelector(".wcp-nf")?.textContent).toContain("noise floor +25.0% / -20.0%");
+    expect(container.querySelector(".wcp-nf")?.textContent).not.toContain("±");
+  });
+
   it("suppresses the 'Most likely cause' card on a not-comparable report — the banner owns the why, no triple-state", async () => {
     harness.outcome = notComparableReport;
     const { container } = mountPanel();

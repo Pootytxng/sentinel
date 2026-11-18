@@ -491,7 +491,7 @@
     "confidenceCappedAt": "Confidence capped at",
     "whatChangedTag": "What changed?",
     "headlineDefault": "WHAT CHANGED? · vs your previous {{game}} session",
-    "noiseFloor": "noise floor ±{{pct}}%",
+    "noiseFloor": "noise floor +{{rise}}% / -{{fall}}%",
     "noiseUnmeasured": "this game's noise isn't measured yet",
     "mostLikelyCause": "Most likely cause",
     "nextTest": "Next test",

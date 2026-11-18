@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import type { CrashIncident, SessionSummary } from "../types";
 import { anchorFor, payoffFor, MIN_PAYOFF_SESSIONS, type CareStep, type Payoff } from "./care-next-step";
+import { fallPct } from "./test-summary";
 import { CareSupportExport } from "./CareHonestEnd";
 import { Depth, ReceiptRow } from "../design/Depth";
 import { displayModeLabel } from "../data/display-mode";
@@ -54,7 +55,8 @@ export function CareNextStep({
   const payoff: Payoff = payoffFor(step, anchor, incidents, sessions, new Date(), skipped);
   const kind = step.source === "incident" ? step.kind : "";
   const game = step.source === "stutter" ? step.game : "";
-  const pct = step.source === "stutter" ? (anchor.baseline ?? step.baseline).noiseFloorPct.toFixed(0) : "";
+  // The line `payoffFor` judges a session back at: the band's matching fall (CR-what-changed-fall).
+  const pct = step.source === "stutter" ? fallPct((anchor.baseline ?? step.baseline).noiseFloorPct).toFixed(0) : "";
 
   // App crash / App hang name the faulting app ("No Valorant.exe crash recorded…"); other kinds,
   // or an app Windows didn't name, keep the kind-only line. Static keys, so the guards can see them.

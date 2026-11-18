@@ -27,6 +27,7 @@ import { hasUndo } from "../data/live-changes";
 // is the first (or only) thing a test/entry point loads — mirrors main.tsx's own `import "./i18n"`.
 import "../i18n";
 import { eventText } from "./event-text";
+import { fallPct } from "./test-summary";
 
 // Intelligence Phase 1 — the "What changed?" panel (Monitor session debrief slot). Renders the
 // deterministic Rust engine's verdict for THIS session vs the previous session of the same game:
@@ -376,7 +377,10 @@ export function WhatChangedReportView({
         <span className="wcp-nf">
           {/* P4-judge-noisy: the band is shown only when it was measured for this game; never a default. */}
           {r.noise_measured ? (
-            <Term id="noise-floor">{t("optimize.whatChangedPanel.noiseFloor", { pct: r.noise_floor_pct.toFixed(1) })}</Term>
+            // CR-what-changed-fall (opus SHOULD-FIX): a rise is judged at the band, a fall at its matching fall.
+            <Term id="noise-floor">
+              {t("optimize.whatChangedPanel.noiseFloor", { rise: r.noise_floor_pct.toFixed(1), fall: fallPct(r.noise_floor_pct).toFixed(1) })}
+            </Term>
           ) : (
             <Term id="noise-floor">{t("optimize.whatChangedPanel.noiseUnmeasured")}</Term>
           )}

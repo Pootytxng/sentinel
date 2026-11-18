@@ -337,6 +337,22 @@ describe("P7-teach: the stutter comparison teaches one lesson from this pair's o
     expect(stutterLessonRule(report({ verdict: "regressed", ...older, ...refs(80, 70, 120, 110) }))).toBe("slower-and-less-steady");
   });
 
+  // CR-what-changed-fall: What changed now judges a measured band as Trials do (a rise past the
+  // band, a fall past the matching fall), so the lesson reads the falls the same way.
+  it("on a measured band a fall reads at the matching fall, a rise still has to beat the band", () => {
+    const wide = { noise_measured: true, noise_floor_pct: 25, noise_avg_band_pct: 25 }; // fall 20%
+    // -22% on both: past the 20% matching fall, inside the 25% band.
+    expect(stutterLessonRule(report({ verdict: "regressed", ...wide, ...refs(100, 78, 120, 93.6) }))).toBe("slower-and-less-steady");
+    // -22% on the 1% low, -18% on the average (inside the 20% fall): steadiness only.
+    expect(stutterLessonRule(report({ verdict: "regressed", ...wide, ...refs(100, 78, 120, 98.4) }))).toBe("less-steady-not-slower");
+    // +22% on both: inside the 25% rise, so it teaches nothing even beside an improved verdict.
+    expect(stutterLessonRule(report({ verdict: "improved", ...wide, ...refs(100, 122, 120, 146.4) }))).toBeNull();
+    expect(stutterLessonRule(report({ verdict: "improved", ...wide, ...refs(100, 126, 120, 120) }))).toBe("steadier-not-faster");
+    // An older report (no measured band) still reads the band both ways.
+    const older = { noise_measured: undefined, noise_floor_pct: 25 };
+    expect(stutterLessonRule(report({ verdict: "regressed", ...older, ...refs(100, 78, 120, 93.6) }))).toBeNull();
+  });
+
   it("the stored verdict wins: a re-derived 1% low direction that disagrees with it teaches nothing", () => {
     // The engine said regressed, the stored readings read flat on the 1% low: no lesson, never a
     // lesson that contradicts the verdict.

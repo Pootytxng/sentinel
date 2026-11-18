@@ -302,7 +302,7 @@ export function fallPct(band: number): number {
 }
 
 /** CR-lesson-fall-band: how a number's FALL was judged against its band. "same": the band both ways
- *  (records judged before noise model 3, and What changed, which judges `|delta| > band`); "matching":
+ *  (records judged before noise model 3, and What changed reports without a measured band); "matching":
  *  a fall past `fallPct(band)` (noise model 3 on); "unknown": the record doesn't say which, so a fall
  *  between the two can't be called either way. */
 export type FallRule = "same" | "matching" | "unknown";

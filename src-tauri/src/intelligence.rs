@@ -1494,13 +1494,18 @@ pub(crate) fn evidence_graph(r: &WhatChangedReport) -> EvidenceGraph {
                 "Average FPS moves alongside, but the 1% low is the verdict metric.".to_string(),
             )
         } else if o.meaningful {
-            (
-                EvidenceRelation::Supports,
+            // CR-what-changed-fall (opus MUST-FIX): a fall is judged at the fall matching the band,
+            // so it quotes that line; a rise is judged at the band itself.
+            let line = if o.delta_pct < 0.0 {
                 format!(
-                    "The 1% low moved {:+.1}% — past the {:.1}% measured noise band.",
-                    o.delta_pct, r.noise_floor_pct
-                ),
-            )
+                    "the {:.1}% fall that matches the {:.1}% measured noise band",
+                    crate::noise_floor::fall_pct(r.noise_floor_pct),
+                    r.noise_floor_pct
+                )
+            } else {
+                format!("the {:.1}% measured noise band", r.noise_floor_pct)
+            };
+            (EvidenceRelation::Supports, format!("The 1% low moved {:+.1}% — past {line}.", o.delta_pct))
         } else if r.noise_measured && r.verdict != "inconclusive" {
             (
                 EvidenceRelation::CorrelatesWith,
@@ -1764,7 +1769,12 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
     // sampler couldn't take is its 0, and it is left out: it printed as "0.0 → 140.2 (+0.0%)" on
     // the panel and in the evidence graph (codebase review 2026-11-03).
     let delta_low1 = round1((c.low1_fps_est - b.low1_fps_est) / b.low1_fps_est * 100.0);
-    let meaningful = delta_low1.abs() > floor; // boundary INCLUSIVE = no-change (comparison.rs pin)
+    // CR-what-changed-fall: the one rule Trials and armed comparisons judge a measured band by
+    // (`comparison::classify_measured`): a rise must beat the band, a fall the matching fall
+    // (`noise_floor::fall_pct`), the same log distance both ways. Both boundaries INCLUSIVE =
+    // no-change. Unmeasured noise calls nothing either way (below).
+    let measured_verdict = crate::comparison::classify_measured(delta_low1, floor);
+    let meaningful = measured_verdict != "no-change";
     let mut observations = vec![Observation {
         metric: "1% low FPS".into(),
         baseline: round1(b.low1_fps_est),
@@ -1843,7 +1853,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         return r;
     }
 
-    let verdict = if delta_low1 > 0.0 { "improved" } else { "regressed" };
+    let verdict = measured_verdict;
     let direction_word = if delta_low1 > 0.0 { "rose" } else { "fell" };
     // The session whose lows were worse — direction-aware evidence (pressure/heat must sit
     // in the WORSE session to support a hypothesis; the reverse contradicts it).
@@ -3713,6 +3723,43 @@ mod tests {
     }
 
     #[test]
+    fn what_changed_judges_a_measured_band_by_the_trials_rise_and_fall_rule() {
+        // CR-what-changed-fall: a 25% measured band is a 25% rise and a 20% fall (`fall_pct`), as
+        // Trials and armed comparisons judge it. A rise never gets easier to call than before.
+        let band = crate::noise_floor::GameNoise { low1_band_pct: 25.0, ..TEST_NOISE };
+        assert_eq!(crate::noise_floor::fall_pct(25.0), 20.0);
+        let verdict_of = |low_c: f64| {
+            let (b, c) = two_sessions(100.0, low_c);
+            let r = report(&WhatChangedInputs { baseline: &b, current: &c, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise: Some(&band) });
+            assert_eq!(r.observations[0].meaningful, r.verdict != "no-change", "{low_c}: the row agrees with the verdict");
+            r.verdict
+        };
+        assert_eq!(verdict_of(78.0), "regressed", "-22% is past the matching fall, though inside the 25% band");
+        // The evidence names the line the fall was judged at, never "past the 25% band" (opus MUST-FIX).
+        let (b, c) = two_sessions(100.0, 78.0);
+        let r = report(&WhatChangedInputs { baseline: &b, current: &c, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise: Some(&band) });
+        let edge = r.evidence_graph.edges.iter().find(|e| e.explanation.contains("1% low moved")).expect("edge");
+        assert!(edge.explanation.contains("past the 20.0% fall that matches the 25.0% measured noise band"), "{}", edge.explanation);
+        let (b, c) = two_sessions(100.0, 126.0);
+        let r = report(&WhatChangedInputs { baseline: &b, current: &c, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise: Some(&band) });
+        let edge = r.evidence_graph.edges.iter().find(|e| e.explanation.contains("1% low moved")).expect("edge");
+        assert!(edge.explanation.contains("past the 25.0% measured noise band"), "{}", edge.explanation);
+        assert_eq!(verdict_of(80.0), "no-change", "the matching fall itself is inclusive");
+        assert_eq!(verdict_of(122.0), "no-change", "+22% is inside the 25% rise");
+        assert_eq!(verdict_of(125.0), "no-change", "the band itself is inclusive");
+        assert_eq!(verdict_of(126.0), "improved");
+        // At the smallest claim (3%) the band is the same both ways, as it always was.
+        let small = |low_c: f64| {
+            let (b, c) = two_sessions(100.0, low_c);
+            report(&WhatChangedInputs { baseline: &b, current: &c, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise: Some(&TEST_NOISE) }).verdict
+        };
+        assert_eq!(small(97.0), "no-change");
+        assert_eq!(small(96.9), "regressed");
+        assert_eq!(small(103.0), "no-change");
+        assert_eq!(small(103.1), "improved");
+    }
+
+    #[test]
     fn identical_sessions_get_no_invented_cause() {
         let (b, c) = two_sessions(100.0, 100.0);
         let r = report(&WhatChangedInputs {
@@ -3780,7 +3827,7 @@ mod tests {
     // session with an uncapped one.
     #[test]
     fn what_changed_judges_only_on_the_measured_band_and_the_same_cap_state() {
-        let (b, c) = two_sessions(100.0, 80.0);
+        let (b, c) = two_sessions(100.0, 84.0);
         let inputs = |noise| WhatChangedInputs {
             baseline: &b,
             current: &c,
@@ -3793,9 +3840,13 @@ mod tests {
         assert_eq!((unmeasured.verdict.as_str(), unmeasured.noise_measured), ("inconclusive", false));
         assert!(unmeasured.headline.contains("isn't measured yet"), "{}", unmeasured.headline);
         assert!(unmeasured.observations.iter().all(|o| !o.meaningful));
-        // A -20% drop inside ROB RUN's measured ±20.6% is no regression; past a quiet game's 3% it is.
+        // A -16% drop inside ROB RUN's measured 20.6% band (its matching fall is 17.0%) is no
+        // regression; past a quiet game's 3% it is. CR-what-changed-fall: -20% is past that fall.
         let wide = crate::noise_floor::GameNoise { low1_band_pct: 20.6, ..TEST_NOISE };
         assert_eq!(report(&inputs(Some(&wide))).verdict, "no-change");
+        let (b20, c20) = two_sessions(100.0, 80.0);
+        let past_fall = report(&WhatChangedInputs { baseline: &b20, current: &c20, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise: Some(&wide) });
+        assert_eq!(past_fall.verdict, "regressed");
         let quiet = report(&inputs(Some(&TEST_NOISE)));
         assert_eq!((quiet.verdict.as_str(), quiet.noise_measured), ("regressed", true));
         // CR-lesson-avg-band: the average's own measured band rides along; none when unmeasured.
