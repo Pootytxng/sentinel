@@ -843,9 +843,12 @@ From self-review view-1112a (installed `b27552f8`, 2026-11-12 s21; r1 and r2 FAI
       (`same_rig`) plus `same_driver`. Tests: `a_driver_written_in_another_case_does_not_split_the_band`,
       `a_driver_written_in_another_case_is_the_same_driver_in_what_changed`. opus AWN (SHOULD-FIX: the What changed
       test, taken; the other exact compares, queued), sonnet AWN.
-- [ ] **CR-driver-compare-rest** (s38 opus SHOULD-FIX) Three driver compares are still exact: the timeline's
-      gpu-driver-change event (intelligence.rs ~568), the hardware snapshot save (~265), the driver-split pattern
-      (intelligence_patterns.rs ~446). Route them through `same_driver`. Rust.
+- [x] **CR-driver-compare-rest** (s38 opus SHOULD-FIX) merge `fbd1a8f6`: the timeline's gpu-driver-change event, the
+      identity snapshot save (`driver_changed` / `driver_gained`) and the driver-split runs compare through
+      `hardware::same_driver`; the driver `to_key` is trimmed + lowercased so both streams' sightings dedup; a
+      whitespace-only read is a failed probe. Tests: `a_driver_written_in_another_case_is_no_driver_change_on_the_timeline`
+      (old code: 3 events, not 1), `a_driver_written_in_another_case_is_one_driver_run` (old code: a driver split).
+      sonnet AWN (SHOULD-FIX whitespace-only read: taken; NITs: the run label / event `from` keep the spelling seen).
 - [x] **CR-active-plan-unread** (coordinator, s38) merge `2a1f3814`: `current_power_plan_guid` reads through
       `output_within` with `POWERCFG_READ_LIMIT` (and a non-zero exit is unread); `core_parking_undo_step` returns Err
       with nothing changed on an unread active plan (before the gone check, the direct query and the re-commit). Tests:
@@ -2672,31 +2675,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-12 ~10:10-12:10 (s23, coordinator-assigned; no game seen; owner's 10:43 rule: push/install need only no game;
-  server restart ~11:08-11:30): bundle `main-unpushed-2026-11-12.bundle` verified. Landed, each in its own worktree:
-  CR-bench-flake `4d51ba9b` (merge `f2062190`; Depth's mount effect re-closed a door tapped before it ran; 10/10 file
-  runs, 2 full vitest 537/540; sonnet APPROVE-WITH-NITS), P9-upgrade-block-reachable `fce48019`, `11a2a2dc` (merge
-  `17b23abf`; OptimizeV2, which drew the block under v2Ia, was deleted in `1ab831fb`; sonnet APPROVE-WITH-NITS),
-  CR-core-parking-held-with-plan + CR-gm-start-respects-plan-holds `17034899`..`45d27ca3` (merge `46354cbb`; opus r1/r2
-  REQUEST-CHANGES without MUST-FIX, sonnet APPROVE-WITH-NITS x2, r3 both APPROVE-WITH-NITS), P9-no-upgrade-cpu-unknown +
-  CR-gpu-share-one-source `9009dee1`, `9173e337` (merge `a69eaa1f`; sonnet APPROVE-WITH-NITS); findings CR-footer-undo-path
-  (no undo path removed) and CR-restore-window-direct (safe by disjointness); P9-session-on-this-hardware parked.
-  cargo 1882/0, clippy clean, full vitest 538/541 (3 site-app suites). Pushes: 1 stopped mid-gate (owner returned,
-  before the 10:43 rule), 2-5 PASS (`17b23abf`, `25ddeafa`, `418e5d91`, `a69eaa1f`). Installed `17b23abf` then
-  `a69eaa1f` (runtime proof attempt 1 each, Synez before/after). Screen check view-1112b on `a69eaa1f` (background,
-  Compy in front 0 of 187 reads): VERDICT PASS (upgrade block not visible on this rig; unit tests only); teardown CLEAN.
-- 2026-11-12 ~12:32-14:15 (s24, coordinator-assigned; no game seen; push/install per the 10:43 rule): landed, each in its
-  own worktree: P9-session-on-this-hardware (merge `da0aeb46`; sonnet APPROVE-WITH-NITS), CR-footer-ledger-unknown
-  in part (merge `1ea41596`; empty-list half dropped: ledger-health-home-guard; sonnet r1, r2 APPROVE-WITH-NITS),
-  P9-exit-fixture (merge `6ba0d038`; tests only; APPROVE-WITH-NITS), P9-no-upgrade-named + P9-cpu-gpu-balance (merge
-  `2d527abc`; sonnet r1 REQUEST-CHANGES, MUST-FIX taken, r2 APPROVE-WITH-NITS), P9-part-line-context +
-  P9-no-session-plain-line (merge `9d2f2b57`; APPROVE-WITH-NITS), CR-view-1112c-zh-gap (this merge). Phase 9 Exit
-  finding under its heading (not ticked; Needs owner). cargo 1887/0, clippy clean, full vitest 540/543 (3 site-app).
-  Pushes 1, 3-6 PASS (`da0aeb46`, `1ea41596`, `6ba0d038`, `2d527abc`, `9d2f2b57`); push 2 failed in the gate on a
-  load flake (glass-rooms.test.tsx:477, queued CR-glass-scroll-flake), retried once as push 3. Installed `9d2f2b57`
-  (runtime proof attempt 1, Synez before/after). Screen check view-1112c (background): VERDICT FAIL (Compy in front 3
-  of 107 reads; Optimize overflow not measured at 3 sizes; zh space after "。"; upgrade block still unseen: the invoke
-  wrap does not take); teardown CLEAN; FAILs queued, the zh one fixed here.
 - 2026-11-12 ~14:36-17:00 (s25, coordinator-assigned; no game seen at any check; owner on Discord/Firefox/Claude, never
   idle 10+ min; restarted once by the server ~15:37): landed, each in its own worktree: CR-glass-scroll-flake (merge
   `973aace2`; BlackBox scroll moved to a layout effect; 20/20 file runs, 2 full vitest; sonnet APPROVE-WITH-NITS),
@@ -2827,6 +2805,10 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   new test. Game (ROB RUN, EAC, Steam app 4262460) from 18:10 through 19:10: per the game rule, NOT PUSHED and NOT
   INSTALLED; main is ahead of origin with all of the above (gates last run: cargo --lib 2002/0, clippy, tsc clean on
   main at `134fdeaf`+; targeted vitest per item). The next session pushes first (step 2, catch up) and installs.
+- 2026-11-18 s39 (scheduled, CODE-ONLY: the owner at the PC, ROB RUN in front): CR-driver-compare-rest (merge
+  `fbd1a8f6`); review under the item. Old-code proof run for both new tests. cargo --lib 2004/0 + clippy clean on the
+  branch before the SHOULD-FIX, intelligence tests 249/0 + clippy clean after. One item (time). NOT PUSHED, NOT
+  INSTALLED: main is ahead of origin (s38's batch + this); the next FULL session pushes first and installs.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
