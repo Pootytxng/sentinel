@@ -248,6 +248,25 @@ describe("Check", () => {
     }
   });
 
+  // Review r1 S2: with unread checks too, the numbers must add up to the total.
+  it("the 'All N checks' line names the checks that could not be measured, so the numbers add up", async () => {
+    readinessMock.advisories = 1;
+    readinessMock.unread = 1;
+    try {
+      render(
+        <ConfirmProvider>
+          <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+        </ConfirmProvider>,
+      );
+      expect(
+        await screen.findByRole("button", { name: /All 3 checks · 1 graded, 1 advisory, 1 couldn't be measured/ }),
+      ).toBeInTheDocument();
+    } finally {
+      readinessMock.advisories = 0;
+      readinessMock.unread = 0;
+    }
+  });
+
   it("the receipt marks an advisory row noted, not graded, never with the ✓", async () => {
     readinessMock.advisories = 1;
     try {

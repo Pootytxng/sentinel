@@ -110,6 +110,7 @@
     "chipUnknown": "{{count}} unknown",
     "allChecks": "All {{count}} checks",
     "allChecksGraded": "All {{count}} checks · {{graded}} graded, {{advisory}} advisory",
+    "allChecksGradedUnread": "All {{count}} checks · {{graded}} graded, {{advisory}} advisory, {{unread}} couldn't be measured",
     "resultOk": "came back fine",
     "resultFix": "worth fixing",
     "resultUnknown": "couldn't read",

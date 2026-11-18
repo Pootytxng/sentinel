@@ -94,6 +94,7 @@
     "chipUnknown": "{{count}} 项未知",
     "allChecks": "全部 {{count}} 项检测",
     "allChecksGraded": "全部 {{count}} 项检测 · {{graded}} 项计入评分，{{advisory}} 项仅供参考",
+    "allChecksGradedUnread": "全部 {{count}} 项检测 · {{graded}} 项计入评分，{{advisory}} 项为提示项，{{unread}} 项无法测量",
     "resultOk": "检测正常",
     "resultFix": "值得修复",
     "resultUnknown": "未能读取",
