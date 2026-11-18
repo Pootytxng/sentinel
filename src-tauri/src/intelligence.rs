@@ -1494,13 +1494,18 @@ pub(crate) fn evidence_graph(r: &WhatChangedReport) -> EvidenceGraph {
                 "Average FPS moves alongside, but the 1% low is the verdict metric.".to_string(),
             )
         } else if o.meaningful {
-            (
-                EvidenceRelation::Supports,
+            // CR-what-changed-fall (opus MUST-FIX): a fall is judged at the fall matching the band,
+            // so it quotes that line; a rise is judged at the band itself.
+            let line = if o.delta_pct < 0.0 {
                 format!(
-                    "The 1% low moved {:+.1}% — past the {:.1}% measured noise band.",
-                    o.delta_pct, r.noise_floor_pct
-                ),
-            )
+                    "the {:.1}% fall that matches the {:.1}% measured noise band",
+                    crate::noise_floor::fall_pct(r.noise_floor_pct),
+                    r.noise_floor_pct
+                )
+            } else {
+                format!("the {:.1}% measured noise band", r.noise_floor_pct)
+            };
+            (EvidenceRelation::Supports, format!("The 1% low moved {:+.1}% — past {line}.", o.delta_pct))
         } else if r.noise_measured && r.verdict != "inconclusive" {
             (
                 EvidenceRelation::CorrelatesWith,
@@ -3704,6 +3709,15 @@ mod tests {
             r.verdict
         };
         assert_eq!(verdict_of(78.0), "regressed", "-22% is past the matching fall, though inside the 25% band");
+        // The evidence names the line the fall was judged at, never "past the 25% band" (opus MUST-FIX).
+        let (b, c) = two_sessions(100.0, 78.0);
+        let r = report(&WhatChangedInputs { baseline: &b, current: &c, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise: Some(&band) });
+        let edge = r.evidence_graph.edges.iter().find(|e| e.explanation.contains("1% low moved")).expect("edge");
+        assert!(edge.explanation.contains("past the 20.0% fall that matches the 25.0% measured noise band"), "{}", edge.explanation);
+        let (b, c) = two_sessions(100.0, 126.0);
+        let r = report(&WhatChangedInputs { baseline: &b, current: &c, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise: Some(&band) });
+        let edge = r.evidence_graph.edges.iter().find(|e| e.explanation.contains("1% low moved")).expect("edge");
+        assert!(edge.explanation.contains("past the 25.0% measured noise band"), "{}", edge.explanation);
         assert_eq!(verdict_of(80.0), "no-change", "the matching fall itself is inclusive");
         assert_eq!(verdict_of(122.0), "no-change", "+22% is inside the 25% rise");
         assert_eq!(verdict_of(125.0), "no-change", "the band itself is inclusive");

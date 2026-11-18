@@ -345,8 +345,9 @@ describe("P7-teach: the stutter comparison teaches one lesson from this pair's o
     expect(stutterLessonRule(report({ verdict: "regressed", ...wide, ...refs(100, 78, 120, 93.6) }))).toBe("slower-and-less-steady");
     // -22% on the 1% low, -18% on the average (inside the 20% fall): steadiness only.
     expect(stutterLessonRule(report({ verdict: "regressed", ...wide, ...refs(100, 78, 120, 98.4) }))).toBe("less-steady-not-slower");
-    // +22% on both: inside the 25% rise, so no lesson from a no-change verdict.
-    expect(stutterLessonRule(report({ verdict: "no-change", ...wide, ...refs(100, 122, 120, 146.4) }))).toBeNull();
+    // +22% on both: inside the 25% rise, so it teaches nothing even beside an improved verdict.
+    expect(stutterLessonRule(report({ verdict: "improved", ...wide, ...refs(100, 122, 120, 146.4) }))).toBeNull();
+    expect(stutterLessonRule(report({ verdict: "improved", ...wide, ...refs(100, 126, 120, 120) }))).toBe("steadier-not-faster");
     // An older report (no measured band) still reads the band both ways.
     const older = { noise_measured: undefined, noise_floor_pct: 25 };
     expect(stutterLessonRule(report({ verdict: "regressed", ...older, ...refs(100, 78, 120, 93.6) }))).toBeNull();
