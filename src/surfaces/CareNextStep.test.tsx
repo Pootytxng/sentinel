@@ -194,7 +194,25 @@ describe("payoffFor: measured recurrence or absence, never a verdict", () => {
     const short = sess("2026-10-24T10:00:00Z", { low1_fps_est: 10, samples: MIN_BASELINE_SAMPLES - 1 });
     const rig = sess("2026-10-24T12:00:00Z", { low1_fps_est: 10, hw_fingerprint: { hash: "hw2", gpu: "GPU B", gpu_driver: "", ram_gb: 16, display: "" } });
     const driver = sess("2026-10-24T13:00:00Z", { low1_fps_est: 79, hw_fingerprint: { hash: "hw9", gpu: "GPU A", gpu_driver: "new", ram_gb: 16, display: "" } });
-    expect(payoffFor(onRig, a, [], [ok1, short, rig, driver], now)).toEqual({ kind: "sessions-steady", total: 2 });
+    const fpA = { hash: "hw1", gpu: "GPU A", gpu_driver: "", ram_gb: 16, display: "" };
+    const ok1A = { ...ok1, hw_fingerprint: fpA };
+    expect(payoffFor(onRig, a, [], [ok1A, short, rig, driver], now)).toEqual({ kind: "sessions-steady", total: 2 });
+  });
+  it("stutter: CR-care-unread-rig, an unread-rig session is left out when the baseline's rig is known, counted when it is not", () => {
+    const st = pickCareStep(null, stutter("Roll back the driver"))! as Extract<CareStep, { source: "stutter" }>;
+    const a = { at: anchorAt, basis: "shown" as const };
+    const fpA = { hash: "hw1", gpu: "GPU A", gpu_driver: "", ram_gb: 16, display: "" };
+    const knownA = { ...st, baseline: { ...st.baseline, rig: { gpu: "GPU A", ram_gb: 16, display: "" } } } as CareStep;
+    const unknown = { ...st, baseline: { ...st.baseline, rig: null } } as CareStep;
+    const sameA = sess("2026-10-22T10:00:00Z", { low1_fps_est: 80, hw_fingerprint: fpA });
+    const unread = sess("2026-10-23T10:00:00Z", { low1_fps_est: 80 });
+    const unreadBad = sess("2026-10-24T10:00:00Z", { low1_fps_est: 10 });
+    // Known baseline rig: the unread sessions are excluded (neither steady nor back); same rig counts.
+    expect(payoffFor(knownA, a, [], [sameA, unread, unreadBad], now)).toEqual({ kind: "not-enough-sessions", total: 1 });
+    expect(payoffFor(knownA, a, [], [sameA, { ...unread, hw_fingerprint: fpA }], now)).toEqual({ kind: "sessions-steady", total: 2 });
+    // Unknown baseline rig (no stored rig, steady session not in the list): unchanged, all count.
+    expect(payoffFor(unknown, a, [], [sameA, unread], now)).toEqual({ kind: "sessions-steady", total: 2 });
+    expect(payoffFor(unknown, a, [], [sameA, unread, unreadBad], now)).toEqual({ kind: "sessions-back", bad: 1, total: 3 });
   });
   it("stutter: a session is back past the band's matching fall, the line What changed calls a regression at", () => {
     // CR-what-changed-fall (s38 opus r2 MUST-FIX): a 25% band's matching fall is 20%. A session 22%

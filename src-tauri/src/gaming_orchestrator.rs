@@ -169,7 +169,7 @@ const REC_PCIE: &str = "pcie-aspm-off";
 const REC_CORE_PARKING: &str = "core-parking-forced";
 
 /// CR-core-parking-held-with-plan: the ledger settings that are settings OF the active power plan
-/// (every apply targets SCHEME_CURRENT). While a session holds the plan they are held with it; while
+/// (every apply targets the active plan, as recorded with its row). While a session holds the plan they are held with it; while
 /// one of them is held (a Trial or the benchmark), a session leaves the plan alone
 /// (CR-gm-start-respects-plan-holds).
 const PLAN_SCOPED: [&str; 3] = [REC_USB, REC_PCIE, REC_CORE_PARKING];
@@ -1606,13 +1606,20 @@ mod spans_trial_tests {
         assert_eq!(session_hold_refusal(REC_CORE_PARKING, Some(&[change(LABEL_GAME_MODE)])), None, "no plan held: free");
         // It reaches the gate (and so its row's undo, `experiment::rollback_change`, is refused too).
         assert_eq!(session_rec_of("core-parking-forced"), Some(REC_CORE_PARKING));
-        // Every writer of SCHEME_CURRENT in actions.rs is a plan-scoped setting's (USB/PCIe apply and
-        // the core-parking restore and its undo); a new one has to be named here.
-        let writers: Vec<&str> = include_str!("actions.rs")
-            .lines()
-            .filter(|l| l.contains("valueindex SCHEME_CURRENT") && !l.trim_start().starts_with("//") && !l.contains("assert"))
-            .collect();
-        assert_eq!(writers.len(), 5, "SCHEME_CURRENT writers changed: hold the new one with the plan\n{writers:#?}");
+        // Every plan-scoped writer in actions.rs is a plan-scoped setting's (USB/PCIe, core parking),
+        // whether it names the live plan or a recorded plan GUID; a new one has to be named here.
+        // CR-plan-write-recorded-guid: the USB/PCIe and core-parking APPLY writers moved from the
+        // `SCHEME_CURRENT` alias to the GUID recorded with the row (`valueindex {plan_guid}`), still
+        // the same settings held by the same gate, so they are counted with the recorded-plan
+        // writers. Left on the alias: only the legacy core-parking undo for rows written before a
+        // plan was recorded (two lines: AC, DC).
+        let lines = || include_str!("actions.rs").lines().filter(|l| !l.trim_start().starts_with("//") && !l.contains("assert"));
+        let alias: Vec<&str> = lines().filter(|l| l.contains("valueindex SCHEME_CURRENT")).collect();
+        assert_eq!(alias.len(), 2, "SCHEME_CURRENT writers changed: hold the new one with the plan\n{alias:#?}");
+        // Recorded plan: 3 apply lines (USB/PCIe write and its undo, core parking's one builder for
+        // both writes and undos) and 4 undo lines (power-setting restore AC/DC, core-parking plan undo AC/DC).
+        let recorded: Vec<&str> = lines().filter(|l| l.contains("valueindex {plan_guid}")).collect();
+        assert_eq!(recorded.len(), 7, "recorded-plan writers changed: hold the new one with the plan\n{recorded:#?}");
 
         // End to end: a readable session holding the plan refuses the restore before anything runs.
         let dir = std::env::temp_dir().join(format!("compy-gm-coreparking-{}", std::process::id()));

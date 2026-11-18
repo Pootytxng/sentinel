@@ -225,7 +225,10 @@ export function payoffFor(
       Number.isFinite(ms(s.started_at)) &&
       ms(s.started_at) > anchor.at &&
       Number.isFinite(s.low1_fps_est) &&
-      (!rig || !baseRig || sameRig(rig, baseRig))
+      // CR-care-unread-rig: with the baseline's rig known, a session whose rig is unread is not
+      // provably the same machine, so it is left out like another rig's; only an unknown baseline
+      // rig keeps counting every session (an old baseline must not read "not enough" forever).
+      (!baseRig || (rig !== null && sameRig(rig, baseRig)))
     );
   });
   // CR-what-changed-fall (s38 opus r2 MUST-FIX): a session is back below the steady 1% low by the
@@ -410,6 +413,8 @@ export function storedStutterStep(
     const then = baselineRig(best.baseline, stutter.sessions);
     if (now_ && then && !sameRig(now_, then)) return retire("rig");
     const p = payoffFor(step, { at: best.at, basis: "shown", baseline: best.baseline }, [], stutter.sessions, now);
+    // CR-care-unread-rig: with a known baseline rig, sessions whose rig is unread no longer count
+    // toward this total, so a stored step waits on sessions whose rig was read.
     if ("total" in p && p.total > STORED_STEP_END_SESSIONS) {
       const e = map.get(best.key) as ShownEntry;
       // Follow-up review 2026-10-26 §4: the final read is "shown" only once a Care view actually
