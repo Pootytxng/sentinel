@@ -378,9 +378,10 @@ export function WhatChangedReportView({
           {/* P4-judge-noisy: the band is shown only when it was measured for this game; never a default. */}
           {r.noise_measured ? (
             // CR-what-changed-fall (opus SHOULD-FIX): a rise is judged at the band, a fall at its matching fall.
-            <Term id="noise-floor">
-              {t("optimize.whatChangedPanel.noiseFloor", { rise: r.noise_floor_pct.toFixed(1), fall: fallPct(r.noise_floor_pct).toFixed(1) })}
-            </Term>
+            <Term id="noise-floor">{t("optimize.whatChangedPanel.noiseFloor", {
+              rise: r.noise_floor_pct.toFixed(1),
+              fall: fallPct(r.noise_floor_pct).toFixed(1),
+            })}</Term>
           ) : (
             <Term id="noise-floor">{t("optimize.whatChangedPanel.noiseUnmeasured")}</Term>
           )}
