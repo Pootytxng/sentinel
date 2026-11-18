@@ -162,8 +162,11 @@ pub(crate) fn lookup(store: &NoiseFloorStore, now: &NoiseConditions) -> NoiseLoo
     if !r.noise_pct.is_finite() || r.noise_pct <= 0.0 {
         return NoiseLookup::Unmeasured;
     }
-    let rig_same = r.hw_fingerprint.hash == now.hw_fingerprint.hash
-        && r.hw_fingerprint.gpu_driver == now.hw_fingerprint.gpu_driver;
+    // CR-driver-compare-everywhere: the hash digests the driver as written, so a case-only difference
+    // in it changed the hash; the rig is compared field by field (the hash's own fields) instead,
+    // the driver by the one shared rule.
+    let rig_same = same_rig(&r.hw_fingerprint, &now.hw_fingerprint)
+        && crate::hardware::same_driver(&r.hw_fingerprint.gpu_driver, &now.hw_fingerprint.gpu_driver);
     let windows = if r.windows_build.is_none() {
         None
     } else {
@@ -242,9 +245,9 @@ pub(crate) fn noise_band_pct(measured: Option<&BetweenSessionNoise>) -> f64 {
 /// [`lookup`]). Anything unread doesn't count. Real play checks its with-change sessions against its
 /// as-is ones by the same rule (`realplay::with_arm`).
 pub(crate) fn still_current(then: &NoiseConditions, now: &NoiseConditions) -> bool {
-    let rig = then.hw_fingerprint.hash == now.hw_fingerprint.hash
-        && then.hw_fingerprint.gpu_driver == now.hw_fingerprint.gpu_driver
-        && same_rig(&then.hw_fingerprint, &now.hw_fingerprint);
+    // CR-driver-compare-everywhere: field by field (the hash's own fields), the driver by the shared rule.
+    let rig = same_rig(&then.hw_fingerprint, &now.hw_fingerprint)
+        && crate::hardware::same_driver(&then.hw_fingerprint.gpu_driver, &now.hw_fingerprint.gpu_driver);
     let windows = then.windows_build.is_some() && then.windows_build == now.windows_build;
     then.process_name.eq_ignore_ascii_case(&now.process_name)
         && rig
@@ -1617,6 +1620,47 @@ pub(crate) mod tests {
         // the log step, so it sits above the pair-mean 23.0% / 18.0% the review measured.)
         assert!(n.low1_band_pct > 15.0 && n.low1_band_pct < 27.0, "{n:?}");
         assert!(n.avg_band_pct > 10.0 && n.avg_band_pct < 21.0, "{n:?}");
+    }
+
+    #[test]
+    fn a_driver_written_in_another_case_does_not_split_the_band() {
+        // CR-driver-compare-everywhere: one session recorded its driver in other case and spacing
+        // (so its fingerprint hash differs too). The same driver: the band is measured over all nine.
+        let named = |s: &mut SessionSummary, driver: &str, hash: &str| {
+            let f = s.hw_fingerprint.as_mut().expect("a read rig");
+            f.gpu_driver = driver.into();
+            f.hash = hash.into();
+        };
+        let with_driver_at_3 = |driver: &str| {
+            let mut s = rob_day();
+            for x in &mut s {
+                named(x, "Adrenalin 25.10.2", "aaaaaaaaaaaaaaaa");
+            }
+            named(&mut s[3], driver, "bbbbbbbbbbbbbbbb");
+            s
+        };
+        let s = with_driver_at_3(" ADRENALIN 25.10.2 ");
+        let n = measure_game_noise(&s, &s[11], &rob_trials()).expect("measured");
+        assert_eq!(n.sessions, 9, "{n:?}");
+        assert!(still_current(
+            &NoiseConditions::of_session(&s[3]).expect("conditions"),
+            &NoiseConditions::of_session(&s[11]).expect("conditions")
+        ));
+        // A real driver change still splits it.
+        let s = with_driver_at_3("Adrenalin 25.11.1");
+        assert!(!still_current(
+            &NoiseConditions::of_session(&s[3]).expect("conditions"),
+            &NoiseConditions::of_session(&s[11]).expect("conditions")
+        ));
+        assert!(!measure_game_noise(&s, &s[11], &rob_trials()).is_ok_and(|n| n.sessions >= 9));
+        // The noise store reads the same driver in another case as current, a new one as changed.
+        let mut store = NoiseFloorStore::default();
+        assert!(upsert(&mut store, &at("wardogs.exe", "Adrenalin 25.10.2", Some("26200.1")), 2.0, 10, "t"));
+        assert_eq!(lookup(&store, &at("wardogs.exe", "adrenalin 25.10.2 ", Some("26200.1"))), NoiseLookup::Measured(2.0));
+        assert_eq!(
+            lookup(&store, &at("wardogs.exe", "Adrenalin 25.11.1", Some("26200.1"))),
+            NoiseLookup::Stale(StaleReason::Changed)
+        );
     }
 
     #[test]

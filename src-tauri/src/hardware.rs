@@ -2720,6 +2720,16 @@ pub(crate) struct HwFingerprint {
     pub display: String,
 }
 
+/// CR-driver-compare-everywhere: whether two recorded GPU driver versions are the same driver. The
+/// same version written with other spacing or case is the same driver (as the Trial preflight
+/// compares it). Used where a driver comparison decides comparability, a measured band or a What
+/// changed cause (comparability.rs, noise_floor.rs, intelligence.rs's gpu-driver-change hypothesis);
+/// the timeline's driver-change event, the hardware snapshot save and the driver-split pattern still
+/// compare exactly (queued: CR-driver-compare-rest).
+pub(crate) fn same_driver(a: &str, b: &str) -> bool {
+    a.trim().eq_ignore_ascii_case(b.trim())
+}
+
 /// Pure: build a fingerprint from rig fields (testable — no system access).
 fn fingerprint_of(gpu: &str, gpu_driver: &str, ram_gb: u32, display: &str) -> HwFingerprint {
     use sha2::{Digest, Sha256};

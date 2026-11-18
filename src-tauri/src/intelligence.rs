@@ -1888,7 +1888,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
         let mut h = HypoEval::new("gpu-driver-change");
         match (b.hw_fingerprint.as_ref(), c.hw_fingerprint.as_ref()) {
             (Some(bf), Some(cf)) if !bf.gpu_driver.is_empty() && !cf.gpu_driver.is_empty() => {
-                if bf.gpu_driver != cf.gpu_driver {
+                if !crate::hardware::same_driver(&bf.gpu_driver, &cf.gpu_driver) {
                     h.direct = true;
                     h.supporting.push(format!(
                         "The baseline ran GPU driver {}; this session ran {}.",
@@ -3684,6 +3684,32 @@ mod tests {
         let avg = r2.observations.iter().find(|o| o.metric == "average FPS").expect("avg row");
         assert!(avg.reference_only);
         assert!((avg.delta_pct - 10.0).abs() < 0.05);
+    }
+
+    #[test]
+    fn a_driver_written_in_another_case_is_the_same_driver_in_what_changed() {
+        // CR-driver-compare-everywhere (s38 opus SHOULD-FIX): the gpu-driver-change hypothesis
+        // reads the same version in another case or spacing as the same driver; a new one as changed.
+        let fp = |driver: &str| crate::hardware::HwFingerprint {
+            hash: format!("h-{driver}"),
+            gpu: "Radeon RX 9070 XT".into(),
+            gpu_driver: driver.into(),
+            ram_gb: 32,
+            display: "2560x1440@165".into(),
+        };
+        let json_for = |db: &str, dc: &str| {
+            let (mut b, mut c) = two_sessions(100.0, 80.0);
+            b.hw_fingerprint = Some(fp(db));
+            c.hw_fingerprint = Some(fp(dc));
+            let r = report(&WhatChangedInputs { baseline: &b, current: &c, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise: Some(&TEST_NOISE) });
+            assert_eq!(r.verdict, "regressed");
+            serde_json::to_string(&r).expect("report")
+        };
+        let same = json_for("Adrenalin 25.10.2", " ADRENALIN 25.10.2 ");
+        assert!(same.contains("Both sessions recorded the same GPU driver"), "{same}");
+        assert!(!same.contains("The baseline ran GPU driver"), "{same}");
+        let changed = json_for("Adrenalin 25.10.2", "Adrenalin 25.11.1");
+        assert!(changed.contains("The baseline ran GPU driver Adrenalin 25.10.2; this session ran Adrenalin 25.11.1."), "{changed}");
     }
 
     #[test]
