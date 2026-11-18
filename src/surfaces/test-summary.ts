@@ -73,6 +73,29 @@ export type SummaryNoise = {
   between_sessions?: { spread_pct: number; sessions: number } | null;
 };
 
+/** A game's own run-to-run noise as measured now, and from how many sessions. */
+export type MeasuredGameNoise = { game: string; pct: number; sessions: number };
+
+/** The game's measured noise, read from the same place as the "measured noise is ±N% (from M
+ *  sessions)" line (`assumed_band`, attached on read by `get_experiments`): the newest record that
+ *  carries one. `game` limits it to one game; omitted, the newest game that has one. null = none yet. */
+export function measuredGameNoise(
+  experiments: readonly Pick<SummaryExperiment, "game" | "assumed_band" | "created_at" | "concluded_at">[],
+  game?: string,
+): MeasuredGameNoise | null {
+  const when = (e: { created_at: string; concluded_at: string | null }) => Date.parse(e.concluded_at ?? e.created_at) || 0;
+  let best: (typeof experiments)[number] | null = null;
+  for (const e of experiments) {
+    if (game != null && e.game !== game) continue;
+    if (e.assumed_band?.measured_low1_pct == null) continue;
+    if (best == null || when(e) >= when(best)) best = e;
+  }
+  const a = best?.assumed_band;
+  return best && a && a.measured_low1_pct != null
+    ? { game: best.game, pct: a.measured_low1_pct, sessions: a.measured_sessions ?? 0 }
+    : null;
+}
+
 /** The experiment fields the summary reads (experiment.rs `ExperimentRecord`). */
 export type SummaryExperiment = {
   /** Item 7: set on read when the verdict was judged on the assumed ±3% band. */
@@ -522,6 +545,8 @@ export type SummaryContext = {
 
 export type GameTestSummary = {
   game: string;
+  /** The game's own run-to-run noise as Compy measures it now (`measuredGameNoise`); null = not yet measured. */
+  gameNoise?: MeasuredGameNoise | null;
   tested: TestedChange[];
   /** "finished-supported-tests" only when the picker's list was read, nothing on it is untested here,
    *  nothing is worth another run, and at least one change has a measured result whose context still
@@ -761,6 +786,7 @@ export function summarizeGame(
 
   return {
     game,
+    gameNoise: measuredGameNoise(experiments, game),
     tested,
     headline:
       candidates == null

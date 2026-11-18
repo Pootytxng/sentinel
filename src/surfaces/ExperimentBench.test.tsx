@@ -1220,6 +1220,22 @@ describe("ExperimentBench (armed)", () => {
     expectEachNoteOnceAndOffTheRows();
   });
 
+  // s44 tester pass: past three notes the list was "*, †, ‡, 4, 5, 6" (symbols, then numbers).
+  it("numbers every note when there are more than three, never mixing symbols and numbers", async () => {
+    state.gate = true;
+    state.experiments = [1, 2, 3, 4, 5].map((m, i) => ({
+      ...KEPT_EXPERIMENT,
+      id: `exp:5-${i}`,
+      noise_evidence: { band_pct: 3, measured_noise_pct: m },
+    }));
+    render(<ExperimentBench />);
+    await waitFor(() => expect(document.querySelectorAll(".exp-bench-noise")).toHaveLength(5));
+    expect(rowMarks()).toEqual(["1", "2", "3", "4", "5"]);
+    expect([...document.querySelectorAll(".exp-bench-noise .exp-bench-noise-mark")].map((m) => m.textContent)).toEqual([
+      "1", "2", "3", "4", "5",
+    ]);
+  });
+
   // IPC audit W2 + self-review item 3 (#583 lane 2b, three passes): a row with no record must not
   // fall silently under the list-wide line, yet neither the floor sentence nor the "no record" note
   // may repeat down the list (C-11). The rule is said once; the note is said once; only rows that
@@ -2291,6 +2307,25 @@ describe("P4-exit: what Compy tested on this game", () => {
     render(<ExperimentBench />);
     return screen.findByTestId("exp-summary");
   }
+
+  // s44 tester pass: once the game's own noise is measured (the figure the "measured noise is ±N% (from
+  // M sessions)" line quotes), the receipt says that value, never "hasn't been measured yet".
+  it("the technical receipt quotes the game's measured noise when one exists", async () => {
+    const f = await owner();
+    state.gate = true;
+    const assumed_band = { assumed_pct: 3, measured_low1_pct: 29, measured_sessions: 6, claimed_change: false, judged: true };
+    state.experiments = f.experiments.map((x: object) => ({ ...x, assumed_band }));
+    state.sessions = f.sessions;
+    state.recs = [pass("visual-effects", "Trim Windows visual effects", 1)];
+    render(<ExperimentBench />);
+    const panel = await screen.findByTestId("exp-summary");
+    const door = panel.querySelector('[data-testid="exp-summary-depth-receipt"] > summary')!;
+    fireEvent.click(door);
+    await waitFor(() => expect(door.parentElement!.children.length).toBeGreaterThan(1));
+    const line = screen.getByTestId("exp-summary-noise");
+    expect(line).toHaveTextContent("WardogsClient's own run-to-run noise on your PC is now measured at ±29% (from 6 sessions).");
+    expect(line).not.toHaveTextContent("hasn't been measured yet");
+  });
 
   it("on the owner's WARDOGS data: Slower, restored, medium confidence, not applied; one more worth testing", async () => {
     const panel = await renderOwner([

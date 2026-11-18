@@ -32,6 +32,7 @@ import { peekProbe, cachedProbe } from "../data/probe-cache";
 import { measureTuning, tuningEvidence, type PostComparability } from "../data/tuning-measure";
 import { primaryGpu } from "../data/gpu-sensor";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
+import { measuredGameNoise, type MeasuredGameNoise, type SummaryExperiment } from "./test-summary";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
 import { BlackBox } from "./BlackBox";
@@ -205,8 +206,12 @@ export function LabConsole({
   // new backend surface.
   const [scoreboard, setScoreboard] = useState<ScoreboardView | null>(null);
   const [trial, setTrial] = useState<TrialState | null>(null);
+  const [gameNoiseNow, setGameNoiseNow] = useState<MeasuredGameNoise | null>(null);
 
   useEffect(() => {
+    invoke<SummaryExperiment[] | null>("get_experiments")
+      .then((xs) => setGameNoiseNow(Array.isArray(xs) ? measuredGameNoise(xs) : null))
+      .catch(() => {});
     cachedProbe("benchmark-state", () => invoke<BenchmarkState>("get_benchmark_state"), 30_000)
       .then(setBench)
       .catch(() => {});
@@ -557,7 +562,10 @@ export function LabConsole({
   // Item 8: a comparison's band only when it was measured (`game_noise`); an older result's fixed 3%
   // and an "unmeasured" result's 0 are not a measurement of this rig.
   const cmpBand = latestCmp?.game_noise != null && latestCmp.verdict !== "unmeasured" ? latestCmp.noise_floor_pct : null;
-  const noiseFloorPct = trial && trial.noise_floor_pct != null ? trial.noise_floor_pct : cmpBand;
+  // s44 tester pass: else the game's own measured noise from its Trial records (the figure the Test
+  // room's "measured noise is ±N% (from M sessions)" line quotes), so this tile never says "not yet"
+  // beside that line.
+  const noiseFloorPct = trial && trial.noise_floor_pct != null ? trial.noise_floor_pct : (cmpBand ?? gameNoiseNow?.pct ?? null);
 
   // BR — Instruments read: how far through the bench this rig has gone. Same `stationHasReading`
   // the dock already uses to mark nodes measured, so the gauge and the dock can never disagree.

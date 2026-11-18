@@ -677,6 +677,29 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     await waitFor(() => expect(tr.querySelector(".ag-v")!.textContent).toBe("4"));
     expect(tr.querySelector(".ag-tag-ny")).toBeNull();
   });
+
+  // s44 tester pass: with no calibration, the tile read "NOT YET" beside a Test-room line quoting the
+  // game's measured noise. It reads that same measured figure (a Trial record's assumed_band).
+  it("Noise floor reads the game's measured noise from its Trial records when no calibration exists", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      cmd === "get_experiments"
+        ? Promise.resolve([
+            {
+              id: "e1", rec_id: "visual-effects", rec_title: "x", game: "robrun.exe", created_at: "2026-11-11T10:00:00Z",
+              concluded_at: "2026-11-11T11:00:00Z", verdict: "too-noisy", kept: false,
+              assumed_band: { assumed_pct: 3, measured_low1_pct: 29, measured_sessions: 6 },
+            },
+          ])
+        : cmd === "get_session_summaries"
+          ? Promise.resolve([])
+          : Promise.resolve(null),
+    );
+    renderConsole();
+    const tr = reading(1);
+    await waitFor(() => expect(tr.querySelector(".ag-v")!.textContent).toBe("29"));
+    expect(tr.querySelector(".ag-tag-ny")).toBeNull();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────

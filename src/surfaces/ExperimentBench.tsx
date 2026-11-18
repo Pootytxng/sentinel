@@ -40,6 +40,7 @@ import {
   outcomeChoices,
   summarizeGame,
   type GameTestSummary,
+  type MeasuredGameNoise,
   LESSON_KEY,
   type Lesson,
   type OutcomeChoice,
@@ -489,6 +490,7 @@ function noiseLine(
   t: Translate,
   g?: GameNoise | null,
   outcome?: TrialOutcome | null,
+  now?: MeasuredGameNoise | null,
 ): string {
   const pct = (v: number) => String(Math.round(v * 10) / 10);
   const name = prettyGameName(game) || game;
@@ -507,6 +509,14 @@ function noiseLine(
   if (n.measured_noise_stale === "changed") return t("lab.experimentBench.noiseStaleChanged", { band: pct(n.band_pct) });
   if (n.measured_noise_stale === "unconfirmed")
     return t("lab.experimentBench.noiseStaleUnconfirmed", { band: pct(n.band_pct) });
+  // The game's noise is measured now (the same figure the assumed-band line quotes): say it, never "hasn't been measured yet".
+  if (now != null)
+    return t("lab.experimentBench.noiseMeasuredNow", {
+      band: pct(n.band_pct),
+      game: name,
+      measured: pct(now.pct),
+      sessions: now.sessions,
+    });
   return t("lab.experimentBench.noiseUnmeasured", { band: pct(n.band_pct) });
 }
 
@@ -855,9 +865,10 @@ function judgedOnNoBaseline(x: Experiment): boolean {
 const NO_RECORD = Symbol("no-noise-record");
 type RowNote = string | typeof NO_RECORD;
 
-// Marks tie a row to a note said once under the list. Past three, plain numbers.
-function noteMark(i: number): string {
-  return ["*", "†", "‡"][i] ?? String(i + 1);
+// Marks tie a row to a note said once under the list. Up to three notes get symbols; more than three
+// are all numbered, so one list never mixes symbols and numbers (s44 tester pass: "*, †, ‡, 4, 5, 6").
+function noteMark(i: number, total: number): string {
+  return total <= 3 ? ["*", "†", "‡"][i] : String(i + 1);
 }
 
 // The backend tags a stop reason with machine prefixes ("start-aborted: …", "user-restored; …",
@@ -1172,7 +1183,7 @@ export default function ExperimentBench({
     n === NO_RECORD
       ? t("lab.experimentBench.noiseNotRecorded", { count: rowNotes.filter((r) => r === NO_RECORD).length })
       : n;
-  const rowMark = rowNotes.map((n) => (n === null || n === sharedNoise ? null : noteMark(footnotes.indexOf(n))));
+  const rowMark = rowNotes.map((n) => (n === null || n === sharedNoise ? null : noteMark(footnotes.indexOf(n), footnotes.length)));
 
   // The testable universe: catalog changes that pass "worth testing on this PC". The rest are listed,
   // each with its reason, behind "Show why others aren't listed" — never dropped silently.
@@ -1896,7 +1907,7 @@ export default function ExperimentBench({
           </ul>
           {footnotes.map((n, k) => (
             <p key={k} className="exp-fineprint exp-bench-noise">
-              <span className="exp-bench-noise-mark">{noteMark(k)}</span> <span>{withTerms(footnoteText(n))}</span>
+              <span className="exp-bench-noise-mark">{noteMark(k, footnotes.length)}</span> <span>{withTerms(footnoteText(n))}</span>
             </p>
           ))}
           {/* s27 (opus r1): said once under the list, wherever a measured band is explained. */}
@@ -2001,7 +2012,7 @@ function TestSummary({ s }: { s: GameTestSummary }) {
     ...new Set(
       s.tested
         .filter((r) => r.noise)
-        .map((r) => (r.realPlay ? realPlayNoiseLine(r.noise!.band_pct, r.realPlay, game, t) : noiseLine(r.noise!, s.game, t)))
+        .map((r) => (r.realPlay ? realPlayNoiseLine(r.noise!.band_pct, r.realPlay, game, t) : noiseLine(r.noise!, s.game, t, null, null, s.gameNoise)))
         .filter((n): n is string => n != null),
     ),
   ];
