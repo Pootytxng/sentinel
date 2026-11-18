@@ -331,15 +331,24 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       must keep segment-level 1% lows for a Trial's baseline (additive, schema-versioned), then the pre-declared rule,
       its words (en + zh-CN) and opus + sonnet reviews: more than fits beside an install in one session.
       Why LAUNCH: P4-exit-proof does not count an unjudged change as finished; salvage is the pre-declared contingency for a Trial too noisy to judge.
+      s41 NOTE FOR THE OWNER (not built, nothing ticked): (1) Data new sessions would have to keep: each session's 10 s buckets
+      with a per-bucket 1% low (today only the session's mean 1% low is stored) plus per-bucket background/cap marks, kept for
+      every session inside the 14-day band window and every Trial session, not shed after 20 newer sessions as now (additive,
+      schema-versioned; roughly 5-15 KB per session). (2) The rule (which buckets count) fixed before any comparison, from as-is
+      data only, with adversarial fixtures. (3) P4 does not need it: on ROB RUN's band a Trial already ends judged ("negligible
+      at this game's noise", change put back, a measured no-change). Salvage would only narrow the band to see smaller effects.
+      (4) Size: about 2 work sessions (schema + rule + en/zh words + opus/sonnet), then 3+ new as-is play sessions before it helps.
 - [ ] [LAUNCH] **TG-passive-band** Learn each game's noise band from ordinary play over time with no instructions, so a Trial
       rarely has to ask for extra as-is sessions. Tested: a band appears from ordinary sessions alone; never pooled across
       contexts.
       Why LAUNCH: P4-exit-proof needs ROB RUN's remaining Trials judged on a measured band; a band kept current from ordinary play lets a Trial judge without asking for extra as-is sessions.
+      s41 (not built, nothing ticked): the band already keeps itself current from every captured as-is session (`noise_floor::measure_game_noise` reads the session store live, same minimums); what is missing is capture itself: ordinary play records nothing unless the user starts measuring (Play/Monitor "Start capture", Benchmark, or the Optimize-my-game journey), because capture launches the elevated ETW helper through a runas (UAC) prompt. Capturing every game launch passively is a privilege/consent change (ARCHITECTURE_LOCKS; a UAC prompt per launch on stock Windows) that needs an owner decision before any code.
 - [ ] [LAUNCH] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "Compy finished the supported
       tests" with nothing worth another run; record it in BACKLOG as the Phase 4 exit.
       Owner 2026-11-12 16:43 (verbatim): "p4 exit answer is no you decide a more fitting resolution". Owner delegated
       2026-11-12; coordinator resolution: "1 change couldn't be judged" does not count as finished; the wording stays;
       P4-judge-noisy makes the unjudged case judgeable honestly, then the proof is re-run on the owner's real play.
+      s41 read (installed build d7fff9e7, code only, nothing ticked): the band needs 3+ as-is ROB RUN sessions (10+ min each, same rig/driver/Windows build, same Compy changes, Gaming Mode and frame-cap state, nothing applied or undone between them, last 14 days) recorded by Compy's capture or by the journey; a change inside ROB RUN's band (1% low +-23%, avg +-18%) concludes "negligible at this game's noise", restored, stored as a measured no-change, which the panel counts toward "finished the supported tests".
       2026-11-10 desk session (not ticked): blocked before any Trial. The owner's PBZ Trial `exp:6-1793579868420`
       (visual-effects, started 2026-11-02 00:37Z) is still Running with its change applied, and the backend refuses
       a new Trial while one is Pending/Running (`experiment.rs:817-823`). Human step: the owner finishes it (one PBZ
@@ -530,12 +539,14 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       `SCHEME_CURRENT` before a UAC prompt and write it after (e.g. the CPMINCORES script, actions.rs ~4570) never
       took Gaming Mode's gate, so a session start or stop during the prompt changes which plan they write.
       Establish whether a live apply route reaches one first.
-- [ ] [CORRECT] **CR-powercfg-restore-exit** (r1 opus SHOULD-FIX of CR-gm-restore-partial; pre-existing; rollback boundary) The
+- [x] [CORRECT] **CR-powercfg-restore-exit** (r1 opus SHOULD-FIX of CR-gm-restore-partial; pre-existing; rollback boundary) The
       power-setting restore (USB selective suspend / PCIe ASPM, actions.rs ~3651, and its batch line ~1034) runs bare
       `powercfg` with no `$LASTEXITCODE` check, so inside the batch's `try` a failed write still records `:ok` and the
       change counts as restored. Check the exit code in the restore path as #617 did for apply. Two reviews.
       s40 opus NIT (same finding, single undo): `power_setting_restore_script` chains bare powercfg steps too;
       `ps_all_or_restore` with `native: true` (the core-parking apply) already exists for this.
+      Done s41 merge `047365a7` (`0e7edbb7`, `d0350d82`): every powercfg step of the USB/PCIe and core-parking undos checks its own
+      exit (`checked_powercfg_steps`); a real PowerShell batch receipts `fail` (old chain `ok`), a single run exits non-zero.
 - [ ] [CORRECT] **CR-gm-repeat-live** (opus SHOULD-FIX of CR-gm-confirm-repeat; FULL, UI) On the installed build, send a held Enter
       (CDP `Input.dispatchKeyEvent`, `autoRepeat: true`) to Gaming Mode's Enable: the repeats must start nothing, a fresh
       press must. jsdom never turns a key into a click, so only a live check proves WebView2 honours the cancel.
@@ -552,6 +563,11 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       power plan at all, even one that clearly differed; the Trial preflight says nothing about an unread baseline
       plan (that Trial now always ends confounded); on those two paths a plan unread at a session's start or end
       isn't checked either. Mutation-free; measurement logic: opus + sonnet.
+      s41 merge `047365a7` (`45e217b3`, `d0350d82`): one pure `experiment::plan_mismatch` backs the Trial check (unchanged), real
+      play (with-change sessions and as-is pins; an anchor whose plan didn't hold pins nothing and says why), the debrief and a
+      tune's later sessions. Left (not ticked): the Trial preflight line for an unread baseline plan (wording only, POLISH);
+      real-play Trials started before this build keep their unfiltered pins (opus NIT). Reviews: opus r1 REQUEST-CHANGES
+      (SHOULD-FIX only, taken), sonnet r1 APPROVE-WITH-NITS (2 of 3 SHOULD-FIX taken; undo reads on the command thread: pre-existing).
 - [ ] [CORRECT] **CR-ultimate-followups** (r3/r4 reviews of CR-ultimate-identity; pre-existing) (a) the row's live check
       (`recommendations.rs` / `probe_rec_target` "power-ultimate", class only) still reads a stamped localized copy as off:
       use `compys_plan_guid`; (b) `actions::current_power_plan_guid` keys on the English "GUID:" at the apply's snapshot
@@ -610,9 +626,11 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       `current_power_plan`, `current_power_scheme`. Mutation boundary: opus + sonnet.
       s40: both actions.rs parts done by CR-plan-unread-rollbacks (merge `573f600d`, below); left: the lib.rs
       read-only reads with no time limit.
-- [ ] [POLISH] **CR-plan-exists-timeout** (s40 opus NIT, pre-existing) `power_plan_exists` (actions.rs, the USB/PCIe undo's
+- [x] [POLISH] **CR-plan-exists-timeout** (s40 opus NIT, pre-existing) `power_plan_exists` (actions.rs, the USB/PCIe undo's
       plan-gone check) runs `powercfg /list` with no `output_within` limit, and a failed or hung list reads as "the
       plan no longer exists" (fails safe: Err, nothing claimed). Use `power_plan_listed` (an Option) instead.
+      Done s41 merge `047365a7` (taken under the CORRECT test: a failed list refused the undo as "plan gone", a hung one held it):
+      `power_plan_known` (time-limited list, whole GUID only, hidden plans asked directly; unread = "couldn't confirm", never gone).
 - [ ] [POLISH] **Judging-chain refactor slice** PARKED s33. First slice LANDED s35 (merge `de49b37a`): the two-session verdict
       chain inside `conclude_experiment` moved unchanged into a pure `judge_pair(&PairInputs)` (placed right after
       it); behaviour tests in `refuse_early_tests` on the owner's session shape retire five include_str! assertions:
@@ -2723,16 +2741,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-12 ~17:00-18:55 (s26, coordinator-assigned; no game at any check; owner on Discord/ChatGPT/Claude, idle 10+
-  min only ~18:20-18:30, during the build): PRODUCT_CONSTITUTION §37 owner amendment ("add it", `4d5217d5`); landed
-  P4-judge-noisy (merge `36ae8929`; sonnet r1 + opus r1/r2 REQUEST-CHANGES, every MUST-FIX taken, opus r3
-  APPROVE-WITH-NITS; ROB RUN fixture: 9 as-is sessions, all read uncapped, 1% low band 23.0%, average 18.0%) and
-  CR-trial-plan-switch-confound (r1 opus + sonnet REQUEST-CHANGES, MUST-FIX taken; r2 both APPROVE-WITH-NITS);
-  owner fact 17:02, idea 17:08 and standard 17:14 recorded verbatim; TG items queued. cargo 1918/0 (P4) and 1922/0,
-  clippy clean, full vitest 541/544 both (3 site-app). Pushes PASS (`36ae8929`, `b6aaf772`, this one). Installed
-  `36ae8929` (runtime proof attempt 1, Synez before/after); RELEASE_STATE re-stamped (`b6aaf772`). Screen check
-  view-1112d NOT run (owner active again by 18:30). ITEM 2 not reached: CR-trial-gm-baseline-overlap,
-  CR-core-parking-plan-guid, CR-receipt-unrecorded-unknown, CR-ts-gpu-first.
 - 2026-11-12 ~22:45-23:55 (coordinator-assigned s28, no game throughout; the owner on Firefox/Discord): pushed s27's
   main `6e064cd8` (PASS). Landed CR-trial-gm-baseline-overlap (merge `457c3ff0`; re-review of its opus r1 MUST-FIX
   fix, opus + sonnet APPROVE-WITH-NITS), CR-core-parking-plan-guid plan-GUID half (merge `8890d34d`; re-review opus +
@@ -2860,6 +2868,15 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   CR-zh-readiness-rest, TG-passive-band. Queue: the owner's priority note (2026-11-17 23:37) added; every open item
   tagged LAUNCH / CORRECT / POLISH and ordered (no item reworded or ticked by the tagging). No guard or census
   re-derived.
+- 2026-11-18 00:34-~02:00 s41 (coordinator-assigned; preflight CODE-ONLY, owner idle, no game at any check; pushes and
+  install on the coordinator's order): step 1 read (code only, no %APPDATA%): ordinary play records nothing; a session
+  exists only when the user starts capture or the journey; a change inside ROB RUN's band ends "negligible at this
+  game's noise" (measured no-change, counts for the panel). TG-passive-band NOT built (needs passive capture = an
+  elevated helper per game launch, an owner privilege/consent decision; note under the item). TG-salvage note written
+  (not built). Landed CR-powercfg-restore-exit + CR-plan-exists-timeout + CR-plan-compare-rest (merge `047365a7`;
+  opus r1 REQUEST-CHANGES SHOULD-FIX only, all taken, no r2; sonnet r1 APPROVE-WITH-NITS); old-behaviour proof: 5
+  tests fail with the fixes neutralized. cargo --lib 2014/0, clippy clean. RELEASE_STATE: `resolve_rollback`
+  re-anchored (actions.rs:5757). No guard or census re-derived. Push/install: see RELEASE_STATE and the s41 checkpoint.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
