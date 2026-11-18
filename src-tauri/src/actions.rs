@@ -3447,10 +3447,16 @@ pub(crate) fn apply_power_setting_off_on_ac(subgroup: &str, setting: &str) -> Re
         "could not determine the active power plan; refusing to apply a change that could not be rolled back".to_string()
     })?;
 
+    // CR-plan-write-recorded-guid: the write goes to the plan recorded above, not to whatever plan
+    // SCHEME_CURRENT names after the UAC prompt. A whole GUID only (an alias such as SCHEME_CURRENT
+    // would put the write back on the live plan), the shape the undos require of the stored one.
+    if !is_whole_plan_guid(&plan_guid) {
+        return Err("could not determine the active power plan; refusing to apply a change that could not be rolled back".to_string());
+    }
     // Apply AC = 0 only. DC stays untouched (laptop battery behavior preserved).
     ps_safe(subgroup)?;
     ps_safe(setting)?;
-    run_elevated_powershell(&power_setting_apply_script(subgroup, setting, prior_ac_value))?;
+    run_elevated_powershell(&power_setting_apply_script(&plan_guid, subgroup, setting, prior_ac_value))?;
 
     let applied_action = if setting == PWR_SETTING_USB_SELECTIVE_SUSPEND {
         AppliedAction::DisableUsbSelectiveSuspendOnAc
@@ -3472,22 +3478,41 @@ pub(crate) fn apply_power_setting_off_on_ac(subgroup: &str, setting: &str) -> Re
     })
 }
 
-/// The AC-off apply script (setacvalueindex 0, then setactive), all-or-nothing (issue 617): both
-/// powercfg steps check their exit status (a non-zero exit does not throw on its own), and a failed
-/// setactive puts the AC index back to `prior_ac` inside the same elevation. Callers pass GUIDs that
-/// already passed `ps_safe`. Kill-mid-apply residual: the AC index may stay 0 with no receipt.
-pub(crate) fn power_setting_apply_script(subgroup: &str, setting: &str, prior_ac: u32) -> String {
+/// Whether `guid` is exactly one plan GUID (`8-4-4-4-12`), never an alias that powercfg also
+/// answers (`SCHEME_CURRENT`, `SCHEME_MAX`, ...) and never a GUID with anything around it.
+fn is_whole_plan_guid(guid: &str) -> bool {
+    crate::scheme_guid_of(guid).is_some_and(|s| s.eq_ignore_ascii_case(guid)) && ps_safe(guid).is_ok()
+}
+
+/// CR-plan-write-recorded-guid: the last step of an apply script that must not move the user onto
+/// the plan it recorded. Inside the same elevation it reads the active plan NOW (after the UAC
+/// prompt): a plan that is still the active one is re-committed so the new index goes live; a plan
+/// the user (Windows Settings, a vendor tool) switched away from while the prompt was open is left
+/// alone, its index already written. An active plan that cannot be read throws, so the earlier
+/// index writes are put back and nothing is recorded: never a silent skip. `plan_guid` is a whole
+/// GUID that already passed [`is_whole_plan_guid`]. Not `native`: its own throws carry the checks.
+fn setactive_if_still_active_step(plan_guid: &str) -> String {
+    format!(
+        "$compyActive = powercfg /getactivescheme; if (-not $?) {{ throw 'compy: step 2 failed' }}; \
+         if ($compyActive -match '{plan_guid}') {{ powercfg /setactive {plan_guid}; \
+         if (-not $?) {{ throw 'compy: step 2 failed' }} }}"
+    )
+}
+
+/// The AC-off apply script (setacvalueindex 0 on the RECORDED plan `plan_guid`, then setactive only
+/// while that plan is still the active one), all-or-nothing (issue 617): the powercfg steps check
+/// their exit status (a non-zero exit does not throw on its own), and a failed setactive puts the AC
+/// index back to `prior_ac` inside the same elevation. Callers pass GUIDs that already passed
+/// `ps_safe` (the plan GUID also [`is_whole_plan_guid`]). Kill-mid-apply residual: the AC index may
+/// stay 0 with no receipt.
+pub(crate) fn power_setting_apply_script(plan_guid: &str, subgroup: &str, setting: &str, prior_ac: u32) -> String {
     ps_all_or_restore(&[
         PsStep {
-            write: format!("powercfg /setacvalueindex SCHEME_CURRENT {subgroup} {setting} 0"),
-            undo: format!("powercfg /setacvalueindex SCHEME_CURRENT {subgroup} {setting} {prior_ac}"),
+            write: format!("powercfg /setacvalueindex {plan_guid} {subgroup} {setting} 0"),
+            undo: format!("powercfg /setacvalueindex {plan_guid} {subgroup} {setting} {prior_ac}"),
             native: true,
         },
-        PsStep {
-            write: "powercfg /setactive SCHEME_CURRENT".to_string(),
-            undo: String::new(),
-            native: true,
-        },
+        PsStep { write: setactive_if_still_active_step(plan_guid), undo: String::new(), native: false },
     ])
 }
 
@@ -4948,20 +4973,20 @@ pub(crate) fn rollback_mpo_typed(prior: Option<u32>) -> Result<(), String> {
 /// step checks its exit status, and a failure puts the finished index writes back (DC, then AC) to
 /// the apply-time snapshot inside the same elevation. A missing DC prior is undone to the AC prior,
 /// mirroring `rollback_core_parking_typed`. The rollback script (`core_parking_script`) is unchanged.
+/// CR-plan-write-recorded-guid: the writes go to the RECORDED plan `plan_guid` (a whole GUID, checked
+/// by the caller), and setactive runs only while that plan is still the active one
+/// ([`setactive_if_still_active_step`]), so a plan switched outside Compy while the UAC prompt was
+/// open never gets the write while the row records the old plan.
 /// Kill-mid-apply residual: the AC (and DC) index may stay 0 with no receipt.
-pub(crate) fn core_parking_apply_script(prior_ac: u32, prior_dc: Option<u32>) -> String {
+pub(crate) fn core_parking_apply_script(plan_guid: &str, prior_ac: u32, prior_dc: Option<u32>) -> String {
     let idx = |side: &str, v: u32| {
-        format!("powercfg -set{side}valueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {v}")
+        format!("powercfg -set{side}valueindex {plan_guid} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} {v}")
     };
     ps_all_or_restore(&[
         PsStep { write: idx("ac", 0), undo: idx("ac", prior_ac), native: true },
         // No DC prior (never read back): the DC undo writes the AC prior, as the rollback does.
         PsStep { write: idx("dc", 0), undo: idx("dc", prior_dc.unwrap_or(prior_ac)), native: true },
-        PsStep {
-            write: "powercfg -setactive SCHEME_CURRENT".to_string(),
-            undo: String::new(),
-            native: true,
-        },
+        PsStep { write: setactive_if_still_active_step(plan_guid), undo: String::new(), native: false },
     ])
 }
 
@@ -4978,7 +5003,7 @@ pub(crate) fn restore_core_parking_default_with(
     run_elevated: &dyn Fn(&str) -> Result<(), String>,
 ) -> Result<ApplyResult, String> {
     // CR-core-parking-plan-guid: the plan SCHEME_CURRENT names right now, recorded with the priors
-    // (a read only; the apply's writes are unchanged). CR-plan-unread-rollbacks B: an unread plan
+    // (and, CR-plan-write-recorded-guid, the plan the apply's writes target). CR-plan-unread-rollbacks B: an unread plan
     // stops the apply before anything runs. Recording no plan would send its undo down the legacy
     // SCHEME_CURRENT path, which after a plan switch writes the old values onto another plan.
     let Some(plan) = active_plan() else {
@@ -4986,9 +5011,16 @@ pub(crate) fn restore_core_parking_default_with(
                     where this change goes. Nothing was changed; try again in a moment."
             .to_string());
     };
+    // CR-plan-write-recorded-guid: that plan is what the write targets, so it must be a whole GUID
+    // (never an alias that would put the write back on the live plan): fail closed like an unread one.
+    if !is_whole_plan_guid(&plan) {
+        return Err("Compy couldn't read which power plan Windows is using just now, so it can't record \
+                    where this change goes. Nothing was changed; try again in a moment."
+            .to_string());
+    }
     let (ac, dc) = read_priors()?;
     let prior_ac = ac.ok_or("could not parse the core-parking AC index — refusing to restore blind")?;
-    run_elevated(&core_parking_apply_script(prior_ac, dc))?;
+    run_elevated(&core_parking_apply_script(&plan, prior_ac, dc))?;
     Ok(ApplyResult {
         applied_action: AppliedAction::RestoreCoreParkingDefault,
         rollback_action: RollbackAction::RestoreCoreParkingFromSnapshot,
@@ -5031,6 +5063,41 @@ mod core_parking_restore_tests {
                 _ => panic!("wrong snapshot"),
             },
             Err(e) => panic!("a read plan applies: {e}"),
+        }
+    }
+
+    /// CR-plan-write-recorded-guid: the elevated script writes the plan the row records (never
+    /// SCHEME_CURRENT, which after a switch outside Compy during the UAC prompt is another plan),
+    /// and a plan that is not one whole GUID (an alias, a GUID with anything around it) stops the
+    /// apply before anything runs, never a fall back to the live plan.
+    #[test]
+    fn the_core_parking_apply_writes_the_recorded_plan_and_refuses_an_alias() {
+        use std::cell::RefCell;
+        let plan = "11111111-2222-3333-4444-555555555555";
+        let seen = RefCell::new(Vec::<String>::new());
+        let run = |s: &str| -> Result<(), String> {
+            seen.borrow_mut().push(s.to_string());
+            Ok(())
+        };
+        let priors = || -> Result<(Option<u32>, Option<u32>), String> { Ok((Some(100), Some(90))) };
+        restore_core_parking_default_with(&|| Some(plan.to_string()), &priors, &run).expect("a read plan applies");
+        let scripts = seen.borrow().clone();
+        assert_eq!(scripts.len(), 1);
+        let s = &scripts[0];
+        assert!(!s.contains("SCHEME_CURRENT"), "{s}");
+        assert!(s.contains(&format!("-setacvalueindex {plan} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 0")), "{s}");
+        assert!(s.contains(&format!("-setdcvalueindex {plan} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 0")), "{s}");
+        // The undo inside the script puts the priors back on that same plan.
+        assert!(s.contains(&format!("-setacvalueindex {plan} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 100")), "{s}");
+        assert!(s.contains(&format!("-setdcvalueindex {plan} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 90")), "{s}");
+
+        for bad in ["SCHEME_CURRENT", "scheme_max", "", "11111111-2222-3333-4444-555555555555-x", "11111111-2222-3333-4444-555555555555; calc"] {
+            let before = seen.borrow().len();
+            match restore_core_parking_default_with(&|| Some(bad.to_string()), &priors, &run) {
+                Err(e) => assert!(e.contains("Nothing was changed"), "{bad}: {e}"),
+                Ok(_) => panic!("{bad:?} must not apply"),
+            }
+            assert_eq!(seen.borrow().len(), before, "nothing runs elevated for {bad:?}");
         }
     }
 }
@@ -7231,19 +7298,92 @@ mod all_or_nothing_tests {
         let mm_absent = mmcss_apply_script(None);
         assert!(mm_absent.contains("Remove-ItemProperty -Path") && !mm_absent.contains("SilentlyContinue"));
 
-        let ps = power_setting_apply_script(PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1);
+        // CR-plan-write-recorded-guid: the writes name the recorded plan, never SCHEME_CURRENT.
+        let ps = power_setting_apply_script(TEST_PLAN, PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1);
         assert!(ps.contains(&format!("{PWR_SETTING_USB_SELECTIVE_SUSPEND} 1; if (-not $?)")), "{ps}");
-        assert_eq!(ps.matches("if (-not $?)").count(), 3, "both steps and the undo are exit-checked: {ps}");
+        assert!(ps.contains(&format!("setacvalueindex {TEST_PLAN} {PWR_SUBGROUP_USB} {PWR_SETTING_USB_SELECTIVE_SUSPEND} 0")), "{ps}");
+        assert!(!ps.contains("SCHEME_CURRENT"), "{ps}");
+        // Index write + its undo + the setactive step's two own throws (the step reads the active plan).
+        assert_eq!(ps.matches("if (-not $?)").count(), 4, "every powercfg is exit-checked: {ps}");
 
-        let cp = core_parking_apply_script(40, None);
-        assert!(cp.contains(&format!("setacvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 40")));
-        assert!(cp.contains(&format!("setdcvalueindex SCHEME_CURRENT {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 40")), "DC mirrors AC");
+        let cp = core_parking_apply_script(TEST_PLAN, 40, None);
+        assert!(cp.contains(&format!("setacvalueindex {TEST_PLAN} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 40")));
+        assert!(cp.contains(&format!("setdcvalueindex {TEST_PLAN} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 40")), "DC mirrors AC");
+        assert!(!cp.contains("SCHEME_CURRENT"), "{cp}");
         assert!(cp.find("if ($compyDone -ge 2)").unwrap() < cp.find("if ($compyDone -ge 1)").unwrap(), "newest first");
 
         for s in [mm, mm_absent, ps, cp] {
             assert!(!contains_exit_token(&s), "exit-free: {s}");
             compose_batch_script(&[("r".to_string(), vec![s])], "x").expect("batchable");
         }
+    }
+
+    const TEST_PLAN: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+    const OTHER_PLAN: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+
+    /// Runs `script` in a real PowerShell with `powercfg` replaced by a recording function (nothing
+    /// touches the machine): `/getactivescheme` answers `active` (None = it fails), every call is
+    /// logged to `$compyLog`, then `check` (PowerShell, may throw) judges the log.
+    fn run_with_fake_powercfg(active: Option<&str>, script: &str, check: &str) -> bool {
+        let answer = match active {
+            Some(g) => format!("'Power Scheme GUID: {g}  (Balanced)'"),
+            None => "cmd /c exit 1".to_string(),
+        };
+        let fake = format!(
+            "$global:compyLog=@(); function powercfg {{ $global:compyLog += ($args -join ' '); \
+             if ($args[0] -eq '/getactivescheme') {{ {answer} }} }}"
+        );
+        run_ps(&format!("{fake}; {script}; {check}"))
+    }
+
+    /// CR-plan-write-recorded-guid: run for real against a recording powercfg. The index write goes
+    /// to the recorded plan, never SCHEME_CURRENT; setactive runs only while that plan is still the
+    /// active one at run time (after the UAC prompt); an unreadable active plan puts the write back.
+    #[test]
+    fn the_apply_scripts_write_the_recorded_plan_and_setactive_only_while_it_is_active() {
+        let usb = power_setting_apply_script(TEST_PLAN, PWR_SUBGROUP_USB, PWR_SETTING_USB_SELECTIVE_SUSPEND, 1);
+        let cp = core_parking_apply_script(TEST_PLAN, 40, Some(30));
+        let wrote = format!("$compyLog -contains '/setacvalueindex {TEST_PLAN} {PWR_SUBGROUP_USB} {PWR_SETTING_USB_SELECTIVE_SUSPEND} 0'");
+        let cp_wrote = format!("$compyLog -contains '-setacvalueindex {TEST_PLAN} {SUB_PROCESSOR_GUID} {CPMINCORES_GUID} 0'");
+        let never_current = "if ($compyLog -match 'SCHEME_CURRENT') { throw 'wrote the live alias' }";
+        for (script, wrote) in [(&usb, &wrote), (&cp, &cp_wrote)] {
+            // Still the active plan: written, then re-committed.
+            let still = format!(
+                "if (-not ({wrote})) {{ throw 'no write' }}; {never_current}; \
+                 if (-not ($compyLog -contains '/setactive {TEST_PLAN}')) {{ throw 'not re-committed' }}"
+            );
+            assert!(run_with_fake_powercfg(Some(TEST_PLAN), script, &still), "still active: {script}");
+            // Switched away while the prompt was open: the recorded plan gets the write, the user's
+            // new plan is neither written nor activated away from.
+            let away = format!(
+                "if (-not ({wrote})) {{ throw 'no write' }}; {never_current}; \
+                 if ($compyLog -match 'setactive') {{ throw 'switched the user back' }}; \
+                 if ($compyLog -match 'valueindex {OTHER_PLAN}') {{ throw 'wrote the other plan' }}"
+            );
+            assert!(run_with_fake_powercfg(Some(OTHER_PLAN), script, &away), "switched away: {script}");
+        }
+        // Active plan unreadable at run time (a REAL native exiting 1: a powercfg.cmd first on PATH
+        // that logs its calls and fails /getactivescheme, so `$?` is the one the script reads): the
+        // apply fails and the index write is put back, never a silent skip of the setactive.
+        let dir = std::env::temp_dir().join(format!("compy-plan-guid-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let log = dir.join("log.txt");
+        let _ = std::fs::remove_file(&log);
+        std::fs::write(
+            dir.join("powercfg.cmd"),
+            "@echo off\r\necho %* >> \"%~dp0log.txt\"\r\nif \"%1\"==\"/getactivescheme\" exit /b 1\r\nexit /b 0\r\n",
+        )
+        .expect("fake powercfg");
+        let d = dir.to_string_lossy().replace('\'', "''");
+        let put_back = format!(
+            "$d='{d}'; $env:Path=$d+';'+$env:Path; try {{ {usb}; $ok=$true }} catch {{ $ok=$false }}; \
+             if ($ok) {{ throw 'applied blind' }}; $l=Get-Content (Join-Path $d 'log.txt'); \
+             if (-not ($l -match '^/setacvalueindex {TEST_PLAN} {PWR_SUBGROUP_USB} {PWR_SETTING_USB_SELECTIVE_SUSPEND} 0')) {{ throw 'no write' }}; \
+             if (-not ($l -match '^/setacvalueindex {TEST_PLAN} {PWR_SUBGROUP_USB} {PWR_SETTING_USB_SELECTIVE_SUSPEND} 1')) {{ throw 'not put back' }}; \
+             if ($l -match 'setactive') {{ throw 'activated blind' }}"
+        );
+        assert!(run_ps(&put_back), "unreadable plan");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // ── elevated scripts: the same wrapper, run for real (unelevated, temp files only) ──
