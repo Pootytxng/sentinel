@@ -329,6 +329,7 @@
         "noSavedUndo": "未列出:{{titles}}。Compy 没有为这些更改保存撤销记录,因此无法在这里把它们恢复原样。",
         "notRecorded": "这项变化不是 Compy 做的,Compy 也没有记录原来的状态,因此无法恢复。",
         "summaryAll_other": "全部 {{count}} 次撤销已完成。",
+        "summaryAllOffered_other": "这里列出的 {{count}} 次撤销已全部完成。标为「未列出」的更改没有被撤销。",
         "summaryPartial": "{{total}} 次撤销中完成了 {{done}} 次。Compy 在下面出问题的那一项停了下来;没有撤销的更改仍然生效,你可以在「已应用与历史记录」中撤销。",
         "summaryNone": "没有撤销任何更改。Compy 的更改仍然生效,你可以在「已应用与历史记录」中撤销。",
         "summaryUnsaved_other": "有 {{count}} 次撤销已在 Windows 上完成,但没有保存到 Compy 的历史记录中;请在 Windows 中检查该设置。",

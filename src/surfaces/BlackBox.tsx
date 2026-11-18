@@ -27,6 +27,7 @@ import {
   restorePlan,
   runRestore,
   trialInProgress,
+  type RestorePlan,
   type RestoreResult,
 } from "./changed-before-restore";
 import { useJourneyPhase } from "./GuidedJourney";
@@ -718,6 +719,9 @@ type RestoreCtx = {
   end: (ran: boolean) => Promise<void>;
 };
 
+/** The changes a "Put back" run left out, each kind named under it (CR-restore-notes-stay). */
+type LeftOut = Pick<RestorePlan, "turnedOnAgain" | "unconfirmed" | "noSavedUndo">;
+
 // P6-restore: "Put back how it was on <date>". Lists the changes, confirms, then undoes them one at
 // a time, newest first, and says what happened to each. It never says this fixes the problem.
 function RestoreOffer({
@@ -734,8 +738,13 @@ function RestoreOffer({
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<RestoreResult[] | null>(null);
   const [refused, setRefused] = useState(false);
+  // CR-restore-notes-stay: the changes left out of a run, as they were when it ran. The ledger is
+  // re-read after a run, so the live plan can no longer name them; the notes stay beside the results.
+  const [leftOut, setLeftOut] = useState<LeftOut | null>(null);
   const plan = restorePlan(cb, restore.changes);
   if (!plan && !results) return null;
+  const notes: LeftOut | null = results ? leftOut : plan;
+  const anyLeftOut = !!notes && (notes.turnedOnAgain.length + notes.unconfirmed.length + notes.noSavedUndo.length > 0);
   const date = plan ? when(plan.date) : "";
   const groups = plan?.groups ?? [];
   const dest = (label: string | null) => (label ? t("app.dialogs.rollbackDest", { label }) : "");
@@ -767,6 +776,7 @@ function RestoreOffer({
       return;
     }
     setRefused(false);
+    setLeftOut({ turnedOnAgain: plan.turnedOnAgain, unconfirmed: plan.unconfirmed, noSavedUndo: plan.noSavedUndo });
     setRunning(true);
     let announced = false;
     let out: RestoreResult[] = [];
@@ -820,19 +830,19 @@ function RestoreOffer({
           )}
         </>
       )}
-      {plan && plan.turnedOnAgain.length > 0 && !results && (
+      {notes && notes.turnedOnAgain.length > 0 && (
         <p className="bb-restore-notlive" data-reason="turned-on-again">
-          {t("gaming.blackBox.changedBefore.restore.turnedOnAgain", { titles: plan.turnedOnAgain.join("; ") })}
+          {t("gaming.blackBox.changedBefore.restore.turnedOnAgain", { titles: notes.turnedOnAgain.join("; ") })}
         </p>
       )}
-      {plan && plan.unconfirmed.length > 0 && !results && (
+      {notes && notes.unconfirmed.length > 0 && (
         <p className="bb-restore-notlive" data-reason="unconfirmed">
-          {t("gaming.blackBox.changedBefore.restore.notLive", { titles: plan.unconfirmed.join("; ") })}
+          {t("gaming.blackBox.changedBefore.restore.notLive", { titles: notes.unconfirmed.join("; ") })}
         </p>
       )}
-      {plan && plan.noSavedUndo.length > 0 && !results && (
+      {notes && notes.noSavedUndo.length > 0 && (
         <p className="bb-restore-notlive" data-reason="no-saved-undo">
-          {t("gaming.blackBox.changedBefore.restore.noSavedUndo", { titles: plan.noSavedUndo.join("; ") })}
+          {t("gaming.blackBox.changedBefore.restore.noSavedUndo", { titles: notes.noSavedUndo.join("; ") })}
         </p>
       )}
       {results && (
@@ -842,7 +852,10 @@ function RestoreOffer({
               {undone === 0
                 ? t("gaming.blackBox.changedBefore.restore.summaryNone")
                 : undone === results.length
-                ? t("gaming.blackBox.changedBefore.restore.summaryAll", { count: undone })
+                ? anyLeftOut
+                  ? // Every offered undo finished, but the changes named as not offered were not undone.
+                    t("gaming.blackBox.changedBefore.restore.summaryAllOffered", { count: undone })
+                  : t("gaming.blackBox.changedBefore.restore.summaryAll", { count: undone })
                 : t("gaming.blackBox.changedBefore.restore.summaryPartial", { done: undone, total: results.length })}
             </p>
           )}
