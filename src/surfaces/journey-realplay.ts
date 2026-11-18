@@ -444,15 +444,12 @@ export function realPlayResult(exp: RealPlayRecord, game: string, t: Translate):
       // CR-fall-words-band: a fall judged at the band's matching fall names that fall, never "more
       // than the ±band" (-9.5% against a 10% band fell past -9.0%, not past 10%).
       const fall = judgedFallOf(band, avgSide ? falls.avg : falls.low, avgSide ? avg : low);
-      return t(fall == null ? "lab.experimentBench.journey.realPlay.likelyWorse" : "lab.experimentBench.journey.realPlay.likelyWorseMatching", {
-        action,
-        metric: metric(avgSide),
-        pct: one(Math.abs(avgSide ? avg : low)),
-        with: counted,
-        before,
-        band: one(band),
-        fall: fall == null ? "" : one(fall),
-      });
+      const pct = one(Math.abs(avgSide ? avg : low));
+      // Two literal calls, each naming what it passes: the affordance census reads the key from the
+      // call and the locale parity guard reads the placeholders from it.
+      if (fall == null)
+        return t("lab.experimentBench.journey.realPlay.likelyWorse", { action, metric: metric(avgSide), pct, with: counted, before, band: one(band) });
+      return t("lab.experimentBench.journey.realPlay.likelyWorseMatching", { action, metric: metric(avgSide), pct, with: counted, before, band: one(band), fall: one(fall) });
     }
     if (exp.verdict === "no-change") {
       // Recommended's "no clear win": the 1% low rose beyond the band but the average fell beyond it
