@@ -3241,8 +3241,16 @@ mod bloat_task_tests {
 
 // ─── Power plan: Ultimate Performance ────────────────────────────────────
 
+/// The active plan's GUID, or `None` when it is unread: powercfg didn't start, didn't answer within
+/// [`POWERCFG_READ_LIMIT`] (CR-active-plan-unread: it is ended, never waited on forever), exited
+/// non-zero, or printed no GUID. `None` never means "no plan is active".
 pub(crate) fn current_power_plan_guid() -> Option<String> {
-    let output = quiet_command("powercfg").args(["/getactivescheme"]).output().ok()?;
+    let mut cmd = quiet_command("powercfg");
+    cmd.args(["/getactivescheme"]);
+    let output = output_within(cmd, POWERCFG_READ_LIMIT)?;
+    if !output.status.success() {
+        return None;
+    }
     active_plan_guid_of(&String::from_utf8_lossy(&output.stdout))
 }
 
@@ -4870,7 +4878,8 @@ pub(crate) fn rollback_core_parking_with(
     }
 }
 
-/// What a core-parking undo does, decided from the row and two read-only machine reads.
+/// What a core-parking undo does, decided from the row and read-only machine reads (the plan list,
+/// the active plan, and when needed the plan itself).
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum CoreParkingUndo {
     /// Run this elevated script.
@@ -4886,6 +4895,8 @@ pub(crate) enum CoreParkingUndo {
 /// gone, and the undo stops with nothing changed rather than closing the row on a failed read.
 /// `plan_queried` (CR-core-parking-hidden-plan) asks Windows for the plan directly; it is only
 /// consulted when the list omits a plan that isn't active, and only its clean failure means gone.
+/// `active_plan` is `None` when the active plan couldn't be read (CR-active-plan-unread): the undo
+/// stops with nothing changed, never treating the recorded plan as "not active".
 pub(crate) fn core_parking_undo_step(
     ac: Option<u32>,
     dc: Option<u32>,
@@ -4916,8 +4927,15 @@ pub(crate) fn core_parking_undo_step(
                     Nothing was changed; try again in a moment."
             .to_string());
     };
-    let active = active_plan();
-    let is_active = active.as_deref().is_some_and(|g| g.eq_ignore_ascii_case(plan.trim()));
+    // CR-active-plan-unread: an unread active plan is not "another plan is active". Whether the
+    // recorded plan is the live one decides both the gone check and the re-commit, so the undo
+    // stops with nothing changed rather than guess either.
+    let Some(active) = active_plan() else {
+        return Err("Compy couldn't read which power plan Windows is using just now, so it can't undo this \
+                    safely. Nothing was changed; try again in a moment."
+            .to_string());
+    };
+    let is_active = active.eq_ignore_ascii_case(plan.trim());
     // Sonnet r1 nit: `powercfg /list` can leave out a hidden scheme; one that is active is there.
     if !listed && !is_active {
         // CR-core-parking-hidden-plan: the list can omit a hidden scheme that still exists and still
