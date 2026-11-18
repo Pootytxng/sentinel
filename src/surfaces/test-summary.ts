@@ -92,7 +92,9 @@ export type SummaryExperiment = {
   game_noise?: { low1_band_pct?: number; avg_band_pct?: number; model?: number } | null;
   baseline_session_id?: string | null;
   /** The stored after-session deltas. null while running and on records that never measured one. */
-  treatment?: { delta_low1_pct: number; delta_avg_pct?: number | null } | null;
+  treatment?: { delta_low1_pct: number; delta_avg_pct?: number | null; crashed?: boolean } | null;
+  /** Why the Trial stopped; "crash-during-treatment" (possibly stacked with other tags) = a crash. */
+  stop_reason?: string | null;
   /** The outcome the Trial was judged for. Absent on older records, which were judged as Recommended. */
   outcome?: "recommended" | "max-fps" | "smoothest" | null;
   /** P8-posture-show: the risk the user allowed when the Trial started (experiment.rs `risk_choice`).
@@ -189,6 +191,9 @@ export type TestedChange = {
   /** The newest judged Trial's stored deltas (null when it recorded none) and when it started. */
   deltaLow1Pct: number | null;
   deltaAvgPct: number | null;
+  /** CR-lesson-crash-not-result: the newest judged Trial's treatment crashed (`crashedTrial`), so the
+   *  crash decided its verdict and its deltas teach no lesson. Absent = no crash recorded. */
+  crashed?: boolean;
   /** The band the newest judged Trial's average was judged on (`avgBandOf`); null = not compared. */
   avgBandPct: number | null;
   /** The band its 1% low was judged on (`lowBandOf`); absent = `noise.band_pct`. */
@@ -474,6 +479,7 @@ export const LESSON_LIBRARY_ID: Readonly<Record<LessonRule, string>> = {
 export function lessonFor(tested: readonly TestedChange[]): Lesson | null {
   const newest = [...tested].sort((a, b) => time(b.at) - time(a.at));
   for (const r of newest) {
+    if (r.crashed === true) continue; // CR-lesson-crash-not-result: the crash decided it, not a measured fall
     const band = r.lowBandPct !== undefined ? r.lowBandPct : r.noise?.band_pct;
     const rule = lessonRuleFor(r.verdict, r.deltaLow1Pct, r.deltaAvgPct, band, r.avgBandPct, r.falls);
     if (rule && band != null && r.deltaLow1Pct != null)
@@ -695,6 +701,7 @@ export function summarizeGame(
       context: matchOf(x.baseline_session_id),
       deltaLow1Pct: x.treatment?.delta_low1_pct ?? null,
       deltaAvgPct: x.treatment?.delta_avg_pct ?? null,
+      crashed: crashedTrial(x),
       avgBandPct: avgBandOf(x),
       lowBandPct: lowBandOf(x),
       falls: fallsOf(x),
@@ -834,12 +841,20 @@ export type OutcomeChoice = {
 
 const outcomeOf = (x: SummaryExperiment): ResultOutcome => (x.outcome === "max-fps" ? "max-fps" : "recommended");
 
+/** CR-lesson-crash-not-result: a Trial whose treatment crashed is stored as Slower (a crash restores
+ *  the change), but the crash decided it, not a measured fall (experiment.rs `crash_outcome`): its
+ *  numbers are no result to read a reason or a lesson from. */
+export function crashedTrial(x: Pick<SummaryExperiment, "treatment" | "stop_reason">): boolean {
+  return x.treatment?.crashed === true || (x.stop_reason ?? "").split(/[;:]\s*/).includes("crash-during-treatment");
+}
+
 /** The reason a measured Trial gives, by its outcome's own rule (experiment.rs
  *  `with_recommended_outcome` / `with_max_fps_outcome`). */
 function resultOf(x: SummaryExperiment): OutcomeResult | null {
   // P4-smooth-offer-b: a Smoothest Trial is judged on frame pacing, a third rule; it is not one side of
   // the Recommended / Maximum FPS trade, so it is never a result here (and never read as Recommended).
   if (x.outcome === "smoothest") return null;
+  if (crashedTrial(x)) return null;
   const band = x.noise_evidence?.band_pct;
   const low = x.treatment?.delta_low1_pct;
   if (!x.verdict || !MEASURED_VERDICTS.has(x.verdict) || band == null || low == null) return null;
