@@ -2414,9 +2414,13 @@ pub(crate) fn with_power_plan_check(
         if !judged_against_noise(&outcome) {
             return outcome;
         }
-        let unread = |g: &crate::game_state::GameStateFingerprint| g.context_version.is_some() && guid(g).is_none();
+        // s40 sonnet SHOULD-FIX: an end read that failed (`power_plan_changed` None) can't confirm the
+        // plan held through the session either.
+        let unread = |g: &crate::game_state::GameStateFingerprint| {
+            g.context_version.is_some() && (guid(g).is_none() || g.power_plan_changed.is_none())
+        };
         let side = match (unread(b), unread(a)) {
-            (true, true) => "either session",
+            (true, true) => "both sessions",
             (true, false) => "the baseline",
             (false, true) => "the after-session",
             (false, false) => return outcome,
@@ -2427,8 +2431,8 @@ pub(crate) fn with_power_plan_check(
             stop_reason: Some("power-plan-unread".into()),
             confidence: Confidence::Low.min(outcome.confidence),
             note: format!(
-                "Compy couldn't read which Windows power plan was active in {side}, so it can't confirm both \
-                 sessions ran on the same plan, and the result can't be pinned on this setting. Compy restored \
+                "Compy couldn't read the Windows power plan at the start or end of {side}, so it can't confirm \
+                 both sessions ran on the same plan, and the result can't be pinned on this setting. Compy restored \
                  it and judged nothing; start a new test to measure it again."
             ),
             ..outcome
@@ -7449,22 +7453,26 @@ mod experiment_tests {
         assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false), "{}", o.note);
         assert_eq!(o.stop_reason.as_deref(), Some("power-plan-unread"));
         assert_eq!(o.confidence, Confidence::Low);
-        assert!(o.note.contains("in the after-session"), "{}", o.note);
+        assert!(o.note.contains("of the after-session"), "{}", o.note);
         // Unread on the baseline side, read after: the same.
         let unread_base = collected(with_plan(session(BASE_ID, 150.0), None, None));
         let read_after = collected(with_plan(session(TREAT_ID, 180.0), Some(BAL), Some(false)));
         let o = with_power_plan_check(m.clone(), Some(&unread_base), &read_after, "power-ultimate");
         assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false), "{}", o.note);
-        assert!(o.note.contains("in the baseline"), "{}", o.note);
-        // Unread on both sides: named as either session.
+        assert!(o.note.contains("of the baseline"), "{}", o.note);
+        // Unread on both sides: named as both sessions.
         let o = with_power_plan_check(m.clone(), Some(&unread_base), &unread_after, "visual-effects");
         assert_eq!((o.verdict.as_str(), o.keep), ("confounded", false), "{}", o.note);
-        assert!(o.note.contains("in either session"), "{}", o.note);
+        assert!(o.note.contains("of both sessions"), "{}", o.note);
         // An old baseline (plan never collected) with an unread after-session: the after-session's unread
         // read is still unconfirmed.
         let old_base = with_plan(session(BASE_ID, 150.0), None, None);
         let o = with_power_plan_check(m.clone(), Some(&old_base), &unread_after, "visual-effects");
         assert_eq!(o.stop_reason.as_deref(), Some("power-plan-unread"), "{}", o.note);
+        // s40 sonnet SHOULD-FIX: the start read worked but the end read failed: still unconfirmed.
+        let end_unread = collected(with_plan(session(TREAT_ID, 180.0), Some(BAL), None));
+        let o = with_power_plan_check(m.clone(), Some(&base), &end_unread, "visual-effects");
+        assert_eq!((o.verdict.as_str(), o.stop_reason.as_deref()), ("confounded", Some("power-plan-unread")), "{}", o.note);
         // s40 opus SHOULD-FIX: a verdict that already says it wasn't judged keeps its own reason.
         let crashed = ConcludeOutcome {
             verdict: "regressed".into(),
