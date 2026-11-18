@@ -3448,13 +3448,30 @@ mod receipt_commit_tests {
         saves: &std::cell::Cell<usize>,
         saved: Result<(), String>,
     ) -> Result<(), RollbackError> {
+        // Another plan is active unless a test says otherwise (CR-active-plan-unread: `None` is an
+        // unread active plan, never "not active").
+        undo_core_parking_read(history, listed, queried, Some(OTHER_PLAN), ran, saves, saved)
+    }
+
+    const OTHER_PLAN: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+
+    /// [`undo_core_parking_queried`] with the active-plan read faked too (`None` = unread).
+    fn undo_core_parking_read(
+        history: &mut [AppliedChange],
+        listed: Option<bool>,
+        queried: Option<bool>,
+        active: Option<&str>,
+        ran: &std::cell::RefCell<Vec<String>>,
+        saves: &std::cell::Cell<usize>,
+        saved: Result<(), String>,
+    ) -> Result<(), RollbackError> {
         let save = |_: &[AppliedChange]| {
             saves.set(saves.get() + 1);
             saved.clone()
         };
         let plan_listed = |_: &str| listed;
         let plan_queried = |_: &str| queried;
-        let active_plan = || None;
+        let active_plan = || active.map(str::to_string);
         let run_elevated = |script: &str| {
             ran.borrow_mut().push(script.to_string());
             Ok(())
@@ -3576,6 +3593,33 @@ mod receipt_commit_tests {
         assert_eq!(saves.get(), 0);
         assert_eq!(history[0].status, "applied");
         assert_eq!(history[0].nothing_restored, None);
+    }
+
+    #[test]
+    fn an_unread_active_plan_is_not_another_plan_and_the_undo_stops_with_nothing_changed() {
+        // CR-active-plan-unread: list omits the plan, the active plan is unread, the direct query
+        // would find it. Before, the unread read counted as "not active" and the undo ran.
+        let step = core_parking_undo_step(Some(40), Some(30), Some(PLAN_A), &|_| Some(false), &|_| Some(true), &|| None);
+        let Err(msg) = step else { panic!("an unread active plan must not run anything: {step:?}") };
+        assert!(msg.contains("couldn't read which power plan") && msg.contains("Nothing was changed"), "{msg}");
+    }
+
+    #[test]
+    fn a_listed_plan_with_an_unread_active_plan_runs_nothing_and_leaves_the_row_open() {
+        // CR-active-plan-unread: whether the plan is the live one decides the re-commit (`-setactive`),
+        // so an unread active plan stops the whole undo, through the production dispatch.
+        for (listed, queried) in [(Some(true), Some(true)), (Some(false), Some(true)), (Some(false), Some(false))] {
+            let mut history = vec![applied_core_parking(Some(PLAN_A))];
+            let (ran, saves) = (std::cell::RefCell::new(Vec::new()), std::cell::Cell::new(0));
+            let err = undo_core_parking_read(&mut history, listed, queried, None, &ran, &saves, Ok(()))
+                .expect_err("an unread active plan is not a known plan state");
+            let RollbackError::Failed(msg) = err else { panic!("a failed undo") };
+            assert!(msg.contains("couldn't read which power plan"), "{listed:?} {queried:?}: {msg}");
+            assert!(ran.borrow().is_empty(), "{listed:?} {queried:?}: nothing runs elevated");
+            assert_eq!(saves.get(), 0);
+            assert_eq!(history[0].status, "applied", "the row stays open");
+            assert_eq!(history[0].nothing_restored, None, "never closed as gone on an unread read");
+        }
     }
 
     #[test]
