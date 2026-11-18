@@ -4878,7 +4878,8 @@ pub(crate) fn rollback_core_parking_with(
     }
 }
 
-/// What a core-parking undo does, decided from the row and two read-only machine reads.
+/// What a core-parking undo does, decided from the row and read-only machine reads (the plan list,
+/// the active plan, and when needed the plan itself).
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum CoreParkingUndo {
     /// Run this elevated script.
