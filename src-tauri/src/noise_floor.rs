@@ -1648,6 +1648,10 @@ pub(crate) mod tests {
         ));
         // A real driver change still splits it.
         let s = with_driver_at_3("Adrenalin 25.11.1");
+        assert!(!still_current(
+            &NoiseConditions::of_session(&s[3]).expect("conditions"),
+            &NoiseConditions::of_session(&s[11]).expect("conditions")
+        ));
         assert!(!measure_game_noise(&s, &s[11], &rob_trials()).is_ok_and(|n| n.sessions >= 9));
         // The noise store reads the same driver in another case as current, a new one as changed.
         let mut store = NoiseFloorStore::default();

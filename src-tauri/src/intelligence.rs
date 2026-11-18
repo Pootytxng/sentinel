@@ -3687,6 +3687,32 @@ mod tests {
     }
 
     #[test]
+    fn a_driver_written_in_another_case_is_the_same_driver_in_what_changed() {
+        // CR-driver-compare-everywhere (s38 opus SHOULD-FIX): the gpu-driver-change hypothesis
+        // reads the same version in another case or spacing as the same driver; a new one as changed.
+        let fp = |driver: &str| crate::hardware::HwFingerprint {
+            hash: format!("h-{driver}"),
+            gpu: "Radeon RX 9070 XT".into(),
+            gpu_driver: driver.into(),
+            ram_gb: 32,
+            display: "2560x1440@165".into(),
+        };
+        let json_for = |db: &str, dc: &str| {
+            let (mut b, mut c) = two_sessions(100.0, 80.0);
+            b.hw_fingerprint = Some(fp(db));
+            c.hw_fingerprint = Some(fp(dc));
+            let r = report(&WhatChangedInputs { baseline: &b, current: &c, events_window: vec![], events_ambiguous: vec![], snapshots: &[], noise: Some(&TEST_NOISE) });
+            assert_eq!(r.verdict, "regressed");
+            serde_json::to_string(&r).expect("report")
+        };
+        let same = json_for("Adrenalin 25.10.2", " ADRENALIN 25.10.2 ");
+        assert!(same.contains("Both sessions recorded the same GPU driver"), "{same}");
+        assert!(!same.contains("The baseline ran GPU driver"), "{same}");
+        let changed = json_for("Adrenalin 25.10.2", "Adrenalin 25.11.1");
+        assert!(changed.contains("The baseline ran GPU driver Adrenalin 25.10.2; this session ran Adrenalin 25.11.1."), "{changed}");
+    }
+
+    #[test]
     fn identical_sessions_get_no_invented_cause() {
         let (b, c) = two_sessions(100.0, 100.0);
         let r = report(&WhatChangedInputs {
