@@ -2730,6 +2730,13 @@ pub(crate) fn same_driver(a: &str, b: &str) -> bool {
     a.trim().eq_ignore_ascii_case(b.trim())
 }
 
+/// Whether two recorded GPU driver versions show a driver change: both read (a blank or
+/// whitespace-only read is a failed probe, never a version) and not [`same_driver`]. An unread side
+/// is unknown, never a change.
+pub(crate) fn driver_changed(a: &str, b: &str) -> bool {
+    !a.trim().is_empty() && !b.trim().is_empty() && !same_driver(a, b)
+}
+
 /// Pure: build a fingerprint from rig fields (testable — no system access).
 fn fingerprint_of(gpu: &str, gpu_driver: &str, ram_gb: u32, display: &str) -> HwFingerprint {
     use sha2::{Digest, Sha256};

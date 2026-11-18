@@ -368,6 +368,31 @@ describe("SessionDebrief comparison card: Answer / Explanation / Technical recei
     vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
   });
 
+  // CR-debrief-lesson-crash: the same measured result with a crash reported beside it teaches nothing,
+  // as a crashed Trial's lesson is withheld: the crash, not the numbers, is what the session showed.
+  it("a comparison with a crash reported beside it teaches no lesson", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const won = {
+      ...comparison,
+      after_low1_fps: 118.9,
+      delta_low1_pct: 7.9,
+      after_avg_fps: 141.6,
+      delta_avg_pct: 0.9,
+      verdict: "improved" as const,
+      crash_reported: true,
+    };
+    vi.mocked(invoke).mockImplementation((cmd: string) => Promise.resolve(cmd === "get_latest_comparison" ? won : null));
+    render(
+      <ConfirmProvider>
+        <SessionDebrief {...baseProps} />
+      </ConfirmProvider>,
+    );
+    await screen.findByTestId("cmp-card");
+    const card = await openWhy();
+    expect(card.querySelector('[data-testid="cmp-lesson"]')).toBeNull();
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(null));
+  });
+
   // CR-lesson-avg-band: on a measured band the average reads against its OWN band (ROB RUN: 1% low
   // ±23%, average ±18%), and a measured result without the average's band compares no average.
   it("the lesson reads the average against the game's measured average band, never the 1% low's", async () => {

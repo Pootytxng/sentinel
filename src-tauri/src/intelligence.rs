@@ -253,7 +253,7 @@ fn str_changed(a: &str, b: &str) -> bool {
 /// (`hardware::same_driver`: the same version in another case or spacing is the same driver).
 /// A blank or whitespace-only read is a failed probe, never a driver.
 fn driver_changed(a: &str, b: &str) -> bool {
-    !a.trim().is_empty() && !b.trim().is_empty() && !crate::hardware::same_driver(a, b)
+    crate::hardware::driver_changed(a, b)
 }
 
 /// The driver going unread -> read (information gain; a whitespace-only read is still unread).
@@ -1910,8 +1910,9 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
     {
         let mut h = HypoEval::new("gpu-driver-change");
         match (b.hw_fingerprint.as_ref(), c.hw_fingerprint.as_ref()) {
-            (Some(bf), Some(cf)) if !bf.gpu_driver.is_empty() && !cf.gpu_driver.is_empty() => {
-                if !crate::hardware::same_driver(&bf.gpu_driver, &cf.gpu_driver) {
+            // s40: a whitespace-only driver read is a failed probe (unknown), as `driver_changed` reads it.
+            (Some(bf), Some(cf)) if !bf.gpu_driver.trim().is_empty() && !cf.gpu_driver.trim().is_empty() => {
+                if crate::hardware::driver_changed(&bf.gpu_driver, &cf.gpu_driver) {
                     h.direct = true;
                     h.supporting.push(format!(
                         "The baseline ran GPU driver {}; this session ran {}.",
@@ -3783,6 +3784,11 @@ mod tests {
         assert!(!same.contains("The baseline ran GPU driver"), "{same}");
         let changed = json_for("Adrenalin 25.10.2", "Adrenalin 25.11.1");
         assert!(changed.contains("The baseline ran GPU driver Adrenalin 25.10.2; this session ran Adrenalin 25.11.1."), "{changed}");
+        // s40: a whitespace-only driver read is a failed probe: neither a driver change nor "the same
+        // driver" on the fingerprints.
+        let blank = json_for("Adrenalin 25.10.2", "   ");
+        assert!(!blank.contains("The baseline ran GPU driver"), "{blank}");
+        assert!(!blank.contains("Both sessions recorded the same GPU driver"), "{blank}");
     }
 
     #[test]

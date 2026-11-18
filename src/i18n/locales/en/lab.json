@@ -1026,6 +1026,7 @@
       "noiseLabel": "Noise band:",
       "receiptLow": "1% low {{pct}}",
       "receiptAvg": "average {{pct}}",
+      "receiptCrashed": "the game crashed during the test, so it has no result",
       "receiptBand": "band {{band}}",
       "receiptRiskChoice": "risk you allowed: {{choice}}",
       "receiptTrials_one": "{{count}} trial",

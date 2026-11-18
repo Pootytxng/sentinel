@@ -200,7 +200,8 @@ pub(crate) fn derive(a: &SessionSummary, b: &SessionSummary) -> SessionComparabi
             // candidate to check. Correlation, never automatic cause.
             // s37 (s35 opus NIT): the same driver written in another case is the same driver, as the
             // Trial preflight compares it (`trial_preflight`).
-            if !crate::hardware::same_driver(&fa.gpu_driver, &fb.gpu_driver) && fa.gpu == fb.gpu {
+            // s40: a blank or whitespace-only driver read is a failed probe, never a changed driver.
+            if crate::hardware::driver_changed(&fa.gpu_driver, &fb.gpu_driver) && fa.gpu == fb.gpu {
                 changed.push(("gpu-driver", format!("GPU driver: {} → {}", fa.gpu_driver, fb.gpu_driver)));
                 candidates.push(format!(
                     "The GPU driver changed ({} → {}) — a candidate explanation to check first, not a \
@@ -1016,6 +1017,19 @@ mod tests {
         let p = derive(&c, &d);
         assert!(p.changed_keys.is_empty(), "{:?}", p.changed_context);
         assert!(p.candidate_causes.iter().all(|s| !s.contains("driver")), "{:?}", p.candidate_causes);
+    }
+
+    #[test]
+    fn a_blank_driver_read_is_never_a_driver_change() {
+        // s40: a blank or whitespace-only driver read is a failed probe, never "the driver changed".
+        for unread in ["", "   "] {
+            let a = session();
+            let mut b = session();
+            b.hw_fingerprint.as_mut().expect("the fixture has a fingerprint").gpu_driver = unread.into();
+            let p = derive(&a, &b);
+            assert!(!p.changed_keys.iter().any(|k| *k == "gpu-driver"), "{unread:?}: {:?}", p.changed_context);
+            assert!(p.candidate_causes.iter().all(|s| !s.contains("driver")), "{:?}", p.candidate_causes);
+        }
     }
 
     #[test]

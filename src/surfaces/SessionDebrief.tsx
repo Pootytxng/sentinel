@@ -115,7 +115,12 @@ function ComparisonCard({
   // (s37 review): its measured band is stored as a rise the same way, so its fall is read at the
   // same matching fall a Trial's average is judged at (`with_recommended_outcome_bands`).
   const falls: Falls | undefined = fall != null ? { low: "matching", avg: "matching" } : undefined;
-  const lessonRule = lessonRuleForVerdict(r.verdict, r.delta_low1_pct, r.delta_avg_pct, r.noise_floor_pct, avgBand, falls);
+  // CR-debrief-lesson-crash: a crash reported beside the comparison withholds its lesson, as a
+  // crashed Trial's does (`crashedTrial`): its numbers are no result to teach from.
+  const lessonRule =
+    r.crash_reported === true
+      ? null
+      : lessonRuleForVerdict(r.verdict, r.delta_low1_pct, r.delta_avg_pct, r.noise_floor_pct, avgBand, falls);
   return (
     <div className={`cmp cmp-${r.verdict}`} data-testid="cmp-card">
       <Depth

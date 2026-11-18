@@ -434,9 +434,11 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
 
         // ── driver-split: last driver version vs the one before it ──
         {
+            // s40 (s39 review SHOULD-FIX): a session whose driver read is blank or whitespace-only is a
+            // failed probe, not a driver version, so it is left out of the split (never a run of its own).
             let fp_sessions: Vec<&&SessionSummary> = low_lane
                 .iter()
-                .filter(|s| s.hw_fingerprint.is_some())
+                .filter(|s| s.hw_fingerprint.as_ref().is_some_and(|f| !f.gpu_driver.trim().is_empty()))
                 .collect();
             // Consecutive-in-time version runs, oldest → newest.
             let mut runs: Vec<(String, Vec<f64>)> = Vec::new();
@@ -452,8 +454,10 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                 let (old_v, old_ys) = runs[runs.len() - 2].clone();
                 // Same rig otherwise (gpu/ram/display) — the driver must be the only
                 // identity difference, else this is a hardware comparison, not a driver one.
+                // Every fingerprinted session counts here, a blank-driver one too: leaving it out of the
+                // runs never hides a rig change.
                 let same_rig = {
-                    let ids: Vec<(&str, u32, &str)> = fp_sessions
+                    let ids: Vec<(&str, u32, &str)> = low_lane
                         .iter()
                         .filter_map(|s| s.hw_fingerprint.as_ref())
                         .map(|f| (f.gpu.as_str(), f.ram_gb, f.display.as_str()))
@@ -955,6 +959,26 @@ mod tests {
         }
         let r = detect(&s);
         assert!(r.patterns.iter().all(|p| p.id != "driver-split"));
+        assert!(r.coverage.iter().all(|c| !c.contains("Driver comparison")), "{:?}", r.coverage);
+    }
+
+    #[test]
+    fn a_blank_driver_read_is_no_driver_run() {
+        // s40 (s39 sonnet SHOULD-FIX): four sessions whose driver probe read blank or whitespace,
+        // then four on a real driver, are no driver split: a failed read is not a version.
+        let mut s: Vec<SessionSummary> = Vec::new();
+        for i in 0..4 {
+            let mut x = mk_session(&day(i), "cp2077.exe", 100.0);
+            x.hw_fingerprint = Some(fp(if i % 2 == 0 { "" } else { "   " }));
+            s.push(x);
+        }
+        for i in 4..8 {
+            let mut x = mk_session(&day(i), "cp2077.exe", 90.0);
+            x.hw_fingerprint = Some(fp("Adrenalin 25.5.1"));
+            s.push(x);
+        }
+        let r = detect(&s);
+        assert!(r.patterns.iter().all(|p| p.id != "driver-split"), "{:?}", r.patterns.iter().map(|p| &p.id).collect::<Vec<_>>());
         assert!(r.coverage.iter().all(|c| !c.contains("Driver comparison")), "{:?}", r.coverage);
     }
 
