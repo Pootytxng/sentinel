@@ -32,7 +32,9 @@ import {
   fallPct,
   fallsOf,
   fellOn,
+  judgedFallOf,
   lowBandOf,
+  type FallRule,
   NOISE_MODEL_LOG,
   worseOn,
   outcomeChoices,
@@ -589,13 +591,22 @@ function afterReceipt(x: Experiment, t: Translate): string | null {
 
 // P4-recommended: a judged row says exactly what was compared (the 1% low and the average, on one
 // band) and why that kept or restored the change. Older rows, judged on the 1% low alone, say nothing.
-function comparedReceipt(x: Experiment, t: Translate): string | null {
+export function comparedReceipt(x: Experiment, t: Translate): string | null {
   const avg = x.treatment?.delta_avg_pct;
   const band = x.noise_evidence?.band_pct;
   if (!looksJudged(x) || !x.treatment || band == null || judgedOnNoBaseline(x)) return null;
   const signed = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 10) / 10}`;
   const low = x.treatment.delta_low1_pct;
   const one = (v: number) => String(Math.round(v * 10) / 10);
+  // CR-fall-words-band: a fall rule names the fall it was judged at when that is the band's matching
+  // fall (experiment.rs `fell_words`), never "fell by more than the band".
+  const falls = fallsOf(x);
+  const ruleWords = (key: string, fell?: { band: number; rule: FallRule; v: number }): string => {
+    const fall = fell ? judgedFallOf(fell.band, fell.rule, fell.v) : null;
+    return fall == null || !fell
+      ? t(`lab.experimentBench.${key}`)
+      : t(`lab.experimentBench.${key}Matching`, { fall: one(fall), band: one(fell.band) });
+  };
   // P4-smooth-offer-b: a Smoothest row leads with frame pacing, on its own band, beside the 1% low.
   if (x.outcome === "smoothest") {
     const ev = x.smoothest;
@@ -610,15 +621,16 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
           : pacing == null
             ? "receiptRuleSmoothUnknown"
             : "receiptRuleSmoothInside";
+    const words = ruleWords(rule, rule === "receiptRuleLowFell" ? { band, rule: falls.low, v: low } : undefined);
     if (pacing == null || !ev) {
-      return t("lab.experimentBench.receiptComparedSmoothestUnknown", { low: signed(low), band: one(band), rule: t(`lab.experimentBench.${rule}`) });
+      return t("lab.experimentBench.receiptComparedSmoothestUnknown", { low: signed(low), band: one(band), rule: words });
     }
     return t("lab.experimentBench.receiptComparedSmoothest", {
       pacing: signed(pacing),
       pacingBand: one(ev.band_pct),
       low: signed(low),
       band: one(band),
-      rule: t(`lab.experimentBench.${rule}`),
+      rule: words,
     });
   }
   if (avg == null) return null;
@@ -633,9 +645,10 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
   if (x.outcome === "max-fps") {
     // CR-lesson-fall-band (s37 sonnet SHOULD-FIX): which number fell, read at the fall the record
     // was judged at (`fallsOf`), on the band each was judged on (Maximum FPS: the wider).
-    const falls = fallsOf(x);
-    const avgFell = () => fellOn(avg, avgBandOf(x) ?? band, falls.avg);
-    const lowFell = () => fellOn(low, lowBandOf(x) ?? band, falls.low);
+    const avgBand = avgBandOf(x) ?? band;
+    const lowBand = lowBandOf(x) ?? band;
+    const avgFell = () => fellOn(avg, avgBand, falls.avg);
+    const lowFell = () => fellOn(low, lowBand, falls.low);
     const rule =
       x.verdict === "improved"
         ? putBackAfterBetter
@@ -646,12 +659,20 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
             ? "receiptRuleMaxAvgFell"
             : "receiptRuleLowFell"
           : "receiptRuleMaxInside";
+    const words = ruleWords(
+      rule,
+      rule === "receiptRuleMaxAvgFell"
+        ? { band: avgBand, rule: falls.avg, v: avg }
+        : rule === "receiptRuleLowFell"
+          ? { band: lowBand, rule: falls.low, v: low }
+          : undefined,
+    );
     if (rp)
       return t("lab.experimentBench.journey.realPlay.comparedMaxFps", {
         avg: signed(avg),
         low: signed(low),
         band: one(band),
-        rule: t(`lab.experimentBench.${rule}`),
+        rule: words,
         with: rp.with,
         before: rp.before,
       });
@@ -659,7 +680,7 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
       avg: signed(avg),
       low: signed(low),
       band: one(band),
-      rule: t(`lab.experimentBench.${rule}`),
+      rule: words,
     });
   }
   const rule =
@@ -672,12 +693,20 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
         : low > band
           ? "receiptRuleAvgFell"
           : "receiptRuleInside";
+  const words = ruleWords(
+    rule,
+    rule === "receiptRuleLowFell"
+      ? { band, rule: falls.low, v: low }
+      : rule === "receiptRuleAvgFell"
+        ? { band: avgBandOf(x) ?? band, rule: falls.avg, v: avg }
+        : undefined,
+  );
   if (rp)
     return t("lab.experimentBench.journey.realPlay.compared", {
       low: signed(low),
       avg: signed(avg),
       band: one(band),
-      rule: t(`lab.experimentBench.${rule}`),
+      rule: words,
       with: rp.with,
       before: rp.before,
     });
@@ -685,7 +714,7 @@ function comparedReceipt(x: Experiment, t: Translate): string | null {
     low: signed(low),
     avg: signed(avg),
     band: String(Math.round(band * 10) / 10),
-    rule: t(`lab.experimentBench.${rule}`),
+    rule: words,
   });
 }
 

@@ -159,7 +159,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 import { invoke } from "@tauri-apps/api/core";
-import ExperimentBench from "./ExperimentBench";
+import ExperimentBench, { comparedReceipt } from "./ExperimentBench";
 import { resetJourneyForTests } from "./GuidedJourney";
 import { whenText } from "./journey-realplay";
 import { invalidateProbe, putProbe } from "../data/probe-cache";
@@ -2105,6 +2105,42 @@ describe("ExperimentBench — Maximum FPS, and Smoothest when measured", () => {
     expect(lines[1]).toMatch(/1% low \+20%.*The average stayed inside the band, so the default was kept and the change restored\.$/);
     expect(lines[2]).toMatch(/The average fell by more than the band, so the change was restored\.$/);
     expect(lines[3]).toMatch(/The 1% low fell by more than the band, so the change was restored\.$/);
+  });
+
+  // CR-fall-words-band (s37 opus r2 SHOULD-FIX): a record judged on measured noise of model 3 judges
+  // a fall at the band's matching fall (10% <-> -9.0%, experiment.rs `fell_words`); its rule names
+  // that fall, never "fell by more than the band". An older record keeps the band words.
+  it("names the fall a Worse was judged at when it is the band's matching fall", async () => {
+    const t = i18n.t.bind(i18n);
+    const m3 = (verdict: string, low: number, avg: number, outcome: string, model = 3) =>
+      ({
+        ...judged(verdict, low, avg),
+        outcome,
+        game_noise: { model, low1_band_pct: 10, avg_band_pct: 10 },
+        noise_evidence: { band_pct: 10, measured_noise_pct: null },
+      }) as unknown as Parameters<typeof comparedReceipt>[0];
+    expect(comparedReceipt(m3("regressed", -2, -9.5, "max-fps"), t)).toMatch(
+      / The average fell past −9%, the fall that matches the \+10% band, so the change was restored\.$/,
+    );
+    expect(comparedReceipt(m3("regressed", -9.5, 1, "max-fps"), t)).toMatch(
+      / The 1% low fell past −9%, the fall that matches the \+10% band, so the change was restored\.$/,
+    );
+    expect(comparedReceipt(m3("regressed", -9.5, 1, "recommended"), t)).toMatch(
+      / The 1% low fell past −9%, the fall that matches the \+10% band, so the change was restored\.$/,
+    );
+    expect(comparedReceipt(m3("no-change", 12, -9.5, "recommended"), t)).toMatch(
+      /but the average fell past −9%, the fall that matches its \+10% band, so this isn't a clear win/,
+    );
+    // Judged the band both ways (before model 3): the band words stand.
+    expect(comparedReceipt(m3("regressed", -12, 1, "recommended", 2), t)).toMatch(/ The 1% low fell by more than the band, so/);
+    // A band at the smallest claim is its own fall: the band words stand.
+    const atMin = { ...m3("regressed", -4, 1, "recommended"), noise_evidence: { band_pct: 3, measured_noise_pct: null } } as unknown as Parameters<typeof comparedReceipt>[0];
+    expect(comparedReceipt(atMin, t)).toMatch(/ The 1% low fell by more than the band, so/);
+    await i18n.changeLanguage("zh-CN");
+    const zh = comparedReceipt(m3("regressed", -2, -9.5, "max-fps"), t) ?? "";
+    expect(zh).toContain("平均帧率的下降超过了 −9%（与 +10% 范围相对应的降幅）");
+    expect(zh).not.toMatch(/\{\{|lab\.experimentBench/);
+    await i18n.changeLanguage("en");
   });
 
   it("says the same in zh-CN", async () => {

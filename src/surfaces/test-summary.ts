@@ -315,6 +315,19 @@ export type FallRule = "same" | "matching" | "unknown";
 /** The fall rule of a result's 1% low and of its average. */
 export type Falls = { low: FallRule; avg: FallRule };
 
+/** CR-fall-words-band: the fall a number was judged at when it differs from the band its line names
+ *  (the matching fall, noise model 3 on: a 10% band judges falls at -9.0%), so the words say the fall
+ *  that decided it, as experiment.rs `fell_words` does. Review r1 (sonnet SHOULD-FIX): a record that
+ *  can't say which ("unknown") names the matching fall when the number `v` didn't fall past the band
+ *  itself (only the matching fall can have called it), and the band words when it did (true either
+ *  way). null = the band itself was the fall ("same"), or the two coincide: the plain band words. */
+export function judgedFallOf(band: number, rule: FallRule, v?: number | null): number | null {
+  if (rule === "same" || !Number.isFinite(band)) return null;
+  if (rule === "unknown" && (v == null || !Number.isFinite(v) || v < -band)) return null;
+  const fall = fallPct(band);
+  return Math.abs(fall - band) < 1e-9 ? null : fall;
+}
+
 /** A fall past `hi` is a fall; one inside `lo` is not; between them can't be called. */
 const fallRange = (band: number, rule: FallRule): { lo: number; hi: number } =>
   rule === "same" ? { lo: band, hi: band } : rule === "matching" ? { lo: fallPct(band), hi: fallPct(band) } : { lo: fallPct(band), hi: band };

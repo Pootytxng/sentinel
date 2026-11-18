@@ -10,7 +10,7 @@
 // Real play never records High confidence (experiment.rs `conclude_realplay`), and nothing here shows
 // it either (`realPlayConfidence`).
 
-import { fallsOf, fellOn, worseOn, type Falls } from "./test-summary";
+import { fallsOf, fellOn, judgedFallOf, worseOn, type Falls } from "./test-summary";
 
 /** CR-lesson-fall-band: the falls a real-play record was judged at (`fallsOf`). */
 const realPlayFalls = (exp: RealPlayRecord): Falls =>
@@ -441,13 +441,17 @@ export function realPlayResult(exp: RealPlayRecord, game: string, t: Translate):
       const falls = realPlayFalls(exp);
       // A fall the rule can't call is settled by the verdict (`worseOn`).
       const avgSide = maxFps && worseOn(fellOn(avg, band, falls.avg), fellOn(low, band, falls.low)) === "avg";
-      return t("lab.experimentBench.journey.realPlay.likelyWorse", {
+      // CR-fall-words-band: a fall judged at the band's matching fall names that fall, never "more
+      // than the ±band" (-9.5% against a 10% band fell past -9.0%, not past 10%).
+      const fall = judgedFallOf(band, avgSide ? falls.avg : falls.low, avgSide ? avg : low);
+      return t(fall == null ? "lab.experimentBench.journey.realPlay.likelyWorse" : "lab.experimentBench.journey.realPlay.likelyWorseMatching", {
         action,
         metric: metric(avgSide),
         pct: one(Math.abs(avgSide ? avg : low)),
         with: counted,
         before,
         band: one(band),
+        fall: fall == null ? "" : one(fall),
       });
     }
     if (exp.verdict === "no-change") {
