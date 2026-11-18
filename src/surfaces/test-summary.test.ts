@@ -73,6 +73,15 @@ describe("P4-exit summary on the owner's WARDOGS records", () => {
     }
   });
 
+  it("marks a Trial whose treatment crashed (CR-lesson-crash-not-result), keeping its numbers on the row", () => {
+    const plain = summarizeGame(GAME, experiments, [VFX], sessions)!.tested[0];
+    expect(plain.crashed).toBe(false);
+    const xs = experiments.map((x) => ({ ...x, stop_reason: "crash-during-treatment" }));
+    const row = summarizeGame(GAME, xs, [VFX], sessions)!.tested[0];
+    expect(row.crashed).toBe(true);
+    expect(row.deltaLow1Pct).toBe(plain.deltaLow1Pct);
+  });
+
   it("says which noise band judged it: Compy's 3% minimum, not measured for this game", () => {
     const s = summarizeGame(GAME, experiments, [VFX], sessions)!;
     expect(s.tested[0].noise).toEqual({ band_pct: 3.0, measured_noise_pct: null });
@@ -294,6 +303,15 @@ describe("P5-learned lesson rules", () => {
     ...over,
   });
   const v = (d: string): number | null => (d === "up" ? 5 : d === "down" ? -5 : d === "flat" ? 1 : null);
+
+  // CR-lesson-crash-not-result: a crash decided the Trial's Slower, not a measured fall.
+  it("a crashed treatment teaches no lesson; the next measured result still does", () => {
+    const crashed = row({ verdict: "regressed", deltaLow1Pct: -5, deltaAvgPct: -5, crashed: true });
+    expect(lessonFor([row({ verdict: "regressed", deltaLow1Pct: -5, deltaAvgPct: -5 })])?.rule).toBe("slower-and-less-steady");
+    expect(lessonFor([crashed])).toBeNull();
+    const older = row({ recId: "older", deltaLow1Pct: 5, deltaAvgPct: 1, at: "2026-10-20T10:00:00Z" });
+    expect(lessonFor([crashed, older])?.recId).toBe("older");
+  });
 
   it("each documented rule fires on exactly its condition", () => {
     for (const [key, rule] of Object.entries(LESSON_RULES)) {

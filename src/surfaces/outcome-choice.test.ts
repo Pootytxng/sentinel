@@ -31,6 +31,17 @@ const MAX_KEEP = trial({
 });
 const cand = (passes: boolean, reason: string | null = null): SummaryCandidate => ({ id: "hags", title: "HAGS", passes, reason, detail: null });
 
+describe("CR-lesson-crash-not-result: a crashed treatment is no result", () => {
+  it("a Recommended Trial put back for a crash gives no 'fell' reason, so no choice is offered from it", () => {
+    expect(outcomeChoices(GAME, [REC_OFF, MAX_KEEP], null)).toHaveLength(1);
+    const crashed = trial({ id: "exp:rec", treatment: { delta_low1_pct: -4, delta_avg_pct: 6, crashed: true }, stop_reason: "crash-during-treatment" });
+    expect(outcomeChoices(GAME, [crashed, MAX_KEEP], null)).toEqual([]);
+    // The stop reason alone (stacked with another tag) says the same.
+    const stacked = trial({ id: "exp:rec", stop_reason: "crash-during-treatment; target-unreadable-at-conclude" });
+    expect(outcomeChoices(GAME, [stacked, MAX_KEEP], null)).toEqual([]);
+  });
+});
+
 describe("P5-outcomes: when Recommended and Maximum FPS disagree", () => {
   it("two differing results give one choice, naming the trade and the Better Trial", () => {
     const [c, ...rest] = outcomeChoices(GAME, [REC_OFF, MAX_KEEP], [cand(false, "already-set-by-compy")]);
