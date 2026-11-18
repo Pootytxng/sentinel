@@ -196,6 +196,17 @@ describe("payoffFor: measured recurrence or absence, never a verdict", () => {
     const driver = sess("2026-10-24T13:00:00Z", { low1_fps_est: 79, hw_fingerprint: { hash: "hw9", gpu: "GPU A", gpu_driver: "new", ram_gb: 16, display: "" } });
     expect(payoffFor(onRig, a, [], [ok1, short, rig, driver], now)).toEqual({ kind: "sessions-steady", total: 2 });
   });
+  it("stutter: a session is back past the band's matching fall, the line What changed calls a regression at", () => {
+    // CR-what-changed-fall (s38 opus r2 MUST-FIX): a 25% band's matching fall is 20%. A session 22%
+    // under the steady 1% low (80 -> 62.4) is what What changed calls regressed, so it is back.
+    const st = pickCareStep(null, stutter("Roll back the driver"))! as Extract<CareStep, { source: "stutter" }>;
+    const wide = { ...st, baseline: { ...st.baseline, noiseFloorPct: 25 } } as CareStep;
+    const a = { at: anchorAt, basis: "shown" as const };
+    const fell22 = sess("2026-10-22T10:00:00Z", { low1_fps_est: 62.4 });
+    const fell18 = sess("2026-10-23T10:00:00Z", { low1_fps_est: 65.6 });
+    expect(payoffFor(wide, a, [], [fell22, fell18], now)).toEqual({ kind: "sessions-back", bad: 1, total: 2 });
+    expect(payoffFor(wide, a, [], [fell18, sess("2026-10-24T10:00:00Z", { low1_fps_est: 81 })], now)).toEqual({ kind: "sessions-steady", total: 2 });
+  });
   it("stutter: later reads measure against the baseline STORED at first show", () => {
     const first = pickCareStep(null, stutter("Roll back the driver"))!;
     const anchor1 = anchorFor(first, [], new Date("2026-10-21T00:00:00Z"));

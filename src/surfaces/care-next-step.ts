@@ -20,7 +20,8 @@
 //     RESOLUTION_MIN_DAYS whole days → a measured absence, qualified when sources were skipped
 //     (a skipped source can hide a record); less → too soon;
 //   * a stutter step counts full-length (MIN_BASELINE_SAMPLES) sessions of the same game on the same
-//     rig after the anchor, against the STORED steady 1% low and noise floor (no new threshold):
+//     rig after the anchor, against the STORED steady 1% low and the noise floor's matching fall
+//     (`fallPct`, the line What changed calls a regression at; no new threshold):
 //     any below → "came back in K of N"; all within and at least MIN_PAYOFF_SESSIONS → "stayed
 //     within"; else not enough play.
 //   No outcome says it is fixed: an absence is a measurement, not proof of the cause.
@@ -28,6 +29,7 @@ import type { CrashIncident, SessionSummary, WhatChangedReport } from "../types"
 import { APP_KINDS, RESOLUTION_MIN_DAYS, appOf } from "../data/blackbox-resolution";
 import { MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { MAX_GOOD_CANDIDATES } from "./StutterCompare";
+import { fallPct } from "./test-summary";
 
 export { RESOLUTION_MIN_DAYS };
 /** Measured sessions of the game needed before "it stayed within" is said at all. */
@@ -226,7 +228,10 @@ export function payoffFor(
       (!rig || !baseRig || sameRig(rig, baseRig))
     );
   });
-  const floor = base.low1 * (1 - base.noiseFloorPct / 100);
+  // CR-what-changed-fall (s38 opus r2 MUST-FIX): a session is back below the steady 1% low by the
+  // same line What changed calls a regression at: a fall past the band's matching fall (`fallPct`;
+  // at the 3% minimum it is the band itself), so "stayed steady" never sits on a regressed reading.
+  const floor = base.low1 * (1 - fallPct(base.noiseFloorPct) / 100);
   const bad = since.filter((s) => s.low1_fps_est < floor).length;
   if (bad > 0) return { kind: "sessions-back", bad, total: since.length };
   if (since.length >= MIN_PAYOFF_SESSIONS) return { kind: "sessions-steady", total: since.length };
