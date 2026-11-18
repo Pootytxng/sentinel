@@ -212,8 +212,9 @@ fn rec_of_label(label: &str) -> Option<&'static str> {
 /// from the contract, which a start fills step by step: a read in between would see no plan step yet.
 /// Left alone = a Trial or the benchmark held the plan or a setting of it; otherwise the start set the
 /// max-performance plan (or found it already active, or found none: the same plan in every session
-/// on this PC, so it compares alike). Known limit (review r2, opus NIT 1): a start that couldn't read
-/// the current plan's GUID skips the switch and still reads as "set".
+/// on this PC, so it compares alike). A start that couldn't read the current plan's GUID no longer
+/// skips the switch quietly (review r2, opus NIT 1): it fails with nothing changed
+/// (CR-plan-unread-rollbacks), so no session reads as "set" on an unread plan.
 pub(crate) fn plan_handling(file: &SessionFile) -> crate::sessions::GamingModePlan {
     if file.left_alone.iter().any(|l| l == LABEL_POWER || l == LABEL_POWER_SETTING_HELD) {
         crate::sessions::GamingModePlan::LeftAlone
