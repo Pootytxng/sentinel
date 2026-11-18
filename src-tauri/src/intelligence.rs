@@ -249,6 +249,18 @@ fn str_changed(a: &str, b: &str) -> bool {
     !a.is_empty() && !b.is_empty() && a != b
 }
 
+/// The driver reads as changed only when both probes read one and they name different drivers
+/// (`hardware::same_driver`: the same version in another case or spacing is the same driver).
+/// A blank or whitespace-only read is a failed probe, never a driver.
+fn driver_changed(a: &str, b: &str) -> bool {
+    !a.trim().is_empty() && !b.trim().is_empty() && !crate::hardware::same_driver(a, b)
+}
+
+/// The driver going unread -> read (information gain; a whitespace-only read is still unread).
+fn driver_gained(a: &str, b: &str) -> bool {
+    a.trim().is_empty() && !b.trim().is_empty()
+}
+
 /// Append `snap` iff it adds information vs the latest snapshot: a real change in any
 /// identity field, or a field going unknown→known (information gain — recorded but never
 /// presented as a change event). A field going known→unknown is a probe failure and
@@ -262,8 +274,8 @@ pub(crate) fn append_if_changed(store: &mut IntelligenceStore, snap: IdentitySna
     let gained_str = |a: &str, b: &str| a.is_empty() && !b.is_empty();
     let should = str_changed(&last.gpu, &snap.gpu)
         || gained_str(&last.gpu, &snap.gpu)
-        || str_changed(&last.gpu_driver, &snap.gpu_driver)
-        || gained_str(&last.gpu_driver, &snap.gpu_driver)
+        || driver_changed(&last.gpu_driver, &snap.gpu_driver)
+        || driver_gained(&last.gpu_driver, &snap.gpu_driver)
         || str_changed(&last.windows_build, &snap.windows_build)
         || gained_str(&last.windows_build, &snap.windows_build)
         || match (last.windows_ubr, snap.windows_ubr) {
@@ -558,16 +570,17 @@ impl IdentityDeltaScan {
             });
         }
 
-        if !driver.is_empty() {
+        if !driver.trim().is_empty() {
             // A GPU swap trivially changes the driver string — that's the hardware event's
             // story, not a driver update. Reset tracking instead of emitting a false event.
             if gpu_swapped {
                 self.last_driver = None;
             }
             if let Some((prev, prev_at)) = &self.last_driver {
-                if prev != driver {
+                if !crate::hardware::same_driver(prev, driver) {
                     out.push(ObservedCandidate {
-                        to_key: format!("driver|{driver}"),
+                        // Keyed as `same_driver` reads it, so both streams' sighting dedups.
+                        to_key: format!("driver|{}", driver.trim().to_ascii_lowercase()),
                         ev: EventRecord {
                             justified_by_experiment: None,
                             id: format!("{id_seed}:{at}:gpu-driver-change"),
@@ -3584,6 +3597,56 @@ mod tests {
                 "2026-07-11T10:00:00Z".to_string()
             ))
         );
+    }
+
+    #[test]
+    fn a_driver_written_in_another_case_is_no_driver_change_on_the_timeline() {
+        // CR-driver-compare-rest (s38 opus SHOULD-FIX): the timeline, the snapshot save and both
+        // streams' dedup read a driver as `hardware::same_driver` does.
+        let snaps = vec![
+            mk_snap("2026-07-08T09:00:00Z", "Adrenalin 25.5.1", "26100", "Balanced"),
+            mk_snap("2026-07-09T09:00:00Z", " ADRENALIN 25.5.1 ", "26100", "Balanced"),
+            mk_snap("2026-07-12T09:00:00Z", "Adrenalin 25.6.0", "26100", "Balanced"),
+        ];
+        let mut s0 = mk_session("2026-07-09T10:00:00Z", "cp2077.exe", 82.0, 121.0);
+        s0.hw_fingerprint = Some(mk_fp("adrenalin 25.5.1"));
+        let mut s1 = mk_session("2026-07-11T10:00:00Z", "cp2077.exe", 80.0, 120.0);
+        s1.hw_fingerprint = Some(mk_fp("ADRENALIN 25.6.0"));
+        let sessions = vec![s0, s1];
+        let asm = assemble_timeline(&empty_inputs(&[], &sessions, &snaps));
+        let drv: Vec<&EventRecord> = asm
+            .events
+            .iter()
+            .filter(|e| e.event_type == "gpu-driver-change")
+            .collect();
+        assert_eq!(drv.len(), 1, "one real change, seen by both streams in two spellings");
+        assert_eq!(
+            drv[0].observed_between,
+            Some((
+                "2026-07-09T10:00:00Z".to_string(),
+                "2026-07-11T10:00:00Z".to_string()
+            ))
+        );
+        // The save appends nothing for a respelled driver, and still appends a new one.
+        let mut store = IntelligenceStore::default();
+        assert!(append_if_changed(&mut store, snaps[0].clone()));
+        assert!(!append_if_changed(&mut store, snaps[1].clone()), "a respelled driver is no change");
+        assert!(append_if_changed(&mut store, snaps[2].clone()), "a new driver is");
+        // A whitespace-only read is a failed probe (s39 sonnet SHOULD-FIX): no event, no save.
+        let blank = vec![
+            mk_snap("2026-07-08T09:00:00Z", "Adrenalin 25.5.1", "26100", "Balanced"),
+            mk_snap("2026-07-09T09:00:00Z", "  ", "26100", "Balanced"),
+            mk_snap("2026-07-10T09:00:00Z", "Adrenalin 25.5.1", "26100", "Balanced"),
+        ];
+        let asm = assemble_timeline(&empty_inputs(&[], &[], &blank));
+        assert!(asm.events.iter().all(|e| e.event_type != "gpu-driver-change"), "a blank read is no change");
+        let mut store = IntelligenceStore::default();
+        assert!(append_if_changed(&mut store, blank[0].clone()));
+        assert!(!append_if_changed(&mut store, blank[1].clone()), "a blank read adds nothing");
+        // A blank first read then a real one is an information gain, still saved.
+        let mut store = IntelligenceStore::default();
+        assert!(append_if_changed(&mut store, blank[1].clone()));
+        assert!(append_if_changed(&mut store, blank[2].clone()), "unread -> read is saved");
     }
 
     #[test]
