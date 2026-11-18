@@ -1222,7 +1222,7 @@ pub(crate) mod tests {
     }
 
     fn change<'a>(id: &'a str, applied_at: &'a str, rolled_back_at: Option<&'a str>) -> LedgerEntryRef<'a> {
-        LedgerEntryRef { id, rec_id: id, applied_at, applied: rolled_back_at.is_none(), rolled_back_at, outside_recorded_at: None }
+        LedgerEntryRef { id, rec_id: id, applied_at, applied: rolled_back_at.is_none(), rolled_back_at, outside_recorded_at: None, outside_earlier_at: &[] }
     }
 
     /// An evening of play with nothing changed: four sessions, 1% low 150 / 156 / 147 / 153.
@@ -1725,6 +1725,16 @@ pub(crate) mod tests {
         let mut outside = rob_trials();
         outside[3].outside_recorded_at = Some("2026-11-11T13:40:00+00:00");
         assert_eq!(as_is_run(&s, &s[11], &outside, 14).len(), 1, "only 13:55 itself");
+        // CR-outside-followups (d): a record made anew later keeps the replaced one's time as a move.
+        // The settled row, recorded outside Compy at 08:00 and again after the whole day: only the
+        // newest time (what the row kept before) leaves all nine sessions in the run.
+        let earlier = ["2026-11-11T08:00:00+00:00".to_string()];
+        let mut again: Vec<LedgerEntryRef<'_>> = rob_trials();
+        again[0].outside_recorded_at = Some("2026-11-12T09:00:00+00:00");
+        assert_eq!(as_is_run(&s, &s[11], &again, 14).len(), 9, "newest time alone: the 08:00 move is lost");
+        again[0].outside_earlier_at = &earlier;
+        let run = as_is_run(&s, &s[11], &again, 14);
+        assert!(run.len() == 4 && run.iter().all(|r| r.started_at.as_str() >= "2026-11-11T08:00"), "{}", run.len());
         // An undo inside an after-session (not entirely between two as-is sessions) is no excursion.
         let mut late = rob_trials();
         late[3] = change("ve-9", "2026-11-11T13:27:06+00:00", Some("2026-11-11T13:56:30+00:00"));
