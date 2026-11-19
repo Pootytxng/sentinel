@@ -84,6 +84,13 @@ pub(crate) struct IncidentObserverState {
     /// for a rescan on mount. Always `None` when there is no pending id, and cleared with it.
     #[serde(default)]
     pub(crate) pending_card: Option<PendingCareIncident>,
+    /// When the seeding scan ran (RFC3339). A crash whose own time is before this happened before
+    /// Compy watched this machine, so it is never announced, even when the seeding scan didn't see it
+    /// (CR-1102-left: a first-ever scan whose readers failed seeded an empty world, and the next scan
+    /// that could read announced the old crashes as news). `None` on a state seeded by an older build:
+    /// no such rule, as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) seeded_at: Option<String>,
 }
 
 /// One remembered incident identity. Timestamps and matching traits only — the crash's contents are
@@ -366,6 +373,7 @@ pub(crate) fn observe(
             }
         }
         state.last_scan_at = Some(now.to_rfc3339());
+        state.seeded_at = Some(now.to_rfc3339());
         outcome.seeded = true;
         prune(state, now);
         return outcome;
@@ -375,11 +383,14 @@ pub(crate) fn observe(
     // review 2026-11-02). Windows keeps its crash records for months while `prune` forgets a row 30
     // days after it was first seen, so an old crash still in the report read as unseen on day 31 and
     // was announced again. A crash older than the window is never news; one with no readable time
-    // can't be shown to be news, so it isn't announced either.
+    // can't be shown to be news, so it isn't announced either. Nor is one that happened before the
+    // seeding scan (CR-1102-left): it is pre-Compy history the seeding scan failed to read, not news.
+    let seeded_at = state.seeded_at.as_deref().and_then(parse_ts);
+    let before_seed = |i: &Incident| seeded_at.is_some_and(|s| parse_ts(&i.when).is_some_and(|t| t < s));
     let fresh: Vec<&Incident> = qualifying
         .iter()
         .copied()
-        .filter(|i| state.find(&i.incident_id).is_none() && happened_within_retention(i, now))
+        .filter(|i| state.find(&i.incident_id).is_none() && happened_within_retention(i, now) && !before_seed(i))
         .collect();
 
     for inc in &fresh {
@@ -1065,6 +1076,42 @@ mod tests {
         let out = observe(&r, at("2026-08-21T10:00:00Z"), &mut s);
         assert!(out.toast.is_none());
         assert!(out.newly_observed.is_empty());
+    }
+
+    // CR-1102-left (codebase review 2026-11-02): a first-ever scan whose readers failed saw no crash
+    // at all, seeded that empty world, and the next scan that could read announced the machine's old
+    // crashes as news. A crash from before the seeding scan is never news, whatever it saw.
+    #[test]
+    fn a_crash_from_before_a_seeding_scan_that_could_not_read_it_is_never_announced() {
+        let mut s = IncidentObserverState::fresh();
+        let failed = BlackBoxReport { skipped_sources: vec!["Event Log".into()], ..Default::default() };
+        assert!(observe(&failed, at("2026-10-30T09:00:00Z"), &mut s).seeded);
+        // The state survives a restart with the seed time.
+        let mut s: IncidentObserverState = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(s.seeded_at.as_deref().and_then(parse_ts), Some(at("2026-10-30T09:00:00Z")));
+
+        let old = inc("old", IncidentKind::AppCrash, "2026-10-29T21:42:00Z", Some("game.exe"));
+        let out = observe(&report(vec![old.clone()]), at("2026-10-30T10:00:00Z"), &mut s);
+        assert!(out.toast.is_none() && out.newly_observed.is_empty(), "{out:?}");
+        assert!(s.pending_home_incident_id.is_none() && s.pending_card.is_none());
+
+        // A crash after the seeding scan still is news, beside the old one.
+        let new = inc("new", IncidentKind::AppCrash, "2026-10-30T09:30:00Z", Some("game.exe"));
+        let out = observe(&report(vec![new, old]), at("2026-10-30T11:00:00Z"), &mut s);
+        assert_eq!(out.newly_observed, vec!["new".to_string()]);
+        assert_eq!(out.toast.as_ref().map(|c| c.incident_id.as_str()), Some("new"));
+    }
+
+    // A state seeded by an older build has no seed time: nothing about it changes.
+    #[test]
+    fn a_state_seeded_before_the_seed_time_was_kept_reads_as_before() {
+        let old_build = r#"{"schema_version":1,"last_scan_at":"2026-10-30T09:00:00Z","seen":[],"pending_home_incident_id":null}"#;
+        let mut s: IncidentObserverState = serde_json::from_str(old_build).unwrap();
+        assert!(s.seeded_at.is_none());
+        let earlier = inc("earlier", IncidentKind::AppCrash, "2026-10-29T21:42:00Z", Some("game.exe"));
+        let out = observe(&report(vec![earlier]), at("2026-10-30T10:00:00Z"), &mut s);
+        assert_eq!(out.newly_observed, vec!["earlier".to_string()]);
+        assert!(!serde_json::to_string(&s).unwrap().contains("seeded_at"), "no seed time is invented");
     }
 
     // ── The watermark across a closed app ───────────────────────────────────────────────────────
