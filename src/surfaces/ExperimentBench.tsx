@@ -1171,14 +1171,19 @@ export default function ExperimentBench({
       experiments.filter((e) => at(e) >= at(x)),
       x.game,
     );
-    const assumedStatesFigure = x.assumed_band != null && (x.assumed_band.measured_low1_pct != null || since != null);
+    // CR-noise-footnote-pair: a figure only an older record carries is named as measured for an
+    // earlier result, so this footnote never says "still isn't measured" beside a line quoting it.
+    // Strictly older records only (sonnet r1), so "earlier" is true by construction.
+    const earlier = since == null ? measuredGameNoise(experiments.filter((e) => at(e) < at(x)), x.game) : null;
+    const assumedStatesFigure =
+      x.assumed_band != null && (x.assumed_band.measured_low1_pct != null || since != null || earlier != null);
     const judged = x.noise_evidence
       ? isRealPlay(x)
         ? realPlayNoiseLine(x.noise_evidence.band_pct, realPlayCounts(x), prettyGameName(x.game) || x.game, t)
         : noiseLine(x.noise_evidence, x.game, t, x.game_noise, x.outcome, since, assumedStatesFigure) || null
       : null;
     // P4-judge-noisy: a result judged on the assumed band says so beside its own line.
-    const assumed = x.assumed_band ? assumedBandLine(x.assumed_band, x.game, t, since) : null;
+    const assumed = x.assumed_band ? assumedBandLine(x.assumed_band, x.game, t, since, earlier) : null;
     return judged && assumed ? `${judged} ${assumed}` : (assumed ?? judged);
   });
   // TG-drift-words: a Trial judged too noisy names what Compy recorded differently between its two

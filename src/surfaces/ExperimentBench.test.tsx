@@ -3673,7 +3673,9 @@ describe("s46: footnotes never call a game's noise unmeasured when the page quot
     expect(notes().some((n) => n.includes("WardogsClient's measured noise is ±21.6% (from 6 sessions)"))).toBe(true);
   });
 
-  it("an older record's figure is not 'since': the newer unmeasured row keeps the unmeasured wording", async () => {
+  // CR-noise-footnote-pair (s51 screen check): the newer row used to say "still isn't measured" beside
+  // the older row quoting ±21.6%. An older figure is not "since", and this result was not judged on it.
+  it("an older record's figure is not 'since', and the newer row never says it still isn't measured beside it", async () => {
     state.gate = true;
     state.experiments = [
       { ...KEPT_EXPERIMENT, id: "exp:old", game: "WardogsClient.exe", created_at: "2026-11-01T00:00:00Z", concluded_at: "2026-11-01T01:00:00Z", noise_evidence: judgedUnmeasured, assumed_band: band(21.6, 6) },
@@ -3683,7 +3685,24 @@ describe("s46: footnotes never call a game's noise unmeasured when the page quot
     await waitFor(() => expect(notes()).toHaveLength(2));
     const all = notes().join("\n");
     expect(all).not.toContain("has since been measured");
-    expect(all).toContain("WardogsClient's noise still isn't measured");
+    expect(all).not.toContain("still isn't measured");
+    expect(all).not.toContain("hasn't been measured yet");
+    expect(all).toContain(
+      "Compy measured WardogsClient's noise at ±21.6% (from 6 sessions) for an earlier result, but couldn't measure it for this one, so treat this result as unconfirmed.",
+    );
+  });
+
+  it("an older record of ANOTHER game is never named as this game's earlier figure", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, id: "exp:b", game: "ROB RUN.exe", created_at: "2026-11-01T00:00:00Z", concluded_at: "2026-11-01T01:00:00Z", noise_evidence: judgedUnmeasured, assumed_band: band(29, 6) },
+      { ...KEPT_EXPERIMENT, id: "exp:a", game: "WardogsClient.exe", created_at: "2026-11-12T00:00:00Z", concluded_at: "2026-11-12T01:00:00Z", noise_evidence: judgedUnmeasured, assumed_band: band(null, null) },
+    ];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(notes()).toHaveLength(2));
+    const a = notes().find((n) => n.includes("WardogsClient"))!;
+    expect(a).toContain("WardogsClient's noise still isn't measured");
+    expect(a).not.toContain("29%");
   });
 
   it("one game's footnote never quotes another game's figure", async () => {

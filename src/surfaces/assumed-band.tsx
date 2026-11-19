@@ -24,7 +24,16 @@ type Translate = (key: string, options?: Record<string, unknown>) => string;
 // `since`: the same game's noise as the page's other records now carry it (test-summary.ts
 // `measuredGameNoise`). A record whose own label has no figure is then said to have been unmeasured
 // WHEN JUDGED, never "still isn't measured" beside a line that quotes the figure.
-export function assumedBandLine(a: AssumedBand, game: string, t: Translate, since?: { pct: number; sessions: number } | null): string {
+// `earlier` (CR-noise-footnote-pair): the figure only an OLDER record carries. It was never measured
+// "since" this result, and this result was not judged on it; the line names it as measured for an
+// earlier result and says Compy couldn't measure it for this one, never "still isn't measured".
+export function assumedBandLine(
+  a: AssumedBand,
+  game: string,
+  t: Translate,
+  since?: { pct: number; sessions: number } | null,
+  earlier?: { pct: number; sessions: number } | null,
+): string {
   const pct = (v: number) => String(Math.round(v * 10) / 10);
   const name = prettyGameName(game) || game;
   if (a.measured_low1_pct == null && since != null)
@@ -33,6 +42,13 @@ export function assumedBandLine(a: AssumedBand, game: string, t: Translate, sinc
       game: name,
       measured: pct(since.pct),
       sessions: since.sessions,
+    });
+  if (a.measured_low1_pct == null && earlier != null)
+    return t("lab.experimentBench.assumedBandMeasuredEarlier", {
+      assumed: pct(a.assumed_pct),
+      game: name,
+      measured: pct(earlier.pct),
+      sessions: earlier.sessions,
     });
   if (a.measured_low1_pct == null) return t("lab.experimentBench.assumedBandUnmeasured", { assumed: pct(a.assumed_pct), game: name });
   const [assumed, measured, sessions] = [pct(a.assumed_pct), pct(a.measured_low1_pct), a.measured_sessions ?? 0];

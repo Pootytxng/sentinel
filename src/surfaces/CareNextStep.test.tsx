@@ -364,7 +364,9 @@ describe("P6-next r2: separate steps stay separate; App crash / hang name the ap
     const { container } = render(<BlackBox />);
     fireEvent.click(screen.getByRole("button", { name: /scan/i }));
     await waitFor(() => expect(container.querySelector(".bb-next")).not.toBeNull());
-    expect(container.querySelector(".bb-next-payoff")!.textContent).toMatch(/Valorant\.exe crashed again\. 1 record since then/);
+    expect(container.querySelector(".bb-next-payoff")!.textContent).toMatch(/Valorant crashed again\. 1 record since then/);
+    // CR-noise-footnote-pair: named as the other rooms name it; the receipt keeps Windows' own name.
+    expect(container.querySelector(".bb-next-payoff")!.textContent).not.toContain(".exe");
     cleanup();
 
     localStorage.setItem(SHOWN_KEY, JSON.stringify({ "incident|App hang|game.exe|H|Detail text.": "2026-10-01T00:00:00Z" }));
@@ -372,7 +374,7 @@ describe("P6-next r2: separate steps stay separate; App crash / hang name the ap
     const r2 = render(<BlackBox />);
     fireEvent.click(screen.getByRole("button", { name: /scan/i }));
     await waitFor(() => expect(r2.container.querySelector(".bb-next")).not.toBeNull());
-    expect(r2.container.querySelector(".bb-next-payoff")!.textContent).toMatch(/No Game\.exe hang recorded in the \d+ days since/);
+    expect(r2.container.querySelector(".bb-next-payoff")!.textContent).toMatch(/No Game hang recorded in the \d+ days since/);
   });
 
   it("without a named app the kind-only line stays", () => {
