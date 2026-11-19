@@ -20,7 +20,7 @@ export function wordFromBand(band: ConfidenceBand | "high" | "medium" | "low" | 
 }
 
 /** A recommendation's provenance: Verified = Compy read the fact (Known); measured-signal = measured
- *  elsewhere (Measured, as `provenance.ts` already labels it); expected-impact = Expected. */
+ *  elsewhere (`provenance.ts` labels the chip "Measured elsewhere"; the word here is Measured); expected-impact = Expected. */
 export function wordFromProvenance(p: Provenance): ConfidenceWord {
   return p === "verified" ? "known" : p === "measured-signal" ? "measured" : p === "expected-impact" ? "expected" : "unknown";
 }

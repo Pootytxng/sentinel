@@ -524,7 +524,7 @@ describe("ExperimentBench (armed)", () => {
 
     const order = [...document.querySelectorAll(".exp-order-list li")].map((li) => li.textContent);
     expect(order).toEqual([
-      "Measured tweak backed by measurements; low risk.",
+      "Measured tweak shown to help in measurements elsewhere; low risk.",
       "Unmeasured tweak expected to help, not measured; moderate risk.",
     ]);
     expect(screen.getByText("Suggested order to test:")).toBeInTheDocument();
@@ -2280,6 +2280,20 @@ describe("ExperimentBench — the next change to test after a Trial", () => {
     expect(line).not.toHaveTextContent("has a result");
     expect(next).toHaveTextContent("Compy doesn't know how big any change's effect would be");
     expect(screen.queryByRole("button", { name: "Set up this test" })).toBeNull();
+  });
+
+  // The suggested-order list does not drop a change already judged on this PC (re-testing is
+  // allowed), so the evidence phrase must stay true for it: it says where the evidence is from and
+  // never "not measured on this PC".
+  it("a change with a judged Trial on this PC shows the same evidence phrase, never 'not measured on this PC'", async () => {
+    state.gate = true;
+    state.recs = [{ ...cand("hags", "Hardware-accelerated GPU scheduling", 1, "measured"), risk: "low" }];
+    state.experiments = [KEPT_EXPERIMENT];
+    render(<ExperimentBench />);
+    await screen.findByText("Suggested order to test:");
+    const li = document.querySelector(".exp-order-list li")!;
+    expect(li.textContent).toContain("shown to help in measurements elsewhere; low risk.");
+    expect(document.body.textContent).not.toContain("not measured on this PC");
   });
 
   it("offers nothing before a Trial concludes in this visit", async () => {

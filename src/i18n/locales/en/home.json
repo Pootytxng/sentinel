@@ -600,10 +600,10 @@
       "tag": "THE SEATBELT",
       "title": "One click to apply. One click to take it back.",
       "demoName": "Power plan",
-      "demoSub": "Recommended: High performance · Current: Balanced",
+      "demoSub": "Recommended: High performance",
       "undoAria": "Undo power plan (demo)",
       "applyAria": "Apply power plan (demo)",
-      "ledger": "Trust Ledger — power plan · Balanced → High performance · just now",
+      "ledger": "Trust Ledger — power plan → High performance · just now",
       "bodyPre": "Try it — the switch is live (and changes nothing here). Every real change lands in the",
       "bodyPost": "tab's ledger with its before-state. Undoable today, undoable in six months."
     },

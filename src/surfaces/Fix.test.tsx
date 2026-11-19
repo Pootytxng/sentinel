@@ -410,6 +410,15 @@ describe("Fix", () => {
     expect(screen.queryByRole("button", { name: /Apply all safe fixes/ })).toBeNull();
   });
 
+  // s49 fresh-PC pass: a row tagged just "Measured" read as "measured on this PC" on a PC with no
+  // measurements. The tag says whose measurement it is.
+  it("a third-party-measured row's tag says it was measured elsewhere, not on this PC", () => {
+    render(<Fix recs={[rec("game-mode", false, "measured-signal")]} {...baseProps} />);
+    const chips = [...document.querySelectorAll(".fix-evidence")].map((e) => e.textContent);
+    expect(chips).toContain("Measured elsewhere");
+    expect(chips).not.toContain("Measured");
+  });
+
   it("toggling a worth-fixing switch routes through onToggleRec with the rec id", () => {
     const onToggleRec = vi.fn();
     render(<Fix recs={[rec("game-mode", false)]} {...baseProps} onToggleRec={onToggleRec} />);
