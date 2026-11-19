@@ -505,6 +505,12 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       NVIDIA card only NVML reports leaves a session's peak graded (the ungrade rule reads DXGI only); `elevate_and_wait` waits with no timeout while
       the ledger is locked (`actions.rs`); core parking flags any non-performance plan with minimum cores at 100;
       drive health and memory speed or channels never rank as limiters.
+      Care's first-ever scan done s47 (CODE-ONLY, not pushed, not installed; SHA in the session log): the seeding scan's
+      time is kept (`IncidentObserverState.seeded_at`, additive) and a crash whose own time is before it is never
+      announced, so a seed whose readers failed no longer lets the next readable scan toast old crashes; a state seeded
+      by an older build has no seed time and reads as before (a downgraded build drops the field: back to old
+      behaviour). 1 test fails with the rule neutralized. Review sonnet r1 APPROVE-WITH-NITS (NITs not taken: clamp a
+      wrong clock, an equal-time test, the `last_scan_at` doc).
       Core parking done `750b6034`, `0f6b6c4e` (2026-11-11 s16-s18, leftovers.rs only, read-only, not installed): 100%
       is flagged only on the stock Balanced plan (class, or the words for an older probe without a class); custom,
       vendor and unread plans are not flagged. cargo `leftovers::` 27/0, clippy clean; sonnet APPROVE-WITH-NITS, no
@@ -631,7 +637,7 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       unjudged); route them through the newest applied row with (b)-(d), two reviews.
       s44 note: (b) is already done on `main` (s27, P4-noise-sf: `current_power_plan_guid` reads the GUID by shape via
       `active_plan_guid_of`, no English label). Left: (c), (d), (f).
-- [ ] [CORRECT] **CR-outside-followups** (review SHOULD-FIX of CR-unconfirmed-remedy, Rust + TS) (a) stamp the active plan GUID on
+- [x] [CORRECT] **CR-outside-followups** (review SHOULD-FIX of CR-unconfirmed-remedy, Rust + TS) (a) stamp the active plan GUID on
       each session or the Trial record, so a plan switched away and back between start and conclude is caught; (b) Test →
       Applied & history shows a recorded row as "changed outside Compy" (`types.ts` field + a note) instead of an active
       change with only the undo, and Game Readiness stops flagging it as drifted; (c) the remedy panel re-fetches its offer
@@ -665,6 +671,16 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       as-is sessions, with the earlier time 4. cargo --lib 2018/0, clippy clean. Reviews r1 opus + sonnet
       APPROVE-WITH-NITS (exact-count NIT taken; unbounded list and corrupt-value NITs not taken). TS `trialMovedSince`
       unchanged (it asks "moved after", which the newest time already answers). Left: (a).
+      (a) found already done (s47, read-only from the code): TG-context v1 (s33) stamps every FPS session with the
+      active plan GUID at its start and whether it changed by its end (`monitoring.rs` capture thread,
+      `GameStateFingerprint::with_power_plan`), and one rule, `experiment::plan_mismatch` (s40/s41), confounds a
+      two-session Trial, real play's pins and with-change sessions, and the debrief on a different, changed or unread
+      plan. A plan switched away and back strictly between two sessions leaves both measured on the same plan, which
+      is what the comparison asks. Residual queued: CR-plan-mid-session.
+- [ ] [CORRECT] **CR-plan-mid-session** (s47, from CR-outside-followups (a)) A plan switched away and back INSIDE one
+      session (start and end reads equal) is not seen: the plan is read only at the capture's start and save. Read it
+      on the capture's existing tick (cheaply, e.g. the registry's active scheme, not a powercfg spawn per tick) and
+      record "changed during" when any read differs. Measurement: opus + sonnet. Low odds (outside Compy, mid-game).
 - [ ] [POLISH] **CR-zh-readiness-rest** (left by CR-zh-readiness-words) The other limiter rows are still English in zh-CN: the
       install-drive (9 sentences), applied-changes (drift counts + kept-outside titles) and fps-monitoring checks, and
       priorities.rs's own rows (pending safe tweaks, startup load, Memory Integrity); and the console / Check rows print
@@ -2799,9 +2815,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-17 s32 (scheduled, CODE-ONLY: owner in Firefox, no game): CR-undo-entry-disable `f5f2feae` (this docs commit on
-  the same branch, merged --no-ff to main; TS only, no review needed). tsc 0, full vitest 545/548 (3 site-app). One
-  item. Not pushed (CODE-ONLY): main is 3 ahead of GitHub; the next FULL session pushes and installs.
 - 2026-11-16/17 s33 (FULL; coordinator-assigned; a server restart at ~21:20 ended the first half, then the owner's game
   ran until after 01:31; resumed 03:03): reviewed s32's CR-undo-entry-disable (opus + sonnet AWN, no MUST-FIX).
   Landed CR-tuning-temp-comparability (`eb81a9f2`), CR-lesson-avg-band (`1a3882a7`, adds
@@ -2900,6 +2913,15 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
 - 2026-11-18 ~11:50-12:48 s43 (coordinator-assigned from the HQ session; preflight CODE-ONLY, owner at the PC; pushes and install on the owner's 11:49 "go all"): catch-up push of s42 refused twice by the gate (affordance census lost realPlay.likelyWorse to a chosen-key t() call, then the locale parity guard on the first fix); fixed `2e22996b`, push PASS. Landed CR-plan-write-recorded-guid + CR-care-unread-rig (merge `b09c4443`; opus r1 + sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken `ffbf619e`, no r2); old-code proof 3 + 1 + 1 tests fail; cargo --lib 2016/0, clippy clean. CR-plan-compare-rest ticked (rest is POLISH). TG-salvage and TG-passive-band parked as POLISH on the owner's word. Push 2 PASS (`2e22996b..a29c7b62`, vitest 551 files / 10828 tests, cargo --lib 2016/0). Installed `a29c7b62fa89a74791dfeb19f771bab10758324f` (runtime proof `a29c7b62` release, shell 0.9.26, attempt 1); RELEASE_STATE stamped. Tester package refreshed (`C:\Users\Kuya\Desktop\Compy-tester-a29c7b62.zip`), not sent.
 - 2026-11-18 ~13:30-14:00 s44 (scheduled; preflight CODE-ONLY, owner on Discord, no game): no catch-up (main = GitHub; the two train-* folders are empty leftovers). Landed CR-outside-followups (d) (code `20054995`, merge `5985289e`; opus r1 + sonnet r1 APPROVE-WITH-NITS, exact-count NIT taken); in-test old-behaviour contrast (newest time alone 9 sessions, with the earlier time 4). cargo --lib 2018/0, clippy clean. CR-ultimate-followups (b) found already done (s27), noted. NOT PUSHED, NOT INSTALLED (CODE-ONLY): the next FULL session pushes main.
 - 2026-11-18 ~14:45-17:43 s45 (coordinator-assigned from the HQ session; owner's 14:41 and 15:40 go-aheads; pushes and install on his word): look-only walkthrough of `a29c7b62` against the tester guide (`_train\view-1118a`; nothing applied) and a five-reader panel found the guide's stutter/crash route does not exist as written and several screens disagreeing with themselves; landed the tester-readiness pass (merge `a8bfa10d`, TS/CSS/locale only; sonnet r1 REQUEST-CHANGES, 1 MUST + 3 SHOULD taken); pushed with the scheduled s44 commits (`42bc6e90..fdd2f07c`, vitest 551 files / 10844 tests, cargo --lib 2018/0); installed `fdd2f07cb4182be6f7f194db67b70de44e6ae1e1` (runtime proof `fdd2f07c` release, shell 0.9.26, attempt 1); RELEASE_STATE stamped. Tester guide rewrite and package follow. s46 same session: on-screen re-check of `fdd2f07c` (`_train\view-1118b`: fixes confirmed, 0 console errors); Test-room footnote/tile wording fix merged (`04cceb24`, sonnet APPROVE-WITH-NITS) but NOT pushed: the push gate timed out twice on verify-release-state-guard (see Needs owner); tester package rebuilt from `fdd2f07c` (`Desktop\Compy-tester-fdd2f07c.zip`), not sent.
+- 2026-11-18 ~19:20-20:15 s47 (scheduled; preflight CODE-ONLY, owner at the PC in the Claude app, no game): no catch-up
+  push (CODE-ONLY; main 5 ahead of GitHub, the push gate blocker in Needs owner still stands); the two train-* folders
+  are empty leftovers, no branch. CR-outside-followups (a) found already done by TG-context + `plan_mismatch` (ticked;
+  residual queued CR-plan-mid-session). CR-1102-left's Care first-ever-scan line fixed (`27b901ad`, merged --no-ff
+  with this docs commit; sonnet r1 APPROVE-WITH-NITS; old-behaviour proof 1 fail). cargo --lib 2020/0 (25 ignored),
+  clippy clean. Queue not refilled from ROADMAP: Phases 0-7 code is landed (exits are owner walkthroughs), Phase 8
+  waits on P4, Phase 9 is code-complete, Phases 10-11 are owner-gated, and the owner's 11-17 priority pulls nothing
+  past v1.0. NOT PUSHED, NOT INSTALLED: the next FULL session pushes main (after the gate blocker is settled).
+
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
