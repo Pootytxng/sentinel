@@ -499,6 +499,10 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       guide updated for the "Watch it work" card, the optional tour and the stutter-task order after a look-only run
       against an empty data folder (`_train\view-1118c`: "Optimize my game" is present for a new user); one file
       `Desktop\Compy-tester-cfbe08a7.zip`; previous package moved to `Compy-tester\older\`; not ticked, not sent.
+      s51 screen check (`_train\view-1119a`, look-only, 1280x720): with an empty data folder the four wording fixes
+      read correctly, "Optimize my game" is present, every guide label matches the screen, 0 console errors; on the
+      owner's data the ROB RUN footnotes and tile name are right and the ring reads "Your safe stack 8/9". Not
+      verified: anything behind an apply/start/save click; a truly separate PC.
 - [ ] [CORRECT] **CR-1102-left** (codebase review 2026-11-02 to 11-03, slices 1-8; fixed in `8f4037c1`..`508b200f`, `4465e74b`, `16479f4b`, `22d23584`..`cd9e11c0`)
       Triaged 2026-11-10 (coordinator desk session). Already fixed on `main`, struck: the Trial delta on a 0/NaN
       baseline (`4d5595fd`), Black Box/export/capture start and the slow probes off the UI thread (`9cab29d0`,
@@ -699,6 +703,11 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       session (start and end reads equal) is not seen: the plan is read only at the capture's start and save. Read it
       on the capture's existing tick (cheaply, e.g. the registry's active scheme, not a powercfg spawn per tick) and
       record "changed during" when any read differs. Measurement: opus + sonnet. Low odds (outside Compy, mid-game).
+- [ ] [CORRECT] **CR-noise-footnote-pair** (s51 screen check) On a PC with history, one past-result footnote can still
+      say "WardogsClient's noise still isn't measured" while another on the same page quotes its measured ±21.6% (from
+      6 sessions); the s46 fix only uses a figure measured after the footnoted result. Decide the wording for a figure
+      measured BEFORE the result that the result itself was not judged on. Words only. Also Problems still shows "ROB
+      RUN.exe" where other rooms say "ROB RUN".
 - [ ] [POLISH] **CR-zh-readiness-rest** (left by CR-zh-readiness-words) The other limiter rows are still English in zh-CN: the
       install-drive (9 sentences), applied-changes (drift counts + kept-outside titles) and fps-monitoring checks, and
       priorities.rs's own rows (pending safe tweaks, startup load, Memory Integrity); and the console / Check rows print
