@@ -157,7 +157,8 @@ release checklist); no new rules.
   (real play against its reference session, opus r1 MUST-FIX). s28 re-review of that fix: opus + sonnet
   APPROVE-WITH-NITS. Not taken: a source-order pin (sessions add no source-text tests); a behaviour test through
   `conclude_realplay` waits on the judging-chain extraction (Trial measurement refactor).
-- **Push gate blocked (s46, 2026-11-18 17:24 and 17:33):** `scripts/verify-release-state-guard.test.mjs` (`has no
+- **Cleared s50 (2026-11-19 08:51): the full gate passed and `main` (16 commits, to `1d7d7c71`) is on GitHub; the timeout
+  did not recur with the PC idle. Kept below as history.** **Push gate blocked (s46, 2026-11-18 17:24 and 17:33):** `scripts/verify-release-state-guard.test.mjs` (`has no
   broken citation, no missing section and no state drift`) timed out at its 120 s limit inside the full vitest run,
   twice, with the PC otherwise idle; alone the check takes 15 s and reports 31/31 ok; every other test passed (10847).
   `main` is ahead of GitHub with `04cceb24` (Test-room footnote wording, words only) and this note; nothing in it is
@@ -588,9 +589,14 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       `ps_all_or_restore` with `native: true` (the core-parking apply) already exists for this.
       Done s41 merge `047365a7` (`0e7edbb7`, `d0350d82`): every powercfg step of the USB/PCIe and core-parking undos checks its own
       exit (`checked_powercfg_steps`); a real PowerShell batch receipts `fail` (old chain `ok`), a single run exits non-zero.
-- [ ] [CORRECT] **CR-gm-repeat-live** (opus SHOULD-FIX of CR-gm-confirm-repeat; FULL, UI) On the installed build, send a held Enter
+- [x] [CORRECT] **CR-gm-repeat-live** (opus SHOULD-FIX of CR-gm-confirm-repeat; FULL, UI) On the installed build, send a held Enter
       (CDP `Input.dispatchKeyEvent`, `autoRepeat: true`) to Gaming Mode's Enable: the repeats must start nothing, a fresh
       press must. jsdom never turns a key into a click, so only a live check proves WebView2 honours the cancel.
+      Done s50 (FULL, installed `fdd2f07c`, fresh WebView2 profile + fresh data root, Compy never in front): over CDP a
+      first Enter on Engage opened the consent modal with Enable focused; 12 `autoRepeat` keydowns reached Enable, all
+      12 were cancelled, no keypress and no click; one fresh Enter clicked Enable once (stopped by the harness's click
+      blocker, so nothing started; consent stayed unset), Cancel closed it. Synez plan before/after, owner's Compy
+      relaunched plain, no debug port. Evidence `_train\view-1119a\keys-result.txt`, `shots\held-enter-modal.png`.
 - [x] [CORRECT] **CR-care-unread-rig** (s40, parked from the s40 small item) care-next-step.ts `payoffFor` counts a session
       whose rig is unread (or a baseline whose rig is unknown) as the same rig (`!rig || !baseRig || sameRig`), so
       "stayed steady" can rest on sessions from another machine. Needs a decision first: excluding them makes an old
@@ -2815,16 +2821,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-16/17 s33 (FULL; coordinator-assigned; a server restart at ~21:20 ended the first half, then the owner's game
-  ran until after 01:31; resumed 03:03): reviewed s32's CR-undo-entry-disable (opus + sonnet AWN, no MUST-FIX).
-  Landed CR-tuning-temp-comparability (`eb81a9f2`), CR-lesson-avg-band (`1a3882a7`, adds
-  `WhatChangedReport.noise_avg_band_pct`), TG-drift-words (`bbb3dd40`), TG-preflight (`10b7bc47`, new read-only
-  command `trial_preflight` in build.rs / capabilities / lib.rs; power plan confound at conclude); reviews in the s31
-  follow-ups and the Trial conditions guard list. TG-interleave design note written (owner decision). Parked: the
-  judging-chain refactor slice (reason under s31 follow-ups). No guard or census re-derived. Pushes: `622e07a7`,
-  `bbb3dd40`, `5bcf29a2`, all PASS. cargo --lib 1977/0, clippy clean, tsc 0, full vitest 550 files pass on `main`.
-  Installed `5bcf29a255d275d5572b4e73481db64ccccd25ac` (runtime proof attempt 1, Synez plan before/after);
-  RELEASE_STATE re-stamped. Tester folder untouched. No game at any check.
 - 2026-11-17 s34 (scheduled, CODE-ONLY: owner in Steam, no game): CR-home-reversible-note `a2426213` (merge `0f293a6e`;
   census re-recorded for the two retired note keys), CR-debrief-no-undo-dismiss `55979f1c` (merged --no-ff with this
   docs commit). TS only, no rollback logic: no review. tsc 0; full vitest 547/551 files on item 1 (3 site-app suites +
@@ -2921,6 +2917,10 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   clippy clean. Queue not refilled from ROADMAP: Phases 0-7 code is landed (exits are owner walkthroughs), Phase 8
   waits on P4, Phase 9 is code-complete, Phases 10-11 are owner-gated, and the owner's 11-17 priority pulls nothing
   past v1.0. NOT PUSHED, NOT INSTALLED: the next FULL session pushes main (after the gate blocker is settled).
+- 2026-11-19 ~08:30-09:05 s50 (scheduled, FULL: owner idle, no game): catch-up push of `main` (s46-s49, 16
+  commits) PASS on the first try (`40015363..1d7d7c71`); the s46 gate blocker did not recur. CR-gm-repeat-live checked live
+  on installed `fdd2f07c` and ticked (held Enter starts nothing, a fresh press confirms; nothing applied, Synez before/after).
+  No code changed, no install (Friday install is tomorrow). Queue not refilled (same reason as s47). Pushed: yes.
 
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
