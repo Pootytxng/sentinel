@@ -717,7 +717,7 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
       cmd === "get_experiments"
         ? Promise.resolve([
             {
-              id: "e1", rec_id: "visual-effects", rec_title: "x", game: "robrun.exe", created_at: "2026-11-11T10:00:00Z",
+              id: "e1", rec_id: "visual-effects", rec_title: "x", game: "ROB RUN.exe", created_at: "2026-11-11T10:00:00Z",
               concluded_at: "2026-11-11T11:00:00Z", verdict: "too-noisy", kept: false,
               assumed_band: { assumed_pct: 3, measured_low1_pct: 29, measured_sessions: 6 },
             },
@@ -731,7 +731,8 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     await waitFor(() => expect(tr.querySelector(".ag-v")!.textContent).toBe("29"));
     expect(tr.querySelector(".ag-tag-ny")).toBeNull();
     // Review r1 S1: the tile names the game the figure belongs to.
-    expect(tr.querySelector(".ag-note")!.textContent).toBe("robrun.exe · a change must beat this to count");
+    // s46: and by the name the rest of the Test page shows (no ".exe").
+    expect(tr.querySelector(".ag-note")!.textContent).toBe("ROB RUN · a change must beat this to count");
   });
 
   // Review r1 S1: with two games measured no single figure is "the" noise floor; quoting the newest

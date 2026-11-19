@@ -943,6 +943,7 @@
     "noiseMeasuredFloor": "{{game}} 的波动小于 ±{{min}}% 时，范围取 ±{{min}}%：这是 Compy 声称有变化的最小幅度，并非测得的波动。",
     "noiseMeasuredCapUnread_other": "未计入：另有 {{count}} 次相同更改下的 {{game}} 对局，因为 Compy 无法判断是否有帧率上限限制了它们。",
     "assumedBandUnmeasured": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 的波动至今仍未测量，因此请视为未经确认。",
+    "assumedBandMeasuredSince": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 的波动在判定时尚未测量，此后已测得 ±{{measured}}%（来自 {{sessions}} 次游戏）。",
     "assumedBandWider": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 实测的波动为 ±{{measured}}%（来自 {{sessions}} 次游戏），比该范围更宽，因此这一结果是按低于这款游戏实际波动的范围判定的。",
     "assumedBandWiderUnjudged": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 实测的波动为 ±{{measured}}%（来自 {{sessions}} 次游戏），比该范围更宽；这一结果没有作出任何判定。",
     "assumedBandWiderNoClaim": "此结果是按假定的 ±{{assumed}}% 范围判定的，当时 Compy 尚未测量每款游戏自身的波动。{{game}} 实测的波动为 ±{{measured}}%（来自 {{sessions}} 次游戏），比该范围更宽；该结果判定为没有变化，在这一更宽的波动下这一结论仍然成立。",

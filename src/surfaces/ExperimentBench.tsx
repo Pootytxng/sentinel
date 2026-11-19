@@ -40,6 +40,7 @@ import {
   outcomeChoices,
   summarizeGame,
   type GameTestSummary,
+  measuredGameNoise,
   type MeasuredGameNoise,
   LESSON_KEY,
   type Lesson,
@@ -491,6 +492,7 @@ function noiseLine(
   g?: GameNoise | null,
   outcome?: TrialOutcome | null,
   now?: MeasuredGameNoise | null,
+  assumedStatesFigure = false,
 ): string {
   const pct = (v: number) => String(Math.round(v * 10) / 10);
   const name = prettyGameName(game) || game;
@@ -509,6 +511,9 @@ function noiseLine(
   if (n.measured_noise_stale === "changed") return t("lab.experimentBench.noiseStaleChanged", { band: pct(n.band_pct) });
   if (n.measured_noise_stale === "unconfirmed")
     return t("lab.experimentBench.noiseStaleUnconfirmed", { band: pct(n.band_pct) });
+  // The same footnote already carries the since-measured figure (the assumed-band line beside this
+  // one): this line has nothing true left to add, and must not say "hasn't been measured yet" next to it.
+  if (assumedStatesFigure) return "";
   // The game's noise is measured now (the same figure the assumed-band line quotes): say it, never "hasn't been measured yet".
   if (now != null)
     return t("lab.experimentBench.noiseMeasuredNow", {
@@ -1155,13 +1160,25 @@ export default function ExperimentBench({
   // older result), or noise lines that differ between rows — is said once under the list, and its
   // rows carry only its mark.
   const noiseLines = history.map((x) => {
+    // s46: the game's noise as this page's own records carry it now. A row judged before it was
+    // measured says so ("wasn't measured when this was judged ... since measured at"), and no line on
+    // the page says "not measured" about a game another line on it quotes a figure for.
+    // "Since" must be true in time: only figures from records at or after this row's own time (the
+    // order measuredGameNoise itself uses: concluded_at, else created_at). An older figure was not
+    // measured "since" this was judged.
+    const at = (e: { created_at: string; concluded_at?: string | null }) => Date.parse(e.concluded_at ?? e.created_at) || 0;
+    const since = measuredGameNoise(
+      experiments.filter((e) => at(e) >= at(x)),
+      x.game,
+    );
+    const assumedStatesFigure = x.assumed_band != null && (x.assumed_band.measured_low1_pct != null || since != null);
     const judged = x.noise_evidence
       ? isRealPlay(x)
         ? realPlayNoiseLine(x.noise_evidence.band_pct, realPlayCounts(x), prettyGameName(x.game) || x.game, t)
-        : noiseLine(x.noise_evidence, x.game, t, x.game_noise, x.outcome)
+        : noiseLine(x.noise_evidence, x.game, t, x.game_noise, x.outcome, since, assumedStatesFigure) || null
       : null;
     // P4-judge-noisy: a result judged on the assumed band says so beside its own line.
-    const assumed = x.assumed_band ? assumedBandLine(x.assumed_band, x.game, t) : null;
+    const assumed = x.assumed_band ? assumedBandLine(x.assumed_band, x.game, t, since) : null;
     return judged && assumed ? `${judged} ${assumed}` : (assumed ?? judged);
   });
   // TG-drift-words: a Trial judged too noisy names what Compy recorded differently between its two
