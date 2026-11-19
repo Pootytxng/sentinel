@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
 
 // §C: the build stamp arrives over the existing IPC probe pattern; everything else resolves null
@@ -75,5 +77,36 @@ describe("Settings", () => {
   it("§C: About carries the compile-time build stamp (review hygiene / receipts-for-builds)", async () => {
     render(<Settings {...baseProps} />);
     expect(await screen.findByText(/ab12cd3 · dev/)).toBeInTheDocument();
+  });
+});
+
+// s44 tester pass: the Support-record preview scrolled sideways in a ~300 px tile, and the Motion
+// row's text was squeezed into a narrow column beside its three-way picker.
+describe("Settings layout (CSS contract)", () => {
+  const css = readFileSync(join("src", "surfaces", "Settings.css"), "utf8");
+  const rule = (selector: string) => {
+    const open = css.indexOf(`\n${selector} {`); // at a line start: not the tile-scoped `.v2-tile-third .set-row {`
+    expect(open, `${selector} rule missing from Settings.css`).toBeGreaterThan(-1);
+    return css.slice(open, css.indexOf("}", open));
+  };
+
+  it("the support-record preview wraps its lines and has no horizontal scrollbar", () => {
+    const pre = rule(".receipts-preview.sev-text");
+    expect(pre).toContain("white-space: pre-wrap");
+    expect(pre).toContain("overflow-x: hidden");
+  });
+
+  it("a row lets a wide control drop under its text, and its text keeps a readable column", () => {
+    expect(rule(".set-row")).toContain("flex-wrap: wrap");
+    expect(rule(".set-row-text")).toMatch(/flex:\s*1 1 \d+px/);
+  });
+
+  it("in a narrow tile, where the row is a column, the text has no flex-basis (it would become a height)", () => {
+    expect(rule(".v2-tile-third .set-row,\n.v2-tile-quarter .set-row")).toContain("flex-direction: column");
+    expect(css).toContain(".v2-tile-third .set-row-text,\n.v2-tile-quarter .set-row-text {");
+    const narrow = rule(".v2-tile-quarter .set-row-text");
+    expect(narrow).toMatch(/flex:\s*0 1 auto/);
+    // It must come AFTER the base rule, or equal-or-lower specificity order would let the 220px win.
+    expect(css.indexOf(".v2-tile-quarter .set-row-text {")).toBeGreaterThan(css.indexOf("\n.set-row-text {"));
   });
 });

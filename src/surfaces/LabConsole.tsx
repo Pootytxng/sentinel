@@ -16,7 +16,7 @@ import { buildRigParts, type RigSelection } from "./rig/rig-parts";
 import { incidentFocus } from "./rig/incident-part";
 import { newestAssessedIncident } from "./care-next-step";
 import { rigPartReadings, subsystemForRigPart, type LabReadingKey, type LabSubsystem } from "./lab-evidence-map";
-import { OptimizeStation, type LabFastPathProps } from "./lab/OptimizeStation";
+import { OptimizeStation, safeStackOf, type LabFastPathProps } from "./lab/OptimizeStation";
 import {
   LAB_STATION_ORDER,
   labStations,
@@ -32,6 +32,7 @@ import { peekProbe, cachedProbe } from "../data/probe-cache";
 import { measureTuning, tuningEvidence, type PostComparability } from "../data/tuning-measure";
 import { primaryGpu } from "../data/gpu-sensor";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
+import { soleGameNoise, type MeasuredGameNoise, type SummaryExperiment } from "./test-summary";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
 import { BlackBox } from "./BlackBox";
@@ -205,8 +206,12 @@ export function LabConsole({
   // new backend surface.
   const [scoreboard, setScoreboard] = useState<ScoreboardView | null>(null);
   const [trial, setTrial] = useState<TrialState | null>(null);
+  const [gameNoiseNow, setGameNoiseNow] = useState<MeasuredGameNoise | null>(null);
 
   useEffect(() => {
+    invoke<SummaryExperiment[] | null>("get_experiments")
+      .then((xs) => setGameNoiseNow(Array.isArray(xs) ? soleGameNoise(xs) : null))
+      .catch(() => {});
     cachedProbe("benchmark-state", () => invoke<BenchmarkState>("get_benchmark_state"), 30_000)
       .then(setBench)
       .catch(() => {});
@@ -557,7 +562,13 @@ export function LabConsole({
   // Item 8: a comparison's band only when it was measured (`game_noise`); an older result's fixed 3%
   // and an "unmeasured" result's 0 are not a measurement of this rig.
   const cmpBand = latestCmp?.game_noise != null && latestCmp.verdict !== "unmeasured" ? latestCmp.noise_floor_pct : null;
-  const noiseFloorPct = trial && trial.noise_floor_pct != null ? trial.noise_floor_pct : cmpBand;
+  // s44 tester pass: else the game's own measured noise from its Trial records (the figure the Test
+  // room's "measured noise is ±N% (from M sessions)" line quotes), so this tile never says "not yet"
+  // beside that line.
+  // Review r1: the game's figure is quoted only when exactly ONE game has one (soleGameNoise), and the
+  // tile's note then names that game, so it can never sit beside a different game's per-game line.
+  const noiseFromGame = trial?.noise_floor_pct == null && cmpBand == null ? gameNoiseNow : null;
+  const noiseFloorPct = trial && trial.noise_floor_pct != null ? trial.noise_floor_pct : (cmpBand ?? noiseFromGame?.pct ?? null);
 
   // BR — Instruments read: how far through the bench this rig has gone. Same `stationHasReading`
   // the dock already uses to mark nodes measured, so the gauge and the dock can never disagree.
@@ -591,6 +602,12 @@ export function LabConsole({
   // read "12 on · all applied" once the stack is in, instead of "0 ready" on an empty ring, which
   // the installed build showed as the room's bottom-left alarm (intimidation pass 2026-08-21).
   const safeOn = (fast.recs ?? []).filter((r) => r.severity === "safe" && r.currently_applied).length;
+  // s44 batch 2 (B1): the SAME stack the Optimize station counts (safe, eligible, appliable) -- when work is
+  // left only because a change reads off, the line says "N of M on" instead of "all N applied".
+  const safeStackRecs = safeStackOf(fast.recs, fast.isAppliable ?? (() => false));
+  const safeStackTotal = safeStackRecs.length;
+  const safeStackOn = safeStackRecs.filter((r) => r.currently_applied).length;
+  const safeStackOff = safeStackTotal - safeStackOn;
 
   // ── THE SELECTED STATION IS THE ROOM (Mission 1, 2026-08-28) ──────────────────────────────────
   // Nothing is selected → the overview below is exactly what it always was. Something IS selected
@@ -791,7 +808,10 @@ export function LabConsole({
                   max={10}
                   unit={t("lab.labConsole.unitPct")}
                   variant="numeral"
-                  measured={noiseFloorPct != null}
+                  /* A figure that belongs to one named game says so on its one supporting line (the
+                     stamp and the note share that row, so the stamp stands down for it). */
+                  measured={noiseFloorPct != null && !noiseFromGame}
+                  note={noiseFromGame ? t("lab.labConsole.noiseFloorNoteGame", { game: noiseFromGame.game }) : undefined}
                 />
               </div>
               <div className="lc-reading">
@@ -825,7 +845,9 @@ export function LabConsole({
                   note={
                     fast.recs != null && safeReady === 0
                       ? safeOn > 0
-                        ? t("lab.labConsole.safeStackAllOn", { count: safeOn })
+                        ? safeStackOff > 0
+                          ? t("lab.labConsole.safeStackSomeOff", { count: safeStackOff, on: safeStackOn, total: safeStackTotal })
+                          : t("lab.labConsole.safeStackAllOn", { count: safeOn })
                         : t("lab.labConsole.safeStackNone")
                       : undefined
                   }
@@ -1049,7 +1071,13 @@ export function LabConsole({
                   max={10}
                   unit={t("lab.labConsole.unitPct")}
                   measured={noiseFloorPct != null}
-                  note={noiseFloorPct != null ? t("lab.labConsole.noiseFloorNote") : undefined}
+                  note={
+                    noiseFloorPct == null
+                      ? undefined
+                      : noiseFromGame
+                        ? t("lab.labConsole.noiseFloorNoteGame", { game: noiseFromGame.game })
+                        : t("lab.labConsole.noiseFloorNote")
+                  }
                 />
               </div>
               <div className="lc-corner lc-bl">
@@ -1066,7 +1094,9 @@ export function LabConsole({
                   note={
                     fast.recs != null && safeReady === 0
                       ? safeOn > 0
-                        ? t("lab.labConsole.safeStackAllOn", { count: safeOn })
+                        ? safeStackOff > 0
+                          ? t("lab.labConsole.safeStackSomeOff", { count: safeStackOff, on: safeStackOn, total: safeStackTotal })
+                          : t("lab.labConsole.safeStackAllOn", { count: safeOn })
                         : t("lab.labConsole.safeStackNone")
                       : undefined
                   }

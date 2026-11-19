@@ -257,7 +257,9 @@
   flex-direction: column;
   width: min(880px, 100%);
   max-height: 100%;
-  background: var(--v2-panel);
+  /* The popover surface (96% opaque), not --v2-panel: that one is a 64% / 86% tint on the glass
+     surfaces, and the room's own text read through the panel over the question (s44 tester pass). */
+  background: var(--v2-panel-pop);
   border: 1px solid var(--v2-line-strong);
   border-radius: var(--v2-r);
   box-shadow: 0 24px 64px var(--v2-shadow-panel);

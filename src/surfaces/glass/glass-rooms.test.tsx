@@ -165,6 +165,15 @@ describe("Health summary (glass redesign)", () => {
     expect(screen.getByRole("button", { name: "Open eldenring" }).textContent).toContain("141");
   });
 
+  // s44 batch 2 (B2): "3 things are worth a look" must name all 3 where the page can be read; the
+  // checks card used to name only the first two.
+  it("names every check the heading counts, not only the first two", () => {
+    home({ readiness: readiness(3) });
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("3 things are worth a look");
+    const card = screen.getByRole("button", { name: /Windows setup/ }).textContent ?? "";
+    for (const n of ["Memory speed 0", "Memory speed 1", "Memory speed 2"]) expect(card).toContain(n);
+  });
+
   it("counts a crash Windows recorded as a thing worth a look, in its own band with both actions", () => {
     const p = home({ pendingCare: care });
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("1 thing is worth a look");

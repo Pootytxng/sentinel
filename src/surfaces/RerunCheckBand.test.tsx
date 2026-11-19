@@ -120,7 +120,7 @@ describe("RerunCheckBand honesty — age only with a real record", () => {
     cleanup();
     storeCheck({ at: Date.now() - 5 * 60_000, total: 16, green: 13, advisory: 2, unread: 1, fixCount: 1 });
     render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
-    expect(line()).toContain("Checked 5m ago · 1 thing to fix · 1 couldn't be measured · 2 advisory, not graded");
+    expect(line()).toContain("Last full check 5m ago · 1 thing to fix · 1 couldn't be measured · 2 advisory, not graded");
   });
 
   // bug → guard (2026-08-18): the honesty hole the old ratio hid. Two checks Compy CANNOT read must
@@ -152,7 +152,10 @@ describe("RerunCheckBand honesty — age only with a real record", () => {
   it("a stored snapshot with advisory checks counts only the graded ones and names the advisory", () => {
     storeCheck({ at: Date.now() - 4 * 60_000, total: 16, green: 14, advisory: 2, unread: 0, fixCount: 0 });
     render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
-    expect(line()).toContain("Checked 4m ago · all 14 looked good · 2 advisory, not graded");
+    // s44 tester pass: a stored result is named as the LAST FULL CHECK, so it cannot read as the
+    // current score above it ("12 of 14 checks look good") disagreeing with it.
+    expect(line()).toContain("Last full check 4m ago · all 14 looked good · 2 advisory, not graded");
+    expect(line()).not.toMatch(/^Checked /);
     expect(line()).not.toContain("all 16");
   });
 

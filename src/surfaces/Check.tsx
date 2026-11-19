@@ -532,7 +532,24 @@ export default function Check({
               onClick={() => setShowAllChecks((o) => !o)}
               aria-expanded={showAllChecks}
             >
-              <span>{t("optimize.check.allChecks", { count: readiness.checks.length })}</span>
+              {/* s44 batch 2 (B3): the total includes advisory checks, which Health's "12 of 14" leaves out;
+                  name the graded count so the two rooms reconcile (grading itself unchanged). */}
+              <span>
+                {readiness.advisory_count > 0 && readiness.unknown_count > 0
+                  ? t("optimize.check.allChecksGradedUnread", {
+                      count: readiness.checks.length,
+                      graded: Math.max(0, readiness.checks.length - readiness.advisory_count - readiness.unknown_count),
+                      advisory: readiness.advisory_count,
+                      unread: readiness.unknown_count,
+                    })
+                  : readiness.advisory_count > 0
+                  ? t("optimize.check.allChecksGraded", {
+                      count: readiness.checks.length,
+                      graded: Math.max(0, readiness.checks.length - readiness.advisory_count - readiness.unknown_count),
+                      advisory: readiness.advisory_count,
+                    })
+                  : t("optimize.check.allChecks", { count: readiness.checks.length })}
+              </span>
               <span>{showAllChecks ? "▾" : "▸"}</span>
             </button>
             {/* P5.5 (owner critique 2026-07-02): the expanded receipt is proper rows — status mark ·

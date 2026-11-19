@@ -244,9 +244,23 @@
   gap: 18px;
   padding: 12px 0;
   border-top: 1px solid var(--ix-glass-border);
+  /* A wide control (the three-way Motion picker) drops under its text rather than squeezing the
+     text into a narrow column (s44 tester pass). */
+  flex-wrap: wrap;
 }
 .set-row:first-of-type {
   border-top: 0;
+}
+.set-row-text {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+/* In a narrow tile the row is a COLUMN (rule near the top of this file), where a flex-basis is a
+   HEIGHT: the 220px above would leave an empty gap under every row's text. The basis only belongs
+   to rows laid out as rows, so the stacked rows go back to their natural height. */
+.v2-tile-third .set-row-text,
+.v2-tile-quarter .set-row-text {
+  flex: 0 1 auto;
 }
 /* A set-row nested inside the Appearance controls column (the Living Instrument toggle). */
 .set-row-inset {
@@ -414,6 +428,13 @@
   border: 1px solid var(--ix-border);
   border-radius: 8px;
   overflow-x: auto;
+}
+/* The support-record preview is read in a third-width tile: wrap long lines instead of scrolling
+   sideways (s44 tester pass). */
+.receipts-preview.sev-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
 }
 
 /* §C build stamp in About — quiet provenance, same scale as the version. */

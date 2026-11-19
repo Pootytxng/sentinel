@@ -66,7 +66,7 @@ vi.mock("./rig/RigViewer", () => ({
 
 const { LabConsole } = await import("./LabConsole");
 const { ConfirmProvider } = await import("../design/ConfirmDialog");
-import type { LabFastPathProps } from "./lab/OptimizeStation";
+import { safeStackOf, type LabFastPathProps } from "./lab/OptimizeStation";
 import type { HardwareInfo } from "../App";
 import type { RigSelection } from "./rig/rig-parts";
 
@@ -432,6 +432,37 @@ describe("LabConsole", () => {
     expect(Number.parseFloat(fill.style.strokeDashoffset || fill.getAttribute("stroke-dashoffset") || "1")).toBeCloseTo(0, 3);
   });
 
+  // s44 batch 2 (B1): "all 8 applied" beside Optimize's "8/9 ... 1 was turned off outside Compy".
+  it("the safe-stack note agrees with Optimize when a change the user turned on now reads off", () => {
+    const recs: Array<Record<string, unknown>> = (recsFixture as Array<Record<string, unknown>>).map((r, i) => ({
+      ...r,
+      currently_applied: i === 0,
+    }));
+    const changes = [
+      { rec_id: String(recs[1].id), rec_title: String(recs[1].title), status: "applied", is_still_active: false },
+    ];
+    renderConsole({ ...base, fast: { ...fast, recs: recs as never[], changes: changes as never[] } });
+    const note = reading(3).querySelector(".ag-note")!.textContent;
+    expect(note).toBe("1 of 2 on · 1 was turned off outside Compy");
+    expect(note).not.toContain("all");
+  });
+
+  // Review r1 S3: the hub and Optimize read ONE helper for the stack, so they cannot disagree.
+  it("the safe stack is one shared set: safe, eligible and appliable; an off rec counts even when it is not a drift", () => {
+    const rec = (id: string, over: Record<string, unknown>) =>
+      ({ id, title: id, severity: "safe", eligible: true, currently_applied: false, ...over }) as never;
+    const recs = [
+      rec("a", { currently_applied: true }),
+      rec("b", {}), // off + eligible, never applied by Compy: not in any reverted set
+      rec("c", { eligible: false }),
+      rec("d", { severity: "risky" }),
+      rec("e", {}), // not appliable on this rig
+    ];
+    const ids = safeStackOf(recs as never[], (id) => id !== "e").map((r) => r.id);
+    expect(ids).toEqual(["a", "b"]);
+    expect(safeStackOf(null, () => true)).toEqual([]);
+  });
+
   it("the dock says where to start: 'Start here' on Optimize and a plain when-line under the row", () => {
     renderConsole();
     const dock = document.querySelector(".dock")!;
@@ -677,6 +708,57 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     await waitFor(() => expect(tr.querySelector(".ag-v")!.textContent).toBe("4"));
     expect(tr.querySelector(".ag-tag-ny")).toBeNull();
   });
+
+  // s44 tester pass: with no calibration, the tile read "NOT YET" beside a Test-room line quoting the
+  // game's measured noise. It reads that same measured figure (a Trial record's assumed_band).
+  it("Noise floor reads the game's measured noise from its Trial records when no calibration exists", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      cmd === "get_experiments"
+        ? Promise.resolve([
+            {
+              id: "e1", rec_id: "visual-effects", rec_title: "x", game: "robrun.exe", created_at: "2026-11-11T10:00:00Z",
+              concluded_at: "2026-11-11T11:00:00Z", verdict: "too-noisy", kept: false,
+              assumed_band: { assumed_pct: 3, measured_low1_pct: 29, measured_sessions: 6 },
+            },
+          ])
+        : cmd === "get_session_summaries"
+          ? Promise.resolve([])
+          : Promise.resolve(null),
+    );
+    renderConsole();
+    const tr = reading(1);
+    await waitFor(() => expect(tr.querySelector(".ag-v")!.textContent).toBe("29"));
+    expect(tr.querySelector(".ag-tag-ny")).toBeNull();
+    // Review r1 S1: the tile names the game the figure belongs to.
+    expect(tr.querySelector(".ag-note")!.textContent).toBe("robrun.exe · a change must beat this to count");
+  });
+
+  // Review r1 S1: with two games measured no single figure is "the" noise floor; quoting the newest
+  // one would disagree with the other game's per-game line, so the tile stays unmeasured.
+  it("Noise floor stays unmeasured when two games each have a measured noise and none is known", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const exp = (id: string, game: string, pct: number, day: string) => ({
+      id, rec_id: "visual-effects", rec_title: "x", game, created_at: `2026-11-${day}T10:00:00Z`,
+      concluded_at: `2026-11-${day}T11:00:00Z`, verdict: "too-noisy", kept: false,
+      assumed_band: { assumed_pct: 3, measured_low1_pct: pct, measured_sessions: 6 },
+    });
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      cmd === "get_experiments"
+        ? Promise.resolve([exp("e1", "robrun.exe", 29, "11"), exp("e2", "other.exe", 8, "12")])
+        : cmd === "get_session_summaries"
+          ? Promise.resolve([])
+          : Promise.resolve(null),
+    );
+    renderConsole();
+    const tr = reading(1);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(tr.querySelector(".ag-tag-ny")).not.toBeNull();
+    expect(tr.querySelector(".ag-v")!.textContent).not.toBe("8");
+    expect(tr.querySelector(".ag-v")!.textContent).not.toBe("29");
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -695,6 +777,23 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
 //
 // Neither guard may pass by the strip having been deleted, so each asserts its own population.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
+describe("the bench reading strip wraps at narrow window widths", () => {
+  const css = readFileSync(resolve("src/surfaces/lab-console.css"), "utf8").replace(/\r\n/g, "\n");
+  const start = css.indexOf("@media (max-width: 900px)");
+  // The wrap rule is the first @media block after the strip's own rules; read just its body.
+  const block = start < 0 ? "" : css.slice(start, css.indexOf("\n}\n", start));
+
+  it("goes two by two under 900px so four rings never run into each other", () => {
+    expect(start, "a max-width: 900px block exists in the hub's own stylesheet").toBeGreaterThan(-1);
+    expect(block).toMatch(/\.lc-readings \{[^}]*grid-template-columns:\s*repeat\(2,/);
+    expect(block).toMatch(/\.lc-readings \{[^}]*row-gap:/);
+  });
+
+  it("drops the dotted rule on the cell that starts the second row", () => {
+    expect(block).toMatch(/\.lc-reading:nth-child\(odd\)::before \{[^}]*display:\s*none/);
+  });
+});
+
 describe("the bench reading set keeps the approved rhythm", () => {
   const cells = () => Array.from(document.querySelectorAll(".lc-readings > .lc-reading"));
 
