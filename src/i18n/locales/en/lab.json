@@ -707,7 +707,7 @@
       "label": "Suggested order to test:",
       "reason": "{{evidence}}; {{risk}}.",
       "evidence": {
-        "measured": "shown to help in other measurements, not measured on this PC",
+        "measured": "shown to help in measurements elsewhere",
         "notMeasured": "expected to help, not measured",
         "unknown": "no stated evidence it helps"
       },
