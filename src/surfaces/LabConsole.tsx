@@ -32,6 +32,7 @@ import { peekProbe, cachedProbe } from "../data/probe-cache";
 import { measureTuning, tuningEvidence, type PostComparability } from "../data/tuning-measure";
 import { primaryGpu } from "../data/gpu-sensor";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
+import { prettyGameName } from "./game-name";
 import { soleGameNoise, type MeasuredGameNoise, type SummaryExperiment } from "./test-summary";
 import { BenchmarkTab } from "./Benchmark";
 import { LatencyTab } from "./Latency";
@@ -811,7 +812,7 @@ export function LabConsole({
                   /* A figure that belongs to one named game says so on its one supporting line (the
                      stamp and the note share that row, so the stamp stands down for it). */
                   measured={noiseFloorPct != null && !noiseFromGame}
-                  note={noiseFromGame ? t("lab.labConsole.noiseFloorNoteGame", { game: noiseFromGame.game }) : undefined}
+                  note={noiseFromGame ? t("lab.labConsole.noiseFloorNoteGame", { game: prettyGameName(noiseFromGame.game) || noiseFromGame.game }) : undefined}
                 />
               </div>
               <div className="lc-reading">
@@ -1075,7 +1076,7 @@ export function LabConsole({
                     noiseFloorPct == null
                       ? undefined
                       : noiseFromGame
-                        ? t("lab.labConsole.noiseFloorNoteGame", { game: noiseFromGame.game })
+                        ? t("lab.labConsole.noiseFloorNoteGame", { game: prettyGameName(noiseFromGame.game) || noiseFromGame.game })
                         : t("lab.labConsole.noiseFloorNote")
                   }
                 />
