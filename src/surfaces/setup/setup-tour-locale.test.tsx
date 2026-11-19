@@ -85,11 +85,17 @@ describe("the tour's lessons and recap read whole in zh-CN", () => {
     next();
     expect(document.querySelector(".st-demo-sub")?.textContent).toBe("Recommended: High performance");
     expect(document.body.textContent).not.toMatch(/Current: |Balanced/);
+    // Flipping the demo switch shows the demo ledger line; it must not bring a source plan back.
+    fireEvent.click(screen.getByRole("switch"));
+    expect(document.querySelector(".st-demo-ledger")?.textContent).toBe("Trust Ledger — power plan → High performance · just now");
+    expect(document.body.textContent).not.toMatch(/Current: |Balanced/);
     cleanup();
     await i18n.changeLanguage("zh-CN");
     renderTour();
     next();
     expect(document.querySelector(".st-demo-sub")?.textContent).toBe("推荐:高性能");
+    fireEvent.click(screen.getByRole("switch"));
+    expect(document.querySelector(".st-demo-ledger")?.textContent).toBe("信任台账 — 电源计划 → 高性能 · 刚刚");
     expect(document.body.textContent).not.toMatch(/当前|平衡/);
   });
 
