@@ -2784,17 +2784,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-13/16 s31 (FULL; stopped 2026-11-13 ~10:26 by the weekly usage limit, resumed 2026-11-16 17:40; a server
-  restart at ~18:17 during the install's verification): pushed s30's TG-context v1 (`401e9772`, PASS; its s30 sonnet
-  review stood; no verdict change). Landed CR-core-parking-plan-gone (`4119f3d5`), CR-plan-held-behaviour-tests
-  (`373a820d`), CR-pattern-cap-and-words (`19140a9d`), CR-debrief-assumed-label (`eb8607f5`), CR-whatchanged-band-words
-  (`390edf16`), CR-tuning-comparability (`375ac530`); reviews in the s31 follow-ups section. Guard work: the
-  history.rs class guard's dispatch_rollback callers now count dispatch_rollback_outcome (same boundary); the #398 lock
-  census classifies the test-only data_root::FILES as "out" (`c56b8a4f`). Pushes: `401e9772`, `061e19b8` (first
-  attempt stopped by the gate on RELEASE_STATE citation drift, re-anchored), `c56b8a4f`; all PASS. cargo --lib 1974/0 on
-  main, clippy clean, tsc clean. Installed `c56b8a4fb09e36df6b246815650f21956960fdab` (runtime proof attempt 1, Synez
-  before/after); RELEASE_STATE re-stamped. Parked: TG-drift-words, CR-tuning-temp-comparability, CR-lesson-avg-band,
-  TG-interleave note. Tester folder untouched. No game at any check.
 - 2026-11-17 s32 (scheduled, CODE-ONLY: owner in Firefox, no game): CR-undo-entry-disable `f5f2feae` (this docs commit on
   the same branch, merged --no-ff to main; TS only, no review needed). tsc 0, full vitest 545/548 (3 site-app). One
   item. Not pushed (CODE-ONLY): main is 3 ahead of GitHub; the next FULL session pushes and installs.
@@ -2895,6 +2884,7 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
 - 2026-11-18 ~08:30-09:00 s42 (scheduled; preflight CODE-ONLY, owner on Firefox, no game): no catch-up (main = GitHub; the two train-* folders were empty leftovers, no branch). CR-plan-read-prompt-write established read-only (no live route; residual queued CR-plan-write-recorded-guid). Landed CR-fall-words-band (merge `03c1e99a`, `4a6e7f5b`; sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken; old-code proof 3 fail). Not pushed, not installed (CODE-ONLY): the next FULL session pushes main.
 - 2026-11-18 ~11:50-12:48 s43 (coordinator-assigned from the HQ session; preflight CODE-ONLY, owner at the PC; pushes and install on the owner's 11:49 "go all"): catch-up push of s42 refused twice by the gate (affordance census lost realPlay.likelyWorse to a chosen-key t() call, then the locale parity guard on the first fix); fixed `2e22996b`, push PASS. Landed CR-plan-write-recorded-guid + CR-care-unread-rig (merge `b09c4443`; opus r1 + sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken `ffbf619e`, no r2); old-code proof 3 + 1 + 1 tests fail; cargo --lib 2016/0, clippy clean. CR-plan-compare-rest ticked (rest is POLISH). TG-salvage and TG-passive-band parked as POLISH on the owner's word. Push 2 PASS (`2e22996b..a29c7b62`, vitest 551 files / 10828 tests, cargo --lib 2016/0). Installed `a29c7b62fa89a74791dfeb19f771bab10758324f` (runtime proof `a29c7b62` release, shell 0.9.26, attempt 1); RELEASE_STATE stamped. Tester package refreshed (`C:\Users\Kuya\Desktop\Compy-tester-a29c7b62.zip`), not sent.
 - 2026-11-18 ~13:30-14:00 s44 (scheduled; preflight CODE-ONLY, owner on Discord, no game): no catch-up (main = GitHub; the two train-* folders are empty leftovers). Landed CR-outside-followups (d) (code `20054995`, merge `5985289e`; opus r1 + sonnet r1 APPROVE-WITH-NITS, exact-count NIT taken); in-test old-behaviour contrast (newest time alone 9 sessions, with the earlier time 4). cargo --lib 2018/0, clippy clean. CR-ultimate-followups (b) found already done (s27), noted. NOT PUSHED, NOT INSTALLED (CODE-ONLY): the next FULL session pushes main.
+- 2026-11-18 ~14:45-16:30 s45 (coordinator-assigned from the HQ session; owner's 14:41 and 15:40 go-aheads; pushes and install on his word): look-only walkthrough of `a29c7b62` against the tester guide (`_train\view-1118a`; nothing applied) and a five-reader panel found the guide's stutter/crash route does not exist as written and several screens disagreeing with themselves; landed the tester-readiness pass (merge `a8bfa10d`, TS/CSS/locale only; sonnet r1 REQUEST-CHANGES, 1 MUST + 3 SHOULD taken); pushed with the scheduled s44 commits (`42bc6e90..fdd2f07c`, vitest 551 files / 10844 tests, cargo --lib 2018/0); installed `fdd2f07cb4182be6f7f194db67b70de44e6ae1e1` (runtime proof `fdd2f07c` release, shell 0.9.26, attempt 1); RELEASE_STATE stamped. Tester guide rewrite and package follow.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
