@@ -157,6 +157,12 @@ release checklist); no new rules.
   (real play against its reference session, opus r1 MUST-FIX). s28 re-review of that fix: opus + sonnet
   APPROVE-WITH-NITS. Not taken: a source-order pin (sessions add no source-text tests); a behaviour test through
   `conclude_realplay` waits on the judging-chain extraction (Trial measurement refactor).
+- **Push gate blocked (s46, 2026-11-18 17:24 and 17:33):** `scripts/verify-release-state-guard.test.mjs` (`has no
+  broken citation, no missing section and no state drift`) timed out at its 120 s limit inside the full vitest run,
+  twice, with the PC otherwise idle; alone the check takes 15 s and reports 31/31 ok; every other test passed (10847).
+  `main` is ahead of GitHub with `04cceb24` (Test-room footnote wording, words only) and this note; nothing in it is
+  installed. Evidence `_train\s46-push1-fail.txt`, `s46-push2-fail.txt`. Not touched: the test, its limit, the gate.
+  Needs a decision: find what slowed the check under load, or run the gate with fewer parallel workers.
 
 ## Queue
 
@@ -474,6 +480,12 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       Save this as a file); not checked on screen. The guide keeps the tester off the Benchmark and Tuning stations and
       the Live/History session comparisons (still fixed ±3%, parked item 8).
       s43 package refreshed to `a29c7b62` (`Compy-0.9.26-a29c7b62-tester-setup.exe`, SHA-256 in `SHA256.txt`); shareable zip `C:\Users\Kuya\Desktop\Compy-tester-a29c7b62.zip`; the three older installers moved to `Compy-tester\older\`; not ticked, not sent.
+      s46 (2026-11-18): package rebuilt from the pushed, installed, screen-checked build `fdd2f07c` after a look-only
+      walkthrough and a five-reader panel (`_train\view-1118a`, `view-1118b`); guide rewritten to the real click paths
+      with a known-issues list; one file `Desktop\Compy-tester-fdd2f07c.zip`; older installers, guides and zip moved
+      to `Compy-tester\older\`; not ticked, not sent. Not verified: the "Optimize my game" flow past its button and
+      first run on a PC with no history (from code only). Not in this build: the footnote/tile wording fix (merge
+      `04cceb24`, unpushed).
 - [ ] [CORRECT] **CR-1102-left** (codebase review 2026-11-02 to 11-03, slices 1-8; fixed in `8f4037c1`..`508b200f`, `4465e74b`, `16479f4b`, `22d23584`..`cd9e11c0`)
       Triaged 2026-11-10 (coordinator desk session). Already fixed on `main`, struck: the Trial delta on a 0/NaN
       baseline (`4d5595fd`), Black Box/export/capture start and the slow probes off the UI thread (`9cab29d0`,
@@ -801,6 +813,9 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       scrollWidth vs clientWidth; plus computed contrast and hover before/after); not run (owner never idle, see
       CR-view-focus-1112c). Dev-fixture shots (`view-1112d\fixture-upgrade`) show no overflow at 1500x980 but are not
       the station's layout.
+- [ ] [POLISH] **CR-assumed-band-since-rest** (s46 sonnet NIT) GuidedJourney's end receipt and SessionDebrief still
+      call `assumedBandLine` without the since-figure, so a record with no figure can say a game's noise 'still isn't
+      measured' after it has been. Words only.
 
 ### Now — finish what's open
 - [x] **CR-zh-drift-count** (second whole-range review) zh-CN `home.json` driftCount strings still said "已漂移" after the English was reworded to "changed since they were last good" (`8d855c05`).
@@ -2884,7 +2899,7 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
 - 2026-11-18 ~08:30-09:00 s42 (scheduled; preflight CODE-ONLY, owner on Firefox, no game): no catch-up (main = GitHub; the two train-* folders were empty leftovers, no branch). CR-plan-read-prompt-write established read-only (no live route; residual queued CR-plan-write-recorded-guid). Landed CR-fall-words-band (merge `03c1e99a`, `4a6e7f5b`; sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken; old-code proof 3 fail). Not pushed, not installed (CODE-ONLY): the next FULL session pushes main.
 - 2026-11-18 ~11:50-12:48 s43 (coordinator-assigned from the HQ session; preflight CODE-ONLY, owner at the PC; pushes and install on the owner's 11:49 "go all"): catch-up push of s42 refused twice by the gate (affordance census lost realPlay.likelyWorse to a chosen-key t() call, then the locale parity guard on the first fix); fixed `2e22996b`, push PASS. Landed CR-plan-write-recorded-guid + CR-care-unread-rig (merge `b09c4443`; opus r1 + sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken `ffbf619e`, no r2); old-code proof 3 + 1 + 1 tests fail; cargo --lib 2016/0, clippy clean. CR-plan-compare-rest ticked (rest is POLISH). TG-salvage and TG-passive-band parked as POLISH on the owner's word. Push 2 PASS (`2e22996b..a29c7b62`, vitest 551 files / 10828 tests, cargo --lib 2016/0). Installed `a29c7b62fa89a74791dfeb19f771bab10758324f` (runtime proof `a29c7b62` release, shell 0.9.26, attempt 1); RELEASE_STATE stamped. Tester package refreshed (`C:\Users\Kuya\Desktop\Compy-tester-a29c7b62.zip`), not sent.
 - 2026-11-18 ~13:30-14:00 s44 (scheduled; preflight CODE-ONLY, owner on Discord, no game): no catch-up (main = GitHub; the two train-* folders are empty leftovers). Landed CR-outside-followups (d) (code `20054995`, merge `5985289e`; opus r1 + sonnet r1 APPROVE-WITH-NITS, exact-count NIT taken); in-test old-behaviour contrast (newest time alone 9 sessions, with the earlier time 4). cargo --lib 2018/0, clippy clean. CR-ultimate-followups (b) found already done (s27), noted. NOT PUSHED, NOT INSTALLED (CODE-ONLY): the next FULL session pushes main.
-- 2026-11-18 ~14:45-16:30 s45 (coordinator-assigned from the HQ session; owner's 14:41 and 15:40 go-aheads; pushes and install on his word): look-only walkthrough of `a29c7b62` against the tester guide (`_train\view-1118a`; nothing applied) and a five-reader panel found the guide's stutter/crash route does not exist as written and several screens disagreeing with themselves; landed the tester-readiness pass (merge `a8bfa10d`, TS/CSS/locale only; sonnet r1 REQUEST-CHANGES, 1 MUST + 3 SHOULD taken); pushed with the scheduled s44 commits (`42bc6e90..fdd2f07c`, vitest 551 files / 10844 tests, cargo --lib 2018/0); installed `fdd2f07cb4182be6f7f194db67b70de44e6ae1e1` (runtime proof `fdd2f07c` release, shell 0.9.26, attempt 1); RELEASE_STATE stamped. Tester guide rewrite and package follow.
+- 2026-11-18 ~14:45-17:43 s45 (coordinator-assigned from the HQ session; owner's 14:41 and 15:40 go-aheads; pushes and install on his word): look-only walkthrough of `a29c7b62` against the tester guide (`_train\view-1118a`; nothing applied) and a five-reader panel found the guide's stutter/crash route does not exist as written and several screens disagreeing with themselves; landed the tester-readiness pass (merge `a8bfa10d`, TS/CSS/locale only; sonnet r1 REQUEST-CHANGES, 1 MUST + 3 SHOULD taken); pushed with the scheduled s44 commits (`42bc6e90..fdd2f07c`, vitest 551 files / 10844 tests, cargo --lib 2018/0); installed `fdd2f07cb4182be6f7f194db67b70de44e6ae1e1` (runtime proof `fdd2f07c` release, shell 0.9.26, attempt 1); RELEASE_STATE stamped. Tester guide rewrite and package follow. s46 same session: on-screen re-check of `fdd2f07c` (`_train\view-1118b`: fixes confirmed, 0 console errors); Test-room footnote/tile wording fix merged (`04cceb24`, sonnet APPROVE-WITH-NITS) but NOT pushed: the push gate timed out twice on verify-release-state-guard (see Needs owner); tester package rebuilt from `fdd2f07c` (`Desktop\Compy-tester-fdd2f07c.zip`), not sent.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
