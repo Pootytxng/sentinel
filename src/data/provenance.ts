@@ -12,7 +12,7 @@ export type Provenance = "verified" | "measured-signal" | "expected-impact";
 // The one-word chip label. Verified / Measured / Expected — identical on every surface.
 export const PROVENANCE_LABEL: Record<Provenance, string> = {
   verified: "Verified",
-  "measured-signal": "Measured",
+  "measured-signal": "Measured elsewhere",
   "expected-impact": "Expected",
 };
 

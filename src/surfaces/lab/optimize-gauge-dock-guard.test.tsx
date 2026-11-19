@@ -149,6 +149,31 @@ describe("safe-stack gauge readout centering (owner-caught: digits over the ring
     );
   });
 
+  // s49 fresh-PC pass: "8/9 YOUR SAFE STACK" on an empty ledger read as 8 things the user built.
+  // Settings that were simply already on in Windows are headed as such; the heading says "your
+  // stack" only when Compy has an active change among them.
+  it("heads the ring 'Already set this way' when Compy applied none of them, 'Your safe stack' when it did", () => {
+    const rec = (id: string, on: boolean) => ({ ...(fast.recs as never[])[0] as object, id, title: id, currently_applied: on });
+    const recs = [rec("game-mode", true), rec("hags", false)] as never[];
+    const none = render(
+      <ConfirmProvider>
+        <OptimizeStation {...fast} recs={recs} />
+      </ConfirmProvider>,
+    );
+    expect(none.container.querySelector(".lab-gauge-caption-k")!.textContent).toBe("Already set this way");
+    none.unmount();
+    const some = render(
+      <ConfirmProvider>
+        <OptimizeStation
+          {...fast}
+          recs={recs}
+          activeChangeFor={(id: string) => (id === "game-mode" ? ({ id: "c1", rec_id: id } as never) : undefined)}
+        />
+      </ConfirmProvider>,
+    );
+    expect(some.container.querySelector(".lab-gauge-caption-k")!.textContent).toBe("Your safe stack");
+  });
+
   it("CSS: the outer box centers, the inner group owns the baseline", () => {
     const css = readFileSync(join("src", "surfaces", "lab", "OptimizeStation.css"), "utf8");
     const center = block(css, ".lab-gauge-center");

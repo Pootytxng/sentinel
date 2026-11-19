@@ -7,7 +7,7 @@ import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "./provenance";
 describe("provenance wording (honesty doctrine)", () => {
   it("uses the same one-word chip label everywhere (no per-surface drift)", () => {
     expect(PROVENANCE_LABEL.verified).toBe("Verified");
-    expect(PROVENANCE_LABEL["measured-signal"]).toBe("Measured");
+    expect(PROVENANCE_LABEL["measured-signal"]).toBe("Measured elsewhere");
     expect(PROVENANCE_LABEL["expected-impact"]).toBe("Expected");
   });
 

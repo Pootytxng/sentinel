@@ -171,7 +171,13 @@ export function OptimizeStation(props: LabFastPathProps) {
             </span>
           </div>
           <p className="lab-gauge-caption">
-            <span className="lab-gauge-caption-k">{t("lab.optimizeStation.yourSafeStack")}</span>
+            {/* s49 fresh-PC pass: with no active Compy change among them, these are settings Windows
+                already has, not a stack this user built — the heading says so. */}
+            <span className="lab-gauge-caption-k">
+              {safeStack.some((r) => r.currently_applied && props.activeChangeFor(r.id))
+                ? t("lab.optimizeStation.yourSafeStack")
+                : t("lab.optimizeStation.alreadySetStack")}
+            </span>
             {/* State observation, never an action claim (consumer-panel Phase 0/1): currently_applied
                 is a live system probe — a setting can be on because Windows shipped that way or the
                 user set it themselves, not because Compy applied anything. "Fully applied" read as
