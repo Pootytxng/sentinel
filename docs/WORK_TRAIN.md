@@ -164,6 +164,14 @@ release checklist); no new rules.
   `main` is ahead of GitHub with `04cceb24` (Test-room footnote wording, words only) and this note; nothing in it is
   installed. Evidence `_train\s46-push1-fail.txt`, `s46-push2-fail.txt`. Not touched: the test, its limit, the gate.
   Needs a decision: find what slowed the check under load, or run the gate with fewer parallel workers.
+- **Release-state stamp check is silently skipped (found s48, 2026-11-18):** `verify-release-state.mjs`
+  `embeddedStampTokens` never sees the installed stamp because in `compy.exe` it runs straight into the next string's
+  hex (`fdd2f07c381b4222...`), longer than the 7-12 cap, so `owner_installed_stamp` prints STATE-SKIP (`0 of 51
+  embedded tokens`). Installs were proven by ship-reinstall's runtime proof instead. A guard change (prefix matching)
+  needs the owner's yes. Evidence `_train\s48-*.txt`.
+- **Problems: a non-game app crash gets "Verify the game's files" (found s48 on an empty-data run):** `blackbox.rs`
+  `rule_app_specific` has no known-games source; needs the known game process names passed into `assess` and a neutral
+  step for other apps. Listed in the tester guide as known.
 
 ## Queue
 
@@ -487,6 +495,10 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       to `Compy-tester\older\`; not ticked, not sent. Not verified: the "Optimize my game" flow past its button and
       first run on a PC with no history (from code only). Not in this build: the footnote/tile wording fix (merge
       `04cceb24`, unpushed).
+      s51 (2026-11-19): package rebuilt from `cfbe08a7` (adds the footnote, Care-seed and fresh-PC wording fixes);
+      guide updated for the "Watch it work" card, the optional tour and the stutter-task order after a look-only run
+      against an empty data folder (`_train\view-1118c`: "Optimize my game" is present for a new user); one file
+      `Desktop\Compy-tester-cfbe08a7.zip`; previous package moved to `Compy-tester\older\`; not ticked, not sent.
 - [ ] [CORRECT] **CR-1102-left** (codebase review 2026-11-02 to 11-03, slices 1-8; fixed in `8f4037c1`..`508b200f`, `4465e74b`, `16479f4b`, `22d23584`..`cd9e11c0`)
       Triaged 2026-11-10 (coordinator desk session). Already fixed on `main`, struck: the Trial delta on a 0/NaN
       baseline (`4d5595fd`), Black Box/export/capture start and the slow probes off the UI thread (`9cab29d0`,
@@ -2821,11 +2833,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-17 s34 (scheduled, CODE-ONLY: owner in Steam, no game): CR-home-reversible-note `a2426213` (merge `0f293a6e`;
-  census re-recorded for the two retired note keys), CR-debrief-no-undo-dismiss `55979f1c` (merged --no-ff with this
-  docs commit). TS only, no rollback logic: no review. tsc 0; full vitest 547/551 files on item 1 (3 site-app suites +
-  the census, re-recorded and passing); item 2's touched suites + i18n guards pass. Not pushed (CODE-ONLY): main is 4+
-  ahead of GitHub; the next FULL session pushes and installs.
 - 2026-11-17 s35 (FULL; coordinator-assigned; no game at any check): reviewed s34's two items (sonnet AWN; its one
   SHOULD-FIX, "not checked" said twice on Home, checked and not taken: the ledger tally and the model's unknown count
   count disjoint rows). The first push's gate caught s34's Dismiss on the danger-red hover (fixed `069f1c85`, census
@@ -2922,6 +2929,7 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   on installed `fdd2f07c` and ticked (held Enter starts nothing, a fresh press confirms; nothing applied, Synez before/after).
   No code changed, no install (Friday install is tomorrow). Queue not refilled (same reason as s47). Pushed: yes.
 
+- 2026-11-18 ~21:15-22:00 and 2026-11-19 ~12:35-12:38 s48/s49/s51 (coordinator-assigned from the HQ session): read-only gate diagnosis (the release-state guard test makes ~178 serial git spawns, 44-72 s in a passing gate; `_train\s48-*`); look-only run of `fdd2f07c` against an empty data folder via `COMPY_MEASUREMENT_DATA_ROOT` (`_train\view-1118c`, real data unchanged); fresh-PC wording pass landed (merge `1d7d7c71`, sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken); pushed by s50; installed `cfbe08a78880b942bc1a402c48913cdb4ac7b91d` (runtime proof `cfbe08a7` release, shell 0.9.26, attempt 1); tester package rebuilt (`Desktop\Compy-tester-cfbe08a7.zip`), not sent.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
