@@ -67,7 +67,7 @@ describe("Black Box resolution line is worded in the viewer's language (P6-next-
     const target = incident("App crash", markedAt - 3_600_000, "Wardogs.exe");
     markYes(target, markedAt);
     const line = await lineFor([target], "zh-CN");
-    expect(line).toBe("此后的 6 天里没有记录到 Wardogs.exe 崩溃。");
+    expect(line).toBe("此后的 6 天里没有记录到 Wardogs 崩溃。");
   });
 
   it("zh-CN: a recurrence reads Chinese with a zh-CN date", async () => {
@@ -77,7 +77,7 @@ describe("Black Box resolution line is worded in the viewer's language (P6-next-
     markYes(target, markedAt);
     const line = await lineFor([target, again], "zh-CN");
     const date = new Date(againAt).toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
-    expect(line).toBe(`Wardogs.exe 在 ${date} 又停止响应了。`);
+    expect(line).toBe(`Wardogs 在 ${date} 又停止响应了。`);
     expect(line).not.toMatch(/[A-Za-z]{3,} (happened|again|recorded)/);
   });
 
@@ -90,7 +90,7 @@ describe("Black Box resolution line is worded in the viewer's language (P6-next-
   it("en: plural days, singular day, and the named-app recurrence", async () => {
     const target = incident("App crash", markedAt - 3_600_000, "Wardogs.exe");
     markYes(target, markedAt);
-    expect(await lineFor([target], "en")).toBe("No Wardogs.exe crash recorded in the 6 days since.");
+    expect(await lineFor([target], "en")).toBe("No Wardogs crash recorded in the 6 days since.");
     cleanup();
 
     const oneDayMark = now - DAY - 3_600_000;
@@ -103,6 +103,6 @@ describe("Black Box resolution line is worded in the viewer's language (P6-next-
     markYes(target, markedAt);
     const line = await lineFor([target, incident("App crash", againAt, "WARDOGS.EXE")], "en");
     const date = new Date(againAt).toLocaleDateString("en", { month: "short", day: "numeric" });
-    expect(line).toBe(`Wardogs.exe crashed again on ${date}.`);
+    expect(line).toBe(`Wardogs crashed again on ${date}.`);
   });
 });

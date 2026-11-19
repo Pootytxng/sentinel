@@ -34,6 +34,7 @@ import { useJourneyPhase } from "./GuidedJourney";
 import { CareNextStep } from "./CareNextStep";
 import { pickCareStep, isLifted, storedStutterStep, dismissStoredStep, markFinalShown, type StutterResult } from "./care-next-step";
 import { CareHonestEnd } from "./CareHonestEnd";
+import { prettyGameName } from "./game-name";
 import { honestEndFor, splitSkips } from "./care-honest-end";
 import "./BlackBox.css";
 
@@ -603,7 +604,8 @@ function readHelpMark(incidentKey: string, voteKey: string): HelpMark | null {
 // responding"; other kinds name the tag, which stays English (no localised tag labels exist yet).
 // Static keys with inline bags, so the locale-parity guard can grade them.
 function resolutionLine(res: IncidentResolution, t: TFunction, lang: string): string {
-  const app = res.app;
+  // CR-noise-footnote-pair: named as the other rooms name it ("ROB RUN", not "ROB RUN.exe").
+  const app = res.app ? prettyGameName(res.app) || res.app : res.app;
   const kind = res.kind;
   const crash = !!app && kind === "App crash";
   const hang = !!app && kind === "App hang";

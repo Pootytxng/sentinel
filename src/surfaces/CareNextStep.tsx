@@ -7,6 +7,7 @@ import { fallPct } from "./test-summary";
 import { CareSupportExport } from "./CareHonestEnd";
 import { Depth, ReceiptRow } from "../design/Depth";
 import { displayModeLabel } from "../data/display-mode";
+import { prettyGameName } from "./game-name";
 import "./CareNextStep.css";
 
 // P6-next: the ONE next step at the top of the Care view, and its measured payoff. BlackBox picks the
@@ -58,9 +59,11 @@ export function CareNextStep({
   // The line `payoffFor` judges a session back at: the band's matching fall (CR-what-changed-fall).
   const pct = step.source === "stutter" ? fallPct((anchor.baseline ?? step.baseline).noiseFloorPct).toFixed(0) : "";
 
-  // App crash / App hang name the faulting app ("No Valorant.exe crash recorded…"); other kinds,
+  // App crash / App hang name the faulting app ("No Valorant crash recorded…"); other kinds,
   // or an app Windows didn't name, keep the kind-only line. Static keys, so the guards can see them.
-  const app = step.source === "incident" ? step.appLabel : null;
+  // CR-noise-footnote-pair: the app as the other rooms name it ("ROB RUN", not "ROB RUN.exe"); the
+  // receipt below keeps Windows' own name verbatim.
+  const app = step.source === "incident" && step.appLabel ? prettyGameName(step.appLabel) || step.appLabel : null;
   const crash = !!app && kind === "App crash";
   const hang = !!app && kind === "App hang";
   let line: string;

@@ -32,13 +32,26 @@ describe("assumedBandLine", () => {
     expect(line).not.toContain("measured\":");
   });
 
+  it("a figure only an earlier result carries is named as such; a 'since' figure wins over it", () => {
+    const a = { assumed_pct: 3, measured_low1_pct: null, measured_sessions: null };
+    const line = assumedBandLine(a, "WardogsClient.exe", t, null, { pct: 21.6, sessions: 6 });
+    expect(line).toContain("lab.experimentBench.assumedBandMeasuredEarlier ");
+    expect(line).toContain('"measured":"21.6"');
+    expect(line).toContain('"game":"WardogsClient"');
+    const since = assumedBandLine(a, "WardogsClient.exe", t, { pct: 18, sessions: 7 }, { pct: 21.6, sessions: 6 });
+    expect(since).toContain("lab.experimentBench.assumedBandMeasuredSince ");
+    // The record's own figure always wins: it is what the label measured for this result.
+    const own = assumedBandLine({ ...a, measured_low1_pct: 20, measured_sessions: 9 }, "x.exe", t, null, { pct: 21.6, sessions: 6 });
+    expect(own).not.toContain("assumedBandMeasuredEarlier");
+  });
+
   it("a narrower measured noise is said as narrower", () => {
     const line = assumedBandLine({ assumed_pct: 3, measured_low1_pct: 3, measured_sessions: 8 }, "cs2.exe", t);
     expect(line).toContain("lab.experimentBench.assumedBandNarrower");
   });
 
   it("every new line exists in English and Simplified Chinese", () => {
-    for (const key of ["noiseMeasuredBands", "assumedBandUnmeasured", "assumedBandWider", "assumedBandWiderNoClaim", "assumedBandWiderUnjudged", "assumedBandNarrower"]) {
+    for (const key of ["noiseMeasuredBands", "assumedBandUnmeasured", "assumedBandMeasuredEarlier", "assumedBandWider", "assumedBandWiderNoClaim", "assumedBandWiderUnjudged", "assumedBandNarrower"]) {
       const enBench = (en as unknown as { experimentBench: Record<string, string> }).experimentBench;
       const zhBench = (zh as unknown as { experimentBench: Record<string, string> }).experimentBench;
       expect(enBench[key], key).toBeTruthy();

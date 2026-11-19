@@ -703,11 +703,17 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       session (start and end reads equal) is not seen: the plan is read only at the capture's start and save. Read it
       on the capture's existing tick (cheaply, e.g. the registry's active scheme, not a powercfg spawn per tick) and
       record "changed during" when any read differs. Measurement: opus + sonnet. Low odds (outside Compy, mid-game).
-- [ ] [CORRECT] **CR-noise-footnote-pair** (s51 screen check) On a PC with history, one past-result footnote can still
+- [x] [CORRECT] **CR-noise-footnote-pair** (s51 screen check) On a PC with history, one past-result footnote can still
       say "WardogsClient's noise still isn't measured" while another on the same page quotes its measured ±21.6% (from
       6 sessions); the s46 fix only uses a figure measured after the footnoted result. Decide the wording for a figure
       measured BEFORE the result that the result itself was not judged on. Words only. Also Problems still shows "ROB
       RUN.exe" where other rooms say "ROB RUN".
+      Done s52 (`5131f61d`, merged with this tick; CODE-ONLY, not pushed, not installed): such a footnote now reads "Compy
+      measured {game}'s noise at ±X% (from N sessions) for an earlier result, but couldn't measure it for this one, so
+      treat this result as unconfirmed" (en + zh-CN; strictly older records of the same game only; the row's own and a
+      "since" figure still win). The Problems next-step payoff and the "Did this help?" line name the app through
+      `prettyGameName` ("ROB RUN crashed again"); the technical receipt keeps Windows' name. Old code: 7 tests fail.
+      Sonnet r1 APPROVE-WITH-NITS (SHOULD-FIX strictly-older and the cross-game test taken). Not checked on screen.
 - [ ] [POLISH] **CR-zh-readiness-rest** (left by CR-zh-readiness-words) The other limiter rows are still English in zh-CN: the
       install-drive (9 sentences), applied-changes (drift counts + kept-outside titles) and fps-monitoring checks, and
       priorities.rs's own rows (pending safe tweaks, startup load, Memory Integrity); and the console / Check rows print
@@ -2939,6 +2945,7 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   No code changed, no install (Friday install is tomorrow). Queue not refilled (same reason as s47). Pushed: yes.
 
 - 2026-11-18 ~21:15-22:00 and 2026-11-19 ~12:35-12:38 s48/s49/s51 (coordinator-assigned from the HQ session): read-only gate diagnosis (the release-state guard test makes ~178 serial git spawns, 44-72 s in a passing gate; `_train\s48-*`); look-only run of `fdd2f07c` against an empty data folder via `COMPY_MEASUREMENT_DATA_ROOT` (`_train\view-1118c`, real data unchanged); fresh-PC wording pass landed (merge `1d7d7c71`, sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken); pushed by s50; installed `cfbe08a78880b942bc1a402c48913cdb4ac7b91d` (runtime proof `cfbe08a7` release, shell 0.9.26, attempt 1); tester package rebuilt (`Desktop\Compy-tester-cfbe08a7.zip`), not sent.
+- 2026-11-19 ~13:30-14:10 s52 (scheduled; preflight CODE-ONLY, owner on Discord, no game): no catch-up (main = GitHub; the two train-* folders are empty leftovers, no branch). Landed CR-noise-footnote-pair (`5131f61d`, merged --no-ff with this tick; TS/locale only; sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken; old-code proof 7 fail; tsc 0, touched suites + i18n/census guards 365/365). Stopped after one item: the next ready item (CR-plan-mid-session) is Rust measurement with two reviews, too long for the time left. NOT PUSHED, NOT INSTALLED (CODE-ONLY): the next FULL session pushes main; Friday install picks it up.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
