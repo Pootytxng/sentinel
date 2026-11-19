@@ -212,6 +212,7 @@
     "gaugeAriaLabel": "{{applied}} of {{total}} safe tweaks on",
     "yourSafeStack": "Your safe stack",
     "alreadySetStack": "Already set this way",
+    "safeTweaksForPc": "Safe tweaks for this PC",
     "allApplied": "All {{total}} already on for this rig — nothing to apply.",
     "freshLeft": "{{count}} left to enable below — one tap each, reversible.",
     "driftedRestore_one": "{{count}} was turned off outside Compy — restore it below.",

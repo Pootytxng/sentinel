@@ -208,6 +208,7 @@
     "gaugeAriaLabel": "{{total}} 项安全优化项中已开启 {{applied}} 项",
     "yourSafeStack": "你的安全优化组合",
     "alreadySetStack": "本机已是这样设置",
+    "safeTweaksForPc": "适合这台电脑的安全优化项",
     "allApplied": "这台主机的 {{total}} 项已全部开启——无需再应用。",
     "freshLeft": "下方还有 {{count}} 项待开启——每项一键完成,且可撤销。",
     "driftedRestore_one": "有 {{count}} 项在 Compy 之外被关闭——请在下方恢复。",

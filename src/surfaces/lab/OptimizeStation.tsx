@@ -176,7 +176,9 @@ export function OptimizeStation(props: LabFastPathProps) {
             <span className="lab-gauge-caption-k">
               {safeStack.some((r) => r.currently_applied && props.activeChangeFor(r.id))
                 ? t("lab.optimizeStation.yourSafeStack")
-                : t("lab.optimizeStation.alreadySetStack")}
+                : appliedSafe > 0
+                  ? t("lab.optimizeStation.alreadySetStack")
+                  : t("lab.optimizeStation.safeTweaksForPc")}
             </span>
             {/* State observation, never an action claim (consumer-panel Phase 0/1): currently_applied
                 is a live system probe — a setting can be on because Windows shipped that way or the
