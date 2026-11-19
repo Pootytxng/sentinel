@@ -524,7 +524,7 @@ describe("ExperimentBench (armed)", () => {
 
     const order = [...document.querySelectorAll(".exp-order-list li")].map((li) => li.textContent);
     expect(order).toEqual([
-      "Measured tweak backed by measurements; low risk.",
+      "Measured tweak shown to help in other measurements, not measured on this PC; low risk.",
       "Unmeasured tweak expected to help, not measured; moderate risk.",
     ]);
     expect(screen.getByText("Suggested order to test:")).toBeInTheDocument();

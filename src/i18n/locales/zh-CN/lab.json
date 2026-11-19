@@ -693,7 +693,7 @@
       "label": "建议的测试顺序：",
       "reason": "{{evidence}}；{{risk}}。",
       "evidence": {
-        "measured": "有实测依据",
+        "measured": "在其他实测中被证明有帮助，并非本机实测结果",
         "notMeasured": "预计有帮助，但未实测",
         "unknown": "没有说明有帮助的证据"
       },
