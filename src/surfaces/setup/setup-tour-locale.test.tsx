@@ -78,6 +78,21 @@ describe("the tour's lessons and recap read whole in zh-CN", () => {
     expect(strongZh).not.toContain("Lab");
   });
 
+  // s49 fresh-PC pass: the seatbelt demo hard-coded "Current: Balanced" for the power plan, untrue on
+  // any PC not on Balanced (the tour has no live plan name). It states the recommendation only.
+  it("the seatbelt demo makes no claim about the PC's current power plan, in both languages", async () => {
+    renderTour();
+    next();
+    expect(document.querySelector(".st-demo-sub")?.textContent).toBe("Recommended: High performance");
+    expect(document.body.textContent).not.toMatch(/Current: |Balanced/);
+    cleanup();
+    await i18n.changeLanguage("zh-CN");
+    renderTour();
+    next();
+    expect(document.querySelector(".st-demo-sub")?.textContent).toBe("推荐:高性能");
+    expect(document.body.textContent).not.toMatch(/当前|平衡/);
+  });
+
   it("the English stays byte-identical in en", () => {
     renderTour();
     for (let n = 0; n < 4; n++) next();
