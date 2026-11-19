@@ -371,6 +371,15 @@ export type SessionSummary = {
   frame_pacing?: { frames: number; p50_ms: number; p99_ms: number; p999_ms: number } | null;
 };
 
+/** Mirror of the Rust `OtherLoad` (game_state.rs): how busy everything except the game was over a
+ *  session's measured ticks, tenths of a percent (0..=1000). Record only; no UI reads it yet. */
+export type OtherLoad = {
+  readings: number;
+  unread: number;
+  mean_pct_x10: number;
+  p90_pct_x10: number;
+};
+
 /** Mirror of the Rust `GameStateFingerprint` (game_state.rs) — the honest conditions a session ran
  *  under. V1 collects only the provable fields (resolution/refresh/driver/Windows build/rig hash/
  *  gaming-mode); everything else stays absent = honestly Unknown, never inferred. Display resolution
@@ -407,6 +416,10 @@ export type GameStateFingerprint = {
   power_plan_changed?: boolean | null;
   /** TG-context schema version; absent = recorded before context was collected. */
   context_version?: number | null;
+  /** TG-context v2: how busy everything except the game was (CPU share of the whole PC, tenths of a percent); absent = unknown. Record only. */
+  other_cpu?: OtherLoad | null;
+  /** TG-context v2: the same for GPU work done by other processes. */
+  other_gpu?: OtherLoad | null;
   collected_at?: string | null;
 };
 
