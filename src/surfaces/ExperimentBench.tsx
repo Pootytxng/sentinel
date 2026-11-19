@@ -1163,7 +1163,14 @@ export default function ExperimentBench({
     // s46: the game's noise as this page's own records carry it now. A row judged before it was
     // measured says so ("wasn't measured when this was judged ... since measured at"), and no line on
     // the page says "not measured" about a game another line on it quotes a figure for.
-    const since = measuredGameNoise(experiments, x.game);
+    // "Since" must be true in time: only figures from records at or after this row's own time (the
+    // order measuredGameNoise itself uses: concluded_at, else created_at). An older figure was not
+    // measured "since" this was judged.
+    const at = (e: { created_at: string; concluded_at?: string | null }) => Date.parse(e.concluded_at ?? e.created_at) || 0;
+    const since = measuredGameNoise(
+      experiments.filter((e) => at(e) >= at(x)),
+      x.game,
+    );
     const assumedStatesFigure = x.assumed_band != null && (x.assumed_band.measured_low1_pct != null || since != null);
     const judged = x.noise_evidence
       ? isRealPlay(x)

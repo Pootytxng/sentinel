@@ -3625,7 +3625,7 @@ describe("s46: footnotes never call a game's noise unmeasured when the page quot
         ...KEPT_EXPERIMENT,
         id: "exp:old",
         game: "WardogsClient.exe",
-        created_at: "2026-11-01T00:00:00Z",
+        created_at: "2026-11-01T00:00:00Z", concluded_at: "2026-11-01T01:00:00Z",
         noise_evidence: judgedUnmeasured,
         assumed_band: band(null, null),
       },
@@ -3633,7 +3633,7 @@ describe("s46: footnotes never call a game's noise unmeasured when the page quot
         ...KEPT_EXPERIMENT,
         id: "exp:new",
         game: "WardogsClient.exe",
-        created_at: "2026-11-12T00:00:00Z",
+        created_at: "2026-11-12T00:00:00Z", concluded_at: "2026-11-12T01:00:00Z",
         noise_evidence: judgedUnmeasured,
         assumed_band: band(21.6, 6),
       },
@@ -3646,6 +3646,44 @@ describe("s46: footnotes never call a game's noise unmeasured when the page quot
     expect(all).toContain(
       "WardogsClient's noise wasn't measured when this was judged; it has since been measured at ±21.6% (from 6 sessions).",
     );
+  });
+
+  it("the row that carries its own figure says it, beside the older row's since-measured line", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, id: "exp:old", game: "WardogsClient.exe", created_at: "2026-11-01T00:00:00Z", concluded_at: "2026-11-01T01:00:00Z", noise_evidence: judgedUnmeasured, assumed_band: band(null, null) },
+      { ...KEPT_EXPERIMENT, id: "exp:new", game: "WardogsClient.exe", created_at: "2026-11-12T00:00:00Z", concluded_at: "2026-11-12T01:00:00Z", noise_evidence: judgedUnmeasured, assumed_band: band(21.6, 6) },
+    ];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(notes()).toHaveLength(2));
+    expect(notes().some((n) => n.includes("WardogsClient's measured noise is ±21.6% (from 6 sessions)"))).toBe(true);
+  });
+
+  it("an older record's figure is not 'since': the newer unmeasured row keeps the unmeasured wording", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, id: "exp:old", game: "WardogsClient.exe", created_at: "2026-11-01T00:00:00Z", concluded_at: "2026-11-01T01:00:00Z", noise_evidence: judgedUnmeasured, assumed_band: band(21.6, 6) },
+      { ...KEPT_EXPERIMENT, id: "exp:new", game: "WardogsClient.exe", created_at: "2026-11-12T00:00:00Z", concluded_at: "2026-11-12T01:00:00Z", noise_evidence: judgedUnmeasured, assumed_band: band(null, null) },
+    ];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(notes()).toHaveLength(2));
+    const all = notes().join("\n");
+    expect(all).not.toContain("has since been measured");
+    expect(all).toContain("WardogsClient's noise still isn't measured");
+  });
+
+  it("one game's footnote never quotes another game's figure", async () => {
+    state.gate = true;
+    state.experiments = [
+      { ...KEPT_EXPERIMENT, id: "exp:a", game: "WardogsClient.exe", created_at: "2026-11-01T00:00:00Z", concluded_at: "2026-11-01T01:00:00Z", noise_evidence: judgedUnmeasured, assumed_band: band(null, null) },
+      { ...KEPT_EXPERIMENT, id: "exp:b", game: "ROB RUN.exe", created_at: "2026-11-12T00:00:00Z", concluded_at: "2026-11-12T01:00:00Z", noise_evidence: judgedUnmeasured, assumed_band: band(29, 6) },
+    ];
+    render(<ExperimentBench />);
+    await waitFor(() => expect(notes()).toHaveLength(2));
+    const a = notes().find((n) => n.includes("WardogsClient"))!;
+    expect(a).toContain("WardogsClient's noise still isn't measured");
+    expect(a).not.toContain("29%");
+    expect(notes().find((n) => n.includes("ROB RUN"))).toContain("ROB RUN's measured noise is ±29% (from 6 sessions)");
   });
 
   it("a game nothing has measured keeps saying so", async () => {
