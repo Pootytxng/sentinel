@@ -78,6 +78,9 @@
     },
     "otherDriver": {
       "what": "A driver other than graphics was updated"
+    },
+    "graphicsMod": {
+      "what": "{{game}}'s folder contains a graphics mod ({{name}})"
     }
   },
   "since": {
@@ -195,7 +198,12 @@
     "recoveredQuietSeen": "Compy saw no build or encoding program start, and the rest of your PC was quiet ({{pct}}% CPU used by other programs) in the sessions that ran normally.",
     "gapDayUnplaced": "{{what}} on {{when}} (time of day not known).",
     "recoveryDayUnplaced": "Windows recorded a change on {{when}} without a time of day, so Compy can't say whether it came before or after the rough sessions.",
-    "recoveredSteamLatestOnly": "Steam only keeps the latest update time of {{game}}'s files, and that is after the rough sessions, so Compy can't say whether they changed in between."
+    "recoveredSteamLatestOnly": "Steam only keeps the latest update time of {{game}}'s files, and that is after the rough sessions, so Compy can't say whether they changed in between.",
+    "modFilesCreated": "Files of this mod were created in this folder around {{first_seen}} (Windows resets this date when a folder is copied or moved).",
+    "modSettingsChanged": "Its settings file was last changed on {{date}}.",
+    "modLogWritten": "The mod's own log or cache file was last written on {{date}}.",
+    "modLogBeforeRough": "That is before the rough session, so the mod may not have been running then.",
+    "crossGameMod": "{{otherGame}}'s folder contains {{name}} files, so its rough sessions may have their own reason."
   },
   "fix": {
     "title": "How to fix it",
@@ -241,6 +249,10 @@
     "programInstalled": {
       "step1": "Close {{names}} while you play, or uninstall it if you don't need it.",
       "step2": "Play {{game}} once, then press Something's wrong again."
+    },
+    "graphicsMod": {
+      "step1": "Check {{name}}'s own page for a version that matches your graphics driver.",
+      "step2": "To test without it, move its files out of the game folder (or use its own uninstall), play once, and press Something's wrong again."
     }
   },
   "card": {
@@ -274,7 +286,8 @@
     "gameFiles": "Steam hasn't recorded an update to {{game}} since {{when}}.",
     "gpuDriverNoInstall": "Graphics driver: still {{driver}}. Windows recorded no graphics driver install in this period.",
     "seen": "Also looked at:",
-    "cantSeeFold": "What Compy can't see"
+    "cantSeeFold": "What Compy can't see",
+    "graphicsMod": "No known graphics mod found in {{game}}'s folder."
   },
   "unknown": {
     "startupPrograms": "Which programs start with Windows, compared with before",
@@ -290,7 +303,11 @@
     "windowsBuild": "Which Windows build was in use",
     "driftTiming": "When some of the settings Compy watches changed",
     "driftUnreadable": "Its record of setting changes, which couldn't be read",
-    "identityUnreadable": "Its record of graphics driver and power plan checks, which couldn't be read"
+    "identityUnreadable": "Its record of graphics driver and power plan checks, which couldn't be read",
+    "modsNoFolder": "Whether {{game}}'s folder has a graphics mod (Compy couldn't match the game to an install folder)",
+    "modsFolderUnreadable": "Whether {{game}}'s folder has a graphics mod (the folder couldn't be read)",
+    "modsPartial": "Whether {{game}}'s folder has a graphics mod (only part of the folder was scanned)",
+    "modsUnavailable": "Whether {{game}}'s folder has a graphics mod (looking took too long)"
   },
   "nothingWrong": {
     "title": "Nothing looks wrong",
@@ -339,7 +356,8 @@
     "updatesUnclassified_other": "{{count}} Windows updates Compy couldn't classify.",
     "updatesUnclassifiedKb_one": "{{count}} Windows update Compy couldn't classify ({{kbs}}).",
     "updatesUnclassifiedKb_other": "{{count}} Windows updates Compy couldn't classify ({{kbs}}).",
-    "driverOtherInstall": "Windows recorded a graphics driver install on {{when}} for a different version than the one your rough sessions ran on."
+    "driverOtherInstall": "Windows recorded a graphics driver install on {{when}} for a different version than the one your rough sessions ran on.",
+    "modSettingsOnly": "{{game}}'s folder contains a settings or data file from {{name}}; Compy can't tell whether the mod itself is installed."
   },
   "limit": {
     "cantSee": "Compy couldn't see {{what}}: {{why}}.",

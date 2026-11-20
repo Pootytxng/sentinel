@@ -707,8 +707,9 @@ pub(crate) fn read_real_changes(t0: DateTime<Utc>, t1: DateTime<Utc>, game_exe: 
 /// The diagnosis with the dated readers: a first pass finds the problem and its window, `fetch` reads
 /// that window within `budget`, and the second pass uses the report. If there is no problem to explain,
 /// or the readers fail or run long, the answer is the same engine with every kind Unknown.
+#[cfg_attr(not(test), allow(dead_code))] // the command uses `diagnose_with_readings`; the tests of the Windows readers use this
 pub(crate) fn diagnose_with_changes<F>(
-    mut inp: DiagnoseInputs,
+    inp: DiagnoseInputs,
     complaint: Complaint,
     game: Option<&str>,
     budget: Duration,
@@ -717,8 +718,50 @@ pub(crate) fn diagnose_with_changes<F>(
 where
     F: FnOnce(DateTime<Utc>, DateTime<Utc>, String) -> ChangeRead + Send + 'static,
 {
+    diagnose_with_readings(inp, complaint, game, budget, fetch, None::<fn(String, Vec<String>) -> ModInput>)
+}
+
+/// `diagnose_with_changes` plus the scan of the game's folder: `fetch_mods` gets the game's process name and
+/// the process names of other games that also got rough, and runs on its own thread beside the Windows
+/// readers, so both wait inside the SAME `budget`. A scan that is still running when the budget ends is left
+/// to finish by itself (each scan bounds itself) and the mods read as `took-too-long`, never as clean; the
+/// Windows readers are never delayed by it.
+pub(crate) fn diagnose_with_readings<F, G>(
+    mut inp: DiagnoseInputs,
+    complaint: Complaint,
+    game: Option<&str>,
+    budget: Duration,
+    fetch: F,
+    fetch_mods: Option<G>,
+) -> Diagnosis
+where
+    F: FnOnce(DateTime<Utc>, DateTime<Utc>, String) -> ChangeRead + Send + 'static,
+    G: FnOnce(String, Vec<String>) -> ModInput + Send + 'static,
+{
     let probe = diagnose(&inp, complaint, game);
     let (Some((t0, t1)), Some(g)) = (change_window(&probe), probe.game.clone()) else { return probe };
+    let started = std::time::Instant::now();
+    let mods_rx = fetch_mods.map(|f| {
+        let others = mods::other_rough_games(&inp, &probe);
+        let game = g.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let spawned = std::thread::Builder::new().name("paramedic-mods".into()).spawn(move || {
+            let _ = tx.send(f(game, others));
+        });
+        (spawned.is_ok(), rx)
+    });
     inp.changes = run_within(budget, move || fetch(t0, t1, g));
+    if let Some((spawned, rx)) = mods_rx {
+        let unavailable = |why: &'static str| ModInput { game: mods::ModsRead::Unavailable(why), others: Vec::new() };
+        inp.mods = if spawned {
+            match rx.recv_timeout(budget.saturating_sub(started.elapsed())) {
+                Ok(m) => m,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => unavailable("took-too-long"),
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => unavailable("reader-failed"),
+            }
+        } else {
+            unavailable("reader-failed")
+        };
+    }
     diagnose(&inp, complaint, probe.game.as_deref())
 }

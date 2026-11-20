@@ -1076,3 +1076,128 @@ describe("ParamedicCard: review round 2", () => {
     expect(document.body.textContent).not.toMatch(/between the rough sessions and the normal ones/);
   });
 });
+describe("ParamedicCard: graphics mods in the game's folder", () => {
+  const day = (iso: string) => new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(iso));
+  const fact = (code: string, args: Record<string, string> = {}, against = false): F["evidence"][number] => ({
+    kind: "known",
+    code,
+    args,
+    against,
+    source: "game-folder",
+  });
+  const mod = (over: Partial<F> = {}): F => find("graphics-mod", { fix: steps("graphics-mod", { name: "OptiScaler" }), ...over });
+  const answerOf = (findings: F[], extra: Partial<ParamedicDiagnosis> = {}): ParamedicDiagnosis => ({
+    ...base,
+    why_first: null,
+    findings,
+    not_it: [],
+    unknowns: [],
+    ...extra,
+  });
+  const created = "2026-11-12T09:00:00Z";
+  const changed = "2026-11-15T09:00:00Z";
+  const logged = "2026-11-10T09:00:00Z";
+
+  it("a mod's loader in the folder is a row named for the game and the mod, with only recorded facts as evidence", async () => {
+    await ask(
+      answerOf([
+        mod({
+          since_when: { kind: "observed-between", from: "2026-11-11T14:24:22Z", to: "2026-11-20T01:01:24Z" },
+          evidence: [
+            fact("mod-files-created", { date: created }),
+            fact("mod-settings-changed", { date: changed }),
+            fact("mod-log-written", { date: logged }),
+            fact("mod-log-before-rough", {}, true),
+          ],
+        }),
+      ]),
+    );
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(rows()[0].textContent).toMatch(/Game A's folder contains a graphics mod \(OptiScaler\)/);
+    expect(rows()[0].textContent).toMatch(/Possible/);
+    openAll();
+    const text = document.body.textContent ?? "";
+    expect(text).toContain(`Files of this mod were created in this folder around ${day(created)} (Windows resets this date when a folder is copied or moved).`);
+    expect(text).toContain(`Its settings file was last changed on ${day(changed)}.`);
+    expect(text).toContain(`The mod's own log or cache file was last written on ${day(logged)}.`);
+    expect(text).toContain("That is before the rough session, so the mod may not have been running then.");
+    expect(text).toContain("Check OptiScaler's own page for a version that matches your graphics driver.");
+    expect(text).toContain(
+      "To test without it, move its files out of the game folder (or use its own uninstall), play once, and press Something's wrong again.",
+    );
+    // That line weakens the mod; the others are plain recorded facts.
+    const weakens = screen.getAllByText(/may not have been running then/)[0].closest("li");
+    expect(within(weakens as HTMLElement).getByText("Weakens this")).toBeTruthy();
+    // Files are never "installed on", "added on" or "active", and there is no one-click button.
+    expect(text).not.toMatch(/installed on|added on|\bactive\b|no mods/i);
+    expect(screen.queryByRole("button", { name: /remove|undo|apply|fix/i })).toBeNull();
+  });
+
+  it("with no timing it waits under 'Also possible', not among the default rows", async () => {
+    const driver = find("gpu-driver-change", { confidence: "likely", in_play: false, fix: steps("gpu-driver-change", { from: "1.0" }) });
+    await ask(answerOf([driver, mod({ in_play: false, evidence: [fact("mod-files-created", { date: created })] })]));
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(screen.queryByText(/contains a graphics mod/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Also possible/ }));
+    expect(within(screen.getByTestId("paramedic-also")).getByText(/Game A's folder contains a graphics mod \(OptiScaler\)/)).toBeTruthy();
+  });
+
+  it("settings-only files, a clean scan and every scan that could not look are each said as exactly what they are", async () => {
+    await ask(
+      answerOf([find("background-load", { fix: steps("background-load") })], {
+        not_it: [{ id: "graphics-mod", args: {} }],
+        seen: [{ id: "mod-settings-only", args: { name: "OptiScaler" } }],
+        unknowns: ["mods-no-folder", "mods-folder-unreadable", "mods-partial", "mods-unavailable"],
+      }),
+    );
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("No known graphics mod found in Game A's folder.");
+    expect(text).toContain("Game A's folder contains a settings or data file from OptiScaler; Compy can't tell whether the mod itself is installed.");
+    expect(text).toContain("Compy couldn't match the game to an install folder");
+    expect(text).toContain("the folder couldn't be read");
+    expect(text).toContain("only part of the folder was scanned");
+    expect(text).toContain("looking took too long");
+    expect(text).not.toMatch(/no mods\b/i);
+    expect(screen.queryByText(/contains a graphics mod/)).toBeNull();
+  });
+
+  it("a scan that could not look never reads 'No known graphics mod'", async () => {
+    await ask(answerOf([find("background-load", { fix: steps("background-load") })], { unknowns: ["mods-partial"] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(document.body.textContent).not.toContain("No known graphics mod");
+    expect(document.body.textContent).toContain("Whether Game A's folder has a graphics mod");
+  });
+
+  it("another game's mod files are said on the cross-game evidence", async () => {
+    const driver = find("gpu-driver-change", {
+      confidence: "possible",
+      evidence: [fact("cross-game-mod", { otherGame: "Game B", name: "ReShade" })],
+      fix: steps("gpu-driver-change", { from: "1.0" }),
+    });
+    await ask(answerOf([driver]));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(document.body.textContent).toContain("Game B's folder contains ReShade files, so its rough sessions may have their own reason.");
+  });
+
+  it("the mod strings never claim the mod is installed, active, running or the reason, in either language", () => {
+    const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "paramedic.json"), "utf8"));
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8"));
+    const pick = (o: Record<string, Record<string, unknown>>) => [
+      (o.finding.graphicsMod as Record<string, string>).what,
+      ...Object.entries(o.evidence).filter(([k]) => /^mod[A-Z]|^crossGameMod$/.test(k)).map(([, v]) => v as string),
+      ...Object.values(o.fix.graphicsMod as Record<string, string>),
+      o.checked.graphicsMod as string,
+      o.seen.modSettingsOnly as string,
+      ...Object.entries(o.unknown).filter(([k]) => /^mods/.test(k)).map(([, v]) => v as string),
+    ];
+    const enS = pick(en);
+    const zhS = pick(zh);
+    expect(enS.length).toBe(zhS.length);
+    for (const s of enS) expect(s).not.toMatch(/\bcaus|because|installed on|added on|\bactive\b|\bno mods\b|\bfix(ed)?\b/i);
+    for (const s of zhS) expect(s).not.toMatch(/原因|导致|造成|修复了|治好|没有任何 ?mod/);
+  });
+});

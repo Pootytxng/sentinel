@@ -29,8 +29,10 @@ use serde::{Deserialize, Serialize};
 use crate::intelligence::{self, SessionRef};
 
 mod changes;
+mod mods;
 mod recovery;
 use changes::{ChangeRead, Limit};
+use mods::ModInput;
 use recovery::{EarlierEpisode, NowLine, NowStatus, Outcome, Recovery};
 
 // ---- Frozen constants (design A3 / B). A change re-runs the walk-forward fixture test. ----------
@@ -204,6 +206,10 @@ pub(crate) struct DiagnoseInputs {
     /// reads it, and tests build it by hand.
     #[serde(skip)]
     changes: ChangeRead,
+    /// What the command's scan of the game's folder (and a cross-game folder) found, as a plain verdict.
+    /// Never part of a recorded fixture; tests build it by hand.
+    #[serde(skip)]
+    mods: ModInput,
 }
 
 // ---- Outputs: codes, ids and numbers. The UI owns every sentence. ----------------------------
@@ -827,7 +833,8 @@ pub(crate) async fn paramedic_diagnose(complaint: Complaint, game: Option<String
         let _flight = flight;
         let inp = read_inputs_from(&crate::compy_data_dir())?;
         let fetch = |t0, t1, exe: String| changes::read_real_changes(t0, t1, &exe);
-        Ok(changes::diagnose_with_changes(inp, complaint, game.as_deref(), changes::CHANGES_BUDGET, fetch))
+        let fetch_mods = |exe: String, others: Vec<String>| mods::read_real_mods(&exe, &others);
+        Ok(changes::diagnose_with_readings(inp, complaint, game.as_deref(), changes::CHANGES_BUDGET, fetch, Some(fetch_mods)))
     })
     .await
     .map_err(|_| "the diagnosis stopped unexpectedly".to_string())?
@@ -963,6 +970,7 @@ fn inputs_from_parts(
         sightings_unread: false,
         drift_unread: false,
         changes: ChangeRead::NotRead,
+        mods: ModInput::default(),
     }
 }
 
@@ -1063,8 +1071,9 @@ impl Cand {
     fn certainty(&self) -> Option<Certainty> {
         if !self.t {
             // A size with no timing (a full memory, a busy PC) is a Possible at best: nothing says it
-            // changed before the problem.
-            return self.m.then_some(Certainty::Possible);
+            // changed before the problem. A graphics mod in the folder with no timing is listed the same way
+            // ("Also possible"): the files are there, nothing dates them to the period.
+            return (self.m || self.id == "graphics-mod").then_some(Certainty::Possible);
         }
         // Likely needs two independent supports and nothing against it. A changed per-session stamp and
         // the timing that follows from it are ONE support; another game's roughness counts only when it
@@ -1128,6 +1137,7 @@ fn category(id: &str) -> usize {
         "windows-update",
         "program-installed",
         "other-driver-change",
+        "graphics-mod",
     ];
     ORDER.iter().position(|x| *x == id).unwrap_or(ORDER.len())
 }
@@ -1242,6 +1252,8 @@ fn explain<'a>(
     changes::detect_programs(&ctx, &mut out);
     // Last: it is a candidate only when nothing above explains the timing.
     changes::detect_other_drivers(&ctx, &mut out);
+    // Files in the game's own folder: a candidate only for a mod's own loader, never an all-clear when unread.
+    mods::detect(&ctx, &mut out);
     for code in ["startup-programs", "overlays"] {
         out.unknown(code);
     }
@@ -1298,7 +1310,7 @@ fn explain<'a>(
 
 /// Likely first (fixed category order breaks ties), then the changes in play (Possible, with timing,
 /// nothing against), then the rest. Within the last two, more supports first, then the category order.
-const TIMING_ONLY_SOURCES: &[&str] = &["windows-update", "game-files-change", "program-installed", "other-driver-change"];
+const TIMING_ONLY_SOURCES: &[&str] = &["windows-update", "game-files-change", "program-installed", "other-driver-change", "graphics-mod"];
 
 fn rank(c: &mut Vec<Cand>) {
     c.retain(|x| x.certainty().is_some());
@@ -1457,6 +1469,7 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         })
     });
     let x_games: Vec<String> = x_others.iter().map(|o| o.name.clone()).collect();
+    let mod_other = mods::other_game_mods(c, &x_games);
     // Independent only if one of those games' rough sessions was measured quiet: none overlapping recorded
     // background activity, and every one with a load number. Otherwise the same busy PC may explain both.
     let x_clean = x_others.iter().any(|o| {
@@ -1507,6 +1520,17 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         if !x_clean {
             evidence.push(ev(EvidenceKind::Unknown, "cross-game-confounded", "sessions", false, &[("games", x_games.join(", "))]));
         }
+        // That game's own folder holds graphics-mod files (a mod's loader, or only its settings or data): its
+        // rough sessions may have their own reason, so they are not independent support for a system-wide cause.
+        for (other, name) in &mod_other {
+            evidence.push(ev(
+                EvidenceKind::Known,
+                "cross-game-mod",
+                "game-folder",
+                false,
+                &[("otherGame", other.clone()), ("name", (*name).to_string())],
+            ));
+        }
     }
     if let Some(newest_ok) = normal_new.iter().max_by_key(|s| s.start()) {
         evidence.push(ev(
@@ -1537,7 +1561,7 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         t: true,
         d: true,
         x: !x_games.is_empty(),
-        confounded: !x_games.is_empty() && !x_clean,
+        confounded: !x_games.is_empty() && (!x_clean || !mod_other.is_empty()),
         r: false,
         m: false,
         c1: rough_on_old > 0 || !normal_new.is_empty() || after_rough,

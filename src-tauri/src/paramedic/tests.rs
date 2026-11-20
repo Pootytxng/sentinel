@@ -290,6 +290,7 @@ fn finding_order_is_pinned() {
         "windows-update",
         "program-installed",
         "other-driver-change",
+        "graphics-mod",
     ];
     for w in order.windows(2) {
         assert!(category(w[0]) < category(w[1]), "{} must rank before {}", w[0], w[1]);
@@ -877,18 +878,29 @@ fn print_live_diagnosis() {
     // the real readers (Steam lookup, driver log, update log, installed programs) inside the 1.5 s budget.
     let mut plain_ms = Vec::new();
     let mut with_ms = Vec::new();
+    let mut changes_only_ms = Vec::new();
     let mut d = diagnose(&inp, Complaint::Unknown, None);
     for _ in 0..5 {
         let t = std::time::Instant::now();
         let _ = diagnose(&inp, Complaint::Unknown, None);
         plain_ms.push(t.elapsed().as_millis());
         let t = std::time::Instant::now();
-        d = changes::diagnose_with_changes(inp.clone(), Complaint::Unknown, None, changes::CHANGES_BUDGET, |a, b, g| {
+        let _ = changes::diagnose_with_changes(inp.clone(), Complaint::Unknown, None, changes::CHANGES_BUDGET, |a, b, g| {
             changes::read_real_changes(a, b, &g)
         });
+        changes_only_ms.push(t.elapsed().as_millis());
+        let t = std::time::Instant::now();
+        d = changes::diagnose_with_readings(
+            inp.clone(),
+            Complaint::Unknown,
+            None,
+            changes::CHANGES_BUDGET,
+            |a, b, g| changes::read_real_changes(a, b, &g),
+            Some(|exe: String, others: Vec<String>| mods::read_real_mods(&exe, &others)),
+        );
         with_ms.push(t.elapsed().as_millis());
     }
-    eprintln!("TIMING plain_ms={plain_ms:?} with_readers_ms={with_ms:?}");
+    eprintln!("TIMING plain_ms={plain_ms:?} windows_readers_only_ms={changes_only_ms:?} with_readers_and_mod_scan_ms={with_ms:?}");
     println!("{}", serde_json::to_string_pretty(&d).expect("serialises"));
 }
 
@@ -2948,5 +2960,322 @@ mod recovery_f3 {
         // A lookup that answers in time is returned as it is.
         let quick = run_bounded(std::time::Duration::from_millis(500), || SteamLookup::Unreadable(crate::change_sources::UnreadableReason::SteamUnreadable));
         assert!(matches!(quick, SteamLookup::Unreadable(_)));
+    }
+}
+
+// ---- M3 commit 1: graphics mods in the game's folder ------------------------------------------------
+mod graphics_mods {
+    use super::super::mods::{self, CouldNot, ModFound, ModInput, ModsRead, ModsVerdict};
+    use super::*;
+    use std::time::Duration;
+
+    fn utc(s: &str) -> DateTime<Utc> {
+        ts(s).expect("a time")
+    }
+
+    /// The period the dates are judged against in `quiet_scenario`: after the end of the last normal session
+    /// (10-04 10:00 + 600 s) and up to the first rough session's start (10-09 10:00).
+    const LO: &str = "2026-10-04T10:10:00Z";
+    const HI: &str = "2026-10-09T10:00:00Z";
+    const IN: &str = "2026-10-06T12:00:00Z";
+    const OLD: &str = "2026-09-01T00:00:00Z";
+
+    fn strong(name: &'static str) -> ModFound {
+        ModFound { name, strong: true, loader_file_present: true, first_seen: None, settings_changed: None, last_log_write: None }
+    }
+
+    fn settings_only(name: &'static str) -> ModFound {
+        ModFound { strong: false, ..strong(name) }
+    }
+
+    fn at(s: &str) -> Option<DateTime<Utc>> {
+        Some(utc(s))
+    }
+
+    /// Four normal sessions and a rough one; nothing else changed, so the mod is the only candidate.
+    fn quiet_scenario() -> Vec<SessionFacts> {
+        let mut v = steady(4);
+        v.push(facts(HI, 600, 600, 100.0, 30.0));
+        v
+    }
+
+    fn read(v: ModsVerdict) -> ModsRead {
+        ModsRead::Read(v)
+    }
+
+    fn run_on(sess: Vec<SessionFacts>, game: ModsRead) -> Diagnosis {
+        let mut inp = inputs(sess);
+        inp.mods = ModInput { game, others: Vec::new() };
+        diagnose(&inp, Complaint::Slow, Some("g"))
+    }
+
+    fn run(m: ModFound) -> Diagnosis {
+        run_on(quiet_scenario(), read(ModsVerdict::Found(vec![m])))
+    }
+
+    fn mod_finding(d: &Diagnosis) -> &Finding {
+        d.findings.iter().find(|f| f.id == "graphics-mod").unwrap_or_else(|| panic!("no graphics-mod finding: {:?}", ids(d)))
+    }
+
+    fn codes(f: &Finding) -> Vec<&'static str> {
+        f.evidence.iter().map(|e| e.code).collect()
+    }
+
+    #[test]
+    fn a_strong_mod_with_a_file_date_in_the_period_is_possible_with_timing_and_never_likely() {
+        let d = run(ModFound { first_seen: at(IN), ..strong("OptiScaler") });
+        let f = mod_finding(&d);
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert!(f.in_play, "dated into the period, nothing against it");
+        assert_eq!(f.since_when, When::ObservedBetween { from: LO.into(), to: HI.into() });
+        assert_eq!(codes(f), ["mod-files-created"]);
+        assert_eq!(f.evidence[0].args.get("date").map(String::as_str), Some(IN));
+        assert!(matches!(&f.fix, Fix::Steps { code: "graphics-mod", args } if args.get("name").map(String::as_str) == Some("OptiScaler")));
+        assert_eq!(d.state, DiagnosisState::Found);
+        assert!(certainties(&d).iter().all(|c| *c != Certainty::Likely), "a timing-only kind can never reach Likely alone");
+    }
+
+    #[test]
+    fn the_period_edges_are_exact_and_either_date_places_it() {
+        let mut m = ModFound { first_seen: at(LO), ..strong("ReShade") };
+        assert!(!mod_finding(&run(m.clone())).in_play, "the end of the last normal session is not after it");
+        m.first_seen = at("2026-10-04T10:10:01Z");
+        assert!(mod_finding(&run(m.clone())).in_play);
+        m.first_seen = at(HI);
+        assert!(mod_finding(&run(m.clone())).in_play, "the first rough session's start is still before it");
+        m.first_seen = at("2026-10-09T10:00:01Z");
+        assert!(!mod_finding(&run(m.clone())).in_play);
+        // The settings file's date places it too, when the creation date is old.
+        m.first_seen = at(OLD);
+        m.settings_changed = at(IN);
+        assert!(mod_finding(&run(m)).in_play);
+    }
+
+    #[test]
+    fn a_strong_mod_with_no_date_in_the_period_is_listed_under_also_possible_with_no_timing() {
+        let d = run(ModFound { first_seen: at(OLD), ..strong("Special K") });
+        let f = mod_finding(&d);
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert!(!f.in_play);
+        assert_eq!(f.since_when, When::Unknown);
+        assert_eq!(d.state, DiagnosisState::Found);
+        // No dates at all: still listed, still no timing.
+        let f2 = run(strong("ReShade"));
+        assert!(!mod_finding(&f2).in_play && mod_finding(&f2).since_when == When::Unknown && mod_finding(&f2).evidence.is_empty());
+    }
+
+    #[test]
+    fn a_loader_that_is_not_beside_the_games_exe_gives_no_timing() {
+        let d = run(ModFound { first_seen: at(IN), loader_file_present: false, ..strong("ReShade") });
+        assert!(!mod_finding(&d).in_play && mod_finding(&d).since_when == When::Unknown);
+    }
+
+    #[test]
+    fn the_settings_date_is_said_only_when_it_differs_from_the_creation_date_by_more_than_a_day() {
+        let base = ModFound { first_seen: at("2026-10-06T12:00:00Z"), ..strong("ReShade") };
+        let with = |s: &str| codes(mod_finding(&run(ModFound { settings_changed: at(s), ..base.clone() }))).contains(&"mod-settings-changed");
+        assert!(!with("2026-10-06T12:00:00Z"));
+        assert!(!with("2026-10-07T12:00:00Z"), "exactly a day is not more than a day");
+        assert!(with("2026-10-07T12:00:01Z"));
+        assert!(with("2026-10-05T11:59:59Z"), "earlier counts too");
+        // With no creation date the settings date is the only fact there is, so it is said.
+        let only = run(ModFound { settings_changed: at(IN), ..strong("ReShade") });
+        assert_eq!(codes(mod_finding(&only)), ["mod-settings-changed"]);
+    }
+
+    #[test]
+    fn the_log_date_adds_one_line_and_the_may_not_have_been_running_line_needs_both_conditions() {
+        let line = |log: &str| codes(mod_finding(&run(ModFound { last_log_write: at(log), ..strong("OptiScaler") })));
+        // After the first rough session started: written, and nothing more.
+        assert_eq!(line("2026-10-10T00:00:00Z"), ["mod-log-written"]);
+        // Before the rough session AND a normal session started before it (the first one, 10-01 10:00).
+        assert_eq!(line("2026-10-03T00:00:00Z"), ["mod-log-written", "mod-log-before-rough"]);
+        // Before the rough session but before every normal session too: no earlier normal session.
+        assert_eq!(line("2026-09-01T00:00:00Z"), ["mod-log-written"]);
+        // The edges: a normal session must start strictly before the write; the write strictly before the rough start.
+        assert_eq!(line("2026-10-01T10:00:00Z"), ["mod-log-written"]);
+        assert_eq!(line("2026-10-01T10:00:01Z"), ["mod-log-written", "mod-log-before-rough"]);
+        assert_eq!(line(HI), ["mod-log-written"]);
+        let f = run(ModFound { last_log_write: at("2026-10-03T00:00:00Z"), ..strong("OptiScaler") });
+        let weakens = mod_finding(&f).evidence.iter().find(|e| e.code == "mod-log-before-rough").expect("said");
+        assert!(weakens.against, "it weakens the mod as a reason");
+    }
+
+    #[test]
+    fn a_mod_never_ranks_above_a_finding_with_other_support_and_is_never_likely() {
+        let mut sess = steady_on_old("g", 10);
+        sess.push(rough_on_new("g", 10));
+        let d = run_on(sess, read(ModsVerdict::Found(vec![ModFound { first_seen: at(IN), ..strong("OptiScaler") }])));
+        assert_eq!(ids(&d), ["gpu-driver-change", "graphics-mod"]);
+        assert_eq!(certainties(&d), [Certainty::Possible, Certainty::Possible]);
+        assert_eq!(d.why_first, Some("not-separable"), "two changes line up with the start; neither is ranked a winner");
+    }
+
+    #[test]
+    fn settings_or_data_files_are_never_a_candidate_and_say_what_they_are() {
+        let d = run_on(quiet_scenario(), read(ModsVerdict::Found(vec![settings_only("OptiScaler")])));
+        assert!(d.findings.iter().all(|f| f.id != "graphics-mod"), "{:?}", ids(&d));
+        assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::NothingChanged });
+        let s = d.seen.iter().find(|s| s.id == "mod-settings-only").expect("a checked line");
+        assert_eq!(s.args.get("name").map(String::as_str), Some("OptiScaler"));
+        assert!(d.not_it.iter().all(|n| n.id != "graphics-mod"), "files were found, so it is not 'no known mod'");
+        // A settings-only mod next to a strong one: one candidate, one checked line.
+        let d = run_on(quiet_scenario(), read(ModsVerdict::Found(vec![strong("ReShade"), settings_only("OptiScaler")])));
+        assert_eq!(d.findings.iter().filter(|f| f.id == "graphics-mod").count(), 1);
+        assert_eq!(d.seen.iter().filter(|s| s.id == "mod-settings-only").count(), 1);
+    }
+
+    #[test]
+    fn a_complete_scan_with_no_known_mod_is_unchanged_and_says_no_known_mod() {
+        let d = run_on(quiet_scenario(), read(ModsVerdict::NoKnownMod));
+        assert!(d.not_it.iter().any(|n| n.id == "graphics-mod" && n.args.is_empty()));
+        assert!(d.unknowns.iter().all(|u| !u.starts_with("mods-")));
+        assert!(d.findings.is_empty());
+    }
+
+    #[test]
+    fn a_scan_that_could_not_look_or_only_partly_looked_is_a_specific_unknown_and_never_unchanged() {
+        let unknowns = |g: ModsRead| {
+            let d = run_on(quiet_scenario(), g);
+            assert!(d.not_it.iter().all(|n| n.id != "graphics-mod"), "never an all-clear");
+            d.unknowns.iter().filter(|u| u.starts_with("mods-")).copied().collect::<Vec<_>>()
+        };
+        assert_eq!(unknowns(read(ModsVerdict::CouldNotScan(CouldNot::NoInstallFolder))), ["mods-no-folder"]);
+        assert_eq!(unknowns(read(ModsVerdict::CouldNotScan(CouldNot::FolderUnreadable))), ["mods-folder-unreadable"]);
+        assert_eq!(unknowns(read(ModsVerdict::Partly(Vec::new()))), ["mods-partial"]);
+        assert_eq!(unknowns(ModsRead::Unavailable("took-too-long")), ["mods-unavailable"]);
+        // The pure engine on a fixture says nothing about mods either way.
+        assert!(unknowns(ModsRead::NotRead).is_empty());
+        // A partial scan that saw a mod's loader still reports it, and still says it was partial.
+        let d = run_on(quiet_scenario(), read(ModsVerdict::Partly(vec![strong("DXVK")])));
+        assert!(d.findings.iter().any(|f| f.id == "graphics-mod") && d.unknowns.contains(&"mods-partial"));
+    }
+
+    fn two_games() -> Vec<SessionFacts> {
+        let mut sess = steady_on_old("g", 10);
+        sess.extend(steady_on_old("h", 12));
+        sess.push(rough_on_new("g", 10));
+        sess.push(rough_on_new("h", 12));
+        sess
+    }
+
+    fn cross(other: ModsRead) -> Diagnosis {
+        let mut inp = inputs(two_games());
+        inp.mods = ModInput { game: ModsRead::NotRead, others: vec![(intelligence::pretty_game_name("h"), other)] };
+        diagnose(&inp, Complaint::Slow, Some("g"))
+    }
+
+    #[test]
+    fn another_games_mod_files_confound_the_cross_game_support() {
+        let clean = cross(read(ModsVerdict::NoKnownMod));
+        assert_eq!(clean.findings[0].confidence, Certainty::Likely, "a clean folder changes nothing");
+        assert_eq!(clean.why_first, Some("cross-game"));
+        for found in [vec![strong("ReShade")], vec![settings_only("OptiScaler")]] {
+            let name = found[0].name;
+            let d = cross(read(ModsVerdict::Found(found)));
+            let f = &d.findings[0];
+            assert_eq!(f.id, "gpu-driver-change");
+            assert_eq!(f.confidence, Certainty::Possible, "that game's rough sessions may have their own reason");
+            assert_ne!(d.why_first, Some("cross-game"));
+            let line = f.evidence.iter().find(|e| e.code == "cross-game-mod").expect("the cross-game line");
+            assert_eq!(line.args.get("name").map(String::as_str), Some(name));
+            assert_eq!(line.args.get("otherGame"), Some(&intelligence::pretty_game_name("h")));
+            assert!(!line.against);
+        }
+        // A scan that could not look says nothing about it; the support stays as it was.
+        for other in [read(ModsVerdict::CouldNotScan(CouldNot::NoInstallFolder)), ModsRead::Unavailable("took-too-long")] {
+            let d = cross(other);
+            assert!(d.findings[0].evidence.iter().all(|e| e.code != "cross-game-mod"));
+            assert_eq!(d.findings[0].confidence, Certainty::Likely);
+        }
+    }
+
+    #[test]
+    fn the_command_path_scans_beside_the_windows_readers_inside_one_budget() {
+        use super::super::changes::{diagnose_with_readings, ChangeRead};
+        // The scan is handed the game and the other games that also got rough, and what it returns is used.
+        let (tx, rx) = std::sync::mpsc::channel();
+        let d = diagnose_with_readings(
+            inputs(two_games()),
+            Complaint::Slow,
+            Some("g"),
+            Duration::from_secs(2),
+            |_, _, _| ChangeRead::NotRead,
+            Some(move |game: String, others: Vec<String>| {
+                tx.send((game, others)).expect("sent");
+                ModInput { game: read(ModsVerdict::NoKnownMod), others: Vec::new() }
+            }),
+        );
+        let (game, others) = rx.recv().expect("asked");
+        assert_eq!((game.as_str(), others), ("g", vec!["h".to_string()]));
+        assert!(d.not_it.iter().any(|n| n.id == "graphics-mod"));
+        // A scan that runs past the budget never delays the answer and is never "no known mod".
+        let started = std::time::Instant::now();
+        let slow = diagnose_with_readings(
+            inputs(quiet_scenario()),
+            Complaint::Slow,
+            Some("g"),
+            Duration::from_millis(80),
+            |_, _, _| ChangeRead::NotRead,
+            Some(|_: String, _: Vec<String>| {
+                std::thread::sleep(Duration::from_millis(700));
+                ModInput { game: read(ModsVerdict::NoKnownMod), others: Vec::new() }
+            }),
+        );
+        assert!(started.elapsed() < Duration::from_millis(500), "{:?}", started.elapsed());
+        assert!(slow.unknowns.contains(&"mods-unavailable") && slow.not_it.iter().all(|n| n.id != "graphics-mod"));
+        // A scan that died is the same unknown, not a failed card.
+        let dead = diagnose_with_readings(
+            inputs(quiet_scenario()),
+            Complaint::Slow,
+            Some("g"),
+            Duration::from_secs(2),
+            |_, _, _| ChangeRead::NotRead,
+            Some(|_: String, _: Vec<String>| -> ModInput { panic!("the scan died") }),
+        );
+        assert!(dead.unknowns.contains(&"mods-unavailable") && dead.state == DiagnosisState::CantTell { why: CantTellWhy::NothingChanged });
+        // Nothing to explain: the scan is never started.
+        let (tx, rx) = std::sync::mpsc::channel::<String>();
+        let _ = diagnose_with_readings(
+            inputs(steady(5)),
+            Complaint::Slow,
+            Some("g"),
+            Duration::from_secs(2),
+            |_, _, _| ChangeRead::NotRead,
+            Some(move |g: String, _: Vec<String>| {
+                let _ = tx.send(g);
+                ModInput::default()
+            }),
+        );
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn a_scan_becomes_a_plain_verdict_and_never_leaks_a_name_or_path() {
+        let root = std::env::temp_dir().join(format!("compy_m3_dto_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let scan = |r: &std::path::Path| mods::dto(&crate::game_mods::scan_game_folder(r, Duration::from_secs(10)));
+        assert_eq!(scan(&root), read(ModsVerdict::NoKnownMod));
+        std::fs::write(root.join("OptiScaler.ini"), b"[x]").unwrap();
+        match scan(&root) {
+            ModsRead::Read(ModsVerdict::Found(m)) => {
+                assert_eq!((m.len(), m[0].name, m[0].strong), (1, "OptiScaler", false));
+            }
+            other => panic!("{other:?}"),
+        }
+        std::fs::write(root.join("ReShade64.dll"), b"MZ").unwrap();
+        match scan(&root) {
+            ModsRead::Read(ModsVerdict::Found(m)) => {
+                let r = m.iter().find(|f| f.name == "ReShade").expect("ReShade");
+                assert!(r.strong && r.loader_file_present && r.first_seen.is_some());
+                let json = serde_json::to_string(&m).expect("serialises");
+                assert!(!json.contains("compy_m3_dto"), "no path in the DTO: {json}");
+            }
+            other => panic!("{other:?}"),
+        }
+        let gone = root.join("not-there");
+        assert_eq!(scan(&gone), read(ModsVerdict::CouldNotScan(CouldNot::FolderUnreadable)));
+        let _ = std::fs::remove_dir_all(root);
     }
 }

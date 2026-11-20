@@ -73,6 +73,10 @@ function findingTitle(f: ParamedicFinding, { t, dates, game }: Ctx): string | nu
   if (f.id === "game-files-change" && f.since_when.kind === "exact") {
     return t("paramedic.finding.gameFiles.what", { game, when: dates.day(f.since_when.at) });
   }
+  // The mod's own name comes from the engine's fixed table, never from a file.
+  if (f.id === "graphics-mod" && f.fix.kind === "steps") {
+    return t("paramedic.finding.graphicsMod.what", { game, name: f.fix.args.name });
+  }
   // Installs carry a day, never a time of day: the heading names the day.
   if (f.id === "program-installed") {
     const day = f.evidence.find((e) => e.code === "installed-and-started")?.args.day;
@@ -121,6 +125,17 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
       return a.neverBefore === "true"
         ? t("paramedic.evidence.crossGame", { games: a.games })
         : t("paramedic.evidence.crossGameAfter", { games: a.games });
+    // Dates of files in the game's folder: when they were created or last written, never "installed on".
+    case "mod-files-created":
+      return t("paramedic.evidence.modFilesCreated", { first_seen: dates.day(a.date) });
+    case "mod-settings-changed":
+      return t("paramedic.evidence.modSettingsChanged", { date: dates.day(a.date) });
+    case "mod-log-written":
+      return t("paramedic.evidence.modLogWritten", { date: dates.day(a.date) });
+    case "mod-log-before-rough":
+      return t("paramedic.evidence.modLogBeforeRough");
+    case "cross-game-mod":
+      return t("paramedic.evidence.crossGameMod", { otherGame: a.otherGame, name: a.name });
     case "install-recorded":
       return t("paramedic.evidence.installRecorded", { when: dates.dayTime(a.when) });
     case "install-not-recorded":
@@ -342,6 +357,8 @@ function stepLines(fix: ParamedicFix, { t, game }: Ctx): string[] {
       ];
     case "program-installed":
       return [t("paramedic.fix.programInstalled.step1", { names: a.names }), t("paramedic.fix.programInstalled.step2", { game })];
+    case "graphics-mod":
+      return [t("paramedic.fix.graphicsMod.step1", { name: a.name }), t("paramedic.fix.graphicsMod.step2")];
     default:
       return [];
   }
@@ -377,13 +394,24 @@ function ruledOutLine(n: ParamedicRuledOut, { t, dates, game }: Ctx): string | n
       return t("paramedic.checked.displayRefreshLower", { hz: a.hz });
     case "windows-build-change":
       return t("paramedic.checked.windowsBuildChange", { build: a.build });
+    case "graphics-mod":
+      // Only for a complete scan: "no KNOWN mod", never "no mods".
+      return t("paramedic.checked.graphicsMod", { game });
     default:
       return null;
   }
 }
 
-function unknownLine(code: string, { t }: Ctx): string | null {
+function unknownLine(code: string, { t, game }: Ctx): string | null {
   switch (code) {
+    case "mods-no-folder":
+      return t("paramedic.unknown.modsNoFolder", { game });
+    case "mods-folder-unreadable":
+      return t("paramedic.unknown.modsFolderUnreadable", { game });
+    case "mods-partial":
+      return t("paramedic.unknown.modsPartial", { game });
+    case "mods-unavailable":
+      return t("paramedic.unknown.modsUnavailable", { game });
     case "startup-programs":
       return t("paramedic.unknown.startupPrograms");
     case "overlays":
@@ -418,9 +446,12 @@ function unknownLine(code: string, { t }: Ctx): string | null {
 }
 
 /** One line of "also looked at": things found that Compy does not treat as findings. */
-function seenLine(s: ParamedicRuledOut, { t, dates }: Ctx): string | null {
+function seenLine(s: ParamedicRuledOut, { t, dates, game }: Ctx): string | null {
   const a = s.args;
   switch (s.id) {
+    case "mod-settings-only":
+      // Files of a mod's own are not proof it is installed: said exactly so.
+      return t("paramedic.seen.modSettingsOnly", { game, name: a.name });
     case "updates-minor":
       return t("paramedic.seen.updatesMinor", { n: Number(a.n), m: Number(a.m) });
     case "programs-installed": {
@@ -731,8 +762,8 @@ function AlsoPossible({ list, d, ctx, recovered }: { list: ParamedicFinding[]; d
   if (list.length === 0) return null;
   return (
     <Fold title={ctx.t("paramedic.alsoPossible.title")} testid="paramedic-also">
-      {list.map((f) => (
-        <Row key={f.id} f={f} d={d} ctx={ctx} recovered={recovered} />
+      {list.map((f, i) => (
+        <Row key={`${f.id}-${i}`} f={f} d={d} ctx={ctx} recovered={recovered} />
       ))}
     </Fold>
   );
@@ -815,8 +846,8 @@ function Candidates({ rows, rest, d, ctx, recovered }: { rows: ParamedicFinding[
   return (
     <>
       <div className="gl-para-rows">
-        {rows.map((f) => (
-          <Row key={f.id} f={f} d={d} ctx={ctx} recovered={recovered} />
+        {rows.map((f, i) => (
+          <Row key={`${f.id}-${i}`} f={f} d={d} ctx={ctx} recovered={recovered} />
         ))}
       </div>
       <AlsoPossible list={rest} d={d} ctx={ctx} recovered={recovered} />

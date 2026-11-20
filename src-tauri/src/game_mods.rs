@@ -52,7 +52,6 @@
 //! Parsing is pure and separate from I/O: `match_signatures_at` takes a hand-built listing and
 //! `parse_version_block` takes bytes. Not folder mods, so not here: Lossless Scaling and RTSS / MSI
 //! Afterburner are separate running apps (a later "running at start" slice).
-#![allow(dead_code)] // wired into paramedic in the next commit
 
 use crate::change_sources::{self, SteamLookup, UnreadableReason};
 use chrono::{DateTime, TimeZone, Utc};
@@ -208,10 +207,12 @@ impl fmt::Debug for ModFinding {
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // the card's locale strings carry the shown wording; this is the reference form the tests pin
 fn date_text(t: DateTime<Utc>) -> String {
     t.format("%Y-%m-%d").to_string()
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // reference wording, pinned by tests; the card shows the locale strings built from the same facts
 impl ModFinding {
     /// The only sentence a caller may build from `strength`. Pinned by a test.
     pub(crate) fn sentence(&self) -> String {
@@ -1413,6 +1414,7 @@ fn scan_with_deadline(root: &Path, deadline: Instant, exe_folder: bool) -> ModSc
 /// Scan one folder (the game exe's folder, normally) and two levels below it. Read-only, bounded by
 /// `budget`. `Unreadable` when the folder cannot be read. Its `coverage` says only that folder was
 /// looked at: for an install root use `scan_install_folder`.
+#[cfg_attr(not(test), allow(dead_code))] // the command scans an install folder or an image folder; tests scan a bare folder
 pub(crate) fn scan_game_folder(root: &Path, budget: Duration) -> ModScan {
     scan_with_deadline(root, deadline_after(budget), true)
 }
