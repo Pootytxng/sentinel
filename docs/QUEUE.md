@@ -9,10 +9,10 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 ## NEXT (in order)
 - [ ] Group a crash-and-relaunch into one sitting for baselines, noise bands and real-play counts — a crash and relaunch no longer counts as two independent sessions
 - [ ] Paramedic: sessions flagged Suspected (`session_boundary::suspected_splice`) are not judged; a note says why — an old two-game row never poisons a diagnosis
-- [ ] Use more of what Compy already records as evidence — peak GPU temperature ("no sign of overheating"); name the setting in "a setting Compy applied is no longer on"; ignore sessions flagged as mixed
+- [ ] Name the setting in "a setting Compy applied is no longer on" (needs a read-only ledger reader + a name on the drift record)
+- [ ] Use more of what Compy already records as evidence — ignore sessions flagged as mixed
 - [ ] Record what was already running when the game started (recorders, overlays, long builds) and use the background-load numbers both ways — the card can blame or clear background load
 - [ ] Read the graphics driver's own settings (Radeon via ADLX; later NVIDIA) as a "what changed" source — a changed driver setting shows up in the diagnosis
-- [ ] Detect graphics mods in a game's folder (injected upscaler and frame-generation DLLs) — the card names a mod that explains rough play
 - [ ] Crash complaint in the same card — "this crash has happened N times since <date> on the same game build"
 - [ ] One-click fixes through the existing undo path (startup entry, power plan, undo a Compy change) — the owner presses one button instead of following steps
 - [ ] Security slices 2-7 from the hardening design: frame-capture helper over a pipe; result relay and safe ticket handling; closed set of elevated operations sized to the Paramedic's fixes; per-machine install; uninstall notice — closes the remaining privilege and data-loss risks
@@ -43,6 +43,8 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee".
 
 ## Done (newest first)
+- 2026-11-20 - Mods, temperature and crash history as evidence; card polish (claude/m3-evidence, see git log)
+- 2026-11-20 - Graphics-mod detector 33decacc
 - 2026-11-20 - Desk build 3e69f454 installed and stamped
 - 2026-11-20 - "Did it get better?" recovery check and a card that fits on Home 3e69f454
 - 2026-11-20 — A session ends when its game exits; a new game starts a new session (no more two games in one record) bb47b314, review fixes b8e729ac

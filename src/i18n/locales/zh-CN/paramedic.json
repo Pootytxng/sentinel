@@ -202,12 +202,12 @@
     "gapDayUnplaced": "{{when}}，{{what}}（不知道具体时间）。",
     "recoveryDayUnplaced": "Windows 记录了 {{when}} 的一项变化，但没有具体时间，所以 Compy 无法判断它发生在不顺的运行之前还是之后。",
     "recoveredSteamLatestOnly": "Steam 只保留 {{game}} 文件最近一次的更新时间，而那个时间在不顺的运行之后，所以 Compy 无法判断期间文件是否变化过。",
-    "modFilesCreated": "这个 mod 的文件大约在 {{first_seen}} 前后创建于此文件夹(复制或移动文件夹时,Windows 会重置这个日期)。",
+    "modFilesCreated": "这个 mod 的文件大约在 {{first_seen}} 前后创建于此文件夹(复制或移动文件夹时,Windows 会重置这个日期,所以它不一定是这个 mod 被加入的时间)。",
     "modSettingsChanged": "它的设置文件最后一次修改是在 {{date}}。",
     "modLogWritten": "这个 mod 自己的日志或缓存文件最后一次写入是在 {{date}}。",
-    "modLogBeforeRough": "这早于卡顿的那次游戏,所以当时这个 mod 可能没有在运行。",
+    "modLogBeforeRough": "这早于卡顿的那次游戏。",
     "crossGameMod": "{{otherGame}} 的文件夹里有 {{name}} 的文件,所以它那几次卡顿可能另有缘故。",
-    "gpuTemp": "显卡温度在出问题的那次游戏中最高达到 {{rough}}°C，在正常的几次中最高为 {{base}}°C。"
+    "crossGameModUnchecked": "Compy 没能检查 {{otherGame}} 的文件夹里有没有显卡 mod。"
   },
   "fix": {
     "title": "如何解决",
@@ -255,11 +255,11 @@
       "step2": "玩一次 {{game}}，再按一次“出问题了”。"
     },
     "graphicsMod": {
-      "step1": "到 {{name}} 的官方页面看看,有没有和你的显卡驱动匹配的版本。",
+      "step1": "到 {{name}} 的官方页面看看有没有更新的版本。",
       "step2": "想不带它测试:把它的文件移出游戏文件夹(或用它自带的卸载),玩一次,再按\"出问题了\"。"
     },
     "gpuHotter": {
-      "step1": "确认显卡风扇在玩游戏时会转起来，并清理风扇和散热片上的灰尘。",
+      "step1": "确认显卡风扇在玩游戏时会转起来，并检查风扇和散热片上有没有灰尘。",
       "step2": "检查机箱的进风和出风是否畅通，并在显卡自带的工具里查看风扇曲线（可能设得偏低）。",
       "step3": "再玩一次 {{game}}，然后再按“出问题了”。"
     }
@@ -298,8 +298,7 @@
     "gpuDriverNoInstall": "显卡驱动：仍是 {{driver}}。Windows 记录显示这段时间内没有安装显卡驱动。",
     "seen": "还看了：",
     "cantSeeFold": "Compy 看不到的内容",
-    "graphicsMod": "在 {{game}} 的文件夹里没有发现已知的图形 mod。",
-    "gpuTemp": "显卡温度：没有比正常几次中的最高值高出超过 {{within}}°C。"
+    "graphicsMod": "在 {{game}} 的文件夹里没有发现已知的图形 mod。"
   },
   "unknown": {
     "startupPrograms": "哪些程序随 Windows 启动，与之前相比",
@@ -336,7 +335,6 @@
     "partial": "Compy 只测量了你最近一次 {{game}} 游戏的一部分（{{percent}}%），所以不会据此判断。请在 Compy 运行的情况下再玩一次。",
     "noGame": "Compy 还没有记录过 {{game}}。请在玩游戏前先启动 Compy。",
     "noSessions": "Compy 还没有记录过任何游戏。请在玩游戏前先启动 Compy。",
-    "crash": "崩溃问题目前有单独的页面。请打开“问题”查看 Windows 的记录。",
     "partialRough": "Compy 只测量了你最近一次 {{game}} 游戏的一部分（{{percent}}%），而它看到的部分显得很卡。请在 Compy 运行的情况下再玩一次。",
     "frameCap": "你的帧率上限在 {{game}} 之前的游戏和最近一次之间变了（或 Compy 读不出来），所以不会拿它们互相比较。",
     "backToNormal": "Compy 暂时还无法判断 {{game}} 是否已恢复正常。请再玩一次。",
@@ -374,11 +372,16 @@
     "updatesUnclassifiedKb_other": "{{count}}个 Compy 无法分类的 Windows 更新({{kbs}})。",
     "driverOtherInstall": "Windows 记录显示,{{when}}安装过显卡驱动,但版本与你出问题的几次游戏所用的不同。",
     "modSettingsOnly": "{{game}} 的文件夹里有 {{name}} 的设置或数据文件;Compy 无法判断这个 mod 本身是否已安装。",
-    "gpuTemp": "显卡温度在出问题的那次游戏中最高达到 {{rough}}°C，在正常的几次中最高为 {{base}}°C。",
     "gameCrashes_one": "{{game}} 曾在 {{since}} 意外关闭过一次。",
     "gameCrashes_other": "{{game}} 自 {{since}} 起已意外关闭 {{count}} 次。",
-    "gameCrashSignature": "它们的特征相同（{{module}}），而且都发生在{{what}}之前，所以很可能是另一个独立的问题。",
-    "crashBeforeWhat": "Compy 找到的最早一项变化（{{date}}）"
+    "gameCrashSignature": "Compy 能读到的所有崩溃特征都相同（{{module}}），而且有些发生在{{what}}之前，所以这项变化不能解释它们的全部。",
+    "crashBeforeWhat": "Compy 找到的最早一项有日期的变化（{{date}}）",
+    "gpuTemp_one": "显卡温度在出问题的那次游戏中最高达到 {{rough}}°C；在正常的几次中，通常最高约为 {{base}}°C。",
+    "gpuTemp_other": "显卡温度在出问题的那几次游戏中最高达到 {{rough}}°C（取其中最高的一次）；在正常的几次中，通常最高约为 {{base}}°C。",
+    "gameCrashesPartial_one": "Compy 能读到的 Windows 崩溃记录显示，{{game}} 至少意外关闭过一次，在 {{since}}。",
+    "gameCrashesPartial_other": "Compy 能读到的 Windows 崩溃记录显示，{{game}} 至少意外关闭了 {{count}} 次。其中最早的一次在 {{since}}。",
+    "crashesByName": "（按程序名匹配）",
+    "crashesVersions": "这些崩溃跨越了游戏的 {{n}} 个版本。"
   },
   "limit": {
     "cantSee": "Compy 看不到{{what}}：{{why}}。",

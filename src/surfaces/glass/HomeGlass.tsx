@@ -191,8 +191,10 @@ export function HomeGlass({
               own glyph from the dock. */}
           {/* One entry point for "something's wrong": it opens the Paramedic card below and moves focus to it.
               With no recorded game there is no card, so it keeps opening Problems (the guided questions),
-              which the card also links to ("Something else? Answer a few questions"). */}
-          <button type="button" className="gl-ghost" onClick={noGames ? onOpenProblems : () => setLaunch((n) => n + 1)}>
+              which the card also links to ("Something else? Answer a few questions"). While the crash banner is
+              showing (pendingCare) the button keeps its old job, opening Problems, where that crash is handled;
+              the card is still there below it. */}
+          <button type="button" className="gl-ghost" onClick={noGames || pendingCare ? onOpenProblems : () => setLaunch((n) => n + 1)}>
             <NavGlyph name="problems" />
             {t("home.glass.actions.problem")}
           </button>

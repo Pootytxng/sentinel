@@ -16,6 +16,7 @@
 //!   or only partly looked, is a specific "Compy couldn't see" line and never an all-clear.
 //! - File dates are creation and last-write times of files. They are never "installed on" or "active".
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use super::*;
@@ -27,6 +28,10 @@ pub(crate) const MAX_OTHER_GAMES: usize = 2;
 const OTHERS_START_LIMIT: Duration = Duration::from_millis(600);
 /// A file date within this many seconds of another counts as the same day (settings vs. creation).
 const SAME_DAY_SECS: i64 = 86_400;
+/// A file written this long after a session ended still counts as written while it ran.
+const SESSION_GRACE_SECS: i64 = 120;
+/// How long the diagnosed game's own verdict waits for the other games' folder scans.
+const OTHERS_WAIT: Duration = Duration::from_millis(500);
 
 /// Why a folder could not be scanned at all (never "no mods").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -107,16 +112,54 @@ pub(crate) fn dto(scan: &ModScan) -> ModsRead {
 /// The real scans, for the command: the diagnosed game, then (while the budget lasts) up to
 /// `MAX_OTHER_GAMES` other games' folders. Synchronous: call it from a blocking context only. Read-only.
 pub(crate) fn read_real_mods(game_exe: &str, others: &[String]) -> ModInput {
+    static OTHERS_RUNNING: AtomicBool = AtomicBool::new(false);
+    read_mods_with(game_exe, others, |raw| dto(&game_mods::scan_for_process(raw)), OTHERS_WAIT, &OTHERS_RUNNING)
+}
+
+/// The diagnosed game's folder is scanned first, on the calling thread, and its verdict is never held back
+/// by another game's folder: the others are scanned one after another on a helper thread and collected for
+/// at most `wait`. One that is late is dropped (it reads as "couldn't check" on the card, never as clean).
+/// `running` keeps one helper alive at a time, so repeated presses cannot pile up scanning threads: while
+/// a previous helper still runs, the other games are simply not scanned this time.
+pub(super) fn read_mods_with(game_exe: &str, others: &[String], scan: fn(&str) -> ModsRead, wait: Duration, running: &'static AtomicBool) -> ModInput {
     let started = Instant::now();
-    let game = dto(&game_mods::scan_for_process(game_exe));
-    let mut rest = Vec::new();
-    for raw in others.iter().take(MAX_OTHER_GAMES) {
-        if started.elapsed() >= OTHERS_START_LIMIT {
-            break;
+    let game = scan(game_exe);
+    let raws: Vec<String> = others.iter().take(MAX_OTHER_GAMES).cloned().collect();
+    if raws.is_empty() || running.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
+        return ModInput { game, others: Vec::new() };
+    }
+    let (tx, rx) = std::sync::mpsc::channel();
+    let spawned = std::thread::Builder::new().name("paramedic-mods-others".into()).spawn(move || {
+        let _free = FlagGuard(running);
+        for raw in raws {
+            if started.elapsed() >= OTHERS_START_LIMIT {
+                break;
+            }
+            let read = scan(&raw);
+            if tx.send((intelligence::pretty_game_name(&raw), read)).is_err() {
+                break;
+            }
         }
-        rest.push((intelligence::pretty_game_name(raw), dto(&game_mods::scan_for_process(raw))));
+    });
+    if spawned.is_err() {
+        running.store(false, Ordering::Release);
+        return ModInput { game, others: Vec::new() };
+    }
+    let deadline = Instant::now() + wait;
+    let mut rest = Vec::new();
+    while let Ok(one) = rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+        rest.push(one);
     }
     ModInput { game, others: rest }
+}
+
+/// Clears a "still running" flag when the thread holding it ends, even by a panic.
+pub(crate) struct FlagGuard(pub(crate) &'static AtomicBool);
+
+impl Drop for FlagGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
 }
 
 /// The process names of the other games the diagnosis says also got rough (the card shows their pretty
@@ -166,8 +209,15 @@ fn candidate(c: &Ctx, m: &ModFound) -> Cand {
     let hi = c.first_bad.start();
     let lo = c.last_full_normal.and_then(SessionFacts::end);
     let in_window = |t: DateTime<Utc>| matches!((lo, hi), (Some(l), Some(h)) if t > l && t <= h);
+    // A settings file the mod rewrites while the game runs (an overlay saving its own config) says when the
+    // game was played, not when the mod arrived: a date inside any of this game's sessions (their length
+    // plus a short grace) gives no timing. The creation date keeps its own caveat in the line.
+    let in_a_session = |t: DateTime<Utc>| {
+        c.sess.iter().any(|s| matches!((s.start(), s.end()), (Some(a), Some(b)) if t >= a && t <= b + chrono::Duration::seconds(SESSION_GRACE_SECS)))
+    };
     // A loader that is not beside the game's exe is a file the game does not load from: no timing from it.
-    let timing = m.loader_file_present && (m.first_seen.is_some_and(in_window) || m.settings_changed.is_some_and(in_window));
+    let timing = m.loader_file_present
+        && (m.first_seen.is_some_and(in_window) || m.settings_changed.is_some_and(|t| in_window(t) && !in_a_session(t)));
     let mut evidence = Vec::new();
     let date = |t: DateTime<Utc>| [("date", iso(t))];
     if let Some(t) = m.first_seen {
@@ -180,15 +230,10 @@ fn candidate(c: &Ctx, m: &ModFound) -> Cand {
     }
     if let Some(l) = m.last_log_write {
         evidence.push(ev(EvidenceKind::Known, "mod-log-written", "game-folder", false, &date(l)));
-        // The mod's own log was last written before the first rough session, and a normal session had already
-        // started before that write: the mod may not have been running in the rough one. Said as "may".
-        // (The baseline sessions are the game's normal ones too, even the first ones that had nothing to be
-        // compared with yet.)
-        let before_l = |s: &SessionFacts| s.start().is_some_and(|t| t < l);
-        let earlier_normal =
-            c.base.iter().copied().any(before_l) || c.sess.iter().zip(c.judged).any(|(s, j)| j.verdict == Verdict::Normal && before_l(s));
-        if hi.is_some_and(|h| l < h) && earlier_normal {
-            evidence.push(ev(EvidenceKind::Known, "mod-log-before-rough", "game-folder", true, &[]));
+        // Only the fact: the file was last written before the first rough session. Compy cannot tell from a
+        // file date whether the mod was running, so nothing is concluded from it and it is not "against".
+        if hi.is_some_and(|h| l < h) {
+            evidence.push(ev(EvidenceKind::Known, "mod-log-before-rough", "game-folder", false, &[]));
         }
     }
     Cand {
@@ -207,6 +252,27 @@ fn candidate(c: &Ctx, m: &ModFound) -> Cand {
         fix: steps("graphics-mod", &[("name", m.name.to_string())]),
         evidence,
     }
+}
+
+/// Cited games whose folder was NOT checked for mods, while mods were asked for at all: absent from the
+/// scans (skipped or late), unavailable, or unscannable. A game scanned clean or with files found is not here.
+/// `others` is keyed by the card's name for the game (`pretty_game_name`), like `games` (the cross-game names).
+pub(super) fn other_game_unchecked(c: &Ctx, games: &[String]) -> Vec<String> {
+    if matches!(c.inp.mods.game, ModsRead::NotRead) {
+        return Vec::new();
+    }
+    games
+        .iter()
+        .filter(|g| {
+            let checked = match c.inp.mods.others.iter().find(|(n, _)| n == *g) {
+                Some((_, ModsRead::Read(ModsVerdict::NoKnownMod | ModsVerdict::Found(_)))) => true,
+                Some((_, ModsRead::Read(ModsVerdict::Partly(m)))) => !m.is_empty(),
+                _ => false,
+            };
+            !checked
+        })
+        .cloned()
+        .collect()
 }
 
 /// Another game's folder holds mod files (strong or settings-only): its rough sessions may have their own

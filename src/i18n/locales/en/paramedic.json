@@ -202,12 +202,12 @@
     "gapDayUnplaced": "{{what}} on {{when}} (time of day not known).",
     "recoveryDayUnplaced": "Windows recorded a change on {{when}} without a time of day, so Compy can't say whether it came before or after the rough sessions.",
     "recoveredSteamLatestOnly": "Steam only keeps the latest update time of {{game}}'s files, and that is after the rough sessions, so Compy can't say whether they changed in between.",
-    "modFilesCreated": "Files of this mod were created in this folder around {{first_seen}} (Windows resets this date when a folder is copied or moved).",
+    "modFilesCreated": "Files of this mod were created in this folder around {{first_seen}} (Windows resets this date when a folder is copied or moved, so it is not necessarily when the mod was added).",
     "modSettingsChanged": "Its settings file was last changed on {{date}}.",
     "modLogWritten": "The mod's own log or cache file was last written on {{date}}.",
-    "modLogBeforeRough": "That is before the rough session, so the mod may not have been running then.",
+    "modLogBeforeRough": "That is before the rough session.",
     "crossGameMod": "{{otherGame}}'s folder contains {{name}} files, so its rough sessions may have their own reason.",
-    "gpuTemp": "Graphics card temperature peaked at {{rough}}°C in the rough session and {{base}}°C in normal ones."
+    "crossGameModUnchecked": "Compy couldn't check {{otherGame}}'s folder for graphics mods."
   },
   "fix": {
     "title": "How to fix it",
@@ -255,11 +255,11 @@
       "step2": "Play {{game}} once, then press Something's wrong again."
     },
     "graphicsMod": {
-      "step1": "Check {{name}}'s own page for a version that matches your graphics driver.",
+      "step1": "Check {{name}}'s own page for a newer version.",
       "step2": "To test without it, move its files out of the game folder (or use its own uninstall), play once, and press Something's wrong again."
     },
     "gpuHotter": {
-      "step1": "Check that the card's fans spin up when you play, and clean the dust off the fans and heatsink.",
+      "step1": "Check that the card's fans spin up when you play, and look at the fans and heatsink for dust.",
       "step2": "Check that the case has clear airflow in and out, and look at the card's fan curve in its own tool (it may be set too low).",
       "step3": "Play {{game}} once, then press Something's wrong again."
     }
@@ -298,8 +298,7 @@
     "gpuDriverNoInstall": "Graphics driver: still {{driver}}. Windows recorded no graphics driver install in this period.",
     "seen": "Also looked at:",
     "cantSeeFold": "What Compy can't see",
-    "graphicsMod": "No known graphics mod found in {{game}}'s folder.",
-    "gpuTemp": "Graphics card temperature: no more than {{within}}°C above the highest peak in your normal sessions."
+    "graphicsMod": "No known graphics mod found in {{game}}'s folder."
   },
   "unknown": {
     "startupPrograms": "Which programs start with Windows, compared with before",
@@ -336,7 +335,6 @@
     "partial": "Compy only measured part of your last {{game}} session ({{percent}}%), so it won't judge it. Play once more with Compy running.",
     "noGame": "Compy hasn't recorded {{game}} yet. Start Compy before you play.",
     "noSessions": "Compy hasn't recorded any games yet. Start Compy before you play.",
-    "crash": "Crashes have their own page for now. Open Problems to see what Windows recorded.",
     "partialRough": "Compy only measured part of your last {{game}} session ({{percent}}%), and what it saw looked rough. Play once more with Compy running.",
     "frameCap": "Your frame cap changed, or Compy can't read it, between your earlier {{game}} sessions and the newest one, so it won't compare them.",
     "backToNormal": "Compy can't tell yet whether {{game}} is back to normal. Play once more.",
@@ -374,11 +372,16 @@
     "updatesUnclassifiedKb_other": "{{count}} Windows updates Compy couldn't classify ({{kbs}}).",
     "driverOtherInstall": "Windows recorded a graphics driver install on {{when}} for a different version than the one your rough sessions ran on.",
     "modSettingsOnly": "{{game}}'s folder contains a settings or data file from {{name}}; Compy can't tell whether the mod itself is installed.",
-    "gpuTemp": "Graphics card temperature peaked at {{rough}}°C in the rough session and {{base}}°C in normal ones.",
     "gameCrashes_one": "{{game}} has closed unexpectedly once, on {{since}}.",
     "gameCrashes_other": "{{game}} has closed unexpectedly {{count}} times since {{since}}.",
-    "gameCrashSignature": "They all have the same signature ({{module}}), and they started before {{what}}, so they are probably a separate problem.",
-    "crashBeforeWhat": "the earliest change Compy found ({{date}})"
+    "gameCrashSignature": "All the crashes Compy could read have the same signature ({{module}}), and some happened before {{what}}, so that change can't be the whole story for them.",
+    "crashBeforeWhat": "the earliest dated change Compy found ({{date}})",
+    "gpuTemp_one": "Graphics card temperature peaked at {{rough}}°C in the rough session; in normal sessions it typically peaks around {{base}}°C.",
+    "gpuTemp_other": "Graphics card temperature peaked at {{rough}}°C in the rough sessions (the highest of them); in normal sessions it typically peaks around {{base}}°C.",
+    "gameCrashesPartial_one": "Windows' crash records that Compy could read show {{game}} closing unexpectedly at least once, on {{since}}.",
+    "gameCrashesPartial_other": "Windows' crash records that Compy could read show {{game}} closing unexpectedly at least {{count}} times. The oldest of these is from {{since}}.",
+    "crashesByName": " (matched by program name)",
+    "crashesVersions": " These crashes are across {{n}} versions of the game."
   },
   "limit": {
     "cantSee": "Compy couldn't see {{what}}: {{why}}.",

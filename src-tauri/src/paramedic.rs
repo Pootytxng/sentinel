@@ -842,8 +842,10 @@ pub(crate) async fn paramedic_diagnose(complaint: Complaint, game: Option<String
         let inp = read_inputs_from(&crate::compy_data_dir())?;
         let fetch = |t0, t1, exe: String| changes::read_real_changes(t0, t1, &exe);
         let fetch_mods = |exe: String, others: Vec<String>| mods::read_real_mods(&exe, &others);
-        let fetch_crashes = extras::read_real_crashes;
-        Ok(changes::diagnose_with_all(inp, complaint, game.as_deref(), changes::CHANGES_BUDGET, fetch, Some(fetch_mods), Some(fetch_crashes)))
+        let fetch_crashes = |exe: String| extras::read_real_crashes(&exe);
+        // A reader still running from an earlier press is not started again (that kind reads "took too long").
+        static SLOTS: changes::Slots = changes::Slots::new();
+        Ok(changes::diagnose_with_all(inp, complaint, game.as_deref(), changes::CHANGES_BUDGET, fetch, Some(fetch_mods), Some(fetch_crashes), Some(&SLOTS)))
     })
     .await
     .map_err(|_| "the diagnosis stopped unexpectedly".to_string())?
@@ -1139,6 +1141,7 @@ fn category(id: &str) -> usize {
         "background-load",
         "gpu-driver-change",
         "memory-pressure",
+        "gpu-hotter",
         "display-refresh-lower",
         "power-plan-change",
         "compy-change",
@@ -1149,7 +1152,6 @@ fn category(id: &str) -> usize {
         "program-installed",
         "other-driver-change",
         "graphics-mod",
-        "gpu-hotter",
     ];
     ORDER.iter().position(|x| *x == id).unwrap_or(ORDER.len())
 }
@@ -1355,6 +1357,14 @@ fn rank(c: &mut Vec<Cand>) {
             c.insert(drv, cand);
         }
     }
+    // A hotter reading is one measured size with no date: it ranks with the other sizes (after memory-pressure
+    // in the category order) but never above a change that is dated, even one that only has its timing.
+    if let (Some(h), Some(last_dated)) = (c.iter().position(|x| x.id == "gpu-hotter"), c.iter().rposition(|x| x.t)) {
+        if h < last_dated {
+            let cand = c.remove(h);
+            c.insert(last_dated, cand);
+        }
+    }
 }
 
 fn why_first(c: &[Cand]) -> Option<&'static str> {
@@ -1485,6 +1495,9 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
     });
     let x_games: Vec<String> = x_others.iter().map(|o| o.name.clone()).collect();
     let mod_other = mods::other_game_mods(c, &x_games);
+    // A cited game whose folder was not checked for mods (when mods were asked for at all) cannot be called
+    // clean: its support stays confounded, and the card says so.
+    let mod_unchecked = mods::other_game_unchecked(c, &x_games);
     // Independent only if one of those games' rough sessions was measured quiet: none overlapping recorded
     // background activity, and every one with a load number. Otherwise the same busy PC may explain both.
     let x_clean = x_others.iter().any(|o| {
@@ -1546,6 +1559,9 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
                 &[("otherGame", other.clone()), ("name", (*name).to_string())],
             ));
         }
+        for other in &mod_unchecked {
+            evidence.push(ev(EvidenceKind::Unknown, "cross-game-mod-unchecked", "game-folder", false, &[("otherGame", other.clone())]));
+        }
     }
     if let Some(newest_ok) = normal_new.iter().max_by_key(|s| s.start()) {
         evidence.push(ev(
@@ -1576,7 +1592,7 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         t: true,
         d: true,
         x: !x_games.is_empty(),
-        confounded: !x_games.is_empty() && (!x_clean || !mod_other.is_empty()),
+        confounded: !x_games.is_empty() && (!x_clean || !mod_other.is_empty() || !mod_unchecked.is_empty()),
         r: false,
         m: false,
         c1: rough_on_old > 0 || !normal_new.is_empty() || after_rough,

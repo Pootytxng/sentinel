@@ -1110,7 +1110,7 @@ describe("ParamedicCard: graphics mods in the game's folder", () => {
             fact("mod-files-created", { date: created }),
             fact("mod-settings-changed", { date: changed }),
             fact("mod-log-written", { date: logged }),
-            fact("mod-log-before-rough", {}, true),
+            fact("mod-log-before-rough", {}),
           ],
         }),
       ]),
@@ -1120,17 +1120,21 @@ describe("ParamedicCard: graphics mods in the game's folder", () => {
     expect(rows()[0].textContent).toMatch(/Possible/);
     openAll();
     const text = document.body.textContent ?? "";
-    expect(text).toContain(`Files of this mod were created in this folder around ${day(created)} (Windows resets this date when a folder is copied or moved).`);
+    expect(text).toContain(
+      `Files of this mod were created in this folder around ${day(created)} (Windows resets this date when a folder is copied or moved, so it is not necessarily when the mod was added).`,
+    );
     expect(text).toContain(`Its settings file was last changed on ${day(changed)}.`);
     expect(text).toContain(`The mod's own log or cache file was last written on ${day(logged)}.`);
-    expect(text).toContain("That is before the rough session, so the mod may not have been running then.");
-    expect(text).toContain("Check OptiScaler's own page for a version that matches your graphics driver.");
+    expect(text).toContain("That is before the rough session.");
+    expect(text).toContain("Check OptiScaler's own page for a newer version.");
     expect(text).toContain(
       "To test without it, move its files out of the game folder (or use its own uninstall), play once, and press Something's wrong again.",
     );
-    // That line weakens the mod; the others are plain recorded facts.
-    const weakens = screen.getAllByText(/may not have been running then/)[0].closest("li");
-    expect(within(weakens as HTMLElement).getByText("Weakens this")).toBeTruthy();
+    // A file date says nothing about whether the mod was running: no line concludes that, and none weakens the mod.
+    expect(text).not.toMatch(/may not have been running|probably/);
+    const before = screen.getAllByText("That is before the rough session.")[0].closest("li");
+    expect(within(before as HTMLElement).queryByText("Weakens this")).toBeNull();
+    expect(within(rows()[0] as HTMLElement).queryByText("Weakens this")).toBeNull();
     // Files are never "installed on", "added on" or "active", and there is no one-click button.
     expect(text).not.toMatch(/installed on|added on|\bactive\b|no mods/i);
     expect(screen.queryByRole("button", { name: /remove|undo|apply|fix/i })).toBeNull();
@@ -1186,6 +1190,18 @@ describe("ParamedicCard: graphics mods in the game's folder", () => {
     expect(document.body.textContent).toContain("Game B's folder contains ReShade files, so its rough sessions may have their own reason.");
   });
 
+  it("a cited game whose folder Compy could not check says so on the cross-game evidence", async () => {
+    const driver = find("gpu-driver-change", {
+      confidence: "possible",
+      evidence: [{ kind: "unknown", code: "cross-game-mod-unchecked", args: { otherGame: "Game B" }, against: false, source: "game-folder" }],
+      fix: steps("gpu-driver-change", { from: "1.0" }),
+    });
+    await ask(answerOf([driver]));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(document.body.textContent).toContain("Compy couldn't check Game B's folder for graphics mods.");
+  });
+
   it("the mod strings never claim the mod is installed, active, running or the reason, in either language", () => {
     const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "paramedic.json"), "utf8"));
     const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8"));
@@ -1218,28 +1234,35 @@ describe("ParamedicCard: temperature and crash history", () => {
   const background = () => find("background-load", { fix: steps("background-load") });
   const checked = () => document.body.textContent ?? "";
 
-  it("the temperature line names both peaks and is the only sentence about them", async () => {
-    await ask(answerOf([background()], { seen: [{ id: "gpu-temp", args: { rough: "77", base: "70" } }] }));
+  it("the temperature line is one sentence with both numbers, in the singular or the plural", async () => {
+    await ask(answerOf([background()], { seen: [{ id: "gpu-temp", args: { rough: "77", base: "70", count: "1" } }] }));
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
-    expect(checked()).toContain("Graphics card temperature peaked at 77°C in the rough session and 70°C in normal ones.");
+    expect(checked()).toContain("Graphics card temperature peaked at 77°C in the rough session; in normal sessions it typically peaks around 70°C.");
+    expect(checked()).not.toContain("the highest of them");
   });
 
-  it("within the line it is also in the Unchanged list, with the line's own number", async () => {
-    await ask(
-      answerOf([background()], {
-        seen: [{ id: "gpu-temp", args: { rough: "74", base: "70" } }],
-        not_it: [{ id: "gpu-temp", args: { rough: "74", base: "70", within: "5" } }],
-      }),
+  it("with several rough sessions the same sentence says it is the highest of them", async () => {
+    await ask(answerOf([background()], { seen: [{ id: "gpu-temp", args: { rough: "88", base: "70", count: "2" } }] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(
+      "Graphics card temperature peaked at 88°C in the rough sessions (the highest of them); in normal sessions it typically peaks around 70°C.",
     );
-    await waitFor(() => expect(rows().length).toBe(1));
-    openAll();
-    expect(checked()).toContain("Graphics card temperature: no more than 5°C above the highest peak in your normal sessions.");
   });
 
-  it("a hotter card is a Possible row with the two peaks as evidence and fan, dust, airflow and fan-curve steps", async () => {
+  it("an unchanged temperature is that same one sentence under Unchanged, said once", async () => {
+    await ask(answerOf([background()], { not_it: [{ id: "gpu-temp", args: { rough: "74", base: "70", count: "1" } }] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    const line = "Graphics card temperature peaked at 74°C in the rough session; in normal sessions it typically peaks around 70°C.";
+    expect(checked()).toContain(line);
+    expect(checked().split(line).length).toBe(2);
+  });
+
+  it("a hotter card is a Possible row with the two peaks as evidence and fan, dust, airflow and fan-curve steps, none of which assumes dust", async () => {
     const hot = find("gpu-hotter", {
-      evidence: [{ kind: "known", code: "gpu-temp", args: { rough: "91", base: "80" }, against: false, source: "sessions" }],
+      evidence: [{ kind: "measured", code: "gpu-temp", args: { rough: "91", base: "80", count: "1" }, against: false, source: "sessions" }],
       fix: steps("gpu-hotter"),
     });
     await ask(answerOf([hot]));
@@ -1247,9 +1270,10 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(rows()[0].textContent).toMatch(/Your graphics card ran hotter than usual/);
     expect(rows()[0].textContent).toMatch(/Possible/);
     openAll();
-    expect(checked()).toContain("Graphics card temperature peaked at 91°C in the rough session and 80°C in normal ones.");
+    expect(checked()).toContain("Graphics card temperature peaked at 91°C in the rough session; in normal sessions it typically peaks around 80°C.");
     expect(checked()).toMatch(/fans spin up/);
-    expect(checked()).toMatch(/dust/);
+    expect(checked()).toContain("look at the fans and heatsink for dust");
+    expect(checked()).not.toMatch(/clean the dust/);
     expect(checked()).toMatch(/airflow/);
     expect(checked()).toMatch(/fan curve/);
   });
@@ -1265,7 +1289,7 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(checked()).not.toMatch(/no crashes/i);
   });
 
-  it("the crash line says once or how many times since the first, and only both conditions bring 'probably'", async () => {
+  it("the crash line says once or how many times since the first, and both conditions bring the signature sentence", async () => {
     const first = "2026-11-02T09:00:00Z";
     const change = "2026-11-12T09:00:00Z";
     await ask(
@@ -1279,8 +1303,9 @@ describe("ParamedicCard: temperature and crash history", () => {
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
     expect(checked()).toContain(`Game A has closed unexpectedly 3 times since ${day(first)}.`);
+    expect(checked()).not.toMatch(/probably/);
     expect(checked()).toContain(
-      `They all have the same signature (nvwgf2umx.dll), and they started before the earliest change Compy found (${day(change)}), so they are probably a separate problem.`,
+      `All the crashes Compy could read have the same signature (nvwgf2umx.dll), and some happened before the earliest dated change Compy found (${day(change)}), so that change can't be the whole story for them.`,
     );
   });
 
@@ -1293,7 +1318,27 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(checked()).not.toMatch(/same signature|probably/);
   });
 
-  it("the new strings use no overheating, throttling, causal or verdict words, and 'probably' only in the signature sentence", () => {
+  it("a partial read says 'at least' in the line itself, and the line says when it went by program name or spans versions", async () => {
+    const first = "2026-11-02T09:00:00Z";
+    await ask(answerOf([background()], { seen: [{ id: "game-crashes", args: { n: "3", since: first, partial: "true", byName: "true", versions: "2" } }] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(
+      `Windows' crash records that Compy could read show Game A closing unexpectedly at least 3 times. The oldest of these is from ${day(first)}. (matched by program name) These crashes are across 2 versions of the game.`,
+    );
+    expect(checked()).not.toMatch(/only some of them could be read/);
+  });
+
+  it("a partial read of one crash says 'at least once', and a complete read keeps the plain wording", async () => {
+    const first = "2026-11-02T09:00:00Z";
+    await ask(answerOf([background()], { seen: [{ id: "game-crashes", args: { n: "1", since: first, partial: "true" } }] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(`Windows' crash records that Compy could read show Game A closing unexpectedly at least once, on ${day(first)}.`);
+    expect(checked()).not.toContain("(matched by program name)");
+  });
+
+  it("the new strings use no overheating, throttling, causal or verdict words, and no 'probably' anywhere", () => {
     const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "paramedic.json"), "utf8"));
     const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8"));
     const strings = (o: Record<string, unknown>): string[] =>
@@ -1305,10 +1350,14 @@ describe("ParamedicCard: temperature and crash history", () => {
     const slice = (o: Record<string, Record<string, unknown>>): string[] =>
       strings({
         a: o.finding.gpuHotter,
-        b: o.evidence.gpuTemp,
+        b: o.evidence.crossGameModUnchecked,
         c: o.fix.gpuHotter,
-        d: o.checked.gpuTemp,
-        e: o.seen.gpuTemp,
+        d: o.seen.gpuTemp_one,
+        e: o.seen.gpuTemp_other,
+        n: o.seen.gameCrashesPartial_one,
+        o: o.seen.gameCrashesPartial_other,
+        p: o.seen.crashesByName,
+        q: o.seen.crashesVersions,
         f: o.seen.gameCrashes_one,
         g: o.seen.gameCrashes_other,
         h: o.seen.gameCrashSignature,
@@ -1320,8 +1369,10 @@ describe("ParamedicCard: temperature and crash history", () => {
       });
     for (const s of slice(en)) expect(s).not.toMatch(/\bcaus|because|guarantee|\bfix(ed)?\b/i);
     for (const s of slice(zh)) expect(s).not.toMatch(/原因|导致|造成|保证|修复了/);
-    expect(all.filter((s) => /probably/i.test(s))).toEqual([en.seen.gameCrashSignature]);
-    expect(strings(zh).filter((s) => /很可能|可能是/.test(s)).length).toBeGreaterThan(0);
+    expect(all.filter((s) => /probably/i.test(s))).toEqual([]);
+    expect(zh.seen.gameCrashSignature).not.toMatch(/很可能|可能是/);
+    // The old per-line temperature keys are gone: the one sentence is the plural pair.
+    expect([en.evidence.gpuTemp, en.checked.gpuTemp, en.seen.gpuTemp, en.cantTell.crash]).toEqual([undefined, undefined, undefined, undefined]);
     // The two languages carry the same keys under every group the slice touched.
     const keys = (o: Record<string, unknown>, p = ""): string[] =>
       Object.entries(o).flatMap(([k, v]) => (typeof v === "string" ? [p + k] : keys(v as Record<string, unknown>, `${p}${k}.`)));
@@ -1352,6 +1403,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     const card = screen.getByTestId("paramedic");
     expect(card.getAttribute("data-open")).toBe("true");
     expect(region.getAttribute("aria-busy")).toBe("false");
+    expect(region.hasAttribute("inert")).toBe(false);
 
     let release: () => void = () => {};
     answer.gate = new Promise<void>((r) => (release = r));
@@ -1365,6 +1417,8 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(region.className).toBe(classBefore);
     expect(region.getAttribute("aria-busy")).toBe("true");
     expect(region.getAttribute("data-busy")).toBe("true");
+    // Dimmed and busy is not enough: the old answer cannot be focused or clicked while it is replaced.
+    expect(region.hasAttribute("inert")).toBe(true);
     expect(rows().length).toBe(1);
     expect(screen.getByRole("status").textContent).toMatch(/Looking at your recent sessions/);
     expect(screen.getByRole("button", { name: "Check again" }).getAttribute("aria-disabled")).toBe("true");
@@ -1378,6 +1432,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     await waitFor(() => expect(region.getAttribute("aria-busy")).toBe("false"));
     expect(scrollRegion()).toBe(region);
     expect(region.hasAttribute("data-busy")).toBe(false);
+    expect(region.hasAttribute("inert")).toBe(false);
     expect(card.textContent).toContain("Game B");
   });
 
@@ -1482,6 +1537,52 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     answer.value = base;
     render(<ParamedicCard onOpenProblems={open} />);
     expect(screen.queryByRole("button", { name: /Something else/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    fireEvent.click(screen.getByRole("button", { name: "Something else? Answer a few questions" }));
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it("the way out to the questions is in every state of the card but the idle one: first check, answer, failed and slow", async () => {
+    const link = () => screen.queryByRole("button", { name: "Something else? Answer a few questions" });
+    const open = vi.fn();
+    // The first check, still running (no answer yet).
+    answer.gate = new Promise<void>(() => {});
+    const first = render(<ParamedicCard onOpenProblems={open} />);
+    expect(link(), "idle").toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toMatch(/Looking at your recent sessions/));
+    expect(link(), "first check running").toBeTruthy();
+    fireEvent.click(link() as HTMLElement);
+    expect(open).toHaveBeenCalledTimes(1);
+    first.unmount();
+    // A failed check.
+    answer.gate = null;
+    answer.reject = "boom";
+    const failed = render(<ParamedicCard onOpenProblems={open} />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    expect(link(), "after a failed check").toBeTruthy();
+    failed.unmount();
+    // A check that is still going when the retries run out.
+    vi.useFakeTimers();
+    try {
+      answer.reject = "";
+      answer.busyFirst = 100;
+      render(<ParamedicCard onOpenProblems={open} />);
+      fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+      for (let i = 0; i < 12; i++) await act(async () => void (await vi.advanceTimersByTimeAsync(1300)));
+      expect(screen.getByRole("status").textContent).toBe("Compy is still checking. Try again in a moment.");
+      expect(link(), "still checking").toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("an answer on screen has the link too, and it opens Problems", async () => {
+    const open = vi.fn();
+    answer.value = base;
+    render(<ParamedicCard onOpenProblems={open} />);
     fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
     await waitFor(() => expect(rows().length).toBe(1));
     fireEvent.click(screen.getByRole("button", { name: "Something else? Answer a few questions" }));

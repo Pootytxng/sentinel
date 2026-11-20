@@ -128,7 +128,7 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
         ? t("paramedic.evidence.crossGame", { games: a.games })
         : t("paramedic.evidence.crossGameAfter", { games: a.games });
     case "gpu-temp":
-      return t("paramedic.evidence.gpuTemp", { rough: a.rough, base: a.base });
+      return t("paramedic.seen.gpuTemp", { count: Number(a.count), rough: a.rough, base: a.base });
     // Dates of files in the game's folder: when they were created or last written, never "installed on".
     case "mod-files-created":
       return t("paramedic.evidence.modFilesCreated", { first_seen: dates.day(a.date) });
@@ -140,6 +140,8 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
       return t("paramedic.evidence.modLogBeforeRough");
     case "cross-game-mod":
       return t("paramedic.evidence.crossGameMod", { otherGame: a.otherGame, name: a.name });
+    case "cross-game-mod-unchecked":
+      return t("paramedic.evidence.crossGameModUnchecked", { otherGame: a.otherGame });
     case "install-recorded":
       return t("paramedic.evidence.installRecorded", { when: dates.dayTime(a.when) });
     case "install-not-recorded":
@@ -404,7 +406,8 @@ function ruledOutLine(n: ParamedicRuledOut, { t, dates, game }: Ctx): string | n
       // Only for a complete scan: "no KNOWN mod", never "no mods".
       return t("paramedic.checked.graphicsMod", { game });
     case "gpu-temp":
-      return t("paramedic.checked.gpuTemp", { within: a.within });
+      // The same one sentence as everywhere else: both numbers, said once.
+      return t("paramedic.seen.gpuTemp", { count: Number(a.count), rough: a.rough, base: a.base });
     default:
       return null;
   }
@@ -466,9 +469,20 @@ function seenLine(s: ParamedicRuledOut, { t, dates, game }: Ctx): string | null 
   const a = s.args;
   switch (s.id) {
     case "gpu-temp":
-      return t("paramedic.seen.gpuTemp", { rough: a.rough, base: a.base });
-    case "game-crashes":
-      return t("paramedic.seen.gameCrashes", { game, count: Number(a.n), since: dates.day(a.since) });
+      return t("paramedic.seen.gpuTemp", { count: Number(a.count), rough: a.rough, base: a.base });
+    case "game-crashes": {
+      // A partial read says "at least" in the line itself. The program name is always matched; when the
+      // install folder or the report's path was not there to check, the line says it went by name only.
+      const count = Number(a.n);
+      const since = dates.day(a.since);
+      const base =
+        a.partial === "true"
+          ? t("paramedic.seen.gameCrashesPartial", { game, count, since })
+          : t("paramedic.seen.gameCrashes", { game, count, since });
+      const byName = a.byName === "true" ? t("paramedic.seen.crashesByName") : "";
+      const versions = a.versions ? t("paramedic.seen.crashesVersions", { n: Number(a.versions) }) : "";
+      return `${base}${byName}${versions}`;
+    }
     case "game-crash-signature":
       return t("paramedic.seen.gameCrashSignature", { module: a.module, what: t("paramedic.seen.crashBeforeWhat", { date: dates.day(a.before) }) });
     case "mod-settings-only":
@@ -1038,8 +1052,6 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
       : t("paramedic.cantTell.partial", { game, percent: s.why.percent });
   } else if (s.kind === "cant-tell" && s.why.kind === "frame-cap-changed") {
     body = t("paramedic.cantTell.frameCap", { game });
-  } else if (s.kind === "cant-tell" && s.why.kind === "crash-not-covered") {
-    body = t("paramedic.cantTell.crash");
   } else if (d.game) {
     body = t("paramedic.cantTell.noGame", { game });
   } else {
@@ -1202,6 +1214,9 @@ export function ParamedicCard({ launch = 0, onOpenProblems }: { launch?: number;
             role="region"
             aria-label={t("paramedic.card.scrollLabel")}
             aria-busy={busy}
+            // The old answer is not interactive or focusable while "Check again" is running: it is dimmed,
+            // announced as busy, and out of reach until the new one replaces it.
+            inert={busy}
             data-busy={busy ? "true" : undefined}
             tabIndex={0}
             onScroll={measure}
@@ -1232,7 +1247,9 @@ export function ParamedicCard({ launch = 0, onOpenProblems }: { launch?: number;
           )}
         </div>
       )}
-      {open && onOpenProblems && (
+      {/* In every state but the idle one (a first check still running, an answer, a failed or a slow one): the
+          way out to the questions is never hidden behind the check. */}
+      {view.kind !== "idle" && onOpenProblems && (
         <div className="gl-para-foot">
           <button type="button" className="gl-ghost" onClick={onOpenProblems}>
             {t("paramedic.card.somethingElse")}

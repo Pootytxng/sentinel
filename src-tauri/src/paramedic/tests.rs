@@ -282,6 +282,7 @@ fn finding_order_is_pinned() {
         "background-load",
         "gpu-driver-change",
         "memory-pressure",
+        "gpu-hotter",
         "display-refresh-lower",
         "power-plan-change",
         "compy-change",
@@ -292,7 +293,6 @@ fn finding_order_is_pinned() {
         "program-installed",
         "other-driver-change",
         "graphics-mod",
-        "gpu-hotter",
     ];
     for w in order.windows(2) {
         assert!(category(w[0]) < category(w[1]), "{} must rank before {}", w[0], w[1]);
@@ -899,7 +899,8 @@ fn print_live_diagnosis() {
             changes::CHANGES_BUDGET,
             |a, b, g| changes::read_real_changes(a, b, &g),
             Some(|exe: String, others: Vec<String>| mods::read_real_mods(&exe, &others)),
-            Some(extras::read_real_crashes),
+            Some(|exe: String| extras::read_real_crashes(&exe)),
+            None,
         );
         with_ms.push(t.elapsed().as_millis());
     }
@@ -3087,21 +3088,35 @@ mod graphics_mods {
     }
 
     #[test]
-    fn the_log_date_adds_one_line_and_the_may_not_have_been_running_line_needs_both_conditions() {
+    fn the_log_date_is_a_fact_and_before_the_rough_session_is_said_only_as_a_fact_never_against() {
         let line = |log: &str| codes(mod_finding(&run(ModFound { last_log_write: at(log), ..strong("OptiScaler") })));
         // After the first rough session started: written, and nothing more.
         assert_eq!(line("2026-10-10T00:00:00Z"), ["mod-log-written"]);
-        // Before the rough session AND a normal session started before it (the first one, 10-01 10:00).
+        // Before the rough session: the date, and that it is before it (whatever sessions came earlier).
         assert_eq!(line("2026-10-03T00:00:00Z"), ["mod-log-written", "mod-log-before-rough"]);
-        // Before the rough session but before every normal session too: no earlier normal session.
-        assert_eq!(line("2026-09-01T00:00:00Z"), ["mod-log-written"]);
-        // The edges: a normal session must start strictly before the write; the write strictly before the rough start.
-        assert_eq!(line("2026-10-01T10:00:00Z"), ["mod-log-written"]);
-        assert_eq!(line("2026-10-01T10:00:01Z"), ["mod-log-written", "mod-log-before-rough"]);
+        assert_eq!(line("2026-09-01T00:00:00Z"), ["mod-log-written", "mod-log-before-rough"]);
+        // The edge: the write strictly before the rough start.
         assert_eq!(line(HI), ["mod-log-written"]);
-        let f = run(ModFound { last_log_write: at("2026-10-03T00:00:00Z"), ..strong("OptiScaler") });
-        let weakens = mod_finding(&f).evidence.iter().find(|e| e.code == "mod-log-before-rough").expect("said");
-        assert!(weakens.against, "it weakens the mod as a reason");
+        let f = run(ModFound { first_seen: at(IN), last_log_write: at("2026-10-03T00:00:00Z"), ..strong("OptiScaler") });
+        let mf = mod_finding(&f);
+        assert!(mf.evidence.iter().all(|e| !e.against), "a file date says nothing about whether the mod was running: nothing is against it");
+        assert!(mf.in_play, "so a dated mod stays in play with the log line beside it");
+    }
+
+    #[test]
+    fn a_settings_file_written_during_a_session_gives_no_timing_but_the_creation_date_still_does() {
+        // A partly measured session of this game inside the period; the settings file was saved while it ran.
+        let mut sess = steady(4);
+        sess.push(facts("2026-10-07T12:00:00Z", 600, 100, 100.0, 50.0));
+        sess.push(facts(HI, 600, 600, 100.0, 30.0));
+        let go = |m: ModFound| run_on(sess.clone(), read(ModsVerdict::Found(vec![m])));
+        let during = |at_: &str| mod_finding(&go(ModFound { first_seen: at(OLD), settings_changed: at(at_), ..strong("OptiScaler") })).in_play;
+        assert!(!during("2026-10-07T12:05:00Z"), "inside the session: no timing");
+        assert!(!during("2026-10-07T12:12:00Z"), "up to two minutes after it ends is still the session");
+        assert!(during("2026-10-07T12:12:01Z"), "past the grace it is a date outside any session");
+        assert!(during("2026-10-07T11:59:59Z"), "before it starts is outside too");
+        // The creation date keeps giving timing even inside a session (its own caveat is in the line).
+        assert!(mod_finding(&go(ModFound { first_seen: at("2026-10-07T12:05:00Z"), ..strong("OptiScaler") })).in_play);
     }
 
     #[test]
@@ -3191,6 +3206,145 @@ mod graphics_mods {
             assert!(d.findings[0].evidence.iter().all(|e| e.code != "cross-game-mod"));
             assert_eq!(d.findings[0].confidence, Certainty::Likely);
         }
+    }
+
+    fn cross_with(game: ModsRead, others: Vec<(String, ModsRead)>) -> Diagnosis {
+        let mut inp = inputs(two_games());
+        inp.mods = ModInput { game, others };
+        diagnose(&inp, Complaint::Slow, Some("g"))
+    }
+
+    #[test]
+    fn a_cited_game_whose_folder_was_not_checked_says_so_and_its_support_is_confounded() {
+        let h = intelligence::pretty_game_name("h");
+        let clean = || read(ModsVerdict::NoKnownMod);
+        let unchecked_line = |d: &Diagnosis| d.findings[0].evidence.iter().find(|e| e.code == "cross-game-mod-unchecked").cloned();
+        // Scanned clean: nothing unchecked, the support stands.
+        let d = cross_with(clean(), vec![(h.clone(), clean())]);
+        assert!(unchecked_line(&d).is_none());
+        assert_eq!(d.findings[0].confidence, Certainty::Likely);
+        // Skipped (absent), late or dead (unavailable), unscannable, or partly scanned with nothing seen.
+        let not_checked = [
+            Vec::new(),
+            vec![(h.clone(), ModsRead::Unavailable("took-too-long"))],
+            vec![(h.clone(), read(ModsVerdict::CouldNotScan(CouldNot::NoInstallFolder)))],
+            vec![(h.clone(), read(ModsVerdict::Partly(Vec::new())))],
+        ];
+        for others in not_checked {
+            let d = cross_with(clean(), others);
+            let f = &d.findings[0];
+            let line = unchecked_line(&d).expect("the folder was not checked and the card says so");
+            assert_eq!((line.kind, line.against), (EvidenceKind::Unknown, false));
+            assert_eq!(line.args.get("otherGame"), Some(&h));
+            assert_eq!(f.confidence, Certainty::Possible, "that game may have had its own reason: not independent support");
+            assert_ne!(d.why_first, Some("cross-game"));
+        }
+        // `others` is keyed by the card's name for the game: an entry under the raw process name is not that game.
+        let d = cross_with(clean(), vec![("h.exe".into(), clean())]);
+        assert!(unchecked_line(&d).is_some());
+        // Mods not asked for at all (recorded fixtures): nothing is said about folders either way.
+        let d = cross_with(ModsRead::NotRead, Vec::new());
+        assert!(unchecked_line(&d).is_none());
+        assert_eq!(d.findings[0].confidence, Certainty::Likely);
+    }
+
+    fn scan_by_name(raw: &str) -> ModsRead {
+        match raw {
+            "slow.exe" => {
+                std::thread::sleep(Duration::from_millis(400));
+                read(ModsVerdict::NoKnownMod)
+            }
+            "g.exe" => read(ModsVerdict::Found(vec![strong("ReShade")])),
+            _ => read(ModsVerdict::NoKnownMod),
+        }
+    }
+
+    #[test]
+    fn the_games_own_verdict_is_never_held_back_by_another_games_slow_scan() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        static RUNNING: AtomicBool = AtomicBool::new(false);
+        let others = vec!["quick.exe".to_string(), "slow.exe".to_string()];
+        let t = std::time::Instant::now();
+        let got = mods::read_mods_with("g.exe", &others, scan_by_name, Duration::from_millis(100), &RUNNING);
+        assert!(t.elapsed() < Duration::from_millis(350), "the late scan is dropped, not waited for: {:?}", t.elapsed());
+        assert_eq!(got.game, read(ModsVerdict::Found(vec![strong("ReShade")])), "the diagnosed game's verdict is kept");
+        assert_eq!(got.others.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(), [intelligence::pretty_game_name("quick.exe")]);
+        // The late one is still being scanned: another press does not start a second helper.
+        assert!(RUNNING.load(Ordering::Acquire));
+        let again = mods::read_mods_with("g.exe", &others, scan_by_name, Duration::from_millis(100), &RUNNING);
+        assert!(again.others.is_empty() && matches!(again.game, ModsRead::Read(ModsVerdict::Found(_))));
+        // Once it ends the next press scans the others again.
+        let end = std::time::Instant::now() + Duration::from_secs(3);
+        while RUNNING.load(Ordering::Acquire) && std::time::Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(!RUNNING.load(Ordering::Acquire));
+        let next = mods::read_mods_with("g.exe", &["quick.exe".to_string()], scan_by_name, Duration::from_millis(300), &RUNNING);
+        assert_eq!(next.others.len(), 1);
+    }
+
+    #[test]
+    fn a_reader_still_running_from_an_earlier_press_is_not_started_again_and_reads_as_took_too_long() {
+        use super::super::changes::{diagnose_with_all, ChangeRead, Slots};
+        use super::super::extras::{CrashHistory, CrashRead};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+        let slots: &'static Slots = Box::leak(Box::new(Slots::new()));
+        let started = Arc::new(AtomicUsize::new(0));
+        let call = |mods_sleep: u64, crashes_sleep: u64, budget: u64| {
+            let (m, c) = (started.clone(), started.clone());
+            diagnose_with_all(
+                inputs(quiet_scenario()),
+                Complaint::Slow,
+                Some("g"),
+                Duration::from_millis(budget),
+                |_, _, _| ChangeRead::NotRead,
+                Some(move |_: String, _: Vec<String>| {
+                    m.fetch_add(1, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_millis(mods_sleep));
+                    ModInput { game: read(ModsVerdict::NoKnownMod), others: Vec::new() }
+                }),
+                Some(move |_: String| {
+                    c.fetch_add(1, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_millis(crashes_sleep));
+                    CrashRead::Read(CrashHistory { crashes: Vec::new(), listed: true, partial: false })
+                }),
+                Some(slots),
+            )
+        };
+        // First press: both readers outlive the budget.
+        let first = call(600, 600, 80);
+        assert!(first.unknowns.contains(&"mods-unavailable") && first.unknowns.contains(&"crashes-unavailable"));
+        assert_eq!(started.load(Ordering::SeqCst), 2);
+        // Second press while they still run: neither is started again; both read as took-too-long.
+        let second = call(0, 0, 80);
+        assert_eq!(started.load(Ordering::SeqCst), 2, "no second reader of either kind");
+        assert!(second.unknowns.contains(&"mods-unavailable") && second.unknowns.contains(&"crashes-unavailable"));
+        // After they end, the next press reads them again.
+        let end = std::time::Instant::now() + Duration::from_secs(3);
+        while (slots.mods.load(Ordering::Acquire) || slots.crashes.load(Ordering::Acquire)) && std::time::Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let third = call(0, 0, 500);
+        assert_eq!(started.load(Ordering::SeqCst), 4);
+        assert!(third.not_it.iter().any(|n| n.id == "graphics-mod") && !third.unknowns.contains(&"mods-unavailable"));
+        // A reader that panics frees its slot.
+        let dead = diagnose_with_all(
+            inputs(quiet_scenario()),
+            Complaint::Slow,
+            Some("g"),
+            Duration::from_millis(500),
+            |_, _, _| ChangeRead::NotRead,
+            Some(|_: String, _: Vec<String>| -> ModInput { panic!("the scan died") }),
+            None::<fn(String) -> CrashRead>,
+            Some(slots),
+        );
+        assert!(dead.unknowns.contains(&"mods-unavailable"));
+        let end = std::time::Instant::now() + Duration::from_secs(3);
+        while slots.mods.load(Ordering::Acquire) && std::time::Instant::now() < end {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(!slots.mods.load(Ordering::Acquire), "a dead reader does not keep the slot");
     }
 
     #[test]
@@ -3283,7 +3437,7 @@ mod graphics_mods {
     }
 }
 
-// ---- M3 commit 2: temperature, crash history, the named setting ---------------------------------------
+// ---- M3 commit 2: temperature and crash history (naming the drifted setting was NOT built) --------------------------------------
 mod temperature_and_crashes {
     use super::super::extras::{CrashFact, CrashHistory, CrashRead, TEMP_HOTTER_C, TEMP_SAME_C};
     use super::super::mods::{ModFound, ModInput, ModsRead, ModsVerdict};
@@ -3291,18 +3445,21 @@ mod temperature_and_crashes {
 
     const HI: &str = "2026-10-09T10:00:00Z";
     const IN: &str = "2026-10-06T12:00:00Z";
-    /// The mod candidate below is dated to the period that starts here (the end of the last normal session).
-    const LO: &str = "2026-10-04T10:10:00Z";
 
     fn utc(s: &str) -> DateTime<Utc> {
         ts(s).expect("a time")
     }
 
-    /// Four normal sessions whose highest peak is `normal_max`, and a rough one that peaked at `rough`.
-    fn temps(rough: Option<u32>, normal_max: Option<u32>) -> Vec<SessionFacts> {
+    /// Four normal sessions whose peaks are `normal-6, normal, normal, normal+6` (median `normal`; the highest
+    /// is 6 above it, which the old "highest peak" comparison would have used), and a rough one at `rough`.
+    fn temps(rough: Option<u32>, normal: Option<u32>) -> Vec<SessionFacts> {
         let mut v = steady(4);
         for (i, s) in v.iter_mut().enumerate() {
-            s.peak_gpu_temp_c = normal_max.map(|m| if i == 1 { m } else { m.saturating_sub(7 + i as u32) });
+            s.peak_gpu_temp_c = normal.map(|m| match i {
+                0 => m.saturating_sub(6),
+                3 => m + 6,
+                _ => m,
+            });
         }
         let mut r = facts(HI, 600, 600, 100.0, 30.0);
         r.peak_gpu_temp_c = rough;
@@ -3330,7 +3487,8 @@ mod temperature_and_crashes {
             let d = run(temps(Some(rough), Some(80)));
             assert_eq!(unchanged_ids(&d).contains(&"gpu-temp"), unchanged, "rough {rough} against 80");
             assert!(!ids(&d).contains(&"gpu-hotter"), "rough {rough} is not past the candidate line");
-            assert!(seen_ids(&d).contains(&"gpu-temp"), "the line is always said when both are read");
+            // One line only: under Unchanged or under "also looked at", never both.
+            assert_eq!(seen_ids(&d).contains(&"gpu-temp"), !unchanged, "rough {rough}: the one line sits in one place");
         }
     }
 
@@ -3343,9 +3501,11 @@ mod temperature_and_crashes {
         let eleven = run(temps(Some(91), Some(80)));
         let f = eleven.findings.iter().find(|f| f.id == "gpu-hotter").expect("a candidate");
         assert_eq!(f.confidence, Certainty::Possible, "one measured size is never Likely");
-        assert!(f.in_play, "the rough session itself carries it");
+        assert!(!f.in_play, "a peak reading carries no timing: it is never 'in play' like a dated change");
+        assert_eq!(f.since_when, When::Unknown);
         assert_eq!(f.evidence.len(), 1);
         assert_eq!(f.evidence[0].code, "gpu-temp");
+        assert_eq!(f.evidence[0].kind, EvidenceKind::Measured);
         assert_eq!(f.evidence[0].args.get("rough").map(String::as_str), Some("91"));
         assert_eq!(f.evidence[0].args.get("base").map(String::as_str), Some("80"));
         assert!(matches!(&f.fix, Fix::Steps { code: "gpu-hotter", .. }));
@@ -3353,10 +3513,48 @@ mod temperature_and_crashes {
     }
 
     #[test]
-    fn the_line_names_the_rough_peak_and_the_highest_normal_peak() {
+    fn the_line_names_the_rough_peak_and_the_typical_normal_peak_which_is_the_median() {
+        // Normal peaks 64, 70, 70, 76: the median is 70, not the highest (76). 77 is 7 above the median:
+        // not "unchanged", though it would have been 1 above the old highest-peak figure.
         let d = run(temps(Some(77), Some(70)));
         let s = d.seen.iter().find(|s| s.id == "gpu-temp").expect("said");
-        assert_eq!((s.args["rough"].as_str(), s.args["base"].as_str()), ("77", "70"));
+        assert_eq!((s.args["rough"].as_str(), s.args["base"].as_str(), s.args["count"].as_str()), ("77", "70", "1"));
+        assert!(!unchanged_ids(&d).contains(&"gpu-temp"), "7 above the typical peak is not 'about the same'");
+        // An even count takes the middle two's mean (rounded): 70 and 71 -> 71 (70.5 rounds up).
+        let mut v = temps(Some(80), Some(70));
+        v[0].peak_gpu_temp_c = Some(60);
+        v[1].peak_gpu_temp_c = Some(70);
+        v[2].peak_gpu_temp_c = Some(71);
+        v[3].peak_gpu_temp_c = Some(90);
+        let d = run(v);
+        assert_eq!(d.seen.iter().find(|s| s.id == "gpu-temp").expect("said").args["base"], "71");
+    }
+
+    #[test]
+    fn the_hotter_candidate_has_no_timing_and_ranks_below_a_dated_change_with_the_sizes() {
+        // Against a dated graphics mod.
+        let mut sess = temps(Some(95), Some(80));
+        let m = ModFound { name: "ReShade", strong: true, loader_file_present: true, first_seen: Some(utc(IN)), settings_changed: None, last_log_write: None };
+        let mut inp = inputs(sess.clone());
+        inp.mods = ModInput { game: ModsRead::Read(ModsVerdict::Found(vec![m])), others: Vec::new() };
+        let d = diagnose(&inp, Complaint::Slow, Some("g"));
+        assert_eq!(ids(&d), ["graphics-mod", "gpu-hotter"], "the dated change is in play, the hotter reading is not");
+        // Against a driver change that the sessions date.
+        for s in sess.iter_mut().take(4) {
+            s.gpu_driver = Some("1.0".into());
+        }
+        sess[4].gpu_driver = Some("2.0".into());
+        let d = run(sess);
+        assert_eq!(ids(&d), ["gpu-driver-change", "gpu-hotter"]);
+        // And with an untimed size from the same category (a full memory), the pinned category order decides.
+        let mut sess = temps(Some(95), Some(80));
+        for s in sess.iter_mut() {
+            s.ram_total_bytes = Some(16_000_000_000);
+            s.peak_ram_bytes = Some(8_000_000_000);
+        }
+        sess[4].peak_ram_bytes = Some(15_500_000_000);
+        let d = run(sess);
+        assert_eq!(ids(&d), ["memory-pressure", "gpu-hotter"], "hotter sits right after memory-pressure in the category order");
     }
 
     #[test]
@@ -3382,12 +3580,12 @@ mod temperature_and_crashes {
         v.extend([a, b]);
         let d = run(v);
         let s = d.seen.iter().find(|s| s.id == "gpu-temp").expect("said");
-        assert_eq!(s.args["rough"], "88");
+        assert_eq!((s.args["rough"].as_str(), s.args["count"].as_str()), ("88", "2"), "the count is of rough sessions with a reading");
     }
 
     // ---- crashes ----
     fn crash(app: &str, when: &str, module: Option<&str>, code: Option<&str>) -> CrashFact {
-        CrashFact { app: app.into(), when: utc(when), module: module.map(Into::into), code: code.map(Into::into) }
+        CrashFact { app: app.into(), when: utc(when), module: module.map(Into::into), code: code.map(Into::into), version: None, path_ok: None }
     }
 
     fn sig(when: &str) -> CrashFact {
@@ -3398,7 +3596,7 @@ mod temperature_and_crashes {
         CrashRead::Read(CrashHistory { crashes, listed: true, partial: false })
     }
 
-    /// A mod whose files date to the period is the one dated candidate (its earliest possible time is `LO`).
+    /// A mod whose files were created inside the period is the one dated candidate (its date is `IN`).
     fn with_crashes(crashes: CrashRead, dated_candidate: bool) -> Diagnosis {
         let mut sess = steady(4);
         sess.push(facts(HI, 600, 600, 100.0, 30.0));
@@ -3449,23 +3647,119 @@ mod temperature_and_crashes {
         assert!(d.unknowns.contains(&"crashes-unavailable") && crash_line(&d).is_none());
         let none = with_crashes(CrashRead::Read(CrashHistory { crashes: Vec::new(), listed: false, partial: false }), false);
         assert!(none.unknowns.contains(&"crashes-unreadable") && crash_line(&none).is_none());
+        // With a count line the line itself carries the limit ("at least"): no separate couldn't-see line.
         let partly = with_crashes(CrashRead::Read(CrashHistory { crashes: vec![sig("2026-10-07T08:00:00Z")], listed: true, partial: true }), false);
-        assert!(partly.unknowns.contains(&"crashes-partial"), "some reports were not read: the count may be low");
-        assert_eq!(crash_line(&partly).expect("what was read is still said").args["n"], "1");
+        let l = crash_line(&partly).expect("what was read is still said");
+        assert_eq!((l.args["n"].as_str(), l.args.get("partial").map(String::as_str)), ("1", Some("true")));
+        assert!(!partly.unknowns.contains(&"crashes-partial"), "the count line says 'at least'; it is not said twice");
+        // With nothing of this game's in the part that was read, the limit is the couldn't-see line.
+        let nothing = with_crashes(CrashRead::Read(CrashHistory { crashes: vec![crash("other", "2026-10-07T08:00:00Z", None, None)], listed: true, partial: true }), false);
+        assert!(nothing.unknowns.contains(&"crashes-partial") && crash_line(&nothing).is_none());
+        // A complete read never carries the flag.
+        let whole = with_crashes(history(vec![sig("2026-10-07T08:00:00Z")]), false);
+        assert!(!crash_line(&whole).expect("said").args.contains_key("partial"));
     }
 
     #[test]
-    fn same_signature_and_started_before_the_earliest_change_says_probably_a_separate_problem() {
+    fn the_program_name_must_match_and_a_report_from_another_folder_is_not_counted() {
+        let under = |when: &str, ok: Option<bool>, version: Option<&str>| CrashFact { path_ok: ok, version: version.map(Into::into), ..crash("g", when, None, None) };
+        // Known install folder: the one report from another folder is dropped; the rest were checked by path.
+        let d = with_crashes(history(vec![under("2026-10-02T08:00:00Z", Some(true), None), under("2026-10-03T08:00:00Z", Some(false), None), under("2026-10-04T08:00:00Z", Some(true), None)]), false);
+        let l = crash_line(&d).expect("said");
+        assert_eq!((l.args["n"].as_str(), l.args["since"].as_str()), ("2", "2026-10-02T08:00:00Z"));
+        assert!(!l.args.contains_key("byName"), "every counted report was matched by path");
+        // A report with no path, or an install folder that is not known: only the name matched, and the line says so.
+        let d = with_crashes(history(vec![under("2026-10-02T08:00:00Z", Some(true), None), under("2026-10-03T08:00:00Z", None, None)]), false);
+        assert_eq!(crash_line(&d).expect("said").args.get("byName").map(String::as_str), Some("true"));
+        let d = with_crashes(history(vec![under("2026-10-02T08:00:00Z", None, None)]), false);
+        assert_eq!(crash_line(&d).expect("said").args.get("byName").map(String::as_str), Some("true"));
+        // Only reports from another folder: nothing of this game's.
+        let d = with_crashes(history(vec![under("2026-10-02T08:00:00Z", Some(false), None)]), false);
+        assert!(crash_line(&d).is_none());
+    }
+
+    #[test]
+    fn the_reader_checks_a_reports_path_against_the_install_folder_and_a_missing_side_is_unknown() {
+        use crate::blackbox::{AppCrash, AppCrashes};
+        use std::path::Path;
+        let report = |path: Option<&str>| AppCrash { app: "game.exe".into(), when: utc("2026-10-02T08:00:00Z"), module: None, code: None, version: Some("1.2".into()), path: path.map(Into::into) };
+        let all = || AppCrashes {
+            crashes: vec![
+                report(Some(r"C:\Steam\steamapps\common\G\Binaries\game.exe")),
+                report(Some(r"C:\Steam\steamapps\common\G2\game.exe")),
+                report(Some(r"D:\Elsewhere\game.exe")),
+                report(None),
+            ],
+            listed_any: true,
+            needs_admin: false,
+            complete_from: None,
+        };
+        let ok = |r: super::super::extras::CrashRead| match r {
+            CrashRead::Read(h) => h.crashes.iter().map(|k| k.path_ok).collect::<Vec<_>>(),
+            other => panic!("{other:?}"),
+        };
+        // The install folder is known: under it is true, anywhere else (even a folder that merely starts with the
+        // same letters) is false, and a report with no path is unknown.
+        let dir = Path::new(r"C:\Steam\steamapps\common\G");
+        assert_eq!(ok(super::super::extras::crash_dto(all(), Some(dir))), [Some(true), Some(false), Some(false), None]);
+        // The install folder is not known: nothing can be checked, only the name matched.
+        assert_eq!(ok(super::super::extras::crash_dto(all(), None)), [None, None, None, None]);
+        // The version string is carried through as read.
+        match super::super::extras::crash_dto(all(), None) {
+            CrashRead::Read(h) => assert_eq!(h.crashes[0].version.as_deref(), Some("1.2")),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn crashes_across_different_versions_of_the_game_say_how_many() {
+        let v = |when: &str, ver: Option<&str>| CrashFact { version: ver.map(Into::into), ..crash("g", when, None, None) };
+        let d = with_crashes(history(vec![v("2026-10-02T08:00:00Z", Some("1.0.0")), v("2026-10-03T08:00:00Z", Some("1.1.0")), v("2026-10-04T08:00:00Z", Some("1.1.0")), v("2026-10-05T08:00:00Z", None)]), false);
+        assert_eq!(crash_line(&d).expect("said").args.get("versions").map(String::as_str), Some("2"));
+        let same = with_crashes(history(vec![v("2026-10-02T08:00:00Z", Some("1.0.0")), v("2026-10-03T08:00:00Z", Some("1.0.0")), v("2026-10-05T08:00:00Z", None)]), false);
+        assert!(!crash_line(&same).expect("said").args.contains_key("versions"), "one version (or none recorded) says nothing about versions");
+    }
+
+    #[test]
+    fn same_signature_and_started_before_the_earliest_dated_change_says_the_change_cannot_be_the_whole_story() {
         let d = with_crashes(history(vec![sig("2026-09-20T08:00:00Z"), sig("2026-10-07T08:00:00Z")]), true);
         let l = signature_line(&d).expect("both conditions hold");
         assert_eq!(l.args["module"], "nvwgf2umx.dll");
-        assert_eq!(l.args["before"], LO, "the earliest the dated candidate could have happened");
+        assert_eq!(l.args["before"], IN, "the date the mod's files were created: a real dated change");
+    }
+
+    #[test]
+    fn only_a_real_dated_change_counts_never_the_edge_of_a_window() {
+        let two = || history(vec![sig("2026-09-20T08:00:00Z"), sig("2026-10-07T08:00:00Z")]);
+        // A driver change the sessions only bracket (no exact install time): the window edge is not a date.
+        let mut sess = steady(4);
+        for s in &mut sess {
+            s.gpu_driver = Some("1.0".into());
+        }
+        let mut rough = facts(HI, 600, 600, 100.0, 30.0);
+        rough.gpu_driver = Some("2.0".into());
+        sess.push(rough);
+        let mut inp = inputs(sess);
+        inp.crashes = two();
+        let d = diagnose(&inp, Complaint::Slow, Some("g"));
+        assert!(ids(&d).contains(&"gpu-driver-change"));
+        assert!(signature_line(&d).is_none(), "an observed-between window dates nothing");
+        assert!(crash_line(&d).is_some());
+        // A mod dated only by its settings file (no creation date) has no date of its own either.
+        let mut sess = steady(4);
+        sess.push(facts(HI, 600, 600, 100.0, 30.0));
+        let mut inp = inputs(sess);
+        inp.crashes = two();
+        let m = ModFound { name: "ReShade", strong: true, loader_file_present: true, first_seen: None, settings_changed: Some(utc(IN)), last_log_write: None };
+        inp.mods = ModInput { game: ModsRead::Read(ModsVerdict::Found(vec![m])), others: Vec::new() };
+        let d = diagnose(&inp, Complaint::Slow, Some("g"));
+        assert!(ids(&d).contains(&"graphics-mod") && signature_line(&d).is_none());
     }
 
     #[test]
     fn the_signature_sentence_needs_both_conditions_and_each_alone_is_not_enough() {
-        // Same signature, but every crash is after the earliest candidate change.
-        let after = with_crashes(history(vec![sig("2026-10-05T08:00:00Z"), sig("2026-10-07T08:00:00Z")]), true);
+        // Same signature, but every crash is after the earliest dated change.
+        let after = with_crashes(history(vec![sig("2026-10-07T08:00:00Z"), sig("2026-10-08T08:00:00Z")]), true);
         assert!(signature_line(&after).is_none());
         // One crash predates the change, but the signatures differ (module, then code).
         let module = with_crashes(history(vec![sig("2026-09-20T08:00:00Z"), crash("g", "2026-10-07T08:00:00Z", Some("other.dll"), Some("c0000005"))]), true);
@@ -3485,9 +3779,9 @@ mod temperature_and_crashes {
 
     #[test]
     fn a_crash_exactly_at_the_earliest_change_does_not_predate_it() {
-        let d = with_crashes(history(vec![sig(LO), sig("2026-10-07T08:00:00Z")]), true);
+        let d = with_crashes(history(vec![sig(IN), sig("2026-10-07T08:00:00Z")]), true);
         assert!(signature_line(&d).is_none());
-        let d = with_crashes(history(vec![sig("2026-10-04T10:09:59Z"), sig("2026-10-07T08:00:00Z")]), true);
+        let d = with_crashes(history(vec![sig("2026-10-06T11:59:59Z"), sig("2026-10-07T08:00:00Z")]), true);
         assert!(signature_line(&d).is_some());
     }
 
@@ -3502,7 +3796,10 @@ mod temperature_and_crashes {
             inputs(s)
         };
         let none = || None::<fn(String, Vec<String>) -> ModInput>;
-        let ok = diagnose_with_all(scenario(), Complaint::Slow, Some("g"), Duration::from_secs(2), |_, _, _| ChangeRead::NotRead, none(), Some(|| history(vec![sig("2026-10-02T08:00:00Z")])));
+        let ok = diagnose_with_all(scenario(), Complaint::Slow, Some("g"), Duration::from_secs(2), |_, _, _| ChangeRead::NotRead, none(), Some(|exe: String| {
+            assert_eq!(exe, "g", "the reader is told which game it is for");
+            history(vec![sig("2026-10-02T08:00:00Z")])
+        }), None);
         assert_eq!(crash_line(&ok).expect("what the reader returned is used").args["n"], "1");
         let started = std::time::Instant::now();
         let slow = diagnose_with_all(
@@ -3512,14 +3809,15 @@ mod temperature_and_crashes {
             Duration::from_millis(80),
             |_, _, _| ChangeRead::NotRead,
             none(),
-            Some(|| {
+            Some(|_: String| {
                 std::thread::sleep(Duration::from_millis(700));
                 history(Vec::new())
             }),
+            None,
         );
         assert!(started.elapsed() < Duration::from_millis(500), "{:?}", started.elapsed());
         assert!(slow.unknowns.contains(&"crashes-unavailable"));
-        let dead = diagnose_with_all(scenario(), Complaint::Slow, Some("g"), Duration::from_secs(2), |_, _, _| ChangeRead::NotRead, none(), Some(|| -> CrashRead { panic!("the read died") }));
+        let dead = diagnose_with_all(scenario(), Complaint::Slow, Some("g"), Duration::from_secs(2), |_, _, _| ChangeRead::NotRead, none(), Some(|_: String| -> CrashRead { panic!("the read died") }), None);
         assert!(dead.unknowns.contains(&"crashes-unavailable"));
         // Nothing to explain: the crash files are never read.
         let (tx, rx) = std::sync::mpsc::channel::<()>();
@@ -3530,19 +3828,20 @@ mod temperature_and_crashes {
             Duration::from_secs(2),
             |_, _, _| ChangeRead::NotRead,
             none(),
-            Some(move || {
+            Some(move |_: String| {
                 let _ = tx.send(());
                 CrashRead::NotRead
             }),
+            None,
         );
         assert!(rx.try_recv().is_err());
     }
 
     #[test]
-    fn the_signature_sentence_is_the_only_place_probably_is_decided_and_the_engine_never_names_a_cause() {
+    fn the_engine_never_names_a_cause_and_never_says_probably() {
         let d = with_crashes(history(vec![sig("2026-09-20T08:00:00Z"), sig("2026-10-07T08:00:00Z")]), true);
         let json = serde_json::to_string(&d).expect("serialises").to_lowercase();
-        for word in ["overheat", "throttl", "caused", "guarantee"] {
+        for word in ["overheat", "throttl", "caused", "guarantee", "probably"] {
             assert!(!json.contains(word), "{word} in {json}");
         }
     }

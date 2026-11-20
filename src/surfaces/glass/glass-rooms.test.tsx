@@ -621,15 +621,23 @@ describe("TubeChart axis", () => {
 });
 
 describe("Home: one entry point for 'something's wrong'", () => {
-  it("the header's 'Something went wrong' opens the Paramedic card and moves focus to it, not the Problems page", async () => {
-    const p = home({ pendingCare: care });
+  it("without the crash banner the header's 'Something went wrong' opens the Paramedic card and moves focus to it, not the Problems page", async () => {
+    const p = home({ pendingCare: null });
     fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
     await waitFor(() => expect(invoked).toContain("paramedic_diagnose"));
     expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
     expect(p.onOpenProblems).not.toHaveBeenCalled();
-    // The crash banner is untouched: its own two buttons are still there.
+  });
+
+  it("while the crash banner is showing the header button keeps its old job and opens Problems; the banner and the card are untouched", () => {
+    const p = home({ pendingCare: care });
+    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
+    expect(p.onOpenProblems).toHaveBeenCalledTimes(1);
+    expect(invoked).not.toContain("paramedic_diagnose");
+    // The crash banner's own two buttons are still there, and so is the card below.
     expect(screen.getByRole("button", { name: "Find out why" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Not now" })).toBeTruthy();
+    expect(screen.getByTestId("paramedic")).toBeTruthy();
   });
 
   it("with no recorded game there is no card, so the header button still opens Problems", () => {

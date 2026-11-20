@@ -1252,6 +1252,10 @@ struct WerReport {
     app: Option<String>,
     module: Option<String>,
     code: Option<String>,
+    /// The `Application Version` signature value (the program's own version string).
+    app_version: Option<String>,
+    /// The `AppPath` key: where the crashed program's exe was.
+    app_path: Option<String>,
     detail: String,
 }
 
@@ -1480,6 +1484,10 @@ pub(crate) struct AppCrash {
     pub when: DateTime<Utc>,
     pub module: Option<String>,
     pub code: Option<String>,
+    /// The program's own version string, when the report carries one.
+    pub version: Option<String>,
+    /// The crashed exe's full path, when the report carries one.
+    pub path: Option<String>,
 }
 
 /// The app crashes WER holds. `listed_any`: a report folder could be read at all. `needs_admin`: some
@@ -1508,7 +1516,7 @@ fn app_crashes_of(reports: &[WerReport]) -> Vec<AppCrash> {
         .filter(|w| classify_wer(&w.event_type) == Some(IncidentKind::AppCrash))
         .filter_map(|w| {
             let when = DateTime::parse_from_rfc3339(&w.when).ok()?.with_timezone(&Utc);
-            Some(AppCrash { app: w.app.clone()?, when, module: w.module.clone(), code: w.code.clone() })
+            Some(AppCrash { app: w.app.clone()?, when, module: w.module.clone(), code: w.code.clone(), version: w.app_version.clone(), path: w.app_path.clone() })
         })
         .collect()
 }
@@ -1618,6 +1626,8 @@ fn parse_wer(text: &str) -> Option<WerReport> {
         .and_then(filetime_to_utc)
         .map(|dt| dt.to_rfc3339())
         .unwrap_or_default();
+    let app_version = sig("Application Version");
+    let app_path = wer_pick(map.get("AppPath"));
     let detail = wer_detail(&event_type, app.as_deref(), module.as_deref(), code.as_deref());
     Some(WerReport {
         event_type,
@@ -1625,6 +1635,8 @@ fn parse_wer(text: &str) -> Option<WerReport> {
         app,
         module,
         code,
+        app_version,
+        app_path,
         detail,
     })
 }
@@ -1892,6 +1904,7 @@ mod blackbox_tests {
             module: module.map(Into::into),
             code: code.map(Into::into),
             detail: wer_detail(event_type, app, module, code),
+            ..Default::default()
         }
     }
 
@@ -2554,6 +2567,18 @@ mod blackbox_tests {
         assert_eq!(w.code.as_deref(), Some("0xc0000005"), "bare hex normalized");
         // EventTime FILETIME → 2026-06-05 (the FallGuys sample).
         assert!(w.when.starts_with("2026-06-05"), "filetime parsed: {}", w.when);
+    }
+
+    #[test]
+    fn parse_wer_reads_the_applications_version_and_path_when_present() {
+        let text = "EventType=APPCRASH\r\nAppPath=C:\\Games\\Steam\\steamapps\\common\\G\\game.exe\r\nSig[0].Name=Application Name\r\nSig[0].Value=game.exe\r\nSig[1].Name=Application Version\r\nSig[1].Value=1.2.3.4\r\n";
+        let w = parse_wer(text).expect("parses");
+        assert_eq!(w.app_version.as_deref(), Some("1.2.3.4"));
+        assert_eq!(w.app_path.as_deref(), Some("C:\\Games\\Steam\\steamapps\\common\\G\\game.exe"));
+        let c = &app_crashes_of(&[WerReport { when: "2026-06-05T08:00:00Z".into(), ..w }])[0];
+        assert_eq!((c.version.as_deref(), c.path.is_some()), (Some("1.2.3.4"), true));
+        let bare = parse_wer(SAMPLE_WER).expect("parses");
+        assert_eq!((bare.app_version, bare.app_path), (None, None), "absent stays absent, never guessed");
     }
 
     #[test]

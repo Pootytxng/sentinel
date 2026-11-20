@@ -738,25 +738,51 @@ where
     F: FnOnce(DateTime<Utc>, DateTime<Utc>, String) -> ChangeRead + Send + 'static,
     G: FnOnce(String, Vec<String>) -> ModInput + Send + 'static,
 {
-    diagnose_with_all(inp, complaint, game, budget, fetch, fetch_mods, None::<fn() -> CrashRead>)
+    diagnose_with_all(inp, complaint, game, budget, fetch, fetch_mods, None::<fn(String) -> CrashRead>, None)
 }
 
-/// Runs `f` on its own named thread and returns the channel it answers on (`None` when no thread could start).
-fn spawn_reader<T: Send + 'static>(name: &str, f: impl FnOnce() -> T + Send + 'static) -> Option<std::sync::mpsc::Receiver<T>> {
+/// "A reader of this kind is still running" flags. A reader that outlives the budget is left to finish by
+/// itself; while it does, pressing the button again does not start a second one of the same kind: that kind
+/// reads as `took-too-long` instead. The command holds one static; the engine's tests pass none or a leaked one.
+pub(crate) struct Slots {
+    pub mods: std::sync::atomic::AtomicBool,
+    pub crashes: std::sync::atomic::AtomicBool,
+}
+
+impl Slots {
+    pub(crate) const fn new() -> Self {
+        Self { mods: std::sync::atomic::AtomicBool::new(false), crashes: std::sync::atomic::AtomicBool::new(false) }
+    }
+}
+
+/// A reader that has been started, or the reason it was not (`took-too-long`: the previous one still runs).
+type Started<T> = Result<Option<std::sync::mpsc::Receiver<T>>, &'static str>;
+
+/// Runs `f` on its own named thread and returns the channel it answers on (`Ok(None)` when no thread could
+/// start). With a `slot`, only one such thread runs at a time: the flag clears when the thread ends, even by a panic.
+fn spawn_reader<T: Send + 'static>(name: &str, slot: Option<&'static std::sync::atomic::AtomicBool>, f: impl FnOnce() -> T + Send + 'static) -> Started<T> {
+    use std::sync::atomic::Ordering;
+    if let Some(s) = slot {
+        if s.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
+            return Err("took-too-long");
+        }
+    }
+    let guard = slot.map(mods::FlagGuard);
     let (tx, rx) = std::sync::mpsc::channel();
-    std::thread::Builder::new()
+    Ok(std::thread::Builder::new()
         .name(name.into())
         .spawn(move || {
+            let _guard = guard;
             let _ = tx.send(f());
         })
         .ok()
-        .map(|_| rx)
+        .map(|_| rx))
 }
 
 /// Waits for a reader inside what is left of the shared budget. A reader that is late or died is
 /// `Err("took-too-long" / "reader-failed")`, never an empty answer.
-fn collect_reader<T>(rx: Option<std::sync::mpsc::Receiver<T>>, budget: Duration, started: std::time::Instant) -> Result<T, &'static str> {
-    let Some(rx) = rx else { return Err("reader-failed") };
+fn collect_reader<T>(rx: Started<T>, budget: Duration, started: std::time::Instant) -> Result<T, &'static str> {
+    let Some(rx) = rx? else { return Err("reader-failed") };
     rx.recv_timeout(budget.saturating_sub(started.elapsed())).map_err(|e| match e {
         std::sync::mpsc::RecvTimeoutError::Timeout => "took-too-long",
         std::sync::mpsc::RecvTimeoutError::Disconnected => "reader-failed",
@@ -774,11 +800,12 @@ pub(crate) fn diagnose_with_all<F, G, H>(
     fetch: F,
     fetch_mods: Option<G>,
     fetch_crashes: Option<H>,
+    slots: Option<&'static Slots>,
 ) -> Diagnosis
 where
     F: FnOnce(DateTime<Utc>, DateTime<Utc>, String) -> ChangeRead + Send + 'static,
     G: FnOnce(String, Vec<String>) -> ModInput + Send + 'static,
-    H: FnOnce() -> CrashRead + Send + 'static,
+    H: FnOnce(String) -> CrashRead + Send + 'static,
 {
     let probe = diagnose(&inp, complaint, game);
     let (Some((t0, t1)), Some(g)) = (change_window(&probe), probe.game.clone()) else { return probe };
@@ -786,9 +813,12 @@ where
     let mods_rx = fetch_mods.map(|f| {
         let others = mods::other_rough_games(&inp, &probe);
         let game = g.clone();
-        spawn_reader("paramedic-mods", move || f(game, others))
+        spawn_reader("paramedic-mods", slots.map(|s| &s.mods), move || f(game, others))
     });
-    let crashes_rx = fetch_crashes.map(|f| spawn_reader("paramedic-crashes", f));
+    let crashes_rx = fetch_crashes.map(|f| {
+        let game = g.clone();
+        spawn_reader("paramedic-crashes", slots.map(|s| &s.crashes), move || f(game))
+    });
     inp.changes = run_within(budget, move || fetch(t0, t1, g));
     if let Some(rx) = mods_rx {
         inp.mods = collect_reader(rx, budget, started)

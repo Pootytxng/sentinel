@@ -1693,6 +1693,24 @@ pub(crate) fn scan_for_process_image(process_name: &str, image: Option<&Path>, b
     }
 }
 
+/// The Steam install folder of the game whose process is `process_name`, when exactly one is found. Read-only.
+/// `None` is "not known", never "not installed".
+pub(crate) fn install_folder_of(process_name: &str) -> Option<PathBuf> {
+    let exe = process_name.trim();
+    if exe.is_empty() {
+        return None;
+    }
+    match change_sources::find_steam_game(exe, change_sources::DEFAULT_BUDGET) {
+        SteamLookup::Found(g) => g.install_dir.map(PathBuf::from),
+        SteamLookup::NotInSteam | SteamLookup::Unreadable(_) => None,
+    }
+}
+
+/// `image` (a program's full path) lies under `root` (lexically; no `..`).
+pub(crate) fn image_is_under(root: &Path, image: &Path) -> bool {
+    image_folder_under(root, image).is_some()
+}
+
 // ---------------------------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------------------------
