@@ -14,10 +14,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    // #515: the second file fails any test that walks the real tree or worktree fleet on less than
-    // the measured TREE_WALK_TIMEOUT_MS (src/test/tree-walk-budget.ts). #563: it also fails any test
-    // or hook that starts GIT_SPAWN_FLOOR or more git processes on less than GIT_SPAWN_TIMEOUT_MS.
-    setupFiles: ["./src/test/setup.ts", "./scripts/lib/tree-walk-tripwire-setup.mjs"],
+    setupFiles: ["./src/test/setup.ts"],
     css: false,
     // Don't scan gitignored local git worktrees (.claude/worktrees/wf_*) — they hold STALE frozen
     // snapshots of these very test files, so vitest would otherwise run duplicate/outdated copies and
@@ -30,15 +27,6 @@ export default defineConfig({
     // runs and reports as a bare file-level failure with no assertion to read. Seen on
     // scripts/export-library.test.mjs. The default is 10s.
     hookTimeout: 15000,
-    // #339: rule C of scripts/handoff-worktree-truth.test.mjs needs one answer from origin (`git
-    // ls-remote --heads`). Asked from inside the pool it competed with 400 files for the same cores,
-    // lost its slice, and redded the gate as "origin unreachable" on an online machine. globalSetup
-    // runs once in the main process before the pool exists; the answer reaches the worker through
-    // provide/inject, and null (unreachable at setup) still fails closed there.
-    // #457: a file argument that matches no test file is dropped silently, and the rest of the run
-    // reports green. The filter guard refuses that run, and it goes FIRST so a refused run never
-    // reaches origin.
-    globalSetup: ["./scripts/lib/vitest-filter-guard.mjs", "./scripts/lib/vitest-global-setup.mjs"],
     // No `retry` here, deliberately. A different small set of files failed on nearly every run for
     // days — encoding-guard, export-library, release-transaction-e2e, ExperimentBench — each one
     // passing when re-run alone, which reads exactly like contention and is not: two test files

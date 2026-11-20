@@ -1,0 +1,125 @@
+# AUDIT tests: parked out of the pre-push gate (npm run test:gate). npm run test:audit runs exactly these.
+# Format: repo-relative path with forward slashes, optional TAB and a reason. Every test file NOT listed here runs in the gate.
+# Only a test that does not protect a user belongs here. New tests default to the gate.
+scripts/alias-harness-orphan-guard.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/alias-propagation-harness.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/console-window-guard.test.mjs	dev-desktop politeness / perf tooling
+scripts/detached-window-guard.test.mjs	dev-desktop politeness / perf tooling
+scripts/dist-site-staleness-guard.test.mjs	marketing site / library export (builds Astro or vite); before a site deploy
+scripts/encoding-guard.test.mjs	repo hygiene / encoding / test-infra
+scripts/export-library.test.mjs	marketing site / library export (builds Astro or vite); before a site deploy
+scripts/launch-focus-guard.test.mjs	dev-desktop politeness / perf tooling
+scripts/markdown-link-guard.test.mjs	repo hygiene / encoding / test-infra
+scripts/mcp-config-guard.test.mjs	repo hygiene / encoding / test-infra
+scripts/native-process-guard.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/nested-vite-server-guard.test.mjs	repo hygiene / encoding / test-infra
+scripts/perf-budget-guard.test.mjs	dev-desktop politeness / perf tooling
+scripts/probe-cleanup-guard.test.mjs	dev-desktop politeness / perf tooling
+scripts/process-mutex-guard.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/production-adapter-lookup.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/production-adapter-native-sandbox.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/ps1-bom-guard.test.mjs	repo hygiene / encoding / test-infra
+scripts/public-version-gate.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/release-receipt-guard.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/release-transaction-e2e.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/runtime-proof-guard.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/site-build-collision-guard.test.mjs	marketing site / library export (builds Astro or vite); before a site deploy
+scripts/site-landing.test.mjs	marketing site / library export (builds Astro or vite); before a site deploy
+scripts/site-seo.test.mjs	marketing site / library export (builds Astro or vite); before a site deploy
+scripts/source-control-characters.test.mjs	repo hygiene / encoding / test-infra
+scripts/tauri-window-pick.test.mjs	dev-desktop politeness / perf tooling
+scripts/tree-kill-fallback-guard.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/tree-kill-stale-parent-guard.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/verify-release-gate.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/verify-release-state-guard.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
+scripts/windows-only-coverage.test.mjs	repo hygiene / encoding / test-infra
+src/affordance-census.test.ts	style/copy/a11y/idle census or source-text pin
+src/ambient-animation-cost-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/arc-v2-reachability-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/button-legibility-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/canvas-a11y-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/control-font-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/cpu-temp-reachability-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/data/jargon-guard.test.ts	copy lint (cross-link coverage), not a truth claim
+src/design-detector-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/design/a11y-axe-guard.test.tsx	visual/style/a11y pin
+src/design/a11y-axe-shell.test.tsx	visual/style/a11y pin
+src/design/a11y-census-guard.test.ts	visual/style/a11y pin
+src/design/bento/bento-tile-head-guard.test.ts	visual/style/idle pin
+src/design/bento/one-hero-guard.test.ts	visual/style/idle pin
+src/design/border-hygiene-guard.test.ts	visual/style/a11y pin
+src/design/comp-fidelity-guard.test.ts	visual/style/a11y pin
+src/design/console/hud-frame-clearance-guard.test.ts	visual/style/idle pin
+src/design/console/hud-frame-room-standdown-guard.test.tsx	visual/style/idle pin
+src/design/console/hud-readout-no-duplicate-guard.test.tsx	visual/style/idle pin
+src/design/console/reticle-cursor-contract.test.ts	visual/style/idle pin
+src/design/console/reticle-idle-guard.test.tsx	visual/style/idle pin
+src/design/content-width-guard.test.ts	visual/style/a11y pin
+src/design/doorknob-guard.test.ts	visual/style/a11y pin
+src/design/heading-is-a-name-guard.test.tsx	visual/style/a11y pin
+src/design/headline-fit-guard.test.ts	visual/style/a11y pin
+src/design/mono-law-guard.test.ts	visual/style/a11y pin
+src/design/no-raw-select-guard.test.ts	visual/style/a11y pin
+src/design/quiet-affordance-guard.test.ts	visual/style/a11y pin
+src/design/rail-label-locale-guard.test.ts	visual/style/a11y pin
+src/design/room-accent-five-hybrid-freeze.test.tsx	visual/style/a11y pin
+src/design/seam-bevel-guard.test.ts	visual/style/a11y pin
+src/design/self-review-2026-10-28-guard.test.tsx	visual/style/a11y pin
+src/design/shell-native-tooltip-guard.test.tsx	visual/style/a11y pin
+src/design/term-style-guard.test.ts	visual/style/a11y pin
+src/design/theme-literal-guard.test.ts	visual/style/a11y pin
+src/design/titlebar-plane-guard.test.ts	visual/style/a11y pin
+src/design/tokens-qpw-guard.test.ts	visual/style/a11y pin
+src/design/tokens-v2-guard.test.ts	visual/style/a11y pin
+src/design/type-scale-guard.test.ts	visual/style/a11y pin
+src/design/wordmark-small-size-guard.test.tsx	visual/style/a11y pin
+src/dom-mutation-census.test.ts	style/copy/a11y/idle census or source-text pin
+src/error-styling-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/first-run-front-door-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/fixture-parity-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/flag-default-drift-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/focus-ring-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/hardware-grid-lead-budget-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/hidden-poll-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/i18n/orphan-key-guard.test.ts	locale completeness beyond placeholders
+src/idle-motion-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/jargon-term-gloss-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/keepalive-idle-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/overlay-ambient-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/plain-language-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/reachability-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/room-name-copy-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/self-review-rubric-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/shell-idle-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/side-stripe-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/stale-reference-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/surfaces/crash-rescue-naming-guard.test.ts	layout/visual/copy pin
+src/surfaces/hc-specs-grid-overflow-guard.test.ts	layout/visual/copy pin
+src/surfaces/home-console-parity-225.test.tsx	layout/visual/copy pin
+src/surfaces/home-hud-pill-quiet-guard.test.ts	layout/visual/copy pin
+src/surfaces/home-interview-default-guard.test.ts	layout/visual/copy pin
+src/surfaces/home-verdict-scale-guard.test.ts	layout/visual/copy pin
+src/surfaces/lab-bench-framing-guard.test.ts	layout/visual/copy pin
+src/surfaces/lab-console-strip-rhythm-guard.test.ts	layout/visual/copy pin
+src/surfaces/lab-short-viewport-guard.test.ts	layout/visual/copy pin
+src/surfaces/monitor-bar-alignment-guard.test.tsx	layout/visual/copy pin
+src/surfaces/monitor-first-viewport-guard.test.tsx	layout/visual/copy pin
+src/surfaces/monitor-one-face-guard.test.tsx	layout/visual/copy pin
+src/surfaces/post-check-lab-route-guard.test.ts	layout/visual/copy pin
+src/surfaces/readiness-attention-label-guard.test.ts	layout/visual/copy pin
+src/surfaces/rig/holo-shell-blink-guard.test.ts	layout/visual/copy pin
+src/surfaces/room-identity.test.ts	layout/visual/copy pin
+src/surfaces/settings-no-rollout-switch.test.tsx	layout/visual/copy pin
+src/surfaces/spotlight-tag-quiet-guard.test.ts	layout/visual/copy pin
+src/sweep-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/test-room-parity-guard.test.ts	style/copy/a11y/idle census or source-text pin
+src/theme-contrast.test.ts	style/copy/a11y/idle census or source-text pin
+src/voice-guard.test.ts	style/copy/a11y/idle census or source-text pin
+tests/docs-encoding-guard.test.ts	doc encoding
+tools/layout/chromium-ownership-guard.test.mjs	real-Chromium layout regression (slow); weekly/pre-release
+tools/layout/debrief-note-layout.test.mjs	real-Chromium layout regression (slow); weekly/pre-release
+tools/layout/hc-specs-grid-layout.test.mjs	real-Chromium layout regression (slow); weekly/pre-release
+tools/layout/health-narrow-layout.test.mjs	real-Chromium layout regression (slow); weekly/pre-release
+tools/layout/overlay-enough-layout.test.mjs	real-Chromium layout regression (slow); weekly/pre-release
+tools/layout/session-stack-meta-layout.test.mjs	real-Chromium layout regression (slow); weekly/pre-release
+src/capability-exception-policy-guard.test.ts	safety review 2026-11-20: shipped-copy driver-claim honesty half protects what users read; its doc-policy half goes stale when docs are archived (step 5) - trim to the copy half then

@@ -1,108 +1,44 @@
 #!/bin/sh
-# Run the free local verification gate before anything is pushed.
+# Run the local verification gate (scripts/verify-local.ps1) before anything is pushed.
 set -eu
 
-# Pre-flight, 1 second, before the 4-minute gate. A stray `core.bare = true` in the SHARED
-# .git/config makes git refuse every work-tree operation in the main checkout AND all ~12 worktrees
-# at once. It surfaces as a scatter of unrelated test failures (anything shelling out to
-# `git check-ignore`, `git ls-files`, ...), four minutes in, naming everything except the cause.
-# The scrub below removes the one known cause; this stays as the detector, because a corrupted
-# .git/config is worth catching however it got that way.
+# A stray `core.bare = true` in the shared .git/config makes git refuse every work-tree operation.
 if [ "$(git config --get core.bare || echo false)" = "true" ]; then
-  echo "pre-push: .git/config has core.bare=true. Git will refuse every work-tree operation," >&2
-  echo "pre-push: in this checkout and in every other worktree sharing this .git." >&2
-  echo "pre-push: repair with:  git config core.bare false" >&2
+  echo "pre-push: .git/config has core.bare=true. Repair with:  git config core.bare false" >&2
   exit 1
 fi
 
 repo="$(git -c safe.directory="$PWD" rev-parse --show-toplevel)"
 
-# ---------------------------------------------------------------------------------------------
-# Scrub git's hook environment before handing off. This is not hygiene, it is the fix to a bug
-# this hook CAUSED -- three times on 2026-08-11, each time corrupting the repo it exists to protect.
-#
-# Git exports GIT_DIR (and friends) to every hook, and they are inherited by every descendant. The
-# gate's first step is `npm test`, and this repo's test suite builds REAL git fixtures -- tools/entry
-# alone runs `git init --bare`, `git worktree add`, and `git checkout main` against temp directories.
-# Those commands take GIT_DIR over their own cwd and argument. So under the hook, and ONLY under the
-# hook, every one of them retargets the developer's actual repository: `git init --bare <tmp>` writes
-# core.bare=true into the REAL .git/config, and a fixture's `git checkout main` moves the REAL
-# worktree onto main with its work left staged.
-#
-# The tell was that `npm test` was green standing alone and failed 8-10 files from inside the hook,
-# with an unmistakable "77 skipped" instead of 3. Confirmed by pointing GIT_DIR at a throwaway repo
-# and re-running the suite: the identical failure set reproduced, and the damage landed in the
-# throwaway. scripts/local-gate-guard.test.mjs pins this scrub so it cannot be dropped.
-#
-# GIT_DIR/GIT_WORK_TREE/GIT_COMMON_DIR/GIT_NAMESPACE redirect which repo a command acts on;
-# GIT_INDEX_FILE/GIT_OBJECT_DIRECTORY/GIT_ALTERNATE_OBJECT_DIRECTORIES/GIT_QUARANTINE_PATH redirect
-# where it writes; GIT_PREFIX/GIT_REFLOG_ACTION merely mislead. `repo` is captured above, first,
-# while the hook environment is still intact.
-# ---------------------------------------------------------------------------------------------
+# Scrub git's hook environment before handing off. Git exports GIT_DIR (and friends) to every hook;
+# the test suite builds REAL git fixtures, and under these variables they retarget the developer's
+# actual repository (this hook once wrote core.bare=true into the real .git/config).
 unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_NAMESPACE \
       GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_QUARANTINE_PATH \
       GIT_PREFIX GIT_REFLOG_ACTION 2>/dev/null || true
 
-# ---------------------------------------------------------------------------------------------
-# Pure DELETIONS skip the gate, and this is not a loosening -- it is the fix to a deadlock the gate
-# creates for itself. Deleting a merged ref (`git push origin --delete <branch>`) runs this hook,
-# which runs the disposition audit, which FAILS precisely because that ref still exists on origin.
-# The gate blocks the push that would satisfy it. Working around it cost five commits of row churn
-# on 2026-08-18 (a row added, flipped to MERGED, rejected by MERGED's own re-proof, re-dispositioned
-# SUPERSEDED, then dropped) -- twice in one session, and it would repeat on every lane.
-#
-# A deletion cannot introduce code: git sends one line per ref as `<local> <lsha> <remote> <rsha>`,
-# and a delete has the all-zero local sha. If EVERY line is a delete there is nothing to verify, so
-# the gate is skipped; any line that is not a delete runs the full gate as before. Pinned by
-# scripts/local-gate-guard.test.mjs so it cannot widen into "skip when convenient".
-# ---------------------------------------------------------------------------------------------
+# A push that only DELETES refs cannot introduce code: skip the gate (all-zero local sha per line).
 refs="$(cat)"
 if [ -n "$refs" ] && ! printf '%s\n' "$refs" | grep -qv '^[^ ]* 0\{40\} '; then
-  echo "pre-push: deletion-only push, nothing to verify — gate skipped." >&2
+  echo "pre-push: deletion-only push, nothing to verify - gate skipped." >&2
   exit 0
 fi
 
-# ---------------------------------------------------------------------------------------------
-# A checkout old enough to predate scripts/verify-local.ps1 has no gate to run, and this hook must
-# say so rather than erroring out of powershell with a path nobody reads.
-#
-# The neighbouring failure is worse and is why this exists: git skips a core.hooksPath naming a
-# directory that does not exist with NO warning and NO error, so a stale worktree runs no hook at
-# all and looks identical to one that passed. Measured 2026-08-30 -- two worktrees
-# (feat/user-feedback-lab-recovery at 05990130, feat/lab-49-parity-port at 7e6cd4d7, both checked
-# out before 670d9b74 added .githooks) had been pushing with zero verification and nothing said so.
-# Repointing their hooksPath lands them here instead, so here has to fail CLOSED.
-# scripts/hookspath-fleet-guard.test.mjs is the detector for the silent half.
-# ---------------------------------------------------------------------------------------------
+# Fail CLOSED when the gate cannot run: a skipped gate looks identical to a passed one.
 if [ ! -f "$repo/scripts/verify-local.ps1" ]; then
-  echo "pre-push: $repo has no scripts/verify-local.ps1 — the gate cannot run here." >&2
-  echo "pre-push: this checkout predates the local gate (added 2026-08-11). Rebase it onto main," >&2
-  echo "pre-push: or push from a current worktree. Refusing to push unverified code." >&2
+  echo "pre-push: $repo has no scripts/verify-local.ps1 - the gate cannot run here. Refusing to push unverified code." >&2
   exit 1
 fi
-
-# ---------------------------------------------------------------------------------------------
-# A gate that DIED must say so. Git Bash turns a Windows exit code it has no name for into 127:
-# 0xFFFFFFFF (what Process.Kill() and Stop-Process -Force leave) and any crash status such as
-# 0xC0000409 or 0xC0000005 all arrive as 127; 0xC000013A (Ctrl+C / console closed) arrives as 130.
-# Before #559 such a death looked like a red gate with no reason printed: the log simply stopped
-# mid-check. The rc is captured and re-raised unchanged, so `set -e` semantics
-# hold: every non-zero answer still refuses the push. scripts/pre-push-killed-gate-guard.test.mjs.
-# ---------------------------------------------------------------------------------------------
 if ! command -v powershell.exe >/dev/null 2>&1; then
-  # The shell's own "command not found" is also 127; this keeps that case from reading as a kill.
   echo "pre-push: powershell.exe is not on PATH, so the gate cannot run. Refusing to push unverified code." >&2
   exit 1
 fi
+
 rc=0
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$repo/scripts/verify-local.ps1" || rc=$?
 if [ "$rc" -ne 0 ]; then
   case "$rc" in
-    127|130)
-      echo "pre-push: the gate process was TERMINATED, not failed (exit $rc). It did not finish, so nothing was proven." >&2
-      echo "pre-push: 127 = killed from outside (Windows exit 0xFFFFFFFF) or crashed with a Windows status code;" >&2
-      echo "pre-push: 130 = Ctrl+C or its console closed. Its log stops mid-check. See #559, then push again." >&2
-      ;;
+    127|130) echo "pre-push: the gate process was TERMINATED, not failed (exit $rc): nothing was proven. Push again." >&2 ;;
   esac
   exit "$rc"
 fi

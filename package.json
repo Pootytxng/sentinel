@@ -7,10 +7,12 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "verify:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-local.ps1",
-    "fleet:hygiene": "node scripts/fleet-hygiene.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "node scripts/run-vitest.mjs run",
+    "test:gate": "node scripts/run-vitest.mjs run --config vitest.gate.config.ts",
+    "test:audit": "node scripts/run-vitest.mjs run --config vitest.audit.config.ts",
+    "typecheck": "tsc --noEmit",
     "test:watch": "node scripts/run-vitest.mjs",
     "export:library": "node scripts/export-library.mjs",
     "stage:site": "node scripts/stage-dist-site.mjs"
