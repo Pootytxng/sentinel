@@ -727,7 +727,7 @@ where
 /// to finish by itself (each scan bounds itself) and the mods read as `took-too-long`, never as clean; the
 /// Windows readers are never delayed by it.
 pub(crate) fn diagnose_with_readings<F, G>(
-    mut inp: DiagnoseInputs,
+    inp: DiagnoseInputs,
     complaint: Complaint,
     game: Option<&str>,
     budget: Duration,
@@ -738,30 +738,64 @@ where
     F: FnOnce(DateTime<Utc>, DateTime<Utc>, String) -> ChangeRead + Send + 'static,
     G: FnOnce(String, Vec<String>) -> ModInput + Send + 'static,
 {
+    diagnose_with_all(inp, complaint, game, budget, fetch, fetch_mods, None::<fn() -> CrashRead>)
+}
+
+/// Runs `f` on its own named thread and returns the channel it answers on (`None` when no thread could start).
+fn spawn_reader<T: Send + 'static>(name: &str, f: impl FnOnce() -> T + Send + 'static) -> Option<std::sync::mpsc::Receiver<T>> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name(name.into())
+        .spawn(move || {
+            let _ = tx.send(f());
+        })
+        .ok()
+        .map(|_| rx)
+}
+
+/// Waits for a reader inside what is left of the shared budget. A reader that is late or died is
+/// `Err("took-too-long" / "reader-failed")`, never an empty answer.
+fn collect_reader<T>(rx: Option<std::sync::mpsc::Receiver<T>>, budget: Duration, started: std::time::Instant) -> Result<T, &'static str> {
+    let Some(rx) = rx else { return Err("reader-failed") };
+    rx.recv_timeout(budget.saturating_sub(started.elapsed())).map_err(|e| match e {
+        std::sync::mpsc::RecvTimeoutError::Timeout => "took-too-long",
+        std::sync::mpsc::RecvTimeoutError::Disconnected => "reader-failed",
+    })
+}
+
+/// `diagnose_with_readings` plus the read-only crash history (`fetch_crashes`), on its own thread inside the
+/// same budget. A crash read that is late or dies reads as unavailable, never as "no crashes".
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn diagnose_with_all<F, G, H>(
+    mut inp: DiagnoseInputs,
+    complaint: Complaint,
+    game: Option<&str>,
+    budget: Duration,
+    fetch: F,
+    fetch_mods: Option<G>,
+    fetch_crashes: Option<H>,
+) -> Diagnosis
+where
+    F: FnOnce(DateTime<Utc>, DateTime<Utc>, String) -> ChangeRead + Send + 'static,
+    G: FnOnce(String, Vec<String>) -> ModInput + Send + 'static,
+    H: FnOnce() -> CrashRead + Send + 'static,
+{
     let probe = diagnose(&inp, complaint, game);
     let (Some((t0, t1)), Some(g)) = (change_window(&probe), probe.game.clone()) else { return probe };
     let started = std::time::Instant::now();
     let mods_rx = fetch_mods.map(|f| {
         let others = mods::other_rough_games(&inp, &probe);
         let game = g.clone();
-        let (tx, rx) = std::sync::mpsc::channel();
-        let spawned = std::thread::Builder::new().name("paramedic-mods".into()).spawn(move || {
-            let _ = tx.send(f(game, others));
-        });
-        (spawned.is_ok(), rx)
+        spawn_reader("paramedic-mods", move || f(game, others))
     });
+    let crashes_rx = fetch_crashes.map(|f| spawn_reader("paramedic-crashes", f));
     inp.changes = run_within(budget, move || fetch(t0, t1, g));
-    if let Some((spawned, rx)) = mods_rx {
-        let unavailable = |why: &'static str| ModInput { game: mods::ModsRead::Unavailable(why), others: Vec::new() };
-        inp.mods = if spawned {
-            match rx.recv_timeout(budget.saturating_sub(started.elapsed())) {
-                Ok(m) => m,
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => unavailable("took-too-long"),
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => unavailable("reader-failed"),
-            }
-        } else {
-            unavailable("reader-failed")
-        };
+    if let Some(rx) = mods_rx {
+        inp.mods = collect_reader(rx, budget, started)
+            .unwrap_or_else(|why| ModInput { game: mods::ModsRead::Unavailable(why), others: Vec::new() });
+    }
+    if let Some(rx) = crashes_rx {
+        inp.crashes = collect_reader(rx, budget, started).unwrap_or_else(extras::CrashRead::Unavailable);
     }
     diagnose(&inp, complaint, probe.game.as_deref())
 }

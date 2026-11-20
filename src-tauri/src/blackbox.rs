@@ -1410,8 +1410,24 @@ pub(crate) fn assert_no_raw_json(field: &str, text: &str) {
 /// network. App-crash/hang reports are readable non-elevated; `Kernel_*` reports are admin-only, so a
 /// PermissionDenied is reported as a *skipped* source (the elevation-honesty hard line), never errored.
 fn collect_wer() -> (Vec<WerReport>, Option<String>, Option<DateTime<Utc>>) {
+    let scan = scan_wer();
+    let skip = scan.needs_admin.then(|| "Windows Error Reporting (some kernel reports need administrator)".to_string());
+    (scan.reports, skip, scan.cut)
+}
+
+/// What one pass over the WER report folders read. `listed_any`: at least one of the two report folders
+/// could be listed (when neither could, nothing was read and the caller must not say "no crashes").
+struct WerScan {
+    reports: Vec<WerReport>,
+    needs_admin: bool,
+    cut: Option<DateTime<Utc>>,
+    listed_any: bool,
+}
+
+fn scan_wer() -> WerScan {
     let mut reports = Vec::new();
     let mut needs_admin = false;
+    let mut listed_any = false;
     let pd = std::env::var("ProgramData").unwrap_or_else(|_| "C:\\ProgramData".into());
     // P6-changed-f2: list the report folders with their modified time (the directory listing carries
     // it — no file contents read here), then read only the newest `WER_MAX_REPORTS`, so the cap has a
@@ -1427,6 +1443,7 @@ fn collect_wer() -> (Vec<WerReport>, Option<String>, Option<DateTime<Utc>>) {
         let Ok(entries) = std::fs::read_dir(&base) else {
             continue; // folder missing → nothing to read here (not a skip)
         };
+        listed_any = true;
         let complete = list_wer_entries(&mut dirs, &mut listing_cut_short, entries, |entry| {
             let modified = entry.metadata().ok().and_then(|m| m.modified().ok()).map(DateTime::<Utc>::from);
             (entry.path(), modified)
@@ -1452,9 +1469,48 @@ fn collect_wer() -> (Vec<WerReport>, Option<String>, Option<DateTime<Utc>>) {
             Err(_) => {} // missing/other → skip this one silently
         }
     }
-    let skip =
-        needs_admin.then(|| "Windows Error Reporting (some kernel reports need administrator)".to_string());
-    (reports, skip, cut)
+    WerScan { reports, needs_admin, cut, listed_any }
+}
+
+/// One app crash Windows Error Reporting kept a report for (APPCRASH and its variants).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct AppCrash {
+    /// The crashed program's exe name as WER recorded it.
+    pub app: String,
+    pub when: DateTime<Utc>,
+    pub module: Option<String>,
+    pub code: Option<String>,
+}
+
+/// The app crashes WER holds. `listed_any`: a report folder could be read at all. `needs_admin`: some
+/// report could not be opened without administrator rights. `complete_from`: the newest time a dropped
+/// folder could hold (the read is complete after it); `None` = nothing was cut.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct AppCrashes {
+    pub crashes: Vec<AppCrash>,
+    pub listed_any: bool,
+    pub needs_admin: bool,
+    pub complete_from: Option<DateTime<Utc>>,
+}
+
+/// The Paramedic's read-only crash history: the same Windows Error Reporting file reads as the Black Box
+/// (`Report.wer` files only: no process is started, nothing is written, no Event Log query).
+pub(crate) fn read_app_crashes() -> AppCrashes {
+    let scan = scan_wer();
+    AppCrashes { crashes: app_crashes_of(&scan.reports), listed_any: scan.listed_any, needs_admin: scan.needs_admin, complete_from: scan.cut }
+}
+
+/// Pure: the app crashes among WER reports. A report with no program name or no readable time is dropped,
+/// never guessed; hangs, kernel reports and other kinds are not crashes of a program.
+fn app_crashes_of(reports: &[WerReport]) -> Vec<AppCrash> {
+    reports
+        .iter()
+        .filter(|w| classify_wer(&w.event_type) == Some(IncidentKind::AppCrash))
+        .filter_map(|w| {
+            let when = DateTime::parse_from_rfc3339(&w.when).ok()?.with_timezone(&Utc);
+            Some(AppCrash { app: w.app.clone()?, when, module: w.module.clone(), code: w.code.clone() })
+        })
+        .collect()
 }
 
 /// Most WER report folders read per scan (bounds the file reads on a pathological WER dir).
@@ -1889,6 +1945,23 @@ mod blackbox_tests {
         assert_eq!(classify_wer("WindowsUpdateFailure3"), None);
         assert_eq!(classify_wer("PnPDeviceProblem"), None);
         assert_eq!(classify_wer(""), None);
+    }
+
+    #[test]
+    fn app_crashes_of_keeps_only_program_crashes_with_a_name_and_a_time() {
+        let reports = vec![
+            wer("APPCRASH", "2026-06-05T08:21:15-07:00", Some("game.exe"), Some("EOSSDK.dll"), Some("0xc0000005")),
+            wer("BEX64", "2026-06-06T08:00:00Z", Some("game.exe"), None, None),
+            wer("AppHang", "2026-06-07T08:00:00Z", Some("game.exe"), None, None),
+            wer("WindowsUpdateFailure3", "2026-06-08T08:00:00Z", Some("game.exe"), None, None),
+            wer("APPCRASH", "2026-06-09T08:00:00Z", None, Some("x.dll"), None),
+            wer("APPCRASH", "not a time", Some("game.exe"), None, None),
+        ];
+        let got = app_crashes_of(&reports);
+        assert_eq!(got.len(), 2, "{got:?}");
+        assert_eq!((got[0].app.as_str(), got[0].module.as_deref(), got[0].code.as_deref()), ("game.exe", Some("EOSSDK.dll"), Some("0xc0000005")));
+        assert_eq!(got[0].when, DateTime::parse_from_rfc3339("2026-06-05T15:21:15Z").unwrap().with_timezone(&Utc));
+        assert_eq!((got[1].module.clone(), got[1].code.clone()), (None, None));
     }
 
     #[test]

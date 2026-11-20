@@ -58,6 +58,8 @@ function whatText(id: string, t: T): string | null {
       return t("paramedic.finding.windowsUpdate.what");
     case "other-driver-change":
       return t("paramedic.finding.otherDriver.what");
+    case "gpu-hotter":
+      return t("paramedic.finding.gpuHotter.what");
     default:
       return null;
   }
@@ -125,6 +127,8 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
       return a.neverBefore === "true"
         ? t("paramedic.evidence.crossGame", { games: a.games })
         : t("paramedic.evidence.crossGameAfter", { games: a.games });
+    case "gpu-temp":
+      return t("paramedic.evidence.gpuTemp", { rough: a.rough, base: a.base });
     // Dates of files in the game's folder: when they were created or last written, never "installed on".
     case "mod-files-created":
       return t("paramedic.evidence.modFilesCreated", { first_seen: dates.day(a.date) });
@@ -359,6 +363,8 @@ function stepLines(fix: ParamedicFix, { t, game }: Ctx): string[] {
       return [t("paramedic.fix.programInstalled.step1", { names: a.names }), t("paramedic.fix.programInstalled.step2", { game })];
     case "graphics-mod":
       return [t("paramedic.fix.graphicsMod.step1", { name: a.name }), t("paramedic.fix.graphicsMod.step2")];
+    case "gpu-hotter":
+      return [t("paramedic.fix.gpuHotter.step1"), t("paramedic.fix.gpuHotter.step2"), t("paramedic.fix.gpuHotter.step3", { game })];
     default:
       return [];
   }
@@ -397,6 +403,8 @@ function ruledOutLine(n: ParamedicRuledOut, { t, dates, game }: Ctx): string | n
     case "graphics-mod":
       // Only for a complete scan: "no KNOWN mod", never "no mods".
       return t("paramedic.checked.graphicsMod", { game });
+    case "gpu-temp":
+      return t("paramedic.checked.gpuTemp", { within: a.within });
     default:
       return null;
   }
@@ -412,6 +420,14 @@ function unknownLine(code: string, { t, game }: Ctx): string | null {
       return t("paramedic.unknown.modsPartial", { game });
     case "mods-unavailable":
       return t("paramedic.unknown.modsUnavailable", { game });
+    case "gpu-temp":
+      return t("paramedic.unknown.gpuTemp");
+    case "crashes-unavailable":
+      return t("paramedic.unknown.crashesUnavailable", { game });
+    case "crashes-unreadable":
+      return t("paramedic.unknown.crashesUnreadable", { game });
+    case "crashes-partial":
+      return t("paramedic.unknown.crashesPartial", { game });
     case "startup-programs":
       return t("paramedic.unknown.startupPrograms");
     case "overlays":
@@ -449,6 +465,12 @@ function unknownLine(code: string, { t, game }: Ctx): string | null {
 function seenLine(s: ParamedicRuledOut, { t, dates, game }: Ctx): string | null {
   const a = s.args;
   switch (s.id) {
+    case "gpu-temp":
+      return t("paramedic.seen.gpuTemp", { rough: a.rough, base: a.base });
+    case "game-crashes":
+      return t("paramedic.seen.gameCrashes", { game, count: Number(a.n), since: dates.day(a.since) });
+    case "game-crash-signature":
+      return t("paramedic.seen.gameCrashSignature", { module: a.module, what: t("paramedic.seen.crashBeforeWhat", { date: dates.day(a.before) }) });
     case "mod-settings-only":
       // Files of a mod's own are not proof it is installed: said exactly so.
       return t("paramedic.seen.modSettingsOnly", { game, name: a.name });

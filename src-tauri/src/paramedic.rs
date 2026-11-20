@@ -29,9 +29,11 @@ use serde::{Deserialize, Serialize};
 use crate::intelligence::{self, SessionRef};
 
 mod changes;
+mod extras;
 mod mods;
 mod recovery;
 use changes::{ChangeRead, Limit};
+use extras::CrashRead;
 use mods::ModInput;
 use recovery::{EarlierEpisode, NowLine, NowStatus, Outcome, Recovery};
 
@@ -134,6 +136,9 @@ pub(crate) struct SessionFacts {
     peak_ram_bytes: Option<u64>,
     #[serde(default)]
     ram_total_bytes: Option<u64>,
+    /// The highest graphics card temperature the session read, whole degrees C. None: no reading.
+    #[serde(default)]
+    peak_gpu_temp_c: Option<u32>,
     #[serde(default)]
     gpu_driver: Option<String>,
     #[serde(default)]
@@ -210,6 +215,9 @@ pub(crate) struct DiagnoseInputs {
     /// Never part of a recorded fixture; tests build it by hand.
     #[serde(skip)]
     mods: ModInput,
+    /// The crash reports Windows keeps for apps, as the command read them. Never part of a recorded fixture.
+    #[serde(skip)]
+    crashes: CrashRead,
 }
 
 // ---- Outputs: codes, ids and numbers. The UI owns every sentence. ----------------------------
@@ -834,7 +842,8 @@ pub(crate) async fn paramedic_diagnose(complaint: Complaint, game: Option<String
         let inp = read_inputs_from(&crate::compy_data_dir())?;
         let fetch = |t0, t1, exe: String| changes::read_real_changes(t0, t1, &exe);
         let fetch_mods = |exe: String, others: Vec<String>| mods::read_real_mods(&exe, &others);
-        Ok(changes::diagnose_with_readings(inp, complaint, game.as_deref(), changes::CHANGES_BUDGET, fetch, Some(fetch_mods)))
+        let fetch_crashes = extras::read_real_crashes;
+        Ok(changes::diagnose_with_all(inp, complaint, game.as_deref(), changes::CHANGES_BUDGET, fetch, Some(fetch_mods), Some(fetch_crashes)))
     })
     .await
     .map_err(|_| "the diagnosis stopped unexpectedly".to_string())?
@@ -926,6 +935,7 @@ pub(crate) fn facts_from(s: &crate::sessions::SessionSummary) -> SessionFacts {
         p99_ms: s.frame_pacing.as_ref().map(|p| p.p99_ms),
         peak_ram_bytes: s.peak_ram_used_bytes,
         ram_total_bytes: s.ram_total_bytes,
+        peak_gpu_temp_c: s.peak_gpu_temp_c,
         gpu_driver: driver,
         windows_build: gs.and_then(|g| g.windows_build.clone()),
         refresh_hz: gs.and_then(|g| g.display_refresh_hz),
@@ -971,6 +981,7 @@ fn inputs_from_parts(
         drift_unread: false,
         changes: ChangeRead::NotRead,
         mods: ModInput::default(),
+        crashes: CrashRead::NotRead,
     }
 }
 
@@ -1138,6 +1149,7 @@ fn category(id: &str) -> usize {
         "program-installed",
         "other-driver-change",
         "graphics-mod",
+        "gpu-hotter",
     ];
     ORDER.iter().position(|x| *x == id).unwrap_or(ORDER.len())
 }
@@ -1254,6 +1266,9 @@ fn explain<'a>(
     changes::detect_other_drivers(&ctx, &mut out);
     // Files in the game's own folder: a candidate only for a mod's own loader, never an all-clear when unread.
     mods::detect(&ctx, &mut out);
+    extras::detect_temperature(&ctx, &mut out);
+    // After every candidate: the crash line compares the crashes' dates with the earliest dated one.
+    extras::detect_crashes(&ctx, &mut out);
     for code in ["startup-programs", "overlays"] {
         out.unknown(code);
     }

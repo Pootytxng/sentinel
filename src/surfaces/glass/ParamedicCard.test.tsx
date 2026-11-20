@@ -1201,3 +1201,127 @@ describe("ParamedicCard: graphics mods in the game's folder", () => {
     for (const s of zhS) expect(s).not.toMatch(/原因|导致|造成|修复了|治好|没有任何 ?mod/);
   });
 });
+
+describe("ParamedicCard: temperature and crash history", () => {
+  const day = (iso: string) => new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(iso));
+  const answerOf = (findings: F[], extra: Partial<ParamedicDiagnosis> = {}): ParamedicDiagnosis => ({
+    ...base,
+    why_first: null,
+    findings,
+    not_it: [],
+    unknowns: [],
+    ...extra,
+  });
+  const background = () => find("background-load", { fix: steps("background-load") });
+  const checked = () => document.body.textContent ?? "";
+
+  it("the temperature line names both peaks and is the only sentence about them", async () => {
+    await ask(answerOf([background()], { seen: [{ id: "gpu-temp", args: { rough: "77", base: "70" } }] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain("Graphics card temperature peaked at 77°C in the rough session and 70°C in normal ones.");
+  });
+
+  it("within the line it is also in the Unchanged list, with the line's own number", async () => {
+    await ask(
+      answerOf([background()], {
+        seen: [{ id: "gpu-temp", args: { rough: "74", base: "70" } }],
+        not_it: [{ id: "gpu-temp", args: { rough: "74", base: "70", within: "5" } }],
+      }),
+    );
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain("Graphics card temperature: no more than 5°C above the highest peak in your normal sessions.");
+  });
+
+  it("a hotter card is a Possible row with the two peaks as evidence and fan, dust, airflow and fan-curve steps", async () => {
+    const hot = find("gpu-hotter", {
+      evidence: [{ kind: "known", code: "gpu-temp", args: { rough: "91", base: "80" }, against: false, source: "sessions" }],
+      fix: steps("gpu-hotter"),
+    });
+    await ask(answerOf([hot]));
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(rows()[0].textContent).toMatch(/Your graphics card ran hotter than usual/);
+    expect(rows()[0].textContent).toMatch(/Possible/);
+    openAll();
+    expect(checked()).toContain("Graphics card temperature peaked at 91°C in the rough session and 80°C in normal ones.");
+    expect(checked()).toMatch(/fans spin up/);
+    expect(checked()).toMatch(/dust/);
+    expect(checked()).toMatch(/airflow/);
+    expect(checked()).toMatch(/fan curve/);
+  });
+
+  it("crash records and a missing temperature are each said as what they are", async () => {
+    await ask(answerOf([background()], { unknowns: ["gpu-temp", "crashes-unavailable", "crashes-unreadable", "crashes-partial"] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain("How hot your graphics card got");
+    expect(checked()).toContain("Whether Game A has closed unexpectedly before (looking took too long)");
+    expect(checked()).toContain("Windows' crash records couldn't be read");
+    expect(checked()).toContain("only some of them could be read");
+    expect(checked()).not.toMatch(/no crashes/i);
+  });
+
+  it("the crash line says once or how many times since the first, and only both conditions bring 'probably'", async () => {
+    const first = "2026-11-02T09:00:00Z";
+    const change = "2026-11-12T09:00:00Z";
+    await ask(
+      answerOf([background()], {
+        seen: [
+          { id: "game-crashes", args: { n: "3", since: first } },
+          { id: "game-crash-signature", args: { module: "nvwgf2umx.dll", before: change } },
+        ],
+      }),
+    );
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(`Game A has closed unexpectedly 3 times since ${day(first)}.`);
+    expect(checked()).toContain(
+      `They all have the same signature (nvwgf2umx.dll), and they started before the earliest change Compy found (${day(change)}), so they are probably a separate problem.`,
+    );
+  });
+
+  it("one crash is said in the singular and carries no signature sentence", async () => {
+    const first = "2026-11-02T09:00:00Z";
+    await ask(answerOf([background()], { seen: [{ id: "game-crashes", args: { n: "1", since: first } }] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(`Game A has closed unexpectedly once, on ${day(first)}.`);
+    expect(checked()).not.toMatch(/same signature|probably/);
+  });
+
+  it("the new strings use no overheating, throttling, causal or verdict words, and 'probably' only in the signature sentence", () => {
+    const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "paramedic.json"), "utf8"));
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8"));
+    const strings = (o: Record<string, unknown>): string[] =>
+      Object.values(o).flatMap((v) => (typeof v === "string" ? [v] : strings(v as Record<string, unknown>)));
+    const all = strings(en);
+    for (const s of all) expect(s).not.toMatch(/overheat|throttl/i);
+    for (const s of strings(zh)) expect(s).not.toMatch(/过热|降频/);
+    // Causal and verdict words, in the strings this slice added (older strings say "can cause" about a cause that is unproven).
+    const slice = (o: Record<string, Record<string, unknown>>): string[] =>
+      strings({
+        a: o.finding.gpuHotter,
+        b: o.evidence.gpuTemp,
+        c: o.fix.gpuHotter,
+        d: o.checked.gpuTemp,
+        e: o.seen.gpuTemp,
+        f: o.seen.gameCrashes_one,
+        g: o.seen.gameCrashes_other,
+        h: o.seen.gameCrashSignature,
+        i: o.seen.crashBeforeWhat,
+        j: o.unknown.gpuTemp,
+        k: o.unknown.crashesUnavailable,
+        l: o.unknown.crashesUnreadable,
+        m: o.unknown.crashesPartial,
+      });
+    for (const s of slice(en)) expect(s).not.toMatch(/\bcaus|because|guarantee|\bfix(ed)?\b/i);
+    for (const s of slice(zh)) expect(s).not.toMatch(/原因|导致|造成|保证|修复了/);
+    expect(all.filter((s) => /probably/i.test(s))).toEqual([en.seen.gameCrashSignature]);
+    expect(strings(zh).filter((s) => /很可能|可能是/.test(s)).length).toBeGreaterThan(0);
+    // The two languages carry the same keys under every group the slice touched.
+    const keys = (o: Record<string, unknown>, p = ""): string[] =>
+      Object.entries(o).flatMap(([k, v]) => (typeof v === "string" ? [p + k] : keys(v as Record<string, unknown>, `${p}${k}.`)));
+    expect(keys(zh).sort()).toEqual(keys(en).sort());
+  });
+});

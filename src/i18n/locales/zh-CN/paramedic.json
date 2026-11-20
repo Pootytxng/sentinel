@@ -81,6 +81,9 @@
     },
     "graphicsMod": {
       "what": "{{game}} 的文件夹里有图形 mod({{name}})"
+    },
+    "gpuHotter": {
+      "what": "显卡温度比平时更高"
     }
   },
   "since": {
@@ -203,7 +206,8 @@
     "modSettingsChanged": "它的设置文件最后一次修改是在 {{date}}。",
     "modLogWritten": "这个 mod 自己的日志或缓存文件最后一次写入是在 {{date}}。",
     "modLogBeforeRough": "这早于卡顿的那次游戏,所以当时这个 mod 可能没有在运行。",
-    "crossGameMod": "{{otherGame}} 的文件夹里有 {{name}} 的文件,所以它那几次卡顿可能另有缘故。"
+    "crossGameMod": "{{otherGame}} 的文件夹里有 {{name}} 的文件,所以它那几次卡顿可能另有缘故。",
+    "gpuTemp": "显卡温度在出问题的那次游戏中最高达到 {{rough}}°C，在正常的几次中最高为 {{base}}°C。"
   },
   "fix": {
     "title": "如何解决",
@@ -253,6 +257,11 @@
     "graphicsMod": {
       "step1": "到 {{name}} 的官方页面看看,有没有和你的显卡驱动匹配的版本。",
       "step2": "想不带它测试:把它的文件移出游戏文件夹(或用它自带的卸载),玩一次,再按\"出问题了\"。"
+    },
+    "gpuHotter": {
+      "step1": "确认显卡风扇在玩游戏时会转起来，并清理风扇和散热片上的灰尘。",
+      "step2": "检查机箱的进风和出风是否畅通，并在显卡自带的工具里查看风扇曲线（可能设得偏低）。",
+      "step3": "再玩一次 {{game}}，然后再按“出问题了”。"
     }
   },
   "card": {
@@ -287,7 +296,8 @@
     "gpuDriverNoInstall": "显卡驱动：仍是 {{driver}}。Windows 记录显示这段时间内没有安装显卡驱动。",
     "seen": "还看了：",
     "cantSeeFold": "Compy 看不到的内容",
-    "graphicsMod": "在 {{game}} 的文件夹里没有发现已知的图形 mod。"
+    "graphicsMod": "在 {{game}} 的文件夹里没有发现已知的图形 mod。",
+    "gpuTemp": "显卡温度：没有比正常几次中的最高值高出超过 {{within}}°C。"
   },
   "unknown": {
     "startupPrograms": "哪些程序随 Windows 启动，与之前相比",
@@ -307,7 +317,11 @@
     "modsNoFolder": "{{game}} 的文件夹里有没有图形 mod(Compy 没能把游戏对应到安装文件夹)",
     "modsFolderUnreadable": "{{game}} 的文件夹里有没有图形 mod(文件夹读不了)",
     "modsPartial": "{{game}} 的文件夹里有没有图形 mod(只扫描了文件夹的一部分)",
-    "modsUnavailable": "{{game}} 的文件夹里有没有图形 mod(查看用时太长)"
+    "modsUnavailable": "{{game}} 的文件夹里有没有图形 mod(查看用时太长)",
+    "gpuTemp": "显卡温度有多高（出问题的那次和正常的几次没有都记录到）",
+    "crashesUnavailable": "{{game}} 以前是否意外关闭过（查看用时过长）",
+    "crashesUnreadable": "{{game}} 以前是否意外关闭过（Windows 的崩溃记录读不了）",
+    "crashesPartial": "Windows 的崩溃记录里是否还有更多 {{game}} 的崩溃（只读到了其中一部分）"
   },
   "nothingWrong": {
     "title": "看起来一切正常",
@@ -357,7 +371,12 @@
     "updatesUnclassifiedKb_one": "{{count}}个 Compy 无法分类的 Windows 更新({{kbs}})。",
     "updatesUnclassifiedKb_other": "{{count}}个 Compy 无法分类的 Windows 更新({{kbs}})。",
     "driverOtherInstall": "Windows 记录显示,{{when}}安装过显卡驱动,但版本与你出问题的几次游戏所用的不同。",
-    "modSettingsOnly": "{{game}} 的文件夹里有 {{name}} 的设置或数据文件;Compy 无法判断这个 mod 本身是否已安装。"
+    "modSettingsOnly": "{{game}} 的文件夹里有 {{name}} 的设置或数据文件;Compy 无法判断这个 mod 本身是否已安装。",
+    "gpuTemp": "显卡温度在出问题的那次游戏中最高达到 {{rough}}°C，在正常的几次中最高为 {{base}}°C。",
+    "gameCrashes_one": "{{game}} 曾在 {{since}} 意外关闭过一次。",
+    "gameCrashes_other": "{{game}} 自 {{since}} 起已意外关闭 {{count}} 次。",
+    "gameCrashSignature": "它们的特征相同（{{module}}），而且都发生在{{what}}之前，所以很可能是另一个独立的问题。",
+    "crashBeforeWhat": "Compy 找到的最早一项变化（{{date}}）"
   },
   "limit": {
     "cantSee": "Compy 看不到{{what}}：{{why}}。",

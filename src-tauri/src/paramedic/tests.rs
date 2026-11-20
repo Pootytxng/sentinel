@@ -37,6 +37,7 @@ fn facts(at: &str, dur: u64, samples: u32, avg: f64, low1: f64) -> SessionFacts 
         low1_fps: low1,
         p99_ms: None,
         peak_ram_bytes: None,
+        peak_gpu_temp_c: None,
         ram_total_bytes: None,
         gpu_driver: None,
         windows_build: None,
@@ -291,6 +292,7 @@ fn finding_order_is_pinned() {
         "program-installed",
         "other-driver-change",
         "graphics-mod",
+        "gpu-hotter",
     ];
     for w in order.windows(2) {
         assert!(category(w[0]) < category(w[1]), "{} must rank before {}", w[0], w[1]);
@@ -890,17 +892,18 @@ fn print_live_diagnosis() {
         });
         changes_only_ms.push(t.elapsed().as_millis());
         let t = std::time::Instant::now();
-        d = changes::diagnose_with_readings(
+        d = changes::diagnose_with_all(
             inp.clone(),
             Complaint::Unknown,
             None,
             changes::CHANGES_BUDGET,
             |a, b, g| changes::read_real_changes(a, b, &g),
             Some(|exe: String, others: Vec<String>| mods::read_real_mods(&exe, &others)),
+            Some(extras::read_real_crashes),
         );
         with_ms.push(t.elapsed().as_millis());
     }
-    eprintln!("TIMING plain_ms={plain_ms:?} windows_readers_only_ms={changes_only_ms:?} with_readers_and_mod_scan_ms={with_ms:?}");
+    eprintln!("TIMING plain_ms={plain_ms:?} windows_readers_only_ms={changes_only_ms:?} with_readers_mod_scan_and_crashes_ms={with_ms:?}");
     println!("{}", serde_json::to_string_pretty(&d).expect("serialises"));
 }
 
@@ -3277,5 +3280,270 @@ mod graphics_mods {
         let gone = root.join("not-there");
         assert_eq!(scan(&gone), read(ModsVerdict::CouldNotScan(CouldNot::FolderUnreadable)));
         let _ = std::fs::remove_dir_all(root);
+    }
+}
+
+// ---- M3 commit 2: temperature, crash history, the named setting ---------------------------------------
+mod temperature_and_crashes {
+    use super::super::extras::{CrashFact, CrashHistory, CrashRead, TEMP_HOTTER_C, TEMP_SAME_C};
+    use super::super::mods::{ModFound, ModInput, ModsRead, ModsVerdict};
+    use super::*;
+
+    const HI: &str = "2026-10-09T10:00:00Z";
+    const IN: &str = "2026-10-06T12:00:00Z";
+    /// The mod candidate below is dated to the period that starts here (the end of the last normal session).
+    const LO: &str = "2026-10-04T10:10:00Z";
+
+    fn utc(s: &str) -> DateTime<Utc> {
+        ts(s).expect("a time")
+    }
+
+    /// Four normal sessions whose highest peak is `normal_max`, and a rough one that peaked at `rough`.
+    fn temps(rough: Option<u32>, normal_max: Option<u32>) -> Vec<SessionFacts> {
+        let mut v = steady(4);
+        for (i, s) in v.iter_mut().enumerate() {
+            s.peak_gpu_temp_c = normal_max.map(|m| if i == 1 { m } else { m.saturating_sub(7 + i as u32) });
+        }
+        let mut r = facts(HI, 600, 600, 100.0, 30.0);
+        r.peak_gpu_temp_c = rough;
+        v.push(r);
+        v
+    }
+
+    fn run(sess: Vec<SessionFacts>) -> Diagnosis {
+        diagnose(&inputs(sess), Complaint::Slow, Some("g"))
+    }
+
+    fn seen_ids(d: &Diagnosis) -> Vec<&'static str> {
+        d.seen.iter().map(|s| s.id).collect()
+    }
+
+    fn unchanged_ids(d: &Diagnosis) -> Vec<&'static str> {
+        d.not_it.iter().map(|s| s.id).collect()
+    }
+
+    // ---- temperature ----
+    #[test]
+    fn five_degrees_above_the_normal_peak_is_unchanged_and_six_is_neither_unchanged_nor_a_candidate() {
+        assert_eq!(TEMP_SAME_C, 5);
+        for (rough, unchanged) in [(60, true), (80, true), (84, true), (85, true), (86, false)] {
+            let d = run(temps(Some(rough), Some(80)));
+            assert_eq!(unchanged_ids(&d).contains(&"gpu-temp"), unchanged, "rough {rough} against 80");
+            assert!(!ids(&d).contains(&"gpu-hotter"), "rough {rough} is not past the candidate line");
+            assert!(seen_ids(&d).contains(&"gpu-temp"), "the line is always said when both are read");
+        }
+    }
+
+    #[test]
+    fn more_than_ten_degrees_above_the_normal_peak_is_a_possible_candidate_and_exactly_ten_is_not() {
+        assert_eq!(TEMP_HOTTER_C, 10);
+        let ten = run(temps(Some(90), Some(80)));
+        assert!(!ids(&ten).contains(&"gpu-hotter"), "exactly 10 above is not more than 10");
+        assert!(!unchanged_ids(&ten).contains(&"gpu-temp"));
+        let eleven = run(temps(Some(91), Some(80)));
+        let f = eleven.findings.iter().find(|f| f.id == "gpu-hotter").expect("a candidate");
+        assert_eq!(f.confidence, Certainty::Possible, "one measured size is never Likely");
+        assert!(f.in_play, "the rough session itself carries it");
+        assert_eq!(f.evidence.len(), 1);
+        assert_eq!(f.evidence[0].code, "gpu-temp");
+        assert_eq!(f.evidence[0].args.get("rough").map(String::as_str), Some("91"));
+        assert_eq!(f.evidence[0].args.get("base").map(String::as_str), Some("80"));
+        assert!(matches!(&f.fix, Fix::Steps { code: "gpu-hotter", .. }));
+        assert!(!unchanged_ids(&eleven).contains(&"gpu-temp"));
+    }
+
+    #[test]
+    fn the_line_names_the_rough_peak_and_the_highest_normal_peak() {
+        let d = run(temps(Some(77), Some(70)));
+        let s = d.seen.iter().find(|s| s.id == "gpu-temp").expect("said");
+        assert_eq!((s.args["rough"].as_str(), s.args["base"].as_str()), ("77", "70"));
+    }
+
+    #[test]
+    fn a_missing_reading_on_either_side_is_a_couldnt_see_line_and_never_unchanged() {
+        for (rough, normal) in [(None, Some(80)), (Some(90), None), (None, None)] {
+            let d = run(temps(rough, normal));
+            assert!(d.unknowns.contains(&"gpu-temp"), "{rough:?} {normal:?}");
+            assert!(!seen_ids(&d).contains(&"gpu-temp") && !unchanged_ids(&d).contains(&"gpu-temp") && !ids(&d).contains(&"gpu-hotter"));
+        }
+        assert!(!run(temps(Some(80), Some(80))).unknowns.contains(&"gpu-temp"));
+    }
+
+    #[test]
+    fn the_rough_peak_is_the_highest_of_the_rough_sessions() {
+        let mut v = steady(4);
+        for s in &mut v {
+            s.peak_gpu_temp_c = Some(70);
+        }
+        let mut a = facts(HI, 600, 600, 100.0, 30.0);
+        a.peak_gpu_temp_c = Some(75);
+        let mut b = facts("2026-10-10T10:00:00Z", 600, 600, 100.0, 30.0);
+        b.peak_gpu_temp_c = Some(88);
+        v.extend([a, b]);
+        let d = run(v);
+        let s = d.seen.iter().find(|s| s.id == "gpu-temp").expect("said");
+        assert_eq!(s.args["rough"], "88");
+    }
+
+    // ---- crashes ----
+    fn crash(app: &str, when: &str, module: Option<&str>, code: Option<&str>) -> CrashFact {
+        CrashFact { app: app.into(), when: utc(when), module: module.map(Into::into), code: code.map(Into::into) }
+    }
+
+    fn sig(when: &str) -> CrashFact {
+        crash("g", when, Some("nvwgf2umx.dll"), Some("c0000005"))
+    }
+
+    fn history(crashes: Vec<CrashFact>) -> CrashRead {
+        CrashRead::Read(CrashHistory { crashes, listed: true, partial: false })
+    }
+
+    /// A mod whose files date to the period is the one dated candidate (its earliest possible time is `LO`).
+    fn with_crashes(crashes: CrashRead, dated_candidate: bool) -> Diagnosis {
+        let mut sess = steady(4);
+        sess.push(facts(HI, 600, 600, 100.0, 30.0));
+        let mut inp = inputs(sess);
+        inp.crashes = crashes;
+        if dated_candidate {
+            let m = ModFound { name: "ReShade", strong: true, loader_file_present: true, first_seen: Some(utc(IN)), settings_changed: None, last_log_write: None };
+            inp.mods = ModInput { game: ModsRead::Read(ModsVerdict::Found(vec![m])), others: Vec::new() };
+        }
+        diagnose(&inp, Complaint::Slow, Some("g"))
+    }
+
+    fn crash_line(d: &Diagnosis) -> Option<&RuledOut> {
+        d.seen.iter().find(|s| s.id == "game-crashes")
+    }
+
+    fn signature_line(d: &Diagnosis) -> Option<&RuledOut> {
+        d.seen.iter().find(|s| s.id == "game-crash-signature")
+    }
+
+    #[test]
+    fn the_diagnosed_games_crashes_are_counted_with_the_date_of_the_first() {
+        let d = with_crashes(
+            history(vec![
+                crash("g", "2026-10-07T08:00:00Z", None, None),
+                crash("G", "2026-10-02T08:00:00Z", None, None),
+                crash("other", "2026-09-01T08:00:00Z", None, None),
+            ]),
+            false,
+        );
+        let l = crash_line(&d).expect("said");
+        assert_eq!(l.args["n"], "2");
+        assert_eq!(l.args["since"], "2026-10-02T08:00:00Z");
+        assert!(signature_line(&d).is_none());
+    }
+
+    #[test]
+    fn crashes_of_other_programs_or_none_at_all_say_nothing_about_this_game() {
+        assert!(crash_line(&with_crashes(history(vec![crash("other", "2026-10-02T08:00:00Z", None, None)]), false)).is_none());
+        assert!(crash_line(&with_crashes(history(Vec::new()), false)).is_none());
+        let d = with_crashes(CrashRead::NotRead, false);
+        assert!(crash_line(&d).is_none() && !d.unknowns.iter().any(|u| u.starts_with("crashes")));
+    }
+
+    #[test]
+    fn crash_data_that_could_not_be_read_is_a_couldnt_see_line_never_no_crashes() {
+        let d = with_crashes(CrashRead::Unavailable("took-too-long"), false);
+        assert!(d.unknowns.contains(&"crashes-unavailable") && crash_line(&d).is_none());
+        let none = with_crashes(CrashRead::Read(CrashHistory { crashes: Vec::new(), listed: false, partial: false }), false);
+        assert!(none.unknowns.contains(&"crashes-unreadable") && crash_line(&none).is_none());
+        let partly = with_crashes(CrashRead::Read(CrashHistory { crashes: vec![sig("2026-10-07T08:00:00Z")], listed: true, partial: true }), false);
+        assert!(partly.unknowns.contains(&"crashes-partial"), "some reports were not read: the count may be low");
+        assert_eq!(crash_line(&partly).expect("what was read is still said").args["n"], "1");
+    }
+
+    #[test]
+    fn same_signature_and_started_before_the_earliest_change_says_probably_a_separate_problem() {
+        let d = with_crashes(history(vec![sig("2026-09-20T08:00:00Z"), sig("2026-10-07T08:00:00Z")]), true);
+        let l = signature_line(&d).expect("both conditions hold");
+        assert_eq!(l.args["module"], "nvwgf2umx.dll");
+        assert_eq!(l.args["before"], LO, "the earliest the dated candidate could have happened");
+    }
+
+    #[test]
+    fn the_signature_sentence_needs_both_conditions_and_each_alone_is_not_enough() {
+        // Same signature, but every crash is after the earliest candidate change.
+        let after = with_crashes(history(vec![sig("2026-10-05T08:00:00Z"), sig("2026-10-07T08:00:00Z")]), true);
+        assert!(signature_line(&after).is_none());
+        // One crash predates the change, but the signatures differ (module, then code).
+        let module = with_crashes(history(vec![sig("2026-09-20T08:00:00Z"), crash("g", "2026-10-07T08:00:00Z", Some("other.dll"), Some("c0000005"))]), true);
+        assert!(signature_line(&module).is_none());
+        let code = with_crashes(history(vec![sig("2026-09-20T08:00:00Z"), crash("g", "2026-10-07T08:00:00Z", Some("nvwgf2umx.dll"), Some("80000003"))]), true);
+        assert!(signature_line(&code).is_none());
+        // A crash with no recorded module or code cannot be said to share one.
+        let unknown = with_crashes(history(vec![sig("2026-09-20T08:00:00Z"), crash("g", "2026-10-07T08:00:00Z", None, None)]), true);
+        assert!(signature_line(&unknown).is_none());
+        // One crash has no "same" to speak of.
+        let one = with_crashes(history(vec![sig("2026-09-20T08:00:00Z")]), true);
+        assert!(signature_line(&one).is_none() && crash_line(&one).is_some());
+        // With no dated candidate there is nothing for the crashes to predate.
+        let undated = with_crashes(history(vec![sig("2026-09-20T08:00:00Z"), sig("2026-10-07T08:00:00Z")]), false);
+        assert!(signature_line(&undated).is_none() && crash_line(&undated).is_some());
+    }
+
+    #[test]
+    fn a_crash_exactly_at_the_earliest_change_does_not_predate_it() {
+        let d = with_crashes(history(vec![sig(LO), sig("2026-10-07T08:00:00Z")]), true);
+        assert!(signature_line(&d).is_none());
+        let d = with_crashes(history(vec![sig("2026-10-04T10:09:59Z"), sig("2026-10-07T08:00:00Z")]), true);
+        assert!(signature_line(&d).is_some());
+    }
+
+    #[test]
+    fn the_crash_read_runs_beside_the_other_readers_inside_one_budget_and_late_or_dead_is_never_no_crashes() {
+        use super::super::changes::{diagnose_with_all, ChangeRead};
+        use super::super::mods::ModInput;
+        use std::time::Duration;
+        let scenario = || {
+            let mut s = steady(4);
+            s.push(facts(HI, 600, 600, 100.0, 30.0));
+            inputs(s)
+        };
+        let none = || None::<fn(String, Vec<String>) -> ModInput>;
+        let ok = diagnose_with_all(scenario(), Complaint::Slow, Some("g"), Duration::from_secs(2), |_, _, _| ChangeRead::NotRead, none(), Some(|| history(vec![sig("2026-10-02T08:00:00Z")])));
+        assert_eq!(crash_line(&ok).expect("what the reader returned is used").args["n"], "1");
+        let started = std::time::Instant::now();
+        let slow = diagnose_with_all(
+            scenario(),
+            Complaint::Slow,
+            Some("g"),
+            Duration::from_millis(80),
+            |_, _, _| ChangeRead::NotRead,
+            none(),
+            Some(|| {
+                std::thread::sleep(Duration::from_millis(700));
+                history(Vec::new())
+            }),
+        );
+        assert!(started.elapsed() < Duration::from_millis(500), "{:?}", started.elapsed());
+        assert!(slow.unknowns.contains(&"crashes-unavailable"));
+        let dead = diagnose_with_all(scenario(), Complaint::Slow, Some("g"), Duration::from_secs(2), |_, _, _| ChangeRead::NotRead, none(), Some(|| -> CrashRead { panic!("the read died") }));
+        assert!(dead.unknowns.contains(&"crashes-unavailable"));
+        // Nothing to explain: the crash files are never read.
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let _ = diagnose_with_all(
+            inputs(steady(5)),
+            Complaint::Slow,
+            Some("g"),
+            Duration::from_secs(2),
+            |_, _, _| ChangeRead::NotRead,
+            none(),
+            Some(move || {
+                let _ = tx.send(());
+                CrashRead::NotRead
+            }),
+        );
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn the_signature_sentence_is_the_only_place_probably_is_decided_and_the_engine_never_names_a_cause() {
+        let d = with_crashes(history(vec![sig("2026-09-20T08:00:00Z"), sig("2026-10-07T08:00:00Z")]), true);
+        let json = serde_json::to_string(&d).expect("serialises").to_lowercase();
+        for word in ["overheat", "throttl", "caused", "guarantee"] {
+            assert!(!json.contains(word), "{word} in {json}");
+        }
     }
 }
