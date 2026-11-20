@@ -7,7 +7,7 @@
 //!
 //! - CPU: one `NtQuerySystemInformation(SystemProcessInformation)` snapshot per tick gives every
 //!   process's kernel + user time WITHOUT opening a process handle, so an anti-cheat-protected game
-//!   reads like any other process. `GetSystemTimes` is read right after, so the game's share and the
+//!   reads like any other process. `GetSystemTimes` is read just before it, so the game's share and the
 //!   machine's total cover the same interval. Other = max(0, total busy - game), as a share of all
 //!   logical cores.
 //! - GPU: the Windows "GPU Engine" counters (vendor-neutral): the sum of every engine instance whose
@@ -35,10 +35,12 @@ pub(crate) fn name_key(name: &str) -> String {
 /// One tick's share of TOTAL CPU capacity used by everything except the game, in percent.
 /// `capacity_delta` is the machine's kernel+user time over the interval (all logical cores, idle
 /// included), `idle_delta` its idle part, `game_delta` the game's kernel+user time over the same
-/// interval. `None` when the capacity is zero or the game's time is unread (game missing).
+/// interval. `None` when the capacity is zero, the idle part exceeds it (an impossible delta: a bad
+/// read, never a zero) or the game's time is unread (game missing). Compy itself, its frame helper and
+/// any game child process under another image name count as "other".
 pub(crate) fn other_cpu_pct(capacity_delta: u64, idle_delta: u64, game_delta: Option<u64>) -> Option<f64> {
     let game = game_delta?;
-    if capacity_delta == 0 {
+    if capacity_delta == 0 || idle_delta > capacity_delta {
         return None;
     }
     let busy = capacity_delta.saturating_sub(idle_delta);
@@ -53,7 +55,8 @@ pub(crate) fn engine_pid(instance: &str) -> Option<u32> {
 }
 
 /// One tick's GPU work done by processes other than the game: the summed utilisation of every engine
-/// instance whose pid is not a game pid, clamped to 0..=100. `None` when the game's pids are unknown
+/// instance whose pid is not a game pid, clamped to 0..=100. This is a SUM over every engine type and
+/// every adapter (an iGPU and a dGPU add up), not a share of one GPU; read it as "other GPU work". `None` when the game's pids are unknown
 /// (cannot tell the game's work from the rest) or no instance was readable.
 pub(crate) fn other_gpu_pct<'a>(
     instances: impl IntoIterator<Item = (&'a str, f64)>,
@@ -175,7 +178,7 @@ pub(crate) fn parse_game_processes(buf: &[u8], key: &str) -> Option<Vec<GameProc
         if len > 0 && len.is_multiple_of(2) {
             let start = ptr.checked_sub(base)?;
             let bytes = buf.get(start..start.checked_add(len)?)?;
-            let units: Vec<u16> = bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+            let units: Vec<u16> = bytes.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect();
             if name_key(&String::from_utf16_lossy(&units)) == key {
                 let user = i64::from_le_bytes(rd(buf, off + OFF_USER)?).max(0) as u64;
                 let kernel = i64::from_le_bytes(rd(buf, off + OFF_KERNEL)?).max(0) as u64;
@@ -339,11 +342,9 @@ impl GpuEngineReader {
             self.pending = GpuEngineQuery::open();
         }
         self.ticks = self.ticks.wrapping_add(1);
-        let r = self.cur.as_ref()?.read_other(&mut self.scratch, game_pids);
-        if r.is_none() {
-            self.ticks = 0; // a failed read re-opens next tick
-        }
-        r
+        // A failed read is unread; the query is replaced at the next re-expansion (at most one new
+        // wildcard query per GPU_REEXPAND_TICKS, so a PC with no readable engines never opens one per tick).
+        self.cur.as_ref()?.read_other(&mut self.scratch, game_pids)
     }
 }
 
@@ -428,8 +429,9 @@ mod tests {
         assert!((pct - 15.0).abs() < 1e-9, "{pct}");
         // The game read higher than the machine's busy time (interval skew): floor at 0, never negative.
         assert_eq!(other_cpu_pct(cap, cap * 9 / 10, Some(cap / 2)), Some(0.0));
-        // Idle larger than capacity (bad delta) cannot go past the range either way.
-        assert_eq!(other_cpu_pct(cap, cap * 2, Some(0)), Some(0.0));
+        // Idle larger than capacity is an impossible delta: unread, never a zero.
+        assert_eq!(other_cpu_pct(cap, cap * 2, Some(0)), None);
+        assert_eq!(other_cpu_pct(cap, cap, Some(0)), Some(0.0), "all idle is a real zero");
         assert_eq!(other_cpu_pct(cap, 0, Some(0)), Some(100.0));
     }
 
