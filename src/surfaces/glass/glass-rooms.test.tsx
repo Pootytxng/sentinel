@@ -640,11 +640,15 @@ describe("Home: one entry point for 'something's wrong'", () => {
     expect(screen.getByTestId("paramedic")).toBeTruthy();
   });
 
-  it("with no recorded game there is no card, so the header button still opens Problems", () => {
+  it("with no recorded game the card is still mounted (day-one first look), says what it is for, and the header button raises it instead of opening Problems", async () => {
     const p = home({ sessions: [] });
-    expect(screen.queryByTestId("paramedic")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
-    expect(p.onOpenProblems).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("paramedic")).toBeTruthy();
+    expect(screen.getByText("A game running badly or crashing? Compy can look at what changed on this PC.")).toBeTruthy();
+    // Nothing is read until the user asks.
     expect(invoked).not.toContain("paramedic_diagnose");
+    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
+    await waitFor(() => expect(invoked).toContain("paramedic_diagnose"));
+    expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
+    expect(p.onOpenProblems).not.toHaveBeenCalled();
   });
 });

@@ -1941,6 +1941,7 @@ pub fn run() {
             intelligence::what_changed_between,
             intelligence::get_intelligence_headline,
             paramedic::paramedic_diagnose,
+            paramedic::first_look::paramedic_first_look,
             intelligence_patterns::get_intelligence_patterns,
             component_evidence::get_component_evidence,
             experiment::get_experiment_gate,

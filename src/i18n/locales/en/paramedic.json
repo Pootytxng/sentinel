@@ -1,5 +1,104 @@
 {
   "label": "What Compy found",
+  "firstLook": {
+    "door": {
+      "sub": "A game running badly or crashing? Compy can look at what changed on this PC."
+    },
+    "lead": "Compy has no earlier sessions to compare with yet, but it can look at what changed on this PC.",
+    "looking": "Looking at what changed on this PC…",
+    "when": {
+      "title": "When did it start?",
+      "today": "Today",
+      "thisWeek": "This week",
+      "thisMonth": "This month",
+      "always": "It's always been like this",
+      "dontKnow": "I don't know"
+    },
+    "title": "What Compy found on this PC",
+    "told": {
+      "title": "What you told Compy",
+      "today": "You said it started today. Compy looked back to {{from}}, in case a change came just before you noticed.",
+      "thisWeek": "You said it started this week. Compy looked back to {{from}}, in case a change came just before you noticed.",
+      "thisMonth": "You said it started this month. Compy looked back to {{from}}, in case a change came just before you noticed.",
+      "always": "You said it has always been like this.",
+      "dontKnow": "You didn't say when it started, so Compy looked at the last 30 days, back to {{from}}."
+    },
+    "alwaysBody": "Changes made recently came after it started, so Compy didn't list them.",
+    "group": {
+      "touch": "Changes that touch games",
+      "more": "Show {{n}} more",
+      "other": "Other changes"
+    },
+    "change": {
+      "gpuChanged": "Your graphics driver changed from {{from}} to {{to}} on {{when}}.",
+      "gpuInstalled": "Windows installed graphics driver {{to}} on {{when}}. Compy can't see which version it replaced.",
+      "gpuInstalledBare": "Windows recorded a graphics driver install on {{when}}. Compy can't see which version it replaced.",
+      "viaUpdate": "Windows Update delivered it.",
+      "windowsUpdate": "Windows installed {{kb}} on {{when}}.",
+      "windowsUpdateNoKb": "Windows installed an update on {{when}}.",
+      "otherDrivers_one": "Windows installed {{count}} other driver ({{classes}}), the latest on {{when}}.",
+      "otherDrivers_other": "Windows installed {{count}} other drivers ({{classes}}), the latest on {{when}}.",
+      "programs_one": "{{count}} program was installed on {{day}}: {{names}}.",
+      "programs_other": "{{count}} programs were installed on {{day}}: {{names}}.",
+      "programsMore": "{{count}} programs were installed on {{day}}: {{names}} and {{more}} more.",
+      "updatesMinor": "Windows also installed security definition updates ({{n}}) and Store app updates ({{m}}). They are counted here, not listed.",
+      "updatesUnclassified_one": "Windows installed {{count}} update that Compy couldn't classify.",
+      "updatesUnclassified_other": "Windows installed {{count}} updates that Compy couldn't classify."
+    },
+    "how": {
+      "gpuDriver": "Check it: Device Manager, Display adapters, Properties, Driver tab. Roll Back Driver there returns to the earlier version when Windows kept it. Your choice; Compy won't do it.",
+      "windowsUpdate": "Check it: Settings, Windows Update, Update history. Uninstall updates there can remove some updates. Your choice; Compy won't do it.",
+      "programs": "Check it: Settings, Apps, Installed apps. You can uninstall a program there.",
+      "otherDrivers": "Check it: Device Manager shows each device's driver version on its Driver tab."
+    },
+    "none": {
+      "gpuDriver": "Windows recorded no graphics driver version change in this period.",
+      "windowsUpdate": "Windows recorded no quality, feature or driver update in this period.",
+      "programs": "No program with a recorded install date was installed in this period."
+    },
+    "nothing": "Compy found no dated change in this period. That doesn't mean nothing is wrong: Compy hasn't measured how any game runs.",
+    "unread": "Compy couldn't read everything for this period, so it can't say that nothing changed. What it couldn't see is listed below.",
+    "limit": {
+      "title": "What Compy couldn't see",
+      "cantSee": "Compy couldn't see {{what}}: {{why}}.",
+      "partial": "Compy saw only part of {{what}}: {{why}}.",
+      "classes": "Compy reads graphics, audio, network and chipset driver installs only, not other drivers.",
+      "noInstallDate": "Compy can't see Store apps, or programs that don't record an install date ({{n}} here).",
+      "gameNotPicked": "Compy didn't look at any game's files, because no game was picked.",
+      "what": {
+        "driver": "when drivers were installed",
+        "windowsUpdate": "which Windows updates were installed",
+        "programs": "which programs were installed",
+        "gameFiles": "a game's files"
+      },
+      "why": {
+        "accessDenied": "Windows needs administrator rights to show that log",
+        "logEmpty": "that Windows log is empty or switched off",
+        "logMissing": "this PC has no such Windows log",
+        "readFailed": "Windows' event-log tool didn't run",
+        "timedOut": "reading it took too long",
+        "recordsUnreadable": "Windows returned {{n}} records Compy couldn't read",
+        "registry": "the list of installed programs couldn't be opened",
+        "notRead": "Compy didn't look it up for this answer",
+        "tookTooLong": "reading took too long, so Compy went on without it",
+        "readerFailed": "the reader stopped unexpectedly",
+        "partialTimedOut": "reading ran out of time, so only the newest records were read",
+        "partialRowCap": "the log holds more records than Compy reads, so older ones are missing",
+        "partialUnparsed": "{{n}} records couldn't be read",
+        "partialOutputCapped": "the log was too long to read in full",
+        "partialRegistry": "{{n}} registry entries couldn't be opened",
+        "partialCoverage": "Windows' log only goes back to {{from}}",
+        "other": "it couldn't be read"
+      }
+    },
+    "cantTell": {
+      "title": "What Compy can't tell yet",
+      "body": "Compy hasn't seen a game run yet, so it can't tell whether anything runs worse than before, or which of these changes matters.",
+      "measure": "Compy can measure a game while you play. Start a capture in Live, play for about 10 minutes, then press Something's wrong again."
+    },
+    "changeWhen": "Change when it started",
+    "footer": "Compy lists what it can see on this PC. It doesn't say what is causing the problem until it has measured the game."
+  },
   "door": {
     "button": "Something's wrong",
     "sub": "Compy looks at what changed and tells you what it finds.",

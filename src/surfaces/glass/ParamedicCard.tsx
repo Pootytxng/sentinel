@@ -17,6 +17,7 @@ import type {
   ParamedicWhen,
 } from "../../types";
 import { useDates } from "./GamesRoom";
+import { ParamedicFirstLook, firstLookApplies } from "./ParamedicFirstLook";
 
 type T = ReturnType<typeof useTranslation>["t"];
 type Dates = ReturnType<typeof useDates>;
@@ -1082,7 +1083,7 @@ type View =
 /** The answer region counts as "more below" when more than this many px are still hidden under its bottom edge. */
 const MORE_SLACK_PX = 4;
 
-export function ParamedicCard({ launch = 0, onOpenProblems }: { launch?: number; onOpenProblems?: () => void } = {}) {
+export function ParamedicCard({ launch = 0, onOpenProblems, noGames = false }: { launch?: number; onOpenProblems?: () => void; noGames?: boolean } = {}) {
   const { t } = useTranslation();
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
@@ -1172,7 +1173,7 @@ export function ParamedicCard({ launch = 0, onOpenProblems }: { launch?: number;
   return (
     <section ref={sectionRef} tabIndex={-1} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
       <div className="gl-card-top">
-        <p className="gl-card-sub">{t("paramedic.door.sub")}</p>
+        <p className="gl-card-sub">{noGames ? t("paramedic.firstLook.door.sub") : t("paramedic.door.sub")}</p>
         <div className="gl-para-actions">
           {/* Busy: aria-disabled, not disabled, so keyboard focus is not lost; a click while busy is ignored. */}
           <button
@@ -1224,13 +1225,16 @@ export function ParamedicCard({ launch = 0, onOpenProblems }: { launch?: number;
             onScroll={measure}
           >
             <div className="gl-para-body" aria-live="polite">
-              <Answer d={answer} ctx={ctx} />
+              {/* No usable history: with no game recorded the first look is the whole answer; with a game that
+                  has too few sessions it follows the measured "can't tell yet". */}
+              {!(answer.state.kind === "cant-tell" && answer.state.why.kind === "no-sessions") && <Answer d={answer} ctx={ctx} />}
+              {firstLookApplies(answer) && <ParamedicFirstLook />}
               {answer.mixed_sessions.length > 0 && (
                 <p className="gl-para-note" data-testid="paramedic-mixed">
                   {t("paramedic.problem.mixed", { count: answer.mixed_sessions.length, dates: answer.mixed_sessions.map((s) => dates.day(s)).join(", ") })}
                 </p>
               )}
-              <p className="gl-para-note">{t("paramedic.footer")}</p>
+              {!firstLookApplies(answer) && <p className="gl-para-note">{t("paramedic.footer")}</p>}
             </div>
           </div>
           {busy && (

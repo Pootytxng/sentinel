@@ -1,5 +1,104 @@
 {
   "label": "Compy 的发现",
+  "firstLook": {
+    "door": {
+      "sub": "游戏运行得不好或总是崩溃？Compy 可以看看这台电脑上有哪些地方变了。"
+    },
+    "lead": "Compy 还没有更早的游戏记录可以对比，但它可以看看这台电脑上有哪些地方变了。",
+    "looking": "正在查看这台电脑上有哪些地方变了…",
+    "when": {
+      "title": "是从什么时候开始的？",
+      "today": "今天",
+      "thisWeek": "这周",
+      "thisMonth": "这个月",
+      "always": "一直都是这样",
+      "dontKnow": "我不知道"
+    },
+    "title": "Compy 在这台电脑上的发现",
+    "told": {
+      "title": "你告诉 Compy 的",
+      "today": "你说是今天开始的。Compy 往回查到了 {{from}}，以防有变化发生在你察觉之前不久。",
+      "thisWeek": "你说是这周开始的。Compy 往回查到了 {{from}}，以防有变化发生在你察觉之前不久。",
+      "thisMonth": "你说是这个月开始的。Compy 往回查到了 {{from}}，以防有变化发生在你察觉之前不久。",
+      "always": "你说它一直都是这样。",
+      "dontKnow": "你没有说是什么时候开始的，所以 Compy 查看了最近 30 天，一直往回查到 {{from}}。"
+    },
+    "alwaysBody": "最近发生的变化都在它开始之后，所以 Compy 没有列出它们。",
+    "group": {
+      "touch": "与游戏有关的变化",
+      "more": "再显示 {{n}} 项",
+      "other": "其他变化"
+    },
+    "change": {
+      "gpuChanged": "你的显卡驱动在 {{when}} 从 {{from}} 变成了 {{to}}。",
+      "gpuInstalled": "Windows 在 {{when}} 安装了显卡驱动 {{to}}。Compy 看不到它替换的是哪个版本。",
+      "gpuInstalledBare": "Windows 在 {{when}} 记录了一次显卡驱动安装。Compy 看不到它替换的是哪个版本。",
+      "viaUpdate": "它是通过 Windows 更新送达的。",
+      "windowsUpdate": "Windows 在 {{when}} 安装了 {{kb}}。",
+      "windowsUpdateNoKb": "Windows 在 {{when}} 安装了一个更新。",
+      "otherDrivers_one": "Windows 安装了 {{count}} 个其他驱动（{{classes}}），最近的一次在 {{when}}。",
+      "otherDrivers_other": "Windows 安装了 {{count}} 个其他驱动（{{classes}}），最近的一次在 {{when}}。",
+      "programs_one": "{{day}} 安装了 {{count}} 个程序：{{names}}。",
+      "programs_other": "{{day}} 安装了 {{count}} 个程序：{{names}}。",
+      "programsMore": "{{day}} 安装了 {{count}} 个程序：{{names}}，另外还有 {{more}} 个。",
+      "updatesMinor": "Windows 还安装了安全定义更新（{{n}} 个）和应用商店应用更新（{{m}} 个）。这里只计数，不逐项列出。",
+      "updatesUnclassified_one": "Windows 安装了 {{count}} 个 Compy 无法分类的更新。",
+      "updatesUnclassified_other": "Windows 安装了 {{count}} 个 Compy 无法分类的更新。"
+    },
+    "how": {
+      "gpuDriver": "自己查看：设备管理器，显示适配器，属性，驱动程序选项卡。如果 Windows 保留了旧版本，那里的“回退驱动程序”可以回到之前的版本。是否这样做由你决定，Compy 不会代你操作。",
+      "windowsUpdate": "自己查看：设置，Windows 更新，更新历史记录。那里的“卸载更新”可以移除部分更新。是否这样做由你决定，Compy 不会代你操作。",
+      "programs": "自己查看：设置，应用，已安装的应用。你可以在那里卸载程序。",
+      "otherDrivers": "自己查看：设备管理器会在每个设备的驱动程序选项卡上显示它的驱动版本。"
+    },
+    "none": {
+      "gpuDriver": "这段时间内，Windows 没有记录到显卡驱动版本发生变化。",
+      "windowsUpdate": "这段时间内，Windows 没有记录到质量更新、功能更新或驱动更新。",
+      "programs": "这段时间内没有安装带安装日期记录的程序。"
+    },
+    "nothing": "这段时间内，Compy 没有找到带日期的变化。这不代表一切正常：Compy 还没有测量过任何游戏的运行情况。",
+    "unread": "这段时间内有些内容 Compy 没能读全，所以它不能说什么都没变。没能看到的部分列在下面。",
+    "limit": {
+      "title": "Compy 没能看到的",
+      "cantSee": "Compy 看不到{{what}}：{{why}}。",
+      "partial": "Compy 只看到了{{what}}的一部分：{{why}}。",
+      "classes": "Compy 只读取显卡、音频、网络和芯片组驱动的安装记录，不包括其他驱动。",
+      "noInstallDate": "Compy 看不到应用商店里的应用，也看不到没有记录安装日期的程序（这里有 {{n}} 个）。",
+      "gameNotPicked": "Compy 没有查看任何游戏的文件，因为还没有选定游戏。",
+      "what": {
+        "driver": "驱动是什么时候安装的",
+        "windowsUpdate": "安装了哪些 Windows 更新",
+        "programs": "安装了哪些程序",
+        "gameFiles": "游戏的文件"
+      },
+      "why": {
+        "accessDenied": "Windows 需要管理员权限才能显示那份日志",
+        "logEmpty": "那份 Windows 日志是空的，或已被关闭",
+        "logMissing": "这台电脑上没有这份 Windows 日志",
+        "readFailed": "Windows 的事件日志工具没有运行起来",
+        "timedOut": "读取花的时间太长",
+        "recordsUnreadable": "Windows 返回了 {{n}} 条 Compy 读不懂的记录",
+        "registry": "无法打开已安装程序的列表",
+        "notRead": "这次回答中 Compy 没有去查",
+        "tookTooLong": "读取花的时间太长，Compy 没有等它",
+        "readerFailed": "读取程序意外停止了",
+        "partialTimedOut": "读取超时，只读到了最新的记录",
+        "partialRowCap": "日志里的记录比 Compy 读取的多，更早的记录没有读到",
+        "partialUnparsed": "有 {{n}} 条记录读不了",
+        "partialOutputCapped": "日志太长，没有读完",
+        "partialRegistry": "有 {{n}} 个注册表项无法打开",
+        "partialCoverage": "Windows 的日志只能追溯到 {{from}}",
+        "other": "没能读取"
+      }
+    },
+    "cantTell": {
+      "title": "Compy 目前还说不准的",
+      "body": "Compy 还没有见过任何游戏运行，所以它说不准有没有哪个游戏比以前跑得更差，也说不准这些变化里哪一项有影响。",
+      "measure": "Compy 可以在你玩游戏时进行测量。请在“Live”里开始一次捕获，玩大约 10 分钟，然后再按一次“出问题了”。"
+    },
+    "changeWhen": "重新选择开始的时间",
+    "footer": "Compy 只列出它在这台电脑上能看到的内容。在测量过游戏之前，它不会下结论说问题出在哪里。"
+  },
   "door": {
     "button": "出问题了",
     "sub": "Compy 会查看哪些地方变了，并告诉你它的发现。",

@@ -190,11 +190,11 @@ export function HomeGlass({
           {/* The two flagship journeys, as equals (Constitution): same weight, each with its door's
               own glyph from the dock. */}
           {/* One entry point for "something's wrong": it opens the Paramedic card below and moves focus to it.
-              With no recorded game there is no card, so it keeps opening Problems (the guided questions),
-              which the card also links to ("Something else? Answer a few questions"). While the crash banner is
-              showing (pendingCare) the button keeps its old job, opening Problems, where that crash is handled;
-              the card is still there below it. */}
-          <button type="button" className="gl-ghost" onClick={noGames || pendingCare ? onOpenProblems : () => setLaunch((n) => n + 1)}>
+              The card is always there, even with no recorded game (it then asks "When did it start?" and reads
+              what changed on this PC); the guided questions stay one link away inside it ("Something else?
+              Answer a few questions"). While the crash banner is showing (pendingCare) the button keeps its old
+              job, opening Problems, where that crash is handled; the card is still there below it. */}
+          <button type="button" className="gl-ghost" onClick={pendingCare ? onOpenProblems : () => setLaunch((n) => n + 1)}>
             <NavGlyph name="problems" />
             {t("home.glass.actions.problem")}
           </button>
@@ -205,8 +205,9 @@ export function HomeGlass({
         </div>
       </header>
 
-      {/* PC Paramedic F1: the "Something's wrong" door. Idle until tapped; nothing is read on mount. */}
-      {!noGames && <ParamedicCard launch={launch} onOpenProblems={onOpenProblems} />}
+      {/* PC Paramedic F1: the "Something's wrong" door. Idle until tapped; nothing is read on mount. Always
+          mounted: a new user or a new game gets the first look (what changed on this PC), not a hidden door. */}
+      <ParamedicCard launch={launch} onOpenProblems={onOpenProblems} noGames={noGames} />
 
       {/* What Windows recorded (the Care observer's pointer). Its own band in the attention colour —
           never the accent fill, which on this page means "your most recent game". */}

@@ -30,6 +30,7 @@ use crate::intelligence::{self, SessionRef};
 
 mod changes;
 mod extras;
+pub(crate) mod first_look;
 mod mods;
 mod recovery;
 use changes::{ChangeRead, Limit};
