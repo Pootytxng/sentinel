@@ -14,10 +14,16 @@
 //!   mod): "contains a graphics mod ({name})".
 //! - `SettingsOnly` (settings, data, log, cache files, or a runtime DLL that is not itself a loader):
 //!   "contains a settings or data file from {name}; Compy can't tell whether the mod itself is installed".
-//! - Dates: "added to this folder around {first_seen}" (earliest NTFS creation time of the
-//!   non-volatile files), and "the mod's own log was last written on {last_log_write}" (nothing
-//!   stronger: it is when something last wrote that file). Never "installed on", "active", "running",
-//!   or "caused".
+//! - Dates: "files of this mod were created in this folder around {first_seen} (Windows resets this
+//!   when a folder is copied or moved, e.g. Steam's Move install folder, so it is not necessarily when
+//!   the mod was added)" (earliest NTFS creation time of the non-volatile files; a copy, move,
+//!   restore or re-download resets it, so it is NOT when the mod arrived), and "the mod's own log or
+//!   cache file was last written on {last_log_write}" (nothing stronger: it is when something last
+//!   wrote that file). Never "installed on", "added on", "active", "running", or "caused".
+//! - Calling: every scan is synchronous and cannot be pre-empted (a first directory read on a sleeping
+//!   disk or a network share can take longer than the budget). Call it from a blocking context
+//!   (`spawn_blocking`), never the UI or an async thread. When wiring, serialise a DTO built from
+//!   `ModScan::verdict()`, not `ModScan` itself: `found` empty on its own is not "no mods".
 //! - No result is "no mods" except `ModScan::verdict()` = `NoKnownMod`, which means "none of the mods
 //!   Compy knows were found in the folders it checked" (`coverage` says which).
 //!
@@ -160,17 +166,24 @@ pub(crate) struct ModFinding {
     /// Same as `kind.display_name()`.
     pub name: &'static str,
     pub strength: Strength,
-    /// A file that COULD load the mod is beside its files: the mod's identified loader, or a bare
-    /// DLL name it can load through. Never means the mod is loaded or running.
+    /// A file that COULD load the mod is in the folder of the game's exe (or, when no exe is known,
+    /// the scanned folder): the mod's identified loader, or a bare DLL name it can load through. A
+    /// loader file in any other folder does not count, because the game does not load from there.
+    /// Never means the mod is loaded or running.
     pub loader_file_present: bool,
     pub evidence: Vec<EvidenceFile>,
     /// Only a value that matches `^\d{1,4}(\.\d{1,4}){1,3}(-[A-Za-z0-9]{1,8})?$`.
     pub version: Option<String>,
-    /// Earliest creation time over the non-volatile evidence (settings, DLLs, data; not logs or caches).
+    /// Earliest NTFS creation time over the non-volatile evidence (settings, DLLs, data; not logs or
+    /// caches). CAVEAT: Windows resets creation time when a folder is copied or moved (Steam's "Move
+    /// install folder", a backup restore, a re-download or re-extract), so after any of those every
+    /// file carries that date. It is when these files were created in this folder, NOT necessarily
+    /// when the mod was added.
     pub first_seen: Option<DateTime<Utc>>,
     /// Latest modified time over the settings files only.
     pub settings_changed: Option<DateTime<Utc>>,
-    /// Latest modified time over the mod's own log / cache files: when something last wrote them.
+    /// Latest modified time over the mod's own log or cache file (a `*.dxvk-cache` is a shader cache,
+    /// not a log): when something last wrote it.
     pub last_log_write: Option<DateTime<Utc>>,
     pub notes: Vec<FindingNote>,
     /// Folders (relative to the scan root) the evidence was in; used to find a version text beside
@@ -210,14 +223,19 @@ impl ModFinding {
         }
     }
 
-    /// "added to this folder around <date>", from the earliest creation time of the non-volatile files.
+    /// The files' creation date, with the caveat that it is not necessarily when the mod was added.
     pub(crate) fn added_phrase(&self) -> Option<String> {
-        self.first_seen.map(|t| format!("added to this folder around {}", date_text(t)))
+        self.first_seen.map(|t| {
+            format!(
+                "files of this mod were created in this folder around {} (Windows resets this when a folder is copied or moved, e.g. Steam's Move install folder, so it is not necessarily when the mod was added)",
+                date_text(t)
+            )
+        })
     }
 
-    /// "the mod's own log was last written on <date>": when something last wrote its log or cache.
+    /// When something last wrote the mod's own log or cache file.
     pub(crate) fn last_log_phrase(&self) -> Option<String> {
-        self.last_log_write.map(|t| format!("the mod's own log was last written on {}", date_text(t)))
+        self.last_log_write.map(|t| format!("the mod's own log or cache file was last written on {}", date_text(t)))
     }
 }
 
@@ -293,6 +311,8 @@ pub(crate) enum ExeSearch {
     ForProgram,
     /// No program was named: up to four folders holding a game-like program were looked for.
     AnyGameLikeProgram,
+    /// The running process's own image path was given: its folder was scanned, nothing was searched.
+    FromProcessPath,
 }
 
 /// Which folders a scan actually looked at.
@@ -312,6 +332,9 @@ impl Coverage {
 }
 
 /// What a scan found. Read it through [`ModScan::verdict`]: `found` empty says nothing by itself.
+/// Scans run synchronously and cannot be pre-empted: call them from a blocking context
+/// (`spawn_blocking`), never the UI thread. Wiring should serialise a DTO built from `verdict()`, not
+/// this type.
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct ModScan {
@@ -583,6 +606,7 @@ pub(crate) fn match_signatures_at(listing: &[Entry], now: DateTime<Utc>) -> Vec<
         let mut evidence: Vec<EvidenceFile> = Vec::new();
         let mut dirs: Vec<String> = Vec::new();
         let mut strong = false;
+        let mut loader_top = false;
         let mut notes: Vec<FindingNote> = Vec::new();
         for e in listing.iter().filter(|e| !e.is_dir) {
             let lower = e.name.to_ascii_lowercase();
@@ -598,6 +622,7 @@ pub(crate) fn match_signatures_at(listing: &[Entry], now: DateTime<Utc>) -> Vec<
             };
             let Some((shown, role, own_loader)) = hit else { continue };
             strong |= own_loader || by_product;
+            loader_top |= (own_loader || by_product) && e.dir.is_empty();
             if !dirs.contains(&e.dir) {
                 dirs.push(e.dir.clone());
             }
@@ -622,12 +647,14 @@ pub(crate) fn match_signatures_at(listing: &[Entry], now: DateTime<Utc>) -> Vec<
         }
         evidence.sort_by_key(|x| x.file_name);
         evidence.truncate(MAX_EVIDENCE);
-        let loader_beside = listing.iter().any(|e| !e.is_dir && dirs.contains(&e.dir) && in_list(sig.loaders, &e.name.to_ascii_lowercase()));
+        // Only the top folder of the listing counts: it is the game exe's folder (the caller clears
+        // the flag when it is not), and the loader search order starts there.
+        let loader_beside = loader_top || listing.iter().any(|e| !e.is_dir && e.dir.is_empty() && in_list(sig.loaders, &e.name.to_ascii_lowercase()));
         let mut finding = ModFinding {
             kind: sig.kind,
             name: sig.kind.display_name(),
             strength: if strong { Strength::Strong } else { Strength::SettingsOnly },
-            loader_file_present: strong || loader_beside,
+            loader_file_present: loader_beside,
             evidence,
             version: None,
             first_seen: None,
@@ -796,7 +823,11 @@ fn parse_version_block(b: &[u8]) -> Result<VersionStrings, PeError> {
     let mut out = VersionStrings::default();
     let mut seen_any = false;
     for sfi in children(b, &root)?.into_iter().filter(|c| c.key == "StringFileInfo") {
-        for table in children(b, &sfi)?.into_iter().take(MAX_TABLES) {
+        let tables = children(b, &sfi)?;
+        if tables.len() > MAX_TABLES {
+            return Err(PeError::Malformed);
+        }
+        for table in tables {
             for s in children(b, &table)? {
                 let slot = match s.key.as_str() {
                     "ProductName" => &mut out.product,
@@ -873,7 +904,10 @@ impl<R: Read + Seek> PeReader<'_, R> {
 
     /// Entries of the resource directory at `dir_off` (relative to the resource base): at most
     /// `MAX_DIR_ENTRIES`, and whether there were more.
-    fn dir_entries(&mut self, secs: &[Section], res_rva: u64, res_size: u64, dir_off: u32) -> Result<(Vec<(u32, u32)>, bool), PeError> {
+    /// With `ids_only` the named entries (which come first) are skipped unread and only the id entries
+    /// are inspected, so any number of named types cannot hide an id like RT_VERSION; the entries
+    /// inspected are capped at `MAX_DIR_ENTRIES` either way.
+    fn dir_entries(&mut self, secs: &[Section], res_rva: u64, res_size: u64, dir_off: u32, ids_only: bool) -> Result<(Vec<(u32, u32)>, bool), PeError> {
         let dir_off = u64::from(dir_off);
         let hdr_end = dir_off.checked_add(16).ok_or(PeError::Malformed)?;
         if hdr_end > res_size {
@@ -881,16 +915,20 @@ impl<R: Read + Seek> PeReader<'_, R> {
         }
         let rva = res_rva.checked_add(dir_off).ok_or(PeError::Malformed)?;
         let h = self.read_at(rva_to_offset(secs, rva, 16)?, 16)?;
-        let n = usize::from(le16(&h, 12)?) + usize::from(le16(&h, 14)?);
+        let named = usize::from(le16(&h, 12)?);
+        let ids = usize::from(le16(&h, 14)?);
+        let (skip, n) = if ids_only { (named, ids) } else { (0, named + ids) };
         let take = n.min(MAX_DIR_ENTRIES);
         if take == 0 {
             return Err(PeError::NoResource);
         }
+        let skip_bytes = u64::try_from(skip).map_err(|_| PeError::Malformed)?.checked_mul(8).ok_or(PeError::Malformed)?;
         let bytes = u64::try_from(take).map_err(|_| PeError::Malformed)?.checked_mul(8).ok_or(PeError::Malformed)?;
-        if hdr_end.checked_add(bytes).ok_or(PeError::Malformed)? > res_size {
+        let start_rel = hdr_end.checked_add(skip_bytes).ok_or(PeError::Malformed)?;
+        if start_rel.checked_add(bytes).ok_or(PeError::Malformed)? > res_size {
             return Err(PeError::Malformed);
         }
-        let first = rva.checked_add(16).ok_or(PeError::Malformed)?;
+        let first = rva.checked_add(16).ok_or(PeError::Malformed)?.checked_add(skip_bytes).ok_or(PeError::Malformed)?;
         let e = self.read_at(rva_to_offset(secs, first, bytes)?, take * 8)?;
         let mut out = Vec::new();
         for i in 0..take {
@@ -900,7 +938,8 @@ impl<R: Read + Seek> PeReader<'_, R> {
     }
 
     fn run(&mut self) -> Result<VersionStrings, PeError> {
-        let not_pe = |e: PeError| if matches!(e, PeError::Truncated | PeError::Io) { PeError::NotPe } else { e };
+        // A file too short for the header is not a PE; a real I/O error is never "not a PE".
+        let not_pe = |e: PeError| if matches!(e, PeError::Truncated) { PeError::NotPe } else { e };
         let dos = self.read_at(0, 64).map_err(not_pe)?;
         if dos.get(..2) != Some(b"MZ".as_slice()) {
             return Err(PeError::NotPe);
@@ -947,19 +986,19 @@ impl<R: Read + Seek> PeReader<'_, R> {
             });
         }
         // Depth is exactly three: type -> name -> language -> data. No recursion.
-        let (l1, over1) = self.dir_entries(&secs, res_rva, res_size, 0)?;
+        let (l1, over1) = self.dir_entries(&secs, res_rva, res_size, 0, true)?;
         let Some(&(_, to_names)) = l1.iter().find(|(name, _)| *name == RT_VERSION) else {
             return Err(if over1 { PeError::Malformed } else { PeError::NoResource });
         };
         if to_names & HIGH_BIT == 0 {
             return Err(PeError::Malformed);
         }
-        let (l2, _) = self.dir_entries(&secs, res_rva, res_size, to_names & !HIGH_BIT)?;
+        let (l2, _) = self.dir_entries(&secs, res_rva, res_size, to_names & !HIGH_BIT, false)?;
         let &(_, to_langs) = l2.first().ok_or(PeError::NoResource)?;
         if to_langs & HIGH_BIT == 0 {
             return Err(PeError::Malformed);
         }
-        let (l3, _) = self.dir_entries(&secs, res_rva, res_size, to_langs & !HIGH_BIT)?;
+        let (l3, _) = self.dir_entries(&secs, res_rva, res_size, to_langs & !HIGH_BIT, false)?;
         let &(_, to_data) = l3.first().ok_or(PeError::NoResource)?;
         if to_data & HIGH_BIT != 0 {
             return Err(PeError::Malformed);
@@ -1160,6 +1199,17 @@ fn attributes_of(md: &std::fs::Metadata) -> (bool, bool) {
     (md.file_type().is_symlink(), false)
 }
 
+#[cfg(windows)]
+fn is_dir_attribute(md: &std::fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    md.file_attributes() & 0x10 != 0
+}
+
+#[cfg(not(windows))]
+fn is_dir_attribute(_md: &std::fs::Metadata) -> bool {
+    false
+}
+
 /// List one real directory without following links (`DirEntry::metadata` describes the entry itself),
 /// stopping at `cap` entries or the deadline, whichever comes first, while it is still enumerating.
 fn list_real(dir: &Path, deadline: Instant, cap: usize) -> RawListing {
@@ -1188,7 +1238,8 @@ fn list_real(dir: &Path, deadline: Instant, cap: usize) -> RawListing {
         let (is_link, offline) = attributes_of(&md);
         out.entries.push(RawEntry {
             name: e.file_name().to_string_lossy().into_owned(),
-            is_dir: md.is_dir(),
+            // A junction is a directory by attribute even though Rust calls it a link, not a dir.
+            is_dir: md.is_dir() || is_dir_attribute(&md),
             is_link,
             offline,
             size: md.len(),
@@ -1339,7 +1390,9 @@ fn attach_versions(root: &Path, listing: &[Entry], found: &mut [ModFinding], dea
 // Scans
 // ---------------------------------------------------------------------------------------------
 
-fn scan_with_deadline(root: &Path, deadline: Instant) -> ModScan {
+/// `exe_folder`: `root` is the folder of the game's exe (or the folder asked about, when no exe is
+/// known). Only then can a loader file be "present"; elsewhere the game does not load from it.
+fn scan_with_deadline(root: &Path, deadline: Instant, exe_folder: bool) -> ModScan {
     let list = |rel: &str, dl: Instant, cap: usize| list_real(&rel_path(root, rel), dl, cap);
     let Walked { mut listing, mut reasons } = match walk(&list, deadline, MAX_ENTRIES) {
         Ok(w) => w,
@@ -1350,6 +1403,9 @@ fn scan_with_deadline(root: &Path, deadline: Instant) -> ModScan {
     attach_versions(root, &listing, &mut found, deadline);
     for f in &mut found {
         f.dirs.clear();
+        if !exe_folder {
+            f.loader_file_present = false;
+        }
     }
     ModScan { status: status_of(reasons), found, coverage: Coverage::root_only() }
 }
@@ -1358,7 +1414,7 @@ fn scan_with_deadline(root: &Path, deadline: Instant) -> ModScan {
 /// `budget`. `Unreadable` when the folder cannot be read. Its `coverage` says only that folder was
 /// looked at: for an install root use `scan_install_folder`.
 pub(crate) fn scan_game_folder(root: &Path, budget: Duration) -> ModScan {
-    scan_with_deadline(root, Instant::now() + budget)
+    scan_with_deadline(root, deadline_after(budget), true)
 }
 
 /// What the search for the program's folder found, and every limit it hit.
@@ -1369,17 +1425,26 @@ struct ExeSearchResult {
     limits: Vec<PartialReason>,
 }
 
-/// Directories (other than `root`) below it, at most 5 deep, that hold a file `pred` accepts (given
-/// the lower-case file name). Bounded in entries and time; never follows reparse points; reports every
-/// limit it hit. With `stop_if_root_holds`, a program in `root` itself ends the search.
+/// Directories (other than `root`) below it, at most 7 deep, that hold a file `pred` accepts (given
+/// the lower-case file name). Bounded in entries and time; never follows reparse points; reports the
+/// limits it hit. Breadth-first: once `max_dirs` folders hold a match, the level of the last one is
+/// finished (so same-level duplicates are seen) and nothing deeper is searched; limits that arise only
+/// below that level are not reported, because a program found at a fully searched level is the one a
+/// process started from the install would be. When not enough matches exist, every limit is reported.
+/// With `stop_if_root_holds`, a program in `root` itself ends the search.
 fn find_dirs_holding(root: &Path, deadline: Instant, pred: &dyn Fn(&str) -> bool, max_dirs: usize, stop_if_root_holds: bool) -> ExeSearchResult {
-    const MAX_FIND_DEPTH: usize = 5;
+    const MAX_FIND_DEPTH: usize = 7;
     const MAX_FIND_ENTRIES: usize = 8000;
     let mut res = ExeSearchResult { dirs: Vec::new(), root_holds: false, more: false, limits: Vec::new() };
     let mut queue: VecDeque<(PathBuf, usize)> = VecDeque::new();
     queue.push_back((root.to_path_buf(), 0));
     let mut seen = 0usize;
+    let mut hit_depth: Option<usize> = None;
+    let mut depth_limited = false;
     while let Some((dir, depth)) = queue.pop_front() {
+        if hit_depth.is_some_and(|h| depth > h) {
+            break;
+        }
         if Instant::now() >= deadline {
             push_reason(&mut res.limits, PartialReason::ExeSearchLimited(SearchLimit::Time));
             break;
@@ -1401,13 +1466,17 @@ fn find_dirs_holding(root: &Path, deadline: Instant, pred: &dyn Fn(&str) -> bool
         let mut holds = false;
         for e in raw.entries {
             if e.is_link || (e.offline && e.is_dir) {
+                // A folder that was not entered (link, or cloud/offline) might hold the program.
+                if e.is_dir {
+                    push_reason(&mut res.limits, PartialReason::ExeSearchLimited(SearchLimit::Unreadable));
+                }
                 continue;
             }
             if e.is_dir {
                 if depth < MAX_FIND_DEPTH {
                     queue.push_back((dir.join(&e.name), depth + 1));
                 } else {
-                    push_reason(&mut res.limits, PartialReason::ExeSearchLimited(SearchLimit::Depth));
+                    depth_limited = true;
                 }
             } else if pred(&e.name.to_ascii_lowercase()) {
                 holds = true;
@@ -1422,6 +1491,9 @@ fn find_dirs_holding(root: &Path, deadline: Instant, pred: &dyn Fn(&str) -> bool
             } else {
                 res.dirs.push(dir);
             }
+            if hit_depth.is_none() && res.dirs.len() >= max_dirs {
+                hit_depth = Some(depth);
+            }
         }
         match raw.stopped {
             Some(Stop::Cap) => {
@@ -1435,11 +1507,20 @@ fn find_dirs_holding(root: &Path, deadline: Instant, pred: &dyn Fn(&str) -> bool
             None => {}
         }
     }
+    if depth_limited && hit_depth.is_none() {
+        push_reason(&mut res.limits, PartialReason::ExeSearchLimited(SearchLimit::Depth));
+    }
     if res.dirs.len() > max_dirs {
         res.more = true;
         res.dirs.truncate(max_dirs);
     }
     res
+}
+
+/// `now + budget`, without panicking on a budget too large to add (then one hour).
+fn deadline_after(budget: Duration) -> Instant {
+    let now = Instant::now();
+    now.checked_add(budget).unwrap_or_else(|| now + Duration::from_secs(3600))
 }
 
 /// A program that looks like a game or its launcher, not an installer, crash reporter or anti-cheat setup.
@@ -1518,13 +1599,15 @@ fn merge(scans: Vec<ModScan>, extra: Vec<PartialReason>, coverage: Coverage) -> 
 /// four folders that hold a game-like program), one shared time budget. A program folder that was not
 /// located, or a search that hit a limit, makes the result `Partial`; `coverage` says what was looked at.
 pub(crate) fn scan_install_folder(root: &Path, exe: Option<&str>, budget: Duration) -> ModScan {
-    let deadline = Instant::now() + budget;
-    let mut scans = vec![scan_with_deadline(root, deadline)];
+    let deadline = deadline_after(budget);
     let want = exe.map(|e| e.trim().to_ascii_lowercase()).filter(|e| !e.is_empty());
     let (search, kind) = match &want {
         Some(w) => (find_dirs_holding(root, deadline, &|n| n == w.as_str(), 1, true), ExeSearch::ForProgram),
         None => (find_dirs_holding(root, deadline, &is_game_like_exe, 4, false), ExeSearch::AnyGameLikeProgram),
     };
+    // The install root is the exe's folder when it holds the program (or no program was named).
+    let root_is_exe_folder = want.is_none() || search.root_holds;
+    let mut scans = vec![scan_with_deadline(root, deadline, root_is_exe_folder)];
     let mut extra = search.limits;
     if want.is_some() && !search.root_holds && search.dirs.is_empty() {
         push_reason(&mut extra, PartialReason::ExeFolderNotLocated);
@@ -1534,10 +1617,48 @@ pub(crate) fn scan_install_folder(root: &Path, exe: Option<&str>, budget: Durati
     }
     let scanned = u8::try_from(search.dirs.len()).unwrap_or(u8::MAX);
     for d in &search.dirs {
-        scans.push(scan_with_deadline(d, deadline));
+        scans.push(scan_with_deadline(d, deadline, true));
     }
     let coverage = Coverage { levels_below_folder: 2, exe_folders_scanned: scanned, exe_search: kind };
     merge(scans, extra, coverage)
+}
+
+/// A path for comparing, not for opening: no `\\?\`, one separator, no trailing one, lower-case.
+fn compare_form(p: &Path) -> String {
+    let s = p.to_string_lossy().replace('/', "\\");
+    let s = s.strip_prefix(r"\\?\").unwrap_or(&s);
+    s.trim_end_matches('\\').to_ascii_lowercase()
+}
+
+/// The folder of `image` when it lies under `root` (lexically; no `..`), else `None`.
+fn image_folder_under(root: &Path, image: &Path) -> Option<PathBuf> {
+    if image.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return None;
+    }
+    let parent = image.parent()?;
+    let (r, p) = (compare_form(root), compare_form(parent));
+    if r.is_empty() || !(p == r || p.starts_with(&format!("{r}\\"))) {
+        return None;
+    }
+    Some(parent.to_path_buf())
+}
+
+/// Scan a game's install folder and the folder of its exe, when the running process's image path is
+/// known: no search at all. When the path is not under the install folder it is not trusted, and the
+/// program's file name is searched for instead (`scan_install_folder`).
+pub(crate) fn scan_for_image(root: &Path, image: &Path, budget: Duration) -> ModScan {
+    let Some(folder) = image_folder_under(root, image) else {
+        let name = image.file_name().map(|n| n.to_string_lossy().into_owned());
+        return scan_install_folder(root, name.as_deref(), budget);
+    };
+    let deadline = deadline_after(budget);
+    let same = compare_form(&folder) == compare_form(root);
+    let mut scans = vec![scan_with_deadline(root, deadline, same)];
+    if !same {
+        scans.push(scan_with_deadline(&folder, deadline, true));
+    }
+    let coverage = Coverage { levels_below_folder: 2, exe_folders_scanned: u8::from(!same), exe_search: ExeSearch::FromProcessPath };
+    merge(scans, Vec::new(), coverage)
 }
 
 /// Scan the Steam install of the game whose process is `process_name`. A game that cannot be matched
@@ -1547,13 +1668,22 @@ pub(crate) fn scan_for_process(process_name: &str) -> ModScan {
 }
 
 pub(crate) fn scan_for_process_with(process_name: &str, budget: Duration) -> ModScan {
+    scan_for_process_image(process_name, None, budget)
+}
+
+/// As `scan_for_process_with`; with the process's image path no search is made (`scan_for_image`),
+/// and the name search is only the fallback.
+pub(crate) fn scan_for_process_image(process_name: &str, image: Option<&Path>, budget: Duration) -> ModScan {
     let exe = process_name.trim();
     if exe.is_empty() {
         return ModScan::unreadable(ModUnreadable::NoProcessName, Coverage::root_only());
     }
     match change_sources::find_steam_game(exe, change_sources::DEFAULT_BUDGET) {
         SteamLookup::Found(g) => match g.install_dir {
-            Some(dir) => scan_install_folder(Path::new(&dir), Some(exe), budget),
+            Some(dir) => match image {
+                Some(img) => scan_for_image(Path::new(&dir), img, budget),
+                None => scan_install_folder(Path::new(&dir), Some(exe), budget),
+            },
             None => ModScan::unreadable(ModUnreadable::NotInSteam, Coverage::root_only()),
         },
         SteamLookup::NotInSteam => ModScan::unreadable(ModUnreadable::NotInSteam, Coverage::root_only()),
@@ -1778,8 +1908,11 @@ mod tests {
         assert_eq!(x.first_seen, Some(t("2026-11-01T20:13:00Z")));
         assert_eq!(x.settings_changed, Some(t("2026-11-03T21:12:08Z")));
         assert_eq!(x.last_log_write, Some(t("2026-11-03T21:14:16Z")), "a log newer than every setting is its own date");
-        assert_eq!(x.added_phrase().as_deref(), Some("added to this folder around 2026-11-01"));
-        assert_eq!(x.last_log_phrase().as_deref(), Some("the mod's own log was last written on 2026-11-03"));
+        assert_eq!(
+            x.added_phrase().as_deref(),
+            Some("files of this mod were created in this folder around 2026-11-01 (Windows resets this when a folder is copied or moved, e.g. Steam's Move install folder, so it is not necessarily when the mod was added)")
+        );
+        assert_eq!(x.last_log_phrase().as_deref(), Some("the mod's own log or cache file was last written on 2026-11-03"));
         assert!(x.evidence.iter().all(|e| !e.file_name.starts_with("nvngx")), "NVIDIA's own files in the data folder are not evidence");
     }
 
@@ -1989,10 +2122,21 @@ mod tests {
     }
 
     fn build_pe(block: &[u8], pe32: bool) -> Pe {
+        build_pe_with(block, pe32, 0, false)
+    }
+
+    /// As `build_pe`, with `named` named type entries before the id entry in the first level, and
+    /// optionally a NAMED (not id) first entry in the second level.
+    fn build_pe_with(block: &[u8], pe32: bool, named: usize, l2_named: bool) -> Pe {
         const RAW: usize = 0x400;
         let opt_size = if pe32 { 224 } else { 240 };
         let (count_at, dirs_at) = if pe32 { (92, 96) } else { (108, 112) };
-        let res_size = 88 + block.len();
+        let id_entry = 16 + 8 * named;
+        let names_dir = id_entry + 8;
+        let langs = names_dir + 24;
+        let data_entry = langs + 24;
+        let block_off = data_entry + 16;
+        let res_size = block_off + block.len();
         let raw_size = res_size.div_ceil(0x200) * 0x200;
         let mut b = vec![0u8; RAW + raw_size];
         b[..2].copy_from_slice(b"MZ");
@@ -2011,38 +2155,94 @@ mod tests {
         put32(&mut b, sec + 12, 0x1000);
         put32(&mut b, sec + 16, u32::try_from(raw_size).unwrap());
         put32(&mut b, sec + 20, u32::try_from(RAW).unwrap());
-        // Resource tree: root(0) -> names(24) -> languages(48) -> data entry(72) -> block(88).
+        // Resource tree: root -> names -> languages -> data entry -> block.
+        put16(&mut b, RAW + 12, u16::try_from(named).unwrap());
         put16(&mut b, RAW + 14, 1);
-        put32(&mut b, RAW + 16, 16);
-        put32(&mut b, RAW + 20, 0x8000_0000 | 24);
-        put16(&mut b, RAW + 24 + 14, 1);
-        put32(&mut b, RAW + 24 + 16, 1);
-        put32(&mut b, RAW + 24 + 20, 0x8000_0000 | 48);
-        put16(&mut b, RAW + 48 + 14, 1);
-        put32(&mut b, RAW + 48 + 16, 0x409);
-        put32(&mut b, RAW + 48 + 20, 72);
-        put32(&mut b, RAW + 72, 0x1000 + 88);
-        put32(&mut b, RAW + 76, u32::try_from(block.len()).unwrap());
-        b[RAW + 88..RAW + 88 + block.len()].copy_from_slice(block);
+        for i in 0..named {
+            put32(&mut b, RAW + 16 + 8 * i, 0x8000_0000 | 0x7000); // a name offset, never read
+            put32(&mut b, RAW + 20 + 8 * i, 0x8000_0000 | u32::try_from(names_dir).unwrap());
+        }
+        put32(&mut b, RAW + id_entry, 16);
+        put32(&mut b, RAW + id_entry + 4, 0x8000_0000 | u32::try_from(names_dir).unwrap());
+        if l2_named {
+            put16(&mut b, RAW + names_dir + 12, 1);
+            put32(&mut b, RAW + names_dir + 16, 0x8000_0000 | 0x7000);
+        } else {
+            put16(&mut b, RAW + names_dir + 14, 1);
+            put32(&mut b, RAW + names_dir + 16, 1);
+        }
+        put32(&mut b, RAW + names_dir + 20, 0x8000_0000 | u32::try_from(langs).unwrap());
+        put16(&mut b, RAW + langs + 14, 1);
+        put32(&mut b, RAW + langs + 16, 0x409);
+        put32(&mut b, RAW + langs + 20, u32::try_from(data_entry).unwrap());
+        put32(&mut b, RAW + data_entry, u32::try_from(0x1000 + block_off).unwrap());
+        put32(&mut b, RAW + data_entry + 4, u32::try_from(block.len()).unwrap());
+        b[RAW + block_off..RAW + block_off + block.len()].copy_from_slice(block);
         Pe {
             bytes: b,
             opt_size_at: 0x54,
             nsec_at: 0x46,
             res_rva_at: opt + dirs_at + 16,
             res_size_at: opt + dirs_at + 20,
-            root_entry_at: RAW + 20,
-            dir2_entry_at: RAW + 44,
-            dir3_entry_at: RAW + 68,
-            data_rva_at: RAW + 72,
-            data_size_at: RAW + 76,
+            root_entry_at: RAW + id_entry + 4,
+            dir2_entry_at: RAW + names_dir + 20,
+            dir3_entry_at: RAW + langs + 20,
+            data_rva_at: RAW + data_entry,
+            data_size_at: RAW + data_entry + 4,
             ids_at: RAW + 14,
-            type_id_at: RAW + 16,
+            type_id_at: RAW + id_entry,
         }
     }
 
+    /// A reader that records every read the CALLER really makes (position, requested length), so the
+    /// bounds checks in the tests do not depend on the reader's own bookkeeping.
+    struct Spy<'a> {
+        inner: Cursor<&'a [u8]>,
+        log: Vec<(u64, usize)>,
+    }
+
+    impl Read for Spy<'_> {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.log.push((self.inner.position(), buf.len()));
+            self.inner.read(buf)
+        }
+    }
+
+    impl Seek for Spy<'_> {
+        fn seek(&mut self, p: SeekFrom) -> std::io::Result<u64> {
+            self.inner.seek(p)
+        }
+    }
+
+    /// Runs the reader over `bytes`; the reads returned are the ones a spy saw, not the reader's own record.
     fn read_pe(bytes: &[u8]) -> (Result<VersionStrings, PeError>, Vec<(u64, usize)>) {
         let len = bytes.len() as u64;
-        read_version_resource(&mut Cursor::new(bytes), len, far())
+        let mut spy = Spy { inner: Cursor::new(bytes), log: Vec::new() };
+        let (r, own) = read_version_resource(&mut spy, len, far());
+        assert_eq!(own.len(), spy.log.len(), "the reader's own record and the spy disagree");
+        (r, spy.log)
+    }
+
+    /// Fails every read after the first `ok_reads` ones with a real I/O error (not EOF).
+    struct Flaky {
+        inner: Cursor<Vec<u8>>,
+        ok_reads: usize,
+    }
+
+    impl Read for Flaky {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.ok_reads == 0 {
+                return Err(std::io::Error::other("simulated lock violation"));
+            }
+            self.ok_reads -= 1;
+            self.inner.read(buf)
+        }
+    }
+
+    impl Seek for Flaky {
+        fn seek(&mut self, p: SeekFrom) -> std::io::Result<u64> {
+            self.inner.seek(p)
+        }
     }
 
     fn opti_block() -> Vec<u8> {
@@ -2221,6 +2421,13 @@ mod tests {
         }
     }
 
+    /// For a large real file: the reader must read only a small fraction of it, whatever the headers claim.
+    fn assert_far_below(reads: &[(u64, usize)], file_len: usize, what: &str) {
+        let total: usize = reads.iter().map(|(_, l)| *l).sum();
+        assert!(total <= 100 * 1024 && total * 4 <= file_len, "{what}: read {total} bytes of a {file_len} byte file");
+        assert!(reads.iter().all(|(_, l)| *l <= MAX_RES_BLOCK as usize), "{what}: a single read over the data cap");
+    }
+
     fn assert_strings_capped(r: &Result<VersionStrings, PeError>) {
         if let Ok(v) = r {
             for s in [&v.product, &v.original_filename, &v.company] {
@@ -2233,15 +2440,13 @@ mod tests {
     fn a_real_system_dll_is_read_and_mutating_it_never_panics_or_reads_out_of_bounds() {
         let sys = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());
         let path = Path::new(&sys).join("System32").join("kernel32.dll");
-        let Ok(mut data) = std::fs::read(&path) else {
-            eprintln!("skipped: no kernel32.dll here");
-            return;
-        };
+        let mut data = std::fs::read(&path).unwrap_or_else(|e| panic!("the real-DLL test needs {}: {e}", path.display()));
         let (real, reads) = read_pe(&data);
         let v = real.expect("kernel32.dll's version resource parses");
         assert!(!v.product.is_empty() && !v.original_filename.is_empty(), "{v:?}");
         assert_eq!(kind_from_version_strings(&v), None, "a Windows DLL is not a mod");
         assert_reads_in_bounds(&reads, data.len(), "real");
+        assert_far_below(&reads, data.len(), "real");
         eprintln!("kernel32.dll: {} bytes read in {} reads (file {} bytes)", reads.iter().map(|(_, l)| l).sum::<usize>(), reads.len(), data.len());
         // The offsets the reader really touches: headers, section table, directories, the block.
         let mut positions: Vec<usize> = Vec::new();
@@ -2260,6 +2465,7 @@ mod tests {
             data[pos] = mutate(keep, r >> 8, rng.next());
             let (res, reads) = read_pe(&data);
             assert_reads_in_bounds(&reads, data.len(), "mutated");
+            assert_far_below(&reads, data.len(), "mutated");
             assert_strings_capped(&res);
             data[pos] = keep;
             iterations += 1;
@@ -2273,6 +2479,7 @@ mod tests {
             }
             let (res, reads) = read_pe(&data);
             assert_reads_in_bounds(&reads, data.len(), "multi");
+            assert_far_below(&reads, data.len(), "multi");
             assert_strings_capped(&res);
             for (p, k) in picks.iter().zip(keep) {
                 data[*p] = k;
@@ -2614,8 +2821,8 @@ mod tests {
         // The program is in the root itself: located, complete.
         put(&root, "Here.exe", b"MZ");
         assert_eq!(scan_install_folder(&root, Some("here.exe"), Duration::from_secs(10)).status, ScanStatus::Complete);
-        // The same program name in two folders: only the first is scanned, and it says so.
-        put(&root, "Other/Game-Win64-Shipping.exe", b"MZ");
+        // The same program name in two folders at the same depth: only the first is scanned, and it says so.
+        put(&root, "Other/Bin/Win64/Game-Win64-Shipping.exe", b"MZ");
         let two = scan_install_folder(&root, Some("game-win64-shipping.exe"), Duration::from_secs(10));
         assert!(reasons_of(&two).contains(&PartialReason::MoreExeFoldersNotScanned), "{two:?}");
         // No program named and more than four game-like folders: only four are scanned, and it says so.
@@ -2628,7 +2835,7 @@ mod tests {
         assert_eq!(scan.coverage.exe_folders_scanned, 4);
         // A program deeper than the search goes: the depth limit is reported.
         let deep = temp_root("exedeep");
-        put(&deep, "a/b/c/d/e/f/g/Game.exe", b"MZ");
+        put(&deep, "a/b/c/d/e/f/g/h/i/Game.exe", b"MZ");
         let scan = scan_install_folder(&deep, Some("game.exe"), Duration::from_secs(10));
         let r = reasons_of(&scan);
         assert!(r.contains(&PartialReason::ExeSearchLimited(SearchLimit::Depth)) && r.contains(&PartialReason::ExeFolderNotLocated), "{r:?}");
@@ -2910,6 +3117,359 @@ mod tests {
         }
     }
 
+    // ---- review r2: I/O errors, parser bounds, the exe-folder search, wording -------------------
+
+    #[test]
+    fn a_real_io_error_on_any_read_is_failed_io_never_no_resource() {
+        let pe = build_pe(&opti_block(), false).bytes;
+        let (good, reads) = read_pe(&pe);
+        assert!(good.is_ok());
+        for k in 0..reads.len() {
+            let mut fl = Flaky { inner: Cursor::new(pe.clone()), ok_reads: k };
+            let (r, _) = read_version_resource(&mut fl, pe.len() as u64, far());
+            assert_eq!(r.err(), Some(PeError::Io), "failing from read {k} (first read is the DOS header)");
+        }
+        let mut fl = Flaky { inner: Cursor::new(pe.clone()), ok_reads: reads.len() };
+        assert!(read_version_resource(&mut fl, pe.len() as u64, far()).0.is_ok());
+        // The mapping the probe uses: Io is a failed probe (so the scan is Partial), a short file is not a PE.
+        assert_eq!(probe_from_error(PeError::Io), Probe::Failed(ProbeFailure::Io));
+        assert_eq!(probe_from_error(PeError::NotPe), Probe::NoResource);
+        let (short, _) = read_pe(&pe[..30]);
+        assert_eq!(short.err(), Some(PeError::NotPe));
+        // And through the scan: a failed probe is DllUnreadable.
+        let mut reasons = Vec::new();
+        let mut l = vec![Entry { dir: String::new(), name: "dxgi.dll".into(), is_dir: false, size: 10, created: None, modified: None, offline: false, product: None }];
+        probe_dlls(Path::new("Z:\\no-such-root"), &mut l, far(), &mut reasons);
+        assert_eq!(reasons, vec![PartialReason::DllUnreadable]);
+    }
+
+    #[test]
+    fn more_than_four_string_tables_or_sixty_four_children_are_malformed_not_ignored() {
+        let table = |key: &str, strings: &[(&str, &str)]| node(key, 1, &[], 0, &strings.iter().map(|(k, v)| string_node(k, v)).collect::<Vec<_>>());
+        let block = |tables: Vec<Vec<u8>>| {
+            let sfi = node("StringFileInfo", 1, &[], 0, &tables);
+            node("VS_VERSION_INFO", 0, &[0; 52], 52, &[sfi])
+        };
+        let empty = |i: usize| table(&format!("0409{i:04X}"), &[("FileVersion", "1")]);
+        // ProductName only in the fifth of five tables: an error, never "no resource".
+        let five = block(vec![empty(0), empty(1), empty(2), empty(3), table("040904B0", &[("ProductName", "OptiScaler")])]);
+        assert_eq!(parse_version_block(&five).err(), Some(PeError::Malformed));
+        // The same in the fourth of four: read.
+        let four = block(vec![empty(0), empty(1), empty(2), table("040904B0", &[("ProductName", "OptiScaler")])]);
+        assert_eq!(parse_version_block(&four).unwrap().product, "OptiScaler");
+        // Exactly 64 children in a table: read; 65: Malformed (not silently cut).
+        let names: Vec<String> = (0..65).map(|i| format!("K{i}")).collect();
+        let pairs = |n: usize| -> Vec<(&str, &str)> { names[..n].iter().map(|k| (k.as_str(), "v")).collect() };
+        let mut p64 = pairs(63);
+        p64.push(("ProductName", "OptiScaler"));
+        assert_eq!(parse_version_block(&block(vec![table("040904B0", &p64)])).unwrap().product, "OptiScaler");
+        let mut p65 = pairs(64);
+        p65.push(("ProductName", "OptiScaler"));
+        assert_eq!(parse_version_block(&block(vec![table("040904B0", &p65)])).err(), Some(PeError::Malformed));
+    }
+
+    #[test]
+    fn children_with_tiny_or_zero_lengths_inside_a_table_are_typed_errors() {
+        // A child of `actual` bytes whose header claims `declared` bytes.
+        let with_child = |declared: usize, actual: usize| {
+            let mut raw = vec![0u8; actual];
+            put16(&mut raw, 0, u16::try_from(declared).unwrap());
+            let table = node("040904B0", 1, &[], 0, &[raw]);
+            let sfi = node("StringFileInfo", 1, &[], 0, &[table]);
+            node("VS_VERSION_INFO", 0, &[0; 52], 52, &[sfi])
+        };
+        for (declared, actual) in [(0usize, 8usize), (2, 8), (5, 8), (6, 6), (7, 7)] {
+            assert_eq!(parse_version_block(&with_child(declared, actual)).err(), Some(PeError::Malformed), "wLength {declared}");
+        }
+        // wLength 8 (and 9, with a stray byte) is a header and an empty key: well formed, names nothing.
+        for w in [8usize, 9] {
+            assert_eq!(parse_version_block(&with_child(w, w)).err(), Some(PeError::NoResource), "wLength {w}");
+        }
+        // A last child whose aligned end passes the table's end (odd text lengths): still read.
+        for n in 0..10 {
+            let text = "a".repeat(n) + "z";
+            let v = parse_version_block(&version_block(&[("ProductName", &text)])).unwrap();
+            assert_eq!(v.product, text);
+        }
+        // A string with no NUL and a wValueLength over 128 units is cut at 128; one that counts BYTES
+        // instead of units overruns its node and is Malformed.
+        let long = "x".repeat(200).encode_utf16().flat_map(u16::to_le_bytes).collect::<Vec<u8>>();
+        let s = node("ProductName", 1, &long, 200, &[]);
+        let table = node("040904B0", 1, &[], 0, &[s]);
+        let b = node("VS_VERSION_INFO", 0, &[0; 52], 52, &[node("StringFileInfo", 1, &[], 0, &[table])]);
+        assert_eq!(parse_version_block(&b).unwrap().product.len(), MAX_STRING_UNITS);
+        let value = utf16z("OptiScaler");
+        let bytes_len = u16::try_from(value.len()).unwrap();
+        let s = node("ProductName", 1, &value, bytes_len, &[]);
+        let table = node("040904B0", 1, &[], 0, &[s]);
+        let b = node("VS_VERSION_INFO", 0, &[0; 52], 52, &[node("StringFileInfo", 1, &[], 0, &[table])]);
+        assert_eq!(parse_version_block(&b).err(), Some(PeError::Malformed));
+    }
+
+    #[test]
+    fn named_resource_types_cannot_hide_the_version_resource() {
+        for named in [1usize, 64, 65, 70, 300] {
+            let pe = build_pe_with(&opti_block(), false, named, false);
+            let (r, reads) = read_pe(&pe.bytes);
+            assert_eq!(kind_from_version_strings(&r.unwrap_or_else(|e| panic!("{named} named types: {e:?}"))), Some(ModKind::OptiScaler), "{named}");
+            assert_reads_in_bounds(&reads, pe.bytes.len(), "named");
+        }
+        // A level-2 first entry that is a NAMED entry is the "first name": still read.
+        let pe = build_pe_with(&opti_block(), true, 0, true);
+        assert_eq!(kind_from_version_strings(&read_pe(&pe.bytes).0.unwrap()), Some(ModKind::OptiScaler));
+        // A named-entry count that runs past the resource is Malformed, never a long skip or a read.
+        let mut pe = build_pe(&opti_block(), false);
+        put16(&mut pe.bytes, pe.ids_at - 2, 65_535);
+        let (r, reads) = read_pe(&pe.bytes);
+        assert_eq!(r.err(), Some(PeError::Malformed));
+        assert_reads_in_bounds(&reads, pe.bytes.len(), "named count");
+        assert!(reads.len() <= 5, "headers, section table and the first directory header only");
+    }
+
+    #[test]
+    fn data_that_straddles_a_section_or_exceeds_its_raw_size_is_malformed() {
+        let block = opti_block();
+        let sec = 0x58 + 240;
+        // Raw size smaller than what the resource needs (virtual size bigger): the block does not fit.
+        let mut pe = build_pe(&block, false);
+        put32(&mut pe.bytes, sec + 8, 0x10000);
+        put32(&mut pe.bytes, sec + 16, 0x100);
+        let (r, reads) = read_pe(&pe.bytes);
+        assert_eq!(r.err(), Some(PeError::Malformed));
+        assert_reads_in_bounds(&reads, pe.bytes.len(), "raw<virtual");
+        // A range that spans two sections (the first cut at 0x100, a second starting right there).
+        let mut pe = build_pe(&block, false);
+        put32(&mut pe.bytes, sec + 16, 0x100);
+        put16(&mut pe.bytes, pe.nsec_at, 2);
+        put32(&mut pe.bytes, sec + 40 + 8, 0x200);
+        put32(&mut pe.bytes, sec + 40 + 12, 0x1100);
+        put32(&mut pe.bytes, sec + 40 + 16, 0x200);
+        put32(&mut pe.bytes, sec + 40 + 20, 0x500);
+        let (r, reads) = read_pe(&pe.bytes);
+        assert_eq!(r.err(), Some(PeError::Malformed), "a block across two sections is not read");
+        assert_reads_in_bounds(&reads, pe.bytes.len(), "two sections");
+        // The data range ends one byte past the resource directory's declared size.
+        let mut pe = build_pe(&block, false);
+        let size = u32::from_le_bytes(pe.bytes[pe.res_size_at..pe.res_size_at + 4].try_into().unwrap());
+        put32(&mut pe.bytes, pe.res_size_at, size - 1);
+        assert_eq!(read_pe(&pe.bytes).0.err(), Some(PeError::Malformed));
+    }
+
+    fn pe_len(block: &[u8]) -> usize {
+        build_pe(block, false).bytes.len()
+    }
+
+    #[test]
+    fn odd_pe32_plus_headers_are_typed_errors() {
+        let block = opti_block();
+        let count_at = 0x58 + 108;
+        let mut pe = build_pe(&block, false);
+        put16(&mut pe.bytes, pe.opt_size_at, 100);
+        let (r, reads) = read_pe(&pe.bytes);
+        assert!(r.is_err(), "SizeOfOptionalHeader 100 is shorter than the data directories");
+        assert_reads_in_bounds(&reads, pe.bytes.len(), "opt 100");
+        for (count, ok) in [(0u32, false), (2, false), (3, true), (16, true), (0xFFFF_FFFF, true)] {
+            let mut pe = build_pe(&block, false);
+            put32(&mut pe.bytes, count_at, count);
+            let (r, reads) = read_pe(&pe.bytes);
+            assert_eq!(r.is_ok(), ok, "NumberOfRvaAndSizes {count:#x}: {r:?}");
+            if !ok {
+                assert_eq!(r.err(), Some(PeError::NoResource));
+            }
+            assert_reads_in_bounds(&reads, pe.bytes.len(), "count");
+        }
+        // e_lfanew at the last 24 bytes, one byte short of them, and inside the section table.
+        let len = pe_len(&block);
+        for at in [len - 24, len - 23, 0x150, 0x3FF] {
+            let mut pe = build_pe(&block, false);
+            put32(&mut pe.bytes, 0x3c, u32::try_from(at).unwrap());
+            let (r, reads) = read_pe(&pe.bytes);
+            assert_eq!(r.err(), Some(PeError::NotPe), "e_lfanew {at:#x}");
+            assert_reads_in_bounds(&reads, pe.bytes.len(), "lfanew");
+        }
+    }
+
+    /// A UE-shaped install: the exe at depth 3, and a Content tree far deeper than the search goes.
+    fn ue_tree(tag: &str, with_exe: bool) -> PathBuf {
+        let root = temp_root(tag);
+        if with_exe {
+            put(&root, "Game/Binaries/Win64/Game-Win64-Shipping.exe", b"MZ");
+        } else {
+            put(&root, "Game/Binaries/Win64/readme.txt", b"x");
+        }
+        put(&root, "Game/Content/a/b/c/d/e/f/g/h/asset.uasset", b"x");
+        put(&root, "Engine/Plugins/p/q/r/s/t/u/v/w/x.bin", b"x");
+        put(&root, "Launcher.exe", b"MZ");
+        root
+    }
+
+    #[test]
+    fn an_exe_found_at_a_fully_searched_level_is_complete_whatever_lies_deeper() {
+        let root = ue_tree("ue_found", true);
+        let scan = scan_install_folder(&root, Some("Game-Win64-Shipping.exe"), Duration::from_secs(10));
+        assert_eq!(scan.status, ScanStatus::Complete, "{scan:?}");
+        assert!(matches!(scan.verdict(), Verdict::NoKnownMod { .. }));
+        assert_eq!((scan.coverage.exe_search, scan.coverage.exe_folders_scanned), (ExeSearch::ForProgram, 1));
+        // A mod beside that exe is found there.
+        put(&root, "Game/Binaries/Win64/ReShade64.dll", b"x");
+        let scan = scan_install_folder(&root, Some("game-win64-shipping.exe"), Duration::from_secs(10));
+        assert_eq!(kinds(&scan.found), vec![ModKind::ReShade]);
+        assert!(scan.found[0].loader_file_present);
+        assert_eq!(scan.status, ScanStatus::Complete);
+        // The search itself: nothing below the hit level is reported, even with a bare deadline-free budget.
+        let s = find_dirs_holding(&root, far(), &|n| n == "game-win64-shipping.exe", 1, true);
+        assert!(s.limits.is_empty() && s.dirs.len() == 1 && !s.more, "{:?}", s.limits);
+        // Same depth duplicates are still seen.
+        put(&root, "Game/Binaries/Other/Game-Win64-Shipping.exe", b"MZ");
+        let s = find_dirs_holding(&root, far(), &|n| n == "game-win64-shipping.exe", 1, true);
+        assert!(s.more, "a second folder at the same depth must be reported");
+        // A duplicate DEEPER than the first hit is not where the process came from: not reported.
+        let root2 = ue_tree("ue_found2", true);
+        put(&root2, "Game/Binaries/Win64/x/y/Game-Win64-Shipping.exe", b"MZ");
+        let s = find_dirs_holding(&root2, far(), &|n| n == "game-win64-shipping.exe", 1, true);
+        assert!(!s.more && s.limits.is_empty());
+        for d in [root, root2] {
+            let _ = std::fs::remove_dir_all(d);
+        }
+    }
+
+    #[test]
+    fn an_exe_that_is_not_found_reports_both_that_and_the_depth_limit() {
+        let root = ue_tree("ue_absent", false);
+        let scan = scan_install_folder(&root, Some("Game-Win64-Shipping.exe"), Duration::from_secs(10));
+        let r = reasons_of(&scan);
+        assert!(r.contains(&PartialReason::ExeFolderNotLocated) && r.contains(&PartialReason::ExeSearchLimited(SearchLimit::Depth)), "{r:?}");
+        assert!(matches!(scan.verdict(), Verdict::PartlyScanned { .. }));
+        // An exe at depth 7 (the limit) is still found; at depth 9 it is not.
+        let at7 = temp_root("ue_d7");
+        put(&at7, "a/b/c/d/e/f/g/Game.exe", b"MZ");
+        assert_eq!(scan_install_folder(&at7, Some("game.exe"), Duration::from_secs(10)).status, ScanStatus::Complete);
+        for d in [root, at7] {
+            let _ = std::fs::remove_dir_all(d);
+        }
+    }
+
+    #[test]
+    fn with_no_program_named_the_search_stops_below_the_level_that_filled_it() {
+        let root = temp_root("any_full");
+        for i in 0..4 {
+            put(&root, &format!("d{i}/g{i}.exe"), b"MZ");
+        }
+        put(&root, "d0/x/y/z/1/2/3/4/5/deep.bin", b"x");
+        let scan = scan_install_folder(&root, None, Duration::from_secs(10));
+        assert_eq!(scan.status, ScanStatus::Complete, "{scan:?}");
+        assert_eq!(scan.coverage.exe_folders_scanned, 4);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_link_or_offline_folder_in_the_exe_search_is_a_recorded_limit() {
+        let root = temp_root("search_link");
+        let target = temp_root("search_link_target");
+        put(&target, "x.exe", b"MZ");
+        let made = std::process::Command::new("cmd.exe")
+            .args(["/c", "mklink", "/J"])
+            .arg(root.join("linked"))
+            .arg(&target)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        if matches!(made, Ok(s) if s.success()) {
+            let s = find_dirs_holding(&root, far(), &|n| n == "x.exe", 1, true);
+            assert!(s.dirs.is_empty() && !s.root_holds, "the junction's target must not be searched");
+            assert!(s.limits.contains(&PartialReason::ExeSearchLimited(SearchLimit::Unreadable)), "{:?}", s.limits);
+            let _ = std::fs::remove_dir(root.join("linked"));
+        } else {
+            eprintln!("skipped: could not create a junction here");
+        }
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&target);
+    }
+
+    #[test]
+    fn a_known_image_path_needs_no_search() {
+        let root = ue_tree("image", true);
+        put(&root, "Game/Binaries/Win64/ReShade.ini", b"x");
+        let image = root.join("Game").join("Binaries").join("Win64").join("Game-Win64-Shipping.exe");
+        let scan = scan_for_image(&root, &image, Duration::from_secs(10));
+        assert_eq!(scan.status, ScanStatus::Complete, "{scan:?}");
+        assert_eq!(kinds(&scan.found), vec![ModKind::ReShade]);
+        assert_eq!((scan.coverage.exe_search, scan.coverage.exe_folders_scanned), (ExeSearch::FromProcessPath, 1));
+        // The exe in the install folder itself: one scan.
+        let scan = scan_for_image(&root, &root.join("Launcher.exe"), Duration::from_secs(10));
+        assert_eq!((scan.coverage.exe_search, scan.coverage.exe_folders_scanned), (ExeSearch::FromProcessPath, 0));
+        assert_eq!(scan.status, ScanStatus::Complete);
+        // A path outside the install folder, or with `..`, is not trusted: the name is searched for.
+        let outside = std::env::temp_dir().join("elsewhere").join("Game-Win64-Shipping.exe");
+        let scan = scan_for_image(&root, &outside, Duration::from_secs(10));
+        assert_eq!(scan.coverage.exe_search, ExeSearch::ForProgram);
+        assert_eq!(kinds(&scan.found), vec![ModKind::ReShade], "found by name instead");
+        let dotted = root.join("Game").join("..").join("Game").join("Binaries").join("Win64").join("Game-Win64-Shipping.exe");
+        assert_eq!(scan_for_image(&root, &dotted, Duration::from_secs(10)).coverage.exe_search, ExeSearch::ForProgram);
+        // A folder that cannot be read is Partial, not clean.
+        let gone = root.join("Game").join("Binaries").join("Nope").join("Game-Win64-Shipping.exe");
+        let scan = scan_for_image(&root, &gone, Duration::from_secs(10));
+        assert!(matches!(scan.verdict(), Verdict::PartlyScanned { .. }), "{scan:?}");
+        // The comparison form.
+        assert_eq!(compare_form(Path::new(r"\\?\C:\Games\X\")), r"c:\games\x");
+        assert!(image_folder_under(Path::new(r"C:\Games\X"), Path::new(r"c:/games/x/Bin/a.exe")).is_some());
+        assert!(image_folder_under(Path::new(r"C:\Games\X"), Path::new(r"C:\Games\XY\a.exe")).is_none(), "a sibling with the same prefix is not under it");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_loader_file_counts_only_in_the_exe_folder() {
+        // Pure: only the top folder of the listing counts.
+        let found = m(&[f("Mods", "ReShade64.dll")]);
+        assert_eq!((found[0].strength, found[0].loader_file_present), (Strength::Strong, false));
+        let found = m(&[f("", "ReShade64.dll")]);
+        assert!(found[0].loader_file_present);
+        let found = m(&[f("Mods", "ReShade.ini"), f("", "d3d11.dll")]);
+        assert!(found[0].loader_file_present, "a loader name in the exe folder could load the settings' mod");
+        assert!(!m(&[f("Mods", "ReShade.ini"), f("Mods", "d3d11.dll")])[0].loader_file_present);
+        // Real folders: the DLL in the install root while the exe is deeper is not "present".
+        let root = temp_root("loader_exe");
+        put(&root, "Game/Bin/Game.exe", b"MZ");
+        put(&root, "ReShade64.dll", b"x");
+        let scan = scan_install_folder(&root, Some("game.exe"), Duration::from_secs(10));
+        assert_eq!((kinds(&scan.found), scan.found[0].loader_file_present), (vec![ModKind::ReShade], false));
+        put(&root, "Game/Bin/SpecialK64.dll", b"x");
+        let scan = scan_install_folder(&root, Some("game.exe"), Duration::from_secs(10));
+        let special = scan.found.iter().find(|x| x.kind == ModKind::SpecialK).unwrap();
+        assert!(special.loader_file_present, "beside the exe");
+        assert!(!scan.found.iter().find(|x| x.kind == ModKind::ReShade).unwrap().loader_file_present);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_budget_too_large_to_add_does_not_panic() {
+        assert!(deadline_after(Duration::MAX) > Instant::now());
+        let root = temp_root("hugebudget");
+        put(&root, "ReShade.ini", b"x");
+        assert_eq!(scan_game_folder(&root, Duration::MAX).status, ScanStatus::Complete);
+        assert_eq!(scan_install_folder(&root, None, Duration::MAX).status, ScanStatus::Complete);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn the_creation_date_wording_carries_its_caveat_everywhere_it_is_documented() {
+        let found = m(&[f("", "ReShade.ini")]);
+        let phrase = found[0].added_phrase().unwrap();
+        assert!(phrase.starts_with("files of this mod were created in this folder around 2026-11-03"), "{phrase}");
+        for must in ["Windows resets this when a folder is copied or moved", "Steam's Move install folder", "not necessarily when the mod was added"] {
+            assert!(phrase.contains(must), "{phrase}");
+        }
+        assert!(!phrase.contains("added to this folder"));
+        let src = include_str!("game_mods.rs");
+        let code = &src[..src.find("#[cfg(test)]\nmod tests").unwrap()];
+        assert!(code.matches("resets creation time when a folder is copied or moved").count() == 1, "the field doc carries the caveat");
+        assert!(code.contains("Windows resets this when a folder is copied or moved"), "the module doc carries the caveat");
+        assert!(code.contains("log or cache file"));
+        assert_eq!(found[0].last_log_phrase(), None);
+        let cache = m(&[f("", "g.exe.dxvk-cache")]);
+        assert_eq!(cache[0].last_log_phrase().as_deref(), Some("the mod's own log or cache file was last written on 2026-11-03"));
+    }
+
     // ---- the real PC (run on demand) -----------------------------------------------------------
 
     fn steam_libraries() -> Vec<PathBuf> {
@@ -2951,11 +3511,35 @@ mod tests {
         )
     }
 
+    /// The process name a game would run as, guessed from its files (a shipping exe first, else the
+    /// shallowest game-like one): the name search is then made as it would be for a running process.
+    fn guess_exe(root: &Path) -> Option<String> {
+        let mut best: Option<((bool, usize), String)> = None;
+        let mut queue = VecDeque::from([(root.to_path_buf(), 0usize)]);
+        while let Some((dir, depth)) = queue.pop_front() {
+            let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+            for e in rd.flatten() {
+                let name = e.file_name().to_string_lossy().into_owned();
+                let Ok(ft) = e.file_type() else { continue };
+                if ft.is_dir() && !ft.is_symlink() && depth < 5 {
+                    queue.push_back((e.path(), depth + 1));
+                } else if ft.is_file() && is_game_like_exe(&name.to_ascii_lowercase()) {
+                    let key = (!name.to_ascii_lowercase().contains("shipping"), depth);
+                    if best.as_ref().is_none_or(|(k, _)| key < *k) {
+                        best = Some((key, name));
+                    }
+                }
+            }
+        }
+        best.map(|(_, n)| n)
+    }
+
     /// `cargo test --lib game_mods::tests::real_pc_report -- --ignored --nocapture`
     #[test]
     #[ignore = "reads this PC's real Steam game folders; run on demand"]
     fn real_pc_report() {
         let mut times: Vec<u128> = Vec::new();
+        let (mut named_complete, mut named_partial, mut named_ms): (usize, Vec<String>, Vec<u128>) = (0, Vec::new(), Vec::new());
         let (mut complete, mut games) = (0usize, 0usize);
         let mut partial: Vec<String> = Vec::new();
         let mut unreadable = 0usize;
@@ -2967,6 +3551,19 @@ mod tests {
                 let s = Instant::now();
                 let scan = scan_install_folder(&g.path(), None, DEFAULT_BUDGET);
                 times.push(s.elapsed().as_millis());
+                if let Some(name) = guess_exe(&g.path()) {
+                    let s = Instant::now();
+                    let named = scan_install_folder(&g.path(), Some(&name), DEFAULT_BUDGET);
+                    named_ms.push(s.elapsed().as_millis());
+                    match &named.status {
+                        ScanStatus::Complete => named_complete += 1,
+                        ScanStatus::Partial { reasons } => named_partial.push(format!("{} as {name}: {reasons:?}", g.file_name().to_string_lossy())),
+                        ScanStatus::Unreadable(_) => {}
+                    }
+                    for x in &named.found {
+                        println!("HIT(as {name}) {} -> {}", g.file_name().to_string_lossy(), describe(x));
+                    }
+                }
                 match &scan.status {
                     ScanStatus::Complete => complete += 1,
                     ScanStatus::Partial { reasons } => partial.push(format!("{}: {reasons:?}", g.file_name().to_string_lossy())),
@@ -2990,7 +3587,16 @@ mod tests {
             }
         }
         times.sort_unstable();
-        println!("games scanned: {games} | complete {complete} | partial {} | unreadable {unreadable}", partial.len());
+        println!("games scanned: {games} | (no program named) complete {complete} | partial {} | unreadable {unreadable}", partial.len());
+        named_ms.sort_unstable();
+        println!(
+            "as a running process would be searched (guessed name): complete {named_complete} | partial {} | max {} ms",
+            named_partial.len(),
+            named_ms.last().copied().unwrap_or(0)
+        );
+        for p in &named_partial {
+            println!("PARTIAL(named) {p}");
+        }
         for p in &partial {
             println!("PARTIAL {p}");
         }
