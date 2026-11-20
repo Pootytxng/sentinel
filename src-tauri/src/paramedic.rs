@@ -708,7 +708,7 @@ fn judge_game(sess: &[&SessionFacts]) -> Vec<Judgement> {
 pub(crate) const SITTING_GAP_MINUTES: i64 = 10;
 
 /// True unless a stamp recorded on BOTH launches differs: graphics driver, Windows build, power plan, refresh
-/// rate, number of changes Compy had on, hardware, frame-cap state. A change between two launches is never
+/// rate, number of changes Compy had on, hardware, frame-cap state. A missing stamp may still join, but the\n/// caller compares a joining launch with EVERY member of the sitting. A change between two launches is never
 /// hidden inside a sitting. (The game's own build is not recorded on a session row, so it cannot be compared.)
 fn same_stamps(a: &SessionFacts, b: &SessionFacts) -> bool {
     fn same<T: PartialEq>(x: &Option<T>, y: &Option<T>) -> bool {
@@ -737,14 +737,17 @@ fn same_stamps(a: &SessionFacts, b: &SessionFacts) -> bool {
 /// fragments). Two judgeable launches are two sessions, whatever the gap. A row with no recorded end (an older
 /// row), one that ended because monitoring was stopped, or one whose process identity changed is never joined:
 /// Compy cannot tell those from a fresh sitting.
-fn group_sittings(rows: &[&SessionFacts]) -> Vec<Vec<usize>> {
+fn group_sittings(rows: &[&SessionFacts], mixed: &[DateTime<Utc>]) -> Vec<Vec<usize>> {
     let mut out: Vec<Vec<usize>> = Vec::new();
     for i in 0..rows.len() {
         let in_group = out.last().map_or(0, |g: &Vec<usize>| g.iter().filter(|&&k| rows[k].judgeable()).count());
         let joins = i > 0
             && rows[i - 1].ended == Some(crate::session_boundary::SessionEnd::ProcessExited)
             && matches!((rows[i - 1].end(), rows[i].start()), (Some(e), Some(b)) if b - e <= chrono::Duration::minutes(SITTING_GAP_MINUTES))
-            && same_stamps(rows[i - 1], rows[i])
+            // Against EVERY launch already in the sitting, so X / not recorded / Y never chain into one.
+            && out.last().is_none_or(|g| g.iter().all(|&k| same_stamps(rows[k], rows[i])))
+            // A row Compy could not attribute to one game (suspected mixed) between the two launches breaks it.
+            && !matches!((rows[i - 1].start(), rows[i].start()), (Some(a), Some(b)) if mixed.iter().any(|m| *m >= a && *m <= b))
             && in_group + usize::from(rows[i].judgeable()) <= 1;
         match out.last_mut() {
             Some(g) if joins => g.push(i),
@@ -769,10 +772,15 @@ fn game_rows<'a>(inp: &'a DiagnoseInputs, game: &str) -> Vec<&'a SessionFacts> {
     v
 }
 
+/// The start of every row the capture flag marks as possibly two games, whatever game it names.
+fn mixed_starts(inp: &DiagnoseInputs) -> Vec<DateTime<Utc>> {
+    inp.sessions.iter().filter(|s| s.mixed).filter_map(|s| s.start()).collect()
+}
+
 /// One game's sessions, oldest first, one per sitting (see `group_sittings`, `sitting_value`).
 fn game_sessions<'a>(inp: &'a DiagnoseInputs, game: &str) -> Vec<&'a SessionFacts> {
     let rows = game_rows(inp, game);
-    group_sittings(&rows).iter().map(|g| rows[sitting_value(&rows, g)]).collect()
+    group_sittings(&rows, &mixed_starts(inp)).iter().map(|g| rows[sitting_value(&rows, g)]).collect()
 }
 
 /// When the sitting that `s` stands for began and ended: from its first launch's start to its last launch's
@@ -780,7 +788,7 @@ fn game_sessions<'a>(inp: &'a DiagnoseInputs, game: &str) -> Vec<&'a SessionFact
 /// at the rough launch's OWN start, so a change made between two launches is never read as coming after.
 fn sitting_span(inp: &DiagnoseInputs, s: &SessionFacts) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
     let rows = game_rows(inp, &s.game);
-    let groups = group_sittings(&rows);
+    let groups = group_sittings(&rows, &mixed_starts(inp));
     let Some(g) = groups.iter().find(|g| g.iter().any(|&i| rows[i].started_at == s.started_at)) else {
         return (s.start(), s.end());
     };
@@ -791,7 +799,7 @@ fn sitting_span(inp: &DiagnoseInputs, s: &SessionFacts) -> (Option<DateTime<Utc>
 /// The started_at of the one launch standing for each of this game's sittings that held more than one launch.
 fn merged_sitting_reps(inp: &DiagnoseInputs, game: &str) -> Vec<String> {
     let rows = game_rows(inp, game);
-    group_sittings(&rows).iter().filter(|g| g.len() > 1).map(|g| rows[sitting_value(&rows, g)].started_at.clone()).collect()
+    group_sittings(&rows, &mixed_starts(inp)).iter().filter(|g| g.len() > 1).map(|g| rows[sitting_value(&rows, g)].started_at.clone()).collect()
 }
 
 /// A sitting's evidence comes from ALL its launches, now that at most one of them is judged for frame rate:
@@ -852,7 +860,7 @@ fn with_sitting_evidence(inp: &DiagnoseInputs) -> DiagnoseInputs {
             .collect();
         idx.sort_by_key(|&i| inp.sessions[i].start());
         let rows: Vec<&SessionFacts> = idx.iter().map(|&i| &inp.sessions[i]).collect();
-        for g in group_sittings(&rows).iter().filter(|g| g.len() > 1) {
+        for g in group_sittings(&rows, &mixed_starts(inp)).iter().filter(|g| g.len() > 1) {
             let rep = idx[sitting_value(&rows, g)];
             let members: Vec<&SessionFacts> =
                 std::iter::once(&inp.sessions[rep]).chain(g.iter().map(|&k| idx[k]).filter(|&i| i != rep).map(|i| &inp.sessions[i])).collect();
@@ -1287,7 +1295,9 @@ struct Cand {
     /// M: a measured size past its fixed line.
     m: bool,
     /// R (F3): the sessions after the episode recovered in a way that supports this candidate (the driver
-    /// changed again, the PC was quiet). Independent of the timing: it is a later observation.
+    /// changed again, the PC was quiet). Independent of the timing: it is a later observation. It orders
+    /// candidates; it counts as a support (toward Likely) only for the background finding, where it is a
+    /// measured recovery of the same load figure (see `independent`).
     r: bool,
     /// C1: a rough session where this change was absent or below its line (or, F3, the recovered
     /// session still had it).
@@ -1312,8 +1322,9 @@ impl Cand {
     }
 
     fn independent(&self) -> usize {
-        // F3 review: a recovery observation (`r`) is NOT a support here. It orders candidates (`supports`),
-        // but no path to Likely exists that did not exist before the recovery slice.
+        // F3 review: for every finding but the background one a recovery observation (`r`) is NOT a support:
+        // it orders candidates (`supports`), but no path to Likely exists that did not exist before the
+        // recovery slice. The background finding is the one exception, below.
         if self.id == "background-load" {
             // Program starts (`d`) and a measured high load (`m`) are the same fact seen twice, so `d` never
             // counts here. The second, independent line is a measured recovery of the same kind (`r`) or
@@ -1729,7 +1740,14 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
     let x_clean = x_others.iter().any(|o| {
         (0..o.sess.len())
             .filter(|&j| o.judged[j].verdict == Verdict::Fired && o.sess[j].start().is_some_and(|t| t >= c.win_start))
-            .all(|j| o.sess[j].busy_starts < BUSY_START_MIN && o.sess[j].other_cpu_p90_pct.is_some())
+            .all(|j| {
+                let s = o.sess[j];
+                // Every recorded load figure under its kind's busy line: a busy PC in the other game's rough
+                // sessions may explain both games (the background finding owns that explanation).
+                s.busy_starts < BUSY_START_MIN
+                    && s.other_cpu_p90_pct.is_some()
+                    && LOAD_KINDS.iter().all(|k| k.read(s).is_none_or(|v| tenths(v) < tenths(k.busy_pct())))
+            })
     });
     // Sessions that ran normally on the new driver (any game, between the last normal session and the first
     // rough one), however thinly measured, weigh against it.
@@ -2016,7 +2034,13 @@ fn other_game_contrast(c: &Ctx, kind: LoadKind) -> bool {
 /// the recovery is measured on both sides.
 fn load_recovered(c: &Ctx, kind: LoadKind, base: f64) -> bool {
     let Some(last) = c.affected.iter().filter_map(|s| s.start()).max() else { return false };
-    c.sess.iter().copied().zip(c.judged).any(|(s, j)| {
+    // Only one of the two newest judged sessions counts (the rule a recovery itself follows): an older
+    // normal session followed by newer judged ones says nothing about how the PC is now.
+    let mut newest: Vec<usize> = (0..c.sess.len()).filter(|&i| c.judged[i].verdict != Verdict::Unjudged).collect();
+    newest.reverse();
+    newest.truncate(2);
+    newest.into_iter().any(|i| {
+        let (s, j) = (c.sess[i], &c.judged[i]);
         j.verdict == Verdict::Normal && s.start().is_some_and(|t| t > last) && kind.read(s).is_some_and(|v| classify_load(kind, v, base) == LoadHow::Same)
     })
 }
@@ -2175,8 +2199,8 @@ fn sitting_note(c: &Ctx, out: &mut Out) {
 
 fn detect_background(c: &Ctx, out: &mut Out) {
     let busy_rough: Vec<&SessionFacts> = c.affected.iter().copied().filter(|s| s.busy_starts >= BUSY_START_MIN).collect();
-    // Starts seen in a ROUGH session of the episode count as timing: this game's rough and partly measured
-    // sessions, and any other game's rough or partly rough ones since the last normal session. A heavy
+    // Starts seen in a ROUGH session of the episode count as timing: this game's own rough and partly measured
+    // sessions only (another game's are a display line, below). A heavy
     // build during a session that ran fine is evidence against, not timing, so a session judged Normal
     // never counts. The start recorder is names-only and misses programs already running, second copies of
     // a running name, bursts of more than four names and everything past 50 events, so an absence of
@@ -2191,7 +2215,7 @@ fn detect_background(c: &Ctx, out: &mut Out) {
     for o in &c.others {
         for (s, j) in o.sess.iter().copied().zip(&o.judged) {
             if j.would_fire && s.start().is_some_and(|t| t >= c.win_start) {
-                note_busy(s, &mut seen);
+                // Another game's starts are a display line only: they never date THIS game's problem.
                 if s.busy_starts >= BUSY_START_MIN {
                     other_seen.push((o.name.as_str(), s));
                 }
@@ -2215,6 +2239,9 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         .filter_map(|(k, s)| if let LoadState::Compared { how: LoadHow::High, base, .. } = s { Some((*k, *base)) } else { None })
         .collect();
     let high = !high_kinds.is_empty();
+    // A kind whose rough and normal figures both round to 0% says nothing worth a line ("about 0%, about the
+    // same as normal (0%)"): it is left out of every line. It still counts in the arithmetic above.
+    let shown = |st: &LoadState| !matches!(st, LoadState::Compared { rough, base, .. } if tenths(*rough) < 5 && tenths(*base) < 5);
     let compared: Vec<LoadState> = states.iter().map(|(_, s)| *s).filter(|s| matches!(s, LoadState::Compared { .. })).collect();
     // "About the same" is a contradiction only when NOTHING is high, EVERY compared kind is about the same and each
     // kind's mean agrees with its p90 (a p90 cannot see a burst shorter than a tenth of the session). With a high
@@ -2240,7 +2267,7 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         // Nothing to list as a finding. The figures are still worth saying, with their numbers: "about the same"
         // for every kind (with the means agreeing) sits with what Compy checked as unchanged; any other reading,
         // including a mix of the same and in between, is only listed under "also looked at".
-        for (kind, st) in &states {
+        for (kind, st) in states.iter().filter(|(_, st)| shown(st)) {
             if let LoadState::Compared { how, rough, base, .. } = st {
                 let mut a = vec![
                     ("kind", kind.code().to_string()),
@@ -2296,8 +2323,8 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         ));
     }
     evidence.extend(start_ev);
-    evidence.extend(states.iter().filter_map(|(k, st)| load_evidence(*k, *st, c.affected.len(), contradiction)));
-    if !compared.is_empty() {
+    evidence.extend(states.iter().filter(|(_, st)| shown(st)).filter_map(|(k, st)| load_evidence(*k, *st, c.affected.len(), contradiction)));
+    if compared.iter().any(shown) {
         // The figure is everything except the game: say so once.
         evidence.push(ev(EvidenceKind::Known, "figure-scope", "sessions", false, &[]));
     }

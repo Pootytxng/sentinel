@@ -661,21 +661,25 @@ fn a_frame_cap_change_alone_never_fires() {
 fn absent_process_starts_are_unknown_not_against_when_load_was_not_recorded() {
     let mut sess = steady(4);
     // Another game got rough after the last normal session and logged 21 build-tool starts; this game's
-    // rough session logged none.
+    // rough session logged 6.
     sess.extend((1..=4).map(|d| named(facts(&at_day(d, 12), 600, 600, 100.0, 50.0), "h")));
     let mut other = named(facts(&at_day(9, 12), 600, 600, 100.0, 30.0), "h");
     other.busy_starts = 21;
     sess.push(other);
-    sess.push(facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 30.0));
+    // The other game's starts alone never date THIS game's problem: no timing, no measured size, no finding.
+    let mut g_rough = facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 30.0);
+    sess.push(g_rough.clone());
+    assert!(diagnose(&inputs(sess.clone()), Complaint::Slow, Some("g")).findings.iter().all(|f| f.id != "background-load"));
+    g_rough.busy_starts = 6;
+    *sess.last_mut().unwrap() = g_rough;
     let d = diagnose(&inputs(sess.clone()), Complaint::Slow, Some("g"));
-    let bg = d.findings.iter().find(|f| f.id == "background-load").expect("starts seen in the episode are timing");
+    let bg = d.findings.iter().find(|f| f.id == "background-load").expect("starts seen in this game's rough session are timing");
     assert!(bg.evidence.iter().all(|e| !e.against), "an absence of starts is not evidence the PC was quiet");
     assert!(bg.evidence.iter().any(|e| e.code == "load-not-recorded" && e.kind == EvidenceKind::Unknown));
     assert_eq!(bg.confidence, Certainty::Possible);
     assert!(bg.in_play);
-    // F16: the count names what it counts. This game's own rough session had no starts, so there is no
-    // "starts-seen" line; the other game's rough session has its own line.
-    assert!(bg.evidence.iter().all(|e| e.code != "starts-seen"), "no start was recorded in this game's rough sessions");
+    // F16: the count names what it counts: this game's own line, and the other game's own line.
+    assert!(bg.evidence.iter().any(|e| e.code == "starts-seen"), "this game's rough session recorded starts");
     let seen = bg.evidence.iter().find(|e| e.code == "starts-seen-other").expect("timing");
     assert_eq!(seen.args["count"], "1", "only the rough sessions that had starts are counted");
     assert_eq!(seen.args["otherGame"], "h");
@@ -779,31 +783,97 @@ fn the_other_changes_dont_line_up_is_said_only_when_every_runner_up_is_contradic
     assert_eq!(d.why_first, Some("cross-game-lead"), "the second sentence would be false here");
 }
 
+/// Four normal sessions of `game` on the old driver, every one carrying processor load `cpu`.
+fn steady_old_with_cpu(game: &str, hour: u32, cpu: f64) -> Vec<SessionFacts> {
+    steady_on_old(game, hour).into_iter().map(|mut s| {
+        s.other_cpu_p90_pct = Some(cpu);
+        s.other_cpu_mean_pct = Some(cpu);
+        s
+    }).collect()
+}
+
+fn rough_with_cpu(game: &str, hour: u32, cpu: f64, starts: u32) -> SessionFacts {
+    let mut s = rough_on_new(game, hour);
+    s.other_cpu_p90_pct = Some(cpu);
+    s.other_cpu_mean_pct = Some(cpu);
+    s.busy_starts = starts;
+    s
+}
+
 #[test]
 fn two_likely_findings_are_a_tie() {
-    let mut sess = steady_on_old("g", 10);
-    for s in sess.iter_mut() {
-        s.other_cpu_p90_pct = Some(2.0);
-    }
-    // The second game's own measured contrast (high against quiet normals) is what lets the load finding reach Likely.
-    let mut h_old = steady_on_old("h", 12);
-    for s in h_old.iter_mut() {
-        s.other_cpu_p90_pct = Some(2.0);
-    }
-    sess.extend(h_old);
-    let mut g_rough = rough_on_new("g", 10);
-    g_rough.other_cpu_p90_pct = Some(22.0);
-    g_rough.busy_starts = 9;
-    sess.push(g_rough);
-    let mut h_rough = rough_on_new("h", 12);
-    h_rough.other_cpu_p90_pct = Some(22.0);
-    sess.push(h_rough);
+    // The driver's cross-game support is clean: h's rough session was measured quiet. The load finding's
+    // second support is k's own measured contrast (22% against 2%), and g's own starts date it.
+    let mut sess = steady_old_with_cpu("g", 10, 2.0);
+    sess.extend(steady_old_with_cpu("h", 12, 2.0));
+    sess.extend(steady_old_with_cpu("k", 14, 2.0));
+    sess.push(rough_with_cpu("g", 10, 22.0, 9));
+    sess.push(rough_with_cpu("h", 12, 2.0, 0));
+    sess.push(rough_with_cpu("k", 14, 22.0, 0));
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     assert_eq!(ids(&d), ["background-load", "gpu-driver-change"]);
     assert_eq!(certainties(&d), [Certainty::Likely, Certainty::Likely]);
     assert_eq!(d.why_first, Some("tie"));
 }
 
+#[test]
+fn another_games_busy_pc_cannot_support_the_driver_so_the_background_finding_leads() {
+    // The other game was rough after the same change, but at 22% other-program load against 2% in its normal
+    // sessions: the same busy PC may explain both games, so it is no independent support for the driver.
+    let mut sess = steady_old_with_cpu("g", 10, 2.0);
+    sess.extend(steady_old_with_cpu("h", 12, 2.0));
+    sess.push(rough_with_cpu("g", 10, 22.0, 9));
+    sess.push(rough_with_cpu("h", 12, 22.0, 0));
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert_eq!(ids(&d), ["background-load", "gpu-driver-change"]);
+    assert_eq!(certainties(&d), [Certainty::Likely, Certainty::Possible], "the driver stays Possible");
+    let driver = &d.findings[1];
+    assert!(driver.in_play, "it still lines up with the start: listed under the lead as also possible");
+    assert!(driver.evidence.iter().any(|e| e.code == "cross-game-confounded"));
+    // Each of the three kinds of load figure counts: a busy video engine in the other game confounds it too.
+    let mut sess = steady_old_with_cpu("g", 10, 2.0);
+    sess.extend(steady_old_with_cpu("h", 12, 2.0));
+    sess.push(rough_with_cpu("g", 10, 22.0, 9));
+    let mut h = rough_with_cpu("h", 12, 2.0, 0);
+    h.other_gpu_video_p90_pct = Some(10.0);
+    sess.push(h);
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    let driver = d.findings.iter().find(|f| f.id == "gpu-driver-change").expect("listed");
+    assert_eq!(driver.confidence, Certainty::Possible, "a video engine at its busy line is a busy PC too");
+    // Just under every busy line, with no starts, the other game's support is clean again.
+    let mut sess = steady_old_with_cpu("g", 10, 2.0);
+    sess.extend(steady_old_with_cpu("h", 12, 2.0));
+    sess.push(rough_with_cpu("g", 10, 22.0, 9));
+    let mut h = rough_with_cpu("h", 12, 14.9, 0);
+    h.other_gpu_3d_p90_pct = Some(19.9);
+    h.other_gpu_video_p90_pct = Some(9.9);
+    sess.push(h);
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    let driver = d.findings.iter().find(|f| f.id == "gpu-driver-change").expect("listed");
+    assert_eq!(driver.confidence, Certainty::Likely);
+}
+
+#[test]
+fn the_background_finding_is_dated_only_by_this_games_own_sessions() {
+    // g was rough with a high processor load and no program starts; h (another game) was rough with build
+    // starts and its own measured contrast. h's starts are a display line: g's finding has no timing.
+    let mut sess = steady_old_with_cpu("g", 10, 2.0);
+    sess.extend(steady_old_with_cpu("h", 12, 2.0));
+    sess.push(rough_with_cpu("g", 10, 22.0, 0));
+    sess.push(rough_with_cpu("h", 12, 22.0, 9));
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    let bg = bg_finding(&d).expect("listed");
+    assert_eq!(bg.confidence, Certainty::Possible);
+    assert!(!bg.in_play, "nothing dates it to this game's problem");
+    assert!(bg.evidence.iter().any(|e| e.code == "starts-seen-other"), "the other game's starts are still said");
+    // With a start in g's own rough session it is dated, and Likely with h's contrast.
+    let mut sess = steady_old_with_cpu("g", 10, 2.0);
+    sess.extend(steady_old_with_cpu("h", 12, 2.0));
+    sess.push(rough_with_cpu("g", 10, 22.0, 9));
+    sess.push(rough_with_cpu("h", 12, 22.0, 9));
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert_eq!(bg_finding(&d).expect("listed").confidence, Certainty::Likely);
+}
 #[test]
 fn with_no_game_named_a_game_with_too_few_sessions_never_hides_another_games_problem() {
     let mut sess = steady(4);
@@ -2359,12 +2429,50 @@ mod recovery_f3 {
         assert_eq!(p.last_full_normal_at.as_deref(), Some(p.last_normal_at.as_str()));
     }
 
+    #[test]
+    fn a_measured_recovery_is_a_support_for_the_background_finding_only() {
+        // For the background finding the two supports are a measured high load (`m`) and a second, independent
+        // measurement: its own measured recovery (`r`) or another game's own contrast (`x`, not confounded).
+        // Starts (`d`) are the same fact as `m` and never count. Likely = t && m && (r || x && !confounded) && !c1.
+        let mut likely_with_r_only = 0;
+        for bits in 0u32..128 {
+            let b = |i: u32| bits & (1 << i) != 0;
+            let (t, d, x, confounded, m, c1, r) = (b(0), b(1), b(2), b(3), b(4), b(5), b(6));
+            let cand = Cand {
+                id: "background-load",
+                t,
+                d,
+                x,
+                confounded,
+                m,
+                r,
+                c1,
+                since: When::Unknown,
+                fix: no_safe_change(),
+                evidence: Vec::new(),
+            };
+            let expected = if !t {
+                m.then_some(Certainty::Possible)
+            } else if m && (r || (x && !confounded)) && !c1 {
+                Some(Certainty::Likely)
+            } else {
+                Some(Certainty::Possible)
+            };
+            assert_eq!(cand.certainty(), expected, "t={t} d={d} x={x} conf={confounded} m={m} r={r} c1={c1}");
+            if expected == Some(Certainty::Likely) && r && !(x && !confounded) {
+                likely_with_r_only += 1;
+            }
+        }
+        assert!(likely_with_r_only > 0, "a measured recovery alone is a path to Likely for this finding");
+    }
     // ---- no path to Likely that did not exist before the recovery slice ----------------------------
     #[test]
-    fn a_recovery_adds_no_path_to_likely() {
-        // Every combination of the supports: Likely exactly when it has timing, two independent supports
-        // (a changed stamp, another game's roughness that is not confounded, a measured size) and nothing
-        // against it. The recovery observation `r` never changes the answer.
+    fn a_recovery_adds_no_path_to_likely_for_the_findings_other_than_background_load() {
+        // Every combination of the supports, for every finding but the background one: Likely exactly when it
+        // has timing, two independent supports (a changed stamp, another game's roughness that is not
+        // confounded, a measured size) and nothing against it. The recovery observation `r` never changes the
+        // answer. (The background finding is the one place a measured recovery IS a support: see
+        // `a_measured_recovery_is_a_support_for_the_background_finding_only`.)
         let mut likely_paths = 0;
         for bits in 0u32..64 {
             let b = |i: u32| bits & (1 << i) != 0;
@@ -2408,7 +2516,7 @@ mod recovery_f3 {
         for sess in scenarios {
             let after = run(sess.clone());
             let before = run(sess[..5].to_vec());
-            for f in after.findings.iter().filter(|f| f.confidence == Certainty::Likely) {
+            for f in after.findings.iter().filter(|f| f.confidence == Certainty::Likely && f.id != "background-load") {
                 assert!(
                     before.findings.iter().any(|b| b.id == f.id && b.confidence == Certainty::Likely),
                     "{} became Likely only because of the recovery",
@@ -4150,7 +4258,8 @@ fn another_kind_about_the_same_never_contradicts_a_high_kind() {
     assert!(f.in_play && f.confidence == Certainty::Possible);
     assert!(f.evidence.iter().all(|e| !e.against), "no weakens line");
     assert!(load_lines(f).contains(&("load-gpu3d", "same".to_string(), false)));
-    assert!(load_lines(f).contains(&("load-gpuvideo", "same".to_string(), false)));
+    // An idle engine (0% against 0%) has nothing to say: no line at all.
+    assert!(load_lines(f).iter().all(|l| l.0 != "load-gpuvideo"), "{:?}", load_lines(f));
     // The same with the high figure and nothing else recorded: no starts, so not in play, but still listed and not contradicted.
     let d = run_load(load_episode(4, [Some(2.0), None, Some(0.0)], [Some(30.0), None, Some(0.0)], 0));
     assert!(bg_finding(&d).is_some_and(|f| f.evidence.iter().all(|e| !e.against)));
@@ -4182,16 +4291,51 @@ fn about_the_same_is_a_contradiction_only_when_every_compared_kind_is_the_same_a
 
 #[test]
 fn readings_that_are_not_a_finding_are_still_shown_and_a_same_never_sits_with_unchanged_beside_an_in_between() {
-    // Processor 25 vs usual 12 (in between) with an idle video engine: no finding; both are "also looked at".
+    // Processor 25 vs usual 12 (in between) with an idle video engine: no finding; only the processor is "also looked at".
     let d = run_load(load_episode(4, [Some(12.0), None, Some(0.0)], [Some(25.0), None, Some(0.0)], 0));
     assert!(bg_finding(&d).is_none());
     let seen: Vec<(String, String)> = d.seen.iter().filter(|s| s.id == "load-seen").map(|s| (s.args["kind"].clone(), s.args["how"].clone())).collect();
-    assert_eq!(seen, [("load-cpu".to_string(), "between".to_string()), ("load-gpuvideo".to_string(), "same".to_string())]);
+    assert_eq!(seen, [("load-cpu".to_string(), "between".to_string())], "the idle video engine (0% against 0%) is not said");
     assert!(d.not_it.iter().all(|n| n.id != "background-load"), "never 'unchanged' for one kind while another is in between");
     // Every compared kind the same, means agreeing: unchanged, as before.
     let d = run_load(load_episode(4, [Some(2.0), None, Some(0.0)], [Some(3.0), None, Some(0.0)], 0));
-    assert_eq!(d.not_it.iter().filter(|n| n.id == "background-load").count(), 2);
+    assert_eq!(d.not_it.iter().filter(|n| n.id == "background-load").count(), 1, "the idle video engine (0% against 0%) is not said");
     assert!(d.seen.iter().all(|s| s.id != "load-seen"));
+}
+
+#[test]
+fn a_kind_whose_rough_and_normal_figures_both_round_to_zero_is_not_said_at_all() {
+    // Every compared kind idle on both sides: nothing about load is said (no finding, no unchanged line, no also-looked-at).
+    let d = run_load(load_episode(4, [Some(0.0), Some(0.2), Some(0.0)], [Some(0.4), Some(0.0), Some(0.0)], 0));
+    assert!(bg_finding(&d).is_none());
+    assert!(d.not_it.iter().all(|n| n.id != "background-load"), "{:?}", d.not_it);
+    assert!(d.seen.iter().all(|s| s.id != "load-seen"));
+    // 0.5% rounds to 1: that one is said. The one that is 0 on both sides is not.
+    let d = run_load(load_episode(4, [Some(0.0), Some(0.0), None], [Some(1.0), Some(0.0), None], 0));
+    let said: Vec<String> = d.not_it.iter().filter(|n| n.id == "background-load").map(|n| n.args["kind"].clone()).collect();
+    assert_eq!(said, ["load-cpu"]);
+    // With a finding the scope line and every kind line follow the same rule.
+    let d = run_load(load_episode(4, [Some(2.0), Some(0.0), Some(0.0)], [Some(30.0), Some(0.0), Some(0.0)], 9));
+    let f = bg_finding(&d).expect("listed");
+    assert_eq!(load_lines(f).len(), 1);
+    assert_eq!(f.evidence.iter().filter(|e| e.code == "figure-scope").count(), 1);
+    let d = run_load(load_episode(4, [Some(0.0), None, None], [Some(0.0), None, None], 9));
+    let f = bg_finding(&d).expect("starts are timing");
+    assert!(load_lines(f).is_empty() && f.evidence.iter().all(|e| e.code != "figure-scope"), "{:?}", f.evidence);
+}
+
+#[test]
+fn a_measured_recovery_must_be_one_of_the_two_newest_judged_sessions() {
+    let quiet = |at: &str| later_normal(at, [Some(2.0), None, None]);
+    let mut sess = load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 9);
+    sess.push(quiet("2026-10-25T10:00:00Z"));
+    sess.push(later_normal("2026-10-26T10:00:00Z", NONE3));
+    let d = run_load(sess.clone());
+    assert_eq!(bg_finding(&d).expect("listed").confidence, Certainty::Likely, "the quiet session is one of the two newest: {:?}", d.state);
+    // A third later session pushes the quiet one out of the two newest: it says nothing about how the PC is now.
+    sess.push(later_normal("2026-10-27T10:00:00Z", NONE3));
+    let d = run_load(sess);
+    assert_eq!(bg_finding(&d).expect("listed").confidence, Certainty::Possible, "{:?}", d.state);
 }
 
 #[test]
@@ -4591,7 +4735,7 @@ fn pair(first_end: Option<SessionEnd>, relaunch_at: &str) -> Vec<SessionFacts> {
 
 fn groups_of(rows: &[SessionFacts]) -> Vec<Vec<usize>> {
     let r: Vec<&SessionFacts> = rows.iter().collect();
-    group_sittings(&r)
+    group_sittings(&r, &[])
 }
 
 #[test]
@@ -4669,6 +4813,39 @@ fn launches_whose_recorded_stamps_differ_are_never_one_sitting() {
     assert_eq!(groups_of(&one_side), [vec![0, 1]]);
 }
 
+#[test]
+fn a_missing_stamp_never_chains_two_different_ones_into_one_sitting() {
+    let exited = Some(SessionEnd::ProcessExited);
+    let mut a = fragment("2026-10-03T10:00:00Z", 120, exited);
+    a.gpu_driver = Some("X".into());
+    let b = fragment("2026-10-03T10:03:00Z", 120, exited); // driver not recorded
+    let mut c = full("2026-10-03T10:08:00Z", 600);
+    c.gpu_driver = Some("Y".into());
+    // Link by link every pair would join (b says nothing), but X and Y are in one sitting: they stay apart.
+    assert_eq!(groups_of(&[a.clone(), b.clone(), c.clone()]), [vec![0, 1], vec![2]]);
+    // The same driver at both ends still chains through the launch that did not record it.
+    c.gpu_driver = Some("X".into());
+    assert_eq!(groups_of(&[a, b, c]), [vec![0, 1, 2]]);
+}
+
+#[test]
+fn a_suspected_mixed_row_between_two_launches_breaks_the_sitting() {
+    let exited = Some(SessionEnd::ProcessExited);
+    let a = fragment("2026-10-03T10:00:00Z", 120, exited);
+    let c = full("2026-10-03T10:08:00Z", 600);
+    let mut m = fragment("2026-10-03T10:04:00Z", 60, exited);
+    m.mixed = true;
+    let sessions = vec![a.clone(), m, c.clone()];
+    let inp = inputs(sessions);
+    let rows = game_rows(&inp, "g");
+    assert_eq!(rows.len(), 2, "the mixed row is not one of the game's rows");
+    assert_eq!(group_sittings(&rows, &mixed_starts(&inp)), [vec![0], vec![1]], "A, [mixed], C are two sittings");
+    assert_eq!(game_sessions(&inp, "g").len(), 2);
+    // Without the mixed row they are one sitting.
+    let inp = inputs(vec![a, c]);
+    let rows = game_rows(&inp, "g");
+    assert_eq!(group_sittings(&rows, &mixed_starts(&inp)), [vec![0, 1]]);
+}
 #[test]
 fn a_sittings_value_is_its_longest_judgeable_launch_else_its_longest() {
     let row = |at: &str, dur: u64, samples: u32| facts(at, dur, samples, 100.0, 50.0);

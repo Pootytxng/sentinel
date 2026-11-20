@@ -1056,6 +1056,9 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
     let verdict: string;
     if (!separable) verdict = t("paramedic.notSeparable.title");
     else if (lead.confidence === "likely") verdict = t("paramedic.verdict.likely");
+    // "Lines up with when it started" is said only when something in play has timing. A finding that rests on
+    // a measured figure alone (no start, no dated change) says what was measured and that it is not tied to a time.
+    else if (!inPlay.length && lead.id !== "graphics-mod") verdict = t("paramedic.verdict.possibleMeasured");
     else verdict = t("paramedic.verdict.possible");
     let next: string;
     if (!separable) {
@@ -1067,6 +1070,7 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
     } else {
       next = t("paramedic.next.possible", { game });
     }
+    const endsWithReplay = separable && lead.id === "background-load" && lead.fix.kind === "steps";
     return (
       <>
         <Problem d={d} ctx={ctx} />
@@ -1074,7 +1078,8 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
           {verdict}
         </p>
         <Candidates rows={rows} rest={rest} d={d} ctx={ctx} recovered={false} />
-        <p className="gl-para-note">{next}</p>
+        {/* The lead's own last step already says "play once, then press the button again": not said twice. */}
+        {!endsWithReplay && <p className="gl-para-note">{next}</p>}
         <Checked d={d} ctx={ctx} />
         <CantSee d={d} ctx={ctx} />
       </>

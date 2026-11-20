@@ -1789,3 +1789,64 @@ describe("ParamedicCard: what the load figure covers", () => {
     expect(screen.getByText("At their busiest (the top tenth of the session), other programs used about 25% of your processor; in normal sessions about 12%.")).toBeTruthy();
   });
 });
+
+describe("ParamedicCard: the verdict line and the order when load leads", () => {
+  const high = { kind: "measured", code: "load-cpu", args: { how: "high", count: "1", rough: "30", base: "2" }, against: false, source: "sessions" } as F["evidence"][number];
+  const measuredOnly = "Compy measured something different during the rough session, but can't tie it to when the problem started.";
+  const dated = "A change lines up with when it started, but Compy can't prove it.";
+
+  it("says a change lines up with the start only when a finding in play has timing", async () => {
+    await ask({ ...base, why_first: null, findings: [find("background-load", { in_play: false, evidence: [high], fix: steps("background-load") })] });
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(screen.getByTestId("paramedic-verdict").textContent).toBe(measuredOnly);
+    expect(document.body.textContent).not.toMatch(/lines up with when it started/);
+    cleanup();
+    await ask({ ...base, why_first: null, findings: [find("background-load", { in_play: true, evidence: [high], fix: steps("background-load") })] });
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(screen.getByTestId("paramedic-verdict").textContent).toBe(dated);
+  });
+
+  it("a graphics mod with no timing keeps its own wording, never the measured one", async () => {
+    await ask({ ...base, why_first: null, findings: [find("graphics-mod", { in_play: false })] });
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(screen.getByTestId("paramedic-verdict").textContent).not.toBe(measuredOnly);
+  });
+
+  it("the background finding leads as most likely and a possible driver change is listed under it", async () => {
+    await ask({
+      ...base,
+      why_first: "cross-game-lead",
+      findings: [
+        find("background-load", { confidence: "likely", in_play: false, evidence: [high], fix: steps("background-load") }),
+        find("gpu-driver-change", { confidence: "possible", in_play: true, fix: steps("gpu-driver-change", { from: "1.0", to: "2.0" }) }),
+      ],
+    });
+    await waitFor(() => expect(rows().length).toBe(2));
+    expect(screen.getByTestId("paramedic-verdict").textContent).toBe("One change lines up best with what happened. It's listed first.");
+    expect(rows()[0].textContent).toMatch(/busier than usual/);
+    expect(rows()[1].textContent).toMatch(/driver/i);
+  });
+
+  it("a background-load fix already ends with play once and press again: the same sentence does not follow it", async () => {
+    await ask({
+      ...base,
+      why_first: null,
+      findings: [find("background-load", { evidence: [high], fix: steps("background-load", { names: "", programs: "OBS Studio" }) })],
+    });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.getByText("Close OBS Studio before you play, then play once and press Something's wrong again.")).toBeTruthy();
+    expect(screen.queryByText(/^Check it, play/)).toBeNull();
+    cleanup();
+    await ask({ ...base, why_first: null, findings: [find("background-load", { evidence: [high], fix: steps("background-load", { names: "rustc" }) })] });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.getByText(/^Play .* once with them closed, then press Something's wrong again\./)).toBeTruthy();
+    expect(screen.queryByText(/^Check it, play/)).toBeNull();
+    cleanup();
+    // Other findings keep their closing sentence.
+    await ask({ ...base, why_first: null, findings: [find("setting-drift", { fix: steps("setting-drift") })] });
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(screen.getByText(/^Check it, play/)).toBeTruthy();
+  });
+});

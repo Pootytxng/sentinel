@@ -577,7 +577,8 @@
   },
   "verdict": {
     "likely": "One change lines up best with what happened. It's listed first.",
-    "possible": "A change lines up with when it started, but Compy can't prove it."
+    "possible": "A change lines up with when it started, but Compy can't prove it.",
+    "possibleMeasured": "Compy measured something different during the rough session, but can't tie it to when the problem started."
   },
   "next": {
     "likely": "Try the steps under the first one, play {{game}} once, then press Something's wrong again.",
