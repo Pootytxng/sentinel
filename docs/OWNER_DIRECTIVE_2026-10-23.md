@@ -1,5 +1,7 @@
 # OWNER DIRECTIVE 2026-10-23 — Product-first recovery
 
+> **Superseded 2026-11-20 by `docs/PRODUCT_CONSTITUTION.md` §38 (owner decision). The work train is paused; scheduled sessions do no work.**
+
 **Authority:** explicit owner decision (authority rank 1 in `CLAUDE.md` / `AGENTS.md`). Where this
 directive conflicts with `docs/WORK_CONTROL.md`, `CLAUDE.md`, `AGENTS.md`, a skill, a hook or a guard,
 **this directive wins** for its period. It does not override `docs/ARCHITECTURE_LOCKS.md` or any

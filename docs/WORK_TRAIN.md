@@ -1,5 +1,7 @@
 # WORK_TRAIN.md — Compy's standing work queue
 
+> **PAUSED 2026-11-20 (owner decision, PRODUCT_CONSTITUTION §38).** The queue and runbook below belong to the plan that ended on 2026-11-20. A scheduled work-train session that reads this file does NO work: do not pick an item, do not build, test, commit, push or install; report 'work train paused by the owner on 2026-11-20; marathon in progress under the HQ session' in your three lines and stop. Do not finish or touch any `train-*` or `m*` worktree. The marathon's list replaces this file when the documents are consolidated.
+
 **Authority:** `OWNER_DIRECTIVE_2026-10-23.md` (owner decision). This file is the one queue the scheduled
 work sessions pull from. It is execution order only; product direction stays in `PRODUCT_CONSTITUTION.md`
 and `product/ROADMAP.md`, build/install truth in `RELEASE_STATE.md`.
@@ -21,6 +23,8 @@ resolution: (1) the Test room says how many sessions count and why the others do
 design in `_train\s58-plan-*.txt`); switching it on needs the owner's explicit yes (asked, not yet answered).
 
 ## How a session runs (every scheduled run follows this)
+
+**PAUSED 2026-11-20: scheduled sessions do nothing; see the top of this file.**
 
 **Bounds.** One session = at most **2 queue items or 60 minutes**, whichever comes first, and at most
 one item in flight. Finish or park (note the next step under the item) before stopping. Never start an

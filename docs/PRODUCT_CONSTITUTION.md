@@ -602,6 +602,26 @@ makes Compy measure each game's own noise and read the frame cap from its own da
 conditions guard" items in `WORK_TRAIN.md` extend that to every condition it can read. No conflict with
 `ARCHITECTURE_LOCKS.md`: nothing here widens privilege, mutation or outbound data.
 
+## 38. Compy is a PC paramedic: three layers, built in order (owner, 2026-11-20)
+
+Owner decision, 2026-11-20 02:04-02:18 PT, after a whole-project evaluation (six independent reviews; evidence on the desk in `_train\s70-*`; synthesis in the HQ project as `claude/COMPY_EVALUATION_2026-11-20.md`, not on disk in this repo). Where this section conflicts with an earlier section, this section wins.
+
+Why: in 177 days Compy ran ten Trials on the owner's PC and none found an improvement; ordinary sessions of one game vary 13-26% in average frame rate and 23-34% in 1% lows, while the Windows settings on offer plausibly move a game 0-3%. Testing one setting at a time through ordinary play cannot show a user a win. What does cost users performance and stability is configuration and change: a driver or Windows update, a game patch, a memory profile left off, overlays and recorders, background load.
+
+Identity. Compy is a PC paramedic for gamers. When a PC or a game stops running the way it did, one button tells the user what changed, what is most likely wrong, and fixes it or gives the exact fix, then checks that it worked. Owner: "the most dummy proff PC optomizer / Paramedic with easy to identify capabilities for any dumbass gamer or user to beanble to comprehend an issue with their PC and rather than spend money taking their PC to some repair shop or geek squad or RMA their hardware they can dpeend on compy".
+
+Three layers, built and shipped in this order:
+
+1. The Paramedic (ships first, alone). One flow: something is wrong -> what changed since it last ran well -> the most likely cause in plain words with how sure Compy is -> fix it (one reversible action where Compy can do it safely; exact steps where it cannot; a plain 'this looks like hardware' when it is) -> did it work.
+2. Game-specific knowledge. For the game being played on this hardware and driver: the known issues that apply to this user, in plain words. Owner: 'advise or provide information down to the specifics the exact game theyre plaing and any of its known issues that are hardware related'.
+3. The Tuning Bay. A separate, opt-in space for tinkerers. Owner: 'a space where they can togglle on however many guaranteed low or 0 risk optimzation option or even bios level tweaks or overclock walkthroughs tailored to user specefic hardware'. Compy guides BIOS and overclocking steps; it does not change firmware. Per-setting Trials live here and run on a repeatable workload, where measurement works; they are no longer Compy's headline.
+
+What Compy claims. It shows its evidence, never invents a problem, says 'nothing is wrong' when nothing is and 'I can't tell' when it can't. Coordinator recommendation recorded for the owner, not yet an owner decision: Compy does not use the word 'guarantee' for performance; the claim is that Compy checks whether a PC is delivering what its hardware should, shows what is holding it back, and proves it when it fixes something.
+
+What this supersedes. §35's sentence stays true in spirit; the Trial-first reading of it does not. The roadmap's Phase 4-7 exit proofs and the friend-tester halves are retired; `docs/product/ROADMAP.md` is to be rewritten around Layer 1. v1.0 is Layer 1 on the public release path: signed, with a privacy policy and EULA. Target date proposed by the coordinator, pending the owner: Friday 2026-12-11.
+
+How the work runs until Layer 1 ships (owner: 'absolute full send automated persisten build Marathon ... straight as an arrow'): one list, one writer at a time, no new guards or coordination documents, a pre-push gate limited to user safety and correctness, a release at the end. `docs/OWNER_DIRECTIVE_2026-10-23.md` is superseded by this section from 2026-11-20.
+
 ---
 
 ## Constitutional anti-goals
