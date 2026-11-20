@@ -228,6 +228,18 @@ pub(crate) fn load_store() -> IntelligenceStore {
     load_store_from(&store_path())
 }
 
+/// PC Paramedic: the identity snapshots from a store file, READ-ONLY. Unlike `load_store_from` it never
+/// sets a damaged file aside (that is a rename, a write): an absent file is an empty store, one that is
+/// there and cannot be read or parsed is an error the caller must show, never an empty history.
+pub(crate) fn read_snapshots_readonly_from(path: &Path) -> Result<Vec<IdentitySnapshot>, String> {
+    let raw = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.to_string()),
+    };
+    serde_json::from_str::<IntelligenceStore>(&raw).map(|s| s.identity_snapshots).map_err(|e| e.to_string())
+}
+
 /// Atomic write (tmp + rename) so a crash mid-write can't corrupt the log.
 pub(crate) fn save_store_to(path: &Path, store: &IntelligenceStore) -> Result<(), String> {
     if let Some(dir) = path.parent() {
@@ -2446,15 +2458,15 @@ pub(crate) fn gaming_status_label(s: crate::gaming_session::SessionStatus) -> &'
     }
 }
 
-pub(crate) struct Gathered {
+struct Gathered {
     applied: Vec<crate::history::AppliedChange>,
-    pub(crate) sessions: Vec<crate::sessions::SessionSummary>,
+    sessions: Vec<crate::sessions::SessionSummary>,
     gaming_slot: Option<(String, &'static str)>,
     awards: Vec<crate::benchmark_scoreboard::AwardEntry>,
     benchmark_baseline_at: Option<String>,
     comparison: Option<crate::comparison::ComparisonResult>,
-    pub(crate) snapshots: Vec<IdentitySnapshot>,
-    pub(crate) drift_notices: Vec<crate::drift::DriftNotice>,
+    snapshots: Vec<IdentitySnapshot>,
+    drift_notices: Vec<crate::drift::DriftNotice>,
     /// Whether `applied` loaded at all. The timeline can honestly show fewer rows; the "What
     /// changed?" engine cannot honestly claim Compy was quiet, so it needs this told to it, together
     /// with `set_aside_through`, per window ([`Gathered::ledger_since`]).
@@ -2483,7 +2495,7 @@ impl Gathered {
     }
 }
 
-pub(crate) fn gather() -> Gathered {
+fn gather() -> Gathered {
     // One load, two readings. `unwrap_or_default` is fine for the timeline VIEW below — an empty
     // view is honest — but the error it swallows is exactly what the engine needs, so capture the
     // health before collapsing it. Transient failure (Err) is incompleteness for every window; a

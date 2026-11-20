@@ -1324,7 +1324,8 @@ export type ParamedicComplaint = "slow" | "crash" | "was-fine-before" | "unknown
 
 export type ParamedicCantTellWhy =
   | { kind: "nothing-changed" }
-  | { kind: "partial-measure"; percent: number }
+  | { kind: "partial-measure"; percent: number; looked_rough: boolean }
+  | { kind: "frame-cap-changed" }
   | { kind: "no-sessions" }
   | { kind: "crash-not-covered" };
 
@@ -1386,6 +1387,8 @@ export type ParamedicFinding = {
   evidence: ParamedicEvidence[];
   since_when: ParamedicWhen;
   fix: ParamedicFix;
+  /** Possible, with timing, and nothing against it: one of the changes Compy cannot yet tell apart. */
+  in_play: boolean;
 };
 
 export type ParamedicRuledOut = { id: string; args: Record<string, string> };
@@ -1401,6 +1404,6 @@ export type ParamedicDiagnosis = {
   unknowns: string[];
   baseline: ParamedicSessionRef | null;
   first_bad: ParamedicSessionRef | null;
-  why_first: "cross-game" | "tie" | null;
+  why_first: "cross-game" | "cross-game-lead" | "tie" | "not-separable" | null;
   method: string;
 };

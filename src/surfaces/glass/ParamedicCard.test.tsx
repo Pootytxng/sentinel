@@ -52,6 +52,7 @@ const base: ParamedicDiagnosis = {
     {
       id: "gpu-driver-change",
       confidence: "likely",
+      in_play: false,
       evidence: [
         { kind: "known", code: "driver-changed", args: { from: "1.0", to: "2.0" }, against: false, source: "snapshots" },
       ],
@@ -61,6 +62,7 @@ const base: ParamedicDiagnosis = {
     {
       id: "background-load",
       confidence: "possible",
+      in_play: false,
       evidence: [{ kind: "unknown", code: "load-not-recorded", args: {}, against: false, source: "sessions" }],
       since_when: { kind: "unknown" },
       fix: { kind: "steps", code: "background-load", args: {} },
@@ -122,6 +124,44 @@ describe("ParamedicCard", () => {
       expect(screen.getByText("Compy measured the problem, but nothing it records changed before it")).toBeTruthy(),
     );
     expect(screen.queryByText("Most likely")).toBeNull();
+  });
+
+  it("not separable: lists the candidates in order, ranks no winner, and says how to find out", async () => {
+    const [driver, load] = base.findings;
+    await ask({
+      ...base,
+      why_first: "not-separable",
+      findings: [
+        { ...driver, confidence: "possible", in_play: true },
+        { ...load, in_play: true },
+      ],
+    });
+    await waitFor(() => expect(screen.getByText("Compy can't tell which of these it is yet")).toBeTruthy());
+    expect(screen.queryByText("Most likely")).toBeNull();
+    expect(screen.getAllByText("Your graphics driver was updated").length).toBeGreaterThan(0);
+    expect(screen.getByText("To find out: play Game A once with nothing else running. Compy will compare.")).toBeTruthy();
+  });
+
+  it("partly measured and looked rough: says so and names the game", async () => {
+    await ask({
+      ...base,
+      state: { kind: "cant-tell", why: { kind: "partial-measure", percent: 40, looked_rough: true } },
+      findings: [],
+    });
+    await waitFor(() => expect(screen.getByText(/only measured part of your last Game A session \(40%\)/)).toBeTruthy());
+    expect(screen.queryByText("Nothing looks wrong")).toBeNull();
+  });
+
+  it("frame cap changed: refuses to compare and offers no stutter verdict", async () => {
+    await ask({ ...base, state: { kind: "cant-tell", why: { kind: "frame-cap-changed" } }, findings: [] });
+    await waitFor(() => expect(screen.getByText(/frame cap changed, or Compy can't read it/)).toBeTruthy());
+    expect(screen.queryByText("Most likely")).toBeNull();
+  });
+
+  it("names the game it picked when none was asked for", async () => {
+    await ask({ ...base, game: "game-b", game_name: "Game B", why_first: null });
+    await waitFor(() => expect(screen.getByText("Game B has been running much rougher than usual")).toBeTruthy());
+    expect(answer.calls[0][1]).toEqual(expect.objectContaining({ game: null }));
   });
 
   it("a failed read says nothing was changed", async () => {

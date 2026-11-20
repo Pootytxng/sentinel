@@ -48,6 +48,7 @@ fn facts(at: &str, dur: u64, samples: u32, avg: f64, low1: f64) -> SessionFacts 
         busy_names: Vec::new(),
         ram_events: 0,
         other_cpu_p90_pct: None,
+        cap: CapState::Unknown,
     }
 }
 
@@ -117,14 +118,17 @@ fn walking_forward_only_the_incident_sessions_are_found() {
 }
 
 #[test]
-fn ranks_driver_first_with_background_and_memory_as_also_possible() {
+fn the_owners_incident_lists_what_changed_and_does_not_pretend_to_separate_it() {
     let d = diagnose(&fixture(), Complaint::WasFineBefore, Some(ROUGH_GAME));
     assert_eq!(d.state, DiagnosisState::Found);
-    assert_eq!(ids(&d), ["gpu-driver-change", "background-load", "memory-pressure", "setting-drift"]);
-    assert_eq!(certainties(&d), [Certainty::Likely, Certainty::Possible, Certainty::Possible, Certainty::Possible]);
+    assert_eq!(ids(&d), ["gpu-driver-change", "background-load", "setting-drift", "memory-pressure"]);
+    // A changed driver stamp and its timing are one support; the other game's roughness overlaps a busy
+    // PC and has no load numbers, so it is confounded. Nothing reaches two independent supports.
+    assert_eq!(certainties(&d), [Certainty::Possible; 4]);
+    assert_eq!(d.findings.iter().map(|f| f.in_play).collect::<Vec<_>>(), [true, true, true, false]);
     assert_eq!(d.baseline.as_ref().expect("baseline").started_at, "2026-11-11T14:14:22Z");
     assert_eq!(d.first_bad.as_ref().expect("first bad").started_at, "2026-11-20T01:01:24Z");
-    assert_eq!(d.why_first, Some("cross-game"));
+    assert_eq!(d.why_first, Some("not-separable"));
     let p = d.problem.as_ref().expect("problem");
     assert_eq!(p.rule, AnomalyRule::StutterCollapse);
     assert!(p.spikes, "01:01 also had spikes: 14.7 ms against a 6.7 ms usual");
@@ -141,7 +145,13 @@ fn the_driver_finding_carries_the_design_evidence() {
     let d = diagnose(&fixture(), Complaint::Slow, Some(ROUGH_GAME));
     let f = &d.findings[0];
     let codes: Vec<&str> = f.evidence.iter().map(|e| e.code).collect();
-    assert_eq!(codes, ["driver-changed", "sessions-split", "cross-game", "install-time-not-read"]);
+    assert_eq!(
+        codes,
+        ["driver-changed", "sessions-split", "cross-game", "cross-game-confounded", "partial-rough-on-old-driver", "install-time-not-read"]
+    );
+    let partial = f.evidence.iter().find(|e| e.code == "partial-rough-on-old-driver").expect("shown");
+    assert!(partial.against && partial.args["date"] == "2026-11-19T03:43:25Z", "the partly measured old-driver session is shown against it");
+    assert_eq!(f.confidence, Certainty::Possible);
     assert_eq!(f.evidence[0].kind, EvidenceKind::Known);
     assert_eq!(f.evidence[0].args["from"], "32.0.32015.7029");
     assert_eq!(f.evidence[0].args["to"], "32.0.32029.2010");
@@ -153,9 +163,13 @@ fn the_driver_finding_carries_the_design_evidence() {
         When::ObservedBetween { from: "2026-11-19T05:12:26Z".into(), to: "2026-11-19T16:54:51Z".into() }
     );
     assert!(matches!(&f.fix, Fix::Steps { code: "gpu-driver-change", .. }));
-    // Memory and background are weakened by the rough sessions that lack them.
-    assert!(d.findings[1].evidence.iter().any(|e| e.against && e.code == "starts-absent"));
-    assert!(d.findings[2].evidence.iter().any(|e| e.against && e.code == "ram-lower"));
+    // Background: starts seen in the episode (the other game's session logged 21), and the load was never
+    // recorded. An absence of starts is NOT evidence against it.
+    let bg: Vec<&str> = d.findings[1].evidence.iter().map(|e| e.code).collect();
+    assert_eq!(bg, ["starts-seen", "load-not-recorded"]);
+    assert!(d.findings[1].evidence.iter().all(|e| !e.against), "nothing recorded argues against background load");
+    assert_eq!(d.findings[1].evidence[1].kind, EvidenceKind::Unknown);
+    assert!(d.findings[3].evidence.iter().any(|e| e.against && e.code == "ram-lower"));
 }
 
 #[test]
@@ -179,10 +193,11 @@ fn as_of_the_first_rough_session_the_driver_still_leads() {
         drift: full.drift.clone(),
     };
     let d = diagnose(&inp, Complaint::Unknown, Some(ROUGH_GAME));
-    assert_eq!(ids(&d), ["gpu-driver-change", "background-load", "memory-pressure", "setting-drift"]);
-    assert_eq!(d.findings[0].confidence, Certainty::Likely);
+    assert_eq!(ids(&d), ["gpu-driver-change", "background-load", "setting-drift", "memory-pressure"]);
+    assert_eq!(d.findings[0].confidence, Certainty::Possible);
     assert_eq!(d.problem.as_ref().expect("problem").sessions_affected.len(), 1);
-    assert_eq!(d.why_first, None, "the cross-game support only exists once the second game gets rough");
+    assert_eq!(d.why_first, Some("not-separable"));
+    assert!(d.findings[0].evidence.iter().all(|e| e.code != "cross-game"), "the cross-game support only exists once the second game gets rough");
 }
 
 #[test]
@@ -190,7 +205,7 @@ fn the_second_game_gets_the_same_top_finding() {
     let d = diagnose(&fixture(), Complaint::Slow, Some(SECOND_GAME));
     assert_eq!(d.state, DiagnosisState::Found);
     assert_eq!(d.findings[0].id, "gpu-driver-change");
-    assert_eq!(d.findings[0].confidence, Certainty::Likely);
+    assert_eq!(d.findings[0].confidence, Certainty::Possible);
     assert_eq!(d.problem.as_ref().expect("problem").other_games_affected, [ROUGH_GAME]);
 }
 
@@ -342,11 +357,13 @@ fn a_ninety_reading_session_is_never_judged_alone() {
     partial.background_secs = 6;
     sess.push(partial);
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
-    assert_eq!(d.state, DiagnosisState::NothingWrong { sessions_checked: 1 }, "judged on the last full session");
-    // Alone, it is not judged at all.
+    // The newest session was never read, so the older ones must not be reported as "nothing wrong" in its
+    // place; and on the numbers it has it would have fired, which the answer says.
+    assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::PartialMeasure { percent: 20, looked_rough: true } });
+    // Alone, it is not judged at all, and with nothing to compare it against it cannot look rough.
     let only = inputs(vec![facts("2026-10-09T10:00:00Z", 467, 90, 139.7, 24.3)]);
     let d = diagnose(&only, Complaint::Slow, Some("g"));
-    assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::PartialMeasure { percent: 19 } });
+    assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::PartialMeasure { percent: 19, looked_rough: false } });
 }
 
 #[test]
@@ -371,7 +388,7 @@ fn no_sessions_and_crash_are_honest_answers() {
 }
 
 #[test]
-fn a_changed_driver_with_no_cross_game_support_is_likely_on_its_own() {
+fn a_changed_driver_stamp_alone_is_one_support_so_only_possible() {
     let mut sess = steady(4);
     for s in sess.iter_mut() {
         s.gpu_driver = Some("1.0".into());
@@ -381,7 +398,7 @@ fn a_changed_driver_with_no_cross_game_support_is_likely_on_its_own() {
     sess.push(rough);
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     assert_eq!(ids(&d), ["gpu-driver-change"]);
-    assert_eq!(d.findings[0].confidence, Certainty::Likely);
+    assert_eq!(d.findings[0].confidence, Certainty::Possible, "a different stamp and the timing that follows from it are ONE support");
     assert_eq!(d.why_first, None);
 }
 
@@ -403,7 +420,7 @@ fn a_rough_session_on_the_old_driver_weakens_the_driver() {
 }
 
 #[test]
-fn two_changes_that_line_up_equally_are_a_tie() {
+fn two_changes_that_line_up_equally_are_not_separable() {
     let mut sess = steady(4);
     for s in sess.iter_mut() {
         s.gpu_driver = Some("1.0".into());
@@ -415,7 +432,8 @@ fn two_changes_that_line_up_equally_are_a_tie() {
     sess.push(rough);
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     assert_eq!(ids(&d), ["gpu-driver-change", "windows-build-change"]);
-    assert_eq!(d.why_first, Some("tie"));
+    assert_eq!(d.why_first, Some("not-separable"));
+    assert!(d.findings.iter().all(|f| f.in_play && f.confidence == Certainty::Possible));
 }
 
 #[test]
@@ -449,6 +467,418 @@ fn busy_programs_measured_on_every_rough_session_are_likely() {
     assert_eq!(ids(&d), ["background-load"]);
     assert_eq!(d.findings[0].confidence, Certainty::Likely);
     assert!(matches!(&d.findings[0].fix, Fix::Steps { code: "background-load", args } if args["names"] == "rustc"));
+}
+
+// ==== review round 1: the card must never say something false ===================================
+fn as_of(at: &str) -> DiagnoseInputs {
+    let full = fixture();
+    let at = ts(at);
+    DiagnoseInputs {
+        sessions: full.sessions.iter().filter(|s| s.start() <= at).cloned().collect(),
+        sightings: full.sightings.iter().filter(|x| ts(&x.observed_at) <= at).cloned().collect(),
+        drift: full.drift.iter().filter(|x| ts(&x.noticed_at) <= at).cloned().collect(),
+    }
+}
+
+fn named(mut s: SessionFacts, game: &str) -> SessionFacts {
+    s.game = game.into();
+    s
+}
+
+fn at_day(day: u32, hour: u32) -> String {
+    format!("2026-10-{day:02}T{hour:02}:00:00Z")
+}
+
+/// Four normal sessions of `game` on driver 1.0 (ratio 0.5), one a day at `hour`.
+fn steady_on_old(game: &str, hour: u32) -> Vec<SessionFacts> {
+    (1..=4)
+        .map(|d| {
+            let mut s = named(facts(&at_day(d, hour), 600, 600, 100.0, 50.0), game);
+            s.gpu_driver = Some("1.0".into());
+            s
+        })
+        .collect()
+}
+
+/// A rough session (ratio 0.3) of `game` on driver 2.0 on the ninth, load measured quiet.
+fn rough_on_new(game: &str, hour: u32) -> SessionFacts {
+    let mut s = named(facts(&at_day(9, hour), 600, 600, 100.0, 30.0), game);
+    s.gpu_driver = Some("2.0".into());
+    s.other_cpu_p90_pct = Some(1.0);
+    s
+}
+
+#[test]
+fn a_newest_session_that_was_only_partly_measured_is_never_nothing_wrong() {
+    // The real fixture as of the 90-reading session (ratio 0.17, 27 build-tool starts): the newest JUDGED
+    // session is a normal one from weeks before, and "nothing looks wrong" would speak for the rough one
+    // Compy never read.
+    let d = diagnose(&as_of("2026-11-19T03:43:25Z"), Complaint::Unknown, Some(ROUGH_GAME));
+    assert!(
+        matches!(d.state, DiagnosisState::CantTell { why: CantTellWhy::PartialMeasure { looked_rough: true, .. } }),
+        "{:?}",
+        d.state
+    );
+    // And a thin session that does NOT look rough is still "partly measured", never "nothing wrong".
+    let mut sess = steady(5);
+    sess.push(facts("2026-10-09T10:00:00Z", 100, 80, 100.0, 50.0));
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert!(matches!(d.state, DiagnosisState::CantTell { why: CantTellWhy::PartialMeasure { looked_rough: false, .. } }), "{:?}", d.state);
+}
+
+#[test]
+fn a_frame_cap_change_alone_never_fires() {
+    let capped = |n: u32, at: f64| -> Vec<SessionFacts> {
+        (1..=n)
+            .map(|d| {
+                let mut s = facts(&at_day(d, 10), 600, 600, 100.0, 90.0);
+                s.cap = CapState::Capped { at_fps: at };
+                s
+            })
+            .collect()
+    };
+    let mut sess = capped(4, 141.0);
+    let mut uncapped = facts(&at_day(9, 10), 600, 600, 100.0, 66.0);
+    uncapped.cap = CapState::Uncapped;
+    sess.push(uncapped.clone());
+    // 0.66 is under 0.80 x 0.90 and under the worst earlier ratio less 0.03, so without the cap rule it would fire.
+    let d = diagnose(&inputs(sess.clone()), Complaint::Slow, Some("g"));
+    assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::FrameCapChanged });
+    assert!(d.problem.is_none(), "no stutter alarm");
+    assert_eq!(d.findings[0].id, "frame-cap-change", "the change itself is the measured finding");
+    assert_eq!(d.findings[0].evidence[0].args["from"], "141");
+    assert_eq!(d.findings[0].evidence[0].args["to"], "uncapped");
+    // An unknown cap against a known one is not comparable either.
+    sess[4].cap = CapState::Unknown;
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::FrameCapChanged });
+    // Once three sessions exist in the new state, sessions are compared like with like, and a rough one fires.
+    let mut sess = capped(4, 141.0);
+    for d in 5..=7 {
+        let mut s = facts(&at_day(d, 10), 600, 600, 100.0, 66.0);
+        s.cap = CapState::Uncapped;
+        sess.push(s);
+    }
+    let mut rough = facts(&at_day(9, 10), 600, 600, 100.0, 30.0);
+    rough.cap = CapState::Uncapped;
+    sess.push(rough);
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::NothingChanged }, "{:?}", d.state);
+    assert!((d.problem.expect("rough").before.ratio - 0.66).abs() < 1e-9, "judged against the uncapped sessions only");
+    // Caps within five percent are the same cap; further apart they are not.
+    assert!(CapState::Capped { at_fps: 141.0 }.same_as(CapState::Capped { at_fps: 144.0 }));
+    assert!(!CapState::Capped { at_fps: 141.0 }.same_as(CapState::Capped { at_fps: 160.0 }));
+}
+
+#[test]
+fn absent_process_starts_are_unknown_not_against_when_load_was_not_recorded() {
+    let mut sess = steady(4);
+    // Another game's session in the window logged 21 build-tool starts; the rough session logged none.
+    let mut other = named(facts("2026-10-05T10:00:00Z", 600, 600, 100.0, 50.0), "h");
+    other.busy_starts = 21;
+    sess.push(other);
+    sess.push(facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 30.0));
+    let d = diagnose(&inputs(sess.clone()), Complaint::Slow, Some("g"));
+    let bg = d.findings.iter().find(|f| f.id == "background-load").expect("starts seen in the episode are timing");
+    assert!(bg.evidence.iter().all(|e| !e.against), "an absence of starts is not evidence the PC was quiet");
+    assert!(bg.evidence.iter().any(|e| e.code == "load-not-recorded" && e.kind == EvidenceKind::Unknown));
+    assert_eq!(bg.confidence, Certainty::Possible);
+    assert!(bg.in_play);
+    // A recorded low load number is the only thing that weakens it.
+    sess[5].other_cpu_p90_pct = Some(3.0);
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    let bg = d.findings.iter().find(|f| f.id == "background-load").expect("still listed");
+    assert!(bg.evidence.iter().any(|e| e.against && e.code == "load-quiet"));
+    assert!(!bg.in_play);
+}
+
+#[test]
+fn memory_already_that_full_in_normal_sessions_is_not_never_nearly_full() {
+    let d = diagnose(&fixture(), Complaint::Slow, Some(SECOND_GAME));
+    let ids: Vec<&str> = d.not_it.iter().map(|n| n.id).collect();
+    assert!(!ids.contains(&"memory-pressure"), "the rough sessions peaked at 92-97%, so it is never 'never nearly full'");
+    let m = d.not_it.iter().find(|n| n.id == "memory-as-full").expect("said as what it is");
+    assert!(m.args.contains_key("peakGb") && m.args.contains_key("totalGb") && m.args.contains_key("basePeakGb"));
+    assert!(d.findings.iter().all(|f| f.id != "memory-pressure"), "no change, so no finding");
+    // And when every rough session really stayed below 90%, the plain line is still right.
+    let mut sess = steady(4);
+    for s in sess.iter_mut() {
+        s.peak_ram_bytes = Some(50);
+        s.ram_total_bytes = Some(100);
+    }
+    let mut rough = facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 30.0);
+    rough.peak_ram_bytes = Some(60);
+    rough.ram_total_bytes = Some(100);
+    sess.push(rough);
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert!(d.not_it.iter().any(|n| n.id == "memory-pressure"));
+}
+
+#[test]
+fn a_thinly_measured_session_that_ran_normally_on_the_new_driver_weighs_against_it() {
+    let mut sess = steady_on_old("g", 10);
+    // Coverage 0.67: judged Normal, never a baseline session, on the NEW driver, before the rough one.
+    let mut thin = facts(&at_day(8, 10), 600, 400, 100.0, 50.0);
+    thin.gpu_driver = Some("2.0".into());
+    sess.push(thin);
+    sess.push(rough_on_new("g", 10));
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    let f = d.findings.iter().find(|f| f.id == "gpu-driver-change").expect("listed");
+    assert!(f.evidence.iter().any(|e| e.against && e.code == "normal-on-new-driver"));
+    assert_eq!(f.confidence, Certainty::Possible);
+    assert!(!f.in_play, "something is against it");
+    assert_eq!(d.problem.expect("problem").last_normal_at, at_day(8, 10), "it last ran normally on the thin session");
+}
+
+#[test]
+fn a_cross_game_support_that_overlaps_a_busy_pc_is_not_independent() {
+    let mut sess = steady_on_old("g", 10);
+    sess.extend(steady_on_old("h", 12));
+    sess.push(rough_on_new("g", 10));
+    let mut h = rough_on_new("h", 12);
+    h.busy_starts = 9;
+    sess.push(h);
+    let d = diagnose(&inputs(sess.clone()), Complaint::Slow, Some("g"));
+    let f = d.findings.iter().find(|f| f.id == "gpu-driver-change").expect("listed");
+    assert_eq!(f.confidence, Certainty::Possible, "the other game's rough session overlaps recorded build tools");
+    assert!(f.evidence.iter().any(|e| e.code == "cross-game-confounded"));
+    // With the other game's load measured quiet, the second support stands.
+    sess.pop();
+    sess.push(rough_on_new("h", 12));
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert_eq!(d.findings[0].confidence, Certainty::Likely);
+}
+
+#[test]
+fn the_other_changes_dont_line_up_is_said_only_when_every_runner_up_is_contradicted() {
+    let mut sess = steady_on_old("g", 10);
+    sess.extend(steady_on_old("h", 12));
+    sess.push(rough_on_new("g", 10));
+    sess.push(rough_on_new("h", 12));
+    let mut inp = inputs(sess);
+    let d = diagnose(&inp, Complaint::Slow, Some("g"));
+    assert_eq!(ids(&d), ["gpu-driver-change"]);
+    assert_eq!(d.why_first, Some("cross-game"), "nothing else changed, so nothing else lines up");
+    // A setting noticed changed inside the window still lines up with every rough session.
+    inp.drift.push(DriftFact { id: "applied-changes".into(), last_ready_at: None, noticed_at: "2026-10-07T12:00:00Z".into() });
+    let d = diagnose(&inp, Complaint::Slow, Some("g"));
+    assert_eq!(ids(&d), ["gpu-driver-change", "setting-drift"]);
+    assert_eq!(d.why_first, Some("cross-game-lead"), "the second sentence would be false here");
+}
+
+#[test]
+fn two_likely_findings_are_a_tie() {
+    let mut sess = steady_on_old("g", 10);
+    for s in sess.iter_mut() {
+        s.other_cpu_p90_pct = Some(2.0);
+    }
+    sess.extend(steady_on_old("h", 12));
+    let mut g_rough = rough_on_new("g", 10);
+    g_rough.other_cpu_p90_pct = Some(22.0);
+    g_rough.busy_starts = 9;
+    sess.push(g_rough);
+    sess.push(rough_on_new("h", 12));
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert_eq!(ids(&d), ["background-load", "gpu-driver-change"]);
+    assert_eq!(certainties(&d), [Certainty::Likely, Certainty::Likely]);
+    assert_eq!(d.why_first, Some("tie"));
+}
+
+#[test]
+fn with_no_game_named_a_game_with_too_few_sessions_never_hides_another_games_problem() {
+    let mut sess = steady(4);
+    sess.push(facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 30.0)); // g is rough
+    sess.push(named(facts("2026-10-10T10:00:00Z", 600, 600, 100.0, 50.0), "j"));
+    sess.push(named(facts("2026-10-11T10:00:00Z", 600, 600, 100.0, 50.0), "j")); // newest session: j, 2 of 3
+    let d = diagnose(&inputs(sess.clone()), Complaint::Unknown, None);
+    assert_eq!(d.game.as_deref(), Some("g"), "the measured problem is not hidden by the newest game");
+    assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::NothingChanged });
+    // Nobody rough: the game played last answers.
+    sess[4] = facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 50.0);
+    let d = diagnose(&inputs(sess.clone()), Complaint::Unknown, None);
+    assert_eq!(d.game.as_deref(), Some("j"));
+    assert!(matches!(d.state, DiagnosisState::NeedsMorePlay { .. }));
+    // A game last played more than fourteen days before the newest session is not looked at, rough or not.
+    for day in 1..=4 {
+        sess.push(named(facts(&format!("2026-09-0{day}T10:00:00Z"), 600, 600, 100.0, 50.0), "old"));
+    }
+    sess.push(named(facts("2026-09-05T10:00:00Z", 600, 600, 100.0, 30.0), "old"));
+    let d = diagnose(&inputs(sess), Complaint::Unknown, None);
+    assert_eq!(d.game.as_deref(), Some("j"));
+}
+
+fn scratch_dir(tag: &str) -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static N: AtomicUsize = AtomicUsize::new(0);
+    let dir = std::env::temp_dir().join(format!("compy-paramedic-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    dir
+}
+
+fn listing(dir: &std::path::Path) -> Vec<(String, u64)> {
+    let mut v: Vec<(String, u64)> = std::fs::read_dir(dir)
+        .expect("readable")
+        .map(|e| e.expect("entry"))
+        .map(|e| (e.file_name().to_string_lossy().into_owned(), e.metadata().expect("meta").len()))
+        .collect();
+    v.sort();
+    v
+}
+
+#[test]
+fn a_damaged_or_unreadable_store_is_an_error_and_the_read_changes_nothing() {
+    let dir = scratch_dir("damaged");
+    // Nothing recorded yet is an honest empty answer.
+    assert!(read_inputs_from(&dir).expect("absent files are empty stores").sessions.is_empty());
+    std::fs::write(dir.join("sessions.json"), "[]").expect("write");
+    assert!(read_inputs_from(&dir).expect("an empty history").sessions.is_empty());
+    // A sessions file that is there but damaged is an error, not "no games yet", and stays where it is.
+    std::fs::write(dir.join("sessions.json"), "{ not json").expect("write");
+    let before = listing(&dir);
+    assert!(read_inputs_from(&dir).is_err());
+    assert_eq!(listing(&dir), before, "no rename, no set-aside, no new file");
+    assert_eq!(std::fs::read_to_string(dir.join("sessions.json")).expect("still there"), "{ not json");
+    // The same for the two other stores.
+    std::fs::write(dir.join("sessions.json"), "[]").expect("write");
+    std::fs::write(dir.join("drift.json"), "garbage").expect("write");
+    assert!(read_inputs_from(&dir).is_err());
+    std::fs::write(dir.join("drift.json"), "{}").expect("write");
+    std::fs::write(dir.join("intelligence.json"), "garbage").expect("write");
+    let before = listing(&dir);
+    assert!(read_inputs_from(&dir).is_err());
+    assert_eq!(listing(&dir), before);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+#[ignore = "reads the real data root read-only and prints the diagnosis: set COMPY_PARAMEDIC_LIVE_DIR or run on the owner's PC"]
+fn print_live_diagnosis() {
+    let dir = std::env::var("COMPY_PARAMEDIC_LIVE_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| crate::compy_data_dir());
+    let inp = read_inputs_from(&dir).expect("the live stores read");
+    let d = diagnose(&inp, Complaint::Unknown, None);
+    println!("{}", serde_json::to_string_pretty(&d).expect("serialises"));
+}
+
+// ---- every frozen constant pinned from both sides ---------------------------------------------
+#[test]
+fn the_frozen_constants_are_what_the_design_froze() {
+    assert_eq!((MIN_JUDGE_SECS, MIN_JUDGE_SAMPLES, BASELINE_MAX, BASELINE_MIN), (300, 250, 10, 3));
+    assert_eq!((MIN_JUDGE_COVERAGE, BASELINE_COVERAGE), (0.50, 0.80));
+    assert_eq!((RULE_R_FRACTION, RULE_R_BELOW_MIN), (0.80, 0.03));
+    assert_eq!((RULE_P99_MEDIAN_X, RULE_P99_MAX_X, RULE_P99_R_FRACTION, RULE_AVG_FRACTION), (2.0, 1.3, 0.90, 0.70));
+    assert_eq!((RAM_FULL_FRACTION, RAM_BASELINE_MAX_FRACTION), (0.90, 0.80));
+    assert_eq!((OTHER_CPU_P90_PCT, OTHER_CPU_BASELINE_MEDIAN_PCT, BUSY_START_MIN), (15.0, 5.0, 5));
+    assert_eq!((CAP_SAME_FRACTION, RECENT_GAME_DAYS), (0.05, 14));
+}
+
+#[test]
+fn rule_r_lines_hold_on_both_sides() {
+    let at = |low1: f64| facts("2026-10-09T10:00:00Z", 600, 600, 100.0, low1);
+    // Fraction binding (usual 0.50, worst 0.50): 0.40 fires, 0.41 does not; 0.80 is neither 0.75 nor 0.85.
+    let b = base(0.5, 0.5);
+    assert!(evaluate(&at(40.0), &b).expect("read").rule_r);
+    assert!(!evaluate(&at(40.5), &b).expect("read").rule_r);
+    // A looser fraction would fire at 0.42: it must not.
+    assert!(!evaluate(&at(42.0), &b).expect("read").rule_r);
+    // Margin binding (usual 0.90, worst 0.45): 0.42 fires, 0.43 does not; 0.03 is neither 0.02 nor 0.04.
+    let b = base(0.9, 0.45);
+    assert!(evaluate(&at(41.9), &b).expect("read").rule_r);
+    assert!(!evaluate(&at(42.5), &b).expect("read").rule_r);
+}
+
+#[test]
+fn spike_factors_hold_on_both_sides() {
+    // 2.0 x the usual binds (worst earlier p99 equals the usual, so 1.3 x it is lower).
+    let tight = BaseStats { med_r: 0.5, min_r: 0.5, med_p99: Some(10.0), max_p99: Some(10.0), med_avg: 100.0, ids: vec![0, 1, 2] };
+    let mut s = facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 44.0);
+    s.p99_ms = Some(19.9);
+    assert!(!evaluate(&s, &tight).expect("read").rule_p99);
+    s.p99_ms = Some(20.0);
+    assert!(evaluate(&s, &tight).expect("read").rule_p99);
+    // 1.3 x the worst earlier p99 binds (worst 16 ms: 20.8 ms).
+    let loose = base(0.5, 0.5);
+    s.p99_ms = Some(20.7);
+    assert!(!evaluate(&s, &loose).expect("read").rule_p99);
+    s.p99_ms = Some(20.8);
+    assert!(evaluate(&s, &loose).expect("read").rule_p99);
+    // The smoothness companion (0.90 x the usual 0.50 = 0.45): 0.45 fires with spikes, 0.46 does not.
+    s.low1_fps = 45.0;
+    assert!(evaluate(&s, &loose).expect("read").fired);
+    s.low1_fps = 46.0;
+    assert!(!evaluate(&s, &loose).expect("read").fired);
+}
+
+#[test]
+fn the_baseline_coverage_count_and_window_edges_are_exact() {
+    // A session measured 79.9% of the way is judged but does not become "normal"; 80.0% does.
+    let with = |samples: u32| -> Vec<SessionFacts> {
+        let mut v: Vec<SessionFacts> =
+            (1..=3).map(|d| facts(&at_day(d, 10), 1000, samples, 100.0, 50.0)).collect();
+        v.push(facts(&at_day(4, 10), 1000, 1000, 100.0, 50.0));
+        v
+    };
+    let sess = with(799);
+    let refs: Vec<&SessionFacts> = sess.iter().collect();
+    assert_eq!(judge_game(&refs)[3].verdict, Verdict::NeedsMore(0));
+    let sess = with(800);
+    let refs: Vec<&SessionFacts> = sess.iter().collect();
+    assert_eq!(judge_game(&refs)[3].verdict, Verdict::Normal);
+    // The baseline is the last ten normal sessions, and three are enough.
+    let sess = steady(12);
+    let refs: Vec<&SessionFacts> = sess.iter().collect();
+    assert_eq!(judge_game(&refs)[11].base.as_ref().expect("base").ids, (1..=10).collect::<Vec<usize>>());
+    let refs3: Vec<&SessionFacts> = sess[..4].iter().collect();
+    assert_eq!(judge_game(&refs3)[3].base.as_ref().expect("three are enough").ids.len(), 3);
+    let refs2: Vec<&SessionFacts> = sess[..3].iter().collect();
+    assert!(judge_game(&refs2)[2].base.is_none(), "two are not");
+}
+
+#[test]
+fn the_cause_lines_hold_on_both_sides() {
+    let run = |tune: &dyn Fn(&mut Vec<SessionFacts>)| -> Vec<&'static str> {
+        let mut sess = steady(4);
+        sess.push(facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 30.0));
+        tune(&mut sess);
+        ids(&diagnose(&inputs(sess), Complaint::Slow, Some("g")))
+    };
+    let ram = |base: u64, rough: u64| {
+        move |s: &mut Vec<SessionFacts>| {
+            for (i, x) in s.iter_mut().enumerate() {
+                x.ram_total_bytes = Some(1000);
+                x.peak_ram_bytes = Some(if i < 4 { base } else { rough });
+            }
+        }
+    };
+    assert_eq!(run(&ram(790, 900)), ["memory-pressure"], "usual peak 79%, rough 90%: counted");
+    assert!(run(&ram(790, 899)).is_empty(), "89.9% is not nearly full");
+    assert!(run(&ram(800, 990)).is_empty(), "a usual peak of 80% means it was already that full");
+    let cpu = |base: f64, rough: f64| {
+        move |s: &mut Vec<SessionFacts>| {
+            for (i, x) in s.iter_mut().enumerate() {
+                x.other_cpu_p90_pct = Some(if i < 4 { base } else { rough });
+            }
+        }
+    };
+    assert_eq!(run(&cpu(4.9, 15.0)), ["background-load"], "usual under 5%, rough at 15%: counted");
+    assert!(run(&cpu(4.9, 14.9)).is_empty());
+    assert!(run(&cpu(5.0, 40.0)).is_empty(), "a usual median of 5% is already busy: no line to measure from");
+    let starts = |n: u32| {
+        move |s: &mut Vec<SessionFacts>| {
+            s[4].busy_starts = n;
+        }
+    };
+    assert_eq!(run(&starts(5)), ["background-load"]);
+    assert!(run(&starts(4)).is_empty());
+    // The average alone: 0.70 of the usual says so, 0.71 does not (it never decides anything by itself).
+    let lower = |avg: f64| {
+        let mut sess = steady(4);
+        sess.push(facts("2026-10-09T10:00:00Z", 600, 600, avg, avg * 0.3));
+        diagnose(&inputs(sess), Complaint::Slow, Some("g")).problem.expect("rough").avg_lower
+    };
+    assert!(lower(69.0));
+    assert!(!lower(71.0));
 }
 
 // ---- adapter and wire shape ------------------------------------------------------------------
@@ -544,7 +974,9 @@ fn the_wire_shape_is_what_the_card_reads() {
     assert_eq!(v["complaint"], "slow");
     assert_eq!(v["state"]["kind"], "found");
     assert_eq!(v["findings"][0]["id"], "gpu-driver-change");
-    assert_eq!(v["findings"][0]["confidence"], "likely");
+    assert_eq!(v["findings"][0]["confidence"], "possible");
+    assert_eq!(v["findings"][0]["in_play"], true);
+    assert_eq!(v["why_first"], "not-separable");
     assert_eq!(v["findings"][0]["evidence"][0]["kind"], "known");
     assert_eq!(v["findings"][0]["evidence"][0]["args"]["from"], "32.0.32015.7029");
     assert_eq!(v["findings"][0]["since_when"]["kind"], "observed-between");

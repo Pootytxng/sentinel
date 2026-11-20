@@ -211,6 +211,17 @@ pub(crate) fn active_drift_notices() -> Vec<DriftNotice> {
     notices_from(&load_state())
 }
 
+/// PC Paramedic: the active drift notices from a state file, READ-ONLY and strict. An absent file is no
+/// notices; one that is there and cannot be read or parsed is an error, not "nothing drifted".
+pub(crate) fn read_notices_readonly_from(path: &std::path::Path) -> Result<Vec<DriftNotice>, String> {
+    let raw = match std::fs::read_to_string(path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.to_string()),
+    };
+    serde_json::from_str::<DriftState>(&raw).map(|s| notices_from(&s)).map_err(|e| e.to_string())
+}
+
 /// #281 — drift's best-effort save still swallows every failure and still returns nothing. Explicit
 /// temp paths only; nothing reads the real data root.
 #[cfg(test)]

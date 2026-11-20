@@ -23,8 +23,17 @@ type Ctx = { t: T; dates: Dates; game: string };
 const pct = (ratio: number) => Math.round(ratio * 100);
 const tenth = (n: number) => String(Math.round(n * 10) / 10);
 
+/** The card's word for a frame-cap state the engine sent as "unknown", "uncapped" or whole fps. */
+function capWord(v: string, t: T): string {
+  if (v === "uncapped") return t("paramedic.cap.none");
+  if (v === "unknown") return t("paramedic.cap.unknown");
+  return t("paramedic.cap.at", { fps: v });
+}
+
 function whatText(id: string, t: T): string | null {
   switch (id) {
+    case "frame-cap-change":
+      return t("paramedic.finding.frameCapChange.what");
     case "gpu-driver-change":
       return t("paramedic.finding.gpuDriver.what");
     case "background-load":
@@ -80,8 +89,16 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
         : t("paramedic.evidence.startsSeenNoNames", { count: Number(a.count) });
     case "load-measured":
       return t("paramedic.evidence.loadMeasured", { count: Number(a.count) });
-    case "starts-absent":
-      return t("paramedic.evidence.startsAbsent", { count: Number(a.count), of: Number(a.of) });
+    case "load-quiet":
+      return t("paramedic.evidence.loadQuiet", { count: Number(a.count) });
+    case "cross-game-confounded":
+      return t("paramedic.evidence.crossGameConfounded", { games: a.games });
+    case "normal-on-new-driver":
+      return t("paramedic.evidence.normalOnNewDriver", { count: Number(a.count), date: dates.day(a.lastAt) });
+    case "partial-rough-on-old-driver":
+      return t("paramedic.evidence.partialRoughOnOldDriver", { date: dates.day(a.date) });
+    case "cap-changed":
+      return t("paramedic.evidence.capChanged", { from: capWord(a.from, t), to: capWord(a.to, t) });
     case "load-not-recorded":
       return t("paramedic.evidence.loadNotRecorded");
     case "ram-peak":
@@ -135,6 +152,8 @@ function stepLines(fix: ParamedicFix, { t, game }: Ctx): string[] {
         a.names ? t("paramedic.fix.backgroundLoad.step1", { names: a.names }) : t("paramedic.fix.backgroundLoad.step1NoNames"),
         t("paramedic.fix.backgroundLoad.step2", { game }),
       ];
+    case "frame-cap-change":
+      return [t("paramedic.fix.frameCapChange.step1", { from: capWord(a.from, t) }), t("paramedic.fix.frameCapChange.step2", { game })];
     case "memory-pressure":
       return [
         t("paramedic.fix.memoryPressure.step1", { peakGb: a.peakGb, totalGb: a.totalGb }),
@@ -158,6 +177,8 @@ function ruledOutLine(n: ParamedicRuledOut, { t }: Ctx): string | null {
       return t("paramedic.checked.backgroundLoad");
     case "memory-pressure":
       return t("paramedic.checked.memoryPressure");
+    case "memory-as-full":
+      return t("paramedic.checked.memoryAsFull", { peakGb: a.peakGb, totalGb: a.totalGb, basePeakGb: a.basePeakGb });
     case "setting-drift":
       return t("paramedic.checked.settingDrift");
     case "compy-change":
@@ -199,6 +220,8 @@ function unknownLine(code: string, { t, game }: Ctx): string | null {
       return t("paramedic.unknown.powerPlanTiming");
     case "display":
       return t("paramedic.unknown.display");
+    case "drift-timing":
+      return t("paramedic.unknown.driftTiming");
     case "windows-build":
       return t("paramedic.unknown.windowsBuild");
     default:
@@ -244,9 +267,12 @@ function FixBlock({ fix, ctx }: { fix: ParamedicFix; ctx: Ctx }) {
 
 function whyFirst(d: ParamedicDiagnosis, ctx: Ctx): string | null {
   if (d.why_first === "tie") return ctx.t("paramedic.why.tie");
-  if (d.why_first !== "cross-game") return null;
+  if (d.why_first !== "cross-game" && d.why_first !== "cross-game-lead") return null;
   const games = d.findings[0]?.evidence.find((e) => e.code === "cross-game")?.args.games;
-  return games ? ctx.t("paramedic.why.crossGame", { game: ctx.game, games }) : null;
+  if (!games) return null;
+  return d.why_first === "cross-game"
+    ? ctx.t("paramedic.why.crossGame", { game: ctx.game, games })
+    : ctx.t("paramedic.why.crossGameLead", { game: ctx.game, games });
 }
 
 function Problem({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
@@ -287,22 +313,32 @@ function Problem({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   );
 }
 
-function Leading({ f, d, ctx }: { f: ParamedicFinding; d: ParamedicDiagnosis; ctx: Ctx }) {
+/** `plain`: one of several changes Compy cannot yet tell apart, so no ranking chip, no "why first". */
+function Leading({ f, d, ctx, plain }: { f: ParamedicFinding; d: ParamedicDiagnosis; ctx: Ctx; plain?: boolean }) {
   const { t } = ctx;
-  const eyebrow = f.confidence === "likely" ? t("paramedic.answer.likely") : f.confidence === "mechanism" ? t("paramedic.answer.mechanism") : t("paramedic.answer.possible");
+  const eyebrow =
+    f.confidence === "likely"
+      ? t("paramedic.answer.likely")
+      : f.confidence === "measured"
+        ? t("paramedic.answer.measured")
+        : f.confidence === "mechanism"
+          ? t("paramedic.answer.mechanism")
+          : t("paramedic.answer.possible");
   const since = sinceText(f.since_when, ctx);
-  const why = whyFirst(d, ctx);
+  const why = plain ? null : whyFirst(d, ctx);
   return (
-    <div className="gl-para-lead" data-testid="paramedic-leading">
-      <span className="gl-chip" data-tone="accent">
-        {eyebrow}
-      </span>
+    <div className="gl-para-lead" data-testid={plain ? "paramedic-candidate" : "paramedic-leading"}>
+      {!plain && (
+        <span className="gl-chip" data-tone="accent">
+          {eyebrow}
+        </span>
+      )}
       <span className="gl-row-title">{whatText(f.id, t)}</span>
       {since && <span className="gl-row-sub">{since}</span>}
       <Evidence list={f.evidence} ctx={ctx} />
       {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
       <FixBlock fix={f.fix} ctx={ctx} />
-      <span className="gl-row-sub">{t("paramedic.card.notProven")}</span>
+      {!plain && <span className="gl-row-sub">{t("paramedic.card.notProven")}</span>}
     </div>
   );
 }
@@ -364,6 +400,23 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const { t } = ctx;
   const s = d.state;
   const game = ctx.game;
+  if (s.kind === "found" && d.findings.length > 0 && d.why_first === "not-separable") {
+    // No change reaches two independent supports: list the ones that line up, rank no winner.
+    return (
+      <>
+        <Problem d={d} ctx={ctx} />
+        <h2 className="gl-card-title">{t("paramedic.notSeparable.title")}</h2>
+        {d.findings
+          .filter((f) => f.in_play)
+          .map((f) => (
+            <Leading key={f.id} f={f} d={d} ctx={ctx} plain />
+          ))}
+        <p className="gl-para-note">{t("paramedic.notSeparable.next", { game })}</p>
+        <AlsoPossible list={d.findings.filter((f) => !f.in_play)} ctx={ctx} />
+        <Checked d={d} ctx={ctx} />
+      </>
+    );
+  }
   if (s.kind === "found" && d.findings.length > 0) {
     return (
       <>
@@ -396,7 +449,11 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   if (s.kind === "needs-more-play") {
     body = t("paramedic.cantTell.needsMore", { game, have: s.have, total: s.have + s.sessions_needed });
   } else if (s.kind === "cant-tell" && s.why.kind === "partial-measure") {
-    body = t("paramedic.cantTell.partial", { percent: s.why.percent });
+    body = s.why.looked_rough
+      ? t("paramedic.cantTell.partialRough", { game, percent: s.why.percent })
+      : t("paramedic.cantTell.partial", { game, percent: s.why.percent });
+  } else if (s.kind === "cant-tell" && s.why.kind === "frame-cap-changed") {
+    body = t("paramedic.cantTell.frameCap", { game });
   } else if (s.kind === "cant-tell" && s.why.kind === "crash-not-covered") {
     body = t("paramedic.cantTell.crash");
   } else if (d.game) {
@@ -408,6 +465,7 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
     <>
       <h2 className="gl-card-title">{t("paramedic.cantTell.title")}</h2>
       <p>{body}</p>
+      {s.kind === "cant-tell" && s.why.kind === "frame-cap-changed" && d.findings[0] && <Leading f={d.findings[0]} d={d} ctx={ctx} />}
     </>
   );
 }
@@ -447,12 +505,14 @@ export function ParamedicCard() {
           {t("paramedic.door.failed")}
         </p>
       )}
-      {view.kind === "done" && ctx && (
-        <div className="gl-para-body" aria-live="polite">
-          <Answer d={view.d} ctx={ctx} />
-          <p className="gl-para-note">{t("paramedic.footer")}</p>
-        </div>
-      )}
+      <div className="gl-para-body" aria-live="polite">
+        {view.kind === "done" && ctx && (
+          <>
+            <Answer d={view.d} ctx={ctx} />
+            <p className="gl-para-note">{t("paramedic.footer")}</p>
+          </>
+        )}
+      </div>
     </section>
   );
 }

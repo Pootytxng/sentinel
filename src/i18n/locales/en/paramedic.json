@@ -22,18 +22,40 @@
   "answer": {
     "likely": "Most likely",
     "possible": "Also possible",
-    "mechanism": "Often causes this (not measured on your PC)"
+    "mechanism": "Often causes this (not measured on your PC)",
+    "measured": "Measured"
   },
   "finding": {
-    "gpuDriver": { "what": "Your graphics driver was updated" },
-    "backgroundLoad": { "what": "Other programs were busy while you played" },
-    "memoryPressure": { "what": "Your memory was nearly full while you played" },
-    "settingDrift": { "what": "A setting was changed outside Compy" },
-    "compyChange": { "what": "Compy had a different number of changes on" },
-    "hardwareChange": { "what": "Your hardware was different" },
-    "powerPlanChange": { "what": "Your power plan was different" },
-    "displayRefreshLower": { "what": "Your screen ran at a lower refresh rate" },
-    "windowsBuildChange": { "what": "Windows was updated" }
+    "gpuDriver": {
+      "what": "Your graphics driver was updated"
+    },
+    "backgroundLoad": {
+      "what": "Other programs were busy while you played"
+    },
+    "memoryPressure": {
+      "what": "Your memory was nearly full while you played"
+    },
+    "settingDrift": {
+      "what": "A setting was changed outside Compy"
+    },
+    "compyChange": {
+      "what": "Compy had a different number of changes on"
+    },
+    "hardwareChange": {
+      "what": "Your hardware was different"
+    },
+    "powerPlanChange": {
+      "what": "Your power plan was different"
+    },
+    "displayRefreshLower": {
+      "what": "Your screen ran at a lower refresh rate"
+    },
+    "windowsBuildChange": {
+      "what": "Windows was updated"
+    },
+    "frameCapChange": {
+      "what": "Your frame cap was different"
+    }
   },
   "since": {
     "between": "Between {{a}} and {{b}}",
@@ -56,8 +78,7 @@
     "startsSeen": "{{names}} started during {{count}} of your sessions since then.",
     "startsSeenNoNames": "Build or encoding programs started during {{count}} of your sessions since then.",
     "loadMeasured": "Everything except the game used a lot of your processor in {{count}} of the rough sessions.",
-    "startsAbsent": "None of those programs were seen starting in {{count}} of the {{of}} rough sessions.",
-    "loadNotRecorded": "Compy didn't record how busy the rest of your PC was then.",
+    "loadNotRecorded": "Compy can't see programs that were already running, and didn't record how busy your PC was in these sessions.",
     "ramPeak": "Memory peaked at {{peakGb}} of {{totalGb}} GB in one rough session.",
     "ramBaseline": "Your normal sessions peaked at {{peakGb}} GB.",
     "ramWarning": "Compy saw memory nearly full during that session.",
@@ -69,7 +90,13 @@
     "countChanged": "Compy had {{from}} changes on in the last normal session and {{to}} in the first rough one.",
     "valueChanged": "It changed from {{from}} to {{to}}.",
     "hardwareChanged": "The graphics card or memory Compy recorded is different.",
-    "powerPlanChanged": "The power plan recorded on the two sessions is different."
+    "powerPlanChanged": "The power plan recorded on the two sessions is different.",
+    "loadQuiet": "Everything except the game was quiet in {{count}} of the rough sessions.",
+    "normalOnNewDriver_one": "{{count}} session ran normally on the new driver (on {{date}}).",
+    "normalOnNewDriver_other": "{{count}} sessions ran normally on the new driver (the latest on {{date}}).",
+    "partialRoughOnOldDriver": "A partly measured session on {{date}}, on the old driver, also looked rough.",
+    "crossGameConfounded": "{{games}}'s rough sessions overlap busy programs or have no load numbers, so this can't point to the driver alone.",
+    "capChanged": "The frame cap went from {{from}} to {{to}}."
   },
   "fix": {
     "title": "How to fix it",
@@ -97,7 +124,11 @@
       "step1": "Open History and look at the changes Compy has on. Undo the newest one.",
       "step2": "Play {{game}} once, then press Something's wrong again."
     },
-    "none": "There's nothing safe Compy can change for this. Check it in Windows, then play once more."
+    "none": "There's nothing safe Compy can change for this. Check it in Windows, then play once more.",
+    "frameCapChange": {
+      "step1": "Set the frame cap in the game or in your graphics settings back to what it was ({{from}}), or leave it as it is.",
+      "step2": "Play {{game}} a few times. Compy only compares like with like, and needs 3 normal sessions with the new setting."
+    }
   },
   "card": {
     "why": "Why this one first: {{reason}}",
@@ -105,22 +136,26 @@
   },
   "why": {
     "crossGame": "It changed just before {{game}} got rough, and {{games}} got rough right after it too. The other changes don't line up with every rough session.",
-    "tie": "Two changes line up equally. Start with the one that's easier to undo."
+    "tie": "Two changes line up equally. Start with the one that's easier to undo.",
+    "crossGameLead": "It changed just before {{game}} got rough, and {{games}} got rough right after it too."
   },
-  "alsoPossible": { "title": "Also possible" },
+  "alsoPossible": {
+    "title": "Also possible"
+  },
   "checked": {
     "title": "What Compy checked",
-    "ruledOut": "Same as before, so not the reason:",
+    "ruledOut": "Unchanged since your normal sessions:",
     "unknown": "Compy couldn't see:",
     "gpuDriverChange": "Graphics driver: still {{driver}}.",
-    "backgroundLoad": "Other programs: no sign of heavy use.",
-    "memoryPressure": "Memory: never nearly full.",
-    "settingDrift": "Settings Compy watches: none changed since then.",
-    "compyChange": "Compy's own changes: {{count}} on, as before.",
-    "hardwareChange": "Hardware: the same.",
-    "powerPlanChange": "Power plan: the same.",
+    "backgroundLoad": "Everything except the game: quiet in these sessions.",
+    "memoryPressure": "Memory: never nearly full in these sessions.",
+    "settingDrift": "Settings Compy watches: no changes noticed.",
+    "compyChange": "Compy has the same number of changes applied ({{count}}).",
+    "hardwareChange": "Graphics card and memory size: the same.",
+    "powerPlanChange": "Power plan on the two sessions compared: the same.",
     "displayRefreshLower": "Screen refresh rate: still {{hz}} Hz.",
-    "windowsBuildChange": "Windows: still build {{build}}."
+    "windowsBuildChange": "Windows: still build {{build}}.",
+    "memoryAsFull": "Memory: as full as in your normal sessions (peaked {{peakGb}} of {{totalGb}} GB; normal sessions peaked {{basePeakGb}} GB)."
   },
   "unknown": {
     "gamePatch": "Whether {{game}} was updated",
@@ -134,7 +169,8 @@
     "powerPlan": "Which power plan was in use",
     "powerPlanTiming": "When your power plan changed",
     "display": "Your screen's refresh rate",
-    "windowsBuild": "Which Windows build was in use"
+    "windowsBuild": "Which Windows build was in use",
+    "driftTiming": "When some of the settings Compy watches changed"
   },
   "nothingWrong": {
     "title": "Nothing looks wrong",
@@ -144,14 +180,25 @@
   "cantTell": {
     "title": "Compy can't tell yet",
     "needsMore": "Compy needs {{total}} normal sessions of {{game}} to know what normal is. You have {{have}}.",
-    "partial": "Compy only measured part of your last session ({{percent}}%), so it won't judge it.",
+    "partial": "Compy only measured part of your last {{game}} session ({{percent}}%), so it won't judge it. Play once more with Compy running.",
     "noGame": "Compy hasn't recorded {{game}} yet. Start Compy before you play.",
     "noSessions": "Compy hasn't recorded any games yet. Start Compy before you play.",
-    "crash": "Crashes have their own page for now. Open Problems to see what Windows recorded."
+    "crash": "Crashes have their own page for now. Open Problems to see what Windows recorded.",
+    "partialRough": "Compy only measured part of your last {{game}} session ({{percent}}%), and what it saw looked rough. Play once more with Compy running.",
+    "frameCap": "Your frame cap changed, or Compy can't read it, between your earlier {{game}} sessions and the newest one, so it won't compare them."
   },
   "nothingChanged": {
     "title": "Compy measured the problem, but nothing it records changed before it",
     "next": "Play once more and Compy will compare again."
   },
-  "footer": "Compy lists what changed before the problem. It doesn't claim to know the cause until a fix is checked."
+  "footer": "Compy lists what changed before the problem. It doesn't claim to know the cause until a fix is checked.",
+  "notSeparable": {
+    "title": "Compy can't tell which of these it is yet",
+    "next": "To find out: play {{game}} once with nothing else running. Compy will compare."
+  },
+  "cap": {
+    "none": "no cap",
+    "unknown": "not read",
+    "at": "{{fps}} fps"
+  }
 }

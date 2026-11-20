@@ -1011,6 +1011,19 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<Option<SavedSessio
     Ok(Some(SavedSession { settled }))
 }
 
+/// PC Paramedic: the stored sessions, oldest first, READ-ONLY and strict. Unlike `load_sessions_checked_from`
+/// it never sets a damaged file aside (a rename, a write). An absent file is no sessions; one that is there
+/// and cannot be read or parsed is an error, never an empty history.
+pub(crate) fn read_sessions_readonly_from(path: &Path) -> Result<Vec<SessionSummary>, String> {
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.to_string()),
+    };
+    let text = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
+    parse_sessions(text).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub(crate) fn get_session_summaries() -> Vec<SessionSummary> {
     // Newest first for the UI. Corrupt/missing file fails safe to empty.
