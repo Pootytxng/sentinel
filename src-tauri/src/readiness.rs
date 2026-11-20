@@ -82,6 +82,12 @@ pub(crate) struct GameReadiness {
 }
 
 impl GameReadiness {
+    /// The status of one check by id: for read-only callers (the first look) that ask about a few rules
+    /// and word them themselves. `None` when no such check was made.
+    pub(crate) fn status_of(&self, id: &str) -> Option<ReadinessStatus> {
+        self.checks.iter().find(|c| c.id == id).map(|c| c.status)
+    }
+
     /// Apply user dismissals: drop dismissed checks from the actionable `attention_count` (they keep
     /// their real status for the Dismissed section, but stop counting as an alert).
     fn apply_dismissals(&mut self, dismissed: Vec<String>) {

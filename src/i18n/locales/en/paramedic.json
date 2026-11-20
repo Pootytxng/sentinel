@@ -28,7 +28,9 @@
       "touch": "Changes that touch games",
       "more": "Show {{n}} more",
       "other": "Other changes",
-      "looksOff": "What looks off on this PC"
+      "looksOff": "What looks off on this PC",
+      "compy": "Changes Compy made",
+      "looksOffNote": "Compy read these on this PC just now. It hasn't measured whether any of them changes how a game runs."
     },
     "change": {
       "gpuChanged": "Your {{adapter}} changed from {{from}} to {{to}} on {{when}}.",
@@ -76,7 +78,9 @@
         "windowsUpdate": "which Windows updates were installed",
         "programs": "which programs were installed",
         "gameFiles": "a game's files",
-        "steamRecord": "Steam's record of {{game}}'s files"
+        "steamRecord": "Steam's record of {{game}}'s files",
+        "facts": "facts about this PC",
+        "history": "the changes Compy made"
       },
       "why": {
         "accessDenied": "Windows needs administrator rights to show that log",
@@ -100,9 +104,12 @@
         "steamUnreadable": "Steam's library files couldn't be read",
         "steamNoRecord": "none of the Steam libraries Compy could read has a record of it",
         "steamNoTime": "Steam's record has no usable update time",
-        "partialSteamLibraries": "{{n}} Steam libraries couldn't be read"
+        "partialSteamLibraries": "{{n}} Steam libraries couldn't be read",
+        "historyUnreadable": "its history file couldn't be read"
       },
-      "steamNewestOnly": "Steam keeps only the newest update time for {{game}}, so an earlier update in this period wouldn't show."
+      "steamNewestOnly": "Steam keeps only the newest update time for {{game}}, so an earlier update in this period wouldn't show.",
+      "hardwareNotReady": "Compy is still reading this PC's hardware.",
+      "factsUnread": "Compy couldn't read: {{list}}."
     },
     "cantTell": {
       "title": "What Compy can't tell yet",
@@ -139,6 +146,45 @@
     },
     "crash": {
       "none": "Windows has no crash record for {{game}} in the records Compy read."
+    },
+    "compy": {
+      "applied": "Compy changed “{{title}}” on {{when}}.",
+      "undone": "Compy changed “{{title}}” on {{when}}, and it was turned back on {{undone}}.",
+      "undoneNoDate": "Compy changed “{{title}}” on {{when}}, and it has since been turned back.",
+      "undoHint": "You can undo these in History."
+    },
+    "fact": {
+      "monitorRefresh": "Your main monitor is running at {{now}} Hz; it supports {{max}} Hz.",
+      "memorySpeed": "Your memory is running at {{now}} MT/s; its rated speed is {{rated}} MT/s.",
+      "memoryOneStick": "Your PC has 1 memory module, so memory runs in single-channel.",
+      "memoryOneChannel": "Your {{n}} memory modules all report the same memory channel, so they share one channel.",
+      "driveHealth": "Windows reports the health of {{drive}} as {{health}}.",
+      "gameOnHdd": "{{game}} is installed on drive {{drive}}:, which is a hard disk (HDD).",
+      "gpuDriverAge_one": "Your graphics driver ({{name}}) is {{count}} day old.",
+      "gpuDriverAge_other": "Your graphics driver ({{name}}) is {{count}} days old.",
+      "freesyncOff": "Your AMD graphics card reports FreeSync as off.",
+      "onBattery": "This PC is running on battery.",
+      "gameDriveFull": "Drive {{drive}}:, where {{game}} is installed, has {{free}} GB free of {{total}} GB."
+    },
+    "factHow": {
+      "monitorRefresh": "To check: Settings, System, Display, Advanced display shows the refresh rate and the ones the monitor supports.",
+      "memorySpeed": "To check: Task Manager, Performance, Memory shows the speed it is running at.",
+      "memoryChannels": "To check: Task Manager, Performance, Memory shows how many memory slots are used.",
+      "driveHealth": "To check: Settings, System, Storage, Advanced storage settings, Disks & volumes shows each drive's health.",
+      "gameOnHdd": "To check: Task Manager, Performance, Disk shows whether each drive is an HDD or an SSD.",
+      "gpuDriverAge": "To check: Device Manager, Display adapters, your card, Driver tab shows the driver date.",
+      "freesyncOff": "To check: AMD Software, Gaming, Display shows the FreeSync setting.",
+      "onBattery": "To check: the battery icon in the taskbar shows whether the charger is connected.",
+      "gameDriveFull": "To check: Settings, System, Storage shows the free space on each drive."
+    },
+    "unreadWhat": {
+      "monitorRefresh": "the main monitor's refresh rate",
+      "memorySpeed": "memory speed",
+      "memoryChannels": "memory channels",
+      "driveHealth": "drive health",
+      "gpuDriver": "the graphics driver's age",
+      "powerSource": "the power source",
+      "gameDrive": "the game's drive"
     }
   },
   "door": {

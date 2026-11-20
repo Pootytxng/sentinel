@@ -748,11 +748,19 @@ where
 pub(crate) struct Slots {
     pub mods: std::sync::atomic::AtomicBool,
     pub crashes: std::sync::atomic::AtomicBool,
+    /// The first look's hardware-facts read and its read of Compy's own change history.
+    pub facts: std::sync::atomic::AtomicBool,
+    pub history: std::sync::atomic::AtomicBool,
 }
 
 impl Slots {
     pub(crate) const fn new() -> Self {
-        Self { mods: std::sync::atomic::AtomicBool::new(false), crashes: std::sync::atomic::AtomicBool::new(false) }
+        Self {
+            mods: std::sync::atomic::AtomicBool::new(false),
+            crashes: std::sync::atomic::AtomicBool::new(false),
+            facts: std::sync::atomic::AtomicBool::new(false),
+            history: std::sync::atomic::AtomicBool::new(false),
+        }
     }
 }
 

@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 
 use super::changes::{collect_reader, spawn_reader, status_limits, Limit, Slots, CHANGES_BUDGET};
 use super::extras::{crash_dto, crash_outcome, CrashMatch, CrashOutcome, CrashRead};
+use super::facts::{self, CompyChange, Fact, FactsInput, FactsRead, HistoryRead};
 use super::mods::{CouldNot, ModFound, ModsRead, ModsVerdict};
 use super::{iso, Certainty, EvidenceKind};
 use crate::change_sources::{self, ChangeEvent, ChangeKind, ChangeReport, GameRef, KindStatus, Precision, SteamLookup, UnreadableReason};
@@ -131,6 +132,10 @@ pub(crate) struct FirstLook {
     pub mods_none: bool,
     /// Mods whose settings or data files (not a loader) sit in the picked game's folder.
     pub mods_settings_only: Vec<&'static str>,
+    /// What looks off on this PC, as codes and numbers: a short fixed list (see `facts`), in its fixed order.
+    pub facts: Vec<Fact>,
+    /// Changes Compy itself made inside the window, newest first (read from the ledger without writing).
+    pub compy_changes: Vec<CompyChange>,
     /// What Compy could not see, per kind; the card words each.
     pub limits: Vec<Limit>,
     /// Every asked kind was read completely (so "no dated change" may be said when the lists are empty).
@@ -168,10 +173,10 @@ pub(crate) struct GameCtx {
 }
 
 impl GameCtx {
-    fn picked(&self) -> bool {
+    pub(super) fn picked(&self) -> bool {
         self.name.is_some() || self.exe.is_some() || self.game_ref.is_some() || self.steam != SteamState::NotAsked
     }
-    fn install_dir(&self) -> Option<&str> {
+    pub(super) fn install_dir(&self) -> Option<&str> {
         self.game_ref.as_ref().and_then(|g| g.install_dir.as_deref())
     }
 }
@@ -182,9 +187,11 @@ pub(crate) struct Sources {
     pub changes: Option<Reading>,
     pub crashes: CrashRead,
     pub mods: ModsRead,
+    pub facts: FactsRead,
+    pub history: HistoryRead,
 }
 
-fn limit(kind: &'static str, code: &'static str, args: &[(&'static str, String)]) -> Limit {
+pub(super) fn limit(kind: &'static str, code: &'static str, args: &[(&'static str, String)]) -> Limit {
     Limit { kind, code, args: args.iter().cloned().collect() }
 }
 
@@ -245,7 +252,8 @@ fn newest_first(v: &mut [Change]) {
 }
 
 /// Pure: the whole-PC answer for `since` from what the dated readers gave (`None` for "always": nothing was
-/// read).
+/// read). The tests' entry; the command goes through `run_with`.
+#[allow(dead_code)]
 pub(crate) fn build(since: Since, now: DateTime<Utc>, reading: Option<&Reading>) -> FirstLook {
     build_with(since, now, &GameCtx::default(), &Sources { changes: reading.cloned(), ..Sources::default() })
 }
@@ -268,6 +276,8 @@ pub(crate) fn build_with(since: Since, now: DateTime<Utc>, game: &GameCtx, src: 
         looks_off: Vec::new(),
         mods_none: false,
         mods_settings_only: Vec::new(),
+        facts: Vec::new(),
+        compy_changes: Vec::new(),
         limits: Vec::new(),
         read_all: false,
         method: METHOD,
@@ -277,6 +287,8 @@ pub(crate) fn build_with(since: Since, now: DateTime<Utc>, game: &GameCtx, src: 
     }
     mods_part(game, &src.mods, t0, now, &mut out);
     crashes_part(game, &src.crashes, &mut out);
+    facts::facts_part(&src.facts, game, &mut out);
+    facts::history_part(&src.history, t0, now, &mut out);
     newest_first(&mut out.touch_games);
     newest_first(&mut out.other_changes);
     newest_first(&mut out.looks_off);
@@ -673,6 +685,10 @@ pub(crate) struct Io {
     pub crashes: fn(&GameCtx) -> CrashRead,
     /// The picked game's folder, for graphics mods.
     pub mods: fn(&GameCtx) -> ModsRead,
+    /// The hardware facts, from the read-only accessors (never starts the hardware sweep).
+    pub facts: fn(&GameCtx) -> FactsRead,
+    /// Compy's own changes from the change ledger (a read that writes nothing).
+    pub history: fn() -> HistoryRead,
 }
 
 /// The answer for `sel` and `since` at `now`: the game is resolved first (it names the folder the other readers
@@ -691,6 +707,11 @@ pub(crate) fn run_with(sel: &FirstLookGame, since: Since, now: DateTime<Utc>, bu
         let g = game.clone();
         spawn_reader("paramedic-first-look-mods", slots.map(|s| &s.mods), move || (io.mods)(&g))
     });
+    let facts_rx = {
+        let g = game.clone();
+        spawn_reader("paramedic-first-look-facts", slots.map(|s| &s.facts), move || (io.facts)(&g))
+    };
+    let history_rx = window_hours(since).map(|_| spawn_reader("paramedic-first-look-history", slots.map(|s| &s.history), move || (io.history)()));
     let changes = window_hours(since).map(|hours| {
         let t0 = now - ChronoDuration::hours(hours);
         let g = game.clone();
@@ -698,7 +719,9 @@ pub(crate) fn run_with(sel: &FirstLookGame, since: Since, now: DateTime<Utc>, bu
     });
     let crashes = crashes_rx.map_or(CrashRead::NotRead, |rx| collect_reader(rx, budget, started).unwrap_or_else(CrashRead::Unavailable));
     let mods = mods_rx.map_or(ModsRead::NotRead, |rx| collect_reader(rx, budget, started).unwrap_or_else(ModsRead::Unavailable));
-    build_with(since, now, &game, &Sources { changes, crashes, mods })
+    let facts = collect_reader(facts_rx, budget, started).unwrap_or_else(FactsRead::Unavailable);
+    let history = history_rx.map_or(HistoryRead::NotRead, |rx| collect_reader(rx, budget, started).unwrap_or_else(HistoryRead::Unavailable));
+    build_with(since, now, &game, &Sources { changes, crashes, mods, facts, history })
 }
 
 /// Pure: a Steam pick against Steam's listing. A game the complete listing does not hold is "not in Steam"; a
@@ -768,7 +791,23 @@ fn mods_real(game: &GameCtx) -> ModsRead {
     super::mods::dto(&crate::game_mods::scan_install_folder(std::path::Path::new(dir), game.exe.as_deref(), crate::game_mods::DEFAULT_BUDGET))
 }
 
-const REAL: Io = Io { resolve: resolve_real, changes: changes_real, crashes: crashes_real, mods: mods_real };
+/// The hardware facts from what is already read: the startup snapshot (never started or waited for here),
+/// the power source (one WMI read on its own thread), and the AMD poller's cached FreeSync reading (the
+/// poller is never started from here).
+fn facts_real(_game: &GameCtx) -> FactsRead {
+    let Some(hw) = crate::hardware::snapshot_if_ready() else {
+        return FactsRead::Read(Box::new(FactsInput { hw: None, ..FactsInput::default() }));
+    };
+    let power = crate::hardware::detect_power_source();
+    let freesync = crate::monitoring::amd_freesync_cache().lock().ok().and_then(|g| *g);
+    FactsRead::Read(Box::new(FactsInput { hw: Some(hw), power, freesync }))
+}
+
+fn history_real() -> HistoryRead {
+    HistoryRead::Read(crate::history::read_ledger_stamps())
+}
+
+const REAL: Io = Io { resolve: resolve_real, changes: changes_real, crashes: crashes_real, mods: mods_real, facts: facts_real, history: history_real };
 
 /// One reader of each kind at a time: a press while an earlier reader still runs reads `took-too-long`.
 static SLOTS: Slots = Slots::new();
@@ -1678,7 +1717,13 @@ mod tests {
     fn dead_mods(_g: &GameCtx) -> ModsRead {
         panic!("the folder scan stopped");
     }
-    const FAKE: Io = Io { resolve: fake_resolve, changes: fake_changes, crashes: fake_crashes, mods: fake_mods };
+    fn fake_facts(_g: &GameCtx) -> FactsRead {
+        FactsRead::NotRead
+    }
+    fn fake_history() -> HistoryRead {
+        HistoryRead::NotRead
+    }
+    const FAKE: Io = Io { resolve: fake_resolve, changes: fake_changes, crashes: fake_crashes, mods: fake_mods, facts: fake_facts, history: fake_history };
 
     fn reset_counts() {
         for c in [&CALLS, &CRASH_CALLS, &MOD_CALLS] {

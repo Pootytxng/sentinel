@@ -1419,6 +1419,49 @@ pub(crate) fn detect_power_status() -> String {
     if s.is_empty() { "Unknown".into() } else { s }
 }
 
+/// Where this PC is drawing power from, as a type (the first look says "on battery" only for the one
+/// state Windows calls discharging).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub(crate) enum PowerSource {
+    OnBattery,
+    AcPower,
+    /// No battery: a desktop.
+    Desktop,
+    /// WMI failed, or the battery state is one this does not read as either (low, critical, undefined).
+    #[default]
+    Unknown,
+}
+
+/// Pure: the power source from (has_battery, BatteryStatus). 1 is discharging; 2, 3 (fully charged),
+/// 6-9 (charging) and 11 (partially charged) are on AC. Anything else is `Unknown`, never a guess.
+pub(crate) fn power_source_from(has_battery: bool, battery_status: Option<u16>) -> PowerSource {
+    if !has_battery {
+        return PowerSource::Desktop;
+    }
+    match battery_status {
+        Some(1) => PowerSource::OnBattery,
+        Some(2 | 3 | 6..=9 | 11) => PowerSource::AcPower,
+        _ => PowerSource::Unknown,
+    }
+}
+
+/// The typed power source: one WMI read on its own thread (a thread, not a process), the same read as
+/// `detect_power_status`. Read-only.
+pub(crate) fn detect_power_source() -> PowerSource {
+    on_wmi_thread(|| {
+        let Some(com) = COMLibrary::new().ok() else { return PowerSource::Unknown };
+        let Some(conn) = WMIConnection::new(com).ok() else { return PowerSource::Unknown };
+        let rows: Result<Vec<Win32Battery>, _> = conn.query();
+        match rows {
+            Err(_) => PowerSource::Unknown,
+            Ok(rows) => match rows.into_iter().next() {
+                None => PowerSource::Desktop,
+                Some(b) => power_source_from(true, b.battery_status),
+            },
+        }
+    })
+}
+
 fn detect_power_status_inner() -> String {
     let Some(com) = COMLibrary::new().ok() else {
         return "Unknown".into();
@@ -1444,6 +1487,22 @@ mod power_status_tests {
         assert_eq!(power_status_label(true, Some(1), Some(60)), "On battery (60%)");
         assert_eq!(power_status_label(true, None, Some(80)), "Battery 80%");
         assert_eq!(power_status_label(true, None, None), "Battery present");
+    }
+
+    #[test]
+    fn the_power_source_is_on_battery_only_for_discharging() {
+        use super::{power_source_from as p, PowerSource as S};
+        assert_eq!(p(false, None), S::Desktop);
+        assert_eq!(p(false, Some(1)), S::Desktop);
+        assert_eq!(p(true, Some(1)), S::OnBattery);
+        for ac in [2, 3, 6, 7, 8, 9, 11] {
+            assert_eq!(p(true, Some(ac)), S::AcPower, "{ac}");
+        }
+        // Low, critical, undefined and unread are not read as on battery or on AC.
+        for other in [4, 5, 10, 12] {
+            assert_eq!(p(true, Some(other)), S::Unknown, "{other}");
+        }
+        assert_eq!(p(true, None), S::Unknown);
     }
 
     #[test]
@@ -1907,6 +1966,15 @@ pub(crate) fn primary_gpu(hw: &HardwareInfo) -> Option<&GpuInfo> {
 pub(crate) fn cached_primary_gpu_name() -> Option<String> {
     let hw = HW_SNAPSHOT.get()?;
     primary_gpu(hw).map(|g| g.name.trim().to_string()).filter(|n| !n.is_empty())
+}
+
+/// The hardware snapshot ONLY if it has already been read: it never starts the WMI sweep and never waits
+/// for one, and it starts no background read (`collect_hardware` does both). The live fields (RAM in use,
+/// free disk space, the main display's mode) are re-read with local calls only. `None` = not ready yet.
+pub(crate) fn snapshot_if_ready() -> Option<HardwareInfo> {
+    let mut hw = HW_SNAPSHOT.get()?.clone();
+    refresh_live_fields(&mut hw);
+    Some(hw)
 }
 
 /// How long a GPU driver read stands before the next call re-reads it.

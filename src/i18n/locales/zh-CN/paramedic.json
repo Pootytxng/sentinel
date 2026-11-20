@@ -28,7 +28,9 @@
       "touch": "与游戏有关的变化",
       "more": "再显示 {{n}} 项",
       "other": "其他变化",
-      "looksOff": "这台电脑上看起来不对劲的地方"
+      "looksOff": "这台电脑上看起来不对劲的地方",
+      "compy": "Compy 做过的更改",
+      "looksOffNote": "这些是 Compy 刚刚在这台电脑上读到的。Compy 还没有测量过其中任何一项是否会影响游戏的运行。"
     },
     "change": {
       "gpuChanged": "你的{{adapter}}在 {{when}} 从 {{from}} 变成了 {{to}}。",
@@ -76,7 +78,9 @@
         "windowsUpdate": "安装了哪些 Windows 更新",
         "programs": "安装了哪些程序",
         "gameFiles": "游戏的文件",
-        "steamRecord": "Steam 对 {{game}} 文件的记录"
+        "steamRecord": "Steam 对 {{game}} 文件的记录",
+        "facts": "这台电脑的一些情况",
+        "history": "Compy 做过的更改"
       },
       "why": {
         "accessDenied": "Windows 需要管理员权限才能显示那份日志",
@@ -100,9 +104,12 @@
         "steamUnreadable": "Steam 的游戏库文件无法读取",
         "steamNoRecord": "Compy 能读取的 Steam 游戏库中都没有它的记录",
         "steamNoTime": "Steam 的记录里没有可用的更新时间",
-        "partialSteamLibraries": "有 {{n}} 个 Steam 游戏库无法读取"
+        "partialSteamLibraries": "有 {{n}} 个 Steam 游戏库无法读取",
+        "historyUnreadable": "它的历史文件无法读取"
       },
-      "steamNewestOnly": "Steam 只保留 {{game}} 最近一次的更新时间，所以这段时间内更早的更新不会显示。"
+      "steamNewestOnly": "Steam 只保留 {{game}} 最近一次的更新时间，所以这段时间内更早的更新不会显示。",
+      "hardwareNotReady": "Compy 还在读取这台电脑的硬件信息。",
+      "factsUnread": "Compy 无法读取：{{list}}。"
     },
     "cantTell": {
       "title": "Compy 目前还说不准的",
@@ -139,6 +146,45 @@
     },
     "crash": {
       "none": "在 Compy 读取的记录中，Windows 没有 {{game}} 的崩溃记录。"
+    },
+    "compy": {
+      "applied": "Compy 在 {{when}} 更改了“{{title}}”。",
+      "undone": "Compy 在 {{when}} 更改了“{{title}}”，并在 {{undone}} 改回去了。",
+      "undoneNoDate": "Compy 在 {{when}} 更改了“{{title}}”，之后已经改回去了。",
+      "undoHint": "你可以在“历史”里撤销这些更改。"
+    },
+    "fact": {
+      "monitorRefresh": "你的主显示器正以 {{now}} Hz 运行；它支持 {{max}} Hz。",
+      "memorySpeed": "你的内存正以 {{now}} MT/s 运行；它的额定速度是 {{rated}} MT/s。",
+      "memoryOneStick": "你的电脑只有 1 根内存条，所以内存是单通道运行。",
+      "memoryOneChannel": "你的 {{n}} 根内存条都报告在同一个内存通道上，所以它们共用一个通道。",
+      "driveHealth": "Windows 报告 {{drive}} 的健康状态为 {{health}}。",
+      "gameOnHdd": "{{game}} 安装在 {{drive}}: 盘，这是一块机械硬盘（HDD）。",
+      "gpuDriverAge_one": "你的显卡驱动（{{name}}）已经有 {{count}} 天了。",
+      "gpuDriverAge_other": "你的显卡驱动（{{name}}）已经有 {{count}} 天了。",
+      "freesyncOff": "你的 AMD 显卡报告 FreeSync 处于关闭状态。",
+      "onBattery": "这台电脑正在使用电池供电。",
+      "gameDriveFull": "安装 {{game}} 的 {{drive}}: 盘，{{total}} GB 中还剩 {{free}} GB 可用。"
+    },
+    "factHow": {
+      "monitorRefresh": "查看方法：设置，系统，显示，高级显示，可以看到当前刷新率和显示器支持的刷新率。",
+      "memorySpeed": "查看方法：任务管理器，性能，内存，可以看到它正在运行的速度。",
+      "memoryChannels": "查看方法：任务管理器，性能，内存，可以看到已使用的内存插槽数。",
+      "driveHealth": "查看方法：设置，系统，存储，高级存储设置，磁盘和卷，可以看到每块硬盘的健康状态。",
+      "gameOnHdd": "查看方法：任务管理器，性能，磁盘，可以看到每块硬盘是 HDD 还是 SSD。",
+      "gpuDriverAge": "查看方法：设备管理器，显示适配器，你的显卡，驱动程序选项卡，可以看到驱动日期。",
+      "freesyncOff": "查看方法：AMD Software，游戏，显示，可以看到 FreeSync 设置。",
+      "onBattery": "查看方法：任务栏里的电池图标会显示充电器是否已连接。",
+      "gameDriveFull": "查看方法：设置，系统，存储，可以看到每块硬盘的可用空间。"
+    },
+    "unreadWhat": {
+      "monitorRefresh": "主显示器的刷新率",
+      "memorySpeed": "内存速度",
+      "memoryChannels": "内存通道",
+      "driveHealth": "硬盘健康状态",
+      "gpuDriver": "显卡驱动的使用时长",
+      "powerSource": "供电方式",
+      "gameDrive": "游戏所在的硬盘"
     }
   },
   "door": {

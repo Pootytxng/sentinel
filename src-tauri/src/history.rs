@@ -2345,6 +2345,31 @@ pub(crate) fn rec_id_of_change(change_id: &str) -> Result<Option<String>, String
     Ok(read_history_unlocked(&history_path())?.into_iter().find(|c| c.id == change_id).map(|c| c.rec_id))
 }
 
+/// What the first look shows of one change Compy made: its title and when. Strings as the ledger holds them.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LedgerStamp {
+    pub title: String,
+    pub applied_at: String,
+    pub rolled_back_at: Option<String>,
+    /// "applied" | "rolled_back".
+    pub status: String,
+}
+
+/// Compy's own changes, titles and dates only, from a read that never moves, writes or reports anything
+/// (`read_history_unlocked`: no lock, no set-aside of a damaged ledger, no restore from the backup copy).
+/// A ledger that can't be read is an error, never an empty list. The path is the data root's, taken without
+/// the legacy-folder migration `compy_data_dir` can run.
+pub(crate) fn read_ledger_stamps() -> Result<Vec<LedgerStamp>, String> {
+    read_ledger_stamps_at(&crate::data_root::decision().effective_root().join("history.json"))
+}
+
+pub(crate) fn read_ledger_stamps_at(path: &Path) -> Result<Vec<LedgerStamp>, String> {
+    Ok(read_history_unlocked(path)?
+        .into_iter()
+        .map(|c| LedgerStamp { title: c.rec_title, applied_at: c.applied_at, rolled_back_at: c.rolled_back_at, status: c.status })
+        .collect())
+}
+
 /// PURE-ish read of the ledger at `path` that never moves, writes or reports anything. Absent is an
 /// empty ledger; a file that can't be read or doesn't parse is an error naming which.
 fn read_history_unlocked(path: &Path) -> Result<Vec<AppliedChange>, String> {
@@ -6829,6 +6854,74 @@ mod ledger_backup_tests {
         assert_eq!(ids(&read_history_unlocked(&path).unwrap()), ids(&rows(2)));
         assert!(!path.exists(), "a pure read");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Every file in `dir` by name and bytes (and every sub-directory by name), so "nothing changed" is the
+    /// whole listing being equal, not one file.
+    fn listing(dir: &Path) -> Vec<(String, Option<Vec<u8>>)> {
+        let mut v: Vec<(String, Option<Vec<u8>>)> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| {
+                let e = e.unwrap();
+                let bytes = e.path().is_file().then(|| std::fs::read(e.path()).unwrap());
+                (e.file_name().to_string_lossy().into_owned(), bytes)
+            })
+            .collect();
+        v.sort();
+        v
+    }
+
+    // The first look's read of Compy's own changes: titles and dates, and nothing written, moved, restored or
+    // set aside, whatever state the ledger is in.
+    #[test]
+    fn the_first_look_ledger_read_changes_nothing_on_disk() {
+        // A good ledger with its backup beside it.
+        let (dir, path) = saved("stamps-good", 3);
+        assert!(backup_path(&path).exists());
+        let before = listing(&dir);
+        let got = read_ledger_stamps_at(&path).unwrap();
+        assert_eq!(got.iter().map(|s| s.title.clone()).collect::<Vec<_>>(), rows(3).into_iter().map(|c| c.rec_title).collect::<Vec<_>>());
+        assert!(got.iter().all(|s| !s.applied_at.is_empty() && !s.status.is_empty()));
+        assert_eq!(listing(&dir), before, "a good ledger");
+        // A damaged ledger with a good backup beside it: an error (never an empty list), and no `.corrupt`
+        // file, no restore, no marker.
+        std::fs::write(&path, b"{ damage").unwrap();
+        let before = listing(&dir);
+        assert!(read_ledger_stamps_at(&path).is_err());
+        assert_eq!(listing(&dir), before, "a damaged ledger with a backup present");
+        assert_eq!(std::fs::read(&path).unwrap(), b"{ damage");
+        // A missing ledger with its backup beside it: the backup's rows are shown and nothing is restored.
+        std::fs::remove_file(&path).unwrap();
+        let before = listing(&dir);
+        assert_eq!(read_ledger_stamps_at(&path).unwrap().len(), 3);
+        assert_eq!(listing(&dir), before, "a missing ledger with a backup present");
+        assert!(!path.exists());
+        // A damaged backup beside a missing ledger is an error, and still nothing changes.
+        std::fs::write(backup_path(&path), b"{ damage").unwrap();
+        let before = listing(&dir);
+        assert!(read_ledger_stamps_at(&path).is_err());
+        assert_eq!(listing(&dir), before, "a damaged backup");
+        std::fs::remove_dir_all(&dir).ok();
+        // No ledger and no backup: an empty list, and no file is created.
+        let dir = dir_for("stamps-none");
+        let path = dir.join("history.json");
+        assert!(read_ledger_stamps_at(&path).unwrap().is_empty());
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "a first run writes nothing");
+        // A directory in the ledger's place cannot be read: an error, left where it was.
+        std::fs::create_dir(&path).unwrap();
+        let before = listing(&dir);
+        assert!(read_ledger_stamps_at(&path).is_err());
+        assert_eq!(listing(&dir), before);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn the_first_look_ledger_read_is_the_unlocked_read_and_never_a_load() {
+        let src = include_str!("history.rs");
+        let body = src.split_once("pub(crate) fn read_ledger_stamps_at(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        assert!(body.contains("read_history_unlocked(") && !body.contains("load_history") && !body.contains("save_"), "{body}");
+        let live = src.split_once("pub(crate) fn read_ledger_stamps(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        assert!(live.contains("read_ledger_stamps_at(") && !live.contains("compy_data_dir"), "{live}");
     }
 
     const GUID: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";

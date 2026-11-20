@@ -31,6 +31,12 @@ export type FirstLookGame = { kind: "whole-pc" } | { kind: "seen"; process: stri
 /** A game Compy has recorded, newest first (the Home card passes them from the recorded sessions). */
 export type RecordedGame = { process: string; name: string };
 
+/** One thing that looks off on this PC: a code and its numbers (the card words it and its one "how to check" line). */
+export type FirstLookFact = { id: string; args: Record<string, string> };
+
+/** A change Compy itself made inside the window (from its change history). */
+export type CompyChange = { title: string; at: string; undone: boolean; undone_at: string | null };
+
 export type ParamedicFirstLook = {
   told: { since: FirstLookSince; from: string | null; to: string; hours: number | null };
   /** The picked game's display name; null for the whole PC. */
@@ -52,6 +58,10 @@ export type ParamedicFirstLook = {
   mods_none: boolean;
   /** Mods whose settings or data files (not a loader) sit in the game's folder. */
   mods_settings_only: string[];
+  /** What looks off on this PC, in the engine's fixed order. */
+  facts: FirstLookFact[];
+  /** Changes Compy made inside the window, newest first. */
+  compy_changes: CompyChange[];
   limits: ParamedicLimit[];
   read_all: boolean;
   method: string;
@@ -187,6 +197,98 @@ function rowNotes(c: FirstLookChange, t: T, dates: Dates): string[] {
   return out;
 }
 
+/** One fact that looks off, as a sentence with its number. The words state a reading; none says why a game runs badly. */
+function factText(f: FirstLookFact, t: T, game: string | null): string {
+  const a = f.args;
+  switch (f.id) {
+    case "monitor-refresh":
+      return t("paramedic.firstLook.fact.monitorRefresh", { now: a.now, max: a.max });
+    case "memory-speed":
+      return t("paramedic.firstLook.fact.memorySpeed", { now: a.now, rated: a.rated });
+    case "memory-one-stick":
+      return t("paramedic.firstLook.fact.memoryOneStick");
+    case "memory-one-channel":
+      return t("paramedic.firstLook.fact.memoryOneChannel", { n: Number(a.n) });
+    case "drive-health":
+      return t("paramedic.firstLook.fact.driveHealth", { drive: a.drive, health: a.health });
+    case "game-on-hdd":
+      return t("paramedic.firstLook.fact.gameOnHdd", { game: game ?? "", drive: a.drive });
+    case "gpu-driver-age":
+      return t("paramedic.firstLook.fact.gpuDriverAge", { name: a.name, count: Number(a.days) });
+    case "freesync-off":
+      return t("paramedic.firstLook.fact.freesyncOff");
+    case "on-battery":
+      return t("paramedic.firstLook.fact.onBattery");
+    case "game-drive-full":
+      return t("paramedic.firstLook.fact.gameDriveFull", { game: game ?? "", drive: a.drive, free: a.free_gb, total: a.total_gb });
+    default:
+      return "";
+  }
+}
+
+/** The one line on how to check a fact by hand. No advice beyond it. */
+function factHow(id: string, t: T): string | null {
+  switch (id) {
+    case "monitor-refresh":
+      return t("paramedic.firstLook.factHow.monitorRefresh");
+    case "memory-speed":
+      return t("paramedic.firstLook.factHow.memorySpeed");
+    case "memory-one-stick":
+    case "memory-one-channel":
+      return t("paramedic.firstLook.factHow.memoryChannels");
+    case "drive-health":
+      return t("paramedic.firstLook.factHow.driveHealth");
+    case "game-on-hdd":
+      return t("paramedic.firstLook.factHow.gameOnHdd");
+    case "gpu-driver-age":
+      return t("paramedic.firstLook.factHow.gpuDriverAge");
+    case "freesync-off":
+      return t("paramedic.firstLook.factHow.freesyncOff");
+    case "on-battery":
+      return t("paramedic.firstLook.factHow.onBattery");
+    case "game-drive-full":
+      return t("paramedic.firstLook.factHow.gameDriveFull");
+    default:
+      return null;
+  }
+}
+
+/** A change Compy made: what and when, and (once) where it can be undone. Compy runs nothing from here. */
+function compyText(c: CompyChange, t: T, dates: Dates): string {
+  const when = dates.dayTime(c.at);
+  if (!c.undone) return t("paramedic.firstLook.compy.applied", { title: c.title, when });
+  return c.undone_at
+    ? t("paramedic.firstLook.compy.undone", { title: c.title, when, undone: dates.dayTime(c.undone_at) })
+    : t("paramedic.firstLook.compy.undoneNoDate", { title: c.title, when });
+}
+
+/** The readings a "couldn't read" line can name. */
+function factsUnreadWords(list: string, t: T): string {
+  return list
+    .split(",")
+    .map((k) => {
+      switch (k) {
+        case "monitor-refresh":
+          return t("paramedic.firstLook.unreadWhat.monitorRefresh");
+        case "memory-speed":
+          return t("paramedic.firstLook.unreadWhat.memorySpeed");
+        case "memory-channels":
+          return t("paramedic.firstLook.unreadWhat.memoryChannels");
+        case "drive-health":
+          return t("paramedic.firstLook.unreadWhat.driveHealth");
+        case "gpu-driver":
+          return t("paramedic.firstLook.unreadWhat.gpuDriver");
+        case "power-source":
+          return t("paramedic.firstLook.unreadWhat.powerSource");
+        case "game-drive":
+          return t("paramedic.firstLook.unreadWhat.gameDrive");
+        default:
+          return k;
+      }
+    })
+    .join(", ");
+}
+
 /** The one line on how to check or undo it by hand. Compy runs none of them. */
 function howText(code: string, t: T): string | null {
   switch (code) {
@@ -207,6 +309,10 @@ function limitWhat(kind: ParamedicLimit["kind"], t: T, game?: string | null): st
   switch (kind) {
     case "game-update":
       return game ? t("paramedic.firstLook.limit.what.steamRecord", { game }) : t("paramedic.firstLook.limit.what.gameFiles");
+    case "facts":
+      return t("paramedic.firstLook.limit.what.facts");
+    case "history":
+      return t("paramedic.firstLook.limit.what.history");
     case "driver":
       return t("paramedic.firstLook.limit.what.driver");
     case "windows-update":
@@ -253,6 +359,8 @@ function limitWhy(l: ParamedicLimit, t: T, dates: Dates): string {
       return t("paramedic.firstLook.limit.why.partialRegistry", { n: l.args.n });
     case "partial-coverage":
       return t("paramedic.firstLook.limit.why.partialCoverage", { from });
+    case "unreadable":
+      return t("paramedic.firstLook.limit.why.historyUnreadable");
     case "not-steam":
       return t("paramedic.firstLook.limit.why.notSteam");
     case "steam-unreadable":
@@ -273,6 +381,8 @@ function limitLine(l: ParamedicLimit, t: T, dates: Dates, game?: string | null):
   if (l.code === "classes") return t("paramedic.firstLook.limit.classes");
   if (l.code === "no-install-date") return t("paramedic.firstLook.limit.noInstallDate", { n: l.args.n });
   if (l.code === "not-picked") return t("paramedic.firstLook.limit.gameNotPicked");
+  if (l.kind === "facts" && l.code === "hardware-not-ready") return t("paramedic.firstLook.limit.hardwareNotReady");
+  if (l.kind === "facts" && l.code === "unread") return t("paramedic.firstLook.limit.factsUnread", { list: factsUnreadWords(l.args.list ?? "", t) });
   if (l.code === "steam-newest-only") return t("paramedic.firstLook.limit.steamNewestOnly", { game: game ?? "" });
   // A graphics-mod or crash-record limit is the measured flow's own "Compy couldn't see" sentence.
   if (l.kind === "mods") {
@@ -619,7 +729,7 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
   // Definition and Store-app updates are daily routine: they are counted inside the limits fold, not listed.
   const minor = a.other_changes.find((c) => c.id === "updates-minor");
   const otherRows = a.other_changes.filter((c) => c.id !== "updates-minor");
-  const empty = a.touch_games.length === 0 && otherRows.length === 0;
+  const empty = a.touch_games.length === 0 && otherRows.length === 0 && a.compy_changes.length === 0;
   const touchLimits = a.limits.filter((l) => inGroup(l) && (l.kind === "driver" || l.kind === "windows-update" || l.kind === "game-update"));
   const programLimits = a.limits.filter((l) => inGroup(l) && l.kind === "programs");
   const open = a.touch_games.slice(0, ROWS_OPEN);
@@ -627,7 +737,36 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
   const noneTouch = a.none.filter((n) => n === "gpu-driver" || n === "windows-update");
   const nonePrograms = a.none.includes("programs");
   const touchNotes = !!gameName && (a.game_files_since !== null || a.mods_none);
-  const offBlock = !!gameName && (a.crashes !== null || a.crashes_none || a.looks_off.length > 0 || a.mods_settings_only.length > 0);
+  // "Still reading this PC's hardware" is said in the block it empties, not only in the limits fold.
+  const waiting = a.limits.find((l) => l.kind === "facts" && l.code === "hardware-not-ready");
+  const foldLimits = a.limits.filter((l) => l !== waiting);
+  const offBlock = a.crashes !== null || a.crashes_none || a.looks_off.length > 0 || a.mods_settings_only.length > 0 || a.facts.length > 0 || !!waiting;
+  const factsOpen = a.facts.slice(0, ROWS_OPEN);
+  const factsRest = a.facts.slice(ROWS_OPEN);
+  const compyOpen = a.compy_changes.slice(0, ROWS_OPEN);
+  const compyRest = a.compy_changes.slice(ROWS_OPEN);
+  const factRows = (rows: FirstLookFact[]) => (
+    <ul className="gl-para-lines" data-testid="first-look-facts">
+      {rows.map((f, i) => {
+        const how = factHow(f.id, t);
+        return (
+          <li key={`${f.id}-${i}`}>
+            <p>{factText(f, t, gameName)}</p>
+            {how && <p className="gl-para-note">{how}</p>}
+          </li>
+        );
+      })}
+    </ul>
+  );
+  const compyRows = (rows: CompyChange[]) => (
+    <ul className="gl-para-lines" data-testid="first-look-compy-rows">
+      {rows.map((c, i) => (
+        <li key={`${c.at}-${i}`}>
+          <p>{compyText(c, t, dates)}</p>
+        </li>
+      ))}
+    </ul>
+  );
   return (
     <div className="gl-para-body" data-testid="first-look">
       <h2 ref={headingRef} tabIndex={-1} className="gl-card-title">
@@ -643,6 +782,20 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
       {!a.changes_listed && <p data-testid="first-look-always">{t("paramedic.firstLook.alwaysBody")}</p>}
       {a.changes_listed && (
         <>
+          {a.compy_changes.length > 0 && (
+            <div role="group" aria-label={t("paramedic.firstLook.group.compy")} data-testid="first-look-compy">
+              <p>
+                <strong>{t("paramedic.firstLook.group.compy")}</strong>
+              </p>
+              {compyRows(compyOpen)}
+              {compyRest.length > 0 && (
+                <Fold title={t("paramedic.firstLook.group.more", { n: compyRest.length })} testid="first-look-compy-more">
+                  {compyRows(compyRest)}
+                </Fold>
+              )}
+              <p className="gl-para-note">{t("paramedic.firstLook.compy.undoHint")}</p>
+            </div>
+          )}
           {(open.length > 0 || noneTouch.length > 0 || touchLimits.length > 0 || touchNotes) && (
             <div role="group" aria-label={t("paramedic.firstLook.group.touch")} data-testid="first-look-touch">
               <p>
@@ -676,12 +829,12 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
               ))}
             </div>
           )}
-          {offBlock && gameName && (
+          {offBlock && (
             <div role="group" aria-label={t("paramedic.firstLook.group.looksOff")} data-testid="first-look-off">
               <p>
                 <strong>{t("paramedic.firstLook.group.looksOff")}</strong>
               </p>
-              {a.crashes && (
+              {gameName && a.crashes && (
                 <div data-testid="first-look-crashes">
                   {crashSentence(a.crashes, gameName, t, dates).map((s, i) => (
                     <p key={i} className={i === 0 ? undefined : "gl-para-note"}>
@@ -690,17 +843,34 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
                   ))}
                 </div>
               )}
-              {a.crashes_none && (
+              {gameName && a.crashes_none && (
                 <p className="gl-para-note" data-testid="first-look-crashes-none">
                   {t("paramedic.firstLook.crash.none", { game: gameName })}
                 </p>
               )}
-              {a.looks_off.length > 0 && <Rows rows={a.looks_off} t={t} dates={dates} game={gameName} />}
-              {a.mods_settings_only.map((name) => (
-                <p key={name} data-testid="first-look-mod-settings-only">
-                  {t("paramedic.seen.modSettingsOnly", { game: gameName, name })}
+              {gameName && a.looks_off.length > 0 && <Rows rows={a.looks_off} t={t} dates={dates} game={gameName} />}
+              {gameName &&
+                a.mods_settings_only.map((name) => (
+                  <p key={name} data-testid="first-look-mod-settings-only">
+                    {t("paramedic.seen.modSettingsOnly", { game: gameName, name })}
+                  </p>
+                ))}
+              {a.facts.length > 0 && factRows(factsOpen)}
+              {factsRest.length > 0 && (
+                <Fold title={t("paramedic.firstLook.group.more", { n: factsRest.length })} testid="first-look-facts-more">
+                  {factRows(factsRest)}
+                </Fold>
+              )}
+              {a.facts.length > 0 && (
+                <p className="gl-para-note" data-testid="first-look-facts-note">
+                  {t("paramedic.firstLook.group.looksOffNote")}
                 </p>
-              ))}
+              )}
+              {waiting && (
+                <p className="gl-para-note" data-testid="first-look-facts-waiting">
+                  {limitLine(waiting, t, dates, gameName)}
+                </p>
+              )}
             </div>
           )}
           {(otherRows.length > 0 || nonePrograms || programLimits.length > 0) && (
@@ -716,11 +886,11 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
           )}
           {empty && a.read_all && !minor && <p data-testid="first-look-nothing">{t("paramedic.firstLook.nothing")}</p>}
           {empty && !a.read_all && <p data-testid="first-look-unread">{t("paramedic.firstLook.unread")}</p>}
-          {(a.limits.length > 0 || minor) && (
+          {(foldLimits.length > 0 || minor) && (
             <Fold title={t("paramedic.firstLook.limit.title")} testid="first-look-limits" defaultOpen={empty && !a.read_all}>
               <ul className="gl-para-lines">
                 {minor && <li>{changeText(minor, t, dates)}</li>}
-                {a.limits.map((l, i) => (
+                {foldLimits.map((l, i) => (
                   <li key={`${l.kind}-${l.code}-${i}`}>{limitLine(l, t, dates, gameName)}</li>
                 ))}
               </ul>

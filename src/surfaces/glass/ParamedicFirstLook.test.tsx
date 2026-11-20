@@ -30,7 +30,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 import "../../i18n";
 import i18n from "../../i18n";
 import type { ParamedicDiagnosis } from "../../types";
-import type { FirstLookChange, ParamedicFirstLook as FirstLookAnswer, RecordedGame, SteamGames } from "./ParamedicFirstLook";
+import type { CompyChange, FirstLookChange, FirstLookFact, ParamedicFirstLook as FirstLookAnswer, RecordedGame, SteamGames } from "./ParamedicFirstLook";
 import { ParamedicCard } from "./ParamedicCard";
 
 afterEach(() => {
@@ -98,6 +98,8 @@ const answer = (over: Partial<FirstLookAnswer> = {}): FirstLookAnswer => ({
   looks_off: [],
   mods_none: false,
   mods_settings_only: [],
+  facts: [],
+  compy_changes: [],
   limits: completeLimits,
   read_all: true,
   method: "paramedic-first-look-v1",
@@ -724,6 +726,219 @@ describe("the first look for a picked game", () => {
       fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
       await pick("这周", gameAnswer());
       expect(screen.getByRole("heading", { name: "Compy 对 ROB RUN 的发现" })).toBeTruthy();
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});
+
+// ---- S3: what looks off on this PC, and Compy's own changes ----------------------------------------------
+
+const fact = (id: string, args: Record<string, string> = {}): FirstLookFact => ({ id, args });
+const compy = (title: string, at: string, over: Partial<CompyChange> = {}): CompyChange => ({ title, at, undone: false, undone_at: null, ...over });
+
+describe("what looks off on this PC", () => {
+  async function wholePc(a: FirstLookAnswer) {
+    await toTheQuestion();
+    await pick("This week", a);
+  }
+
+  const cases: [FirstLookFact, RegExp, RegExp][] = [
+    [fact("monitor-refresh", { now: "60", max: "250" }), /^Your main monitor is running at 60 Hz; it supports 250 Hz\./, /Advanced display/],
+    [fact("memory-speed", { now: "4800", rated: "6000" }), /^Your memory is running at 4800 MT\/s; its rated speed is 6000 MT\/s\./, /Task Manager, Performance, Memory/],
+    [fact("memory-one-stick"), /^Your PC has 1 memory module, so memory runs in single-channel\./, /memory slots are used/],
+    [fact("memory-one-channel", { n: "2" }), /^Your 2 memory modules all report the same memory channel/, /memory slots are used/],
+    [fact("drive-health", { drive: "WD Blue", health: "Warning" }), /^Windows reports the health of WD Blue as Warning\./, /Disks & volumes/],
+    [fact("game-on-hdd", { drive: "D" }), /^ROB RUN is installed on drive D:, which is a hard disk \(HDD\)\./, /HDD or an SSD/],
+    [fact("gpu-driver-age", { days: "412", name: "AMD Radeon RX 9070" }), /^Your graphics driver \(AMD Radeon RX 9070\) is 412 days old\./, /Driver tab/],
+    [fact("freesync-off"), /^Your AMD graphics card reports FreeSync as off\./, /AMD Software, Gaming, Display/],
+    [fact("on-battery"), /^This PC is running on battery\./, /battery icon/],
+    [fact("game-drive-full", { drive: "D", free_gb: "12.0", total_gb: "500.0" }), /^Drive D:, where ROB RUN is installed, has 12\.0 GB free of 500\.0 GB\./, /Settings, System, Storage/],
+  ];
+
+  it.each(cases)("%# says its reading with the number and exactly one line on how to check it", async (f, sentence, how) => {
+    await wholePc(gameAnswer({ facts: [f] }));
+    const row = within(screen.getByTestId("first-look-off")).getByRole("listitem");
+    const [said, check, ...more] = within(row).getAllByText(/./).map((n) => n.textContent ?? "");
+    expect(said).toMatch(sentence);
+    expect(check).toMatch(how);
+    expect(check.startsWith("To check: ")).toBe(true);
+    expect(more).toEqual([]);
+  });
+
+  it("is a block with a once-only note, and the facts keep the engine's order", async () => {
+    await wholePc(gameAnswer({ facts: [fact("monitor-refresh", { now: "60", max: "250" }), fact("memory-speed", { now: "4800", rated: "6000" })] }));
+    const block = screen.getByTestId("first-look-off");
+    expect(within(block).getByText("What looks off on this PC")).toBeTruthy();
+    expect(within(block).getAllByRole("listitem").map((n) => n.textContent)).toEqual([
+      expect.stringMatching(/^Your main monitor is running at 60 Hz/),
+      expect.stringMatching(/^Your memory is running at 4800 MT\/s/),
+    ]);
+    expect(within(block).getAllByTestId("first-look-facts-note")).toHaveLength(1);
+    expect(screen.getByTestId("first-look-facts-note").textContent).toBe(
+      "Compy read these on this PC just now. It hasn't measured whether any of them changes how a game runs.",
+    );
+  });
+
+  it("a healthy PC has no block and no note", async () => {
+    await wholePc(gameAnswer());
+    expect(screen.queryByTestId("first-look-off")).toBeNull();
+    expect(screen.queryByTestId("first-look-facts-note")).toBeNull();
+  });
+
+  it("three facts are open and the rest wait behind a closed fold", async () => {
+    const many = [1, 2, 3, 4, 5].map((n) => fact("drive-health", { drive: `Drive ${n}`, health: "Warning" }));
+    await wholePc(gameAnswer({ facts: many }));
+    const block = screen.getByTestId("first-look-off");
+    expect(within(block).getAllByRole("listitem")).toHaveLength(3);
+    const more = within(block).getByRole("button", { name: "Show 2 more" });
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(more);
+    expect(within(block).getAllByRole("listitem")).toHaveLength(5);
+  });
+
+  it("hardware still being read is said in the block, once, and the block is not empty or silent", async () => {
+    await wholePc(gameAnswer({ limits: [{ kind: "facts", code: "hardware-not-ready", args: {} }], read_all: true }));
+    const block = screen.getByTestId("first-look-off");
+    expect(within(block).getByTestId("first-look-facts-waiting").textContent).toBe("Compy is still reading this PC's hardware.");
+    expect(within(block).queryAllByRole("listitem")).toHaveLength(0);
+    // Said once: not repeated in the limits fold.
+    expect(screen.queryByTestId("first-look-limits")).toBeNull();
+    expect(screen.getAllByText("Compy is still reading this PC's hardware.")).toHaveLength(1);
+  });
+
+  it("a reading Compy couldn't make is one limit line naming it, in the fold", async () => {
+    await wholePc(gameAnswer({ limits: [{ kind: "facts", code: "unread", args: { list: "monitor-refresh,power-source,game-drive" } }] }));
+    const fold = screen.getByRole("button", { name: "What Compy couldn't see" });
+    if (fold.getAttribute("aria-expanded") === "false") fireEvent.click(fold);
+    expect(screen.getByTestId("first-look-limits").textContent).toContain("Compy couldn't read: the main monitor's refresh rate, the power source, the game's drive.");
+    expect(screen.queryByTestId("first-look-off")).toBeNull();
+  });
+
+  it("in a game's answer the order is crash history, graphics mods, then the PC's facts, in one block", async () => {
+    engine.steam = steamList([]);
+    await toThePicker(noSessions(), { games: recorded });
+    fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
+    await pick(
+      "This week",
+      gameAnswer({
+        crashes: { args: { n: "2", since: "2026-11-02T10:00:00Z", partial: "false", byName: "false", versions: "" }, signature_module: null, signature_before: null },
+        looks_off: [modRow()],
+        mods_settings_only: ["ReShade"],
+        facts: [fact("on-battery")],
+      }),
+    );
+    const block = screen.getByTestId("first-look-off");
+    const parts = [
+      within(block).getByTestId("first-look-crashes"),
+      within(block).getByTestId("first-look-rows"),
+      within(block).getByTestId("first-look-mod-settings-only"),
+      within(block).getByTestId("first-look-facts"),
+    ];
+    for (let i = 1; i < parts.length; i++) expect(parts[i - 1].compareDocumentPosition(parts[i]) & Node.DOCUMENT_POSITION_FOLLOWING, `part ${i}`).toBeTruthy();
+  });
+
+  it("no fact says why a game runs badly or tells the user what to do: only a reading and how to check it", async () => {
+    const all = cases.map(([f]) => f);
+    await wholePc(gameAnswer({ facts: all.slice(0, 3) }));
+    for (const lang of ["en", "zh-CN"]) {
+      const j = JSON.parse(readFileSync(join("src", "i18n", "locales", lang, "paramedic.json"), "utf8")).firstLook as Record<string, Record<string, string>>;
+      for (const [k, v] of [...Object.entries(j.fact), ...Object.entries(j.factHow)]) {
+        expect(v, `${lang} ${k}`).not.toMatch(/\b(should|try|enable|disable|turn on|turn off|update|upgrade|replace|buy|fix|slow|cause|why)\b|应该|建议|请|尝试|升级|更换|购买/i);
+      }
+    }
+  });
+});
+
+describe("changes Compy made", () => {
+  async function wholePc(a: FirstLookAnswer) {
+    await toTheQuestion();
+    await pick("This week", a);
+  }
+
+  it("is its own first group, with dates and one 'undo it in History' line, and no button", async () => {
+    await wholePc(gameAnswer({ compy_changes: [compy("Turn off Game DVR", "2026-11-18T10:00:00Z")], touch_games: [driver] }));
+    const group = screen.getByTestId("first-look-compy");
+    expect(within(group).getByText("Changes Compy made")).toBeTruthy();
+    expect(within(group).getByRole("listitem").textContent).toMatch(/^Compy changed “Turn off Game DVR” on [A-Z][a-z]{2} \d+/);
+    expect(within(group).getByText("You can undo these in History.")).toBeTruthy();
+    expect(within(group).queryAllByRole("button")).toHaveLength(0);
+    // The first group: before the changes that touch games.
+    expect(group.compareDocumentPosition(screen.getByTestId("first-look-touch")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(group.compareDocumentPosition(screen.getByTestId("first-look-told")) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+  });
+
+  it("a change that was turned back says so, with the date when the ledger has one", async () => {
+    await wholePc(
+      gameAnswer({
+        compy_changes: [
+          compy("Tweak A", "2026-11-18T10:00:00Z", { undone: true, undone_at: "2026-11-19T08:00:00Z" }),
+          compy("Tweak B", "2026-11-17T10:00:00Z", { undone: true }),
+        ],
+      }),
+    );
+    const rows = within(screen.getByTestId("first-look-compy")).getAllByRole("listitem").map((n) => n.textContent ?? "");
+    expect(rows[0]).toMatch(/^Compy changed “Tweak A” on [A-Z][a-z]{2} \d+.*, and it was turned back on [A-Z][a-z]{2} \d+/);
+    expect(rows[1]).toMatch(/, and it has since been turned back\.$/);
+  });
+
+  it("three are open and the rest wait behind a closed fold; none means no group", async () => {
+    await wholePc(gameAnswer({ compy_changes: [1, 2, 3, 4].map((n) => compy(`Tweak ${n}`, `2026-11-1${n}T10:00:00Z`)) }));
+    expect(within(screen.getByTestId("first-look-compy")).getAllByRole("listitem")).toHaveLength(3);
+    expect(screen.getByRole("button", { name: "Show 1 more" }).getAttribute("aria-expanded")).toBe("false");
+    cleanup();
+    await wholePc(gameAnswer());
+    expect(screen.queryByTestId("first-look-compy")).toBeNull();
+  });
+
+  it("is itself a finding: a window with only Compy's own change is not 'no dated change'", async () => {
+    await wholePc(gameAnswer({ compy_changes: [compy("Tweak", "2026-11-18T10:00:00Z")], none: ["gpu-driver"] }));
+    expect(screen.queryByTestId("first-look-nothing")).toBeNull();
+  });
+
+  it("a ledger that couldn't be read is a limit line in the card's words", async () => {
+    await wholePc(gameAnswer({ limits: [{ kind: "history", code: "unreadable", args: {} }], read_all: false }));
+    const fold = screen.getByRole("button", { name: "What Compy couldn't see" });
+    if (fold.getAttribute("aria-expanded") === "false") fireEvent.click(fold);
+    expect(screen.getByTestId("first-look-limits").textContent).toContain("Compy couldn't see the changes Compy made: its history file couldn't be read.");
+    expect(screen.queryByTestId("first-look-compy")).toBeNull();
+  });
+
+  it("the blocks keep one fixed order: told, Compy's changes, changes that touch games, what looks off, other changes, limits, can't tell", async () => {
+    await wholePc(
+      gameAnswer({
+        compy_changes: [compy("Tweak", "2026-11-18T10:00:00Z")],
+        touch_games: [driver],
+        facts: [fact("on-battery")],
+        other_changes: [programs],
+        limits: [{ kind: "driver", code: "access-denied", args: {} }],
+        read_all: false,
+      }),
+    );
+    const order = [
+      screen.getByTestId("first-look-told"),
+      screen.getByTestId("first-look-compy"),
+      screen.getByTestId("first-look-touch"),
+      screen.getByTestId("first-look-off"),
+      screen.getByTestId("first-look-other"),
+      screen.getByTestId("first-look-limits"),
+      screen.getByTestId("first-look-cant-tell"),
+    ];
+    for (let i = 1; i < order.length; i++) expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING, `block ${i}`).toBeTruthy();
+  });
+
+  it("works in Chinese: a fact, its check line and Compy's change come from the zh-CN keys", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      engine.diagnose = noSessions();
+      render(<ParamedicCard noGames />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
+      fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
+      await pick("这周", gameAnswer({ facts: [fact("monitor-refresh", { now: "60", max: "250" })], compy_changes: [compy("Tweak", "2026-11-18T10:00:00Z")] }));
+      expect(screen.getByText("你的主显示器正以 60 Hz 运行；它支持 250 Hz。")).toBeTruthy();
+      expect(screen.getByText(/^查看方法：设置，系统，显示/)).toBeTruthy();
+      expect(screen.getByText(/^Compy 在 .* 更改了“Tweak”。$/)).toBeTruthy();
     } finally {
       await i18n.changeLanguage("en");
     }
