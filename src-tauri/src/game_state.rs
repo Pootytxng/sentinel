@@ -458,6 +458,22 @@ mod tests {
         assert_eq!(kept["other_cpu"]["readings"], 300);
     }
 
+    // The earlier merged v2 build wrote a single `other_gpu` summed figure. It is no longer a field, so a
+    // session carrying it keeps it as an unknown key (never dropped, never read as 3D or video).
+    #[test]
+    fn a_session_with_the_earlier_other_gpu_key_keeps_it_and_reads_no_3d_or_video() {
+        let old = r#"{"process_name":"ROB RUN.exe","context_version":2,"other_cpu":{"readings":300,"unread":2,"mean_pct_x10":110,"p90_pct_x10":160},"other_gpu":{"readings":300,"unread":2,"mean_pct_x10":1000,"p90_pct_x10":1000}}"#;
+        let g: GameStateFingerprint = serde_json::from_str(old).unwrap();
+        assert_eq!((g.other_gpu_3d, g.other_gpu_video), (None, None));
+        assert_eq!(g.other_cpu.map(|c| c.readings), Some(300));
+        assert_eq!(g.context_version, Some(2));
+        assert_eq!(g.unknown_fields["other_gpu"]["p90_pct_x10"], 1000);
+        let out = serde_json::to_value(&g).unwrap();
+        assert_eq!(out, serde_json::from_str::<serde_json::Value>(old).unwrap(), "lossless round trip");
+        let again: GameStateFingerprint = serde_json::from_value(out).unwrap();
+        assert_eq!(again, g);
+    }
+
     #[test]
     fn known_none_fields_are_omitted_from_json() {
         // skip_serializing_if keeps exports lean AND honest: an absent field reads as "unknown",
