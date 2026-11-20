@@ -7,28 +7,41 @@
 //! or another lower-risk user-mode route"). Nothing here is added to any support bundle or
 //! outbound payload, and nothing is logged: program and game names are data about the user.
 //!
+//! RULES (each pinned by a test in this file):
+//! - Never runs in the elevated helper: `run_elevated_helper` must not reach this module.
+//! - Never spawns by bare name: child tools are started by absolute path under the Windows system
+//!   directory (`GetSystemDirectoryW`), so a planted `wevtutil.exe` beside compy.exe never runs.
+//! - Never feeds support evidence, the evidence-upload types, receipts or any outbound payload.
+//! - Never says "nothing changed" when it could not look: every outcome is `Unreadable(reason)`,
+//!   or a `Read` that lists its gaps (budget, row cap, malformed records, coverage start).
+//!
 //! Sources, chosen on this PC without elevation (see _train/f4-windows-facts.md):
 //! - Drivers: System-class channel `Microsoft-Windows-Kernel-PnP/Configuration`, event 400 ("device
 //!   was configured") with `DeviceUpdated=true`. The design's UserPnp 20001/20003 is NOT usable:
 //!   20003 only reports service adds and 20001 never appears. Times are UTC and exact.
 //! - Windows Update: System log `Microsoft-Windows-WindowsUpdateClient` event 19 (installation
-//!   successful; `updateTitle` carries the KB). UTC and exact.
+//!   successful; `updateTitle` carries the KB). UTC and exact. Store/MSIX app updates appear here.
 //! - Game update: Steam `steamapps\appmanifest_<id>.acf` (`buildid`, `LastUpdated` epoch seconds).
-//! - Programs: registry `...\Uninstall\*` `InstallDate` (a LOCAL calendar date, day precision).
+//!   `LastUpdated` also moves on a file verify or DLC download, so it means "the game's files
+//!   changed", NOT "a new version"; only `buildid` != `TargetBuildID` is a real pending-update signal.
+//! - Programs: registry `...\Uninstall\*` `InstallDate`: a LOCAL calendar date, day precision. Only
+//!   programs that record an install date can be listed (the count of those that do not is
+//!   reported); Store/MSIX apps are not in these keys at all. The engine must never claim "no
+//!   program was installed". A day-precision event happened "that day", never "after" a time.
 //!
-//! Event-log reads go through the built-in `wevtutil.exe` (a hidden child process that can be
-//! killed at the budget), the same "built-in Windows tool, no window" approach `blackbox.rs` uses
-//! for `Get-WinEvent`, but ~50 ms instead of a PowerShell start-up. Parsing is pure and separate
-//! from I/O so every parser is tested from fixture text.
-//!
-//! Honesty rule: a source that could not be read is `Unreadable(reason)`, never an empty list, so
-//! the engine can say "Compy could not read this" and never "nothing changed".
+//! Event-log reads go through the built-in `wevtutil.exe` (a hidden child that can be killed at the
+//! budget): ~50 ms instead of a PowerShell start-up. wevtutil writes text to a pipe in the ANSI/OEM
+//! code page, replacing characters it cannot map with `?` (measured on this PC: U+200E arrives as
+//! `?`), so event-log TEXT (titles, provider names) is flagged `text_uncertain` whenever it holds a
+//! `?` or a non-ASCII character; KB ids, versions and times are ASCII and authoritative.
+//! Parsing is pure and separate from I/O so every parser is tested from fixture text.
 #![allow(dead_code)] // wired into paramedic in the next commit
 
-use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::io::Read;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -37,8 +50,8 @@ use std::time::{Duration, Instant};
 pub(crate) const DEFAULT_BUDGET: Duration = Duration::from_millis(500);
 /// How far back the driver reader looks so a driver event can name the version it replaced.
 const DRIVER_LOOKBACK_DAYS: i64 = 120;
-/// Newest-first cap on event-log rows per query.
-const MAX_EVENTS: u32 = 600;
+/// Newest-first cap on event-log rows per query. Reaching it makes the read partial.
+const MAX_EVENTS: usize = 600;
 /// Same device + same driver + same version reconfigured within this span is one install.
 const DUP_SPAN_SECS: i64 = 600;
 
@@ -54,6 +67,7 @@ pub(crate) enum ChangeKind {
     OtherDriver,
     /// Quality, feature, driver-via-Windows-Update, definition or Store-app update.
     WindowsUpdate,
+    /// Steam says the game's files changed at this time (update, verify or DLC; see module docs).
     GameUpdate,
     ProgramInstalled,
 }
@@ -63,7 +77,8 @@ pub(crate) enum ChangeKind {
 pub(crate) enum Precision {
     /// `at` is the instant (UTC) Windows recorded.
     Exact,
-    /// The source only knows a local calendar day: the change happened in `[at, until)`.
+    /// The source only knows a local calendar day: the change happened in `[at, until)`. Word it
+    /// "that day", never "after" some time of day.
     Day,
     Unknown,
 }
@@ -126,13 +141,22 @@ impl Source {
 pub(crate) struct ChangeWhat {
     pub name: Option<String>,
     pub id: Option<String>,
+    /// Driver: the version this install replaced. `None` when unchanged OR when the previous
+    /// version is not known (see `version_changed`).
     pub from_version: Option<String>,
     pub to_version: Option<String>,
+    /// Driver events only: `Some(true)` a real version change, `Some(false)` the same version was
+    /// configured again, `None` the previous version is unknown (first row seen in the lookback).
+    /// Callers filter real changes on this, never on `detail` text.
+    pub version_changed: Option<bool>,
     /// Windows Update KB id, e.g. "KB5007651".
     pub kb: Option<String>,
     /// Steam build id.
     pub build_id: Option<String>,
     pub detail: Option<String>,
+    /// True when `name`/`detail` came through wevtutil and hold a `?` or non-ASCII character: the
+    /// text may have been mis-decoded (KB ids, versions and times are unaffected).
+    pub text_uncertain: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -143,23 +167,128 @@ pub(crate) struct ChangeEvent {
     pub source: Source,
 }
 
+/// Why a source could not be read. Fixed codes, never Windows' (localised) error text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum UnreadableReason {
+    ToolMissing,
+    StartFailed,
+    AccessDenied,
+    ChannelNotFound,
+    QueryFailed(Option<i32>),
+    TimedOutBeforeAnyRecord,
+    /// The log has no records at all: cleared, or switched off.
+    LogEmptyOrSwitchedOff,
+    /// Windows returned records Compy could not read (renamed field, undecodable text).
+    RecordsUnreadable(usize),
+    RegistryUnreadable,
+    ReaderStopped,
+    NotSteamLauncher(String),
+    NoGameIdentified,
+    NotInSteamLibrary,
+    SteamNotFound,
+    SteamUnreadable,
+    SteamGameNotFound,
+    SteamPartiallyUnreadable { libraries: usize, records: usize },
+    SteamNoUpdateTime,
+}
+
+impl UnreadableReason {
+    /// Plain English for the user-facing line. Fixed text; nothing from Windows is echoed.
+    pub(crate) fn plain(&self) -> String {
+        match self {
+            Self::ToolMissing => "Windows' event-log tool was not found in the system folder".into(),
+            Self::StartFailed => "Windows' event-log tool could not be started".into(),
+            Self::AccessDenied => "Windows refused access to the event log without administrator rights".into(),
+            Self::ChannelNotFound => "This Windows event log does not exist on this PC".into(),
+            Self::QueryFailed(Some(c)) => format!("Windows could not run the event-log query (code {c})"),
+            Self::QueryFailed(None) => "Windows could not run the event-log query".into(),
+            Self::TimedOutBeforeAnyRecord => "Reading did not finish within its time budget".into(),
+            Self::LogEmptyOrSwitchedOff => "The Windows log is empty or switched off, so it shows nothing about the past".into(),
+            Self::RecordsUnreadable(n) => format!("Windows returned records Compy could not read ({n} unreadable)"),
+            Self::RegistryUnreadable => "The installed-programs registry keys could not be opened".into(),
+            Self::ReaderStopped => "The reader stopped unexpectedly".into(),
+            Self::NotSteamLauncher(l) => format!(
+                "This game is not a Steam install (launcher: {l}); Compy can only read update times from Steam"
+            ),
+            Self::NoGameIdentified => "No game was identified, so there is no game update to look up".into(),
+            Self::NotInSteamLibrary => {
+                "This game is not installed in a Steam library, so Compy cannot read when it was updated".into()
+            }
+            Self::SteamNotFound => "Steam was not found for this Windows user, so Compy cannot check a Steam record".into(),
+            Self::SteamUnreadable => "Steam's settings could not be read".into(),
+            Self::SteamGameNotFound => "Every Steam library Compy could read has no record of this game".into(),
+            Self::SteamPartiallyUnreadable { libraries, records } => format!(
+                "Compy could not read part of Steam's data ({libraries} library folder(s), {records} game record(s)) and did not find this game in the rest"
+            ),
+            Self::SteamNoUpdateTime => "Steam's record for this game has no usable update time".into(),
+        }
+    }
+}
+
+/// A reason a `Read` is incomplete. A read with gaps is never "all clear".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Gap {
+    /// Budget ran out; only the newest rows were read (see `covered_from`).
+    TimedOut,
+    /// The row cap was reached; older rows exist and were not read (see `covered_from`).
+    RowCapReached,
+    /// Records Windows returned that Compy could not parse (count).
+    MalformedRecords(usize),
+    SteamLibrariesUnreadable(usize),
+    SteamRecordsUnparsed(usize),
+}
+
+/// A limit of the source that is always true, for the engine's wording.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Note {
+    /// Programs the registry lists with no usable install date (cannot be placed in time).
+    ProgramsWithoutDate(usize),
+    /// Store/MSIX apps are not in the Uninstall keys; never claim "no program was installed".
+    StoreAppsNotCovered,
+    /// Steam `LastUpdated` also moves on verify/DLC: "the game's files changed", not "new version".
+    SteamUpdateTimeIsFileChange,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReadOk {
+    pub events: Vec<ChangeEvent>,
+    /// Records older than this may be missing: the oldest record the log still holds, or, after a
+    /// timeout or row cap, how far back the read actually reached. `None` for sources with no log.
+    pub covered_from: Option<DateTime<Utc>>,
+    pub gaps: Vec<Gap>,
+    pub notes: Vec<Note>,
+}
+
+impl ReadOk {
+    pub(crate) fn timed_out(&self) -> bool {
+        self.gaps.contains(&Gap::TimedOut)
+    }
+}
+
 /// One reader's outcome. `Unreadable` is NOT the same as `Read` with no events.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum SourceRead {
-    /// `timed_out`: the budget ran out and `events` is only what was read so far.
-    Read { events: Vec<ChangeEvent>, timed_out: bool },
-    Unreadable(String),
+    Read(ReadOk),
+    Unreadable(UnreadableReason),
 }
 
 impl SourceRead {
-    /// A reader that ran out of budget having produced nothing has not shown "nothing changed":
-    /// it is unreadable. Partial output stays partial and keeps `timed_out`.
-    fn finish(events: Vec<ChangeEvent>, timed_out: bool, what: &str) -> SourceRead {
+    /// A complete read with nothing special to say.
+    pub(crate) fn ok(events: Vec<ChangeEvent>) -> SourceRead {
+        SourceRead::Read(ReadOk { events, covered_from: None, gaps: Vec::new(), notes: Vec::new() })
+    }
+
+    /// A budget-limited read of a source with no log: nothing read by the deadline is unreadable,
+    /// not "nothing changed"; partial output stays partial.
+    fn finish(events: Vec<ChangeEvent>, timed_out: bool, notes: Vec<Note>) -> SourceRead {
         if timed_out && events.is_empty() {
-            SourceRead::Unreadable(format!("{what} did not finish within its time budget"))
-        } else {
-            SourceRead::Read { events, timed_out }
+            return SourceRead::Unreadable(UnreadableReason::TimedOutBeforeAnyRecord);
         }
+        let gaps = if timed_out { vec![Gap::TimedOut] } else { Vec::new() };
+        SourceRead::Read(ReadOk { events, covered_from: None, gaps, notes })
     }
 }
 
@@ -176,7 +305,22 @@ pub(crate) struct GameRef {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct UnreadableSource {
     pub source: Source,
-    pub reason: String,
+    pub reason: UnreadableReason,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct PartialSource {
+    pub source: Source,
+    pub gaps: Vec<Gap>,
+    pub covered_from: Option<DateTime<Utc>>,
+}
+
+/// "Compy cannot see `from..to` for this source": the window starts before the log does.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct CoverageGap {
+    pub source: Source,
+    pub from: DateTime<Utc>,
+    pub to: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -187,13 +331,50 @@ pub(crate) struct ChangeReport {
     pub events: Vec<ChangeEvent>,
     /// Sources Compy could not read. "Could not read" is never "nothing changed".
     pub unreadable: Vec<UnreadableSource>,
-    /// Sources that hit their time budget: `events` holds only what was read before that.
-    pub partial: Vec<Source>,
-    /// The game's last update from Steam regardless of the window (so "not updated since X" can be
-    /// said), when a game was asked about and could be read.
+    /// Sources that were read incompletely (budget, row cap, malformed records).
+    pub partial: Vec<PartialSource>,
+    /// Parts of the window a log cannot cover because it starts later than `window_start`.
+    pub coverage_gaps: Vec<CoverageGap>,
+    /// Always-true limits of the sources that were read.
+    pub notes: Vec<(Source, Note)>,
+    /// The game's last file change from Steam regardless of the window (so "files unchanged since
+    /// X" can be said), when a game was asked about and could be read.
     pub game_last_update: Option<ChangeEvent>,
     /// Events a source returned without a usable time; excluded from `events`.
     pub undated_excluded: usize,
+}
+
+// ---------------------------------------------------------------------------------------------
+// System tools: absolute path only
+// ---------------------------------------------------------------------------------------------
+
+/// The Windows system directory from `GetSystemDirectoryW` (not an environment variable).
+fn system_directory() -> Option<PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    let mut buf = [0u16; 260];
+    // SAFETY: the buffer outlives the call and its length is passed with it.
+    let n = unsafe { windows::Win32::System::SystemInformation::GetSystemDirectoryW(Some(&mut buf)) } as usize;
+    if n == 0 || n >= buf.len() {
+        return None;
+    }
+    Some(PathBuf::from(std::ffi::OsString::from_wide(&buf[..n])))
+}
+
+/// Absolute path of a tool in the system directory, or `ToolMissing`. A bare name would be looked
+/// up in compy.exe's own folder first, which a per-user install lets another program write to.
+fn system_tool(name: &str) -> Result<PathBuf, UnreadableReason> {
+    let p = system_directory().ok_or(UnreadableReason::ToolMissing)?.join(name);
+    if p.is_absolute() && p.is_file() {
+        Ok(p)
+    } else {
+        Err(UnreadableReason::ToolMissing)
+    }
+}
+
+fn system_command(name: &str) -> Result<std::process::Command, UnreadableReason> {
+    let path = system_tool(name)?;
+    let s = path.to_str().ok_or(UnreadableReason::ToolMissing)?;
+    Ok(crate::actions::quiet_command(s))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -202,44 +383,45 @@ pub(crate) struct ChangeReport {
 
 struct RunOutput {
     stdout: Vec<u8>,
-    stderr: String,
     timed_out: bool,
+    exit_code: Option<i32>,
     success: bool,
 }
 
 /// Run a child with piped output and a hard deadline. At the deadline the child is killed and
-/// whatever it had already written is returned with `timed_out: true`.
-fn run_with_budget(mut cmd: std::process::Command, budget: Duration) -> Result<RunOutput, String> {
+/// whatever it had already written is returned with `timed_out: true`. Its stderr is drained and
+/// discarded: Windows' localised error text never reaches a user-visible reason.
+fn run_with_budget(mut cmd: std::process::Command, budget: Duration) -> Result<RunOutput, UnreadableReason> {
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("the Windows reader could not be started ({:?})", e.kind()))?;
+    let mut child = cmd.spawn().map_err(|_| UnreadableReason::StartFailed)?;
     let out_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
-    let err_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
-    let pump = |mut pipe: Box<dyn Read + Send>, buf: Arc<Mutex<Vec<u8>>>| {
+    let pump = |mut pipe: Box<dyn Read + Send>, buf: Option<Arc<Mutex<Vec<u8>>>>| {
         std::thread::spawn(move || {
             let mut chunk = [0u8; 16 * 1024];
             loop {
                 match pipe.read(&mut chunk) {
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
-                        if let Ok(mut b) = buf.lock() {
-                            b.extend_from_slice(&chunk[..n]);
+                        if let Some(b) = &buf {
+                            if let Ok(mut b) = b.lock() {
+                                b.extend_from_slice(&chunk[..n]);
+                            }
                         }
                     }
                 }
             }
         })
     };
-    let t_out = child.stdout.take().map(|p| pump(Box::new(p), out_buf.clone()));
-    let t_err = child.stderr.take().map(|p| pump(Box::new(p), err_buf.clone()));
+    let t_out = child.stdout.take().map(|p| pump(Box::new(p), Some(out_buf.clone())));
+    let t_err = child.stderr.take().map(|p| pump(Box::new(p), None));
 
     let deadline = Instant::now() + budget;
-    let (mut timed_out, mut success) = (false, false);
+    let (mut timed_out, mut success, mut exit_code) = (false, false, None);
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
                 success = status.success();
+                exit_code = status.code();
                 break;
             }
             Ok(None) => {
@@ -267,13 +449,7 @@ fn run_with_budget(mut cmd: std::process::Command, budget: Duration) -> Result<R
         }
     }
     let stdout = out_buf.lock().map(|b| b.clone()).unwrap_or_default();
-    let stderr_bytes = err_buf.lock().map(|b| b.clone()).unwrap_or_default();
-    Ok(RunOutput {
-        stdout,
-        stderr: String::from_utf8_lossy(&stderr_bytes).trim().to_string(),
-        timed_out,
-        success,
-    })
+    Ok(RunOutput { stdout, timed_out, exit_code, success })
 }
 
 /// Feed `iter` to `f` until the deadline; returns true if it stopped because time ran out.
@@ -287,29 +463,66 @@ fn collect_until<T, I: Iterator<Item = T>>(iter: I, deadline: Instant, mut f: im
     false
 }
 
-/// Query one event-log channel with `wevtutil qe` (no elevation for System-class channels).
-/// Returns the XML text and whether the budget ran out.
-fn run_wevtutil(channel: &str, xpath: &str, budget: Duration) -> Result<(String, bool), String> {
-    let mut cmd = crate::actions::quiet_command("wevtutil.exe");
-    cmd.args([
-        "qe",
-        channel,
-        &format!("/q:{xpath}"),
-        &format!("/c:{MAX_EVENTS}"),
-        "/rd:true",
-        "/f:xml",
-    ]);
-    let out = run_with_budget(cmd, budget)?;
-    if !out.timed_out && !out.success {
-        let first = out.stderr.lines().next().unwrap_or("no detail").trim();
-        let first: String = first.chars().take(120).collect();
-        return Err(format!("the Windows event log could not be queried ({first})"));
+/// wevtutil's exit code is the Win32 error. Fixed reason codes; the text it prints is ignored.
+fn reason_for_exit_code(code: Option<i32>) -> UnreadableReason {
+    match code {
+        Some(5) => UnreadableReason::AccessDenied,
+        // ERROR_EVT_INVALID_CHANNEL_PATH / ERROR_EVT_CHANNEL_NOT_FOUND
+        Some(15000) | Some(15007) => UnreadableReason::ChannelNotFound,
+        other => UnreadableReason::QueryFailed(other),
     }
-    Ok((String::from_utf8_lossy(&out.stdout).into_owned(), out.timed_out))
 }
 
-fn xpath_time(since: DateTime<Utc>) -> String {
-    since.format("%Y-%m-%dT%H:%M:%S.000Z").to_string()
+/// wevtutil writes ANSI/OEM text to a pipe, not UTF-8. Valid UTF-8 is taken as is (ASCII is both);
+/// anything else is read byte-per-char. Either way non-ASCII text is flagged `text_uncertain`.
+fn decode_console_text(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(s) => s.to_string(),
+        Err(_) => bytes.iter().map(|&b| char::from(b)).collect(),
+    }
+}
+
+fn text_is_uncertain(s: &str) -> bool {
+    s.contains('?') || !s.is_ascii()
+}
+
+/// Query one event-log channel with `wevtutil qe`, by absolute path (no elevation for
+/// System-class channels). `xpath` None = no filter. Returns the decoded XML and whether the
+/// budget ran out.
+fn run_wevtutil(
+    channel: &str,
+    xpath: Option<&str>,
+    count: usize,
+    newest_first: bool,
+    budget: Duration,
+) -> Result<(String, bool), UnreadableReason> {
+    let mut cmd = system_command("wevtutil.exe")?;
+    cmd.arg("qe").arg(channel);
+    if let Some(q) = xpath {
+        cmd.arg(format!("/q:{q}"));
+    }
+    cmd.arg(format!("/c:{count}"))
+        .arg(format!("/rd:{newest_first}"))
+        .arg("/f:xml");
+    let out = run_with_budget(cmd, budget)?;
+    if !out.timed_out && !out.success {
+        return Err(reason_for_exit_code(out.exit_code));
+    }
+    Ok((decode_console_text(&out.stdout), out.timed_out))
+}
+
+/// `[since, until]` bounds for the event query, to the millisecond (lower floored, upper rounded
+/// up a millisecond so the exact window filter applied later never loses a boundary row).
+fn xpath_bounds(since: DateTime<Utc>, until: DateTime<Utc>) -> String {
+    let lo = since.format("%Y-%m-%dT%H:%M:%S%.3fZ");
+    let hi = (until + ChronoDuration::milliseconds(1)).format("%Y-%m-%dT%H:%M:%S%.3fZ");
+    format!("(TimeCreated[@SystemTime>='{lo}'])and(TimeCreated[@SystemTime<='{hi}'])")
+}
+
+/// Pure: the event query for one provider/id over `[since, until]`.
+fn event_query(provider: Option<&str>, id: u32, since: DateTime<Utc>, until: DateTime<Utc>) -> String {
+    let prov = provider.map(|p| format!("Provider[@Name='{p}']and")).unwrap_or_default();
+    format!("*[System[{prov}(EventID={id})and{}]]", xpath_bounds(since, until))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -396,6 +609,123 @@ fn xml_event_time(block: &str) -> Option<DateTime<Utc>> {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Event-log read assessment (pure): partial / unreadable decisions in one place
+// ---------------------------------------------------------------------------------------------
+
+/// What a parser found in one query's output. `blocks` counts every `<Event>` block returned;
+/// `items` the ones that carried every required field.
+struct Parsed<T> {
+    items: Vec<T>,
+    blocks: usize,
+    /// Oldest `TimeCreated` among all blocks (the query is newest-first, so this is how far back
+    /// the output reached).
+    oldest_row: Option<DateTime<Utc>>,
+}
+
+impl<T> Parsed<T> {
+    fn malformed(&self) -> usize {
+        self.blocks - self.items.len()
+    }
+}
+
+fn parse_blocks<T>(xml: &str, one: impl Fn(&str) -> Option<T>) -> Parsed<T> {
+    let blocks = event_blocks(xml);
+    let oldest_row = blocks.iter().filter_map(|b| xml_event_time(b)).min();
+    let items: Vec<T> = blocks.iter().filter_map(|b| one(b)).collect();
+    Parsed { items, blocks: blocks.len(), oldest_row }
+}
+
+struct Assessed<T> {
+    items: Vec<T>,
+    covered_from: Option<DateTime<Utc>>,
+    gaps: Vec<Gap>,
+}
+
+/// Pure: turn one query's parsed output into items + gaps, or `Unreadable`. Never `Ok` with no
+/// items when the output could not be understood.
+fn assess<T>(
+    raw: &str,
+    timed_out: bool,
+    log_oldest: Option<DateTime<Utc>>,
+    parsed: Parsed<T>,
+) -> Result<Assessed<T>, UnreadableReason> {
+    let blank = raw.trim().is_empty();
+    if parsed.blocks == 0 {
+        if timed_out {
+            return Err(UnreadableReason::TimedOutBeforeAnyRecord);
+        }
+        if !blank {
+            return Err(UnreadableReason::RecordsUnreadable(0));
+        }
+    }
+    let malformed = parsed.malformed();
+    if parsed.blocks > 0 && malformed == parsed.blocks {
+        return Err(UnreadableReason::RecordsUnreadable(malformed));
+    }
+    let mut gaps = Vec::new();
+    let cap_hit = parsed.blocks >= MAX_EVENTS;
+    if timed_out {
+        gaps.push(Gap::TimedOut);
+    }
+    if cap_hit {
+        gaps.push(Gap::RowCapReached);
+    }
+    if malformed > 0 {
+        gaps.push(Gap::MalformedRecords(malformed));
+    }
+    // After a timeout or the cap the read stopped at its oldest row; otherwise the log's own start.
+    let covered_from = if timed_out || cap_hit {
+        match (log_oldest, parsed.oldest_row) {
+            (Some(a), Some(b)) => Some(a.max(b)),
+            (a, b) => a.or(b),
+        }
+    } else {
+        log_oldest
+    };
+    Ok(Assessed { items: parsed.items, covered_from, gaps })
+}
+
+/// Pure: the oldest record of a channel from the unfiltered `/c:1 /rd:false` query.
+fn parse_log_start(xml: &str) -> Result<DateTime<Utc>, UnreadableReason> {
+    let blocks = event_blocks(xml);
+    if blocks.is_empty() {
+        return if xml.trim().is_empty() {
+            Err(UnreadableReason::LogEmptyOrSwitchedOff)
+        } else {
+            Err(UnreadableReason::RecordsUnreadable(0))
+        };
+    }
+    blocks
+        .iter()
+        .filter_map(|b| xml_event_time(b))
+        .min()
+        .ok_or(UnreadableReason::RecordsUnreadable(blocks.len()))
+}
+
+/// One channel: the log's own start (one unfiltered query), then the filtered rows, inside one
+/// budget. A cleared or disabled log is `Unreadable`, not an empty read.
+fn read_channel<T>(
+    channel: &str,
+    xpath: &str,
+    budget: Duration,
+    parse: impl Fn(&str) -> Parsed<T>,
+) -> Result<Assessed<T>, UnreadableReason> {
+    let deadline = Instant::now() + budget;
+    let (start_xml, start_timed_out) = run_wevtutil(channel, None, 1, false, budget)?;
+    if start_timed_out {
+        return Err(UnreadableReason::TimedOutBeforeAnyRecord);
+    }
+    let log_oldest = parse_log_start(&start_xml)?;
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    let (xml, timed_out) = run_wevtutil(channel, Some(xpath), MAX_EVENTS, true, remaining)?;
+    assess(&xml, timed_out, Some(log_oldest), parse(&xml))
+}
+
+fn read_ok_from(a: Assessed<ChangeEvent>) -> SourceRead {
+    SourceRead::Read(ReadOk { events: a.items, covered_from: a.covered_from, gaps: a.gaps, notes: Vec::new() })
+}
+
+// ---------------------------------------------------------------------------------------------
 // Drivers: Kernel-PnP/Configuration event 400
 // ---------------------------------------------------------------------------------------------
 
@@ -412,32 +742,34 @@ struct PnpRecord {
     status_ok: bool,
 }
 
-/// Pure: every well-formed event 400 in `xml`. Malformed blocks are skipped.
-fn parse_pnp_records(xml: &str) -> Vec<PnpRecord> {
-    event_blocks(xml)
-        .into_iter()
-        .filter_map(|b| {
-            if xml_event_id(b)? != 400 {
-                return None;
-            }
-            let at = xml_event_time(b)?;
-            let instance_id = xml_data(b, "DeviceInstanceId").filter(|s| !s.is_empty())?;
-            let status = xml_data(b, "Status").unwrap_or_default();
-            let status_ok = status.is_empty() || u32::from_str_radix(status.trim_start_matches("0x"), 16) == Ok(0);
-            Some(PnpRecord {
-                at,
-                instance_id,
-                driver_name: xml_data(b, "DriverName").filter(|s| !s.is_empty()),
-                class_guid: xml_data(b, "ClassGuid").unwrap_or_default(),
-                version: xml_data(b, "DriverVersion").filter(|s| !s.is_empty()),
-                driver_date: xml_data(b, "DriverDate")
-                    .and_then(|d| NaiveDate::parse_from_str(d.trim(), "%m/%d/%Y").ok()),
-                provider: xml_data(b, "DriverProvider").filter(|s| !s.is_empty()),
-                updated: xml_data(b, "DeviceUpdated").is_some_and(|v| v.eq_ignore_ascii_case("true")),
-                status_ok,
-            })
-        })
-        .collect()
+/// One event-400 block, or `None` when a required field is missing or renamed (counted as
+/// malformed by the caller, never silently dropped).
+fn parse_pnp_block(b: &str) -> Option<PnpRecord> {
+    if xml_event_id(b)? != 400 {
+        return None;
+    }
+    let at = xml_event_time(b)?;
+    let instance_id = xml_data(b, "DeviceInstanceId").filter(|s| !s.is_empty())?;
+    let class_guid = xml_data(b, "ClassGuid").filter(|s| !s.is_empty())?;
+    let updated = xml_data(b, "DeviceUpdated")?;
+    let version = xml_data(b, "DriverVersion")?;
+    let status = xml_data(b, "Status").unwrap_or_default();
+    let status_ok = status.is_empty() || u32::from_str_radix(status.trim_start_matches("0x"), 16) == Ok(0);
+    Some(PnpRecord {
+        at,
+        instance_id,
+        driver_name: xml_data(b, "DriverName").filter(|s| !s.is_empty()),
+        class_guid,
+        version: Some(version).filter(|s| !s.is_empty()),
+        driver_date: xml_data(b, "DriverDate").and_then(|d| NaiveDate::parse_from_str(d.trim(), "%m/%d/%Y").ok()),
+        provider: xml_data(b, "DriverProvider").filter(|s| !s.is_empty()),
+        updated: updated.eq_ignore_ascii_case("true"),
+        status_ok,
+    })
+}
+
+fn parse_pnp(xml: &str) -> Parsed<PnpRecord> {
+    parse_blocks(xml, parse_pnp_block)
 }
 
 /// Device-class GUID -> what the engine calls it. Software-component children (AMD's OpenCL /
@@ -468,7 +800,6 @@ fn hardware_id_of(instance_id: &str) -> String {
 #[derive(Default)]
 struct DeviceState {
     cur: Option<String>,
-    before: Option<String>,
     last_at: Option<DateTime<Utc>>,
     last_name: Option<String>,
 }
@@ -476,6 +807,8 @@ struct DeviceState {
 /// Pure: driver installs from the raw configure records. Only `DeviceUpdated=true` rows with a
 /// success status in a reported class count as installs; every row (updated or not) feeds the
 /// "version before" lookup. Same device + inf + version within 10 minutes is one install.
+/// `version_changed`: Some(true) real change (from_version set), Some(false) same version again,
+/// None previous version unknown (first row of that device in the rows read).
 fn driver_changes(mut recs: Vec<PnpRecord>) -> Vec<ChangeEvent> {
     recs.sort_by_key(|r| r.at);
     let mut states: HashMap<String, DeviceState> = HashMap::new();
@@ -483,15 +816,18 @@ fn driver_changes(mut recs: Vec<PnpRecord>) -> Vec<ChangeEvent> {
     for r in recs {
         let Some((kind, label)) = driver_class(&r.class_guid) else { continue };
         let st = states.entry(r.instance_id.clone()).or_default();
-        let dup = st.cur == r.version
+        let dup = st.cur.is_some()
+            && st.cur == r.version
             && st.last_name == r.driver_name
             && st.last_at.is_some_and(|t| (r.at - t) <= ChronoDuration::seconds(DUP_SPAN_SECS));
-        let changed = r.version.is_some() && st.cur != r.version;
-        if changed {
-            st.before = st.cur.take();
+        let (version_changed, from_version) = match (&st.cur, &r.version) {
+            (Some(c), Some(v)) if c == v => (Some(false), None),
+            (Some(c), Some(_)) => (Some(true), Some(c.clone())),
+            _ => (None, None),
+        };
+        if r.version.is_some() {
             st.cur = r.version.clone();
         }
-        let from_version = if changed { st.before.clone() } else { r.version.clone() };
         st.last_at = Some(r.at);
         st.last_name = r.driver_name.clone();
         if !r.updated || !r.status_ok || dup {
@@ -504,9 +840,12 @@ fn driver_changes(mut recs: Vec<PnpRecord>) -> Vec<ChangeEvent> {
         if let Some(d) = r.driver_date {
             detail.push_str(&format!(", driver dated {d}"));
         }
-        if !changed {
-            detail.push_str(", same version configured again");
+        match version_changed {
+            Some(false) => detail.push_str(", same version configured again"),
+            None => detail.push_str(", previous version unknown"),
+            Some(true) => {}
         }
+        let text_uncertain = text_is_uncertain(&detail) || r.provider.as_deref().is_some_and(text_is_uncertain);
         out.push(ChangeEvent {
             kind,
             when: ChangeTime::exact(r.at),
@@ -515,7 +854,9 @@ fn driver_changes(mut recs: Vec<PnpRecord>) -> Vec<ChangeEvent> {
                 id: Some(hardware_id_of(&r.instance_id)),
                 from_version,
                 to_version: r.version.clone(),
+                version_changed,
                 detail: Some(detail),
+                text_uncertain,
                 ..ChangeWhat::default()
             },
             source: Source::DriverLog,
@@ -524,17 +865,23 @@ fn driver_changes(mut recs: Vec<PnpRecord>) -> Vec<ChangeEvent> {
     out
 }
 
+/// Fixture seam: driver installs from raw wevtutil XML (malformed blocks are dropped here; the
+/// readers count them).
 pub(crate) fn driver_events_from_xml(xml: &str) -> Vec<ChangeEvent> {
-    driver_changes(parse_pnp_records(xml))
+    driver_changes(parse_pnp(xml).items)
 }
 
-/// Driver installs since `since` (look back further than the window you care about: the extra
-/// rows are what let an event say which version it replaced).
-pub(crate) fn read_driver_installs(since: DateTime<Utc>, budget: Duration) -> SourceRead {
-    let xpath = format!("*[System[(EventID=400)and(TimeCreated[@SystemTime>='{}'])]]", xpath_time(since));
-    match run_wevtutil("Microsoft-Windows-Kernel-PnP/Configuration", &xpath, budget) {
-        Ok((xml, timed_out)) => SourceRead::finish(driver_events_from_xml(&xml), timed_out, "The driver log"),
-        Err(reason) => SourceRead::Unreadable(reason),
+/// Driver installs over `[since, until]` (look back further than the window you care about: the
+/// extra rows are what let an event say which version it replaced).
+pub(crate) fn read_driver_installs(since: DateTime<Utc>, until: DateTime<Utc>, budget: Duration) -> SourceRead {
+    let q = event_query(None, 400, since, until);
+    match read_channel("Microsoft-Windows-Kernel-PnP/Configuration", &q, budget, parse_pnp) {
+        Ok(a) => read_ok_from(Assessed {
+            items: driver_changes(a.items),
+            covered_from: a.covered_from,
+            gaps: a.gaps,
+        }),
+        Err(r) => SourceRead::Unreadable(r),
     }
 }
 
@@ -548,18 +895,16 @@ struct WuRecord {
     title: String,
 }
 
-/// Pure: successful installs (event 19) in `xml`. Malformed blocks are skipped.
-fn parse_wu_records(xml: &str) -> Vec<WuRecord> {
-    event_blocks(xml)
-        .into_iter()
-        .filter_map(|b| {
-            if xml_event_id(b)? != 19 {
-                return None;
-            }
-            let title = xml_data(b, "updateTitle").map(|t| t.trim().to_string()).filter(|t| !t.is_empty())?;
-            Some(WuRecord { at: xml_event_time(b)?, title })
-        })
-        .collect()
+fn parse_wu_block(b: &str) -> Option<WuRecord> {
+    if xml_event_id(b)? != 19 {
+        return None;
+    }
+    let title = xml_data(b, "updateTitle").map(|t| t.trim().to_string()).filter(|t| !t.is_empty())?;
+    Some(WuRecord { at: xml_event_time(b)?, title })
+}
+
+fn parse_wu(xml: &str) -> Parsed<WuRecord> {
+    parse_blocks(xml, parse_wu_block)
 }
 
 /// "KB5007651" from a title like "... - KB5007651 (Version ...)". Needs 6 to 8 digits.
@@ -591,7 +936,10 @@ fn wu_class(title: &str) -> &'static str {
         "feature"
     } else if t.contains("cumulative update") || t.contains("security update") || t.contains("servicing stack") {
         "quality"
-    } else if t.contains("driver") || (title.split(" - ").count() >= 3 && title.rsplit(" - ").next().is_some_and(|l| l.starts_with(|c: char| c.is_ascii_digit()))) {
+    } else if t.contains("driver")
+        || (title.split(" - ").count() >= 3
+            && title.rsplit(" - ").next().is_some_and(|l| l.starts_with(|c: char| c.is_ascii_digit())))
+    {
         "driver"
     } else {
         "other"
@@ -617,6 +965,7 @@ fn wu_changes(mut recs: Vec<WuRecord>) -> Vec<ChangeEvent> {
                 kb: kb_of(&r.title),
                 name: Some(r.title.clone()),
                 detail: Some(wu_class(&r.title).to_string()),
+                text_uncertain: text_is_uncertain(&r.title),
                 ..ChangeWhat::default()
             },
             source: Source::WindowsUpdateLog,
@@ -625,18 +974,16 @@ fn wu_changes(mut recs: Vec<WuRecord>) -> Vec<ChangeEvent> {
     out
 }
 
+/// Fixture seam: update installs from raw wevtutil XML.
 pub(crate) fn wu_events_from_xml(xml: &str) -> Vec<ChangeEvent> {
-    wu_changes(parse_wu_records(xml))
+    wu_changes(parse_wu(xml).items)
 }
 
-pub(crate) fn read_windows_updates(since: DateTime<Utc>, budget: Duration) -> SourceRead {
-    let xpath = format!(
-        "*[System[Provider[@Name='Microsoft-Windows-WindowsUpdateClient']and(EventID=19)and(TimeCreated[@SystemTime>='{}'])]]",
-        xpath_time(since)
-    );
-    match run_wevtutil("System", &xpath, budget) {
-        Ok((xml, timed_out)) => SourceRead::finish(wu_events_from_xml(&xml), timed_out, "The Windows Update log"),
-        Err(reason) => SourceRead::Unreadable(reason),
+pub(crate) fn read_windows_updates(since: DateTime<Utc>, until: DateTime<Utc>, budget: Duration) -> SourceRead {
+    let q = event_query(Some("Microsoft-Windows-WindowsUpdateClient"), 19, since, until);
+    match read_channel("System", &q, budget, parse_wu) {
+        Ok(a) => read_ok_from(Assessed { items: wu_changes(a.items), covered_from: a.covered_from, gaps: a.gaps }),
+        Err(r) => SourceRead::Unreadable(r),
     }
 }
 
@@ -651,7 +998,7 @@ struct AcfInfo {
     install_dir: Option<String>,
     build_id: Option<String>,
     target_build_id: Option<String>,
-    /// Epoch seconds (UTC) Steam last updated the game's files.
+    /// Epoch seconds (UTC) Steam last changed the game's files (update, verify or DLC).
     last_updated: Option<i64>,
 }
 
@@ -694,19 +1041,39 @@ fn parse_acf(text: &str) -> Option<AcfInfo> {
     })
 }
 
+const STEAM_COMMON: &str = "\\steamapps\\common\\";
+
+/// `D:/Lib/` -> `d:\lib` (slashes, trailing separator and case folded).
+fn normalize_root(s: &str) -> String {
+    s.replace('/', "\\").trim_end_matches('\\').to_ascii_lowercase()
+}
+
 /// Pure: the folder name under `steamapps\common\` for an install dir, if it lives in one.
 fn steam_install_folder(install_dir: &str) -> Option<String> {
     let norm = install_dir.replace('/', "\\");
     let lower = norm.to_ascii_lowercase();
-    let marker = "\\steamapps\\common\\";
-    let i = lower.find(marker)? + marker.len();
-    let rest = &norm[i..];
-    let folder = rest.split('\\').next()?.trim();
+    let i = lower.find(STEAM_COMMON)? + STEAM_COMMON.len();
+    let folder = norm[i..].split('\\').next()?.trim();
     (!folder.is_empty()).then(|| folder.to_string())
 }
 
-/// Pure: is this manifest the asked-about game (app id wins; else the install folder name)?
-fn manifest_matches(info: &AcfInfo, game: &GameRef) -> bool {
+/// Pure: the Steam library root an install dir sits under (`D:\Lib` for `D:\Lib\steamapps\common\X`).
+fn library_root_of(install_dir: &str) -> Option<String> {
+    let norm = install_dir.replace('/', "\\");
+    let i = norm.to_ascii_lowercase().find(STEAM_COMMON)?;
+    let root = normalize_root(&norm[..i]);
+    (!root.is_empty()).then_some(root)
+}
+
+/// Pure: is this manifest (found under library `manifest_root`) the asked-about game? A game whose
+/// install dir sits under another library root never matches a stale manifest in this one. Then
+/// app id wins; else the install folder name.
+fn manifest_matches(info: &AcfInfo, game: &GameRef, manifest_root: &str) -> bool {
+    if let Some(want_root) = game.install_dir.as_deref().and_then(library_root_of) {
+        if want_root != normalize_root(manifest_root) {
+            return false;
+        }
+    }
     if let Some(id) = game.steam_app_id {
         return info.app_id == id;
     }
@@ -717,14 +1084,9 @@ fn manifest_matches(info: &AcfInfo, game: &GameRef) -> bool {
 }
 
 /// Pure: the game-update event from a manifest, or why there is none.
-fn game_event_from_acf(info: &AcfInfo) -> Result<ChangeEvent, String> {
-    let secs = info
-        .last_updated
-        .ok_or_else(|| "Steam's record for this game has no update time".to_string())?;
-    let at = Utc
-        .timestamp_opt(secs, 0)
-        .single()
-        .ok_or_else(|| "Steam's record for this game has an unreadable update time".to_string())?;
+fn game_event_from_acf(info: &AcfInfo) -> Result<ChangeEvent, UnreadableReason> {
+    let secs = info.last_updated.ok_or(UnreadableReason::SteamNoUpdateTime)?;
+    let at = Utc.timestamp_opt(secs, 0).single().ok_or(UnreadableReason::SteamNoUpdateTime)?;
     let pending = match (&info.build_id, &info.target_build_id) {
         (Some(b), Some(t)) if b != t => Some(format!("an update to build {t} is pending")),
         _ => None,
@@ -744,91 +1106,130 @@ fn game_event_from_acf(info: &AcfInfo) -> Result<ChangeEvent, String> {
     })
 }
 
-fn steam_not_readable(why: &str) -> SourceRead {
-    SourceRead::Unreadable(why.to_string())
+/// Steam root plus every library folder it lists; `vdf_unreadable` when the list could not be read
+/// (then only the default root is searched).
+struct SteamRoots {
+    roots: Vec<String>,
+    vdf_unreadable: bool,
 }
 
-/// Steam root plus every library folder it lists (registry `SteamPath`, `libraryfolders.vdf`).
-fn steam_library_roots() -> Result<Vec<String>, String> {
-    let steam: String = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+fn steam_library_roots() -> Result<SteamRoots, UnreadableReason> {
+    let steam: String = match winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
         .open_subkey("Software\\Valve\\Steam")
         .and_then(|k| k.get_value::<String, _>("SteamPath"))
-        .map_err(|_| "Steam is not installed for this Windows user, so no Steam game record exists".to_string())?;
+    {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(UnreadableReason::SteamNotFound),
+        Err(_) => return Err(UnreadableReason::SteamUnreadable),
+    };
     let steam = steam.replace('/', "\\");
     let steam = steam.trim_end_matches('\\').to_string();
     let vdf = format!("{steam}\\steamapps\\libraryfolders.vdf");
     let mut roots = vec![steam];
-    if let Ok(body) = std::fs::read_to_string(&vdf) {
-        for p in crate::hardware::parse_steam_library_paths(&body) {
-            if !roots.iter().any(|r| r.eq_ignore_ascii_case(&p)) {
-                roots.push(p);
+    let mut vdf_unreadable = false;
+    match std::fs::read_to_string(&vdf) {
+        Ok(body) => {
+            for p in crate::hardware::parse_steam_library_paths(&body) {
+                if !roots.iter().any(|r| r.eq_ignore_ascii_case(&p)) {
+                    roots.push(p);
+                }
             }
         }
+        Err(_) => vdf_unreadable = true,
     }
-    Ok(roots)
+    Ok(SteamRoots { roots, vdf_unreadable })
 }
 
-fn read_manifest(path: &std::path::Path) -> Option<AcfInfo> {
-    let meta = std::fs::metadata(path).ok()?;
-    if meta.len() > 1_000_000 {
-        return None;
-    }
-    parse_acf(&std::fs::read_to_string(path).ok()?)
+enum ManifestRead {
+    /// No such file: the game is not recorded here.
+    Missing,
+    /// The file exists but could not be read or parsed (half-written, locked, too large).
+    Unreadable,
+    Parsed(AcfInfo),
 }
 
-/// Steam's record of when `game` was last updated. Anything that is not a readable Steam install
-/// is `Unreadable` with a plain reason (other launchers are not read in this slice).
+fn read_manifest(path: &std::path::Path) -> ManifestRead {
+    use std::io::ErrorKind::NotFound;
+    match std::fs::metadata(path) {
+        Err(e) if e.kind() == NotFound => ManifestRead::Missing,
+        Err(_) => ManifestRead::Unreadable,
+        Ok(m) if m.len() > 1_000_000 => ManifestRead::Unreadable,
+        Ok(_) => match std::fs::read_to_string(path) {
+            Err(e) if e.kind() == NotFound => ManifestRead::Missing,
+            Err(_) => ManifestRead::Unreadable,
+            Ok(s) => parse_acf(&s).map_or(ManifestRead::Unreadable, ManifestRead::Parsed),
+        },
+    }
+}
+
+fn is_manifest_name(e: &std::fs::DirEntry) -> bool {
+    let n = e.file_name().to_string_lossy().to_ascii_lowercase();
+    n.starts_with("appmanifest_") && n.ends_with(".acf")
+}
+
+/// Steam's record of when `game`'s files last changed. Anything that is not a readable Steam
+/// install is `Unreadable` with a fixed reason (other launchers are not read in this slice).
+/// "Not found" is only said when every library was readable.
 pub(crate) fn read_game_update(game: &GameRef, budget: Duration) -> SourceRead {
     if let Some(l) = game.launcher.as_deref().map(str::trim).filter(|l| !l.is_empty()) {
         if !l.eq_ignore_ascii_case("steam") {
-            return SourceRead::Unreadable(format!(
-                "This game is not a Steam install (launcher: {l}); Compy can only read update times from Steam"
-            ));
+            return SourceRead::Unreadable(UnreadableReason::NotSteamLauncher(l.to_string()));
         }
     }
     if game.steam_app_id.is_none() {
         match game.install_dir.as_deref() {
-            None => return steam_not_readable("No game was identified, so there is no game update to look up"),
+            None => return SourceRead::Unreadable(UnreadableReason::NoGameIdentified),
             Some(d) if steam_install_folder(d).is_none() => {
-                return steam_not_readable(
-                    "This game is not installed in a Steam library, so Compy cannot read when it was updated",
-                )
+                return SourceRead::Unreadable(UnreadableReason::NotInSteamLibrary)
             }
             Some(_) => {}
         }
     }
-    let roots = match steam_library_roots() {
-        Ok(r) => r,
-        Err(e) => return SourceRead::Unreadable(e),
-    };
+    match steam_library_roots() {
+        Ok(r) => find_in_libraries(&r.roots, r.vdf_unreadable, game, budget),
+        Err(e) => SourceRead::Unreadable(e),
+    }
+}
+
+/// Search the given Steam library roots for `game`'s manifest. "Not found" is only said when every
+/// library and record could be read; otherwise the reason says what could not be read.
+fn find_in_libraries(roots: &[String], vdf_unreadable: bool, game: &GameRef, budget: Duration) -> SourceRead {
     let deadline = Instant::now() + budget;
+    let mut libs_unreadable = usize::from(vdf_unreadable);
+    let mut records_unparsed = 0usize;
     let mut found: Option<AcfInfo> = None;
     let mut timed_out = false;
-    'libs: for root in &roots {
+    'libs: for root in roots {
         let dir = std::path::Path::new(root).join("steamapps");
+        if !dir.is_dir() {
+            libs_unreadable += 1; // e.g. a library on a drive that is not connected
+            continue;
+        }
         if let Some(id) = game.steam_app_id {
             // Fast path: the manifest name is the app id.
-            if let Some(info) = read_manifest(&dir.join(format!("appmanifest_{id}.acf"))) {
-                if manifest_matches(&info, game) {
+            match read_manifest(&dir.join(format!("appmanifest_{id}.acf"))) {
+                ManifestRead::Parsed(info) if manifest_matches(&info, game, root) => {
                     found = Some(info);
                     break 'libs;
                 }
+                ManifestRead::Unreadable => records_unparsed += 1,
+                _ => {}
             }
             continue;
         }
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        let manifests = entries.flatten().filter(|e| {
-            let n = e.file_name().to_string_lossy().to_ascii_lowercase();
-            n.starts_with("appmanifest_") && n.ends_with(".acf")
-        });
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            libs_unreadable += 1;
+            continue;
+        };
         let mut hit = None;
-        timed_out |= collect_until(manifests, deadline, |e| {
-            if hit.is_none() {
-                if let Some(info) = read_manifest(&e.path()) {
-                    if manifest_matches(&info, game) {
-                        hit = Some(info);
-                    }
-                }
+        timed_out |= collect_until(entries.flatten().filter(is_manifest_name), deadline, |e| {
+            if hit.is_some() {
+                return;
+            }
+            match read_manifest(&e.path()) {
+                ManifestRead::Parsed(info) if manifest_matches(&info, game, root) => hit = Some(info),
+                ManifestRead::Unreadable => records_unparsed += 1,
+                _ => {}
             }
         });
         if hit.is_some() {
@@ -841,28 +1242,41 @@ pub(crate) fn read_game_update(game: &GameRef, budget: Duration) -> SourceRead {
     }
     match found {
         Some(info) => match game_event_from_acf(&info) {
-            Ok(ev) => SourceRead::Read { events: vec![ev], timed_out: false },
+            Ok(ev) => {
+                let mut ok = ReadOk {
+                    events: vec![ev],
+                    covered_from: None,
+                    gaps: Vec::new(),
+                    notes: vec![Note::SteamUpdateTimeIsFileChange],
+                };
+                if libs_unreadable > 0 {
+                    ok.gaps.push(Gap::SteamLibrariesUnreadable(libs_unreadable));
+                }
+                SourceRead::Read(ok)
+            }
             Err(e) => SourceRead::Unreadable(e),
         },
-        None if timed_out => SourceRead::Unreadable("Steam's game records did not finish reading within the time budget".into()),
-        None => SourceRead::Unreadable("This game was not found in any Steam library on this PC".into()),
+        None if timed_out => SourceRead::Unreadable(UnreadableReason::TimedOutBeforeAnyRecord),
+        None if libs_unreadable > 0 || records_unparsed > 0 => {
+            SourceRead::Unreadable(UnreadableReason::SteamPartiallyUnreadable {
+                libraries: libs_unreadable,
+                records: records_unparsed,
+            })
+        }
+        None => SourceRead::Unreadable(UnreadableReason::SteamGameNotFound),
     }
 }
 
-/// Every installed Steam game with a readable update time (app id, name, install folder, event).
-/// For callers that want to enumerate, and for the real-PC check.
-pub(crate) fn read_all_steam_games(budget: Duration) -> Result<Vec<ChangeEvent>, String> {
-    let roots = steam_library_roots()?;
+/// Every installed Steam game with a readable update time. For callers that want to enumerate, and
+/// for the real-PC check.
+pub(crate) fn read_all_steam_games(budget: Duration) -> Result<Vec<ChangeEvent>, UnreadableReason> {
+    let SteamRoots { roots, .. } = steam_library_roots()?;
     let deadline = Instant::now() + budget;
     let mut out = Vec::new();
     for root in &roots {
         let Ok(entries) = std::fs::read_dir(std::path::Path::new(root).join("steamapps")) else { continue };
-        let manifests = entries.flatten().filter(|e| {
-            let n = e.file_name().to_string_lossy().to_ascii_lowercase();
-            n.starts_with("appmanifest_") && n.ends_with(".acf")
-        });
-        let stopped = collect_until(manifests, deadline, |e| {
-            if let Some(info) = read_manifest(&e.path()) {
+        let stopped = collect_until(entries.flatten().filter(is_manifest_name), deadline, |e| {
+            if let ManifestRead::Parsed(info) = read_manifest(&e.path()) {
                 if let Ok(ev) = game_event_from_acf(&info) {
                     out.push(ev);
                 }
@@ -900,56 +1314,104 @@ fn parse_install_date(raw: &str) -> Option<NaiveDate> {
     (d >= NaiveDate::from_ymd_opt(1990, 1, 1)?).then_some(d)
 }
 
-/// `[start of local day, start of next local day)` in UTC for `date` in time zone `tz`.
-fn day_window_in<Tz: TimeZone>(tz: &Tz, date: NaiveDate) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
-    let start = tz.from_local_datetime(&date.and_hms_opt(0, 0, 0)?).earliest()?;
-    let end = tz.from_local_datetime(&date.succ_opt()?.and_hms_opt(0, 0, 0)?).earliest()?;
-    Some((start.with_timezone(&Utc), end.with_timezone(&Utc)))
+/// First instant of local `date` that exists in the zone `resolve` describes. Local midnight does
+/// not exist where daylight saving starts at 00:00 (the clock jumps to 01:00): then the day starts
+/// at its first valid time, and the row is never dropped.
+fn first_instant_of_day(resolve: &dyn Fn(NaiveDateTime) -> Option<DateTime<Utc>>, date: NaiveDate) -> Option<DateTime<Utc>> {
+    let midnight = date.and_hms_opt(0, 0, 0)?;
+    (0..96).find_map(|i| {
+        let t = midnight + ChronoDuration::minutes(15 * i);
+        if t.date() != date {
+            return None;
+        }
+        resolve(t)
+    })
 }
 
-/// Pure (zone injected): one Uninstall entry as a program-installed event, or `None` when it is a
-/// system component, a patch, nameless, or has no usable date.
-fn uninstall_event(
-    f: &UninstallFields,
-    day_window: &dyn Fn(NaiveDate) -> Option<(DateTime<Utc>, DateTime<Utc>)>,
-) -> Option<ChangeEvent> {
+/// `[first instant of local day, first instant of next local day)` in UTC for `date`.
+fn day_window_with(
+    resolve: &dyn Fn(NaiveDateTime) -> Option<DateTime<Utc>>,
+    date: NaiveDate,
+) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
+    Some((first_instant_of_day(resolve, date)?, first_instant_of_day(resolve, date.succ_opt()?)?))
+}
+
+fn day_window_in<Tz: TimeZone>(tz: &Tz, date: NaiveDate) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
+    day_window_with(&|n| tz.from_local_datetime(&n).earliest().map(|d| d.with_timezone(&Utc)), date)
+}
+
+enum UninstallOutcome {
+    Event(Box<ChangeEvent>),
+    /// A real program the registry gives no usable install date for.
+    NoDate,
+    /// System component, patch or nameless: not a program of the user's.
+    Skipped,
+}
+
+type DayWindowFn<'a> = &'a dyn Fn(NaiveDate) -> Option<(DateTime<Utc>, DateTime<Utc>)>;
+
+fn uninstall_outcome(f: &UninstallFields, day_window: DayWindowFn<'_>) -> UninstallOutcome {
     if f.system_component || f.is_patch {
-        return None;
+        return UninstallOutcome::Skipped;
     }
-    let name = f.display_name.as_deref().map(str::trim).filter(|n| !n.is_empty())?;
-    let date = parse_install_date(f.install_date.as_deref()?)?;
-    let (start, end) = day_window(date)?;
-    Some(ChangeEvent {
+    let Some(name) = f.display_name.as_deref().map(str::trim).filter(|n| !n.is_empty()) else {
+        return UninstallOutcome::Skipped;
+    };
+    let Some(date) = f.install_date.as_deref().and_then(parse_install_date) else {
+        return UninstallOutcome::NoDate;
+    };
+    let Some((start, end)) = day_window(date) else {
+        return UninstallOutcome::NoDate;
+    };
+    UninstallOutcome::Event(Box::new(ChangeEvent {
         kind: ChangeKind::ProgramInstalled,
         when: ChangeTime::day(start, end),
         what: ChangeWhat {
             name: Some(name.to_string()),
             to_version: f.display_version.clone().filter(|v| !v.trim().is_empty()),
-            detail: Some(format!("installer-reported install date {date} (local day)")),
+            detail: Some(format!("installer-reported install date {date} (that local day)")),
             ..ChangeWhat::default()
         },
         source: Source::UninstallKeys,
-    })
+    }))
+}
+
+/// Pure (zone injected): one Uninstall entry as a program-installed event, or `None`.
+fn uninstall_event(f: &UninstallFields, day_window: DayWindowFn<'_>) -> Option<ChangeEvent> {
+    match uninstall_outcome(f, day_window) {
+        UninstallOutcome::Event(e) => Some(*e),
+        _ => None,
+    }
+}
+
+struct UninstallScan {
+    events: Vec<ChangeEvent>,
+    timed_out: bool,
+    without_date: usize,
 }
 
 /// Pure: events from a stream of entries, stopping at the deadline. Same name + version + day in
-/// two registry views is one program.
+/// two registry views is one program. Programs with no usable date are counted, not dropped.
 fn collect_uninstall<I: Iterator<Item = UninstallFields>>(
     entries: I,
     deadline: Instant,
-    day_window: &dyn Fn(NaiveDate) -> Option<(DateTime<Utc>, DateTime<Utc>)>,
-) -> (Vec<ChangeEvent>, bool) {
-    let mut out: Vec<ChangeEvent> = Vec::new();
+    day_window: DayWindowFn<'_>,
+) -> UninstallScan {
+    let mut events: Vec<ChangeEvent> = Vec::new();
+    let mut without_date = 0;
     let mut seen: HashSet<(String, Option<String>, Option<DateTime<Utc>>)> = HashSet::new();
-    let timed_out = collect_until(entries, deadline, |f| {
-        if let Some(ev) = uninstall_event(&f, day_window) {
+    let timed_out = collect_until(entries, deadline, |f| match uninstall_outcome(&f, day_window) {
+        UninstallOutcome::Event(ev) => {
+            let ev = *ev;
             let key = (ev.what.name.clone().unwrap_or_default(), ev.what.to_version.clone(), ev.when.at);
             if seen.insert(key) {
-                out.push(ev);
+                events.push(ev);
             }
         }
+        UninstallOutcome::NoDate => without_date += 1,
+        UninstallOutcome::Skipped => {}
     });
-    (out, timed_out)
+    UninstallScan { events, timed_out, without_date }
 }
 
 #[derive(Clone, Copy)]
@@ -988,7 +1450,9 @@ fn read_uninstall_fields(hive: Hive, path: &str, sub: &str) -> Option<UninstallF
     })
 }
 
-/// Programs the registry says were installed (any date; the combiner applies the window).
+/// Programs the registry says were installed (any date; the combiner applies the window). Only
+/// programs that record an install date are listed; the rest are counted in a note, and Store/MSIX
+/// apps are not in these keys at all.
 pub(crate) fn read_installed_programs(budget: Duration) -> SourceRead {
     let deadline = Instant::now() + budget;
     let mut names: Vec<(Hive, &'static str, String)> = Vec::new();
@@ -1000,11 +1464,15 @@ pub(crate) fn read_installed_programs(budget: Duration) -> SourceRead {
         }
     }
     if opened == 0 {
-        return SourceRead::Unreadable("The installed-programs registry keys could not be opened".into());
+        return SourceRead::Unreadable(UnreadableReason::RegistryUnreadable);
     }
     let entries = names.into_iter().filter_map(|(h, p, n)| read_uninstall_fields(h, p, &n));
-    let (events, timed_out) = collect_uninstall(entries, deadline, &|d| day_window_in(&chrono::Local, d));
-    SourceRead::finish(events, timed_out, "The installed-programs list")
+    let scan = collect_uninstall(entries, deadline, &|d| day_window_in(&chrono::Local, d));
+    let mut notes = vec![Note::StoreAppsNotCovered];
+    if scan.without_date > 0 {
+        notes.push(Note::ProgramsWithoutDate(scan.without_date));
+    }
+    SourceRead::finish(scan.events, scan.timed_out, notes)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1022,22 +1490,30 @@ fn kind_rank(k: ChangeKind) -> u8 {
 }
 
 /// Pure: merge reader outcomes into one report for the window `(t0, t1]` (lower bound exclusive,
-/// upper inclusive; see `ChangeTime::in_window`). Unreadable sources and budget-truncated sources
-/// are listed, never dropped.
+/// upper inclusive; see `ChangeTime::in_window`). Unreadable sources, incomplete reads and the part
+/// of the window a log does not reach are listed, never dropped.
 pub(crate) fn combine(t0: DateTime<Utc>, t1: DateTime<Utc>, reads: Vec<(Source, SourceRead)>) -> ChangeReport {
     let mut events: Vec<ChangeEvent> = Vec::new();
     let mut unreadable = Vec::new();
     let mut partial = Vec::new();
+    let mut coverage_gaps = Vec::new();
+    let mut notes = Vec::new();
     let mut game_last_update: Option<ChangeEvent> = None;
     let mut undated_excluded = 0;
     for (source, read) in reads {
         match read {
             SourceRead::Unreadable(reason) => unreadable.push(UnreadableSource { source, reason }),
-            SourceRead::Read { events: evs, timed_out } => {
-                if timed_out {
-                    partial.push(source);
+            SourceRead::Read(ok) => {
+                if !ok.gaps.is_empty() {
+                    partial.push(PartialSource { source, gaps: ok.gaps.clone(), covered_from: ok.covered_from });
                 }
-                for ev in evs {
+                if let Some(from) = ok.covered_from {
+                    if from > t0 {
+                        coverage_gaps.push(CoverageGap { source, from: t0, to: from });
+                    }
+                }
+                notes.extend(ok.notes.iter().cloned().map(|n| (source, n)));
+                for ev in ok.events {
                     if ev.kind == ChangeKind::GameUpdate
                         && game_last_update.as_ref().is_none_or(|g| ev.when.at > g.when.at)
                     {
@@ -1061,14 +1537,16 @@ pub(crate) fn combine(t0: DateTime<Utc>, t1: DateTime<Utc>, reads: Vec<(Source, 
         events,
         unreadable,
         partial,
+        coverage_gaps,
+        notes,
         game_last_update,
         undated_excluded,
     }
 }
 
 /// What changed on this PC in `(t0, t1]`: runs every reader (in parallel, each with its own
-/// budget) and combines them. `game` adds the Steam update lookup for that game. Never panics: a
-/// reader that dies is reported as unreadable.
+/// budget) and combines them. `game` adds the Steam lookup for that game. Never panics: a reader
+/// that dies is reported as unreadable.
 pub(crate) fn changes_between(t0: DateTime<Utc>, t1: DateTime<Utc>, game: Option<&GameRef>) -> ChangeReport {
     changes_between_with(t0, t1, game, DEFAULT_BUDGET)
 }
@@ -1079,10 +1557,11 @@ pub(crate) fn changes_between_with(
     game: Option<&GameRef>,
     budget: Duration,
 ) -> ChangeReport {
-    let lost = || SourceRead::Unreadable("The reader stopped unexpectedly".to_string());
+    let lost = || SourceRead::Unreadable(UnreadableReason::ReaderStopped);
     let reads = std::thread::scope(|s| {
-        let drivers = s.spawn(move || read_driver_installs(t0 - ChronoDuration::days(DRIVER_LOOKBACK_DAYS), budget));
-        let updates = s.spawn(move || read_windows_updates(t0, budget));
+        let drivers =
+            s.spawn(move || read_driver_installs(t0 - ChronoDuration::days(DRIVER_LOOKBACK_DAYS), t1, budget));
+        let updates = s.spawn(move || read_windows_updates(t0, t1, budget));
         let programs = s.spawn(move || read_installed_programs(budget));
         let game_read = game.map(|g| s.spawn(move || read_game_update(g, budget)));
         let mut reads = vec![
@@ -1346,15 +1825,15 @@ mod tests {
     fn manifest_matching_by_app_id_or_install_folder() {
         let info = parse_acf(ACF).unwrap();
         let by_id = GameRef { steam_app_id: Some(1217060), ..GameRef::default() };
-        assert!(manifest_matches(&info, &by_id));
-        assert!(!manifest_matches(&info, &GameRef { steam_app_id: Some(1), ..GameRef::default() }));
+        assert!(manifest_matches(&info, &by_id, "C:\\Steam"));
+        assert!(!manifest_matches(&info, &GameRef { steam_app_id: Some(1), ..GameRef::default() }, "C:\\Steam"));
         let by_dir = GameRef {
             install_dir: Some("D:/SteamLibrary/steamapps/common/example game/bin".into()),
             ..GameRef::default()
         };
-        assert!(manifest_matches(&info, &by_dir));
+        assert!(manifest_matches(&info, &by_dir, "D:\\SteamLibrary"));
         let elsewhere = GameRef { install_dir: Some("C:\\Games\\Example Game".into()), ..GameRef::default() };
-        assert!(!manifest_matches(&info, &elsewhere));
+        assert!(!manifest_matches(&info, &elsewhere, "C:\\Steam"));
         assert_eq!(steam_install_folder("C:\\Games\\Example Game"), None);
         assert_eq!(
             steam_install_folder("C:\\Program Files (x86)\\Steam\\steamapps\\common\\Example Game\\x.exe").as_deref(),
@@ -1366,16 +1845,16 @@ mod tests {
     fn non_steam_or_unidentified_games_are_unreadable_with_a_plain_reason() {
         let epic = GameRef { launcher: Some("Epic".into()), steam_app_id: Some(5), ..GameRef::default() };
         match read_game_update(&epic, DEFAULT_BUDGET) {
-            SourceRead::Unreadable(r) => assert!(r.contains("not a Steam install"), "{r}"),
+            SourceRead::Unreadable(r) => assert!(r.plain().contains("not a Steam install"), "{r:?}"),
             other => panic!("expected Unreadable, got {other:?}"),
         }
         match read_game_update(&GameRef::default(), DEFAULT_BUDGET) {
-            SourceRead::Unreadable(r) => assert!(r.contains("No game was identified"), "{r}"),
+            SourceRead::Unreadable(r) => assert!(r.plain().contains("No game was identified"), "{r:?}"),
             other => panic!("expected Unreadable, got {other:?}"),
         }
         let loose = GameRef { install_dir: Some("C:\\Games\\Whatever".into()), ..GameRef::default() };
         match read_game_update(&loose, DEFAULT_BUDGET) {
-            SourceRead::Unreadable(r) => assert!(r.contains("not installed in a Steam library"), "{r}"),
+            SourceRead::Unreadable(r) => assert!(r.plain().contains("not installed in a Steam library"), "{r:?}"),
             other => panic!("expected Unreadable, got {other:?}"),
         }
     }
@@ -1439,7 +1918,8 @@ mod tests {
         let w = |d| day_window_in(&pst(), d);
         let deadline = Instant::now() + Duration::from_secs(5);
         let entries = vec![fields("Tool", "20261119"), fields("Tool", "20261119"), fields("Other", "20261119")];
-        let (evs, timed_out) = collect_uninstall(entries.into_iter(), deadline, &w);
+        let scan = collect_uninstall(entries.into_iter(), deadline, &w);
+        let (evs, timed_out) = (scan.events, scan.timed_out);
         assert_eq!(evs.len(), 2);
         assert!(!timed_out);
     }
@@ -1456,7 +1936,7 @@ mod tests {
     }
 
     fn ok(events: Vec<ChangeEvent>) -> SourceRead {
-        SourceRead::Read { events, timed_out: false }
+        SourceRead::ok(events)
     }
 
     #[test]
@@ -1501,13 +1981,13 @@ mod tests {
             t1,
             vec![
                 (Source::DriverLog, ok(vec![])),
-                (Source::WindowsUpdateLog, SourceRead::Unreadable("Access is denied".into())),
+                (Source::WindowsUpdateLog, SourceRead::Unreadable(UnreadableReason::AccessDenied)),
             ],
         );
         assert!(r.events.is_empty());
         assert_eq!(r.unreadable.len(), 1);
         assert_eq!(r.unreadable[0].source, Source::WindowsUpdateLog);
-        assert_eq!(r.unreadable[0].reason, "Access is denied");
+        assert_eq!(r.unreadable[0].reason, UnreadableReason::AccessDenied);
         assert!(r.partial.is_empty());
         // A clean empty read lists nothing as unreadable.
         let clean = combine(t0, t1, vec![(Source::DriverLog, ok(vec![]))]);
@@ -1517,21 +1997,33 @@ mod tests {
     #[test]
     fn a_timed_out_reader_is_marked_partial_and_keeps_its_events() {
         let (t0, t1) = (utc("2026-11-01T00:00:00Z"), utc("2026-11-20T00:00:00Z"));
-        let partial = SourceRead::Read {
+        let partial = SourceRead::Read(ReadOk {
             events: vec![exact_ev(ChangeKind::WindowsUpdate, "2026-11-10T00:00:00Z", "kept")],
-            timed_out: true,
-        };
+            covered_from: Some(utc("2026-11-08T00:00:00Z")),
+            gaps: vec![Gap::TimedOut],
+            notes: vec![],
+        });
         let r = combine(t0, t1, vec![(Source::WindowsUpdateLog, partial)]);
         assert_eq!(r.events.len(), 1);
-        assert_eq!(r.partial, vec![Source::WindowsUpdateLog]);
+        assert_eq!(r.partial.len(), 1);
+        assert_eq!(r.partial[0].source, Source::WindowsUpdateLog);
+        assert_eq!(r.partial[0].gaps, vec![Gap::TimedOut]);
+        assert_eq!(r.partial[0].covered_from, Some(utc("2026-11-08T00:00:00Z")), "how far back the partial read reached");
+        assert_eq!(r.coverage_gaps.len(), 1, "t0..covered_from is not covered");
     }
 
     #[test]
     fn budget_exhausted_with_nothing_read_is_unreadable_not_empty() {
-        assert!(matches!(SourceRead::finish(vec![], true, "The x"), SourceRead::Unreadable(_)));
-        assert!(matches!(SourceRead::finish(vec![], false, "The x"), SourceRead::Read { timed_out: false, .. }));
+        assert!(matches!(SourceRead::finish(vec![], true, vec![]), SourceRead::Unreadable(UnreadableReason::TimedOutBeforeAnyRecord)));
+        match SourceRead::finish(vec![], false, vec![]) {
+            SourceRead::Read(ok) => assert!(!ok.timed_out() && ok.gaps.is_empty()),
+            other => panic!("{other:?}"),
+        }
         let one = vec![exact_ev(ChangeKind::GpuDriver, "2026-11-10T00:00:00Z", "a")];
-        assert!(matches!(SourceRead::finish(one, true, "The x"), SourceRead::Read { timed_out: true, .. }));
+        match SourceRead::finish(one, true, vec![]) {
+            SourceRead::Read(ok) => assert!(ok.timed_out()),
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]
@@ -1586,7 +2078,7 @@ mod tests {
 
     #[test]
     fn a_child_that_exceeds_its_budget_is_killed_and_returns_what_it_had_written() {
-        let mut cmd = crate::actions::quiet_command("cmd.exe");
+        let mut cmd = system_command("cmd.exe").unwrap();
         cmd.args(["/c", "echo first-line & ping -n 8 127.0.0.1 > nul"]);
         let started = Instant::now();
         let out = run_with_budget(cmd, Duration::from_millis(400)).unwrap();
@@ -1597,17 +2089,24 @@ mod tests {
 
     #[test]
     fn a_failing_query_is_unreadable_with_the_windows_reason() {
-        let r = run_wevtutil("No-Such-Channel/Operational", "*", Duration::from_secs(5));
-        assert!(r.is_err(), "a missing channel must not look like an empty log");
+        let r = run_wevtutil("No-Such-Channel/Operational", None, 1, false, Duration::from_secs(5));
+        assert!(
+            matches!(r, Err(UnreadableReason::ChannelNotFound | UnreadableReason::QueryFailed(_))),
+            "a missing channel must not look like an empty log: {r:?}"
+        );
+        // And through the reader: a channel that does not exist is Unreadable.
+        let q = event_query(None, 1, Utc::now() - ChronoDuration::days(1), Utc::now());
+        assert!(read_channel("No-Such-Channel/Operational", &q, Duration::from_secs(5), parse_pnp).is_err());
     }
 
     #[test]
     fn a_zero_budget_real_reader_is_unreadable_not_empty() {
-        match read_driver_installs(Utc::now() - ChronoDuration::days(1), Duration::from_millis(0)) {
+        let now = Utc::now();
+        match read_driver_installs(now - ChronoDuration::days(1), now, Duration::from_millis(0)) {
             SourceRead::Unreadable(_) => {}
-            SourceRead::Read { timed_out, events } => {
+            SourceRead::Read(ok) => {
                 // A child can race a zero budget and finish first; then it is a real read.
-                assert!(!timed_out || !events.is_empty());
+                assert!(!ok.timed_out() || !ok.events.is_empty());
             }
         }
     }
@@ -1619,6 +2118,485 @@ mod tests {
         assert!(j.contains("window_start"));
     }
 
+    // ---- review r1: executable resolution, elevation, payload isolation ---------------------------
+
+    #[test]
+    fn wevtutil_is_resolved_to_an_absolute_path_inside_the_system_directory() {
+        let sys = system_directory().expect("system directory");
+        assert!(sys.is_absolute());
+        let tool = system_tool("wevtutil.exe").expect("wevtutil in the system directory");
+        assert!(tool.is_absolute(), "{tool:?}");
+        assert_eq!(tool.parent().unwrap(), sys.as_path());
+        assert!(tool.is_file());
+        // A name that is not in the system directory is ToolMissing, never a PATH search.
+        assert_eq!(system_tool("compy-no-such-tool.exe"), Err(UnreadableReason::ToolMissing));
+    }
+
+    /// Removes the planted file even if an assertion fails.
+    struct Planted(PathBuf);
+    impl Drop for Planted {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+
+    #[test]
+    fn a_wevtutil_planted_beside_the_executable_is_never_run() {
+        let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let planted = exe_dir.join("wevtutil.exe");
+        if planted.exists() {
+            return; // never touch a file this test did not create
+        }
+        std::fs::write(&planted, b"MZ this is not a program").unwrap();
+        let _guard = Planted(planted);
+        // Control: a bare-name spawn (what quiet_command("wevtutil.exe") does) picks the planted
+        // file first and fails; this is the hazard the absolute path closes.
+        match std::process::Command::new("wevtutil.exe").arg("/?").spawn() {
+            Err(_) => {}
+            Ok(mut child) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("control: a bare-name spawn did not pick the planted file, so this test proves nothing here");
+            }
+        }
+        // The reader still works: it ran the real tool from the system directory.
+        let r = run_wevtutil("System", None, 1, false, Duration::from_secs(10));
+        assert!(matches!(r, Ok((_, false))), "{r:?}");
+    }
+
+    /// The text of `fn <name>` up to its closing brace at column 0.
+    fn fn_body<'a>(src: &'a str, signature: &str) -> &'a str {
+        let i = src.find(signature).unwrap_or_else(|| panic!("{signature} not found"));
+        let rest = &src[i..];
+        &rest[..rest.find("\n}\n").expect("end of fn") + 3]
+    }
+
+    #[test]
+    fn the_elevated_helper_never_reaches_this_module() {
+        let lib = include_str!("lib.rs");
+        let body = fn_body(lib, "pub fn run_elevated_helper(");
+        assert!(!body.contains("change_sources"), "run_elevated_helper must never call change_sources");
+        assert!(!include_str!("main.rs").contains("change_sources"));
+        // The elevated helper entry also never names this module's reader entry points.
+        for f in ["changes_between", "read_driver_installs", "read_windows_updates", "read_installed_programs", "read_game_update"] {
+            assert!(!body.contains(f), "{f}");
+        }
+    }
+
+    #[test]
+    fn change_events_are_not_part_of_any_support_or_outbound_payload() {
+        // Program names and device ids must not reach a support bundle, evidence upload, receipt,
+        // signed catalog or export. Every type here is reachable only through the module path, so no
+        // source file other than lib.rs (the `mod` line), this file and the diagnosis engine
+        // (paramedic.rs, the one planned consumer) may name it. Scanning the whole source directory
+        // covers every payload module without listing (or naming) any of them.
+        let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let allowed = ["lib.rs", "change_sources.rs", "paramedic.rs"];
+        let mut scanned = 0;
+        for entry in std::fs::read_dir(&src_dir).unwrap().flatten() {
+            let path = entry.path();
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") || allowed.contains(&name.as_str()) {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            scanned += 1;
+            assert!(!text.contains("change_sources"), "{name} reaches into change_sources");
+        }
+        assert!(scanned > 30, "the scan must actually cover the crate's modules ({scanned})");
+        // lib.rs may only declare the module.
+        let lib = include_str!("lib.rs");
+        let lines: Vec<&str> = lib.lines().filter(|l| l.contains("change_sources")).collect();
+        assert!(lines.iter().all(|l| l.trim_start().starts_with("mod change_sources;")), "{lines:?}");
+    }
+
+    // ---- review r1: row cap, upper bound, coverage, no silent parse drops ---------------------
+
+    #[test]
+    fn the_query_is_bounded_above_as_well_as_below() {
+        let q = event_query(Some("Microsoft-Windows-WindowsUpdateClient"), 19, utc("2026-10-01T00:00:00Z"), utc("2026-10-20T12:00:00.5Z"));
+        assert!(q.contains("@SystemTime>='2026-10-01T00:00:00.000Z'"), "{q}");
+        assert!(q.contains("@SystemTime<='2026-10-20T12:00:00.501Z'"), "upper bound, rounded up a millisecond: {q}");
+        assert!(q.contains("EventID=19") && q.contains("Provider[@Name='Microsoft-Windows-WindowsUpdateClient']"));
+        let pnp_q = event_query(None, 400, utc("2026-10-01T00:00:00Z"), utc("2026-10-02T00:00:00Z"));
+        assert!(!pnp_q.contains("Provider") && pnp_q.contains("<='"));
+    }
+
+    #[test]
+    fn a_log_read_that_is_cut_at_a_past_window_end_returns_only_rows_up_to_it() {
+        // Real log: a window that ended 40 days ago must not be answered from the newest rows.
+        let until = Utc::now() - ChronoDuration::days(40);
+        match read_windows_updates(until - ChronoDuration::days(20), until, Duration::from_secs(5)) {
+            SourceRead::Read(ok) => {
+                assert!(ok.events.iter().all(|e| e.when.at.unwrap() <= until + ChronoDuration::milliseconds(1)));
+            }
+            SourceRead::Unreadable(_) => {} // a log that does not reach back that far is Unreadable-or-gap territory
+        }
+    }
+
+    fn wu_rows(n: usize) -> String {
+        // Newest first, one row per minute, like `/rd:true`.
+        (0..n)
+            .map(|i| {
+                let t = utc("2026-11-19T12:00:00Z") - ChronoDuration::minutes(i as i64);
+                wu(&t.format("%Y-%m-%dT%H:%M:%SZ").to_string(), &format!("Update number {i} - KB{:07}", 1_000_000 + i))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn reaching_the_row_cap_marks_the_read_partial_and_names_how_far_back_it_got() {
+        let xml = wu_rows(MAX_EVENTS);
+        let a = assess(&xml, false, Some(utc("2026-01-01T00:00:00Z")), parse_wu(&xml)).unwrap();
+        assert_eq!(a.items.len(), MAX_EVENTS);
+        assert!(a.gaps.contains(&Gap::RowCapReached), "{:?}", a.gaps);
+        let oldest = utc("2026-11-19T12:00:00Z") - ChronoDuration::minutes(MAX_EVENTS as i64 - 1);
+        assert_eq!(a.covered_from, Some(oldest), "the oldest time actually seen, not the log's start");
+        // One row under the cap is a complete read back to the log's own start.
+        let xml = wu_rows(MAX_EVENTS - 1);
+        let a = assess(&xml, false, Some(utc("2026-01-01T00:00:00Z")), parse_wu(&xml)).unwrap();
+        assert!(a.gaps.is_empty());
+        assert_eq!(a.covered_from, Some(utc("2026-01-01T00:00:00Z")));
+    }
+
+    #[test]
+    fn a_timed_out_log_read_reports_how_far_back_it_reached() {
+        let xml = wu_rows(10);
+        let a = assess(&xml, true, Some(utc("2026-01-01T00:00:00Z")), parse_wu(&xml)).unwrap();
+        assert_eq!(a.gaps, vec![Gap::TimedOut]);
+        assert_eq!(a.covered_from, Some(utc("2026-11-19T12:00:00Z") - ChronoDuration::minutes(9)));
+        // Nothing read before the deadline is unreadable, never an empty read.
+        assert_eq!(
+            assess("", true, Some(utc("2026-01-01T00:00:00Z")), parse_wu("")).err(),
+            Some(UnreadableReason::TimedOutBeforeAnyRecord)
+        );
+    }
+
+    #[test]
+    fn a_log_that_starts_after_the_window_start_is_a_coverage_gap() {
+        let (t0, t1) = (utc("2026-11-01T00:00:00Z"), utc("2026-11-20T00:00:00Z"));
+        let read = SourceRead::Read(ReadOk {
+            events: vec![],
+            covered_from: Some(utc("2026-11-10T00:00:00Z")),
+            gaps: vec![],
+            notes: vec![],
+        });
+        let r = combine(t0, t1, vec![(Source::DriverLog, read)]);
+        assert!(r.events.is_empty());
+        assert_eq!(r.coverage_gaps, vec![CoverageGap { source: Source::DriverLog, from: t0, to: utc("2026-11-10T00:00:00Z") }]);
+        // A log that reaches back past the window start has no gap.
+        let ok = SourceRead::Read(ReadOk { events: vec![], covered_from: Some(utc("2026-05-22T00:00:00Z")), gaps: vec![], notes: vec![] });
+        assert!(combine(t0, t1, vec![(Source::DriverLog, ok)]).coverage_gaps.is_empty());
+        // Covered exactly from t0 is covered (t0 itself is outside the window anyway).
+        let edge = SourceRead::Read(ReadOk { events: vec![], covered_from: Some(t0), gaps: vec![], notes: vec![] });
+        assert!(combine(t0, t1, vec![(Source::DriverLog, edge)]).coverage_gaps.is_empty());
+    }
+
+    #[test]
+    fn an_empty_or_cleared_log_is_unreadable_not_an_empty_read() {
+        assert_eq!(parse_log_start(""), Err(UnreadableReason::LogEmptyOrSwitchedOff));
+        assert_eq!(parse_log_start("  \r\n"), Err(UnreadableReason::LogEmptyOrSwitchedOff));
+        assert_eq!(parse_log_start("some text, no events"), Err(UnreadableReason::RecordsUnreadable(0)));
+        assert!(parse_log_start("<Event><System><EventID>1</EventID></System></Event>").is_err(), "no time");
+        let one = wu("2026-05-22T06:42:41.9574227Z", "x");
+        assert_eq!(parse_log_start(&one), Ok(utc("2026-05-22T06:42:41.9574227Z")));
+    }
+
+    #[test]
+    fn a_renamed_field_is_unreadable_records_not_an_empty_read() {
+        // Valid-looking event 19 blocks whose title field was renamed by a Windows update.
+        let xml = wu("2026-11-19T00:00:00Z", "Some Update KB1234567").replace("updateTitle", "updateName");
+        let parsed = parse_wu(&xml);
+        assert_eq!((parsed.blocks, parsed.items.len(), parsed.malformed()), (1, 0, 1));
+        assert_eq!(assess(&xml, false, None, parsed).err(), Some(UnreadableReason::RecordsUnreadable(1)));
+        // Same for the driver parser when DriverVersion disappears.
+        let pnp_xml = pnp("2026-11-19T00:00:00Z", "PCI\\VEN_1&amp;DEV_2\\3&amp;4", "oem3.inf", DISPLAY, "1.0", "01/01/2026", true, "0x0")
+            .replace("DriverVersion", "DriverVer");
+        assert_eq!(assess(&pnp_xml, false, None, parse_pnp(&pnp_xml)).err(), Some(UnreadableReason::RecordsUnreadable(1)));
+    }
+
+    #[test]
+    fn non_blank_output_with_no_event_blocks_is_unreadable() {
+        for garbage in ["Access is denied.", "<?xml version='1.0'?><Events/>", "\u{FFFD}\u{FFFD}\u{FFFD}"] {
+            assert_eq!(
+                assess(garbage, false, None, parse_wu(garbage)).err(),
+                Some(UnreadableReason::RecordsUnreadable(0)),
+                "{garbage:?}"
+            );
+        }
+        // Blank output is a legitimate "no rows" only because the log's start was read first.
+        let a = assess("", false, Some(utc("2026-01-01T00:00:00Z")), parse_wu("")).unwrap();
+        assert!(a.items.is_empty() && a.gaps.is_empty());
+    }
+
+    #[test]
+    fn some_malformed_rows_make_the_read_partial_with_their_count() {
+        let good = wu("2026-11-19T00:00:00Z", "Good Update KB1234567");
+        let bad = wu("2026-11-19T00:01:00Z", "Bad").replace("updateTitle", "gone");
+        let xml = format!("{good}{bad}{bad}");
+        let a = assess(&xml, false, Some(utc("2026-01-01T00:00:00Z")), parse_wu(&xml)).unwrap();
+        assert_eq!(a.items.len(), 1);
+        assert_eq!(a.gaps, vec![Gap::MalformedRecords(2)]);
+    }
+
+    #[test]
+    fn real_log_reads_report_where_their_coverage_starts() {
+        let now = Utc::now();
+        for read in [
+            read_windows_updates(now - ChronoDuration::days(30), now, Duration::from_secs(5)),
+            read_driver_installs(now - ChronoDuration::days(30), now, Duration::from_secs(5)),
+        ] {
+            match read {
+                SourceRead::Read(ok) => {
+                    let from = ok.covered_from.expect("an event-log read always says where its coverage starts");
+                    assert!(from < now);
+                }
+                SourceRead::Unreadable(r) => panic!("System/Kernel-PnP logs are readable without elevation: {r:?}"),
+            }
+        }
+    }
+
+    // ---- review r1: exit codes, encoding -------------------------------------------------------
+
+    #[test]
+    fn wevtutil_exit_codes_map_to_fixed_reasons_and_no_text() {
+        assert_eq!(reason_for_exit_code(Some(5)), UnreadableReason::AccessDenied);
+        assert_eq!(reason_for_exit_code(Some(15007)), UnreadableReason::ChannelNotFound);
+        assert_eq!(reason_for_exit_code(Some(15000)), UnreadableReason::ChannelNotFound);
+        assert_eq!(reason_for_exit_code(Some(1)), UnreadableReason::QueryFailed(Some(1)));
+        assert_eq!(reason_for_exit_code(None), UnreadableReason::QueryFailed(None));
+        // Every plain() line is fixed English: it holds no Windows text and no path.
+        for r in [
+            UnreadableReason::AccessDenied,
+            UnreadableReason::ChannelNotFound,
+            UnreadableReason::QueryFailed(Some(15011)),
+            UnreadableReason::RecordsUnreadable(3),
+            UnreadableReason::SteamPartiallyUnreadable { libraries: 1, records: 2 },
+        ] {
+            let s = r.plain();
+            assert!(s.is_ascii() && !s.contains('\\'), "{s}");
+        }
+    }
+
+    #[test]
+    fn a_missing_channel_exit_code_is_a_fixed_reason() {
+        match run_wevtutil("No-Such-Channel/Operational", None, 1, false, Duration::from_secs(5)) {
+            Err(UnreadableReason::ChannelNotFound) | Err(UnreadableReason::QueryFailed(Some(_))) => {}
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn console_text_is_decoded_and_non_ascii_titles_are_flagged_uncertain() {
+        // wevtutil writes ANSI/OEM, not UTF-8: a Latin-1 byte decodes per byte, UTF-8 as UTF-8.
+        assert_eq!(decode_console_text(&[b'C', b'a', b'f', 0xE9]), "Caf\u{e9}");
+        assert_eq!(decode_console_text("Caf\u{e9}".as_bytes()), "Caf\u{e9}");
+        assert_eq!(decode_console_text(b"plain ascii"), "plain ascii");
+        // Measured on this PC: U+200E reaches the pipe as a literal '?'.
+        let xml = format!(
+            "{}{}{}",
+            wu("2026-11-19T00:00:00Z", "Caf\u{e9} Update - KB1234567 (Version 1.2)"),
+            wu("2026-11-19T01:00:00Z", "Update ?Friday KB7654321"),
+            wu("2026-11-19T02:00:00Z", "Plain Update KB1111111"),
+        );
+        let evs = wu_events_from_xml(&xml);
+        let by = |kb: &str| evs.iter().find(|e| e.what.kb.as_deref() == Some(kb)).unwrap();
+        assert!(by("KB1234567").what.text_uncertain);
+        assert!(by("KB7654321").what.text_uncertain);
+        assert!(!by("KB1111111").what.text_uncertain);
+        // KB ids and times stay authoritative even when the text is uncertain.
+        assert_eq!(by("KB1234567").when.at, Some(utc("2026-11-19T00:00:00Z")));
+        // The same flag on driver rows whose provider text is non-ASCII.
+        let d = pnp("2026-11-19T00:00:00Z", "PCI\\VEN_1&amp;DEV_2\\3&amp;4", "oem3.inf", DISPLAY, "1.0", "01/01/2026", true, "0x0")
+            .replace("Advanced Micro Devices, Inc.", "Soci\u{e9}t\u{e9}");
+        assert!(driver_events_from_xml(&d)[0].what.text_uncertain);
+    }
+
+    // ---- review r1: driver version_changed ----------------------------------------------------
+
+    #[test]
+    fn version_changed_separates_real_changes_from_same_version_and_unknown() {
+        let a = "PCI\\VEN_1&amp;DEV_2\\3&amp;4";
+        let b = "PCI\\VEN_9&amp;DEV_9\\3&amp;4";
+        let xml = [
+            pnp("2026-11-01T00:00:00Z", a, "oem1.inf", DISPLAY, "1.0", "01/01/2026", true, "0x0"),
+            pnp("2026-11-10T00:00:00Z", a, "oem2.inf", DISPLAY, "2.0", "01/01/2026", true, "0x0"),
+            pnp("2026-11-15T00:00:00Z", a, "oem2.inf", DISPLAY, "2.0", "01/01/2026", true, "0x0"),
+            pnp("2026-11-12T00:00:00Z", b, "oem5.inf", MEDIA, "5.0", "01/01/2026", true, "0x0"),
+        ]
+        .concat();
+        let evs = driver_events_from_xml(&xml);
+        let at = |t: &str, id: &str| evs.iter().find(|e| e.when.at == Some(utc(t)) && e.what.id.as_deref().unwrap().contains(id)).unwrap();
+        let first = at("2026-11-01T00:00:00Z", "VEN_1");
+        assert_eq!((first.what.version_changed, first.what.from_version.as_deref()), (None, None));
+        assert!(first.what.detail.as_deref().unwrap().contains("previous version unknown"));
+        let changed = at("2026-11-10T00:00:00Z", "VEN_1");
+        assert_eq!((changed.what.version_changed, changed.what.from_version.as_deref()), (Some(true), Some("1.0")));
+        let same = at("2026-11-15T00:00:00Z", "VEN_1");
+        assert_eq!((same.what.version_changed, same.what.from_version.as_deref()), (Some(false), None));
+        // Another device's state is separate.
+        assert_eq!(at("2026-11-12T00:00:00Z", "VEN_9").what.version_changed, None);
+        // The engine's filter: real version changes only, no text parsing.
+        let real: Vec<_> = evs.iter().filter(|e| e.what.version_changed == Some(true)).collect();
+        assert_eq!(real.len(), 1);
+    }
+
+    // ---- review r1: DST gap, programs without a date ----------------------------------------------
+
+    #[test]
+    fn a_day_whose_local_midnight_does_not_exist_still_gets_a_window() {
+        // Clocks jump 00:00 -> 01:00 on 2018-11-04 (e.g. Sao Paulo, UTC-3 -> UTC-2): 00:00-00:59
+        // does not exist locally. The day must start at 01:00 local, not vanish.
+        let gap_day = NaiveDate::from_ymd_opt(2018, 11, 4).unwrap();
+        let resolve = move |n: NaiveDateTime| -> Option<DateTime<Utc>> {
+            if n.date() == gap_day && n.time() < chrono::NaiveTime::from_hms_opt(1, 0, 0).unwrap() {
+                return None;
+            }
+            let offset_hours = if n.date() >= gap_day { 2 } else { 3 }; // local = UTC - offset
+            Some(DateTime::from_naive_utc_and_offset(n + ChronoDuration::hours(offset_hours), Utc))
+        };
+        let (start, end) = day_window_with(&resolve, gap_day).expect("a window, not None");
+        assert_eq!(start, utc("2018-11-04T03:00:00Z"), "first valid local instant, 01:00 at UTC-2");
+        assert_eq!(end, utc("2018-11-05T02:00:00Z"));
+        // And the program on that day is listed, not dropped.
+        let f = UninstallFields {
+            display_name: Some("Tool".into()),
+            install_date: Some("20181104".into()),
+            ..UninstallFields::default()
+        };
+        let ev = uninstall_event(&f, &|d| day_window_with(&resolve, d)).expect("event on the DST-gap day");
+        assert_eq!(ev.when.at, Some(start));
+    }
+
+    #[test]
+    fn programs_without_a_usable_date_are_counted_not_dropped() {
+        let w = |d| day_window_in(&pst(), d);
+        let mut no_date = fields("NoDate", "20261119");
+        no_date.install_date = None;
+        let entries = vec![fields("Dated", "20261119"), no_date, fields("BadDate", "soon"), {
+            let mut s = fields("Sys", "20261119");
+            s.system_component = true;
+            s
+        }];
+        let scan = collect_uninstall(entries.into_iter(), Instant::now() + Duration::from_secs(5), &w);
+        assert_eq!(scan.events.len(), 1);
+        assert_eq!(scan.without_date, 2, "NoDate and BadDate; the system component is not a program");
+        assert!(!scan.timed_out);
+    }
+
+    #[test]
+    fn the_real_program_reader_states_its_limits() {
+        match read_installed_programs(Duration::from_secs(5)) {
+            SourceRead::Read(ok) => {
+                assert!(ok.notes.contains(&Note::StoreAppsNotCovered));
+                assert_eq!(ok.covered_from, None, "the registry has no log start");
+            }
+            SourceRead::Unreadable(r) => panic!("{r:?}"),
+        }
+    }
+
+    // ---- review r1: Steam libraries --------------------------------------------------------------
+
+    fn temp_root(tag: &str) -> PathBuf {
+        let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let p = std::env::temp_dir().join(format!("compy-f4-{tag}-{}-{n}", std::process::id()));
+        std::fs::create_dir_all(p.join("steamapps")).unwrap();
+        p
+    }
+
+    fn acf_for(app_id: u32, install_dir: &str, build: u32) -> String {
+        ACF.replace("1217060", &app_id.to_string())
+            .replace("\"installdir\"\t\t\"Example Game\"", &format!("\"installdir\"\t\t\"{install_dir}\""))
+            .replace("26448669", &build.to_string())
+    }
+
+    fn steam_roots_for(paths: &[&PathBuf]) -> Vec<String> {
+        paths.iter().map(|p| p.to_string_lossy().into_owned()).collect()
+    }
+
+    #[test]
+    fn a_library_on_a_missing_drive_is_could_not_read_not_not_found() {
+        let ok_lib = temp_root("a");
+        let roots = vec![ok_lib.to_string_lossy().into_owned(), "Z:\\__compy_missing_library__".to_string()];
+        let game = GameRef { steam_app_id: Some(1217060), ..GameRef::default() };
+        match find_in_libraries(&roots, false, &game, Duration::from_secs(5)) {
+            SourceRead::Unreadable(r @ UnreadableReason::SteamPartiallyUnreadable { libraries: 1, records: 0 }) => {
+                assert!(r.plain().contains("could not read") && !r.plain().contains("no record"), "{}", r.plain());
+            }
+            other => panic!("{other:?}"),
+        }
+        // The same libraries with everything readable: now it is a plain not-found.
+        let both = steam_roots_for(&[&ok_lib]);
+        assert_eq!(
+            find_in_libraries(&both, false, &game, Duration::from_secs(5)),
+            SourceRead::Unreadable(UnreadableReason::SteamGameNotFound)
+        );
+        // An unreadable libraryfolders.vdf also stops "not found" from being claimed.
+        assert!(matches!(
+            find_in_libraries(&both, true, &game, Duration::from_secs(5)),
+            SourceRead::Unreadable(UnreadableReason::SteamPartiallyUnreadable { libraries: 1, .. })
+        ));
+        let _ = std::fs::remove_dir_all(&ok_lib);
+    }
+
+    #[test]
+    fn a_half_written_manifest_is_counted_not_hidden() {
+        let lib = temp_root("b");
+        std::fs::write(lib.join("steamapps").join("appmanifest_5.acf"), "\"AppState\"\n{\n\"appid\"\t\"5").unwrap();
+        let game = GameRef { steam_app_id: Some(5), ..GameRef::default() };
+        let roots = steam_roots_for(&[&lib]);
+        assert_eq!(
+            find_in_libraries(&roots, false, &game, Duration::from_secs(5)),
+            SourceRead::Unreadable(UnreadableReason::SteamPartiallyUnreadable { libraries: 0, records: 1 })
+        );
+        let _ = std::fs::remove_dir_all(&lib);
+    }
+
+    #[test]
+    fn the_install_folder_match_is_scoped_to_the_library_the_game_is_in() {
+        let (c_lib, d_lib) = (temp_root("c"), temp_root("d"));
+        // Stale manifest in library C (build 1); the live one in library D (build 2). Same folder name.
+        std::fs::write(c_lib.join("steamapps").join("appmanifest_7.acf"), acf_for(7, "Foo", 1)).unwrap();
+        std::fs::write(d_lib.join("steamapps").join("appmanifest_7.acf"), acf_for(7, "Foo", 2)).unwrap();
+        let install = format!("{}\\steamapps\\common\\Foo", d_lib.to_string_lossy());
+        let game = GameRef { install_dir: Some(install.clone()), ..GameRef::default() };
+        let roots = steam_roots_for(&[&c_lib, &d_lib]);
+        match find_in_libraries(&roots, false, &game, Duration::from_secs(5)) {
+            SourceRead::Read(ok) => assert_eq!(ok.events[0].what.build_id.as_deref(), Some("2"), "the D library's manifest, not C's stale one"),
+            other => panic!("{other:?}"),
+        }
+        // Only the stale manifest exists, in the other library: not a match, and plainly not found.
+        let _ = std::fs::remove_file(d_lib.join("steamapps").join("appmanifest_7.acf"));
+        assert_eq!(
+            find_in_libraries(&roots, false, &game, Duration::from_secs(5)),
+            SourceRead::Unreadable(UnreadableReason::SteamGameNotFound)
+        );
+        assert_eq!(library_root_of(&install), Some(normalize_root(&d_lib.to_string_lossy())));
+        let _ = std::fs::remove_dir_all(&c_lib);
+        let _ = std::fs::remove_dir_all(&d_lib);
+    }
+
+    #[test]
+    fn steam_registry_states_are_distinct_reasons() {
+        // Fixed codes the engine can tell apart; the actual registry lookup is covered on the real PC.
+        assert_ne!(UnreadableReason::SteamNotFound, UnreadableReason::SteamUnreadable);
+        assert_ne!(UnreadableReason::SteamGameNotFound, UnreadableReason::SteamNotFound);
+        assert!(UnreadableReason::SteamNotFound.plain().contains("was not found"));
+        assert!(UnreadableReason::SteamUnreadable.plain().contains("could not be read"));
+    }
+
+    #[test]
+    fn steam_update_time_is_documented_as_a_file_change_not_a_new_version() {
+        let lib = temp_root("e");
+        std::fs::write(lib.join("steamapps").join("appmanifest_1217060.acf"), ACF).unwrap();
+        let game = GameRef { steam_app_id: Some(1217060), ..GameRef::default() };
+        match find_in_libraries(&steam_roots_for(&[&lib]), false, &game, Duration::from_secs(5)) {
+            SourceRead::Read(ok) => assert!(ok.notes.contains(&Note::SteamUpdateTimeIsFileChange)),
+            other => panic!("{other:?}"),
+        }
+        let _ = std::fs::remove_dir_all(&lib);
+    }
+
     // ---- the real PC (run on demand) -----------------------------------------------------------
 
     /// `cargo test --lib change_sources::tests::real_pc_report -- --ignored --nocapture`
@@ -1627,30 +2605,42 @@ mod tests {
     fn real_pc_report() {
         let now = Utc::now();
         let t0 = now - ChronoDuration::days(30);
+        let describe = |r: &SourceRead| match r {
+            SourceRead::Read(ok) => format!(
+                "read {} rows-as-events, covered_from={}, gaps={:?}, notes={:?}",
+                ok.events.len(),
+                ok.covered_from.map_or("n/a".to_string(), |t| t.format("%Y-%m-%dT%H:%MZ").to_string()),
+                ok.gaps,
+                ok.notes
+            ),
+            SourceRead::Unreadable(why) => format!("UNREADABLE {why:?}"),
+        };
         let timed = |label: &str, f: &dyn Fn() -> SourceRead| {
             let s = Instant::now();
             let r = f();
-            let n = match &r {
-                SourceRead::Read { events, timed_out } => format!("read {} events, timed_out={timed_out}", events.len()),
-                SourceRead::Unreadable(why) => format!("UNREADABLE: {why}"),
-            };
-            println!("timing {label}: {} ms ({n})", s.elapsed().as_millis());
+            println!("timing {label}: {} ms ({})", s.elapsed().as_millis(), describe(&r));
         };
-        timed("drivers (120d lookback)", &|| read_driver_installs(t0 - ChronoDuration::days(DRIVER_LOOKBACK_DAYS), DEFAULT_BUDGET));
-        timed("windows update (30d)", &|| read_windows_updates(t0, DEFAULT_BUDGET));
+        timed("drivers (120d lookback)", &|| read_driver_installs(t0 - ChronoDuration::days(DRIVER_LOOKBACK_DAYS), now, DEFAULT_BUDGET));
+        timed("windows update (30d)", &|| read_windows_updates(t0, now, DEFAULT_BUDGET));
         timed("installed programs", &|| read_installed_programs(DEFAULT_BUDGET));
 
         let games = read_all_steam_games(DEFAULT_BUDGET).unwrap_or_default();
         println!("steam games with a readable update time: {}", games.len());
         let game = games.first().and_then(|g| g.what.id.as_deref()).and_then(|id| id.parse::<u32>().ok());
         let gref = game.map(|id| GameRef { steam_app_id: Some(id), ..GameRef::default() });
+        let steam = gref.as_ref().map(|g| read_game_update(g, DEFAULT_BUDGET));
+        if let Some(s) = &steam {
+            println!("steam read: {}", describe(s));
+        }
 
         let s = Instant::now();
         let r = changes_between(t0, now, gref.as_ref());
         println!("changes_between(30d) total wall time: {} ms", s.elapsed().as_millis());
         println!("window: ({}, {}]", r.window_start.to_rfc3339(), r.window_end.to_rfc3339());
-        println!("unreadable: {:?}", r.unreadable.iter().map(|u| (u.source, u.reason.as_str())).collect::<Vec<_>>());
-        println!("partial: {:?}   undated_excluded: {}", r.partial, r.undated_excluded);
+        println!("unreadable: {:?}", r.unreadable.iter().map(|u| (u.source, u.reason.plain())).collect::<Vec<_>>());
+        println!("partial: {:?}", r.partial.iter().map(|p| (p.source, &p.gaps, p.covered_from.map(|t| t.format("%Y-%m-%dT%H:%MZ").to_string()))).collect::<Vec<_>>());
+        println!("coverage_gaps: {:?}   undated_excluded: {}", r.coverage_gaps, r.undated_excluded);
+        println!("notes: {:?}", r.notes);
         let count = |k: ChangeKind| r.events.iter().filter(|e| e.kind == k).count();
         println!(
             "counts: gpu_driver={} other_driver={} windows_update={} game_update={} programs_installed={}",
@@ -1660,6 +2650,8 @@ mod tests {
             count(ChangeKind::GameUpdate),
             count(ChangeKind::ProgramInstalled)
         );
+        let uncertain = r.events.iter().filter(|e| e.what.text_uncertain).count();
+        println!("events with text_uncertain: {uncertain}");
         let fmt = |e: &ChangeEvent| {
             let when = match e.when.precision {
                 Precision::Exact => format!("{} exact", e.when.at.unwrap().format("%Y-%m-%dT%H:%MZ")),
@@ -1667,17 +2659,20 @@ mod tests {
                 Precision::Unknown => "unknown".into(),
             };
             format!(
-                "  {:?} {} | {} -> {} | {}",
+                "  {:?} {} | {} -> {} | changed={:?} | {}",
                 e.kind,
                 when,
                 e.what.from_version.as_deref().unwrap_or("?"),
                 e.what.to_version.as_deref().unwrap_or("?"),
+                e.what.version_changed,
                 e.what.kb.as_deref().or(e.what.id.as_deref()).unwrap_or("-"),
             )
         };
-        for e in r.events.iter().filter(|e| matches!(e.kind, ChangeKind::GpuDriver | ChangeKind::OtherDriver)) {
+        for e in r.events.iter().filter(|e| e.kind == ChangeKind::GpuDriver) {
             println!("{}", fmt(e));
         }
+        let others = r.events.iter().filter(|e| e.kind == ChangeKind::OtherDriver);
+        println!("  other drivers: {} ({} real version changes)", others.clone().count(), others.filter(|e| e.what.version_changed == Some(true)).count());
         for e in r.events.iter().filter(|e| e.kind == ChangeKind::WindowsUpdate && e.what.detail.as_deref() != Some("definition") && e.what.detail.as_deref() != Some("store-app")) {
             println!("{} | {}", fmt(e), e.what.detail.as_deref().unwrap_or(""));
         }
@@ -1685,7 +2680,7 @@ mod tests {
         let store = r.events.iter().filter(|e| e.what.detail.as_deref() == Some("store-app")).count();
         println!("  (windows update also: {defs} Defender definition installs, {store} Store-app installs)");
         if let Some(g) = &r.game_last_update {
-            println!("game last update (outside window allowed): {}", fmt(g));
+            println!("game last file change (outside window allowed): {}", fmt(g));
         }
     }
 }
