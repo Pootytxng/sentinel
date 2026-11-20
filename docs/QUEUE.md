@@ -5,10 +5,11 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 
 ## NOW (in flight, each on its own branch)
 - [ ] "Did it get better?" recovery check and a card that fits on Home — the owner sees whether a fix worked (claude/m1-paramedic-f3)
-- [ ] A session ends when its game exits — no more two games in one record (claude/m1-splice)
 - [ ] Security slice 1: system tools by absolute path, pinned child environment — closes planted-tool and inherited-environment risk (claude/m1-hard-1; reviewed and green, waiting for the owner's direct go-ahead to push)
 
 ## NEXT (in order)
+- [ ] Group a crash-and-relaunch into one sitting for baselines, noise bands and real-play counts — a crash and relaunch no longer counts as two independent sessions
+- [ ] Paramedic: sessions flagged Suspected (`session_boundary::suspected_splice`) are not judged; a note says why — an old two-game row never poisons a diagnosis
 - [ ] Use more of what Compy already records as evidence — peak GPU temperature ("no sign of overheating"); name the setting in "a setting Compy applied is no longer on"; ignore sessions flagged as mixed
 - [ ] Record what was already running when the game started (recorders, overlays, long builds) and use the background-load numbers both ways — the card can blame or clear background load
 - [ ] Read the graphics driver's own settings (Radeon via ADLX; later NVIDIA) as a "what changed" source — a changed driver setting shows up in the diagnosis
@@ -37,6 +38,7 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee".
 
 ## Done (newest first)
+- 2026-11-20 — A session ends when its game exits; a new game starts a new session (no more two games in one record) bb47b314, review fixes b8e729ac
 - 2026-11-20 — Desk build 808a95ce installed and stamped 920f6bca
 - 2026-11-20 — Readers wired into the diagnosis 808a95ce
 - 2026-11-20 — Dated change readers (driver installs, Windows updates, Steam game updates, installed programs) c99d4b4d
