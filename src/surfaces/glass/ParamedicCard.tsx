@@ -3,7 +3,7 @@
 // offers steps the owner does in Windows. It runs no fix, writes nothing, and says what changed before
 // the problem, never that it caused it (Constitution 17). The engine returns codes and numbers; every
 // sentence here is a locale string. Keys are literal, one t() call per key (never composed).
-import { useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type {
@@ -12,6 +12,7 @@ import type {
   ParamedicFinding,
   ParamedicFix,
   ParamedicLimit,
+  ParamedicNow,
   ParamedicRuledOut,
   ParamedicWhen,
 } from "../../types";
@@ -190,13 +191,69 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
       return t("paramedic.evidence.hardwareChanged");
     case "power-plan-changed":
       return t("paramedic.evidence.powerPlanChanged");
-    default:
+    case "recovered-same-driver":
+      return t("paramedic.evidence.recoveredSameDriver", { game, version: a.version });
+    case "recovered-after-driver-change":
+      return a.exact === "true"
+        ? t("paramedic.evidence.recoveredAfterDriverChange", { version: a.version, when: dates.dayTime(a.when) })
+        : t("paramedic.evidence.recoveredAfterDriverChangeSeen", { version: a.version, when: dates.dayTime(a.when) });
+    case "recovered-quiet":
+      return t("paramedic.evidence.recoveredQuiet", { pct: a.pct });
+    case "rough-load-not-recorded":
+      return t("paramedic.evidence.roughLoadNotRecorded");
+    case "recovered-busy":
+      return t("paramedic.evidence.recoveredBusy");
+    case "recovered-few-starts":
+      return t("paramedic.evidence.recoveredFewStarts", { starts: a.starts });
+    case "recovery-load-not-recorded":
+      return t("paramedic.evidence.recoveryLoadNotRecorded");
+    case "recovered-ram-lower":
+      return t("paramedic.evidence.recoveredRamLower", { peakGb: a.peakGb, totalGb: a.totalGb, roughGb: a.roughGb });
+    case "recovered-ram-full":
+      return t("paramedic.evidence.recoveredRamFull", { peakGb: a.peakGb, totalGb: a.totalGb });
+    case "recovery-ram-not-read":
+      return t("paramedic.evidence.recoveryRamNotRead");
+    case "recovered-drift-still":
+      return t("paramedic.evidence.recoveredDriftStill");
+    case "recovery-drift-unknown":
+      return t("paramedic.evidence.recoveryDriftUnknown");
+    case "recovered-compy-same":
+      return t("paramedic.evidence.recoveredCompySame", { count: Number(a.count) });
+    case "recovered-compy-back":
+      return t("paramedic.evidence.recoveredCompyBack", { from: a.from, to: a.to });
+    case "recovered-compy-other":
+      return t("paramedic.evidence.recoveredCompyOther", { from: a.from, to: a.to });
+    case "recovery-compy-unread":
+      return t("paramedic.evidence.recoveryCompyUnread");
+    case "recovered-build-same":
+      return t("paramedic.evidence.recoveredBuildSame", { build: a.build });
+    case "recovered-build-changed":
+      return t("paramedic.evidence.recoveredBuildChanged", { from: a.from, to: a.to });
+    case "recovery-build-unread":
+      return t("paramedic.evidence.recoveryBuildUnread");
+    case "recovered-unchanged":
+      if (a.what === "windows-update") return t("paramedic.evidence.recoveredUnchangedUpdate");
+      if (a.what === "game-files-change") return t("paramedic.evidence.recoveredUnchangedFiles", { game });
+      return t("paramedic.evidence.recoveredUnchangedProgram");
+    case "recovered-changed-again":
+      if (a.what === "windows-update") return t("paramedic.evidence.recoveredChangedAgainUpdate", { when: dates.dayTime(a.when) });
+      if (a.what === "game-files-change") return t("paramedic.evidence.recoveredChangedAgainFiles", { game, when: dates.dayTime(a.when) });
+      return t("paramedic.evidence.recoveredChangedAgainProgram", { when: dates.dayTime(a.when) });
+    case "recovery-records-unread":
+      return t("paramedic.evidence.recoveryRecordsUnread");
+    case "recovered-driver-record-differs":
+      return t("paramedic.evidence.recoveredDriverRecordDiffers", { when: dates.dayTime(a.when) });
+    case "recovery-driver-unread":
+      return t("paramedic.evidence.recoveryDriverUnread");
+    case "compy-changes-differ":
+      return t("paramedic.evidence.compyChangesDiffer", { from: a.from, to: a.to });    default:
       return null;
   }
 }
 
 function badge(e: ParamedicEvidence, t: T): string {
   if (e.against) return t("paramedic.badge.against");
+  if (e.kind === "supported-inference") return t("paramedic.badge.supports");
   if (e.kind === "known") return t("paramedic.badge.known");
   if (e.kind === "unknown") return t("paramedic.badge.unknown");
   return t("paramedic.badge.measured");
@@ -453,26 +510,9 @@ function Evidence({ list, ctx, hideInstallAt }: { list: ParamedicEvidence[]; ctx
   );
 }
 
-/** `collapsible`: with several candidates Compy cannot tell apart, each one's steps wait behind "How to check this". */
-function FixBlock({ fix, ctx, collapsible }: { fix: ParamedicFix; ctx: Ctx; collapsible?: boolean }) {
-  const [open, setOpen] = useState(false);
+/** The steps for one candidate; they sit inside its row, which opens on a tap. */
+function FixBlock({ fix, ctx }: { fix: ParamedicFix; ctx: Ctx }) {
   const steps = stepLines(fix, ctx);
-  if (steps.length > 0 && collapsible) {
-    return (
-      <div>
-        <button type="button" className="gl-ghost" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-          {ctx.t("paramedic.fix.toggle")}
-        </button>
-        {open && (
-          <ol className="gl-para-lines gl-para-steps">
-            {steps.map((x, i) => (
-              <li key={i}>{x}</li>
-            ))}
-          </ol>
-        )}
-      </div>
-    );
-  }
   if (steps.length > 0) {
     return (
       <div>
@@ -498,11 +538,50 @@ function whyFirst(d: ParamedicDiagnosis, ctx: Ctx): string | null {
     : ctx.t("paramedic.why.crossGameLead", { game: ctx.game, games });
 }
 
+/** How many candidates the default open card lists as one-line rows. The rest wait under "Also possible". */
+const ROWS_SHOWN = 3;
+/** The card asks again this often (ms) while another diagnosis is still running, up to `BUSY_RETRIES` times. */
+const BUSY_RETRY_MS = 1200;
+const BUSY_RETRIES = 8;
+/** What `paramedic_diagnose` answers while another call is still running: "still checking", never a failure. */
+const BUSY = "paramedic-busy";
+
+function nowText(n: ParamedicNow, t: T): string {
+  if (n === "points-to") return t("paramedic.now.pointsTo");
+  if (n === "points-away") return t("paramedic.now.pointsAway");
+  return t("paramedic.now.cantTell");
+}
+
+/** A disclosure: a button with aria-expanded; nothing inside is rendered until it is opened. */
+function Fold({ title, testid, children }: { title: string; testid: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <div className="gl-para-fold" data-testid={testid}>
+      <button type="button" className="gl-para-fold-btn" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+        <span aria-hidden="true" className="gl-para-caret">
+          {open ? "▾" : "▸"}
+        </span>
+        {title}
+      </button>
+      {open && (
+        <div id={id} className="gl-para-body">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The measured problem: the title and two lines. The rest of the numbers wait behind "Show the numbers". */
 function Problem({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const { t, dates, game } = ctx;
+  const [open, setOpen] = useState(false);
+  const id = useId();
   const p = d.problem;
   if (!p) return null;
   const spikes = p.spikes && p.now.p99_ms != null && p.before.p99_ms != null;
+  const hasMore = spikes || p.avg_lower || p.other_games_affected.length > 0 || p.partial_sessions.length > 0;
   return (
     <>
       <div className="gl-card-top">
@@ -511,97 +590,99 @@ function Problem({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
           {t("paramedic.problem.badge")}
         </span>
       </div>
-      <p>
-        {t("paramedic.problem.body", {
-          game,
-          count: p.sessions_affected.length,
-          beforePct: pct(p.before.ratio),
-          nowPct: pct(p.now.ratio),
-        })}
+      <p className="gl-para-clamp">
+        {t("paramedic.problem.body", { game, count: p.sessions_affected.length, beforePct: pct(p.before.ratio), nowPct: pct(p.now.ratio) })}
       </p>
-      {spikes && (
-        <p>{t("paramedic.problem.spikes", { nowMs: tenth(p.now.p99_ms as number), beforeMs: tenth(p.before.p99_ms as number) })}</p>
+      <p className="gl-para-clamp">
+        {t("paramedic.problem.sinceLasted", { date: dates.day(p.last_normal_at), count: p.sessions_affected.length })}
+      </p>
+      {p.later_unjudged > 0 && <p className="gl-para-note">{t("paramedic.cantTell.backToNormal", { game })}</p>}
+      {d.earlier_episode && (
+        <p className="gl-para-note">
+          {t("paramedic.problem.earlier", { from: dates.day(d.earlier_episode.from), to: dates.day(d.earlier_episode.to) })}
+        </p>
       )}
-      {p.avg_lower && (
-        <p>{t("paramedic.problem.average", { nowFps: Math.round(p.now.avg_fps), beforeFps: Math.round(p.before.avg_fps) })}</p>
-      )}
-      {p.other_games_affected.length > 0 && (
-        <p>{t("paramedic.problem.otherGames", { games: p.other_games_affected.join(", ") })}</p>
-      )}
-      <p>{t("paramedic.problem.since", { date: dates.day(p.last_normal_at) })}</p>
-      {p.partial_sessions.length > 0 && (
-        <p className="gl-para-note">{t("paramedic.problem.partial", { count: p.partial_sessions.length })}</p>
+      {hasMore && (
+        <div>
+          <button type="button" className="gl-ghost" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+            {open ? t("paramedic.numbers.hide") : t("paramedic.numbers.show")}
+          </button>
+          {open && (
+            <div id={id} className="gl-para-body">
+              {spikes && (
+                <p>{t("paramedic.problem.spikes", { nowMs: tenth(p.now.p99_ms as number), beforeMs: tenth(p.before.p99_ms as number) })}</p>
+              )}
+              {p.avg_lower && (
+                <p>{t("paramedic.problem.average", { nowFps: Math.round(p.now.avg_fps), beforeFps: Math.round(p.before.avg_fps) })}</p>
+              )}
+              {p.other_games_affected.length > 0 && <p>{t("paramedic.problem.otherGames", { games: p.other_games_affected.join(", ") })}</p>}
+              {p.partial_sessions.length > 0 && (
+                <p className="gl-para-note">{t("paramedic.problem.partial", { count: p.partial_sessions.length })}</p>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </>
   );
 }
 
-/** `plain`: one of several changes Compy cannot yet tell apart, so no ranking chip, no "why first". */
-function Leading({ f, d, ctx, plain }: { f: ParamedicFinding; d: ParamedicDiagnosis; ctx: Ctx; plain?: boolean }) {
+function chipFor(f: ParamedicFinding, recovered: boolean, t: T): { text: string; tone?: string } {
+  if (recovered && f.now) {
+    return { text: nowText(f.now, t), tone: f.now === "points-to" ? "accent" : f.now === "points-away" ? "ok" : undefined };
+  }
+  if (f.confidence === "likely") return { text: t("paramedic.answer.likely"), tone: "accent" };
+  if (f.confidence === "measured") return { text: t("paramedic.answer.measured"), tone: "accent" };
+  if (f.confidence === "mechanism") return { text: t("paramedic.answer.mechanism") };
+  return { text: t("paramedic.answer.possible") };
+}
+
+/** One candidate as ONE line (name, when, a short chip). Its evidence and steps open on a tap. */
+function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagnosis; ctx: Ctx; recovered: boolean }) {
   const { t } = ctx;
-  const eyebrow =
-    f.confidence === "likely"
-      ? t("paramedic.answer.likely")
-      : f.confidence === "measured"
-        ? t("paramedic.answer.measured")
-        : f.confidence === "mechanism"
-          ? t("paramedic.answer.mechanism")
-          : t("paramedic.answer.possible");
+  const [open, setOpen] = useState(false);
+  const id = useId();
   const since = sinceText(f.since_when, ctx);
-  const why = plain ? null : whyFirst(d, ctx);
+  const chip = chipFor(f, recovered, t);
+  const why = recovered ? null : whyFirst(d, ctx);
   return (
-    <div className="gl-para-lead" data-testid={plain ? "paramedic-candidate" : "paramedic-leading"}>
-      {!plain && (
-        <span className="gl-chip" data-tone="accent">
-          {eyebrow}
+    <div className="gl-para-row" data-testid="paramedic-candidate">
+      <button type="button" className="gl-para-row-btn" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+        <span aria-hidden="true" className="gl-para-caret">
+          {open ? "▾" : "▸"}
         </span>
+        <span className="gl-para-row-name">{findingTitle(f, ctx)}</span>
+        {since && <span className="gl-para-row-when">{since}</span>}
+        <span className="gl-chip" data-tone={chip.tone}>
+          {chip.text}
+        </span>
+      </button>
+      {open && (
+        <div id={id} className="gl-para-row-body">
+          <Evidence list={f.evidence} ctx={ctx} hideInstallAt={f.since_when.kind === "exact" ? f.since_when.at : undefined} />
+          {recovered && f.now_evidence.length > 0 && (
+            <div>
+              <p className="gl-row-title">{t("paramedic.row.nowTitle")}</p>
+              <Evidence list={f.now_evidence} ctx={ctx} />
+            </div>
+          )}
+          {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
+          {!recovered && <FixBlock fix={f.fix} ctx={ctx} />}
+          {!recovered && f === d.findings[0] && f.confidence !== "possible" && <span className="gl-row-sub">{t("paramedic.card.notProven")}</span>}
+        </div>
       )}
-      <span className="gl-row-title">{findingTitle(f, ctx)}</span>
-      {since && <span className="gl-row-sub">{since}</span>}
-      <Evidence list={f.evidence} ctx={ctx} hideInstallAt={f.since_when.kind === "exact" ? f.since_when.at : undefined} />
-      {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
-      <FixBlock fix={f.fix} ctx={ctx} collapsible={plain} />
-      {!plain && <span className="gl-row-sub">{t("paramedic.card.notProven")}</span>}
     </div>
   );
 }
 
-const CANDIDATES_SHOWN = 3;
-
-/** The changes that line up when Compy cannot tell them apart: three at first, the rest on a tap. */
-function Candidates({ list, d, ctx }: { list: ParamedicFinding[]; d: ParamedicDiagnosis; ctx: Ctx }) {
-  const [all, setAll] = useState(false);
-  const shown = all ? list : list.slice(0, CANDIDATES_SHOWN);
-  const hidden = list.length - shown.length;
-  return (
-    <>
-      {shown.map((f) => (
-        <Leading key={f.id} f={f} d={d} ctx={ctx} plain />
-      ))}
-      {hidden > 0 && (
-        <button type="button" className="gl-ghost" onClick={() => setAll(true)}>
-          {ctx.t("paramedic.notSeparable.showMore", { n: hidden })}
-        </button>
-      )}
-    </>
-  );
-}
-
-function AlsoPossible({ list, ctx }: { list: ParamedicFinding[]; ctx: Ctx }) {
+function AlsoPossible({ list, d, ctx, recovered }: { list: ParamedicFinding[]; d: ParamedicDiagnosis; ctx: Ctx; recovered: boolean }) {
   if (list.length === 0) return null;
   return (
-    <details className="gl-para-fold" data-testid="paramedic-also">
-      <summary>{ctx.t("paramedic.alsoPossible.title")}</summary>
-      <div className="gl-para-body">
-        {list.map((f) => (
-          <div className="gl-para-lead" key={f.id}>
-            <span className="gl-row-title">{findingTitle(f, ctx)}</span>
-            {sinceText(f.since_when, ctx) && <span className="gl-row-sub">{sinceText(f.since_when, ctx)}</span>}
-            <Evidence list={f.evidence} ctx={ctx} hideInstallAt={f.since_when.kind === "exact" ? f.since_when.at : undefined} />
-          </div>
-        ))}
-      </div>
-    </details>
+    <Fold title={ctx.t("paramedic.alsoPossible.title")} testid="paramedic-also">
+      {list.map((f) => (
+        <Row key={f.id} f={f} d={d} ctx={ctx} recovered={recovered} />
+      ))}
+    </Fold>
   );
 }
 
@@ -609,90 +690,173 @@ function Checked({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const { t } = ctx;
   const ruled = present(d.not_it.map((n) => ruledOutLine(n, ctx)));
   const seen = present(d.seen.map((s) => seenLine(s, ctx)));
-  // What is true of every PC (which driver classes Compy reads, programs without a date) is kept apart from
-  // what could not be read this time.
-  const always = (l: ParamedicLimit) => l.code === "classes" || l.code === "no-install-date";
-  const unknown = present([...d.unknowns.map((u) => unknownLine(u, ctx)), ...d.limits.filter((l) => !always(l)).map((l) => limitLine(l, ctx))]);
-  const fixed = present(d.limits.filter(always).map((l) => limitLine(l, ctx)));
-  if (ruled.length === 0 && seen.length === 0 && unknown.length === 0 && fixed.length === 0) return null;
+  if (ruled.length === 0 && seen.length === 0) return null;
   return (
-    <details className="gl-para-fold" data-testid="paramedic-checked">
-      <summary>{t("paramedic.checked.title")}</summary>
-      <div className="gl-para-body">
-        {ruled.length > 0 && (
-          <div>
-            <p className="gl-row-title">{t("paramedic.checked.ruledOut")}</p>
-            <ul className="gl-para-lines">
-              {ruled.map((l) => (
-                <li key={l}>{l}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {seen.length > 0 && (
-          <div>
-            <p className="gl-row-title">{t("paramedic.checked.seen")}</p>
-            <ul className="gl-para-lines">
-              {seen.map((l) => (
-                <li key={l}>{l}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {unknown.length > 0 && (
-          <div>
-            <p className="gl-row-title">{t("paramedic.checked.unknown")}</p>
-            <ul className="gl-para-lines">
-              {unknown.map((l) => (
-                <li key={l}>{l}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {fixed.length > 0 && (
-          <details className="gl-para-fold" data-testid="paramedic-limits">
-            <summary>{t("paramedic.checked.cantSeeFold")}</summary>
-            <ul className="gl-para-lines">
-              {fixed.map((l) => (
-                <li key={l}>{l}</li>
-              ))}
-            </ul>
-          </details>
-        )}
-      </div>
-    </details>
+    <Fold title={t("paramedic.checked.title")} testid="paramedic-checked">
+      {ruled.length > 0 && (
+        <div>
+          <p className="gl-row-title">{t("paramedic.checked.ruledOut")}</p>
+          <ul className="gl-para-lines">
+            {ruled.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {seen.length > 0 && (
+        <div>
+          <p className="gl-row-title">{t("paramedic.checked.seen")}</p>
+          <ul className="gl-para-lines">
+            {seen.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Fold>
   );
 }
 
-/** One of the four answers the engine can give, in the owner's words. */
+/** What Compy could not read this time, and what it never reads. Never "nothing changed". */
+function CantSee({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
+  const { t } = ctx;
+  const always = (l: ParamedicLimit) => l.code === "classes" || l.code === "no-install-date";
+  const unknown = present([...d.unknowns.map((u) => unknownLine(u, ctx)), ...d.limits.filter((l) => !always(l)).map((l) => limitLine(l, ctx))]);
+  const fixed = present(d.limits.filter(always).map((l) => limitLine(l, ctx)));
+  if (unknown.length === 0 && fixed.length === 0) return null;
+  return (
+    <Fold title={t("paramedic.checked.cantSeeFold")} testid="paramedic-limits">
+      {unknown.length > 0 && (
+        <div>
+          <p className="gl-row-title">{t("paramedic.checked.unknown")}</p>
+          <ul className="gl-para-lines">
+            {unknown.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {fixed.length > 0 && (
+        <ul className="gl-para-lines">
+          {fixed.map((l) => (
+            <li key={l}>{l}</li>
+          ))}
+        </ul>
+      )}
+    </Fold>
+  );
+}
+
+const NOW_ORDER: Record<ParamedicNow, number> = { "points-to": 0, "cant-tell": 1, "points-away": 2 };
+
+/** Candidates in the order the card lists them: the recovery re-orders by what it says, then the engine's ranking. */
+function ordered(list: ParamedicFinding[], recovered: boolean): ParamedicFinding[] {
+  if (!recovered) return list;
+  return list
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => NOW_ORDER[a.f.now ?? "cant-tell"] - NOW_ORDER[b.f.now ?? "cant-tell"] || a.i - b.i)
+    .map((x) => x.f);
+}
+
+/** Candidates as one-line rows (at most `ROWS_SHOWN`), the rest under "Also possible". */
+function Candidates({ rows, rest, d, ctx, recovered }: { rows: ParamedicFinding[]; rest: ParamedicFinding[]; d: ParamedicDiagnosis; ctx: Ctx; recovered: boolean }) {
+  return (
+    <>
+      <div className="gl-para-rows">
+        {rows.map((f) => (
+          <Row key={f.id} f={f} d={d} ctx={ctx} recovered={recovered} />
+        ))}
+      </div>
+      <AlsoPossible list={rest} d={d} ctx={ctx} recovered={recovered} />
+    </>
+  );
+}
+
+function whatOf(f: ParamedicFinding | undefined, ctx: Ctx): string {
+  return (f && findingTitle(f, ctx)) ?? "";
+}
+
+function RecoveredAnswer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
+  const { t, game } = ctx;
+  const r = d.recovery;
+  if (!r) return null;
+  const list = ordered(d.findings, true);
+  const rows = list.slice(0, ROWS_SHOWN);
+  const rest = list.slice(ROWS_SHOWN);
+  const byId = (id: string) => d.findings.find((f) => f.id === id);
+  const s = r.summary;
+  let verdict: string;
+  if (s.kind === "points-to") verdict = t("paramedic.recovered.pointsTo", { what: whatOf(byId(s.id), ctx) });
+  else if (s.kind === "between") verdict = t("paramedic.recovered.between", { list: s.ids.map((id) => whatOf(byId(id), ctx)).join(", ") });
+  else verdict = t("paramedic.recovered.nothing");
+  const also = r.also_changed.map((e) => evidenceLine(e, ctx)).filter((x): x is string => !!x);
+  return (
+    <>
+      <div className="gl-card-top">
+        <h2 className="gl-card-title">{t("paramedic.recovered.title", { game })}</h2>
+        <span className="gl-chip" data-tone="ok">
+          {t("paramedic.problem.badge")}
+        </span>
+      </div>
+      <p className="gl-para-clamp">
+        {t("paramedic.recovered.numbers", { beforePct: pct(r.before.ratio), roughPct: pct(r.rough.ratio), nowPct: pct(r.now.ratio) })}
+      </p>
+      <p className="gl-para-note">{r.recovered_sessions.length > 1 ? t("paramedic.recovered.basisTwo") : t("paramedic.recovered.basisOne")}</p>
+      <p className="gl-card-title" data-testid="paramedic-verdict">
+        {verdict}
+      </p>
+      <Candidates rows={rows} rest={rest} d={d} ctx={ctx} recovered />
+      {also.map((l) => (
+        <p className="gl-para-note" key={l}>
+          {l}
+        </p>
+      ))}
+      <p className="gl-para-note">{t("paramedic.recovered.next")}</p>
+      <p className="gl-para-note">{t("paramedic.recovered.notProven")}</p>
+      <Checked d={d} ctx={ctx} />
+      <CantSee d={d} ctx={ctx} />
+    </>
+  );
+}
+
+/** One of the answers the engine can give, in the owner's words. */
 function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const { t } = ctx;
   const s = d.state;
   const game = ctx.game;
-  if (s.kind === "found" && d.findings.length > 0 && d.why_first === "not-separable") {
-    // No change reaches two independent supports: list the ones that line up, rank no winner.
-    return (
-      <>
-        <Problem d={d} ctx={ctx} />
-        <h2 className="gl-card-title">{t("paramedic.notSeparable.title")}</h2>
-        <Candidates list={d.findings.filter((f) => f.in_play)} d={d} ctx={ctx} />
-        {d.findings.some((f) => f.in_play && f.id === "background-load") ? (
-          <p className="gl-para-note">{t("paramedic.notSeparable.next", { game })}</p>
-        ) : (
-          <p className="gl-para-note">{t("paramedic.notSeparable.nextOther", { game })}</p>
-        )}
-        <AlsoPossible list={d.findings.filter((f) => !f.in_play)} ctx={ctx} />
-        <Checked d={d} ctx={ctx} />
-      </>
-    );
-  }
+  if (s.kind === "recovered" && d.recovery) return <RecoveredAnswer d={d} ctx={ctx} />;
   if (s.kind === "found" && d.findings.length > 0) {
+    const separable = d.why_first !== "not-separable";
+    const inPlay = d.findings.filter((f) => f.in_play);
+    // Not separable: the changes that line up, no winner. Otherwise the engine's lead and what lines up behind it.
+    const rowsAll = separable ? [d.findings[0], ...inPlay.filter((f) => f !== d.findings[0])] : inPlay;
+    const rows = rowsAll.slice(0, ROWS_SHOWN);
+    const rest = d.findings.filter((f) => !rows.includes(f));
+    const lead = d.findings[0];
+    let verdict: string;
+    if (!separable) verdict = t("paramedic.notSeparable.title");
+    else if (lead.confidence === "likely") verdict = t("paramedic.verdict.likely");
+    else verdict = t("paramedic.verdict.possible");
+    let next: string;
+    if (!separable) {
+      next = inPlay.some((f) => f.id === "background-load")
+        ? t("paramedic.notSeparable.next", { game })
+        : t("paramedic.notSeparable.nextOther", { game });
+    } else if (lead.confidence === "likely") {
+      next = t("paramedic.next.likely", { game });
+    } else {
+      next = t("paramedic.next.possible", { game });
+    }
     return (
       <>
         <Problem d={d} ctx={ctx} />
-        <Leading f={d.findings[0]} d={d} ctx={ctx} />
-        <AlsoPossible list={d.findings.slice(1)} ctx={ctx} />
+        <p className="gl-card-title" data-testid="paramedic-verdict">
+          {verdict}
+        </p>
+        <Candidates rows={rows} rest={rest} d={d} ctx={ctx} recovered={false} />
+        <p className="gl-para-note">{next}</p>
         <Checked d={d} ctx={ctx} />
+        <CantSee d={d} ctx={ctx} />
       </>
     );
   }
@@ -703,6 +867,7 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
         <h2 className="gl-card-title">{t("paramedic.nothingChanged.title")}</h2>
         <p className="gl-para-note">{t("paramedic.nothingChanged.next")}</p>
         <Checked d={d} ctx={ctx} />
+        <CantSee d={d} ctx={ctx} />
       </>
     );
   }
@@ -725,6 +890,8 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
     body = t("paramedic.cantTell.frameCap", { game });
   } else if (s.kind === "cant-tell" && s.why.kind === "crash-not-covered") {
     body = t("paramedic.cantTell.crash");
+  } else if (s.kind === "cant-tell" && s.why.kind === "recovery-unclear") {
+    body = t("paramedic.cantTell.backToNormal", { game });
   } else if (d.game) {
     body = t("paramedic.cantTell.noGame", { game });
   } else {
@@ -734,7 +901,9 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
     <>
       <h2 className="gl-card-title">{t("paramedic.cantTell.title")}</h2>
       <p>{body}</p>
-      {s.kind === "cant-tell" && s.why.kind === "frame-cap-changed" && d.findings[0] && <Leading f={d.findings[0]} d={d} ctx={ctx} />}
+      {s.kind === "cant-tell" && s.why.kind === "frame-cap-changed" && d.findings[0] && (
+        <Candidates rows={[d.findings[0]]} rest={[]} d={d} ctx={ctx} recovered={false} />
+      )}
     </>
   );
 }
@@ -745,24 +914,56 @@ export function ParamedicCard() {
   const { t } = useTranslation();
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
+  const doorRef = useRef<HTMLButtonElement>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const refocus = useRef(false);
 
-  const ask = () => {
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  // After "Close" the card is its small bar again: keyboard focus goes to the bar's button, not to nowhere.
+  useEffect(() => {
+    if (view.kind === "idle" && refocus.current) {
+      refocus.current = false;
+      doorRef.current?.focus();
+    }
+  }, [view.kind]);
+
+  const ask = (attempt: number) => {
     setView({ kind: "busy" });
     invoke<ParamedicDiagnosis | null>("paramedic_diagnose", { complaint: "unknown", game: null })
       .then((d) => setView(d ? { kind: "done", d } : { kind: "failed" }))
-      .catch(() => setView({ kind: "failed" }));
+      .catch((e: unknown) => {
+        // Another diagnosis is still running: keep saying "still checking" and ask again shortly.
+        if (String(e) === BUSY && attempt < BUSY_RETRIES) {
+          timer.current = window.setTimeout(() => ask(attempt + 1), BUSY_RETRY_MS);
+        } else {
+          setView({ kind: "failed" });
+        }
+      });
   };
 
-  const ctx: Ctx | null =
-    view.kind === "done" ? { t, dates, game: view.d.game_name ?? view.d.game ?? "" } : null;
+  const close = () => {
+    window.clearTimeout(timer.current);
+    refocus.current = true;
+    setView({ kind: "idle" });
+  };
+
+  const ctx: Ctx | null = view.kind === "done" ? { t, dates, game: view.d.game_name ?? view.d.game ?? "" } : null;
+  const open = view.kind === "done";
 
   return (
-    <section className="gl-card" aria-label={t("paramedic.label")} data-testid="paramedic">
+    <section className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
       <div className="gl-card-top">
         <p className="gl-card-sub">{t("paramedic.door.sub")}</p>
-        <button type="button" className="gl-cta" onClick={ask} disabled={view.kind === "busy"}>
-          {view.kind === "done" || view.kind === "failed" ? t("paramedic.door.again") : t("paramedic.door.button")}
-        </button>
+        <div className="gl-para-actions">
+          <button ref={doorRef} type="button" className="gl-cta" onClick={() => ask(0)} disabled={view.kind === "busy"}>
+            {view.kind === "done" || view.kind === "failed" ? t("paramedic.door.again") : t("paramedic.door.button")}
+          </button>
+          {open && (
+            <button type="button" className="gl-ghost" onClick={close}>
+              {t("paramedic.door.close")}
+            </button>
+          )}
+        </div>
       </div>
       {view.kind === "busy" && (
         <p className="gl-card-sub" role="status">
@@ -774,14 +975,14 @@ export function ParamedicCard() {
           {t("paramedic.door.failed")}
         </p>
       )}
-      <div className="gl-para-body" aria-live="polite">
-        {view.kind === "done" && ctx && (
-          <>
+      {view.kind === "done" && ctx && (
+        <div className="gl-para-scroll" role="region" aria-label={t("paramedic.card.scrollLabel")} tabIndex={0}>
+          <div className="gl-para-body" aria-live="polite">
             <Answer d={view.d} ctx={ctx} />
             <p className="gl-para-note">{t("paramedic.footer")}</p>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

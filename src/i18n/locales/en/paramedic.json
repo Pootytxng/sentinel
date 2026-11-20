@@ -5,7 +5,8 @@
     "sub": "Compy looks at what changed and tells you what it finds.",
     "looking": "Looking at your recent sessions…",
     "failed": "Compy couldn't read its records just now. Nothing on your PC was changed.",
-    "again": "Check again"
+    "again": "Check again",
+    "close": "Close"
   },
   "problem": {
     "title": "{{game}} has been running much rougher than usual",
@@ -15,13 +16,15 @@
     "spikes": "The slowest 1 in 100 frames took about {{nowMs}} ms, against about {{beforeMs}} ms in your normal sessions.",
     "average": "It also averaged {{nowFps}} frames per second, against about {{beforeFps}} before.",
     "otherGames": "{{games}} also had rough sessions in the same period.",
-    "since": "It last ran normally on {{date}}.",
     "partial_one": "Compy also saw 1 more session it only measured part of, and what it measured looked rough. A partly measured session never counts on its own.",
-    "partial_other": "Compy also saw {{count}} more sessions it only measured part of, and what it measured looked rough. A partly measured session never counts on its own."
+    "partial_other": "Compy also saw {{count}} more sessions it only measured part of, and what it measured looked rough. A partly measured session never counts on its own.",
+    "sinceLasted_one": "It last ran normally on {{date}}. The rough run has lasted {{count}} session so far.",
+    "sinceLasted_other": "It last ran normally on {{date}}. The rough run has lasted {{count}} sessions so far.",
+    "earlier": "It also ran rough {{from}}–{{to}} and recovered."
   },
   "answer": {
     "likely": "Most likely",
-    "possible": "Also possible",
+    "possible": "Possible",
     "mechanism": "Often causes this (not measured on your PC)",
     "measured": "Measured"
   },
@@ -79,7 +82,8 @@
     "known": "Known",
     "measured": "Measured",
     "unknown": "Not recorded",
-    "against": "Weakens this"
+    "against": "Weakens this",
+    "supports": "Supports this"
   },
   "evidence": {
     "driverChanged": "Your graphics driver changed from {{from}} to {{to}}.",
@@ -124,7 +128,37 @@
     "deliveredByUpdate": "Windows Update delivered it.",
     "reinstallSameVersion": "Windows recorded the same driver version being installed again on {{when}}.",
     "installPriorUnknown": "Windows recorded a graphics driver install on {{when}}; the version before it isn't known.",
-    "updateInstalledNoKb": "Windows installed an update on {{when}}."
+    "updateInstalledNoKb": "Windows installed an update on {{when}}.",
+    "recoveredSameDriver": "{{game}} ran normally again on the same driver ({{version}}), so the driver alone doesn't explain it.",
+    "recoveredAfterDriverChange": "It recovered after the driver changed to {{version}} on {{when}}.",
+    "recoveredAfterDriverChangeSeen": "It recovered after the driver changed to {{version}} (Compy first saw it on {{when}}).",
+    "recoveredQuiet": "Compy saw no build or encoding program start, and the rest of your PC was quiet ({{pct}}% CPU used by other programs) in the session that ran normally.",
+    "roughLoadNotRecorded": "Compy didn't record how busy the PC was in the rough sessions, so this comparison is one-sided.",
+    "recoveredBusy": "Build or encoding programs were still starting, or the rest of your PC was busy, in a session that ran normally, so background programs alone don't explain it.",
+    "recoveredFewStarts": "A few build or encoding programs started in the session that ran normally ({{starts}}), so Compy can't say the PC was quiet.",
+    "recoveryLoadNotRecorded": "Compy didn't record how busy the PC was in the session that ran normally.",
+    "recoveredRamLower": "Memory peaked at {{peakGb}} of {{totalGb}} GB when it ran normally, against {{roughGb}} GB in the rough sessions.",
+    "recoveredRamFull": "Memory still peaked at {{peakGb}} of {{totalGb}} GB when it ran normally, so memory alone doesn't explain it.",
+    "recoveryRamNotRead": "Compy has no memory reading for the session that ran normally.",
+    "recoveredDriftStill": "Compy's notice about that setting was already there before the session that ran normally, and it still stands, so that setting alone doesn't explain it.",
+    "recoveryDriftUnknown": "Compy can't tell whether that setting was still off when it ran normally.",
+    "recoveredCompySame": "Compy had {{count}} changes on when it ran normally, the same as in the rough sessions.",
+    "recoveredCompyBack": "Compy's changes went from {{from}} to {{to}}, back to what they were in the normal sessions, before it ran normally.",
+    "recoveredCompyOther": "Compy's changes went from {{from}} to {{to}} between the rough sessions and the one that ran normally.",
+    "recoveryCompyUnread": "Compy has no change count for one of those sessions.",
+    "recoveredBuildSame": "Windows was still build {{build}} when it ran normally, so that update alone doesn't explain it.",
+    "recoveredBuildChanged": "Windows changed from build {{from}} to {{to}} between the rough sessions and the one that ran normally.",
+    "recoveryBuildUnread": "Compy has no Windows build for one of those sessions.",
+    "recoveredUnchangedUpdate": "Windows recorded no further update between the rough sessions and the one that ran normally, so the update was most likely still in place. It can't be the whole story on its own.",
+    "recoveredUnchangedFiles": "Steam recorded no further change to {{game}}'s files between the rough sessions and the one that ran normally, so the files were most likely the same. They can't be the whole story on their own.",
+    "recoveredUnchangedProgram": "Windows recorded no further program install between the rough sessions and the one that ran normally, so the program was most likely still there. It can't be the whole story on its own.",
+    "recoveredChangedAgainUpdate": "Windows recorded another update on {{when}}, between the rough sessions and the one that ran normally.",
+    "recoveredChangedAgainFiles": "Steam recorded another change to {{game}}'s files on {{when}}, between the rough sessions and the one that ran normally.",
+    "recoveredChangedAgainProgram": "Windows recorded another program install on {{when}}, between the rough sessions and the one that ran normally.",
+    "recoveryRecordsUnread": "Compy couldn't read Windows' records for the time since, so it can't say whether this changed again.",
+    "recoveredDriverRecordDiffers": "Windows recorded a graphics driver install on {{when}} that the sessions' driver version doesn't show, so Compy can't say.",
+    "recoveryDriverUnread": "Compy has no driver version for one of those sessions.",
+    "compyChangesDiffer": "Compy's count of changes that are on also changed, from {{from}} to {{to}}, between the rough sessions and the one that ran normally."
   },
   "fix": {
     "title": "How to fix it",
@@ -170,12 +204,12 @@
     "programInstalled": {
       "step1": "Close {{names}} while you play, or uninstall it if you don't need it.",
       "step2": "Play {{game}} once, then press Something's wrong again."
-    },
-    "toggle": "How to check this"
+    }
   },
   "card": {
     "why": "Why this one first: {{reason}}",
-    "notProven": "Compy can't prove this until you try the fix and play again."
+    "notProven": "Compy can't prove this until you try the fix and play again.",
+    "scrollLabel": "What Compy found. Scrolls if there is more."
   },
   "why": {
     "crossGame": "It changed just before {{game}} got rough, and {{games}} got rough right after it too. The other changes don't line up with every rough session.",
@@ -234,7 +268,8 @@
     "noSessions": "Compy hasn't recorded any games yet. Start Compy before you play.",
     "crash": "Crashes have their own page for now. Open Problems to see what Windows recorded.",
     "partialRough": "Compy only measured part of your last {{game}} session ({{percent}}%), and what it saw looked rough. Play once more with Compy running.",
-    "frameCap": "Your frame cap changed, or Compy can't read it, between your earlier {{game}} sessions and the newest one, so it won't compare them."
+    "frameCap": "Your frame cap changed, or Compy can't read it, between your earlier {{game}} sessions and the newest one, so it won't compare them.",
+    "backToNormal": "Compy can't tell yet whether {{game}} is back to normal. Play once more."
   },
   "nothingChanged": {
     "title": "Compy measured the problem, but nothing it records changed before it",
@@ -244,8 +279,7 @@
   "notSeparable": {
     "title": "Compy can't tell which of these it is yet",
     "next": "To find out: play {{game}} once with nothing else running. Compy will compare.",
-    "nextOther": "Play {{game}} once more. Compy may still not be able to tell these apart.",
-    "showMore": "Show {{n}} more"
+    "nextOther": "Play {{game}} once more. Compy may still not be able to tell these apart."
   },
   "cap": {
     "none": "no cap",
@@ -308,5 +342,36 @@
     "audio": "audio",
     "network": "network",
     "chipset": "chipset"
+  },
+  "numbers": {
+    "show": "Show the numbers",
+    "hide": "Hide the numbers"
+  },
+  "verdict": {
+    "likely": "One change lines up best with what happened. It's listed first.",
+    "possible": "A change lines up with when it started, but Compy can't prove it."
+  },
+  "next": {
+    "likely": "Try the steps under the first one, play {{game}} once, then press Something's wrong again.",
+    "possible": "Check it, play {{game}} once, then press Something's wrong again. Compy will compare."
+  },
+  "row": {
+    "nowTitle": "Since it ran normally again:"
+  },
+  "now": {
+    "pointsTo": "Points to it",
+    "pointsAway": "Points away from it",
+    "cantTell": "Still can't tell"
+  },
+  "recovered": {
+    "title": "{{game}} is running the way it usually does again",
+    "numbers": "Its dips stayed at about {{beforePct}}% of its average before, fell to about {{roughPct}}% while it was rough, and are at about {{nowPct}}% now.",
+    "basisOne": "Its newest session ran at or above its usual.",
+    "basisTwo": "Its last two sessions both ran close to its usual.",
+    "pointsTo": "The evidence now points to: {{what}}.",
+    "between": "Still between: {{list}}.",
+    "nothing": "Compy can't narrow it down from this recovery.",
+    "next": "If it runs rough again, press Something's wrong again and Compy will compare.",
+    "notProven": "This is what the recorded sessions show. It doesn't prove why it got better."
   }
 }

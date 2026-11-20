@@ -1469,11 +1469,34 @@ fn folder_holds_exe(dir: &std::path::Path, exe: &str, deadline: Instant) -> bool
 /// Which Steam game owns this program? Read-only: the library list, the manifests and the install
 /// folders. Sessions record only the process name, so this is how a game's Steam record is found.
 pub(crate) fn find_steam_game(exe: &str, budget: Duration) -> SteamLookup {
-    match steam_library_roots() {
-        Ok(r) => find_game_in_roots(&r.roots, r.vdf_unreadable, exe, budget),
+    let exe = exe.to_string();
+    run_bounded(budget, move || match steam_library_roots() {
+        Ok(r) => find_game_in_roots(&r.roots, r.vdf_unreadable, &exe, budget),
         Err(UnreadableReason::SteamNotFound) => SteamLookup::NotInSteam,
         Err(e) => SteamLookup::Unreadable(e),
+    })
+}
+
+/// Entries read from one library's `steamapps` folder at most (a real library holds a few hundred files).
+pub(crate) const STEAM_DIR_ENTRY_CAP: usize = 5000;
+/// Grace after the lookup's own budget before the caller gives up on the thread (a read of an unreachable
+/// or sleeping drive can block inside the operating system, past any deadline the loop checks).
+pub(crate) const STEAM_HARD_MARGIN: Duration = Duration::from_millis(250);
+
+/// Runs the lookup on its own thread and waits at most `budget` plus `STEAM_HARD_MARGIN`. A drive that
+/// never answers leaves the thread behind and the answer is "couldn't match", never a hang.
+pub(crate) fn run_bounded<F>(budget: Duration, f: F) -> SteamLookup
+where
+    F: FnOnce() -> SteamLookup + Send + 'static,
+{
+    let (tx, rx) = std::sync::mpsc::channel();
+    let spawned = std::thread::Builder::new().name("paramedic-steam".into()).spawn(move || {
+        let _ = tx.send(f());
+    });
+    if spawned.is_err() {
+        return SteamLookup::NotInSteam;
     }
+    rx.recv_timeout(budget + STEAM_HARD_MARGIN).unwrap_or(SteamLookup::NotInSteam)
 }
 
 fn find_game_in_roots(roots: &[String], vdf_unreadable: bool, exe: &str, budget: Duration) -> SteamLookup {
@@ -1492,7 +1515,7 @@ fn find_game_in_roots(roots: &[String], vdf_unreadable: bool, exe: &str, budget:
             libs_unreadable += 1;
             continue;
         };
-        timed_out |= collect_until(entries.flatten().filter(is_manifest_name), deadline, |e| {
+        timed_out |= collect_until(entries.flatten().take(STEAM_DIR_ENTRY_CAP).filter(is_manifest_name), deadline, |e| {
             match read_manifest(&e.path()) {
                 ManifestRead::Parsed(info) => {
                     if let Some(folder) = info.install_dir.as_deref().filter(|f| folder_may_hold(&key, f)) {

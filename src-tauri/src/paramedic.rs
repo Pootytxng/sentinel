@@ -29,7 +29,9 @@ use serde::{Deserialize, Serialize};
 use crate::intelligence::{self, SessionRef};
 
 mod changes;
+mod recovery;
 use changes::{ChangeRead, Limit};
+use recovery::{EarlierEpisode, NowLine, NowStatus, Outcome, Recovery};
 
 // ---- Frozen constants (design A3 / B). A change re-runs the walk-forward fixture test. ----------
 /// A session is judgeable only if it is long enough, has enough readings and Compy measured enough of it.
@@ -225,6 +227,10 @@ pub(crate) enum CantTellWhy {
     NoSessions,
     /// F10 will answer crash complaints in this card; F1 does not.
     CrashNotCovered,
+    /// An episode of rough sessions was followed by sessions that are neither clearly back to normal
+    /// nor rough again (in between, partly measured, or under another frame cap). `partial`: the newest
+    /// session was not measured well enough to be judged either way.
+    RecoveryUnclear { partial: bool },
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -233,6 +239,9 @@ pub(crate) enum DiagnosisState {
     NothingWrong { sessions_checked: u8 },
     CantTell { why: CantTellWhy },
     Found,
+    /// F3: an episode of rough sessions is over: the game's newest judged sessions run the way it usually
+    /// does. `Diagnosis::recovery` carries the numbers and what the recovery says about each candidate.
+    Recovered,
     NeedsMorePlay { sessions_needed: u8, have: u8 },
 }
 
@@ -269,6 +278,9 @@ pub(crate) struct ProblemReading {
     /// Sessions Compy measured only in part that would also have fired: corroboration, never a reason alone.
     pub partial_sessions: Vec<SessionRef>,
     pub other_games_affected: Vec<String>,
+    /// Sessions after the newest rough one that were not judged (partly measured): while any exist Compy
+    /// cannot say the game is back to normal.
+    pub later_unjudged: u8,
 }
 
 /// §25 vocabulary, per line of evidence.
@@ -277,7 +289,7 @@ pub(crate) struct ProblemReading {
 pub(crate) enum EvidenceKind {
     Known,
     Measured,
-    #[allow(dead_code)] // F3+ (judged "did it work" lines)
+    /// A recovery observation that supports a candidate (never proves it).
     SupportedInference,
     #[allow(dead_code)] // F8 (mechanism-only findings)
     ExpectedMechanism,
@@ -349,6 +361,9 @@ pub(crate) struct Finding {
     pub fix: Fix,
     /// Possible, with timing, and nothing against it: one of the changes Compy cannot yet tell apart.
     pub in_play: bool,
+    /// F3: what the sessions since the episode say about this candidate. `None` unless the episode recovered.
+    pub now: Option<NowStatus>,
+    pub now_evidence: Vec<Evidence>,
 }
 
 /// Checked and found unchanged since the normal sessions (design B, C3). Says only what was compared.
@@ -383,6 +398,10 @@ pub(crate) struct Diagnosis {
     /// (another game got rough too, but other changes still line up), `tie` (two Likely) or
     /// `not-separable` (no Likely, two or more in play: the card lists them without ranking a winner).
     pub why_first: Option<&'static str>,
+    /// F3: set with `DiagnosisState::Recovered`.
+    pub recovery: Option<Recovery>,
+    /// F3: set when the current episode follows an earlier one that recovered.
+    pub earlier_episode: Option<EarlierEpisode>,
     pub method: &'static str,
 }
 
@@ -402,6 +421,8 @@ impl Diagnosis {
             baseline: None,
             first_bad: None,
             why_first: None,
+            recovery: None,
+            earlier_episode: None,
             method: METHOD,
         }
     }
@@ -638,7 +659,12 @@ pub(crate) fn diagnose(inp: &DiagnoseInputs, complaint: Complaint, game: Option<
     let answers: Vec<Diagnosis> = played.iter().map(|(_, g)| diagnose_game(inp, complaint, g)).collect();
     // The rough game whose newest rough session is the most recent.
     let rough_at = |d: &Diagnosis| {
-        let rough = matches!(d.state, DiagnosisState::Found | DiagnosisState::CantTell { why: CantTellWhy::NothingChanged });
+        let rough = matches!(
+            d.state,
+            DiagnosisState::Found
+                | DiagnosisState::Recovered
+                | DiagnosisState::CantTell { why: CantTellWhy::NothingChanged | CantTellWhy::RecoveryUnclear { .. } }
+        );
         rough.then(|| d.problem.as_ref().and_then(|p| p.sessions_affected.iter().filter_map(|s| ts(&s.started_at)).max())).flatten()
     };
     let pick = (0..answers.len()).filter_map(|i| rough_at(&answers[i]).map(|t| (t, i))).max().map(|(_, i)| i).unwrap_or(0);
@@ -679,6 +705,8 @@ fn diagnose_game(inp: &DiagnoseInputs, complaint: Complaint, game_key: &str) -> 
                 have: have.min(BASELINE_MIN) as u8,
             };
         }
+        // F3: after an episode of rough sessions the next sessions say whether it is over.
+        Verdict::Normal if recovery_answer(inp, &game_key, &sess, &judged, newest, &mut d) => {}
         // Sessions after the newest judged one went unjudged: "nothing wrong" would speak for a session
         // Compy never read, so it says so instead.
         Verdict::Normal if newest + 1 < sess.len() => d.state = partial_state(&sess, &judged, newest + 1),
@@ -698,10 +726,41 @@ fn diagnose_game(inp: &DiagnoseInputs, complaint: Complaint, game_key: &str) -> 
             }
             d.state = DiagnosisState::NothingWrong { sessions_checked: n.max(1) };
         }
-        Verdict::Fired => explain(inp, &game_key, &sess, &judged, newest, &mut d),
+        Verdict::Fired => explain(inp, &game_key, &sess, &judged, newest, &mut d, None),
         Verdict::Unjudged => {}
     }
     d
+}
+
+/// F3: when the game's newest judged session ran normally but an episode of rough sessions came shortly
+/// before it, answers "is it back to normal?" and returns true. Returns false when there is no recent
+/// episode (the ordinary answers apply). The rough episode is explained as usual so the card still has
+/// its numbers and candidates; a recovery additionally re-scores each candidate.
+fn recovery_answer<'a>(
+    inp: &'a DiagnoseInputs,
+    game_key: &str,
+    sess: &[&'a SessionFacts],
+    judged: &'a [Judgement],
+    newest: usize,
+    d: &mut Diagnosis,
+) -> bool {
+    let Some(f) = (0..newest).rev().find(|&i| judged[i].verdict == Verdict::Fired) else { return false };
+    let Some(outcome) = recovery::outcome(sess, judged, f, sess.len()) else { return false };
+    match outcome {
+        Outcome::Recovered { idx } => {
+            explain(inp, game_key, sess, judged, f, d, Some(&idx));
+            d.state = if d.recovery.is_some() {
+                DiagnosisState::Recovered
+            } else {
+                DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial: false } }
+            };
+        }
+        Outcome::Unclear { partial } => {
+            explain(inp, game_key, sess, judged, f, d, None);
+            d.state = DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial } };
+        }
+    }
+    true
 }
 
 /// "Partly measured": the sessions from `from` on were never judged. The percentage is the newest
@@ -721,6 +780,8 @@ fn cap_finding(now: &SessionFacts, before: CapState) -> Finding {
         since_when: When::Seen { at: now.started_at.clone() },
         fix: steps("frame-cap-change", &[("from", before.word()), ("to", now.cap.word())]),
         in_play: false,
+        now: None,
+        now_evidence: Vec::new(),
     }
 }
 
@@ -731,13 +792,39 @@ fn cap_finding(now: &SessionFacts, before: CapState) -> Finding {
 /// `changes::CHANGES_BUDGET`; if they cannot be read in time the diagnosis stands with each kind Unknown.
 #[tauri::command]
 pub(crate) async fn paramedic_diagnose(complaint: Complaint, game: Option<String>) -> Result<Diagnosis, String> {
+    // Single flight: while one diagnosis is running, another call gets BUSY (the card keeps saying "still
+    // checking") instead of starting a second set of reader threads.
+    let Some(flight) = FlightGuard::begin() else { return Err(BUSY.to_string()) };
     tauri::async_runtime::spawn_blocking(move || -> Result<Diagnosis, String> {
+        let _flight = flight;
         let inp = read_inputs_from(&crate::compy_data_dir())?;
         let fetch = |t0, t1, exe: String| changes::read_real_changes(t0, t1, &exe);
         Ok(changes::diagnose_with_changes(inp, complaint, game.as_deref(), changes::CHANGES_BUDGET, fetch))
     })
     .await
     .map_err(|_| "the diagnosis stopped unexpectedly".to_string())?
+}
+
+/// What `paramedic_diagnose` returns as its error while another call is still running. The card treats it as
+/// "still checking", never as a failure.
+pub(crate) const BUSY: &str = "paramedic-busy";
+
+static IN_FLIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Held for the whole of one diagnosis (including a panic or an early return); dropping it frees the slot.
+pub(crate) struct FlightGuard(());
+
+impl FlightGuard {
+    pub(crate) fn begin() -> Option<FlightGuard> {
+        use std::sync::atomic::Ordering;
+        IN_FLIGHT.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).ok().map(|_| FlightGuard(()))
+    }
+}
+
+impl Drop for FlightGuard {
+    fn drop(&mut self) {
+        IN_FLIGHT.store(false, std::sync::atomic::Ordering::Release);
+    }
 }
 
 /// What the diagnosis reads, from a data directory: sessions, identity checks and drift notices. A file
@@ -927,7 +1014,11 @@ struct Cand {
     confounded: bool,
     /// M: a measured size past its fixed line.
     m: bool,
-    /// C1: a rough session where this change was absent or below its line.
+    /// R (F3): the sessions after the episode recovered in a way that supports this candidate (the driver
+    /// changed again, the PC was quiet). Independent of the timing: it is a later observation.
+    r: bool,
+    /// C1: a rough session where this change was absent or below its line (or, F3, the recovered
+    /// session still had it).
     c1: bool,
     since: When,
     fix: Fix,
@@ -948,7 +1039,7 @@ impl Cand {
     }
 
     fn independent(&self) -> usize {
-        usize::from(self.d) + usize::from(self.x && !self.confounded) + usize::from(self.m)
+        usize::from(self.d) + usize::from(self.x && !self.confounded) + usize::from(self.m) + usize::from(self.r)
     }
 
     /// Possible, with timing, and nothing against it.
@@ -957,7 +1048,7 @@ impl Cand {
     }
 
     fn supports(&self) -> usize {
-        usize::from(self.d) + usize::from(self.x) + usize::from(self.m) + usize::from(self.t)
+        usize::from(self.d) + usize::from(self.x) + usize::from(self.m) + usize::from(self.r) + usize::from(self.t)
     }
 }
 
@@ -1012,6 +1103,9 @@ fn explain<'a>(
     judged: &'a [Judgement],
     newest: usize,
     d: &mut Diagnosis,
+    // F3: the sessions (indexes) that ran normally after this episode. With them, each candidate is
+    // re-scored against the recovery and `d.recovery` is set.
+    recovered: Option<&[usize]>,
 ) {
     let mut run = vec![newest];
     for i in (0..newest).rev() {
@@ -1062,7 +1156,12 @@ fn explain<'a>(
         sessions_affected: affected.iter().map(|s| s.session_ref()).collect(),
         partial_sessions: partial,
         other_games_affected: affected_others,
+        later_unjudged: ((newest + 1)..sess.len()).filter(|&i| judged[i].verdict == Verdict::Unjudged).count().min(u8::MAX as usize) as u8,
     });
+    // A new episode after an earlier one that recovered is a new episode: one line says so.
+    if recovered.is_none() {
+        d.earlier_episode = recovery::earlier_episode(sess, judged, first);
+    }
     d.baseline = Some(baseline_newest.session_ref());
     d.first_bad = Some(first_bad.session_ref());
     let ctx = Ctx {
@@ -1104,17 +1203,36 @@ fn explain<'a>(
     if inp.sightings_unread {
         out.unknown("identity-unreadable");
     }
+    // F3: the recovery re-scores each candidate (a support or a contradiction) before the ranking.
+    let now_lines: Vec<NowLine> = match recovered {
+        Some(idx) => {
+            let rec: Vec<&SessionFacts> = idx.iter().map(|&i| sess[i]).collect();
+            recovery::apply(&ctx, &rec, &mut out.cands)
+        }
+        None => Vec::new(),
+    };
     rank(&mut out.cands);
     d.why_first = why_first(&out.cands);
+    let mut now_by_id: BTreeMap<&'static str, NowLine> = now_lines.into_iter().map(|l| (l.id, l)).collect();
     d.findings = out
         .cands
         .into_iter()
         .filter_map(|c| {
             let confidence = c.certainty()?;
             let in_play = c.in_play();
-            Some(Finding { id: c.id, confidence, evidence: c.evidence, since_when: c.since, fix: c.fix, in_play })
+            let line = now_by_id.remove(c.id);
+            let (now, now_evidence) = match line {
+                Some(l) => (Some(l.status), l.evidence),
+                None => (None, Vec::new()),
+            };
+            Some(Finding { id: c.id, confidence, evidence: c.evidence, since_when: c.since, fix: c.fix, in_play, now, now_evidence })
         })
         .collect();
+    if let Some(idx) = recovered {
+        let rec: Vec<&SessionFacts> = idx.iter().map(|&i| sess[i]).collect();
+        let since = ((newest + 1)..sess.len()).filter(|&i| judged[i].verdict != Verdict::Unjudged).count();
+        d.recovery = recovery::build_block(&ctx, &rec, d, since);
+    }
     d.not_it = out.not_it;
     d.seen = out.seen;
     d.unknowns = out.unknowns;
@@ -1193,6 +1311,7 @@ fn detect_hardware(c: &Ctx, out: &mut Out) {
             d: true,
             x: false,
             confounded: false,
+            r: false,
             m: false,
             c1: c.affected.iter().any(|s| nonblank(&s.rig) == Some(b)),
             since: whole_window(c),
@@ -1346,6 +1465,7 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         d: true,
         x: !x_games.is_empty(),
         confounded: !x_games.is_empty() && !x_clean,
+        r: false,
         m: false,
         c1: rough_on_old > 0 || !normal_new.is_empty() || after_rough,
         since: match exact {
@@ -1431,6 +1551,7 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         d: busy_rough.len() == c.affected.len(),
         x: false,
         confounded: false,
+        r: false,
         m: loud_rough > 0,
         c1: quiet_rough > 0,
         since,
@@ -1488,6 +1609,7 @@ fn detect_memory(c: &Ctx, out: &mut Out) {
         d: false,
         x: false,
         confounded: false,
+        r: false,
         m: true,
         c1: !lower.is_empty(),
         since: When::Exact { at: worst.started_at.clone() },
@@ -1520,6 +1642,7 @@ fn detect_compy_changes(c: &Ctx, out: &mut Out) {
         d: true,
         x: false,
         confounded: false,
+        r: false,
         m: false,
         c1: now.iter().any(|&n| !outside(n)),
         since: whole_window(c),
@@ -1566,6 +1689,7 @@ fn detect_power_plan(c: &Ctx, out: &mut Out) {
             d: true,
             x: false,
             confounded: false,
+            r: false,
             m: false,
             c1: false,
             since: whole_window(c),
@@ -1622,6 +1746,7 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
         d: false,
         x: false,
         confounded: false,
+        r: false,
         m: false,
         c1: false,
         since,
@@ -1646,6 +1771,7 @@ fn detect_display(c: &Ctx, out: &mut Out) {
         d: true,
         x: false,
         confounded: false,
+        r: false,
         m: false,
         c1: c.affected.iter().any(|s| s.refresh_hz == Some(b)),
         since: whole_window(c),
@@ -1670,6 +1796,7 @@ fn detect_windows(c: &Ctx, out: &mut Out) {
         d: true,
         x: false,
         confounded: false,
+        r: false,
         m: false,
         c1: c.affected.iter().any(|s| nonblank(&s.windows_build) == Some(b)),
         since: whole_window(c),

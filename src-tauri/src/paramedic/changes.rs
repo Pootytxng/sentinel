@@ -62,7 +62,7 @@ fn limit(kind: &'static str, code: &'static str, args: &[(&'static str, String)]
 /// the first rough session's start (`Timing`), earlier, or later (the card shows later ones as evidence
 /// against, never as timing).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Bucket {
+pub(super) enum Bucket {
     Before,
     Timing,
     After,
@@ -91,32 +91,32 @@ fn bucket(e: &ChangeEvent, sp: &Span) -> Bucket {
     }
 }
 
-fn report<'a>(c: &'a Ctx) -> Option<&'a ChangeReport> {
+pub(super) fn report<'a>(c: &'a Ctx) -> Option<&'a ChangeReport> {
     match &c.inp.changes {
         ChangeRead::Report { report, .. } => Some(report.as_ref()),
         _ => None,
     }
 }
 
-fn kind_events(r: &ChangeReport, kind: ChangeKind) -> impl DoubleEndedIterator<Item = &ChangeEvent> {
+pub(super) fn kind_events(r: &ChangeReport, kind: ChangeKind) -> impl DoubleEndedIterator<Item = &ChangeEvent> {
     r.events_found.iter().filter(move |e| e.kind == kind)
 }
 
-fn is_complete(r: &ChangeReport, kind: ChangeKind) -> bool {
+pub(super) fn is_complete(r: &ChangeReport, kind: ChangeKind) -> bool {
     matches!(r.status(kind), KindStatus::Complete { .. })
 }
 
-fn when_of(e: &ChangeEvent) -> Option<DateTime<Utc>> {
+pub(super) fn when_of(e: &ChangeEvent) -> Option<DateTime<Utc>> {
     e.when.at
 }
 
-fn class_of(e: &ChangeEvent) -> String {
+pub(super) fn class_of(e: &ChangeEvent) -> String {
     e.what.detail.as_deref().unwrap_or("").trim().to_ascii_lowercase()
 }
 
 /// A real, dated GPU driver install: Windows said the version changed. `Some(false)` (the same version
 /// configured again) and `None` (previous version unknown) are never a change.
-fn gpu_installs<'a>(c: &'a Ctx) -> Vec<(&'a ChangeEvent, DateTime<Utc>, Bucket)> {
+pub(super) fn gpu_installs<'a>(c: &'a Ctx) -> Vec<(&'a ChangeEvent, DateTime<Utc>, Bucket)> {
     let (Some(r), sp) = (report(c), span(c)) else { return Vec::new() };
     let mut v: Vec<(&ChangeEvent, DateTime<Utc>, Bucket)> = kind_events(r, ChangeKind::GpuDriver)
         .filter(|e| e.what.version_changed == Some(true))
@@ -262,6 +262,7 @@ pub(super) fn windows_only_driver(c: &Ctx, out: &mut Out) {
         d: false,
         x: false,
         confounded: false,
+        r: false,
         m: false,
         c1: false,
         since: When::Exact { at: iso(at) },
@@ -365,6 +366,7 @@ pub(super) fn detect_windows_update(c: &Ctx, out: &mut Out) {
         d: false,
         x: false,
         confounded: false,
+        r: false,
         m: false,
         c1: false,
         since: if first == last { When::Exact { at: iso(first) } } else { When::ObservedBetween { from: iso(first), to: iso(last) } },
@@ -385,6 +387,7 @@ pub(super) fn detect_game_files(c: &Ctx, out: &mut Out) {
             d: false,
             x: false,
             confounded: false,
+            r: false,
             m: false,
             c1: false,
             since: When::Exact { at: iso(at) },
@@ -485,6 +488,7 @@ pub(super) fn detect_programs(c: &Ctx, out: &mut Out) {
         d: false,
         x: false,
         confounded: false,
+        r: false,
         m: false,
         c1: false,
         // Installs carry a day, never a time: the heading names the day and no time of day is claimed.
@@ -529,6 +533,7 @@ pub(super) fn detect_other_drivers(c: &Ctx, out: &mut Out) {
         d: false,
         x: false,
         confounded: false,
+        r: false,
         m: false,
         c1: false,
         since: if first == last { When::Exact { at: iso(first) } } else { When::ObservedBetween { from: iso(first), to: iso(last) } },
@@ -653,9 +658,12 @@ pub(super) fn limits(c: &Ctx) -> Vec<Limit> {
 pub(crate) fn change_window(d: &Diagnosis) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
     let p = d.problem.as_ref()?;
     let t0 = ts(&p.last_normal_at)?;
+    // A recovered episode also asks Windows what happened up to the end of the sessions that ran normally.
+    let recovered = d.recovery.iter().flat_map(|r| r.recovered_sessions.iter());
     let t1 = p
         .sessions_affected
         .iter()
+        .chain(recovered)
         .filter_map(|s| ts(&s.started_at).map(|t| t + chrono::Duration::seconds(s.duration_secs as i64)))
         .max()?;
     Some((t0, t1))

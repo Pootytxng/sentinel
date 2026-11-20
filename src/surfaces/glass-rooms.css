@@ -672,3 +672,114 @@
   align-items: flex-start;
   gap: 6px;
 }
+
+/* ── Paramedic card (F3): the open card fits ~520 px; rows are one line; the rest scrolls inside. ── */
+:root[data-v2="on"] .gl-para-card {
+  --para-card-max: 520px;
+  display: flex;
+  flex-direction: column;
+  max-height: var(--para-card-max);
+  overflow: hidden;
+}
+:root[data-v2="on"] .gl-para-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+/* The answer scrolls inside the card, with a visible bar and edge shadows so it is plain there is more. */
+:root[data-v2="on"] .gl-para-scroll {
+  min-height: 0;
+  margin-top: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--v2-muted) transparent;
+  background:
+    linear-gradient(var(--v2-panel-card) 30%, transparent) top / 100% 18px no-repeat local,
+    linear-gradient(transparent, var(--v2-panel-card) 70%) bottom / 100% 18px no-repeat local,
+    linear-gradient(var(--v2-line), transparent) top / 100% 6px no-repeat scroll,
+    linear-gradient(transparent, var(--v2-line)) bottom / 100% 6px no-repeat scroll;
+}
+:root[data-v2="on"] .gl-para-scroll:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+:root[data-v2="on"] .gl-para-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+:root[data-v2="on"] .gl-para-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--v2-muted);
+}
+:root[data-v2="on"] .gl-para-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+:root[data-v2="on"] .gl-para-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+:root[data-v2="on"] .gl-para-row {
+  border: 1px solid var(--v2-line);
+  border-radius: 12px;
+}
+:root[data-v2="on"] .gl-para-row-btn,
+:root[data-v2="on"] .gl-para-fold-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+:root[data-v2="on"] .gl-para-row-btn:focus-visible,
+:root[data-v2="on"] .gl-para-fold-btn:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+:root[data-v2="on"] .gl-para-fold-btn {
+  padding-left: 0;
+  font-size: var(--type-label);
+  font-weight: 600;
+}
+:root[data-v2="on"] .gl-para-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+:root[data-v2="on"] .gl-para-row-when {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--v2-muted);
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .gl-para-row .gl-chip {
+  flex: 0 0 auto;
+}
+:root[data-v2="on"] .gl-para-caret {
+  flex: 0 0 auto;
+  width: 1em;
+  color: var(--v2-muted);
+}
+:root[data-v2="on"] .gl-para-row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 12px 12px;
+}

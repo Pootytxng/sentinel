@@ -1327,12 +1327,16 @@ export type ParamedicCantTellWhy =
   | { kind: "partial-measure"; percent: number; looked_rough: boolean }
   | { kind: "frame-cap-changed" }
   | { kind: "no-sessions" }
-  | { kind: "crash-not-covered" };
+  | { kind: "crash-not-covered" }
+  /** An episode of rough sessions was followed by sessions that are neither clearly normal nor rough again. */
+  | { kind: "recovery-unclear"; partial: boolean };
 
 export type ParamedicState =
   | { kind: "nothing-wrong"; sessions_checked: number }
   | { kind: "cant-tell"; why: ParamedicCantTellWhy }
   | { kind: "found" }
+  /** F3: the episode is over; Diagnosis.recovery says what the recovery shows. */
+  | { kind: "recovered" }
   | { kind: "needs-more-play"; sessions_needed: number; have: number };
 
 export type ParamedicMetric = { ratio: number; p99_ms: number | null; avg_fps: number };
@@ -1356,6 +1360,8 @@ export type ParamedicProblem = {
   sessions_affected: ParamedicSessionRef[];
   partial_sessions: ParamedicSessionRef[];
   other_games_affected: string[];
+  /** Sessions after the newest rough one that were not judged (partly measured). */
+  later_unjudged: number;
 };
 
 export type ParamedicEvidence = {
@@ -1389,7 +1395,12 @@ export type ParamedicFinding = {
   fix: ParamedicFix;
   /** Possible, with timing, and nothing against it: one of the changes Compy cannot yet tell apart. */
   in_play: boolean;
+  /** F3: what the sessions since the episode say about this candidate; null unless it recovered. */
+  now: ParamedicNow | null;
+  now_evidence: ParamedicEvidence[];
 };
+
+export type ParamedicNow = "points-to" | "points-away" | "cant-tell";
 
 export type ParamedicRuledOut = { id: string; args: Record<string, string> };
 
@@ -1398,6 +1409,23 @@ export type ParamedicLimit = {
   kind: "driver" | "windows-update" | "game-update" | "programs";
   code: string;
   args: Record<string, string>;
+};
+
+export type ParamedicRecoverySummary =
+  | { kind: "points-to"; id: string }
+  | { kind: "between"; ids: string[] }
+  | { kind: "none" };
+
+export type ParamedicRecovery = {
+  before: ParamedicMetric;
+  rough: ParamedicMetric;
+  now: ParamedicMetric;
+  rough_sessions: ParamedicSessionRef[];
+  recovered_sessions: ParamedicSessionRef[];
+  at_or_above_median: boolean;
+  sessions_since: number;
+  summary: ParamedicRecoverySummary;
+  also_changed: ParamedicEvidence[];
 };
 
 export type ParamedicDiagnosis = {
@@ -1415,5 +1443,8 @@ export type ParamedicDiagnosis = {
   baseline: ParamedicSessionRef | null;
   first_bad: ParamedicSessionRef | null;
   why_first: "cross-game" | "cross-game-lead" | "tie" | "not-separable" | null;
+  recovery: ParamedicRecovery | null;
+  /** The current episode follows an earlier one that recovered. */
+  earlier_episode: { from: string; to: string } | null;
   method: string;
 };

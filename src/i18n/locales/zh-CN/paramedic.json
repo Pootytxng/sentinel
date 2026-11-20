@@ -5,7 +5,8 @@
     "sub": "Compy 会查看哪些地方变了，并告诉你它的发现。",
     "looking": "正在查看你最近的游戏记录…",
     "failed": "Compy 暂时读不到自己的记录。你的电脑没有被改动。",
-    "again": "再查一次"
+    "again": "再查一次",
+    "close": "收起"
   },
   "problem": {
     "title": "{{game}} 最近明显比平时卡顿",
@@ -15,13 +16,15 @@
     "spikes": "最慢的百分之一的帧耗时约 {{nowMs}} 毫秒，你正常游戏时约为 {{beforeMs}} 毫秒。",
     "average": "平均帧率也只有每秒 {{nowFps}} 帧，之前约为 {{beforeFps}} 帧。",
     "otherGames": "{{games}} 在同一时期也出现过明显卡顿的游戏记录。",
-    "since": "它上一次正常运行是在 {{date}}。",
     "partial_one": "Compy 还看到 1 次只测量了一部分的游戏，测到的部分看起来也很卡。只测量了一部分的游戏不会单独作为依据。",
-    "partial_other": "Compy 还看到 {{count}} 次只测量了一部分的游戏，测到的部分看起来也很卡。只测量了一部分的游戏不会单独作为依据。"
+    "partial_other": "Compy 还看到 {{count}} 次只测量了一部分的游戏，测到的部分看起来也很卡。只测量了一部分的游戏不会单独作为依据。",
+    "sinceLasted_one": "它上一次正常运行是在 {{date}}。到目前为止，卡顿已持续 {{count}} 次游戏。",
+    "sinceLasted_other": "它上一次正常运行是在 {{date}}。到目前为止，卡顿已持续 {{count}} 次游戏。",
+    "earlier": "它在 {{from}}–{{to}} 期间也曾卡顿，后来恢复了。"
   },
   "answer": {
     "likely": "最有可能",
-    "possible": "也有可能",
+    "possible": "有可能",
     "mechanism": "常会导致这种情况（尚未在你的电脑上测得）",
     "measured": "已测得"
   },
@@ -79,7 +82,8 @@
     "known": "已知",
     "measured": "已测得",
     "unknown": "未记录",
-    "against": "削弱这一判断"
+    "against": "削弱这一判断",
+    "supports": "支持这一判断"
   },
   "evidence": {
     "driverChanged": "你的显卡驱动从 {{from}} 变成了 {{to}}。",
@@ -124,7 +128,37 @@
     "deliveredByUpdate": "这是通过 Windows 更新安装的。",
     "reinstallSameVersion": "Windows 记录显示,{{when}}重新安装了同一个版本的驱动。",
     "installPriorUnknown": "Windows 记录显示,{{when}}安装过显卡驱动,但不知道之前的版本。",
-    "updateInstalledNoKb": "Windows 在{{when}}安装了一个更新。"
+    "updateInstalledNoKb": "Windows 在{{when}}安装了一个更新。",
+    "recoveredSameDriver": "{{game}} 在同一个驱动（{{version}}）下又恢复了正常，所以仅凭驱动解释不了这一点。",
+    "recoveredAfterDriverChange": "它在驱动于 {{when}} 变成 {{version}} 之后恢复了正常。",
+    "recoveredAfterDriverChangeSeen": "它在驱动变成 {{version}} 之后恢复了正常（Compy 在 {{when}} 首次看到它）。",
+    "recoveredQuiet": "在运行正常的那次游戏中，Compy 没有看到编译或编码程序启动，电脑其余部分也很安静（其他程序占用了 {{pct}}% 的处理器）。",
+    "roughLoadNotRecorded": "Compy 没有记录卡顿那几次游戏时电脑有多忙，所以这个对比只有一边的数据。",
+    "recoveredBusy": "在运行正常的游戏中，编译或编码程序仍在启动，或电脑其余部分仍很忙，所以仅凭后台程序解释不了这一点。",
+    "recoveredFewStarts": "在运行正常的那次游戏中，有几个编译或编码程序启动过（{{starts}} 次），所以 Compy 不能说电脑当时很安静。",
+    "recoveryLoadNotRecorded": "Compy 没有记录运行正常的那次游戏时电脑有多忙。",
+    "recoveredRamLower": "运行正常时，内存最高用到 {{peakGb}} GB（共 {{totalGb}} GB），卡顿的游戏中是 {{roughGb}} GB。",
+    "recoveredRamFull": "运行正常时，内存仍然最高用到 {{peakGb}} GB（共 {{totalGb}} GB），所以仅凭内存解释不了这一点。",
+    "recoveryRamNotRead": "Compy 没有运行正常的那次游戏的内存读数。",
+    "recoveredDriftStill": "Compy 对那项设置的提示在运行正常的那次游戏之前就已存在，现在仍然有效，所以仅凭那项设置解释不了这一点。",
+    "recoveryDriftUnknown": "Compy 无法判断那项设置在运行正常时是否仍处于关闭状态。",
+    "recoveredCompySame": "运行正常时，Compy 开启了 {{count}} 项更改，与卡顿的游戏时相同。",
+    "recoveredCompyBack": "在运行正常之前，Compy 的更改数量从 {{from}} 项变成了 {{to}} 项，回到了正常游戏时的数量。",
+    "recoveredCompyOther": "在卡顿的游戏和运行正常的那次之间，Compy 的更改数量从 {{from}} 项变成了 {{to}} 项。",
+    "recoveryCompyUnread": "Compy 没有其中一次游戏的更改数量记录。",
+    "recoveredBuildSame": "运行正常时，Windows 仍是 {{build}} 版本，所以仅凭那次更新解释不了这一点。",
+    "recoveredBuildChanged": "在卡顿的游戏和运行正常的那次之间，Windows 从 {{from}} 版本变成了 {{to}} 版本。",
+    "recoveryBuildUnread": "Compy 没有其中一次游戏的 Windows 版本记录。",
+    "recoveredUnchangedUpdate": "在卡顿的游戏和运行正常的那次之间，Windows 没有记录新的更新，所以那次更新多半仍在。仅凭它说明不了全部。",
+    "recoveredUnchangedFiles": "在卡顿的游戏和运行正常的那次之间，Steam 没有记录 {{game}} 的文件有新的变化，所以文件多半没变。仅凭它们说明不了全部。",
+    "recoveredUnchangedProgram": "在卡顿的游戏和运行正常的那次之间，Windows 没有记录新安装的程序，所以那个程序多半仍在。仅凭它说明不了全部。",
+    "recoveredChangedAgainUpdate": "Windows 在 {{when}} 又记录了一次更新，介于卡顿的游戏和运行正常的那次之间。",
+    "recoveredChangedAgainFiles": "Steam 在 {{when}} 又记录了 {{game}} 的文件变化，介于卡顿的游戏和运行正常的那次之间。",
+    "recoveredChangedAgainProgram": "Windows 在 {{when}} 又记录了一次程序安装，介于卡顿的游戏和运行正常的那次之间。",
+    "recoveryRecordsUnread": "Compy 读不到此后 Windows 的记录，所以无法判断这一项是否又变过。",
+    "recoveredDriverRecordDiffers": "Windows 在 {{when}} 记录了一次显卡驱动安装，但游戏记录里的驱动版本没有体现，所以 Compy 无法判断。",
+    "recoveryDriverUnread": "Compy 没有其中一次游戏的驱动版本记录。",
+    "compyChangesDiffer": "在卡顿的游戏和运行正常的那次之间，Compy 已开启的更改数量也变了，从 {{from}} 项变成 {{to}} 项。"
   },
   "fix": {
     "title": "如何解决",
@@ -170,12 +204,12 @@
     "programInstalled": {
       "step1": "玩游戏时请关闭 {{names}}，如果不需要它，也可以卸载。",
       "step2": "玩一次 {{game}}，再按一次“出问题了”。"
-    },
-    "toggle": "如何检查这一项"
+    }
   },
   "card": {
     "why": "为什么先说这一项：{{reason}}",
-    "notProven": "在你试过解决办法并再玩一次之前，Compy 无法证明这一点。"
+    "notProven": "在你试过解决办法并再玩一次之前，Compy 无法证明这一点。",
+    "scrollLabel": "Compy 的发现。内容较多时可以滚动查看。"
   },
   "why": {
     "crossGame": "它恰好在 {{game}} 变卡之前发生，{{games}} 也在紧接着变卡。其他改动没有和每一次卡顿对上。",
@@ -234,7 +268,8 @@
     "noSessions": "Compy 还没有记录过任何游戏。请在玩游戏前先启动 Compy。",
     "crash": "崩溃问题目前有单独的页面。请打开“问题”查看 Windows 的记录。",
     "partialRough": "Compy 只测量了你最近一次 {{game}} 游戏的一部分（{{percent}}%），而它看到的部分显得很卡。请在 Compy 运行的情况下再玩一次。",
-    "frameCap": "你的帧率上限在 {{game}} 之前的游戏和最近一次之间变了（或 Compy 读不出来），所以不会拿它们互相比较。"
+    "frameCap": "你的帧率上限在 {{game}} 之前的游戏和最近一次之间变了（或 Compy 读不出来），所以不会拿它们互相比较。",
+    "backToNormal": "Compy 暂时还无法判断 {{game}} 是否已恢复正常。请再玩一次。"
   },
   "nothingChanged": {
     "title": "Compy 测到了问题，但它记录的内容在此之前没有变化",
@@ -244,8 +279,7 @@
   "notSeparable": {
     "title": "Compy 暂时还分不清是下面哪一项",
     "next": "要查明：请在没有运行其他程序的情况下玩一次 {{game}}。Compy 会重新对比。",
-    "nextOther": "请再玩一次 {{game}}。Compy 可能仍然分不清这几项。",
-    "showMore": "再显示 {{n}} 项"
+    "nextOther": "请再玩一次 {{game}}。Compy 可能仍然分不清这几项。"
   },
   "cap": {
     "none": "无上限",
@@ -308,5 +342,36 @@
     "audio": "音频",
     "network": "网络",
     "chipset": "芯片组"
+  },
+  "numbers": {
+    "show": "查看数据",
+    "hide": "收起数据"
+  },
+  "verdict": {
+    "likely": "有一项变化与问题出现的时间最吻合，已排在最前面。",
+    "possible": "有一项变化与问题开始的时间吻合，但 Compy 无法证明。"
+  },
+  "next": {
+    "likely": "先试试第一项里的步骤，再玩一次 {{game}}，然后再点“出问题了”。",
+    "possible": "先检查一下，再玩一次 {{game}}，然后再点“出问题了”。Compy 会重新对比。"
+  },
+  "row": {
+    "nowTitle": "它恢复正常之后："
+  },
+  "now": {
+    "pointsTo": "指向它",
+    "pointsAway": "不指向它",
+    "cantTell": "仍无法判断"
+  },
+  "recovered": {
+    "title": "{{game}} 又恢复到平时的表现了",
+    "numbers": "之前，它掉帧时仍能保持约 {{beforePct}}% 的平均帧率；卡顿期间降到约 {{roughPct}}%；现在约为 {{nowPct}}%。",
+    "basisOne": "最近一次游戏的表现达到或超过了它平时的水平。",
+    "basisTwo": "最近两次游戏的表现都接近它平时的水平。",
+    "pointsTo": "现在的证据指向：{{what}}。",
+    "between": "目前仍在这几项之间：{{list}}。",
+    "nothing": "仅凭这次恢复，Compy 还无法缩小范围。",
+    "next": "如果又变卡，请再点“出问题了”，Compy 会重新对比。",
+    "notProven": "这是已记录的游戏数据所显示的情况，并不能证明它为什么变好。"
   }
 }

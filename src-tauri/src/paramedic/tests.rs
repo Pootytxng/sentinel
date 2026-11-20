@@ -1793,3 +1793,579 @@ mod windows_records {
         assert_eq!(v["seen"][0]["args"]["n"], "1");
     }
 }
+
+// ==== F3: did it get better? Recovery judged from the next sessions, each candidate re-scored ===========
+mod recovery_f3 {
+    use super::super::changes::{ChangeRead, GameSteam};
+    use super::super::recovery::{RecoverySummary, RECOVERY_R_FRACTION, RECOVERY_SHOWN_FOR};
+    use super::*;
+    use crate::change_sources::{ChangeEvent, ChangeKind, ChangeReport, ChangeTime, ChangeWhat, Note, Source};
+
+    fn utc(s: &str) -> DateTime<Utc> {
+        ts(s).expect("a time")
+    }
+
+    /// A session of "g" on `day` of October at 10:00, 600 s fully measured, average 100 and 1% low `low1`.
+    fn on(day: u32, low1: f64, driver: Option<&str>) -> SessionFacts {
+        let mut s = facts(&at_day(day, 10), 600, 600, 100.0, low1);
+        s.gpu_driver = driver.map(str::to_string);
+        s
+    }
+
+    /// Four normal sessions (days 1 to 4, ratio 0.5) on driver 1.0, then one rough one (ratio 0.3) on 2.0 on day 9.
+    fn episode() -> Vec<SessionFacts> {
+        let mut v: Vec<SessionFacts> = (1..=4).map(|d| on(d, 50.0, Some("1.0"))).collect();
+        v.push(on(9, 30.0, Some("2.0")));
+        v
+    }
+
+    fn run(sess: Vec<SessionFacts>) -> Diagnosis {
+        diagnose(&inputs(sess), Complaint::Slow, Some("g"))
+    }
+
+    fn with_extra(mut sess: Vec<SessionFacts>, extra: Vec<SessionFacts>) -> Vec<SessionFacts> {
+        sess.extend(extra);
+        sess
+    }
+
+    fn now_of(d: &Diagnosis, id: &str) -> (Option<NowStatus>, Vec<&'static str>) {
+        let f = d.findings.iter().find(|f| f.id == id).unwrap_or_else(|| panic!("{id} not listed: {:?}", ids(d)));
+        (f.now, f.now_evidence.iter().map(|e| e.code).collect())
+    }
+
+    fn finding_of<'a>(d: &'a Diagnosis, id: &str) -> &'a Finding {
+        d.findings.iter().find(|f| f.id == id).unwrap_or_else(|| panic!("{id} not listed: {:?}", ids(d)))
+    }
+
+    // ---- the recovery rule -------------------------------------------------------------------------
+    #[test]
+    fn one_session_at_the_median_is_a_recovery() {
+        let d = run(with_extra(episode(), vec![on(10, 50.0, Some("2.0"))]));
+        assert_eq!(d.state, DiagnosisState::Recovered, "{:?}", d.state);
+        let r = d.recovery.as_ref().expect("recovery block");
+        assert_eq!(r.recovered_sessions.len(), 1);
+        assert!(r.at_or_above_median);
+        assert_eq!(r.sessions_since, 1);
+        assert!((r.before.ratio - 0.5).abs() < 1e-9 && (r.rough.ratio - 0.3).abs() < 1e-9 && (r.now.ratio - 0.5).abs() < 1e-9);
+        assert_eq!(r.rough_sessions.len(), 1);
+        // The episode itself is still described (what it was, what changed before it).
+        assert!(d.problem.is_some() && !d.findings.is_empty());
+    }
+
+    #[test]
+    fn two_consecutive_sessions_at_ninety_to_a_hundred_percent_of_the_median_are_a_recovery() {
+        let d = run(with_extra(episode(), vec![on(10, 46.0, Some("2.0")), on(11, 46.0, Some("2.0"))]));
+        assert_eq!(d.state, DiagnosisState::Recovered, "{:?}", d.state);
+        let r = d.recovery.as_ref().expect("recovery block");
+        assert_eq!(r.recovered_sessions.len(), 2);
+        assert!(!r.at_or_above_median);
+        // One such session is only "can't tell yet".
+        let one = run(with_extra(episode(), vec![on(10, 46.0, Some("2.0"))]));
+        assert_eq!(one.state, DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial: false } }, "{:?}", one.state);
+        assert!(one.recovery.is_none() && one.findings.iter().all(|f| f.now.is_none()), "no per-candidate verdict before a recovery");
+        // A dip between two good ones: the newest must qualify and the one before it too.
+        let gap = run(with_extra(episode(), vec![on(10, 46.0, Some("2.0")), on(11, 42.0, Some("2.0"))]));
+        assert!(matches!(gap.state, DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { .. } }), "{:?}", gap.state);
+    }
+
+    #[test]
+    fn the_ninety_percent_and_median_lines_hold_on_both_sides() {
+        assert_eq!(RECOVERY_R_FRACTION, 0.90);
+        assert_eq!(RECOVERY_SHOWN_FOR, 5);
+        let rec = |a: f64, b: Option<f64>| {
+            let mut v = vec![on(10, a, Some("2.0"))];
+            v.extend(b.map(|b| on(11, b, Some("2.0"))));
+            run(with_extra(episode(), v))
+        };
+        // 0.90 x 0.5 = 0.45: exactly on the line counts, just under does not.
+        assert_eq!(rec(45.0, Some(45.0)).state, DiagnosisState::Recovered);
+        assert!(matches!(rec(44.9, Some(44.9)).state, DiagnosisState::CantTell { .. }));
+        // The median: exactly at it is enough alone, just under needs a second.
+        assert_eq!(rec(50.0, None).state, DiagnosisState::Recovered);
+        assert!(matches!(rec(49.9, None).state, DiagnosisState::CantTell { .. }));
+    }
+
+    #[test]
+    fn a_partly_measured_session_is_never_a_recovery() {
+        // Too short to judge: the episode stands and says how many later sessions were not read.
+        let mut short = on(10, 50.0, Some("2.0"));
+        short.duration_secs = 100;
+        short.samples = 80;
+        let d = run(with_extra(episode(), vec![short]));
+        assert_eq!(d.state, DiagnosisState::Found, "{:?}", d.state);
+        assert_eq!(d.problem.as_ref().map(|p| p.later_unjudged), Some(1));
+        // Judged, but only 70% measured (under the baseline's 80%): in between, never recovered.
+        let mut thin = on(10, 50.0, Some("2.0"));
+        thin.samples = 420;
+        let d = run(with_extra(episode(), vec![thin]));
+        assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial: true } }, "{:?}", d.state);
+        // A good session followed by a session nobody could read: Compy cannot say.
+        let mut later = on(11, 50.0, Some("2.0"));
+        later.duration_secs = 100;
+        later.samples = 80;
+        let d = run(with_extra(episode(), vec![on(10, 50.0, Some("2.0")), later]));
+        assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial: true } }, "{:?}", d.state);
+    }
+
+    #[test]
+    fn a_frame_cap_change_is_never_a_recovery() {
+        // Uncapped baseline and rough session, then a capped session (a cap lifts the ratio): never "recovered".
+        let mut sess: Vec<SessionFacts> = episode();
+        for s in sess.iter_mut() {
+            s.cap = CapState::Uncapped;
+        }
+        let mut capped = on(10, 50.0, Some("2.0"));
+        capped.cap = CapState::Capped { at_fps: 60.0 };
+        sess.push(capped);
+        let d = run(sess);
+        assert!(!matches!(d.state, DiagnosisState::Recovered), "{:?}", d.state);
+        assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::FrameCapChanged });
+        // Even with three capped sessions on file (so the capped one IS judged against them), the rough
+        // episode was uncapped, so it still does not count.
+        let mut sess: Vec<SessionFacts> = Vec::new();
+        for d in 1..=3 {
+            let mut s = facts(&at_day(d, 9), 600, 600, 60.0, 30.0);
+            s.cap = CapState::Capped { at_fps: 60.0 };
+            sess.push(s);
+        }
+        for d in 4..=7 {
+            let mut s = on(d, 50.0, None);
+            s.cap = CapState::Uncapped;
+            sess.push(s);
+        }
+        let mut rough = on(9, 30.0, None);
+        rough.cap = CapState::Uncapped;
+        sess.push(rough);
+        let mut capped = facts(&at_day(10, 10), 600, 600, 60.0, 30.0);
+        capped.cap = CapState::Capped { at_fps: 60.0 };
+        sess.push(capped);
+        let d = run(sess);
+        assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial: true } }, "{:?}", d.state);
+    }
+
+    #[test]
+    fn rough_again_is_the_same_episode_continuing_and_the_card_can_count_it() {
+        let d = run(with_extra(episode(), vec![on(10, 30.0, Some("2.0"))]));
+        assert_eq!(d.state, DiagnosisState::Found);
+        assert_eq!(d.problem.as_ref().map(|p| p.sessions_affected.len()), Some(2));
+        assert!(d.recovery.is_none() && d.earlier_episode.is_none());
+    }
+
+    #[test]
+    fn a_rough_episode_after_a_recovery_is_a_new_episode() {
+        let sess = with_extra(episode(), vec![on(10, 50.0, Some("2.0")), on(11, 50.0, Some("2.0")), on(12, 30.0, Some("2.0"))]);
+        let d = run(sess);
+        // Nothing recorded changed before the second episode (the driver stayed on 2.0): it is measured, not explained.
+        assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::NothingChanged }, "{:?}", d.state);
+        assert_eq!(d.problem.as_ref().map(|p| p.sessions_affected.len()), Some(1), "the two episodes are not merged");
+        assert_eq!(d.earlier_episode, Some(EarlierEpisode { from: at_day(9, 10), to: at_day(9, 10) }));
+        // An earlier episode that never recovered (rough, then one in-between session) is not announced.
+        let d = run(with_extra(episode(), vec![on(10, 44.0, Some("2.0")), on(11, 30.0, Some("2.0"))]));
+        assert_eq!(d.earlier_episode, None);
+    }
+
+    #[test]
+    fn the_recovered_answer_lasts_five_sessions_then_it_is_just_normal() {
+        let run_n = |n: u32| run(with_extra(episode(), (10..10 + n).map(|d| on(d, 50.0, Some("2.0"))).collect()));
+        assert_eq!(run_n(5).state, DiagnosisState::Recovered);
+        assert!(matches!(run_n(6).state, DiagnosisState::NothingWrong { .. }), "{:?}", run_n(6).state);
+    }
+
+    // ---- what the recovery says about each candidate ------------------------------------------------
+    #[test]
+    fn recovered_on_the_same_driver_points_away_from_the_driver() {
+        let d = run(with_extra(episode(), vec![on(10, 50.0, Some("2.0"))]));
+        let (now, codes) = now_of(&d, "gpu-driver-change");
+        assert_eq!(now, Some(NowStatus::PointsAway));
+        assert_eq!(codes, ["recovered-same-driver"]);
+        let f = finding_of(&d, "gpu-driver-change");
+        assert!(f.now_evidence[0].against && f.now_evidence[0].args["version"] == "2.0");
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert!(!f.in_play, "contradicted, so no longer one of the changes in play");
+    }
+
+    #[test]
+    fn recovered_after_the_driver_changed_again_supports_it_and_may_reach_likely() {
+        // Stamp-only: the second independent support is the recovery itself.
+        let d = run(with_extra(episode(), vec![on(10, 50.0, Some("3.0"))]));
+        let (now, codes) = now_of(&d, "gpu-driver-change");
+        assert_eq!(now, Some(NowStatus::PointsTo));
+        assert_eq!(codes, ["recovered-after-driver-change"]);
+        let f = finding_of(&d, "gpu-driver-change");
+        assert_eq!(f.now_evidence[0].kind, EvidenceKind::SupportedInference);
+        assert_eq!(f.now_evidence[0].args["exact"], "false");
+        assert_eq!(f.now_evidence[0].args["back"], "false");
+        assert_eq!(f.confidence, Certainty::Likely);
+        // Changed BACK to the version it had before: the same support, said as "back".
+        let back = run(with_extra(episode(), vec![on(10, 50.0, Some("1.0"))]));
+        assert_eq!(finding_of(&back, "gpu-driver-change").now_evidence[0].args["back"], "true");
+        // It supports; it never proves: no certainty above Likely, and no "known" or "measured" band.
+        assert!(!matches!(f.confidence, Certainty::Known | Certainty::Measured));
+    }
+
+    #[test]
+    fn a_recovery_with_no_driver_stamp_cannot_promote_the_driver() {
+        let d = run(with_extra(episode(), vec![on(10, 50.0, None)]));
+        let (now, codes) = now_of(&d, "gpu-driver-change");
+        assert_eq!(now, Some(NowStatus::CantTell));
+        assert_eq!(codes, ["recovery-driver-unread"]);
+        assert_eq!(finding_of(&d, "gpu-driver-change").confidence, Certainty::Possible);
+    }
+
+    fn event(kind: ChangeKind, at: &str, what: ChangeWhat, source: Source) -> ChangeEvent {
+        ChangeEvent { kind, when: ChangeTime::exact(utc(at)), what, source }
+    }
+
+    fn gpu(at: &str, from: &str, to: &str) -> ChangeEvent {
+        let what = ChangeWhat {
+            name: Some("Display".into()),
+            from_version: Some(from.into()),
+            to_version: Some(to.into()),
+            version_changed: Some(true),
+            detail: Some("display driver, package oem1.inf".into()),
+            ..ChangeWhat::default()
+        };
+        event(ChangeKind::GpuDriver, at, what, Source::DriverLog)
+    }
+
+    fn update(at: &str, kb: &str) -> ChangeEvent {
+        let what = ChangeWhat { kb: Some(kb.into()), name: Some(format!("{kb} update")), detail: Some("quality".into()), ..ChangeWhat::default() };
+        event(ChangeKind::WindowsUpdate, at, what, Source::WindowsUpdateLog)
+    }
+
+    fn report(events: Vec<ChangeEvent>) -> ChangeReport {
+        ChangeReport {
+            window_start: utc("2026-10-04T10:00:00Z"),
+            window_end: utc("2026-10-10T10:10:00Z"),
+            asked: vec![Source::DriverLog, Source::WindowsUpdateLog, Source::UninstallKeys, Source::SteamManifest],
+            events_found: events,
+            unreadable: Vec::new(),
+            partial: Vec::new(),
+            coverage_gaps: Vec::new(),
+            notes: vec![(Source::UninstallKeys, Note::ProgramsWithoutDate(0)), (Source::SteamManifest, Note::SteamUpdateTimeIsFileChange)],
+            game_last_update: None,
+            undated_excluded: 0,
+        }
+    }
+
+    fn with_report(sess: Vec<SessionFacts>, events: Vec<ChangeEvent>) -> Diagnosis {
+        let mut inp = inputs(sess);
+        inp.changes = ChangeRead::Report { report: Box::new(report(events)), steam: GameSteam::Found };
+        diagnose(&inp, Complaint::Slow, Some("g"))
+    }
+
+    #[test]
+    fn windows_install_record_dates_the_second_driver_change() {
+        let d = with_report(
+            with_extra(episode(), vec![on(10, 50.0, Some("3.0"))]),
+            vec![gpu("2026-10-09T20:00:00Z", "2.0", "3.0")],
+        );
+        let f = finding_of(&d, "gpu-driver-change");
+        assert_eq!(f.now, Some(NowStatus::PointsTo));
+        let e = &f.now_evidence[0];
+        assert_eq!((e.args["exact"].as_str(), e.args["when"].as_str()), ("true", "2026-10-09T20:00:00Z"));
+        // The same stamps with a Windows record of ANOTHER version in between is not "same driver": it can't say.
+        let d = with_report(
+            with_extra(episode(), vec![on(10, 50.0, Some("2.0"))]),
+            vec![gpu("2026-10-09T20:00:00Z", "2.0", "3.0")],
+        );
+        assert_eq!(finding_of(&d, "gpu-driver-change").now, Some(NowStatus::CantTell));
+    }
+
+    /// Rough sessions where every one saw nine build-tool starts and no load number was recorded.
+    fn busy_episode() -> Vec<SessionFacts> {
+        let mut v: Vec<SessionFacts> = (1..=4).map(|d| on(d, 50.0, None)).collect();
+        let mut rough = on(9, 30.0, None);
+        rough.busy_starts = 9;
+        rough.busy_names = vec!["rustc".into()];
+        v.push(rough);
+        v
+    }
+
+    fn recovered_with(low1: f64, starts: u32, p90: Option<f64>) -> SessionFacts {
+        let mut s = on(10, low1, None);
+        s.busy_starts = starts;
+        s.other_cpu_p90_pct = p90;
+        s
+    }
+
+    #[test]
+    fn a_quiet_recovered_session_with_recorded_low_load_supports_background_programs_one_sidedly() {
+        let d = run(with_extra(busy_episode(), vec![recovered_with(50.0, 0, Some(3.0))]));
+        assert_eq!(d.state, DiagnosisState::Recovered);
+        let f = finding_of(&d, "background-load");
+        assert_eq!(f.now, Some(NowStatus::PointsTo));
+        let codes: Vec<&str> = f.now_evidence.iter().map(|e| e.code).collect();
+        // The rough sessions have no load numbers (true of the owner's 2026-11-19/20 sessions): said in the same breath.
+        assert_eq!(codes, ["recovered-quiet", "rough-load-not-recorded"]);
+        assert_eq!(f.now_evidence[0].args["pct"], "3.0");
+        assert_eq!(f.now_evidence[0].kind, EvidenceKind::SupportedInference);
+        // Starts in every rough session + a quiet recovered session may reach Likely.
+        assert_eq!(f.confidence, Certainty::Likely);
+        assert_eq!(d.recovery.as_ref().map(|r| r.summary.clone()), Some(RecoverySummary::PointsTo { id: "background-load" }));
+    }
+
+    #[test]
+    fn background_programs_are_not_promoted_without_a_recorded_quiet_session() {
+        // No load number on the recovered session: Compy can't tell.
+        let d = run(with_extra(busy_episode(), vec![recovered_with(50.0, 0, None)]));
+        let f = finding_of(&d, "background-load");
+        assert_eq!((f.now, f.confidence), (Some(NowStatus::CantTell), Certainty::Possible));
+        // A few starts (under the five that count as busy): not "nothing else was starting".
+        let d = run(with_extra(busy_episode(), vec![recovered_with(50.0, 2, Some(3.0))]));
+        let f = finding_of(&d, "background-load");
+        assert_eq!((f.now, f.confidence), (Some(NowStatus::CantTell), Certainty::Possible));
+        // Quiet, but only some of the rough sessions had starts: one support plus the recovery is not enough
+        // for the timing-only case either way, so it stays Possible when the starts were not on every one.
+        let mut v = busy_episode();
+        v.push(on(10, 30.0, None)); // a second rough session with no starts
+        let mut rec = recovered_with(50.0, 0, Some(3.0));
+        rec.started_at = at_day(11, 10);
+        v.push(rec);
+        let d = run(v);
+        let f = finding_of(&d, "background-load");
+        assert_eq!(f.now, Some(NowStatus::PointsTo));
+        assert_eq!(f.confidence, Certainty::Possible);
+    }
+
+    #[test]
+    fn recovered_with_programs_still_starting_or_a_busy_pc_points_away_from_background_programs() {
+        let d = run(with_extra(busy_episode(), vec![recovered_with(50.0, 9, Some(3.0))]));
+        let f = finding_of(&d, "background-load");
+        assert_eq!(f.now, Some(NowStatus::PointsAway));
+        assert!(f.now_evidence[0].against);
+        assert!(!f.in_play && f.confidence == Certainty::Possible);
+        // High recorded load, no starts: also against. 14.9 is quiet, 15.0 is not (the engine's own line).
+        let d = run(with_extra(busy_episode(), vec![recovered_with(50.0, 0, Some(15.0))]));
+        assert_eq!(finding_of(&d, "background-load").now, Some(NowStatus::PointsAway));
+        let d = run(with_extra(busy_episode(), vec![recovered_with(50.0, 0, Some(14.9))]));
+        assert_eq!(finding_of(&d, "background-load").now, Some(NowStatus::PointsTo));
+    }
+
+    #[test]
+    fn the_summary_names_one_supported_candidate_only_when_every_other_is_pointed_away() {
+        // Driver stays (points away), background quiet (points to): "points to" the background programs.
+        let mut v: Vec<SessionFacts> = (1..=4).map(|d| on(d, 50.0, Some("1.0"))).collect();
+        let mut rough = on(9, 30.0, Some("2.0"));
+        rough.busy_starts = 9;
+        v.push(rough);
+        let mut rec = on(10, 50.0, Some("2.0"));
+        rec.other_cpu_p90_pct = Some(3.0);
+        v.push(rec.clone());
+        let d = run(v.clone());
+        assert_eq!(now_of(&d, "gpu-driver-change").0, Some(NowStatus::PointsAway));
+        assert_eq!(d.recovery.as_ref().map(|r| r.summary.clone()), Some(RecoverySummary::PointsTo { id: "background-load" }));
+        // Driver changed AND quiet: two candidates stand, "still between".
+        v.pop();
+        rec.gpu_driver = Some("3.0".into());
+        v.push(rec);
+        let d = run(v);
+        match d.recovery.as_ref().map(|r| r.summary.clone()) {
+            Some(RecoverySummary::Between { ids }) => {
+                assert!(ids.contains(&"gpu-driver-change") && ids.contains(&"background-load"), "{ids:?}")
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn memory_in_the_recovered_session_is_compared_with_the_rough_ones() {
+        let gb = |g: f64| Some((g * 1e9) as u64);
+        let mk = |rec_peak: Option<u64>| {
+            let mut v: Vec<SessionFacts> = (1..=4)
+                .map(|d| {
+                    let mut s = on(d, 50.0, None);
+                    s.peak_ram_bytes = gb(20.0);
+                    s.ram_total_bytes = gb(33.7);
+                    s
+                })
+                .collect();
+            let mut rough = on(9, 30.0, None);
+            rough.peak_ram_bytes = gb(31.0);
+            rough.ram_total_bytes = gb(33.7);
+            v.push(rough);
+            let mut rec = on(10, 50.0, None);
+            rec.peak_ram_bytes = rec_peak;
+            rec.ram_total_bytes = rec_peak.map(|_| (33.7e9) as u64);
+            v.push(rec);
+            run(v)
+        };
+        let lower = mk(gb(20.0));
+        assert_eq!(now_of(&lower, "memory-pressure"), (Some(NowStatus::PointsTo), vec!["recovered-ram-lower"]));
+        // Memory is a size, not a timing: a support never lifts it above Possible.
+        assert_eq!(finding_of(&lower, "memory-pressure").confidence, Certainty::Possible);
+        let full = mk(gb(31.0));
+        assert_eq!(now_of(&full, "memory-pressure"), (Some(NowStatus::PointsAway), vec!["recovered-ram-full"]));
+        let unread = mk(None);
+        assert_eq!(now_of(&unread, "memory-pressure"), (Some(NowStatus::CantTell), vec!["recovery-ram-not-read"]));
+    }
+
+    #[test]
+    fn a_setting_notice_that_still_stands_points_away_and_an_unplaceable_one_cannot_tell() {
+        let drift = |at: &str| DriftFact { id: "applied-changes".into(), last_ready_at: None, noticed_at: at.into() };
+        let mk = |fact: DriftFact, unread: bool| {
+            let mut inp = inputs(with_extra(episode(), vec![on(10, 50.0, Some("2.0"))]));
+            inp.drift = vec![fact];
+            inp.drift_unread = unread;
+            diagnose(&inp, Complaint::Slow, Some("g"))
+        };
+        let d = mk(drift("2026-10-08T10:00:00Z"), false);
+        assert_eq!(now_of(&d, "setting-drift"), (Some(NowStatus::PointsAway), vec!["recovered-drift-still"]));
+        // A store that cannot be read: Compy says it cannot tell (the candidate is not even listed from an unread store).
+        let d = mk(drift("2026-10-08T10:00:00Z"), true);
+        assert!(d.findings.iter().all(|f| f.id != "setting-drift" || f.now == Some(NowStatus::CantTell)));
+    }
+
+    #[test]
+    fn a_compy_change_count_back_to_normal_supports_and_naming_one_that_changed_is_listed() {
+        let mut v: Vec<SessionFacts> = (1..=4).map(|d| on(d, 50.0, None)).collect();
+        for s in v.iter_mut() {
+            s.compy_changes = Some(3);
+        }
+        let mut rough = on(9, 30.0, None);
+        rough.compy_changes = Some(5);
+        v.push(rough);
+        let mut back = on(10, 50.0, None);
+        back.compy_changes = Some(3);
+        let mut w = v.clone();
+        w.push(back);
+        let d = run(w);
+        assert_eq!(now_of(&d, "compy-change"), (Some(NowStatus::PointsTo), vec!["recovered-compy-back"]));
+        // The user undid a Compy change between the two: named as one more thing that changed.
+        let r = d.recovery.as_ref().expect("recovery");
+        assert_eq!(r.also_changed.iter().map(|e| e.code).collect::<Vec<_>>(), ["compy-changes-differ"]);
+        assert_eq!(r.also_changed[0].args["from"], "5");
+        assert_eq!(r.also_changed[0].args["to"], "3");
+        // Still 5 changes on: points away.
+        let mut same = on(10, 50.0, None);
+        same.compy_changes = Some(5);
+        v.push(same);
+        let d = run(v);
+        assert_eq!(now_of(&d, "compy-change"), (Some(NowStatus::PointsAway), vec!["recovered-compy-same"]));
+        assert!(d.recovery.as_ref().is_some_and(|r| r.also_changed.is_empty()));
+    }
+
+    #[test]
+    fn windows_update_unchanged_cannot_be_the_whole_story_and_changed_again_is_only_noted() {
+        let base = || with_extra(episode(), vec![on(10, 50.0, Some("2.0"))]);
+        let before = update("2026-10-08T12:00:00Z", "KB5001234");
+        let d = with_report(base(), vec![before.clone()]);
+        let f = finding_of(&d, "windows-update");
+        assert_eq!(f.now, Some(NowStatus::PointsAway));
+        assert_eq!(f.now_evidence[0].code, "recovered-unchanged");
+        assert_eq!(f.now_evidence[0].args["what"], "windows-update");
+        // Another update between the rough sessions and the recovered one: noted, never a support.
+        let d = with_report(base(), vec![before, update("2026-10-09T20:00:00Z", "KB5009999")]);
+        let f = finding_of(&d, "windows-update");
+        assert_eq!(f.now, Some(NowStatus::CantTell));
+        assert_eq!(f.now_evidence[0].code, "recovered-changed-again");
+        assert_eq!(f.now_evidence[0].args["count"], "1");
+        // No Windows records at all: it says so.
+        let d = run(base());
+        assert!(d.findings.iter().all(|f| f.id != "windows-update"));
+    }
+
+    #[test]
+    fn a_windows_build_that_stays_points_away_and_one_that_changed_again_is_noted() {
+        let mk = |rec_build: &str| {
+            let mut v: Vec<SessionFacts> = (1..=4).map(|d| on(d, 50.0, None)).collect();
+            for s in v.iter_mut() {
+                s.windows_build = Some("100".into());
+            }
+            let mut rough = on(9, 30.0, None);
+            rough.windows_build = Some("101".into());
+            v.push(rough);
+            let mut rec = on(10, 50.0, None);
+            rec.windows_build = Some(rec_build.into());
+            v.push(rec);
+            run(v)
+        };
+        assert_eq!(now_of(&mk("101"), "windows-build-change"), (Some(NowStatus::PointsAway), vec!["recovered-build-same"]));
+        assert_eq!(now_of(&mk("102"), "windows-build-change"), (Some(NowStatus::CantTell), vec!["recovered-build-changed"]));
+    }
+
+    // ---- the owner's real sessions, with synthetic future sessions built here -----------------------
+    #[test]
+    fn the_owners_incident_then_a_quiet_normal_session_reads_as_a_one_sided_recovery() {
+        let full = fixture();
+        let d0 = diagnose(&full, Complaint::Unknown, Some(ROUGH_GAME));
+        assert_eq!(d0.state, DiagnosisState::Found, "{:?}", d0.state);
+        let med = d0.problem.as_ref().expect("problem").before.ratio;
+        let newest_rough = full
+            .sessions
+            .iter()
+            .filter(|s| same_game(&s.game, ROUGH_GAME))
+            .max_by_key(|s| s.start())
+            .expect("a session")
+            .clone();
+        let mut rec = newest_rough.clone();
+        rec.started_at = "2026-11-21T10:00:00Z".into();
+        rec.duration_secs = 3600;
+        rec.samples = 3600;
+        rec.background_secs = 0;
+        rec.avg_fps = 200.0;
+        rec.low1_fps = 200.0 * (med + 0.01);
+        rec.p99_ms = None;
+        rec.busy_starts = 0;
+        rec.busy_names = Vec::new();
+        rec.started_names = Vec::new();
+        rec.other_cpu_p90_pct = Some(3.0);
+        rec.peak_ram_bytes = Some(21_500_000_000);
+        rec.ram_events = 0;
+        let mut inp = full.clone();
+        inp.sessions.push(rec);
+        let d = diagnose(&inp, Complaint::Unknown, Some(ROUGH_GAME));
+        assert_eq!(d.state, DiagnosisState::Recovered, "{:?}", d.state);
+        // The recovered session ran on the same driver stamp as the rough ones: the driver alone doesn't explain it.
+        assert_eq!(finding_of(&d, "gpu-driver-change").now, Some(NowStatus::PointsAway));
+        // The rough sessions have no load numbers: the quiet support says so in the same breath.
+        let bg = finding_of(&d, "background-load");
+        assert_eq!(bg.now, Some(NowStatus::PointsTo));
+        assert!(bg.now_evidence.iter().any(|e| e.code == "rough-load-not-recorded"));
+        // Never "known" or "measured": a recovery supports, it does not prove.
+        assert!(d.findings.iter().all(|f| !matches!(f.confidence, Certainty::Known | Certainty::Measured)));
+    }
+
+    // ---- the wire shape, the single flight, the Steam bound ----------------------------------------
+    #[test]
+    fn the_recovered_wire_shape_is_what_the_card_reads() {
+        let d = run(with_extra(episode(), vec![on(10, 50.0, Some("3.0"))]));
+        let v = serde_json::to_value(&d).expect("serialises");
+        assert_eq!(v["state"]["kind"], "recovered");
+        assert_eq!(v["recovery"]["summary"]["kind"], "points-to");
+        assert_eq!(v["recovery"]["recovered_sessions"].as_array().map(Vec::len), Some(1));
+        let f = v["findings"].as_array().and_then(|a| a.iter().find(|f| f["id"] == "gpu-driver-change")).expect("driver");
+        assert_eq!(f["now"], "points-to");
+        assert_eq!(f["now_evidence"][0]["kind"], "supported-inference");
+        let unclear = serde_json::to_value(run(with_extra(episode(), vec![on(10, 46.0, Some("2.0"))]))).expect("serialises");
+        assert_eq!(unclear["state"]["why"]["kind"], "recovery-unclear");
+        assert_eq!(unclear["state"]["why"]["partial"], false);
+    }
+
+    #[test]
+    fn a_second_diagnosis_while_one_is_running_gets_busy_not_a_second_set_of_readers() {
+        let first = FlightGuard::begin().expect("the first call starts");
+        assert!(FlightGuard::begin().is_none(), "a second call while one is in flight is refused");
+        assert_eq!(BUSY, "paramedic-busy");
+        drop(first);
+        let again = FlightGuard::begin();
+        assert!(again.is_some(), "the slot is free once the first call is done");
+    }
+
+    #[test]
+    fn a_steam_lookup_on_a_drive_that_never_answers_gives_up_instead_of_hanging() {
+        use crate::change_sources::{run_bounded, SteamLookup, STEAM_DIR_ENTRY_CAP, STEAM_HARD_MARGIN};
+        assert_eq!(STEAM_DIR_ENTRY_CAP, 5000);
+        assert_eq!(STEAM_HARD_MARGIN, std::time::Duration::from_millis(250));
+        let t = std::time::Instant::now();
+        let got = run_bounded(std::time::Duration::from_millis(100), || {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            SteamLookup::NotInSteam
+        });
+        assert_eq!(got, SteamLookup::NotInSteam);
+        assert!(t.elapsed() < std::time::Duration::from_secs(2), "took {:?}", t.elapsed());
+        // A lookup that answers in time is returned as it is.
+        let quick = run_bounded(std::time::Duration::from_millis(500), || SteamLookup::Unreadable(crate::change_sources::UnreadableReason::SteamUnreadable));
+        assert!(matches!(quick, SteamLookup::Unreadable(_)));
+    }
+}
