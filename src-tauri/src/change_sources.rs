@@ -1485,6 +1485,12 @@ pub(crate) const STEAM_HARD_MARGIN: Duration = Duration::from_millis(250);
 
 /// Runs the lookup on its own thread and waits at most `budget` plus `STEAM_HARD_MARGIN`. A drive that
 /// never answers leaves the thread behind and the answer is "couldn't match", never a hang.
+///
+/// Thread bound: the thread is named "paramedic-steam", does read-only directory work only and is never
+/// joined. A drive that is unreachable (or asleep) can block it inside the operating system past every
+/// deadline the loop checks, so ONE parked thread can remain per such lookup until the OS call returns; it
+/// then sends into a dropped channel and ends. Nothing it holds is shared with the caller, and a lookup is
+/// made at most once per diagnosis, so the leak is bounded and cannot grow while the card is idle.
 pub(crate) fn run_bounded<F>(budget: Duration, f: F) -> SteamLookup
 where
     F: FnOnce() -> SteamLookup + Send + 'static,
@@ -1500,6 +1506,13 @@ where
 }
 
 fn find_game_in_roots(roots: &[String], vdf_unreadable: bool, exe: &str, budget: Duration) -> SteamLookup {
+    find_game_in_roots_capped(roots, vdf_unreadable, exe, budget, STEAM_DIR_ENTRY_CAP)
+}
+
+/// `entry_cap` entries are read from each library's `steamapps` folder. A folder with more entries than
+/// that is NOT silently cut short: the library counts as only partly read, so the answer is "couldn't
+/// match" (even if one match was seen: a second one past the cap could not be ruled out).
+fn find_game_in_roots_capped(roots: &[String], vdf_unreadable: bool, exe: &str, budget: Duration, entry_cap: usize) -> SteamLookup {
     let key = exe_stem_key(exe);
     if key.len() < 3 {
         return SteamLookup::NotInSteam;
@@ -1508,6 +1521,7 @@ fn find_game_in_roots(roots: &[String], vdf_unreadable: bool, exe: &str, budget:
     let mut libs_unreadable = usize::from(vdf_unreadable);
     let mut records_unparsed = 0usize;
     let mut timed_out = false;
+    let mut capped_any = false;
     let mut hits: Vec<GameRef> = Vec::new();
     for root in roots {
         let steamapps = std::path::Path::new(root).join("steamapps");
@@ -1515,7 +1529,13 @@ fn find_game_in_roots(roots: &[String], vdf_unreadable: bool, exe: &str, budget:
             libs_unreadable += 1;
             continue;
         };
-        timed_out |= collect_until(entries.flatten().take(STEAM_DIR_ENTRY_CAP).filter(is_manifest_name), deadline, |e| {
+        let (mut seen, mut capped) = (0usize, false);
+        let walk = entries.flatten().take_while(|_| {
+            seen += 1;
+            capped = seen > entry_cap;
+            !capped
+        });
+        timed_out |= collect_until(walk.filter(is_manifest_name), deadline, |e| {
             match read_manifest(&e.path()) {
                 ManifestRead::Parsed(info) => {
                     if let Some(folder) = info.install_dir.as_deref().filter(|f| folder_may_hold(&key, f)) {
@@ -1533,6 +1553,10 @@ fn find_game_in_roots(roots: &[String], vdf_unreadable: bool, exe: &str, budget:
                 ManifestRead::Missing => {}
             }
         });
+        if capped {
+            libs_unreadable += 1;
+            capped_any = true;
+        }
         if timed_out {
             break;
         }
@@ -1540,7 +1564,7 @@ fn find_game_in_roots(roots: &[String], vdf_unreadable: bool, exe: &str, budget:
     // Two folders holding the same program name (two libraries, or "Game.exe" in two games) is never
     // guessed at: Compy says it could not match the game.
     match hits.len() {
-        1 => return SteamLookup::Found(hits.remove(0)),
+        1 if !capped_any => return SteamLookup::Found(hits.remove(0)),
         n if n > 1 => return SteamLookup::NotInSteam,
         _ => {}
     }
@@ -2673,6 +2697,29 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
+    #[test]
+    fn a_steamapps_folder_past_the_entry_cap_is_a_partial_read_never_a_silent_cut() {
+        let root = fake_library("cap");
+        let roots = vec![root.to_string_lossy().into_owned()];
+        // The folder holds exactly four entries (common, three manifests... two here plus the folder): a cap at
+        // or above the count reads everything and finds the game.
+        let total = std::fs::read_dir(root.join("steamapps")).unwrap().count();
+        assert!(matches!(
+            find_game_in_roots_capped(&roots, false, "LaneSplit-Win64-Shipping.exe", Duration::from_secs(5), total),
+            SteamLookup::Found(_)
+        ));
+        // One entry short of the count: not everything was looked at, so it is "couldn't match", never a
+        // Found (a second match past the cap could not be ruled out) and never a plain "not in Steam".
+        assert_eq!(
+            find_game_in_roots_capped(&roots, false, "LaneSplit-Win64-Shipping.exe", Duration::from_secs(5), total - 1),
+            SteamLookup::Unreadable(UnreadableReason::SteamPartiallyUnreadable { libraries: 1, records: 0 })
+        );
+        assert_eq!(
+            find_game_in_roots_capped(&roots, false, "Nope-Win64-Shipping.exe", Duration::from_secs(5), 1),
+            SteamLookup::Unreadable(UnreadableReason::SteamPartiallyUnreadable { libraries: 1, records: 0 })
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
     #[test]
     fn a_library_that_cannot_be_read_is_never_not_in_steam() {
         let root = fake_library("gone");

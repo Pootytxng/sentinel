@@ -7,8 +7,9 @@
 //! the newest rough one both run clear: judged Normal, neither rule firing, at least `BASELINE_COVERAGE` of
 //! the session measured, the same frame cap as the rough sessions, at least `RECOVERY_MIN_SECS` long, a 1%
 //! low no worse than the baseline's worst, and a smoothness ratio >= `RECOVERY_R_FRACTION` x the episode's
-//! baseline median. One clear session is only "can't tell yet". Once two such sessions exist the answer does
-//! not flip back because a later session ran a little lower; only a rule firing reopens it (as a new episode).
+//! baseline median. One clear session is only "can't tell yet". The pair is always the two NEWEST judged
+//! sessions: a later session that ran a little lower makes it "can't tell yet" again, and only a rule firing
+//! reopens the episode (as a new one).
 //!
 //! A recovery is one-sided evidence: it never adds a path to Likely (`Cand::independent` ignores it), and
 //! any recorded change between the last rough session's end and the first recovered session's start, or a
@@ -128,10 +129,11 @@ fn outcome_within(sess: &[&SessionFacts], judged: &[Judgement], f: usize, end: u
     if newest + 1 < end {
         return Some(Outcome::Unclear { partial: true, one_clear: false, cap_changed: false });
     }
-    // Two clear sessions in a row, the latest such pair: a later session that ran a little lower does not
-    // undo it (only a rule firing does, and that is a new episode).
-    if let Some(k) = (1..post.len()).rev().find(|&k| clear(post[k - 1]) && clear(post[k])) {
-        return Some(Outcome::Recovered { idx: vec![post[k - 1], post[k]] });
+    // The TWO NEWEST judged sessions both clear. The pair is never an older one: the card says "the last two
+    // sessions ran the way it usually does", and that has to be true of the last two. A newer session that
+    // ran a little lower is "can't tell yet" (never a new rough episode: only a rule firing opens one).
+    if post.len() >= 2 && clear(post[post.len() - 2]) && clear(post[post.len() - 1]) {
+        return Some(Outcome::Recovered { idx: vec![post[post.len() - 2], post[post.len() - 1]] });
     }
     let cap_changed = !sess[newest].cap.same_as(rough_cap);
     let thin = judged[newest].verdict != Verdict::Normal || sess[newest].coverage() < BASELINE_COVERAGE;
@@ -165,10 +167,12 @@ fn gap_bounds(c: &Ctx, rec: &[&SessionFacts]) -> (DateTime<Utc>, DateTime<Utc>) 
 }
 
 /// When a dated record falls in `(lo, hi]` (a day-precision record: any part of its day does).
-fn overlaps(e: &ChangeEvent, lo: DateTime<Utc>, hi: DateTime<Utc>) -> Option<DateTime<Utc>> {
+fn overlaps(e: &ChangeEvent, lo: DateTime<Utc>, hi: DateTime<Utc>) -> Option<(DateTime<Utc>, bool)> {
     match (e.when.precision, e.when.at, e.when.until) {
-        (Precision::Exact, Some(a), _) => (a > lo && a <= hi).then_some(a),
-        (Precision::Day, Some(a), Some(b)) => (a <= hi && b > lo).then_some(a),
+        (Precision::Exact, Some(a), _) => (a > lo && a <= hi).then_some((a, true)),
+        // A day-precision record falls in the stretch only partly when the day began before it or ended after
+        // it: the second value says the WHOLE day lies inside, i.e. the record really is "between".
+        (Precision::Day, Some(a), Some(b)) => (a <= hi && b > lo).then_some((a, a > lo && b <= hi)),
         _ => None,
     }
 }
@@ -176,7 +180,9 @@ fn overlaps(e: &ChangeEvent, lo: DateTime<Utc>, hi: DateTime<Utc>) -> Option<Dat
 pub(super) struct Gap {
     /// One line per recorded change in the stretch, oldest first.
     lines: Vec<Evidence>,
-    /// The candidate id each change belongs to (for "Still between").
+    /// The candidate id each line belongs to, aligned with `lines`.
+    line_ids: Vec<&'static str>,
+    /// The candidate ids (for "Still between"), each once.
     ids: Vec<&'static str>,
     /// Every Windows record that could name a change there was read completely.
     complete: bool,
@@ -187,6 +193,12 @@ impl Gap {
     /// name one change as the reason.
     fn unclean(&self) -> bool {
         !self.lines.is_empty() || !self.complete
+    }
+
+    /// The same, not counting the change that a "points to it" row already names (that change is the very
+    /// thing the row is about, not an unexplained extra).
+    fn unclean_except(&self, id: &str) -> bool {
+        !self.complete || self.line_ids.iter().any(|i| *i != id)
     }
 }
 
@@ -199,49 +211,57 @@ fn gap_of(c: &Ctx, rec: &[&SessionFacts]) -> Gap {
     if let Some(r) = changes::report(c) {
         let kinds = [ChangeKind::GpuDriver, ChangeKind::OtherDriver, ChangeKind::WindowsUpdate, ChangeKind::GameUpdate, ChangeKind::ProgramInstalled];
         complete = kinds.iter().all(|k| changes::is_complete(r, *k));
-        let gap_event = |kind: &'static str, e: &ChangeEvent, at: DateTime<Utc>, detail: String| {
+        let gap_event = |kind: &'static str, e: &ChangeEvent, at: DateTime<Utc>, whole: bool, detail: String| {
             ev(
                 EvidenceKind::Known,
                 "gap-change",
                 "windows",
                 false,
-                &[("kind", kind.to_string()), ("when", iso(at)), ("day", (e.when.precision == Precision::Day).to_string()), ("detail", detail)],
+                &[
+                    ("kind", kind.to_string()),
+                    ("when", iso(at)),
+                    ("day", (e.when.precision == Precision::Day).to_string()),
+                    // A day record that only partly lies in the stretch is not "between": its time of day is unknown.
+                    ("placed", whole.to_string()),
+                    ("detail", detail),
+                ],
             )
         };
         let mut gpu_or_other = false;
         for e in changes::kind_events(r, ChangeKind::GpuDriver).filter(|e| e.what.version_changed == Some(true)) {
-            if let Some(at) = overlaps(e, lo, hi) {
+            if let Some((at, whole)) = overlaps(e, lo, hi) {
                 gpu_or_other = true;
-                dated.push((at, gap_event("gpu-driver", e, at, e.what.to_version.clone().unwrap_or_default()), "gpu-driver-change"));
+                dated.push((at, gap_event("gpu-driver", e, at, whole, e.what.to_version.clone().unwrap_or_default()), "gpu-driver-change"));
             }
         }
         for e in changes::kind_events(r, ChangeKind::OtherDriver) {
-            if let Some(at) = overlaps(e, lo, hi) {
+            if let Some((at, whole)) = overlaps(e, lo, hi) {
                 gpu_or_other = true;
-                dated.push((at, gap_event("other-driver", e, at, String::new()), "other-driver-change"));
+                dated.push((at, gap_event("other-driver", e, at, whole, String::new()), "other-driver-change"));
             }
         }
         for e in changes::kind_events(r, ChangeKind::WindowsUpdate) {
             let class = changes::class_of(e);
             // A driver delivered by Windows Update is already listed as the driver install.
             let counts = matches!(class.as_str(), "quality" | "feature") || (class == "driver" && !gpu_or_other);
-            if let (true, Some(at)) = (counts, overlaps(e, lo, hi)) {
-                dated.push((at, gap_event("windows-update", e, at, e.what.kb.clone().unwrap_or_default()), "windows-update"));
+            if let (true, Some((at, whole))) = (counts, overlaps(e, lo, hi)) {
+                dated.push((at, gap_event("windows-update", e, at, whole, e.what.kb.clone().unwrap_or_default()), "windows-update"));
             }
         }
         for e in changes::kind_events(r, ChangeKind::GameUpdate) {
-            if let Some(at) = overlaps(e, lo, hi) {
-                dated.push((at, gap_event("game-files", e, at, String::new()), "game-files-change"));
+            if let Some((at, whole)) = overlaps(e, lo, hi) {
+                dated.push((at, gap_event("game-files", e, at, whole, String::new()), "game-files-change"));
             }
         }
         for e in changes::kind_events(r, ChangeKind::ProgramInstalled).filter(|e| e.what.name.is_some()) {
-            if let Some(at) = overlaps(e, lo, hi) {
-                dated.push((at, gap_event("program", e, at, e.what.name.clone().unwrap_or_default()), "program-installed"));
+            if let Some((at, whole)) = overlaps(e, lo, hi) {
+                dated.push((at, gap_event("program", e, at, whole, e.what.name.clone().unwrap_or_default()), "program-installed"));
             }
         }
     }
     dated.sort_by_key(|(at, _, _)| *at);
     let mut lines: Vec<Evidence> = dated.iter().map(|(_, e, _)| e.clone()).collect();
+    let mut line_ids: Vec<&'static str> = dated.iter().map(|(_, _, id)| *id).collect();
     let mut ids: Vec<&'static str> = Vec::new();
     for (_, _, id) in &dated {
         if !ids.contains(id) {
@@ -253,17 +273,19 @@ fn gap_of(c: &Ctx, rec: &[&SessionFacts]) -> Gap {
         if let (Some(a), Some(b)) = (a, b) {
             if a != b {
                 lines.push(ev(EvidenceKind::Measured, "gap-build", "sessions", false, &[("from", a.to_string()), ("to", b.to_string())]));
+                line_ids.push("windows-build-change");
                 ids.push("windows-build-change");
             }
         }
         if let (Some(a), Some(b)) = (rough_last.compy_changes, rf.compy_changes) {
             if a != b {
                 lines.push(ev(EvidenceKind::Known, "compy-changes-differ", "sessions", false, &[("from", a.to_string()), ("to", b.to_string())]));
+                line_ids.push("compy-change");
                 ids.push("compy-change");
             }
         }
     }
-    Gap { lines, ids, complete }
+    Gap { lines, line_ids, ids, complete }
 }
 
 /// A change to the game's files in the stretch is a candidate in its own right. Windows-style Steam records
@@ -275,7 +297,7 @@ pub(super) fn gap_candidates(c: &Ctx, rec: &[&SessionFacts], cands: &mut Vec<Can
     }
     let Some(r) = changes::report(c) else { return };
     let (lo, hi) = gap_bounds(c, rec);
-    let Some(at) = changes::kind_events(r, ChangeKind::GameUpdate).filter_map(|e| overlaps(e, lo, hi)).max() else { return };
+    let Some(at) = changes::kind_events(r, ChangeKind::GameUpdate).filter_map(|e| overlaps(e, lo, hi)).map(|(at, _)| at).max() else { return };
     cands.push(Cand {
         id: "game-files-change",
         t: true,
@@ -344,11 +366,19 @@ pub(super) fn apply<'x>(c: &'x Ctx<'x>, rec: &'x [&'x SessionFacts], cands: &mut
 
 fn driver(rc: &Rc, cand: &Cand) -> (NowStatus, Vec<Evidence>) {
     let rough = nonblank(&rc.rough_last.gpu_driver);
-    let now = rc.rec.last().and_then(|s| nonblank(&s.gpu_driver));
-    let (Some(rough), Some(now)) = (rough, now) else { return (NowStatus::CantTell, unread("recovery-driver-unread")) };
+    let stamps: Vec<Option<&str>> = rc.rec.iter().map(|s| nonblank(&s.gpu_driver)).collect();
+    let Some(rough) = rough else { return (NowStatus::CantTell, unread("recovery-driver-unread")) };
+    if stamps.is_empty() || stamps.iter().any(Option::is_none) {
+        return (NowStatus::CantTell, unread("recovery-driver-unread"));
+    }
+    let stamps: Vec<&str> = stamps.into_iter().flatten().collect();
+    // A recovered session that was already clear on the rough sessions' driver weakens the driver, whatever
+    // the other one ran on: "points to it" needs EVERY recovered session to be on a different driver.
+    let same = stamps.iter().copied().find(|d| !crate::hardware::driver_changed(rough, d));
+    let now = same.unwrap_or(stamps[stamps.len() - 1]);
     let installs = changes::gpu_installs(rc.c);
     let in_gap = |at: DateTime<Utc>| at > rc.rough_end && at <= rc.rec_start;
-    if !crate::hardware::driver_changed(rough, now) {
+    if same.is_some() {
         // The stamps agree, but Windows dated an install of another version between the two.
         if let Some((_, at, _)) = installs.iter().rev().find(|(e, at, _)| {
             in_gap(*at) && e.what.to_version.as_deref().is_some_and(|v| crate::hardware::driver_changed(rough, v))
@@ -426,17 +456,23 @@ fn background(rc: &Rc) -> (NowStatus, Vec<Evidence>) {
     }
     match max_p {
         Some(p) if p90s.len() == rc.rec.len() => {
-            let mut e = vec![ev(EvidenceKind::SupportedInference, "recovered-quiet", "sessions", false, &[("pct", pct1(p))])];
+            // What was seen is a measurement. It is a supporting inference ("consistent with") ONLY on the path
+            // that points to background programs: a rough session that was busy and recovered ones that were
+            // quiet. Anywhere else it is a plain measurement in neutral words, with no "supports" chip.
+            let seen = || ev(EvidenceKind::Measured, "recovered-quiet-seen", "sessions", false, &[("pct", pct1(p))]);
             let rough = &rc.c.affected;
             if rough.iter().any(|s| s.other_cpu_p90_pct.is_none()) {
                 // One-sided: no load numbers for a rough session. Said in the same breath; never "points to".
-                e.push(ev(EvidenceKind::Unknown, "rough-load-not-recorded", "sessions", false, &[]));
-                return (NowStatus::CantTell, e);
+                return (NowStatus::CantTell, vec![seen(), ev(EvidenceKind::Unknown, "rough-load-not-recorded", "sessions", false, &[])]);
             }
             let rough_busy = rough
                 .iter()
                 .any(|s| s.busy_starts >= BUSY_START_MIN || s.other_cpu_p90_pct.is_some_and(|p| p >= OTHER_CPU_P90_PCT));
-            (if rough_busy { NowStatus::PointsTo } else { NowStatus::CantTell }, e)
+            if rough_busy {
+                (NowStatus::PointsTo, vec![ev(EvidenceKind::SupportedInference, "recovered-quiet", "sessions", false, &[("pct", pct1(p))])])
+            } else {
+                (NowStatus::CantTell, vec![seen()])
+            }
         }
         _ => (NowStatus::CantTell, unread("recovery-load-not-recorded")),
     }
@@ -507,22 +543,24 @@ fn drift(rc: &Rc, cand: &Cand) -> (NowStatus, Vec<Evidence>) {
 /// Compy's own changes. The count counts as "back" only when it equals the count at the baseline's newest
 /// session (a count is not the identity of a change, so the wording says only that the number went back).
 fn compy(rc: &Rc) -> (NowStatus, Vec<Evidence>) {
-    let now = rc.rec.iter().filter_map(|s| s.compy_changes).next_back();
+    let counts: Vec<Option<usize>> = rc.rec.iter().map(|s| s.compy_changes).collect();
     let rough: Vec<usize> = rc.c.affected.iter().filter_map(|s| s.compy_changes).collect();
-    let (Some(now), Some(before)) = (now, rc.c.baseline_newest.compy_changes) else {
-        return (NowStatus::CantTell, unread("recovery-compy-unread"));
-    };
-    if rough.is_empty() {
+    let Some(before) = rc.c.baseline_newest.compy_changes else { return (NowStatus::CantTell, unread("recovery-compy-unread")) };
+    if rough.is_empty() || counts.is_empty() || counts.iter().any(Option::is_none) {
         return (NowStatus::CantTell, unread("recovery-compy-unread"));
     }
+    let counts: Vec<usize> = counts.into_iter().flatten().collect();
+    let now = counts[counts.len() - 1];
     let from = rough[rough.len() - 1].to_string();
-    if rough.contains(&now) {
+    // A recovered session that ran with the same number of changes as a rough one weakens it, whatever the
+    // other one had: "back" needs EVERY recovered session to differ from the rough count and equal the baseline's.
+    if let Some(same) = counts.iter().copied().find(|c| rough.contains(c)) {
         return (
             NowStatus::PointsAway,
-            vec![ev(EvidenceKind::Measured, "recovered-compy-same", "sessions", true, &[("count", now.to_string())])],
+            vec![ev(EvidenceKind::Measured, "recovered-compy-same", "sessions", true, &[("count", same.to_string())])],
         );
     }
-    if now == before {
+    if counts.iter().all(|c| *c == before) {
         return (
             NowStatus::PointsTo,
             vec![ev(EvidenceKind::SupportedInference, "recovered-compy-back", "sessions", false, &[("from", from), ("to", now.to_string())])],
@@ -552,10 +590,11 @@ fn build(rc: &Rc) -> (NowStatus, Vec<Evidence>) {
 fn dated(rc: &Rc, what: &'static str, kind: ChangeKind) -> (NowStatus, Vec<Evidence>) {
     let unread_records = || vec![ev(EvidenceKind::Unknown, "recovery-records-unread", "windows", false, &[("what", what.to_string())])];
     let Some(r) = changes::report(rc.c) else { return (NowStatus::CantTell, unread_records()) };
-    let hits: Vec<DateTime<Utc>> = changes::kind_events(r, kind)
+    let all: Vec<(DateTime<Utc>, bool)> = changes::kind_events(r, kind)
         .filter(|e| kind != ChangeKind::WindowsUpdate || matches!(changes::class_of(e).as_str(), "quality" | "feature" | "driver"))
         .filter_map(|e| overlaps(e, rc.rough_end, rc.rec_start))
         .collect();
+    let hits: Vec<DateTime<Utc>> = all.iter().filter(|h| h.1).map(|h| h.0).collect();
     if let Some(first) = hits.iter().copied().min() {
         return (
             NowStatus::CantTell,
@@ -567,6 +606,22 @@ fn dated(rc: &Rc, what: &'static str, kind: ChangeKind) -> (NowStatus, Vec<Evide
                 &[("what", what.to_string()), ("count", hits.len().to_string()), ("when", iso(first))],
             )],
         );
+    }
+    // A day-precision record that only partly lies in the stretch: Compy cannot say it came after the rough
+    // sessions, so it is not "between", and it is not "no further change" either.
+    if let Some(day) = all.iter().map(|h| h.0).min() {
+        return (
+            NowStatus::CantTell,
+            vec![ev(EvidenceKind::Unknown, "recovery-day-unplaced", "windows", false, &[("what", what.to_string()), ("when", iso(day))])],
+        );
+    }
+    // Steam keeps only the NEWEST update time of a game. A newest time after the stretch can hide an earlier
+    // change inside it, so "no further change" can be said only when the newest time is not after it.
+    if kind == ChangeKind::GameUpdate {
+        let newest = changes::kind_events(r, kind).filter_map(|e| e.when.until.or(e.when.at)).max();
+        if newest.is_some_and(|t| t > rc.rec_start) {
+            return (NowStatus::CantTell, vec![ev(EvidenceKind::Unknown, "recovered-steam-latest-only", "steam", false, &[])]);
+        }
     }
     if changes::is_complete(r, kind) {
         return (
@@ -585,7 +640,9 @@ fn dated(rc: &Rc, what: &'static str, kind: ChangeKind) -> (NowStatus, Vec<Evide
 fn summary(findings: &[Finding], gap: &Gap) -> RecoverySummary {
     let live: Vec<&Finding> = findings.iter().filter(|f| f.now != Some(NowStatus::PointsAway)).collect();
     let supported = live.iter().filter(|f| f.now == Some(NowStatus::PointsTo)).count();
-    if !gap.unclean() && live.len() == 1 && supported == 1 {
+    // The change the one standing row names is not an unexplained extra: only other changes (or unread
+    // records) in the stretch stop it from being named.
+    if live.len() == 1 && supported == 1 && !gap.unclean_except(live[0].id) {
         return RecoverySummary::PointsTo { id: live[0].id };
     }
     let mut ids: Vec<&'static str> = live.iter().map(|f| f.id).collect();
@@ -598,6 +655,18 @@ fn summary(findings: &[Finding], gap: &Gap) -> RecoverySummary {
         RecoverySummary::Between { ids }
     } else {
         RecoverySummary::None
+    }
+}
+
+/// A row reads "points to it" only when nothing else changed in the stretch between the rough sessions and
+/// the normal ones (not counting the change the row itself names) and Windows' records for it were read
+/// completely. Otherwise the row reads "still can't tell"; its evidence lines stay as they are.
+pub(super) fn settle(c: &Ctx, rec: &[&SessionFacts], findings: &mut [Finding]) {
+    let gap = gap_of(c, rec);
+    for f in findings.iter_mut() {
+        if f.now == Some(NowStatus::PointsTo) && gap.unclean_except(f.id) {
+            f.now = Some(NowStatus::CantTell);
+        }
     }
 }
 

@@ -10,7 +10,6 @@
     "stillChecking": "Compy 仍在检查，请稍后再试。"
   },
   "problem": {
-    "title": "{{game}} 最近明显比平时卡顿",
     "badge": "已测得",
     "body_one": "正常情况下，{{game}} 掉帧时仍能保持约 {{beforePct}}% 的平均帧率。在你最近一次游戏中，掉帧时降到了约 {{nowPct}}%。",
     "body_other": "正常情况下，{{game}} 掉帧时仍能保持约 {{beforePct}}% 的平均帧率。在你最近 {{count}} 次游戏中，掉帧时降到了约 {{nowPct}}%。",
@@ -23,7 +22,12 @@
     "sinceLasted_other": "它上一次正常运行是在 {{date}}。到目前为止，卡顿已持续 {{count}} 次游戏。",
     "earlier": "它在 {{from}}–{{to}} 期间也曾卡顿，后来恢复了。",
     "sinceLastedFull_one": "它最近一次完整测量且表现正常的运行在 {{date}}。这段不顺的时期目前已持续 {{count}} 次游戏。",
-    "sinceLastedFull_other": "它最近一次完整测量且表现正常的运行在 {{date}}。这段不顺的时期目前已持续 {{count}} 次游戏。"
+    "sinceLastedFull_other": "它最近一次完整测量且表现正常的运行在 {{date}}。这段不顺的时期目前已持续 {{count}} 次游戏。",
+    "title_one": "{{game}} 最近一次运行比平时卡顿得多",
+    "title_other": "{{game}} 最近明显比平时卡顿",
+    "oneSession": "只有一次运行的数据，参考价值有限。如果下一次运行正常，这次可能只是偶然。",
+    "mixed_one": "有 1 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对它做判断。",
+    "mixed_other": "有 {{count}} 次运行（{{dates}}）可能包含两款游戏，所以 Compy 没有对它们做判断。"
   },
   "answer": {
     "likely": "最有可能",
@@ -94,8 +98,6 @@
     "sessionsSplit_other": "{{game}} 最后一次正常运行（{{date}}）用的是旧驱动；之后 {{count}} 次卡顿的游戏都用的是新驱动。",
     "crossGame": "{{games}} 在更新之后也明显变卡，而在此之前从未这样。",
     "installTimeNotRead": "Compy 没有读取确切的安装时间；它在 {{when}} 看到了新版本。",
-    "roughOnOldDriver": "有 {{count}} 次卡顿的游戏仍在用旧驱动。",
-    "loadMeasured": "在 {{count}} 次卡顿的游戏中，游戏以外的程序占用了大量处理器。",
     "loadNotRecorded": "Compy 看不到游戏开始前就已在运行的程序，也没有记录这几次游戏时电脑其余部分有多忙。",
     "ramPeak": "在一次卡顿的游戏中，内存最高用到 {{peakGb}} GB（共 {{totalGb}} GB）。",
     "ramBaseline": "你正常游戏时内存最高用到 {{peakGb}} GB。",
@@ -109,7 +111,6 @@
     "valueChanged": "它从 {{from}} 变成了 {{to}}。",
     "hardwareChanged": "Compy 记录的显卡或内存不一样了。",
     "powerPlanChanged": "两次游戏记录的电源计划不一样。",
-    "loadQuiet": "在 {{count}} 次卡顿的游戏中，游戏以外的程序很安静。",
     "normalOnNewDriver_one": "有 {{count}} 次游戏在新驱动下运行正常（{{date}}）。",
     "normalOnNewDriver_other": "有 {{count}} 次游戏在新驱动下运行正常（最近一次在 {{date}}）。",
     "partialRoughOnOldDriver": "有一次只测量了一部分的游戏（{{date}}）用的是旧驱动，看起来也很卡。",
@@ -166,10 +167,10 @@
     "startsSeenNoNames_other": "{{count}} 次不顺的 {{game}} 运行期间，有其他程序启动。",
     "startsSeenPartial": "在 {{date}} 一次只测量了一部分的 {{game}} 运行中，也看到有程序启动（{{names}}）。",
     "startsSeenPartialNoNames": "在 {{date}} 一次只测量了一部分的 {{game}} 运行中，也看到有程序启动。",
-    "startsSeenOther_one": "另外在 {{count}} 次不顺的 {{otherGame}} 运行中，也看到有程序启动（{{names}}）。",
-    "startsSeenOther_other": "另外在 {{count}} 次不顺的 {{otherGame}} 运行中，也看到有程序启动（{{names}}）。",
-    "startsSeenOtherNoNames_one": "另外在 {{count}} 次不顺的 {{otherGame}} 运行中，也看到有程序启动。",
-    "startsSeenOtherNoNames_other": "另外在 {{count}} 次不顺的 {{otherGame}} 运行中，也看到有程序启动。",
+    "startsSeenOther_one": "另外在 {{count}} 次不顺的 {{otherGame}} 运行（{{date}}）中，也看到有程序启动（{{names}}）。",
+    "startsSeenOther_other": "另外在 {{count}} 次不顺的 {{otherGame}} 运行（最近一次在 {{date}}）中，也看到有程序启动（{{names}}）。",
+    "startsSeenOtherNoNames_one": "另外在 {{count}} 次不顺的 {{otherGame}} 运行（{{date}}）中，也看到有程序启动。",
+    "startsSeenOtherNoNames_other": "另外在 {{count}} 次不顺的 {{otherGame}} 运行（最近一次在 {{date}}）中，也看到有程序启动。",
     "recoveredRamRoughLower": "恢复正常时内存峰值为 {{totalGb}} GB 中的 {{peakGb}} GB，但并非每次不顺的运行内存都接近用满，所以 Compy 无法判断是否与内存有关。",
     "recoveryRamRoughUnread": "Compy 没有不顺运行的内存读数，无法比较。",
     "gapChange": "在不顺的运行与恢复正常的运行之间：{{when}}，{{what}}。",
@@ -182,7 +183,19 @@
     "gapProgram": "安装了一个程序",
     "gapProgramNamed": "安装了 {{name}}",
     "gapBuild": "在不顺的运行与恢复正常的运行之间：Windows 从 {{from}} 版本变为 {{to}} 版本。",
-    "gapUnread": "Compy 没能读完这段时间内 Windows 的记录，所以可能漏掉了其他变化。"
+    "gapUnread": "Compy 没能读完这段时间内 Windows 的记录，所以可能漏掉了其他变化。",
+    "roughOnOldDriver_one": "那次卡顿的游戏仍在用旧驱动。",
+    "roughOnOldDriver_other": "有 {{count}} 次卡顿的游戏仍在用旧驱动。",
+    "loadMeasured_one": "在那次卡顿的游戏中，游戏以外的程序占用了大量处理器。",
+    "loadMeasured_other": "在 {{count}} 次卡顿的游戏中，游戏以外的程序占用了大量处理器。",
+    "loadQuiet_one": "在那次卡顿的游戏中，游戏以外的程序很安静。",
+    "loadQuiet_other": "在 {{count}} 次卡顿的游戏中，游戏以外的程序很安静。",
+    "sessionsSplitPartly_one": "{{game}} 有一次只测量了一部分的运行（{{date}}）用的是旧驱动；那次卡顿的游戏用的是新驱动。",
+    "sessionsSplitPartly_other": "{{game}} 有一次只测量了一部分的运行（{{date}}）用的是旧驱动；之后 {{count}} 次卡顿的游戏都用的是新驱动。",
+    "recoveredQuietSeen": "在恢复正常的运行中，Compy 没有看到生成或编码程序启动，电脑其余部分也很安静（其他程序占用 CPU {{pct}}%）。",
+    "gapDayUnplaced": "{{when}}，{{what}}（不知道具体时间）。",
+    "recoveryDayUnplaced": "Windows 记录了 {{when}} 的一项变化，但没有具体时间，所以 Compy 无法判断它发生在不顺的运行之前还是之后。",
+    "recoveredSteamLatestOnly": "Steam 只保留 {{game}} 文件最近一次的更新时间，而那个时间在不顺的运行之后，所以 Compy 无法判断期间文件是否变化过。"
   },
   "fix": {
     "title": "如何解决",
@@ -195,7 +208,7 @@
     },
     "backgroundLoad": {
       "step1": "玩游戏时请关闭 {{names}}。",
-      "step1NoNames": "玩游戏时请关闭编译工具、视频编码器和下载管理器。",
+      "step1NoNames": "玩游戏时请关闭其他程序，尤其是正在编译、录制或下载的程序。",
       "step2": "关闭它们后玩一次 {{game}}，再按一次“出问题了”。"
     },
     "memoryPressure": {

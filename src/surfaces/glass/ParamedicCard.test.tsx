@@ -88,6 +88,7 @@ const base: ParamedicDiagnosis = {
   seen: [],
   baseline: ref("2026-11-11T14:14:22Z"),
   first_bad: ref("2026-11-20T01:01:24Z"),
+  mixed_sessions: [],
   why_first: "tie",
   recovery: null,
   earlier_episode: null,
@@ -272,7 +273,7 @@ describe("ParamedicCard", () => {
 
   it("names the game it picked when none was asked for", async () => {
     await ask({ ...base, game: "game-b", game_name: "Game B", why_first: null });
-    await waitFor(() => expect(screen.getByText("Game B has been running much rougher than usual")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Game B ran much rougher than usual in its last session")).toBeTruthy());
     expect(answer.calls[0][1]).toEqual(expect.objectContaining({ game: null }));
   });
 
@@ -546,7 +547,7 @@ describe("ParamedicCard: while the episode is still going", () => {
   it("in between: shows the problem line and collapsed rows, says it can't tell yet, and never says recovered (F8)", async () => {
     await ask(unclear());
     await waitFor(() => expect(screen.getByText("Compy can't tell yet whether Game A is back to normal. Play once more.")).toBeTruthy());
-    expect(screen.getByText("Game A has been running much rougher than usual")).toBeTruthy();
+    expect(screen.getByText("Game A ran much rougher than usual in its last session")).toBeTruthy();
     expect(screen.getByText(/In a normal session, Game A's dips stay at about 90%/)).toBeTruthy();
     expect(screen.queryByText(/running the way it usually does/)).toBeNull();
     expect(rows().length).toBe(2);
@@ -609,7 +610,7 @@ describe("ParamedicCard: while the episode is still going", () => {
     openAll();
     expect(screen.getByText("2 rough Game A sessions had other programs starting during them (Discord, Zip Thing).")).toBeTruthy();
     expect(screen.getByText(/Programs were seen starting in a partly measured Game A session on .+ \(Updater\)\./)).toBeTruthy();
-    expect(screen.getByText("Programs were also seen starting in 3 rough Game B sessions (Encoder).")).toBeTruthy();
+    expect(screen.getByText(/^Programs were also seen starting in 3 rough Game B sessions, the latest on .+ \(Encoder\)\.$/)).toBeTruthy();
     expect(screen.getByText(/Compy can't see programs that were already running/)).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Compy's own|Compy started/);
   });
@@ -950,5 +951,128 @@ describe("paramedic words", () => {
     const calls = [...code.matchAll(/\bt\(\s*([^,)]*)/g)].map((m) => m[1].trim());
     expect(calls.length).toBeGreaterThan(50);
     expect(calls.filter((c) => !/^"[^"]+"$/.test(c))).toEqual([]);
+  });
+});
+
+describe("ParamedicCard: review round 2", () => {
+  const ev = (kind: "measured" | "unknown" | "supported-inference", code: string, args: Record<string, string> = {}, against = false) => ({
+    kind,
+    code,
+    args,
+    against,
+    source: "sessions",
+  });
+
+  const recov = (over: Partial<NonNullable<ParamedicDiagnosis["recovery"]>> = {}): NonNullable<ParamedicDiagnosis["recovery"]> => ({
+    before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
+    rough: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
+    now: { ratio: 0.92, p99_ms: null, avg_fps: 118 },
+    rough_sessions: [ref("2026-11-20T01:00:00Z")],
+    recovered_sessions: [ref("2026-11-21T10:00:00Z"), ref("2026-11-22T10:00:00Z")],
+    sessions_since: 2,
+    summary: { kind: "none" },
+    also_changed: [],
+    ...over,
+  });
+
+  it("N1: a session that may hold two games is named in one note and says it was not judged", async () => {
+    await ask({ ...base, mixed_sessions: ["2026-11-20T01:01:24Z"] });
+    await waitFor(() => expect(screen.getByTestId("paramedic-mixed")).toBeTruthy());
+    expect(screen.getByTestId("paramedic-mixed").textContent).toMatch(/^1 session \(.+\) may contain two games, so Compy didn't judge it\.$/);
+    cleanup();
+    await ask({ ...base, mixed_sessions: ["2026-11-20T01:01:24Z", "2026-11-19T22:00:00Z"] });
+    await waitFor(() => expect(screen.getByTestId("paramedic-mixed")).toBeTruthy());
+    expect(screen.getByTestId("paramedic-mixed").textContent).toMatch(/^2 sessions \(.+\) may contain two games, so Compy didn't judge them\.$/);
+    cleanup();
+    await ask(base);
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(screen.queryByTestId("paramedic-mixed")).toBeNull();
+  });
+
+  it("N2: one rough session reads as one, with the one-session caveat; two do not get it", async () => {
+    await ask(base);
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(screen.getByText("Game A ran much rougher than usual in its last session")).toBeTruthy();
+    expect(screen.getByText(/In your last session they fell to about 50%\./)).toBeTruthy();
+    expect(screen.getByText(/The rough run has lasted 1 session so far\./)).toBeTruthy();
+    expect(screen.getByText("One session isn't much to go on. If the next one is normal, this may have been a one-off.")).toBeTruthy();
+    cleanup();
+    const p = base.problem!;
+    await ask({ ...base, problem: { ...p, sessions_affected: [ref("2026-11-19T10:00:00Z"), ref("2026-11-20T01:01:24Z")] } });
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(screen.getByText("Game A has been running much rougher than usual")).toBeTruthy();
+    expect(screen.getByText(/In your last 2 sessions they fell to about 50%\./)).toBeTruthy();
+    expect(screen.getByText(/The rough run has lasted 2 sessions so far\./)).toBeTruthy();
+    expect(screen.queryByText(/One session isn't much to go on/)).toBeNull();
+  });
+
+  it("M1: a quiet recovery that can't be tied to the rough sessions is a plain measurement, not 'consistent with'", async () => {
+    await ask({
+      ...base,
+      state: { kind: "recovered" },
+      recovery: recov(),
+      findings: [
+        find("background-load", {
+          now: "cant-tell",
+          now_evidence: [ev("measured", "recovered-quiet-seen", { pct: "3.0" }), ev("unknown", "rough-load-not-recorded")],
+          fix: steps("background-load"),
+        }),
+      ],
+    });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.getByText(/Compy saw no build or encoding program start, and the rest of your PC was quiet \(3\.0% CPU used by other programs\) in the sessions that ran normally\./)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/consistent with/);
+  });
+
+  it("S2, S3, S4: the day-only install, the Steam latest-time caveat and the partly measured driver session are each said as what they are", async () => {
+    await ask({
+      ...base,
+      state: { kind: "recovered" },
+      recovery: recov(),
+      why_first: "not-separable",
+      findings: [
+        find("gpu-driver-change", {
+          evidence: [
+            ev("measured", "sessions-split-partly", { date: "2026-11-08T10:00:00Z", count: "1", baselineAt: "2026-11-08T10:00:00Z" }),
+          ],
+          fix: steps("gpu-driver-change", { from: "1.0" }),
+        }),
+        find("windows-update", {
+          now: "cant-tell",
+          now_evidence: [ev("unknown", "recovery-day-unplaced", { what: "windows-update", when: "2026-11-19T00:00:00Z" })],
+          fix: steps("windows-update"),
+        }),
+        find("game-files-change", {
+          now: "cant-tell",
+          now_evidence: [ev("unknown", "recovered-steam-latest-only")],
+          fix: steps("game-files-change"),
+        }),
+      ],
+    });
+    await waitFor(() => expect(rows().length).toBeGreaterThan(0));
+    openAll();
+    expect(screen.getByText(/A partly measured Game A session \(.+\) used the old driver; the rough one used the new one\./)).toBeTruthy();
+    expect(screen.getByText(/Windows recorded a change on .+ without a time of day, so Compy can't say whether it came before or after the rough sessions\./)).toBeTruthy();
+    expect(screen.getByText(/Steam only keeps the latest update time of Game A's files/)).toBeTruthy();
+  });
+
+  it("S2: a gap line whose day is not wholly inside the stretch says the time of day is not known", async () => {
+    await ask({
+      ...base,
+      state: { kind: "recovered" },
+      recovery: {
+        before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
+        rough: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
+        now: { ratio: 0.92, p99_ms: null, avg_fps: 118 },
+        rough_sessions: [ref("2026-11-20T01:00:00Z")],
+        recovered_sessions: [ref("2026-11-21T10:00:00Z"), ref("2026-11-22T10:00:00Z")],
+        sessions_since: 2,
+        summary: { kind: "none" },
+        also_changed: [ev("measured", "gap-change", { kind: "windows-update", when: "2026-11-20T00:00:00Z", day: "true", placed: "false" })],
+      },
+    });
+    await waitFor(() => expect(screen.getByText(/time of day not known/)).toBeTruthy());
+    expect(document.body.textContent).not.toMatch(/between the rough sessions and the normal ones/);
   });
 });

@@ -161,6 +161,11 @@ pub(crate) struct SessionFacts {
     other_cpu_p90_pct: Option<f64>,
     #[serde(default)]
     cap: CapState,
+    /// The recorder's read-only flag (`session_boundary::suspected_splice`) says this row may hold two games.
+    /// Such a session is NOT judged: it is left out of baselines, rough counts, recovery pairs and every
+    /// per-session evidence count, and the card says so in one note line.
+    #[serde(default)]
+    mixed: bool,
 }
 
 /// A time Compy looked at the PC's identity (an `IdentitySnapshot`, reduced).
@@ -408,6 +413,8 @@ pub(crate) struct Diagnosis {
     pub recovery: Option<Recovery>,
     /// F3: set when the current episode follows an earlier one that recovered.
     pub earlier_episode: Option<EarlierEpisode>,
+    /// Start times of this game's recent sessions that may hold two games and were therefore not judged.
+    pub mixed_sessions: Vec<String>,
     pub method: &'static str,
 }
 
@@ -429,6 +436,7 @@ impl Diagnosis {
             why_first: None,
             recovery: None,
             earlier_episode: None,
+            mixed_sessions: Vec::new(),
             method: METHOD,
         }
     }
@@ -634,9 +642,20 @@ fn judge_game(sess: &[&SessionFacts]) -> Vec<Judgement> {
 
 /// One game's sessions, oldest first. A session whose start cannot be read is left out, never guessed at.
 fn game_sessions<'a>(inp: &'a DiagnoseInputs, game: &str) -> Vec<&'a SessionFacts> {
-    let mut v: Vec<&SessionFacts> = inp.sessions.iter().filter(|s| same_game(&s.game, game) && s.start().is_some()).collect();
+    // A session the capture flag marks as possibly two games is not one of the game's sessions here.
+    let mut v: Vec<&SessionFacts> = inp.sessions.iter().filter(|s| !s.mixed && same_game(&s.game, game) && s.start().is_some()).collect();
     v.sort_by_key(|s| s.start());
     v
+}
+
+/// This game's sessions of the last `RECENT_GAME_DAYS` that were left out as possibly holding two games.
+fn mixed_of(inp: &DiagnoseInputs, game: &str) -> Vec<String> {
+    let Some(newest) = inp.sessions.iter().filter_map(SessionFacts::start).max() else { return Vec::new() };
+    let cutoff = newest - chrono::Duration::days(RECENT_GAME_DAYS);
+    let mut v: Vec<&SessionFacts> =
+        inp.sessions.iter().filter(|s| s.mixed && same_game(&s.game, game) && s.start().is_some_and(|t| t >= cutoff)).collect();
+    v.sort_by_key(|s| s.start());
+    v.into_iter().map(|s| s.started_at.clone()).collect()
 }
 
 // ---- Entry points -----------------------------------------------------------------------------
@@ -647,13 +666,13 @@ pub(crate) fn diagnose(inp: &DiagnoseInputs, complaint: Complaint, game: Option<
     if let Some(g) = game {
         return diagnose_game(inp, complaint, g);
     }
-    let Some(newest) = inp.sessions.iter().filter_map(SessionFacts::start).max() else {
+    let Some(newest) = inp.sessions.iter().filter(|s| !s.mixed).filter_map(SessionFacts::start).max() else {
         return Diagnosis::empty(complaint, DiagnosisState::CantTell { why: CantTellWhy::NoSessions });
     };
     let cutoff = newest - chrono::Duration::days(RECENT_GAME_DAYS);
     // Each recent game once (by its case-folded name), with when it was last played.
     let mut recent: BTreeMap<String, (DateTime<Utc>, String)> = BTreeMap::new();
-    for s in &inp.sessions {
+    for s in inp.sessions.iter().filter(|s| !s.mixed) {
         let Some(t) = s.start().filter(|t| *t >= cutoff) else { continue };
         let e = recent.entry(s.game.trim().to_ascii_lowercase()).or_insert((t, s.game.clone()));
         if t > e.0 {
@@ -684,6 +703,7 @@ fn diagnose_game(inp: &DiagnoseInputs, complaint: Complaint, game_key: &str) -> 
     let mut d = Diagnosis::empty(complaint, DiagnosisState::CantTell { why: CantTellWhy::NoSessions });
     d.game_name = Some(intelligence::pretty_game_name(&game_key));
     d.game = Some(game_key.clone());
+    d.mixed_sessions = mixed_of(inp, &game_key);
     if complaint == Complaint::Crash {
         d.state = DiagnosisState::CantTell { why: CantTellWhy::CrashNotCovered };
         return d;
@@ -910,6 +930,9 @@ pub(crate) fn facts_from(s: &crate::sessions::SessionSummary) -> SessionFacts {
         started_names,
         ram_events,
         other_cpu_p90_pct: gs.and_then(|g| g.other_cpu).map(|o| f64::from(o.p90_pct_x10) / 10.0),
+        // No crash marks are passed: the engine reads none, read-only or otherwise, so the flag runs on the
+        // session's own series (a row written by a build that holds one process identity is Clean without looking).
+        mixed: matches!(crate::session_boundary::suspected_splice(s, &[]), crate::session_boundary::Splice::Suspected(_)),
         cap: match crate::noise_floor::cap_read(s) {
             crate::noise_floor::CapRead::Uncapped => CapState::Uncapped,
             crate::noise_floor::CapRead::Capped { at_fps } => CapState::Capped { at_fps },
@@ -953,7 +976,7 @@ struct OtherGame<'a> {
 
 fn other_games<'a>(inp: &'a DiagnoseInputs, game: &str) -> Vec<OtherGame<'a>> {
     let mut keys: BTreeMap<String, String> = BTreeMap::new();
-    for s in &inp.sessions {
+    for s in inp.sessions.iter().filter(|s| !s.mixed) {
         if !same_game(&s.game, game) {
             keys.entry(s.game.trim().to_ascii_lowercase()).or_insert_with(|| s.game.clone());
         }
@@ -975,6 +998,9 @@ struct Ctx<'a> {
     /// The newest session judged Normal before the first rough one (the date the card calls "last ran
     /// normally"); it can be newer than the newest baseline session.
     last_normal: &'a SessionFacts,
+    /// The newest session before the first rough one that was fully measured and ran close to the usual:
+    /// the one the headline calls "last ran normally" (or "last fully measured normal session").
+    last_full_normal: Option<&'a SessionFacts>,
     first_bad: &'a SessionFacts,
     win_start: DateTime<Utc>,
     win_end: DateTime<Utc>,
@@ -1158,14 +1184,15 @@ fn explain<'a>(
     let last_normal_at = last_normal.started_at.clone();
     // The newest earlier session that was fully measured and ran close to the game's usual: the date the
     // card may call "last ran normally" without leaning on an idle or thinly measured session.
-    let last_full_normal_at = (0..first)
+    let last_full_normal: Option<&SessionFacts> = (0..first)
         .rev()
         .find(|&i| {
             judged[i].verdict == Verdict::Normal
                 && sess[i].coverage() >= BASELINE_COVERAGE
                 && sess[i].ratio().is_some_and(|r| r >= recovery::RECOVERY_R_FRACTION * base.med_r)
         })
-        .map(|i| sess[i].started_at.clone());
+        .map(|i| sess[i]);
+    let last_full_normal_at = last_full_normal.map(|s| s.started_at.clone());
     d.problem = Some(ProblemReading {
         rule: if evals.iter().flatten().any(|e| e.rule_r) { AnomalyRule::StutterCollapse } else { AnomalyRule::Spikes },
         spikes: evals.iter().flatten().any(|e| e.rule_p99),
@@ -1191,6 +1218,7 @@ fn explain<'a>(
         affected,
         baseline_newest,
         last_normal,
+        last_full_normal,
         first_bad,
         win_start,
         win_end,
@@ -1254,6 +1282,7 @@ fn explain<'a>(
         .collect();
     if let Some(idx) = recovered {
         let rec: Vec<&SessionFacts> = idx.iter().map(|&i| sess[i]).collect();
+        recovery::settle(&ctx, &rec, &mut d.findings);
         let since = ((newest + 1)..sess.len()).filter(|&i| judged[i].verdict != Verdict::Unjudged).count();
         d.recovery = recovery::build_block(&ctx, &rec, d, since);
     }
@@ -1445,10 +1474,20 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         // "The last normal session used the old driver": said only of the very session the card calls the
         // last normal one, and only if it did run on the old driver (else the normal-on-new-driver line
         // below says what it is).
-        if on(c.last_normal, from) {
+        // The session named is the one the headline names. If the only normal session on the old driver is a
+        // thin one, it is labelled as partly measured instead.
+        if let Some(full) = c.last_full_normal.filter(|s| on(s, from)) {
             evidence.push(ev(
                 EvidenceKind::Measured,
                 "sessions-split",
+                "sessions",
+                false,
+                &[("baselineAt", full.started_at.clone()), ("count", c.affected.len().to_string())],
+            ));
+        } else if on(c.last_normal, from) {
+            evidence.push(ev(
+                EvidenceKind::Measured,
+                "sessions-split-partly",
                 "sessions",
                 false,
                 &[("baselineAt", c.last_normal.started_at.clone()), ("count", c.affected.len().to_string())],
@@ -1566,9 +1605,6 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         }
         return;
     }
-    let mut names: Vec<String> = seen.iter().flat_map(|s| s.busy_names.iter().cloned()).collect();
-    names.sort();
-    names.dedup();
     let mut evidence = Vec::new();
     if !busy_rough.is_empty() {
         evidence.push(ev(
@@ -1585,7 +1621,7 @@ fn detect_background(c: &Ctx, out: &mut Out) {
             "starts-seen-partial",
             "sessions",
             false,
-            &[("date", newest.started_at.clone()), ("names", names_of(&partial_seen))],
+            &[("date", newest.started_at.clone()), ("names", names_of(&[newest]))],
         ));
     }
     if !other_seen.is_empty() {
@@ -1593,12 +1629,18 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         games.sort();
         games.dedup();
         let sessions: Vec<&SessionFacts> = other_seen.iter().map(|(_, s)| *s).collect();
+        let newest_other = sessions.iter().copied().max_by_key(|s| s.start()).map(|s| s.started_at.clone()).unwrap_or_default();
         evidence.push(ev(
             EvidenceKind::Measured,
             "starts-seen-other",
             "sessions",
             false,
-            &[("count", other_seen.len().to_string()), ("otherGame", games.join(", ")), ("names", names_of(&sessions))],
+            &[
+                ("count", other_seen.len().to_string()),
+                ("otherGame", games.join(", ")),
+                ("names", names_of(&sessions)),
+                ("date", newest_other),
+            ],
         ));
     }
     if loud_rough > 0 {
@@ -1610,7 +1652,10 @@ fn detect_background(c: &Ctx, out: &mut Out) {
     if !all_measured {
         evidence.push(ev(EvidenceKind::Unknown, "load-not-recorded", "sessions", false, &[]));
     }
-    let since = match (seen.iter().filter_map(|s| s.start()).min(), seen.iter().filter_map(|s| s.end()).max()) {
+    // A time range only over this game's own fully measured rough sessions that had programs starting. A
+    // partly measured session or another game's session is dated on its own evidence line: stretching the
+    // range over them would claim programs were starting across a period that includes sessions that ran fine.
+    let since = match (busy_rough.iter().filter_map(|s| s.start()).min(), busy_rough.iter().filter_map(|s| s.end()).max()) {
         (Some(a), Some(b)) => When::ObservedBetween { from: iso(a), to: iso(b) },
         _ => When::Unknown,
     };
@@ -1624,7 +1669,8 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         m: loud_rough > 0,
         c1: quiet_rough > 0,
         since,
-        fix: steps("background-load", &[("names", names.join(", "))]),
+        // Programs are named in the steps only when this game's own fully measured rough sessions had them.
+        fix: steps("background-load", &[("names", names_of(&busy_rough))]),
         evidence,
     });
 }

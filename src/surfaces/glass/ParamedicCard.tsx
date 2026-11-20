@@ -114,6 +114,8 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
       return t("paramedic.evidence.driverChanged", { from: a.from, to: a.to });
     case "sessions-split":
       return t("paramedic.evidence.sessionsSplit", { game, date: dates.day(a.baselineAt), count: Number(a.count) });
+    case "sessions-split-partly":
+      return t("paramedic.evidence.sessionsSplitPartly", { game, date: dates.day(a.baselineAt), count: Number(a.count) });
     case "cross-game":
       // "Never before it" only when every earlier session of that game ran normally.
       return a.neverBefore === "true"
@@ -162,8 +164,8 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
         : t("paramedic.evidence.startsSeenPartialNoNames", { game, date: dates.day(a.date) });
     case "starts-seen-other":
       return a.names
-        ? t("paramedic.evidence.startsSeenOther", { otherGame: a.otherGame, names: a.names, count: Number(a.count) })
-        : t("paramedic.evidence.startsSeenOtherNoNames", { otherGame: a.otherGame, count: Number(a.count) });
+        ? t("paramedic.evidence.startsSeenOther", { otherGame: a.otherGame, names: a.names, count: Number(a.count), date: dates.day(a.date) })
+        : t("paramedic.evidence.startsSeenOtherNoNames", { otherGame: a.otherGame, count: Number(a.count), date: dates.day(a.date) });
     case "gap-change": {
       const when = a.day === "true" ? dates.day(a.when) : dates.dayTime(a.when);
       let what: string;
@@ -174,6 +176,8 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
         what = a.detail ? t("paramedic.evidence.gapUpdateKb", { kb: a.detail }) : t("paramedic.evidence.gapUpdate");
       } else if (a.kind === "game-files") what = t("paramedic.evidence.gapFiles", { game });
       else what = a.detail ? t("paramedic.evidence.gapProgramNamed", { name: a.detail }) : t("paramedic.evidence.gapProgram");
+      // A day record that only partly lies in the stretch has no time of day: it is not said to be "between".
+      if (a.placed === "false") return t("paramedic.evidence.gapDayUnplaced", { what, when });
       return t("paramedic.evidence.gapChange", { what, when });
     }
     case "gap-build":
@@ -228,6 +232,12 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
         : t("paramedic.evidence.recoveredAfterDriverChangeSeen", { version: a.version, when: dates.dayTime(a.when) });
     case "recovered-quiet":
       return t("paramedic.evidence.recoveredQuiet", { pct: a.pct });
+    case "recovered-quiet-seen":
+      return t("paramedic.evidence.recoveredQuietSeen", { pct: a.pct });
+    case "recovery-day-unplaced":
+      return t("paramedic.evidence.recoveryDayUnplaced", { when: dates.day(a.when) });
+    case "recovered-steam-latest-only":
+      return t("paramedic.evidence.recoveredSteamLatestOnly", { game });
     case "rough-load-not-recorded":
       return t("paramedic.evidence.roughLoadNotRecorded");
     case "recovered-busy":
@@ -622,13 +632,15 @@ function Problem({ d, ctx, skipLater }: { d: ParamedicDiagnosis; ctx: Ctx; skipL
   return (
     <>
       <div className="gl-card-top">
-        <h2 className="gl-card-title">{t("paramedic.problem.title", { game })}</h2>
+        <h2 className="gl-card-title">{t("paramedic.problem.title", { game, count })}</h2>
         <span className="gl-chip" data-tone="accent">
           {t("paramedic.problem.badge")}
         </span>
       </div>
       <p>{t("paramedic.problem.body", { game, count, beforePct: pct(p.before.ratio), nowPct: pct(p.now.ratio) })}</p>
       {lasted && <p>{lasted}</p>}
+      {/* One rough session is enough to say it ran rough, not enough to say it is a pattern. */}
+      {count === 1 && <p className="gl-para-note">{t("paramedic.problem.oneSession")}</p>}
       {p.later_unjudged > 0 && !skipLater && <p className="gl-para-note">{t("paramedic.cantTell.backToNormal", { game })}</p>}
       {d.earlier_episode && (
         <p className="gl-para-note">
@@ -1074,6 +1086,11 @@ export function ParamedicCard() {
         <div className="gl-para-scroll" role="region" aria-label={t("paramedic.card.scrollLabel")} tabIndex={0}>
           <div className="gl-para-body" aria-live="polite">
             <Answer d={view.d} ctx={ctx} />
+            {view.d.mixed_sessions.length > 0 && (
+              <p className="gl-para-note" data-testid="paramedic-mixed">
+                {t("paramedic.problem.mixed", { count: view.d.mixed_sessions.length, dates: view.d.mixed_sessions.map((s) => dates.day(s)).join(", ") })}
+              </p>
+            )}
             <p className="gl-para-note">{t("paramedic.footer")}</p>
           </div>
         </div>

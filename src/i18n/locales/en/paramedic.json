@@ -10,7 +10,6 @@
     "stillChecking": "Compy is still checking. Try again in a moment."
   },
   "problem": {
-    "title": "{{game}} has been running much rougher than usual",
     "badge": "Measured",
     "body_one": "In a normal session, {{game}}'s dips stay at about {{beforePct}}% of its average frame rate. In your last session they fell to about {{nowPct}}%.",
     "body_other": "In a normal session, {{game}}'s dips stay at about {{beforePct}}% of its average frame rate. In your last {{count}} sessions they fell to about {{nowPct}}%.",
@@ -23,7 +22,12 @@
     "sinceLasted_other": "It last ran normally on {{date}}. The rough run has lasted {{count}} sessions so far.",
     "earlier": "It also ran rough {{from}}–{{to}} and recovered.",
     "sinceLastedFull_one": "Its last fully measured normal session was {{date}}. The rough run has lasted {{count}} session so far.",
-    "sinceLastedFull_other": "Its last fully measured normal session was {{date}}. The rough run has lasted {{count}} sessions so far."
+    "sinceLastedFull_other": "Its last fully measured normal session was {{date}}. The rough run has lasted {{count}} sessions so far.",
+    "title_one": "{{game}} ran much rougher than usual in its last session",
+    "title_other": "{{game}} has been running much rougher than usual",
+    "oneSession": "One session isn't much to go on. If the next one is normal, this may have been a one-off.",
+    "mixed_one": "1 session ({{dates}}) may contain two games, so Compy didn't judge it.",
+    "mixed_other": "{{count}} sessions ({{dates}}) may contain two games, so Compy didn't judge them."
   },
   "answer": {
     "likely": "Most likely",
@@ -94,8 +98,6 @@
     "sessionsSplit_other": "{{game}}'s last normal session ({{date}}) used the old driver; all {{count}} rough ones used the new one.",
     "crossGame": "{{games}} also got much rougher after the update, and never before it.",
     "installTimeNotRead": "Compy didn't read the exact install time; it saw the new version on {{when}}.",
-    "roughOnOldDriver": "{{count}} of the rough sessions were still on the old driver.",
-    "loadMeasured": "Everything except the game used a lot of your processor in {{count}} of the rough sessions.",
     "loadNotRecorded": "Compy can't see programs that were already running, and didn't record how busy your PC was in these sessions.",
     "ramPeak": "Memory peaked at {{peakGb}} of {{totalGb}} GB in one rough session.",
     "ramBaseline": "Your normal sessions peaked at {{peakGb}} GB.",
@@ -109,7 +111,6 @@
     "valueChanged": "It changed from {{from}} to {{to}}.",
     "hardwareChanged": "The graphics card or memory Compy recorded is different.",
     "powerPlanChanged": "The power plan recorded on the two sessions is different.",
-    "loadQuiet": "Everything except the game was quiet in {{count}} of the rough sessions.",
     "normalOnNewDriver_one": "{{count}} session ran normally on the new driver (on {{date}}).",
     "normalOnNewDriver_other": "{{count}} sessions ran normally on the new driver (the latest on {{date}}).",
     "partialRoughOnOldDriver": "A partly measured session on {{date}}, on the old driver, also looked rough.",
@@ -166,10 +167,10 @@
     "startsSeenNoNames_other": "{{count}} rough {{game}} sessions had other programs starting during them.",
     "startsSeenPartial": "Programs were seen starting in a partly measured {{game}} session on {{date}} ({{names}}).",
     "startsSeenPartialNoNames": "Programs were seen starting in a partly measured {{game}} session on {{date}}.",
-    "startsSeenOther_one": "Programs were also seen starting in {{count}} rough {{otherGame}} session ({{names}}).",
-    "startsSeenOther_other": "Programs were also seen starting in {{count}} rough {{otherGame}} sessions ({{names}}).",
-    "startsSeenOtherNoNames_one": "Programs were also seen starting in {{count}} rough {{otherGame}} session.",
-    "startsSeenOtherNoNames_other": "Programs were also seen starting in {{count}} rough {{otherGame}} sessions.",
+    "startsSeenOther_one": "Programs were also seen starting in {{count}} rough {{otherGame}} session, on {{date}} ({{names}}).",
+    "startsSeenOther_other": "Programs were also seen starting in {{count}} rough {{otherGame}} sessions, the latest on {{date}} ({{names}}).",
+    "startsSeenOtherNoNames_one": "Programs were also seen starting in {{count}} rough {{otherGame}} session, on {{date}}.",
+    "startsSeenOtherNoNames_other": "Programs were also seen starting in {{count}} rough {{otherGame}} sessions, the latest on {{date}}.",
     "recoveredRamRoughLower": "Memory peaked at {{peakGb}} of {{totalGb}} GB when it ran normally, but not every rough session had memory nearly full, so Compy can't say whether memory is the reason.",
     "recoveryRamRoughUnread": "Compy has no memory reading for the rough sessions, so it can't compare.",
     "gapChange": "Between the rough sessions and the normal ones: {{what}} on {{when}}.",
@@ -182,7 +183,19 @@
     "gapProgram": "a program install",
     "gapProgramNamed": "{{name}} was installed",
     "gapBuild": "Between the rough sessions and the normal ones: Windows went from build {{from}} to {{to}}.",
-    "gapUnread": "Compy couldn't read all of Windows' records for that stretch, so other changes in it may be missing."
+    "gapUnread": "Compy couldn't read all of Windows' records for that stretch, so other changes in it may be missing.",
+    "roughOnOldDriver_one": "The rough session was still on the old driver.",
+    "roughOnOldDriver_other": "{{count}} of the rough sessions were still on the old driver.",
+    "loadMeasured_one": "Everything except the game used a lot of your processor in the rough session.",
+    "loadMeasured_other": "Everything except the game used a lot of your processor in {{count}} of the rough sessions.",
+    "loadQuiet_one": "Everything except the game was quiet in the rough session.",
+    "loadQuiet_other": "Everything except the game was quiet in {{count}} of the rough sessions.",
+    "sessionsSplitPartly_one": "A partly measured {{game}} session ({{date}}) used the old driver; the rough one used the new one.",
+    "sessionsSplitPartly_other": "A partly measured {{game}} session ({{date}}) used the old driver; all {{count}} rough ones used the new one.",
+    "recoveredQuietSeen": "Compy saw no build or encoding program start, and the rest of your PC was quiet ({{pct}}% CPU used by other programs) in the sessions that ran normally.",
+    "gapDayUnplaced": "{{what}} on {{when}} (time of day not known).",
+    "recoveryDayUnplaced": "Windows recorded a change on {{when}} without a time of day, so Compy can't say whether it came before or after the rough sessions.",
+    "recoveredSteamLatestOnly": "Steam only keeps the latest update time of {{game}}'s files, and that is after the rough sessions, so Compy can't say whether they changed in between."
   },
   "fix": {
     "title": "How to fix it",
@@ -195,7 +208,7 @@
     },
     "backgroundLoad": {
       "step1": "Close {{names}} while you play.",
-      "step1NoNames": "Close build tools, video encoders and download managers while you play.",
+      "step1NoNames": "Close other programs, especially anything building, recording or downloading, while you play.",
       "step2": "Play {{game}} once with them closed, then press Something's wrong again."
     },
     "memoryPressure": {

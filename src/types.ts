@@ -1450,5 +1450,7 @@ export type ParamedicDiagnosis = {
   recovery: ParamedicRecovery | null;
   /** The current episode follows an earlier one that recovered. */
   earlier_episode: { from: string; to: string } | null;
+  /** Start times of this game's recent sessions that may hold two games: not judged, named in one note line. */
+  mixed_sessions: string[];
   method: string;
 };
