@@ -1339,7 +1339,8 @@ mod windows_records {
         // Same-version rows and rows with an unknown previous version are never a change.
         let rows = vec![gpu("2026-10-06T12:00:00Z", "1.0", "1.0", Some(false)), gpu("2026-10-06T13:00:00Z", "", "1.0", None)];
         let d = found(sess.clone(), report(rows));
-        assert!(d.not_it.iter().any(|n| n.id == "gpu-driver-change" && n.args.get("windows").map(String::as_str) == Some("none")));
+        // ...but they ARE install rows: "Windows recorded no install" is never said beside them.
+        assert!(d.not_it.iter().any(|n| n.id == "gpu-driver-change" && !n.args.contains_key("windows")));
         assert!(d.findings.iter().all(|f| f.id != "gpu-driver-change"));
         // An unread log says nothing about Windows.
         let mut r = report(Vec::new());
@@ -1634,6 +1635,151 @@ mod windows_records {
             ChangeRead::NotRead
         });
         assert!(matches!(r, ChangeRead::Unavailable("took-too-long")) && started.elapsed() < Duration::from_millis(400));
+    }
+
+    // ---- F4b review r1 ----
+
+    #[test]
+    fn an_update_compy_cannot_classify_is_counted_never_dropped_and_never_unchanged() {
+        let d = found(scenario(), report(vec![update("2026-10-07T03:00:00Z", "KB5009999", "other")]));
+        assert!(d.not_it.iter().all(|n| n.id != "windows-update"), "an unrecognised update is not 'none'");
+        assert!(d.findings.iter().all(|f| f.id != "windows-update"));
+        let s = d.seen.iter().find(|s| s.id == "updates-unclassified").expect("counted");
+        assert_eq!((s.args["n"].as_str(), s.args["kbs"].as_str()), ("1", "KB5009999"));
+        // Beside a definition update it still suppresses the line; with no KB id the id list is empty.
+        let mut other = update("2026-10-07T03:00:00Z", "x", "other");
+        other.what.kb = None;
+        let d = found(scenario(), report(vec![update("2026-10-08T01:00:00Z", "KB2267602", "definition"), other]));
+        assert!(d.not_it.iter().all(|n| n.id != "windows-update"));
+        assert_eq!(d.seen.iter().find(|s| s.id == "updates-unclassified").expect("counted").args["kbs"], "");
+    }
+
+    #[test]
+    fn same_version_and_unknown_version_rows_are_install_records_so_never_none() {
+        let equal = scenario_without_driver_change();
+        let d = found(equal.clone(), report(vec![gpu("2026-10-06T12:00:00Z", "1.0", "1.0", Some(false))]));
+        let n = d.not_it.iter().find(|n| n.id == "gpu-driver-change").expect("stamps equal");
+        assert!(!n.args.contains_key("windows"));
+        assert!(d.seen.iter().any(|s| s.id == "driver-reinstall-same" && s.args["when"] == "2026-10-06T12:00:00Z"));
+        let d = found(equal, report(vec![gpu("2026-10-06T12:00:00Z", "", "1.0", None)]));
+        assert!(!d.not_it.iter().find(|n| n.id == "gpu-driver-change").expect("stamps equal").args.contains_key("windows"));
+        assert!(d.seen.iter().any(|s| s.id == "driver-install-prior-unknown"));
+        // Differing stamps: the "no record" evidence is withheld and the row is said as it is.
+        let d = found(scenario(), report(vec![gpu("2026-10-06T12:00:00Z", "", "2.0", None)]));
+        let c = codes(finding(&d, "gpu-driver-change"));
+        assert!(!c.contains(&"install-not-recorded") && c.contains(&"install-prior-unknown") && c.contains(&"install-time-not-read"), "{c:?}");
+        let d = found(scenario(), report(vec![gpu("2026-10-06T12:00:00Z", "2.0", "2.0", Some(false))]));
+        let c = codes(finding(&d, "gpu-driver-change"));
+        assert!(!c.contains(&"install-not-recorded") && c.contains(&"reinstall-same-version"), "{c:?}");
+    }
+
+    #[test]
+    fn a_windows_only_driver_candidate_never_has_empty_version_text() {
+        let nostamps = || -> Vec<SessionFacts> {
+            scenario()
+                .into_iter()
+                .map(|mut s| {
+                    s.gpu_driver = None;
+                    s
+                })
+                .collect()
+        };
+        let mut no_from = gpu("2026-10-06T12:00:00Z", "1.0", "2.0", Some(true));
+        no_from.what.from_version = None;
+        let d = found(nostamps(), report(vec![no_from]));
+        assert!(matches!(finding(&d, "gpu-driver-change").fix, Fix::None { .. }), "no version steps without a version");
+        let d = found(nostamps(), report(vec![gpu("2026-10-06T12:00:00Z", "1.0", "2.0", Some(true))]));
+        match &finding(&d, "gpu-driver-change").fix {
+            Fix::Steps { args, .. } => assert!(!args["from"].is_empty() && !args["to"].is_empty(), "{args:?}"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_program_candidate_names_the_day_only_and_never_one_that_ran_before_the_period() {
+        let progs = vec![program("2026-10-07T00:00:00Z", "2026-10-08T00:00:00Z", "Discord")];
+        let mut sess = scenario();
+        sess.last_mut().expect("rough").started_names = vec!["discord".into()];
+        let d = found(sess.clone(), report(progs.clone()));
+        let f = finding(&d, "program-installed");
+        assert_eq!(f.since_when, When::Unknown, "a day is not a time of day");
+        assert_eq!(f.evidence[0].args["day"], "2026-10-07T00:00:00Z");
+        // It also started in a normal session before the period: updated, not newly installed.
+        sess[1].started_names = vec!["discord".into()];
+        let d = found(sess, report(progs));
+        assert!(d.findings.iter().all(|f| f.id != "program-installed"));
+        assert!(d.seen.iter().any(|s| s.id == "programs-installed"), "the collapsed line stays");
+    }
+
+    #[test]
+    fn an_install_of_another_version_never_dates_or_weakens_this_driver_change() {
+        // The stamps say 1.0 -> 2.0. A 3.0 install in the period is some other driver.
+        let d = found(scenario(), report(vec![gpu("2026-10-06T12:00:00Z", "1.0", "3.0", Some(true))]));
+        let f = finding(&d, "gpu-driver-change");
+        let c = codes(f);
+        assert!(!c.contains(&"install-recorded") && c.contains(&"install-time-not-read"), "{c:?}");
+        assert!(matches!(f.since_when, When::ObservedBetween { .. }));
+        assert!(d.seen.iter().any(|s| s.id == "driver-other-install"));
+        // Later, a different version is installed: that is not evidence against the 2.0 change.
+        let d = found(scenario(), report(vec![gpu("2026-10-09T10:05:00Z", "2.0", "3.0", Some(true))]));
+        let f = finding(&d, "gpu-driver-change");
+        assert!(f.in_play && !codes(f).contains(&"install-after-rough"));
+    }
+
+    #[test]
+    fn the_uninstall_step_names_the_quality_updates_own_kb() {
+        let evs = vec![update("2026-10-06T03:00:00Z", "KB900", "driver"), update("2026-10-07T03:00:00Z", "KB5001", "quality")];
+        let d = found(scenario(), report(evs));
+        match &finding(&d, "windows-update").fix {
+            Fix::Steps { args, .. } => assert_eq!(args["kb"], "KB5001"),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_driver_class_update_that_is_the_same_install_is_one_candidate_not_two() {
+        let mut wu = update("2026-10-06T12:01:00Z", "KB900", "driver");
+        wu.what.to_version = Some("2.0".into());
+        let drv = gpu("2026-10-06T12:00:00Z", "1.0", "2.0", Some(true));
+        let d = found(scenario(), report(vec![drv.clone(), wu.clone()]));
+        assert!(d.findings.iter().all(|f| f.id != "windows-update"), "{:?}", ids(&d));
+        assert!(codes(finding(&d, "gpu-driver-change")).contains(&"delivered-by-update"));
+        // Half an hour apart they are two facts.
+        wu.when = ChangeTime::exact(utc("2026-10-06T12:30:00Z"));
+        let d = found(scenario(), report(vec![drv, wu]));
+        finding(&d, "windows-update");
+        assert!(!codes(finding(&d, "gpu-driver-change")).contains(&"delivered-by-update"));
+    }
+
+    #[test]
+    fn a_patch_tuesday_update_never_ranks_above_a_finding_with_other_support() {
+        let mut inp = fixture();
+        let mut r = report(vec![update("2026-11-19T12:00:00Z", "KB5050", "quality")]);
+        r.window_start = utc("2026-11-11T14:14:22Z");
+        r.window_end = utc("2026-11-20T04:00:00Z");
+        inp.changes = ChangeRead::Report { report: Box::new(r), steam: GameSteam::Found };
+        let d = diagnose(&inp, Complaint::Slow, Some(ROUGH_GAME));
+        let at = |id: &str| ids(&d).iter().position(|x| *x == id).unwrap_or_else(|| panic!("{id} missing: {:?}", ids(&d)));
+        assert!(at("windows-update") > at("gpu-driver-change") && at("windows-update") > at("background-load"), "{:?}", ids(&d));
+        // Alone, it leads: nothing better-evidenced is in play.
+        let d = found(scenario_without_driver_change(), report(vec![update("2026-10-07T03:00:00Z", "KB5001", "quality")]));
+        assert_eq!(ids(&d)[0], "windows-update");
+    }
+
+    #[test]
+    fn a_partly_read_log_or_steam_never_gives_an_unchanged_line() {
+        let mut r = report(Vec::new());
+        r.partial.push(PartialSource {
+            source: Source::WindowsUpdateLog,
+            gaps: vec![Gap::RowCapReached],
+            covered_from: Some(utc("2026-10-08T00:00:00Z")),
+        });
+        r.partial.push(PartialSource { source: Source::SteamManifest, gaps: vec![Gap::TimedOut], covered_from: None });
+        r.game_last_update = Some(game_files("2026-09-01T00:00:00Z"));
+        let d = found(scenario(), r);
+        assert!(d.not_it.iter().all(|n| n.id != "windows-update" && n.id != "game-files-change"), "{:?}", d.not_it);
+        assert!(limit_of(&d, "windows-update").contains(&"partial-row-cap"));
+        assert!(limit_of(&d, "game-update").contains(&"partial-timed-out"));
     }
 
     #[test]

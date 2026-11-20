@@ -64,7 +64,7 @@
       "what": "{{game}} 的文件在 {{when}} 发生了变化"
     },
     "programInstalled": {
-      "what": "这段时间内安装的一个程序，也在卡顿的那几次游戏中运行过"
+      "what": "{{day}}安装的一个程序,在你玩游戏时也启动过"
     },
     "otherDriver": {
       "what": "显卡以外的某个驱动更新了"
@@ -120,7 +120,11 @@
     "filesChanged": "Steam 显示 {{game}} 的文件在 {{when}} 发生了变化。这可能是更新、文件校验或新增内容。",
     "installedAndStarted": "{{name}} 在 {{day}} 安装，并且在卡顿的那几次游戏中也启动过。",
     "otherDriverInstalled_one": "Windows 记录了 {{count}} 次{{classes}}驱动安装，时间是 {{when}}；Compy 找到的其他内容都对不上这个时间。",
-    "otherDriverInstalled_other": "Windows 记录了 {{count}} 次{{classes}}驱动安装，最早在 {{when}}；Compy 找到的其他内容都对不上这个时间。"
+    "otherDriverInstalled_other": "Windows 记录了 {{count}} 次{{classes}}驱动安装，最早在 {{when}}；Compy 找到的其他内容都对不上这个时间。",
+    "deliveredByUpdate": "这是通过 Windows 更新安装的。",
+    "reinstallSameVersion": "Windows 记录显示,{{when}}重新安装了同一个版本的驱动。",
+    "installPriorUnknown": "Windows 记录显示,{{when}}安装过显卡驱动,但不知道之前的版本。",
+    "updateInstalledNoKb": "Windows 在{{when}}安装了一个更新。"
   },
   "fix": {
     "title": "如何解决",
@@ -166,7 +170,8 @@
     "programInstalled": {
       "step1": "玩游戏时请关闭 {{names}}，如果不需要它，也可以卸载。",
       "step2": "玩一次 {{game}}，再按一次“出问题了”。"
-    }
+    },
+    "toggle": "如何检查这一项"
   },
   "card": {
     "why": "为什么先说这一项：{{reason}}",
@@ -195,9 +200,10 @@
     "windowsBuildChange": "Windows：仍是 {{build}} 版本。",
     "memoryAsFull": "内存：和你正常游戏时一样满（最高用到 {{peakGb}} GB，共 {{totalGb}} GB；正常游戏时最高 {{basePeakGb}} GB）。",
     "windowsUpdate": "Windows：这段时间内没有质量更新或功能更新。",
-    "gameFiles": "{{game}} 的文件：自 {{when}} 起没有变化。",
+    "gameFiles": "自{{when}}起,Steam 没有记录{{game}}的更新。",
     "gpuDriverNoInstall": "显卡驱动：仍是 {{driver}}。Windows 记录显示这段时间内没有安装显卡驱动。",
-    "seen": "还看了："
+    "seen": "还看了：",
+    "cantSeeFold": "Compy 看不到的内容"
   },
   "unknown": {
     "startupPrograms": "哪些程序随 Windows 启动，与之前相比",
@@ -238,7 +244,8 @@
   "notSeparable": {
     "title": "Compy 暂时还分不清是下面哪一项",
     "next": "要查明：请在没有运行其他程序的情况下玩一次 {{game}}。Compy 会重新对比。",
-    "nextOther": "请再玩一次 {{game}}。Compy 可能仍然分不清这几项。"
+    "nextOther": "请再玩一次 {{game}}。Compy 可能仍然分不清这几项。",
+    "showMore": "再显示 {{n}} 项"
   },
   "cap": {
     "none": "无上限",
@@ -246,7 +253,7 @@
     "at": "每秒 {{fps}} 帧"
   },
   "seen": {
-    "updatesMinor": "{{n}} 个安全定义更新和 {{m}} 个应用更新，Compy 不会把它们当作可能的原因。",
+    "updatesMinor": "{{n}}个安全定义更新和{{m}}个应用更新(仅供完整列出)。",
     "programsInstalled_one": "{{day}} 安装了 {{count}} 个程序：{{names}}。",
     "programsInstalled_other": "{{day}} 安装了 {{count}} 个程序：{{names}}。",
     "programsInstalledMore": "{{day}} 安装了 {{count}} 个程序：{{names}}，另外还有 {{more}} 个。",
@@ -254,12 +261,17 @@
     "otherDrivers_one": "这段时间内安装了 {{count}} 个其他驱动（{{classes}}）。",
     "otherDrivers_other": "这段时间内安装了 {{count}} 个其他驱动（{{classes}}）。",
     "driverInstallSameStamp": "Windows 记录的一次显卡驱动安装发生在 {{when}}，但你这几次游戏记录的驱动版本没有变化。",
-    "dayRange": "{{a}} 至 {{b}}"
+    "dayRange": "{{a}} 至 {{b}}",
+    "updatesUnclassified_one": "{{count}}个 Compy 无法分类的 Windows 更新。",
+    "updatesUnclassified_other": "{{count}}个 Compy 无法分类的 Windows 更新。",
+    "updatesUnclassifiedKb_one": "{{count}}个 Compy 无法分类的 Windows 更新({{kbs}})。",
+    "updatesUnclassifiedKb_other": "{{count}}个 Compy 无法分类的 Windows 更新({{kbs}})。",
+    "driverOtherInstall": "Windows 记录显示,{{when}}安装过显卡驱动,但版本与你出问题的几次游戏所用的不同。"
   },
   "limit": {
     "cantSee": "Compy 看不到{{what}}：{{why}}。",
     "partial": "Compy 只看到了{{what}}的一部分：{{why}}。",
-    "notSteam": "Compy 在能找到的 Steam 游戏库里没有找到 {{game}}，所以看不到它是什么时候更新的。",
+    "notSteam": "Compy 没能把{{game}}对应到某个 Steam 安装,所以看不到它的更新时间。",
     "classes": "Compy 只读取显卡、音频、网络和芯片组驱动的安装记录，不包括其他驱动。",
     "noInstallDate": "Compy 看不到应用商店里的应用，也看不到没有记录安装日期的程序（这里有 {{n}} 个）。",
     "what": {

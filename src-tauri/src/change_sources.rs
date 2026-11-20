@@ -1485,7 +1485,7 @@ fn find_game_in_roots(roots: &[String], vdf_unreadable: bool, exe: &str, budget:
     let mut libs_unreadable = usize::from(vdf_unreadable);
     let mut records_unparsed = 0usize;
     let mut timed_out = false;
-    let mut hit: Option<GameRef> = None;
+    let mut hits: Vec<GameRef> = Vec::new();
     for root in roots {
         let steamapps = std::path::Path::new(root).join("steamapps");
         let Ok(entries) = std::fs::read_dir(&steamapps) else {
@@ -1493,15 +1493,12 @@ fn find_game_in_roots(roots: &[String], vdf_unreadable: bool, exe: &str, budget:
             continue;
         };
         timed_out |= collect_until(entries.flatten().filter(is_manifest_name), deadline, |e| {
-            if hit.is_some() {
-                return;
-            }
             match read_manifest(&e.path()) {
                 ManifestRead::Parsed(info) => {
                     if let Some(folder) = info.install_dir.as_deref().filter(|f| folder_may_hold(&key, f)) {
                         let dir = steamapps.join("common").join(folder);
                         if folder_holds_exe(&dir, exe, deadline) {
-                            hit = Some(GameRef {
+                            hits.push(GameRef {
                                 steam_app_id: Some(info.app_id),
                                 install_dir: Some(dir.to_string_lossy().into_owned()),
                                 launcher: Some("Steam".into()),
@@ -1513,17 +1510,23 @@ fn find_game_in_roots(roots: &[String], vdf_unreadable: bool, exe: &str, budget:
                 ManifestRead::Missing => {}
             }
         });
-        if hit.is_some() || timed_out {
+        if timed_out {
             break;
         }
     }
-    match hit {
-        Some(g) => SteamLookup::Found(g),
-        None if timed_out => SteamLookup::Unreadable(UnreadableReason::TimedOutBeforeAnyRecord),
-        None if libs_unreadable > 0 || records_unparsed > 0 => {
+    // Two folders holding the same program name (two libraries, or "Game.exe" in two games) is never
+    // guessed at: Compy says it could not match the game.
+    match hits.len() {
+        1 => return SteamLookup::Found(hits.remove(0)),
+        n if n > 1 => return SteamLookup::NotInSteam,
+        _ => {}
+    }
+    match () {
+        () if timed_out => SteamLookup::Unreadable(UnreadableReason::TimedOutBeforeAnyRecord),
+        () if libs_unreadable > 0 || records_unparsed > 0 => {
             SteamLookup::Unreadable(UnreadableReason::SteamPartiallyUnreadable { libraries: libs_unreadable, records: records_unparsed })
         }
-        None => SteamLookup::NotInSteam,
+        () => SteamLookup::NotInSteam,
     }
 }
 
@@ -2627,6 +2630,23 @@ mod tests {
         // A name that matches a folder is not enough: the program must be in it.
         assert_eq!(find_game_in_roots(&roots, false, "OtherGame.exe", Duration::from_secs(5)), SteamLookup::NotInSteam);
         assert_eq!(find_game_in_roots(&roots, false, "nothing-like-it.exe", Duration::from_secs(5)), SteamLookup::NotInSteam);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn two_folders_holding_the_same_program_name_are_never_guessed_between() {
+        let root = fake_library("dup");
+        // A second game folder with the same program name inside, in a second library as well.
+        let common = root.join("steamapps").join("common");
+        std::fs::create_dir_all(common.join("Lane Split 2")).unwrap();
+        std::fs::write(common.join("Lane Split 2").join("LaneSplit-Win64-Shipping.exe"), b"x").unwrap();
+        std::fs::write(
+            root.join("steamapps").join("appmanifest_44.acf"),
+            "\"AppState\"\n{\n\t\"appid\"\t\t\"44\"\n\t\"name\"\t\t\"Lane Split 2\"\n\t\"installdir\"\t\t\"Lane Split 2\"\n\t\"LastUpdated\"\t\t\"1763500002\"\n}\n",
+        )
+        .unwrap();
+        let roots = vec![root.to_string_lossy().into_owned()];
+        assert_eq!(find_game_in_roots(&roots, false, "LaneSplit-Win64-Shipping.exe", Duration::from_secs(5)), SteamLookup::NotInSteam);
         let _ = std::fs::remove_dir_all(root);
     }
 

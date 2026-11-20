@@ -1127,6 +1127,8 @@ fn explain<'a>(
 
 /// Likely first (fixed category order breaks ties), then the changes in play (Possible, with timing,
 /// nothing against), then the rest. Within the last two, more supports first, then the category order.
+const TIMING_ONLY_SOURCES: &[&str] = &["windows-update", "game-files-change", "program-installed", "other-driver-change"];
+
 fn rank(c: &mut Vec<Cand>) {
     c.retain(|x| x.certainty().is_some());
     let class = |x: &Cand| match x.certainty() {
@@ -1134,8 +1136,11 @@ fn rank(c: &mut Vec<Cand>) {
         _ if x.in_play() => 1,
         _ => 2,
     };
+    // A candidate whose only support is timing from the dated readers never ranks above one that has any
+    // other support: it leads only when nothing better-evidenced is in play.
+    let timing_only = |x: &Cand| class(x) != 0 && x.t && !x.d && !x.x && !x.m && TIMING_ONLY_SOURCES.contains(&x.id);
     c.sort_by(|a, b| {
-        let by_class = class(a).cmp(&class(b));
+        let by_class = timing_only(a).cmp(&timing_only(b)).then(class(a).cmp(&class(b)));
         if class(a) == 0 {
             by_class.then(category(a.id).cmp(&category(b.id)))
         } else {
@@ -1332,9 +1337,9 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
     }
     // Windows' own record of the install. It is the same fact as the sessions' stamps (it dates it), so it
     // never adds an independent support: `d` stays the one support for "the driver changed".
-    let record = changes::driver_record(c, Some(to), first_new);
+    let record = changes::driver_record(c, Some(to), first_new, out);
     let (exact, after_rough) = (record.exact, record.after_rough);
-    evidence.push(record.evidence);
+    evidence.extend(record.evidence);
     out.cands.push(Cand {
         id: "gpu-driver-change",
         t: true,

@@ -227,7 +227,9 @@ describe("ParamedicCard", () => {
         },
       ],
     });
-    await waitFor(() => expect(screen.getByText(/Windows recorded the driver install on/)).toBeTruthy());
+    // The heading already shows that exact time, so the evidence does not say it a second time.
+    await waitFor(() => expect(screen.getByText(/On .*2026|On Nov 19/)).toBeTruthy());
+    expect(screen.queryByText(/Windows recorded the driver install on/)).toBeNull();
     expect(screen.getByText("Your graphics driver changed from 1.0 to 2.0.")).toBeTruthy();
     expect(screen.queryByText(/didn't read the exact install time/)).toBeNull();
   });
@@ -250,10 +252,12 @@ describe("ParamedicCard", () => {
     });
     await waitFor(() => expect(screen.getByText("Windows installed an update")).toBeTruthy());
     expect(screen.getByText(/Windows installed KB5001234 on/)).toBeTruthy();
+    expect(screen.queryByText(/Update history to see what was installed and when/)).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: "How to check this" })[1]);
     expect(screen.getByText(/Update history to see what was installed and when/)).toBeTruthy();
     expect(screen.getByText(/You can remove KB5001234 there and restart. That's your choice; Compy won't do it for you./)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /uninstall|remove|undo/i })).toBeNull();
-    expect(screen.getByText("2 security definition and 1 app updates, which Compy doesn't treat as likely causes.")).toBeTruthy();
+    expect(screen.getByText("2 security definition and 1 app updates (listed for completeness).")).toBeTruthy();
   });
 
   it("a feature update offers no uninstall step", async () => {
@@ -294,7 +298,7 @@ describe("ParamedicCard", () => {
     cleanup();
     await ask({ ...base, limits: [{ kind: "game-update", code: "not-steam", args: {} }] });
     await waitFor(() =>
-      expect(screen.getByText("Game A isn't in a Steam library Compy could find, so it can't see when it was updated.")).toBeTruthy(),
+      expect(screen.getByText("Compy couldn't match Game A to a Steam install, so it can't see when it was updated.")).toBeTruthy(),
     );
   });
 
@@ -331,7 +335,8 @@ describe("ParamedicCard", () => {
     await waitFor(() => expect(screen.getByText("Windows: no quality or feature update in this period.")).toBeTruthy());
     expect(screen.getByText(/4 programs were installed on .*: Discord, Paint Tool, Zip Thing and 1 more\./)).toBeTruthy();
     expect(screen.getByText("Graphics driver: still 2.0. Windows recorded no graphics driver install in this period.")).toBeTruthy();
-    expect(screen.getByText(/Game A's files: unchanged since/)).toBeTruthy();
+    expect(screen.getByText(/Steam hasn't recorded an update to Game A since/)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/Game A's files: unchanged/);
   });
 
   it("an install after the first rough session is shown as weakening the driver", async () => {
@@ -404,5 +409,128 @@ describe("paramedic words", () => {
 
   it("has the same keys in both languages", () => {
     expect(keys(zh)).toEqual(keys(en));
+  });
+});
+
+describe("ParamedicCard review r2", () => {
+  type F = ParamedicDiagnosis["findings"][number];
+  const find = (id: string, over: Partial<F> = {}): F => ({
+    id,
+    confidence: "possible",
+    in_play: true,
+    evidence: [],
+    since_when: { kind: "unknown" },
+    fix: { kind: "none", code: "no-safe-change" },
+    ...over,
+  });
+  const steps = (code: string, args: Record<string, string> = {}): F["fix"] => ({ kind: "steps", code, args });
+  const five = (): F[] => [
+    find("gpu-driver-change", { fix: steps("gpu-driver-change", { from: "1.0" }) }),
+    find("background-load", { fix: steps("background-load") }),
+    find("windows-update", { fix: steps("windows-update", { kb: "", quality: "false" }) }),
+    find("game-files-change", { since_when: { kind: "exact", at: "2026-11-18T18:00:00Z" }, fix: steps("game-files-change") }),
+    find("program-installed", {
+      evidence: [{ kind: "known", code: "installed-and-started", args: { name: "Discord", day: "2026-11-19T08:00:00Z" }, against: false, source: "uninstall-keys" }],
+      fix: steps("program-installed", { names: "Discord" }),
+    }),
+  ];
+
+  it("with candidates Compy can't tell apart, each one's steps wait behind How to check this", async () => {
+    await ask({ ...base, why_first: "not-separable", findings: five().slice(0, 2) });
+    await waitFor(() => expect(screen.getByText("Compy can't tell which of these it is yet")).toBeTruthy());
+    expect(screen.queryByText(/Press Windows \+ X and open Device Manager/)).toBeNull();
+    const [first] = screen.getAllByRole("button", { name: "How to check this" });
+    expect(first.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(first);
+    expect(first.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText(/Press Windows \+ X and open Device Manager/)).toBeTruthy();
+  });
+
+  it("shows at most three candidates, the rest behind Show n more", async () => {
+    await ask({ ...base, why_first: "not-separable", findings: five() });
+    await waitFor(() => expect(screen.getAllByTestId("paramedic-candidate").length).toBe(3));
+    fireEvent.click(screen.getByRole("button", { name: "Show 2 more" }));
+    expect(screen.getAllByTestId("paramedic-candidate").length).toBe(5);
+    expect(screen.queryByRole("button", { name: /Show \d+ more/ })).toBeNull();
+  });
+
+  it("keeps the always-true limits under What Compy can't see, apart from what could not be read", async () => {
+    await ask({
+      ...base,
+      limits: [
+        { kind: "driver", code: "classes", args: {} },
+        { kind: "programs", code: "no-install-date", args: { n: "27" } },
+        { kind: "driver", code: "access-denied", args: {} },
+      ],
+    });
+    await waitFor(() => expect(screen.getByTestId("paramedic-limits")).toBeTruthy());
+    const fold = screen.getByTestId("paramedic-limits");
+    expect(fold.textContent).toMatch(/What Compy can't see/);
+    expect(fold.textContent).toMatch(/Compy reads graphics, audio, network and chipset driver installs only/);
+    expect(fold.textContent).toMatch(/27 here/);
+    expect(fold.textContent).not.toMatch(/administrator rights/);
+    const checked = screen.getByTestId("paramedic-checked");
+    expect(checked.textContent).toMatch(/administrator rights/);
+  });
+
+  it("says the install time once: dropped from the evidence when the heading shows that exact time, kept for a range", async () => {
+    const at = "2026-11-19T13:38:22Z";
+    const line = { kind: "known" as const, code: "install-recorded", args: { when: at, version: "2.0" }, against: false, source: "windows" };
+    const [driver] = base.findings;
+    await ask({ ...base, why_first: null, findings: [{ ...driver, confidence: "possible", evidence: [line], since_when: { kind: "exact", at } }] });
+    await waitFor(() => expect(screen.getByTestId("paramedic-leading")).toBeTruthy());
+    expect(screen.queryByText(/Windows recorded the driver install on/)).toBeNull();
+    cleanup();
+    await ask({
+      ...base,
+      why_first: null,
+      findings: [{ ...driver, confidence: "possible", evidence: [line], since_when: { kind: "observed-between", from: "2026-11-19T05:12:26Z", to: "2026-11-19T16:54:51Z" } }],
+    });
+    await waitFor(() => expect(screen.getByText(/Windows recorded the driver install on/)).toBeTruthy());
+  });
+
+  it("names the install day in the program heading and never a time of day", async () => {
+    await ask({ ...base, why_first: null, findings: [five()[4]] });
+    await waitFor(() => expect(screen.getByText(/A program installed on .* also started while you played/)).toBeTruthy());
+    expect(document.body.textContent).not.toMatch(/Between .*12:00 AM/);
+  });
+
+  it("counts updates it could not classify, with their KB ids", async () => {
+    await ask({
+      ...base,
+      seen: [
+        { id: "updates-unclassified", args: { n: "2", kbs: "KB5009999, KB5008888" } },
+        { id: "driver-reinstall-same", args: { when: "2026-11-19T12:00:00Z" } },
+        { id: "driver-install-prior-unknown", args: { when: "2026-11-19T12:00:00Z" } },
+        { id: "driver-other-install", args: { when: "2026-11-19T12:00:00Z" } },
+      ],
+    });
+    await waitFor(() => expect(screen.getByText("2 Windows updates Compy couldn't classify (KB5009999, KB5008888).")).toBeTruthy());
+    expect(screen.getAllByText(/Windows recorded the same driver version being installed again on/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/the version before it isn't known/)).toBeTruthy();
+    expect(screen.getByText(/for a different version than the one your rough sessions ran on/)).toBeTruthy();
+  });
+
+  it("no rendered line has an empty placeholder, for any finding in these fixtures", async () => {
+    const noVersion = find("gpu-driver-change", {
+      since_when: { kind: "exact", at: "2026-11-19T12:00:00Z" },
+      evidence: [{ kind: "known", code: "install-recorded", args: { when: "2026-11-19T12:00:00Z", version: "" }, against: false, source: "windows" }],
+    });
+    const noKb = find("windows-update", {
+      evidence: [{ kind: "known", code: "update-installed", args: { kb: "", when: "2026-11-19T12:00:00Z", class: "feature" }, against: false, source: "windows" }],
+      fix: steps("windows-update", { kb: "", quality: "false" }),
+    });
+    for (const findings of [[noVersion, noKb, ...five()], base.findings]) {
+      await ask({ ...base, why_first: "not-separable", findings });
+      await waitFor(() => expect(screen.getByText("Compy can't tell which of these it is yet")).toBeTruthy());
+      const more = screen.queryByRole("button", { name: /Show \d+ more/ });
+      if (more) fireEvent.click(more);
+      for (const b of screen.queryAllByRole("button", { name: "How to check this" })) fireEvent.click(b);
+      const bad = [...document.querySelectorAll("li, p, span, summary, button, h2")]
+        .map((el) => el.textContent ?? "")
+        .filter((t) => /\s{2,}| [.,]|\{\{|\(\)|\bfrom \.|version \./.test(t));
+      expect(bad).toEqual([]);
+      cleanup();
+    }
   });
 });

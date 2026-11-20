@@ -55,8 +55,6 @@ function whatText(id: string, t: T): string | null {
       return t("paramedic.finding.windowsBuildChange.what");
     case "windows-update":
       return t("paramedic.finding.windowsUpdate.what");
-    case "program-installed":
-      return t("paramedic.finding.programInstalled.what");
     case "other-driver-change":
       return t("paramedic.finding.otherDriver.what");
     default:
@@ -73,6 +71,11 @@ function findingTitle(f: ParamedicFinding, { t, dates, game }: Ctx): string | nu
   // Steam's time moves on an update, a file verification or added content: the heading says only that the files changed.
   if (f.id === "game-files-change" && f.since_when.kind === "exact") {
     return t("paramedic.finding.gameFiles.what", { game, when: dates.day(f.since_when.at) });
+  }
+  // Installs carry a day, never a time of day: the heading names the day.
+  if (f.id === "program-installed") {
+    const day = f.evidence.find((e) => e.code === "installed-and-started")?.args.day;
+    if (day) return t("paramedic.finding.programInstalled.what", { day: dates.day(day) });
   }
   return whatText(f.id, t);
 }
@@ -122,7 +125,15 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
     case "install-after-rough":
       return t("paramedic.evidence.installAfterRough", { when: dates.dayTime(a.when) });
     case "update-installed":
-      return t("paramedic.evidence.updateInstalled", { kb: a.kb, when: dates.dayTime(a.when) });
+      return a.kb
+        ? t("paramedic.evidence.updateInstalled", { kb: a.kb, when: dates.dayTime(a.when) })
+        : t("paramedic.evidence.updateInstalledNoKb", { when: dates.dayTime(a.when) });
+    case "delivered-by-update":
+      return t("paramedic.evidence.deliveredByUpdate");
+    case "reinstall-same-version":
+      return t("paramedic.evidence.reinstallSameVersion", { when: dates.dayTime(a.when) });
+    case "install-prior-unknown":
+      return t("paramedic.evidence.installPriorUnknown", { when: dates.dayTime(a.when) });
     case "update-more":
       return t("paramedic.evidence.updateMore", { count: Number(a.count) });
     case "files-changed":
@@ -329,6 +340,16 @@ function seenLine(s: ParamedicRuledOut, { t, dates }: Ctx): string | null {
       return t("paramedic.seen.otherDrivers", { count: Number(a.count), classes: driverClasses(a.classes, t) });
     case "driver-install-same-stamp":
       return t("paramedic.seen.driverInstallSameStamp", { when: dates.dayTime(a.when) });
+    case "driver-reinstall-same":
+      return t("paramedic.evidence.reinstallSameVersion", { when: dates.dayTime(a.when) });
+    case "driver-install-prior-unknown":
+      return t("paramedic.evidence.installPriorUnknown", { when: dates.dayTime(a.when) });
+    case "driver-other-install":
+      return t("paramedic.seen.driverOtherInstall", { when: dates.dayTime(a.when) });
+    case "updates-unclassified":
+      return a.kbs
+        ? t("paramedic.seen.updatesUnclassifiedKb", { count: Number(a.n), kbs: a.kbs })
+        : t("paramedic.seen.updatesUnclassified", { count: Number(a.n) });
     default:
       return null;
   }
@@ -411,8 +432,12 @@ function limitLine(l: ParamedicLimit, ctx: Ctx): string | null {
 
 const present = (xs: (string | null)[]): string[] => xs.filter((x): x is string => !!x);
 
-function Evidence({ list, ctx }: { list: ParamedicEvidence[]; ctx: Ctx }) {
-  const rows = list.map((e) => ({ e, text: evidenceLine(e, ctx) })).filter((r) => r.text);
+/** `hideInstallAt`: the exact time the heading already shows, so "Windows recorded the install" is not said twice. */
+function Evidence({ list, ctx, hideInstallAt }: { list: ParamedicEvidence[]; ctx: Ctx; hideInstallAt?: string }) {
+  const rows = list
+    .filter((e) => !(hideInstallAt && e.code === "install-recorded" && e.args.when === hideInstallAt))
+    .map((e) => ({ e, text: evidenceLine(e, ctx) }))
+    .filter((r) => r.text);
   if (rows.length === 0) return null;
   return (
     <ul className="gl-para-lines">
@@ -428,8 +453,26 @@ function Evidence({ list, ctx }: { list: ParamedicEvidence[]; ctx: Ctx }) {
   );
 }
 
-function FixBlock({ fix, ctx }: { fix: ParamedicFix; ctx: Ctx }) {
+/** `collapsible`: with several candidates Compy cannot tell apart, each one's steps wait behind "How to check this". */
+function FixBlock({ fix, ctx, collapsible }: { fix: ParamedicFix; ctx: Ctx; collapsible?: boolean }) {
+  const [open, setOpen] = useState(false);
   const steps = stepLines(fix, ctx);
+  if (steps.length > 0 && collapsible) {
+    return (
+      <div>
+        <button type="button" className="gl-ghost" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          {ctx.t("paramedic.fix.toggle")}
+        </button>
+        {open && (
+          <ol className="gl-para-lines gl-para-steps">
+            {steps.map((x, i) => (
+              <li key={i}>{x}</li>
+            ))}
+          </ol>
+        )}
+      </div>
+    );
+  }
   if (steps.length > 0) {
     return (
       <div>
@@ -515,11 +558,32 @@ function Leading({ f, d, ctx, plain }: { f: ParamedicFinding; d: ParamedicDiagno
       )}
       <span className="gl-row-title">{findingTitle(f, ctx)}</span>
       {since && <span className="gl-row-sub">{since}</span>}
-      <Evidence list={f.evidence} ctx={ctx} />
+      <Evidence list={f.evidence} ctx={ctx} hideInstallAt={f.since_when.kind === "exact" ? f.since_when.at : undefined} />
       {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
-      <FixBlock fix={f.fix} ctx={ctx} />
+      <FixBlock fix={f.fix} ctx={ctx} collapsible={plain} />
       {!plain && <span className="gl-row-sub">{t("paramedic.card.notProven")}</span>}
     </div>
+  );
+}
+
+const CANDIDATES_SHOWN = 3;
+
+/** The changes that line up when Compy cannot tell them apart: three at first, the rest on a tap. */
+function Candidates({ list, d, ctx }: { list: ParamedicFinding[]; d: ParamedicDiagnosis; ctx: Ctx }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? list : list.slice(0, CANDIDATES_SHOWN);
+  const hidden = list.length - shown.length;
+  return (
+    <>
+      {shown.map((f) => (
+        <Leading key={f.id} f={f} d={d} ctx={ctx} plain />
+      ))}
+      {hidden > 0 && (
+        <button type="button" className="gl-ghost" onClick={() => setAll(true)}>
+          {ctx.t("paramedic.notSeparable.showMore", { n: hidden })}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -533,7 +597,7 @@ function AlsoPossible({ list, ctx }: { list: ParamedicFinding[]; ctx: Ctx }) {
           <div className="gl-para-lead" key={f.id}>
             <span className="gl-row-title">{findingTitle(f, ctx)}</span>
             {sinceText(f.since_when, ctx) && <span className="gl-row-sub">{sinceText(f.since_when, ctx)}</span>}
-            <Evidence list={f.evidence} ctx={ctx} />
+            <Evidence list={f.evidence} ctx={ctx} hideInstallAt={f.since_when.kind === "exact" ? f.since_when.at : undefined} />
           </div>
         ))}
       </div>
@@ -545,8 +609,12 @@ function Checked({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const { t } = ctx;
   const ruled = present(d.not_it.map((n) => ruledOutLine(n, ctx)));
   const seen = present(d.seen.map((s) => seenLine(s, ctx)));
-  const unknown = present([...d.unknowns.map((u) => unknownLine(u, ctx)), ...d.limits.map((l) => limitLine(l, ctx))]);
-  if (ruled.length === 0 && seen.length === 0 && unknown.length === 0) return null;
+  // What is true of every PC (which driver classes Compy reads, programs without a date) is kept apart from
+  // what could not be read this time.
+  const always = (l: ParamedicLimit) => l.code === "classes" || l.code === "no-install-date";
+  const unknown = present([...d.unknowns.map((u) => unknownLine(u, ctx)), ...d.limits.filter((l) => !always(l)).map((l) => limitLine(l, ctx))]);
+  const fixed = present(d.limits.filter(always).map((l) => limitLine(l, ctx)));
+  if (ruled.length === 0 && seen.length === 0 && unknown.length === 0 && fixed.length === 0) return null;
   return (
     <details className="gl-para-fold" data-testid="paramedic-checked">
       <summary>{t("paramedic.checked.title")}</summary>
@@ -581,6 +649,16 @@ function Checked({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
             </ul>
           </div>
         )}
+        {fixed.length > 0 && (
+          <details className="gl-para-fold" data-testid="paramedic-limits">
+            <summary>{t("paramedic.checked.cantSeeFold")}</summary>
+            <ul className="gl-para-lines">
+              {fixed.map((l) => (
+                <li key={l}>{l}</li>
+              ))}
+            </ul>
+          </details>
+        )}
       </div>
     </details>
   );
@@ -597,11 +675,7 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
       <>
         <Problem d={d} ctx={ctx} />
         <h2 className="gl-card-title">{t("paramedic.notSeparable.title")}</h2>
-        {d.findings
-          .filter((f) => f.in_play)
-          .map((f) => (
-            <Leading key={f.id} f={f} d={d} ctx={ctx} plain />
-          ))}
+        <Candidates list={d.findings.filter((f) => f.in_play)} d={d} ctx={ctx} />
         {d.findings.some((f) => f.in_play && f.id === "background-load") ? (
           <p className="gl-para-note">{t("paramedic.notSeparable.next", { game })}</p>
         ) : (

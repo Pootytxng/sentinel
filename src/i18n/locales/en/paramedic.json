@@ -64,7 +64,7 @@
       "what": "{{game}}'s files changed on {{when}}"
     },
     "programInstalled": {
-      "what": "A program installed in this period also ran in the rough sessions"
+      "what": "A program installed on {{day}} also started while you played"
     },
     "otherDriver": {
       "what": "A driver other than graphics was updated"
@@ -120,7 +120,11 @@
     "filesChanged": "Steam says {{game}}'s files changed on {{when}}. That can be an update, a file verification or added content.",
     "installedAndStarted": "{{name}} was installed on {{day}} and also started during the rough sessions.",
     "otherDriverInstalled_one": "Windows recorded {{count}} {{classes}} driver install on {{when}}, and nothing else Compy found lines up with the timing.",
-    "otherDriverInstalled_other": "Windows recorded {{count}} {{classes}} driver installs, the first on {{when}}, and nothing else Compy found lines up with the timing."
+    "otherDriverInstalled_other": "Windows recorded {{count}} {{classes}} driver installs, the first on {{when}}, and nothing else Compy found lines up with the timing.",
+    "deliveredByUpdate": "Windows Update delivered it.",
+    "reinstallSameVersion": "Windows recorded the same driver version being installed again on {{when}}.",
+    "installPriorUnknown": "Windows recorded a graphics driver install on {{when}}; the version before it isn't known.",
+    "updateInstalledNoKb": "Windows installed an update on {{when}}."
   },
   "fix": {
     "title": "How to fix it",
@@ -166,7 +170,8 @@
     "programInstalled": {
       "step1": "Close {{names}} while you play, or uninstall it if you don't need it.",
       "step2": "Play {{game}} once, then press Something's wrong again."
-    }
+    },
+    "toggle": "How to check this"
   },
   "card": {
     "why": "Why this one first: {{reason}}",
@@ -195,9 +200,10 @@
     "windowsBuildChange": "Windows: still build {{build}}.",
     "memoryAsFull": "Memory: as full as in your normal sessions (peaked {{peakGb}} of {{totalGb}} GB; normal sessions peaked {{basePeakGb}} GB).",
     "windowsUpdate": "Windows: no quality or feature update in this period.",
-    "gameFiles": "{{game}}'s files: unchanged since {{when}}.",
+    "gameFiles": "Steam hasn't recorded an update to {{game}} since {{when}}.",
     "gpuDriverNoInstall": "Graphics driver: still {{driver}}. Windows recorded no graphics driver install in this period.",
-    "seen": "Also looked at:"
+    "seen": "Also looked at:",
+    "cantSeeFold": "What Compy can't see"
   },
   "unknown": {
     "startupPrograms": "Which programs start with Windows, compared with before",
@@ -238,7 +244,8 @@
   "notSeparable": {
     "title": "Compy can't tell which of these it is yet",
     "next": "To find out: play {{game}} once with nothing else running. Compy will compare.",
-    "nextOther": "Play {{game}} once more. Compy may still not be able to tell these apart."
+    "nextOther": "Play {{game}} once more. Compy may still not be able to tell these apart.",
+    "showMore": "Show {{n}} more"
   },
   "cap": {
     "none": "no cap",
@@ -246,7 +253,7 @@
     "at": "{{fps}} fps"
   },
   "seen": {
-    "updatesMinor": "{{n}} security definition and {{m}} app updates, which Compy doesn't treat as likely causes.",
+    "updatesMinor": "{{n}} security definition and {{m}} app updates (listed for completeness).",
     "programsInstalled_one": "{{count}} program was installed on {{day}}: {{names}}.",
     "programsInstalled_other": "{{count}} programs were installed on {{day}}: {{names}}.",
     "programsInstalledMore": "{{count}} programs were installed on {{day}}: {{names}} and {{more}} more.",
@@ -254,12 +261,17 @@
     "otherDrivers_one": "{{count}} other driver was installed in this period ({{classes}}).",
     "otherDrivers_other": "{{count}} other drivers were installed in this period ({{classes}}).",
     "driverInstallSameStamp": "Windows recorded a graphics driver install on {{when}}, but the driver version on your sessions didn't change.",
-    "dayRange": "{{a}} to {{b}}"
+    "dayRange": "{{a}} to {{b}}",
+    "updatesUnclassified_one": "{{count}} Windows update Compy couldn't classify.",
+    "updatesUnclassified_other": "{{count}} Windows updates Compy couldn't classify.",
+    "updatesUnclassifiedKb_one": "{{count}} Windows update Compy couldn't classify ({{kbs}}).",
+    "updatesUnclassifiedKb_other": "{{count}} Windows updates Compy couldn't classify ({{kbs}}).",
+    "driverOtherInstall": "Windows recorded a graphics driver install on {{when}} for a different version than the one your rough sessions ran on."
   },
   "limit": {
     "cantSee": "Compy couldn't see {{what}}: {{why}}.",
     "partial": "Compy saw only part of {{what}}: {{why}}.",
-    "notSteam": "{{game}} isn't in a Steam library Compy could find, so it can't see when it was updated.",
+    "notSteam": "Compy couldn't match {{game}} to a Steam install, so it can't see when it was updated.",
     "classes": "Compy reads graphics, audio, network and chipset driver installs only, not other drivers.",
     "noInstallDate": "Compy can't see Store apps, or programs that don't record an install date ({{n}} here).",
     "what": {

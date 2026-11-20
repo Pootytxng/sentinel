@@ -126,75 +126,136 @@ fn gpu_installs<'a>(c: &'a Ctx) -> Vec<(&'a ChangeEvent, DateTime<Utc>, Bucket)>
     v
 }
 
-/// The install that explains `to` (the version the first rough session ran): the one Windows recorded
-/// for that version, else the newest one in the period, else the newest later one (shown against).
+/// The newest graphics-driver row of each kind that never dates a change: the same version configured
+/// again, and a row whose previous version is unknown. Rows from before the period are not shown.
+fn unclear_rows(c: &Ctx) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
+    let (Some(r), sp) = (report(c), span(c)) else { return (None, None) };
+    let newest = |want: Option<bool>| {
+        kind_events(r, ChangeKind::GpuDriver)
+            .filter(|e| e.what.version_changed == want && bucket(e, &sp) != Bucket::Before)
+            .filter_map(when_of)
+            .max()
+    };
+    (newest(Some(false)), newest(None))
+}
+
+/// Is this Windows Update row the same install as that driver row? The same moment (within two minutes)
+/// and, when both name a version, the same version.
+fn same_install(update: &ChangeEvent, driver: &ChangeEvent) -> bool {
+    let (Some(a), Some(b)) = (when_of(update), when_of(driver)) else { return false };
+    if (a - b).num_seconds().abs() > 120 {
+        return false;
+    }
+    match (update.what.to_version.as_deref(), driver.what.to_version.as_deref()) {
+        (Some(x), Some(y)) => crate::hardware::same_driver(x, y),
+        _ => true,
+    }
+}
+
+/// A driver-class Windows Update that delivered this graphics driver install.
+fn delivered_by_update(r: &ChangeReport, driver: &ChangeEvent) -> bool {
+    kind_events(r, ChangeKind::WindowsUpdate).any(|w| class_of(w) == "driver" && same_install(w, driver))
+}
+
+fn delivered_line(c: &Ctx, e: &ChangeEvent) -> Option<Evidence> {
+    report(c).filter(|r| delivered_by_update(r, e)).map(|_| ev(EvidenceKind::Known, "delivered-by-update", "windows", false, &[]))
+}
+
+/// The install that explains `to` (the version the first rough session ran). With `to` known, only an
+/// install of THAT version counts (another adapter's, or another version's, never dates this change):
+/// the newest in the period, else the newest later one (shown against). With `to` unknown, the newest
+/// in the period, else the newest later one.
 fn pick_install<'a>(
     installs: &[(&'a ChangeEvent, DateTime<Utc>, Bucket)],
     to: Option<&str>,
 ) -> Option<(&'a ChangeEvent, DateTime<Utc>, Bucket)> {
-    if let Some(t) = to {
-        let hit = installs.iter().filter(|(_, _, b)| *b == Bucket::Timing).find(|(e, _, _)| {
-            e.what.to_version.as_deref().is_some_and(|v| crate::hardware::same_driver(v, t))
-        });
-        if let Some(hit) = hit {
-            return Some(*hit);
-        }
-    }
-    let newest = |want: Bucket| installs.iter().rev().find(|(_, _, b)| *b == want).copied();
+    let newest = |want: Bucket| {
+        installs
+            .iter()
+            .rev()
+            .find(|(e, _, b)| {
+                *b == want
+                    && match to {
+                        None => true,
+                        Some(t) => e.what.to_version.as_deref().is_some_and(|v| crate::hardware::same_driver(v, t)),
+                    }
+            })
+            .copied()
+    };
     newest(Bucket::Timing).or_else(|| newest(Bucket::After))
 }
 
-/// What the driver detector adds from Windows' own record. `stamps_differ`: the sessions' driver stamps
-/// say the driver changed. Returns the evidence line, the exact time (if any) and whether the install
-/// came after the first rough session.
+/// What the driver detector adds from Windows' own record. Returns the evidence lines, the exact time (if
+/// any) and whether the install came after the first rough session.
 pub(super) struct DriverRecord {
-    pub evidence: Evidence,
+    pub evidence: Vec<Evidence>,
     pub exact: Option<DateTime<Utc>>,
     pub after_rough: bool,
 }
 
-pub(super) fn driver_record(c: &Ctx, to: Option<&str>, first_new: DateTime<Utc>) -> DriverRecord {
+pub(super) fn driver_record(c: &Ctx, to: Option<&str>, first_new: DateTime<Utc>, out: &mut Out) -> DriverRecord {
     let installs = gpu_installs(c);
-    let not_read = || DriverRecord {
-        evidence: ev(EvidenceKind::Unknown, "install-time-not-read", "snapshots", false, &[("seenAt", iso(first_new))]),
-        exact: None,
-        after_rough: false,
-    };
     match pick_install(&installs, to) {
-        Some((e, at, Bucket::Timing)) => DriverRecord {
-            evidence: ev(
+        Some((e, at, Bucket::Timing)) => {
+            let mut evidence = vec![ev(
                 EvidenceKind::Known,
                 "install-recorded",
                 "windows",
                 false,
                 &[("when", iso(at)), ("version", e.what.to_version.clone().unwrap_or_default())],
-            ),
-            exact: Some(at),
-            after_rough: false,
-        },
+            )];
+            evidence.extend(delivered_line(c, e));
+            DriverRecord { evidence, exact: Some(at), after_rough: false }
+        }
         Some((_, at, _)) => DriverRecord {
-            evidence: ev(EvidenceKind::Measured, "install-after-rough", "windows", true, &[("when", iso(at))]),
+            evidence: vec![ev(EvidenceKind::Measured, "install-after-rough", "windows", true, &[("when", iso(at))])],
             exact: None,
             after_rough: true,
         },
-        // Windows was read completely and has no install in the period, while the stamps differ: both
-        // facts are shown and neither is explained away. Anything less than complete says nothing.
-        None => match report(c) {
-            Some(r) if is_complete(r, ChangeKind::GpuDriver) && installs.is_empty() => DriverRecord {
-                evidence: ev(EvidenceKind::Unknown, "install-not-recorded", "windows", false, &[("seenAt", iso(first_new))]),
-                exact: None,
-                after_rough: false,
-            },
-            _ => not_read(),
-        },
+        None => {
+            // An install of some other version (another adapter, another driver) is shown on its own and
+            // never supplies this driver's time.
+            if let Some((_, at, _)) = installs.iter().rev().find(|(_, _, b)| *b != Bucket::Before) {
+                out.see("driver-other-install", &[("when", iso(*at))]);
+            }
+            // "Windows has no record" needs a complete read AND no graphics driver row of any kind: a
+            // same-version row or a row with an unknown previous version is still an install record.
+            let none_at_all = report(c).is_some_and(|r| is_complete(r, ChangeKind::GpuDriver) && kind_events(r, ChangeKind::GpuDriver).next().is_none());
+            let mut evidence = vec![if none_at_all {
+                ev(EvidenceKind::Unknown, "install-not-recorded", "windows", false, &[("seenAt", iso(first_new))])
+            } else {
+                ev(EvidenceKind::Unknown, "install-time-not-read", "snapshots", false, &[("seenAt", iso(first_new))])
+            }];
+            let (same, unknown) = unclear_rows(c);
+            if let Some(at) = same {
+                evidence.push(ev(EvidenceKind::Known, "reinstall-same-version", "windows", false, &[("when", iso(at))]));
+            }
+            if let Some(at) = unknown {
+                evidence.push(ev(EvidenceKind::Known, "install-prior-unknown", "windows", false, &[("when", iso(at))]));
+            }
+            DriverRecord { evidence, exact: None, after_rough: false }
+        }
     }
 }
 
 /// With the sessions' driver stamps unread, Windows' own dated install still places a driver change in
-/// the period: timing only, so Possible at best.
+/// the period: timing only, so Possible at best. The fix steps name versions only when Windows gave them.
 pub(super) fn windows_only_driver(c: &Ctx, out: &mut Out) {
     let installs = gpu_installs(c);
     let Some((e, at, Bucket::Timing)) = pick_install(&installs, None) else { return };
+    let known = |v: &Option<String>| v.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
+    let fix = match (known(&e.what.from_version), known(&e.what.to_version)) {
+        (Some(from), Some(to)) => steps("gpu-driver-change", &[("from", from), ("to", to)]),
+        _ => no_safe_change(),
+    };
+    let mut evidence = vec![ev(
+        EvidenceKind::Known,
+        "install-recorded",
+        "windows",
+        false,
+        &[("when", iso(at)), ("version", e.what.to_version.clone().unwrap_or_default())],
+    )];
+    evidence.extend(delivered_line(c, e));
     out.cands.push(Cand {
         id: "gpu-driver-change",
         t: true,
@@ -204,50 +265,75 @@ pub(super) fn windows_only_driver(c: &Ctx, out: &mut Out) {
         m: false,
         c1: false,
         since: When::Exact { at: iso(at) },
-        fix: steps("gpu-driver-change", &[("from", String::new()), ("to", e.what.to_version.clone().unwrap_or_default())]),
-        evidence: vec![ev(
-            EvidenceKind::Known,
-            "install-recorded",
-            "windows",
-            false,
-            &[("when", iso(at)), ("version", e.what.to_version.clone().unwrap_or_default())],
-        )],
+        fix,
+        evidence,
     });
 }
 
 /// The driver is unchanged on the sessions' stamps. Windows' record is added only when it was read
-/// completely and shows no graphics driver install at all.
+/// completely and has NO graphics driver row in the period, of any kind.
 pub(super) fn driver_unchanged_args(c: &Ctx) -> Vec<(&'static str, String)> {
     match report(c) {
-        Some(r) if is_complete(r, ChangeKind::GpuDriver) && kind_events(r, ChangeKind::GpuDriver).all(|e| e.what.version_changed != Some(true)) => {
+        Some(r) if is_complete(r, ChangeKind::GpuDriver) && kind_events(r, ChangeKind::GpuDriver).next().is_none() => {
             vec![("windows", "none".to_string())]
         }
         _ => Vec::new(),
     }
 }
 
-/// Stamps equal, yet Windows recorded a real install in the period: said as it is, not as a change.
+/// Stamps equal, yet Windows recorded an install row in the period: said as it is, not as a change.
 pub(super) fn driver_same_stamp_note(c: &Ctx, out: &mut Out) {
     if let Some((_, at, Bucket::Timing)) = pick_install(&gpu_installs(c), None) {
         out.see("driver-install-same-stamp", &[("when", iso(at))]);
     }
+    let (same, unknown) = unclear_rows(c);
+    if let Some(at) = same {
+        out.see("driver-reinstall-same", &[("when", iso(at))]);
+    }
+    if let Some(at) = unknown {
+        out.see("driver-install-prior-unknown", &[("when", iso(at))]);
+    }
+}
+
+fn is_major(class: &str) -> bool {
+    matches!(class, "quality" | "feature" | "driver")
+}
+
+fn is_minor(class: &str) -> bool {
+    matches!(class, "definition" | "store-app")
 }
 
 pub(super) fn detect_windows_update(c: &Ctx, out: &mut Out) {
     let Some(r) = report(c) else { return };
     let sp = span(c);
     let all: Vec<&ChangeEvent> = kind_events(r, ChangeKind::WindowsUpdate).collect();
-    let major = |e: &&ChangeEvent| matches!(class_of(e).as_str(), "quality" | "feature" | "driver");
-    let mut hits: Vec<&ChangeEvent> =
-        all.iter().copied().filter(|e| major(e) && bucket(e, &sp) == Bucket::Timing && when_of(e).is_some()).collect();
+    // A driver-class update that IS a graphics driver install Windows also recorded is the same install:
+    // the driver finding says "Windows Update delivered it", so it is not a second candidate.
+    let folded = |e: &ChangeEvent| class_of(e) == "driver" && kind_events(r, ChangeKind::GpuDriver).any(|g| same_install(e, g));
+    let mut hits: Vec<&ChangeEvent> = all
+        .iter()
+        .copied()
+        .filter(|e| is_major(&class_of(e)) && bucket(e, &sp) == Bucket::Timing && when_of(e).is_some() && !folded(e))
+        .collect();
     hits.sort_by_key(|e| when_of(e));
     let minor = |class: &str| all.iter().filter(|e| bucket(e, &sp) == Bucket::Timing && class_of(e) == class).count();
     let (defs, apps) = (minor("definition"), minor("store-app"));
     if defs + apps > 0 {
         out.see("updates-minor", &[("n", defs.to_string()), ("m", apps.to_string())]);
     }
+    // An update whose class Compy does not recognise (a title in another language, a new kind) is never
+    // dropped and never an "unchanged" fact: it is counted, with its KB id when there is one.
+    let unclassified: Vec<&&ChangeEvent> = all.iter().filter(|e| !is_major(&class_of(e)) && !is_minor(&class_of(e))).collect();
+    if !unclassified.is_empty() {
+        let mut kbs: Vec<String> = unclassified.iter().filter_map(|e| e.what.kb.clone()).collect();
+        kbs.sort();
+        kbs.dedup();
+        out.see("updates-unclassified", &[("n", unclassified.len().to_string()), ("kbs", kbs.join(", "))]);
+    }
     if hits.is_empty() {
-        if is_complete(r, ChangeKind::WindowsUpdate) && !all.iter().any(major) {
+        // "No quality or feature update" is said only when EVERY update row in the window is a
+        // recognised minor kind (definition, Store app) and the log was read completely.
+        if is_complete(r, ChangeKind::WindowsUpdate) && all.iter().all(|e| is_minor(&class_of(e))) {
             out.ruled_out("windows-update", &[]);
         }
         return;
@@ -271,7 +357,8 @@ pub(super) fn detect_windows_update(c: &Ctx, out: &mut Out) {
     }
     let (first, last) = (when_of(hits[0]).unwrap_or(sp.lo), when_of(hits[hits.len() - 1]).unwrap_or(sp.lo));
     let quality = hits.iter().any(|e| class_of(e) == "quality");
-    let kb = hits.iter().find_map(|e| e.what.kb.clone()).unwrap_or_default();
+    // The uninstall step names the quality update's own KB, never another update's.
+    let kb = hits.iter().filter(|e| class_of(e) == "quality").find_map(|e| e.what.kb.clone()).unwrap_or_default();
     out.cands.push(Cand {
         id: "windows-update",
         t: true,
@@ -306,8 +393,8 @@ pub(super) fn detect_game_files(c: &Ctx, out: &mut Out) {
         });
         return;
     }
-    // "Unchanged" only when Steam's last change is older than the period: a later change would have
-    // hidden one inside it (the manifest keeps only the newest).
+    // Steam's last recorded update is older than the period: a later change would have hidden one inside
+    // it (the manifest keeps only the newest). The card words it as Steam's record, not as the files.
     if is_complete(r, ChangeKind::GameUpdate) {
         if let Some(at) = r.game_last_update.as_ref().and_then(when_of).filter(|at| *at <= sp.lo) {
             out.ruled_out("game-files-change", &[("since", iso(at))]);
@@ -351,7 +438,7 @@ pub(super) fn detect_programs(c: &Ctx, out: &mut Out) {
             ("last", day(installed[installed.len() - 1])),
         ],
     );
-    // A candidate only when the program is ALSO among those seen starting in a rough session.
+    // A candidate only when the program is ALSO among those seen starting in a rough session...
     let mut rough: Vec<&str> = Vec::new();
     for s in c.affected.iter().copied().chain(c.partial.iter().copied()) {
         rough.extend(s.started_names.iter().map(String::as_str));
@@ -363,13 +450,35 @@ pub(super) fn detect_programs(c: &Ctx, out: &mut Out) {
             }
         }
     }
-    let matched: Vec<&&ChangeEvent> =
-        installed.iter().filter(|e| e.what.name.as_deref().is_some_and(|n| rough.iter().any(|p| same_program(n, p)))).collect();
-    let Some(first) = matched.first() else { return };
-    let since = match (first.when.at, matched[matched.len() - 1].when.until) {
-        (Some(a), Some(b)) => When::ObservedBetween { from: iso(a), to: iso(b) },
-        _ => When::Unknown,
-    };
+    // ...and did NOT already start in a session judged Normal before the period: a program that ran
+    // before was updated or reinstalled, not newly installed. (Absence from the recorder's sample proves
+    // nothing; presence does.)
+    let before = c.first_bad.start();
+    let mut ran_before: Vec<&str> = Vec::new();
+    for s in &c.base {
+        ran_before.extend(s.started_names.iter().map(String::as_str));
+    }
+    for (s, j) in c.sess.iter().copied().zip(c.judged) {
+        if j.verdict == Verdict::Normal && s.start() < before {
+            ran_before.extend(s.started_names.iter().map(String::as_str));
+        }
+    }
+    for o in &c.others {
+        for (s, j) in o.sess.iter().copied().zip(&o.judged) {
+            if j.verdict == Verdict::Normal && s.start() < before {
+                ran_before.extend(s.started_names.iter().map(String::as_str));
+            }
+        }
+    }
+    let matched: Vec<&&ChangeEvent> = installed
+        .iter()
+        .filter(|e| {
+            e.what.name.as_deref().is_some_and(|n| rough.iter().any(|p| same_program(n, p)) && !ran_before.iter().any(|p| same_program(n, p)))
+        })
+        .collect();
+    if matched.is_empty() {
+        return;
+    }
     out.cands.push(Cand {
         id: "program-installed",
         t: true,
@@ -378,7 +487,8 @@ pub(super) fn detect_programs(c: &Ctx, out: &mut Out) {
         confounded: false,
         m: false,
         c1: false,
-        since,
+        // Installs carry a day, never a time: the heading names the day and no time of day is claimed.
+        since: When::Unknown,
         fix: steps(
             "program-installed",
             &[("names", matched.iter().take(PROGRAM_NAMES_SHOWN).filter_map(|e| e.what.name.clone()).collect::<Vec<_>>().join(", "))],
