@@ -6,7 +6,8 @@
 // It never assumes something is wrong (DIR-1a): a problem card appears only when the Care observer
 // found real evidence (pendingCare), and its two buttons are the same "Find out why" / "Not now"
 // handlers the console's card used. This page adds no mutation path; "Run a check" is the same
-// read-only FirstCheck the console opens.
+// read-only FirstCheck the console opens. "Something's wrong" (ParamedicCard, PC Paramedic F1) asks only
+// on a tap, reads recorded sessions and shows steps; it runs no fix and writes nothing either.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { GameReadiness, PendingCareIncident, Priorities, SessionSummary } from "../../types";
@@ -14,6 +15,7 @@ import { gameLibrary } from "../../data/game-library";
 import { knownFps } from "../../lib/session-metrics";
 import { wordFromBand, confidenceWordKey } from "../../data/confidence-word";
 import { TubeChart, type TubeBar } from "./TubeChart";
+import { ParamedicCard } from "./ParamedicCard";
 import { useDates } from "./GamesRoom";
 import { NavGlyph } from "../../design/NavGlyph";
 import { careHeadline, incidentKindLabel, incidentWhen, readinessWords } from "../../data/backend-words";
@@ -195,6 +197,9 @@ export function HomeGlass({
           </button>
         </div>
       </header>
+
+      {/* PC Paramedic F1: the "Something's wrong" door. Idle until tapped; nothing is read on mount. */}
+      {!noGames && <ParamedicCard />}
 
       {/* What Windows recorded (the Care observer's pointer). Its own band in the attention colour —
           never the accent fill, which on this page means "your most recent game". */}

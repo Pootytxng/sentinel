@@ -45,8 +45,9 @@ Line counts drift — treat as rough and verify against current code before asse
 - `tray.rs` (~177) — system-tray integration.
 
 **Intelligence & Measurement Platform (read-only, additive — no mutation markers, verified 2026-08-02)**
-- `machine_model.rs` (~1494) — Phase 2 (#385): the shared Machine Model. Composes ONE read-only `Fact<T>` view (value + evidence class + source + honest unknown) from the producers above; owns no store and probes nothing itself. Reports identity disagreement, never resolves it.
+- `machine_model.rs` (~1494) — Phase 2 (#385): the shared Machine Model. Composes ONE read-only `Fact<T>` view (value + evidence class + source + honest unknown) from the producers above; owns no store and probes nothing itself.
 - `intelligence.rs` (~3614) — Phase 1: canonical intelligence types, local event timeline, deterministic "What changed?" engine. READ-ONLY by doctrine; never mutates Windows, never networks.
+- `paramedic.rs` (~1259), `tests.rs` (~573) — PC Paramedic, READ-ONLY.
 - `intelligence_patterns.rs` (~903) — Phase 2: cross-session pattern detection over `sessions.json`.
 - `experiment.rs` (~1420) — Phase 3: single-variable experiment engine + optimization simulator. **ARMED** (`experiment_gate()` returns true, owner sign-off 2026-07-17) — the bench renders live. It APPLIES via `history::apply_recommendation`, so an already-active rec simulates to `already-configured`; do not route a rollback-shaped next test here.
 - `trial_candidates.rs` (~710) — P4-candidates/rank: read-only Trial picker filter + test order (ENGINE §3.1–3.7), one reason each.
@@ -56,4 +57,4 @@ Line counts drift — treat as rough and verify against current code before asse
 - `fuzz_support.rs` (~184) — test-only input generator for the property/fuzz suites.
 
 **Secondary state persistence**
-- `atomic_write.rs` (~447) — whole-file byte replacement (temp in the target's own dir → rename) for the SECONDARY stores: benchmark, comparison, readiness dismissals, drift, and the license token — which is signed plain text, not JSON, so its exact bytes pass through unserialized. An interrupted save leaves the previous complete file instead of a truncated one that every loader reads as "no data". **NOT power-loss durability, NOT a lock, NOT a transaction** — the module doc says so and the tests prove only a named interruption point. Writes no Windows state, so unstarred. Deliberately NOT used by the Trust Ledger or the signed remote rules; the module doc says why (there, not here, because this map's halves must stay disjoint).
+- `atomic_write.rs` (~447) — whole-file byte replacement (temp file, rename) for the SECONDARY stores: benchmark, comparison, readiness dismissals, drift, and the license token — which is signed plain text, not JSON, so its exact bytes pass through unserialized. An interrupted save leaves the previous complete file instead of a truncated one that every loader reads as "no data". **NOT power-loss durability, NOT a lock, NOT a transaction** — the module doc says so and the tests prove only a named interruption point. Writes no Windows state, so unstarred. Deliberately NOT used by the Trust Ledger or the signed remote rules; the module doc says why (there, not here, because this map's halves must stay disjoint).

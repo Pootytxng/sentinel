@@ -621,3 +621,54 @@
 :root[data-v2="on"] .gl-back-row {
   margin-bottom: 10px;
 }
+
+/* ── Paramedic card (F1): the "Something's wrong" door and what Compy found. Tokens only. ── */
+:root[data-v2="on"] .gl-para-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+:root[data-v2="on"] .gl-para-body p {
+  margin: 0;
+  font-size: var(--type-body);
+}
+:root[data-v2="on"] .gl-para-body .gl-para-note {
+  color: var(--v2-muted);
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .gl-para-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--type-label);
+}
+:root[data-v2="on"] .gl-para-lines.gl-para-steps {
+  padding-left: 20px;
+  list-style: decimal;
+}
+:root[data-v2="on"] .gl-para-lines .gl-chip {
+  margin-right: 6px;
+}
+:root[data-v2="on"] .gl-para-fold {
+  padding-top: 8px;
+  border-top: 1px solid var(--v2-line);
+}
+:root[data-v2="on"] .gl-para-fold > summary {
+  cursor: pointer;
+  font-size: var(--type-label);
+  font-weight: 600;
+}
+:root[data-v2="on"] .gl-para-fold > summary:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
+}
+:root[data-v2="on"] .gl-para-lead {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}

@@ -2446,15 +2446,15 @@ pub(crate) fn gaming_status_label(s: crate::gaming_session::SessionStatus) -> &'
     }
 }
 
-struct Gathered {
+pub(crate) struct Gathered {
     applied: Vec<crate::history::AppliedChange>,
-    sessions: Vec<crate::sessions::SessionSummary>,
+    pub(crate) sessions: Vec<crate::sessions::SessionSummary>,
     gaming_slot: Option<(String, &'static str)>,
     awards: Vec<crate::benchmark_scoreboard::AwardEntry>,
     benchmark_baseline_at: Option<String>,
     comparison: Option<crate::comparison::ComparisonResult>,
-    snapshots: Vec<IdentitySnapshot>,
-    drift_notices: Vec<crate::drift::DriftNotice>,
+    pub(crate) snapshots: Vec<IdentitySnapshot>,
+    pub(crate) drift_notices: Vec<crate::drift::DriftNotice>,
     /// Whether `applied` loaded at all. The timeline can honestly show fewer rows; the "What
     /// changed?" engine cannot honestly claim Compy was quiet, so it needs this told to it, together
     /// with `set_aside_through`, per window ([`Gathered::ledger_since`]).
@@ -2483,7 +2483,7 @@ impl Gathered {
     }
 }
 
-fn gather() -> Gathered {
+pub(crate) fn gather() -> Gathered {
     // One load, two readings. `unwrap_or_default` is fine for the timeline VIEW below — an empty
     // view is honest — but the error it swallows is exactly what the engine needs, so capture the
     // health before collapsing it. Transient failure (Err) is incompleteness for every window; a

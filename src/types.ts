@@ -1317,3 +1317,90 @@ export type MachineModel = {
   compy_changes: CompyChangeTruth;
   evidence: EvidenceSummary;
 };
+
+// PC Paramedic F1 (paramedic.rs, `paramedic_diagnose`): codes, ids and numbers only. Every sentence is
+// the card's own (locales/<lang>/paramedic.json). Read-only: the answer carries no action to run.
+export type ParamedicComplaint = "slow" | "crash" | "was-fine-before" | "unknown";
+
+export type ParamedicCantTellWhy =
+  | { kind: "nothing-changed" }
+  | { kind: "partial-measure"; percent: number }
+  | { kind: "no-sessions" }
+  | { kind: "crash-not-covered" };
+
+export type ParamedicState =
+  | { kind: "nothing-wrong"; sessions_checked: number }
+  | { kind: "cant-tell"; why: ParamedicCantTellWhy }
+  | { kind: "found" }
+  | { kind: "needs-more-play"; sessions_needed: number; have: number };
+
+export type ParamedicMetric = { ratio: number; p99_ms: number | null; avg_fps: number };
+
+export type ParamedicSessionRef = {
+  started_at: string;
+  game: string;
+  duration_secs: number;
+  samples: number;
+  avg_fps: number;
+  low1_fps: number;
+};
+
+export type ParamedicProblem = {
+  rule: "stutter-collapse" | "spikes";
+  spikes: boolean;
+  avg_lower: boolean;
+  before: ParamedicMetric;
+  now: ParamedicMetric;
+  last_normal_at: string;
+  sessions_affected: ParamedicSessionRef[];
+  partial_sessions: ParamedicSessionRef[];
+  other_games_affected: string[];
+};
+
+export type ParamedicEvidence = {
+  kind: "known" | "measured" | "supported-inference" | "expected-mechanism" | "unknown";
+  code: string;
+  args: Record<string, string>;
+  /** The line weakens the finding. */
+  against: boolean;
+  source: string;
+};
+
+export type ParamedicWhen =
+  | { kind: "exact"; at: string }
+  | { kind: "observed-between"; from: string; to: string }
+  | { kind: "seen"; at: string }
+  | { kind: "unknown" };
+
+export type ParamedicFix =
+  | { kind: "steps"; code: string; args: Record<string, string> }
+  | { kind: "none"; code: string }
+  | { kind: "hardware"; code: string }
+  | { kind: "one-click"; action: { kind: string; change_id: string }; reversible: boolean; needs_admin: boolean };
+
+export type ParamedicCertainty = "known" | "measured" | "likely" | "possible" | "mechanism" | "cant-tell";
+
+export type ParamedicFinding = {
+  id: string;
+  confidence: ParamedicCertainty;
+  evidence: ParamedicEvidence[];
+  since_when: ParamedicWhen;
+  fix: ParamedicFix;
+};
+
+export type ParamedicRuledOut = { id: string; args: Record<string, string> };
+
+export type ParamedicDiagnosis = {
+  complaint: ParamedicComplaint;
+  state: ParamedicState;
+  game: string | null;
+  game_name: string | null;
+  problem: ParamedicProblem | null;
+  findings: ParamedicFinding[];
+  not_it: ParamedicRuledOut[];
+  unknowns: string[];
+  baseline: ParamedicSessionRef | null;
+  first_bad: ParamedicSessionRef | null;
+  why_first: "cross-game" | "tie" | null;
+  method: string;
+};

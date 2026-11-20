@@ -1,0 +1,157 @@
+{
+  "label": "What Compy found",
+  "door": {
+    "button": "Something's wrong",
+    "sub": "Compy looks at what changed and tells you what it finds.",
+    "looking": "Looking at your recent sessions…",
+    "failed": "Compy couldn't read its records just now. Nothing on your PC was changed.",
+    "again": "Check again"
+  },
+  "problem": {
+    "title": "{{game}} has been running much rougher than usual",
+    "badge": "Measured",
+    "body_one": "Normally, when {{game}} dips, it still runs at about {{beforePct}}% of its usual speed. In your last session the dips went down to about {{nowPct}}%.",
+    "body_other": "Normally, when {{game}} dips, it still runs at about {{beforePct}}% of its usual speed. In your last {{count}} sessions the dips went down to about {{nowPct}}%.",
+    "spikes": "The worst hitches lasted {{nowMs}} ms, against about {{beforeMs}} ms before.",
+    "average": "It also averaged {{nowFps}} frames per second, against about {{beforeFps}} before.",
+    "otherGames": "{{games}} got rougher at the same time.",
+    "since": "It last ran normally on {{date}}.",
+    "partial_one": "Compy also saw 1 session it only measured part of. It didn't count it.",
+    "partial_other": "Compy also saw {{count}} sessions it only measured part of. It didn't count them."
+  },
+  "answer": {
+    "likely": "Most likely",
+    "possible": "Also possible",
+    "mechanism": "Often causes this (not measured on your PC)"
+  },
+  "finding": {
+    "gpuDriver": { "what": "Your graphics driver was updated" },
+    "backgroundLoad": { "what": "Other programs were busy while you played" },
+    "memoryPressure": { "what": "Your memory was nearly full while you played" },
+    "settingDrift": { "what": "A setting was changed outside Compy" },
+    "compyChange": { "what": "Compy had a different number of changes on" },
+    "hardwareChange": { "what": "Your hardware was different" },
+    "powerPlanChange": { "what": "Your power plan was different" },
+    "displayRefreshLower": { "what": "Your screen ran at a lower refresh rate" },
+    "windowsBuildChange": { "what": "Windows was updated" }
+  },
+  "since": {
+    "between": "Between {{a}} and {{b}}",
+    "exact": "On {{when}}",
+    "seen": "Compy noticed it on {{when}}"
+  },
+  "badge": {
+    "known": "Known",
+    "measured": "Measured",
+    "unknown": "Not recorded",
+    "against": "Weakens this"
+  },
+  "evidence": {
+    "driverChanged": "Your graphics driver changed from {{from}} to {{to}}.",
+    "sessionsSplit_one": "{{game}}'s last normal session ({{date}}) used the old driver; the rough one used the new one.",
+    "sessionsSplit_other": "{{game}}'s last normal session ({{date}}) used the old driver; all {{count}} rough ones used the new one.",
+    "crossGame": "{{games}} also got much rougher after the update, and never before it.",
+    "installTimeNotRead": "Compy didn't read the exact install time; it saw the new version on {{when}}.",
+    "roughOnOldDriver": "{{count}} of the rough sessions were still on the old driver.",
+    "startsSeen": "{{names}} started during {{count}} of your sessions since then.",
+    "startsSeenNoNames": "Build or encoding programs started during {{count}} of your sessions since then.",
+    "loadMeasured": "Everything except the game used a lot of your processor in {{count}} of the rough sessions.",
+    "startsAbsent": "None of those programs were seen starting in {{count}} of the {{of}} rough sessions.",
+    "loadNotRecorded": "Compy didn't record how busy the rest of your PC was then.",
+    "ramPeak": "Memory peaked at {{peakGb}} of {{totalGb}} GB in one rough session.",
+    "ramBaseline": "Your normal sessions peaked at {{peakGb}} GB.",
+    "ramWarning": "Compy saw memory nearly full during that session.",
+    "ramLower": "Other rough sessions only reached {{peakGb}} GB.",
+    "driftApplied": "Compy noticed that its own changes were turned back off.",
+    "driftPower": "Compy noticed the power plan was no longer performance-oriented.",
+    "driftOther": "Compy noticed a setting it watches had changed.",
+    "whichNotRecorded": "Which setting, and who changed it, isn't recorded.",
+    "countChanged": "Compy had {{from}} changes on in the last normal session and {{to}} in the first rough one.",
+    "valueChanged": "It changed from {{from}} to {{to}}.",
+    "hardwareChanged": "The graphics card or memory Compy recorded is different.",
+    "powerPlanChanged": "The power plan recorded on the two sessions is different."
+  },
+  "fix": {
+    "title": "How to fix it",
+    "gpuDriver": {
+      "step1": "Press Windows + X and open Device Manager.",
+      "step2": "Open Display adapters, double-click your graphics card, then open the Driver tab.",
+      "step3": "If \"Roll Back Driver\" can be clicked, click it and restart. Your previous version was {{from}}.",
+      "step4": "If it's greyed out, download {{from}} from the graphics maker's previous-drivers page, run it, and choose the clean install option.",
+      "step5": "Then play {{game}} once and press Something's wrong again. Compy will compare it with how it usually runs."
+    },
+    "backgroundLoad": {
+      "step1": "Close {{names}} while you play.",
+      "step1NoNames": "Close build tools, video encoders and download managers while you play.",
+      "step2": "Play {{game}} once with them closed, then press Something's wrong again."
+    },
+    "memoryPressure": {
+      "step1": "Close browser tabs and launchers before you play. Memory peaked at {{peakGb}} of {{totalGb}} GB.",
+      "step2": "Play {{game}} once, then press Something's wrong again."
+    },
+    "settingDrift": {
+      "step1": "Open History to see what Compy changed, and check any Windows setting you changed yourself.",
+      "step2": "Play {{game}} once, then press Something's wrong again."
+    },
+    "compyChange": {
+      "step1": "Open History and look at the changes Compy has on. Undo the newest one.",
+      "step2": "Play {{game}} once, then press Something's wrong again."
+    },
+    "none": "There's nothing safe Compy can change for this. Check it in Windows, then play once more."
+  },
+  "card": {
+    "why": "Why this one first: {{reason}}",
+    "notProven": "Compy can't prove this until you try the fix and play again."
+  },
+  "why": {
+    "crossGame": "It changed just before {{game}} got rough, and {{games}} got rough right after it too. The other changes don't line up with every rough session.",
+    "tie": "Two changes line up equally. Start with the one that's easier to undo."
+  },
+  "alsoPossible": { "title": "Also possible" },
+  "checked": {
+    "title": "What Compy checked",
+    "ruledOut": "Same as before, so not the reason:",
+    "unknown": "Compy couldn't see:",
+    "gpuDriverChange": "Graphics driver: still {{driver}}.",
+    "backgroundLoad": "Other programs: no sign of heavy use.",
+    "memoryPressure": "Memory: never nearly full.",
+    "settingDrift": "Settings Compy watches: none changed since then.",
+    "compyChange": "Compy's own changes: {{count}} on, as before.",
+    "hardwareChange": "Hardware: the same.",
+    "powerPlanChange": "Power plan: the same.",
+    "displayRefreshLower": "Screen refresh rate: still {{hz}} Hz.",
+    "windowsBuildChange": "Windows: still build {{build}}."
+  },
+  "unknown": {
+    "gamePatch": "Whether {{game}} was updated",
+    "startupPrograms": "Which programs start with Windows, compared with before",
+    "overlays": "Which overlays or recorders were running",
+    "otherLoad": "How busy the rest of your PC was while you played",
+    "gpuDriver": "Which graphics driver was in use",
+    "hardware": "Whether your hardware changed",
+    "memory": "How full your memory got",
+    "compyChanges": "How many changes Compy had on",
+    "powerPlan": "Which power plan was in use",
+    "powerPlanTiming": "When your power plan changed",
+    "display": "Your screen's refresh rate",
+    "windowsBuild": "Which Windows build was in use"
+  },
+  "nothingWrong": {
+    "title": "Nothing looks wrong",
+    "body_one": "{{game}}'s last session ran the way it usually does. If something still feels off, tell Compy what you notice and play once more with Compy running.",
+    "body_other": "{{game}}'s last {{count}} sessions ran the way it usually does. If something still feels off, tell Compy what you notice and play once more with Compy running."
+  },
+  "cantTell": {
+    "title": "Compy can't tell yet",
+    "needsMore": "Compy needs {{total}} normal sessions of {{game}} to know what normal is. You have {{have}}.",
+    "partial": "Compy only measured part of your last session ({{percent}}%), so it won't judge it.",
+    "noGame": "Compy hasn't recorded {{game}} yet. Start Compy before you play.",
+    "noSessions": "Compy hasn't recorded any games yet. Start Compy before you play.",
+    "crash": "Crashes have their own page for now. Open Problems to see what Windows recorded."
+  },
+  "nothingChanged": {
+    "title": "Compy measured the problem, but nothing it records changed before it",
+    "next": "Play once more and Compy will compare again."
+  },
+  "footer": "Compy lists what changed before the problem. It doesn't claim to know the cause until a fix is checked."
+}

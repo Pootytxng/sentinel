@@ -34,6 +34,7 @@ mod hw_class; // Tier-neutral pure hardware-class helpers (basename token / RAM 
 mod incident_observer; // Compy Care Tier 1 (task 9, #222) — the PERSISTED local incident observer: remembers across launches which crashes this machine has already been told about, so one that happened while Compy was closed is surfaced once and never twice. Pure consumer of blackbox.rs; three event triggers and NO cadence, service, scheduled task or network. Writes only its own state file.
 mod hwchange; // Hardware-change detection (A5 "Re-Run Setup") — read-only fingerprint diff across launches.
 mod intelligence; // Intelligence Phase 1 — READ-ONLY event timeline + deterministic "What changed?" engine (bands-only confidence, zero mutation, zero network).
+mod paramedic; // PC Paramedic F1 - READ-ONLY "Something's wrong": finds a session far outside a game's own history and ranks what changed before it (pure diagnose() over recorded sessions; no writes, no new privilege).
 mod intelligence_patterns; // Intelligence Phase 2 — READ-ONLY cross-session pattern detection over recorded sessions.json (deterministic trend/thermal/memory/driver/mode/fade detectors; bands-only, passive-capped at Medium, zero mutation/network).
 mod component_evidence; // Intelligence Phase 4 — READ-ONLY projection of Intelligence Phase 2 patterns onto the hardware component each names (the §4H hardware twin; invents no evidence, inherits each pattern's band, honest-neutral when absent).
 mod latency; // Diagnostics WIRED (Latency tab: MSI/timer/CCD/USB/mouse). Stage 1-2 ETW capture + Correlate engine still DARK (unwired).
@@ -1935,6 +1936,7 @@ pub fn run() {
             intelligence::what_changed_for_session,
             intelligence::what_changed_between,
             intelligence::get_intelligence_headline,
+            paramedic::paramedic_diagnose,
             intelligence_patterns::get_intelligence_patterns,
             component_evidence::get_component_evidence,
             experiment::get_experiment_gate,

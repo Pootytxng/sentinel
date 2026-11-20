@@ -19,6 +19,7 @@ import enLab from "./locales/en/lab.json";
 import enMonitor from "./locales/en/monitor.json";
 import enGaming from "./locales/en/gaming.json";
 import enBlackbook from "./locales/en/blackbook.json";
+import enParamedic from "./locales/en/paramedic.json";
 
 import zhCommon from "./locales/zh-CN/common.json";
 import zhApp from "./locales/zh-CN/app.json";
@@ -29,6 +30,7 @@ import zhLab from "./locales/zh-CN/lab.json";
 import zhMonitor from "./locales/zh-CN/monitor.json";
 import zhGaming from "./locales/zh-CN/gaming.json";
 import zhBlackbook from "./locales/zh-CN/blackbook.json";
+import zhParamedic from "./locales/zh-CN/paramedic.json";
 
 const en = {
   common: enCommon,
@@ -40,6 +42,7 @@ const en = {
   monitor: enMonitor,
   gaming: enGaming,
   blackbook: enBlackbook,
+  paramedic: enParamedic,
 };
 
 const zhCN = {
@@ -52,6 +55,7 @@ const zhCN = {
   monitor: zhMonitor,
   gaming: zhGaming,
   blackbook: zhBlackbook,
+  paramedic: zhParamedic,
 };
 
 // Read once at module init (before React mounts — see main.tsx) so the very first render is

@@ -99,6 +99,7 @@ const APP_COMMANDS: &[&str] = &[
     "mark_care_incident_opened",
     "open_export_folder",
     "overlay_visible",
+    "paramedic_diagnose",
     "preview_receipt_payload",
     "preview_support_evidence",
     "priorities_from",

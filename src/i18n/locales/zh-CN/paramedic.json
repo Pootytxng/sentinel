@@ -1,0 +1,157 @@
+{
+  "label": "Compy 的发现",
+  "door": {
+    "button": "出问题了",
+    "sub": "Compy 会查看哪些地方变了，并告诉你它的发现。",
+    "looking": "正在查看你最近的游戏记录…",
+    "failed": "Compy 暂时读不到自己的记录。你的电脑没有被改动。",
+    "again": "再查一次"
+  },
+  "problem": {
+    "title": "{{game}} 最近明显比平时卡顿",
+    "badge": "已测得",
+    "body_one": "平时 {{game}} 掉帧时，仍能保持约 {{beforePct}}% 的常规速度。在你最近一次游戏中，掉帧时只剩约 {{nowPct}}%。",
+    "body_other": "平时 {{game}} 掉帧时，仍能保持约 {{beforePct}}% 的常规速度。在你最近 {{count}} 次游戏中，掉帧时只剩约 {{nowPct}}%。",
+    "spikes": "最严重的卡顿持续了 {{nowMs}} 毫秒，之前约为 {{beforeMs}} 毫秒。",
+    "average": "平均帧率也只有每秒 {{nowFps}} 帧，之前约为 {{beforeFps}} 帧。",
+    "otherGames": "{{games}} 在同一时间也变卡了。",
+    "since": "它上一次正常运行是在 {{date}}。",
+    "partial_one": "Compy 还看到 1 次只测量了一部分的游戏，没有把它算进去。",
+    "partial_other": "Compy 还看到 {{count}} 次只测量了一部分的游戏，没有把它们算进去。"
+  },
+  "answer": {
+    "likely": "最可能的原因",
+    "possible": "也有可能",
+    "mechanism": "常会导致这种情况（尚未在你的电脑上测得）"
+  },
+  "finding": {
+    "gpuDriver": { "what": "你的显卡驱动更新了" },
+    "backgroundLoad": { "what": "你玩游戏时其他程序很忙" },
+    "memoryPressure": { "what": "你玩游戏时内存几乎用满" },
+    "settingDrift": { "what": "有设置在 Compy 之外被改动" },
+    "compyChange": { "what": "Compy 开启的更改数量不一样" },
+    "hardwareChange": { "what": "你的硬件不一样了" },
+    "powerPlanChange": { "what": "你的电源计划不一样了" },
+    "displayRefreshLower": { "what": "你的屏幕刷新率变低了" },
+    "windowsBuildChange": { "what": "Windows 更新了" }
+  },
+  "since": {
+    "between": "在 {{a}} 与 {{b}} 之间",
+    "exact": "在 {{when}}",
+    "seen": "Compy 在 {{when}} 注意到"
+  },
+  "badge": {
+    "known": "已知",
+    "measured": "已测得",
+    "unknown": "未记录",
+    "against": "削弱这一判断"
+  },
+  "evidence": {
+    "driverChanged": "你的显卡驱动从 {{from}} 变成了 {{to}}。",
+    "sessionsSplit_one": "{{game}} 最后一次正常运行（{{date}}）用的是旧驱动；那次卡顿的游戏用的是新驱动。",
+    "sessionsSplit_other": "{{game}} 最后一次正常运行（{{date}}）用的是旧驱动；之后 {{count}} 次卡顿的游戏都用的是新驱动。",
+    "crossGame": "{{games}} 在更新之后也明显变卡，而在此之前从未这样。",
+    "installTimeNotRead": "Compy 没有读取确切的安装时间；它在 {{when}} 看到了新版本。",
+    "roughOnOldDriver": "有 {{count}} 次卡顿的游戏仍在用旧驱动。",
+    "startsSeen": "从那以后，{{names}} 在你的 {{count}} 次游戏中启动过。",
+    "startsSeenNoNames": "从那以后，编译或编码类程序在你的 {{count}} 次游戏中启动过。",
+    "loadMeasured": "在 {{count}} 次卡顿的游戏中，游戏以外的程序占用了大量处理器。",
+    "startsAbsent": "在 {{of}} 次卡顿的游戏中，有 {{count}} 次没有看到这些程序启动。",
+    "loadNotRecorded": "Compy 没有记录当时电脑其余部分有多忙。",
+    "ramPeak": "在一次卡顿的游戏中，内存最高用到 {{peakGb}} GB（共 {{totalGb}} GB）。",
+    "ramBaseline": "你正常游戏时内存最高用到 {{peakGb}} GB。",
+    "ramWarning": "Compy 在那次游戏中看到内存几乎用满。",
+    "ramLower": "其他卡顿的游戏内存只用到 {{peakGb}} GB。",
+    "driftApplied": "Compy 注意到它自己的更改被重新关闭了。",
+    "driftPower": "Compy 注意到电源计划不再偏向高性能。",
+    "driftOther": "Compy 注意到它监视的某项设置变了。",
+    "whichNotRecorded": "具体是哪项设置、谁改的，没有记录。",
+    "countChanged": "上一次正常游戏时 Compy 开启了 {{from}} 项更改，第一次卡顿时是 {{to}} 项。",
+    "valueChanged": "它从 {{from}} 变成了 {{to}}。",
+    "hardwareChanged": "Compy 记录的显卡或内存不一样了。",
+    "powerPlanChanged": "两次游戏记录的电源计划不一样。"
+  },
+  "fix": {
+    "title": "如何解决",
+    "gpuDriver": {
+      "step1": "按 Windows + X，打开设备管理器。",
+      "step2": "展开“显示适配器”，双击你的显卡，再打开“驱动程序”选项卡。",
+      "step3": "如果“回退驱动程序”可以点击，就点击它并重启。你之前的版本是 {{from}}。",
+      "step4": "如果它是灰色的，就到显卡厂商的历史驱动页面下载 {{from}}，运行它，并选择“干净安装”。",
+      "step5": "然后玩一次 {{game}}，再按一次“出问题了”。Compy 会把它和平时的表现做对比。"
+    },
+    "backgroundLoad": {
+      "step1": "玩游戏时请关闭 {{names}}。",
+      "step1NoNames": "玩游戏时请关闭编译工具、视频编码器和下载管理器。",
+      "step2": "关闭它们后玩一次 {{game}}，再按一次“出问题了”。"
+    },
+    "memoryPressure": {
+      "step1": "玩游戏前请关闭浏览器标签页和启动器。内存最高用到 {{peakGb}} GB（共 {{totalGb}} GB）。",
+      "step2": "玩一次 {{game}}，再按一次“出问题了”。"
+    },
+    "settingDrift": {
+      "step1": "打开“历史记录”查看 Compy 改过什么，并检查你自己改过的 Windows 设置。",
+      "step2": "玩一次 {{game}}，再按一次“出问题了”。"
+    },
+    "compyChange": {
+      "step1": "打开“历史记录”，查看 Compy 开启的更改，并撤销最新的一项。",
+      "step2": "玩一次 {{game}}，再按一次“出问题了”。"
+    },
+    "none": "Compy 没有可以安全更改的地方。请在 Windows 里检查一下，然后再玩一次。"
+  },
+  "card": {
+    "why": "为什么先说这一项：{{reason}}",
+    "notProven": "在你试过解决办法并再玩一次之前，Compy 无法证明这一点。"
+  },
+  "why": {
+    "crossGame": "它恰好在 {{game}} 变卡之前发生，{{games}} 也在紧接着变卡。其他改动没有和每一次卡顿对上。",
+    "tie": "有两项改动同样吻合。先从更容易撤销的那一项开始。"
+  },
+  "alsoPossible": { "title": "也有可能" },
+  "checked": {
+    "title": "Compy 检查过的内容",
+    "ruledOut": "和之前一样，所以不是原因：",
+    "unknown": "Compy 看不到：",
+    "gpuDriverChange": "显卡驱动：仍是 {{driver}}。",
+    "backgroundLoad": "其他程序：没有大量占用的迹象。",
+    "memoryPressure": "内存：从未几乎用满。",
+    "settingDrift": "Compy 监视的设置：此后没有变化。",
+    "compyChange": "Compy 自己的更改：仍是 {{count}} 项，和之前一样。",
+    "hardwareChange": "硬件：没有变化。",
+    "powerPlanChange": "电源计划：没有变化。",
+    "displayRefreshLower": "屏幕刷新率：仍是 {{hz}} Hz。",
+    "windowsBuildChange": "Windows：仍是 {{build}} 版本。"
+  },
+  "unknown": {
+    "gamePatch": "{{game}} 是否更新过",
+    "startupPrograms": "哪些程序随 Windows 启动，与之前相比",
+    "overlays": "哪些悬浮窗或录制工具在运行",
+    "otherLoad": "你玩游戏时电脑其余部分有多忙",
+    "gpuDriver": "当时用的是哪个显卡驱动",
+    "hardware": "你的硬件是否变过",
+    "memory": "内存用到了多满",
+    "compyChanges": "Compy 开启了多少项更改",
+    "powerPlan": "当时用的是哪个电源计划",
+    "powerPlanTiming": "你的电源计划是什么时候变的",
+    "display": "你的屏幕刷新率",
+    "windowsBuild": "当时用的是哪个 Windows 版本"
+  },
+  "nothingWrong": {
+    "title": "看起来一切正常",
+    "body_one": "{{game}} 最近一次游戏的表现和平时一样。如果你仍然觉得不对劲，请告诉 Compy 你的感受，并在 Compy 运行的情况下再玩一次。",
+    "body_other": "{{game}} 最近 {{count}} 次游戏的表现和平时一样。如果你仍然觉得不对劲，请告诉 Compy 你的感受，并在 Compy 运行的情况下再玩一次。"
+  },
+  "cantTell": {
+    "title": "Compy 暂时还无法判断",
+    "needsMore": "Compy 需要 {{game}} 的 {{total}} 次正常游戏记录，才知道它平时是什么样。你现在有 {{have}} 次。",
+    "partial": "Compy 只测量了你最近一次游戏的一部分（{{percent}}%），所以不会据此判断。",
+    "noGame": "Compy 还没有记录过 {{game}}。请在玩游戏前先启动 Compy。",
+    "noSessions": "Compy 还没有记录过任何游戏。请在玩游戏前先启动 Compy。",
+    "crash": "崩溃问题目前有单独的页面。请打开“问题”查看 Windows 的记录。"
+  },
+  "nothingChanged": {
+    "title": "Compy 测到了问题，但它记录的内容在此之前没有变化",
+    "next": "再玩一次，Compy 会重新对比。"
+  },
+  "footer": "Compy 只列出问题出现之前发生了什么变化。在解决办法经过检验之前，它不会声称知道原因。"
+}
