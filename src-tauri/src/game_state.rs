@@ -130,6 +130,14 @@ pub(crate) struct GameStateFingerprint {
     /// recorded before the Trial conditions guard, whose missing context fields mean "not collected".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_version: Option<u32>,
+    /// TG-context v2: how much of the PC's total CPU capacity everything EXCEPT the game used over
+    /// the session's measured ticks (a stream, a browser video, a download). Numbers only. `None` =
+    /// unknown (too few readings, too many unread ticks, or a pre-v2 session), never zero.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub other_cpu: Option<OtherLoad>,
+    /// TG-context v2: the same for GPU engine work done by processes other than the game.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub other_gpu: Option<OtherLoad>,
 
     /// When this fingerprint was collected (session start, ISO-8601), for provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -141,10 +149,34 @@ pub(crate) struct GameStateFingerprint {
     pub unknown_fields: HashMap<String, serde_json::Value>,
 }
 
-/// TG-context schema version: 1 = the power plan at start + whether it changed by the end.
-pub(crate) const CONTEXT_VERSION: u32 = 1;
+/// TG-context schema version: 1 = the power plan at start + whether it changed by the end;
+/// 2 = v1 plus how busy the rest of the PC was (`other_cpu`, `other_gpu`).
+pub(crate) const CONTEXT_VERSION: u32 = 2;
+
+/// How busy "everything except the game" was across a session's measured ticks, as a share of the
+/// whole machine's capacity, in tenths of a percent (0..=1000). Numbers only: no process names, no
+/// pids. Built by `other_load::OtherLoadAccumulator`, which returns `None` rather than a figure it
+/// cannot stand behind.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct OtherLoad {
+    /// Measured ticks that produced a reading.
+    pub readings: u32,
+    /// Measured ticks whose reading failed (not counted in the figures below).
+    pub unread: u32,
+    /// Mean of the readings, tenths of a percent.
+    pub mean_pct_x10: u16,
+    /// 90th percentile (nearest rank) of the readings, tenths of a percent.
+    pub p90_pct_x10: u16,
+}
 
 impl GameStateFingerprint {
+    /// PURE (TG-context v2): attach the other-load figures. `None` stays unknown.
+    pub(crate) fn with_other_load(mut self, cpu: Option<OtherLoad>, gpu: Option<OtherLoad>) -> Self {
+        self.other_cpu = cpu;
+        self.other_gpu = gpu;
+        self
+    }
+
     /// PURE (TG-context): record the plan read at the capture's start and end. A start that can't be
     /// read leaves the plan unknown; "changed" needs both reads (GUIDs compared case-insensitively).
     pub(crate) fn with_power_plan(mut self, at_start: Option<String>, at_end: Option<String>) -> Self {
@@ -222,6 +254,8 @@ impl GameStateFingerprint {
             power_plan_guid: None,
             power_plan_changed: None,
             context_version: None,
+            other_cpu: None,
+            other_gpu: None,
             collected_at: (!collected_at.trim().is_empty()).then(|| collected_at.to_string()),
             // --- Not provable in V1 → honestly unknown (documented on each field above) ---
             executable_version: None,
@@ -377,6 +411,38 @@ mod tests {
         assert_eq!(reserialized["another_future_scalar"], "hi");
         // Unknown (None) fields are skipped, so we don't emit a wall of nulls.
         assert!(reserialized.get("executable_version").is_none());
+    }
+
+    // TG-context v2: a session stored by the v1 build keeps its version and its bytes.
+    #[test]
+    fn a_stored_v1_session_loads_with_no_other_load_and_reserialises_identically() {
+        let v1 = r#"{"process_name":"ROB RUN.exe","gpu_driver":"32.0.1","gaming_mode_active":false,"power_plan_guid":"381b4222-f694-41f0-9685-ff5bb260df2e","power_plan_changed":false,"context_version":1,"collected_at":"2026-11-10T10:00:00Z"}"#;
+        let g: GameStateFingerprint = serde_json::from_str(v1).unwrap();
+        assert_eq!((g.other_cpu, g.other_gpu, g.context_version), (None, None, Some(1)));
+        assert!(g.unknown_fields.is_empty(), "{:?}", g.unknown_fields);
+        let out = serde_json::to_string(&g).unwrap();
+        assert_eq!(serde_json::from_str::<serde_json::Value>(&out).unwrap(), serde_json::from_str::<serde_json::Value>(v1).unwrap());
+        assert!(!out.contains("other_"), "{out}");
+        assert_eq!(out, serde_json::to_string(&serde_json::from_str::<GameStateFingerprint>(&out).unwrap()).unwrap());
+    }
+
+    #[test]
+    fn a_v2_session_round_trips_its_other_load_and_unknown_fields_survive() {
+        let load = |r, u, m, p| OtherLoad { readings: r, unread: u, mean_pct_x10: m, p90_pct_x10: p };
+        let g = GameStateFingerprint::default()
+            .with_power_plan(Some(BAL.into()), Some(BAL.into()))
+            .with_other_load(Some(load(300, 4, 123, 456)), None);
+        assert_eq!(g.context_version, Some(2));
+        let v = serde_json::to_value(&g).unwrap();
+        assert_eq!(v["other_cpu"]["p90_pct_x10"], 456);
+        assert!(v.get("other_gpu").is_none(), "unknown GPU load is omitted, never a zero: {v}");
+        let back: GameStateFingerprint = serde_json::from_value(v).unwrap();
+        assert_eq!(back, g);
+        let mut future = serde_json::to_value(&g).unwrap();
+        future["next_build_field"] = serde_json::json!({"k": 1});
+        let kept = serde_json::to_value(serde_json::from_value::<GameStateFingerprint>(future).unwrap()).unwrap();
+        assert_eq!(kept["next_build_field"]["k"], 1);
+        assert_eq!(kept["other_cpu"]["readings"], 300);
     }
 
     #[test]

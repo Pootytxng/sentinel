@@ -775,7 +775,7 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       test fixture the baseline, ledger length and clock don't change `judge_pair`'s result, so their hand-off is shown
       only by equality.
       s38: untouched (under 50 minutes before the 18:40 batch once items 1-5 were in).
-- [ ] [POLISH] **TG-context** Every session records a measurement-context fingerprint from what Compy can read: cap state (from
+- [x] [POLISH] **TG-context** Every session records a measurement-context fingerprint from what Compy can read: cap state (from
       frame data), resolution/refresh mode, share of time the game was in front, active power plan, GPU driver and
       adapter, known heavy background work (recording/streaming encoders, high CPU from non-game processes), length;
       additive, schema-versioned; unknown stays unknown. User sees: nothing new until TG-drift-words. Tested: fixtures
@@ -784,6 +784,13 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       `context_version` 1 to `game_state` (cap, focus share, resolution/refresh, driver were already recorded).
       Left: known heavy background work (recorder/streaming encoder, high non-game CPU) as context v2; note the
       per-tick process-name set in monitoring.rs only refreshes while the signal log has < 50 events.
+      LANDED s54/s55 (ticked; merge in the session log): context v2 `bb36a7c3` (s54) + review fixes `2488ddc4` (s55):
+      each capture records `other_cpu` (share of the whole CPU used by everything but the game, from a handle-free
+      process snapshot) and `other_gpu` (GPU Engine work by other processes: a recorder's encoder shows here), as
+      readings/unread/mean/p90 in tenths of a percent; unknown under 60 readings or >20% unread; numbers only, no
+      names; feeds nothing yet (TG-drift-words reads it). Sonnet r1 APPROVE-WITH-NITS, 3 SHOULD-FIX taken. NITs left
+      (POLISH): process-snapshot buffer is u8-backed and zero-filled per tick; a game process exiting between ticks
+      drops its last CPU slice; `other_gpu` sums all adapters (documented, not restricted to the game's LUID).
 - [ ] [POLISH] **TG-drift-words** When two sessions' contexts differ, the verdict names the difference and the fix ("the frame
       cap was on in one session", "the game was in the background for 18 of 40 minutes", "a recorder was running in one
       session") and offers the one next step. Tested: one fixture per difference, en + zh-CN.
@@ -2848,26 +2855,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-17 s35 (FULL; coordinator-assigned; no game at any check): reviewed s34's two items (sonnet AWN; its one
-  SHOULD-FIX, "not checked" said twice on Home, checked and not taken: the ledger tally and the model's unknown count
-  count disjoint rows). The first push's gate caught s34's Dismiss on the danger-red hover (fixed `069f1c85`, census
-  3 -> 4); pushed `744acb22` PASS. Landed CR-drift-words-own-plan (`1cb7b2e6`), CR-tuning-frames-unread-reason
-  (`a9e681b1`), s35 small fixes (`c80a00ff`), CR-core-parking-hidden-plan (`91d59341`), judging-chain refactor slice 1
-  (`de49b37a`); reviews under each item. Parked: CR-lesson-fall-band (reason under it). Guards: the callers-of guard
-  also matches `dispatch_rollback_outcome_with` (tightening); the false-danger census +1 with its fix; the record-first
-  guard's §4.6 order check (`experiment-record-first-guard.test.ts`) re-derived onto `judge_pair` (the conclude calls
-  it after the treatment check; its body holds `conclude_outcome(` / `with_comparability(`), same strength. RELEASE_STATE
-  re-anchored (`resolve_rollback`). cargo --lib 1982/0 on the last branch, clippy clean, tsc 0. Pushes: `744acb22`,
-  `8c818b0d`, both PASS (two gate failures fixed forward: RELEASE_STATE drift, the record-first guard above; one
-  timing flake in tree-kill-stale-parent-guard under load, passed on retry). Installed
-  `8c818b0d348ed190b430abdddadc46e21ea432d5` (runtime proof attempt 1, Synez plan before/after); RELEASE_STATE
-  re-stamped. Tester folder untouched.
-- 2026-11-17 s36 (scheduled, FULL; owner idle, no game): CR-zh-readiness-words `79b52634` (merged --no-ff with this
-  docs commit; queued CR-zh-readiness-rest). TS only, no rollback logic: no review. tsc 0; full vitest 547/551 files
-  (the 3 site-app suites + the i18n orphan-key guard, fixed by writing the keys whole, then its suite passes). The two
-  `train-*` folders preflight lists are the empty leftovers inventoried under s31 follow-ups. Not pushed: the owner
-  came back (idle 49 s) before the push, so CODE-ONLY; main is 4 ahead of GitHub, the next FULL session pushes. Not
-  installed (Friday install, or the next FULL session); zh-CN screen check owed then.
 - 2026-11-17 s37 (coordinator-assigned; preflight CODE-ONLY: the owner at the PC, so pushes ran on the
   coordinator's order; no game at any check): reviewed s36's CR-zh-readiness-words (sonnet AWN; comment `ffce3574`,
   merge `72bda27a`) and pushed it (`72bda27a`, gate PASS). Landed CR-lesson-fall-band (merge `8fd27fd3`), judging-chain
@@ -2946,6 +2933,7 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
 
 - 2026-11-18 ~21:15-22:00 and 2026-11-19 ~12:35-12:38 s48/s49/s51 (coordinator-assigned from the HQ session): read-only gate diagnosis (the release-state guard test makes ~178 serial git spawns, 44-72 s in a passing gate; `_train\s48-*`); look-only run of `fdd2f07c` against an empty data folder via `COMPY_MEASUREMENT_DATA_ROOT` (`_train\view-1118c`, real data unchanged); fresh-PC wording pass landed (merge `1d7d7c71`, sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken); pushed by s50; installed `cfbe08a78880b942bc1a402c48913cdb4ac7b91d` (runtime proof `cfbe08a7` release, shell 0.9.26, attempt 1); tester package rebuilt (`Desktop\Compy-tester-cfbe08a7.zip`), not sent.
 - 2026-11-19 ~13:30-14:10 s52 (scheduled; preflight CODE-ONLY, owner on Discord, no game): no catch-up (main = GitHub; the two train-* folders are empty leftovers, no branch). Landed CR-noise-footnote-pair (`5131f61d`, merged --no-ff with this tick; TS/locale only; sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken; old-code proof 7 fail; tsc 0, touched suites + i18n/census guards 365/365). Stopped after one item: the next ready item (CR-plan-mid-session) is Rust measurement with two reviews, too long for the time left. NOT PUSHED, NOT INSTALLED (CODE-ONLY): the next FULL session pushes main; Friday install picks it up.
+- 2026-11-19 ~19:40-20:10 PT s55 (scheduled; preflight CODE-ONLY: the owner in PBZ): caught up the unlanded `train-s54-ctx2` (TG-context v2, `bb36a7c3`, an earlier session's commit with no log line): sonnet r1 APPROVE-WITH-NITS, 3 SHOULD-FIX + a clippy lint from the current toolchain + the module map (57 files) fixed in `2488ddc4`; the impossible-delta test fails on the old code by construction. tsc 0, clippy -D warnings clean, cargo --lib 2031/0 (26 ignored), module map OK, all at below-normal priority. Merged --no-ff with this tick; TG-context ticked. One item (catch-up). Queue not refilled (same reason as s47). NOT PUSHED, NOT INSTALLED (CODE-ONLY): main is 2 + this merge ahead of GitHub; the next FULL session (or Friday's install) pushes first.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`

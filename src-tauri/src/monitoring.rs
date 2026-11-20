@@ -1221,6 +1221,10 @@ fn start_fps_capture_locked() -> Result<(), String> {
             let mut timeline: Vec<(u32, f64)> = Vec::new();
             let mut events: Vec<crate::stutter::StutterEvent> = Vec::new();
             let mut proc_sys = System::new();
+            // TG-context v2 (record only): the rest of the PC's CPU/GPU load over measured ticks.
+            let mut other_sampler: Option<crate::other_load::OtherLoadSampler> = None;
+            let mut other_cpu_acc = crate::other_load::OtherLoadAccumulator::default();
+            let mut other_gpu_acc = crate::other_load::OtherLoadAccumulator::default();
             let mut prev_procs: Option<std::collections::HashSet<String>> = None;
             let mut prev_clock: Option<u32> = None;
             let mut ram_logged = false;
@@ -1255,6 +1259,8 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 let mut tip: Option<(f64, f64)> = None;
                 // P9-bottleneck-sustained: whether this tick's frame reading was a MEASURED one.
                 let mut tick_measured = false;
+                // TG-context v2: the game this tick's frame reading belongs to (name, pid), if any.
+                let mut tick_game: Option<(String, u32)> = None;
                 // Freshness gate (0.9.1): the helper now emits NOTHING when no game is
                 // positively attached (fail-closed attribution), so fps.json can legitimately
                 // sit frozen at its last sample. Same <3 s mtime rule as get_fps_status —
@@ -1294,6 +1300,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
                                 *lock_progress() = Some(acc.progress());
                             }
                             tick_measured = measured;
+                            tick_game = Some((s.process_name.clone(), s.pid));
                             tip = Some((s.fps, s.low1_fps));
                             if measured && s.low1_fps > 0.0 && timeline.len() < 7200 {
                                 timeline.push((elapsed, s.low1_fps));
@@ -1329,6 +1336,21 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 // introspection, which is forbidden), so the limiter claim this share feeds inherits
                 // the same assumption the peak made.
                 acc.record_gpu_load(gpu_usage, tick_measured);
+                // TG-context v2 (record only, feeds no verdict): sample every tick a game is attached so
+                // each reading spans one tick; only a measured tick counts, and a failed read counts as
+                // unread, never as zero. Numbers only: the game's name is compared in memory, never stored.
+                if let Some((name, pid)) = &tick_game {
+                    if !other_sampler.as_ref().is_some_and(|s| s.is_for(name)) {
+                        other_sampler = Some(crate::other_load::OtherLoadSampler::new(name));
+                    }
+                    if let Some(sampler) = other_sampler.as_mut() {
+                        let r = sampler.sample(*pid);
+                        if tick_measured {
+                            other_cpu_acc.record(r.cpu);
+                            other_gpu_acc.record(r.gpu);
+                        }
+                    }
+                }
                 // Same driver-free interop as get_cpu_temp (cpu_temp.rs) — None when no HWiNFO/LHM/OHM
                 // is running; never fabricated. Session-scoped peak, same as the GPU sensors above.
                 let cpu_temp = crate::cpu_temp::read_cpu_temp().map(|t| t.temp_c.round() as u32);
@@ -1418,7 +1440,8 @@ fn start_fps_capture_locked() -> Result<(), String> {
                     &summary.started_at,
                     Some(gaming_mode_seen),
                 )
-                .with_power_plan(plan_at_start, crate::actions::current_power_plan_guid()));
+                .with_power_plan(plan_at_start, crate::actions::current_power_plan_guid())
+                .with_other_load(other_cpu_acc.finish(), other_gpu_acc.finish()));
                 // P7-notify (Constitution §15, §33): a saved session toasts only when it settles a
                 // decision or a state change (a Trial's after-session, a before/after verdict, a
                 // regression against the game's last steady session). Otherwise the debrief waits
