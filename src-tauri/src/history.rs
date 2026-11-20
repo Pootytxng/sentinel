@@ -8080,12 +8080,13 @@ mod ultimate_identity_tests {
         let started = std::time::Instant::now();
         assert_eq!(
             bounded_read_within(limit, move || {
-                std::thread::sleep(limit * 10);
+                // Two minutes against a 100 ms bound: the margin below can't be eaten by a loaded PC.
+                std::thread::sleep(limit * 1200);
                 Some(1)
             }),
             None
         );
-        assert!(started.elapsed() < limit * 8, "returned at the bound, not when the read finished");
+        assert!(started.elapsed() < limit * 600, "returned at the bound, not when the read finished");
         // And the production read uses the 5 s receipt bound.
         let body = include_str!("history.rs").split_once("fn bounded_read<T").map(|(_, r)| r).expect("fn");
         let body = body.split_once("\n}\n").map(|(b, _)| b).expect("body");

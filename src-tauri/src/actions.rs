@@ -3774,7 +3774,43 @@ fn power_plan_known(guid: &str) -> Option<bool> {
     if !crate::scheme_guid_of(g).is_some_and(|s| s.eq_ignore_ascii_case(g)) {
         return Some(false);
     }
+    #[cfg(test)]
+    {
+        if let Some(answer) = FAKE_PLAN_KNOWN.with(|f| *f.borrow()) {
+            return answer;
+        }
+    }
     plan_known_from(power_plan_listed(g), || power_plan_queried(g))
+}
+
+// Test-only: makes `power_plan_known` answer from a fake instead of asking the real `powercfg`, on
+// this thread, so a test of what an undo does with "gone" or "couldn't be read" doesn't depend on a
+// real Windows tool answering in time on a loaded PC. The whole-GUID check above still runs first.
+// Never compiled into the shipped binary; the production read is unchanged.
+#[cfg(test)]
+thread_local! {
+    static FAKE_PLAN_KNOWN: std::cell::RefCell<Option<Option<bool>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// RAII guard: for its lifetime `power_plan_known` answers `answer` on this thread (test-only).
+/// `Some(false)` = the plan is gone, `Some(true)` = it exists, `None` = Windows couldn't confirm
+/// (what a timed-out read says).
+#[cfg(test)]
+pub(crate) struct FakePlanKnown;
+
+#[cfg(test)]
+impl FakePlanKnown {
+    pub(crate) fn begin(answer: Option<bool>) -> Self {
+        FAKE_PLAN_KNOWN.with(|f| *f.borrow_mut() = Some(answer));
+        FakePlanKnown
+    }
+}
+
+#[cfg(test)]
+impl Drop for FakePlanKnown {
+    fn drop(&mut self) {
+        FAKE_PLAN_KNOWN.with(|f| *f.borrow_mut() = None);
+    }
 }
 
 /// PURE (CR-plan-exists-timeout): [`power_plan_known`] from the list read and the direct query.
@@ -3914,14 +3950,28 @@ mod output_within_tests {
     // left running; one that answers in time is read as it printed.
     #[test]
     fn a_command_that_doesnt_answer_in_time_is_unread_and_ended() {
+        // Load-proof (it failed a real push on a busy PC): the child runs ~2 minutes (`ping -n 120`,
+        // a unique `-l 1117` marks it), dwarfing the 300 ms deadline. What is asserted is the
+        // outcome, not a scheduler-dependent upper bound on elapsed time: the read is unread
+        // (`None`), it returned long before the child could have finished by itself, and the child
+        // is no longer running (looked up by its marker; `output_within` killed and waited on it).
         let mut slow = quiet_command("ping");
-        slow.args(["-n", "6", "127.0.0.1"]);
+        slow.args(["-n", "120", "-l", "1117", "127.0.0.1"]);
         let t = Instant::now();
-        assert!(output_within(slow, Duration::from_millis(300)).is_none());
-        assert!(t.elapsed() < Duration::from_secs(3), "waited {:?}", t.elapsed());
+        assert!(output_within(slow, Duration::from_millis(300)).is_none(), "an unanswered command is unread");
+        assert!(t.elapsed() < Duration::from_secs(60), "returned at the deadline, not when the child ended: {:?}", t.elapsed());
+        let mut lookup = quiet_command("powershell");
+        lookup.args([
+            "-NoProfile",
+            "-Command",
+            "(Get-CimInstance Win32_Process -Filter \"Name='PING.EXE'\" | Where-Object { $_.CommandLine -like '*-l 1117*' } | Measure-Object).Count",
+        ]);
+        let still = output_within(lookup, Duration::from_secs(120)).expect("the process lookup answered");
+        assert_eq!(String::from_utf8_lossy(&still.stdout).trim(), "0", "the timed-out child must have been ended");
         let mut quick = quiet_command("cmd");
         quick.args(["/C", "echo plan-read"]);
-        let out = output_within(quick, Duration::from_secs(10)).expect("answered in time");
+        // A generous limit: this side must not time out on a loaded machine.
+        let out = output_within(quick, Duration::from_secs(120)).expect("answered in time");
         assert!(out.status.success());
         assert!(String::from_utf8_lossy(&out.stdout).contains("plan-read"));
         // A program that can't start is unread too.
@@ -3930,7 +3980,7 @@ mod output_within_tests {
         // deadlock: all of it is read (20000 lines of 20 bytes plus CRLF = 440000 bytes).
         let mut loud = quiet_command("cmd");
         loud.args(["/C", "for /L %i in (1,1,20000) do @echo xxxxxxxxxxxxxxxxxxxx"]);
-        let out = output_within(loud, Duration::from_secs(60)).expect("answered in time");
+        let out = output_within(loud, Duration::from_secs(300)).expect("answered in time");
         assert_eq!(out.stdout.len(), 20000 * 22, "{}", out.stdout.len());
     }
 }

@@ -370,7 +370,7 @@ describe("ExperimentBench (armed)", () => {
     fireEvent.click(trigger); // close the menu
 
     // The reasons sit behind the toggle, closed by default.
-    const toggle = screen.getByRole("button", { name: "Show why others aren't listed" });
+    const toggle = await screen.findByRole("button", { name: "Show why others aren't listed" });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(document.querySelector(".exp-why-list")).toBeNull();
     fireEvent.click(toggle);
@@ -409,7 +409,8 @@ describe("ExperimentBench (armed)", () => {
     await waitFor(() =>
       expect(vi.mocked(invoke)).toHaveBeenCalledWith("get_trial_candidates", { riskChoice: "low-and-moderate" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Show why others aren't listed" }));
+    // The toggle appears only once the candidate read has been committed: await it, never look at once.
+    fireEvent.click(await screen.findByRole("button", { name: "Show why others aren't listed" }));
     expect(document.querySelector('.exp-why-list [data-rec="mod-rec"]')?.textContent).toContain(
       "Outside the risk you chose.",
     );
@@ -467,7 +468,7 @@ describe("ExperimentBench (armed)", () => {
       fireEvent.click(opt);
       await waitFor(() => expect(risk).toHaveTextContent("Low risk only"));
       await new Promise((r) => setTimeout(r, 250)); // let the old, slow read land
-      const pick = screen.getByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") });
+      const pick = await screen.findByRole("combobox", { name: i18n.t("lab.experimentBench.pickLabel") });
       fireEvent.click(pick);
       await waitFor(() => expect(document.querySelector('[role="listbox"] [data-value="low-rec"]')).not.toBeNull());
       expect(document.querySelector('[role="listbox"] [data-value="mod-rec"]')).toBeNull();
@@ -534,7 +535,7 @@ describe("ExperimentBench (armed)", () => {
       ),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show why others aren't listed" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show why others aren't listed" }));
     expect(document.querySelector('.exp-why-list [data-rec="tiny"]')?.textContent).toBe(
       "Tiny tweak Too small to measure here. Its expected effect (1.5%) is no bigger than this game's measured run-to-run noise (4.2%).",
     );

@@ -2566,13 +2566,18 @@ mod tests {
 
     #[test]
     fn a_child_that_exceeds_its_budget_is_killed_and_returns_what_it_had_written() {
-        let mut cmd = system_command("cmd.exe").unwrap();
-        cmd.args(["/c", "echo first-line & ping -n 8 127.0.0.1 > nul"]);
+        // Load-proof: the child is `ping` itself (no `cmd` wrapper, so killing it leaves no orphan
+        // holding the test's pipes), prints its first line at once and then runs ~2 minutes. The
+        // budget (5 s) is long enough for it to start and print on a busy PC and the child dwarfs
+        // it, so what is asserted is the outcome: timed out, killed, the partial output kept, and
+        // returned long before the child could have ended by itself.
+        let mut cmd = system_command("ping.exe").unwrap();
+        cmd.args(["-n", "120", "127.0.0.1"]);
         let started = Instant::now();
-        let out = run_with_budget(cmd, Duration::from_millis(400)).unwrap();
+        let out = run_with_budget(cmd, Duration::from_secs(5)).unwrap();
         assert!(out.timed_out);
-        assert!(started.elapsed() < Duration::from_secs(4), "returned at the budget, not at child exit");
-        assert!(String::from_utf8_lossy(&out.stdout).contains("first-line"), "partial output kept");
+        assert!(started.elapsed() < Duration::from_secs(60), "returned at the budget, not at child exit");
+        assert!(String::from_utf8_lossy(&out.stdout).contains("Pinging"), "partial output kept");
     }
 
     #[test]
@@ -3463,12 +3468,17 @@ mod tests {
         assert_eq!(b, b"abcdef");
         assert!(append_capped(&mut b, b"x", 6));
         assert_eq!(b.len(), 6);
-        // A real child that writes far more than the cap.
+        // A real child that writes far more than the cap (3000 lines of 22 bytes = 66000 bytes, 66
+        // times the cap and past a pipe's buffer, so the pump has to keep draining). It ends by
+        // itself and quickly; the budget is generous (it failed a real push when a 20000-line child
+        // ran past a 30 s budget on a loaded PC), so what is asserted is the outcome: not timed out,
+        // child ended with success, output capped and flagged. No elapsed-time assumption.
         let mut cmd = system_command("cmd.exe").expect("cmd.exe");
-        cmd.args(["/c", "for /l %i in (1,1,20000) do @echo xxxxxxxxxxxxxxxxxxxx"]);
-        let out = run_capped(cmd, Duration::from_secs(30), 1000).expect("ran");
-        assert!(!out.timed_out);
-        assert!(out.overflow, "20000 lines is far over a 1000 byte cap");
+        cmd.args(["/c", "for /l %i in (1,1,3000) do @echo xxxxxxxxxxxxxxxxxxxx"]);
+        let out = run_capped(cmd, Duration::from_secs(300), 1000).expect("ran");
+        assert!(!out.timed_out, "the child ended by itself within the budget");
+        assert!(out.success, "the child ran to its end: {:?}", out.exit_code);
+        assert!(out.overflow, "3000 lines is far over a 1000 byte cap");
         assert!(out.stdout.len() <= 1000);
         // And the read that saw it is partial, never complete.
         let xml = wu_rows(10);
@@ -3686,9 +3696,11 @@ mod steam_listing_tests {
     #[test]
     fn a_hung_read_is_the_late_answer_never_a_hang() {
         let started = Instant::now();
-        let r = run_bounded_value(Duration::from_millis(50), || { std::thread::sleep(Duration::from_secs(2)); 1 }, 0);
+        let r = run_bounded_value(Duration::from_millis(50), || { std::thread::sleep(Duration::from_secs(120)); 1 }, 0);
         assert_eq!(r, 0);
-        assert!(started.elapsed() < Duration::from_secs(1));
+        // The read would take two minutes: returning anywhere near the 50 ms bound (not 120 s) is
+        // the proof, with a margin no loaded scheduler can eat.
+        assert!(started.elapsed() < Duration::from_secs(60));
         assert_eq!(run_bounded_value(Duration::from_secs(2), || 7, 0), 7);
     }
 

@@ -10325,10 +10325,31 @@ mod experiment_tests {
         let _scene = scene(Some(ExperimentStatus::Kept));
         let sink = crate::actions::ElevationDeferral::begin().unwrap();
         // Past the hold, the undo itself runs: it finds the row's plan gone, which only the dispatched
-        // power-plan-setting undo says.
+        // power-plan-setting undo says. "Gone" is answered by a fake: the undo used to ask the real
+        // `powercfg`, whose time-limited read could time out on a loaded PC and say "couldn't confirm"
+        // instead (flaky under a parallel gate run). The production read has its own tests.
+        let _plans = crate::actions::FakePlanKnown::begin(Some(false));
         let why = crate::experiment::rollback_change("ph-usb".into()).expect_err("the gone plan fails in the undo");
         assert!(why.contains("no longer exists") && !why.contains("same power plan"), "{why}");
         assert_eq!(sink.deferred_count(), 0);
+        assert_eq!(row_status("ph-usb"), "applied", "nothing was rolled back");
+    }
+
+    #[test]
+    fn a_plan_check_that_cant_be_confirmed_stops_the_same_undo_and_changes_nothing() {
+        // The user-protecting half, pinned apart from the timing: when Windows couldn't confirm the
+        // plan still exists (a powercfg read that timed out answers `None`), the undo stops, says so,
+        // writes nothing and leaves the row active. Never read as "gone".
+        let _scene = scene(Some(ExperimentStatus::Kept));
+        let sink = crate::actions::ElevationDeferral::begin().unwrap();
+        let _plans = crate::actions::FakePlanKnown::begin(None);
+        let why = crate::experiment::rollback_change("ph-usb".into()).expect_err("unconfirmed plan stops the undo");
+        assert!(
+            why.contains("couldn't confirm with Windows") && why.contains("Nothing was changed") && !why.contains("no longer exists"),
+            "{why}"
+        );
+        assert_eq!(sink.deferred_count(), 0, "no elevated run");
+        assert_eq!(row_status("ph-usb"), "applied", "the row is still active");
     }
 
     #[test]
