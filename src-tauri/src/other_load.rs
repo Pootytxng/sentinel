@@ -1,7 +1,7 @@
 //! TG-context v2: how busy was everything ELSE on the PC while the game was measured?
 //!
 //! RECORD ONLY. Nothing here feeds a verdict, band, comparison or wording; the numbers land on
-//! `GameStateFingerprint::{other_cpu, other_gpu}` for a later slice to read. Numbers only: no
+//! `GameStateFingerprint::{other_cpu, other_gpu_3d, other_gpu_video}` for a later slice to read. Numbers only: no
 //! process names, no pids and no window titles leave this module (a name is compared in memory
 //! against the game's name, then dropped).
 //!
@@ -10,8 +10,9 @@
 //!   reads like any other process. `GetSystemTimes` is read just before it, so the game's share and the
 //!   machine's total cover the same interval. Other = max(0, total busy - game), as a share of all
 //!   logical cores.
-//! - GPU: the Windows "GPU Engine" counters (vendor-neutral): the sum of every engine instance whose
-//!   pid is not the game's, clamped to 0..=100.
+//! - GPU: the Windows "GPU Engine" counters (vendor-neutral): two figures, each the sum over engine
+//!   instances whose pid is not the game's, clamped to 0..=100: 3D engines, and video engines
+//!   (decode/encode/codec/processing/JPEG). Copy, Compute and the rest are ignored.
 //!
 //! Every failure is an `unread` tick, never a zero.
 
@@ -54,31 +55,70 @@ pub(crate) fn engine_pid(instance: &str) -> Option<u32> {
     rest.split('_').next()?.parse().ok()
 }
 
-/// One tick's GPU work done by processes other than the game: the summed utilisation of every engine
-/// instance whose pid is not a game pid, clamped to 0..=100. This is a SUM over every engine type and
-/// every adapter (an iGPU and a dGPU add up), not a share of one GPU; read it as "other GPU work". `None` when the game's pids are unknown
-/// (cannot tell the game's work from the rest) or no instance was readable.
-pub(crate) fn other_gpu_pct<'a>(
+/// The engine type in a GPU Engine instance name: everything after `_engtype_`, which may hold spaces
+/// and digits (`..._engtype_Video Codec Engine`, `..._engtype_Compute 0`).
+pub(crate) fn engine_type(instance: &str) -> Option<&str> {
+    instance.split_once("_engtype_").map(|(_, ty)| ty.trim()).filter(|ty| !ty.is_empty())
+}
+
+/// Which of the two recorded figures an engine counts toward. Copy, Compute, Security, Timer and any
+/// unknown type count toward neither.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum EngineKind {
+    D3,
+    Video,
+}
+
+pub(crate) fn engine_kind(engine_type: &str) -> Option<EngineKind> {
+    let l = engine_type.to_lowercase();
+    if l == "3d" {
+        Some(EngineKind::D3)
+    } else if l.contains("video") {
+        Some(EngineKind::Video)
+    } else {
+        None
+    }
+}
+
+/// One tick's GPU work done by processes other than the game, in percent.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct GpuOther {
+    /// Summed 3D-engine utilisation of non-game pids, clamped 0..=100.
+    pub d3: f64,
+    /// Summed video-engine (decode/encode/codec/processing/JPEG) utilisation of non-game pids, clamped 0..=100.
+    pub video: f64,
+}
+
+/// One tick's other-than-game GPU work, split into the two figures. Each is a SUM over the engines of
+/// its kind and over every adapter (an iGPU and a dGPU add up), clamped; read it as "other GPU work",
+/// not a share of one GPU. `None` when the game's pids are unknown (cannot tell the game's work from the
+/// rest) or no instance was attributable to a pid at all; once any was, a kind with no non-game work
+/// reads a true 0.
+pub(crate) fn other_gpu_pcts<'a>(
     instances: impl IntoIterator<Item = (&'a str, f64)>,
     game_pids: &[u32],
-) -> Option<f64> {
+) -> Option<GpuOther> {
     if game_pids.is_empty() {
         return None;
     }
-    let (mut sum, mut seen) = (0.0_f64, false);
+    let (mut d3, mut video, mut seen) = (0.0_f64, 0.0_f64, false);
     for (name, util) in instances {
         let Some(pid) = engine_pid(name) else { continue };
         if !util.is_finite() {
             continue;
         }
         seen = true;
-        if !game_pids.contains(&pid) {
-            sum += util.max(0.0);
+        if game_pids.contains(&pid) {
+            continue;
+        }
+        match engine_type(name).and_then(engine_kind) {
+            Some(EngineKind::D3) => d3 += util.max(0.0),
+            Some(EngineKind::Video) => video += util.max(0.0),
+            None => {}
         }
     }
-    seen.then(|| sum.clamp(0.0, 100.0))
+    seen.then(|| GpuOther { d3: d3.clamp(0.0, 100.0), video: video.clamp(0.0, 100.0) })
 }
-
 /// A percentage as tenths of a percent, clamped 0..=1000; a non-finite value is no reading.
 pub(crate) fn pct_x10(pct: f64) -> Option<u16> {
     pct.is_finite().then(|| (pct * 10.0).round().clamp(0.0, 1000.0) as u16)
@@ -276,8 +316,8 @@ impl GpuEngineQuery {
         }
     }
 
-    /// Collect and return the other-than-game GPU percentage (see [`other_gpu_pct`]).
-    fn read_other(&self, scratch: &mut Vec<u64>, game_pids: &[u32]) -> Option<f64> {
+    /// Collect and return the other-than-game GPU figures (see [`other_gpu_pcts`]).
+    fn read_other(&self, scratch: &mut Vec<u64>, game_pids: &[u32]) -> Option<GpuOther> {
         use windows::Win32::System::Performance::{
             PdhCollectQueryData, PdhGetFormattedCounterArrayW, PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE,
         };
@@ -309,7 +349,7 @@ impl GpuEngineQuery {
                     rows.push((name, it.FmtValue.Anonymous.doubleValue));
                 }
             }
-            other_gpu_pct(rows.iter().map(|(n, v)| (n.as_str(), *v)), game_pids)
+            other_gpu_pcts(rows.iter().map(|(n, v)| (n.as_str(), *v)), game_pids)
         }
     }
 }
@@ -334,7 +374,7 @@ struct GpuEngineReader {
 }
 
 impl GpuEngineReader {
-    fn read(&mut self, game_pids: &[u32]) -> Option<f64> {
+    fn read(&mut self, game_pids: &[u32]) -> Option<GpuOther> {
         if let Some(p) = self.pending.take() {
             self.cur = Some(p);
         }
@@ -352,7 +392,8 @@ impl GpuEngineReader {
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct TickReading {
     pub cpu: Option<f64>,
-    pub gpu: Option<f64>,
+    pub gpu_3d: Option<f64>,
+    pub gpu_video: Option<f64>,
 }
 
 /// Samples the rest of the PC for one game (identified in memory by its process name).
@@ -395,7 +436,7 @@ impl OtherLoadSampler {
     }
 
     /// B/GPU half: GPU work by everything but `game_pids`.
-    pub(crate) fn gpu_tick(&mut self, game_pids: &[u32]) -> Option<f64> {
+    pub(crate) fn gpu_tick(&mut self, game_pids: &[u32]) -> Option<GpuOther> {
         self.gpu.read(game_pids)
     }
 
@@ -407,7 +448,7 @@ impl OtherLoadSampler {
         }
         // With no game pid known (snapshot failed) the GPU read cannot tell the game from the rest.
         let gpu = if pids.is_empty() { None } else { self.gpu_tick(&pids) };
-        TickReading { cpu, gpu }
+        TickReading { cpu, gpu_3d: gpu.map(|g| g.d3), gpu_video: gpu.map(|g| g.video) }
     }
 }
 
@@ -448,22 +489,48 @@ mod tests {
     }
 
     #[test]
-    fn gpu_other_excludes_only_the_game_and_clamps() {
-        let inst = [
-            ("pid_100_luid_0x0_0x1_phys_0_eng_0_engtype_3D", 40.0),
-            ("pid_200_luid_0x0_0x1_phys_0_eng_0_engtype_3D", 2.5),
-            ("pid_200_luid_0x0_0x1_phys_0_eng_3_engtype_Copy", 1.0),
-            ("pid_300_luid_0x0_0x1_phys_0_eng_1_engtype_VideoDecode", 3.0),
-            ("garbage", 99.0),
-        ];
-        let v = other_gpu_pct(inst, &[100]).unwrap();
-        assert!((v - 6.5).abs() < 1e-9, "{v}");
-        assert_eq!(other_gpu_pct([("pid_5_luid_x_engtype_3D", 250.0)], &[1]), Some(100.0));
-        assert_eq!(other_gpu_pct(inst, &[]), None, "game pids unknown");
-        assert_eq!(other_gpu_pct([("garbage", 1.0)], &[1]), None, "nothing attributable");
-        assert_eq!(other_gpu_pct([("pid_100_luid_x_engtype_3D", 40.0)], &[100]), Some(0.0), "only the game: truly 0");
+    fn engine_type_keeps_spaces_and_digits_and_sorts_into_two_kinds() {
+        let ty = |n: &str| engine_type(n).and_then(engine_kind);
+        assert_eq!(engine_type("pid_1_luid_0x0_0x1_phys_0_eng_2_engtype_Video Codec Engine"), Some("Video Codec Engine"));
+        assert_eq!(engine_type("pid_1_luid_0x0_0x1_phys_0_eng_9_engtype_Compute 0"), Some("Compute 0"));
+        assert_eq!(engine_type("pid_1_luid_x_engtype_"), None);
+        assert_eq!(engine_type("nothing here"), None);
+        assert_eq!(ty("pid_1_luid_x_phys_0_eng_0_engtype_3D"), Some(EngineKind::D3));
+        assert_eq!(ty("pid_1_luid_x_phys_0_eng_0_engtype_3d"), Some(EngineKind::D3), "case-insensitive");
+        for v in ["Video Codec Engine", "VideoEncode", "VideoDecode", "VideoProcessing", "Video JPEG 0", "video codec engine"] {
+            assert_eq!(ty(&format!("pid_1_luid_x_phys_0_eng_1_engtype_{v}")), Some(EngineKind::Video), "{v}");
+        }
+        for v in ["Copy", "Compute 0", "Security 1", "Timer 0", "3D Something", "Mystery"] {
+            assert_eq!(ty(&format!("pid_1_luid_x_phys_0_eng_1_engtype_{v}")), None, "{v} counts toward neither figure");
+        }
     }
 
+    #[test]
+    fn gpu_other_splits_3d_from_video_and_excludes_only_the_game() {
+        let inst = [
+            ("pid_100_luid_0x0_0x1_phys_0_eng_0_engtype_3D", 40.0), // the game: in neither
+            ("pid_100_luid_0x0_0x1_phys_0_eng_5_engtype_VideoDecode", 9.0), // the game: in neither
+            ("pid_200_luid_0x0_0x1_phys_0_eng_0_engtype_3D", 2.5),
+            ("pid_200_luid_0x0_0x1_phys_0_eng_3_engtype_Copy", 30.0), // ignored type
+            ("pid_200_luid_0x0_0x1_phys_0_eng_4_engtype_Compute 0", 30.0), // ignored type
+            ("pid_300_luid_0x0_0x1_phys_0_eng_1_engtype_Video Codec Engine", 3.0),
+            ("pid_300_luid_0x0_0x1_phys_0_eng_2_engtype_VideoEncode", 1.5),
+            ("garbage", 99.0),
+        ];
+        let v = other_gpu_pcts(inst, &[100]).unwrap();
+        assert!((v.d3 - 2.5).abs() < 1e-9, "a 3D reading never leaks into video: {v:?}");
+        assert!((v.video - 4.5).abs() < 1e-9, "a video reading never leaks into 3D: {v:?}");
+        // Two game processes: both excluded from both figures.
+        let two = other_gpu_pcts(inst, &[100, 200]).unwrap();
+        assert_eq!((two.d3, two.video), (0.0, 4.5));
+        // Clamp per figure.
+        let hot = other_gpu_pcts([("pid_5_luid_x_engtype_3D", 250.0), ("pid_6_luid_x_engtype_VideoEncode", 140.0)], &[1]).unwrap();
+        assert_eq!((hot.d3, hot.video), (100.0, 100.0));
+        assert_eq!(other_gpu_pcts(inst, &[]), None, "game pids unknown");
+        assert_eq!(other_gpu_pcts([("garbage", 1.0)], &[1]), None, "nothing attributable");
+        let only_game = other_gpu_pcts([("pid_100_luid_x_engtype_3D", 40.0)], &[100]).unwrap();
+        assert_eq!((only_game.d3, only_game.video), (0.0, 0.0), "only the game: truly 0 once something was read");
+    }
     #[test]
     fn tenths_are_clamped_and_non_finite_is_no_reading() {
         assert_eq!(pct_x10(12.34), Some(123));
@@ -570,7 +637,7 @@ mod tests {
     }
 
     /// Measurement probe, not a gate: `cargo test --lib other_load::tests::probe -- --ignored --nocapture`.
-    /// Treats THIS test process as "the game" for ~30 s, with one busy thread so the game share is non-zero.
+    /// Treats THIS test process as "the game" for ~70 s, with one busy thread so the game share is non-zero.
     #[test]
     #[ignore]
     fn probe() {
@@ -587,10 +654,11 @@ mod tests {
             }
         });
         let mut s = OtherLoadSampler::new(&name);
-        let (mut cpu_acc, mut gpu_acc) = (OtherLoadAccumulator::default(), OtherLoadAccumulator::default());
+        let (mut cpu_acc, mut g3_acc, mut gv_acc) =
+            (OtherLoadAccumulator::default(), OtherLoadAccumulator::default(), OtherLoadAccumulator::default());
         let (mut cpu_ms, mut gpu_ms, mut n) = (0.0, 0.0, 0u32);
         let me = std::process::id();
-        for _ in 0..30 {
+        for _ in 0..70 {
             std::thread::sleep(Duration::from_secs(1));
             let t0 = Instant::now();
             let (cpu, mut pids) = s.cpu_tick();
@@ -604,22 +672,15 @@ mod tests {
             gpu_ms += (t2 - t1).as_secs_f64() * 1000.0;
             n += 1;
             cpu_acc.record(cpu);
-            gpu_acc.record(gpu);
+            g3_acc.record(gpu.map(|g| g.d3));
+            gv_acc.record(gpu.map(|g| g.video));
             println!("tick {n}: other_cpu={cpu:?} other_gpu={gpu:?} game_pids={}", pids.len());
         }
         stop.store(true, Ordering::Relaxed);
         burner.join().unwrap();
-        let raw = |a: &OtherLoadAccumulator| {
-            let mut v = a.vals.clone();
-            v.sort_unstable();
-            let n = v.len().max(1);
-            let mean = v.iter().map(|x| *x as f64).sum::<f64>() / n as f64;
-            let p90 = v.get((n * 9).div_ceil(10).saturating_sub(1)).copied().unwrap_or(0);
-            format!("readings={} unread={} mean={:.1}% p90={:.1}%", v.len(), a.unread, mean / 10.0, p90 as f32 / 10.0)
-        };
-        println!("PROBE other_cpu (A): {}", raw(&cpu_acc));
-        println!("PROBE other_gpu (B): {}", raw(&gpu_acc));
+        println!("PROBE other_cpu       : {:?}", cpu_acc.finish());
+        println!("PROBE other_gpu_3d    : {:?}", g3_acc.finish());
+        println!("PROBE other_gpu_video : {:?}", gv_acc.finish());
         println!("PROBE mean tick cost: A(cpu snapshot)={:.2} ms  B(gpu pdh)={:.2} ms over {n} ticks", cpu_ms / n as f64, gpu_ms / n as f64);
-        println!("PROBE (a 30 s probe is under the {MIN_READINGS}-reading floor, so finish() would say unknown)");
     }
 }

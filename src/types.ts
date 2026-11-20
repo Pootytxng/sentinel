@@ -418,8 +418,10 @@ export type GameStateFingerprint = {
   context_version?: number | null;
   /** TG-context v2: how busy everything except the game was (CPU share of the whole PC, tenths of a percent); absent = unknown. Record only. */
   other_cpu?: OtherLoad | null;
-  /** TG-context v2: the same for GPU work done by other processes. */
-  other_gpu?: OtherLoad | null;
+  /** TG-context v2: the same for 3D-engine GPU work done by other processes (sum, clamped to 100). */
+  other_gpu_3d?: OtherLoad | null;
+  /** TG-context v2: the same for video-engine GPU work (decode/encode) done by other processes. */
+  other_gpu_video?: OtherLoad | null;
   collected_at?: string | null;
 };
 
