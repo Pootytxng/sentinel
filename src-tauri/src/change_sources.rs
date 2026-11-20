@@ -1489,8 +1489,10 @@ pub(crate) const STEAM_HARD_MARGIN: Duration = Duration::from_millis(250);
 /// Thread bound: the thread is named "paramedic-steam", does read-only directory work only and is never
 /// joined. A drive that is unreachable (or asleep) can block it inside the operating system past every
 /// deadline the loop checks, so ONE parked thread can remain per such lookup until the OS call returns; it
-/// then sends into a dropped channel and ends. Nothing it holds is shared with the caller, and a lookup is
-/// made at most once per diagnosis, so the leak is bounded and cannot grow while the card is idle.
+/// then sends into a dropped channel and ends. Nothing it holds is shared with the caller, and a diagnosis makes
+/// one lookup, and the game picker makes one list read plus at most twelve matches of recorded games, behind a
+/// single-flight guard (a second picker request while one runs is answered BUSY). So the leak is bounded and
+/// cannot grow while the card is idle.
 pub(crate) fn run_bounded<F>(budget: Duration, f: F) -> SteamLookup
 where
     F: FnOnce() -> SteamLookup + Send + 'static,

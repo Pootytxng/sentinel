@@ -394,6 +394,7 @@ function limitLine(l: ParamedicLimit, t: T, dates: Dates, game?: string | null):
   if (l.code === "classes") return t("paramedic.firstLook.limit.classes");
   if (l.code === "no-install-date") return t("paramedic.firstLook.limit.noInstallDate", { n: l.args.n });
   if (l.code === "not-picked") return t("paramedic.firstLook.limit.gameNotPicked");
+  if (l.kind === "facts" && l.code === "no-game-folder") return t("paramedic.firstLook.limit.gameLocation", { game: game ?? "" });
   if (l.kind === "facts" && l.code === "hardware-not-ready") return t("paramedic.firstLook.limit.hardwareNotReady");
   if (l.kind === "facts" && l.code === "unread") return t("paramedic.firstLook.limit.factsUnread", { list: factsUnreadWords(l.args.list ?? "", t) });
   if (l.kind === "history" && l.code === "unreadable") return t("paramedic.firstLook.limit.historyUnreadable");
@@ -564,20 +565,26 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
   const [showAll, setShowAll] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const timer = useRef<number | undefined>(undefined);
+  const listTimer = useRef<number | undefined>(undefined);
   const alive = useRef(true);
   const headingId = useId();
 
   useEffect(() => {
     alive.current = true;
     // Steam's installed games, read once for the picker. A read that failed is "couldn't read", never "no games".
-    invoke<SteamGames | null>("paramedic_list_games", { recorded: games.map((g) => g.process).filter(Boolean) })
-      .then((r) => {
-        if (alive.current) setSteam(r && Array.isArray(r.games) ? r : "failed");
-      })
-      .catch(() => {
-        if (alive.current) setSteam("failed");
-      });
+    const ask = (attempt: number) =>
+      invoke<SteamGames | null>("paramedic_list_games", { recorded: games.map((g) => g.process).filter(Boolean) })
+        .then((r) => {
+          if (alive.current) setSteam(r && Array.isArray(r.games) ? r : "failed");
+        })
+        .catch((e: unknown) => {
+          if (!alive.current) return;
+          if (String(e) === BUSY && attempt < BUSY_RETRIES) listTimer.current = window.setTimeout(() => ask(attempt + 1), BUSY_RETRY_MS);
+          else setSteam("failed");
+        });
+    ask(0);
     return () => {
+      window.clearTimeout(listTimer.current);
       alive.current = false;
       window.clearTimeout(timer.current);
     };
@@ -812,6 +819,49 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
         <p data-testid="first-look-told">{toldText(a, t, dates)}</p>
       </div>
       {!a.changes_listed && <p data-testid="first-look-always">{t("paramedic.firstLook.alwaysBody")}</p>}
+      {!a.changes_listed && gameName && a.mods_none && (
+        <p className="gl-para-note" data-testid="first-look-mods-none">
+          {t("paramedic.checked.graphicsMod", { game: gameName })}
+        </p>
+      )}
+      {offBlock && (
+            <div role="group" aria-label={t("paramedic.firstLook.group.looksOff")} data-testid="first-look-off">
+              <p>
+                <strong>{t("paramedic.firstLook.group.looksOff")}</strong>
+              </p>
+              {gameName && a.crashes && (
+                <div data-testid="first-look-crashes">
+                  {crashSentence(a.crashes, gameName, t, dates).map((s, i) => (
+                    <p key={i} className={i === 0 ? undefined : "gl-para-note"}>
+                      {s}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {gameName && a.crashes_none && (
+                <p className="gl-para-note" data-testid="first-look-crashes-none">
+                  {t("paramedic.firstLook.crash.none", { game: gameName })}
+                </p>
+              )}
+              {gameName && a.looks_off.length > 0 && <Rows rows={a.looks_off} t={t} dates={dates} game={gameName} />}
+              {a.facts.length > 0 && factRows(factsOpen)}
+              {factsRest.length > 0 && (
+                <Fold title={t("paramedic.firstLook.group.more", { n: factsRest.length })} testid="first-look-facts-more">
+                  {factRows(factsRest)}
+                </Fold>
+              )}
+              {a.facts.length > 0 && (
+                <p className="gl-para-note" data-testid="first-look-facts-note">
+                  {t("paramedic.firstLook.group.looksOffNote")}
+                </p>
+              )}
+              {waiting && (
+                <p className="gl-para-note" data-testid="first-look-facts-waiting">
+                  {limitLine(waiting, t, dates, gameName)}
+                </p>
+              )}
+            </div>
+          )}
       {a.changes_listed && (
         <>
           {a.compy_changes.length > 0 && (
@@ -863,44 +913,6 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
           )}
         </>
       )}
-      {offBlock && (
-            <div role="group" aria-label={t("paramedic.firstLook.group.looksOff")} data-testid="first-look-off">
-              <p>
-                <strong>{t("paramedic.firstLook.group.looksOff")}</strong>
-              </p>
-              {gameName && a.crashes && (
-                <div data-testid="first-look-crashes">
-                  {crashSentence(a.crashes, gameName, t, dates).map((s, i) => (
-                    <p key={i} className={i === 0 ? undefined : "gl-para-note"}>
-                      {s}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {gameName && a.crashes_none && (
-                <p className="gl-para-note" data-testid="first-look-crashes-none">
-                  {t("paramedic.firstLook.crash.none", { game: gameName })}
-                </p>
-              )}
-              {gameName && a.looks_off.length > 0 && <Rows rows={a.looks_off} t={t} dates={dates} game={gameName} />}
-              {a.facts.length > 0 && factRows(factsOpen)}
-              {factsRest.length > 0 && (
-                <Fold title={t("paramedic.firstLook.group.more", { n: factsRest.length })} testid="first-look-facts-more">
-                  {factRows(factsRest)}
-                </Fold>
-              )}
-              {a.facts.length > 0 && (
-                <p className="gl-para-note" data-testid="first-look-facts-note">
-                  {t("paramedic.firstLook.group.looksOffNote")}
-                </p>
-              )}
-              {waiting && (
-                <p className="gl-para-note" data-testid="first-look-facts-waiting">
-                  {limitLine(waiting, t, dates, gameName)}
-                </p>
-              )}
-            </div>
-          )}
       {a.changes_listed && (
         <>
           {(otherRows.length > 0 || nonePrograms || programLimits.length > 0) && (

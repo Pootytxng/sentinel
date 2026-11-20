@@ -95,6 +95,13 @@ pub(super) fn drive_letter(path: &str) -> Option<char> {
     (a.is_ascii_alphabetic() && b == ':').then(|| a.to_ascii_uppercase())
 }
 
+/// A date-only value ("2025-01-10") carried at noon UTC: shown in any time zone it is still that calendar day,
+/// where midnight UTC would read as the day before west of Greenwich. Anything longer is kept as it came.
+fn calendar_date(s: &str) -> String {
+    let s = s.trim();
+    if s.len() == 10 { format!("{s}T12:00:00Z") } else { s.to_string() }
+}
+
 fn gb(bytes: u64) -> String {
     format!("{:.1}", bytes as f64 / GIB)
 }
@@ -122,7 +129,7 @@ pub(super) fn evaluate(hw: &HardwareInfo, power: PowerSource, freesync: Option<b
 
     // 1. The main monitor below its maximum refresh rate (the display mode of the primary display).
     match (r.status_of("monitor-refresh"), hw.display.as_ref()) {
-        (Some(ReadinessStatus::Attention), Some(d)) if d.max_refresh_rate_hz.saturating_sub(d.current_refresh_rate_hz) >= MONITOR_GAP_HZ => out.facts.push(fact(
+        (Some(ReadinessStatus::Attention), Some(d)) if d.current_refresh_rate_hz > 1 && d.max_refresh_rate_hz.saturating_sub(d.current_refresh_rate_hz) >= MONITOR_GAP_HZ => out.facts.push(fact(
             "monitor-refresh",
             &[("now", d.current_refresh_rate_hz.to_string()), ("max", d.max_refresh_rate_hz.to_string())],
         )),
@@ -177,7 +184,8 @@ pub(super) fn evaluate(hw: &HardwareInfo, power: PowerSource, freesync: Option<b
                 _ => unread("game-drive", &mut out),
             }
         }
-        Some(None) => unread("game-drive", &mut out),
+        // The game's folder is not known (not in Steam, or no drive letter): nothing about its drive can be read.
+        Some(None) => unread("game-location", &mut out),
         None => {}
     }
 
@@ -189,7 +197,7 @@ pub(super) fn evaluate(hw: &HardwareInfo, power: PowerSource, freesync: Option<b
                 let lower = g.name.to_ascii_lowercase();
                 let basic = lower.contains("microsoft") || lower.contains("basic display");
                 if let (Some(days), false, false) = (g.driver_age_days, basic, g.driver_date.trim().is_empty()) {
-                    out.facts.push(fact("gpu-driver-age", &[("days", days.to_string()), ("date", g.driver_date.trim().to_string())]));
+                    out.facts.push(fact("gpu-driver-age", &[("days", days.to_string()), ("date", calendar_date(&g.driver_date))]));
                 }
             }
         }
@@ -241,6 +249,10 @@ pub(super) fn facts_part(read: &FactsRead, game: &GameCtx, out: &mut FirstLook) 
                     r.facts.retain(|f| f.id != "gpu-driver-age");
                 }
                 out.facts = r.facts;
+                if r.unread.contains(&"game-location") {
+                    out.limits.push(limit("facts", "no-game-folder", &[]));
+                    r.unread.retain(|u| *u != "game-location");
+                }
                 if !r.unread.is_empty() {
                     out.limits.push(limit("facts", "unread", &[("list", r.unread.join(","))]));
                 }
@@ -429,7 +441,7 @@ mod tests {
         assert!(evaluate(&hw, PowerSource::AcPower, None, &GameCtx::default()).facts.is_empty());
         // A game with no known folder, or on a drive whose type is unknown, is a limit.
         let no_folder = GameCtx { name: Some("X".into()), ..GameCtx::default() };
-        assert_eq!(evaluate(&hw, PowerSource::AcPower, None, &no_folder).unread, vec!["game-drive"]);
+        assert_eq!(evaluate(&hw, PowerSource::AcPower, None, &no_folder).unread, vec!["game-location"]);
         hw.game_storage.libraries = vec![lib("D", "Unknown")];
         assert_eq!(on(&hw, r"D:\Games\ROB RUN").unread, vec!["game-drive"]);
     }
@@ -485,6 +497,38 @@ mod tests {
         });
         facts_part(&FactsRead::Read(Box::new(inp())), &GameCtx::default(), &mut out);
         assert!(!said(&out), "{:?}", out.facts);
+    }
+
+    #[test]
+    fn a_date_only_driver_date_is_carried_at_noon_so_it_stays_on_its_day_west_of_utc() {
+        let mut hw = healthy();
+        let mut g = gpu(Some(400));
+        g.driver_date = "2025-01-10".into();
+        hw.gpus = vec![g];
+        let o = eval(&hw);
+        assert_eq!(o.facts[0].args["date"], "2025-01-10T12:00:00Z");
+        // At noon UTC the calendar day is the same from UTC-12 to UTC+11.
+        let at = chrono::DateTime::parse_from_rfc3339(&o.facts[0].args["date"]).unwrap();
+        for hours in [-12i32, -8, 0, 5, 11] {
+            let local = at.with_timezone(&chrono::FixedOffset::east_opt(hours * 3600).unwrap());
+            assert_eq!(local.format("%Y-%m-%d").to_string(), "2025-01-10", "UTC{hours:+}");
+        }
+        // A full timestamp is kept as it came.
+        assert_eq!(calendar_date("2025-01-10T00:00:00Z"), "2025-01-10T00:00:00Z");
+    }
+
+    #[test]
+    fn a_hardware_default_refresh_rate_is_not_a_reading_and_a_game_with_no_folder_has_its_own_limit() {
+        let mut hw = healthy();
+        for now in [0, 1] {
+            hw.display = Some(display(now, 250));
+            assert!(eval(&hw).facts.is_empty(), "{now} Hz");
+        }
+        let no_folder = GameCtx { name: Some("Elsewhere".into()), ..GameCtx::default() };
+        let inp = FactsInput { hw: Some(healthy()), power: PowerSource::AcPower, ..FactsInput::default() };
+        let out = build_with(Since::ThisWeek, utc(NOW), &no_folder, &Sources { facts: FactsRead::Read(Box::new(inp)), ..Sources::default() });
+        assert!(out.limits.iter().any(|l| l.kind == "facts" && l.code == "no-game-folder"), "{:?}", out.limits);
+        assert!(out.limits.iter().all(|l| !(l.kind == "facts" && l.code == "unread")), "{:?}", out.limits);
     }
 
     #[test]

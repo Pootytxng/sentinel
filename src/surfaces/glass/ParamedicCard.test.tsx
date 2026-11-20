@@ -1306,7 +1306,7 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(checked()).toContain(`Game A has closed unexpectedly 3 times since ${day(first)}.`);
     expect(checked()).not.toMatch(/probably/);
     expect(checked()).toContain(
-      `All the crashes Compy could read have the same signature (nvwgf2umx.dll), and some happened before the earliest dated change Compy found (${day(change)}), so that change can't be the whole story for them.`,
+      `All the crashes Compy could read stopped in the same file (nvwgf2umx.dll), and some happened before the earliest dated change Compy found (${day(change)}), so that change can't be the whole story for them.`,
     );
   });
 

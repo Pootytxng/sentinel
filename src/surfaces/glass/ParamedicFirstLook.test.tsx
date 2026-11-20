@@ -13,6 +13,7 @@ const engine = vi.hoisted(() => ({
   gate: null as Promise<void> | null,
   lookError: "",
   steam: null as unknown,
+  listBusy: 0,
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string, args: unknown) => {
@@ -22,7 +23,13 @@ vi.mock("@tauri-apps/api/core", () => ({
       if (engine.lookError) return Promise.reject(engine.lookError);
       return engine.gate ? engine.gate.then(() => engine.look) : Promise.resolve(engine.look);
     }
-    if (cmd === "paramedic_list_games") return Promise.resolve(engine.steam);
+    if (cmd === "paramedic_list_games") {
+      if (engine.listBusy > 0) {
+        engine.listBusy -= 1;
+        return Promise.reject("paramedic-busy");
+      }
+      return Promise.resolve(engine.steam);
+    }
     return Promise.resolve(null);
   },
 }));
@@ -272,7 +279,7 @@ describe("the answer", () => {
       "Windows also installed security definition updates (6) and Store app updates (2). They are counted here, not listed.",
     );
     expect(screen.getByText("Windows recorded no graphics driver version change in this period.")).toBeTruthy();
-    expect(screen.getByText("Windows recorded no monthly Windows update, Windows version update or driver update in this period.")).toBeTruthy();
+    expect(screen.getByText("Windows Update recorded no monthly Windows update, Windows version update or driver update in this period.")).toBeTruthy();
   });
 
   it("'always been like this' shows no change list and says why", async () => {
@@ -325,7 +332,7 @@ describe("the answer", () => {
     expect(text).toContain("Compy couldn't see which Windows updates were installed: reading took too long, so Compy went on without it.");
     expect(text).toContain("Compy didn't look at any game's files, because no game was picked.");
     // The one complete kind is still said, for that kind only.
-    expect(screen.getByText("Windows recorded no monthly Windows update, Windows version update or driver update in this period.")).toBeTruthy();
+    expect(screen.getByText("Windows Update recorded no monthly Windows update, Windows version update or driver update in this period.")).toBeTruthy();
     expect(screen.queryByText("Windows recorded no graphics driver version change in this period.")).toBeNull();
     // Limits that hide a whole kind are said inside that kind's own group, not only in the fold (review S2).
     const inGroup = within(screen.getByTestId("first-look-touch")).getAllByTestId("first-look-group-limit").map((n) => n.textContent);
@@ -630,7 +637,7 @@ describe("the first look for a picked game", () => {
     // The crash block comes before any other fact in the block.
     expect(crashes.compareDocumentPosition(within(block).getByTestId("first-look-rows")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(crashes.textContent).toMatch(/^Windows' crash records that Compy could read show ROB RUN closing unexpectedly at least 3 times\. The oldest of these is from [A-Z][a-z]{2} \d+\./);
-    expect(crashes.textContent).toMatch(/All the crashes Compy could read have the same signature \(UnityPlayer\.dll\), and some happened before the earliest dated change Compy found \([A-Z][a-z]{2} \d+\), so that change can't be the whole story for them\.$/);
+    expect(crashes.textContent).toMatch(/All the crashes Compy could read stopped in the same file \(UnityPlayer\.dll\), and some happened before the earliest dated change Compy found \([A-Z][a-z]{2} \d+\), so that change can't be the whole story for them\.$/);
   });
 
   it("the same-signature sentence is said only when the engine sent a signature; a single crash and 'matched by program name' use the measured flow's words", async () => {
@@ -692,7 +699,7 @@ describe("the first look for a picked game", () => {
     expect(inGroup).toContain("Compy couldn't see Steam's record of ROB RUN's files: Steam's library files couldn't be read.");
   });
 
-  it("the blocks come in a fixed order: told, changes that touch games, what looks off, other changes, limits, what Compy can't tell", async () => {
+  it("the blocks come in a fixed order: told, what looks off, changes that touch games, other changes, limits, what Compy can't tell", async () => {
     await look(
       gameAnswer({
         touch_games: [driver],
@@ -704,8 +711,8 @@ describe("the first look for a picked game", () => {
     );
     const order = [
       screen.getByTestId("first-look-told"),
-      screen.getByTestId("first-look-touch"),
       screen.getByTestId("first-look-off"),
+      screen.getByTestId("first-look-touch"),
       screen.getByTestId("first-look-other"),
       screen.getByTestId("first-look-limits"),
       screen.getByTestId("first-look-cant-tell"),
@@ -861,7 +868,7 @@ describe("changes Compy made", () => {
     const group = screen.getByTestId("first-look-compy");
     expect(within(group).getByText("Changes Compy made")).toBeTruthy();
     expect(within(group).getByRole("listitem").textContent).toMatch(/^Compy changed “Turn off Game DVR” on [A-Z][a-z]{2} \d+/);
-    expect(within(group).getByText("Changes still in place can be undone in History.")).toBeTruthy();
+    expect(within(group).getByText("Changes that History lists as applied can be undone there.")).toBeTruthy();
     expect(within(group).queryAllByRole("button")).toHaveLength(0);
     // The first group: before the changes that touch games.
     expect(group.compareDocumentPosition(screen.getByTestId("first-look-touch")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -904,7 +911,7 @@ describe("changes Compy made", () => {
     expect(screen.queryByTestId("first-look-compy")).toBeNull();
   });
 
-  it("the blocks keep one fixed order: told, Compy's changes, changes that touch games, what looks off, other changes, limits, can't tell", async () => {
+  it("the blocks keep one fixed order: told, what looks off, Compy's changes, changes that touch games, other changes, limits, can't tell", async () => {
     await wholePc(
       gameAnswer({
         compy_changes: [compy("Tweak", "2026-11-18T10:00:00Z")],
@@ -917,9 +924,9 @@ describe("changes Compy made", () => {
     );
     const order = [
       screen.getByTestId("first-look-told"),
+      screen.getByTestId("first-look-off"),
       screen.getByTestId("first-look-compy"),
       screen.getByTestId("first-look-touch"),
-      screen.getByTestId("first-look-off"),
       screen.getByTestId("first-look-other"),
       screen.getByTestId("first-look-limits"),
       screen.getByTestId("first-look-cant-tell"),
@@ -1004,7 +1011,7 @@ describe("first-look review r1", () => {
   });
 
   it("the undo hint appears only when a listed change is still in place, and an undone one says 'undone'", async () => {
-    const hint = "Changes still in place can be undone in History.";
+    const hint = "Changes that History lists as applied can be undone there.";
     const undone = [compy("A", "2026-11-18T10:00:00Z", { undone: true, undone_at: "2026-11-19T08:00:00Z" }), compy("B", "2026-11-17T10:00:00Z", { undone: true })];
     await lookAs(gameAnswer({ compy_changes: undone }), "This week");
     expect(screen.queryByText(hint)).toBeNull();
@@ -1120,5 +1127,64 @@ describe("first-look review r1", () => {
     expect(shown.filter((n) => /^Recorded/.test(n))).toHaveLength(5);
     expect(shown.filter((n) => ["Alpha", "Beta", "Gamma", "Delta", "Epsilon"].includes(n))).toEqual(["Alpha", "Beta", "Gamma"]);
     expect(screen.getByRole("button", { name: "Show 7 more" })).toBeTruthy();
+  });
+});
+
+describe("first-look review r2", () => {
+  async function lookAs(a: FirstLookAnswer, label: string) {
+    engine.steam = steamList([]);
+    await toThePicker(noSessions(), { games: recorded });
+    fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
+    await pick(label, a);
+  }
+
+  it("the crash lines come first in what looks off, and what looks off comes right after what the user told Compy", async () => {
+    await lookAs(
+      gameAnswer({
+        crashes: { args: { n: "2", since: "2026-11-02T10:00:00Z" }, signature_module: "UnityPlayer.dll", signature_before: "2026-11-15T13:44:49Z" },
+        facts: [fact("on-battery")],
+        looks_off: [modRow()],
+        compy_changes: [compy("Tweak", "2026-11-18T10:00:00Z")],
+        touch_games: [driver],
+      }),
+      "This week",
+    );
+    const off = screen.getByTestId("first-look-off");
+    expect(screen.getByTestId("first-look-told").parentElement!.compareDocumentPosition(off) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(off.compareDocumentPosition(screen.getByTestId("first-look-compy")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const first = off.querySelector("[data-testid]") as HTMLElement;
+    expect(first.getAttribute("data-testid")).toBe("first-look-crashes");
+    // No "signature" jargon: the crashes stopped in the same file.
+    expect(off.textContent).toContain("stopped in the same file (UnityPlayer.dll)");
+    expect(off.textContent).not.toMatch(/signature/i);
+  });
+
+  it("'always' also says no known graphics mod was found when the scan was complete", async () => {
+    await lookAs(
+      gameAnswer({ told: { since: "always", from: null, to: "2026-11-20T12:00:00Z", hours: null }, changes_listed: false, mods_none: true }),
+      "It's always been like this",
+    );
+    expect(screen.getByTestId("first-look-mods-none").textContent).toBe("No known graphics mod found in ROB RUN's folder.");
+  });
+
+  it("a game whose folder is unknown says so instead of 'couldn't read the drive'", async () => {
+    await lookAs(gameAnswer({ limits: [{ kind: "facts", code: "no-game-folder", args: {} }], read_all: false }), "This week");
+    openLimits();
+    const text = screen.getByTestId("first-look-limits").textContent ?? "";
+    expect(text).toContain("Compy doesn't know where ROB RUN is installed, so it couldn't check its drive or folder.");
+    expect(text).not.toContain("the game's drive");
+  });
+
+  it("the picker asks again when the engine answers BUSY, and does not call a busy answer a failed read", async () => {
+    try {
+      engine.steam = steamList(["Alpha"]);
+      engine.listBusy = 1;
+      await toThePicker(noSessions(), { games: recorded });
+      await waitFor(() => expect(screen.getByRole("button", { name: "Alpha" })).toBeTruthy(), { timeout: 4000 });
+      expect(screen.queryByTestId("first-look-steam-unread")).toBeNull();
+      expect(engine.calls.filter((c) => c.cmd === "paramedic_list_games").length).toBeGreaterThanOrEqual(2);
+    } finally {
+      engine.listBusy = 0;
+    }
   });
 });

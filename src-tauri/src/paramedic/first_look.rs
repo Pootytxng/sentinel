@@ -857,9 +857,17 @@ pub(crate) struct SteamGames {
     pub games: Vec<ListedGame>,
 }
 
-/// Two folder paths are one folder (case and a trailing separator aside).
+/// Two folder paths are one folder (case, slash direction, doubled separators and a trailing separator aside).
 fn same_folder(a: &str, b: &str) -> bool {
-    let norm = |s: &str| s.trim().trim_end_matches(['\\', '/']).replace('/', "\\").to_ascii_lowercase();
+    let norm = |s: &str| {
+        let mut out = String::new();
+        for c in s.trim().replace('/', "\\").to_ascii_lowercase().chars() {
+            if !(c == '\\' && out.ends_with('\\')) {
+                out.push(c);
+            }
+        }
+        out.trim_end_matches('\\').to_string()
+    };
     !norm(a).is_empty() && norm(a) == norm(b)
 }
 
@@ -889,12 +897,37 @@ fn games_dto(listing: Result<change_sources::SteamListing, UnreadableReason>, re
 const RECORDED_MATCHED: usize = 12;
 const RECORDED_MATCH_BUDGET: Duration = Duration::from_millis(1200);
 
+/// A program name longer than this is not a program name.
+const RECORDED_NAME_MAX: usize = 260;
+
+/// The command boundary's cap, before anything is spawned: names that are empty or longer than
+/// `RECORDED_NAME_MAX` are dropped, repeats (any case) are dropped, and at most `RECORDED_MATCHED` are kept.
+fn cap_recorded(names: Vec<String>) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for n in names {
+        // A length test first: an absurdly long string is never walked character by character.
+        if n.len() > RECORDED_NAME_MAX * 4 {
+            continue;
+        }
+        let n = n.trim();
+        if n.is_empty() || n.chars().count() > RECORDED_NAME_MAX || !seen.insert(n.to_lowercase()) {
+            continue;
+        }
+        out.push(n.to_string());
+        if out.len() == RECORDED_MATCHED {
+            break;
+        }
+    }
+    out
+}
+
 /// Each recorded game's program name with the Steam folder it was found in (the measured flow's own lookup).
 /// A game not found, or reached after the budget, is simply not matched: both entries then show.
 fn recorded_folders(processes: Vec<String>) -> Vec<(String, String)> {
     let started = Instant::now();
     let mut out = Vec::new();
-    for p in processes.into_iter().map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).take(RECORDED_MATCHED) {
+    for p in processes.into_iter().take(RECORDED_MATCHED) {
         let left = RECORDED_MATCH_BUDGET.saturating_sub(started.elapsed());
         if left.is_zero() {
             break;
@@ -908,14 +941,32 @@ fn recorded_folders(processes: Vec<String>) -> Vec<(String, String)> {
     out
 }
 
+/// Set while a picker lookup runs.
+static LISTING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Frees the picker's lookup when it ends, however it ends.
+struct ListingGuard;
+impl Drop for ListingGuard {
+    fn drop(&mut self) {
+        LISTING.store(false, Ordering::Release);
+    }
+}
+
 /// The games installed with Steam, most recently updated first, for the "Which game?" step. `recorded` are the
 /// program names of the games Compy has recorded, so the picker can tell which Steam entry is one of them.
 /// Read-only and bounded (`change_sources::list_steam_games`); it starts no process and writes nothing.
 #[tauri::command]
 pub(crate) async fn paramedic_list_games(recorded: Option<Vec<String>>) -> Result<SteamGames, String> {
+    // One lookup at a time: reopening the picker while one still runs answers BUSY (the card asks again), so
+    // lookups cannot stack up behind a drive that is slow to answer.
+    if LISTING.swap(true, Ordering::AcqRel) {
+        return Err(super::BUSY.to_string());
+    }
+    let names = cap_recorded(recorded.unwrap_or_default());
     tauri::async_runtime::spawn_blocking(move || {
+        let _free = ListingGuard;
         let listing = change_sources::list_steam_games(change_sources::STEAM_LIST_BUDGET);
-        let folders = if listing.is_ok() { recorded_folders(recorded.unwrap_or_default()) } else { Vec::new() };
+        let folders = if listing.is_ok() { recorded_folders(names) } else { Vec::new() };
         games_dto(listing, &folders)
     })
     .await
@@ -1874,6 +1925,31 @@ mod tests {
         let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src);
         let l = a.limits.iter().find(|l| l.kind == "mods" && l.code == "partial").expect("a partial line");
         assert!(l.args.is_empty());
+    }
+
+    #[test]
+    fn the_command_boundary_caps_the_recorded_names_before_anything_is_spawned() {
+        let mut names: Vec<String> = (0..500).map(|i| format!("Game{i}.exe")).collect();
+        names.insert(0, "x".repeat(1_000_000));
+        names.insert(1, "y".repeat(261));
+        names.insert(2, "  ".into());
+        names.insert(3, "GAME0.EXE".into());
+        names.insert(4, "game0.exe".into());
+        let got = cap_recorded(names);
+        assert_eq!(got.len(), RECORDED_MATCHED);
+        assert_eq!(got[0], "GAME0.EXE", "the first spelling wins, repeats in any case are dropped");
+        assert!(got.iter().all(|n| n.chars().count() <= RECORDED_NAME_MAX && !n.trim().is_empty()));
+        assert_eq!(got.iter().filter(|n| n.eq_ignore_ascii_case("game0.exe")).count(), 1);
+        // A name of exactly the limit is kept.
+        assert_eq!(cap_recorded(vec!["z".repeat(RECORDED_NAME_MAX)]).len(), 1);
+    }
+
+    #[test]
+    fn folders_compare_equal_through_case_slashes_doubled_and_trailing_separators() {
+        assert!(same_folder(r"D:\Lib\\steamapps\common\X", "d:/lib/steamapps/common/x/"));
+        assert!(same_folder(r"D:\Lib\", r"d:\lib"));
+        assert!(!same_folder(r"D:\Lib\A", r"D:\Lib\B"));
+        assert!(!same_folder("", ""));
     }
 
     #[test]

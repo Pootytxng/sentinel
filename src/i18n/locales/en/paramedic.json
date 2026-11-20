@@ -62,7 +62,7 @@
     },
     "none": {
       "gpuDriver": "Windows recorded no graphics driver version change in this period.",
-      "windowsUpdate": "Windows recorded no monthly Windows update, Windows version update or driver update in this period.",
+      "windowsUpdate": "Windows Update recorded no monthly Windows update, Windows version update or driver update in this period.",
       "programs": "No program shows an install or update date in this period."
     },
     "nothing": "Compy found no dated change in this period. That doesn't mean nothing is wrong: Compy hasn't measured how any game runs.",
@@ -114,7 +114,8 @@
       "modsPartialOther": "Whether {{game}}'s folder has other graphics mods (only part of the folder was scanned)",
       "modsReaderFailed": "Whether {{game}}'s folder has a graphics mod (the reader stopped unexpectedly)",
       "crashesReaderFailed": "Whether {{game}} has closed unexpectedly before (the reader stopped unexpectedly)",
-      "crashesNoFolder": "Whether {{game}} has closed unexpectedly before (Compy couldn't match the game to an install folder)"
+      "crashesNoFolder": "Whether {{game}} has closed unexpectedly before (Compy couldn't match the game to an install folder)",
+      "gameLocation": "Compy doesn't know where {{game}} is installed, so it couldn't check its drive or folder."
     },
     "cantTell": {
       "title": "What Compy can't tell yet",
@@ -157,7 +158,7 @@
       "applied": "Compy changed “{{title}}” on {{when}}.",
       "undone": "Compy changed “{{title}}” on {{when}}, and it was undone on {{undone}}.",
       "undoneNoDate": "Compy changed “{{title}}” on {{when}}, and it has since been undone.",
-      "undoHint": "Changes still in place can be undone in History."
+      "undoHint": "Changes that History lists as applied can be undone there."
     },
     "fact": {
       "monitorRefresh": "Your main monitor is running at {{now}} Hz; at this resolution it supports {{max}} Hz.",
@@ -603,7 +604,7 @@
     "modSettingsOnly": "{{game}}'s folder contains a settings or data file from {{name}}; Compy can't tell whether the mod itself is installed.",
     "gameCrashes_one": "{{game}} has closed unexpectedly once, on {{since}}.",
     "gameCrashes_other": "{{game}} has closed unexpectedly {{count}} times since {{since}}.",
-    "gameCrashSignature": "All the crashes Compy could read have the same signature ({{module}}), and some happened before {{what}}, so that change can't be the whole story for them.",
+    "gameCrashSignature": "All the crashes Compy could read stopped in the same file ({{module}}), and some happened before {{what}}, so that change can't be the whole story for them.",
     "crashBeforeWhat": "the earliest dated change Compy found ({{date}})",
     "gpuTemp_one": "Graphics card temperature peaked at {{rough}}°C in the rough session; in normal sessions it typically peaks around {{base}}°C.",
     "gpuTemp_other": "Graphics card temperature peaked at {{rough}}°C in the rough sessions (the highest of them); in normal sessions it typically peaks around {{base}}°C.",

@@ -62,7 +62,7 @@
     },
     "none": {
       "gpuDriver": "这段时间内，Windows 没有记录到显卡驱动版本发生变化。",
-      "windowsUpdate": "Windows 在这段时间没有记录每月 Windows 更新、Windows 版本更新或驱动更新。",
+      "windowsUpdate": "Windows 更新在这段时间没有记录每月 Windows 更新、Windows 版本更新或驱动更新。",
       "programs": "这段时间没有程序显示安装或更新日期。"
     },
     "nothing": "这段时间内，Compy 没有找到带日期的变化。这不代表一切正常：Compy 还没有测量过任何游戏的运行情况。",
@@ -114,7 +114,8 @@
       "modsPartialOther": "{{game}} 的文件夹里是否还有其他图形 mod(只扫描了文件夹的一部分)",
       "modsReaderFailed": "{{game}} 的文件夹里有没有图形 mod(读取程序意外停止了)",
       "crashesReaderFailed": "{{game}} 以前是否意外关闭过（读取程序意外停止了）",
-      "crashesNoFolder": "{{game}} 以前是否意外关闭过（Compy 没能把游戏对应到安装文件夹）"
+      "crashesNoFolder": "{{game}} 以前是否意外关闭过（Compy 没能把游戏对应到安装文件夹）",
+      "gameLocation": "Compy 不知道 {{game}} 安装在哪里，所以没能检查它所在的驱动器或文件夹。"
     },
     "cantTell": {
       "title": "Compy 目前还说不准的",
@@ -157,7 +158,7 @@
       "applied": "Compy 在 {{when}} 更改了“{{title}}”。",
       "undone": "Compy 在 {{when}} 更改了“{{title}}”，并已在 {{undone}} 被撤销。",
       "undoneNoDate": "Compy 在 {{when}} 更改了“{{title}}”，之后已被撤销。",
-      "undoHint": "仍然生效的更改可以在“历史”里撤销。"
+      "undoHint": "“历史”里列为已应用的更改，可以在那里撤销。"
     },
     "fact": {
       "monitorRefresh": "你的主显示器正以 {{now}} Hz 运行；在当前分辨率下它支持 {{max}} Hz。",
@@ -603,7 +604,7 @@
     "modSettingsOnly": "{{game}} 的文件夹里有 {{name}} 的设置或数据文件;Compy 无法判断这个 mod 本身是否已安装。",
     "gameCrashes_one": "{{game}} 曾在 {{since}} 意外关闭过一次。",
     "gameCrashes_other": "{{game}} 自 {{since}} 起已意外关闭 {{count}} 次。",
-    "gameCrashSignature": "Compy 能读到的所有崩溃特征都相同（{{module}}），而且有些发生在{{what}}之前，所以这项变化不能解释它们的全部。",
+    "gameCrashSignature": "Compy 能读到的所有崩溃都停在同一个文件里（{{module}}），而且有些发生在{{what}}之前，所以这项变化不能解释它们的全部。",
     "crashBeforeWhat": "Compy 找到的最早一项有日期的变化（{{date}}）",
     "gpuTemp_one": "显卡温度在出问题的那次游戏中最高达到 {{rough}}°C；在正常的几次中，通常最高约为 {{base}}°C。",
     "gpuTemp_other": "显卡温度在出问题的那几次游戏中最高达到 {{rough}}°C（取其中最高的一次）；在正常的几次中，通常最高约为 {{base}}°C。",
