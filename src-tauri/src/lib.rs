@@ -58,6 +58,7 @@ mod recommendations;
 mod remote_rules;
 mod services; // A4 read-only service inventory — categorised, informational, mutates nothing.
 mod sessions;
+mod session_boundary; // Where a session ends and the next begins (one process identity per session) + the read-only mixed-session flag.
 mod support_evidence; // Local support evidence — bounded, redacted, on-disk-only record of the moments support actually asks about. No outbound path; export is user-initiated and preview-gated.
 mod trial_candidates; // P4-candidates: READ-ONLY "worth testing on this PC" filter for the Trial picker (OPTIMIZATION_ENGINE §3.1–3.3) — applies / already set / Compy can do it safely, with one reason per change. Mutates nothing.
 mod tray; // Opt-in "minimize to tray" (default OFF — §1 clean-exit unless the user opts in).

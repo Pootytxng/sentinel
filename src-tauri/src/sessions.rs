@@ -231,6 +231,19 @@ pub(crate) struct SessionSummary {
     /// only when present; an unknown value reads as `None`; an older Compy ignores the key.
     #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "frame_cap_lenient")]
     pub(crate) frame_cap: Option<crate::noise_floor::CapRead>,
+    /// Why this session ended (`session_boundary::SessionEnd`): the process exited, a different
+    /// process began presenting, or monitoring was stopped. A session belongs to ONE process
+    /// identity, so a game that dies ends its session at its last reading and the next game starts
+    /// its own. `None` on every row an older Compy wrote (nothing says why those ended, and some of
+    /// them hold two games: `session_boundary::suspected_splice`). Additive: written only when
+    /// present, an unknown value reads as `None`, and an older Compy ignores the key.
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "session_end_lenient")]
+    pub(crate) ended: Option<crate::session_boundary::SessionEnd>,
+}
+
+/// An unknown or damaged `ended` value reads as not recorded, never as a failed load.
+fn session_end_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<crate::session_boundary::SessionEnd>, D::Error> {
+    Ok(serde_json::from_value(serde_json::Value::deserialize(d)?).ok())
 }
 
 /// An unknown or damaged `frame_cap` value reads as not recorded, never as a failed load.
@@ -753,6 +766,8 @@ impl SessionAccumulator {
             frame_pacing,
             gpu_load: self.gpu_load,
             frame_cap: None,
+            // Stamped by the monitoring loop, which knows why the session ended.
+            ended: None,
         }
     }
 }

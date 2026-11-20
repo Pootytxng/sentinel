@@ -1819,6 +1819,7 @@ mod blackbox_tests {
             frame_pacing: None,
             gpu_load: None,
             frame_cap: None,
+            ended: None,
         }
     }
 

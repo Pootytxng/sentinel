@@ -1208,7 +1208,13 @@ fn start_fps_capture_locked() -> Result<(), String> {
             &started_at,
         );
         std::thread::spawn(move || {
-            let mut live = LiveSession::begin(started_at, active_changes);
+            // One clock for the whole capture: every session's start and end are readings of it.
+            let clock = std::time::Instant::now();
+            // A session belongs to ONE process identity: the boundary decides, once a second, when
+            // the open session ends (its process is gone, or another one is presenting) and when the
+            // next begins. A fresh capture opens a session at once, as it always did.
+            let mut boundary = crate::session_boundary::Boundary::open_at(0);
+            let mut slot: Option<LiveSession> = Some(LiveSession::begin(started_at, active_changes, 0));
             // P5-enough: a new capture starts from nothing, never the last capture's count.
             *lock_progress() = None;
             let mut proc_sys = System::new();
@@ -1217,7 +1223,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 if !capture_live(generation) {
                     break;
                 }
-                let elapsed = live.start.elapsed().as_secs() as u32;
+                let now = clock.elapsed().as_secs() as u32;
                 // Tooltip carry-over: the live tray tooltip reuses this tick's data (no new IPC).
                 let mut tip: Option<(f64, f64)> = None;
                 // P9-bottleneck-sustained: whether this tick's frame reading was a MEASURED one.
@@ -1239,36 +1245,67 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 } else {
                     None
                 };
-                if let Some(txt) = fps_txt {
-                    // Parse the helper's per-tick line through the capture backend (its wire format is
-                    // the backend's concern) — byte-identical to the prior inline serde_json parse.
-                    if let Some(s) = crate::capture::EtwDxgiBackend.parse_sample(&txt) {
-                        if s.fps > 0.0 {
-                            // P4-comparable: a tick with the game behind another window is left out
-                            // of the session's numbers and of the stutter timeline.
-                            let measured = live.acc.record_tick(
-                                &s.process_name,
-                                s.fps,
-                                s.avg_frametime_ms,
-                                s.low1_fps,
-                                elapsed,
-                                s.foreground,
-                            );
-                            // P4-smooth-measure: every frame since the last reading, left out
-                            // on the same ground as the tick (alt-tabbed).
-                            if let Some(h) = &s.frame_hist {
-                                live.acc.record_frame_hist(&s.process_name, h, measured, elapsed);
-                            }
-                            if measured {
-                                *lock_progress() = Some(live.acc.progress());
-                            }
-                            tick_measured = measured;
-                            tick_game = Some((s.process_name.clone(), s.pid));
-                            tip = Some((s.fps, s.low1_fps));
-                            if measured && s.low1_fps > 0.0 && live.timeline.len() < 7200 {
-                                live.timeline.push((elapsed, s.low1_fps));
-                            }
-                        }
+                // Parse the helper's per-tick line through the capture backend (its wire format is
+                // the backend's concern) - byte-identical to the prior inline serde_json parse.
+                let sample = fps_txt
+                    .and_then(|txt| crate::capture::EtwDxgiBackend.parse_sample(&txt))
+                    .filter(|s| s.fps > 0.0);
+                // The boundary sees only a reading that names its process; `alive` is asked only on a
+                // tick with no fresh reading, so a game that is merely silent (alt-tab, loading,
+                // minimised) is never mistaken for a game that is gone.
+                let step = boundary.tick(
+                    now,
+                    sample.as_ref().filter(|s| !s.process_name.is_empty()).map(|s| (s.process_name.as_str(), s.pid)),
+                    pid_running_as,
+                );
+                if let Some(ended) = step.ended {
+                    if let Some(done) = slot.take() {
+                        done.finish(ended);
+                    }
+                    *lock_progress() = None;
+                }
+                if step.began {
+                    // A new process begins its OWN session at its first frame: its start, its
+                    // change counts and its clock are its own, and nothing of the last one is carried.
+                    let began_at = chrono::Utc::now().to_rfc3339();
+                    let counts = crate::history::session_start_counts(
+                        crate::history::load_history,
+                        crate::history::ledger_set_aside_through,
+                        &began_at,
+                    );
+                    slot = Some(LiveSession::begin(began_at, counts, now));
+                }
+                // No session open (the game closed and nothing has presented since): monitoring stays
+                // on and waits, recording nothing.
+                let Some(live) = slot.as_mut() else {
+                    crate::tray::set_monitoring_on();
+                    continue;
+                };
+                let elapsed = now.saturating_sub(live.began_at);
+                if let Some(s) = &sample {
+                    // P4-comparable: a tick with the game behind another window is left out
+                    // of the session's numbers and of the stutter timeline.
+                    let measured = live.acc.record_tick(
+                        &s.process_name,
+                        s.fps,
+                        s.avg_frametime_ms,
+                        s.low1_fps,
+                        elapsed,
+                        s.foreground,
+                    );
+                    // P4-smooth-measure: every frame since the last reading, left out
+                    // on the same ground as the tick (alt-tabbed).
+                    if let Some(h) = &s.frame_hist {
+                        live.acc.record_frame_hist(&s.process_name, h, measured, elapsed);
+                    }
+                    if measured {
+                        *lock_progress() = Some(live.acc.progress());
+                    }
+                    tick_measured = measured;
+                    tick_game = Some((s.process_name.clone(), s.pid));
+                    tip = Some((s.fps, s.low1_fps));
+                    if measured && s.low1_fps > 0.0 && live.timeline.len() < 7200 {
+                        live.timeline.push((elapsed, s.low1_fps));
                     }
                 }
                 let gpus = get_gpu_sensors();
@@ -1384,7 +1421,14 @@ fn start_fps_capture_locked() -> Result<(), String> {
                     live.prev_procs = Some(names);
                 }
             }
-            live.finish_at_stop();
+            // Monitoring stopped (or the helper went away): a session still open ends with the wall
+            // time since it began, as every session always has.
+            let now = clock.elapsed().as_secs() as u32;
+            if let Some(ended) = boundary.stop(now) {
+                if let Some(done) = slot.take() {
+                    done.finish(ended);
+                }
+            }
         });
     }
 
@@ -1408,7 +1452,8 @@ const PROC_IGNORE: [&str; 8] = [
 /// their order are the locals the loop always had).
 struct LiveSession {
     acc: crate::sessions::SessionAccumulator,
-    start: std::time::Instant,
+    /// Reading of the capture's clock at which this session began.
+    began_at: u32,
     /// TG-context: the active power plan as the session begins (read-only powercfg query, once;
     /// read again at save to see whether it changed). Unread stays unknown.
     plan_at_start: Option<String>,
@@ -1436,10 +1481,10 @@ struct LiveSession {
 }
 
 impl LiveSession {
-    fn begin(started_at: String, active_changes: crate::history::SessionStartCounts) -> Self {
+    fn begin(started_at: String, active_changes: crate::history::SessionStartCounts, began_at: u32) -> Self {
         Self {
             acc: crate::sessions::SessionAccumulator::with_counts(started_at, active_changes),
-            start: std::time::Instant::now(),
+            began_at,
             plan_at_start: crate::actions::current_power_plan_guid(),
             timeline: Vec::new(),
             events: Vec::new(),
@@ -1456,18 +1501,17 @@ impl LiveSession {
         }
     }
 
-    /// Capture stopped: finalize at wall time since the session began, and save it if it measured.
-    fn finish_at_stop(self) {
-        let duration_secs = self.start.elapsed().as_secs();
-        self.finish(duration_secs);
-    }
-
-    fn finish(self, duration_secs: u64) {
+    /// The session ended as `ended` says: finalize it there and save it if it measured. A session
+    /// that ended at its last reading (its process exited, or another took over) keeps nothing that
+    /// was seen after it: no signal logged past its end.
+    fn finish(self, ended: crate::session_boundary::Ended) {
+        let crate::session_boundary::Ended { reason, duration_secs } = ended;
+        let duration_secs = u64::from(duration_secs);
         let LiveSession {
             acc,
             plan_at_start,
             timeline,
-            events,
+            mut events,
             other_cpu_acc,
             other_gpu_3d_acc,
             other_gpu_video_acc,
@@ -1475,8 +1519,12 @@ impl LiveSession {
             gaming_mode_plan,
             ..
         } = self;
+        if reason != crate::session_boundary::SessionEnd::CaptureStopped {
+            events.retain(|e| u64::from(e.at_secs) <= duration_secs);
+        }
         if acc.worth_saving() {
             let mut summary = acc.finalize(duration_secs);
+            summary.ended = Some(reason);
             summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
             summary.gaming_mode_active = Some(gaming_mode_seen);
             summary.gaming_mode_plan = gaming_mode_plan;

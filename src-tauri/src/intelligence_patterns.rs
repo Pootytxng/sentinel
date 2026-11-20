@@ -693,6 +693,7 @@ mod tests {
             gpu_load: None,
             // A read "no cap" (CR-pattern-cap-and-words: an unread cap is left out of 1% low lanes).
             frame_cap: Some(crate::noise_floor::CapRead::Uncapped),
+            ended: None,
         }
     }
 
