@@ -1675,7 +1675,7 @@ fn drive_letter_of(path: &str) -> Option<char> {
 
 // Pure: library paths from a Steam libraryfolders.vdf body. Each library block
 // has a line like:  "path"   "D:\\SteamLibrary"  (backslashes doubled in the VDF).
-fn parse_steam_library_paths(vdf: &str) -> Vec<String> {
+pub(crate) fn parse_steam_library_paths(vdf: &str) -> Vec<String> {
     vdf.lines()
         .filter_map(|line| {
             let rest = line.trim().strip_prefix("\"path\"")?;
