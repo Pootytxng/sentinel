@@ -1224,7 +1224,8 @@ fn start_fps_capture_locked() -> Result<(), String> {
             // TG-context v2 (record only): the rest of the PC's CPU/GPU load over measured ticks.
             let mut other_sampler: Option<crate::other_load::OtherLoadSampler> = None;
             let mut other_cpu_acc = crate::other_load::OtherLoadAccumulator::default();
-            let mut other_gpu_acc = crate::other_load::OtherLoadAccumulator::default();
+            let mut other_gpu_3d_acc = crate::other_load::OtherLoadAccumulator::default();
+            let mut other_gpu_video_acc = crate::other_load::OtherLoadAccumulator::default();
             let mut prev_procs: Option<std::collections::HashSet<String>> = None;
             let mut prev_clock: Option<u32> = None;
             let mut ram_logged = false;
@@ -1347,7 +1348,8 @@ fn start_fps_capture_locked() -> Result<(), String> {
                         let r = sampler.sample(*pid);
                         if tick_measured {
                             other_cpu_acc.record(r.cpu);
-                            other_gpu_acc.record(r.gpu);
+                            other_gpu_3d_acc.record(r.gpu_3d);
+                            other_gpu_video_acc.record(r.gpu_video);
                         }
                     }
                 }
@@ -1441,7 +1443,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
                     Some(gaming_mode_seen),
                 )
                 .with_power_plan(plan_at_start, crate::actions::current_power_plan_guid())
-                .with_other_load(other_cpu_acc.finish(), other_gpu_acc.finish()));
+                .with_other_load(other_cpu_acc.finish(), other_gpu_3d_acc.finish(), other_gpu_video_acc.finish()));
                 // P7-notify (Constitution §15, §33): a saved session toasts only when it settles a
                 // decision or a state change (a Trial's after-session, a before/after verdict, a
                 // regression against the game's last steady session). Otherwise the debrief waits
