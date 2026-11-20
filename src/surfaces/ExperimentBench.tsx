@@ -75,7 +75,7 @@ import {
   type RealPlayProgress,
 } from "./journey-realplay";
 import { journeyProgress, nextToTest, stillOnFor } from "./journey-resume";
-import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
+import { fullAfterSessionsFirst, gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { displayModeLabel } from "../data/display-mode";
 import { takeBenchArrival, type BenchArrival } from "./lab-arrival";
 import { settingsDoneLine, softwareFirstLine } from "./settings-done";
@@ -911,15 +911,17 @@ function lastVerdictOn(experiments: Experiment[], game: string): Map<string, str
   return last;
 }
 
-function treatmentFor(exp: Experiment, sessions: SessionSummary[]): SessionSummary | null {
+export function treatmentFor(exp: Experiment, sessions: SessionSummary[]): SessionSummary | null {
   if (!canConclude(exp)) return null;
   const started = new Date(exp.applied_at).getTime();
-  const candidates = sessions
-    .filter(
+  // A full after-session before a short relaunch fragment (a crash and relaunch in one sitting now
+  // leaves two rows): the Trial must not conclude on the fragment while a full reading is stored.
+  const candidates = fullAfterSessionsFirst(
+    sessions.filter(
       (s) =>
         s.process_name === exp.game && isUsableReading(s) && new Date(s.started_at).getTime() > started,
-    )
-    .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+    ),
+  );
   return candidates[0] ?? null;
 }
 

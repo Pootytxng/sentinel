@@ -59,7 +59,13 @@ enum State {
     Idle,
     /// A session is open. `target` is `None` until its first frame names the process (the session
     /// of a fresh capture exists from the moment monitoring starts, as it always has).
-    Open { target: Option<Target>, began_at: u32, last_frame_at: Option<u32>, gone_ticks: u32 },
+    Open {
+        target: Option<Target>,
+        began_at: u32,
+        first_frame_at: Option<u32>,
+        last_frame_at: Option<u32>,
+        gone_ticks: u32,
+    },
 }
 
 /// A session that ended, and where.
@@ -69,6 +75,30 @@ pub(crate) struct Ended {
     /// Whole seconds from the session's start to its end: to the LAST READING for `ProcessExited`
     /// and `TargetChanged`, to the moment of the stop for `CaptureStopped`.
     pub(crate) duration_secs: u32,
+    /// Reading of the capture's clock at which the session began (0 = it began with the capture).
+    pub(crate) began_at: u32,
+    /// Seconds from the session's first reading to its last: how long the process was actually
+    /// presenting. The first session of a capture counts its duration from monitoring start, so a
+    /// launcher or splash window seen after minutes of waiting has a long duration and a tiny span.
+    pub(crate) frame_span_secs: u32,
+}
+
+/// A session whose process presented for less than this is a fragment (a launcher / splash /
+/// bootstrap window, or a game that died on start), not a game session: it is not saved. Sixty
+/// seconds is also `sessions::MIN_SESSION_SECS`, the floor every capture has always had.
+pub(crate) const MIN_FRAGMENT_SECS: u32 = 60;
+/// A session that began mid-capture and ended only because monitoring stopped needs at least this
+/// many readings (measured or left out for being behind another window) to be a game session.
+pub(crate) const MIN_STOP_READINGS: u32 = 30;
+
+/// PURE: is an ended session worth a row? `readings` = ticks the session folded in (measured, plus
+/// those left out for being behind another window). A skipped fragment follows the path every
+/// sub-minimum capture always took: nothing is stored and nothing is shown for it.
+pub(crate) fn worth_keeping(ended: &Ended, readings: u32) -> bool {
+    match ended.reason {
+        SessionEnd::CaptureStopped => ended.began_at == 0 || readings >= MIN_STOP_READINGS,
+        SessionEnd::ProcessExited | SessionEnd::TargetChanged => ended.frame_span_secs >= MIN_FRAGMENT_SECS,
+    }
 }
 
 /// What one tick decided.
@@ -84,11 +114,23 @@ pub(crate) struct Boundary {
     state: State,
 }
 
+fn ended_at(reason: SessionEnd, began_at: u32, first: Option<u32>, last: Option<u32>, now: u32) -> Ended {
+    let last = last.unwrap_or(now);
+    Ended {
+        reason,
+        duration_secs: last.saturating_sub(began_at),
+        began_at,
+        frame_span_secs: first.map_or(0, |f| last.saturating_sub(f)),
+    }
+}
+
 impl Boundary {
     /// Monitoring just started at `now` (seconds on the caller's clock): a session is open and its
     /// process is not known yet.
     pub(crate) fn open_at(now: u32) -> Self {
-        Self { state: State::Open { target: None, began_at: now, last_frame_at: None, gone_ticks: 0 } }
+        Self {
+            state: State::Open { target: None, began_at: now, first_frame_at: None, last_frame_at: None, gone_ticks: 0 },
+        }
     }
 
     /// Seconds-clock reading at which the open session began, or `None` when none is open.
@@ -115,6 +157,7 @@ impl Boundary {
                 self.state = State::Open {
                     target: Some(Target { name: name.to_string(), pid }),
                     began_at: now,
+                    first_frame_at: Some(now),
                     last_frame_at: Some(now),
                     gone_ticks: 0,
                 };
@@ -125,6 +168,7 @@ impl Boundary {
                 self.state = State::Open {
                     target: Some(Target { name: name.to_string(), pid }),
                     began_at,
+                    first_frame_at: Some(now),
                     last_frame_at: Some(now),
                     gone_ticks: 0,
                 };
@@ -134,37 +178,38 @@ impl Boundary {
                 self.state = open;
                 Step::default()
             }
-            (State::Open { target: Some(t), began_at, last_frame_at, .. }, Some((name, pid))) => {
+            (State::Open { target: Some(t), began_at, first_frame_at, last_frame_at, .. }, Some((name, pid))) => {
                 if t.name == name && t.pid == pid {
-                    self.state = State::Open { target: Some(t), began_at, last_frame_at: Some(now), gone_ticks: 0 };
+                    self.state = State::Open {
+                        target: Some(t),
+                        began_at,
+                        first_frame_at,
+                        last_frame_at: Some(now),
+                        gone_ticks: 0,
+                    };
                     Step::default()
                 } else {
                     // Another process identity is presenting: the open session is not about it.
-                    let ended = Ended {
-                        reason: SessionEnd::TargetChanged,
-                        duration_secs: last_frame_at.unwrap_or(now).saturating_sub(began_at),
-                    };
+                    let ended = ended_at(SessionEnd::TargetChanged, began_at, first_frame_at, last_frame_at, now);
                     self.state = State::Open {
                         target: Some(Target { name: name.to_string(), pid }),
                         began_at: now,
+                        first_frame_at: Some(now),
                         last_frame_at: Some(now),
                         gone_ticks: 0,
                     };
                     Step { ended: Some(ended), began: true }
                 }
             }
-            (State::Open { target: Some(t), began_at, last_frame_at, gone_ticks }, None) => {
+            (State::Open { target: Some(t), began_at, first_frame_at, last_frame_at, gone_ticks }, None) => {
                 let gone = alive(t.pid, &t.name) == Some(false);
                 let gone_ticks = if gone { gone_ticks + 1 } else { 0 };
                 if gone_ticks >= EXIT_CONFIRM_TICKS {
-                    let ended = Ended {
-                        reason: SessionEnd::ProcessExited,
-                        duration_secs: last_frame_at.unwrap_or(now).saturating_sub(began_at),
-                    };
                     // State stays Idle (set by the replace above).
+                    let ended = ended_at(SessionEnd::ProcessExited, began_at, first_frame_at, last_frame_at, now);
                     Step { ended: Some(ended), began: false }
                 } else {
-                    self.state = State::Open { target: Some(t), began_at, last_frame_at, gone_ticks };
+                    self.state = State::Open { target: Some(t), began_at, first_frame_at, last_frame_at, gone_ticks };
                     Step::default()
                 }
             }
@@ -175,11 +220,68 @@ impl Boundary {
     /// since it began (what every session has always recorded). `None` when none was open.
     pub(crate) fn stop(&mut self, now: u32) -> Option<Ended> {
         match std::mem::replace(&mut self.state, State::Idle) {
-            State::Open { began_at, .. } => Some(Ended {
+            State::Open { began_at, first_frame_at, last_frame_at, .. } => Some(Ended {
                 reason: SessionEnd::CaptureStopped,
                 duration_secs: now.saturating_sub(began_at),
+                began_at,
+                frame_span_secs: match (first_frame_at, last_frame_at) {
+                    (Some(f), Some(l)) => l.saturating_sub(f),
+                    _ => 0,
+                },
             }),
             State::Idle => None,
+        }
+    }
+}
+
+/// The boundary plus the one open session it governs, as the monitoring thread drives them: the pure
+/// glue between "what the tick decided" and "which session this tick's frame belongs to". `S` is the
+/// session type (the thread's `LiveSession`; a plain record in the tests). Invariant: a session is
+/// held exactly when the boundary says one is open.
+pub(crate) struct Tracker<S> {
+    boundary: Boundary,
+    slot: Option<S>,
+}
+
+impl<S> Tracker<S> {
+    /// Monitoring started at `now` with `first` already open (a capture opens a session at once).
+    pub(crate) fn open_at(now: u32, first: S) -> Self {
+        Self { boundary: Boundary::open_at(now), slot: Some(first) }
+    }
+
+    /// One tick. A session that ended is handed to `finish` FIRST (it is saved before anything of
+    /// the next one starts); a session that begins is built by `begin(now)`. Afterwards
+    /// [`Self::current`] is the session this tick's frame belongs to (the new one, on a target
+    /// change), or `None` while nothing is open.
+    pub(crate) fn advance(
+        &mut self,
+        now: u32,
+        frame: Option<(&str, u32)>,
+        alive: impl FnOnce(u32, &str) -> Option<bool>,
+        finish: impl FnOnce(S, Ended),
+        begin: impl FnOnce(u32) -> S,
+    ) {
+        let step = self.boundary.tick(now, frame, alive);
+        if let Some(ended) = step.ended {
+            if let Some(done) = self.slot.take() {
+                finish(done, ended);
+            }
+        }
+        if step.began {
+            self.slot = Some(begin(now));
+        }
+    }
+
+    pub(crate) fn current(&mut self) -> Option<&mut S> {
+        self.slot.as_mut()
+    }
+
+    /// Monitoring stopped: a session still open is handed to `finish` exactly once.
+    pub(crate) fn stop(&mut self, now: u32, finish: impl FnOnce(S, Ended)) {
+        if let Some(ended) = self.boundary.stop(now) {
+            if let Some(done) = self.slot.take() {
+                finish(done, ended);
+            }
         }
     }
 }
@@ -274,7 +376,7 @@ fn same_image(a: &str, b: &str) -> bool {
 /// dip that returns to the same level is NOT flagged. `None` means "no sign", including "the row kept
 /// no series to look at". Never an edit: the caller decides what to do (the Paramedic declines to
 /// judge a flagged session).
-pub(crate) fn suspected_splice(s: &SessionSummary, crashes: &[CrashMark]) -> Option<SpliceSuspicion> {
+pub(crate) fn find_splice(s: &SessionSummary, crashes: &[CrashMark]) -> Option<SpliceSuspicion> {
     let series = level_series(s);
     let started = DateTime::parse_from_rfc3339(&s.started_at).ok().map(|t| t.with_timezone(&Utc));
     let mut best: Option<SpliceSuspicion> = None;
@@ -326,10 +428,46 @@ pub(crate) fn suspected_splice(s: &SessionSummary, crashes: &[CrashMark]) -> Opt
     best
 }
 
+/// What the flag says about one recorded session.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum Splice {
+    /// One process by construction (the row records why it ended), or no sign of a seam.
+    Clean,
+    /// The row looks like two workloads: a Paramedic reader should say "this session may contain two
+    /// games: not judged" and leave it out of baselines and rough counts.
+    Suspected(SpliceSuspicion),
+    /// A legacy row (no recorded end) that kept neither an fps series nor a per-second timeline, so
+    /// nothing can be looked at. NOT the same as Clean: judge it if you must, but say it wasn't checked.
+    CantTell,
+}
+
+/// PURE, read-only, three-state. A row with `ended` set was written by a build that holds one process
+/// identity per session, so it is `Clean` without looking at its series. A legacy row (no `ended`) is
+/// looked at with [`find_splice`] (gap of 120 s or more, then a level shift of 1.5x or more held for
+/// at least 5 minutes: `MIN_SIDE_POINTS` ten-second points); with neither series nor timeline kept it
+/// is `CantTell`.
+///
+/// Known limit, pinned by a test: a long alt-tab (the series leaves background seconds out, so it
+/// shows as a gap) followed by a different scene (lobby 300 fps, match 140) looks exactly like a
+/// seam on a legacy row, and is flagged `Suspected`. Only a crash record at the seam can tell them
+/// apart, and a flagged row is merely not judged, never altered.
+pub(crate) fn suspected_splice(s: &SessionSummary, crashes: &[CrashMark]) -> Splice {
+    if s.ended.is_some() {
+        return Splice::Clean;
+    }
+    if level_series(s).is_empty() {
+        return Splice::CantTell;
+    }
+    match find_splice(s, crashes) {
+        Some(found) => Splice::Suspected(found),
+        None => Splice::Clean,
+    }
+}
+
 /// PURE: when the suspected split happened (session start + where readings stop), for the Paramedic's
-/// "this session may contain two games: not judged".
+/// "this session may contain two games: not judged". `None` unless the row is `Suspected`.
 pub(crate) fn suspected_split_time(s: &SessionSummary, crashes: &[CrashMark]) -> Option<DateTime<Utc>> {
-    let found = suspected_splice(s, crashes)?;
+    let Splice::Suspected(found) = suspected_splice(s, crashes) else { return None };
     let t0 = DateTime::parse_from_rfc3339(&s.started_at).ok()?.with_timezone(&Utc);
     Some(t0 + Duration::seconds(i64::from(found.split_at_secs)))
 }
@@ -391,12 +529,12 @@ mod tests {
         let steps = drive(&mut b, &script, 0);
         assert_eq!(steps.len(), 2, "{steps:?}");
         // A ends once the exit is confirmed (2 ticks), but its duration is its LAST READING (t=59).
-        assert_eq!(steps[0], (66, Step { ended: Some(Ended { reason: SessionEnd::ProcessExited, duration_secs: 59 }), began: false }));
+        assert_eq!(steps[0], (66, Step { ended: Some(Ended { reason: SessionEnd::ProcessExited, duration_secs: 59, began_at: 0, frame_span_secs: 59 }), began: false }));
         // B begins at its own first frame; nothing of A is carried over.
         assert_eq!(steps[1], (85, Step { ended: None, began: true }));
         assert_eq!(b.began_at(), Some(85));
         // B's session then ends at ITS last reading when it stops.
-        assert_eq!(b.stop(120), Some(Ended { reason: SessionEnd::CaptureStopped, duration_secs: 35 }));
+        assert_eq!(b.stop(120), Some(Ended { reason: SessionEnd::CaptureStopped, duration_secs: 35, began_at: 85, frame_span_secs: 29 }));
     }
 
     #[test]
@@ -406,7 +544,7 @@ mod tests {
         script.extend(vec![(None, Some(false)); 600]);
         let steps = drive(&mut b, &script, 0);
         assert_eq!(steps.len(), 1, "{steps:?}");
-        assert_eq!(steps[0].1.ended, Some(Ended { reason: SessionEnd::ProcessExited, duration_secs: 29 }));
+        assert_eq!(steps[0].1.ended, Some(Ended { reason: SessionEnd::ProcessExited, duration_secs: 29, began_at: 0, frame_span_secs: 29 }));
         assert_eq!(b.began_at(), None, "monitoring stays on but no session is open");
         assert_eq!(b.stop(700), None, "stopping an idle capture saves nothing");
     }
@@ -459,7 +597,7 @@ mod tests {
         let steps = drive(&mut b, &script, 0);
         assert_eq!(
             steps,
-            vec![(40, Step { ended: Some(Ended { reason: SessionEnd::TargetChanged, duration_secs: 39 }), began: true })]
+            vec![(40, Step { ended: Some(Ended { reason: SessionEnd::TargetChanged, duration_secs: 39, began_at: 0, frame_span_secs: 39 }), began: true })]
         );
     }
 
@@ -472,7 +610,7 @@ mod tests {
         let steps = drive(&mut b, &script, 0);
         assert_eq!(steps.len(), 1, "{steps:?}");
         assert_eq!(steps[0].0, 20);
-        assert_eq!(steps[0].1.ended, Some(Ended { reason: SessionEnd::TargetChanged, duration_secs: 19 }));
+        assert_eq!(steps[0].1.ended, Some(Ended { reason: SessionEnd::TargetChanged, duration_secs: 19, began_at: 0, frame_span_secs: 19 }));
         assert!(steps[0].1.began);
     }
 
@@ -492,7 +630,7 @@ mod tests {
     fn stopping_with_the_game_alive_keeps_the_wall_time_duration() {
         let mut b = Boundary::open_at(10);
         drive(&mut b, &vec![(A, None); 50], 10);
-        assert_eq!(b.stop(75), Some(Ended { reason: SessionEnd::CaptureStopped, duration_secs: 65 }));
+        assert_eq!(b.stop(75), Some(Ended { reason: SessionEnd::CaptureStopped, duration_secs: 65, began_at: 10, frame_span_secs: 49 }));
     }
 
     #[test]
@@ -532,7 +670,7 @@ mod tests {
             "ROB RUN.exe",
             series(vec![run(0, 3520, 203.0), run(4240, 6730, 97.0)]),
         );
-        let f = suspected_splice(&s, &[]).expect("flagged");
+        let f = find_splice(&s, &[]).expect("flagged");
         assert_eq!((f.split_at_secs, f.resumes_at_secs), (3520, 4240));
         assert!(f.before_level > 200.0 && f.after_level < 100.0 && !f.crash_at_seam);
         let at = suspected_split_time(&s, &[]).unwrap();
@@ -546,14 +684,14 @@ mod tests {
             "ROB RUN.exe",
             series(vec![run(0, 600, 200.0), run(780, 1100, 150.0)]), // 1.33x, right side 32 points, left 60
         );
-        assert!(suspected_splice(&s, &[]).is_none(), "1.33x alone is ordinary variation");
+        assert!(find_splice(&s, &[]).is_none(), "1.33x alone is ordinary variation");
         let crash_time = DateTime::parse_from_rfc3339("2026-11-20T01:11:00Z").unwrap().with_timezone(&Utc); // t=576
         let crash = CrashMark { at: crash_time, app: Some("ROB RUN.exe".into()) };
-        let f = suspected_splice(&s, std::slice::from_ref(&crash)).expect("flagged with the crash");
+        let f = find_splice(&s, std::slice::from_ref(&crash)).expect("flagged with the crash");
         assert!(f.crash_at_seam);
         // A crash of some OTHER program is not evidence about this session.
         let other = CrashMark { at: crash_time, app: Some("explorer.exe".into()) };
-        assert!(suspected_splice(&s, &[other]).is_none());
+        assert!(find_splice(&s, &[other]).is_none());
     }
 
     #[test]
@@ -564,23 +702,23 @@ mod tests {
             "ROB RUN.exe",
             series(vec![run(0, 900, 200.0), run(1140, 1800, 205.0)]),
         );
-        assert!(suspected_splice(&s, &[]).is_none());
+        assert!(find_splice(&s, &[]).is_none());
     }
 
     #[test]
     fn a_menu_to_gameplay_change_without_a_gap_is_not_flagged() {
         let s = row("2026-11-11T13:27:19Z", "ROB RUN.exe", series(vec![run(0, 600, 600.0), run(600, 1800, 250.0)]));
-        assert!(suspected_splice(&s, &[]).is_none(), "no stretch without readings, no seam");
+        assert!(find_splice(&s, &[]).is_none(), "no stretch without readings, no seam");
     }
 
     #[test]
     fn a_short_gap_or_a_thin_side_is_not_flagged_and_a_row_without_a_series_says_nothing() {
         let short = row("2026-11-11T13:27:19Z", "G.exe", series(vec![run(0, 900, 200.0), run(960, 1800, 90.0)]));
-        assert!(suspected_splice(&short, &[]).is_none(), "a 60 s gap is a loading screen");
+        assert!(find_splice(&short, &[]).is_none(), "a 60 s gap is a loading screen");
         let thin = row("2026-11-11T13:27:19Z", "G.exe", series(vec![run(0, 100, 200.0), run(400, 1000, 90.0)]));
-        assert!(suspected_splice(&thin, &[]).is_none(), "ten points before the gap is not a level");
+        assert!(find_splice(&thin, &[]).is_none(), "ten points before the gap is not a level");
         let none = row("2026-11-11T13:27:19Z", "G.exe", serde_json::json!({}));
-        assert!(suspected_splice(&none, &[]).is_none());
+        assert!(find_splice(&none, &[]).is_none());
     }
 
     #[test]
@@ -588,7 +726,7 @@ mod tests {
         let mut tl: Vec<(u32, f64)> = (0..1800).map(|t| (t, 80.0)).collect();
         tl.extend((2400..4200).map(|t| (t, 30.0)));
         let s = row("2026-11-20T01:01:24Z", "ROB RUN.exe", serde_json::json!({ "stutter_timeline": tl }));
-        let f = suspected_splice(&s, &[]).expect("flagged from the timeline");
+        let f = find_splice(&s, &[]).expect("flagged from the timeline");
         assert_eq!((f.split_at_secs, f.resumes_at_secs), (1800, 2400));
     }
 
@@ -613,16 +751,20 @@ mod tests {
             }
         }
         println!("sessions read: {}, crash marks read: {}", sessions.len(), crashes.len());
-        let mut flagged = Vec::new();
+        let (mut flagged, mut cant_tell, mut clean) = (Vec::new(), 0usize, 0usize);
         for s in &sessions {
             let without = suspected_splice(s, &[]);
             let with = suspected_splice(s, &crashes);
-            if without.is_some() || with.is_some() {
-                flagged.push(s.started_at.clone());
-                println!("FLAGGED {} {} without_crash_records={:?} with_crash_records={:?}", s.started_at, s.process_name, without, with);
+            match (&without, &with) {
+                (Splice::CantTell, _) | (_, Splice::CantTell) => cant_tell += 1,
+                (Splice::Clean, Splice::Clean) => clean += 1,
+                _ => {
+                    flagged.push(s.started_at.clone());
+                    println!("SUSPECTED {} {} without_crash_records={:?} with_crash_records={:?}", s.started_at, s.process_name, without, with);
+                }
             }
         }
-        println!("flagged: {flagged:?}");
+        println!("suspected: {flagged:?} | clean: {clean} | cant_tell: {cant_tell} | total: {}", sessions.len());
         assert!(flagged.iter().all(|t| !t.starts_with("2026-11-11")), "an ordinary 2026-11-11 session was flagged");
     }
 }
@@ -635,15 +777,229 @@ mod wiring {
     fn the_monitoring_loop_is_driven_by_the_boundary() {
         let src = include_str!("monitoring.rs");
         for needle in [
-            "Boundary::open_at(0)",
-            "boundary.tick(",
-            "boundary.stop(",
+            "Tracker::open_at(0,",
+            "tracker.advance(",
+            "tracker.stop(",
             "done.finish(ended)",
-            "if step.began {",
+            "worth_keeping(&ended",
             "summary.ended = Some(reason);",
         ] {
             assert!(src.contains(needle), "monitoring.rs lost `{needle}`");
         }
         assert!(!src.contains("finish_at_stop"), "the single-session shape is back");
+    }
+}
+
+#[cfg(test)]
+mod review_tests {
+    use super::*;
+
+    type Frame<'a> = Option<(&'a str, u32)>;
+    const A: Frame<'static> = Some(("ROB RUN.exe", 100));
+    const B: Frame<'static> = Some(("PBZ.exe", 200));
+
+    /// A session stand-in: the frames recorded into it and when it began.
+    #[derive(Debug, PartialEq)]
+    struct Rec {
+        began: u32,
+        frames: Vec<u32>,
+    }
+
+    /// The monitoring thread's per-tick glue, with `Rec` for the session and a log of what finished.
+    struct Rig {
+        tracker: Tracker<Rec>,
+        finished: Vec<(Rec, Ended)>,
+    }
+
+    impl Rig {
+        fn new() -> Self {
+            Self { tracker: Tracker::open_at(0, Rec { began: 0, frames: vec![] }), finished: vec![] }
+        }
+        /// One tick exactly as the loop does it: advance, then record this tick's frame into the
+        /// session that is open (if any).
+        fn tick(&mut self, now: u32, frame: Frame<'_>, probe: Option<bool>) {
+            let finished = &mut self.finished;
+            self.tracker.advance(now, frame, |_, _| probe, |done, ended| finished.push((done, ended)), |n| Rec { began: n, frames: vec![] });
+            if frame.is_some() {
+                if let Some(live) = self.tracker.current() {
+                    live.frames.push(now);
+                }
+            }
+        }
+        fn stop(&mut self, now: u32) {
+            let finished = &mut self.finished;
+            self.tracker.stop(now, |done, ended| finished.push((done, ended)));
+        }
+    }
+
+    #[test]
+    fn a_probe_that_never_answers_still_cannot_absorb_a_second_game() {
+        // OpenProcess denied for A: the probe says None for 300 ticks, then B presents.
+        let mut r = Rig::new();
+        for t in 0..60 {
+            r.tick(t, A, None);
+        }
+        for t in 60..360 {
+            r.tick(t, None, None);
+        }
+        for t in 360..400 {
+            r.tick(t, B, None);
+        }
+        assert_eq!(r.finished.len(), 1, "exactly one session ended");
+        let (a, ended) = &r.finished[0];
+        assert_eq!(ended.reason, SessionEnd::TargetChanged);
+        assert_eq!(ended.duration_secs, 59, "A ends at its last reading, not at B's first");
+        assert_eq!(a.frames.last(), Some(&59));
+        assert!(a.frames.iter().all(|&t| t < 60), "none of B's frames reached A");
+        let b = r.tracker.current().unwrap();
+        assert_eq!((b.began, b.frames.first(), b.frames.len()), (360, Some(&360), 40));
+    }
+
+    #[test]
+    fn the_frame_that_changes_the_target_is_recorded_into_the_new_session() {
+        let mut r = Rig::new();
+        for t in 0..10 {
+            r.tick(t, A, None);
+        }
+        r.tick(10, B, None);
+        assert_eq!(r.finished.len(), 1);
+        assert_eq!(r.finished[0].0.frames.len(), 10, "A kept its own ten frames only");
+        assert_eq!(r.tracker.current().unwrap().frames, vec![10], "the switching frame is B's first");
+    }
+
+    #[test]
+    fn nothing_is_recorded_while_no_session_is_open() {
+        let mut r = Rig::new();
+        for t in 0..70 {
+            r.tick(t, A, None);
+        }
+        for t in 70..500 {
+            r.tick(t, None, Some(false));
+            if t > 72 {
+                assert!(r.tracker.current().is_none(), "no session may be held at t={t}");
+            }
+        }
+        assert_eq!(r.finished.len(), 1);
+    }
+
+    #[test]
+    fn stopping_inside_the_exit_detection_window_saves_the_session_exactly_once() {
+        let mut r = Rig::new();
+        for t in 0..70 {
+            r.tick(t, A, None);
+        }
+        r.tick(70, None, Some(false)); // one "gone" tick: not yet confirmed
+        r.stop(71);
+        r.stop(72); // a second stop must not save again
+        assert_eq!(r.finished.len(), 1);
+        assert_eq!(r.finished[0].1.reason, SessionEnd::CaptureStopped);
+        assert_eq!(r.finished[0].1.duration_secs, 71);
+    }
+
+    #[test]
+    fn a_splash_window_seen_after_a_long_wait_is_a_fragment_and_not_kept_but_the_game_is() {
+        // Monitoring on for 2 minutes, a splash exe presents for 5 s, then the real game for 10 min.
+        let splash: Frame<'static> = Some(("start_protected_game.exe", 7));
+        let mut r = Rig::new();
+        for t in 0..120 {
+            r.tick(t, None, None);
+        }
+        for t in 120..125 {
+            r.tick(t, splash, None);
+        }
+        for t in 125..130 {
+            r.tick(t, None, Some(false));
+        }
+        for t in 130..730 {
+            r.tick(t, A, None);
+        }
+        r.stop(731);
+        assert_eq!(r.finished.len(), 2);
+        let (_, splash_end) = &r.finished[0];
+        assert_eq!(splash_end.reason, SessionEnd::ProcessExited);
+        assert!(splash_end.duration_secs >= 120, "counted from monitoring start");
+        assert_eq!(splash_end.frame_span_secs, 4);
+        assert!(!worth_keeping(splash_end, 5), "a 4 s splash is not a session row");
+        let (game, game_end) = &r.finished[1];
+        assert_eq!(game.began, 130);
+        assert!(worth_keeping(game_end, 600));
+    }
+
+    #[test]
+    fn what_is_kept_and_what_is_dropped_is_pinned() {
+        let e = |reason, began_at, frame_span_secs| Ended { reason, duration_secs: 999, began_at, frame_span_secs };
+        // A game that died 50 s in is not a row (as any capture under a minute never was).
+        assert!(!worth_keeping(&e(SessionEnd::ProcessExited, 0, 50), 50));
+        assert!(!worth_keeping(&e(SessionEnd::TargetChanged, 300, 59), 59));
+        assert!(worth_keeping(&e(SessionEnd::ProcessExited, 0, 60), 60));
+        assert!(worth_keeping(&e(SessionEnd::TargetChanged, 300, 600), 600));
+        // Stopped: a capture-long session is kept as always; one that began mid-capture needs readings.
+        assert!(worth_keeping(&e(SessionEnd::CaptureStopped, 0, 0), 0));
+        assert!(!worth_keeping(&e(SessionEnd::CaptureStopped, 300, 9), 9));
+        assert!(!worth_keeping(&e(SessionEnd::CaptureStopped, 300, 29), 29));
+        assert!(worth_keeping(&e(SessionEnd::CaptureStopped, 300, 30), 30));
+    }
+
+    // ---- the three-state flag ---------------------------------------------------------------
+
+    fn legacy(extra: serde_json::Value) -> SessionSummary {
+        let mut v = serde_json::json!({
+            "started_at": "2026-11-20T01:01:24Z", "duration_secs": 6730, "process_name": "ROB RUN.exe", "samples": 5000,
+            "avg_fps": 160.0, "avg_frametime_ms": 6.0, "low1_fps_est": 60.0
+        });
+        for (k, x) in extra.as_object().unwrap() {
+            v[k] = x.clone();
+        }
+        serde_json::from_value(v).unwrap()
+    }
+    fn pts(from: u32, to: u32, fps: f64) -> Vec<(u32, f64)> {
+        (from..to).step_by(10).map(|t| (t, fps)).collect()
+    }
+    fn series(a: Vec<(u32, f64)>, b: Vec<(u32, f64)>) -> serde_json::Value {
+        let all = [a, b].concat();
+        serde_json::json!({ "fps_series": all })
+    }
+
+    #[test]
+    fn a_row_that_records_its_end_is_clean_without_looking_at_its_series() {
+        // The very series that flags a legacy row.
+        let mut with_end = series(pts(0, 3520, 203.0), pts(4240, 6730, 97.0));
+        with_end["ended"] = serde_json::json!("capture-stopped");
+        let s = legacy(with_end);
+        assert_eq!(suspected_splice(&s, &[]), Splice::Clean);
+        assert_eq!(suspected_split_time(&s, &[]), None);
+        let same_without = legacy(series(pts(0, 3520, 203.0), pts(4240, 6730, 97.0)));
+        assert!(matches!(suspected_splice(&same_without, &[]), Splice::Suspected(_)));
+    }
+
+    #[test]
+    fn a_legacy_row_with_nothing_to_look_at_is_cant_tell_not_clean() {
+        assert_eq!(suspected_splice(&legacy(serde_json::json!({})), &[]), Splice::CantTell);
+        // A series of only unusable points is nothing to look at either.
+        assert_eq!(suspected_splice(&legacy(serde_json::json!({ "fps_series": [[0, 0.0], [10, 0.0]] })), &[]), Splice::CantTell);
+    }
+
+    #[test]
+    fn a_legacy_row_with_a_series_and_no_seam_is_clean() {
+        let s = legacy(series(pts(0, 900, 200.0), pts(1140, 1800, 205.0)));
+        assert_eq!(suspected_splice(&s, &[]), Splice::Clean);
+    }
+
+    #[test]
+    fn known_limit_a_long_alt_tab_then_a_different_scene_reads_as_suspected() {
+        // 3 min of alt-tab (a gap: background seconds are left out of the series), lobby at 300 fps
+        // before, match at 140 after, each held for 5+ minutes. Indistinguishable from two games on a
+        // legacy row without a crash record. Pinned so the limit is a documented decision: the cost of
+        // a false Suspected is that one old row is not judged, never an edit.
+        let s = legacy(series(pts(0, 600, 300.0), pts(780, 1380, 140.0)));
+        assert!(matches!(suspected_splice(&s, &[]), Splice::Suspected(_)));
+    }
+
+    #[test]
+    fn a_shift_held_for_under_five_minutes_after_the_gap_is_not_suspected_without_a_crash_record() {
+        let short = legacy(series(pts(0, 900, 200.0), pts(1100, 1390, 90.0))); // 29 points after the gap
+        assert_eq!(suspected_splice(&short, &[]), Splice::Clean);
+        let held = legacy(series(pts(0, 900, 200.0), pts(1100, 1400, 90.0))); // 30 points = 5 minutes
+        assert!(matches!(suspected_splice(&held, &[]), Splice::Suspected(_)));
     }
 }

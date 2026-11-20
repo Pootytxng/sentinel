@@ -10,6 +10,18 @@ import type { SessionSummary } from "../types";
 
 /** experiment.rs MIN_BASELINE_SAMPLES (= MIN_TREATMENT_SAMPLES): about 10 minutes of play. */
 export const MIN_BASELINE_SAMPLES = 600;
+/** experiment.rs MIN_TREATMENT_SAMPLES: fewer measured readings than this and a Trial's after-session
+ *  concludes "insufficient evidence". Pinned to the Rust value by baseline-grade.test.ts. */
+export const MIN_TREATMENT_SAMPLES = MIN_BASELINE_SAMPLES;
+
+/** Order candidate after-sessions best first: a row with at least MIN_TREATMENT_SAMPLES readings before
+ *  any shorter one, newest first within each group. A game that crashes and is relaunched in one sitting
+ *  leaves a full row and a short relaunch fragment; the fragment is newer but must not be the one a
+ *  Trial concludes on. When no row reaches the floor the order is plain newest first, as it always was. */
+export function fullAfterSessionsFirst<T extends { samples: number; started_at: string }>(rows: T[]): T[] {
+  const full = (s: T) => (s.samples >= MIN_TREATMENT_SAMPLES ? 1 : 0);
+  return [...rows].sort((a, b) => full(b) - full(a) || Date.parse(b.started_at) - Date.parse(a.started_at));
+}
 /** comparison.rs DEFAULT_NOISE_FLOOR_PCT: halves differing by more than this are uneven. */
 export const BASELINE_HALVES_FLOOR_PCT = 3;
 

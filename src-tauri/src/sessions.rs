@@ -703,6 +703,13 @@ impl SessionAccumulator {
         self.samples > 0
     }
 
+    /// Ticks this session folded in: measured readings plus the ones left out for being behind another
+    /// window. What a session that began mid-capture and ended at a stop needs 30 of to be kept
+    /// (`session_boundary::worth_keeping`).
+    pub(crate) fn readings_seen(&self) -> u32 {
+        self.samples + self.background_secs_excluded.unwrap_or(0)
+    }
+
     /// P5-enough: the session so far, for the guided journey's "enough yet?" line. `samples` is the
     /// measured readings only (a background tick never counts), and the series includes the open
     /// bucket's mean the same way `finalize` flushes it, so the live grade and the saved one agree.

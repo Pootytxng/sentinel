@@ -1213,8 +1213,8 @@ fn start_fps_capture_locked() -> Result<(), String> {
             // A session belongs to ONE process identity: the boundary decides, once a second, when
             // the open session ends (its process is gone, or another one is presenting) and when the
             // next begins. A fresh capture opens a session at once, as it always did.
-            let mut boundary = crate::session_boundary::Boundary::open_at(0);
-            let mut slot: Option<LiveSession> = Some(LiveSession::begin(started_at, active_changes, 0));
+            let mut tracker =
+                crate::session_boundary::Tracker::open_at(0, LiveSession::begin(started_at, active_changes, 0));
             // P5-enough: a new capture starts from nothing, never the last capture's count.
             *lock_progress() = None;
             let mut proc_sys = System::new();
@@ -1253,31 +1253,29 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 // The boundary sees only a reading that names its process; `alive` is asked only on a
                 // tick with no fresh reading, so a game that is merely silent (alt-tab, loading,
                 // minimised) is never mistaken for a game that is gone.
-                let step = boundary.tick(
+                tracker.advance(
                     now,
                     sample.as_ref().filter(|s| !s.process_name.is_empty()).map(|s| (s.process_name.as_str(), s.pid)),
                     pid_running_as,
-                );
-                if let Some(ended) = step.ended {
-                    if let Some(done) = slot.take() {
+                    |done, ended| {
                         done.finish(ended);
-                    }
-                    *lock_progress() = None;
-                }
-                if step.began {
-                    // A new process begins its OWN session at its first frame: its start, its
-                    // change counts and its clock are its own, and nothing of the last one is carried.
-                    let began_at = chrono::Utc::now().to_rfc3339();
-                    let counts = crate::history::session_start_counts(
-                        crate::history::load_history,
-                        crate::history::ledger_set_aside_through,
-                        &began_at,
-                    );
-                    slot = Some(LiveSession::begin(began_at, counts, now));
-                }
+                        *lock_progress() = None;
+                    },
+                    |now| {
+                        // A new process begins its OWN session at its first frame: its start, its
+                        // change counts and its clock are its own, and nothing of the last one is carried.
+                        let began_at = chrono::Utc::now().to_rfc3339();
+                        let counts = crate::history::session_start_counts(
+                            crate::history::load_history,
+                            crate::history::ledger_set_aside_through,
+                            &began_at,
+                        );
+                        LiveSession::begin(began_at, counts, now)
+                    },
+                );
                 // No session open (the game closed and nothing has presented since): monitoring stays
                 // on and waits, recording nothing.
-                let Some(live) = slot.as_mut() else {
+                let Some(live) = tracker.current() else {
                     crate::tray::set_monitoring_on();
                     continue;
                 };
@@ -1424,11 +1422,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
             // Monitoring stopped (or the helper went away): a session still open ends with the wall
             // time since it began, as every session always has.
             let now = clock.elapsed().as_secs() as u32;
-            if let Some(ended) = boundary.stop(now) {
-                if let Some(done) = slot.take() {
-                    done.finish(ended);
-                }
-            }
+            tracker.stop(now, |done, ended| done.finish(ended));
         });
     }
 
@@ -1505,8 +1499,8 @@ impl LiveSession {
     /// that ended at its last reading (its process exited, or another took over) keeps nothing that
     /// was seen after it: no signal logged past its end.
     fn finish(self, ended: crate::session_boundary::Ended) {
-        let crate::session_boundary::Ended { reason, duration_secs } = ended;
-        let duration_secs = u64::from(duration_secs);
+        let reason = ended.reason;
+        let duration_secs = u64::from(ended.duration_secs);
         let LiveSession {
             acc,
             plan_at_start,
@@ -1519,6 +1513,11 @@ impl LiveSession {
             gaming_mode_plan,
             ..
         } = self;
+        // A fragment (a launcher / splash window, a game that died within a minute of its first
+        // frame) is not a session row: same silent path as any capture under the minimum length.
+        if !crate::session_boundary::worth_keeping(&ended, acc.readings_seen()) {
+            return;
+        }
         if reason != crate::session_boundary::SessionEnd::CaptureStopped {
             events.retain(|e| u64::from(e.at_secs) <= duration_secs);
         }

@@ -78,7 +78,7 @@ import { allBackground } from "../lib/session-metrics";
 import { writeLedger } from "../data/ledger-write";
 import { ChangedOutsideRemedy } from "./ChangedOutsideRemedy";
 import { prettyGameName } from "./game-name";
-import { gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
+import { fullAfterSessionsFirst, gradeBaseline, MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { Depth, ReceiptRow, receiptBand, receiptPct } from "../design/Depth";
 import { asProgress, enoughLine, enoughState, setJourneyRecording, type CaptureProgress, type JourneyMode } from "./journey-enough";
 import { journeyStopped, pickUpJourney, stopJourneyHere, type JourneyProgress } from "./journey-resume";
@@ -365,6 +365,29 @@ function waitForPlay(captureFailed: string, mode: JourneyMode = "pair"): Promise
   });
 }
 
+/** The session `waitForSession` returns from the store: usable (or behind another window the whole
+ *  time), of `game` when given, started at or after `since`, never the one `not` names. A row with at
+ *  least MIN_TREATMENT_SAMPLES readings comes before a shorter one (a crash and relaunch in one sitting
+ *  leaves a full row and a short fragment), newest first within each; with no full row, the newest. */
+export function pickSavedSession(
+  ss: SessionSummary[],
+  since: number,
+  game: string | null,
+  not?: string,
+): SessionSummary | undefined {
+  return fullAfterSessionsFirst(
+    ss.filter(
+      (s) =>
+        // P4-show-f1: a session behind another window the whole time is returned too, so the
+        // journey can say why it has no reading.
+        (usable(s) || allBackground(s)) &&
+        s.started_at !== not &&
+        Date.parse(s.started_at) >= since - 1000 &&
+        (game == null || s.process_name === game),
+    ),
+  )[0];
+}
+
 /** The newest usable session (of `game`, when given) that started at or after `since`, once saved —
  *  never the session `not` names (session 2 must never read back the baseline). */
 async function waitForSession(
@@ -376,17 +399,7 @@ async function waitForSession(
   const tries = Math.max(1, Math.ceil(saveWaitMs / pollMs));
   for (let i = 0; i < tries && !gone(); i++) {
     const ss = await invoke<SessionSummary[]>("get_session_summaries").catch(() => []);
-    const found = (ss ?? [])
-      .filter(
-        (s) =>
-          // P4-show-f1: a session behind another window the whole time is returned too, so the
-          // journey can say why it has no reading.
-          (usable(s) || allBackground(s)) &&
-          s.started_at !== not &&
-          Date.parse(s.started_at) >= since - 1000 &&
-          (game == null || s.process_name === game),
-      )
-      .sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at))[0];
+    const found = pickSavedSession(ss ?? [], since, game, not);
     if (found) return found;
     await sleep(pollMs);
   }
