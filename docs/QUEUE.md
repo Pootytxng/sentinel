@@ -45,7 +45,8 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee".
 
 ## Done (newest first)
-- 2026-11-20 - Mods, temperature and crash history as evidence; card polish (claude/m3-evidence, see git log)
+- 2026-11-20 - desk build dd799c62 installed and stamped
+- 2026-11-20 - Mods, temperature and crash history as evidence; card polish (claude/m3-evidence, dd799c62)
 - 2026-11-20 - Graphics-mod detector 33decacc
 - 2026-11-20 - Desk build 3e69f454 installed and stamped
 - 2026-11-20 - "Did it get better?" recovery check and a card that fits on Home 3e69f454
@@ -60,5 +61,6 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - 2026-11-20 — §38 recorded ca2989ef
 
 ## Session log (newest 10)
+- 2026-11-20 desk-install session 2: built and installed main dd799c62, proved at runtime, stamped in RELEASE_STATE; look-only check of the Home card in _train\view-1120c.
 - 2026-11-20 desk-install session: built and installed main 3e69f454, proved at runtime, stamped in RELEASE_STATE; look-only check of the Home card in _train\view-1120b.
 - 2026-11-20 docs session: QUEUE.md and a short CLAUDE.md written; WORK_TRAIN.md points here.
