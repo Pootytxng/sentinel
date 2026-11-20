@@ -712,11 +712,11 @@
   border-radius: 999px;
   background: var(--v2-muted);
 }
-:root[data-v2="on"] .gl-para-clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+/* Busy: the button stays in the tab order (aria-disabled) and ignores clicks; it only looks unavailable. */
+:root[data-v2="on"] .gl-cta[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+  filter: none;
 }
 :root[data-v2="on"] .gl-para-rows {
   display: flex;
@@ -752,12 +752,16 @@
   font-size: var(--type-label);
   font-weight: 600;
 }
+/* A row's name wraps to two lines before it is cut; the full text is also its title (hover) and the
+   button's accessible name carries it, so nothing is lost when the second line is cut. */
 :root[data-v2="on"] .gl-para-row-name {
   flex: 1 1 auto;
   min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   font-weight: 600;
 }
 :root[data-v2="on"] .gl-para-row-when {

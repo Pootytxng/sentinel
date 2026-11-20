@@ -1328,8 +1328,11 @@ export type ParamedicCantTellWhy =
   | { kind: "frame-cap-changed" }
   | { kind: "no-sessions" }
   | { kind: "crash-not-covered" }
-  /** An episode of rough sessions was followed by sessions that are neither clearly normal nor rough again. */
-  | { kind: "recovery-unclear"; partial: boolean };
+  /**
+   * An episode of rough sessions was followed by sessions that are not yet two clear ones in a row.
+   * `one_clear`: exactly one has been clear. `cap_changed`: the frame cap differs from the rough sessions'.
+   */
+  | { kind: "recovery-unclear"; partial: boolean; one_clear: boolean; cap_changed: boolean };
 
 export type ParamedicState =
   | { kind: "nothing-wrong"; sessions_checked: number }
@@ -1357,6 +1360,8 @@ export type ParamedicProblem = {
   before: ParamedicMetric;
   now: ParamedicMetric;
   last_normal_at: string;
+  /** The newest fully measured session that ran normally. The card says "last ran normally" only when it is `last_normal_at`. */
+  last_full_normal_at: string | null;
   sessions_affected: ParamedicSessionRef[];
   partial_sessions: ParamedicSessionRef[];
   other_games_affected: string[];
@@ -1422,7 +1427,6 @@ export type ParamedicRecovery = {
   now: ParamedicMetric;
   rough_sessions: ParamedicSessionRef[];
   recovered_sessions: ParamedicSessionRef[];
-  at_or_above_median: boolean;
   sessions_since: number;
   summary: ParamedicRecoverySummary;
   also_changed: ParamedicEvidence[];

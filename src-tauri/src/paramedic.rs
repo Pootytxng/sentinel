@@ -229,8 +229,10 @@ pub(crate) enum CantTellWhy {
     CrashNotCovered,
     /// An episode of rough sessions was followed by sessions that are neither clearly back to normal
     /// nor rough again (in between, partly measured, or under another frame cap). `partial`: the newest
-    /// session was not measured well enough to be judged either way.
-    RecoveryUnclear { partial: bool },
+    /// session was not measured well enough to be judged either way. `one_clear`: exactly one session
+    /// since has run the way the game usually does (Recovered needs two). `cap_changed`: the newest
+    /// session ran under another frame cap, so playing again cannot settle it.
+    RecoveryUnclear { partial: bool, one_clear: bool, cap_changed: bool },
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -274,6 +276,10 @@ pub(crate) struct ProblemReading {
     /// Mean ratio and average of the affected sessions, worst p99.
     pub now: Metric,
     pub last_normal_at: String,
+    /// The newest session before the episode that was fully measured (coverage >= BASELINE_COVERAGE) and
+    /// ran at >= RECOVERY_R_FRACTION x the median. The card says "last ran normally" only when this is
+    /// `last_normal_at`; otherwise it names this one as the last fully measured normal session.
+    pub last_full_normal_at: Option<String>,
     pub sessions_affected: Vec<SessionRef>,
     /// Sessions Compy measured only in part that would also have fired: corroboration, never a reason alone.
     pub partial_sessions: Vec<SessionRef>,
@@ -657,17 +663,19 @@ pub(crate) fn diagnose(inp: &DiagnoseInputs, complaint: Complaint, game: Option<
     let mut played: Vec<(DateTime<Utc>, String)> = recent.into_values().collect();
     played.sort_by_key(|p| std::cmp::Reverse(p.0));
     let answers: Vec<Diagnosis> = played.iter().map(|(_, g)| diagnose_game(inp, complaint, g)).collect();
-    // The rough game whose newest rough session is the most recent.
-    let rough_at = |d: &Diagnosis| {
-        let rough = matches!(
-            d.state,
-            DiagnosisState::Found
-                | DiagnosisState::Recovered
-                | DiagnosisState::CantTell { why: CantTellWhy::NothingChanged | CantTellWhy::RecoveryUnclear { .. } }
-        );
-        rough.then(|| d.problem.as_ref().and_then(|p| p.sessions_affected.iter().filter_map(|s| ts(&s.started_at)).max())).flatten()
+    // Which game the card answers for: a game still rough (an ongoing episode) first, then one whose
+    // recovery is unclear, then one that recovered; among equals the one whose newest rough session is the
+    // most recent. A game that recovered never hides a game that is still rough.
+    let rank_at = |d: &Diagnosis| {
+        let rank = match d.state {
+            DiagnosisState::Found | DiagnosisState::CantTell { why: CantTellWhy::NothingChanged } => 3u8,
+            DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { .. } } => 2,
+            DiagnosisState::Recovered => 1,
+            _ => return None,
+        };
+        d.problem.as_ref().and_then(|p| p.sessions_affected.iter().filter_map(|s| ts(&s.started_at)).max()).map(|t| (rank, t))
     };
-    let pick = (0..answers.len()).filter_map(|i| rough_at(&answers[i]).map(|t| (t, i))).max().map(|(_, i)| i).unwrap_or(0);
+    let pick = (0..answers.len()).filter_map(|i| rank_at(&answers[i]).map(|k| (k, i))).max().map(|(_, i)| i).unwrap_or(0);
     answers.into_iter().nth(pick).unwrap_or_else(|| Diagnosis::empty(complaint, DiagnosisState::CantTell { why: CantTellWhy::NoSessions }))
 }
 
@@ -752,12 +760,12 @@ fn recovery_answer<'a>(
             d.state = if d.recovery.is_some() {
                 DiagnosisState::Recovered
             } else {
-                DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial: false } }
+                DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial: false, one_clear: false, cap_changed: false } }
             };
         }
-        Outcome::Unclear { partial } => {
+        Outcome::Unclear { partial, one_clear, cap_changed } => {
             explain(inp, game_key, sess, judged, f, d, None);
-            d.state = DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial } };
+            d.state = DiagnosisState::CantTell { why: CantTellWhy::RecoveryUnclear { partial, one_clear, cap_changed } };
         }
     }
     true
@@ -1039,7 +1047,9 @@ impl Cand {
     }
 
     fn independent(&self) -> usize {
-        usize::from(self.d) + usize::from(self.x && !self.confounded) + usize::from(self.m) + usize::from(self.r)
+        // F3 review: a recovery observation (`r`) is NOT a support here. It orders candidates (`supports`),
+        // but no path to Likely exists that did not exist before the recovery slice.
+        usize::from(self.d) + usize::from(self.x && !self.confounded) + usize::from(self.m)
     }
 
     /// Possible, with timing, and nothing against it.
@@ -1146,6 +1156,16 @@ fn explain<'a>(
     // newer than the newest baseline session (a thinly measured session is Normal but not a baseline).
     let last_normal: &SessionFacts = (0..first).rev().find(|&i| judged[i].verdict == Verdict::Normal).map_or(baseline_newest, |i| sess[i]);
     let last_normal_at = last_normal.started_at.clone();
+    // The newest earlier session that was fully measured and ran close to the game's usual: the date the
+    // card may call "last ran normally" without leaning on an idle or thinly measured session.
+    let last_full_normal_at = (0..first)
+        .rev()
+        .find(|&i| {
+            judged[i].verdict == Verdict::Normal
+                && sess[i].coverage() >= BASELINE_COVERAGE
+                && sess[i].ratio().is_some_and(|r| r >= recovery::RECOVERY_R_FRACTION * base.med_r)
+        })
+        .map(|i| sess[i].started_at.clone());
     d.problem = Some(ProblemReading {
         rule: if evals.iter().flatten().any(|e| e.rule_r) { AnomalyRule::StutterCollapse } else { AnomalyRule::Spikes },
         spikes: evals.iter().flatten().any(|e| e.rule_p99),
@@ -1153,6 +1173,7 @@ fn explain<'a>(
         before: Metric { ratio: base.med_r, p99_ms: base.med_p99, avg_fps: base.med_avg },
         now: Metric { ratio: ratio_now, p99_ms: affected.iter().filter_map(|s| s.p99_ms).reduce(f64::max), avg_fps: avg_now },
         last_normal_at,
+        last_full_normal_at,
         sessions_affected: affected.iter().map(|s| s.session_ref()).collect(),
         partial_sessions: partial,
         other_games_affected: affected_others,
@@ -1207,6 +1228,9 @@ fn explain<'a>(
     let now_lines: Vec<NowLine> = match recovered {
         Some(idx) => {
             let rec: Vec<&SessionFacts> = idx.iter().map(|&i| sess[i]).collect();
+            // A change to the game's files between the rough sessions and the normal ones is a candidate
+            // in its own right (the Steam manifest keeps only the newest change).
+            recovery::gap_candidates(&ctx, &rec, &mut out.cands);
             recovery::apply(&ctx, &rec, &mut out.cands)
         }
         None => Vec::new(),
@@ -1265,6 +1289,16 @@ fn rank(c: &mut Vec<Cand>) {
             by_class.then(b.supports().cmp(&a.supports())).then(category(a.id).cmp(&category(b.id)))
         }
     });
+    // Background programs seen only in a partly measured session or another game's rough session (none in
+    // this game's fully measured rough ones) are a weaker support than a measured driver change: they never
+    // rank above the driver.
+    let weak_background = |x: &Cand| x.id == "background-load" && !x.evidence.iter().any(|e| e.code == "starts-seen");
+    if let (Some(bg), Some(drv)) = (c.iter().position(weak_background), c.iter().position(|x| x.id == "gpu-driver-change")) {
+        if bg < drv {
+            let cand = c.remove(bg);
+            c.insert(drv, cand);
+        }
+    }
 }
 
 fn why_first(c: &[Cand]) -> Option<&'static str> {
@@ -1496,13 +1530,26 @@ fn detect_background(c: &Ctx, out: &mut Out) {
     for s in c.affected.iter().copied().chain(c.partial.iter().copied()) {
         note_busy(s, &mut seen);
     }
+    // Where each start was seen, so every count says what it counts (F16): this game's fully measured rough
+    // sessions, its partly measured ones, and another game's rough sessions.
+    let mut other_seen: Vec<(&str, &SessionFacts)> = Vec::new();
     for o in &c.others {
         for (s, j) in o.sess.iter().copied().zip(&o.judged) {
             if j.would_fire && s.start().is_some_and(|t| t >= c.win_start) {
                 note_busy(s, &mut seen);
+                if s.busy_starts >= BUSY_START_MIN {
+                    other_seen.push((o.name.as_str(), s));
+                }
             }
         }
     }
+    let partial_seen: Vec<&SessionFacts> = c.partial.iter().copied().filter(|s| s.busy_starts >= BUSY_START_MIN).collect();
+    let names_of = |v: &[&SessionFacts]| -> String {
+        let mut n: Vec<String> = v.iter().flat_map(|s| s.busy_names.iter().cloned()).collect();
+        n.sort();
+        n.dedup();
+        n.join(", ")
+    };
     let mut base_cpu: Vec<f64> = c.base.iter().filter_map(|s| s.other_cpu_p90_pct).collect();
     let can_measure = !base_cpu.is_empty() && median(&mut base_cpu) < OTHER_CPU_BASELINE_MEDIAN_PCT;
     let loud = |s: &SessionFacts| can_measure && s.other_cpu_p90_pct.is_some_and(|p| p >= OTHER_CPU_P90_PCT);
@@ -1523,13 +1570,35 @@ fn detect_background(c: &Ctx, out: &mut Out) {
     names.sort();
     names.dedup();
     let mut evidence = Vec::new();
-    if !seen.is_empty() {
+    if !busy_rough.is_empty() {
         evidence.push(ev(
             EvidenceKind::Measured,
             "starts-seen",
             "sessions",
             false,
-            &[("count", seen.len().to_string()), ("names", names.join(", "))],
+            &[("count", busy_rough.len().to_string()), ("names", names_of(&busy_rough))],
+        ));
+    }
+    if let Some(newest) = partial_seen.iter().copied().max_by_key(|s| s.start()) {
+        evidence.push(ev(
+            EvidenceKind::Measured,
+            "starts-seen-partial",
+            "sessions",
+            false,
+            &[("date", newest.started_at.clone()), ("names", names_of(&partial_seen))],
+        ));
+    }
+    if !other_seen.is_empty() {
+        let mut games: Vec<String> = other_seen.iter().map(|(g, _)| (*g).to_string()).collect();
+        games.sort();
+        games.dedup();
+        let sessions: Vec<&SessionFacts> = other_seen.iter().map(|(_, s)| *s).collect();
+        evidence.push(ev(
+            EvidenceKind::Measured,
+            "starts-seen-other",
+            "sessions",
+            false,
+            &[("count", other_seen.len().to_string()), ("otherGame", games.join(", ")), ("names", names_of(&sessions))],
         ));
     }
     if loud_rough > 0 {

@@ -3,19 +3,27 @@
 //! whether the episode is over, and what that says about each candidate the engine listed. Wording law:
 //! a recovery SUPPORTS or WEAKENS a candidate; it never proves one ("fixed", "caused" are never said).
 //!
-//! The recovery rule (design E, frozen below): the newest judgeable session after the newest rough one has
-//! neither rule firing, measured at least `BASELINE_COVERAGE` of itself, ran under the same frame cap as the
-//! rough sessions and has a smoothness ratio >= `RECOVERY_R_FRACTION` x the episode's baseline median; and it
-//! is either >= that median (one session is enough) or the judgeable session before it also qualifies.
+//! The recovery rule (frozen below): the game has recovered only when the TWO newest judged sessions since
+//! the newest rough one both run clear: judged Normal, neither rule firing, at least `BASELINE_COVERAGE` of
+//! the session measured, the same frame cap as the rough sessions, at least `RECOVERY_MIN_SECS` long, a 1%
+//! low no worse than the baseline's worst, and a smoothness ratio >= `RECOVERY_R_FRACTION` x the episode's
+//! baseline median. One clear session is only "can't tell yet". Once two such sessions exist the answer does
+//! not flip back because a later session ran a little lower; only a rule firing reopens it (as a new episode).
+//!
+//! A recovery is one-sided evidence: it never adds a path to Likely (`Cand::independent` ignores it), and
+//! any recorded change between the last rough session's end and the first recovered session's start, or a
+//! Windows record for that stretch that could not be read completely, means there is no "points to" summary.
 
 use super::changes;
 use super::*;
-use crate::change_sources::ChangeKind;
+use crate::change_sources::{ChangeEvent, ChangeKind, Precision};
 
 /// A recovered session's smoothness ratio must reach this fraction of the baseline median.
 pub(crate) const RECOVERY_R_FRACTION: f64 = 0.90;
-/// The card still says "recovered" while at most this many judgeable sessions have come since the newest
-/// rough one; after that the game is simply running normally (the ordinary answer).
+/// A recovered session must have run at least this long (idle menus and short loads do not count).
+pub(crate) const RECOVERY_MIN_SECS: u64 = 600;
+/// The card still says the game recovered while at most this many judgeable sessions have come since the
+/// newest rough one; after that the game is simply running normally (the ordinary answer).
 pub(crate) const RECOVERY_SHOWN_FOR: usize = 5;
 
 /// What the sessions since the episode say about one candidate.
@@ -36,9 +44,10 @@ pub(super) struct NowLine {
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum RecoverySummary {
-    /// Exactly one candidate has support and every other one is pointed away from.
+    /// Exactly one candidate has support, every other one is pointed away from, and nothing else changed
+    /// between the rough sessions and the normal ones (Windows' records for that stretch were complete).
     PointsTo { id: &'static str },
-    /// More than one candidate is still standing.
+    /// More than one candidate (or recorded change) is still standing.
     Between { ids: Vec<&'static str> },
     None,
 }
@@ -49,16 +58,15 @@ pub(crate) struct Recovery {
     pub before: Metric,
     /// The rough sessions (mean ratio and average, worst p99).
     pub rough: Metric,
-    /// The sessions that ran normally (mean ratio and average, worst p99).
+    /// The two sessions that ran normally (mean ratio and average, worst p99).
     pub now: Metric,
     pub rough_sessions: Vec<SessionRef>,
     pub recovered_sessions: Vec<SessionRef>,
-    /// The newest recovered session reached the baseline median (one session was enough).
-    pub at_or_above_median: bool,
     /// Judgeable sessions since the newest rough one.
     pub sessions_since: u8,
     pub summary: RecoverySummary,
-    /// Other recorded changes between the rough sessions and the recovered ones (Compy's change count).
+    /// Every recorded change between the last rough session's end and the first recovered session's start,
+    /// each as its own line, plus a line when Windows' records for that stretch could not be read completely.
     pub also_changed: Vec<Evidence>,
 }
 
@@ -70,11 +78,12 @@ pub(crate) struct EarlierEpisode {
 }
 
 pub(super) enum Outcome {
-    /// The sessions (indexes into the game's list) that count as having run normally: one or two.
+    /// The two sessions (indexes into the game's list) that ran normally.
     Recovered { idx: Vec<usize> },
     /// Neither back to normal nor rough again. `partial`: the newest session was too thinly measured (or
-    /// under another frame cap) to say.
-    Unclear { partial: bool },
+    /// sessions after it were never read) to say. `one_clear`: exactly one session since ran clear.
+    /// `cap_changed`: the newest session ran under another frame cap than the rough ones.
+    Unclear { partial: bool, one_clear: bool, cap_changed: bool },
 }
 
 /// The first session of the episode that ends at `f` (rough sessions and unjudged ones between them).
@@ -90,6 +99,21 @@ pub(super) fn episode_first(judged: &[Judgement], f: usize) -> usize {
     first
 }
 
+/// A session that counts toward "back to normal": fully usable and close to the game's usual.
+fn clear_session(sess: &[&SessionFacts], judged: &[Judgement], i: usize, base: &BaseStats, rough_cap: CapState) -> bool {
+    let s = sess[i];
+    judged[i].verdict == Verdict::Normal
+        && s.cap.same_as(rough_cap)
+        && s.coverage() >= BASELINE_COVERAGE
+        && s.duration_secs >= RECOVERY_MIN_SECS
+        && judged[i].eval.is_some_and(|e| !e.rule_r && !e.rule_p99)
+        && s.ratio().is_some_and(|r| r >= RECOVERY_R_FRACTION * base.med_r)
+        && match (s.p99_ms, base.max_p99) {
+            (Some(p), Some(m)) => p <= m,
+            _ => true,
+        }
+}
+
 fn outcome_within(sess: &[&SessionFacts], judged: &[Judgement], f: usize, end: usize, shown_for: usize) -> Option<Outcome> {
     let first = episode_first(judged, f);
     let base = judged[first].base.as_ref()?;
@@ -99,33 +123,19 @@ fn outcome_within(sess: &[&SessionFacts], judged: &[Judgement], f: usize, end: u
         return None;
     }
     let rough_cap = sess[f].cap;
-    // A session counts toward "back to normal" only when it is fully usable: judged Normal, neither rule
-    // firing, at least BASELINE_COVERAGE of it measured, the same frame cap as the rough sessions, and a
-    // smoothness ratio within RECOVERY_R_FRACTION of the baseline median.
-    let clear = |i: usize| -> bool {
-        judged[i].verdict == Verdict::Normal
-            && sess[i].cap.same_as(rough_cap)
-            && sess[i].coverage() >= BASELINE_COVERAGE
-            && judged[i].eval.is_some_and(|e| !e.rule_r && !e.rule_p99)
-            && sess[i].ratio().is_some_and(|r| r >= RECOVERY_R_FRACTION * base.med_r)
-    };
+    let clear = |i: usize| clear_session(sess, judged, i, base, rough_cap);
     // Sessions after the newest judged one went unjudged: Compy never read them, so it cannot say.
     if newest + 1 < end {
-        return Some(Outcome::Unclear { partial: true });
+        return Some(Outcome::Unclear { partial: true, one_clear: false, cap_changed: false });
     }
-    if !clear(newest) {
-        let thin = judged[newest].verdict != Verdict::Normal
-            || sess[newest].coverage() < BASELINE_COVERAGE
-            || !sess[newest].cap.same_as(rough_cap);
-        return Some(Outcome::Unclear { partial: thin });
+    // Two clear sessions in a row, the latest such pair: a later session that ran a little lower does not
+    // undo it (only a rule firing does, and that is a new episode).
+    if let Some(k) = (1..post.len()).rev().find(|&k| clear(post[k - 1]) && clear(post[k])) {
+        return Some(Outcome::Recovered { idx: vec![post[k - 1], post[k]] });
     }
-    if sess[newest].ratio().is_some_and(|r| r >= base.med_r) {
-        return Some(Outcome::Recovered { idx: vec![newest] });
-    }
-    match post.len().checked_sub(2).map(|k| post[k]) {
-        Some(prev) if clear(prev) => Some(Outcome::Recovered { idx: vec![prev, newest] }),
-        _ => Some(Outcome::Unclear { partial: false }),
-    }
+    let cap_changed = !sess[newest].cap.same_as(rough_cap);
+    let thin = judged[newest].verdict != Verdict::Normal || sess[newest].coverage() < BASELINE_COVERAGE;
+    Some(Outcome::Unclear { partial: thin && !cap_changed, one_clear: !cap_changed && clear(newest), cap_changed })
 }
 
 /// The recovery outcome of the episode ending at `f`, over the sessions before `end`.
@@ -145,12 +155,149 @@ pub(super) fn earlier_episode(sess: &[&SessionFacts], judged: &[Judgement], firs
     }
 }
 
+// ---- The stretch between the rough sessions and the normal ones -----------------------------------------
+/// The last rough session's end and the first recovered session's start.
+fn gap_bounds(c: &Ctx, rec: &[&SessionFacts]) -> (DateTime<Utc>, DateTime<Utc>) {
+    let rough_last = c.affected.iter().copied().max_by_key(|s| s.start()).unwrap_or(c.first_bad);
+    let lo = rough_last.end().or_else(|| rough_last.start()).unwrap_or(c.win_end);
+    let hi = rec.iter().filter_map(|s| s.start()).min().unwrap_or(lo);
+    (lo, hi)
+}
+
+/// When a dated record falls in `(lo, hi]` (a day-precision record: any part of its day does).
+fn overlaps(e: &ChangeEvent, lo: DateTime<Utc>, hi: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    match (e.when.precision, e.when.at, e.when.until) {
+        (Precision::Exact, Some(a), _) => (a > lo && a <= hi).then_some(a),
+        (Precision::Day, Some(a), Some(b)) => (a <= hi && b > lo).then_some(a),
+        _ => None,
+    }
+}
+
+pub(super) struct Gap {
+    /// One line per recorded change in the stretch, oldest first.
+    lines: Vec<Evidence>,
+    /// The candidate id each change belongs to (for "Still between").
+    ids: Vec<&'static str>,
+    /// Every Windows record that could name a change there was read completely.
+    complete: bool,
+}
+
+impl Gap {
+    /// Something changed in the stretch, or Windows' records for it were not read completely: Compy cannot
+    /// name one change as the reason.
+    fn unclean(&self) -> bool {
+        !self.lines.is_empty() || !self.complete
+    }
+}
+
+fn gap_of(c: &Ctx, rec: &[&SessionFacts]) -> Gap {
+    let (lo, hi) = gap_bounds(c, rec);
+    let rough_last = c.affected.iter().copied().max_by_key(|s| s.start()).unwrap_or(c.first_bad);
+    let rec_first = rec.iter().copied().min_by_key(|s| s.start());
+    let mut dated: Vec<(DateTime<Utc>, Evidence, &'static str)> = Vec::new();
+    let mut complete = false;
+    if let Some(r) = changes::report(c) {
+        let kinds = [ChangeKind::GpuDriver, ChangeKind::OtherDriver, ChangeKind::WindowsUpdate, ChangeKind::GameUpdate, ChangeKind::ProgramInstalled];
+        complete = kinds.iter().all(|k| changes::is_complete(r, *k));
+        let gap_event = |kind: &'static str, e: &ChangeEvent, at: DateTime<Utc>, detail: String| {
+            ev(
+                EvidenceKind::Known,
+                "gap-change",
+                "windows",
+                false,
+                &[("kind", kind.to_string()), ("when", iso(at)), ("day", (e.when.precision == Precision::Day).to_string()), ("detail", detail)],
+            )
+        };
+        let mut gpu_or_other = false;
+        for e in changes::kind_events(r, ChangeKind::GpuDriver).filter(|e| e.what.version_changed == Some(true)) {
+            if let Some(at) = overlaps(e, lo, hi) {
+                gpu_or_other = true;
+                dated.push((at, gap_event("gpu-driver", e, at, e.what.to_version.clone().unwrap_or_default()), "gpu-driver-change"));
+            }
+        }
+        for e in changes::kind_events(r, ChangeKind::OtherDriver) {
+            if let Some(at) = overlaps(e, lo, hi) {
+                gpu_or_other = true;
+                dated.push((at, gap_event("other-driver", e, at, String::new()), "other-driver-change"));
+            }
+        }
+        for e in changes::kind_events(r, ChangeKind::WindowsUpdate) {
+            let class = changes::class_of(e);
+            // A driver delivered by Windows Update is already listed as the driver install.
+            let counts = matches!(class.as_str(), "quality" | "feature") || (class == "driver" && !gpu_or_other);
+            if let (true, Some(at)) = (counts, overlaps(e, lo, hi)) {
+                dated.push((at, gap_event("windows-update", e, at, e.what.kb.clone().unwrap_or_default()), "windows-update"));
+            }
+        }
+        for e in changes::kind_events(r, ChangeKind::GameUpdate) {
+            if let Some(at) = overlaps(e, lo, hi) {
+                dated.push((at, gap_event("game-files", e, at, String::new()), "game-files-change"));
+            }
+        }
+        for e in changes::kind_events(r, ChangeKind::ProgramInstalled).filter(|e| e.what.name.is_some()) {
+            if let Some(at) = overlaps(e, lo, hi) {
+                dated.push((at, gap_event("program", e, at, e.what.name.clone().unwrap_or_default()), "program-installed"));
+            }
+        }
+    }
+    dated.sort_by_key(|(at, _, _)| *at);
+    let mut lines: Vec<Evidence> = dated.iter().map(|(_, e, _)| e.clone()).collect();
+    let mut ids: Vec<&'static str> = Vec::new();
+    for (_, _, id) in &dated {
+        if !ids.contains(id) {
+            ids.push(id);
+        }
+    }
+    if let Some(rf) = rec_first {
+        let (a, b) = (nonblank(&rough_last.windows_build), nonblank(&rf.windows_build));
+        if let (Some(a), Some(b)) = (a, b) {
+            if a != b {
+                lines.push(ev(EvidenceKind::Measured, "gap-build", "sessions", false, &[("from", a.to_string()), ("to", b.to_string())]));
+                ids.push("windows-build-change");
+            }
+        }
+        if let (Some(a), Some(b)) = (rough_last.compy_changes, rf.compy_changes) {
+            if a != b {
+                lines.push(ev(EvidenceKind::Known, "compy-changes-differ", "sessions", false, &[("from", a.to_string()), ("to", b.to_string())]));
+                ids.push("compy-change");
+            }
+        }
+    }
+    Gap { lines, ids, complete }
+}
+
+/// A change to the game's files in the stretch is a candidate in its own right. Windows-style Steam records
+/// keep only the newest change, so when it falls here an earlier one can no longer be seen (and nothing is
+/// said about it).
+pub(super) fn gap_candidates(c: &Ctx, rec: &[&SessionFacts], cands: &mut Vec<Cand>) {
+    if cands.iter().any(|x| x.id == "game-files-change") {
+        return;
+    }
+    let Some(r) = changes::report(c) else { return };
+    let (lo, hi) = gap_bounds(c, rec);
+    let Some(at) = changes::kind_events(r, ChangeKind::GameUpdate).filter_map(|e| overlaps(e, lo, hi)).max() else { return };
+    cands.push(Cand {
+        id: "game-files-change",
+        t: true,
+        d: false,
+        x: false,
+        confounded: false,
+        r: false,
+        m: false,
+        c1: false,
+        since: When::Exact { at: iso(at) },
+        fix: steps("game-files-change", &[]),
+        evidence: vec![ev(EvidenceKind::Known, "files-changed", "steam", false, &[("when", iso(at))])],
+    });
+}
+
 // ---- Per-candidate re-scoring ------------------------------------------------------------------------
 struct Rc<'x> {
     c: &'x Ctx<'x>,
     rec: &'x [&'x SessionFacts],
     rough_last: &'x SessionFacts,
-    rough_start: DateTime<Utc>,
+    /// The last rough session's end: a change after it is "between the rough sessions and the normal ones".
+    rough_end: DateTime<Utc>,
     rec_start: DateTime<Utc>,
 }
 
@@ -162,13 +309,14 @@ fn unread(code: &'static str) -> Vec<Evidence> {
     vec![ev(EvidenceKind::Unknown, code, "sessions", false, &[])]
 }
 
-/// Re-scores every candidate against the sessions that ran normally. A support sets the candidate's `r`
-/// (independent of its timing); a contradiction sets `c1`. Neither ever makes a candidate certain.
+/// Re-scores every candidate against the sessions that ran normally. A contradiction sets `c1`. A support
+/// sets `r` (ordering only: it is never one of the two independent supports Likely needs), and only when
+/// nothing else changed in the stretch and Windows' records for it were complete.
 pub(super) fn apply<'x>(c: &'x Ctx<'x>, rec: &'x [&'x SessionFacts], cands: &mut [Cand]) -> Vec<NowLine> {
     let rough_last = c.affected.iter().copied().max_by_key(|s| s.start()).unwrap_or(c.first_bad);
-    let rough_start = rough_last.start().unwrap_or(c.win_end);
-    let rec_start = rec.iter().filter_map(|s| s.start()).min().unwrap_or(rough_start);
-    let rc = Rc { c, rec, rough_last, rough_start, rec_start };
+    let (rough_end, rec_start) = gap_bounds(c, rec);
+    let rc = Rc { c, rec, rough_last, rough_end, rec_start };
+    let clean = !gap_of(c, rec).unclean();
     cands
         .iter_mut()
         .map(|cand| {
@@ -185,7 +333,7 @@ pub(super) fn apply<'x>(c: &'x Ctx<'x>, rec: &'x [&'x SessionFacts], cands: &mut
                 _ => (NowStatus::CantTell, Vec::new()),
             };
             match status {
-                NowStatus::PointsTo => cand.r = true,
+                NowStatus::PointsTo => cand.r = clean,
                 NowStatus::PointsAway => cand.c1 = true,
                 NowStatus::CantTell => {}
             }
@@ -199,7 +347,7 @@ fn driver(rc: &Rc, cand: &Cand) -> (NowStatus, Vec<Evidence>) {
     let now = rc.rec.last().and_then(|s| nonblank(&s.gpu_driver));
     let (Some(rough), Some(now)) = (rough, now) else { return (NowStatus::CantTell, unread("recovery-driver-unread")) };
     let installs = changes::gpu_installs(rc.c);
-    let in_gap = |at: DateTime<Utc>| at > rc.rough_start && at <= rc.rec_start;
+    let in_gap = |at: DateTime<Utc>| at > rc.rough_end && at <= rc.rec_start;
     if !crate::hardware::driver_changed(rough, now) {
         // The stamps agree, but Windows dated an install of another version between the two.
         if let Some((_, at, _)) = installs.iter().rev().find(|(e, at, _)| {
@@ -229,7 +377,7 @@ fn driver(rc: &Rc, cand: &Cand) -> (NowStatus, Vec<Evidence>) {
         .filter(|s| nonblank(&s.gpu_driver).is_some_and(|d| !crate::hardware::driver_changed(d, now)))
         .filter_map(|s| s.start())
         .chain(inp.sightings.iter().filter(|g| !crate::hardware::driver_changed(&g.gpu_driver, now)).filter_map(|g| ts(&g.observed_at)))
-        .filter(|t| *t > rc.rough_start)
+        .filter(|t| *t > rc.rough_end)
         .min()
         .unwrap_or(rc.rec_start);
     let (when, exact) = match record {
@@ -255,6 +403,9 @@ fn driver(rc: &Rc, cand: &Cand) -> (NowStatus, Vec<Evidence>) {
     )
 }
 
+/// Background programs. "Points to it" needs recorded load numbers on BOTH sides: a rough session that was
+/// busy (programs starting, or the rest of the PC loud) and recovered sessions that were quiet. Without load
+/// numbers for every rough session the comparison is one-sided and Compy says it cannot tell.
 fn background(rc: &Rc) -> (NowStatus, Vec<Evidence>) {
     let starts: u32 = rc.rec.iter().map(|s| s.busy_starts).sum();
     let p90s: Vec<f64> = rc.rec.iter().filter_map(|s| s.other_cpu_p90_pct).collect();
@@ -276,16 +427,24 @@ fn background(rc: &Rc) -> (NowStatus, Vec<Evidence>) {
     match max_p {
         Some(p) if p90s.len() == rc.rec.len() => {
             let mut e = vec![ev(EvidenceKind::SupportedInference, "recovered-quiet", "sessions", false, &[("pct", pct1(p))])];
-            // The comparison is one-sided when the rough sessions have no load numbers.
-            if rc.c.affected.iter().any(|s| s.other_cpu_p90_pct.is_none()) {
+            let rough = &rc.c.affected;
+            if rough.iter().any(|s| s.other_cpu_p90_pct.is_none()) {
+                // One-sided: no load numbers for a rough session. Said in the same breath; never "points to".
                 e.push(ev(EvidenceKind::Unknown, "rough-load-not-recorded", "sessions", false, &[]));
+                return (NowStatus::CantTell, e);
             }
-            (NowStatus::PointsTo, e)
+            let rough_busy = rough
+                .iter()
+                .any(|s| s.busy_starts >= BUSY_START_MIN || s.other_cpu_p90_pct.is_some_and(|p| p >= OTHER_CPU_P90_PCT));
+            (if rough_busy { NowStatus::PointsTo } else { NowStatus::CantTell }, e)
         }
         _ => (NowStatus::CantTell, unread("recovery-load-not-recorded")),
     }
 }
 
+/// Memory. "Points to it" only when EVERY rough session with a reading peaked at or past the full line and
+/// the recovered ones did not; a rough session that ran with memory well below full means a lower peak now
+/// says little (the same contradiction `detect_memory` records as ram-lower).
 fn memory(rc: &Rc) -> (NowStatus, Vec<Evidence>) {
     let peak = |s: &SessionFacts| s.peak_ram_bytes.unwrap_or(0);
     let read: Vec<&&SessionFacts> = rc.rec.iter().filter(|s| s.ram_fraction().is_some()).collect();
@@ -297,7 +456,23 @@ fn memory(rc: &Rc) -> (NowStatus, Vec<Evidence>) {
             vec![ev(EvidenceKind::Measured, "recovered-ram-full", "sessions", true, &[("peakGb", gb(peak(worst))), ("totalGb", gb(total))])],
         );
     }
-    let rough_peak = rc.c.affected.iter().filter(|s| s.ram_fraction().is_some()).map(|s| peak(s)).max().unwrap_or(0);
+    let rough: Vec<&&SessionFacts> = rc.c.affected.iter().filter(|s| s.ram_fraction().is_some()).collect();
+    if rough.is_empty() {
+        return (NowStatus::CantTell, unread("recovery-ram-rough-unread"));
+    }
+    if rough.iter().any(|s| s.ram_fraction().is_some_and(|f| f < RAM_FULL_FRACTION)) {
+        return (
+            NowStatus::CantTell,
+            vec![ev(
+                EvidenceKind::Measured,
+                "recovered-ram-rough-lower",
+                "sessions",
+                false,
+                &[("peakGb", gb(peak(worst))), ("totalGb", gb(total))],
+            )],
+        );
+    }
+    let least_rough = rough.iter().map(|s| peak(s)).min().unwrap_or(0);
     (
         NowStatus::PointsTo,
         vec![ev(
@@ -305,7 +480,7 @@ fn memory(rc: &Rc) -> (NowStatus, Vec<Evidence>) {
             "recovered-ram-lower",
             "sessions",
             false,
-            &[("peakGb", gb(peak(worst))), ("totalGb", gb(total)), ("roughGb", gb(rough_peak))],
+            &[("peakGb", gb(peak(worst))), ("totalGb", gb(total)), ("roughGb", gb(least_rough))],
         )],
     )
 }
@@ -329,11 +504,12 @@ fn drift(rc: &Rc, cand: &Cand) -> (NowStatus, Vec<Evidence>) {
     (NowStatus::CantTell, unread("recovery-drift-unknown"))
 }
 
+/// Compy's own changes. The count counts as "back" only when it equals the count at the baseline's newest
+/// session (a count is not the identity of a change, so the wording says only that the number went back).
 fn compy(rc: &Rc) -> (NowStatus, Vec<Evidence>) {
     let now = rc.rec.iter().filter_map(|s| s.compy_changes).next_back();
     let rough: Vec<usize> = rc.c.affected.iter().filter_map(|s| s.compy_changes).collect();
-    let before: Vec<usize> = rc.c.base.iter().filter_map(|s| s.compy_changes).collect();
-    let (Some(now), Some(lo), Some(hi)) = (now, before.iter().copied().min(), before.iter().copied().max()) else {
+    let (Some(now), Some(before)) = (now, rc.c.baseline_newest.compy_changes) else {
         return (NowStatus::CantTell, unread("recovery-compy-unread"));
     };
     if rough.is_empty() {
@@ -346,7 +522,7 @@ fn compy(rc: &Rc) -> (NowStatus, Vec<Evidence>) {
             vec![ev(EvidenceKind::Measured, "recovered-compy-same", "sessions", true, &[("count", now.to_string())])],
         );
     }
-    if now >= lo && now <= hi {
+    if now == before {
         return (
             NowStatus::PointsTo,
             vec![ev(EvidenceKind::SupportedInference, "recovered-compy-back", "sessions", false, &[("from", from), ("to", now.to_string())])],
@@ -378,8 +554,7 @@ fn dated(rc: &Rc, what: &'static str, kind: ChangeKind) -> (NowStatus, Vec<Evide
     let Some(r) = changes::report(rc.c) else { return (NowStatus::CantTell, unread_records()) };
     let hits: Vec<DateTime<Utc>> = changes::kind_events(r, kind)
         .filter(|e| kind != ChangeKind::WindowsUpdate || matches!(changes::class_of(e).as_str(), "quality" | "feature" | "driver"))
-        .filter_map(changes::when_of)
-        .filter(|at| *at > rc.rough_start && *at <= rc.rec_start)
+        .filter_map(|e| overlaps(e, rc.rough_end, rc.rec_start))
         .collect();
     if let Some(first) = hits.iter().copied().min() {
         return (
@@ -403,13 +578,24 @@ fn dated(rc: &Rc, what: &'static str, kind: ChangeKind) -> (NowStatus, Vec<Evide
 }
 
 // ---- The recovery block ------------------------------------------------------------------------------
-fn summary(findings: &[Finding]) -> RecoverySummary {
+/// "Points to" names one candidate only when exactly one stands with support, every other one is pointed
+/// away from, nothing else changed in the stretch and Windows' records for it were complete. Otherwise it is
+/// "Still between" the candidates and the recorded changes still standing, or nothing when there are fewer
+/// than two.
+fn summary(findings: &[Finding], gap: &Gap) -> RecoverySummary {
     let live: Vec<&Finding> = findings.iter().filter(|f| f.now != Some(NowStatus::PointsAway)).collect();
     let supported = live.iter().filter(|f| f.now == Some(NowStatus::PointsTo)).count();
-    if live.len() == 1 && supported == 1 {
-        RecoverySummary::PointsTo { id: live[0].id }
-    } else if live.len() >= 2 {
-        RecoverySummary::Between { ids: live.iter().map(|f| f.id).collect() }
+    if !gap.unclean() && live.len() == 1 && supported == 1 {
+        return RecoverySummary::PointsTo { id: live[0].id };
+    }
+    let mut ids: Vec<&'static str> = live.iter().map(|f| f.id).collect();
+    for id in &gap.ids {
+        if !ids.contains(id) {
+            ids.push(id);
+        }
+    }
+    if ids.len() >= 2 {
+        RecoverySummary::Between { ids }
     } else {
         RecoverySummary::None
     }
@@ -427,13 +613,11 @@ fn mean_metric(s: &[&SessionFacts]) -> Metric {
 /// The numbers and the summary of a recovered episode. `d.problem` and `d.findings` are already set.
 pub(super) fn build_block(c: &Ctx, rec: &[&SessionFacts], d: &Diagnosis, since: usize) -> Option<Recovery> {
     let p = d.problem.as_ref()?;
-    let newest = rec.last()?;
-    let rough_count = c.affected.iter().filter_map(|s| s.compy_changes).next_back();
-    let mut also_changed = Vec::new();
-    if let (Some(a), Some(b)) = (rough_count, newest.compy_changes) {
-        if a != b {
-            also_changed.push(ev(EvidenceKind::Known, "compy-changes-differ", "sessions", false, &[("from", a.to_string()), ("to", b.to_string())]));
-        }
+    rec.last()?;
+    let gap = gap_of(c, rec);
+    let mut also_changed = gap.lines.clone();
+    if !gap.complete {
+        also_changed.push(ev(EvidenceKind::Unknown, "gap-unread", "windows", false, &[]));
     }
     Some(Recovery {
         before: p.before.clone(),
@@ -441,9 +625,8 @@ pub(super) fn build_block(c: &Ctx, rec: &[&SessionFacts], d: &Diagnosis, since: 
         now: mean_metric(rec),
         rough_sessions: p.sessions_affected.clone(),
         recovered_sessions: rec.iter().map(|s| s.session_ref()).collect(),
-        at_or_above_median: newest.ratio().is_some_and(|r| r >= p.before.ratio),
         sessions_since: since.min(u8::MAX as usize) as u8,
-        summary: summary(&d.findings),
+        summary: summary(&d.findings, &gap),
         also_changed,
     })
 }

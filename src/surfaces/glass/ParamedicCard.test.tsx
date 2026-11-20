@@ -2,7 +2,7 @@
 // default open card is short: one-line rows, every disclosure closed (F3). The engine's answer is mocked
 // (numbers and codes only); every sentence asserted here is the card's own.
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor, within, act } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -54,6 +54,7 @@ const base: ParamedicDiagnosis = {
     before: { ratio: 0.9, p99_ms: null, avg_fps: 120 },
     now: { ratio: 0.5, p99_ms: null, avg_fps: 110 },
     last_normal_at: "2026-11-11T14:14:22Z",
+    last_full_normal_at: "2026-11-11T14:14:22Z",
     sessions_affected: [ref("2026-11-20T01:01:24Z")],
     partial_sessions: [],
     other_games_affected: [],
@@ -536,12 +537,89 @@ describe("ParamedicCard: while the episode is still going", () => {
     expect(screen.queryByText(/running the way it usually does again/)).toBeNull();
   });
 
-  it("in between: can't tell yet whether it is back, and never says recovered", async () => {
-    await ask({ ...base, state: { kind: "cant-tell", why: { kind: "recovery-unclear", partial: false } } });
+  const unclear = (why: Partial<{ partial: boolean; one_clear: boolean; cap_changed: boolean }> = {}): ParamedicDiagnosis => ({
+    ...base,
+    state: { kind: "cant-tell", why: { kind: "recovery-unclear", partial: false, one_clear: false, cap_changed: false, ...why } },
+    why_first: null,
+  });
+
+  it("in between: shows the problem line and collapsed rows, says it can't tell yet, and never says recovered (F8)", async () => {
+    await ask(unclear());
     await waitFor(() => expect(screen.getByText("Compy can't tell yet whether Game A is back to normal. Play once more.")).toBeTruthy());
-    expect(screen.queryByText(/running the way it usually does again/)).toBeNull();
-    expect(screen.queryByText("Most likely")).toBeNull();
-    expect(rows().length).toBe(0);
+    expect(screen.getByText("Game A has been running much rougher than usual")).toBeTruthy();
+    expect(screen.getByText(/In a normal session, Game A's dips stay at about 90%/)).toBeTruthy();
+    expect(screen.queryByText(/running the way it usually does/)).toBeNull();
+    expect(rows().length).toBe(2);
+    // Every row starts collapsed.
+    for (const r of rows()) expect(within(r).getByRole("button").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("the unclear state says it once even when later sessions were only partly measured", async () => {
+    await ask({ ...unclear(), problem: { ...base.problem!, later_unjudged: 2 } });
+    await waitFor(() => expect(rows().length).toBe(2));
+    expect(screen.getAllByText("Compy can't tell yet whether Game A is back to normal. Play once more.").length).toBe(1);
+  });
+
+  it("one clear session since says so and asks for one more (F1)", async () => {
+    await ask(unclear({ one_clear: true }));
+    await waitFor(() =>
+      expect(screen.getByText("One session since has run the way Game A usually does. Compy needs one more to be sure.")).toBeTruthy(),
+    );
+    expect(screen.queryByText(/running the way it usually does/)).toBeNull();
+  });
+
+  it("a frame cap that is different now is said as a frame-cap problem, not as a vague one (F9)", async () => {
+    await ask(unclear({ cap_changed: true, one_clear: true }));
+    await waitFor(() =>
+      expect(screen.getByText("Game A's frame cap is different now, so Compy can't compare these sessions with the earlier ones.")).toBeTruthy(),
+    );
+    expect(screen.queryByText(/Compy needs one more/)).toBeNull();
+  });
+
+  it("names the last fully measured normal session when the newest normal one was only partly measured (F12)", async () => {
+    const p = base.problem!;
+    await ask({ ...base, problem: { ...p, last_full_normal_at: "2026-11-09T10:00:00Z" } });
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(screen.getByText(/Its last fully measured normal session was .+\. The rough run has lasted 1 session so far\./)).toBeTruthy();
+    expect(screen.queryByText(/It last ran normally on/)).toBeNull();
+    cleanup();
+    await ask({ ...base, problem: { ...p, last_full_normal_at: null } });
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(screen.queryByText(/last ran normally|last fully measured/)).toBeNull();
+  });
+
+  it("every count in the background-programs evidence says what it counts, with the names on their own line (F16)", async () => {
+    const ev = (code: string, args: Record<string, string>) => ({ kind: "measured" as const, code, args, against: false, source: "sessions" });
+    await ask({
+      ...base,
+      why_first: "not-separable",
+      findings: [
+        find("background-load", {
+          evidence: [
+            ev("starts-seen", { count: "2", names: "Discord, Zip Thing" }),
+            ev("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "Updater" }),
+            ev("starts-seen-other", { count: "3", otherGame: "Game B", names: "Encoder" }),
+            { kind: "unknown", code: "load-not-recorded", args: {}, against: false, source: "sessions" },
+          ],
+          fix: steps("background-load"),
+        }),
+      ],
+    });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.getByText("2 rough Game A sessions had other programs starting during them (Discord, Zip Thing).")).toBeTruthy();
+    expect(screen.getByText(/Programs were seen starting in a partly measured Game A session on .+ \(Updater\)\./)).toBeTruthy();
+    expect(screen.getByText("Programs were also seen starting in 3 rough Game B sessions (Encoder).")).toBeTruthy();
+    expect(screen.getByText(/Compy can't see programs that were already running/)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/Compy's own|Compy started/);
+  });
+
+  it("a count of zero is not a line: no 'starts-seen' evidence means no 'had other programs starting' text", async () => {
+    await ask({ ...base, why_first: null, findings: [base.findings[1]] });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.queryByText(/had other programs starting/)).toBeNull();
+    expect(screen.getByText(/Compy can't see programs that were already running/)).toBeTruthy();
   });
 });
 
@@ -552,7 +630,6 @@ describe("ParamedicCard: recovered", () => {
     now: { ratio: 0.92, p99_ms: null, avg_fps: 118 },
     rough_sessions: [ref("2026-11-20T01:00:00Z")],
     recovered_sessions: [ref("2026-11-21T01:00:00Z")],
-    at_or_above_median: true,
     sessions_since: 1,
     summary: { kind: "points-to", id: "background-load" },
     also_changed: [],
@@ -585,9 +662,12 @@ describe("ParamedicCard: recovered", () => {
 
   it("titles the recovery with the measured before, rough and now numbers, and names what the evidence points to", async () => {
     await ask(recovered());
-    await waitFor(() => expect(screen.getByText("Game A is running the way it usually does again")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Game A's last two sessions ran the way it usually does")).toBeTruthy());
     expect(screen.getByText("Its dips stayed at about 90% of its average before, fell to about 50% while it was rough, and are at about 92% now.")).toBeTruthy();
-    expect(screen.getByText("Its newest session ran at or above its usual.")).toBeTruthy();
+    // No one-session basis line any more: recovery is two clear sessions or nothing (F1).
+    expect(screen.queryByText(/newest session ran at or above/)).toBeNull();
+    // The numbers line is whole, never clamped to two lines (F7).
+    expect(document.querySelector(".gl-para-clamp")).toBeNull();
     expect(verdict()).toBe("The evidence now points to: Other programs started while you played.");
     expect(rows().length).toBe(2);
     expect(rows()[0].textContent).toMatch(/Other programs started while you played.*Points to it/);
@@ -601,9 +681,11 @@ describe("ParamedicCard: recovered", () => {
     await ask(recovered());
     await waitFor(() => expect(rows().length).toBe(2));
     openAll();
-    expect(screen.getByText("Game A ran normally again on the same driver (2.0), so the driver alone doesn't explain it.")).toBeTruthy();
+    expect(
+      screen.getByText("Game A ran normally again on the same driver (2.0). That weakens the driver as the reason, though some driver problems come and go."),
+    ).toBeTruthy();
     expect(screen.getByText(/Compy saw no build or encoding program start, and the rest of your PC was quiet \(3\.0% CPU used by other programs\)/)).toBeTruthy();
-    expect(screen.getByText("Compy didn't record how busy the PC was in the rough sessions, so this comparison is one-sided.")).toBeTruthy();
+    expect(screen.getByText("Compy didn't record how busy the PC was in every rough session, so this comparison is one-sided.")).toBeTruthy();
     expect(screen.getAllByText("Supports this").length).toBe(1);
     expect(screen.getAllByText("Since it ran normally again:").length).toBe(2);
   });
@@ -623,16 +705,100 @@ describe("ParamedicCard: recovered", () => {
     expect(screen.getByText(/It recovered after the driver changed to 3\.0 \(Compy first saw it on /)).toBeTruthy();
   });
 
-  it("with more than one candidate still standing it says 'Still between', and two close sessions are said as such", async () => {
+  it("with more than one candidate still standing it says 'Still between'", async () => {
     await ask(
       recovered({
         findings: [driver("cant-tell", []), background("points-to", quiet)],
-        recovery: rec({ summary: { kind: "between", ids: ["gpu-driver-change", "background-load"] }, recovered_sessions: [ref("2026-11-21T01:00:00Z"), ref("2026-11-22T01:00:00Z")], at_or_above_median: false }),
+        recovery: rec({ summary: { kind: "between", ids: ["gpu-driver-change", "background-load"] }, recovered_sessions: [ref("2026-11-21T01:00:00Z"), ref("2026-11-22T01:00:00Z")] }),
       }),
     );
     await waitFor(() => expect(verdict()).toBe("Still between: Your graphics driver was updated, Other programs started while you played."));
-    expect(screen.getByText("Its last two sessions both ran close to its usual.")).toBeTruthy();
     expect(rows()[1].textContent).toMatch(/Still can't tell/);
+  });
+
+  const ev = (code: string, args: Record<string, string>, over: Partial<F["evidence"][number]> = {}): F["evidence"][number] => ({
+    kind: "known",
+    code,
+    args,
+    against: false,
+    source: "windows",
+    ...over,
+  });
+
+  it("every dated change between the rough sessions and the normal ones is its own line, and the summary stays 'Still between' (F4)", async () => {
+    await ask(
+      recovered({
+        findings: [driver("cant-tell", [])],
+        recovery: rec({
+          summary: { kind: "between", ids: ["gpu-driver-change", "windows-update", "game-files-change", "program-installed"] },
+          also_changed: [
+            ev("gap-change", { kind: "windows-update", when: "2026-11-20T10:00:00Z", day: "false", detail: "KB5001234" }),
+            ev("gap-change", { kind: "game-files", when: "2026-11-20T12:00:00Z", day: "false", detail: "" }),
+            ev("gap-change", { kind: "program", when: "2026-11-20T00:00:00Z", day: "true", detail: "Zip Thing" }),
+            ev("gap-change", { kind: "gpu-driver", when: "2026-11-20T13:00:00Z", day: "false", detail: "3.0" }),
+            ev("gap-change", { kind: "other-driver", when: "2026-11-20T14:00:00Z", day: "false", detail: "" }),
+            ev("gap-build", { from: "26100", to: "26200" }, { kind: "measured" }),
+            ev("gap-unread", {}, { kind: "unknown" }),
+          ],
+        }),
+      }),
+    );
+    await waitFor(() => expect(screen.getByTestId("paramedic-verdict")).toBeTruthy());
+    expect(verdict()).toBe(
+      "Still between: Your graphics driver was updated, Windows installed an update, Game A's files changed, A program was installed.",
+    );
+    expect(screen.queryByText(/The evidence now points to/)).toBeNull();
+    const text = document.body.textContent ?? "";
+    expect(text.match(/Between the rough sessions and the normal ones: /g)?.length).toBe(6);
+    expect(text).toMatch(/: a Windows update \(KB5001234\) on /);
+    expect(text).toMatch(/: a change to Game A's files on /);
+    expect(text).toMatch(/: Zip Thing was installed on /);
+    expect(text).toMatch(/: a graphics driver install \(3\.0\) on /);
+    expect(text).toMatch(/: a driver install on /);
+    expect(text).toMatch(/Windows went from build 26100 to 26200/);
+    expect(text).toMatch(/Compy couldn't read all of Windows' records for that stretch/);
+  });
+
+  it("a change to the game's files in the stretch is a candidate in its own right, with its own wording (F4)", async () => {
+    const files = find("game-files-change", {
+      in_play: false,
+      since_when: { kind: "exact", at: "2026-11-20T12:00:00Z" },
+      evidence: [ev("files-changed", { when: "2026-11-20T12:00:00Z" }, { source: "steam" })],
+      now: "cant-tell",
+      now_evidence: [ev("recovered-changed-again", { what: "game-files-change", count: "1", when: "2026-11-20T12:00:00Z" }, { kind: "measured" })],
+    });
+    await ask(recovered({ findings: [files], recovery: rec({ summary: { kind: "none" } }) }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(rows()[0].textContent).toMatch(/Game A's files changed on /);
+    openAll();
+    expect(screen.getByText(/Game A's files changed on .+, and it has run normally in the sessions since\./)).toBeTruthy();
+  });
+
+  it("memory and background-programs evidence say what was seen, never a conclusion (F2, F3, F5)", async () => {
+    const mem = find("memory-pressure", {
+      in_play: false,
+      now: "cant-tell",
+      now_evidence: [ev("recovered-ram-rough-lower", { peakGb: "20.0", totalGb: "32.0" }, { kind: "measured" })],
+    });
+    const unread = find("setting-drift", {
+      in_play: false,
+      now: "cant-tell",
+      now_evidence: [ev("recovery-ram-rough-unread", {}, { kind: "unknown" })],
+    });
+    const bg = find("background-load", {
+      in_play: false,
+      now: "cant-tell",
+      now_evidence: [ev("recovered-quiet", { pct: "3.0" }, { kind: "supported-inference" }), ev("rough-load-not-recorded", {}, { kind: "unknown" })],
+    });
+    await ask(recovered({ findings: [mem, unread, bg], recovery: rec({ summary: { kind: "none" } }) }));
+    await waitFor(() => expect(rows().length).toBe(3));
+    openAll();
+    expect(
+      screen.getByText("Memory peaked at 20.0 of 32.0 GB when it ran normally, but not every rough session had memory nearly full, so Compy can't say whether memory is the reason."),
+    ).toBeTruthy();
+    expect(screen.getByText("Compy has no memory reading for the rough sessions, so it can't compare.")).toBeTruthy();
+    expect(screen.getByText(/That is consistent with background programs, but Compy can't see programs that were already running\./)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/doesn't explain it|alone doesn't|can't be the whole story/);
   });
 
   it("when nothing can be narrowed down it says so, and names a Compy change that also changed", async () => {
@@ -669,6 +835,75 @@ describe("ParamedicCard: still checking", () => {
     await waitFor(() => expect(screen.getByText("Most likely")).toBeTruthy(), { timeout: 4000 });
     expect(answer.calls.length).toBe(2);
   });
+
+  it("when every retry is still busy it says 'still checking', never that it couldn't read its records (F13)", async () => {
+    vi.useFakeTimers();
+    try {
+      answer.busyFirst = 100;
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+      for (let i = 0; i < 12; i++) await act(async () => void (await vi.advanceTimersByTimeAsync(1300)));
+      expect(answer.calls.length).toBe(9);
+      expect(screen.getByRole("status").textContent).toBe("Compy is still checking. Try again in a moment.");
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(document.body.textContent).not.toMatch(/couldn't read its records/);
+      expect(screen.getByRole("button", { name: "Check again" })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("an unmounted card never asks again (F13)", async () => {
+    vi.useFakeTimers();
+    try {
+      answer.busyFirst = 100;
+      const { unmount } = render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
+      expect(answer.calls.length).toBe(1);
+      unmount();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(20000)));
+      expect(answer.calls.length).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("while busy the button stays focusable (aria-disabled) and a click is ignored (F14)", async () => {
+    answer.busyFirst = 1;
+    answer.value = base;
+    render(<ParamedicCard />);
+    const button = screen.getByRole("button", { name: "Something's wrong" }) as HTMLButtonElement;
+    fireEvent.click(button);
+    await waitFor(() => expect(answer.calls.length).toBe(1));
+    expect(button.getAttribute("aria-disabled")).toBe("true");
+    expect(button.disabled).toBe(false);
+    button.focus();
+    expect(document.activeElement).toBe(button);
+    fireEvent.click(button);
+    expect(answer.calls.length).toBe(1);
+    await waitFor(() => expect(screen.getByText("Most likely")).toBeTruthy(), { timeout: 4000 });
+    expect(button.getAttribute("aria-disabled")).toBe("false");
+  });
+});
+
+describe("ParamedicCard: row names", () => {
+  it("a row name that may be cut carries its full text as its title (F15)", async () => {
+    await ask(base);
+    await waitFor(() => expect(rows().length).toBe(1));
+    const name = rows()[0].querySelector(".gl-para-row-name") as HTMLElement;
+    expect(name.textContent).toBe("Your graphics driver was updated");
+    expect(name.getAttribute("title")).toBe(name.textContent);
+    const when = rows()[0].querySelector(".gl-para-row-when") as HTMLElement;
+    expect(when.getAttribute("title")).toBe(when.textContent);
+  });
+
+  it("the stylesheet lets a name wrap to two lines instead of one cut line (F15)", () => {
+    const css = readFileSync(join("src", "surfaces", "glass-rooms.css"), "utf8");
+    const rule = css.match(/\.gl-para-row-name \{[^}]*\}/)?.[0] ?? "";
+    expect(rule).toMatch(/-webkit-line-clamp: 2/);
+    expect(rule).not.toMatch(/white-space: nowrap/);
+  });
 });
 
 describe("paramedic words", () => {
@@ -684,7 +919,7 @@ describe("paramedic words", () => {
   };
   const recoveryStrings = (src: string) => {
     const o = JSON.parse(src);
-    const ev = Object.entries(o.evidence as Record<string, string>).filter(([k]) => /^recover|^roughLoad|^compyChangesDiffer/.test(k));
+    const ev = Object.entries(o.evidence as Record<string, string>).filter(([k]) => /^recover|^roughLoad|^compyChangesDiffer|^gap|^startsSeen/.test(k));
     return [...Object.values((o.recovered ?? {}) as Record<string, string>), ...ev.map(([, v]) => v)];
   };
 

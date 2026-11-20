@@ -151,10 +151,39 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
       return t("paramedic.evidence.installTimeNotRead", { when: dates.dayTime(a.seenAt) });
     case "rough-on-old-driver":
       return t("paramedic.evidence.roughOnOldDriver", { count: Number(a.count) });
+    // Each count says what it counts, and the names belong to the line they came from.
     case "starts-seen":
       return a.names
-        ? t("paramedic.evidence.startsSeen", { names: a.names, count: Number(a.count) })
-        : t("paramedic.evidence.startsSeenNoNames", { count: Number(a.count) });
+        ? t("paramedic.evidence.startsSeen", { game, names: a.names, count: Number(a.count) })
+        : t("paramedic.evidence.startsSeenNoNames", { game, count: Number(a.count) });
+    case "starts-seen-partial":
+      return a.names
+        ? t("paramedic.evidence.startsSeenPartial", { game, names: a.names, date: dates.day(a.date) })
+        : t("paramedic.evidence.startsSeenPartialNoNames", { game, date: dates.day(a.date) });
+    case "starts-seen-other":
+      return a.names
+        ? t("paramedic.evidence.startsSeenOther", { otherGame: a.otherGame, names: a.names, count: Number(a.count) })
+        : t("paramedic.evidence.startsSeenOtherNoNames", { otherGame: a.otherGame, count: Number(a.count) });
+    case "gap-change": {
+      const when = a.day === "true" ? dates.day(a.when) : dates.dayTime(a.when);
+      let what: string;
+      if (a.kind === "gpu-driver") {
+        what = a.detail ? t("paramedic.evidence.gapGpuDriverVersion", { version: a.detail }) : t("paramedic.evidence.gapGpuDriver");
+      } else if (a.kind === "other-driver") what = t("paramedic.evidence.gapOtherDriver");
+      else if (a.kind === "windows-update") {
+        what = a.detail ? t("paramedic.evidence.gapUpdateKb", { kb: a.detail }) : t("paramedic.evidence.gapUpdate");
+      } else if (a.kind === "game-files") what = t("paramedic.evidence.gapFiles", { game });
+      else what = a.detail ? t("paramedic.evidence.gapProgramNamed", { name: a.detail }) : t("paramedic.evidence.gapProgram");
+      return t("paramedic.evidence.gapChange", { what, when });
+    }
+    case "gap-build":
+      return t("paramedic.evidence.gapBuild", { from: a.from, to: a.to });
+    case "gap-unread":
+      return t("paramedic.evidence.gapUnread");
+    case "recovered-ram-rough-lower":
+      return t("paramedic.evidence.recoveredRamRoughLower", { peakGb: a.peakGb, totalGb: a.totalGb });
+    case "recovery-ram-rough-unread":
+      return t("paramedic.evidence.recoveryRamRoughUnread");
     case "load-measured":
       return t("paramedic.evidence.loadMeasured", { count: Number(a.count) });
     case "load-quiet":
@@ -246,7 +275,8 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
     case "recovery-driver-unread":
       return t("paramedic.evidence.recoveryDriverUnread");
     case "compy-changes-differ":
-      return t("paramedic.evidence.compyChangesDiffer", { from: a.from, to: a.to });    default:
+      return t("paramedic.evidence.compyChangesDiffer", { from: a.from, to: a.to });
+    default:
       return null;
   }
 }
@@ -574,12 +604,19 @@ function Fold({ title, testid, children }: { title: string; testid: string; chil
 }
 
 /** The measured problem: the title and two lines. The rest of the numbers wait behind "Show the numbers". */
-function Problem({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
+function Problem({ d, ctx, skipLater }: { d: ParamedicDiagnosis; ctx: Ctx; skipLater?: boolean }) {
   const { t, dates, game } = ctx;
   const [open, setOpen] = useState(false);
   const id = useId();
   const p = d.problem;
   if (!p) return null;
+  const count = p.sessions_affected.length;
+  // "It last ran normally" only when that session was fully measured and ran normally; otherwise the
+  // newest session that was is named for what it is, and with none the line is left out.
+  const fullAt = p.last_full_normal_at;
+  let lasted: string | null = null;
+  if (fullAt && fullAt === p.last_normal_at) lasted = t("paramedic.problem.sinceLasted", { date: dates.day(fullAt), count });
+  else if (fullAt) lasted = t("paramedic.problem.sinceLastedFull", { date: dates.day(fullAt), count });
   const spikes = p.spikes && p.now.p99_ms != null && p.before.p99_ms != null;
   const hasMore = spikes || p.avg_lower || p.other_games_affected.length > 0 || p.partial_sessions.length > 0;
   return (
@@ -590,13 +627,9 @@ function Problem({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
           {t("paramedic.problem.badge")}
         </span>
       </div>
-      <p className="gl-para-clamp">
-        {t("paramedic.problem.body", { game, count: p.sessions_affected.length, beforePct: pct(p.before.ratio), nowPct: pct(p.now.ratio) })}
-      </p>
-      <p className="gl-para-clamp">
-        {t("paramedic.problem.sinceLasted", { date: dates.day(p.last_normal_at), count: p.sessions_affected.length })}
-      </p>
-      {p.later_unjudged > 0 && <p className="gl-para-note">{t("paramedic.cantTell.backToNormal", { game })}</p>}
+      <p>{t("paramedic.problem.body", { game, count, beforePct: pct(p.before.ratio), nowPct: pct(p.now.ratio) })}</p>
+      {lasted && <p>{lasted}</p>}
+      {p.later_unjudged > 0 && !skipLater && <p className="gl-para-note">{t("paramedic.cantTell.backToNormal", { game })}</p>}
       {d.earlier_episode && (
         <p className="gl-para-note">
           {t("paramedic.problem.earlier", { from: dates.day(d.earlier_episode.from), to: dates.day(d.earlier_episode.to) })}
@@ -643,6 +676,7 @@ function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagno
   const [open, setOpen] = useState(false);
   const id = useId();
   const since = sinceText(f.since_when, ctx);
+  const name = findingTitle(f, ctx);
   const chip = chipFor(f, recovered, t);
   const why = recovered ? null : whyFirst(d, ctx);
   return (
@@ -651,8 +685,14 @@ function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagno
         <span aria-hidden="true" className="gl-para-caret">
           {open ? "▾" : "▸"}
         </span>
-        <span className="gl-para-row-name">{findingTitle(f, ctx)}</span>
-        {since && <span className="gl-para-row-when">{since}</span>}
+        <span className="gl-para-row-name" title={name ?? undefined}>
+          {name}
+        </span>
+        {since && (
+          <span className="gl-para-row-when" title={since}>
+            {since}
+          </span>
+        )}
         <span className="gl-chip" data-tone={chip.tone}>
           {chip.text}
         </span>
@@ -772,8 +812,14 @@ function Candidates({ rows, rest, d, ctx, recovered }: { rows: ParamedicFinding[
   );
 }
 
-function whatOf(f: ParamedicFinding | undefined, ctx: Ctx): string {
-  return (f && findingTitle(f, ctx)) ?? "";
+/** A candidate's name, or for a recorded change in the stretch that has no row of its own, a short plain name. */
+function nameOfId(id: string, byId: (id: string) => ParamedicFinding | undefined, ctx: Ctx): string {
+  const f = byId(id);
+  const own = f ? findingTitle(f, ctx) : null;
+  if (own) return own;
+  if (id === "game-files-change") return ctx.t("paramedic.recovered.gapGameFiles", { game: ctx.game });
+  if (id === "program-installed") return ctx.t("paramedic.recovered.gapProgram");
+  return whatText(id, ctx.t) ?? "";
 }
 
 function RecoveredAnswer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
@@ -786,9 +832,15 @@ function RecoveredAnswer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const byId = (id: string) => d.findings.find((f) => f.id === id);
   const s = r.summary;
   let verdict: string;
-  if (s.kind === "points-to") verdict = t("paramedic.recovered.pointsTo", { what: whatOf(byId(s.id), ctx) });
-  else if (s.kind === "between") verdict = t("paramedic.recovered.between", { list: s.ids.map((id) => whatOf(byId(id), ctx)).join(", ") });
-  else verdict = t("paramedic.recovered.nothing");
+  if (s.kind === "points-to") verdict = t("paramedic.recovered.pointsTo", { what: nameOfId(s.id, byId, ctx) });
+  else if (s.kind === "between") {
+    verdict = t("paramedic.recovered.between", {
+      list: s.ids
+        .map((id) => nameOfId(id, byId, ctx))
+        .filter((x) => x)
+        .join(", "),
+    });
+  } else verdict = t("paramedic.recovered.nothing");
   const also = r.also_changed.map((e) => evidenceLine(e, ctx)).filter((x): x is string => !!x);
   return (
     <>
@@ -798,10 +850,7 @@ function RecoveredAnswer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
           {t("paramedic.problem.badge")}
         </span>
       </div>
-      <p className="gl-para-clamp">
-        {t("paramedic.recovered.numbers", { beforePct: pct(r.before.ratio), roughPct: pct(r.rough.ratio), nowPct: pct(r.now.ratio) })}
-      </p>
-      <p className="gl-para-note">{r.recovered_sessions.length > 1 ? t("paramedic.recovered.basisTwo") : t("paramedic.recovered.basisOne")}</p>
+      <p>{t("paramedic.recovered.numbers", { beforePct: pct(r.before.ratio), roughPct: pct(r.rough.ratio), nowPct: pct(r.now.ratio) })}</p>
       <p className="gl-card-title" data-testid="paramedic-verdict">
         {verdict}
       </p>
@@ -860,6 +909,26 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
       </>
     );
   }
+  if (s.kind === "cant-tell" && s.why.kind === "recovery-unclear") {
+    // The problem line, then what Compy can't tell yet, then the candidates as collapsed rows.
+    const w = s.why;
+    const body = w.cap_changed
+      ? t("paramedic.cantTell.recoveryCap", { game })
+      : w.one_clear
+        ? t("paramedic.cantTell.oneClear", { game })
+        : t("paramedic.cantTell.backToNormal", { game });
+    const list = d.findings.slice(0, ROWS_SHOWN);
+    return (
+      <>
+        <Problem d={d} ctx={ctx} skipLater />
+        <h2 className="gl-card-title">{t("paramedic.cantTell.title")}</h2>
+        <p data-testid="paramedic-unclear">{body}</p>
+        <Candidates rows={list} rest={d.findings.slice(ROWS_SHOWN)} d={d} ctx={ctx} recovered={false} />
+        <Checked d={d} ctx={ctx} />
+        <CantSee d={d} ctx={ctx} />
+      </>
+    );
+  }
   if (s.kind === "cant-tell" && s.why.kind === "nothing-changed") {
     return (
       <>
@@ -890,8 +959,6 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
     body = t("paramedic.cantTell.frameCap", { game });
   } else if (s.kind === "cant-tell" && s.why.kind === "crash-not-covered") {
     body = t("paramedic.cantTell.crash");
-  } else if (s.kind === "cant-tell" && s.why.kind === "recovery-unclear") {
-    body = t("paramedic.cantTell.backToNormal", { game });
   } else if (d.game) {
     body = t("paramedic.cantTell.noGame", { game });
   } else {
@@ -908,7 +975,8 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   );
 }
 
-type View = { kind: "idle" } | { kind: "busy" } | { kind: "failed" } | { kind: "done"; d: ParamedicDiagnosis };
+/** `still`: another diagnosis kept running past every retry. That is "still checking", never a failed read. */
+type View = { kind: "idle" } | { kind: "busy" } | { kind: "still" } | { kind: "failed" } | { kind: "done"; d: ParamedicDiagnosis };
 
 export function ParamedicCard() {
   const { t } = useTranslation();
@@ -918,7 +986,15 @@ export function ParamedicCard() {
   const timer = useRef<number | undefined>(undefined);
   const refocus = useRef(false);
 
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  // After unmount nothing may run again: the retry timer is cleared and a late answer is dropped.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      window.clearTimeout(timer.current);
+    };
+  }, []);
   // After "Close" the card is its small bar again: keyboard focus goes to the bar's button, not to nowhere.
   useEffect(() => {
     if (view.kind === "idle" && refocus.current) {
@@ -930,13 +1006,18 @@ export function ParamedicCard() {
   const ask = (attempt: number) => {
     setView({ kind: "busy" });
     invoke<ParamedicDiagnosis | null>("paramedic_diagnose", { complaint: "unknown", game: null })
-      .then((d) => setView(d ? { kind: "done", d } : { kind: "failed" }))
+      .then((d) => {
+        if (alive.current) setView(d ? { kind: "done", d } : { kind: "failed" });
+      })
       .catch((e: unknown) => {
-        // Another diagnosis is still running: keep saying "still checking" and ask again shortly.
-        if (String(e) === BUSY && attempt < BUSY_RETRIES) {
+        if (!alive.current) return;
+        if (String(e) !== BUSY) {
+          setView({ kind: "failed" });
+        } else if (attempt < BUSY_RETRIES) {
+          // Another diagnosis is still running: keep saying "still checking" and ask again shortly.
           timer.current = window.setTimeout(() => ask(attempt + 1), BUSY_RETRY_MS);
         } else {
-          setView({ kind: "failed" });
+          setView({ kind: "still" });
         }
       });
   };
@@ -955,8 +1036,17 @@ export function ParamedicCard() {
       <div className="gl-card-top">
         <p className="gl-card-sub">{t("paramedic.door.sub")}</p>
         <div className="gl-para-actions">
-          <button ref={doorRef} type="button" className="gl-cta" onClick={() => ask(0)} disabled={view.kind === "busy"}>
-            {view.kind === "done" || view.kind === "failed" ? t("paramedic.door.again") : t("paramedic.door.button")}
+          {/* Busy: aria-disabled, not disabled, so keyboard focus is not lost; a click while busy is ignored. */}
+          <button
+            ref={doorRef}
+            type="button"
+            className="gl-cta"
+            aria-disabled={view.kind === "busy"}
+            onClick={() => {
+              if (view.kind !== "busy") ask(0);
+            }}
+          >
+            {view.kind === "done" || view.kind === "failed" || view.kind === "still" ? t("paramedic.door.again") : t("paramedic.door.button")}
           </button>
           {open && (
             <button type="button" className="gl-ghost" onClick={close}>
@@ -968,6 +1058,11 @@ export function ParamedicCard() {
       {view.kind === "busy" && (
         <p className="gl-card-sub" role="status">
           {t("paramedic.door.looking")}
+        </p>
+      )}
+      {view.kind === "still" && (
+        <p className="gl-card-sub" role="status">
+          {t("paramedic.door.stillChecking")}
         </p>
       )}
       {view.kind === "failed" && (
