@@ -490,6 +490,11 @@ pub(crate) struct LiveReads {
     /// readiness pass spawns one `powercfg`, not two.
     read_scheme: fn() -> Option<ObservedPlan>,
     scheme: std::cell::OnceCell<Option<ObservedPlan>>,
+    /// This rig's fingerprint, taken once per pass the first time a stamped row asks. Every row's
+    /// "is this my rig" test compares against the same print, so a pass of N stamped rows runs
+    /// `current_fingerprint` (a hardware-snapshot clone plus live RAM and disk refresh) once, not N
+    /// times. Nothing is cached across passes.
+    fingerprint: std::cell::OnceCell<crate::hardware::HwFingerprint>,
 }
 
 /// One row per service a [`disable_service_listing`] read returned: (name, state, start mode), as
@@ -525,7 +530,13 @@ impl LiveReads {
             services: std::cell::OnceCell::new(),
             read_scheme: crate::current_power_scheme,
             scheme: std::cell::OnceCell::new(),
+            fingerprint: std::cell::OnceCell::new(),
         }
+    }
+
+    /// This rig's fingerprint for this pass, read at most once.
+    fn rig_now(&self) -> &crate::hardware::HwFingerprint {
+        self.fingerprint.get_or_init(crate::hardware::current_fingerprint)
     }
 
     /// The same pass with its active-scheme read replaced. Tests pass a counting fake.
@@ -841,7 +852,7 @@ fn into_view_with(c: AppliedChange, reads: &LiveReads) -> AppliedChangeView {
     let on_this_rig = c
         .hw_fingerprint
         .as_ref()
-        .map(|f| same_rig(f, &crate::hardware::current_fingerprint()));
+        .map(|f| same_rig(f, reads.rig_now()));
     let undo_contract = resolve_rollback(&c).is_ok();
     AppliedChangeView {
         id: c.id,
