@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within, waitFor } from "@testing-library/react";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -617,5 +617,26 @@ describe("TubeChart axis", () => {
     const ticks = [...container.querySelectorAll("svg > g > text")].map((n) => n.textContent);
     expect(ticks.length).toBeGreaterThan(1);
     expect(new Set(ticks).size).toBe(ticks.length);
+  });
+});
+
+describe("Home: one entry point for 'something's wrong'", () => {
+  it("the header's 'Something went wrong' opens the Paramedic card and moves focus to it, not the Problems page", async () => {
+    const p = home({ pendingCare: care });
+    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
+    await waitFor(() => expect(invoked).toContain("paramedic_diagnose"));
+    expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
+    expect(p.onOpenProblems).not.toHaveBeenCalled();
+    // The crash banner is untouched: its own two buttons are still there.
+    expect(screen.getByRole("button", { name: "Find out why" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Not now" })).toBeTruthy();
+  });
+
+  it("with no recorded game there is no card, so the header button still opens Problems", () => {
+    const p = home({ sessions: [] });
+    expect(screen.queryByTestId("paramedic")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
+    expect(p.onOpenProblems).toHaveBeenCalledTimes(1);
+    expect(invoked).not.toContain("paramedic_diagnose");
   });
 });

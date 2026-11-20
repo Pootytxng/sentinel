@@ -3,7 +3,7 @@
 // offers steps the owner does in Windows. It runs no fix, writes nothing, and says what changed before
 // the problem, never that it caused it (Constitution 17). The engine returns codes and numbers; every
 // sentence here is a locale string. Keys are literal, one t() call per key (never composed).
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type {
@@ -645,6 +645,26 @@ function nowText(n: ParamedicNow, t: T): string {
   return t("paramedic.now.cantTell");
 }
 
+/** The disclosure caret: one 18 px chevron that rotates open off its button's aria-expanded (see glass-rooms.css). */
+function Chevron() {
+  return (
+    <span aria-hidden="true" className="gl-para-caret">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" focusable="false">
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </span>
+  );
+}
+
+/** The scroll hint's chevron: the same size, pointing down. */
+function ChevronDown() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
 /** A disclosure: a button with aria-expanded; nothing inside is rendered until it is opened. */
 function Fold({ title, testid, children }: { title: string; testid: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -652,9 +672,7 @@ function Fold({ title, testid, children }: { title: string; testid: string; chil
   return (
     <div className="gl-para-fold" data-testid={testid}>
       <button type="button" className="gl-para-fold-btn" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
-        <span aria-hidden="true" className="gl-para-caret">
-          {open ? "▾" : "▸"}
-        </span>
+        <Chevron />
         {title}
       </button>
       {open && (
@@ -747,9 +765,7 @@ function Row({ f, d, ctx, recovered }: { f: ParamedicFinding; d: ParamedicDiagno
   return (
     <div className="gl-para-row" data-testid="paramedic-candidate">
       <button type="button" className="gl-para-row-btn" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
-        <span aria-hidden="true" className="gl-para-caret">
-          {open ? "▾" : "▸"}
-        </span>
+        <Chevron />
         <span className="gl-para-row-name" title={name ?? undefined}>
           {name}
         </span>
@@ -1040,14 +1056,26 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   );
 }
 
-/** `still`: another diagnosis kept running past every retry. That is "still checking", never a failed read. */
-type View = { kind: "idle" } | { kind: "busy" } | { kind: "still" } | { kind: "failed" } | { kind: "done"; d: ParamedicDiagnosis };
+/** `still`: another diagnosis kept running past every retry. That is "still checking", never a failed read.
+ *  `busy.prev`: the answer on screen when "Check again" was pressed. It stays mounted (dimmed, aria-busy) until the new one arrives. */
+type View =
+  | { kind: "idle" }
+  | { kind: "busy"; prev: ParamedicDiagnosis | null }
+  | { kind: "still" }
+  | { kind: "failed" }
+  | { kind: "done"; d: ParamedicDiagnosis };
 
-export function ParamedicCard() {
+/** The answer region counts as "more below" when more than this many px are still hidden under its bottom edge. */
+const MORE_SLACK_PX = 4;
+
+export function ParamedicCard({ launch = 0, onOpenProblems }: { launch?: number; onOpenProblems?: () => void } = {}) {
   const { t } = useTranslation();
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
+  const [more, setMore] = useState(false);
   const doorRef = useRef<HTMLButtonElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const timer = useRef<number | undefined>(undefined);
   const refocus = useRef(false);
 
@@ -1069,7 +1097,8 @@ export function ParamedicCard() {
   }, [view.kind]);
 
   const ask = (attempt: number) => {
-    setView({ kind: "busy" });
+    // Pressing "Check again" keeps the answer on screen (dimmed) so the card does not collapse and jump the page.
+    setView((v) => ({ kind: "busy", prev: v.kind === "done" ? v.d : v.kind === "busy" ? v.prev : null }));
     invoke<ParamedicDiagnosis | null>("paramedic_diagnose", { complaint: "unknown", game: null })
       .then((d) => {
         if (alive.current) setView(d ? { kind: "done", d } : { kind: "failed" });
@@ -1087,17 +1116,47 @@ export function ParamedicCard() {
       });
   };
 
+  // The header's "Something went wrong" button raises `launch`: the card asks (when it is not already asking
+  // or showing an answer) and keyboard focus moves to it.
+  const startedFrom = useRef(0);
+  useEffect(() => {
+    if (!launch || launch === startedFrom.current) return;
+    startedFrom.current = launch;
+    const el = sectionRef.current;
+    el?.focus();
+    el?.scrollIntoView?.({ block: "nearest" });
+    if (view.kind === "idle" || view.kind === "failed" || view.kind === "still") ask(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the counter only
+  }, [launch]);
+
   const close = () => {
     window.clearTimeout(timer.current);
     refocus.current = true;
     setView({ kind: "idle" });
   };
 
-  const ctx: Ctx | null = view.kind === "done" ? { t, dates, game: view.d.game_name ?? view.d.game ?? "" } : null;
-  const open = view.kind === "done";
+  const answer = view.kind === "done" ? view.d : view.kind === "busy" ? view.prev : null;
+  const ctx: Ctx | null = answer ? { t, dates, game: answer.game_name ?? answer.game ?? "" } : null;
+  const open = answer != null;
+  const busy = view.kind === "busy";
+
+  // Whether the answer region has more below its bottom edge: drives the fade and the "More below" row.
+  const measure = useCallback(() => {
+    const el = scrollRef.current;
+    setMore(!!el && el.scrollHeight - el.scrollTop - el.clientHeight > MORE_SLACK_PX);
+  }, []);
+  useEffect(() => {
+    measure();
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => ro.disconnect();
+  }, [answer, measure]);
 
   return (
-    <section className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
+    <section ref={sectionRef} tabIndex={-1} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
       <div className="gl-card-top">
         <p className="gl-card-sub">{t("paramedic.door.sub")}</p>
         <div className="gl-para-actions">
@@ -1106,21 +1165,21 @@ export function ParamedicCard() {
             ref={doorRef}
             type="button"
             className="gl-cta"
-            aria-disabled={view.kind === "busy"}
+            aria-disabled={busy}
             onClick={() => {
               if (view.kind !== "busy") ask(0);
             }}
           >
-            {view.kind === "done" || view.kind === "failed" || view.kind === "still" ? t("paramedic.door.again") : t("paramedic.door.button")}
+            {view.kind === "done" || view.kind === "failed" || view.kind === "still" || (busy && view.prev) ? t("paramedic.door.again") : t("paramedic.door.button")}
           </button>
-          {open && (
+          {view.kind === "done" && (
             <button type="button" className="gl-ghost" onClick={close}>
               {t("paramedic.door.close")}
             </button>
           )}
         </div>
       </div>
-      {view.kind === "busy" && (
+      {busy && !view.prev && (
         <p className="gl-card-sub" role="status">
           {t("paramedic.door.looking")}
         </p>
@@ -1135,17 +1194,49 @@ export function ParamedicCard() {
           {t("paramedic.door.failed")}
         </p>
       )}
-      {view.kind === "done" && ctx && (
-        <div className="gl-para-scroll" role="region" aria-label={t("paramedic.card.scrollLabel")} tabIndex={0}>
-          <div className="gl-para-body" aria-live="polite">
-            <Answer d={view.d} ctx={ctx} />
-            {view.d.mixed_sessions.length > 0 && (
-              <p className="gl-para-note" data-testid="paramedic-mixed">
-                {t("paramedic.problem.mixed", { count: view.d.mixed_sessions.length, dates: view.d.mixed_sessions.map((s) => dates.day(s)).join(", ") })}
-              </p>
-            )}
-            <p className="gl-para-note">{t("paramedic.footer")}</p>
+      {answer && ctx && (
+        <div className="gl-para-answer">
+          <div
+            ref={scrollRef}
+            className="gl-para-scroll"
+            role="region"
+            aria-label={t("paramedic.card.scrollLabel")}
+            aria-busy={busy}
+            data-busy={busy ? "true" : undefined}
+            tabIndex={0}
+            onScroll={measure}
+          >
+            <div className="gl-para-body" aria-live="polite">
+              <Answer d={answer} ctx={ctx} />
+              {answer.mixed_sessions.length > 0 && (
+                <p className="gl-para-note" data-testid="paramedic-mixed">
+                  {t("paramedic.problem.mixed", { count: answer.mixed_sessions.length, dates: answer.mixed_sessions.map((s) => dates.day(s)).join(", ") })}
+                </p>
+              )}
+              <p className="gl-para-note">{t("paramedic.footer")}</p>
+            </div>
           </div>
+          {busy && (
+            <p className="gl-para-status" role="status">
+              {t("paramedic.door.looking")}
+            </p>
+          )}
+          {more && (
+            <>
+              <div className="gl-para-fade" aria-hidden="true" data-testid="paramedic-more-fade" />
+              <div className="gl-para-more" aria-hidden="true" data-testid="paramedic-more">
+                <ChevronDown />
+                <span>{t("paramedic.card.moreBelow")}</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {open && onOpenProblems && (
+        <div className="gl-para-foot">
+          <button type="button" className="gl-ghost" onClick={onOpenProblems}>
+            {t("paramedic.card.somethingElse")}
+          </button>
         </div>
       )}
     </section>

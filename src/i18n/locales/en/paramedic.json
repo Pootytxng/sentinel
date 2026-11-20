@@ -267,7 +267,9 @@
   "card": {
     "why": "Why this one first: {{reason}}",
     "notProven": "Compy can't prove this until you try the fix and play again.",
-    "scrollLabel": "What Compy found. Scrolls if there is more."
+    "scrollLabel": "What Compy found. Scrolls if there is more.",
+    "moreBelow": "More below",
+    "somethingElse": "Something else? Answer a few questions"
   },
   "why": {
     "crossGame": "It changed just before {{game}} got rough, and {{games}} got rough right after it too. The other changes don't line up with every rough session.",

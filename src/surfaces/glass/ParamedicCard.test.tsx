@@ -6,10 +6,12 @@ import { render, screen, fireEvent, cleanup, waitFor, within, act } from "@testi
 import { readFileSync } from "fs";
 import { join } from "path";
 
-const answer = vi.hoisted(() => ({ value: null as unknown, calls: [] as unknown[][], busyFirst: 0, reject: "" }));
+const answer = vi.hoisted(() => ({ value: null as unknown, calls: [] as unknown[][], busyFirst: 0, reject: "", gate: null as Promise<void> | null }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => {
     answer.calls.push(args);
+    // A test holds the answer back (to look at the card while it is still asking) by setting a gate.
+    if (answer.gate) return answer.gate.then(() => answer.value);
     if (answer.busyFirst > 0) {
       answer.busyFirst -= 1;
       return Promise.reject("paramedic-busy");
@@ -29,6 +31,7 @@ afterEach(() => {
   answer.calls.length = 0;
   answer.busyFirst = 0;
   answer.reject = "";
+  answer.gate = null;
 });
 
 const ref = (at: string): ParamedicSessionRef => ({
@@ -1323,5 +1326,174 @@ describe("ParamedicCard: temperature and crash history", () => {
     const keys = (o: Record<string, unknown>, p = ""): string[] =>
       Object.entries(o).flatMap(([k, v]) => (typeof v === "string" ? [p + k] : keys(v as Record<string, unknown>, `${p}${k}.`)));
     expect(keys(zh).sort()).toEqual(keys(en).sort());
+  });
+});
+
+describe("ParamedicCard: Check again, the scroll hint and the entry points", () => {
+  const scrollRegion = () => screen.getByRole("region", { name: /Scrolls if there is more/ });
+  const sizes = (el: HTMLElement, h: { scrollHeight: number; clientHeight: number; scrollTop: number }) => {
+    for (const [k, v] of Object.entries(h)) Object.defineProperty(el, k, { configurable: true, value: v });
+  };
+  const sheet = readFileSync(join("src", "surfaces", "glass-rooms.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const rule = (selector: string): string => {
+    for (const block of sheet.split("}")) {
+      const [sel, decls] = block.split("{");
+      if (sel != null && decls != null && sel.trim().replace(/\s+/g, " ") === selector) return decls;
+    }
+    return "";
+  };
+  const px = (decls: string, prop: string) => Number(decls.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*(\\d+)px`))?.[1] ?? NaN);
+
+  it("Check again keeps the answer mounted, dimmed and aria-busy, in the same box, until the new one arrives", async () => {
+    await ask(base);
+    await waitFor(() => expect(rows().length).toBe(1));
+    const region = scrollRegion();
+    const classBefore = region.className;
+    const card = screen.getByTestId("paramedic");
+    expect(card.getAttribute("data-open")).toBe("true");
+    expect(region.getAttribute("aria-busy")).toBe("false");
+
+    let release: () => void = () => {};
+    answer.gate = new Promise<void>((r) => (release = r));
+    answer.value = { ...base, game_name: "Game B" };
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+
+    // While it asks: the same element, the same classes, the old rows, the card still open.
+    expect(card.getAttribute("data-open")).toBe("true");
+    expect(scrollRegion()).toBe(region);
+    expect(region.isConnected).toBe(true);
+    expect(region.className).toBe(classBefore);
+    expect(region.getAttribute("aria-busy")).toBe("true");
+    expect(region.getAttribute("data-busy")).toBe("true");
+    expect(rows().length).toBe(1);
+    expect(screen.getByRole("status").textContent).toMatch(/Looking at your recent sessions/);
+    expect(screen.getByRole("button", { name: "Check again" }).getAttribute("aria-disabled")).toBe("true");
+    // The status is an overlay on the answer, not a line that pushes it down.
+    expect(region.parentElement!.contains(screen.getByRole("status"))).toBe(true);
+    expect(card.querySelector(":scope > p.gl-card-sub[role=status]")).toBeNull();
+
+    await act(async () => {
+      release();
+    });
+    await waitFor(() => expect(region.getAttribute("aria-busy")).toBe("false"));
+    expect(scrollRegion()).toBe(region);
+    expect(region.hasAttribute("data-busy")).toBe(false);
+    expect(card.textContent).toContain("Game B");
+  });
+
+  it("the first ask, with no earlier answer, shows the plain looking line and no answer box", async () => {
+    answer.gate = new Promise<void>(() => {});
+    await ask(base);
+    expect(screen.getByRole("status").textContent).toMatch(/Looking at your recent sessions/);
+    expect(screen.queryByRole("region", { name: /Scrolls if there is more/ })).toBeNull();
+    expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
+  });
+
+  it("a Check again that fails says so and drops the old answer instead of leaving it dimmed for ever", async () => {
+    await ask(base);
+    await waitFor(() => expect(rows().length).toBe(1));
+    answer.reject = "boom";
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    expect(screen.queryByRole("region", { name: /Scrolls if there is more/ })).toBeNull();
+  });
+
+  it("more below: a fade and a 'More below' row show while text is hidden under the bottom edge and go at the end", async () => {
+    await ask(base);
+    await waitFor(() => expect(rows().length).toBe(1));
+    const region = scrollRegion();
+    expect(screen.queryByTestId("paramedic-more")).toBeNull();
+    sizes(region, { scrollHeight: 900, clientHeight: 448, scrollTop: 0 });
+    fireEvent.scroll(region);
+    expect(screen.getByTestId("paramedic-more").textContent).toBe("More below");
+    expect(screen.getByTestId("paramedic-more-fade")).toBeTruthy();
+    // Four pixels or fewer left is the end; five is not.
+    sizes(region, { scrollHeight: 900, clientHeight: 448, scrollTop: 447 });
+    fireEvent.scroll(region);
+    expect(screen.queryByTestId("paramedic-more")).not.toBeNull();
+    sizes(region, { scrollHeight: 900, clientHeight: 448, scrollTop: 448 });
+    fireEvent.scroll(region);
+    expect(screen.queryByTestId("paramedic-more")).toBeNull();
+    expect(screen.queryByTestId("paramedic-more-fade")).toBeNull();
+    // Content that fits has nothing below it.
+    sizes(region, { scrollHeight: 300, clientHeight: 448, scrollTop: 0 });
+    fireEvent.scroll(region);
+    expect(screen.queryByTestId("paramedic-more")).toBeNull();
+  });
+
+  it("the hint and every chevron are at least 16 px, in the body ink, and a hint never takes a click or a height", () => {
+    const svgSize = (selector: string) => px(rule(selector), "width");
+    expect(svgSize(':root[data-v2="on"] .gl-para-caret svg')).toBeGreaterThanOrEqual(16);
+    expect(px(rule(':root[data-v2="on"] .gl-para-caret'), "width")).toBeGreaterThanOrEqual(16);
+    expect(svgSize(':root[data-v2="on"] .gl-para-more svg')).toBeGreaterThanOrEqual(16);
+    expect(rule(':root[data-v2="on"] .gl-para-caret')).toMatch(/color:\s*var\(--v2-text\)/);
+    expect(rule(':root[data-v2="on"] .gl-para-more')).toMatch(/color:\s*var\(--v2-text\)/);
+    for (const s of [".gl-para-fade", ".gl-para-more", ".gl-para-status"]) {
+      const b = rule(`:root[data-v2="on"] ${s}`);
+      expect(b, s).toMatch(/position:\s*absolute/);
+      expect(b, s).toMatch(/pointer-events:\s*none/);
+    }
+    // The fade is tall enough to see and ends in the card's own colour.
+    const fade = rule(':root[data-v2="on"] .gl-para-fade');
+    expect(px(fade, "height")).toBeGreaterThanOrEqual(48);
+    expect(fade).toMatch(/var\(--v2-panel-card\)/);
+    // The glyphs are SVG now: nothing of the old 6 px text caret is left.
+    const src = readFileSync(join("src", "surfaces", "glass", "ParamedicCard.tsx"), "utf8");
+    expect(src).not.toMatch(/["']▾["']|["']▸["']/);
+  });
+
+  it("the chevron turns off aria-expanded and obeys the motion setting; colours are tokens only", () => {
+    expect(rule(':root[data-v2="on"] [aria-expanded="true"] > .gl-para-caret svg')).toMatch(/rotate\(90deg\)/);
+    expect(rule(':root[data-v2="on"][data-motion="reduced"] .gl-para-caret svg')).toMatch(/transition:\s*none/);
+    expect(sheet).not.toMatch(/prefers-reduced-motion/);
+    for (const s of [".gl-para-fade", ".gl-para-more", ".gl-para-status", ".gl-para-caret", ".gl-para-scroll"]) {
+      expect(rule(`:root[data-v2="on"] ${s}`), s).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/);
+    }
+  });
+
+  it("the box reserves its scroll bar's gutter, the card has a cap but no height of its own, and Home's scroller keeps its gutter", () => {
+    expect(rule(':root[data-v2="on"] .gl-para-scroll')).toMatch(/scrollbar-gutter:\s*stable/);
+    const card = rule(':root[data-v2="on"] .gl-para-card');
+    expect(card).toMatch(/max-height:\s*var\(--para-card-max\)/);
+    expect(card).toMatch(/--para-card-max:\s*520px/);
+    expect(card).not.toMatch(/(?:^|[;\s])(?:min-)?height:/);
+    expect(rule(':root[data-v2="on"] .gl-para-answer')).toMatch(/flex:\s*0 1 auto/);
+    expect(rule(':root[data-v2="on"] .v2-content:has(.gl-room[data-room="home"])')).toMatch(/scrollbar-gutter:\s*stable/);
+  });
+
+  it("asked from outside (launch), the card asks once, takes focus, and does not ask again for the same press", async () => {
+    answer.value = base;
+    const { rerender } = render(<ParamedicCard launch={0} />);
+    expect(answer.calls.length).toBe(0);
+    rerender(<ParamedicCard launch={1} />);
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(answer.calls.length).toBe(1);
+    expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
+    // The same press again changes nothing; another press with an answer showing only moves focus back.
+    rerender(<ParamedicCard launch={1} />);
+    (screen.getByRole("button", { name: "Close" }) as HTMLElement).focus();
+    rerender(<ParamedicCard launch={2} />);
+    expect(answer.calls.length).toBe(1);
+    expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
+  });
+
+  it("'Something else? Answer a few questions' is in the open card and opens Problems; it is not on the closed bar", async () => {
+    const open = vi.fn();
+    answer.value = base;
+    render(<ParamedicCard onOpenProblems={open} />);
+    expect(screen.queryByRole("button", { name: /Something else/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    fireEvent.click(screen.getByRole("button", { name: "Something else? Answer a few questions" }));
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it("the new strings read in both languages with the same keys", () => {
+    const en = JSON.parse(readFileSync(join("src", "i18n", "locales", "en", "paramedic.json"), "utf8")).card;
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8")).card;
+    expect(en.moreBelow).toBe("More below");
+    expect(en.somethingElse).toBe("Something else? Answer a few questions");
+    expect(Object.keys(zh).sort()).toEqual(Object.keys(en).sort());
+    expect(zh.moreBelow).not.toBe(en.moreBelow);
   });
 });

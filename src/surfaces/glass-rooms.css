@@ -687,19 +687,87 @@
   align-items: center;
   gap: 8px;
 }
-/* The answer scrolls inside the card, with a visible bar and edge shadows so it is plain there is more. */
+/* The card is as tall as its content up to the cap (no height of its own, only max-height), so a short
+   answer is not padded and a long one scrolls inside. `.gl-para-answer` holds the scroll region and the
+   overlays that say there is more below it; the overlays are absolute, so they never change a height. */
+:root[data-v2="on"] .gl-para-answer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+/* The answer scrolls inside the card. A reserved gutter keeps its text from shifting when a bar appears. */
 :root[data-v2="on"] .gl-para-scroll {
+  flex: 1 1 auto;
   min-height: 0;
   margin-top: 4px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: var(--v2-muted) transparent;
-  background:
-    linear-gradient(var(--v2-panel-card) 30%, transparent) top / 100% 18px no-repeat local,
-    linear-gradient(transparent, var(--v2-panel-card) 70%) bottom / 100% 18px no-repeat local,
-    linear-gradient(var(--v2-line), transparent) top / 100% 6px no-repeat scroll,
-    linear-gradient(transparent, var(--v2-line)) bottom / 100% 6px no-repeat scroll;
+  transition: opacity 0.15s ease;
+}
+/* "Check again": the previous answer stays where it is, dimmed, until the new one replaces it. */
+:root[data-v2="on"] .gl-para-scroll[data-busy="true"] {
+  opacity: 0.5;
+}
+:root[data-v2="on"][data-motion="reduced"] .gl-para-scroll {
+  transition: none;
+}
+:root[data-v2="on"] .gl-para-status {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 4px 12px;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 999px;
+  background: var(--v2-panel-card);
+  color: var(--v2-text);
+  font-size: var(--type-label);
+  pointer-events: none;
+}
+/* More below: a fade to the card's own colour over the last 64 px, and a row with a 18 px chevron in the
+   body ink. Both sit over the region's bottom edge, left of its scroll bar, and never take a click. */
+:root[data-v2="on"] .gl-para-fade {
+  position: absolute;
+  right: 10px;
+  bottom: 0;
+  left: 0;
+  height: 64px;
+  background: linear-gradient(to bottom, transparent, var(--v2-panel-card) 85%);
+  pointer-events: none;
+}
+:root[data-v2="on"] .gl-para-more {
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--v2-text);
+  font-size: var(--type-label);
+  font-weight: 600;
+  pointer-events: none;
+}
+:root[data-v2="on"] .gl-para-more svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+:root[data-v2="on"] .gl-para-foot {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+:root[data-v2="on"] .gl-para-card:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 2px;
 }
 :root[data-v2="on"] .gl-para-scroll:focus-visible {
   outline: 2px solid var(--v2-accent);
@@ -776,10 +844,29 @@
 :root[data-v2="on"] .gl-para-row .gl-chip {
   flex: 0 0 auto;
 }
+/* One chevron, 18 px, in the body ink (not the dim ink the old 6 px glyph used); it turns when its button opens. */
 :root[data-v2="on"] .gl-para-caret {
   flex: 0 0 auto;
-  width: 1em;
-  color: var(--v2-muted);
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  color: var(--v2-text);
+}
+:root[data-v2="on"] .gl-para-caret svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.15s ease;
+}
+:root[data-v2="on"] [aria-expanded="true"] > .gl-para-caret svg {
+  transform: rotate(90deg);
+}
+:root[data-v2="on"][data-motion="reduced"] .gl-para-caret svg {
+  transition: none;
+}
+/* Home's scroll box keeps room for its bar, so opening the card (which makes the page scroll) does not
+   move the header's buttons sideways. */
+:root[data-v2="on"] .v2-content:has(.gl-room[data-room="home"]) {
+  scrollbar-gutter: stable;
 }
 :root[data-v2="on"] .gl-para-row-body {
   display: flex;

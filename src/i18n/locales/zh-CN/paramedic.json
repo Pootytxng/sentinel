@@ -267,7 +267,9 @@
   "card": {
     "why": "为什么先说这一项：{{reason}}",
     "notProven": "在你试过解决办法并再玩一次之前，Compy 无法证明这一点。",
-    "scrollLabel": "Compy 的发现。内容较多时可以滚动查看。"
+    "scrollLabel": "Compy 的发现。内容较多时可以滚动查看。",
+    "moreBelow": "下面还有",
+    "somethingElse": "是别的问题？回答几个问题"
   },
   "why": {
     "crossGame": "它恰好在 {{game}} 变卡之前发生，{{games}} 也在紧接着变卡。其他改动没有和每一次卡顿对上。",

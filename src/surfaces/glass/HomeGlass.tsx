@@ -74,6 +74,8 @@ export function HomeGlass({
   // Nothing on this page may then speak as if one was measured (round-2 review, 2026-10-31).
   const anyMeasured = sessions.some((s) => knownFps(s.avg_fps) != null);
   const [chartKey, setChartKey] = useState<string | null>(games[0]?.key ?? null);
+  // The header's "Something went wrong" raises this; the Paramedic card asks and takes focus.
+  const [launch, setLaunch] = useState(0);
   useEffect(() => {
     if (!games.some((g) => g.key === chartKey)) setChartKey(games[0]?.key ?? null);
   }, [games, chartKey]);
@@ -187,7 +189,10 @@ export function HomeGlass({
         <div className="gl-actions">
           {/* The two flagship journeys, as equals (Constitution): same weight, each with its door's
               own glyph from the dock. */}
-          <button type="button" className="gl-ghost" onClick={onOpenProblems}>
+          {/* One entry point for "something's wrong": it opens the Paramedic card below and moves focus to it.
+              With no recorded game there is no card, so it keeps opening Problems (the guided questions),
+              which the card also links to ("Something else? Answer a few questions"). */}
+          <button type="button" className="gl-ghost" onClick={noGames ? onOpenProblems : () => setLaunch((n) => n + 1)}>
             <NavGlyph name="problems" />
             {t("home.glass.actions.problem")}
           </button>
@@ -199,7 +204,7 @@ export function HomeGlass({
       </header>
 
       {/* PC Paramedic F1: the "Something's wrong" door. Idle until tapped; nothing is read on mount. */}
-      {!noGames && <ParamedicCard />}
+      {!noGames && <ParamedicCard launch={launch} onOpenProblems={onOpenProblems} />}
 
       {/* What Windows recorded (the Care observer's pointer). Its own band in the attention colour —
           never the accent fill, which on this page means "your most recent game". */}
