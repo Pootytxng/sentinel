@@ -143,6 +143,22 @@ pub(crate) struct GameStateFingerprint {
     /// processes other than the game, e.g. a stream or a capture encoder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub other_gpu_video: Option<OtherLoad>,
+    /// Which KNOWN programs (a reviewed allowlist: recorders, overlays, build tools, browsers,
+    /// launchers) were already running when the session began (`running_at_start.rs`). Ids and
+    /// categories only, never a process name. `None` = not recorded (an older row, or no frame ever
+    /// named the process): "Compy couldn't see", never "nothing was running". Additive; no
+    /// `CONTEXT_VERSION` bump because no comparison reads it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub running_at_start: Option<crate::running_at_start::RunningAtStart>,
+    /// Ticks the process-start recorder did not list because more than 4 names appeared at once.
+    /// `None` = not recorded (an older row). A reader says "some starts were not listed", never that
+    /// the list is complete.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_ticks_skipped: Option<u32>,
+    /// Process starts the recorder would have listed but did not because the session's event log was
+    /// full (50). `None` = not recorded (an older row).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_events_dropped: Option<u32>,
 
     /// When this fingerprint was collected (session start, ISO-8601), for provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -185,6 +201,20 @@ impl GameStateFingerprint {
         self.other_cpu = cpu;
         self.other_gpu_3d = gpu_3d;
         self.other_gpu_video = gpu_video;
+        self
+    }
+
+    /// PURE: attach what was running at the session's start and the process-start recorder's
+    /// counters (`StartWatch::finish`). A snapshot that was never taken stays `None`.
+    pub(crate) fn with_running_at_start(
+        mut self,
+        running: Option<crate::running_at_start::RunningAtStart>,
+        ticks_skipped: u32,
+        events_dropped: u32,
+    ) -> Self {
+        self.running_at_start = running;
+        self.start_ticks_skipped = Some(ticks_skipped);
+        self.start_events_dropped = Some(events_dropped);
         self
     }
 
@@ -268,6 +298,9 @@ impl GameStateFingerprint {
             other_cpu: None,
             other_gpu_3d: None,
             other_gpu_video: None,
+            running_at_start: None,
+            start_ticks_skipped: None,
+            start_events_dropped: None,
             collected_at: (!collected_at.trim().is_empty()).then(|| collected_at.to_string()),
             // --- Not provable in V1 → honestly unknown (documented on each field above) ---
             executable_version: None,

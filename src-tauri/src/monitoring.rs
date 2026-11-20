@@ -1360,7 +1360,10 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 }
 
                 // ── Stutter signals (capped at 50, read-only) ──
-                if live.events.len() < 50 {
+                // Read once, before this tick adds anything: a full log still lets the process diff keep
+                // COUNTING what it could not list (`start_events_dropped`), it just stops listing.
+                let at_cap = live.events.len() >= crate::running_at_start::EVENT_CAP;
+                if !at_cap {
                     if !live.ram_logged
                         && cpu.ram_total_bytes > 0
                         && cpu.ram_used_bytes as f64 / cpu.ram_total_bytes as f64 >= 0.90
@@ -1386,38 +1389,25 @@ fn start_fps_capture_locked() -> Result<(), String> {
                         }
                     }
                     live.prev_clock = gpu_clock.or(live.prev_clock);
-                    // Process starts: a names-only diff every tick (1 Hz, only while capturing),
-                    // skipping OS chatter so the insight never degrades to "svchost did it".
-                    proc_sys.refresh_processes_specifics(
-                        sysinfo::ProcessesToUpdate::All,
-                        true,
-                        sysinfo::ProcessRefreshKind::nothing(),
-                    );
-                    let names: std::collections::HashSet<String> = proc_sys
-                        .processes()
-                        .values()
-                        .map(|p| p.name().to_string_lossy().into_owned())
-                        .collect();
-                    if let Some(prev) = &live.prev_procs {
-                        let new: Vec<&String> = names.difference(prev).collect();
-                        // One launch is a signal; a big burst (login/boot) isn't a single culprit.
-                        if new.len() <= 4 {
-                            for n in new {
-                                let lower = n.to_lowercase();
-                                let base = lower.strip_suffix(".exe").unwrap_or(&lower);
-                                if base == "compy" || PROC_IGNORE.contains(&base) {
-                                    continue;
-                                }
-                                live.events.push(crate::stutter::StutterEvent {
-                                    at_secs: elapsed,
-                                    kind: "process-start".into(),
-                                    label: format!("{n} starting"),
-                                });
-                            }
-                        }
-                    }
-                    live.prev_procs = Some(names);
                 }
+                // Process starts: a names-only diff every tick (1 Hz, only while capturing),
+                // skipping OS chatter so the insight never degrades to "svchost did it". The same
+                // enumeration gives the session's one start snapshot (which KNOWN programs were
+                // already running; ids only, `running_at_start.rs`) on the first tick a frame
+                // names the process, and counts the ticks/starts the diff could not list.
+                proc_sys.refresh_processes_specifics(
+                    sysinfo::ProcessesToUpdate::All,
+                    true,
+                    sysinfo::ProcessRefreshKind::nothing(),
+                );
+                let total_procs = u32::try_from(proc_sys.processes().len()).unwrap_or(u32::MAX);
+                let names: std::collections::HashSet<String> = proc_sys
+                    .processes()
+                    .values()
+                    .map(|p| p.name().to_string_lossy().into_owned())
+                    .collect();
+                let started = live.watch.observe(names, total_procs, at_cap, elapsed, tick_game.is_some());
+                live.events.extend(started);
             }
             // Monitoring stopped (or the helper went away): a session still open ends with the wall
             // time since it began, as every session always has.
@@ -1428,18 +1418,6 @@ fn start_fps_capture_locked() -> Result<(), String> {
 
     Ok(())
 }
-
-/// OS chatter that constantly starts/stops: never the culprit, would drown the signal.
-const PROC_IGNORE: [&str; 8] = [
-    "svchost",
-    "conhost",
-    "dllhost",
-    "runtimebroker",
-    "backgroundtaskhost",
-    "wmiprvse",
-    "taskhostw",
-    "searchprotocolhost",
-];
 
 /// Everything one session folds in while it is open, and what saving it needs. Pulled out of the
 /// monitoring thread's locals so the thread can hold one of these per session (the fields and
@@ -1461,7 +1439,9 @@ struct LiveSession {
     other_cpu_acc: crate::other_load::OtherLoadAccumulator,
     other_gpu_3d_acc: crate::other_load::OtherLoadAccumulator,
     other_gpu_video_acc: crate::other_load::OtherLoadAccumulator,
-    prev_procs: Option<std::collections::HashSet<String>>,
+    /// The process-start diff, the one start snapshot and the skipped/dropped counters
+    /// (`running_at_start::StartWatch`); replaces the bare previous-names set.
+    watch: crate::running_at_start::StartWatch,
     prev_clock: Option<u32>,
     ram_logged: bool,
     /// Gaming Mode presence: a valid session slot at ANY tick marks the whole session (a
@@ -1486,7 +1466,7 @@ impl LiveSession {
             other_cpu_acc: Default::default(),
             other_gpu_3d_acc: Default::default(),
             other_gpu_video_acc: Default::default(),
-            prev_procs: None,
+            watch: Default::default(),
             prev_clock: None,
             ram_logged: false,
             gaming_mode_seen: false,
@@ -1511,8 +1491,10 @@ impl LiveSession {
             other_gpu_video_acc,
             gaming_mode_seen,
             gaming_mode_plan,
+            watch,
             ..
         } = self;
+        let (running_at_start, start_ticks_skipped, start_events_dropped) = watch.finish();
         // A fragment (a launcher / splash window, a game that died within a minute of its first
         // frame) is not a session row: same silent path as any capture under the minimum length.
         if !crate::session_boundary::worth_keeping(&ended, acc.readings_seen()) {
@@ -1543,7 +1525,8 @@ impl LiveSession {
                 Some(gaming_mode_seen),
             )
             .with_power_plan(plan_at_start, crate::actions::current_power_plan_guid())
-            .with_other_load(other_cpu_acc.finish(), other_gpu_3d_acc.finish(), other_gpu_video_acc.finish()));
+            .with_other_load(other_cpu_acc.finish(), other_gpu_3d_acc.finish(), other_gpu_video_acc.finish())
+            .with_running_at_start(running_at_start, start_ticks_skipped, start_events_dropped));
             // P7-notify (Constitution section 15, 33): a saved session toasts only when it settles a
             // decision or a state change (a Trial's after-session, a before/after verdict, a
             // regression against the game's last steady session). Otherwise the debrief waits

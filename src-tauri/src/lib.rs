@@ -17,6 +17,7 @@ mod comparability; // Measurement Platform 2.0 (Task F) — the pure session-com
 mod comparison; // M4 cross-session comparison engine (arm → finalize-delta → honest verdict).
 mod game_state; // Measurement Platform 2.0 (Task E) — additive per-session GameStateFingerprint (the honest conditions a session ran under; collects only provable fields, infers nothing).
 mod drift; // Drift Watch — notices readiness checks that were good and regressed (outside Compy).
+mod running_at_start; // Which KNOWN programs (reviewed allowlist, ids only, never a process name) were already running when a game session began, plus the process-start recorder's skipped/dropped counters. Record-only: nothing reads it yet.
 mod stutter; // Stutter Forensics — correlates a session's worst dips with concurrent signals.
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (HWiNFO/LHM/OHM) — driver-free.
 mod data_root; // #130 — the canonical data-root resolver: detects a container/junction-redirected persistence root instead of trusting the APPDATA *string*, halts on a split rather than guessing, and hands out `MutationRoot` (the capability type every Windows-mutation and receipt-write path now requires) only for a verified canonical root.
