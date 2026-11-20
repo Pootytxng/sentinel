@@ -285,7 +285,8 @@
     "unknown": "Compy couldn't see:",
     "gpuDriverChange": "Graphics driver: still {{driver}}.",
     "backgroundLoad": "Everything except the game: quiet in these sessions.",
-    "memoryPressure": "Memory: never reached {{percent}}% full in these sessions.",
+    "memoryPressure_one": "Memory: never reached {{percent}}% full in the rough session.",
+    "memoryPressure_other": "Memory: never reached {{percent}}% full in the rough sessions.",
     "settingDrift": "Settings Compy watches: no changes noticed.",
     "compyChange": "The number of changes Compy lists as on: still {{count}}.",
     "hardwareChange": "Graphics card and memory size: the same.",
@@ -322,7 +323,7 @@
     "gpuTemp": "How hot your graphics card got (it wasn't recorded in both the rough and the normal sessions)",
     "crashesUnavailable": "Whether {{game}} has closed unexpectedly before (looking took too long)",
     "crashesUnreadable": "Whether {{game}} has closed unexpectedly before (Windows' crash records couldn't be read)",
-    "crashesPartial": "Whether Windows' crash records hold more crashes of {{game}} (only some of them could be read)"
+    "crashesPartial": "Compy could only read some of Windows' crash records, and found none for {{game}} in those."
   },
   "nothingWrong": {
     "title": "Nothing looks wrong",
@@ -333,6 +334,7 @@
     "title": "Compy can't tell yet",
     "needsMore": "Compy needs {{total}} normal sessions of {{game}} to know what normal is. You have {{have}}.",
     "partial": "Compy only measured part of your last {{game}} session ({{percent}}%), so it won't judge it. Play once more with Compy running.",
+    "crash": "Crashes have their own page for now. Open Problems to see what Windows recorded.",
     "noGame": "Compy hasn't recorded {{game}} yet. Start Compy before you play.",
     "noSessions": "Compy hasn't recorded any games yet. Start Compy before you play.",
     "partialRough": "Compy only measured part of your last {{game}} session ({{percent}}%), and what it saw looked rough. Play once more with Compy running.",

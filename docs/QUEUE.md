@@ -10,6 +10,8 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - [ ] Group a crash-and-relaunch into one sitting for baselines, noise bands and real-play counts — a crash and relaunch no longer counts as two independent sessions
 - [ ] Paramedic: sessions flagged Suspected (`session_boundary::suspected_splice`) are not judged; a note says why — an old two-game row never poisons a diagnosis
 - [ ] Name the setting in "a setting Compy applied is no longer on" (needs a read-only ledger reader + a name on the drift record)
+- [ ] Crash line: say when more reports matched the program name but ran from another folder (8.3 names, \\?\ paths, junctions)
+- [ ] Mod scan: time-based release when a drive never answers
 - [ ] Use more of what Compy already records as evidence — ignore sessions flagged as mixed
 - [ ] Record what was already running when the game started (recorders, overlays, long builds) and use the background-load numbers both ways — the card can blame or clear background load
 - [ ] Read the graphics driver's own settings (Radeon via ADLX; later NVIDIA) as a "what changed" source — a changed driver setting shows up in the diagnosis

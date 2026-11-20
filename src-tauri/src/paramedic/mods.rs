@@ -111,17 +111,22 @@ pub(crate) fn dto(scan: &ModScan) -> ModsRead {
 
 /// The real scans, for the command: the diagnosed game, then (while the budget lasts) up to
 /// `MAX_OTHER_GAMES` other games' folders. Synchronous: call it from a blocking context only. Read-only.
-pub(crate) fn read_real_mods(game_exe: &str, others: &[String]) -> ModInput {
+pub(crate) fn read_real_mods(game_exe: &str, others: &[String], budget: Duration) -> ModInput {
     static OTHERS_RUNNING: AtomicBool = AtomicBool::new(false);
-    read_mods_with(game_exe, others, |raw| dto(&game_mods::scan_for_process(raw)), OTHERS_WAIT, &OTHERS_RUNNING)
+    read_mods_with(game_exe, others, |raw| dto(&game_mods::scan_for_process(raw)), OTHERS_WAIT, budget, &OTHERS_RUNNING)
 }
+
+/// Kept back from the reader budget so a verdict sent just before the caller stops waiting still arrives.
+const BUDGET_MARGIN: Duration = Duration::from_millis(60);
 
 /// The diagnosed game's folder is scanned first, on the calling thread, and its verdict is never held back
 /// by another game's folder: the others are scanned one after another on a helper thread and collected for
-/// at most `wait`. One that is late is dropped (it reads as "couldn't check" on the card, never as clean).
+/// at most `wait`, and never past what is left of the caller's `budget` (less a small margin): a game scan
+/// that finished is always delivered, never reported as "took too long" because other games were slow.
+/// One that is late is dropped (it reads as "couldn't check" on the card, never as clean).
 /// `running` keeps one helper alive at a time, so repeated presses cannot pile up scanning threads: while
 /// a previous helper still runs, the other games are simply not scanned this time.
-pub(super) fn read_mods_with(game_exe: &str, others: &[String], scan: fn(&str) -> ModsRead, wait: Duration, running: &'static AtomicBool) -> ModInput {
+pub(super) fn read_mods_with(game_exe: &str, others: &[String], scan: fn(&str) -> ModsRead, wait: Duration, budget: Duration, running: &'static AtomicBool) -> ModInput {
     let started = Instant::now();
     let game = scan(game_exe);
     let raws: Vec<String> = others.iter().take(MAX_OTHER_GAMES).cloned().collect();
@@ -145,7 +150,8 @@ pub(super) fn read_mods_with(game_exe: &str, others: &[String], scan: fn(&str) -
         running.store(false, Ordering::Release);
         return ModInput { game, others: Vec::new() };
     }
-    let deadline = Instant::now() + wait;
+    let left = budget.saturating_sub(BUDGET_MARGIN).saturating_sub(started.elapsed());
+    let deadline = Instant::now() + wait.min(left);
     let mut rest = Vec::new();
     while let Ok(one) = rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
         rest.push(one);
@@ -210,10 +216,11 @@ fn candidate(c: &Ctx, m: &ModFound) -> Cand {
     let lo = c.last_full_normal.and_then(SessionFacts::end);
     let in_window = |t: DateTime<Utc>| matches!((lo, hi), (Some(l), Some(h)) if t > l && t <= h);
     // A settings file the mod rewrites while the game runs (an overlay saving its own config) says when the
-    // game was played, not when the mod arrived: a date inside any of this game's sessions (their length
-    // plus a short grace) gives no timing. The creation date keeps its own caveat in the line.
+    // game was played, not when the mod arrived: a date inside ANY recorded session (this game's or another's,
+    // mixed or partly measured ones too; their length plus a short grace) gives no timing. The creation
+    // date keeps its own caveat in the line.
     let in_a_session = |t: DateTime<Utc>| {
-        c.sess.iter().any(|s| matches!((s.start(), s.end()), (Some(a), Some(b)) if t >= a && t <= b + chrono::Duration::seconds(SESSION_GRACE_SECS)))
+        c.inp.sessions.iter().any(|s| matches!((s.start(), s.end()), (Some(a), Some(b)) if t >= a && t <= b + chrono::Duration::seconds(SESSION_GRACE_SECS)))
     };
     // A loader that is not beside the game's exe is a file the game does not load from: no timing from it.
     let timing = m.loader_file_present

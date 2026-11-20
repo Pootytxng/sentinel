@@ -254,10 +254,10 @@ describe("ParamedicCard", () => {
   });
 
   it("an unread record is said as unread, and memory names the line the engine applied", async () => {
-    await ask({ ...base, unknowns: ["drift-unreadable", "identity-unreadable"], not_it: [{ id: "memory-pressure", args: { percent: "90" } }] });
+    await ask({ ...base, unknowns: ["drift-unreadable", "identity-unreadable"], not_it: [{ id: "memory-pressure", args: { percent: "90", count: "1" } }] });
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
-    expect(screen.getByText("Memory: never reached 90% full in these sessions.")).toBeTruthy();
+    expect(screen.getByText("Memory: never reached 90% full in the rough session.")).toBeTruthy();
     expect(screen.getByText("Its record of setting changes, which couldn't be read")).toBeTruthy();
     expect(screen.getByText("Its record of graphics driver and power plan checks, which couldn't be read")).toBeTruthy();
   });
@@ -1285,7 +1285,8 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(checked()).toContain("How hot your graphics card got");
     expect(checked()).toContain("Whether Game A has closed unexpectedly before (looking took too long)");
     expect(checked()).toContain("Windows' crash records couldn't be read");
-    expect(checked()).toContain("only some of them could be read");
+    expect(checked()).toContain("Compy could only read some of Windows' crash records, and found none for Game A in those.");
+    expect(checked()).not.toMatch(/more crashes/);
     expect(checked()).not.toMatch(/no crashes/i);
   });
 
@@ -1307,6 +1308,19 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(checked()).toContain(
       `All the crashes Compy could read have the same signature (nvwgf2umx.dll), and some happened before the earliest dated change Compy found (${day(change)}), so that change can't be the whole story for them.`,
     );
+  });
+
+  it("memory says it was checked against the rough sessions, in the plural when there were several", async () => {
+    await ask(answerOf([background()], { not_it: [{ id: "memory-pressure", args: { percent: "90", count: "3" } }] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain("Memory: never reached 90% full in the rough sessions.");
+    expect(checked()).not.toMatch(/in these sessions/);
+  });
+
+  it("a crash complaint that reaches the card gets a truthful line, not the no-game text", async () => {
+    await ask({ ...base, state: { kind: "cant-tell", why: { kind: "crash-not-covered" } }, findings: [] });
+    await waitFor(() => expect(screen.getByText("Crashes have their own page for now. Open Problems to see what Windows recorded.")).toBeTruthy());
   });
 
   it("one crash is said in the singular and carries no signature sentence", async () => {
@@ -1372,7 +1386,7 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(all.filter((s) => /probably/i.test(s))).toEqual([]);
     expect(zh.seen.gameCrashSignature).not.toMatch(/很可能|可能是/);
     // The old per-line temperature keys are gone: the one sentence is the plural pair.
-    expect([en.evidence.gpuTemp, en.checked.gpuTemp, en.seen.gpuTemp, en.cantTell.crash]).toEqual([undefined, undefined, undefined, undefined]);
+    expect([en.evidence.gpuTemp, en.checked.gpuTemp, en.seen.gpuTemp, en.checked.memoryPressure]).toEqual([undefined, undefined, undefined, undefined]);
     // The two languages carry the same keys under every group the slice touched.
     const keys = (o: Record<string, unknown>, p = ""): string[] =>
       Object.entries(o).flatMap(([k, v]) => (typeof v === "string" ? [p + k] : keys(v as Record<string, unknown>, `${p}${k}.`)));

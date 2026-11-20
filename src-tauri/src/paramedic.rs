@@ -841,7 +841,7 @@ pub(crate) async fn paramedic_diagnose(complaint: Complaint, game: Option<String
         let _flight = flight;
         let inp = read_inputs_from(&crate::compy_data_dir())?;
         let fetch = |t0, t1, exe: String| changes::read_real_changes(t0, t1, &exe);
-        let fetch_mods = |exe: String, others: Vec<String>| mods::read_real_mods(&exe, &others);
+        let fetch_mods = |exe: String, others: Vec<String>, budget: std::time::Duration| mods::read_real_mods(&exe, &others, budget);
         let fetch_crashes = |exe: String| extras::read_real_crashes(&exe);
         // A reader still running from an earlier press is not started again (that kind reads "took too long").
         static SLOTS: changes::Slots = changes::Slots::new();
@@ -1754,7 +1754,10 @@ fn detect_memory(c: &Ctx, out: &mut Out) {
         } else {
             // Every rough session had a reading, none reached the line the code applies: the card says that
             // line (the same constant), never a vaguer "nearly full".
-            out.ruled_out("memory-pressure", &[("percent", format!("{}", (RAM_FULL_FRACTION * 100.0).round() as u32))]);
+            out.ruled_out(
+                "memory-pressure",
+                &[("percent", format!("{}", (RAM_FULL_FRACTION * 100.0).round() as u32)), ("count", c.affected.len().to_string())],
+            );
         }
         return;
     }

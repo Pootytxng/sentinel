@@ -387,7 +387,7 @@ function ruledOutLine(n: ParamedicRuledOut, { t, dates, game }: Ctx): string | n
     case "background-load":
       return t("paramedic.checked.backgroundLoad");
     case "memory-pressure":
-      return t("paramedic.checked.memoryPressure", { percent: a.percent });
+      return t("paramedic.checked.memoryPressure", { percent: a.percent, count: Number(a.count ?? 1) });
     case "memory-as-full":
       return t("paramedic.checked.memoryAsFull", { peakGb: a.peakGb, totalGb: a.totalGb, basePeakGb: a.basePeakGb });
     case "setting-drift":
@@ -1052,6 +1052,8 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
       : t("paramedic.cantTell.partial", { game, percent: s.why.percent });
   } else if (s.kind === "cant-tell" && s.why.kind === "frame-cap-changed") {
     body = t("paramedic.cantTell.frameCap", { game });
+  } else if (s.kind === "cant-tell" && s.why.kind === "crash-not-covered") {
+    body = t("paramedic.cantTell.crash");
   } else if (d.game) {
     body = t("paramedic.cantTell.noGame", { game });
   } else {

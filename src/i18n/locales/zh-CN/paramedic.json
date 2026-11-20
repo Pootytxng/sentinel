@@ -285,7 +285,8 @@
     "unknown": "Compy 看不到：",
     "gpuDriverChange": "显卡驱动：仍是 {{driver}}。",
     "backgroundLoad": "游戏以外的程序：这几次游戏中很安静。",
-    "memoryPressure": "内存：这几次游戏中从未达到 {{percent}}% 满。",
+    "memoryPressure_one": "内存：在出问题的那次游戏中从未达到 {{percent}}% 满。",
+    "memoryPressure_other": "内存：在出问题的这几次游戏中从未达到 {{percent}}% 满。",
     "settingDrift": "Compy 监视的设置：没有注意到变化。",
     "compyChange": "Compy 列出的已开启更改数量：仍是 {{count}} 项。",
     "hardwareChange": "显卡和内存容量：没有变化。",
@@ -322,7 +323,7 @@
     "gpuTemp": "显卡温度有多高（出问题的那次和正常的几次没有都记录到）",
     "crashesUnavailable": "{{game}} 以前是否意外关闭过（查看用时过长）",
     "crashesUnreadable": "{{game}} 以前是否意外关闭过（Windows 的崩溃记录读不了）",
-    "crashesPartial": "Windows 的崩溃记录里是否还有更多 {{game}} 的崩溃（只读到了其中一部分）"
+    "crashesPartial": "Compy 只读到了 Windows 崩溃记录的一部分，其中没有找到 {{game}} 的崩溃。"
   },
   "nothingWrong": {
     "title": "看起来一切正常",
@@ -333,6 +334,7 @@
     "title": "Compy 暂时还无法判断",
     "needsMore": "Compy 需要 {{game}} 的 {{total}} 次正常游戏记录，才知道它平时是什么样。你现在有 {{have}} 次。",
     "partial": "Compy 只测量了你最近一次 {{game}} 游戏的一部分（{{percent}}%），所以不会据此判断。请在 Compy 运行的情况下再玩一次。",
+    "crash": "崩溃问题目前有单独的页面。请打开“问题”查看 Windows 的记录。",
     "noGame": "Compy 还没有记录过 {{game}}。请在玩游戏前先启动 Compy。",
     "noSessions": "Compy 还没有记录过任何游戏。请在玩游戏前先启动 Compy。",
     "partialRough": "Compy 只测量了你最近一次 {{game}} 游戏的一部分（{{percent}}%），而它看到的部分显得很卡。请在 Compy 运行的情况下再玩一次。",

@@ -718,11 +718,12 @@ pub(crate) fn diagnose_with_changes<F>(
 where
     F: FnOnce(DateTime<Utc>, DateTime<Utc>, String) -> ChangeRead + Send + 'static,
 {
-    diagnose_with_readings(inp, complaint, game, budget, fetch, None::<fn(String, Vec<String>) -> ModInput>)
+    diagnose_with_readings(inp, complaint, game, budget, fetch, None::<fn(String, Vec<String>, Duration) -> ModInput>)
 }
 
-/// `diagnose_with_changes` plus the scan of the game's folder: `fetch_mods` gets the game's process name and
-/// the process names of other games that also got rough, and runs on its own thread beside the Windows
+/// `diagnose_with_changes` plus the scan of the game's folder: `fetch_mods` gets the game's process name,
+/// the process names of other games that also got rough, and the whole reader budget (so it never holds a
+/// finished verdict back past it), and runs on its own thread beside the Windows
 /// readers, so both wait inside the SAME `budget`. A scan that is still running when the budget ends is left
 /// to finish by itself (each scan bounds itself) and the mods read as `took-too-long`, never as clean; the
 /// Windows readers are never delayed by it.
@@ -736,7 +737,7 @@ pub(crate) fn diagnose_with_readings<F, G>(
 ) -> Diagnosis
 where
     F: FnOnce(DateTime<Utc>, DateTime<Utc>, String) -> ChangeRead + Send + 'static,
-    G: FnOnce(String, Vec<String>) -> ModInput + Send + 'static,
+    G: FnOnce(String, Vec<String>, Duration) -> ModInput + Send + 'static,
 {
     diagnose_with_all(inp, complaint, game, budget, fetch, fetch_mods, None::<fn(String) -> CrashRead>, None)
 }
@@ -804,7 +805,7 @@ pub(crate) fn diagnose_with_all<F, G, H>(
 ) -> Diagnosis
 where
     F: FnOnce(DateTime<Utc>, DateTime<Utc>, String) -> ChangeRead + Send + 'static,
-    G: FnOnce(String, Vec<String>) -> ModInput + Send + 'static,
+    G: FnOnce(String, Vec<String>, Duration) -> ModInput + Send + 'static,
     H: FnOnce(String) -> CrashRead + Send + 'static,
 {
     let probe = diagnose(&inp, complaint, game);
@@ -813,7 +814,7 @@ where
     let mods_rx = fetch_mods.map(|f| {
         let others = mods::other_rough_games(&inp, &probe);
         let game = g.clone();
-        spawn_reader("paramedic-mods", slots.map(|s| &s.mods), move || f(game, others))
+        spawn_reader("paramedic-mods", slots.map(|s| &s.mods), move || f(game, others, budget))
     });
     let crashes_rx = fetch_crashes.map(|f| {
         let game = g.clone();

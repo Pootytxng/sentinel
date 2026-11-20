@@ -898,7 +898,7 @@ fn print_live_diagnosis() {
             None,
             changes::CHANGES_BUDGET,
             |a, b, g| changes::read_real_changes(a, b, &g),
-            Some(|exe: String, others: Vec<String>| mods::read_real_mods(&exe, &others)),
+            Some(|exe: String, others: Vec<String>, budget: std::time::Duration| mods::read_real_mods(&exe, &others, budget)),
             Some(|exe: String| extras::read_real_crashes(&exe)),
             None,
         );
@@ -1487,6 +1487,22 @@ mod windows_records {
         assert_eq!((minor.args["n"].as_str(), minor.args["m"].as_str()), ("2", "1"));
         assert_eq!(d.findings.iter().filter(|f| f.id == "windows-update").count(), 1, "never one finding per definition update");
         assert!(d.not_it.iter().all(|n| n.id != "windows-update"));
+    }
+
+    #[test]
+    fn the_hotter_candidate_ranks_below_a_dated_windows_update_and_a_dated_game_files_change() {
+        for (event, id) in [(update("2026-10-07T03:00:00Z", "KB5001234", "quality"), "windows-update"), (game_files("2026-10-05T18:00:00Z"), "game-files-change")] {
+            let mut sess = scenario();
+            let last = sess.len() - 1;
+            for (i, s) in sess.iter_mut().enumerate() {
+                s.peak_gpu_temp_c = Some(if i == last { 95 } else { 80 });
+            }
+            let d = found(sess, report(vec![event]));
+            let order = ids(&d);
+            let (dated, hotter) = (order.iter().position(|x| *x == id), order.iter().position(|x| *x == "gpu-hotter"));
+            assert!(dated.is_some() && hotter.is_some() && dated < hotter, "{id}: {order:?}");
+            assert!(!finding(&d, "gpu-hotter").in_play, "{id}: the hotter reading carries no timing");
+        }
     }
 
     #[test]
@@ -3120,6 +3136,29 @@ mod graphics_mods {
     }
 
     #[test]
+    fn a_settings_write_inside_a_mixed_or_another_games_session_gives_no_timing_either() {
+        let mut base = steady(4);
+        base.push(facts(HI, 600, 600, 100.0, 30.0));
+        let timed = |extra: SessionFacts, written: &str| {
+            let mut sess = base.clone();
+            sess.push(extra);
+            let m = ModFound { first_seen: at(OLD), settings_changed: at(written), ..strong("OptiScaler") };
+            mod_finding(&run_on(sess, read(ModsVerdict::Found(vec![m])))).in_play
+        };
+        // This game's own session flagged as possibly two games (left out of the judged sessions).
+        let mut mixed = facts("2026-10-07T12:00:00Z", 600, 600, 100.0, 50.0);
+        mixed.mixed = true;
+        assert!(!timed(mixed.clone(), "2026-10-07T12:05:00Z"), "inside a mixed session: no timing");
+        assert!(!timed(mixed.clone(), "2026-10-07T12:12:00Z"), "its grace counts too");
+        assert!(timed(mixed, "2026-10-07T12:12:01Z"), "past the grace it is outside");
+        // Another game's session.
+        let mut other = facts("2026-10-07T12:00:00Z", 600, 600, 100.0, 50.0);
+        other.game = "h".into();
+        assert!(!timed(other.clone(), "2026-10-07T12:05:00Z"), "inside another game's session: no timing");
+        assert!(timed(other, "2026-10-07T11:59:59Z"));
+    }
+
+    #[test]
     fn a_mod_never_ranks_above_a_finding_with_other_support_and_is_never_likely() {
         let mut sess = steady_on_old("g", 10);
         sess.push(rough_on_new("g", 10));
@@ -3265,13 +3304,13 @@ mod graphics_mods {
         static RUNNING: AtomicBool = AtomicBool::new(false);
         let others = vec!["quick.exe".to_string(), "slow.exe".to_string()];
         let t = std::time::Instant::now();
-        let got = mods::read_mods_with("g.exe", &others, scan_by_name, Duration::from_millis(100), &RUNNING);
+        let got = mods::read_mods_with("g.exe", &others, scan_by_name, Duration::from_millis(100), Duration::from_secs(5), &RUNNING);
         assert!(t.elapsed() < Duration::from_millis(350), "the late scan is dropped, not waited for: {:?}", t.elapsed());
         assert_eq!(got.game, read(ModsVerdict::Found(vec![strong("ReShade")])), "the diagnosed game's verdict is kept");
         assert_eq!(got.others.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>(), [intelligence::pretty_game_name("quick.exe")]);
         // The late one is still being scanned: another press does not start a second helper.
         assert!(RUNNING.load(Ordering::Acquire));
-        let again = mods::read_mods_with("g.exe", &others, scan_by_name, Duration::from_millis(100), &RUNNING);
+        let again = mods::read_mods_with("g.exe", &others, scan_by_name, Duration::from_millis(100), Duration::from_secs(5), &RUNNING);
         assert!(again.others.is_empty() && matches!(again.game, ModsRead::Read(ModsVerdict::Found(_))));
         // Once it ends the next press scans the others again.
         let end = std::time::Instant::now() + Duration::from_secs(3);
@@ -3279,8 +3318,50 @@ mod graphics_mods {
             std::thread::sleep(Duration::from_millis(20));
         }
         assert!(!RUNNING.load(Ordering::Acquire));
-        let next = mods::read_mods_with("g.exe", &["quick.exe".to_string()], scan_by_name, Duration::from_millis(300), &RUNNING);
+        let next = mods::read_mods_with("g.exe", &["quick.exe".to_string()], scan_by_name, Duration::from_millis(300), Duration::from_secs(5), &RUNNING);
         assert_eq!(next.others.len(), 1);
+    }
+
+    fn scan_late_game(raw: &str) -> ModsRead {
+        match raw {
+            "late.exe" => {
+                std::thread::sleep(Duration::from_millis(350));
+                read(ModsVerdict::NoKnownMod)
+            }
+            _ => {
+                std::thread::sleep(Duration::from_millis(3000));
+                read(ModsVerdict::NoKnownMod)
+            }
+        }
+    }
+
+    #[test]
+    fn a_game_scan_that_finished_late_in_the_budget_is_used_even_when_another_games_scan_is_slow() {
+        use std::sync::atomic::AtomicBool;
+        static RUNNING: AtomicBool = AtomicBool::new(false);
+        // The game scan ends at ~350 ms of a 500 ms budget; the other game's scan takes seconds. The wait for
+        // the others is cut to what the budget has left, so the caller still gets the game's verdict.
+        let others = vec!["other.exe".to_string()];
+        let t = std::time::Instant::now();
+        let got = mods::read_mods_with("late.exe", &others, scan_late_game, Duration::from_millis(500), Duration::from_millis(500), &RUNNING);
+        assert!(t.elapsed() < Duration::from_millis(500), "returns inside the budget: {:?}", t.elapsed());
+        assert_eq!(got.game, read(ModsVerdict::NoKnownMod));
+        assert!(got.others.is_empty());
+        // Through the whole path: the verdict is used, not reported as took-too-long.
+        use super::super::changes::{diagnose_with_readings, ChangeRead};
+        let d = diagnose_with_readings(
+            inputs(two_games()),
+            Complaint::Slow,
+            Some("g"),
+            Duration::from_millis(600),
+            |_, _, _| ChangeRead::NotRead,
+            Some(|_: String, _: Vec<String>, budget: Duration| {
+                static RUNNING2: AtomicBool = AtomicBool::new(false);
+                mods::read_mods_with("late.exe", &["other.exe".to_string()], scan_late_game, Duration::from_millis(500), budget, &RUNNING2)
+            }),
+        );
+        assert!(!d.unknowns.contains(&"mods-unavailable"), "{:?}", d.unknowns);
+        assert!(d.not_it.iter().any(|n| n.id == "graphics-mod"));
     }
 
     #[test]
@@ -3299,7 +3380,7 @@ mod graphics_mods {
                 Some("g"),
                 Duration::from_millis(budget),
                 |_, _, _| ChangeRead::NotRead,
-                Some(move |_: String, _: Vec<String>| {
+                Some(move |_: String, _: Vec<String>, _: Duration| {
                     m.fetch_add(1, Ordering::SeqCst);
                     std::thread::sleep(Duration::from_millis(mods_sleep));
                     ModInput { game: read(ModsVerdict::NoKnownMod), others: Vec::new() }
@@ -3335,7 +3416,7 @@ mod graphics_mods {
             Some("g"),
             Duration::from_millis(500),
             |_, _, _| ChangeRead::NotRead,
-            Some(|_: String, _: Vec<String>| -> ModInput { panic!("the scan died") }),
+            Some(|_: String, _: Vec<String>, _: Duration| -> ModInput { panic!("the scan died") }),
             None::<fn(String) -> CrashRead>,
             Some(slots),
         );
@@ -3358,7 +3439,7 @@ mod graphics_mods {
             Some("g"),
             Duration::from_secs(2),
             |_, _, _| ChangeRead::NotRead,
-            Some(move |game: String, others: Vec<String>| {
+            Some(move |game: String, others: Vec<String>, _: Duration| {
                 tx.send((game, others)).expect("sent");
                 ModInput { game: read(ModsVerdict::NoKnownMod), others: Vec::new() }
             }),
@@ -3374,7 +3455,7 @@ mod graphics_mods {
             Some("g"),
             Duration::from_millis(80),
             |_, _, _| ChangeRead::NotRead,
-            Some(|_: String, _: Vec<String>| {
+            Some(|_: String, _: Vec<String>, _: Duration| {
                 std::thread::sleep(Duration::from_millis(700));
                 ModInput { game: read(ModsVerdict::NoKnownMod), others: Vec::new() }
             }),
@@ -3388,7 +3469,7 @@ mod graphics_mods {
             Some("g"),
             Duration::from_secs(2),
             |_, _, _| ChangeRead::NotRead,
-            Some(|_: String, _: Vec<String>| -> ModInput { panic!("the scan died") }),
+            Some(|_: String, _: Vec<String>, _: Duration| -> ModInput { panic!("the scan died") }),
         );
         assert!(dead.unknowns.contains(&"mods-unavailable") && dead.state == DiagnosisState::CantTell { why: CantTellWhy::NothingChanged });
         // Nothing to explain: the scan is never started.
@@ -3399,7 +3480,7 @@ mod graphics_mods {
             Some("g"),
             Duration::from_secs(2),
             |_, _, _| ChangeRead::NotRead,
-            Some(move |g: String, _: Vec<String>| {
+            Some(move |g: String, _: Vec<String>, _: Duration| {
                 let _ = tx.send(g);
                 ModInput::default()
             }),
@@ -3510,6 +3591,11 @@ mod temperature_and_crashes {
         assert_eq!(f.evidence[0].args.get("base").map(String::as_str), Some("80"));
         assert!(matches!(&f.fix, Fix::Steps { code: "gpu-hotter", .. }));
         assert!(!unchanged_ids(&eleven).contains(&"gpu-temp"));
+        // The candidate's own evidence is the sentence: it is not also listed under "also looked at".
+        assert!(!seen_ids(&eleven).contains(&"gpu-temp"), "the sentence appears once");
+        // Between 6 and 10 above: no candidate, so the line sits under "also looked at".
+        let nine = run(temps(Some(89), Some(80)));
+        assert!(seen_ids(&nine).contains(&"gpu-temp") && !ids(&nine).contains(&"gpu-hotter"));
     }
 
     #[test]
@@ -3579,8 +3665,9 @@ mod temperature_and_crashes {
         b.peak_gpu_temp_c = Some(88);
         v.extend([a, b]);
         let d = run(v);
-        let s = d.seen.iter().find(|s| s.id == "gpu-temp").expect("said");
-        assert_eq!((s.args["rough"].as_str(), s.args["count"].as_str()), ("88", "2"), "the count is of rough sessions with a reading");
+        // 88 is 18 above the median: the sentence is the candidate's evidence (said once, not under "also looked at").
+        let e = &d.findings.iter().find(|f| f.id == "gpu-hotter").expect("a candidate").evidence[0];
+        assert_eq!((e.args["rough"].as_str(), e.args["count"].as_str()), ("88", "2"), "the count is of rough sessions with a reading");
     }
 
     // ---- crashes ----
@@ -3795,7 +3882,7 @@ mod temperature_and_crashes {
             s.push(facts(HI, 600, 600, 100.0, 30.0));
             inputs(s)
         };
-        let none = || None::<fn(String, Vec<String>) -> ModInput>;
+        let none = || None::<fn(String, Vec<String>, Duration) -> ModInput>;
         let ok = diagnose_with_all(scenario(), Complaint::Slow, Some("g"), Duration::from_secs(2), |_, _, _| ChangeRead::NotRead, none(), Some(|exe: String| {
             assert_eq!(exe, "g", "the reader is told which game it is for");
             history(vec![sig("2026-10-02T08:00:00Z")])

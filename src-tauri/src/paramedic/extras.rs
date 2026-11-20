@@ -9,8 +9,9 @@
 //!   numbers whatever the outcome (Measured), in one place only.
 //! - Within `TEMP_SAME_C` of that median: that one line sits under "Unchanged"; otherwise under "also looked at".
 //! - More than `TEMP_HOTTER_C` above it: a candidate ("ran hotter than usual"), Possible at most. It has no
-//!   timing (a peak reading says nothing about WHEN the card started running hotter), and it carries a
-//!   contradiction (`c1`) when any rough session's peak was within `TEMP_SAME_C` of the median.
+//!   timing (a peak reading says nothing about WHEN the card started running hotter) and no contradiction
+//!   flag; its own evidence line is the temperature sentence, so the line is not also listed under
+//!   "also looked at" (the sentence appears once).
 //! - A reading missing on either side is a "Compy couldn't see" line, never an all-clear.
 //! - Crashes: the count and first date for the diagnosed game, from the reports Compy could read (a partial
 //!   read says "at least" and the line itself carries the limit). Only when every readable crash has the same
@@ -106,16 +107,15 @@ pub(super) fn detect_temperature(c: &Ctx, out: &mut Out) {
     let args = [("rough", rough.to_string()), ("base", base.to_string()), ("count", rough_peaks.len().to_string())];
     let over = rough - base;
     // ONE line says both numbers (the same sentence wherever it sits): under "Unchanged" when the rough peak is
-    // about the same, under "also looked at" otherwise. It is never said twice.
+    // about the same, under "also looked at" when it is somewhat higher, and as the evidence of the
+    // "ran hotter than usual" candidate when it is much higher. It is never said twice.
     if over <= TEMP_SAME_C {
         out.ruled_out("gpu-temp", &args);
-    } else {
+    } else if over <= TEMP_HOTTER_C {
         out.see("gpu-temp", &args);
-    }
-    if over > TEMP_HOTTER_C {
+    } else {
         // One measured size with no timing: a peak reading does not say when the card began running hotter,
-        // so it is Possible at most and ranks with the other sizes. A rough session whose peak stayed close to
-        // the normal figure weighs against it.
+        // so it is Possible at most and ranks below every dated change.
         out.cands.push(Cand {
             id: "gpu-hotter",
             t: false,
@@ -124,7 +124,7 @@ pub(super) fn detect_temperature(c: &Ctx, out: &mut Out) {
             confounded: false,
             m: true,
             r: false,
-            c1: rough_peaks.iter().any(|&p| p - base <= TEMP_SAME_C),
+            c1: false,
             since: When::Unknown,
             fix: steps("gpu-hotter", &[]),
             evidence: vec![ev(EvidenceKind::Measured, "gpu-temp", "sessions", false, &args)],
