@@ -1494,7 +1494,10 @@ impl LiveSession {
             watch,
             ..
         } = self;
-        let (running_at_start, start_ticks_skipped, start_events_dropped) = watch.finish();
+        // The counters are trimmed to the session's end exactly as `events` is just below.
+        let counters_end = (ended.reason != crate::session_boundary::SessionEnd::CaptureStopped)
+            .then(|| u32::try_from(duration_secs).unwrap_or(u32::MAX));
+        let (running_at_start, start_ticks_skipped, start_events_dropped) = watch.finish(counters_end);
         // A fragment (a launcher / splash window, a game that died within a minute of its first
         // frame) is not a session row: same silent path as any capture under the minimum length.
         if !crate::session_boundary::worth_keeping(&ended, acc.readings_seen()) {

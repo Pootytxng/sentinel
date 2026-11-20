@@ -22,6 +22,8 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - [ ] First-run and empty states for a new user — a new PC gets a clear first screen, not blank cards
 - [ ] Signing, privacy policy and EULA — the installer is signed and the legal text is published
 - [ ] Rewrite docs/product/ROADMAP.md around Layer 1 — the roadmap matches §38
+- [ ] Export Snapshot: redact process-start program names that are not on the known-programs list
+- [ ] verify the NVIDIA / AMD overlay and Game Bar image names on real installs
 
 ## LATER
 - [ ] Layer 2: game-specific known issues for the user's game, hardware and driver

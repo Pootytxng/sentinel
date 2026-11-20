@@ -17,6 +17,27 @@ use serde_json::{json, Value};
 use crate::history::APPLIABLE_REC_IDS;
 use crate::compy_data_dir;
 
+/// `game_state` keys that say which programs were running (`running_at_start.rs`) and how complete
+/// the process-start list is. They stay in the local session row and are NOT part of the report a
+/// user may share: a list that can include a torrent client, meeting apps and developer tools says
+/// more about the person than this report needs.
+const SHARED_EXPORT_OMITS: [&str; 3] = ["running_at_start", "start_ticks_skipped", "start_events_dropped"];
+
+/// PURE: the session rows as the shared export carries them, without the keys above. Everything else
+/// (including how process-start events are exported today) is unchanged.
+pub(crate) fn redact_session_rows(mut sessions: Value) -> Value {
+    if let Some(rows) = sessions.as_array_mut() {
+        for row in rows {
+            if let Some(gs) = row.get_mut("game_state").and_then(Value::as_object_mut) {
+                for key in SHARED_EXPORT_OMITS {
+                    gs.remove(key);
+                }
+            }
+        }
+    }
+    sessions
+}
+
 #[derive(Serialize)]
 pub(crate) struct ExportResult {
     path: String,
@@ -819,8 +840,9 @@ pub(crate) fn export_report(
         serde_json::to_value(crate::history::get_applied_changes()).unwrap_or(Value::Null);
     let readiness =
         serde_json::to_value(crate::readiness::get_game_readiness()).unwrap_or(Value::Null);
-    let sessions =
-        serde_json::to_value(crate::sessions::get_session_summaries()).unwrap_or(Value::Null);
+    let sessions = redact_session_rows(
+        serde_json::to_value(crate::sessions::get_session_summaries()).unwrap_or(Value::Null),
+    );
     let diagnostics =
         serde_json::to_value(crate::diagnostics::get_diagnostics()).unwrap_or(Value::Null);
     let rules_source = crate::recommendations::get_rules_source().to_string();

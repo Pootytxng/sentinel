@@ -148,7 +148,7 @@ pub(crate) struct GameStateFingerprint {
     /// categories only, never a process name. `None` = not recorded (an older row, or no frame ever
     /// named the process): "Compy couldn't see", never "nothing was running". Additive; no
     /// `CONTEXT_VERSION` bump because no comparison reads it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "crate::running_at_start::lenient")]
     pub running_at_start: Option<crate::running_at_start::RunningAtStart>,
     /// Ticks the process-start recorder did not list because more than 4 names appeared at once.
     /// `None` = not recorded (an older row). A reader says "some starts were not listed", never that
