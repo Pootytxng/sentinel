@@ -1743,3 +1743,18 @@ describe("ParamedicCard: programs already open at the start", () => {
     expect(screen.getByText("Compy didn't record how busy your PC was in these sessions.")).toBeTruthy();
   });
 });
+
+describe("ParamedicCard: sittings counted together", () => {
+  it("says once how many times a closed-and-reopened game was counted as one session, in the singular and the plural", async () => {
+    await ask({ ...base, findings: [base.findings[0]], seen: [{ id: "sitting-merged", args: { count: "1" } }] });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.getByText("Once, the game closed and was opened again within 10 minutes. Compy counted those launches as one session.")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/crash/i);
+    cleanup();
+    await ask({ ...base, findings: [base.findings[0]], seen: [{ id: "sitting-merged", args: { count: "3" } }] });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.getByText("3 times, the game closed and was opened again within 10 minutes. Compy counted each of those as one session.")).toBeTruthy();
+  });
+});

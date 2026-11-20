@@ -210,6 +210,10 @@ pub(crate) struct SessionFacts {
     /// per-session evidence count, and the card says so in one note line.
     #[serde(default)]
     mixed: bool,
+    /// Why the session stopped (`session_boundary::SessionEnd`). `None` = not recorded (an older row): such a
+    /// row is never joined to the one after it, because Compy cannot tell a relaunch from a new sitting.
+    #[serde(default)]
+    ended: Option<crate::session_boundary::SessionEnd>,
 }
 
 /// A time Compy looked at the PC's identity (an `IdentitySnapshot`, reduced).
@@ -691,12 +695,66 @@ fn judge_game(sess: &[&SessionFacts]) -> Vec<Judgement> {
     out
 }
 
-/// One game's sessions, oldest first. A session whose start cannot be read is left out, never guessed at.
-fn game_sessions<'a>(inp: &'a DiagnoseInputs, game: &str) -> Vec<&'a SessionFacts> {
-    // A session the capture flag marks as possibly two games is not one of the game's sessions here.
+/// A launch that follows the end of an earlier one by no more than this, after the earlier one's process
+/// exited, is the same sitting: the player closed the game (or it closed) and opened it again.
+pub(crate) const SITTING_GAP_MINUTES: i64 = 10;
+
+/// PURE. Groups one game's rows (oldest first) into sittings, as lists of indices. A row joins the one before
+/// it only when that row's recorded end is `ProcessExited` (the game's process went away) and this row began
+/// within `SITTING_GAP_MINUTES` of that row's end. A row with no recorded end (an older row), one that ended
+/// because monitoring was stopped, or one whose process identity changed is never joined: Compy cannot tell
+/// those from a fresh sitting.
+fn group_sittings(rows: &[&SessionFacts]) -> Vec<Vec<usize>> {
+    let mut out: Vec<Vec<usize>> = Vec::new();
+    for i in 0..rows.len() {
+        let joins = i > 0
+            && rows[i - 1].ended == Some(crate::session_boundary::SessionEnd::ProcessExited)
+            && matches!((rows[i - 1].end(), rows[i].start()), (Some(e), Some(b)) if b - e <= chrono::Duration::minutes(SITTING_GAP_MINUTES));
+        match out.last_mut() {
+            Some(g) if joins => g.push(i),
+            _ => out.push(vec![i]),
+        }
+    }
+    out
+}
+
+/// A sitting's one row: its longest judgeable launch (the earliest on a tie), else its longest launch. The
+/// short launch before a relaunch is not the sitting's value.
+fn sitting_value(rows: &[&SessionFacts], group: &[usize]) -> usize {
+    let longest = |it: &mut dyn Iterator<Item = usize>| it.max_by_key(|&i| (rows[i].duration_secs, std::cmp::Reverse(i)));
+    longest(&mut group.iter().copied().filter(|&i| rows[i].judgeable())).or_else(|| longest(&mut group.iter().copied())).unwrap_or(group[0])
+}
+
+/// One game's raw rows, oldest first. A session whose start cannot be read is left out, never guessed at, and
+/// a session the capture flag marks as possibly two games is not one of the game's sessions here.
+fn game_rows<'a>(inp: &'a DiagnoseInputs, game: &str) -> Vec<&'a SessionFacts> {
     let mut v: Vec<&SessionFacts> = inp.sessions.iter().filter(|s| !s.mixed && same_game(&s.game, game) && s.start().is_some()).collect();
     v.sort_by_key(|s| s.start());
     v
+}
+
+/// One game's sessions, oldest first, one per sitting (see `group_sittings`, `sitting_value`).
+fn game_sessions<'a>(inp: &'a DiagnoseInputs, game: &str) -> Vec<&'a SessionFacts> {
+    let rows = game_rows(inp, game);
+    group_sittings(&rows).iter().map(|g| rows[sitting_value(&rows, g)]).collect()
+}
+
+/// When the sitting that `s` stands for began and ended: from its first launch's start to its last launch's
+/// end, so a window or gap never counts a launch of the sitting as the time between sessions.
+fn sitting_span(inp: &DiagnoseInputs, s: &SessionFacts) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
+    let rows = game_rows(inp, &s.game);
+    let groups = group_sittings(&rows);
+    let Some(g) = groups.iter().find(|g| g.iter().any(|&i| rows[i].started_at == s.started_at)) else {
+        return (s.start(), s.end());
+    };
+    let (first, last) = (rows[g[0]], rows[g[g.len() - 1]]);
+    (first.start(), last.end().max(s.end()))
+}
+
+/// How many of this game's sittings held more than one launch.
+fn merged_sittings(inp: &DiagnoseInputs, game: &str) -> usize {
+    let rows = game_rows(inp, game);
+    group_sittings(&rows).iter().filter(|g| g.len() > 1).count()
 }
 
 /// This game's sessions of the last `RECENT_GAME_DAYS` that were left out as possibly holding two games.
@@ -994,6 +1052,7 @@ pub(crate) fn facts_from(s: &crate::sessions::SessionSummary) -> SessionFacts {
         // No crash marks are passed: the engine reads none, read-only or otherwise, so the flag runs on the
         // session's own series (a row written by a build that holds one process identity is Clean without looking).
         mixed: matches!(crate::session_boundary::suspected_splice(s, &[]), crate::session_boundary::Splice::Suspected(_)),
+        ended: s.ended,
         cap: match crate::noise_floor::cap_read(s) {
             crate::noise_floor::CapRead::Uncapped => CapState::Uncapped,
             crate::noise_floor::CapRead::Capped { at_fps } => CapState::Capped { at_fps },
@@ -1076,6 +1135,11 @@ struct Ctx<'a> {
 }
 
 impl<'a> Ctx<'a> {
+    /// When the sitting a session stands for began and ended (see sitting_span).
+    fn span_of(&self, s: &SessionFacts) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
+        sitting_span(self.inp, s)
+    }
+
     /// Sessions of any game, judged Normal, that started between the last normal session's end and the
     /// first rough one's start: they ran fine while whatever changed was already (or not yet) in place.
     fn normal_in_window(&self) -> Vec<&'a SessionFacts> {
@@ -1225,7 +1289,7 @@ fn explain<'a>(
     let base_sess: Vec<&SessionFacts> = base.ids.iter().map(|&i| sess[i]).collect();
     let affected: Vec<&SessionFacts> = run.iter().map(|&i| sess[i]).collect();
     let (baseline_newest, first_bad) = (base_sess[base_sess.len() - 1], sess[first]);
-    let (Some(win_start), Some(win_end)) = (baseline_newest.end(), first_bad.start()) else {
+    let (Some(win_start), Some(win_end)) = (sitting_span(inp, baseline_newest).1, sitting_span(inp, first_bad).0) else {
         return;
     };
     let others = other_games(inp, game_key);
@@ -1315,6 +1379,7 @@ fn explain<'a>(
     extras::detect_crashes(&ctx, &mut out);
     start_unknowns(&ctx, &mut out);
     start_listing_note(&ctx, &mut out);
+    sitting_note(&ctx, &mut out);
     d.limits = changes::limits(&ctx);
     if inp.drift_unread {
         out.unknown("drift-unreadable");
@@ -1912,6 +1977,16 @@ fn start_listing_note(c: &Ctx, out: &mut Out) {
         out.see("starts-dropped", &[("n", dropped.to_string())]);
     } else if skipped > 0 {
         out.see("starts-skipped", &[]);
+    }
+}
+
+/// One line, under what Compy checked, when launches of this game were counted together: a game closed and
+/// opened again within `SITTING_GAP_MINUTES` is one session for baselines, counts and recovery. It says how
+/// many times that happened and nothing about why the game closed.
+fn sitting_note(c: &Ctx, out: &mut Out) {
+    let n = merged_sittings(c.inp, &c.first_bad.game);
+    if n > 0 {
+        out.see("sitting-merged", &[("count", n.to_string())]);
     }
 }
 

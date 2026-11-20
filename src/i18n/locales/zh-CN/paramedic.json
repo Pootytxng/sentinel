@@ -525,7 +525,9 @@
     "crashesByName": "（按程序名匹配）",
     "crashesVersions": "这些崩溃跨越了游戏的 {{n}} 个版本。",
     "startsDropped": "Compy 在中途停止了记录程序启动（还有 {{n}} 个没有记录）。",
-    "startsSkipped": "Compy 没有记录同一时刻启动的一些程序。"
+    "startsSkipped": "Compy 没有记录同一时刻启动的一些程序。",
+    "sittingMerged_one": "有 1 次，游戏关闭后在 10 分钟内又重新打开。Compy 把这几次启动算作一次游戏。",
+    "sittingMerged_other": "有 {{count}} 次，游戏关闭后在 10 分钟内又重新打开。Compy 把每一次这样的情况都算作一次游戏。"
   },
   "limit": {
     "cantSee": "Compy 看不到{{what}}：{{why}}。",

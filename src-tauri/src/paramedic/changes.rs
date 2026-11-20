@@ -75,7 +75,7 @@ struct Span {
 }
 
 fn span(c: &Ctx) -> Span {
-    Span { lo: c.last_normal.end().unwrap_or(c.win_start), hi: c.win_end }
+    Span { lo: c.span_of(c.last_normal).1.unwrap_or(c.win_start), hi: c.win_end }
 }
 
 fn bucket(e: &ChangeEvent, sp: &Span) -> Bucket {

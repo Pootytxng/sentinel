@@ -57,6 +57,7 @@ fn facts(at: &str, dur: u64, samples: u32, avg: f64, low1: f64) -> SessionFacts 
         start_events_dropped: None,
         cap: CapState::Unknown,
         mixed: false,
+        ended: None,
     }
 }
 
@@ -4373,4 +4374,153 @@ fn the_card_sentence_for_a_program_already_running_is_the_modules_own_sentence()
     let p = ProgramPresence { id: "obs-studio", name: "OBS Studio", always_resident: false };
     let expect = already_running_sentence(&p, "Game X").expect("not resident");
     assert_eq!(line.replace("{{name}}", "OBS Studio").replace("{{game}}", "Game X"), expect);
+}
+
+// ==== a crash-and-relaunch is one sitting (g4 commit 3) ==========================================
+use crate::session_boundary::SessionEnd;
+
+fn ended(mut s: SessionFacts, e: Option<SessionEnd>) -> SessionFacts {
+    s.ended = e;
+    s
+}
+
+/// A 600 s launch at 10:00 that ended as `first_end`, then a 600 s launch at `relaunch_at`.
+fn pair(first_end: Option<SessionEnd>, relaunch_at: &str) -> Vec<SessionFacts> {
+    vec![ended(facts("2026-10-03T10:00:00Z", 600, 600, 100.0, 50.0), first_end), facts(relaunch_at, 600, 600, 100.0, 50.0)]
+}
+
+fn groups_of(rows: &[SessionFacts]) -> Vec<Vec<usize>> {
+    let r: Vec<&SessionFacts> = rows.iter().collect();
+    group_sittings(&r)
+}
+
+#[test]
+fn a_relaunch_joins_only_after_an_exited_process_and_within_ten_minutes_pinned_both_sides() {
+    use SessionEnd::{CaptureStopped, ProcessExited, TargetChanged};
+    // The first launch ends at 10:10:00.
+    assert_eq!(groups_of(&pair(Some(ProcessExited), "2026-10-03T10:19:59Z")), [vec![0, 1]], "9:59 after the end joins");
+    assert_eq!(groups_of(&pair(Some(ProcessExited), "2026-10-03T10:20:00Z")), [vec![0, 1]], "exactly ten minutes joins");
+    assert_eq!(groups_of(&pair(Some(ProcessExited), "2026-10-03T10:20:01Z")), [vec![0], vec![1]], "one second past ten minutes does not");
+    for other in [None, Some(CaptureStopped), Some(TargetChanged)] {
+        assert_eq!(groups_of(&pair(other, "2026-10-03T10:12:00Z")), [vec![0], vec![1]], "{other:?} is never a relaunch Compy can vouch for");
+    }
+    // A chain joins link by link, and stops at the first link that is not one.
+    let chain = |mid: Option<SessionEnd>| {
+        vec![
+            ended(facts("2026-10-03T10:00:00Z", 600, 600, 100.0, 50.0), Some(ProcessExited)),
+            ended(facts("2026-10-03T10:12:00Z", 600, 600, 100.0, 50.0), mid),
+            facts("2026-10-03T10:30:00Z", 600, 600, 100.0, 50.0),
+        ]
+    };
+    assert_eq!(groups_of(&chain(Some(ProcessExited))), [vec![0, 1, 2]]);
+    assert_eq!(groups_of(&chain(Some(CaptureStopped))), [vec![0, 1], vec![2]]);
+    assert!(groups_of(&[]).is_empty());
+}
+
+#[test]
+fn a_sittings_value_is_its_longest_judgeable_launch_else_its_longest() {
+    let row = |at: &str, dur: u64, samples: u32| facts(at, dur, samples, 100.0, 50.0);
+    let pick = |rows: &[SessionFacts]| {
+        let r: Vec<&SessionFacts> = rows.iter().collect();
+        let g: Vec<usize> = (0..r.len()).collect();
+        sitting_value(&r, &g)
+    };
+    let short = row("2026-10-03T10:00:00Z", 20, 20);
+    assert!(!short.judgeable());
+    // A short launch before a judgeable relaunch is not the sitting's value.
+    assert_eq!(pick(&[short.clone(), row("2026-10-03T10:05:00Z", 600, 600)]), 1);
+    // Two judgeable launches: the longer one, wherever it is.
+    assert_eq!(pick(&[row("2026-10-03T10:00:00Z", 900, 900), row("2026-10-03T10:20:00Z", 600, 600)]), 0);
+    assert_eq!(pick(&[row("2026-10-03T10:00:00Z", 600, 600), row("2026-10-03T10:20:00Z", 900, 900)]), 1);
+    // A tie keeps the earliest.
+    assert_eq!(pick(&[row("2026-10-03T10:00:00Z", 600, 600), row("2026-10-03T10:20:00Z", 600, 600)]), 0);
+    // A longer launch that cannot be judged does not beat a judgeable one.
+    assert_eq!(pick(&[row("2026-10-03T10:00:00Z", 600, 600), row("2026-10-03T10:20:00Z", 5000, 10)]), 0);
+    // Nothing judgeable: the longest launch.
+    assert_eq!(pick(&[short.clone(), row("2026-10-03T10:05:00Z", 40, 40)]), 1);
+}
+
+fn sittings_episode(first: SessionFacts, relaunch: SessionFacts, end: Option<SessionEnd>) -> Vec<SessionFacts> {
+    let mut sess = steady(4);
+    sess.push(ended(first, end));
+    sess.push(relaunch);
+    sess
+}
+
+#[test]
+fn a_rough_launch_followed_by_a_normal_relaunch_is_one_normal_sitting_and_the_other_way_round_is_rough() {
+    let exited = Some(SessionEnd::ProcessExited);
+    let rough = |at: &str, dur: u64| facts(at, dur, dur as u32, 100.0, 30.0);
+    let normal = |at: &str, dur: u64| facts(at, dur, dur as u32, 100.0, 50.0);
+    // Rough 600 s launch, then a normal 1800 s relaunch four minutes later: the sitting's value is the normal one.
+    let merged = sittings_episode(rough("2026-10-20T10:00:00Z", 600), normal("2026-10-20T10:14:00Z", 1800), exited);
+    let d = diagnose(&inputs(merged.clone()), Complaint::Slow, Some("g"));
+    assert!(d.problem.is_none() && !matches!(d.state, DiagnosisState::Found), "{:?}", d.state);
+    // The same two rows with no recorded end are two sessions: nothing is merged away.
+    let mut apart = merged;
+    apart[4].ended = None;
+    assert_eq!(game_sessions(&inputs(apart.clone()), "g").len(), 6);
+    assert_eq!(game_sessions(&inputs(sittings_episode(apart[4].clone(), apart[5].clone(), exited)), "g").len(), 5);
+    // Normal short launch after a rough long one: the sitting is rough.
+    let rough_sitting = sittings_episode(rough("2026-10-20T10:00:00Z", 1800), normal("2026-10-20T10:35:00Z", 600), exited);
+    let d = diagnose(&inputs(rough_sitting), Complaint::Slow, Some("g"));
+    assert_eq!(d.problem.as_ref().map(|p| p.sessions_affected.len()), Some(1), "{:?}", d.state);
+}
+
+#[test]
+fn a_sitting_counts_once_as_a_baseline_session() {
+    let exited = Some(SessionEnd::ProcessExited);
+    let mut sess = steady(3);
+    sess[1].ended = exited;
+    sess[2].started_at = "2026-10-02T10:12:00Z".into();
+    let inp = inputs(sess);
+    assert_eq!(game_sessions(&inp, "g").len(), 2, "three launches, two sittings");
+    let mut sess = inp.sessions.clone();
+    sess[1].ended = None;
+    assert_eq!(game_sessions(&inputs(sess), "g").len(), 3);
+}
+
+#[test]
+fn a_window_between_sessions_runs_from_the_end_of_the_last_launch_to_the_start_of_the_first() {
+    let exited = Some(SessionEnd::ProcessExited);
+    let rows = vec![
+        ended(facts("2026-10-03T10:00:00Z", 600, 600, 100.0, 50.0), exited),
+        facts("2026-10-03T10:12:00Z", 1800, 1800, 100.0, 50.0),
+        facts("2026-10-05T10:00:00Z", 600, 600, 100.0, 50.0),
+    ];
+    let inp = inputs(rows);
+    let rep = game_sessions(&inp, "g")[0];
+    assert_eq!(rep.started_at, "2026-10-03T10:12:00Z", "the longer relaunch is the value");
+    let (a, b) = sitting_span(&inp, rep);
+    assert_eq!(a.map(iso), Some("2026-10-03T10:00:00Z".to_string()), "from the first launch");
+    assert_eq!(b.map(iso), Some("2026-10-03T10:42:00Z".to_string()), "to the last launch's end");
+    // A lone session spans itself.
+    let lone = game_sessions(&inp, "g")[1];
+    assert_eq!(sitting_span(&inp, lone).0, lone.start());
+    assert_eq!(sitting_span(&inp, lone).1, lone.end());
+}
+
+#[test]
+fn the_card_says_once_how_many_sittings_were_counted_together_and_never_when_none_were() {
+    let build = |merge: bool| {
+        let mut sess = load_episode(5, [Some(2.0), None, None], [Some(30.0), None, None], 0);
+        if merge {
+            sess[0].ended = Some(SessionEnd::ProcessExited);
+            sess[1].started_at = "2026-10-01T10:12:00Z".into();
+        }
+        run_load(sess)
+    };
+    let d = build(true);
+    let line = d.seen.iter().filter(|s| s.id == "sitting-merged").collect::<Vec<_>>();
+    assert_eq!(line.len(), 1);
+    assert_eq!(line[0].args.get("count").map(String::as_str), Some("1"));
+    assert!(build(false).seen.iter().all(|s| s.id != "sitting-merged"));
+}
+
+#[test]
+fn facts_read_why_a_session_ended_and_an_old_row_reads_as_not_recorded() {
+    let mut row = summary();
+    row.ended = Some(SessionEnd::ProcessExited);
+    assert_eq!(facts_from(&row).ended, Some(SessionEnd::ProcessExited));
+    assert_eq!(facts_from(&summary()).ended, None);
 }

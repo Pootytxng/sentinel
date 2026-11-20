@@ -553,6 +553,8 @@ function seenLine(s: ParamedicRuledOut, { t, dates, game }: Ctx): string | null 
       return t("paramedic.seen.startsDropped", { n: Number(a.n) });
     case "starts-skipped":
       return t("paramedic.seen.startsSkipped");
+    case "sitting-merged":
+      return t("paramedic.seen.sittingMerged", { count: Number(a.count) });
     case "game-crash-signature":
       return t("paramedic.seen.gameCrashSignature", { module: a.module, what: t("paramedic.seen.crashBeforeWhat", { date: dates.day(a.before) }) });
     case "mod-settings-only":

@@ -161,7 +161,7 @@ pub(super) fn earlier_episode(sess: &[&SessionFacts], judged: &[Judgement], firs
 /// The last rough session's end and the first recovered session's start.
 fn gap_bounds(c: &Ctx, rec: &[&SessionFacts]) -> (DateTime<Utc>, DateTime<Utc>) {
     let rough_last = c.affected.iter().copied().max_by_key(|s| s.start()).unwrap_or(c.first_bad);
-    let lo = rough_last.end().or_else(|| rough_last.start()).unwrap_or(c.win_end);
+    let lo = c.span_of(rough_last).1.or_else(|| rough_last.start()).unwrap_or(c.win_end);
     let hi = rec.iter().filter_map(|s| s.start()).min().unwrap_or(lo);
     (lo, hi)
 }

@@ -525,7 +525,9 @@
     "crashesByName": " (matched by program name)",
     "crashesVersions": " These crashes are across {{n}} versions of the game.",
     "startsDropped": "Compy stopped listing program starts partway through ({{n}} more were not listed).",
-    "startsSkipped": "Compy didn't list some program starts that happened at the same moment."
+    "startsSkipped": "Compy didn't list some program starts that happened at the same moment.",
+    "sittingMerged_one": "Once, the game closed and was opened again within 10 minutes. Compy counted those launches as one session.",
+    "sittingMerged_other": "{{count}} times, the game closed and was opened again within 10 minutes. Compy counted each of those as one session."
   },
   "limit": {
     "cantSee": "Compy couldn't see {{what}}: {{why}}.",
