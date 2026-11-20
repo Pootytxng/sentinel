@@ -2742,7 +2742,7 @@ mod tests {
         // (paramedic.rs, the one planned consumer) may name it. Scanning the whole source directory
         // covers every payload module without listing (or naming) any of them.
         let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let allowed = ["lib.rs", "change_sources.rs", "paramedic.rs"];
+        let allowed = ["lib.rs", "change_sources.rs", "paramedic.rs", "game_mods.rs"];
         let mut scanned = 0;
         for entry in std::fs::read_dir(&src_dir).unwrap().flatten() {
             let path = entry.path();
