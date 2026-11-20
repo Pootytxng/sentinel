@@ -139,34 +139,75 @@ pub(super) fn detect_crashes(c: &Ctx, out: &mut Out) {
         CrashRead::Read(h) if !h.listed => out.unknown("crashes-unreadable"),
         CrashRead::Read(h) => {
             let game = c.first_bad.game.as_str();
-            // The program name must match; when the report says where the exe was and the game's install
-            // folder is known, that path must lie under it.
-            let mine: Vec<&CrashFact> = h.crashes.iter().filter(|k| same_game(&k.app, game) && k.path_ok != Some(false)).collect();
-            let Some(since) = mine.iter().map(|k| k.when).min() else {
-                // No count line to carry the limit: say what could not be seen.
-                if h.partial {
-                    out.unknown("crashes-partial");
+            match crash_outcome(h, CrashMatch::Program(game), earliest_change(&out.cands)) {
+                CrashOutcome::Line(l) => {
+                    out.see("game-crashes", &l.args);
+                    if let Some((module, before)) = l.signature {
+                        out.see("game-crash-signature", &[("module", module), ("before", before)]);
+                    }
                 }
-                return;
-            };
-            let mut args = vec![("n", mine.len().to_string()), ("since", iso(since))];
-            if h.partial {
-                // The line itself says "at least": a partial read only gives a lower bound.
-                args.push(("partial", "true".to_string()));
-            }
-            if mine.iter().any(|k| k.path_ok != Some(true)) {
-                args.push(("byName", "true".to_string()));
-            }
-            let versions: BTreeSet<String> = mine.iter().filter_map(|k| k.version.as_deref()).map(|v| v.trim().to_ascii_lowercase()).filter(|v| !v.is_empty()).collect();
-            if versions.len() > 1 {
-                args.push(("versions", versions.len().to_string()));
-            }
-            out.see("game-crashes", &args);
-            if let Some((module, before)) = shared_signature(&mine, &out.cands) {
-                out.see("game-crash-signature", &[("module", module), ("before", before)]);
+                // No count line to carry the limit: say what could not be seen.
+                CrashOutcome::NoneCounted { partial } => {
+                    if partial {
+                        out.unknown("crashes-partial");
+                    }
+                }
             }
         }
     }
+}
+
+/// How a crash report is tied to the game asked about.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum CrashMatch<'a> {
+    /// The program name must match; when the report says where the exe was and the game's install folder is
+    /// known, that path must lie under it (the measured flow, and a first look for a game Compy has recorded).
+    Program(&'a str),
+    /// Only the install folder is known (a game picked from Steam's list): the report's exe path must lie
+    /// under it. A report with no path could belong to the game, so it makes the read partial.
+    InstallFolder,
+}
+
+/// The crash line for a game: the numbers the card words, from the crash facts alone.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CrashLine {
+    /// `n`, `since`, and `partial` / `byName` / `versions` when they apply (the card's own args).
+    pub args: Vec<(&'static str, String)>,
+    /// `(module, date of the earliest dated change)`: only under the signature conditions below.
+    pub signature: Option<(String, String)>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum CrashOutcome {
+    Line(CrashLine),
+    /// No crash of this game was counted. `partial`: the read did not cover everything, so this is not
+    /// "no crashes".
+    NoneCounted { partial: bool },
+}
+
+/// THE crash rule, shared by the measured flow and the first look (one code path, one set of sentences).
+/// `earliest` is the earliest REAL dated change (see `earliest_change`): the signature line needs one.
+pub(crate) fn crash_outcome(h: &CrashHistory, how: CrashMatch<'_>, earliest: Option<DateTime<Utc>>) -> CrashOutcome {
+    let mine: Vec<&CrashFact> = match how {
+        CrashMatch::Program(game) => h.crashes.iter().filter(|k| same_game(&k.app, game) && k.path_ok != Some(false)).collect(),
+        CrashMatch::InstallFolder => h.crashes.iter().filter(|k| k.path_ok == Some(true)).collect(),
+    };
+    let unattributable = matches!(how, CrashMatch::InstallFolder) && h.crashes.iter().any(|k| k.path_ok.is_none());
+    let partial = h.partial || unattributable;
+    let Some(since) = mine.iter().map(|k| k.when).min() else { return CrashOutcome::NoneCounted { partial } };
+    let mut args = vec![("n", mine.len().to_string()), ("since", iso(since))];
+    if partial {
+        // The line itself says "at least": a partial read only gives a lower bound.
+        args.push(("partial", "true".to_string()));
+    }
+    if matches!(how, CrashMatch::Program(_)) && mine.iter().any(|k| k.path_ok != Some(true)) {
+        args.push(("byName", "true".to_string()));
+    }
+    let versions: BTreeSet<String> = mine.iter().filter_map(|k| k.version.as_deref()).map(|v| v.trim().to_ascii_lowercase()).filter(|v| !v.is_empty()).collect();
+    if versions.len() > 1 {
+        args.push(("versions", versions.len().to_string()));
+    }
+    CrashOutcome::Line(CrashLine { args, signature: shared_signature(&mine, earliest) })
 }
 
 /// The earliest a REAL dated candidate change happened: an exact date, or the date a mod's files were
@@ -186,12 +227,12 @@ fn earliest_change(cands: &[Cand]) -> Option<DateTime<Utc>> {
 
 /// `Some((module, date of the earliest dated change))` only when BOTH hold: two or more crashes, all
 /// with the same faulting module and exception code; and at least one crash predates that dated change.
-fn shared_signature(crashes: &[&CrashFact], cands: &[Cand]) -> Option<(String, String)> {
+fn shared_signature(crashes: &[&CrashFact], earliest: Option<DateTime<Utc>>) -> Option<(String, String)> {
     let first = crashes.first()?;
     let (module, code) = (first.module.as_deref()?, first.code.as_deref()?);
     let same = crashes.len() >= 2
         && crashes.iter().all(|k| k.module.as_deref().is_some_and(|m| m.eq_ignore_ascii_case(module)) && k.code.as_deref().is_some_and(|x| x.eq_ignore_ascii_case(code)));
-    let earliest = earliest_change(cands)?;
+    let earliest = earliest?;
     let predates = crashes.iter().any(|k| k.when < earliest);
     (same && predates).then(|| (module.to_string(), iso(earliest)))
 }

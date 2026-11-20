@@ -99,6 +99,7 @@
     "allow-overlay-visible",
     "allow-paramedic-diagnose",
     "allow-paramedic-first-look",
+    "allow-paramedic-list-games",
     "allow-preview-receipt-payload",
     "allow-preview-support-evidence",
     "allow-priorities-from",

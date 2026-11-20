@@ -757,11 +757,11 @@ impl Slots {
 }
 
 /// A reader that has been started, or the reason it was not (`took-too-long`: the previous one still runs).
-type Started<T> = Result<Option<std::sync::mpsc::Receiver<T>>, &'static str>;
+pub(super) type Started<T> = Result<Option<std::sync::mpsc::Receiver<T>>, &'static str>;
 
 /// Runs `f` on its own named thread and returns the channel it answers on (`Ok(None)` when no thread could
 /// start). With a `slot`, only one such thread runs at a time: the flag clears when the thread ends, even by a panic.
-fn spawn_reader<T: Send + 'static>(name: &str, slot: Option<&'static std::sync::atomic::AtomicBool>, f: impl FnOnce() -> T + Send + 'static) -> Started<T> {
+pub(super) fn spawn_reader<T: Send + 'static>(name: &str, slot: Option<&'static std::sync::atomic::AtomicBool>, f: impl FnOnce() -> T + Send + 'static) -> Started<T> {
     use std::sync::atomic::Ordering;
     if let Some(s) = slot {
         if s.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
@@ -782,7 +782,7 @@ fn spawn_reader<T: Send + 'static>(name: &str, slot: Option<&'static std::sync::
 
 /// Waits for a reader inside what is left of the shared budget. A reader that is late or died is
 /// `Err("took-too-long" / "reader-failed")`, never an empty answer.
-fn collect_reader<T>(rx: Started<T>, budget: Duration, started: std::time::Instant) -> Result<T, &'static str> {
+pub(super) fn collect_reader<T>(rx: Started<T>, budget: Duration, started: std::time::Instant) -> Result<T, &'static str> {
     let Some(rx) = rx? else { return Err("reader-failed") };
     rx.recv_timeout(budget.saturating_sub(started.elapsed())).map_err(|e| match e {
         std::sync::mpsc::RecvTimeoutError::Timeout => "took-too-long",

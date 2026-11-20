@@ -1,27 +1,31 @@
-//! The day-one answer (design M5, slice S1): what changed on this PC around when it started, for a user
-//! with no usable history. Read-only: it reads Windows' own dated records through
-//! `change_sources::changes_between` (whole PC, no game) and writes nothing, stores nothing about the
-//! user's answer, and starts no process of its own.
+//! The day-one answer (design M5, slices S1-S3): what changed on this PC around when it started, for a user
+//! with no usable history, for the whole PC or for one picked game. Read-only: it reads Windows' own dated
+//! records through `change_sources::changes_between`, the crash and mod readers the measured flow uses, and
+//! writes nothing, stores nothing about the user's answers, and starts no process of its own.
 //!
 //! What it says and refuses to say:
 //! - Every row is a dated fact with `Certainty::Possible` at most and `EvidenceKind::Known`; nothing is
 //!   called a problem or a cause, and nothing is ordered by likelihood (newest first inside a group).
 //! - A kind whose source was unread, partly read, not asked or not covered back to the window start is a
 //!   limit line, never "nothing changed". "None" is said per kind, only for a complete read.
-//! - "It's always been like this" reads nothing and lists no change.
+//! - "It's always been like this" lists no change; the game's crash records and folder are still read.
+//! - A picked game's crash history and graphics-mod verdict come from the SAME rules and readers as the
+//!   measured flow (`extras::crash_outcome`, `mods::dto`), so the same inputs give the same sentences.
 //!
 //! The engine returns codes, ids and numbers; the card owns every sentence (locales `paramedic.firstLook`).
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::changes::{status_limits, Limit, CHANGES_BUDGET};
+use super::changes::{collect_reader, spawn_reader, status_limits, Limit, Slots, CHANGES_BUDGET};
+use super::extras::{crash_dto, crash_outcome, CrashMatch, CrashOutcome, CrashRead};
+use super::mods::{CouldNot, ModFound, ModsRead, ModsVerdict};
 use super::{iso, Certainty, EvidenceKind};
-use crate::change_sources::{self, ChangeEvent, ChangeKind, ChangeReport, KindStatus, Precision};
+use crate::change_sources::{self, ChangeEvent, ChangeKind, ChangeReport, GameRef, KindStatus, Precision, SteamLookup, UnreadableReason};
 
 // The outer wait must outlast each reader's own budget, or a slow source would read "took too long" for all
 // three kinds instead of giving its own partial line (pinned here, at compile time).
@@ -43,11 +47,15 @@ pub(crate) enum Since {
     DontKnow,
 }
 
-/// Which game to look at. S1 only has the whole PC; the game picker (S2) adds variants here.
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+/// Which game to look at: nothing picked (the whole PC), a game Compy has recorded (its program name), or a
+/// game from Steam's list (its app id; `name` is only the name the card showed, used if Steam's record of it
+/// cannot be read again).
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum FirstLookGame {
     WholePc,
+    Seen { process: String },
+    Steam { app_id: u32, #[serde(default)] name: Option<String> },
 }
 
 /// The window read for a choice, as a number of days back from now. A lead is included on purpose: a
@@ -87,17 +95,42 @@ pub(crate) struct Change {
     pub how: &'static str,
 }
 
+/// The game's crash records Compy could read, as numbers (`n`, `since`, and `partial` / `byName` /
+/// `versions` when they apply: the measured flow's own args) and the same-signature facts under its own
+/// conditions.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct Crashes {
+    pub args: BTreeMap<&'static str, String>,
+    pub signature_module: Option<String>,
+    pub signature_before: Option<String>,
+}
+
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub(crate) struct FirstLook {
     pub told: Told,
+    /// The display name of the picked game; none for the whole PC.
+    pub game: Option<String>,
     /// False for "always": no change list was made, by choice.
     pub changes_listed: bool,
-    /// Graphics driver, Windows updates: the things that sit in a game's path. Newest first.
+    /// Graphics driver, Windows updates, the game's files, a graphics mod dated in the window: the things
+    /// that sit in a game's path. Newest first.
     pub touch_games: Vec<Change>,
     /// Other drivers, programs, minor updates. Newest first.
     pub other_changes: Vec<Change>,
     /// Kinds read COMPLETELY with nothing in the window: `gpu-driver`, `windows-update`, `programs`.
     pub none: Vec<&'static str>,
+    /// Steam's last recorded update of the picked game when it is OLDER than the window (read completely).
+    pub game_files_since: Option<String>,
+    /// The picked game's crash records, when any were counted.
+    pub crashes: Option<Crashes>,
+    /// Windows' crash records were read completely and none is the picked game's.
+    pub crashes_none: bool,
+    /// Facts about the PC or the game's folder with their dates or numbers (not a change in the window).
+    pub looks_off: Vec<Change>,
+    /// The picked game's folder was scanned completely and holds no mod Compy knows.
+    pub mods_none: bool,
+    /// Mods whose settings or data files (not a loader) sit in the picked game's folder.
+    pub mods_settings_only: Vec<&'static str>,
     /// What Compy could not see, per kind; the card words each.
     pub limits: Vec<Limit>,
     /// Every asked kind was read completely (so "no dated change" may be said when the lists are empty).
@@ -111,6 +144,44 @@ pub(crate) enum Reading {
     Report(Box<ChangeReport>),
     /// `took-too-long` or `reader-failed`: every kind is unread.
     Unavailable(&'static str),
+}
+
+/// What Steam said about the picked game, for the limit lines.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) enum SteamState {
+    /// No game picked.
+    #[default]
+    NotAsked,
+    Found,
+    NotInSteam,
+    Unreadable(UnreadableReason),
+}
+
+/// The game asked about, as the command resolved it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct GameCtx {
+    pub name: Option<String>,
+    /// The program name, when the game is one Compy has recorded.
+    pub exe: Option<String>,
+    pub game_ref: Option<GameRef>,
+    pub steam: SteamState,
+}
+
+impl GameCtx {
+    fn picked(&self) -> bool {
+        self.name.is_some() || self.exe.is_some() || self.game_ref.is_some() || self.steam != SteamState::NotAsked
+    }
+    fn install_dir(&self) -> Option<&str> {
+        self.game_ref.as_ref().and_then(|g| g.install_dir.as_deref())
+    }
+}
+
+/// Everything the readers gave, as plain DTOs. A reader nobody asked is `NotRead` / `None`: it says nothing.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Sources {
+    pub changes: Option<Reading>,
+    pub crashes: CrashRead,
+    pub mods: ModsRead,
 }
 
 fn limit(kind: &'static str, code: &'static str, args: &[(&'static str, String)]) -> Limit {
@@ -173,26 +244,55 @@ fn newest_first(v: &mut [Change]) {
     v.sort_by(|a, b| b.at.cmp(&a.at).then(a.id.cmp(b.id)).then(a.args.cmp(&b.args)));
 }
 
-/// Pure: the answer for `since` from what the readers gave (`None` for "always": nothing was read).
+/// Pure: the whole-PC answer for `since` from what the dated readers gave (`None` for "always": nothing was
+/// read).
 pub(crate) fn build(since: Since, now: DateTime<Utc>, reading: Option<&Reading>) -> FirstLook {
+    build_with(since, now, &GameCtx::default(), &Sources { changes: reading.cloned(), ..Sources::default() })
+}
+
+/// Pure: the answer for `since` about `game` (no game picked = the whole PC) from what the readers gave.
+pub(crate) fn build_with(since: Since, now: DateTime<Utc>, game: &GameCtx, src: &Sources) -> FirstLook {
     let hours = window_hours(since);
-    let from = hours.map(|h| iso(now - ChronoDuration::hours(h)));
-    let told = Told { since, from, to: iso(now), hours };
+    let t0 = hours.map(|h| now - ChronoDuration::hours(h));
+    let told = Told { since, from: t0.map(iso), to: iso(now), hours };
     let mut out = FirstLook {
         told,
+        game: game.name.clone(),
         changes_listed: since != Since::Always,
         touch_games: Vec::new(),
         other_changes: Vec::new(),
         none: Vec::new(),
+        game_files_since: None,
+        crashes: None,
+        crashes_none: false,
+        looks_off: Vec::new(),
+        mods_none: false,
+        mods_settings_only: Vec::new(),
         limits: Vec::new(),
         read_all: false,
         method: METHOD,
     };
-    let Some(reading) = reading.filter(|_| since != Since::Always) else { return out };
+    if let Some(reading) = src.changes.as_ref().filter(|_| since != Since::Always) {
+        changes_part(reading, game, &mut out);
+    }
+    mods_part(game, &src.mods, t0, now, &mut out);
+    crashes_part(game, &src.crashes, &mut out);
+    newest_first(&mut out.touch_games);
+    newest_first(&mut out.other_changes);
+    newest_first(&mut out.looks_off);
+    out
+}
+
+/// The dated Windows readers' half: the three whole-PC kinds, and the picked game's Steam record.
+fn changes_part(reading: &Reading, game: &GameCtx, out: &mut FirstLook) {
+    let picked = game.picked();
     match reading {
         Reading::Unavailable(why) => {
             for (name, _) in KINDS {
                 out.limits.push(limit(name, why, &[]));
+            }
+            if picked {
+                out.limits.push(limit("game-update", why, &[]));
             }
         }
         Reading::Report(r) => {
@@ -203,12 +303,32 @@ pub(crate) fn build(since: Since, now: DateTime<Utc>, reading: Option<&Reading>)
                 all_complete &= matches!(status, KindStatus::Complete { .. });
                 status_limits(name, status, &mut out.limits);
             }
+            let steam_read = picked && game.steam == SteamState::Found;
+            if steam_read {
+                let status = r.status(ChangeKind::GameUpdate);
+                all_complete &= matches!(status, KindStatus::Complete { .. });
+                let was_read = matches!(status, KindStatus::Complete { .. } | KindStatus::Partial { .. });
+                status_limits("game-update", status, &mut out.limits);
+                // Steam keeps only the newest update time: an earlier update in the window would not show.
+                if was_read {
+                    out.limits.push(limit("game-update", "steam-newest-only", &[]));
+                }
+            } else if picked {
+                all_complete = false;
+                match &game.steam {
+                    SteamState::Unreadable(why) => status_limits("game-update", KindStatus::Unreadable(why.clone()), &mut out.limits),
+                    _ => out.limits.push(limit("game-update", "not-steam", &[])),
+                }
+            }
             out.read_all = all_complete;
             let complete = |kind: ChangeKind| matches!(r.status(kind), KindStatus::Complete { .. });
-            gpu_rows(r, &mut out);
-            let folded = update_rows(r, &mut out);
-            program_rows(r, &mut out);
-            other_driver_row(r, &mut out);
+            gpu_rows(r, out);
+            let folded = update_rows(r, out);
+            program_rows(r, out);
+            other_driver_row(r, out);
+            if steam_read {
+                game_rows(r, game, out);
+            }
             if complete(ChangeKind::GpuDriver) && !out.touch_games.iter().any(|c| c.id.starts_with("gpu-driver")) {
                 out.none.push("gpu-driver");
             }
@@ -225,11 +345,114 @@ pub(crate) fn build(since: Since, now: DateTime<Utc>, reading: Option<&Reading>)
             }
         }
     }
-    // Game files are not read in S1: no game is picked, so Compy says so rather than staying silent.
-    out.limits.push(limit("game-update", "not-picked", &[]));
-    newest_first(&mut out.touch_games);
-    newest_first(&mut out.other_changes);
-    out
+    // No game is picked: Compy says it did not look at any game's files, rather than staying silent.
+    if !picked {
+        out.limits.push(limit("game-update", "not-picked", &[]));
+    }
+}
+
+/// Steam's record of the picked game's files. In the window: one dated row (never "the game updated":
+/// Steam's time also moves on a verify or a DLC download). Older than the window: said as Steam's record.
+fn game_rows(r: &ChangeReport, game: &GameCtx, out: &mut FirstLook) {
+    let name = game.name.clone().unwrap_or_default();
+    let newest = events_of(r, ChangeKind::GameUpdate).into_iter().filter(|e| e.when.at.is_some()).max_by_key(|e| e.when.at);
+    if let Some(e) = newest {
+        let mut args = vec![("game", name)];
+        if e.what.detail.is_some() {
+            args.push(("pending", "true".to_string()));
+        }
+        out.touch_games.push(change("game-files", e.when.at, e.when.precision, &args, "game-files"));
+        return;
+    }
+    if matches!(r.status(ChangeKind::GameUpdate), KindStatus::Complete { .. }) {
+        if let Some(at) = r.game_last_update.as_ref().and_then(|e| e.when.at).filter(|at| *at <= r.window_start) {
+            out.game_files_since = Some(iso(at));
+        }
+    }
+}
+
+/// The picked game's folder, through the measured flow's verdict DTO. A mod's loader file with a file date
+/// inside the window is listed among the changes that touch games; any other mod fact is a fact about the
+/// folder with its dates. A settings or data file alone is one line saying so. Never "active" or "installed on".
+fn mods_part(game: &GameCtx, mods: &ModsRead, t0: Option<DateTime<Utc>>, now: DateTime<Utc>, out: &mut FirstLook) {
+    if !game.picked() {
+        return;
+    }
+    match mods {
+        ModsRead::NotRead => {}
+        ModsRead::Unavailable(why) => out.limits.push(limit("mods", why, &[])),
+        ModsRead::Read(ModsVerdict::NoKnownMod) => out.mods_none = true,
+        ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::NoInstallFolder)) => out.limits.push(limit("mods", "no-folder", &[])),
+        ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::FolderUnreadable)) => out.limits.push(limit("mods", "folder-unreadable", &[])),
+        ModsRead::Read(ModsVerdict::Found(found)) => mod_rows(found, t0, now, out),
+        ModsRead::Read(ModsVerdict::Partly(found)) => {
+            mod_rows(found, t0, now, out);
+            out.limits.push(limit("mods", "partial", &[]));
+        }
+    }
+}
+
+/// A settings file this much later than the folder's first file is worth its own date.
+const SETTINGS_DAY_SECS: i64 = 86_400;
+
+fn mod_rows(found: &[ModFound], t0: Option<DateTime<Utc>>, now: DateTime<Utc>, out: &mut FirstLook) {
+    for m in found {
+        if !m.strong {
+            out.mods_settings_only.push(m.name);
+            continue;
+        }
+        let mut args = vec![("name", m.name.to_string())];
+        if let Some(t) = m.first_seen {
+            args.push(("date", iso(t)));
+        }
+        // A settings file the mod rewrites itself says when it ran, not when it arrived: its date is shown
+        // beside the creation date, and never decides whether the mod is "in the window".
+        if let Some(s) = m.settings_changed.filter(|s| m.first_seen.is_none_or(|f| (*s - f).num_seconds().abs() > SETTINGS_DAY_SECS)) {
+            args.push(("settings", iso(s)));
+        }
+        // The same rule as the measured flow: a loader that is not beside the game's exe is a file the game
+        // does not load from, so it gives no timing.
+        let in_window = m.loader_file_present && matches!((t0, m.first_seen), (Some(a), Some(f)) if f > a && f <= now);
+        let row = change("graphics-mod", m.first_seen, Precision::Exact, &args, "graphics-mod");
+        if in_window {
+            out.touch_games.push(row);
+        } else {
+            out.looks_off.push(row);
+        }
+    }
+}
+
+/// The earliest REAL dated change among the rows (an exact date; a day-precision row is not a moment), the
+/// reference the same-signature line needs.
+fn earliest_exact(out: &FirstLook) -> Option<DateTime<Utc>> {
+    out.touch_games.iter().filter(|c| c.precision == "exact").filter_map(|c| c.at.as_deref()).filter_map(super::ts).min()
+}
+
+/// The picked game's Windows crash records, through the measured flow's rule (`extras::crash_outcome`).
+fn crashes_part(game: &GameCtx, crashes: &CrashRead, out: &mut FirstLook) {
+    if !game.picked() {
+        return;
+    }
+    match crashes {
+        CrashRead::NotRead => {}
+        CrashRead::Unavailable(why) => out.limits.push(limit("crashes", why, &[])),
+        CrashRead::Read(h) if !h.listed => out.limits.push(limit("crashes", "unreadable", &[])),
+        CrashRead::Read(h) => {
+            let how = match game.exe.as_deref() {
+                Some(exe) => CrashMatch::Program(exe),
+                None => CrashMatch::InstallFolder,
+            };
+            match crash_outcome(h, how, earliest_exact(out)) {
+                CrashOutcome::Line(l) => {
+                    let (module, before) = l.signature.unzip();
+                    out.crashes = Some(Crashes { args: l.args.into_iter().collect(), signature_module: module, signature_before: before });
+                }
+                // Not "no crashes": some reports were not read.
+                CrashOutcome::NoneCounted { partial: true } => out.limits.push(limit("crashes", "partial", &[])),
+                CrashOutcome::NoneCounted { partial: false } => out.crashes_none = true,
+            }
+        }
+    }
 }
 
 /// The PCI vendor id (four hex digits, lower case) inside a hardware id such as `PCI\VEN_1002&DEV_7550&...`.
@@ -438,43 +661,185 @@ where
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Reading::Unavailable("reader-failed"),
     }
 }
-/// The answer for `since` at `now`. `fetch` gets the window `(t0, now]` and runs only when there is one.
-pub(crate) fn first_look_with<F>(since: Since, now: DateTime<Utc>, budget: Duration, fetch: F) -> FirstLook
-where
-    F: FnOnce(DateTime<Utc>, DateTime<Utc>) -> Reading + Send + 'static,
-{
-    let Some(hours) = window_hours(since) else { return build(since, now, None) };
-    let t0 = now - ChronoDuration::hours(hours);
-    let reading = read_within(budget, move || fetch(t0, now));
-    build(since, now, Some(&reading))
+
+/// What the readers call: the real ones in the command, hand-built ones in the tests.
+#[derive(Clone, Copy)]
+pub(crate) struct Io {
+    /// Which game, and what Steam says about it (bounded, read-only).
+    pub resolve: fn(&FirstLookGame) -> GameCtx,
+    /// The dated Windows readers for the window.
+    pub changes: fn(DateTime<Utc>, DateTime<Utc>, &GameCtx) -> Reading,
+    /// Windows' crash records, for a picked game.
+    pub crashes: fn(&GameCtx) -> CrashRead,
+    /// The picked game's folder, for graphics mods.
+    pub mods: fn(&GameCtx) -> ModsRead,
 }
 
-/// The real readers for the whole PC (no game). Read-only; no network, no elevation.
-pub(crate) fn read_real(t0: DateTime<Utc>, t1: DateTime<Utc>) -> Reading {
-    match change_sources::changes_between(t0, t1, None) {
+/// The answer for `sel` and `since` at `now`: the game is resolved first (it names the folder the other readers
+/// need), then the dated readers, the crash read and the folder scan run side by side inside one shared
+/// `budget`. A reader that is late or dies is its own limit line, never an empty answer. "Always" runs no
+/// dated reader, but a picked game's crash records and folder are still read.
+pub(crate) fn run_with(sel: &FirstLookGame, since: Since, now: DateTime<Utc>, budget: Duration, io: Io, slots: Option<&'static Slots>) -> FirstLook {
+    let started = Instant::now();
+    let game = (io.resolve)(sel);
+    let picked = game.picked();
+    let crashes_rx = picked.then(|| {
+        let g = game.clone();
+        spawn_reader("paramedic-first-look-crashes", slots.map(|s| &s.crashes), move || (io.crashes)(&g))
+    });
+    let mods_rx = picked.then(|| {
+        let g = game.clone();
+        spawn_reader("paramedic-first-look-mods", slots.map(|s| &s.mods), move || (io.mods)(&g))
+    });
+    let changes = window_hours(since).map(|hours| {
+        let t0 = now - ChronoDuration::hours(hours);
+        let g = game.clone();
+        read_within(budget.saturating_sub(started.elapsed()), move || (io.changes)(t0, now, &g))
+    });
+    let crashes = crashes_rx.map_or(CrashRead::NotRead, |rx| collect_reader(rx, budget, started).unwrap_or_else(CrashRead::Unavailable));
+    let mods = mods_rx.map_or(ModsRead::NotRead, |rx| collect_reader(rx, budget, started).unwrap_or_else(ModsRead::Unavailable));
+    build_with(since, now, &game, &Sources { changes, crashes, mods })
+}
+
+/// Pure: a Steam pick against Steam's listing. A game the complete listing does not hold is "not in Steam"; a
+/// listing that was cut short or could not be read never says that.
+fn resolve_steam(app_id: u32, shown: Option<String>, listing: Result<change_sources::SteamListing, UnreadableReason>) -> GameCtx {
+    let fallback = || shown.clone().or_else(|| Some(format!("Steam game {app_id}")));
+    match listing {
+        Ok(l) => match l.games.into_iter().find(|g| g.app_id == app_id) {
+            Some(g) => GameCtx {
+                name: Some(g.name),
+                exe: None,
+                game_ref: Some(GameRef { steam_app_id: Some(app_id), install_dir: g.install_dir, launcher: Some("Steam".into()) }),
+                steam: SteamState::Found,
+            },
+            None if l.complete => GameCtx { name: fallback(), exe: None, game_ref: None, steam: SteamState::NotInSteam },
+            None => GameCtx {
+                name: fallback(),
+                exe: None,
+                game_ref: None,
+                steam: SteamState::Unreadable(UnreadableReason::SteamPartiallyUnreadable { libraries: 0, records: 0 }),
+            },
+        },
+        Err(why) => GameCtx { name: fallback(), exe: None, game_ref: None, steam: SteamState::Unreadable(why) },
+    }
+}
+
+fn resolve_real(sel: &FirstLookGame) -> GameCtx {
+    match sel {
+        FirstLookGame::WholePc => GameCtx::default(),
+        FirstLookGame::Seen { process } => {
+            let process = process.trim().to_string();
+            if process.is_empty() {
+                return GameCtx::default();
+            }
+            let name = Some(crate::intelligence::pretty_game_name(&process)).filter(|n| !n.is_empty()).or_else(|| Some(process.clone()));
+            let (game_ref, steam) = match change_sources::find_steam_game(&process, change_sources::DEFAULT_BUDGET) {
+                SteamLookup::Found(g) => (Some(g), SteamState::Found),
+                SteamLookup::NotInSteam => (None, SteamState::NotInSteam),
+                SteamLookup::Unreadable(why) => (None, SteamState::Unreadable(why)),
+            };
+            GameCtx { name, exe: Some(process), game_ref, steam }
+        }
+        FirstLookGame::Steam { app_id, name } => resolve_steam(*app_id, name.clone(), change_sources::list_steam_games(change_sources::STEAM_LIST_BUDGET)),
+    }
+}
+
+fn changes_real(t0: DateTime<Utc>, t1: DateTime<Utc>, game: &GameCtx) -> Reading {
+    match change_sources::changes_between(t0, t1, game.game_ref.as_ref()) {
         Ok(report) => Reading::Report(Box::new(report)),
         Err(_) => Reading::Unavailable("reader-failed"),
     }
 }
+
+/// Windows Error Reporting files, read-only (the Black Box's own read). With a program name the measured
+/// flow's matching applies; with only an install folder, a report's exe path must lie under it.
+fn crashes_real(game: &GameCtx) -> CrashRead {
+    if game.exe.is_none() && game.install_dir().is_none() {
+        return CrashRead::Unavailable("no-folder");
+    }
+    crash_dto(crate::blackbox::read_app_crashes(), game.install_dir().map(std::path::Path::new))
+}
+
+/// The same scan and the same verdict DTO as the measured flow (`scan_install_folder` for the folder the game
+/// was found in; with no folder the verdict is the measured flow's "couldn't match the game to a folder").
+fn mods_real(game: &GameCtx) -> ModsRead {
+    let Some(dir) = game.install_dir() else { return ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::NoInstallFolder)) };
+    super::mods::dto(&crate::game_mods::scan_install_folder(std::path::Path::new(dir), game.exe.as_deref(), crate::game_mods::DEFAULT_BUDGET))
+}
+
+const REAL: Io = Io { resolve: resolve_real, changes: changes_real, crashes: crashes_real, mods: mods_real };
+
+/// One reader of each kind at a time: a press while an earlier reader still runs reads `took-too-long`.
+static SLOTS: Slots = Slots::new();
 
 /// The Tauri edge, beside `paramedic_diagnose` and under the same single-flight guard: while either is
 /// running the other answers BUSY (the card keeps saying "still checking"). Writes nothing.
 #[tauri::command]
 pub(crate) async fn paramedic_first_look(game: FirstLookGame, since: Since) -> Result<FirstLook, String> {
     let Some(flight) = super::FlightGuard::begin() else { return Err(super::BUSY.to_string()) };
-    let FirstLookGame::WholePc = game;
     tauri::async_runtime::spawn_blocking(move || {
         let _flight = flight;
-        first_look_with(since, Utc::now(), CHANGES_BUDGET, read_real)
+        run_with(&game, since, Utc::now(), CHANGES_BUDGET, REAL, Some(&SLOTS))
     })
     .await
     .map_err(|_| "the first look stopped unexpectedly".to_string())
 }
 
+/// One game of Steam's list as the picker needs it: no folder, no path.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct ListedGame {
+    pub app_id: u32,
+    pub name: String,
+    /// When Steam last changed the game's files (UTC); none when its record has no time.
+    pub last_updated: Option<String>,
+}
+
+/// Steam's list for the picker. `read: false` is "Compy couldn't read Steam's libraries", never "no games";
+/// `complete: false` is "this is only part of the list".
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub(crate) struct SteamGames {
+    pub read: bool,
+    pub complete: bool,
+    pub games: Vec<ListedGame>,
+}
+
+fn games_dto(listing: Result<change_sources::SteamListing, UnreadableReason>) -> SteamGames {
+    match listing {
+        Ok(l) => SteamGames {
+            read: true,
+            complete: l.complete,
+            games: l.games.into_iter().map(|g| ListedGame { app_id: g.app_id, name: g.name, last_updated: g.last_updated.map(iso) }).collect(),
+        },
+        Err(_) => SteamGames { read: false, complete: false, games: Vec::new() },
+    }
+}
+
+/// The games installed with Steam, most recently updated first, for the "Which game?" step. Read-only and
+/// bounded (`change_sources::list_steam_games`); it starts no process and writes nothing.
+#[tauri::command]
+pub(crate) async fn paramedic_list_games() -> Result<SteamGames, String> {
+    tauri::async_runtime::spawn_blocking(|| games_dto(change_sources::list_steam_games(change_sources::STEAM_LIST_BUDGET)))
+        .await
+        .map_err(|_| "the game list stopped unexpectedly".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::change_sources::{ChangeTime, ChangeWhat, Gap, ReadOk, Source, SourceRead, UnreadableReason};
+    use crate::change_sources::{ChangeTime, ChangeWhat, Gap, ReadOk, Source, SourceRead};
+    use crate::paramedic::extras::CrashHistory;
+
+    /// The whole-PC answer for `since` at `now`. `fetch` gets the window `(t0, now]` and runs only when there is one.
+    pub(super) fn first_look_with<F>(since: Since, now: DateTime<Utc>, budget: Duration, fetch: F) -> FirstLook
+    where
+        F: FnOnce(DateTime<Utc>, DateTime<Utc>) -> Reading + Send + 'static,
+    {
+        let Some(hours) = window_hours(since) else { return build(since, now, None) };
+        let t0 = now - ChronoDuration::hours(hours);
+        let reading = read_within(budget, move || fetch(t0, now));
+        build(since, now, Some(&reading))
+    }
 
     fn utc(s: &str) -> DateTime<Utc> {
         DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
@@ -940,14 +1305,42 @@ mod tests {
     #[test]
     #[ignore = "reads this PC's event logs and registry; run by hand"]
     fn live_first_look_prints_the_answer() {
+        // The app's own startup sweep fills the hardware snapshot the facts read; it is run once by hand
+        // here, OUTSIDE the engine, so the facts have what they have in the running app.
+        let _hw = crate::hardware::collect_hardware();
+        println!("LIVE_DISPLAY {:?}", crate::hardware::detect_display_info().map(|d| (d.width, d.height, d.current_refresh_rate_hz, d.max_refresh_rate_hz)));
+        println!("LIVE_HW_READY {}", crate::hardware::snapshot_if_ready().is_some());
+        let whole = FirstLookGame::WholePc;
         for since in [Since::ThisWeek, Since::ThisMonth] {
-            let a = first_look_with(since, Utc::now(), CHANGES_BUDGET, read_real);
+            let a = run_with(&whole, since, Utc::now(), CHANGES_BUDGET, REAL, None);
             println!("LIVE_FIRST_LOOK_JSON {}", serde_json::to_string(&a).unwrap());
+        }
+        // The picked games: a Steam pick when the library lists the name, else the process name as Compy saw it.
+        let listing = change_sources::list_steam_games(change_sources::STEAM_LIST_BUDGET);
+        let pick = |needle: &str, process: &str| match &listing {
+            Ok(l) => match l.games.iter().find(|g| g.name.to_lowercase().contains(needle)) {
+                Some(g) => FirstLookGame::Steam { app_id: g.app_id, name: Some(g.name.clone()) },
+                None => FirstLookGame::Seen { process: process.into() },
+            },
+            Err(_) => FirstLookGame::Seen { process: process.into() },
+        };
+        for (label, sel, since) in [("ROB RUN", pick("rob run", "ROB RUN"), Since::ThisWeek), ("Wardogs", pick("wardogs", "WardogsClient"), Since::ThisMonth)] {
+            println!("LIVE_PICK {label} {sel:?}");
+            let a = run_with(&sel, since, Utc::now(), CHANGES_BUDGET, REAL, None);
+            println!("LIVE_FIRST_LOOK_GAME_JSON {label} {}", serde_json::to_string(&a).unwrap());
+            let mut ms = Vec::new();
+            for _ in 0..5 {
+                let t = std::time::Instant::now();
+                let b = run_with(&sel, since, Utc::now(), CHANGES_BUDGET, REAL, None);
+                ms.push(t.elapsed().as_millis());
+                assert!(b.limits.iter().all(|l| l.code != "took-too-long"), "a reader ran past the budget: {:?}", b.limits);
+            }
+            println!("LIVE_FIRST_LOOK_GAME_WALL_MS {label} {ms:?}");
         }
         let mut ms = Vec::new();
         for _ in 0..5 {
             let t = std::time::Instant::now();
-            let a = first_look_with(Since::ThisWeek, Utc::now(), CHANGES_BUDGET, read_real);
+            let a = run_with(&whole, Since::ThisWeek, Utc::now(), CHANGES_BUDGET, REAL, None);
             ms.push(t.elapsed().as_millis());
             assert!(a.limits.iter().all(|l| l.code != "took-too-long"), "a reader ran past the budget: {:?}", a.limits);
         }
@@ -971,5 +1364,366 @@ mod tests {
         ] {
             assert!(!code.contains(&banned), "first_look.rs must not contain {banned}");
         }
+    }
+
+    // ---- S2: the first look for one picked game --------------------------------------------------
+    // Every input below is hand-built: no test reads Steam, the registry, a log or a folder.
+
+    fn steam_ev(at: &str, pending: bool) -> ChangeEvent {
+        let mut e = ev(
+            ChangeKind::GameUpdate,
+            ChangeTime::exact(utc(at)),
+            ChangeWhat {
+                name: Some("ROB RUN".into()),
+                id: Some("2000".into()),
+                detail: pending.then(|| "an update to build 9 is pending".to_string()),
+                ..Default::default()
+            },
+        );
+        e.source = Source::SteamManifest;
+        e
+    }
+
+    /// A report with the three whole-PC sources empty and Steam's record as given.
+    fn game_report(steam: SourceRead) -> ChangeReport {
+        let t1 = utc(NOW);
+        change_sources::combine(
+            t1 - ChronoDuration::hours(8 * 24),
+            t1,
+            vec![(Source::DriverLog, read(vec![])), (Source::WindowsUpdateLog, read(vec![])), (Source::UninstallKeys, read(vec![])), (Source::SteamManifest, steam)],
+        )
+        .unwrap()
+    }
+
+    fn steam_ctx() -> GameCtx {
+        GameCtx {
+            name: Some("ROB RUN".into()),
+            exe: Some("robrun.exe".into()),
+            game_ref: Some(GameRef { steam_app_id: Some(2000), install_dir: Some(r"D:\SteamLibrary\steamapps\common\ROB RUN".into()), launcher: Some("Steam".into()) }),
+            steam: SteamState::Found,
+        }
+    }
+
+    fn steam_only(r: ChangeReport) -> Sources {
+        Sources { changes: Some(Reading::Report(Box::new(r))), ..Default::default() }
+    }
+
+    fn has_limit(a: &FirstLook, kind: &str, code: &str) -> bool {
+        a.limits.iter().any(|l| l.kind == kind && l.code == code)
+    }
+
+    #[test]
+    fn steams_last_update_inside_the_window_is_one_dated_row_that_touches_games() {
+        let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &steam_only(game_report(read(vec![steam_ev("2026-11-18T09:00:00Z", false)]))));
+        assert_eq!(a.game.as_deref(), Some("ROB RUN"));
+        let rows: Vec<&Change> = a.touch_games.iter().filter(|c| c.id == "game-files").collect();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].at.as_deref(), Some("2026-11-18T09:00:00Z"));
+        assert_eq!(rows[0].args.get("game").map(String::as_str), Some("ROB RUN"));
+        assert!(!rows[0].args.contains_key("pending"));
+        assert!(a.game_files_since.is_none());
+        // Steam keeps only the newest time: an earlier update in the window would not show, and that is said.
+        assert!(has_limit(&a, "game-update", "steam-newest-only"));
+        assert!(!has_limit(&a, "game-update", "not-picked"));
+    }
+
+    #[test]
+    fn an_update_steam_has_not_installed_yet_is_flagged_on_the_row() {
+        let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &steam_only(game_report(read(vec![steam_ev("2026-11-18T09:00:00Z", true)]))));
+        let row = a.touch_games.iter().find(|c| c.id == "game-files").unwrap();
+        assert_eq!(row.args.get("pending").map(String::as_str), Some("true"));
+    }
+
+    #[test]
+    fn an_update_older_than_the_window_is_steams_record_not_a_row() {
+        let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &steam_only(game_report(read(vec![steam_ev("2026-09-02T09:00:00Z", false)]))));
+        assert!(a.touch_games.iter().all(|c| c.id != "game-files"));
+        assert_eq!(a.game_files_since.as_deref(), Some("2026-09-02T09:00:00Z"));
+    }
+
+    #[test]
+    fn a_steam_record_that_could_not_be_read_is_a_limit_never_no_update() {
+        let unread = |why| GameCtx { steam: SteamState::Unreadable(why), game_ref: None, ..steam_ctx() };
+        let a = build_with(Since::ThisWeek, utc(NOW), &unread(UnreadableReason::SteamUnreadable), &steam_only(game_report(read(vec![]))));
+        assert!(has_limit(&a, "game-update", "steam-unreadable"));
+        assert!(a.game_files_since.is_none() && a.touch_games.iter().all(|c| c.id != "game-files"));
+        assert!(!a.read_all);
+        let not_steam = GameCtx { steam: SteamState::NotInSteam, game_ref: None, ..steam_ctx() };
+        let a = build_with(Since::ThisWeek, utc(NOW), &not_steam, &steam_only(game_report(read(vec![]))));
+        assert!(has_limit(&a, "game-update", "not-steam"));
+        assert!(a.game_files_since.is_none());
+    }
+
+    fn crash(app: &str, at: &str, path_ok: Option<bool>) -> crate::paramedic::extras::CrashFact {
+        crate::paramedic::extras::CrashFact {
+            app: app.into(),
+            when: utc(at),
+            module: Some("UnityPlayer.dll".into()),
+            code: Some("0xc0000005".into()),
+            version: Some("1.0".into()),
+            path_ok,
+        }
+    }
+
+    fn history(crashes: Vec<crate::paramedic::extras::CrashFact>, partial: bool) -> CrashHistory {
+        CrashHistory { crashes, listed: true, partial }
+    }
+
+    fn with_crashes(h: CrashHistory, steam: SourceRead) -> FirstLook {
+        let mut src = steam_only(game_report(steam));
+        src.crashes = CrashRead::Read(h);
+        build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src)
+    }
+
+    /// The crash line and the same-signature sentence's inputs are the measured flow's own (`crash_outcome`).
+    #[test]
+    fn the_crash_line_is_the_measured_flows_for_the_same_inputs() {
+        let h = history(
+            vec![crash("robrun.exe", "2026-11-02T10:00:00Z", Some(true)), crash("robrun.exe", "2026-11-05T10:00:00Z", Some(true)), crash("other.exe", "2026-11-06T10:00:00Z", Some(true))],
+            false,
+        );
+        // A dated change after the crashes (Steam's own update on the 18th): the signature line applies.
+        let a = with_crashes(h.clone(), read(vec![steam_ev("2026-11-18T09:00:00Z", false)]));
+        let CrashOutcome::Line(want) = crash_outcome(&h, CrashMatch::Program("robrun.exe"), Some(utc("2026-11-18T09:00:00Z"))) else { panic!("no line") };
+        let got = a.crashes.as_ref().expect("a crash line");
+        assert_eq!(got.args, want.args.iter().cloned().collect::<std::collections::BTreeMap<_, _>>());
+        assert_eq!(got.args.get("n").map(String::as_str), Some("2"));
+        assert!(!got.args.contains_key("partial"));
+        let sig = want.signature.clone().expect("the measured flow says same signature here");
+        assert_eq!(got.signature_module.as_deref(), Some(sig.0.as_str()));
+        assert_eq!(got.signature_before.as_deref(), Some(sig.1.as_str()));
+        // No dated change to compare with: the measured flow says no signature line, and so does the first look.
+        let a = with_crashes(h, read(vec![]));
+        assert!(a.crashes.as_ref().unwrap().signature_module.is_none());
+    }
+
+    #[test]
+    fn a_partial_crash_read_says_at_least_and_never_none() {
+        let a = with_crashes(history(vec![crash("robrun.exe", "2026-11-02T10:00:00Z", Some(true))], true), read(vec![]));
+        assert_eq!(a.crashes.as_ref().unwrap().args.get("partial").map(String::as_str), Some("true"));
+        let a = with_crashes(history(vec![], true), read(vec![]));
+        assert!(a.crashes.is_none() && !a.crashes_none);
+        assert!(has_limit(&a, "crashes", "partial"));
+        let a = with_crashes(history(vec![], false), read(vec![]));
+        assert!(a.crashes_none && a.crashes.is_none());
+        assert!(a.limits.iter().all(|l| l.kind != "crashes"));
+    }
+
+    #[test]
+    fn crash_records_that_could_not_be_listed_or_came_late_are_limits() {
+        let mut src = steam_only(game_report(read(vec![])));
+        src.crashes = CrashRead::Read(CrashHistory { crashes: vec![], listed: false, partial: false });
+        let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src);
+        assert!(has_limit(&a, "crashes", "unreadable") && !a.crashes_none);
+        src.crashes = CrashRead::Unavailable("took-too-long");
+        let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src);
+        assert!(has_limit(&a, "crashes", "took-too-long") && !a.crashes_none);
+    }
+
+    /// A pick from Steam has no program name: only reports whose path lies under its folder count, and a report
+    /// with no path makes the read partial instead of being counted or ignored.
+    #[test]
+    fn a_steam_pick_matches_crashes_by_install_folder_only() {
+        let by_folder = GameCtx { exe: None, ..steam_ctx() };
+        let h = history(vec![crash("robrun.exe", "2026-11-02T10:00:00Z", Some(true)), crash("robrun.exe", "2026-11-03T10:00:00Z", Some(false))], false);
+        let mut src = steam_only(game_report(read(vec![])));
+        src.crashes = CrashRead::Read(h);
+        let a = build_with(Since::ThisWeek, utc(NOW), &by_folder, &src);
+        assert_eq!(a.crashes.as_ref().unwrap().args.get("n").map(String::as_str), Some("1"));
+        assert!(!a.crashes.as_ref().unwrap().args.contains_key("byName"));
+        src.crashes = CrashRead::Read(history(vec![crash("robrun.exe", "2026-11-02T10:00:00Z", None)], false));
+        let a = build_with(Since::ThisWeek, utc(NOW), &by_folder, &src);
+        assert!(a.crashes.is_none() && !a.crashes_none && has_limit(&a, "crashes", "partial"));
+    }
+
+    fn found_mod(name: &'static str, strong: bool, loader: bool, first: Option<&str>, settings: Option<&str>) -> crate::paramedic::mods::ModFound {
+        crate::paramedic::mods::ModFound {
+            name,
+            strong,
+            loader_file_present: loader,
+            first_seen: first.map(utc),
+            settings_changed: settings.map(utc),
+            last_log_write: None,
+        }
+    }
+
+    fn with_mods(m: ModsRead) -> FirstLook {
+        let mut src = steam_only(game_report(read(vec![])));
+        src.mods = m;
+        build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src)
+    }
+
+    #[test]
+    fn a_loader_file_dated_in_the_window_is_a_change_that_touches_games_with_its_dates() {
+        let a = with_mods(ModsRead::Read(ModsVerdict::Found(vec![found_mod("OptiScaler", true, true, Some("2026-11-18T10:00:00Z"), Some("2026-11-19T11:00:00Z"))])));
+        let row = a.touch_games.iter().find(|c| c.id == "graphics-mod").expect("a row among the changes that touch games");
+        assert_eq!(row.at.as_deref(), Some("2026-11-18T10:00:00Z"));
+        assert_eq!(row.args.get("name").map(String::as_str), Some("OptiScaler"));
+        assert_eq!(row.args.get("date").map(String::as_str), Some("2026-11-18T10:00:00Z"));
+        assert_eq!(row.args.get("settings").map(String::as_str), Some("2026-11-19T11:00:00Z"));
+        assert!(a.looks_off.is_empty() && !a.mods_none);
+        // Possible at most: the file's date is a clue, never a verdict.
+        assert_eq!(row.confidence, Certainty::Possible);
+    }
+
+    #[test]
+    fn a_mod_outside_the_window_or_off_the_exes_folder_is_a_fact_about_the_folder_and_a_settings_date_never_decides() {
+        // Created long before the window; its settings file was rewritten inside it (the mod does that itself).
+        let a = with_mods(ModsRead::Read(ModsVerdict::Found(vec![found_mod("OptiScaler", true, true, Some("2026-09-01T10:00:00Z"), Some("2026-11-19T10:00:00Z"))])));
+        assert!(a.touch_games.iter().all(|c| c.id != "graphics-mod"));
+        assert_eq!(a.looks_off.len(), 1);
+        assert_eq!(a.looks_off[0].args.get("settings").map(String::as_str), Some("2026-11-19T10:00:00Z"));
+        // A loader that is not beside the game's exe gives no timing, even with a date in the window.
+        let a = with_mods(ModsRead::Read(ModsVerdict::Found(vec![found_mod("ReShade", true, false, Some("2026-11-18T10:00:00Z"), None)])));
+        assert!(a.touch_games.iter().all(|c| c.id != "graphics-mod"));
+        assert_eq!(a.looks_off.len(), 1);
+    }
+
+    #[test]
+    fn a_settings_file_alone_is_one_line_and_no_known_mod_needs_a_complete_scan() {
+        let a = with_mods(ModsRead::Read(ModsVerdict::Found(vec![found_mod("ReShade", false, false, Some("2026-10-01T10:00:00Z"), None)])));
+        assert_eq!(a.mods_settings_only, vec!["ReShade"]);
+        assert!(a.looks_off.is_empty() && a.touch_games.iter().all(|c| c.id != "graphics-mod"));
+        let a = with_mods(ModsRead::Read(ModsVerdict::NoKnownMod));
+        assert!(a.mods_none);
+        // A scan that stopped early is a limit, even when it found nothing.
+        let a = with_mods(ModsRead::Read(ModsVerdict::Partly(vec![])));
+        assert!(!a.mods_none && has_limit(&a, "mods", "partial"));
+        let a = with_mods(ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::NoInstallFolder)));
+        assert!(!a.mods_none && has_limit(&a, "mods", "no-folder"));
+        let a = with_mods(ModsRead::Read(ModsVerdict::CouldNotScan(CouldNot::FolderUnreadable)));
+        assert!(!a.mods_none && has_limit(&a, "mods", "folder-unreadable"));
+        let a = with_mods(ModsRead::Unavailable("took-too-long"));
+        assert!(!a.mods_none && has_limit(&a, "mods", "took-too-long"));
+    }
+
+    #[test]
+    fn the_whole_pc_says_nothing_about_a_game_it_was_not_asked_about() {
+        let mut src = steam_only(game_report(read(vec![])));
+        src.crashes = CrashRead::Read(history(vec![crash("robrun.exe", "2026-11-02T10:00:00Z", None)], false));
+        src.mods = ModsRead::Read(ModsVerdict::NoKnownMod);
+        let a = build_with(Since::ThisWeek, utc(NOW), &GameCtx::default(), &src);
+        assert!(a.game.is_none() && a.crashes.is_none() && !a.crashes_none && !a.mods_none && a.looks_off.is_empty());
+        assert!(has_limit(&a, "game-update", "not-picked"));
+    }
+
+    #[test]
+    fn a_steam_pick_resolves_against_a_complete_listing_only() {
+        let g = |id: u32, name: &str| change_sources::SteamGame { app_id: id, name: name.into(), install_dir: Some(format!(r"D:\Lib\steamapps\common\{name}")), last_updated: None };
+        let listing = |games: Vec<change_sources::SteamGame>, complete| change_sources::SteamListing { games, complete };
+        let c = resolve_steam(2000, Some("shown".into()), Ok(listing(vec![g(2000, "ROB RUN")], true)));
+        assert_eq!((c.name.as_deref(), c.steam.clone()), (Some("ROB RUN"), SteamState::Found));
+        assert_eq!(c.game_ref.as_ref().and_then(|r| r.steam_app_id), Some(2000));
+        assert!(c.exe.is_none());
+        // Not in a COMPLETE listing: not a Steam game. In a cut-short listing or an unreadable one: not known.
+        let c = resolve_steam(7, Some("Gone".into()), Ok(listing(vec![g(2000, "ROB RUN")], true)));
+        assert_eq!((c.name.as_deref(), c.steam), (Some("Gone"), SteamState::NotInSteam));
+        let c = resolve_steam(7, None, Ok(listing(vec![], false)));
+        assert_eq!(c.name.as_deref(), Some("Steam game 7"));
+        assert!(matches!(c.steam, SteamState::Unreadable(_)));
+        let c = resolve_steam(7, Some("Gone".into()), Err(UnreadableReason::SteamNotFound));
+        assert!(matches!(c.steam, SteamState::Unreadable(UnreadableReason::SteamNotFound)));
+    }
+
+    #[test]
+    fn the_games_list_keeps_could_not_read_apart_from_no_games() {
+        let g = |id: u32, at: Option<&str>| change_sources::SteamGame { app_id: id, name: format!("G{id}"), install_dir: Some("x".into()), last_updated: at.map(utc) };
+        let none = games_dto(Ok(change_sources::SteamListing { games: vec![], complete: true }));
+        assert_eq!((none.read, none.complete, none.games.len()), (true, true, 0));
+        let unread = games_dto(Err(UnreadableReason::SteamNotFound));
+        assert_eq!((unread.read, unread.complete, unread.games.len()), (false, false, 0));
+        let part = games_dto(Ok(change_sources::SteamListing { games: vec![g(1, Some("2026-11-18T09:00:00Z")), g(2, None)], complete: false }));
+        assert_eq!((part.read, part.complete), (true, false));
+        assert_eq!(part.games[0].last_updated.as_deref(), Some("2026-11-18T09:00:00Z"));
+        assert_eq!(part.games[1].last_updated, None);
+        // The picker is told no folder: only an id, a name and a time.
+        let json = serde_json::to_string(&part).unwrap();
+        assert!(!json.contains("install") && !json.contains("\"x\""), "{json}");
+    }
+
+    // ---- run_with: the readers side by side, with hand-built readers -------------------------------
+
+    static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    static CRASH_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    static MOD_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+    fn fake_resolve(sel: &FirstLookGame) -> GameCtx {
+        match sel {
+            FirstLookGame::WholePc => GameCtx::default(),
+            _ => steam_ctx(),
+        }
+    }
+    fn fake_changes(t0: DateTime<Utc>, t1: DateTime<Utc>, _g: &GameCtx) -> Reading {
+        CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let reads = vec![
+            (Source::DriverLog, read(vec![])),
+            (Source::WindowsUpdateLog, read(vec![])),
+            (Source::UninstallKeys, read(vec![])),
+            (Source::SteamManifest, read(vec![steam_ev("2026-11-18T09:00:00Z", false)])),
+        ];
+        Reading::Report(Box::new(change_sources::combine(t0, t1, reads).unwrap()))
+    }
+    fn fake_crashes(_g: &GameCtx) -> CrashRead {
+        CRASH_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        CrashRead::Read(history(vec![crash("robrun.exe", "2026-11-02T10:00:00Z", Some(true))], false))
+    }
+    fn fake_mods(_g: &GameCtx) -> ModsRead {
+        MOD_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        ModsRead::Read(ModsVerdict::NoKnownMod)
+    }
+    fn slow_crashes(_g: &GameCtx) -> CrashRead {
+        std::thread::sleep(Duration::from_millis(900));
+        CrashRead::Read(history(vec![], false))
+    }
+    fn dead_mods(_g: &GameCtx) -> ModsRead {
+        panic!("the folder scan stopped");
+    }
+    const FAKE: Io = Io { resolve: fake_resolve, changes: fake_changes, crashes: fake_crashes, mods: fake_mods };
+
+    fn reset_counts() {
+        for c in [&CALLS, &CRASH_CALLS, &MOD_CALLS] {
+            c.store(0, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+    fn count(c: &std::sync::atomic::AtomicUsize) -> usize {
+        c.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[test]
+    fn a_picked_game_reads_its_steam_record_crashes_and_folder_and_the_whole_pc_reads_neither() {
+        let _t = one_at_a_time();
+        reset_counts();
+        let a = run_with(&FirstLookGame::Seen { process: "robrun.exe".into() }, Since::ThisWeek, utc(NOW), Duration::from_secs(2), FAKE, None);
+        assert_eq!((count(&CALLS), count(&CRASH_CALLS), count(&MOD_CALLS)), (1, 1, 1));
+        assert!(a.touch_games.iter().any(|c| c.id == "game-files"));
+        assert!(a.crashes.is_some() && a.mods_none);
+        reset_counts();
+        let a = run_with(&FirstLookGame::WholePc, Since::ThisWeek, utc(NOW), Duration::from_secs(2), FAKE, None);
+        assert_eq!((count(&CALLS), count(&CRASH_CALLS), count(&MOD_CALLS)), (1, 0, 0));
+        assert!(a.game.is_none() && a.crashes.is_none() && !a.mods_none);
+    }
+
+    #[test]
+    fn always_reads_no_dated_source_but_still_reads_the_picked_games_crashes_and_folder() {
+        let _t = one_at_a_time();
+        reset_counts();
+        let a = run_with(&FirstLookGame::Steam { app_id: 2000, name: Some("ROB RUN".into()) }, Since::Always, utc(NOW), Duration::from_secs(2), FAKE, None);
+        assert_eq!((count(&CALLS), count(&CRASH_CALLS), count(&MOD_CALLS)), (0, 1, 1));
+        assert!(!a.changes_listed && a.touch_games.is_empty());
+        assert!(a.crashes.is_some() && a.mods_none);
+    }
+
+    #[test]
+    fn a_late_or_dead_reader_is_its_own_limit_and_the_others_still_answer() {
+        let _t = one_at_a_time();
+        reset_counts();
+        let io = Io { crashes: slow_crashes, mods: dead_mods, ..FAKE };
+        let started = Instant::now();
+        let a = run_with(&FirstLookGame::Seen { process: "robrun.exe".into() }, Since::ThisWeek, utc(NOW), Duration::from_millis(300), io, None);
+        assert!(started.elapsed() < Duration::from_millis(850), "the answer waited for a late reader: {:?}", started.elapsed());
+        assert!(has_limit(&a, "crashes", "took-too-long") && !a.crashes_none, "{:?}", a.limits);
+        assert!(has_limit(&a, "mods", "reader-failed") && !a.mods_none, "{:?}", a.limits);
+        // The dated readers still gave their row.
+        assert!(a.touch_games.iter().any(|c| c.id == "game-files"));
     }
 }

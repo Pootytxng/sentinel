@@ -27,7 +27,8 @@
     "group": {
       "touch": "Changes that touch games",
       "more": "Show {{n}} more",
-      "other": "Other changes"
+      "other": "Other changes",
+      "looksOff": "What looks off on this PC"
     },
     "change": {
       "gpuChanged": "Your {{adapter}} changed from {{from}} to {{to}} on {{when}}.",
@@ -45,7 +46,10 @@
       "updatesUnclassified_one": "Windows installed {{count}} update that Compy couldn't classify.",
       "updatesUnclassified_other": "Windows installed {{count}} updates that Compy couldn't classify.",
       "displayOther_one": "A display driver ({{count}}) was installed or updated, the latest on {{when}}.",
-      "displayOther_other": "Display drivers ({{count}}) were installed or updated, the latest on {{when}}."
+      "displayOther_other": "Display drivers ({{count}}) were installed or updated, the latest on {{when}}.",
+      "gameFiles": "Steam last updated {{game}} on {{when}}.",
+      "gameFilesPending": "Steam also shows a newer version of {{game}} that isn't installed yet.",
+      "modUnknownOn": "Compy can't tell whether it is turned on."
     },
     "how": {
       "gpuDriver": "To see it: Device Manager, Display adapters, your card, Driver tab. Windows can roll a driver back there if it kept the earlier one.",
@@ -71,7 +75,8 @@
         "driver": "when drivers were installed",
         "windowsUpdate": "which Windows updates were installed",
         "programs": "which programs were installed",
-        "gameFiles": "a game's files"
+        "gameFiles": "a game's files",
+        "steamRecord": "Steam's record of {{game}}'s files"
       },
       "why": {
         "accessDenied": "Windows needs administrator rights to show that log",
@@ -90,8 +95,14 @@
         "partialOutputCapped": "the log was too long to read in full",
         "partialRegistry": "{{n}} registry entries couldn't be opened",
         "partialCoverage": "Windows' log only goes back to {{from}}",
-        "other": "it couldn't be read"
-      }
+        "other": "it couldn't be read",
+        "notSteam": "this game isn't in a Steam library Compy could read",
+        "steamUnreadable": "Steam's library files couldn't be read",
+        "steamNoRecord": "none of the Steam libraries Compy could read has a record of it",
+        "steamNoTime": "Steam's record has no usable update time",
+        "partialSteamLibraries": "{{n}} Steam libraries couldn't be read"
+      },
+      "steamNewestOnly": "Steam keeps only the newest update time for {{game}}, so an earlier update in this period wouldn't show."
     },
     "cantTell": {
       "title": "What Compy can't tell yet",
@@ -110,7 +121,25 @@
       "lead": "Compy has too few sessions of {{game}} to compare yet ({{have}} of {{need}}).",
       "scope": "This list is for the whole PC, not one game."
     },
-    "privacy": "Compy reads this on your PC. It doesn't save it or send it anywhere, and it doesn't save what you tap."
+    "privacy": "Compy reads this on your PC. It doesn't save it or send it anywhere, and it doesn't save what you tap.",
+    "game": {
+      "title": "Which game?",
+      "seen": "Games Compy has seen",
+      "steam": "Installed with Steam",
+      "other": "Another game, or the whole PC",
+      "more": "Show {{n}} more",
+      "fewer": "Show fewer",
+      "loadingSteam": "Looking for your installed Steam games…",
+      "steamUnread": "Compy couldn't read your Steam library.",
+      "steamPartial": "Compy read only part of your Steam library, so some games may be missing.",
+      "chosen": "Looking at {{game}}.",
+      "chosenWhole": "Looking at the whole PC, not one game.",
+      "change": "Change the game",
+      "found": "What Compy found for {{game}}"
+    },
+    "crash": {
+      "none": "Windows has no crash record for {{game}} in the records Compy read."
+    }
   },
   "door": {
     "button": "Something's wrong",

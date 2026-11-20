@@ -70,6 +70,8 @@ export function HomeGlass({
   const dates = useDates();
   const games = useMemo(() => gameLibrary(sessions), [sessions]);
   const noGames = games.length === 0;
+  // The first look's "Which game?" list: the games Compy has recorded, most recently played first.
+  const recorded = useMemo(() => games.map((g) => ({ process: g.sessions[0]?.process_name ?? "", name: g.name })).filter((g) => g.process), [games]);
   // Games can be recorded with no frame rate measured (a session Compy saw but couldn't read).
   // Nothing on this page may then speak as if one was measured (round-2 review, 2026-10-31).
   const anyMeasured = sessions.some((s) => knownFps(s.avg_fps) != null);
@@ -207,7 +209,7 @@ export function HomeGlass({
 
       {/* PC Paramedic F1: the "Something's wrong" door. Idle until tapped; nothing is read on mount. Always
           mounted: a new user or a new game gets the first look (what changed on this PC), not a hidden door. */}
-      <ParamedicCard launch={launch} onOpenProblems={onOpenProblems} noGames={noGames} />
+      <ParamedicCard launch={launch} onOpenProblems={onOpenProblems} noGames={noGames} games={recorded} />
 
       {/* What Windows recorded (the Care observer's pointer). Its own band in the attention colour —
           never the accent fill, which on this page means "your most recent game". */}

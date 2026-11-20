@@ -1601,6 +1601,126 @@ pub(crate) fn read_all_steam_games(budget: Duration) -> Result<Vec<ChangeEvent>,
 }
 
 // ---------------------------------------------------------------------------------------------
+// Installed Steam games: the game picker's list (read-only, bounded)
+// ---------------------------------------------------------------------------------------------
+
+/// One installed Steam game, from its appmanifest. Names and folders stay on this PC.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SteamGame {
+    pub app_id: u32,
+    pub name: String,
+    /// The game's folder under its library's `steamapps\common`, when the manifest names a plain folder.
+    pub install_dir: Option<String>,
+    /// When Steam last changed the game's files (an update, a verify or a DLC download).
+    pub last_updated: Option<DateTime<Utc>>,
+}
+
+/// What a listing saw. `complete` is false when a limit stopped it (the entry cap, the time budget, a
+/// library or a record that could not be read, more games than are kept): `games` is then only what was seen,
+/// and an empty list is "couldn't read it all", never "no games".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SteamListing {
+    pub games: Vec<SteamGame>,
+    pub complete: bool,
+}
+
+/// Time the listing may take (the reader's own deadline; the caller waits a little longer for a drive that blocks).
+pub(crate) const STEAM_LIST_BUDGET: Duration = Duration::from_millis(400);
+/// Games a listing keeps (the most recently updated first). A real PC holds a few hundred at most.
+pub(crate) const STEAM_LIST_MAX_GAMES: usize = 300;
+
+/// Steam's own tools sit in the library as "games" and are never what a user plays.
+fn is_steam_tool(app_id: u32, name: &str) -> bool {
+    app_id == 228_980 || ["Steamworks Common", "Proton", "Steam Linux Runtime"].iter().any(|p| name.starts_with(p))
+}
+
+/// Pure: a game from one manifest found under library `root`. A manifest without a name, or one of Steam's
+/// tools, is not a game; an `installdir` that is not one plain folder name gives no folder (never a path
+/// built from it).
+fn game_from_acf(info: &AcfInfo, root: &str) -> Option<SteamGame> {
+    let name = info.name.as_deref()?.trim();
+    if name.is_empty() || is_steam_tool(info.app_id, name) {
+        return None;
+    }
+    let install_dir = info
+        .install_dir
+        .as_deref()
+        .map(str::trim)
+        .filter(|f| !f.is_empty() && *f != ".." && *f != "." && !f.contains(['\\', '/', ':']))
+        .map(|f| format!("{}{STEAM_COMMON}{f}", root.trim_end_matches('\\')));
+    Some(SteamGame {
+        app_id: info.app_id,
+        name: name.to_string(),
+        install_dir,
+        last_updated: info.last_updated.and_then(|s| Utc.timestamp_opt(s, 0).single()),
+    })
+}
+
+/// Reads every library's manifests: at most `entry_cap` directory entries per library and `budget` in all.
+/// Anything not read (a library that is not there, a record that does not parse, the cap, the clock) makes
+/// the listing incomplete. Newest update first; one entry per app id.
+fn list_games_in_roots(roots: &[String], vdf_unreadable: bool, budget: Duration, entry_cap: usize) -> SteamListing {
+    let deadline = Instant::now() + budget;
+    let mut complete = !vdf_unreadable;
+    let mut games: Vec<SteamGame> = Vec::new();
+    for root in roots {
+        let steamapps = std::path::Path::new(root).join("steamapps");
+        let Ok(entries) = std::fs::read_dir(&steamapps) else {
+            complete = false; // e.g. a library on a drive that is not connected
+            continue;
+        };
+        let (mut seen, mut capped) = (0usize, false);
+        let walk = entries.flatten().take_while(|_| {
+            seen += 1;
+            capped = seen > entry_cap;
+            !capped
+        });
+        let timed_out = collect_until(walk.filter(is_manifest_name), deadline, |e| match read_manifest(&e.path()) {
+            ManifestRead::Parsed(info) => games.extend(game_from_acf(&info, root)),
+            ManifestRead::Unreadable => complete = false,
+            ManifestRead::Missing => {}
+        });
+        if capped {
+            complete = false;
+        }
+        if timed_out {
+            complete = false;
+            break;
+        }
+    }
+    // One entry per app id (a game can have a stale manifest in a second library): the newest wins.
+    games.sort_by(|a, b| (b.last_updated, &a.name, a.app_id).cmp(&(a.last_updated, &b.name, b.app_id)));
+    let mut seen_ids = std::collections::HashSet::new();
+    games.retain(|g| seen_ids.insert(g.app_id));
+    if games.len() > STEAM_LIST_MAX_GAMES {
+        games.truncate(STEAM_LIST_MAX_GAMES);
+        complete = false;
+    }
+    SteamListing { games, complete }
+}
+
+/// Runs `f` on its own thread and waits at most `budget` plus `STEAM_HARD_MARGIN`; a drive that never
+/// answers leaves one parked read-only thread behind and the answer is `late` (the same bound as `run_bounded`).
+fn run_bounded_value<T: Send + 'static>(budget: Duration, f: impl FnOnce() -> T + Send + 'static, late: T) -> T {
+    let (tx, rx) = std::sync::mpsc::channel();
+    if std::thread::Builder::new().name("paramedic-steam-list".into()).spawn(move || drop(tx.send(f()))).is_err() {
+        return late;
+    }
+    rx.recv_timeout(budget + STEAM_HARD_MARGIN).unwrap_or(late)
+}
+
+/// Every installed Steam game, newest update first. Read-only: the library list and the manifests, no
+/// process, no write. `Err` is "couldn't read Steam's libraries at all" (Steam not found, unreadable, or the
+/// read ran past its budget), which is not the same as `Ok` with no games.
+pub(crate) fn list_steam_games(budget: Duration) -> Result<SteamListing, UnreadableReason> {
+    run_bounded_value(
+        budget,
+        move || steam_library_roots().map(|r| list_games_in_roots(&r.roots, r.vdf_unreadable, budget, STEAM_DIR_ENTRY_CAP)),
+        Err(UnreadableReason::TimedOutBeforeAnyRecord),
+    )
+}
+
+// ---------------------------------------------------------------------------------------------
 // Installed programs: registry Uninstall keys (InstallDate = LOCAL calendar date)
 // ---------------------------------------------------------------------------------------------
 
@@ -3439,6 +3559,143 @@ mod tests {
         println!("  (windows update also: {defs} Defender definition installs, {store} Store-app installs)");
         if let Some(g) = &r.game_last_update {
             println!("game last file change (outside window allowed): {}", fmt(g));
+        }
+    }
+}
+
+/// The Steam game list (the picker). The parser is tested from fixture text; the directory reads only touch
+/// a scratch folder this test makes (never the real Steam folders, the registry or a process).
+#[cfg(test)]
+mod steam_listing_tests {
+    use super::*;
+
+    fn acf(id: u32, name: &str, dir: &str, updated: Option<i64>) -> String {
+        let lu = updated.map(|u| format!("\t\"LastUpdated\"\t\t\"{u}\"\n")).unwrap_or_default();
+        format!("\"AppState\"\n{{\n\t\"appid\"\t\t\"{id}\"\n\t\"name\"\t\t\"{name}\"\n\t\"installdir\"\t\t\"{dir}\"\n{lu}}}\n")
+    }
+
+    fn library(tag: &str, manifests: &[(u32, String)]) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("compy_d6_{tag}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("steamapps")).unwrap();
+        for (id, body) in manifests {
+            std::fs::write(root.join("steamapps").join(format!("appmanifest_{id}.acf")), body).unwrap();
+        }
+        root
+    }
+
+    fn roots(p: &std::path::Path) -> Vec<String> {
+        vec![p.to_string_lossy().into_owned()]
+    }
+
+    #[test]
+    fn a_manifest_gives_name_app_id_folder_and_update_time() {
+        let info = parse_acf(&acf(42, "Lane Split", "Lane Split", Some(1_763_500_000))).unwrap();
+        let g = game_from_acf(&info, "D:\\Lib\\").unwrap();
+        assert_eq!((g.app_id, g.name.as_str()), (42, "Lane Split"));
+        assert_eq!(g.install_dir.as_deref(), Some("D:\\Lib\\steamapps\\common\\Lane Split"));
+        assert_eq!(g.last_updated.map(|t| t.timestamp()), Some(1_763_500_000));
+        // No update time is a game with no date, not a missing game.
+        let none = game_from_acf(&parse_acf(&acf(7, "Dateless", "Dateless", None)).unwrap(), "D:\\Lib").unwrap();
+        assert_eq!(none.last_updated, None);
+    }
+
+    #[test]
+    fn steams_own_tools_and_unnamed_manifests_are_not_games() {
+        for (id, name) in [(228_980, "Steamworks Common Redistributables"), (1, "Proton 9.0"), (2, "Steam Linux Runtime 3.0 (sniper)")] {
+            assert!(game_from_acf(&parse_acf(&acf(id, name, "x", Some(1))).unwrap(), "C:\\S").is_none(), "{name}");
+        }
+        let unnamed = "\"AppState\"\n{\n\t\"appid\"\t\t\"9\"\n\t\"installdir\"\t\t\"Thing\"\n}\n";
+        assert!(game_from_acf(&parse_acf(unnamed).unwrap(), "C:\\S").is_none());
+    }
+
+    #[test]
+    fn an_installdir_that_is_not_one_plain_folder_gives_no_folder() {
+        for bad in ["..", "a\\b", "a/b", "C:\\Windows", "."] {
+            let g = game_from_acf(&parse_acf(&acf(5, "Odd", bad, Some(1))).unwrap(), "C:\\S").unwrap();
+            assert_eq!(g.install_dir, None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_listing_is_newest_update_first_with_one_entry_per_app_id() {
+        let a = library(
+            "order",
+            &[
+                (1, acf(1, "Old", "Old", Some(1_700_000_000))),
+                (2, acf(2, "New", "New", Some(1_763_000_000))),
+                (3, acf(3, "Dateless", "Dateless", None)),
+                (4, acf(4, "Proton 8.0", "Proton 8.0", Some(1_763_999_999))),
+            ],
+        );
+        let b = library("order2", &[(2, acf(2, "New", "New", Some(1_000)))]); // a stale second copy of app 2
+        let both: Vec<String> = [&a, &b].iter().map(|p| p.to_string_lossy().into_owned()).collect();
+        let l = list_games_in_roots(&both, false, Duration::from_secs(5), 5000);
+        let names: Vec<&str> = l.games.iter().map(|g| g.name.as_str()).collect();
+        assert_eq!(names, vec!["New", "Old", "Dateless"]);
+        assert!(l.complete);
+        assert_eq!(l.games[0].last_updated.map(|t| t.timestamp()), Some(1_763_000_000), "the newest copy wins");
+        let _ = std::fs::remove_dir_all(a);
+        let _ = std::fs::remove_dir_all(b);
+    }
+
+    #[test]
+    fn a_library_with_no_games_is_complete_and_empty_not_unreadable() {
+        let a = library("empty", &[]);
+        let l = list_games_in_roots(&roots(&a), false, Duration::from_secs(5), 5000);
+        assert!(l.games.is_empty() && l.complete, "none is a complete read");
+        let _ = std::fs::remove_dir_all(a);
+    }
+
+    #[test]
+    fn what_could_not_be_read_makes_the_listing_incomplete_never_none() {
+        let a = library("gaps", &[(1, acf(1, "One", "One", Some(5)))]);
+        // A library that is not there.
+        let mut with_gone = roots(&a);
+        with_gone.push("Z:\\no-such-library-d6".into());
+        let l = list_games_in_roots(&with_gone, false, Duration::from_secs(5), 5000);
+        assert_eq!((l.games.len(), l.complete), (1, false));
+        // The library list itself could not be read.
+        assert!(!list_games_in_roots(&roots(&a), true, Duration::from_secs(5), 5000).complete);
+        // A record that does not parse.
+        std::fs::write(a.join("steamapps").join("appmanifest_2.acf"), "not a manifest").unwrap();
+        let l = list_games_in_roots(&roots(&a), false, Duration::from_secs(5), 5000);
+        assert_eq!((l.games.len(), l.complete), (1, false));
+        // The entry cap: fewer entries read than the folder holds.
+        let l = list_games_in_roots(&roots(&a), false, Duration::from_secs(5), 1);
+        assert!(!l.complete);
+        // A budget that has already run out reads nothing and says so.
+        let l = list_games_in_roots(&roots(&a), false, Duration::ZERO, 5000);
+        assert!(l.games.is_empty() && !l.complete);
+        let _ = std::fs::remove_dir_all(a);
+    }
+
+    #[test]
+    fn more_games_than_are_kept_is_said_as_incomplete() {
+        let many: Vec<(u32, String)> = (1..=(STEAM_LIST_MAX_GAMES as u32 + 5)).map(|i| (i, acf(i, &format!("G{i}"), "x", Some(i64::from(i) + 1)))).collect();
+        let a = library("many", &many);
+        let l = list_games_in_roots(&roots(&a), false, Duration::from_secs(10), 5000);
+        assert_eq!(l.games.len(), STEAM_LIST_MAX_GAMES);
+        assert!(!l.complete);
+        assert_eq!(l.games[0].name, format!("G{}", STEAM_LIST_MAX_GAMES + 5), "the newest are kept");
+        let _ = std::fs::remove_dir_all(a);
+    }
+
+    #[test]
+    fn a_hung_read_is_the_late_answer_never_a_hang() {
+        let started = Instant::now();
+        let r = run_bounded_value(Duration::from_millis(50), || { std::thread::sleep(Duration::from_secs(2)); 1 }, 0);
+        assert_eq!(r, 0);
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert_eq!(run_bounded_value(Duration::from_secs(2), || 7, 0), 7);
+    }
+
+    #[test]
+    fn the_listing_reads_files_only_and_names_no_process_or_write() {
+        let src = include_str!("change_sources.rs");
+        let part = src.split_once("// Installed Steam games: the game picker's list").and_then(|(_, r)| r.split_once("// Installed programs: registry")).unwrap().0;
+        for banned in ["Command::new", "std::fs::write", "remove_file", "create_dir", "std::fs::rename", "OpenOptions"] {
+            assert!(!part.contains(banned), "{banned}");
         }
     }
 }

@@ -1411,7 +1411,7 @@ export type ParamedicRuledOut = { id: string; args: Record<string, string> };
 
 /** What Compy could not see of Windows' own records, per kind of change. `code` says why; the card owns the sentence. */
 export type ParamedicLimit = {
-  kind: "driver" | "windows-update" | "game-update" | "programs";
+  kind: "driver" | "windows-update" | "game-update" | "programs" | "mods" | "crashes";
   code: string;
   args: Record<string, string>;
 };
