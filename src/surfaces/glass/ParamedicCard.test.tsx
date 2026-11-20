@@ -1612,3 +1612,81 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(zh.moreBelow).not.toBe(en.moreBelow);
   });
 });
+
+describe("ParamedicCard: recorded background load", () => {
+  const load = (code: string, how: string, args: Record<string, string>, against = false): F["evidence"][number] => ({
+    kind: "measured",
+    code,
+    args: { how, count: "1", ...args },
+    against,
+    source: "sessions",
+  });
+  const showing = async (evidence: F["evidence"], extra: Partial<ParamedicDiagnosis> = {}) => {
+    await ask({ ...base, why_first: null, findings: [find("background-load", { evidence, fix: steps("background-load") })], ...extra });
+    await waitFor(() => expect(rows().length).toBe(1));
+  };
+
+  it("a measured high figure retitles the finding and gives both numbers; starts alone keep the old heading", async () => {
+    await showing([load("load-cpu", "high", { rough: "30", base: "2" })]);
+    expect(rows()[0].textContent).toMatch(/Other programs were using your PC while you played/);
+    expect(rows()[0].textContent).not.toMatch(/started while you played/);
+    openAll();
+    expect(screen.getByText("Other programs used about 30% of your processor during the rough session; in normal sessions they use about 2%.")).toBeTruthy();
+    cleanup();
+    await showing([{ kind: "measured", code: "starts-seen", args: { count: "1", names: "" }, against: false, source: "sessions" }]);
+    expect(rows()[0].textContent).toMatch(/Other programs started while you played/);
+  });
+
+  it("the three kinds read in their own words, singular and plural", async () => {
+    await showing([
+      load("load-cpu", "between", { rough: "10", base: "2", count: "2" }),
+      load("load-gpu3d", "high", { rough: "40", base: "5" }),
+      load("load-gpuvideo", "high", { rough: "25", base: "0", count: "2" }),
+    ]);
+    openAll();
+    expect(screen.getByText("Other programs used about 10% of your processor during the rough sessions; in normal sessions they use about 2%.")).toBeTruthy();
+    expect(screen.getByText("Other programs used about 40% of your graphics card during the rough session; in normal sessions they use about 5%.")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Other programs used about 25% of your graphics card's video engine (recording, streaming or video playback) during the rough sessions; in normal sessions they use about 0%.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("about the same as usual is an against line", async () => {
+    await showing([load("load-cpu", "same", { rough: "4", base: "2" }, true), { kind: "measured", code: "starts-seen", args: { count: "1", names: "" }, against: false, source: "sessions" }]);
+    openAll();
+    const line = screen.getByText("Other programs used about 4% of your processor during the rough session, about the same as in normal sessions (2%).");
+    expect(line.closest("li")?.textContent).toMatch(/Weakens this/);
+  });
+
+  it("numbers on one side only say exactly that", async () => {
+    await showing([load("load-cpu", "rough-only", { rough: "30" }), load("load-gpu3d", "base-only", { base: "6" })]);
+    openAll();
+    expect(
+      screen.getByText("Compy recorded how much of your processor other programs used in the rough session (about 30%), but not in enough of the normal sessions it compares with."),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("Compy recorded how much of your graphics card other programs used in the normal sessions (about 6%), but not in every rough session."),
+    ).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/Weakens this|Supports this/);
+  });
+
+  it("a figure about the same as usual sits with what Compy checked, and each recorded state has its own can't-see line", async () => {
+    await ask({
+      ...base,
+      findings: [base.findings[0]],
+      not_it: [{ id: "background-load", args: { kind: "load-gpuvideo", rough: "1", base: "0", count: "1" } }],
+      unknowns: ["other-load", "other-load-rough-only", "other-load-base-only"],
+    });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(
+      screen.getByText("Other programs used about 1% of your graphics card's video engine (recording, streaming or video playback) during the rough session, about the same as in normal sessions (0%)."),
+    ).toBeTruthy();
+    expect(screen.getByText("How busy the rest of your PC was, in the rough sessions and in the normal ones (Compy recorded it in neither)")).toBeTruthy();
+    expect(screen.getByText("How busy the rest of your PC was in the normal sessions Compy compares with (it recorded this only for the rough ones)")).toBeTruthy();
+    expect(screen.getByText("How busy the rest of your PC was in the rough sessions (Compy recorded this only for the normal ones)")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/How busy the rest of your PC was while you played/);
+  });
+});

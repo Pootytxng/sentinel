@@ -50,6 +50,8 @@ fn facts(at: &str, dur: u64, samples: u32, avg: f64, low1: f64) -> SessionFacts 
         started_names: Vec::new(),
         ram_events: 0,
         other_cpu_p90_pct: None,
+        other_gpu_3d_p90_pct: None,
+        other_gpu_video_p90_pct: None,
         cap: CapState::Unknown,
         mixed: false,
     }
@@ -670,11 +672,20 @@ fn absent_process_starts_are_unknown_not_against_when_load_was_not_recorded() {
     let seen = bg.evidence.iter().find(|e| e.code == "starts-seen-other").expect("timing");
     assert_eq!(seen.args["count"], "1", "only the rough sessions that had starts are counted");
     assert_eq!(seen.args["otherGame"], "h");
-    // A recorded low load number is the only thing that weakens it.
+    // A rough figure with no figure to compare it with weakens nothing: one neutral line says exactly that.
     sess[9].other_cpu_p90_pct = Some(3.0);
+    let d = diagnose(&inputs(sess.clone()), Complaint::Slow, Some("g"));
+    let bg = d.findings.iter().find(|f| f.id == "background-load").expect("still listed");
+    assert!(bg.evidence.iter().all(|e| !e.against), "one-sided numbers never weaken it");
+    assert!(bg.evidence.iter().any(|e| e.code == "load-cpu" && e.args["how"] == "rough-only"));
+    assert!(bg.in_play);
+    // A recorded low load number on BOTH sides, about the same, is what weakens it.
+    for s in sess.iter_mut().take(4) {
+        s.other_cpu_p90_pct = Some(2.0);
+    }
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     let bg = d.findings.iter().find(|f| f.id == "background-load").expect("still listed");
-    assert!(bg.evidence.iter().any(|e| e.against && e.code == "load-quiet"));
+    assert!(bg.evidence.iter().any(|e| e.against && e.code == "load-cpu" && e.args["how"] == "same"));
     assert!(!bg.in_play);
 }
 
@@ -916,7 +927,9 @@ fn the_frozen_constants_are_what_the_design_froze() {
     assert_eq!((RULE_R_FRACTION, RULE_R_BELOW_MIN), (0.80, 0.03));
     assert_eq!((RULE_P99_MEDIAN_X, RULE_P99_MAX_X, RULE_P99_R_FRACTION, RULE_AVG_FRACTION), (2.0, 1.3, 0.90, 0.70));
     assert_eq!((RAM_FULL_FRACTION, RAM_BASELINE_MAX_FRACTION), (0.90, 0.80));
-    assert_eq!((OTHER_CPU_P90_PCT, OTHER_CPU_BASELINE_MEDIAN_PCT, BUSY_START_MIN), (15.0, 5.0, 5));
+    assert_eq!((OTHER_CPU_P90_PCT, BUSY_START_MIN), (15.0, 5));
+    assert_eq!((OTHER_GPU_3D_P90_PCT, OTHER_GPU_VIDEO_P90_PCT), (20.0, 10.0));
+    assert_eq!((LOAD_RISE_PTS, LOAD_VIDEO_RISE_PTS, LOAD_SAME_PTS, LOAD_BASELINE_MIN), (15.0, 10.0, 5.0, 3));
     assert_eq!(RECENT_GAME_DAYS, 14);
 }
 
@@ -1008,9 +1021,13 @@ fn the_cause_lines_hold_on_both_sides() {
             }
         }
     };
-    assert_eq!(run(&cpu(4.9, 15.0)), ["background-load"], "usual under 5%, rough at 15%: counted");
-    assert!(run(&cpu(4.9, 14.9)).is_empty());
-    assert!(run(&cpu(5.0, 40.0)).is_empty(), "a usual median of 5% is already busy: no line to measure from");
+    // Recorded load counts when the rough p90 is at least 15 points above the normal median AND at least 15%.
+    assert_eq!(run(&cpu(4.9, 19.9)), ["background-load"], "usual 4.9%, rough 19.9%: exactly 15 points above, counted");
+    assert!(run(&cpu(4.9, 19.8)).is_empty(), "14.9 points above is not enough");
+    assert_eq!(run(&cpu(0.0, 15.0)), ["background-load"], "usual 0%, rough exactly at the 15% line: counted");
+    assert!(run(&cpu(0.0, 14.9)).is_empty(), "a hair under the busy line is not counted");
+    assert_eq!(run(&cpu(14.9, 40.0)), ["background-load"], "a usual just under the line, rough 25 points above: counted");
+    assert!(run(&cpu(15.0, 40.0)).is_empty(), "a usual median at the busy line is already busy: nothing to measure from");
     let starts = |n: u32| {
         move |s: &mut Vec<SessionFacts>| {
             s[4].busy_starts = n;
@@ -3932,4 +3949,234 @@ mod temperature_and_crashes {
             assert!(!json.contains(word), "{word} in {json}");
         }
     }
+}
+
+// ==== recorded background load, both ways (g4 commit 1) ==========================================
+/// Load figures for the three kinds, in order: processor, 3D engine, video engine.
+type Load3 = [Option<f64>; 3];
+
+fn with_load(mut s: SessionFacts, l: Load3) -> SessionFacts {
+    s.other_cpu_p90_pct = l[0];
+    s.other_gpu_3d_p90_pct = l[1];
+    s.other_gpu_video_p90_pct = l[2];
+    s
+}
+
+/// `n` normal sessions carrying `base`, then one rough session (ratio 0.3) carrying `rough` and `starts`
+/// build-tool starts. Nothing else differs between them.
+fn load_episode(n: usize, base: Load3, rough: Load3, starts: u32) -> Vec<SessionFacts> {
+    let mut sess: Vec<SessionFacts> = steady(n).into_iter().map(|s| with_load(s, base)).collect();
+    let mut r = with_load(facts("2026-10-20T10:00:00Z", 600, 600, 100.0, 30.0), rough);
+    r.busy_starts = starts;
+    if starts > 0 {
+        r.busy_names = vec!["rustc".into()];
+    }
+    sess.push(r);
+    sess
+}
+
+fn run_load(sess: Vec<SessionFacts>) -> Diagnosis {
+    diagnose(&inputs(sess), Complaint::Slow, Some("g"))
+}
+
+fn bg_finding(d: &Diagnosis) -> Option<&Finding> {
+    d.findings.iter().find(|f| f.id == "background-load")
+}
+
+fn load_lines(f: &Finding) -> Vec<(&'static str, String, bool)> {
+    f.evidence.iter().filter(|e| matches!(e.code, "load-cpu" | "load-gpu3d" | "load-gpuvideo")).map(|e| (e.code, e.args.get("how").cloned().unwrap_or_default(), e.against)).collect()
+}
+
+const NONE3: Load3 = [None, None, None];
+
+#[test]
+fn load_boundaries_are_pinned_from_both_sides_for_every_kind() {
+    use LoadHow::{Between, High, Same};
+    let c = |k, rough, base| classify_load(k, rough, base);
+    // Processor: busy line 15, rise 15, same band 5.
+    assert_eq!(c(LoadKind::Cpu, 15.0, 0.0), High, "exactly at the busy line and 15 above");
+    assert_eq!(c(LoadKind::Cpu, 14.9, 0.0), Between, "a hair under the busy line");
+    assert_eq!(c(LoadKind::Cpu, 19.9, 4.9), High, "exactly 15.0 points above");
+    assert_eq!(c(LoadKind::Cpu, 19.8, 4.9), Between, "14.9 points above");
+    assert_eq!(c(LoadKind::Cpu, 30.0, 15.0), Between, "a usual median at the busy line is already busy");
+    assert_eq!(c(LoadKind::Cpu, 40.0, 14.9), High);
+    assert_eq!(c(LoadKind::Cpu, 14.9, 9.9), Same, "under the line and exactly 5.0 above");
+    assert_eq!(c(LoadKind::Cpu, 14.9, 9.8), Between, "5.1 above is not about the same");
+    assert_eq!(c(LoadKind::Cpu, 5.0, 10.0), Same, "5.0 below counts");
+    assert_eq!(c(LoadKind::Cpu, 4.9, 10.0), Between, "5.1 below does not: much quieter than usual says nothing here");
+    assert_eq!(c(LoadKind::Cpu, 3.0, 3.0), Same);
+    // 3D engine: busy line 20, rise 15.
+    assert_eq!(c(LoadKind::Gpu3d, 20.0, 5.0), High);
+    assert_eq!(c(LoadKind::Gpu3d, 20.0, 5.1), Between);
+    assert_eq!(c(LoadKind::Gpu3d, 19.9, 0.0), Between);
+    assert_eq!(c(LoadKind::Gpu3d, 19.9, 14.9), Same);
+    assert_eq!(c(LoadKind::Gpu3d, 19.9, 14.8), Between, "5.1 above");
+    assert_eq!(c(LoadKind::Gpu3d, 35.0, 19.9), High, "a usual just under the line, 15.1 points above");
+    // Video engine: busy line 10, rise 10.
+    assert_eq!(c(LoadKind::GpuVideo, 10.0, 0.0), High);
+    assert_eq!(c(LoadKind::GpuVideo, 9.9, 0.0), Between);
+    assert_eq!(c(LoadKind::GpuVideo, 10.5, 0.6), Between, "9.9 points above");
+    assert_eq!(c(LoadKind::GpuVideo, 10.6, 0.6), High, "exactly 10.0 points above");
+    assert_eq!(c(LoadKind::GpuVideo, 5.0, 0.0), Same);
+    assert_eq!(c(LoadKind::GpuVideo, 5.1, 0.0), Between);
+    // The boundary is decided in tenths, so a value that is not exact in binary still lands on its side.
+    assert_eq!(c(LoadKind::Cpu, 0.1 + 0.2 + 14.7, 0.0), High, "15.000000000000002 is 15.0");
+}
+
+#[test]
+fn recorded_high_load_against_a_quiet_baseline_is_one_measured_support_and_never_likely_alone() {
+    let d = run_load(load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 0));
+    let f = bg_finding(&d).expect("a measured high load is listed");
+    assert_eq!(f.confidence, Certainty::Possible, "one support is never Most likely");
+    assert!(!f.in_play, "load says how busy the PC was, not when: no timing");
+    assert_eq!(f.evidence.len(), 1);
+    let e = &f.evidence[0];
+    assert!(e.code == "load-cpu" && e.kind == EvidenceKind::Measured && !e.against);
+    assert_eq!((e.args["how"].as_str(), e.args["rough"].as_str(), e.args["base"].as_str()), ("high", "30", "2"));
+    assert_eq!(f.since_when, When::Unknown);
+    // The same finding from the other two kinds, each by itself.
+    let d = run_load(load_episode(4, [None, Some(5.0), None], [None, Some(40.0), None], 0));
+    assert!(bg_finding(&d).is_some_and(|f| f.confidence == Certainty::Possible && f.evidence[0].code == "load-gpu3d"));
+    let d = run_load(load_episode(4, [None, None, Some(0.0)], [None, None, Some(25.0)], 0));
+    assert!(bg_finding(&d).is_some_and(|f| f.confidence == Certainty::Possible && f.evidence[0].code == "load-gpuvideo"));
+}
+
+#[test]
+fn recorded_high_load_plus_programs_seen_starting_in_every_rough_session_reaches_likely() {
+    // The one other support that exists for this finding is a start recorded in EVERY rough session (`d`).
+    let d = run_load(load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 9));
+    let f = bg_finding(&d).expect("listed");
+    assert_eq!(f.confidence, Certainty::Likely);
+    assert_eq!(load_lines(f)[0], ("load-cpu", "high".to_string(), false));
+    // An in-between reading on another kind weakens nothing; a same-as-usual one does.
+    let d = run_load(load_episode(4, [Some(2.0), Some(3.0), None], [Some(30.0), Some(10.0), None], 9));
+    assert_eq!(bg_finding(&d).map(|f| f.confidence), Some(Certainty::Likely), "3D 10% against a usual 3% is in between");
+    let d = run_load(load_episode(4, [Some(2.0), Some(3.0), Some(0.0)], [Some(30.0), Some(3.0), Some(0.0)], 9));
+    let f = bg_finding(&d).expect("listed");
+    assert_eq!(f.confidence, Certainty::Possible, "another kind about the same as usual is a contradiction");
+    assert!(load_lines(f).contains(&("load-gpu3d", "same".to_string(), true)));
+    // Starts alone (no recorded load) stay Possible, and so does a start seen in only some rough sessions.
+    let d = run_load(load_episode(4, NONE3, NONE3, 9));
+    assert_eq!(bg_finding(&d).map(|f| f.confidence), Some(Certainty::Possible));
+    // Load plus starts only in a partly measured session or another game's session: timing at most, never the second support.
+    let mut sess = load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 0);
+    let mut thin = facts("2026-10-12T10:00:00Z", 100, 80, 100.0, 20.0);
+    thin.busy_starts = 9;
+    thin.busy_names = vec!["rustc".into()];
+    sess.insert(4, thin);
+    let d = run_load(sess);
+    assert_eq!(bg_finding(&d).map(|f| f.confidence), Some(Certainty::Possible), "{:?}", d.findings.iter().map(|f| (f.id, f.confidence)).collect::<Vec<_>>());
+}
+
+#[test]
+fn about_the_same_load_is_evidence_against_and_otherwise_sits_with_what_was_checked() {
+    // Nothing else in the finding: no finding at all, and the numbers are listed as unchanged.
+    let d = run_load(load_episode(4, [Some(2.0), None, None], [Some(4.0), None, None], 0));
+    assert!(bg_finding(&d).is_none() && d.state == DiagnosisState::CantTell { why: CantTellWhy::NothingChanged });
+    let n = d.not_it.iter().find(|n| n.id == "background-load").expect("listed as unchanged, with its numbers");
+    assert_eq!((n.args["kind"].as_str(), n.args["rough"].as_str(), n.args["base"].as_str()), ("load-cpu", "4", "2"));
+    assert!(!d.unknowns.contains(&"other-load"), "recorded on both sides");
+    // With programs seen starting, the same reading is an against line and the finding is no longer in play.
+    let d = run_load(load_episode(4, [Some(2.0), None, None], [Some(4.0), None, None], 9));
+    let f = bg_finding(&d).expect("starts are timing");
+    assert!(load_lines(f).contains(&("load-cpu", "same".to_string(), true)));
+    assert!(!f.in_play && f.confidence == Certainty::Possible);
+    // The graphics kinds say it with their own words.
+    let d = run_load(load_episode(4, [None, Some(10.0), Some(1.0)], [None, Some(12.0), Some(2.0)], 0));
+    let kinds: Vec<&str> = d.not_it.iter().filter(|n| n.id == "background-load").map(|n| n.args["kind"].as_str()).collect();
+    assert_eq!(kinds, ["load-gpu3d", "load-gpuvideo"]);
+}
+
+#[test]
+fn a_reading_in_between_is_a_neutral_line_and_changes_nothing() {
+    // 10% against a usual 2%: under the busy line, 8 points above: neither high nor the same.
+    let d = run_load(load_episode(4, [Some(2.0), None, None], [Some(10.0), None, None], 9));
+    let f = bg_finding(&d).expect("starts are timing");
+    assert!(load_lines(f).contains(&("load-cpu", "between".to_string(), false)));
+    assert!(f.evidence.iter().all(|e| !e.against));
+    assert!(f.in_play, "no support and no contradiction from the load line");
+    // Two rough sessions, one high and one in between: shown in between, never counted as high.
+    let mut sess = load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 0);
+    sess.push(with_load(facts("2026-10-21T10:00:00Z", 600, 600, 100.0, 30.0), [Some(10.0), None, None]));
+    let d = run_load(sess);
+    assert_eq!(d.problem.as_ref().map(|p| p.sessions_affected.len()), Some(2));
+    assert!(bg_finding(&d).is_none(), "a mix of high and in between lists nothing by itself");
+}
+
+#[test]
+fn numbers_on_one_side_only_say_so_and_never_count() {
+    // Rough recorded, the normal sessions did not (older sessions): one neutral line, no support, no contradiction.
+    let d = run_load(load_episode(4, NONE3, [Some(30.0), None, None], 9));
+    let f = bg_finding(&d).expect("starts are timing");
+    assert_eq!(load_lines(f), [("load-cpu", "rough-only".to_string(), false)]);
+    assert_eq!(f.confidence, Certainty::Possible, "30% with nothing to compare it with is not a support");
+    assert!(d.unknowns.contains(&"other-load-rough-only") && !d.unknowns.contains(&"other-load"));
+    // Fewer than three normal sessions with numbers is the same as none.
+    let mut sess = load_episode(4, NONE3, [Some(30.0), None, None], 9);
+    sess[0].other_cpu_p90_pct = Some(2.0);
+    sess[1].other_cpu_p90_pct = Some(2.0);
+    let f_conf = bg_finding(&run_load(sess)).map(|f| f.confidence);
+    assert_eq!(f_conf, Some(Certainty::Possible));
+    // The other way round: the normal sessions have numbers, the rough one does not.
+    let d = run_load(load_episode(4, [Some(2.0), None, None], NONE3, 9));
+    let f = bg_finding(&d).expect("starts are timing");
+    assert_eq!(load_lines(f), [("load-cpu", "base-only".to_string(), false)]);
+    assert!(d.unknowns.contains(&"other-load-base-only"));
+    // One of two rough sessions without a number: not compared, said as base-only.
+    let mut sess = load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 9);
+    let mut second = facts("2026-10-21T10:00:00Z", 600, 600, 100.0, 30.0);
+    second.busy_starts = 9;
+    second.busy_names = vec!["rustc".into()];
+    sess.push(second);
+    let d = run_load(sess);
+    assert_eq!(d.problem.as_ref().map(|p| p.sessions_affected.len()), Some(2));
+    let f = bg_finding(&d).expect("starts are timing");
+    assert_eq!(load_lines(f), [("load-cpu", "base-only".to_string(), false)]);
+    assert_eq!(f.confidence, Certainty::Possible);
+}
+
+#[test]
+fn sessions_without_numbers_never_produce_load_support_or_contradiction() {
+    // Old sessions: no number anywhere. Starts alone make the finding; it says nothing was recorded.
+    let d = run_load(load_episode(4, NONE3, NONE3, 9));
+    let f = bg_finding(&d).expect("starts are timing");
+    assert!(load_lines(f).is_empty(), "no load line of any kind");
+    assert!(f.evidence.iter().any(|e| e.code == "load-not-recorded" && e.kind == EvidenceKind::Unknown));
+    assert!(f.evidence.iter().all(|e| !e.against));
+    assert!(d.unknowns.contains(&"other-load"), "the generic line stays for sessions that recorded nothing");
+    // And with no starts either there is no finding and nothing is called quiet or unchanged.
+    let d = run_load(load_episode(4, NONE3, NONE3, 0));
+    assert!(bg_finding(&d).is_none() && d.not_it.iter().all(|n| n.id != "background-load"));
+    assert!(d.unknowns.contains(&"other-load"));
+    // The owner's recorded sessions predate both recorders: the same.
+    let d = diagnose(&fixture(), Complaint::WasFineBefore, Some(ROUGH_GAME));
+    let f = bg_finding(&d).expect("starts seen in the episode are timing");
+    assert!(f.evidence.iter().all(|e| !e.code.starts_with("load-") || e.code == "load-not-recorded"));
+    assert!(d.unknowns.contains(&"other-load") && d.not_it.iter().all(|n| n.id != "background-load"));
+}
+
+#[test]
+fn the_title_changes_only_with_a_measured_high_figure() {
+    // The card keys its heading off exactly this evidence: a "load-*" line whose how is "high".
+    let high = |d: &Diagnosis| bg_finding(d).is_some_and(|f| f.evidence.iter().any(|e| e.code.starts_with("load-") && e.args.get("how").is_some_and(|h| h == "high")));
+    assert!(high(&run_load(load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 0))));
+    assert!(!high(&run_load(load_episode(4, NONE3, NONE3, 9))), "starts alone keep the old heading");
+    assert!(!high(&run_load(load_episode(4, [Some(2.0), None, None], [Some(10.0), None, None], 9))));
+}
+
+#[test]
+fn facts_read_all_three_other_load_figures() {
+    let mut s = summary();
+    s.game_state = Some(crate::game_state::GameStateFingerprint {
+        other_cpu: Some(crate::game_state::OtherLoad { readings: 100, unread: 0, mean_pct_x10: 40, p90_pct_x10: 223 }),
+        other_gpu_3d: Some(crate::game_state::OtherLoad { readings: 100, unread: 0, mean_pct_x10: 10, p90_pct_x10: 305 }),
+        other_gpu_video: Some(crate::game_state::OtherLoad { readings: 100, unread: 0, mean_pct_x10: 0, p90_pct_x10: 0 }),
+        ..Default::default()
+    });
+    let f = facts_from(&s);
+    assert_eq!((f.other_cpu_p90_pct, f.other_gpu_3d_p90_pct, f.other_gpu_video_p90_pct), (Some(22.3), Some(30.5), Some(0.0)));
+    // A row from before the recorders: nothing, never zero.
+    s.game_state = None;
+    let f = facts_from(&s);
+    assert_eq!((f.other_cpu_p90_pct, f.other_gpu_3d_p90_pct, f.other_gpu_video_p90_pct), (None, None, None));
 }

@@ -61,7 +61,26 @@ pub(crate) const RULE_AVG_FRACTION: f64 = 0.70;
 pub(crate) const RAM_FULL_FRACTION: f64 = 0.90;
 pub(crate) const RAM_BASELINE_MAX_FRACTION: f64 = 0.80;
 pub(crate) const OTHER_CPU_P90_PCT: f64 = 15.0;
-pub(crate) const OTHER_CPU_BASELINE_MEDIAN_PCT: f64 = 5.0;
+/// Recorded background load, rough sessions against the normal ones (`load_state`). All figures are the 90th
+/// percentile of a session's readings (what the recorder keeps as `p90_pct_x10`), compared in tenths of a
+/// percent so a boundary never depends on float rounding. A kind counts as HIGH in the rough session(s) when its
+/// p90 is at or above its busy line AND at least its rise above the normal sessions' median AND the normal
+/// median itself is under the busy line; SAME when it is under the busy line and within `LOAD_SAME_PTS` of the
+/// normal median either way; anything else is in between (shown, never counted).
+/// Other programs' 3D-engine work: a SUM over engines of everything but the game, and the desktop compositor and
+/// a browser keep a floor under it, so its busy line sits above the processor's.
+pub(crate) const OTHER_GPU_3D_P90_PCT: f64 = 20.0;
+/// Other programs' video-engine work (decode, encode): idle unless something is playing, recording or
+/// streaming, so a sustained 10% is a real encode or decode, and the rise needed is smaller.
+pub(crate) const OTHER_GPU_VIDEO_P90_PCT: f64 = 10.0;
+/// Rise over the normal median that counts as "more than usual" (processor and 3D engine).
+pub(crate) const LOAD_RISE_PTS: f64 = 15.0;
+/// The same for the video engine.
+pub(crate) const LOAD_VIDEO_RISE_PTS: f64 = 10.0;
+/// Within this many points of the normal median is "about the same".
+pub(crate) const LOAD_SAME_PTS: f64 = 5.0;
+/// Normal sessions with a recorded figure needed before the rough ones can be compared with them.
+pub(crate) const LOAD_BASELINE_MIN: usize = 3;
 /// Process starts of build/encode tools in one session that count as "busy programs were running".
 pub(crate) const BUSY_START_MIN: u32 = 5;
 /// With no game named, every game played within this many days of the newest session is judged.
@@ -167,6 +186,13 @@ pub(crate) struct SessionFacts {
     /// 90th percentile of how busy everything except the game was, percent. Unknown before TG-context v2.
     #[serde(default)]
     other_cpu_p90_pct: Option<f64>,
+    /// Same for 3D-engine work done by everything but the game (a sum, clamped to 100). Sessions recorded
+    /// before 2026-11-20 never have it: unknown, never zero.
+    #[serde(default)]
+    other_gpu_3d_p90_pct: Option<f64>,
+    /// Same for video-engine work (decode, encode) by everything but the game.
+    #[serde(default)]
+    other_gpu_video_p90_pct: Option<f64>,
     #[serde(default)]
     cap: CapState,
     /// The recorder's read-only flag (`session_boundary::suspected_splice`) says this row may hold two games.
@@ -950,6 +976,8 @@ pub(crate) fn facts_from(s: &crate::sessions::SessionSummary) -> SessionFacts {
         started_names,
         ram_events,
         other_cpu_p90_pct: gs.and_then(|g| g.other_cpu).map(|o| f64::from(o.p90_pct_x10) / 10.0),
+        other_gpu_3d_p90_pct: gs.and_then(|g| g.other_gpu_3d).map(|o| f64::from(o.p90_pct_x10) / 10.0),
+        other_gpu_video_p90_pct: gs.and_then(|g| g.other_gpu_video).map(|o| f64::from(o.p90_pct_x10) / 10.0),
         // No crash marks are passed: the engine reads none, read-only or otherwise, so the flag runs on the
         // session's own series (a row written by a build that holds one process identity is Clean without looking).
         mixed: matches!(crate::session_boundary::suspected_splice(s, &[]), crate::session_boundary::Splice::Suspected(_)),
@@ -1351,7 +1379,10 @@ fn rank(c: &mut Vec<Cand>) {
     // Background programs seen only in a partly measured session or another game's rough session (none in
     // this game's fully measured rough ones) are a weaker support than a measured driver change: they never
     // rank above the driver.
-    let weak_background = |x: &Cand| x.id == "background-load" && !x.evidence.iter().any(|e| e.code == "starts-seen");
+    // A recorded high load figure is a measurement of this game's own rough sessions, so it is not weak.
+    let weak_background = |x: &Cand| {
+        x.id == "background-load" && !x.evidence.iter().any(|e| e.code == "starts-seen" || (e.code.starts_with("load-") && e.args.get("how").is_some_and(|h| h == "high")))
+    };
     if let (Some(bg), Some(drv)) = (c.iter().position(weak_background), c.iter().position(|x| x.id == "gpu-driver-change")) {
         if bg < drv {
             let cand = c.remove(bg);
@@ -1613,6 +1644,148 @@ fn note_busy<'s>(s: &'s SessionFacts, seen: &mut Vec<&'s SessionFacts>) {
     }
 }
 
+/// Which recorded figure of "everything except the game" a line is about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LoadKind {
+    Cpu,
+    Gpu3d,
+    GpuVideo,
+}
+
+const LOAD_KINDS: [LoadKind; 3] = [LoadKind::Cpu, LoadKind::Gpu3d, LoadKind::GpuVideo];
+
+impl LoadKind {
+    fn code(self) -> &'static str {
+        match self {
+            LoadKind::Cpu => "load-cpu",
+            LoadKind::Gpu3d => "load-gpu3d",
+            LoadKind::GpuVideo => "load-gpuvideo",
+        }
+    }
+
+    fn busy_pct(self) -> f64 {
+        match self {
+            LoadKind::Cpu => OTHER_CPU_P90_PCT,
+            LoadKind::Gpu3d => OTHER_GPU_3D_P90_PCT,
+            LoadKind::GpuVideo => OTHER_GPU_VIDEO_P90_PCT,
+        }
+    }
+
+    fn rise_pts(self) -> f64 {
+        match self {
+            LoadKind::Cpu | LoadKind::Gpu3d => LOAD_RISE_PTS,
+            LoadKind::GpuVideo => LOAD_VIDEO_RISE_PTS,
+        }
+    }
+
+    fn read(self, s: &SessionFacts) -> Option<f64> {
+        match self {
+            LoadKind::Cpu => s.other_cpu_p90_pct,
+            LoadKind::Gpu3d => s.other_gpu_3d_p90_pct,
+            LoadKind::GpuVideo => s.other_gpu_video_p90_pct,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LoadHow {
+    /// Counts as support (one independent measurement).
+    High,
+    /// Counts against: about the same as in the normal sessions.
+    Same,
+    /// Shown with its numbers, counted neither way.
+    Between,
+}
+
+/// A percentage in tenths, so the two sides of a line are compared as whole numbers.
+fn tenths(x: f64) -> i64 {
+    (x * 10.0).round() as i64
+}
+
+/// One rough figure against the normal sessions' median, for one kind (see the constants' docs).
+fn classify_load(kind: LoadKind, rough: f64, base: f64) -> LoadHow {
+    let (r, b) = (tenths(rough), tenths(base));
+    let (busy, rise, same) = (tenths(kind.busy_pct()), tenths(kind.rise_pts()), tenths(LOAD_SAME_PTS));
+    if r >= busy && r - b >= rise && b < busy {
+        LoadHow::High
+    } else if r < busy && (r - b).abs() <= same {
+        LoadHow::Same
+    } else {
+        LoadHow::Between
+    }
+}
+
+/// What the recorded figures say about one kind, for the rough sessions and the baseline sessions.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum LoadState {
+    /// Every rough session and at least `LOAD_BASELINE_MIN` baseline sessions have the figure.
+    Compared { how: LoadHow, rough: f64, base: f64 },
+    /// Every rough session has it; too few normal sessions do.
+    RoughOnly { rough: f64 },
+    /// Enough normal sessions have it; not every rough session does.
+    BaseOnly { base: f64 },
+    Neither,
+}
+
+fn load_state(c: &Ctx, kind: LoadKind) -> LoadState {
+    let rough_all: Vec<Option<f64>> = c.affected.iter().map(|s| kind.read(s)).collect();
+    let mut rough: Vec<f64> = rough_all.iter().flatten().copied().collect();
+    let rough_ok = !rough_all.is_empty() && rough.len() == rough_all.len();
+    let mut base: Vec<f64> = c.base.iter().filter_map(|s| kind.read(s)).collect();
+    let base_ok = base.len() >= LOAD_BASELINE_MIN;
+    match (rough_ok, base_ok) {
+        (true, true) => {
+            let b = median(&mut base);
+            let hows: Vec<LoadHow> = rough.iter().map(|r| classify_load(kind, *r, b)).collect();
+            let how = if hows.iter().all(|h| *h == LoadHow::High) {
+                LoadHow::High
+            } else if hows.iter().all(|h| *h == LoadHow::Same) {
+                LoadHow::Same
+            } else {
+                LoadHow::Between
+            };
+            // The figure shown is the one the verdict stands on: the lowest rough one for "high" (every rough
+            // session was at least that busy), the highest for "same" (every one was at most that busy).
+            let shown = match how {
+                LoadHow::High => rough.iter().copied().fold(f64::INFINITY, f64::min),
+                LoadHow::Same => rough.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+                LoadHow::Between => median(&mut rough),
+            };
+            LoadState::Compared { how, rough: shown, base: b }
+        }
+        (true, false) => LoadState::RoughOnly { rough: median(&mut rough) },
+        (false, true) => LoadState::BaseOnly { base: median(&mut base) },
+        (false, false) => LoadState::Neither,
+    }
+}
+
+fn pct_word(x: f64) -> String {
+    format!("{}", x.round() as i64)
+}
+
+/// The evidence line for one kind, or `None` when neither side recorded it. `how` says which sentence the card
+/// uses; only `high` supports and only `same` weakens.
+fn load_evidence(kind: LoadKind, st: LoadState, rough_sessions: usize) -> Option<Evidence> {
+    let line = |how: &str, against: bool, args: &[(&'static str, String)]| {
+        let mut a: Vec<(&'static str, String)> = vec![("how", how.to_string()), ("count", rough_sessions.to_string())];
+        a.extend(args.iter().cloned());
+        ev(EvidenceKind::Measured, kind.code(), "sessions", against, &a)
+    };
+    match st {
+        LoadState::Compared { how, rough, base } => {
+            let nums = [("rough", pct_word(rough)), ("base", pct_word(base))];
+            Some(match how {
+                LoadHow::High => line("high", false, &nums),
+                LoadHow::Same => line("same", true, &nums),
+                LoadHow::Between => line("between", false, &nums),
+            })
+        }
+        LoadState::RoughOnly { rough } => Some(line("rough-only", false, &[("rough", pct_word(rough))])),
+        LoadState::BaseOnly { base } => Some(line("base-only", false, &[("base", pct_word(base))])),
+        LoadState::Neither => None,
+    }
+}
+
 fn detect_background(c: &Ctx, out: &mut Out) {
     let busy_rough: Vec<&SessionFacts> = c.affected.iter().copied().filter(|s| s.busy_starts >= BUSY_START_MIN).collect();
     // Starts seen in a ROUGH session of the episode count as timing: this game's rough and partly measured
@@ -1645,19 +1818,43 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         n.dedup();
         n.join(", ")
     };
-    let mut base_cpu: Vec<f64> = c.base.iter().filter_map(|s| s.other_cpu_p90_pct).collect();
-    let can_measure = !base_cpu.is_empty() && median(&mut base_cpu) < OTHER_CPU_BASELINE_MEDIAN_PCT;
-    let loud = |s: &SessionFacts| can_measure && s.other_cpu_p90_pct.is_some_and(|p| p >= OTHER_CPU_P90_PCT);
-    // Only a recorded load number below the line may weaken this finding.
-    let quiet_rough = c.affected.iter().filter(|s| s.other_cpu_p90_pct.is_some_and(|p| p < OTHER_CPU_P90_PCT)).count();
-    let loud_rough = c.affected.iter().filter(|s| loud(s)).count();
-    let all_measured = c.affected.iter().all(|s| s.other_cpu_p90_pct.is_some());
-    if !all_measured {
-        out.unknown("other-load");
+    // Recorded load, per kind: a measurement of its own, independent of the lossy start events. Only sessions
+    // since 2026-11-20 carry it, and only a figure recorded on BOTH sides is ever compared.
+    let states: Vec<(LoadKind, LoadState)> = LOAD_KINDS.iter().map(|k| (*k, load_state(c, *k))).collect();
+    let how_of = |st: &LoadState| if let LoadState::Compared { how, .. } = st { Some(*how) } else { None };
+    let high = states.iter().any(|(_, s)| how_of(s) == Some(LoadHow::High));
+    let same = states.iter().any(|(_, s)| how_of(s) == Some(LoadHow::Same));
+    let compared = states.iter().any(|(_, s)| how_of(s).is_some());
+    let rough_only = states.iter().any(|(_, s)| matches!(s, LoadState::RoughOnly { .. }));
+    let base_only = states.iter().any(|(_, s)| matches!(s, LoadState::BaseOnly { .. }));
+    let none_recorded = states.iter().all(|(_, s)| *s == LoadState::Neither);
+    // What Compy could not see, said for the state each set of sessions is in (never "the PC was quiet").
+    if !compared {
+        if none_recorded {
+            out.unknown("other-load");
+        }
+        if rough_only {
+            out.unknown("other-load-rough-only");
+        }
+        if base_only {
+            out.unknown("other-load-base-only");
+        }
     }
-    if seen.is_empty() && loud_rough == 0 {
-        if all_measured && can_measure {
-            out.ruled_out("background-load", &[]);
+    if seen.is_empty() && !high {
+        // Nothing to list. The load figures that say it was about the same as usual are the one thing worth
+        // saying: they sit with what Compy checked, with their numbers.
+        for (kind, st) in &states {
+            if let LoadState::Compared { how: LoadHow::Same, rough, base } = st {
+                out.ruled_out(
+                    "background-load",
+                    &[
+                        ("kind", kind.code().to_string()),
+                        ("rough", pct_word(*rough)),
+                        ("base", pct_word(*base)),
+                        ("count", c.affected.len().to_string()),
+                    ],
+                );
+            }
         }
         return;
     }
@@ -1699,13 +1896,8 @@ fn detect_background(c: &Ctx, out: &mut Out) {
             ],
         ));
     }
-    if loud_rough > 0 {
-        evidence.push(ev(EvidenceKind::Measured, "load-measured", "sessions", false, &[("count", loud_rough.to_string())]));
-    }
-    if quiet_rough > 0 {
-        evidence.push(ev(EvidenceKind::Measured, "load-quiet", "sessions", true, &[("count", quiet_rough.to_string())]));
-    }
-    if !all_measured {
+    evidence.extend(states.iter().filter_map(|(k, st)| load_evidence(*k, *st, c.affected.len())));
+    if none_recorded {
         evidence.push(ev(EvidenceKind::Unknown, "load-not-recorded", "sessions", false, &[]));
     }
     // A time range only over this game's own fully measured rough sessions that had programs starting. A
@@ -1717,13 +1909,16 @@ fn detect_background(c: &Ctx, out: &mut Out) {
     };
     out.cands.push(Cand {
         id: "background-load",
+        // Timing comes from starts alone: a recorded load figure says how busy the PC was, not when.
         t: !seen.is_empty(),
+        // Unchanged: a program start recorded in every rough session (the one other support that exists here).
         d: busy_rough.len() == c.affected.len(),
         x: false,
         confounded: false,
         r: false,
-        m: loud_rough > 0,
-        c1: quiet_rough > 0,
+        // One recorded measurement: the rough session(s) were far busier than the normal ones.
+        m: high,
+        c1: same,
         since,
         // Programs are named in the steps only when this game's own fully measured rough sessions had them.
         fix: steps("background-load", &[("names", names_of(&busy_rough))]),

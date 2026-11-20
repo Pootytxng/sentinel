@@ -80,6 +80,10 @@ function findingTitle(f: ParamedicFinding, { t, dates, game }: Ctx): string | nu
   if (f.id === "graphics-mod" && f.fix.kind === "steps") {
     return t("paramedic.finding.graphicsMod.what", { game, name: f.fix.args.name });
   }
+  // When the support is a recorded load figure (not just programs seen starting), the heading says it was measured.
+  if (f.id === "background-load" && f.evidence.some((e) => e.code.startsWith("load-") && e.args.how === "high")) {
+    return t("paramedic.finding.backgroundLoad.measured");
+  }
   // Installs carry a day, never a time of day: the heading names the day.
   if (f.id === "program-installed") {
     const day = f.evidence.find((e) => e.code === "installed-and-started")?.args.day;
@@ -112,6 +116,35 @@ function sinceText(w: ParamedicWhen, { t, dates }: Ctx): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * One recorded figure of how busy everything except the game was, in the sentence for what it says:
+ * `high` and `between` give the numbers, `same` says "about the same", and the two one-sided states say
+ * which side Compy did not record. Literal keys, one per sentence.
+ */
+function loadLine(code: string, a: Record<string, string>, t: T): string | null {
+  const count = Number(a.count ?? 1);
+  const { rough, base } = a;
+  if (code === "load-cpu") {
+    if (a.how === "same") return t("paramedic.evidence.loadCpuSame", { count, rough, base });
+    if (a.how === "rough-only") return t("paramedic.evidence.loadCpuRoughOnly", { count, rough });
+    if (a.how === "base-only") return t("paramedic.evidence.loadCpuBaseOnly", { base });
+    return t("paramedic.evidence.loadCpu", { count, rough, base });
+  }
+  if (code === "load-gpu3d") {
+    if (a.how === "same") return t("paramedic.evidence.loadGpu3dSame", { count, rough, base });
+    if (a.how === "rough-only") return t("paramedic.evidence.loadGpu3dRoughOnly", { count, rough });
+    if (a.how === "base-only") return t("paramedic.evidence.loadGpu3dBaseOnly", { base });
+    return t("paramedic.evidence.loadGpu3d", { count, rough, base });
+  }
+  if (code === "load-gpuvideo") {
+    if (a.how === "same") return t("paramedic.evidence.loadGpuVideoSame", { count, rough, base });
+    if (a.how === "rough-only") return t("paramedic.evidence.loadGpuVideoRoughOnly", { count, rough });
+    if (a.how === "base-only") return t("paramedic.evidence.loadGpuVideoBaseOnly", { base });
+    return t("paramedic.evidence.loadGpuVideo", { count, rough, base });
+  }
+  return null;
 }
 
 function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | null {
@@ -210,10 +243,10 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
       return t("paramedic.evidence.recoveredRamRoughLower", { peakGb: a.peakGb, totalGb: a.totalGb });
     case "recovery-ram-rough-unread":
       return t("paramedic.evidence.recoveryRamRoughUnread");
-    case "load-measured":
-      return t("paramedic.evidence.loadMeasured", { count: Number(a.count) });
-    case "load-quiet":
-      return t("paramedic.evidence.loadQuiet", { count: Number(a.count) });
+    case "load-cpu":
+    case "load-gpu3d":
+    case "load-gpuvideo":
+      return loadLine(e.code, a, t);
     case "cross-game-confounded":
       return t("paramedic.evidence.crossGameConfounded", { games: a.games });
     case "normal-on-new-driver":
@@ -386,7 +419,8 @@ function ruledOutLine(n: ParamedicRuledOut, { t, dates, game }: Ctx): string | n
     case "game-files-change":
       return t("paramedic.checked.gameFiles", { game, when: dates.day(a.since) });
     case "background-load":
-      return t("paramedic.checked.backgroundLoad");
+      // Only a recorded figure that was about the same as in the normal sessions is listed here, with its numbers.
+      return loadLine(a.kind, { ...a, how: "same" }, t);
     case "memory-pressure":
       return t("paramedic.checked.memoryPressure", { percent: a.percent, count: Number(a.count ?? 1) });
     case "memory-as-full":
@@ -438,6 +472,10 @@ function unknownLine(code: string, { t, game }: Ctx): string | null {
       return t("paramedic.unknown.overlays");
     case "other-load":
       return t("paramedic.unknown.otherLoad");
+    case "other-load-rough-only":
+      return t("paramedic.unknown.otherLoadRoughOnly");
+    case "other-load-base-only":
+      return t("paramedic.unknown.otherLoadBaseOnly");
     case "gpu-driver":
       return t("paramedic.unknown.gpuDriver");
     case "hardware":
