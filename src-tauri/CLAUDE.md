@@ -24,7 +24,7 @@ Line counts drift — treat as rough and verify against current code before asse
 
 **Monitoring, FPS & sessions**
 - `monitoring.rs` (~1300) — monitor-tool orchestration + sensor coverage.
-- `other_load.rs` (~626) — TG-context v2, record only: how busy everything but the game was during a capture (CPU share from a handle-free process snapshot, GPU Engine counters), numbers only. Opens no process handle, writes no Windows state.
+- `other_load.rs` — non-game load.
 - `fps.rs` (~1092) — FPS/frametime IPC (`fps.json`/`fps.alive`) from the ETW helper.
 - `sessions.rs` (~569) — session-summary persistence (`sessions.json`).
 - `stutter.rs` (~135) — stutter/1%-low derivation.
