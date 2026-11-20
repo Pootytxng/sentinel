@@ -255,7 +255,8 @@ describe("Home's standard readout (owner 2026-08-06 — structure it, do not hid
     // The readings. The 1% low and GPU temp were briefly expert-only; the owner put them back.
     // CPU temp joined them on the face in issue #49, when it moved off the annotation plane.
     const read = (id: string) => c.querySelector(`[data-read="${id}"]`);
-    expect(read("readiness"), "the readiness gauge left the default face").toBeTruthy();
+    // Paramedic-first Home (2026-11-20): the readiness ring left Home on purpose; no score, no grade word.
+    expect(read("readiness"), "the readiness score is back on Home").toBeNull();
     expect(read("avgFps"), "the avg-fps reading left the default face").toBeTruthy();
     expect(read("low1"), "the 1% low is gated again — it must be standard").toBeTruthy();
     expect(read("gpuTemp"), "the GPU temp is gated again — it must be standard").toBeTruthy();

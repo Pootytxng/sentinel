@@ -130,7 +130,9 @@ export function TrustMoment({
             {t("home.trustMoment.offer.bodyPost")}
           </p>
           <div className="tm-actions">
-            <button type="button" className="tm-btn tm-btn-primary" onClick={run}>
+            {/* Quiet, not primary: it changes a setting, so a first-time user's biggest button on Home is
+                the Paramedic's. Same click, confirmation text and undo as before. */}
+            <button type="button" className="tm-btn" onClick={run}>
               {t("home.trustMoment.actions.watch")}
             </button>
             <button type="button" className="tm-btn" onClick={dismiss}>

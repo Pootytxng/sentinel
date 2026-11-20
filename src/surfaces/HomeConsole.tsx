@@ -32,7 +32,7 @@ import { buildRigParts } from "./rig/rig-parts";
 import { hddPartIds, limiterFocus } from "./rig/limiter-part";
 import { HardwareGrid } from "./HardwareGrid";
 import { inEffectCounts, useMachineModel, type InEffectCounts } from "../data/machine-model";
-import { ArcGauge, type ArcTone } from "../design/console/ArcGauge";
+import type { ArcTone } from "../design/console/ArcGauge";
 import { Term } from "../design/Term";
 import { Dock, type DockNode } from "../design/console/Dock";
 import { Reading } from "../design/console/Reading";
@@ -734,41 +734,6 @@ export function HomeConsole({
     ? Math.max(0, readiness!.checks.length - checksUnread - checksAdvisory)
     : 0;
   const checksGood = readinessKnown ? Math.max(0, checksGraded - readiness!.attention_count) : 0;
-  const readinessScore = readinessKnown && checksGraded > 0 ? Math.round((100 * checksGood) / checksGraded) : null;
-  // What the ratio left out is NOT said in the ring's note: at 1280×720 the ring's column is 134px,
-  // and "· 2 advisory, not graded" wrapped its note to four lines and pushed the panel 9px past its
-  // floor (desk review 2026-11-03, second pass); "· 2 couldn't be read" wrapped it past two lines the
-  // same way (CR-ring-note). The ring never counts an unread or advisory check as passed; the Re-run
-  // band below names both, as the first check does. With nothing graded at all the ring has no number,
-  // so both reasons are said under it instead.
-  const readinessAside = [
-    ...(checksUnread > 0 ? [t("home.homeConsole.stage.readinessUnread", { count: checksUnread })] : []),
-    ...(checksAdvisory > 0 ? [t("home.homeConsole.stage.readinessAdvisory", { count: checksAdvisory })] : []),
-  ];
-  /**
-   * THE READINESS BAND — the one word 01-health-approved.png prints beside the ring.
-   *
-   * These thresholds are stated HERE, next to the number they band, because a grade is an
-   * interpretation of a measurement and an undocumented interpretation is indistinguishable
-   * from an invented one. Nothing is measured here that was not already measured: the score
-   * is the share of readiness checks that passed, so the band is arithmetic on a real ratio,
-   * never a claim about the machine beyond it. Null score (checks still running, or none at
-   * all) yields NO grade — the gauge falls back to its honest not-yet state.
-   *
-   *   >= 90  Good          at 16 readable checks that is at most one imperfect check
-   *   >= 70  Fair          a handful want a look; the room still works
-   *    < 70  Worth a look  a third or more of the readable checks want attention
-   * (P7-score: the words are calm — a grade is a share of checks, not a verdict on the PC — and
-   *  unreadable checks are outside the ratio, named beside it.)
-   */
-  const readinessGrade =
-    readinessScore == null
-      ? null
-      : readinessScore >= 90
-        ? { word: t("home.homeConsole.stage.readinessGrade.good"), tone: "good" as const }
-        : readinessScore >= 70
-          ? { word: t("home.homeConsole.stage.readinessGrade.fair"), tone: "warn" as const }
-          : { word: t("home.homeConsole.stage.readinessGrade.poor"), tone: "bad" as const };
 
   // The dek: postureLine's sentence often opens by restating its own headline. Under the
   // display verdict that reads as a stutter, so the dek drops the restated prefix and keeps
@@ -1293,38 +1258,11 @@ export function HomeConsole({
             )}
             </div>
             {/* THE READOUT STRIP — the four gauges that used to sit on the canvas corners, plus
-                the CPU temperature that used to be a value on the annotation plane. It is a
-                HIERARCHY, not five equal instruments: readiness keeps its ring because a 0–100 out
-                of a formula is what a ring is for, and the four raw readings beside it are numbers,
-                so they render as numbers. Five rings in a row would be the "twelve equal tiles"
-                failure the bento exists to prevent, in miniature. */}
+                the CPU temperature that used to be a value on the annotation plane. Readings,
+                not rings: every cell is a number Compy measured, so it renders as a number. The
+                readiness ring and its grade word left Home (Paramedic-first Home, 2026-11-20): Compy
+                shows no score; the checks it ran stay named in the Re-run band and the posture line. */}
             <div className="hc-readout">
-              <div className="hc-read-arc" data-read="readiness">
-                {/* The score's whole formula, stated where the number is (consumer-panel Phase 2:
-                    a bare 0–100 read as a made-up number). */}
-                <ArcGauge
-                  label={t("home.homeConsole.stage.readinessLabel")}
-                  value={readinessScore}
-                  max={100}
-                  unit="score"
-                  /* The RING stays the accent. Sampled straight out of the comp: its ring is
-                     violet and only the word beside it is green, so the colour-coded ladder
-                     lives in the GRADE and the ring stays the room's instrument. */
-                  tone="accent"
-                  grade={readinessGrade?.word}
-                  gradeTone={readinessGrade?.tone}
-                  note={
-                    readinessKnown
-                      ? t("home.homeConsole.stage.readinessNote", { passed: checksGood, total: checksGraded })
-                      : undefined
-                  }
-                />
-                {/* P7-score: with NOTHING graded the ring is honestly not-yet (the gauge drops its
-                    note in that state), so the reason is said here instead of nowhere. */}
-                {readinessKnown && readinessScore == null && readinessAside.length > 0 && (
-                  <span className="hc-read-unread">{readinessAside.join(" · ")}</span>
-                )}
-              </div>
               <Reading
                 id="avgFps"
                 label={t("home.homeConsole.stage.avgFps")}

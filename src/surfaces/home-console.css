@@ -804,8 +804,8 @@
 :root[data-v2="on"] .hc-readout {
   --hc-readout-sep: 6px;
   display: grid;
-  grid-template-columns: minmax(86px, 2fr) minmax(100px, 1fr) minmax(100px, 1fr)
-    minmax(100px, 1fr) minmax(100px, 1fr);
+  /* Four readings (the readiness ring left Home): every cell is a measured number. */
+  grid-template-columns: repeat(4, minmax(100px, 1fr));
   /* THE FIVE CELLS SHARE THESE THREE ROWS (self-review round 10). Every reading is label · value ·
      attestation, and each cell used to size those three rows for ITSELF. At 1280×720 "GPU TEMP" and
      "CPU TEMP" wrap to two lines where "AVG FPS" and "1% LOW" do not, so their values sat 17px
@@ -834,38 +834,7 @@
    .reading/.rd-*, and this strip owns only where they sit. The contract that keeps the row a row
    lives with the component as READING_ROWS: the strip declares exactly that many row tracks above,
    every cell spans them, and both halves are guarded against ONE number rather than three copies.
-   Health's own readiness cell is not a Reading (it is an ArcGauge), so it has to opt in by hand. */
-:root[data-v2="on"] .hc-read-arc {
-  min-width: 0;
-  grid-row: span 3;
-}
-/* ROUND 12 (see the readout budget above): below 150px the instrument's label wraps UNDER the ring
-   instead of beside it -- the browser measuring, no breakpoint (the handoff's "one composition
-   that flexes"). The ring, its centre readout and the label are the kit's own children; only
-   their flow changes, and only in this cell. Above 150px -- the owner's 1500x980 and the comp --
-   the line never wraps and the layout is the kit's grid to the pixel: ring, 10px, label, the ring
-   centred on the label. The centre readout rides the ring: pulled back over it by its own width,
-   then the kit's 10px gap on its far side. */
-:root[data-v2="on"] .hc-read-arc .ag-as-ring {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 0;
-}
-:root[data-v2="on"] .hc-read-arc .ag-as-ring > svg {
-  flex: none;
-}
-:root[data-v2="on"] .hc-read-arc .ag-as-ring > .ag-ctr {
-  flex: none;
-  width: 56px;
-  margin-left: -56px;
-  margin-right: 10px;
-}
-:root[data-v2="on"] .hc-read-arc .ag-as-ring > .ag-label {
-  flex: 1 1 84px;
-  min-width: 0;
-}
-
+   every cell spans them, and both halves are guarded against ONE number rather than three copies. */
 /* ── WHAT HAS BEEN HAPPENING (issue #49) — the three shortcuts into the interview. Row buttons, not
    cards: they are one list of answers to one question, and a grid of boxes here would compete with
    the primary button directly above them. ── */
@@ -1261,13 +1230,4 @@
   font: 600 var(--type-body) var(--v2-font-sans);
   color: var(--v2-accent-text, var(--v2-accent));
   white-space: nowrap;
-}
-
-/* P7-score: the readiness ring's "N couldn't be read" when nothing at all was readable (the gauge
-   is in its not-yet state then and drops its own note). Same face as the gauge's note. */
-:root[data-v2="on"] .hc-read-arc .hc-read-unread {
-  display: block;
-  margin-top: 4px;
-  font-size: var(--type-label);
-  color: var(--ix-text-3);
 }

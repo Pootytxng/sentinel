@@ -509,23 +509,43 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
     expect(readout(c, "low1").unmeasured).toBeNull();
   });
 
-  it("Readiness = the real ready/total ratio; NOT-YET while checks are running", () => {
-    const c = mount().container;
-    expect(readout(c, "readiness").value).toBe("100");
-    cleanup();
-    const checking = mount({ ...props, readiness: null, priorities: null }).container;
-    expect(readout(checking, "readiness").unmeasured).not.toBeNull();
-    // `.rcb` = the band's own root. It moved out of the shell's `measured` slot on 2026-08-23
-    // (see the note on the front-door test above); the sentence it prints is unchanged.
-    expect(checking.querySelector(".rcb")!.textContent).toContain("Checking your PC now");
+  // Paramedic-first Home (owner decision 2026-11-20, constitution A38): Compy shows no readiness score
+  // and no grade word. The ring (a 0-100 with Good / Fair / Worth a look) left the readout strip. What
+  // the checks found is still said in words (the Re-run band, the posture line), never as a number.
+  // Replaces the three tests that pinned the ring: "Readiness = the real ready/total ratio" (value "100",
+  // NOT-YET while running), "unreadable checks ... never graded as failures" (value "93", note
+  // "13 of 14 checks passed", "Good") and "advisory checks ... never counted as passed" (value "100" / "93").
+  it("shows no readiness score, ring or grade word: checks passed, running, unreadable or advisory", () => {
+    const some: GameReadiness = {
+      ...readiness,
+      checks: Array.from({ length: 16 }, (_, i) => ({ id: `c${i}`, label: `C${i}`, status: i < 13 ? "ready" : i < 14 ? "attention" : "unknown", detail: "", value: null })),
+      ready_count: 13,
+      attention_count: 1,
+      unknown_count: 2,
+    };
+    const advisoryOnly: GameReadiness = {
+      ...readiness,
+      checks: Array.from({ length: 16 }, (_, i) => ({ id: `c${i}`, label: `C${i}`, status: i < 14 ? "ready" : "advisory", detail: "", value: null })),
+      ready_count: 14,
+      advisory_count: 2,
+    };
+    const allUnread: GameReadiness = { ...some, checks: some.checks.map((k) => ({ ...k, status: "unknown" })), ready_count: 0, attention_count: 0, unknown_count: 16 };
+    for (const r of [readiness, null, some, advisoryOnly, allUnread]) {
+      const c = mount({ ...props, readiness: r, priorities: r ? props.priorities : null }).container;
+      const strip = c.querySelector(".hc-readout")!;
+      // Only the four measured readings are left in the strip; no ring cell.
+      expect([...strip.children].map((el) => el.getAttribute("data-read"))).toEqual(["avgFps", "low1", "gpuTemp", "cpuTemp"]);
+      expect(c.querySelector('[data-read="readiness"]')).toBeNull();
+      expect(strip.querySelector(".ag-v, .ag-as-ring, .hc-read-arc")).toBeNull();
+      expect(strip.textContent).not.toMatch(/readiness|score|\bGood\b|\bFair\b|Worth a look/i);
+      expect(c.textContent).not.toMatch(/\bscore\b/i);
+      cleanup();
+    }
   });
 
-  // P7-score (Constitution §34, §26): a check Compy could not read is not a failing check. It is
-  // left out of the ratio and named on the page; the grade words are calm. Fails on the code
-  // before this slice (13 of 16 = 81 "FAIR", and "2 couldn't be read" nowhere). CR-ring-note (desk
-  // review 2026-11-03): the count left the ring's note, which wrapped past two lines at 1280x720
-  // with it; the Re-run band names it, as it names the advisory checks.
-  it("unreadable checks are left out of the readiness ratio and named on the page, never graded as failures", () => {
+  // What the checks left out is still named in words by the Re-run band (the ring's note used to carry
+  // the ratio; the band carries the plain sentence). Unchanged assertions from the old ring tests.
+  it("unreadable and advisory checks are still named on the page, never counted as passed", () => {
     const some: GameReadiness = {
       ...readiness,
       checks: Array.from({ length: 16 }, (_, i) => ({ id: `c${i}`, label: `C${i}`, status: i < 13 ? "ready" : i < 14 ? "attention" : "unknown", detail: "", value: null })),
@@ -534,55 +554,17 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
       unknown_count: 2,
     };
     const c = mount({ ...props, readiness: some }).container;
-    const r = readout(c, "readiness");
-    expect(r.value).toBe("93"); // 13 of the 14 READABLE checks, not 13 of 16
-    expect(r.el.querySelector(".ag-note")?.textContent).toBe("13 of 14 checks passed");
-    expect(r.el.textContent).not.toContain("couldn't be read"); // CR-ring-note: not in the ring's cell
     expect(c.querySelector(".rcb")!.textContent).toContain("2 couldn't be measured"); // the band says it
-    expect(r.el.textContent).toContain("Good");
-    expect(r.el.textContent).not.toMatch(/NEEDS WORK|FAIR|GOOD/);
     cleanup();
-    // Nothing readable at all: no ratio, no grade — the honest not-yet, never 0.
-    const none: GameReadiness = { ...some, checks: some.checks.map((k) => ({ ...k, status: "unknown" })), ready_count: 0, attention_count: 0, unknown_count: 16 };
-    const n = mount({ ...props, readiness: none }).container;
-    expect(readout(n, "readiness").unmeasured).not.toBeNull();
-    expect(readout(n, "readiness").value).not.toMatch(/\d/);
-    expect(n.textContent).toContain("16 couldn't be read");
-  });
-
-  // Desk review 2026-11-03 (his rig: 14 ready, network QoS and VRR advisory): the ring said "16 of 16
-  // checks passed" while FirstCheck said 2 were noted, not graded. An advisory is left out of the ratio
-  // like an unread check; it never passed. The second pass kept the ring's note to the ratio (the
-  // advisory aside wrapped it to four lines at 720p) and the page names the advisory ones in the band.
-  it("advisory checks are left out of the readiness ratio and named on the page, never counted as passed", () => {
     const his: GameReadiness = {
       ...readiness,
       checks: Array.from({ length: 16 }, (_, i) => ({ id: `c${i}`, label: `C${i}`, status: i < 14 ? "ready" : "advisory", detail: "", value: null })),
       ready_count: 14,
       advisory_count: 2,
     };
-    const c = mount({ ...props, readiness: his }).container;
-    const r = readout(c, "readiness");
-    expect(r.value).toBe("100");
-    expect(r.el.querySelector(".ag-note")?.textContent).toBe("14 of 14 checks passed");
-    expect(c.querySelector(".rcb")!.textContent).toContain("All 14 checks look good · 2 advisory, not graded");
-    expect(c.textContent).not.toContain("16 of 16");
-    cleanup();
-    const flagged: GameReadiness = {
-      ...his,
-      checks: his.checks.map((k, i) => (i === 0 ? { ...k, status: "attention" } : k)),
-      ready_count: 13,
-      attention_count: 1,
-    };
-    const f = mount({ ...props, readiness: flagged }).container;
-    expect(readout(f, "readiness").value).toBe("93"); // 13 of the 14 GRADED checks, not 15 of 16
-    expect(readout(f, "readiness").el.textContent).toContain("13 of 14 checks passed");
-    cleanup();
-    // Nothing graded at all: no ratio, no grade, and the reason is still said.
-    const none: GameReadiness = { ...his, checks: his.checks.map((k) => ({ ...k, status: "advisory" })), ready_count: 0, advisory_count: 16 };
-    const n = mount({ ...props, readiness: none }).container;
-    expect(readout(n, "readiness").value).not.toMatch(/\d/);
-    expect(n.textContent).toContain("16 advisory, not graded");
+    const h = mount({ ...props, readiness: his }).container;
+    expect(h.querySelector(".rcb")!.textContent).toContain("All 14 checks look good · 2 advisory, not graded");
+    expect(h.textContent).not.toContain("16 of 16");
   });
 
   it("GPU temp reading shows the polled value once it lands", async () => {
@@ -1024,7 +1006,7 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     expect(panel.querySelector(".hc-controls"), "the controls left the panel").not.toBeNull();
     // Every reading survived the move. This is the half that matters: the fix must not have been
     // "we removed the things that were in the way".
-    for (const id of ["readiness", "avgFps", "low1", "gpuTemp", "cpuTemp"]) {
+    for (const id of ["avgFps", "low1", "gpuTemp", "cpuTemp"]) {
       expect(c.querySelector(`[data-read="${id}"]`), `${id} was lost in the move`).not.toBeNull();
     }
   });
@@ -1105,7 +1087,6 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     const CLIENT = 547; // .hc-readout clientWidth at CLIENT 1280x720, the narrowest supported size
     const READS = [73, 73, 76, 76]; // widest UNBREAKABLE child of each reading cell, measured there
     const HAIRLINE = 1;
-    const LABEL = 84; // "Readiness" at the 13px type floor -- one word, so it cannot wrap
 
     // ROUND 12 (Wave 1 Lane B self-review at 5ee0de97, 2026-09-03): READS are the VALUES, and the
     // widest unbreakable child of a measured cell is not its value -- it is the MEASURED pill. Read
@@ -1134,36 +1115,6 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
     const readout = block(css, ':root[data-v2="on"] .hc-readout');
     const divider = /\.hc-readout\s*>\s*\*\s*\+\s*\*\s*\{([^}]*)\}/.exec(stripComments(css));
     expect(divider, "the readout must still draw a hairline between readings").not.toBeNull();
-
-    // The instrument's own floor comes from the shared kit, not from a number retyped here: if the
-    // ring grows, this guard tightens on its own.
-    const kit = stripComments(
-      readFileSync(join("src", "design", "console", "arc-gauge.css"), "utf8"),
-    );
-    const ring = Number(/\.arc-gauge > svg\s*\{[^}]*width:\s*(\d+)px/.exec(kit)?.[1]);
-    const kitGap = Number(/\.arc-gauge\s*\{[^}]*gap:\s*(\d+)px/.exec(kit)?.[1]);
-    expect(
-      Number.isFinite(ring) && Number.isFinite(kitGap),
-      "arc-gauge.css must still declare the ring width and its label gap",
-    ).toBe(true);
-    // ROUND 12: five pill-wide floors do not fit beside a 150px instrument in 515px, and the type
-    // floor, the pill's one appearance and the single row are all fixed -- so the INSTRUMENT gives.
-    // Health's cell lets the gauge's label wrap UNDER the ring (flex-wrap, the browser measuring,
-    // no breakpoint), so its floor is the wider of the ring and the word "Readiness", not their
-    // sum. Accepted only when the wrap is declared and the label keeps its whole word as its basis.
-    const plain = stripComments(css);
-    const arcCell = /\.hc-read-arc\s+\.ag-as-ring\s*\{([^}]*)\}/.exec(plain)?.[1] ?? "";
-    const arcLabel = /\.hc-read-arc\s+\.ag-as-ring\s*>\s*\.ag-label\s*\{([^}]*)\}/.exec(plain)?.[1] ?? "";
-    const wraps = /flex-wrap:\s*wrap/.test(arcCell);
-    if (wraps) {
-      const basis = Number(/flex:\s*1\s+1\s+(\d+)px/.exec(arcLabel)?.[1]);
-      expect(
-        basis,
-        "the wrapped label's flex-basis must be at least the word \"Readiness\" (" + LABEL +
-          "px), or it is squeezed before it wraps",
-      ).toBeGreaterThanOrEqual(LABEL);
-    }
-    const GAUGE_MIN = wraps ? Math.max(ring, LABEL) : ring + kitGap + LABEL;
 
     // A length here may be a px literal, a v2 token, or the strip's own local variable. Resolve it,
     // so the budget is checked against what the browser will actually use.
@@ -1216,32 +1167,27 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
       parts.join(""),
       "every readout track must be minmax(<px floor>, <n>fr); got " + norm,
     ).toBe(expanded);
-    expect(parts.length, "the strip is the readiness instrument plus four readings").toBe(5);
+    expect(parts.length, "the strip is the four measured readings (the readiness ring left Home)").toBe(4);
     const floors = parts.map((p) => Number(/(\d+)px/.exec(p)![1]));
 
     // (3) Each floor clears its own unbreakable content...
-    expect(
-      floors[0],
-      "the readiness track must fit the ring, its gap and the word \"Readiness\" (" + GAUGE_MIN +
-        "px) -- a starved instrument prints its label over the reading beside it",
-    ).toBeGreaterThanOrEqual(GAUGE_MIN);
     READS.forEach((w, i) => {
       const widest = Math.max(w, PILL);
       expect(
-        floors[i + 1],
+        floors[i],
         "reading " + (i + 1) + " must fit its widest unbreakable child (" + widest.toFixed(1) +
           "px: its value, or the MEASURED pill, whichever is wider) plus the hairline and its " +
           "padding: a reading clipped by its neighbour is a reading nobody can read",
       ).toBeGreaterThanOrEqual(widest + HAIRLINE + sep);
     });
 
-    // (4) ...and all five together still fit the narrowest supported strip, or the browser
+    // (4) ...and all four together still fit the narrowest supported strip, or the browser
     //     over-subscribes the row and puts one cell on top of another exactly as before.
     const content = CLIENT - 2 * pad;
-    const needed = floors.reduce((a, b) => a + b, 0) + 4 * gap;
+    const needed = floors.reduce((a, b) => a + b, 0) + 3 * gap;
     expect(
       needed,
-      "at 1280x720 the five floors need " + needed + "px of a " + content + "px strip. Buy the " +
+      "at 1280x720 the four floors need " + needed + "px of a " + content + "px strip. Buy the " +
         "difference back from gap/padding (they carry no reading) -- never from the 13px type " +
         "floor, and never by wrapping the strip to a second row.",
     ).toBeLessThanOrEqual(content);
@@ -1273,7 +1219,6 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
         .map(([, , body]) => body)
         .join("\n");
     const read = rulesFor(".reading", kit);
-    const arc = rulesFor(".hc-read-arc", css);
 
     const rows = /grid-template-rows:\s*([^;]+);/.exec(readout);
     expect(rows, ".hc-readout must own the rows the readings are laid onto").not.toBeNull();
@@ -1293,7 +1238,7 @@ describe("HomeConsole — nothing covers the rig canvas (bug→guard, issue #49)
 
     // The span and the track count are the same fact stated twice, so DERIVE both from READING_ROWS
     // -- a cell that spans 2 of 3 rows silently stops sharing the third.
-    for (const [what, blk] of [[".reading (kit)", read], [".hc-read-arc", arc]] as const) {
+    for (const [what, blk] of [[".reading (kit)", read]] as const) {
       const span = /grid-row:\s*span\s*(\d+)/.exec(blk);
       expect(span, what + " must span the strip's rows explicitly").not.toBeNull();
       expect(
