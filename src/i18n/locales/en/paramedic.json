@@ -10,14 +10,14 @@
   "problem": {
     "title": "{{game}} has been running much rougher than usual",
     "badge": "Measured",
-    "body_one": "Normally, when {{game}} dips, it still runs at about {{beforePct}}% of its usual speed. In your last session the dips went down to about {{nowPct}}%.",
-    "body_other": "Normally, when {{game}} dips, it still runs at about {{beforePct}}% of its usual speed. In your last {{count}} sessions the dips went down to about {{nowPct}}%.",
-    "spikes": "The worst hitches lasted {{nowMs}} ms, against about {{beforeMs}} ms before.",
+    "body_one": "In a normal session, {{game}}'s dips stay at about {{beforePct}}% of its average frame rate. In your last session they fell to about {{nowPct}}%.",
+    "body_other": "In a normal session, {{game}}'s dips stay at about {{beforePct}}% of its average frame rate. In your last {{count}} sessions they fell to about {{nowPct}}%.",
+    "spikes": "The slowest 1 in 100 frames took about {{nowMs}} ms, against about {{beforeMs}} ms in your normal sessions.",
     "average": "It also averaged {{nowFps}} frames per second, against about {{beforeFps}} before.",
-    "otherGames": "{{games}} got rougher at the same time.",
+    "otherGames": "{{games}} also had rough sessions in the same period.",
     "since": "It last ran normally on {{date}}.",
-    "partial_one": "Compy also saw 1 session it only measured part of. It didn't count it.",
-    "partial_other": "Compy also saw {{count}} sessions it only measured part of. It didn't count them."
+    "partial_one": "Compy also saw 1 more session it only measured part of, and what it measured looked rough. A partly measured session never counts on its own.",
+    "partial_other": "Compy also saw {{count}} more sessions it only measured part of, and what it measured looked rough. A partly measured session never counts on its own."
   },
   "answer": {
     "likely": "Most likely",
@@ -30,13 +30,14 @@
       "what": "Your graphics driver was updated"
     },
     "backgroundLoad": {
-      "what": "Other programs were busy while you played"
+      "what": "Other programs started while you played"
     },
     "memoryPressure": {
       "what": "Your memory was nearly full while you played"
     },
     "settingDrift": {
-      "what": "A setting was changed outside Compy"
+      "what": "A setting Compy watches changed",
+      "applied": "A setting Compy applied is no longer on"
     },
     "compyChange": {
       "what": "Compy had a different number of changes on"
@@ -75,18 +76,18 @@
     "crossGame": "{{games}} also got much rougher after the update, and never before it.",
     "installTimeNotRead": "Compy didn't read the exact install time; it saw the new version on {{when}}.",
     "roughOnOldDriver": "{{count}} of the rough sessions were still on the old driver.",
-    "startsSeen": "{{names}} started during {{count}} of your sessions since then.",
-    "startsSeenNoNames": "Build or encoding programs started during {{count}} of your sessions since then.",
+    "startsSeen": "{{count}} of your rough sessions had other programs starting during them ({{names}}).",
+    "startsSeenNoNames": "{{count}} of your rough sessions had other programs starting during them.",
     "loadMeasured": "Everything except the game used a lot of your processor in {{count}} of the rough sessions.",
     "loadNotRecorded": "Compy can't see programs that were already running, and didn't record how busy your PC was in these sessions.",
     "ramPeak": "Memory peaked at {{peakGb}} of {{totalGb}} GB in one rough session.",
     "ramBaseline": "Your normal sessions peaked at {{peakGb}} GB.",
     "ramWarning": "Compy saw memory nearly full during that session.",
     "ramLower": "Other rough sessions only reached {{peakGb}} GB.",
-    "driftApplied": "Compy noticed that its own changes were turned back off.",
+    "driftApplied": "Compy's own check found a setting it applied is no longer on.",
     "driftPower": "Compy noticed the power plan was no longer performance-oriented.",
     "driftOther": "Compy noticed a setting it watches had changed.",
-    "whichNotRecorded": "Which setting, and who changed it, isn't recorded.",
+    "whichNotRecorded": "Which setting it was, and what changed it, isn't recorded.",
     "countChanged": "Compy had {{from}} changes on in the last normal session and {{to}} in the first rough one.",
     "valueChanged": "It changed from {{from}} to {{to}}.",
     "hardwareChanged": "The graphics card or memory Compy recorded is different.",
@@ -148,9 +149,9 @@
     "unknown": "Compy couldn't see:",
     "gpuDriverChange": "Graphics driver: still {{driver}}.",
     "backgroundLoad": "Everything except the game: quiet in these sessions.",
-    "memoryPressure": "Memory: never nearly full in these sessions.",
+    "memoryPressure": "Memory: never reached {{percent}}% full in these sessions.",
     "settingDrift": "Settings Compy watches: no changes noticed.",
-    "compyChange": "Compy has the same number of changes applied ({{count}}).",
+    "compyChange": "The number of changes Compy lists as on: still {{count}}.",
     "hardwareChange": "Graphics card and memory size: the same.",
     "powerPlanChange": "Power plan on the two sessions compared: the same.",
     "displayRefreshLower": "Screen refresh rate: still {{hz}} Hz.",
@@ -170,7 +171,9 @@
     "powerPlanTiming": "When your power plan changed",
     "display": "Your screen's refresh rate",
     "windowsBuild": "Which Windows build was in use",
-    "driftTiming": "When some of the settings Compy watches changed"
+    "driftTiming": "When some of the settings Compy watches changed",
+    "driftUnreadable": "Its record of setting changes, which couldn't be read",
+    "identityUnreadable": "Its record of graphics driver and power plan checks, which couldn't be read"
   },
   "nothingWrong": {
     "title": "Nothing looks wrong",
@@ -194,7 +197,8 @@
   "footer": "Compy lists what changed before the problem. It doesn't claim to know the cause until a fix is checked.",
   "notSeparable": {
     "title": "Compy can't tell which of these it is yet",
-    "next": "To find out: play {{game}} once with nothing else running. Compy will compare."
+    "next": "To find out: play {{game}} once with nothing else running. Compy will compare.",
+    "nextOther": "Play {{game}} once more. Compy may still not be able to tell these apart."
   },
   "cap": {
     "none": "no cap",

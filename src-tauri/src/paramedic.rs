@@ -48,8 +48,6 @@ pub(crate) const OTHER_CPU_P90_PCT: f64 = 15.0;
 pub(crate) const OTHER_CPU_BASELINE_MEDIAN_PCT: f64 = 5.0;
 /// Process starts of build/encode tools in one session that count as "busy programs were running".
 pub(crate) const BUSY_START_MIN: u32 = 5;
-/// Two frame caps are the same cap when they are within this fraction of each other (round-trip noise).
-pub(crate) const CAP_SAME_FRACTION: f64 = 0.05;
 /// With no game named, every game played within this many days of the newest session is judged.
 pub(crate) const RECENT_GAME_DAYS: i64 = 14;
 /// Build and encode tools whose repeated starts mean heavy background work (names, lower-case, no `.exe`).
@@ -72,12 +70,26 @@ pub(crate) enum CapState {
 }
 
 impl CapState {
+    fn read(self) -> crate::noise_floor::CapRead {
+        match self {
+            CapState::Unknown => crate::noise_floor::CapRead::Unknown,
+            CapState::Uncapped => crate::noise_floor::CapRead::Uncapped,
+            CapState::Capped { at_fps } => crate::noise_floor::CapRead::Capped { at_fps },
+        }
+    }
+
+    /// The same state to compare like with like: two unread states, or two reads that
+    /// `noise_floor::cap_pair` calls the same cap (its tolerance, not a second number of ours).
     fn same_as(self, other: CapState) -> bool {
         match (self, other) {
-            (CapState::Unknown, CapState::Unknown) | (CapState::Uncapped, CapState::Uncapped) => true,
-            (CapState::Capped { at_fps: a }, CapState::Capped { at_fps: b }) => (a - b).abs() <= CAP_SAME_FRACTION * a.max(b),
-            _ => false,
+            (CapState::Unknown, CapState::Unknown) => true,
+            _ => crate::noise_floor::cap_pair(self.read(), other.read()) == crate::noise_floor::CapPair::Same,
         }
+    }
+
+    /// Both states were read and they differ: the only case where "the cap changed" is established.
+    fn known_change(self, other: CapState) -> bool {
+        crate::noise_floor::cap_pair(self.read(), other.read()) == crate::noise_floor::CapPair::Changed
     }
 
     /// The card's own word for it: `unknown`, `uncapped` or the cap in whole frames per second.
@@ -162,6 +174,12 @@ pub(crate) struct DiagnoseInputs {
     sightings: Vec<Sighting>,
     #[serde(default)]
     drift: Vec<DriftFact>,
+    /// The identity-check store exists but could not be read: said as an unknown, never as "no checks".
+    #[serde(default)]
+    sightings_unread: bool,
+    /// The setting-drift store exists but could not be read: said as an unknown, never as "no drift".
+    #[serde(default)]
+    drift_unread: bool,
 }
 
 // ---- Outputs: codes, ids and numbers. The UI owns every sentence. ----------------------------
@@ -530,11 +548,18 @@ fn judge_game(sess: &[&SessionFacts]) -> Vec<Judgement> {
     let mut pool: Vec<usize> = Vec::new();
     let mut out = Vec::with_capacity(sess.len());
     for (i, s) in sess.iter().enumerate() {
-        // A session is compared only with earlier normal sessions under the same frame-cap state.
-        let same: Vec<usize> = pool.iter().copied().filter(|&j| sess[j].cap.same_as(s.cap)).collect();
+        let judgeable = s.judgeable();
+        // A session is compared only with earlier normal sessions under the same frame-cap state. A thin
+        // session whose cap could not be read (a short trace) only ever corroborates, and is compared with
+        // the baseline sessions a cap cannot flatter (uncapped or unread): a cap lifts a ratio, so this
+        // never invents a drop. Without this a partly measured session was never compared at all.
+        let same: Vec<usize> = if !judgeable && s.cap == CapState::Unknown {
+            pool.iter().copied().filter(|&j| !matches!(sess[j].cap, CapState::Capped { .. })).collect()
+        } else {
+            pool.iter().copied().filter(|&j| sess[j].cap.same_as(s.cap)).collect()
+        };
         let base = base_stats(sess, &same);
         let eval = base.as_ref().and_then(|b| evaluate(s, b));
-        let judgeable = s.judgeable();
         let fired = eval.is_some_and(|e| e.fired);
         let verdict = if !judgeable {
             Verdict::Unjudged
@@ -618,7 +643,11 @@ fn diagnose_game(inp: &DiagnoseInputs, complaint: Complaint, game_key: &str) -> 
         Verdict::CapChanged => {
             let before = (0..newest).rev().find(|&i| judged[i].verdict != Verdict::Unjudged).map_or(CapState::Unknown, |i| sess[i].cap);
             d.state = DiagnosisState::CantTell { why: CantTellWhy::FrameCapChanged };
-            d.findings.push(cap_finding(sess[newest], before));
+            // A change is a finding only when both caps were read. An unread side leaves just the
+            // "can't tell" answer, which already says Compy may not be able to read it.
+            if before.known_change(sess[newest].cap) {
+                d.findings.push(cap_finding(sess[newest], before));
+            }
         }
         Verdict::NeedsMore(have) => {
             d.state = DiagnosisState::NeedsMorePlay {
@@ -659,7 +688,7 @@ fn partial_state(sess: &[&SessionFacts], judged: &[Judgement], from: usize) -> D
     DiagnosisState::CantTell { why: CantTellWhy::PartialMeasure { percent: pct, looked_rough } }
 }
 
-/// The frame cap changed (or is unknown) between the earlier sessions and the newest one.
+/// The frame cap changed between two sessions whose caps were both read.
 fn cap_finding(now: &SessionFacts, before: CapState) -> Finding {
     Finding {
         id: "frame-cap-change",
@@ -681,12 +710,17 @@ pub(crate) fn paramedic_diagnose(complaint: Complaint, game: Option<String>) -> 
 }
 
 /// What the diagnosis reads, from a data directory: sessions, identity checks and drift notices. A file
-/// that is not there is an empty store; one that is there and cannot be read or parsed is an `Err`.
+/// that is not there is an empty store. A sessions file that is there and cannot be read or parsed is an
+/// `Err` (the sessions ARE the diagnosis). The identity and drift stores only corroborate, so one that
+/// cannot be read degrades to an unknown line for that source and the rest of the answer stands.
 pub(crate) fn read_inputs_from(dir: &std::path::Path) -> Result<DiagnoseInputs, String> {
     let sessions = crate::sessions::read_sessions_readonly_from(&dir.join("sessions.json"))?;
-    let snapshots = intelligence::read_snapshots_readonly_from(&dir.join("intelligence.json"))?;
-    let notices = crate::drift::read_notices_readonly_from(&dir.join("drift.json"))?;
-    Ok(inputs_from_parts(&sessions, &snapshots, &notices))
+    let snapshots = intelligence::read_snapshots_readonly_from(&dir.join("intelligence.json"));
+    let notices = crate::drift::read_notices_readonly_from(&dir.join("drift.json"));
+    let mut inp = inputs_from_parts(&sessions, snapshots.as_deref().unwrap_or(&[]), notices.as_deref().unwrap_or(&[]));
+    inp.sightings_unread = snapshots.is_err();
+    inp.drift_unread = notices.is_err();
+    Ok(inp)
 }
 
 // ---- Adapters from what Compy records ----------------------------------------------------------
@@ -768,6 +802,8 @@ fn inputs_from_parts(
             .iter()
             .map(|n| DriftFact { id: n.id.clone(), last_ready_at: n.last_ready_at.clone(), noticed_at: n.noticed_at.clone() })
             .collect(),
+        sightings_unread: false,
+        drift_unread: false,
     }
 }
 
@@ -800,9 +836,10 @@ struct Ctx<'a> {
     base: Vec<&'a SessionFacts>,
     affected: Vec<&'a SessionFacts>,
     baseline_newest: &'a SessionFacts,
+    /// The newest session judged Normal before the first rough one (the date the card calls "last ran
+    /// normally"); it can be newer than the newest baseline session.
+    last_normal: &'a SessionFacts,
     first_bad: &'a SessionFacts,
-    /// Every session of any game that started after the last normal one ended and before the first rough one.
-    window: Vec<&'a SessionFacts>,
     win_start: DateTime<Utc>,
     win_end: DateTime<Utc>,
     others: Vec<OtherGame<'a>>,
@@ -963,10 +1000,8 @@ fn explain<'a>(
     let partial: Vec<SessionRef> = partial_facts.iter().map(|s| s.session_ref()).collect();
     // "It last ran normally": the newest session judged Normal before the first rough one, which can be
     // newer than the newest baseline session (a thinly measured session is Normal but not a baseline).
-    let last_normal_at = (0..first)
-        .rev()
-        .find(|&i| judged[i].verdict == Verdict::Normal)
-        .map_or_else(|| baseline_newest.started_at.clone(), |i| sess[i].started_at.clone());
+    let last_normal: &SessionFacts = (0..first).rev().find(|&i| judged[i].verdict == Verdict::Normal).map_or(baseline_newest, |i| sess[i]);
+    let last_normal_at = last_normal.started_at.clone();
     d.problem = Some(ProblemReading {
         rule: if evals.iter().flatten().any(|e| e.rule_r) { AnomalyRule::StutterCollapse } else { AnomalyRule::Spikes },
         spikes: evals.iter().flatten().any(|e| e.rule_p99),
@@ -980,15 +1015,13 @@ fn explain<'a>(
     });
     d.baseline = Some(baseline_newest.session_ref());
     d.first_bad = Some(first_bad.session_ref());
-    let window: Vec<&SessionFacts> =
-        inp.sessions.iter().filter(|s| s.start().is_some_and(|t| t >= win_start && t < win_end)).collect();
     let ctx = Ctx {
         inp,
         base: base_sess,
         affected,
         baseline_newest,
+        last_normal,
         first_bad,
-        window,
         win_start,
         win_end,
         others,
@@ -1008,6 +1041,12 @@ fn explain<'a>(
     detect_windows(&ctx, &mut out);
     for code in ["game-patch", "startup-programs", "overlays"] {
         out.unknown(code);
+    }
+    if inp.drift_unread {
+        out.unknown("drift-unreadable");
+    }
+    if inp.sightings_unread {
+        out.unknown("identity-unreadable");
     }
     rank(&mut out.cands);
     d.why_first = why_first(&out.cands);
@@ -1168,13 +1207,18 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
     let mut evidence = vec![changed(from, to)];
     evidence[0].code = "driver-changed";
     if rough_on_old == 0 {
-        evidence.push(ev(
-            EvidenceKind::Measured,
-            "sessions-split",
-            "sessions",
-            false,
-            &[("baselineAt", c.baseline_newest.started_at.clone()), ("count", c.affected.len().to_string())],
-        ));
+        // "The last normal session used the old driver": said only of the very session the card calls the
+        // last normal one, and only if it did run on the old driver (else the normal-on-new-driver line
+        // below says what it is).
+        if on(c.last_normal, from) {
+            evidence.push(ev(
+                EvidenceKind::Measured,
+                "sessions-split",
+                "sessions",
+                false,
+                &[("baselineAt", c.last_normal.started_at.clone()), ("count", c.affected.len().to_string())],
+            ));
+        }
     } else {
         evidence.push(ev(EvidenceKind::Measured, "rough-on-old-driver", "sessions", true, &[("count", rough_on_old.to_string())]));
     }
@@ -1194,12 +1238,12 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         ));
     }
     if let Some(p) = partial_old.first() {
-        // A partly measured session never counts alone, so it is shown against the driver but sets no contradiction.
+        // A partly measured session never counts alone: shown as a neutral line, it sets no contradiction.
         evidence.push(ev(
             EvidenceKind::Measured,
             "partial-rough-on-old-driver",
             "sessions",
-            true,
+            false,
             &[("date", p.started_at.clone()), ("count", partial_old.len().to_string())],
         ));
     }
@@ -1227,18 +1271,19 @@ fn note_busy<'s>(s: &'s SessionFacts, seen: &mut Vec<&'s SessionFacts>) {
 
 fn detect_background(c: &Ctx, out: &mut Out) {
     let busy_rough: Vec<&SessionFacts> = c.affected.iter().copied().filter(|s| s.busy_starts >= BUSY_START_MIN).collect();
-    // Starts seen in ANY session of the episode count as timing: the window between the last normal session
-    // and the first rough one (any game), this game's rough and partly measured sessions, and any other
-    // game's rough ones. The start recorder is names-only and misses programs already running, second
-    // copies of a running name, bursts of more than four names and everything past 50 events, so an
-    // absence of starts is never evidence that the PC was quiet.
+    // Starts seen in a ROUGH session of the episode count as timing: this game's rough and partly measured
+    // sessions, and any other game's rough or partly rough ones since the last normal session. A heavy
+    // build during a session that ran fine is evidence against, not timing, so a session judged Normal
+    // never counts. The start recorder is names-only and misses programs already running, second copies of
+    // a running name, bursts of more than four names and everything past 50 events, so an absence of
+    // starts is never evidence that the PC was quiet.
     let mut seen: Vec<&SessionFacts> = Vec::new();
-    for s in c.window.iter().copied().chain(c.affected.iter().copied()).chain(c.partial.iter().copied()) {
+    for s in c.affected.iter().copied().chain(c.partial.iter().copied()) {
         note_busy(s, &mut seen);
     }
     for o in &c.others {
         for (s, j) in o.sess.iter().copied().zip(&o.judged) {
-            if j.verdict == Verdict::Fired && s.start().is_some_and(|t| t >= c.win_start) {
+            if j.would_fire && s.start().is_some_and(|t| t >= c.win_start) {
                 note_busy(s, &mut seen);
             }
         }
@@ -1321,14 +1366,17 @@ fn detect_memory(c: &Ctx, out: &mut Out) {
                 &[("peakGb", gb(peak(w))), ("totalGb", gb(w.ram_total_bytes.unwrap_or(0))), ("basePeakGb", gb(base_peak))],
             );
         } else {
-            out.ruled_out("memory-pressure", &[]);
+            // Every rough session had a reading, none reached the line the code applies: the card says that
+            // line (the same constant), never a vaguer "nearly full".
+            out.ruled_out("memory-pressure", &[("percent", format!("{}", (RAM_FULL_FRACTION * 100.0).round() as u32))]);
         }
         return;
     }
     let worst = full_rough.iter().copied().max_by_key(|s| peak(s)).unwrap_or(full_rough[0]);
     let total = worst.ram_total_bytes.unwrap_or(0);
     let base_peak = c.base.iter().filter_map(|s| s.peak_ram_bytes).max().unwrap_or(0);
-    let lower: Vec<&SessionFacts> = c.affected.iter().copied().filter(|s| !full(s)).collect();
+    // Only sessions that recorded a reading can be "lower"; a missing reading is neither high nor low.
+    let lower: Vec<&SessionFacts> = c.affected.iter().copied().filter(|s| s.ram_fraction().is_some_and(|f| f < RAM_FULL_FRACTION)).collect();
     let mut evidence = vec![
         ev(EvidenceKind::Measured, "ram-peak", "sessions", false, &[("peakGb", gb(peak(worst))), ("totalGb", gb(total))]),
         ev(EvidenceKind::Measured, "ram-baseline", "sessions", false, &[("peakGb", gb(base_peak))]),
@@ -1466,7 +1514,8 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
     if evidence.is_empty() {
         if ambiguous {
             out.unknown("drift-timing");
-        } else {
+        } else if !c.inp.drift_unread {
+            // An unread store is not "no changes noticed".
             out.ruled_out("setting-drift", &[]);
         }
         return;

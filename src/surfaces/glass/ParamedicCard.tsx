@@ -57,6 +57,15 @@ function whatText(id: string, t: T): string | null {
   }
 }
 
+/** A finding's heading. A setting that drifted is named for what the records say: Compy-applied only when every notice is. */
+function findingTitle(f: ParamedicFinding, t: T): string | null {
+  if (f.id === "setting-drift") {
+    const drift = f.evidence.filter((e) => e.code === "drift-noticed");
+    if (drift.length > 0 && drift.every((e) => e.args.check === "applied-changes")) return t("paramedic.finding.settingDrift.applied");
+  }
+  return whatText(f.id, t);
+}
+
 function sinceText(w: ParamedicWhen, { t, dates }: Ctx): string | null {
   switch (w.kind) {
     case "observed-between":
@@ -176,7 +185,7 @@ function ruledOutLine(n: ParamedicRuledOut, { t }: Ctx): string | null {
     case "background-load":
       return t("paramedic.checked.backgroundLoad");
     case "memory-pressure":
-      return t("paramedic.checked.memoryPressure");
+      return t("paramedic.checked.memoryPressure", { percent: a.percent });
     case "memory-as-full":
       return t("paramedic.checked.memoryAsFull", { peakGb: a.peakGb, totalGb: a.totalGb, basePeakGb: a.basePeakGb });
     case "setting-drift":
@@ -222,6 +231,10 @@ function unknownLine(code: string, { t, game }: Ctx): string | null {
       return t("paramedic.unknown.display");
     case "drift-timing":
       return t("paramedic.unknown.driftTiming");
+    case "drift-unreadable":
+      return t("paramedic.unknown.driftUnreadable");
+    case "identity-unreadable":
+      return t("paramedic.unknown.identityUnreadable");
     case "windows-build":
       return t("paramedic.unknown.windowsBuild");
     default:
@@ -333,7 +346,7 @@ function Leading({ f, d, ctx, plain }: { f: ParamedicFinding; d: ParamedicDiagno
           {eyebrow}
         </span>
       )}
-      <span className="gl-row-title">{whatText(f.id, t)}</span>
+      <span className="gl-row-title">{findingTitle(f, t)}</span>
       {since && <span className="gl-row-sub">{since}</span>}
       <Evidence list={f.evidence} ctx={ctx} />
       {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
@@ -351,7 +364,7 @@ function AlsoPossible({ list, ctx }: { list: ParamedicFinding[]; ctx: Ctx }) {
       <div className="gl-para-body">
         {list.map((f) => (
           <div className="gl-para-lead" key={f.id}>
-            <span className="gl-row-title">{whatText(f.id, ctx.t)}</span>
+            <span className="gl-row-title">{findingTitle(f, ctx.t)}</span>
             {sinceText(f.since_when, ctx) && <span className="gl-row-sub">{sinceText(f.since_when, ctx)}</span>}
             <Evidence list={f.evidence} ctx={ctx} />
           </div>
@@ -411,7 +424,11 @@ function Answer({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
           .map((f) => (
             <Leading key={f.id} f={f} d={d} ctx={ctx} plain />
           ))}
-        <p className="gl-para-note">{t("paramedic.notSeparable.next", { game })}</p>
+        {d.findings.some((f) => f.in_play && f.id === "background-load") ? (
+          <p className="gl-para-note">{t("paramedic.notSeparable.next", { game })}</p>
+        ) : (
+          <p className="gl-para-note">{t("paramedic.notSeparable.nextOther", { game })}</p>
+        )}
         <AlsoPossible list={d.findings.filter((f) => !f.in_play)} ctx={ctx} />
         <Checked d={d} ctx={ctx} />
       </>

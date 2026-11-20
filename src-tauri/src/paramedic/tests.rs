@@ -107,6 +107,7 @@ fn walking_forward_only_the_incident_sessions_are_found() {
             sessions: order.iter().filter(|x| x.start() <= Some(at)).map(|x| (*x).clone()).collect(),
             sightings: full.sightings.iter().filter(|x| ts(&x.observed_at) <= Some(at)).cloned().collect(),
             drift: full.drift.iter().filter(|x| ts(&x.noticed_at) <= Some(at)).cloned().collect(),
+            ..DiagnoseInputs::default()
         };
         let d = diagnose(&inp, Complaint::Unknown, Some(&s.game));
         if matches!(d.state, DiagnosisState::Found | DiagnosisState::CantTell { why: CantTellWhy::NothingChanged }) {
@@ -150,7 +151,12 @@ fn the_driver_finding_carries_the_design_evidence() {
         ["driver-changed", "sessions-split", "cross-game", "cross-game-confounded", "partial-rough-on-old-driver", "install-time-not-read"]
     );
     let partial = f.evidence.iter().find(|e| e.code == "partial-rough-on-old-driver").expect("shown");
-    assert!(partial.against && partial.args["date"] == "2026-11-19T03:43:25Z", "the partly measured old-driver session is shown against it");
+    assert!(!partial.against && partial.args["date"] == "2026-11-19T03:43:25Z", "shown as a neutral line: it sets no contradiction");
+    // The card says "last ran normally on X" in the problem block and "last normal session (X)" here: one date.
+    let split = f.evidence.iter().find(|e| e.code == "sessions-split").expect("the last normal session ran on the old driver");
+    let last_normal = d.problem.as_ref().expect("problem").last_normal_at.clone();
+    assert_eq!(split.args["baselineAt"], last_normal);
+    assert_ne!(last_normal, d.baseline.as_ref().expect("baseline").started_at, "the thin 04:43 session is newer than the baseline");
     assert_eq!(f.confidence, Certainty::Possible);
     assert_eq!(f.evidence[0].kind, EvidenceKind::Known);
     assert_eq!(f.evidence[0].args["from"], "32.0.32015.7029");
@@ -191,6 +197,7 @@ fn as_of_the_first_rough_session_the_driver_still_leads() {
         sessions: full.sessions.iter().filter(|s| s.start() <= at).cloned().collect(),
         sightings: full.sightings.clone(),
         drift: full.drift.clone(),
+        ..DiagnoseInputs::default()
     };
     let d = diagnose(&inp, Complaint::Unknown, Some(ROUGH_GAME));
     assert_eq!(ids(&d), ["gpu-driver-change", "background-load", "setting-drift", "memory-pressure"]);
@@ -477,6 +484,7 @@ fn as_of(at: &str) -> DiagnoseInputs {
         sessions: full.sessions.iter().filter(|s| s.start() <= at).cloned().collect(),
         sightings: full.sightings.iter().filter(|x| ts(&x.observed_at) <= at).cloned().collect(),
         drift: full.drift.iter().filter(|x| ts(&x.noticed_at) <= at).cloned().collect(),
+        ..DiagnoseInputs::default()
     }
 }
 
@@ -548,10 +556,12 @@ fn a_frame_cap_change_alone_never_fires() {
     assert_eq!(d.findings[0].id, "frame-cap-change", "the change itself is the measured finding");
     assert_eq!(d.findings[0].evidence[0].args["from"], "141");
     assert_eq!(d.findings[0].evidence[0].args["to"], "uncapped");
-    // An unknown cap against a known one is not comparable either.
+    // An unknown cap against a known one is not comparable either, and is no established change: only the
+    // "can't tell" answer, never a finding that says the cap "went from not read".
     sess[4].cap = CapState::Unknown;
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::FrameCapChanged });
+    assert!(d.findings.is_empty(), "an unread cap is not a finding");
     // Once three sessions exist in the new state, sessions are compared like with like, and a rough one fires.
     let mut sess = capped(4, 141.0);
     for d in 5..=7 {
@@ -565,16 +575,27 @@ fn a_frame_cap_change_alone_never_fires() {
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::NothingChanged }, "{:?}", d.state);
     assert!((d.problem.expect("rough").before.ratio - 0.66).abs() < 1e-9, "judged against the uncapped sessions only");
-    // Caps within five percent are the same cap; further apart they are not.
-    assert!(CapState::Capped { at_fps: 141.0 }.same_as(CapState::Capped { at_fps: 144.0 }));
-    assert!(!CapState::Capped { at_fps: 141.0 }.same_as(CapState::Capped { at_fps: 160.0 }));
+    // The tolerance is noise_floor::cap_pair's (3% of the smaller cap): 141 and 145.2 are one cap, 141 and
+    // 145.3 are two; two unread states are the same state, an unread one and a read one are not.
+    let cap = |f: f64| CapState::Capped { at_fps: f };
+    assert!(cap(141.0).same_as(cap(145.2)) && cap(145.2).same_as(cap(141.0)));
+    assert!(!cap(141.0).same_as(cap(145.3)) && !cap(145.3).same_as(cap(141.0)));
+    assert!(CapState::Unknown.same_as(CapState::Unknown) && CapState::Uncapped.same_as(CapState::Uncapped));
+    assert!(!CapState::Unknown.same_as(CapState::Uncapped) && !CapState::Uncapped.same_as(cap(144.0)));
+    // A change is established only when both sides were read.
+    assert!(cap(141.0).known_change(CapState::Uncapped) && cap(141.0).known_change(cap(145.3)));
+    assert!(!cap(141.0).known_change(cap(145.2)));
+    assert!(!CapState::Unknown.known_change(CapState::Uncapped) && !cap(141.0).known_change(CapState::Unknown));
+    assert!(!CapState::Unknown.known_change(CapState::Unknown));
 }
 
 #[test]
 fn absent_process_starts_are_unknown_not_against_when_load_was_not_recorded() {
     let mut sess = steady(4);
-    // Another game's session in the window logged 21 build-tool starts; the rough session logged none.
-    let mut other = named(facts("2026-10-05T10:00:00Z", 600, 600, 100.0, 50.0), "h");
+    // Another game got rough after the last normal session and logged 21 build-tool starts; this game's
+    // rough session logged none.
+    sess.extend((1..=4).map(|d| named(facts(&at_day(d, 12), 600, 600, 100.0, 50.0), "h")));
+    let mut other = named(facts(&at_day(9, 12), 600, 600, 100.0, 30.0), "h");
     other.busy_starts = 21;
     sess.push(other);
     sess.push(facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 30.0));
@@ -584,8 +605,10 @@ fn absent_process_starts_are_unknown_not_against_when_load_was_not_recorded() {
     assert!(bg.evidence.iter().any(|e| e.code == "load-not-recorded" && e.kind == EvidenceKind::Unknown));
     assert_eq!(bg.confidence, Certainty::Possible);
     assert!(bg.in_play);
+    let seen = bg.evidence.iter().find(|e| e.code == "starts-seen").expect("timing");
+    assert_eq!(seen.args["count"], "1", "only the rough sessions that had starts are counted");
     // A recorded low load number is the only thing that weakens it.
-    sess[5].other_cpu_p90_pct = Some(3.0);
+    sess[9].other_cpu_p90_pct = Some(3.0);
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     let bg = d.findings.iter().find(|f| f.id == "background-load").expect("still listed");
     assert!(bg.evidence.iter().any(|e| e.against && e.code == "load-quiet"));
@@ -611,7 +634,9 @@ fn memory_already_that_full_in_normal_sessions_is_not_never_nearly_full() {
     rough.ram_total_bytes = Some(100);
     sess.push(rough);
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
-    assert!(d.not_it.iter().any(|n| n.id == "memory-pressure"));
+    let line = d.not_it.iter().find(|n| n.id == "memory-pressure").expect("said");
+    assert_eq!(line.args["percent"], "90", "the line names the threshold the code applies");
+    assert_eq!((RAM_FULL_FRACTION * 100.0).round() as u32, 90);
 }
 
 #[test]
@@ -625,6 +650,7 @@ fn a_thinly_measured_session_that_ran_normally_on_the_new_driver_weighs_against_
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     let f = d.findings.iter().find(|f| f.id == "gpu-driver-change").expect("listed");
     assert!(f.evidence.iter().any(|e| e.against && e.code == "normal-on-new-driver"));
+    assert!(f.evidence.iter().all(|e| e.code != "sessions-split"), "the last normal session ran on the NEW driver: no 'old driver' claim");
     assert_eq!(f.confidence, Certainty::Possible);
     assert!(!f.in_play, "something is against it");
     assert_eq!(d.problem.expect("problem").last_normal_at, at_day(8, 10), "it last ran normally on the thin session");
@@ -738,16 +764,42 @@ fn a_damaged_or_unreadable_store_is_an_error_and_the_read_changes_nothing() {
     assert!(read_inputs_from(&dir).is_err());
     assert_eq!(listing(&dir), before, "no rename, no set-aside, no new file");
     assert_eq!(std::fs::read_to_string(dir.join("sessions.json")).expect("still there"), "{ not json");
-    // The same for the two other stores.
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_damaged_corroborating_store_is_an_unknown_not_a_failed_card() {
+    let dir = scratch_dir("degrade");
     std::fs::write(dir.join("sessions.json"), "[]").expect("write");
+    // A valid, empty drift store is "nothing noticed": not flagged as unread.
+    std::fs::write(dir.join("drift.json"), r#"{"last_good":{},"noticed_at":{}}"#).expect("write");
+    let inp = read_inputs_from(&dir).expect("reads");
+    assert!(!inp.drift_unread && !inp.sightings_unread, "valid and absent stores are not unread");
+    // Garbage drift: flagged, and the identity store (absent) is not.
     std::fs::write(dir.join("drift.json"), "garbage").expect("write");
-    assert!(read_inputs_from(&dir).is_err());
-    std::fs::write(dir.join("drift.json"), "{}").expect("write");
+    let before = listing(&dir);
+    let inp = read_inputs_from(&dir).expect("a damaged drift store does not fail the card");
+    assert!(inp.drift_unread && !inp.sightings_unread);
+    assert_eq!(listing(&dir), before, "nothing renamed or written");
+    // Garbage identity store with a valid drift store: the other way round.
+    std::fs::write(dir.join("drift.json"), r#"{"last_good":{},"noticed_at":{}}"#).expect("write");
     std::fs::write(dir.join("intelligence.json"), "garbage").expect("write");
     let before = listing(&dir);
-    assert!(read_inputs_from(&dir).is_err());
+    let inp = read_inputs_from(&dir).expect("a damaged identity store does not fail the card");
+    assert!(!inp.drift_unread && inp.sightings_unread);
     assert_eq!(listing(&dir), before);
     let _ = std::fs::remove_dir_all(&dir);
+    // The answer says what it could not read, and never claims "no setting changes" for an unread store.
+    let mut sess = steady(4);
+    sess.push(facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 30.0));
+    let mut inp = inputs(sess);
+    let d = diagnose(&inp, Complaint::Slow, Some("g"));
+    assert!(d.not_it.iter().any(|n| n.id == "setting-drift") && !d.unknowns.contains(&"drift-unreadable"));
+    inp.drift_unread = true;
+    inp.sightings_unread = true;
+    let d = diagnose(&inp, Complaint::Slow, Some("g"));
+    assert!(d.unknowns.contains(&"drift-unreadable") && d.unknowns.contains(&"identity-unreadable"));
+    assert!(d.not_it.iter().all(|n| n.id != "setting-drift"), "an unread store is not 'no changes noticed'");
 }
 
 #[test]
@@ -770,7 +822,7 @@ fn the_frozen_constants_are_what_the_design_froze() {
     assert_eq!((RULE_P99_MEDIAN_X, RULE_P99_MAX_X, RULE_P99_R_FRACTION, RULE_AVG_FRACTION), (2.0, 1.3, 0.90, 0.70));
     assert_eq!((RAM_FULL_FRACTION, RAM_BASELINE_MAX_FRACTION), (0.90, 0.80));
     assert_eq!((OTHER_CPU_P90_PCT, OTHER_CPU_BASELINE_MEDIAN_PCT, BUSY_START_MIN), (15.0, 5.0, 5));
-    assert_eq!((CAP_SAME_FRACTION, RECENT_GAME_DAYS), (0.05, 14));
+    assert_eq!(RECENT_GAME_DAYS, 14);
 }
 
 #[test]
@@ -878,6 +930,8 @@ fn the_cause_lines_hold_on_both_sides() {
         diagnose(&inputs(sess), Complaint::Slow, Some("g")).problem.expect("rough").avg_lower
     };
     assert!(lower(69.0));
+    assert!(lower(RULE_AVG_FRACTION * 100.0), "exactly 0.70 of the usual says so");
+    assert!(!lower(RULE_AVG_FRACTION * 100.0 + 0.01), "a hair above does not");
     assert!(!lower(71.0));
 }
 
@@ -1001,4 +1055,98 @@ fn the_engine_writes_nothing() {
     for banned in ["std::fs", "File::create", "write(", "atomic_write", "Command::new", "apply_recommendation", "rollback_change", "set_startup_entry_enabled"] {
         assert!(!production.contains(banned), "paramedic.rs must stay read-only, found {banned}");
     }
+}
+
+// ==== review round 2: no claim beyond the evidence ===============================================
+#[test]
+fn starts_in_a_session_that_ran_normally_are_not_timing() {
+    let mut sess = steady(4);
+    // Thinly measured (coverage 0.67): judged Normal, in the window, with a heavy build running.
+    let mut thin = facts(&at_day(8, 10), 600, 400, 100.0, 50.0);
+    thin.busy_starts = 21;
+    sess.push(thin);
+    sess.push(facts(&at_day(9, 10), 600, 600, 100.0, 30.0));
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert!(d.findings.iter().all(|f| f.id != "background-load"), "a build during a session that ran fine is not timing");
+}
+
+#[test]
+fn a_session_with_no_memory_reading_is_never_a_lower_one() {
+    let mut sess = steady(4);
+    for s in sess.iter_mut() {
+        s.peak_ram_bytes = Some(50);
+        s.ram_total_bytes = Some(100);
+    }
+    let mut a = facts(&at_day(9, 10), 600, 600, 100.0, 30.0);
+    a.peak_ram_bytes = Some(95);
+    a.ram_total_bytes = Some(100);
+    sess.push(a);
+    sess.push(facts(&at_day(10, 10), 600, 600, 100.0, 30.0)); // rough, no memory reading
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    assert_eq!(d.problem.as_ref().expect("problem").sessions_affected.len(), 2);
+    let m = d.findings.iter().find(|f| f.id == "memory-pressure").expect("one rough session was nearly full");
+    assert!(m.evidence.iter().all(|e| !e.against && e.code != "ram-lower"), "a missing reading is neither high nor low");
+    assert!(d.unknowns.contains(&"memory") || m.evidence.iter().any(|e| e.code == "ram-peak"));
+}
+
+#[test]
+fn a_thin_session_with_an_unread_cap_still_corroborates_against_baselines_it_cannot_flatter() {
+    let make = |cap: CapState| {
+        let mut sess = steady(4);
+        for s in sess.iter_mut() {
+            s.cap = cap;
+        }
+        // 90 readings, so never judged alone, and a short trace, so its cap is unread.
+        sess.push(facts(&at_day(7, 10), 467, 90, 100.0, 10.0));
+        let mut rough = facts(&at_day(9, 10), 600, 600, 100.0, 30.0);
+        rough.cap = cap;
+        sess.push(rough);
+        diagnose(&inputs(sess), Complaint::Slow, Some("g"))
+    };
+    let d = make(CapState::Uncapped);
+    assert_eq!(d.problem.as_ref().expect("rough").partial_sessions.len(), 1, "compared with the uncapped baseline");
+    // Against a capped baseline an unread session could look rough only because of the cap: not compared.
+    let d = make(CapState::Capped { at_fps: 144.0 });
+    assert!(d.problem.as_ref().expect("rough").partial_sessions.is_empty());
+}
+
+#[test]
+fn a_game_played_exactly_the_window_before_the_newest_session_is_still_judged() {
+    let build = |old_rough_at: &str| {
+        let mut sess: Vec<SessionFacts> = (1..=4).map(|d| named(facts(&at_day(d, 10), 600, 600, 100.0, 50.0), "old")).collect();
+        sess.push(named(facts(old_rough_at, 600, 600, 100.0, 30.0), "old"));
+        sess.push(named(facts("2026-10-30T10:00:00Z", 600, 600, 100.0, 50.0), "j"));
+        diagnose(&inputs(sess), Complaint::Unknown, None)
+    };
+    // Fourteen days before 30 Oct 10:00 is 16 Oct 10:00: on the line is in, one second before is out.
+    assert_eq!(build("2026-10-16T10:00:00Z").game.as_deref(), Some("old"));
+    assert_eq!(build("2026-10-16T09:59:59Z").game.as_deref(), Some("j"));
+}
+
+#[test]
+fn when_two_games_are_rough_the_one_that_got_rough_last_is_shown() {
+    let build = |g_day: u32, h_day: u32| {
+        let mut sess = steady(4);
+        sess.extend((1..=4).map(|d| named(facts(&at_day(d, 12), 600, 600, 100.0, 50.0), "h")));
+        sess.push(facts(&at_day(g_day, 10), 600, 600, 100.0, 30.0));
+        sess.push(named(facts(&at_day(h_day, 12), 600, 600, 100.0, 30.0), "h"));
+        diagnose(&inputs(sess), Complaint::Unknown, None)
+    };
+    assert_eq!(build(9, 10).game.as_deref(), Some("h"));
+    assert_eq!(build(10, 9).game.as_deref(), Some("g"));
+}
+
+#[test]
+fn a_newest_game_that_is_only_partly_rough_does_not_hide_the_game_with_a_fired_session() {
+    let mut sess = steady(4);
+    sess.push(facts(&at_day(9, 10), 600, 600, 100.0, 30.0)); // g: rough, judged
+    sess.extend((1..=4).map(|d| named(facts(&at_day(d, 12), 600, 600, 100.0, 50.0), "h")));
+    sess.push(named(facts(&at_day(12, 12), 100, 80, 100.0, 10.0), "h")); // newest session: h, 80 readings, looks rough
+    let inp = inputs(sess);
+    let d = diagnose(&inp, Complaint::Unknown, None);
+    assert_eq!(d.game.as_deref(), Some("g"), "only a fired session counts as rough for the pick");
+    assert_eq!(d.state, DiagnosisState::CantTell { why: CantTellWhy::NothingChanged });
+    // Asked about h directly, the partial measure is said, never "nothing wrong".
+    let h = diagnose(&inp, Complaint::Unknown, Some("h"));
+    assert!(matches!(h.state, DiagnosisState::CantTell { why: CantTellWhy::PartialMeasure { looked_rough: true, .. } }), "{:?}", h.state);
 }

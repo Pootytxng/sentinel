@@ -142,6 +142,50 @@ describe("ParamedicCard", () => {
     expect(screen.getByText("To find out: play Game A once with nothing else running. Compy will compare.")).toBeTruthy();
   });
 
+  it("not separable without background load: does not promise that a quiet PC will tell them apart", async () => {
+    const [driver] = base.findings;
+    const windows: ParamedicDiagnosis["findings"][number] = {
+      id: "windows-build-change",
+      confidence: "possible",
+      in_play: true,
+      evidence: [{ kind: "known", code: "value-changed", args: { from: "1", to: "2" }, against: false, source: "sessions" }],
+      since_when: { kind: "unknown" },
+      fix: { kind: "none", code: "no-safe-change" },
+    };
+    await ask({ ...base, why_first: "not-separable", findings: [{ ...driver, confidence: "possible", in_play: true }, windows] });
+    await waitFor(() => expect(screen.getByText("Compy can't tell which of these it is yet")).toBeTruthy());
+    expect(screen.queryByText(/play Game A once with nothing else running/)).toBeNull();
+    expect(screen.getByText("Play Game A once more. Compy may still not be able to tell these apart.")).toBeTruthy();
+  });
+
+  it("a setting that drifted is named for what the records say", async () => {
+    const drift = (check: string): ParamedicDiagnosis["findings"][number] => ({
+      id: "setting-drift",
+      confidence: "possible",
+      in_play: true,
+      evidence: [{ kind: "known", code: "drift-noticed", args: { check }, against: false, source: "drift" }],
+      since_when: { kind: "unknown" },
+      fix: { kind: "steps", code: "setting-drift", args: {} },
+    });
+    await ask({ ...base, why_first: null, findings: [drift("applied-changes")] });
+    await waitFor(() => expect(screen.getByText("A setting Compy applied is no longer on")).toBeTruthy());
+    expect(screen.queryByText(/outside Compy/)).toBeNull();
+    cleanup();
+    await ask({ ...base, why_first: null, findings: [drift("power-profile")] });
+    await waitFor(() => expect(screen.getByText("A setting Compy watches changed")).toBeTruthy());
+  });
+
+  it("an unread record is said as unread, and memory names the line the engine applied", async () => {
+    await ask({
+      ...base,
+      unknowns: ["drift-unreadable", "identity-unreadable"],
+      not_it: [{ id: "memory-pressure", args: { percent: "90" } }],
+    });
+    await waitFor(() => expect(screen.getByText("Memory: never reached 90% full in these sessions.")).toBeTruthy());
+    expect(screen.getByText("Its record of setting changes, which couldn't be read")).toBeTruthy();
+    expect(screen.getByText("Its record of graphics driver and power plan checks, which couldn't be read")).toBeTruthy();
+  });
+
   it("partly measured and looked rough: says so and names the game", async () => {
     await ask({
       ...base,
@@ -187,6 +231,11 @@ describe("paramedic words", () => {
   it("never hard-codes a percentage and never claims a cause", () => {
     expect(en).not.toMatch(/\d%/);
     expect(en).not.toMatch(/\bcaused\b|because of/i);
+  });
+
+  it("claims no more than the records show", () => {
+    expect(en).not.toMatch(/were busy|got rougher|usual speed|outside Compy|nearly full in these/i);
+    expect(JSON.parse(zh).answer.likely).not.toMatch(/原因/);
   });
 
   it("has the same keys in both languages", () => {

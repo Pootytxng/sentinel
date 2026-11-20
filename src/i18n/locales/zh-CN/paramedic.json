@@ -10,17 +10,17 @@
   "problem": {
     "title": "{{game}} 最近明显比平时卡顿",
     "badge": "已测得",
-    "body_one": "平时 {{game}} 掉帧时，仍能保持约 {{beforePct}}% 的常规速度。在你最近一次游戏中，掉帧时只剩约 {{nowPct}}%。",
-    "body_other": "平时 {{game}} 掉帧时，仍能保持约 {{beforePct}}% 的常规速度。在你最近 {{count}} 次游戏中，掉帧时只剩约 {{nowPct}}%。",
-    "spikes": "最严重的卡顿持续了 {{nowMs}} 毫秒，之前约为 {{beforeMs}} 毫秒。",
+    "body_one": "正常情况下，{{game}} 掉帧时仍能保持约 {{beforePct}}% 的平均帧率。在你最近一次游戏中，掉帧时降到了约 {{nowPct}}%。",
+    "body_other": "正常情况下，{{game}} 掉帧时仍能保持约 {{beforePct}}% 的平均帧率。在你最近 {{count}} 次游戏中，掉帧时降到了约 {{nowPct}}%。",
+    "spikes": "最慢的百分之一的帧耗时约 {{nowMs}} 毫秒，你正常游戏时约为 {{beforeMs}} 毫秒。",
     "average": "平均帧率也只有每秒 {{nowFps}} 帧，之前约为 {{beforeFps}} 帧。",
-    "otherGames": "{{games}} 在同一时间也变卡了。",
+    "otherGames": "{{games}} 在同一时期也出现过明显卡顿的游戏记录。",
     "since": "它上一次正常运行是在 {{date}}。",
-    "partial_one": "Compy 还看到 1 次只测量了一部分的游戏，没有把它算进去。",
-    "partial_other": "Compy 还看到 {{count}} 次只测量了一部分的游戏，没有把它们算进去。"
+    "partial_one": "Compy 还看到 1 次只测量了一部分的游戏，测到的部分看起来也很卡。只测量了一部分的游戏不会单独作为依据。",
+    "partial_other": "Compy 还看到 {{count}} 次只测量了一部分的游戏，测到的部分看起来也很卡。只测量了一部分的游戏不会单独作为依据。"
   },
   "answer": {
-    "likely": "最可能的原因",
+    "likely": "最有可能",
     "possible": "也有可能",
     "mechanism": "常会导致这种情况（尚未在你的电脑上测得）",
     "measured": "已测得"
@@ -30,13 +30,14 @@
       "what": "你的显卡驱动更新了"
     },
     "backgroundLoad": {
-      "what": "你玩游戏时其他程序很忙"
+      "what": "你玩游戏时有其他程序启动了"
     },
     "memoryPressure": {
       "what": "你玩游戏时内存几乎用满"
     },
     "settingDrift": {
-      "what": "有设置在 Compy 之外被改动"
+      "what": "Compy 监视的某项设置变了",
+      "applied": "Compy 开启的某项设置已不再开启"
     },
     "compyChange": {
       "what": "Compy 开启的更改数量不一样"
@@ -75,18 +76,18 @@
     "crossGame": "{{games}} 在更新之后也明显变卡，而在此之前从未这样。",
     "installTimeNotRead": "Compy 没有读取确切的安装时间；它在 {{when}} 看到了新版本。",
     "roughOnOldDriver": "有 {{count}} 次卡顿的游戏仍在用旧驱动。",
-    "startsSeen": "从那以后，{{names}} 在你的 {{count}} 次游戏中启动过。",
-    "startsSeenNoNames": "从那以后，编译或编码类程序在你的 {{count}} 次游戏中启动过。",
+    "startsSeen": "在你的 {{count}} 次卡顿游戏中，有其他程序启动过（{{names}}）。",
+    "startsSeenNoNames": "在你的 {{count}} 次卡顿游戏中，有其他程序启动过。",
     "loadMeasured": "在 {{count}} 次卡顿的游戏中，游戏以外的程序占用了大量处理器。",
     "loadNotRecorded": "Compy 看不到游戏开始前就已在运行的程序，也没有记录这几次游戏时电脑其余部分有多忙。",
     "ramPeak": "在一次卡顿的游戏中，内存最高用到 {{peakGb}} GB（共 {{totalGb}} GB）。",
     "ramBaseline": "你正常游戏时内存最高用到 {{peakGb}} GB。",
     "ramWarning": "Compy 在那次游戏中看到内存几乎用满。",
     "ramLower": "其他卡顿的游戏内存只用到 {{peakGb}} GB。",
-    "driftApplied": "Compy 注意到它自己的更改被重新关闭了。",
+    "driftApplied": "Compy 自己的检查发现，它开启过的某项设置现在已不再开启。",
     "driftPower": "Compy 注意到电源计划不再偏向高性能。",
     "driftOther": "Compy 注意到它监视的某项设置变了。",
-    "whichNotRecorded": "具体是哪项设置、谁改的，没有记录。",
+    "whichNotRecorded": "具体是哪项设置、是什么改变了它，没有记录。",
     "countChanged": "上一次正常游戏时 Compy 开启了 {{from}} 项更改，第一次卡顿时是 {{to}} 项。",
     "valueChanged": "它从 {{from}} 变成了 {{to}}。",
     "hardwareChanged": "Compy 记录的显卡或内存不一样了。",
@@ -148,9 +149,9 @@
     "unknown": "Compy 看不到：",
     "gpuDriverChange": "显卡驱动：仍是 {{driver}}。",
     "backgroundLoad": "游戏以外的程序：这几次游戏中很安静。",
-    "memoryPressure": "内存：这几次游戏中从未几乎用满。",
+    "memoryPressure": "内存：这几次游戏中从未达到 {{percent}}% 满。",
     "settingDrift": "Compy 监视的设置：没有注意到变化。",
-    "compyChange": "Compy 开启的更改数量相同（{{count}} 项）。",
+    "compyChange": "Compy 列出的已开启更改数量：仍是 {{count}} 项。",
     "hardwareChange": "显卡和内存容量：没有变化。",
     "powerPlanChange": "用于对比的两次游戏的电源计划：相同。",
     "displayRefreshLower": "屏幕刷新率：仍是 {{hz}} Hz。",
@@ -170,7 +171,9 @@
     "powerPlanTiming": "你的电源计划是什么时候变的",
     "display": "你的屏幕刷新率",
     "windowsBuild": "当时用的是哪个 Windows 版本",
-    "driftTiming": "有些被监视的设置是什么时候变的"
+    "driftTiming": "有些被监视的设置是什么时候变的",
+    "driftUnreadable": "它的设置变化记录（读取失败）",
+    "identityUnreadable": "它的显卡驱动和电源计划检查记录（读取失败）"
   },
   "nothingWrong": {
     "title": "看起来一切正常",
@@ -194,7 +197,8 @@
   "footer": "Compy 只列出问题出现之前发生了什么变化。在解决办法经过检验之前，它不会声称知道原因。",
   "notSeparable": {
     "title": "Compy 暂时还分不清是下面哪一项",
-    "next": "要查明：请在没有运行其他程序的情况下玩一次 {{game}}。Compy 会重新对比。"
+    "next": "要查明：请在没有运行其他程序的情况下玩一次 {{game}}。Compy 会重新对比。",
+    "nextOther": "请再玩一次 {{game}}。Compy 可能仍然分不清这几项。"
   },
   "cap": {
     "none": "无上限",
