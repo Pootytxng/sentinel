@@ -30,31 +30,33 @@
       "other": "Other changes"
     },
     "change": {
-      "gpuChanged": "Your graphics driver changed from {{from}} to {{to}} on {{when}}.",
-      "gpuInstalled": "Windows installed graphics driver {{to}} on {{when}}. Compy can't see which version it replaced.",
-      "gpuInstalledBare": "Windows recorded a graphics driver install on {{when}}. Compy can't see which version it replaced.",
+      "gpuChanged": "Your {{adapter}} changed from {{from}} to {{to}} on {{when}}.",
+      "gpuInstalled": "Windows installed {{adapter}} {{to}} on {{when}}. Compy can't see which version it replaced.",
+      "gpuInstalledBare": "Windows recorded a {{adapter}} install on {{when}}. Compy can't see which version it replaced.",
       "viaUpdate": "Windows Update delivered it.",
       "windowsUpdate": "Windows installed {{kb}} on {{when}}.",
       "windowsUpdateNoKb": "Windows installed an update on {{when}}.",
-      "otherDrivers_one": "Windows installed {{count}} other driver ({{classes}}), the latest on {{when}}.",
-      "otherDrivers_other": "Windows installed {{count}} other drivers ({{classes}}), the latest on {{when}}.",
-      "programs_one": "{{count}} program was installed on {{day}}: {{names}}.",
-      "programs_other": "{{count}} programs were installed on {{day}}: {{names}}.",
-      "programsMore": "{{count}} programs were installed on {{day}}: {{names}} and {{more}} more.",
+      "otherDrivers_one": "Windows installed or updated {{count}} other driver ({{classes}}), the latest on {{when}}.",
+      "otherDrivers_other": "Windows installed or updated {{count}} other drivers ({{classes}}), the latest on {{when}}.",
+      "programs_one": "{{count}} program was installed or updated on {{day}}: {{names}}.",
+      "programs_other": "{{count}} programs were installed or updated on {{day}}: {{names}}.",
+      "programsMore": "{{count}} programs were installed or updated on {{day}}: {{names}} and {{more}} more.",
       "updatesMinor": "Windows also installed security definition updates ({{n}}) and Store app updates ({{m}}). They are counted here, not listed.",
       "updatesUnclassified_one": "Windows installed {{count}} update that Compy couldn't classify.",
-      "updatesUnclassified_other": "Windows installed {{count}} updates that Compy couldn't classify."
+      "updatesUnclassified_other": "Windows installed {{count}} updates that Compy couldn't classify.",
+      "displayOther_one": "A display driver ({{count}}) was installed or updated, the latest on {{when}}.",
+      "displayOther_other": "Display drivers ({{count}}) were installed or updated, the latest on {{when}}."
     },
     "how": {
-      "gpuDriver": "Check it: Device Manager, Display adapters, Properties, Driver tab. Roll Back Driver there returns to the earlier version when Windows kept it. Your choice; Compy won't do it.",
-      "windowsUpdate": "Check it: Settings, Windows Update, Update history. Uninstall updates there can remove some updates. Your choice; Compy won't do it.",
-      "programs": "Check it: Settings, Apps, Installed apps. You can uninstall a program there.",
-      "otherDrivers": "Check it: Device Manager shows each device's driver version on its Driver tab."
+      "gpuDriver": "To see it: Device Manager, Display adapters, your card, Driver tab. Windows can roll a driver back there if it kept the earlier one.",
+      "windowsUpdate": "To see them: Settings, Windows Update, Update history. Some updates can be uninstalled from that page.",
+      "programs": "To see them: Settings, Apps, Installed apps. Windows keeps one date per program, and some programs refresh it when they update themselves.",
+      "otherDrivers": "To see them: Device Manager shows each device's driver version on its Driver tab."
     },
     "none": {
       "gpuDriver": "Windows recorded no graphics driver version change in this period.",
-      "windowsUpdate": "Windows recorded no quality, feature or driver update in this period.",
-      "programs": "No program with a recorded install date was installed in this period."
+      "windowsUpdate": "Windows recorded no monthly Windows update, Windows version update or driver update in this period.",
+      "programs": "No program shows an install or update date in this period."
     },
     "nothing": "Compy found no dated change in this period. That doesn't mean nothing is wrong: Compy hasn't measured how any game runs.",
     "unread": "Compy couldn't read everything for this period, so it can't say that nothing changed. What it couldn't see is listed below.",
@@ -94,10 +96,21 @@
     "cantTell": {
       "title": "What Compy can't tell yet",
       "body": "Compy hasn't seen a game run yet, so it can't tell whether anything runs worse than before, or which of these changes matters.",
-      "measure": "Compy can measure a game while you play. Start a capture in Live, play for about 10 minutes, then press Something's wrong again."
+      "measure": "Compy can measure a game while you play. It needs about 3 sessions of the same game before it can compare. Start a capture in Live, play as usual, and press Check again here afterwards.",
+      "bodyFew": "Compy hasn't got enough sessions of {{game}} yet, so it can't tell whether anything runs worse than before, or which of these changes matters."
     },
     "changeWhen": "Change when it started",
-    "footer": "Compy lists what it can see on this PC. It doesn't say what is causing the problem until it has measured the game."
+    "footer": "Compy lists what it can see on this PC. It doesn't say why a game runs badly until it has measured it.",
+    "adapter": {
+      "plain": "graphics driver",
+      "maker": "{{maker}} graphics driver",
+      "other": "display adapter driver"
+    },
+    "measured": {
+      "lead": "Compy has too few sessions of {{game}} to compare yet ({{have}} of {{need}}).",
+      "scope": "This list is for the whole PC, not one game."
+    },
+    "privacy": "Compy reads this on your PC. It doesn't save it or send it anywhere, and it doesn't save what you tap."
   },
   "door": {
     "button": "Something's wrong",
@@ -434,8 +447,8 @@
     "needsMore": "Compy needs {{total}} normal sessions of {{game}} to know what normal is. You have {{have}}.",
     "partial": "Compy only measured part of your last {{game}} session ({{percent}}%), so it won't judge it. Play once more with Compy running.",
     "crash": "Crashes have their own page for now. Open Problems to see what Windows recorded.",
-    "noGame": "Compy hasn't recorded {{game}} yet. Start Compy before you play.",
-    "noSessions": "Compy hasn't recorded any games yet. Start Compy before you play.",
+    "noGame": "Compy hasn't recorded {{game}} yet. Compy can measure a game while you play. It needs about 3 sessions of the same game before it can compare. Start a capture in Live, play as usual, and press Check again here afterwards.",
+    "noSessions": "Compy hasn't recorded any games yet. Compy can measure a game while you play. It needs about 3 sessions of the same game before it can compare. Start a capture in Live, play as usual, and press Check again here afterwards.",
     "partialRough": "Compy only measured part of your last {{game}} session ({{percent}}%), and what it saw looked rough. Play once more with Compy running.",
     "frameCap": "Your frame cap changed, or Compy can't read it, between your earlier {{game}} sessions and the newest one, so it won't compare them.",
     "backToNormal": "Compy can't tell yet whether {{game}} is back to normal. Play once more.",

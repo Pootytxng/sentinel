@@ -40,7 +40,16 @@ export type ParamedicFirstLook = {
 /** The measured answers that leave the user with nothing to look at: the first look takes over from them. */
 export function firstLookApplies(d: ParamedicDiagnosis): boolean {
   const s = d.state;
-  return s.kind === "needs-more-play" || (s.kind === "cant-tell" && (s.why.kind === "no-sessions" || s.why.kind === "crash-not-covered"));
+  return s.kind === "needs-more-play" || (s.kind === "cant-tell" && s.why.kind === "no-sessions");
+}
+
+/** What the measured answer already said about the one game that has too few sessions (null: no game recorded at all). */
+export type FirstLookMeasured = { game: string; have: number; need: number } | null;
+
+/** The card's own `measured` for this diagnosis: only a game with some sessions has counts to name. */
+export function firstLookMeasured(d: ParamedicDiagnosis, game: string): FirstLookMeasured {
+  const s = d.state;
+  return s.kind === "needs-more-play" ? { game, have: s.have, need: s.have + s.sessions_needed } : null;
 }
 
 const CHOICES: { since: FirstLookSince }[] = [
@@ -84,16 +93,28 @@ function toldText(a: ParamedicFirstLook, t: T, dates: Dates): string {
 }
 
 /** One dated fact. Installs carry a day, never a time of day; every other row names the day and time Windows recorded. */
+/** "graphics driver", or with more than one graphics adapter in the window, "AMD graphics driver" (maker from its PCI vendor id). */
+function adapterWord(maker: string | undefined, t: T): string {
+  if (!maker) return t("paramedic.firstLook.adapter.plain");
+  if (maker === "amd") return t("paramedic.firstLook.adapter.maker", { maker: "AMD" });
+  if (maker === "nvidia") return t("paramedic.firstLook.adapter.maker", { maker: "NVIDIA" });
+  if (maker === "intel") return t("paramedic.firstLook.adapter.maker", { maker: "Intel" });
+  return t("paramedic.firstLook.adapter.other");
+}
+
 function changeText(c: FirstLookChange, t: T, dates: Dates): string {
   const a = c.args;
   const when = c.at ? (c.precision === "day" ? dates.day(c.at) : dates.dayTime(c.at)) : "";
+  const adapter = adapterWord(a.maker, t);
   switch (c.id) {
     case "gpu-driver-changed":
-      return t("paramedic.firstLook.change.gpuChanged", { from: a.from, to: a.to, when });
+      return t("paramedic.firstLook.change.gpuChanged", { adapter, from: a.from, to: a.to, when });
     case "gpu-driver-installed":
-      return t("paramedic.firstLook.change.gpuInstalled", { to: a.to, when });
+      return t("paramedic.firstLook.change.gpuInstalled", { adapter, to: a.to, when });
     case "gpu-driver-installed-bare":
-      return t("paramedic.firstLook.change.gpuInstalledBare", { when });
+      return t("paramedic.firstLook.change.gpuInstalledBare", { adapter, when });
+    case "display-driver-other":
+      return t("paramedic.firstLook.change.displayOther", { count: Number(a.count), when });
     case "windows-update":
       return t("paramedic.firstLook.change.windowsUpdate", { kb: a.kb, when });
     case "windows-update-nokb":
@@ -205,6 +226,10 @@ function limitLine(l: ParamedicLimit, t: T, dates: Dates): string {
   return l.code.startsWith("partial-") ? t("paramedic.firstLook.limit.partial", { what, why }) : t("paramedic.firstLook.limit.cantSee", { what, why });
 }
 
+/** Limits that are always true of a source that WAS read stay in the fold; every other limit hides some or all of a kind, so it is said in its own group. */
+const ALWAYS_TRUE = ["classes", "no-install-date", "not-picked"];
+const inGroup = (l: ParamedicLimit) => !ALWAYS_TRUE.includes(l.code);
+
 function Chevron() {
   return (
     <span aria-hidden="true" className="gl-para-caret">
@@ -283,7 +308,7 @@ type Step =
   | { kind: "failed"; chosen: FirstLookSince }
   | { kind: "done"; chosen: FirstLookSince; a: ParamedicFirstLook };
 
-export function ParamedicFirstLook() {
+export function ParamedicFirstLook({ measured = null }: { measured?: FirstLookMeasured } = {}) {
   const { t } = useTranslation();
   const dates = useDates();
   const [step, setStep] = useState<Step>({ kind: "ask", chosen: null });
@@ -299,9 +324,15 @@ export function ParamedicFirstLook() {
       window.clearTimeout(timer.current);
     };
   }, []);
-  // Each step's heading takes keyboard focus, so a screen reader starts at the new step.
+  // Each step's heading takes keyboard focus, so a screen reader starts at the new step. When the measured answer
+  // is already on screen above (a game with too few sessions), the first look does not take focus past it on mount.
+  const mounted = useRef(false);
   useEffect(() => {
+    const first = !mounted.current;
+    mounted.current = true;
+    if (first && measured) return;
     if (step.kind === "ask" || step.kind === "done") headingRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the step only
   }, [step.kind]);
 
   const look = (since: FirstLookSince, attempt: number) => {
@@ -319,12 +350,15 @@ export function ParamedicFirstLook() {
   };
 
   const footer = <p className="gl-para-note">{t("paramedic.firstLook.footer")}</p>;
+  const privacy = <p className="gl-para-note" data-testid="first-look-privacy">{t("paramedic.firstLook.privacy")}</p>;
 
   if (step.kind !== "done") {
     const busy = step.kind === "busy";
     return (
       <div className="gl-para-body" data-testid="first-look">
-        <p>{t("paramedic.firstLook.lead")}</p>
+        <p data-testid="first-look-lead">
+          {measured ? t("paramedic.firstLook.measured.lead", { game: measured.game, have: measured.have, need: measured.need }) : t("paramedic.firstLook.lead")}
+        </p>
         <div role="group" aria-labelledby={headingId} className="gl-para-lead">
           <h2 id={headingId} ref={headingRef} tabIndex={-1} className="gl-card-title">
             {t("paramedic.firstLook.when.title")}
@@ -363,12 +397,18 @@ export function ParamedicFirstLook() {
           </p>
         )}
         {footer}
+        {privacy}
       </div>
     );
   }
 
   const { a } = step;
-  const empty = a.touch_games.length === 0 && a.other_changes.length === 0;
+  // Definition and Store-app updates are daily routine: they are counted inside the limits fold, not listed.
+  const minor = a.other_changes.find((c) => c.id === "updates-minor");
+  const otherRows = a.other_changes.filter((c) => c.id !== "updates-minor");
+  const empty = a.touch_games.length === 0 && otherRows.length === 0;
+  const touchLimits = a.limits.filter((l) => inGroup(l) && (l.kind === "driver" || l.kind === "windows-update"));
+  const programLimits = a.limits.filter((l) => inGroup(l) && l.kind === "programs");
   const open = a.touch_games.slice(0, ROWS_OPEN);
   const rest = a.touch_games.slice(ROWS_OPEN);
   const noneTouch = a.none.filter((n) => n === "gpu-driver" || n === "windows-update");
@@ -378,6 +418,7 @@ export function ParamedicFirstLook() {
       <h2 ref={headingRef} tabIndex={-1} className="gl-card-title">
         {t("paramedic.firstLook.title")}
       </h2>
+      {measured && <p data-testid="first-look-scope">{t("paramedic.firstLook.measured.scope")}</p>}
       <div role="group" aria-label={t("paramedic.firstLook.told.title")}>
         <p>
           <strong>{t("paramedic.firstLook.told.title")}</strong>
@@ -387,7 +428,7 @@ export function ParamedicFirstLook() {
       {!a.changes_listed && <p data-testid="first-look-always">{t("paramedic.firstLook.alwaysBody")}</p>}
       {a.changes_listed && (
         <>
-          {(open.length > 0 || noneTouch.length > 0) && (
+          {(open.length > 0 || noneTouch.length > 0 || touchLimits.length > 0) && (
             <div role="group" aria-label={t("paramedic.firstLook.group.touch")} data-testid="first-look-touch">
               <p>
                 <strong>{t("paramedic.firstLook.group.touch")}</strong>
@@ -403,19 +444,30 @@ export function ParamedicFirstLook() {
                   {noneLine(n, t)}
                 </p>
               ))}
+              {touchLimits.map((l, i) => (
+                <p key={`${l.kind}-${l.code}-${i}`} className="gl-para-note" data-testid="first-look-group-limit">
+                  {limitLine(l, t, dates)}
+                </p>
+              ))}
             </div>
           )}
-          {(a.other_changes.length > 0 || nonePrograms) && (
+          {(otherRows.length > 0 || nonePrograms || programLimits.length > 0) && (
             <Fold title={t("paramedic.firstLook.group.other")} testid="first-look-other">
-              {a.other_changes.length > 0 && <Rows rows={a.other_changes} t={t} dates={dates} />}
+              {otherRows.length > 0 && <Rows rows={otherRows} t={t} dates={dates} />}
               {nonePrograms && <p className="gl-para-note">{noneLine("programs", t)}</p>}
+              {programLimits.map((l, i) => (
+                <p key={`${l.kind}-${l.code}-${i}`} className="gl-para-note" data-testid="first-look-group-limit">
+                  {limitLine(l, t, dates)}
+                </p>
+              ))}
             </Fold>
           )}
-          {empty && a.read_all && <p data-testid="first-look-nothing">{t("paramedic.firstLook.nothing")}</p>}
+          {empty && a.read_all && !minor && <p data-testid="first-look-nothing">{t("paramedic.firstLook.nothing")}</p>}
           {empty && !a.read_all && <p data-testid="first-look-unread">{t("paramedic.firstLook.unread")}</p>}
-          {a.limits.length > 0 && (
+          {(a.limits.length > 0 || minor) && (
             <Fold title={t("paramedic.firstLook.limit.title")} testid="first-look-limits" defaultOpen={empty && !a.read_all}>
               <ul className="gl-para-lines">
+                {minor && <li>{changeText(minor, t, dates)}</li>}
                 {a.limits.map((l, i) => (
                   <li key={`${l.kind}-${l.code}-${i}`}>{limitLine(l, t, dates)}</li>
                 ))}
@@ -428,7 +480,7 @@ export function ParamedicFirstLook() {
         <p>
           <strong>{t("paramedic.firstLook.cantTell.title")}</strong>
         </p>
-        <p>{t("paramedic.firstLook.cantTell.body")}</p>
+        <p>{measured ? t("paramedic.firstLook.cantTell.bodyFew", { game: measured.game }) : t("paramedic.firstLook.cantTell.body")}</p>
         <p>{t("paramedic.firstLook.cantTell.measure")}</p>
       </div>
       <div>
@@ -437,6 +489,7 @@ export function ParamedicFirstLook() {
         </button>
       </div>
       {footer}
+      {privacy}
     </div>
   );
 }

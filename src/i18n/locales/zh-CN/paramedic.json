@@ -30,31 +30,33 @@
       "other": "其他变化"
     },
     "change": {
-      "gpuChanged": "你的显卡驱动在 {{when}} 从 {{from}} 变成了 {{to}}。",
-      "gpuInstalled": "Windows 在 {{when}} 安装了显卡驱动 {{to}}。Compy 看不到它替换的是哪个版本。",
-      "gpuInstalledBare": "Windows 在 {{when}} 记录了一次显卡驱动安装。Compy 看不到它替换的是哪个版本。",
+      "gpuChanged": "你的{{adapter}}在 {{when}} 从 {{from}} 变成了 {{to}}。",
+      "gpuInstalled": "Windows 在 {{when}} 安装了{{adapter}} {{to}}。Compy 看不到它替换了哪个版本。",
+      "gpuInstalledBare": "Windows 在 {{when}} 记录了一次{{adapter}}安装。Compy 看不到它替换了哪个版本。",
       "viaUpdate": "它是通过 Windows 更新送达的。",
       "windowsUpdate": "Windows 在 {{when}} 安装了 {{kb}}。",
       "windowsUpdateNoKb": "Windows 在 {{when}} 安装了一个更新。",
-      "otherDrivers_one": "Windows 安装了 {{count}} 个其他驱动（{{classes}}），最近的一次在 {{when}}。",
-      "otherDrivers_other": "Windows 安装了 {{count}} 个其他驱动（{{classes}}），最近的一次在 {{when}}。",
-      "programs_one": "{{day}} 安装了 {{count}} 个程序：{{names}}。",
-      "programs_other": "{{day}} 安装了 {{count}} 个程序：{{names}}。",
-      "programsMore": "{{day}} 安装了 {{count}} 个程序：{{names}}，另外还有 {{more}} 个。",
-      "updatesMinor": "Windows 还安装了安全定义更新（{{n}} 个）和应用商店应用更新（{{m}} 个）。这里只计数，不逐项列出。",
+      "otherDrivers_one": "Windows 安装或更新了 {{count}} 个其他驱动（{{classes}}），最近一次在 {{when}}。",
+      "otherDrivers_other": "Windows 安装或更新了 {{count}} 个其他驱动（{{classes}}），最近一次在 {{when}}。",
+      "programs_one": "{{day}} 有 {{count}} 个程序安装或更新：{{names}}。",
+      "programs_other": "{{day}} 有 {{count}} 个程序安装或更新：{{names}}。",
+      "programsMore": "{{day}} 有 {{count}} 个程序安装或更新：{{names}}，另有 {{more}} 个。",
+      "updatesMinor": "Windows 还安装了安全定义更新（{{n}} 个）和应用商店应用更新（{{m}} 个）。这里只计数，不逐条列出。",
       "updatesUnclassified_one": "Windows 安装了 {{count}} 个 Compy 无法分类的更新。",
-      "updatesUnclassified_other": "Windows 安装了 {{count}} 个 Compy 无法分类的更新。"
+      "updatesUnclassified_other": "Windows 安装了 {{count}} 个 Compy 无法分类的更新。",
+      "displayOther_other": "有显示驱动（{{count}} 个）安装或更新，最近一次在 {{when}}。",
+      "displayOther_one": "有显示驱动（{{count}} 个）安装或更新，最近一次在 {{when}}。"
     },
     "how": {
-      "gpuDriver": "自己查看：设备管理器，显示适配器，属性，驱动程序选项卡。如果 Windows 保留了旧版本，那里的“回退驱动程序”可以回到之前的版本。是否这样做由你决定，Compy 不会代你操作。",
-      "windowsUpdate": "自己查看：设置，Windows 更新，更新历史记录。那里的“卸载更新”可以移除部分更新。是否这样做由你决定，Compy 不会代你操作。",
-      "programs": "自己查看：设置，应用，已安装的应用。你可以在那里卸载程序。",
-      "otherDrivers": "自己查看：设备管理器会在每个设备的驱动程序选项卡上显示它的驱动版本。"
+      "gpuDriver": "查看方式：设备管理器，显示适配器，你的显卡，驱动程序选项卡。如果 Windows 保留了旧版本，可以在那里回退驱动。",
+      "windowsUpdate": "查看方式：设置，Windows 更新，更新历史记录。部分更新可以在该页面卸载。",
+      "programs": "查看方式：设置，应用，已安装的应用。Windows 为每个程序只记一个日期，有些程序自行更新时会刷新它。",
+      "otherDrivers": "查看方式：设备管理器在每个设备的驱动程序选项卡里显示驱动版本。"
     },
     "none": {
       "gpuDriver": "这段时间内，Windows 没有记录到显卡驱动版本发生变化。",
-      "windowsUpdate": "这段时间内，Windows 没有记录到质量更新、功能更新或驱动更新。",
-      "programs": "这段时间内没有安装带安装日期记录的程序。"
+      "windowsUpdate": "Windows 在这段时间没有记录每月 Windows 更新、Windows 版本更新或驱动更新。",
+      "programs": "这段时间没有程序显示安装或更新日期。"
     },
     "nothing": "这段时间内，Compy 没有找到带日期的变化。这不代表一切正常：Compy 还没有测量过任何游戏的运行情况。",
     "unread": "这段时间内有些内容 Compy 没能读全，所以它不能说什么都没变。没能看到的部分列在下面。",
@@ -94,10 +96,21 @@
     "cantTell": {
       "title": "Compy 目前还说不准的",
       "body": "Compy 还没有见过任何游戏运行，所以它说不准有没有哪个游戏比以前跑得更差，也说不准这些变化里哪一项有影响。",
-      "measure": "Compy 可以在你玩游戏时进行测量。请在“Live”里开始一次捕获，玩大约 10 分钟，然后再按一次“出问题了”。"
+      "measure": "Compy 可以在你玩游戏时进行测量。同一款游戏大约需要 3 场记录才能比较。请在“实时”里开始捕获，照常游玩，之后回到这里再按“再查一次”。",
+      "bodyFew": "Compy 记录的 {{game}} 场次还不够，所以无法判断是否有什么比以前运行得更差，也无法判断这些变化中哪个重要。"
     },
     "changeWhen": "重新选择开始的时间",
-    "footer": "Compy 只列出它在这台电脑上能看到的内容。在测量过游戏之前，它不会下结论说问题出在哪里。"
+    "footer": "Compy 列出它在这台电脑上能看到的内容。在测量之前，它不会说游戏为什么运行不好。",
+    "adapter": {
+      "plain": "显卡驱动",
+      "maker": "{{maker}} 显卡驱动",
+      "other": "显示适配器驱动"
+    },
+    "measured": {
+      "lead": "Compy 记录的 {{game}} 场次还太少，暂时无法比较（{{have}} / {{need}}）。",
+      "scope": "这份列表针对整台电脑，不针对某一款游戏。"
+    },
+    "privacy": "Compy 在你的电脑上读取这些内容，不会保存，也不会发送到任何地方，也不会记录你点了什么。"
   },
   "door": {
     "button": "出问题了",
@@ -434,8 +447,8 @@
     "needsMore": "Compy 需要 {{game}} 的 {{total}} 次正常游戏记录，才知道它平时是什么样。你现在有 {{have}} 次。",
     "partial": "Compy 只测量了你最近一次 {{game}} 游戏的一部分（{{percent}}%），所以不会据此判断。请在 Compy 运行的情况下再玩一次。",
     "crash": "崩溃问题目前有单独的页面。请打开“问题”查看 Windows 的记录。",
-    "noGame": "Compy 还没有记录过 {{game}}。请在玩游戏前先启动 Compy。",
-    "noSessions": "Compy 还没有记录过任何游戏。请在玩游戏前先启动 Compy。",
+    "noGame": "Compy 还没有记录 {{game}}。Compy 可以在你玩游戏时进行测量，同一款游戏大约需要 3 场记录才能比较。请在“实时”里开始捕获，照常游玩，之后回到这里再按“再查一次”。",
+    "noSessions": "Compy 还没有记录任何游戏。Compy 可以在你玩游戏时进行测量，同一款游戏大约需要 3 场记录才能比较。请在“实时”里开始捕获，照常游玩，之后回到这里再按“再查一次”。",
     "partialRough": "Compy 只测量了你最近一次 {{game}} 游戏的一部分（{{percent}}%），而它看到的部分显得很卡。请在 Compy 运行的情况下再玩一次。",
     "frameCap": "你的帧率上限在 {{game}} 之前的游戏和最近一次之间变了（或 Compy 读不出来），所以不会拿它们互相比较。",
     "backToNormal": "Compy 暂时还无法判断 {{game}} 是否已恢复正常。请再玩一次。",

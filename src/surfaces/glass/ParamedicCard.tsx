@@ -17,7 +17,7 @@ import type {
   ParamedicWhen,
 } from "../../types";
 import { useDates } from "./GamesRoom";
-import { ParamedicFirstLook, firstLookApplies } from "./ParamedicFirstLook";
+import { ParamedicFirstLook, firstLookApplies, firstLookMeasured } from "./ParamedicFirstLook";
 
 type T = ReturnType<typeof useTranslation>["t"];
 type Dates = ReturnType<typeof useDates>;
@@ -1088,6 +1088,8 @@ export function ParamedicCard({ launch = 0, onOpenProblems, noGames = false }: {
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
   const [more, setMore] = useState(false);
+  // Every press of the door starts the first look over (its question, not an answer from before the user played).
+  const [round, setRound] = useState(0);
   const doorRef = useRef<HTMLButtonElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1112,6 +1114,7 @@ export function ParamedicCard({ launch = 0, onOpenProblems, noGames = false }: {
   }, [view.kind]);
 
   const ask = (attempt: number) => {
+    if (attempt === 0) setRound((r) => r + 1);
     // Pressing "Check again" keeps the answer on screen (dimmed) so the card does not collapse and jump the page.
     setView((v) => ({ kind: "busy", prev: v.kind === "done" ? v.d : v.kind === "busy" ? v.prev : null }));
     invoke<ParamedicDiagnosis | null>("paramedic_diagnose", { complaint: "unknown", game: null })
@@ -1228,7 +1231,7 @@ export function ParamedicCard({ launch = 0, onOpenProblems, noGames = false }: {
               {/* No usable history: with no game recorded the first look is the whole answer; with a game that
                   has too few sessions it follows the measured "can't tell yet". */}
               {!(answer.state.kind === "cant-tell" && answer.state.why.kind === "no-sessions") && <Answer d={answer} ctx={ctx} />}
-              {firstLookApplies(answer) && <ParamedicFirstLook />}
+              {firstLookApplies(answer) && <ParamedicFirstLook key={round} measured={firstLookMeasured(answer, ctx.game)} />}
               {answer.mixed_sessions.length > 0 && (
                 <p className="gl-para-note" data-testid="paramedic-mixed">
                   {t("paramedic.problem.mixed", { count: answer.mixed_sessions.length, dates: answer.mixed_sessions.map((s) => dates.day(s)).join(", ") })}

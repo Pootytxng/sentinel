@@ -651,4 +651,21 @@ describe("Home: one entry point for 'something's wrong'", () => {
     expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
     expect(p.onOpenProblems).not.toHaveBeenCalled();
   });
+
+  // T5 (review): with no recorded game the way to the questions is the card's own link, and the crash banner still wins the header button.
+  it("with no recorded game, once the card has been asked, 'Something else?' opens Problems", async () => {
+    const p = home({ sessions: [] });
+    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
+    await waitFor(() => expect(invoked).toContain("paramedic_diagnose"));
+    fireEvent.click(await screen.findByRole("button", { name: "Something else? Answer a few questions" }));
+    expect(p.onOpenProblems).toHaveBeenCalledTimes(1);
+  });
+
+  it("with no recorded game and the crash banner showing, the header button still opens Problems and asks nothing", () => {
+    const p = home({ sessions: [], pendingCare: care });
+    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
+    expect(p.onOpenProblems).toHaveBeenCalledTimes(1);
+    expect(invoked).not.toContain("paramedic_diagnose");
+    expect(screen.getByRole("button", { name: "Find out why" })).toBeTruthy();
+  });
 });

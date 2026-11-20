@@ -127,7 +127,11 @@ describe("the card with no games (the question step)", () => {
     expect(engine.calls.map((c) => c.cmd)).toEqual(["paramedic_diagnose"]);
     expect(screen.queryByText("Which game?")).toBeNull();
     // The old measured line is not shown for "no games": the first look is the whole answer.
-    expect(screen.queryByText("Compy hasn't recorded any games yet. Start Compy before you play.")).toBeNull();
+    expect(screen.queryByText(/Compy hasn't recorded any games yet/)).toBeNull();
+    // The question step says the look stays on this PC.
+    expect(screen.getByTestId("first-look-privacy").textContent).toBe(
+      "Compy reads this on your PC. It doesn't save it or send it anywhere, and it doesn't save what you tap.",
+    );
   });
 
   it("is keyboard reachable: real buttons in a labelled group, none disabled or taken out of the tab order, the heading takes focus", async () => {
@@ -147,6 +151,19 @@ describe("the card with no games (the question step)", () => {
     await toTheQuestion(diagnosis({ kind: "needs-more-play", sessions_needed: 2, have: 1 }), {});
     expect(screen.getByText("Compy can't tell yet")).toBeTruthy();
     expect(screen.getByRole("group", { name: "When did it start?" })).toBeTruthy();
+    // The question does not pull keyboard focus past the measured answer already on screen.
+    expect(document.activeElement).not.toBe(screen.getByRole("heading", { name: "When did it start?" }));
+  });
+
+  // T1 (review F1): a user with some history is never told "no earlier sessions" or "hasn't seen a game run".
+  it("a game with 1 of 3 sessions: the first look names the need, is for the whole PC, and never says there is no history", async () => {
+    await toTheQuestion(diagnosis({ kind: "needs-more-play", sessions_needed: 2, have: 1 }), {});
+    expect(screen.getByTestId("first-look-lead").textContent).toMatch(/^Compy has too few sessions of .* to compare yet \(1 of 3\)\.$/);
+    await pick("This week", answer());
+    expect(screen.getByTestId("first-look-scope").textContent).toBe("This list is for the whole PC, not one game.");
+    const all = screen.getByTestId("first-look").textContent ?? "";
+    expect(all).not.toMatch(/hasn't seen a game run|no earlier sessions|hasn't recorded any games/);
+    expect(all).toContain("It needs about 3 sessions of the same game before it can compare.");
   });
 
   it("history that answers is not interrogated: the measured flow is unchanged and no question appears", async () => {
@@ -190,21 +207,21 @@ describe("the answer", () => {
     expect(lines).toHaveLength(2);
     // Newest first: the engine's order is kept (driver 19 Nov, then the update 17 Nov).
     expect(lines[0].textContent).toMatch(/^Your graphics driver changed from 32\.0\.32015\.7029 to 32\.0\.32029\.2010 on /);
-    expect(lines[0].textContent).toMatch(/Check it: Device Manager/);
+    expect(lines[0].textContent).toMatch(/To see it: Device Manager/);
     expect(lines[1].textContent).toMatch(/^Windows installed KB5050000 on /);
-    expect(lines[1].textContent).toMatch(/Check it: Settings, Windows Update/);
+    expect(lines[1].textContent).toMatch(/To see them: Settings, Windows Update/);
   });
 
-  it("other changes wait in a closed disclosure; a program install is worded 'installed on {day}', never with a time", async () => {
+  it("other changes wait in a closed disclosure; a program is 'installed or updated on {day}', never with a time", async () => {
     await toTheQuestion();
     await pick("This week", answer());
     const fold = screen.getByRole("button", { name: "Other changes" });
     expect(fold.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByText(/were installed on/)).toBeNull();
+    expect(screen.queryByText(/were installed or updated on/)).toBeNull();
     fireEvent.click(fold);
     expect(fold.getAttribute("aria-expanded")).toBe("true");
-    const row = screen.getByText(/2 programs were installed on /);
-    expect(row.textContent).toMatch(/^2 programs were installed on [A-Z][a-z]{2} \d+: Alpha, Beta\.$/);
+    const row = screen.getByText(/2 programs were installed or updated on /);
+    expect(row.textContent).toMatch(/^2 programs were installed or updated on [A-Z][a-z]{2} \d+: Alpha, Beta\.$/);
     expect(row.textContent).not.toMatch(/\d:\d\d/);
   });
 
@@ -225,10 +242,15 @@ describe("the answer", () => {
     const minor = change("updates-minor", "2026-11-15T03:00:00Z", { n: "6", m: "2" }, "");
     await toTheQuestion();
     await pick("This week", answer({ touch_games: [], other_changes: [minor], none: ["gpu-driver", "windows-update"] }));
-    fireEvent.click(screen.getByRole("button", { name: "Other changes" }));
-    expect(screen.getByText("Windows also installed security definition updates (6) and Store app updates (2). They are counted here, not listed.")).toBeTruthy();
+    // Routine counts are not a change row: no "Other changes" disclosure, the count sits in the "couldn't see" fold.
+    expect(screen.queryByRole("button", { name: "Other changes" })).toBeNull();
+    const limits = screen.getByRole("button", { name: "What Compy couldn't see" });
+    if (limits.getAttribute("aria-expanded") === "false") fireEvent.click(limits);
+    expect(screen.getByTestId("first-look-limits").textContent).toContain(
+      "Windows also installed security definition updates (6) and Store app updates (2). They are counted here, not listed.",
+    );
     expect(screen.getByText("Windows recorded no graphics driver version change in this period.")).toBeTruthy();
-    expect(screen.getByText("Windows recorded no quality, feature or driver update in this period.")).toBeTruthy();
+    expect(screen.getByText("Windows recorded no monthly Windows update, Windows version update or driver update in this period.")).toBeTruthy();
   });
 
   it("'always been like this' shows no change list and says why", async () => {
@@ -281,8 +303,11 @@ describe("the answer", () => {
     expect(text).toContain("Compy couldn't see which Windows updates were installed: reading took too long, so Compy went on without it.");
     expect(text).toContain("Compy didn't look at any game's files, because no game was picked.");
     // The one complete kind is still said, for that kind only.
-    expect(screen.getByText("Windows recorded no quality, feature or driver update in this period.")).toBeTruthy();
+    expect(screen.getByText("Windows recorded no monthly Windows update, Windows version update or driver update in this period.")).toBeTruthy();
     expect(screen.queryByText("Windows recorded no graphics driver version change in this period.")).toBeNull();
+    // Limits that hide a whole kind are said inside that kind's own group, not only in the fold (review S2).
+    const inGroup = within(screen.getByTestId("first-look-touch")).getAllByTestId("first-look-group-limit").map((n) => n.textContent);
+    expect(inGroup).toContain("Compy couldn't see when drivers were installed: Windows needs administrator rights to show that log.");
   });
 
   it("ends with what Compy can't tell yet and the one next step, and claims no measurement", async () => {
@@ -291,10 +316,58 @@ describe("the answer", () => {
     const g = screen.getByTestId("first-look-cant-tell");
     expect(within(g).getByText("What Compy can't tell yet")).toBeTruthy();
     expect(within(g).getByText("Compy hasn't seen a game run yet, so it can't tell whether anything runs worse than before, or which of these changes matters.")).toBeTruthy();
-    expect(within(g).getByText("Compy can measure a game while you play. Start a capture in Live, play for about 10 minutes, then press Something's wrong again.")).toBeTruthy();
+    expect(
+      within(g).getByText(
+        "Compy can measure a game while you play. It needs about 3 sessions of the same game before it can compare. Start a capture in Live, play as usual, and press Check again here afterwards.",
+      ),
+    ).toBeTruthy();
     const all = screen.getByTestId("first-look").textContent ?? "";
     expect(all).not.toMatch(/issue|found \d|likely|caused|because of|guarantee|probably|fixed/i);
-    expect(screen.getByText(/It doesn't say what is causing the problem until it has measured the game/)).toBeTruthy();
+    expect(screen.getByText("Compy lists what it can see on this PC. It doesn't say why a game runs badly until it has measured it.")).toBeTruthy();
+    // The privacy line closes the answer too.
+    expect(screen.getByTestId("first-look-privacy")).toBeTruthy();
+  });
+
+  // T4 (review S1): two display adapters are told apart by maker; a virtual display driver is not called a graphics card.
+  it("names the graphics driver by maker when two adapters changed; a virtual display driver goes under Other changes", async () => {
+    const amd = change("gpu-driver-changed", "2026-11-19T05:12:26Z", { from: "1.0", to: "2.0", maker: "amd" }, "gpu-driver");
+    const intel = change("gpu-driver-installed", "2026-11-18T05:12:26Z", { to: "9.9", maker: "intel" }, "gpu-driver");
+    const other = change("gpu-driver-installed-bare", "2026-11-17T05:12:26Z", { maker: "other" }, "gpu-driver");
+    const virt = change("display-driver-other", "2026-11-16T05:12:26Z", { count: "2" }, "other-drivers");
+    await toTheQuestion();
+    await pick("This week", answer({ touch_games: [amd, intel, other], other_changes: [virt] }));
+    const lines = within(screen.getByTestId("first-look-touch")).getAllByRole("listitem").map((n) => n.textContent ?? "");
+    expect(lines[0]).toMatch(/^Your AMD graphics driver changed from 1\.0 to 2\.0 on /);
+    expect(lines[1]).toMatch(/^Windows installed Intel graphics driver 9\.9 on /);
+    expect(lines[2]).toMatch(/^Windows recorded a display adapter driver install on /);
+    fireEvent.click(screen.getByRole("button", { name: "Other changes" }));
+    expect(screen.getByText(/^Display drivers \(2\) were installed or updated, the latest on /)).toBeTruthy();
+  });
+
+  it("a program day is the start of the local day and is shown as that day, with no time, in any time zone", async () => {
+    const localMidnight = new Date(2026, 10, 19).toISOString();
+    await toTheQuestion();
+    await pick("This week", answer({ touch_games: [], other_changes: [change("programs-installed", localMidnight, { count: "1", names: "Alpha", more: "0" }, "programs", "day")] }));
+    fireEvent.click(screen.getByRole("button", { name: "Other changes" }));
+    expect(screen.getByText("1 program was installed or updated on Nov 19: Alpha.")).toBeTruthy();
+  });
+
+  it("the programs how-line says Windows keeps one date per program; none-line says 'install or update date'", async () => {
+    await toTheQuestion();
+    await pick("This week", answer({ touch_games: [], other_changes: [programs], none: ["programs"] }));
+    fireEvent.click(screen.getByRole("button", { name: "Other changes" }));
+    expect(screen.getByText(/Windows keeps one date per program, and some programs refresh it when they update themselves\./)).toBeTruthy();
+  });
+
+  // T3 (review F5): pressing "Check again" after a first look starts it over: the question, not the old window.
+  it("'Check again' resets the first look to its question (no stale answer window)", async () => {
+    await toTheQuestion();
+    await pick("This week", answer());
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    await waitFor(() => expect(screen.getByRole("group", { name: "When did it start?" })).toBeTruthy());
+    expect(screen.queryByTestId("first-look-told")).toBeNull();
+    const group = screen.getByRole("group", { name: "When did it start?" });
+    for (const b of within(group).getAllByRole("button")) expect(b.getAttribute("aria-pressed")).toBe("false");
   });
 
   it("'Change when it started' returns to the question with the earlier choice pressed (aria-pressed)", async () => {

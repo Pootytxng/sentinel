@@ -592,7 +592,7 @@ fn gap_limits(kind: &'static str, gaps: &[Gap], covered_from: Option<DateTime<Ut
     }
 }
 
-fn status_limits(kind: &'static str, status: KindStatus, out: &mut Vec<Limit>) {
+pub(super) fn status_limits(kind: &'static str, status: KindStatus, out: &mut Vec<Limit>) {
     match status {
         KindStatus::NotAsked => out.push(limit(kind, "not-read", &[])),
         KindStatus::Unreadable(r) => out.push(limit(kind, reason_code(&r), &reason_args(&r))),

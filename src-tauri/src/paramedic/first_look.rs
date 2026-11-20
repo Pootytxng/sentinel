@@ -13,15 +13,19 @@
 //! The engine returns codes, ids and numbers; the card owns every sentence (locales `paramedic.firstLook`).
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::changes::{Limit, CHANGES_BUDGET};
+use super::changes::{status_limits, Limit, CHANGES_BUDGET};
 use super::{iso, Certainty, EvidenceKind};
-use crate::change_sources::{self, ChangeEvent, ChangeKind, ChangeReport, Gap, KindStatus, Note, Precision, UnreadableReason};
+use crate::change_sources::{self, ChangeEvent, ChangeKind, ChangeReport, KindStatus, Precision};
+
+// The outer wait must outlast each reader's own budget, or a slow source would read "took too long" for all
+// three kinds instead of giving its own partial line (pinned here, at compile time).
+const _: () = assert!(CHANGES_BUDGET.as_millis() >= change_sources::DEFAULT_BUDGET.as_millis() * 2);
 
 /// Names a day's installs show before "and N more".
 const PROGRAM_NAMES_SHOWN: usize = 3;
@@ -154,72 +158,6 @@ fn known(v: &Option<String>) -> String {
     v.as_deref().map(str::trim).unwrap_or("").to_string()
 }
 
-/// Fixed codes per reason; the card owns the sentence.
-fn reason_code(r: &UnreadableReason) -> &'static str {
-    use UnreadableReason as U;
-    match r {
-        U::AccessDenied => "access-denied",
-        U::LogEmptyOrSwitchedOff => "log-empty",
-        U::ChannelNotFound | U::ToolMissing => "log-missing",
-        U::StartFailed | U::QueryFailed(_) | U::ReaderStopped => "read-failed",
-        U::TimedOutBeforeAnyRecord => "timed-out",
-        U::RecordsUnreadable(_) => "records-unreadable",
-        U::RegistryUnreadable => "registry",
-        // Game readers are not asked in S1; these codes only keep the match closed.
-        U::NotSteamLauncher(_) | U::NoGameIdentified | U::NotInSteamLibrary | U::SteamNotFound => "not-steam",
-        U::SteamUnreadable | U::SteamPartiallyUnreadable { .. } => "steam-unreadable",
-        U::SteamGameNotFound => "steam-no-record",
-        U::SteamNoUpdateTime => "steam-no-time",
-    }
-}
-
-fn reason_args(r: &UnreadableReason) -> Vec<(&'static str, String)> {
-    match r {
-        UnreadableReason::RecordsUnreadable(n) => vec![("n", n.to_string())],
-        _ => Vec::new(),
-    }
-}
-
-fn gap_limits(kind: &'static str, gaps: &[Gap], covered_from: Option<DateTime<Utc>>, coverage_from: Option<DateTime<Utc>>, out: &mut Vec<Limit>) {
-    for g in gaps {
-        out.push(match g {
-            Gap::TimedOut => limit(kind, "partial-timed-out", &[]),
-            Gap::RowCapReached => limit(kind, "partial-row-cap", &covered_from.map(|t| vec![("from", iso(t))]).unwrap_or_default()),
-            Gap::MalformedRecords(n) => limit(kind, "partial-unparsed", &[("n", n.to_string())]),
-            Gap::OutputCapped => limit(kind, "partial-output-capped", &[]),
-            Gap::RegistryKeysUnreadable(n) => limit(kind, "partial-registry", &[("n", n.to_string())]),
-            Gap::SteamLibrariesUnreadable(n) => limit(kind, "partial-steam-libraries", &[("n", n.to_string())]),
-        });
-    }
-    if let Some(t) = coverage_from {
-        out.push(limit(kind, "partial-coverage", &[("from", iso(t))]));
-    }
-}
-
-/// Always-true limits of a source that WAS read (completely or in part).
-fn kind_limits(kind: &'static str, notes: &[Note], out: &mut Vec<Limit>) {
-    match kind {
-        "driver" => out.push(limit(kind, "classes", &[])),
-        "programs" => {
-            let n = notes.iter().find_map(|n| if let Note::ProgramsWithoutDate(n) = n { Some(*n) } else { None }).unwrap_or(0);
-            out.push(limit(kind, "no-install-date", &[("n", n.to_string())]));
-        }
-        _ => {}
-    }
-}
-
-fn status_limits(kind: &'static str, status: KindStatus, out: &mut Vec<Limit>) {
-    match status {
-        KindStatus::NotAsked => out.push(limit(kind, "not-read", &[])),
-        KindStatus::Unreadable(r) => out.push(limit(kind, reason_code(&r), &reason_args(&r))),
-        KindStatus::Partial { gaps, covered_from, coverage_gap, limits } => {
-            gap_limits(kind, &gaps, covered_from, coverage_gap.as_ref().map(|g| g.to), out);
-            kind_limits(kind, &limits, out);
-        }
-        KindStatus::Complete { limits } => kind_limits(kind, &limits, out),
-    }
-}
-
 /// The three kinds read for the whole PC, with their limit names.
 const KINDS: [(&str, ChangeKind); 3] = [
     ("driver", ChangeKind::GpuDriver),
@@ -268,13 +206,18 @@ pub(crate) fn build(since: Since, now: DateTime<Utc>, reading: Option<&Reading>)
             out.read_all = all_complete;
             let complete = |kind: ChangeKind| matches!(r.status(kind), KindStatus::Complete { .. });
             gpu_rows(r, &mut out);
-            update_rows(r, &mut out);
+            let folded = update_rows(r, &mut out);
             program_rows(r, &mut out);
             other_driver_row(r, &mut out);
             if complete(ChangeKind::GpuDriver) && !out.touch_games.iter().any(|c| c.id.starts_with("gpu-driver")) {
                 out.none.push("gpu-driver");
             }
-            if complete(ChangeKind::WindowsUpdate) && !out.touch_games.iter().any(|c| c.id.starts_with("windows-update")) && !out.other_changes.iter().any(|c| c.id == "updates-unclassified") {
+            // "No update" is never said beside a driver row that Windows Update delivered: that update IS recorded.
+            if complete(ChangeKind::WindowsUpdate)
+                && !folded
+                && !out.touch_games.iter().any(|c| c.id.starts_with("windows-update"))
+                && !out.other_changes.iter().any(|c| c.id == "updates-unclassified")
+            {
                 out.none.push("windows-update");
             }
             if complete(ChangeKind::ProgramInstalled) && !out.other_changes.iter().any(|c| c.id == "programs-installed") {
@@ -289,11 +232,46 @@ pub(crate) fn build(since: Since, now: DateTime<Utc>, reading: Option<&Reading>)
     out
 }
 
+/// The PCI vendor id (four hex digits, lower case) inside a hardware id such as `PCI\VEN_1002&DEV_7550&...`.
+/// A virtual or remote display driver has none.
+fn pci_vendor(hardware_id: &str) -> Option<String> {
+    let up = hardware_id.to_ascii_uppercase();
+    let i = up.find("VEN_")? + 4;
+    let v = up.get(i..i + 4)?;
+    v.chars().all(|c| c.is_ascii_hexdigit()).then(|| v.to_ascii_lowercase())
+}
+
+/// The maker for a vendor id from a tiny fixed table; any other PCI vendor is `other`.
+fn maker_of(vendor: &str) -> &'static str {
+    match vendor {
+        "1002" => "amd",
+        "10de" => "nvidia",
+        "8086" => "intel",
+        _ => "other",
+    }
+}
+
 /// Real graphics-driver version changes. The same version configured again is not a change and is not listed.
+/// With more than one graphics adapter (PCI display hardware ids) in the window, each row names its maker.
+/// A display driver with no PCI vendor (a virtual or remote display) is never "your graphics driver": it is
+/// counted on one line under the other changes.
 fn gpu_rows(r: &ChangeReport, out: &mut FirstLook) {
     let updates = events_of(r, ChangeKind::WindowsUpdate);
-    for e in events_of(r, ChangeKind::GpuDriver) {
+    let gpu = events_of(r, ChangeKind::GpuDriver);
+    let mut adapters: Vec<&str> = gpu.iter().filter(|e| e.what.id.as_deref().and_then(pci_vendor).is_some()).filter_map(|e| e.what.id.as_deref()).collect();
+    adapters.sort_unstable();
+    adapters.dedup();
+    let several = adapters.len() > 1;
+    let mut virtual_rows: Vec<DateTime<Utc>> = Vec::new();
+    for e in gpu {
         let Some(at) = e.when.at else { continue };
+        if e.what.version_changed == Some(false) {
+            continue;
+        }
+        let Some(vendor) = e.what.id.as_deref().and_then(pci_vendor) else {
+            virtual_rows.push(at);
+            continue;
+        };
         let (from, to) = (known(&e.what.from_version), known(&e.what.to_version));
         let mut args: Vec<(&'static str, String)> = Vec::new();
         let id = match e.what.version_changed {
@@ -304,29 +282,39 @@ fn gpu_rows(r: &ChangeReport, out: &mut FirstLook) {
             }
             // Windows said the version changed but did not name both versions, or it does not know the
             // earlier one: said as an install, never as "changed from X".
-            Some(true) | None if !to.is_empty() => {
+            _ if !to.is_empty() => {
                 args.push(("to", to));
                 "gpu-driver-installed"
             }
-            Some(true) | None => "gpu-driver-installed-bare",
-            Some(false) => continue,
+            _ => "gpu-driver-installed-bare",
         };
+        if several {
+            args.push(("maker", maker_of(&vendor).to_string()));
+        }
         if updates.iter().any(|w| class_of(w) == "driver" && same_install(w, e)) {
             args.push(("via_update", "true".to_string()));
         }
         out.touch_games.push(change(id, Some(at), e.when.precision, &args, "gpu-driver"));
     }
+    if let Some(newest) = virtual_rows.iter().max() {
+        out.other_changes.push(change("display-driver-other", Some(*newest), Precision::Exact, &[("count", virtual_rows.len().to_string())], "other-drivers"));
+    }
 }
-
-/// Quality, feature and driver-class updates one by one (a driver-class row that is a graphics driver
-/// install already listed is folded into it); definition and Store-app updates counted on one line.
-fn update_rows(r: &ChangeReport, out: &mut FirstLook) {
+/// Monthly, version and driver-class updates one by one (a driver-class row that is a graphics driver
+/// install is folded into that row); definition and Store-app updates counted on one line. Returns
+/// whether any update was folded that way.
+fn update_rows(r: &ChangeReport, out: &mut FirstLook) -> bool {
     let gpu = events_of(r, ChangeKind::GpuDriver);
     let all = events_of(r, ChangeKind::WindowsUpdate);
+    let mut folded = false;
     for e in &all {
         let class = class_of(e);
         let Some(at) = e.when.at else { continue };
-        if !is_major(&class) || (class == "driver" && gpu.iter().any(|g| same_install(e, g))) {
+        if class == "driver" && gpu.iter().any(|g| same_install(e, g)) {
+            folded = true;
+            continue;
+        }
+        if !is_major(&class) {
             continue;
         }
         let (id, args) = match e.what.kb.as_deref().map(str::trim).filter(|k| !k.is_empty()) {
@@ -356,6 +344,7 @@ fn update_rows(r: &ChangeReport, out: &mut FirstLook) {
             "",
         ));
     }
+    folded
 }
 
 /// Programs, one row per calendar day (installs carry a day, never a time of day).
@@ -400,14 +389,30 @@ fn other_driver_row(r: &ChangeReport, out: &mut FirstLook) {
 
 // ---- Orchestration: the command's half ---------------------------------------------------------
 
-/// A reader from an earlier press that is still running: a new one is not started (that press reads
-/// `took-too-long`), so repeated taps cannot pile threads up.
-static READING: AtomicBool = AtomicBool::new(false);
+/// When the reader from an earlier press started (ms since the epoch), or 0 when none runs: a new one is not
+/// started while it runs (that press reads `took-too-long`), so repeated taps cannot pile threads up. A slot
+/// held longer than `STALE_SLOT_MS` is taken over, so one hung reader cannot make every later press fail.
+static READING: AtomicU64 = AtomicU64::new(0);
+const STALE_SLOT_MS: u64 = 30_000;
 
-struct SlotGuard;
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(1).max(1)
+}
+
+/// Takes the slot at `now` (free, or held past the stale limit); returns the stamp that releases it.
+fn take_slot(slot: &AtomicU64, now: u64) -> Option<u64> {
+    let held = slot.load(Ordering::Acquire);
+    if held != 0 && now.saturating_sub(held) < STALE_SLOT_MS {
+        return None;
+    }
+    slot.compare_exchange(held, now, Ordering::AcqRel, Ordering::Acquire).ok().map(|_| now)
+}
+
+/// Frees the slot it took, unless a later holder has taken it over since.
+struct SlotGuard(&'static AtomicU64, u64);
 impl Drop for SlotGuard {
     fn drop(&mut self) {
-        READING.store(false, Ordering::Release);
+        let _ = self.0.compare_exchange(self.1, 0, Ordering::AcqRel, Ordering::Acquire);
     }
 }
 
@@ -416,17 +421,15 @@ pub(crate) fn read_within<F>(budget: Duration, fetch: F) -> Reading
 where
     F: FnOnce() -> Reading + Send + 'static,
 {
-    if READING.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_err() {
-        return Reading::Unavailable("took-too-long");
-    }
-    let guard = SlotGuard;
+    let Some(stamp) = take_slot(&READING, now_ms()) else { return Reading::Unavailable("took-too-long") };
+    let guard = SlotGuard(&READING, stamp);
     let (tx, rx) = std::sync::mpsc::channel();
     let spawned = std::thread::Builder::new().name("paramedic-first-look".into()).spawn(move || {
         let _guard = guard;
         let _ = tx.send(fetch());
     });
     if spawned.is_err() {
-        READING.store(false, Ordering::Release);
+        let _ = READING.compare_exchange(stamp, 0, Ordering::AcqRel, Ordering::Acquire);
         return Reading::Unavailable("reader-failed");
     }
     match rx.recv_timeout(budget) {
@@ -435,7 +438,6 @@ where
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Reading::Unavailable("reader-failed"),
     }
 }
-
 /// The answer for `since` at `now`. `fetch` gets the window `(t0, now]` and runs only when there is one.
 pub(crate) fn first_look_with<F>(since: Since, now: DateTime<Utc>, budget: Duration, fetch: F) -> FirstLook
 where
@@ -472,7 +474,7 @@ pub(crate) async fn paramedic_first_look(game: FirstLookGame, since: Since) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::change_sources::{ChangeTime, ChangeWhat, ReadOk, Source, SourceRead};
+    use crate::change_sources::{ChangeTime, ChangeWhat, Gap, ReadOk, Source, SourceRead, UnreadableReason};
 
     fn utc(s: &str) -> DateTime<Utc> {
         DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
@@ -491,11 +493,19 @@ mod tests {
         ChangeEvent { kind, when, what, source }
     }
 
+    const AMD: &str = "PCI\\VEN_1002&DEV_7550&SUBSYS_88111EAE&REV_C0";
+    const INTEL: &str = "PCI\\VEN_8086&DEV_A780&SUBSYS_1&REV_04";
+
     fn gpu(at: &str, from: Option<&str>, to: &str, changed: Option<bool>) -> ChangeEvent {
+        gpu_on(AMD, at, from, to, changed)
+    }
+
+    fn gpu_on(id: &str, at: &str, from: Option<&str>, to: &str, changed: Option<bool>) -> ChangeEvent {
         ev(
             ChangeKind::GpuDriver,
             ChangeTime::exact(utc(at)),
             ChangeWhat {
+                id: Some(id.into()),
                 name: Some("Display adapter".into()),
                 from_version: from.map(str::to_string),
                 to_version: Some(to.into()),
@@ -831,6 +841,98 @@ mod tests {
         let a = look(Since::ThisWeek, live_like());
         let l = a.limits.iter().find(|l| l.kind == "game-update").unwrap();
         assert_eq!(l.code, "not-picked");
+    }
+
+    // ---- review r1 fixes ------------------------------------------------------------------------
+
+    #[test]
+    fn no_update_line_is_never_said_beside_a_driver_row_windows_update_delivered() {
+        let drivers = vec![gpu("2026-11-19T05:12:26Z", Some("1.0"), "2.0", Some(true))];
+        let mut wu = update("2026-11-19T05:12:30Z", Some("KB777"), "driver");
+        wu.what.to_version = Some("2.0".into());
+        let a = look(Since::ThisWeek, report(8 * 24, read(drivers), read(vec![wu]), read(vec![])));
+        assert_eq!(a.touch_games[0].args.get("via_update").map(String::as_str), Some("true"));
+        assert!(!a.none.contains(&"windows-update"), "{:?}", a.none);
+        // The same update folded into a graphics row that is not listed (same version) is still a recorded update.
+        let drivers = vec![gpu("2026-11-19T05:12:26Z", Some("2.0"), "2.0", Some(false))];
+        let mut wu = update("2026-11-19T05:12:30Z", Some("KB777"), "driver");
+        wu.what.to_version = Some("2.0".into());
+        let b = look(Since::ThisWeek, report(8 * 24, read(drivers), read(vec![wu]), read(vec![])));
+        assert!(!b.none.contains(&"windows-update"), "{:?}", b.none);
+    }
+
+    #[test]
+    fn two_graphics_adapters_are_told_apart_by_maker() {
+        let drivers = vec![
+            gpu_on(AMD, "2026-11-19T05:12:26Z", Some("1.0"), "2.0", Some(true)),
+            gpu_on(INTEL, "2026-11-18T05:00:00Z", Some("30.1"), "31.2", Some(true)),
+        ];
+        let a = look(Since::ThisWeek, report(8 * 24, read(drivers), read(vec![]), read(vec![])));
+        let makers: Vec<Option<&str>> = a.touch_games.iter().map(|c| c.args.get("maker").map(String::as_str)).collect();
+        assert_eq!(makers, vec![Some("amd"), Some("intel")]);
+    }
+
+    #[test]
+    fn one_adapter_has_no_maker_and_an_unlisted_pci_vendor_is_other() {
+        let a = look(Since::ThisWeek, report(8 * 24, read(vec![gpu("2026-11-19T05:12:26Z", Some("1.0"), "2.0", Some(true))]), read(vec![]), read(vec![])));
+        assert!(!a.touch_games[0].args.contains_key("maker"));
+        let odd = "PCI\\VEN_1234&DEV_0001&SUBSYS_1&REV_01";
+        let drivers = vec![
+            gpu_on(AMD, "2026-11-19T05:12:26Z", Some("1.0"), "2.0", Some(true)),
+            gpu_on(odd, "2026-11-18T05:00:00Z", Some("5"), "6", Some(true)),
+        ];
+        let b = look(Since::ThisWeek, report(8 * 24, read(drivers), read(vec![]), read(vec![])));
+        assert_eq!(b.touch_games[1].args.get("maker").map(String::as_str), Some("other"));
+        assert_eq!(maker_of("10de"), "nvidia");
+    }
+
+    #[test]
+    fn a_virtual_display_driver_is_not_your_graphics_driver() {
+        let drivers = vec![
+            gpu("2026-11-19T05:12:26Z", Some("1.0"), "2.0", Some(true)),
+            gpu_on("ROOT\\DISPLAY", "2026-11-19T06:00:00Z", Some("1"), "2", Some(true)),
+            gpu_on("ROOT\\DISPLAY", "2026-11-18T06:00:00Z", Some("0"), "1", Some(true)),
+        ];
+        let a = look(Since::ThisWeek, report(8 * 24, read(drivers), read(vec![]), read(vec![])));
+        assert_eq!(a.touch_games.len(), 1, "{:?}", a.touch_games);
+        assert!(!a.touch_games[0].args.contains_key("maker"), "a virtual display is not a second graphics adapter");
+        let v = a.other_changes.iter().find(|c| c.id == "display-driver-other").unwrap();
+        assert_eq!(v.args.get("count").map(String::as_str), Some("2"));
+        assert_eq!(v.at.as_deref(), Some("2026-11-19T06:00:00Z"));
+    }
+
+    #[test]
+    fn only_a_virtual_display_leaves_the_graphics_none_line_true() {
+        let drivers = vec![gpu_on("SWD\\REMOTE", "2026-11-19T06:00:00Z", Some("1"), "2", Some(true))];
+        let a = look(Since::ThisWeek, report(8 * 24, read(drivers), read(vec![]), read(vec![])));
+        assert!(a.touch_games.is_empty());
+        assert!(a.none.contains(&"gpu-driver"));
+    }
+
+    #[test]
+    fn pci_vendor_is_read_from_the_hardware_id() {
+        assert_eq!(pci_vendor(AMD).as_deref(), Some("1002"));
+        assert_eq!(pci_vendor("pci\\ven_10de&dev_1").as_deref(), Some("10de"));
+        assert_eq!(pci_vendor("ROOT\\DISPLAY"), None);
+        assert_eq!(pci_vendor("PCI\\VEN_ZZZZ"), None);
+    }
+
+    #[test]
+    fn a_slot_held_past_the_stale_limit_is_taken_over_and_a_fresh_one_is_not() {
+        let slot = AtomicU64::new(0);
+        let a = take_slot(&slot, 1_000).expect("free");
+        assert!(take_slot(&slot, 1_000 + STALE_SLOT_MS - 1).is_none(), "fresh");
+        let b = take_slot(&slot, 1_000 + STALE_SLOT_MS).expect("stale");
+        // The old holder finishing late must not free the newer holder's slot.
+        let _ = slot.compare_exchange(a, 0, Ordering::AcqRel, Ordering::Acquire);
+        assert_eq!(slot.load(Ordering::Acquire), b);
+        let _ = slot.compare_exchange(b, 0, Ordering::AcqRel, Ordering::Acquire);
+        assert_eq!(slot.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn the_outer_wait_outlasts_each_readers_own_budget() {
+        assert!(CHANGES_BUDGET >= change_sources::DEFAULT_BUDGET * 2);
     }
 
     /// Read-only, on THIS PC: the real readers for the whole PC with "this week" and "this month", five
