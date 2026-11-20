@@ -81,6 +81,8 @@ const FULL_BYTES: u64 = 20 * 1_073_741_824;
 /// Drives with a health warning listed.
 const DRIVES_SHOWN: usize = 3;
 const GIB: f64 = 1_073_741_824.0;
+/// A refresh rate this far (or more) under the monitor's maximum is a fact; 59 against 60 is a rounding of the mode.
+const MONITOR_GAP_HZ: u32 = 5;
 
 fn fact(id: &'static str, args: &[(&'static str, String)]) -> Fact {
     Fact { id, args: args.iter().cloned().collect() }
@@ -120,7 +122,7 @@ pub(super) fn evaluate(hw: &HardwareInfo, power: PowerSource, freesync: Option<b
 
     // 1. The main monitor below its maximum refresh rate (the display mode of the primary display).
     match (r.status_of("monitor-refresh"), hw.display.as_ref()) {
-        (Some(ReadinessStatus::Attention), Some(d)) => out.facts.push(fact(
+        (Some(ReadinessStatus::Attention), Some(d)) if d.max_refresh_rate_hz.saturating_sub(d.current_refresh_rate_hz) >= MONITOR_GAP_HZ => out.facts.push(fact(
             "monitor-refresh",
             &[("now", d.current_refresh_rate_hz.to_string()), ("max", d.max_refresh_rate_hz.to_string())],
         )),
@@ -183,8 +185,11 @@ pub(super) fn evaluate(hw: &HardwareInfo, power: PowerSource, freesync: Option<b
     match r.status_of("gpu-driver-age") {
         Some(ReadinessStatus::Attention) => {
             if let Some(g) = hw.gpus.iter().max_by_key(|g| g.vram_bytes) {
-                if let Some(days) = g.driver_age_days {
-                    out.facts.push(fact("gpu-driver-age", &[("days", days.to_string()), ("name", g.name.trim().to_string())]));
+                // Microsoft's basic display driver carries a stock date, not a maker's: never "your driver is old".
+                let lower = g.name.to_ascii_lowercase();
+                let basic = lower.contains("microsoft") || lower.contains("basic display");
+                if let (Some(days), false, false) = (g.driver_age_days, basic, g.driver_date.trim().is_empty()) {
+                    out.facts.push(fact("gpu-driver-age", &[("days", days.to_string()), ("date", g.driver_date.trim().to_string())]));
                 }
             }
         }
@@ -229,7 +234,12 @@ pub(super) fn facts_part(read: &FactsRead, game: &GameCtx, out: &mut FirstLook) 
             // Never an empty list: Compy has not finished reading this PC's hardware.
             None => out.limits.push(limit("facts", "hardware-not-ready", &[])),
             Some(hw) => {
-                let r = evaluate(hw, inp.power, inp.freesync, game);
+                let mut r = evaluate(hw, inp.power, inp.freesync, game);
+                // The startup snapshot's driver date can be older than a driver installed since: when a graphics
+                // driver change is listed in the window, the card never also says the driver is old.
+                if out.touch_games.iter().any(|c| c.id.starts_with("gpu-driver")) {
+                    r.facts.retain(|f| f.id != "gpu-driver-age");
+                }
                 out.facts = r.facts;
                 if !r.unread.is_empty() {
                     out.limits.push(limit("facts", "unread", &[("list", r.unread.join(","))]));
@@ -304,7 +314,7 @@ mod tests {
         }
     }
     fn gpu(days: Option<i64>) -> GpuInfo {
-        GpuInfo { name: "AMD Radeon RX 9070".into(), vram_bytes: 16 << 30, driver_age_days: days, ..Default::default() }
+        GpuInfo { name: "AMD Radeon RX 9070".into(), vram_bytes: 16 << 30, driver_age_days: days, driver_date: "2025-01-10T00:00:00Z".into(), ..Default::default() }
     }
     fn lib(drive: &str, media: &str) -> GameLibrary {
         GameLibrary { launcher: "Steam".into(), drive: drive.into(), media_type: media.into(), bus_type: String::new() }
@@ -431,10 +441,64 @@ mod tests {
         let o = eval(&hw);
         assert_eq!(ids(&o), vec!["gpu-driver-age"]);
         assert_eq!(o.facts[0].args["days"], "366");
+        assert_eq!(o.facts[0].args["date"], "2025-01-10T00:00:00Z");
         hw.gpus = vec![gpu(Some(365))];
         assert!(eval(&hw).facts.is_empty());
         hw.gpus = vec![gpu(None)];
         assert_eq!(eval(&hw).unread, vec!["gpu-driver"]);
+    }
+
+    #[test]
+    fn the_driver_fact_is_never_made_for_microsofts_basic_driver_or_a_driver_with_no_date() {
+        let mut hw = healthy();
+        let mut basic = gpu(Some(7000));
+        basic.name = "Microsoft Basic Display Adapter".into();
+        hw.gpus = vec![basic];
+        assert!(eval(&hw).facts.is_empty());
+        let mut undated = gpu(Some(500));
+        undated.driver_date = String::new();
+        hw.gpus = vec![undated];
+        assert!(eval(&hw).facts.is_empty());
+    }
+
+    #[test]
+    fn the_driver_fact_is_dropped_when_a_graphics_driver_change_is_listed_in_the_window() {
+        use crate::paramedic::first_look::Change;
+        use crate::paramedic::{Certainty, EvidenceKind};
+        let mut hw = healthy();
+        hw.gpus = vec![gpu(Some(400))];
+        let inp = || FactsInput { hw: Some(hw.clone()), ..FactsInput::default() };
+        let said = |out: &FirstLook| out.facts.iter().any(|f| f.id == "gpu-driver-age");
+        // No driver change listed: the fact stands.
+        let out = build_with(Since::ThisWeek, utc(NOW), &GameCtx::default(), &Sources { facts: FactsRead::Read(Box::new(inp())), ..Sources::default() });
+        assert!(said(&out));
+        // The same facts after a listed driver change: never both "your driver changed" and "your driver is old".
+        let mut out = build_with(Since::ThisWeek, utc(NOW), &GameCtx::default(), &Sources::default());
+        out.touch_games.push(Change {
+            id: "gpu-driver-changed",
+            at: Some("2026-11-19T13:38:22Z".into()),
+            precision: "exact",
+            args: BTreeMap::new(),
+            confidence: Certainty::Possible,
+            evidence: EvidenceKind::Known,
+            how: "gpu-driver",
+        });
+        facts_part(&FactsRead::Read(Box::new(inp())), &GameCtx::default(), &mut out);
+        assert!(!said(&out), "{:?}", out.facts);
+    }
+
+    #[test]
+    fn a_refresh_gap_under_five_hz_is_not_a_fact_and_five_is() {
+        let mut hw = healthy();
+        hw.display = Some(display(59, 60));
+        assert!(eval(&hw).facts.is_empty());
+        hw.display = Some(display(143, 144));
+        assert!(eval(&hw).facts.is_empty());
+        hw.display = Some(display(55, 60));
+        assert_eq!(ids(&eval(&hw)), vec!["monitor-refresh"]);
+        // A main monitor at its maximum is no fact whatever a second monitor runs at: only the primary is read.
+        hw.display = Some(display(250, 250));
+        assert!(eval(&hw).facts.is_empty());
     }
 
     #[test]

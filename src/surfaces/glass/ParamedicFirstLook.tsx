@@ -68,7 +68,19 @@ export type ParamedicFirstLook = {
 };
 
 /** Steam's list for the picker: `read: false` is "couldn't read Steam's libraries", never "no games". */
-export type SteamGames = { read: boolean; complete: boolean; games: { app_id: number; name: string; last_updated: string | null }[] };
+export type SteamGames = {
+  read: boolean;
+  complete: boolean;
+  games: {
+    app_id: number;
+    name: string;
+    last_updated: string | null;
+    /** The drive letter of the game's library: tells two games of one name apart. */
+    drive?: string | null;
+    /** The recorded game (its program name) found in this very folder; a name match never sets it. */
+    recorded?: string | null;
+  }[];
+};
 
 /** The measured answers that leave the user with nothing to look at: the first look takes over from them. */
 export function firstLookApplies(d: ParamedicDiagnosis): boolean {
@@ -198,7 +210,7 @@ function rowNotes(c: FirstLookChange, t: T, dates: Dates): string[] {
 }
 
 /** One fact that looks off, as a sentence with its number. The words state a reading; none says why a game runs badly. */
-function factText(f: FirstLookFact, t: T, game: string | null): string {
+function factText(f: FirstLookFact, t: T, game: string | null, dates: Dates): string {
   const a = f.args;
   switch (f.id) {
     case "monitor-refresh":
@@ -209,12 +221,15 @@ function factText(f: FirstLookFact, t: T, game: string | null): string {
       return t("paramedic.firstLook.fact.memoryOneStick");
     case "memory-one-channel":
       return t("paramedic.firstLook.fact.memoryOneChannel", { n: Number(a.n) });
-    case "drive-health":
-      return t("paramedic.firstLook.fact.driveHealth", { drive: a.drive, health: a.health });
+    case "drive-health": {
+      // The two values Windows' health status gives are translated; any other value is shown as it came.
+      const word = a.health === "Warning" ? t("paramedic.firstLook.healthWord.warning") : a.health === "Unhealthy" ? t("paramedic.firstLook.healthWord.unhealthy") : null;
+      return word ? t("paramedic.firstLook.fact.driveHealth", { drive: a.drive, health: word }) : t("paramedic.firstLook.fact.driveHealthOther", { drive: a.drive, health: a.health });
+    }
     case "game-on-hdd":
       return t("paramedic.firstLook.fact.gameOnHdd", { game: game ?? "", drive: a.drive });
     case "gpu-driver-age":
-      return t("paramedic.firstLook.fact.gpuDriverAge", { name: a.name, count: Number(a.days) });
+      return t("paramedic.firstLook.fact.gpuDriverAge", { date: dates.day(a.date), count: Number(a.days) });
     case "freesync-off":
       return t("paramedic.firstLook.fact.freesyncOff");
     case "on-battery":
@@ -359,8 +374,6 @@ function limitWhy(l: ParamedicLimit, t: T, dates: Dates): string {
       return t("paramedic.firstLook.limit.why.partialRegistry", { n: l.args.n });
     case "partial-coverage":
       return t("paramedic.firstLook.limit.why.partialCoverage", { from });
-    case "unreadable":
-      return t("paramedic.firstLook.limit.why.historyUnreadable");
     case "not-steam":
       return t("paramedic.firstLook.limit.why.notSteam");
     case "steam-unreadable":
@@ -383,6 +396,7 @@ function limitLine(l: ParamedicLimit, t: T, dates: Dates, game?: string | null):
   if (l.code === "not-picked") return t("paramedic.firstLook.limit.gameNotPicked");
   if (l.kind === "facts" && l.code === "hardware-not-ready") return t("paramedic.firstLook.limit.hardwareNotReady");
   if (l.kind === "facts" && l.code === "unread") return t("paramedic.firstLook.limit.factsUnread", { list: factsUnreadWords(l.args.list ?? "", t) });
+  if (l.kind === "history" && l.code === "unreadable") return t("paramedic.firstLook.limit.historyUnreadable");
   if (l.code === "steam-newest-only") return t("paramedic.firstLook.limit.steamNewestOnly", { game: game ?? "" });
   // A graphics-mod or crash-record limit is the measured flow's own "Compy couldn't see" sentence.
   if (l.kind === "mods") {
@@ -393,7 +407,10 @@ function limitLine(l: ParamedicLimit, t: T, dates: Dates, game?: string | null):
       case "folder-unreadable":
         return t("paramedic.unknown.modsFolderUnreadable", { game: g });
       case "partial":
-        return t("paramedic.unknown.modsPartial", { game: g });
+        // A mod already found: what is unknown is whether there are other mods.
+        return l.args.other === "true" ? t("paramedic.firstLook.limit.modsPartialOther", { game: g }) : t("paramedic.unknown.modsPartial", { game: g });
+      case "reader-failed":
+        return t("paramedic.firstLook.limit.modsReaderFailed", { game: g });
       default:
         return t("paramedic.unknown.modsUnavailable", { game: g });
     }
@@ -405,6 +422,10 @@ function limitLine(l: ParamedicLimit, t: T, dates: Dates, game?: string | null):
         return t("paramedic.unknown.crashesUnreadable", { game: g });
       case "partial":
         return t("paramedic.unknown.crashesPartial", { game: g });
+      case "no-folder":
+        return t("paramedic.firstLook.limit.crashesNoFolder", { game: g });
+      case "reader-failed":
+        return t("paramedic.firstLook.limit.crashesReaderFailed", { game: g });
       default:
         return t("paramedic.unknown.crashesUnavailable", { game: g });
     }
@@ -549,7 +570,7 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
   useEffect(() => {
     alive.current = true;
     // Steam's installed games, read once for the picker. A read that failed is "couldn't read", never "no games".
-    invoke<SteamGames | null>("paramedic_list_games")
+    invoke<SteamGames | null>("paramedic_list_games", { recorded: games.map((g) => g.process).filter(Boolean) })
       .then((r) => {
         if (alive.current) setSteam(r && Array.isArray(r.games) ? r : "failed");
       })
@@ -595,16 +616,25 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
 
   if (step.kind === "pick") {
     const recorded = games.filter((g) => g.process && g.name);
-    const taken = new Set(recorded.map((g) => normName(g.name)));
-    const installed = steam !== "loading" && steam !== "failed" && steam.read ? steam.games.filter((g) => !taken.has(normName(g.name))) : [];
-    const all: { key: string; group: "seen" | "steam"; pick: Exclude<Pick, { kind: "whole-pc" }> }[] = [
-      ...recorded.map((g) => ({ key: `seen-${g.process}`, group: "seen" as const, pick: { kind: "seen" as const, process: g.process, name: g.name } })),
-      ...installed.map((g) => ({ key: `steam-${g.app_id}`, group: "steam" as const, pick: { kind: "steam" as const, app_id: g.app_id, name: g.name } })),
-    ];
-    const shown = showAll ? all : all.slice(0, GAMES_OPEN);
+    const recordedProcs = new Set(recorded.map((g) => g.process));
+    const listed = steam !== "loading" && steam !== "failed" && steam.read ? steam.games : [];
+    // A Steam entry is one of the recorded games only when the engine found that recorded game in that very
+    // folder. A name alone never merges two games: two of one name stay two, told apart by their drive.
+    const installed = listed.filter((g) => !(g.recorded && recordedProcs.has(g.recorded)));
+    const nameCount = new Map<string, number>();
+    for (const n of [...recorded.map((g) => g.name), ...installed.map((g) => g.name)]) nameCount.set(normName(n), (nameCount.get(normName(n)) ?? 0) + 1);
+    const labelOf = (name: string, drive?: string | null) => ((nameCount.get(normName(name)) ?? 0) > 1 && drive ? t("paramedic.firstLook.game.withDrive", { name, drive }) : name);
+    type Entry = { key: string; label: string; pick: Exclude<Pick, { kind: "whole-pc" }> };
+    const seenAll: Entry[] = recorded.map((g) => ({ key: `seen-${g.process}`, label: g.name, pick: { kind: "seen" as const, process: g.process, name: g.name } }));
+    const steamAll: Entry[] = installed.map((g) => ({ key: `steam-${g.app_id}`, label: labelOf(g.name, g.drive), pick: { kind: "steam" as const, app_id: g.app_id, name: g.name } }));
+    // At least three Steam games show before "Show more", however many games Compy has recorded.
+    const steamFloor = Math.min(3, steamAll.length);
+    const seenShown = showAll ? seenAll : seenAll.slice(0, Math.max(0, GAMES_OPEN - steamFloor));
+    const steamShown = showAll ? steamAll : steamAll.slice(0, Math.max(0, GAMES_OPEN - seenShown.length));
+    const total = seenAll.length + steamAll.length;
+    const shownCount = seenShown.length + steamShown.length;
     const isPicked = (p: Pick) => !!game && game.kind === p.kind && (p.kind === "seen" ? game.kind === "seen" && game.process === p.process : p.kind === "steam" ? game.kind === "steam" && game.app_id === p.app_id : true);
-    const section = (group: "seen" | "steam", title: string) => {
-      const items = shown.filter((x) => x.group === group);
+    const section = (group: "seen" | "steam", title: string, items: Entry[]) => {
       if (items.length === 0) return null;
       return (
         <div role="group" aria-label={title} data-testid={`first-look-games-${group}`}>
@@ -614,7 +644,7 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
           <div className="gl-para-actions">
             {items.map((x) => (
               <button key={x.key} type="button" className="gl-ghost" aria-pressed={isPicked(x.pick)} onClick={() => choose(x.pick)}>
-                {x.pick.name}
+                {x.label}
               </button>
             ))}
           </div>
@@ -630,8 +660,8 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
           <h2 id={headingId} ref={headingRef} tabIndex={-1} className="gl-card-title">
             {t("paramedic.firstLook.game.title")}
           </h2>
-          {section("seen", t("paramedic.firstLook.game.seen"))}
-          {section("steam", t("paramedic.firstLook.game.steam"))}
+          {section("seen", t("paramedic.firstLook.game.seen"), seenShown)}
+          {section("steam", t("paramedic.firstLook.game.steam"), steamShown)}
           {steam === "loading" && (
             <p className="gl-card-sub" role="status">
               {t("paramedic.firstLook.game.loadingSteam")}
@@ -647,13 +677,13 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
               {t("paramedic.firstLook.game.steamPartial")}
             </p>
           )}
-          {all.length > GAMES_OPEN && (
+          {total > shownCount || (showAll && total > GAMES_OPEN) ? (
             <div>
               <button type="button" className="gl-ghost" aria-expanded={showAll} onClick={() => setShowAll((s) => !s)}>
-                {showAll ? t("paramedic.firstLook.game.fewer") : t("paramedic.firstLook.game.more", { n: all.length - GAMES_OPEN })}
+                {showAll ? t("paramedic.firstLook.game.fewer") : t("paramedic.firstLook.game.more", { n: total - shownCount })}
               </button>
             </div>
-          )}
+          ) : null}
           <div className="gl-para-actions">
             <button type="button" className="gl-ghost" aria-pressed={game?.kind === "whole-pc"} onClick={() => choose({ kind: "whole-pc" })}>
               {t("paramedic.firstLook.game.other")}
@@ -740,7 +770,9 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
   // "Still reading this PC's hardware" is said in the block it empties, not only in the limits fold.
   const waiting = a.limits.find((l) => l.kind === "facts" && l.code === "hardware-not-ready");
   const foldLimits = a.limits.filter((l) => l !== waiting);
-  const offBlock = a.crashes !== null || a.crashes_none || a.looks_off.length > 0 || a.mods_settings_only.length > 0 || a.facts.length > 0 || !!waiting;
+  const offBlock = a.crashes !== null || a.crashes_none || a.looks_off.length > 0 || a.facts.length > 0 || !!waiting;
+  // A settings or data file of a mod is not something "off": it is said beside what Compy also looked at.
+  const settingsOnly = gameName ? a.mods_settings_only : [];
   const factsOpen = a.facts.slice(0, ROWS_OPEN);
   const factsRest = a.facts.slice(ROWS_OPEN);
   const compyOpen = a.compy_changes.slice(0, ROWS_OPEN);
@@ -751,7 +783,7 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
         const how = factHow(f.id, t);
         return (
           <li key={`${f.id}-${i}`}>
-            <p>{factText(f, t, gameName)}</p>
+            <p>{factText(f, t, gameName, dates)}</p>
             {how && <p className="gl-para-note">{how}</p>}
           </li>
         );
@@ -793,7 +825,7 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
                   {compyRows(compyRest)}
                 </Fold>
               )}
-              <p className="gl-para-note">{t("paramedic.firstLook.compy.undoHint")}</p>
+              {a.compy_changes.some((c) => !c.undone) && <p className="gl-para-note">{t("paramedic.firstLook.compy.undoHint")}</p>}
             </div>
           )}
           {(open.length > 0 || noneTouch.length > 0 || touchLimits.length > 0 || touchNotes) && (
@@ -814,7 +846,7 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
               ))}
               {gameName && a.game_files_since && (
                 <p className="gl-para-note" data-testid="first-look-game-files-since">
-                  {t("paramedic.checked.gameFiles", { game: gameName, when: dates.day(a.game_files_since) })}
+                  {t("paramedic.firstLook.change.gameFilesSince", { game: gameName, when: dates.day(a.game_files_since) })}
                 </p>
               )}
               {gameName && a.mods_none && (
@@ -829,7 +861,9 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
               ))}
             </div>
           )}
-          {offBlock && (
+        </>
+      )}
+      {offBlock && (
             <div role="group" aria-label={t("paramedic.firstLook.group.looksOff")} data-testid="first-look-off">
               <p>
                 <strong>{t("paramedic.firstLook.group.looksOff")}</strong>
@@ -849,12 +883,6 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
                 </p>
               )}
               {gameName && a.looks_off.length > 0 && <Rows rows={a.looks_off} t={t} dates={dates} game={gameName} />}
-              {gameName &&
-                a.mods_settings_only.map((name) => (
-                  <p key={name} data-testid="first-look-mod-settings-only">
-                    {t("paramedic.seen.modSettingsOnly", { game: gameName, name })}
-                  </p>
-                ))}
               {a.facts.length > 0 && factRows(factsOpen)}
               {factsRest.length > 0 && (
                 <Fold title={t("paramedic.firstLook.group.more", { n: factsRest.length })} testid="first-look-facts-more">
@@ -873,6 +901,8 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
               )}
             </div>
           )}
+      {a.changes_listed && (
+        <>
           {(otherRows.length > 0 || nonePrograms || programLimits.length > 0) && (
             <Fold title={t("paramedic.firstLook.group.other")} testid="first-look-other">
               {otherRows.length > 0 && <Rows rows={otherRows} t={t} dates={dates} game={gameName} />}
@@ -886,17 +916,22 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
           )}
           {empty && a.read_all && !minor && <p data-testid="first-look-nothing">{t("paramedic.firstLook.nothing")}</p>}
           {empty && !a.read_all && <p data-testid="first-look-unread">{t("paramedic.firstLook.unread")}</p>}
-          {(foldLimits.length > 0 || minor) && (
-            <Fold title={t("paramedic.firstLook.limit.title")} testid="first-look-limits" defaultOpen={empty && !a.read_all}>
-              <ul className="gl-para-lines">
-                {minor && <li>{changeText(minor, t, dates)}</li>}
-                {foldLimits.map((l, i) => (
-                  <li key={`${l.kind}-${l.code}-${i}`}>{limitLine(l, t, dates, gameName)}</li>
-                ))}
-              </ul>
-            </Fold>
-          )}
         </>
+      )}
+      {(foldLimits.length > 0 || (a.changes_listed && minor) || settingsOnly.length > 0) && (
+        <Fold title={t("paramedic.firstLook.limit.title")} testid="first-look-limits" defaultOpen={a.changes_listed && empty && !a.read_all}>
+          <ul className="gl-para-lines">
+            {a.changes_listed && minor && <li>{changeText(minor, t, dates)}</li>}
+            {settingsOnly.map((name) => (
+              <li key={`settings-${name}`} data-testid="first-look-mod-settings-only">
+                {t("paramedic.seen.modSettingsOnly", { game: gameName, name })}
+              </li>
+            ))}
+            {foldLimits.map((l, i) => (
+              <li key={`${l.kind}-${l.code}-${i}`}>{limitLine(l, t, dates, gameName)}</li>
+            ))}
+          </ul>
+        </Fold>
       )}
       <div role="group" aria-label={t("paramedic.firstLook.cantTell.title")} data-testid="first-look-cant-tell">
         <p>

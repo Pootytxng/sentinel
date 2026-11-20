@@ -286,9 +286,11 @@ pub(crate) fn build_with(since: Since, now: DateTime<Utc>, game: &GameCtx, src: 
         changes_part(reading, game, &mut out);
     }
     mods_part(game, &src.mods, t0, now, &mut out);
+    // Compy's own changes come BEFORE the crash line: they are dated changes too, and the line's "before the
+    // earliest dated change" must name the true earliest one.
+    facts::history_part(&src.history, t0, now, &mut out);
     crashes_part(game, &src.crashes, &mut out);
     facts::facts_part(&src.facts, game, &mut out);
-    facts::history_part(&src.history, t0, now, &mut out);
     newest_first(&mut out.touch_games);
     newest_first(&mut out.other_changes);
     newest_first(&mut out.looks_off);
@@ -399,7 +401,9 @@ fn mods_part(game: &GameCtx, mods: &ModsRead, t0: Option<DateTime<Utc>>, now: Da
         ModsRead::Read(ModsVerdict::Found(found)) => mod_rows(found, t0, now, out),
         ModsRead::Read(ModsVerdict::Partly(found)) => {
             mod_rows(found, t0, now, out);
-            out.limits.push(limit("mods", "partial", &[]));
+            // A mod already found: what is unknown is whether there are OTHER mods.
+            let args = if found.is_empty() { Vec::new() } else { vec![("other", "true".to_string())] };
+            out.limits.push(limit("mods", "partial", &args));
         }
     }
 }
@@ -436,8 +440,12 @@ fn mod_rows(found: &[ModFound], t0: Option<DateTime<Utc>>, now: DateTime<Utc>, o
 
 /// The earliest REAL dated change among the rows (an exact date; a day-precision row is not a moment), the
 /// reference the same-signature line needs.
+/// Compy's own changes count (they are dated moments). A mod's file-creation time does not: Windows resets
+/// it when a folder is copied or moved, so it is not a change time.
 fn earliest_exact(out: &FirstLook) -> Option<DateTime<Utc>> {
-    out.touch_games.iter().filter(|c| c.precision == "exact").filter_map(|c| c.at.as_deref()).filter_map(super::ts).min()
+    let rows = out.touch_games.iter().filter(|c| c.precision == "exact" && c.id != "graphics-mod").filter_map(|c| c.at.as_deref()).filter_map(super::ts);
+    let compy = out.compy_changes.iter().filter_map(|c| super::ts(&c.at));
+    rows.chain(compy).min()
 }
 
 /// The picked game's Windows crash records, through the measured flow's rule (`extras::crash_outcome`).
@@ -825,17 +833,23 @@ pub(crate) async fn paramedic_first_look(game: FirstLookGame, since: Since) -> R
     .map_err(|_| "the first look stopped unexpectedly".to_string())
 }
 
-/// One game of Steam's list as the picker needs it: no folder, no path.
+/// One game of Steam's list as the picker needs it: no path. Only the drive letter that tells two games of one
+/// name apart, and which recorded game (if any) is this very folder.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub(crate) struct ListedGame {
     pub app_id: u32,
     pub name: String,
     /// When Steam last changed the game's files (UTC); none when its record has no time.
     pub last_updated: Option<String>,
+    /// The drive letter of the game's library (`D`), when its folder is known.
+    pub drive: Option<String>,
+    /// The recorded game (its program name) whose install folder IS this game's folder; none when no recorded
+    /// game was found in it. A name match alone never sets it.
+    pub recorded: Option<String>,
 }
 
 /// Steam's list for the picker. `read: false` is "Compy couldn't read Steam's libraries", never "no games";
-/// `complete: false` is "this is only part of the list".
+/// `complete: false` is "this is only part of the list". No Steam on the PC is a list that was read and is empty.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 pub(crate) struct SteamGames {
     pub read: bool,
@@ -843,24 +857,69 @@ pub(crate) struct SteamGames {
     pub games: Vec<ListedGame>,
 }
 
-fn games_dto(listing: Result<change_sources::SteamListing, UnreadableReason>) -> SteamGames {
+/// Two folder paths are one folder (case and a trailing separator aside).
+fn same_folder(a: &str, b: &str) -> bool {
+    let norm = |s: &str| s.trim().trim_end_matches(['\\', '/']).replace('/', "\\").to_ascii_lowercase();
+    !norm(a).is_empty() && norm(a) == norm(b)
+}
+
+/// Pure: the picker's list. `recorded` holds each recorded game's program name with the Steam folder it was found in.
+fn games_dto(listing: Result<change_sources::SteamListing, UnreadableReason>, recorded: &[(String, String)]) -> SteamGames {
     match listing {
         Ok(l) => SteamGames {
             read: true,
             complete: l.complete,
-            games: l.games.into_iter().map(|g| ListedGame { app_id: g.app_id, name: g.name, last_updated: g.last_updated.map(iso) }).collect(),
+            games: l
+                .games
+                .into_iter()
+                .map(|g| {
+                    let drive = g.install_dir.as_deref().and_then(facts::drive_letter).map(|c| c.to_string());
+                    let rec = g.install_dir.as_deref().and_then(|d| recorded.iter().find(|(_, f)| same_folder(f, d)).map(|(p, _)| p.clone()));
+                    ListedGame { app_id: g.app_id, name: g.name, last_updated: g.last_updated.map(iso), drive, recorded: rec }
+                })
+                .collect(),
         },
+        // No Steam on this PC: there is no library to read, so nothing failed and nothing is said.
+        Err(UnreadableReason::SteamNotFound) => SteamGames { read: true, complete: true, games: Vec::new() },
         Err(_) => SteamGames { read: false, complete: false, games: Vec::new() },
     }
 }
 
-/// The games installed with Steam, most recently updated first, for the "Which game?" step. Read-only and
-/// bounded (`change_sources::list_steam_games`); it starts no process and writes nothing.
+/// Recorded games matched to a Steam folder, and how long all of the matching may take together.
+const RECORDED_MATCHED: usize = 12;
+const RECORDED_MATCH_BUDGET: Duration = Duration::from_millis(1200);
+
+/// Each recorded game's program name with the Steam folder it was found in (the measured flow's own lookup).
+/// A game not found, or reached after the budget, is simply not matched: both entries then show.
+fn recorded_folders(processes: Vec<String>) -> Vec<(String, String)> {
+    let started = Instant::now();
+    let mut out = Vec::new();
+    for p in processes.into_iter().map(|p| p.trim().to_string()).filter(|p| !p.is_empty()).take(RECORDED_MATCHED) {
+        let left = RECORDED_MATCH_BUDGET.saturating_sub(started.elapsed());
+        if left.is_zero() {
+            break;
+        }
+        if let SteamLookup::Found(g) = change_sources::find_steam_game(&p, left.min(change_sources::DEFAULT_BUDGET)) {
+            if let Some(dir) = g.install_dir {
+                out.push((p, dir));
+            }
+        }
+    }
+    out
+}
+
+/// The games installed with Steam, most recently updated first, for the "Which game?" step. `recorded` are the
+/// program names of the games Compy has recorded, so the picker can tell which Steam entry is one of them.
+/// Read-only and bounded (`change_sources::list_steam_games`); it starts no process and writes nothing.
 #[tauri::command]
-pub(crate) async fn paramedic_list_games() -> Result<SteamGames, String> {
-    tauri::async_runtime::spawn_blocking(|| games_dto(change_sources::list_steam_games(change_sources::STEAM_LIST_BUDGET)))
-        .await
-        .map_err(|_| "the game list stopped unexpectedly".to_string())
+pub(crate) async fn paramedic_list_games(recorded: Option<Vec<String>>) -> Result<SteamGames, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let listing = change_sources::list_steam_games(change_sources::STEAM_LIST_BUDGET);
+        let folders = if listing.is_ok() { recorded_folders(recorded.unwrap_or_default()) } else { Vec::new() };
+        games_dto(listing, &folders)
+    })
+    .await
+    .map_err(|_| "the game list stopped unexpectedly".to_string())
 }
 
 #[cfg(test)]
@@ -1363,7 +1422,7 @@ mod tests {
             },
             Err(_) => FirstLookGame::Seen { process: process.into() },
         };
-        for (label, sel, since) in [("ROB RUN", pick("rob run", "ROB RUN"), Since::ThisWeek), ("Wardogs", pick("wardogs", "WardogsClient"), Since::ThisMonth)] {
+        for (label, sel, since) in [("ROB RUN", pick("rob run", "ROB RUN"), Since::ThisWeek), ("ROB-RUN-always", pick("rob run", "ROB RUN"), Since::Always), ("Wardogs", pick("wardogs", "WardogsClient"), Since::ThisMonth)] {
             println!("LIVE_PICK {label} {sel:?}");
             let a = run_with(&sel, since, Utc::now(), CHANGES_BUDGET, REAL, None);
             println!("LIVE_FIRST_LOOK_GAME_JSON {label} {}", serde_json::to_string(&a).unwrap());
@@ -1667,11 +1726,11 @@ mod tests {
     #[test]
     fn the_games_list_keeps_could_not_read_apart_from_no_games() {
         let g = |id: u32, at: Option<&str>| change_sources::SteamGame { app_id: id, name: format!("G{id}"), install_dir: Some("x".into()), last_updated: at.map(utc) };
-        let none = games_dto(Ok(change_sources::SteamListing { games: vec![], complete: true }));
+        let none = games_dto(Ok(change_sources::SteamListing { games: vec![], complete: true }), &[]);
         assert_eq!((none.read, none.complete, none.games.len()), (true, true, 0));
-        let unread = games_dto(Err(UnreadableReason::SteamNotFound));
+        let unread = games_dto(Err(UnreadableReason::SteamUnreadable), &[]);
         assert_eq!((unread.read, unread.complete, unread.games.len()), (false, false, 0));
-        let part = games_dto(Ok(change_sources::SteamListing { games: vec![g(1, Some("2026-11-18T09:00:00Z")), g(2, None)], complete: false }));
+        let part = games_dto(Ok(change_sources::SteamListing { games: vec![g(1, Some("2026-11-18T09:00:00Z")), g(2, None)], complete: false }), &[]);
         assert_eq!((part.read, part.complete), (true, false));
         assert_eq!(part.games[0].last_updated.as_deref(), Some("2026-11-18T09:00:00Z"));
         assert_eq!(part.games[1].last_updated, None);
@@ -1770,5 +1829,74 @@ mod tests {
         assert!(has_limit(&a, "mods", "reader-failed") && !a.mods_none, "{:?}", a.limits);
         // The dated readers still gave their row.
         assert!(a.touch_games.iter().any(|c| c.id == "game-files"));
+    }
+
+    // ---- review r1 -------------------------------------------------------------------------------
+
+    fn compy_stamp(title: &str, at: &str) -> crate::history::LedgerStamp {
+        crate::history::LedgerStamp { title: title.into(), applied_at: at.into(), rolled_back_at: None, status: "applied".into() }
+    }
+
+    /// The crash line's "before the earliest dated change" names the earliest REAL dated change, Compy's own included.
+    #[test]
+    fn the_crash_reference_date_is_the_earliest_dated_change_including_compys_own() {
+        let h = history(vec![crash("robrun.exe", "2026-11-10T10:00:00Z", Some(true)), crash("robrun.exe", "2026-11-12T10:00:00Z", Some(true))], false);
+        let mut src = steam_only(game_report(read(vec![steam_ev("2026-11-19T09:00:00Z", false)])));
+        src.crashes = CrashRead::Read(h);
+        src.history = HistoryRead::Read(Ok(vec![compy_stamp("Enable Windows Game Mode", "2026-11-15T13:44:49Z")]));
+        let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src);
+        assert_eq!(a.crashes.as_ref().unwrap().signature_before.as_deref(), Some("2026-11-15T13:44:49Z"));
+        // Without Compy's own change the reference is the Steam row, as before.
+        src.history = HistoryRead::Read(Ok(vec![]));
+        let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src);
+        assert_eq!(a.crashes.as_ref().unwrap().signature_before.as_deref(), Some("2026-11-19T09:00:00Z"));
+    }
+
+    #[test]
+    fn a_mods_file_creation_time_is_not_a_dated_change_for_the_crash_reference() {
+        let h = history(vec![crash("robrun.exe", "2026-11-10T10:00:00Z", Some(true)), crash("robrun.exe", "2026-11-12T10:00:00Z", Some(true))], false);
+        let mut src = steam_only(game_report(read(vec![steam_ev("2026-11-19T09:00:00Z", false)])));
+        src.crashes = CrashRead::Read(h);
+        src.mods = ModsRead::Read(ModsVerdict::Found(vec![found_mod("OptiScaler", true, true, Some("2026-11-14T10:00:00Z"), None)]));
+        let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src);
+        assert!(a.touch_games.iter().any(|c| c.id == "graphics-mod"), "the mod row is still listed");
+        assert_eq!(a.crashes.as_ref().unwrap().signature_before.as_deref(), Some("2026-11-19T09:00:00Z"));
+    }
+
+    #[test]
+    fn a_partial_scan_that_found_a_mod_says_it_is_other_mods_that_are_unknown() {
+        let mut src = steam_only(game_report(read(vec![])));
+        src.mods = ModsRead::Read(ModsVerdict::Partly(vec![found_mod("OptiScaler", true, false, None, None)]));
+        let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src);
+        let l = a.limits.iter().find(|l| l.kind == "mods" && l.code == "partial").expect("a partial line");
+        assert_eq!(l.args.get("other").map(String::as_str), Some("true"));
+        src.mods = ModsRead::Read(ModsVerdict::Partly(vec![]));
+        let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src);
+        let l = a.limits.iter().find(|l| l.kind == "mods" && l.code == "partial").expect("a partial line");
+        assert!(l.args.is_empty());
+    }
+
+    #[test]
+    fn no_steam_on_this_pc_is_an_empty_list_that_was_read_and_a_real_failure_is_not() {
+        let none = games_dto(Err(UnreadableReason::SteamNotFound), &[]);
+        assert_eq!((none.read, none.complete, none.games.len()), (true, true, 0));
+        for why in [UnreadableReason::SteamUnreadable, UnreadableReason::TimedOutBeforeAnyRecord] {
+            assert!(!games_dto(Err(why), &[]).read);
+        }
+    }
+
+    /// A recorded game and a Steam game of the same name are one only when the recorded game was found in that
+    /// very folder; two Steam games of one name stay two and carry their drive letters.
+    #[test]
+    fn a_steam_entry_is_marked_recorded_only_by_folder_and_carries_its_drive() {
+        let g = |id: u32, dir: &str| change_sources::SteamGame { app_id: id, name: "DOOM".into(), install_dir: Some(dir.into()), last_updated: None };
+        let l = change_sources::SteamListing { games: vec![g(1, r"D:\Lib\steamapps\common\DOOM"), g(2, r"E:\Lib\steamapps\common\DOOM")], complete: true };
+        let dto = games_dto(Ok(l), &[("DOOMx64.exe".to_string(), r"d:\lib\steamapps\common\doom\".to_string())]);
+        assert_eq!(dto.games[0].recorded.as_deref(), Some("DOOMx64.exe"));
+        assert_eq!(dto.games[1].recorded, None);
+        assert_eq!((dto.games[0].drive.as_deref(), dto.games[1].drive.as_deref()), (Some("D"), Some("E")));
+        // No recorded game found anywhere: nothing is merged on the name alone.
+        let l = change_sources::SteamListing { games: vec![g(1, r"D:\Lib\steamapps\common\DOOM")], complete: true };
+        assert_eq!(games_dto(Ok(l), &[]).games[0].recorded, None);
     }
 }

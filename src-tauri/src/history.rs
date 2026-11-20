@@ -2360,7 +2360,16 @@ pub(crate) struct LedgerStamp {
 /// A ledger that can't be read is an error, never an empty list. The path is the data root's, taken without
 /// the legacy-folder migration `compy_data_dir` can run.
 pub(crate) fn read_ledger_stamps() -> Result<Vec<LedgerStamp>, String> {
-    read_ledger_stamps_at(&crate::data_root::decision().effective_root().join("history.json"))
+    read_ledger_stamps_for(crate::data_root::decision())
+}
+
+/// The ledger for a data-root decision. A root that could not be settled has no ledger path to read: that
+/// is an error, never "no changes".
+fn read_ledger_stamps_for(root: &crate::data_root::DataRootDecision) -> Result<Vec<LedgerStamp>, String> {
+    if matches!(root, crate::data_root::DataRootDecision::Unavailable { .. }) {
+        return Err("Compy's data folder is not available".to_string());
+    }
+    read_ledger_stamps_at(&root.effective_root().join("history.json"))
 }
 
 pub(crate) fn read_ledger_stamps_at(path: &Path) -> Result<Vec<LedgerStamp>, String> {
@@ -6920,8 +6929,26 @@ mod ledger_backup_tests {
         let src = include_str!("history.rs");
         let body = src.split_once("pub(crate) fn read_ledger_stamps_at(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
         assert!(body.contains("read_history_unlocked(") && !body.contains("load_history") && !body.contains("save_"), "{body}");
-        let live = src.split_once("pub(crate) fn read_ledger_stamps(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        let live = src.split_once("fn read_ledger_stamps_for(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
         assert!(live.contains("read_ledger_stamps_at(") && !live.contains("compy_data_dir"), "{live}");
+        let entry = src.split_once("pub(crate) fn read_ledger_stamps(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        assert!(entry.contains("read_ledger_stamps_for(") && !entry.contains("compy_data_dir"), "{entry}");
+    }
+
+    #[test]
+    fn a_data_root_that_could_not_be_settled_is_an_unreadable_ledger_never_an_empty_one() {
+        use crate::data_root::DataRootDecision;
+        let dir = std::env::temp_dir().join(format!("compy-ledger-root-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let before: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
+        let err = read_ledger_stamps_for(&DataRootDecision::Unavailable { reason: "no appdata".into() });
+        assert!(err.is_err(), "{err:?}");
+        // A root with no ledger yet is an empty ledger (nothing was ever applied), as before.
+        let ok = read_ledger_stamps_for(&DataRootDecision::Canonical { root: dir.clone() });
+        assert_eq!(ok.map(|v| v.len()), Ok(0));
+        let after: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(before, after, "the read wrote something");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     const GUID: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";

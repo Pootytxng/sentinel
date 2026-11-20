@@ -49,9 +49,10 @@
       "updatesUnclassified_other": "Windows installed {{count}} updates that Compy couldn't classify.",
       "displayOther_one": "A display driver ({{count}}) was installed or updated, the latest on {{when}}.",
       "displayOther_other": "Display drivers ({{count}}) were installed or updated, the latest on {{when}}.",
-      "gameFiles": "Steam last updated {{game}} on {{when}}.",
+      "gameFiles": "Steam changed {{game}}'s files on {{when}}. That can be an update, a file check or added content.",
       "gameFilesPending": "Steam also shows a newer version of {{game}} that isn't installed yet.",
-      "modUnknownOn": "Compy can't tell whether it is turned on."
+      "modUnknownOn": "Compy can't tell whether it is turned on.",
+      "gameFilesSince": "Steam hasn't recorded a change to {{game}}'s files since {{when}}."
     },
     "how": {
       "gpuDriver": "To see it: Device Manager, Display adapters, your card, Driver tab. Windows can roll a driver back there if it kept the earlier one.",
@@ -103,13 +104,17 @@
         "notSteam": "this game isn't in a Steam library Compy could read",
         "steamUnreadable": "Steam's library files couldn't be read",
         "steamNoRecord": "none of the Steam libraries Compy could read has a record of it",
-        "steamNoTime": "Steam's record has no usable update time",
-        "partialSteamLibraries": "{{n}} Steam libraries couldn't be read",
-        "historyUnreadable": "its history file couldn't be read"
+        "steamNoTime": "Steam's record has no usable date for when the files changed",
+        "partialSteamLibraries": "{{n}} Steam libraries couldn't be read"
       },
-      "steamNewestOnly": "Steam keeps only the newest update time for {{game}}, so an earlier update in this period wouldn't show.",
+      "steamNewestOnly": "Steam keeps only the latest date its files changed for {{game}}, so an earlier change in this period wouldn't show.",
       "hardwareNotReady": "Compy is still reading this PC's hardware.",
-      "factsUnread": "Compy couldn't read: {{list}}."
+      "factsUnread": "Compy couldn't read: {{list}}.",
+      "historyUnreadable": "Compy couldn't read its own change history.",
+      "modsPartialOther": "Whether {{game}}'s folder has other graphics mods (only part of the folder was scanned)",
+      "modsReaderFailed": "Whether {{game}}'s folder has a graphics mod (the reader stopped unexpectedly)",
+      "crashesReaderFailed": "Whether {{game}} has closed unexpectedly before (the reader stopped unexpectedly)",
+      "crashesNoFolder": "Whether {{game}} has closed unexpectedly before (Compy couldn't match the game to an install folder)"
     },
     "cantTell": {
       "title": "What Compy can't tell yet",
@@ -142,29 +147,31 @@
       "chosen": "Looking at {{game}}.",
       "chosenWhole": "Looking at the whole PC, not one game.",
       "change": "Change the game",
-      "found": "What Compy found for {{game}}"
+      "found": "What Compy found for {{game}}",
+      "withDrive": "{{name}} ({{drive}}:)"
     },
     "crash": {
       "none": "Windows has no crash record for {{game}} in the records Compy read."
     },
     "compy": {
       "applied": "Compy changed “{{title}}” on {{when}}.",
-      "undone": "Compy changed “{{title}}” on {{when}}, and it was turned back on {{undone}}.",
-      "undoneNoDate": "Compy changed “{{title}}” on {{when}}, and it has since been turned back.",
-      "undoHint": "You can undo these in History."
+      "undone": "Compy changed “{{title}}” on {{when}}, and it was undone on {{undone}}.",
+      "undoneNoDate": "Compy changed “{{title}}” on {{when}}, and it has since been undone.",
+      "undoHint": "Changes still in place can be undone in History."
     },
     "fact": {
-      "monitorRefresh": "Your main monitor is running at {{now}} Hz; it supports {{max}} Hz.",
-      "memorySpeed": "Your memory is running at {{now}} MT/s; its rated speed is {{rated}} MT/s.",
+      "monitorRefresh": "Your main monitor is running at {{now}} Hz; at this resolution it supports {{max}} Hz.",
+      "memorySpeed": "Your memory is running at {{now}} MHz; your PC's firmware lists it as capable of {{rated}} MHz.",
       "memoryOneStick": "Your PC has 1 memory module, so memory runs in single-channel.",
       "memoryOneChannel": "Your {{n}} memory modules all report the same memory channel, so they share one channel.",
       "driveHealth": "Windows reports the health of {{drive}} as {{health}}.",
       "gameOnHdd": "{{game}} is installed on drive {{drive}}:, which is a hard disk (HDD).",
-      "gpuDriverAge_one": "Your graphics driver ({{name}}) is {{count}} day old.",
-      "gpuDriverAge_other": "Your graphics driver ({{name}}) is {{count}} days old.",
+      "gpuDriverAge_one": "Your graphics driver is dated {{date}}, {{count}} day ago.",
+      "gpuDriverAge_other": "Your graphics driver is dated {{date}}, {{count}} days ago.",
       "freesyncOff": "Your AMD graphics card reports FreeSync as off.",
       "onBattery": "This PC is running on battery.",
-      "gameDriveFull": "Drive {{drive}}:, where {{game}} is installed, has {{free}} GB free of {{total}} GB."
+      "gameDriveFull": "Drive {{drive}}:, where {{game}} is installed, has {{free}} GB free of {{total}} GB.",
+      "driveHealthOther": "Windows reports {{drive}}: {{health}}."
     },
     "factHow": {
       "monitorRefresh": "To check: Settings, System, Display, Advanced display shows the refresh rate and the ones the monitor supports.",
@@ -185,6 +192,10 @@
       "gpuDriver": "the graphics driver's age",
       "powerSource": "the power source",
       "gameDrive": "the game's drive"
+    },
+    "healthWord": {
+      "warning": "Warning",
+      "unhealthy": "Unhealthy"
     }
   },
   "door": {

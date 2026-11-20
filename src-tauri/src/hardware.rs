@@ -253,6 +253,13 @@ pub(crate) struct HardwareInfo {
 // current refresh rate and the highest supported rate AT THE CURRENT
 // RESOLUTION. Comparing the two surfaces the classic "144 Hz monitor
 // running at 60 Hz" misconfiguration.
+/// Pure: the highest refresh rate among `modes` (width, height, Hz) at the current width and height, never
+/// below the current rate. The modes are the PRIMARY display's own (the list `EnumDisplaySettingsW` gives for
+/// the null device), so a second monitor's slower modes never enter it.
+pub(crate) fn max_refresh_at(cw: u32, ch: u32, current_hz: u32, modes: &[(u32, u32, u32)]) -> u32 {
+    modes.iter().filter(|(w, h, _)| *w == cw && *h == ch).map(|(_, _, hz)| *hz).fold(current_hz, u32::max)
+}
+
 pub(crate) fn detect_display_info() -> Option<DisplayInfo> {
     use std::mem;
     use std::ptr;
@@ -269,20 +276,17 @@ pub(crate) fn detect_display_info() -> Option<DisplayInfo> {
         let ch = current.dmPelsHeight;
         let chz = current.dmDisplayFrequency;
 
-        let mut max_hz = chz;
+        // The modes of the primary display (the null device), and nobody else's.
+        let mut modes: Vec<(u32, u32, u32)> = Vec::new();
         for i in 0..2000u32 {
             let mut mode: DEVMODEW = mem::zeroed();
             mode.dmSize = mem::size_of::<DEVMODEW>() as u16;
             if EnumDisplaySettingsW(ptr::null(), i, &mut mode) == 0 {
                 break;
             }
-            if mode.dmPelsWidth == cw
-                && mode.dmPelsHeight == ch
-                && mode.dmDisplayFrequency > max_hz
-            {
-                max_hz = mode.dmDisplayFrequency;
-            }
+            modes.push((mode.dmPelsWidth, mode.dmPelsHeight, mode.dmDisplayFrequency));
         }
+        let max_hz = max_refresh_at(cw, ch, chz, &modes);
 
         Some(DisplayInfo {
             width: cw,
@@ -1473,6 +1477,24 @@ fn detect_power_status_inner() -> String {
     match rows.into_iter().next() {
         None => power_status_label(false, None, None),
         Some(b) => power_status_label(true, b.battery_status, b.estimated_charge_remaining),
+    }
+}
+
+#[cfg(test)]
+mod display_mode_tests {
+    use super::max_refresh_at;
+
+    #[test]
+    fn the_maximum_is_read_from_the_primary_displays_modes_at_its_current_size() {
+        // A 250 Hz main monitor running at 250 Hz, with its other sizes and slower modes listed.
+        let modes = [(1920, 1080, 60), (1920, 1080, 144), (1920, 1080, 250), (2560, 1440, 360), (1280, 720, 500)];
+        assert_eq!(max_refresh_at(1920, 1080, 250, &modes), 250);
+        // The same list at 144 Hz: the gap is real.
+        assert_eq!(max_refresh_at(1920, 1080, 144, &modes), 250);
+        // A second monitor's 75 Hz modes are not in the list, so the main one at its maximum is never "below max".
+        assert_eq!(max_refresh_at(1920, 1080, 250, &[(1920, 1080, 75), (1920, 1080, 250)]), 250);
+        // No mode at the current size: the current rate stands.
+        assert_eq!(max_refresh_at(3840, 2160, 60, &modes), 60);
     }
 }
 

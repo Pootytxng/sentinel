@@ -49,9 +49,10 @@
       "updatesUnclassified_other": "Windows 安装了 {{count}} 个 Compy 无法分类的更新。",
       "displayOther_other": "有显示驱动（{{count}} 个）安装或更新，最近一次在 {{when}}。",
       "displayOther_one": "有显示驱动（{{count}} 个）安装或更新，最近一次在 {{when}}。",
-      "gameFiles": "Steam 最近一次更新 {{game}} 是在 {{when}}。",
+      "gameFiles": "Steam 在 {{when}} 更改了 {{game}} 的文件。更新、文件校验或新增内容，都会让 Steam 记下这个时间。",
       "gameFilesPending": "Steam 还显示 {{game}} 有一个尚未安装的较新版本。",
-      "modUnknownOn": "Compy 无法判断它是否已启用。"
+      "modUnknownOn": "Compy 无法判断它是否已启用。",
+      "gameFilesSince": "自 {{when}} 起，Steam 没有记录 {{game}} 的文件有过更改。"
     },
     "how": {
       "gpuDriver": "查看方式：设备管理器，显示适配器，你的显卡，驱动程序选项卡。如果 Windows 保留了旧版本，可以在那里回退驱动。",
@@ -103,13 +104,17 @@
         "notSteam": "这款游戏不在 Compy 能读取的 Steam 游戏库中",
         "steamUnreadable": "Steam 的游戏库文件无法读取",
         "steamNoRecord": "Compy 能读取的 Steam 游戏库中都没有它的记录",
-        "steamNoTime": "Steam 的记录里没有可用的更新时间",
-        "partialSteamLibraries": "有 {{n}} 个 Steam 游戏库无法读取",
-        "historyUnreadable": "它的历史文件无法读取"
+        "steamNoTime": "Steam 的记录里没有可用的文件更改日期",
+        "partialSteamLibraries": "有 {{n}} 个 Steam 游戏库无法读取"
       },
-      "steamNewestOnly": "Steam 只保留 {{game}} 最近一次的更新时间，所以这段时间内更早的更新不会显示。",
+      "steamNewestOnly": "Steam 只保留 {{game}} 的文件最近一次更改的日期，所以这段时间内更早的更改不会显示。",
       "hardwareNotReady": "Compy 还在读取这台电脑的硬件信息。",
-      "factsUnread": "Compy 无法读取：{{list}}。"
+      "factsUnread": "Compy 无法读取：{{list}}。",
+      "historyUnreadable": "Compy 无法读取它自己的更改历史。",
+      "modsPartialOther": "{{game}} 的文件夹里是否还有其他图形 mod(只扫描了文件夹的一部分)",
+      "modsReaderFailed": "{{game}} 的文件夹里有没有图形 mod(读取程序意外停止了)",
+      "crashesReaderFailed": "{{game}} 以前是否意外关闭过（读取程序意外停止了）",
+      "crashesNoFolder": "{{game}} 以前是否意外关闭过（Compy 没能把游戏对应到安装文件夹）"
     },
     "cantTell": {
       "title": "Compy 目前还说不准的",
@@ -142,29 +147,31 @@
       "chosen": "正在查看 {{game}}。",
       "chosenWhole": "正在查看整台电脑，而不是某一款游戏。",
       "change": "换一款游戏",
-      "found": "Compy 对 {{game}} 的发现"
+      "found": "Compy 对 {{game}} 的发现",
+      "withDrive": "{{name}}（{{drive}}: 盘）"
     },
     "crash": {
       "none": "在 Compy 读取的记录中，Windows 没有 {{game}} 的崩溃记录。"
     },
     "compy": {
       "applied": "Compy 在 {{when}} 更改了“{{title}}”。",
-      "undone": "Compy 在 {{when}} 更改了“{{title}}”，并在 {{undone}} 改回去了。",
-      "undoneNoDate": "Compy 在 {{when}} 更改了“{{title}}”，之后已经改回去了。",
-      "undoHint": "你可以在“历史”里撤销这些更改。"
+      "undone": "Compy 在 {{when}} 更改了“{{title}}”，并已在 {{undone}} 被撤销。",
+      "undoneNoDate": "Compy 在 {{when}} 更改了“{{title}}”，之后已被撤销。",
+      "undoHint": "仍然生效的更改可以在“历史”里撤销。"
     },
     "fact": {
-      "monitorRefresh": "你的主显示器正以 {{now}} Hz 运行；它支持 {{max}} Hz。",
-      "memorySpeed": "你的内存正以 {{now}} MT/s 运行；它的额定速度是 {{rated}} MT/s。",
+      "monitorRefresh": "你的主显示器正以 {{now}} Hz 运行；在当前分辨率下它支持 {{max}} Hz。",
+      "memorySpeed": "你的内存正以 {{now}} MHz 运行；电脑固件标明它最高可达 {{rated}} MHz。",
       "memoryOneStick": "你的电脑只有 1 根内存条，所以内存是单通道运行。",
       "memoryOneChannel": "你的 {{n}} 根内存条都报告在同一个内存通道上，所以它们共用一个通道。",
       "driveHealth": "Windows 报告 {{drive}} 的健康状态为 {{health}}。",
       "gameOnHdd": "{{game}} 安装在 {{drive}}: 盘，这是一块机械硬盘（HDD）。",
-      "gpuDriverAge_one": "你的显卡驱动（{{name}}）已经有 {{count}} 天了。",
-      "gpuDriverAge_other": "你的显卡驱动（{{name}}）已经有 {{count}} 天了。",
+      "gpuDriverAge_one": "你的显卡驱动日期为 {{date}}，距今 {{count}} 天。",
+      "gpuDriverAge_other": "你的显卡驱动日期为 {{date}}，距今 {{count}} 天。",
       "freesyncOff": "你的 AMD 显卡报告 FreeSync 处于关闭状态。",
       "onBattery": "这台电脑正在使用电池供电。",
-      "gameDriveFull": "安装 {{game}} 的 {{drive}}: 盘，{{total}} GB 中还剩 {{free}} GB 可用。"
+      "gameDriveFull": "安装 {{game}} 的 {{drive}}: 盘，{{total}} GB 中还剩 {{free}} GB 可用。",
+      "driveHealthOther": "Windows 报告 {{drive}}：{{health}}。"
     },
     "factHow": {
       "monitorRefresh": "查看方法：设置，系统，显示，高级显示，可以看到当前刷新率和显示器支持的刷新率。",
@@ -185,6 +192,10 @@
       "gpuDriver": "显卡驱动的使用时长",
       "powerSource": "供电方式",
       "gameDrive": "游戏所在的硬盘"
+    },
+    "healthWord": {
+      "warning": "警告",
+      "unhealthy": "不健康"
     }
   },
   "door": {

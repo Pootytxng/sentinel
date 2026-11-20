@@ -479,11 +479,14 @@ describe("the game picker", () => {
     expect(within(screen.getByTestId("first-look-games-steam")).getByText("Installed with Steam")).toBeTruthy();
   });
 
-  it("a Steam game Compy has already seen is listed once, under the games Compy has seen", async () => {
+  it("a Steam game Compy has already seen is listed once, under the games Compy has seen, when the engine found it in that very folder", async () => {
     engine.steam = steamList(["Rob Run", "Alpha"]);
+    (engine.steam as SteamGames).games[0].recorded = "robrun.exe";
     await toThePicker(noSessions(), { games: recorded });
     await waitFor(() => expect(screen.getByRole("button", { name: "Alpha" })).toBeTruthy());
     expect(gameButtons().filter((n) => /rob run/i.test(n))).toEqual(["ROB RUN"]);
+    // The recorded program names go with the request, so the engine can match by folder.
+    expect(engine.calls.find((c) => c.cmd === "paramedic_list_games")?.args).toEqual({ recorded: ["robrun.exe", "wardogs.exe"] });
   });
 
   it("is keyboard reachable: real buttons in labelled groups, none disabled or out of the tab order, the heading takes focus", async () => {
@@ -596,8 +599,8 @@ describe("the first look for a picked game", () => {
     expect(screen.getByRole("heading", { name: "What Compy found for ROB RUN" })).toBeTruthy();
     expect(screen.queryByTestId("first-look-scope")).toBeNull();
     const rows = within(screen.getByTestId("first-look-touch")).getAllByRole("listitem");
-    expect(rows[0].textContent).toMatch(/^Steam last updated ROB RUN on /);
-    expect(rows[0].textContent).not.toMatch(/the game updated|was updated/);
+    expect(rows[0].textContent).toMatch(/^Steam changed ROB RUN's files on [A-Z][a-z]{2} \d+, .*\. That can be an update, a file check or added content\.$/);
+    expect(rows[0].textContent).not.toMatch(/updated/i);
   });
 
   it("an update Steam hasn't installed yet is said once under the row", async () => {
@@ -608,10 +611,10 @@ describe("the first look for a picked game", () => {
 
   it("a Steam update older than the window is Steam's record, in the measured flow's own sentence", async () => {
     await look(gameAnswer({ game_files_since: "2026-09-02T09:00:00Z", none: ["gpu-driver"], limits: [{ kind: "game-update", code: "steam-newest-only", args: {} }] }));
-    expect(screen.getByTestId("first-look-game-files-since").textContent).toMatch(/^Steam hasn't recorded an update to ROB RUN since [A-Z][a-z]{2} \d+\.$/);
+    expect(screen.getByTestId("first-look-game-files-since").textContent).toMatch(/^Steam hasn't recorded a change to ROB RUN's files since [A-Z][a-z]{2} \d+\.$/);
     // Steam keeps only the newest time, and that limit is in the fold.
     openLimits();
-    expect(screen.getByTestId("first-look-limits").textContent).toContain("Steam keeps only the newest update time for ROB RUN, so an earlier update in this period wouldn't show.");
+    expect(screen.getByTestId("first-look-limits").textContent).toContain("Steam keeps only the latest date its files changed for ROB RUN, so an earlier change in this period wouldn't show.");
   });
 
   it("crash history is the first block under 'What looks off on this PC', with 'at least' for a partial read", async () => {
@@ -663,7 +666,10 @@ describe("the first look for a picked game", () => {
     await look(gameAnswer({ looks_off: [modRow()], mods_settings_only: ["ReShade"], mods_none: false }));
     const block = screen.getByTestId("first-look-off");
     expect(within(block).getByText(/ROB RUN's folder contains a graphics mod \(OptiScaler\)/)).toBeTruthy();
-    expect(within(block).getByTestId("first-look-mod-settings-only").textContent).toBe(
+    // A settings or data file alone is not something "off": it is said beside what Compy also looked at.
+    expect(within(block).queryByTestId("first-look-mod-settings-only")).toBeNull();
+    openLimits();
+    expect(within(screen.getByTestId("first-look-limits")).getByTestId("first-look-mod-settings-only").textContent).toBe(
       "ROB RUN's folder contains a settings or data file from ReShade; Compy can't tell whether the mod itself is installed.",
     );
     cleanup();
@@ -744,13 +750,13 @@ describe("what looks off on this PC", () => {
   }
 
   const cases: [FirstLookFact, RegExp, RegExp][] = [
-    [fact("monitor-refresh", { now: "60", max: "250" }), /^Your main monitor is running at 60 Hz; it supports 250 Hz\./, /Advanced display/],
-    [fact("memory-speed", { now: "4800", rated: "6000" }), /^Your memory is running at 4800 MT\/s; its rated speed is 6000 MT\/s\./, /Task Manager, Performance, Memory/],
+    [fact("monitor-refresh", { now: "60", max: "250" }), /^Your main monitor is running at 60 Hz; at this resolution it supports 250 Hz\./, /Advanced display/],
+    [fact("memory-speed", { now: "4800", rated: "6000" }), /^Your memory is running at 4800 MHz; your PC's firmware lists it as capable of 6000 MHz\./, /Task Manager, Performance, Memory/],
     [fact("memory-one-stick"), /^Your PC has 1 memory module, so memory runs in single-channel\./, /memory slots are used/],
     [fact("memory-one-channel", { n: "2" }), /^Your 2 memory modules all report the same memory channel/, /memory slots are used/],
     [fact("drive-health", { drive: "WD Blue", health: "Warning" }), /^Windows reports the health of WD Blue as Warning\./, /Disks & volumes/],
     [fact("game-on-hdd", { drive: "D" }), /^ROB RUN is installed on drive D:, which is a hard disk \(HDD\)\./, /HDD or an SSD/],
-    [fact("gpu-driver-age", { days: "412", name: "AMD Radeon RX 9070" }), /^Your graphics driver \(AMD Radeon RX 9070\) is 412 days old\./, /Driver tab/],
+    [fact("gpu-driver-age", { days: "412", date: "2025-10-05T12:00:00Z" }), /^Your graphics driver is dated [A-Z][a-z]{2} \d+, 412 days ago\.$/, /Driver tab/],
     [fact("freesync-off"), /^Your AMD graphics card reports FreeSync as off\./, /AMD Software, Gaming, Display/],
     [fact("on-battery"), /^This PC is running on battery\./, /battery icon/],
     [fact("game-drive-full", { drive: "D", free_gb: "12.0", total_gb: "500.0" }), /^Drive D:, where ROB RUN is installed, has 12\.0 GB free of 500\.0 GB\./, /Settings, System, Storage/],
@@ -772,7 +778,7 @@ describe("what looks off on this PC", () => {
     expect(within(block).getByText("What looks off on this PC")).toBeTruthy();
     expect(within(block).getAllByRole("listitem").map((n) => n.textContent)).toEqual([
       expect.stringMatching(/^Your main monitor is running at 60 Hz/),
-      expect.stringMatching(/^Your memory is running at 4800 MT\/s/),
+      expect.stringMatching(/^Your memory is running at 4800 MHz/),
     ]);
     expect(within(block).getAllByTestId("first-look-facts-note")).toHaveLength(1);
     expect(screen.getByTestId("first-look-facts-note").textContent).toBe(
@@ -815,7 +821,7 @@ describe("what looks off on this PC", () => {
     expect(screen.queryByTestId("first-look-off")).toBeNull();
   });
 
-  it("in a game's answer the order is crash history, graphics mods, then the PC's facts, in one block", async () => {
+  it("in a game's answer the order is crash history, graphics mods, then the PC's facts, in one block (a settings file alone is not in it)", async () => {
     engine.steam = steamList([]);
     await toThePicker(noSessions(), { games: recorded });
     fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
@@ -824,17 +830,11 @@ describe("what looks off on this PC", () => {
       gameAnswer({
         crashes: { args: { n: "2", since: "2026-11-02T10:00:00Z", partial: "false", byName: "false", versions: "" }, signature_module: null, signature_before: null },
         looks_off: [modRow()],
-        mods_settings_only: ["ReShade"],
         facts: [fact("on-battery")],
       }),
     );
     const block = screen.getByTestId("first-look-off");
-    const parts = [
-      within(block).getByTestId("first-look-crashes"),
-      within(block).getByTestId("first-look-rows"),
-      within(block).getByTestId("first-look-mod-settings-only"),
-      within(block).getByTestId("first-look-facts"),
-    ];
+    const parts = [within(block).getByTestId("first-look-crashes"), within(block).getByTestId("first-look-rows"), within(block).getByTestId("first-look-facts")];
     for (let i = 1; i < parts.length; i++) expect(parts[i - 1].compareDocumentPosition(parts[i]) & Node.DOCUMENT_POSITION_FOLLOWING, `part ${i}`).toBeTruthy();
   });
 
@@ -861,7 +861,7 @@ describe("changes Compy made", () => {
     const group = screen.getByTestId("first-look-compy");
     expect(within(group).getByText("Changes Compy made")).toBeTruthy();
     expect(within(group).getByRole("listitem").textContent).toMatch(/^Compy changed “Turn off Game DVR” on [A-Z][a-z]{2} \d+/);
-    expect(within(group).getByText("You can undo these in History.")).toBeTruthy();
+    expect(within(group).getByText("Changes still in place can be undone in History.")).toBeTruthy();
     expect(within(group).queryAllByRole("button")).toHaveLength(0);
     // The first group: before the changes that touch games.
     expect(group.compareDocumentPosition(screen.getByTestId("first-look-touch")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -878,8 +878,8 @@ describe("changes Compy made", () => {
       }),
     );
     const rows = within(screen.getByTestId("first-look-compy")).getAllByRole("listitem").map((n) => n.textContent ?? "");
-    expect(rows[0]).toMatch(/^Compy changed “Tweak A” on [A-Z][a-z]{2} \d+.*, and it was turned back on [A-Z][a-z]{2} \d+/);
-    expect(rows[1]).toMatch(/, and it has since been turned back\.$/);
+    expect(rows[0]).toMatch(/^Compy changed “Tweak A” on [A-Z][a-z]{2} \d+.*, and it was undone on [A-Z][a-z]{2} \d+/);
+    expect(rows[1]).toMatch(/, and it has since been undone\.$/);
   });
 
   it("three are open and the rest wait behind a closed fold; none means no group", async () => {
@@ -900,7 +900,7 @@ describe("changes Compy made", () => {
     await wholePc(gameAnswer({ limits: [{ kind: "history", code: "unreadable", args: {} }], read_all: false }));
     const fold = screen.getByRole("button", { name: "What Compy couldn't see" });
     if (fold.getAttribute("aria-expanded") === "false") fireEvent.click(fold);
-    expect(screen.getByTestId("first-look-limits").textContent).toContain("Compy couldn't see the changes Compy made: its history file couldn't be read.");
+    expect(screen.getByTestId("first-look-limits").textContent).toContain("Compy couldn't read its own change history.");
     expect(screen.queryByTestId("first-look-compy")).toBeNull();
   });
 
@@ -936,7 +936,7 @@ describe("changes Compy made", () => {
       await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
       fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
       await pick("这周", gameAnswer({ facts: [fact("monitor-refresh", { now: "60", max: "250" })], compy_changes: [compy("Tweak", "2026-11-18T10:00:00Z")] }));
-      expect(screen.getByText("你的主显示器正以 60 Hz 运行；它支持 250 Hz。")).toBeTruthy();
+      expect(screen.getByText("你的主显示器正以 60 Hz 运行；在当前分辨率下它支持 250 Hz。")).toBeTruthy();
       expect(screen.getByText(/^查看方法：设置，系统，显示/)).toBeTruthy();
       expect(screen.getByText(/^Compy 在 .* 更改了“Tweak”。$/)).toBeTruthy();
     } finally {
@@ -969,5 +969,156 @@ describe("first-look strings", () => {
         expect(v, `${lang} ${k}`).not.toMatch(/\d+\s+(issues?|problems?|errors?) (found|detected)/i);
       }
     }
+  });
+});
+
+describe("first-look review r1", () => {
+  async function lookAs(a: FirstLookAnswer, label: string, game = "ROB RUN") {
+    engine.steam = steamList([]);
+    await toThePicker(noSessions(), { games: recorded });
+    fireEvent.click(screen.getByRole("button", { name: game }));
+    await pick(label, a);
+  }
+  const alwaysTold = { since: "always" as const, from: null, to: "2026-11-20T12:00:00Z", hours: null };
+  const crashes = { args: { n: "26", since: "2026-11-10T19:17:16Z", partial: "true" }, signature_module: "UnityPlayer.dll", signature_before: null };
+
+  it("'it's always been like this' still shows what was read: the crash line, a fact and the facts limit", async () => {
+    await lookAs(
+      gameAnswer({ told: alwaysTold, changes_listed: false, crashes, facts: [fact("on-battery")], limits: [{ kind: "facts", code: "unread", args: { list: "power-source" } }], read_all: false }),
+      "It's always been like this",
+    );
+    expect(screen.getByTestId("first-look-always")).toBeTruthy();
+    const block = screen.getByTestId("first-look-off");
+    expect(within(block).getByTestId("first-look-crashes").textContent).toContain("at least 26 times");
+    expect(within(block).getByTestId("first-look-facts").textContent).toContain("This PC is running on battery.");
+    openLimits();
+    expect(screen.getByTestId("first-look-limits").textContent).toContain("Compy couldn't read: the power source.");
+    // No change list was made, by choice.
+    expect(screen.queryByTestId("first-look-touch")).toBeNull();
+    expect(screen.queryByTestId("first-look-nothing")).toBeNull();
+  });
+
+  it("'always' with hardware still being read says so in the block", async () => {
+    await lookAs(gameAnswer({ told: alwaysTold, changes_listed: false, limits: [{ kind: "facts", code: "hardware-not-ready", args: {} }], read_all: false }), "It's always been like this");
+    expect(within(screen.getByTestId("first-look-off")).getByTestId("first-look-facts-waiting").textContent).toBe("Compy is still reading this PC's hardware.");
+  });
+
+  it("the undo hint appears only when a listed change is still in place, and an undone one says 'undone'", async () => {
+    const hint = "Changes still in place can be undone in History.";
+    const undone = [compy("A", "2026-11-18T10:00:00Z", { undone: true, undone_at: "2026-11-19T08:00:00Z" }), compy("B", "2026-11-17T10:00:00Z", { undone: true })];
+    await lookAs(gameAnswer({ compy_changes: undone }), "This week");
+    expect(screen.queryByText(hint)).toBeNull();
+    expect(screen.getByTestId("first-look-compy").textContent).not.toMatch(/turned back/);
+    cleanup();
+    await lookAs(gameAnswer({ compy_changes: [...undone, compy("C", "2026-11-16T10:00:00Z")] }), "This week");
+    expect(screen.getAllByText(hint)).toHaveLength(1);
+  });
+
+  it("no Steam sentence in this flow says the game was updated", async () => {
+    const row = gameChange("game-files", "2026-11-18T09:00:00Z", { game: "ROB RUN", pending: "true" }, "game-files");
+    await lookAs(
+      gameAnswer({ touch_games: [row], game_files_since: "2026-10-01T00:00:00Z", limits: [{ kind: "game-update", code: "steam-newest-only", args: {} }, { kind: "game-update", code: "steam-no-time", args: {} }] }),
+      "This week",
+    );
+    openLimits();
+    const text = (screen.getByTestId("first-look-touch").textContent ?? "") + (screen.getByTestId("first-look-limits").textContent ?? "");
+    expect(text).toContain("Steam changed ROB RUN's files on");
+    expect(text).toContain("Steam hasn't recorded a change to ROB RUN's files since");
+    expect(text).toContain("Steam's record has no usable date for when the files changed");
+    expect(text).not.toMatch(/last updated|update time|updated/i);
+  });
+
+  it("the Steam strings of the first look never say 'updated' in en, or 'the latest update' in zh-CN", () => {
+    for (const lang of ["en", "zh-CN"]) {
+      const j = JSON.parse(readFileSync(join("src", "i18n", "locales", lang, "paramedic.json"), "utf8")).firstLook as Record<string, unknown>;
+      const walk = (o: unknown, path: string): [string, string][] =>
+        typeof o === "string" ? [[path, o]] : Object.entries(o as Record<string, unknown>).flatMap(([k, v]) => walk(v, `${path}.${k}`));
+      for (const [k, v] of walk(j, "firstLook").filter(([, v]) => /steam/i.test(v))) {
+        expect(v, `${lang} ${k}`).not.toMatch(lang === "en" ? /\bupdated\b|update time/i : /最近一次更新|更新时间|更新了/);
+      }
+    }
+  });
+
+  it("a history that couldn't be read is one plain line, never an empty list", async () => {
+    await lookAs(gameAnswer({ limits: [{ kind: "history", code: "unreadable", args: {} }], read_all: false }), "This week");
+    openLimits();
+    expect(screen.getByTestId("first-look-limits").textContent).toContain("Compy couldn't read its own change history.");
+    expect(screen.queryByTestId("first-look-compy")).toBeNull();
+  });
+
+  it("limit reasons are true: a reader that stopped, a game with no folder, and other mods after a partial scan", async () => {
+    await lookAs(
+      gameAnswer({
+        limits: [
+          { kind: "mods", code: "reader-failed", args: {} },
+          { kind: "crashes", code: "no-folder", args: {} },
+          { kind: "crashes", code: "reader-failed", args: {} },
+          { kind: "mods", code: "partial", args: { other: "true" } },
+        ],
+        read_all: false,
+      }),
+      "This week",
+    );
+    openLimits();
+    const text = screen.getByTestId("first-look-limits").textContent ?? "";
+    expect(text).toContain("Whether ROB RUN's folder has a graphics mod (the reader stopped unexpectedly)");
+    expect(text).toContain("Whether ROB RUN has closed unexpectedly before (Compy couldn't match the game to an install folder)");
+    expect(text).toContain("Whether ROB RUN has closed unexpectedly before (the reader stopped unexpectedly)");
+    expect(text).toContain("Whether ROB RUN's folder has other graphics mods (only part of the folder was scanned)");
+    expect(text).not.toContain("looking took too long");
+  });
+
+  it("the drive-health word is translated in zh-CN, and any other value is shown as Windows gave it", async () => {
+    await lookAs(gameAnswer({ facts: [fact("drive-health", { drive: "WD Blue", health: "Degraded" })] }), "This week");
+    expect(screen.getByText("Windows reports WD Blue: Degraded.")).toBeTruthy();
+    cleanup();
+    await i18n.changeLanguage("zh-CN");
+    try {
+      engine.diagnose = noSessions();
+      engine.steam = steamList([]);
+      render(<ParamedicCard noGames />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
+      fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
+      await pick("这周", gameAnswer({ facts: [fact("drive-health", { drive: "WD Blue", health: "Warning" })] }));
+      expect(screen.getByText("Windows 报告 WD Blue 的健康状态为 警告。")).toBeTruthy();
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  it("no Steam on this PC: no Steam section and no error line; a real read failure still says so", async () => {
+    engine.steam = { read: true, complete: true, games: [] };
+    await toThePicker(noSessions(), { games: recorded });
+    await waitFor(() => expect(screen.queryByText("Looking for your installed Steam games…")).toBeNull());
+    expect(screen.queryByTestId("first-look-steam-unread")).toBeNull();
+    expect(screen.queryByText("Installed with Steam")).toBeNull();
+    expect(gameButtons()).toEqual(["ROB RUN", "Wardogs", WHOLE_PC]);
+  });
+
+  const steamEntry = (id: number, name: string, drive: string, recordedAs?: string) => ({ app_id: id, name, last_updated: null, drive, recorded: recordedAs ?? null });
+
+  it("two Steam games of one name both stay, told apart by their drive; a recorded game of that name merges only by folder", async () => {
+    engine.steam = { read: true, complete: true, games: [steamEntry(1, "DOOM", "D"), steamEntry(2, "DOOM", "E")] };
+    await toThePicker(noSessions(), { games: [{ process: "DOOMx64.exe", name: "DOOM" }] });
+    await waitFor(() => expect(screen.getByRole("button", { name: "DOOM (D:)" })).toBeTruthy());
+    // No folder match: nothing merges on the name alone.
+    expect(gameButtons()).toEqual(["DOOM", "DOOM (D:)", "DOOM (E:)", WHOLE_PC]);
+    cleanup();
+    engine.steam = { read: true, complete: true, games: [steamEntry(1, "DOOM", "D", "DOOMx64.exe"), steamEntry(2, "DOOM", "E")] };
+    await toThePicker(noSessions(), { games: [{ process: "DOOMx64.exe", name: "DOOM" }] });
+    await waitFor(() => expect(screen.getByRole("button", { name: "DOOM (E:)" })).toBeTruthy());
+    expect(gameButtons()).toEqual(["DOOM", "DOOM (E:)", WHOLE_PC]);
+  });
+
+  it("with many recorded games at least three Steam games still show before 'Show more'", async () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({ process: `r${i}.exe`, name: `Recorded ${String(i + 1).padStart(2, "0")}` }));
+    engine.steam = steamList(["Alpha", "Beta", "Gamma", "Delta", "Epsilon"]);
+    await toThePicker(noSessions(), { games: many });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Alpha" })).toBeTruthy());
+    const shown = gameButtons();
+    expect(shown.filter((n) => /^Recorded/.test(n))).toHaveLength(5);
+    expect(shown.filter((n) => ["Alpha", "Beta", "Gamma", "Delta", "Epsilon"].includes(n))).toEqual(["Alpha", "Beta", "Gamma"]);
+    expect(screen.getByRole("button", { name: "Show 7 more" })).toBeTruthy();
   });
 });
