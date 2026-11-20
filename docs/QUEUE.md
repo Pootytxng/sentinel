@@ -16,7 +16,9 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - [ ] Detect graphics mods in a game's folder (injected upscaler and frame-generation DLLs) — the card names a mod that explains rough play
 - [ ] Crash complaint in the same card — "this crash has happened N times since <date> on the same game build"
 - [ ] One-click fixes through the existing undo path (startup entry, power plan, undo a Compy change) — the owner presses one button instead of following steps
-- [ ] Security slices 2-7 from the hardening design: frame-capture helper over a pipe; result relay and safe ticket handling; closed set of elevated operations sized to the Paramedic's fixes; per-machine install; history backup; uninstall notice — closes the remaining privilege and data-loss risks
+- [ ] Security slices 2-7 from the hardening design: frame-capture helper over a pipe; result relay and safe ticket handling; closed set of elevated operations sized to the Paramedic's fixes; per-machine install; uninstall notice — closes the remaining privilege and data-loss risks
+- [ ] In-app Clear history (removes the ledger, its backup, marker and set-asides together)
+- [ ] History backup follow-ups: a `backup_current` flag in the health view, age out the restored note, a `.corrupt` left after a full restore still reads as incomplete, render the restored note in the UI (en + zh-CN)
 - [ ] Baseline keyed by frame cap, refresh rate and resolution — a changed cap no longer looks like a slowdown
 - [ ] First-run and empty states for a new user — a new PC gets a clear first screen, not blank cards
 - [ ] Signing, privacy policy and EULA — the installer is signed and the legal text is published
@@ -35,10 +37,13 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - 3-5 outside testers.
 - A VM or 15 minutes for a real UAC-prompt test.
 - Yes or no on editing the project's `.claude/settings.json` in the diet.
+- Publish the privacy page wording for the history backup with the release (site/privacy.html; docs/PRIVACY.md already has it).
+- ARCHITECTURE_LOCKS line for the ledger backup (proposed text in _train\b1-review-r1.md).
 - Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee".
 
 ## Done (newest first)
 - 2026-11-20 — A session ends when its game exits; a new game starts a new session (no more two games in one record) bb47b314, review fixes b8e729ac
+- 2026-11-20 - fix(history): the change history keeps a verified backup copy and restores from it when the main file is missing or damaged (claude/m1-hist-bak, reviewed)
 - 2026-11-20 — Desk build 808a95ce installed and stamped 920f6bca
 - 2026-11-20 — Readers wired into the diagnosis 808a95ce
 - 2026-11-20 — Dated change readers (driver installs, Windows updates, Steam game updates, installed programs) c99d4b4d
