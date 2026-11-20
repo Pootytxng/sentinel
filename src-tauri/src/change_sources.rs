@@ -2623,7 +2623,7 @@ mod tests {
             seen.push(m);
         }
         assert!(seen.contains(&"actions".to_string()), "the scan must reach what the helper really uses: {seen:?}");
-        for banned in ["paramedic", "change_sources"] {
+        for banned in ["paramedic", "change_sources", "game_mods"] {
             assert!(!seen.iter().any(|m| m == banned), "the elevated helper reaches {banned} through {seen:?}");
         }
     }

@@ -131,9 +131,6 @@ windows = { version = "0.59", features = [
   # SHELLEXECUTEINFOW embeds an HKEY, so the windows crate gates ShellExecuteExW behind it.
   "Win32_System_Com",
   "Win32_System_Registry",
-  # GetFileVersionInfoW / VerQueryValueW: read a proxy-named DLL's version-resource strings (game_mods.rs),
-  # read-only; the file is mapped as data and never loaded as code.
-  "Win32_Storage_FileSystem",
 ] }
 
 # ETW (Event Tracing for Windows) consumer for FPS / frametime capture.
