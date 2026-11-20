@@ -1393,6 +1393,13 @@ export type ParamedicFinding = {
 
 export type ParamedicRuledOut = { id: string; args: Record<string, string> };
 
+/** What Compy could not see of Windows' own records, per kind of change. `code` says why; the card owns the sentence. */
+export type ParamedicLimit = {
+  kind: "driver" | "windows-update" | "game-update" | "programs";
+  code: string;
+  args: Record<string, string>;
+};
+
 export type ParamedicDiagnosis = {
   complaint: ParamedicComplaint;
   state: ParamedicState;
@@ -1402,6 +1409,9 @@ export type ParamedicDiagnosis = {
   findings: ParamedicFinding[];
   not_it: ParamedicRuledOut[];
   unknowns: string[];
+  limits: ParamedicLimit[];
+  /** Looked at and found, listed under "What Compy checked": never a finding. */
+  seen: ParamedicRuledOut[];
   baseline: ParamedicSessionRef | null;
   first_bad: ParamedicSessionRef | null;
   why_first: "cross-game" | "cross-game-lead" | "tie" | "not-separable" | null;

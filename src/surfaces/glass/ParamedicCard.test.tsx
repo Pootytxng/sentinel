@@ -69,7 +69,9 @@ const base: ParamedicDiagnosis = {
     },
   ],
   not_it: [{ id: "hardware-change", args: {} }],
-  unknowns: ["game-patch"],
+  unknowns: ["startup-programs"],
+  limits: [],
+  seen: [],
   baseline: ref("2026-11-11T14:14:22Z"),
   first_bad: ref("2026-11-20T01:01:24Z"),
   why_first: "tie",
@@ -208,6 +210,164 @@ describe("ParamedicCard", () => {
     expect(answer.calls[0][1]).toEqual(expect.objectContaining({ game: null }));
   });
 
+  it("Windows recorded the install time: the card says when, and drops the 'didn't read it' line", async () => {
+    const [driver] = base.findings;
+    await ask({
+      ...base,
+      why_first: null,
+      findings: [
+        {
+          ...driver,
+          confidence: "possible",
+          since_when: { kind: "exact", at: "2026-11-19T12:00:00Z" },
+          evidence: [
+            driver.evidence[0],
+            { kind: "known", code: "install-recorded", args: { when: "2026-11-19T12:00:00Z", version: "2.0" }, against: false, source: "windows" },
+          ],
+        },
+      ],
+    });
+    await waitFor(() => expect(screen.getByText(/Windows recorded the driver install on/)).toBeTruthy());
+    expect(screen.getByText("Your graphics driver changed from 1.0 to 2.0.")).toBeTruthy();
+    expect(screen.queryByText(/didn't read the exact install time/)).toBeNull();
+  });
+
+  it("a Windows update in the period is a candidate with steps to view it and, for a quality update, remove it yourself", async () => {
+    const [driver] = base.findings;
+    const update: ParamedicDiagnosis["findings"][number] = {
+      id: "windows-update",
+      confidence: "possible",
+      in_play: true,
+      evidence: [{ kind: "known", code: "update-installed", args: { kb: "KB5001234", when: "2026-11-19T03:00:00Z", class: "quality" }, against: false, source: "windows" }],
+      since_when: { kind: "exact", at: "2026-11-19T03:00:00Z" },
+      fix: { kind: "steps", code: "windows-update", args: { kb: "KB5001234", quality: "true" } },
+    };
+    await ask({
+      ...base,
+      why_first: "not-separable",
+      findings: [{ ...driver, confidence: "possible", in_play: true }, update],
+      seen: [{ id: "updates-minor", args: { n: "2", m: "1" } }],
+    });
+    await waitFor(() => expect(screen.getByText("Windows installed an update")).toBeTruthy());
+    expect(screen.getByText(/Windows installed KB5001234 on/)).toBeTruthy();
+    expect(screen.getByText(/Update history to see what was installed and when/)).toBeTruthy();
+    expect(screen.getByText(/You can remove KB5001234 there and restart. That's your choice; Compy won't do it for you./)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /uninstall|remove|undo/i })).toBeNull();
+    expect(screen.getByText("2 security definition and 1 app updates, which Compy doesn't treat as likely causes.")).toBeTruthy();
+  });
+
+  it("a feature update offers no uninstall step", async () => {
+    const [driver] = base.findings;
+    await ask({
+      ...base,
+      why_first: null,
+      findings: [
+        {
+          ...driver,
+          id: "windows-update",
+          confidence: "possible",
+          evidence: [],
+          fix: { kind: "steps", code: "windows-update", args: { kb: "KB1", quality: "false" } },
+        },
+      ],
+    });
+    await waitFor(() => expect(screen.getByText(/Update history to see what was installed and when/)).toBeTruthy());
+    expect(screen.queryByText(/Uninstall updates/)).toBeNull();
+  });
+
+  it("game files changing is worded as files, never as a patch, and a non-Steam game stays in what Compy couldn't see", async () => {
+    const [driver] = base.findings;
+    const files: ParamedicDiagnosis["findings"][number] = {
+      id: "game-files-change",
+      confidence: "possible",
+      in_play: false,
+      evidence: [{ kind: "known", code: "files-changed", args: { when: "2026-11-18T18:00:00Z" }, against: false, source: "steam" }],
+      since_when: { kind: "exact", at: "2026-11-18T18:00:00Z" },
+      fix: { kind: "steps", code: "game-files-change", args: {} },
+    };
+    await ask({ ...base, why_first: null, findings: [files, { ...driver, confidence: "possible" }] });
+    await waitFor(() => expect(screen.getAllByText(/Game A's files changed on/).length).toBeGreaterThan(0));
+    expect(screen.getByText(/That can be an update, a file verification or added content/)).toBeTruthy();
+    expect(screen.getByText(/Check Game A's patch notes/)).toBeTruthy();
+    expect(screen.getByText(/Verify integrity of game files/)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/was patched|were patched|got patched/i);
+    cleanup();
+    await ask({ ...base, limits: [{ kind: "game-update", code: "not-steam", args: {} }] });
+    await waitFor(() =>
+      expect(screen.getByText("Game A isn't in a Steam library Compy could find, so it can't see when it was updated.")).toBeTruthy(),
+    );
+  });
+
+  it("when the readers could not read, the card still renders and each kind has its own specific line", async () => {
+    await ask({
+      ...base,
+      limits: [
+        { kind: "driver", code: "access-denied", args: {} },
+        { kind: "windows-update", code: "timed-out", args: {} },
+        { kind: "game-update", code: "steam-unreadable", args: {} },
+        { kind: "programs", code: "partial-registry", args: { n: "2" } },
+        { kind: "programs", code: "no-install-date", args: { n: "3" } },
+      ],
+    });
+    await waitFor(() => expect(screen.getByText("Most likely")).toBeTruthy());
+    expect(screen.getByText("Compy couldn't see when drivers were installed: Windows needs administrator rights to show that log.")).toBeTruthy();
+    expect(screen.getByText("Compy couldn't see which Windows updates were installed: reading it took too long.")).toBeTruthy();
+    expect(screen.getByText("Compy couldn't see when Game A was updated: Steam's files couldn't be read.")).toBeTruthy();
+    expect(screen.getByText("Compy saw only part of which programs were installed: 2 registry entries couldn't be opened.")).toBeTruthy();
+    expect(screen.getByText("Compy can't see Store apps, or programs that don't record an install date (3 here).")).toBeTruthy();
+    expect(screen.queryByText(/Whether Game A was updated/)).toBeNull();
+  });
+
+  it("installed programs are one collapsed line and 'unchanged' only appears when Windows was read completely", async () => {
+    await ask({
+      ...base,
+      not_it: [
+        { id: "windows-update", args: {} },
+        { id: "gpu-driver-change", args: { driver: "2.0", windows: "none" } },
+        { id: "game-files-change", args: { since: "2026-09-01T00:00:00Z" } },
+      ],
+      seen: [{ id: "programs-installed", args: { count: "4", names: "Discord, Paint Tool, Zip Thing", more: "1", day: "2026-11-19T00:00:00Z", last: "2026-11-19T00:00:00Z" } }],
+    });
+    await waitFor(() => expect(screen.getByText("Windows: no quality or feature update in this period.")).toBeTruthy());
+    expect(screen.getByText(/4 programs were installed on .*: Discord, Paint Tool, Zip Thing and 1 more\./)).toBeTruthy();
+    expect(screen.getByText("Graphics driver: still 2.0. Windows recorded no graphics driver install in this period.")).toBeTruthy();
+    expect(screen.getByText(/Game A's files: unchanged since/)).toBeTruthy();
+  });
+
+  it("an install after the first rough session is shown as weakening the driver", async () => {
+    const [driver] = base.findings;
+    await ask({
+      ...base,
+      why_first: null,
+      findings: [
+        {
+          ...driver,
+          confidence: "possible",
+          evidence: [
+            { kind: "measured", code: "install-after-rough", args: { when: "2026-11-20T01:05:00Z" }, against: true, source: "windows" },
+          ],
+        },
+      ],
+    });
+    await waitFor(() => expect(screen.getByText(/after the first rough session had started/)).toBeTruthy());
+    expect(screen.getAllByText("Weakens this").length).toBeGreaterThan(0);
+  });
+
+  it("'never before it' is said only when the engine says every earlier session was normal", async () => {
+    const [driver] = base.findings;
+    const cross = (neverBefore: string): ParamedicDiagnosis["findings"][number] => ({
+      ...driver,
+      confidence: "possible",
+      evidence: [{ kind: "measured", code: "cross-game", args: { games: "Game B", neverBefore }, against: false, source: "sessions" }],
+    });
+    await ask({ ...base, why_first: null, findings: [cross("true")] });
+    await waitFor(() => expect(screen.getByText("Game B also got much rougher after the update, and never before it.")).toBeTruthy());
+    cleanup();
+    await ask({ ...base, why_first: null, findings: [cross("false")] });
+    await waitFor(() => expect(screen.getByText("Game B's rough sessions also came after the update.")).toBeTruthy());
+    expect(screen.queryByText(/never before it/)).toBeNull();
+  });
+
   it("a failed read says nothing was changed", async () => {
     await ask(null);
     await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
@@ -235,6 +395,10 @@ describe("paramedic words", () => {
 
   it("claims no more than the records show", () => {
     expect(en).not.toMatch(/were busy|got rougher|usual speed|outside Compy|nearly full in these/i);
+    // Steam's time also moves on a file verification or added content: never "the game was patched".
+    expect(en).not.toMatch(/was patched|were patched|got patched/i);
+    // The confounded line says what was recorded (programs starting), not that the PC was busy.
+    expect(JSON.parse(en).evidence.crossGameConfounded).not.toMatch(/busy/i);
     expect(JSON.parse(zh).answer.likely).not.toMatch(/原因/);
   });
 

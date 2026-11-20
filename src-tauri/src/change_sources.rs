@@ -35,7 +35,6 @@
 //! `?`), so event-log TEXT (titles, provider names) is flagged `text_uncertain` whenever it holds a
 //! `?` or a non-ASCII character; KB ids, versions and times are ASCII and authoritative.
 //! Parsing is pure and separate from I/O so every parser is tested from fixture text.
-#![allow(dead_code)] // wired into paramedic in the next commit
 
 use chrono::{DateTime, Duration as ChronoDuration, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use serde::Serialize;
@@ -106,6 +105,7 @@ impl ChangeTime {
     pub(crate) fn day(start: DateTime<Utc>, end: DateTime<Utc>) -> Self {
         ChangeTime { precision: Precision::Day, at: Some(start), until: Some(end) }
     }
+    #[cfg(test)]
     pub(crate) fn unknown() -> Self {
         ChangeTime { precision: Precision::Unknown, at: None, until: None }
     }
@@ -129,17 +129,6 @@ pub(crate) enum Source {
     WindowsUpdateLog,
     SteamManifest,
     UninstallKeys,
-}
-
-impl Source {
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Source::DriverLog => "Windows System log: Kernel-PnP/Configuration event 400 (driver configured)",
-            Source::WindowsUpdateLog => "Windows System log: WindowsUpdateClient event 19 (installation successful)",
-            Source::SteamManifest => "Steam appmanifest (buildid, LastUpdated)",
-            Source::UninstallKeys => "Registry Uninstall key InstallDate",
-        }
-    }
 }
 
 /// Plain fields; every one optional because no source has all of them.
@@ -201,6 +190,7 @@ pub(crate) enum UnreadableReason {
 
 impl UnreadableReason {
     /// Plain English for the user-facing line. Fixed text; nothing from Windows is echoed.
+    #[cfg(test)]
     pub(crate) fn plain(&self) -> String {
         match self {
             Self::ToolMissing => "Windows' event-log tool was not found in the system folder".into(),
@@ -247,7 +237,6 @@ pub(crate) enum Gap {
     /// Registry keys that could not be opened or listed (count).
     RegistryKeysUnreadable(usize),
     SteamLibrariesUnreadable(usize),
-    SteamRecordsUnparsed(usize),
 }
 
 /// A limit of the source that is always true, for the engine's wording.
@@ -276,6 +265,7 @@ pub(crate) struct ReadOk {
 }
 
 impl ReadOk {
+    #[cfg(test)]
     pub(crate) fn timed_out(&self) -> bool {
         self.gaps.contains(&Gap::TimedOut)
     }
@@ -290,6 +280,7 @@ pub(crate) enum SourceRead {
 
 impl SourceRead {
     /// A complete read with nothing special to say.
+    #[cfg(test)]
     pub(crate) fn ok(events: Vec<ChangeEvent>) -> SourceRead {
         SourceRead::Read(ReadOk { events, covered_from: None, gaps: Vec::new(), notes: Vec::new() })
     }
@@ -759,6 +750,7 @@ struct Assessed<T> {
 
 /// Pure: turn one query's parsed output into items + gaps, or `Unreadable`. Never `Ok` with no
 /// items when the output could not be understood.
+#[cfg(test)]
 fn assess<T>(
     raw: &str,
     timed_out: bool,
@@ -1003,6 +995,7 @@ fn driver_changes(mut recs: Vec<PnpRecord>) -> Vec<ChangeEvent> {
 
 /// Fixture seam: driver installs from raw wevtutil XML (malformed blocks are dropped here; the
 /// readers count them).
+#[cfg(test)]
 pub(crate) fn driver_events_from_xml(xml: &str) -> Vec<ChangeEvent> {
     driver_changes(parse_pnp(xml).items)
 }
@@ -1113,6 +1106,7 @@ fn wu_changes(mut recs: Vec<WuRecord>) -> Vec<ChangeEvent> {
 }
 
 /// Fixture seam: update installs from raw wevtutil XML.
+#[cfg(test)]
 pub(crate) fn wu_events_from_xml(xml: &str) -> Vec<ChangeEvent> {
     wu_changes(parse_wu(xml).items)
 }
@@ -1411,6 +1405,128 @@ fn find_in_libraries(roots: &[String], vdf_unreadable: bool, game: &GameRef, bud
     }
 }
 
+/// Whether Compy could place a game (known only by its process name) in a Steam library.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SteamLookup {
+    Found(GameRef),
+    /// Every library Compy could read has no folder that holds this program, or Steam is not installed.
+    /// It is not proof that the game is not Steam's: the match needs the program inside the install folder.
+    NotInSteam,
+    Unreadable(UnreadableReason),
+}
+
+/// Pure: a program's file name reduced to the part a game's folder is named after
+/// ("LANESPLIT-Win64-Shipping.exe" -> "lanesplit", "ROB RUN.exe" -> "robrun").
+fn exe_stem_key(exe: &str) -> String {
+    let lower = exe.trim().to_ascii_lowercase();
+    let mut s = lower.strip_suffix(".exe").unwrap_or(&lower).to_string();
+    for suffix in ["-win64-shipping", "-win32-shipping", "-wingdk-shipping", "-shipping", "_win64", "-win64", "_x64", "-x64", "_64"] {
+        if let Some(t) = s.strip_suffix(suffix) {
+            s = t.to_string();
+            break;
+        }
+    }
+    s.chars().filter(char::is_ascii_alphanumeric).collect()
+}
+
+/// Pure: can a Steam install folder named `folder` plausibly hold the program whose key is `key`?
+/// Equal, or one a prefix of the other when both are long enough to mean something. The program is
+/// then looked for inside the folder; the name alone never decides.
+fn folder_may_hold(key: &str, folder: &str) -> bool {
+    let fk: String = folder.to_ascii_lowercase().chars().filter(char::is_ascii_alphanumeric).collect();
+    if key.is_empty() || fk.is_empty() {
+        return false;
+    }
+    fk == key || (key.len().min(fk.len()) >= 4 && (fk.starts_with(key) || key.starts_with(&fk)))
+}
+
+/// Is a file named `exe` anywhere inside `dir` (a few levels deep, bounded in entries and time)?
+fn folder_holds_exe(dir: &std::path::Path, exe: &str, deadline: Instant) -> bool {
+    const MAX_DEPTH: usize = 4;
+    const MAX_ENTRIES: usize = 4000;
+    let mut stack = vec![(dir.to_path_buf(), 0usize)];
+    let mut seen = 0usize;
+    while let Some((d, depth)) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        for e in rd.flatten() {
+            seen += 1;
+            if seen > MAX_ENTRIES || Instant::now() >= deadline {
+                return false;
+            }
+            let Ok(ft) = e.file_type() else { continue };
+            if ft.is_dir() {
+                if depth < MAX_DEPTH {
+                    stack.push((e.path(), depth + 1));
+                }
+            } else if e.file_name().to_string_lossy().eq_ignore_ascii_case(exe.trim()) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Which Steam game owns this program? Read-only: the library list, the manifests and the install
+/// folders. Sessions record only the process name, so this is how a game's Steam record is found.
+pub(crate) fn find_steam_game(exe: &str, budget: Duration) -> SteamLookup {
+    match steam_library_roots() {
+        Ok(r) => find_game_in_roots(&r.roots, r.vdf_unreadable, exe, budget),
+        Err(UnreadableReason::SteamNotFound) => SteamLookup::NotInSteam,
+        Err(e) => SteamLookup::Unreadable(e),
+    }
+}
+
+fn find_game_in_roots(roots: &[String], vdf_unreadable: bool, exe: &str, budget: Duration) -> SteamLookup {
+    let key = exe_stem_key(exe);
+    if key.len() < 3 {
+        return SteamLookup::NotInSteam;
+    }
+    let deadline = Instant::now() + budget;
+    let mut libs_unreadable = usize::from(vdf_unreadable);
+    let mut records_unparsed = 0usize;
+    let mut timed_out = false;
+    let mut hit: Option<GameRef> = None;
+    for root in roots {
+        let steamapps = std::path::Path::new(root).join("steamapps");
+        let Ok(entries) = std::fs::read_dir(&steamapps) else {
+            libs_unreadable += 1;
+            continue;
+        };
+        timed_out |= collect_until(entries.flatten().filter(is_manifest_name), deadline, |e| {
+            if hit.is_some() {
+                return;
+            }
+            match read_manifest(&e.path()) {
+                ManifestRead::Parsed(info) => {
+                    if let Some(folder) = info.install_dir.as_deref().filter(|f| folder_may_hold(&key, f)) {
+                        let dir = steamapps.join("common").join(folder);
+                        if folder_holds_exe(&dir, exe, deadline) {
+                            hit = Some(GameRef {
+                                steam_app_id: Some(info.app_id),
+                                install_dir: Some(dir.to_string_lossy().into_owned()),
+                                launcher: Some("Steam".into()),
+                            });
+                        }
+                    }
+                }
+                ManifestRead::Unreadable => records_unparsed += 1,
+                ManifestRead::Missing => {}
+            }
+        });
+        if hit.is_some() || timed_out {
+            break;
+        }
+    }
+    match hit {
+        Some(g) => SteamLookup::Found(g),
+        None if timed_out => SteamLookup::Unreadable(UnreadableReason::TimedOutBeforeAnyRecord),
+        None if libs_unreadable > 0 || records_unparsed > 0 => {
+            SteamLookup::Unreadable(UnreadableReason::SteamPartiallyUnreadable { libraries: libs_unreadable, records: records_unparsed })
+        }
+        None => SteamLookup::NotInSteam,
+    }
+}
+
 /// Every installed Steam game with a readable update time. For callers that want to enumerate, and
 /// for the real-PC check.
 #[cfg(test)]
@@ -1522,6 +1638,7 @@ fn uninstall_outcome(f: &UninstallFields, day_window: DayWindowFn<'_>) -> Uninst
 }
 
 /// Pure (zone injected): one Uninstall entry as a program-installed event, or `None`.
+#[cfg(test)]
 fn uninstall_event(f: &UninstallFields, day_window: DayWindowFn<'_>) -> Option<ChangeEvent> {
     match uninstall_outcome(f, day_window) {
         UninstallOutcome::Event(e) => Some(*e),
@@ -2395,11 +2512,136 @@ mod tests {
         let lib = include_str!("lib.rs");
         let body = fn_body(lib, "pub fn run_elevated_helper(");
         assert!(!body.contains("change_sources"), "run_elevated_helper must never call change_sources");
+        assert!(!body.contains("paramedic"), "run_elevated_helper must never call the paramedic");
         assert!(!include_str!("main.rs").contains("change_sources"));
+        assert!(!include_str!("main.rs").contains("paramedic"));
         // The elevated helper entry also never names this module's reader entry points.
         for f in ["changes_between", "read_driver_installs", "read_windows_updates", "read_installed_programs", "read_game_update"] {
             assert!(!body.contains(f), "{f}");
         }
+        // Transitively: every module the helper's body names, and every module those name in turn,
+        // never mentions the paramedic or this module (module-level reach is deliberately coarse: a false
+        // alarm is a reason to look, a miss would put a reader behind the elevated entry).
+        let src_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut modules: HashMap<String, String> = HashMap::new();
+        for entry in std::fs::read_dir(&src_dir).unwrap().flatten() {
+            let p = entry.path();
+            let stem = p.file_stem().unwrap().to_string_lossy().into_owned();
+            let mut text = String::new();
+            if p.is_dir() {
+                let mut stack = vec![p.clone()];
+                while let Some(d) = stack.pop() {
+                    for e in std::fs::read_dir(&d).unwrap().flatten() {
+                        let q = e.path();
+                        if q.is_dir() {
+                            stack.push(q);
+                        } else if q.extension().and_then(|x| x.to_str()) == Some("rs") {
+                            text.push_str(&std::fs::read_to_string(&q).unwrap());
+                        }
+                    }
+                }
+            } else if p.extension().and_then(|x| x.to_str()) == Some("rs") {
+                text = std::fs::read_to_string(&p).unwrap();
+            } else {
+                continue;
+            }
+            modules.entry(stem).or_default().push_str(&text);
+        }
+        let code_only = |t: &str| t.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
+        let names_in = |t: &str| -> Vec<String> {
+            let t = code_only(t);
+            modules
+                .keys()
+                .filter(|m| {
+                    let pat = format!("{m}::");
+                    t.match_indices(&pat).any(|(i, _)| {
+                        !t[..i].chars().next_back().is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
+                    })
+                })
+                .cloned()
+                .collect()
+        };
+        let mut seen: Vec<String> = Vec::new();
+        let mut queue = names_in(body);
+        while let Some(m) = queue.pop() {
+            if seen.contains(&m) {
+                continue;
+            }
+            for next in names_in(&modules[&m]) {
+                queue.push(next);
+            }
+            seen.push(m);
+        }
+        assert!(seen.contains(&"actions".to_string()), "the scan must reach what the helper really uses: {seen:?}");
+        for banned in ["paramedic", "change_sources"] {
+            assert!(!seen.iter().any(|m| m == banned), "the elevated helper reaches {banned} through {seen:?}");
+        }
+    }
+
+    // ---- find_steam_game: a program name to its Steam install --------------------------------
+
+    #[test]
+    fn exe_names_reduce_to_the_folder_name_they_belong_to() {
+        assert_eq!(exe_stem_key("LANESPLIT-Win64-Shipping.exe"), "lanesplit");
+        assert_eq!(exe_stem_key("ROB RUN.exe"), "robrun");
+        assert_eq!(exe_stem_key("  Game_x64.EXE "), "game");
+        assert!(folder_may_hold("lanesplit", "LANESPLIT"));
+        assert!(folder_may_hold("robrun", "ROB RUN"));
+        assert!(folder_may_hold("lanesplit", "Lanesplit Demo"));
+        assert!(!folder_may_hold("lanesplit", "Counter-Strike"));
+        assert!(!folder_may_hold("cs", "csgo"), "two letters decide nothing");
+        assert!(!folder_may_hold("", "anything"));
+    }
+
+    fn fake_library(tag: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("compy_f4b_{tag}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("steamapps").join("common").join("Lane Split").join("Bin").join("Win64")).unwrap();
+        std::fs::create_dir_all(root.join("steamapps").join("common").join("Other Game")).unwrap();
+        std::fs::write(root.join("steamapps").join("common").join("Lane Split").join("Bin").join("Win64").join("LaneSplit-Win64-Shipping.exe"), b"x").unwrap();
+        std::fs::write(
+            root.join("steamapps").join("appmanifest_42.acf"),
+            "\"AppState\"\n{\n\t\"appid\"\t\t\"42\"\n\t\"name\"\t\t\"Lane Split\"\n\t\"installdir\"\t\t\"Lane Split\"\n\t\"buildid\"\t\t\"7\"\n\t\"LastUpdated\"\t\t\"1763500000\"\n}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("steamapps").join("appmanifest_43.acf"),
+            "\"AppState\"\n{\n\t\"appid\"\t\t\"43\"\n\t\"name\"\t\t\"Other\"\n\t\"installdir\"\t\t\"Other Game\"\n\t\"LastUpdated\"\t\t\"1763500001\"\n}\n",
+        )
+        .unwrap();
+        root
+    }
+
+    #[test]
+    fn a_program_inside_a_steam_install_folder_finds_its_game() {
+        let root = fake_library("found");
+        let roots = vec![root.to_string_lossy().into_owned()];
+        match find_game_in_roots(&roots, false, "LaneSplit-Win64-Shipping.exe", Duration::from_secs(5)) {
+            SteamLookup::Found(g) => {
+                assert_eq!(g.steam_app_id, Some(42));
+                assert_eq!(g.launcher.as_deref(), Some("Steam"));
+                assert!(g.install_dir.unwrap().ends_with("Lane Split"));
+            }
+            other => panic!("{other:?}"),
+        }
+        // A name that matches a folder is not enough: the program must be in it.
+        assert_eq!(find_game_in_roots(&roots, false, "OtherGame.exe", Duration::from_secs(5)), SteamLookup::NotInSteam);
+        assert_eq!(find_game_in_roots(&roots, false, "nothing-like-it.exe", Duration::from_secs(5)), SteamLookup::NotInSteam);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_library_that_cannot_be_read_is_never_not_in_steam() {
+        let root = fake_library("gone");
+        let roots = vec![root.to_string_lossy().into_owned(), "Z:\\no-such-library-f4b".into()];
+        assert_eq!(
+            find_game_in_roots(&roots, false, "Nope-Win64-Shipping.exe", Duration::from_secs(5)),
+            SteamLookup::Unreadable(UnreadableReason::SteamPartiallyUnreadable { libraries: 1, records: 0 })
+        );
+        // A library list that could not be read counts the same way.
+        let roots = vec![root.to_string_lossy().into_owned()];
+        assert!(matches!(find_game_in_roots(&roots, true, "Nope.exe", Duration::from_secs(5)), SteamLookup::Unreadable(_)));
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

@@ -12,6 +12,12 @@
 //! is the exact reason nothing flagged the 2026-11-19/20 incident (design section 0). The finding ids
 //! below are that catalog's ids; the inputs are `gather()`'s; the driver test is `hardware::driver_changed`.
 //!
+//! F4b: the command also asks `change_sources` (read-only: driver log, update log, the game's Steam manifest,
+//! installed programs) what Windows recorded between the last normal session and the rough ones, once, off the
+//! UI thread, within a total budget (`changes.rs`). The report is an INPUT to the pure `diagnose`; if the readers
+//! fail or run long every kind is Unknown. Windows' dated driver install is the same fact as the sessions'
+//! driver stamps and only sharpens the timing: it is never a second independent support.
+//!
 //! Wording law (Constitution 17, 25): a finding says what changed before the problem, never that it
 //! caused it. Certainty is a band, never a number.
 
@@ -21,6 +27,9 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::intelligence::{self, SessionRef};
+
+mod changes;
+use changes::{ChangeRead, Limit};
 
 // ---- Frozen constants (design A3 / B). A change re-runs the walk-forward fixture test. ----------
 /// A session is judgeable only if it is long enough, has enough readings and Compy measured enough of it.
@@ -139,6 +148,10 @@ pub(crate) struct SessionFacts {
     /// Which programs those were. Empty in recorded fixtures; filled from the live session.
     #[serde(default)]
     busy_names: Vec<String>,
+    /// Every program name seen starting during the session (lower case, no `.exe`), as the recorder kept
+    /// them. Used only to tell whether a program Windows says was installed also ran in a rough session.
+    #[serde(default)]
+    started_names: Vec<String>,
     #[serde(default)]
     ram_events: u32,
     /// 90th percentile of how busy everything except the game was, percent. Unknown before TG-context v2.
@@ -180,6 +193,10 @@ pub(crate) struct DiagnoseInputs {
     /// The setting-drift store exists but could not be read: said as an unknown, never as "no drift".
     #[serde(default)]
     drift_unread: bool,
+    /// What Windows recorded in the diagnosis window. Never part of a recorded fixture: the command
+    /// reads it, and tests build it by hand.
+    #[serde(skip)]
+    changes: ChangeRead,
 }
 
 // ---- Outputs: codes, ids and numbers. The UI owns every sentence. ----------------------------
@@ -354,6 +371,11 @@ pub(crate) struct Diagnosis {
     pub not_it: Vec<RuledOut>,
     /// What Compy could not see, as codes.
     pub unknowns: Vec<&'static str>,
+    /// What Compy could not see of Windows' own records, per kind of change (never "nothing changed").
+    pub limits: Vec<Limit>,
+    /// Things Compy looked at and found, which are listed under "What Compy checked" and are not
+    /// findings (security definition and app updates, installed programs, other drivers).
+    pub seen: Vec<RuledOut>,
     /// The newest of the game's normal sessions the problem was judged against.
     pub baseline: Option<SessionRef>,
     pub first_bad: Option<SessionRef>,
@@ -375,6 +397,8 @@ impl Diagnosis {
             findings: Vec::new(),
             not_it: Vec::new(),
             unknowns: Vec::new(),
+            limits: Vec::new(),
+            seen: Vec::new(),
             baseline: None,
             first_bad: None,
             why_first: None,
@@ -702,11 +726,18 @@ fn cap_finding(now: &SessionFacts, before: CapState) -> Finding {
 
 /// The Tauri edge. Reads the three stores it needs without writing to any (no ledger load, no
 /// set-aside of a damaged file) and calls no apply path. A store that exists but cannot be read is an
-/// error the card shows, never an empty history.
+/// error the card shows, never an empty history. Windows' own dated records (driver installs, updates,
+/// the game's Steam files, installed programs) are read once, off the UI thread, within
+/// `changes::CHANGES_BUDGET`; if they cannot be read in time the diagnosis stands with each kind Unknown.
 #[tauri::command]
-pub(crate) fn paramedic_diagnose(complaint: Complaint, game: Option<String>) -> Result<Diagnosis, String> {
-    let inp = read_inputs_from(&crate::compy_data_dir())?;
-    Ok(diagnose(&inp, complaint, game.as_deref()))
+pub(crate) async fn paramedic_diagnose(complaint: Complaint, game: Option<String>) -> Result<Diagnosis, String> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<Diagnosis, String> {
+        let inp = read_inputs_from(&crate::compy_data_dir())?;
+        let fetch = |t0, t1, exe: String| changes::read_real_changes(t0, t1, &exe);
+        Ok(changes::diagnose_with_changes(inp, complaint, game.as_deref(), changes::CHANGES_BUDGET, fetch))
+    })
+    .await
+    .map_err(|_| "the diagnosis stopped unexpectedly".to_string())?
 }
 
 /// What the diagnosis reads, from a data directory: sessions, identity checks and drift notices. A file
@@ -738,11 +769,19 @@ pub(crate) fn facts_from(s: &crate::sessions::SessionSummary) -> SessionFacts {
         .or_else(|| fp.map(|f| f.gpu_driver.clone()))
         .filter(|d| !d.trim().is_empty());
     let mut busy_names: Vec<String> = Vec::new();
+    let mut started_names: Vec<String> = Vec::new();
     let mut busy_starts = 0u32;
     let mut ram_events = 0u32;
     for e in &s.stutter_events {
         match e.kind.as_str() {
             "process-start" => {
+                let label = e.label.trim();
+                let label = label.strip_suffix(" starting").unwrap_or(label);
+                let name = label.to_ascii_lowercase();
+                let name = name.strip_suffix(".exe").unwrap_or(&name).to_string();
+                if !name.is_empty() && !started_names.contains(&name) {
+                    started_names.push(name);
+                }
                 if let Some(n) = busy_program(&e.label) {
                     busy_starts += 1;
                     if !busy_names.contains(&n) {
@@ -773,6 +812,7 @@ pub(crate) fn facts_from(s: &crate::sessions::SessionSummary) -> SessionFacts {
         compy_changes: s.compy_changes_active,
         busy_starts,
         busy_names,
+        started_names,
         ram_events,
         other_cpu_p90_pct: gs.and_then(|g| g.other_cpu).map(|o| f64::from(o.p90_pct_x10) / 10.0),
         cap: match crate::noise_floor::cap_read(s) {
@@ -804,6 +844,7 @@ fn inputs_from_parts(
             .collect(),
         sightings_unread: false,
         drift_unread: false,
+        changes: ChangeRead::NotRead,
     }
 }
 
@@ -925,9 +966,14 @@ struct Out {
     cands: Vec<Cand>,
     not_it: Vec<RuledOut>,
     unknowns: Vec<&'static str>,
+    seen: Vec<RuledOut>,
 }
 
 impl Out {
+    fn see(&mut self, id: &'static str, args: &[(&'static str, String)]) {
+        self.seen.push(RuledOut { id, args: args.iter().cloned().collect() });
+    }
+
     fn ruled_out(&mut self, id: &'static str, args: &[(&'static str, String)]) {
         self.not_it.push(RuledOut { id, args: args.iter().cloned().collect() });
     }
@@ -951,6 +997,10 @@ fn category(id: &str) -> usize {
         "compy-change",
         "setting-drift",
         "windows-build-change",
+        "game-files-change",
+        "windows-update",
+        "program-installed",
+        "other-driver-change",
     ];
     ORDER.iter().position(|x| *x == id).unwrap_or(ORDER.len())
 }
@@ -1039,9 +1089,15 @@ fn explain<'a>(
     detect_power_plan(&ctx, &mut out);
     detect_display(&ctx, &mut out);
     detect_windows(&ctx, &mut out);
-    for code in ["game-patch", "startup-programs", "overlays"] {
+    changes::detect_windows_update(&ctx, &mut out);
+    changes::detect_game_files(&ctx, &mut out);
+    changes::detect_programs(&ctx, &mut out);
+    // Last: it is a candidate only when nothing above explains the timing.
+    changes::detect_other_drivers(&ctx, &mut out);
+    for code in ["startup-programs", "overlays"] {
         out.unknown(code);
     }
+    d.limits = changes::limits(&ctx);
     if inp.drift_unread {
         out.unknown("drift-unreadable");
     }
@@ -1060,6 +1116,7 @@ fn explain<'a>(
         })
         .collect();
     d.not_it = out.not_it;
+    d.seen = out.seen;
     d.unknowns = out.unknowns;
     d.state = if d.findings.is_empty() {
         DiagnosisState::CantTell { why: CantTellWhy::NothingChanged }
@@ -1146,10 +1203,15 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
     let from = c.base.iter().rev().find_map(|s| nonblank(&s.gpu_driver));
     let (Some(from), Some(to)) = (from, nonblank(&c.first_bad.gpu_driver)) else {
         out.unknown("gpu-driver");
+        // The sessions say nothing about the driver, but Windows may have dated an install.
+        changes::windows_only_driver(c, out);
         return;
     };
     if !crate::hardware::driver_changed(from, to) {
-        out.ruled_out("gpu-driver-change", &[("driver", to.to_string())]);
+        let mut args = vec![("driver", to.to_string())];
+        args.extend(changes::driver_unchanged_args(c));
+        out.ruled_out("gpu-driver-change", &args);
+        changes::driver_same_stamp_note(c, out);
         return;
     }
     let on = |s: &SessionFacts, v: &str| nonblank(&s.gpu_driver).is_some_and(|x| crate::hardware::same_driver(x, v));
@@ -1175,14 +1237,16 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         .max()
         .unwrap_or(c.win_start);
     let rough_on_old = c.affected.iter().filter(|s| on(s, from)).count();
+    let first_rough_of = |o: &OtherGame| {
+        (0..o.sess.len()).find(|&j| {
+            o.judged[j].verdict == Verdict::Fired && o.sess[j].start().is_some_and(|t| t >= c.win_start) && on(o.sess[j], to)
+        })
+    };
     let x_others: Vec<&OtherGame> = c
         .others
         .iter()
         .filter(|o| {
-            let first_rough = (0..o.sess.len()).find(|&j| {
-                o.judged[j].verdict == Verdict::Fired && o.sess[j].start().is_some_and(|t| t >= c.win_start) && on(o.sess[j], to)
-            });
-            first_rough.is_some_and(|f| {
+            first_rough_of(o).is_some_and(|f| {
                 o.judged[..f].iter().all(|j| j.verdict != Verdict::Fired)
                     && o.judged[..f].iter().any(|j| j.verdict == Verdict::Normal)
                     // It must not have run normally on the new driver first: that is a game the change spared.
@@ -1192,6 +1256,19 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
             })
         })
         .collect();
+    // "Never before it" is said only if EVERY earlier session of that game was judged Normal. The first
+    // sessions of a game have nothing to be compared with yet (`NeedsMore`) but, measured well enough to
+    // be a baseline, they ARE the baseline: they count. An unjudged, thin, partly measured or
+    // frame-cap-changed earlier session leaves the sentence unsaid.
+    let never_before = x_others.iter().all(|o| {
+        first_rough_of(o).is_some_and(|f| {
+            (0..f).all(|j| match o.judged[j].verdict {
+                Verdict::Normal => true,
+                Verdict::NeedsMore(_) => o.sess[j].coverage() >= BASELINE_COVERAGE,
+                _ => false,
+            })
+        })
+    });
     let x_games: Vec<String> = x_others.iter().map(|o| o.name.clone()).collect();
     // Independent only if one of those games' rough sessions was measured quiet: none overlapping recorded
     // background activity, and every one with a load number. Otherwise the same busy PC may explain both.
@@ -1223,7 +1300,13 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         evidence.push(ev(EvidenceKind::Measured, "rough-on-old-driver", "sessions", true, &[("count", rough_on_old.to_string())]));
     }
     if !x_games.is_empty() {
-        evidence.push(ev(EvidenceKind::Measured, "cross-game", "sessions", false, &[("games", x_games.join(", "))]));
+        evidence.push(ev(
+            EvidenceKind::Measured,
+            "cross-game",
+            "sessions",
+            false,
+            &[("games", x_games.join(", ")), ("neverBefore", never_before.to_string())],
+        ));
         if !x_clean {
             evidence.push(ev(EvidenceKind::Unknown, "cross-game-confounded", "sessions", false, &[("games", x_games.join(", "))]));
         }
@@ -1247,7 +1330,11 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
             &[("date", p.started_at.clone()), ("count", partial_old.len().to_string())],
         ));
     }
-    evidence.push(ev(EvidenceKind::Unknown, "install-time-not-read", "snapshots", false, &[("seenAt", iso(first_new))]));
+    // Windows' own record of the install. It is the same fact as the sessions' stamps (it dates it), so it
+    // never adds an independent support: `d` stays the one support for "the driver changed".
+    let record = changes::driver_record(c, Some(to), first_new);
+    let (exact, after_rough) = (record.exact, record.after_rough);
+    evidence.push(record.evidence);
     out.cands.push(Cand {
         id: "gpu-driver-change",
         t: true,
@@ -1255,8 +1342,11 @@ fn detect_driver(c: &Ctx, out: &mut Out) {
         x: !x_games.is_empty(),
         confounded: !x_games.is_empty() && !x_clean,
         m: false,
-        c1: rough_on_old > 0 || !normal_new.is_empty(),
-        since: When::ObservedBetween { from: iso(last_old), to: iso(first_new) },
+        c1: rough_on_old > 0 || !normal_new.is_empty() || after_rough,
+        since: match exact {
+            Some(at) => When::Exact { at: iso(at) },
+            None => When::ObservedBetween { from: iso(last_old), to: iso(first_new) },
+        },
         fix: steps("gpu-driver-change", &[("from", from.to_string()), ("to", to.to_string())]),
         evidence,
     });

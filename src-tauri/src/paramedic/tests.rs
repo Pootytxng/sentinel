@@ -46,6 +46,7 @@ fn facts(at: &str, dur: u64, samples: u32, avg: f64, low1: f64) -> SessionFacts 
         compy_changes: None,
         busy_starts: 0,
         busy_names: Vec::new(),
+        started_names: Vec::new(),
         ram_events: 0,
         other_cpu_p90_pct: None,
         cap: CapState::Unknown,
@@ -184,7 +185,7 @@ fn the_unchanged_conditions_are_listed_as_ruled_out() {
     let mut got: Vec<&str> = d.not_it.iter().map(|n| n.id).collect();
     got.sort_unstable();
     assert_eq!(got, ["compy-change", "display-refresh-lower", "hardware-change", "power-plan-change", "windows-build-change"]);
-    for code in ["game-patch", "startup-programs", "overlays", "other-load"] {
+    for code in ["startup-programs", "overlays", "other-load"] {
         assert!(d.unknowns.contains(&code), "{code} is something Compy could not see");
     }
 }
@@ -234,6 +235,10 @@ fn finding_order_is_pinned() {
         "compy-change",
         "setting-drift",
         "windows-build-change",
+        "game-files-change",
+        "windows-update",
+        "program-installed",
+        "other-driver-change",
     ];
     for w in order.windows(2) {
         assert!(category(w[0]) < category(w[1]), "{} must rank before {}", w[0], w[1]);
@@ -354,7 +359,7 @@ fn nothing_changed_is_cant_tell_with_the_anomaly_still_reported() {
     assert!(d.findings.is_empty(), "no recorded change to list");
     let p = d.problem.as_ref().expect("the measured problem is still shown");
     assert!((p.before.ratio - 0.5).abs() < 1e-9 && (p.now.ratio - 0.3).abs() < 1e-9);
-    assert!(d.unknowns.contains(&"game-patch"), "and the honest gaps are listed");
+    assert!(d.limits.iter().any(|l| l.kind == "game-update" && l.code == "not-read"), "and the honest gaps are listed");
 }
 
 #[test]
@@ -809,7 +814,22 @@ fn print_live_diagnosis() {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| crate::compy_data_dir());
     let inp = read_inputs_from(&dir).expect("the live stores read");
-    let d = diagnose(&inp, Complaint::Unknown, None);
+    // The command's two halves, timed apart: the same read-only diagnosis without Windows' records, and with
+    // the real readers (Steam lookup, driver log, update log, installed programs) inside the 1.5 s budget.
+    let mut plain_ms = Vec::new();
+    let mut with_ms = Vec::new();
+    let mut d = diagnose(&inp, Complaint::Unknown, None);
+    for _ in 0..5 {
+        let t = std::time::Instant::now();
+        let _ = diagnose(&inp, Complaint::Unknown, None);
+        plain_ms.push(t.elapsed().as_millis());
+        let t = std::time::Instant::now();
+        d = changes::diagnose_with_changes(inp.clone(), Complaint::Unknown, None, changes::CHANGES_BUDGET, |a, b, g| {
+            changes::read_real_changes(a, b, &g)
+        });
+        with_ms.push(t.elapsed().as_millis());
+    }
+    eprintln!("TIMING plain_ms={plain_ms:?} with_readers_ms={with_ms:?}");
     println!("{}", serde_json::to_string_pretty(&d).expect("serialises"));
 }
 
@@ -1050,10 +1070,11 @@ fn the_wire_shape_is_what_the_card_reads() {
 #[test]
 fn the_engine_writes_nothing() {
     // F1 is read-only: no file writes, no apply path, no process spawn in this module's production code.
-    let src = include_str!("../paramedic.rs");
-    let production = src.split("#[cfg(test)]").next().unwrap_or(src);
-    for banned in ["std::fs", "File::create", "write(", "atomic_write", "Command::new", "apply_recommendation", "rollback_change", "set_startup_entry_enabled"] {
-        assert!(!production.contains(banned), "paramedic.rs must stay read-only, found {banned}");
+    for (name, src) in [("paramedic.rs", include_str!("../paramedic.rs")), ("paramedic/changes.rs", include_str!("changes.rs"))] {
+        let production = src.split("#[cfg(test)]").next().unwrap_or(src);
+        for banned in ["std::fs", "File::create", "write(", "atomic_write", "Command::new", "apply_recommendation", "rollback_change", "set_startup_entry_enabled"] {
+            assert!(!production.contains(banned), "{name} must stay read-only, found {banned}");
+        }
     }
 }
 
@@ -1149,4 +1170,479 @@ fn a_newest_game_that_is_only_partly_rough_does_not_hide_the_game_with_a_fired_s
     // Asked about h directly, the partial measure is said, never "nothing wrong".
     let h = diagnose(&inp, Complaint::Unknown, Some("h"));
     assert!(matches!(h.state, DiagnosisState::CantTell { why: CantTellWhy::PartialMeasure { looked_rough: true, .. } }), "{:?}", h.state);
+}
+
+// ==== F4b: what Windows recorded, from hand-built reports (no wevtutil, no registry, no Steam) ====
+mod windows_records {
+    use super::super::changes::{change_window, diagnose_with_changes, run_within, ChangeRead, GameSteam};
+    use super::*;
+    use crate::change_sources::{
+        ChangeEvent, ChangeKind, ChangeReport, ChangeTime, ChangeWhat, Gap, Note, PartialSource, Source, UnreadableReason,
+        UnreadableSource,
+    };
+    use std::time::Duration;
+
+    fn utc(s: &str) -> DateTime<Utc> {
+        ts(s).expect("a time")
+    }
+
+    fn event(kind: ChangeKind, at: &str, what: ChangeWhat, source: Source) -> ChangeEvent {
+        ChangeEvent { kind, when: ChangeTime::exact(utc(at)), what, source }
+    }
+
+    fn gpu(at: &str, from: &str, to: &str, changed: Option<bool>) -> ChangeEvent {
+        let what = ChangeWhat {
+            name: Some("Display".into()),
+            from_version: Some(from.into()),
+            to_version: Some(to.into()),
+            version_changed: changed,
+            detail: Some("display driver, package oem1.inf".into()),
+            ..ChangeWhat::default()
+        };
+        event(ChangeKind::GpuDriver, at, what, Source::DriverLog)
+    }
+
+    fn other_driver(at: &str, class: &str) -> ChangeEvent {
+        let what = ChangeWhat {
+            version_changed: Some(true),
+            to_version: Some("9.9".into()),
+            detail: Some(format!("{class} driver, package oem7.inf")),
+            ..ChangeWhat::default()
+        };
+        event(ChangeKind::OtherDriver, at, what, Source::DriverLog)
+    }
+
+    fn update(at: &str, kb: &str, class: &str) -> ChangeEvent {
+        let what = ChangeWhat { kb: Some(kb.into()), name: Some(format!("{kb} update")), detail: Some(class.into()), ..ChangeWhat::default() };
+        event(ChangeKind::WindowsUpdate, at, what, Source::WindowsUpdateLog)
+    }
+
+    fn game_files(at: &str) -> ChangeEvent {
+        let what = ChangeWhat { name: Some("G".into()), id: Some("42".into()), ..ChangeWhat::default() };
+        event(ChangeKind::GameUpdate, at, what, Source::SteamManifest)
+    }
+
+    fn program(day: &str, next: &str, name: &str) -> ChangeEvent {
+        ChangeEvent {
+            kind: ChangeKind::ProgramInstalled,
+            when: ChangeTime::day(utc(day), utc(next)),
+            what: ChangeWhat { name: Some(name.into()), ..ChangeWhat::default() },
+            source: Source::UninstallKeys,
+        }
+    }
+
+    /// Every source asked and read completely.
+    fn report(events: Vec<ChangeEvent>) -> ChangeReport {
+        ChangeReport {
+            window_start: utc("2026-10-04T10:00:00Z"),
+            window_end: utc("2026-10-09T10:10:00Z"),
+            asked: vec![Source::DriverLog, Source::WindowsUpdateLog, Source::UninstallKeys, Source::SteamManifest],
+            events_found: events,
+            unreadable: Vec::new(),
+            partial: Vec::new(),
+            coverage_gaps: Vec::new(),
+            notes: vec![(Source::UninstallKeys, Note::ProgramsWithoutDate(2)), (Source::SteamManifest, Note::SteamUpdateTimeIsFileChange)],
+            game_last_update: None,
+            undated_excluded: 0,
+        }
+    }
+
+    /// Four normal sessions on driver 1.0 (days 1 to 4), then a rough one on driver 2.0 on the ninth.
+    fn scenario() -> Vec<SessionFacts> {
+        let mut sess = steady_on_old("g", 10);
+        sess.push(rough_on_new("g", 10));
+        sess
+    }
+
+    fn with(sess: Vec<SessionFacts>, r: ChangeReport, steam: GameSteam) -> DiagnoseInputs {
+        let mut inp = inputs(sess);
+        inp.changes = ChangeRead::Report { report: Box::new(r), steam };
+        inp
+    }
+
+    fn found(sess: Vec<SessionFacts>, r: ChangeReport) -> Diagnosis {
+        diagnose(&with(sess, r, GameSteam::Found), Complaint::Slow, Some("g"))
+    }
+
+    fn finding<'a>(d: &'a Diagnosis, id: &str) -> &'a Finding {
+        d.findings.iter().find(|f| f.id == id).unwrap_or_else(|| panic!("{id} not listed: {:?}", ids(d)))
+    }
+
+    fn codes(f: &Finding) -> Vec<&'static str> {
+        f.evidence.iter().map(|e| e.code).collect()
+    }
+
+    fn limit_of<'a>(d: &'a Diagnosis, kind: &str) -> Vec<&'a str> {
+        d.limits.iter().filter(|l| l.kind == kind).map(|l| l.code).collect()
+    }
+
+    #[test]
+    fn the_exact_install_time_replaces_the_unread_line_and_is_not_a_second_support() {
+        let d = found(scenario(), report(vec![gpu("2026-10-06T12:00:00Z", "1.0", "2.0", Some(true))]));
+        let f = finding(&d, "gpu-driver-change");
+        assert_eq!(f.since_when, When::Exact { at: "2026-10-06T12:00:00Z".into() });
+        let c = codes(f);
+        assert!(c.contains(&"driver-changed"), "the session stamps stay: {c:?}");
+        assert!(c.contains(&"install-recorded") && !c.contains(&"install-time-not-read") && !c.contains(&"install-not-recorded"), "{c:?}");
+        let line = f.evidence.iter().find(|e| e.code == "install-recorded").expect("shown");
+        assert_eq!(line.kind, EvidenceKind::Known);
+        assert!(!line.against);
+        assert_eq!(line.args["when"], "2026-10-06T12:00:00Z");
+        assert_eq!(f.confidence, Certainty::Possible, "Windows dating the install is the same fact as the stamps");
+    }
+
+    #[test]
+    fn windows_dated_install_with_a_busy_other_game_stays_not_separable_on_the_owners_data() {
+        // The owner's real incident: the driver was bracketed between 05:12 and 16:54 on 2026-11-19. Give it
+        // an exact time in that bracket.
+        let mut inp = fixture();
+        let mut r = report(vec![gpu("2026-11-19T12:00:00Z", "32.0.32015.7029", "32.0.32029.2010", Some(true))]);
+        r.window_start = utc("2026-11-11T14:14:22Z");
+        r.window_end = utc("2026-11-20T04:00:00Z");
+        inp.changes = ChangeRead::Report { report: Box::new(r), steam: GameSteam::Found };
+        let d = diagnose(&inp, Complaint::Slow, Some(ROUGH_GAME));
+        let f = finding(&d, "gpu-driver-change");
+        assert_eq!(f.since_when, When::Exact { at: "2026-11-19T12:00:00Z".into() });
+        assert_eq!(f.confidence, Certainty::Possible, "driver and background load are not separable on this data");
+        assert!(f.in_play);
+        assert_eq!(d.why_first, Some("not-separable"));
+        assert!(codes(f).contains(&"cross-game-confounded"));
+    }
+
+    #[test]
+    fn a_complete_read_with_no_install_beside_differing_stamps_shows_both_and_raises_nothing() {
+        let d = found(scenario(), report(Vec::new()));
+        let f = finding(&d, "gpu-driver-change");
+        let c = codes(f);
+        assert!(c.contains(&"driver-changed") && c.contains(&"install-not-recorded"), "{c:?}");
+        assert!(!c.contains(&"install-recorded"));
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert!(matches!(f.since_when, When::ObservedBetween { .. }), "no exact time was invented");
+        // The same facts from a read that was only partly done say nothing about Windows' record.
+        let mut r = report(Vec::new());
+        r.partial.push(PartialSource { source: Source::DriverLog, gaps: vec![Gap::TimedOut], covered_from: None });
+        let d = found(scenario(), r);
+        let c = codes(finding(&d, "gpu-driver-change"));
+        assert!(c.contains(&"install-time-not-read") && !c.contains(&"install-not-recorded"), "{c:?}");
+        assert!(limit_of(&d, "driver").contains(&"partial-timed-out"));
+    }
+
+    #[test]
+    fn equal_stamps_and_a_complete_read_with_no_install_are_unchanged() {
+        let mut sess = steady_on_old("g", 10);
+        let mut rough = rough_on_new("g", 10);
+        rough.gpu_driver = Some("1.0".into());
+        sess.push(rough);
+        let d = found(sess.clone(), report(Vec::new()));
+        let n = d.not_it.iter().find(|n| n.id == "gpu-driver-change").expect("ruled out");
+        assert_eq!(n.args["windows"], "none");
+        // Same-version rows and rows with an unknown previous version are never a change.
+        let rows = vec![gpu("2026-10-06T12:00:00Z", "1.0", "1.0", Some(false)), gpu("2026-10-06T13:00:00Z", "", "1.0", None)];
+        let d = found(sess.clone(), report(rows));
+        assert!(d.not_it.iter().any(|n| n.id == "gpu-driver-change" && n.args.get("windows").map(String::as_str) == Some("none")));
+        assert!(d.findings.iter().all(|f| f.id != "gpu-driver-change"));
+        // An unread log says nothing about Windows.
+        let mut r = report(Vec::new());
+        r.unreadable.push(UnreadableSource { source: Source::DriverLog, reason: UnreadableReason::AccessDenied });
+        let d = found(sess, r);
+        let n = d.not_it.iter().find(|n| n.id == "gpu-driver-change").expect("the stamps are equal");
+        assert!(!n.args.contains_key("windows"));
+        assert!(limit_of(&d, "driver").contains(&"access-denied"));
+    }
+
+    #[test]
+    fn a_same_version_row_never_dates_a_change() {
+        let d = found(scenario(), report(vec![gpu("2026-10-06T12:00:00Z", "2.0", "2.0", Some(false))]));
+        let f = finding(&d, "gpu-driver-change");
+        assert!(!codes(f).contains(&"install-recorded"));
+        assert!(matches!(f.since_when, When::ObservedBetween { .. }));
+    }
+
+    #[test]
+    fn an_install_after_the_first_rough_session_is_evidence_against() {
+        // Windows says the version changed at 10:05 on the ninth, after the rough session began at 10:00.
+        let d = found(scenario(), report(vec![gpu("2026-10-09T10:05:00Z", "1.0", "2.0", Some(true))]));
+        let f = finding(&d, "gpu-driver-change");
+        let line = f.evidence.iter().find(|e| e.code == "install-after-rough").expect("shown");
+        assert!(line.against);
+        assert!(!f.in_play, "something is against it");
+        assert!(matches!(f.since_when, When::ObservedBetween { .. }), "a later install is not its time");
+    }
+
+    #[test]
+    fn with_no_driver_stamps_a_dated_install_is_a_possible_on_its_own() {
+        let sess: Vec<SessionFacts> = scenario()
+            .into_iter()
+            .map(|mut s| {
+                s.gpu_driver = None;
+                s
+            })
+            .collect();
+        let d = found(sess, report(vec![gpu("2026-10-06T12:00:00Z", "1.0", "2.0", Some(true))]));
+        let f = finding(&d, "gpu-driver-change");
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert_eq!(f.since_when, When::Exact { at: "2026-10-06T12:00:00Z".into() });
+        assert!(d.unknowns.contains(&"gpu-driver"), "the stamps are still unknown");
+    }
+
+    #[test]
+    fn a_quality_update_is_a_candidate_and_definitions_and_store_apps_are_only_counted() {
+        let ev = vec![
+            update("2026-10-07T03:00:00Z", "KB5001234", "quality"),
+            update("2026-10-08T01:00:00Z", "KB2267602", "definition"),
+            update("2026-10-08T02:00:00Z", "KB0000001", "definition"),
+            update("2026-10-08T03:00:00Z", "KB0000002", "store-app"),
+            update("2026-10-02T03:00:00Z", "KB0000003", "quality"), // before the last normal session ended
+        ];
+        let d = found(scenario(), report(ev));
+        let f = finding(&d, "windows-update");
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert_eq!(f.evidence.len(), 1, "only the one quality update in the period");
+        assert_eq!(f.evidence[0].kind, EvidenceKind::Known);
+        assert_eq!(f.evidence[0].args["kb"], "KB5001234");
+        assert_eq!(f.evidence[0].args["when"], "2026-10-07T03:00:00Z");
+        assert_eq!(f.since_when, When::Exact { at: "2026-10-07T03:00:00Z".into() });
+        match &f.fix {
+            Fix::Steps { code, args } => assert!(*code == "windows-update" && args["quality"] == "true" && args["kb"] == "KB5001234"),
+            other => panic!("steps only, never a one-click: {other:?}"),
+        }
+        let minor = d.seen.iter().find(|s| s.id == "updates-minor").expect("counted");
+        assert_eq!((minor.args["n"].as_str(), minor.args["m"].as_str()), ("2", "1"));
+        assert_eq!(d.findings.iter().filter(|f| f.id == "windows-update").count(), 1, "never one finding per definition update");
+        assert!(d.not_it.iter().all(|n| n.id != "windows-update"));
+    }
+
+    #[test]
+    fn only_definition_and_store_updates_are_never_a_finding_and_a_complete_none_is_unchanged() {
+        let d = found(scenario(), report(vec![update("2026-10-08T01:00:00Z", "KB2267602", "definition")]));
+        assert!(d.findings.iter().all(|f| f.id != "windows-update"));
+        assert!(d.not_it.iter().any(|n| n.id == "windows-update"), "no quality or feature update in the period");
+        let d = found(scenario(), report(Vec::new()));
+        assert!(d.not_it.iter().any(|n| n.id == "windows-update"));
+        // A quality update just OUTSIDE the period is not "none in the period".
+        let d = found(scenario(), report(vec![update("2026-10-09T10:05:00Z", "KB5009999", "quality")]));
+        assert!(d.not_it.iter().all(|n| n.id != "windows-update"));
+        assert!(d.findings.iter().all(|f| f.id != "windows-update"), "it came after the first rough session started");
+    }
+
+    #[test]
+    fn an_unreadable_windows_update_log_is_never_unchanged() {
+        let mut r = report(Vec::new());
+        r.unreadable.push(UnreadableSource { source: Source::WindowsUpdateLog, reason: UnreadableReason::ChannelNotFound });
+        let d = found(scenario(), r);
+        assert!(d.not_it.iter().all(|n| n.id != "windows-update"));
+        assert_eq!(limit_of(&d, "windows-update"), ["log-missing"]);
+    }
+
+    #[test]
+    fn game_files_changing_in_the_period_is_a_candidate_worded_as_files_not_a_patch() {
+        let d = diagnose(&with(scenario(), report(vec![game_files("2026-10-05T18:00:00Z")]), GameSteam::Found), Complaint::Slow, Some("g"));
+        let f = finding(&d, "game-files-change");
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert_eq!(f.since_when, When::Exact { at: "2026-10-05T18:00:00Z".into() });
+        assert_eq!(codes(f), ["files-changed"]);
+        assert_eq!(f.evidence[0].kind, EvidenceKind::Known);
+        assert!(matches!(&f.fix, Fix::Steps { code: "game-files-change", .. }));
+        // Steam's last change older than the period: unchanged. Newer than the period: nothing is claimed.
+        let mut r = report(Vec::new());
+        r.game_last_update = Some(game_files("2026-09-01T00:00:00Z"));
+        let d = found(scenario(), r);
+        let n = d.not_it.iter().find(|n| n.id == "game-files-change").expect("unchanged");
+        assert_eq!(n.args["since"], "2026-09-01T00:00:00Z");
+        let mut r = report(Vec::new());
+        r.game_last_update = Some(game_files("2026-10-09T12:00:00Z"));
+        let d = found(scenario(), r);
+        assert!(d.not_it.iter().all(|n| n.id != "game-files-change"), "a later change would hide one inside the period");
+    }
+
+    #[test]
+    fn a_game_that_is_not_in_steam_stays_in_what_compy_couldnt_see() {
+        let mut r = report(Vec::new());
+        r.asked.retain(|s| *s != Source::SteamManifest);
+        let d = diagnose(&with(scenario(), r, GameSteam::NotInSteam), Complaint::Slow, Some("g"));
+        assert_eq!(limit_of(&d, "game-update"), ["not-steam"]);
+        assert!(d.findings.iter().all(|f| f.id != "game-files-change") && d.not_it.iter().all(|n| n.id != "game-files-change"));
+        assert!(!d.unknowns.contains(&"game-patch"), "the per-kind status carries it now");
+        // A Steam that could not be read says that instead.
+        let mut r = report(Vec::new());
+        r.asked.retain(|s| *s != Source::SteamManifest);
+        let d = diagnose(&with(scenario(), r, GameSteam::Unreadable(UnreadableReason::SteamUnreadable)), Complaint::Slow, Some("g"));
+        assert_eq!(limit_of(&d, "game-update"), ["steam-unreadable"]);
+    }
+
+    #[test]
+    fn installed_programs_are_one_collapsed_line_and_a_candidate_only_if_they_also_ran_in_a_rough_session() {
+        let progs = vec![
+            program("2026-10-07T00:00:00Z", "2026-10-08T00:00:00Z", "Discord"),
+            program("2026-10-07T00:00:00Z", "2026-10-08T00:00:00Z", "Paint Tool"),
+            program("2026-10-08T00:00:00Z", "2026-10-09T00:00:00Z", "Zip Thing"),
+            program("2026-10-08T00:00:00Z", "2026-10-09T00:00:00Z", "Another One"),
+        ];
+        let d = found(scenario(), report(progs.clone()));
+        let s = d.seen.iter().find(|s| s.id == "programs-installed").expect("one line");
+        assert_eq!(s.args["count"], "4");
+        assert_eq!(s.args["names"], "Discord, Paint Tool, Another One", "up to three names");
+        assert_eq!(s.args["more"], "1");
+        assert_eq!(s.args["day"], "2026-10-07T00:00:00Z");
+        assert_eq!(d.seen.iter().filter(|s| s.id == "programs-installed").count(), 1);
+        assert!(d.findings.iter().all(|f| f.id != "program-installed"), "installed alone is not a cause");
+        assert!(d.limits.iter().any(|l| l.kind == "programs" && l.code == "no-install-date" && l.args["n"] == "2"), "the limit is always carried");
+        // The same program also started during the rough session.
+        let mut sess = scenario();
+        sess.last_mut().expect("rough").started_names = vec!["discord".into(), "steam".into()];
+        let d = found(sess, report(progs));
+        let f = finding(&d, "program-installed");
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert_eq!(f.evidence.len(), 1);
+        assert_eq!(f.evidence[0].args["name"], "Discord");
+        // "steam" must not match a program that merely contains it, and short names never match.
+        let mut sess = scenario();
+        sess.last_mut().expect("rough").started_names = vec!["tool".into(), "zip".into()];
+        let d = found(sess, report(vec![program("2026-10-07T00:00:00Z", "2026-10-08T00:00:00Z", "Paint Tool")]));
+        assert!(d.findings.iter().all(|f| f.id != "program-installed"));
+    }
+
+    #[test]
+    fn other_drivers_are_a_line_and_a_candidate_only_if_nothing_else_explains_the_timing() {
+        let ev = vec![other_driver("2026-10-06T12:00:00Z", "audio")];
+        let d = found(scenario_without_driver_change(), report(ev.clone()));
+        let f = finding(&d, "other-driver-change");
+        assert_eq!(f.confidence, Certainty::Possible);
+        assert!(d.seen.iter().any(|s| s.id == "other-drivers" && s.args["classes"] == "audio"));
+        // With another change that lines up, the audio driver is only the collapsed line.
+        let d = found(scenario(), report(ev));
+        assert!(d.findings.iter().all(|f| f.id != "other-driver-change"));
+        assert!(d.seen.iter().any(|s| s.id == "other-drivers"));
+    }
+
+    /// The driver stamp does not change: nothing else lines up with the timing.
+    fn scenario_without_driver_change() -> Vec<SessionFacts> {
+        scenario()
+            .into_iter()
+            .map(|mut s| {
+                s.gpu_driver = Some("1.0".into());
+                s
+            })
+            .collect()
+    }
+
+    #[test]
+    fn readers_that_could_not_read_leave_specific_lines_and_no_claim() {
+        let mut r = report(vec![update("2026-10-07T03:00:00Z", "KB5001234", "quality")]);
+        r.events_found.clear();
+        r.unreadable.push(UnreadableSource { source: Source::DriverLog, reason: UnreadableReason::AccessDenied });
+        r.unreadable.push(UnreadableSource { source: Source::WindowsUpdateLog, reason: UnreadableReason::TimedOutBeforeAnyRecord });
+        r.partial.push(PartialSource { source: Source::UninstallKeys, gaps: vec![Gap::RegistryKeysUnreadable(2)], covered_from: None });
+        r.asked.retain(|s| *s != Source::SteamManifest);
+        let d = diagnose(&with(scenario(), r, GameSteam::NotInSteam), Complaint::Slow, Some("g"));
+        assert_eq!(limit_of(&d, "driver"), ["access-denied"]);
+        assert_eq!(limit_of(&d, "windows-update"), ["timed-out"]);
+        assert_eq!(limit_of(&d, "game-update"), ["not-steam"]);
+        assert!(limit_of(&d, "programs").contains(&"partial-registry") && limit_of(&d, "programs").contains(&"no-install-date"));
+        assert!(d.not_it.iter().all(|n| n.id != "windows-update"));
+        assert!(d.seen.iter().all(|s| s.id != "programs-none"), "a partial read never says none");
+        assert!(codes(finding(&d, "gpu-driver-change")).contains(&"install-time-not-read"));
+        assert_eq!(d.state, DiagnosisState::Found, "the card still renders");
+    }
+
+    #[test]
+    fn the_diagnosis_without_a_report_lists_every_kind_as_not_read_and_nothing_else_changes() {
+        let plain = diagnose(&inputs(scenario()), Complaint::Slow, Some("g"));
+        let kinds: Vec<&str> = plain.limits.iter().map(|l| l.kind).collect();
+        assert_eq!(kinds, ["driver", "windows-update", "game-update", "programs"]);
+        assert!(plain.limits.iter().all(|l| l.code == "not-read"));
+        assert!(plain.seen.is_empty());
+        assert_eq!(ids(&plain), ["gpu-driver-change"]);
+    }
+
+    #[test]
+    fn the_never_before_sentence_needs_every_earlier_session_judged_normal() {
+        let build = |thin_earlier: bool| {
+            let mut sess = steady_on_old("g", 10);
+            sess.extend(steady_on_old("h", 12));
+            if thin_earlier {
+                let mut thin = named(facts("2026-10-02T15:00:00Z", 100, 80, 100.0, 50.0), "h");
+                thin.gpu_driver = Some("1.0".into());
+                sess.push(thin);
+            }
+            sess.push(rough_on_new("g", 10));
+            sess.push(rough_on_new("h", 12));
+            diagnose(&inputs(sess), Complaint::Slow, Some("g"))
+        };
+        let cross = |d: &Diagnosis| {
+            finding(d, "gpu-driver-change").evidence.iter().find(|e| e.code == "cross-game").expect("listed").args["neverBefore"].clone()
+        };
+        assert_eq!(cross(&build(false)), "true", "every earlier session of the other game was normal");
+        assert_eq!(cross(&build(true)), "false", "one earlier session was only thinly measured");
+    }
+
+    #[test]
+    fn the_readers_window_is_the_last_normal_start_to_the_newest_affected_end() {
+        let d = diagnose(&inputs(scenario()), Complaint::Slow, Some("g"));
+        let (t0, t1) = change_window(&d).expect("a window");
+        assert_eq!(t0, utc("2026-10-04T10:00:00Z"));
+        assert_eq!(t1, utc("2026-10-09T10:10:00Z"));
+        assert!(change_window(&diagnose(&inputs(steady(5)), Complaint::Slow, Some("g"))).is_none(), "nothing to explain, nothing to read");
+    }
+
+    #[test]
+    fn the_command_path_hands_the_readers_the_window_and_the_game_and_uses_what_they_return() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let d = diagnose_with_changes(inputs(scenario()), Complaint::Slow, Some("g"), Duration::from_secs(2), move |a, b, g| {
+            tx.send((a, b, g)).expect("sent");
+            ChangeRead::Report {
+                report: Box::new(report(vec![gpu("2026-10-06T12:00:00Z", "1.0", "2.0", Some(true))])),
+                steam: GameSteam::Found,
+            }
+        });
+        let (a, b, g) = rx.recv().expect("the readers were asked");
+        assert_eq!((a, b, g.as_str()), (utc("2026-10-04T10:00:00Z"), utc("2026-10-09T10:10:00Z"), "g"));
+        assert_eq!(finding(&d, "gpu-driver-change").since_when, When::Exact { at: "2026-10-06T12:00:00Z".into() });
+        // With no game named the first pass picks it and the readers are asked about that one.
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _ = diagnose_with_changes(fixture(), Complaint::Unknown, None, Duration::from_secs(2), move |_, _, g| {
+            tx.send(g).expect("sent");
+            ChangeRead::NotRead
+        });
+        assert_eq!(rx.recv().expect("asked"), ROUGH_GAME);
+        // Nothing to explain: the readers are never started.
+        let (tx, rx) = std::sync::mpsc::channel::<String>();
+        let d = diagnose_with_changes(inputs(steady(5)), Complaint::Slow, Some("g"), Duration::from_secs(2), move |_, _, g| {
+            let _ = tx.send(g);
+            ChangeRead::NotRead
+        });
+        assert!(rx.try_recv().is_err() && d.limits.is_empty());
+    }
+
+    #[test]
+    fn readers_that_run_long_or_die_leave_every_kind_unknown_never_an_error_or_nothing_changed() {
+        let plain = diagnose(&fixture(), Complaint::Slow, Some(ROUGH_GAME));
+        let slow = diagnose_with_changes(fixture(), Complaint::Slow, Some(ROUGH_GAME), Duration::from_millis(60), |_, _, _| {
+            std::thread::sleep(Duration::from_millis(600));
+            ChangeRead::NotRead
+        });
+        assert!(slow.limits.iter().all(|l| l.code == "took-too-long") && slow.limits.len() == 4, "{:?}", slow.limits);
+        assert_eq!(ids(&slow), ids(&plain), "the diagnosis stands without them");
+        assert!(slow.not_it.iter().all(|n| n.id != "windows-update"));
+        let dead = diagnose_with_changes(fixture(), Complaint::Slow, Some(ROUGH_GAME), Duration::from_secs(2), |_, _, _| panic!("the reader died"));
+        assert!(dead.limits.iter().all(|l| l.code == "reader-failed") && dead.limits.len() == 4);
+        assert_eq!(dead.state, DiagnosisState::Found);
+        // The wait itself is bounded by the budget.
+        let started = std::time::Instant::now();
+        let r = run_within(Duration::from_millis(50), || {
+            std::thread::sleep(Duration::from_millis(500));
+            ChangeRead::NotRead
+        });
+        assert!(matches!(r, ChangeRead::Unavailable("took-too-long")) && started.elapsed() < Duration::from_millis(400));
+    }
+
+    #[test]
+    fn the_wire_shape_carries_limits_and_seen_lines() {
+        let d = found(scenario(), report(vec![update("2026-10-08T01:00:00Z", "KB2267602", "definition")]));
+        let v = serde_json::to_value(&d).expect("serialises");
+        assert_eq!(v["limits"][0]["kind"], "driver");
+        assert!(v["limits"][0]["code"].is_string() && v["limits"][0]["args"].is_object());
+        assert_eq!(v["seen"][0]["id"], "updates-minor");
+        assert_eq!(v["seen"][0]["args"]["n"], "1");
+    }
 }

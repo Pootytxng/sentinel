@@ -56,6 +56,18 @@
     },
     "frameCapChange": {
       "what": "你的帧率上限不一样了"
+    },
+    "windowsUpdate": {
+      "what": "Windows 安装了一个更新"
+    },
+    "gameFiles": {
+      "what": "{{game}} 的文件在 {{when}} 发生了变化"
+    },
+    "programInstalled": {
+      "what": "这段时间内安装的一个程序，也在卡顿的那几次游戏中运行过"
+    },
+    "otherDriver": {
+      "what": "显卡以外的某个驱动更新了"
     }
   },
   "since": {
@@ -96,8 +108,19 @@
     "normalOnNewDriver_one": "有 {{count}} 次游戏在新驱动下运行正常（{{date}}）。",
     "normalOnNewDriver_other": "有 {{count}} 次游戏在新驱动下运行正常（最近一次在 {{date}}）。",
     "partialRoughOnOldDriver": "有一次只测量了一部分的游戏（{{date}}）用的是旧驱动，看起来也很卡。",
-    "crossGameConfounded": "{{games}} 卡顿的那几次游戏与繁忙的程序运行时间重叠，或没有占用率数据，所以不能单凭这一点指向显卡驱动。",
-    "capChanged": "帧率上限从 {{from}} 变成了 {{to}}。"
+    "crossGameConfounded": "{{games}} 卡顿的那几次游戏期间有其他程序启动，或没有占用率数据，所以不能单凭这一点指向显卡驱动。",
+    "capChanged": "帧率上限从 {{from}} 变成了 {{to}}。",
+    "installRecorded": "Windows 记录了驱动的安装时间：{{when}}。",
+    "installNotRecorded": "Windows 没有这段时间内显卡驱动安装的记录，但 Compy 看到的驱动版本确实变了（它在 {{when}} 看到了新版本）。",
+    "installAfterRough": "Windows 记录的一次显卡驱动安装发生在 {{when}}，那时第一次卡顿的游戏已经开始了。",
+    "crossGameAfter": "{{games}} 卡顿的那几次游戏也出现在更新之后。",
+    "updateInstalled": "Windows 在 {{when}} 安装了 {{kb}}。",
+    "updateMore_one": "同一时期还安装了 {{count}} 个更新。",
+    "updateMore_other": "同一时期还安装了 {{count}} 个更新。",
+    "filesChanged": "Steam 显示 {{game}} 的文件在 {{when}} 发生了变化。这可能是更新、文件校验或新增内容。",
+    "installedAndStarted": "{{name}} 在 {{day}} 安装，并且在卡顿的那几次游戏中也启动过。",
+    "otherDriverInstalled_one": "Windows 记录了 {{count}} 次{{classes}}驱动安装，时间是 {{when}}；Compy 找到的其他内容都对不上这个时间。",
+    "otherDriverInstalled_other": "Windows 记录了 {{count}} 次{{classes}}驱动安装，最早在 {{when}}；Compy 找到的其他内容都对不上这个时间。"
   },
   "fix": {
     "title": "如何解决",
@@ -129,6 +152,20 @@
     "frameCapChange": {
       "step1": "把游戏里或显卡设置里的帧率上限改回原来的值（{{from}}），或者保持现在的设置。",
       "step2": "再玩几次 {{game}}。Compy 只在相同条件下对比，需要 3 次使用新设置的正常游戏记录。"
+    },
+    "windowsUpdate": {
+      "step1": "打开“设置”，进入“Windows 更新”，再打开“更新历史记录”，查看安装了什么、什么时候安装的。",
+      "stepUninstall": "如果你想测试一下，“更新历史记录”里有“卸载更新”。你可以在那里卸载 {{kb}} 并重启。这由你决定，Compy 不会替你操作。",
+      "step2": "玩一次 {{game}}，再按一次“出问题了”。"
+    },
+    "gameFiles": {
+      "step1": "查看 {{game}} 的更新说明，看看那个日期前后改了什么。",
+      "step2": "在 Steam 中右键点击 {{game}}，打开“属性”，进入“已安装文件”，选择“验证游戏文件的完整性”。",
+      "step3": "玩一次 {{game}}，再按一次“出问题了”。"
+    },
+    "programInstalled": {
+      "step1": "玩游戏时请关闭 {{names}}，如果不需要它，也可以卸载。",
+      "step2": "玩一次 {{game}}，再按一次“出问题了”。"
     }
   },
   "card": {
@@ -156,10 +193,13 @@
     "powerPlanChange": "用于对比的两次游戏的电源计划：相同。",
     "displayRefreshLower": "屏幕刷新率：仍是 {{hz}} Hz。",
     "windowsBuildChange": "Windows：仍是 {{build}} 版本。",
-    "memoryAsFull": "内存：和你正常游戏时一样满（最高用到 {{peakGb}} GB，共 {{totalGb}} GB；正常游戏时最高 {{basePeakGb}} GB）。"
+    "memoryAsFull": "内存：和你正常游戏时一样满（最高用到 {{peakGb}} GB，共 {{totalGb}} GB；正常游戏时最高 {{basePeakGb}} GB）。",
+    "windowsUpdate": "Windows：这段时间内没有质量更新或功能更新。",
+    "gameFiles": "{{game}} 的文件：自 {{when}} 起没有变化。",
+    "gpuDriverNoInstall": "显卡驱动：仍是 {{driver}}。Windows 记录显示这段时间内没有安装显卡驱动。",
+    "seen": "还看了："
   },
   "unknown": {
-    "gamePatch": "{{game}} 是否更新过",
     "startupPrograms": "哪些程序随 Windows 启动，与之前相比",
     "overlays": "哪些悬浮窗或录制工具在运行",
     "otherLoad": "你玩游戏时电脑其余部分有多忙",
@@ -204,5 +244,57 @@
     "none": "无上限",
     "unknown": "未读取到",
     "at": "每秒 {{fps}} 帧"
+  },
+  "seen": {
+    "updatesMinor": "{{n}} 个安全定义更新和 {{m}} 个应用更新，Compy 不会把它们当作可能的原因。",
+    "programsInstalled_one": "{{day}} 安装了 {{count}} 个程序：{{names}}。",
+    "programsInstalled_other": "{{day}} 安装了 {{count}} 个程序：{{names}}。",
+    "programsInstalledMore": "{{day}} 安装了 {{count}} 个程序：{{names}}，另外还有 {{more}} 个。",
+    "programsNone": "这段时间内没有安装带安装日期记录的程序。",
+    "otherDrivers_one": "这段时间内安装了 {{count}} 个其他驱动（{{classes}}）。",
+    "otherDrivers_other": "这段时间内安装了 {{count}} 个其他驱动（{{classes}}）。",
+    "driverInstallSameStamp": "Windows 记录的一次显卡驱动安装发生在 {{when}}，但你这几次游戏记录的驱动版本没有变化。",
+    "dayRange": "{{a}} 至 {{b}}"
+  },
+  "limit": {
+    "cantSee": "Compy 看不到{{what}}：{{why}}。",
+    "partial": "Compy 只看到了{{what}}的一部分：{{why}}。",
+    "notSteam": "Compy 在能找到的 Steam 游戏库里没有找到 {{game}}，所以看不到它是什么时候更新的。",
+    "classes": "Compy 只读取显卡、音频、网络和芯片组驱动的安装记录，不包括其他驱动。",
+    "noInstallDate": "Compy 看不到应用商店里的应用，也看不到没有记录安装日期的程序（这里有 {{n}} 个）。",
+    "what": {
+      "driver": "驱动是什么时候安装的",
+      "windowsUpdate": "安装了哪些 Windows 更新",
+      "gameUpdate": "{{game}} 是什么时候更新的",
+      "programs": "安装了哪些程序"
+    },
+    "why": {
+      "accessDenied": "Windows 需要管理员权限才能显示那份日志",
+      "logEmpty": "那份 Windows 日志是空的，或已被关闭",
+      "logMissing": "这台电脑上没有这份 Windows 日志",
+      "readFailed": "Windows 的事件日志工具没有运行起来",
+      "timedOut": "读取花的时间太长",
+      "recordsUnreadable": "Windows 返回了 {{n}} 条 Compy 读不懂的记录",
+      "registry": "无法打开已安装程序的列表",
+      "steamUnreadable": "无法读取 Steam 的文件",
+      "steamNoRecord": "Steam 里没有这款游戏的记录",
+      "steamNoTime": "Steam 的记录里没有更新时间",
+      "notRead": "这次回答中 Compy 没有去查",
+      "tookTooLong": "读取花的时间太长，Compy 没有等它",
+      "noWindow": "没有可供查看的时间段",
+      "readerFailed": "读取程序意外停止了",
+      "partialTimedOut": "读取超时，只读到了最新的记录",
+      "partialRowCap": "日志里的记录比 Compy 读取的多，更早的记录没有读到",
+      "partialUnparsed": "有 {{n}} 条记录读不了",
+      "partialOutputCapped": "日志太长，没有读完",
+      "partialRegistry": "有 {{n}} 个注册表项无法打开",
+      "partialSteamLibraries": "有 {{n}} 个 Steam 游戏库文件夹无法读取",
+      "partialCoverage": "Windows 的日志只能追溯到 {{from}}"
+    }
+  },
+  "driverClass": {
+    "audio": "音频",
+    "network": "网络",
+    "chipset": "芯片组"
   }
 }

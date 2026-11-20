@@ -56,6 +56,18 @@
     },
     "frameCapChange": {
       "what": "Your frame cap was different"
+    },
+    "windowsUpdate": {
+      "what": "Windows installed an update"
+    },
+    "gameFiles": {
+      "what": "{{game}}'s files changed on {{when}}"
+    },
+    "programInstalled": {
+      "what": "A program installed in this period also ran in the rough sessions"
+    },
+    "otherDriver": {
+      "what": "A driver other than graphics was updated"
     }
   },
   "since": {
@@ -96,8 +108,19 @@
     "normalOnNewDriver_one": "{{count}} session ran normally on the new driver (on {{date}}).",
     "normalOnNewDriver_other": "{{count}} sessions ran normally on the new driver (the latest on {{date}}).",
     "partialRoughOnOldDriver": "A partly measured session on {{date}}, on the old driver, also looked rough.",
-    "crossGameConfounded": "{{games}}'s rough sessions overlap busy programs or have no load numbers, so this can't point to the driver alone.",
-    "capChanged": "The frame cap went from {{from}} to {{to}}."
+    "crossGameConfounded": "{{games}}'s rough sessions had other programs starting during them, or have no load numbers, so this can't point to the driver alone.",
+    "capChanged": "The frame cap went from {{from}} to {{to}}.",
+    "installRecorded": "Windows recorded the driver install on {{when}}.",
+    "installNotRecorded": "Windows has no record of a graphics driver install in this period, though the driver version Compy saw changed (it saw the new version on {{when}}).",
+    "installAfterRough": "Windows recorded a graphics driver install on {{when}}, after the first rough session had started.",
+    "crossGameAfter": "{{games}}'s rough sessions also came after the update.",
+    "updateInstalled": "Windows installed {{kb}} on {{when}}.",
+    "updateMore_one": "{{count}} more update was installed in the same period.",
+    "updateMore_other": "{{count}} more updates were installed in the same period.",
+    "filesChanged": "Steam says {{game}}'s files changed on {{when}}. That can be an update, a file verification or added content.",
+    "installedAndStarted": "{{name}} was installed on {{day}} and also started during the rough sessions.",
+    "otherDriverInstalled_one": "Windows recorded {{count}} {{classes}} driver install on {{when}}, and nothing else Compy found lines up with the timing.",
+    "otherDriverInstalled_other": "Windows recorded {{count}} {{classes}} driver installs, the first on {{when}}, and nothing else Compy found lines up with the timing."
   },
   "fix": {
     "title": "How to fix it",
@@ -129,6 +152,20 @@
     "frameCapChange": {
       "step1": "Set the frame cap in the game or in your graphics settings back to what it was ({{from}}), or leave it as it is.",
       "step2": "Play {{game}} a few times. Compy only compares like with like, and needs 3 normal sessions with the new setting."
+    },
+    "windowsUpdate": {
+      "step1": "Open Settings, then Windows Update, then Update history to see what was installed and when.",
+      "stepUninstall": "If you want to test it, Update history has \"Uninstall updates\". You can remove {{kb}} there and restart. That's your choice; Compy won't do it for you.",
+      "step2": "Play {{game}} once, then press Something's wrong again."
+    },
+    "gameFiles": {
+      "step1": "Check {{game}}'s patch notes for what changed around that date.",
+      "step2": "In Steam, right-click {{game}}, open Properties, then Installed Files, and choose Verify integrity of game files.",
+      "step3": "Play {{game}} once, then press Something's wrong again."
+    },
+    "programInstalled": {
+      "step1": "Close {{names}} while you play, or uninstall it if you don't need it.",
+      "step2": "Play {{game}} once, then press Something's wrong again."
     }
   },
   "card": {
@@ -156,10 +193,13 @@
     "powerPlanChange": "Power plan on the two sessions compared: the same.",
     "displayRefreshLower": "Screen refresh rate: still {{hz}} Hz.",
     "windowsBuildChange": "Windows: still build {{build}}.",
-    "memoryAsFull": "Memory: as full as in your normal sessions (peaked {{peakGb}} of {{totalGb}} GB; normal sessions peaked {{basePeakGb}} GB)."
+    "memoryAsFull": "Memory: as full as in your normal sessions (peaked {{peakGb}} of {{totalGb}} GB; normal sessions peaked {{basePeakGb}} GB).",
+    "windowsUpdate": "Windows: no quality or feature update in this period.",
+    "gameFiles": "{{game}}'s files: unchanged since {{when}}.",
+    "gpuDriverNoInstall": "Graphics driver: still {{driver}}. Windows recorded no graphics driver install in this period.",
+    "seen": "Also looked at:"
   },
   "unknown": {
-    "gamePatch": "Whether {{game}} was updated",
     "startupPrograms": "Which programs start with Windows, compared with before",
     "overlays": "Which overlays or recorders were running",
     "otherLoad": "How busy the rest of your PC was while you played",
@@ -204,5 +244,57 @@
     "none": "no cap",
     "unknown": "not read",
     "at": "{{fps}} fps"
+  },
+  "seen": {
+    "updatesMinor": "{{n}} security definition and {{m}} app updates, which Compy doesn't treat as likely causes.",
+    "programsInstalled_one": "{{count}} program was installed on {{day}}: {{names}}.",
+    "programsInstalled_other": "{{count}} programs were installed on {{day}}: {{names}}.",
+    "programsInstalledMore": "{{count}} programs were installed on {{day}}: {{names}} and {{more}} more.",
+    "programsNone": "No program with a recorded install date was installed in this period.",
+    "otherDrivers_one": "{{count}} other driver was installed in this period ({{classes}}).",
+    "otherDrivers_other": "{{count}} other drivers were installed in this period ({{classes}}).",
+    "driverInstallSameStamp": "Windows recorded a graphics driver install on {{when}}, but the driver version on your sessions didn't change.",
+    "dayRange": "{{a}} to {{b}}"
+  },
+  "limit": {
+    "cantSee": "Compy couldn't see {{what}}: {{why}}.",
+    "partial": "Compy saw only part of {{what}}: {{why}}.",
+    "notSteam": "{{game}} isn't in a Steam library Compy could find, so it can't see when it was updated.",
+    "classes": "Compy reads graphics, audio, network and chipset driver installs only, not other drivers.",
+    "noInstallDate": "Compy can't see Store apps, or programs that don't record an install date ({{n}} here).",
+    "what": {
+      "driver": "when drivers were installed",
+      "windowsUpdate": "which Windows updates were installed",
+      "gameUpdate": "when {{game}} was updated",
+      "programs": "which programs were installed"
+    },
+    "why": {
+      "accessDenied": "Windows needs administrator rights to show that log",
+      "logEmpty": "that Windows log is empty or switched off",
+      "logMissing": "this PC has no such Windows log",
+      "readFailed": "Windows' event-log tool didn't run",
+      "timedOut": "reading it took too long",
+      "recordsUnreadable": "Windows returned {{n}} records Compy couldn't read",
+      "registry": "the list of installed programs couldn't be opened",
+      "steamUnreadable": "Steam's files couldn't be read",
+      "steamNoRecord": "Steam has no record of this game",
+      "steamNoTime": "Steam's record has no update time",
+      "notRead": "Compy didn't look it up for this answer",
+      "tookTooLong": "reading took too long, so Compy went on without it",
+      "noWindow": "there was no period to look at",
+      "readerFailed": "the reader stopped unexpectedly",
+      "partialTimedOut": "reading ran out of time, so only the newest records were read",
+      "partialRowCap": "the log holds more records than Compy reads, so older ones are missing",
+      "partialUnparsed": "{{n}} records couldn't be read",
+      "partialOutputCapped": "the log was too long to read in full",
+      "partialRegistry": "{{n}} registry entries couldn't be opened",
+      "partialSteamLibraries": "{{n}} Steam library folders couldn't be read",
+      "partialCoverage": "Windows' log only goes back to {{from}}"
+    }
+  },
+  "driverClass": {
+    "audio": "audio",
+    "network": "network",
+    "chipset": "chipset"
   }
 }

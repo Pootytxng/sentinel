@@ -4,7 +4,7 @@ mod actions;
 mod amd_freesync; // AMD FreeSync (VRR) on/off read via hand-written ADLX display FFI.
 mod atomic_write; // Whole-file byte replacement for SECONDARY on-disk state (benchmark/comparison/readiness/drift JSON, plus the license token's exact plain-text bytes — the one caller here that is not JSON): a save interrupted part-way leaves the previous complete file rather than a truncated one. NOT power-loss durability, NOT a lock, NOT a transaction — and deliberately NOT used by the Trust Ledger or the signed remote rules, which carry their own rules.
 mod blackbox; // Black Box v1 (Paramedic Mode) — READ-ONLY crash/freeze evidence reader (Event Log + last-vitals overlay). Zero causal claims, zero mutation.
-mod change_sources; // Paramedic F4 - READ-ONLY dated change readers (driver installs, Windows Update, Steam game update, installed programs); no command yet, no network, no writes, no elevation.
+mod change_sources; // Paramedic F4 - READ-ONLY dated change readers (driver installs, Windows Update, Steam game update, installed programs); used only by paramedic::changes (F4b), no command of its own, no network, no writes, no elevation.
 mod benchmark; // Measured-efficacy engine — WIRED (Benchmark tab: run/baseline/efficacy). Absolute-score normalization still PLACEHOLDER (delta is the honest signal).
 mod benchmark_verdict; // [A] verdict engine (bootstrap CI, Keep/Revert/Inconclusive) — WIRED: powers the trial verdict + scoreboard awards.
 mod benchmark_scoreboard; // [B] scoreboard — WIRED (Score card + persisted ledger; Keep-only awards, firewalled). P4 cohort/network still unbuilt.

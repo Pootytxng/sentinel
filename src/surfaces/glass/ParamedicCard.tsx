@@ -11,6 +11,7 @@ import type {
   ParamedicEvidence,
   ParamedicFinding,
   ParamedicFix,
+  ParamedicLimit,
   ParamedicRuledOut,
   ParamedicWhen,
 } from "../../types";
@@ -52,18 +53,41 @@ function whatText(id: string, t: T): string | null {
       return t("paramedic.finding.displayRefreshLower.what");
     case "windows-build-change":
       return t("paramedic.finding.windowsBuildChange.what");
+    case "windows-update":
+      return t("paramedic.finding.windowsUpdate.what");
+    case "program-installed":
+      return t("paramedic.finding.programInstalled.what");
+    case "other-driver-change":
+      return t("paramedic.finding.otherDriver.what");
     default:
       return null;
   }
 }
 
 /** A finding's heading. A setting that drifted is named for what the records say: Compy-applied only when every notice is. */
-function findingTitle(f: ParamedicFinding, t: T): string | null {
+function findingTitle(f: ParamedicFinding, { t, dates, game }: Ctx): string | null {
   if (f.id === "setting-drift") {
     const drift = f.evidence.filter((e) => e.code === "drift-noticed");
     if (drift.length > 0 && drift.every((e) => e.args.check === "applied-changes")) return t("paramedic.finding.settingDrift.applied");
   }
+  // Steam's time moves on an update, a file verification or added content: the heading says only that the files changed.
+  if (f.id === "game-files-change" && f.since_when.kind === "exact") {
+    return t("paramedic.finding.gameFiles.what", { game, when: dates.day(f.since_when.at) });
+  }
   return whatText(f.id, t);
+}
+
+/** The engine's driver class words ("audio", "network", "chipset/system"), in the card's language. */
+function driverClasses(list: string, t: T): string {
+  return list
+    .split(", ")
+    .map((c) => {
+      if (c === "audio") return t("paramedic.driverClass.audio");
+      if (c === "network") return t("paramedic.driverClass.network");
+      if (c.startsWith("chipset")) return t("paramedic.driverClass.chipset");
+      return c;
+    })
+    .join(", ");
 }
 
 function sinceText(w: ParamedicWhen, { t, dates }: Ctx): string | null {
@@ -87,7 +111,30 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
     case "sessions-split":
       return t("paramedic.evidence.sessionsSplit", { game, date: dates.day(a.baselineAt), count: Number(a.count) });
     case "cross-game":
-      return t("paramedic.evidence.crossGame", { games: a.games });
+      // "Never before it" only when every earlier session of that game ran normally.
+      return a.neverBefore === "true"
+        ? t("paramedic.evidence.crossGame", { games: a.games })
+        : t("paramedic.evidence.crossGameAfter", { games: a.games });
+    case "install-recorded":
+      return t("paramedic.evidence.installRecorded", { when: dates.dayTime(a.when) });
+    case "install-not-recorded":
+      return t("paramedic.evidence.installNotRecorded", { when: dates.dayTime(a.seenAt) });
+    case "install-after-rough":
+      return t("paramedic.evidence.installAfterRough", { when: dates.dayTime(a.when) });
+    case "update-installed":
+      return t("paramedic.evidence.updateInstalled", { kb: a.kb, when: dates.dayTime(a.when) });
+    case "update-more":
+      return t("paramedic.evidence.updateMore", { count: Number(a.count) });
+    case "files-changed":
+      return t("paramedic.evidence.filesChanged", { game, when: dates.dayTime(a.when) });
+    case "installed-and-started":
+      return t("paramedic.evidence.installedAndStarted", { name: a.name, day: dates.day(a.day) });
+    case "other-driver-installed":
+      return t("paramedic.evidence.otherDriverInstalled", {
+        count: Number(a.count),
+        classes: driverClasses(a.classes, t),
+        when: dates.dayTime(a.when),
+      });
     case "install-time-not-read":
       return t("paramedic.evidence.installTimeNotRead", { when: dates.dayTime(a.seenAt) });
     case "rough-on-old-driver":
@@ -172,16 +219,38 @@ function stepLines(fix: ParamedicFix, { t, game }: Ctx): string[] {
       return [t("paramedic.fix.settingDrift.step1"), t("paramedic.fix.settingDrift.step2", { game })];
     case "compy-change":
       return [t("paramedic.fix.compyChange.step1"), t("paramedic.fix.compyChange.step2", { game })];
+    case "windows-update":
+      // Uninstalling is the owner's choice in Settings, offered for a quality update only. There is no button.
+      return present([
+        t("paramedic.fix.windowsUpdate.step1"),
+        a.quality === "true" && a.kb ? t("paramedic.fix.windowsUpdate.stepUninstall", { kb: a.kb }) : null,
+        t("paramedic.fix.windowsUpdate.step2", { game }),
+      ]);
+    case "game-files-change":
+      return [
+        t("paramedic.fix.gameFiles.step1", { game }),
+        t("paramedic.fix.gameFiles.step2", { game }),
+        t("paramedic.fix.gameFiles.step3", { game }),
+      ];
+    case "program-installed":
+      return [t("paramedic.fix.programInstalled.step1", { names: a.names }), t("paramedic.fix.programInstalled.step2", { game })];
     default:
       return [];
   }
 }
 
-function ruledOutLine(n: ParamedicRuledOut, { t }: Ctx): string | null {
+function ruledOutLine(n: ParamedicRuledOut, { t, dates, game }: Ctx): string | null {
   const a = n.args;
   switch (n.id) {
     case "gpu-driver-change":
-      return t("paramedic.checked.gpuDriverChange", { driver: a.driver });
+      // Windows' own record is added only when it was read completely and showed no graphics driver install.
+      return a.windows === "none"
+        ? t("paramedic.checked.gpuDriverNoInstall", { driver: a.driver })
+        : t("paramedic.checked.gpuDriverChange", { driver: a.driver });
+    case "windows-update":
+      return t("paramedic.checked.windowsUpdate");
+    case "game-files-change":
+      return t("paramedic.checked.gameFiles", { game, when: dates.day(a.since) });
     case "background-load":
       return t("paramedic.checked.backgroundLoad");
     case "memory-pressure":
@@ -205,10 +274,8 @@ function ruledOutLine(n: ParamedicRuledOut, { t }: Ctx): string | null {
   }
 }
 
-function unknownLine(code: string, { t, game }: Ctx): string | null {
+function unknownLine(code: string, { t }: Ctx): string | null {
   switch (code) {
-    case "game-patch":
-      return t("paramedic.unknown.gamePatch", { game });
     case "startup-programs":
       return t("paramedic.unknown.startupPrograms");
     case "overlays":
@@ -240,6 +307,106 @@ function unknownLine(code: string, { t, game }: Ctx): string | null {
     default:
       return null;
   }
+}
+
+/** One line of "also looked at": things found that Compy does not treat as findings. */
+function seenLine(s: ParamedicRuledOut, { t, dates }: Ctx): string | null {
+  const a = s.args;
+  switch (s.id) {
+    case "updates-minor":
+      return t("paramedic.seen.updatesMinor", { n: Number(a.n), m: Number(a.m) });
+    case "programs-installed": {
+      const day = !a.last || a.last === a.day ? dates.day(a.day) : t("paramedic.seen.dayRange", { a: dates.day(a.day), b: dates.day(a.last) });
+      const count = Number(a.count);
+      const more = Number(a.more);
+      return more > 0
+        ? t("paramedic.seen.programsInstalledMore", { count, names: a.names, more, day })
+        : t("paramedic.seen.programsInstalled", { count, names: a.names, day });
+    }
+    case "programs-none":
+      return t("paramedic.seen.programsNone");
+    case "other-drivers":
+      return t("paramedic.seen.otherDrivers", { count: Number(a.count), classes: driverClasses(a.classes, t) });
+    case "driver-install-same-stamp":
+      return t("paramedic.seen.driverInstallSameStamp", { when: dates.dayTime(a.when) });
+    default:
+      return null;
+  }
+}
+
+/** Why a kind of Windows record could not be read, in words. One literal key per reason. */
+function whyText(code: string, a: Record<string, string>, { t, dates }: Ctx): string | null {
+  switch (code) {
+    case "access-denied":
+      return t("paramedic.limit.why.accessDenied");
+    case "log-empty":
+      return t("paramedic.limit.why.logEmpty");
+    case "log-missing":
+      return t("paramedic.limit.why.logMissing");
+    case "read-failed":
+      return t("paramedic.limit.why.readFailed");
+    case "timed-out":
+      return t("paramedic.limit.why.timedOut");
+    case "records-unreadable":
+      return t("paramedic.limit.why.recordsUnreadable", { n: Number(a.n) });
+    case "registry":
+      return t("paramedic.limit.why.registry");
+    case "steam-unreadable":
+      return t("paramedic.limit.why.steamUnreadable");
+    case "steam-no-record":
+      return t("paramedic.limit.why.steamNoRecord");
+    case "steam-no-time":
+      return t("paramedic.limit.why.steamNoTime");
+    case "not-read":
+      return t("paramedic.limit.why.notRead");
+    case "took-too-long":
+      return t("paramedic.limit.why.tookTooLong");
+    case "no-window":
+      return t("paramedic.limit.why.noWindow");
+    case "reader-failed":
+      return t("paramedic.limit.why.readerFailed");
+    case "partial-timed-out":
+      return t("paramedic.limit.why.partialTimedOut");
+    case "partial-row-cap":
+      return t("paramedic.limit.why.partialRowCap");
+    case "partial-unparsed":
+      return t("paramedic.limit.why.partialUnparsed", { n: Number(a.n) });
+    case "partial-output-capped":
+      return t("paramedic.limit.why.partialOutputCapped");
+    case "partial-registry":
+      return t("paramedic.limit.why.partialRegistry", { n: Number(a.n) });
+    case "partial-steam-libraries":
+      return t("paramedic.limit.why.partialSteamLibraries", { n: Number(a.n) });
+    case "partial-coverage":
+      return t("paramedic.limit.why.partialCoverage", { from: dates.day(a.from) });
+    default:
+      return null;
+  }
+}
+
+function whatKind(kind: ParamedicLimit["kind"], { t, game }: Ctx): string {
+  switch (kind) {
+    case "driver":
+      return t("paramedic.limit.what.driver");
+    case "windows-update":
+      return t("paramedic.limit.what.windowsUpdate");
+    case "game-update":
+      return t("paramedic.limit.what.gameUpdate", { game });
+    default:
+      return t("paramedic.limit.what.programs");
+  }
+}
+
+/** One thing Compy could not see: never "nothing changed". */
+function limitLine(l: ParamedicLimit, ctx: Ctx): string | null {
+  const { t, game } = ctx;
+  if (l.code === "not-steam") return t("paramedic.limit.notSteam", { game });
+  if (l.code === "classes") return t("paramedic.limit.classes");
+  if (l.code === "no-install-date") return t("paramedic.limit.noInstallDate", { n: Number(l.args.n) });
+  const why = whyText(l.code, l.args, ctx);
+  if (!why) return null;
+  const what = whatKind(l.kind, ctx);
+  return l.code.startsWith("partial-") ? t("paramedic.limit.partial", { what, why }) : t("paramedic.limit.cantSee", { what, why });
 }
 
 const present = (xs: (string | null)[]): string[] => xs.filter((x): x is string => !!x);
@@ -346,7 +513,7 @@ function Leading({ f, d, ctx, plain }: { f: ParamedicFinding; d: ParamedicDiagno
           {eyebrow}
         </span>
       )}
-      <span className="gl-row-title">{findingTitle(f, t)}</span>
+      <span className="gl-row-title">{findingTitle(f, ctx)}</span>
       {since && <span className="gl-row-sub">{since}</span>}
       <Evidence list={f.evidence} ctx={ctx} />
       {why && <span className="gl-row-sub">{t("paramedic.card.why", { reason: why })}</span>}
@@ -364,7 +531,7 @@ function AlsoPossible({ list, ctx }: { list: ParamedicFinding[]; ctx: Ctx }) {
       <div className="gl-para-body">
         {list.map((f) => (
           <div className="gl-para-lead" key={f.id}>
-            <span className="gl-row-title">{findingTitle(f, ctx.t)}</span>
+            <span className="gl-row-title">{findingTitle(f, ctx)}</span>
             {sinceText(f.since_when, ctx) && <span className="gl-row-sub">{sinceText(f.since_when, ctx)}</span>}
             <Evidence list={f.evidence} ctx={ctx} />
           </div>
@@ -377,8 +544,9 @@ function AlsoPossible({ list, ctx }: { list: ParamedicFinding[]; ctx: Ctx }) {
 function Checked({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
   const { t } = ctx;
   const ruled = present(d.not_it.map((n) => ruledOutLine(n, ctx)));
-  const unknown = present(d.unknowns.map((u) => unknownLine(u, ctx)));
-  if (ruled.length === 0 && unknown.length === 0) return null;
+  const seen = present(d.seen.map((s) => seenLine(s, ctx)));
+  const unknown = present([...d.unknowns.map((u) => unknownLine(u, ctx)), ...d.limits.map((l) => limitLine(l, ctx))]);
+  if (ruled.length === 0 && seen.length === 0 && unknown.length === 0) return null;
   return (
     <details className="gl-para-fold" data-testid="paramedic-checked">
       <summary>{t("paramedic.checked.title")}</summary>
@@ -388,6 +556,16 @@ function Checked({ d, ctx }: { d: ParamedicDiagnosis; ctx: Ctx }) {
             <p className="gl-row-title">{t("paramedic.checked.ruledOut")}</p>
             <ul className="gl-para-lines">
               {ruled.map((l) => (
+                <li key={l}>{l}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {seen.length > 0 && (
+          <div>
+            <p className="gl-row-title">{t("paramedic.checked.seen")}</p>
+            <ul className="gl-para-lines">
+              {seen.map((l) => (
                 <li key={l}>{l}</li>
               ))}
             </ul>
