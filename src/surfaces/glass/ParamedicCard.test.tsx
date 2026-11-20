@@ -1628,10 +1628,10 @@ describe("ParamedicCard: recorded background load", () => {
 
   it("a measured high figure retitles the finding and gives both numbers; starts alone keep the old heading", async () => {
     await showing([load("load-cpu", "high", { rough: "30", base: "2" })]);
-    expect(rows()[0].textContent).toMatch(/Other programs were using your PC while you played/);
+    expect(rows()[0].textContent).toMatch(/The rest of your PC was busier than usual while you played/);
     expect(rows()[0].textContent).not.toMatch(/started while you played/);
     openAll();
-    expect(screen.getByText("Other programs used about 30% of your processor during the rough session; in normal sessions they use about 2%.")).toBeTruthy();
+    expect(screen.getByText("At their busiest (the top tenth of the session), other programs used about 30% of your processor; in normal sessions about 2%.")).toBeTruthy();
     cleanup();
     await showing([{ kind: "measured", code: "starts-seen", args: { count: "1", names: "" }, against: false, source: "sessions" }]);
     expect(rows()[0].textContent).toMatch(/Other programs started while you played/);
@@ -1644,11 +1644,11 @@ describe("ParamedicCard: recorded background load", () => {
       load("load-gpuvideo", "high", { rough: "25", base: "0", count: "2" }),
     ]);
     openAll();
-    expect(screen.getByText("Other programs used about 10% of your processor during the rough sessions; in normal sessions they use about 2%.")).toBeTruthy();
-    expect(screen.getByText("Other programs used about 40% of your graphics card during the rough session; in normal sessions they use about 5%.")).toBeTruthy();
+    expect(screen.getByText("At their busiest (the top tenth of a session), other programs used up to about 10% of your processor in the rough sessions; in normal sessions about 2%.")).toBeTruthy();
+    expect(screen.getByText("At their busiest (the top tenth of the session), other programs used about 40% of your graphics card; in normal sessions about 5%.")).toBeTruthy();
     expect(
       screen.getByText(
-        "Other programs used about 25% of your graphics card's video engine (recording, streaming or video playback) during the rough sessions; in normal sessions they use about 0%.",
+        "At their busiest (the top tenth of a session), other programs used up to about 25% of your graphics card's video engine (recording, streaming or video playback) in the rough sessions; in normal sessions about 0%.",
       ),
     ).toBeTruthy();
   });
@@ -1656,7 +1656,7 @@ describe("ParamedicCard: recorded background load", () => {
   it("about the same as usual is an against line", async () => {
     await showing([load("load-cpu", "same", { rough: "4", base: "2" }, true), { kind: "measured", code: "starts-seen", args: { count: "1", names: "" }, against: false, source: "sessions" }]);
     openAll();
-    const line = screen.getByText("Other programs used about 4% of your processor during the rough session, about the same as in normal sessions (2%).");
+    const line = screen.getByText("At their busiest (the top tenth of the session), other programs used about 4% of your processor, about the same as in normal sessions (2%). Short bursts wouldn't show in this figure.");
     expect(line.closest("li")?.textContent).toMatch(/Weakens this/);
   });
 
@@ -1682,7 +1682,7 @@ describe("ParamedicCard: recorded background load", () => {
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
     expect(
-      screen.getByText("Other programs used about 1% of your graphics card's video engine (recording, streaming or video playback) during the rough session, about the same as in normal sessions (0%)."),
+      screen.getByText("At their busiest (the top tenth of the session), other programs used about 1% of your graphics card's video engine (recording, streaming or video playback), about the same as in normal sessions (0%). Short bursts wouldn't show in this figure."),
     ).toBeTruthy();
     expect(screen.getByText("How busy the rest of your PC was, in the rough sessions and in the normal ones (Compy recorded it in neither)")).toBeTruthy();
     expect(screen.getByText("How busy the rest of your PC was in the normal sessions Compy compares with (it recorded this only for the rough ones)")).toBeTruthy();
@@ -1756,5 +1756,36 @@ describe("ParamedicCard: sittings counted together", () => {
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
     expect(screen.getByText("3 times, the game closed and was opened again within 10 minutes. Compy counted each of those as one session.")).toBeTruthy();
+  });
+});
+
+
+describe("ParamedicCard: what the load figure covers", () => {
+  it("says once that the figure is everything except the game, and shows an in-between reading under also looked at", async () => {
+    await ask({
+      ...base,
+      why_first: null,
+      findings: [
+        find("background-load", {
+          evidence: [
+            { kind: "measured", code: "load-cpu", args: { how: "high", count: "1", rough: "30", base: "2" }, against: false, source: "sessions" },
+            { kind: "known", code: "figure-scope", args: {}, against: false, source: "sessions" },
+          ],
+          fix: steps("background-load"),
+        }),
+      ],
+    });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.getByText("This figure covers everything except the game, including Compy and Windows itself.")).toBeTruthy();
+    cleanup();
+    await ask({
+      ...base,
+      findings: [base.findings[0]],
+      seen: [{ id: "load-seen", args: { kind: "load-cpu", how: "between", count: "1", rough: "25", base: "12" } }],
+    });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.getByText("At their busiest (the top tenth of the session), other programs used about 25% of your processor; in normal sessions about 12%.")).toBeTruthy();
   });
 });

@@ -272,6 +272,8 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
       return t("paramedic.evidence.capChanged", { from: capWord(a.from, t), to: capWord(a.to, t) });
     case "load-not-recorded":
       return t("paramedic.evidence.loadNotRecorded");
+    case "figure-scope":
+      return t("paramedic.evidence.figureScope");
     case "ram-peak":
       return t("paramedic.evidence.ramPeak", { peakGb: a.peakGb, totalGb: a.totalGb });
     case "ram-baseline":
@@ -553,6 +555,8 @@ function seenLine(s: ParamedicRuledOut, { t, dates, game }: Ctx): string | null 
       return t("paramedic.seen.startsDropped", { n: Number(a.n) });
     case "starts-skipped":
       return t("paramedic.seen.startsSkipped");
+    case "load-seen":
+      return loadLine(a.kind, a, t);
     case "sitting-merged":
       return t("paramedic.seen.sittingMerged", { count: Number(a.count) });
     case "game-crash-signature":

@@ -212,7 +212,7 @@ fn found_mods(c: &Ctx, out: &mut Out, found: &[ModFound]) {
 }
 
 fn candidate(c: &Ctx, m: &ModFound) -> Cand {
-    let hi = c.span_of(c.first_bad).0;
+    let hi = c.first_bad.start();
     let lo = c.last_full_normal.and_then(|s| c.span_of(s).1);
     let in_window = |t: DateTime<Utc>| matches!((lo, hi), (Some(l), Some(h)) if t > l && t <= h);
     // A settings file the mod rewrites while the game runs (an overlay saving its own config) says when the

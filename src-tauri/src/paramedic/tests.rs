@@ -52,6 +52,9 @@ fn facts(at: &str, dur: u64, samples: u32, avg: f64, low1: f64) -> SessionFacts 
         other_cpu_p90_pct: None,
         other_gpu_3d_p90_pct: None,
         other_gpu_video_p90_pct: None,
+        other_cpu_mean_pct: None,
+        other_gpu_3d_mean_pct: None,
+        other_gpu_video_mean_pct: None,
         running_at_start: None,
         start_ticks_skipped: None,
         start_events_dropped: None,
@@ -525,7 +528,7 @@ fn a_new_compy_change_count_is_listed_and_an_unchanged_one_is_ruled_out() {
 }
 
 #[test]
-fn busy_programs_measured_on_every_rough_session_are_likely() {
+fn busy_programs_and_a_measured_high_load_on_every_rough_session_are_one_fact_so_only_possible() {
     let mut sess = steady(4);
     for s in sess.iter_mut() {
         s.other_cpu_p90_pct = Some(2.0);
@@ -537,7 +540,7 @@ fn busy_programs_measured_on_every_rough_session_are_likely() {
     sess.push(rough);
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     assert_eq!(ids(&d), ["background-load"]);
-    assert_eq!(d.findings[0].confidence, Certainty::Likely);
+    assert_eq!(d.findings[0].confidence, Certainty::Possible, "the starts and the figure say the same thing once");
     assert!(matches!(&d.findings[0].fix, Fix::Steps { code: "background-load", args } if args["names"] == "rustc"));
 }
 
@@ -678,6 +681,7 @@ fn absent_process_starts_are_unknown_not_against_when_load_was_not_recorded() {
     assert_eq!(seen.args["otherGame"], "h");
     // A rough figure with no figure to compare it with weakens nothing: one neutral line says exactly that.
     sess[9].other_cpu_p90_pct = Some(3.0);
+    sess[9].other_cpu_mean_pct = Some(3.0);
     let d = diagnose(&inputs(sess.clone()), Complaint::Slow, Some("g"));
     let bg = d.findings.iter().find(|f| f.id == "background-load").expect("still listed");
     assert!(bg.evidence.iter().all(|e| !e.against), "one-sided numbers never weaken it");
@@ -686,6 +690,7 @@ fn absent_process_starts_are_unknown_not_against_when_load_was_not_recorded() {
     // A recorded low load number on BOTH sides, about the same, is what weakens it.
     for s in sess.iter_mut().take(4) {
         s.other_cpu_p90_pct = Some(2.0);
+        s.other_cpu_mean_pct = Some(2.0);
     }
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     let bg = d.findings.iter().find(|f| f.id == "background-load").expect("still listed");
@@ -780,12 +785,19 @@ fn two_likely_findings_are_a_tie() {
     for s in sess.iter_mut() {
         s.other_cpu_p90_pct = Some(2.0);
     }
-    sess.extend(steady_on_old("h", 12));
+    // The second game's own measured contrast (high against quiet normals) is what lets the load finding reach Likely.
+    let mut h_old = steady_on_old("h", 12);
+    for s in h_old.iter_mut() {
+        s.other_cpu_p90_pct = Some(2.0);
+    }
+    sess.extend(h_old);
     let mut g_rough = rough_on_new("g", 10);
     g_rough.other_cpu_p90_pct = Some(22.0);
     g_rough.busy_starts = 9;
     sess.push(g_rough);
-    sess.push(rough_on_new("h", 12));
+    let mut h_rough = rough_on_new("h", 12);
+    h_rough.other_cpu_p90_pct = Some(22.0);
+    sess.push(h_rough);
     let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
     assert_eq!(ids(&d), ["background-load", "gpu-driver-change"]);
     assert_eq!(certainties(&d), [Certainty::Likely, Certainty::Likely]);
@@ -1000,7 +1012,7 @@ fn the_baseline_coverage_count_and_window_edges_are_exact() {
 }
 
 #[test]
-fn the_cause_lines_hold_on_both_sides() {
+fn the_cause_lines_hold_on_both_sides_and_the_cpu_load_rule_changed_2026_11_20_to_a_15_point_rise_over_normal() {
     let run = |tune: &dyn Fn(&mut Vec<SessionFacts>)| -> Vec<&'static str> {
         let mut sess = steady(4);
         sess.push(facts("2026-10-09T10:00:00Z", 600, 600, 100.0, 30.0));
@@ -3963,6 +3975,10 @@ fn with_load(mut s: SessionFacts, l: Load3) -> SessionFacts {
     s.other_cpu_p90_pct = l[0];
     s.other_gpu_3d_p90_pct = l[1];
     s.other_gpu_video_p90_pct = l[2];
+    // The means agree with the p90s unless a test says otherwise.
+    s.other_cpu_mean_pct = l[0];
+    s.other_gpu_3d_mean_pct = l[1];
+    s.other_gpu_video_mean_pct = l[2];
     s
 }
 
@@ -4033,7 +4049,8 @@ fn recorded_high_load_against_a_quiet_baseline_is_one_measured_support_and_never
     let f = bg_finding(&d).expect("a measured high load is listed");
     assert_eq!(f.confidence, Certainty::Possible, "one support is never Most likely");
     assert!(!f.in_play, "load says how busy the PC was, not when: no timing");
-    assert_eq!(f.evidence.len(), 1);
+    assert_eq!(f.evidence.len(), 2, "the figure, and the one line saying what it covers");
+    assert_eq!(f.evidence[1].code, "figure-scope");
     let e = &f.evidence[0];
     assert!(e.code == "load-cpu" && e.kind == EvidenceKind::Measured && !e.against);
     assert_eq!((e.args["how"].as_str(), e.args["rough"].as_str(), e.args["base"].as_str()), ("high", "30", "2"));
@@ -4046,30 +4063,149 @@ fn recorded_high_load_against_a_quiet_baseline_is_one_measured_support_and_never
 }
 
 #[test]
-fn recorded_high_load_plus_programs_seen_starting_in_every_rough_session_reaches_likely() {
-    // The one other support that exists for this finding is a start recorded in EVERY rough session (`d`).
+fn starts_and_a_measured_high_load_are_one_support_and_stay_possible() {
+    // Normal 2% CPU, one rough session with 9 rustc starts and 30% CPU: both say "programs were busy". One fact.
     let d = run_load(load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 9));
     let f = bg_finding(&d).expect("listed");
-    assert_eq!(f.confidence, Certainty::Likely);
+    assert_eq!(f.confidence, Certainty::Possible, "the starts are timing, the figure is the one support");
+    assert!(f.in_play);
     assert_eq!(load_lines(f)[0], ("load-cpu", "high".to_string(), false));
-    // An in-between reading on another kind weakens nothing; a same-as-usual one does.
-    let d = run_load(load_episode(4, [Some(2.0), Some(3.0), None], [Some(30.0), Some(10.0), None], 9));
-    assert_eq!(bg_finding(&d).map(|f| f.confidence), Some(Certainty::Likely), "3D 10% against a usual 3% is in between");
-    let d = run_load(load_episode(4, [Some(2.0), Some(3.0), Some(0.0)], [Some(30.0), Some(3.0), Some(0.0)], 9));
-    let f = bg_finding(&d).expect("listed");
-    assert_eq!(f.confidence, Certainty::Possible, "another kind about the same as usual is a contradiction");
-    assert!(load_lines(f).contains(&("load-gpu3d", "same".to_string(), true)));
-    // Starts alone (no recorded load) stay Possible, and so does a start seen in only some rough sessions.
+    // Starts alone stay Possible, and so do starts only in a partly measured session.
     let d = run_load(load_episode(4, NONE3, NONE3, 9));
     assert_eq!(bg_finding(&d).map(|f| f.confidence), Some(Certainty::Possible));
-    // Load plus starts only in a partly measured session or another game's session: timing at most, never the second support.
     let mut sess = load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 0);
     let mut thin = facts("2026-10-12T10:00:00Z", 100, 80, 100.0, 20.0);
     thin.busy_starts = 9;
     thin.busy_names = vec!["rustc".into()];
     sess.insert(4, thin);
     let d = run_load(sess);
-    assert_eq!(bg_finding(&d).map(|f| f.confidence), Some(Certainty::Possible), "{:?}", d.findings.iter().map(|f| (f.id, f.confidence)).collect::<Vec<_>>());
+    assert_eq!(bg_finding(&d).map(|f| f.confidence), Some(Certainty::Possible));
+}
+
+fn later_normal(at: &str, load: Load3) -> SessionFacts {
+    with_load(facts(at, 600, 600, 100.0, 50.0), load)
+}
+
+#[test]
+fn a_measured_recovery_of_the_same_kind_is_the_second_line_that_reaches_likely() {
+    let episode = || load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 9);
+    let likely = |sess: Vec<SessionFacts>| bg_finding(&run_load(sess)).map(|f| f.confidence);
+    let mut sess = episode();
+    sess.push(later_normal("2026-10-25T10:00:00Z", [Some(3.0), None, None]));
+    assert_eq!(likely(sess), Some(Certainty::Likely), "high, then normal and back within the normal band, with starts as timing");
+    // Back to normal but the load was not recorded: nothing independent.
+    let mut sess = episode();
+    sess.push(later_normal("2026-10-25T10:00:00Z", NONE3));
+    assert_eq!(likely(sess), Some(Certainty::Possible));
+    // Ran normally but the load stayed high: not a recovery of that kind.
+    let mut sess = episode();
+    sess.push(later_normal("2026-10-25T10:00:00Z", [Some(20.0), None, None]));
+    assert_eq!(likely(sess), Some(Certainty::Possible));
+    // Without timing (no starts) a measured recovery is still not Likely.
+    let mut sess = load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 0);
+    sess.push(later_normal("2026-10-25T10:00:00Z", [Some(3.0), None, None]));
+    assert_eq!(likely(sess), Some(Certainty::Possible));
+}
+
+#[test]
+fn another_games_own_measured_contrast_is_the_second_line_that_reaches_likely() {
+    let other = |game: &str, load_base: Option<f64>, load_rough: Option<f64>| -> Vec<SessionFacts> {
+        let mut v: Vec<SessionFacts> = (0..4)
+            .map(|i| named(with_load(facts(&format!("2026-10-{:02}T12:00:00Z", i + 5), 600, 600, 100.0, 50.0), [load_base, None, None]), game))
+            .collect();
+        v.push(named(with_load(facts("2026-10-21T10:00:00Z", 600, 600, 100.0, 30.0), [load_rough, None, None]), game));
+        v
+    };
+    let mut sess = load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 9);
+    sess.extend(other("h", Some(2.0), Some(30.0)));
+    assert_eq!(bg_finding(&run_load(sess)).map(|f| f.confidence), Some(Certainty::Likely));
+    // The other game's figures were not recorded: its roughness says nothing about load.
+    let mut sess = load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 9);
+    sess.extend(other("h", None, None));
+    assert_eq!(bg_finding(&run_load(sess)).map(|f| f.confidence), Some(Certainty::Possible));
+    // The other game's rough figure was only in between.
+    let mut sess = load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 9);
+    sess.extend(other("h", Some(2.0), Some(10.0)));
+    assert_eq!(bg_finding(&run_load(sess)).map(|f| f.confidence), Some(Certainty::Possible));
+}
+
+#[test]
+fn a_busy_normal_session_means_there_is_no_contrast_to_count() {
+    // Normal figures 2, 2, 2, 20: one of them was already over the busy line, so 30% is not a rise over "usual".
+    let mut sess = load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 9);
+    sess[3].other_cpu_p90_pct = Some(20.0);
+    sess[3].other_cpu_mean_pct = Some(20.0);
+    sess.push(later_normal("2026-10-25T10:00:00Z", [Some(3.0), None, None]));
+    let d = run_load(sess);
+    let f = bg_finding(&d).expect("starts are timing");
+    assert_eq!(f.confidence, Certainty::Possible);
+    assert_eq!(load_lines(f), [("load-cpu", "between".to_string(), false)], "shown with its numbers, never as high");
+}
+
+#[test]
+fn another_kind_about_the_same_never_contradicts_a_high_kind() {
+    // Processor 30 vs 2, 3D 3 vs 3, an idle video engine 0 vs 0: the idle engine says nothing about the processor.
+    let d = run_load(load_episode(4, [Some(2.0), Some(3.0), Some(0.0)], [Some(30.0), Some(3.0), Some(0.0)], 9));
+    let f = bg_finding(&d).expect("listed");
+    assert!(f.in_play && f.confidence == Certainty::Possible);
+    assert!(f.evidence.iter().all(|e| !e.against), "no weakens line");
+    assert!(load_lines(f).contains(&("load-gpu3d", "same".to_string(), false)));
+    assert!(load_lines(f).contains(&("load-gpuvideo", "same".to_string(), false)));
+    // The same with the high figure and nothing else recorded: no starts, so not in play, but still listed and not contradicted.
+    let d = run_load(load_episode(4, [Some(2.0), None, Some(0.0)], [Some(30.0), None, Some(0.0)], 0));
+    assert!(bg_finding(&d).is_some_and(|f| f.evidence.iter().all(|e| !e.against)));
+}
+
+#[test]
+fn about_the_same_is_a_contradiction_only_when_every_compared_kind_is_the_same_and_the_means_agree() {
+    let with_mean = |cpu_mean: f64| {
+        let mut sess = load_episode(4, [Some(2.0), None, None], [Some(4.0), None, None], 9);
+        sess.last_mut().unwrap().other_cpu_mean_pct = Some(cpu_mean);
+        run_load(sess)
+    };
+    // Mean agrees with the p90: against, and out of play.
+    let f = bg_finding(&with_mean(4.0)).cloned().expect("starts are timing");
+    assert!(load_lines(&f).contains(&("load-cpu", "same".to_string(), true)));
+    assert!(!f.in_play);
+    // The mean is far above the usual even though the p90 is not: a burst the p90 cannot see. Neutral.
+    let f = bg_finding(&with_mean(12.0)).cloned().expect("starts are timing");
+    assert!(load_lines(&f).contains(&("load-cpu", "same".to_string(), false)));
+    assert!(f.in_play, "a same reading the mean does not back is not a contradiction");
+    // No mean recorded at all: neutral too.
+    let mut sess = load_episode(4, [Some(2.0), None, None], [Some(4.0), None, None], 9);
+    for s in sess.iter_mut() {
+        s.other_cpu_mean_pct = None;
+    }
+    let f = bg_finding(&run_load(sess)).cloned().expect("starts are timing");
+    assert!(f.evidence.iter().all(|e| !e.against) && f.in_play);
+}
+
+#[test]
+fn readings_that_are_not_a_finding_are_still_shown_and_a_same_never_sits_with_unchanged_beside_an_in_between() {
+    // Processor 25 vs usual 12 (in between) with an idle video engine: no finding; both are "also looked at".
+    let d = run_load(load_episode(4, [Some(12.0), None, Some(0.0)], [Some(25.0), None, Some(0.0)], 0));
+    assert!(bg_finding(&d).is_none());
+    let seen: Vec<(String, String)> = d.seen.iter().filter(|s| s.id == "load-seen").map(|s| (s.args["kind"].clone(), s.args["how"].clone())).collect();
+    assert_eq!(seen, [("load-cpu".to_string(), "between".to_string()), ("load-gpuvideo".to_string(), "same".to_string())]);
+    assert!(d.not_it.iter().all(|n| n.id != "background-load"), "never 'unchanged' for one kind while another is in between");
+    // Every compared kind the same, means agreeing: unchanged, as before.
+    let d = run_load(load_episode(4, [Some(2.0), None, Some(0.0)], [Some(3.0), None, Some(0.0)], 0));
+    assert_eq!(d.not_it.iter().filter(|n| n.id == "background-load").count(), 2);
+    assert!(d.seen.iter().all(|s| s.id != "load-seen"));
+}
+
+#[test]
+fn the_highest_rough_figure_is_the_one_shown_and_the_scope_is_said_once() {
+    let mut sess = load_episode(4, [Some(2.0), None, None], [Some(30.0), None, None], 9);
+    sess.push(with_load(facts("2026-10-21T10:00:00Z", 600, 600, 100.0, 30.0), [Some(40.0), None, None]));
+    let d = run_load(sess);
+    let f = bg_finding(&d).expect("listed");
+    let line = f.evidence.iter().find(|e| e.code == "load-cpu").unwrap();
+    assert_eq!((line.args["how"].as_str(), line.args["rough"].as_str()), ("high", "40"));
+    assert_eq!(f.evidence.iter().filter(|e| e.code == "figure-scope").count(), 1);
+    // No figure on any line: no scope line.
+    let d = run_load(load_episode(4, NONE3, NONE3, 9));
+    assert!(bg_finding(&d).unwrap().evidence.iter().all(|e| e.code != "figure-scope"));
 }
 
 #[test]
@@ -4105,6 +4241,7 @@ fn a_reading_in_between_is_a_neutral_line_and_changes_nothing() {
     let d = run_load(sess);
     assert_eq!(d.problem.as_ref().map(|p| p.sessions_affected.len()), Some(2));
     assert!(bg_finding(&d).is_none(), "a mix of high and in between lists nothing by itself");
+    assert!(d.seen.iter().any(|s| s.id == "load-seen" && s.args["how"] == "between"), "but the figure is still shown, under also looked at");
 }
 
 #[test]
@@ -4249,12 +4386,63 @@ fn a_program_open_in_fewer_rough_sessions_than_normal_ones_says_nothing() {
 }
 
 #[test]
-fn fewer_than_two_readable_normal_snapshots_is_no_baseline_and_no_timing() {
-    // One readable snapshot, one unread, one missing: one session is not a baseline.
+fn fewer_than_three_readable_normal_snapshots_is_no_baseline_and_no_timing() {
+    // One readable, one unread, one missing; and two readable ones ("0 of 2" says almost nothing).
     let unread = snapshot(std::iter::empty(), 0, 0, 0);
-    let base = vec![Some(snap(&[])), Some(unread), None];
-    let d = run_load(start_episode(base, Some(snap(&["obs64.exe"]))));
-    assert!(d.findings.iter().all(|f| f.id != "background-load"));
+    for base in [vec![Some(snap(&[])), Some(unread), None], vec![Some(snap(&[])), Some(snap(&[]))]] {
+        let d = run_load(start_episode(base, Some(snap(&["obs64.exe"]))));
+        assert!(d.findings.iter().all(|f| f.id != "background-load"));
+    }
+}
+
+#[test]
+fn a_program_open_in_part_of_the_normal_sessions_is_a_counts_line_and_never_timing() {
+    // Open in the one rough session and in 1 of 3 normal ones: more in the rough one, but not a change before it.
+    let base = vec![Some(snap(&["obs64.exe"])), Some(snap(&[])), Some(snap(&[]))];
+    let d = run_load(start_episode(base.clone(), Some(snap(&["obs64.exe"]))));
+    assert!(d.findings.iter().all(|f| f.id != "background-load"), "no timing, nothing else to make a finding");
+    // With a finding made by program starts the counts line is there, without timing from it and without a name in the fix.
+    let mut sess = start_episode(base, Some(snap(&["obs64.exe"])));
+    let last = sess.last_mut().unwrap();
+    last.busy_starts = 5;
+    last.busy_names = vec!["rustc".into()];
+    let d = run_load(sess);
+    let f = bg_finding(&d).expect("starts are timing");
+    assert_eq!(start_codes(f), ["already-running", "open-counts"]);
+    match &f.fix {
+        Fix::Steps { args, .. } => assert_eq!(args.get("programs").map(String::as_str), Some(""), "{args:?}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_resident_overlay_is_a_counts_line_only_and_is_never_named_in_the_fix() {
+    // Medal is resident: open in the rough session and in none of three normal ones.
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["medal.exe"])));
+    let last = sess.last_mut().unwrap();
+    last.busy_starts = 5;
+    last.busy_names = vec!["rustc".into()];
+    let d = run_load(sess);
+    let f = bg_finding(&d).expect("starts are timing");
+    assert_eq!(start_codes(f), ["open-counts-named"]);
+    match &f.fix {
+        Fix::Steps { args, .. } => assert_eq!(args.get("programs").map(String::as_str), Some(""), "{args:?}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_program_open_in_only_some_rough_sessions_is_named_in_its_counts_and_never_called_already_running() {
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe"])));
+    sess.last_mut().unwrap().busy_starts = 5;
+    sess.last_mut().unwrap().busy_names = vec!["rustc".into()];
+    let mut second = facts("2026-10-21T10:00:00Z", 600, 600, 100.0, 30.0);
+    second.running_at_start = Some(snap(&[]));
+    sess.push(second);
+    let d = run_load(sess);
+    assert_eq!(d.problem.as_ref().map(|p| p.sessions_affected.len()), Some(2));
+    let f = bg_finding(&d).expect("starts are timing");
+    assert_eq!(start_codes(f), ["open-counts-named"], "1 of 2 rough sessions is a count, not 'it was already running'");
 }
 
 #[test]
@@ -4376,7 +4564,7 @@ fn the_card_sentence_for_a_program_already_running_is_the_modules_own_sentence()
     assert_eq!(line.replace("{{name}}", "OBS Studio").replace("{{game}}", "Game X"), expect);
 }
 
-// ==== a crash-and-relaunch is one sitting (g4 commit 3) ==========================================
+// ==== a crash-and-relaunch is one sitting (g4 commit 3, r2) ======================================
 use crate::session_boundary::SessionEnd;
 
 fn ended(mut s: SessionFacts, e: Option<SessionEnd>) -> SessionFacts {
@@ -4384,9 +4572,21 @@ fn ended(mut s: SessionFacts, e: Option<SessionEnd>) -> SessionFacts {
     s
 }
 
-/// A 600 s launch at 10:00 that ended as `first_end`, then a 600 s launch at `relaunch_at`.
+/// A fully measured launch of `dur` seconds, smoothness ratio 0.5.
+fn full(at: &str, dur: u64) -> SessionFacts {
+    facts(at, dur, dur as u32, 100.0, 50.0)
+}
+
+/// A launch too short to judge (under MIN_JUDGE_SECS), ending as `e`.
+fn fragment(at: &str, dur: u64, e: Option<SessionEnd>) -> SessionFacts {
+    let s = ended(full(at, dur), e);
+    assert!(!s.judgeable(), "a fragment is not judgeable");
+    s
+}
+
+/// A 120 s fragment at 10:00 (ending 10:02) that ended as `first_end`, then a 600 s launch at `relaunch_at`.
 fn pair(first_end: Option<SessionEnd>, relaunch_at: &str) -> Vec<SessionFacts> {
-    vec![ended(facts("2026-10-03T10:00:00Z", 600, 600, 100.0, 50.0), first_end), facts(relaunch_at, 600, 600, 100.0, 50.0)]
+    vec![fragment("2026-10-03T10:00:00Z", 120, first_end), full(relaunch_at, 600)]
 }
 
 fn groups_of(rows: &[SessionFacts]) -> Vec<Vec<usize>> {
@@ -4395,26 +4595,78 @@ fn groups_of(rows: &[SessionFacts]) -> Vec<Vec<usize>> {
 }
 
 #[test]
-fn a_relaunch_joins_only_after_an_exited_process_and_within_ten_minutes_pinned_both_sides() {
+fn a_relaunch_joins_only_after_an_exited_process_within_ten_minutes_pinned_both_sides() {
     use SessionEnd::{CaptureStopped, ProcessExited, TargetChanged};
-    // The first launch ends at 10:10:00.
-    assert_eq!(groups_of(&pair(Some(ProcessExited), "2026-10-03T10:19:59Z")), [vec![0, 1]], "9:59 after the end joins");
-    assert_eq!(groups_of(&pair(Some(ProcessExited), "2026-10-03T10:20:00Z")), [vec![0, 1]], "exactly ten minutes joins");
-    assert_eq!(groups_of(&pair(Some(ProcessExited), "2026-10-03T10:20:01Z")), [vec![0], vec![1]], "one second past ten minutes does not");
+    // The fragment ends at 10:02:00.
+    assert_eq!(groups_of(&pair(Some(ProcessExited), "2026-10-03T10:11:59Z")), [vec![0, 1]], "9:59 after the end joins");
+    assert_eq!(groups_of(&pair(Some(ProcessExited), "2026-10-03T10:12:00Z")), [vec![0, 1]], "exactly ten minutes joins");
+    assert_eq!(groups_of(&pair(Some(ProcessExited), "2026-10-03T10:12:01Z")), [vec![0], vec![1]], "one second past ten minutes does not");
     for other in [None, Some(CaptureStopped), Some(TargetChanged)] {
-        assert_eq!(groups_of(&pair(other, "2026-10-03T10:12:00Z")), [vec![0], vec![1]], "{other:?} is never a relaunch Compy can vouch for");
+        assert_eq!(groups_of(&pair(other, "2026-10-03T10:05:00Z")), [vec![0], vec![1]], "{other:?} is never a relaunch Compy can vouch for");
     }
     // A chain joins link by link, and stops at the first link that is not one.
     let chain = |mid: Option<SessionEnd>| {
         vec![
-            ended(facts("2026-10-03T10:00:00Z", 600, 600, 100.0, 50.0), Some(ProcessExited)),
-            ended(facts("2026-10-03T10:12:00Z", 600, 600, 100.0, 50.0), mid),
-            facts("2026-10-03T10:30:00Z", 600, 600, 100.0, 50.0),
+            fragment("2026-10-03T10:00:00Z", 120, Some(ProcessExited)),
+            fragment("2026-10-03T10:05:00Z", 120, mid),
+            full("2026-10-03T10:12:00Z", 600),
         ]
     };
     assert_eq!(groups_of(&chain(Some(ProcessExited))), [vec![0, 1, 2]]);
     assert_eq!(groups_of(&chain(Some(CaptureStopped))), [vec![0, 1], vec![2]]);
     assert!(groups_of(&[]).is_empty());
+}
+
+#[test]
+fn two_judgeable_launches_are_two_sessions_whatever_the_gap() {
+    let exited = Some(SessionEnd::ProcessExited);
+    // 10 minutes normal then a relaunch one minute later: both can be judged, so both are sessions.
+    let both = vec![ended(full("2026-10-03T10:00:00Z", 600), exited), full("2026-10-03T10:11:00Z", 600)];
+    assert_eq!(groups_of(&both), [vec![0], vec![1]]);
+    // A 40-minute normal launch followed by a 12-minute rough relaunch: two sessions, the rough one is judged.
+    let forty = vec![ended(full("2026-10-03T10:00:00Z", 2400), exited), facts("2026-10-03T10:43:00Z", 720, 720, 100.0, 30.0)];
+    assert_eq!(groups_of(&forty), [vec![0], vec![1]]);
+    let inp = inputs(steady(4).into_iter().chain(forty).map(|mut s| {
+        if s.started_at.starts_with("2026-10-03T10:00") {
+            s.started_at = "2026-10-20T10:00:00Z".into();
+        } else if s.started_at.starts_with("2026-10-03T10:43") {
+            s.started_at = "2026-10-20T10:43:00Z".into();
+        }
+        s
+    }).collect());
+    assert_eq!(game_sessions(&inp, "g").len(), 6);
+    let d = diagnose(&inp, Complaint::Slow, Some("g"));
+    assert_eq!(d.problem.as_ref().map(|p| p.sessions_affected.len()), Some(1), "the rough relaunch is judged on its own: {:?}", d.state);
+}
+
+#[test]
+fn launches_whose_recorded_stamps_differ_are_never_one_sitting() {
+    let exited = Some(SessionEnd::ProcessExited);
+    let with = |mut v: Vec<SessionFacts>, f: &dyn Fn(&mut SessionFacts, usize)| {
+        for (i, s) in v.iter_mut().enumerate() {
+            f(s, i);
+        }
+        v
+    };
+    let base = pair(exited, "2026-10-03T10:05:00Z");
+    assert_eq!(groups_of(&base), [vec![0, 1]]);
+    let cases: Vec<(&str, Vec<SessionFacts>)> = vec![
+        ("driver", with(base.clone(), &|s, i| s.gpu_driver = Some(format!("{i}.0")))),
+        ("windows build", with(base.clone(), &|s, i| s.windows_build = Some(format!("26{i}00")))),
+        ("power plan", with(base.clone(), &|s, i| s.power_plan = Some(format!("plan {i}")))),
+        ("refresh rate", with(base.clone(), &|s, i| s.refresh_hz = Some(60 + 60 * i as u32))),
+        ("changes on", with(base.clone(), &|s, i| s.compy_changes = Some(i))),
+        ("hardware", with(base.clone(), &|s, i| s.rig = Some(format!("rig-{i}")))),
+        ("frame cap", with(base.clone(), &|s, i| s.cap = if i == 0 { CapState::Uncapped } else { CapState::Capped { at_fps: 60.0 } })),
+    ];
+    for (what, rows) in cases {
+        assert_eq!(groups_of(&rows), [vec![0], vec![1]], "a different {what} keeps them apart");
+    }
+    // The same stamp, or one that was not recorded on one side, still joins.
+    let same = with(base.clone(), &|s, _| s.gpu_driver = Some("1.0".into()));
+    assert_eq!(groups_of(&same), [vec![0, 1]]);
+    let one_side = with(base, &|s, i| s.gpu_driver = (i == 1).then(|| "1.0".to_string()));
+    assert_eq!(groups_of(&one_side), [vec![0, 1]]);
 }
 
 #[test]
@@ -4427,52 +4679,43 @@ fn a_sittings_value_is_its_longest_judgeable_launch_else_its_longest() {
     };
     let short = row("2026-10-03T10:00:00Z", 20, 20);
     assert!(!short.judgeable());
-    // A short launch before a judgeable relaunch is not the sitting's value.
     assert_eq!(pick(&[short.clone(), row("2026-10-03T10:05:00Z", 600, 600)]), 1);
-    // Two judgeable launches: the longer one, wherever it is.
     assert_eq!(pick(&[row("2026-10-03T10:00:00Z", 900, 900), row("2026-10-03T10:20:00Z", 600, 600)]), 0);
     assert_eq!(pick(&[row("2026-10-03T10:00:00Z", 600, 600), row("2026-10-03T10:20:00Z", 900, 900)]), 1);
-    // A tie keeps the earliest.
     assert_eq!(pick(&[row("2026-10-03T10:00:00Z", 600, 600), row("2026-10-03T10:20:00Z", 600, 600)]), 0);
-    // A longer launch that cannot be judged does not beat a judgeable one.
     assert_eq!(pick(&[row("2026-10-03T10:00:00Z", 600, 600), row("2026-10-03T10:20:00Z", 5000, 10)]), 0);
-    // Nothing judgeable: the longest launch.
     assert_eq!(pick(&[short.clone(), row("2026-10-03T10:05:00Z", 40, 40)]), 1);
 }
 
-fn sittings_episode(first: SessionFacts, relaunch: SessionFacts, end: Option<SessionEnd>) -> Vec<SessionFacts> {
+fn sittings_episode(first: SessionFacts, relaunch: SessionFacts) -> Vec<SessionFacts> {
     let mut sess = steady(4);
-    sess.push(ended(first, end));
+    sess.push(first);
     sess.push(relaunch);
     sess
 }
 
 #[test]
-fn a_rough_launch_followed_by_a_normal_relaunch_is_one_normal_sitting_and_the_other_way_round_is_rough() {
+fn a_fragment_and_its_relaunch_are_one_session_judged_on_the_launch_that_can_be_judged() {
     let exited = Some(SessionEnd::ProcessExited);
     let rough = |at: &str, dur: u64| facts(at, dur, dur as u32, 100.0, 30.0);
-    let normal = |at: &str, dur: u64| facts(at, dur, dur as u32, 100.0, 50.0);
-    // Rough 600 s launch, then a normal 1800 s relaunch four minutes later: the sitting's value is the normal one.
-    let merged = sittings_episode(rough("2026-10-20T10:00:00Z", 600), normal("2026-10-20T10:14:00Z", 1800), exited);
-    let d = diagnose(&inputs(merged.clone()), Complaint::Slow, Some("g"));
+    // A short rough-looking fragment, then a normal 30-minute relaunch: the sitting is the normal launch.
+    let d = diagnose(&inputs(sittings_episode(ended(rough("2026-10-20T10:00:00Z", 200), exited), full("2026-10-20T10:08:00Z", 1800))), Complaint::Slow, Some("g"));
     assert!(d.problem.is_none() && !matches!(d.state, DiagnosisState::Found), "{:?}", d.state);
-    // The same two rows with no recorded end are two sessions: nothing is merged away.
-    let mut apart = merged;
-    apart[4].ended = None;
-    assert_eq!(game_sessions(&inputs(apart.clone()), "g").len(), 6);
-    assert_eq!(game_sessions(&inputs(sittings_episode(apart[4].clone(), apart[5].clone(), exited)), "g").len(), 5);
-    // Normal short launch after a rough long one: the sitting is rough.
-    let rough_sitting = sittings_episode(rough("2026-10-20T10:00:00Z", 1800), normal("2026-10-20T10:35:00Z", 600), exited);
-    let d = diagnose(&inputs(rough_sitting), Complaint::Slow, Some("g"));
+    // The same rows with no recorded end are two sessions.
+    let apart = sittings_episode(rough("2026-10-20T10:00:00Z", 200), full("2026-10-20T10:08:00Z", 1800));
+    assert_eq!(game_sessions(&inputs(apart), "g").len(), 6);
+    // A normal-looking fragment, then a rough 30-minute relaunch: the sitting is the rough launch.
+    let d = diagnose(&inputs(sittings_episode(ended(full("2026-10-20T10:00:00Z", 200), exited), rough("2026-10-20T10:08:00Z", 1800))), Complaint::Slow, Some("g"));
     assert_eq!(d.problem.as_ref().map(|p| p.sessions_affected.len()), Some(1), "{:?}", d.state);
 }
 
 #[test]
 fn a_sitting_counts_once_as_a_baseline_session() {
-    let exited = Some(SessionEnd::ProcessExited);
     let mut sess = steady(3);
-    sess[1].ended = exited;
-    sess[2].started_at = "2026-10-02T10:12:00Z".into();
+    sess[1].ended = Some(SessionEnd::ProcessExited);
+    sess[1].duration_secs = 120;
+    sess[1].samples = 120;
+    sess[2].started_at = "2026-10-02T10:08:00Z".into();
     let inp = inputs(sess);
     assert_eq!(game_sessions(&inp, "g").len(), 2, "three launches, two sittings");
     let mut sess = inp.sessions.clone();
@@ -4481,32 +4724,93 @@ fn a_sitting_counts_once_as_a_baseline_session() {
 }
 
 #[test]
-fn a_window_between_sessions_runs_from_the_end_of_the_last_launch_to_the_start_of_the_first() {
-    let exited = Some(SessionEnd::ProcessExited);
+fn a_sittings_span_runs_from_its_first_launch_to_its_last_launchs_end() {
     let rows = vec![
-        ended(facts("2026-10-03T10:00:00Z", 600, 600, 100.0, 50.0), exited),
-        facts("2026-10-03T10:12:00Z", 1800, 1800, 100.0, 50.0),
-        facts("2026-10-05T10:00:00Z", 600, 600, 100.0, 50.0),
+        fragment("2026-10-03T10:00:00Z", 120, Some(SessionEnd::ProcessExited)),
+        full("2026-10-03T10:12:00Z", 1800),
+        full("2026-10-05T10:00:00Z", 600),
     ];
     let inp = inputs(rows);
     let rep = game_sessions(&inp, "g")[0];
-    assert_eq!(rep.started_at, "2026-10-03T10:12:00Z", "the longer relaunch is the value");
+    assert_eq!(rep.started_at, "2026-10-03T10:12:00Z", "the launch that can be judged is the value");
     let (a, b) = sitting_span(&inp, rep);
-    assert_eq!(a.map(iso), Some("2026-10-03T10:00:00Z".to_string()), "from the first launch");
-    assert_eq!(b.map(iso), Some("2026-10-03T10:42:00Z".to_string()), "to the last launch's end");
-    // A lone session spans itself.
+    assert_eq!(a.map(iso), Some("2026-10-03T10:00:00Z".to_string()));
+    assert_eq!(b.map(iso), Some("2026-10-03T10:42:00Z".to_string()));
     let lone = game_sessions(&inp, "g")[1];
-    assert_eq!(sitting_span(&inp, lone).0, lone.start());
-    assert_eq!(sitting_span(&inp, lone).1, lone.end());
+    assert_eq!((sitting_span(&inp, lone).0, sitting_span(&inp, lone).1), (lone.start(), lone.end()));
 }
 
 #[test]
-fn the_card_says_once_how_many_sittings_were_counted_together_and_never_when_none_were() {
+fn a_change_made_between_a_fragment_and_the_rough_relaunch_is_timing_not_after() {
+    use super::changes::{ChangeRead, GameSteam};
+    use crate::change_sources::{ChangeEvent, ChangeKind, ChangeReport, ChangeTime, ChangeWhat, Note, Source};
+    let utc = |s: &str| ts(s).expect("a time");
+    // 10:00 a 4-minute launch (ends 10:04), 10:06 the game's files change, 10:10 a rough hour.
+    let mut sess = steady(4);
+    sess.push(fragment("2026-10-20T10:00:00Z", 240, Some(SessionEnd::ProcessExited)));
+    sess.push(facts("2026-10-20T10:10:00Z", 3600, 3600, 100.0, 30.0));
+    let report = ChangeReport {
+        window_start: utc("2026-10-04T10:00:00Z"),
+        window_end: utc("2026-10-20T11:10:00Z"),
+        asked: vec![Source::DriverLog, Source::WindowsUpdateLog, Source::UninstallKeys, Source::SteamManifest],
+        events_found: vec![ChangeEvent {
+            kind: ChangeKind::GameUpdate,
+            when: ChangeTime::exact(utc("2026-10-20T10:06:00Z")),
+            what: ChangeWhat { name: Some("G".into()), id: Some("42".into()), ..ChangeWhat::default() },
+            source: Source::SteamManifest,
+        }],
+        unreadable: Vec::new(),
+        partial: Vec::new(),
+        coverage_gaps: Vec::new(),
+        notes: vec![(Source::SteamManifest, Note::SteamUpdateTimeIsFileChange)],
+        game_last_update: None,
+        undated_excluded: 0,
+    };
+    let mut inp = inputs(sess);
+    inp.changes = ChangeRead::Report { report: Box::new(report), steam: GameSteam::Found };
+    let d = diagnose(&inp, Complaint::Slow, Some("g"));
+    let f = d.findings.iter().find(|f| f.id == "game-files-change").expect("the file change is a finding, not evidence against");
+    assert!(f.in_play, "it happened before the rough launch began");
+    assert!(d.not_it.iter().all(|n| n.id != "game-files-change"));
+}
+
+#[test]
+fn a_sittings_evidence_comes_from_all_its_launches() {
+    let exited = Some(SessionEnd::ProcessExited);
+    let mut frag = fragment("2026-10-20T10:00:00Z", 120, exited);
+    frag.busy_starts = 6;
+    frag.busy_names = vec!["rustc".into()];
+    frag.start_events_dropped = Some(3);
+    frag.peak_ram_bytes = Some(900);
+    frag.running_at_start = Some(snap(&["obs64.exe"]));
+    let mut rough = facts("2026-10-20T10:05:00Z", 600, 600, 100.0, 30.0);
+    rough.peak_ram_bytes = Some(500);
+    rough.start_events_dropped = Some(2);
+    rough.running_at_start = Some(snap(&["medal.exe"]));
+    let inp = inputs(sittings_episode(frag, rough));
+    let merged = with_sitting_evidence(&inp);
+    let s = merged.sessions.iter().find(|s| s.started_at == "2026-10-20T10:05:00Z").unwrap();
+    assert_eq!((s.busy_starts, s.busy_names.clone()), (6, vec!["rustc".to_string()]));
+    assert_eq!((s.start_events_dropped, s.peak_ram_bytes), (Some(5), Some(900)));
+    let ids: Vec<&str> = s.running_at_start.as_ref().unwrap().known.iter().map(|k| k.id.as_str()).collect();
+    assert_eq!(ids, ["medal", "obs-studio"], "the union, in table order");
+    // The starts reach the finding: programs were seen starting in the rough sitting.
+    let d = diagnose(&inp, Complaint::Slow, Some("g"));
+    let f = bg_finding(&d).expect("starts in the sitting are timing");
+    assert!(f.evidence.iter().any(|e| e.code == "starts-seen"));
+    // Raw rows stay raw: nothing was merged into the input itself.
+    assert_eq!(inp.sessions.iter().find(|s| s.started_at == "2026-10-20T10:05:00Z").unwrap().busy_starts, 0);
+}
+
+#[test]
+fn the_card_says_once_how_many_sittings_among_the_compared_sessions_were_counted_together_and_never_when_none_were() {
     let build = |merge: bool| {
         let mut sess = load_episode(5, [Some(2.0), None, None], [Some(30.0), None, None], 0);
         if merge {
             sess[0].ended = Some(SessionEnd::ProcessExited);
-            sess[1].started_at = "2026-10-01T10:12:00Z".into();
+            sess[0].duration_secs = 120;
+            sess[0].samples = 120;
+            sess[1].started_at = "2026-10-01T10:08:00Z".into();
         }
         run_load(sess)
     };
