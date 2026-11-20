@@ -1208,54 +1208,16 @@ fn start_fps_capture_locked() -> Result<(), String> {
             &started_at,
         );
         std::thread::spawn(move || {
-            let mut acc = crate::sessions::SessionAccumulator::with_counts(started_at, active_changes);
+            let mut live = LiveSession::begin(started_at, active_changes);
             // P5-enough: a new capture starts from nothing, never the last capture's count.
             *lock_progress() = None;
-            let start = std::time::Instant::now();
-            // TG-context: the active power plan as the capture starts (read-only powercfg query, once;
-            // read again at save to see whether it changed). Unread stays unknown.
-            let plan_at_start = crate::actions::current_power_plan_guid();
-            // Stutter Forensics: a read-only per-second timeline (elapsed, 1% low) + a capped log of
-            // signals (process starts / RAM 90% / GPU clock drop), analyzed once at finalize. Only
-            // runs while monitoring (the user opted in); bounded so it never grows unbounded.
-            let mut timeline: Vec<(u32, f64)> = Vec::new();
-            let mut events: Vec<crate::stutter::StutterEvent> = Vec::new();
             let mut proc_sys = System::new();
-            // TG-context v2 (record only): the rest of the PC's CPU/GPU load over measured ticks.
-            let mut other_sampler: Option<crate::other_load::OtherLoadSampler> = None;
-            let mut other_cpu_acc = crate::other_load::OtherLoadAccumulator::default();
-            let mut other_gpu_3d_acc = crate::other_load::OtherLoadAccumulator::default();
-            let mut other_gpu_video_acc = crate::other_load::OtherLoadAccumulator::default();
-            let mut prev_procs: Option<std::collections::HashSet<String>> = None;
-            let mut prev_clock: Option<u32> = None;
-            let mut ram_logged = false;
-            // Gaming Mode presence: a valid session slot at ANY tick marks the whole session —
-            // a save-time-only probe would read false for a Gaming Mode session that ended
-            // before monitoring stopped. Read-only 1 Hz file check; while Gaming Mode is on it now reads
-            // and parses the small session file every tick (it is saved by temp file and rename), so a
-            // second Gaming Mode session during the same game session is seen too.
-            let mut gaming_mode_seen = false;
-            // CR-trial-plan-switch-confound: what each Gaming Mode session seen did with the power plan
-            // (read once per Gaming Mode session id), so a Trial never compares two plans unawares.
-            let mut gaming_mode_plan: Option<crate::sessions::GamingModePlan> = None;
-            let mut gaming_mode_ids: Vec<String> = Vec::new();
-            // OS chatter that constantly starts/stops — never the culprit, would drown the signal.
-            let proc_ignore: [&str; 8] = [
-                "svchost",
-                "conhost",
-                "dllhost",
-                "runtimebroker",
-                "backgroundtaskhost",
-                "wmiprvse",
-                "taskhostw",
-                "searchprotocolhost",
-            ];
             while capture_live(generation) {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 if !capture_live(generation) {
                     break;
                 }
-                let elapsed = start.elapsed().as_secs() as u32;
+                let elapsed = live.start.elapsed().as_secs() as u32;
                 // Tooltip carry-over: the live tray tooltip reuses this tick's data (no new IPC).
                 let mut tip: Option<(f64, f64)> = None;
                 // P9-bottleneck-sustained: whether this tick's frame reading was a MEASURED one.
@@ -1284,7 +1246,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
                         if s.fps > 0.0 {
                             // P4-comparable: a tick with the game behind another window is left out
                             // of the session's numbers and of the stutter timeline.
-                            let measured = acc.record_tick(
+                            let measured = live.acc.record_tick(
                                 &s.process_name,
                                 s.fps,
                                 s.avg_frametime_ms,
@@ -1295,16 +1257,16 @@ fn start_fps_capture_locked() -> Result<(), String> {
                             // P4-smooth-measure: every frame since the last reading, left out
                             // on the same ground as the tick (alt-tabbed).
                             if let Some(h) = &s.frame_hist {
-                                acc.record_frame_hist(&s.process_name, h, measured, elapsed);
+                                live.acc.record_frame_hist(&s.process_name, h, measured, elapsed);
                             }
                             if measured {
-                                *lock_progress() = Some(acc.progress());
+                                *lock_progress() = Some(live.acc.progress());
                             }
                             tick_measured = measured;
                             tick_game = Some((s.process_name.clone(), s.pid));
                             tip = Some((s.fps, s.low1_fps));
-                            if measured && s.low1_fps > 0.0 && timeline.len() < 7200 {
-                                timeline.push((elapsed, s.low1_fps));
+                            if measured && s.low1_fps > 0.0 && live.timeline.len() < 7200 {
+                                live.timeline.push((elapsed, s.low1_fps));
                             }
                         }
                     }
@@ -1323,7 +1285,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 // An unfilled sensor cache reads 0 of 0 (the poller starts with the capture): that is
                 // no reading, never a RAM figure (codebase review 2026-11-02).
                 let ram_read = cpu.ram_total_bytes > 0;
-                acc.record_sensors(
+                live.acc.record_sensors(
                     gpu_temp,
                     gpu_usage,
                     ram_read.then_some(cpu.ram_used_bytes),
@@ -1336,59 +1298,59 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 // game, but nothing here proves which adapter drew the frame (that would need game
                 // introspection, which is forbidden), so the limiter claim this share feeds inherits
                 // the same assumption the peak made.
-                acc.record_gpu_load(gpu_usage, tick_measured);
+                live.acc.record_gpu_load(gpu_usage, tick_measured);
                 // TG-context v2 (record only, feeds no verdict): sample every tick a game is attached so
                 // each reading spans one tick; only a measured tick counts, and a failed read counts as
                 // unread, never as zero. Numbers only: the game's name is compared in memory, never stored.
                 if let Some((name, pid)) = &tick_game {
-                    if !other_sampler.as_ref().is_some_and(|s| s.is_for(name)) {
-                        other_sampler = Some(crate::other_load::OtherLoadSampler::new(name));
+                    if !live.other_sampler.as_ref().is_some_and(|s| s.is_for(name)) {
+                        live.other_sampler = Some(crate::other_load::OtherLoadSampler::new(name));
                     }
-                    if let Some(sampler) = other_sampler.as_mut() {
+                    if let Some(sampler) = live.other_sampler.as_mut() {
                         let r = sampler.sample(*pid);
                         if tick_measured {
-                            other_cpu_acc.record(r.cpu);
-                            other_gpu_3d_acc.record(r.gpu_3d);
-                            other_gpu_video_acc.record(r.gpu_video);
+                            live.other_cpu_acc.record(r.cpu);
+                            live.other_gpu_3d_acc.record(r.gpu_3d);
+                            live.other_gpu_video_acc.record(r.gpu_video);
                         }
                     }
                 }
                 // Same driver-free interop as get_cpu_temp (cpu_temp.rs) — None when no HWiNFO/LHM/OHM
                 // is running; never fabricated. Session-scoped peak, same as the GPU sensors above.
                 let cpu_temp = crate::cpu_temp::read_cpu_temp().map(|t| t.temp_c.round() as u32);
-                acc.record_thermals(cpu_temp, gpu_hotspot_temp);
+                live.acc.record_thermals(cpu_temp, gpu_hotspot_temp);
                 if let Some(gm) = crate::gaming_session::load_session() {
-                    gaming_mode_seen = true;
-                    gaming_mode_plan = crate::gaming_orchestrator::observe_plan(&gm, &mut gaming_mode_ids, gaming_mode_plan);
+                    live.gaming_mode_seen = true;
+                    live.gaming_mode_plan = crate::gaming_orchestrator::observe_plan(&gm, &mut live.gaming_mode_ids, live.gaming_mode_plan);
                 }
 
                 // ── Stutter signals (capped at 50, read-only) ──
-                if events.len() < 50 {
-                    if !ram_logged
+                if live.events.len() < 50 {
+                    if !live.ram_logged
                         && cpu.ram_total_bytes > 0
                         && cpu.ram_used_bytes as f64 / cpu.ram_total_bytes as f64 >= 0.90
                     {
-                        events.push(crate::stutter::StutterEvent {
+                        live.events.push(crate::stutter::StutterEvent {
                             at_secs: elapsed,
                             kind: "ram".into(),
                             label: "RAM filling up (90%+)".into(),
                         });
-                        ram_logged = true;
+                        live.ram_logged = true;
                     }
                     // GPU clock drop ONLY while busy — a sharp drop under load is throttling; a drop
                     // at low utilization is just normal idle downclock, not a stutter cause.
-                    if let (Some(prev), Some(now)) = (prev_clock, gpu_clock) {
+                    if let (Some(prev), Some(now)) = (live.prev_clock, gpu_clock) {
                         let dropped = prev > 0 && (now as f64) < (prev as f64) * 0.8;
                         let busy = gpu_usage.is_some_and(|u| u >= 80);
                         if dropped && busy {
-                            events.push(crate::stutter::StutterEvent {
+                            live.events.push(crate::stutter::StutterEvent {
                                 at_secs: elapsed,
                                 kind: "gpu-clock".into(),
                                 label: "a GPU clock drop under load".into(),
                             });
                         }
                     }
-                    prev_clock = gpu_clock.or(prev_clock);
+                    live.prev_clock = gpu_clock.or(live.prev_clock);
                     // Process starts: a names-only diff every tick (1 Hz, only while capturing),
                     // skipping OS chatter so the insight never degrades to "svchost did it".
                     proc_sys.refresh_processes_specifics(
@@ -1401,17 +1363,17 @@ fn start_fps_capture_locked() -> Result<(), String> {
                         .values()
                         .map(|p| p.name().to_string_lossy().into_owned())
                         .collect();
-                    if let Some(prev) = &prev_procs {
+                    if let Some(prev) = &live.prev_procs {
                         let new: Vec<&String> = names.difference(prev).collect();
                         // One launch is a signal; a big burst (login/boot) isn't a single culprit.
                         if new.len() <= 4 {
                             for n in new {
                                 let lower = n.to_lowercase();
                                 let base = lower.strip_suffix(".exe").unwrap_or(&lower);
-                                if base == "compy" || proc_ignore.contains(&base) {
+                                if base == "compy" || PROC_IGNORE.contains(&base) {
                                     continue;
                                 }
-                                events.push(crate::stutter::StutterEvent {
+                                live.events.push(crate::stutter::StutterEvent {
                                     at_secs: elapsed,
                                     kind: "process-start".into(),
                                     label: format!("{n} starting"),
@@ -1419,46 +1381,134 @@ fn start_fps_capture_locked() -> Result<(), String> {
                             }
                         }
                     }
-                    prev_procs = Some(names);
+                    live.prev_procs = Some(names);
                 }
             }
-            if acc.worth_saving() {
-                let mut summary = acc.finalize(start.elapsed().as_secs());
-                summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
-                summary.gaming_mode_active = Some(gaming_mode_seen);
-                summary.gaming_mode_plan = gaming_mode_plan;
-                summary.stutter_insight = crate::stutter::analyze(&timeline, &events);
-                summary.stutter_timeline = timeline;
-                summary.stutter_events = events;
-                // What this session could actually measure — the honest capability descriptor of the
-                // production ETW-DXGI backend, keyed to the capture start (the session start).
-                summary.capture_capabilities = Some(
-                    crate::capture::EtwDxgiBackend.capabilities(Some(summary.started_at.clone())),
-                );
-                // The honest conditions this session ran under (resolution/refresh/driver/rig hash/…).
-                // collect_v1 populates only provable fields; everything else stays honestly Unknown.
-                summary.game_state = Some(crate::game_state::GameStateFingerprint::collect_v1(
-                    &summary.process_name,
-                    &summary.started_at,
-                    Some(gaming_mode_seen),
-                )
-                .with_power_plan(plan_at_start, crate::actions::current_power_plan_guid())
-                .with_other_load(other_cpu_acc.finish(), other_gpu_3d_acc.finish(), other_gpu_video_acc.finish()));
-                // P7-notify (Constitution §15, §33): a saved session toasts only when it settles a
-                // decision or a state change (a Trial's after-session, a before/after verdict, a
-                // regression against the game's last steady session). Otherwise the debrief waits
-                // in the app, silently. A short blip is never saved, so it never toasts.
-                let ended = summary.clone();
-                if let Ok(Some(saved)) = crate::sessions::save_session(summary) {
-                    if let Some(notice) = crate::experiment::session_end_notice_now(&ended, saved.settled) {
-                        crate::notify_debrief_ready(&notice.body(&ended.process_name));
-                    }
-                }
-            }
+            live.finish_at_stop();
         });
     }
 
     Ok(())
+}
+
+/// OS chatter that constantly starts/stops: never the culprit, would drown the signal.
+const PROC_IGNORE: [&str; 8] = [
+    "svchost",
+    "conhost",
+    "dllhost",
+    "runtimebroker",
+    "backgroundtaskhost",
+    "wmiprvse",
+    "taskhostw",
+    "searchprotocolhost",
+];
+
+/// Everything one session folds in while it is open, and what saving it needs. Pulled out of the
+/// monitoring thread's locals so the thread can hold one of these per session (the fields and
+/// their order are the locals the loop always had).
+struct LiveSession {
+    acc: crate::sessions::SessionAccumulator,
+    start: std::time::Instant,
+    /// TG-context: the active power plan as the session begins (read-only powercfg query, once;
+    /// read again at save to see whether it changed). Unread stays unknown.
+    plan_at_start: Option<String>,
+    /// Stutter Forensics: a read-only per-second timeline (elapsed, 1% low) + a capped log of
+    /// signals (process starts / RAM 90% / GPU clock drop), analyzed once at finalize. Only
+    /// runs while monitoring (the user opted in); bounded so it never grows unbounded.
+    timeline: Vec<(u32, f64)>,
+    events: Vec<crate::stutter::StutterEvent>,
+    /// TG-context v2 (record only): the rest of the PC's CPU/GPU load over measured ticks.
+    other_sampler: Option<crate::other_load::OtherLoadSampler>,
+    other_cpu_acc: crate::other_load::OtherLoadAccumulator,
+    other_gpu_3d_acc: crate::other_load::OtherLoadAccumulator,
+    other_gpu_video_acc: crate::other_load::OtherLoadAccumulator,
+    prev_procs: Option<std::collections::HashSet<String>>,
+    prev_clock: Option<u32>,
+    ram_logged: bool,
+    /// Gaming Mode presence: a valid session slot at ANY tick marks the whole session (a
+    /// save-time-only probe would read false for a Gaming Mode session that ended before
+    /// monitoring stopped).
+    gaming_mode_seen: bool,
+    /// CR-trial-plan-switch-confound: what each Gaming Mode session seen did with the power plan
+    /// (read once per Gaming Mode session id), so a Trial never compares two plans unawares.
+    gaming_mode_plan: Option<crate::sessions::GamingModePlan>,
+    gaming_mode_ids: Vec<String>,
+}
+
+impl LiveSession {
+    fn begin(started_at: String, active_changes: crate::history::SessionStartCounts) -> Self {
+        Self {
+            acc: crate::sessions::SessionAccumulator::with_counts(started_at, active_changes),
+            start: std::time::Instant::now(),
+            plan_at_start: crate::actions::current_power_plan_guid(),
+            timeline: Vec::new(),
+            events: Vec::new(),
+            other_sampler: None,
+            other_cpu_acc: Default::default(),
+            other_gpu_3d_acc: Default::default(),
+            other_gpu_video_acc: Default::default(),
+            prev_procs: None,
+            prev_clock: None,
+            ram_logged: false,
+            gaming_mode_seen: false,
+            gaming_mode_plan: None,
+            gaming_mode_ids: Vec::new(),
+        }
+    }
+
+    /// Capture stopped: finalize at wall time since the session began, and save it if it measured.
+    fn finish_at_stop(self) {
+        let duration_secs = self.start.elapsed().as_secs();
+        self.finish(duration_secs);
+    }
+
+    fn finish(self, duration_secs: u64) {
+        let LiveSession {
+            acc,
+            plan_at_start,
+            timeline,
+            events,
+            other_cpu_acc,
+            other_gpu_3d_acc,
+            other_gpu_video_acc,
+            gaming_mode_seen,
+            gaming_mode_plan,
+            ..
+        } = self;
+        if acc.worth_saving() {
+            let mut summary = acc.finalize(duration_secs);
+            summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
+            summary.gaming_mode_active = Some(gaming_mode_seen);
+            summary.gaming_mode_plan = gaming_mode_plan;
+            summary.stutter_insight = crate::stutter::analyze(&timeline, &events);
+            summary.stutter_timeline = timeline;
+            summary.stutter_events = events;
+            // What this session could actually measure: the honest capability descriptor of the
+            // production ETW-DXGI backend, keyed to the capture start (the session start).
+            summary.capture_capabilities = Some(
+                crate::capture::EtwDxgiBackend.capabilities(Some(summary.started_at.clone())),
+            );
+            // The honest conditions this session ran under (resolution/refresh/driver/rig hash/...).
+            // collect_v1 populates only provable fields; everything else stays honestly Unknown.
+            summary.game_state = Some(crate::game_state::GameStateFingerprint::collect_v1(
+                &summary.process_name,
+                &summary.started_at,
+                Some(gaming_mode_seen),
+            )
+            .with_power_plan(plan_at_start, crate::actions::current_power_plan_guid())
+            .with_other_load(other_cpu_acc.finish(), other_gpu_3d_acc.finish(), other_gpu_video_acc.finish()));
+            // P7-notify (Constitution section 15, 33): a saved session toasts only when it settles a
+            // decision or a state change (a Trial's after-session, a before/after verdict, a
+            // regression against the game's last steady session). Otherwise the debrief waits
+            // in the app, silently. A short blip is never saved, so it never toasts.
+            let ended = summary.clone();
+            if let Ok(Some(saved)) = crate::sessions::save_session(summary) {
+                if let Some(notice) = crate::experiment::session_end_notice_now(&ended, saved.settled) {
+                    crate::notify_debrief_ready(&notice.body(&ended.process_name));
+                }
+            }
+        }
+    }
 }
 
 // True when UAC is fully disabled (EnableLUA=0). In that state the "runas"
