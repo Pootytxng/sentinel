@@ -7,6 +7,7 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - [ ] Security slice 1: system tools by absolute path, pinned child environment — closes planted-tool and inherited-environment risk (claude/m1-hard-1; reviewed and green, waiting for the owner's direct go-ahead to push)
 
 ## NEXT (in order)
+- [ ] stabilise three load-flaky gate tests (two Rust, one ExperimentBench)
 - [ ] first look: drift notices ('turned off outside Compy') and changes undone inside the window
 - [ ] first look S4-S7 (programs running now; crash before/after line; start measuring + one-session statement; local store for answers)
 - [ ] Group a crash-and-relaunch into one sitting for baselines, noise bands and real-play counts — a crash and relaunch no longer counts as two independent sessions
@@ -47,7 +48,8 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee".
 
 ## Done (newest first)
-- 2026-11-20 - First look for a picked game (its Steam file change, crash history, graphics mods) and what looks off on this PC as plain facts, with Compy's own dated changes (claude/m5-first-look-2; see git log)
+- 2026-11-20 - desk build 5f4cad34 installed and stamped
+- 2026-11-20 - First look for a picked game (its Steam file change, crash history, graphics mods) and what looks off on this PC as plain facts, with Compy's own dated changes (claude/m5-first-look-2; 5f4cad34)
 - 2026-11-20 - desk build dd799c62 installed and stamped
 - 2026-11-20 - Mods, temperature and crash history as evidence; card polish (claude/m3-evidence, dd799c62)
 - 2026-11-20 - Graphics-mod detector 33decacc
@@ -64,6 +66,7 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - 2026-11-20 — §38 recorded ca2989ef
 
 ## Session log (newest 10)
+- 2026-11-20 desk-install session 3: built and installed main 5f4cad34, proved at runtime, stamped in RELEASE_STATE; look-only checks of the Home card (real data and new-user sandbox) in _train\view-1120d.
 - 2026-11-20 desk-install session 2: built and installed main dd799c62, proved at runtime, stamped in RELEASE_STATE; look-only check of the Home card in _train\view-1120c.
 - 2026-11-20 desk-install session: built and installed main 3e69f454, proved at runtime, stamped in RELEASE_STATE; look-only check of the Home card in _train\view-1120b.
 - 2026-11-20 docs session: QUEUE.md and a short CLAUDE.md written; WORK_TRAIN.md points here.
