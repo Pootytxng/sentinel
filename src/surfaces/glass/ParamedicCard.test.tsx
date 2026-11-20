@@ -614,7 +614,7 @@ describe("ParamedicCard: while the episode is still going", () => {
     expect(screen.getByText("2 rough Game A sessions had other programs starting during them (Discord, Zip Thing).")).toBeTruthy();
     expect(screen.getByText(/Programs were seen starting in a partly measured Game A session on .+ \(Updater\)\./)).toBeTruthy();
     expect(screen.getByText(/^Programs were also seen starting in 3 rough Game B sessions, the latest on .+ \(Encoder\)\.$/)).toBeTruthy();
-    expect(screen.getByText(/Compy can't see programs that were already running/)).toBeTruthy();
+    expect(screen.getByText("Compy didn't record how busy your PC was in these sessions.")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Compy's own|Compy started/);
   });
 
@@ -623,7 +623,7 @@ describe("ParamedicCard: while the episode is still going", () => {
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
     expect(screen.queryByText(/had other programs starting/)).toBeNull();
-    expect(screen.getByText(/Compy can't see programs that were already running/)).toBeTruthy();
+    expect(screen.getByText("Compy didn't record how busy your PC was in these sessions.")).toBeTruthy();
   });
 });
 
@@ -1688,5 +1688,58 @@ describe("ParamedicCard: recorded background load", () => {
     expect(screen.getByText("How busy the rest of your PC was in the normal sessions Compy compares with (it recorded this only for the rough ones)")).toBeTruthy();
     expect(screen.getByText("How busy the rest of your PC was in the rough sessions (Compy recorded this only for the normal ones)")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/How busy the rest of your PC was while you played/);
+  });
+});
+
+
+describe("ParamedicCard: programs already open at the start", () => {
+  const m = (code: string, args: Record<string, string>): F["evidence"][number] => ({ kind: "measured", code, args, against: false, source: "sessions" });
+  const showing = async (evidence: F["evidence"], fix: F["fix"] = steps("background-load"), extra: Partial<ParamedicDiagnosis> = {}) => {
+    await ask({ ...base, why_first: null, findings: [find("background-load", { evidence, fix })], ...extra });
+    await waitFor(() => expect(rows().length).toBe(1));
+  };
+
+  it("a program open at the start gets its own sentence and the counts, and the finding says so in its heading", async () => {
+    await showing(
+      [m("already-running", { id: "obs-studio", name: "OBS Studio" }), m("open-counts", { id: "obs-studio", r: "3", rm: "3", n: "0", nm: "4" })],
+      steps("background-load", { names: "", programs: "OBS Studio" }),
+    );
+    expect(rows()[0].textContent).toMatch(/Other programs were already open when you started playing/);
+    openAll();
+    expect(screen.getByText(/OBS Studio was already running when .* started\./)).toBeTruthy();
+    expect(screen.getByText("It was open in 3 of 3 rough sessions and 0 of 4 normal ones.")).toBeTruthy();
+    expect(screen.getByText("Close OBS Studio before you play, then play once and press Something's wrong again.")).toBeTruthy();
+  });
+
+  it("one rough session reads in the singular, and a resident program is a counted line with no already-running sentence", async () => {
+    await showing([m("open-counts-named", { id: "medal", name: "Medal", r: "1", rm: "1", n: "1", nm: "5" }), m("starts-seen", { count: "1", names: "" })]);
+    openAll();
+    expect(screen.getByText("Medal was open at the start of 1 of 1 rough session and 1 of 5 normal ones.")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/was already running when/);
+    expect(rows()[0].textContent).toMatch(/Other programs started while you played/);
+  });
+
+  it("the can't-see lines and the start-recorder notes say what they are, never that the PC was quiet", async () => {
+    await ask({
+      ...base,
+      findings: [base.findings[0]],
+      unknowns: ["running-at-start", "start-list-only"],
+      seen: [
+        { id: "starts-dropped", args: { n: "7" } },
+        { id: "starts-skipped", args: {} },
+      ],
+    });
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.getByText("Compy didn't record what was running when this session started.")).toBeTruthy();
+    expect(screen.getByText("Compy stopped listing program starts partway through (7 more were not listed).")).toBeTruthy();
+    expect(screen.getByText("Compy didn't list some program starts that happened at the same moment.")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/nothing was running|was quiet/i);
+  });
+
+  it("the not-recorded load line says Compy didn't record it", async () => {
+    await showing([m("load-not-recorded", { count: "2" })]);
+    openAll();
+    expect(screen.getByText("Compy didn't record how busy your PC was in these sessions.")).toBeTruthy();
   });
 });

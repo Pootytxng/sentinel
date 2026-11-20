@@ -84,6 +84,14 @@ function findingTitle(f: ParamedicFinding, { t, dates, game }: Ctx): string | nu
   if (f.id === "background-load" && f.evidence.some((e) => e.code.startsWith("load-") && e.args.how === "high")) {
     return t("paramedic.finding.backgroundLoad.measured");
   }
+  // Support that is only "already open when the game started" (no start was seen): the heading says that, not "started".
+  if (
+    f.id === "background-load" &&
+    f.evidence.some((e) => e.code === "already-running") &&
+    !f.evidence.some((e) => e.code.startsWith("starts-seen"))
+  ) {
+    return t("paramedic.finding.backgroundLoad.open");
+  }
   // Installs carry a day, never a time of day: the heading names the day.
   if (f.id === "program-installed") {
     const day = f.evidence.find((e) => e.code === "installed-and-started")?.args.day;
@@ -243,6 +251,13 @@ function evidenceLine(e: ParamedicEvidence, { t, dates, game }: Ctx): string | n
       return t("paramedic.evidence.recoveredRamRoughLower", { peakGb: a.peakGb, totalGb: a.totalGb });
     case "recovery-ram-rough-unread":
       return t("paramedic.evidence.recoveryRamRoughUnread");
+    // Presence only: the one allowed sentence for a program on its own, and counts across rough and normal sessions.
+    case "already-running":
+      return t("paramedic.evidence.alreadyRunning", { name: a.name, game });
+    case "open-counts":
+      return t("paramedic.evidence.openCounts", { count: Number(a.rm), r: a.r, rm: a.rm, n: a.n, nm: a.nm });
+    case "open-counts-named":
+      return t("paramedic.evidence.openCountsNamed", { count: Number(a.rm), name: a.name, r: a.r, rm: a.rm, n: a.n, nm: a.nm });
     case "load-cpu":
     case "load-gpu3d":
     case "load-gpuvideo":
@@ -367,6 +382,14 @@ function stepLines(fix: ParamedicFix, { t, game }: Ctx): string[] {
         t("paramedic.fix.gpuDriver.step5", { game }),
       ];
     case "background-load":
+      // A recorder or overlay that was open at the start of the rough sessions and of none of the normal ones is named;
+      // that step already says to play once and press the button again.
+      if (a.programs) {
+        return present([
+          a.names ? t("paramedic.fix.backgroundLoad.step1", { names: a.names }) : null,
+          t("paramedic.fix.backgroundLoad.stepProgram", { name: a.programs }),
+        ]);
+      }
       return [
         a.names ? t("paramedic.fix.backgroundLoad.step1", { names: a.names }) : t("paramedic.fix.backgroundLoad.step1NoNames"),
         t("paramedic.fix.backgroundLoad.step2", { game }),
@@ -470,6 +493,10 @@ function unknownLine(code: string, { t, game }: Ctx): string | null {
       return t("paramedic.unknown.startupPrograms");
     case "overlays":
       return t("paramedic.unknown.overlays");
+    case "running-at-start":
+      return t("paramedic.unknown.runningAtStart");
+    case "start-list-only":
+      return t("paramedic.unknown.startListOnly");
     case "other-load":
       return t("paramedic.unknown.otherLoad");
     case "other-load-rough-only":
@@ -522,6 +549,10 @@ function seenLine(s: ParamedicRuledOut, { t, dates, game }: Ctx): string | null 
       const versions = a.versions ? t("paramedic.seen.crashesVersions", { n: Number(a.versions) }) : "";
       return `${base}${byName}${versions}`;
     }
+    case "starts-dropped":
+      return t("paramedic.seen.startsDropped", { n: Number(a.n) });
+    case "starts-skipped":
+      return t("paramedic.seen.startsSkipped");
     case "game-crash-signature":
       return t("paramedic.seen.gameCrashSignature", { module: a.module, what: t("paramedic.seen.crashBeforeWhat", { date: dates.day(a.before) }) });
     case "mod-settings-only":

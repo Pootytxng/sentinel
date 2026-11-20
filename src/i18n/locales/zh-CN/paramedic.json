@@ -153,7 +153,8 @@
     },
     "backgroundLoad": {
       "what": "你玩游戏时有其他程序启动了",
-      "measured": "你玩游戏时，其他程序在占用你的电脑"
+      "measured": "你玩游戏时，其他程序在占用你的电脑",
+      "open": "你开始玩游戏时，其他程序已经打开了"
     },
     "memoryPressure": {
       "what": "你玩游戏时内存几乎用满"
@@ -217,7 +218,12 @@
     "sessionsSplit_other": "{{game}} 最后一次正常运行（{{date}}）用的是旧驱动；之后 {{count}} 次卡顿的游戏都用的是新驱动。",
     "crossGame": "{{games}} 在更新之后也明显变卡，而在此之前从未这样。",
     "installTimeNotRead": "Compy 没有读取确切的安装时间；它在 {{when}} 看到了新版本。",
-    "loadNotRecorded": "Compy 看不到游戏开始前就已在运行的程序，也没有记录这几次游戏时电脑其余部分有多忙。",
+    "loadNotRecorded": "Compy 没有记录这几次游戏时电脑其余部分有多忙。",
+    "alreadyRunning": "{{game}} 启动时，{{name}} 已经在运行。",
+    "openCounts_one": "它在 {{rm}} 次不顺的游戏中有 {{r}} 次已经打开，在 {{nm}} 次正常的游戏中有 {{n}} 次。",
+    "openCounts_other": "它在 {{rm}} 次不顺的游戏中有 {{r}} 次已经打开，在 {{nm}} 次正常的游戏中有 {{n}} 次。",
+    "openCountsNamed_one": "{{name}} 在 {{rm}} 次不顺的游戏开始时有 {{r}} 次已经打开，在 {{nm}} 次正常的游戏中有 {{n}} 次。",
+    "openCountsNamed_other": "{{name}} 在 {{rm}} 次不顺的游戏开始时有 {{r}} 次已经打开，在 {{nm}} 次正常的游戏中有 {{n}} 次。",
     "ramPeak": "在一次卡顿的游戏中，内存最高用到 {{peakGb}} GB（共 {{totalGb}} GB）。",
     "ramBaseline": "你正常游戏时内存最高用到 {{peakGb}} GB。",
     "ramWarning": "Compy 在那次游戏中看到内存几乎用满。",
@@ -351,7 +357,8 @@
     "backgroundLoad": {
       "step1": "玩游戏时请关闭 {{names}}。",
       "step1NoNames": "玩游戏时请关闭其他程序，尤其是正在编译、录制或下载的程序。",
-      "step2": "关闭它们后玩一次 {{game}}，再按一次“出问题了”。"
+      "step2": "关闭它们后玩一次 {{game}}，再按一次“出问题了”。",
+      "stepProgram": "玩游戏前先关闭 {{name}}，然后玩一次，再按一次“出问题了”。"
     },
     "memoryPressure": {
       "step1": "玩游戏前请关闭浏览器标签页和启动器。内存最高用到 {{peakGb}} GB（共 {{totalGb}} GB）。",
@@ -433,6 +440,8 @@
   "unknown": {
     "startupPrograms": "哪些程序随 Windows 启动，与之前相比",
     "overlays": "哪些悬浮窗或录制工具在运行",
+    "runningAtStart": "Compy 没有记录这次游戏开始时有哪些程序在运行。",
+    "startListOnly": "游戏开始时，是否有不在 Compy 已知名单上的程序已经打开",
     "otherLoad": "不顺的游戏和正常的游戏中，电脑其余部分有多忙（Compy 两边都没有记录）",
     "otherLoadRoughOnly": "用来比较的正常游戏中，电脑其余部分有多忙（Compy 只记录了不顺的那几次）",
     "otherLoadBaseOnly": "不顺的游戏中，电脑其余部分有多忙（Compy 只记录了正常的那几次）",
@@ -514,7 +523,9 @@
     "gameCrashesPartial_one": "Compy 能读到的 Windows 崩溃记录显示，{{game}} 至少意外关闭过一次，在 {{since}}。",
     "gameCrashesPartial_other": "Compy 能读到的 Windows 崩溃记录显示，{{game}} 至少意外关闭了 {{count}} 次。其中最早的一次在 {{since}}。",
     "crashesByName": "（按程序名匹配）",
-    "crashesVersions": "这些崩溃跨越了游戏的 {{n}} 个版本。"
+    "crashesVersions": "这些崩溃跨越了游戏的 {{n}} 个版本。",
+    "startsDropped": "Compy 在中途停止了记录程序启动（还有 {{n}} 个没有记录）。",
+    "startsSkipped": "Compy 没有记录同一时刻启动的一些程序。"
   },
   "limit": {
     "cantSee": "Compy 看不到{{what}}：{{why}}。",

@@ -193,6 +193,16 @@ pub(crate) struct SessionFacts {
     /// Same for video-engine work (decode, encode) by everything but the game.
     #[serde(default)]
     other_gpu_video_p90_pct: Option<f64>,
+    /// Which listed programs were open at the session's first frame (`running_at_start.rs`). `None` = not
+    /// recorded (an older row, or no frame ever named the process): "Compy didn't record", never "nothing
+    /// was running". Read only through `already_running_sentence` and `differs_between`.
+    #[serde(default)]
+    running_at_start: Option<crate::running_at_start::RunningAtStart>,
+    /// Ticks the start recorder skipped (a burst of more than four names) and starts it dropped (a full log).
+    #[serde(default)]
+    start_ticks_skipped: Option<u32>,
+    #[serde(default)]
+    start_events_dropped: Option<u32>,
     #[serde(default)]
     cap: CapState,
     /// The recorder's read-only flag (`session_boundary::suspected_splice`) says this row may hold two games.
@@ -978,6 +988,9 @@ pub(crate) fn facts_from(s: &crate::sessions::SessionSummary) -> SessionFacts {
         other_cpu_p90_pct: gs.and_then(|g| g.other_cpu).map(|o| f64::from(o.p90_pct_x10) / 10.0),
         other_gpu_3d_p90_pct: gs.and_then(|g| g.other_gpu_3d).map(|o| f64::from(o.p90_pct_x10) / 10.0),
         other_gpu_video_p90_pct: gs.and_then(|g| g.other_gpu_video).map(|o| f64::from(o.p90_pct_x10) / 10.0),
+        running_at_start: gs.and_then(|g| g.running_at_start.clone()),
+        start_ticks_skipped: gs.and_then(|g| g.start_ticks_skipped),
+        start_events_dropped: gs.and_then(|g| g.start_events_dropped),
         // No crash marks are passed: the engine reads none, read-only or otherwise, so the flag runs on the
         // session's own series (a row written by a build that holds one process identity is Clean without looking).
         mixed: matches!(crate::session_boundary::suspected_splice(s, &[]), crate::session_boundary::Splice::Suspected(_)),
@@ -1300,9 +1313,8 @@ fn explain<'a>(
     extras::detect_temperature(&ctx, &mut out);
     // After every candidate: the crash line compares the crashes' dates with the earliest dated one.
     extras::detect_crashes(&ctx, &mut out);
-    for code in ["startup-programs", "overlays"] {
-        out.unknown(code);
-    }
+    start_unknowns(&ctx, &mut out);
+    start_listing_note(&ctx, &mut out);
     d.limits = changes::limits(&ctx);
     if inp.drift_unread {
         out.unknown("drift-unreadable");
@@ -1786,6 +1798,123 @@ fn load_evidence(kind: LoadKind, st: LoadState, rough_sessions: usize) -> Option
     }
 }
 
+/// Fewer readable snapshots than this among the normal sessions and nothing is compared with them: one
+/// session is not a baseline for "was it open at the start".
+pub(crate) const RUNNING_BASELINE_MIN: usize = 2;
+
+/// The start-of-session snapshots of the rough sessions and of the baseline sessions, readable ones only. A
+/// row with none, or an unread one, is "Compy didn't record", never "nothing was running".
+struct StartRead<'a> {
+    rough: Vec<&'a crate::running_at_start::RunningAtStart>,
+    rough_total: usize,
+    base: Vec<&'a crate::running_at_start::RunningAtStart>,
+}
+
+fn start_read<'a>(c: &Ctx<'a>) -> StartRead<'a> {
+    let readable = |v: &[&'a SessionFacts]| -> Vec<&'a crate::running_at_start::RunningAtStart> {
+        v.iter().filter_map(|s| s.running_at_start.as_ref()).filter(|r| r.is_readable()).collect()
+    };
+    StartRead { rough: readable(&c.affected), rough_total: c.affected.len(), base: readable(&c.base) }
+}
+
+impl StartRead<'_> {
+    /// Every rough session has a readable snapshot.
+    fn complete(&self) -> bool {
+        self.rough_total > 0 && self.rough.len() == self.rough_total
+    }
+}
+
+fn nofm_args(d: &crate::running_at_start::Difference) -> Vec<(&'static str, String)> {
+    vec![
+        ("r", d.in_rough.n.to_string()),
+        ("rm", d.in_rough.of.to_string()),
+        ("n", d.in_normal.n.to_string()),
+        ("nm", d.in_normal.of.to_string()),
+    ]
+}
+
+/// What the start-of-session snapshots say, for the "Other programs" finding, strictly within the module's
+/// rules: a program that is not always resident gets `already_running_sentence` (presence only); any program,
+/// resident or not, is compared only through `differs_between`, and only in the direction "open in a larger
+/// share of the rough sessions". Only a non-resident program that differs is timing; a resident one is a line
+/// on a finding that exists for other reasons and never makes one. Returns the lines, whether any is timing,
+/// and the names of recorder/overlay programs open in the rough sessions and in none of the normal ones.
+fn start_evidence(c: &Ctx, game: &str) -> (Vec<Evidence>, bool, Vec<&'static str>) {
+    use crate::running_at_start as ras;
+    let st = start_read(c);
+    let mut evidence = Vec::new();
+    let mut timing = false;
+    let mut named: Vec<&'static str> = Vec::new();
+    if st.rough.is_empty() {
+        return (evidence, timing, named);
+    }
+    let diffs = if st.base.len() >= RUNNING_BASELINE_MIN { ras::differs_between(&st.rough, &st.base) } else { Vec::new() };
+    let mut present: Vec<ras::ProgramPresence> = Vec::new();
+    for r in &st.rough {
+        for cat in ras::summarise(r).by_category {
+            for p in cat.programs {
+                if !present.iter().any(|x| x.id == p.id) {
+                    present.push(p);
+                }
+            }
+        }
+    }
+    for p in ras::PROGRAMS {
+        let diff = diffs.iter().find(|d| d.id == p.id && d.more_in_rough());
+        let is_named = |d: &ras::Difference| p.category == ras::Category::RecorderOverlay && d.in_normal.n == 0;
+        if let Some(pr) = present.iter().find(|x| x.id == p.id) {
+            // The one allowed line for a program on its own; `None` for a resident one, which gets nothing here.
+            if ras::already_running_sentence(pr, game).is_some() {
+                evidence.push(ev(EvidenceKind::Measured, "already-running", "sessions", false, &[("id", p.id.to_string()), ("name", p.display_name.to_string())]));
+                if let Some(d) = diff {
+                    let mut a = vec![("id", p.id.to_string())];
+                    a.extend(nofm_args(d));
+                    evidence.push(ev(EvidenceKind::Measured, "open-counts", "sessions", false, &a));
+                    timing = true;
+                    if is_named(d) {
+                        named.push(p.display_name);
+                    }
+                }
+                continue;
+            }
+        }
+        if let (true, Some(d)) = (p.always_resident, diff) {
+            let mut a = vec![("id", p.id.to_string()), ("name", p.display_name.to_string())];
+            a.extend(nofm_args(d));
+            evidence.push(ev(EvidenceKind::Measured, "open-counts-named", "sessions", false, &a));
+            if is_named(d) {
+                named.push(p.display_name);
+            }
+        }
+    }
+    (evidence, timing, named)
+}
+
+/// What Compy could not see about the start of the rough sessions. With a readable snapshot on every rough
+/// session the generic "which overlays or recorders" line is replaced by what the snapshot cannot cover (it
+/// only looks for the programs on Compy's own list); otherwise that line stays and the missing snapshot is said.
+fn start_unknowns(c: &Ctx, out: &mut Out) {
+    out.unknown("startup-programs");
+    if start_read(c).complete() {
+        out.unknown("start-list-only");
+    } else {
+        out.unknown("overlays");
+        out.unknown("running-at-start");
+    }
+}
+
+/// One line when the start recorder stopped listing starts in a rough session (a full log: a count of how many
+/// were dropped), or skipped a burst of simultaneous starts (no count of starts exists for that).
+fn start_listing_note(c: &Ctx, out: &mut Out) {
+    let dropped = c.affected.iter().filter_map(|s| s.start_events_dropped).fold(0u32, u32::saturating_add);
+    let skipped = c.affected.iter().filter_map(|s| s.start_ticks_skipped).fold(0u32, u32::saturating_add);
+    if dropped > 0 {
+        out.see("starts-dropped", &[("n", dropped.to_string())]);
+    } else if skipped > 0 {
+        out.see("starts-skipped", &[]);
+    }
+}
+
 fn detect_background(c: &Ctx, out: &mut Out) {
     let busy_rough: Vec<&SessionFacts> = c.affected.iter().copied().filter(|s| s.busy_starts >= BUSY_START_MIN).collect();
     // Starts seen in a ROUGH session of the episode count as timing: this game's rough and partly measured
@@ -1840,7 +1969,9 @@ fn detect_background(c: &Ctx, out: &mut Out) {
             out.unknown("other-load-base-only");
         }
     }
-    if seen.is_empty() && !high {
+    // What the start-of-session snapshots say (presence only; see `start_evidence`).
+    let (start_ev, snap_timing, recorders) = start_evidence(c, &intelligence::pretty_game_name(&c.first_bad.game));
+    if seen.is_empty() && !high && !snap_timing {
         // Nothing to list. The load figures that say it was about the same as usual are the one thing worth
         // saying: they sit with what Compy checked, with their numbers.
         for (kind, st) in &states {
@@ -1896,6 +2027,7 @@ fn detect_background(c: &Ctx, out: &mut Out) {
             ],
         ));
     }
+    evidence.extend(start_ev);
     evidence.extend(states.iter().filter_map(|(k, st)| load_evidence(*k, *st, c.affected.len())));
     if none_recorded {
         evidence.push(ev(EvidenceKind::Unknown, "load-not-recorded", "sessions", false, &[]));
@@ -1909,8 +2041,9 @@ fn detect_background(c: &Ctx, out: &mut Out) {
     };
     out.cands.push(Cand {
         id: "background-load",
-        // Timing comes from starts alone: a recorded load figure says how busy the PC was, not when.
-        t: !seen.is_empty(),
+        // Timing comes from starts, or from a program that was NOT already open at the start of the normal
+        // sessions (`start_evidence`): a recorded load figure says how busy the PC was, not when.
+        t: !seen.is_empty() || snap_timing,
         // Unchanged: a program start recorded in every rough session (the one other support that exists here).
         d: busy_rough.len() == c.affected.len(),
         x: false,
@@ -1921,7 +2054,8 @@ fn detect_background(c: &Ctx, out: &mut Out) {
         c1: same,
         since,
         // Programs are named in the steps only when this game's own fully measured rough sessions had them.
-        fix: steps("background-load", &[("names", names_of(&busy_rough))]),
+        // A recorder or overlay open at the start of the rough sessions and of none of the normal ones is named too.
+        fix: steps("background-load", &[("names", names_of(&busy_rough)), ("programs", recorders.join(", "))]),
         evidence,
     });
 }

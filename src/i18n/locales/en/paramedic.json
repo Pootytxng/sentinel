@@ -153,7 +153,8 @@
     },
     "backgroundLoad": {
       "what": "Other programs started while you played",
-      "measured": "Other programs were using your PC while you played"
+      "measured": "Other programs were using your PC while you played",
+      "open": "Other programs were already open when you started playing"
     },
     "memoryPressure": {
       "what": "Your memory was nearly full while you played"
@@ -217,7 +218,12 @@
     "sessionsSplit_other": "{{game}}'s last normal session ({{date}}) used the old driver; all {{count}} rough ones used the new one.",
     "crossGame": "{{games}} also got much rougher after the update, and never before it.",
     "installTimeNotRead": "Compy didn't read the exact install time; it saw the new version on {{when}}.",
-    "loadNotRecorded": "Compy can't see programs that were already running, and didn't record how busy your PC was in these sessions.",
+    "loadNotRecorded": "Compy didn't record how busy your PC was in these sessions.",
+    "alreadyRunning": "{{name}} was already running when {{game}} started.",
+    "openCounts_one": "It was open in {{r}} of {{rm}} rough session and {{n}} of {{nm}} normal ones.",
+    "openCounts_other": "It was open in {{r}} of {{rm}} rough sessions and {{n}} of {{nm}} normal ones.",
+    "openCountsNamed_one": "{{name}} was open at the start of {{r}} of {{rm}} rough session and {{n}} of {{nm}} normal ones.",
+    "openCountsNamed_other": "{{name}} was open at the start of {{r}} of {{rm}} rough sessions and {{n}} of {{nm}} normal ones.",
     "ramPeak": "Memory peaked at {{peakGb}} of {{totalGb}} GB in one rough session.",
     "ramBaseline": "Your normal sessions peaked at {{peakGb}} GB.",
     "ramWarning": "Compy saw memory nearly full during that session.",
@@ -351,7 +357,8 @@
     "backgroundLoad": {
       "step1": "Close {{names}} while you play.",
       "step1NoNames": "Close other programs, especially anything building, recording or downloading, while you play.",
-      "step2": "Play {{game}} once with them closed, then press Something's wrong again."
+      "step2": "Play {{game}} once with them closed, then press Something's wrong again.",
+      "stepProgram": "Close {{name}} before you play, then play once and press Something's wrong again."
     },
     "memoryPressure": {
       "step1": "Close browser tabs and launchers before you play. Memory peaked at {{peakGb}} of {{totalGb}} GB.",
@@ -433,6 +440,8 @@
   "unknown": {
     "startupPrograms": "Which programs start with Windows, compared with before",
     "overlays": "Which overlays or recorders were running",
+    "runningAtStart": "Compy didn't record what was running when this session started.",
+    "startListOnly": "Whether any program that isn't on Compy's list of known ones was open when the session started",
     "otherLoad": "How busy the rest of your PC was, in the rough sessions and in the normal ones (Compy recorded it in neither)",
     "otherLoadRoughOnly": "How busy the rest of your PC was in the normal sessions Compy compares with (it recorded this only for the rough ones)",
     "otherLoadBaseOnly": "How busy the rest of your PC was in the rough sessions (Compy recorded this only for the normal ones)",
@@ -514,7 +523,9 @@
     "gameCrashesPartial_one": "Windows' crash records that Compy could read show {{game}} closing unexpectedly at least once, on {{since}}.",
     "gameCrashesPartial_other": "Windows' crash records that Compy could read show {{game}} closing unexpectedly at least {{count}} times. The oldest of these is from {{since}}.",
     "crashesByName": " (matched by program name)",
-    "crashesVersions": " These crashes are across {{n}} versions of the game."
+    "crashesVersions": " These crashes are across {{n}} versions of the game.",
+    "startsDropped": "Compy stopped listing program starts partway through ({{n}} more were not listed).",
+    "startsSkipped": "Compy didn't list some program starts that happened at the same moment."
   },
   "limit": {
     "cantSee": "Compy couldn't see {{what}}: {{why}}.",

@@ -52,6 +52,9 @@ fn facts(at: &str, dur: u64, samples: u32, avg: f64, low1: f64) -> SessionFacts 
         other_cpu_p90_pct: None,
         other_gpu_3d_p90_pct: None,
         other_gpu_video_p90_pct: None,
+        running_at_start: None,
+        start_ticks_skipped: None,
+        start_events_dropped: None,
         cap: CapState::Unknown,
         mixed: false,
     }
@@ -4179,4 +4182,195 @@ fn facts_read_all_three_other_load_figures() {
     s.game_state = None;
     let f = facts_from(&s);
     assert_eq!((f.other_cpu_p90_pct, f.other_gpu_3d_p90_pct, f.other_gpu_video_p90_pct), (None, None, None));
+}
+
+// ==== programs already open at the start (g4 commit 2) ===========================================
+use crate::running_at_start::{snapshot, RunningAtStart};
+
+fn snap(names: &[&str]) -> RunningAtStart {
+    snapshot(names.iter().copied(), 120, 4, 4)
+}
+
+/// One normal session per entry of `base` (each carrying that snapshot, or none), then one rough session
+/// carrying `rough`. Nothing else differs, so the snapshot is the only thing that could make a finding.
+fn start_episode(base: Vec<Option<RunningAtStart>>, rough: Option<RunningAtStart>) -> Vec<SessionFacts> {
+    let mut sess = steady(base.len());
+    for (s, b) in sess.iter_mut().zip(base) {
+        s.running_at_start = b;
+    }
+    let mut r = facts("2026-10-20T10:00:00Z", 600, 600, 100.0, 30.0);
+    r.running_at_start = rough;
+    sess.push(r);
+    sess
+}
+
+fn quiet_base(n: usize) -> Vec<Option<RunningAtStart>> {
+    (0..n).map(|_| Some(snap(&[]))).collect()
+}
+
+fn start_codes(f: &Finding) -> Vec<&'static str> {
+    f.evidence.iter().filter(|e| matches!(e.code, "already-running" | "open-counts" | "open-counts-named")).map(|e| e.code).collect()
+}
+
+#[test]
+fn a_program_open_at_the_start_of_the_rough_session_and_in_no_normal_one_is_timing_and_stays_possible() {
+    let d = run_load(start_episode(quiet_base(3), Some(snap(&["obs64.exe"]))));
+    let f = bg_finding(&d).expect("the snapshot is timing");
+    assert_eq!(start_codes(f), ["already-running", "open-counts"]);
+    let counts = f.evidence.iter().find(|e| e.code == "open-counts").unwrap();
+    for (k, v) in [("r", "1"), ("rm", "1"), ("n", "0"), ("nm", "3")] {
+        assert_eq!(counts.args.get(k).map(String::as_str), Some(v), "{k}");
+    }
+    assert!(f.in_play && f.confidence == Certainty::Possible, "{:?}", f.confidence);
+    // The fix names the recorder, because it is open in none of the normal sessions.
+    match &f.fix {
+        Fix::Steps { code, args } => {
+            assert_eq!(*code, "background-load");
+            assert_eq!(args.get("programs").map(String::as_str), Some("OBS Studio"));
+        }
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_program_open_in_the_same_share_of_normal_sessions_is_a_sentence_without_counts_or_timing() {
+    // Open at the start of the rough session and of every normal one: present, but not different.
+    let base = vec![Some(snap(&["obs64.exe"])), Some(snap(&["obs64.exe"])), Some(snap(&["obs64.exe"]))];
+    let d = run_load(start_episode(base, Some(snap(&["obs64.exe"]))));
+    assert!(d.findings.iter().all(|f| f.id != "background-load"), "presence alone is timing for nothing: {:?}", d.findings.iter().map(|f| f.id).collect::<Vec<_>>());
+}
+
+#[test]
+fn a_program_open_in_fewer_rough_sessions_than_normal_ones_says_nothing() {
+    let base = vec![Some(snap(&["obs64.exe"])), Some(snap(&["obs64.exe"])), Some(snap(&["obs64.exe"]))];
+    let d = run_load(start_episode(base, Some(snap(&[]))));
+    assert!(d.findings.iter().all(|f| f.id != "background-load"));
+}
+
+#[test]
+fn fewer_than_two_readable_normal_snapshots_is_no_baseline_and_no_timing() {
+    // One readable snapshot, one unread, one missing: one session is not a baseline.
+    let unread = snapshot(std::iter::empty(), 0, 0, 0);
+    let base = vec![Some(snap(&[])), Some(unread), None];
+    let d = run_load(start_episode(base, Some(snap(&["obs64.exe"]))));
+    assert!(d.findings.iter().all(|f| f.id != "background-load"));
+}
+
+#[test]
+fn a_resident_program_alone_makes_no_finding_and_never_gets_the_already_running_line() {
+    let d = run_load(start_episode(quiet_base(3), Some(snap(&["medal.exe"]))));
+    assert!(d.findings.iter().all(|f| f.id != "background-load"), "an always-resident program is only a comparison on a finding that exists");
+    // With a finding made for another reason (a build tool started in the rough session) it is a counted line only.
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["medal.exe"])));
+    let last = sess.last_mut().unwrap();
+    last.busy_starts = 5;
+    last.busy_names = vec!["rustc".into()];
+    let f = run_load(sess);
+    let f = bg_finding(&f).expect("starts make the finding").clone();
+    assert_eq!(start_codes(&f), ["open-counts-named"]);
+    let named = f.evidence.iter().find(|e| e.code == "open-counts-named").unwrap();
+    assert_eq!(named.args.get("name").map(String::as_str), Some("Medal"));
+    assert!(f.evidence.iter().all(|e| e.code != "already-running"));
+    assert!(f.confidence != Certainty::Likely || f.evidence.iter().any(|e| e.code.starts_with("load-")), "a start-recorder line never promotes alone");
+}
+
+#[test]
+fn a_missing_or_unread_rough_snapshot_is_said_and_a_complete_set_names_what_the_list_cannot_cover() {
+    for rough in [None, Some(snapshot(std::iter::empty(), 0, 0, 0))] {
+        let mut sess = start_episode(quiet_base(3), rough);
+        let last = sess.last_mut().unwrap();
+        last.busy_starts = 5;
+        last.busy_names = vec!["rustc".into()];
+        let d = run_load(sess);
+        assert!(d.unknowns.contains(&"running-at-start") && d.unknowns.contains(&"overlays"), "{:?}", d.unknowns);
+        assert!(!d.unknowns.contains(&"start-list-only"));
+    }
+    let mut sess = start_episode(quiet_base(3), Some(snap(&[])));
+    let last = sess.last_mut().unwrap();
+    last.busy_starts = 5;
+    last.busy_names = vec!["rustc".into()];
+    let d = run_load(sess);
+    assert!(d.unknowns.contains(&"start-list-only") && d.unknowns.contains(&"startup-programs"), "{:?}", d.unknowns);
+    assert!(!d.unknowns.contains(&"overlays") && !d.unknowns.contains(&"running-at-start"));
+}
+
+#[test]
+fn a_full_start_log_and_a_skipped_burst_are_each_one_honest_line() {
+    let mk = |dropped: Option<u32>, skipped: Option<u32>| {
+        let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe"])));
+        let last = sess.last_mut().unwrap();
+        last.start_events_dropped = dropped;
+        last.start_ticks_skipped = skipped;
+        run_load(sess)
+    };
+    let d = mk(Some(7), Some(2));
+    let s = d.seen.iter().find(|s| s.id == "starts-dropped").expect("dropped says how many");
+    assert_eq!(s.args.get("n").map(String::as_str), Some("7"));
+    assert!(d.seen.iter().all(|s| s.id != "starts-skipped"), "one line, the one with a count");
+    assert!(mk(None, Some(2)).seen.iter().any(|s| s.id == "starts-skipped"));
+    let none = mk(Some(0), Some(0));
+    assert!(none.seen.iter().all(|s| s.id != "starts-dropped" && s.id != "starts-skipped"));
+}
+
+#[test]
+fn the_fix_names_only_recorders_and_overlays_open_in_none_of_the_normal_sessions() {
+    // A build tool and a browser differ too, but the fix names only the recorder.
+    let base = vec![Some(snap(&[])), Some(snap(&[])), Some(snap(&[]))];
+    let d = run_load(start_episode(base, Some(snap(&["obs64.exe", "cargo.exe", "chrome.exe"]))));
+    let f = bg_finding(&d).expect("finding");
+    match &f.fix {
+        Fix::Steps { args, .. } => {
+            let p = args.get("programs").map(String::as_str).unwrap_or("");
+            assert_eq!(p, "OBS Studio", "never cargo or a browser");
+        }
+        other => panic!("{other:?}"),
+    }
+    // Open in a normal session too: not named (the fix would ask to close what was open when it ran fine).
+    let base = vec![Some(snap(&["obs64.exe"])), Some(snap(&[])), Some(snap(&[]))];
+    let d = run_load(start_episode(base, Some(snap(&["obs64.exe"]))));
+    if let Some(f) = bg_finding(&d) {
+        if let Fix::Steps { args, .. } = &f.fix {
+            assert_eq!(args.get("programs").map(String::as_str), Some(""), "{args:?}");
+        }
+    }
+}
+
+#[test]
+fn start_lines_never_change_the_certainty_a_finding_has_without_them() {
+    let with = |rough: Option<RunningAtStart>| {
+        let mut sess = start_episode(quiet_base(3), rough);
+        let last = sess.last_mut().unwrap();
+        last.busy_starts = 5;
+        last.busy_names = vec!["rustc".into()];
+        let d = run_load(sess);
+        bg_finding(&d).map(|f| f.confidence)
+    };
+    assert_eq!(with(Some(snap(&["obs64.exe"]))), with(None), "same finding, same certainty, with or without the snapshot lines");
+    assert_eq!(with(None), Some(Certainty::Possible));
+}
+
+#[test]
+fn facts_read_the_three_start_fields_and_old_rows_read_as_not_recorded() {
+    let mut row = summary();
+    row.game_state = Some(crate::game_state::GameStateFingerprint {
+        running_at_start: Some(snap(&["obs64.exe"])),
+        start_events_dropped: Some(4),
+        start_ticks_skipped: Some(1),
+        ..Default::default()
+    });
+    let f = facts_from(&row);
+    assert_eq!(f.running_at_start, Some(snap(&["obs64.exe"])));
+    assert_eq!((f.start_events_dropped, f.start_ticks_skipped), (Some(4), Some(1)));
+    let old = facts_from(&summary());
+    assert!(old.running_at_start.is_none() && old.start_events_dropped.is_none() && old.start_ticks_skipped.is_none());
+}
+
+#[test]
+fn the_card_sentence_for_a_program_already_running_is_the_modules_own_sentence() {
+    use crate::running_at_start::{already_running_sentence, ProgramPresence};
+    let en: serde_json::Value = serde_json::from_str(include_str!("../../../src/i18n/locales/en/paramedic.json")).expect("en json");
+    let line = en["evidence"]["alreadyRunning"].as_str().expect("key");
+    let p = ProgramPresence { id: "obs-studio", name: "OBS Studio", always_resident: false };
+    let expect = already_running_sentence(&p, "Game X").expect("not resident");
+    assert_eq!(line.replace("{{name}}", "OBS Studio").replace("{{game}}", "Game X"), expect);
 }
