@@ -668,8 +668,13 @@ where
     let guard = SlotGuard(&READING, stamp);
     let (tx, rx) = std::sync::mpsc::channel();
     let spawned = std::thread::Builder::new().name("paramedic-first-look".into()).spawn(move || {
-        let _guard = guard;
-        let _ = tx.send(fetch());
+        let guard = guard;
+        let reading = fetch();
+        // Free the slot before handing the answer over: whoever asks again the moment it arrives must find the
+        // slot free, not be told "took too long" by a reader that has already finished. (A reader that dies frees
+        // it as it unwinds, before the waiting side sees the hang-up.)
+        drop(guard);
+        let _ = tx.send(reading);
     });
     if spawned.is_err() {
         let _ = READING.compare_exchange(stamp, 0, Ordering::AcqRel, Ordering::Acquire);
@@ -1243,6 +1248,44 @@ mod tests {
         let dead = first_look_with(Since::ThisWeek, utc(NOW), Duration::from_secs(2), |_, _| panic!("reader died"));
         assert!(dead.limits.iter().any(|l| l.kind == "driver" && l.code == "reader-failed"), "{:?}", dead.limits);
         assert!(dead.none.is_empty());
+    }
+
+    /// The reader frees the slot before it hands its answer over, so asking again the moment an answer arrives
+    /// is never refused as "took too long" (it was, now and then: the slot was freed after the hand-over).
+    /// With the old order this fails within a few reads on a busy PC (which the push check is) and almost never
+    /// on an idle one, so a pass on an idle PC alone proves little.
+    #[test]
+    fn a_read_straight_after_an_answer_finds_the_slot_free() {
+        let _turn = one_at_a_time();
+        for i in 0..500 {
+            // "ran" is an answer only this reader gives: a refused read, a dead reader or a failed start say otherwise.
+            let r = read_within(Duration::from_secs(30), || Reading::Unavailable("ran"));
+            assert!(matches!(r, Reading::Unavailable("ran")), "read {i} did not run: the slot was still held after the previous answer");
+        }
+    }
+
+    /// A reader that dies frees the slot as it unwinds, before the waiting side learns it died.
+    #[test]
+    fn a_read_straight_after_a_dead_reader_finds_the_slot_free() {
+        let _turn = one_at_a_time();
+        for i in 0..50 {
+            let dead = read_within(Duration::from_secs(30), || panic!("reader died"));
+            assert!(matches!(dead, Reading::Unavailable("reader-failed")), "read {i}: a dead reader is reader-failed");
+            let r = read_within(Duration::from_secs(30), || Reading::Unavailable("ran"));
+            assert!(matches!(r, Reading::Unavailable("ran")), "read {i} did not run after a dead reader: its slot was still held");
+        }
+    }
+
+    /// The same for the crash, mod, fact and history readers, which share `spawn_reader`.
+    #[test]
+    fn a_slotted_reader_straight_after_an_answer_finds_the_slot_free() {
+        static SLOT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        for i in 0..500 {
+            let rx = spawn_reader("paramedic-test-reader", Some(&SLOT), || 1u8)
+                .unwrap_or_else(|e| panic!("read {i} was refused ({e}): the slot was still held after the previous answer"))
+                .expect("the reader thread starts");
+            assert_eq!(rx.recv().expect("the reader answers"), 1);
+        }
     }
 
     #[test]

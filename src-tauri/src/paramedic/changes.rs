@@ -781,8 +781,12 @@ pub(super) fn spawn_reader<T: Send + 'static>(name: &str, slot: Option<&'static 
     Ok(std::thread::Builder::new()
         .name(name.into())
         .spawn(move || {
-            let _guard = guard;
-            let _ = tx.send(f());
+            let guard = guard;
+            let answer = f();
+            // Free the slot before handing the answer over, so asking again the moment it arrives is not refused
+            // by a reader that has already finished. (A reader that dies frees it as it unwinds.)
+            drop(guard);
+            let _ = tx.send(answer);
         })
         .ok()
         .map(|_| rx))
