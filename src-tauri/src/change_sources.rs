@@ -43,6 +43,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -52,6 +53,11 @@ pub(crate) const DEFAULT_BUDGET: Duration = Duration::from_millis(500);
 const DRIVER_LOOKBACK_DAYS: i64 = 120;
 /// Newest-first cap on event-log rows per query. Reaching it makes the read partial.
 const MAX_EVENTS: usize = 600;
+/// Rows requested: one more than the cap, so exactly `MAX_EVENTS` rows is a complete read and only
+/// `MAX_EVENTS + 1` proves older rows exist.
+const QUERY_ROWS: usize = MAX_EVENTS + 1;
+/// Most bytes read from a child's stdout; more is dropped and the read is partial.
+const MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
 /// Same device + same driver + same version reconfigured within this span is one install.
 const DUP_SPAN_SECS: i64 = 600;
 
@@ -236,6 +242,10 @@ pub(crate) enum Gap {
     RowCapReached,
     /// Records Windows returned that Compy could not parse (count).
     MalformedRecords(usize),
+    /// The reader's output exceeded the byte cap; the rest was not read.
+    OutputCapped,
+    /// Registry keys that could not be opened or listed (count).
+    RegistryKeysUnreadable(usize),
     SteamLibrariesUnreadable(usize),
     SteamRecordsUnparsed(usize),
 }
@@ -250,6 +260,9 @@ pub(crate) enum Note {
     StoreAppsNotCovered,
     /// Steam `LastUpdated` also moves on verify/DLC: "the game's files changed", not "new version".
     SteamUpdateTimeIsFileChange,
+    /// The driver classes this reader reports. Storage, USB, Bluetooth, HID and every other class are
+    /// NOT checked, so the engine must never say "no driver changed", only "no driver of these classes".
+    DriverClassesCovered(Vec<String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -323,12 +336,22 @@ pub(crate) struct CoverageGap {
     pub to: DateTime<Utc>,
 }
 
+/// What changed in a window, plus everything the engine needs to avoid a false "nothing changed".
+///
+/// `events_found` is only what was FOUND. An empty list says nothing by itself: the source may not
+/// have been asked, may be unreadable, or may be partial. Always go through [`ChangeReport::status`]
+/// for the kind you want to talk about, and only a `KindStatus::Complete` with an empty
+/// `events_found` for that kind means "Compy looked and found none" (still limited by the listed
+/// `limits`, e.g. Store apps are not covered).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct ChangeReport {
     pub window_start: DateTime<Utc>,
     pub window_end: DateTime<Utc>,
-    /// Inside the window `(window_start, window_end]`, oldest first.
-    pub events: Vec<ChangeEvent>,
+    /// The sources that were actually asked. A source not listed here says nothing about the PC.
+    pub asked: Vec<Source>,
+    /// Found inside the window `(window_start, window_end]`, oldest first. NOT "all that changed":
+    /// see the type docs and `status`.
+    pub events_found: Vec<ChangeEvent>,
     /// Sources Compy could not read. "Could not read" is never "nothing changed".
     pub unreadable: Vec<UnreadableSource>,
     /// Sources that were read incompletely (budget, row cap, malformed records).
@@ -342,6 +365,62 @@ pub(crate) struct ChangeReport {
     pub game_last_update: Option<ChangeEvent>,
     /// Events a source returned without a usable time; excluded from `events`.
     pub undated_excluded: usize,
+}
+
+/// How far the engine may trust a kind's (possibly empty) list of found events.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) enum KindStatus {
+    /// The source for this kind was never asked (e.g. no game was given for `GameUpdate`).
+    NotAsked,
+    Unreadable(UnreadableReason),
+    /// Read, but incompletely or not back to the window start.
+    Partial { gaps: Vec<Gap>, covered_from: Option<DateTime<Utc>>, coverage_gap: Option<CoverageGap>, limits: Vec<Note> },
+    /// Read completely. `limits` are the always-true limits of that source.
+    Complete { limits: Vec<Note> },
+}
+
+impl ChangeKind {
+    /// The Windows source that answers this kind.
+    pub(crate) fn source(self) -> Source {
+        match self {
+            ChangeKind::GpuDriver | ChangeKind::OtherDriver => Source::DriverLog,
+            ChangeKind::WindowsUpdate => Source::WindowsUpdateLog,
+            ChangeKind::GameUpdate => Source::SteamManifest,
+            ChangeKind::ProgramInstalled => Source::UninstallKeys,
+        }
+    }
+}
+
+impl ChangeReport {
+    /// The only sound way to read an empty `events_found`: what is known about this kind's source.
+    pub(crate) fn status(&self, kind: ChangeKind) -> KindStatus {
+        let source = kind.source();
+        if !self.asked.contains(&source) {
+            return KindStatus::NotAsked;
+        }
+        if let Some(u) = self.unreadable.iter().find(|u| u.source == source) {
+            return KindStatus::Unreadable(u.reason.clone());
+        }
+        let limits: Vec<Note> = self.notes.iter().filter(|(s, _)| *s == source).map(|(_, n)| n.clone()).collect();
+        let partial = self.partial.iter().find(|p| p.source == source);
+        let coverage_gap = self.coverage_gaps.iter().find(|g| g.source == source).cloned();
+        if partial.is_some() || coverage_gap.is_some() {
+            return KindStatus::Partial {
+                gaps: partial.map(|p| p.gaps.clone()).unwrap_or_default(),
+                covered_from: partial.and_then(|p| p.covered_from).or(coverage_gap.as_ref().map(|g| g.to)),
+                coverage_gap,
+                limits,
+            };
+        }
+        KindStatus::Complete { limits }
+    }
+}
+
+/// Why a report could not be made at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub(crate) enum ChangeError {
+    /// `t0 >= t1`: an inverted or empty window has nothing to say; it is not "no changes".
+    EmptyWindow,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -383,6 +462,8 @@ fn system_command(name: &str) -> Result<std::process::Command, UnreadableReason>
 
 struct RunOutput {
     stdout: Vec<u8>,
+    /// More than the byte cap was written; the excess was dropped.
+    overflow: bool,
     timed_out: bool,
     exit_code: Option<i32>,
     success: bool,
@@ -391,11 +472,24 @@ struct RunOutput {
 /// Run a child with piped output and a hard deadline. At the deadline the child is killed and
 /// whatever it had already written is returned with `timed_out: true`. Its stderr is drained and
 /// discarded: Windows' localised error text never reaches a user-visible reason.
-fn run_with_budget(mut cmd: std::process::Command, budget: Duration) -> Result<RunOutput, UnreadableReason> {
+fn run_with_budget(cmd: std::process::Command, budget: Duration) -> Result<RunOutput, UnreadableReason> {
+    run_capped(cmd, budget, MAX_OUTPUT_BYTES)
+}
+
+/// Append at most `cap` bytes in total; true when something was dropped.
+fn append_capped(buf: &mut Vec<u8>, chunk: &[u8], cap: usize) -> bool {
+    let room = cap.saturating_sub(buf.len());
+    buf.extend_from_slice(&chunk[..chunk.len().min(room)]);
+    chunk.len() > room
+}
+
+fn run_capped(mut cmd: std::process::Command, budget: Duration, max_bytes: usize) -> Result<RunOutput, UnreadableReason> {
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn().map_err(|_| UnreadableReason::StartFailed)?;
     let out_buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let overflow = Arc::new(AtomicBool::new(false));
     let pump = |mut pipe: Box<dyn Read + Send>, buf: Option<Arc<Mutex<Vec<u8>>>>| {
+        let overflow = overflow.clone();
         std::thread::spawn(move || {
             let mut chunk = [0u8; 16 * 1024];
             loop {
@@ -404,7 +498,9 @@ fn run_with_budget(mut cmd: std::process::Command, budget: Duration) -> Result<R
                     Ok(n) => {
                         if let Some(b) = &buf {
                             if let Ok(mut b) = b.lock() {
-                                b.extend_from_slice(&chunk[..n]);
+                                if append_capped(&mut b, &chunk[..n], max_bytes) {
+                                    overflow.store(true, Ordering::Relaxed);
+                                }
                             }
                         }
                     }
@@ -449,7 +545,7 @@ fn run_with_budget(mut cmd: std::process::Command, budget: Duration) -> Result<R
         }
     }
     let stdout = out_buf.lock().map(|b| b.clone()).unwrap_or_default();
-    Ok(RunOutput { stdout, timed_out, exit_code, success })
+    Ok(RunOutput { stdout, overflow: overflow.load(Ordering::Relaxed), timed_out, exit_code, success })
 }
 
 /// Feed `iter` to `f` until the deadline; returns true if it stopped because time ran out.
@@ -482,8 +578,28 @@ fn decode_console_text(bytes: &[u8]) -> String {
     }
 }
 
+/// A driver version: digits and dots only. Anything else (mojibake, markup) is not trusted.
+fn clean_version(s: &str) -> Option<String> {
+    let t = s.trim();
+    (!t.is_empty() && t.chars().all(|c| c.is_ascii_digit() || c == '.')).then(|| t.to_string())
+}
+
+/// A Steam build id: digits only.
+fn clean_build_id(s: &str) -> Option<String> {
+    let t = s.trim();
+    (!t.is_empty() && t.chars().all(|c| c.is_ascii_digit())).then(|| t.to_string())
+}
+
 fn text_is_uncertain(s: &str) -> bool {
     s.contains('?') || !s.is_ascii()
+}
+
+#[derive(Debug)]
+struct LogText {
+    xml: String,
+    timed_out: bool,
+    /// Output exceeded the byte cap.
+    capped: bool,
 }
 
 /// Query one event-log channel with `wevtutil qe`, by absolute path (no elevation for
@@ -495,7 +611,7 @@ fn run_wevtutil(
     count: usize,
     newest_first: bool,
     budget: Duration,
-) -> Result<(String, bool), UnreadableReason> {
+) -> Result<LogText, UnreadableReason> {
     let mut cmd = system_command("wevtutil.exe")?;
     cmd.arg("qe").arg(channel);
     if let Some(q) = xpath {
@@ -508,7 +624,7 @@ fn run_wevtutil(
     if !out.timed_out && !out.success {
         return Err(reason_for_exit_code(out.exit_code));
     }
-    Ok((decode_console_text(&out.stdout), out.timed_out))
+    Ok(LogText { xml: decode_console_text(&out.stdout), timed_out: out.timed_out, capped: out.overflow })
 }
 
 /// `[since, until]` bounds for the event query, to the millisecond (lower floored, upper rounded
@@ -649,6 +765,17 @@ fn assess<T>(
     log_oldest: Option<DateTime<Utc>>,
     parsed: Parsed<T>,
 ) -> Result<Assessed<T>, UnreadableReason> {
+    assess_with(raw, timed_out, false, log_oldest, parsed)
+}
+
+/// `assess` with the output-byte-cap flag.
+fn assess_with<T>(
+    raw: &str,
+    timed_out: bool,
+    capped: bool,
+    log_oldest: Option<DateTime<Utc>>,
+    parsed: Parsed<T>,
+) -> Result<Assessed<T>, UnreadableReason> {
     let blank = raw.trim().is_empty();
     if parsed.blocks == 0 {
         if timed_out {
@@ -663,9 +790,12 @@ fn assess<T>(
         return Err(UnreadableReason::RecordsUnreadable(malformed));
     }
     let mut gaps = Vec::new();
-    let cap_hit = parsed.blocks >= MAX_EVENTS;
+    let cap_hit = parsed.blocks > MAX_EVENTS;
     if timed_out {
         gaps.push(Gap::TimedOut);
+    }
+    if capped {
+        gaps.push(Gap::OutputCapped);
     }
     if cap_hit {
         gaps.push(Gap::RowCapReached);
@@ -674,7 +804,7 @@ fn assess<T>(
         gaps.push(Gap::MalformedRecords(malformed));
     }
     // After a timeout or the cap the read stopped at its oldest row; otherwise the log's own start.
-    let covered_from = if timed_out || cap_hit {
+    let covered_from = if timed_out || cap_hit || capped {
         match (log_oldest, parsed.oldest_row) {
             (Some(a), Some(b)) => Some(a.max(b)),
             (a, b) => a.or(b),
@@ -711,14 +841,14 @@ fn read_channel<T>(
     parse: impl Fn(&str) -> Parsed<T>,
 ) -> Result<Assessed<T>, UnreadableReason> {
     let deadline = Instant::now() + budget;
-    let (start_xml, start_timed_out) = run_wevtutil(channel, None, 1, false, budget)?;
-    if start_timed_out {
+    let start = run_wevtutil(channel, None, 1, false, budget)?;
+    if start.timed_out {
         return Err(UnreadableReason::TimedOutBeforeAnyRecord);
     }
-    let log_oldest = parse_log_start(&start_xml)?;
+    let log_oldest = parse_log_start(&start.xml)?;
     let remaining = deadline.saturating_duration_since(Instant::now());
-    let (xml, timed_out) = run_wevtutil(channel, Some(xpath), MAX_EVENTS, true, remaining)?;
-    assess(&xml, timed_out, Some(log_oldest), parse(&xml))
+    let q = run_wevtutil(channel, Some(xpath), QUERY_ROWS, true, remaining)?;
+    assess_with(&q.xml, q.timed_out, q.capped, Some(log_oldest), parse(&q.xml))
 }
 
 fn read_ok_from(a: Assessed<ChangeEvent>) -> SourceRead {
@@ -736,6 +866,8 @@ struct PnpRecord {
     driver_name: Option<String>,
     class_guid: String,
     version: Option<String>,
+    /// The version field held something other than digits and dots (not trusted).
+    version_bad: bool,
     driver_date: Option<NaiveDate>,
     provider: Option<String>,
     updated: bool,
@@ -760,7 +892,8 @@ fn parse_pnp_block(b: &str) -> Option<PnpRecord> {
         instance_id,
         driver_name: xml_data(b, "DriverName").filter(|s| !s.is_empty()),
         class_guid,
-        version: Some(version).filter(|s| !s.is_empty()),
+        version: clean_version(&version),
+        version_bad: !version.trim().is_empty() && clean_version(&version).is_none(),
         driver_date: xml_data(b, "DriverDate").and_then(|d| NaiveDate::parse_from_str(d.trim(), "%m/%d/%Y").ok()),
         provider: xml_data(b, "DriverProvider").filter(|s| !s.is_empty()),
         updated: updated.eq_ignore_ascii_case("true"),
@@ -776,14 +909,16 @@ fn parse_pnp(xml: &str) -> Parsed<PnpRecord> {
 /// Vulkan helper devices, ...) and every other class are not reported.
 fn driver_class(guid: &str) -> Option<(ChangeKind, &'static str)> {
     let g = guid.trim().trim_matches(|c| c == '{' || c == '}').to_ascii_lowercase();
-    match g.as_str() {
-        "4d36e968-e325-11ce-bfc1-08002be10318" => Some((ChangeKind::GpuDriver, "display")),
-        "4d36e96c-e325-11ce-bfc1-08002be10318" => Some((ChangeKind::OtherDriver, "audio")),
-        "4d36e972-e325-11ce-bfc1-08002be10318" => Some((ChangeKind::OtherDriver, "network")),
-        "4d36e97d-e325-11ce-bfc1-08002be10318" => Some((ChangeKind::OtherDriver, "chipset/system")),
-        _ => None,
-    }
+    DRIVER_CLASSES.iter().find(|(id, _, _)| *id == g).map(|(_, k, l)| (*k, *l))
 }
+
+/// The only driver classes reported (device-class GUID, kind, label).
+const DRIVER_CLASSES: [(&str, ChangeKind, &str); 4] = [
+    ("4d36e968-e325-11ce-bfc1-08002be10318", ChangeKind::GpuDriver, "display"),
+    ("4d36e96c-e325-11ce-bfc1-08002be10318", ChangeKind::OtherDriver, "audio"),
+    ("4d36e972-e325-11ce-bfc1-08002be10318", ChangeKind::OtherDriver, "network"),
+    ("4d36e97d-e325-11ce-bfc1-08002be10318", ChangeKind::OtherDriver, "chipset/system"),
+];
 
 /// Instance id without its per-machine instance suffix: `PCI\VEN_1002&DEV_7550&...\6&2ef2...` ->
 /// `PCI\VEN_1002&DEV_7550&...`.
@@ -845,7 +980,8 @@ fn driver_changes(mut recs: Vec<PnpRecord>) -> Vec<ChangeEvent> {
             None => detail.push_str(", previous version unknown"),
             Some(true) => {}
         }
-        let text_uncertain = text_is_uncertain(&detail) || r.provider.as_deref().is_some_and(text_is_uncertain);
+        let text_uncertain =
+            text_is_uncertain(&detail) || r.provider.as_deref().is_some_and(text_is_uncertain) || r.version_bad;
         out.push(ChangeEvent {
             kind,
             when: ChangeTime::exact(r.at),
@@ -876,11 +1012,13 @@ pub(crate) fn driver_events_from_xml(xml: &str) -> Vec<ChangeEvent> {
 pub(crate) fn read_driver_installs(since: DateTime<Utc>, until: DateTime<Utc>, budget: Duration) -> SourceRead {
     let q = event_query(None, 400, since, until);
     match read_channel("Microsoft-Windows-Kernel-PnP/Configuration", &q, budget, parse_pnp) {
-        Ok(a) => read_ok_from(Assessed {
-            items: driver_changes(a.items),
-            covered_from: a.covered_from,
-            gaps: a.gaps,
-        }),
+        Ok(a) => {
+            let mut r = read_ok_from(Assessed { items: driver_changes(a.items), covered_from: a.covered_from, gaps: a.gaps });
+            if let SourceRead::Read(ok) = &mut r {
+                ok.notes.push(Note::DriverClassesCovered(DRIVER_CLASSES.iter().map(|(_, _, l)| (*l).to_string()).collect()));
+            }
+            r
+        }
         Err(r) => SourceRead::Unreadable(r),
     }
 }
@@ -998,6 +1136,8 @@ struct AcfInfo {
     install_dir: Option<String>,
     build_id: Option<String>,
     target_build_id: Option<String>,
+    /// A build id field held something other than digits (not trusted, dropped).
+    ids_uncertain: bool,
     /// Epoch seconds (UTC) Steam last changed the game's files (update, verify or DLC).
     last_updated: Option<i64>,
 }
@@ -1035,8 +1175,11 @@ fn parse_acf(text: &str) -> Option<AcfInfo> {
         app_id: nonempty("appid")?.parse().ok()?,
         name: nonempty("name"),
         install_dir: nonempty("installdir"),
-        build_id: nonempty("buildid"),
-        target_build_id: nonempty("targetbuildid"),
+        build_id: nonempty("buildid").and_then(|v| clean_build_id(&v)),
+        target_build_id: nonempty("targetbuildid").and_then(|v| clean_build_id(&v)),
+        ids_uncertain: ["buildid", "targetbuildid"]
+            .iter()
+            .any(|k| nonempty(k).is_some_and(|v| clean_build_id(&v).is_none())),
         last_updated: nonempty("lastupdated").and_then(|v| v.parse::<i64>().ok()).filter(|s| *s > 0),
     })
 }
@@ -1100,6 +1243,7 @@ fn game_event_from_acf(info: &AcfInfo) -> Result<ChangeEvent, UnreadableReason> 
             to_version: info.build_id.clone(),
             build_id: info.build_id.clone(),
             detail: pending,
+            text_uncertain: info.ids_uncertain,
             ..ChangeWhat::default()
         },
         source: Source::SteamManifest,
@@ -1269,6 +1413,7 @@ fn find_in_libraries(roots: &[String], vdf_unreadable: bool, game: &GameRef, bud
 
 /// Every installed Steam game with a readable update time. For callers that want to enumerate, and
 /// for the real-PC check.
+#[cfg(test)]
 pub(crate) fn read_all_steam_games(budget: Duration) -> Result<Vec<ChangeEvent>, UnreadableReason> {
     let SteamRoots { roots, .. } = steam_library_roots()?;
     let deadline = Instant::now() + budget;
@@ -1388,11 +1533,13 @@ struct UninstallScan {
     events: Vec<ChangeEvent>,
     timed_out: bool,
     without_date: usize,
+    /// Entries that could not be opened (`None` in the stream).
+    unreadable_keys: usize,
 }
 
 /// Pure: events from a stream of entries, stopping at the deadline. Same name + version + day in
 /// two registry views is one program. Programs with no usable date are counted, not dropped.
-fn collect_uninstall<I: Iterator<Item = UninstallFields>>(
+fn collect_uninstall<I: Iterator<Item = Option<UninstallFields>>>(
     entries: I,
     deadline: Instant,
     day_window: DayWindowFn<'_>,
@@ -1400,18 +1547,20 @@ fn collect_uninstall<I: Iterator<Item = UninstallFields>>(
     let mut events: Vec<ChangeEvent> = Vec::new();
     let mut without_date = 0;
     let mut seen: HashSet<(String, Option<String>, Option<DateTime<Utc>>)> = HashSet::new();
-    let timed_out = collect_until(entries, deadline, |f| match uninstall_outcome(&f, day_window) {
-        UninstallOutcome::Event(ev) => {
+    let mut unreadable_keys = 0usize;
+    let timed_out = collect_until(entries, deadline, |f| match f.map(|f| uninstall_outcome(&f, day_window)) {
+        None => unreadable_keys += 1,
+        Some(UninstallOutcome::Event(ev)) => {
             let ev = *ev;
             let key = (ev.what.name.clone().unwrap_or_default(), ev.what.to_version.clone(), ev.when.at);
             if seen.insert(key) {
                 events.push(ev);
             }
         }
-        UninstallOutcome::NoDate => without_date += 1,
-        UninstallOutcome::Skipped => {}
+        Some(UninstallOutcome::NoDate) => without_date += 1,
+        Some(UninstallOutcome::Skipped) => {}
     });
-    UninstallScan { events, timed_out, without_date }
+    UninstallScan { events, timed_out, without_date, unreadable_keys }
 }
 
 #[derive(Clone, Copy)]
@@ -1456,23 +1605,47 @@ fn read_uninstall_fields(hive: Hive, path: &str, sub: &str) -> Option<UninstallF
 pub(crate) fn read_installed_programs(budget: Duration) -> SourceRead {
     let deadline = Instant::now() + budget;
     let mut names: Vec<(Hive, &'static str, String)> = Vec::new();
-    let mut opened = 0;
-    for (hive, path) in UNINSTALL_PATHS {
-        if let Ok(k) = open_hive(hive).open_subkey_with_flags(path, winreg::enums::KEY_READ) {
-            opened += 1;
-            names.extend(k.enum_keys().flatten().map(|n| (hive, path, n)));
+    let mut unreadable_keys = 0usize;
+    for (i, (hive, path)) in UNINSTALL_PATHS.iter().enumerate() {
+        match open_hive(*hive).open_subkey_with_flags(path, winreg::enums::KEY_READ) {
+            Ok(k) => {
+                for r in k.enum_keys() {
+                    match r {
+                        Ok(n) => names.push((*hive, path, n)),
+                        Err(_) => unreadable_keys += 1,
+                    }
+                }
+            }
+            Err(e) => match hive_open_effect(i == 0, e.kind()) {
+                Ok(n) => unreadable_keys += n,
+                Err(reason) => return SourceRead::Unreadable(reason),
+            },
         }
     }
-    if opened == 0 {
-        return SourceRead::Unreadable(UnreadableReason::RegistryUnreadable);
-    }
-    let entries = names.into_iter().filter_map(|(h, p, n)| read_uninstall_fields(h, p, &n));
+    let entries = names.into_iter().map(|(h, p, n)| read_uninstall_fields(h, p, &n));
     let scan = collect_uninstall(entries, deadline, &|d| day_window_in(&chrono::Local, d));
+    let failed = unreadable_keys + scan.unreadable_keys;
     let mut notes = vec![Note::StoreAppsNotCovered];
     if scan.without_date > 0 {
         notes.push(Note::ProgramsWithoutDate(scan.without_date));
     }
-    SourceRead::finish(scan.events, scan.timed_out, notes)
+    let mut read = SourceRead::finish(scan.events, scan.timed_out, notes);
+    if failed > 0 {
+        if let SourceRead::Read(ok) = &mut read {
+            ok.gaps.push(Gap::RegistryKeysUnreadable(failed));
+        }
+    }
+    read
+}
+
+/// What a failed open of one Uninstall key set means: the main 64-bit machine key failing makes
+/// the whole source unreadable (another hive working does not make up for it); a missing optional
+/// key is normal; any other failure is counted as an unreadable key.
+fn hive_open_effect(is_main: bool, kind: std::io::ErrorKind) -> Result<usize, UnreadableReason> {
+    if is_main {
+        return Err(UnreadableReason::RegistryUnreadable);
+    }
+    Ok(usize::from(kind != std::io::ErrorKind::NotFound))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1492,7 +1665,16 @@ fn kind_rank(k: ChangeKind) -> u8 {
 /// Pure: merge reader outcomes into one report for the window `(t0, t1]` (lower bound exclusive,
 /// upper inclusive; see `ChangeTime::in_window`). Unreadable sources, incomplete reads and the part
 /// of the window a log does not reach are listed, never dropped.
-pub(crate) fn combine(t0: DateTime<Utc>, t1: DateTime<Utc>, reads: Vec<(Source, SourceRead)>) -> ChangeReport {
+/// The window must be non-empty (`t0 < t1`); otherwise `EmptyWindow`.
+pub(crate) fn combine(t0: DateTime<Utc>, t1: DateTime<Utc>, reads: Vec<(Source, SourceRead)>) -> Result<ChangeReport, ChangeError> {
+    if t0 >= t1 {
+        return Err(ChangeError::EmptyWindow);
+    }
+    Ok(combine_unchecked(t0, t1, reads))
+}
+
+fn combine_unchecked(t0: DateTime<Utc>, t1: DateTime<Utc>, reads: Vec<(Source, SourceRead)>) -> ChangeReport {
+    let asked: Vec<Source> = reads.iter().map(|(s, _)| *s).collect();
     let mut events: Vec<ChangeEvent> = Vec::new();
     let mut unreadable = Vec::new();
     let mut partial = Vec::new();
@@ -1504,8 +1686,17 @@ pub(crate) fn combine(t0: DateTime<Utc>, t1: DateTime<Utc>, reads: Vec<(Source, 
         match read {
             SourceRead::Unreadable(reason) => unreadable.push(UnreadableSource { source, reason }),
             SourceRead::Read(ok) => {
-                if !ok.gaps.is_empty() {
-                    partial.push(PartialSource { source, gaps: ok.gaps.clone(), covered_from: ok.covered_from });
+                // A row cap or timeout only matters when the read stopped inside the window; if it
+                // reached back to t0 the window was fully covered anyway.
+                let reached_window_start = ok.covered_from.is_some_and(|c| c <= t0);
+                let gaps: Vec<Gap> = ok
+                    .gaps
+                    .iter()
+                    .filter(|g| !(reached_window_start && matches!(g, Gap::RowCapReached | Gap::TimedOut | Gap::OutputCapped)))
+                    .cloned()
+                    .collect();
+                if !gaps.is_empty() {
+                    partial.push(PartialSource { source, gaps, covered_from: ok.covered_from });
                 }
                 if let Some(from) = ok.covered_from {
                     if from > t0 {
@@ -1534,7 +1725,8 @@ pub(crate) fn combine(t0: DateTime<Utc>, t1: DateTime<Utc>, reads: Vec<(Source, 
     ChangeReport {
         window_start: t0,
         window_end: t1,
-        events,
+        asked,
+        events_found: events,
         unreadable,
         partial,
         coverage_gaps,
@@ -1547,7 +1739,11 @@ pub(crate) fn combine(t0: DateTime<Utc>, t1: DateTime<Utc>, reads: Vec<(Source, 
 /// What changed on this PC in `(t0, t1]`: runs every reader (in parallel, each with its own
 /// budget) and combines them. `game` adds the Steam lookup for that game. Never panics: a reader
 /// that dies is reported as unreadable.
-pub(crate) fn changes_between(t0: DateTime<Utc>, t1: DateTime<Utc>, game: Option<&GameRef>) -> ChangeReport {
+pub(crate) fn changes_between(
+    t0: DateTime<Utc>,
+    t1: DateTime<Utc>,
+    game: Option<&GameRef>,
+) -> Result<ChangeReport, ChangeError> {
     changes_between_with(t0, t1, game, DEFAULT_BUDGET)
 }
 
@@ -1556,7 +1752,10 @@ pub(crate) fn changes_between_with(
     t1: DateTime<Utc>,
     game: Option<&GameRef>,
     budget: Duration,
-) -> ChangeReport {
+) -> Result<ChangeReport, ChangeError> {
+    if t0 >= t1 {
+        return Err(ChangeError::EmptyWindow);
+    }
     let lost = || SourceRead::Unreadable(UnreadableReason::ReaderStopped);
     let reads = std::thread::scope(|s| {
         let drivers =
@@ -1918,7 +2117,7 @@ mod tests {
         let w = |d| day_window_in(&pst(), d);
         let deadline = Instant::now() + Duration::from_secs(5);
         let entries = vec![fields("Tool", "20261119"), fields("Tool", "20261119"), fields("Other", "20261119")];
-        let scan = collect_uninstall(entries.into_iter(), deadline, &w);
+        let scan = collect_uninstall(entries.into_iter().map(Some), deadline, &w);
         let (evs, timed_out) = (scan.events, scan.timed_out);
         assert_eq!(evs.len(), 2);
         assert!(!timed_out);
@@ -1949,8 +2148,8 @@ mod tests {
             exact_ev(ChangeKind::GpuDriver, "2026-11-20T01:01:00.001Z", "just-after-t1"),
             exact_ev(ChangeKind::GpuDriver, "2026-11-10T00:00:00Z", "before"),
         ];
-        let r = combine(t0, t1, vec![(Source::DriverLog, ok(evs))]);
-        let names: Vec<_> = r.events.iter().map(|e| e.what.name.clone().unwrap()).collect();
+        let r = combine_unchecked(t0, t1, vec![(Source::DriverLog, ok(evs))]);
+        let names: Vec<_> = r.events_found.iter().map(|e| e.what.name.clone().unwrap()).collect();
         assert_eq!(names, vec!["just-after-t0", "at-t1"]);
     }
 
@@ -1976,7 +2175,7 @@ mod tests {
     #[test]
     fn unreadable_is_reported_and_is_not_the_same_as_empty() {
         let (t0, t1) = (utc("2026-11-01T00:00:00Z"), utc("2026-11-20T00:00:00Z"));
-        let r = combine(
+        let r = combine_unchecked(
             t0,
             t1,
             vec![
@@ -1984,13 +2183,13 @@ mod tests {
                 (Source::WindowsUpdateLog, SourceRead::Unreadable(UnreadableReason::AccessDenied)),
             ],
         );
-        assert!(r.events.is_empty());
+        assert!(r.events_found.is_empty());
         assert_eq!(r.unreadable.len(), 1);
         assert_eq!(r.unreadable[0].source, Source::WindowsUpdateLog);
         assert_eq!(r.unreadable[0].reason, UnreadableReason::AccessDenied);
         assert!(r.partial.is_empty());
         // A clean empty read lists nothing as unreadable.
-        let clean = combine(t0, t1, vec![(Source::DriverLog, ok(vec![]))]);
+        let clean = combine_unchecked(t0, t1, vec![(Source::DriverLog, ok(vec![]))]);
         assert!(clean.unreadable.is_empty());
     }
 
@@ -2003,8 +2202,8 @@ mod tests {
             gaps: vec![Gap::TimedOut],
             notes: vec![],
         });
-        let r = combine(t0, t1, vec![(Source::WindowsUpdateLog, partial)]);
-        assert_eq!(r.events.len(), 1);
+        let r = combine_unchecked(t0, t1, vec![(Source::WindowsUpdateLog, partial)]);
+        assert_eq!(r.events_found.len(), 1);
         assert_eq!(r.partial.len(), 1);
         assert_eq!(r.partial[0].source, Source::WindowsUpdateLog);
         assert_eq!(r.partial[0].gaps, vec![Gap::TimedOut]);
@@ -2031,7 +2230,7 @@ mod tests {
         let (t0, t1) = (utc("2026-11-10T00:00:00Z"), utc("2026-11-20T00:00:00Z"));
         let mut game = exact_ev(ChangeKind::GameUpdate, "2026-11-05T00:00:00Z", "The Game");
         game.source = Source::SteamManifest;
-        let r = combine(
+        let r = combine_unchecked(
             t0,
             t1,
             vec![
@@ -2040,7 +2239,7 @@ mod tests {
                 (Source::SteamManifest, ok(vec![game])),
             ],
         );
-        let names: Vec<_> = r.events.iter().map(|e| e.what.name.clone().unwrap()).collect();
+        let names: Vec<_> = r.events_found.iter().map(|e| e.what.name.clone().unwrap()).collect();
         assert_eq!(names, vec!["early", "late"], "the game update is before the window");
         assert_eq!(r.game_last_update.unwrap().what.name.as_deref(), Some("The Game"));
     }
@@ -2054,8 +2253,8 @@ mod tests {
             what: ChangeWhat::default(),
             source: Source::UninstallKeys,
         };
-        let r = combine(t0, t1, vec![(Source::UninstallKeys, ok(vec![ev]))]);
-        assert!(r.events.is_empty());
+        let r = combine_unchecked(t0, t1, vec![(Source::UninstallKeys, ok(vec![ev]))]);
+        assert!(r.events_found.is_empty());
         assert_eq!(r.undated_excluded, 1);
     }
 
@@ -2113,7 +2312,7 @@ mod tests {
 
     #[test]
     fn reports_serialize_for_the_engine() {
-        let r = combine(utc("2026-11-01T00:00:00Z"), utc("2026-11-20T00:00:00Z"), vec![]);
+        let r = combine_unchecked(utc("2026-11-01T00:00:00Z"), utc("2026-11-20T00:00:00Z"), vec![]);
         let j = serde_json::to_string(&r).unwrap();
         assert!(j.contains("window_start"));
     }
@@ -2144,24 +2343,44 @@ mod tests {
     fn a_wevtutil_planted_beside_the_executable_is_never_run() {
         let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
         let planted = exe_dir.join("wevtutil.exe");
-        if planted.exists() {
-            return; // never touch a file this test did not create
+        // The resolver itself never yields a relative or bare name (independent of any planting).
+        let cmd = system_command("wevtutil.exe").expect("system command");
+        assert!(std::path::Path::new(cmd.get_program()).is_absolute(), "{:?}", cmd.get_program());
+        if let Ok(meta) = std::fs::metadata(&planted) {
+            let age = meta.modified().ok().and_then(|m| m.elapsed().ok()).unwrap_or(Duration::from_secs(u64::MAX));
+            if age > Duration::from_secs(600) {
+                panic!(
+                    "a stale wevtutil.exe was left beside the test executable ({planted:?}); delete it, then rerun. \
+                     Not passing vacuously."
+                );
+            }
+            eprintln!("skipped: a fresh wevtutil.exe beside the executable belongs to a concurrent run");
+            return;
         }
-        std::fs::write(&planted, b"MZ this is not a program").unwrap();
-        let _guard = Planted(planted);
+        if std::fs::write(&planted, b"MZ this is not a program").is_err() {
+            eprintln!("skipped: cannot write beside the test executable");
+            return;
+        }
+        let _guard = Planted(planted.clone());
         // Control: a bare-name spawn (what quiet_command("wevtutil.exe") does) picks the planted
-        // file first and fails; this is the hazard the absolute path closes.
+        // file first and fails; this is the hazard the absolute path closes. If antivirus removed
+        // the file, or the control spawn works, the hazard was not reproduced here: skip, say why.
+        if !planted.exists() {
+            eprintln!("skipped: the planted file was removed (antivirus?) before the control");
+            return;
+        }
         match std::process::Command::new("wevtutil.exe").arg("/?").spawn() {
             Err(_) => {}
             Ok(mut child) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                panic!("control: a bare-name spawn did not pick the planted file, so this test proves nothing here");
+                eprintln!("skipped: a bare-name spawn did not pick the planted file, so nothing is proven here");
+                return;
             }
         }
         // The reader still works: it ran the real tool from the system directory.
         let r = run_wevtutil("System", None, 1, false, Duration::from_secs(10));
-        assert!(matches!(r, Ok((_, false))), "{r:?}");
+        assert!(matches!(&r, Ok(t) if !t.timed_out), "{r:?}");
     }
 
     /// The text of `fn <name>` up to its closing brace at column 0.
@@ -2246,14 +2465,14 @@ mod tests {
 
     #[test]
     fn reaching_the_row_cap_marks_the_read_partial_and_names_how_far_back_it_got() {
-        let xml = wu_rows(MAX_EVENTS);
+        let xml = wu_rows(MAX_EVENTS + 1);
         let a = assess(&xml, false, Some(utc("2026-01-01T00:00:00Z")), parse_wu(&xml)).unwrap();
-        assert_eq!(a.items.len(), MAX_EVENTS);
+        assert_eq!(a.items.len(), MAX_EVENTS + 1);
         assert!(a.gaps.contains(&Gap::RowCapReached), "{:?}", a.gaps);
-        let oldest = utc("2026-11-19T12:00:00Z") - ChronoDuration::minutes(MAX_EVENTS as i64 - 1);
+        let oldest = utc("2026-11-19T12:00:00Z") - ChronoDuration::minutes(MAX_EVENTS as i64);
         assert_eq!(a.covered_from, Some(oldest), "the oldest time actually seen, not the log's start");
-        // One row under the cap is a complete read back to the log's own start.
-        let xml = wu_rows(MAX_EVENTS - 1);
+        // Exactly the cap is a complete read (only cap+1 rows proves older rows exist) back to the log's own start.
+        let xml = wu_rows(MAX_EVENTS);
         let a = assess(&xml, false, Some(utc("2026-01-01T00:00:00Z")), parse_wu(&xml)).unwrap();
         assert!(a.gaps.is_empty());
         assert_eq!(a.covered_from, Some(utc("2026-01-01T00:00:00Z")));
@@ -2281,15 +2500,15 @@ mod tests {
             gaps: vec![],
             notes: vec![],
         });
-        let r = combine(t0, t1, vec![(Source::DriverLog, read)]);
-        assert!(r.events.is_empty());
+        let r = combine_unchecked(t0, t1, vec![(Source::DriverLog, read)]);
+        assert!(r.events_found.is_empty());
         assert_eq!(r.coverage_gaps, vec![CoverageGap { source: Source::DriverLog, from: t0, to: utc("2026-11-10T00:00:00Z") }]);
         // A log that reaches back past the window start has no gap.
         let ok = SourceRead::Read(ReadOk { events: vec![], covered_from: Some(utc("2026-05-22T00:00:00Z")), gaps: vec![], notes: vec![] });
-        assert!(combine(t0, t1, vec![(Source::DriverLog, ok)]).coverage_gaps.is_empty());
+        assert!(combine_unchecked(t0, t1, vec![(Source::DriverLog, ok)]).coverage_gaps.is_empty());
         // Covered exactly from t0 is covered (t0 itself is outside the window anyway).
         let edge = SourceRead::Read(ReadOk { events: vec![], covered_from: Some(t0), gaps: vec![], notes: vec![] });
-        assert!(combine(t0, t1, vec![(Source::DriverLog, edge)]).coverage_gaps.is_empty());
+        assert!(combine_unchecked(t0, t1, vec![(Source::DriverLog, edge)]).coverage_gaps.is_empty());
     }
 
     #[test]
@@ -2342,16 +2561,33 @@ mod tests {
     #[test]
     fn real_log_reads_report_where_their_coverage_starts() {
         let now = Utc::now();
-        for read in [
-            read_windows_updates(now - ChronoDuration::days(30), now, Duration::from_secs(5)),
-            read_driver_installs(now - ChronoDuration::days(30), now, Duration::from_secs(5)),
+        for (channel, read) in [
+            ("System", read_windows_updates(now - ChronoDuration::days(30), now, Duration::from_secs(5))),
+            ("Microsoft-Windows-Kernel-PnP/Configuration", read_driver_installs(now - ChronoDuration::days(30), now, Duration::from_secs(5))),
         ] {
+            if !log_readable(channel) {
+                continue;
+            }
             match read {
                 SourceRead::Read(ok) => {
                     let from = ok.covered_from.expect("an event-log read always says where its coverage starts");
                     assert!(from < now);
                 }
-                SourceRead::Unreadable(r) => panic!("System/Kernel-PnP logs are readable without elevation: {r:?}"),
+                SourceRead::Unreadable(r) => panic!("{channel} is readable without elevation: {r:?}"),
+            }
+        }
+    }
+
+    /// True when this machine's log can be read at all (not empty, not disabled, not denied); else
+    /// prints why and the caller skips, so a machine with a cleared log does not fail the suite.
+    fn log_readable(channel: &str) -> bool {
+        let r = run_wevtutil(channel, None, 1, false, Duration::from_secs(10))
+            .and_then(|t| if t.timed_out { Err(UnreadableReason::TimedOutBeforeAnyRecord) } else { parse_log_start(&t.xml) });
+        match r {
+            Ok(_) => true,
+            Err(reason) => {
+                eprintln!("skipped {channel}: unfiltered query is unreadable here ({reason:?})");
+                false
             }
         }
     }
@@ -2478,7 +2714,7 @@ mod tests {
             s.system_component = true;
             s
         }];
-        let scan = collect_uninstall(entries.into_iter(), Instant::now() + Duration::from_secs(5), &w);
+        let scan = collect_uninstall(entries.into_iter().map(Some), Instant::now() + Duration::from_secs(5), &w);
         assert_eq!(scan.events.len(), 1);
         assert_eq!(scan.without_date, 2, "NoDate and BadDate; the system component is not a program");
         assert!(!scan.timed_out);
@@ -2597,6 +2833,196 @@ mod tests {
         let _ = std::fs::remove_dir_all(&lib);
     }
 
+    // ---- review r2: per-kind status, registry gaps, validated text, caps ----------------------------
+
+    fn win() -> (DateTime<Utc>, DateTime<Utc>) {
+        (utc("2026-11-01T00:00:00Z"), utc("2026-11-20T00:00:00Z"))
+    }
+
+    fn read_with(covered_from: Option<DateTime<Utc>>, gaps: Vec<Gap>, notes: Vec<Note>) -> SourceRead {
+        SourceRead::Read(ReadOk { events: vec![], covered_from, gaps, notes })
+    }
+
+    #[test]
+    fn a_source_that_was_not_asked_is_not_asked_and_never_clean() {
+        let (t0, t1) = win();
+        let r = combine(t0, t1, vec![(Source::DriverLog, ok(vec![]))]).unwrap();
+        assert!(r.events_found.is_empty());
+        assert_eq!(r.status(ChangeKind::GameUpdate), KindStatus::NotAsked);
+        assert_eq!(r.status(ChangeKind::WindowsUpdate), KindStatus::NotAsked);
+        assert!(matches!(r.status(ChangeKind::GpuDriver), KindStatus::Complete { .. }));
+        assert!(matches!(r.status(ChangeKind::OtherDriver), KindStatus::Complete { .. }));
+        // Real call with no game: Steam is not asked, the other three are.
+        let now = Utc::now();
+        let real = changes_between(now - ChronoDuration::days(2), now, None).unwrap();
+        assert_eq!(real.status(ChangeKind::GameUpdate), KindStatus::NotAsked);
+        for s in [Source::DriverLog, Source::WindowsUpdateLog, Source::UninstallKeys] {
+            assert!(real.asked.contains(&s), "{s:?}");
+        }
+        assert!(!real.asked.contains(&Source::SteamManifest));
+    }
+
+    #[test]
+    fn a_clean_program_read_with_no_events_is_complete_and_states_its_limits() {
+        let (t0, t1) = win();
+        let read = read_with(None, vec![], vec![Note::StoreAppsNotCovered, Note::ProgramsWithoutDate(3)]);
+        let r = combine(t0, t1, vec![(Source::UninstallKeys, read)]).unwrap();
+        assert!(r.events_found.is_empty());
+        match r.status(ChangeKind::ProgramInstalled) {
+            KindStatus::Complete { limits } => {
+                assert!(limits.contains(&Note::StoreAppsNotCovered));
+                assert!(limits.contains(&Note::ProgramsWithoutDate(3)));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn unreadable_and_partial_kinds_say_so_through_status() {
+        let (t0, t1) = win();
+        let r = combine(
+            t0,
+            t1,
+            vec![
+                (Source::WindowsUpdateLog, SourceRead::Unreadable(UnreadableReason::AccessDenied)),
+                (Source::DriverLog, read_with(Some(utc("2026-11-10T00:00:00Z")), vec![Gap::TimedOut], vec![])),
+            ],
+        )
+        .unwrap();
+        assert_eq!(r.status(ChangeKind::WindowsUpdate), KindStatus::Unreadable(UnreadableReason::AccessDenied));
+        match r.status(ChangeKind::GpuDriver) {
+            KindStatus::Partial { gaps, covered_from, .. } => {
+                assert_eq!(gaps, vec![Gap::TimedOut]);
+                assert_eq!(covered_from, Some(utc("2026-11-10T00:00:00Z")));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn cap_and_timeout_gaps_are_dropped_when_the_read_reached_the_window_start() {
+        let (t0, t1) = win();
+        let gaps = || vec![Gap::RowCapReached, Gap::TimedOut, Gap::OutputCapped, Gap::MalformedRecords(1)];
+        for from in [t0 - ChronoDuration::days(1), t0] {
+            let r = combine(t0, t1, vec![(Source::DriverLog, read_with(Some(from), gaps(), vec![]))]).unwrap();
+            assert_eq!(r.partial.len(), 1);
+            assert_eq!(r.partial[0].gaps, vec![Gap::MalformedRecords(1)], "only the real gap stays: {from}");
+        }
+        // Stopped inside the window: every gap stays.
+        let r = combine(t0, t1, vec![(Source::DriverLog, read_with(Some(t0 + ChronoDuration::days(1)), gaps(), vec![]))]).unwrap();
+        assert_eq!(r.partial[0].gaps, gaps());
+        // Only a cap that reached the window start: no partial at all.
+        let r = combine(t0, t1, vec![(Source::DriverLog, read_with(Some(t0), vec![Gap::RowCapReached], vec![]))]).unwrap();
+        assert!(r.partial.is_empty());
+        assert!(matches!(r.status(ChangeKind::GpuDriver), KindStatus::Complete { .. }));
+    }
+
+    #[test]
+    fn an_inverted_or_empty_window_is_an_error_not_a_clean_report() {
+        let (t0, t1) = win();
+        assert_eq!(combine(t1, t0, vec![]), Err(ChangeError::EmptyWindow));
+        assert_eq!(combine(t0, t0, vec![]), Err(ChangeError::EmptyWindow));
+        assert_eq!(changes_between(t1, t0, None), Err(ChangeError::EmptyWindow));
+        assert!(combine(t0, t1, vec![]).is_ok());
+    }
+
+    #[test]
+    fn failed_registry_keys_are_counted_and_a_failed_main_hive_is_unreadable() {
+        let w = |d| day_window_in(&pst(), d);
+        let entries = vec![Some(fields("A", "20261119")), None, None];
+        let scan = collect_uninstall(entries.into_iter(), Instant::now() + Duration::from_secs(5), &w);
+        assert_eq!(scan.events.len(), 1);
+        assert_eq!(scan.unreadable_keys, 2);
+        use std::io::ErrorKind::{NotFound, PermissionDenied};
+        assert_eq!(hive_open_effect(true, NotFound), Err(UnreadableReason::RegistryUnreadable));
+        assert_eq!(hive_open_effect(true, PermissionDenied), Err(UnreadableReason::RegistryUnreadable));
+        assert_eq!(hive_open_effect(false, NotFound), Ok(0), "an optional key that does not exist is normal");
+        assert_eq!(hive_open_effect(false, PermissionDenied), Ok(1));
+    }
+
+    #[test]
+    fn versions_and_build_ids_accept_only_digits_and_dots() {
+        assert_eq!(clean_version(" 32.0.32029.2010 ").as_deref(), Some("32.0.32029.2010"));
+        for bad in ["", "32.0.3?.2010", "1.2 beta", "<b>1.2</b>", "\u{fffd}1.2", "1,2"] {
+            assert_eq!(clean_version(bad), None, "{bad:?}");
+        }
+        assert_eq!(clean_build_id("26448669").as_deref(), Some("26448669"));
+        for bad in ["", "26?48669", "1.2", "-5", "12 3"] {
+            assert_eq!(clean_build_id(bad), None, "{bad:?}");
+        }
+        for s in ["KB1234?67", "KB\u{661}\u{662}\u{663}\u{664}\u{665}\u{666}\u{667}", "KB 1234567"] {
+            if let Some(k) = kb_of(s) {
+                assert!(k.starts_with("KB") && k[2..].chars().all(|c| c.is_ascii_digit()) && k.len() > 2, "{s:?} -> {k}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_mojibake_driver_version_is_dropped_and_flagged() {
+        let xml = pnp("2026-11-19T13:38:22Z", GPU_INST, "oem3.inf", DISPLAY, "32.0.3?.2010", "11/18/2026", true, "0x0");
+        let evs = driver_events_from_xml(&xml);
+        assert_eq!(evs.len(), 1);
+        assert_eq!(evs[0].what.to_version, None);
+        assert!(evs[0].what.text_uncertain);
+        let good = pnp("2026-11-19T13:38:22Z", GPU_INST, "oem3.inf", DISPLAY, "32.0.32029.2010", "11/18/2026", true, "0x0");
+        assert!(!driver_events_from_xml(&good)[0].what.text_uncertain);
+    }
+
+    #[test]
+    fn a_mojibake_build_id_is_dropped_and_flagged() {
+        let bad = ACF.replace("\"buildid\"\t\t\"26448669\"", "\"buildid\"\t\t\"2644?669\"");
+        let info = parse_acf(&bad).unwrap();
+        assert_eq!(info.build_id, None);
+        assert!(info.ids_uncertain);
+        let ev = game_event_from_acf(&info).unwrap();
+        assert_eq!(ev.what.build_id, None);
+        assert!(ev.what.text_uncertain);
+        let good = game_event_from_acf(&parse_acf(ACF).unwrap()).unwrap();
+        assert!(!good.what.text_uncertain);
+    }
+
+    #[test]
+    fn the_driver_read_names_the_classes_it_covers() {
+        let labels: Vec<&str> = DRIVER_CLASSES.iter().map(|(_, _, l)| *l).collect();
+        assert_eq!(labels, vec!["display", "audio", "network", "chipset/system"]);
+        if !log_readable("Microsoft-Windows-Kernel-PnP/Configuration") {
+            return;
+        }
+        let now = Utc::now();
+        match read_driver_installs(now - ChronoDuration::days(3), now, Duration::from_secs(10)) {
+            SourceRead::Read(ok) => {
+                let covered = ok.notes.iter().find_map(|n| match n {
+                    Note::DriverClassesCovered(v) => Some(v.clone()),
+                    _ => None,
+                });
+                assert_eq!(covered, Some(labels.iter().map(|s| s.to_string()).collect::<Vec<_>>()));
+            }
+            SourceRead::Unreadable(r) => panic!("{r:?}"),
+        }
+    }
+
+    #[test]
+    fn output_beyond_the_byte_cap_is_dropped_and_flagged() {
+        let mut b = Vec::new();
+        assert!(!append_capped(&mut b, b"abcd", 6));
+        assert!(append_capped(&mut b, b"efgh", 6));
+        assert_eq!(b, b"abcdef");
+        assert!(append_capped(&mut b, b"x", 6));
+        assert_eq!(b.len(), 6);
+        // A real child that writes far more than the cap.
+        let mut cmd = system_command("cmd.exe").expect("cmd.exe");
+        cmd.args(["/c", "for /l %i in (1,1,20000) do @echo xxxxxxxxxxxxxxxxxxxx"]);
+        let out = run_capped(cmd, Duration::from_secs(30), 1000).expect("ran");
+        assert!(!out.timed_out);
+        assert!(out.overflow, "20000 lines is far over a 1000 byte cap");
+        assert!(out.stdout.len() <= 1000);
+        // And the read that saw it is partial, never complete.
+        let xml = wu_rows(10);
+        let a = assess_with(&xml, false, true, Some(utc("2026-01-01T00:00:00Z")), parse_wu(&xml)).unwrap();
+        assert_eq!(a.gaps, vec![Gap::OutputCapped]);
+        assert_eq!(a.covered_from, Some(utc("2026-11-19T12:00:00Z") - ChronoDuration::minutes(9)));
+    }
+
     // ---- the real PC (run on demand) -----------------------------------------------------------
 
     /// `cargo test --lib change_sources::tests::real_pc_report -- --ignored --nocapture`
@@ -2634,14 +3060,14 @@ mod tests {
         }
 
         let s = Instant::now();
-        let r = changes_between(t0, now, gref.as_ref());
+        let r = changes_between(t0, now, gref.as_ref()).unwrap();
         println!("changes_between(30d) total wall time: {} ms", s.elapsed().as_millis());
         println!("window: ({}, {}]", r.window_start.to_rfc3339(), r.window_end.to_rfc3339());
         println!("unreadable: {:?}", r.unreadable.iter().map(|u| (u.source, u.reason.plain())).collect::<Vec<_>>());
         println!("partial: {:?}", r.partial.iter().map(|p| (p.source, &p.gaps, p.covered_from.map(|t| t.format("%Y-%m-%dT%H:%MZ").to_string()))).collect::<Vec<_>>());
         println!("coverage_gaps: {:?}   undated_excluded: {}", r.coverage_gaps, r.undated_excluded);
         println!("notes: {:?}", r.notes);
-        let count = |k: ChangeKind| r.events.iter().filter(|e| e.kind == k).count();
+        let count = |k: ChangeKind| r.events_found.iter().filter(|e| e.kind == k).count();
         println!(
             "counts: gpu_driver={} other_driver={} windows_update={} game_update={} programs_installed={}",
             count(ChangeKind::GpuDriver),
@@ -2650,7 +3076,7 @@ mod tests {
             count(ChangeKind::GameUpdate),
             count(ChangeKind::ProgramInstalled)
         );
-        let uncertain = r.events.iter().filter(|e| e.what.text_uncertain).count();
+        let uncertain = r.events_found.iter().filter(|e| e.what.text_uncertain).count();
         println!("events with text_uncertain: {uncertain}");
         let fmt = |e: &ChangeEvent| {
             let when = match e.when.precision {
@@ -2668,16 +3094,16 @@ mod tests {
                 e.what.kb.as_deref().or(e.what.id.as_deref()).unwrap_or("-"),
             )
         };
-        for e in r.events.iter().filter(|e| e.kind == ChangeKind::GpuDriver) {
+        for e in r.events_found.iter().filter(|e| e.kind == ChangeKind::GpuDriver) {
             println!("{}", fmt(e));
         }
-        let others = r.events.iter().filter(|e| e.kind == ChangeKind::OtherDriver);
+        let others = r.events_found.iter().filter(|e| e.kind == ChangeKind::OtherDriver);
         println!("  other drivers: {} ({} real version changes)", others.clone().count(), others.filter(|e| e.what.version_changed == Some(true)).count());
-        for e in r.events.iter().filter(|e| e.kind == ChangeKind::WindowsUpdate && e.what.detail.as_deref() != Some("definition") && e.what.detail.as_deref() != Some("store-app")) {
+        for e in r.events_found.iter().filter(|e| e.kind == ChangeKind::WindowsUpdate && e.what.detail.as_deref() != Some("definition") && e.what.detail.as_deref() != Some("store-app")) {
             println!("{} | {}", fmt(e), e.what.detail.as_deref().unwrap_or(""));
         }
-        let defs = r.events.iter().filter(|e| e.what.detail.as_deref() == Some("definition")).count();
-        let store = r.events.iter().filter(|e| e.what.detail.as_deref() == Some("store-app")).count();
+        let defs = r.events_found.iter().filter(|e| e.what.detail.as_deref() == Some("definition")).count();
+        let store = r.events_found.iter().filter(|e| e.what.detail.as_deref() == Some("store-app")).count();
         println!("  (windows update also: {defs} Defender definition installs, {store} Store-app installs)");
         if let Some(g) = &r.game_last_update {
             println!("game last file change (outside window allowed): {}", fmt(g));
