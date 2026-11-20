@@ -4,7 +4,6 @@ Changes to privilege, rollback or measurement code get an independent review bef
 No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md for the check).
 
 ## NOW (in flight, each on its own branch)
-- [ ] "Did it get better?" recovery check and a card that fits on Home — the owner sees whether a fix worked (claude/m1-paramedic-f3)
 - [ ] Security slice 1: system tools by absolute path, pinned child environment — closes planted-tool and inherited-environment risk (claude/m1-hard-1; reviewed and green, waiting for the owner's direct go-ahead to push)
 
 ## NEXT (in order)
@@ -42,6 +41,8 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee".
 
 ## Done (newest first)
+- 2026-11-20 - Desk build 3e69f454 installed and stamped
+- 2026-11-20 - "Did it get better?" recovery check and a card that fits on Home 3e69f454
 - 2026-11-20 — A session ends when its game exits; a new game starts a new session (no more two games in one record) bb47b314, review fixes b8e729ac
 - 2026-11-20 - fix(history): the change history keeps a verified backup copy and restores from it when the main file is missing or damaged (claude/m1-hist-bak, reviewed)
 - 2026-11-20 — Desk build 808a95ce installed and stamped 920f6bca
@@ -53,4 +54,5 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - 2026-11-20 — §38 recorded ca2989ef
 
 ## Session log (newest 10)
+- 2026-11-20 desk-install session: built and installed main 3e69f454, proved at runtime, stamped in RELEASE_STATE; look-only check of the Home card in _train\view-1120b.
 - 2026-11-20 docs session: QUEUE.md and a short CLAUDE.md written; WORK_TRAIN.md points here.
