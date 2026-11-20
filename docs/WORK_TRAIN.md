@@ -8,6 +8,17 @@ and `product/ROADMAP.md`, build/install truth in `RELEASE_STATE.md`.
 rig first; anything shipped to the friend goes through the normal updater.
 **No second tester now (owner, 2026-11-11 07:41, verbatim):** "I DO NOT HAVE ANY AVAILABLE FRIEND FOR TESTING SO
 LEAVE ANYTHING LIKE THAT ONLINE". Friend-dependent halves of P5/P6/P7-exit-proof are deferred (notes under each).
+**No dependable outside tester (owner, 2026-11-19 15:17, verbatim):** "i dont see the significance in having an
+approved tester build when i am quite literally the only tester i can depend on currently anyway". P7-tester-package
+is parked as built (`Desktop\Compy-tester-cfbe08a7.zip`, kept, unsent, no further work). The friend halves of P5/P6/P7
+stay deferred; whether the owner half alone exits those phases is an open owner decision (asked 2026-11-19, not yet
+answered).
+**Session-counting taken off the owner (owner, 2026-11-19 20:59):** after an evening in which a GPU driver update
+(32.0.32015.7029 -> 32.0.32029.2010) silently reset his ROB RUN count and one capture ran mostly behind another
+window, the owner asked for "an alternative way ... so the responsibility is left out of my hands". Coordinator
+resolution: (1) the Test room says how many sessions count and why the others do not (S-A, branch
+`claude/train-s59-counted`, in review); (2) automatic capture as an opt-in setting, OFF by default (TG-passive-band,
+design in `_train\s58-plan-*.txt`); switching it on needs the owner's explicit yes (asked, not yet answered).
 
 ## How a session runs (every scheduled run follows this)
 
@@ -353,11 +364,18 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       data only, with adversarial fixtures. (3) P4 does not need it: on ROB RUN's band a Trial already ends judged ("negligible
       at this game's noise", change put back, a measured no-change). Salvage would only narrow the band to see smaller effects.
       (4) Size: about 2 work sessions (schema + rule + en/zh words + opus/sonnet), then 3+ new as-is play sessions before it helps.
-- [ ] [POLISH] **TG-passive-band** (owner 2026-11-18 11:49 "go all" on the coordinator's recommendation: not needed for P4, parked until v1.0) Learn each game's noise band from ordinary play over time with no instructions, so a Trial
+- [ ] [LAUNCH] **TG-passive-band** (owner 2026-11-19 20:59: take session-counting out of his hands; supersedes the 11-18 parking) (owner 2026-11-18 11:49 "go all" on the coordinator's recommendation: not needed for P4, parked until v1.0) Learn each game's noise band from ordinary play over time with no instructions, so a Trial
       rarely has to ask for extra as-is sessions. Tested: a band appears from ordinary sessions alone; never pooled across
       contexts.
       Why LAUNCH: P4-exit-proof needs ROB RUN's remaining Trials judged on a measured band; a band kept current from ordinary play lets a Trial judge without asking for extra as-is sessions.
       s41 (not built, nothing ticked): the band already keeps itself current from every captured as-is session (`noise_floor::measure_game_noise` reads the session store live, same minimums); what is missing is capture itself: ordinary play records nothing unless the user starts measuring (Play/Monitor "Start capture", Benchmark, or the Optimize-my-game journey), because capture launches the elevated ETW helper through a runas (UAC) prompt. Capturing every game launch passively is a privilege/consent change (ARCHITECTURE_LOCKS; a UAC prompt per launch on stock Windows) that needs an owner decision before any code.
+      s58 design (read-only, `_train\s58-plan-*.txt`): trigger = out-of-context foreground WinEvent hook, no polling,
+      no injection; a game = a process with at least one stored session of >= 600 readings, a window covering its
+      monitor, in front 10 s; one elevated helper per game session (no idle elevated helper, no service or task);
+      sessions under 600 readings are not stored; `capture_origin` additive field; never starts/concludes/applies
+      anything; paused during a two-session Trial. Slices: S-A what-counted status (no privilege), S-B engine behind
+      the OFF setting (opus + sonnet), S-C the Settings toggle. Owner decisions pending: enabling it; a recorded
+      ARCHITECTURE_LOCKS 1.8 consent note.
 - [ ] [LAUNCH] **P4-exit-proof** (owner, FULL) Run Trials on WARDOGS until the panel says "Compy finished the supported
       tests" with nothing worth another run; record it in BACKLOG as the Phase 4 exit.
       Owner 2026-11-12 16:43 (verbatim): "p4 exit answer is no you decide a more fitting resolution". Owner delegated
@@ -405,6 +423,12 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       change, so on ROB RUN this wording can no longer be reached (coordinator/owner call: a steadier game, or accept
       "nothing left" as the exit). Evidence `_train\view-1111a\` (journey.log, powercfg.txt, ledger-*.txt,
       experiments-final.txt, o-*.json/txt, fgwatch.log, teardown.txt).
+      s53 trace (2026-11-19, read-only, `_train\s53-p4-*.txt`): the ±29% ROB RUN band is from six 2026-11-11 sessions
+      and cannot be a baseline (Game Mode and Trim visual effects were applied 2026-11-15; the driver changed
+      2026-11-19); the two too-noisy visual-effects runs failed the retired uneven-session check, not the band, and
+      exhausted RETEST_CAP, so the journey offers nothing; the manual "Pick a change to test" route still starts a
+      Trial once 3 as-is sessions count. As of 2026-11-19 19:51 ROB RUN has 2 countable sessions on the new driver
+      (17:01, 19:51). LANESPLIT (1 countable) may substitute at the owner's choice (owner 2026-11-19 16:30).
 - [ ] [LAUNCH] **P5-exit-proof** (owner, FULL) Run the journey on WARDOGS from the button to the summary with no manual
       Trial clicks; the friend repeats it once. Record in BACKLOG as the Phase 5 exit. Needs P5-guided through
       P5-learned. ROADMAP P5 exit.
@@ -775,7 +799,7 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       test fixture the baseline, ledger length and clock don't change `judge_pair`'s result, so their hand-off is shown
       only by equality.
       s38: untouched (under 50 minutes before the 18:40 batch once items 1-5 were in).
-- [x] [POLISH] **TG-context** Every session records a measurement-context fingerprint from what Compy can read: cap state (from
+- [ ] [CORRECT] **TG-context** (owner 2026-11-19 15:17 "yes prioritize and proceed": background apps must be accounted for) Every session records a measurement-context fingerprint from what Compy can read: cap state (from
       frame data), resolution/refresh mode, share of time the game was in front, active power plan, GPU driver and
       adapter, known heavy background work (recording/streaming encoders, high CPU from non-game processes), length;
       additive, schema-versioned; unknown stays unknown. User sees: nothing new until TG-drift-words. Tested: fixtures
@@ -791,6 +815,12 @@ Queue priority (owner, 2026-11-17 23:37): take items in this order and no other.
       names; feeds nothing yet (TG-drift-words reads it). Sonnet r1 APPROVE-WITH-NITS, 3 SHOULD-FIX taken. NITs left
       (POLISH): process-snapshot buffer is u8-backed and zero-filled per tick; a game process exiting between ticks
       drops its last CPU slice; `other_gpu` sums all adapters (documented, not restricted to the game's LUID).
+      s54 (2026-11-19/20): context v2 LANDED record-only (merges `535345ea`, `598df276`): `game_state.other_cpu`,
+      `other_gpu_3d`, `other_gpu_video` as numbers (handle-free process snapshot + GPU Engine counters), unknown stays
+      unknown, no names stored; reviewed (sonnet, whole feature). Left: S2 the fixed comparison rule + reasons + words
+      (proposed: differ when mean non-game CPU share differs by >= 10 points and the larger is >= 15%; GPU thresholds
+      to be set from the first v2 sessions; opus + sonnet), S3 the preflight line. Design `_train\s53-plan-*.txt`. Not
+      tested: video figure under a real encoder; CPU reading for an anti-cheat game.
 - [ ] [POLISH] **TG-drift-words** When two sessions' contexts differ, the verdict names the difference and the fix ("the frame
       cap was on in one session", "the game was in the background for 18 of 40 minutes", "a recorder was running in one
       session") and offers the one next step. Tested: one fixture per difference, en + zh-CN.
@@ -2855,21 +2885,6 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
   `RELEASE_STATE.md` in the same commit, report what is visible, and summarise the week from the Session log.
 
 ## Session log
-- 2026-11-17 s37 (coordinator-assigned; preflight CODE-ONLY: the owner at the PC, so pushes ran on the
-  coordinator's order; no game at any check): reviewed s36's CR-zh-readiness-words (sonnet AWN; comment `ffce3574`,
-  merge `72bda27a`) and pushed it (`72bda27a`, gate PASS). Landed CR-lesson-fall-band (merge `8fd27fd3`), judging-chain
-  refactor slice 2 (merge `1d12730f`, no behaviour change, 5 of the 13 named pins retired), the s35 NITs (merge
-  `ac1108fe`: powercfg read timeout, driver compare); reviews under each item. Parked TG-salvage untouched (reason
-  under it). Queued: CR-lesson-crash-not-result, CR-fall-words-band, CR-what-changed-fall,
-  CR-driver-compare-everywhere. Guard re-derived: experiment-record-first-guard.test.ts's six conclude assertions onto
-  `conclude_two_session` (same strength; one order check that was vacuous since s35 now compares against
-  `judge_pair(` / `crash_outcome(`). Pushes: `72bda27a` PASS; `f03cfdde` FAIL (RELEASE_STATE citation drift from
-  the NITs merge, re-anchored `0a0cf626`), `0a0cf626` PASS (cargo --lib 1997/0, vitest 551/551). Installed
-  `0a0cf626efef0047cb13b949c578771165fb8a1e` (runtime proof attempt 1, Synez plan before/after); RELEASE_STATE
-  re-stamped. Tester folder refreshed: `Compy-0.9.26-0a0cf626-tester-setup.exe` added beside the old installer (SHA-256
-  verified), SHA256.txt lists both (old marked older), guide txt + html: the new installer name, the conditions check
-  when a test waits for its second session, the other stations now optional, Roll back greyed out with no saved undo.
-  Screen check (zh-CN Health, the lessons) not run.
 - 2026-11-17 s38 (coordinator-assigned; preflight CODE-ONLY, the owner at the PC: all pushes and the install as one
   batch from 18:40): landed CR-active-plan-unread (merge `2a1f3814`), CR-restore-notes-stay (`045733a9`),
   CR-home-unchecked-once (`7795dfc7`), CR-driver-compare-everywhere (`c237b160`), CR-what-changed-fall (`134fdeaf`),
@@ -2934,6 +2949,7 @@ Screen check view-1112c (s24, installed `9d2f2b57`; verdict FAIL, quoted in the 
 - 2026-11-18 ~21:15-22:00 and 2026-11-19 ~12:35-12:38 s48/s49/s51 (coordinator-assigned from the HQ session): read-only gate diagnosis (the release-state guard test makes ~178 serial git spawns, 44-72 s in a passing gate; `_train\s48-*`); look-only run of `fdd2f07c` against an empty data folder via `COMPY_MEASUREMENT_DATA_ROOT` (`_train\view-1118c`, real data unchanged); fresh-PC wording pass landed (merge `1d7d7c71`, sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken); pushed by s50; installed `cfbe08a78880b942bc1a402c48913cdb4ac7b91d` (runtime proof `cfbe08a7` release, shell 0.9.26, attempt 1); tester package rebuilt (`Desktop\Compy-tester-cfbe08a7.zip`), not sent.
 - 2026-11-19 ~13:30-14:10 s52 (scheduled; preflight CODE-ONLY, owner on Discord, no game): no catch-up (main = GitHub; the two train-* folders are empty leftovers, no branch). Landed CR-noise-footnote-pair (`5131f61d`, merged --no-ff with this tick; TS/locale only; sonnet r1 APPROVE-WITH-NITS, SHOULD-FIX taken; old-code proof 7 fail; tsc 0, touched suites + i18n/census guards 365/365). Stopped after one item: the next ready item (CR-plan-mid-session) is Rust measurement with two reviews, too long for the time left. NOT PUSHED, NOT INSTALLED (CODE-ONLY): the next FULL session pushes main; Friday install picks it up.
 - 2026-11-19 ~19:40-20:10 PT s55 (scheduled; preflight CODE-ONLY: the owner in PBZ): caught up the unlanded `train-s54-ctx2` (TG-context v2, `bb36a7c3`, an earlier session's commit with no log line): sonnet r1 APPROVE-WITH-NITS, 3 SHOULD-FIX + a clippy lint from the current toolchain + the module map (57 files) fixed in `2488ddc4`; the impossible-delta test fails on the old code by construction. tsc 0, clippy -D warnings clean, cargo --lib 2031/0 (26 ignored), module map OK, all at below-normal priority. Merged --no-ff with this tick; TG-context ticked. One item (catch-up). Queue not refilled (same reason as s47). NOT PUSHED, NOT INSTALLED (CODE-ONLY): main is 2 + this merge ahead of GitHub; the next FULL session (or Friday's install) pushes first.
+- 2026-11-19 ~15:20-2026-11-20 01:44 s53/s54/s58/s59 (coordinator-assigned from the HQ session; builds stopped whenever a game ran): owner promoted background-app accounting and asked for session-counting to be taken off him; read-only P4 trace and two designs (`_train\s53-*`, `s58-*`); TG-context v2 landed record-only (merge `598df276`, sonnet review over the whole feature, SHOULD-FIX taken; cargo --lib 2038/0); S-A what-counted status built, in opus + sonnet review (not merged); pushed (`d135f6ae..b4cefc86`, vitest 551 files / 11528 tests, cargo --lib 2038/0); installed `b4cefc86402644a5eaf3ddc5dfa3ba6e9121169c` (runtime proof `b4cefc86` release, shell 0.9.26, attempt 1); RELEASE_STATE stamped.
 ## Done
 - [x] Owner directive, release-ledger reconcile — `52865562` (2026-10-23)
 - [x] #620 Trial read-back (PR #686) — `9470b437`; desk install recorded — `ba587842`
