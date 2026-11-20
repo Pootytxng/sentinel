@@ -981,7 +981,9 @@ fn ledger_path_for(root: &MutationRoot) -> PathBuf {
 /// Load the ledger a mutation is about to write. Same fail-loud behavior as `load_history`, but
 /// read from the capability root — see `ledger_path_for`.
 fn load_history_for(root: &MutationRoot) -> Result<Vec<AppliedChange>, String> {
-    let loaded = load_history_from(&ledger_path_for(root));
+    // The one load that may RESTORE a missing or damaged ledger from its backup copy: it holds the
+    // capability, so the write lands only under a root Compy has proven is the machine's own.
+    let loaded = load_history_core(&ledger_path_for(root), true);
     if let Err(e) = &loaded {
         crate::support_evidence::record(
             crate::support_evidence::EventKind::Ledger,
@@ -1018,7 +1020,20 @@ pub(crate) fn load_history() -> Result<Vec<AppliedChange>, String> {
 }
 
 fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
+    // The READ side: it never writes a restored ledger (only `load_history_for`, which holds the
+    // capability, does). With the main file missing or damaged it still shows the backup's rows.
+    load_history_core(path, false)
+}
+
+/// The one load. `may_restore` is true only for the capability-holding mutation load: it alone
+/// writes the backup copy back as the main file. A main file that parses always wins and nothing
+/// below touches it; the backup is consulted only when the main file is missing or does not parse.
+fn load_history_core(path: &Path, may_restore: bool) -> Result<Vec<AppliedChange>, String> {
     if !path.exists() {
+        // A backup copy beside a missing ledger is NOT a first run: the file was deleted or lost.
+        if backup_path(path).exists() {
+            return recover_from_backup(path, may_restore, RestoreReason::Missing, None);
+        }
         return Ok(Vec::new()); // first run — genuinely no history
     }
     // A READ that fails is not damage (codebase review 2026-11-02). A sharing violation, a
@@ -1054,7 +1069,7 @@ fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
                 }
                 set_aside
             });
-            Err(format!(
+            let damaged = format!(
                 "The Trust Ledger could not be read (parse: {e}). {}",
                 if preserved {
                     "The damaged file was set aside as history.json.corrupt — nothing was \
@@ -1062,7 +1077,14 @@ fn load_history_from(path: &Path) -> Result<Vec<AppliedChange>, String> {
                 } else {
                     "The damaged file was left in place — Compy will not record changes over it."
                 }
-            ))
+            );
+            // Only a damaged file that was really set aside can be replaced; one left in place
+            // fails loud exactly as before and the backup is not consulted.
+            if preserved {
+                recover_from_backup(path, may_restore, RestoreReason::Damaged, Some(damaged))
+            } else {
+                Err(damaged)
+            }
         }
     }
 }
@@ -1087,6 +1109,228 @@ fn keep_earlier_set_aside(ledger: &Path, corrupt: &Path) -> Option<std::path::Pa
         .filter(|older| std::fs::rename(corrupt, older).is_ok())
 }
 
+// ---- The backup copy (reliability slice: the undo history survives one deleted or damaged file) ----
+//
+// Rules, in one place:
+// * WRITE: after a save of the main file has fully succeeded, the SAME serialised bytes are written to
+//   `history.json.bak` (temp in the same directory, synced, read back, renamed over the old copy). A
+//   save that fails never reaches this step, so a failed save never replaces a good backup. A backup
+//   that cannot be refreshed does not fail the save (the main file is already durable); it is reported.
+// * RESTORE: only when the main file is missing or does not parse, and only from a backup that parses.
+//   A main file that parses always wins; the backup never overwrites it. The damaged main file keeps
+//   its existing set-aside name. Nothing is ever deleted.
+// * Both bad: exactly today's corrupt-ledger result (fail loud once, bytes set aside, then fresh).
+// * No main and no backup: a genuine first run, unchanged.
+// * A future "clear history" command must remove `history.json.bak` and `history.json.restored` in the
+//   same step, or the cleared rows come back on the next load. No such command exists today.
+
+/// `history.json.bak`, beside the ledger.
+fn backup_path(ledger: &Path) -> PathBuf {
+    ledger.with_extension("json.bak")
+}
+
+/// `history.json.restored`: left behind by a restore so the health surface can say it happened.
+fn restored_marker_path(ledger: &Path) -> PathBuf {
+    ledger.with_extension("json.restored")
+}
+
+#[derive(Clone, Copy)]
+enum RestoreReason {
+    Missing,
+    Damaged,
+}
+
+impl RestoreReason {
+    fn word(self) -> &'static str {
+        match self {
+            RestoreReason::Missing => "missing",
+            RestoreReason::Damaged => "damaged",
+        }
+    }
+}
+
+enum BackupRead {
+    Absent,
+    /// The backup exists but could not be READ (not a statement about its bytes): never touched.
+    Unreadable(String),
+    /// The backup was read and does not parse as a ledger.
+    Damaged(String),
+    Good(Vec<u8>, Vec<AppliedChange>),
+}
+
+fn read_backup(ledger: &Path) -> BackupRead {
+    match std::fs::read(backup_path(ledger)) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => BackupRead::Absent,
+        Err(e) => BackupRead::Unreadable(e.to_string()),
+        Ok(bytes) => match serde_json::from_slice::<Vec<AppliedChange>>(&bytes) {
+            Ok(entries) => BackupRead::Good(bytes, entries),
+            Err(e) => BackupRead::Damaged(e.to_string()),
+        },
+    }
+}
+
+/// Create `file`, write `bytes`, flush them to the disk.
+fn write_new_synced(file: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut f = std::fs::File::create(file)?;
+    std::io::Write::write_all(&mut f, bytes)?;
+    f.sync_all()
+}
+
+/// Write `bytes` to `tmp` (synced), optionally read them back, then rename over `dest`. On any
+/// failure the temp file is removed and `dest` is exactly as it was.
+fn write_beside_and_swap(dest: &Path, tmp: &Path, bytes: &[u8], verify: bool) -> Result<(), String> {
+    let done = (|| -> std::io::Result<()> {
+        write_new_synced(tmp, bytes)?;
+        if verify && std::fs::read(tmp)? != bytes {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "the copy read back different"));
+        }
+        std::fs::rename(tmp, dest)
+    })();
+    if done.is_err() {
+        let _ = std::fs::remove_file(tmp);
+    }
+    done.map_err(|e| e.to_string())
+}
+
+/// Refresh `history.json.bak` from the bytes the main file was just saved with. Called only after the
+/// main write has fully succeeded. The bytes must parse as a ledger before they can replace a backup.
+fn write_backup_copy(ledger: &Path, json: &[u8]) -> Result<(), String> {
+    serde_json::from_slice::<Vec<AppliedChange>>(json)
+        .map_err(|e| format!("the saved ledger did not read back as a ledger ({e})"))?;
+    write_beside_and_swap(&backup_path(ledger), &ledger.with_extension("json.bak.tmp"), json, true)
+}
+
+/// Set a damaged backup aside under a name that never replaces an earlier one. Best effort.
+fn set_backup_aside(ledger: &Path) {
+    let bak = backup_path(ledger);
+    let aside = (0..100u32)
+        .map(|n| match n {
+            0 => ledger.with_extension("json.bak.corrupt"),
+            n => ledger.with_extension(format!("json.bak.corrupt.{n}")),
+        })
+        .find(|p| std::fs::symlink_metadata(p).is_err());
+    if let Some(aside) = aside {
+        let _ = std::fs::rename(bak, aside);
+    }
+}
+
+/// The backup as the lost ledger itself (the main file is missing and the backup does not parse):
+/// the same set-aside as a damaged main file, so `ledger_was_quarantined` and its time bound see it.
+fn set_backup_aside_as_corrupt_ledger(ledger: &Path) -> bool {
+    let corrupt = ledger.with_extension("json.corrupt");
+    let cleared = if corrupt.exists() { keep_earlier_set_aside(ledger, &corrupt).map(Some) } else { Some(None) };
+    cleared.is_some_and(|moved| {
+        let set_aside = std::fs::rename(backup_path(ledger), &corrupt).is_ok();
+        if let (false, Some(earlier)) = (set_aside, moved) {
+            let _ = std::fs::rename(earlier, &corrupt);
+        }
+        set_aside
+    })
+}
+
+/// The main file is missing, or was just set aside as damaged (`damaged` carries that error text).
+fn recover_from_backup(
+    path: &Path,
+    may_restore: bool,
+    reason: RestoreReason,
+    damaged: Option<String>,
+) -> Result<Vec<AppliedChange>, String> {
+    match (read_backup(path), damaged) {
+        (BackupRead::Good(bytes, entries), _) => {
+            if may_restore {
+                restore_main_from(path, &bytes, entries, reason)
+            } else {
+                Ok(entries) // a view; the next mutation load writes it back
+            }
+        }
+        // Raced with a removal of the backup: the answer is whatever the main file's situation was.
+        (BackupRead::Absent, None) => Ok(Vec::new()),
+        (BackupRead::Absent, Some(damaged)) => Err(damaged),
+        (BackupRead::Unreadable(e), None) => Err(format!(
+            "The Trust Ledger is missing and its backup copy could not be read right now (read: {e}). \
+             Nothing was changed, and Compy will not record changes until it can read it again."
+        )),
+        (BackupRead::Unreadable(e), Some(damaged)) => {
+            Err(format!("{damaged} Its backup copy could not be read right now either (read: {e}); it was left where it is."))
+        }
+        // Main missing and the only copy is damaged: that copy is the lost ledger. Fail loud once.
+        (BackupRead::Damaged(e), None) => {
+            let preserved = set_backup_aside_as_corrupt_ledger(path);
+            Err(format!(
+                "The Trust Ledger could not be read (parse: {e}). {}",
+                if preserved {
+                    "Its only copy was set aside as history.json.corrupt - nothing was overwritten, and \
+                     Compy will not record changes over it."
+                } else {
+                    "Its only copy was left in place - Compy will not record changes over it."
+                }
+            ))
+        }
+        // Both bad: today's corrupt-ledger result. The damaged backup is kept aside, never overwritten.
+        (BackupRead::Damaged(_), Some(damaged)) => {
+            set_backup_aside(path);
+            Err(damaged)
+        }
+    }
+}
+
+/// Write the backup's bytes back as the main file. The marker goes first (a restore nobody can see
+/// is a silent one, so one that cannot be marked is refused). The main file is put in place without
+/// ever replacing a file that is already there: if one appeared since the load, it wins.
+fn restore_main_from(
+    path: &Path,
+    bytes: &[u8],
+    entries: Vec<AppliedChange>,
+    reason: RestoreReason,
+) -> Result<Vec<AppliedChange>, String> {
+    let refuse = |what: &str, e: &dyn std::fmt::Display| {
+        format!(
+            "The Trust Ledger's backup copy is good but could not be restored ({what}: {e}). It was left \
+             where it is, and Compy will not record changes until the ledger can be restored."
+        )
+    };
+    if !entries.is_empty() {
+        let note = format!("{} {}\n", Utc::now().to_rfc3339(), reason.word());
+        write_beside_and_swap(&restored_marker_path(path), &path.with_extension("json.restored.tmp"), note.as_bytes(), false)
+            .map_err(|e| refuse("marker", &e))?;
+    }
+    let tmp = path.with_extension("json.restore.tmp");
+    write_new_synced(&tmp, bytes).map_err(|e| refuse("write", &e))?;
+    let placed = match std::fs::hard_link(&tmp, path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(_) if path.exists() => Ok(false),
+        // A volume without hard links: rename, after the same "nothing there" check.
+        Err(_) => std::fs::rename(&tmp, path).map(|()| true),
+    };
+    let _ = std::fs::remove_file(&tmp);
+    match placed {
+        Ok(true) => Ok(entries),
+        // A ledger was put there first (a concurrent save): theirs wins, read it as it is.
+        Ok(false) => load_history_core(path, true),
+        Err(e) => Err(refuse("place", &e)),
+    }
+}
+
+/// What the health surface should say about a restore, if one happened (or is pending).
+fn restored_note_at(path: &Path) -> Option<String> {
+    const TAIL: &str = "A change made in the last moments before that may not be listed; if something you changed is not here, use Find leftovers.";
+    if let Ok(marker) = std::fs::read_to_string(restored_marker_path(path)) {
+        let why = match marker.split_whitespace().nth(1) {
+            Some("damaged") => "damaged",
+            Some("missing") => "missing",
+            _ => "missing or damaged",
+        };
+        return Some(format!("Compy restored your change history from its backup copy (the main file was {why}). {TAIL}"));
+    }
+    (!path.exists() && backup_path(path).exists()).then(|| {
+        format!(
+            "Compy is showing your change history from its backup copy because the main file is missing; \
+             it will be written back the next time Compy records a change. {TAIL}"
+        )
+    })
+}
+
 /// Persist the ledger. Takes the `MutationRoot` capability rather than a path: a receipt may only
 /// ever be written under a root Compy has PROVEN is the machine's own (#130). Under a redirected
 /// root no token exists, so this function is unreachable — that is the fix, expressed as a type
@@ -1094,7 +1338,7 @@ fn keep_earlier_set_aside(ledger: &Path, corrupt: &Path) -> Option<std::path::Pa
 fn save_history(root: &MutationRoot, h: &[AppliedChange]) -> Result<(), String> {
     let saved = std::fs::create_dir_all(root.path())
         .map_err(|e| e.to_string())
-        .and_then(|()| save_history_to(&ledger_path_for(root), h));
+        .and_then(|()| save_history_to_reporting(&ledger_path_for(root), h));
     // The write side of the same story: a receipt that cannot be persisted is the failure that
     // strands a real machine change with no rollback contract. Support needs to see it happened.
     if let Err(e) = &saved {
@@ -1106,10 +1350,29 @@ fn save_history(root: &MutationRoot, h: &[AppliedChange]) -> Result<(), String> 
             e,
         );
     }
-    saved
+    // The main file is durable; a backup copy that could not be refreshed is reported, never fatal.
+    if let Ok(Some(why)) = &saved {
+        crate::support_evidence::record(
+            crate::support_evidence::EventKind::Ledger,
+            "ledger_backup",
+            "not_refreshed",
+            crate::support_evidence::Outcome::Failed,
+            why,
+        );
+    }
+    saved.map(|_| ())
 }
 
+/// The path-parameterized save without the backup report (the production caller is `save_history`,
+/// which reports through support evidence); the unit tests drive it directly in temp directories.
+#[cfg(test)]
 fn save_history_to(path: &Path, h: &[AppliedChange]) -> Result<(), String> {
+    save_history_to_reporting(path, h).map(|_| ())
+}
+
+/// `Ok(None)`: the main file and its backup copy are both written. `Ok(Some(why))`: the main file is
+/// durable but the backup copy could not be refreshed (the previous backup is untouched).
+fn save_history_to_reporting(path: &Path, h: &[AppliedChange]) -> Result<Option<String>, String> {
     let json = serde_json::to_string_pretty(h).map_err(|e| e.to_string())?;
     // Crash-safe (H1): write the full new ledger BESIDE the live one, then atomically swap it
     // in (same-volume rename; std maps to MoveFileEx + REPLACE_EXISTING on Windows). A crash
@@ -1124,7 +1387,9 @@ fn save_history_to(path: &Path, h: &[AppliedChange]) -> Result<(), String> {
         .and_then(|()| file.sync_all())
         .map_err(|e| format!("write: {e}"))?;
     drop(file);
-    std::fs::rename(&tmp, path).map_err(|e| format!("swap: {e}"))
+    std::fs::rename(&tmp, path).map_err(|e| format!("swap: {e}"))?;
+    // Only now, with the main file fully in place, refresh the backup copy from the SAME bytes.
+    Ok(write_backup_copy(path, json.as_bytes()).err())
 }
 
 /// Prove the ledger is WRITABLE before mutating the machine (H1, write side).
@@ -2011,7 +2276,18 @@ pub(crate) fn rec_id_of_change(change_id: &str) -> Result<Option<String>, String
 /// empty ledger; a file that can't be read or doesn't parse is an error naming which.
 fn read_history_unlocked(path: &Path) -> Result<Vec<AppliedChange>, String> {
     if !path.exists() {
-        return Ok(Vec::new());
+        // A backup copy beside a missing ledger is not "no history": read it (a view; nothing is
+        // written or moved here).
+        return match read_backup(path) {
+            BackupRead::Absent => Ok(Vec::new()),
+            BackupRead::Good(_, entries) => Ok(entries),
+            BackupRead::Unreadable(e) => Err(format!(
+                "The Trust Ledger is missing and its backup copy could not be read right now (read: {e}). Nothing was changed."
+            )),
+            BackupRead::Damaged(e) => Err(format!(
+                "The Trust Ledger is missing and its backup copy could not be read (parse: {e}). Nothing was changed."
+            )),
+        };
     }
     let bytes = std::fs::read(path)
         .map_err(|e| format!("The Trust Ledger could not be read right now (read: {e}). Nothing was changed."))?;
@@ -2367,6 +2643,10 @@ pub(crate) struct LedgerHealthView {
     /// `history.json.corrupt` sits beside the ledger — the original bytes are still on disk, which
     /// is the difference between "your record is gone" and "your record is set aside, unopened".
     pub quarantined: bool,
+    /// Set when the change history was (or is about to be) restored from `history.json.bak` because the
+    /// main file was missing or damaged: the sentence the surface can show. `None` otherwise. Does not
+    /// by itself make the ledger incomplete: the restored rows are the backup's.
+    pub restored: Option<String>,
 }
 
 fn ledger_health_at(path: &Path) -> LedgerHealthView {
@@ -2375,7 +2655,7 @@ fn ledger_health_at(path: &Path) -> LedgerHealthView {
     // reading it first would miss a fresh quarantine by one run.
     let error = load_history_from(path).err();
     let quarantined = path.with_extension("json.corrupt").exists();
-    LedgerHealthView { complete: error.is_none() && !quarantined, error, quarantined }
+    LedgerHealthView { complete: error.is_none() && !quarantined, error, quarantined, restored: restored_note_at(path) }
 }
 
 #[tauri::command]
@@ -5900,6 +6180,10 @@ mod history_tests {
         let path = dir.join("history.json");
         save_history_to(&path, &[record("game-mode", "applied")]).unwrap();
         let full = std::fs::read_to_string(&path).unwrap();
+        // This pins the case with NO backup copy (a ledger from before backups existed, or both
+        // files lost): the torn ledger surfaces. With a backup it is restored instead, which
+        // `ledger_backup_tests` proves at every cut offset.
+        std::fs::remove_file(backup_path(&path)).unwrap();
         std::fs::write(&path, &full[..full.len() / 2]).unwrap(); // torn mid-token
         assert!(
             load_history_from(&path).is_err(),
@@ -5990,7 +6274,14 @@ mod ledger_fuzz_tests {
     /// Wipe the ledger AND any set-aside/temp copy, so no case can ever assert on the previous
     /// iteration's residue.
     fn clear(dir: &std::path::Path) {
-        for name in ["history.json", "history.json.corrupt", "history.json.tmp"] {
+        for name in [
+            "history.json",
+            "history.json.corrupt",
+            "history.json.tmp",
+            "history.json.bak",
+            "history.json.bak.tmp",
+            "history.json.restored",
+        ] {
             std::fs::remove_file(dir.join(name)).ok();
         }
     }
@@ -6160,6 +6451,325 @@ mod ledger_fuzz_tests {
             load_history_from(&path).expect("the complete ledger loads").len(),
             2
         );
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}
+
+// The backup copy (reliability slice): the undo history survives one deleted or damaged file. Every
+// test works in its own temp directory and never touches %APPDATA%\Compy.
+#[cfg(test)]
+mod ledger_backup_tests {
+    use super::*;
+
+    fn dir_for(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("compy-ledger-bak-{tag}-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        dir
+    }
+
+    fn row(n: usize, title: &str) -> AppliedChange {
+        serde_json::from_value(serde_json::json!({
+            "id": format!("row-{n}"), "rec_id": "game-mode", "rec_title": title,
+            "applied_at": "2026-11-01T09:00:00+00:00", "snapshot": { "prior": n }, "status": "applied"
+        }))
+        .expect("a ledger row")
+    }
+
+    fn rows(n: usize) -> Vec<AppliedChange> {
+        (0..n).map(|i| row(i, &format!("title \"{i}\" \u{00e9}\u{4e2d}"))).collect()
+    }
+
+    fn ids(h: &[AppliedChange]) -> Vec<String> {
+        h.iter().map(|c| c.id.clone()).collect()
+    }
+
+    fn saved(tag: &str, n: usize) -> (std::path::PathBuf, std::path::PathBuf) {
+        let dir = dir_for(tag);
+        let path = dir.join("history.json");
+        save_history_to(&path, &rows(n)).expect("save");
+        (dir, path)
+    }
+
+    fn parses(path: &Path) -> bool {
+        std::fs::read(path).is_ok_and(|b| serde_json::from_slice::<Vec<AppliedChange>>(&b).is_ok())
+    }
+
+    #[test]
+    fn a_save_writes_the_same_bytes_to_the_backup_and_main_is_what_it_always_was() {
+        let (dir, path) = saved("golden", 3);
+        // Golden: the main file is byte-for-byte what the save has always written.
+        let expected = serde_json::to_string_pretty(&rows(3)).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), expected.as_bytes(), "main bytes unchanged by the backup");
+        assert_eq!(std::fs::read(backup_path(&path)).unwrap(), expected.as_bytes(), "backup = the same bytes");
+        for residue in ["json.tmp", "json.bak.tmp", "json.restore.tmp", "json.restored", "json.corrupt"] {
+            assert!(!path.with_extension(residue).exists(), "no {residue} after a clean save");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn hostile_content_leaves_main_and_backup_identical_and_valid() {
+        use crate::fuzz_support::{hostile_string, Rng, SEEDS};
+        let dir = dir_for("hostile");
+        let path = dir.join("history.json");
+        for seed in SEEDS {
+            let mut rng = Rng::seeded(seed);
+            let ledger: Vec<AppliedChange> = (0..3).map(|i| row(i, &hostile_string(&mut rng, 2))).collect();
+            save_history_to(&path, &ledger).expect("save");
+            assert_eq!(std::fs::read(&path).unwrap(), std::fs::read(backup_path(&path)).unwrap(), "seed {seed}");
+            assert!(parses(&backup_path(&path)), "seed {seed}");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_deleted_main_file_is_restored_with_every_row_and_says_so() {
+        let (dir, path) = saved("deleted", 3);
+        let bak_bytes = std::fs::read(backup_path(&path)).unwrap();
+        std::fs::remove_file(&path).unwrap();
+
+        // A reader shows the backup's rows and writes nothing: no first run, no restore, no marker.
+        let view = load_history_from(&path).expect("a view of the backup");
+        assert_eq!(ids(&view), ids(&rows(3)));
+        assert!(!path.exists() && !restored_marker_path(&path).exists(), "a read writes nothing");
+        let pending = ledger_health_at(&path);
+        assert!(pending.complete && pending.error.is_none());
+        assert!(pending.restored.expect("pending note").contains("backup copy"));
+
+        // The mutation load (it holds the capability) writes it back and leaves the marker.
+        let back = load_history_core(&path, true).expect("restore");
+        assert_eq!(ids(&back), ids(&rows(3)), "every row is back");
+        assert_eq!(std::fs::read(&path).unwrap(), bak_bytes, "main = the backup's bytes");
+        assert_eq!(std::fs::read(backup_path(&path)).unwrap(), bak_bytes, "the backup is untouched");
+        let health = ledger_health_at(&path);
+        let note = health.restored.expect("a restore is visible");
+        assert!(note.contains("restored your change history from its backup copy") && note.contains("missing"), "{note}");
+        assert!(health.complete, "a restore is not a loss");
+        assert!(!path.with_extension("json.restore.tmp").exists());
+        // And it stays stable: the next load is an ordinary load of the restored main file.
+        assert_eq!(ids(&load_history_core(&path, true).unwrap()), ids(&rows(3)));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_main_file_cut_at_every_byte_offset_never_loads_as_an_empty_healthy_ledger() {
+        let (dir, path) = saved("cut", 2);
+        let full = std::fs::read(&path).unwrap();
+        let corrupt = path.with_extension("json.corrupt");
+        for cut in 0..full.len() {
+            for f in [&path, &corrupt, &path.with_extension("json.restored")] {
+                std::fs::remove_file(f).ok();
+            }
+            save_history_to(&path, &rows(2)).unwrap(); // main and backup both good again
+            std::fs::write(&path, &full[..cut]).unwrap();
+            let back = load_history_core(&path, true).unwrap_or_else(|e| panic!("cut {cut}: {e}"));
+            assert_eq!(ids(&back), ids(&rows(2)), "cut {cut}: every row, never empty");
+            assert_eq!(std::fs::read(&corrupt).unwrap(), &full[..cut], "cut {cut}: the damaged bytes are kept");
+            assert_eq!(std::fs::read(&path).unwrap(), full, "cut {cut}: main is whole again");
+            assert!(ledger_health_at(&path).restored.is_some(), "cut {cut}: visible");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_read_of_a_cut_main_file_shows_the_backups_rows_at_every_offset() {
+        let (dir, path) = saved("cut-read", 2);
+        let full = std::fs::read(&path).unwrap();
+        for cut in 0..full.len() {
+            std::fs::remove_file(path.with_extension("json.corrupt")).ok();
+            std::fs::write(&path, &full[..cut]).unwrap();
+            let seen = load_history_from(&path).unwrap_or_else(|e| panic!("cut {cut}: {e}"));
+            assert_eq!(ids(&seen), ids(&rows(2)), "cut {cut}");
+            assert!(!path.exists(), "cut {cut}: the reader sets the damage aside and writes no ledger");
+        }
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_main_file_of_the_wrong_shape_is_damage_too() {
+        for (i, body) in ["{\"schema\":9}", "null", "5", "\"x\"", "[{\"id\":1}]"].into_iter().enumerate() {
+            let (dir, path) = saved(&format!("shape{i}"), 2);
+            std::fs::write(&path, body).unwrap();
+            assert_eq!(ids(&load_history_core(&path, true).unwrap()), ids(&rows(2)), "{body}");
+            assert_eq!(std::fs::read_to_string(path.with_extension("json.corrupt")).unwrap(), body);
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
+    #[test]
+    fn a_readable_main_file_always_wins_and_the_backup_is_never_used_over_it() {
+        let (dir, path) = saved("wins", 1);
+        // A backup with MORE rows than the main file: still never used while the main file parses.
+        let bigger = serde_json::to_string_pretty(&rows(3)).unwrap();
+        std::fs::write(backup_path(&path), &bigger).unwrap();
+        let main_before = std::fs::read(&path).unwrap();
+        assert_eq!(ids(&load_history_core(&path, true).unwrap()), ids(&rows(1)));
+        assert_eq!(std::fs::read(&path).unwrap(), main_before, "main untouched");
+        assert_eq!(std::fs::read_to_string(backup_path(&path)).unwrap(), bigger, "backup untouched at load");
+        assert!(!restored_marker_path(&path).exists() && ledger_health_at(&path).restored.is_none());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_damaged_backup_never_masks_a_good_main_and_the_next_save_repairs_it() {
+        let (dir, path) = saved("badbak", 2);
+        std::fs::write(backup_path(&path), b"{ not a ledger").unwrap();
+        assert_eq!(ids(&load_history_core(&path, true).unwrap()), ids(&rows(2)));
+        assert!(ledger_health_at(&path).restored.is_none(), "no signal for a bad backup");
+        assert!(!path.with_extension("json.corrupt").exists());
+        save_history_to(&path, &rows(3)).unwrap();
+        assert!(parses(&backup_path(&path)));
+        assert_eq!(std::fs::read(&path).unwrap(), std::fs::read(backup_path(&path)).unwrap());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn both_files_bad_is_todays_corrupt_ledger_result() {
+        let (dir, path) = saved("both", 2);
+        let (main_bad, bak_bad): (&[u8], &[u8]) = (b"{ main is garbage ]]]", b"{ so is the backup");
+        std::fs::write(&path, main_bad).unwrap();
+        std::fs::write(backup_path(&path), bak_bad).unwrap();
+        let err = load_history_core(&path, true).err().expect("fails loud");
+        assert!(err.contains("could not be read") && err.contains("history.json.corrupt"), "{err}");
+        assert_eq!(std::fs::read(path.with_extension("json.corrupt")).unwrap(), main_bad);
+        assert_eq!(std::fs::read(path.with_extension("json.bak.corrupt")).unwrap(), bak_bad, "kept, not deleted");
+        assert!(!restored_marker_path(&path).exists());
+        // As today: after the one loud failure the ledger starts fresh and the marker says why.
+        assert!(load_history_core(&path, true).unwrap().is_empty());
+        assert!(ledger_was_quarantined_at(&path));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    fn ledger_was_quarantined_at(path: &Path) -> bool {
+        path.with_extension("json.corrupt").exists()
+    }
+
+    #[test]
+    fn a_missing_main_with_only_a_damaged_backup_fails_closed_once_and_keeps_the_bytes() {
+        let dir = dir_for("onlybad");
+        let path = dir.join("history.json");
+        std::fs::write(backup_path(&path), b"{ the only copy, damaged").unwrap();
+        let err = load_history_core(&path, true).err().expect("never a silent first run");
+        assert!(err.contains("could not be read"), "{err}");
+        assert_eq!(std::fs::read(path.with_extension("json.corrupt")).unwrap(), b"{ the only copy, damaged");
+        assert!(set_aside_through_at(&path).unwrap().is_some(), "the marker the health surface reads");
+        assert!(load_history_core(&path, true).unwrap().is_empty(), "then fresh, exactly like a damaged main file");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_genuine_first_run_is_unchanged() {
+        let dir = dir_for("first");
+        let path = dir.join("history.json");
+        assert!(load_history_core(&path, true).unwrap().is_empty());
+        assert!(load_history_from(&path).unwrap().is_empty());
+        assert!(read_history_unlocked(&path).unwrap().is_empty());
+        let health = ledger_health_at(&path);
+        assert!(health.complete && health.error.is_none() && !health.quarantined && health.restored.is_none());
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0, "a first run writes nothing");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_read_error_never_restores_and_never_touches_the_backup() {
+        let (dir, path) = saved("readerr", 2);
+        let bak_bytes = std::fs::read(backup_path(&path)).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap(); // a read of this path fails on every platform
+        let err = load_history_core(&path, true).err().expect("a read error fails loud");
+        assert!(err.contains("could not be read right now"), "{err}");
+        assert!(path.is_dir(), "left where it was");
+        assert_eq!(std::fs::read(backup_path(&path)).unwrap(), bak_bytes);
+        assert!(!restored_marker_path(&path).exists() && !path.with_extension("json.corrupt").exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_failed_main_save_leaves_the_previous_backup_and_main_intact() {
+        let (dir, path) = saved("failsave", 2);
+        let main_before = std::fs::read(&path).unwrap();
+        let bak_before = std::fs::read(backup_path(&path)).unwrap();
+        std::fs::create_dir(path.with_extension("json.tmp")).unwrap(); // the main write cannot start
+        assert!(save_history_to(&path, &rows(5)).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), main_before);
+        assert_eq!(std::fs::read(backup_path(&path)).unwrap(), bak_before, "a failed save never replaces a good backup");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_backup_that_cannot_be_refreshed_does_not_fail_the_save_and_keeps_the_old_copy() {
+        let (dir, path) = saved("bakfail", 2);
+        let bak_before = std::fs::read(backup_path(&path)).unwrap();
+        std::fs::create_dir(path.with_extension("json.bak.tmp")).unwrap(); // the backup write cannot start
+        let why = save_history_to_reporting(&path, &rows(4)).expect("the main file is saved").expect("and it is reported");
+        assert!(!why.is_empty());
+        assert_eq!(ids(&load_history_core(&path, true).unwrap()), ids(&rows(4)), "main has the new rows");
+        assert_eq!(std::fs::read(backup_path(&path)).unwrap(), bak_before, "the old backup is intact");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_restore_that_cannot_be_marked_is_refused_and_changes_nothing() {
+        let (dir, path) = saved("nomark", 2);
+        let bak_bytes = std::fs::read(backup_path(&path)).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(path.with_extension("json.restored.tmp")).unwrap();
+        let err = load_history_core(&path, true).err().expect("a silent restore is refused");
+        assert!(err.contains("could not be restored"), "{err}");
+        assert!(!path.exists(), "no main file was written");
+        assert_eq!(std::fs::read(backup_path(&path)).unwrap(), bak_bytes);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_restore_never_replaces_a_ledger_that_appeared_first() {
+        let (dir, path) = saved("race", 3);
+        let bak_bytes = std::fs::read(backup_path(&path)).unwrap();
+        // The main file (one row) is there by the time the restore writes: it wins, untouched.
+        let newer = serde_json::to_string_pretty(&rows(1)).unwrap();
+        std::fs::write(&path, &newer).unwrap();
+        let got = restore_main_from(&path, &bak_bytes, rows(3), RestoreReason::Missing).unwrap();
+        assert_eq!(ids(&got), ids(&rows(1)));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), newer);
+        assert!(!path.with_extension("json.restore.tmp").exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn the_unlocked_undo_lookup_does_not_read_a_missing_ledger_as_a_first_run() {
+        let (dir, path) = saved("lookup", 2);
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(ids(&read_history_unlocked(&path).unwrap()), ids(&rows(2)));
+        assert!(!path.exists(), "a pure read");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn saves_in_quick_succession_leave_main_and_backup_both_valid_and_equal() {
+        let dir = dir_for("quick");
+        let path = dir.join("history.json");
+        for n in 0..25 {
+            save_history_to(&path, &rows(n)).unwrap();
+            assert_eq!(std::fs::read(&path).unwrap(), std::fs::read(backup_path(&path)).unwrap(), "after save {n}");
+        }
+        // Two writers behind the production lock (every ledger writer holds it).
+        let threads: Vec<_> = (0..2)
+            .map(|t| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    for n in 0..15 {
+                        let _guard = lock_history().expect("lock");
+                        save_history_to(&path, &rows(t * 20 + n)).expect("save");
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+        assert!(parses(&path) && parses(&backup_path(&path)));
+        assert_eq!(std::fs::read(&path).unwrap(), std::fs::read(backup_path(&path)).unwrap());
         std::fs::remove_dir_all(&dir).ok();
     }
 }

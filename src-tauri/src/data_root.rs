@@ -505,7 +505,15 @@ fn dir_identity(_p: &Path) -> Option<(u32, u64)> {
 /// unreadable, which every caller must treat as "may hold receipts". Read-only.
 fn ledger_receipts(path: &Path) -> Option<usize> {
     if !path.exists() {
-        return Some(0);
+        // No main file, but its backup copy (`history.json.bak`) may still hold receipts: that is a
+        // ledger that lost its main file, not an empty one. An unreadable backup may hold receipts.
+        let backup = path.with_extension("json.bak");
+        if !backup.exists() {
+            return Some(0);
+        }
+        let text = std::fs::read_to_string(&backup).ok()?;
+        let parsed: serde_json::Value = serde_json::from_str(&text).ok()?;
+        return parsed.as_array().map(|a| a.len());
     }
     let text = std::fs::read_to_string(path).ok()?;
     let parsed: serde_json::Value = serde_json::from_str(&text).ok()?;
@@ -1560,5 +1568,34 @@ mod tests {
             found.push((name, first));
         }
         found
+    }
+}
+
+// A ledger that lost its main file is not an empty ledger: its backup copy still holds the receipts, so
+// the root decision must count them (a missing `history.json` beside a good `history.json.bak` read as
+// "no receipts" before, which is the first-run reading the backup exists to prevent).
+#[cfg(test)]
+mod ledger_backup_receipts_tests {
+    use super::ledger_receipts;
+
+    fn dir_for(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("compy-root-bak-{tag}-{}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn a_missing_ledger_with_a_backup_counts_the_backups_receipts() {
+        let dir = dir_for("count");
+        let ledger = dir.join("history.json");
+        assert_eq!(ledger_receipts(&ledger), Some(0), "no files at all: a genuine first run");
+        std::fs::write(dir.join("history.json.bak"), r#"[{"a":1},{"a":2},{"a":3}]"#).unwrap();
+        assert_eq!(ledger_receipts(&ledger), Some(3), "the backup still holds three receipts");
+        std::fs::write(dir.join("history.json.bak"), "{ not a ledger").unwrap();
+        assert_eq!(ledger_receipts(&ledger), None, "an unreadable backup may hold receipts");
+        std::fs::write(&ledger, "[{\"a\":1}]").unwrap();
+        assert_eq!(ledger_receipts(&ledger), Some(1), "a main file that reads is the answer");
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

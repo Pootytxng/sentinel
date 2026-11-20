@@ -164,6 +164,11 @@ exclusive fullscreen — by design, no injection).
 - ☐ **Missing history** — delete `history.json`, reopen → empty ledger, no
   crash. *(proven live 2026-07-07 on `5f765e4` — T5: clean launch with the
   file absent, `[]` + UI rendered, no crash; ledger restored hash-identical)*
+  *Since the history backup copy (`history.json.bak`, written after every successful save): the two
+  checks above describe a ledger with NO backup. With the backup present, a missing or damaged
+  `history.json` is restored from it (every row back, `history.json.restored` left behind, damaged bytes
+  kept as `history.json.corrupt`); the empty-ledger result holds only when the backup is gone too.
+  Proven by `history::ledger_backup_tests` in temp dirs; do not repeat it against the real `%APPDATA%\Compy`.*
 - ☐ **Cancelled apply** — (covered in §1) no success entry on UAC cancel.
 - ☑ **Helper crash** — kill `compy.exe --fps-capture` mid-capture → app
   reflects FPS stopped; re-enabling works (no stale session). *(owner-present

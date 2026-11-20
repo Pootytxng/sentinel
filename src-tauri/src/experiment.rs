@@ -10273,6 +10273,10 @@ mod experiment_tests {
             let _ = std::fs::remove_file(store_path());
             let _ = std::fs::remove_dir(store_path());
             let _ = std::fs::remove_file(ledger_file());
+            // The ledger's backup copy and restore marker are part of the ledger: leaving them would
+            // read as a deleted ledger that can be restored, to the next test.
+            let _ = std::fs::remove_file(ledger_file().with_extension("json.bak"));
+            let _ = std::fs::remove_file(ledger_file().with_extension("json.restored"));
         }
     }
 
