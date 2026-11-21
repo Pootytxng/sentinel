@@ -652,6 +652,55 @@ describe("Problems (glass redesign)", () => {
   });
 });
 
+// view-1121b A5: the Problems room opened with all 25 records expanded on a plain visit, because the
+// record the door's dot counts (pendingIncidentId) was treated as a deep link and opened its group.
+describe("Problems room: groups open only for a real deep link", () => {
+  const crash = (n: number) => ({
+    incident_id: `grp${String(n).padStart(13, "0")}`,
+    headline: `ROB RUN stopped working and closed — Nov ${10 + n}, 6:33 AM`,
+    tag: "App crash",
+    when: `2026-11-${10 + n}T14:33:00Z`,
+    when_display: `Nov ${10 + n}, 6:33 AM`,
+    vitals: null,
+    receipt: { source: "Application log · 1000", event_ids: [1000], faulting_app: "ROB RUN.exe", faulting_module: null, code: null, detail: "" },
+    assessment: null,
+  });
+  const room = (props: { focus: string | null; pending?: string | null }) =>
+    render(
+      <ProblemsRoom
+        changes={[]}
+        onChanged={vi.fn()}
+        ledgerBusy={false}
+        onLedgerBusy={vi.fn()}
+        focusIncidentId={props.focus}
+        pendingIncidentId={props.pending ?? null}
+      />,
+    );
+
+  it("a plain visit with a record waiting stays folded: a group, a 'Show each one' button, no record rows", async () => {
+    scan.report = { incidents: [crash(1), crash(2), crash(3)], skipped_sources: [] };
+    room({ focus: null, pending: crash(3).incident_id });
+    const btn = await screen.findByRole("button", { name: "Show each one (3)" });
+    expect(btn.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelectorAll(".bb-group-list > .bb-item")).toHaveLength(0);
+  });
+
+  it("a deep link to a record inside the group opens it and scrolls to that record", async () => {
+    scan.report = { incidents: [crash(1), crash(2), crash(3)], skipped_sources: [] };
+    const scrolled = vi.spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(() => {});
+    try {
+      room({ focus: crash(2).incident_id });
+      const btn = await screen.findByRole("button", { name: "Hide the individual records" });
+      expect(btn.getAttribute("aria-expanded")).toBe("true");
+      const row = document.querySelector('.bb-item[data-selected="true"]')!;
+      expect(row.textContent).toContain("Nov 12, 6:33 AM");
+      expect(scrolled.mock.contexts.some((el) => el === row), "the deep-linked record was not scrolled to").toBe(true);
+    } finally {
+      scrolled.mockRestore();
+    }
+  });
+});
+
 // Round-2 review 2026-10-31: games recorded but no frame rate measured (a session Compy saw but
 // couldn't read). The page said "No session yet" beside cards counting "1 session", "2 games
 // measured" beside two "Not measured" cards, and drew an empty chart with ticks "0 1 1 2".

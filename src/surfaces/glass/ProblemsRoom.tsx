@@ -42,6 +42,9 @@ export function ProblemsRoom({
       <div className="gl-card gl-station">
         <BlackBox
           selectedIncidentId={focusIncidentId ?? pendingIncidentId}
+          // Only a real deep link opens a group. The waiting record still marks its row, but a plain
+          // visit stays folded (view-1121b A5: all 25 records opened expanded).
+          expandGroupFor={focusIncidentId}
           scanOnOpen
           changes={changes}
           onChanged={onChanged}

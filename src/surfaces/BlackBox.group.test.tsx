@@ -259,6 +259,33 @@ describe("Problems room - identical incidents grouped", () => {
     expect(marked[0].textContent).toContain("Nov 10, 12:02 PM");
   });
 
+  it("a record that is only marked (a waiting pointer, not a deep link) never opens its group", async () => {
+    reportMock.value = { incidents: many(5), skipped_sources: [] };
+    // selectedIncidentId marks and scans; expandGroupFor={null} says nobody asked for the group open.
+    render(<BlackBox selectedIncidentId={rob(4).incident_id} expandGroupFor={null} />);
+    await screen.findByText(/closed 5 times/);
+    expect(screen.getByRole("button", { name: "Show each one (5)" }).getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelectorAll(".bb-group-list > .bb-item")).toHaveLength(0);
+  });
+
+  it("the next-step block's 'Show this record in the list' opens the folded group and scrolls to that record", async () => {
+    const spy = vi.fn();
+    const orig = HTMLElement.prototype.scrollIntoView;
+    const { container } = await open(many(5));
+    // Folded on arrival; the pointer is a button.
+    expect(screen.getByRole("button", { name: "Show each one (5)" }).getAttribute("aria-expanded")).toBe("false");
+    const pointer = screen.getByRole("button", { name: "Show this record in the list" });
+    HTMLElement.prototype.scrollIntoView = spy;
+    fireEvent.click(pointer);
+    HTMLElement.prototype.scrollIntoView = orig;
+    expect(screen.getByRole("button", { name: "Hide the individual records" }).getAttribute("aria-expanded")).toBe("true");
+    const marked = container.querySelectorAll('.bb-item[data-selected="true"]');
+    expect(marked).toHaveLength(1);
+    // The step's record is the newest one in the group.
+    expect(marked[0].textContent).toContain("Nov 11, 12:04 PM");
+    expect(spy.mock.contexts.some((el) => el === marked[0]), "the record was not scrolled to").toBe(true);
+  });
+
   it("says it in Chinese, with a plural-safe count and no cause or fix wording", async () => {
     await i18n.changeLanguage("zh-CN");
     const { container } = await open(many(25));

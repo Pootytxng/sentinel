@@ -55,6 +55,7 @@ import "./BlackBox.css";
 export function BlackBox({
   onReport,
   selectedIncidentId,
+  expandGroupFor,
   scanOnOpen = false,
   changes,
   onChanged,
@@ -67,6 +68,11 @@ export function BlackBox({
    *  When present the station scans on mount instead of waiting for a click — a user who followed
    *  "Find out why" already asked the question, and making them press Scan is asking it twice. */
   selectedIncidentId?: string | null;
+  /** The record the USER asked for by a deep link (Home's crash banner, "Find out why"). A group
+   *  holding it opens on mount. Left out, it follows `selectedIncidentId`; the Problems room passes
+   *  only the real deep link, so a record the door's dot merely counts marks its row but never opens
+   *  a group on a plain visit (view-1121b: all 25 records opened expanded). */
+  expandGroupFor?: string | null;
   /** P6-timeline: the user followed a "See what changed" pointer here, so scan on arrival — the
    *  "Since it last worked" list they were promised needs a scan to exist. */
   scanOnOpen?: boolean;
@@ -200,6 +206,15 @@ export function BlackBox({
   // P2-group: identical incidents as one group; stable between renders so the groups' own memos hold.
   const groups = useMemo(() => (report ? groupIncidents(report.incidents) : []), [report]);
 
+  // A press on "Show this record" in the next-step block: the user's own action, so it opens the
+  // group holding the record and scrolls to it. `n` makes a second press scroll again.
+  const [reveal, setReveal] = useState<{ id: string; n: number } | null>(null);
+  const markedId = reveal?.id ?? selectedIncidentId;
+  const expandFor = expandGroupFor === undefined ? selectedIncidentId : expandGroupFor;
+  const stepRecordId = careStep?.source === "incident" ? careStep.incidentId : null;
+  const stepInGroup =
+    !!stepRecordId && groups.some((g) => g.items.length > 1 && g.items.some((i) => i.incident_id === stepRecordId));
+
   const selectedMissing =
     !!selectedIncidentId &&
     !!report &&
@@ -224,6 +239,9 @@ export function BlackBox({
         sessions={stutter?.sessions ?? []}
         skipped={!!report && report.skipped_sources.length > 0}
         skippedNeedsAdmin={skips.admin.length > 0}
+        onShowRecord={
+          stepInGroup && stepRecordId ? () => setReveal({ id: stepRecordId, n: Date.now() }) : undefined
+        }
         onDismiss={(key) => {
           dismissStoredStep(key);
           setRetired((n) => n + 1);
@@ -266,7 +284,8 @@ export function BlackBox({
                     key={g.items[0].incident_id || `${g.items[0].when}-${gi}`}
                     inc={g.items[0]}
                     allIncidents={report.incidents}
-                    selected={!!selectedIncidentId && g.items[0].incident_id === selectedIncidentId}
+                    selected={!!markedId && g.items[0].incident_id === markedId}
+                    scrollNonce={reveal?.n}
                     restore={restore}
                     lifted={isLifted(careStep, g.items[0])}
                   />
@@ -275,7 +294,9 @@ export function BlackBox({
                     key={g.items[0].incident_id || `${g.items[0].when}-${gi}`}
                     group={g}
                     allIncidents={report.incidents}
-                    selectedIncidentId={selectedIncidentId}
+                    selectedIncidentId={markedId}
+                    expandFor={expandFor}
+                    reveal={reveal}
                     restore={restore}
                     isLiftedInc={(inc) => isLifted(careStep, inc)}
                   />
@@ -319,6 +340,7 @@ function IncidentRow({
   inc,
   allIncidents,
   selected = false,
+  scrollNonce,
   restore,
   lifted = false,
   compact = false,
@@ -342,6 +364,8 @@ function IncidentRow({
   /** This is the exact incident the user was routed here to see. Marked, and scrolled into view —
    *  a deep-link that lands the user in a list of twenty-five rows has not actually arrived. */
   selected?: boolean;
+  /** Changes on each "Show this record" press, so a press on an already-marked row scrolls again. */
+  scrollNonce?: number;
 }) {
   const { t } = useTranslation();
   const [showReceipt, setShowReceipt] = useState(false);
@@ -354,7 +378,7 @@ function IncidentRow({
     // By its top: a record with its evidence open runs taller than the window, and centring it put
     // the "this is the one" note and the headline above the fold (desk review 2026-10-30).
     if (selected) ref.current?.scrollIntoView({ block: "start", behavior: "auto" });
-  }, [selected]);
+  }, [selected, scrollNonce]);
   const r = inc.receipt;
   return (
     <li className="bb-item" ref={ref} data-selected={selected ? "true" : undefined}>
@@ -529,12 +553,19 @@ function IncidentGroupBlock({
   group,
   allIncidents,
   selectedIncidentId,
+  expandFor,
+  reveal,
   restore,
   isLiftedInc,
 }: {
   group: IncidentGroup;
   allIncidents: CrashIncident[];
+  /** The record whose row is marked and scrolled to (a deep link, a waiting record, or a reveal). */
   selectedIncidentId?: string | null;
+  /** The record a deep link asked for: a group holding it is open on mount. Nothing else opens a group. */
+  expandFor?: string | null;
+  /** A press on the next-step block's "Show this record": opens the group holding that record. */
+  reveal?: { id: string; n: number } | null;
   restore?: RestoreCtx;
   /** Is this record's step the one shown at the top? */
   isLiftedInc: (inc: CrashIncident) => boolean;
@@ -543,8 +574,12 @@ function IncidentGroupBlock({
   const { items } = group;
   const newest = items[0];
   const oldest = items[items.length - 1];
-  const hasSelected = !!selectedIncidentId && items.some((i) => i.incident_id === selectedIncidentId);
-  const [open, setOpen] = useState(hasSelected);
+  const hasAsked = !!expandFor && items.some((i) => i.incident_id === expandFor);
+  const [open, setOpen] = useState(hasAsked);
+  const revealHere = !!reveal && items.some((i) => i.incident_id === reveal.id);
+  useEffect(() => {
+    if (revealHere) setOpen(true);
+  }, [revealHere, reveal?.n]);
   const listId = useId();
   const count = items.length;
   const shared = useMemo(() => sharedUnknownItems(items), [items]);
@@ -620,6 +655,7 @@ function IncidentGroupBlock({
               inc={inc}
               allIncidents={allIncidents}
               selected={!!selectedIncidentId && inc.incident_id === selectedIncidentId}
+              scrollNonce={reveal?.n}
               restore={restore}
               lifted={isLiftedInc(inc)}
               compact

@@ -406,6 +406,7 @@
       "fromStutterStored": "来自之前一次测出变慢的 {{game}} 会话比较。Compy 会继续用当时那次平稳会话来衡量之后的 {{game}} 会话。",
       "finalRead": "这是这一步的最后一次读数：下次打开这个页面时，Compy 将停止跟踪它。新的比较仍可能给出新的一步。",
       "stopTracking": "停止跟踪这一步",
+      "showRecord": "在列表中显示这条记录",
       "whyIncident": "Compy 之所以给出这一步，是因为它最新的崩溃记录标记为{{kind}}，而这是针对这类记录最安全的第一项检查。这是下一步，不是诊断。",
       "whyIncidentResearch": "Compy 之所以给出这一步，是因为它最新的崩溃记录标记为{{kind}}。这是一条值得研究的线索，不是 Compy 能安全执行或担保的更改。",
       "whyIncidentBeyond": "Compy 之所以给出这一步，是因为它最新的崩溃记录标记为{{kind}}，而这一读数超出了 Compy 能安全收窄的范围。诚实的下一步是找人帮忙，并带上记录本身的细节。",

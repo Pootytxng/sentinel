@@ -27,6 +27,7 @@ export function CareNextStep({
   sessions,
   skipped,
   skippedNeedsAdmin = true,
+  onShowRecord,
   onDismiss,
 }: {
   step: CareStep | null;
@@ -37,6 +38,10 @@ export function CareNextStep({
   /** P6-unknown: at least one skip needs admin. False → the skips were reader failures, and the
    *  partial line says some sources couldn't be read this time, not "need administrator". */
   skippedNeedsAdmin?: boolean;
+  /** The step's record sits inside a group of records that is folded. The press is the user's own
+   *  action: it opens that group and scrolls to the record. Absent when the record is already a
+   *  row of its own. */
+  onShowRecord?: () => void;
   /** P6-next-f2: the user stopped tracking a stored stutter step (BlackBox retires it). */
   onDismiss?: (key: string) => void;
 }) {
@@ -212,6 +217,11 @@ export function CareNextStep({
           </dl>
         }
       />
+      {onShowRecord && step.source === "incident" && (
+        <button type="button" className="set-action bb-next-show" onClick={onShowRecord}>
+          {t("gaming.blackBox.nextStep.showRecord")}
+        </button>
+      )}
       {beyond && <CareSupportExport />}
       {step.source === "stutter" && step.stored && onDismiss && (
         <button type="button" className="set-action bb-next-dismiss" onClick={() => onDismiss(step.key)}>
