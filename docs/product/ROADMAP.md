@@ -1,363 +1,205 @@
-# Compy Reborn Roadmap
-
-**Derived authority:** `../PRODUCT_CONSTITUTION.md`<br>
-**Current-state authority:** `../RELEASE_STATE.md`<br>
-**Safety authority:** `../ARCHITECTURE_LOCKS.md`<br>
-**Execution authority:** `../WORK_CONTROL.md`
-
-This roadmap does not redefine the product. It converts the Constitution into build order.
-
-If this roadmap conflicts with the Constitution, the Constitution wins. If it assumes a capability is built when `RELEASE_STATE.md` says otherwise, Release State wins on current truth. If it proposes an implementation that violates Architecture Locks, the implementation is invalid until the lock is explicitly and safely amended through its own process.
-
----
-
-## North star
-
-Compy must make two journeys excellent:
-
-1. **MAKE THIS PC BETTER**
-2. **FIGURE OUT WHAT WENT WRONG**
-
-Both must converge on the same machine model, evidence, history, Trial system, rollback machinery, explanation system, and confidence vocabulary.
-
-The project should not optimize for feature count. It should optimize for the quality of these two journeys.
-
-Phase numbering below is dependency order, not product ranking. The optimization phases precede Care
-convergence only because Care's "what changed since it worked?" path consumes the Machine Model, Trial,
-history, and rollback machinery those phases build. **FIGURE OUT WHAT WENT WRONG** is never subordinate
-to **MAKE THIS PC BETTER**, and no phase may ship Performance value by weakening the shared machinery
-Care depends on.
-
----
-
-## First product train — done when
-
-*Derived, not new direction (#663): every line below comes from a phase's own **Exit:** line or from
-`../PRODUCT_CONSTITUTION.md`; it adds no product direction, price or date. The owner may amend it.*
-
-A phase is done when its Exit holds on the **installed build** on the owner's rig, never because one PR
-merged (`../BACKLOG.md` "False-done rule"). The train as a whole is done when the §35 product success
-condition is true for a normal user: told Compy what they wanted (Phases 4–5), it understood the PC
-(Phase 2), tested what actually mattered (Phases 3–4), explained what changed (Phase 7), kept what helped
-and put back what didn't (Phases 3, 5), and when something later went wrong helped them understand why
-(Phase 6).
-
-| Phase | Done when (source) | Current status (evidence) |
-|---|---|---|
-| 0 | Phase 0 Exit | Exited: `BACKLOG.md` P0 "COMPLETE 2026-09-05" (PR #371) |
-| 1 | Phase 1 Exit | Exited: `BACKLOG.md` P1 "Phase 1 exit holds" (re-derived at `901f090c`) |
-| 2 | Phase 2 Exit; §16 | Exited: `BACKLOG.md` P2 "Phase 2 owner-rig exit: met" (desk build `2afd7471`, 2026-10-24) |
-| 3 | Phase 3 Exit; §7 | Exited: `BACKLOG.md` P3 "Phase 3 owner-rig exit: met" (2026-10-23; `d1a5204d`, `39b591d6`) |
-| 4 | Phase 4 Exit; §8, §35 "tested what actually mattered" | Code landed (`WORK_TRAIN.md` P4-exit `e3d0420e`); exit walkthrough open (P4-exit-proof) |
-| 5 | Phase 5 Exit; §10, §36 | Code landed (P5-guided `2f33cc6b` to P5-outcomes-f1 `19c70a50`); exit walkthrough open (P5-exit-proof) |
-| 6 | Phase 6 Exit; §17, §18, §26 | Code landed (P6-changed `3216a6b2` to P6-timeline `02a00f5f`); exit walkthrough open (P6-exit-proof) |
-| 7 | Phase 7 Exit; §13, §14, §25 | Code landed (P7-route `9fefbf6d` to P7-rig-care `9f60e291`); exit walkthrough open (P7-exit-proof) |
-| 8 | Phase 8 Exit; §20 | Risk-choice slices landed (P8-posture-a `1eeef838` on); first Advanced candidate waits on P4-exit-proof and the owner's sign-off (P8-first-advanced) |
-| 9 | Phase 9 Exit (below); §23 | In progress: P9-hz `f1bfbb26`, P9-target `97ebbf7f`, P9-settings-done `25feba43` (its live case waits on P4-exit-proof), P9-bottleneck-sustained `14d39b5`, P9-software-first `023da7d`, P9-hint-shown `4a4265d4` |
-| 10 | Phase 10 Exit (below); §31 | Not started: no slice in `WORK_TRAIN.md` or `BACKLOG.md` |
-| 11 | Phase 11 Exit (below); §32 | Not started: no slice in `WORK_TRAIN.md` or `BACKLOG.md` |
-
-**What v1.0 means** (derived; owner may amend). Compy v1.0 is the first build a stranger can install from
-the public release path and for which the §35 sentence is true: Phases 0–7 exited on the installed build,
-so both flagship journeys work end to end on the same machine model, Trial and rollback. It also clears
-the `../ARCHITECTURE_LOCKS.md` §4 release/security checklist as it applies (code signing in the release
-pipeline, final license/EULA/privacy disclosures, permission/elevation explanation, rollback across
-upgrades, installer trust testing, security/privacy claims matching the binary), which today leaves the
-`../RELEASE_STATE.md` gates OPEN for code signing and legal. Those gates are the owner's; no executor or
-automated workflow closes them. Nothing in §35 needs Phases 8–11, so v1.0 does not wait on them.
-
----
-
-## Phase 0 — Constitutional migration and drift elimination
-
-**Goal:** prevent pre-rebirth product doctrine from steering future implementation.
-
-Required:
-
-- install `PRODUCT_CONSTITUTION.md` as product authority;
-- rewire `CLAUDE.md`, `AGENTS.md`, docs index, README, and other bootstrap paths;
-- create the `docs/product/` derived architecture;
-- classify/supersede all pre-rebirth product-direction documents;
-- remove current-product hierarchy statements from safety docs while preserving actual safety laws;
-- add a product-authority/drift guard;
-- rebuild `BACKLOG.md` so it is execution-only and points to this roadmap;
-- independently review the migration against the owner-ratified Constitution.
-
-**Exit:** a fresh agent cannot legitimately derive “Care primary / optimization secondary,” universal-preset thinking, tweak-count thinking, or another historical thesis from active authority.
-
----
-
-## Phase 1 — Safe current-build stabilization
-
-**Goal:** reach a trustworthy development base before expanding behavior.
-
-Only work that materially protects real users, reliable measurement, or safe iteration outranks product development here.
-
-Examples:
-
-- release-state truth and build/install integrity;
-- unresolved control-plane blockers that can corrupt parallel work or proof;
-- mutation/rollback correctness;
-- measurement defects that would invalidate Trials;
-- installer/signing/trust blockers required for safe external testing;
-- severe product defects that prevent a first-time user completing either flagship journey.
-
-Do not let open-ended repo hygiene, cosmetic cleanup, or new coordination machinery become an indefinite precondition for product learning.
-
-**Exit:** product experiments can be built, shipped to controlled testers, measured, and rolled back without known critical integrity failures.
-
----
-
-## Phase 2 — Shared Machine Model v1
-
-**Goal:** establish one coherent representation consumed by Performance and Care.
-
-Build/reconcile the minimum useful model of:
-
-- detected hardware/topology;
-- Windows/build/driver facts;
-- display characteristics;
-- relevant power/security/configuration state;
-- active Compy changes and exact prior-state history;
-- recent sessions and benchmark baselines;
-- observed incidents;
-- known configuration drift where safely detectable;
-- relevant startup/background activity;
-- evidence confidence/provenance.
-
-No separate “Performance machine state” and “Care machine state” unless the underlying facts are truly different.
-
-**Exit:** both flagship journeys can ask the same local model what the machine is, what recently changed, what Compy changed, and what evidence is available.
-
----
-
-## Phase 3 — Trial Protocol v1
-
-**Goal:** make the Trial the canonical unit of optimization and bounded troubleshooting.
-
-Implement the schema/logic for:
-
-- purpose/outcome;
-- eligibility;
-- mechanism;
-- current state;
-- risk class;
-- rollback contract;
-- measurement strategy;
-- interactions/dependencies;
-- result classification;
-- keep/restore/defer/retest decision.
-
-The first version does not need to cover every existing tweak. It must prove the model on a small set of high-confidence, reversible candidates.
-
-**Exit:** one candidate can move through baseline → apply → verify → measure → classify → keep/restore with a durable receipt and no hidden state.
-
----
-
-## Phase 4 — Optimization Engine v1
-
-**Goal:** replace universal-preset logic with outcome-oriented candidate search.
-
-First supported user outcomes:
-
-- **Recommended / Best Overall Experience**
-- **Maximum FPS**
-- **Smoothest frame pacing**
-
-Latency and visual-quality constrained optimization enter only when measurement/controls are credible enough to avoid pseudo-precision.
-
-Required engine behavior:
-
-- derive relevant candidates from machine/workload facts;
-- remove inapplicable/already-correct candidates;
-- rank by expected usefulness, risk, evidence, and measurement cost;
-- understand interaction groups;
-- stop chasing effects below measurable noise;
-- keep only validated benefit or explicit user-chosen tradeoffs;
-- preserve exact rollback paths.
-
-**Exit:** Compy can honestly say “we tested what mattered on this PC” for at least one supported workload path.
-
----
-
-## Phase 5 — Guided Optimization Journey
-
-**Goal:** make serious benchmarking usable by a normal person.
-
-User flow:
-
-1. Compy proposes or defaults the outcome.
-2. Compy explains the approximate test plan/time.
-3. It establishes a repeatable baseline.
-4. It guides the user through the minimum necessary workload repetition.
-5. It tests candidates/bundles according to the Trial Protocol.
-6. It presents understandable configuration outcomes such as Safe / Recommended / Push when evidence supports multiple tradeoffs.
-7. It keeps/restores according to the user decision.
-8. It explains what was learned.
-
-The user never needs to know which internal setting should be tried next.
-
-**Real-play mode (Constitution §36, 2026-10-29).** Step 4 must not depend on disciplined repetition. When a
-user just plays normally, Compy keeps the change on across several ordinary sessions and compares them
-with several ordinary sessions without it (like-with-like where it can tell scenes apart), and reports the
-confidence that earned ("Likely", "No clear difference", "Unknown") instead of stopping at "too noisy".
-
-**Exit:** a first-time gamer can complete an optimization journey without outside benchmarking knowledge or manual Windows-tweak research, playing the way they normally play.
-
----
-
-## Phase 6 — Care Journey convergence
-
-**Goal:** make diagnosis the reverse traversal of the same machine/evidence history.
-
-Prioritize:
-
-- **What changed since it worked?**
-- incident chronology;
-- recent driver/Windows/configuration/Compy changes;
-- known-good baseline comparison;
-- evidence vs inference separation;
-- one safe next experiment at a time;
-- restoration to known-good state where justified;
-- clear “unknown / beyond Compy / needs outside support” outcomes.
-
-Black Box and case intelligence should feed this journey rather than remain isolated specialist instruments.
-
-**Exit:** a user can move from “my game started crashing/stuttering” to a bounded next action or honest unknown without manually hunting through rooms.
-
----
-
-## Phase 7 — Contextual UX and education convergence
-
-**Goal:** make the whole product feel like one understandable conversation.
-
-Implement consistently:
-
-- intent/context routing instead of requiring room knowledge;
-- Answer → Explanation → Technical Receipt progressive disclosure;
-- notification rules based on meaningful decisions/state changes;
-- 3D rig as reasoning visualization rather than decoration;
-- contextual teaching after relevant personal evidence;
-- consistent confidence vocabulary;
-- no scareware severity inflation;
-- no arbitrary score treated as truth unless it has a defensible model.
-
-**Exit:** normal users are not blocked by technical vocabulary; enthusiasts can still inspect exact mechanisms/evidence.
-
----
-
-## Phase 8 — Advanced tuning envelope
-
-**Goal:** extend capability without abandoning responsibility.
-
-Only after the foundational Trial/risk/stability systems are proven should Compy broaden into areas such as:
-
-- advanced scheduling;
-- deeper power behavior;
-- supported undervolting/overclocking interfaces;
-- more aggressive debloat/startup choices;
-- other higher-risk performance controls.
-
-Every capability must enter through `RISK_MODEL.md` and Architecture Locks.
-
-No “advanced mode” becomes a dumping ground for unsupported controls.
-
-**Exit:** advanced users gain more agency while every Compy-automated operation still has a defensible support boundary.
-
----
-
-## Phase 9 — Hardware decision intelligence
-
-**Goal:** help users decide whether software optimization has reached the machine's practical limit.
-
-Build system-level upgrade assessment around:
-
-- measured bottleneck;
-- target workload;
-- display target;
-- CPU/GPU balance;
-- PSU capacity/connectors where knowable;
-- motherboard compatibility;
-- physical/thermal constraints where knowable;
-- cheaper software/configuration alternatives first;
-- “no upgrade recommended” as a valid result.
-
-Affiliate economics, if ever enabled, are firewalled from the technical recommendation.
-
-**Exit:** (derived from the Goal above and Constitution §23; owner may amend) for a measured workload, Compy can say whether software settings have reached what it can test, then name the measured limiter in system context or say "no upgrade recommended", never naming a part in isolation and never letting retail economics shape the answer.
-
----
-
-## Phase 10 — Evidence network / public knowledge moat
-
-**Goal:** convert trustworthy individual evidence into trustworthy collective knowledge without compromising consent.
-
-Before any outbound expansion:
-
-- local value must stand alone;
-- consent must be explicit and reviewable;
-- uploaded evidence must be scoped/scrubbed;
-- methodology and schema must be stable enough for comparison;
-- sample size/confidence must be shown honestly.
-
-Potential outputs:
-
-- hardware/workload-specific optimization evidence;
-- known-issue correlations;
-- Blackbook empirical updates;
-- null-result publication;
-- compatibility intelligence;
-- upgrade evidence.
-
-**Exit:** (derived from the preconditions above and Constitution §31; owner may amend) at least one collective output ships from explicitly consented, scoped evidence, shows its sample size and confidence honestly, and leaves every local feature working without it.
-
----
-
-## Phase 11 — Monetization and distribution scale
-
-**Goal:** charge for demonstrated durable value, not for a predetermined pricing story.
-
-Before broad monetization:
-
-- validate user activation and repeat value;
-- test real willingness to pay;
-- confirm what users consider Pro rather than core trust/safety;
-- code-sign and establish public trust/distribution hygiene;
-- make the official site/release path reliable.
-
-Consumer recurring subscriptions are not assumed. Lifetime, perpetual + maintenance, annual, or other structures remain hypotheses until evidence selects among them.
-
-**Exit:** (derived from the list above and Constitution §32; owner may amend) any charge Compy makes rests on measured activation, repeat value and willingness to pay, keeps safety fundamentals and undo outside it, and is sold through a code-signed, reliable public release path.
-
----
-
-## Permanent deprioritization rules
-
-The following do not outrank flagship-journey work merely because competitors have them:
-
-- raw tweak count;
-- generic junk cleaning;
-- broad driver updating;
-- sensor-count expansion;
-- exposed registry/service/process controls;
-- UI complexity for expert credibility;
-- speculative kernel capability;
-- engagement mechanics;
-- additional internal governance that does not materially protect users or development truth.
-
----
-
-## Product-development pull rule
-
-For every proposed item, ask in order:
-
-1. Which flagship journey does this improve?
-2. What user decision becomes better?
-3. What evidence will tell us it worked?
-4. What machine-model facts does it require?
-5. What Trial/risk/rollback contract applies?
-6. Can the user understand the result without knowing the Windows primitive?
-7. Does a safer/smaller implementation provide most of the value?
-8. Does real user evidence justify building it now?
-
-If those questions cannot be answered, the item is not ready to outrank proven work.
+# Compy Roadmap: the Paramedic to v1.0
+
+**Derived from:** `../PRODUCT_CONSTITUTION.md` §38 (owner, 2026-11-20).<br>
+**On conflict:** the Constitution (product), `../ARCHITECTURE_LOCKS.md` (safety, privilege, privacy) and
+`../RELEASE_STATE.md` (what is built, installed, released) win over this file.<br>
+**Day-to-day order:** `../QUEUE.md`. This file says what each phase must prove; QUEUE says what runs next.
+
+Three layers ship in order: (1) the Paramedic, alone, first; (2) game-specific known issues; (3) the
+opt-in Tuning Bay. v1.0 is Layer 1 on the public release path: signed, with a privacy policy and EULA.
+A phase is done when its exit holds on the **installed build**, not when code merges. Designs cited by
+name are evidence, not authority, in `C:\Users\Kuya\code\_train\` (`m1-paramedic-design.md`,
+`m5-day-one-design.md`, `m1-hardening-design.md`). Nothing here promises a performance result.
+
+## Phase 0: already true (2026-11-20)
+
+- Testers get builds through the signed in-app updater (published: v0.9.26); the owner's desk runs a
+  newer unreleased desk build (RELEASE_STATE).
+- Home's one main button, "Something's wrong", opens the Paramedic card: "Which game?" and "When did it
+  start?", then a first look that needs no history (dated driver, Windows, Steam game and program
+  changes; crash history; graphics mods; what looks off; Compy's own dated changes with undo), and a
+  measured answer once a game has three normal sessions. "Did it get better?" checks sessions after a fix.
+- The change history keeps a verified backup. A session ends when its game exits. The pre-push gate is
+  limited to user safety and correctness. The score ring is gone.
+- The old roadmap's Phases 0-3 (migration, stabilization, shared machine model, Trial protocol) exited;
+  the Paramedic reads that machinery.
+- Not yet true: installers are not code-signed; EULA and privacy text are drafts; Compy installs per
+  user; frame capture starts only by hand, with a Windows admin prompt each session.
+
+## Phase 1: an honest first answer, everywhere a new user looks
+
+**At the end:** someone who installs Compy and presses "Something's wrong" gets a plain list of what
+changed and what looks off on their PC, and no screen claims more than Compy knows.
+
+**Exit:** the over-claims QUEUE names outside the Problems room are gone and `home.json` is in the
+wording scan (`src/i18n/problems-room-claims.test.ts`); one "how sure" vocabulary in card and Problems
+room, pinned by a test; first look S4 (programs running now) and S5 (crash before/after line) shipped; a
+brand-new PC gets a clear first screen and empty states; a look-only check of the installed build as a
+brand-new user finds no over-claim, no unreachable control and no "checked and clear" line that was not
+checked, and the open items from `_train\view-1120e\report.md` (green "Check again" before a game is
+picked, Re-run band wording, count-style Home headlines) are fixed or decided.
+
+**In:** QUEUE items for over-claims, vocabulary, Problems room follow-ups, card layout, first-run states,
+drift notices. **Out:** the navigation fold (paramedic F9), new rooms, any score or "N issues" tally.
+**Depends on:** nothing new. **Owner:** the Home headline decision (m5 H5); time away from the PC for
+the look-only check.
+
+## Phase 2: the measured answer and "did it get better?"
+
+**At the end:** Compy measures a game while the user plays, says when it runs much rougher than its own
+normal and what changed around then, and after a fix says whether it got better or that it can't tell.
+
+**Exit:** the measuring design below is decided and on the installed build; first look S6 ("Start
+measuring" in the card) and S7 (handover baseline: "how it runs since you said it got better") shipped;
+a crash-and-relaunch counts as one sitting, Suspected or mixed sessions are not judged and the card says
+why, and the baseline is keyed by frame cap, refresh rate and resolution (each with a test that fails on
+today's code); background load recorded at game start and used both ways; the graphics driver's own
+settings (Radeon first) read as a "what changed" source; a crash complaint answered in the same card
+(paramedic F5, F10); the 1-before/1-after fix check uses the m5 D3 bar and says "can't tell yet" below it.
+
+**Open design: measuring without a ritual.** Today capture starts by hand, raises an admin prompt each
+session, and a game needs three normal sessions before the measured answer speaks. A design is being
+written. Decision point (m5 H4): keep a manual "Start measuring" with the prompt, or a consented
+auto-start for the picked game. Auto-start makes the elevated capture helper start without the user
+present, a privilege change: it needs an ARCHITECTURE_LOCKS review and the owner, and comes after
+security slice 2.
+
+**Out:** the unprompted "ran rough" notice (off until Phase 5); changing the frozen anomaly constants
+without re-running the walk-forward test. **Depends on:** Phase 1's vocabulary. **Owner:** H3 (keep
+the user's answers in a local, deletable, never-exported file), H4; one ordinary ROB RUN session with
+nothing else running.
+
+## Phase 3: safe one-button fixes and a closed privilege boundary
+
+**At the end:** where Compy can fix the likely problem safely, the user presses one button and can undo
+it from History; every admin action Compy can take is one its own code names in advance.
+
+Security slices in the order of the hardening design §5 (independent review on each; its size estimates):
+
+| # | Slice | Size | Blocks v1.0? |
+|---|---|---|---|
+| 1 | System tools by absolute path; pinned environment for elevated children | 1 d (reviewed, waiting to land) | Yes |
+| 2 | Frame-capture helper over a verified pipe | 2 d | Yes |
+| 3 | Elevated results over stdout; ticket consumed by handle | 1.5 d | Yes |
+| 4a/4b | Closed set of typed elevated operations sized to the Paramedic's fixes; raw entry deleted | 3-4 d | Yes by default; deferring it is an owner decision with a written risk note |
+| 5 | Per-machine install (Phase 4); may move up to second once the owner decides | 1 d + VM test | Yes: the only fix for a user-writable install folder |
+| 6 | History backup | done | n/a |
+| 7 | Uninstall notice (shares the install hook with 5) | 0.5 d | Yes |
+
+**One-click fixes** use the existing apply/undo path (`actions.rs`, ledger row first, rollback from
+`history.json`): turn off a new startup entry, switch back to the earlier power plan, undo a Compy change.
+Fixes needing no admin rights may land after slice 1; a fix needing admin rights lands only as an
+operation in slice 4's closed set. Driver rollback, Windows update removal, refresh rate and memory
+profile stay as exact steps (paramedic C1-C4).
+
+**Exit:** the fail-first tests in the hardening design and paramedic F6 pass; red-team checks RT1, RT4,
+RT5 run before and after; each fix applies, shows in History and undoes to the exact prior state on the
+installed build; a source guard proves the Paramedic never calls apply itself.
+
+**Out:** one-click driver rollback, killing processes, anything barred by ARCHITECTURE_LOCKS §3.
+**Depends on:** Phase 2 findings to attach fixes to. **Owner:** "land the security slice"; slice 4
+hold-or-defer; the lock additions the design proposes.
+
+## Phase 4: ready for strangers (install, signing, legal)
+
+**At the end:** a stranger can download a signed installer, install Compy to Program Files, and read
+what Compy does with their data before using it.
+
+**Exit:** per-machine install puts Compy in `C:\Program Files\Compy`, ordinary users cannot write there,
+the old per-user copy is removed, an update raises one admin prompt, and release tooling naming
+`%LOCALAPPDATA%\Compy\compy.exe` is re-pointed, proven on a VM or the owner's UAC test (hardening §5.2);
+the installer is Authenticode-signed in the release pipeline; privacy policy and EULA are final and
+published (with the history-backup wording) and a first-launch notice says what Compy reads, keeps and
+sends; Export Snapshot redacts unknown program names; overlay and Game Bar names checked on real
+NVIDIA/AMD installs; the ARCHITECTURE_LOCKS §4 checklist walked item by item into RELEASE_STATE.
+
+**Out:** store listing, payments, arming Receipts, case intelligence or remote rules (all stay dark).
+**Depends on:** slices 5 and 7. **Owner:** signing eligibility and identity; the per-machine decision;
+a VM or 15 minutes for the UAC test; legal text and its publication on the site.
+
+## Phase 5: validated on PCs other than the owner's
+
+**At the end:** Compy has been used on several PCs that are not the owner's, and its answers held up.
+
+The anomaly thresholds were fitted to 50 sessions on one AMD PC; NVIDIA/Intel drivers, laptops,
+non-Steam launchers, event-log access on other editions and first-week users cannot be checked on it
+(paramedic G1-G2). **"Validated"** (coordinator proposal; the owner may amend): on at least 3 outside
+PCs, one or more with a non-AMD GPU, about a week of ordinary play each on a tester build; at
+least one game per PC reaches a measured answer; the rough-session rule fires on no session the tester
+calls normal; the first look finishes in its time budget and shows no line the tester can show is false;
+every one-click fix used undoes cleanly and nothing changes without a button press; each finding is fixed
+or listed in the release notes as a known limit. Only after this may the unprompted notice be considered
+for default-on (owner decision). Testers on the updater path do not need a signed build.
+
+**Depends on:** Phases 1-2 and the no-admin fixes on a tester build; Phase 3 changes that land later are
+re-checked on the testers' PCs before release. **Owner:** 3-5 named testers, willing to report by hand
+what Compy showed them (there is no telemetry).
+
+## Phase 6: v1.0 release
+
+**At the end:** anyone can download Compy v1.0 from the public site.
+
+**Exit:** Phases 1-5 hold on the release candidate; the release transaction (`../RELEASE_TRANSACTION.md`)
+closes on its own evidence; RELEASE_STATE shows code signing and legal closed. **Owner:** the publish GO.
+
+## Target date and date risk
+
+**Target: Friday 2026-12-11**, a coordinator default (QUEUE "Waiting on the owner") the owner may overturn.
+
+Mon 2026-11-23 to Fri 2026-12-11 is **15 working days**. From the designs' own estimates:
+- security slices still to build: 2 (2) + 3 (1.5) + 4a/4b (3-4) + 5 (1) + 7 (0.5) = **8-9 days
+  serial**, plus the owner's VM or UAC test; admin-needing fixes follow slice 4;
+- Paramedic and honesty work still open: about **13 executor sessions** (first look S4-S7, paramedic F5,
+  F6, F10, the QUEUE judging and wording items);
+- outside validation: about **5 working days** of play, then fixes.
+
+Strictly one writer at a time, 8-9 + ~13 + 5 is well over 15: **the date does not fit serially.** It
+fits on paper, with 2-3 days of slack, only if security and Paramedic work run in parallel on disjoint
+files and a tester build (Phases 1-2 plus no-admin fixes) goes out by Tue 2026-12-01.
+
+**Any one of these makes 2026-12-11 unrealistic:** slice 1 not landed by Tue 2026-11-24; slice 4 past
+4 days with no owner deferral; testers not named and installed by Tue 2026-12-01; the signing identity
+not cleared in time to sign the candidate (outside lead time unknown, so it should start now); the owner
+choosing consented auto-start for capture (privilege change plus locks review); validation false alarms
+that need the thresholds re-fitted. A late tester start or a late slice 4 moves the date day for day;
+the Friday after is 2026-12-18. The likeliest slips are owner-side inputs, not build work.
+
+## Layer 2: game-specific known issues (after v1.0)
+
+**Question first:** where the known-issue knowledge comes from and how it stays current and honest. A
+list shipped in each release adds no network surface; a downloadable catalog is the signed
+case-knowledge tier of ARCHITECTURE_LOCKS §1.8, built dark, needing its own owner arming decision.
+**Smallest first version:** for the picked game on the user's GPU and driver version, the known
+hardware-related issues that apply, each with source and date, in the same card; "none known" when none
+apply; nothing the user's hardware or driver rules out. **Layer 1 first:** v1.0 shipped; game and
+driver identification proven on outside PCs.
+
+## Layer 3: the Tuning Bay (after Layer 2)
+
+**Question first:** which optional changes are low or zero risk on this hardware and measurable on a
+repeatable workload rather than ordinary play. **Smallest first version:** a separate opt-in space with
+the existing per-setting Trial on a repeatable workload and one hardware-specific walkthrough (such as
+the memory profile for the detected board vendor). Compy guides BIOS and overclocking steps; it does not
+change firmware; ARCHITECTURE_LOCKS §3 applies unchanged. **Layer 1 first:** undo path and privilege
+boundary proven on outside PCs; Layer 2 shipped.
+
+## Not on the roadmap
+
+Retired or frozen by §38. Existing code stays where it is unless QUEUE says otherwise; it is not built
+further before v1.0.
+
+- **Per-setting Trials as the headline.** Ten Trials in 177 days found no improvement: sessions vary
+  13-26% while the settings on offer plausibly move a game 0-3%. They move to the Tuning Bay.
+- **Old Phase 4-7 exit proofs and friend-tester halves** (optimization engine, guided optimization,
+  Care and UX convergence). Retired by §38; Phase 5 above is the outside proof now.
+- **Outcome choices and Safe / Recommended / Push results.** They depend on Trials finding wins.
+- **Readiness scores, score rings, grades and issue tallies.** A score turns generic floors into a
+  verdict; the first look lists facts.
+- **Advanced tuning envelope (old Phase 8).** Becomes Layer 3.
+- **Hardware upgrade advice (old Phase 9).** Not one of the three layers; frozen.
+- **Evidence network, Receipts, case intelligence, remote rules (old Phase 10).** Stay dark; arming each
+  is its own owner decision.
+- **Monetization (old Phase 11).** `MONETIZATION.md` predates §38 and needs reconciling; no payment work
+  before v1.0.
+- **Process machinery.** No new guards or coordination documents (§38); Work Control and the work train
+  no longer drive work (`../../CLAUDE.md`).
