@@ -1,5 +1,5 @@
 import { withTerms } from "../design/with-terms";
-import { ConfidenceWord } from "../design/ConfidenceWord";
+import { RowConfidence } from "../design/ConfidenceWord";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -23,6 +23,7 @@ import { readHologramV2, readHomeInterview } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
 import { LedgerHealthNotice, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { gradeGpuTempForVendor, primaryGpu, sensorForGpu, type GpuSensorReading } from "../data/gpu-sensor";
+import { isMeasuredRow } from "../data/confidence-word";
 import { useDocumentVisible } from "../data/use-document-visible";
 import { gpuVendor } from "./walkthroughs";
 import { tuningGuideForVendorForLanguage } from "../data/tuning-guides";
@@ -1359,10 +1360,12 @@ export function HomeConsole({
             {/* THE #1 LIMITER — micro-label · the measured title · quiet confidence tag · jump. */}
             {topLimiter ? (
               <div className="hc-limiter">
-                <span className="hc-limiter-label">{t("home.homeConsole.limiter.topLabel")}</span>
+                <span className="hc-limiter-label">
+                  {isMeasuredRow(topLimiter.basis) ? t("home.homeConsole.limiter.topLabel") : t("home.homeConsole.limiter.topLabelFact")}
+                </span>
                 <span className="hc-limiter-title">{withTerms(topLimiter.title)}</span>
                 <span className="hc-limiter-tag hc-mono">
-                  <ConfidenceWord band={topLimiter.confidence} />
+                  <RowConfidence basis={topLimiter.basis} band={topLimiter.confidence} />
                 </span>
                 <button type="button" className="hc-btn hc-btn-ghost" onClick={onSeeInFix}>
                   {t("home.homeConsole.limiter.seeIn", { room: fixRoomLabel })}

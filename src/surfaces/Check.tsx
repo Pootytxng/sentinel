@@ -1,6 +1,7 @@
-import { ConfidenceWord } from "../design/ConfidenceWord";
+import { RowConfidence } from "../design/ConfidenceWord";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { isMeasuredRow } from "../data/confidence-word";
 import { writeLedger } from "../data/ledger-write";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -755,7 +756,11 @@ export default function Check({
               false while the rec rows below still offer changes. */}
           {v2Ia && limiters.length === 0 ? null : (
           <>
-          <div className="check-section-label">{t("optimize.check.biggestLimiters")}</div>
+          {/* "Limiters we measured" only over rows that rest on a measurement; a list of facts Compy read
+              (a plan, a setting, a driver age) is "Worth a look": their effect on FPS is not measured. */}
+          <div className="check-section-label">
+            {limiters.every((l) => isMeasuredRow(l.basis)) ? t("optimize.check.biggestLimiters") : t("optimize.check.worthALook")}
+          </div>
           {limiters.length === 0 ? (
             // Deliberately NOT "measured clean" — the scan subtitle above already says it (the
             // same double-saying the P5 taste catch flagged on Home). One phrase, one owner.
@@ -815,7 +820,7 @@ export default function Check({
                         <div className="check-row-head">
                           <span className="check-row-title">{lim.title}</span>
                           <span className="check-conf">
-                            <ConfidenceWord band={lim.confidence} />
+                            <RowConfidence basis={lim.basis} band={lim.confidence} />
                           </span>
                         </div>
                         <p className="check-row-reason">{t("optimize.check.startupLimiterReason")}</p>
@@ -850,7 +855,7 @@ export default function Check({
                       <div className="check-row-head">
                         <span className="check-row-title">{lim.title}</span>
                         <span className="check-conf">
-                          <ConfidenceWord band={lim.confidence} />
+                          <RowConfidence basis={lim.basis} band={lim.confidence} />
                         </span>
                       </div>
                       <p className="check-row-reason">{lim.reason}</p>

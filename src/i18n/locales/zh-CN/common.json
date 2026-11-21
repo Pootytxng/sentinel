@@ -169,6 +169,9 @@
     "expected": "预期",
     "unknown": "未知"
   },
+  "confidenceNote": {
+    "effectNotMeasured": "对 FPS 的影响未实测"
+  },
   "depth": {
     "why": "为什么对这台电脑推荐这一步",
     "receipt": "技术回执"

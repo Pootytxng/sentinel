@@ -87,6 +87,7 @@
     },
     "limiter": {
       "topLabel": "首要限制因素",
+      "topLabelFact": "值得一看",
       "lastSessionLabel": "上次会话",
       "seeIn": "在「{{room}}」中查看",
       "none": "没有更多发现——上方的结论已经说明。",
@@ -756,6 +757,7 @@
     },
     "limiter": {
       "title": "是什么在拖慢 FPS",
+      "titleFact": "值得一看",
       "none": "Compy 检查过的设置里没有明显的瓶颈。",
       "unknown": "暂时未知：Compy 还没有读取你的设置。"
     },

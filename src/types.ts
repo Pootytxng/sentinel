@@ -206,7 +206,10 @@ export type ReadinessCheck = { id: string; label: string; status: ReadinessStatu
 export type Drift = { id: string; label: string; detail: string; noticed_at: string; unreadable_now?: boolean };
 export type GameReadiness = { checks: ReadinessCheck[]; ready_count: number; attention_count: number; unknown_count: number; advisory_count: number; advisory: string; dismissed_ids: string[]; drifts: Drift[] };
 
-export type PriorityItem = { id: string; title: string; reason: string; linked: string | null; confidence: Confidence; status: PriorityStatus };
+/** What a priority row rests on: "fact" = a setting/plan/age Compy read (effect on FPS not measured);
+ *  "measured" = recorded on this PC. Absent (older data) is shown as a fact: never claim a measurement. */
+export type PriorityBasis = "fact" | "measured";
+export type PriorityItem = { id: string; title: string; reason: string; linked: string | null; confidence: Confidence; basis?: PriorityBasis; status: PriorityStatus };
 // R3 Lane B: advisory upgrade path — present only when a verdict names hardware as the limiter.
 // Links are plain retailer searches (no affiliate tags); in-app they are COPY-only, never opened.
 export type RetailLink = { retailer: string; url: string };

@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import type { GameReadiness, PendingCareIncident, Priorities, SessionSummary } from "../../types";
 import { gameLibrary } from "../../data/game-library";
 import { knownFps } from "../../lib/session-metrics";
-import { wordFromBand, confidenceWordKey } from "../../data/confidence-word";
+import { wordFromRow, isMeasuredRow, confidenceWordKey } from "../../data/confidence-word";
 import { TubeChart, type TubeBar } from "./TubeChart";
 import { ParamedicCard } from "./ParamedicCard";
 import { useDates } from "./GamesRoom";
@@ -344,6 +344,9 @@ export function HomeGlass({
                   {checksKnown ? (
                     <>
                       <span className="gl-num">{good}</span>
+                      {/* A real space: "13of 14" read as one word in the text (copy, screen readers); the
+                          small's margin only drew the gap. */}
+                      {" "}
                       <small>{t("home.glass.checks.of", { total: graded })}</small>
                     </>
                   ) : (
@@ -364,7 +367,9 @@ export function HomeGlass({
 
           <section className="gl-card" aria-labelledby="gl-home-limiter">
             <h2 className="gl-card-title" id="gl-home-limiter">
-              {t("home.glass.limiter.title")}
+              {/* "What's holding FPS back" only when the top row rests on a measurement. A fact Compy read
+                  (a plan, a setting, a driver age) has no measured effect on FPS: "Worth a look". */}
+              {topLimiter && !isMeasuredRow(topLimiter.basis) ? t("home.glass.limiter.titleFact") : t("home.glass.limiter.title")}
             </h2>
             {topLimiter ? (
               <div className="gl-rows">
@@ -372,9 +377,12 @@ export function HomeGlass({
                   <span>
                     <span className="gl-row-title">{limiterWords!.label}</span>
                     <span className="gl-row-sub">{limiterWords!.detail}</span>
+                    {!isMeasuredRow(topLimiter.basis) && (
+                      <span className="gl-row-sub">{t("common.confidenceNote.effectNotMeasured")}</span>
+                    )}
                   </span>
                   <span className="gl-chip" data-tone="accent">
-                    {t(confidenceWordKey(wordFromBand(topLimiter.confidence)))}
+                    {t(confidenceWordKey(wordFromRow(topLimiter.basis, topLimiter.confidence)))}
                   </span>
                 </div>
               </div>

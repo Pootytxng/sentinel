@@ -145,6 +145,7 @@
     "networkDriverRecent_one": "Network driver is recent too — nothing worth chasing.",
     "networkDriverRecent_other": "Network drivers are recent too — nothing worth chasing.",
     "biggestLimiters": "Limiters we measured",
+    "worthALook": "Worth a look",
     "noLimiterStandsOut": "No limiter stands out on this rig — nothing to change today.",
     "revertedSingleTitle": "“{{title}}” turned itself back off",
     "revertedMultiCount": "{{count}} settings you applied turned back off",

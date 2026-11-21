@@ -73,8 +73,8 @@ describe("rigGlow", () => {
 // nothing here names an id priorities.rs cannot emit as a limiter.
 describe("the table matches what priorities.rs can call a limiter", () => {
   const rs = readFileSync(join("src-tauri", "src", "priorities.rs"), "utf8");
-  // Readiness rules that are not advisory: ("id", rank, Confidence::X, false)
-  const fromReadiness = [...rs.matchAll(/\("([a-z0-9-]+)",\s*\d+,\s*Confidence::\w+,\s*false\)/g)].map((m) => m[1]);
+  // Readiness rules that are not advisory: ("id", rank, Confidence::X, false, Basis::Y)
+  const fromReadiness = [...rs.matchAll(/\("([a-z0-9-]+)",\s*\d+,\s*Confidence::\w+,\s*false,\s*Basis::\w+\)/g)].map((m) => m[1]);
   // Direct limiter pushes: Bucket::Limiter(n), PriorityItem { id: "..." }
   const fromPushes = [...rs.matchAll(/Bucket::Limiter\(\d+\),\s*PriorityItem\s*\{\s*id:\s*"([a-z0-9-]+)"/g)].map((m) => m[1]);
   const emitted = new Set([...fromReadiness, ...fromPushes]);

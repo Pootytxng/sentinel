@@ -1,4 +1,5 @@
-import { ConfidenceWord } from "../design/ConfidenceWord";
+import { RowConfidence } from "../design/ConfidenceWord";
+import { isMeasuredRow } from "../data/confidence-word";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { readHologramV2 } from "../design/theme";
 // DIR-1 first-timer walk, 2026-08-26, finding #5: "1% low" is a measurement word, and the
@@ -637,9 +638,9 @@ export function HomeV2({
                   <span
                     className={`hv2-pill hv2-pill-${i === 0 ? "warn" : (statusTone[l.status] ?? "info")}`}
                   >
-                    {i === 0
+                    {i === 0 && isMeasuredRow(l.basis)
                       ? t("home.homeV2.priorities.biggestLimiter")
-                      : <ConfidenceWord band={l.confidence} />}
+                      : <RowConfidence basis={l.basis} band={l.confidence} />}
                   </span>
                   <button type="button" className="hv2-btn hv2-btn-ghost" onClick={onSeeInFix}>
                     {t("home.homeV2.priorities.seeIn", { room: fixRoomLabel })}

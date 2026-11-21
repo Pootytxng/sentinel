@@ -25,6 +25,21 @@ pub(crate) enum PriorityStatus {
     Unknown,
 }
 
+/// What a row rests on. Not a strength: `confidence` ranks rows, `basis` says what Compy actually
+/// has. `Fact` = a setting, plan, driver age or toggle Compy READ from Windows or the hardware; its
+/// effect on this PC's frame rate was never measured. `Measured` = a session, a temperature reading
+/// or a trend recorded on this PC. The screens show a Fact as "Known" with "Effect on FPS not
+/// measured" and never as "Likely" or as something "holding FPS back".
+#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Basis {
+    Fact,
+    /// No limiter row is measured today (session reads live in `session_hint`/`upgrade_path`); the
+    /// screens already key their wording off this value so a measured row reads right when one exists.
+    #[allow(dead_code)]
+    Measured,
+}
+
 #[derive(Serialize, Clone, Debug)]
 pub(crate) struct PriorityItem {
     id: &'static str,
@@ -33,6 +48,8 @@ pub(crate) struct PriorityItem {
     /// rec_id or readiness-check id this row links to, if any.
     linked: Option<String>,
     confidence: Confidence,
+    /// Required on every row (no default): a new row cannot be added without declaring it.
+    basis: Basis,
     status: PriorityStatus,
 }
 
@@ -635,19 +652,20 @@ pub(crate) fn build_priorities_for(
     let sessions = &here;
     let mut tagged: Vec<(Bucket, PriorityItem)> = Vec::new();
 
-    // Readiness-derived rules: (check id, rank, confidence, advisory?).
-    // Advisory rows always land in "not worth touching" regardless of status.
-    let readiness_rules: &[(&'static str, u8, Confidence, bool)] = &[
-        ("monitor-refresh", 1, Confidence::High, false),
-        ("gpu-driver-age", 3, Confidence::High, false),
-        ("install-drive", 4, Confidence::Medium, false),
-        ("power-profile", 5, Confidence::Medium, false),
-        ("fps-monitoring", 6, Confidence::Low, false),
-        ("applied-changes", 7, Confidence::High, false),
-        ("hdr", 10, Confidence::Low, true),
-        ("vrr", 11, Confidence::Low, true),
+    // Readiness-derived rules: (check id, rank, confidence, advisory?, basis).
+    // Advisory rows always land in "not worth touching" regardless of status. Every readiness check
+    // is a read of Windows or the hardware, so each is a Fact: none measures its effect on FPS.
+    let readiness_rules: &[(&'static str, u8, Confidence, bool, Basis)] = &[
+        ("monitor-refresh", 1, Confidence::High, false, Basis::Fact),
+        ("gpu-driver-age", 3, Confidence::High, false, Basis::Fact),
+        ("install-drive", 4, Confidence::Medium, false, Basis::Fact),
+        ("power-profile", 5, Confidence::Medium, false, Basis::Fact),
+        ("fps-monitoring", 6, Confidence::Low, false, Basis::Fact),
+        ("applied-changes", 7, Confidence::High, false, Basis::Fact),
+        ("hdr", 10, Confidence::Low, true, Basis::Fact),
+        ("vrr", 11, Confidence::Low, true, Basis::Fact),
     ];
-    for &(id, rank, conf, advisory) in readiness_rules {
+    for &(id, rank, conf, advisory, basis) in readiness_rules {
         if let Some((st, label, detail)) = check(readiness, id) {
             let status = status_from(&st);
             let item = PriorityItem {
@@ -656,6 +674,7 @@ pub(crate) fn build_priorities_for(
                 reason: detail,
                 linked: Some(id.to_string()),
                 confidence: conf,
+                basis,
                 status,
             };
             let bucket = if advisory {
@@ -699,6 +718,7 @@ pub(crate) fn build_priorities_for(
                     reason: "No pending safe tweaks — the safe recommendations that apply to your PC are already applied, or none apply.".into(),
                     linked: None,
                     confidence: Confidence::Low,
+                    basis: Basis::Fact,
                     status: PriorityStatus::Ready,
                 },
             ));
@@ -724,6 +744,7 @@ pub(crate) fn build_priorities_for(
                     ),
                     linked: None,
                     confidence: Confidence::Medium,
+                    basis: Basis::Fact,
                     status: PriorityStatus::Attention,
                 },
             ));
@@ -746,6 +767,7 @@ pub(crate) fn build_priorities_for(
                     reason: "A heavy startup load uses RAM and CPU before you even open a game. Compy can turn off the ones you don't need — it stops them auto-starting, never uninstalls.".into(),
                     linked: None,
                     confidence: Confidence::Low,
+                    basis: Basis::Fact,
                     status: PriorityStatus::Attention,
                 },
             ));
@@ -758,6 +780,7 @@ pub(crate) fn build_priorities_for(
                     reason: format!("{enabled} app(s) launch at startup."),
                     linked: None,
                     confidence: Confidence::Low,
+                    basis: Basis::Fact,
                     status: PriorityStatus::Ready,
                 },
             ));
@@ -786,6 +809,7 @@ pub(crate) fn build_priorities_for(
                     reason: "Memory Integrity / VBS is turned on. It can cost a few % in some games, but it's a security feature — advisory only, your call.".into(),
                     linked: r.get("id").and_then(Value::as_str).map(str::to_string),
                     confidence: Confidence::Low,
+                    basis: Basis::Fact,
                     status: PriorityStatus::Ready,
                 },
             ));
@@ -926,6 +950,66 @@ mod priority_tests {
     }
     fn limiter_ids(p: &Priorities) -> Vec<&str> {
         p.limiters.iter().map(|i| i.id).collect()
+    }
+
+    /// Every row `build_priorities` can emit, with what it rests on (owner rule 2026-11-20: a fact
+    /// Compy read is "Known", never "Likely" and never "holding FPS back" until its effect is
+    /// measured). A row missing here fails the test below, so a new row cannot skip declaring it.
+    /// All are static reads of Windows/hardware/Compy's own record today; none measures FPS.
+    const EXPECTED_BASIS: &[(&str, Basis)] = &[
+        ("monitor-refresh", Basis::Fact),   // display mode read from Windows
+        ("gpu-driver-age", Basis::Fact),    // driver date read from the GPU driver
+        ("install-drive", Basis::Fact),     // drive type of the game library
+        ("power-profile", Basis::Fact),     // active Windows power plan
+        ("fps-monitoring", Basis::Fact),    // capture capability
+        ("applied-changes", Basis::Fact),   // Compy's record vs the live setting
+        ("hdr", Basis::Fact),               // display toggle
+        ("vrr", Basis::Fact),               // display toggle
+        ("pending-safe-recs", Basis::Fact), // catalog tweaks not applied
+        ("startup-load", Basis::Fact),      // count of auto-start entries
+        ("memory-integrity", Basis::Fact),  // security feature toggle
+    ];
+
+    #[test]
+    fn every_row_declares_what_it_rests_on_and_a_static_fact_is_not_a_measurement() {
+        let readiness_ids = ["monitor-refresh", "gpu-driver-age", "install-drive", "power-profile", "fps-monitoring", "applied-changes", "hdr", "vrr"];
+        let appliable = APPLIABLE_REC_IDS[0];
+        let eight = json!((0..8).map(|n| json!({ "name": format!("app{n}"), "enabled": true })).collect::<Vec<_>>());
+        let one = json!([{ "name": "app", "enabled": true }]);
+        let vbs = rec("memory-integrity-vbs-advisory", false, "info");
+        // Attention + pending recs + heavy startup, then everything fine + light startup: every row
+        // in every bucket it can land in.
+        let runs = [
+            (readiness_ids.iter().map(|i| chk(i, "attention")).collect::<Vec<_>>(), json!([rec(appliable, false, "safe"), vbs.clone()]), eight),
+            (readiness_ids.iter().map(|i| chk(i, "ready")).collect::<Vec<_>>(), json!([vbs]), one),
+        ];
+        let mut seen = std::collections::HashSet::new();
+        for (checks, recs, startup) in runs {
+            let p = build_priorities(&readiness(checks), &recs, &startup, &json!([]));
+            for item in p.limiters.iter().chain(&p.already_fine).chain(&p.not_worth_touching) {
+                let want = EXPECTED_BASIS
+                    .iter()
+                    .find(|(id, _)| *id == item.id)
+                    .unwrap_or_else(|| panic!("row `{}` has no declared basis: add it to EXPECTED_BASIS as Fact (read from the PC) or Measured (recorded on it)", item.id))
+                    .1;
+                assert_eq!(item.basis, want, "row `{}`", item.id);
+                let sent = serde_json::to_value(item).expect("serializes");
+                assert_eq!(sent["basis"], if want == Basis::Fact { "fact" } else { "measured" }, "row `{}` on the wire", item.id);
+                seen.insert(item.id);
+            }
+        }
+        for (id, _) in EXPECTED_BASIS {
+            assert!(seen.contains(id), "EXPECTED_BASIS lists `{id}` but no run produced it");
+        }
+    }
+
+    #[test]
+    fn a_new_users_top_row_is_a_fact_so_nothing_asserts_it_was_measured() {
+        // A brand-new user: no session, only the power plan flagged.
+        let p = build_priorities(&readiness(vec![chk("power-profile", "attention")]), &json!([]), &json!([]), &json!([]));
+        assert_eq!(limiter_ids(&p), vec!["power-profile"]);
+        assert_eq!(p.limiters[0].basis, Basis::Fact);
+        assert_eq!(p.limiters[0].confidence, Confidence::Medium, "ranking and strength are unchanged");
     }
 
     #[test]

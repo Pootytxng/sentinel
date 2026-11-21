@@ -521,6 +521,7 @@ type PriorityItem = {
   reason: string;
   linked: string | null;
   confidence: Confidence;
+  basis?: "fact" | "measured";
   status: PriorityStatus;
 };
 type Priorities = {

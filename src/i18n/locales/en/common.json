@@ -175,6 +175,9 @@
     "expected": "Expected",
     "unknown": "Unknown"
   },
+  "confidenceNote": {
+    "effectNotMeasured": "Effect on FPS not measured"
+  },
   "depth": {
     "why": "Why this, for this PC",
     "receipt": "Technical receipt"

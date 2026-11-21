@@ -806,11 +806,23 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
     const row = c.querySelector(".hc-limiter")!;
     expect(row).not.toBeNull();
     expect(row.textContent).toContain("C: drive is 87% full");
-    // P7-confidence: a high inference band reads "Likely" (one vocabulary); the band stays on data-confidence.
-    expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Likely");
+    // Owner rule 2026-11-20: the fixture row (no basis, like older data) is a fact Compy read, so it reads
+    // "Known" + "Effect on FPS not measured", never "Likely"; the band stays on data-confidence.
+    expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Known");
+    expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Effect on FPS not measured");
+    expect(row.querySelector(".hc-limiter-tag")!.textContent).not.toContain("Likely");
+    expect(row.querySelector(".hc-limiter-label")!.textContent).toBe("worth a look");
     expect(row.querySelector(".hc-limiter-tag [data-confidence]")!.getAttribute("data-confidence")).toBe("high");
     fireEvent.click(row.querySelector("button.hc-btn")!);
     expect(jump).toHaveBeenCalled();
+  });
+
+  it("a measured top limiter keeps 'top limiter' and its band's word (P7-confidence), with no 'not measured' note", () => {
+    const measured = { ...(priorities as Priorities), limiters: [{ ...(priorities as Priorities).limiters[0], basis: "measured" as const }] };
+    const row = mount({ ...props, priorities: measured }).container.querySelector(".hc-limiter")!;
+    expect(row.querySelector(".hc-limiter-label")!.textContent).toBe("top limiter");
+    expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Likely");
+    expect(row.querySelector(".hc-limiter-tag")!.textContent).not.toContain("not measured");
   });
 
   // BENTO (2026-08-12): the limiter's TILE must always render — a half-width tile that sometimes
@@ -870,7 +882,8 @@ describe("HomeConsole — the masthead band's route to the fixes", () => {
 // limiter row must stand down and let the verdict own the story (one-owner-per-screen, P5 voice).
 const topLimiterRows = (c: HTMLElement) =>
   Array.from(c.querySelectorAll(".hc-limiter")).filter(
-    (r) => r.querySelector(".hc-limiter-label")?.textContent === "top limiter",
+    // The label is "top limiter" over a measured row and "worth a look" over a fact (owner rule 2026-11-20).
+    (r) => ["top limiter", "worth a look"].includes(r.querySelector(".hc-limiter-label")?.textContent ?? ""),
   );
 
 describe("HomeConsole — verdict/top-limiter one-owner dedup", () => {

@@ -19,6 +19,16 @@ export function wordFromBand(band: ConfidenceBand | "high" | "medium" | "low" | 
   return band === "high" || band === "medium" ? "likely" : "unknown";
 }
 
+/** A priority row only says it was measured when its basis says so. Older data with no basis reads as
+ *  a fact: never claim a measurement the row doesn't carry. */
+export const isMeasuredRow = (basis: "fact" | "measured" | undefined): boolean => basis === "measured";
+
+/** A priority row's word: a fact Compy read is "Known" (its effect on FPS is not measured, so never
+ *  "Likely"); a measured row keeps the band's word. */
+export function wordFromRow(basis: "fact" | "measured" | undefined, band: ConfidenceBand | "high" | "medium" | "low" | null | undefined): ConfidenceWord {
+  return isMeasuredRow(basis) ? wordFromBand(band) : "known";
+}
+
 /** A recommendation's provenance: Verified = Compy read the fact (Known); measured-signal = measured
  *  elsewhere (`provenance.ts` labels the chip "Measured elsewhere"; the word here is Measured); expected-impact = Expected. */
 export function wordFromProvenance(p: Provenance): ConfidenceWord {

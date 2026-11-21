@@ -91,6 +91,7 @@
     },
     "limiter": {
       "topLabel": "top limiter",
+      "topLabelFact": "worth a look",
       "lastSessionLabel": "Last session",
       "seeIn": "See in {{room}}",
       "none": "Nothing further — the verdict above covers it.",
@@ -786,6 +787,7 @@
     },
     "limiter": {
       "title": "What's holding FPS back",
+      "titleFact": "Worth a look",
       "none": "Nothing in the setup Compy checked stands out.",
       "unknown": "Not known yet: Compy hasn't read your setup."
     },

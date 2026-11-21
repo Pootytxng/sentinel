@@ -1,4 +1,5 @@
-import { ConfidenceWord } from "../design/ConfidenceWord";
+import { RowConfidence } from "../design/ConfidenceWord";
+import { isMeasuredRow } from "../data/confidence-word";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 // DIR-1 first-timer walk, 2026-08-26, finding #5: "1% low" is a measurement word, and the
 // reader this product is for has never met it. `src/jargon-term-gloss-guard.test.ts` derives
@@ -742,9 +743,9 @@ export function HomeHud({
                   <span
                     className={`hud-pill hud-pill-${i === 0 ? "warn" : (statusTone[l.status] ?? "info")}`}
                   >
-                    {i === 0
+                    {i === 0 && isMeasuredRow(l.basis)
                       ? t("home.homeHud.docket.biggestLimiter")
-                      : <ConfidenceWord band={l.confidence} />}
+                      : <RowConfidence basis={l.basis} band={l.confidence} />}
                   </span>
                   <button type="button" className="hud-btn hud-btn-ghost" onClick={onSeeInFix}>
                     {t("home.homeHud.docket.seeIn", { room: fixRoomLabel })}

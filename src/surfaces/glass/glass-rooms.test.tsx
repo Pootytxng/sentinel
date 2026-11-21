@@ -96,7 +96,7 @@ describe("Health summary (glass redesign)", () => {
     home();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Your PC looks set up right");
     const checks = screen.getByRole("button", { name: /Windows setup/ });
-    expect(checks.textContent).toMatch(/10\s*of 10 checks look right/);
+    expect(checks.textContent).toMatch(/10 of 10 checks look right/);
     expect(checks.textContent).toContain("No check needs a look");
   });
 
@@ -192,7 +192,7 @@ describe("Health summary (glass redesign)", () => {
 
   it("never grades what it could not read: unknown checks leave the ratio, and no checks means 'Run a check'", () => {
     home({ readiness: readiness(1, 2) });
-    expect(screen.getByRole("button", { name: /Windows setup/ }).textContent).toMatch(/7\s*of 8 checks look right/);
+    expect(screen.getByRole("button", { name: /Windows setup/ }).textContent).toMatch(/7 of 8 checks look right/);
     cleanup();
     const p = home({ readiness: null });
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Here's how your PC is doing");
@@ -212,7 +212,7 @@ describe("Health summary (glass redesign)", () => {
     };
     home({ readiness: withAdvisory });
     const card = screen.getByRole("button", { name: /Windows setup/ });
-    expect(card.textContent).toMatch(/8\s*of 8 checks look right/);
+    expect(card.textContent).toMatch(/8 of 8 checks look right/);
     expect(card.textContent).toContain("2 advisory, not graded");
     expect(card.textContent).not.toMatch(/10\s*of 10/);
   });
@@ -246,10 +246,12 @@ const noLimiters: Priorities = { limiters: [], already_fine: [], not_worth_touch
 
 describe("GL-empty — 'What's holding FPS back' speaks for what it read: the setup, never a session", () => {
   // priorities.rs builds limiters from readiness, recommendations and startup; no session feeds one.
-  const limiter = () => screen.getByRole("region", { name: "What's holding FPS back" });
+  // By the card's own id: its name depends on what the top row rests on (see the "Known" block below).
+  const limiter = () => document.querySelector('[aria-labelledby="gl-home-limiter"]') as HTMLElement;
 
   it("F1: no limiter in a read setup says the checked setup has nothing standing out, with no session claimed", () => {
     home({ sessions: [], priorities: noLimiters });
+    expect(screen.getByRole("region", { name: "What's holding FPS back" })).toBe(limiter());
     expect(limiter().textContent).toContain("Nothing in the setup Compy checked stands out.");
     expect(limiter().textContent).not.toMatch(/session/i);
   });
@@ -300,6 +302,74 @@ describe("GL-empty — 'What's holding FPS back' speaks for what it read: the se
     } finally {
       await i18n.changeLanguage("en");
     }
+  });
+});
+
+// Owner rule 2026-11-20 (a brand-new user saw "What's holding FPS back: Power plan isn't
+// performance-oriented, Likely" with nothing measured): a fact Compy read from Windows is "Known" with
+// "Effect on FPS not measured"; the tile is only "What's holding FPS back" over a measured row.
+describe("Home limiter tile — a fact is Known, never Likely, never 'holding FPS back'", () => {
+  const tile = () => document.querySelector('[aria-labelledby="gl-home-limiter"]') as HTMLElement;
+  const row = (over: Partial<Priorities["limiters"][number]>): Priorities => ({
+    ...noLimiters,
+    limiters: [
+      { id: "power-profile", title: "Power plan isn't performance-oriented", reason: "Active plan \"Balanced\".", linked: null, confidence: "medium", status: "attention", ...over },
+    ],
+  });
+
+  it("a fact row reads Known + 'Effect on FPS not measured' under 'Worth a look'", () => {
+    home({ sessions: [], priorities: row({ basis: "fact" }) });
+    expect(screen.getByRole("region", { name: "Worth a look" })).toBe(tile());
+    expect(tile().querySelector(".gl-chip")!.textContent).toBe("Known");
+    expect(tile().textContent).toContain("Effect on FPS not measured");
+    expect(tile().textContent).not.toMatch(/Likely|Measured|Expected|holding FPS back/);
+    expect(tile().textContent).toContain("Power plan isn't performance-oriented");
+  });
+
+  it("a row with no basis (older data) is treated as a fact, never as a measurement", () => {
+    home({ sessions: [], priorities: row({}) });
+    expect(screen.getByRole("region", { name: "Worth a look" })).toBe(tile());
+    expect(tile().querySelector(".gl-chip")!.textContent).toBe("Known");
+  });
+
+  it("a measured row keeps 'What's holding FPS back', its band's word, and no 'not measured' note", () => {
+    home({ priorities: row({ basis: "measured" }) });
+    expect(screen.getByRole("region", { name: "What's holding FPS back" })).toBe(tile());
+    expect(tile().querySelector(".gl-chip")!.textContent).toBe("Likely");
+    expect(tile().textContent).not.toContain("not measured");
+  });
+
+  it("zh-CN: the fact tile is 值得一看 with 已知 and the zh note; the old title is not used", async () => {
+    const { default: i18n } = await import("../../i18n");
+    await i18n.changeLanguage("zh-CN");
+    try {
+      home({ sessions: [], priorities: row({ basis: "fact" }) });
+      expect(tile().querySelector("h2")!.textContent).toBe("值得一看");
+      expect(tile().querySelector(".gl-chip")!.textContent).toBe("已知");
+      expect(tile().textContent).toContain("对 FPS 的影响未实测");
+      expect(tile().textContent).not.toMatch(/较可能|拖慢/);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+
+  // Seen in the installed app: "13of 14 checks look right" (the number and its words were two
+  // adjacent inline elements with only a CSS margin between them, so the text had no space).
+  it("the Windows setup tile reads '13 of 14 checks look right' with a real space", () => {
+    const base = readiness(0);
+    const fourteen: GameReadiness = {
+      ...base,
+      checks: [
+        ...Array.from({ length: 13 }, (_, i) => ({ id: `ok${i}`, label: `Ok ${i}`, status: "ready" as const, detail: "", value: null })),
+        { id: "att", label: "Power plan isn't performance-oriented", status: "attention" as const, detail: "", value: null },
+      ],
+      ready_count: 13,
+      attention_count: 1,
+    };
+    home({ readiness: fourteen });
+    const text = screen.getByRole("button", { name: /Windows setup/ }).textContent!;
+    expect(text).toContain("13 of 14 checks look right");
+    expect(text).not.toMatch(/\d(of|\/)/);
   });
 });
 

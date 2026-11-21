@@ -817,6 +817,46 @@ describe("Check", () => {
     expect(screen.queryByTestId("check-upgrade-fit")).toBeNull();
   });
 
+  // Owner rule 2026-11-20: a fact Compy read (a plan, a setting) is Known with its effect on FPS not
+  // measured, under "Worth a look"; "Limiters we measured" and "Likely" need a measured row.
+  it("a limiter resting on a fact reads Known + 'Effect on FPS not measured' under 'Worth a look'; a measured one keeps its heading and word", async () => {
+    const lim = (basis: "fact" | "measured") => ({
+      id: "power-profile",
+      title: "Power plan isn't performance-oriented",
+      reason: "A reason.",
+      linked: null,
+      confidence: "medium" as const,
+      basis,
+      status: "attention" as const,
+    });
+    const labels = () => Array.from(document.querySelectorAll(".check-section-label")).map((e) => e.textContent);
+    prioritiesMock.payload = { limiters: [lim("fact")], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null };
+    const { unmount } = render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    let row = (await screen.findByText("Power plan isn't performance-oriented")).closest(".check-row")!;
+    expect(labels()).toContain("Worth a look");
+    expect(labels()).not.toContain("Limiters we measured");
+    expect(row.textContent).toContain("Known");
+    expect(row.textContent).toContain("Effect on FPS not measured");
+    expect(row.textContent).not.toMatch(/Likely/);
+    unmount();
+
+    prioritiesMock.payload = { limiters: [lim("measured")], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null };
+    invalidateProbe();
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    row = (await screen.findByText("Power plan isn't performance-oriented")).closest(".check-row")!;
+    expect(labels()).toContain("Limiters we measured");
+    expect(row.textContent).toContain("Likely");
+    expect(row.textContent).not.toContain("not measured");
+  });
+
   // ── Session hint (P9-hint-shown) ──
 
   it("prints the session GPU hint under the limiter rows, and nothing when it is absent", async () => {
