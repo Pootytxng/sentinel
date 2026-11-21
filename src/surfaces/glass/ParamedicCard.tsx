@@ -94,13 +94,16 @@ function findingTitle(f: ParamedicFinding, { t, dates, game }: Ctx): string | nu
     return t("paramedic.finding.backgroundLoad.open");
   }
   // Starts seen only in a partly measured session or in another game's sessions, none in the rough session(s)
-  // being judged ("starts-seen"): the heading says they were nearby, not that they happened while you played.
+  // being judged ("starts-seen"): the heading says they were seen in other sessions, not while you played. The
+  // count is the sessions those lines name: the partly measured one (one) plus the other game's (their count).
   if (
     f.id === "background-load" &&
     !f.evidence.some((e) => e.code === "starts-seen") &&
     f.evidence.some((e) => e.code === "starts-seen-partial" || e.code === "starts-seen-other")
   ) {
-    return t("paramedic.finding.backgroundLoad.nearby");
+    const partial = f.evidence.some((e) => e.code === "starts-seen-partial") ? 1 : 0;
+    const other = f.evidence.filter((e) => e.code === "starts-seen-other").reduce((n, e) => n + (Number(e.args.count) || 1), 0);
+    return t("paramedic.finding.backgroundLoad.nearby", { count: partial + other });
   }
   // Installs carry a day, never a time of day: the heading names the day.
   if (f.id === "program-installed") {
@@ -1190,6 +1193,9 @@ export function ParamedicCard({ noGames = false, games = [] }: { noGames?: boole
   const gen = useRef(0);
   const doorRef = useRef<HTMLButtonElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  // Focus is waiting on the card while the check runs (see the effect on `dim`).
+  const parked = useRef(false);
   const timer = useRef<number | undefined>(undefined);
   const refocus = useRef(false);
   // "Back to the answer": focus goes to the answer, so the keyboard (and Escape) still works inside the card.
@@ -1286,11 +1292,26 @@ export function ParamedicCard({ noGames = false, games = [] }: { noGames?: boole
   }, [questions]);
   // The button that was just pressed leaves while the questions are asked: if focus was on it, it moves into the
   // card (the first question's heading takes it when it can; otherwise the answer region), never to the page.
+  // While a check runs the answer region is inert and cannot take focus: the card itself (never inert) holds it,
+  // and it moves to the question's heading once the region is usable again.
   useEffect(() => {
     if (!hideCheck) return;
     const a = document.activeElement;
-    if (!a || a === document.body) scrollRef.current?.focus();
+    // Focus the question's own heading took inside the inert region does not count: a browser refuses it there.
+    if (a && a !== document.body && !(dim && scrollRef.current?.contains(a))) return;
+    if (dim) {
+      parked.current = true;
+      sectionRef.current?.focus();
+    } else {
+      scrollRef.current?.focus();
+    }
   }, [hideCheck]);
+  useEffect(() => {
+    if (dim || !parked.current) return;
+    parked.current = false;
+    const heading = scrollRef.current?.querySelector<HTMLElement>("h2");
+    (heading ?? scrollRef.current)?.focus();
+  }, [dim]);
   useEffect(() => {
     measure();
     const el = scrollRef.current;
@@ -1302,7 +1323,7 @@ export function ParamedicCard({ noGames = false, games = [] }: { noGames?: boole
   }, [answer, measure]);
 
   return (
-    <section tabIndex={-1} onKeyDown={onKeyDown} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
+    <section ref={sectionRef} tabIndex={-1} onKeyDown={onKeyDown} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
       <div className="gl-card-top">
         <p className="gl-card-sub">{noGames ? t("paramedic.firstLook.door.sub") : t("paramedic.door.sub")}</p>
         <div className="gl-para-actions">

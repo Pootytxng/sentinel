@@ -243,7 +243,8 @@
       "what": "Other programs started while you played",
       "measured": "The rest of your PC was busier than usual while you played",
       "open": "Other programs were already open when you started playing",
-      "nearby": "Other programs were starting in nearby sessions"
+      "nearby_one": "Other programs were seen starting in another recent session",
+      "nearby_other": "Other programs were seen starting in other recent sessions"
     },
     "memoryPressure": {
       "what": "Your memory was nearly full while you played"

@@ -2029,25 +2029,26 @@ describe("ParamedicCard: honest headings, test-not-fix steps and a button that w
     await waitFor(() => expect(rows().length).toBe(1));
   };
 
-  it("starts seen only in a partly measured session or another game's sessions say 'nearby sessions', not 'while you played'", async () => {
+  it("starts seen only in other sessions say 'seen starting in other recent sessions' (one session: 'another recent session'), not 'while you played'", async () => {
     await showing([m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "cargo" }), m("starts-seen-other", { count: "1", otherGame: "PBZ", names: "cargo", date: "2026-11-19T10:00:00Z" })]);
-    expect(rows()[0].textContent).toMatch(/Other programs were starting in nearby sessions/);
+    expect(rows()[0].textContent).toMatch(/Other programs were seen starting in other recent sessions/);
     expect(rows()[0].textContent).not.toMatch(/started while you played/);
     openAll();
     expect(screen.getByText(/Programs were seen starting in a partly measured/)).toBeTruthy();
     cleanup();
-    await showing([m("starts-seen-other", { count: "1", otherGame: "PBZ", names: "", date: "2026-11-19T10:00:00Z" })]);
-    expect(rows()[0].textContent).toMatch(/Other programs were starting in nearby sessions/);
+    await showing([m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "" })]);
+    expect(rows()[0].textContent).toMatch(/Other programs were seen starting in another recent session/);
+    expect(rows()[0].textContent).not.toMatch(/other recent sessions|started while you played/);
   });
 
   it("starts recorded in the judged rough session keep 'started while you played', even with other sessions beside them", async () => {
     await showing([m("starts-seen", { count: "1", names: "" }), m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "" })]);
     expect(rows()[0].textContent).toMatch(/Other programs started while you played/);
-    expect(rows()[0].textContent).not.toMatch(/nearby sessions/);
+    expect(rows()[0].textContent).not.toMatch(/seen starting in/);
   });
 
   it("a program already open in the judged session keeps its own heading when other sessions also had starts", async () => {
-    await showing([m("already-running", { id: "obs-studio", name: "OBS Studio" }), m("starts-seen-other", { count: "1", otherGame: "PBZ", names: "", date: "2026-11-19T10:00:00Z" })]);
+    await showing([m("already-running", { id: "obs-studio", name: "OBS Studio" }), m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "" })]);
     expect(rows()[0].textContent).toMatch(/Other programs were already open when you started playing/);
   });
 
@@ -2093,12 +2094,12 @@ describe("ParamedicCard: honest headings, test-not-fix steps and a button that w
     expect(checkAgain()).toBeNull();
     expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
     // Focus still goes to the question's heading.
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Which game?" })), { timeout: 3000 });
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Which game?" })));
     fireEvent.click(screen.getByRole("button", { name: "Another game, or the whole PC" }));
-    await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy());
     expect(checkAgain()).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Today" }));
-    await waitFor(() => expect(screen.getByTestId("first-look-told")).toBeTruthy(), { timeout: 3000 });
+    await waitFor(() => expect(screen.getByTestId("first-look-told")).toBeTruthy());
     expect(checkAgain()).toBeTruthy();
   });
 
@@ -2113,5 +2114,76 @@ describe("ParamedicCard: honest headings, test-not-fix steps and a button that w
     expect(checkAgain()).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Back to the answer" }));
     expect(checkAgain()).toBeTruthy();
+  });
+});
+
+describe("ParamedicCard: 'Check again' pressed from a first-look answer or after a failed check", () => {
+  const firstLookAnswer = {
+    told: { since: "today", from: "2026-11-20T00:00:00Z", to: "2026-11-20T12:00:00Z", hours: 12 },
+    game: null,
+    changes_listed: true,
+    touch_games: [],
+    other_changes: [],
+    none: [],
+    game_files_since: null,
+    crashes: null,
+    crashes_none: false,
+    looks_off: [],
+    mods_none: false,
+    mods_settings_only: [],
+    facts: [],
+    compy_changes: [],
+    limits: [],
+    read_all: true,
+    method: "paramedic-first-look-v1",
+  };
+  const checkAgain = () => screen.queryByRole("button", { name: "Check again" });
+
+  it("from a first-look answer: focus stays in the card while the check runs (the answer region is inert), then goes to the question", async () => {
+    answer.value = { ...base, state: { kind: "cant-tell", why: { kind: "no-sessions" } }, findings: [] };
+    answer.byCmd = { paramedic_list_games: { read: true, complete: true, games: [] }, paramedic_first_look: firstLookAnswer };
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Another game, or the whole PC" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    await waitFor(() => expect(screen.getByTestId("first-look-told")).toBeTruthy());
+    let release = () => {};
+    answer.gate = new Promise<void>((r) => (release = r));
+    const button = checkAgain() as HTMLElement;
+    button.focus();
+    fireEvent.click(button);
+    const card = screen.getByTestId("paramedic");
+    const region = screen.getByRole("region", { name: /Scrolls if there is more/ });
+    // jsdom does not act on `inert`, so the rule is stated on the attribute: the region is inert, and focus is not
+    // parked on it (or on the page) but on the card, which is never inert.
+    await waitFor(() => expect(region.hasAttribute("inert")).toBe(true));
+    expect(document.activeElement).not.toBe(document.body);
+    expect(region.contains(document.activeElement)).toBe(false);
+    expect(document.activeElement).toBe(card);
+    release();
+    await waitFor(() => expect(region.hasAttribute("inert")).toBe(false));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Which game?" })));
+    expect(checkAgain(), "asking again: nothing to check again").toBeNull();
+    expect(answer.calls.filter((c) => c[0] === "paramedic_diagnose").length).toBe(2);
+  });
+
+  it("from a failed check: the button stays, says so, and a second press asks again and shows the answer", async () => {
+    answer.value = base;
+    answer.reject = "boom";
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    const button = checkAgain() as HTMLElement;
+    expect(button).toBeTruthy();
+    button.focus();
+    answer.reject = "";
+    fireEvent.click(button);
+    await waitFor(() => expect(rows().length).toBe(1));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(checkAgain()).toBeTruthy();
+    expect(answer.calls.filter((c) => c[0] === "paramedic_diagnose").length).toBe(2);
+    expect(document.activeElement).not.toBe(document.body);
   });
 });
