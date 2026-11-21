@@ -59,4 +59,5 @@ Historical material must not be used to silently restore the former "Care primar
 ## Legal drafts
 
 - [PRIVACY.md](PRIVACY.md) — privacy policy draft.
+- [EXPORT_REDACTION.md](EXPORT_REDACTION.md) - the exact rules the Export Snapshot follows.
 - [EULA.md](EULA.md) — EULA draft; must be reconciled with final capability and monetization choices before public release.
