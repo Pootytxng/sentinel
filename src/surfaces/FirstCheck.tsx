@@ -69,7 +69,7 @@ export default function FirstCheck({
     if (!rec) return;
     const ok = await confirm({
       title: `Apply "${rec.title}"?`,
-      body: "Compy snapshots the prior state so you can roll this back anytime.",
+      body: "Compy snapshots the prior state so you can undo this from Applied.",
       confirmLabel: "Apply",
     });
     if (!ok) return;
@@ -231,7 +231,7 @@ export default function FirstCheck({
                     <span className="fc-rev-mark" aria-hidden="true">
                       ↺
                     </span>
-                    Compy snapshots the prior state so you can roll this back anytime.
+                    Compy snapshots the prior state so you can undo this from Applied.
                   </p>
                 )}
               </div>

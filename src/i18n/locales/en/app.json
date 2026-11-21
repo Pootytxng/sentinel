@@ -23,7 +23,7 @@
   "dialogs": {
     "applyTitle": "Apply \"{{title}}\"?",
     "applyTradeoff": " Tradeoff: {{downside}}",
-    "applyBody": "{{description}}{{tradeoff}} Compy snapshots the prior state so you can roll this back anytime.",
+    "applyBody": "{{description}}{{tradeoff}} Compy snapshots the prior state so you can undo this from Applied.",
     "apply": "Apply",
     "rollbackTitle": "Roll back \"{{title}}\"?",
     "rollbackDest": " It'll return to {{label}}.",

@@ -65,8 +65,8 @@
     "tiles": {
       "changesTitle": "Changes Compy made",
       "changesNone": "nothing changed yet",
-      "changesActive": "{{count}} still on · every one undoable",
-      "changesInactive": "none active now · every one undoable",
+      "changesActive": "{{count}} still on",
+      "changesInactive": "none active now",
       "changesUnknown": "can't be read right now",
       "changesNonePartial": "none we can still show",
       "changesActivePartial": "{{count}} still on · part of the record is missing",

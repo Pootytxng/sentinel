@@ -7,7 +7,7 @@
     "goal": "Get tear-free and low-latency at the same time on a VRR monitor — the single most-felt smoothness upgrade there is.",
     "steps": [
       "Turn on VRR in two places that must agree: your monitor's own menu (look for G-Sync, FreeSync, or Adaptive Sync) and your graphics driver's display settings.",
-      "In the graphics driver, set V-Sync to On. This sounds wrong, but here it only acts as a safety net for the rare frame that overshoots.",
+      "In the graphics driver, set V-Sync to On. This sounds wrong, but here it only acts as a backstop for the rare frame that overshoots.",
       "Cap your frame rate about 3 below your refresh rate — 141 on a 144 Hz panel, 237 on a 240 Hz panel. This keeps you inside the VRR range so V-Sync never adds its lag.",
       "Turn on NVIDIA Reflex (or in-game Anti-Lag 2 on AMD) in any game that offers it, for the lowest input latency.",
       "Play, and watch for tearing or stutter — done right, you should see neither."

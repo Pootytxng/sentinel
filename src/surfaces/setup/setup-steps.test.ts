@@ -142,7 +142,7 @@ describe("buildTabs / TAB_BLURB", () => {
     expect(optimize.blurb).toBe(MERGED_FIX_BLURB);
     // Both halves of the merged room are in the blurb: the diagnose half and the undo promise.
     expect(optimize.blurb).toMatch(/check/i);
-    expect(optimize.blurb).toMatch(/undoable/i);
+    expect(optimize.blurb).toMatch(/undo/i);
   });
 });
 
@@ -195,7 +195,7 @@ describe("proving-ground tour alignment (ground=true)", () => {
     const lab = buildTabs(true, true).find((t) => t.id === "lab")!;
     expect(lab.blurb).toBe(GROUND_LAB_BLURB);
     expect(lab.blurb).toMatch(/check/i);
-    expect(lab.blurb).toMatch(/undoable/i);
+    expect(lab.blurb).toMatch(/undo/i);
     expect(lab.blurb).toMatch(/prove/i);
   });
 

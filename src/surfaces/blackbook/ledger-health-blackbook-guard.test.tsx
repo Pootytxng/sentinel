@@ -228,7 +228,7 @@ describe("the Logbook may not speak for a ledger it could not read", () => {
     const { container } = mountConsole([change(), session(), autopsy()], HEALTHY);
 
     expect(tileN(container, "change")).toBe("1");
-    expect(tileD(container, "change")).toBe("1 still on · every one undoable");
+    expect(tileD(container, "change")).toBe("1 still on");
     expect(notice(container)).toBeNull();
     // Nothing narrows, because nothing over-claimed in the first place.
     expect(head(container)).toBeNull();

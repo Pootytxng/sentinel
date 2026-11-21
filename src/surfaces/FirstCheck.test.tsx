@@ -271,7 +271,7 @@ describe("FirstCheck (audit M1)", () => {
     // The #1-limiter spotlight resolves with an Apply button (an applyable fix)…
     expect(await screen.findByRole("button", { name: "Apply" })).toBeInTheDocument();
     // …and the reversibility promise is already on the card — no Apply click required.
-    expect(screen.getByText(/roll this back anytime/i)).toBeInTheDocument();
+    expect(screen.getByText(/undo this from Applied/i)).toBeInTheDocument();
   });
 });
 

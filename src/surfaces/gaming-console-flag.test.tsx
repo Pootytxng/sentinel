@@ -66,7 +66,7 @@ describe("Gaming console DEFAULT ON — absent renders the console face; '0' is 
     const what = container.querySelector("details.gc-what");
     expect(what).toBeTruthy();
     expect(what?.hasAttribute("open")).toBe(false); // collapsed by default
-    expect(what?.textContent).toContain("already-audited, fully reversible");
+    expect(what?.textContent).toContain("already-audited");
   });
 
   it("classic failsafe ('0'): the literal '0' renders today's classic card, no console classes", async () => {

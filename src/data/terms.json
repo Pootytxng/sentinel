@@ -28,7 +28,7 @@
     "name": "V-Sync (vertical sync)",
     "aliases": ["vsync", "v-sync", "vertical sync"],
     "what": "The old fix for screen tearing: it holds each finished frame until the monitor is ready for it. It removes tearing but adds input lag, because frames sit in a queue waiting their turn.",
-    "more": "On its own it's a trade you usually don't want for fast games. The modern move is to pair it with VRR (the monitor waiting for frames) plus an FPS cap a few frames below your refresh rate — then V-Sync only acts as a safety net and almost never adds the lag. See the sync stack.",
+    "more": "On its own it's a trade you usually don't want for fast games. The modern move is to pair it with VRR (the monitor waiting for frames) plus an FPS cap a few frames below your refresh rate — then V-Sync only acts as a backstop and almost never adds the lag. See the sync stack.",
     "related": ["vrr", "gsync-freesync", "vrr-sync-stack", "input-latency", "fps-cap"]
   },
   {
@@ -140,7 +140,7 @@
     "name": "AMD undervolting — Radeon GPU vs Ryzen CPU",
     "aliases": ["amd undervolt", "amd undervolting", "undervolt amd", "radeon undervolt", "ryzen undervolt", "undervolt radeon", "undervolt ryzen"],
     "what": "\"Undervolting an AMD system\" is really two different jobs with very different difficulty and risk: lowering voltage on your Radeon GPU, and lowering it on your Ryzen CPU. They use different tools, and which one you should reach for first is not a coin flip — start with the GPU.",
-    "more": "The Radeon GPU side is the friendly one: you do it inside AMD's Adrenalin software in Windows (Performance → Tuning), it is fully reversible with a reset button, and a careful undervolt tends to mean a cooler, quieter card at the same or even slightly better performance — this is the path Compy actually walks you through (see the AMD GPU undervolt guide). The Ryzen CPU side is advanced and genuinely risky: it lives in the BIOS as Precision Boost Overdrive / Curve Optimizer, and pushing the offsets too far causes crashes that look 'random' for weeks before you trace them back — so it is small steps, hours of stability testing, and a known-good fallback (loading BIOS defaults undoes it). Both are about heat and efficiency, not a magic FPS switch, and how far you can go varies chip to chip — the 'silicon lottery' — so no specific number is guaranteed. If you are new to this, do the GPU undervolt first and leave the CPU's Curve Optimizer until you are comfortable. (This is the AMD-verified path; Compy withholds NVIDIA and Intel undervolt guidance until each is verified on real hardware.)",
+    "more": "The Radeon GPU side is the friendly one: you do it inside AMD's Adrenalin software in Windows (Performance → Tuning), it can be undone with a reset button, and a careful undervolt tends to mean a cooler, quieter card at the same or even slightly better performance — this is the path Compy actually walks you through (see the AMD GPU undervolt guide). The Ryzen CPU side is advanced and genuinely risky: it lives in the BIOS as Precision Boost Overdrive / Curve Optimizer, and pushing the offsets too far causes crashes that look 'random' for weeks before you trace them back — so it is small steps, hours of stability testing, and a known-good fallback (loading BIOS defaults undoes it). Both are about heat and efficiency, not a magic FPS switch, and how far you can go varies chip to chip — the 'silicon lottery' — so no specific number is guaranteed. If you are new to this, do the GPU undervolt first and leave the CPU's Curve Optimizer until you are comfortable. (This is the AMD-verified path; Compy withholds NVIDIA and Intel undervolt guidance until each is verified on real hardware.)",
     "related": ["amd-gpu-undervolt", "undervolting", "pbo", "pbo-curve-optimizer", "thermal-throttling"]
   },
   {
@@ -179,15 +179,15 @@
     "id": "raid",
     "name": "RAID",
     "aliases": ["raid", "raid 0", "raid array", "disk array"],
-    "what": "A way of joining several drives so they act as one — some setups for speed, some for a safety backup copy, some for both. The name stands for Redundant Array of Independent Disks.",
-    "more": "For a gaming PC it's rarely worth the trouble: a single modern NVMe drive is already so fast that striping drives for speed barely moves load times. The backup-style setups protect against a drive dying, which is real value, but that's data safety, not performance. Most gamers are better served by one good NVMe than a RAID array.",
+    "what": "A way of joining several drives so they act as one — some setups for speed, some for a backup copy, some for both. The name stands for Redundant Array of Independent Disks.",
+    "more": "For a gaming PC it's rarely worth the trouble: a single modern NVMe drive is already so fast that striping drives for speed barely moves load times. The backup-style setups protect against a drive dying, which is real value, but that's data protection, not performance. Most gamers are better served by one good NVMe than a RAID array.",
     "related": ["nvme-ssd-hdd"]
   },
   {
     "id": "pagefile",
     "name": "Pagefile (virtual memory)",
     "aliases": ["pagefile", "page file", "virtual memory", "swap file"],
-    "what": "A reserved chunk of your drive that Windows uses as overflow when it needs more memory than your RAM holds. It's a safety valve, not a speed setting.",
+    "what": "A reserved chunk of your drive that Windows uses as overflow when it needs more memory than your RAM holds. It's overflow space, not a speed setting.",
     "more": "A popular tweak says to disable it or hard-cap it to a tiny size — don't. Games that commit more memory than you have RAM will hard-crash without it, and \"I have 32 GB, that's plenty\" isn't how memory reservation works. Leave it system-managed and forget it exists.",
     "related": ["pagefile-disable", "vram"]
   },
@@ -212,7 +212,7 @@
     "name": "UEFI vs BIOS",
     "aliases": ["uefi", "bios", "firmware", "motherboard firmware"],
     "what": "The low-level menu that runs before Windows loads, where you set memory speed, fan curves, and boot options. \"BIOS\" is the old name; \"UEFI\" is the modern version, but people use the words interchangeably.",
-    "more": "This is where XMP/EXPO, Resizable BAR, and fan settings live. Every board's menu looks different, which is why guides can only teach the concept, not the exact clicks. The universal safety net is that you can reset it to defaults — usually a menu option or by clearing CMOS — if a change goes wrong.",
+    "more": "This is where XMP/EXPO, Resizable BAR, and fan settings live. Every board's menu looks different, which is why guides can only teach the concept, not the exact clicks. If something goes wrong, you can reset it to defaults — usually a menu option or by clearing CMOS — if a change goes wrong.",
     "related": ["xmp", "resizable-bar", "secure-boot", "csm", "fan-curves"]
   },
   {
@@ -244,7 +244,7 @@
     "name": "DLL injection",
     "aliases": ["dll injection", "dll inject", "injector", "code injection"],
     "what": "Forcing extra code into a program that's already running, by slipping a library (a DLL file) into its process. Overlays use a gentle form of it; cheats and some \"optimizers\" use an aggressive form.",
-    "more": "A DLL is a Dynamic-Link Library — a bundle of code programs share. The problem is that injecting into a game looks exactly like what a cheat does, so anti-cheats treat it as hostile and can ban the account. Any tool that injects into game memory is playing with your account's safety, whatever it promises.",
+    "more": "A DLL is a Dynamic-Link Library — a bundle of code programs share. The problem is that injecting into a game looks exactly like what a cheat does, so anti-cheats treat it as hostile and can ban the account. Any tool that injects into game memory is putting your account at risk, whatever it promises.",
     "related": ["dll-injectors", "kernel-driver", "anti-cheat", "overlay"]
   },
   {

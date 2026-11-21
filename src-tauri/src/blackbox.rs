@@ -663,8 +663,7 @@ fn rule_graphics_driver(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> 
             "Do a clean reinstall of your graphics driver",
             "Download the latest driver for your card and install it with the 'clean install' / 'factory \
              reset' option (or remove the old one first with DDU — a free driver-cleanup tool — in Safe \
-             Mode). Fully reversible — you can roll back to the previous driver from Device Manager if the \
-             new one is worse.",
+             Mode). If the new one is worse, Device Manager's Roll Back Driver can restore the previous one while Windows still has it.",
         ),
         beyond_us: false,
         statement: None,

@@ -94,7 +94,7 @@
     "fan": "Fan",
     "power": "Power",
     "protectedTitle": "You're protected",
-    "protectedDetail": "4 changes active — all reversible from the Ledger.",
+    "protectedDetail": "4 changes active — Compy saved each current setting first, so you can undo them from the Ledger.",
     "noSessions": "No sessions yet",
     "noSessionsBody": "Play a game with monitoring on and Compy will write a debrief here."
   },

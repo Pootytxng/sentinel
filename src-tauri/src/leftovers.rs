@@ -361,7 +361,7 @@ fn detect_bcdedit_timer_flags(probes: &Value) -> Outcome {
                 .into(),
         verdict: "These flags fight the scheduler Windows actually ships today — the guide that recommended them predates it.".into(),
         uncertain_source: true,
-        restore_note: "Removable with bcdedit /deletevalue (admin); fully reversible; takes effect after a reboot.".into(), // mutation-boundary-allow: names the command; the restore runs through actions.rs
+        restore_note: "Removable with bcdedit /deletevalue (admin); takes effect after a reboot.".into(), // mutation-boundary-allow: names the command; the restore runs through actions.rs
     })
 }
 

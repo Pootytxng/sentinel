@@ -22,13 +22,13 @@
         }
       },
       "fastpath": {
-        "confirmBody": "Compy 会先保存更改前的状态,你可以随时从「已应用」中把它们全部回滚。",
-        "ready_other": "{{count}} 项可撤销优化已就绪——一键搞定。",
-        "apply_other": "应用 {{count}} 项可撤销优化 · 一键搞定",
-        "appliedPart_other": "已应用 {{count}} 项可撤销优化",
-        "appliedAllReversible": "{{appliedPart}}——可在「已应用」中全部回滚。",
+        "confirmBody": "Compy 会先保存更改前的状态,你可以从「已应用」中逐项回滚。",
+        "ready_other": "{{count}} 项基础优化已就绪——一键搞定。",
+        "apply_other": "应用 {{count}} 项基础优化 · 一键搞定",
+        "appliedPart_other": "已应用 {{count}} 项基础优化",
+        "appliedAllReversible": "{{appliedPart}}——Compy 已先保存每项当前设置,可在「已应用」中撤销。",
         "skippedPart_other": "{{count}} 项被跳过",
-        "appliedWithSkipped": "{{appliedPart}} · {{skippedPart}}——可在「已应用」中全部回滚。",
+        "appliedWithSkipped": "{{appliedPart}} · {{skippedPart}}——Compy 已先保存每项当前设置,可在「已应用」中撤销。",
         "skippedDisclosure_one": "查看被跳过的 1 项",
         "skippedDisclosure_other": "查看被跳过的 {{count}} 项",
         "skippedItemReason": "{{title}}——{{reason}}"
@@ -210,9 +210,9 @@
     "f": {
       "ev": {
         "readiness": "当前 {{total}} 项启动检查中有 {{passed}} 项通过。",
-        "stackReady_other": "有 {{count}} 项可撤销改动可以应用。",
-        "stackClear": "Compy 知道的可撤销改动都已经开启了。",
-        "changes_other": "Compy 已对这台电脑做了 {{count}} 项改动，每一项都仍可撤销。",
+        "stackReady_other": "有 {{count}} 项基础改动可以应用。",
+        "stackClear": "Compy 知道的基础改动都已经开启了。",
+        "changes_other": "Compy 已对这台电脑做了 {{count}} 项改动，并已先保存每项当前设置,你可以撤销。",
         "lastSession": "最近一次记录的会话——{{game}}：平均 {{avg}} FPS，最差 {{low}} FPS。",
         "sessionCount_other": "有 {{count}} 次已记录的会话可供对比。",
         "tested_other": "Compy 已在这台电脑上用前后对比试验实测了 {{count}} 项改动。",
@@ -222,7 +222,7 @@
       },
       "act": {
         "check": "重新检查一次",
-        "fastpath_other": "应用 {{count}} 项可撤销改动——一键完成",
+        "fastpath_other": "应用 {{count}} 项基础改动——一键完成",
         "crashRecord": "读取崩溃记录",
         "careView": "和上一局平稳的会话比一比",
         "crashBehind": "看看背后有没有崩溃",
@@ -231,7 +231,7 @@
         "readSession": "回看你上一次的会话",
         "heat": "检查散热与风扇余量",
         "journey": "找出对我的游戏有用的改动",
-        "optimize": "查看可撤销改动",
+        "optimize": "查看基础改动",
         "whatTested": "查看 Compy 测过什么",
         "sinceWorked": "看看上次正常以来改了什么",
         "undo": "Compy 会先保存原设置，之后你可以在“已应用”里撤销其中任何一项。",
@@ -279,7 +279,7 @@
       },
       "wantFps": {
         "sentence": "Compy 可以在这台电脑上实测：一局保持现状，一局只改一项，只有你的游戏实测变好才保留这项改动。",
-        "sentenceNoJourney": "Compy 可以给你看它知道的可撤销改动。它们还没在你的游戏上实测过，所以任何提升都只是预期，未经证实。"
+        "sentenceNoJourney": "Compy 可以给你看它知道的基础改动。它们还没在你的游戏上实测过，所以任何提升都只是预期，未经证实。"
       },
       "wantMonitor": {
         "sentence": "Compy 可以在你游戏时把帧率显示在屏幕上，并保留一份总结，让“感觉更顺了”变成你能核对的数字。"
@@ -448,7 +448,7 @@
     },
     "dialedInHeadline": "你可以开玩了",
     "dialedInSub": "Compy 能读取的检查全部正常 · {{changeNote}}。",
-    "changeNote_other": "{{count}} 项更改生效中,可随时回滚",
+    "changeNote_other": "{{count}} 项更改生效中",
     "noChangeNote": "没有需要更改的地方",
     "readyWorthFixing_other": "Compy 能读取的检查全部正常。下方列出了 {{count}} 项值得一看的内容。",
     "readyAllRead": "Compy 能读取的检查全部正常。",
@@ -456,7 +456,7 @@
     "unreadCount_other": "{{count}} 项检查无法读取。",
     "dismissedCount_other": "你搁置的 {{count}} 项检查未计入。",
     "readyMeasuredClean": "可以开玩了——这台主机今天测得很干净。",
-    "changeNoteReversible_other": "{{count}} 项更改生效中,可随时回滚。",
+    "changeNoteReversible_other": "{{count}} 项更改生效中。",
     "changeNoteUnknown": "Compy 暂时无法读取它的更改记录。",
     "noChangeWithoutSayso": "未经你同意,绝不更改任何东西。",
     "lastSessionFallback": "上次会话"
@@ -591,7 +591,7 @@
       "tag": "首次检测",
       "spotlightTag": "清单第一项",
       "applyConfirmTitle": "应用「{{title}}」?",
-      "confirmBody": "Compy 会先保存之前的状态,你可以随时回滚。",
+      "confirmBody": "Compy 会先保存之前的状态,你可以从「已应用」中回滚。",
       "applyLabel": "应用",
       "applyFailedTitle": "未能应用该修复",
       "ok": "确定",
@@ -621,7 +621,7 @@
       "checksClean_other": "{{count}} 项检测通过——基于这台主机的实测,而非假设。",
       "checksUnread_other": "{{count}} 项检测在这台电脑上无法读取,因此不计入通过或未通过。",
       "checksAdvisory_other": "另有 {{count}} 项为提示项:仅作记录,不评级。",
-      "reversibleFooter": "全部可撤销。接下来,快速浏览一下你的主机——点击「下一步」。"
+      "reversibleFooter": "Compy 已先保存每项当前设置。接下来,快速浏览一下你的主机——点击「下一步」。"
     },
     "lesson": {
       "drivesLabel": "影响",
@@ -703,15 +703,15 @@
     },
     "tabBlurb": {
       "home": "你的电脑现在还好吗——结论，以及值得一看的是什么。",
-      "check": "扫描游戏就绪度，然后为你的主机应用它找到的可撤销修复。",
+      "check": "扫描游戏就绪度，然后为你的主机应用它找到的修复。",
       "play": "实时查看帧率、1% 最低帧和温度——每局结束后有一份复盘。",
       "fix": "应用和撤销可逆的调整——每项更改都记录在账本里。",
       "learn": "真正有效的实测记录——以及那些无效的传言。它的资料库是“实战指南”。",
       "lab": "更深入：基准测试、延迟和系统诊断。",
       "games": "Compy 测量过的每个游戏，以及各自的运行情况——让游戏变好从这里开始。",
       "problems": "来自 Windows 自身记录的崩溃、卡死和重启——查明出了什么事。",
-      "mergedFix": "检查有哪些值得一看的地方，然后应用修复——每项更改都可在账本里撤销。",
-      "groundLab": "检查有哪些值得一看的地方并应用修复——每项更改都可撤销——然后用基准测试、延迟和诊断来证明。"
+      "mergedFix": "检查有哪些值得一看的地方，然后应用修复——Compy 会先保存每项当前设置,方便你撤销。",
+      "groundLab": "检查有哪些值得一看的地方并应用修复——Compy 会先保存每项当前设置,方便你撤销——然后用基准测试、延迟和诊断来证明。"
     }
   },
   "glass": {

@@ -848,17 +848,25 @@ pub(crate) fn shared_controller_advisory(loads: &[UsbControllerLoad]) -> Option<
         ));
     }
     if let Some(c) = loads.iter().find(|l| l.severity() == "info") {
-        let neighbors = if c.has_high_rate_input {
-            "low-traffic devices (keyboard-class)"
+        let lead = if c.has_high_rate_input {
+            format!("Your mouse shares this controller ({}) with other input devices.", c.controller_name)
         } else {
-            "other low-traffic input devices"
+            format!("Input devices share this controller ({}); Compy did not see a mouse on it.", c.controller_name)
         };
-        return Some(format!(
-            "Your mouse shares this controller ({}) with {neighbors}. They send a few \
-             bytes per keypress, not a constant stream, so this adds little. Full isolation only matters if you're \
-             chasing the last microsecond of 1000Hz+ consistency.",
-            c.controller_name
-        ));
+        let streaming = if c.streaming_neighbors.is_empty() {
+            "Compy did not see a constant-streaming device (audio or video) on it.".to_string()
+        } else {
+            format!(
+                "Compy saw {} on it, a constant-streaming device (audio or video).",
+                c.streaming_neighbors.join(", ")
+            )
+        };
+        let advice = if c.has_high_rate_input {
+            "move the mouse to a port on a different controller"
+        } else {
+            "move one of them to a port on a different controller"
+        };
+        return Some(format!("{lead} {streaming} Effect not measured: to rule it out, {advice}."));
     }
     None
 }
@@ -1924,7 +1932,25 @@ mod latency_tests {
         }];
         assert_eq!(quiet[0].severity(), "info");
         let a = shared_controller_advisory(&quiet).expect("advisory present");
-        assert!(a.contains("adds little"));
+        assert!(a.contains("Your mouse shares this controller"));
+        assert!(a.contains("did not see a constant-streaming device"));
+        assert!(a.contains("Effect not measured"));
+        assert!(!a.contains("adds little"), "no unmeasured reassurance: {a}");
+
+        // No mouse on it, but a streaming neighbor is: the text must not say "your mouse" nor "no streaming".
+        let no_mouse = vec![UsbControllerLoad {
+            controller_name: "AMD USB 3.10".into(),
+            controller_id: "PCIA".into(),
+            input_devices: vec!["HID Keyboard Device".into()],
+            streaming_neighbors: vec!["Arctis 7 Headset".into()],
+            has_high_rate_input: false,
+        }];
+        assert_eq!(no_mouse[0].severity(), "info");
+        let n = shared_controller_advisory(&no_mouse).expect("advisory present");
+        assert!(!n.contains("Your mouse"), "{n}");
+        assert!(n.contains("did not see a mouse"), "{n}");
+        assert!(n.contains("Compy saw Arctis 7 Headset"), "{n}");
+        assert!(!n.contains("did not see a constant-streaming"), "{n}");
         assert!(a.contains("AMD USB 3.10"));
 
         // Mouse + streaming audio dongle → actionable ATTENTION copy that names both + the fix.

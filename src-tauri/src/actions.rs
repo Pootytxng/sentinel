@@ -3826,7 +3826,7 @@ pub(crate) fn plan_known_from(listed: Option<bool>, query: impl FnOnce() -> Opti
 /// the list, or the direct query of a plan it leaves out, couldn't be read (s41 opus NIT: worded for
 /// both).
 const PLAN_LIST_UNREAD: &str = "Compy couldn't confirm with Windows just now whether this power plan still exists, \
-                                so it can't undo this. Nothing was changed; try again in a moment.";
+                                so Compy stopped before undoing anything. Nothing was changed; try again in a moment.";
 
 /// CR-core-parking-plan-gone: whether `guid` is in Windows' plan list, as a read that can fail.
 /// `None` = the list couldn't be read ([`crate::power_plan_guids`]: powercfg didn't run, exited
@@ -5235,7 +5235,7 @@ pub(crate) fn core_parking_undo_step(
         return Err(format!("This entry's recorded power plan ({plan}) isn't a plan id — cannot roll back blind."));
     }
     let Some(listed) = plan_listed(plan) else {
-        return Err("Compy couldn't read Windows' list of power plans just now, so it can't undo this. \
+        return Err("Compy couldn't read Windows' list of power plans just now, so Compy stopped before undoing anything. \
                     Nothing was changed; try again in a moment."
             .to_string());
     };
@@ -5243,7 +5243,7 @@ pub(crate) fn core_parking_undo_step(
     // recorded plan is the live one decides both the gone check and the re-commit, so the undo
     // stops with nothing changed rather than guess either.
     let Some(active) = active_plan() else {
-        return Err("Compy couldn't read which power plan Windows is using just now, so it can't undo this. \
+        return Err("Compy couldn't read which power plan Windows is using just now, so Compy stopped before undoing anything. \
                     Nothing was changed; try again in a moment."
             .to_string());
     };
@@ -5256,8 +5256,8 @@ pub(crate) fn core_parking_undo_step(
         match plan_queried(plan) {
             Some(true) => return Ok(CoreParkingUndo::Run(core_parking_plan_script(plan, a, d, false))),
             None => {
-                return Err("Compy couldn't confirm with Windows whether this power plan still exists, so it \
-                            can't undo this. Nothing was changed; try again in a moment."
+                return Err("Compy couldn't confirm with Windows whether this power plan still exists, so \
+                            Compy stopped before undoing anything. Nothing was changed; try again in a moment."
                     .to_string())
             }
             Some(false) => {}

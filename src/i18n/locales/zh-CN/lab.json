@@ -71,7 +71,7 @@
     "notYet": "暂未测得",
     "checkupReportLabel": "体检报告",
     "notes": {
-      "optimize": "网上大多数「最佳设置」指南都千篇一律、放之四海而皆准。而这些优化项,都是针对像你这样的主机专门验证过、且可撤销的——每一项在改动前都会先保存原始状态的快照。",
+      "optimize": "网上大多数「最佳设置」指南都千篇一律。Compy 会先检查你的硬件,只提供条件符合这台电脑的优化项。每一项在改动前都会先保存当前设置,方便你撤销。",
       "diagnostics": "大多数人从没见过自己电脑真正的配件清单。这是一份诚实的清单——直接从这台机器读取,不安装任何东西。",
       "benchmark": "跑分本身就带有波动:哪怕两次测试的设置完全一样,分数也不会完全相同。Compy 会以这个噪声下限为标准判定更改效果,所以运气不会被当成一次提升。",
       "latency": "一次点击要经过鼠标、USB、Windows、GPU 和显示器,你才能在画面上看到它——每一步都会增加延迟,而且每一步都可以测量。",
@@ -133,7 +133,7 @@
     "noiseFloorLabel": "噪声基线",
     "noiseFloorNote": "改动必须超过此幅度才算数",
     "noiseFloorNoteGame": "{{game}} · 改动必须超过此幅度才算数",
-    "safeStackLabel": "可撤销优化组合",
+    "safeStackLabel": "基础优化组合",
     "instrumentsReadLabel": "读取进度",
     "instrumentsReadNote": "{{total}} 站中已读 {{read}} 站",
     "unitPct": "±%",
@@ -147,7 +147,7 @@
     "backToRoom": "返回“测试”",
     "closeStationAriaLabel": "关闭站点",
     "close": "关闭",
-    "optimizeReassurance": "这一站可以一键应用你的可撤销优化组合——和这个房间里的每一项更改一样,均可完全撤销。",
+    "optimizeReassurance": "这一站可以一键应用你的基础优化组合,也就是符合你硬件条件、风险较低的那一档。Compy 会先保存每项当前设置,所以这些更改可以在账本里撤销。",
     "tiles": {
       "stage": "工作台上的你的整机",
       "reading": "部件读数",
@@ -187,7 +187,7 @@
       "headline": "一次只测一项改动",
       "sub": "Compy 会在改动前后各测一次；除非结果明显超过噪声基线，否则会把这项改动还原。",
       "action": "从「优化」开始",
-      "actionNote": "想让电脑更快、又稳妥、又不想自己折腾时，选这个。",
+      "actionNote": "想让电脑更快、又不想自己折腾时，选这个。",
       "safety": "一次一项可还原的改动 · 一次实测结果 · 默认还原。"
     },
     "verdictFix": {
@@ -205,10 +205,10 @@
     }
   },
   "optimizeStation": {
-    "gaugeAriaLabel": "{{total}} 项可撤销优化项中已开启 {{applied}} 项",
-    "yourSafeStack": "你的可撤销优化组合",
+    "gaugeAriaLabel": "{{total}} 项基础优化项中已开启 {{applied}} 项",
+    "yourSafeStack": "你的基础优化组合",
     "alreadySetStack": "本机已是这样设置",
-    "safeTweaksForPc": "适合这台电脑的可撤销优化项",
+    "safeTweaksForPc": "适合这台电脑的基础优化项",
     "allApplied": "这台主机的 {{total}} 项已全部开启——无需再应用。",
     "freshLeft": "下方还有 {{count}} 项待开启——每项一键完成,且可撤销。",
     "driftedRestore_one": "有 {{count}} 项在 Compy 之外被关闭——请在下方恢复。",
@@ -223,7 +223,7 @@
   "stations": {
     "optimize": {
       "name": "优化",
-      "forLine": "一键为你的主机开启经过验证的可撤销优化项。",
+      "forLine": "一键开启符合你硬件条件的基础优化项。",
       "whenLine": "你只是想更快,又不想自己动手折腾。",
       "dockLine": "每次只测试一项改动，保留真正有效的。",
       "connectsLine": "验证你刚应用的这组优化——运行「基准测试」,查看前后对比。"
@@ -265,7 +265,7 @@
     },
     "routerLeadOptimize": {
       "symptom": "我只是想让电脑更快——不用自己折腾",
-      "because": "它能一键为你的主机开启经过验证的可撤销优化项——随时可以撤销"
+      "because": "它能一键开启符合你硬件条件的基础优化项——每一项都可以在账本里撤销"
     },
     "router": {
       "latency": {
@@ -302,8 +302,8 @@
       "regressed": "上次判定：已退步——这几项更改放在一起,实测结果变差了,值得撤销。"
     },
     "reading": {
-      "optimizeReady_other": "还有 {{count}} 项可撤销优化待开启——一键完成,均可撤销。",
-      "optimizeAllSet": "每一项可撤销优化都已开启——你的主机已经就绪。可以在下方验证效果,到此为止也可以。",
+      "optimizeReady_other": "还有 {{count}} 项基础优化待开启——一键完成,每项都会先保存当前设置。",
+      "optimizeAllSet": "每一项基础优化都已开启——你的主机已经就绪。可以在下方验证效果,到此为止也可以。",
       "diagnosticsCaptured": "报告已生成——这台主机的原始信息,随时可读。",
       "diagnosticsNotCaptured": "暂无读数——系统报告还没有生成。",
       "benchmarkBaselineSaved": "基准已保存——改一项设置,再测一次,判定结果就会显示在这里。",

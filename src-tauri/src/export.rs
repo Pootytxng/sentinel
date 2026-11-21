@@ -1183,7 +1183,7 @@ fn build_discord_block(
     let _ = writeln!(o, "{rig}");
     let _ = writeln!(o, "ready   · {ready}/{total} checks · {attention} need attention");
     let _ = writeln!(o, "top fix · {top_fix}");
-    let _ = writeln!(o, "changes · {active_changes} active & reversible");
+    let _ = writeln!(o, "changes · {active_changes} active");
     // The newest session that measured play, and only readings it measured (codebase review
     // 2026-11-02): a session behind another window the whole time saves 0s that mean "not measured",
     // and printed "0 avg / 0 1% low".

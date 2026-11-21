@@ -591,7 +591,7 @@
     "aliases": ["set refresh rate", "144hz showing 60fps", "monitor stuck at 60hz", "windows refresh rate", "enable 144hz"],
     "verdict": "real",
     "what": "Making sure Windows is actually driving your monitor at its rated refresh rate (say 144Hz or 165Hz), not silently running it at 60Hz.",
-    "why": "This is the most common 'my expensive monitor feels like 60fps' fix there is, and it is genuinely real. Windows often defaults a high-refresh monitor to 60Hz — especially after a new cable, a driver update, or adding a second display — so the panel can only SHOW 60 frames a second no matter how many your GPU draws. Set it in Settings → System → Display → Advanced display, and choose your monitor's top refresh rate. The change is instant, free, and fully reversible. If your monitor was stuck at 60Hz, this is the single biggest smoothness upgrade you can make without spending a cent — your GPU was already making the frames; the screen just was not showing them.",
+    "why": "This is the most common 'my expensive monitor feels like 60fps' fix there is, and it is genuinely real. Windows often defaults a high-refresh monitor to 60Hz — especially after a new cable, a driver update, or adding a second display — so the panel can only SHOW 60 frames a second no matter how many your GPU draws. Set it in Settings → System → Display → Advanced display, and choose your monitor's top refresh rate. The change is instant and free, and you can set it back. If your monitor was stuck at 60Hz, this is the single biggest smoothness upgrade you can make without spending a cent — your GPU was already making the frames; the screen just was not showing them.",
     "related": ["hz-vs-fps", "vrr", "vsync", "monitor-overclock-fps"]
   },
   {

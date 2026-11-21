@@ -71,7 +71,7 @@
     "notYet": "Not yet",
     "checkupReportLabel": "Checkup report",
     "notes": {
-      "optimize": "Most \"best settings\" guides are generic and one-size-fits-all. These tweaks are the ones vetted for a rig like yours, and reversible — every one snapshots its prior state before it touches anything.",
+      "optimize": "Most \"best settings\" guides are one-size-fits-all. Compy checks your hardware first and offers only the tweaks whose conditions match this PC. Each one saves its current setting before it changes anything, so you can undo it.",
       "diagnostics": "Most people never see their PC's real parts list. This is the honest inventory — read straight from the machine, nothing installed.",
       "benchmark": "Benchmarks are noisy: two identical runs never score identical. Compy grades changes against that noise floor, so luck can't be called a win.",
       "latency": "One click crosses the mouse, USB, Windows, the GPU and your monitor before you see it land — every hop adds delay, and each one is measurable.",
@@ -133,7 +133,7 @@
     "noiseFloorLabel": "Noise floor",
     "noiseFloorNote": "a change must beat this to count",
     "noiseFloorNoteGame": "{{game}} · a change must beat this to count",
-    "safeStackLabel": "Reversible stack",
+    "safeStackLabel": "Starter stack",
     "instrumentsReadLabel": "Instruments read",
     "instrumentsReadNote": "{{read}} of {{total}} stations",
     "unitPct": "±%",
@@ -149,7 +149,7 @@
     "backToRoom": "Back to Test",
     "closeStationAriaLabel": "Close station",
     "close": "Close",
-    "optimizeReassurance": "This station applies your reversible stack in one click — and like every change made in this room, it's fully reversible.",
+    "optimizeReassurance": "This station applies your starter stack in one click: the lower-risk tier of the tweaks that match your hardware. Compy saves each current setting first, so these changes are reversible from the ledger.",
     "tiles": {
       "stage": "Your rig on the bench",
       "reading": "Rig reading",
@@ -209,10 +209,10 @@
     }
   },
   "optimizeStation": {
-    "gaugeAriaLabel": "{{applied}} of {{total}} reversible tweaks on",
-    "yourSafeStack": "Your reversible stack",
+    "gaugeAriaLabel": "{{applied}} of {{total}} starter tweaks on",
+    "yourSafeStack": "Your starter stack",
     "alreadySetStack": "Already set this way",
-    "safeTweaksForPc": "Reversible tweaks for this PC",
+    "safeTweaksForPc": "Starter tweaks for this PC",
     "allApplied": "All {{total}} already on for this rig — nothing to apply.",
     "freshLeft": "{{count}} left to enable below — one tap each, reversible.",
     "driftedRestore_one": "{{count}} was turned off outside Compy — restore it below.",
@@ -227,7 +227,7 @@
   "stations": {
     "optimize": {
       "name": "Optimize",
-      "forLine": "Enable the vetted, reversible tweaks for your rig — in one tap.",
+      "forLine": "Turn on the starter tweaks that match your hardware — in one tap.",
       "whenLine": "You just want it faster, without fiddling.",
       "dockLine": "Test one change at a time and keep what helps.",
       "connectsLine": "Prove the stack you just applied — run Benchmark and watch the before/after."
@@ -269,7 +269,7 @@
     },
     "routerLeadOptimize": {
       "symptom": "I just want my PC faster — no fiddling",
-      "because": "it enables the vetted, reversible tweaks for your rig in one tap — undo any time"
+      "because": "it turns on the starter tweaks that match your hardware in one tap; you can undo each one from the ledger"
     },
     "router": {
       "latency": {
@@ -306,9 +306,9 @@
       "regressed": "Last verdict: Regressed — things measured worse together. Worth undoing."
     },
     "reading": {
-      "optimizeReady_one": "{{count}} reversible tweak ready to enable — one tap, reversible.",
-      "optimizeReady_other": "{{count}} reversible tweaks ready to enable — one tap, all reversible.",
-      "optimizeAllSet": "Every reversible tweak is already on — your rig is set. Prove it below, or you're done.",
+      "optimizeReady_one": "{{count}} starter tweak ready to enable — one tap; Compy saves the setting first.",
+      "optimizeReady_other": "{{count}} starter tweaks ready to enable — one tap; Compy saves each setting first.",
+      "optimizeAllSet": "Every starter tweak is already on — your rig is set. Prove it below, or you're done.",
       "diagnosticsCaptured": "Report captured — the raw facts about this rig, ready to read.",
       "diagnosticsNotCaptured": "No reading yet — the system report hasn't been captured.",
       "benchmarkBaselineSaved": "Baseline saved — change one thing, re-run, and the grade lands here.",

@@ -237,9 +237,9 @@ describe("LAW 3 — evidence is quoted, never synthesised", () => {
       ["readiness", { readiness: null }, "checks pass"],
       ["last session", { lastSession: null }, "Last recorded session"],
       ["session count", { sessionCount: 0 }, "to compare against"],
-      ["applied changes", { activeChanges: 0 }, "still undoable"],
+      ["applied changes", { activeChanges: 0 }, "to this PC and saved"],
       // #452: a count the Machine Model could not give (pending or unreadable) is not a 0 to quote.
-      ["unread applied changes", { activeChanges: null }, "still undoable"],
+      ["unread applied changes", { activeChanges: null }, "to this PC and saved"],
       ["gpu temperature", { gpuTempC: null }, "reading"],
       ["measured Trials", { trials: null }, "before-and-after Trial"],
     ];

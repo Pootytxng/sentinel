@@ -521,7 +521,7 @@
       "step1": "Open History and look at the changes Compy has on. Undo the newest one.",
       "step2": "Play {{game}} once, then press Something's wrong again."
     },
-    "none": "There's nothing safe Compy can change for this. Check it in Windows, then play once more.",
+    "none": "Compy has no change to offer for this. Check it in Windows, then play once more.",
     "frameCapChange": {
       "step1": "Set the frame cap in the game or in your graphics settings back to what it was ({{from}}), or leave it as it is.",
       "step2": "Play {{game}} a few times. Compy only compares like with like, and needs 3 normal sessions with the new setting."

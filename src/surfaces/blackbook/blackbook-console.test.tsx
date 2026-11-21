@@ -483,7 +483,7 @@ describe("BlackbookConsole — Receipts Strip filters the tape honestly", () => 
       autopsy({ scamFlags: 2 }),
     ]);
     const strip = container.querySelector(".bc-strip")!;
-    expect(strip.textContent).toContain("1 still on · every one undoable");
+    expect(strip.textContent).toContain("1 still on");
     expect(strip.textContent).toContain("2 scam patterns flagged");
   });
 
@@ -505,11 +505,11 @@ describe("BlackbookConsole — Receipts Strip filters the tape honestly", () => 
   it("with nothing unconfirmed the tile keeps its old words, from the model's number", () => {
     useReduced();
     expect(changesSub({ kind: "counted", activeNow: 7, unknown: 0, totalRecorded: 9 })).toBe(
-      "7 still on · every one undoable",
+      "7 still on",
     );
     cleanup();
     expect(changesSub({ kind: "counted", activeNow: 0, unknown: 0, totalRecorded: 9 })).toBe(
-      "none active now · every one undoable",
+      "none active now",
     );
   });
 

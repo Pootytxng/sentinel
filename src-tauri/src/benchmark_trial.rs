@@ -507,7 +507,7 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
     if items.is_empty() {
         set(|s| {
             s.running = false;
-            s.error = Some("No appliable reversible tweaks to measure as a stack.".into());
+            s.error = Some("No appliable starter tweaks to measure as a stack.".into());
             s.status = "Nothing to apply.".into();
         });
         return;
@@ -557,7 +557,7 @@ pub(crate) fn start_stack_trial(requested: Vec<(String, String)>) {
             //    The diff's isolation relies on apply_recommendations_batch holding HISTORY_LOCK for
             //    its whole duration (so no unrelated write interleaves the two reads); if a future
             //    refactor shrinks that lock scope, revisit this.
-            set(|s| s.status = "Applying the reversible stack…".into());
+            set(|s| s.status = "Applying the starter stack…".into());
             // The "before" read is fallible on purpose: a corrupt/unreadable ledger must ABORT here,
             // BEFORE any mutation — never swallow to [] and then apply against an orphaned ledger
             // (rust-tauri-reviewer, §2a). No mutation has happened yet, so this is a clean bail.

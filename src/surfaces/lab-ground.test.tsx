@@ -152,7 +152,7 @@ describe("LabGround OPS CONSOLE — LabConsole replaces the Instrument Bench ben
     expect(off.querySelector(".hud-headline")).toBeNull();
     expect(off.querySelector(".v2-verdict h1")!.textContent).toContain("Test one change at a time");
     expect(off.querySelector(".v2-verdict h1")!.textContent, "no count may reach the failsafe's h1").not.toMatch(/\d/);
-    expect(off.querySelector(".v2-verdict-sub")!.textContent).toContain("1 reversible fix is ready to apply.");
+    expect(off.querySelector(".v2-verdict-sub")!.textContent).toContain("1 starter fix is ready to apply.");
     expect(off.querySelector(".v2-verdict-sub .lc-verdict-fix")!.textContent).toBe("Show the fix");
   });
 

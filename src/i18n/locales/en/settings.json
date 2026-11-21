@@ -38,7 +38,7 @@
     },
     "expertView": {
       "title": "Expert view",
-      "sub": "For tinkerers: shows every tweak's technical name and the exact registry key, service, or setting it touches, opens the \"deliberately refused\" list with full reasoning, and swaps rounded stats for raw measured values. Same tweaks, same safety rails — nothing new becomes appliable."
+      "sub": "For tinkerers: shows every tweak's technical name and the exact registry key, service, or setting it touches, opens the \"deliberately refused\" list with full reasoning, and swaps rounded stats for raw measured values. Same tweaks, same limits — nothing new becomes appliable."
     },
     "overlayDensity": {
       "title": "In-game overlay density",

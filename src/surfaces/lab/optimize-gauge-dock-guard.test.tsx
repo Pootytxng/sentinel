@@ -171,7 +171,7 @@ describe("safe-stack gauge readout centering (owner-caught: digits over the ring
         />
       </ConfirmProvider>,
     );
-    expect(some.container.querySelector(".lab-gauge-caption-k")!.textContent).toBe("Your reversible stack");
+    expect(some.container.querySelector(".lab-gauge-caption-k")!.textContent).toBe("Your starter stack");
   });
 
   // Review r1 S1: with NONE on (a fresh PC) "Already set this way" over "0 /N" is untrue too.
@@ -183,8 +183,8 @@ describe("safe-stack gauge readout centering (owner-caught: digits over the ring
       </ConfirmProvider>,
     );
     const head = container.querySelector(".lab-gauge-caption-k")!.textContent;
-    expect(head).toBe("Reversible tweaks for this PC");
-    expect(head).not.toMatch(/Already set|Your reversible stack/);
+    expect(head).toBe("Starter tweaks for this PC");
+    expect(head).not.toMatch(/Already set|Your starter stack/);
   });
 
   it("CSS: the outer box centers, the inner group owns the baseline", () => {

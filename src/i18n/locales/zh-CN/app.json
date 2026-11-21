@@ -23,7 +23,7 @@
   "dialogs": {
     "applyTitle": "应用「{{title}}」？",
     "applyTradeoff": "权衡: {{downside}}",
-    "applyBody": "{{description}}{{tradeoff}} Compy 会先保存当前设置,方便你随时回滚。",
+    "applyBody": "{{description}}{{tradeoff}} Compy 会先保存当前设置,方便你回滚。",
     "apply": "应用",
     "rollbackTitle": "回滚「{{title}}」？",
     "rollbackDest": "将恢复为 {{label}}。",
