@@ -288,6 +288,40 @@
     "withRate": "{{width}}×{{height}} @ {{rate}} Hz",
     "rateUnknown": "{{width}}×{{height}}, refresh rate unknown"
   },
+  "driftNamed": {
+    "joiner": " ",
+    "name": {
+      "powerProfile": "Power plan (Control Panel > Power Options)",
+      "monitorRefresh": "Monitor refresh rate (Windows Settings > System > Display > Advanced display)",
+      "vrr": "Variable refresh rate (FreeSync / G-SYNC; Windows Settings > System > Display > Graphics)",
+      "memorySpeed": "Memory speed (set in your PC's BIOS, where it may be called XMP or EXPO)",
+      "memoryChannels": "Memory channels (how your RAM sticks sit on the motherboard)",
+      "driveHealth": "Drive health (the drive's own SMART report)",
+      "installDrive": "Where your games are installed (the drive your game library is on)",
+      "gpuDriverAge": "Graphics driver age (the driver date in Device Manager > Display adapters)"
+    },
+    "line": "{{name}}: {{clauses}}",
+    "now": "Now {{now}}.",
+    "nowUnreadable": "Compy couldn't read it just now, so it can't say what it is now.",
+    "nowNoReading": "Compy has no short reading of it now.",
+    "before": "Compy last recorded {{before}} on {{when}}.",
+    "beforeUnknownValue": "Compy last saw it as expected on {{when}}, but doesn't know what it was before.",
+    "beforeUnknown": "Compy doesn't know what it was before, or when it last saw it as expected.",
+    "noticed": "Compy noticed this on {{noticed}}.",
+    "noticedUnreadable": "It was last seen changed on {{noticed}}.",
+    "applied": {
+      "name": "A change you turned on with Compy",
+      "off_one": "“{{titles}}” is now off.",
+      "off_other": "These are now off: {{titles}}.",
+      "offUnnamed": "It is now off, but Compy can't name which change here.",
+      "before_one": "You turned it on with Compy, and Compy last saw it on at {{when}}.",
+      "before_other": "You turned them on with Compy, and Compy last saw them on at {{when}}.",
+      "beforeUnknown_one": "You turned it on with Compy; Compy doesn't know when it last saw it on.",
+      "beforeUnknown_other": "You turned them on with Compy; Compy doesn't know when it last saw them on."
+    },
+    "more_one": "and {{count}} more setting",
+    "more_other": "and {{count}} more settings"
+  },
   "timelineEvent": {
     "applied": "{{title}} applied",
     "appliedRolledBack": "{{title}} applied (since rolled back)",

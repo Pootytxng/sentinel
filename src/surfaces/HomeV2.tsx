@@ -8,6 +8,7 @@ import { readHologramV2 } from "../design/theme";
 import { Term } from "../design/Term";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { driftMore, driftSentence, HOME_DRIFT_LINES } from "./drift-named";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
@@ -137,7 +138,7 @@ export function HomeV2({
   fixRoomLabel = "Lab",
   onOpenLabStation,
 }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const reduced = useReducedMotion();
   // Shared Machine Model (#451): the hardware grid's identity rows read its facts, not bare
   // inventory fields. One read-only IPC per hardware refresh — `hw` is App.refresh()'s product, so a
@@ -572,6 +573,15 @@ export function HomeV2({
                   <span className="hv2-led hv2-led-warn" aria-hidden="true" />
                   {t("home.homeV2.stats.driftCount", { count: drifts.length })}
                 </span>
+                {/* n1-drift: each setting named, with what it reads now, what Compy last recorded and when. */}
+                {drifts.slice(0, HOME_DRIFT_LINES).map((d) => (
+                  <span key={d.id} className="hv2-stat-d hv2-drift-line">
+                    {driftSentence(d, t, i18n.language)}
+                  </span>
+                ))}
+                {driftMore(drifts.length, HOME_DRIFT_LINES, t) && (
+                  <span className="hv2-stat-d">{driftMore(drifts.length, HOME_DRIFT_LINES, t)}</span>
+                )}
                 <span className="hv2-stat-d">{seeWhatChanged ?? t("home.homeV2.stats.driftWhere")}</span>
               </>
             )}

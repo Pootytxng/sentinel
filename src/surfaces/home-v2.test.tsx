@@ -289,29 +289,51 @@ describe("HomeV2 — glance cards (fill pass)", () => {
     expect(screen.getByText("no check Compy watches has slipped since last time")).toBeTruthy();
   });
 
-  it("N drifts → honest count, then a pointer to the Care view's list, never the names restated (P6-timeline)", () => {
+  it("N drifts → honest count, each setting named (now / last recorded / when), then a pointer to the Care view's list (P6-timeline, n1-drift)", () => {
     useReduced();
     const open = vi.fn();
+    const at = "2026-07-04T10:00:00Z";
+    const mk = (id: string) => ({ id, label: id, detail: "", noticed_at: at, value_now: "now-" + id, last_ready_value: "was-" + id, last_ready_at: "2026-07-03T10:00:00Z" });
     mount({
       onOpenLabStation: open,
       readiness: {
         ...readiness,
-        drifts: [
-          { id: "d1", label: "Game Mode", detail: "", noticed_at: "2026-07-04T10:00:00Z" },
-          { id: "d2", label: "Power plan", detail: "", noticed_at: "2026-07-04T10:00:00Z" },
-          { id: "d3", label: "SysMain", detail: "", noticed_at: "2026-07-04T10:00:00Z" },
-        ],
+        drifts: [mk("power-profile"), mk("monitor-refresh"), mk("vrr"), mk("memory-speed"), mk("drive-health")],
       },
     });
-    expect(screen.getByText("3 settings changed since they were last good")).toBeTruthy();
-    expect(screen.queryByText(/Game Mode/)).toBeNull();
+    expect(screen.getByText("5 settings changed since they were last good")).toBeTruthy();
+    // The first three are spelled out; the rest are counted, never silently dropped.
+    expect(screen.getByText(/^Power plan \(Control Panel > Power Options\): Now now-power-profile\. Compy last recorded was-power-profile on /)).toBeTruthy();
+    expect(screen.getByText(/^Monitor refresh rate \(.*\): Now now-monitor-refresh\./)).toBeTruthy();
+    expect(screen.getByText(/^Variable refresh rate \(.*\): Now now-vrr\./)).toBeTruthy();
+    expect(screen.queryByText(/now-memory-speed/)).toBeNull();
+    expect(screen.getByText("and 2 more settings")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "see what changed" }));
     expect(open).toHaveBeenCalledWith("blackbox");
     cleanup();
     // Without the deep-link the pointer is text that still names where the list is.
-    mount({ readiness: { ...readiness, drifts: [{ id: "d1", label: "Game Mode", detail: "", noticed_at: "2026-07-04T10:00:00Z" }] } });
+    mount({ readiness: { ...readiness, drifts: [mk("power-profile")] } });
     expect(screen.getByText("listed on Crash & Freeze Rescue")).toBeTruthy();
-    expect(screen.queryByText(/Game Mode/)).toBeNull();
+    expect(screen.queryByText(/and \d+ more/)).toBeNull();
+  });
+
+  it("a drift Compy can't read now says so and claims no current value; one with no earlier record says it doesn't know", () => {
+    useReduced();
+    mount({
+      readiness: {
+        ...readiness,
+        drifts: [
+          { id: "power-profile", label: "x", detail: "", noticed_at: "2026-07-04T10:00:00Z", unreadable_now: true, value_now: null, last_ready_value: "Balanced", last_ready_at: "2026-07-03T10:00:00Z" },
+          { id: "vrr", label: "x", detail: "", noticed_at: "2026-07-04T10:00:00Z", value_now: "FreeSync: off", last_ready_value: null, last_ready_at: null },
+        ],
+      },
+    });
+    const unreadable = screen.getByText(/^Power plan /).textContent ?? "";
+    expect(unreadable).toContain("Compy couldn't read it just now, so it can't say what it is now.");
+    expect(unreadable).not.toMatch(/unchanged|Now /);
+    const unknown = screen.getByText(/^Variable refresh rate /).textContent ?? "";
+    expect(unknown).toContain("Now FreeSync: off.");
+    expect(unknown).toContain("Compy doesn't know what it was before, or when it last saw it as expected.");
   });
 
   it("readiness unresolved → drift card claims nothing", () => {

@@ -20,6 +20,7 @@ import { useHardwareChange, summarizeHardwareChanges } from "../hooks/use-hardwa
 import { useScan, buildSetupSummary, rowVerdict } from "./use-scan";
 import { useExpertView } from "../design/use-expert-view";
 import { ScanStream } from "./ScanStream";
+import { driftSentence } from "./drift-named";
 import { SidePileItem, SIDE_PILE_ORDER } from "./side-pile";
 import { upgradeFitLine } from "./upgrade-fit";
 import { prettyGameName } from "./game-name";
@@ -638,11 +639,7 @@ export default function Check({
               </div>
               {checkDrifts.map((d) => (
                 <p key={d.id} className="check-drift-detail">
-                  {d.unreadable_now
-                    ? t("optimize.check.driftUnreadable", { label: d.label })
-                    : d.detail
-                      ? t("optimize.check.driftItem", { label: d.label, detail: d.detail })
-                      : d.label}
+                  {driftSentence(d, t, i18n.language)}
                 </p>
               ))}
               <p className="check-drift-detail">{t("optimize.check.driftPointer")}</p>

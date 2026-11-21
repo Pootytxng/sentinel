@@ -697,3 +697,9 @@
   text-underline-offset: 2px;
   cursor: pointer;
 }
+
+/* n1-drift: each drift is a short sentence of its own, one per line. */
+:root[data-v2="on"][data-hud="on"] .hud-drift-line {
+  display: block;
+  margin-top: 4px;
+}

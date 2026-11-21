@@ -212,24 +212,38 @@ describe("HomeHud header text never runs together (#513)", () => {
   });
 });
 
-describe("HomeHud drift module points to the Care view (P6-timeline)", () => {
+describe("HomeHud drift module names the setting and points to the Care view (P6-timeline, n1-drift)", () => {
   const drifted = {
     ...readiness,
-    drifts: [{ id: "game-mode", label: "Game Mode", detail: "Off.", noticed_at: "2026-10-20T10:00:00Z" }],
+    drifts: [
+      {
+        id: "power-profile",
+        label: "Power plan is set to save power",
+        detail: 'Active plan "Power saver".',
+        noticed_at: "2026-10-20T10:00:00Z",
+        value_now: "Power saver",
+        last_ready_value: "Balanced",
+        last_ready_at: "2026-10-19T08:00:00Z",
+      },
+    ],
   } as unknown as GameReadiness;
 
-  it("counts the drift and opens Crash & Freeze Rescue instead of restating its name", () => {
+  it("counts the drift, names the setting with now / last recorded / when, and opens Crash & Freeze Rescue", () => {
     const open = vi.fn();
     const c = render(<HomeRoom {...props} readiness={drifted} onOpenLabStation={open} />).container;
     expect(c.querySelector("[data-hud-home]")).not.toBeNull();
     expect(screen.getByText(/1 setting changed since it was last good/)).toBeTruthy();
-    expect(screen.queryByText(/Game Mode/)).toBeNull();
+    const line = c.querySelector(".hud-drift-line")?.textContent ?? "";
+    expect(line).toContain("Power plan (Control Panel > Power Options): Now Power saver.");
+    expect(line).toContain("Compy last recorded Balanced on ");
+    expect(line).toContain("Compy noticed this on ");
     fireEvent.click(screen.getByRole("button", { name: "see what changed" }));
     expect(open).toHaveBeenCalledWith("blackbox");
   });
 
   it("without the deep-link, still names where the list is", () => {
     render(<HomeRoom {...props} readiness={drifted} />);
-    expect(screen.getByText(/1 setting changed since it was last good · listed on Crash & Freeze Rescue/)).toBeTruthy();
+    expect(screen.getByText(/1 setting changed since it was last good/)).toBeTruthy();
+    expect(screen.getByText("listed on Crash & Freeze Rescue")).toBeTruthy();
   });
 });

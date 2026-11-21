@@ -1213,16 +1213,32 @@ pub(crate) fn get_game_readiness() -> GameReadiness {
     // is a regression (outside Compy) worth a quiet heads-up.
     let dismissed: std::collections::HashSet<&str> =
         r.dismissed_ids.iter().map(String::as_str).collect();
-    let observations: Vec<(String, String, String, String)> = r
-        .checks
-        .iter()
-        .filter(|c| !dismissed.contains(c.id))
-        .map(|c| {
-            (c.id.to_string(), c.label.to_string(), status_str(c.status).to_string(), c.detail.clone())
-        })
-        .collect();
-    r.drifts = crate::drift::detect_and_persist(&observations);
+    let (observations, seen) = drift_inputs(&r.checks, &dismissed, hist.as_ref().map_err(String::as_str));
+    r.drifts = crate::drift::detect_and_persist(&observations, &seen);
     r
+}
+
+/// n1-drift: what Drift Watch folds from one scan, as pure data. Besides each non-dismissed check's
+/// status and detail, it carries the check's own short `value` (what it reads now / read when last
+/// ready) and, for the applied-changes row only, the changes now off BY TITLE taken from the ledger
+/// summary itself: `drifted_titles` on the row also holds the changes the user kept as set outside
+/// Compy, which are not drifts, so the row's list is not used here.
+fn drift_inputs(
+    checks: &[ReadinessCheck],
+    dismissed: &std::collections::HashSet<&str>,
+    hist: Result<&AppliedChangesSummary, &str>,
+) -> (Vec<crate::drift::Observation>, crate::drift::SeenMap) {
+    let mut observations = Vec::new();
+    let mut seen = std::collections::HashMap::new();
+    for c in checks.iter().filter(|c| !dismissed.contains(c.id)) {
+        observations.push((c.id.to_string(), c.label.to_string(), status_str(c.status).to_string(), c.detail.clone()));
+        let titles = match (c.id, hist) {
+            ("applied-changes", Ok(h)) => h.drifted_titles.clone(),
+            _ => Vec::new(),
+        };
+        seen.insert(c.id.to_string(), crate::drift::Seen { value: c.value.clone(), titles });
+    }
+    (observations, seen)
 }
 
 /// #281 — the dismissals store's policy and its two user-facing error strings are UNCHANGED by the
@@ -1769,6 +1785,40 @@ mod readiness_tests {
         // Structured drift titles are exposed so the priorities layer can dedup the drifted rec
         // out of "safe tweaks not applied" (owner-caught double-listing, 2026-07-08).
         assert_eq!(c.drifted_titles, vec!["Enable Windows Game Mode".to_string()]);
+    }
+
+    /// n1-drift: the drift side input carries each check's own short value, and for the applied-changes
+    /// row the titles of the changes now off from the ledger summary (never the kept-outside titles
+    /// that share the row's `drifted_titles`); a dismissed check is not observed at all.
+    #[test]
+    fn drift_inputs_carry_values_and_only_the_drifted_titles() {
+        let hw = hw_with(None, vec![], vec![]);
+        let hist = AppliedChangesSummary {
+            total: 3,
+            active: 1,
+            externally_reverted: 1,
+            drifted_titles: vec!["Enable Windows Game Mode".into()],
+            kept_outside: 1,
+            kept_outside_titles: vec!["Switch to the Ultimate Performance power plan".into()],
+            ..AppliedChangesSummary::default()
+        };
+        let r = evaluate_readiness(&hw, None, false, false, Ok(&hist), None);
+        // The row's own list mixes both; the side input must not.
+        assert_eq!(find(&r, "applied-changes").drifted_titles.len(), 2);
+        let none = std::collections::HashSet::new();
+        let (obs, seen) = drift_inputs(&r.checks, &none, Ok(&hist));
+        assert!(obs.iter().any(|o| o.0 == "applied-changes" && o.2 == "attention"));
+        let ac = &seen["applied-changes"];
+        assert_eq!(ac.titles, vec!["Enable Windows Game Mode".to_string()]);
+        assert_eq!(ac.value.as_deref(), Some("1 on / 1 drifted"));
+        assert!(seen.iter().filter(|(k, _)| k.as_str() != "applied-changes").all(|(_, s)| s.titles.is_empty()));
+        // Dismissed: not observed, not carried.
+        let dismissed: std::collections::HashSet<&str> = ["applied-changes"].into_iter().collect();
+        let (obs2, seen2) = drift_inputs(&r.checks, &dismissed, Ok(&hist));
+        assert!(!obs2.iter().any(|o| o.0 == "applied-changes") && !seen2.contains_key("applied-changes"));
+        // An unreadable ledger carries no titles.
+        let (_o3, seen3) = drift_inputs(&r.checks, &none, Err("unreadable"));
+        assert!(seen3["applied-changes"].titles.is_empty());
     }
 
     #[test]

@@ -279,6 +279,36 @@
     "withRate": "{{width}}×{{height}} @ {{rate}} Hz",
     "rateUnknown": "{{width}}×{{height}},刷新率未知"
   },
+  "driftNamed": {
+    "joiner": "",
+    "name": {
+      "powerProfile": "电源计划(控制面板 > 电源选项)",
+      "monitorRefresh": "显示器刷新率(Windows 设置 > 系统 > 屏幕 > 高级显示)",
+      "vrr": "可变刷新率(FreeSync / G-SYNC;Windows 设置 > 系统 > 屏幕 > 图形)",
+      "memorySpeed": "内存速度(在电脑的 BIOS 里设置,可能叫 XMP 或 EXPO)",
+      "memoryChannels": "内存通道(内存条在主板上的插法)",
+      "driveHealth": "硬盘健康(硬盘自己的 SMART 报告)",
+      "installDrive": "游戏的安装位置(你的游戏库所在的硬盘)",
+      "gpuDriverAge": "显卡驱动的新旧(设备管理器 > 显示适配器里的驱动日期)"
+    },
+    "line": "{{name}}:{{clauses}}",
+    "now": "现在是 {{now}}。",
+    "nowUnreadable": "Compy 刚才没能读到它,所以说不出它现在是什么。",
+    "nowNoReading": "Compy 现在没有它的简短读数。",
+    "before": "Compy 上次记录的是 {{before}},时间是 {{when}}。",
+    "beforeUnknownValue": "Compy 在 {{when}} 上次看到它符合预期,但不知道它之前是什么。",
+    "beforeUnknown": "Compy 不知道它之前是什么,也不知道上次什么时候看到它符合预期。",
+    "noticed": "Compy 在 {{noticed}} 注意到这一点。",
+    "noticedUnreadable": "它上次被看到有变化是在 {{noticed}}。",
+    "applied": {
+      "name": "你用 Compy 打开的一项更改",
+      "off_other": "这些现在是关闭的:{{titles}}。",
+      "offUnnamed": "它现在是关闭的,但这里 Compy 说不出是哪一项更改。",
+      "before_other": "这是你用 Compy 打开的,Compy 上次看到它开着是在 {{when}}。",
+      "beforeUnknown_other": "这是你用 Compy 打开的;Compy 不知道上次什么时候看到它开着。"
+    },
+    "more_other": "还有 {{count}} 项设置"
+  },
   "timelineEvent": {
     "applied": "已应用 {{title}}",
     "appliedRolledBack": "已应用 {{title}}(之后已撤销)",

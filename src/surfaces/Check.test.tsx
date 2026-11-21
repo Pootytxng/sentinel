@@ -13,7 +13,7 @@ const leftoversMock = vi.hoisted(() => ({
 
 // Settable Drift Watch payload — a check that was good and has since regressed. Default: none.
 const readinessMock = vi.hoisted(() => ({
-  drifts: [] as { id: string; label: string; detail: string; noticed_at: string; unreadable_now?: boolean }[],
+  drifts: [] as import("../types").Drift[],
   // P6-timeline: the hardware-change advisory's payload (hwchange.rs). Default: no change.
   hw: null as null | { changed: boolean; changes: string[]; baseline_recorded: boolean },
   // Checks Compy could not read (each one an extra "unknown" row). Default: none.
@@ -297,6 +297,10 @@ describe("Check", () => {
         label: "Power profile",
         detail: "Active plan 'Balanced'.",
         noticed_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        // n1-drift: now / last recorded / when it was last seen as expected.
+        value_now: "Power saver",
+        last_ready_value: "Balanced",
+        last_ready_at: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
       },
     ];
     render(
@@ -304,8 +308,12 @@ describe("Check", () => {
         <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
       </ConfirmProvider>,
     );
-    // WHAT drifted: the name and its detail...
-    expect(await screen.findByText("Power profile: Active plan 'Balanced'.")).toBeInTheDocument();
+    // WHAT drifted: the setting's plain name, what it is now, what Compy last recorded and when...
+    expect(
+      await screen.findByText(
+        /^Power plan \(Control Panel > Power Options\): Now Power saver\. Compy last recorded Balanced on .+\. Compy noticed this on .+\.$/,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("1 setting changed since it was last good")).toBeInTheDocument();
     // ...WHEN is no longer restated here: the card points to the Care view's list, which dates it
     // (P6-timeline). The old relative "noticed …" line is gone from Check.
@@ -326,7 +334,11 @@ describe("Check", () => {
         <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
       </ConfirmProvider>,
     );
-    expect(await screen.findByText("Power profile: last seen changed; Compy can't read it now.")).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        /^Power plan \(Control Panel > Power Options\): Compy couldn't read it just now, so it can't say what it is now\. Compy doesn't know what it was before, or when it last saw it as expected\. It was last seen changed on .+\.$/,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("1 setting changed since it was last good")).toBeInTheDocument();
     expect(screen.queryByText(/Couldn't read the active plan/)).not.toBeInTheDocument();
   });

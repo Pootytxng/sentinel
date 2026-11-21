@@ -26,7 +26,25 @@ struct DriftState {
     /// ready scan; state files from before this field simply have no earlier bound.
     #[serde(default)]
     last_ready_seen: HashMap<String, String>,
+    /// n1-drift (additive): the check's own short value (e.g. "144 Hz") at its last ready scan, so
+    /// a drift can say what Compy last recorded. A ready scan that carried no value removes it
+    /// (never stale); a state file from before this field simply has none, and the UI says so.
+    #[serde(default)]
+    last_ready_value: HashMap<String, String>,
 }
+
+/// What one scan read for a check beyond its status (n1-drift): its short current value, and, for
+/// the applied-changes row only, the titles of the changes now off. Side input to `detect_seen`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct Seen {
+    pub value: Option<String>,
+    pub titles: Vec<String>,
+}
+
+/// One scan's observation of a check: `(id, label, status, detail)`.
+pub(crate) type Observation = (String, String, String, String);
+/// What each scan read beyond status, keyed by check id (see [`Seen`]).
+pub(crate) type SeenMap = HashMap<String, Seen>;
 
 /// A surfaced regression: a check that was good and now needs attention.
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -39,6 +57,15 @@ pub(crate) struct Drift {
     /// notice stays (it was last seen changed) and says Compy can't read the check now; `detail` is
     /// then the unknown check's own detail, never the old regression's.
     pub unreadable_now: bool,
+    /// n1-drift: what the check reads now as a short value; None when it can't be read now or the
+    /// check has no short value. Never inferred from `detail`.
+    pub value_now: Option<String>,
+    /// n1-drift: when the check was last seen ready (None for a state file from before that stamp).
+    pub last_ready_at: Option<String>,
+    /// n1-drift: the short value it had at that last ready scan (None when not recorded).
+    pub last_ready_value: Option<String>,
+    /// n1-drift: the applied changes now off, by title (the applied-changes row only; empty else).
+    pub titles: Vec<String>,
 }
 
 // #283 — serialized so two concurrent readiness scans can't interleave load → detect → save.
@@ -101,20 +128,40 @@ fn save_state_to(path: &std::path::Path, s: &DriftState) {
 /// Pure core: fold current check observations `(id, label, status, detail)` into the prior state,
 /// returning the active drifts + updated state. Ready → records/keeps `last_good` and clears any
 /// drift; Attention while previously good → a regression, stamping `noticed_at` once (stable).
+#[cfg(test)]
 fn detect(
     checks: &[(String, String, String, String)],
+    prior: &DriftState,
+    now: &str,
+) -> (Vec<Drift>, DriftState) {
+    detect_seen(checks, &HashMap::new(), prior, now)
+}
+
+/// `detect` plus what each scan read beyond status (`seen`, keyed by check id; absent = nothing read).
+fn detect_seen(
+    checks: &[(String, String, String, String)],
+    seen: &HashMap<String, Seen>,
     prior: &DriftState,
     now: &str,
 ) -> (Vec<Drift>, DriftState) {
     let mut state = prior.clone();
     let mut drifts = Vec::new();
     for (id, label, status, detail) in checks {
+        let read = seen.get(id).cloned().unwrap_or_default();
         match status.as_str() {
             "ready" => {
                 state.last_good.insert(id.clone(), true);
                 state.noticed_at.remove(id);
                 state.labels.remove(id);
                 state.last_ready_seen.insert(id.clone(), now.to_string());
+                match read.value {
+                    Some(v) => {
+                        state.last_ready_value.insert(id.clone(), v);
+                    }
+                    None => {
+                        state.last_ready_value.remove(id);
+                    }
+                }
             }
             // Attention while the check was previously good = a regression (a drift).
             "attention" if state.last_good.get(id).copied().unwrap_or(false) => {
@@ -130,6 +177,10 @@ fn detect(
                     detail: detail.clone(),
                     noticed_at: noticed,
                     unreadable_now: false,
+                    value_now: read.value.clone(),
+                    last_ready_at: state.last_ready_seen.get(id).cloned(),
+                    last_ready_value: state.last_ready_value.get(id).cloned(),
+                    titles: read.titles.clone(),
                 });
             }
             // An active drift whose check now reads unknown: still a notice (last seen changed), with
@@ -142,6 +193,11 @@ fn detect(
                     detail: detail.clone(),
                     noticed_at: state.noticed_at[id].clone(),
                     unreadable_now: true,
+                    // Couldn't read it now: no current value is claimed, and no titles.
+                    value_now: None,
+                    last_ready_at: state.last_ready_seen.get(id).cloned(),
+                    last_ready_value: state.last_ready_value.get(id).cloned(),
+                    titles: Vec::new(),
                 });
             }
             // advisory / unknown with no active drift / attention-that-was-never-good → not a regression.
@@ -152,12 +208,15 @@ fn detect(
 }
 
 /// Load → detect → persist. Returns the active drifts for the UI.
-pub(crate) fn detect_and_persist(checks: &[(String, String, String, String)]) -> Vec<Drift> {
+pub(crate) fn detect_and_persist(
+    checks: &[(String, String, String, String)],
+    seen: &HashMap<String, Seen>,
+) -> Vec<Drift> {
     // Best-effort like everything else in this module: a poisoned lock means some other thread
     // panicked mid-update, and drift is a convenience that must never become an error the user has
     // to answer. Recovering the guard keeps the sequence serialized rather than silently
     // un-serializing it, which is the failure this lock exists to prevent.
-    detect_and_persist_at(&state_path(), checks, &chrono::Utc::now().to_rfc3339())
+    detect_and_persist_at(&state_path(), checks, seen, &chrono::Utc::now().to_rfc3339())
 }
 
 /// The whole read-modify-write, lifted to a path so the #283 lock can be PROVEN against a scratch
@@ -166,12 +225,13 @@ pub(crate) fn detect_and_persist(checks: &[(String, String, String, String)]) ->
 fn detect_and_persist_at(
     path: &std::path::Path,
     checks: &[(String, String, String, String)],
+    seen: &HashMap<String, Seen>,
     now: &str,
 ) -> Vec<Drift> {
     let _lock = lock_drift();
     let prior = load_state_from(path);
     crate::race_seam::hold(); // no-op in a release build; see race_seam
-    let (drifts, new_state) = detect(checks, &prior, now);
+    let (drifts, new_state) = detect_seen(checks, seen, &prior, now);
     save_state_to(path, &new_state);
     drifts
 }
@@ -564,6 +624,99 @@ mod drift_tests {
         assert_eq!(d1[0].detail, "FreeSync turned off");
         assert_eq!(d1[0].noticed_at, "T1");
     }
+
+    fn obs_val(id: &str, status: &str, value: Option<&str>) -> (
+        (String, String, String, String),
+        HashMap<String, Seen>,
+    ) {
+        let mut seen = HashMap::new();
+        seen.insert(id.to_string(), Seen { value: value.map(String::from), titles: Vec::new() });
+        (obs(id, status), seen)
+    }
+
+    /// n1-drift: every check id that has an Attention state carries what it reads now, what it
+    /// last recorded and when, in the payload. One row per drift-capable kind.
+    #[test]
+    fn every_drift_capable_kind_carries_now_before_and_when() {
+        let kinds = [
+            ("monitor-refresh", "144 Hz", "60 / 144 Hz"),
+            ("memory-speed", "3200 of 3200 MT/s", "2133 of 3200 MT/s"),
+            ("memory-channels", "2 modules on 2 channels", "2 modules on 1 channel"),
+            ("drive-health", "Samsung SSD: Healthy", "Samsung SSD: Warning"),
+            ("install-drive", "Fast on C:", "HDD: D:"),
+            ("gpu-driver-age", "100 days", "400 days"),
+            ("vrr", "FreeSync: on", "FreeSync: off"),
+            ("power-profile", "Balanced", "Power saver"),
+        ];
+        for (id, before, now) in kinds {
+            let (good, seen_good) = obs_val(id, "ready", Some(before));
+            let (_d0, s0) = detect_seen(&[good], &seen_good, &DriftState::default(), "T0");
+            let (bad, seen_bad) = obs_val(id, "attention", Some(now));
+            let (d1, _s1) = detect_seen(&[bad], &seen_bad, &s0, "T1");
+            assert_eq!(d1.len(), 1, "{id}");
+            assert_eq!(d1[0].value_now.as_deref(), Some(now), "{id}: now");
+            assert_eq!(d1[0].last_ready_value.as_deref(), Some(before), "{id}: before");
+            assert_eq!(d1[0].last_ready_at.as_deref(), Some("T0"), "{id}: when");
+            assert_eq!(d1[0].noticed_at, "T1", "{id}: noticed");
+            assert!(!d1[0].unreadable_now && d1[0].titles.is_empty(), "{id}");
+        }
+    }
+
+    /// The applied-changes drift names the changes now off, from the side input only.
+    #[test]
+    fn applied_changes_drift_carries_the_titles_now_off() {
+        let (good, _) = obs_val("applied-changes", "ready", Some("2 active"));
+        let (_d0, s0) = detect(&[good], &DriftState::default(), "T0");
+        let mut seen = HashMap::new();
+        seen.insert(
+            "applied-changes".to_string(),
+            Seen { value: Some("1 on / 1 drifted".into()), titles: vec!["Enable Windows Game Mode".into()] },
+        );
+        let (d1, _s1) = detect_seen(&[obs("applied-changes", "attention")], &seen, &s0, "T1");
+        assert_eq!(d1[0].titles, vec!["Enable Windows Game Mode".to_string()]);
+        assert_eq!(d1[0].last_ready_at.as_deref(), Some("T0"));
+    }
+
+    /// Unknown before: a state file from before `last_ready_value` (and before the ready stamp)
+    /// has neither, and the payload says None for each, never a guess; the file still loads.
+    #[test]
+    fn a_state_from_before_the_new_field_loads_and_reports_unknown_before() {
+        let old = r#"{"last_good":{"power-profile":true},"noticed_at":{},"labels":{}}"#;
+        let s: DriftState = serde_json::from_str(old).expect("older drift.json must still load");
+        assert!(s.last_ready_value.is_empty() && s.last_ready_seen.is_empty());
+        let (bad, seen) = obs_val("power-profile", "attention", Some("Power saver"));
+        let (d, _) = detect_seen(&[bad], &seen, &s, "T1");
+        assert_eq!(d[0].value_now.as_deref(), Some("Power saver"));
+        assert_eq!(d[0].last_ready_value, None);
+        assert_eq!(d[0].last_ready_at, None);
+    }
+
+    /// A later ready scan with no value removes the old one: "last recorded" is never stale.
+    #[test]
+    fn a_ready_scan_without_a_value_clears_the_recorded_value() {
+        let (good, seen) = obs_val("vrr", "ready", Some("FreeSync: on"));
+        let (_d0, s0) = detect_seen(&[good], &seen, &DriftState::default(), "T0");
+        assert_eq!(s0.last_ready_value.get("vrr").map(String::as_str), Some("FreeSync: on"));
+        let (_d1, s1) = detect(&[obs("vrr", "ready")], &s0, "T1");
+        assert!(!s1.last_ready_value.contains_key("vrr"));
+        let (d2, _) = detect(&[obs("vrr", "attention")], &s1, "T2");
+        assert_eq!((d2[0].last_ready_value.clone(), d2[0].last_ready_at.clone()), (None, Some("T1".into())));
+    }
+
+    /// Couldn't read it now: the notice keeps its before and when, claims no current value.
+    #[test]
+    fn an_unreadable_drift_claims_no_current_value_but_keeps_before_and_when() {
+        let (good, seen) = obs_val("power-profile", "ready", Some("Balanced"));
+        let (_d0, s0) = detect_seen(&[good], &seen, &DriftState::default(), "T0");
+        let (bad, seen_bad) = obs_val("power-profile", "attention", Some("Power saver"));
+        let (_d1, s1) = detect_seen(&[bad], &seen_bad, &s0, "T1");
+        let (d2, _) = detect_seen(&[obs("power-profile", "unknown")], &HashMap::new(), &s1, "T2");
+        assert!(d2[0].unreadable_now);
+        assert_eq!(d2[0].value_now, None);
+        assert_eq!(d2[0].last_ready_value.as_deref(), Some("Balanced"));
+        assert_eq!(d2[0].last_ready_at.as_deref(), Some("T0"));
+        assert_eq!(d2[0].noticed_at, "T1");
+    }
 }
 
 /// #283 — LOST UPDATE. `detect_and_persist` folds observations into the PRIOR state, so two
@@ -608,7 +761,7 @@ mod drift_race_tests {
                         "ready".to_string(),
                         String::new(),
                     )];
-                    detect_and_persist_at(&path, &checks, "T0");
+                    detect_and_persist_at(&path, &checks, &HashMap::new(), "T0");
                 });
             }
         });
@@ -640,7 +793,7 @@ mod drift_race_tests {
         // "was good" only — the regression that stamps `noticed_at` happens INSIDE the race.
         let good =
             vec![("vrr".to_string(), "VRR".to_string(), "ready".to_string(), String::new())];
-        detect_and_persist_at(&path, &good, "T0");
+        detect_and_persist_at(&path, &good, &HashMap::new(), "T0");
         assert!(load_state_from(&path).noticed_at.is_empty(), "nothing is noticed yet");
 
         let _seam = crate::race_seam::Widened::arm();
@@ -653,7 +806,7 @@ mod drift_race_tests {
                     "attention".to_string(),
                     "off".to_string(),
                 )];
-                detect_and_persist_at(&p, &bad, "T1");
+                detect_and_persist_at(&p, &bad, &HashMap::new(), "T1");
             });
             // Comfortably inside the seam the first scan is sitting in, and comfortably after it
             // entered: the second scan's READ is guaranteed to predate the first scan's WRITE.
@@ -666,7 +819,7 @@ mod drift_race_tests {
                     "ready".to_string(),
                     String::new(),
                 )];
-                detect_and_persist_at(&p, &other, "T9");
+                detect_and_persist_at(&p, &other, &HashMap::new(), "T9");
             });
         });
 

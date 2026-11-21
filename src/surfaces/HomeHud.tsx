@@ -7,6 +7,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Term } from "../design/Term";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { driftMore, driftSentence, HOME_DRIFT_LINES } from "./drift-named";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
@@ -681,12 +682,22 @@ export function HomeHud({
                 {t("home.homeHud.ledger.driftNone")}
               </span>
             ) : (
-              <span className="hud-note hud-note-warn">
-                <span className="hud-led hud-led-warn" aria-hidden="true" />{" "}
-                {t("home.homeHud.ledger.driftCount", { count: drifts.length })}
-                {" · "}
-                {seeWhatChanged ?? t("home.homeHud.ledger.driftWhere")}
-              </span>
+              <>
+                <span className="hud-note hud-note-warn">
+                  <span className="hud-led hud-led-warn" aria-hidden="true" />{" "}
+                  {t("home.homeHud.ledger.driftCount", { count: drifts.length })}
+                </span>
+                {/* n1-drift: each setting named, with what it reads now, what Compy last recorded and when. */}
+                {drifts.slice(0, HOME_DRIFT_LINES).map((d) => (
+                  <span key={d.id} className="hud-note hud-drift-line">
+                    {driftSentence(d, t, i18n.language)}
+                  </span>
+                ))}
+                {driftMore(drifts.length, HOME_DRIFT_LINES, t) && (
+                  <span className="hud-note">{driftMore(drifts.length, HOME_DRIFT_LINES, t)}</span>
+                )}
+                <span className="hud-note">{seeWhatChanged ?? t("home.homeHud.ledger.driftWhere")}</span>
+              </>
             )}
           </Module>
 

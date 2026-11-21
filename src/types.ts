@@ -206,7 +206,21 @@ export type LedgerHealth = {
 export type ReadinessCheck = { id: string; label: string; status: ReadinessStatus; detail: string; value: string | null; action_uri?: string | null; action_label?: string | null };
 // unreadable_now: the drifted check now reads unknown; the notice stays, said as last seen changed
 // (drift.rs `Drift`, always sent).
-export type Drift = { id: string; label: string; detail: string; noticed_at: string; unreadable_now?: boolean };
+// n1-drift (drift.rs `Drift`, always sent; optional here so older fixtures still type): value_now =
+// what the check reads now (null when it can't be read now), last_ready_at / last_ready_value = when
+// Compy last saw it as expected and the short value it had then (null = not recorded), titles = the
+// applied changes now off, by name (applied-changes only).
+export type Drift = {
+  id: string;
+  label: string;
+  detail: string;
+  noticed_at: string;
+  unreadable_now?: boolean;
+  value_now?: string | null;
+  last_ready_at?: string | null;
+  last_ready_value?: string | null;
+  titles?: string[];
+};
 export type GameReadiness = { checks: ReadinessCheck[]; ready_count: number; attention_count: number; unknown_count: number; advisory_count: number; advisory: string; dismissed_ids: string[]; drifts: Drift[] };
 
 /** What a priority row rests on: "fact" = a setting/plan/age Compy read (effect on FPS not measured);
