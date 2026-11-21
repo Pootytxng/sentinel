@@ -330,8 +330,11 @@ pub(crate) fn redact_session_rows(mut sessions: Value, r: &mut ExportRedaction) 
 
 /// PURE: `C:\Users\<name>\...` (either slash, doubled or not, any prefix such as a UNC share) with the
 /// name replaced by `<user>`. The rest of the path stays readable. The public profile folders carry no
-/// one's name and are left alone. A name with spaces is taken whole when a separator or a closing quote
-/// follows it; at the end of a string or before other punctuation it ends at the first space.
+/// one's name and are left alone (decided: `C:\Users\Public` and `C:\Users\Default` are shared profiles,
+/// not people, so they stay as they are). A name with spaces is taken whole when a separator or a closing
+/// quote follows it, or a closing bracket, comma or semicolon follows a name of up to three words; at the
+/// end of a string, or after a longer run, it ends at the first space. An apostrophe inside a name
+/// ("O'Brien") belongs to it.
 fn scrub_user_paths(s: &str, count: &mut u32) -> String {
     const KEEP: [&str; 4] = ["public", "default", "default user", "all users"];
     let b = s.as_bytes();
@@ -345,8 +348,16 @@ fn scrub_user_paths(s: &str, count: &mut u32) -> String {
             }
             let rest = &s[start..];
             let stop = |c: char| matches!(c, '\\' | '/' | '"' | '\'' | '<' | '>' | '|' | '*' | '?' | '\n' | '\r' | ')' | ',' | ';' | ']' | '}');
-            let name_len = match rest.find(stop) {
+            // An apostrophe inside a name ("O'Brien", "D'Angelo") does not end it: it ends the name only
+            // when no letter or digit follows (a closing single quote).
+            let end = rest.char_indices().find(|&(at, c)| {
+                stop(c) && !(c == '\'' && rest[at + 1..].chars().next().is_some_and(char::is_alphanumeric))
+            });
+            let name_len = match end.map(|(at, _)| at) {
                 Some(e) if matches!(rest.as_bytes()[e], b'\\' | b'/' | b'"' | b'\'') => e,
+                // A closing bracket, comma or semicolon: a spaced name of up to three words is taken whole
+                // ("C:\Users\John Smith, then"); a longer run is cut at the first space (prose, not a name).
+                Some(e) if matches!(rest.as_bytes()[e], b')' | b',' | b';' | b']' | b'}') && rest[..e].split_whitespace().count() <= 3 => e,
                 Some(e) => rest[..e].find(char::is_whitespace).unwrap_or(e),
                 None => rest.find(char::is_whitespace).unwrap_or(rest.len()),
             };
@@ -2344,6 +2355,46 @@ mod export_tests {
         let once = scrub_user_paths(&format!(r"C:\Users\{C_USER}\a"), &mut m);
         assert_eq!(scrub_user_paths(&once, &mut m), once, "idempotent");
         assert_eq!(scrub_user_paths(&format!("é C:\\Users\\{C_USER}\\é"), &mut 0), "é C:\\Users\\<user>\\é");
+    }
+
+    #[test]
+    fn path_scrub_edge_cases_apostrophe_spaces_short_8_3_unc_slashes_escapes_drives_and_shared_profiles() {
+        let cases: [(&str, &str); 19] = [
+            // An apostrophe inside the name.
+            (r"C:\Users\O'Brien\x", r"C:\Users\<user>\x"),
+            (r"C:\Users\D'Angelo Smith\Docs", r"C:\Users\<user>\Docs"),
+            (r"open 'C:\Users\O'Brien\x.txt' now", r"open 'C:\Users\<user>\x.txt' now"),
+            (r"'C:\Users\john' failed", r"'C:\Users\<user>' failed"),
+            (r"C:\Users\O'Brien", r"C:\Users\<user>"),
+            // A name with spaces, then a comma, a closing quote or a closing bracket.
+            (r"saw C:\Users\John Smith, then left", r"saw C:\Users\<user>, then left"),
+            (r"(C:\Users\Mary Ann Smith) failed", r"(C:\Users\<user>) failed"),
+            (r"[C:\Users\John Smith];", r"[C:\Users\<user>];"),
+            (r#"{"p": "C:\Users\John Smith"}"#, r#"{"p": "C:\Users\<user>"}"#),
+            (r"path 'C:\Users\John Smith' x", r"path 'C:\Users\<user>' x"),
+            // 8.3 short name, UNC (with an admin share), forward slashes, another drive.
+            (r"C:\Users\JOHNDO~1\AppData\Local", r"C:\Users\<user>\AppData\Local"),
+            (r"\\server\share\Users\john\x", r"\\server\share\Users\<user>\x"),
+            (r"\\server\c$\Users\John Smith\x", r"\\server\c$\Users\<user>\x"),
+            ("C:/Users/john/Desktop", "C:/Users/<user>/Desktop"),
+            (r"E:\Users\john\Games", r"E:\Users\<user>\Games"),
+            ("D:/Users/John Smith/Games", "D:/Users/<user>/Games"),
+            // Inside a JSON-escaped string (doubled, then quadrupled backslashes, escaped quotes).
+            (r"C:\\Users\\john\\x", r"C:\\Users\\<user>\\x"),
+            (r#"{\"p\":\"C:\\\\Users\\\\john\\\\x\"}"#, r#"{\"p\":\"C:\\\\Users\\\\<user>\\\\x\"}"#),
+            (r#"\"C:\\Users\\John Smith\""#, r#"\"C:\\Users\\<user>\""#),
+        ];
+        for (input, want) in cases {
+            let mut n = 0;
+            assert_eq!(scrub_user_paths(input, &mut n), want, "{input}");
+            assert_eq!(n, 1, "{input}");
+        }
+        // Shared profiles are not people: left as they are, in every spelling, and not counted.
+        let mut n = 0;
+        for shared in [r"C:\Users\Public\Documents", r"D:\Users\Public", r"c:\users\public\x", r"C:\Users\Default\NTUSER.DAT", r"C:\Users\Default User\x", r"C:\Users\All Users\Microsoft", "C:/Users/Public/x", r"\\srv\share\Users\Public\x"] {
+            assert_eq!(scrub_user_paths(shared, &mut n), shared);
+        }
+        assert_eq!(n, 0);
     }
 
     #[test]
