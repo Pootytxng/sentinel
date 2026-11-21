@@ -192,33 +192,61 @@ hardware and driver names, your network adapters (an adapter's name can name a V
 changes Compy made, and, for each recorded session, the game's program name, when you played and how it
 ran. Before the report is written, Compy changes these things in the copy it exports:
 
-- Programs that started during a game session, and startup entries you changed through Compy, are named
-  only when they are on Compy's reviewed list of known programs (recorders, overlays, launchers, browsers,
-  chat and meeting apps, a torrent client, developer tools, Windows Update). Any other program is shown as "other
-  program 1", "other program 2" and so on, the same program keeping its number within one report, with
-  counts and timing kept.
-- Your Windows user name and your computer name are replaced with `<user>` and `<host>` (as whole
-  words; a name shorter than three letters, or one of 28 common words Compy will not replace in text (for example
-  Admin, User, Owner, Max, Gamer), is left alone except in file paths, so such a name can still appear in text that is not a path; a name that is
-  a single ordinary word Compy's own report text uses, such as a computer named Hardware, is replaced only in file
-  paths and in the computer-name fields, never in running text, and the last lines of the report say how many places
-  it was left in). In any path under `C:\Users\<name>` (on any drive or network share, with either slash, with an
-  apostrophe or spaces in the name) the name is always replaced, except the shared Public and Default profiles, which
-  are not a person's. The id of each change in the Trust Ledger is replaced by "change 1", "change 2" and so on,
-  because an id carries the name of a startup entry you changed. QoS policy
-  names are replaced by a numbered label. A power plan with a name you or your PC maker chose is shown
-  as "a custom power plan" (Windows' own plans, and copies of them such as the Ultimate Performance
-  plan Compy creates, keep their names), and the ids of custom power plans and network interfaces are
-  replaced by numbered labels.
+- Programs that started during a game session (the event labels and the stutter sentence), and startup
+  entries you changed through Compy, are named only when they are on Compy's reviewed list of known
+  programs (recorders, overlays, launchers, browsers, chat and meeting apps, a torrent client, developer
+  tools, Windows Update). Any other program there is shown as "other program 1", "other program 2" and so
+  on, the same program keeping its number within one report, with counts and timing kept.
+- Your Windows user name, your profile folder's name, your user domain and your computer name are replaced
+  with `<user>` or `<host>`, in any letter case, as a whole word (a letter or digit beside it makes it part
+  of a longer word). A name with a digit, hyphen, dot or space in it, or whose letters are not a word that
+  Compy's own report text uses (for example DESKTOP-4F2K9Q), is replaced everywhere it appears. A name that
+  is shorter than three letters, is one of 28 common words (for example Admin, User, Owner, Max, Gamer), or
+  is a single ordinary word that Compy's own report text uses (a computer named Ethernet or Hardware, say)
+  is replaced only in Windows file and network paths (next to a backslash, or next to a forward slash in a
+  string that is a path, including `\\NAME\share`) and in the name fields (hostname, computer name,
+  machine name, domain, user name), and is
+  left as it is in running text; the last lines of the report say how many other places it was left in.
+  "Compy's own report text" means the fixed words of Compy's report, readiness, hardware, diagnostics,
+  recommendation, ledger, drift and session text; a name that only Windows supplies is not in it.
+- In a path under `\Users\<name>` (any drive or network share, either slash, doubled or JSON-escaped
+  slashes, and the `\\?\` and `file:///` forms) another account's name is replaced with `<user>`, except
+  the shared Public, Default, Default User and All Users profiles, which are not a person's. The name ends
+  at a slash, a straight or curly quote, or one of `< > | * ?`. A spaced name that ends at a closing
+  bracket, comma, semicolon, or a period or colon followed by a space or the end, is taken whole if it is
+  at most 32 characters and cut at its first space if it is longer, so a later word of a long spaced name
+  stays. When the path begins the value and nothing marks the end of the name, the rest of the value is
+  taken, up to 48 characters, and cut at its first space if longer; inside a sentence with no end mark only
+  the first word is taken, so a spaced name followed by plain words there keeps the words after its first.
+  The period or colon that ended the name stays, and an apostrophe inside a name belongs to it. A OneDrive
+  folder named `OneDrive - <company>` is shown as `OneDrive - <organization>` (`OneDrive - Personal` stays),
+  with the company ending by the same rules.
+- The id of each change in the Trust Ledger is replaced by "change 1", "change 2" and so on, because an id
+  carries the name of a startup entry you changed. QoS policy names are replaced by "QoS policy 1", "QoS
+  policy 2" and so on, the same number wherever the name appears (the hardware list and the Network QoS
+  row of Game Readiness); a policy name of one or two letters is replaced in the list and inside that row's
+  list of names, not in other text.
+- A power plan name stays only when its id is one of the four plans Windows ships, or is a copy of the
+  Ultimate Performance plan that Compy recorded creating, or when the name is exactly Balanced, High
+  performance, Power saver or Ultimate performance (a row that carries no id is judged by the plan Windows
+  reports as active). Any other name, including a custom one that contains "Ultimate" or "High
+  performance", is shown as "a custom power plan" in the places a plan name sits: the power rows of Game
+  Readiness and Diagnostics, the Drift Watch values, a name beside a plan id, and a Trust Ledger row that
+  carries a custom plan id. The ids of custom power plans and network interfaces are replaced by numbered
+  labels.
 - The list of known programs that were already running when a game started, the computer-name field and
   any game-state field a newer Compy adds without being reviewed are left out.
 
 What stays: the game's program name, hardware and network adapter names, the stock Windows power plan
 names, the hardware fingerprint (a short code made from the hardware names that are already in the
-report), and anything you type into the note box, exactly as you wrote it. The last lines of the Markdown,
-and a `redaction` section in the JSON, say how many names, ids and paths were changed. Nothing changes in
-what Compy records on your PC or shows you in the app; only the exported copy is altered. Read a report
-before you post it in public: it is made to help someone diagnose your PC, not to be anonymous.
+report), and anything you type into the note box, exactly as you wrote it. What the changes above do not
+reach: free text is searched only for your own Windows user, profile, domain and computer names and for the
+names and ids named above, so a name of yours typed elsewhere is not found; a name of yours that is an
+ordinary word stays in running text; a text value is rewritten but an object key in the JSON is not; and
+another account's name is found only in a `\Users\` path. The last lines of the Markdown, and a
+`redaction` section in the JSON, say how many names, ids and paths were changed. Nothing changes in what
+Compy records on your PC or shows you in the app; only the exported copy is altered. Read a report before
+you post it in public: it is made to help someone diagnose your PC, not to be anonymous.
 
 The **Email it to me** button in the same place opens a draft in your own mail program, addressed to
 compysupport@gmail.com, holding your note and a short snapshot summary. Compy does not send it: nothing

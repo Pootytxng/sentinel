@@ -49,11 +49,13 @@ pub(crate) struct ExportRedaction {
     change_ids: u32,
     /// Occurrences of this PC's user, profile-folder, computer or domain name replaced anywhere.
     identity_names: u32,
-    /// Places where this PC's computer or user name, being also an ordinary word of Compy's own export text,
-    /// was left in free text (it is replaced only in file paths and name fields).
+    /// Places where this PC's computer or user name, being scoped ([`is_scoped_name`]: short, a common word or an
+    /// ordinary word of Compy's own text), was left in free text (it is replaced only in paths and name fields).
     ordinary_word_names_left: u32,
     /// `C:\Users\<name>\` segments rewritten to `C:\Users\<user>\`.
     user_name_segments: u32,
+    /// `OneDrive - <company>` folder names rewritten to `OneDrive - <organization>`.
+    onedrive_organizations: u32,
 }
 
 /// The only fixed (non-program) signal labels the monitoring loop writes (`monitoring.rs`).
@@ -99,42 +101,77 @@ pub(crate) struct ExportEnv {
     /// (value, mask) pairs: this PC's user/profile name (`<user>`) and computer/domain name (`<host>`).
     pub(crate) literals: Vec<(String, &'static str)>,
     pub(crate) active_plan: Option<ActivePlan>,
+    /// GUIDs of the Ultimate copies Compy recorded activating (ledger `applied_plan`): such a plan keeps its name.
+    pub(crate) compy_plan_guids: Vec<String>,
 }
 
 impl ExportEnv {
-    /// This machine: the support-evidence literals (USERNAME, USERDOMAIN, COMPUTERNAME, 3+ characters),
-    /// the profile folder's own name, minus ordinary words; and the active power plan.
+    /// This machine: the support-evidence literals (USERNAME, USERDOMAIN, COMPUTERNAME), the profile folder's
+    /// own name; the active power plan; and the plan copies Compy recorded.
     pub(crate) fn this_machine() -> Self {
         // data-root-allow: reads only the profile folder's NAME, to scrub it from the exported text;
         // no path is composed from it and nothing is read, written or opened.
         let leaf = std::env::var("USERPROFILE").ok().and_then(|p| std::path::Path::new(&p).file_name()?.to_str().map(str::to_owned));
-        let literals = usable_literals(crate::support_evidence::sensitive_literals(), leaf);
+        // Read here, not through `support_evidence::sensitive_literals`, which drops names under three
+        // characters: a short name is applied by the paths-only rule ([`is_scoped_name`]), never dropped.
+        let raw = [("USERNAME", "<user>"), ("USERDOMAIN", "<host>"), ("COMPUTERNAME", "<host>")]
+            .into_iter()
+            .filter_map(|(var, mask)| std::env::var(var).ok().map(|v| (v, mask)))
+            .collect();
+        let literals = usable_literals(raw, leaf);
         let active_plan = crate::current_power_scheme().map(|p| ActivePlan { name: p.name, guid: p.guid });
-        Self { literals, active_plan }
+        Self { literals, active_plan, compy_plan_guids: crate::history::recorded_plan_guids() }
     }
 }
 
-/// PURE: the identity literals the export may apply: 3+ characters (the support-evidence rule) and not an
-/// ordinary word, plus the profile folder's own name when it is a different name.
+/// PURE: the identity literals the export applies: every non-empty name, plus the profile folder's own name
+/// when it is a different name. None is dropped (a short or common name is no less personal); how each is
+/// applied is [`is_scoped_name`]'s decision.
 fn usable_literals(mut raw: Vec<(String, &'static str)>, profile_leaf: Option<String>) -> Vec<(String, &'static str)> {
     if let Some(leaf) = profile_leaf {
         if !raw.iter().any(|(v, _)| v.eq_ignore_ascii_case(&leaf)) {
             raw.push((leaf, "<user>"));
         }
     }
-    raw.retain(|(v, _)| long_enough(v) && !COMMON_NAMES.contains(&v.to_lowercase().as_str()));
+    raw.retain(|(v, _)| !v.trim().is_empty());
     raw
 }
 
-/// The words of Compy's own static export text: every alphabetic word of three or more letters in a string
-/// literal of this file's non-test code (the report headings, labels and sentences), lower-case. Computed
-/// from the source at build time (`include_str!`), never hand-listed, so a new label joins it by itself.
+/// The words of Compy's own static text that can reach an export: every alphabetic word of three or more
+/// letters in a string literal of the non-test code of the files that write the report and its sources (the
+/// export, readiness, hardware, diagnostics, recommendations, Trust Ledger, Drift Watch, sessions and stutter
+/// files) and in the embedded rules file, lower-case. Computed from the sources at build time
+/// (`include_str!`), never hand-listed, so a new label joins it by itself. Text Windows supplies (a device
+/// or adapter name) is not in it; see [`is_scoped_name`].
 fn export_text_words() -> &'static HashSet<String> {
     static WORDS: std::sync::OnceLock<HashSet<String>> = std::sync::OnceLock::new();
     WORDS.get_or_init(|| {
-        let src = include_str!("export.rs");
+        let mut words = HashSet::new();
+        for src in [
+            include_str!("export.rs"),
+            include_str!("readiness.rs"),
+            include_str!("hardware.rs"),
+            include_str!("diagnostics.rs"),
+            include_str!("recommendations.rs"),
+            include_str!("history.rs"),
+            include_str!("drift.rs"),
+            include_str!("sessions.rs"),
+            include_str!("stutter.rs"),
+        ] {
+            literal_words(src, &mut words);
+        }
+        let rules = include_str!("../resources/baseline-rules-v1.json");
+        words.extend(rules.split(|ch: char| !ch.is_alphabetic()).filter(|w| w.chars().count() >= 3).map(str::to_lowercase));
+        words
+    })
+}
+
+/// The lower-case alphabetic words (3+ letters) of the string literals in the non-test part of `src`,
+/// added to `words`. Comments, char literals and the test module are skipped; raw strings are read.
+fn literal_words(src: &str, words: &mut HashSet<String>) {
+    {
         // The test module comes last; its canary strings are not export text.
-        let code = src.split("\n#[cfg(test)]\n").next().unwrap_or(src);
+        let code = src.split("\n#[cfg(test)]\nmod ").next().unwrap_or(src);
         let c: Vec<char> = code.chars().collect();
         let (mut literals, mut i) = (String::new(), 0usize);
         while i < c.len() {
@@ -147,6 +184,25 @@ fn export_text_words() -> &'static HashSet<String> {
                 '\'' => {
                     // A char literal ('"', '\\', '\''): skipped whole so its quote does not open a string.
                     i += if c.get(i + 1) == Some(&'\\') { 4 } else if c.get(i + 2) == Some(&'\'') { 3 } else { 1 };
+                }
+                // A raw string r"..." or r#"..."#: no escapes, ends at a quote followed by as many #.
+                'r' if i == 0 || !(c[i - 1].is_alphanumeric() || c[i - 1] == '_') => {
+                    let (mut j, mut hashes) = (i + 1, 0usize);
+                    while c.get(j) == Some(&'#') {
+                        hashes += 1;
+                        j += 1;
+                    }
+                    if c.get(j) == Some(&'"') {
+                        j += 1;
+                        while j < c.len() && !(c[j] == '"' && (1..=hashes).all(|k| c.get(j + k) == Some(&'#'))) {
+                            literals.push(c[j]);
+                            j += 1;
+                        }
+                        literals.push(' ');
+                        i = j + 1 + hashes;
+                    } else {
+                        i += 1;
+                    }
                 }
                 '"' => {
                     i += 1;
@@ -164,22 +220,43 @@ fn export_text_words() -> &'static HashSet<String> {
                 _ => i += 1,
             }
         }
-        literals.split(|ch: char| !ch.is_alphabetic()).filter(|w| w.chars().count() >= 3).map(str::to_lowercase).collect()
-    })
+        words.extend(literals.split(|ch: char| !ch.is_alphabetic()).filter(|w| w.chars().count() >= 3).map(str::to_lowercase));
+    }
 }
 
-/// A name that is a single ordinary word: all letters, and a word Compy's own export text uses. Replacing it
-/// everywhere would corrupt the sentences around it ("Power saving"), so it is replaced only where a
-/// backslash touches it (file paths, `\\HOST\share`) and in the name fields ([`IDENTITY_KEYS`]).
+/// A name that is a single ordinary word: all letters, and a word of Compy's own static export text
+/// ([`export_text_words`]).
 fn is_ordinary_word(name: &str) -> bool {
     !name.is_empty() && name.chars().all(char::is_alphabetic) && export_text_words().contains(&name.to_lowercase())
+}
+
+/// THE RULE for how this PC's own user or computer name is applied. A name is SCOPED when it is shorter than
+/// three characters ([`long_enough`]), is on the [`COMMON_NAMES`] list, or is a single ordinary word
+/// ([`is_ordinary_word`]): replacing it everywhere would corrupt the sentences around it ("Power saving",
+/// "Ethernet adapter"), so it is replaced only in Windows file and network paths (next to a `\`, or a `/` in a
+/// string that is a path) and in the name fields ([`IDENTITY_KEYS`]), and left as it is elsewhere (counted).
+/// Every other name (a digit, a hyphen, a dot, a space, or letters no Compy text uses: `DESKTOP-4F2K9Q`,
+/// `john.smith`, `Zed Canary`) is replaced everywhere, at word boundaries.
+fn is_scoped_name(name: &str) -> bool {
+    !long_enough(name) || COMMON_NAMES.contains(&name.trim().to_lowercase().as_str()) || is_ordinary_word(name)
+}
+
+/// Whether `s` reads as a Windows or file-URL path: a drive (`C:\`, `C:/`), a UNC start (`\\` or `//`), or
+/// `file:`. Decides whether a `/` beside a scoped name counts as a path separator.
+fn looks_like_path(s: &str) -> bool {
+    let t = s.trim_start();
+    let b = t.as_bytes();
+    // A drive letter stands alone ("C:\"), so the "s:/" of "https://" is not one.
+    let drive = (0..b.len().saturating_sub(2))
+        .any(|i| b[i].is_ascii_alphabetic() && b[i + 1] == b':' && (b[i + 2] == b'\\' || b[i + 2] == b'/') && (i == 0 || !b[i - 1].is_ascii_alphanumeric()));
+    drive || t.starts_with("//") || t.starts_with("\\\\") || t.contains("\\\\") || t.to_ascii_lowercase().contains("file:")
 }
 
 /// Object keys that hold this PC's own computer, domain or account name as the whole value.
 const IDENTITY_KEYS: [&str; 6] = ["hostname", "computer_name", "machine_name", "domain", "user_name", "username"];
 
-/// In place: [`is_ordinary_word`] `name` replaced in the name fields (the whole value) and where a backslash
-/// touches it; `n` counts what was replaced, `left` the plain-word matches that were kept.
+/// In place: a [`is_scoped_name`] `name` replaced in the name fields (the whole value) and where a path
+/// separator touches it; `n` counts what was replaced, `left` the plain matches that were kept.
 fn replace_ordinary_name(v: &mut Value, name: &str, to: &str, n: &mut u32, left: &mut u32) {
     match v {
         Value::String(s) => *s = replace_name_scoped(s, name, to, n, Some(left)),
@@ -218,11 +295,11 @@ fn replace_name(s: &str, name: &str, to: &str, count: &mut u32) -> String {
     replace_name_scoped(s, name, to, count, None)
 }
 
-/// [`replace_name`], or, with `left` given, the paths-only form for a name that is also an ordinary word: a
-/// match is replaced only when a backslash touches it (`\\HOST\share`, `C:\Games\Name\x`); every other match
-/// is kept and counted in `left`.
+/// [`replace_name`], or, with `left` given, the paths-only form for a [`is_scoped_name`] name (any length): a
+/// match is replaced only when a path separator touches it (`\\HOST\share`, `C:\Games\Name\x`, or a `/` in a
+/// string that [`looks_like_path`]); every other word-boundary match is kept and counted in `left`.
 fn replace_name_scoped(s: &str, name: &str, to: &str, count: &mut u32, mut left: Option<&mut u32>) -> String {
-    if !long_enough(name) {
+    if left.is_none() && !long_enough(name) {
         if s.eq_ignore_ascii_case(name) {
             *count += 1;
             return to.to_string();
@@ -231,6 +308,11 @@ fn replace_name_scoped(s: &str, name: &str, to: &str, count: &mut u32, mut left:
     }
     let (sc, nc): (Vec<char>, Vec<char>) = (s.chars().collect(), name.chars().collect());
     let same = |a: char, b: char| a == b || a.to_lowercase().eq(b.to_lowercase());
+    if nc.is_empty() {
+        return s.to_string();
+    }
+    let slash_is_sep = left.is_some() && looks_like_path(s);
+    let sep = |c: char| c == '\\' || (slash_is_sep && c == '/');
     let (head, tail) = (nc[0].is_ascii_alphanumeric(), nc[nc.len() - 1].is_ascii_alphanumeric());
     let (mut out, mut i) = (String::with_capacity(s.len()), 0usize);
     while i < sc.len() {
@@ -239,7 +321,7 @@ fn replace_name_scoped(s: &str, name: &str, to: &str, count: &mut u32, mut left:
             let before = !(head && i > 0 && sc[i - 1].is_ascii_alphanumeric());
             let after = !(tail && end < sc.len() && sc[end].is_ascii_alphanumeric());
             if before && after {
-                let in_path = left.is_none() || (i > 0 && sc[i - 1] == '\\') || (end < sc.len() && sc[end] == '\\');
+                let in_path = left.is_none() || (i > 0 && sep(sc[i - 1])) || (end < sc.len() && sep(sc[end]));
                 if in_path {
                     out.push_str(to);
                     *count += 1;
@@ -332,6 +414,7 @@ impl ExportRedaction {
             "identity_names_replaced": self.identity_names,
             "ordinary_word_names_left_in_text": self.ordinary_word_names_left,
             "user_name_segments_replaced": self.user_name_segments,
+            "onedrive_organizations_replaced": self.onedrive_organizations,
             "running_at_start_omitted": true,
             "summary": self.note(),
         })
@@ -380,7 +463,11 @@ impl ExportRedaction {
         }
         if self.ordinary_word_names_left > 0 {
             let n = self.ordinary_word_names_left;
-            push(format!("Your Windows user name or computer name is also an ordinary word in this report, so it was replaced only in file paths and name fields and left in {n} other place{} where it reads as a plain word.", s(n)));
+            push(format!("Your Windows user name or computer name can also be an ordinary word, so it was replaced only in Windows file and network paths and in name fields, and left as it is in {n} other place{}.", s(n)));
+        }
+        if self.onedrive_organizations > 0 {
+            let n = self.onedrive_organizations;
+            push(format!("A company name in a OneDrive folder name was replaced with \"organization\" in {n} place{}.", s(n)));
         }
         push(if self.user_name_segments == 0 {
             "No other account's name was found in a file path.".to_string()
@@ -434,10 +521,18 @@ pub(crate) fn redact_session_rows(mut sessions: Value, r: &mut ExportRedaction) 
 /// PURE: `C:\Users\<name>\...` (either slash, doubled or not, any prefix such as a UNC share) with the
 /// name replaced by `<user>`. The rest of the path stays readable. The public profile folders carry no
 /// one's name and are left alone (decided: `C:\Users\Public` and `C:\Users\Default` are shared profiles,
-/// not people, so they stay as they are). A name with spaces is taken whole when a separator or a closing
-/// quote follows it, or a closing bracket, comma or semicolon follows a name of up to three words; at the
-/// end of a string, or after a longer run, it ends at the first space. An apostrophe inside a name
-/// ("O'Brien") belongs to it.
+/// not people, so they stay as they are). This PC's own name is already gone by now (matched exactly, spaces
+/// and all, by the identity pass), so this reads OTHER accounts' names, whose shape is not known:
+/// - the name ends at a path separator, a quote (straight or curly), `< > | * ? CR LF`, or a closing
+///   bracket, comma, semicolon, or a period or colon followed by a space or the end;
+/// - a spaced name before one of the soft ends (bracket, comma, semicolon, period, colon) is taken whole when
+///   it is at most [`NAME_CAP`] characters (a Windows account name has at most 20; a profile folder adds a
+///   domain suffix at most), so "C:\Users\Mary Ann Van Der Berg, then" loses all of it; a longer run is cut
+///   at the first space (prose, not a name);
+/// - when the path begins the value (nothing but the path before it), a name with no end mark runs to the end
+///   of the value, if that is within [`VALUE_NAME_CAP`] characters;
+/// - otherwise (a path inside a sentence, no end mark) the name ends at the first space;
+/// - the period or colon that ended the name is kept; an apostrophe inside a name ("O'Brien") belongs to it.
 fn scrub_user_paths(s: &str, count: &mut u32) -> String {
     const KEEP: [&str; 4] = ["public", "default", "default user", "all users"];
     let b = s.as_bytes();
@@ -450,20 +545,9 @@ fn scrub_user_paths(s: &str, count: &mut u32) -> String {
                 start += 1;
             }
             let rest = &s[start..];
-            let stop = |c: char| matches!(c, '\\' | '/' | '"' | '\'' | '<' | '>' | '|' | '*' | '?' | '\n' | '\r' | ')' | ',' | ';' | ']' | '}');
-            // An apostrophe inside a name ("O'Brien", "D'Angelo") does not end it: it ends the name only
-            // when no letter or digit follows (a closing single quote).
-            let end = rest.char_indices().find(|&(at, c)| {
-                stop(c) && !(c == '\'' && rest[at + 1..].chars().next().is_some_and(char::is_alphanumeric))
-            });
-            let name_len = match end.map(|(at, _)| at) {
-                Some(e) if matches!(rest.as_bytes()[e], b'\\' | b'/' | b'"' | b'\'') => e,
-                // A closing bracket, comma or semicolon: a spaced name of up to three words is taken whole
-                // ("C:\Users\John Smith, then"); a longer run is cut at the first space (prose, not a name).
-                Some(e) if matches!(rest.as_bytes()[e], b')' | b',' | b';' | b']' | b'}') && rest[..e].split_whitespace().count() <= 3 => e,
-                Some(e) => rest[..e].find(char::is_whitespace).unwrap_or(e),
-                None => rest.find(char::is_whitespace).unwrap_or(rest.len()),
-            };
+            // The path begins the value: only a path token (no space) stands before it.
+            let value_initial = !s[..i].trim_start().contains(char::is_whitespace);
+            let name_len = name_span(rest, value_initial);
             let name = &rest[..name_len];
             if !name.trim().is_empty() && !KEEP.contains(&name.trim().to_lowercase().as_str()) {
                 out.push_str(&s[last..start]);
@@ -475,6 +559,71 @@ fn scrub_user_paths(s: &str, count: &mut u32) -> String {
             }
         }
         i += 1;
+    }
+    out.push_str(&s[last..]);
+    out
+}
+
+/// Longest spaced run taken as one name before a soft end (see [`scrub_user_paths`]).
+const NAME_CAP: usize = 32;
+/// Longest run taken as one name when it is the end of a value that begins with the path.
+const VALUE_NAME_CAP: usize = 48;
+
+/// PURE: the byte length of the account or organization name at the start of `rest` (the text after
+/// `\Users\` or `OneDrive - `), by the rules in [`scrub_user_paths`]. Never includes the end mark.
+fn name_span(rest: &str, value_initial: bool) -> usize {
+    let hard = |c: char| matches!(c, '\\' | '/' | '"' | '<' | '>' | '|' | '*' | '?' | '\n' | '\r' | '\u{201c}' | '\u{201d}' | '\u{2018}');
+    let apostrophe = |c: char| c == '\'' || c == '\u{2019}';
+    let mut stop: Option<(usize, bool)> = None; // (byte offset, soft)
+    for (at, c) in rest.char_indices() {
+        let next = rest[at + c.len_utf8()..].chars().next();
+        if hard(c) || (apostrophe(c) && !next.is_some_and(char::is_alphanumeric)) {
+            stop = Some((at, false));
+            break;
+        }
+        // An apostrophe inside a name ("O'Brien") is part of it.
+        let sentence_end = matches!(c, '.' | ':') && !next.is_some_and(|n| !n.is_whitespace());
+        if matches!(c, ')' | ',' | ';' | ']' | '}') || sentence_end {
+            stop = Some((at, true));
+            break;
+        }
+    }
+    let first_space = |span: &str| span.find(char::is_whitespace).unwrap_or(span.len());
+    let len = match stop {
+        Some((e, false)) => e,
+        Some((e, true)) if rest[..e].chars().count() <= NAME_CAP => e,
+        Some((e, true)) => first_space(&rest[..e]),
+        None if value_initial && rest.trim_end().chars().count() <= VALUE_NAME_CAP => rest.trim_end().len(),
+        None => first_space(rest),
+    };
+    rest[..len].trim_end_matches(|c: char| c.is_whitespace() || c == '.' || c == ':').len()
+}
+
+/// PURE: `OneDrive - <company>` folder names (after a `\` or `/`) with the company replaced by
+/// `<organization>`; `OneDrive - Personal` names no company and stays. The company ends where
+/// [`name_span`] ends a name. `count` is the number replaced.
+fn scrub_onedrive_org(s: &str, count: &mut u32) -> String {
+    const LEAD: &str = "onedrive - ";
+    let lower = s.to_ascii_lowercase();
+    let (mut out, mut last, mut from) = (String::new(), 0usize, 0usize);
+    while let Some(at) = lower[from..].find(LEAD).map(|p| p + from) {
+        from = at + LEAD.len();
+        let after_sep = at > 0 && matches!(s.as_bytes()[at - 1], b'\\' | b'/');
+        if !after_sep {
+            continue;
+        }
+        let rest = &s[from..];
+        let value_initial = !s[..at].trim_start().contains(char::is_whitespace);
+        let len = name_span(rest, value_initial);
+        let org = &rest[..len];
+        if org.trim().is_empty() || org.eq_ignore_ascii_case("personal") || org == "<organization>" {
+            continue;
+        }
+        out.push_str(&s[last..from]);
+        out.push_str("<organization>");
+        last = from + len;
+        from = last;
+        *count += 1;
     }
     out.push_str(&s[last..]);
     out
@@ -537,9 +686,10 @@ const PLAN_VALUE_KEYS: [&str; 3] = ["value", "value_now", "last_ready_value"];
 
 /// Names of power plans that are not stock, from the places a plan name sits next to its identity: the
 /// diagnostics "Active power plan" row, the readiness power-profile row and any object that holds both a
-/// plan GUID and a name. The active plan keeps its name only when the machine says its GUID is stock.
-fn custom_plan_names(sources: &[&Value], active: Option<&ActivePlan>) -> Vec<String> {
-    fn walk(v: &Value, keyed: &mut Vec<String>, guided: &mut Vec<(String, bool)>) {
+/// plan GUID and a name. A name is kept only by [`keeps_plan_name`]; the active plan keeps its name when its
+/// GUID is stock or one Compy recorded (`compy`).
+fn custom_plan_names(sources: &[&Value], active: Option<&ActivePlan>, compy: &[String]) -> Vec<String> {
+    fn walk(v: &Value, keyed: &mut Vec<String>, guided: &mut Vec<(String, String)>) {
         match v {
             Value::Object(o) => {
                 let label = o.get("label").and_then(Value::as_str);
@@ -555,7 +705,7 @@ fn custom_plan_names(sources: &[&Value], active: Option<&ActivePlan>) -> Vec<Str
                 }
                 let guid = ["guid", "plan_guid", "prior_guid"].iter().find_map(|k| o.get(*k).and_then(Value::as_str));
                 if let (Some(g), Some(n)) = (guid, o.get("name").and_then(Value::as_str)) {
-                    guided.push((n.to_string(), is_stock_plan(g)));
+                    guided.push((n.to_string(), g.to_string()));
                 }
                 o.values().for_each(|x| walk(x, keyed, guided));
             }
@@ -565,10 +715,11 @@ fn custom_plan_names(sources: &[&Value], active: Option<&ActivePlan>) -> Vec<Str
     }
     let (mut keyed, mut guided) = (Vec::new(), Vec::new());
     sources.iter().for_each(|v| walk(v, &mut keyed, &mut guided));
-    let active_stock = active.filter(|a| is_stock_plan(&a.guid)).map(|a| a.name.to_lowercase());
-    let mut out: Vec<String> = keyed.into_iter().filter(|n| Some(n.to_lowercase()) != active_stock && !keeps_plan_name(None, n)).collect();
-    out.extend(guided.into_iter().filter(|(n, stock)| !stock && !keeps_plan_name(None, n)).map(|(n, _)| n));
-    if let Some(a) = active.filter(|a| !is_stock_plan(&a.guid) && !keeps_plan_name(Some(&a.guid), &a.name)) {
+    // The active plan's name is kept when its GUID is one Windows ships or one Compy recorded.
+    let active_kept = active.filter(|a| keeps_plan_name(Some(&a.guid), &a.name, compy)).map(|a| a.name.to_lowercase());
+    let mut out: Vec<String> = keyed.into_iter().filter(|n| Some(n.to_lowercase()) != active_kept && !keeps_plan_name(None, n, compy)).collect();
+    out.extend(guided.into_iter().filter(|(n, g)| !keeps_plan_name(Some(g), n, compy)).map(|(n, _)| n));
+    if let Some(a) = active.filter(|a| !keeps_plan_name(Some(&a.guid), &a.name, compy)) {
         out.push(a.name.clone());
     }
     out.retain(|n| !n.trim().is_empty() && !n.eq_ignore_ascii_case("unknown"));
@@ -577,15 +728,21 @@ fn custom_plan_names(sources: &[&Value], active: Option<&ActivePlan>) -> Vec<Str
     out
 }
 
-/// A plan name that stays: one of Windows' own names, or one `power_plan_of` reads as a known class (so
-/// Compy's own Ultimate Performance copy, which has a GUID Windows does not ship, keeps its name).
-fn keeps_plan_name(guid: Option<&str>, name: &str) -> bool {
+/// THE STRICT RULE for a power-plan name that stays in the export. Exactly one of:
+/// (a) its GUID is one of the four Windows ships ([`is_stock_plan`]);
+/// (b) its GUID is an Ultimate copy Compy recorded activating (`compy`, from the ledger's `applied_plan`);
+/// (c) the name equals, whole and ignoring case, one of the four stock names.
+/// Nothing else: a name that merely contains "Ultimate" or "High performance" ("Canary Ultimate Rig") is a
+/// name the user typed and is replaced. This is not `power_plan_of`, which classes by substring for another
+/// purpose and is left as it is.
+fn keeps_plan_name(guid: Option<&str>, name: &str, compy: &[String]) -> bool {
     const STOCK_NAMES: [&str; 4] = ["balanced", "high performance", "power saver", "ultimate performance"];
-    if STOCK_NAMES.contains(&name.trim().to_lowercase().as_str()) {
-        return true;
+    if let Some(g) = guid.map(|g| g.trim().trim_matches(['{', '}'])) {
+        if is_stock_plan(g) || compy.iter().any(|c| c.trim().trim_matches(['{', '}']).eq_ignore_ascii_case(g)) {
+            return true;
+        }
     }
-    let g = guid.unwrap_or("00000000-0000-0000-0000-000000000000");
-    crate::power_plan_of(&format!("Power Scheme GUID: {g}  ({name})")).is_some_and(|(class, _)| !matches!(class, crate::PowerPlanClass::Other))
+    STOCK_NAMES.contains(&name.trim().to_lowercase().as_str())
 }
 
 /// In place: the custom plan `names` replaced only where a plan name sits: the "Active power plan" row's
@@ -625,15 +782,36 @@ fn replace_plan_names(v: &mut Value, names: &[String], ledger_row: bool, n: &mut
 /// any report is built from them, so the Markdown, the Discord block and the JSON all agree. Order:
 /// sessions (programs, game_state keys), QoS names, Trust Ledger row ids ("change N"), startup-entry names (their own ledger rows, plus the
 /// exact `startup-entry:<name>` id elsewhere), custom plan names (plan fields only), per-install ids, this
-/// PC's own names (word boundaries), and last the user-name segment of any path.
+/// PC's own names (longest first; a scoped name only in paths and name fields, see [`is_scoped_name`]), then
+/// the user-name segment of any path, and last the company in `OneDrive - <company>`. A QoS policy name is
+/// replaced wherever it appears (the hardware list and the readiness `network-qos` row).
 pub(crate) fn redact_export_sources(sources: [&mut Value; 6], env: &ExportEnv) -> ExportRedaction {
     let mut r = ExportRedaction::default();
     let mut all = sources.into_iter().collect::<Vec<_>>();
     let sessions = &mut *all[4];
     *sessions = redact_session_rows(sessions.take(), &mut r);
+    // QoS policy names are typed by the user (or an admin). Save the originals, number the hardware list, then
+    // replace each original wherever else it is repeated (the readiness "network-qos" row's detail prints
+    // them): longest first, so a name that contains another is not half-replaced, with the same number
+    // everywhere.
+    let mut qos_names: Vec<(usize, String)> = Vec::new();
     if let Some(q) = all[0].get_mut("qos_policies").and_then(Value::as_array_mut) {
         r.qos_policy_names += q.len() as u32;
+        qos_names = q.iter().enumerate().filter_map(|(i, v)| v.as_str().map(|n| (i + 1, n.to_string()))).filter(|(_, n)| !n.trim().is_empty()).collect();
         *q = (1..=q.len()).map(|i| json!(format!("QoS policy {i}"))).collect();
+    }
+    // The readiness row prints the list as "(a, b)": the joined list goes first, so a name too short for
+    // the free-text rule is covered inside that row too.
+    if !qos_names.is_empty() {
+        let joined = qos_names.iter().map(|(_, n)| n.as_str()).collect::<Vec<_>>().join(", ");
+        let labels = qos_names.iter().map(|(i, _)| format!("QoS policy {i}")).collect::<Vec<_>>().join(", ");
+        all.iter_mut().for_each(|v| map_strings(v, &mut |s| replace_name(s, &joined, &labels, &mut 0)));
+    }
+    qos_names.sort_by_key(|(_, n)| std::cmp::Reverse(n.chars().count()));
+    for (number, name) in &qos_names {
+        let label = format!("QoS policy {number}");
+        let name = name.trim();
+        all.iter_mut().for_each(|v| map_strings(v, &mut |s| replace_name(s, name, &label, &mut 0)));
     }
     // Trust Ledger row ids ("<rec id>-<millis>") carry the rec id, which for a startup entry is the typed
     // entry name: number every row id ("change 1", in ledger order) and follow it wherever else the id
@@ -696,7 +874,7 @@ pub(crate) fn redact_export_sources(sources: [&mut Value; 6], env: &ExportEnv) -
         r.startup_entry_names += n;
     }
     // Custom plan names, before the ids go: a ledger row is recognised by the custom GUID it carries.
-    let plans = custom_plan_names(&all.iter().map(|v| &**v).collect::<Vec<_>>(), env.active_plan.as_ref());
+    let plans = custom_plan_names(&all.iter().map(|v| &**v).collect::<Vec<_>>(), env.active_plan.as_ref(), &env.compy_plan_guids);
     if !plans.is_empty() {
         let mut n = 0;
         for (i, v) in all.iter_mut().enumerate() {
@@ -719,10 +897,16 @@ pub(crate) fn redact_export_sources(sources: [&mut Value; 6], env: &ExportEnv) -
         let inner = value.trim().trim_matches(['{', '}']).to_string();
         all.iter_mut().for_each(|v| map_strings(v, &mut |s| replace_name(s, &inner, &label, &mut 0)));
     }
-    for (value, mask) in env.literals.iter().filter(|(v, _)| long_enough(v)) {
+    // Longest first, so a name that contains another ("Mary Ann" and "Mary") is not half-replaced.
+    let mut literals: Vec<&(String, &'static str)> = env.literals.iter().filter(|(v, _)| !v.trim().is_empty()).collect();
+    literals.sort_by_key(|(v, _)| (std::cmp::Reverse(v.chars().count()), v.to_lowercase()));
+    // The user domain is often the computer name: apply (and count) each name once.
+    literals.dedup_by(|a, b| a.0.eq_ignore_ascii_case(&b.0));
+    for (value, mask) in literals {
         let mut n = 0;
-        if is_ordinary_word(value) {
-            // An ordinary word of Compy's own text: only in paths and name fields, never in free text.
+        if is_scoped_name(value) {
+            // A short name, a common word or an ordinary word of Compy's own text: only in paths and name
+            // fields, never in free text.
             let mut left = 0;
             all.iter_mut().for_each(|v| replace_ordinary_name(v, value, mask, &mut n, &mut left));
             r.ordinary_word_names_left += left;
@@ -734,6 +918,9 @@ pub(crate) fn redact_export_sources(sources: [&mut Value; 6], env: &ExportEnv) -
     let mut paths = 0;
     all.iter_mut().for_each(|v| map_strings(v, &mut |s| scrub_user_paths(s, &mut paths)));
     r.user_name_segments = paths;
+    let mut orgs = 0;
+    all.iter_mut().for_each(|v| map_strings(v, &mut |s| scrub_onedrive_org(s, &mut orgs)));
+    r.onedrive_organizations = orgs;
     r
 }
 
@@ -2219,6 +2406,7 @@ mod export_tests {
         ExportEnv {
             literals: vec![(C_USER.into(), "<user>"), (C_PROFILE.into(), "<user>"), (C_HOST.into(), "<host>")],
             active_plan: Some(ActivePlan { name: C_PLAN.into(), guid: C_PLAN_GUID.into() }),
+            ..Default::default()
         }
     }
 
@@ -2244,7 +2432,10 @@ mod export_tests {
             json!({ "checks": [
                 { "id": "power-profile", "title": "Power profile", "value": C_PLAN, "detail": format!("Active plan \"{C_PLAN}\". A performance plan can reduce latency.") },
                 { "id": "c1", "detail": format!(r"\\srv\share\Users\{C_USER}\Games") },
-                { "id": "c2", "detail": format!(r"C:\\Users\\{C_USER}\\escaped") }
+                { "id": "c2", "detail": format!(r"C:\\Users\\{C_USER}\\escaped") },
+                // The readiness row prints the typed QoS policy names (readiness.rs): same text as the live row.
+                { "id": "network-qos", "label": "Network QoS policy", "status": "advisory", "value": "2 QoS policies",
+                  "detail": format!("Windows QoS traffic-priority policies are active ({C_QOS}, {C_QOS} two). These shape which apps get network priority.") }
             ] }),
             rows_with_canaries(),
             json!([{ "name": "Power", "entries": [
@@ -2333,7 +2524,7 @@ mod export_tests {
         assert!(note.contains("replaced in 7 places, file paths included."), "{note}");
         assert!(!note.contains("No file path in this export held a Windows user name"), "{note}");
         // Only the current user's name, in a path: it is counted as an identity replacement, not as another account.
-        let env = ExportEnv { literals: vec![("Kuyaname".into(), "<user>")], active_plan: None };
+        let env = ExportEnv { literals: vec![("Kuyaname".into(), "<user>")], active_plan: None, ..Default::default() };
         let mut hw = json!({ "p": r"C:\Users\Kuyaname\AppData" });
         let (mut a, mut l, mut rd, mut s, mut d) = (json!([]), json!([]), json!({}), json!([]), json!([]));
         let r = redact_export_sources([&mut hw, &mut a, &mut l, &mut rd, &mut s, &mut d], &env);
@@ -2412,22 +2603,32 @@ mod export_tests {
         assert_eq!(replace_name("AB", "ab", "X", &mut n), "X");
         assert_eq!(replace_name("see Abc here", "abc", "X", &mut n), "see X here");
         assert_eq!(n, 2);
-        // A 2-character literal (user name) is never applied.
-        let env = ExportEnv { literals: vec![("ab".into(), "<user>")], active_plan: None };
-        let mut hw = json!({ "cpu_brand": "fabric lab" });
-        redact_export_sources([&mut hw, &mut a, &mut ledger, &mut rd, &mut s, &mut d], &env);
-        assert_eq!(hw["cpu_brand"], "fabric lab");
+        // A 2-character literal (user name) is never applied in free text: only in paths and name fields.
+        let env = ExportEnv { literals: vec![("ab".into(), "<user>")], active_plan: None, ..Default::default() };
+        let mut hw = json!({ "cpu_brand": "fabric lab and ab", "hostname": "AB", "p": r"C:\Games\ab\x" });
+        let r = redact_export_sources([&mut hw, &mut a, &mut ledger, &mut rd, &mut s, &mut d], &env);
+        assert_eq!(hw["cpu_brand"], "fabric lab and ab", "free text is untouched");
+        assert_eq!(hw["hostname"], "<user>");
+        assert_eq!(hw["p"], r"C:\Games\<user>\x");
+        assert_eq!((r.identity_names, r.ordinary_word_names_left), (2, 1), "path and name field replaced; the plain 'ab' counted as left");
     }
 
     #[test]
-    fn usable_literals_drop_short_and_ordinary_names_and_add_the_profile_folder() {
-        let raw = vec![("Kuya".to_string(), "<user>"), ("ab".to_string(), "<user>"), ("Admin".to_string(), "<user>"), ("PCNAME1".to_string(), "<host>")];
+    fn usable_literals_keep_every_name_and_add_the_profile_folder_and_the_rule_scopes_them() {
+        let raw = vec![("Kuya".to_string(), "<user>"), ("ab".to_string(), "<user>"), ("Admin".to_string(), "<user>"), ("PCNAME1".to_string(), "<host>"), (" ".to_string(), "<host>")];
         let out = usable_literals(raw, Some("KuyaProfile".into()));
         let vals: Vec<&str> = out.iter().map(|(v, _)| v.as_str()).collect();
-        assert_eq!(vals, ["Kuya", "PCNAME1", "KuyaProfile"]);
+        assert_eq!(vals, ["Kuya", "ab", "Admin", "PCNAME1", "KuyaProfile"], "short and common names are no longer dropped; a blank one is");
         assert_eq!(usable_literals(vec![], Some("Kuya".into())).len(), 1);
         assert!(usable_literals(vec![("kuya".into(), "<user>")], Some("Kuya".into())).len() == 1, "no duplicate of the same name");
-        assert!(usable_literals(vec![], Some("User".into())).is_empty(), "an ordinary word as the folder name is left to the path rule");
+        assert_eq!(usable_literals(vec![], Some("User".into())).len(), 1, "an ordinary word as the folder name is kept, and scoped");
+        // Which names are scoped (paths and name fields only) and which are replaced everywhere.
+        for scoped in ["ab", "Admin", "Power", "Ethernet", "Gaming"] {
+            assert!(is_scoped_name(scoped), "{scoped} is scoped");
+        }
+        for everywhere in ["PCNAME1", "DESKTOP-4F2K9Q", "john.smith", "Zed Canaryspaced", "CanaryKuyaName", "Zorvak"] {
+            assert!(!is_scoped_name(everywhere), "{everywhere} is replaced everywhere");
+        }
     }
 
     #[test]
@@ -2436,11 +2637,11 @@ mod export_tests {
             [json!({}), json!([]), json!([]), json!({ "checks": [{ "id": "power-profile", "value": name, "detail": format!("Active plan \"{name}\".") }] }), json!([]),
              json!([{ "name": "Power", "entries": [{ "label": "Active power plan", "value": name }] }])]
         };
-        let stock = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Balanced".into(), guid: "381B4222-F694-41F0-9685-FF5BB260DF2E".into() }) };
+        let stock = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Balanced".into(), guid: "381B4222-F694-41F0-9685-FF5BB260DF2E".into() }), ..Default::default() };
         let mut s = mk("Balanced");
         let r = redact_export_sources(s.each_mut(), &stock);
         assert!(all_text(&s).contains("balanced") && r.power_plan_names == 0);
-        let custom = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: C_PLAN.into(), guid: C_PLAN_GUID.into() }) };
+        let custom = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: C_PLAN.into(), guid: C_PLAN_GUID.into() }), ..Default::default() };
         let mut c = mk(C_PLAN);
         let r = redact_export_sources(c.each_mut(), &custom);
         assert!(!all_text(&c).contains("canaryplanname") && all_text(&c).contains("a custom power plan") && r.power_plan_names == 3);
@@ -2630,7 +2831,7 @@ mod export_tests {
         assert!(is_ordinary_word("Hardware") && is_ordinary_word("SESSIONS"));
         assert!(!is_ordinary_word("Zorbakplex") && !is_ordinary_word("Hardware2") && !is_ordinary_word("Hard ware") && !is_ordinary_word(""));
         // A computer named "Hardware" (a heading of the report), not on the skip list.
-        let env = ExportEnv { literals: vec![("Hardware".into(), "<host>")], active_plan: None };
+        let env = ExportEnv { literals: vec![("Hardware".into(), "<host>")], active_plan: None, ..Default::default() };
         let (s, r) = lone(
             [
                 json!({ "hostname": "HARDWARE", "cpu_brand": "Hardware and software", "unc": r"\\HARDWARE\share\x", "p": r"C:\Games\Hardware\x" }),
@@ -2649,28 +2850,81 @@ mod export_tests {
         assert_eq!((r.identity_names, r.ordinary_word_names_left), (3, 1));
         let note = r.note();
         assert!(note.contains("replaced in 3 places, file paths included."), "{note}");
-        assert!(note.contains("also an ordinary word in this report, so it was replaced only in file paths and name fields and left in 1 other place where it reads as a plain word."), "{note}");
+        assert!(note.contains("can also be an ordinary word, so it was replaced only in Windows file and network paths and in name fields, and left as it is in 1 other place."), "{note}");
         // A name that is not an ordinary word is still replaced everywhere, and says nothing about words.
-        let env = ExportEnv { literals: vec![("Zorbakplex".into(), "<host>")], active_plan: None };
+        let env = ExportEnv { literals: vec![("Zorbakplex".into(), "<host>")], active_plan: None, ..Default::default() };
         let (s, r) = lone([json!({ "x": "Zorbakplex rig" }), json!([]), json!([]), json!({}), json!([]), json!([])], &env);
         assert_eq!(s[0]["x"], "<host> rig");
         assert!(!r.note().contains("ordinary word"));
     }
 
     #[test]
+    fn an_ordinary_word_computer_name_from_any_export_text_leaves_the_text_whole_and_a_coded_name_goes_everywhere() {
+        // "Ethernet" is a word of the readiness and hardware text, not of export.rs alone: the widened set holds it.
+        let words = export_text_words();
+        for w in ["ethernet", "network", "adapter", "latency", "ultimate"] {
+            assert!(words.contains(w), "{w} is static text somewhere in the export's sources");
+        }
+        let text = "Ethernet adapter is connected; wired Ethernet gives lower latency.";
+        let env = ExportEnv { literals: vec![("Ethernet".into(), "<host>"), ("DESKTOP-4F2K9Q".into(), "<host>")], ..Default::default() };
+        let (s, r) = lone(
+            [
+                json!({ "hostname": "Ethernet", "gpus": [], "n": "DESKTOP-4F2K9Q on Ethernet" }),
+                json!([]),
+                json!([]),
+                json!({ "checks": [{ "id": "network-wired", "detail": text, "value": r"\\Ethernet\share" }] }),
+                json!([]),
+                json!([{ "name": "Network", "entries": [{ "label": "Adapter", "value": "Ethernet" }] }]),
+            ],
+            &env,
+        );
+        assert_eq!(s[3]["checks"][0]["detail"], text, "the readiness sentence is not corrupted");
+        assert_eq!(s[3]["checks"][0]["value"], r"\\<host>\share", "a network path is replaced");
+        assert_eq!(s[0]["hostname"], "<host>", "a name field is replaced");
+        assert_eq!(s[0]["n"], "<host> on Ethernet", "the coded name goes everywhere; the plain word stays");
+        assert_eq!(s[5][0]["entries"][0]["value"], "Ethernet", "an adapter name is hardware text, kept");
+        assert_eq!(r.ordinary_word_names_left, 4, "two in the sentence, one in the n field, one adapter value: counted");
+    }
+
+    #[test]
+    fn a_scoped_name_beside_a_forward_slash_is_replaced_only_in_a_path_and_a_unc_share_is_covered() {
+        let env = ExportEnv { literals: vec![("Power".into(), "<host>"), ("ab".into(), "<user>"), ("Gaming".into(), "<user>")], ..Default::default() };
+        let (s, r) = lone(
+            [
+                json!({
+                    "unc": r"\\Power\share\x", "unc2": "//Power/share/x", "drive": "C:/Games/Gaming/save.dat", "two": r"C:\Users\ab\x",
+                    "text": "Power/Performance and Gaming/Mode", "url": "https://Power/Gaming/x"
+                }),
+                json!([]), json!([]), json!({}), json!([]), json!([]),
+            ],
+            &env,
+        );
+        assert_eq!(s[0]["unc"], r"\\<host>\share\x", "computer named with a skip-list word, in a UNC path");
+        assert_eq!(s[0]["unc2"], "//<host>/share/x");
+        assert_eq!(s[0]["drive"], "C:/Games/<user>/save.dat", "a skip-list word beside a forward slash in a drive path");
+        assert_eq!(s[0]["two"], r"C:\Users\<user>\x", "a two-letter user name in a path");
+        assert_eq!(s[0]["text"], "Power/Performance and Gaming/Mode", "a slash in plain text is not a path");
+        assert_eq!(s[0]["url"], "https://Power/Gaming/x", "a URL is not a Windows path");
+        assert_eq!(r.identity_names, 4);
+        assert_eq!(r.ordinary_word_names_left, 4, "Power and Gaming in the text, Power and Gaming in the URL");
+    }
+
+    #[test]
     fn a_computer_or_user_named_with_a_skip_list_word_never_corrupts_the_text() {
         let text = "Gaming Mode: Power saving on a Desktop PC, Guest account, Windows System";
         for name in ["GAMING", "Desktop", "Power", "Guest"] {
-            let env = ExportEnv { literals: usable_literals(vec![(name.into(), "<host>")], None), active_plan: None };
-            assert!(env.literals.is_empty(), "{name} is on the skip list");
-            let (s, r) = lone([json!({ "hostname": name, "note": text }), json!([]), json!([]), json!({}), json!([]), json!([])], &env);
+            let env = ExportEnv { literals: usable_literals(vec![(name.into(), "<host>")], None), active_plan: None, ..Default::default() };
+            assert_eq!(env.literals.len(), 1, "{name} is on the skip list: kept, and applied by the paths-and-name-fields rule");
+            let (s, r) = lone([json!({ "hostname": name, "note": text, "unc": format!(r"\\{name}\share") }), json!([]), json!([]), json!({}), json!([]), json!([])], &env);
             assert_eq!(s[0]["note"], text, "{name}");
             assert!(!s.iter().any(|v| v.to_string().contains("<host> saving")), "{name}");
-            assert_eq!(r.identity_names, 0);
+            assert_eq!(s[0]["hostname"], "<host>", "{name}: the name field");
+            assert_eq!(s[0]["unc"], r"\\<host>\share", "{name}: a UNC path");
+            assert_eq!((r.identity_names, r.ordinary_word_names_left), (2, 1), "{name}");
         }
         // A user named with one of them: the sentence is intact and the profile path is still scrubbed by shape.
         for name in ["GAMING", "Desktop", "Power", "Guest"] {
-            let env = ExportEnv { literals: usable_literals(vec![(name.into(), "<user>")], Some(name.into())), active_plan: None };
+            let env = ExportEnv { literals: usable_literals(vec![(name.into(), "<user>")], Some(name.into())), active_plan: None, ..Default::default() };
             let (s, _) = lone([json!({ "note": text, "p": format!(r"C:\Users\{name}\x") }), json!([]), json!([]), json!({}), json!([]), json!([])], &env);
             assert_eq!(s[0]["note"], text, "{name}");
             assert_eq!(s[0]["p"], r"C:\Users\<user>\x", "{name}: a path is still scrubbed");
@@ -2689,7 +2943,7 @@ mod export_tests {
         let drift_changes = json!({ "id": "applied-changes", "label": "Applied changes", "detail": format!("2 changes are off: {title}, {short}"),
             "noticed_at": "t", "unreadable_now": false, "value_now": null, "last_ready_at": null, "last_ready_value": null,
             "titles": [title, short], "applied_at": ["t", "t"] });
-        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Gaming Rig".into(), guid: "dddddddd-1111-2222-3333-444444444444".into() }) };
+        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Gaming Rig".into(), guid: "dddddddd-1111-2222-3333-444444444444".into() }), ..Default::default() };
         let (s, r) = lone(
             [
                 json!({}),
@@ -2777,7 +3031,7 @@ mod export_tests {
 
     #[test]
     fn this_pcs_own_spaced_name_at_the_end_of_a_string_is_caught_by_the_literal_pass() {
-        let env = ExportEnv { literals: vec![(C_SPACED.into(), "<user>")], active_plan: None };
+        let env = ExportEnv { literals: vec![(C_SPACED.into(), "<user>")], active_plan: None, ..Default::default() };
         let mut hw = json!({ "a": format!(r"C:\Users\{C_SPACED}"), "b": format!("owner {C_SPACED}") });
         let (mut a, mut l, mut rd, mut s, mut d) = (json!([]), json!([]), json!({}), json!([]), json!([]));
         redact_export_sources([&mut hw, &mut a, &mut l, &mut rd, &mut s, &mut d], &env);
@@ -2825,10 +3079,11 @@ mod export_tests {
         assert_eq!(rep("GrandSam", "Sam"), "GrandSam", "a name inside a longer word is left alone from the front too");
         assert_eq!(rep("Sam's laptop", "SAM"), "<user>'s laptop");
         assert_eq!(rep("张伟的电脑", "张伟"), "<user>的电脑", "a CJK name matches inside longer text");
-        // "Max" is an ordinary word on the skip list, so it is never applied to free text.
-        assert!(usable_literals(vec![("Max".into(), "<user>")], None).is_empty());
+        // "Max" is an ordinary word on the skip list: kept as a literal, but applied to paths and name fields only.
+        assert_eq!(usable_literals(vec![("Max".into(), "<user>")], None).len(), 1);
+        assert!(is_scoped_name("Max"));
         let mut hw = json!({ "display": "Max refresh rate", "gpu": "NVIDIA Corporation", "share": r"CORP\kuya", "pc": "张伟的电脑" });
-        let env = ExportEnv { literals: vec![("CORP".into(), "<host>"), ("张伟".into(), "<user>")], active_plan: None };
+        let env = ExportEnv { literals: vec![("CORP".into(), "<host>"), ("张伟".into(), "<user>")], active_plan: None, ..Default::default() };
         let (mut a, mut l, mut rd, mut s, mut d) = (json!([]), json!([]), json!({}), json!([]), json!([]));
         redact_export_sources([&mut hw, &mut a, &mut l, &mut rd, &mut s, &mut d], &env);
         assert_eq!(hw["display"], "Max refresh rate");
@@ -2839,12 +3094,19 @@ mod export_tests {
 
     #[test]
     fn an_account_name_on_the_skip_list_is_removed_from_paths_only() {
-        assert!(usable_literals(vec![("Admin".into(), "<user>")], None).is_empty());
+        // Another account named Admin (no literal): removed by the path shape alone.
         let mut hw = json!({ "p": r"C:\Users\Admin\Documents", "t": "Admin panel" });
         let (mut a, mut l, mut rd, mut s, mut d) = (json!([]), json!([]), json!({}), json!([]), json!([]));
         redact_export_sources([&mut hw, &mut a, &mut l, &mut rd, &mut s, &mut d], &ExportEnv::default());
         assert_eq!(hw["p"], r"C:\Users\<user>\Documents");
         assert_eq!(hw["t"], "Admin panel");
+        // This PC's own account named Admin: a literal now, applied to the path and the name field, not the text.
+        let env = ExportEnv { literals: usable_literals(vec![("Admin".into(), "<user>")], None), ..Default::default() };
+        assert_eq!(env.literals.len(), 1);
+        let mut hw = json!({ "p": r"C:\Users\Admin\Documents", "t": "Admin panel", "username": "ADMIN" });
+        let r = redact_export_sources([&mut hw, &mut a, &mut l, &mut rd, &mut s, &mut d], &env);
+        assert_eq!((hw["p"].as_str(), hw["t"].as_str(), hw["username"].as_str()), (Some(r"C:\Users\<user>\Documents"), Some("Admin panel"), Some("<user>")));
+        assert_eq!((r.identity_names, r.ordinary_word_names_left, r.user_name_segments), (2, 1, 0));
     }
 
     fn plan_sources(name: &str, guid: &str) -> [Value; 6] {
@@ -2862,18 +3124,33 @@ mod export_tests {
     #[test]
     fn a_plan_name_windows_or_compy_gave_keeps_its_name_even_with_a_guid_windows_does_not_ship() {
         let guid = "aaaaaaaa-1111-2222-3333-444444444444";
-        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Ultimate Performance".into(), guid: guid.into() }) };
+        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Ultimate Performance".into(), guid: guid.into() }), ..Default::default() };
         let mut s = plan_sources("Ultimate Performance", guid);
         let r = redact_export_sources(s.each_mut(), &env);
         let text = all_text(&s);
         assert!(text.matches("ultimate performance").count() >= 5, "{text}");
         assert!(!text.contains(guid) && text.contains("custom-plan-1"), "the guid is still labelled: {text}");
         assert!(!text.contains("a custom power plan") && r.power_plan_names == 0);
-        // A name that is not Windows' own but reads as a known class (by `power_plan_of`) is kept too.
-        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "My Ultimate Rig".into(), guid: guid.into() }) };
+        // A name that merely CONTAINS a stock class word is a name the user typed: replaced (the strict rule).
+        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "My Ultimate Rig".into(), guid: guid.into() }), ..Default::default() };
         let mut k = plan_sources("My Ultimate Rig", guid);
         let r = redact_export_sources(k.each_mut(), &env);
-        assert!(all_text(&k).matches("my ultimate rig").count() >= 5 && r.power_plan_names == 0);
+        assert!(!all_text(&k).contains("my ultimate rig") && r.power_plan_names == 5, "{}", all_text(&k));
+        // Compy's own Ultimate copy on a localized Windows: a GUID Windows does not ship and a name that is not
+        // one of the four, but a GUID the ledger recorded: the name stays. The same name with a GUID Compy never
+        // recorded is replaced.
+        let env = ExportEnv {
+            active_plan: Some(ActivePlan { name: "Höchstleistung Canary".into(), guid: guid.into() }),
+            compy_plan_guids: vec![guid.to_uppercase()],
+            ..Default::default()
+        };
+        let mut own = plan_sources("Höchstleistung Canary", guid);
+        let r = redact_export_sources(own.each_mut(), &env);
+        assert!(all_text(&own).matches("höchstleistung canary").count() >= 5 && r.power_plan_names == 0, "{}", all_text(&own));
+        let other = ExportEnv { active_plan: env.active_plan.clone(), compy_plan_guids: vec!["99999999-1111-2222-3333-444444444444".into()], ..Default::default() };
+        let mut not_own = plan_sources("Höchstleistung Canary", guid);
+        let r = redact_export_sources(not_own.each_mut(), &other);
+        assert!(!all_text(&not_own).contains("höchstleistung canary") && r.power_plan_names == 5, "{}", all_text(&not_own));
         // No plan read: a name that is stock is kept.
         let mut b = plan_sources("Balanced", "381b4222-f694-41f0-9685-ff5bb260df2e");
         let r = redact_export_sources(b.each_mut(), &ExportEnv::default());
@@ -2883,7 +3160,7 @@ mod export_tests {
     #[test]
     fn a_custom_plan_name_is_replaced_in_plan_fields_only() {
         let guid = "bbbbbbbb-1111-2222-3333-444444444444";
-        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Gaming".into(), guid: guid.into() }) };
+        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Gaming".into(), guid: guid.into() }), ..Default::default() };
         let mut s = plan_sources("Gaming", guid);
         let r = redact_export_sources(s.each_mut(), &env);
         assert_eq!(s[1][0]["title"], "Gaming Mode");
@@ -2894,6 +3171,260 @@ mod export_tests {
         assert_eq!(s[3]["checks"][0]["detail"], format!("Active plan \"{CUSTOM_PLAN}\". Ok."));
         assert_eq!(s[5][0]["entries"][0]["value"], CUSTOM_PLAN);
         assert_eq!(r.power_plan_names, 5);
+    }
+
+    #[test]
+    fn qos_policy_names_in_the_readiness_row_are_numbered_like_the_hardware_list_and_appear_nowhere() {
+        // One name inside the other, and a two-letter one: longest first, the same number everywhere.
+        let (long, short, tiny) = ("Zorvak Game Traffic", "Zorvak Game", "ab");
+        let row = |names: &str| {
+            json!({ "id": "network-qos", "label": "Network QoS policy", "status": "advisory", "value": "3 QoS policies",
+                    "detail": format!("Windows QoS traffic-priority policies are active ({names}). These shape which apps get network priority.") })
+        };
+        let sources = || -> [Value; 6] {
+            [
+                json!({ "qos_policies": [short, long, tiny] }),
+                json!([]),
+                json!([]),
+                json!({ "checks": [row(&format!("{short}, {long}, {tiny}")), { "id": "other", "detail": format!("see {long} and {short} again") }] }),
+                json!([]),
+                json!([]),
+            ]
+        };
+        let (s, r) = lone(sources(), &ExportEnv::default());
+        assert_eq!(s[0]["qos_policies"], json!(["QoS policy 1", "QoS policy 2", "QoS policy 3"]));
+        let detail = s[3]["checks"][0]["detail"].as_str().unwrap();
+        assert!(detail.contains("(QoS policy 1, QoS policy 2, QoS policy 3)."), "{detail}");
+        assert_eq!(s[3]["checks"][1]["detail"], "see QoS policy 2 and QoS policy 1 again", "the longer name is not half-replaced");
+        assert_eq!(r.qos_policy_names, 3);
+        for consumer in [false, true] {
+            let b = build_export(sources(), consumer, None, "embedded", "t", &ExportEnv::default());
+            let shapes = [b.markdown.to_lowercase(), b.discord.to_lowercase(), serde_json::to_string(&b.bundle).unwrap().to_lowercase()];
+            for text in shapes {
+                assert!(!text.contains("zorvak"), "a QoS policy name survived (consumer tier: {consumer}): {text}");
+            }
+        }
+        let tech = build_export(sources(), false, None, "embedded", "t", &ExportEnv::default());
+        assert!(tech.markdown.contains("QoS policy 1, QoS policy 2, QoS policy 3"), "the readiness row reaches the Markdown, numbered: {}", tech.markdown);
+    }
+
+    #[test]
+    fn a_custom_plan_whose_name_contains_ultimate_or_high_performance_is_replaced_wherever_a_plan_name_sits() {
+        let guid = "eeeeeeee-1111-2222-3333-444444444444";
+        for name in ["Canary Ultimate Rig", "My High performance mix", "Ultimate Performance (copy 2)", "Power Saver Plus"] {
+            let mut src = plan_sources(name, guid);
+            src[3]["drifts"] = json!([{
+                "id": "power-profile", "label": "Power profile", "detail": format!("Active plan \"{name}\" is not a performance plan."),
+                "noticed_at": "t", "unreadable_now": false, "value_now": name, "last_ready_at": "t", "last_ready_value": name,
+                "titles": [], "applied_at": []
+            }]);
+            let (s, r) = lone(src, &ExportEnv::default());
+            let text = all_text(&s);
+            assert!(!text.contains(&name.to_lowercase()), "{name} survived: {text}");
+            assert_eq!(s[3]["checks"][0]["value"], CUSTOM_PLAN, "{name}: readiness");
+            assert_eq!(s[5][0]["entries"][0]["value"], CUSTOM_PLAN, "{name}: diagnostics");
+            assert_eq!(s[3]["drifts"][0]["value_now"], CUSTOM_PLAN, "{name}: drift now");
+            assert_eq!(s[3]["drifts"][0]["last_ready_value"], CUSTOM_PLAN, "{name}: drift last ready");
+            assert_eq!(s[2][0]["restores_label"], format!("Switches back to {CUSTOM_PLAN}"), "{name}: ledger row");
+            assert_eq!(s[2][0]["applied_plan"]["name"], CUSTOM_PLAN, "{name}: ledger plan");
+            assert_eq!(r.power_plan_names, 8, "{name}: 5 in the base fixture + the drift row's value_now, last_ready_value and quoted detail");
+        }
+        // The three ways a name stays: a stock GUID (whatever Windows calls it), an exact stock name, a GUID Compy recorded.
+        assert!(keeps_plan_name(Some("381B4222-F694-41F0-9685-FF5BB260DF2E"), "Ausgeglichen", &[]));
+        assert!(keeps_plan_name(None, "  ULTIMATE performance ", &[]));
+        assert!(keeps_plan_name(Some("{aaaaaaaa-1111-2222-3333-444444444444}"), "Höchstleistung", &["AAAAAAAA-1111-2222-3333-444444444444".to_string()]));
+        assert!(!keeps_plan_name(Some("aaaaaaaa-1111-2222-3333-444444444444"), "Höchstleistung", &[]));
+        assert!(!keeps_plan_name(None, "Ultimate Performance 2", &[]) && !keeps_plan_name(None, "Canary Ultimate Rig", &[]));
+    }
+
+    #[test]
+    fn a_spaced_name_is_taken_whole_at_the_end_of_a_value_and_before_a_period_colon_comma_or_curly_quote() {
+        let name = "Mary Ann Van Der Berg"; // five words: past the old three-word limit
+        let u = r"C:\Users\<user>";
+        let cases: Vec<(String, String)> = vec![
+            (format!(r"C:\Users\{name}"), u.into()),
+            (format!(r"C:\Users\{name}."), format!("{u}.")),
+            (format!(r"C:\Users\{name}: access denied"), format!("{u}: access denied")),
+            (format!(r"failed at C:\Users\{name}: denied"), format!(r"failed at {u}: denied")),
+            (format!(r"saw C:\Users\{name}, then left"), format!(r"saw {u}, then left")),
+            (format!(r"see C:\Users\{name}. Next"), format!(r"see {u}. Next")),
+            (format!("open \u{201c}C:\\Users\\{name}\u{201d} now"), format!("open \u{201c}{u}\u{201d} now")),
+            ("\u{2018}C:\\Users\\john\u{2019} failed".into(), format!("\u{2018}{u}\u{2019} failed")),
+            (r"read C:\Users\john.smith failed".into(), r"read C:\Users\<user> failed".into()),
+            (r"\\?\C:\Users\John Smith\x".into(), r"\\?\C:\Users\<user>\x".into()),
+            ("file:///C:/Users/John%20Smith/x.txt".into(), "file:///C:/Users/<user>/x.txt".into()),
+            ("C:/Users/O\u{2019}Brien/x".into(), "C:/Users/<user>/x".into()),
+        ];
+        for (input, want) in cases {
+            let mut n = 0;
+            assert_eq!(scrub_user_paths(&input, &mut n), want, "{input}");
+            assert_eq!(n, 1, "{input}");
+        }
+        // The one limit that is left: a spaced name past 32 characters before a soft end is cut at its first space.
+        let mut n = 0;
+        assert_eq!(
+            scrub_user_paths(r"x C:\Users\Alpha Bravo Charlie Delta Echo Foxtrot, more", &mut n),
+            r"x C:\Users\<user> Bravo Charlie Delta Echo Foxtrot, more"
+        );
+        // This PC's own name is matched exactly by the literal pass, whatever its length or what follows it.
+        let own = "Alpha Bravo Charlie Delta Echo Foxtrot";
+        let env = ExportEnv { literals: vec![(own.into(), "<user>")], ..Default::default() };
+        let (s, _) = lone([json!({ "p": format!(r"x C:\Users\{own}, more") }), json!([]), json!([]), json!({}), json!([]), json!([])], &env);
+        assert_eq!(s[0]["p"], r"x C:\Users\<user>, more");
+    }
+
+    #[test]
+    fn a_onedrive_company_name_becomes_organization_and_personal_stays() {
+        let cases = [
+            (r"C:\Users\<user>\OneDrive - Acme Corp\Documents\a.txt", r"C:\Users\<user>\OneDrive - <organization>\Documents\a.txt", 1),
+            (r"C:\Users\<user>\OneDrive - Acme Corp", r"C:\Users\<user>\OneDrive - <organization>", 1),
+            (r"saved to C:\Users\<user>\OneDrive - Acme Corp, then", r"saved to C:\Users\<user>\OneDrive - <organization>, then", 1),
+            ("D:/OneDrive - Initech Ltd/Desktop", "D:/OneDrive - <organization>/Desktop", 1),
+            (r"C:\Users\<user>\OneDrive - Personal\Pictures", r"C:\Users\<user>\OneDrive - Personal\Pictures", 0),
+            ("OneDrive - Acme Corp is a folder name in text", "OneDrive - Acme Corp is a folder name in text", 0),
+            (r"C:\Users\<user>\OneDrive - <organization>\x", r"C:\Users\<user>\OneDrive - <organization>\x", 0),
+        ];
+        for (input, want, count) in cases {
+            let mut n = 0;
+            assert_eq!(scrub_onedrive_org(input, &mut n), want, "{input}");
+            assert_eq!(n, count, "{input}");
+        }
+        // End to end: the company is gone from every shape, counted, and said in the note.
+        let src = [
+            json!({ "p": r"C:\Users\Someone Else\OneDrive - Globex Corporation\Desktop" }),
+            json!([]), json!([]), json!({}), json!([]), json!([]),
+        ];
+        let b = build_export(src, false, None, "embedded", "t", &ExportEnv::default());
+        let json = serde_json::to_string(&b.bundle).unwrap();
+        assert!(!json.contains("Globex") && !json.contains("Someone Else") && json.contains(r"OneDrive - <organization>"), "{json}");
+        assert_eq!(b.bundle["redaction"]["onedrive_organizations_replaced"], 1);
+        assert!(b.markdown.contains("A company name in a OneDrive folder name was replaced with \"organization\" in 1 place."), "{}", b.markdown);
+    }
+
+    /// The record types the export reads, field by field, each classed ONE of three ways (space-separated names):
+    /// safe = a number, flag, stamp, version, fixed Compy word, or a nested record that has its own row here;
+    /// hardware text = a device or program name the export keeps on purpose (the note says so);
+    /// redacted text = text that can carry a typed name, which the passes in `redact_export_sources` cover.
+    /// `every_field_of_the_exported_records_is_classified_here_and_a_new_one_fails_this_test` reads the struct
+    /// definitions from the source, so a field added to any of them (or to one nested in them) fails until it is
+    /// listed here with a class. Not covered: the enum-typed fields (a snapshot or action holds typed names, which
+    /// the startup-entry and plan passes handle), and `game_state` (its own key list, EXPORTED_GAME_STATE_KEYS).
+    const RECORD_FIELDS: [(&str, &str, &str, &str); 36] = [
+        ("AppliedChangeView",
+         "applied_at status is_still_active active_check app_version_at_apply ruleset_version_at_apply elevation_used hw_fingerprint on_this_rig changed_outside_holds rolled_back_at justified_by_experiment rollback_justified_by_experiment undo_contract",
+         "",
+         "id rec_id rec_title snapshot applied_action rollback_action restores_label applied_label payoff_label changed_outside nothing_restored"),
+        ("ChangedOutside", "schema recorded_at earlier_recorded_at", "", "observed"),
+        ("TrialLink", "experiment_id outcome concluded_at", "", ""),
+        ("NothingRestored", "", "", "reason plan_guid"),
+        ("HwFingerprint", "hash ram_gb", "gpu gpu_driver display", ""),
+        ("GameReadiness", "checks ready_count attention_count unknown_count advisory_count advisory drifts", "", "dismissed_ids"),
+        ("ReadinessCheck", "id label status action_uri action_label", "", "detail value drifted_titles"),
+        ("Drift", "noticed_at unreadable_now last_ready_at applied_at", "", "id label detail value_now last_ready_value titles"),
+        ("DiagnosticSection", "entries", "", "name"),
+        ("DiagnosticEntry", "", "", "label value note"),
+        ("Recommendation", "id category severity applies_to currently_applied provenance eligible risk_dimensions", "", "title description impact downside ineligible_reason"),
+        ("RiskDimensions", "reversibility stability compatibility security", "", ""),
+        ("HardwareInfo",
+         "cpu_cores_logical cpu_cores_physical cpu_frequency_mhz ram_total_bytes ram_used_bytes swap_total_bytes disks gpus physical_disks disk_health display memory_modules windows_version bios_info virtualization usb cpu_arch has_active_wired_ethernet has_wired_ethernet_port eee_switch_exposed network_adapters wifi_link network_pills game_storage monitors",
+         "cpu_brand os_name os_version kernel_version",
+         "hostname qos_policies"),
+        ("DiskInfo", "total_bytes available_bytes file_system", "", "mount_point"),
+        ("GpuInfo", "vram_bytes driver_date driver_age_days current_refresh_rate_hz", "name driver_version video_processor", ""),
+        ("PhysicalDiskInfo", "media_type bus_type size_bytes", "friendly_name", ""),
+        ("DiskHealth", "health", "friendly_name", ""),
+        ("DisplayInfo", "width height current_refresh_rate_hz max_refresh_rate_hz hdr_capable", "", ""),
+        ("MemoryModuleInfo", "capacity_bytes speed_mhz rated_speed_mhz type_name xmp_expo_status bank_channel slot_channel", "manufacturer", ""),
+        ("WindowsVersionInfo", "display_version build ubr", "edition product_name", ""),
+        ("BiosInfo", "release_date release_date_age_days", "manufacturer version", ""),
+        ("VirtualizationInfo", "hypervisor_present cpu_virtualization_enabled vbs_state", "", ""),
+        ("UsbSummary", "top_spec controller_count", "", ""),
+        ("CpuArchInfo", "", "vendor family_label architecture generation", ""),
+        ("NetAdapterInfo", "physical medium connected link_speed_bps", "name", ""),
+        ("WifiLink", "band signal_pct rx_mbps radio_type channel", "", ""),
+        ("NetworkPill", "tone", "", "label"),
+        ("GameStorage", "libraries any_fast any_slow", "", ""),
+        ("GameLibrary", "drive media_type bus_type", "launcher", ""),
+        ("MonitorInfo", "", "model manufacturer", ""),
+        ("SessionSummary",
+         "started_at duration_secs samples avg_fps avg_frametime_ms low1_fps_est peak_gpu_temp_c peak_gpu_usage_pct peak_ram_used_bytes ram_total_bytes compy_changes_active compy_changes_per_change compy_changes_cant_confirm compy_changes_legacy_active compy_changes_since_set_aside hw_fingerprint gaming_mode_active gaming_mode_plan stutter_timeline stutter_events fps_series capture_capabilities peak_cpu_temp_c peak_gpu_hotspot_temp_c background_secs_excluded frame_pacing gpu_load frame_cap ended unreadable_seconds",
+         "process_name",
+         "stutter_insight game_state"),
+        ("CountsSinceSetAside", "active cant_confirm since", "", ""),
+        ("FramePacing", "frames p50_ms p99_ms p999_ms", "", ""),
+        ("GpuLoad", "readings busy", "", ""),
+        ("StutterEvent", "at_secs kind", "", "label"),
+        ("CaptureCapabilities",
+         "backend_id backend_version graphics_api supports_app_fps supports_presented_fps supports_displayed_fps supports_frame_type supports_generated_frames supports_gpu_busy supports_display_latency supports_input_latency supports_dropped_frames supports_gpu_telemetry capture_started_at methodology_version",
+         "",
+         "limitations"),
+    ];
+
+    const RECORD_SOURCES: [&str; 10] = [
+        include_str!("readiness.rs"), include_str!("drift.rs"), include_str!("history.rs"), include_str!("diagnostics.rs"),
+        include_str!("recommendations.rs"), include_str!("hardware.rs"), include_str!("sessions.rs"), include_str!("stutter.rs"),
+        include_str!("capture.rs"), include_str!("actions.rs"),
+    ];
+
+    /// The `struct <name> {` line's fields as (field, type text), read from the record sources; None if not found.
+    fn record_struct(name: &str) -> Option<Vec<(String, String)>> {
+        let strip = |t: &'static str| -> &'static str {
+            let t = t.trim_start();
+            t.strip_prefix("pub(crate) ").or_else(|| t.strip_prefix("pub(super) ")).or_else(|| t.strip_prefix("pub ")).unwrap_or(t)
+        };
+        let head = format!("struct {name} {{");
+        for src in RECORD_SOURCES {
+            let lines: Vec<&'static str> = src.lines().collect();
+            let Some(at) = lines.iter().position(|l| strip(l).starts_with(&head)) else { continue };
+            let mut out = Vec::new();
+            for l in &lines[at + 1..] {
+                if l.starts_with('}') {
+                    break;
+                }
+                let t = strip(l);
+                if t.starts_with("//") || t.starts_with('#') {
+                    continue;
+                }
+                if let Some((f, ty)) = t.split_once(": ") {
+                    if !f.is_empty() && f.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') {
+                        out.push((f.to_string(), ty.to_string()));
+                    }
+                }
+            }
+            return Some(out);
+        }
+        None
+    }
+
+    #[test]
+    fn every_field_of_the_exported_records_is_classified_here_and_a_new_one_fails_this_test() {
+        let mut defined: HashSet<String> = HashSet::new();
+        for src in RECORD_SOURCES {
+            for l in src.lines() {
+                let t = l.trim_start();
+                let t = t.strip_prefix("pub(crate) ").or_else(|| t.strip_prefix("pub ")).unwrap_or(t);
+                if let Some(rest) = t.strip_prefix("struct ").filter(|r| r.trim_end().ends_with('{')) {
+                    defined.insert(rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect());
+                }
+            }
+        }
+        let listed: HashSet<&str> = RECORD_FIELDS.iter().map(|(n, ..)| *n).collect();
+        for (name, safe, hardware, redacted) in RECORD_FIELDS {
+            let fields = record_struct(name).unwrap_or_else(|| panic!("struct {name} is not found in the record sources: renamed or moved? update RECORD_FIELDS and RECORD_SOURCES"));
+            let all: Vec<&str> = [safe, hardware, redacted].iter().flat_map(|c| c.split_whitespace()).collect();
+            for (field, ty) in &fields {
+                let classes = all.iter().filter(|f| **f == field).count();
+                assert!(classes == 1, "{name}.{field} is {}: classify it exactly once in RECORD_FIELDS (safe, hardware text or redacted text)", if classes == 0 { "NEW and unclassified" } else { "classified twice" });
+                // A nested record must have its own row.
+                for ident in ty.split(|c: char| !(c.is_alphanumeric() || c == '_')).filter(|i| i.chars().next().is_some_and(char::is_uppercase)) {
+                    assert!(!defined.contains(ident) || listed.contains(ident), "{name}.{field} holds the record {ident}, which has no row in RECORD_FIELDS");
+                }
+            }
+            for f in all {
+                assert!(fields.iter().any(|(n, _)| n == f), "{name}.{f} is classified but the struct no longer has it: remove it from RECORD_FIELDS");
+            }
+        }
+        assert!(listed.len() == RECORD_FIELDS.len(), "a record is listed twice");
     }
 
     #[test]
