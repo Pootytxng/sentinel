@@ -1102,6 +1102,8 @@ fn ledger_lock_required() -> Refusal {
 }
 
 /// Re-plans and checks the plan the caller was shown still stands.
+// The `Err` is the finished `ClearOutcome` (a refusal or "plan changed"), returned once, on a cold path.
+#[allow(clippy::result_large_err)]
 fn replan(root: &Path, plan: &ClearPlan, facts: &ClearFacts) -> Result<ClearPlan, ClearOutcome> {
     let now = plan_clear(root, plan.scope, facts);
     if !now.refusals.is_empty() {
@@ -1207,6 +1209,7 @@ pub(crate) struct LedgerPhase {
 /// called without it. Re-plans UNDER both locks, so "no change is applied" is the answer at the moment of
 /// the delete, and an apply that landed first is seen and refuses. Deletes the ledger family in its fixed
 /// order (backup before `history.json`), stopping the family on a failure, then `experiments.json`.
+#[allow(clippy::result_large_err)] // the Err is the finished outcome, returned once on a cold path
 pub(crate) fn execute_everything_ledger_phase(
     root: &Path,
     plan: &ClearPlan,
@@ -1219,6 +1222,7 @@ pub(crate) fn execute_everything_ledger_phase(
 
 /// The body of phase 1, with the delete as a parameter so a test can look at what is held while a file
 /// goes. Production passes `delete_one`.
+#[allow(clippy::result_large_err)] // as above
 fn ledger_phase(
     root: &Path,
     plan: &ClearPlan,
@@ -2364,7 +2368,7 @@ mod tests {
             seen.borrow_mut().push((rel.to_string(), held_now()));
             delete_one(root, rel)
         });
-        let phase = phase.ok().expect("phase 1 runs");
+        let phase = phase.expect("phase 1 runs");
         drop(ledger);
         drop(gate);
         let seen = seen.borrow();
