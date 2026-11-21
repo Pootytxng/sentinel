@@ -44,8 +44,14 @@ pub(crate) struct ExportRedaction {
     power_plan_names: u32,
     /// Distinct per-install ids replaced ("custom-plan:<guid>", "interface:<guid>"), first seen first.
     ids: Vec<String>,
+    /// Distinct Trust Ledger row ids replaced by "change N". A row id is "<rec id>-<millis>", and the rec id of
+    /// a startup entry carries the typed entry name, so every row id is numbered, not only those.
+    change_ids: u32,
     /// Occurrences of this PC's user, profile-folder, computer or domain name replaced anywhere.
     identity_names: u32,
+    /// Places where this PC's computer or user name, being also an ordinary word of Compy's own export text,
+    /// was left in free text (it is replaced only in file paths and name fields).
+    ordinary_word_names_left: u32,
     /// `C:\Users\<name>\` segments rewritten to `C:\Users\<user>\`.
     user_name_segments: u32,
 }
@@ -120,6 +126,79 @@ fn usable_literals(mut raw: Vec<(String, &'static str)>, profile_leaf: Option<St
     raw
 }
 
+/// The words of Compy's own static export text: every alphabetic word of three or more letters in a string
+/// literal of this file's non-test code (the report headings, labels and sentences), lower-case. Computed
+/// from the source at build time (`include_str!`), never hand-listed, so a new label joins it by itself.
+fn export_text_words() -> &'static HashSet<String> {
+    static WORDS: std::sync::OnceLock<HashSet<String>> = std::sync::OnceLock::new();
+    WORDS.get_or_init(|| {
+        let src = include_str!("export.rs");
+        // The test module comes last; its canary strings are not export text.
+        let code = src.split("\n#[cfg(test)]\n").next().unwrap_or(src);
+        let c: Vec<char> = code.chars().collect();
+        let (mut literals, mut i) = (String::new(), 0usize);
+        while i < c.len() {
+            match c[i] {
+                '/' if c.get(i + 1) == Some(&'/') => {
+                    while i < c.len() && c[i] != '\n' {
+                        i += 1;
+                    }
+                }
+                '\'' => {
+                    // A char literal ('"', '\\', '\''): skipped whole so its quote does not open a string.
+                    i += if c.get(i + 1) == Some(&'\\') { 4 } else if c.get(i + 2) == Some(&'\'') { 3 } else { 1 };
+                }
+                '"' => {
+                    i += 1;
+                    while i < c.len() && c[i] != '"' {
+                        if c[i] == '\\' {
+                            i += 1;
+                        } else {
+                            literals.push(c[i]);
+                        }
+                        i += 1;
+                    }
+                    literals.push(' ');
+                    i += 1;
+                }
+                _ => i += 1,
+            }
+        }
+        literals.split(|ch: char| !ch.is_alphabetic()).filter(|w| w.chars().count() >= 3).map(str::to_lowercase).collect()
+    })
+}
+
+/// A name that is a single ordinary word: all letters, and a word Compy's own export text uses. Replacing it
+/// everywhere would corrupt the sentences around it ("Power saving"), so it is replaced only where a
+/// backslash touches it (file paths, `\\HOST\share`) and in the name fields ([`IDENTITY_KEYS`]).
+fn is_ordinary_word(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(char::is_alphabetic) && export_text_words().contains(&name.to_lowercase())
+}
+
+/// Object keys that hold this PC's own computer, domain or account name as the whole value.
+const IDENTITY_KEYS: [&str; 6] = ["hostname", "computer_name", "machine_name", "domain", "user_name", "username"];
+
+/// In place: [`is_ordinary_word`] `name` replaced in the name fields (the whole value) and where a backslash
+/// touches it; `n` counts what was replaced, `left` the plain-word matches that were kept.
+fn replace_ordinary_name(v: &mut Value, name: &str, to: &str, n: &mut u32, left: &mut u32) {
+    match v {
+        Value::String(s) => *s = replace_name_scoped(s, name, to, n, Some(left)),
+        Value::Array(a) => a.iter_mut().for_each(|x| replace_ordinary_name(x, name, to, n, left)),
+        Value::Object(o) => {
+            for (k, x) in o.iter_mut() {
+                match x {
+                    Value::String(s) if IDENTITY_KEYS.contains(&k.as_str()) && s.trim().eq_ignore_ascii_case(name) => {
+                        *s = to.to_string();
+                        *n += 1;
+                    }
+                    other => replace_ordinary_name(other, name, to, n, left),
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 /// One of the four plans Windows ships (the one table is [`crate::STOCK_POWER_SCHEMES`]); anything else
 /// is per-install.
 pub(crate) fn is_stock_plan(guid: &str) -> bool {
@@ -136,6 +215,13 @@ fn guid_like(s: &str) -> bool {
 /// CJK name still matches inside longer text). A name that is not [`long_enough`] is only replaced when it
 /// is the whole string, so a 1-2 character name cannot shred text.
 fn replace_name(s: &str, name: &str, to: &str, count: &mut u32) -> String {
+    replace_name_scoped(s, name, to, count, None)
+}
+
+/// [`replace_name`], or, with `left` given, the paths-only form for a name that is also an ordinary word: a
+/// match is replaced only when a backslash touches it (`\\HOST\share`, `C:\Games\Name\x`); every other match
+/// is kept and counted in `left`.
+fn replace_name_scoped(s: &str, name: &str, to: &str, count: &mut u32, mut left: Option<&mut u32>) -> String {
     if !long_enough(name) {
         if s.eq_ignore_ascii_case(name) {
             *count += 1;
@@ -153,8 +239,16 @@ fn replace_name(s: &str, name: &str, to: &str, count: &mut u32) -> String {
             let before = !(head && i > 0 && sc[i - 1].is_ascii_alphanumeric());
             let after = !(tail && end < sc.len() && sc[end].is_ascii_alphanumeric());
             if before && after {
-                out.push_str(to);
-                *count += 1;
+                let in_path = left.is_none() || (i > 0 && sc[i - 1] == '\\') || (end < sc.len() && sc[end] == '\\');
+                if in_path {
+                    out.push_str(to);
+                    *count += 1;
+                } else {
+                    if let Some(l) = left.as_deref_mut() {
+                        *l += 1;
+                    }
+                    out.extend(&sc[i..end]);
+                }
                 i = end;
                 continue;
             }
@@ -233,8 +327,10 @@ impl ExportRedaction {
             "qos_policy_names_replaced": self.qos_policy_names,
             "power_plan_names_replaced": self.power_plan_names,
             "custom_ids_replaced": self.ids.len(),
+            "change_ids_replaced": self.change_ids,
             "game_state_fields_dropped": self.game_state_fields_dropped,
             "identity_names_replaced": self.identity_names,
+            "ordinary_word_names_left_in_text": self.ordinary_word_names_left,
             "user_name_segments_replaced": self.user_name_segments,
             "running_at_start_omitted": true,
             "summary": self.note(),
@@ -269,6 +365,9 @@ impl ExportRedaction {
             let n = self.ids.len() as u32;
             push(format!("{n} custom power-plan or network-interface ID{} replaced with numbered labels.", s(n)));
         }
+        if self.change_ids > 0 {
+            push(format!("{} Trust Ledger change ID{} replaced with \"change 1\", \"change 2\" and so on.", self.change_ids, s(self.change_ids)));
+        }
         if self.game_state_fields_dropped > 0 {
             push(format!("{} unrecognised game-state field{} left out.", self.game_state_fields_dropped, s(self.game_state_fields_dropped)));
         }
@@ -278,6 +377,10 @@ impl ExportRedaction {
         }
         if self.identity_names > 0 {
             push(format!("Your Windows user name or computer name was replaced in {} place{}, file paths included.", self.identity_names, s(self.identity_names)));
+        }
+        if self.ordinary_word_names_left > 0 {
+            let n = self.ordinary_word_names_left;
+            push(format!("Your Windows user name or computer name is also an ordinary word in this report, so it was replaced only in file paths and name fields and left in {n} other place{} where it reads as a plain word.", s(n)));
         }
         push(if self.user_name_segments == 0 {
             "No other account's name was found in a file path.".to_string()
@@ -429,6 +532,9 @@ fn collect_ids(v: &Value, out: &mut Vec<(&'static str, String)>) {
     }
 }
 
+/// The fields of a plan row (readiness check, Drift Watch row, diagnostics entry) that hold a plan's name.
+const PLAN_VALUE_KEYS: [&str; 3] = ["value", "value_now", "last_ready_value"];
+
 /// Names of power plans that are not stock, from the places a plan name sits next to its identity: the
 /// diagnostics "Active power plan" row, the readiness power-profile row and any object that holds both a
 /// plan GUID and a name. The active plan keeps its name only when the machine says its GUID is stock.
@@ -439,8 +545,12 @@ fn custom_plan_names(sources: &[&Value], active: Option<&ActivePlan>) -> Vec<Str
                 let label = o.get("label").and_then(Value::as_str);
                 let id = o.get("id").and_then(Value::as_str);
                 if label == Some("Active power plan") || id == Some("power-profile") {
-                    if let Some(n) = o.get("value").and_then(Value::as_str) {
-                        keyed.push(n.to_string());
+                    // `value` is the readiness row's; `value_now` and `last_ready_value` are the Drift Watch
+                    // row's (what the plan reads now, and what it read when last ready: a plan no longer active).
+                    for key in PLAN_VALUE_KEYS {
+                        if let Some(n) = o.get(key).and_then(Value::as_str) {
+                            keyed.push(n.to_string());
+                        }
                     }
                 }
                 let guid = ["guid", "plan_guid", "prior_guid"].iter().find_map(|k| o.get(*k).and_then(Value::as_str));
@@ -498,7 +608,7 @@ fn replace_plan_names(v: &mut Value, names: &[String], ledger_row: bool, n: &mut
             for (k, x) in o.iter_mut() {
                 match x {
                     Value::String(s) if ledger_row => *s = swap(s.as_str(), false, n),
-                    Value::String(s) if plan_row && k == "value" => *s = swap(s.as_str(), false, n),
+                    Value::String(s) if plan_row && PLAN_VALUE_KEYS.contains(&k.as_str()) => *s = swap(s.as_str(), false, n),
                     Value::String(s) if plan_row && k == "detail" => *s = swap(s.as_str(), true, n),
                     Value::String(s) if with_guid && k == "name" => *s = swap(s.as_str(), false, n),
                     other => replace_plan_names(other, names, ledger_row, n),
@@ -513,7 +623,7 @@ fn replace_plan_names(v: &mut Value, names: &[String], ledger_row: bool, n: &mut
 
 /// PURE, in place: everything the shared export redacts, over the six source values. Run once, before
 /// any report is built from them, so the Markdown, the Discord block and the JSON all agree. Order:
-/// sessions (programs, game_state keys), QoS names, startup-entry names (their own ledger rows, plus the
+/// sessions (programs, game_state keys), QoS names, Trust Ledger row ids ("change N"), startup-entry names (their own ledger rows, plus the
 /// exact `startup-entry:<name>` id elsewhere), custom plan names (plan fields only), per-install ids, this
 /// PC's own names (word boundaries), and last the user-name segment of any path.
 pub(crate) fn redact_export_sources(sources: [&mut Value; 6], env: &ExportEnv) -> ExportRedaction {
@@ -525,6 +635,25 @@ pub(crate) fn redact_export_sources(sources: [&mut Value; 6], env: &ExportEnv) -
         r.qos_policy_names += q.len() as u32;
         *q = (1..=q.len()).map(|i| json!(format!("QoS policy {i}"))).collect();
     }
+    // Trust Ledger row ids ("<rec id>-<millis>") carry the rec id, which for a startup entry is the typed
+    // entry name: number every row id ("change 1", in ledger order) and follow it wherever else the id
+    // is repeated. Trial ids ("exp:<n>-<millis>") are a counter and a clock, no name: kept as they are.
+    let mut change_ids: Vec<String> = Vec::new();
+    for id in all[2].as_array().into_iter().flatten().filter_map(|row| row.get("id").and_then(Value::as_str)).filter(|id| !id.is_empty()) {
+        if !change_ids.iter().any(|x| x == id) {
+            change_ids.push(id.to_string());
+        }
+    }
+    for (i, old) in change_ids.iter().enumerate() {
+        let label = format!("change {}", i + 1);
+        for row in all[2].as_array_mut().into_iter().flatten().filter(|row| row.get("id").and_then(Value::as_str) == Some(old.as_str())) {
+            row["id"] = Value::String(label.clone());
+        }
+        if long_enough(old) {
+            all.iter_mut().for_each(|v| map_strings(v, &mut |s| replace_name(s, old, &label, &mut 0)));
+        }
+    }
+    r.change_ids = change_ids.len() as u32;
     // Startup entries: shared "other program N" numbering; a listed program keeps its name.
     for name in startup_entry_names(&*all[2]) {
         if crate::running_at_start::lookup(&name).is_some() || crate::running_at_start::lookup(&format!("{name}.exe")).is_some() {
@@ -532,12 +661,35 @@ pub(crate) fn redact_export_sources(sources: [&mut Value; 6], env: &ExportEnv) -
         }
         let ph = r.placeholder(&name);
         let mut n = 0;
+        // The rows' own titles ("Disable startup entry: <name>") are repeated verbatim outside the ledger: the
+        // readiness applied-changes row (`detail`, `drifted_titles`) and the Drift Watch row (`titles`). The
+        // title is replaced as a whole wherever it stands, so a name too short for the free-text rule is
+        // covered there too (the title is "<verb> startup entry: <name>", a shape this code knows).
+        let titles: Vec<(String, String)> = all[2]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|row| row_startup_names(row).iter().any(|x| x.eq_ignore_ascii_case(&name)))
+            .filter_map(|row| row.get("rec_title").and_then(Value::as_str))
+            .map(|t| {
+                let suffix = format!(": {name}");
+                let new = match t.len().checked_sub(suffix.len()).filter(|&at| t.is_char_boundary(at) && t[at..].eq_ignore_ascii_case(&suffix)) {
+                    Some(at) => format!("{}: {ph}", &t[..at]),
+                    None => replace_name(t, &name, &ph, &mut 0),
+                };
+                (t.to_string(), new)
+            })
+            .filter(|(old, new)| old != new)
+            .collect();
         // Only the Trust Ledger rows that hold this entry carry its name in free text; everywhere else only
         // the exact id "startup-entry:<name>" is replaced, so "Steam" in a game-library note stays.
         if let Some(rows) = all[2].as_array_mut() {
             for row in rows.iter_mut().filter(|row| row_startup_names(row).iter().any(|x| x.eq_ignore_ascii_case(&name))) {
                 map_strings(row, &mut |s| replace_name(s, &name, &ph, &mut n));
             }
+        }
+        for (old, new) in &titles {
+            all.iter_mut().for_each(|v| map_strings(v, &mut |s| replace_name(s, old, new, &mut n)));
         }
         let (id, id_ph) = (format!("startup-entry:{name}"), format!("startup-entry:{ph}"));
         all.iter_mut().for_each(|v| map_strings(v, &mut |s| replace_name(s, &id, &id_ph, &mut n)));
@@ -569,7 +721,14 @@ pub(crate) fn redact_export_sources(sources: [&mut Value; 6], env: &ExportEnv) -
     }
     for (value, mask) in env.literals.iter().filter(|(v, _)| long_enough(v)) {
         let mut n = 0;
-        all.iter_mut().for_each(|v| map_strings(v, &mut |s| replace_name(s, value, mask, &mut n)));
+        if is_ordinary_word(value) {
+            // An ordinary word of Compy's own text: only in paths and name fields, never in free text.
+            let mut left = 0;
+            all.iter_mut().for_each(|v| replace_ordinary_name(v, value, mask, &mut n, &mut left));
+            r.ordinary_word_names_left += left;
+        } else {
+            all.iter_mut().for_each(|v| map_strings(v, &mut |s| replace_name(s, value, mask, &mut n)));
+        }
         r.identity_names += n;
     }
     let mut paths = 0;
@@ -2140,13 +2299,14 @@ mod export_tests {
         assert_eq!(n("qos_policy_names_replaced"), 2);
         assert_eq!(n("power_plan_names_replaced"), 5, "diagnostics, readiness value + detail, applied_plan, restores_label");
         assert_eq!(n("custom_ids_replaced"), 2, "one custom plan guid (3 places), one interface");
+        assert_eq!(n("change_ids_replaced"), 4, "the four Trust Ledger rows");
         assert_eq!(n("game_state_fields_dropped"), 1, "future_field");
         assert_eq!(n("identity_names_replaced"), 7, "user x4 (path, UNC, escaped, note), profile x1, host x2 (hostname field, note)");
         assert_eq!(n("user_name_segments_replaced"), 2, "a quoted spaced name and a parenthesised one");
         assert_eq!(j["running_at_start_omitted"], true);
         let note = j["summary"].as_str().unwrap();
         assert!(note.starts_with("6 program names in game sessions and 5 startup-entry names not on Compy's known-programs list (4 programs in all) replaced"), "{note}");
-        for part in ["2 QoS policy names replaced.", "A custom power plan name was replaced in 5 places.", "2 custom power-plan or network-interface IDs replaced", "1 unrecognised game-state field left out.", "replaced in 7 places, file paths included.", "Another account's name was removed from 2 places in file paths.", "Kept as they are: game program names, your typed note, hardware and network adapter names."] {
+        for part in ["2 QoS policy names replaced.", "A custom power plan name was replaced in 5 places.", "2 custom power-plan or network-interface IDs replaced", "4 Trust Ledger change IDs replaced with \"change 1\", \"change 2\" and so on.", "1 unrecognised game-state field left out.", "replaced in 7 places, file paths included.", "Another account's name was removed from 2 places in file paths.", "Kept as they are: game program names, your typed note, hardware and network adapter names."] {
             assert!(note.contains(part), "{part} missing from {note}");
         }
     }
@@ -2395,6 +2555,224 @@ mod export_tests {
             assert_eq!(scrub_user_paths(shared, &mut n), shared);
         }
         assert_eq!(n, 0);
+    }
+
+    #[test]
+    fn a_ledger_row_id_that_carries_a_typed_name_becomes_change_n_and_references_follow() {
+        // How a row id is built (history.rs build_applied_change_with): "<rec id>-<millis>", and the rec id of
+        // a startup entry is "startup-entry:<typed name>". A Trial id is "exp:<count>-<millis>": no name.
+        let (a, b, c) = (format!("startup-entry:{C_STARTUP}-1731000000001"), "high-performance-plan-1731000000002", "bloat-task:telemetry-1731000000003");
+        let mut v = [
+            json!({}),
+            json!([]),
+            json!([
+                { "id": a, "rec_id": format!("startup-entry:{C_STARTUP}"), "rec_title": "t" },
+                { "id": b, "rec_id": "high-performance-plan", "justified_by_experiment": { "experiment_id": "exp:3-1731000000009", "outcome": "recommended" } },
+                { "id": c, "rec_id": "bloat-task:telemetry" },
+                { "id": b, "rec_id": "high-performance-plan" }
+            ]),
+            json!({ "checks": [{ "id": "k", "detail": format!("Last change {a} and {b}.") }] }),
+            json!([]),
+            json!([]),
+        ];
+        let r = redact_export_sources(v.each_mut(), &ExportEnv::default());
+        let ids: Vec<&str> = v[2].as_array().unwrap().iter().map(|row| row["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["change 1", "change 2", "change 3", "change 2"], "numbered in ledger order; the same id keeps its number");
+        assert_eq!(v[3]["checks"][0]["detail"], "Last change change 1 and change 2.", "a reference follows its row");
+        assert_eq!(v[2][1]["justified_by_experiment"]["experiment_id"], "exp:3-1731000000009", "a Trial id holds no name and stays");
+        assert_eq!(r.change_ids, 3);
+        assert!(!all_text(&v).contains("1731000000001") && !all_text(&v).contains(&C_STARTUP.to_lowercase()), "{}", all_text(&v));
+        assert!(r.note().contains("3 Trust Ledger change IDs replaced"), "{}", r.note());
+    }
+
+    fn lone(sources: [Value; 6], env: &ExportEnv) -> ([Value; 6], ExportRedaction) {
+        let mut s = sources;
+        let r = redact_export_sources(s.each_mut(), env);
+        (s, r)
+    }
+
+    #[test]
+    fn a_plan_name_beside_a_guid_outside_a_ledger_row_is_redacted_when_custom_and_kept_when_stock() {
+        // changed_outside.observed is { kind, guid, name } inside a Trust Ledger row; the same shape can sit
+        // anywhere (a diagnostics entry), so it is tested in both places, with no active plan read.
+        let custom = "cccccccc-1111-2222-3333-444444444444";
+        let observed = |guid: &str, name: &str| json!({ "kind": "power-plan", "guid": guid, "name": name });
+        let (s, r) = lone(
+            [
+                json!({}),
+                json!([]),
+                json!([
+                    { "id": "row-one", "rec_id": "core-parking", "rec_title": "Core parking", "status": "applied",
+                      "changed_outside": { "schema": 1, "recorded_at": "t", "observed": observed(custom, "Canary Rig Plan") } },
+                    { "id": "row-two", "rec_id": "core-parking", "rec_title": "Core parking", "status": "applied",
+                      "changed_outside": { "schema": 1, "recorded_at": "t", "observed": observed("381b4222-f694-41f0-9685-ff5bb260df2e", "Balanced") } }
+                ]),
+                json!({}),
+                json!([]),
+                json!([{ "name": "Power", "entries": [], "observed": observed(custom, "Canary Rig Plan") }]),
+            ],
+            &ExportEnv::default(),
+        );
+        let text = all_text(&s);
+        assert!(!text.contains("canary rig plan") && !text.contains(custom), "{text}");
+        assert_eq!(s[2][0]["changed_outside"]["observed"]["name"], CUSTOM_PLAN);
+        assert_eq!(s[2][0]["changed_outside"]["observed"]["guid"], "custom-plan-1");
+        assert_eq!(s[5][0]["observed"]["name"], CUSTOM_PLAN);
+        assert_eq!(s[2][1]["changed_outside"]["observed"]["name"], "Balanced", "a stock plan keeps its name");
+        assert_eq!(r.power_plan_names, 2);
+    }
+
+    #[test]
+    fn a_name_that_is_an_ordinary_word_of_the_export_text_is_replaced_in_paths_and_name_fields_only() {
+        let words = export_text_words();
+        assert!(words.contains("hardware") && words.contains("sessions"), "the headings are in the set");
+        assert!(!words.contains("canaryhostpc") && !words.contains("futurecanaryfield"), "test-only strings are not export text");
+        assert!(is_ordinary_word("Hardware") && is_ordinary_word("SESSIONS"));
+        assert!(!is_ordinary_word("Zorbakplex") && !is_ordinary_word("Hardware2") && !is_ordinary_word("Hard ware") && !is_ordinary_word(""));
+        // A computer named "Hardware" (a heading of the report), not on the skip list.
+        let env = ExportEnv { literals: vec![("Hardware".into(), "<host>")], active_plan: None };
+        let (s, r) = lone(
+            [
+                json!({ "hostname": "HARDWARE", "cpu_brand": "Hardware and software", "unc": r"\\HARDWARE\share\x", "p": r"C:\Games\Hardware\x" }),
+                json!([]),
+                json!([]),
+                json!({}),
+                json!([]),
+                json!([]),
+            ],
+            &env,
+        );
+        assert_eq!(s[0]["hostname"], "<host>", "the name field");
+        assert_eq!(s[0]["cpu_brand"], "Hardware and software", "free text is not shredded");
+        assert_eq!(s[0]["unc"], r"\\<host>\share\x");
+        assert_eq!(s[0]["p"], r"C:\Games\<host>\x");
+        assert_eq!((r.identity_names, r.ordinary_word_names_left), (3, 1));
+        let note = r.note();
+        assert!(note.contains("replaced in 3 places, file paths included."), "{note}");
+        assert!(note.contains("also an ordinary word in this report, so it was replaced only in file paths and name fields and left in 1 other place where it reads as a plain word."), "{note}");
+        // A name that is not an ordinary word is still replaced everywhere, and says nothing about words.
+        let env = ExportEnv { literals: vec![("Zorbakplex".into(), "<host>")], active_plan: None };
+        let (s, r) = lone([json!({ "x": "Zorbakplex rig" }), json!([]), json!([]), json!({}), json!([]), json!([])], &env);
+        assert_eq!(s[0]["x"], "<host> rig");
+        assert!(!r.note().contains("ordinary word"));
+    }
+
+    #[test]
+    fn a_computer_or_user_named_with_a_skip_list_word_never_corrupts_the_text() {
+        let text = "Gaming Mode: Power saving on a Desktop PC, Guest account, Windows System";
+        for name in ["GAMING", "Desktop", "Power", "Guest"] {
+            let env = ExportEnv { literals: usable_literals(vec![(name.into(), "<host>")], None), active_plan: None };
+            assert!(env.literals.is_empty(), "{name} is on the skip list");
+            let (s, r) = lone([json!({ "hostname": name, "note": text }), json!([]), json!([]), json!({}), json!([]), json!([])], &env);
+            assert_eq!(s[0]["note"], text, "{name}");
+            assert!(!s.iter().any(|v| v.to_string().contains("<host> saving")), "{name}");
+            assert_eq!(r.identity_names, 0);
+        }
+        // A user named with one of them: the sentence is intact and the profile path is still scrubbed by shape.
+        for name in ["GAMING", "Desktop", "Power", "Guest"] {
+            let env = ExportEnv { literals: usable_literals(vec![(name.into(), "<user>")], Some(name.into())), active_plan: None };
+            let (s, _) = lone([json!({ "note": text, "p": format!(r"C:\Users\{name}\x") }), json!([]), json!([]), json!({}), json!([]), json!([])], &env);
+            assert_eq!(s[0]["note"], text, "{name}");
+            assert_eq!(s[0]["p"], r"C:\Users\<user>\x", "{name}: a path is still scrubbed");
+        }
+    }
+
+    #[test]
+    fn the_drift_watch_fields_redact_plan_names_and_startup_titles() {
+        let title = format!("Disable startup entry: {C_STARTUP}");
+        let short = "Disable startup entry: QQ";
+        let drift_plan = json!({ "id": "power-profile", "label": "Power profile", "detail": "Active plan \"Gaming Rig\" is not a performance plan.",
+            "noticed_at": "t", "unreadable_now": false, "value_now": "Gaming Rig", "last_ready_at": "t", "last_ready_value": "Old Rig Plan",
+            "titles": [], "applied_at": [] });
+        let drift_stock = json!({ "id": "power-profile", "label": "Power profile", "detail": "x", "noticed_at": "t", "unreadable_now": true,
+            "value_now": null, "last_ready_at": "t", "last_ready_value": "High performance", "titles": [], "applied_at": [] });
+        let drift_changes = json!({ "id": "applied-changes", "label": "Applied changes", "detail": format!("2 changes are off: {title}, {short}"),
+            "noticed_at": "t", "unreadable_now": false, "value_now": null, "last_ready_at": null, "last_ready_value": null,
+            "titles": [title, short], "applied_at": ["t", "t"] });
+        let env = ExportEnv { literals: vec![], active_plan: Some(ActivePlan { name: "Gaming Rig".into(), guid: "dddddddd-1111-2222-3333-444444444444".into() }) };
+        let (s, r) = lone(
+            [
+                json!({}),
+                json!([]),
+                json!([
+                    { "id": "a-1", "rec_id": format!("startup-entry:{C_STARTUP}"), "rec_title": title, "snapshot": { "kind": "startup-approval", "name": C_STARTUP } },
+                    { "id": "b-2", "rec_id": "startup-entry:QQ", "rec_title": short, "snapshot": { "kind": "startup-approval", "name": "QQ" } }
+                ]),
+                json!({ "checks": [{ "id": "applied-changes", "label": "Applied changes", "detail": format!("2 changes are off: {title}, {short}"),
+                                      "drifted_titles": [title, short] }],
+                        "drifts": [drift_plan, drift_stock, drift_changes] }),
+                json!([]),
+                json!([]),
+            ],
+            &env,
+        );
+        let text = all_text(&s);
+        let startup_lc = C_STARTUP.to_lowercase();
+        for gone in ["gaming rig", "old rig plan", startup_lc.as_str()] {
+            assert!(!text.contains(gone), "{gone} survived: {text}");
+        }
+        assert!(!text.contains("startup entry: qq"), "a two-letter entry in a title: {text}");
+        let d = &s[3]["drifts"];
+        assert_eq!(d[0]["value_now"], CUSTOM_PLAN);
+        assert_eq!(d[0]["last_ready_value"], CUSTOM_PLAN, "a plan no longer active is a plan name too");
+        assert_eq!(d[0]["detail"], format!("Active plan \"{CUSTOM_PLAN}\" is not a performance plan."));
+        assert_eq!(d[1]["last_ready_value"], "High performance", "a stock plan keeps its name");
+        assert_eq!(d[1]["value_now"], Value::Null);
+        assert_eq!(d[2]["titles"], json!(["Disable startup entry: other program 1", "Disable startup entry: other program 2"]));
+        assert_eq!(s[3]["checks"][0]["drifted_titles"], d[2]["titles"]);
+        assert_eq!(d[2]["applied_at"], json!(["t", "t"]), "stamps are untouched");
+        assert!(r.power_plan_names >= 3 && r.startup_entry_names >= 2);
+    }
+
+    #[test]
+    fn every_field_of_a_session_row_and_a_drift_row_is_classified_here_and_a_new_one_breaks_this_build() {
+        // Exhaustive patterns (no `..`): adding a field to either struct is a compile error until it is named
+        // below, under the class that says how the export treats it. game_state has its own key list
+        // (EXPORTED_GAME_STATE_KEYS); these two have none, so this is their classification.
+        let row: crate::sessions::SessionSummary = serde_json::from_value(json!({
+            "started_at": "t", "duration_secs": 40, "process_name": "game.exe", "samples": 1, "avg_fps": 1.0,
+            "avg_frametime_ms": 1.0, "low1_fps_est": 1.0, "unreadable_seconds": 30
+        }))
+        .unwrap();
+        let crate::sessions::SessionSummary {
+            // Numbers, booleans and Compy's own fixed words: nothing a person typed.
+            started_at: _, duration_secs: _, samples: _, avg_fps: _, avg_frametime_ms: _, low1_fps_est: _, peak_gpu_temp_c: _,
+            peak_gpu_usage_pct: _, peak_ram_used_bytes: _, ram_total_bytes: _, compy_changes_active: _, compy_changes_per_change: _,
+            compy_changes_cant_confirm: _, compy_changes_legacy_active: _, compy_changes_since_set_aside: _, gaming_mode_active: _,
+            gaming_mode_plan: _, stutter_timeline: _, fps_series: _, capture_capabilities: _, peak_cpu_temp_c: _,
+            peak_gpu_hotspot_temp_c: _, background_secs_excluded: _, frame_pacing: _, gpu_load: _, frame_cap: _, ended: _,
+            // M6-unread: whole seconds, rendered through fmt_duration with a fixed sentence.
+            unreadable_seconds,
+            // Hardware names only (the rig hash inputs), kept as the export says it keeps hardware names.
+            hw_fingerprint: _,
+            // The game's own program name: kept by design (the note says so).
+            process_name: _,
+            // Program names from the machine: redacted by redact_session_rows (labels, sentence).
+            stutter_insight: _, stutter_events: _,
+            // Cut to EXPORTED_GAME_STATE_KEYS by redact_session_rows.
+            game_state: _,
+        } = row;
+        assert_eq!(unreadable_seconds, 30);
+        let drift = crate::drift::Drift {
+            id: String::new(), label: String::new(), detail: String::new(), noticed_at: String::new(), unreadable_now: false,
+            value_now: None, last_ready_at: None, last_ready_value: None, titles: vec![], applied_at: vec![],
+        };
+        let crate::drift::Drift {
+            // Fixed check id and label, stamps, a flag.
+            id: _, label: _, noticed_at: _, unreadable_now: _, last_ready_at: _, applied_at: _,
+            // A check's own text: plan names by replace_plan_names (PLAN_VALUE_KEYS, quoted detail), this PC's
+            // names by the literal pass.
+            detail: _, value_now: _, last_ready_value: _,
+            // Applied-change titles: startup-entry titles by the startup loop.
+            titles: _,
+        } = drift;
+        // The unmeasured seconds reach the export as a number and Compy's fixed sentence.
+        let mut sources = canary_sources();
+        sources[4] = json!([{ "process_name": "game.exe", "duration_secs": 900, "samples": 800, "unreadable_seconds": 90,
+            "avg_fps": 141.0, "avg_frametime_ms": 7.1, "low1_fps_est": 98.0 }]);
+        let b = build_export(sources, false, None, "embedded", "t", &canary_env());
+        assert_eq!(b.bundle["sessions"][0]["unreadable_seconds"], 90);
+        assert!(b.markdown.contains("Compy couldn't measure 1m 30s of it (left out of these figures)"), "{}", b.markdown);
     }
 
     #[test]
