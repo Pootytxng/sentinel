@@ -199,8 +199,13 @@ ran. Before the report is written, Compy changes these things in the copy it exp
   counts and timing kept.
 - Your Windows user name and your computer name are replaced with `<user>` and `<host>` (as whole
   words; a name shorter than three letters, or one of 28 common words Compy will not replace in text (for example
-  Admin, User, Owner, Max, Gamer), is left alone except in file paths, so such a name can still appear in text that is not a path). In any path under
-  `C:\Users\<name>` the name is always replaced. QoS policy
+  Admin, User, Owner, Max, Gamer), is left alone except in file paths, so such a name can still appear in text that is not a path; a name that is
+  a single ordinary word Compy's own report text uses, such as a computer named Hardware, is replaced only in file
+  paths and in the computer-name fields, never in running text, and the last lines of the report say how many places
+  it was left in). In any path under `C:\Users\<name>` (on any drive or network share, with either slash, with an
+  apostrophe or spaces in the name) the name is always replaced, except the shared Public and Default profiles, which
+  are not a person's. The id of each change in the Trust Ledger is replaced by "change 1", "change 2" and so on,
+  because an id carries the name of a startup entry you changed. QoS policy
   names are replaced by a numbered label. A power plan with a name you or your PC maker chose is shown
   as "a custom power plan" (Windows' own plans, and copies of them such as the Ultimate Performance
   plan Compy creates, keep their names), and the ids of custom power plans and network interfaces are
