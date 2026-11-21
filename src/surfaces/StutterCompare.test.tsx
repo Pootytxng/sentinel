@@ -149,7 +149,7 @@ describe("the Care view compares on a stutter arrival", () => {
     expect(screen.getByText(/Your latest Valorant session vs your last steady one/)).toBeInTheDocument();
     expect(screen.getByText(/none of it is a proven cause/)).toBeInTheDocument();
     // The cause heading itself carries the tag, not only the section.
-    const cause = screen.getByText("Possible cause");
+    const cause = screen.getByText("Possible reason");
     expect(cause.parentElement?.textContent).toMatch(/not proven cause/i);
     // One-shot: the flag is spent, and no Monitor/Benchmark command was used.
     expect(localStorage.getItem(CARE_ARRIVAL_KEY)).toBeNull();

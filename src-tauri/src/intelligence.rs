@@ -2425,7 +2425,7 @@ fn what_changed_inner(inp: &WhatChangedInputs, ledger: LedgerHealth) -> WhatChan
             // The confidence word lives on the hypothesis itself, where the shared confidence
             // vocabulary renders it with its gloss (self-review 2026-10-28, P7-confidence). The
             // headline is prose and must not carry a raw, unglossed "(medium confidence)".
-            headline.push_str(&format!(" Most likely: {}.", leader.title));
+            headline.push_str(&format!(" Possible reason: {}.", leader.title));
         }
         next_action = leader.next_test.clone();
         next_action_rec_id = leader.next_test_rec_id.clone();
@@ -3980,7 +3980,7 @@ mod tests {
         assert_eq!(leader.confidence, Confidence::High);
         // self-review 2026-10-28 (P7-confidence): the headline names the likely cause in prose and
         // leaves the confidence word to the hypothesis, where the UI glosses it.
-        assert!(r.headline.contains(&format!("Most likely: {}.", leader.title)), "{}", r.headline);
+        assert!(r.headline.contains(&format!("Possible reason: {}.", leader.title)), "{}", r.headline);
         assert!(!r.headline.contains("confidence"), "raw confidence word in headline: {}", r.headline);
         assert!(leader.supporting_evidence[0].contains("25.5.1"));
         // Recorded facts rule OUT what matched: gaming mode + hardware + compy config.

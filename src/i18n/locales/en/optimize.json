@@ -500,7 +500,7 @@
     "headlineDefault": "WHAT CHANGED? · vs your previous {{game}} session",
     "noiseFloor": "noise floor +{{rise}}% / -{{fall}}%",
     "noiseUnmeasured": "this game's noise isn't measured yet",
-    "mostLikelyCause": "Possible cause",
+    "mostLikelyCause": "Possible reason",
     "nextTest": "Next test",
     "rollBackNamed": "Roll back \"{{title}}\"",
     "rollingBackEllipsis": "Rolling back…",
