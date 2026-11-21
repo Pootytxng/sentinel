@@ -48,7 +48,7 @@ function buildMailto(notes: string, r: ExportResult, subjectTag: string, t: TFun
   const subject = subjectTag ? `${base} — ${subjectTag}` : base;
   const note = notes.trim() || t("settings.feedback.mailNoNote");
   const snapshot = r.discord?.trim() ? `\n\n${t("settings.feedback.mailSnapshotHeader")}\n${r.discord.trim()}` : "";
-  const pointer = `\n\n${t("settings.feedback.mailPointer", { path: r.path })}`;
+  const pointer = `\n\n${t("settings.feedback.mailPointer", { path: r.display_path })}`;
   let body = note + snapshot + pointer;
   if (body.length > MAILTO_BODY_MAX) {
     // Drop the inline snapshot first (it's in the saved report), then trim the note if still over.
@@ -209,7 +209,7 @@ export function FeedbackExport({
         <div className="fb-saved">
           <p className="receipts-hint fb-saved-line">
             {t("settings.feedback.savedToPre")}
-            <span className="fb-path">{result.path}</span>
+            <span className="fb-path">{result.display_path}</span>
           </p>
           <div className="fb-saved-actions">
             <button className="set-action" onClick={onOpenFolder}>

@@ -10,6 +10,7 @@ afterEach(cleanup);
 
 const report = {
   path: "C:\\exports\\compy-report.md",
+  display_path: "%APPDATA%\\Compy\\exports\\compy-report.md",
   json_path: "C:\\exports\\compy-report.json",
   markdown: "# Compy Report",
   discord: "```\nCOMPY\n```",

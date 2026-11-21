@@ -445,7 +445,7 @@ export function ReportModal({
             {t("app.reportModal.close")}
           </button>
         </div>
-        <p className="muted modal-path">{t("app.reportModal.savedTo", { path: report.path })}</p>
+        <p className="muted modal-path">{t("app.reportModal.savedTo", { path: report.display_path })}</p>
         <div className="export-feedback">
           <div className="export-feedback-head">
             {t("app.reportModal.feedbackHeadPre")} <span className="muted">{t("app.reportModal.feedbackHeadOptional")}</span>

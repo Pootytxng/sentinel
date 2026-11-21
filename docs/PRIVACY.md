@@ -118,16 +118,29 @@ yourself — you are the transport, and you can read exactly what you are sendin
 
 **The diagnostic report ("Export Snapshot", Settings, Feedback & help)** is built on your PC and saved
 as a Markdown file and a JSON file under `%APPDATA%\Compy\exports\`. Compy never sends it; you choose
-whether to share it. Before it is written, Compy takes two kinds of personal detail out of it. Programs
-that started during a game session are listed only when they are on Compy's reviewed list of known
-programs (recorders, overlays, launchers, build tools); any other program that started is replaced by
-"other program 1", "other program 2" and so on, the same program getting the same number within one
-report, with the counts and timing kept. And in any file path, the Windows user name is replaced by
-`<user>`. The report says what it did: the last lines of the Markdown, and a `redaction` section in the
-JSON, give how many program names were replaced and how many paths had the user name removed. The list
-of known programs that were already running when a game started, and your computer name, are not in the
-report at all. Nothing changes in what Compy records on your PC or shows you in the app; only the
-exported copy is altered.
+whether to share it, and you can read it first. It is a detailed record and is meant to be: it holds your
+hardware and driver names, your network adapters (a physical adapter's name can name a VPN you use), the
+changes Compy made, and, for each recorded session, the game's program name, when you played and how it
+ran. Before the report is written, Compy changes these things in the copy it exports:
+
+- Programs that started during a game session, and startup entries you changed through Compy, are named
+  only when they are on Compy's reviewed list of known programs (recorders, overlays, launchers, browsers,
+  chat and meeting apps, a torrent client, developer tools). Any other program is shown as "other
+  program 1", "other program 2" and so on, the same program keeping its number within one report, with
+  counts and timing kept.
+- Your Windows user name and your computer name are replaced with `<user>` and `<host>` wherever Compy
+  finds them, including in file paths under `C:\Users\<name>`. QoS policy names are replaced by a
+  numbered label. A power plan that is not one of the plans Windows ships is shown as "a custom power
+  plan", and the ids of custom power plans and network interfaces are replaced by numbered labels.
+- The list of known programs that were already running when a game started, the computer-name field and
+  any game-state field a newer Compy adds without being reviewed are left out.
+
+What stays: the game's program name, hardware and network adapter names, the stock Windows power plan
+names, the hardware fingerprint (a short code made from the hardware names that are already in the
+report), and anything you type into the note box, exactly as you wrote it. The last lines of the Markdown,
+and a `redaction` section in the JSON, say how many names, ids and paths were changed. Nothing changes in
+what Compy records on your PC or shows you in the app; only the exported copy is altered. Read a report
+before you post it in public: it is made to help someone diagnose your PC, not to be anonymous.
 
 The FPS working files and the first-run flag are safe to delete — Compy just recreates them as needed. Deleting `history.json` is different: it erases your Trust Ledger, so past changes stop being reversible from it. Compy also keeps one backup copy of the ledger beside it, `history.json.bak`, and if `history.json` is missing or damaged it restores the ledger from that copy (leaving a small `history.json.restored` note that it did). To erase your change history for good, close Compy and delete every file in that folder whose name starts with `history.json` (the ledger, its `.bak` backup copy, and any `.restored` or `.corrupt` files); Compy then starts a fresh, empty ledger. The support record can be cleared or deleted at any time and Compy simply starts a new empty one; the only consequence is that if you later ask for help with something that already went wrong, there is no record of it left to show — so clear it *after* a support conversation, not before.
 

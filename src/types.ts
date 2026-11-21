@@ -9,6 +9,9 @@ export type StartupEntry = {
 // `discord` the compact share-card summary. Fully local — assembling it sends nothing.
 export type ExportResult = {
   path: string;
+  // `path` in `%APPDATA%\Compy\exports\<file>` form: what is shown on screen and put in an email, so the
+  // Windows account name never goes with it. `path` is only for opening the folder locally.
+  display_path: string;
   json_path: string;
   markdown: string;
   discord: string;

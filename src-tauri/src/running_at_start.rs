@@ -1130,7 +1130,8 @@ mod tests {
         let r = snap(&["Medal.exe", "qbittorrent.exe", "teams.exe", "cargo.exe", "node.exe"]);
         let g = GameStateFingerprint { process_name: Some("game.exe".into()), ..Default::default() }.with_running_at_start(Some(r), 4, 5);
         let row = json!({"process_name": "game.exe", "avg_fps": 144.0, "game_state": g,
-            "stutter_events": [{"at_secs": 3, "kind": "process-start", "label": "Medal.exe starting"}]});
+            "stutter_events": [{"at_secs": 3, "kind": "process-start", "label": "Medal.exe starting"},
+                               {"at_secs": 4, "kind": "process-start", "label": "OneDrive.exe starting"}]});
         let out = crate::export::redact_session_rows(json!([row]), &mut crate::export::ExportRedaction::default());
         let text = out.to_string();
         for key in ["running_at_start", "start_ticks_skipped", "start_events_dropped", "known", "taken_at_offset_s", "total_processes"] {
@@ -1143,6 +1144,9 @@ mod tests {
         // (A program that is NOT on the list is now replaced in the export: see export_tests in export.rs.)
         assert_eq!(out[0]["game_state"]["process_name"], "game.exe");
         assert_eq!(out[0]["stutter_events"][0]["label"], "Medal.exe starting");
+        // OneDrive is deliberately not on the list: it is replaced, so this pins both sides.
+        assert_eq!(out[0]["stutter_events"][1]["label"], "other program 1 starting");
+        assert!(!text.contains("OneDrive"));
         assert_eq!(out[0]["avg_fps"], 144.0);
         // A non-array or a row without game_state passes through untouched.
         let mut r = crate::export::ExportRedaction::default();

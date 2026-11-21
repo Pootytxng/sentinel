@@ -84,7 +84,7 @@
     "tierConsumer": "Plain English",
     "tierTechnical": "Full detail",
     "tierConsumerSub": "What Compy changed, measured, and flagged — in plain words.",
-    "tierTechnicalSub": "Hardware, checks, sessions, and diagnostics. Names of programs Compy does not list, and your Windows user name, are taken out.",
+    "tierTechnicalSub": "Hardware, checks, sessions, and diagnostics. Programs that start during a game are named only if Compy knows them, and your Windows user name is taken out of file paths.",
     "savedToPre": "Saved to ",
     "openFolder": "Open folder",
     "copied": "Copied!",

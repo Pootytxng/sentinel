@@ -96,7 +96,7 @@ pub fn redact_with(input: &str, literals: &[(String, &'static str)]) -> String {
 }
 
 /// Values that identify *this* machine and *this* user, read from the environment.
-fn sensitive_literals() -> Vec<(String, &'static str)> {
+pub(crate) fn sensitive_literals() -> Vec<(String, &'static str)> {
     let mut out = Vec::new();
     for (var, mask) in [
         ("USERNAME", MASK_USER),
@@ -113,7 +113,7 @@ fn sensitive_literals() -> Vec<(String, &'static str)> {
     out
 }
 
-fn replace_ignore_case(haystack: &str, needle: &str, mask: &str) -> String {
+pub(crate) fn replace_ignore_case(haystack: &str, needle: &str, mask: &str) -> String {
     if needle.is_empty() {
         return haystack.to_string();
     }
@@ -160,7 +160,7 @@ fn scrub_literals(input: &str) -> String {
 /// same form `docs/PRIVACY.md` shows, readable and free of the account name — and keeps the literal
 /// scrub as the safety net for anything below the root. If no known root matches (a redirected data
 /// dir, a portable layout) it falls back to the full redaction: unreadable beats leaky.
-fn display_location(path: &Path) -> String {
+pub(crate) fn display_location(path: &Path) -> String {
     let raw = path.to_string_lossy().to_string();
     // Deepest roots first — USERPROFILE is a prefix of both AppData roots, so it must lose.
     // data-root-allow: display SCRUBBING, the reverse direction. These turn an already-resolved

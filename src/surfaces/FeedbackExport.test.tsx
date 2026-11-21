@@ -9,6 +9,7 @@ const INTAKE_EMAIL = "compysupport@gmail.com";
 
 const RESULT = {
   path: "C:\\Users\\Kuya\\AppData\\Roaming\\Compy\\exports\\compy-report.md",
+  display_path: "%APPDATA%\\Compy\\exports\\compy-report.md",
   json_path: "C:\\Users\\Kuya\\AppData\\Roaming\\Compy\\exports\\compy-report.json",
   markdown: "# Compy report\n\nfull body",
   discord: "**Compy** · RX 9070 XT · 16 cores · 29 GB",
@@ -66,6 +67,9 @@ describe("FeedbackExport — outbound boundary", () => {
     // Subject/body are pre-filled; the user's note is carried (encoded).
     expect(decodeURIComponent(url)).toContain("coil whine on load screen");
     expect(decodeURIComponent(url)).toContain("v0.9.4");
+    // The email names the file as %APPDATA%\Compy\exports\<file>, never with the Windows account name.
+    expect(decodeURIComponent(url)).toContain(RESULT.display_path);
+    expect(decodeURIComponent(url)).not.toContain("Kuya");
     // The bundle it emailed about was built locally via export_report, feedback passed through.
     // Email is the SUPPORT errand: it always carries the full-detail report, whatever the save
     // tier says — a plain-English file with no probe detail defeats the reason it was emailed.
@@ -89,7 +93,9 @@ describe("FeedbackExport — outbound boundary", () => {
       expect(invokeMock).toHaveBeenCalledWith("export_report", { feedback: null, tier: "consumer" }),
     );
     // Saved path is surfaced; no mail client, no network.
-    expect(await screen.findByText(RESULT.path)).toBeInTheDocument();
+    expect(await screen.findByText(RESULT.display_path)).toBeInTheDocument();
+    // The Windows account name is never on screen: the raw path is only for opening the folder.
+    expect(screen.queryByText(RESULT.path)).not.toBeInTheDocument();
     expect(openUrlMock).not.toHaveBeenCalled();
   });
 });
