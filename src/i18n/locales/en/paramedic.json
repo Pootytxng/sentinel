@@ -320,7 +320,7 @@
     "ramWarning": "Compy saw memory nearly full during that session.",
     "ramLower": "Other rough sessions only reached {{peakGb}} GB.",
     "driftApplied": "Compy's own check found a setting it applied is no longer on.",
-    "driftPower": "Compy noticed the power plan was no longer performance-oriented.",
+    "driftPower": "Compy noticed the power plan is now one Windows designed to save power.",
     "driftOther": "Compy noticed a setting it watches had changed.",
     "whichNotRecorded": "Which setting it was, and what changed it, isn't recorded.",
     "countChanged": "Compy had {{from}} changes on in the last normal session and {{to}} in the first rough one.",

@@ -320,7 +320,7 @@
     "ramWarning": "Compy 在那次游戏中看到内存几乎用满。",
     "ramLower": "其他卡顿的游戏内存只用到 {{peakGb}} GB。",
     "driftApplied": "Compy 自己的检查发现，它开启过的某项设置现在已不再开启。",
-    "driftPower": "Compy 注意到电源计划不再偏向高性能。",
+    "driftPower": "Compy 注意到电源计划现在是 Windows 设计用来节省电力的计划。",
     "driftOther": "Compy 注意到它监视的某项设置变了。",
     "whichNotRecorded": "具体是哪项设置、是什么改变了它，没有记录。",
     "countChanged": "上一次正常游戏时 Compy 开启了 {{from}} 项更改，第一次卡顿时是 {{to}} 项。",
