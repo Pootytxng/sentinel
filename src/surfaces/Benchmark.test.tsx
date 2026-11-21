@@ -125,7 +125,7 @@ describe("BenchmarkTab (audit M1)", () => {
     // The band names the tier + the exact specs it read, and frames comparison as same-class only.
     expect(await screen.findByText("Your rig tier")).toBeInTheDocument();
     expect(screen.getByText("High")).toBeInTheDocument();
-    expect(screen.getByText(/16 GB VRAM · 8 cores · 32 GB RAM/)).toBeInTheDocument();
+    expect(screen.getByText(/16 GB VRAM · 8 cores · 32 GB usable RAM/)).toBeInTheDocument();
     expect(screen.getByText(/like-to-like/)).toBeInTheDocument();
   });
 });

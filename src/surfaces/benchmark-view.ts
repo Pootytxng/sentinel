@@ -3,6 +3,7 @@
 import type { Status } from "../design";
 import type { BenchComponent, MachineModel, Verdict, TrialVerdict } from "../types";
 import { rigTierLine, type RigTier } from "../data/rig-tier";
+import { installedRamGB } from "../data/ram-format";
 import type { TFunction } from "i18next";
 
 const COMPONENT_LABELS: Record<BenchComponent, string> = {
@@ -251,6 +252,8 @@ export type RigSpecs = {
   gpus?: { vram_bytes: number }[];
   cpu_cores_physical: number;
   ram_total_bytes: number;
+  /** The installed modules, when known: the tier then reads installed memory, like the hardware grid. */
+  memory_modules?: { capacity_bytes: number }[];
 };
 
 /**
@@ -265,6 +268,7 @@ export function benchRigTier(hw: RigSpecs): { tier: RigTier; basis: string } | n
     Math.max(0, ...(hw.gpus ?? []).map((g) => g.vram_bytes)),
     hw.cpu_cores_physical,
     hw.ram_total_bytes,
+    installedRamGB(hw.memory_modules),
   );
 }
 

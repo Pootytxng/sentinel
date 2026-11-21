@@ -163,12 +163,31 @@ describe("benchRigTier (A2 hardware-tier segmentation)", () => {
     const ctx = benchRigTier({
       gpus: [{ vram_bytes: 16 * GIB }],
       cpu_cores_physical: 8,
-      ram_total_bytes: 32 * GIB,
+      ram_total_bytes: Math.round(31.4 * GIB),
+      memory_modules: [{ capacity_bytes: 16 * GIB }, { capacity_bytes: 16 * GIB }],
     });
     expect(ctx).not.toBeNull();
     expect(ctx!.tier).toBe("High");
     // Honest, transparent basis — exactly the three facts it read (matches rig-tier.ts wording).
+    // Installed memory (the modules' sum), the same figure the hardware grid shows.
     expect(ctx!.basis).toBe("rough, from 16 GB VRAM · 8 cores · 32 GB RAM");
+  });
+
+  it("without the module sum the basis says the memory figure is the usable total", () => {
+    const ctx = benchRigTier({
+      gpus: [{ vram_bytes: 16 * GIB }],
+      cpu_cores_physical: 8,
+      ram_total_bytes: 32 * GIB,
+    });
+    expect(ctx!.basis).toBe("rough, from 16 GB VRAM · 8 cores · 32 GB usable RAM");
+    // One module unread: still the usable total, never a partial sum.
+    const partial = benchRigTier({
+      gpus: [{ vram_bytes: 16 * GIB }],
+      cpu_cores_physical: 8,
+      ram_total_bytes: 32 * GIB,
+      memory_modules: [{ capacity_bytes: 16 * GIB }, { capacity_bytes: 0 }],
+    });
+    expect(partial!.basis).toContain("32 GB usable RAM");
   });
 
   it("is conservative: one weak axis drops it to Entry (a strong spec can't carry it)", () => {
