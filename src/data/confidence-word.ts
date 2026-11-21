@@ -11,6 +11,10 @@
 import type { ConfidenceBand, Provenance } from "../types";
 import type { FindingLevel } from "../surfaces/home-interview-data";
 
+// D3 slice 1: the two-axis vocabulary (source / strength) lives in certainty.ts. Re-exported so the
+// module stays on the import graph; no screen reads it until slice 2.
+export { SOURCES, STRENGTHS } from "./certainty";
+
 export type ConfidenceWord = "known" | "measured" | "likely" | "expected" | "unknown";
 
 /** An inference band (limiter rows, hardware evidence, What-changed hypotheses, patterns):
