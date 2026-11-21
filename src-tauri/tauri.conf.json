@@ -62,7 +62,7 @@
     "category": "Utility",
     "homepage": "https://compy.gg",
     "shortDescription": "Hardware-aware, rollback-first PC optimization for gamers.",
-    "longDescription": "Compy reads your PC's hardware and recommends safe, reversible Windows optimizations in plain language. Every change it applies is snapshotted first so it can be rolled back. No kernel driver, no game injection, no telemetry.",
+    "longDescription": "Compy reads your PC's hardware and recommends reversible Windows optimizations in plain language. Every change it applies is snapshotted first so it can be rolled back. It installs no kernel driver, does no game injection and sends no telemetry; its only automatic connection is a signed update check you can turn off.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
