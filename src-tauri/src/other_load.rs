@@ -293,6 +293,41 @@ pub(crate) fn parse_game_processes(buf: &[u8], key: &str) -> Option<Vec<GameProc
     }
     None
 }
+
+/// PURE over the snapshot bytes: the image name of every process, as the snapshot holds it (extension and
+/// case kept, not truncated). An entry with an unreadable name is skipped; `None` when the entry chain is
+/// malformed. Opens no process. Added for the first look's "running now" (names only).
+pub(crate) fn parse_process_names(buf: &[u8]) -> Option<Vec<String>> {
+    let base = buf.as_ptr() as usize;
+    let mut out = Vec::new();
+    let mut off = 0usize;
+    for _ in 0..100_000 {
+        let next = u32::from_le_bytes(rd(buf, off + OFF_NEXT)?) as usize;
+        if off + ENTRY_MIN > buf.len() {
+            return None;
+        }
+        if let Some(n) = entry_name(buf, base, off) {
+            out.push(n);
+        }
+        if next == 0 {
+            return Some(out);
+        }
+        if next < ENTRY_MIN {
+            return None;
+        }
+        off = off.checked_add(next)?;
+    }
+    None
+}
+
+/// One handle-free snapshot, names only (no process is opened). `None` on any failure: unread, never empty.
+pub(crate) fn read_process_names() -> Option<Vec<String>> {
+    let mut buf = Vec::new();
+    if !take_process_snapshot(&mut buf) {
+        return None;
+    }
+    parse_process_names(&buf)
+}
 // ---------------------------------------------------------------------------------------------
 // Windows readers
 // ---------------------------------------------------------------------------------------------
@@ -865,6 +900,26 @@ mod tests {
             at += u.len();
         }
         buf
+    }
+
+    /// The names the first look matches against its allowlist: extension and case kept as Windows gives them,
+    /// an unreadable name skipped, a corrupt chain unread (fixture data, no real enumeration).
+    #[test]
+    fn the_snapshot_names_keep_extension_and_case_and_match_the_allowlist_by_exact_name() {
+        let buf = snapshot(&[(4, "System", 1, 0, 0), (10, "Medal.exe", 2, 0, 0), (11, "notmedal.exe", 3, 0, 0), (12, "OBS64.EXE", 4, 0, 0)]);
+        let names = parse_process_names(&buf).unwrap();
+        assert_eq!(names, vec!["System", "Medal.exe", "notmedal.exe", "OBS64.EXE"]);
+        let hit = |n: &str| crate::running_at_start::lookup(n).map(|p| p.id);
+        assert_eq!(hit(&names[1]), Some("medal"));
+        assert_eq!(hit(&names[2]), None);
+        assert_eq!(hit(&names[3]), Some("obs-studio"));
+        assert_eq!(hit(&names[0]), None);
+        assert_eq!(parse_process_names(&buf[..100]), None);
+        assert_eq!(parse_process_names(&[]), None);
+        // A foreign name pointer skips that entry, never fails the walk.
+        let mut bad = buf.clone();
+        bad[OFF_NAME_PTR..OFF_NAME_PTR + 8].copy_from_slice(&7u64.to_le_bytes());
+        assert_eq!(parse_process_names(&bad), Some(vec![]));
     }
 
     #[test]

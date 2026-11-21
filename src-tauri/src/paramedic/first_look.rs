@@ -2134,6 +2134,24 @@ mod tests {
         assert_eq!((a.running_now.state, a.running_now.programs.len()), ("reader-failed", 0));
     }
 
+    /// The slot path (`slots = Some`): a listing still running from an earlier press reads `took-too-long`, a free
+    /// slot reads, and the slot is free again right after an answer.
+    #[test]
+    fn the_running_now_slot_refuses_a_second_listing_while_one_runs_and_is_free_after_an_answer() {
+        let _t = one_at_a_time();
+        let slots: &'static Slots = Box::leak(Box::new(Slots::new()));
+        let io = Io { running: running_listed, ..FAKE };
+        let ask = || run_with(&FirstLookGame::WholePc, Since::ThisWeek, utc(NOW), Duration::from_secs(2), io, Some(slots));
+        RUNNING_SLOT.store(true, Ordering::SeqCst);
+        let a = ask();
+        RUNNING_SLOT.store(false, Ordering::SeqCst);
+        assert_eq!((a.running_now.state, a.running_now.programs.len()), ("took-too-long", 0));
+        let a = ask();
+        assert_eq!(a.running_now.state, "listed");
+        let a = ask();
+        assert_eq!(a.running_now.state, "listed", "the slot was freed by the previous answer");
+    }
+
     #[test]
     fn running_now_serialises_no_raw_process_name_through_the_whole_answer() {
         let a = build_with(Since::ThisWeek, utc(NOW), &GameCtx::default(), &Sources { running: running_of(&["Medal.exe", "my-private-tool.exe", "System"]), ..Sources::default() });

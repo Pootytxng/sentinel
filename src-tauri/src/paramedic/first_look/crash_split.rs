@@ -7,8 +7,9 @@
 //! - Every count is "at least": Windows keeps a limited number of crash records and a report can be deleted,
 //!   so even a complete read is a lower bound.
 //! - "None before" is said only when the readable records reach back past the change (the oldest record of ANY
-//!   program is older than it) and nothing was left unread. Otherwise the line says it can't tell how many came
-//!   before, and why. A split with no record on one side never turns into "it stopped" or "it started".
+//!   program is older than it) and nothing was left unread; "none after" only when nothing was left unread.
+//!   Otherwise the line says it can't tell how many came before (or whether any came after), and why. A split
+//!   with no record on one side never turns into "it stopped" or "it started".
 //! - No rate, no "more/fewer since", no cause: the card words the counts and nothing else.
 
 use chrono::{DateTime, Utc};
@@ -20,6 +21,8 @@ use crate::paramedic::{iso, same_game};
 /// Why Compy can't say how many records came before the change.
 pub(crate) const GAP_STARTS_LATER: &str = "starts-later";
 pub(crate) const GAP_UNREAD: &str = "unread";
+/// Some records could not be read, and none of the readable ones is after the change: a newer one may be among them.
+pub(crate) const GAP_AFTER_UNREAD: &str = "unread-after";
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct CrashSplit {
@@ -31,9 +34,13 @@ pub(crate) struct CrashSplit {
     pub change: String,
     /// The oldest crash record of ANY program that Compy could read: where its view of Windows' records starts.
     pub oldest_read: Option<String>,
-    /// Set when Compy cannot say how many came before: `starts-later` (its oldest readable record is not older
-    /// than the change) or `unread` (some records could not be read). Never set when `before` is above zero.
+    /// Set when Compy cannot back a "none" on one side: `starts-later` (no record before the change, and its
+    /// oldest readable record is not older than the change) or `unread` (no record before it, and some records
+    /// could not be read); `unread-after` (no record after it, and some records could not be read).
     pub gap: Option<&'static str>,
+    /// The records were matched by program name only (some report has no path under the game's folder), so
+    /// the count may include another program of the same name: the card carries the measured flow's by-name hedge.
+    pub by_name: bool,
 }
 
 /// The records of the game, by the same rule as `extras::crash_outcome`.
@@ -56,16 +63,17 @@ pub(crate) fn split(h: &CrashHistory, how: CrashMatch<'_>, change: Option<DateTi
     let before = mine.iter().filter(|k| k.when < change).count() as u32;
     let after = mine.len() as u32 - before;
     let oldest = h.crashes.iter().map(|k| k.when).min();
-    let gap = if before > 0 {
-        None
-    } else if oldest.is_none_or(|o| o >= change) {
+    let gap = if before == 0 && oldest.is_none_or(|o| o >= change) {
         Some(GAP_STARTS_LATER)
-    } else if partial {
+    } else if before == 0 && partial {
         Some(GAP_UNREAD)
+    } else if after == 0 && partial {
+        Some(GAP_AFTER_UNREAD)
     } else {
         None
     };
-    Some(CrashSplit { before, after, change: iso(change), oldest_read: oldest.map(iso), gap })
+    let by_name = matches!(how, CrashMatch::Program(_)) && mine.iter().any(|k| k.path_ok != Some(true));
+    Some(CrashSplit { before, after, change: iso(change), oldest_read: oldest.map(iso), gap, by_name })
 }
 
 #[cfg(test)]
@@ -185,5 +193,30 @@ mod tests {
         let h = hist(vec![crash("robrun.exe", "2026-11-20T01:00:00Z", Some(true)), crash("x.exe", "2026-11-01T10:00:00Z", None)], false);
         let s = split(&h, CrashMatch::InstallFolder, Some(utc(C))).unwrap();
         assert_eq!((s.before, s.after, s.gap), (0, 1, Some(GAP_UNREAD)));
+    }
+
+    /// "None after" needs a complete read: a record that could not be read may be a newer crash.
+    #[test]
+    fn none_after_is_a_gap_when_some_records_were_not_read_and_a_fact_when_none_were_missed() {
+        let records = vec![crash("robrun.exe", "2026-11-01T10:00:00Z", None), crash("robrun.exe", "2026-11-02T10:00:00Z", None)];
+        let s = split_of(&hist(records.clone(), true));
+        assert_eq!((s.before, s.after, s.gap), (2, 0, Some(GAP_AFTER_UNREAD)));
+        let s = split_of(&hist(records, false));
+        assert_eq!((s.before, s.after, s.gap), (2, 0, None));
+        // An install-folder pick with a path-less report is partial too.
+        let h = hist(vec![crash("robrun.exe", "2026-11-01T10:00:00Z", Some(true)), crash("x.exe", "2026-11-01T11:00:00Z", None)], false);
+        let s = split(&h, CrashMatch::InstallFolder, Some(utc(C))).unwrap();
+        assert_eq!((s.before, s.after, s.gap), (1, 0, Some(GAP_AFTER_UNREAD)));
+    }
+
+    /// A match by program name alone can count another program of the same name: the split says so.
+    #[test]
+    fn a_match_by_program_name_only_is_flagged_and_a_folder_match_is_not() {
+        let named = hist(vec![crash("robrun.exe", "2026-11-01T10:00:00Z", None), crash("robrun.exe", "2026-11-20T10:00:00Z", Some(true))], false);
+        assert!(split_of(&named).by_name);
+        let by_path = hist(vec![crash("robrun.exe", "2026-11-01T10:00:00Z", Some(true)), crash("robrun.exe", "2026-11-20T10:00:00Z", Some(true))], false);
+        assert!(!split_of(&by_path).by_name);
+        let folder = hist(vec![crash("robrun.exe", "2026-11-01T10:00:00Z", Some(true))], false);
+        assert!(!split(&folder, CrashMatch::InstallFolder, Some(utc(C))).unwrap().by_name);
     }
 }

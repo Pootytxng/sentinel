@@ -1196,8 +1196,8 @@ describe("running right now (S4)", () => {
   const running = (over: Partial<FirstLookAnswer["running_now"]> = {}): FirstLookAnswer["running_now"] => ({
     state: "listed",
     programs: [
-      { id: "medal", name: "Medal", resident: true },
-      { id: "obs-studio", name: "OBS Studio", resident: false },
+      { id: "medal", name: "Medal" },
+      { id: "obs-studio", name: "OBS Studio" },
     ],
     more: 0,
     ...over,
@@ -1211,17 +1211,18 @@ describe("running right now (S4)", () => {
     expect(screen.getByTestId("first-look-running-list").textContent).toBe("Running right now: Medal, OBS Studio.");
     const now = screen.getByTestId("first-look-running-now").textContent ?? "";
     expect(now).toBe("This is what is running now, not what was running when the problem happened. Compy didn't see that, and it hasn't measured whether any of these affects a game.");
-    expect(block().textContent).toContain("Some of these start with Windows and sit in the background on many PCs.");
+    expect(block().textContent).not.toMatch(/background|start with Windows|many PCs/i);
     expect(block().textContent).not.toMatch(/caus|slow|lag|because|affects? your/i);
   });
 
-  it("says nothing about starting with Windows when none of the listed programs is a resident one, and names the game for a picked game", async () => {
+  it("names the game for a picked game, says nothing general about how such programs normally run, and lists a background program like any other", async () => {
     engine.steam = steamList([]);
     await toThePicker(noSessions(), { games: recorded });
     fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
-    await pick("This week", gameAnswer({ running_now: running({ programs: [{ id: "obs-studio", name: "OBS Studio", resident: false }] }) }));
-    expect(block().textContent).not.toContain("start with Windows");
-    expect(screen.getByTestId("first-look-running-now").textContent).toMatch(/^This is what is running now, not what was running when ROB RUN ran badly\./);
+    await pick("This week", gameAnswer({ running_now: running({ programs: [{ id: "medal", name: "Medal" }] }) }));
+    expect(block().textContent).not.toMatch(/background|start with Windows|many PCs/i);
+    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Running right now: Medal.");
+    expect(screen.getByTestId("first-look-running-now").textContent).toMatch(/^This is what is running now, not what was running when the problem with ROB RUN happened\./);
   });
 
   it("shows the count of the rest after the cap", async () => {
@@ -1233,7 +1234,7 @@ describe("running right now (S4)", () => {
   it("a read that found none of the listed programs says exactly that, scoped to the programs Compy looks for", async () => {
     await toTheQuestion();
     await pick("This week", answer({ running_now: running({ state: "none", programs: [] }) }));
-    expect(screen.getByTestId("first-look-running-none").textContent).toBe("None of the programs Compy looks for (recorders, overlays, launchers, build tools, browsers) are running right now.");
+    expect(screen.getByTestId("first-look-running-none").textContent).toBe("Compy didn't find any program from its list running right now. It matches by program name: recorders and overlays, voice chat, launchers, browsers, build and developer tools, Windows Update.");
     expect(screen.queryByTestId("first-look-running-now")).toBeNull();
   });
 
@@ -1248,7 +1249,7 @@ describe("running right now (S4)", () => {
       await toTheQuestion();
       await pick("This week", answer({ running_now: running({ state, programs: [] }) }));
       expect(screen.getByTestId("first-look-running-unread").textContent).toBe(sentence);
-      expect(block().textContent).not.toMatch(/None of the programs|no program/i);
+      expect(block().textContent).not.toMatch(/didn't find any program|None of the programs|no program/i);
       engine.calls.length = 0;
     }
   });
@@ -1301,7 +1302,7 @@ describe("the crash records before and after the earliest change (S5)", () => {
     signature_before: null,
     split,
   });
-  const sp = (over: Partial<FirstLookCrashSplit> = {}): FirstLookCrashSplit => ({ before: 20, after: 6, change: CHANGE, oldest_read: "2026-10-01T10:00:00Z", gap: null, ...over });
+  const sp = (over: Partial<FirstLookCrashSplit> = {}): FirstLookCrashSplit => ({ before: 20, after: 6, change: CHANGE, oldest_read: "2026-10-01T10:00:00Z", gap: null, by_name: false, ...over });
   async function lookAs(a: FirstLookAnswer, label = "This week") {
     engine.steam = steamList([]);
     await toThePicker(noSessions(), { games: recorded });
@@ -1328,7 +1329,7 @@ describe("the crash records before and after the earliest change (S5)", () => {
     expect(line()).toMatch(/at least 3 are from before .*and none from after\.$/);
     cleanup();
     await lookAs(gameAnswer({ crashes: crashes(sp({ before: 0, after: 5 })) }));
-    expect(line()).toMatch(/^Of the crash records Compy could read, none are from before .*and at least 5 from after\.$/);
+    expect(line()).toMatch(/^Of the crash records Compy could read, none are from before .*and at least 5 from after\. That is a count by date; Compy hasn't tested whether that change matters to the game\.$/);
   });
 
   it("when the records do not reach back past the change it says it can't tell how many came before, and that Windows keeps a limited number", async () => {
@@ -1345,12 +1346,34 @@ describe("the crash records before and after the earliest change (S5)", () => {
   });
 
   it("states counts and dates only: no rate, no more or fewer since, no cause, in every variant", async () => {
-    const variants = [sp(), sp({ before: 1 }), sp({ before: 3, after: 0 }), sp({ before: 0, after: 5 }), sp({ before: 0, after: 5, gap: "starts-later" }), sp({ before: 0, after: 5, gap: "unread" })];
+    const variants = [sp(), sp({ before: 1 }), sp({ before: 3, after: 0 }), sp({ before: 0, after: 5 }), sp({ before: 0, after: 5, gap: "starts-later" }), sp({ before: 0, after: 5, gap: "unread" }), sp({ before: 2, after: 0, gap: "unread-after" }), sp({ by_name: true })];
     for (const v of variants) {
       cleanup();
       await lookAs(gameAnswer({ crashes: crashes(v) }));
       expect(line(), JSON.stringify(v)).not.toMatch(/\bmore\b|fewer|\brate\b|per day|per week|caus|because|started|stopped|worse|better|increase|decrease|since the change/i);
     }
+  });
+
+  it("when some records could not be read and none readable is after the change, it says it can't say whether any came after, never 'none from after'", async () => {
+    await lookAs(gameAnswer({ crashes: crashes(sp({ before: 2, after: 0, gap: "unread-after" })) }));
+    expect(line()).toMatch(/^Of the crash records Compy could read, at least 2 are from before .*\(the earliest dated change Compy found\)\. Some records couldn't be read, so it can't say whether any came after\.$/);
+    expect(line()).not.toMatch(/none from after/);
+    cleanup();
+    await lookAs(gameAnswer({ crashes: crashes(sp({ before: 1, after: 0, gap: "unread-after" })) }));
+    expect(line()).toMatch(/at least 1 is from before /);
+  });
+
+  it("a count matched by program name only carries the measured flow's own by-name hedge", async () => {
+    await lookAs(gameAnswer({ crashes: crashes(sp({ by_name: true })) }));
+    expect(line()).toMatch(/from after\. \(matched by program name\)$/);
+    cleanup();
+    await lookAs(gameAnswer({ crashes: crashes(sp({ by_name: false })) }));
+    expect(line()).not.toMatch(/matched by program name/);
+  });
+
+  it("the none-from-before line says it is a count by date and not a test of the change", async () => {
+    await lookAs(gameAnswer({ crashes: crashes(sp({ before: 0, after: 5 })) }));
+    expect(line()).toContain("That is a count by date; Compy hasn't tested whether that change matters to the game.");
   });
 
   it("no split means no split line, and the existing same-file sentence is still said by itself", async () => {

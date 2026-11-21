@@ -1,6 +1,6 @@
 //! S4 of the day-one answer: which KNOWN programs are running right now. A fact about this moment, not about
-//! when the game ran badly: Compy did not see that session. Read-only, one names-only process listing (the
-//! same call `overlay_tools` makes), nothing stored, nothing sent, no process started.
+//! when the game ran badly: Compy did not see that session. Read-only, one handle-free names-only snapshot
+//! (`other_load::read_process_names`: no process is opened, so a running game is never touched), nothing stored, nothing sent, no process started.
 //!
 //! Privacy and honesty (the allowlist rule of `running_at_start`, unchanged):
 //! - Only programs in the reviewed `running_at_start::PROGRAMS` table can appear, matched by exact image name.
@@ -41,8 +41,6 @@ pub(crate) enum RunningRead {
 pub(crate) struct Running {
     pub id: &'static str,
     pub name: &'static str,
-    /// The table's `always_resident`: it sits in the background on many PCs, so its presence says even less.
-    pub resident: bool,
 }
 
 /// What the card gets. `state`: `listed`, `none` (read, none of the listed programs), `unread` (the listing was
@@ -83,19 +81,21 @@ pub(crate) fn out(read: &RunningRead) -> RunningNowOut {
         RunningRead::Read(r) if r.total == 0 => RunningNowOut { state: "unread", programs: Vec::new(), more: 0 },
         RunningRead::Read(r) if r.ids.is_empty() => RunningNowOut { state: "none", programs: Vec::new(), more: 0 },
         RunningRead::Read(r) => {
-            let all: Vec<Running> = PROGRAMS.iter().filter(|p| r.ids.contains(&p.id)).map(|p| Running { id: p.id, name: p.display_name, resident: p.always_resident }).collect();
+            let all: Vec<Running> = PROGRAMS.iter().filter(|p| r.ids.contains(&p.id)).map(|p| Running { id: p.id, name: p.display_name }).collect();
             let more = all.len().saturating_sub(SHOWN) as u32;
             RunningNowOut { state: "listed", programs: all.into_iter().take(SHOWN).collect(), more }
         }
     }
 }
 
-/// The real read: one names-only listing of the running processes, read-only, user mode.
+/// The real read: one handle-free names-only snapshot (`NtQuerySystemInformation`, through `other_load`): no
+/// process is opened, so a running game is never touched. A failed snapshot is an empty listing, which reads
+/// `unread`, never "none".
 pub(crate) fn read_real() -> RunningRead {
-    let mut sys = sysinfo::System::new();
-    sys.refresh_processes_specifics(sysinfo::ProcessesToUpdate::All, true, sysinfo::ProcessRefreshKind::nothing());
-    let names: Vec<String> = sys.processes().values().map(|p| p.name().to_string_lossy().into_owned()).collect();
-    RunningRead::Read(from_names(names.iter().map(String::as_str)))
+    match crate::other_load::read_process_names() {
+        Some(names) => RunningRead::Read(from_names(names.iter().map(String::as_str))),
+        None => RunningRead::Read(RunningNow::default()),
+    }
 }
 
 #[cfg(test)]
@@ -135,13 +135,15 @@ mod tests {
     }
 
     #[test]
-    fn residency_comes_from_the_table_and_the_list_is_capped_with_a_count_of_the_rest() {
+    fn the_list_is_capped_with_a_count_of_the_rest() {
         let every: Vec<&str> = PROGRAMS.iter().flat_map(|p| p.images.iter().copied()).collect();
         let o = out(&RunningRead::Read(from_names(every)));
         assert_eq!(o.state, "listed");
         assert_eq!(o.programs.len(), SHOWN);
         assert_eq!(o.programs.len() as u32 + o.more, PROGRAMS.len() as u32);
-        let medal = out(&RunningRead::Read(from_names(["medal.exe", "firefox.exe"])));
-        assert_eq!(medal.programs.iter().map(|p| (p.id, p.resident)).collect::<Vec<_>>(), vec![("medal", true), ("firefox", false)]);
+        // Every listed program stays listed, background or not; nothing is said about residency.
+        let two = out(&RunningRead::Read(from_names(["medal.exe", "firefox.exe"])));
+        assert_eq!(two.programs.iter().map(|p| p.id).collect::<Vec<_>>(), vec!["medal", "firefox"]);
+        assert!(!serde_json::to_string(&two).unwrap().contains("resident"));
     }
 }

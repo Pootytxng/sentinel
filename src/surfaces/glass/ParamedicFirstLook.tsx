@@ -40,13 +40,13 @@ export type CompyChange = { title: string; at: string; undone: boolean; undone_a
 /** The game's crash records before and after the earliest dated change: counts and dates only. `gap` is set when
  *  Compy can't say how many came before (`starts-later`: its oldest readable record is not older than the change;
  *  `unread`: some records could not be read). */
-export type FirstLookCrashSplit = { before: number; after: number; change: string; oldest_read: string | null; gap: "starts-later" | "unread" | null };
+export type FirstLookCrashSplit = { before: number; after: number; change: string; oldest_read: string | null; gap: "starts-later" | "unread" | "unread-after" | null; by_name: boolean };
 
 /** Known programs running at this moment (the reviewed allowlist only). `state` other than "listed" and "none" is
  *  a "couldn't read" outcome; only "none" says none. */
 export type FirstLookRunning = {
   state: "listed" | "none" | "unread" | "took-too-long" | "reader-failed" | "not-read";
-  programs: { id: string; name: string; resident: boolean }[];
+  programs: { id: string; name: string }[];
   more: number;
 };
 
@@ -575,7 +575,14 @@ function crashSentence(c: NonNullable<ParamedicFirstLook["crashes"]>, game: stri
  *  "at least". When Compy can't see back past the change it says so instead of saying none. */
 function splitSentence(s: FirstLookCrashSplit, t: T, dates: Dates): string {
   const date = dates.dayTime(s.change);
+  // Matched by program name only: the count may include another program of the same name (the measured flow's own hedge).
+  const hedge = s.by_name ? t("paramedic.seen.crashesByName") : "";
+  return `${splitBody(s, t, dates, date)}${hedge}`;
+}
+
+function splitBody(s: FirstLookCrashSplit, t: T, dates: Dates, date: string): string {
   if (s.gap === "starts-later" && s.oldest_read) return t("paramedic.firstLook.crash.split.startsLater", { count: s.after, date, oldest: dates.dayTime(s.oldest_read) });
+  if (s.gap === "unread-after") return t("paramedic.firstLook.crash.split.beforeUnread", { count: s.before, date });
   if (s.gap) return t("paramedic.firstLook.crash.split.unread", { count: s.after, date });
   if (s.before === 0) return t("paramedic.firstLook.crash.split.afterOnly", { count: s.after, date });
   if (s.after === 0) return t("paramedic.firstLook.crash.split.beforeOnly", { count: s.before, date });
@@ -594,7 +601,6 @@ function RunningNow({ r, game, t }: { r: FirstLookRunning; game: string | null; 
         <p className="gl-para-note" data-testid="first-look-running-now">
           {game ? t("paramedic.firstLook.running.nowGame", { game }) : t("paramedic.firstLook.running.nowPc")}
         </p>
-        {r.programs.some((p) => p.resident) && <p className="gl-para-note">{t("paramedic.firstLook.running.resident")}</p>}
       </>
     );
   } else if (r.state === "none") {
