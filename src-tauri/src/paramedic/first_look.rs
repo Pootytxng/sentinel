@@ -1582,6 +1582,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn the_running_now_listing_opens_no_process_so_a_running_game_is_never_touched() {
+        // Source-text guard: the listing must come from other_load's handle-free snapshot, never from
+        // an enumeration that opens a handle to every process (sysinfo does, including a running game's).
+        let code = include_str!("first_look/running_now.rs").split("#[cfg(test)]").next().unwrap();
+        // Comments may name what the code avoids; only code lines count.
+        let code = code.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
+        assert!(code.contains(&["other_load::", "read_process_names"].concat()), "the listing must use the handle-free snapshot");
+        for banned in [["sys", "info"].concat(), ["refresh_", "processes"].concat(), ["System", "::new"].concat(), ["OpenProcess"].concat()] {
+            assert!(!code.contains(&banned), "the running-now listing must not use {banned}");
+        }
+    }
+
     // ---- S2: the first look for one picked game --------------------------------------------------
     // Every input below is hand-built: no test reads Steam, the registry, a log or a folder.
 
