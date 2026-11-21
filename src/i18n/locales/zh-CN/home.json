@@ -46,7 +46,7 @@
       "eyebrow": "最近发生了什么？",
       "hint": "选一个最贴切的描述，我们就能为你指明方向。",
       "eyebrowClear": "你想做什么？",
-      "hintClear": "这台电脑目前没有任何异常 — 大家通常从这里开始。"
+      "hintClear": "Compy 能读取的检查没有一项出错 — 大家通常从这里开始。"
     },
     "dense": {
       "model": "型号",
@@ -450,7 +450,7 @@
     "dialedInSub": "所有就绪检测均已通过 · {{changeNote}}。",
     "changeNote_other": "{{count}} 项安全更改生效中,可随时回滚",
     "noChangeNote": "没有需要更改的地方",
-    "readyWorthFixing": "可以开玩了——有 {{count}} 项值得修复。",
+    "readyWorthFixing_other": "所有就绪检测均已通过。下方列出了 {{count}} 项值得一看的内容。",
     "readyMeasuredClean": "可以开玩了——这台主机今天测得很干净。",
     "changeNoteReversible_other": "{{count}} 项安全更改生效中,可随时回滚。",
     "changeNoteUnknown": "Compy 暂时无法读取它的更改记录。",

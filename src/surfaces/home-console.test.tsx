@@ -825,6 +825,26 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
     expect(row.querySelector(".hc-limiter-tag")!.textContent).not.toContain("not measured");
   });
 
+  // view-1121b B3: "You're ready to play / 1 worth fixing." sat above "Nothing is flagged on this PC right
+  // now", on a PC whose only finding was one safe tweak not applied. One finding, three sentences, two
+  // different counts. A tweak that is not applied is something to look at, not something broken: the
+  // headline stays about readiness, the dek says what is listed below, and nothing says "flagged" or
+  // "worth fixing" about it.
+  it("all readiness checks pass + one limiter: the headline, the dek and the hint agree with the Findings tile", () => {
+    const c = mount().container;
+    expect(c.querySelector(".hc-headline")!.textContent).toBe("You're ready to play");
+    const dek = c.querySelector(".hc-verdict-dek")!.textContent;
+    expect(dek).toBe("All readiness checks pass. 1 thing is listed below as worth a look.");
+    // The tile it points at lists that one item under the same words.
+    const row = c.querySelector(".hc-limiter")!;
+    expect(row.querySelector(".hc-limiter-label")!.textContent).toBe("worth a look");
+    expect(row.textContent).toContain("C: drive is 87% full");
+    const hint = c.querySelector(".hc-happening-hint")?.textContent ?? "";
+    expect(hint).toContain("No check Compy could read came back wrong");
+    // (The forward door's label "Find what's worth fixing" is a door, not a count: not matched here.)
+    expect(c.textContent).not.toMatch(/\d+ (things? )?worth fixing|Nothing is flagged|measured clean/i);
+  });
+
   // BENTO (2026-08-12): the limiter's TILE must always render — a half-width tile that sometimes
   // doesn't render leaves a hole under the two-row hero (`bento: no conditional partial tile`, and
   // the self-review FAIL that guard came from). What must never appear is a fabricated verdict: the

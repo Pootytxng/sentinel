@@ -62,10 +62,14 @@ const priorities = (limiters: number): Priorities => ({
 });
 
 describe("postureLine (real headline + priorities-driven sentence)", () => {
-  it("ready with limiters → 'N worth fixing'", () => {
+  it("ready with limiters → says what is listed below as worth a look, never 'worth fixing' (view-1121b B3)", () => {
     const p = postureLine(readiness([check("ready", "SSD")]), priorities(3), 1);
     expect(p.tone).toBe("ready");
-    expect(p.sentence).toBe("Ready to play — 3 worth fixing.");
+    expect(p.sentence).toBe("All readiness checks pass. 3 things are listed below as worth a look.");
+    expect(postureLine(readiness([check("ready", "SSD")]), priorities(1), 0).sentence).toBe(
+      "All readiness checks pass. 1 thing is listed below as worth a look.",
+    );
+    expect(p.sentence).not.toMatch(/fix/i);
     expect(p.reassurance).toMatch(/1 safe change active/);
   });
 

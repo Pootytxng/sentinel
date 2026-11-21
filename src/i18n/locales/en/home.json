@@ -50,7 +50,7 @@
       "eyebrow": "What's been happening?",
       "hint": "Pick what best describes it so we can point you in the right direction.",
       "eyebrowClear": "What do you want to do?",
-      "hintClear": "Nothing is flagged on this PC right now — here is where people usually start."
+      "hintClear": "No check Compy could read came back wrong — here is where people usually start."
     },
     "dense": {
       "model": "model",
@@ -471,7 +471,8 @@
     "changeNote_one": "{{count}} safe change active & reversible",
     "changeNote_other": "{{count}} safe changes active & reversible",
     "noChangeNote": "nothing needs changing",
-    "readyWorthFixing": "Ready to play — {{count}} worth fixing.",
+    "readyWorthFixing_one": "All readiness checks pass. {{count}} thing is listed below as worth a look.",
+    "readyWorthFixing_other": "All readiness checks pass. {{count}} things are listed below as worth a look.",
     "readyMeasuredClean": "Ready to play — this rig measured clean today.",
     "changeNoteReversible_one": "{{count}} safe change active & reversible. ",
     "changeNoteReversible_other": "{{count}} safe changes active & reversible. ",
