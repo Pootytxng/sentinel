@@ -479,7 +479,18 @@ pub(crate) struct Diagnosis {
     pub earlier_episode: Option<EarlierEpisode>,
     /// Start times of this game's recent sessions that may hold two games and were therefore not judged.
     pub mixed_sessions: Vec<String>,
+    /// How many of the rough sessions have a readable record of what was running when they started. The card
+    /// scopes both "was already running" and "didn't record" to these counts, so they can be true together.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_record: Option<StartRecord>,
     pub method: &'static str,
+}
+
+/// Rough sessions of the game with a readable start-of-session snapshot (`recorded`), of all of them (`rough`).
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct StartRecord {
+    pub recorded: u32,
+    pub rough: u32,
 }
 
 impl Diagnosis {
@@ -501,6 +512,7 @@ impl Diagnosis {
             recovery: None,
             earlier_episode: None,
             mixed_sessions: Vec::new(),
+            start_record: None,
             method: METHOD,
         }
     }
@@ -1507,6 +1519,7 @@ fn explain<'a>(
     // After every candidate: the crash line compares the crashes' dates with the earliest dated one.
     extras::detect_crashes(&ctx, &mut out);
     start_unknowns(&ctx, &mut out);
+    d.start_record = start_record(&ctx);
     start_listing_note(&ctx, &mut out);
     sitting_note(&ctx, &mut out);
     d.limits = changes::limits(&ctx);
@@ -2132,7 +2145,15 @@ fn start_evidence(c: &Ctx, game: &str) -> (Vec<Evidence>, bool, Vec<&'static str
         let in_every_rough = st.rough.iter().all(|r| r.known.iter().any(|k| k.id == p.id));
         let presence = ras::ProgramPresence { id: p.id, name: p.display_name, always_resident: p.always_resident };
         if in_every_rough && ras::already_running_sentence(&presence, game).is_some() {
-            evidence.push(ev(EvidenceKind::Measured, "already-running", "sessions", false, &[("id", p.id.to_string()), ("name", p.display_name.to_string())]));
+            // `n` of `of`: it was open in every rough session that has a readable snapshot, which may be fewer
+            // than all of them. The card says which, so this line and "didn't record" can both be true.
+            evidence.push(ev(
+                EvidenceKind::Measured,
+                "already-running",
+                "sessions",
+                false,
+                &[("id", p.id.to_string()), ("name", p.display_name.to_string()), ("n", st.rough.len().to_string()), ("of", st.rough_total.to_string())],
+            ));
             if let Some(d) = diff {
                 let mut a = vec![("id", p.id.to_string())];
                 a.extend(nofm_args(d));
@@ -2151,6 +2172,12 @@ fn start_evidence(c: &Ctx, game: &str) -> (Vec<Evidence>, bool, Vec<&'static str
         }
     }
     (evidence, timing, named)
+}
+
+/// How many rough sessions have a readable start snapshot, of all of them (none when there is no rough session).
+fn start_record(c: &Ctx) -> Option<StartRecord> {
+    let st = start_read(c);
+    (st.rough_total > 0).then_some(StartRecord { recorded: st.rough.len() as u32, rough: st.rough_total as u32 })
 }
 
 /// What Compy could not see about the start of the rough sessions. With a readable snapshot on every rough

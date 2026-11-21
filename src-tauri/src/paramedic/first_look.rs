@@ -22,9 +22,11 @@ use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 
 mod crash_split;
+mod recorded;
 mod running_now;
 
 use self::crash_split::CrashSplit;
+use self::recorded::{RecordedOut, SessionsRead};
 use self::running_now::{RunningNowOut, RunningRead};
 use super::changes::{collect_reader, spawn_reader, status_limits, Limit, Slots, CHANGES_BUDGET};
 use super::extras::{crash_dto, crash_outcome, CrashMatch, CrashOutcome, CrashRead};
@@ -147,6 +149,9 @@ pub(crate) struct FirstLook {
     /// Known programs (the reviewed allowlist) running at this moment: a fact about now, not about when the
     /// game ran badly. Read for the whole PC and for a picked game, with or without a window.
     pub running_now: RunningNowOut,
+    /// How many sessions Compy has recorded (in all, and for the picked game): what "can't tell yet" rests on.
+    /// A failed read or an unmatched pick is never a zero (see `recorded`).
+    pub recorded: RecordedOut,
     /// What Compy could not see, per kind; the card words each.
     pub limits: Vec<Limit>,
     /// Every asked kind was read completely (so "no dated change" may be said when the lists are empty).
@@ -201,6 +206,7 @@ pub(crate) struct Sources {
     pub facts: FactsRead,
     pub history: HistoryRead,
     pub running: RunningRead,
+    pub sessions: SessionsRead,
 }
 
 pub(super) fn limit(kind: &'static str, code: &'static str, args: &[(&'static str, String)]) -> Limit {
@@ -291,6 +297,7 @@ pub(crate) fn build_with(since: Since, now: DateTime<Utc>, game: &GameCtx, src: 
         facts: Vec::new(),
         compy_changes: Vec::new(),
         running_now: running_now::out(&src.running),
+        recorded: recorded::out(&src.sessions, game),
         limits: Vec::new(),
         read_all: false,
         method: METHOD,
@@ -719,10 +726,14 @@ pub(crate) struct Io {
     pub history: fn() -> HistoryRead,
     /// Which known programs are running right now: one names-only process listing, read-only.
     pub running: fn() -> RunningRead,
+    /// Every recorded session's program name, from the sessions file (read-only).
+    pub sessions: fn() -> SessionsRead,
 }
 
 /// One running-now listing at a time (the command's slot; tests that go through it take `one_at_a_time`).
 static RUNNING_SLOT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// One sessions read at a time, the same way.
+static SESSIONS_SLOT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// The answer for `sel` and `since` at `now`: the game is resolved first (it names the folder the other readers
 /// need), then the dated readers, the crash read and the folder scan run side by side inside one shared
@@ -747,6 +758,8 @@ pub(crate) fn run_with(sel: &FirstLookGame, since: Since, now: DateTime<Utc>, bu
     let history_rx = window_hours(since).map(|_| spawn_reader("paramedic-first-look-history", slots.map(|s| &s.history), move || (io.history)()));
     // Running now is a fact about this moment: asked for every choice, the whole PC and a picked game alike.
     let running_rx = spawn_reader("paramedic-first-look-running", slots.map(|_| &RUNNING_SLOT), move || (io.running)());
+    // How many sessions Compy has recorded: asked for every choice, so "can't tell yet" never rests on a guess.
+    let sessions_rx = spawn_reader("paramedic-first-look-sessions", slots.map(|_| &SESSIONS_SLOT), move || (io.sessions)());
     let changes = window_hours(since).map(|hours| {
         let t0 = now - ChronoDuration::hours(hours);
         let g = game.clone();
@@ -757,7 +770,8 @@ pub(crate) fn run_with(sel: &FirstLookGame, since: Since, now: DateTime<Utc>, bu
     let facts = collect_reader(facts_rx, budget, started).unwrap_or_else(FactsRead::Unavailable);
     let history = history_rx.map_or(HistoryRead::NotRead, |rx| collect_reader(rx, budget, started).unwrap_or_else(HistoryRead::Unavailable));
     let running = collect_reader(running_rx, budget, started).unwrap_or_else(RunningRead::Unavailable);
-    build_with(since, now, &game, &Sources { changes, crashes, mods, facts, history, running })
+    let sessions = collect_reader(sessions_rx, budget, started).unwrap_or_else(SessionsRead::Unavailable);
+    build_with(since, now, &game, &Sources { changes, crashes, mods, facts, history, running, sessions })
 }
 
 /// Pure: a Steam pick against Steam's listing. A game the complete listing does not hold is "not in Steam"; a
@@ -843,7 +857,7 @@ fn history_real() -> HistoryRead {
     HistoryRead::Read(crate::history::read_ledger_stamps())
 }
 
-const REAL: Io = Io { resolve: resolve_real, changes: changes_real, crashes: crashes_real, mods: mods_real, facts: facts_real, history: history_real, running: running_now::read_real };
+const REAL: Io = Io { resolve: resolve_real, changes: changes_real, crashes: crashes_real, mods: mods_real, facts: facts_real, history: history_real, running: running_now::read_real, sessions: recorded::read_real };
 
 /// One reader of each kind at a time: a press while an earlier reader still runs reads `took-too-long`.
 static SLOTS: Slots = Slots::new();
@@ -1916,7 +1930,10 @@ mod tests {
     fn fake_running() -> RunningRead {
         RunningRead::NotRead
     }
-    const FAKE: Io = Io { resolve: fake_resolve, changes: fake_changes, crashes: fake_crashes, mods: fake_mods, facts: fake_facts, history: fake_history, running: fake_running };
+    fn fake_sessions() -> SessionsRead {
+        SessionsRead::NotRead
+    }
+    const FAKE: Io = Io { resolve: fake_resolve, changes: fake_changes, crashes: fake_crashes, mods: fake_mods, facts: fake_facts, history: fake_history, running: fake_running, sessions: fake_sessions };
 
     fn reset_counts() {
         for c in [&CALLS, &CRASH_CALLS, &MOD_CALLS] {
@@ -2170,5 +2187,47 @@ mod tests {
         let a = build_with(Since::ThisWeek, utc(NOW), &GameCtx::default(), &Sources { running: running_of(&["Medal.exe", "my-private-tool.exe", "System"]), ..Sources::default() });
         let json = serde_json::to_string(&a).unwrap();
         assert!(json.contains("\"name\":\"Medal\"") && !json.contains("my-private-tool") && !json.contains("Medal.exe"), "{json}");
+    }
+
+    // ---- P3 cardtruth: how many sessions Compy has recorded -----------------------------------------
+
+    fn resolve_rob(_s: &FirstLookGame) -> GameCtx {
+        GameCtx { name: Some("ROB RUN".into()), exe: Some("ROB RUN.exe".into()), ..GameCtx::default() }
+    }
+    fn twenty_rob_sessions() -> SessionsRead {
+        let mut v: Vec<String> = std::iter::repeat_n("ROB RUN.exe".to_string(), 20).collect();
+        v.extend(std::iter::repeat_n("PBZ.exe".to_string(), 13));
+        SessionsRead::Read(v)
+    }
+    fn sessions_dead() -> SessionsRead {
+        panic!("the sessions file reader stopped");
+    }
+
+    #[test]
+    fn the_command_path_counts_the_picked_games_recorded_sessions_for_every_choice() {
+        let _t = one_at_a_time();
+        for since in [Since::ThisWeek, Since::Always] {
+            let io = Io { resolve: resolve_rob, sessions: twenty_rob_sessions, ..FAKE };
+            let sel = FirstLookGame::Seen { process: "ROB RUN.exe".into() };
+            let a = run_with(&sel, since, utc(NOW), Duration::from_secs(2), io, None);
+            assert_eq!((a.recorded.state, a.recorded.total, a.recorded.game), ("read", Some(33), Some(20)), "{since:?}");
+        }
+    }
+
+    #[test]
+    fn a_dead_sessions_reader_is_unread_never_zero_sessions() {
+        let _t = one_at_a_time();
+        let io = Io { resolve: resolve_rob, sessions: sessions_dead, ..FAKE };
+        let sel = FirstLookGame::Seen { process: "ROB RUN.exe".into() };
+        let a = run_with(&sel, Since::ThisWeek, utc(NOW), Duration::from_secs(2), io, None);
+        assert_eq!((a.recorded.state, a.recorded.total, a.recorded.game), ("unread", None, None));
+    }
+
+    #[test]
+    fn nobody_asked_for_sessions_serialises_as_not_read_with_no_counts() {
+        let a = build_with(Since::ThisWeek, utc(NOW), &GameCtx::default(), &Sources::default());
+        let json = serde_json::to_value(&a).unwrap();
+        assert_eq!(json["recorded"]["state"], "not-read");
+        assert!(json["recorded"]["total"].is_null() && json["recorded"]["game"].is_null());
     }
 }

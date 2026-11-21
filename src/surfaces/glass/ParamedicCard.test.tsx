@@ -2190,3 +2190,157 @@ describe("ParamedicCard: 'Check again' pressed from a first-look answer or after
     expect(document.activeElement).not.toBe(document.body);
   });
 });
+
+// P3 cardtruth, bug 2: the drift suspect said "Which setting it was ... isn't recorded" while Home named it. The card now
+// names the setting from the same drift list Home uses (drift-named.ts rules), and says "isn't recorded" only when it can't.
+describe("ParamedicCard: the drift suspect names the setting the way Home does", () => {
+  const TITLE = "Trim Windows visual effects";
+  const drift = (over: Record<string, unknown> = {}) => ({
+    id: "applied-changes",
+    label: "Compy changes were turned back off",
+    detail: "",
+    noticed_at: "2026-11-19T20:49:30Z",
+    unreadable_now: false,
+    value_now: null,
+    last_ready_at: "2026-11-19T20:37:06Z",
+    last_ready_value: null,
+    titles: [TITLE],
+    applied_at: ["2026-11-15T13:45:00Z"],
+    ...over,
+  });
+  const suspect = (check = "applied-changes") =>
+    find("setting-drift", {
+      evidence: [
+        { kind: "known", code: "drift-noticed", args: { check }, against: false, source: "drift" },
+        { kind: "unknown", code: "which-not-recorded", args: {}, against: false, source: "drift" },
+      ],
+      fix: steps("setting-drift"),
+    });
+  async function open(drifts: unknown[] | undefined, check = "applied-changes") {
+    answer.value = { ...base, why_first: null, findings: [suspect(check)] };
+    render(<ParamedicCard drifts={drifts as never} />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    return screen.getByTestId("paramedic").textContent ?? "";
+  }
+
+  it("names the setting and its one ledger date, and no longer says which setting it was isn't recorded", async () => {
+    const text = await open([drift()]);
+    expect(text).toContain(`Compy's own check found that “${TITLE}”, a setting Compy applied, is no longer on.`);
+    expect(text).toMatch(/You turned it on with Compy on [A-Z][a-z]{2} \d{1,2}, /);
+    expect(text).toContain("What changed it isn't recorded.");
+    expect(text).not.toContain("Which setting it was");
+  });
+
+  it("with several settings off it lists them and gives no single date", async () => {
+    const text = await open([drift({ titles: [TITLE, "Enable Windows Game Mode"], applied_at: ["2026-11-15T13:45:00Z", "2026-11-15T13:44:00Z"] })]);
+    expect(text).toContain(`these settings Compy applied are no longer on: ${TITLE}, Enable Windows Game Mode.`);
+    expect(text).not.toContain("You turned it on with Compy on");
+  });
+
+  it("no title in the list: never invents one, and still says which setting it was isn't recorded", async () => {
+    for (const drifts of [undefined, [], [drift({ titles: [], applied_at: [] })], [drift({ unreadable_now: true })]]) {
+      cleanup();
+      const text = await open(drifts);
+      expect(text, JSON.stringify(drifts)).toContain("Compy's own check found a setting it applied is no longer on.");
+      expect(text).toContain("Which setting it was, and what changed it, isn't recorded.");
+      expect(text).not.toContain(TITLE);
+      expect(text).not.toContain("You turned it on with Compy on");
+    }
+  });
+
+  it("a single title without a ledger stamp is named with no date", async () => {
+    const text = await open([drift({ applied_at: [""] })]);
+    expect(text).toContain(`“${TITLE}”`);
+    expect(text).not.toContain("You turned it on with Compy on");
+  });
+
+  it("another watched setting is named by its short form from the same list", async () => {
+    const text = await open(
+      [drift({ id: "monitor-refresh", label: "Monitor refresh rate", titles: [], applied_at: [], value_now: "144 Hz", unreadable_now: false })],
+      "monitor-refresh",
+    );
+    expect(text).toContain("Compy noticed a setting it watches had changed: Monitor refresh rate: now 144 Hz.");
+    expect(text).toContain("What changed it isn't recorded.");
+  });
+
+  it("says the same in Chinese from the zh-CN keys", async () => {
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8")).evidence as Record<string, string>;
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      answer.value = { ...base, why_first: null, findings: [suspect()] };
+      render(<ParamedicCard drifts={[drift()] as never} />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      const text = screen.getByTestId("paramedic").textContent ?? "";
+      expect(text).toContain(zh.driftAppliedNamed_other.replace("{{titles}}", TITLE));
+      expect(text).toContain(zh.whichChangedNotRecorded);
+      expect(text).not.toContain(zh.whichNotRecorded);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});
+
+// P3 cardtruth, bug 3: "Compy didn't record what was running" next to "Firefox was already running". Each now says which
+// rough sessions it is about, so both can be true at once.
+describe("ParamedicCard: 'already running' and 'not recorded' are scoped to their own sessions", () => {
+  const running = (n: string, of: string) =>
+    find("background-load", {
+      evidence: [{ kind: "measured", code: "already-running", args: { id: "node", name: "Node.js", n, of }, against: false, source: "sessions" }],
+      fix: steps("background-load"),
+    });
+  async function open(d: Partial<ParamedicDiagnosis>) {
+    answer.value = { ...base, why_first: null, ...d };
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    return screen.getByTestId("paramedic").textContent ?? "";
+  }
+
+  it("3 of 4 recorded: both lines are shown, each about its own sessions, and neither says nothing was running", async () => {
+    const text = await open({ findings: [running("3", "4")], unknowns: ["running-at-start"], start_record: { recorded: 3, rough: 4 } });
+    expect(text).toContain("In the 3 of 4 rough Game A sessions where Compy recorded what was running, Node.js was already running when the game started.");
+    expect(text).toContain("For 1 of the 4 rough Game A sessions, Compy didn't record what was running when the game started.");
+    expect(text).not.toContain("Compy didn't record what was running when this session started.");
+    expect(text).not.toMatch(/nothing was running|no programs were running/i);
+  });
+
+  it("every rough session recorded: the plain sentence and no 'not recorded' line", async () => {
+    const text = await open({ findings: [running("1", "1")], unknowns: [], start_record: { recorded: 1, rough: 1 } });
+    expect(text).toContain("Node.js was already running when Game A started.");
+    expect(text).not.toContain("didn't record what was running");
+  });
+
+  it("none of several rough sessions recorded: says none of them was recorded, not that nothing ran", async () => {
+    const text = await open({ unknowns: ["running-at-start"], start_record: { recorded: 0, rough: 4 } });
+    expect(text).toContain("Compy didn't record what was running when any of the 4 rough Game A sessions started.");
+  });
+
+  it("one rough session with no record keeps the single-session sentence", async () => {
+    const text = await open({ unknowns: ["running-at-start"], start_record: { recorded: 0, rough: 1 } });
+    expect(text).toContain("Compy didn't record what was running when this session started.");
+  });
+
+  it("says the same in Chinese from the zh-CN keys", async () => {
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8"));
+    const i18n = (await import("../../i18n")).default;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      answer.value = { ...base, why_first: null, findings: [running("3", "4")], unknowns: ["running-at-start"], start_record: { recorded: 3, rough: 4 } };
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      const text = screen.getByTestId("paramedic").textContent ?? "";
+      expect(text).toContain(zh.evidence.alreadyRunningScoped.replace("{{of}}", "4").replace("{{game}}", "Game A").replace(/\{\{n\}\}/g, "3").replace("{{name}}", "Node.js"));
+      expect(text).toContain(zh.unknown.runningAtStartSome.replace("{{rough}}", "4").replace("{{game}}", "Game A").replace("{{missing}}", "1"));
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});

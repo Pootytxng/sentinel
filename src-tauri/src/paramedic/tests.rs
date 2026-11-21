@@ -4627,6 +4627,36 @@ fn a_missing_or_unread_rough_snapshot_is_said_and_a_complete_set_names_what_the_
     assert!(!d.unknowns.contains(&"overlays") && !d.unknowns.contains(&"running-at-start"));
 }
 
+/// P3 cardtruth: the owner's case. Four rough sessions, three with a snapshot (a program open in all three) and one
+/// with none. "Was already running" holds for the three that were recorded, "didn't record" for the one that was
+/// not: the engine says which counts each sentence is about, so the card can show both without contradicting itself.
+#[test]
+fn already_running_and_not_recorded_are_scoped_to_the_sessions_each_is_about() {
+    let mut sess = start_episode(quiet_base(3), None);
+    for day in ["2026-10-21", "2026-10-22", "2026-10-23"] {
+        let mut r = facts(&format!("{day}T10:00:00Z"), 600, 600, 100.0, 30.0);
+        r.running_at_start = Some(snap(&["obs64.exe"]));
+        sess.push(r);
+    }
+    let d = run_load(sess);
+    assert_eq!(d.problem.as_ref().map(|p| p.sessions_affected.len()), Some(4));
+    let f = bg_finding(&d).expect("the three snapshots are timing");
+    let line = f.evidence.iter().find(|e| e.code == "already-running").expect("open in every readable rough snapshot");
+    assert_eq!((line.args.get("n").map(String::as_str), line.args.get("of").map(String::as_str)), (Some("3"), Some("4")));
+    assert!(d.unknowns.contains(&"running-at-start"), "one rough session has no record: {:?}", d.unknowns);
+    assert_eq!(d.start_record, Some(StartRecord { recorded: 3, rough: 4 }));
+}
+
+#[test]
+fn with_every_rough_session_recorded_the_scope_is_all_of_them_and_nothing_is_missing() {
+    let d = run_load(start_episode(quiet_base(3), Some(snap(&["obs64.exe"]))));
+    let f = bg_finding(&d).expect("timing");
+    let line = f.evidence.iter().find(|e| e.code == "already-running").unwrap();
+    assert_eq!((line.args.get("n").map(String::as_str), line.args.get("of").map(String::as_str)), (Some("1"), Some("1")));
+    assert_eq!(d.start_record, Some(StartRecord { recorded: 1, rough: 1 }));
+    assert!(!d.unknowns.contains(&"running-at-start"));
+}
+
 #[test]
 fn a_full_start_log_and_a_skipped_burst_are_each_one_honest_line() {
     let mk = |dropped: Option<u32>, skipped: Option<u32>| {

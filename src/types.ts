@@ -1489,5 +1489,7 @@ export type ParamedicDiagnosis = {
   earlier_episode: { from: string; to: string } | null;
   /** Start times of this game's recent sessions that may hold two games: not judged, named in one note line. */
   mixed_sessions: string[];
+  /** How many of the rough sessions have a record of what was running at the start, of all of them (absent: no rough session). */
+  start_record?: { recorded: number; rough: number };
   method: string;
 };

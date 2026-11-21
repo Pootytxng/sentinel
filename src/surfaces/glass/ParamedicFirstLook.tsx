@@ -51,6 +51,12 @@ export type FirstLookRunning = {
   more: number;
 };
 
+/** How many sessions Compy has recorded. `state` other than "read" is a "couldn't read" outcome: no count is claimed.
+ *  `game` is null when no game is picked, the read failed, or the pick couldn't be matched to a recorded game
+ *  (`unmatched`); only a successful read can say 0. `need` is the number of sessions of one game the measured answer
+ *  needs before it can compare. */
+export type FirstLookRecorded = { state: "read" | "unread" | "not-read"; total: number | null; game: number | null; unmatched: boolean; need: number };
+
 export type ParamedicFirstLook = {
   told: { since: FirstLookSince; from: string | null; to: string; hours: number | null };
   /** The picked game's display name; null for the whole PC. */
@@ -78,6 +84,8 @@ export type ParamedicFirstLook = {
   compy_changes: CompyChange[];
   /** Known programs running right now: a fact about now, not about when the problem happened. */
   running_now: FirstLookRunning;
+  /** How many sessions Compy has recorded: what "can't tell yet" rests on. Absent (an older answer) is "couldn't read". */
+  recorded?: FirstLookRecorded;
   limits: ParamedicLimit[];
   read_all: boolean;
   method: string;
@@ -555,6 +563,32 @@ function toGame(p: Pick): FirstLookGame {
   if (p.kind === "seen") return { kind: "seen", process: p.process };
   if (p.kind === "steam") return { kind: "steam", app_id: p.app_id, name: p.name };
   return { kind: "whole-pc" };
+}
+
+/** "What Compy can't tell yet": rests on how many sessions Compy has recorded. "None" is said only when the read
+ *  succeeded and found none; a failed read or a pick Compy couldn't match to a recorded game is "can't tell". */
+function cantTellBody(a: ParamedicFirstLook, measured: FirstLookMeasured, t: T): string {
+  if (measured) return t("paramedic.firstLook.cantTell.bodyFew", { game: measured.game });
+  const r = a.recorded;
+  const game = a.game;
+  if (!r || r.state !== "read") {
+    return game ? t("paramedic.firstLook.cantTell.unreadGame", { game }) : t("paramedic.firstLook.cantTell.unreadPc");
+  }
+  if (game == null) return r.total ? t("paramedic.firstLook.cantTell.pcRecorded", { count: r.total }) : t("paramedic.firstLook.cantTell.body");
+  if (r.unmatched || r.game == null) return t("paramedic.firstLook.cantTell.unmatched", { game });
+  if (r.game >= r.need) return t("paramedic.firstLook.cantTell.recorded", { count: r.game, game });
+  if (r.game > 0) return t("paramedic.firstLook.cantTell.bodyFew", { game });
+  return r.total ? t("paramedic.firstLook.cantTell.noneOfGame", { game }) : t("paramedic.firstLook.cantTell.body");
+}
+
+/** The "start a capture and play" line belongs only where more sessions would change the answer. */
+function cantTellMeasures(a: ParamedicFirstLook, measured: FirstLookMeasured): boolean {
+  if (measured) return true;
+  const r = a.recorded;
+  if (!r || r.state !== "read") return false;
+  if (a.game == null) return !r.total;
+  if (r.unmatched || r.game == null) return false;
+  return r.game < r.need;
 }
 
 /** The picked game's crash records, in the measured flow's own sentences (same keys, same arguments). */
@@ -1045,8 +1079,8 @@ export function ParamedicFirstLook({
         <p>
           <strong>{t("paramedic.firstLook.cantTell.title")}</strong>
         </p>
-        <p>{measured ? t("paramedic.firstLook.cantTell.bodyFew", { game: measured.game }) : t("paramedic.firstLook.cantTell.body")}</p>
-        <p>{t("paramedic.firstLook.cantTell.measure")}</p>
+        <p data-testid="first-look-cant-tell-body">{cantTellBody(a, measured, t)}</p>
+        {cantTellMeasures(a, measured) && <p>{t("paramedic.firstLook.cantTell.measure")}</p>}
       </div>
       <div className="gl-para-actions">
         <button type="button" className="gl-ghost" onClick={() => setStep({ kind: "ask", chosen: step.chosen })}>

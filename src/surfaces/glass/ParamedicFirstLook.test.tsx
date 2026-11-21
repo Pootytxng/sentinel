@@ -108,6 +108,8 @@ const answer = (over: Partial<FirstLookAnswer> = {}): FirstLookAnswer => ({
   facts: [],
   compy_changes: [],
   running_now: { state: "not-read", programs: [], more: 0 },
+  // Nothing recorded at all, and the read succeeded: the one case where "hasn't seen a game run yet" is true.
+  recorded: { state: "read", total: 0, game: null, unmatched: false, need: 3 },
   limits: completeLimits,
   read_all: true,
   method: "paramedic-first-look-v1",
@@ -1412,6 +1414,119 @@ describe("the crash records before and after the earliest change (S5)", () => {
         await pick("这周", gameAnswer({ crashes: crashes(split) }));
         expect(line()).toMatch(want);
       }
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});
+
+
+// P3 cardtruth, bug 1: the owner's ROB RUN has 20 recorded sessions and the first look said "Compy hasn't seen a
+// game run yet". The answer now carries how many sessions Compy recorded; "none" needs a successful read that found none.
+describe("what Compy can't tell yet rests on the sessions it recorded", () => {
+  const STALE = "Compy hasn't seen a game run yet";
+  const rec = (over: Partial<NonNullable<FirstLookAnswer["recorded"]>>): NonNullable<FirstLookAnswer["recorded"]> => ({
+    state: "read",
+    total: 33,
+    game: 20,
+    unmatched: false,
+    need: 3,
+    ...over,
+  });
+  /** The real route: a measured answer is on screen, "Something else?" opens the questions over it (so the first
+   *  look gets no `measured` of its own), ROB RUN is picked, "This week" is tapped. Returns the can't-tell group. */
+  async function lookAt(a: FirstLookAnswer, pickedGame = "ROB RUN") {
+    engine.diagnose = diagnosis({ kind: "nothing-wrong", sessions_checked: 4 });
+    engine.steam = steamList([]);
+    render(<ParamedicCard games={recorded} />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Something else? Answer a few questions" })).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: "Something else? Answer a few questions" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
+    engine.look = a;
+    fireEvent.click(screen.getByRole("button", { name: pickedGame }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy());
+    await pick("This week", a);
+    return {
+      body: screen.getByTestId("first-look-cant-tell-body").textContent ?? "",
+      group: screen.getByTestId("first-look-cant-tell").textContent ?? "",
+    };
+  }
+
+  it("a game with 20 recorded sessions is never told it hasn't been seen: it says how many, and that this list doesn't compare them", async () => {
+    const { body, group } = await lookAt(gameAnswer({ recorded: rec({}) }));
+    expect(body).toBe(
+      "Compy has recorded 20 sessions of ROB RUN. This list shows what changed on this PC; it doesn't compare those sessions, so it can't say here which of these changes matters.",
+    );
+    expect(group).not.toContain(STALE);
+    // More sessions would not change this answer, so no "start a capture and play" instruction.
+    expect(group).not.toContain("Start a capture in Live");
+  });
+
+  it("a read that failed is 'couldn't read', never 'none' and never a count", async () => {
+    const { body, group } = await lookAt(gameAnswer({ recorded: rec({ state: "unread", total: null, game: null }) }));
+    expect(body).toBe(
+      "Compy couldn't read the sessions it recorded just now, so it can't tell whether ROB RUN runs worse than before, or which of these changes matters.",
+    );
+    expect(group).not.toMatch(/hasn't seen|hasn't recorded|hasn't got enough|Start a capture/);
+  });
+
+  it("an answer with no sessions field (an older one) is 'couldn't read', not 'none'", async () => {
+    const a = gameAnswer();
+    delete a.recorded;
+    const { body } = await lookAt(a);
+    expect(body).toMatch(/^Compy couldn't read the sessions it recorded just now/);
+  });
+
+  it("a pick Compy couldn't match to a recorded game is 'can't tell', not 'none'", async () => {
+    const { body, group } = await lookAt(gameAnswer({ recorded: rec({ game: null, unmatched: true }) }));
+    expect(body).toBe(
+      "Compy couldn't match ROB RUN to a game it has recorded, so it can't tell whether it runs worse than before, or which of these changes matters.",
+    );
+    expect(group).not.toMatch(/hasn't seen|hasn't recorded|Start a capture/);
+  });
+
+  it("2 recorded sessions is 'not enough yet' with the capture instruction; 0 of a game among others is 'hasn't recorded a session of it'", async () => {
+    const few = await lookAt(gameAnswer({ recorded: rec({ game: 2 }) }));
+    expect(few.body).toBe("Compy hasn't got enough sessions of ROB RUN yet, so it can't tell whether anything runs worse than before, or which of these changes matters.");
+    expect(few.group).toContain("Start a capture in Live");
+    cleanup();
+    const none = await lookAt(gameAnswer({ recorded: rec({ game: 0 }) }));
+    expect(none.body).toBe("Compy hasn't recorded a session of ROB RUN yet, so it can't tell whether anything runs worse than before, or which of these changes matters.");
+    expect(none.group).toContain("Start a capture in Live");
+  });
+
+  it("'hasn't seen a game run yet' is still said when the read succeeded and Compy has recorded nothing at all", async () => {
+    const { body, group } = await lookAt(gameAnswer({ recorded: rec({ total: 0, game: 0 }) }));
+    expect(body).toContain(STALE);
+    expect(group).toContain("Start a capture in Live");
+  });
+
+  it("the whole PC: a count of all recorded sessions when there are some, the old line only when there are none, 'couldn't read' otherwise", async () => {
+    await toTheQuestion();
+    await pick("This week", answer({ recorded: rec({ game: null, total: 33 }) }));
+    expect(screen.getByTestId("first-look-cant-tell-body").textContent).toBe(
+      "Compy has recorded 33 game sessions, but this list is for the whole PC, not one game, so it doesn't compare any of them.",
+    );
+    cleanup();
+    await toTheQuestion();
+    await pick("This week", answer({ recorded: rec({ state: "unread", game: null, total: null }) }));
+    expect(screen.getByTestId("first-look-cant-tell-body").textContent).toMatch(/^Compy couldn't read the sessions it recorded just now, so it can't tell whether anything runs worse/);
+  });
+
+  it("says the same in Chinese: each case comes from its own zh-CN key", async () => {
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8")).firstLook.cantTell as Record<string, string>;
+    await i18n.changeLanguage("zh-CN");
+    try {
+      engine.diagnose = noSessions();
+      engine.steam = steamList([]);
+      render(<ParamedicCard games={recorded} />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
+      fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
+      await pick("这周", gameAnswer({ recorded: rec({}) }));
+      expect(screen.getByTestId("first-look-cant-tell-body").textContent).toBe(zh.recorded_other.replace("{{count}}", "20").replace("{{game}}", "ROB RUN"));
+      expect(screen.getByTestId("first-look-cant-tell").textContent).not.toContain(zh.body);
     } finally {
       await i18n.changeLanguage("en");
     }
