@@ -2633,48 +2633,50 @@ mod tests {
         }
     }
 
+    /// Serialises the tests that plant the decoy: it must be named exactly `wevtutil.exe` beside the
+    /// test executable to be a decoy at all, so two of them in one run would share one file.
+    static PLANT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn lower(p: &std::path::Path) -> String {
+        p.to_string_lossy().to_lowercase()
+    }
+
+    /// g4: no skip branch passes. Every set-up problem FAILS with "could not set up"; the decoy is
+    /// never spawned (a bad "MZ" image can raise a modal error box or an antivirus hold, which hung
+    /// this test); the property is proven at the resolver (the exact GetSystemDirectoryW path, never
+    /// the test executable's folder) and by the real read, which is bounded by its 10 s kill budget.
     #[test]
     fn a_wevtutil_planted_beside_the_executable_is_never_run() {
+        let _serial = PLANT_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         let exe_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        let sys = system_directory().expect("could not set up: GetSystemDirectoryW gave no directory");
         let planted = exe_dir.join("wevtutil.exe");
-        // The resolver itself never yields a relative or bare name (independent of any planting).
-        let cmd = system_command("wevtutil.exe").expect("system command");
-        assert!(std::path::Path::new(cmd.get_program()).is_absolute(), "{:?}", cmd.get_program());
-        if let Ok(meta) = std::fs::metadata(&planted) {
-            let age = meta.modified().ok().and_then(|m| m.elapsed().ok()).unwrap_or(Duration::from_secs(u64::MAX));
-            if age > Duration::from_secs(600) {
-                panic!(
-                    "a stale wevtutil.exe was left beside the test executable ({planted:?}); delete it, then rerun. \
-                     Not passing vacuously."
-                );
-            }
-            eprintln!("skipped: a fresh wevtutil.exe beside the executable belongs to a concurrent run");
-            return;
+        // A decoy left by a run that was killed before its drop guard ran is removed, not trusted:
+        // only this test writes the name, and the lock serialises it inside one run.
+        if planted.exists() {
+            std::fs::remove_file(&planted)
+                .unwrap_or_else(|e| panic!("could not set up: a leftover decoy {planted:?} could not be removed: {e}"));
         }
-        if std::fs::write(&planted, b"MZ this is not a program").is_err() {
-            eprintln!("skipped: cannot write beside the test executable");
-            return;
-        }
+        std::fs::write(&planted, b"MZ decoy, never to be executed")
+            .unwrap_or_else(|e| panic!("could not set up: cannot write the decoy {planted:?}: {e}"));
         let _guard = Planted(planted.clone());
-        // Control: a bare-name spawn (what quiet_command("wevtutil.exe") does) picks the planted
-        // file first and fails; this is the hazard the absolute path closes. If antivirus removed
-        // the file, or the control spawn works, the hazard was not reproduced here: skip, say why.
-        if !planted.exists() {
-            eprintln!("skipped: the planted file was removed (antivirus?) before the control");
-            return;
-        }
-        match std::process::Command::new("wevtutil.exe").arg("/?").spawn() {
-            Err(_) => {}
-            Ok(mut child) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                eprintln!("skipped: a bare-name spawn did not pick the planted file, so nothing is proven here");
-                return;
-            }
-        }
-        // The reader still works: it ran the real tool from the system directory.
+        assert!(planted.is_file(), "could not set up: the decoy {planted:?} vanished (antivirus?)");
+
+        // With the decoy in place, the resolver names exactly the system directory's wevtutil.exe.
+        let cmd = system_command("wevtutil.exe").expect("system command");
+        let program = PathBuf::from(cmd.get_program());
+        assert!(program.is_absolute(), "{program:?}");
+        assert_eq!(lower(&program), lower(&sys.join("wevtutil.exe")), "resolved outside the system directory");
+        assert!(!lower(&program).starts_with(&lower(&exe_dir)), "resolved into the test executable's folder: {program:?}");
+        assert_ne!(lower(&program), lower(&planted), "resolved to the decoy");
+
+        // And the real reader runs that tool: the decoy cannot print an event. Bounded: the read is
+        // killed at 10 s, and the elapsed check catches a wait that outlived its own budget.
+        let started = Instant::now();
         let r = run_wevtutil("System", None, 1, false, Duration::from_secs(10));
-        assert!(matches!(&r, Ok(t) if !t.timed_out), "{r:?}");
+        assert!(started.elapsed() < Duration::from_secs(30), "the bounded read took {:?}", started.elapsed());
+        assert!(matches!(&r, Ok(t) if !t.timed_out && t.xml.contains("<Event")), "{r:?}");
+        assert!(planted.is_file(), "the decoy must still be there when the real read ran, or nothing was shown");
     }
 
     /// The text of `fn <name>` up to its closing brace at column 0.

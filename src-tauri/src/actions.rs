@@ -6369,12 +6369,21 @@ mod rollback_tests {
         }
         let dir = std::env::temp_dir().join(format!("compy-s41-restore-exit-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
+        // g4: every PowerShell child is waited on for at most PS_LIMIT, then killed by its own handle
+        // (output_within), so a stalled child fails this test with a message instead of hanging it.
+        const PS_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+        let bounded = |what: &str, script: &str| -> std::process::Output {
+            let mut cmd = quiet_command("powershell");
+            cmd.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+            output_within(cmd, PS_LIMIT).unwrap_or_else(|| {
+                panic!("the PowerShell child for `{what}` did not start or did not finish within {PS_LIMIT:?}; it was killed")
+            })
+        };
         let run = |rec: &str, body: String| -> String {
             let receipts = dir.join(format!("{rec}.txt"));
             let _ = std::fs::remove_file(&receipts);
             let script = compose_batch_script(&[(rec.to_string(), vec![body])], &receipts.to_string_lossy()).unwrap();
-            let out = quiet_command("powershell").args(["-NoProfile", "-NonInteractive", "-Command", &script]).output();
-            assert!(out.is_ok(), "powershell ran");
+            bounded(rec, &script);
             std::fs::read_to_string(&receipts).unwrap_or_default().trim().to_string()
         };
         let fail_then_ok = ["findstr /c:compy-s41-none NUL".to_string(), "where.exe cmd".to_string()];
@@ -6386,11 +6395,8 @@ mod rollback_tests {
         // `$ErrorActionPreference='Stop'` in front; a failed step exits non-zero (an Err), where the
         // bare chain exited 0 when its last step succeeded.
         let single = |body: String| {
-            let out = quiet_command("powershell")
-                .args(["-NoProfile", "-NonInteractive", "-Command", with_error_action_stop(&body).as_ref()])
-                .output()
-                .expect("powershell ran");
-            out.status.code()
+            let script = with_error_action_stop(&body);
+            bounded("single elevation", script.as_ref()).status.code()
         };
         assert_ne!(single(checked_powercfg_steps(&fail_then_ok)), Some(0));
         assert_eq!(single(fail_then_ok.join("; ")), Some(0), "the old chain exited 0 past a failed step");
