@@ -398,11 +398,11 @@
     "readiness": {
       "powerProfile": {
         "label": "电源计划",
-        "labelAttention": "电源计划不是性能优先",
+        "labelAttention": "电源计划设为节能",
         "unknown": "无法读取当前的 Windows 电源计划。",
-        "kept": "当前计划为“{{plan}}”，这是你选择保留的 Compy 之外的设置。Compy 不会标记或切换它。",
-        "ready": "当前计划“{{plan}}”是性能优先的。",
-        "attention": "当前计划为“{{plan}}”。性能计划（高性能 / 卓越性能）可以降低延迟。Compy 不会替你切换。"
+        "kept": "当前计划为“{{plan}}”，这是你选择保留的 Compy 之外的设置。Compy 自己不会更改任何内容。",
+        "ready": "当前计划为“{{plan}}”。",
+        "attention": "当前计划为“{{plan}}”。Windows 将此计划设计为节省电力。Compy 尚未测量它对这台电脑的影响。Compy 自己不会更改任何内容。你可以在 Windows 设置的“电源”中切换计划。"
       },
       "monitorRefresh": {
         "label": "显示器刷新率",

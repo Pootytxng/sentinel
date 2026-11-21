@@ -105,15 +105,15 @@ describe("friendlyHeadline", () => {
   });
 });
 
-// CR-zh-readiness-words: zh-CN Health's limiter card printed readiness.rs English ("Power plan isn't
-// performance-oriented", "Active plan "Synez Power Plan". A performance plan ...").
+// CR-zh-readiness-words: zh-CN Health's limiter card printed readiness.rs English; h4-plan: the
+// flagged power-plan row is now Power saver only, with no unmeasured effect claim.
 describe("readinessWords", () => {
   const plan = {
     id: "power-profile",
     status: "attention",
-    label: "Power plan isn't performance-oriented",
+    label: "Power plan is set to save power",
     detail:
-      'Active plan "Synez Power Plan". A performance plan (High performance / Ultimate Performance) can reduce latency. Compy won\'t switch it for you.',
+      'Active plan "Power saver". Windows designed this plan to save power. Compy has not measured its effect on this PC. Compy changes nothing by itself. You can switch plans in Windows Settings, Power.',
   };
 
   it("English gets the backend's own words, byte for byte", () => {
@@ -122,8 +122,10 @@ describe("readinessWords", () => {
 
   it("zh-CN translates by (id, status), keeping the plan's name as Windows has it", () => {
     const w = readinessWords(plan, zh, "zh-CN");
-    expect(w.label).toBe("电源计划不是性能优先");
-    expect(w.detail).toBe("当前计划为“Synez Power Plan”。性能计划（高性能 / 卓越性能）可以降低延迟。Compy 不会替你切换。");
+    expect(w.label).toBe("电源计划设为节能");
+    expect(w.detail).toBe(
+      "当前计划为“Power saver”。Windows 将此计划设计为节省电力。Compy 尚未测量它对这台电脑的影响。Compy 自己不会更改任何内容。你可以在 Windows 设置的“电源”中切换计划。",
+    );
   });
 
   it("names and numbers are lifted from the sentence and put back untranslated", () => {
@@ -152,8 +154,8 @@ describe("readinessWords", () => {
     expect(hz.detail).toContain("250 Hz");
     expect(hz.detail).not.toMatch(/Running|display/);
     // A plan named like a template slot or with regex characters is taken as sent.
-    const odd = readinessWords({ ...plan, status: "ready", label: "Power profile", detail: 'Active plan "a.*(b) {{x}}" is performance-oriented.' }, zh, "zh-CN");
-    expect(odd.detail).toBe("当前计划“a.*(b) {{x}}”是性能优先的。");
+    const odd = readinessWords({ ...plan, status: "ready", label: "Power profile", detail: 'Active plan "a.*(b) {{x}}".' }, zh, "zh-CN");
+    expect(odd.detail).toBe("当前计划为“a.*(b) {{x}}”。");
   });
 
   it("a sentence, status or label that matches no mirror is shown as sent (never guessed)", () => {

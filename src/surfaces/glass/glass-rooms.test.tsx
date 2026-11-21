@@ -276,13 +276,13 @@ describe("GL-empty — 'What's holding FPS back' speaks for what it read: the se
   // CR-zh-readiness-words (view-1112a/14-home-zh-CN.png): zh-CN printed readiness.rs's English title
   // and body for the owner's power plan; the plan's own name stays as Windows has it.
   it("zh-CN: the power-plan limiter reads in Chinese with the plan's name untranslated; English unchanged", async () => {
-    const label = "Power plan isn't performance-oriented";
+    const label = "Power plan is set to save power";
     const detail =
-      'Active plan "Synez Power Plan". A performance plan (High performance / Ultimate Performance) can reduce latency. Compy won\'t switch it for you.';
+      'Active plan "Power saver". Windows designed this plan to save power. Compy has not measured its effect on this PC. Compy changes nothing by itself. You can switch plans in Windows Settings, Power.';
     const r = readiness(0);
     const withPlan: GameReadiness = {
       ...r,
-      checks: [...r.checks, { id: "power-profile", label, status: "attention", detail, value: "Synez Power Plan" }],
+      checks: [...r.checks, { id: "power-profile", label, status: "attention", detail, value: "Power saver" }],
       attention_count: 1,
     };
     const priorities: Priorities = {
@@ -299,9 +299,9 @@ describe("GL-empty — 'What's holding FPS back' speaks for what it read: the se
       home({ readiness: withPlan, priorities });
       // The card's name is Chinese here too; found by its heading's id.
       const text = document.querySelector('[aria-labelledby="gl-home-limiter"]')!.textContent!;
-      expect(text).toContain("电源计划不是性能优先");
-      expect(text).toContain("“Synez Power Plan”");
-      expect(text).not.toMatch(/performance-oriented|Active plan|switch it/);
+      expect(text).toContain("电源计划设为节能");
+      expect(text).toContain("“Power saver”");
+      expect(text).not.toMatch(/save power|Active plan|Windows Settings/);
     } finally {
       await i18n.changeLanguage("en");
     }
@@ -316,7 +316,7 @@ describe("Home limiter tile — a fact is Known, never Likely, never 'holding FP
   const row = (over: Partial<Priorities["limiters"][number]>): Priorities => ({
     ...noLimiters,
     limiters: [
-      { id: "power-profile", title: "Power plan isn't performance-oriented", reason: "Active plan \"Balanced\".", linked: null, confidence: "medium", status: "attention", ...over },
+      { id: "power-profile", title: "Power plan is set to save power", reason: "Active plan \"Power saver\".", linked: null, confidence: "medium", status: "attention", ...over },
     ],
   });
 
@@ -326,7 +326,7 @@ describe("Home limiter tile — a fact is Known, never Likely, never 'holding FP
     expect(tile().querySelector(".gl-chip")!.textContent).toBe("Known");
     expect(tile().textContent).toContain("Effect on FPS not measured");
     expect(tile().textContent).not.toMatch(/Likely|Measured|Expected|holding FPS back/);
-    expect(tile().textContent).toContain("Power plan isn't performance-oriented");
+    expect(tile().textContent).toContain("Power plan is set to save power");
   });
 
   it("a row with no basis (older data) is treated as a fact, never as a measurement", () => {

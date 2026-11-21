@@ -407,11 +407,11 @@
     "readiness": {
       "powerProfile": {
         "label": "Power profile",
-        "labelAttention": "Power plan isn't performance-oriented",
+        "labelAttention": "Power plan is set to save power",
         "unknown": "Couldn't read the active Windows power plan.",
-        "kept": "Active plan \"{{plan}}\", which you chose to keep as set outside Compy. Compy won't flag or switch it.",
-        "ready": "Active plan \"{{plan}}\" is performance-oriented.",
-        "attention": "Active plan \"{{plan}}\". A performance plan (High performance / Ultimate Performance) can reduce latency. Compy won't switch it for you."
+        "kept": "Active plan \"{{plan}}\", which you chose to keep as set outside Compy. Compy changes nothing by itself.",
+        "ready": "Active plan \"{{plan}}\".",
+        "attention": "Active plan \"{{plan}}\". Windows designed this plan to save power. Compy has not measured its effect on this PC. Compy changes nothing by itself. You can switch plans in Windows Settings, Power."
       },
       "monitorRefresh": {
         "label": "Monitor refresh rate",

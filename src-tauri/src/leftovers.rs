@@ -772,6 +772,7 @@ fn probe_core_parking() -> Value {
                     crate::PowerPlanClass::Balanced => "balanced",
                     crate::PowerPlanClass::HighPerformance => "high-performance",
                     crate::PowerPlanClass::Ultimate => "ultimate",
+                    crate::PowerPlanClass::PowerSaver => "power-saver",
                     crate::PowerPlanClass::Other => "other",
                 }),
             })

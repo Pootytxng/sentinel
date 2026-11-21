@@ -191,20 +191,16 @@ pub(crate) enum PowerPlanClass {
     Balanced,
     HighPerformance,
     Ultimate,
+    /// Windows' own "Power saver" plan, by its stock GUID only (a name is never read for this class).
+    PowerSaver,
     /// A GUID Windows does not ship, named by words this build cannot read as a class.
     Other,
 }
 
+const SCHEME_POWER_SAVER: &str = "a1841308-3541-4fab-bc81-f71556f20b4a";
 const SCHEME_BALANCED: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
 const SCHEME_HIGH_PERFORMANCE: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
 const SCHEME_ULTIMATE: &str = "e9a42b02-d5df-448d-aa00-03f14749eb61";
-
-impl PowerPlanClass {
-    /// Does this plan ship with performance-oriented defaults (parking off, no idle throttling)?
-    pub(crate) fn is_performance(self) -> bool {
-        matches!(self, PowerPlanClass::HighPerformance | PowerPlanClass::Ultimate)
-    }
-}
 
 /// The active plan's class and its printed name, from one `powercfg /getactivescheme` read.
 pub(crate) fn current_power_plan() -> Option<(PowerPlanClass, String)> {
@@ -239,6 +235,7 @@ pub(crate) fn power_plan_of(stdout: &str) -> Option<(PowerPlanClass, String)> {
     let guid = scheme_guid_of(stdout)?;
     let name = power_plan_name_of(stdout).unwrap_or_default();
     let class = match guid.as_str() {
+        SCHEME_POWER_SAVER => PowerPlanClass::PowerSaver,
         SCHEME_BALANCED => PowerPlanClass::Balanced,
         SCHEME_HIGH_PERFORMANCE => PowerPlanClass::HighPerformance,
         SCHEME_ULTIMATE => PowerPlanClass::Ultimate,
@@ -694,6 +691,8 @@ mod core_parking_tests {
         let copy = "Power Scheme GUID: 12345678-1234-1234-1234-123456789abc  (Ultimate Performance)";
         assert_eq!(power_plan_of(copy).map(|p| p.0), Some(PowerPlanClass::Ultimate));
         let ryzen = "Power Scheme GUID: 12345678-1234-1234-1234-123456789abc  (AMD Ryzen Balanced)";
+        assert_eq!(power_plan_of("x GUID: A1841308-3541-4FAB-BC81-F71556F20B4A  (Power saver)").map(|p| p.0), Some(PowerPlanClass::PowerSaver));
+        assert_eq!(power_plan_of("x GUID: 11111111-2222-3333-4444-555555555555  (Power saver)").map(|p| p.0), Some(PowerPlanClass::Other), "the name alone never makes a plan Power saver");
         assert_eq!(power_plan_of(ryzen), Some((PowerPlanClass::Other, "AMD Ryzen Balanced".into())));
         let zh_copy = "电源方案 GUID: 12345678-1234-1234-1234-123456789abc  (卓越性能)";
         assert_eq!(power_plan_of(zh_copy).map(|p| p.0), Some(PowerPlanClass::Other), "a localized copy stays Other: not guessed");

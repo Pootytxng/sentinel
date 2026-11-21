@@ -860,36 +860,35 @@ pub(crate) fn evaluate_readiness(
         ),
         // CR-kept-outside-nits (d): the plan the user chose to keep as set outside Compy (its record
         // holds against the live read) is theirs to judge: an advisory, never a flag.
-        Some((class, p)) if !class.is_performance() && hist.is_ok_and(|h| h.kept_outside_plan) => check(
+        Some((class, p)) if class == crate::PowerPlanClass::PowerSaver && hist.is_ok_and(|h| h.kept_outside_plan) => check(
             "power-profile",
             "Power profile",
             ReadinessStatus::Advisory,
-            format!("Active plan \"{p}\", which you chose to keep as set outside Compy. Compy won't flag or switch it."),
+            format!("Active plan \"{p}\", which you chose to keep as set outside Compy. Compy changes nothing by itself."),
             Some(p.to_string()),
         ),
-        Some((class, p)) => {
-            if class.is_performance() {
-                check(
-                    "power-profile",
-                    "Power profile",
-                    ReadinessStatus::Ready,
-                    format!("Active plan \"{}\" is performance-oriented.", p),
-                    Some(p.to_string()),
-                )
-            } else {
-                check(
-                    "power-profile",
-                    "Power plan isn't performance-oriented",
-                    ReadinessStatus::Attention,
-                    format!(
-                        "Active plan \"{}\". A performance plan (High performance / Ultimate \
-                         Performance) can reduce latency. Compy won't switch it for you.",
-                        p
-                    ),
-                    Some(p.to_string()),
-                )
-            }
-        }
+        // h4-plan: only a plan Windows designed to save power (Power saver, by its stock GUID) is
+        // flagged. Balanced, High performance, Ultimate and any plan Compy cannot class (custom, OEM,
+        // renamed) pass as a plain fact; nothing here claims an effect Compy has not measured.
+        Some((crate::PowerPlanClass::PowerSaver, p)) => check(
+            "power-profile",
+            "Power plan is set to save power",
+            ReadinessStatus::Attention,
+            format!(
+                "Active plan \"{}\". Windows designed this plan to save power. Compy has not measured \
+                 its effect on this PC. Compy changes nothing by itself. You can switch plans in \
+                 Windows Settings, Power.",
+                p
+            ),
+            Some(p.to_string()),
+        ),
+        Some((_, p)) => check(
+            "power-profile",
+            "Power profile",
+            ReadinessStatus::Ready,
+            format!("Active plan \"{}\".", p),
+            Some(p.to_string()),
+        ),
     });
 
     // 7. FPS monitoring readiness — a capability check; never auto-starts.
@@ -1371,28 +1370,54 @@ mod readiness_tests {
         let ready = row(Some((PowerPlanClass::HighPerformance, "高性能")));
         assert_eq!(ready.status, ReadinessStatus::Ready);
         assert!(ready.detail.contains("高性能"), "{}", ready.detail);
-        assert_eq!(row(Some((PowerPlanClass::Balanced, "平衡"))).status, ReadinessStatus::Attention);
-        assert_eq!(
-            row(Some((PowerPlanClass::Other, "AMD Ryzen Balanced"))).status,
-            ReadinessStatus::Attention,
-            "a plan this build cannot class is not called performance"
-        );
+        assert_eq!(row(Some((PowerPlanClass::Balanced, "平衡"))).status, ReadinessStatus::Ready, "h4-plan: Balanced passes");
         assert_eq!(row(None).status, ReadinessStatus::Unknown);
-        // CR-kept-outside-nits (d): a plan the user chose to keep as set outside Compy isn't flagged.
+        // CR-kept-outside-nits (d): a Power saver the user chose to keep as set outside Compy isn't flagged.
         let kept = AppliedChangesSummary { kept_outside: 1, kept_outside_plan: true, ..AppliedChangesSummary::default() };
-        let r = evaluate_readiness(&hw, Some((PowerPlanClass::Other, "Synez Power Plan")), false, false, Ok(&kept), None);
+        let r = evaluate_readiness(&hw, Some((PowerPlanClass::PowerSaver, "Power saver")), false, false, Ok(&kept), None);
         let c = r.checks.into_iter().find(|c| c.id == "power-profile").expect("row");
         assert_eq!(c.status, ReadinessStatus::Advisory, "{}", c.detail);
-        assert!(c.detail.contains("Synez Power Plan") && c.detail.contains("you chose to keep"), "{}", c.detail);
+        assert!(c.detail.contains("Power saver") && c.detail.contains("you chose to keep"), "{}", c.detail);
         // A performance plan reads as before even with the flag set.
         let r = evaluate_readiness(&hw, Some((PowerPlanClass::HighPerformance, "High performance")), false, false, Ok(&kept), None);
         assert_eq!(r.checks.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Ready);
         // Another kept setting (not the plan) changes nothing here; nor does an unreadable ledger.
         let other = AppliedChangesSummary { kept_outside: 1, ..AppliedChangesSummary::default() };
-        let r = evaluate_readiness(&hw, Some((PowerPlanClass::Other, "Synez Power Plan")), false, false, Ok(&other), None);
+        let r = evaluate_readiness(&hw, Some((PowerPlanClass::PowerSaver, "Power saver")), false, false, Ok(&other), None);
         assert_eq!(r.checks.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Attention);
-        let r = evaluate_readiness(&hw, Some((PowerPlanClass::Balanced, "Balanced")), false, false, Err("unreadable"), None);
+        let r = evaluate_readiness(&hw, Some((PowerPlanClass::PowerSaver, "Power saver")), false, false, Err("unreadable"), None);
         assert_eq!(r.checks.iter().find(|c| c.id == "power-profile").unwrap().status, ReadinessStatus::Attention);
+    }
+
+    // h4-plan: only a plan Windows designed to save power is flagged; an unread plan stays unread; and
+    // no produced string claims an effect Compy has not measured.
+    #[test]
+    fn only_power_saver_is_flagged_and_no_detail_claims_an_unmeasured_effect() {
+        let hw = HardwareInfo::default();
+        let hist = AppliedChangesSummary::default();
+        let kept = AppliedChangesSummary { kept_outside: 1, kept_outside_plan: true, ..AppliedChangesSummary::default() };
+        let cases: [(Option<(PowerPlanClass, &str)>, ReadinessStatus); 7] = [
+            (Some((PowerPlanClass::Balanced, "Balanced")), ReadinessStatus::Ready),
+            (Some((PowerPlanClass::HighPerformance, "High performance")), ReadinessStatus::Ready),
+            (Some((PowerPlanClass::Ultimate, "Ultimate Performance")), ReadinessStatus::Ready),
+            (Some((PowerPlanClass::PowerSaver, "Power saver")), ReadinessStatus::Attention),
+            (Some((PowerPlanClass::Other, "Synez Power Plan")), ReadinessStatus::Ready),
+            (Some((PowerPlanClass::Other, "")), ReadinessStatus::Ready),
+            (None, ReadinessStatus::Unknown),
+        ];
+        for (plan, want) in cases {
+            for (h, is_kept) in [(&hist, false), (&kept, true)] {
+                let r = evaluate_readiness(&hw, plan, false, false, Ok(h), None);
+                let c = r.checks.into_iter().find(|c| c.id == "power-profile").expect("row");
+                // A kept Power saver is the user's own call: an advisory, not a flag.
+                let want = if is_kept && want == ReadinessStatus::Attention { ReadinessStatus::Advisory } else { want };
+                assert_eq!(c.status, want, "{plan:?} kept={is_kept}: {}", c.detail);
+                let text = format!("{} {}", c.label, c.detail).to_lowercase();
+                for bad in ["latency", "faster", "slower", "boost", "performance-oriented"] {
+                    assert!(!text.contains(bad), "{plan:?} says {bad}: {text}");
+                }
+            }
+        }
     }
 
     #[test]
@@ -1542,7 +1567,7 @@ mod readiness_tests {
                 ..Default::default()
             }],
         );
-        let r = evaluate_readiness(&hw, Some((PowerPlanClass::Balanced, "Balanced")), true, false, Ok(&AppliedChangesSummary::default()), None);
+        let r = evaluate_readiness(&hw, Some((PowerPlanClass::PowerSaver, "Power saver")), true, false, Ok(&AppliedChangesSummary::default()), None);
         assert_eq!(find(&r, "monitor-refresh").status, ReadinessStatus::Attention);
         assert_eq!(find(&r, "gpu-driver-age").status, ReadinessStatus::Attention); // 500d > 1yr
         assert_eq!(find(&r, "power-profile").status, ReadinessStatus::Attention);
