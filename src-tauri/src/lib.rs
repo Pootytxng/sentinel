@@ -2032,6 +2032,9 @@ pub fn run() {
                     );
                 }
             }
+            // A change history saved before the backup copy existed has none until its next save;
+            // write it once now when it is clean and no backup exists. Never fails the start.
+            history::ensure_backup_at_start();
             // Capture the handle so the session recorder thread can fire the debrief toast.
             let _ = APP_HANDLE.set(app.handle().clone());
             // Care trigger 1 of 3 (Tier 1 task 9): the launch scan. This is the one that catches a

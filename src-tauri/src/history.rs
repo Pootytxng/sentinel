@@ -1414,21 +1414,76 @@ fn save_history(root: &MutationRoot, h: &[AppliedChange]) -> Result<(), String> 
         );
     }
     // The main file is durable; a backup copy that could not be refreshed is reported, never fatal.
-    // Once per process: a backup that stays unwritable fails on every save (twice per mutation), and
-    // the support record is a 400-entry ring that other evidence would be pushed out of.
-    static BACKUP_REPORTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if let Ok(Some(why)) = &saved {
-        if claim_once(&BACKUP_REPORTED) {
-            crate::support_evidence::record(
-                crate::support_evidence::EventKind::Ledger,
-                "ledger_backup",
-                "not_refreshed",
-                crate::support_evidence::Outcome::Failed,
-                why,
-            );
-        }
+        report_backup_not_refreshed(why);
     }
     saved.map(|_| ())
+}
+
+/// Once per process: a backup that stays unwritable fails on every save (twice per mutation), and
+/// the support record is a 400-entry ring that other evidence would be pushed out of. Shared by the
+/// post-save refresh and the start-up backup so the two never report twice between them.
+fn report_backup_not_refreshed(why: &str) {
+    static BACKUP_REPORTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if claim_once(&BACKUP_REPORTED) {
+        crate::support_evidence::record(
+            crate::support_evidence::EventKind::Ledger,
+            "ledger_backup",
+            "not_refreshed",
+            crate::support_evidence::Outcome::Failed,
+            why,
+        );
+    }
+}
+
+/// What the start-up backup step did. Production reads only `Failed`; the tests read all three.
+#[derive(Debug, PartialEq, Eq)]
+enum StartupBackup {
+    Written,
+    Skipped,
+    Failed(String),
+}
+
+/// The start-up backup, once per app start (called from `setup`). A PC that applies changes rarely
+/// would otherwise have no `history.json.bak` until its next save. Does nothing under a root that
+/// cannot mutate (sandbox, redirected, conflicted, unavailable), and never fails or surfaces an error.
+pub(crate) fn ensure_backup_at_start() {
+    ensure_backup_at_start_for(crate::data_root::mutation_root());
+}
+
+fn ensure_backup_at_start_for(root: Result<MutationRoot, String>) -> StartupBackup {
+    let Ok(root) = root else { return StartupBackup::Skipped };
+    // The same lock the save and restore paths hold, so no save or restore is half-done underneath.
+    // Released before the failure is recorded (support evidence takes its own lock).
+    let outcome = {
+        let Ok(_guard) = lock_history() else { return StartupBackup::Skipped };
+        backup_missing_ledger_at(&ledger_path_for(&root))
+    };
+    if let StartupBackup::Failed(why) = &outcome {
+        report_backup_not_refreshed(why);
+    }
+    outcome
+}
+
+/// Write `history.json.bak` from the main file's exact bytes, only when there is no backup yet and
+/// the main file is a clean, non-empty ledger. Every other case is `Skipped` and writes nothing:
+/// a restore marker (the restore path owns that state), anything at the backup path (a backup is
+/// never overwritten here, even one that differs), a set-aside `history.json.corrupt` (the ledger
+/// health reads incomplete), a main file that is missing, unreadable, unparseable or empty.
+fn backup_missing_ledger_at(ledger: &Path) -> StartupBackup {
+    let absent = |p: PathBuf| matches!(std::fs::symlink_metadata(p), Err(e) if e.kind() == std::io::ErrorKind::NotFound);
+    if !(absent(restored_marker_path(ledger)) && absent(backup_path(ledger)) && absent(ledger.with_extension("json.corrupt"))) {
+        return StartupBackup::Skipped;
+    }
+    let Ok(bytes) = std::fs::read(ledger) else { return StartupBackup::Skipped };
+    match serde_json::from_slice::<Vec<AppliedChange>>(&bytes) {
+        Ok(rows) if !rows.is_empty() => {}
+        _ => return StartupBackup::Skipped,
+    }
+    match write_backup_copy(ledger, &bytes) {
+        Ok(()) => StartupBackup::Written,
+        Err(why) => StartupBackup::Failed(why),
+    }
 }
 
 /// True exactly once per flag (the first caller claims it).
@@ -6826,6 +6881,114 @@ mod ledger_backup_tests {
         assert_eq!(ids(&load_history_core(&path, true).unwrap()), ids(&rows(4)), "main has the new rows");
         assert_eq!(std::fs::read(backup_path(&path)).unwrap(), bak_before, "the old backup is intact");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A clean ledger as an older build left it: main only, no backup.
+    fn main_only(tag: &str, n: usize) -> (std::path::PathBuf, std::path::PathBuf) {
+        let (dir, path) = saved(tag, n);
+        std::fs::remove_file(backup_path(&path)).unwrap();
+        (dir, path)
+    }
+
+    #[test]
+    fn startup_backup_copies_a_clean_main_that_has_none_byte_for_byte() {
+        let (dir, path) = main_only("start-copy", 3);
+        let main_before = std::fs::read(&path).unwrap();
+        assert_eq!(backup_missing_ledger_at(&path), StartupBackup::Written);
+        assert_eq!(std::fs::read(backup_path(&path)).unwrap(), main_before);
+        assert_eq!(std::fs::read(&path).unwrap(), main_before, "main untouched");
+        assert!(!path.with_extension("json.bak.tmp").exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn startup_backup_never_overwrites_an_existing_backup_even_a_different_one() {
+        let (dir, path) = saved("start-keep", 3);
+        std::fs::write(backup_path(&path), serde_json::to_string_pretty(&rows(1)).unwrap()).unwrap();
+        let (bytes, mtime) = (
+            std::fs::read(backup_path(&path)).unwrap(),
+            std::fs::metadata(backup_path(&path)).unwrap().modified().unwrap(),
+        );
+        assert_eq!(backup_missing_ledger_at(&path), StartupBackup::Skipped);
+        assert_eq!(std::fs::read(backup_path(&path)).unwrap(), bytes);
+        assert_eq!(std::fs::metadata(backup_path(&path)).unwrap().modified().unwrap(), mtime);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn startup_backup_writes_nothing_from_a_missing_or_unparseable_main() {
+        let dir = dir_for("start-bad");
+        let path = dir.join("history.json");
+        assert_eq!(backup_missing_ledger_at(&path), StartupBackup::Skipped);
+        assert!(!path.exists() && !backup_path(&path).exists(), "no ledger created, no backup");
+        std::fs::write(&path, b"[{ not a ledger").unwrap();
+        assert_eq!(backup_missing_ledger_at(&path), StartupBackup::Skipped);
+        assert_eq!(std::fs::read(&path).unwrap(), b"[{ not a ledger", "main untouched");
+        assert!(!backup_path(&path).exists() && !path.with_extension("json.corrupt").exists());
+        std::fs::write(&path, b"[]").unwrap();
+        assert_eq!(backup_missing_ledger_at(&path), StartupBackup::Skipped, "an empty ledger has nothing to protect");
+        assert!(!backup_path(&path).exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn startup_backup_leaves_a_restore_in_progress_and_an_incomplete_ledger_alone() {
+        let (dir, path) = main_only("start-marker", 2);
+        std::fs::write(restored_marker_path(&path), "restored missing 2026-11-01T00:00:00Z").unwrap();
+        assert_eq!(backup_missing_ledger_at(&path), StartupBackup::Skipped);
+        assert!(!backup_path(&path).exists(), "the restore path owns that state");
+        std::fs::remove_file(restored_marker_path(&path)).unwrap();
+        std::fs::write(path.with_extension("json.corrupt"), b"x").unwrap(); // health reads incomplete
+        assert_eq!(backup_missing_ledger_at(&path), StartupBackup::Skipped);
+        assert!(!backup_path(&path).exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn startup_backup_that_cannot_be_written_fails_quietly_and_leaves_main_alone() {
+        let (dir, path) = main_only("start-fail", 2);
+        let main_before = std::fs::read(&path).unwrap();
+        std::fs::create_dir(path.with_extension("json.bak.tmp")).unwrap(); // the backup write cannot start
+        assert!(matches!(backup_missing_ledger_at(&path), StartupBackup::Failed(_)));
+        assert!(!backup_path(&path).exists());
+        assert_eq!(std::fs::read(&path).unwrap(), main_before);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn startup_backup_runs_once_the_second_pass_writes_nothing() {
+        let (dir, path) = main_only("start-twice", 2);
+        assert_eq!(backup_missing_ledger_at(&path), StartupBackup::Written);
+        let mtime = std::fs::metadata(backup_path(&path)).unwrap().modified().unwrap();
+        assert_eq!(backup_missing_ledger_at(&path), StartupBackup::Skipped);
+        assert_eq!(std::fs::metadata(backup_path(&path)).unwrap().modified().unwrap(), mtime);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn startup_backup_follows_the_data_root_and_never_runs_under_a_root_that_cannot_mutate() {
+        use crate::data_root::{mutation_root_from, DataRootDecision};
+        let _serial = serial();
+        // The save path's root: the process's own (test) root, the same one `mutation_root` issues.
+        let root = crate::data_root::mutation_root().expect("the test root");
+        let ledger = ledger_path_for(&root);
+        let _ = (std::fs::remove_file(&ledger), std::fs::remove_file(backup_path(&ledger)));
+        std::fs::create_dir_all(root.path()).unwrap();
+        save_history_to(&ledger, &rows(2)).unwrap();
+        std::fs::remove_file(backup_path(&ledger)).unwrap();
+        // A sandbox, redirected or unavailable root has no token: nothing is written anywhere.
+        let sandbox = dir_for("start-sandbox");
+        save_history_to(&sandbox.join("history.json"), &rows(2)).unwrap();
+        std::fs::remove_file(backup_path(&sandbox.join("history.json"))).unwrap();
+        let halted = mutation_root_from(&DataRootDecision::Sandbox { root: sandbox.clone() });
+        assert!(halted.is_err());
+        assert_eq!(ensure_backup_at_start_for(halted), StartupBackup::Skipped);
+        assert!(!backup_path(&sandbox.join("history.json")).exists(), "a sandbox ledger is never written");
+        assert!(!backup_path(&ledger).exists(), "and nothing leaks into the real root");
+        assert_eq!(ensure_backup_at_start_for(crate::data_root::mutation_root()), StartupBackup::Written);
+        assert_eq!(std::fs::read(backup_path(&ledger)).unwrap(), std::fs::read(&ledger).unwrap());
+        let _ = (std::fs::remove_file(&ledger), std::fs::remove_file(backup_path(&ledger)));
+        std::fs::remove_dir_all(&sandbox).ok();
     }
 
     #[test]
