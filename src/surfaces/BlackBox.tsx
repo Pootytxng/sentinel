@@ -676,11 +676,9 @@ function IncidentGroupBlock({
           as everything Compy read (the headline stays true: it counts identical records). */}
       {lineKey && apart > 0 && (
         <p className="bb-group-apart">
-          {t(lineKey === "gaming.blackBox.group.crash" ? "gaming.blackBox.group.apartCrash" : "gaming.blackBox.group.apartHang", {
-            total: count + apart,
-            app,
-            count: apart,
-          })}
+          {newest.tag === "App crash"
+            ? t("gaming.blackBox.group.apartCrash", { total: count + apart, app, count: apart })
+            : t("gaming.blackBox.group.apartHang", { total: count + apart, app, count: apart })}
         </p>
       )}
       {newest.assessment && (

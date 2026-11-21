@@ -328,7 +328,8 @@ describe("FirstCheck rows rest on what Compy has (review M4)", () => {
     expect(conf).toHaveLength(2);
     expect(conf[0]).toContain("Known");
     expect(conf[0]).toContain("Effect on FPS not measured");
-    expect(conf[1]).toContain("Likely");
+    expect(conf[1]).toContain("Possible");
+    expect(conf[1]).not.toContain("Likely");
     expect(conf[1]).not.toContain("not measured");
     expect(container.textContent).not.toMatch(/confidence/i);
   });

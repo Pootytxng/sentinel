@@ -8,7 +8,7 @@
 // Spec: docs/superpowers/specs/2026-07-17-intelligence-phase3-experiment-engine.md.
 
 import { withTerms } from "../design/with-terms";
-import { confidenceHintKey, confidenceWordKey, type ConfidenceWord } from "../data/confidence-word";
+import { confidenceHintKey, confidenceWordKey, wordFromBench, type ConfidenceWord } from "../data/confidence-word";
 import type { BenchKind } from "../data/certainty";
 import { Term } from "../design/Term";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -380,8 +380,10 @@ function simVerdictCopy(t: Translate): Record<string, { label: string; blocked: 
 // played (Likely), never a controlled measurement, and never High.
 function BenchWord({ c, kind }: { c: Confidence; kind: BenchKind }) {
   const { t } = useTranslation();
-  const word: ConfidenceWord =
-    c === "high" || c === "medium" ? (kind === "estimate" ? "expected" : kind === "real-play" ? "likely" : "measured") : "unknown";
+  // u3-focus 2026-11-21: through certainty.ts fromBench. A real-play result and a two-session Trial are
+  // each ONE before/after comparison (the Trial record stores no repeat count): "Measured once", not
+  // "Measured" and not "Likely" (nothing above Possible without two independent supports).
+  const word: ConfidenceWord = wordFromBench(kind, c);
   return <Term tip={t(confidenceHintKey(word))}>{t(confidenceWordKey(word))}</Term>;
 }
 

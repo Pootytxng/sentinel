@@ -821,7 +821,8 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
     const measured = { ...(priorities as Priorities), limiters: [{ ...(priorities as Priorities).limiters[0], basis: "measured" as const }] };
     const row = mount({ ...props, priorities: measured }).container.querySelector(".hc-limiter")!;
     expect(row.querySelector(".hc-limiter-label")!.textContent).toBe("top limiter");
-    expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Likely");
+    expect(row.querySelector(".hc-limiter-tag")!.textContent).toContain("Possible");
+    expect(row.querySelector(".hc-limiter-tag")!.textContent).not.toContain("Likely");
     expect(row.querySelector(".hc-limiter-tag")!.textContent).not.toContain("not measured");
   });
 

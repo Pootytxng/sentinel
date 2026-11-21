@@ -174,13 +174,22 @@ describe("confidence-word.ts through the mappers is byte-identical to the frozen
   const locales = join("src", "i18n", "locales");
   const text = (loc: string, w: string) => (JSON.parse(readFileSync(join(locales, loc, "common.json"), "utf8")) as { confidenceWord: Record<string, string> }).confidenceWord[w];
 
-  it("wordFromBand, for every band the Rust side can send plus null and undefined", () => {
+  // u3-focus 2026-11-21 (deliberate change, not a loosening): the OLD word for a supported band was
+  // "likely", which is a strength above "Possible" shown with no two independent supports. The band
+  // mappers (fromHypothesisBand, fromPriorityRow) already say Possible; the SHOWN word now follows.
+  // Everything else still equals the frozen reference, and "likely" can no longer come out.
+  const NEW_BAND = (band: string | null | undefined) => (band === "high" || band === "medium" ? "possible" : "unknown");
+  it("wordFromBand, for every band the Rust side can send plus null and undefined: Possible or Unknown, never Likely", () => {
     expect(bands.length).toBeGreaterThanOrEqual(6);
-    for (const b of bands) expect(wordFromBand(b as never), String(b)).toBe(OLD.wordFromBand(b));
+    for (const b of bands) {
+      expect(wordFromBand(b as never), String(b)).toBe(NEW_BAND(b));
+      expect(wordFromBand(b as never), String(b)).not.toBe("likely");
+    }
   });
 
-  it("wordFromRow, for every basis (and none) x every band", () => {
-    for (const basis of bases) for (const b of bands) expect(wordFromRow(basis, b as never), `${basis}/${b}`).toBe(OLD.wordFromRow(basis, b));
+  it("wordFromRow, for every basis (and none) x every band: a fact stays Known (as before), a measured row is Possible or Unknown", () => {
+    for (const basis of bases)
+      for (const b of bands) expect(wordFromRow(basis, b as never), `${basis}/${b}`).toBe(basis === "measured" ? NEW_BAND(b) : OLD.wordFromRow(basis, b));
   });
 
   it("wordFromProvenance, for every Provenance and an out-of-domain value", () => {
@@ -195,7 +204,7 @@ describe("confidence-word.ts through the mappers is byte-identical to the frozen
     for (const loc of ["en", "zh-CN"]) {
       for (const p of PROVENANCE_VALUES) expect(text(loc, wordFromProvenance(p))).toBe(text(loc, OLD.wordFromProvenance(p)));
       for (const l of FINDING_LEVEL_VALUES) expect(text(loc, wordFromFinding(l))).toBe(text(loc, OLD.wordFromFinding(l)));
-      for (const b of bands) expect(text(loc, wordFromBand(b as never))).toBe(text(loc, OLD.wordFromBand(b)));
+      for (const b of bands) expect(text(loc, wordFromBand(b as never))).toBe(text(loc, NEW_BAND(b)));
     }
   });
 });

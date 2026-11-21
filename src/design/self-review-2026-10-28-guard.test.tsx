@@ -25,7 +25,7 @@ function sources(dir: string, out: string[] = []): string[] {
 describe("self-review 2026-10-28 guards", () => {
   it("a confidence word shows its hint in the in-app tooltip, never a native title", () => {
     const { container } = render(<ConfidenceWord band="high" />);
-    expect(container.textContent).toBe("Likely");
+    expect(container.textContent).toBe("Possible");
     expect(container.querySelector("[title]")).toBeNull();
     expect(container.querySelector("button.kl-term")).not.toBeNull();
     expect(container.querySelector("[data-confidence]")!.getAttribute("data-confidence")).toBe("high");

@@ -10,9 +10,9 @@
 // default face is translated.
 import type { ConfidenceBand, Provenance } from "../types";
 import type { FindingLevel } from "../surfaces/home-interview-data";
-import { fromFindingLevel, fromHypothesisBand, fromPatternBand, fromPriorityRow, fromProvenance, PROVENANCE_VALUES, type Mapped } from "./certainty";
+import { fromBench, fromFindingLevel, fromHypothesisBand, fromPatternBand, fromPriorityRow, fromProvenance, PROVENANCE_VALUES, type BenchKind, type Mapped } from "./certainty";
 
-export type ConfidenceWord = "known" | "measured" | "likely" | "expected" | "unknown";
+export type ConfidenceWord = "known" | "measured" | "measuredOnce" | "possible" | "likely" | "expected" | "unknown";
 
 // D3 slice 1: every function below produces the same word it always did, but by going through the
 // two-axis mappers in certainty.ts (`from…` -> Mapped -> this word). Screens still see only the five
@@ -29,10 +29,22 @@ function legacyWord(m: Mapped): ConfidenceWord {
   }
 }
 
-/** An inference band (limiter rows, hardware evidence, What-changed hypotheses, patterns):
- *  high and medium are supported inferences; low and unknown are not enough evidence to lean on. */
+/** The word for a Mapped value as it is SHOWN today (u3-focus, 2026-11-21): a strength reads
+ *  "Possible" (nothing above it is shown without two independent supports, and no band producer
+ *  proves two); a source seen once reads "Measured once". Only a most-likely strength keeps the word
+ *  "Likely", and none of the band mappers below can produce one. wordFromProvenance and
+ *  wordFromFinding keep legacyWord: their screens are not part of this change. */
+function shownWord(m: Mapped): ConfidenceWord {
+  if (m.axis === "strength") return m.strength === "possible" ? "possible" : "likely";
+  if (m.axis === "source" && m.source === "measured-once") return "measuredOnce";
+  return legacyWord(m);
+}
+
+/** An inference band (limiter rows, hardware evidence, What-changed hypotheses):
+ *  high and medium are shown as "Possible" (certainty.ts fromHypothesisBand caps them there: the
+ *  evidence behind a band is not two independent supports); low and unknown are "Unknown". */
 export function wordFromBand(band: ConfidenceBand | "high" | "medium" | "low" | null | undefined): ConfidenceWord {
-  return legacyWord(fromHypothesisBand(band));
+  return shownWord(fromHypothesisBand(band));
 }
 
 /** A cross-session pattern (History's "Patterns across your sessions"). The rows are measured
@@ -50,7 +62,7 @@ export function wordFromPattern(band: ConfidenceBand | "high" | "medium" | "low"
 export const isMeasuredRow = (basis: "fact" | "measured" | undefined): boolean => basis === "measured";
 
 /** A priority row's word: a fact Compy read is "Known" (its effect on FPS is not measured, so never
- *  "Likely"); a measured row keeps the band's word. */
+ *  "Likely"); a measured row keeps the band's word ("Possible" or "Unknown"). */
 export function wordFromRow(basis: "fact" | "measured" | undefined, band: ConfidenceBand | "high" | "medium" | "low" | null | undefined): ConfidenceWord {
   // A measured row with a low rank is source "measured" in the new vocabulary, but its word today is
   // Unknown, so a measured row still takes the band's word (wordFromBand).
@@ -62,6 +74,13 @@ export function wordFromRow(basis: "fact" | "measured" | undefined, band: Confid
  *  elsewhere (`provenance.ts` labels the chip "Measured elsewhere"; the word here is Measured); expected-impact = Expected. */
 export function wordFromProvenance(p: Provenance): ConfidenceWord {
   return PROVENANCE_VALUES.includes(p) ? legacyWord(fromProvenance(p)) : "unknown";
+}
+
+/** A bench result's word, through certainty.ts fromBench: a simulator estimate is "Expected"; a real-play
+ *  result and a two-session Trial are each ONE before/after comparison, so "Measured once" (never
+ *  "Measured", never "Likely"); a low or unknown band is "Unknown". */
+export function wordFromBench(kind: BenchKind, band: ConfidenceBand | "high" | "medium" | "low" | null | undefined): ConfidenceWord {
+  return shownWord(fromBench(kind, band));
 }
 
 /** The Home interview's finding level is already in the vocabulary. */

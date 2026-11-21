@@ -338,7 +338,7 @@ describe("Home limiter tile — a fact is Known, never Likely, never 'holding FP
   it("a measured row keeps 'What's holding FPS back', its band's word, and no 'not measured' note", () => {
     home({ priorities: row({ basis: "measured" }) });
     expect(screen.getByRole("region", { name: "What's holding FPS back" })).toBe(tile());
-    expect(tile().querySelector(".gl-chip")!.textContent).toBe("Likely");
+    expect(tile().querySelector(".gl-chip")!.textContent).toBe("Possible");
     expect(tile().textContent).not.toContain("not measured");
   });
 

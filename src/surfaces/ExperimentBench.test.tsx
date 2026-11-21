@@ -2354,7 +2354,7 @@ describe("P4-exit: what Compy tested on this game", () => {
     );
     expect(panel).not.toHaveTextContent("finished the supported tests");
     const tested = screen.getByTestId("exp-summary-tested");
-    expect(tested).toHaveTextContent("Trim Windows visual effects: Slower — restored · Measured · Not applied now.");
+    expect(tested).toHaveTextContent("Trim Windows visual effects: Slower — restored · Measured once · Not applied now.");
     expect(screen.getByTestId("exp-summary-stays")).toHaveTextContent("Nothing from these tests stays applied.");
     expect(screen.getByTestId("exp-summary-left")).toHaveTextContent("Turn off mouse acceleration");
     expect(screen.getByTestId("exp-summary-skipped")).toHaveTextContent("Turn off Game Bar: Already set this way in Windows, not by Compy.");

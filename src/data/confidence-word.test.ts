@@ -1,18 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { confidenceWordKey, wordFromBand, wordFromFinding, wordFromProvenance } from "./confidence-word";
+import { confidenceWordKey, wordFromBand, wordFromBench, wordFromFinding, wordFromProvenance } from "./confidence-word";
 
 // P7-confidence (Constitution §25): ONE vocabulary — Known / Measured / Likely / Expected / Unknown —
 // mapped from each producer's own field, never a percentage and never a raw high/medium/low on the
 // default face. These pin the mapping and that every word has a string in every locale.
 describe("confidence vocabulary", () => {
-  it("maps an inference band: high and medium are supported inferences, low and unknown are not enough", () => {
-    expect(wordFromBand("high")).toBe("likely");
-    expect(wordFromBand("medium")).toBe("likely");
+  it("maps an inference band: high and medium are Possible (never Likely: no two independent supports), low and unknown are not enough", () => {
+    expect(wordFromBand("high")).toBe("possible");
+    expect(wordFromBand("medium")).toBe("possible");
     expect(wordFromBand("low")).toBe("unknown");
     expect(wordFromBand("unknown")).toBe("unknown");
     expect(wordFromBand(null)).toBe("unknown");
+  });
+
+  it("maps a bench result through fromBench: an estimate is Expected; a real-play result and a two-session Trial are Measured once; a weak band is Unknown; never Likely or Measured", () => {
+    for (const band of ["high", "medium"] as const) {
+      expect(wordFromBench("estimate", band)).toBe("expected");
+      expect(wordFromBench("real-play", band)).toBe("measuredOnce");
+      expect(wordFromBench("measured", band)).toBe("measuredOnce");
+    }
+    for (const kind of ["estimate", "real-play", "measured"] as const)
+      for (const band of ["low", "unknown", null, undefined] as const) expect(wordFromBench(kind, band)).toBe("unknown");
+    for (const kind of ["estimate", "real-play", "measured"] as const)
+      for (const band of ["high", "medium", "low", null] as const) expect(wordFromBench(kind, band)).not.toMatch(/^(likely|measured)$/);
   });
 
   it("maps provenance: a fact Compy read is Known, a third-party measurement is Measured, reasoning is Expected", () => {
@@ -31,7 +43,7 @@ describe("confidence vocabulary", () => {
     const locales = join("src", "i18n", "locales");
     for (const loc of ["en", "zh-CN"]) {
       const common = JSON.parse(readFileSync(join(locales, loc, "common.json"), "utf8")) as { confidenceWord: Record<string, string> };
-      for (const w of ["known", "measured", "likely", "expected", "unknown"] as const) {
+      for (const w of ["known", "measured", "measuredOnce", "possible", "likely", "expected", "unknown"] as const) {
         expect(confidenceWordKey(w)).toBe(`common.confidenceWord.${w}`);
         expect(common.confidenceWord[w]).toBeTruthy();
       }

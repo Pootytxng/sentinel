@@ -865,7 +865,8 @@ describe("Check", () => {
     );
     row = (await screen.findByText("Power plan isn't performance-oriented")).closest(".check-row")!;
     expect(labels()).toContain("Limiters we measured");
-    expect(row.textContent).toContain("Likely");
+    expect(row.textContent).toContain("Possible");
+    expect(row.textContent).not.toContain("Likely");
     expect(row.textContent).not.toContain("not measured");
   });
 
