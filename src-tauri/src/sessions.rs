@@ -969,6 +969,10 @@ fn lock_sessions() -> crate::race_seam::StoreGuard {
     })
 }
 
+/// The inventory store id (`data_inventory` row `sessions`) whose clear epoch a session save follows.
+/// Only a delete of this store's files (`sessions.json`, its set-asides and temp files) moves it.
+const CLEAR_STORE: &str = "sessions";
+
 /// Takes the sessions lock, then runs `write` only if no clear has run since `started_epoch` (read
 /// when the save began). `None` = a clear ran in between and the write was dropped. The epoch is
 /// checked UNDER the lock, and the clear bumps it while holding the same lock, so either the save
@@ -1251,7 +1255,7 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<Option<SavedSessio
     // D6: settles the recorder's pending count on every way out, and notes the clear epoch before any
     // read of the store, so a save that began before a clear is dropped rather than written after it.
     let _settled = SaveSettled(&RECORDER);
-    let started_epoch = crate::atomic_write::clear_epoch();
+    let started_epoch = crate::atomic_write::clear_epoch(CLEAR_STORE);
     // Drop trivially short sessions entirely — no debrief, and crucially no armed-comparison
     // resolution (a blip must not confound or settle a pending comparison; the arm waits).
     if !meets_min_duration(summary.duration_secs) {
@@ -1264,7 +1268,7 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<Option<SavedSessio
     // a result no session backs, with its arm already spent.
     let compared = summary.clone();
     // The sessions lock is released before the comparison below (its own lock, no nesting).
-    match unless_cleared(started_epoch, crate::atomic_write::clear_epoch, || save_session_to(&sessions_path(), summary)) {
+    match unless_cleared(started_epoch, || crate::atomic_write::clear_epoch(CLEAR_STORE), || save_session_to(&sessions_path(), summary)) {
         None => {
             // Not silent, and not "too short": a clear of the stored data ran while this session was being
             // saved, so it was not written (and nothing is settled against it). Say so.
@@ -2492,12 +2496,35 @@ mod d6_clear_tests {
         assert!(body.contains("let _settled = SaveSettled(&RECORDER)"), "save_session holds the settle guard for its whole body");
     }
 
+    // D7: a session save follows only the sessions epoch. Another store's clear moves another key.
+    #[test]
+    fn a_clear_of_another_store_does_not_drop_a_save_but_a_clear_of_sessions_does() {
+        let epochs = crate::atomic_write::ClearEpochs::new();
+        let path = scratch("perstore").join("sessions.json");
+        let started = epochs.now(CLEAR_STORE);
+        epochs.bump("drift");
+        epochs.bump("incident-observer");
+        epochs.bump("hardware-fingerprint");
+        let kept = unless_cleared(started, || epochs.now(CLEAR_STORE), || save_session_to(&path, one("2026-11-09T10:00:00Z")));
+        assert!(matches!(kept, Some(Ok(()))), "other stores were cleared: the in-flight save still lands");
+        assert_eq!(rows(&path), 1);
+        let started = epochs.now(CLEAR_STORE);
+        with_store_locked(|| {
+            std::fs::remove_file(&path).unwrap();
+            epochs.bump(CLEAR_STORE);
+        });
+        let late = unless_cleared(started, || epochs.now(CLEAR_STORE), || save_session_to(&path, one("2026-11-10T10:00:00Z")));
+        assert!(late.is_none(), "sessions was cleared since the save began: dropped");
+        assert!(!path.exists());
+    }
+
     #[test]
     fn the_save_notes_the_epoch_first_and_lets_go_of_the_lock_before_the_comparison() {
         let src = include_str!("sessions.rs");
         let body = src.split(concat!("pub(crate) fn ", "save_session(")).nth(1).unwrap();
         let body = body.split(concat!("fn get_", "session_summaries")).next().unwrap();
-        let noted = body.find("let started_epoch = crate::atomic_write::clear_epoch()").expect("epoch noted");
+        assert_eq!(CLEAR_STORE, "sessions", "this store's own epoch, keyed by its inventory id");
+        let noted = body.find("let started_epoch = crate::atomic_write::clear_epoch(CLEAR_STORE)").expect("epoch noted");
         let read = body.find("create_dir_all").expect("first touch of the store");
         let locked = body.find("unless_cleared(started_epoch").expect("the guarded write");
         let settled = body.find(concat!("comparison::", "on_session_finalized(")).expect("the settle");

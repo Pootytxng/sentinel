@@ -58,11 +58,13 @@ pub(crate) enum FailPoint {
 /// Per-process counter so two writes from the same process never pick the same temp name.
 static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
-/// How many times a "clear my data" has deleted a store in this process (D6). A writer that started
-/// before a clear reads this when it starts, and checks it again UNDER its store lock, right before it
-/// writes: if it moved, the clear ran in between and the write is dropped, never made. Lives here (a
-/// leaf every store already reaches) so a store module needs no edge to `data_clear`.
-static CLEAR_EPOCH: ClearEpoch = ClearEpoch::new();
+/// How many times a "clear my data" has deleted files of ONE store in this process (D6, per store in D7).
+/// A writer that started before a clear reads its store's epoch when it starts, and checks it again UNDER
+/// its store lock, right before it writes: if it moved, a clear of that store ran in between and the write
+/// is dropped, never made. Keyed by the inventory's store id (`data_inventory` row id, `sessions`,
+/// `incident-observer`), so deleting one store's file never drops an in-flight write to another. Lives
+/// here (a leaf every store already reaches) so a store module needs no edge to `data_clear`.
+static CLEAR_EPOCHS: ClearEpochs = ClearEpochs::new();
 
 /// A clear epoch as a value, so a test can use its own and never touch the process-wide one.
 pub(crate) struct ClearEpoch(AtomicU64);
@@ -81,14 +83,46 @@ impl ClearEpoch {
     }
 }
 
-/// The process-wide clear epoch now. Read it when a save STARTS.
-pub(crate) fn clear_epoch() -> u64 {
-    CLEAR_EPOCH.now()
+/// One [`ClearEpoch`] per store id, as a value so a test can use its own set. The map's mutex is a leaf:
+/// it is held for one lookup and takes nothing else, so reading or bumping an epoch under a store's lock
+/// adds no lock order. A store nobody has cleared reads 0.
+pub(crate) struct ClearEpochs(std::sync::Mutex<Vec<(&'static str, ClearEpoch)>>);
+
+impl ClearEpochs {
+    pub(crate) const fn new() -> Self {
+        Self(std::sync::Mutex::new(Vec::new()))
+    }
+    fn locked(&self) -> std::sync::MutexGuard<'_, Vec<(&'static str, ClearEpoch)>> {
+        self.0.lock().unwrap_or_else(|p| p.into_inner())
+    }
+    /// `store`'s epoch. Read it when a save of that store STARTS.
+    pub(crate) fn now(&self, store: &str) -> u64 {
+        self.locked().iter().find(|(s, _)| *s == store).map_or(0, |(_, e)| e.now())
+    }
+    /// Called by the clear, while it holds `store`'s lock and has just deleted one of that store's files.
+    /// Moves that store's epoch and no other.
+    pub(crate) fn bump(&self, store: &'static str) {
+        let mut all = self.locked();
+        match all.iter().find(|(s, _)| *s == store) {
+            Some((_, e)) => e.bump(),
+            None => {
+                let e = ClearEpoch::new();
+                e.bump();
+                all.push((store, e));
+            }
+        }
+    }
 }
 
-/// The process-wide epoch, bumped by the real clear (`data_clear::ProcessEffects`) and by nothing else.
-pub(crate) fn bump_clear_epoch() {
-    CLEAR_EPOCH.bump();
+/// The process-wide clear epoch of `store` now. Read it when a save of that store STARTS.
+pub(crate) fn clear_epoch(store: &str) -> u64 {
+    CLEAR_EPOCHS.now(store)
+}
+
+/// The process-wide epoch of `store`, bumped by the real clear (`data_clear::ProcessEffects`) and by
+/// nothing else.
+pub(crate) fn bump_clear_epoch(store: &'static str) {
+    CLEAR_EPOCHS.bump(store);
 }
 
 /// A temp name that is unique per process and per call, and that sorts next to its target so a

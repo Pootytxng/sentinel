@@ -92,6 +92,9 @@ pub(crate) struct PlannedDelete {
     /// Relative to the data root, `/` separated.
     pub(crate) rel: String,
     pub(crate) row_id: &'static str,
+    /// The inventory id of the store this file belongs to (`sessions` for `sessions.json.corrupt.9`): the
+    /// key of that store's clear epoch. Not in the fingerprint; it follows from `row_id`.
+    pub(crate) store: &'static str,
     pub(crate) category: &'static str,
     /// Size and modified time (ms since 1970) when planned. They are part of the fingerprint, so a file
     /// rewritten after the list was shown makes the executor refuse: "things changed since you looked".
@@ -750,6 +753,7 @@ fn visit(path: &Path, rel: String, depth: u8, run: &Run, plan: &mut ClearPlan) {
             plan.delete.push(PlannedDelete {
                 rel,
                 row_id: hit.row.id,
+                store: hit.class.id,
                 category: cat_name(hit.class.category),
                 size: meta.len(),
                 modified_ms,
@@ -912,8 +916,9 @@ fn gate_of(d: &PlannedDelete) -> Gate {
 pub(crate) trait ClearGates {
     /// Takes the lock(s) of `gate`'s store, runs `delete`, resets what the running app holds in memory
     /// for that store when the delete worked, and releases. Nothing else is held meanwhile. An `Err`
-    /// means the delete failed or the gate could not be taken (then nothing was deleted).
-    fn with_gate(&self, gate: Gate, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String>;
+    /// means the delete failed or the gate could not be taken (then nothing was deleted). `store` is the
+    /// inventory id of the store the file belongs to: the clear epoch that moves is that store's alone.
+    fn with_gate(&self, gate: Gate, store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String>;
 }
 
 // ---- deleting one file --------------------------------------------------------------------------
@@ -1202,7 +1207,7 @@ fn delete_rows(
         } else if gate == Gate::Ledger {
             Err(ledger_lock_required().detail)
         } else {
-            gates.with_gate(gate, &mut run)
+            gates.with_gate(gate, d.store, &mut run)
         };
         match result {
             Ok(Removed::Deleted) => report.deleted.push(d.rel.clone()),
@@ -1357,8 +1362,9 @@ use crate::data_root;
 /// test supplies its own instances and no process-wide state is touched by any test; the app uses
 /// [`ProcessEffects`].
 pub(crate) trait ClearEffects {
-    /// A store file was deleted (called under that store's lock): move the clear epoch.
-    fn deleted(&self);
+    /// A file of store `store` (an inventory id) was deleted (called under that store's lock): move THAT
+    /// store's clear epoch, and no other.
+    fn deleted(&self, store: &'static str);
     /// Runs `delete` with the benchmark cache's lock held, and resets the cache before letting go if the
     /// delete worked. The process's cache hydrates itself from the data root on first use, so a test must
     /// never reach it: it supplies its own lock and its own copy.
@@ -1373,8 +1379,8 @@ pub(crate) trait ClearEffects {
 pub(crate) struct ProcessEffects;
 
 impl ClearEffects for ProcessEffects {
-    fn deleted(&self) {
-        crate::atomic_write::bump_clear_epoch();
+    fn deleted(&self, store: &'static str) {
+        crate::atomic_write::bump_clear_epoch(store);
     }
     fn with_benchmark_locked(&self, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
         crate::benchmark::with_state_locked(|state| {
@@ -1398,12 +1404,12 @@ impl ClearEffects for ProcessEffects {
 pub(crate) struct LiveGates<'a>(pub(crate) &'a dyn ClearEffects);
 
 impl ClearGates for LiveGates<'_> {
-    fn with_gate(&self, gate: Gate, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+    fn with_gate(&self, gate: Gate, store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
         let fx = self.0;
         let mut run = || {
             let result = delete();
             if matches!(result, Ok(Removed::Deleted)) {
-                fx.deleted();
+                fx.deleted(store);
             }
             result
         };
@@ -1601,7 +1607,7 @@ mod tests {
     struct NoGates;
 
     impl ClearGates for NoGates {
-        fn with_gate(&self, _gate: Gate, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+        fn with_gate(&self, _gate: Gate, _store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
             delete()
         }
     }
@@ -1725,7 +1731,7 @@ mod tests {
         seed(&t2);
         t2.put("notes.txt", "mine");
         let mut tampered = plan_clear(&t2.root, Scope::PlayHistory, &later());
-        tampered.delete.push(PlannedDelete { rel: "notes.txt".into(), row_id: "sessions", category: "play_history", size: 4, modified_ms: 0 });
+        tampered.delete.push(PlannedDelete { rel: "notes.txt".into(), row_id: "sessions", store: "sessions", category: "play_history", size: 4, modified_ms: 0 });
         let before = t2.listing();
         assert!(matches!(exec(&t2.root, &tampered, &later()), ClearOutcome::PlanChanged));
         let mut other = plan_clear(&t2.root, Scope::PlayHistory, &later());
@@ -2283,7 +2289,7 @@ mod tests {
     /// Effects with instances of the test's own: nothing process-wide (epoch, benchmark cache, trial state,
     /// incident flags) is read or written by any test.
     struct TestEffects {
-        epoch: crate::atomic_write::ClearEpoch,
+        epoch: crate::atomic_write::ClearEpochs,
         bench: RefCell<crate::benchmark::BenchmarkState>,
         bench_lock: &'static Mutex<u8>, // leaked: the recorded guard must be static
         bench_resets: std::cell::Cell<u32>,
@@ -2299,7 +2305,7 @@ mod tests {
                 ..Default::default()
             };
             Self {
-                epoch: crate::atomic_write::ClearEpoch::new(),
+                epoch: crate::atomic_write::ClearEpochs::new(),
                 bench: RefCell::new(bench),
                 bench_lock: Box::leak(Box::new(std::sync::Mutex::new(0u8))),
                 bench_resets: Default::default(),
@@ -2310,8 +2316,8 @@ mod tests {
     }
 
     impl ClearEffects for TestEffects {
-        fn deleted(&self) {
-            self.epoch.bump();
+        fn deleted(&self, store: &'static str) {
+            self.epoch.bump(store);
         }
         fn with_benchmark_locked(&self, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
             // The same shape as the process's: a recorded Benchmark lock held across the delete, then the
@@ -2345,8 +2351,8 @@ mod tests {
     }
 
     impl ClearGates for Probe {
-        fn with_gate(&self, gate: Gate, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
-            LiveGates(&self.fx).with_gate(gate, &mut || {
+        fn with_gate(&self, gate: Gate, store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+            LiveGates(&self.fx).with_gate(gate, store, &mut || {
                 self.seen.borrow_mut().push((gate, held_now()));
                 delete()
             })
@@ -2429,20 +2435,20 @@ mod tests {
         let t = Tmp::new("x4");
         seed(&t);
         let fx = TestEffects::new();
-        let before = fx.epoch.now();
+        let before = fx.epoch.now("sessions");
         let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
         assert!(done(execute_clear(&t.root, &plan, &later(), &LiveGates(&fx))).complete);
-        assert!(fx.epoch.now() > before, "a delete under the store lock must move the epoch");
+        assert!(fx.epoch.now("sessions") > before, "a delete under the store lock must move that store's epoch");
         // Each memory reset ran once, for its own store, after a delete that worked.
         assert_eq!(fx.bench_resets.get(), 1, "the benchmark cache is reset once");
         assert!(fx.bench.borrow().baseline_at.is_none() && fx.bench.borrow().error.is_none(), "and the copy it was handed is empty");
         assert_eq!(fx.trial_forgets.get(), 1, "the finished trial result is forgotten once");
         assert_eq!(fx.incident_forgets.get(), 1, "the incident failure flags are forgotten once");
         // Nothing to delete (second run): no delete happened, so nothing needs dropping.
-        let mid = fx.epoch.now();
+        let mid = fx.epoch.now("sessions");
         let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
         assert!(plan.nothing_to_do());
-        assert_eq!(fx.epoch.now(), mid, "planning is a pure read");
+        assert_eq!(fx.epoch.now("sessions"), mid, "planning is a pure read");
     }
 
     // (3) typed outcome: codes, never one joined string; "couldn't read" is not "nothing to do"
@@ -2694,5 +2700,64 @@ mod tests {
         assert_eq!(out, Removed::AlreadyGone);
         t.put("sessions.json", "[]");
         assert_eq!(delete_one(&t.root, "sessions.json").unwrap(), Removed::Deleted);
+    }
+
+    // ===== D7 item 1: one epoch per store =============================================================
+
+    #[test]
+    fn p1_clearing_other_stores_does_not_move_the_sessions_or_observer_epoch() {
+        // Only drift and the hardware fingerprint exist: a clear deletes them and nothing of sessions.
+        let t = Tmp::new("p1");
+        t.put("drift.json", "x");
+        t.put("hardware-fingerprint.json", "x");
+        let fx = TestEffects::new();
+        let (sessions0, observer0) = (fx.epoch.now("sessions"), fx.epoch.now("incident-observer"));
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(done(execute_clear(&t.root, &plan, &later(), &LiveGates(&fx))).complete);
+        assert!(fx.epoch.now("drift") > 0 && fx.epoch.now("hardware-fingerprint") > 0, "the stores it deleted moved");
+        assert_eq!(fx.epoch.now("sessions"), sessions0, "an in-flight session save is not dropped by a drift clear");
+        assert_eq!(fx.epoch.now("incident-observer"), observer0, "nor is an incident scan");
+        assert_eq!(fx.epoch.now("support-evidence"), 0, "a store play history never touches stays at 0");
+    }
+
+    #[test]
+    fn p2_clearing_sessions_moves_the_sessions_epoch_and_only_that_one() {
+        let t = Tmp::new("p2");
+        t.put("sessions.json", "x");
+        t.put("sessions.json.corrupt.123", "x"); // a set-aside belongs to the same store
+        let fx = TestEffects::new();
+        let started = fx.epoch.now("sessions"); // a save begins
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(plan.delete.iter().all(|d| d.store == "sessions"), "{:?}", plan.delete);
+        assert!(done(execute_clear(&t.root, &plan, &later(), &LiveGates(&fx))).complete);
+        assert_ne!(fx.epoch.now("sessions"), started, "the stale sessions save is dropped");
+        for other in ["drift", "incident-observer", "benchmark", "scoreboard", "intelligence", "support-evidence"] {
+            assert_eq!(fx.epoch.now(other), 0, "{other} was not cleared, so its epoch did not move");
+        }
+    }
+
+    #[test]
+    fn p3_every_planned_delete_names_a_real_store_and_the_epoch_keys_the_savers_use_are_inventory_ids() {
+        let t = Tmp::new("p3");
+        seed(&t);
+        t.put("care/incident-observer.12.3.json.tmp", "x");
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(!plan.delete.is_empty());
+        for d in &plan.delete {
+            assert!(data_root_rows().any(|r| r.id == d.store), "{} names store `{}`, which is no inventory row", d.rel, d.store);
+        }
+        let store_of = |rel: &str| plan.delete.iter().find(|d| d.rel == rel).unwrap_or_else(|| panic!("{rel}")).store;
+        assert_eq!(store_of("sessions.json.corrupt.123"), "sessions");
+        assert_eq!(store_of(".drift.json.12-3.tmp"), "drift");
+        assert_eq!(store_of("care/incident-observer.12.3.json.tmp"), "incident-observer");
+        // The two savers that read an epoch use these ids, and they are inventory rows.
+        for (file, id) in [("sessions.rs", "sessions"), ("incident_observer.rs", "incident-observer")] {
+            assert!(data_root_rows().any(|r| r.id == id), "{id}");
+            let src = match file {
+                "sessions.rs" => include_str!("sessions.rs"),
+                _ => include_str!("incident_observer.rs"),
+            };
+            assert!(src.contains(&format!("const CLEAR_STORE: &str = \"{id}\";")), "{file} must key its epoch by `{id}`");
+        }
     }
 }

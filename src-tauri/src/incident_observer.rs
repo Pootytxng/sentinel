@@ -762,6 +762,10 @@ pub(crate) fn scan_async(trigger: ScanTrigger) {
 /// spawn PowerShell before either had written a watermark.
 static SCANNING: AtomicBool = AtomicBool::new(false);
 
+/// The inventory store id (`data_inventory` row `incident-observer`) whose clear epoch a scan follows.
+/// Only a delete of this store's files (`care/incident-observer*`) moves it.
+const CLEAR_STORE: &str = "incident-observer";
+
 struct ScanClaim;
 
 impl Drop for ScanClaim {
@@ -787,12 +791,12 @@ fn scan_now(trigger: ScanTrigger) {
     // Gathering evidence happens with NO lock held. It spawns PowerShell and queries WMI — seconds —
     // and the user may well be clicking dismiss on the card throughout. The lock is taken only for
     // the read-modify-write below, which is microseconds.
-    let started_epoch = crate::atomic_write::clear_epoch();
+    let started_epoch = crate::atomic_write::clear_epoch(CLEAR_STORE);
     let report = crate::blackbox::collect_crash_blackbox();
     let now = Utc::now();
     let saved = rmw_unless(
         &state_path(),
-        || crate::atomic_write::clear_epoch() == started_epoch,
+        || crate::atomic_write::clear_epoch(CLEAR_STORE) == started_epoch,
         |state| observe(&report, now, state).toast,
     );
     let toast = match saved {
@@ -1786,6 +1790,25 @@ mod tests {
             assert_eq!(load_checked(&path).unwrap().last_scan_at.as_deref(), Some("2026-11-21T10:00:00Z"));
         }
 
+        // D7: the epoch is the observer's own. A clear of any other store moves a different key, so an
+        // in-flight scan still lands; a clear of this store drops it.
+        #[test]
+        fn a_clear_of_another_store_does_not_drop_a_scan_but_a_clear_of_this_one_does() {
+            use crate::atomic_write::ClearEpochs;
+            let path = scratch("perstore");
+            let epochs = ClearEpochs::new();
+            let started = epochs.now(CLEAR_STORE);
+            epochs.bump("sessions");
+            epochs.bump("drift");
+            let saved = rmw_unless(&path, || epochs.now(CLEAR_STORE) == started, stamp).unwrap();
+            assert!(saved.is_some(), "sessions and drift were cleared, not this store: the scan lands");
+            let started = epochs.now(CLEAR_STORE);
+            with_store_locked(|| epochs.bump(CLEAR_STORE));
+            let late = rmw_unless(&path, || epochs.now(CLEAR_STORE) == started, |s| s.last_scan_at = Some("late".into())).unwrap();
+            assert!(late.is_none(), "this store was cleared since the scan began: dropped");
+            assert_eq!(load_checked(&path).unwrap().last_scan_at.as_deref(), Some("2026-11-21T10:00:00Z"), "the late write never landed");
+        }
+
         #[test]
         fn with_no_clear_the_scan_always_lands() {
             let path = scratch("noclear");
@@ -1809,10 +1832,11 @@ mod tests {
         fn the_scan_notes_the_epoch_before_it_gathers_and_checks_it_under_the_lock() {
             let src = include_str!("incident_observer.rs");
             let f = src.split(concat!("fn scan", "_now(")).nth(1).unwrap().split("\nfn notify").next().unwrap();
-            let noted = f.find("let started_epoch = crate::atomic_write::clear_epoch()").expect("noted");
+            let noted = f.find("let started_epoch = crate::atomic_write::clear_epoch(CLEAR_STORE)").expect("noted");
             let gathered = f.find("collect_crash_blackbox()").expect("gathered");
             assert!(noted < gathered, "the epoch is read before the evidence is gathered");
-            assert!(f.contains("clear_epoch() == started_epoch"), "and compared inside the locked write");
+            assert!(f.contains("clear_epoch(CLEAR_STORE) == started_epoch"), "and compared inside the locked write");
+            assert_eq!(CLEAR_STORE, "incident-observer", "this store's own epoch, keyed by its inventory id");
         }
     }
 }
