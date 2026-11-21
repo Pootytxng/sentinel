@@ -84,10 +84,13 @@ export function RerunCheckBand({
     advisory = snap.advisory;
     unread = snap.unread;
     const age = formatCheckAge(snap.at, Date.now(), t);
-    unreadSaid = !warn && unread > 0;
+    const noneGraded = Math.max(0, snap.total - snap.unread - snap.advisory) === 0;
+    unreadSaid = !warn && unread > 0 && !noneGraded;
     sentence = warn
       ? t("optimize.rerunCheckBand.lastFlagged", { age, count: snap.fixCount })
-      : unread > 0
+      : noneGraded
+        ? t("optimize.rerunCheckBand.lastNoneGraded", { age })
+        : unread > 0
         ? t("optimize.rerunCheckBand.lastCleanPartial", {
             age,
             green: snap.green,
@@ -105,10 +108,12 @@ export function RerunCheckBand({
     const graded = Math.max(0, total - unread - advisory);
     const attention = readiness?.attention_count ?? 0;
     warn = attention > 0;
-    unreadSaid = !warn && unread > 0;
+    unreadSaid = !warn && unread > 0 && graded > 0;
     sentence = warn
       ? t("optimize.rerunCheckBand.flagged", { count: attention, total: graded })
-      : unread > 0
+      : graded === 0
+        ? t("optimize.rerunCheckBand.noneGraded")
+        : unread > 0
         ? t("optimize.rerunCheckBand.cleanPartial", { measured: graded, total, unknown: unread })
         : t("optimize.rerunCheckBand.clean", { count: graded });
   }

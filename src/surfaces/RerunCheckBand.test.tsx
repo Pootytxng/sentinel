@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { RerunCheckBand } from "./RerunCheckBand";
+import i18n from "../i18n";
 import { LAST_CHECK_KEY, formatCheckAge, type LastCheck } from "./last-check";
 import type { GameReadiness, ReadinessCheck, ReadinessStatus } from "../types";
 import { readFileSync } from "fs";
@@ -253,5 +254,48 @@ describe("RerunCheckBand — Re-run action wiring", () => {
     // Checking IGNORES the stored snapshot: no stale age while a live check is in flight.
     expect(line()).toContain("Checking your PC now");
     expect(line()).not.toMatch(/ago|just now|yesterday|Checked /);
+  });
+});
+
+describe("RerunCheckBand - nothing graded", () => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
+  });
+
+  it("says no checks were graded, not 'All 0 checks look good', and still names what was left out", () => {
+    const r = readiness({ checks: Array.from({ length: 16 }, () => chk("advisory")), advisory_count: 16 });
+    render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("No checks were graded · 16 advisory, not graded");
+    expect(line()).not.toMatch(/All 0|0 checks look good|0 of/);
+    cleanup();
+    const u = readiness({ checks: [chk("unknown"), chk("unknown"), chk("advisory")], unknown_count: 2, advisory_count: 1 });
+    render(<RerunCheckBand readiness={u} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("No checks were graded · 2 couldn't be measured · 1 advisory, not graded");
+  });
+
+  it("the stored last-check line says it too", () => {
+    storeCheck({ at: Date.now() - 5 * 60_000, total: 16, green: 0, advisory: 16, unread: 0, fixCount: 0 });
+    render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("Last full check 5m ago · no checks were graded · 16 advisory, not graded");
+    expect(line()).not.toMatch(/all 0|0 looked good|0 of/);
+  });
+
+  it("zh-CN says it in Chinese", async () => {
+    await i18n.changeLanguage("zh-CN");
+    const r = readiness({ checks: Array.from({ length: 16 }, () => chk("advisory")), advisory_count: 16 });
+    render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("没有检测项被评级 · 16 项为提示项,不评级");
+    expect(line()).not.toContain("全部 0");
+    cleanup();
+    storeCheck({ at: Date.now() - 5 * 60_000, total: 16, green: 0, advisory: 16, unread: 0, fixCount: 0 });
+    render(<RerunCheckBand readiness={readiness({})} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("没有检测项被评级");
+  });
+
+  it("a real clean line is unchanged when something was graded", () => {
+    const r = readiness({ checks: [chk("ready"), chk("ready")] });
+    render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("All 2 checks look good");
+    expect(line()).not.toContain("No checks were graded");
   });
 });
