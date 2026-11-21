@@ -225,7 +225,7 @@ fn detect_pagefile(probes: &Value) -> Outcome {
             "this PC has pagefile settings on more than one drive, and Compy's restore only handles a single fixed pagefile",
         )
     } else if crate::actions::parse_manual_pagefile_entry(&[format!("{name} {init} {max}")]).is_ok() {
-        "Safe to restore to automatic; fully reversible; takes effect after a reboot.".to_string()
+        "Compy can restore this to automatic; takes effect after a reboot.".to_string()
     } else if first.get("name").and_then(Value::as_str).is_some() {
         pagefile_manual_note(&format!(
             "this PC's pagefile entry ({name}) isn't the plain drive-letter form Compy's restore accepts"
@@ -297,7 +297,7 @@ fn detect_memory_compression(probes: &Value) -> Outcome {
         verdict,
         uncertain_source: true,
         restore_note:
-            "Safe to restore (Enable-MMAgent); fully reversible; takes effect after a reboot.".into(), // mutation-boundary-allow: tells the user the cmdlet; the restore runs through actions.rs
+            "Compy can restore this (Enable-MMAgent); takes effect after a reboot.".into(), // mutation-boundary-allow: tells the user the cmdlet; the restore runs through actions.rs
     })
 }
 
@@ -406,7 +406,7 @@ fn detect_mmcss(probes: &Value) -> Outcome {
                 .into(),
         verdict: "Windows' multimedia scheduler already prioritizes the foreground game — these values mostly remove its safety margin.".into(),
         uncertain_source: true,
-        restore_note: "Safe to restore the defaults; fully reversible; takes effect after a sign-out or reboot.".into(),
+        restore_note: "Compy can restore the defaults; takes effect after a sign-out or reboot.".into(),
     })
 }
 
@@ -455,7 +455,7 @@ fn detect_core_parking(probes: &Value) -> Outcome {
                 .into(),
         verdict: "Modern Windows unparks cores in microseconds when load arrives — the forced override spends watts on a solved problem.".into(),
         uncertain_source: true,
-        restore_note: "Safe to remove the override (powercfg); fully reversible; takes effect immediately.".into(),
+        restore_note: "Compy can remove the override (powercfg); takes effect immediately.".into(),
     })
 }
 
@@ -524,7 +524,7 @@ fn detect_mpo(probes: &Value) -> Outcome {
                     .into(),
             verdict: "The flicker bugs this worked around were driver-era issues that have since been fixed for most hardware.".into(),
             uncertain_source: true,
-            restore_note: "Safe to delete the value; fully reversible; takes effect after a reboot.".into(),
+            restore_note: "Compy can delete the value; takes effect after a reboot.".into(),
         }),
     }
 }
@@ -555,7 +555,7 @@ fn detect_tcp_autotuning(probes: &Value) -> Outcome {
                     .into(),
             verdict: "This one usually makes downloads measurably slower today; it solved a Vista-era problem.".into(),
             uncertain_source: true,
-            restore_note: "Safe to restore (netsh … autotuninglevel=normal); fully reversible; takes effect immediately.".into(),
+            restore_note: "Compy can restore this (netsh … autotuninglevel=normal); takes effect immediately.".into(),
         }),
     }
 }
@@ -585,7 +585,7 @@ fn detect_priority_separation(probes: &Value) -> Outcome {
                     .into(),
             verdict: "The shipped value already favors the foreground; the guide values trade stability for a placebo.".into(),
             uncertain_source: true,
-            restore_note: "Safe to restore to 2; fully reversible; takes effect immediately.".into(),
+            restore_note: "Compy can restore this to 2; takes effect immediately.".into(),
         }),
     }
 }
@@ -1067,7 +1067,7 @@ mod leftovers_tests {
             let r = evaluate_leftovers(&probes(Some(false), files.clone(), Some(true), Some(32)), &no_endorsements());
             let f = find(&r, "pagefile-fixed").expect("still a fixed-pagefile finding");
             let note = f.restore_note.to_lowercase();
-            assert!(!note.contains("safe to restore"), "offers the restore it refuses: {files} -> {}", f.restore_note);
+            assert!(!note.contains("compy can restore"), "offers the restore it refuses: {files} -> {}", f.restore_note);
             assert!(note.contains("not a one-click restore"), "says so plainly: {}", f.restore_note);
             assert!(note.contains("virtual memory") && note.contains("automatically manage"), "names the way: {}", f.restore_note);
             assert!(note.contains("reboot"), "reboot honesty kept: {}", f.restore_note);
@@ -1075,7 +1075,7 @@ mod leftovers_tests {
         // A single fixed row keeps the one-click note (the layout the restore accepts).
         let single = json!([{ "name": "C:\\pagefile.sys", "initial_mb": 8192, "maximum_mb": 8192 }]);
         let r = evaluate_leftovers(&probes(Some(false), single, Some(true), Some(32)), &no_endorsements());
-        assert!(find(&r, "pagefile-fixed").expect("finding").restore_note.starts_with("Safe to restore"));
+        assert!(find(&r, "pagefile-fixed").expect("finding").restore_note.starts_with("Compy can restore"));
     }
 
     // CR-pagefile-note-refusals: "Pagefile disabled" (no rows) and the single rows the restore's own
@@ -1088,7 +1088,7 @@ mod leftovers_tests {
             let r = evaluate_leftovers(&probes(Some(false), files.clone(), Some(true), Some(32)), &no_endorsements());
             let f = find(&r, "pagefile-fixed").expect("a pagefile finding");
             let note = f.restore_note.to_lowercase();
-            assert!(!note.contains("safe to restore"), "offers the restore it refuses: {files} -> {}", f.restore_note);
+            assert!(!note.contains("compy can restore"), "offers the restore it refuses: {files} -> {}", f.restore_note);
             assert!(note.starts_with("not a one-click restore here"), "says so plainly: {}", f.restore_note);
             assert!(note.contains(why), "names why ({why}): {}", f.restore_note);
             assert!(note.contains("virtual memory") && note.contains("reboot"), "names the way: {}", f.restore_note);
@@ -1107,7 +1107,7 @@ mod leftovers_tests {
         for name in ["C:\\pagefile.sys", "d:\\PAGEFILE.SYS"] {
             let files = json!([{ "name": name, "initial_mb": 2048, "maximum_mb": 4096 }]);
             let r = evaluate_leftovers(&probes(Some(false), files, Some(true), Some(32)), &no_endorsements());
-            assert!(find(&r, "pagefile-fixed").expect("finding").restore_note.starts_with("Safe to restore"), "{name}");
+            assert!(find(&r, "pagefile-fixed").expect("finding").restore_note.starts_with("Compy can restore"), "{name}");
             assert!(crate::actions::parse_manual_pagefile_entry(&[format!("{name} 2048 4096")]).is_ok());
         }
     }

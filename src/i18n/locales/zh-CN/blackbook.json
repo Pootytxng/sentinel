@@ -220,7 +220,7 @@
       "term": "把行话黑话,翻译成大白话",
       "trick": "假优化工具惯用的套路——在被坑之前先认出它们"
     },
-    "guideSafePill": "指南 · 安全",
+    "guideSafePill": "指南 · 操作方法",
     "entryTypeBody": {
       "spotIt": "识别方法:",
       "honestVersion": "真实情况:",
@@ -269,7 +269,7 @@
       "scamFlags_other": "这里有 {{count}} 个已知诈骗套路——展开下方标记的行查看详情。",
       "resultNote": "无法识别的内容不会给出结论——我们绝不瞎猜。点击任意一行即可在此查看详情。",
       "openFullEntry": "查看完整词条 →",
-      "safeHowTo": "有安全的操作方法 →",
+      "safeHowTo": "有操作方法 →",
       "truncated": "内容过长,我们只对前 {{chars}} 个字符做了评级。"
     }
   },

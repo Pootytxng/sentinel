@@ -393,7 +393,7 @@ describe("Fix", () => {
     ];
     render(<Fix recs={recs} {...baseProps} onApplyBatch={onApplyBatch} />);
     // The bar shows the SAFE count and opens the single consent sheet.
-    fireEvent.click(screen.getByRole("button", { name: "Apply all safe fixes (2)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply all reversible fixes (2)" }));
     expect(screen.getByText("Apply these 2 changes to your rig?")).toBeTruthy();
     // Approve → the batch runs over exactly those ids (App orchestrates the existing apply per item).
     fireEvent.click(screen.getByRole("button", { name: "Apply all (2)" }));
@@ -407,7 +407,7 @@ describe("Fix", () => {
     ];
     render(<Fix recs={recs} {...baseProps} />);
     // Only ONE safe item → the bar (which needs ≥2) must not appear.
-    expect(screen.queryByRole("button", { name: /Apply all safe fixes/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Apply all reversible fixes/ })).toBeNull();
   });
 
   // s49 fresh-PC pass: a row tagged just "Measured" read as "measured on this PC" on a PC with no

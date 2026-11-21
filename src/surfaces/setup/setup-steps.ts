@@ -30,7 +30,7 @@ export const TAB_BLURB: Record<HomeRailId, string> = {
   // "Your dashboard" named a shape, not an answer — the same reason the room stopped being called
   // "Home" (owner rename 2026-08-19). The blurb now states the question the room answers.
   home: "Is your PC OK right now — the verdict, and what is holding you back.",
-  check: "Scan game-readiness, then apply the safe fixes it finds for your rig.",
+  check: "Scan game-readiness, then apply the reversible fixes it finds for your rig.",
   play: "Watch live FPS, 1% lows and temps — with a debrief after each session.",
   fix: "Apply and undo reversible tweaks — every change logged in the ledger.",
   // Names the Field Guide explicitly (tester Matthew 2026-07-22: he first met the term inside the
@@ -45,13 +45,13 @@ export const TAB_BLURB: Record<HomeRailId, string> = {
 // The merged room absorbs Check's diagnose half, so its blurb must cover both (the fix-id blurb
 // above only describes the Tune half — wrong for the five-room rail).
 export const MERGED_FIX_BLURB =
-  "Check what's holding your games back, then apply the safe fixes — every change undoable in the ledger.";
+  "Check what's holding your games back, then apply the fixes — every change undoable in the ledger.";
 
 // The proving-ground Lab absorbs the whole Optimize room (2026-07-10 flip: no standalone Optimize
 // tab), so ITS blurb must cover check + fix + prove — the lab-id blurb above only describes the
 // instruments half.
 export const GROUND_LAB_BLURB =
-  "Check what's holding your games back and apply the safe fixes — every change undoable — then prove it with benchmarks, latency and diagnostics.";
+  "Check what's holding your games back and apply the fixes — every change undoable — then prove it with benchmarks, latency and diagnostics.";
 
 export interface HardwareLesson {
   /** Which rig part kind this lesson focuses (the showcase shows the first part of this kind). */

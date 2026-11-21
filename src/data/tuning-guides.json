@@ -14,7 +14,7 @@
       "radeon tuning",
       "mv"
     ],
-    "goal": "Lower temps and fan noise — often with the same or slightly better performance, because a cooler card holds its boost longer. An undervolt that goes too far just gets unstable and resets; you nudge it back and you're fine. It's the safest knob on the card.",
+    "goal": "Lower temps and fan noise — often with the same or slightly better performance, because a cooler card holds its boost longer. An undervolt that goes too far just gets unstable and resets; you nudge it back and you're fine. It's an easy knob to turn back.",
     "tool": "You'll use AMD's own tool — Adrenalin — nothing to install.",
     "steps": [
       "Right-click the desktop → AMD Software: Adrenalin Edition.",

@@ -229,7 +229,7 @@
       "term": "The jargon, translated into plain English",
       "trick": "The tricks fake optimizers pull — spot them before they cost you"
     },
-    "guideSafePill": "Guide · safe",
+    "guideSafePill": "Guide · how-to",
     "entryTypeBody": {
       "spotIt": "Spot it:",
       "honestVersion": "The honest version:",
@@ -283,7 +283,7 @@
       "scamFlags_other": "{{count}} known scam patterns in here — open the flagged rows below.",
       "resultNote": "Anything we don't recognize gets no verdict — we won't guess. Tap a row to read it right here.",
       "openFullEntry": "Open full entry →",
-      "safeHowTo": "Safe how-to available →",
+      "safeHowTo": "How-to available →",
       "truncated": "We graded the first {{chars}} characters of a longer paste."
     }
   },

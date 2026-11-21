@@ -572,7 +572,7 @@ describe("P7-depth: the next step's technical receipt", () => {
     // The explanation says why, in plain words, and names the kind.
     await openDoor(container, "bb-next-depth-why");
     expect(container.querySelector(".bb-next-why")!.textContent).toMatch(/newest crash record is tagged App crash/);
-    expect(container.querySelector(".bb-next-why")!.textContent).toMatch(/safe first thing to check/);
+    expect(container.querySelector(".bb-next-why")!.textContent).toMatch(/first thing to check/);
   });
 
   // Review of this slice, MUST-FIX 1: the why never says "safe first thing to check" for a step the
@@ -597,7 +597,7 @@ describe("P7-depth: the next step's technical receipt", () => {
     // The stop code the user is told to share is in the answer, before any tap.
     expect(second.container.querySelector(".bb-next-detail:not(.bb-next-beyond)")!.textContent).toBe("Stop code 0x133.");
     await openDoor(second.container, "bb-next-depth-why");
-    expect(second.container.querySelector(".bb-next-why")!.textContent).toMatch(/beyond what Compy can safely narrow down/);
+    expect(second.container.querySelector(".bb-next-why")!.textContent).toMatch(/beyond what Compy can narrow down/);
     expect(second.container.querySelector(".bb-next-why")!.textContent).not.toMatch(/safe first thing/);
   });
 });

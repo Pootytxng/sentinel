@@ -198,7 +198,7 @@ pub(crate) fn hardware_ineligibility_reason(cond: &Condition, _hw: &HardwareInfo
             "Needs a wired Ethernet port — this rig has none (Wi-Fi / other only).".into(),
         ),
         Condition::EeeSwitchExposed => Some(
-            "No connected wired adapter exposes an Energy-Efficient-Ethernet switch Compy can safely flip — either the cable isn't plugged in right now, or this adapter's driver doesn't offer the setting.".into(),
+            "No connected wired adapter exposes an Energy-Efficient-Ethernet switch Compy can flip — either the cable isn't plugged in right now, or this adapter's driver doesn't offer the setting.".into(),
         ),
         Condition::DisplayHdrCapable => Some("Your display isn't HDR-capable.".into()),
         Condition::AllHdd => Some("Only for HDD-only systems — this rig has an SSD/NVMe.".into()),

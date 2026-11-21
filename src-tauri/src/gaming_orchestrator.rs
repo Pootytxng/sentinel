@@ -791,7 +791,7 @@ pub(crate) fn start(opts: StartOptions) -> Result<SessionFile, String> {
             // destroying a possibly-live rollback contract. Refuse rather than clobber (rollback-first).
             if quarantine_session().is_none() {
                 return Err("a Gaming Mode session file exists but is unreadable and couldn't be \
-                            safely moved aside — refusing to start so it isn't overwritten. Try again, \
+                            moved aside — refusing to start so it isn't overwritten. Try again, \
                             or recover it from %APPDATA%\\Compy.".into());
             }
         }

@@ -12,7 +12,7 @@
     "id": "invented-issue-counter",
     "name": "The invented issue counter",
     "aliases": ["847 problems", "issues found", "problems found", "issue counter", "errors found"],
-    "pattern": "The scan ends with a big red \"847 issues found!\" Most of those \"issues\" are harmless leftover files, cookies, and registry entries that affect nothing, counted up to look alarming.",
+    "pattern": "The scan ends with a big red \"847 issues found!\" Most of those \"issues\" are leftover files, cookies, and registry entries that affect nothing, counted up to look alarming.",
     "tell": "The number is huge, precise, and scary, but the app won't tell you what a single \"issue\" actually does or what fixing it changes.",
     "honest_version": "An honest tool names what it found and why it matters, and is comfortable saying \"nothing here needs fixing\" — a clean result is a real result, not a failure to sell.",
     "related": ["fake-deep-scan", "fake-optimization-score", "scareware-fear-tone"]
@@ -58,7 +58,7 @@
     "name": "The tweak mega-pack with no undo",
     "aliases": ["mega pack", "all in one tweak", "ultimate tweak pack", "one click optimize", "tweak script"],
     "pattern": "One button applies dozens of registry, service, and system changes at once, promised as the \"ultimate\" setup. When something breaks afterward — audio, anti-cheat, updates — there's no way to tell which of the dozens of changes did it, and often no clean way back.",
-    "tell": "It changes many things in one click and offers no per-change undo, just a vague promise that it's all safe.",
+    "tell": "It changes many things in one click and offers no per-change undo, just a vague assurance that it's all fine.",
     "honest_version": "An honest tool changes one thing at a time, records exactly what it did, and gives you a one-click rollback for each change.",
     "related": ["debloat-scripts", "debloating", "restore-point", "secret-windows-settings"]
   },

@@ -252,7 +252,7 @@
     "name": "Anti-cheat (Vanguard / EAC / BattlEye)",
     "aliases": ["anti-cheat", "anticheat", "vanguard", "eac", "easy anti-cheat", "battleye"],
     "what": "The watchdog software a multiplayer game uses to catch cheaters. Vanguard (Valorant), Easy Anti-Cheat, and BattlEye are the common ones.",
-    "more": "To spot cheats they watch for anything tampering with the game or the system, which is why injectors, kernel tweak tools, and some driver hacks get accounts banned. Several require Secure Boot or TPM to be on. The safe rule: if a \"tweak\" touches game memory, timers, or drivers in a non-standard way, assume anti-cheat risk until proven otherwise.",
+    "more": "To spot cheats they watch for anything tampering with the game or the system, which is why injectors, kernel tweak tools, and some driver hacks get accounts banned. Several require Secure Boot or TPM to be on. The rule of thumb: if a \"tweak\" touches game memory, timers, or drivers in a non-standard way, assume anti-cheat risk until proven otherwise.",
     "related": ["dll-injection", "kernel-driver", "secure-boot", "tpm", "anti-lag-plus"]
   },
   {
@@ -268,7 +268,7 @@
     "name": "Overlay",
     "aliases": ["overlay", "on screen display", "osd", "in-game overlay"],
     "what": "The little stats or panel drawn on top of your game — an FPS counter, a Discord pop-up, a performance graph. It floats over the picture without being part of the game.",
-    "more": "Some overlays draw the safe way, alongside the game; older ones hook into it more invasively, which can clash with anti-cheats or cost a few frames. Compy's overlay draws over borderless and windowed games but not exclusive-fullscreen ones, because it never injects. If a game stutters only with an overlay on, that overlay is the suspect.",
+    "more": "Some overlays draw alongside the game; older ones hook into it more invasively, which can clash with anti-cheats or cost a few frames. Compy's overlay draws over borderless and windowed games but not exclusive-fullscreen ones, because it never injects. If a game stutters only with an overlay on, that overlay is the suspect.",
     "related": ["fullscreen-modes", "dll-injection", "etw"]
   },
   {
@@ -388,7 +388,7 @@
     "name": "Telemetry",
     "aliases": ["telemetry", "diagtrack", "data collection", "usage data"],
     "what": "The usage and diagnostic data Windows and apps send back to their makers. Turning the heaviest of it off is the cleanest debloat win.",
-    "more": "Disabling Windows' main telemetry service has no effect on updates, stability, or your games — its honest payoff is privacy and a little less background chatter, not more FPS. It's a safe, reversible toggle. Don't expect frames from it; do expect a quieter machine.",
+    "more": "Disabling Windows' main telemetry service has no effect on updates, stability, or your games — its honest payoff is privacy and a little less background chatter, not more FPS. Compy saves the current setting first, so you can undo it. Don't expect frames from it; do expect a quieter machine.",
     "related": ["diagtrack", "debloating"]
   },
   {
@@ -420,7 +420,7 @@
     "name": "Power plans",
     "aliases": ["power plan", "power plans", "ultimate performance", "high performance", "balanced"],
     "what": "Windows' presets for how aggressively the CPU saves power versus stays awake. The performance plans stop it from downclocking and parking cores during light moments.",
-    "more": "On many rigs that means a snappier feel mid-game, at the cost of a little more idle power draw. Switching between plans that already exist is a safe, reversible change — Compy can do it for you and records the exact previous plan to switch back. It's a genuine help on some systems and barely noticeable on others.",
+    "more": "On many rigs that means a snappier feel mid-game, at the cost of a little more idle power draw. Switching between plans that already exist is a reversible change — Compy can do it for you and records the exact previous plan to switch back. It's a genuine help on some systems and barely noticeable on others.",
     "related": ["power-plan", "core-parking", "c-states"]
   },
   {
@@ -548,7 +548,7 @@
     "name": "Boost clock (dynamic clocks)",
     "aliases": ["boost clock", "gpu boost", "dynamic clocks", "base vs boost clock", "clock speed gaming"],
     "what": "Modern GPUs and CPUs do not run at one fixed speed — they constantly raise and lower their clock speed (boost) based on how much temperature and power headroom they have right now.",
-    "more": "The 'base clock' on a spec sheet is the guaranteed floor; the 'boost clock' is roughly the best case. In practice the chip sits somewhere in between, second by second — climbing when it is cool and has power budget to spare, easing off when it gets hot or hits its power limit. This is why a card runs faster in a cold room than a hot one, and why good airflow quietly buys real performance. It is also why most 'lock your clocks to maximum' tweaks miss the point: the chip is already boosting as high as it safely can, and forcing a fixed high clock usually just adds heat or instability for nothing. The honest levers are the ones that give the chip more room to boost on its own — better cooling, a sensible fan curve, or an undervolt that runs cooler at the same clock.",
+    "more": "The 'base clock' on a spec sheet is the guaranteed floor; the 'boost clock' is roughly the best case. In practice the chip sits somewhere in between, second by second — climbing when it is cool and has power budget to spare, easing off when it gets hot or hits its power limit. This is why a card runs faster in a cold room than a hot one, and why good airflow quietly buys real performance. It is also why most 'lock your clocks to maximum' tweaks miss the point: the chip is already boosting as high as its limits allow, and forcing a fixed high clock usually just adds heat or instability for nothing. The honest levers are the ones that give the chip more room to boost on its own — better cooling, a sensible fan curve, or an undervolt that runs cooler at the same clock.",
     "related": ["thermal-throttling", "power-limit-tdp", "nvidia-prefer-max-performance", "undervolting"]
   },
   {
@@ -572,7 +572,7 @@
     "name": "DisplayPort vs HDMI (for gaming)",
     "aliases": ["displayport vs hdmi", "dp vs hdmi gaming", "best cable for 144hz", "hdmi or displayport"],
     "what": "Which cable you use sets the ceiling on the refresh rate and resolution your monitor can run — pick an old version (or a cheap cable) and a 144Hz monitor can be stuck at 60Hz.",
-    "more": "Both can be excellent; what matters is the VERSION and the bandwidth it carries. For high-refresh PC gaming, DisplayPort (1.4 or 2.1) is the safe default — it is built for monitors and handles high refresh rates and variable refresh (VRR) cleanly. HDMI 2.1 is also great, and it actually carries more raw bandwidth than DisplayPort 1.4 (it is what modern consoles and TVs use for 4K120); only DisplayPort 2.1 tops it. Older HDMI 2.0 or a cheap cable can quietly cap you at 4K60 or 1080p120. If your monitor will not offer its top refresh rate, the cable and port are among the first things to check — use the best port your GPU and monitor share, with a cable rated for it. The cable does not change your FPS; it changes how much of it the screen is allowed to show.",
+    "more": "Both can be excellent; what matters is the VERSION and the bandwidth it carries. For high-refresh PC gaming, DisplayPort (1.4 or 2.1) is the usual default — it is built for monitors and handles high refresh rates and variable refresh (VRR) cleanly. HDMI 2.1 is also great, and it actually carries more raw bandwidth than DisplayPort 1.4 (it is what modern consoles and TVs use for 4K120); only DisplayPort 2.1 tops it. Older HDMI 2.0 or a cheap cable can quietly cap you at 4K60 or 1080p120. If your monitor will not offer its top refresh rate, the cable and port are among the first things to check — use the best port your GPU and monitor share, with a cable rated for it. The cable does not change your FPS; it changes how much of it the screen is allowed to show.",
     "related": ["set-refresh-rate", "hz-vs-fps", "vrr"]
   },
   {

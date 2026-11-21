@@ -515,7 +515,7 @@ describe("Check", () => {
           mechanism_cost: "A fixed size either wastes disk or caps Windows below what a game may commit.",
           verdict: "On your 31 GB-RAM machine a fixed 29 GB pagefile spends ~29 GB of disk and changes nothing about game performance.",
           uncertain_source: true,
-          restore_note: "Safe to restore to automatic; fully reversible; takes effect after a reboot.",
+          restore_note: "Compy can restore this to automatic; takes effect after a reboot.",
         },
       ],
       checked: 2,

@@ -722,12 +722,12 @@ describe("copy honesty (pure data)", () => {
     ]) {
       expect(s).not.toMatch(/\(s\)/);
     }
-    expect(fastPathReadyHeadline(1)).toContain("1 safe tweak is ready");
-    expect(fastPathReadyHeadline(4)).toContain("4 safe tweaks are ready");
-    expect(fastPathApplyLabel(1)).toBe("Apply 1 safe tweak · one tap");
-    expect(fastPathApplyLabel(4)).toBe("Apply 4 safe tweaks · one tap");
-    expect(i18n.t("home.interview.f.act.fastpath", { count: 1 })).toContain("1 safe change");
-    expect(i18n.t("home.interview.f.act.fastpath", { count: 4 })).toContain("4 safe changes");
+    expect(fastPathReadyHeadline(1)).toContain("1 reversible tweak is ready");
+    expect(fastPathReadyHeadline(4)).toContain("4 reversible tweaks are ready");
+    expect(fastPathApplyLabel(1)).toBe("Apply 1 reversible tweak · one tap");
+    expect(fastPathApplyLabel(4)).toBe("Apply 4 reversible tweaks · one tap");
+    expect(i18n.t("home.interview.f.act.fastpath", { count: 1 })).toContain("1 reversible change");
+    expect(i18n.t("home.interview.f.act.fastpath", { count: 4 })).toContain("4 reversible changes");
   });
 
   it("no answer or finding names a room — the words stay the user's, not the app's", () => {

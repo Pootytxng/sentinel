@@ -71,7 +71,7 @@
     "notYet": "Not yet",
     "checkupReportLabel": "Checkup report",
     "notes": {
-      "optimize": "Most \"best settings\" guides are generic and one-size-fits-all. These tweaks are the ones vetted safe AND reversible for a rig like yours — every one snapshots its prior state before it touches anything.",
+      "optimize": "Most \"best settings\" guides are generic and one-size-fits-all. These tweaks are the ones vetted for a rig like yours, and reversible — every one snapshots its prior state before it touches anything.",
       "diagnostics": "Most people never see their PC's real parts list. This is the honest inventory — read straight from the machine, nothing installed.",
       "benchmark": "Benchmarks are noisy: two identical runs never score identical. Compy grades changes against that noise floor, so luck can't be called a win.",
       "latency": "One click crosses the mouse, USB, Windows, the GPU and your monitor before you see it land — every hop adds delay, and each one is measurable.",
@@ -133,7 +133,7 @@
     "noiseFloorLabel": "Noise floor",
     "noiseFloorNote": "a change must beat this to count",
     "noiseFloorNoteGame": "{{game}} · a change must beat this to count",
-    "safeStackLabel": "Safe stack",
+    "safeStackLabel": "Reversible stack",
     "instrumentsReadLabel": "Instruments read",
     "instrumentsReadNote": "{{read}} of {{total}} stations",
     "unitPct": "±%",
@@ -149,7 +149,7 @@
     "backToRoom": "Back to Test",
     "closeStationAriaLabel": "Close station",
     "close": "Close",
-    "optimizeReassurance": "This station applies your safe stack in one click — and like every change made in this room, it's fully reversible.",
+    "optimizeReassurance": "This station applies your reversible stack in one click — and like every change made in this room, it's fully reversible.",
     "tiles": {
       "stage": "Your rig on the bench",
       "reading": "Rig reading",
@@ -189,7 +189,7 @@
       "headline": "Test one change at a time",
       "sub": "Compy measures before and after, then restores the change unless the result clearly beats the noise.",
       "action": "Start with Optimize",
-      "actionNote": "Best when you want it faster and safe, without fiddling.",
+      "actionNote": "Best when you want it faster, without fiddling.",
       "safety": "One reversible change · one measured result · restore by default."
     },
     "verdictFix": {
@@ -209,10 +209,10 @@
     }
   },
   "optimizeStation": {
-    "gaugeAriaLabel": "{{applied}} of {{total}} safe tweaks on",
-    "yourSafeStack": "Your safe stack",
+    "gaugeAriaLabel": "{{applied}} of {{total}} reversible tweaks on",
+    "yourSafeStack": "Your reversible stack",
     "alreadySetStack": "Already set this way",
-    "safeTweaksForPc": "Safe tweaks for this PC",
+    "safeTweaksForPc": "Reversible tweaks for this PC",
     "allApplied": "All {{total}} already on for this rig — nothing to apply.",
     "freshLeft": "{{count}} left to enable below — one tap each, reversible.",
     "driftedRestore_one": "{{count}} was turned off outside Compy — restore it below.",
@@ -227,8 +227,8 @@
   "stations": {
     "optimize": {
       "name": "Optimize",
-      "forLine": "Enable the safe, vetted tweaks for your rig — in one tap.",
-      "whenLine": "You just want it faster and safe, without fiddling.",
+      "forLine": "Enable the vetted, reversible tweaks for your rig — in one tap.",
+      "whenLine": "You just want it faster, without fiddling.",
       "dockLine": "Test one change at a time and keep what helps.",
       "connectsLine": "Prove the stack you just applied — run Benchmark and watch the before/after."
     },
@@ -268,8 +268,8 @@
       "connectsLine": "Check Diagnostics for the rig state behind what it finds."
     },
     "routerLeadOptimize": {
-      "symptom": "I just want my PC faster — safely, no fiddling",
-      "because": "it enables the safe, vetted tweaks for your rig in one tap — undo any time"
+      "symptom": "I just want my PC faster — no fiddling",
+      "because": "it enables the vetted, reversible tweaks for your rig in one tap — undo any time"
     },
     "router": {
       "latency": {
@@ -306,9 +306,9 @@
       "regressed": "Last verdict: Regressed — things measured worse together. Worth undoing."
     },
     "reading": {
-      "optimizeReady_one": "{{count}} safe tweak ready to enable — one tap, reversible.",
-      "optimizeReady_other": "{{count}} safe tweaks ready to enable — one tap, all reversible.",
-      "optimizeAllSet": "Every safe tweak is already on — your rig is set. Prove it below, or you're done.",
+      "optimizeReady_one": "{{count}} reversible tweak ready to enable — one tap, reversible.",
+      "optimizeReady_other": "{{count}} reversible tweaks ready to enable — one tap, all reversible.",
+      "optimizeAllSet": "Every reversible tweak is already on — your rig is set. Prove it below, or you're done.",
       "diagnosticsCaptured": "Report captured — the raw facts about this rig, ready to read.",
       "diagnosticsNotCaptured": "No reading yet — the system report hasn't been captured.",
       "benchmarkBaselineSaved": "Baseline saved — change one thing, re-run, and the grade lands here.",
@@ -702,7 +702,7 @@
       "alreadySetByGamingModeRestoreUnfinished": "Already set. Compy's Gaming Mode set it and hasn't finished putting it back. Restore your settings from the interrupted Gaming Mode session notice.",
       "alreadySetUnchecked": "Already set this way in Windows; Compy couldn't check whether it made this change.",
       "alreadySetUnconfirmed": "Already set. Compy applied this earlier but can't confirm its change is the one keeping it set.",
-      "noSafeApply": "Advice only. Compy has no safe one-click change for it, so it can't be tested.",
+      "noSafeApply": "Advice only. Compy has no one-click change for it, so it can't be tested.",
       "tooSmallToMeasureHere": "Too small to measure here. Its expected effect ({{effect}}%) is no bigger than this game's measured run-to-run noise ({{band}}%).",
       "outsideChosenRisk": "Outside the risk you chose."
     },
@@ -729,7 +729,7 @@
       "offerOnly": "Nothing changes until you start it.",
       "none": "Nothing else here is worth testing on this PC.",
       "noneWhy": "No more changes are available to test on {{game}} right now.",
-      "noneEffectUnknown": "Compy doesn't know how big any change's effect would be, so that list is by whether a change applies here, is already set and can be safely undone, not by size."
+      "noneEffectUnknown": "Compy doesn't know how big any change's effect would be, so that list is by whether a change applies here, is already set and can be undone, not by size."
     },
     "readingRig": "Reading your rig…",
     "forYourRig": "For your rig:",

@@ -192,7 +192,7 @@ describe("the Care view: beyond Compy", () => {
     await waitFor(() => expect(container.querySelector(".bb-next")).not.toBeNull());
     const box = container.querySelector(".bb-next")!;
     expect(box.querySelector(".bb-next-tag")!.textContent).toBe("Beyond Compy");
-    expect(box.textContent).toMatch(/beyond what Compy can safely narrow down/);
+    expect(box.textContent).toMatch(/beyond what Compy can narrow down/);
     expect(box.textContent).toMatch(/Compy sends nothing/);
     // The receipt comes first; the support record is optional context that does not hold this crash.
     expect(box.textContent).toMatch(/share the receipt in this record below: it has the stop code/);

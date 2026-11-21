@@ -65,13 +65,13 @@
   "labBento": {
     "ledePre": "你这台主机的全面体检——五项测量,从左到右依次呈现。这里的一切都只是在",
     "ledeEmph": "读取",
-    "ledePost": "；不会更改你电脑上的任何设置,尽管放心探索。",
+    "ledePost": "；不会更改你电脑上的任何设置,尽管随意探索。",
     "openStationAriaLabel": "打开第 {{n}} 站 —— {{name}}",
     "measured": "已测量",
     "notYet": "暂未测得",
     "checkupReportLabel": "体检报告",
     "notes": {
-      "optimize": "网上大多数「最佳设置」指南都千篇一律、放之四海而皆准。而这些优化项,都是针对像你这样的主机专门验证过安全且可撤销的——每一项在改动前都会先保存原始状态的快照。",
+      "optimize": "网上大多数「最佳设置」指南都千篇一律、放之四海而皆准。而这些优化项,都是针对像你这样的主机专门验证过、且可撤销的——每一项在改动前都会先保存原始状态的快照。",
       "diagnostics": "大多数人从没见过自己电脑真正的配件清单。这是一份诚实的清单——直接从这台机器读取,不安装任何东西。",
       "benchmark": "跑分本身就带有波动:哪怕两次测试的设置完全一样,分数也不会完全相同。Compy 会以这个噪声下限为标准判定更改效果,所以运气不会被当成一次提升。",
       "latency": "一次点击要经过鼠标、USB、Windows、GPU 和显示器,你才能在画面上看到它——每一步都会增加延迟,而且每一步都可以测量。",
@@ -81,7 +81,7 @@
     "checkup": {
       "notStarted": {
         "headline": "你的体检还没有开始。",
-        "sub": "从左到右依次体验每一站——这里的一切都只是测量,不会弄坏任何东西。放心随便试试。"
+        "sub": "从左到右依次体验每一站——这里的一切都只是测量,不会弄坏任何东西。随便试试。"
       },
       "complete": {
         "headline": "全面体检已完成——每一站都有了读数。",
@@ -133,7 +133,7 @@
     "noiseFloorLabel": "噪声基线",
     "noiseFloorNote": "改动必须超过此幅度才算数",
     "noiseFloorNoteGame": "{{game}} · 改动必须超过此幅度才算数",
-    "safeStackLabel": "安全优化组合",
+    "safeStackLabel": "可撤销优化组合",
     "instrumentsReadLabel": "读取进度",
     "instrumentsReadNote": "{{total}} 站中已读 {{read}} 站",
     "unitPct": "±%",
@@ -147,7 +147,7 @@
     "backToRoom": "返回“测试”",
     "closeStationAriaLabel": "关闭站点",
     "close": "关闭",
-    "optimizeReassurance": "这一站可以一键应用你的安全优化组合——和这个房间里的每一项更改一样,均可完全撤销。",
+    "optimizeReassurance": "这一站可以一键应用你的可撤销优化组合——和这个房间里的每一项更改一样,均可完全撤销。",
     "tiles": {
       "stage": "工作台上的你的整机",
       "reading": "部件读数",
@@ -205,10 +205,10 @@
     }
   },
   "optimizeStation": {
-    "gaugeAriaLabel": "{{total}} 项安全优化项中已开启 {{applied}} 项",
-    "yourSafeStack": "你的安全优化组合",
+    "gaugeAriaLabel": "{{total}} 项可撤销优化项中已开启 {{applied}} 项",
+    "yourSafeStack": "你的可撤销优化组合",
     "alreadySetStack": "本机已是这样设置",
-    "safeTweaksForPc": "适合这台电脑的安全优化项",
+    "safeTweaksForPc": "适合这台电脑的可撤销优化项",
     "allApplied": "这台主机的 {{total}} 项已全部开启——无需再应用。",
     "freshLeft": "下方还有 {{count}} 项待开启——每项一键完成,且可撤销。",
     "driftedRestore_one": "有 {{count}} 项在 Compy 之外被关闭——请在下方恢复。",
@@ -223,8 +223,8 @@
   "stations": {
     "optimize": {
       "name": "优化",
-      "forLine": "一键为你的主机开启经过验证的安全优化项。",
-      "whenLine": "你只是想更快、更安全,又不想自己动手折腾。",
+      "forLine": "一键为你的主机开启经过验证的可撤销优化项。",
+      "whenLine": "你只是想更快,又不想自己动手折腾。",
       "dockLine": "每次只测试一项改动，保留真正有效的。",
       "connectsLine": "验证你刚应用的这组优化——运行「基准测试」,查看前后对比。"
     },
@@ -264,8 +264,8 @@
       "connectsLine": "查看「诊断」,了解它发现的问题背后,这台主机当时的状态。"
     },
     "routerLeadOptimize": {
-      "symptom": "我只是想让电脑更快——安全地、不用自己折腾",
-      "because": "它能一键为你的主机开启经过验证的安全优化项——随时可以撤销"
+      "symptom": "我只是想让电脑更快——不用自己折腾",
+      "because": "它能一键为你的主机开启经过验证的可撤销优化项——随时可以撤销"
     },
     "router": {
       "latency": {
@@ -302,8 +302,8 @@
       "regressed": "上次判定：已退步——这几项更改放在一起,实测结果变差了,值得撤销。"
     },
     "reading": {
-      "optimizeReady_other": "还有 {{count}} 项安全优化待开启——一键完成,均可撤销。",
-      "optimizeAllSet": "每一项安全优化都已开启——你的主机已经就绪。可以在下方验证效果,到此为止也可以。",
+      "optimizeReady_other": "还有 {{count}} 项可撤销优化待开启——一键完成,均可撤销。",
+      "optimizeAllSet": "每一项可撤销优化都已开启——你的主机已经就绪。可以在下方验证效果,到此为止也可以。",
       "diagnosticsCaptured": "报告已生成——这台主机的原始信息,随时可读。",
       "diagnosticsNotCaptured": "暂无读数——系统报告还没有生成。",
       "benchmarkBaselineSaved": "基准已保存——改一项设置,再测一次,判定结果就会显示在这里。",
@@ -690,7 +690,7 @@
       "alreadySetByGamingModeRestoreUnfinished": "已经设置好了。是 Compy 的游戏模式设置的，但还没有改回来。请在游戏模式会话中断的提示里恢复你的设置。",
       "alreadySetUnchecked": "Windows 里已经是这个设置；Compy 无法确认这项更改是不是它做的。",
       "alreadySetUnconfirmed": "已经设置好了。Compy 之前应用过这项更改，但无法确认现在保持这个设置的是不是它的更改。",
-      "noSafeApply": "仅为建议。Compy 没有可安全一键执行的更改，所以无法测试。",
+      "noSafeApply": "仅为建议。Compy 没有可一键执行的更改，所以无法测试。",
       "tooSmallToMeasureHere": "效果太小，这里测不出来。它的预期效果（{{effect}}%）不超过这款游戏实测的每次运行间波动（{{band}}%）。",
       "outsideChosenRisk": "超出你选择的风险范围。"
     },
@@ -717,7 +717,7 @@
       "offerOnly": "在你开始测试之前，什么都不会改动。",
       "none": "这台主机上没有其他值得测试的更改了。",
       "noneWhy": "{{game}} 上现在没有更多可供测试的更改了。",
-      "noneEffectUnknown": "Compy 不知道任何一项更改的效果会有多大，所以这份列表依据的是更改是否适用于这里、是否已设置、能否安全撤销，而不是效果大小。"
+      "noneEffectUnknown": "Compy 不知道任何一项更改的效果会有多大，所以这份列表依据的是更改是否适用于这里、是否已设置、能否撤销，而不是效果大小。"
     },
     "readingRig": "正在读取你的主机…",
     "forYourRig": "针对你的主机：",

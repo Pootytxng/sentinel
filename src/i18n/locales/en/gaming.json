@@ -405,7 +405,7 @@
       "gapRepeat": "If it happens again, scan again. Some readings need the same kind of record more than once before Compy says anything.",
       "gapSession": "Play another full-length session of {{game}} on this PC, then check the comparison below again.",
       "beyondTag": "Beyond Compy",
-      "beyondLine": "This one is beyond what Compy can safely narrow down from the evidence. The honest next move is to take it to a person.",
+      "beyondLine": "This one is beyond what Compy can narrow down from the evidence. The honest next move is to take it to a person.",
       "exportLine": "To ask for help, share the receipt in this record below: it has the stop code and when it happened. Compy's support record can go with it as optional context. It lists what Compy itself did on this PC, not this crash. You see what's in it first, then save it as a file and attach it yourself. Compy sends nothing.",
       "exportOpen": "Open the support record",
       "whyLabel": "Why there is no step yet",
@@ -420,9 +420,9 @@
       "finalRead": "This is the last read for this step: Compy stops tracking it from your next visit to this view. A new comparison can still name a new step.",
       "stopTracking": "Stop tracking this step",
       "showRecord": "Show this record in the list",
-      "whyIncident": "Compy named this step because its newest crash record is tagged {{kind}}, and this is the safe first thing to check for that kind. It is a next step, not a diagnosis.",
-      "whyIncidentResearch": "Compy named this step because its newest crash record is tagged {{kind}}. It is a lead worth researching, not a safe change Compy can make or vouch for.",
-      "whyIncidentBeyond": "Compy named this step because its newest crash record is tagged {{kind}}, and that reading is beyond what Compy can safely narrow down. The honest next move is a person, with the record's own details.",
+      "whyIncident": "Compy named this step because its newest crash record is tagged {{kind}}, and this is the first thing to check for that kind. It is a next step, not a diagnosis.",
+      "whyIncidentResearch": "Compy named this step because its newest crash record is tagged {{kind}}. It is a lead worth researching, not a change Compy can make or vouch for.",
+      "whyIncidentBeyond": "Compy named this step because its newest crash record is tagged {{kind}}, and that reading is beyond what Compy can narrow down. The honest next move is a person, with the record's own details.",
       "whyStutter": "Compy named this step because the latest {{game}} session comparison measured a slowdown against a steady earlier session, judged against this game's own {{pct}}% session-to-session spread on this PC.",
       "whyStutterStored": "Compy named this step from an earlier {{game}} session comparison that measured a slowdown against a steady session, judged against this game's own {{pct}}% session-to-session spread on this PC. It keeps counting new sessions against that steady one.",
       "receipt": {
@@ -539,9 +539,9 @@
       "hardwareErrorPeak": "Windows logged a hardware-level error (WHEA). The hardware reports these itself; they can come from heat, power, memory, or an unstable overclock or undervolt. The record alone doesn't say which. In the session running at the time, Compy measured the GPU peaking at {{temp}}°C and hasn't compared that with this card's other sessions, so it can't tell whether heat played a part.",
       "unnamedApp": "an app"
     },
-    "assessLinePostBeyond": "— beyond what Compy can safely narrow down.",
+    "assessLinePostBeyond": "— beyond what Compy can narrow down.",
     "worthResearching": "Worth researching",
-    "safeNextStep": "Safe next step",
+    "safeNextStep": "Next step",
     "resolution": {
       "noneSince_one": "No {{kind}} recorded in the 1 day since.",
       "noneSince_other": "No {{kind}} recorded in the {{days}} days since.",

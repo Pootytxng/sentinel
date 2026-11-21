@@ -36,13 +36,13 @@
     "copySummary": "复制摘要",
     "setupSummaryBlurb": "用通俗易懂的语言总结了上次检测的结果——复制后即可分享你的配置。",
     "verdict": {
-      "checkingHeadline": "正在检查可以安全更改的内容…",
+      "checkingHeadline": "正在检查可以更改的内容…",
       "undoSub": "每次应用都会先保存撤销记录——可以随时在「已应用」中回滚。",
       "driftClauseSuffix_other": " 另外还有 {{count}} 项你应用过的设置在 Compy 之外被关闭——可以在下方重新打开。",
-      "readyHeadline_other": "{{count}} 项安全修复已就绪,可以应用。",
+      "readyHeadline_other": "{{count}} 项可撤销修复已就绪,可以应用。",
       "driftedOnlyHeadline_other": "你应用过的 {{count}} 项设置在 Compy 之外被关闭了。",
       "driftedOnlySub_other": "可以在下方逐项重新打开——如果这是你自己的操作,也可以保留关闭状态。Compy 绝不会自作主张重新应用。",
-      "allSafeActiveHeadline_other": "没有新的项目需要应用——已有 {{count}} 项安全更改生效中。",
+      "allSafeActiveHeadline_other": "没有新的项目需要应用——已有 {{count}} 项可撤销更改生效中。",
       "nothingToApplyHeadline": "目前没有需要应用的项目。",
       "nothingToApplySub": "Compy 只会推荐它在这台主机上实测到的内容——绝不凭空捏造。"
     }
@@ -261,7 +261,7 @@
     "removingEllipsis": "正在移除…",
     "remove": "移除",
     "guidedTag": "引导",
-    "noSafeSwitchNote": "这一项没有安全、可回滚的开关——它位于厂商应用或 Windows 设置页面中,是否切换特意留给你自己决定。Compy 不会自动化一项它无法安全撤销的更改。",
+    "noSafeSwitchNote": "这一项没有可回滚的开关——它位于厂商应用或 Windows 设置页面中,是否切换特意留给你自己决定。Compy 不会自动化一项它无法撤销的更改。",
     "noCommand": "(无命令)",
     "startupToggleAriaLabel": "{{action}} {{name}} 的开机启动",
     "enable": "启用",
@@ -317,7 +317,7 @@
     "sectionReadyV2": "已就绪——一键搞定,可撤销",
     "sectionWorthMaking": "值得为你的主机做的更改",
     "applyReviewedCount": "应用已选项({{count}})",
-    "applySafeFixesCount": "应用全部安全修复项({{count}})",
+    "applySafeFixesCount": "应用全部可撤销修复项({{count}})",
     "applyAllHint": "可回滚 · 每项均可单独撤销 · 让配置更干净,而非魔法加速",
     "appliedCount": "已应用 {{count}} 项",
     "skippedSuffix": " · 跳过 {{count}} 项:{{titles}}",
@@ -370,7 +370,7 @@
     },
     "readTheAutopsy": "查看完整分析 →",
     "needsYourCall": "需要你来决定",
-    "advisoryIntro": "已检测到,但 Compy 不会替你更改这些——它们位于厂商应用或 Windows 设置页面中,没有安全、可回滚的开关。这里会准确告诉你每一项的位置和操作步骤。",
+    "advisoryIntro": "已检测到,但 Compy 不会替你更改这些——它们位于厂商应用或 Windows 设置页面中,没有可回滚的开关。这里会准确告诉你每一项的位置和操作步骤。",
     "compyPointsTheWay": "Compy 为你指路",
     "startupApps": "启动项",
     "startupAppsIntro": "这些应用会随 Windows 一同启动。关闭开关即可阻止其自动启动——可撤销,不会删除任何东西。"

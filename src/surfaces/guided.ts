@@ -71,7 +71,7 @@ export const GUIDED_STEPS: Record<string, Guide> = {
     steps: [
       "Run Storage Sense / Cleanup recommendations.",
       "Uninstall unused apps and move large libraries (e.g. game installs) off C:.",
-      "Empty the Recycle Bin and Downloads if safe.",
+      "Empty the Recycle Bin and Downloads if you no longer need what's in them.",
     ],
   },
   "ssd-upgrade-advisory": {

@@ -169,7 +169,7 @@ describe("apply-all consent: the hand-rolled popout, inside the canonical Sheet"
 
   const openConsent = (props: Record<string, unknown> = {}) => {
     render(<Fix recs={two} {...baseProps} {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Apply all safe fixes (2)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply all reversible fixes (2)" }));
     return sheet()!;
   };
 

@@ -250,7 +250,7 @@ const FACES: Face[] = [
     card: ".hv2-stat",
     key: ".hv2-stat-k",
     num: ".hv2-stat-n",
-    activeLabel: "Safe changes active",
+    activeLabel: "Reversible changes active",
     ledgerLabel: "Trust ledger",
   },
 ];

@@ -23,12 +23,12 @@
       },
       "fastpath": {
         "confirmBody": "Compy snapshots the prior state first, so you can roll every one back anytime from Applied.",
-        "ready_one": "{{count}} safe tweak is ready — one tap does it.",
-        "ready_other": "{{count}} safe tweaks are ready — one tap does them all.",
-        "apply_one": "Apply {{count}} safe tweak · one tap",
-        "apply_other": "Apply {{count}} safe tweaks · one tap",
-        "appliedPart_one": "Applied {{count}} safe tweak",
-        "appliedPart_other": "Applied {{count}} safe tweaks",
+        "ready_one": "{{count}} reversible tweak is ready — one tap does it.",
+        "ready_other": "{{count}} reversible tweaks are ready — one tap does them all.",
+        "apply_one": "Apply {{count}} reversible tweak · one tap",
+        "apply_other": "Apply {{count}} reversible tweaks · one tap",
+        "appliedPart_one": "Applied {{count}} reversible tweak",
+        "appliedPart_other": "Applied {{count}} reversible tweaks",
         "appliedAllReversible": "{{appliedPart}} — all reversible from Applied.",
         "skippedPart_one": "{{count}} was skipped",
         "skippedPart_other": "{{count}} were skipped",
@@ -216,9 +216,9 @@
     "f": {
       "ev": {
         "readiness": "{{passed}} of {{total}} startup checks pass right now.",
-        "stackReady_one": "{{count}} safe change is ready to apply.",
-        "stackReady_other": "{{count}} safe changes are ready to apply.",
-        "stackClear": "Every safe change Compy knows about is already on.",
+        "stackReady_one": "{{count}} reversible change is ready to apply.",
+        "stackReady_other": "{{count}} reversible changes are ready to apply.",
+        "stackClear": "Every reversible change Compy knows about is already on.",
         "changes_one": "Compy has made {{count}} change to this PC, and it is still undoable.",
         "changes_other": "Compy has made {{count}} changes to this PC, and every one is still undoable.",
         "lastSession": "Last recorded session — {{game}}: {{avg}} FPS average, {{low}} FPS at its worst.",
@@ -233,8 +233,8 @@
       },
       "act": {
         "check": "Run a fresh check",
-        "fastpath_one": "Apply {{count}} safe change — one tap",
-        "fastpath_other": "Apply {{count}} safe changes — one tap",
+        "fastpath_one": "Apply {{count}} reversible change — one tap",
+        "fastpath_other": "Apply {{count}} reversible changes — one tap",
         "crashRecord": "Read the crash record",
         "careView": "Compare with my last steady session",
         "crashBehind": "Check for a crash behind it",
@@ -243,7 +243,7 @@
         "readSession": "Read back your last session",
         "heat": "Check heat and fan headroom",
         "journey": "Find what helps my game",
-        "optimize": "See the safe changes",
+        "optimize": "See the reversible changes",
         "whatTested": "See what Compy tested",
         "sinceWorked": "See what changed since it last worked",
         "undo": "Compy saves the old setting first, so you can undo any of this later from Applied.",
@@ -291,7 +291,7 @@
       },
       "wantFps": {
         "sentence": "Compy can test that on this PC: one session as it is now, one with a single change, and the change stays only if your game measured better.",
-        "sentenceNoJourney": "Compy can show you the safe changes it knows about. It has not measured them on your game, so any gain is expected, not proven."
+        "sentenceNoJourney": "Compy can show you the reversible changes it knows about. It has not measured them on your game, so any gain is expected, not proven."
       },
       "wantMonitor": {
         "sentence": "Compy can put your frame rate on screen while you play and keep a summary of the run, so “it felt smoother” becomes a number you can check."
@@ -427,7 +427,7 @@
       "estimateSuffix": "(estimate)",
       "notMeasured": "not measured",
       "noSession": "Play a session to see this — Compy captures it from outside the game.",
-      "activeChangesLabel": "Safe changes active",
+      "activeChangesLabel": "Reversible changes active",
       "trustLedgerLabel": "Trust ledger",
       "changesTracked_one": "change tracked",
       "changesTracked_other": "changes tracked",
@@ -468,8 +468,8 @@
     },
     "dialedInHeadline": "You're ready to play",
     "dialedInSub": "Every check Compy could read came back right · {{changeNote}}.",
-    "changeNote_one": "{{count}} safe change active & reversible",
-    "changeNote_other": "{{count}} safe changes active & reversible",
+    "changeNote_one": "{{count}} change active & reversible",
+    "changeNote_other": "{{count}} changes active & reversible",
     "noChangeNote": "nothing needs changing",
     "readyWorthFixing_one": "Every check Compy could read came back right. {{count}} thing is listed below as worth a look.",
     "readyWorthFixing_other": "Every check Compy could read came back right. {{count}} things are listed below as worth a look.",
@@ -481,8 +481,8 @@
     "dismissedCount_one": "{{count}} check you set aside isn't counted.",
     "dismissedCount_other": "{{count}} checks you set aside aren't counted.",
     "readyMeasuredClean": "Ready to play — this rig measured clean today.",
-    "changeNoteReversible_one": "{{count}} safe change active & reversible. ",
-    "changeNoteReversible_other": "{{count}} safe changes active & reversible. ",
+    "changeNoteReversible_one": "{{count}} change active & reversible. ",
+    "changeNoteReversible_other": "{{count}} changes active & reversible. ",
     "changeNoteUnknown": "Compy can't read its change record right now. ",
     "noChangeWithoutSayso": "Nothing changes without your say-so.",
     "lastSessionFallback": "Last session"
@@ -736,15 +736,15 @@
     },
     "tabBlurb": {
       "home": "Is your PC OK right now — the verdict, and what's worth a look.",
-      "check": "Scan game-readiness, then apply the safe fixes it finds for your rig.",
+      "check": "Scan game-readiness, then apply the reversible fixes it finds for your rig.",
       "play": "Watch live FPS, 1% lows and temps — with a debrief after each session.",
       "fix": "Apply and undo reversible tweaks — every change logged in the ledger.",
       "learn": "The measured record of what actually works — and the myths that don't. Its library is the Field Guide.",
       "lab": "Go deeper: benchmarks, latency and system diagnostics.",
       "games": "Every game Compy has measured, and how each one runs — where making a game better starts.",
       "problems": "Crashes, freezes and restarts from Windows' own records — find out what went wrong.",
-      "mergedFix": "Check what's worth a look, then apply the safe fixes — every change undoable in the ledger.",
-      "groundLab": "Check what's worth a look and apply the safe fixes — every change undoable — then prove it with benchmarks, latency and diagnostics."
+      "mergedFix": "Check what's worth a look, then apply the fixes — every change undoable in the ledger.",
+      "groundLab": "Check what's worth a look and apply the fixes — every change undoable — then prove it with benchmarks, latency and diagnostics."
     }
   },
   "glass": {

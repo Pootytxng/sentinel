@@ -854,8 +854,8 @@ pub(crate) fn shared_controller_advisory(loads: &[UsbControllerLoad]) -> Option<
             "other low-traffic input devices"
         };
         return Some(format!(
-            "Your mouse shares this controller ({}) with {neighbors}. Harmless — they send a few \
-             bytes per keypress, not a constant stream. Full isolation only matters if you're \
+            "Your mouse shares this controller ({}) with {neighbors}. They send a few \
+             bytes per keypress, not a constant stream, so this adds little. Full isolation only matters if you're \
              chasing the last microsecond of 1000Hz+ consistency.",
             c.controller_name
         ));
@@ -887,7 +887,7 @@ pub(crate) fn wired_vs_wireless_advisory(loads: &[UsbControllerLoad]) -> Option<
     Some(format!(
         "{wireless} looks like a wireless connection. A modern 2.4 GHz gaming receiver is competitive \
          with wired — about a millisecond more, and rock-steady; Bluetooth adds noticeably more lag and \
-         jitter. For the lowest, most consistent input latency a wired connection is the safe pick, but \
+         jitter. For the lowest, most consistent input latency a wired connection is the one to pick, but \
          a good 2.4 GHz dongle is plenty for most play. (Read from the device name — if it's wrong, \
          trust your own setup over this.)"
     ))
@@ -1924,7 +1924,7 @@ mod latency_tests {
         }];
         assert_eq!(quiet[0].severity(), "info");
         let a = shared_controller_advisory(&quiet).expect("advisory present");
-        assert!(a.contains("Harmless"));
+        assert!(a.contains("adds little"));
         assert!(a.contains("AMD USB 3.10"));
 
         // Mouse + streaming audio dongle → actionable ATTENTION copy that names both + the fix.

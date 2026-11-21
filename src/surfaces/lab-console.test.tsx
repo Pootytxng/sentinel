@@ -411,7 +411,7 @@ describe("LabConsole", () => {
     renderConsole();
     // Two unapplied safe recs in the fixture → the gauge reads "2 · measured", never NOT-YET.
     const bl = reading(3);
-    expect(bl.textContent).toContain("Safe stack");
+    expect(bl.textContent).toContain("Reversible stack");
     expect(bl.querySelector(".ag-v")!.textContent).toBe("2");
     expect(bl.querySelector(".ag-tag-ny")).toBeNull(); // NOT the NOT-YET tag
   });
@@ -625,7 +625,7 @@ describe("LabConsole — Test's own reading set (spec 2026-08-21-test-rig-readin
     expect(readingLabel(0)).toBe("Proven");
     expect(readingLabel(1)).toBe("Noise floor");
     expect(readingLabel(2)).toBe("Instruments read");
-    expect(readingLabel(3)).toBe("Safe stack");
+    expect(readingLabel(3)).toBe("Reversible stack");
     // ...and the strip sits UNDER the canvas, never over it. The handoff is explicit that the real
     // rig stays the focal surface and its canvas is not to be covered with click targets or
     // diagrams; four rings floating in its corners were doing exactly that.

@@ -949,7 +949,7 @@ pub(crate) static INVENTORY: &[InventoryRow] = &[
         writers: &["atomic_write.rs"],
         category: Transient,
         personal: &[ProgramNames, PurchaseDetail],
-        contains: "A hidden temporary copy beside a file being replaced safely (benchmark, comparison, drift, noise floors, readiness dismissals, licence). Renamed into place when complete.",
+        contains: "A hidden temporary copy beside a file being replaced (benchmark, comparison, drift, noise floors, readiness dismissals, licence). Renamed into place when complete.",
         created: "during every save of those files",
         sandbox: Follows,
         names_in_code: &[],

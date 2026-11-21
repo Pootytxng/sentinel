@@ -166,7 +166,7 @@ impl DataRootDecision {
                 effective,
                 evidence,
             } => Some(format!(
-                "Compy's data folder is being redirected, so it cannot safely record or undo \
+                "Compy's data folder is being redirected, so it cannot record or undo \
                  changes. It would write to {} instead of your real Compy folder. {} Close Compy \
                  and start it from your Start menu or desktop shortcut — not from inside another \
                  app — then try again.",

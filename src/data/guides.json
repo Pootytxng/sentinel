@@ -81,7 +81,7 @@
     "name": "Set a sane fan curve",
     "aliases": ["fan curve", "fan curve setup", "cooling", "stop thermal throttling", "custom fan curve"],
     "tier": "safe",
-    "goal": "Keep parts cool enough to hold their boost clocks — the safest performance change there is, since modern chips run faster when cooler.",
+    "goal": "Keep parts cool enough to hold their boost clocks — modern chips run faster when cooler.",
     "steps": [
       "Use your vendor's software for fan control — your motherboard's tuning app for case and CPU fans, your graphics card's app for the GPU fan.",
       "Aim for a gentle ramp: quiet at idle, climbing steadily as temperature rises, full speed only when genuinely hot.",

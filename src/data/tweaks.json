@@ -72,7 +72,7 @@
     "aliases": ["fan curve", "thermal throttling fix", "undervolt cooling"],
     "verdict": "real",
     "what": "Tunes case/GPU/CPU fan response so parts stay cooler under load.",
-    "why": "One of the safest 'performance' tweaks there is: modern parts boost higher when cooler, so a sane curve buys free sustained clocks. No registry to edit — the one real trade-off is fan noise, since a more aggressive curve spins up louder, so it is a comfort-vs-cooling balance you set to taste."
+    "why": "A low-effort 'performance' tweak: modern parts boost higher when cooler, so a sane curve buys free sustained clocks. No registry to edit — the one real trade-off is fan noise, since a more aggressive curve spins up louder, so it is a comfort-vs-cooling balance you set to taste."
   },
   {
     "id": "nvidia-reflex",
@@ -153,7 +153,7 @@
     "aliases": ["game dvr", "game bar", "background recording", "capture off"],
     "verdict": "real",
     "what": "Turns off Windows' always-on gameplay capture buffer.",
-    "why": "Real on weaker rigs — capture overhead you may never have wanted. Harmless to disable if you don't use instant replay; Compy treats it as a safe, reversible toggle."
+    "why": "Real on weaker rigs — capture overhead you may never have wanted. If you don't use instant replay, you aren't switching off anything you use; Compy saves the current setting first, so you can undo it."
   },
   {
     "id": "hags",
@@ -178,7 +178,7 @@
     "aliases": ["diagtrack", "telemetry", "connected user experiences"],
     "verdict": "real",
     "what": "Stops Windows' usage/diagnostics reporting services.",
-    "why": "The cleanest debloat win — no effect on stability or updates. Honesty note: this is about privacy and background hygiene, not FPS. Compy offers it as a safe, reversible toggle."
+    "why": "The cleanest debloat win — no effect on stability or updates. Honesty note: this is about privacy and background hygiene, not FPS. Compy saves the current setting first, so you can undo it."
   },
   {
     "id": "sysmain-superfetch",
@@ -195,7 +195,7 @@
     "aliases": ["startup apps", "msconfig", "boot time", "autostart"],
     "verdict": "real",
     "what": "Stops vendor bloat (RGB suites, updaters) from launching at boot.",
-    "why": "The biggest FELT win in all of debloating — faster boots, fewer background stutter sources. Safe: disabling startup doesn't uninstall anything."
+    "why": "The biggest FELT win in all of debloating — faster boots, fewer background stutter sources. Disabling a startup entry doesn't uninstall anything."
   },
   {
     "id": "windows-search-off",

@@ -578,7 +578,7 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
             next_step: NextStep::safe(
                 "Check your temperatures under load",
                 "Run the game (or a stress test) with a temperature overlay and watch the GPU. If it \
-                 climbs back toward this range, improving case airflow or clearing dust is the safe place \
+                 climbs back toward this range, improving case airflow or clearing dust is the place \
                  to start. Re-pasting or undervolting are bigger jobs to research first, not do blind.",
             ),
             beyond_us: false,
@@ -825,7 +825,7 @@ fn rule_beyond_us(inc: &Incident) -> Option<Assessment> {
             &format!(
                 "Search that stop code ({code}) on Microsoft's docs, and share this incident's receipt \
                  (the code, any faulting module, and the time) on a reputable hardware forum. That's the \
-                 honest next move — this is beyond what Compy can safely narrow down for you."
+                 honest next move — this is beyond what Compy can narrow down for you."
             ),
         ),
         beyond_us: true,
