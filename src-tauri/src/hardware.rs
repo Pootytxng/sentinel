@@ -8,7 +8,7 @@
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use sysinfo::{Disks, System};
+use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
 use winreg::enums::HKEY_LOCAL_MACHINE;
 use winreg::RegKey;
 use wmi::{COMLibrary, WMIConnection};
@@ -1952,7 +1952,7 @@ pub(crate) fn service_state_and_start_mode(name: &str) -> Option<(String, String
 pub(crate) fn collect_hardware() -> HardwareInfo {
     // Hardware is static for a session, but several commands need it — on startup
     // get_recommendations / get_diagnostics / get_game_readiness / get_priorities fire in
-    // parallel, and each used to trigger its own full System::new_all() + WMI sweep on a fresh
+    // parallel, and each used to trigger its own full sysinfo + WMI sweep on a fresh
     // thread (4–5 simultaneous scans contending for CPU + WMI). Cache the snapshot so they
     // collapse to ONE scan: get_or_init is synchronized, so concurrent first-calls block on the
     // single scan and then all clone the result. (A hot-plugged drive/monitor won't appear until
@@ -2151,9 +2151,23 @@ fn refresh_live_fields(hw: &mut HardwareInfo) {
     }
 }
 
+/// What the hardware snapshot asks sysinfo to read: the CPU list (brand, frequency, core count) and
+/// memory (RAM and swap totals). Deliberately no process refresh of any kind: a process refresh
+/// opens every running process, a game included, with PROCESS_VM_READ and reads its memory
+/// (ARCHITECTURE_LOCKS.md, "Boundaries that remain absolute"). Nothing here needs a process field.
+fn hardware_refresh_kind() -> RefreshKind {
+    RefreshKind::nothing()
+        .with_cpu(CpuRefreshKind::everything())
+        .with_memory(MemoryRefreshKind::everything())
+}
+
+/// The one place the hardware collection path builds its `System`.
+fn hardware_system() -> System {
+    System::new_with_specifics(hardware_refresh_kind())
+}
+
 fn collect_hardware_inner() -> HardwareInfo {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    let sys = hardware_system();
 
     let cpu_brand = sys
         .cpus()
@@ -3892,5 +3906,90 @@ mod parser_tests {
         let _ = parse_smbios_memory_devices(&[17, 0x40, 1, 2, 3]);
         // All zeros.
         let _ = parse_smbios_memory_devices(&[0u8; 64]);
+    }
+}
+
+/// Safety guard (ARCHITECTURE_LOCKS.md, "Boundaries that remain absolute": no game-memory read).
+/// The hardware snapshot runs once at app start, possibly with a game already running, and a sysinfo
+/// process refresh opens every process with PROCESS_VM_READ and reads its memory. The hardware code
+/// never uses a process field, so no process refresh may exist in this file's production code.
+#[cfg(test)]
+mod no_process_refresh_guard {
+    use super::{hardware_refresh_kind, hardware_system};
+
+    const FORBIDDEN: &[&str] = &[
+        "new_all",
+        "refresh_all",
+        "refresh_processes",
+        "ProcessRefreshKind",
+        "ProcessesToUpdate",
+        ".processes(",
+        ".process(",
+    ];
+
+    /// Production text only: drops every `#[cfg(test)]` item (a column-0 attribute through the
+    /// column-0 closing brace, the shape every test module in this file has) and every `//` line.
+    fn production_text(src: &str) -> String {
+        let mut out = Vec::new();
+        let mut in_test = false;
+        for line in src.lines() {
+            if in_test {
+                if line == "}" {
+                    in_test = false;
+                }
+                continue;
+            }
+            if line == "#[cfg(test)]" {
+                in_test = true;
+                continue;
+            }
+            if line.trim_start().starts_with("//") {
+                continue;
+            }
+            out.push(line);
+        }
+        out.join("\n")
+    }
+
+    fn violations(text: &str) -> Vec<&'static str> {
+        FORBIDDEN.iter().copied().filter(|p| text.contains(p)).collect()
+    }
+
+    #[test]
+    fn hardware_production_code_never_refreshes_processes() {
+        let prod = production_text(include_str!("hardware.rs"));
+        assert!(prod.contains("fn collect_hardware_inner"), "the scan must have been kept in the text");
+        assert_eq!(violations(&prod), Vec::<&str>::new(), "hardware.rs production code must not refresh or read processes");
+    }
+
+    #[test]
+    fn the_guard_is_not_vacuous() {
+        assert_eq!(violations("let mut sys = System::new_all();\nsys.refresh_all();"), vec!["new_all", "refresh_all"]);
+        assert_eq!(violations("sys.refresh_processes_specifics(ProcessesToUpdate::All, true, k);"), vec!["refresh_processes", "ProcessesToUpdate"]);
+        assert_eq!(violations("for p in sys.processes() {}"), vec![".processes("]);
+        assert_eq!(violations("sys.process(pid);"), vec![".process("]);
+        // Comments and test modules do not count; code does.
+        let text = "// sys.refresh_all();\nfn a() {}\n#[cfg(test)]\nmod t {\n    fn b() { sys.refresh_all(); }\n}\nfn c() {}";
+        assert!(violations(&production_text(text)).is_empty());
+        assert_eq!(violations(&production_text("fn a() { sys.refresh_all(); }")), vec!["refresh_all"]);
+    }
+
+    #[test]
+    fn the_collection_path_builds_its_system_through_the_narrow_function() {
+        let prod = production_text(include_str!("hardware.rs"));
+        let start = prod.find("fn collect_hardware_inner").expect("collect_hardware_inner");
+        let body = &prod[start..];
+        assert!(body.contains("hardware_system()"), "collect_hardware_inner builds its System through hardware_system()");
+        assert!(!body.contains("System::new("), "and builds no other System there");
+    }
+
+    #[test]
+    fn the_refresh_kind_asks_for_cpu_and_memory_and_no_processes() {
+        let kind = hardware_refresh_kind();
+        assert!(kind.processes().is_none(), "no process refresh");
+        assert!(kind.cpu().is_some(), "CPU brand/frequency/cores are used");
+        assert!(kind.memory().is_some(), "RAM and swap totals are used");
+        // The CPU list still comes out of the narrow construction (brand, core count are built there).
+        assert!(hardware_system().cpus().len() >= 1);
     }
 }
