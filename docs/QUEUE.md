@@ -5,17 +5,17 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 The push check can fail on a vitest 15 s timeout when several builds share the PC (one retry passed; not a code failure). A push is confirmed only by the "main -> main" line.
 
 ## NOW (in flight, each on its own branch)
-- [ ] Clear my data wiring prerequisites (claude/d6-clearlocks; in progress)
-- Desk build on the owner's PC: 0c4057c7 (installed and runtime-proved 2026-11-21)
-- [ ] Security slice 1: system tools by absolute path, pinned child environment — closes planted-tool and inherited-environment risk (claude/m1-hard-1; reviewed and green, waiting for the owner's direct go-ahead to push)
-- [ ] Parked: capture without elevation when the account is in "Performance Log Users" (claude/d1s1-capture e95c81de, verified); waits behind claude/m1-hard-1 c5e4b3af and needs a rebase over g2-handles (monitoring.rs)
+- Nothing building. Desk build on the owner's PC: fc01eff9 (installed and runtime-proved 2026-11-21)
+- Parked: claude/m1-hard-1 d04c81e9 (rebased onto main today, 2,796 Rust tests green, every tool spawn covered; confirmed real on the installed build: a program planted in Compy's per-user install folder is run, twice with administrator rights; owner brief `_train\m1-owner-brief.md`; lands only on the owner's words "land the security slice")
+- Parked: claude/d1s1-capture 10b3bcea, behind claude/m1-hard-1
 
 ## NEXT (in order)
+- [ ] Land the security slice (claude/m1-hard-1) when the owner says "land the security slice"
+- [ ] Per-machine install: the per-user install folder itself is user-writable
 - [ ] Owner capture checks (`_train\g3-owner-capture-checks.md`)
-- [ ] Vocabulary slice 2: the remaining "Likely" renders
-- [ ] The app shows the helper's unreadable-tick marker
 - [ ] Capture slice 2
 - [ ] Clear my data screen
+- [ ] Consumer panel follow-up
 - [ ] Handles audit S5: the direct query-only opens of the game (fps.rs ~520/~643, monitoring.rs ~896)
 - [ ] Remove or rewrite the #[ignore] test in running_at_start.rs (~1180) that opens every process
 - [ ] Paramedic card: drift evidence lines name the setting (driftApplied/driftOther)
@@ -57,6 +57,8 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - [ ] Remaining diet steps — agent machinery removal (needs the owner's yes for the project settings file); docs archive
 
 ## Waiting on the owner
+- Decide: the tier name "starter" (the app now says "N starter tweaks ready", "Starter stack", "Apply all starter fixes").
+- Decide: the Test bench rule for "Likely better" (two agreeing comparisons).
 - Decide: should Home count an unapplied optional tweak as "worth a look"?
 - Privacy questions and the lawyer list (`_train\t2-privacy-for-owner-and-lawyer.md`).
 - Site copy differences (`_train\t2-site-privacy-diff.md`, `_train\c3-site-claims.md`).
@@ -81,6 +83,13 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee"; a strength above the lowest needs two independent supports and no contradicting evidence (in the Paramedic's code and now the Problems room's; not yet written in the constitution); the full health check shows no score ring (removed 2026-11-20, one revert restores it).
 
 ## Done (newest first)
+- 2026-11-21 - desk build fc01eff9 installed and stamped (installed over 0c4057c7)
+- 2026-11-21 - The app no longer calls changes or itself "safe": the "starter" tier is named, the mechanism is stated instead of promises; guard src/i18n/safe-promise-claims.test.ts fc01eff9, 8937664f
+- 2026-11-21 - Seconds Compy could not measure are counted from the helper's own counter, shown live, stored per session and excluded from the numbers; a mostly-unread session is not graded or compared anywhere 7c55c0c9, fd0cdc1d
+- 2026-11-21 - Planted-tool and powercfg tests can no longer skip or hang 7bb265a0, 93f23905
+- 2026-11-21 - Paramedic card: one earliest change that names Compy's own changes; the Windows Update line says only what its record shows; memory evidence scoped per session; Escape closes the card 9ab15eec, c2ce8e16
+- 2026-11-21 - Problems room focus and count line, health-check count, the last "Likely" words; Test bench words follow the data 9d1472fa
+- 2026-11-21 - Clear my data wiring prerequisites (commands still unregistered) a30ae21f
 - 2026-11-21 - desk build 0c4057c7 installed and stamped (installed over a0cfaca3)
 - 2026-11-21 - Screen fixes from the real-app check: Problems room groups folded by default, with a line for the group holding the marked record; Home says only what was read; one memory formatter; History wording; Monitor driver/overlay lines f07ca7f0..0c4057c7
 - 2026-11-21 - PRIVACY.md v0.7 checked against code, and the installer description 5c22778a, 3c7149b5, 21884dd8, 7686ff53
@@ -129,6 +138,7 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - 2026-11-20 — §38 recorded ca2989ef
 
 ## Session log (newest 10)
+- 2026-11-21 desk-install session 7: built and installed main fc01eff9 over 0c4057c7, proved at runtime, stamped in RELEASE_STATE; look-only re-check in _train\view-1121d.
 - 2026-11-21 desk-install session 6: built and installed main 0c4057c7 over a0cfaca3, proved at runtime, stamped in RELEASE_STATE; look-only re-check in _train\view-1121c.
 - 2026-11-21 desk-install session 5: built and installed main a0cfaca3 over 4115e40e, proved at runtime, stamped in RELEASE_STATE; look-only checks in _train\view-1121b.
 - 2026-11-21 session: landed the game-claims correction, export redaction, grouped crash records, first-look running-now, power-plan and hardware-sweep safety fixes (listed under Done; each reviewed, each through the push check). Install of current main and look-only checks blocked at 06:00 PT (PC not idle); installed build is still 4115e40e. g2-handles and n1-drift in review; d1s1-capture parked.
