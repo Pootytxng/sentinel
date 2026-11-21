@@ -394,7 +394,7 @@ you requested. It installs no kernel driver of its own and does not inject code 
 ## Children's privacy
 
 Compy is a PC utility and is not directed at children. The app sends no personal information to us. The website
-waitlist collects an email address; it is not meant for children (the owner has yet to set an age limit).
+waitlist collects an email address; it is not meant for children.
 
 ## Changes to this policy
 
