@@ -23,9 +23,10 @@
 //! * A working file (`Category::Transient`) newer than an hour may belong to a running operation, so it
 //!   is kept and reported.
 //!
-//! This slice (D4-2) exposes `Scope::PlayHistory` through two commands. `Scope::Everything` is planned
-//! and executed by the same code but has no command yet (D4-3 adds the lock order, the clear-intent
-//! file and the start-up roll-forward). The core below this file's `live wrappers` marker takes the root as
+//! This slice (D4-2) ships the core and tests only. The two live wrappers at the bottom are NOT registered
+//! as commands until the UI/relaunch slice (see the note above them). `Scope::Everything` is planned and
+//! executed by the same code but has no wrapper yet (D4-3 adds the lock order, the clear-intent file and
+//! the start-up roll-forward). The core below this file's `live wrappers` marker takes the root as
 //! an argument and never resolves a data root itself; every test passes a temp folder it made.
 
 #![allow(dead_code)] // `Scope::Everything` and the report helpers are first used by D4-3 and D4-4.
@@ -72,6 +73,17 @@ const LEDGER_FILE: &str = "history.json";
 /// Row ids the policy singles out. A test checks each is still an inventory row.
 const EXPERIMENTS_ID: &str = "experiments";
 const LICENCE_ID: &str = "license";
+/// The Trial store. Read (never moved) by `read_trial_store`.
+const EXPERIMENTS_FILE: &str = "experiments.json";
+/// Files an elevated helper leaves behind. They are not play history: a leftover batch receipt can be
+/// the only evidence of which items of an interrupted batch finished. Kept by `PlayHistory`.
+const ELEVATED_LEFTOVER_IDS: &[&str] = &[
+    "elevation-batch-receipts",
+    "gaming-elevation-receipts",
+    "gaming-restore-receipts",
+    "memcompress-result",
+    "elevation-ticket",
+];
 
 // ---- the plan ---------------------------------------------------------------------------------
 
@@ -81,6 +93,10 @@ pub(crate) struct PlannedDelete {
     pub(crate) rel: String,
     pub(crate) row_id: &'static str,
     pub(crate) category: &'static str,
+    /// Size and modified time (ms since 1970) when planned. They are part of the fingerprint, so a file
+    /// rewritten after the list was shown makes the executor refuse: "things changed since you looked".
+    pub(crate) size: u64,
+    pub(crate) modified_ms: u128,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -172,7 +188,7 @@ impl ClearPlan {
         let mut h = Sha256::new();
         h.update(format!("{:?}\n", self.scope));
         for d in &self.delete {
-            h.update(format!("{}|{}\n", d.rel, d.row_id));
+            h.update(format!("{}|{}|{}|{}\n", d.rel, d.row_id, d.size, d.modified_ms));
         }
         self.fingerprint = format!("{:x}", h.finalize());
         self
@@ -183,8 +199,6 @@ impl ClearPlan {
 /// a test sets them.
 #[derive(Debug, Clone)]
 pub(crate) struct ClearFacts {
-    /// A Trial is starting or running.
-    pub(crate) trial_active: bool,
     /// A capture (a game being measured) is running.
     pub(crate) capture_active: bool,
     /// `Everything` only: also delete the licence token.
@@ -424,9 +438,15 @@ struct Run<'a> {
     ctx: &'a Ctx,
 }
 
+/// The live Gaming Mode contract file itself.
 fn is_live_contract(rel: &str) -> bool {
-    let l = rel.to_lowercase();
-    l == "gaming-session.json" || l.ends_with(".tmp")
+    rel.eq_ignore_ascii_case("gaming-session.json")
+}
+
+/// A working file beside the contract (`gaming-session.json.tmp`, `.gaming-session.json.<pid>-<n>.tmp`):
+/// a crash leftover or a save in flight. Named truthfully: it is not "Gaming Mode is running".
+fn is_contract_working_file(rel: &str) -> bool {
+    rel.to_lowercase().ends_with(".tmp")
 }
 
 impl Run<'_> {
@@ -461,6 +481,12 @@ impl Run<'_> {
             if is_live_contract(rel) {
                 return Verdict::Refuse("gaming_mode_active", "Gaming Mode is holding changes right now. End it first.");
             }
+            if is_contract_working_file(rel) {
+                return Verdict::Refuse(
+                    "gaming_working_file",
+                    "A Gaming Mode working file was left behind. It may belong to a session that did not finish, so Compy does not delete anything until it is dealt with.",
+                );
+            }
             return if everything {
                 Verdict::Refuse(
                     "gaming_orphan",
@@ -470,6 +496,18 @@ impl Run<'_> {
                 Verdict::Keep("undo_data", "Kept: it may be needed to restore changes Gaming Mode made.")
             };
         }
+        // A damaged Trial store set aside is kept, never deleted (experiment.rs `set_aside_damaged`): a
+        // Pending start whose change landed without a receipt is named nowhere but that store.
+        if row.category == Category::SetAside && class.id == EXPERIMENTS_ID {
+            return if everything {
+                Verdict::Refuse(
+                    "trial_record_set_aside",
+                    "A damaged copy of the Trial records was set aside. It may be the only record of a change a Trial made, so Compy does not delete it.",
+                )
+            } else {
+                Verdict::Keep("trial_record_set_aside", "Kept: a damaged copy of the Trial records may be the only record of a change a Trial made.")
+            };
+        }
         let in_scope = match class.category {
             Category::PlayHistory | Category::HardwareFacts | Category::Transient | Category::SetAside => true,
             Category::Support | Category::Cache | Category::Choices | Category::UserText => everything,
@@ -477,6 +515,9 @@ impl Run<'_> {
         };
         if !in_scope {
             return Verdict::Keep("not_in_this_choice", "Not part of this choice.");
+        }
+        if !everything && ELEVATED_LEFTOVER_IDS.contains(&row.id) {
+            return Verdict::Keep("elevated_leftover", "Not play history: a file an elevated helper left behind stays.");
         }
         if class.id == LICENCE_ID && !self.facts.remove_licence {
             return Verdict::Keep("licence_kept", "The Compy Pro licence stays unless you tick the box to remove it.");
@@ -512,6 +553,30 @@ fn is_link(meta: &fs::Metadata) -> bool {
     false
 }
 
+enum TrialRead {
+    NoStore,
+    /// A record is `Pending` or `Running`.
+    Active,
+    Idle,
+    /// Unreadable or damaged. Never read as "no Trial".
+    Unknown(String),
+}
+
+/// A PURE read of the Trial store: bytes and a parse, nothing moved. (`experiment::load_store_checked_from`
+/// renames a damaged file to `.corrupt`, so a plan must not use it.)
+fn read_trial_store(root: &Path) -> TrialRead {
+    let bytes = match fs::read(root.join(EXPERIMENTS_FILE)) {
+        Ok(b) => b,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return TrialRead::NoStore,
+        Err(e) => return TrialRead::Unknown(e.to_string()),
+    };
+    match serde_json::from_slice::<crate::experiment::ExperimentStore>(&bytes) {
+        Ok(s) if crate::experiment::active_trial(&s).is_some() => TrialRead::Active,
+        Ok(_) => TrialRead::Idle,
+        Err(e) => TrialRead::Unknown(e.to_string()),
+    }
+}
+
 fn check_ledger(root: &Path) -> LedgerCheck {
     match crate::history::not_rolled_back_titles_at(&root.join(LEDGER_FILE)) {
         Ok(t) if t.is_empty() => LedgerCheck::Clean,
@@ -545,8 +610,19 @@ pub(crate) fn plan_clear(root: &Path, scope: Scope, facts: &ClearFacts) -> Clear
     if facts.capture_active {
         plan.refuse("capture_running", "Compy is measuring a game right now. Close the game or stop measuring first.", None);
     }
-    if facts.trial_active {
-        plan.refuse("trial_running", "A Trial is running. Let it finish or stop it first.", None);
+    match read_trial_store(root) {
+        TrialRead::Idle | TrialRead::NoStore => {}
+        // Pending is a start that may have changed Windows (its receipt can be missing): a change may be on.
+        TrialRead::Active => plan.refuse(
+            "trial_running",
+            "A Trial is starting, running or was interrupted mid-start, so a change it made may still be on. Let it finish or stop it first.",
+            None,
+        ),
+        TrialRead::Unknown(_) => plan.refuse(
+            "trial_state_unknown",
+            "Compy can't read its Trial records, so it can't confirm that no Trial change is still on. The file was left exactly as it is.",
+            None,
+        ),
     }
     let ledger = check_ledger(root);
     if scope == Scope::Everything {
@@ -635,7 +711,20 @@ fn visit(path: &Path, rel: String, depth: u8, run: &Run, plan: &mut ClearPlan) {
         return;
     };
     match run.decide(&hit, &rel, meta.modified().ok()) {
-        Verdict::Delete => plan.delete.push(PlannedDelete { rel, row_id: hit.row.id, category: cat_name(hit.class.category) }),
+        Verdict::Delete => {
+            let modified_ms = meta
+                .modified()
+                .ok()
+                .and_then(|m| m.duration_since(SystemTime::UNIX_EPOCH).ok())
+                .map_or(0, |d| d.as_millis());
+            plan.delete.push(PlannedDelete {
+                rel,
+                row_id: hit.row.id,
+                category: cat_name(hit.class.category),
+                size: meta.len(),
+                modified_ms,
+            });
+        }
         Verdict::Keep(code, detail) => plan.kept.push(Kept { rel, code, detail }),
         Verdict::Refuse(code, detail) => {
             plan.refuse(code, detail, Some(&rel));
@@ -718,6 +807,15 @@ enum Removed {
 /// folders inside the root. Never follows a link.
 fn delete_one(root: &Path, rel: &str) -> Result<Removed, String> {
     let segs = validate_rel(rel)?;
+    // Re-checked immediately before every delete: the root itself is a plain folder, not a link. These
+    // checks are by path, so a folder swapped for a junction between a check and `remove_file` is not
+    // caught; deleting through a handle opened with FILE_FLAG_OPEN_REPARSE_POINT and checking its final
+    // path is the full fix (listed in `d5-clear-before-wiring.md`).
+    match fs::symlink_metadata(root) {
+        Ok(m) if m.is_dir() && !is_link(&m) => {}
+        Ok(_) => return Err("the data folder is a link or not a folder, so nothing was touched".to_string()),
+        Err(e) => return Err(format!("the data folder could not be checked ({e})")),
+    }
     let canon_root = root.canonicalize().map_err(|e| format!("the data folder cannot be resolved ({e})"))?;
     let mut dir = root.to_path_buf();
     for seg in &segs[..segs.len() - 1] {
@@ -790,49 +888,44 @@ pub(crate) fn execute_clear(root: &Path, plan: &ClearPlan, facts: &ClearFacts) -
 }
 
 // ---- live wrappers (the only code below that touches the running app) ------------------------------
+//
+// NOT REGISTERED as Tauri commands, on purpose (review r1, B2): no `#[tauri::command]`, no entry in
+// `generate_handler!`, `build.rs` APP_COMMANDS or `capabilities/default.json`. They are ordinary
+// functions nothing calls. What must exist BEFORE they are registered is in
+// `C:\Users\Kuya\code\_train\d5-clear-before-wiring.md` (per-store locks, in-memory caches, the
+// browser keys, typed refusals, off the main thread, a handle-based delete, the ledger lock for
+// Everything, honest screen copy).
 
-/// Reads the facts only the running app knows. The experiment store gate must already be held.
-fn live_facts(root: &Path) -> Result<ClearFacts, String> {
-    let trial_active = crate::experiment::load_store_checked_from(&root.join(EXPERIMENTS_FILE))
-        .map(|s| crate::experiment::active_trial(&s).is_some())?;
-    Ok(ClearFacts {
-        trial_active,
+/// Reads the facts only the running app knows.
+fn live_facts() -> ClearFacts {
+    ClearFacts {
         capture_active: crate::monitoring::fps_active().load(std::sync::atomic::Ordering::Acquire),
         remove_licence: false,
         now: SystemTime::now(),
-    })
+    }
 }
 
-const EXPERIMENTS_FILE: &str = "experiments.json";
-
-/// What "Clear play history" would delete, keep and leave alone, right now. Changes nothing.
-#[tauri::command]
+/// What "Clear play history" would delete, keep and leave alone, right now. A pure read: the Trial store
+/// is read without being moved.
 pub(crate) fn plan_clear_play_history() -> Result<ClearPlan, String> {
     let root = crate::data_root::mutation_root()?;
-    let _gate = crate::experiment::lock_store()?;
-    let facts = live_facts(root.path())?;
-    Ok(plan_clear(root.path(), Scope::PlayHistory, &facts))
+    Ok(plan_clear(root.path(), Scope::PlayHistory, &live_facts()))
 }
 
 /// Deletes the play history the plan with `expected_fingerprint` listed. Never touches `history.json*`.
-/// Refuses (deleting nothing) when the files changed since that plan or anything blocks the clear.
-#[tauri::command]
-pub(crate) fn clear_play_history(expected_fingerprint: String) -> Result<ClearReport, String> {
+/// The outcome is typed: refusals keep their codes, and a list that differs from the one shown is
+/// `PlanChanged` ("things changed since you looked").
+pub(crate) fn clear_play_history(expected_fingerprint: &str) -> Result<ClearOutcome, String> {
     let root = crate::data_root::mutation_root()?;
     // The experiment store gate is the outermost lock and the only one held: no new lock order.
     let _gate = crate::experiment::lock_store()?;
-    let facts = live_facts(root.path())?;
+    let facts = live_facts();
     let plan = plan_clear(root.path(), Scope::PlayHistory, &facts);
     if plan.fingerprint != expected_fingerprint {
-        return Err("The files changed since the list was shown, so nothing was deleted. Look at the list again.".to_string());
+        return Ok(ClearOutcome::PlanChanged);
     }
-    match execute_clear(root.path(), &plan, &facts) {
-        ClearOutcome::Refused(r) => Err(r.iter().map(|x| x.detail.clone()).collect::<Vec<_>>().join(" ")),
-        ClearOutcome::PlanChanged => Err("The files changed while clearing started, so nothing was deleted. Try again.".to_string()),
-        ClearOutcome::Done(report) => Ok(report),
-    }
+    Ok(execute_clear(root.path(), &plan, &facts))
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -903,7 +996,7 @@ mod tests {
     }
 
     fn facts() -> ClearFacts {
-        ClearFacts { trial_active: false, capture_active: false, remove_licence: false, now: SystemTime::now() }
+        ClearFacts { capture_active: false, remove_licence: false, now: SystemTime::now() }
     }
 
     /// Two hours on, so every working file counts as old enough.
@@ -948,6 +1041,7 @@ mod tests {
         ] {
             t.put(f, "x");
         }
+        t.put("experiments.json", r#"{"schema_version":1,"experiments":[]}"#);
         t.put("care/incident-observer.json", "x");
         t.put("support/evidence.jsonl", "x");
         t.put("exports/compy-report-20261120-101010123.md", "x");
@@ -961,7 +1055,6 @@ mod tests {
         "care/incident-observer.json",
         "compy_comparison.json",
         "drift.json",
-        "elevation-batch-1700000000000.receipts",
         "experiments.json",
         "hardware-fingerprint.json",
         "intelligence.json",
@@ -1018,7 +1111,7 @@ mod tests {
         seed(&t2);
         t2.put("notes.txt", "mine");
         let mut tampered = plan_clear(&t2.root, Scope::PlayHistory, &later());
-        tampered.delete.push(PlannedDelete { rel: "notes.txt".into(), row_id: "sessions", category: "play_history" });
+        tampered.delete.push(PlannedDelete { rel: "notes.txt".into(), row_id: "sessions", category: "play_history", size: 4, modified_ms: 0 });
         let before = t2.listing();
         assert!(matches!(execute_clear(&t2.root, &tampered, &later()), ClearOutcome::PlanChanged));
         let mut other = plan_clear(&t2.root, Scope::PlayHistory, &later());
@@ -1102,8 +1195,6 @@ mod tests {
         for scope in [Scope::PlayHistory, Scope::Everything] {
             let t = Tmp::new("flags");
             seed(&t);
-            let busy = ClearFacts { trial_active: true, ..later() };
-            assert!(plan_clear(&t.root, scope, &busy).refusals.iter().any(|r| r.code == "trial_running"));
             let capture = ClearFacts { capture_active: true, ..later() };
             assert!(plan_clear(&t.root, scope, &capture).refusals.iter().any(|r| r.code == "capture_running"));
         }
@@ -1287,6 +1378,160 @@ mod tests {
         let plan = plan_clear(&link, Scope::PlayHistory, &later());
         assert!(plan.refusals.iter().any(|r| r.code == "root_not_a_plain_folder") && plan.delete.is_empty());
         assert!(matches!(execute_clear(&link, &plan, &later()), ClearOutcome::Refused(_)));
+        assert!(real.join("sessions.json").exists());
+        fs::remove_dir(&link).unwrap();
+    }
+
+    // B1 (review r1): the Trial store is read, never moved, and its set-aside copies are never deleted
+    fn trial_store(status: &str) -> String {
+        format!(
+            r#"{{"schema_version":1,"experiments":[{{"id":"e1","rec_id":"game-mode","rec_title":"Game mode","game":"g.exe","hypothesis":"h","created_at":"2026-11-01T00:00:00Z","status":"{status}","baseline_avg_fps":100.0,"baseline_low1_fps":60.0,"ledger_watermark":0,"applied_change_id":"","noise_floor_pct":3.0}}]}}"#
+        )
+    }
+
+    #[test]
+    fn t1_a_damaged_trial_store_refuses_both_choices_and_is_not_moved() {
+        for scope in [Scope::PlayHistory, Scope::Everything] {
+            let t = Tmp::new("t1");
+            seed(&t);
+            t.put("experiments.json", "{ damaged");
+            let before = t.listing();
+            let plan = plan_clear(&t.root, scope, &later());
+            assert!(plan.refusals.iter().any(|r| r.code == "trial_state_unknown"), "{scope:?}: {:?}", plan.refusals);
+            assert!(plan.delete.is_empty());
+            assert_eq!(before, t.listing(), "planning must not rename the damaged store");
+            assert_eq!(t.read("experiments.json"), "{ damaged");
+            assert!(!t.has("experiments.json.corrupt"));
+            assert!(matches!(execute_clear(&t.root, &plan, &later()), ClearOutcome::Refused(_)));
+            assert_eq!(before, t.listing());
+        }
+    }
+
+    #[test]
+    fn t2_trial_store_set_asides_are_kept_by_play_history_and_refuse_everything() {
+        let t = Tmp::new("t2");
+        seed(&t);
+        t.put("experiments.json.corrupt", "damaged trial records");
+        t.put("experiments.json.corrupt.1700000000", "older damaged trial records");
+        t.put("experiments.json.corrupt.1700000000-1", "older still");
+        let play = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(play.can_proceed(), "{:?}", play.refusals);
+        for f in ["experiments.json.corrupt", "experiments.json.corrupt.1700000000", "experiments.json.corrupt.1700000000-1"] {
+            assert!(play.kept.iter().any(|k| k.rel == f && k.code == "trial_record_set_aside"), "{f}: {:?}", play.kept);
+            assert!(!rels(&play).contains(&f));
+        }
+        let report = done(execute_clear(&t.root, &play, &later()));
+        assert!(report.complete);
+        assert_eq!(t.read("experiments.json.corrupt"), "damaged trial records");
+        assert_eq!(t.read("experiments.json.corrupt.1700000000-1"), "older still");
+        let before = t.listing();
+        let every = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(every.refusals.iter().any(|r| r.code == "trial_record_set_aside"), "{:?}", every.refusals);
+        assert!(every.delete.is_empty());
+        assert!(matches!(execute_clear(&t.root, &every, &later()), ClearOutcome::Refused(_)));
+        assert_eq!(before, t.listing());
+    }
+
+    #[test]
+    fn t3_a_pending_or_running_trial_means_a_change_may_be_on_and_refuses_both_choices() {
+        for status in ["pending", "running"] {
+            for scope in [Scope::PlayHistory, Scope::Everything] {
+                let t = Tmp::new("t3");
+                seed(&t);
+                t.put("experiments.json", &trial_store(status));
+                let before = t.listing();
+                let plan = plan_clear(&t.root, scope, &later());
+                assert!(plan.refusals.iter().any(|r| r.code == "trial_running"), "{status} {scope:?}: {:?}", plan.refusals);
+                assert!(matches!(execute_clear(&t.root, &plan, &later()), ClearOutcome::Refused(_)));
+                assert_eq!(before, t.listing());
+            }
+        }
+        // A finished Trial does not block.
+        let t = Tmp::new("t3b");
+        seed(&t);
+        t.put("experiments.json", &trial_store("kept"));
+        assert!(plan_clear(&t.root, Scope::PlayHistory, &later()).can_proceed());
+    }
+
+    // review r1 small items
+    #[test]
+    fn t4_elevated_helper_leftovers_are_not_play_history() {
+        let names = [
+            "elevation-batch-1700000000000.receipts",
+            "gaming-elevation-ab12.receipts",
+            "gaming-restore-ab12.receipts",
+            "memcompress-restore-1700000000000.result",
+            "runtime/elev-12-3.ticket",
+        ];
+        let t = Tmp::new("t4");
+        seed(&t);
+        for n in names {
+            t.put(n, "x");
+        }
+        let play = plan_clear(&t.root, Scope::PlayHistory, &later());
+        for n in names {
+            assert!(play.kept.iter().any(|k| k.rel == n && k.code == "elevated_leftover"), "{n}: {:?}", play.kept);
+            assert!(!rels(&play).contains(&n));
+        }
+        let every = plan_clear(&t.root, Scope::Everything, &later());
+        for n in names {
+            assert!(rels(&every).contains(&n), "{n} goes with Everything");
+        }
+        for id in ELEVATED_LEFTOVER_IDS {
+            assert!(data_inventory::rows().iter().any(|r| r.id == *id), "{id} is not an inventory row");
+        }
+    }
+
+    #[test]
+    fn t5_a_gaming_working_file_is_named_truthfully_and_the_live_contract_still_says_running() {
+        for leftover in ["gaming-session.json.tmp", ".gaming-session.json.12-3.tmp"] {
+            for scope in [Scope::PlayHistory, Scope::Everything] {
+                let t = Tmp::new("t5");
+                seed(&t);
+                t.put(leftover, "{}");
+                let plan = plan_clear(&t.root, scope, &later());
+                assert!(plan.refusals.iter().any(|r| r.code == "gaming_working_file"), "{leftover} {scope:?}: {:?}", plan.refusals);
+                assert!(plan.refusals.iter().all(|r| r.code != "gaming_mode_active"), "{leftover}: must not claim Gaming Mode is running");
+                assert!(plan.delete.is_empty());
+            }
+        }
+        let t = Tmp::new("t5b");
+        t.put("gaming-session.json", "{}");
+        assert!(plan_clear(&t.root, Scope::PlayHistory, &facts()).refusals.iter().any(|r| r.code == "gaming_mode_active"));
+    }
+
+    #[test]
+    fn t6_the_fingerprint_covers_size_and_modified_time() {
+        let t = Tmp::new("t6");
+        seed(&t);
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let before = t.listing();
+        // Same name, new bytes: the count the user was shown is stale.
+        t.put("sessions.json", "a much longer body than before");
+        assert!(matches!(execute_clear(&t.root, &plan, &later()), ClearOutcome::PlanChanged));
+        assert!(t.has("sessions.json") && t.has("drift.json"), "nothing is deleted on a mismatch");
+        let _ = before;
+        // Same name, same size, only the modified time moved.
+        let t = Tmp::new("t6b");
+        seed(&t);
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let f = fs::OpenOptions::new().write(true).open(t.root.join("drift.json")).unwrap();
+        f.set_modified(SystemTime::now() + Duration::from_secs(60)).unwrap();
+        drop(f);
+        assert!(matches!(execute_clear(&t.root, &plan, &later()), ClearOutcome::PlanChanged));
+        assert!(t.has("drift.json") && t.has("sessions.json"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn t7_delete_one_refuses_a_root_that_became_a_junction() {
+        let t = Tmp::new("t7");
+        let real = t.base.join("real");
+        fs::create_dir_all(&real).unwrap();
+        fs::write(real.join("sessions.json"), "must survive").unwrap();
+        let link = t.base.join("Compy-link");
+        junction(&link, &real);
+        assert!(delete_one(&link, "sessions.json").is_err());
         assert!(real.join("sessions.json").exists());
         fs::remove_dir(&link).unwrap();
     }
