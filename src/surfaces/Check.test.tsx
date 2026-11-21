@@ -315,8 +315,8 @@ describe("Check", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("1 setting changed since it was last good")).toBeInTheDocument();
-    // ...WHEN is no longer restated here: the card points to the Care view's list, which dates it
-    // (P6-timeline). The old relative "noticed …" line is gone from Check.
+    // ...with the full dated line here (what it reads now, what Compy last recorded and when), and a
+    // pointer to the Care view's list. The old relative "noticed 2h ago" line stays gone.
     expect(screen.getByText(/lists each one with when Compy noticed it/)).toBeInTheDocument();
     expect(screen.queryByText(/noticed \d|noticed just now|noticed yesterday/)).not.toBeInTheDocument();
     // ...and the banner NEVER attributes a cause. "outside Compy" is the retired false claim.
@@ -336,7 +336,7 @@ describe("Check", () => {
     );
     expect(
       await screen.findByText(
-        /^Power plan \(Control Panel > Power Options\): Compy couldn't read it just now, so it can't say what it is now\. Compy doesn't know what it was before, or when it last saw it as expected\. It was last seen changed on .+\.$/,
+        /^Power plan \(Control Panel > Power Options\): Compy couldn't read it just now, so it can't say what it is now\. Compy doesn't know what it was before, or when it last saw it as expected\. Compy first noticed it changed on .+\.$/,
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("1 setting changed since it was last good")).toBeInTheDocument();

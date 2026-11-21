@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// Persisted across launches: which checks were last seen "good", and when each current drift was
 /// first noticed (so the timestamp is stable — it isn't reset on every scan).
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
-struct DriftState {
+pub(crate) struct DriftState {
     last_good: HashMap<String, bool>,
     noticed_at: HashMap<String, String>,
     /// Intelligence Phase 2 (additive): the label each active drift carried when noticed, so the
@@ -33,13 +33,32 @@ struct DriftState {
     last_ready_value: HashMap<String, String>,
 }
 
+#[cfg(test)]
+impl DriftState {
+    /// True when any part of this state still mentions the check (tests only).
+    pub(crate) fn has_record_for(&self, id: &str) -> bool {
+        self.last_good.contains_key(id)
+            || self.noticed_at.contains_key(id)
+            || self.labels.contains_key(id)
+            || self.last_ready_seen.contains_key(id)
+            || self.last_ready_value.contains_key(id)
+    }
+}
+
 /// What one scan read for a check beyond its status (n1-drift): its short current value, and, for
 /// the applied-changes row only, the titles of the changes now off. Side input to `detect_seen`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Seen {
     pub value: Option<String>,
     pub titles: Vec<String>,
+    /// When each of `titles` was applied, from the ledger's own per-change stamp (same order).
+    pub applied_at: Vec<String>,
 }
+
+/// Checks that reach Attention by time passing alone, with nothing on the PC changing (a driver
+/// getting older): never a drift. `detect_seen` skips them and drops any record an earlier build
+/// kept for them, so an old notice does not linger.
+const TIME_ONLY_CHECKS: &[&str] = &["gpu-driver-age"];
 
 /// One scan's observation of a check: `(id, label, status, detail)`.
 pub(crate) type Observation = (String, String, String, String);
@@ -66,6 +85,9 @@ pub(crate) struct Drift {
     pub last_ready_value: Option<String>,
     /// n1-drift: the applied changes now off, by title (the applied-changes row only; empty else).
     pub titles: Vec<String>,
+    /// n1-drift: when each of `titles` was applied, from the ledger's own per-change stamp (same
+    /// order). Never `last_ready_at`, which is a scan time for the whole row.
+    pub applied_at: Vec<String>,
 }
 
 // #283 — serialized so two concurrent readiness scans can't interleave load → detect → save.
@@ -138,7 +160,7 @@ fn detect(
 }
 
 /// `detect` plus what each scan read beyond status (`seen`, keyed by check id; absent = nothing read).
-fn detect_seen(
+pub(crate) fn detect_seen(
     checks: &[(String, String, String, String)],
     seen: &HashMap<String, Seen>,
     prior: &DriftState,
@@ -147,6 +169,14 @@ fn detect_seen(
     let mut state = prior.clone();
     let mut drifts = Vec::new();
     for (id, label, status, detail) in checks {
+        if TIME_ONLY_CHECKS.contains(&id.as_str()) {
+            state.last_good.remove(id);
+            state.noticed_at.remove(id);
+            state.labels.remove(id);
+            state.last_ready_seen.remove(id);
+            state.last_ready_value.remove(id);
+            continue;
+        }
         let read = seen.get(id).cloned().unwrap_or_default();
         match status.as_str() {
             "ready" => {
@@ -181,6 +211,7 @@ fn detect_seen(
                     last_ready_at: state.last_ready_seen.get(id).cloned(),
                     last_ready_value: state.last_ready_value.get(id).cloned(),
                     titles: read.titles.clone(),
+                    applied_at: read.applied_at.clone(),
                 });
             }
             // An active drift whose check now reads unknown: still a notice (last seen changed), with
@@ -198,6 +229,7 @@ fn detect_seen(
                     last_ready_at: state.last_ready_seen.get(id).cloned(),
                     last_ready_value: state.last_ready_value.get(id).cloned(),
                     titles: Vec::new(),
+                    applied_at: Vec::new(),
                 });
             }
             // advisory / unknown with no active drift / attention-that-was-never-good → not a regression.
@@ -630,7 +662,7 @@ mod drift_tests {
         HashMap<String, Seen>,
     ) {
         let mut seen = HashMap::new();
-        seen.insert(id.to_string(), Seen { value: value.map(String::from), titles: Vec::new() });
+        seen.insert(id.to_string(), Seen { value: value.map(String::from), ..Seen::default() });
         (obs(id, status), seen)
     }
 
@@ -638,24 +670,27 @@ mod drift_tests {
     /// last recorded and when, in the payload. One row per drift-capable kind.
     #[test]
     fn every_drift_capable_kind_carries_now_before_and_when() {
-        let kinds = [
-            ("monitor-refresh", "144 Hz", "60 / 144 Hz"),
-            ("memory-speed", "3200 of 3200 MT/s", "2133 of 3200 MT/s"),
-            ("memory-channels", "2 modules on 2 channels", "2 modules on 1 channel"),
-            ("drive-health", "Samsung SSD: Healthy", "Samsung SSD: Warning"),
-            ("install-drive", "Fast on C:", "HDD: D:"),
-            ("gpu-driver-age", "100 days", "400 days"),
-            ("vrr", "FreeSync: on", "FreeSync: off"),
-            ("power-profile", "Balanced", "Power saver"),
+        // The value shapes readiness.rs really produces (pinned against `evaluate_readiness` by
+        // `readiness::drift_values_match_what_each_kind_really_produces`). memory-speed and
+        // drive-health have no value when Ready, so their "before" is genuinely unknown.
+        let fast = "Fast \u{b7} C:";
+        let kinds: [(&str, Option<&str>, &str); 7] = [
+            ("monitor-refresh", Some("144 Hz"), "60 / 144 Hz"),
+            ("memory-speed", None, "4800 of 6000 MT/s"),
+            ("memory-channels", Some("2 modules on 2 channels"), "2 modules on 1 channel"),
+            ("drive-health", None, "CT1000: Warning"),
+            ("install-drive", Some(fast), "HDD: D"),
+            ("vrr", Some("FreeSync: on"), "FreeSync: off"),
+            ("power-profile", Some("Balanced"), "Power saver"),
         ];
         for (id, before, now) in kinds {
-            let (good, seen_good) = obs_val(id, "ready", Some(before));
+            let (good, seen_good) = obs_val(id, "ready", before);
             let (_d0, s0) = detect_seen(&[good], &seen_good, &DriftState::default(), "T0");
             let (bad, seen_bad) = obs_val(id, "attention", Some(now));
             let (d1, _s1) = detect_seen(&[bad], &seen_bad, &s0, "T1");
             assert_eq!(d1.len(), 1, "{id}");
             assert_eq!(d1[0].value_now.as_deref(), Some(now), "{id}: now");
-            assert_eq!(d1[0].last_ready_value.as_deref(), Some(before), "{id}: before");
+            assert_eq!(d1[0].last_ready_value.as_deref(), before, "{id}: before");
             assert_eq!(d1[0].last_ready_at.as_deref(), Some("T0"), "{id}: when");
             assert_eq!(d1[0].noticed_at, "T1", "{id}: noticed");
             assert!(!d1[0].unreadable_now && d1[0].titles.is_empty(), "{id}");
@@ -670,11 +705,42 @@ mod drift_tests {
         let mut seen = HashMap::new();
         seen.insert(
             "applied-changes".to_string(),
-            Seen { value: Some("1 on / 1 drifted".into()), titles: vec!["Enable Windows Game Mode".into()] },
+            Seen {
+                value: Some("1 on / 1 drifted".into()),
+                titles: vec!["Enable Windows Game Mode".into()],
+                applied_at: vec!["2026-11-01T10:00:00Z".into()],
+            },
         );
         let (d1, _s1) = detect_seen(&[obs("applied-changes", "attention")], &seen, &s0, "T1");
         assert_eq!(d1[0].titles, vec!["Enable Windows Game Mode".to_string()]);
+        // The change's own ledger stamp travels beside its title; the row's last-ready scan time is a
+        // different thing and is never what a surface says "you turned it on" with.
+        assert_eq!(d1[0].applied_at, vec!["2026-11-01T10:00:00Z".to_string()]);
         assert_eq!(d1[0].last_ready_at.as_deref(), Some("T0"));
+    }
+
+    /// B2: a driver getting older reaches Attention with nothing changed, so it is never a drift:
+    /// ready -> advisory -> attention yields no drift and no record, and a notice an earlier build
+    /// kept for it is dropped on the next scan.
+    #[test]
+    fn an_ageing_driver_is_never_a_drift_and_an_old_record_is_dropped() {
+        let (good, sg) = obs_val("gpu-driver-age", "ready", Some("100 days"));
+        let (d0, s0) = detect_seen(&[good], &sg, &DriftState::default(), "T0");
+        assert!(d0.is_empty());
+        assert!(!s0.last_good.contains_key("gpu-driver-age"), "never recorded as good");
+        let (adv, sa) = obs_val("gpu-driver-age", "advisory", Some("200 days"));
+        let (_d1, s1) = detect_seen(&[adv], &sa, &s0, "T1");
+        let (old, so) = obs_val("gpu-driver-age", "attention", Some("400 days"));
+        let (d2, s2) = detect_seen(&[old], &so, &s1, "T2");
+        assert!(d2.is_empty(), "an ageing driver is not a setting that changed");
+        assert!(s2.noticed_at.is_empty() && notices_from(&s2).is_empty());
+        // A state an earlier build wrote, with a live notice for it, is cleaned.
+        let mut legacy = DriftState::default();
+        legacy.last_good.insert("gpu-driver-age".into(), true);
+        legacy.noticed_at.insert("gpu-driver-age".into(), "T0".into());
+        legacy.labels.insert("gpu-driver-age".into(), "GPU driver over a year old".into());
+        let (d3, s3) = detect_seen(&[obs("gpu-driver-age", "attention")], &HashMap::new(), &legacy, "T3");
+        assert!(d3.is_empty() && notices_from(&s3).is_empty() && s3.last_good.is_empty());
     }
 
     /// Unknown before: a state file from before `last_ready_value` (and before the ready stamp)

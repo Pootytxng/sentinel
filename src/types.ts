@@ -220,6 +220,8 @@ export type Drift = {
   last_ready_at?: string | null;
   last_ready_value?: string | null;
   titles?: string[];
+  /** Ledger's own "turned on" stamp per title, aligned with `titles` ("" = none recorded). */
+  applied_at?: string[];
 };
 export type GameReadiness = { checks: ReadinessCheck[]; ready_count: number; attention_count: number; unknown_count: number; advisory_count: number; advisory: string; dismissed_ids: string[]; drifts: Drift[] };
 

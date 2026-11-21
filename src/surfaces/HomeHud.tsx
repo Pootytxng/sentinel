@@ -7,7 +7,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Term } from "../design/Term";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { driftMore, driftSentence, HOME_DRIFT_LINES } from "./drift-named";
+import { driftMore, driftShort, HOME_DRIFT_LINES } from "./drift-named";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
@@ -65,7 +65,7 @@ type Props = {
   /** Where the "See in …" buttons land: "Lab" on the proving-ground rail, "Optimize" classic. */
   fixRoomLabel?: string;
   /** App's station deep-link. The drift module's pointer opens the Care view ("blackbox"), whose
-   *  "Since it last worked" list names and dates each drift (P6-timeline). Absent → text only. */
+   *  "Since it last worked" list names and dates every drift in full (Home shows the short form only). Absent → text only. */
   onOpenLabStation?: (station: string) => void;
 };
 
@@ -341,8 +341,9 @@ export function HomeHud({
   const activeWithdrawn = ledgerBlank || inEffect.kind === "unreadable";
 
   const drifts = readiness?.drifts ?? [];
-  // P6-timeline: the drift module counts and points; the Care view's "Since it last worked" list
-  // is the one place each drift is named and dated.
+  // n1-drift: the drift module counts, names each setting in a short fact ("Power plan: now Power
+  // saver", at most three) and points; the full line (what it was, when) lives in Check and in the
+  // Care view's "Since it last worked" list (Constitution section 13: the receipt stays inside).
   const seeWhatChanged = onOpenLabStation && (
     <button type="button" className="hud-inline-link" onClick={() => onOpenLabStation("blackbox")}>
       {t("home.homeHud.ledger.seeWhatChanged")}
@@ -690,7 +691,7 @@ export function HomeHud({
                 {/* n1-drift: each setting named, with what it reads now, what Compy last recorded and when. */}
                 {drifts.slice(0, HOME_DRIFT_LINES).map((d) => (
                   <span key={d.id} className="hud-note hud-drift-line">
-                    {driftSentence(d, t, i18n.language)}
+                    {driftShort(d, t)}
                   </span>
                 ))}
                 {driftMore(drifts.length, HOME_DRIFT_LINES, t) && (

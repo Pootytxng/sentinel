@@ -1232,11 +1232,11 @@ fn drift_inputs(
     let mut seen = std::collections::HashMap::new();
     for c in checks.iter().filter(|c| !dismissed.contains(c.id)) {
         observations.push((c.id.to_string(), c.label.to_string(), status_str(c.status).to_string(), c.detail.clone()));
-        let titles = match (c.id, hist) {
-            ("applied-changes", Ok(h)) => h.drifted_titles.clone(),
-            _ => Vec::new(),
+        let (titles, applied_at) = match (c.id, hist) {
+            ("applied-changes", Ok(h)) => (h.drifted_titles.clone(), h.drifted_applied_at.clone()),
+            _ => (Vec::new(), Vec::new()),
         };
-        seen.insert(c.id.to_string(), crate::drift::Seen { value: c.value.clone(), titles });
+        seen.insert(c.id.to_string(), crate::drift::Seen { value: c.value.clone(), titles, applied_at });
     }
     (observations, seen)
 }
@@ -1798,6 +1798,7 @@ mod readiness_tests {
             active: 1,
             externally_reverted: 1,
             drifted_titles: vec!["Enable Windows Game Mode".into()],
+            drifted_applied_at: vec!["2026-11-01T10:00:00Z".into()],
             kept_outside: 1,
             kept_outside_titles: vec!["Switch to the Ultimate Performance power plan".into()],
             ..AppliedChangesSummary::default()
@@ -1810,6 +1811,7 @@ mod readiness_tests {
         assert!(obs.iter().any(|o| o.0 == "applied-changes" && o.2 == "attention"));
         let ac = &seen["applied-changes"];
         assert_eq!(ac.titles, vec!["Enable Windows Game Mode".to_string()]);
+        assert_eq!(ac.applied_at, vec!["2026-11-01T10:00:00Z".to_string()], "the ledger's own stamp");
         assert_eq!(ac.value.as_deref(), Some("1 on / 1 drifted"));
         assert!(seen.iter().filter(|(k, _)| k.as_str() != "applied-changes").all(|(_, s)| s.titles.is_empty()));
         // Dismissed: not observed, not carried.
@@ -1819,6 +1821,109 @@ mod readiness_tests {
         // An unreadable ledger carries no titles.
         let (_o3, seen3) = drift_inputs(&r.checks, &none, Err("unreadable"));
         assert!(seen3["applied-changes"].titles.is_empty());
+    }
+
+    /// B6: the short `value` each drift-capable kind really sends when Ready and when it needs
+    /// attention, taken from `evaluate_readiness` itself. `drift.rs` and the frontend fixtures use
+    /// exactly these shapes, so a fixture cannot drift from the source. memory-speed and drive-health
+    /// send no value when Ready (so their "before" is honestly unknown); none is invented here.
+    #[test]
+    fn drift_values_match_what_each_kind_really_produces() {
+        use crate::hardware::{DiskHealth, GameLibrary, GameStorage, MemoryModuleInfo};
+        let hist = AppliedChangesSummary::default();
+        let row = |hw: &HardwareInfo, plan: Option<(PowerPlanClass, &str)>, fs: Option<bool>, id: &str| {
+            let r = evaluate_readiness(hw, plan, false, false, Ok(&hist), fs);
+            let c = find(&r, id);
+            (c.status, c.value.clone())
+        };
+        let none = HardwareInfo::default();
+        let display = |cur, max| HardwareInfo {
+            display: Some(DisplayInfo { current_refresh_rate_hz: cur, max_refresh_rate_hz: max, ..Default::default() }),
+            ..Default::default()
+        };
+        assert_eq!(row(&display(144, 144), None, None, "monitor-refresh"), (ReadinessStatus::Ready, Some("144 Hz".into())));
+        assert_eq!(row(&display(60, 144), None, None, "monitor-refresh"), (ReadinessStatus::Attention, Some("60 / 144 Hz".into())));
+        let ram = |speed, status: &str| HardwareInfo {
+            memory_modules: vec![MemoryModuleInfo {
+                speed_mhz: speed,
+                rated_speed_mhz: 6000,
+                xmp_expo_status: status.into(),
+                ..mem("DDR5")
+            }],
+            ..Default::default()
+        };
+        assert_eq!(row(&ram(6000, "running_at_rated"), None, None, "memory-speed"), (ReadinessStatus::Ready, None));
+        assert_eq!(
+            row(&ram(4800, "running_below_rated"), None, None, "memory-speed"),
+            (ReadinessStatus::Attention, Some("4800 of 6000 MT/s".into()))
+        );
+        let two = HardwareInfo { memory_modules: vec![mem_on("DDR5", "P0 CHANNEL A"), mem_on("DDR5", "P0 CHANNEL B")], ..Default::default() };
+        let one = HardwareInfo { memory_modules: vec![mem_on("DDR4", "CHANNEL A"), mem_on("DDR4", "CHANNEL A")], ..Default::default() };
+        assert_eq!(row(&two, None, None, "memory-channels"), (ReadinessStatus::Ready, Some("2 modules on 2 channels".into())));
+        assert_eq!(row(&one, None, None, "memory-channels"), (ReadinessStatus::Attention, Some("2 modules on 1 channel".into())));
+        let disk = |health: &str| HardwareInfo {
+            disk_health: vec![DiskHealth { friendly_name: "CT1000".into(), health: health.into() }],
+            ..Default::default()
+        };
+        assert_eq!(row(&disk("Healthy"), None, None, "drive-health"), (ReadinessStatus::Ready, None));
+        assert_eq!(row(&disk("Warning"), None, None, "drive-health"), (ReadinessStatus::Attention, Some("CT1000: Warning".into())));
+        let lib = |drive: &str, media: &str, slow: bool| HardwareInfo {
+            game_storage: GameStorage {
+                libraries: vec![GameLibrary { launcher: "Steam".into(), drive: drive.into(), media_type: media.into(), bus_type: "SATA".into() }],
+                any_fast: !slow,
+                any_slow: slow,
+            },
+            ..Default::default()
+        };
+        assert_eq!(row(&lib("C", "SSD", false), None, None, "install-drive"), (ReadinessStatus::Ready, Some("Fast \u{b7} C:".into())));
+        assert_eq!(row(&lib("D", "HDD", true), None, None, "install-drive"), (ReadinessStatus::Attention, Some("HDD: D:".into())));
+        assert_eq!(row(&none, None, Some(true), "vrr"), (ReadinessStatus::Ready, Some("FreeSync: on".into())));
+        assert_eq!(row(&none, None, Some(false), "vrr"), (ReadinessStatus::Attention, Some("FreeSync: off".into())));
+        assert_eq!(
+            row(&none, Some((PowerPlanClass::Balanced, "Balanced")), None, "power-profile"),
+            (ReadinessStatus::Ready, Some("Balanced".into()))
+        );
+        assert_eq!(
+            row(&none, Some((PowerPlanClass::PowerSaver, "Power saver")), None, "power-profile"),
+            (ReadinessStatus::Attention, Some("Power saver".into()))
+        );
+    }
+
+    /// Power-plan answer, pinned: only Windows' own Power saver reaches Attention, so a move such as
+    /// High performance -> Balanced is Ready both times and can never become a drift.
+    #[test]
+    fn only_power_saver_can_make_the_power_plan_drift() {
+        let hist = AppliedChangesSummary::default();
+        let none = HardwareInfo::default();
+        let status = |class| {
+            let r = evaluate_readiness(&none, Some((class, "x")), false, false, Ok(&hist), None);
+            find(&r, "power-profile").status
+        };
+        for class in [PowerPlanClass::Balanced, PowerPlanClass::HighPerformance, PowerPlanClass::Ultimate, PowerPlanClass::Other] {
+            assert_eq!(status(class), ReadinessStatus::Ready);
+        }
+        assert_eq!(status(PowerPlanClass::PowerSaver), ReadinessStatus::Attention);
+    }
+
+    /// B2 end to end: a real ageing driver (fresh, then still fine, then over a year) goes through
+    /// `evaluate_readiness` -> `drift_inputs` -> `detect_seen` and never produces a drift or a record.
+    #[test]
+    fn an_ageing_driver_never_produces_a_drift_line() {
+        use crate::hardware::GpuInfo;
+        let hist = AppliedChangesSummary::default();
+        let mut state = crate::drift::DriftState::default();
+        for (n, age) in [10, 200, 500].into_iter().enumerate() {
+            let hw = HardwareInfo {
+                gpus: vec![GpuInfo { name: "Test GPU".into(), vram_bytes: 8u64 << 30, driver_age_days: Some(age), ..Default::default() }],
+                ..Default::default()
+            };
+            let r = evaluate_readiness(&hw, None, false, false, Ok(&hist), None);
+            let (obs, seen) = drift_inputs(&r.checks, &std::collections::HashSet::new(), Ok(&hist));
+            let (drifts, next) = crate::drift::detect_seen(&obs, &seen, &state, &format!("T{n}"));
+            assert!(!drifts.iter().any(|d| d.id == "gpu-driver-age"), "age {age}");
+            assert!(!next.has_record_for("gpu-driver-age"), "age {age}");
+            state = next;
+        }
     }
 
     #[test]

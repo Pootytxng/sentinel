@@ -8,7 +8,7 @@ import { readHologramV2 } from "../design/theme";
 import { Term } from "../design/Term";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { driftMore, driftSentence, HOME_DRIFT_LINES } from "./drift-named";
+import { driftMore, driftShort, HOME_DRIFT_LINES } from "./drift-named";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
@@ -61,7 +61,7 @@ type Props = {
   /** Where the "See in …" buttons land: "Lab" on the proving-ground rail, "Optimize" classic. */
   fixRoomLabel?: string;
   /** App's station deep-link. The drift module's pointer opens the Care view ("blackbox"), whose
-   *  "Since it last worked" list names and dates each drift (P6-timeline). Absent → text only. */
+   *  "Since it last worked" list names and dates every drift in full (Home shows the short form only). Absent → text only. */
   onOpenLabStation?: (station: string) => void;
 };
 
@@ -138,7 +138,7 @@ export function HomeV2({
   fixRoomLabel = "Lab",
   onOpenLabStation,
 }: Props) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const reduced = useReducedMotion();
   // Shared Machine Model (#451): the hardware grid's identity rows read its facts, not bare
   // inventory fields. One read-only IPC per hardware refresh — `hw` is App.refresh()'s product, so a
@@ -265,8 +265,9 @@ export function HomeV2({
   // ── Glanceable fill (spec 2026-07-05) — measured-only sources for the two glance cards ──
   // Drift watch: the A5 drift signal, surfaced on Home for the first time (no one-mention clash).
   const drifts = readiness?.drifts ?? [];
-  // P6-timeline: the drift module counts and points; the Care view's "Since it last worked" list
-  // is the one place each drift is named and dated.
+  // n1-drift: the drift module counts, names each setting in a short fact ("Power plan: now Power
+  // saver", at most three) and points; the full line (what it was, when) lives in Check and in the
+  // Care view's "Since it last worked" list (Constitution section 13: the receipt stays inside).
   const seeWhatChanged = onOpenLabStation && (
     <button type="button" className="hv2-inline-link" onClick={() => onOpenLabStation("blackbox")}>
       {t("home.homeV2.stats.seeWhatChanged")}
@@ -576,7 +577,7 @@ export function HomeV2({
                 {/* n1-drift: each setting named, with what it reads now, what Compy last recorded and when. */}
                 {drifts.slice(0, HOME_DRIFT_LINES).map((d) => (
                   <span key={d.id} className="hv2-stat-d hv2-drift-line">
-                    {driftSentence(d, t, i18n.language)}
+                    {driftShort(d, t)}
                   </span>
                 ))}
                 {driftMore(drifts.length, HOME_DRIFT_LINES, t) && (

@@ -303,10 +303,12 @@ describe("HomeV2 — glance cards (fill pass)", () => {
     });
     expect(screen.getByText("5 settings changed since they were last good")).toBeTruthy();
     // The first three are spelled out; the rest are counted, never silently dropped.
-    expect(screen.getByText(/^Power plan \(Control Panel > Power Options\): Now now-power-profile\. Compy last recorded was-power-profile on /)).toBeTruthy();
-    expect(screen.getByText(/^Monitor refresh rate \(.*\): Now now-monitor-refresh\./)).toBeTruthy();
-    expect(screen.getByText(/^Variable refresh rate \(.*\): Now now-vrr\./)).toBeTruthy();
+    // Short form only: "{short name}: now {value}". The dated line stays in Check and the Care list.
+    expect(screen.getByText("Power plan: now now-power-profile")).toBeTruthy();
+    expect(screen.getByText("Monitor refresh rate: now now-monitor-refresh")).toBeTruthy();
+    expect(screen.getByText("Variable refresh rate: now now-vrr")).toBeTruthy();
     expect(screen.queryByText(/now-memory-speed/)).toBeNull();
+    expect(screen.queryByText(/recorded|noticed|Control Panel/)).toBeNull();
     expect(screen.getByText("and 2 more settings")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "see what changed" }));
     expect(open).toHaveBeenCalledWith("blackbox");
@@ -328,12 +330,12 @@ describe("HomeV2 — glance cards (fill pass)", () => {
         ],
       },
     });
-    const unreadable = screen.getByText(/^Power plan /).textContent ?? "";
-    expect(unreadable).toContain("Compy couldn't read it just now, so it can't say what it is now.");
-    expect(unreadable).not.toMatch(/unchanged|Now /);
-    const unknown = screen.getByText(/^Variable refresh rate /).textContent ?? "";
-    expect(unknown).toContain("Now FreeSync: off.");
-    expect(unknown).toContain("Compy doesn't know what it was before, or when it last saw it as expected.");
+    const unreadable = screen.getByText(/^Power plan: /).textContent ?? "";
+    expect(unreadable).toBe("Power plan: Compy couldn't read it just now");
+    expect(unreadable).not.toMatch(/unchanged|now Balanced|now Power/);
+    // The earlier-record gaps are Check's to say; Home states only what it reads now.
+    const unknown = screen.getByText(/^Variable refresh rate: /).textContent ?? "";
+    expect(unknown).toBe("Variable refresh rate: now FreeSync: off");
   });
 
   it("readiness unresolved → drift card claims nothing", () => {

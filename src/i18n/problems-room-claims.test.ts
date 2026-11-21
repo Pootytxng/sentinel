@@ -5,6 +5,8 @@ import enLab from "./locales/en/lab.json";
 import zhLab from "./locales/zh-CN/lab.json";
 import enHome from "./locales/en/home.json";
 import zhHome from "./locales/zh-CN/home.json";
+import enCommon from "./locales/en/common.json";
+import zhCommon from "./locales/zh-CN/common.json";
 
 // The Problems room (Black Box), its case text and the Lab rig line that reads the same crash record
 // may say what Windows recorded and what that does not rule out. They may never exclude the PC (or a
@@ -70,6 +72,10 @@ const SOURCES: Array<[string, unknown]> = [
   // home.json whole: the interview lines (what Compy says after the user's pick) and the Home rig caption.
   ["en/home.json", enHome],
   ["zh-CN/home.json", zhHome],
+  // n1-drift: the drifted-setting lines (Home short form, Check full form) say what a setting reads and
+  // what Compy recorded, never that a part or the PC is fine or at fault.
+  ["en/common.json#driftNamed", enCommon.driftNamed],
+  ["zh-CN/common.json#driftNamed", zhCommon.driftNamed],
 ];
 
 // File key as the exclusion list spells it: the part of the source name before any "#".

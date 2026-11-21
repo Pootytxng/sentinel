@@ -228,15 +228,16 @@ describe("HomeHud drift module names the setting and points to the Care view (P6
     ],
   } as unknown as GameReadiness;
 
-  it("counts the drift, names the setting with now / last recorded / when, and opens Crash & Freeze Rescue", () => {
+  it("counts the drift, names the setting with what it reads now (short form), and opens Crash & Freeze Rescue", () => {
     const open = vi.fn();
     const c = render(<HomeRoom {...props} readiness={drifted} onOpenLabStation={open} />).container;
     expect(c.querySelector("[data-hud-home]")).not.toBeNull();
     expect(screen.getByText(/1 setting changed since it was last good/)).toBeTruthy();
     const line = c.querySelector(".hud-drift-line")?.textContent ?? "";
-    expect(line).toContain("Power plan (Control Panel > Power Options): Now Power saver.");
-    expect(line).toContain("Compy last recorded Balanced on ");
-    expect(line).toContain("Compy noticed this on ");
+    // Home is the short form (Constitution section 13): the short name and what it reads now. The
+    // full line (what it was, when, where it is set) lives in Check and the Care list.
+    expect(line).toBe("Power plan: now Power saver");
+    expect(line).not.toMatch(/recorded|noticed|Control Panel|caused|fixed|guarantee|probably/i);
     fireEvent.click(screen.getByRole("button", { name: "see what changed" }));
     expect(open).toHaveBeenCalledWith("blackbox");
   });

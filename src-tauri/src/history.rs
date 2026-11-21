@@ -2912,6 +2912,10 @@ pub(crate) struct AppliedChangesSummary {
     /// The drifted settings BY NAME (rec titles, sorted for stable output) so surfaces can say
     /// WHICH setting drifted instead of a vague "N setting(s)" (flags-name-it law).
     pub(crate) drifted_titles: Vec<String>,
+    /// n1-drift: when each of those changes was applied (its ledger `applied_at`), in the same order
+    /// as `drifted_titles`, so a surface can say when the user turned a drifted change on from the
+    /// ledger's own stamp, never from a scan time.
+    pub(crate) drifted_applied_at: Vec<String>,
     /// CR-outside-followups (b): changes that read off because the user chose to keep what was set
     /// outside Compy (a usable "changed outside Compy" record whose state the live read still
     /// shows). Never part of `externally_reverted`: Game Readiness does not flag them. Only the
@@ -3178,6 +3182,7 @@ fn summarize_checked(
     for (i, c) in history.iter().enumerate() {
         latest.insert(c.rec_id.as_str(), i); // later entries overwrite earlier → newest wins
     }
+    let mut drifted: Vec<(String, String)> = Vec::new();
     for &i in latest.values() {
         let c = &history[i];
         s.total += 1;
@@ -3196,11 +3201,12 @@ fn summarize_checked(
                 s.kept_outside_plan |= c.rec_id == "power-ultimate";
             } else {
                 s.externally_reverted += 1;
-                s.drifted_titles.push(c.rec_title.clone());
+                drifted.push((c.rec_title.clone(), c.applied_at.clone()));
             }
         }
     }
-    s.drifted_titles.sort(); // HashMap order is random — keep the named list stable
+    drifted.sort(); // HashMap order is random — keep the named list stable
+    (s.drifted_titles, s.drifted_applied_at) = drifted.into_iter().unzip();
     s.kept_outside_titles.sort();
     s
 }
@@ -6092,6 +6098,9 @@ mod history_tests {
         // Compy". The only drifted change is the one Health calls no longer in effect.
         assert!(summary.active_recs.iter().any(|r| r == "late-rec"));
         assert_eq!(summary.drifted_titles, ["Disable Windows Search indexer"]);
+        // n1-drift: each drifted change carries its own ledger stamp, in the titles' order.
+        let idx = history.iter().position(|c| c.rec_title == "Disable Windows Search indexer").expect("row");
+        assert_eq!(summary.drifted_applied_at, [history[idx].applied_at.clone()]);
         assert_eq!(summary.externally_reverted, want("notInEffect"));
         assert_eq!(summary.rolled_back, want("rolledBack"), "rb-rec is active, so not also rolled back");
     }
