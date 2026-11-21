@@ -864,37 +864,11 @@ fn game_running_from(
 
 /// Read-only: is `pid` still a live process whose image is `expected_name`? `Some(false)` when the
 /// pid no longer exists, has exited, or now runs another image (Windows reuses pids); `None` when
-/// Windows refused to say (access denied), which must never read as "the game closed".
+/// the handle-free process snapshot could not be read, which must never read as "the game closed".
+/// Opens no process: it asks the same system-wide snapshot as the rest of the capture
+/// ([`crate::other_load::running_as`]).
 fn pid_running_as(pid: u32, expected_name: &str) -> Option<bool> {
-    use windows::core::PWSTR;
-    use windows::Win32::Foundation::{CloseHandle, ERROR_INVALID_PARAMETER, STILL_ACTIVE};
-    use windows::Win32::System::Threading::{
-        GetExitCodeProcess, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
-        PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-    unsafe {
-        let handle = match OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
-            Ok(h) => h,
-            // No such process id: the game is gone.
-            Err(e) if e.code() == ERROR_INVALID_PARAMETER.to_hresult() => return Some(false),
-            Err(_) => return None,
-        };
-        let mut code = 0u32;
-        let exited = GetExitCodeProcess(handle, &mut code).is_ok() && code != STILL_ACTIVE.0 as u32;
-        let mut buf = [0u16; 260];
-        let mut size = buf.len() as u32;
-        let named = QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut size).is_ok();
-        let _ = CloseHandle(handle);
-        if exited {
-            return Some(false);
-        }
-        if !named {
-            return Some(true);
-        }
-        let full = String::from_utf16_lossy(&buf[..size as usize]);
-        let name = full.rsplit(['\\', '/']).next().unwrap_or(&full);
-        Some(name.eq_ignore_ascii_case(expected_name))
-    }
+    crate::other_load::running_as(crate::other_load::read_process_rows().as_deref(), pid, expected_name)
 }
 
 // Support evidence for the FPS helper (spec §12). The helper is the one part of Compy that can

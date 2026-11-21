@@ -744,7 +744,7 @@ mod tests {
     #[test]
     fn an_unreadable_capture_tick_is_the_failed_read_form_and_never_skipped() {
         use crate::other_load::ProcRow;
-        let row = |pid: u32, name: &str| ProcRow { pid, parent: 0, name: Some(name.into()), threads: 1, working_set: 0, create_time: 1, cpu_100ns: 0 };
+        let row = |pid: u32, name: &str| ProcRow { pid, parent: 0, name: Some(name.into()), threads: 1, session_id: 1, working_set: 0, create_time: 1, cpu_100ns: 0 };
         assert_eq!(tick_listing(None), (HashSet::new(), 0));
         let rows = [row(4, "System"), row(10, "Medal.exe")];
         let (names, total) = tick_listing(Some(&rows));

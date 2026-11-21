@@ -116,8 +116,9 @@ pub(crate) fn select_game_presenter(
         if c.recent.len() < 2 {
             continue;
         }
-        // A presenter we couldn't even NAME can never be "the game": resolve_process_name
-        // returns "" when OpenProcess fails — which is exactly the protected/system-process
+        // A presenter we couldn't even NAME can never be "the game": the name is "" when the
+        // process snapshot has no readable image name for the pid (it used to be "" when
+        // OpenProcess failed) — which was exactly the protected/system-process
         // case (live catch 2026-07-22: dwm.exe's name failed to resolve on the dev box, so
         // "" slid past the name denylist below and the compositor won at a fabricated
         // 803 fps). Games are user-session processes the elevated helper can always open;
@@ -507,33 +508,25 @@ fn parse_opts() -> CaptureOpts {
     }
 }
 
-/// Resolve a PID to its executable file name. The helper is elevated, so
-/// OpenProcess with QUERY_LIMITED_INFORMATION succeeds for game processes.
-fn resolve_process_name(pid: u32) -> String {
-    use windows::core::PWSTR;
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
-        PROCESS_QUERY_LIMITED_INFORMATION,
+// A presenter's image name and "is the attached game still the same process" both come from ONE
+// handle-free system snapshot per tick (`other_load::read_process_rows`): this file opens no process,
+// the game included. (It used to OpenProcess each presenting pid, twice per tick for the game.)
+
+/// The creation time of the attached pid, remembered from the tick it attached, so a recycled pid (even
+/// of the same exe) reads as a different process. PURE: `prev` is what was remembered, `rows` this tick's
+/// snapshot. Cleared when unattached; kept while the same pid stays attached; (re)read from the snapshot
+/// when a pid newly attaches or nothing was recorded yet.
+fn track_created(
+    prev: Option<(u32, i64)>,
+    attachment: &Attachment,
+    rows: &[crate::other_load::ProcRow],
+) -> Option<(u32, i64)> {
+    let Attachment::Attached { pid, .. } = attachment else {
+        return None;
     };
-    unsafe {
-        let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
-            return String::new();
-        };
-        let mut buf = [0u16; 260];
-        let mut size = buf.len() as u32;
-        let res = QueryFullProcessImageNameW(
-            handle,
-            PROCESS_NAME_WIN32,
-            PWSTR(buf.as_mut_ptr()),
-            &mut size,
-        );
-        let _ = CloseHandle(handle);
-        if res.is_err() {
-            return String::new();
-        }
-        let full = String::from_utf16_lossy(&buf[..size as usize]);
-        full.rsplit(['\\', '/']).next().unwrap_or(&full).to_string()
+    match prev {
+        Some((p, c)) if p == *pid => Some((p, c)),
+        _ => crate::other_load::find_row(rows, *pid).map(|r| (*pid, r.create_time)),
     }
 }
 
@@ -630,25 +623,6 @@ fn probe_window_evidence(pids: &[u32]) -> (HashMap<u32, WindowEvidence>, bool) {
         }
     }
     (ctx.evidence, fg_known)
-}
-
-/// Is `pid` still a live process running the image we attached to? Guards both
-/// process exit and (rare) pid recycling — either releases the attachment.
-fn process_alive_as(pid: u32, expected_name: &str) -> bool {
-    use windows::Win32::Foundation::{CloseHandle, STILL_ACTIVE};
-    use windows::Win32::System::Threading::{
-        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-    let running = unsafe {
-        let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
-            return false;
-        };
-        let mut code = 0u32;
-        let ok = GetExitCodeProcess(handle, &mut code).is_ok();
-        let _ = CloseHandle(handle);
-        ok && code == STILL_ACTIVE.0 as u32
-    };
-    running && resolve_process_name(pid).eq_ignore_ascii_case(expected_name)
 }
 
 fn write_atomic(path: &str, contents: &str) {
@@ -769,6 +743,8 @@ pub fn run_capture() {
     // Sticky game attachment (0.9.1): acquire on positive window evidence +
     // streak, then report ONLY the attached pid; silence emits nothing.
     let mut attachment = Attachment::new();
+    // (pid, creation time) of the attached game, from the snapshot of the tick it attached.
+    let mut attached_created: Option<(u32, i64)> = None;
     loop {
         std::thread::sleep(Duration::from_millis(REPORT_INTERVAL_MS));
         let now = Instant::now();
@@ -799,8 +775,7 @@ pub fn run_capture() {
         // select_game_presenter over WINDOW-QUALIFIED candidates only (Compy's
         // own UI / compositor / shell / windowless Electron GPU processes can
         // never win); once attached, only that pid is ever reported. Names
-        // resolve once per pid here; window evidence probes once per tick.
-        let mut names: HashMap<u32, String> = HashMap::new();
+        // come from one handle-free snapshot per tick (below); window evidence probes once per tick.
         let mut candidates: Vec<PresenterCandidate> = Vec::new();
         for ((pid, swapchain), tr) in map.iter() {
             let recent: Vec<f64> = tr
@@ -812,19 +787,25 @@ pub fn run_capture() {
             if recent.len() < 2 {
                 continue;
             }
-            let name = names
-                .entry(*pid)
-                .or_insert_with(|| resolve_process_name(*pid))
-                .clone();
             candidates.push(PresenterCandidate {
                 pid: *pid,
-                name,
+                name: String::new(), // filled from the snapshot below, once the map lock is released
                 swapchain: *swapchain,
                 recent,
                 evidence: WindowEvidence::default(),
             });
         }
         drop(map);
+        // ONE handle-free snapshot names every presenter and answers "is the attached game still that
+        // process". If it cannot be read, emit nothing this tick (fail closed, state unchanged): an
+        // unreadable snapshot must neither name the game "" nor release a live attachment.
+        let Some(rows) = crate::other_load::read_process_rows() else {
+            eprintln!("[compy-fps] process snapshot unreadable - skipping this tick.");
+            continue;
+        };
+        for c in &mut candidates {
+            c.name = crate::other_load::image_name_for(&rows, c.pid);
+        }
         let chains: Vec<(u32, u64, Vec<f64>)> =
             candidates.iter().map(|c| (c.pid, c.swapchain, c.recent.clone())).collect();
         let pids: Vec<u32> = candidates.iter().map(|c| c.pid).collect();
@@ -833,12 +814,17 @@ pub fn run_capture() {
             c.evidence = evidence.get(&c.pid).copied().unwrap_or_default();
         }
         let was_attached = matches!(&attachment, Attachment::Attached { .. });
+        let created_for = attached_created;
         let (next, best) = advance_attachment(
             std::mem::replace(&mut attachment, Attachment::new()),
             candidates,
-            &|pid, name| process_alive_as(pid, name),
+            &|pid, name| {
+                let created = created_for.filter(|(p, _)| *p == pid).map(|(_, c)| c);
+                crate::other_load::alive_as(&rows, pid, name, created)
+            },
         );
         attachment = next;
+        attached_created = track_created(attached_created, &attachment, &rows);
         match (&attachment, was_attached) {
             (Attachment::Attached { pid, name }, false) => {
                 eprintln!("[compy-fps] attached to {name} (pid {pid})");
@@ -1462,5 +1448,84 @@ mod frame_hist_tests {
         assert_eq!(reported_chain(&chains, 7, &[4.0, 4.1]), Some(0xA));
         assert_eq!(reported_chain(&chains, 7, &[1.0, 1.1, 1.2]), Some(0xB));
         assert_eq!(reported_chain(&chains, 9, &[4.0, 4.1]), None);
+    }
+}
+
+#[cfg(test)]
+mod handle_free_identity_tests {
+    //! The attached game's identity comes from snapshot rows (pid + image name + creation time), with no
+    //! process opened. These drive the real state machine with `alive_as` over synthetic rows.
+    use super::{advance_attachment, track_created, Attachment, PresenterCandidate, WindowEvidence};
+    use crate::other_load::{alive_as, ProcRow};
+
+    fn proc_row(pid: u32, name: &str, create: i64, threads: u32) -> ProcRow {
+        ProcRow {
+            pid,
+            parent: 1,
+            name: Some(name.into()),
+            threads,
+            session_id: 1,
+            working_set: 0,
+            create_time: create,
+            cpu_100ns: 0,
+        }
+    }
+
+    fn attached() -> Attachment {
+        Attachment::Attached { pid: 10, name: "Game.exe".into() }
+    }
+
+    fn silent_tick(rows: &[ProcRow], created: Option<(u32, i64)>) -> Attachment {
+        let created = created.filter(|(p, _)| *p == 10).map(|(_, c)| c);
+        advance_attachment(attached(), vec![], &|pid, name| alive_as(rows, pid, name, created)).0
+    }
+
+    #[test]
+    fn the_creation_time_is_remembered_while_attached_and_cleared_when_not() {
+        let rows = vec![proc_row(10, "Game.exe", 500, 9)];
+        assert_eq!(track_created(None, &attached(), &rows), Some((10, 500)));
+        // Kept: a later snapshot with a different time (a recycled pid) must not overwrite it.
+        let later = vec![proc_row(10, "Game.exe", 777, 9)];
+        assert_eq!(track_created(Some((10, 500)), &attached(), &later), Some((10, 500)));
+        // A different pid attaching re-reads; unattached clears.
+        let other = Attachment::Attached { pid: 11, name: "B.exe".into() };
+        let two = vec![proc_row(11, "B.exe", 900, 1)];
+        assert_eq!(track_created(Some((10, 500)), &other, &two), Some((11, 900)));
+        assert_eq!(track_created(Some((10, 500)), &Attachment::new(), &two), None);
+        // Attached but absent from the snapshot: nothing to remember yet.
+        assert_eq!(track_created(None, &attached(), &[]), None);
+    }
+
+    #[test]
+    fn a_silent_attached_game_stays_attached_while_the_same_process_lives() {
+        let rows = vec![proc_row(10, "Game.exe", 500, 9)];
+        assert!(matches!(silent_tick(&rows, Some((10, 500))), Attachment::Attached { pid: 10, .. }));
+    }
+
+    #[test]
+    fn exit_recycle_and_another_image_each_release_the_attachment() {
+        let created = Some((10, 500));
+        // Gone from the snapshot.
+        assert!(matches!(silent_tick(&[], created), Attachment::Unattached { .. }));
+        // Exited but still listed (another program holds a handle): no threads.
+        assert!(matches!(silent_tick(&[proc_row(10, "Game.exe", 500, 0)], created), Attachment::Unattached { .. }));
+        // The pid now runs another image.
+        assert!(matches!(silent_tick(&[proc_row(10, "cmd.exe", 500, 3)], created), Attachment::Unattached { .. }));
+        // The pid was recycled by a new process of the SAME exe (new creation time).
+        assert!(matches!(silent_tick(&[proc_row(10, "Game.exe", 777, 3)], created), Attachment::Unattached { .. }));
+    }
+
+    #[test]
+    fn a_recycled_pid_that_is_presenting_is_not_measured_under_the_old_lifetime() {
+        let rows = vec![proc_row(10, "Game.exe", 777, 3)];
+        let cand = PresenterCandidate {
+            pid: 10,
+            name: "Game.exe".into(),
+            swapchain: 1,
+            recent: vec![6.0, 6.0, 6.0],
+            evidence: WindowEvidence::default(),
+        };
+        let (next, report) = advance_attachment(attached(), vec![cand], &|pid, name| alive_as(&rows, pid, name, Some(500)));
+        assert!(report.is_none() && matches!(next, Attachment::Unattached { .. }));
     }
 }

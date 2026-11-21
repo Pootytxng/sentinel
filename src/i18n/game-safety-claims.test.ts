@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 // Compy may say what it DOES to a game (reads frame timing from Windows, injects nothing, writes
-// nothing to game files). It may not say a game is "never touched": its process listings open no process
-// (one handle-free system snapshot), but a few places still open the game's own process with
-// PROCESS_QUERY_LIMITED_INFORMATION (fps.rs, monitoring.rs pid_running_as; docs/ARCHITECTURE_LOCKS.md ~191), and it may not
-// promise an outcome with anti-cheat or bans: the makers of anti-cheat do not publish what they
-// allow, so Compy cannot know. "Compy can't promise how any anti-cheat will react" is the true line.
+// nothing to game files). The true remaining set (src-tauri, guarded by other_load.rs
+// `open_process_appears_only_at_allowlisted_sites`, whose allowlist is empty): Compy opens NO process by id,
+// the game included. Process names, "is the game still running" and pid-reuse checks all read one
+// system-wide snapshot (other_load::read_process_rows: pid, parent, image name, create time, threads,
+// session). It reads no game memory and holds no handle to the game; frame timing is read from Windows'
+// event tracing (ETW); window and foreground checks are window-manager queries. It may still not say
+// "never touched" or promise an outcome with anti-cheat or bans: the makers of anti-cheat do not publish
+// what they allow, so Compy cannot know (docs/ARCHITECTURE_LOCKS.md ~191).
+// "Compy can't promise how any anti-cheat will react" is the true line.
 // Product text rule: CLAUDE.md "Honesty rules", docs/PRODUCT_CONSTITUTION.md section 38.
 //
 // Scans EVERY locale JSON (all namespaces, en and zh-CN, found on disk, so a new file or language is

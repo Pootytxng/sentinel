@@ -337,7 +337,10 @@ const OFF_THREADS: usize = 4;
 const OFF_PPID: usize = 88;
 const OFF_WORKING_SET: usize = 144;
 const ROW_MIN: usize = OFF_WORKING_SET + 8;
+/// SessionId (ULONG) follows HandleCount (ULONG at 96) after UniqueProcessId/InheritedFrom (80, 88).
+const OFF_SESSION: usize = 100;
 const _: () = assert!(OFF_PPID == OFF_PID + 8 && ROW_MIN == 152);
+const _: () = assert!(OFF_SESSION == OFF_PPID + 8 + 4 && OFF_SESSION + 4 <= ROW_MIN);
 
 /// One process as the handle-free snapshot describes it. Everything here comes from the snapshot buffer;
 /// nothing needs a process handle. NOT available without a handle (and so not here): full exe path,
@@ -352,6 +355,8 @@ pub(crate) struct ProcRow {
     /// safely). See [`ProcRow::label`].
     pub name: Option<String>,
     pub threads: u32,
+    /// Terminal-services session the process runs in (0 = services/system).
+    pub session_id: u32,
     /// Working set in bytes (the figure sysinfo called `memory()`).
     pub working_set: u64,
     /// Creation time, 100 ns units (FILETIME). With `pid` it identifies one process lifetime.
@@ -392,6 +397,7 @@ pub(crate) fn parse_process_rows(buf: &[u8]) -> Option<Vec<ProcRow>> {
             parent: u64::from_le_bytes(rd(buf, off + OFF_PPID)?) as u32,
             name: entry_name(buf, base, off),
             threads: u32::from_le_bytes(rd(buf, off + OFF_THREADS)?),
+            session_id: u32::from_le_bytes(rd(buf, off + OFF_SESSION)?),
             working_set: u64::from_le_bytes(rd(buf, off + OFF_WORKING_SET)?),
             create_time: i64::from_le_bytes(rd(buf, off + OFF_CREATE)?),
             cpu_100ns: user.saturating_add(kernel),
@@ -414,6 +420,44 @@ pub(crate) fn read_process_rows() -> Option<Vec<ProcRow>> {
         return None;
     }
     parse_process_rows(&buf)
+}
+
+// PURE questions over snapshot rows. They replace the three direct `OpenProcess` calls on a game pid
+// (fps.rs name + alive, monitoring.rs pid_running_as): nothing here opens any process.
+
+/// The row for `pid`, if the snapshot holds it.
+pub(crate) fn find_row(rows: &[ProcRow], pid: u32) -> Option<&ProcRow> {
+    rows.iter().find(|r| r.pid == pid)
+}
+
+/// The image file name of `pid`, or "" when the snapshot has no such pid or no readable name (what a
+/// failed open used to give, so an unnameable presenter still never counts as a game).
+pub(crate) fn image_name_for(rows: &[ProcRow], pid: u32) -> String {
+    find_row(rows, pid).and_then(|r| r.name.clone()).unwrap_or_default()
+}
+
+/// STRICT identity: `pid` is present, has threads (an exited process other programs still hold a handle
+/// to has none), runs an image named `expected_name` (case-insensitive; an unreadable name fails), and,
+/// when `created` is known, is the same lifetime (a recycled pid has a different creation time).
+pub(crate) fn alive_as(rows: &[ProcRow], pid: u32, expected_name: &str, created: Option<i64>) -> bool {
+    find_row(rows, pid).is_some_and(|r| {
+        r.threads > 0
+            && r.name.as_deref().is_some_and(|n| n.eq_ignore_ascii_case(expected_name))
+            && created.is_none_or(|c| r.create_time == c)
+    })
+}
+
+/// Is `pid` still a live process whose image is `expected_name`? `None` when the snapshot could not be
+/// read (never "closed"); `Some(false)` when the pid is gone, has no threads, or runs another image; an
+/// unreadable name reads as running, as a failed name query did.
+pub(crate) fn running_as(rows: Option<&[ProcRow]>, pid: u32, expected_name: &str) -> Option<bool> {
+    let rows = rows?;
+    Some(match find_row(rows, pid) {
+        None => false,
+        Some(r) if r.threads == 0 => false,
+        Some(ProcRow { name: Some(n), .. }) => n.eq_ignore_ascii_case(expected_name),
+        Some(_) => true,
+    })
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1050,10 +1094,69 @@ mod tests {
             parent: 0,
             name: Some("x.exe".into()),
             threads: 1,
+            session_id: 1,
             working_set: 0,
             create_time: create,
             cpu_100ns: cpu,
         }
+    }
+
+    fn named(pid: u32, name: &str, create: i64, threads: u32) -> ProcRow {
+        ProcRow { name: Some(name.into()), threads, ..row(pid, create, 0) }
+    }
+
+    #[test]
+    fn alive_needs_the_pid_present_with_threads_and_the_same_name() {
+        let rows = vec![named(10, "Game.exe", 500, 12), named(11, "gone.exe", 501, 0), ProcRow { name: None, ..row(12, 502, 0) }];
+        assert!(alive_as(&rows, 10, "game.EXE", None), "name is case-insensitive");
+        assert!(!alive_as(&rows, 10, "other.exe", None), "another image on the pid");
+        assert!(!alive_as(&rows, 99, "Game.exe", None), "absent pid");
+        assert!(!alive_as(&rows, 11, "gone.exe", None), "an exited process (no threads) another handle still holds");
+        assert!(!alive_as(&rows, 12, "x.exe", None), "an unreadable name never proves identity");
+        assert!(!alive_as(&[], 10, "Game.exe", None));
+    }
+
+    #[test]
+    fn a_recycled_pid_is_caught_by_creation_time_even_with_the_same_image() {
+        let at_attach = vec![named(10, "Game.exe", 500, 12)];
+        let created = find_row(&at_attach, 10).map(|r| r.create_time);
+        assert!(alive_as(&at_attach, 10, "Game.exe", created));
+        // The game exits; Windows hands pid 10 to a NEW process of the same exe.
+        let recycled = vec![named(10, "Game.exe", 777, 8)];
+        assert!(!alive_as(&recycled, 10, "Game.exe", created), "same pid, same name, new lifetime");
+        assert!(alive_as(&recycled, 10, "Game.exe", None), "without a recorded start the name alone decides");
+    }
+
+    #[test]
+    fn running_as_never_reads_an_unreadable_snapshot_as_closed() {
+        let rows = vec![named(10, "Game.exe", 500, 12), named(11, "gone.exe", 501, 0), ProcRow { name: None, ..row(12, 502, 0) }];
+        assert_eq!(running_as(None, 10, "Game.exe"), None);
+        assert_eq!(running_as(Some(&rows), 10, "game.exe"), Some(true));
+        assert_eq!(running_as(Some(&rows), 10, "cmd.exe"), Some(false), "a reused pid is not the game");
+        assert_eq!(running_as(Some(&rows), 99, "Game.exe"), Some(false));
+        assert_eq!(running_as(Some(&rows), 11, "gone.exe"), Some(false));
+        assert_eq!(running_as(Some(&rows), 12, "x.exe"), Some(true), "present but unnamed: as a failed name query read");
+    }
+
+    #[test]
+    fn image_name_for_is_empty_when_the_pid_or_name_is_missing() {
+        let rows = vec![named(10, "Game.exe", 500, 1), ProcRow { name: None, ..row(12, 502, 0) }];
+        assert_eq!(image_name_for(&rows, 10), "Game.exe");
+        assert_eq!(image_name_for(&rows, 12), "");
+        assert_eq!(image_name_for(&rows, 99), "");
+    }
+
+    #[test]
+    fn the_session_id_is_read_from_its_offset_and_distinguishes_sessions() {
+        const ENTRY: usize = 256;
+        assert_eq!(OFF_SESSION, 100);
+        let mut buf = snapshot(&[(4, "System", 1, 0, 0), (1234, "Game.exe", 77, 0, 0), (555, "Svc.exe", 5, 0, 0)]);
+        buf[ENTRY + OFF_SESSION..ENTRY + OFF_SESSION + 4].copy_from_slice(&3u32.to_le_bytes());
+        let rows = parse_process_rows(&buf).unwrap();
+        assert_eq!((rows[0].session_id, rows[1].session_id, rows[2].session_id), (0, 3, 0));
+        assert_ne!(rows[1].session_id, rows[2].session_id, "a session match compares these");
+        // The field sits inside the minimum entry, so a short entry is still rejected, not read past.
+        assert_eq!(parse_process_rows(&buf[..ENTRY + OFF_SESSION + 2]), None);
     }
 
     #[test]
@@ -1075,6 +1178,7 @@ mod tests {
                 parent: 500,
                 name: Some("Game.exe".into()),
                 threads: 9,
+                session_id: 0,
                 working_set: 123_456_789,
                 create_time: 77,
                 cpu_100ns: 1000,
@@ -1722,5 +1826,94 @@ mod process_refresh_guard {
         assert_eq!(violations("#[cfg(test)]\nmod t { fn b() { sys.refresh_all(); } }"), vec!["refresh_all"]);
         // ... and a `System::new_all()` placed after a `];`-ending test item fails.
         assert_eq!(violations("#[cfg(test)]\nconst A: [u8; 1] = [\n    1,\n];\nfn p() { System::new_all(); }"), vec!["new_all"]);
+    }
+
+    // ---- OpenProcess allowlist -------------------------------------------------------------------
+    //
+    // No code in this crate opens another process by id. The three direct opens of the game pid
+    // (fps.rs name + alive, monitoring.rs pid_running_as) were replaced by snapshot rows, so the list
+    // below is EMPTY. A future need must be added here, by file and function with a one-line reason, in
+    // the same change that reviews it: `OpenProcess` anywhere else, test code included, fails. The
+    // substring also catches `NtOpenProcess`, `ZwOpenProcess` and `OpenProcessToken`.
+    // (src-tauri/src-relative file with `/`, function name, why this site may open a process).
+    const OPEN_PROCESS_ALLOWLIST: &[(&str, &str, &str)] = &[];
+
+    /// Where `OpenProcess` appears in `src`: the enclosing function name for each production occurrence,
+    /// plus "<test code>" if any occurrence is inside a `#[cfg(test)]` item. Masked first, so comments
+    /// and string literals neither trip nor hide it.
+    fn open_process_sites(src: &str) -> Vec<String> {
+        const NAME: &str = "OpenProcess";
+        let masked = mask(src);
+        let prod = drop_test_items(&masked);
+        let ident = |c: char| c.is_alphanumeric() || c == '_';
+        let mut sites: Vec<String> = prod
+            .match_indices(NAME)
+            .map(|(i, _)| {
+                let before = &prod[..i];
+                before
+                    .match_indices("fn ")
+                    .filter(|(j, _)| !before[..*j].chars().next_back().is_some_and(ident))
+                    .last()
+                    .map(|(j, _)| before[j + 3..].chars().take_while(|c| ident(*c)).collect::<String>())
+                    .unwrap_or_else(|| "<top level>".to_string())
+            })
+            .collect();
+        if masked.matches(NAME).count() > prod.matches(NAME).count() {
+            sites.push("<test code>".to_string());
+        }
+        sites
+    }
+
+    fn allowed(list: &[(&str, &str, &str)], file: &str, func: &str) -> bool {
+        list.iter().any(|(f, n, why)| *f == file && *n == func && !why.trim().is_empty())
+    }
+
+    #[test]
+    fn open_process_appears_only_at_allowlisted_sites() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files = Vec::new();
+        rs_files(&root, &mut files);
+        assert!(files.len() > 50, "the scan must really see the source tree, saw {}", files.len());
+        let (mut bad, mut seen) = (Vec::new(), Vec::new());
+        for f in &files {
+            let rel = f.strip_prefix(&root).unwrap_or(f).to_string_lossy().replace('\\', "/");
+            let src = std::fs::read_to_string(f).expect("read source");
+            for func in open_process_sites(&src) {
+                if allowed(OPEN_PROCESS_ALLOWLIST, &rel, &func) {
+                    seen.push((rel.clone(), func));
+                } else {
+                    bad.push(format!("{rel}: fn {func}"));
+                }
+            }
+        }
+        assert!(
+            bad.is_empty(),
+            "OpenProcess is not allowed here (a game's process must not be opened; use other_load::read_process_rows), \
+             or add the site to OPEN_PROCESS_ALLOWLIST with a reason:\n{}",
+            bad.join("\n")
+        );
+        for (f, n, _) in OPEN_PROCESS_ALLOWLIST {
+            assert!(
+                seen.iter().any(|(sf, sn)| sf == f && sn == n),
+                "allowlist entry {f}::{n} no longer has an OpenProcess call: remove it"
+            );
+        }
+    }
+
+    #[test]
+    fn the_open_process_guard_is_not_vacuous() {
+        assert_eq!(open_process_sites("fn probe(pid: u32) { OpenProcess(Q, false, pid); }"), vec!["probe"]);
+        assert_eq!(open_process_sites("fn a() {}\nfn b() { let h = NtOpenProcess(x); }"), vec!["b"]);
+        assert_eq!(open_process_sites("fn t() { OpenProcessToken(h, 8, &mut t); }"), vec!["t"]);
+        // Comments and strings are not code; a test item is "<test code>", not a production site.
+        assert!(open_process_sites("// OpenProcess\nfn a() { let s = \"OpenProcess\"; }").is_empty());
+        assert_eq!(open_process_sites("#[cfg(test)]\nmod t { fn x() { OpenProcess(1); } }\nfn p() {}"), vec!["<test code>"]);
+        // The allowlist matches by file AND function, and only with a reason.
+        let list: &[(&str, &str, &str)] = &[("a.rs", "probe", "why"), ("b.rs", "quiet", " ")];
+        assert!(allowed(list, "a.rs", "probe"));
+        assert!(!allowed(list, "a.rs", "other"), "a different function in an allowed file");
+        assert!(!allowed(list, "c.rs", "probe"), "the same function name in another file");
+        assert!(!allowed(list, "b.rs", "quiet"), "no reason, no entry");
+        assert!(!allowed(OPEN_PROCESS_ALLOWLIST, "fps.rs", "resolve_process_name"));
     }
 }
