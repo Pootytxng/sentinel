@@ -1247,9 +1247,9 @@ pub(crate) struct LedgerPhase {
 }
 
 /// "Clear everything", phase 1: the change-history family and the Trial store. The caller must hold the
-/// Trial gate and then the ledger lock (the one declared nesting `Experiment -> History`); the ledger
-/// lock is taken as `&LedgerGuard`, a value only `history::lock_ledger` makes, so this function cannot be
-/// called without it. Re-plans UNDER both locks, so "no change is applied" is the answer at the moment of
+/// Trial gate and then the ledger lock (the one declared nesting `Experiment -> History`); they are taken
+/// as `&TrialGuard` and `&LedgerGuard`, values only `experiment::lock_trial_gate` and `history::lock_ledger`
+/// make (no other lock's guard type-checks), so this function cannot be called without both. Re-plans UNDER both locks, so "no change is applied" is the answer at the moment of
 /// the delete, and an apply that landed first is seen and refuses. Deletes the ledger family in its fixed
 /// order (backup before `history.json`), stopping the family on a failure, then `experiments.json`.
 #[allow(clippy::result_large_err)] // the Err is the finished outcome, returned once on a cold path
@@ -1257,7 +1257,7 @@ pub(crate) fn execute_everything_ledger_phase(
     root: &Path,
     plan: &ClearPlan,
     facts: &ClearFacts,
-    _experiment_gate: &crate::race_seam::StoreGuard,
+    _experiment_gate: &crate::experiment::TrialGuard,
     _ledger: &crate::history::LedgerGuard,
 ) -> Result<LedgerPhase, ClearOutcome> {
     ledger_phase(root, plan, facts, &delete_one)
@@ -1315,7 +1315,7 @@ pub(crate) fn clear_everything_at(
     gates: &dyn ClearGates,
 ) -> ClearOutcome {
     let phase = {
-        let experiment_gate = match crate::experiment::lock_store() {
+        let experiment_gate = match crate::experiment::lock_trial_gate() {
             Ok(g) => g,
             Err(e) => return ClearOutcome::Refused(vec![store_lock_unavailable("the Trial store", &e)]),
         };
@@ -2517,7 +2517,7 @@ mod tests {
         let t = Tmp::new("x8");
         seed(&t);
         let plan = plan_clear(&t.root, Scope::Everything, &later());
-        let gate = crate::experiment::lock_store().unwrap();
+        let gate = crate::experiment::lock_trial_gate().unwrap();
         let ledger = crate::history::lock_ledger().unwrap();
         let seen = RefCell::new(Vec::new());
         let phase = ledger_phase(&t.root, &plan, &later(), &|root, rel| {
@@ -2560,12 +2560,48 @@ mod tests {
         let core = include_str!("data_clear.rs").split("// ---- live wrappers").next().unwrap();
         let sig = core.split("pub(crate) fn execute_everything_ledger_phase(").nth(1).and_then(|r| r.split(") ->").next()).unwrap();
         assert!(sig.contains("&crate::history::LedgerGuard"), "the ledger lock must be a parameter: {sig}");
+        assert!(sig.contains("&crate::experiment::TrialGuard"), "the Trial gate must be a parameter of its own type: {sig}");
+        assert!(!sig.contains("StoreGuard"), "no bare StoreGuard stands in for either gate: {sig}");
         let code: String = core.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
         assert!(!code.contains(concat!("lock_", "history(")), "the ledger lock comes only through history::lock_ledger");
         assert_eq!(code.matches("history::lock_ledger()").count(), 1, "exactly one place takes it: clear_everything_at");
-        let exp = code.find("experiment::lock_store()").expect("the Trial gate");
+        let exp = code.find("experiment::lock_trial_gate()").expect("the Trial gate");
         let led = code.find("history::lock_ledger()").expect("the ledger lock");
         assert!(exp < led, "Experiment, then History: the declared nesting");
+    }
+
+    // ===== D7 item 3: the Trial gate has a type of its own ===========================================
+
+    #[test]
+    fn y1_the_trial_gate_is_a_type_only_the_trial_stores_lock_function_makes() {
+        use std::any::TypeId;
+        // Not a StoreGuard: a sessions, history or any other store guard cannot be passed for it.
+        assert_ne!(TypeId::of::<crate::experiment::TrialGuard>(), TypeId::of::<crate::race_seam::StoreGuard>());
+        assert_ne!(TypeId::of::<crate::experiment::TrialGuard>(), TypeId::of::<crate::history::LedgerGuard>());
+        // Constructible in exactly one place: its struct and the one literal in `lock_trial_gate`.
+        let exp = include_str!("experiment.rs");
+        assert_eq!(exp.matches("TrialGuard {").count(), 2, "the struct and its single constructor");
+        assert!(exp.contains("lock_store().map(|_guard| TrialGuard { _guard })"), "built only from the Trial store's own lock");
+        let core = include_str!("data_clear.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+        assert!(!core.contains("TrialGuard {"), "the clear never builds one");
+        // The private field means no struct literal outside experiment.rs compiles either; and the one
+        // function taking it is the ledger phase.
+        assert_eq!(core.matches("&crate::experiment::TrialGuard").count(), 1);
+    }
+
+    #[test]
+    fn y2_the_public_ledger_phase_runs_with_the_two_guards_and_the_clear_goes_on_to_the_rest() {
+        let t = Tmp::new("y2");
+        seed(&t);
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(plan.can_proceed(), "{:?}", plan.refusals);
+        let trial = crate::experiment::lock_trial_gate().unwrap();
+        let ledger = crate::history::lock_ledger().unwrap();
+        let phase = execute_everything_ledger_phase(&t.root, &plan, &later(), &trial, &ledger).ok().expect("phase 1");
+        drop(ledger);
+        drop(trial);
+        assert!(!t.has("history.json") && !t.has("history.json.bak") && !t.has("experiments.json"));
+        assert!(done(finish_everything(&t.root, phase, &NoGates)).complete);
     }
 
     // (5) handle-based delete
