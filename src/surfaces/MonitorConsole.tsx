@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
-import type { SessionSummary } from "../types";
+import type { SessionSummary, FpsUnreadStatus } from "../types";
 import {
   readDisplayRefreshHz,
   type OverlayDensity,
@@ -83,7 +83,7 @@ type FpsSample = {
   avg_frametime_ms: number;
   recent_frametimes_ms: number[];
 };
-type FpsLite = { active: boolean; status: string; sample: FpsSample | null };
+type FpsLite = { active: boolean; status: string; sample: FpsSample | null } & FpsUnreadStatus;
 
 // Same corner set as Play's overlay config (ported, not forked).
 const CORNERS: [string, string][] = [
@@ -359,9 +359,13 @@ export function MonitorConsole({
   // What an empty scope says under "no signal" (intimidation pass 2026-08-20): the bare words
   // read as a fault on a room that had not yet explained itself. One plain line names the next
   // press — and, once capture is on, what is being waited for. Same line in both scopes.
-  const scopeHint = fpsActive
-    ? t("monitor.monitorConsole.scopeCapturingHint")
-    : t("monitor.monitorConsole.scopeIdleHint");
+  // M6-unread: a second Compy couldn't read is its own state, not "no signal" and not 0 fps.
+  const unreadableNow = fpsActive && fps?.unreadable_now === true;
+  const scopeHint = unreadableNow
+    ? t("monitor.unreadable.now")
+    : fpsActive
+      ? t("monitor.monitorConsole.scopeCapturingHint")
+      : t("monitor.monitorConsole.scopeIdleHint");
 
   // THE LAST SESSION IS THE EVIDENCE (issue #49 slice 4). The approved Live comp makes the latest
   // COMPLETED session the focal proof, not the live window: name, duration, its average, its 1%
@@ -802,6 +806,8 @@ export function MonitorConsole({
                 <Term id="one-percent-lows">{t("monitor.monitorConsole.oneLowTermLabel")}</Term>
                 {t("monitor.monitorConsole.estSuffix")}
               </>
+            ) : unreadableNow ? (
+              t("monitor.unreadable.now")
             ) : fps?.status === "declined" ? (
               t("monitor.monitorConsole.declinedStatus")
             ) : fpsActive ? (

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { invoke } from "@tauri-apps/api/core";
-import type { SessionSummary, Priorities, Recommendation, AppliedChange } from "../types";
+import type { SessionSummary, Priorities, Recommendation, AppliedChange, FpsUnreadStatus } from "../types";
 import {
   type OverlayDensity,
   type OverlayBackdrop,
@@ -38,7 +38,11 @@ import "./Play.css";
 
 type GpuLite = { vendor?: string; temperature_c: number | null; utilization_gpu_pct: number | null };
 type CpuLite = { usage_overall_pct: number };
-type FpsLite = { active: boolean; status: string; sample: { fps: number; low1_fps: number } | null };
+type FpsLite = {
+  active: boolean;
+  status: string;
+  sample: { fps: number; low1_fps: number } | null;
+} & FpsUnreadStatus;
 type ArmedLite = { game: string } | null;
 
 const CORNERS: [string, string][] = [
@@ -409,7 +413,11 @@ export default function Play({
               {t("monitor.play.adminDeclined")}
             </p>
           )}
-          {fps?.active && !sample && fps?.status !== "declined" && (
+          {/* M6-unread: a second Compy couldn't read is its own line (the figures above show "—", not 0). */}
+          {fps?.active && !sample && fps?.unreadable_now === true && (
+            <p className="play-honest">{t("monitor.unreadable.now")}</p>
+          )}
+          {fps?.active && !sample && fps?.unreadable_now !== true && fps?.status !== "declined" && (
             <p className="play-honest">
               {t("monitor.play.capturingHint")}
             </p>

@@ -3203,6 +3203,7 @@ mod tests {
             gpu_load: None,
             frame_cap: None,
             ended: None,
+            unreadable_seconds: 0,
         }
     }
 

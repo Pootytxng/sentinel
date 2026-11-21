@@ -27,6 +27,24 @@ export function allBackground(s: {
   return !(s.samples > 0) && leftOutSecs(s) != null;
 }
 
+/** M6-unread: past this share of a session's seconds unmeasured, its figures are marked untrusted.
+ *  Mirror of sessions.rs `UNREADABLE_UNTRUSTED_PCT` (pinned by unreadable-contract.test.ts). */
+export const UNREADABLE_UNTRUSTED_PCT = 20;
+
+/** The whole seconds of a session Compy could not look at, when there are any. Absent/null (an older
+ *  Compy, or a session that always could) and 0 both mean there is nothing to say. */
+export function unreadableSecs(s: { unreadable_seconds?: number | null }): number | null {
+  const v = s.unreadable_seconds;
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.round(v) : null;
+}
+
+/** Too much of the session went unmeasured for its figures to stand: strictly more than
+ *  UNREADABLE_UNTRUSTED_PCT percent of its seconds. Integer arithmetic, as sessions.rs `mostly_unread`. */
+export function mostlyUnread(s: { unreadable_seconds?: number | null; duration_secs: number }): boolean {
+  const n = unreadableSecs(s);
+  return n != null && n * 100 > Math.max(0, s.duration_secs) * UNREADABLE_UNTRUSTED_PCT;
+}
+
 /** "24 s" / "2 min 36 s" in the viewer's language (keys under monitor.leftOut). */
 export function leftOutSpan(secs: number, t: Translate): string {
   return secs < 60

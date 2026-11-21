@@ -466,7 +466,7 @@ struct FpsReport {
     frame_hist: Option<FrameHistWire>,
     /// How many ticks since this helper started could not read the process snapshot (and so emitted
     /// nothing). Cumulative; omitted while 0. Lets a reader tell "the helper could not look" from
-    /// "no frames". Readers ignore it today (the app's `FpsSample` skips unknown fields).
+    /// "no frames". The app reads it into `FpsSample::snapshot_unreadable_ticks`.
     #[serde(skip_serializing_if = "is_zero")]
     snapshot_unreadable_ticks: u64,
 }
@@ -474,6 +474,11 @@ struct FpsReport {
 fn is_zero(n: &u64) -> bool {
     *n == 0
 }
+
+/// Appended to the helper's output path for the unreadable-tick marker: a file holding the cumulative
+/// count, rewritten on every unreadable tick. The app reads its AGE (monitoring.rs `unreadable_read`):
+/// younger than the last report means the helper is, right now, unable to look.
+pub(crate) const UNREADABLE_SUFFIX: &str = ".snapshot-unreadable";
 
 /// Counts ticks whose process snapshot could not be read, and rate-limits the message about it: the
 /// first, then every `EVERY`th (a persistent failure would otherwise print twice a second).
@@ -490,6 +495,16 @@ impl UnreadableTicks {
         self.total += 1;
         self.total == 1 || self.total.is_multiple_of(Self::EVERY)
     }
+}
+
+/// One unreadable tick: count it and rewrite the marker file beside `out` (every tick, so its age
+/// stays current while the failure lasts). True when the message should be printed now (rate-limited).
+fn note_unreadable_tick(unreadable: &mut UnreadableTicks, out: Option<&str>) -> bool {
+    let say = unreadable.note();
+    if let Some(out) = out {
+        write_atomic(&format!("{out}{UNREADABLE_SUFFIX}"), &unreadable.total.to_string());
+    }
+    say
 }
 
 /// What one tick's identity step produced. `skipped` = the snapshot was unreadable: nothing was
@@ -815,6 +830,10 @@ pub fn run_capture() {
     // The snapshot buffer lives across ticks (no 1 MiB allocation per tick), and unreadable ticks are counted.
     let mut snap_buf: Vec<u8> = Vec::new();
     let mut unreadable = UnreadableTicks::default();
+    // A marker left by an earlier helper must not read as this one's (the app also removes it at start).
+    if let Some(out) = &opts.out_path {
+        let _ = std::fs::remove_file(format!("{out}{UNREADABLE_SUFFIX}"));
+    }
     loop {
         std::thread::sleep(Duration::from_millis(REPORT_INTERVAL_MS));
         let now = Instant::now();
@@ -893,14 +912,13 @@ pub fn run_capture() {
         attached_created = step.created;
         let best = step.best;
         if step.skipped {
-            if unreadable.note() {
+            // The marker is written on EVERY unreadable tick (the message is rate-limited, the file is
+            // not): the app reads its age to tell "Compy couldn't read this second" from "no frames".
+            if note_unreadable_tick(&mut unreadable, opts.out_path.as_deref()) {
                 eprintln!(
                     "[compy-fps] process snapshot unreadable - skipping the tick ({} so far).",
                     unreadable.total
                 );
-                if let Some(out) = &opts.out_path {
-                    write_atomic(&format!("{out}.snapshot-unreadable"), &unreadable.total.to_string());
-                }
             }
             continue;
         }
@@ -1536,8 +1554,9 @@ mod handle_free_identity_tests {
     //! The attached game's identity comes from snapshot rows (pid + image name + creation time), with no
     //! process opened. These drive `identity_step` (the function the capture loop calls) over synthetic rows.
     use super::{
-        identity_step, select_game_presenter, track_created, Attachment, FpsReport, IdentityStep,
-        PresenterCandidate, UnreadableTicks, WindowEvidence, ATTACH_STREAK_TICKS,
+        identity_step, note_unreadable_tick, select_game_presenter, track_created, Attachment, FpsReport,
+        IdentityStep, PresenterCandidate, UnreadableTicks, WindowEvidence, ATTACH_STREAK_TICKS,
+        UNREADABLE_SUFFIX,
     };
     use crate::other_load::ProcRow;
 
@@ -1689,6 +1708,28 @@ mod handle_free_identity_tests {
         };
         assert!(!serde_json::to_string(&rep(0)).unwrap().contains("snapshot_unreadable_ticks"));
         assert!(serde_json::to_string(&rep(3)).unwrap().contains("\"snapshot_unreadable_ticks\":3"));
+    }
+
+    /// M6-unread: the marker file is rewritten on EVERY unreadable tick (its age is what the app
+    /// reads), while the printed message stays rate-limited to the first and every 120th.
+    #[test]
+    fn every_unreadable_tick_rewrites_the_marker_but_the_message_is_rate_limited() {
+        let dir = std::env::temp_dir().join(format!("compy-unread-marker-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("fps.json").to_string_lossy().into_owned();
+        let marker = format!("{out}{UNREADABLE_SUFFIX}");
+        let mut ticks = UnreadableTicks::default();
+        let said: Vec<bool> = (0..3).map(|_| note_unreadable_tick(&mut ticks, Some(&out))).collect();
+        assert_eq!(said, [true, false, false]);
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "3", "the file carries the running count");
+        for _ in 3..120 {
+            note_unreadable_tick(&mut ticks, Some(&out));
+        }
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "120");
+        assert!(!note_unreadable_tick(&mut ticks, None), "tick 121 is not a message tick");
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), "120", "no out path, no file");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Names the snapshot now supplies that the old open often refused. Each well-known non-game presenter

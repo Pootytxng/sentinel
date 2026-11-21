@@ -3,6 +3,9 @@
     "seconds": "{{seconds}} 秒",
     "minutes": "{{minutes}} 分 {{seconds}} 秒"
   },
+  "unreadable": {
+    "now": "Compy 无法读取这一秒的数据。"
+  },
   "monitor": {
     "tuningPresetsTitle": "调优预设",
     "vendorHintAmd": "——你的 AMD 显卡支持 FreeSync",
@@ -232,6 +235,7 @@
   },
   "sessionDebrief": {
     "leftOut": "其他窗口在前台的 {{span}} 没有计入数据。",
+    "unreadable": "本次会话的 {{total}} 秒中，Compy 有 {{count}} 秒无法测量，所以这些数字只涵盖其余部分。",
     "screenTarget": "你的平均帧率约为 {{rate}} Hz 屏幕刷新率的 {{pct}}%。",
     "screenTargetMet": "你的平均帧率跟上了 {{rate}} Hz 屏幕的刷新率。",
     "comparisonHeader": "对比 · {{title}} · 两次 {{game}} 会话",
@@ -286,6 +290,10 @@
       "background": {
         "headline": "未评级",
         "sub": "整个会话期间其他窗口都在前台，所以这 {{span}} 全部没有计入，也没有测得任何数据。让游戏保持在前台即可得到读数。"
+      },
+      "partial": {
+        "headline": "未评级",
+        "sub": "Compy 有超过五分之一的时间无法测量，仅凭其余部分给出流畅度结论，就等于替它没看到的时间下判断。下方数字只涵盖它能读取的那些秒。"
       },
       "smooth": {
         "headline": "会话流畅",

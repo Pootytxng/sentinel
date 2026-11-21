@@ -3,6 +3,9 @@
     "seconds": "{{seconds}} s",
     "minutes": "{{minutes}} min {{seconds}} s"
   },
+  "unreadable": {
+    "now": "Compy couldn't read this second."
+  },
   "monitor": {
     "tuningPresetsTitle": "Tuning presets",
     "vendorHintAmd": " — FreeSync on your AMD card",
@@ -232,6 +235,7 @@
   },
   "sessionDebrief": {
     "leftOut": "{{span}} left out while another window was in front.",
+    "unreadable": "Compy couldn't measure {{count}} of this session's {{total}} seconds, so the numbers cover the rest.",
     "screenTarget": "Your average was about {{pct}}% of your {{rate}} Hz screen.",
     "screenTargetMet": "Your average kept up with your {{rate}} Hz screen.",
     "comparisonHeader": "COMPARISON · {{title}} · two {{game}} sessions",
@@ -286,6 +290,10 @@
       "background": {
         "headline": "Not graded",
         "sub": "Another window was in front for the whole session, so all {{span}} were left out and nothing was measured. Keep the game in front to get a reading."
+      },
+      "partial": {
+        "headline": "Not graded",
+        "sub": "Compy couldn't measure more than a fifth of this session, so a smoothness verdict from the rest would speak for time it never saw. The figures below cover only the seconds it could read."
       },
       "smooth": {
         "headline": "Smooth session",

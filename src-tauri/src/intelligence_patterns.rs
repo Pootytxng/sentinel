@@ -705,6 +705,7 @@ mod tests {
             // A read "no cap" (CR-pattern-cap-and-words: an unread cap is left out of 1% low lanes).
             frame_cap: Some(crate::noise_floor::CapRead::Uncapped),
             ended: None,
+            unreadable_seconds: 0,
         }
     }
 

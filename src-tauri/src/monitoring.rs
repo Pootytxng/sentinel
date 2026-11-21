@@ -741,6 +741,68 @@ pub(crate) fn fps_out_path() -> PathBuf {
 pub(crate) fn fps_alive_path() -> PathBuf {
     fps_dir().join("fps.alive")
 }
+/// The helper's unreadable-tick marker (`fps::UNREADABLE_SUFFIX`): written on every tick on which the
+/// helper could not read the process snapshot, holding the cumulative count of such ticks.
+pub(crate) fn fps_unreadable_path() -> PathBuf {
+    PathBuf::from(format!("{}{}", fps_out_path().display(), crate::fps::UNREADABLE_SUFFIX))
+}
+
+/// How recent the helper's marker must be to say "this second". The helper ticks every 500 ms, so a
+/// marker older than this was not written by the tick that just passed.
+const UNREADABLE_FRESH: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// What the helper's marker says about the current moment. `now` = the helper could not read the
+/// process snapshot on its latest tick, so this second is "Compy couldn't read it", never "no frames"
+/// and never 0 fps. `ticks` = the helper's cumulative count (0 when it never missed).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct UnreadRead {
+    pub(crate) ticks: u64,
+    pub(crate) now: bool,
+}
+
+/// PURE: the marker file's text as a count. Anything but a whole number is no count.
+pub(crate) fn parse_unreadable_ticks(txt: &str) -> Option<u64> {
+    txt.trim().parse().ok()
+}
+
+/// PURE: read the marker. `marker_age` is how old the marker file is (`None` = no marker), `sample_age`
+/// how old fps.json is (`None` = none yet). `now` holds only while the marker is fresh AND newer than
+/// the last report, so a helper that has recovered (it rewrote fps.json after the marker) reads as
+/// readable at once, and a marker left behind reads as stale. `ticks` is the larger of the marker's
+/// count and the one the last report carried (`sample_ticks`).
+pub(crate) fn unreadable_read(
+    marker_ticks: Option<u64>,
+    marker_age: Option<std::time::Duration>,
+    sample_age: Option<std::time::Duration>,
+    sample_ticks: u64,
+) -> UnreadRead {
+    let now = marker_age.is_some_and(|m| m < UNREADABLE_FRESH && sample_age.is_none_or(|s| s > m));
+    UnreadRead { ticks: marker_ticks.unwrap_or(0).max(sample_ticks), now }
+}
+
+/// PURE: what one recorder second does with the report on disk. While the helper could not read the
+/// snapshot (`unread.now`) the report is withheld (it is older than the marker, so it is not this
+/// second's) and the second is flagged unreadable; otherwise the report passes through unchanged.
+pub(crate) fn gate_unreadable<T>(sample: Option<T>, unread: UnreadRead) -> (Option<T>, bool) {
+    if unread.now {
+        (None, true)
+    } else {
+        (sample, false)
+    }
+}
+
+/// The marker as it is on disk: its count (if readable) and its age (if present).
+fn read_marker() -> (Option<u64>, Option<std::time::Duration>) {
+    let path = fps_unreadable_path();
+    let age = std::fs::metadata(&path).ok().and_then(|m| m.modified().ok()).and_then(|m| m.elapsed().ok());
+    let ticks = age.and_then(|_| std::fs::read_to_string(&path).ok()).and_then(|t| parse_unreadable_ticks(&t));
+    (ticks, age)
+}
+
+/// How old fps.json is, if it exists.
+fn sample_age() -> Option<std::time::Duration> {
+    std::fs::metadata(fps_out_path()).ok().and_then(|m| m.modified().ok()).and_then(|m| m.elapsed().ok())
+}
 
 pub(crate) fn fps_active() -> &'static std::sync::atomic::AtomicBool {
     static A: OnceLock<std::sync::atomic::AtomicBool> = OnceLock::new();
@@ -822,6 +884,11 @@ pub(crate) struct FpsSample {
     /// session recorder only; never sent on to the UI (`skip_serializing`), which has no use for it.
     #[serde(default, skip_serializing)]
     frame_hist: Option<crate::fps::FrameHistWire>,
+    /// The helper's cumulative count of ticks that could not read the process snapshot (omitted by
+    /// the helper while 0, so it reads 0 here). Missing on an older helper's line = 0 = nothing said.
+    /// Read through [`unreadable_read`]; never sent to the UI (the status carries the readout).
+    #[serde(default, skip_serializing)]
+    snapshot_unreadable_ticks: u64,
 }
 
 #[derive(Serialize)]
@@ -841,6 +908,23 @@ pub(crate) struct FpsStatus {
     /// capture is off or before the recorder's first tick. Additive and read-only.
     #[serde(skip_serializing_if = "Option::is_none")]
     progress: Option<crate::sessions::CaptureProgress>,
+    /// M6-unread: the helper could not read the process snapshot on its latest tick, so Compy
+    /// couldn't read THIS second. `sample` is withheld then (a report up to 3 s old would read as
+    /// live), and the UI says so instead of showing 0 fps or "no frames". Omitted while false.
+    #[serde(skip_serializing_if = "is_false")]
+    unreadable_now: bool,
+    /// M6-unread: how many ticks the helper has been unable to read the snapshot since it started
+    /// (cumulative, half-second ticks). Omitted while 0. Additive: an older reader ignores it.
+    #[serde(skip_serializing_if = "is_zero_u64")]
+    unreadable_ticks: u64,
+}
+
+fn is_zero_u64(n: &u64) -> bool {
+    *n == 0
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// PURE (P5-guided): whether the game behind the helper's last line is still running. `last` is the
@@ -1003,8 +1087,10 @@ fn start_fps_capture_locked() -> Result<(), String> {
     }
     let dir = fps_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("could not create data dir: {e}"))?;
-    // Drop any stale sample so the UI doesn't briefly show last session's data.
+    // Drop any stale sample so the UI doesn't briefly show last session's data (and any marker of
+    // the last helper, so it never reads as this one's).
     let _ = std::fs::remove_file(fps_out_path());
+    let _ = std::fs::remove_file(fps_unreadable_path());
     // A new generation BEFORE the heartbeat and the flag go up, so a thread of the last capture that
     // wakes now sees it was superseded (and leaves the fresh heartbeat alone).
     let generation = capture_gen().fetch_add(1, Ordering::AcqRel) + 1;
@@ -1187,12 +1273,8 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 // positively attached (fail-closed attribution), so fps.json can legitimately
                 // sit frozen at its last sample. Same <3 s mtime rule as get_fps_status —
                 // without it, this 1 Hz recorder would re-record that frozen sample forever.
-                let fps_fresh = std::fs::metadata(fps_out_path())
-                    .ok()
-                    .and_then(|m| m.modified().ok())
-                    .and_then(|m| m.elapsed().ok())
-                    .map(|e| e < std::time::Duration::from_secs(3))
-                    .unwrap_or(false);
+                let fps_age = sample_age();
+                let fps_fresh = fps_age.map(|e| e < std::time::Duration::from_secs(3)).unwrap_or(false);
                 let fps_txt = if fps_fresh {
                     std::fs::read_to_string(fps_out_path()).ok()
                 } else {
@@ -1200,9 +1282,20 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 };
                 // Parse the helper's per-tick line through the capture backend (its wire format is
                 // the backend's concern) - byte-identical to the prior inline serde_json parse.
-                let sample = fps_txt
+                let parsed = fps_txt
                     .and_then(|txt| crate::capture::EtwDxgiBackend.parse_sample(&txt))
                     .filter(|s| s.fps > 0.0);
+                // M6-unread: a second the helper could not look at is neither a reading nor "no
+                // frames": the report up to 3 s old that is still on disk is NOT re-recorded as this
+                // second's, and the second is counted as unreadable below.
+                let (marker_ticks, marker_age) = read_marker();
+                let unread = unreadable_read(
+                    marker_ticks,
+                    marker_age,
+                    fps_age,
+                    parsed.as_ref().map_or(0, |s| s.snapshot_unreadable_ticks),
+                );
+                let (sample, second_unreadable) = gate_unreadable(parsed, unread);
                 // The boundary sees only a reading that names its process; `alive` is asked only on a
                 // tick with no fresh reading, so a game that is merely silent (alt-tab, loading,
                 // minimised) is never mistaken for a game that is gone.
@@ -1233,6 +1326,12 @@ fn start_fps_capture_locked() -> Result<(), String> {
                     continue;
                 };
                 let elapsed = now.saturating_sub(live.began_at);
+                if second_unreadable {
+                    // Counted as what it is: a second Compy couldn't measure. It adds no reading, no
+                    // zero and no gap-fill; the session's own length still includes it.
+                    live.acc.record_unreadable();
+                    *lock_progress() = Some(live.acc.progress());
+                }
                 if let Some(s) = &sample {
                     // P4-comparable: a tick with the game behind another window is left out
                     // of the session's numbers and of the stutter timeline.
@@ -1484,8 +1583,13 @@ impl LiveSession {
             // in the app, silently. A short blip is never saved, so it never toasts.
             let ended = summary.clone();
             if let Ok(Some(saved)) = crate::sessions::save_session(summary) {
-                if let Some(notice) = crate::experiment::session_end_notice_now(&ended, saved.settled) {
-                    crate::notify_debrief_ready(&notice.body(&ended.process_name));
+                // M6-unread: a session whose figures are untrusted (more than a fifth of it unmeasured,
+                // `mostly_unread`) settles nothing, so it never interrupts the player with a verdict
+                // toast; its debrief waits in the app and says why.
+                if !ended.mostly_unread() {
+                    if let Some(notice) = crate::experiment::session_end_notice_now(&ended, saved.settled) {
+                        crate::notify_debrief_ready(&notice.body(&ended.process_name));
+                    }
                 }
             }
         }
@@ -1523,6 +1627,7 @@ fn stop_fps_capture_locked() {
     *lock_progress() = None;
     let _ = std::fs::remove_file(fps_alive_path());
     let _ = std::fs::remove_file(fps_out_path());
+    let _ = std::fs::remove_file(fps_unreadable_path());
     crate::tray::set_idle();
 }
 
@@ -1539,6 +1644,12 @@ pub(crate) fn latest_frametimes() -> Option<(String, Vec<f64>)> {
         .map(|e| e < std::time::Duration::from_secs(3))
         .unwrap_or(false);
     if !fresh {
+        return None;
+    }
+    // M6-unread: a report older than the helper's marker is not the present: a Trial window never
+    // takes it as this moment's frames.
+    let (marker_ticks, marker_age) = read_marker();
+    if unreadable_read(marker_ticks, marker_age, sample_age(), 0).now {
         return None;
     }
     let bytes = std::fs::read(&path).ok()?;
@@ -1568,12 +1679,23 @@ pub(crate) fn get_fps_status() -> FpsStatus {
     })()
     .unwrap_or((None, false));
     let game_running = if active { game_running_from(last.as_ref(), fresh, pid_running_as) } else { None };
+    // M6-unread: while the helper cannot read the process snapshot the readout says so (and shows
+    // no report: the one on disk is older than the marker). Only while capture is on.
+    let (marker_ticks, marker_age) = read_marker();
+    let unread = if active {
+        unreadable_read(marker_ticks, marker_age, sample_age(), last.as_ref().map_or(0, |s| s.snapshot_unreadable_ticks))
+    } else {
+        UnreadRead::default()
+    };
+    let (sample, _) = gate_unreadable(if fresh { last } else { None }, unread);
     FpsStatus {
         active,
         status,
-        sample: if fresh { last } else { None },
+        sample,
         game_running,
         progress: if active { lock_progress().clone() } else { None },
+        unreadable_now: unread.now,
+        unreadable_ticks: unread.ticks,
     }
 }
 
@@ -2012,5 +2134,138 @@ mod capture_generation_tests {
         // Tickets rise in the order they are taken.
         let (a, b) = (capture_ticket(), capture_ticket());
         assert!(b > a);
+    }
+}
+
+/// M6-unread: "Compy couldn't read this second" is its own state: never 0 fps, never "no frames".
+#[cfg(test)]
+mod unreadable_tests {
+    use super::{
+        gate_unreadable, parse_unreadable_ticks, unreadable_read, FpsSample, FpsStatus, UnreadRead,
+    };
+    use std::time::Duration;
+
+    const S: fn(f64) -> Duration = Duration::from_secs_f64;
+
+    #[test]
+    fn the_app_reads_the_file_the_helper_writes() {
+        let path = super::fps_unreadable_path();
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(name, format!("fps.json{}", crate::fps::UNREADABLE_SUFFIX));
+        assert_eq!(path.parent(), super::fps_out_path().parent(), "beside fps.json, as the helper writes it");
+    }
+
+    #[test]
+    fn the_marker_text_is_a_whole_count_or_nothing() {
+        assert_eq!(parse_unreadable_ticks("12"), Some(12));
+        assert_eq!(parse_unreadable_ticks(" 7\r\n"), Some(7));
+        for bad in ["", "  ", "abc", "-1", "1.5", "12 ticks"] {
+            assert_eq!(parse_unreadable_ticks(bad), None, "{bad:?} is no count");
+        }
+    }
+
+    #[test]
+    fn a_fresh_marker_newer_than_the_last_report_reads_as_this_second_unreadable() {
+        // Marker written 0.2 s ago; the last report is 2.5 s old (the helper has skipped since).
+        assert!(unreadable_read(Some(5), Some(S(0.2)), Some(S(2.5)), 0).now);
+        // No report was ever written (the game never presented a readable tick).
+        assert!(unreadable_read(Some(1), Some(S(0.1)), None, 0).now);
+    }
+
+    #[test]
+    fn a_helper_that_recovered_a_stale_marker_and_no_marker_are_not_unreadable() {
+        // The helper wrote a report AFTER the marker: it can look again.
+        assert!(!unreadable_read(Some(5), Some(S(1.0)), Some(S(0.3)), 5).now);
+        // A marker left behind (older than the freshness window) is history, not now.
+        assert!(!unreadable_read(Some(5), Some(S(9.0)), Some(S(20.0)), 0).now);
+        // No marker at all: the helper never missed.
+        assert_eq!(unreadable_read(None, None, Some(S(0.4)), 0), UnreadRead { ticks: 0, now: false });
+    }
+
+    #[test]
+    fn the_count_is_the_larger_of_the_marker_and_the_last_report() {
+        assert_eq!(unreadable_read(Some(3), Some(S(30.0)), Some(S(0.2)), 8).ticks, 8);
+        assert_eq!(unreadable_read(Some(9), Some(S(0.2)), Some(S(2.0)), 4).ticks, 9);
+        assert_eq!(unreadable_read(None, None, None, 0).ticks, 0);
+    }
+
+    #[test]
+    fn an_unreadable_second_withholds_the_report_on_disk_and_says_why() {
+        let now = UnreadRead { ticks: 4, now: true };
+        assert_eq!(gate_unreadable(Some("stale report"), now), (None, true), "not re-recorded as this second's");
+        assert_eq!(gate_unreadable::<&str>(None, now), (None, true), "no report at all is still unreadable, not silent");
+        let ok = UnreadRead { ticks: 4, now: false };
+        assert_eq!(gate_unreadable(Some("live"), ok), (Some("live"), false));
+        assert_eq!(gate_unreadable::<&str>(None, ok), (None, false), "no frames stays no frames");
+    }
+
+    fn line(extra: &str) -> FpsSample {
+        serde_json::from_str(&format!(
+            r#"{{"pid":4,"process_name":"g.exe","fps":60.0,"avg_frametime_ms":16.6,"low1_fps":50.0,"frames_last_sec":60,"recent_frametimes_ms":[16.6]{extra}}}"#
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn the_helpers_count_loads_and_an_older_line_without_it_reads_as_none_said() {
+        assert_eq!(line("").snapshot_unreadable_ticks, 0);
+        assert_eq!(line(r#","snapshot_unreadable_ticks":3"#).snapshot_unreadable_ticks, 3);
+    }
+
+    #[test]
+    fn the_status_names_the_unreadable_state_only_when_there_is_one() {
+        let status = |now: bool, ticks: u64| {
+            serde_json::to_value(FpsStatus {
+                active: true,
+                status: "running".into(),
+                sample: None,
+                game_running: None,
+                progress: None,
+                unreadable_now: now,
+                unreadable_ticks: ticks,
+            })
+            .unwrap()
+        };
+        let quiet = status(false, 0);
+        assert!(quiet.get("unreadable_now").is_none() && quiet.get("unreadable_ticks").is_none(), "{quiet}");
+        let loud = status(true, 9);
+        assert_eq!(loud["unreadable_now"], true);
+        assert_eq!(loud["unreadable_ticks"], 9);
+        assert!(loud["sample"].is_null(), "an unreadable second shows no sample");
+    }
+
+    /// The Rust half of the wire contract: `src/test/fixtures/unreadable.wire.json` is what serde emits
+    /// today; `src/unreadable-contract.test.ts` holds the TypeScript types to the same file.
+    #[test]
+    fn the_wire_fixture_is_what_serde_emits() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../src/test/fixtures/unreadable.wire.json")).unwrap();
+        let mut acc = crate::sessions::SessionAccumulator::new("2026-11-21T00:00:00Z".into(), Some(0));
+        acc.record_tick("g.exe", 98.5, 10.1, 80.0, 0, Some(true));
+        for _ in 0..4 {
+            acc.record_unreadable();
+        }
+        let progress = acc.progress();
+        let status = serde_json::to_value(FpsStatus {
+            active: true,
+            status: "running".into(),
+            sample: None,
+            game_running: None,
+            progress: Some(progress),
+            unreadable_now: true,
+            unreadable_ticks: 9,
+        })
+        .unwrap();
+        assert_eq!(status["unreadable_now"], fixture["fps_status"]["unreadable_now"]);
+        assert_eq!(status["unreadable_ticks"], fixture["fps_status"]["unreadable_ticks"]);
+        assert_eq!(status["progress"], fixture["fps_status"]["progress"]);
+        assert_eq!(status, fixture["fps_status"], "the whole status, key for key");
+        let mut again = crate::sessions::SessionAccumulator::new("2026-11-21T00:00:00Z".into(), Some(0));
+        again.record_tick("g.exe", 98.5, 10.1, 80.0, 0, Some(true));
+        for _ in 0..12 {
+            again.record_unreadable();
+        }
+        let summary = serde_json::to_value(again.finalize(100)).unwrap();
+        assert_eq!(summary["unreadable_seconds"], fixture["session_unreadable_seconds"]);
     }
 }

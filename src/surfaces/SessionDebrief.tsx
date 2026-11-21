@@ -28,7 +28,7 @@ import { useExpertView } from "../design/use-expert-view";
 import { Depth, ReceiptRow, receiptPct } from "../design/Depth";
 import { LessonLine } from "../design/LessonLine";
 import { LESSON_KEY, lessonRuleForVerdict, type Falls } from "./test-summary";
-import { knownFps, leftOutSecs, allBackground, leftOutSpan } from "../lib/session-metrics";
+import { knownFps, leftOutSecs, allBackground, leftOutSpan, unreadableSecs, mostlyUnread } from "../lib/session-metrics";
 import { hasUndo, liveChangeGroups } from "../data/live-changes";
 import "../i18n";
 
@@ -416,7 +416,12 @@ export function SessionDebrief({
   // The verdict, the insights and the clean line all argue from the 1%-low/average ratio, so with
   // either reading unknown there is no ratio and nothing here concludes from one (#608). The old
   // fallback of 1 called an unmeasured session "Smooth"; an unknown low of 0 called it "Rough".
-  const ratio = avgFps != null && lowFps != null ? Math.min(1, lowFps / avgFps) : null;
+  // M6-unread: seconds Compy could not look at are left out of every number, and said. Past a fifth
+  // of the session the figures cover too little of it to grade it: no ratio, so no verdict, no
+  // insight and no clean line argue from them (the numbers stay on screen, ungraded).
+  const unread = unreadableSecs(s);
+  const untrusted = mostlyUnread(s);
+  const ratio = !untrusted && avgFps != null && lowFps != null ? Math.min(1, lowFps / avgFps) : null;
   // P4-comparable-show: time the game spent behind another window was left out of every number,
   // so the card says how much. A session that was behind the whole time says that is why it has no
   // readings. No focus reading (null) says nothing.
@@ -427,6 +432,11 @@ export function SessionDebrief({
       ? {
           h: t("monitor.sessionDebrief.verdict.background.headline"),
           sub: t("monitor.sessionDebrief.verdict.background.sub", { span: leftOutSpan(leftOut, t) }),
+        }
+      : untrusted
+      ? {
+          h: t("monitor.sessionDebrief.verdict.partial.headline"),
+          sub: t("monitor.sessionDebrief.verdict.partial.sub"),
         }
       : ratio == null
       ? {
@@ -548,20 +558,25 @@ export function SessionDebrief({
           {t("monitor.sessionDebrief.leftOut", { span: leftOutSpan(leftOut, t) })}
         </p>
       )}
+      {unread != null && (
+        <p className="debrief-sub debrief-unreadable">
+          {t("monitor.sessionDebrief.unreadable", { count: unread, total: s.duration_secs })}
+        </p>
+      )}
 
       <div className="debrief-tiles">
         <DebriefTile
           label={<Term id="hz-vs-fps">{t("monitor.sessionDebrief.avgFpsLabel")}</Term>}
           value={fmtFps(avgFps)}
           note={avgFps == null ? t("common.arcGauge.noReading") : undefined}
-          grade={avgFps == null ? undefined : gradeFps(avgFps, { refreshHz: readDisplayRefreshHz() })}
+          grade={avgFps == null || untrusted ? undefined : gradeFps(avgFps, { refreshHz: readDisplayRefreshHz() })}
         />
         {/* A 1% low is graded against its average, so it needs both readings to carry a grade. */}
         <DebriefTile
           label={<Term id="one-percent-lows">{t("monitor.sessionDebrief.oneLowLabel")}</Term>}
           value={fmtFps(lowFps)}
           note={lowFps == null ? t("common.arcGauge.noReading") : t("monitor.sessionDebrief.estimateNote")}
-          grade={lowFps == null || avgFps == null ? undefined : gradeLow1(lowFps, avgFps)}
+          grade={lowFps == null || avgFps == null || untrusted ? undefined : gradeLow1(lowFps, avgFps)}
         />
         {/* Peak GPU is utilization — left neutral on purpose (high is good while gaming). */}
         <DebriefTile

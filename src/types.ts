@@ -388,9 +388,23 @@ export type SessionSummary = {
   /** P4-comparable: seconds the game presented while another window was in front, left out of every
    *  number above. null/absent = the session didn't record focus (an older Compy). */
   background_secs_excluded?: number | null;
+  /** M6-unread: whole seconds Compy could not look at (the capture helper could not read the Windows
+   *  process snapshot). Left out of every number above, never zeros and never "no frames". Absent on
+   *  rows an older Compy wrote and on sessions that always could (sessions.rs `unreadable_seconds`). */
+  unreadable_seconds?: number | null;
   /** P4-smooth-measure: true per-frame frame-time percentiles (ms) over `frames` measured frames.
    *  Absent on older sessions, with an older helper, or under 1000 frames. Not shown yet. */
   frame_pacing?: { frames: number; p50_ms: number; p99_ms: number; p999_ms: number } | null;
+};
+
+/** M6-unread: what `get_fps_status` adds when the capture helper cannot read the Windows process
+ *  snapshot (monitoring.rs `FpsStatus`). `unreadable_now` = Compy couldn't read THIS second: `sample`
+ *  is null then, and the readout must say so, never show 0 fps or "no frames". Both keys are absent
+ *  while there is nothing to say (an older build never sends them). `unreadable_ticks` counts the
+ *  helper's half-second ticks, since it started. */
+export type FpsUnreadStatus = {
+  unreadable_now?: boolean;
+  unreadable_ticks?: number;
 };
 
 /** Mirror of the Rust `OtherLoad` (game_state.rs): how busy everything except the game was over a

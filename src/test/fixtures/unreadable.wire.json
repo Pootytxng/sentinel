@@ -1,0 +1,15 @@
+{
+  "fps_status": {
+    "active": true,
+    "status": "running",
+    "sample": null,
+    "progress": {
+      "samples": 1,
+      "fps_series": [[0, 98.5]],
+      "unreadable_secs": 4
+    },
+    "unreadable_now": true,
+    "unreadable_ticks": 9
+  },
+  "session_unreadable_seconds": 12
+}

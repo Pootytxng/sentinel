@@ -404,7 +404,7 @@ pub(crate) static INVENTORY: &[InventoryRow] = &[
         writers: &["sessions.rs"],
         category: PlayHistory,
         personal: &[ProgramNames, HardwareSpecs],
-        contains: "Up to 100 monitoring sessions: the game or app executable name, start time and length, FPS, frametime and 1% lows, peak temperatures and usage, per-second stutter timeline and events (including notes of which programs started during the session), and the hardware label.",
+        contains: "Up to 100 monitoring sessions: the game or app executable name, start time and length, FPS, frametime and 1% lows, peak temperatures and usage, per-second stutter timeline and events (including notes of which programs started during the session), and the hardware label, and how many of its seconds Compy couldn't measure.",
         created: "when the first monitoring session ends",
         sandbox: Follows,
         names_in_code: &[],
