@@ -204,6 +204,24 @@ const SCHEME_BALANCED: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
 const SCHEME_HIGH_PERFORMANCE: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
 const SCHEME_ULTIMATE: &str = "e9a42b02-d5df-448d-aa00-03f14749eb61";
 
+/// The ONE table of the power plans Windows ships under fixed GUIDs (lower-case): GUID, class, the name
+/// Windows gives it in English. `power_plan_of`, the changed-outside rule (history.rs), the Trial
+/// pre-flight (experiment.rs) and the Export Snapshot redaction (export.rs) all read it; there is no
+/// other copy. Compy's own Ultimate Performance copy has a GUID that is NOT in this table.
+pub(crate) const STOCK_POWER_SCHEMES: [(&str, PowerPlanClass, &str); 4] = [
+    (SCHEME_BALANCED, PowerPlanClass::Balanced, "Balanced"),
+    (SCHEME_HIGH_PERFORMANCE, PowerPlanClass::HighPerformance, "High performance"),
+    (SCHEME_POWER_SAVER, PowerPlanClass::PowerSaver, "Power saver"),
+    (SCHEME_ULTIMATE, PowerPlanClass::Ultimate, "Ultimate Performance"),
+];
+
+/// Pure: the class and English name of a stock Windows plan, from its GUID in any case, with or
+/// without braces. `None` for every other GUID (a custom plan, or Compy's own Ultimate copy).
+pub(crate) fn stock_power_scheme(guid: &str) -> Option<(PowerPlanClass, &'static str)> {
+    let g = guid.trim().trim_matches(['{', '}']).to_ascii_lowercase();
+    STOCK_POWER_SCHEMES.iter().find(|(s, _, _)| *s == g).map(|(_, c, n)| (*c, *n))
+}
+
 /// The active plan's class and its printed name, from one `powercfg /getactivescheme` read.
 pub(crate) fn current_power_plan() -> Option<(PowerPlanClass, String)> {
     let output = crate::actions::quiet_command("powercfg")
@@ -236,12 +254,9 @@ pub(crate) fn power_scheme_of(stdout: &str) -> Option<history::ObservedPlan> {
 pub(crate) fn power_plan_of(stdout: &str) -> Option<(PowerPlanClass, String)> {
     let guid = scheme_guid_of(stdout)?;
     let name = power_plan_name_of(stdout).unwrap_or_default();
-    let class = match guid.as_str() {
-        SCHEME_POWER_SAVER => PowerPlanClass::PowerSaver,
-        SCHEME_BALANCED => PowerPlanClass::Balanced,
-        SCHEME_HIGH_PERFORMANCE => PowerPlanClass::HighPerformance,
-        SCHEME_ULTIMATE => PowerPlanClass::Ultimate,
-        _ => {
+    let class = match stock_power_scheme(&guid) {
+        Some((class, _)) => class,
+        None => {
             let lower = name.to_lowercase();
             if lower.contains("ultimate") {
                 PowerPlanClass::Ultimate
@@ -706,6 +721,37 @@ mod core_parking_tests {
         // A name with its own parentheses, and a ")" before "(": the name is what follows the GUID; no panic.
         assert_eq!(power_plan_name_of("Power Scheme (active) GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High performance)").as_deref(), Some("High performance"));
         assert_eq!(power_plan_name_of(") stray ("), None);
+    }
+
+    #[test]
+    fn the_one_stock_power_scheme_table_classifies_every_guid_each_old_copy_knew_the_same_way() {
+        use super::{power_plan_of, stock_power_scheme, PowerPlanClass as C};
+        // The GUIDs and names the four retired copies (lib.rs match, history.rs 3-GUID list, experiment.rs
+        // plan_name, export.rs 4-GUID list) knew, written out here so a change to the table fails this test.
+        let old = [
+            ("381b4222-f694-41f0-9685-ff5bb260df2e", C::Balanced, "Balanced"),
+            ("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", C::HighPerformance, "High performance"),
+            ("a1841308-3541-4fab-bc81-f71556f20b4a", C::PowerSaver, "Power saver"),
+            ("e9a42b02-d5df-448d-aa00-03f14749eb61", C::Ultimate, "Ultimate Performance"),
+        ];
+        assert_eq!(super::STOCK_POWER_SCHEMES.len(), old.len());
+        for (guid, class, name) in old {
+            assert_eq!(stock_power_scheme(guid), Some((class, name)), "{guid}");
+            assert_eq!(stock_power_scheme(&guid.to_uppercase()), Some((class, name)), "upper-case {guid}");
+            assert_eq!(stock_power_scheme(&format!("{{{guid}}}")), Some((class, name)), "braced {guid}");
+            // lib.rs's own reader, history.rs's non-Ultimate rule, experiment.rs's name and export.rs's stock test.
+            assert_eq!(power_plan_of(&format!("x GUID: {guid}  (zzz)")).map(|p| p.0), Some(class));
+            assert_eq!(crate::history::is_stock_non_ultimate_scheme(guid), class != C::Ultimate, "{guid}");
+            assert_eq!(crate::experiment::plan_name(guid), Some(name), "{guid}");
+            assert!(crate::export::is_stock_plan(guid), "{guid}");
+        }
+        // Compy's own Ultimate copy and any custom plan: not in the table, by every reader.
+        for other in ["aaaaaaaa-1111-2222-3333-444444444444", "", "381b4222-f694-41f0-9685-ff5bb260df2f"] {
+            assert_eq!(stock_power_scheme(other), None, "{other}");
+            assert!(!crate::history::is_stock_non_ultimate_scheme(other));
+            assert_eq!(crate::experiment::plan_name(other), None);
+            assert!(!crate::export::is_stock_plan(other));
+        }
     }
 
     #[test]

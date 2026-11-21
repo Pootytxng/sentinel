@@ -3258,13 +3258,12 @@ pub(crate) struct ObservedPlan {
     pub(crate) class: crate::PowerPlanClass,
 }
 
-/// The schemes Windows ships under fixed GUIDs that are not Ultimate: Balanced, High performance and
-/// Power saver. A copy Compy's Ultimate apply makes always gets a new GUID, so it is never one of these.
-const STOCK_NON_ULTIMATE_SCHEMES: [&str; 3] = [
-    "381b4222-f694-41f0-9685-ff5bb260df2e",
-    "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
-    "a1841308-3541-4fab-bc81-f71556f20b4a",
-];
+/// True for the schemes Windows ships under fixed GUIDs that are not Ultimate: Balanced, High performance
+/// and Power saver (read from the one table, [`crate::STOCK_POWER_SCHEMES`]). A copy Compy's Ultimate apply
+/// makes always gets a new GUID, so it is never one of these.
+pub(crate) fn is_stock_non_ultimate_scheme(guid: &str) -> bool {
+    crate::stock_power_scheme(guid).is_some_and(|(class, _)| class != crate::PowerPlanClass::Ultimate)
+}
 
 /// The refusal for a row applied before Compy recorded which plan its Ultimate apply activated, when
 /// the active plan is not a stock Windows scheme (CR-ultimate-identity, review r2).
@@ -3316,7 +3315,7 @@ pub(crate) fn changed_outside_refusal(c: &AppliedChange, observed: Option<&Obser
     // language) from the user's plan. Only a stock Windows scheme, which no copy can be, is known
     // not to be it; anything else stays a refusal (the undo remains the user's other choice). A
     // record made earlier is kept as it is; this only refuses a new one.
-    if compys_plan_guid(c).is_none() && !STOCK_NON_ULTIMATE_SCHEMES.iter().any(|g| seen.guid.eq_ignore_ascii_case(g)) {
+    if compys_plan_guid(c).is_none() && !is_stock_non_ultimate_scheme(&seen.guid) {
         return Err(LEGACY_ULTIMATE_REFUSAL.into());
     }
     Ok(())
@@ -8258,7 +8257,7 @@ mod ultimate_identity_tests {
         assert_eq!(changed_outside_refusal(&old, Some(&localized_copy)), Err(LEGACY_ULTIMATE_REFUSAL.to_string()));
         let users = seen("44444444-4444-4444-4444-444444444444", crate::PowerPlanClass::Other);
         assert_eq!(changed_outside_refusal(&old, Some(&users)), Err(LEGACY_ULTIMATE_REFUSAL.to_string()), "unknown refuses");
-        for stock in STOCK_NON_ULTIMATE_SCHEMES {
+        for stock in ["381b4222-f694-41f0-9685-ff5bb260df2e", "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", "a1841308-3541-4fab-bc81-f71556f20b4a"] {
             assert_eq!(changed_outside_refusal(&old, Some(&seen(&stock.to_uppercase(), crate::PowerPlanClass::Other))), Ok(()), "{stock}");
         }
         assert!(changed_outside_refusal(&old, Some(&seen(PRIOR, crate::PowerPlanClass::Other))).is_err(), "the prior: undo instead");

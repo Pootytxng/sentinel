@@ -54,13 +54,6 @@ pub(crate) struct ExportRedaction {
 const FIXED_SIGNALS: [&str; 2] = ["RAM filling up (90%+)", "a GPU clock drop under load"];
 const WITHHELD: &str = "(withheld from this export)";
 const CUSTOM_PLAN: &str = "a custom power plan";
-/// The four power plans Windows ships, by GUID (lower-case). Anything else is per-install.
-const STOCK_PLAN_GUIDS: [&str; 4] = [
-    "381b4222-f694-41f0-9685-ff5bb260df2e",
-    "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
-    "a1841308-3541-4fab-bc81-f71556f20b4a",
-    "e9a42b02-d5df-448d-aa00-03f14749eb61",
-];
 /// Every `game_state` key the export carries: the fingerprint's own fields, minus
 /// [`SHARED_EXPORT_OMITS`]. Anything else (a newer build's `unknown_fields`) is dropped, so a new
 /// field is private until someone looks at it and adds it here (a test fails until then).
@@ -127,8 +120,10 @@ fn usable_literals(mut raw: Vec<(String, &'static str)>, profile_leaf: Option<St
     raw
 }
 
-fn is_stock_plan(guid: &str) -> bool {
-    STOCK_PLAN_GUIDS.contains(&guid.trim().trim_matches(['{', '}']).to_lowercase().as_str())
+/// One of the four plans Windows ships (the one table is [`crate::STOCK_POWER_SCHEMES`]); anything else
+/// is per-install.
+pub(crate) fn is_stock_plan(guid: &str) -> bool {
+    crate::stock_power_scheme(guid).is_some()
 }
 
 fn guid_like(s: &str) -> bool {

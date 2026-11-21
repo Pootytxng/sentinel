@@ -2318,14 +2318,10 @@ pub(crate) const POWER_PLAN_REC: &str = "power-ultimate";
 
 /// Opus r1 SHOULD-FIX: Windows' own plans by their fixed GUIDs, so the fix step can name the plan to
 /// switch back to; any other plan is left unnamed (never guessed).
-fn plan_name(guid: &str) -> Option<&'static str> {
-    match guid.trim().to_ascii_lowercase().as_str() {
-        "381b4222-f694-41f0-9685-ff5bb260df2e" => Some("Balanced"),
-        "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" => Some("High performance"),
-        "a1841308-3541-4fab-bc81-f71556f20b4a" => Some("Power saver"),
-        "e9a42b02-d5df-448d-aa00-03f14749eb61" => Some("Ultimate Performance"),
-        _ => None,
-    }
+pub(crate) fn plan_name(guid: &str) -> Option<&'static str> {
+    // The one table lives in lib.rs (`STOCK_POWER_SCHEMES`). The old copy here did not strip braces; a
+    // braced GUID was never passed in (GUIDs are stored bare), so reading it too changes no result.
+    crate::stock_power_scheme(guid).map(|(_, name)| name)
 }
 
 /// TG-preflight (read-only): for a running two-session Trial with no after-session yet, what differs
