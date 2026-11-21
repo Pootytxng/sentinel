@@ -167,7 +167,7 @@ export function TrustMoment({
             <>
               <p className="tm-body tm-close">{t("home.trustMoment.done.body")}</p>
               <div className="tm-actions">
-                <button type="button" className="tm-btn tm-btn-primary" onClick={dismiss}>
+                <button type="button" className="tm-btn" onClick={dismiss}>
                   {t("home.trustMoment.actions.gotIt")}
                 </button>
               </div>

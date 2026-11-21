@@ -565,6 +565,17 @@ describe("HomeConsole — the console stage (the real rig + its honest readout)"
     const h = mount({ ...props, readiness: his }).container;
     expect(h.querySelector(".rcb")!.textContent).toContain("All 14 checks look good · 2 advisory, not graded");
     expect(h.textContent).not.toContain("16 of 16");
+    cleanup();
+    // The ring's note used to carry what it left out; the Re-run band (.rcb) says it now, in plain words, whenever
+    // the number is above zero, including when NOTHING was graded (never silence for "couldn't read").
+    const unread: GameReadiness = { ...some, checks: some.checks.map((k) => ({ ...k, status: "unknown" })), ready_count: 0, attention_count: 0, unknown_count: 16 };
+    expect(mount({ ...props, readiness: unread }).container.querySelector(".rcb")!.textContent).toContain("16 couldn't be measured");
+    cleanup();
+    const allAdvisory: GameReadiness = { ...his, checks: his.checks.map((k) => ({ ...k, status: "advisory" })), ready_count: 0, advisory_count: 16 };
+    expect(mount({ ...props, readiness: allAdvisory }).container.querySelector(".rcb")!.textContent).toContain("16 advisory, not graded");
+    cleanup();
+    const flagged: GameReadiness = { ...his, checks: his.checks.map((k, i) => (i === 0 ? { ...k, status: "attention" } : k)), ready_count: 13, attention_count: 1 };
+    expect(mount({ ...props, readiness: flagged }).container.querySelector(".rcb")!.textContent).toContain("2 advisory, not graded");
   });
 
   it("GPU temp reading shows the polled value once it lands", async () => {

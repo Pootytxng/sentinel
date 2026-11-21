@@ -76,17 +76,6 @@
       "none": "Nothing detected yet — run a fresh check."
     },
     "stage": {
-      "readinessLabel": "Readiness",
-      "readinessNote": "{{passed}} of {{total}} checks passed",
-      "readinessUnread_one": "{{count}} couldn't be read",
-      "readinessUnread_other": "{{count}} couldn't be read",
-      "readinessAdvisory_one": "{{count}} advisory, not graded",
-      "readinessAdvisory_other": "{{count}} advisory, not graded",
-      "readinessGrade": {
-        "good": "Good",
-        "fair": "Fair",
-        "poor": "Worth a look"
-      },
       "avgFps": "Avg FPS",
       "onePercentLow": "1% low",
       "gpuTemp": "GPU temp",

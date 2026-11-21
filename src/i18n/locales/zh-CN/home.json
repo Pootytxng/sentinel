@@ -72,15 +72,6 @@
       "none": "尚未检测到硬件——请重新检查。"
     },
     "stage": {
-      "readinessLabel": "就绪度",
-      "readinessNote": "{{total}} 项检查中通过 {{passed}} 项",
-      "readinessUnread_other": "{{count}} 项无法读取",
-      "readinessAdvisory_other": "{{count}} 项为提示项,不评级",
-      "readinessGrade": {
-        "good": "良好",
-        "fair": "尚可",
-        "poor": "值得看看"
-      },
       "avgFps": "平均 FPS",
       "onePercentLow": "1% 低帧",
       "gpuTemp": "GPU 温度",

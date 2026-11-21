@@ -367,11 +367,10 @@ function InEffectLine({ inEffect, t }: { inEffect: InEffectCounts; t: TFunction 
   );
 }
 
-// WHY THE FOUR RAW READINGS ARE NOT ArcGauges (four-room direction, issue #49). The strip is a
-// HIERARCHY, not five equal instruments: the composite readiness score keeps its ring because a
-// 0-100 out of a formula is what a ring is for, and the four raw readings beside it are just
-// numbers. Five rings in a row would be the "twelve equal tiles" failure the bento exists to
-// prevent, in miniature. The cell itself now lives in the kit (slice 3) — see Reading.tsx, whose
+// WHY THE READINGS ARE NOT ArcGauges (four-room direction, issue #49). The strip is four measured
+// numbers, rendered as numbers; the composite readiness ring and its grade word left Home on
+// 2026-11-20 (Compy shows no score). Rings in a row would be the "twelve equal tiles" failure the
+// bento exists to prevent, in miniature. The cell itself now lives in the kit (slice 3) — see Reading.tsx, whose
 // READING_ROWS contract .hc-readout below is what satisfies.
 
 export function HomeConsole({

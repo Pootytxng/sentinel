@@ -742,13 +742,11 @@
   color: var(--v2-text);
 }
 
-/* ── THE READOUT STRIP (issue #49) — the four canvas-corner gauges plus the CPU temperature that
-   used to be a value on the annotation plane, in one row under the rig. It is a HIERARCHY, not five
-   equal instruments: readiness keeps its ring (a 0–100 out of a formula is what a ring is for) and
-   the four raw readings beside it are numbers, rendered as numbers. Five rings would be the "twelve
-   equal tiles" failure the bento exists to prevent, in miniature. The readiness track is the widest
-   of the five, measured off the approved comp, where that cell is about a third wider than its
-   neighbours because it carries the ring, the grade word and the "= n of m checks passed" line. ── */
+/* ── THE READOUT STRIP (issue #49) — the canvas-corner gauges' readings plus the CPU temperature that
+   used to be a value on the annotation plane, in one row under the rig. Four readings, each a number
+   Compy measured, rendered as a number. The readiness ring (and its grade word) left Home on
+   2026-11-20: Compy shows no score. The ROUND notes below are history from when the strip had a
+   fifth, readiness cell; the per-reading floors and the budget still apply to the four. ── */
 /* THE STRIP'S WIDTH BUDGET — four rounds, four mechanisms, one root cause: a track sized by its
    CONTENT, in a strip whose content is translated and wraps. R6: a bare `1.4fr`'s automatic minimum
    is min-content, so the readiness track overflowed the CONTAINER — clamped it. R7: a 1.4/5.4 share
@@ -833,8 +831,8 @@
 /* THE CELLS ARE THE SHARED KIT'S (slice 3) — src/design/console/Reading.tsx + reading.css own
    .reading/.rd-*, and this strip owns only where they sit. The contract that keeps the row a row
    lives with the component as READING_ROWS: the strip declares exactly that many row tracks above,
-   every cell spans them, and both halves are guarded against ONE number rather than three copies.
    every cell spans them, and both halves are guarded against ONE number rather than three copies. */
+
 /* ── WHAT HAS BEEN HAPPENING (issue #49) — the three shortcuts into the interview. Row buttons, not
    cards: they are one list of answers to one question, and a grid of boxes here would compete with
    the primary button directly above them. ── */

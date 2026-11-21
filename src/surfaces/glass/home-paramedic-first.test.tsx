@@ -1,18 +1,35 @@
-// Home's first screen puts the Paramedic first (owner decision, constitution A38). Pins three outcomes:
+// Home's first screen puts the Paramedic first (owner decision, constitution A38). Pins:
 //  1. the Paramedic's "Something's wrong" is the one primary action on Home, new user or not, and it
-//     comes before everything else on the page;
-//  2. "Watch it work" is still on Home (the feature stays) but is a quiet button, not primary;
-//  3. Home shows no readiness score and no grade word, with or without history.
-// Home is composed the way App composes it: HomeGlass with TrustMoment in its latestChange slot.
+//     comes before everything else on the page (with no crash banner showing: see the banner case);
+//  2. "Watch it work" is still on Home (the feature stays) but is a quiet button, not primary, in the
+//     offer and after the demo finishes.
+// "No readiness score or grade on Home" is pinned where the ring lived, in home-console.test.tsx
+// (HomeGlass, the summary page, never had one). Home is composed the way App composes it: HomeGlass
+// with TrustMoment in its latestChange slot.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, within } from "@testing-library/react";
+import { render, screen, cleanup, within, fireEvent } from "@testing-library/react";
+import type { AppliedChange } from "../../types";
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: () => Promise.resolve(null),
+  invoke: (cmd: string) => {
+    if (cmd === "apply_recommendation") {
+      const change: AppliedChange = {
+        id: "c-1",
+        rec_id: "game-mode",
+        rec_title: "Game Mode",
+        applied_at: "2026-10-24T01:00:00Z",
+        snapshot: null,
+        status: "applied",
+        is_still_active: true,
+      };
+      return Promise.resolve(change);
+    }
+    return Promise.resolve(null);
+  },
 }));
 
 import "../../i18n";
-import type { GameReadiness, Recommendation, SessionSummary } from "../../types";
+import type { GameReadiness, PendingCareIncident, Recommendation, SessionSummary } from "../../types";
 import { HomeGlass } from "./HomeGlass";
 import { TrustMoment } from "../TrustMoment";
 
@@ -64,13 +81,22 @@ const readiness = (): GameReadiness => ({
   drifts: [],
 });
 
-function home(sessions: SessionSummary[]) {
+const care: PendingCareIncident = {
+  incident_id: "inc-1",
+  occurred_at: "2026-10-30T13:44:00-07:00",
+  occurred_display: "Oct 30, 1:44 PM",
+  kind: "App crash",
+  app_label: "Elden Ring",
+  summary: "Elden Ring closed unexpectedly",
+};
+
+function home(sessions: SessionSummary[], pendingCare: PendingCareIncident | null = null) {
   const { container } = render(
     <HomeGlass
       readiness={readiness()}
       priorities={null}
       sessions={sessions}
-      pendingCare={null}
+      pendingCare={pendingCare}
       onOpenCareIncident={vi.fn()}
       onDismissCareIncident={vi.fn()}
       onOpenGame={vi.fn()}
@@ -90,21 +116,19 @@ function home(sessions: SessionSummary[]) {
 const PRIMARY = ".gl-cta, .tm-btn-primary, .v2-primary, [data-primary], [class*='primary']";
 
 describe("Home puts the Paramedic first", () => {
-  it("no history: the Paramedic entry is the only primary action, and it comes first", () => {
+  it("no history, no crash banner: the Paramedic entry is the only primary action, and it comes first", () => {
     const c = home([]);
     const paramedic = screen.getByTestId("paramedic");
     const door = within(paramedic).getByRole("button", { name: "Something's wrong" });
-    const primaries = [...c.querySelectorAll<HTMLElement>(PRIMARY)];
-    expect(primaries).toEqual([door]);
+    expect([...c.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door]);
     // Nothing but the header comes before it, so it is in the first screenful, not under the fold.
-    const head = c.querySelector(".gl-head")!;
-    expect(head.nextElementSibling).toBe(paramedic);
+    expect(c.querySelector(".gl-head")!.nextElementSibling).toBe(paramedic);
     // The trust demo sits after it in the page.
     const trust = c.querySelector(".trust-moment")!;
     expect(paramedic.compareDocumentPosition(trust) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("with history: the same single primary, in the same place", () => {
+  it("with history and no crash banner: the same single primary, in the same place", () => {
     const c = home([session]);
     const paramedic = screen.getByTestId("paramedic");
     const door = within(paramedic).getByRole("button", { name: "Something's wrong" });
@@ -112,28 +136,37 @@ describe("Home puts the Paramedic first", () => {
     expect(c.querySelector(".gl-head")!.nextElementSibling).toBe(paramedic);
   });
 
+  // KNOWN GAP, documented rather than hidden: while Windows has recorded a crash, the banner's own
+  // "Find out why" is a second .gl-cta. Reworking the banner is the next slice; when it lands, this
+  // case should become "still exactly one primary" and the banner entry below goes away.
+  it("with a crash banner showing, the banner's button is the one known second primary (to be reworked)", () => {
+    const c = home([session], care);
+    const paramedic = screen.getByTestId("paramedic");
+    const door = within(paramedic).getByRole("button", { name: "Something's wrong" });
+    const banner = c.querySelector<HTMLElement>(".gl-banner .gl-cta")!;
+    expect(banner).not.toBeNull();
+    expect([...c.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door, banner]);
+    // The Paramedic's door still comes first on the page, ahead of the banner.
+    expect(paramedic.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("'Watch it work' is still on Home, but quiet: not primary-styled", () => {
     const c = home([]);
     const watch = screen.getByRole("button", { name: /watch it work/i });
-    expect(watch.classList.contains("tm-btn-primary")).toBe(false);
     expect(watch.matches(PRIMARY)).toBe(false);
     // It sits in the Trust card's own action row beside "No thanks", as a plain button.
     expect(watch.className).toBe("tm-btn");
     expect(within(c.querySelector(".tm-actions") as HTMLElement).getByRole("button", { name: /no thanks/i })).toBeTruthy();
   });
 
-  it("shows no readiness score or grade word, with or without history", () => {
-    for (const sessions of [[], [session]]) {
-      const c = home(sessions);
-      const text = c.textContent ?? "";
-      expect(text).not.toMatch(/readiness|\bscore\b|\bgrade\b/i);
-      // The grade words the retired ring printed (en home.homeConsole.stage.readinessGrade).
-      // (Matched as a whole element's text: "Good morning" and "Worth a look: ..." are ordinary sentences.)
-      const words = [...c.querySelectorAll("*")].map((el) => (el.textContent ?? "").trim());
-      expect(words.filter((w) => w === "Good" || w === "Fair" || w === "Worth a look")).toEqual([]);
-      // No ring either (the ratio "13 of 14 checks look right" is a fact on the Windows setup card, not a score).
-      expect(c.querySelector("[data-read='readiness'], .ag-v, .ag-as-ring")).toBeNull();
-      cleanup();
-    }
-  });
+  it("after the demo finishes, 'Got it' is quiet too: Home never has two primaries", async () => {
+    const c = home([]);
+    fireEvent.click(screen.getByRole("button", { name: /watch it work/i }));
+    // The card pauses ~2.6 s on the applied receipt before the undo half runs.
+    const gotIt = await screen.findByRole("button", { name: /got it/i }, { timeout: 8000 });
+    expect(gotIt.className).toBe("tm-btn");
+    expect([...c.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([
+      within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" }),
+    ]);
+  }, 15000);
 });

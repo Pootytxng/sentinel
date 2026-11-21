@@ -17,7 +17,10 @@
 // templates below the stage, and NOTHING is gated.
 //
 // What this guard pins, so the switch cannot creep back:
-//   1. Every readout renders on the DEFAULT face, with an empty localStorage.
+//   1. Every readout renders on the DEFAULT face, with an empty localStorage. (2026-11-20: the readiness
+//      ring left Home by owner decision, so the readout is the four measured readings; that none comes
+//      back as a score is pinned in home-console.test.tsx. This guard still protects: all four readings,
+//      the rig, the controls and the boxed record are on the default face and nothing is gated.)
 //   2. `compy_expert_view` changes nothing on Home — flipping it must be a no-op, in both directions.
 //   3. The record is BOXED and inert: no button, no expand, nothing to discover.
 //   4. Rows are label + value, never prose — the mechanical form of "no paragraph style descriptions".
@@ -227,10 +230,10 @@ const setExpert = (on: boolean) =>
 /** Everything Home puts on screen, as one comparable string. Used to prove the preference is inert. */
 const faceOf = (c: HTMLElement) =>
   [
-    // By FACT, not by position (issue #49): these five used to be four corner anchors on the
+    // By FACT, not by position (issue #49): these four used to be four corner anchors on the
     // canvas plus a value on the annotation plane, and a selector naming a corner stops guarding
     // anything the moment the room is re-laid-out. `data-read` moves with the reading.
-    ["readiness", "avgFps", "low1", "gpuTemp", "cpuTemp"]
+    ["avgFps", "low1", "gpuTemp", "cpuTemp"]
       .map((q) => `${q}:${c.querySelector(`[data-read="${q}"]`) ? 1 : 0}`)
       .join(","),
     `seg:${c.querySelectorAll(".hc-seg-group").length}`,
@@ -255,8 +258,6 @@ describe("Home's standard readout (owner 2026-08-06 — structure it, do not hid
     // The readings. The 1% low and GPU temp were briefly expert-only; the owner put them back.
     // CPU temp joined them on the face in issue #49, when it moved off the annotation plane.
     const read = (id: string) => c.querySelector(`[data-read="${id}"]`);
-    // Paramedic-first Home (2026-11-20): the readiness ring left Home on purpose; no score, no grade word.
-    expect(read("readiness"), "the readiness score is back on Home").toBeNull();
     expect(read("avgFps"), "the avg-fps reading left the default face").toBeTruthy();
     expect(read("low1"), "the 1% low is gated again — it must be standard").toBeTruthy();
     expect(read("gpuTemp"), "the GPU temp is gated again — it must be standard").toBeTruthy();

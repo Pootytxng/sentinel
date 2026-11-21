@@ -35,10 +35,6 @@
   color: var(--fg);
   cursor: pointer;
 }
-.tm-btn-primary {
-  border-color: var(--accent);
-  color: var(--accent);
-}
 .tm-btn:hover {
   border-color: var(--accent);
 }
