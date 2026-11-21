@@ -3000,7 +3000,7 @@ mod tests {
         assert!(plan.can_proceed(), "{:?}", plan.refusals);
         let trial = crate::experiment::lock_trial_gate().unwrap();
         let ledger = crate::history::lock_ledger().unwrap();
-        let phase = execute_everything_ledger_phase(&t.root, &plan, &later(), &trial, &ledger).ok().expect("phase 1");
+        let phase = execute_everything_ledger_phase(&t.root, &plan, &later(), &trial, &ledger).unwrap_or_else(|o| panic!("phase 1: {o:?}"));
         drop(ledger);
         drop(trial);
         assert!(!t.has("history.json") && !t.has("history.json.bak") && !t.has("experiments.json"));
@@ -3344,7 +3344,7 @@ mod tests {
         let first = plan.delete[0].rel.clone();
         let gates = FlipAfter { fx: TestEffects::new(), after: 1, calls: Default::default() };
         let report = done(execute_clear(&t.root, &plan, &later(), &gates));
-        assert_eq!(report.deleted, [first.clone()], "only the file before the flip went");
+        assert_eq!(report.deleted, std::slice::from_ref(&first), "only the file before the flip went");
         assert!(!t.has(&first));
         assert_eq!(report.not_attempted.len(), plan.delete.len() - 1, "every later file is named as not tried");
         assert!(report.failed.is_empty(), "not a failed delete: it was never attempted");
