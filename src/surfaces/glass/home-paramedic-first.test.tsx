@@ -1,6 +1,6 @@
 // Home's first screen puts the Paramedic first (owner decision, constitution A38). Pins:
-//  1. the Paramedic's "Something's wrong" is the one primary action on Home, new user or not, and it
-//     comes before everything else on the page (with no crash banner showing: see the banner case);
+//  1. the Paramedic's "Something's wrong" is the one primary action on Home, new user or not, with or without
+//     the crash banner, and it comes before everything else on the page;
 //  2. "Watch it work" is still on Home (the feature stays) but is a quiet button, not primary, in the
 //     offer and after the demo finishes.
 // "No readiness score or grade on Home" is pinned where the ring lived, in home-console.test.tsx
@@ -97,10 +97,8 @@ function home(sessions: SessionSummary[], pendingCare: PendingCareIncident | nul
       priorities={null}
       sessions={sessions}
       pendingCare={pendingCare}
-      onOpenCareIncident={vi.fn()}
       onDismissCareIncident={vi.fn()}
       onOpenGame={vi.fn()}
-      onOpenProblems={vi.fn()}
       onOpenLive={vi.fn()}
       onRunCheck={vi.fn()}
       onSeeChecks={vi.fn()}
@@ -136,18 +134,22 @@ describe("Home puts the Paramedic first", () => {
     expect(c.querySelector(".gl-head")!.nextElementSibling).toBe(paramedic);
   });
 
-  // KNOWN GAP, documented rather than hidden: while Windows has recorded a crash, the banner's own
-  // "Find out why" is a second .gl-cta. Reworking the banner is the next slice; when it lands, this
-  // case should become "still exactly one primary" and the banner entry below goes away.
-  it("with a crash banner showing, the banner's button is the one known second primary (to be reworked)", () => {
+  // The crash banner used to carry a second green primary ("Find out why"). It is a quiet button now: Home has one
+  // primary action with or without the banner, and it is the Paramedic card's own.
+  it("with a crash banner showing, there is still exactly one primary action, and the Paramedic door still comes first", () => {
     const c = home([session], care);
     const paramedic = screen.getByTestId("paramedic");
     const door = within(paramedic).getByRole("button", { name: "Something's wrong" });
-    const banner = c.querySelector<HTMLElement>(".gl-banner .gl-cta")!;
-    expect(banner).not.toBeNull();
-    expect([...c.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door, banner]);
-    // The Paramedic's door still comes first on the page, ahead of the banner.
-    expect(paramedic.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect([...c.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door]);
+    const find = within(c.querySelector<HTMLElement>(".gl-banner")!).getByRole("button", { name: "Find out why" });
+    expect(find.matches(PRIMARY)).toBe(false);
+    expect(paramedic.compareDocumentPosition(find) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("with a crash banner and no history, the same single primary", () => {
+    const c = home([], care);
+    const door = within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" });
+    expect([...c.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door]);
   });
 
   it("'Watch it work' is still on Home, but quiet: not primary-styled", () => {

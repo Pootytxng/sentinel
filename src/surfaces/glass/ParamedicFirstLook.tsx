@@ -556,11 +556,18 @@ function crashSentence(c: NonNullable<ParamedicFirstLook["crashes"]>, game: stri
   return out;
 }
 
-export function ParamedicFirstLook({ measured = null, games = [] }: { measured?: FirstLookMeasured; games?: RecordedGame[] } = {}) {
+/** `elsewhere`: opened from a card that already has a measured answer, so the lead does not say there are no earlier sessions.
+ *  `initialGame`: a game already chosen (the crash banner's "Find out why"): the flow starts at "When did it start?". */
+export function ParamedicFirstLook({
+  measured = null,
+  games = [],
+  initialGame = null,
+  elsewhere = false,
+}: { measured?: FirstLookMeasured; games?: RecordedGame[]; initialGame?: RecordedGame | null; elsewhere?: boolean } = {}) {
   const { t } = useTranslation();
   const dates = useDates();
-  const [step, setStep] = useState<Step>({ kind: "pick" });
-  const [game, setGame] = useState<Pick | null>(null);
+  const [step, setStep] = useState<Step>(initialGame ? { kind: "ask", chosen: null } : { kind: "pick" });
+  const [game, setGame] = useState<Pick | null>(initialGame ? { kind: "seen", process: initialGame.process, name: initialGame.name } : null);
   const [steam, setSteam] = useState<Listing>("loading");
   const [showAll, setShowAll] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -661,7 +668,7 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
     return (
       <div className="gl-para-body" data-testid="first-look">
         <p data-testid="first-look-lead">
-          {measured ? t("paramedic.firstLook.measured.lead", { game: measured.game, have: measured.have, need: measured.need }) : t("paramedic.firstLook.lead")}
+          {measured ? t("paramedic.firstLook.measured.lead", { game: measured.game, have: measured.have, need: measured.need }) : elsewhere ? t("paramedic.firstLook.leadElsewhere") : t("paramedic.firstLook.lead")}
         </p>
         <div role="group" aria-labelledby={headingId} className="gl-para-lead" data-testid="first-look-picker">
           <h2 id={headingId} ref={headingRef} tabIndex={-1} className="gl-card-title">
@@ -710,7 +717,7 @@ export function ParamedicFirstLook({ measured = null, games = [] }: { measured?:
     return (
       <div className="gl-para-body" data-testid="first-look">
         <p data-testid="first-look-lead">
-          {measured ? t("paramedic.firstLook.measured.lead", { game: measured.game, have: measured.have, need: measured.need }) : t("paramedic.firstLook.lead")}
+          {measured ? t("paramedic.firstLook.measured.lead", { game: measured.game, have: measured.have, need: measured.need }) : elsewhere ? t("paramedic.firstLook.leadElsewhere") : t("paramedic.firstLook.lead")}
         </p>
         <p data-testid="first-look-chosen">{name ? t("paramedic.firstLook.game.chosen", { game: name }) : t("paramedic.firstLook.game.chosenWhole")}</p>
         <div role="group" aria-labelledby={headingId} className="gl-para-lead">

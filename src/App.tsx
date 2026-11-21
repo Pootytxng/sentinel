@@ -1655,13 +1655,11 @@ function App() {
                 priorities={priorities}
                 sessions={sessions}
                 pendingCare={pendingCare}
-                onOpenCareIncident={openCareIncident}
                 onDismissCareIncident={dismissCareIncident}
                 onOpenGame={(key) => {
                   setGamesFocus(key);
                   navHome("games");
                 }}
-                onOpenProblems={() => navHome("problems")}
                 onOpenLive={() => navHome("play")}
                 onRunCheck={() => setShowFirstCheck(true)}
                 onSeeChecks={openFixesInLab}

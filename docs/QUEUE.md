@@ -48,6 +48,7 @@ No builds, tests or pushes while a game runs on the owner's PC (see CLAUDE.md fo
 - Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee".
 
 ## Done (newest first)
+- 2026-11-20 - Card: "Something else?" opens the first-look questions inside the card; one entry for "something's wrong" (header ghost removed); crash banner "Find out why" opens the card for that game, no second primary; Escape closes the card; "More below" strip no longer covers text; "No checks were graded" in the Re-run band (claude/c2-card)
 - 2026-11-20 - desk build 5f4cad34 installed and stamped
 - 2026-11-20 - First look for a picked game (its Steam file change, crash history, graphics mods) and what looks off on this PC as plain facts, with Compy's own dated changes (claude/m5-first-look-2; 5f4cad34)
 - 2026-11-20 - desk build dd799c62 installed and stamped

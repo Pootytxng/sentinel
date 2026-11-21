@@ -3,7 +3,7 @@
 // offers steps the owner does in Windows. It runs no fix, writes nothing, and says what changed before
 // the problem, never that it caused it (Constitution 17). The engine returns codes and numbers; every
 // sentence here is a locale string. Keys are literal, one t() call per key (never composed).
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type {
@@ -1163,18 +1163,29 @@ type View =
 /** The answer region counts as "more below" when more than this many px are still hidden under its bottom edge. */
 const MORE_SLACK_PX = 4;
 
+/** What a launch from outside asks for: a recorded game (its measured answer, or the first look with that game
+ *  already chosen), or "pick" (the card's own game question). Nothing set: the usual measured check. */
+export type LaunchGame = RecordedGame | "pick";
+
 export function ParamedicCard({
   launch = 0,
-  onOpenProblems,
+  launchGame = null,
   noGames = false,
   games = [],
-}: { launch?: number; onOpenProblems?: () => void; noGames?: boolean; games?: RecordedGame[] } = {}) {
+}: { launch?: number; launchGame?: LaunchGame | null; noGames?: boolean; games?: RecordedGame[] } = {}) {
   const { t } = useTranslation();
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });
   const [more, setMore] = useState(false);
   // Every press of the door starts the first look over (its question, not an answer from before the user played).
   const [round, setRound] = useState(0);
+  // "Something else? Answer a few questions": the first-look questions open in the card, in place of the measured
+  // answer (which "Back" and "Check again" bring back). Nothing here is stored.
+  const [questions, setQuestions] = useState(false);
+  // A game chosen from outside (the crash banner): the first look starts after its game question.
+  const [preset, setPreset] = useState<RecordedGame | null>(null);
+  const target = useRef<string | null>(null);
+  const gen = useRef(0);
   const doorRef = useRef<HTMLButtonElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1198,29 +1209,34 @@ export function ParamedicCard({
     }
   }, [view.kind]);
 
-  const ask = (attempt: number) => {
-    if (attempt === 0) setRound((r) => r + 1);
+  const ask = (attempt: number, game: string | null = target.current) => {
+    if (attempt === 0) {
+      setRound((r) => r + 1);
+      setQuestions(false);
+      gen.current += 1;
+    }
+    const mine = gen.current;
     // Pressing "Check again" keeps the answer on screen (dimmed) so the card does not collapse and jump the page.
     setView((v) => ({ kind: "busy", prev: v.kind === "done" ? v.d : v.kind === "busy" ? v.prev : null }));
-    invoke<ParamedicDiagnosis | null>("paramedic_diagnose", { complaint: "unknown", game: null })
+    invoke<ParamedicDiagnosis | null>("paramedic_diagnose", { complaint: "unknown", game })
       .then((d) => {
-        if (alive.current) setView(d ? { kind: "done", d } : { kind: "failed" });
+        if (alive.current && mine === gen.current) setView(d ? { kind: "done", d } : { kind: "failed" });
       })
       .catch((e: unknown) => {
-        if (!alive.current) return;
+        if (!alive.current || mine !== gen.current) return;
         if (String(e) !== BUSY) {
           setView({ kind: "failed" });
         } else if (attempt < BUSY_RETRIES) {
           // Another diagnosis is still running: keep saying "still checking" and ask again shortly.
-          timer.current = window.setTimeout(() => ask(attempt + 1), BUSY_RETRY_MS);
+          timer.current = window.setTimeout(() => ask(attempt + 1, game), BUSY_RETRY_MS);
         } else {
           setView({ kind: "still" });
         }
       });
   };
 
-  // The header's "Something went wrong" button raises `launch`: the card asks (when it is not already asking
-  // or showing an answer) and keyboard focus moves to it.
+  // The crash banner's "Find out why" raises `launch`: keyboard focus moves to the card and it opens for the banner's
+  // game (`launchGame`); with no game named it runs the usual check (when it is not already asking or showing one).
   const startedFrom = useRef(0);
   useEffect(() => {
     if (!launch || launch === startedFrom.current) return;
@@ -1228,20 +1244,47 @@ export function ParamedicCard({
     const el = sectionRef.current;
     el?.focus();
     el?.scrollIntoView?.({ block: "nearest" });
-    if (view.kind === "idle" || view.kind === "failed" || view.kind === "still") ask(0);
+    if (launchGame === "pick") {
+      // The game is not known: the card's own game question, not a guess.
+      target.current = null;
+      setPreset(null);
+      setRound((r) => r + 1);
+      setQuestions(true);
+    } else if (launchGame) {
+      target.current = launchGame.process;
+      setPreset(launchGame);
+      ask(0, launchGame.process);
+    } else if (view.kind === "idle" || view.kind === "failed" || view.kind === "still") ask(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reacts to the counter only
   }, [launch]);
 
   const close = () => {
     window.clearTimeout(timer.current);
+    gen.current += 1;
+    target.current = null;
     refocus.current = true;
+    setPreset(null);
+    setQuestions(false);
     setView({ kind: "idle" });
+    doorRef.current?.focus();
   };
 
   const answer = view.kind === "done" ? view.d : view.kind === "busy" ? view.prev : null;
   const ctx: Ctx | null = answer ? { t, dates, game: answer.game_name ?? answer.game ?? "" } : null;
-  const open = answer != null;
+  const showQuestions = questions;
+  const open = answer != null || showQuestions;
   const busy = view.kind === "busy";
+  // Escape closes the open card from anywhere inside it, except inside a disclosure that is open (a row, a fold,
+  // "Show more"), where it keeps its normal job, and while a check is running (Close is not offered then either).
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
+    if (e.key !== "Escape" || e.defaultPrevented || busy) return;
+    if (!(view.kind === "done" || view.kind === "failed" || view.kind === "still" || showQuestions)) return;
+    for (let n = e.target as HTMLElement | null; n && n !== e.currentTarget; n = n.parentElement) {
+      if (n.getAttribute("aria-expanded") === "true" || n.querySelector(":scope > [aria-expanded=\"true\"]")) return;
+    }
+    e.preventDefault();
+    close();
+  };
 
   // Whether the answer region has more below its bottom edge: drives the fade and the "More below" row.
   const measure = useCallback(() => {
@@ -1259,7 +1302,7 @@ export function ParamedicCard({
   }, [answer, measure]);
 
   return (
-    <section ref={sectionRef} tabIndex={-1} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
+    <section ref={sectionRef} tabIndex={-1} onKeyDown={onKeyDown} className="gl-card gl-para-card" aria-label={t("paramedic.label")} data-testid="paramedic" data-open={open ? "true" : "false"}>
       <div className="gl-card-top">
         <p className="gl-card-sub">{noGames ? t("paramedic.firstLook.door.sub") : t("paramedic.door.sub")}</p>
         <div className="gl-para-actions">
@@ -1275,7 +1318,7 @@ export function ParamedicCard({
           >
             {view.kind === "done" || view.kind === "failed" || view.kind === "still" || (busy && view.prev) ? t("paramedic.door.again") : t("paramedic.door.button")}
           </button>
-          {view.kind === "done" && (
+          {(view.kind === "done" || questions) && (
             <button type="button" className="gl-ghost" onClick={close}>
               {t("paramedic.door.close")}
             </button>
@@ -1297,7 +1340,7 @@ export function ParamedicCard({
           {t("paramedic.door.failed")}
         </p>
       )}
-      {answer && ctx && (
+      {(showQuestions || (answer && ctx)) && (
         <div className="gl-para-answer">
           <div
             ref={scrollRef}
@@ -1313,16 +1356,22 @@ export function ParamedicCard({
             onScroll={measure}
           >
             <div className="gl-para-body" aria-live="polite">
+              {showQuestions ? (
+                <ParamedicFirstLook key={`questions-${round}`} games={games} elsewhere />
+              ) : answer && ctx ? (
+                <>
               {/* No usable history: with no game recorded the first look is the whole answer; with a game that
                   has too few sessions it follows the measured "can't tell yet". */}
               {!(answer.state.kind === "cant-tell" && answer.state.why.kind === "no-sessions") && <Answer d={answer} ctx={ctx} />}
-              {firstLookApplies(answer) && <ParamedicFirstLook key={round} measured={firstLookMeasured(answer, ctx.game)} games={games} />}
+              {firstLookApplies(answer) && <ParamedicFirstLook key={round} measured={firstLookMeasured(answer, ctx.game)} games={games} initialGame={preset} />}
               {answer.mixed_sessions.length > 0 && (
                 <p className="gl-para-note" data-testid="paramedic-mixed">
                   {t("paramedic.problem.mixed", { count: answer.mixed_sessions.length, dates: answer.mixed_sessions.map((s) => dates.day(s)).join(", ") })}
                 </p>
               )}
               {!firstLookApplies(answer) && <p className="gl-para-note">{t("paramedic.footer")}</p>}
+                </>
+              ) : null}
             </div>
           </div>
           {busy && (
@@ -1330,22 +1379,34 @@ export function ParamedicCard({
               {t("paramedic.door.looking")}
             </p>
           )}
-          {more && (
-            <>
-              <div className="gl-para-fade" aria-hidden="true" data-testid="paramedic-more-fade" />
-              <div className="gl-para-more" aria-hidden="true" data-testid="paramedic-more">
-                <ChevronDown />
-                <span>{t("paramedic.card.moreBelow")}</span>
-              </div>
-            </>
+          {/* The hint is its own strip under the scroll region, never over its last row. */}
+          {more && !showQuestions && (
+            <div className="gl-para-more" aria-hidden="true" data-testid="paramedic-more">
+              <ChevronDown />
+              <span>{t("paramedic.card.moreBelow")}</span>
+            </div>
           )}
         </div>
       )}
       {/* In every state but the idle one (a first check still running, an answer, a failed or a slow one): the
           way out to the questions is never hidden behind the check. */}
-      {view.kind !== "idle" && onOpenProblems && (
+      {questions && answer && (
         <div className="gl-para-foot">
-          <button type="button" className="gl-ghost" onClick={onOpenProblems}>
+          <button type="button" className="gl-ghost" onClick={() => setQuestions(false)}>
+            {t("paramedic.card.back")}
+          </button>
+        </div>
+      )}
+      {!questions && view.kind !== "idle" && !(answer && firstLookApplies(answer)) && (
+        <div className="gl-para-foot">
+          <button
+            type="button"
+            className="gl-ghost"
+            onClick={() => {
+              setRound((r) => r + 1);
+              setQuestions(true);
+            }}
+          >
             {t("paramedic.card.somethingElse")}
           </button>
         </div>

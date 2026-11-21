@@ -688,8 +688,8 @@
   gap: 8px;
 }
 /* The card is as tall as its content up to the cap (no height of its own, only max-height), so a short
-   answer is not padded and a long one scrolls inside. `.gl-para-answer` holds the scroll region and the
-   overlays that say there is more below it; the overlays are absolute, so they never change a height. */
+   answer is not padded and a long one scrolls inside. `.gl-para-answer` holds the scroll region, the
+   "More below" strip under it, and the busy status, which is absolute so it never changes a height. */
 :root[data-v2="on"] .gl-para-answer {
   position: relative;
   display: flex;
@@ -730,22 +730,11 @@
   font-size: var(--type-label);
   pointer-events: none;
 }
-/* More below: a fade to the card's own colour over the last 64 px, and a row with a 18 px chevron in the
-   body ink. Both sit over the region's bottom edge, left of its scroll bar, and never take a click. */
-:root[data-v2="on"] .gl-para-fade {
-  position: absolute;
-  right: 10px;
-  bottom: 0;
-  left: 0;
-  height: 64px;
-  background: linear-gradient(to bottom, transparent, var(--v2-panel-card) 85%);
-  pointer-events: none;
-}
+/* More below: its own strip under the scroll region (never over its last row), a row with a 18 px chevron in
+   the body ink, left of the scroll bar. It never takes a click. It shows only while text is hidden below. */
 :root[data-v2="on"] .gl-para-more {
-  position: absolute;
-  right: 10px;
-  bottom: 6px;
-  left: 0;
+  flex: 0 0 auto;
+  margin: 4px 10px 0 0;
   display: flex;
   align-items: center;
   justify-content: center;

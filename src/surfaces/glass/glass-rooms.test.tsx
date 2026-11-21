@@ -5,11 +5,13 @@ import { join } from "path";
 
 const invoked: string[] = [];
 // Settable per-test scan answer (vi.mock factories are hoisted, so this must be too).
-const scan = vi.hoisted(() => ({ report: null as unknown }));
+const scan = vi.hoisted(() => ({ report: null as unknown, diagnose: null as unknown, calls: [] as { cmd: string; args: unknown }[] }));
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: (cmd: string) => {
+  invoke: (cmd: string, args?: unknown) => {
     invoked.push(cmd);
+    scan.calls.push({ cmd, args });
     if (cmd === "get_crash_blackbox") return Promise.resolve(scan.report);
+    if (cmd === "paramedic_diagnose") return Promise.resolve(scan.diagnose);
     return Promise.resolve(null);
   },
 }));
@@ -25,6 +27,8 @@ afterEach(() => {
   cleanup();
   invoked.length = 0;
   scan.report = null;
+  scan.diagnose = null;
+  scan.calls.length = 0;
 });
 
 const session = (over: Partial<SessionSummary>): SessionSummary =>
@@ -74,10 +78,8 @@ function home(over: Partial<Parameters<typeof HomeGlass>[0]> = {}) {
     priorities: null,
     sessions: [session({})],
     pendingCare: null,
-    onOpenCareIncident: vi.fn(),
     onDismissCareIncident: vi.fn(),
     onOpenGame: vi.fn(),
-    onOpenProblems: vi.fn(),
     onOpenLive: vi.fn(),
     onRunCheck: vi.fn(),
     onSeeChecks: vi.fn(),
@@ -181,8 +183,7 @@ describe("Health summary (glass redesign)", () => {
     expect(within(band).getByText("Elden Ring closed unexpectedly")).toBeTruthy();
     // The checks card speaks for the checks only, so it cannot contradict the answer's count.
     expect(screen.getByRole("button", { name: /Windows setup/ }).textContent).toContain("No check needs a look");
-    fireEvent.click(within(band).getByRole("button", { name: "Find out why" }));
-    expect(p.onOpenCareIncident).toHaveBeenCalledWith("inc-1");
+    expect(within(band).getByRole("button", { name: "Find out why" })).toBeTruthy();
     fireEvent.click(within(band).getByRole("button", { name: "Not now" }));
     expect(p.onDismissCareIncident).toHaveBeenCalledWith("inc-1");
   });
@@ -621,51 +622,131 @@ describe("TubeChart axis", () => {
 });
 
 describe("Home: one entry point for 'something's wrong'", () => {
-  it("without the crash banner the header's 'Something went wrong' opens the Paramedic card and moves focus to it, not the Problems page", async () => {
-    const p = home({ pendingCare: null });
-    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
-    await waitFor(() => expect(invoked).toContain("paramedic_diagnose"));
-    expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
-    expect(p.onOpenProblems).not.toHaveBeenCalled();
+  /** Every control styled as a page's primary action (the same selector home-paramedic-first.test.tsx uses). */
+  const PRIMARY = ".gl-cta, .tm-btn-primary, .v2-primary, [data-primary], [class*='primary']";
+  const diag = (state: unknown, over: Record<string, unknown> = {}) => ({
+    complaint: "unknown",
+    state,
+    game: "eldenring.exe",
+    game_name: "Elden Ring",
+    problem: null,
+    findings: [],
+    not_it: [],
+    unknowns: [],
+    limits: [],
+    seen: [],
+    baseline: null,
+    first_bad: null,
+    why_first: null,
+    recovery: null,
+    earlier_episode: null,
+    mixed_sessions: [],
+    method: "paramedic-rules-v1",
+    ...over,
+  });
+  const measured = () => diag({ kind: "nothing-wrong", sessions_checked: 3 });
+  const tooFew = () => diag({ kind: "cant-tell", why: { kind: "no-sessions" } });
+  const diagnoseArgs = () => scan.calls.filter((c) => c.cmd === "paramedic_diagnose").map((c) => c.args);
+  const quiet = (p: ReturnType<typeof home>) => {
+    for (const k of ["onOpenGame", "onOpenLive", "onRunCheck", "onSeeChecks", "onOpenDetails", "onDismissCareIncident"] as const) {
+      expect(p[k], k).not.toHaveBeenCalled();
+    }
+  };
+
+  it("the header has no 'Something went wrong' button, with or without the crash banner; 'Improve a game' stays", () => {
+    for (const pendingCare of [null, care]) {
+      home({ pendingCare });
+      expect(screen.queryByRole("button", { name: /Something went wrong/ })).toBeNull();
+      const head = document.querySelector(".gl-head") as HTMLElement;
+      expect(within(head).getAllByRole("button").map((b) => b.textContent)).toEqual(["Improve a game"]);
+      cleanup();
+    }
   });
 
-  it("while the crash banner is showing the header button keeps its old job and opens Problems; the banner and the card are untouched", () => {
+  it("with the crash banner showing, Home still has exactly one primary action, and 'Find out why' is not it", () => {
+    home({ pendingCare: care });
+    const door = within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" });
+    expect([...document.body.querySelectorAll<HTMLElement>(PRIMARY)]).toEqual([door]);
+    const band = screen.getByRole("group", { name: "Needs a look" });
+    expect(within(band).getByRole("button", { name: "Find out why" }).className).toBe("gl-ghost");
+    expect(within(band).getByRole("button", { name: "Not now" }).className).toBe("gl-ghost");
+    // The banner's own text is as it was.
+    expect(within(band).getByText("Elden Ring closed unexpectedly")).toBeTruthy();
+  });
+
+  it("'Find out why' opens the card for the banner's game and shows its measured answer; nothing navigates", async () => {
+    scan.diagnose = measured();
     const p = home({ pendingCare: care });
-    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
-    expect(p.onOpenProblems).toHaveBeenCalledTimes(1);
-    expect(invoked).not.toContain("paramedic_diagnose");
-    // The crash banner's own two buttons are still there, and so is the card below.
-    expect(screen.getByRole("button", { name: "Find out why" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Not now" })).toBeTruthy();
-    expect(screen.getByTestId("paramedic")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
+    await waitFor(() => expect(screen.getByText("Nothing looks wrong")).toBeTruthy());
+    expect(diagnoseArgs()).toEqual([{ complaint: "unknown", game: "eldenring.exe" }]);
+    expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
+    quiet(p);
+    // The banner is still there until the user says "Not now".
+    expect(screen.getByRole("group", { name: "Needs a look" })).toBeTruthy();
   });
 
-  it("with no recorded game the card is still mounted (day-one first look), says what it is for, and the header button raises it instead of opening Problems", async () => {
-    const p = home({ sessions: [] });
+  it("'Find out why' for a game with too few sessions opens the first look with that game already chosen", async () => {
+    scan.diagnose = tooFew();
+    const p = home({ pendingCare: care });
+    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "When did it start?" })).toBeTruthy());
+    expect(screen.getByTestId("first-look-chosen").textContent).toBe("Looking at eldenring.");
+    expect(screen.queryByRole("heading", { name: "Which game?" })).toBeNull();
+    expect(diagnoseArgs()).toEqual([{ complaint: "unknown", game: "eldenring.exe" }]);
+    quiet(p);
+  });
+
+  it("'Find out why' with a game that cannot be matched opens the card's game question and never guesses", async () => {
+    const p = home({ pendingCare: { ...care, app_label: "Some Other Program" } });
+    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
+    expect(diagnoseArgs()).toEqual([]);
+    expect(screen.getByRole("button", { name: "Another game, or the whole PC" })).toBeTruthy();
+    quiet(p);
+    cleanup();
+    // No name at all from Windows: the same.
+    home({ pendingCare: { ...care, app_label: null } });
+    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
+    cleanup();
+    // Two recorded games that both fit the name: not one of them.
+    home({
+      pendingCare: care,
+      sessions: [session({ process_name: "eldenring.exe" }), session({ process_name: "Elden Ring.exe", started_at: "2026-10-28T20:00:00Z" })],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
+    expect(diagnoseArgs()).toEqual([]);
+  });
+
+  it("with no recorded game and the crash banner, 'Find out why' opens the card's game question", async () => {
+    const p = home({ sessions: [], pendingCare: care });
+    fireEvent.click(screen.getByRole("button", { name: "Find out why" }));
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
+    expect(diagnoseArgs()).toEqual([]);
+    quiet(p);
+  });
+
+  it("with no recorded game the card is still mounted (day-one first look) and says what it is for; nothing is read until the user asks", async () => {
+    home({ sessions: [] });
     expect(screen.getByTestId("paramedic")).toBeTruthy();
     expect(screen.getByText("A game running badly or crashing? Compy can look at what changed on this PC.")).toBeTruthy();
-    // Nothing is read until the user asks.
     expect(invoked).not.toContain("paramedic_diagnose");
-    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
+    fireEvent.click(within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" }));
     await waitFor(() => expect(invoked).toContain("paramedic_diagnose"));
-    expect(document.activeElement).toBe(screen.getByTestId("paramedic"));
-    expect(p.onOpenProblems).not.toHaveBeenCalled();
   });
 
-  // T5 (review): with no recorded game the way to the questions is the card's own link, and the crash banner still wins the header button.
-  it("with no recorded game, once the card has been asked, 'Something else?' opens Problems", async () => {
-    const p = home({ sessions: [] });
-    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
-    await waitFor(() => expect(invoked).toContain("paramedic_diagnose"));
+  it("once the card has been asked, 'Something else?' opens the game question inside the card and leaves Home where it is", async () => {
+    scan.diagnose = measured();
+    const p = home({ pendingCare: null });
+    fireEvent.click(within(screen.getByTestId("paramedic")).getByRole("button", { name: "Something's wrong" }));
     fireEvent.click(await screen.findByRole("button", { name: "Something else? Answer a few questions" }));
-    expect(p.onOpenProblems).toHaveBeenCalledTimes(1);
-  });
-
-  it("with no recorded game and the crash banner showing, the header button still opens Problems and asks nothing", () => {
-    const p = home({ sessions: [], pendingCare: care });
-    fireEvent.click(screen.getByRole("button", { name: "Something went wrong" }));
-    expect(p.onOpenProblems).toHaveBeenCalledTimes(1);
-    expect(invoked).not.toContain("paramedic_diagnose");
-    expect(screen.getByRole("button", { name: "Find out why" })).toBeTruthy();
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Which game?" })).toBeTruthy());
+    expect(within(screen.getByTestId("paramedic")).getByRole("heading", { name: "Which game?" })).toBeTruthy();
+    quiet(p);
+    // Back to the measured answer.
+    fireEvent.click(screen.getByRole("button", { name: "Back to the answer" }));
+    expect(screen.getByText("Nothing looks wrong")).toBeTruthy();
   });
 });
