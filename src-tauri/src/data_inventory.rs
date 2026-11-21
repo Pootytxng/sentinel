@@ -371,7 +371,9 @@ pub(crate) static INVENTORY: &[InventoryRow] = &[
         base: DataRoot,
         path: "gaming-session.orphaned.json",
         writers: &["gaming_session.rs"],
-        category: SetAside,
+        // Undo, not SetAside: an unreadable Gaming Mode contract may still be the only record of what to
+        // restore, so a later "clear" must treat it like the ledger (clear-data design: "keep").
+        category: Undo,
         personal: &[],
         contains: "A Gaming Mode session contract that could not be read, set aside.",
         created: "when an unreadable session file is found",
@@ -385,7 +387,7 @@ pub(crate) static INVENTORY: &[InventoryRow] = &[
         base: DataRoot,
         path: "gaming-session.orphaned-<n>.json",
         writers: &["gaming_session.rs"],
-        category: SetAside,
+        category: Undo,
         personal: &[],
         contains: "As above, numbered when one already sits there.",
         created: "when a second unreadable session file is found",
