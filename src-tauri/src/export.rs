@@ -140,88 +140,14 @@ fn usable_literals(mut raw: Vec<(String, &'static str)>, profile_leaf: Option<St
 /// The words of Compy's own static text that can reach an export: every alphabetic word of three or more
 /// letters in a string literal of the non-test code of the files that write the report and its sources (the
 /// export, readiness, hardware, diagnostics, recommendations, Trust Ledger, Drift Watch, sessions and stutter
-/// files) and in the embedded rules file, lower-case. Computed from the sources at build time
-/// (`include_str!`), never hand-listed, so a new label joins it by itself. Text Windows supplies (a device
-/// or adapter name) is not in it; see [`is_scoped_name`].
+/// files) and in the embedded rules file, lower-case, one per line, sorted. The list is the checked-in file
+/// `export_words.txt`, GENERATED from those sources: the `export_words_guard` test regenerates it and fails,
+/// naming the command to run, when a label changed and the file did not (so a new label joins by itself, and
+/// no source text is compiled into the program). Text Windows supplies (a device or adapter name) is not in
+/// it; see [`is_scoped_name`].
 fn export_text_words() -> &'static HashSet<String> {
     static WORDS: std::sync::OnceLock<HashSet<String>> = std::sync::OnceLock::new();
-    WORDS.get_or_init(|| {
-        let mut words = HashSet::new();
-        for src in [
-            include_str!("export.rs"),
-            include_str!("readiness.rs"),
-            include_str!("hardware.rs"),
-            include_str!("diagnostics.rs"),
-            include_str!("recommendations.rs"),
-            include_str!("history.rs"),
-            include_str!("drift.rs"),
-            include_str!("sessions.rs"),
-            include_str!("stutter.rs"),
-        ] {
-            literal_words(src, &mut words);
-        }
-        let rules = include_str!("../resources/baseline-rules-v1.json");
-        words.extend(rules.split(|ch: char| !ch.is_alphabetic()).filter(|w| w.chars().count() >= 3).map(str::to_lowercase));
-        words
-    })
-}
-
-/// The lower-case alphabetic words (3+ letters) of the string literals in the non-test part of `src`,
-/// added to `words`. Comments, char literals and the test module are skipped; raw strings are read.
-fn literal_words(src: &str, words: &mut HashSet<String>) {
-    {
-        // The test module comes last; its canary strings are not export text.
-        let code = src.split("\n#[cfg(test)]\nmod ").next().unwrap_or(src);
-        let c: Vec<char> = code.chars().collect();
-        let (mut literals, mut i) = (String::new(), 0usize);
-        while i < c.len() {
-            match c[i] {
-                '/' if c.get(i + 1) == Some(&'/') => {
-                    while i < c.len() && c[i] != '\n' {
-                        i += 1;
-                    }
-                }
-                '\'' => {
-                    // A char literal ('"', '\\', '\''): skipped whole so its quote does not open a string.
-                    i += if c.get(i + 1) == Some(&'\\') { 4 } else if c.get(i + 2) == Some(&'\'') { 3 } else { 1 };
-                }
-                // A raw string r"..." or r#"..."#: no escapes, ends at a quote followed by as many #.
-                'r' if i == 0 || !(c[i - 1].is_alphanumeric() || c[i - 1] == '_') => {
-                    let (mut j, mut hashes) = (i + 1, 0usize);
-                    while c.get(j) == Some(&'#') {
-                        hashes += 1;
-                        j += 1;
-                    }
-                    if c.get(j) == Some(&'"') {
-                        j += 1;
-                        while j < c.len() && !(c[j] == '"' && (1..=hashes).all(|k| c.get(j + k) == Some(&'#'))) {
-                            literals.push(c[j]);
-                            j += 1;
-                        }
-                        literals.push(' ');
-                        i = j + 1 + hashes;
-                    } else {
-                        i += 1;
-                    }
-                }
-                '"' => {
-                    i += 1;
-                    while i < c.len() && c[i] != '"' {
-                        if c[i] == '\\' {
-                            i += 1;
-                        } else {
-                            literals.push(c[i]);
-                        }
-                        i += 1;
-                    }
-                    literals.push(' ');
-                    i += 1;
-                }
-                _ => i += 1,
-            }
-        }
-        words.extend(literals.split(|ch: char| !ch.is_alphabetic()).filter(|w| w.chars().count() >= 3).map(str::to_lowercase));
-    }
+    WORDS.get_or_init(|| include_str!("export_words.txt").lines().map(str::trim).filter(|w| !w.is_empty()).map(str::to_owned).collect()) // data-root-allow: compiled into the program, not a file Compy writes.
 }
 
 /// A name that is a single ordinary word: all letters, and a word of Compy's own static export text
@@ -538,6 +464,7 @@ fn scrub_user_paths(s: &str, count: &mut u32) -> String {
     let b = s.as_bytes();
     let is_sep = |c: u8| c == b'\\' || c == b'/';
     let (mut out, mut last, mut i) = (String::new(), 0usize, 0usize);
+    let first_space = first_space_after_lead(s);
     while i + 7 <= b.len() {
         if is_sep(b[i]) && b[i + 1..i + 6].eq_ignore_ascii_case(b"users") && is_sep(b[i + 6]) {
             let mut start = i + 7;
@@ -546,7 +473,7 @@ fn scrub_user_paths(s: &str, count: &mut u32) -> String {
             }
             let rest = &s[start..];
             // The path begins the value: only a path token (no space) stands before it.
-            let value_initial = !s[..i].trim_start().contains(char::is_whitespace);
+            let value_initial = first_space >= i;
             let name_len = name_span(rest, value_initial);
             let name = &rest[..name_len];
             if !name.trim().is_empty() && !KEEP.contains(&name.trim().to_lowercase().as_str()) {
@@ -562,6 +489,14 @@ fn scrub_user_paths(s: &str, count: &mut u32) -> String {
     }
     out.push_str(&s[last..]);
     out
+}
+
+/// PURE: the byte offset of the first whitespace after the leading whitespace of `s` (`s.len()` when there is
+/// none). Computed once per string, so a match at `i` is "value-initial" when this offset is not before `i`
+/// (no rescan of the text before every match: a long space-less string stays linear).
+fn first_space_after_lead(s: &str) -> usize {
+    let lead = s.len() - s.trim_start().len();
+    s[lead..].find(char::is_whitespace).map_or(s.len(), |p| p + lead)
 }
 
 /// Longest spaced run taken as one name before a soft end (see [`scrub_user_paths`]).
@@ -606,6 +541,7 @@ fn scrub_onedrive_org(s: &str, count: &mut u32) -> String {
     const LEAD: &str = "onedrive - ";
     let lower = s.to_ascii_lowercase();
     let (mut out, mut last, mut from) = (String::new(), 0usize, 0usize);
+    let first_space = first_space_after_lead(s);
     while let Some(at) = lower[from..].find(LEAD).map(|p| p + from) {
         from = at + LEAD.len();
         let after_sep = at > 0 && matches!(s.as_bytes()[at - 1], b'\\' | b'/');
@@ -613,7 +549,7 @@ fn scrub_onedrive_org(s: &str, count: &mut u32) -> String {
             continue;
         }
         let rest = &s[from..];
-        let value_initial = !s[..at].trim_start().contains(char::is_whitespace);
+        let value_initial = first_space >= at;
         let len = name_span(rest, value_initial);
         let org = &rest[..len];
         if org.trim().is_empty() || org.eq_ignore_ascii_case("personal") || org == "<organization>" {
@@ -795,17 +731,25 @@ pub(crate) fn redact_export_sources(sources: [&mut Value; 6], env: &ExportEnv) -
     // them): longest first, so a name that contains another is not half-replaced, with the same number
     // everywhere.
     let mut qos_names: Vec<(usize, String)> = Vec::new();
+    let mut qos_list: Option<(String, String)> = None; // the whole list as the readiness row prints it, and its labels
     if let Some(q) = all[0].get_mut("qos_policies").and_then(Value::as_array_mut) {
         r.qos_policy_names += q.len() as u32;
-        qos_names = q.iter().enumerate().filter_map(|(i, v)| v.as_str().map(|n| (i + 1, n.to_string()))).filter(|(_, n)| !n.trim().is_empty()).collect();
+        let originals: Vec<(usize, String)> = q.iter().enumerate().filter_map(|(i, v)| v.as_str().map(|n| (i + 1, n.to_string()))).collect();
+        if !originals.is_empty() {
+            // Unfiltered and untrimmed: the row prints every entry exactly as typed.
+            let joined = originals.iter().map(|(_, n)| n.as_str()).collect::<Vec<_>>().join(", ");
+            let labels = originals.iter().map(|(i, _)| format!("QoS policy {i}")).collect::<Vec<_>>().join(", ");
+            qos_list = Some((joined, labels));
+        }
+        qos_names = originals.into_iter().filter(|(_, n)| !n.trim().is_empty()).collect();
         *q = (1..=q.len()).map(|i| json!(format!("QoS policy {i}"))).collect();
     }
-    // The readiness row prints the list as "(a, b)": the joined list goes first, so a name too short for
-    // the free-text rule is covered inside that row too.
-    if !qos_names.is_empty() {
-        let joined = qos_names.iter().map(|(_, n)| n.as_str()).collect::<Vec<_>>().join(", ");
-        let labels = qos_names.iter().map(|(i, _)| format!("QoS policy {i}")).collect::<Vec<_>>().join(", ");
-        all.iter_mut().for_each(|v| map_strings(v, &mut |s| replace_name(s, &joined, &labels, &mut 0)));
+    // The readiness row prints the list as "(a, b)". The whole parenthesised list goes first, so a policy
+    // name too short for the free-text rule (one or two letters) is covered inside that row too, and the
+    // row reads like the hardware list ("(QoS policy 1, QoS policy 2)").
+    if let Some((joined, labels)) = &qos_list {
+        let (from, to) = (format!("({joined})"), format!("({labels})"));
+        all.iter_mut().for_each(|v| map_strings(v, &mut |s| replace_name(s, &from, &to, &mut 0)));
     }
     qos_names.sort_by_key(|(_, n)| std::cmp::Reverse(n.chars().count()));
     for (number, name) in &qos_names {
@@ -2365,7 +2309,7 @@ mod export_tests {
     const C_PROG2: &str = "SignalCanary.exe";
     const C_STARTUP: &str = "StartupCanaryApp";
     const C_QOS: &str = "QosCanaryPolicy";
-    const C_USER: &str = "CanaryKuyaName";
+    const C_USER: &str = "CanaryZorvakName";
     const C_PROFILE: &str = "CanaryProfileDir";
     const C_HOST: &str = "CANARYHOSTPC";
     const C_SPACED: &str = "Zed Canaryspaced";
@@ -2374,7 +2318,7 @@ mod export_tests {
     const C_IFACE: &str = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
     const C_FUTURE: &str = "FutureCanaryField";
     const ALL_CANARIES: [&str; 12] = [
-        "taxprep2026canary", "signalcanary", "startupcanaryapp", "qoscanarypolicy", "canarykuyaname", "canaryprofiledir",
+        "taxprep2026canary", "signalcanary", "startupcanaryapp", "qoscanarypolicy", "canaryzorvakname", "canaryprofiledir",
         "canaryhostpc", "canaryspaced", "canaryplanname", "11111111-2222-3333-4444-555555555555",
         "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", "futurecanaryfield",
     ];
@@ -2524,8 +2468,8 @@ mod export_tests {
         assert!(note.contains("replaced in 7 places, file paths included."), "{note}");
         assert!(!note.contains("No file path in this export held a Windows user name"), "{note}");
         // Only the current user's name, in a path: it is counted as an identity replacement, not as another account.
-        let env = ExportEnv { literals: vec![("Kuyaname".into(), "<user>")], active_plan: None, ..Default::default() };
-        let mut hw = json!({ "p": r"C:\Users\Kuyaname\AppData" });
+        let env = ExportEnv { literals: vec![("Zorvakname".into(), "<user>")], active_plan: None, ..Default::default() };
+        let mut hw = json!({ "p": r"C:\Users\Zorvakname\AppData" });
         let (mut a, mut l, mut rd, mut s, mut d) = (json!([]), json!([]), json!({}), json!([]), json!([]));
         let r = redact_export_sources([&mut hw, &mut a, &mut l, &mut rd, &mut s, &mut d], &env);
         assert_eq!(hw["p"], r"C:\Users\<user>\AppData");
@@ -2615,18 +2559,18 @@ mod export_tests {
 
     #[test]
     fn usable_literals_keep_every_name_and_add_the_profile_folder_and_the_rule_scopes_them() {
-        let raw = vec![("Kuya".to_string(), "<user>"), ("ab".to_string(), "<user>"), ("Admin".to_string(), "<user>"), ("PCNAME1".to_string(), "<host>"), (" ".to_string(), "<host>")];
-        let out = usable_literals(raw, Some("KuyaProfile".into()));
+        let raw = vec![("Zorvak".to_string(), "<user>"), ("ab".to_string(), "<user>"), ("Admin".to_string(), "<user>"), ("PCNAME1".to_string(), "<host>"), (" ".to_string(), "<host>")];
+        let out = usable_literals(raw, Some("ZorvakProfile".into()));
         let vals: Vec<&str> = out.iter().map(|(v, _)| v.as_str()).collect();
-        assert_eq!(vals, ["Kuya", "ab", "Admin", "PCNAME1", "KuyaProfile"], "short and common names are no longer dropped; a blank one is");
-        assert_eq!(usable_literals(vec![], Some("Kuya".into())).len(), 1);
-        assert!(usable_literals(vec![("kuya".into(), "<user>")], Some("Kuya".into())).len() == 1, "no duplicate of the same name");
+        assert_eq!(vals, ["Zorvak", "ab", "Admin", "PCNAME1", "ZorvakProfile"], "short and common names are no longer dropped; a blank one is");
+        assert_eq!(usable_literals(vec![], Some("Zorvak".into())).len(), 1);
+        assert!(usable_literals(vec![("zorvak".into(), "<user>")], Some("Zorvak".into())).len() == 1, "no duplicate of the same name");
         assert_eq!(usable_literals(vec![], Some("User".into())).len(), 1, "an ordinary word as the folder name is kept, and scoped");
         // Which names are scoped (paths and name fields only) and which are replaced everywhere.
         for scoped in ["ab", "Admin", "Power", "Ethernet", "Gaming"] {
             assert!(is_scoped_name(scoped), "{scoped} is scoped");
         }
-        for everywhere in ["PCNAME1", "DESKTOP-4F2K9Q", "john.smith", "Zed Canaryspaced", "CanaryKuyaName", "Zorvak"] {
+        for everywhere in ["PCNAME1", "DESKTOP-4F2K9Q", "john.smith", "Zed Canaryspaced", "CanaryZorvakName", "Zorvak"] {
             assert!(!is_scoped_name(everywhere), "{everywhere} is replaced everywhere");
         }
     }
@@ -3082,13 +3026,13 @@ mod export_tests {
         // "Max" is an ordinary word on the skip list: kept as a literal, but applied to paths and name fields only.
         assert_eq!(usable_literals(vec![("Max".into(), "<user>")], None).len(), 1);
         assert!(is_scoped_name("Max"));
-        let mut hw = json!({ "display": "Max refresh rate", "gpu": "NVIDIA Corporation", "share": r"CORP\kuya", "pc": "张伟的电脑" });
+        let mut hw = json!({ "display": "Max refresh rate", "gpu": "NVIDIA Corporation", "share": r"CORP\zorvak", "pc": "张伟的电脑" });
         let env = ExportEnv { literals: vec![("CORP".into(), "<host>"), ("张伟".into(), "<user>")], active_plan: None, ..Default::default() };
         let (mut a, mut l, mut rd, mut s, mut d) = (json!([]), json!([]), json!({}), json!([]), json!([]));
         redact_export_sources([&mut hw, &mut a, &mut l, &mut rd, &mut s, &mut d], &env);
         assert_eq!(hw["display"], "Max refresh rate");
         assert_eq!(hw["gpu"], "NVIDIA Corporation");
-        assert_eq!(hw["share"], r"<host>\kuya");
+        assert_eq!(hw["share"], r"<host>\zorvak");
         assert_eq!(hw["pc"], "<user>的电脑");
     }
 
@@ -3301,6 +3245,138 @@ mod export_tests {
         assert!(b.markdown.contains("A company name in a OneDrive folder name was replaced with \"organization\" in 1 place."), "{}", b.markdown);
     }
 
+    #[test]
+    fn a_one_or_two_letter_qos_policy_name_leaves_the_readiness_row_as_the_labelled_list() {
+        // The row prints the names exactly as typed, spaces and all; a blank entry still takes a number.
+        for names in [vec!["ab"], vec!["ab", "cd"], vec![" ab ", "  "], vec!["x"]] {
+            let printed = names.join(", ");
+            let sources = || -> [Value; 6] {
+                [
+                    json!({ "qos_policies": names }),
+                    json!([]),
+                    json!([]),
+                    json!({ "checks": [{ "id": "network-qos", "label": "Network QoS policy", "status": "advisory", "value": "labels about",
+                        "detail": format!("Windows QoS traffic-priority policies are active ({printed}). They shape which apps get priority, about it.") }] }),
+                    json!([]),
+                    json!([]),
+                ]
+            };
+            let (s, r) = lone(sources(), &ExportEnv::default());
+            let labels = (1..=names.len()).map(|i| format!("QoS policy {i}")).collect::<Vec<_>>().join(", ");
+            assert_eq!(
+                s[3]["checks"][0]["detail"],
+                format!("Windows QoS traffic-priority policies are active ({labels}). They shape which apps get priority, about it."),
+                "{names:?}"
+            );
+            assert_eq!(s[3]["checks"][0]["value"], "labels about", "{names:?}: ordinary words are not shredded");
+            assert_eq!(s[0]["qos_policies"].as_array().unwrap().len(), names.len());
+            assert_eq!(r.qos_policy_names as usize, names.len());
+            let b = build_export(sources(), false, None, "embedded", "t", &ExportEnv::default());
+            assert!(b.markdown.contains(&format!("({labels})")), "{names:?}: {}", b.markdown);
+        }
+    }
+
+    #[test]
+    fn a_spaced_name_inside_a_sentence_is_only_partly_replaced() {
+        let mut n = 0;
+        assert_eq!(scrub_user_paths(r"saw C:\Users\Mary Ann Van Der Berg open it", &mut n), r"saw C:\Users\<user> Ann Van Der Berg open it");
+        assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn a_long_unc_profile_path_loses_the_account_name() {
+        for (input, want) in [
+            (r"\\?\UNC\fileserver\share\Users\jdoe\Desktop\a.txt", r"\\?\UNC\fileserver\share\Users\<user>\Desktop\a.txt"),
+            (r"\\?\UNC\fileserver\share\Users\jdoe", r"\\?\UNC\fileserver\share\Users\<user>"),
+            (r"\\fileserver\share$\Users\Jane Doe\x", r"\\fileserver\share$\Users\<user>\x"),
+        ] {
+            let mut n = 0;
+            assert_eq!(scrub_user_paths(input, &mut n), want, "{input}");
+            assert_eq!(n, 1, "{input}");
+        }
+    }
+
+    #[test]
+    fn a_non_ascii_account_name_is_replaced_and_never_cut_inside_a_character() {
+        for (input, want) in [
+            (r"C:\Users\José Müller\x", r"C:\Users\<user>\x"),
+            (r"C:\Users\张伟\Desktop", r"C:\Users\<user>\Desktop"),
+            ("C:\\Users\\Zo\u{eb}.", "C:\\Users\\<user>."),
+            ("C:\\Users\\\u{1F600}smile\\x", "C:\\Users\\<user>\\x"),
+            (r"C:\Users\Müller, then", r"C:\Users\<user>, then"),
+        ] {
+            let mut n = 0;
+            assert_eq!(scrub_user_paths(input, &mut n), want, "{input}");
+            assert_eq!(n, 1, "{input}");
+        }
+        // Every prefix of awkward text, cut at every character boundary, goes through both scrubs without a panic.
+        for text in ["\\Users\\é\\OneDrive - Ünï\u{301}\u{2019}x, \u{1F600}.", "é/Users/\u{1F600}\u{201c}ö", "\\users\\\u{2019}\\OneDrive - \u{1F600}\u{1F600}"] {
+            for (at, _) in text.char_indices().chain(std::iter::once((text.len(), ' '))) {
+                let (mut a, mut b) = (0, 0);
+                let one = scrub_user_paths(&text[..at], &mut a);
+                let _ = scrub_onedrive_org(&one, &mut b);
+            }
+        }
+    }
+
+    #[test]
+    fn a_moved_profile_folder_is_matched_by_its_real_leaf_name_scoped_or_not() {
+        // `Media` is a common word (replaced only in a path); the other leaf is replaced everywhere.
+        for (leaf, prose_stays) in [("Zorvakprofile", false), ("Media", true)] {
+            let env = ExportEnv { literals: usable_literals(vec![(C_USER.to_string(), "<user>")], Some(leaf.to_string())), ..Default::default() };
+            let src = [
+                json!({ "cpu_brand": "x", "paths": [format!(r"D:\Profiles\{leaf}\Documents\a.txt"), format!(r"\\NAS\home\{leaf}\x")],
+                        "note": format!("opened the {} player", leaf.to_lowercase()) }),
+                json!([]), json!([]), json!({}), json!([]), json!([]),
+            ];
+            let (s, _) = lone(src, &env);
+            assert_eq!(s[0]["paths"][0], r"D:\Profiles\<user>\Documents\a.txt", "{leaf}");
+            assert_eq!(s[0]["paths"][1], r"\\NAS\home\<user>\x", "{leaf}");
+            let note = s[0]["note"].as_str().unwrap();
+            assert_eq!(note.contains(leaf.to_lowercase().as_str()), prose_stays, "{leaf}: {note}");
+        }
+    }
+
+    #[test]
+    fn a_onedrive_company_name_ending_in_a_period_before_a_separator_is_replaced() {
+        let mut n = 0;
+        let out = scrub_onedrive_org(r"C:\Users\<user>\OneDrive - Contoso Ltd.\Documents\a.txt", &mut n);
+        assert!(!out.contains("Contoso") && !out.contains("Ltd"), "{out}");
+        assert_eq!(n, 1);
+        assert_eq!(out, r"C:\Users\<user>\OneDrive - <organization>.\Documents\a.txt");
+    }
+
+    #[test]
+    fn a_long_space_free_string_of_paths_is_matched_in_linear_time() {
+        let started = std::time::Instant::now();
+        let big = r"\Users\".repeat(130_000); // about 1 MB, no space anywhere
+        let mut n = 0;
+        let out = scrub_user_paths(&big, &mut n);
+        assert!(n > 1000 && out.contains("<user>"), "{n}");
+        let slashes = r"/users/a,".repeat(115_000);
+        let (mut a, mut b) = (0, 0);
+        let _ = scrub_user_paths(&slashes, &mut a);
+        let _ = scrub_onedrive_org(&r"\OneDrive - Acme,".repeat(60_000), &mut b);
+        assert!(a > 1000 && b > 1000, "{a} {b}");
+        let (s, _) = lone([json!({ "p": big }), json!([]), json!([]), json!({}), json!([]), json!([])], &ExportEnv::default());
+        assert!(s[0]["p"].as_str().unwrap().contains("<user>"));
+        assert!(started.elapsed() < std::time::Duration::from_secs(10), "path matching is linear: took {:?}", started.elapsed());
+    }
+
+    #[test]
+    fn the_export_reads_the_ledger_once_for_support_evidence() {
+        // An unreadable ledger is one support event per export: the plan-GUID read is quiet, the view read records.
+        let src = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("history.rs")).expect("history.rs");
+        let at = src.find("pub(crate) fn recorded_plan_guids()").expect("recorded_plan_guids");
+        let body = &src[at..at + src[at..].find("\n}\n").expect("end")];
+        assert!(body.contains("load_history_from(") && !body.contains("load_history()") && !body.contains("load_history_for("), "{body}");
+        let this = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src").join("export.rs")).expect("export.rs");
+        let at = this.find("pub(crate) fn export_report(").expect("export_report");
+        let report = &this[at..at + this[at..].find("pub(crate) fn open_export_folder").expect("end")];
+        assert_eq!(report.matches("get_applied_changes()").count(), 1, "the view read is the one that records");
+        assert!(!report.contains("load_history"), "export_report reads the ledger only through the view");
+    }
+
     /// The record types the export reads, field by field, each classed ONE of three ways (space-separated names):
     /// safe = a number, flag, stamp, version, fixed Compy word, or a nested record that has its own row here;
     /// hardware text = a device or program name the export keeps on purpose (the note says so);
@@ -3368,46 +3444,76 @@ mod export_tests {
 
     /// The `struct <name> {` line's fields as (field, type text), read from the record sources; None if not found.
     fn record_struct(name: &str) -> Option<Vec<(String, String)>> {
-        let strip = |t: &'static str| -> &'static str {
+        RECORD_SOURCES.iter().find_map(|src| struct_fields_in(src, name))
+    }
+
+    /// [`record_struct`] over one source text. PANICS on a field line it cannot read.
+    fn struct_fields_in(src: &str, name: &str) -> Option<Vec<(String, String)>> {
+        let strip = |t: &str| -> String {
             let t = t.trim_start();
-            t.strip_prefix("pub(crate) ").or_else(|| t.strip_prefix("pub(super) ")).or_else(|| t.strip_prefix("pub ")).unwrap_or(t)
+            t.strip_prefix("pub(crate) ").or_else(|| t.strip_prefix("pub(super) ")).or_else(|| t.strip_prefix("pub ")).unwrap_or(t).to_string()
         };
         let head = format!("struct {name} {{");
-        for src in RECORD_SOURCES {
-            let lines: Vec<&'static str> = src.lines().collect();
-            let Some(at) = lines.iter().position(|l| strip(l).starts_with(&head)) else { continue };
+        {
+            let lines: Vec<&str> = src.lines().collect();
+            let at = lines.iter().position(|l| strip(l).starts_with(&head))?;
             let mut out = Vec::new();
             for l in &lines[at + 1..] {
                 if l.starts_with('}') {
                     break;
                 }
                 let t = strip(l);
-                if t.starts_with("//") || t.starts_with('#') {
+                if t.is_empty() || t.starts_with("//") || t.starts_with('#') {
                     continue;
                 }
-                if let Some((f, ty)) = t.split_once(": ") {
-                    if !f.is_empty() && f.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') {
-                        out.push((f.to_string(), ty.to_string()));
-                    }
-                }
+                // Every other line must be one `field: Type,`; a line this cannot read (a type that runs over
+                // several lines, `r#name`, `pub(in path)`) FAILS here instead of being skipped, so a field can
+                // never go unclassified because the parser could not see it.
+                let (f, ty) = t.split_once(": ").unwrap_or_else(|| panic!("struct {name}: cannot read the field line `{}`: put each field and its type on one line (and no r#name or pub(in ..)), or extend record_struct", l.trim()));
+                assert!(
+                    !f.is_empty() && f.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                    "struct {name}: cannot read the field name in `{}`: put each field and its type on one line (and no r#name or pub(in ..)), or extend record_struct",
+                    l.trim()
+                );
+                out.push((f.to_string(), ty.to_string()));
             }
-            return Some(out);
+            Some(out)
         }
-        None
+    }
+
+    /// The names of the `struct Name {` records a source defines (any of `pub`, `pub(crate)`, `pub(super)`).
+    fn structs_defined_in(src: &str) -> Vec<String> {
+        let mut names = Vec::new();
+        for l in src.lines() {
+            let t = l.trim_start();
+            let t = t.strip_prefix("pub(crate) ").or_else(|| t.strip_prefix("pub(super) ")).or_else(|| t.strip_prefix("pub ")).unwrap_or(t);
+            if let Some(rest) = t.strip_prefix("struct ").filter(|r| r.trim_end().ends_with('{')) {
+                names.push(rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect());
+            }
+        }
+        names
+    }
+
+    #[test]
+    fn a_struct_field_line_the_parser_cannot_read_fails_instead_of_being_skipped() {
+        let ok = "pub(super) struct Rec {\n    pub(super) a: u32,\n    /// doc\n    #[serde(skip)]\n    pub b_c: Option<String>, // note\n\n}\n";
+        let fields = struct_fields_in(ok, "Rec").expect("found");
+        assert_eq!(fields.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["a", "b_c"]);
+        assert!(struct_fields_in(ok, "Missing").is_none());
+        assert_eq!(structs_defined_in("pub(super) struct A {\n pub(crate) struct B {\npub struct C {\nstruct D {\nstruct E;\n"), ["A", "B", "C", "D"]);
+        for (bad, why) in [
+            ("struct Rec {\n    a: HashMap<String,\n        Vec<u8>>,\n}\n", "a type over several lines"),
+            ("struct Rec {\n    r#type: String,\n}\n", "a raw identifier"),
+            ("struct Rec {\n    pub(in crate::x) a: u8,\n}\n", "pub(in path)"),
+            ("struct Rec {\n    A: u8,\n}\n", "an upper-case field name"),
+        ] {
+            assert!(std::panic::catch_unwind(|| struct_fields_in(bad, "Rec")).is_err(), "{why} must fail, not be skipped");
+        }
     }
 
     #[test]
     fn every_field_of_the_exported_records_is_classified_here_and_a_new_one_fails_this_test() {
-        let mut defined: HashSet<String> = HashSet::new();
-        for src in RECORD_SOURCES {
-            for l in src.lines() {
-                let t = l.trim_start();
-                let t = t.strip_prefix("pub(crate) ").or_else(|| t.strip_prefix("pub ")).unwrap_or(t);
-                if let Some(rest) = t.strip_prefix("struct ").filter(|r| r.trim_end().ends_with('{')) {
-                    defined.insert(rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect());
-                }
-            }
-        }
+        let defined: HashSet<String> = RECORD_SOURCES.iter().flat_map(|src| structs_defined_in(src)).collect();
         let listed: HashSet<&str> = RECORD_FIELDS.iter().map(|(n, ..)| *n).collect();
         for (name, safe, hardware, redacted) in RECORD_FIELDS {
             let fields = record_struct(name).unwrap_or_else(|| panic!("struct {name} is not found in the record sources: renamed or moved? update RECORD_FIELDS and RECORD_SOURCES"));
@@ -3441,5 +3547,395 @@ mod export_tests {
         for later in ["build_consumer_report(", "build_markdown_report(", "build_discord_block(", "redaction.note()", "\"redaction\": redaction.to_json()"] {
             assert!(redact < at(later), "redact before {later}");
         }
+    }
+}
+
+/// The generated word list (`export_words.txt`) and the guard that no program code embeds source text.
+///
+/// The lexer here reads Rust source the way the repo's other source guards do (comments, strings, raw
+/// strings and char literals are told apart, so a brace or a quote inside one is not code), and drops every
+/// `#[cfg(test)]` / `#[test]` item by real bracket depth, never by "the next closing line".
+#[cfg(test)]
+mod export_words_guard {
+    use std::collections::{BTreeSet, HashSet};
+    use std::path::{Path, PathBuf};
+
+    #[derive(Debug, Clone, PartialEq)]
+    enum Tok {
+        Str(String),
+        Ident(String),
+        P(char),
+    }
+
+    fn manifest_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
+    fn src_dir() -> PathBuf {
+        manifest_dir().join("src")
+    }
+
+    /// Tokens of `src`: string contents (escapes dropped with the escaped character), identifiers, and every other
+    /// non-space character. Comments, char literals and lifetimes produce nothing.
+    fn lex(src: &str) -> Vec<Tok> {
+        let c: Vec<char> = src.chars().collect();
+        let ident = |ch: char| ch.is_alphanumeric() || ch == '_';
+        let (mut out, mut i) = (Vec::new(), 0usize);
+        while i < c.len() {
+            let (ch, next) = (c[i], c.get(i + 1).copied());
+            if ch == '/' && next == Some('/') {
+                while i < c.len() && c[i] != '\n' {
+                    i += 1;
+                }
+                continue;
+            }
+            if ch == '/' && next == Some('*') {
+                let mut depth = 0;
+                while i < c.len() {
+                    if c[i] == '/' && c.get(i + 1) == Some(&'*') {
+                        depth += 1;
+                        i += 2;
+                    } else if c[i] == '*' && c.get(i + 1) == Some(&'/') {
+                        depth -= 1;
+                        i += 2;
+                        if depth == 0 {
+                            break;
+                        }
+                    } else {
+                        i += 1;
+                    }
+                }
+                continue;
+            }
+            // A raw string: r"..", r#".."#, br#".."#.
+            if (ch == 'r' || (ch == 'b' && next == Some('r'))) && (i == 0 || !ident(c[i - 1])) {
+                let (mut j, mut hashes) = (i + if ch == 'b' { 2 } else { 1 }, 0usize);
+                while c.get(j) == Some(&'#') {
+                    hashes += 1;
+                    j += 1;
+                }
+                if c.get(j) == Some(&'"') {
+                    j += 1;
+                    let mut s = String::new();
+                    while j < c.len() && !(c[j] == '"' && (1..=hashes).all(|k| c.get(j + k) == Some(&'#'))) {
+                        s.push(c[j]);
+                        j += 1;
+                    }
+                    out.push(Tok::Str(s));
+                    i = j + 1 + hashes;
+                    continue;
+                }
+            }
+            if ch == '"' {
+                i += 1;
+                let mut s = String::new();
+                while i < c.len() && c[i] != '"' {
+                    if c[i] == '\\' {
+                        i += 1;
+                    } else {
+                        s.push(c[i]);
+                    }
+                    i += 1;
+                }
+                out.push(Tok::Str(s));
+                i += 1;
+                continue;
+            }
+            if ch == '\'' {
+                // '\n', '\'', '\u{..}' skip to the closing quote; 'x' is three characters; anything else is a lifetime.
+                if next == Some('\\') {
+                    i += 3;
+                    while i < c.len() && c[i] != '\'' {
+                        i += 1;
+                    }
+                    i += 1;
+                } else if c.get(i + 2) == Some(&'\'') {
+                    i += 3;
+                } else {
+                    i += 1;
+                }
+                continue;
+            }
+            if ident(ch) {
+                let start = i;
+                while i < c.len() && ident(c[i]) {
+                    i += 1;
+                }
+                out.push(Tok::Ident(c[start..i].iter().collect()));
+                continue;
+            }
+            if !ch.is_whitespace() {
+                out.push(Tok::P(ch));
+            }
+            i += 1;
+        }
+        out
+    }
+
+    /// The length in tokens of a `#[cfg(test)]` or `#[test]` attribute at the start of `t`.
+    fn test_attr_len(t: &[Tok]) -> Option<usize> {
+        let id = |k: usize, name: &str| matches!(t.get(k), Some(Tok::Ident(x)) if x == name);
+        let p = |k: usize, ch: char| t.get(k) == Some(&Tok::P(ch));
+        if !(p(0, '#') && p(1, '[')) {
+            return None;
+        }
+        if id(2, "test") && p(3, ']') {
+            return Some(4);
+        }
+        (id(2, "cfg") && p(3, '(') && id(4, "test") && p(5, ')') && p(6, ']')).then_some(7)
+    }
+
+    /// Skip the further attributes of an item and then the item itself, by bracket depth: through its `;` at depth
+    /// zero, or the `}` that closes its first brace block. Returns the index just past it.
+    fn skip_item(t: &[Tok], mut i: usize) -> usize {
+        while t.get(i) == Some(&Tok::P('#')) && t.get(i + 1) == Some(&Tok::P('[')) {
+            let mut depth = 0;
+            while i < t.len() {
+                match &t[i] {
+                    Tok::P('[') => depth += 1,
+                    Tok::P(']') => {
+                        depth -= 1;
+                        if depth == 0 {
+                            i += 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+        }
+        let mut depth = 0i32;
+        while i < t.len() {
+            match &t[i] {
+                Tok::P('(' | '[' | '{') => depth += 1,
+                Tok::P(')' | ']') => depth -= 1,
+                Tok::P('}') => {
+                    depth -= 1;
+                    if depth <= 0 {
+                        return i + 1;
+                    }
+                }
+                Tok::P(';') if depth == 0 => return i + 1,
+                _ => {}
+            }
+            i += 1;
+        }
+        i
+    }
+
+    /// The tokens outside every `#[cfg(test)]` / `#[test]` item.
+    fn production(t: &[Tok]) -> Vec<Tok> {
+        let (mut out, mut i) = (Vec::new(), 0usize);
+        while i < t.len() {
+            if let Some(n) = test_attr_len(&t[i..]) {
+                i = skip_item(t, i + n);
+            } else {
+                out.push(t[i].clone());
+                i += 1;
+            }
+        }
+        out
+    }
+
+    /// The files whose words are the export's static text.
+    const WORD_SOURCES: [&str; 9] = [
+        "export.rs", "readiness.rs", "hardware.rs", "diagnostics.rs", "recommendations.rs", "history.rs", "drift.rs", "sessions.rs", "stutter.rs",
+    ];
+
+    fn add_words(text: &str, words: &mut BTreeSet<String>) {
+        words.extend(text.split(|ch: char| !ch.is_alphabetic()).filter(|w| w.chars().count() >= 3).map(str::to_lowercase));
+    }
+
+    /// The list as the file must hold it: lower-case alphabetic words of 3+ letters from the string literals of the
+    /// non-test code of [`WORD_SOURCES`] and from the rules file, sorted, one per line.
+    fn generated_list() -> String {
+        let mut words = BTreeSet::new();
+        for f in WORD_SOURCES {
+            let src = std::fs::read_to_string(src_dir().join(f)).unwrap_or_else(|e| panic!("cannot read {f}: {e}"));
+            for t in production(&lex(&src)) {
+                if let Tok::Str(s) = t {
+                    add_words(&s, &mut words);
+                }
+            }
+        }
+        let rules = std::fs::read_to_string(manifest_dir().join("resources").join("baseline-rules-v1.json")).expect("rules file");
+        add_words(&rules, &mut words);
+        let mut text = words.into_iter().collect::<Vec<_>>().join("\n");
+        text.push('\n');
+        text
+    }
+
+    const REFRESH_VAR: &str = "COMPY_REFRESH_EXPORT_WORDS";
+
+    #[test]
+    fn export_words_txt_is_the_current_list_from_the_sources() {
+        let want = generated_list();
+        let path = src_dir().join("export_words.txt");
+        if std::env::var_os(REFRESH_VAR).is_some() {
+            std::fs::write(&path, &want).expect("write export_words.txt");
+            return;
+        }
+        let have = std::fs::read_to_string(&path).unwrap_or_default().replace("\r\n", "\n");
+        if have != want {
+            let (h, w): (BTreeSet<&str>, BTreeSet<&str>) = (have.lines().collect(), want.lines().collect());
+            let added: Vec<&&str> = w.difference(&h).take(8).collect();
+            let removed: Vec<&&str> = h.difference(&w).take(8).collect();
+            panic!(
+                "src-tauri/src/export_words.txt is stale: the export's static text changed and the word list was not regenerated \
+                 (new words such as {added:?}, gone words such as {removed:?}). Refresh it and commit the file: \
+                 in PowerShell run `$env:{REFRESH_VAR}=1; cargo test --lib export_words_txt_is_the_current_list; Remove-Item Env:{REFRESH_VAR}`."
+            );
+        }
+    }
+
+    #[test]
+    fn the_word_list_holds_export_text_and_no_test_text() {
+        let list = std::fs::read_to_string(src_dir().join("export_words.txt")).expect("list");
+        let words: HashSet<&str> = list.lines().collect();
+        assert!(words.len() > 800, "the list is a few thousand words, not {}", words.len());
+        assert!(list.len() < 60_000, "a word list, not source text: {} bytes", list.len());
+        for w in ["connected", "refresh", "hardware"] {
+            assert!(words.contains(w), "{w} is a word of the export's own text");
+        }
+        for w in ["zorvak", "canary", "zorvakprofile"] {
+            assert!(!words.contains(w), "{w} is a test fixture, not export text");
+        }
+        assert!(list.lines().all(|l| l.chars().all(char::is_alphabetic) && l == l.to_lowercase()), "one lower-case word per line");
+    }
+
+    #[test]
+    fn the_generator_skips_test_items_by_bracket_depth_and_reads_literals_properly() {
+        let src = r##"
+const A: &str = "alpha // { ";
+const B: char = '{';
+const C: &str = r#"bravo "quoted" }"#;
+#[cfg(test)]
+mod early_tests { fn f() { let _ = "zebra"; if true { let _ = "}"; } let _ = '}'; } }
+fn prod(x: &'static str) -> &'static str { "charlie" }
+#[cfg(test)]
+fn helper(a: [u8; 3]) -> &'static str { "yankee" }
+#[test]
+fn a_test() { let _ = "xray"; }
+#[cfg(test)]
+const T: &[&str] = &["whiskey"];
+const D: &str = "delta\n";
+/* "block comment string" */
+#[cfg(test)]
+#[allow(dead_code)]
+mod late_tests { const S: &str = "victor"; mod inner { const X: &str = "uniform"; } }
+const LAST: &str = "foxtrot";
+"##;
+        let mut words = BTreeSet::new();
+        for t in production(&lex(src)) {
+            if let Tok::Str(s) = t {
+                add_words(&s, &mut words);
+            }
+        }
+        let got: Vec<&str> = words.iter().map(String::as_str).collect();
+        assert_eq!(got, ["alpha", "bravo", "charlie", "delta", "foxtrot", "quoted"], "production literals only, nothing from a test item");
+    }
+
+    fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
+        let mut entries: Vec<PathBuf> = std::fs::read_dir(dir).expect("read dir").filter_map(|e| e.ok().map(|e| e.path())).collect();
+        entries.sort();
+        for p in entries {
+            if p.is_dir() {
+                rs_files(&p, out);
+            } else if p.extension().is_some_and(|e| e == "rs") {
+                out.push(p);
+            }
+        }
+    }
+
+    /// Module files that exist only under `#[cfg(test)] mod name;` in their parent (a whole-file test module).
+    fn test_only_modules(files: &[(PathBuf, Vec<Tok>)]) -> Vec<PathBuf> {
+        let mut dirs = Vec::new();
+        for (path, toks) in files {
+            let (dir, stem) = (path.parent().unwrap(), path.file_stem().unwrap().to_string_lossy().to_string());
+            let module_dir = if matches!(stem.as_str(), "lib" | "main" | "mod") { dir.to_path_buf() } else { dir.join(&stem) };
+            let mut i = 0;
+            while i < toks.len() {
+                if let Some(n) = test_attr_len(&toks[i..]) {
+                    let mut j = i + n;
+                    while matches!(toks.get(j), Some(Tok::Ident(x)) if x == "pub") {
+                        j += 1;
+                        if toks.get(j) == Some(&Tok::P('(')) {
+                            while j < toks.len() && toks[j] != Tok::P(')') {
+                                j += 1;
+                            }
+                            j += 1;
+                        }
+                    }
+                    if let (Some(Tok::Ident(m)), Some(Tok::Ident(name)), Some(Tok::P(';'))) = (toks.get(j), toks.get(j + 1), toks.get(j + 2)) {
+                        if m == "mod" {
+                            dirs.push(module_dir.join(name));
+                        }
+                    }
+                }
+                i += 1;
+            }
+        }
+        dirs
+    }
+
+    const SOURCE_EXTENSIONS: [&str; 6] = [".rs", ".tsx", ".ts", ".jsx", ".js", ".mjs"];
+
+    /// What a production token stream embeds: `include_str!` / `include_bytes!` / `include!` of a source file, or
+    /// with an argument that is not one plain string literal (so it cannot be checked).
+    fn embeds(toks: &[Tok]) -> Vec<String> {
+        let mut found = Vec::new();
+        for w in toks.windows(4) {
+            let (Tok::Ident(mac), Tok::P('!'), Tok::P('(')) = (&w[0], &w[1], &w[2]) else { continue };
+            if !matches!(mac.as_str(), "include_str" | "include_bytes" | "include") {
+                continue;
+            }
+            match &w[3] {
+                Tok::Str(p) if SOURCE_EXTENSIONS.iter().any(|e| p.to_lowercase().ends_with(e)) => found.push(format!("{mac}!(\"{p}\") embeds a source file")),
+                Tok::Str(_) => {}
+                other => found.push(format!("{mac}!({other:?}..) is not one plain string literal")),
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn no_program_code_embeds_source_text() {
+        let mut paths = Vec::new();
+        rs_files(&src_dir(), &mut paths);
+        let files: Vec<(PathBuf, Vec<Tok>)> = paths.into_iter().map(|p| {
+            let toks = lex(&std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("cannot read {}: {e}", p.display())));
+            (p, toks)
+        }).collect();
+        let test_dirs = test_only_modules(&files);
+        let is_test_file = |p: &Path| test_dirs.iter().any(|d| p == d.with_extension("rs") || p == d.join("mod.rs") || p.starts_with(d));
+        assert!(files.len() > 50, "the source tree was found");
+        let mut bad = Vec::new();
+        for (path, toks) in &files {
+            if is_test_file(path) {
+                continue;
+            }
+            for what in embeds(&production(toks)) {
+                bad.push(format!("{}: {what}", path.strip_prefix(manifest_dir()).unwrap_or(path).display()));
+            }
+        }
+        assert!(
+            bad.is_empty(),
+            "program (non-test) code must never include_str!/include_bytes! source text: it would be compiled into the shipped binary \
+             (and could carry names). Read the file at test time instead. Found: {bad:#?}"
+        );
+    }
+
+    #[test]
+    fn the_embed_guard_sees_production_includes_only() {
+        let hit = |src: &str| embeds(&production(&lex(src)));
+        assert_eq!(hit(r#"fn f() -> &'static str { include_str!("export.rs") }"#).len(), 1);
+        assert_eq!(hit(r#"const B: &[u8] = include_bytes!("../x/view.tsx");"#).len(), 1);
+        assert_eq!(hit(r#"static S: &str = include_str!("a/b.TS");"#).len(), 1);
+        assert_eq!(hit(r#"static S: &str = include_str!(concat!(env!("D"), "/x.rs"));"#).len(), 1, "an unreadable argument fails too");
+        assert!(hit(r#"const R: &str = include_str!("../resources/rules.json"); const W: &str = include_str!("export_words.txt");"#).is_empty());
+        assert!(hit("#[cfg(test)]\nmod tests { fn f() { let _ = include_str!(\"export.rs\"); } }").is_empty(), "a test module may read its own source");
+        assert!(hit("#[test]\nfn t() { let _ = include_str!(\"export.rs\"); }").is_empty());
+        assert!(hit("// include_str!(\"export.rs\")\nconst S: &str = \"include_str!(\\\"export.rs\\\")\";").is_empty(), "a comment or a string is not an include");
     }
 }

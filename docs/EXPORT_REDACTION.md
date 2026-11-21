@@ -10,7 +10,18 @@ Backed by these tests in `src-tauri/src/export.rs`: `no_canary_survives_in_any_s
 `an_ordinary_word_computer_name_from_any_export_text_leaves_the_text_whole_and_a_coded_name_goes_everywhere`,
 `a_scoped_name_beside_a_forward_slash_is_replaced_only_in_a_path_and_a_unc_share_is_covered`,
 `a_computer_or_user_named_with_a_skip_list_word_never_corrupts_the_text`,
-`every_field_of_the_exported_records_is_classified_here_and_a_new_one_fails_this_test`.
+`every_field_of_the_exported_records_is_classified_here_and_a_new_one_fails_this_test`,
+`a_one_or_two_letter_qos_policy_name_leaves_the_readiness_row_as_the_labelled_list`,
+`a_spaced_name_inside_a_sentence_is_only_partly_replaced`,
+`a_long_unc_profile_path_loses_the_account_name`,
+`a_non_ascii_account_name_is_replaced_and_never_cut_inside_a_character`,
+`a_moved_profile_folder_is_matched_by_its_real_leaf_name_scoped_or_not`,
+`a_long_space_free_string_of_paths_is_matched_in_linear_time`.
+
+The ordinary-word list the rules above use is `src-tauri/src/export_words.txt`, generated from the
+non-test string literals of the report's source files; `export_words_txt_is_the_current_list_from_the_sources`
+fails, naming the refresh command, when it is stale, and `no_program_code_embeds_source_text` keeps source
+text out of the program.
 
 This is the detailed version of the export paragraph in `docs/PRIVACY.md`. The Export Snapshot holds your
 hardware and driver names, your network adapters (an adapter's name can name a VPN you use), the changes
@@ -61,7 +72,8 @@ the report is written, Compy changes these things in the copy it exports:
   carries the name of a startup entry you changed. QoS policy names are replaced by "QoS policy 1", "QoS
   policy 2" and so on, the same number wherever the name appears (the hardware list and the Network QoS
   row of Game Readiness); a policy name of one or two letters is replaced in the list and inside that row's
-  list of names, not in other text.
+  parenthesised list of names (the row then reads "(QoS policy 1, QoS policy 2)", like the hardware list),
+  not in other text.
 
 ## Power plans
 
@@ -72,7 +84,8 @@ the report is written, Compy changes these things in the copy it exports:
   performance", is shown as "a custom power plan" in the places a plan name sits: the power rows of Game
   Readiness and Diagnostics, the Drift Watch values, a name beside a plan id, and a Trust Ledger row that
   carries a custom plan id. The ids of custom power plans and network interfaces are replaced by numbered
-  labels.
+  labels. If the Trust Ledger cannot be read, Compy cannot tell which Ultimate Performance copy is its own,
+  so that copy is shown as "a custom power plan" too.
 
 ## Left out
 

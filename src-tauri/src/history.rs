@@ -206,9 +206,11 @@ pub(crate) fn compys_plan_guid(c: &AppliedChange) -> Option<&str> {
 
 /// Every Ultimate copy Compy recorded activating (lower-case GUIDs, from the ledger rows' `applied_plan`).
 /// A read only; a ledger that cannot be read gives none. The export keeps the name of exactly these copies
-/// (and of Windows' own four plans) and replaces every other custom plan name.
+/// (and of Windows' own four plans) and replaces every other custom plan name. It reads without recording a
+/// support event: the export's own `get_applied_changes` read of the same ledger records the one event, so
+/// an unreadable ledger is one event per export, not two.
 pub(crate) fn recorded_plan_guids() -> Vec<String> {
-    load_history().map(|h| h.iter().filter_map(compys_plan_guid).map(str::to_owned).collect()).unwrap_or_default()
+    load_history_from(&history_path()).map(|h| h.iter().filter_map(compys_plan_guid).map(str::to_owned).collect()).unwrap_or_default()
 }
 
 /// CR-ultimate-identity: the receipt's read-back of the scheme Compy activated. Only for the Ultimate

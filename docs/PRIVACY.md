@@ -195,7 +195,7 @@ Compy replaces these in the copy it exports:
 - the names of other programs that started during a game session or that you changed as startup entries
   (unless they are on Compy's reviewed list of known programs);
 - your Windows user, profile, domain and computer names;
-- other accounts' names in file paths, and company names in OneDrive folder paths;
+- other accounts' names in `\Users\` file paths, and company names in OneDrive folder paths;
 - Trust Ledger ids, QoS policy names, and custom power plan names and ids.
 
 What stays: the game's program name, hardware and adapter names, stock Windows power plan names, the
@@ -203,8 +203,10 @@ hardware fingerprint, and your own note text. The limits:
 
 - A name of yours that is also an ordinary word, or shorter than three letters, is only replaced in file
   paths and name fields.
-- Text you typed elsewhere is not searched.
-- A very long account name with spaces may be only partly replaced.
+- Text is searched only for the names listed above, so any other name in it (yours or someone else's)
+  stays.
+- Another account's name that contains spaces may be only partly replaced: in the middle of a sentence only
+  its first word is certain to be replaced, and so is a name longer than 32 characters.
 - The JSON's field names are not rewritten.
 
 The last lines of the report say how many things were changed. Read a report before you post it in public:
