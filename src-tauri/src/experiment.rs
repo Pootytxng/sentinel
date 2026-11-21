@@ -793,18 +793,6 @@ pub(crate) fn lock_store() -> Result<crate::race_seam::StoreGuard, String> {
     })
 }
 
-/// The Trial store gate as a VALUE that only [`lock_trial_gate`] can make (D7), the twin of
-/// `history::LedgerGuard`. `data_clear`'s "clear everything" ledger phase takes `&TrialGuard` as a
-/// parameter, so a different lock (any other `StoreGuard`) does not type-check as "the Trial gate is held".
-pub(crate) struct TrialGuard {
-    _guard: crate::race_seam::StoreGuard,
-}
-
-/// [`lock_store`], wrapped. Same lock, same recorded acquisition, same poison policy (an `Err`).
-pub(crate) fn lock_trial_gate() -> Result<TrialGuard, String> {
-    lock_store().map(|_guard| TrialGuard { _guard })
-}
-
 // ─── Pure decision core (injected clock/ledger → unit-testable, anti-fabrication) ──
 
 /// The single-variable attribution note (§4F "warn when multiple changes active"). `None` when the
