@@ -994,7 +994,7 @@ fn build_methodology_section(sessions: &Value) -> String {
     let Some(c) = caps else {
         let _ = writeln!(
             o,
-            "- Frame rate is measured from the frame events Windows reports (ETW), not from inside the game: nothing is injected and no overlay is added to the game."
+            "- Frame rate is measured from the frame events Windows reports (ETW), not from inside the game: nothing is injected."
         );
         let _ = writeln!(
             o,
