@@ -615,7 +615,8 @@ fn with_state_at<T>(
     path: &Path,
     f: impl FnOnce(&mut IncidentObserverState) -> T,
 ) -> Result<T, StoreFailure> {
-    rmw_unless(path, || true, f).map(|out| out.expect("a write with no epoch is never dropped"))
+    let _guard = lock_state();
+    rmw_locked(path, f)
 }
 
 /// `with_state_at`, except that `still_valid` is asked UNDER the state lock before anything is read or
@@ -630,11 +631,19 @@ fn rmw_unless<T>(
     if !still_valid() {
         return Ok(None);
     }
+    rmw_locked(path, f).map(Some)
+}
+
+/// The read → apply → save itself. The caller holds `lock_state()`.
+fn rmw_locked<T>(
+    path: &Path,
+    f: impl FnOnce(&mut IncidentObserverState) -> T,
+) -> Result<T, StoreFailure> {
     let mut state =
         load_checked(path).map_err(|detail| StoreFailure { code: "read_failed", detail })?;
     let out = f(&mut state);
     save_to(path, &state).map_err(|detail| StoreFailure { code: "save_failed", detail })?;
-    Ok(Some(out))
+    Ok(out)
 }
 
 /// Runs `f` (the clear's delete of the incident record) with every writer held off, then forgets the
@@ -1727,11 +1736,9 @@ mod tests {
             assert!(!json.contains(banned), "a card must not claim `{banned}`");
         }
     }
-}
 
-/// D6: the clear's gate and the epoch-aware writer.
-#[cfg(test)]
-mod d6_clear_tests {
+    /// D6: the clear's gate and the epoch-aware writer. (Nested: this file keeps ONE test block at the tail.)
+    mod d6_clear_tests {
     use super::*;
 
     fn scratch(tag: &str) -> PathBuf {
@@ -1776,4 +1783,5 @@ mod d6_clear_tests {
         assert!(noted < gathered, "the epoch is read before the evidence is gathered");
         assert!(f.contains("clear_epoch() == started_epoch"), "and compared inside the locked write");
     }
+}
 }
