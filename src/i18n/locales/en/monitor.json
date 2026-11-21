@@ -304,7 +304,7 @@
         "sub": "A smoothness verdict compares your worst moments with your average, and this session didn't measure both."
       }
     },
-    "gpuLoafedInsight": "Your GPU only reached {{pct}}% at its peak while frames dipped — so the GPU probably isn't the bottleneck here. Prime suspect: a CPU or system limiter.",
+    "gpuLoafedInsight": "Your GPU only reached {{pct}}% at its peak while frames dipped — so the GPU wasn't working at its limit in this session. The limit may have been the CPU or something else in the system.",
     "primeSuspectInsight": "Prime suspect: {{limiter}}. {{reason}}",
     "lastSessionFallback": "Last session",
     "share": "Share",

@@ -304,7 +304,7 @@
         "sub": "流畅度评级要比较最差瞬间与平均帧率，而本次会话没有同时测得这两项。"
       }
     },
-    "gpuLoafedInsight": "你的 GPU 峰值占用只有 {{pct}}%，帧数却在下滑——所以 GPU 大概率不是瓶颈。头号嫌疑：CPU 或系统限制。",
+    "gpuLoafedInsight": "你的 GPU 峰值占用只有 {{pct}}%，帧数却在下滑——所以这一局里 GPU 并没有满负荷运行。限制可能来自 CPU 或系统中的其他部分。",
     "primeSuspectInsight": "头号嫌疑：{{limiter}}。{{reason}}",
     "lastSessionFallback": "上次会话",
     "share": "分享",
