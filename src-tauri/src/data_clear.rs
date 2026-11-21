@@ -230,6 +230,42 @@ pub(crate) struct ClearFacts {
     pub(crate) now: SystemTime,
 }
 
+/// The three things only the running app knows, that can change at any moment. Read when the plan is
+/// made (inside `ClearFacts`) AND again inside each store's gate immediately before a delete (D7): a
+/// Trial, a capture or an unsaved session that began after the plan was checked is seen and refused.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct LiveState {
+    pub(crate) capture_active: bool,
+    pub(crate) recorder_busy: bool,
+    pub(crate) benchmark_trial_running: bool,
+}
+
+impl ClearFacts {
+    pub(crate) fn live_state(&self) -> LiveState {
+        LiveState {
+            capture_active: self.capture_active,
+            recorder_busy: self.recorder_busy,
+            benchmark_trial_running: self.benchmark_trial_running,
+        }
+    }
+}
+
+/// The typed reasons `state` forbids a clear, `(code, sentence)`, in a fixed order. The planner and the
+/// in-gate re-check read the same list, so a refusal means the same thing in both places.
+fn live_state_refusals(state: &LiveState) -> Vec<(&'static str, &'static str)> {
+    let mut out = Vec::new();
+    if state.capture_active {
+        out.push(("capture_running", "Compy is measuring a game right now. Close the game or stop measuring first."));
+    }
+    if state.recorder_busy {
+        out.push(("recording_in_progress", "Compy is still finishing the play session it just measured. Try again in a moment."));
+    }
+    if state.benchmark_trial_running {
+        out.push(("benchmark_trial_running", "A benchmark trial is running. Let it finish or cancel it first."));
+    }
+    out
+}
+
 enum LedgerCheck {
     /// Readable, and every row is rolled back (or there is no ledger).
     Clean,
@@ -630,18 +666,8 @@ pub(crate) fn plan_clear(root: &Path, scope: Scope, facts: &ClearFacts) -> Clear
         }
         Ok(_) => {}
     }
-    if facts.capture_active {
-        plan.refuse("capture_running", "Compy is measuring a game right now. Close the game or stop measuring first.", None);
-    }
-    if facts.recorder_busy {
-        plan.refuse(
-            "recording_in_progress",
-            "Compy is still finishing the play session it just measured. Try again in a moment.",
-            None,
-        );
-    }
-    if facts.benchmark_trial_running {
-        plan.refuse("benchmark_trial_running", "A benchmark trial is running. Let it finish or cancel it first.", None);
+    for (code, detail) in live_state_refusals(&facts.live_state()) {
+        plan.refuse(code, detail, None);
     }
     match read_trial_store(root) {
         TrialRead::Idle | TrialRead::NoStore => {}
@@ -782,8 +808,13 @@ pub(crate) struct ClearReport {
     /// Listed by the plan but already gone when its turn came.
     pub(crate) already_gone: Vec<String>,
     pub(crate) failed: Vec<FailedDelete>,
-    /// Not tried because an earlier ledger file could not be deleted.
+    /// Not tried because an earlier ledger file could not be deleted, or because the run stopped (below).
     pub(crate) not_attempted: Vec<String>,
+    /// Set when a Trial, a capture or an unsaved session appeared AFTER the plan was checked and was seen
+    /// inside a store's gate immediately before a delete (D7): the run stopped there and the rest is in
+    /// `not_attempted`. Empty otherwise. When it fires before anything was deleted the outcome is
+    /// `Refused` instead, with these same typed reasons.
+    pub(crate) stopped: Vec<Refusal>,
     pub(crate) kept: Vec<Kept>,
     pub(crate) unknown: Vec<String>,
     /// True only when every file the plan listed is gone.
@@ -807,6 +838,12 @@ impl ClearReport {
             "Nothing to clear.".to_string()
         } else if self.complete {
             format!("Cleared: {gone} file(s) deleted.")
+        } else if let Some(why) = self.stopped.first() {
+            format!(
+                "Stopped: {gone} file(s) deleted, {} not tried. {} Run it again afterwards.",
+                self.not_attempted.len(),
+                why.detail
+            )
         } else {
             format!(
                 "Not finished: {gone} file(s) deleted, {} could not be deleted, {} not tried. Run it again after closing whatever is using them.",
@@ -919,6 +956,10 @@ pub(crate) trait ClearGates {
     /// means the delete failed or the gate could not be taken (then nothing was deleted). `store` is the
     /// inventory id of the store the file belongs to: the clear epoch that moves is that store's alone.
     fn with_gate(&self, gate: Gate, store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String>;
+    /// What the running app is doing right now (a capture, an unsaved session, a benchmark trial). Read by
+    /// `delete_rows` INSIDE the gate, immediately before each delete, so a Trial that started after the plan
+    /// was checked is seen. No default: an implementation that forgets it would silently skip the check.
+    fn live_state(&self) -> LiveState;
 }
 
 // ---- deleting one file --------------------------------------------------------------------------
@@ -1165,6 +1206,7 @@ fn new_report(now: &ClearPlan) -> ClearReport {
         already_gone: Vec::new(),
         failed: Vec::new(),
         not_attempted: Vec::new(),
+        stopped: Vec::new(),
         kept: now.kept.clone(),
         unknown: now.unknown.clone(),
         complete: false,
@@ -1194,14 +1236,25 @@ fn delete_rows(
     held: &[Gate],
     report: &mut ClearReport,
     ledger_failed: &mut bool,
-) {
-    for d in rows {
+) -> Vec<Refusal> {
+    for (i, d) in rows.iter().enumerate() {
         if *ledger_failed && d.row_id.starts_with("ledger-") {
             report.not_attempted.push(d.rel.clone());
             continue;
         }
         let gate = gate_of(d);
-        let mut run = || delete_one(root, &d.rel);
+        // The plan was checked some time ago. Read the live state AGAIN here, inside the store's gate
+        // (the closure runs with the lock held) and immediately before the delete: a Trial, a capture or an
+        // unsaved session that started since is seen, and nothing more is deleted (D7).
+        let tripped: std::cell::RefCell<Vec<Refusal>> = std::cell::RefCell::new(Vec::new());
+        let mut run = || {
+            let why = live_state_refusals(&gates.live_state());
+            if !why.is_empty() {
+                *tripped.borrow_mut() = why.into_iter().map(|(code, detail)| Refusal { code, detail: detail.to_string(), files: Vec::new() }).collect();
+                return Err("the live state changed".to_string());
+            }
+            delete_one(root, &d.rel)
+        };
         let result = if gate == Gate::Unlocked || held.contains(&gate) {
             run()
         } else if gate == Gate::Ledger {
@@ -1209,6 +1262,12 @@ fn delete_rows(
         } else {
             gates.with_gate(gate, d.store, &mut run)
         };
+        let stopped = tripped.into_inner();
+        if !stopped.is_empty() {
+            // Not a failed delete: nothing was attempted. This file and every one after it stay.
+            report.not_attempted.extend(rows[i..].iter().map(|r| r.rel.clone()));
+            return stopped;
+        }
         match result {
             Ok(Removed::Deleted) => report.deleted.push(d.rel.clone()),
             Ok(Removed::AlreadyGone) => report.already_gone.push(d.rel.clone()),
@@ -1218,6 +1277,20 @@ fn delete_rows(
             }
         }
     }
+    Vec::new()
+}
+
+/// `settle`, for a run that may have stopped. Stopped before anything was deleted: a typed `Refused`
+/// (nothing changed on disk). Stopped later: `Done`, incomplete, with `stopped` naming why.
+fn settle_run(mut report: ClearReport, stopped: Vec<Refusal>) -> ClearOutcome {
+    if stopped.is_empty() {
+        return settle(report);
+    }
+    if report.deleted.is_empty() && report.already_gone.is_empty() && report.failed.is_empty() {
+        return ClearOutcome::Refused(stopped);
+    }
+    report.stopped = stopped;
+    settle(report)
 }
 
 /// "Clear play history": deletes what `plan` listed, and only that, each store under its own lock for the
@@ -1235,8 +1308,8 @@ pub(crate) fn execute_clear(root: &Path, plan: &ClearPlan, facts: &ClearFacts, g
     };
     let mut report = new_report(&now);
     let mut ledger_failed = false;
-    delete_rows(root, &now.delete, gates, &[], &mut report, &mut ledger_failed);
-    settle(report)
+    let stopped = delete_rows(root, &now.delete, gates, &[], &mut report, &mut ledger_failed);
+    settle_run(report, stopped)
 }
 
 /// What `execute_everything_ledger_phase` leaves for `finish_everything`.
@@ -1301,8 +1374,8 @@ fn ledger_phase(
 /// file, each under its own store's lock one at a time, the support record last.
 pub(crate) fn finish_everything(root: &Path, phase: LedgerPhase, gates: &dyn ClearGates) -> ClearOutcome {
     let LedgerPhase { mut report, rest, mut ledger_failed } = phase;
-    delete_rows(root, &rest, gates, &[], &mut report, &mut ledger_failed);
-    settle(report)
+    let stopped = delete_rows(root, &rest, gates, &[], &mut report, &mut ledger_failed);
+    settle_run(report, stopped)
 }
 
 /// "Clear everything" as one call: takes the Trial gate, then the ledger lock, runs phase 1 under both,
@@ -1325,6 +1398,10 @@ pub(crate) fn clear_everything_at(
         };
         let facts = facts();
         let plan = plan_clear(root, Scope::Everything, &facts);
+        // A refusal is named as one (as `clear_play_history_at` does), not folded into "files changed".
+        if !plan.refusals.is_empty() {
+            return ClearOutcome::Refused(plan.refusals);
+        }
         if plan.fingerprint != expected_fingerprint {
             return ClearOutcome::PlanChanged;
         }
@@ -1373,6 +1450,8 @@ pub(crate) trait ClearEffects {
     fn forget_trial_result(&self);
     /// The incident observer's failure-streak flags, under its lock, after its record is gone.
     fn forget_incident_failures(&self);
+    /// What the running app is doing now, read inside a store's gate immediately before a delete (D7).
+    fn live_state(&self) -> LiveState;
 }
 
 /// The process-wide instances: the real epoch, the real benchmark cache and trial state, the real flags.
@@ -1396,6 +1475,15 @@ impl ClearEffects for ProcessEffects {
     }
     fn forget_incident_failures(&self) {
         crate::incident_observer::forget_failure_streak();
+    }
+    fn live_state(&self) -> LiveState {
+        // Atomics and one short leaf mutex (`benchmark_trial::state`, held for a clone and never across a
+        // store lock): safe to read inside any store's gate.
+        LiveState {
+            capture_active: crate::monitoring::fps_active().load(std::sync::atomic::Ordering::Acquire),
+            recorder_busy: crate::sessions::recorder_busy(),
+            benchmark_trial_running: crate::benchmark_trial::trial_state().running,
+        }
     }
 }
 
@@ -1453,14 +1541,18 @@ impl ClearGates for LiveGates<'_> {
         }
         result
     }
+    fn live_state(&self) -> LiveState {
+        self.0.live_state()
+    }
 }
 
 /// The facts only the running app knows.
 fn live_facts(remove_licence: bool) -> ClearFacts {
+    let live = ProcessEffects.live_state();
     ClearFacts {
-        capture_active: crate::monitoring::fps_active().load(std::sync::atomic::Ordering::Acquire),
-        recorder_busy: crate::sessions::recorder_busy(),
-        benchmark_trial_running: crate::benchmark_trial::trial_state().running,
+        capture_active: live.capture_active,
+        recorder_busy: live.recorder_busy,
+        benchmark_trial_running: live.benchmark_trial_running,
         remove_licence,
         now: SystemTime::now(),
     }
@@ -1609,6 +1701,9 @@ mod tests {
     impl ClearGates for NoGates {
         fn with_gate(&self, _gate: Gate, _store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
             delete()
+        }
+        fn live_state(&self) -> LiveState {
+            LiveState::default()
         }
     }
 
@@ -2295,6 +2390,8 @@ mod tests {
         bench_resets: std::cell::Cell<u32>,
         trial_forgets: std::cell::Cell<u32>,
         incident_forgets: std::cell::Cell<u32>,
+        /// What the "running app" is doing now; a test flips it between the plan and the delete.
+        live: std::cell::Cell<LiveState>,
     }
 
     impl TestEffects {
@@ -2311,6 +2408,7 @@ mod tests {
                 bench_resets: Default::default(),
                 trial_forgets: Default::default(),
                 incident_forgets: Default::default(),
+                live: Default::default(),
             }
         }
     }
@@ -2336,6 +2434,9 @@ mod tests {
         fn forget_incident_failures(&self) {
             self.incident_forgets.set(self.incident_forgets.get() + 1);
         }
+        fn live_state(&self) -> LiveState {
+            self.live.get()
+        }
     }
 
     /// The real gates, with a look at what this thread holds while each file goes.
@@ -2356,6 +2457,9 @@ mod tests {
                 self.seen.borrow_mut().push((gate, held_now()));
                 delete()
             })
+        }
+        fn live_state(&self) -> LiveState {
+            self.fx.live_state()
         }
     }
 
@@ -2666,7 +2770,10 @@ mod tests {
         assert!(every.refusals.iter().any(|r| r.code == "recording_in_progress"));
         // The live fact comes from the recorder (a gauge the accumulator and `save_session` move), and a
         // capture flag alone is not read as "done".
-        let live = include_str!("data_clear.rs").split("fn live_facts(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        let src = include_str!("data_clear.rs");
+        let facts_fn = src.split("fn live_facts(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(facts_fn.contains("ProcessEffects.live_state()"), "the facts and the in-gate re-check read the same function");
+        let live = src.split("impl ClearEffects for ProcessEffects").nth(1).unwrap().split("fn live_state(&self) -> LiveState {").nth(1).unwrap().split("\n    }\n").next().unwrap();
         assert!(live.contains("sessions::recorder_busy()"), "{live}");
         assert!(live.contains("fps_active()"), "the capture flag is still read too");
     }
@@ -2786,7 +2893,7 @@ mod tests {
         assert_eq!(store_of("sessions.json.corrupt.123"), "sessions");
         assert_eq!(store_of(".drift.json.12-3.tmp"), "drift");
         assert_eq!(store_of("care/incident-observer.12.3.json.tmp"), "incident-observer");
-        // The two savers that read an epoch use these ids, and they are inventory rows.
+        // The two savers that read an epoch use these ids, and they are inventory rows (D7 item 1).
         for (file, id) in [("sessions.rs", "sessions"), ("incident_observer.rs", "incident-observer")] {
             assert!(data_root_rows().any(|r| r.id == id), "{id}");
             let src = match file {
@@ -2795,5 +2902,141 @@ mod tests {
             };
             assert!(src.contains(&format!("const CLEAR_STORE: &str = \"{id}\";")), "{file} must key its epoch by `{id}`");
         }
+    }
+
+    // ===== D7 item 4: the state is read again INSIDE the gate, right before the delete =================
+
+    fn running(f: impl FnOnce(&mut LiveState)) -> LiveState {
+        let mut s = LiveState::default();
+        f(&mut s);
+        s
+    }
+
+    /// The real gates over a `TestEffects`; after `after` gated deletes it flips the "app" into a benchmark
+    /// trial, the way a Trial started by the user while a clear was already running would.
+    struct FlipAfter {
+        fx: TestEffects,
+        after: usize,
+        calls: std::cell::Cell<usize>,
+    }
+
+    impl ClearGates for FlipAfter {
+        fn with_gate(&self, gate: Gate, store: &'static str, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+            let result = LiveGates(&self.fx).with_gate(gate, store, delete);
+            self.calls.set(self.calls.get() + 1);
+            if self.calls.get() == self.after {
+                self.fx.live.set(running(|s| s.benchmark_trial_running = true));
+            }
+            result
+        }
+        fn live_state(&self) -> LiveState {
+            self.fx.live_state()
+        }
+    }
+
+    #[test]
+    fn r1_a_capture_recording_or_trial_that_starts_after_the_plan_is_seen_in_the_gate_and_nothing_is_deleted() {
+        for (flip, code) in [
+            (running(|s| s.capture_active = true), "capture_running"),
+            (running(|s| s.recorder_busy = true), "recording_in_progress"),
+            (running(|s| s.benchmark_trial_running = true), "benchmark_trial_running"),
+        ] {
+            let t = Tmp::new("r1");
+            seed(&t);
+            let fx = TestEffects::new();
+            let plan = plan_clear(&t.root, Scope::PlayHistory, &later()); // checked while everything was idle
+            assert!(plan.can_proceed() && !plan.delete.is_empty());
+            fx.live.set(flip); // it starts after the check, before the first delete
+            let before = t.listing();
+            // The facts handed to the executor are still the idle ones: only the in-gate read can see it.
+            let outcome = execute_clear(&t.root, &plan, &later(), &LiveGates(&fx));
+            let ClearOutcome::Refused(why) = &outcome else { panic!("{code}: expected Refused, got {outcome:?}") };
+            assert_eq!(why.iter().map(|r| r.code).collect::<Vec<_>>(), [code]);
+            assert_eq!(before, t.listing(), "{code}: nothing was deleted");
+            assert_eq!(fx.epoch.now("sessions"), 0, "{code}: and no epoch moved");
+        }
+    }
+
+    #[test]
+    fn r2_a_file_with_no_store_lock_is_checked_too() {
+        let t = Tmp::new("r2");
+        t.put("runtime/fps.json", "x"); // `Gate::Unlocked`: protected only by this check
+        let fx = TestEffects::new();
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert_eq!(rels(&plan), ["runtime/fps.json"]);
+        assert_eq!(gate_of(&plan.delete[0]), Gate::Unlocked);
+        fx.live.set(running(|s| s.capture_active = true));
+        let outcome = execute_clear(&t.root, &plan, &later(), &LiveGates(&fx));
+        assert!(matches!(&outcome, ClearOutcome::Refused(r) if r[0].code == "capture_running"), "{outcome:?}");
+        assert!(t.has("runtime/fps.json"));
+        // Idle again: it goes.
+        fx.live.set(LiveState::default());
+        assert!(done(execute_clear(&t.root, &plan, &later(), &LiveGates(&fx))).complete);
+        assert!(!t.has("runtime/fps.json"));
+    }
+
+    #[test]
+    fn r3_a_trial_that_starts_mid_run_stops_the_rest_and_the_report_says_so() {
+        let t = Tmp::new("r3");
+        seed(&t);
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let first = plan.delete[0].rel.clone();
+        let gates = FlipAfter { fx: TestEffects::new(), after: 1, calls: Default::default() };
+        let report = done(execute_clear(&t.root, &plan, &later(), &gates));
+        assert_eq!(report.deleted, [first.clone()], "only the file before the flip went");
+        assert!(!t.has(&first));
+        assert_eq!(report.not_attempted.len(), plan.delete.len() - 1, "every later file is named as not tried");
+        assert!(report.failed.is_empty(), "not a failed delete: it was never attempted");
+        assert_eq!(report.stopped.iter().map(|r| r.code).collect::<Vec<_>>(), ["benchmark_trial_running"]);
+        assert!(!report.complete);
+        assert!(report.summary().starts_with("Stopped:"), "{}", report.summary());
+        for rel in &report.not_attempted {
+            assert!(t.has(rel), "{rel} must still be there");
+        }
+        // A re-run once the trial is over finishes the rest.
+        gates.fx.live.set(LiveState::default());
+        let plan2 = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(done(execute_clear(&t.root, &plan2, &later(), &gates)).complete);
+        assert!(plan_clear(&t.root, Scope::PlayHistory, &later()).nothing_to_do());
+    }
+
+    #[test]
+    fn r4_everything_sees_it_too_in_both_phases() {
+        // Before phase 1 (the facts are read under the locks): refused, the ledger family untouched.
+        let t = Tmp::new("r4a");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(shown.can_proceed());
+        let before = t.listing();
+        let busy = ClearFacts { capture_active: true, ..later() };
+        let outcome = clear_everything_at(&t.root, &shown.fingerprint, &move || busy.clone(), &NoGates);
+        assert!(matches!(&outcome, ClearOutcome::Refused(r) if r[0].code == "capture_running"), "{outcome:?}");
+        assert_eq!(before, t.listing());
+        // During phase 2: phase 1 already took the ledger family, so the answer is Done-and-stopped.
+        let t = Tmp::new("r4b");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        let gates = FlipAfter { fx: TestEffects::new(), after: 2, calls: Default::default() };
+        let report = done(clear_everything_at(&t.root, &shown.fingerprint, &later, &gates));
+        assert!(!t.has("history.json") && !t.has("history.json.bak"), "phase 1 had finished before the trial began");
+        assert_eq!(report.stopped.iter().map(|r| r.code).collect::<Vec<_>>(), ["benchmark_trial_running"]);
+        assert!(!report.complete && !report.not_attempted.is_empty());
+        assert!(t.has("support/evidence.jsonl"), "the support record goes last, so it is still there");
+    }
+
+    #[test]
+    fn r5_the_planner_and_the_gate_read_the_same_list_and_every_delete_goes_through_the_check() {
+        // The same refusal codes, in one place.
+        let all = live_state_refusals(&LiveState { capture_active: true, recorder_busy: true, benchmark_trial_running: true });
+        assert_eq!(all.iter().map(|(c, _)| *c).collect::<Vec<_>>(), ["capture_running", "recording_in_progress", "benchmark_trial_running"]);
+        assert!(live_state_refusals(&LiveState::default()).is_empty());
+        // The check is inside the closure every delete path runs: gated, held and unlocked alike.
+        let core = include_str!("data_clear.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+        let body = core.split("fn delete_rows(").nth(1).unwrap().split("\n/// `settle`, for a run").next().unwrap();
+        let check = body.find("gates.live_state()").expect("the re-check");
+        let delete = body.find("delete_one(root, &d.rel)").expect("the delete");
+        let gated = body.find("gates.with_gate(gate, d.store, &mut run)").expect("the gate call");
+        assert!(check < delete && delete < gated, "one closure: check, then delete; the gate runs that closure");
+        assert_eq!(body.matches("delete_one(").count(), 1, "no second delete path that skips the check");
     }
 }
