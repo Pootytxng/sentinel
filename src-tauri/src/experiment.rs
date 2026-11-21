@@ -3728,8 +3728,8 @@ pub(crate) fn simulate(ctx: &SimContext) -> SimulatorReport {
         (
             "risk-exceeds-value",
             Confidence::High,
-            "On the permanent safety/anti-cheat blocklist — the stability or anti-cheat risk \
-             outweighs any possible gain, so Compy will not test it."
+            "On the permanent safety blocklist — the risk to stability outweighs any possible \
+             gain, so Compy will not test it."
                 .into(),
         )
     } else if !ctx.applicable {

@@ -269,7 +269,7 @@
     "aliases": ["defender off", "disable antivirus", "defender fps"],
     "verdict": "risky",
     "what": "Turns off Windows' built-in antivirus for a supposed FPS gain.",
-    "why": "Hard no. For the average rig the measured gain is a rounding error, and the cost is your only always-on protection — and some anti-cheats react badly to tampered security. If Defender's live scanning ever does cause stutter on one game (heavy disk I/O can trigger it), the right fix is a per-game folder exclusion, never killing your antivirus. Permanently blocklisted in Compy."
+    "why": "Hard no. For the average rig the measured gain is a rounding error, and the cost is your only always-on protection. If Defender's live scanning ever does cause stutter on one game (heavy disk I/O can trigger it), the right fix is a per-game folder exclusion, never killing your antivirus. Permanently blocklisted in Compy."
   },
   {
     "id": "disable-windows-update",

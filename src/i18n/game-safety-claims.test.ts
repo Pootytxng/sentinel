@@ -13,13 +13,30 @@ import { describe, expect, it } from "vitest";
 // Every locales/<lang>/<namespace>.json, parsed at test time (Vite-native, no fs typings needed).
 const LOCALE_MODULES = import.meta.glob("./locales/*/*.json", { import: "default", eager: true }) as Record<string, unknown>;
 
+// The Library / Blackbook data (terms, tweaks, tricks, guides; en and zh-CN) reaches users through the
+// Term tooltip, Learn and the autopsy pages, so it is held to the same rule as the locale files.
+const DATA_MODULES = import.meta.glob("../data/*.json", { import: "default", eager: true }) as Record<string, unknown>;
+
+// Every Rust source under src-tauri/src as raw text. Rust strings reach users raw (the exported report,
+// the Leftovers rows, the simulator's "why"), so they are scanned too. Narrowing, so honest internals
+// do not trip it: from each file only the PRODUCTION text is scanned (cut at the first `#[cfg(test)]`,
+// lines starting with `//` dropped, so doc comments that explain why a rule exists are not claims), and
+// files named tests.rs or under a tests/ folder are skipped (fixtures).
+const RUST_SOURCES = import.meta.glob("../../src-tauri/src/**/*.rs", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+
+const productionRust = (text: string): string => {
+  const lines = text.split(/\r?\n/);
+  const cut = lines.findIndex((l) => /^\s*#\[cfg\(test\)\]/.test(l));
+  return (cut === -1 ? lines : lines.slice(0, cut)).filter((l) => !l.trim().startsWith("//")).join("\n");
+};
+
 const CLAIM_PATTERNS: ReadonlyArray<[string, RegExp]> = [
   ["'never/doesn't touch ... games'", /\b(never|doesn'?t|does not|won'?t|will not|no)\s+touch(es)?\b[^.]{0,30}\bgames?\b/i],
   ["'safe with / safe for anti-cheat'", /\bsafe (with|for|against|around|under)\b[^.]{0,12}anti-?cheat/i],
   ["'anti-cheat-safe / -friendly / -proof / -compatible'", /anti-?cheats?[- ](safe|friendly|proof|compatible|approved|whitelisted|ok)\b/i],
   ["'compatible with anti-cheat'", /\bcompatible with\b[^.]{0,12}anti-?cheat/i],
   ["'anti-cheat will not flag / ban / react'", /anti-?cheats?\b[^.]{0,20}\b(won'?t|will not|never|can'?t|cannot)\s+(flag|ban|detect|object|care|notice)/i],
-  ["'anti-cheats react badly' (a claim about their behaviour)", /anti-?cheats?\s+(react|reacts|punish|punishes|ban|bans|flag|flags)\b/i],
+  ["'anti-cheats react badly' (a claim about their behaviour)", /anti-?cheats?\s+(react|reacts)\b/i],
   ["'nothing for anti-cheat to object to'", /nothing for anti-?cheat/i],
   ["'100%' beside safe / secure / undetectable / ban", /100\s?%\s*[-\w ]{0,12}(safe|secure|undetect|ban|anti)/i],
   ["'undetectable'", /undetect/i],
@@ -27,7 +44,17 @@ const CLAIM_PATTERNS: ReadonlyArray<[string, RegExp]> = [
   ["'no risk' / 'risk-free' / 'zero risk' (bans)", /\b(no|zero) risk\b|risk-free/i],
   ["'guarantee' beside anti-cheat or ban", /guarantee[sd]?\b[^.]{0,40}(anti-?cheat|\bban)/i],
   ["zh: '绝不触碰 / 不会触碰 ... 游戏'", /(绝不|不会|从不|不)触碰[^。]{0,8}游戏|绝不触碰|不会触碰/],
-  ["zh: '对反作弊安全 / 与反作弊兼容'", /(对|与|和)反作弊(系统|软件)?(是)?(安全|兼容|友好)|反作弊[^。，,]{0,4}(安全|兼容|无忧|放心)/],
+  // The dodge family a reviewer listed (safe-to-use wording, "<launcher>-safe", "won't trigger", "no ban risk").
+  // Over-broad on purpose: it would also block an honest "safe ... anti-cheat" sentence; reword that instead.
+  ["'safe ... anti-cheat / Vanguard / EAC / BattlEye'", /\bsafe\b[^.]{0,20}\b(anti-?cheat|vanguard|eac|battleye)\b/i],
+  ["'Vanguard-safe / EAC-safe / BattlEye-safe / ban-safe'", /\b(vanguard|eac|battleye|ban)[- ]safe\b/i],
+  ["'won't trigger / set off anti-cheat'", /(won'?t|never|doesn'?t|does not|will not)\s+(trigger|set off|upset|alert)\b[^.]{0,15}anti-?cheat/i],
+  ["'no ban risk'", /\bno\s+ban\s+risk\b/i],
+  ["'react badly'", /\breact(s|ed)? badly\b/i],
+  ["zh: '对反作弊(系统)安全 / 与反作弊兼容'", /(对|与|和)反作弊(系统|软件)?(来说)?(是)?(安全|兼容|友好)|反作弊(系统|软件)?(来说)?(是)?(安全|无忧|放心)/],
+  ["zh: '不会触发反作弊'", /不会触发[^。]{0,4}反作弊/],
+  ["zh: '不碰 ... 游戏'", /不(会)?碰[^。]{0,4}游戏/],
+  ["zh: '反作弊 ... 反应会很不好'", /反作弊[^。]{0,24}反应(会)?(很)?(不好|糟)/],
   ["zh: '不会封号 / 不会被封'", /不会(被)?封(号|禁)|不会被封|无需担心[^。]{0,6}封号|封号风险(为零|没有|很低)/],
   ["zh: '检测不到 / 无法被检测'", /检测不到|无法被检测|不会被检测|不被检测/],
   ["zh: '百分之百 / 绝对安全'", /百分之百|绝对安全|100\s?%\s*安全/],
@@ -90,6 +117,11 @@ describe("game-safety claims: Compy states what it does, never an outcome with a
     expect(files.filter((f) => f.startsWith("zh-CN/")).length, "no zh-CN locale files found").toBeGreaterThan(5);
   });
 
+  const failMessage = (hits: Hit[]) =>
+    `Compy cannot prove these. State what Compy does (e.g. "Frame timing is read from Windows, not from inside the game"), ` +
+    `never an outcome with a game or anti-cheat. Reword:\n` +
+    hits.map((h) => `  ${h.where} [${h.label}]: "${h.text.slice(0, 140)}"`).join("\n");
+
   it("no locale string claims a game is never touched, is safe with anti-cheat, or cannot be banned", () => {
     const hits: Hit[] = [];
     for (const file of localeFiles()) {
@@ -97,11 +129,60 @@ describe("game-safety claims: Compy states what it does, never an outcome with a
         for (const label of scan(text)) hits.push({ where: `${file}:${key}`, text, label });
       }
     }
-    const report = hits.map((h) => `  ${h.where} [${h.label}]: "${h.text.slice(0, 140)}"`).join("\n");
-    expect(
-      hits,
-      `Compy cannot prove these. State what Compy does (e.g. "Frame timing is read from Windows, not from inside the game"), ` +
-        `never an outcome with a game or anti-cheat. Reword:\n${report}`,
-    ).toEqual([]);
+    expect(hits, failMessage(hits)).toEqual([]);
+  });
+
+  it("no src/data JSON string (terms, tweaks, tricks, guides; en and zh-CN) makes those claims", () => {
+    const names = Object.keys(DATA_MODULES);
+    expect(names.some((n) => n.endsWith("terms.json")), "terms.json not scanned").toBe(true);
+    expect(names.some((n) => n.endsWith("terms.zh-CN.json")), "terms.zh-CN.json not scanned").toBe(true);
+    expect(names.some((n) => n.endsWith("tweaks.json")), "tweaks.json not scanned").toBe(true);
+    const hits: Hit[] = [];
+    for (const [file, json] of Object.entries(DATA_MODULES)) {
+      for (const [key, text] of leaves(json)) {
+        for (const label of scan(text)) hits.push({ where: `${file.replace("../", "src/")}:${key}`, text, label });
+      }
+    }
+    expect(hits, failMessage(hits)).toEqual([]);
+  });
+
+  it("no Rust string shown to users (export report, Leftovers, simulator) makes those claims", () => {
+    const files = Object.entries(RUST_SOURCES).filter(([f]) => !/(^|\/)tests\.rs$|\/tests\//.test(f));
+    expect(files.length, "Rust sources not found").toBeGreaterThan(20);
+    for (const must of ["export.rs", "leftovers.rs"]) {
+      expect(files.some(([f]) => f.endsWith(`/${must}`)), `${must} not scanned`).toBe(true);
+    }
+    const hits: Hit[] = [];
+    for (const [file, raw] of files) {
+      const prod = productionRust(raw);
+      for (const label of scan(prod)) {
+        const re = CLAIM_PATTERNS.find(([l]) => l === label)![1];
+        const m = re.exec(prod);
+        hits.push({ where: file.replace("../../", ""), text: m ? prod.slice(Math.max(0, m.index - 40), m.index + 100) : "", label });
+      }
+    }
+    expect(hits, failMessage(hits)).toEqual([]);
+  });
+
+  it("the Rust and data scans would catch the old sentences (disarm proof)", () => {
+    expect(scan(productionRust('    "No game code is touched and no overlay is injected — anti-cheat-safe by design.",')).length).toBeGreaterThan(0);
+    expect(scan(productionRust('// anti-cheat-safe in a comment is not a claim\nfn a() {}')), "comment lines are skipped").toEqual([]);
+    expect(scan(productionRust('fn a() {}\n#[cfg(test)]\nmod t { const S: &str = "anti-cheat-safe"; }')), "test code is skipped").toEqual([]);
+    expect(scan("the cost is your only always-on protection — and some anti-cheats react badly.").length).toBeGreaterThan(0);
+    expect(scan("Because it reads events Windows already broadcasts, it doesn't touch game memory, so it's anti-cheat-safe.").length).toBeGreaterThan(0);
+    expect(scan("Compy stays anti-cheat-safe and does not enable any feature your game forbids").length).toBeGreaterThan(0);
+    expect(scan("Safe to use with anti-cheat.").length).toBeGreaterThan(0);
+    expect(scan("It won't trigger anti-cheat.").length).toBeGreaterThan(0);
+    expect(scan("Vanguard-safe.").length).toBeGreaterThan(0);
+    expect(scan("No ban risk.").length).toBeGreaterThan(0);
+    expect(scan("不会触发反作弊。").length).toBeGreaterThan(0);
+    expect(scan("不碰你的游戏。").length).toBeGreaterThan(0);
+    expect(scan("所以对反作弊系统来说是安全的。").length).toBeGreaterThan(0);
+    expect(scan("有些反作弊系统一旦发现安全防护被动过手脚,反应会很不好。").length).toBeGreaterThan(0);
+    // The honest sentences must keep passing.
+    expect(scan("Compy can't promise how any anti-cheat will react."), "honest EN").toEqual([]);
+    expect(scan("Compy 无法承诺任何反作弊系统会作何反应。"), "honest ZH").toEqual([]);
+    expect(scan("Breaks Game Pass, anti-cheat compatibility, and security patching"), "'anti-cheat compatibility' as a topic").toEqual([]);
+    expect(scan("会破坏 Game Pass、反作弊兼容性和安全补丁机制"), "zh 反作弊兼容性 as a topic").toEqual([]);
   });
 });

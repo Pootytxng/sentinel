@@ -489,7 +489,7 @@ fn detect_defender_policy(probes: &Value) -> Outcome {
         stock_default: "No policy override — real-time protection on".into(),
         matched_tweak: "\"Disable Windows Defender for FPS\" — registry/policy guides".into(),
         mechanism_cost:
-            "The FPS gain is a rounding error; the cost is your only always-on protection — and some anti-cheats react badly."
+            "The FPS gain is a rounding error; the cost is your only always-on protection."
                 .into(),
         verdict: "Nothing here changes itself back — the policy stays until removed.".into(),
         uncertain_source: true,

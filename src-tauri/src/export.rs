@@ -994,8 +994,7 @@ fn build_methodology_section(sessions: &Value) -> String {
     let Some(c) = caps else {
         let _ = writeln!(
             o,
-            "- Frame rate is measured by observing the frames each game submits to Windows — no game \
-             code is touched and no overlay is injected (anti-cheat-safe by design)."
+            "- Frame rate is measured from the frame events Windows reports (ETW), not from inside the game: nothing is injected and no overlay is added to the game."
         );
         let _ = writeln!(
             o,
@@ -1047,7 +1046,7 @@ fn build_methodology_section(sessions: &Value) -> String {
     let _ = writeln!(
         o,
         "- **Capture method:** present-event counting via `{}` (capture-method v{}, methodology {}). \
-         No game code is touched and no overlay is injected — anti-cheat-safe by design.",
+         Frame timing is read from Windows, not from inside the game; nothing is injected.",
         vstr(c, "backend_id"),
         vstr(c, "backend_version"),
         vstr(c, "methodology_version"),

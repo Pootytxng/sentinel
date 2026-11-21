@@ -447,9 +447,10 @@ export function MonitorConsole({
       }
       quiet={quiet}
       /* THE METHOD, at the foot of the story column where the comp puts it — the same honesty
-         micro-line the room always carried, moved rather than rewritten: the anti-cheat-safe
-         wording is preserved verbatim (the handoff names it explicitly) and it still glosses ETW
-         through the same Term. What is new is the padlock beside it, and the company it keeps:
+         micro-line the room always carried, moved rather than rewritten. The old "Safe with
+         anti-cheat" promise is gone (Compy cannot know how any anti-cheat reacts; see
+         src/i18n/game-safety-claims.test.ts); the line says how frames are measured instead. It
+         still glosses ETW through the same Term. What is new is the padlock beside it, and the company it keeps:
          the room's forward route now sits directly above it instead of at the page foot. */
       footnote={
         <>

@@ -391,7 +391,7 @@
       },
       "disableDefender": {
         "name": "Disable Windows Defender",
-        "why": "The FPS gain is a rounding error; the cost is your only always-on protection — and Compy can't tell how a game's anti-cheat treats it."
+        "why": "The FPS gain is a rounding error; the cost is your only always-on protection."
       }
     },
     "readTheAutopsy": "Read the autopsy →",
