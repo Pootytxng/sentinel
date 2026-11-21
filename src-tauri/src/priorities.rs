@@ -714,8 +714,8 @@ pub(crate) fn build_priorities_for(
                 Bucket::Fine,
                 PriorityItem {
                     id: "pending-safe-recs",
-                    title: "Safe one-click tweaks".into(),
-                    reason: "No pending safe tweaks — the safe recommendations that apply to your PC are already applied, or none apply.".into(),
+                    title: "One-click tweaks".into(),
+                    reason: "No pending tweaks — the recommendations that apply to your PC are already applied, or none apply.".into(),
                     linked: None,
                     confidence: Confidence::Low,
                     basis: Basis::Fact,
@@ -733,12 +733,12 @@ pub(crate) fn build_priorities_for(
                 PriorityItem {
                     id: "pending-safe-recs",
                     title: format!(
-                        "{} safe {} not applied",
+                        "{} {} not applied",
                         pending.len(),
                         if pending.len() == 1 { "tweak" } else { "tweaks" }
                     ),
                     reason: format!(
-                        "Compy has safe, reversible tweaks you haven't applied: {}{}.",
+                        "Compy has reversible tweaks you haven't applied: {}{}.",
                         titles.join(", "),
                         if pending.len() > titles.len() { ", …" } else { "" }
                     ),
@@ -1318,7 +1318,7 @@ mod priority_tests {
         let p = build_priorities(&r, &recs, &json!([]), &json!([]));
         assert!(limiter_ids(&p).contains(&"pending-safe-recs"), "the non-drifted rec still lists");
         // …and the count reflects ONE rec, grammar-correct (no "(s)").
-        assert_eq!(limiter_title(&p, "pending-safe-recs").as_deref(), Some("1 safe tweak not applied"));
+        assert_eq!(limiter_title(&p, "pending-safe-recs").as_deref(), Some("1 tweak not applied"));
     }
 
     // flags-name-it law: no "N setting(s)" pluralization artifact. Singular vs plural is real grammar.
@@ -1330,7 +1330,7 @@ mod priority_tests {
             &json!([]),
             &json!([]),
         );
-        assert_eq!(limiter_title(&one, "pending-safe-recs").as_deref(), Some("1 safe tweak not applied"));
+        assert_eq!(limiter_title(&one, "pending-safe-recs").as_deref(), Some("1 tweak not applied"));
         let two = build_priorities(
             &readiness(vec![]),
             &json!([
@@ -1340,7 +1340,7 @@ mod priority_tests {
             &json!([]),
             &json!([]),
         );
-        assert_eq!(limiter_title(&two, "pending-safe-recs").as_deref(), Some("2 safe tweaks not applied"));
+        assert_eq!(limiter_title(&two, "pending-safe-recs").as_deref(), Some("2 tweaks not applied"));
         for t in [limiter_title(&one, "pending-safe-recs"), limiter_title(&two, "pending-safe-recs")]
             .into_iter()
             .flatten()
