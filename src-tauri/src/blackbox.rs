@@ -377,6 +377,25 @@ pub(crate) struct Assessment {
     pub(crate) next_step: NextStep,
     /// True = "beyond what Compy can safely advise — here's the raw evidence to take to a human/forum."
     pub(crate) beyond_us: bool,
+    /// Set where the surface should say one fixed, translated sentence about what Windows recorded
+    /// instead of the generic "consistent with {consistent_with}" frame. `consistent_with` still
+    /// carries the English meaning of the same statement.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) statement: Option<AssessmentStatement>,
+    /// The app name `statement` is about (display form). None = the record did not name one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) subject: Option<String>,
+}
+
+/// The fixed sentences a surface renders for an app-side record. Each says what Windows recorded and
+/// that it does not rule out the PC; none names a cause or excludes hardware.
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum AssessmentStatement {
+    AppCrash,
+    AppHang,
+    /// A Windows host process (RUNDLL32, svchost, ...) crashed; the program it was running is unknown.
+    HostProcess,
 }
 
 /// Gate for all of Black Box v2 (mirrors `gaming_mode_gate` / `receipts_gate`). **Owner-authorized
@@ -459,8 +478,9 @@ fn incident_within(inc: &Incident, ctx: &[Incident], mins: i64, kind_pred: impl 
 }
 
 /// Rule 1 — overheating-consistent. A MEASURED high GPU temp (≥85 °C) in the pre-crash vitals on a GPU
-/// timeout or an unexpected shutdown → Strong. A WHEA hardware machine-check → Strong if repeated (or
-/// corroborated by a high temp), else Partial. Honest about WHEA's breadth (heat OR power OR memory).
+/// timeout or an unexpected shutdown → Strong (a measured reading plus a Windows record: two kinds).
+/// A WHEA hardware machine-check → Strong only when corroborated by a measured high temp, else Partial
+/// (repeats are the same kind of evidence). Honest about WHEA's breadth (heat OR power OR memory).
 fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
     let high = is_high_temp(inc);
     if high && matches!(inc.kind, IncidentKind::GpuTimeout | IncidentKind::UnexpectedShutdown) {
@@ -480,11 +500,15 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
                  to start. Re-pasting or undervolting are bigger jobs to research first, not do blind.",
             ),
             beyond_us: false,
+            statement: None,
+            subject: None,
         });
     }
     if inc.kind == IncidentKind::HardwareError {
         let repeats = count_kind(ctx, IncidentKind::HardwareError) >= 2;
-        let strength = if repeats || high { Strength::Strong } else { Strength::Partial };
+        // Strong needs two independent supports: the Windows hardware record AND a measured high GPU
+        // temperature. The same record twice is one kind of evidence, so it stays Partial.
+        let strength = if high { Strength::Strong } else { Strength::Partial };
         let mut evidence = vec![
             format!(
                 "Windows logged a hardware-level fault {} (it calls these 'WHEA' errors)",
@@ -508,13 +532,17 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
                  change one blind).",
             ),
             beyond_us: false,
+            statement: None,
+            subject: None,
         });
     }
     None
 }
 
 /// Rule 2 — graphics-driver-consistent. The SAME GPU driver module timing out (TDR) across ≥2 crashes,
-/// temps NOT high (rule 1 owns the hot case). → Strong it's the driver. Reversible: clean-reinstall.
+/// temps NOT high (rule 1 owns the hot case). → Partial: repeats of one Windows record are one kind of
+/// evidence, and "temps not high" is the absence of a contrary sign, not a second support.
+/// Reversible: clean-reinstall.
 fn rule_graphics_driver(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
     if inc.kind != IncidentKind::GpuTimeout || is_high_temp(inc) {
         return None;
@@ -530,7 +558,7 @@ fn rule_graphics_driver(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> 
     Some(Assessment {
         rule: AssessmentRule::GraphicsDriver,
         consistent_with: format!("your graphics driver ({module}) repeatedly timing out"),
-        strength: Strength::Strong,
+        strength: Strength::Partial,
         evidence: vec![
             format!("the same driver module ({module}) stopped responding across {same_module} separate crashes"),
             "the GPU temperature was not in the overheating range in those sessions".into(),
@@ -543,11 +571,15 @@ fn rule_graphics_driver(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> 
              new one is worse.",
         ),
         beyond_us: false,
+        statement: None,
+        subject: None,
     })
 }
 
-/// Rule 3 — app-specific (not your PC). A lone app crash/hang with NO system-level event within ±10 min.
-/// → Strong it's app-side. Reversible: verify game files / update.
+/// Rule 3 — app-specific. A lone app crash/hang with NO system-level event within ±10 min.
+/// → Partial: one Windows record is one kind of evidence, and where in the app Windows saw the crash
+/// does not rule out the PC (drivers, memory, heat and overclocks crash inside a game's own process).
+/// The sentence says what was recorded and that it does not rule out the PC. Reversible: verify files.
 fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
     if !matches!(inc.kind, IncidentKind::AppCrash | IncidentKind::AppHang) {
         return None;
@@ -557,6 +589,8 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
     }
     let app = inc.receipt.faulting_app.as_deref().map(pretty_proc);
     let subject = app.clone().unwrap_or_else(|| "that app".to_string());
+    let hang = inc.kind == IncidentKind::AppHang;
+    let what_happened = if hang { "not responding" } else { "crashing" };
     let lead = match &app {
         Some(a) => format!("{a} closed on its own, with no system-level error logged around it"),
         None => "the app closed on its own, with no system-level error logged around it".to_string(),
@@ -569,10 +603,12 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         return Some(Assessment {
             rule: AssessmentRule::AppSpecific,
             consistent_with: format!(
-                "likely a problem in code {subject} was running for another program, rather than your hardware"
+                "{subject} crashing, a Windows file that runs code for other programs, which points at a program it was running and doesn't rule out your PC"
             ),
             // Only the process name and a quiet hardware log are known here, so this is Partial.
             strength: Strength::Partial,
+            statement: Some(AssessmentStatement::HostProcess),
+            subject: app.clone(),
             evidence,
             next_step: NextStep::safe(
                 "Update Windows, then the program that was starting",
@@ -587,8 +623,12 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
     }
     Some(Assessment {
         rule: AssessmentRule::AppSpecific,
-        consistent_with: format!("a problem inside {subject} itself, rather than your PC"),
-        strength: Strength::Strong,
+        consistent_with: format!(
+            "{subject} {what_happened}, which points at the game or something it loads and doesn't rule out your PC"
+        ),
+        strength: Strength::Partial,
+        statement: Some(if hang { AssessmentStatement::AppHang } else { AssessmentStatement::AppCrash }),
+        subject: app.clone(),
         evidence,
         next_step: NextStep::safe(
             "Verify the game's files, then update it",
@@ -651,6 +691,8 @@ fn rule_power_hardlock(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
              power supply is worth researching — don't assume it, and don't open the power supply.",
         ),
         beyond_us: false,
+        statement: None,
+        subject: None,
     })
 }
 
@@ -678,6 +720,8 @@ fn rule_beyond_us(inc: &Incident) -> Option<Assessment> {
             ),
         ),
         beyond_us: true,
+        statement: None,
+        subject: None,
     })
 }
 
@@ -2866,19 +2910,23 @@ mod blackbox_tests {
     }
 
     #[test]
-    fn whea_is_partial_once_and_strong_when_repeated() {
+    fn whea_is_partial_alone_or_repeated_and_strong_only_with_a_measured_high_temp() {
         let one = mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, None);
         let a = assess(&one, std::slice::from_ref(&one)).expect("fires");
         assert_eq!(a.strength, Strength::Partial, "a lone WHEA is honest about ambiguity");
         assert!(a.consistent_with.contains("hardware-level"));
-        // two WHEA in context → Strong
+        // two WHEA in context → still Partial: the same record twice is one kind of evidence
         let two = vec![
             mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, None),
             mk(IncidentKind::HardwareError, "2026-06-11T10:00:00Z", None, None, None, None),
         ];
         let a2 = assess(&two[0], &two).expect("fires");
-        assert_eq!(a2.strength, Strength::Strong);
+        assert_eq!(a2.strength, Strength::Partial, "repeats of one record are not a second support");
         assert!(a2.next_step.reversible && !has_percent(&a2));
+        // a WHEA record plus a measured high GPU temperature are two kinds → Strong
+        let hot = mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, Some(90));
+        let a3 = assess(&hot, std::slice::from_ref(&hot)).expect("fires");
+        assert_eq!(a3.strength, Strength::Strong);
     }
 
     #[test]
@@ -2886,13 +2934,13 @@ mod blackbox_tests {
         let cool = mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("nvlddmkm"), None, None, None);
         // one TDR → not enough → no driver claim (could be a one-off)
         assert!(rule_graphics_driver(&cool, std::slice::from_ref(&cool)).is_none(), "one TDR is not a pattern");
-        // two same-module TDRs, cool → Strong driver
+        // two same-module TDRs, cool → Partial driver (one kind of evidence, repeated)
         let two = vec![
             mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("nvlddmkm"), None, None, None),
             mk(IncidentKind::GpuTimeout, "2026-06-11T20:00:00Z", Some("nvlddmkm"), None, None, None),
         ];
         let a = assess(&two[0], &two).expect("fires");
-        assert_eq!(a.strength, Strength::Strong);
+        assert_eq!(a.strength, Strength::Partial);
         assert!(a.consistent_with.contains("nvlddmkm"));
         assert!(a.next_step.headline.to_lowercase().contains("reinstall") && a.next_step.reversible);
         assert!(!has_percent(&a));
@@ -2908,8 +2956,11 @@ mod blackbox_tests {
     fn app_specific_only_when_no_system_event_is_near() {
         let lone = mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", Some("unity.dll"), Some("0xc0000005"), Some("game.exe"), None);
         let a = assess(&lone, std::slice::from_ref(&lone)).expect("fires");
-        assert_eq!(a.strength, Strength::Strong);
-        assert!(a.consistent_with.contains("game") && a.consistent_with.contains("rather than your PC"));
+        assert_eq!(a.strength, Strength::Partial, "one app-crash record is one kind of evidence");
+        assert!(a.consistent_with.contains("game") && a.consistent_with.contains("doesn't rule out your PC"));
+        assert!(!a.consistent_with.contains("rather than"));
+        assert_eq!(a.statement, Some(AssessmentStatement::AppCrash));
+        assert_eq!(a.subject.as_deref(), Some("game"));
         assert!(a.next_step.reversible && !has_percent(&a));
         // a GPU timeout 3 minutes away → NOT safely app-side → no app assessment
         let near = vec![
@@ -2931,7 +2982,9 @@ mod blackbox_tests {
             let step = format!("{} {}", a.next_step.headline, a.next_step.detail).to_lowercase();
             assert!(!step.contains("game"), "{app}: game advice for a Windows process: {step}");
             assert!(step.contains("windows update") || step.contains("windows updates"), "{app}: {step}");
-            assert!(a.consistent_with.contains("another program"), "{app}: {}", a.consistent_with);
+            assert!(a.consistent_with.contains("other programs"), "{app}: {}", a.consistent_with);
+            assert!(a.consistent_with.contains("doesn't rule out your PC"), "{app}: {}", a.consistent_with);
+            assert_eq!(a.statement, Some(AssessmentStatement::HostProcess));
             assert!(a.next_step.reversible && !has_percent(&a));
         }
         // a real game keeps the game-files advice
@@ -3034,6 +3087,41 @@ mod blackbox_tests {
     }
 
     #[test]
+    fn strong_needs_a_measured_reading_plus_a_record_and_no_rule_excludes_the_pc() {
+        // Strong is allowed only where two kinds of evidence agree: a measured high GPU temperature
+        // AND a Windows record. One kind of evidence (an app-crash record, a driver timeout seen
+        // twice, a WHEA record seen twice) is at most Partial.
+        for ctx in &firing_cases() {
+            let a = assess(&ctx[0], ctx).expect("fires");
+            if a.strength == Strength::Strong {
+                assert!(
+                    matches!(a.rule, AssessmentRule::Overheating | AssessmentRule::HardwareError)
+                        && is_high_temp(&ctx[0]),
+                    "Strong without a measured high temperature plus a Windows record: {:?}",
+                    a.consistent_with
+                );
+            }
+            // No rule says the PC is excluded, whatever the crash location.
+            let blob = serde_json::to_string(&a).unwrap().to_lowercase();
+            for banned in ["rather than your", "not your pc", "your pc is fine", "itself, rather"] {
+                assert!(!blob.contains(banned), "rule excludes the PC: '{banned}' in {blob}");
+            }
+        }
+        let hang = mk(IncidentKind::AppHang, "2026-06-12T21:00:00Z", None, None, Some("game.exe"), None);
+        let a = assess(&hang, std::slice::from_ref(&hang)).expect("fires");
+        assert_eq!((a.strength, a.statement), (Strength::Partial, Some(AssessmentStatement::AppHang)));
+        let whea_twice = vec![
+            mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, None),
+            mk(IncidentKind::HardwareError, "2026-06-11T10:00:00Z", None, None, None, None),
+        ];
+        assert_ne!(assess(&whea_twice[0], &whea_twice).unwrap().strength, Strength::Strong);
+        // the sentence names the game it was recorded for
+        let rob = mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", None, None, Some("ROB RUN-Win64-Shipping.exe"), None);
+        let a = assess(&rob, std::slice::from_ref(&rob)).expect("fires");
+        assert_eq!(a.subject.as_deref(), Some("ROB RUN"));
+    }
+
+    #[test]
     fn next_step_headlines_never_command_an_irreversible_action() {
         // The reversible-only law's teeth: the HEADLINE is the imperative "do this" line, so it must
         // never command an irreversible/risky action (those may appear only as "research" framing in the
@@ -3110,7 +3198,7 @@ mod blackbox_tests {
         let out = from_events(events, &[]);
         assert_eq!(out.len(), 1);
         let a = out[0].assessment.as_ref().expect("a lone app crash assesses as app-specific");
-        assert!(a.consistent_with.contains("rather than your PC"));
+        assert!(a.consistent_with.contains("doesn't rule out your PC"));
         assert!(a.next_step.reversible && !has_percent(a));
     }
 

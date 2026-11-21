@@ -11,6 +11,7 @@ import type {
   BlackBoxReport,
   CrashIncident,
   CrashAssessment,
+  AssessmentStatement,
   CaseIntelligenceMatch,
   ChangedBeforeIncident,
   ChangedBeforeItem,
@@ -399,6 +400,12 @@ function IncidentRow({
   );
 }
 
+const ASSESS_STATEMENT_KEY: Record<AssessmentStatement, string> = {
+  "app-crash": "appCrash",
+  "app-hang": "appHang",
+  "host-process": "hostProcess",
+};
+
 // Black Box v2 triage block. "Consistent with…" framing only — never "the cause is…". Shows the exact
 // evidence it fired on and ONE reversible next step (research-only steps are clearly marked, never "do
 // this" for anything irreversible). Rendered only when the backend gate populated `assessment`.
@@ -422,20 +429,29 @@ function AssessmentBlock({
           {t(`gaming.blackBox.strengthLabel.${a.strength}`)}
         </span>
       </div>
-      <p className="bb-assess-line">
-        {a.beyond_us
-          ? t("gaming.blackBox.assessLinePreBeyond")
-          : t("gaming.blackBox.assessLinePreConsistent")}{" "}
-        <strong>{a.consistent_with}</strong>
-        {a.beyond_us ? (
-          <>
-            {" "}
-            {t("gaming.blackBox.assessLinePostBeyond")}
-          </>
-        ) : (
-          "."
-        )}
-      </p>
+      {a.statement ? (
+        // What Windows recorded and what it does not rule out: one fixed sentence, never a cause.
+        <p className="bb-assess-line">
+          {t(`gaming.blackBox.assessStatement.${ASSESS_STATEMENT_KEY[a.statement]}`, {
+            subject: a.subject ?? t("gaming.blackBox.assessStatement.unnamedApp"),
+          })}
+        </p>
+      ) : (
+        <p className="bb-assess-line">
+          {a.beyond_us
+            ? t("gaming.blackBox.assessLinePreBeyond")
+            : t("gaming.blackBox.assessLinePreConsistent")}{" "}
+          <strong>{a.consistent_with}</strong>
+          {a.beyond_us ? (
+            <>
+              {" "}
+              {t("gaming.blackBox.assessLinePostBeyond")}
+            </>
+          ) : (
+            "."
+          )}
+        </p>
+      )}
       <ul className="bb-assess-evidence">
         {a.evidence.map((e, i) => (
           <li key={i}>{e}</li>

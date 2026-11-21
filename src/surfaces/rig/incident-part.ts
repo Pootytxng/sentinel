@@ -7,7 +7,8 @@
 //   - overheating     → the GPU: the rule fires on a MEASURED high GPU temperature;
 //   - graphics-driver → the GPU: the same graphics-driver module timed out repeatedly — the card the
 //                       driver runs (the line says "its graphics driver", never "the card failed");
-//   - app-specific    → away: the record reads as a problem in the app itself, not a part;
+//   - app-specific    → away: Windows recorded an app crash or hang; the line says that and that it
+//                       does not rule out a part (the rig is dimmed, no part is named);
 //   - hardware-error  → nothing: Windows' WHEA fault is heat, power OR memory — no one part;
 //   - power-hardlock  → nothing: power delivery, a deep hang, or a one-off — no one part;
 //   - beyond-us       → nothing: a stop code Compy won't guess at.

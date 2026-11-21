@@ -528,6 +528,12 @@
     },
     "assessLinePreBeyond": "This one is",
     "assessLinePreConsistent": "The evidence is consistent with",
+    "assessStatement": {
+      "appCrash": "Windows recorded {{subject}} crashing. That points at the game or something it loads. It doesn't rule out your PC.",
+      "appHang": "Windows recorded {{subject}} not responding. That points at the game or something it loads. It doesn't rule out your PC.",
+      "hostProcess": "Windows recorded {{subject}} crashing. It is a Windows file that runs code for other programs, so that points at a program it was running. It doesn't rule out your PC.",
+      "unnamedApp": "an app"
+    },
     "assessLinePostBeyond": "— beyond what Compy can safely narrow down.",
     "worthResearching": "Worth researching",
     "safeNextStep": "Safe next step",

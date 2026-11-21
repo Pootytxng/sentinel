@@ -500,6 +500,12 @@
       "catalogVersion": "问题库 v{{version}}",
       "attribution": "以上是发布方的原话，不是 Compy 的判断。"
     },
+    "assessStatement": {
+      "appCrash": "Windows 记录到 {{subject}} 崩溃。这指向游戏或它加载的内容，并不能排除你的电脑。",
+      "appHang": "Windows 记录到 {{subject}} 停止响应。这指向游戏或它加载的内容，并不能排除你的电脑。",
+      "hostProcess": "Windows 记录到 {{subject}} 崩溃。它是替其他程序运行代码的 Windows 文件，所以这指向它当时运行的某个程序，并不能排除你的电脑。",
+      "unnamedApp": "某个应用"
+    },
     "assessLinePreBeyond": "这一项属于",
     "assessLinePreConsistent": "现有证据与以下情况相符:",
     "assessLinePostBeyond": "——已超出 Compy 能够安全判断的范围。",
