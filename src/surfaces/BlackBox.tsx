@@ -40,6 +40,7 @@ import {
   groupIncidents,
   headlineWording,
   sharedUnknownItems,
+  recordsApart,
   INCIDENT_CAP,
   type IncidentGroup,
 } from "./blackbox-group";
@@ -240,7 +241,7 @@ export function BlackBox({
         skipped={!!report && report.skipped_sources.length > 0}
         skippedNeedsAdmin={skips.admin.length > 0}
         onShowRecord={
-          stepInGroup && stepRecordId ? () => setReveal({ id: stepRecordId, n: Date.now() }) : undefined
+          stepInGroup && stepRecordId ? () => setReveal({ id: stepRecordId, n: nextNonce() }) : undefined
         }
         onDismiss={(key) => {
           dismissStoredStep(key);
@@ -286,6 +287,7 @@ export function BlackBox({
                     allIncidents={report.incidents}
                     selected={!!markedId && g.items[0].incident_id === markedId}
                     scrollNonce={reveal?.n}
+                    focusNonce={reveal?.n}
                     restore={restore}
                     lifted={isLifted(careStep, g.items[0])}
                   />
@@ -336,11 +338,18 @@ export function BlackBox({
   );
 }
 
+// A press that asks for a record to be shown carries a number; a row focuses itself once per number.
+// (Remounting the row, e.g. hiding and showing the group again, must not pull focus back to it.)
+let nonceSeq = 0;
+const nextNonce = () => ++nonceSeq;
+const focusedNonces = new Set<number>();
+
 function IncidentRow({
   inc,
   allIncidents,
   selected = false,
   scrollNonce,
+  focusNonce,
   restore,
   lifted = false,
   compact = false,
@@ -366,6 +375,10 @@ function IncidentRow({
   selected?: boolean;
   /** Changes on each "Show this record" press, so a press on an already-marked row scrolls again. */
   scrollNonce?: number;
+  /** Set only by a press that asked to see this record ("Show that record", "Show this record in the
+   *  list"). The row then takes keyboard focus, once, so focus does not fall to the page when the
+   *  button that was pressed goes away. A plain deep-link arrival never sets it. */
+  focusNonce?: number;
 }) {
   const { t } = useTranslation();
   const [showReceipt, setShowReceipt] = useState(false);
@@ -378,10 +391,22 @@ function IncidentRow({
     // By its top: a record with its evidence open runs taller than the window, and centring it put
     // the "this is the one" note and the headline above the fold (desk review 2026-10-30).
     if (selected) ref.current?.scrollIntoView({ block: "start", behavior: "auto" });
-  }, [selected, scrollNonce]);
+    if (selected && focusNonce !== undefined && !focusedNonces.has(focusNonce)) {
+      focusedNonces.add(focusNonce);
+      ref.current?.focus({ preventScroll: true });
+    }
+  }, [selected, scrollNonce, focusNonce]);
   const r = inc.receipt;
   return (
-    <li className="bb-item" ref={ref} data-selected={selected ? "true" : undefined}>
+    // tabIndex -1: focusable by script only (not a tab stop). The label is what a screen reader says
+    // when focus lands here: which record it is, in the record's own headline.
+    <li
+      className="bb-item"
+      ref={ref}
+      tabIndex={-1}
+      aria-label={t("gaming.blackBox.recordLabel", { headline: inc.headline })}
+      data-selected={selected ? "true" : undefined}
+    >
       {selected && <p className="bb-selected-note">{t("gaming.blackBox.selectedNote")}</p>}
       <div className="bb-item-head">
         {compact ? (
@@ -576,6 +601,8 @@ function IncidentGroupBlock({
   const oldest = items[items.length - 1];
   const hasAsked = !!expandFor && items.some((i) => i.incident_id === expandFor);
   const [open, setOpen] = useState(hasAsked);
+  // "Show that record": the button is gone once the group opens, so the record takes focus.
+  const [markedFocus, setMarkedFocus] = useState<number | undefined>(undefined);
   const revealHere = !!reveal && items.some((i) => i.incident_id === reveal.id);
   useEffect(() => {
     if (revealHere) setOpen(true);
@@ -608,6 +635,7 @@ function IncidentGroupBlock({
   const headline = lineKey
     ? t(lineKey, { count, app, range })
     : t("gaming.blackBox.group.other", { count, what: headlineWording(newest), range });
+  const apart = useMemo(() => recordsApart(group, allIncidents), [group, allIncidents]);
   // Members share one next step (it is part of the key): if it is the step shown above, say so once.
   const lifted = items.some(isLiftedInc);
   // The marked record (a waiting record the red dot points to, a deep link or a reveal) sits in this
@@ -631,7 +659,10 @@ function IncidentGroupBlock({
           <button
             type="button"
             className="bb-receipt-toggle bb-group-show-marked"
-            onClick={() => setOpen(true)}
+            onClick={() => {
+              setMarkedFocus(nextNonce());
+              setOpen(true);
+            }}
             aria-controls={listId}
           >
             {t("gaming.blackBox.group.showMarked")}
@@ -640,6 +671,18 @@ function IncidentGroupBlock({
       )}
       {/* On every group, at any size: the list is the newest records Compy read, never Windows' total. */}
       <p className="bb-group-cap">{t("gaming.blackBox.group.capNote", { cap: INCIDENT_CAP })}</p>
+      {/* Records for the same program and kind that Compy read but that sit outside this group
+          because something in their details differs: said here, so the headline's count is not read
+          as everything Compy read (the headline stays true: it counts identical records). */}
+      {lineKey && apart > 0 && (
+        <p className="bb-group-apart">
+          {t(lineKey === "gaming.blackBox.group.crash" ? "gaming.blackBox.group.apartCrash" : "gaming.blackBox.group.apartHang", {
+            total: count + apart,
+            app,
+            count: apart,
+          })}
+        </p>
+      )}
       {newest.assessment && (
         <AssessmentBlock inc={newest} allIncidents={allIncidents} lifted={lifted} omitFeedback />
       )}
@@ -678,6 +721,7 @@ function IncidentGroupBlock({
               allIncidents={allIncidents}
               selected={!!selectedIncidentId && inc.incident_id === selectedIncidentId}
               scrollNonce={reveal?.n}
+              focusNonce={reveal?.n ?? markedFocus}
               restore={restore}
               lifted={isLiftedInc(inc)}
               compact

@@ -57,6 +57,19 @@ export function groupKey(inc: CrashIncident): string {
   ]);
 }
 
+/** How many records of the same program and kind as this group's are NOT in it, because something in
+ *  their details (usually the assessment's evidence) differs. Real case: 22 crash records read "no
+ *  graphics-driver timeout ... in the System log"; a 23rd said Compy couldn't read the System log for
+ *  its time. Different reading, so rightly apart, but the group's "22 times" must not read as "all
+ *  Compy read". */
+export function recordsApart(group: IncidentGroup, all: CrashIncident[]): number {
+  const first = group.items[0];
+  if (!first) return 0;
+  const program = programOf(first);
+  if (!program) return 0;
+  return all.filter((i) => i.tag === first.tag && programOf(i) === program && groupKey(i) !== group.key).length;
+}
+
 const time = (inc: CrashIncident) => {
   const ms = Date.parse(inc.when);
   return Number.isNaN(ms) ? null : ms;

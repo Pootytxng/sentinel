@@ -559,6 +559,7 @@
     "yesButton": "Yes",
     "noButton": "No",
     "selectedNote": "This is the one you came here to see.",
+    "recordLabel": "Record: {{headline}}",
     "selectedMissing": "The incident you opened isn't in this scan. Windows may have rotated its record out, or a source that recorded it needs admin to read.",
     "group": {
       "crash_other": "{{app}} stopped working and closed {{count}} times in the Windows records Compy read, {{range}}.",
@@ -571,6 +572,10 @@
       "hideEach": "Hide the individual records",
       "markedHere": "The record you came here to see is in this group.",
       "showMarked": "Show that record",
+      "apartCrash_one": "Compy read {{total}} crash records for {{app}} in all; {{count}} is shown separately because its details differ.",
+      "apartCrash_other": "Compy read {{total}} crash records for {{app}} in all; {{count}} are shown separately because their details differ.",
+      "apartHang_one": "Compy read {{total}} freeze records for {{app}} in all; {{count}} is shown separately because its details differ.",
+      "apartHang_other": "Compy read {{total}} freeze records for {{app}} in all; {{count}} are shown separately because their details differ.",
       "eachLabel_other": "The {{count}} records, newest first",
       "sameForAll_other": "The same for all {{count}} of these records"
     }

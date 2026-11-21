@@ -530,6 +530,7 @@
     "yesButton": "是",
     "noButton": "否",
     "selectedNote": "这就是你要查看的那条记录。",
+    "recordLabel": "记录：{{headline}}",
     "selectedMissing": "本次扫描中没有你打开的那条记录。Windows 可能已经轮换掉了它，或者记录它的来源需要管理员权限才能读取。",
     "group": {
       "crash_other": "在 Compy 读取的 Windows 记录中，{{app}} 停止工作并关闭，共 {{count}} 次，{{range}}。",
@@ -541,6 +542,8 @@
       "showEach_other": "展开每一条（{{count}}）",
       "markedHere": "你要查看的那条记录在这一组里。",
       "showMarked": "显示那条记录",
+      "apartCrash_other": "Compy 一共读到 {{total}} 条 {{app}} 的崩溃记录；其中 {{count}} 条因细节不同而单独显示。",
+      "apartHang_other": "Compy 一共读到 {{total}} 条 {{app}} 的卡死记录；其中 {{count}} 条因细节不同而单独显示。",
       "hideEach": "收起各条记录",
       "eachLabel_other": "这 {{count}} 条记录，最新的在前",
       "sameForAll_other": "这 {{count}} 条记录都一样"

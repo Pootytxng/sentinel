@@ -352,3 +352,88 @@ describe("Problems room - identical incidents grouped", () => {
     expect(container.textContent).not.toMatch(/\bcaused\b|\bfixed\b|guarantee|probably|issues? found/i);
   });
 });
+
+describe("Problems room - focus follows a press that reveals a record", () => {
+  it("'Show that record': focus lands on the revealed record, which a screen reader hears by name", async () => {
+    reportMock.value = { incidents: many(5), skipped_sources: [] };
+    const target = rob(1);
+    const { container } = render(<BlackBox selectedIncidentId={target.incident_id} expandGroupFor={null} />);
+    await screen.findByText(/closed 5 times/);
+    const group = container.querySelector(".bb-group") as HTMLElement;
+    const button = within(group).getByRole("button", { name: "Show that record" });
+    button.focus();
+    fireEvent.click(button);
+    const row = container.querySelector('.bb-item[data-selected="true"]') as HTMLElement;
+    expect(row.textContent).toContain("Nov 10, 12:01 PM");
+    expect(document.activeElement, "focus fell off the revealed record").toBe(row);
+    expect(row.getAttribute("tabindex")).toBe("-1");
+    expect(row.getAttribute("aria-label")).toBe(`Record: ${target.headline}`);
+  });
+
+  it("the care step's 'Show this record in the list' moves focus to that record too", async () => {
+    const { container } = await open(many(5));
+    fireEvent.click(screen.getByRole("button", { name: "Show this record in the list" }));
+    const row = container.querySelector('.bb-item[data-selected="true"]') as HTMLElement;
+    expect(row.textContent).toContain("Nov 11, 12:04 PM");
+    expect(document.activeElement).toBe(row);
+    expect(row.getAttribute("aria-label")).toBe(`Record: ${rob(4).headline}`);
+  });
+
+  it("a plain deep-link arrival marks and scrolls but does not take focus", async () => {
+    reportMock.value = { incidents: many(5), skipped_sources: [] };
+    const { container } = render(<BlackBox selectedIncidentId={rob(1).incident_id} />);
+    await screen.findByText(/This is the one you came here to see\./);
+    const row = container.querySelector('.bb-item[data-selected="true"]') as HTMLElement;
+    expect(document.activeElement).not.toBe(row);
+  });
+
+  it("hiding and showing the group again does not pull focus back to the record", async () => {
+    reportMock.value = { incidents: many(5), skipped_sources: [] };
+    const { container } = render(<BlackBox selectedIncidentId={rob(1).incident_id} expandGroupFor={null} />);
+    await screen.findByText(/closed 5 times/);
+    fireEvent.click(screen.getByRole("button", { name: "Show that record" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide the individual records" }));
+    const again = screen.getByRole("button", { name: "Show each one (5)" });
+    again.focus();
+    fireEvent.click(again);
+    expect(document.activeElement).toBe(again);
+    expect(document.activeElement).not.toBe(container.querySelector('.bb-item[data-selected="true"]'));
+  });
+});
+
+describe("Problems room - records outside a group are counted, not hidden", () => {
+  // Real data (2026-11-21): 22 ROB RUN crash records read "no graphics-driver timeout ... in the System
+  // log"; the 23rd (Nov 11, 7:17 AM) said Compy couldn't read the System log for its time. Different
+  // evidence, so a separate block; the group must still say how many records Compy read in all.
+  const odd = (i: number) =>
+    rob(i, {
+      assessment: {
+        ...rob(i).assessment!,
+        evidence: ["Compy couldn't read the Windows System log for that time, so it can't say whether a system-level error was logged around it."],
+      },
+    });
+
+  it("22 identical + 1 with different evidence: the group keeps its count and says Compy read 23 in all, 1 shown separately", async () => {
+    const { container } = await open([...many(22), odd(22)]);
+    expect(container.querySelectorAll(".bb-list > .bb-item")).toHaveLength(2);
+    expect(screen.getByText(/closed 22 times in the Windows records Compy read/)).toBeTruthy();
+    expect(screen.getByText("Compy read 23 crash records for ROB RUN in all; 1 is shown separately because its details differ.")).toBeTruthy();
+  });
+
+  it("said in Chinese", async () => {
+    await i18n.changeLanguage("zh-CN");
+    await open([...many(22), odd(22)]);
+    expect(screen.getByText("Compy 一共读到 23 条 ROB RUN 的崩溃记录；其中 1 条因细节不同而单独显示。")).toBeTruthy();
+  });
+
+  it("no line when every record of that program and kind is in the group", async () => {
+    const { container } = await open(many(4));
+    expect(container.querySelector(".bb-group-apart")).toBeNull();
+  });
+
+  it("a different program is not counted", async () => {
+    const other = rob(9, { receipt: { ...rob(9).receipt, faulting_app: "Discord.exe" } });
+    const { container } = await open([...many(3), other]);
+    expect(container.querySelector(".bb-group-apart")).toBeNull();
+  });
+});
