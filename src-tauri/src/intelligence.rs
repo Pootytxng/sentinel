@@ -358,6 +358,14 @@ fn refresh_gate() -> &'static Mutex<Option<Instant>> {
     GATE.get_or_init(|| Mutex::new(None))
 }
 
+/// "Clear my data" deleted the identity log: forget when the last refresh ran, so the next one is not held
+/// back by the throttle and the log starts again at once. A leaf (one short lock, nothing taken inside).
+pub(crate) fn forget_refresh_throttle() {
+    if let Ok(mut last) = refresh_gate().lock() {
+        *last = None;
+    }
+}
+
 /// Probe + append synchronously (called from a background thread / app start).
 pub(crate) fn record_identity_snapshot_now() {
     let snap = capture_identity_snapshot();

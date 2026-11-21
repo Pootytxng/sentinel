@@ -1185,8 +1185,8 @@ pub(crate) const MEMORY_COPIES: &[MemoryCopy] = &[
     MemoryCopy { reason: "benchmark_cache", holder: "benchmark.rs state_cache (baseline, latest run, efficacy, error)", everything_only: false, reset_by: Some(Gate::Benchmark) },
     MemoryCopy { reason: "trial_result", holder: "benchmark_trial.rs state (last finished verdict and noise reading)", everything_only: false, reset_by: Some(Gate::Scoreboard) },
     MemoryCopy { reason: "incident_failure_flags", holder: "incident_observer.rs READ_FAILURE_REPORTED, SCAN_STORE_FAILED", everything_only: false, reset_by: Some(Gate::IncidentObserver) },
-    MemoryCopy { reason: "support_preview_flag", holder: "support_evidence.rs PREVIEWED (the record was previewed this run; no clear-owner API)", everything_only: true, reset_by: None },
-    MemoryCopy { reason: "identity_log_throttle", holder: "intelligence.rs refresh_gate (time of the last identity refresh; no clear-owner API)", everything_only: true, reset_by: None },
+    MemoryCopy { reason: "support_preview_flag", holder: "support_evidence.rs PREVIEWED (the record was previewed this run), reset by support_evidence::forget_preview", everything_only: true, reset_by: Some(Gate::SupportEvidence) },
+    MemoryCopy { reason: "identity_log_throttle", holder: "intelligence.rs refresh_gate (time of the last identity refresh), reset by intelligence::forget_refresh_throttle", everything_only: false, reset_by: Some(Gate::Intelligence) },
     MemoryCopy { reason: "screen_memory", holder: "the window's own state and WebView storage (UI slice: relaunch)", everything_only: false, reset_by: None },
 ];
 
@@ -1450,6 +1450,10 @@ pub(crate) trait ClearEffects {
     fn forget_trial_result(&self);
     /// The incident observer's failure-streak flags, under its lock, after its record is gone.
     fn forget_incident_failures(&self);
+    /// The support record's "previewed this run" flag, under the record's lock, after the record is gone.
+    fn forget_support_preview(&self);
+    /// The identity log's refresh throttle, under the log's lock, after the log is gone.
+    fn forget_identity_throttle(&self);
     /// What the running app is doing now, read inside a store's gate immediately before a delete (D7).
     fn live_state(&self) -> LiveState;
 }
@@ -1475,6 +1479,12 @@ impl ClearEffects for ProcessEffects {
     }
     fn forget_incident_failures(&self) {
         crate::incident_observer::forget_failure_streak();
+    }
+    fn forget_support_preview(&self) {
+        crate::support_evidence::forget_preview();
+    }
+    fn forget_identity_throttle(&self) {
+        crate::intelligence::forget_refresh_throttle();
     }
     fn live_state(&self) -> LiveState {
         // Atomics and one short leaf mutex (`benchmark_trial::state`, held for a clone and never across a
@@ -1520,13 +1530,21 @@ impl ClearGates for LiveGates<'_> {
             }),
             Gate::Intelligence => {
                 let _lock = crate::intelligence::lock_store().map_err(|()| "the identity log lock is poisoned".to_string())?;
-                run()
+                let result = run();
+                if result.is_ok() {
+                    fx.forget_identity_throttle();
+                }
+                result
             }
             Gate::HardwareFingerprint => crate::hwchange::with_store_locked(run),
             Gate::Readiness => crate::readiness::with_store_locked(run),
             Gate::SupportEvidence => {
                 let _lock = crate::support_evidence::lock_store();
-                run()
+                let result = run();
+                if result.is_ok() {
+                    fx.forget_support_preview();
+                }
+                result
             }
             Gate::Experiment => {
                 let _lock = crate::experiment::lock_store()?;
@@ -2390,6 +2408,8 @@ mod tests {
         bench_resets: std::cell::Cell<u32>,
         trial_forgets: std::cell::Cell<u32>,
         incident_forgets: std::cell::Cell<u32>,
+        support_forgets: std::cell::Cell<u32>,
+        identity_forgets: std::cell::Cell<u32>,
         /// What the "running app" is doing now; a test flips it between the plan and the delete.
         live: std::cell::Cell<LiveState>,
     }
@@ -2408,6 +2428,8 @@ mod tests {
                 bench_resets: Default::default(),
                 trial_forgets: Default::default(),
                 incident_forgets: Default::default(),
+                support_forgets: Default::default(),
+                identity_forgets: Default::default(),
                 live: Default::default(),
             }
         }
@@ -2433,6 +2455,12 @@ mod tests {
         }
         fn forget_incident_failures(&self) {
             self.incident_forgets.set(self.incident_forgets.get() + 1);
+        }
+        fn forget_support_preview(&self) {
+            self.support_forgets.set(self.support_forgets.get() + 1);
+        }
+        fn forget_identity_throttle(&self) {
+            self.identity_forgets.set(self.identity_forgets.get() + 1);
         }
         fn live_state(&self) -> LiveState {
             self.live.get()
@@ -2816,7 +2844,7 @@ mod tests {
         assert!(report.restart_required, "the screen's own memory is not reset by the backend");
         assert_eq!(report.restart_reasons, ["screen_memory"], "play history: only the window's memory");
         let every = restart_reasons_in(MEMORY_COPIES, Scope::Everything);
-        assert_eq!(every, ["support_preview_flag", "identity_log_throttle", "screen_memory"], "everything: the three with no reset");
+        assert_eq!(every, ["screen_memory"], "everything: only the WebView copy has no reset (UI slice)");
         // Every copy that HAS a reset names a gate the executor really takes; none is listed as a reason.
         for c in MEMORY_COPIES.iter().filter(|c| c.reset_by.is_some()) {
             assert!(!every.contains(&c.reason), "{} is reset, so it is not a reason", c.reason);
@@ -2901,6 +2929,68 @@ mod tests {
                 _ => include_str!("incident_observer.rs"),
             };
             assert!(src.contains(&format!("const CLEAR_STORE: &str = \"{id}\";")), "{file} must key its epoch by `{id}`");
+        }
+    }
+
+    // ===== D7 item 6: every memory copy that has a safe reset gets one, through ClearEffects ===========
+
+    #[test]
+    fn m1_everything_resets_the_support_preview_and_the_identity_throttle_with_the_rest() {
+        let t = Tmp::new("m1");
+        seed(&t);
+        let fx = TestEffects::new();
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        let report = done(clear_everything_at(&t.root, &plan.fingerprint, &later, &LiveGates(&fx)));
+        assert!(report.complete, "{report:?}");
+        assert_eq!(
+            (fx.bench_resets.get(), fx.trial_forgets.get(), fx.incident_forgets.get(), fx.support_forgets.get(), fx.identity_forgets.get()),
+            (1, 1, 1, 1, 1),
+            "each copy is reset exactly once, after a delete of its own store that worked"
+        );
+        assert_eq!(report.restart_reasons, ["screen_memory"], "only the WebView's own copy is left, and the screen owns it");
+        assert!(report.restart_required);
+    }
+
+    #[test]
+    fn m2_play_history_resets_the_identity_throttle_but_not_the_support_preview() {
+        let t = Tmp::new("m2");
+        seed(&t);
+        let fx = TestEffects::new();
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(done(execute_clear(&t.root, &plan, &later(), &LiveGates(&fx))).complete);
+        assert!(t.has("support/evidence.jsonl"), "play history keeps the support record");
+        assert_eq!(fx.support_forgets.get(), 0, "so the preview of it is still true");
+        assert_eq!(fx.identity_forgets.get(), 1, "the identity log was deleted, so its throttle goes");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn m3_a_reset_runs_only_after_a_delete_that_worked_and_a_failed_delete_resets_nothing() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let t = Tmp::new("m3");
+        t.put("intelligence.json", "x");
+        t.put("support/evidence.jsonl", "x");
+        let fx = TestEffects::new();
+        let _hold = fs::OpenOptions::new().read(true).share_mode(0).open(t.root.join("intelligence.json")).unwrap();
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        let report = done(clear_everything_at(&t.root, &plan.fingerprint, &later, &LiveGates(&fx)));
+        assert!(!report.complete && report.failed.iter().any(|f| f.rel == "intelligence.json"), "{report:?}");
+        assert_eq!(fx.identity_forgets.get(), 0, "the identity log is still there: its throttle is not reset");
+        assert_eq!(fx.support_forgets.get(), 1, "the support record went, so its preview flag did");
+    }
+
+    #[test]
+    fn m4_every_copy_in_the_list_with_a_reset_names_a_gate_and_the_only_one_without_is_the_webview() {
+        for c in MEMORY_COPIES {
+            match c.reset_by {
+                Some(g) => assert!(GATED_STEMS.iter().any(|(_, gate)| *gate == g), "{}: reset gate {g:?} is a real store gate", c.reason),
+                None => assert_eq!(c.reason, "screen_memory", "{} has no reset and is not the window's own copy", c.reason),
+            }
+        }
+        // Each owner API exists where the list says it does (the effect calls it).
+        let core = include_str!("data_clear.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+        for api in ["support_evidence::forget_preview()", "intelligence::forget_refresh_throttle()", "benchmark::reset_for_clear(", "incident_observer::forget_failure_streak()", "benchmark_trial::forget_finished_result()"] {
+            assert!(core.contains(api), "ProcessEffects must call {api}");
         }
     }
 

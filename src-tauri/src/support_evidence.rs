@@ -699,6 +699,12 @@ fn previewed() -> &'static AtomicBool {
     PREVIEWED.get_or_init(|| AtomicBool::new(false))
 }
 
+/// "Clear my data" deleted the support record: the preview the user saw is of a record that is gone, so an
+/// export must preview again. Called by the clear with the record's lock held.
+pub(crate) fn forget_preview() {
+    previewed().store(false, Ordering::Release);
+}
+
 pub fn build_bundle(path: &Path, generated_at: String, location: String) -> EvidenceBundle {
     let (events, unreadable_records) = read_events_from(path);
     EvidenceBundle {
