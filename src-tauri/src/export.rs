@@ -23,9 +23,98 @@ use crate::compy_data_dir;
 /// more about the person than this report needs.
 const SHARED_EXPORT_OMITS: [&str; 3] = ["running_at_start", "start_ticks_skipped", "start_events_dropped"];
 
-/// PURE: the session rows as the shared export carries them, without the keys above. Everything else
-/// (including how process-start events are exported today) is unchanged.
-pub(crate) fn redact_session_rows(mut sessions: Value) -> Value {
+/// What the export builder took out of the shared export. Built while redacting, then written into
+/// the export itself ([`ExportRedaction::to_json`], [`ExportRedaction::note`]). Not `Serialize` and
+/// not `Debug`: it holds the raw names it replaced (lower-cased) so a repeat gets the same number,
+/// and those must never reach a file or a log.
+#[derive(Default)]
+pub(crate) struct ExportRedaction {
+    /// Every place a program name was replaced (an event label or a stutter sentence).
+    program_names_replaced: u32,
+    /// Distinct programs replaced, first seen first. The placeholder number is the position here, so
+    /// it says only "the Nth program this export met", never anything about the name.
+    others: Vec<String>,
+    /// Stutter text whose shape this code does not know: replaced whole rather than risk a name.
+    other_text_withheld: u32,
+    /// `C:\Users\<name>\` segments rewritten to `C:\Users\<user>\`.
+    user_name_segments_replaced: u32,
+}
+
+/// The only fixed (non-program) signal labels the monitoring loop writes (`monitoring.rs`).
+const FIXED_SIGNALS: [&str; 2] = ["RAM filling up (90%+)", "a GPU clock drop under load"];
+const WITHHELD: &str = "(withheld from this export)";
+
+impl ExportRedaction {
+    fn placeholder(&mut self, name: &str) -> String {
+        let key = name.trim().to_lowercase();
+        let at = self.others.iter().position(|n| *n == key).unwrap_or_else(|| {
+            self.others.push(key);
+            self.others.len() - 1
+        });
+        format!("other program {}", at + 1)
+    }
+
+    /// "<program> starting" with the program replaced unless it is on the known-programs list.
+    fn start_label(&mut self, label: &str) -> String {
+        let name = label.strip_suffix(" starting").unwrap_or(label);
+        if crate::running_at_start::lookup(name.trim()).is_some() {
+            return label.to_string();
+        }
+        self.program_names_replaced += 1;
+        format!("{} starting", self.placeholder(name))
+    }
+
+    /// The one-sentence stutter insight ("2 of your worst stutters lined up with X starting.").
+    /// Anything that is not exactly that shape is withheld whole.
+    fn insight(&mut self, text: &str) -> String {
+        const LEAD: &str = " of your worst stutters lined up with ";
+        let parsed = text.find(LEAD).filter(|&at| text[..at].bytes().all(|b| b.is_ascii_digit()) && at > 0).map(|at| {
+            let (head, tail) = text.split_at(at + LEAD.len());
+            (head, tail.strip_suffix('.').unwrap_or(tail))
+        });
+        match parsed {
+            Some((head, tail)) if FIXED_SIGNALS.contains(&tail) => format!("{head}{tail}."),
+            Some((head, tail)) if tail.ends_with(" starting") => format!("{head}{}.", self.start_label(tail)),
+            _ => {
+                self.other_text_withheld += 1;
+                WITHHELD.to_string()
+            }
+        }
+    }
+
+    /// The machine-readable record of what was done, written into the JSON export.
+    pub(crate) fn to_json(&self) -> Value {
+        json!({
+            "program_names_replaced": self.program_names_replaced,
+            "other_programs": self.others.len(),
+            "other_text_withheld": self.other_text_withheld,
+            "user_name_segments_replaced": self.user_name_segments_replaced,
+            "running_at_start_omitted": true,
+            "summary": self.note(),
+        })
+    }
+
+    /// The same facts in a sentence, for the Markdown export and the JSON `summary`.
+    pub(crate) fn note(&self) -> String {
+        let s = |n: u32| if n == 1 { "" } else { "s" };
+        let (n, m, k) = (self.program_names_replaced, self.others.len() as u32, self.user_name_segments_replaced);
+        let mut out = format!(
+            "{n} program name{} not on Compy's known-programs list ({m} program{}) replaced with \"other program 1\", \"other program 2\" and so on, with counts and timing unchanged. The Windows user name was removed from {k} file path{}.",
+            s(n),
+            s(m),
+            s(k)
+        );
+        if self.other_text_withheld > 0 {
+            out.push_str(&format!(" {} piece{} of stutter text in an unexpected shape {} withheld.", self.other_text_withheld, s(self.other_text_withheld), if self.other_text_withheld == 1 { "was" } else { "were" }));
+        }
+        out
+    }
+}
+
+/// PURE: the session rows as the shared export carries them: without the keys above, and with every
+/// process-start program that is not on the known-programs list replaced by "other program N"
+/// (event labels and the stutter sentence). Everything else is unchanged.
+pub(crate) fn redact_session_rows(mut sessions: Value, r: &mut ExportRedaction) -> Value {
     if let Some(rows) = sessions.as_array_mut() {
         for row in rows {
             if let Some(gs) = row.get_mut("game_state").and_then(Value::as_object_mut) {
@@ -33,9 +122,84 @@ pub(crate) fn redact_session_rows(mut sessions: Value) -> Value {
                     gs.remove(key);
                 }
             }
+            if let Some(events) = row.get_mut("stutter_events").and_then(Value::as_array_mut) {
+                for ev in events {
+                    let is_start = ev.get("kind").and_then(Value::as_str) == Some("process-start");
+                    let Some(label) = ev.get("label").and_then(Value::as_str).map(str::to_owned) else { continue };
+                    let new = if is_start {
+                        r.start_label(&label)
+                    } else if FIXED_SIGNALS.contains(&label.as_str()) {
+                        continue;
+                    } else {
+                        r.other_text_withheld += 1;
+                        WITHHELD.to_string()
+                    };
+                    ev["label"] = Value::String(new);
+                }
+            }
+            if let Some(text) = row.get("stutter_insight").and_then(Value::as_str).map(str::to_owned) {
+                row["stutter_insight"] = Value::String(r.insight(&text));
+            }
         }
     }
     sessions
+}
+
+/// PURE: `C:\Users\<name>\...` (either slash) with the name segment replaced by `<user>`. The rest of
+/// the path stays readable. The public profile folders carry no one's name and are left alone.
+fn scrub_user_paths(s: &str, count: &mut u32) -> String {
+    const KEEP: [&str; 4] = ["public", "default", "default user", "all users"];
+    let b = s.as_bytes();
+    let is_sep = |c: u8| c == b'\\' || c == b'/';
+    let (mut out, mut last, mut i) = (String::new(), 0usize, 0usize);
+    while i + 7 <= b.len() {
+        if is_sep(b[i]) && b[i + 1..i + 6].eq_ignore_ascii_case(b"users") && is_sep(b[i + 6]) {
+            let start = i + 7;
+            let rest = &s[start..];
+            let stop = |c: char| matches!(c, '\\' | '/' | '"' | '\'' | '<' | '>' | '|' | '*' | '?' | '\n' | '\r');
+            // A name may hold spaces when a separator follows it; otherwise it ends at the first space.
+            let name_len = match rest.find(stop) {
+                Some(e) if is_sep(rest.as_bytes()[e]) => e,
+                Some(e) => rest[..e].find(char::is_whitespace).unwrap_or(e),
+                None => rest.find(char::is_whitespace).unwrap_or(rest.len()),
+            };
+            let name = &rest[..name_len];
+            if !name.is_empty() && !KEEP.contains(&name.to_lowercase().as_str()) {
+                out.push_str(&s[last..start]);
+                out.push_str("<user>");
+                last = start + name_len;
+                i = last;
+                *count += 1;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    out.push_str(&s[last..]);
+    out
+}
+
+fn scrub_value_paths(v: &mut Value, count: &mut u32) {
+    match v {
+        Value::String(s) => *s = scrub_user_paths(s, count),
+        Value::Array(a) => a.iter_mut().for_each(|x| scrub_value_paths(x, count)),
+        Value::Object(o) => o.values_mut().for_each(|x| scrub_value_paths(x, count)),
+        _ => {}
+    }
+}
+
+/// PURE, in place: everything the shared export redacts, over the six source values. Run once, before
+/// any report is built from them, so the Markdown, the Discord block and the JSON all agree.
+pub(crate) fn redact_export_sources(sources: [&mut Value; 6]) -> ExportRedaction {
+    let mut r = ExportRedaction::default();
+    let [hardware, recommendations, trust_ledger, readiness, sessions, diagnostics] = sources;
+    *sessions = redact_session_rows(sessions.take(), &mut r);
+    let mut paths = 0;
+    for v in [hardware, recommendations, trust_ledger, readiness, sessions, diagnostics] {
+        scrub_value_paths(v, &mut paths);
+    }
+    r.user_name_segments_replaced = paths;
+    r
 }
 
 #[derive(Serialize)]
@@ -814,6 +978,25 @@ fn cap_feedback(feedback: Option<String>) -> Option<String> {
     feedback.map(|f| f.chars().take(FEEDBACK_MAX_CHARS).collect())
 }
 
+/// PURE: the JSON export, from the six already-redacted source values plus the record of what was
+/// redacted (`redaction`, a key an older reader simply ignores).
+fn export_bundle(exported_at: &str, rules_source: &str, sources: [Value; 6], redaction: &ExportRedaction) -> Value {
+    let [hardware, recommendations, trust_ledger, readiness, sessions, diagnostics] = sources;
+    json!({
+        "exported_at": exported_at,
+        "compy_version": env!("CARGO_PKG_VERSION"),
+        "rules_source": rules_source,
+        "hardware": hardware,
+        "recommendations": recommendations,
+        "trust_ledger": trust_ledger,
+        "readiness": readiness,
+        "sessions": sessions,
+        "diagnostics": diagnostics,
+        "redaction": redaction.to_json(),
+        "privacy": "Local export only. Compy collects no telemetry and has no account.",
+    })
+}
+
 // The window reaches this through `off_main::export_report` (lib.rs), off the main thread.
 pub(crate) fn export_report(
     feedback: Option<String>,
@@ -834,18 +1017,26 @@ pub(crate) fn export_report(
     let feedback = cap_feedback(feedback);
     let exported_at = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
     let mut hardware = serde_json::to_value(crate::hardware::get_hardware_info()).unwrap_or(Value::Null);
-    let recommendations =
+    let mut recommendations =
         serde_json::to_value(crate::recommendations::get_recommendations()).unwrap_or(Value::Null);
-    let trust_ledger =
+    let mut trust_ledger =
         serde_json::to_value(crate::history::get_applied_changes()).unwrap_or(Value::Null);
-    let readiness =
+    let mut readiness =
         serde_json::to_value(crate::readiness::get_game_readiness()).unwrap_or(Value::Null);
-    let sessions = redact_session_rows(
-        serde_json::to_value(crate::sessions::get_session_summaries()).unwrap_or(Value::Null),
-    );
-    let diagnostics =
+    let mut sessions =
+        serde_json::to_value(crate::sessions::get_session_summaries()).unwrap_or(Value::Null);
+    let mut diagnostics =
         serde_json::to_value(crate::diagnostics::get_diagnostics()).unwrap_or(Value::Null);
     let rules_source = crate::recommendations::get_rules_source().to_string();
+    // Redact once, before any report is built, so the Markdown, Discord block and JSON agree.
+    let redaction = redact_export_sources([
+        &mut hardware,
+        &mut recommendations,
+        &mut trust_ledger,
+        &mut readiness,
+        &mut sessions,
+        &mut diagnostics,
+    ]);
 
     let markdown = if consumer {
         build_consumer_report(
@@ -869,6 +1060,8 @@ pub(crate) fn export_report(
             feedback.as_deref(),
         )
     };
+    // The export says what it removed, in words, at the end of the file.
+    let markdown = format!("{markdown}\n---\n_Removed from this export: {}_\n", redaction.note());
     // Built before the JSON bundle below moves the source Values.
     let discord = build_discord_block(&hardware, &readiness, &sessions, &trust_ledger, &exported_at);
 
@@ -898,18 +1091,12 @@ pub(crate) fn export_report(
 
     // JSON export comes for free — the assembled source Values + metadata.
     let json_path = dir.join(format!("compy-report-{stamp}.json"));
-    let bundle = json!({
-        "exported_at": exported_at,
-        "compy_version": env!("CARGO_PKG_VERSION"),
-        "rules_source": rules_source,
-        "hardware": hardware,
-        "recommendations": recommendations,
-        "trust_ledger": trust_ledger,
-        "readiness": readiness,
-        "sessions": sessions,
-        "diagnostics": diagnostics,
-        "privacy": "Local export only. Compy collects no telemetry and has no account.",
-    });
+    let bundle = export_bundle(
+        &exported_at,
+        &rules_source,
+        [hardware, recommendations, trust_ledger, readiness, sessions, diagnostics],
+        &redaction,
+    );
     let json_body = serde_json::to_string_pretty(&bundle).map_err(|e| format!("could not build JSON report: {e}"))?;
     std::fs::write(&json_path, json_body)
         .map_err(|e| format!("could not write JSON report: {e}"))?;
@@ -1364,5 +1551,181 @@ mod export_tests {
         assert!(md.contains("Test GPU"));
         assert!(md.contains("VRAM, driver age —")); // missing vram/driver age -> dash, no panic
         assert!(md.contains("Built-in")); // rules source prettified
+    }
+
+    // ── Redaction of other programs and user-name paths (x2) ───────────────────────────────────
+
+    const CANARY_PROG: &str = "TaxPrep2026Canary.exe";
+    const CANARY_USER: &str = "CanaryKuyaName";
+
+    fn ev(at: u64, label: &str) -> Value {
+        json!({ "at_secs": at, "kind": "process-start", "label": label })
+    }
+
+    fn rows_with_canaries() -> Value {
+        json!([
+            { "process_name": "game.exe", "avg_fps": 144.0,
+              "game_state": { "process_name": "game.exe", "running_at_start": { "known": [] }, "start_ticks_skipped": 1, "start_events_dropped": 2 },
+              "stutter_events": [
+                ev(3, "Medal.exe starting"),
+                ev(5, &format!("{CANARY_PROG} starting")),
+                ev(9, "SignalCanary.exe starting"),
+                ev(12, &format!("{} starting", CANARY_PROG.to_lowercase())),
+                { "at_secs": 14, "kind": "ram", "label": "RAM filling up (90%+)" }
+              ],
+              "stutter_insight": format!("2 of your worst stutters lined up with {CANARY_PROG} starting.") },
+            { "process_name": "game.exe",
+              "stutter_events": [ev(1, "SignalCanary.exe starting"), ev(2, "OBS64.EXE starting")],
+              "stutter_insight": "2 of your worst stutters lined up with OBS64.EXE starting." }
+        ])
+    }
+
+    #[test]
+    fn programs_off_the_list_become_numbered_placeholders_and_listed_ones_stay() {
+        let mut r = ExportRedaction::default();
+        let out = redact_session_rows(rows_with_canaries(), &mut r);
+        let labels = |i: usize| -> Vec<String> {
+            out[i]["stutter_events"].as_array().unwrap().iter().map(|e| e["label"].as_str().unwrap().to_string()).collect()
+        };
+        assert_eq!(
+            labels(0),
+            ["Medal.exe starting", "other program 1 starting", "other program 2 starting", "other program 1 starting", "RAM filling up (90%+)"]
+        );
+        // The same program is the same placeholder in another session of the same export.
+        assert_eq!(labels(1), ["other program 2 starting", "OBS64.EXE starting"]);
+        // Counts and timing survive: same number of events, same seconds and kinds.
+        let at: Vec<u64> = out[0]["stutter_events"].as_array().unwrap().iter().map(|e| e["at_secs"].as_u64().unwrap()).collect();
+        assert_eq!(at, [3, 5, 9, 12, 14]);
+        assert_eq!(out[0]["stutter_events"][1]["kind"], "process-start");
+        assert_eq!(out[0]["stutter_insight"], "2 of your worst stutters lined up with other program 1 starting.");
+        assert_eq!(out[1]["stutter_insight"], "2 of your worst stutters lined up with OBS64.EXE starting.");
+        // 3 event labels (tax, signal, tax) + 1 sentence (tax) + 1 event (signal) = 5; 2 distinct programs.
+        let j = r.to_json();
+        assert_eq!((j["program_names_replaced"].as_u64(), j["other_programs"].as_u64()), (Some(5), Some(2)));
+        let text = out.to_string().to_lowercase();
+        assert!(!text.contains("taxprep") && !text.contains("signalcanary"), "a raw name survived: {text}");
+        // The recorded rows are untouched (the redaction works on the export's copy).
+        assert!(rows_with_canaries().to_string().contains(CANARY_PROG));
+    }
+
+    #[test]
+    fn the_placeholder_number_does_not_depend_on_the_name() {
+        // Same two programs, met in the other order: the numbers follow the order met, not the names.
+        let rows = json!([{ "stutter_events": [ev(1, "b-secret.exe starting"), ev(2, "a-secret.exe starting")] }]);
+        let out = redact_session_rows(rows, &mut ExportRedaction::default());
+        assert_eq!(out[0]["stutter_events"][0]["label"], "other program 1 starting");
+        assert_eq!(out[0]["stutter_events"][1]["label"], "other program 2 starting");
+    }
+
+    #[test]
+    fn a_stutter_sentence_of_an_unknown_shape_is_withheld_whole() {
+        for odd in [
+            format!("some of your worst stutters lined up with {CANARY_PROG} starting."),
+            format!("{CANARY_PROG} lined up with your worst stutters."),
+            format!("2 of your worst stutters lined up with {CANARY_PROG}."),
+            format!("{CANARY_PROG} 2 of your worst stutters lined up with RAM filling up (90%+)."),
+        ] {
+            let mut r = ExportRedaction::default();
+            let out = redact_session_rows(json!([{ "stutter_insight": odd }]), &mut r);
+            assert_eq!(out[0]["stutter_insight"], WITHHELD, "{odd}");
+            assert_eq!(r.to_json()["other_text_withheld"], 1);
+            assert!(!out.to_string().contains(CANARY_PROG));
+        }
+        let mut r = ExportRedaction::default();
+        let out = redact_session_rows(
+            json!([{ "stutter_events": [{ "at_secs": 1, "kind": "mystery", "label": CANARY_PROG }],
+                     "stutter_insight": "3 of your worst stutters lined up with a GPU clock drop under load." }]),
+            &mut r,
+        );
+        assert!(!out.to_string().contains(CANARY_PROG));
+        assert_eq!(out[0]["stutter_insight"], "3 of your worst stutters lined up with a GPU clock drop under load.");
+        assert_eq!(r.to_json()["other_text_withheld"], 1);
+    }
+
+    #[test]
+    fn the_user_name_segment_of_a_path_is_replaced_and_the_rest_kept() {
+        let mut n = 0;
+        let s = |x: &str, n: &mut u32| scrub_user_paths(x, n);
+        assert_eq!(s(&format!(r"C:\Users\{CANARY_USER}\AppData\Roaming\Compy"), &mut n), r"C:\Users\<user>\AppData\Roaming\Compy");
+        assert_eq!(s(&format!("c:/users/{CANARY_USER}/Desktop/x.log"), &mut n), "c:/users/<user>/Desktop/x.log");
+        assert_eq!(s(&format!(r"saved C:\Users\John {CANARY_USER}\Documents\a.txt ok"), &mut n), r"saved C:\Users\<user>\Documents\a.txt ok");
+        assert_eq!(s(&format!(r"read C:\Users\{CANARY_USER} failed"), &mut n), r"read C:\Users\<user> failed");
+        assert_eq!(n, 4);
+        let mut m = 0;
+        for same in [r"C:\Users\Public\Desktop", r"C:\Users\Default\NTUSER.DAT", r"C:\Users\<user>\x", r"D:\Games\Users", "no path here"] {
+            assert_eq!(s(same, &mut m), same);
+        }
+        assert_eq!(m, 0, "nothing to remove: nothing counted");
+        // Idempotent: a second pass changes nothing and counts nothing.
+        let once = s(&format!(r"C:\Users\{CANARY_USER}\a"), &mut m);
+        assert_eq!(s(&once, &mut m), once);
+        assert_eq!(m, 1);
+        // Non-ASCII around a path never panics or shifts the cut.
+        assert_eq!(s(&format!("é C:\\Users\\{CANARY_USER}\\é"), &mut 0), "é C:\\Users\\<user>\\é");
+    }
+
+    fn canary_sources() -> [Value; 6] {
+        let p = format!(r"C:\Users\{CANARY_USER}\AppData\Roaming\Compy\history.json");
+        [
+            json!({ "cpu_brand": "Test CPU", "hostname": "HOSTCANARY", "gpus": [{ "name": "Test GPU" }] }),
+            json!([{ "id": "x", "title": "T", "category": "c", "detail": format!(r"see {p}") }]),
+            json!([{ "id": "h1", "rec_title": "Enable Game Mode", "restores_label": p }]),
+            json!({ "checks": [{ "id": "c", "detail": format!("/Users/{CANARY_USER}/Games") }] }),
+            rows_with_canaries(),
+            json!([{ "name": "Storage", "entries": [{ "label": "Log", "value": p }] }]),
+        ]
+    }
+
+    #[test]
+    fn nothing_personal_is_left_anywhere_in_the_serialized_export() {
+        let [mut hw, mut recs, mut ledger, mut ready, mut sess, mut diag] = canary_sources();
+        let r = redact_export_sources([&mut hw, &mut recs, &mut ledger, &mut ready, &mut sess, &mut diag]);
+        let md = build_markdown_report(&hw, &recs, &ledger, &ready, &sess, &diag, "embedded", "t", None);
+        // The JSON path removes the hostname after the builders ran (see `export_report`).
+        hw.as_object_mut().unwrap().remove("hostname");
+        let bundle = export_bundle("t", "embedded", [hw, recs, ledger, ready, sess, diag], &r);
+        let json_text = serde_json::to_string_pretty(&bundle).unwrap();
+        for (what, text) in [("json", json_text.to_lowercase()), ("markdown", md.to_lowercase())] {
+            for canary in [CANARY_USER, CANARY_PROG, "SignalCanary", "HOSTCANARY"] {
+                assert!(!text.contains(&canary.to_lowercase()), "{canary} survived in the {what} export");
+            }
+        }
+        // The strip that was already there still holds, in the JSON.
+        for key in ["running_at_start", "start_ticks_skipped", "start_events_dropped"] {
+            assert!(!json_text.contains(&format!("\"{key}\": ")), "{key} must stay out of the export");
+        }
+        assert!(json_text.contains(r"C:\\Users\\<user>\\AppData"), "the readable rest of the path stays");
+        // Counts: 3+1+1 program names over 2 programs; user-name segments: ledger 1, recs 1, diag 1, readiness 1.
+        assert_eq!(bundle["redaction"]["program_names_replaced"], 5);
+        assert_eq!(bundle["redaction"]["other_programs"], 2);
+        assert_eq!(bundle["redaction"]["user_name_segments_replaced"], 4);
+        assert_eq!(bundle["redaction"]["running_at_start_omitted"], true);
+        let summary = bundle["redaction"]["summary"].as_str().unwrap();
+        assert!(summary.starts_with("5 program names not on Compy's known-programs list (2 programs) replaced"), "{summary}");
+        assert!(summary.contains("removed from 4 file paths"), "{summary}");
+    }
+
+    #[test]
+    fn the_note_is_true_when_nothing_was_replaced_and_singular_for_one() {
+        let none = ExportRedaction::default();
+        assert!(none.note().starts_with("0 program names not on Compy's known-programs list (0 programs)"));
+        assert!(none.note().contains("removed from 0 file paths"));
+        let mut one = ExportRedaction::default();
+        one.start_label("x-canary.exe starting");
+        one.user_name_segments_replaced = 1;
+        assert!(one.note().starts_with("1 program name not on Compy's known-programs list (1 program) replaced"));
+        assert!(one.note().contains("removed from 1 file path."));
+    }
+
+    #[test]
+    fn export_report_redacts_before_any_report_is_built_and_writes_the_note() {
+        let src = include_str!("export.rs");
+        let body = &src[src.find("pub(crate) fn export_report(").unwrap()..];
+        let at = |needle: &str| body.find(needle).unwrap_or_else(|| panic!("export_report must contain {needle}"));
+        assert!(at("redact_export_sources(") < at("build_consumer_report("), "redact before the Markdown is built");
+        assert!(at("redact_export_sources(") < at("build_markdown_report("));
+        assert!(at("redact_export_sources(") < at("build_discord_block("));
+        assert!(at("redaction.note()") < at("export_bundle("), "the Markdown carries the note");
+        assert!(at("export_bundle(") > at("redact_export_sources("), "the JSON is built from the redacted values");
     }
 }

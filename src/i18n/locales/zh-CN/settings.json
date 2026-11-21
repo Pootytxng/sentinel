@@ -84,7 +84,7 @@
     "tierConsumer": "通俗版",
     "tierTechnical": "完整详情",
     "tierConsumerSub": "用大白话说明 Compy 改了什么、测了什么、标记了什么。",
-    "tierTechnicalSub": "Compy 能看到的一切：硬件、检查、游戏会话和诊断信息。",
+    "tierTechnicalSub": "硬件、检查、游戏会话和诊断信息。Compy 不认识的程序名称和你的 Windows 用户名已被去掉。",
     "savedToPre": "已保存至 ",
     "openFolder": "打开文件夹",
     "copied": "已复制！",

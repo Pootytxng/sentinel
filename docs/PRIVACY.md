@@ -116,6 +116,19 @@ in the update request, and does not upload it anywhere.
 export it to a file under `%APPDATA%\Compy\exports\`, and attach that file to a support conversation
 yourself — you are the transport, and you can read exactly what you are sending before you send it.
 
+**The diagnostic report ("Export Snapshot", Settings, Feedback & help)** is built on your PC and saved
+as a Markdown file and a JSON file under `%APPDATA%\Compy\exports\`. Compy never sends it; you choose
+whether to share it. Before it is written, Compy takes two kinds of personal detail out of it. Programs
+that started during a game session are listed only when they are on Compy's reviewed list of known
+programs (recorders, overlays, launchers, build tools); any other program that started is replaced by
+"other program 1", "other program 2" and so on, the same program getting the same number within one
+report, with the counts and timing kept. And in any file path, the Windows user name is replaced by
+`<user>`. The report says what it did: the last lines of the Markdown, and a `redaction` section in the
+JSON, give how many program names were replaced and how many paths had the user name removed. The list
+of known programs that were already running when a game started, and your computer name, are not in the
+report at all. Nothing changes in what Compy records on your PC or shows you in the app; only the
+exported copy is altered.
+
 The FPS working files and the first-run flag are safe to delete — Compy just recreates them as needed. Deleting `history.json` is different: it erases your Trust Ledger, so past changes stop being reversible from it. Compy also keeps one backup copy of the ledger beside it, `history.json.bak`, and if `history.json` is missing or damaged it restores the ledger from that copy (leaving a small `history.json.restored` note that it did). To erase your change history for good, close Compy and delete every file in that folder whose name starts with `history.json` (the ledger, its `.bak` backup copy, and any `.restored` or `.corrupt` files); Compy then starts a fresh, empty ledger. The support record can be cleared or deleted at any time and Compy simply starts a new empty one; the only consequence is that if you later ask for help with something that already went wrong, there is no record of it left to show — so clear it *after* a support conversation, not before.
 
 ## What Compy does NOT do
