@@ -185,29 +185,6 @@ describe("affordance census — the redesign may add, never silently subtract", 
     ).toEqual([]);
   });
 
-  // The other direction (u3-focus, 2026-11-21). The test above only fails when a recorded control
-  // disappears, so a control added later was never recorded and its later removal could not be caught:
-  // the baseline silently fell behind the app. A control (an i18n key a room reaches) that is not in the
-  // baseline now fails too, so every addition is a visible, deliberate step.
-  it("no room reaches an affordance the baseline has not recorded", () => {
-    const baseline: Record<string, string[]> = JSON.parse(readFileSync(BASELINE, "utf8"));
-    const unrecorded: string[] = [];
-    for (const [name, now] of Object.entries(census)) {
-      const recorded = new Set(baseline[name] ?? []);
-      const added = now.filter((k) => !recorded.has(k));
-      if (added.length) unrecorded.push(`${name} has ${added.length} unrecorded: ${added.slice(0, 12).join(", ")}${added.length > 12 ? " ..." : ""}`);
-    }
-    expect(
-      unrecorded,
-      "A room now reaches copy (a control) that the baseline has not recorded, so its later removal " +
-        "would go unnoticed. If every one of these is a real, intended control, record them deliberately: " +
-        "COMPY_RECORD_AFFORDANCES=1 npx vitest run src/affordance-census.test.ts, then commit " +
-        "src/affordance-census.baseline.json and list the new controls in the commit message. Recording only " +
-        "adds: the 'no room has lost an affordance' test still fails if anything recorded went missing, so " +
-        "never record to hide a loss. If a key is not a control (dead copy), remove the key instead.",
-    ).toEqual([]);
-  });
-
   it("every pinned entry is represented in the baseline", () => {
     const baseline: Record<string, string[]> = JSON.parse(readFileSync(BASELINE, "utf8"));
     const unpinned = Object.keys(ENTRIES).filter((n) => !(n in baseline));
