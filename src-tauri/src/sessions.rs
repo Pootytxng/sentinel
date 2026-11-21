@@ -2536,10 +2536,14 @@ mod d6_clear_tests {
         let mon = include_str!("monitoring.rs");
         let fin = mon.split("fn finish(self, ended: crate::session_boundary::Ended)").nth(1).expect("LiveSession::finish");
         let fin = fin.split("\n// True when UAC is fully disabled").next().unwrap();
-        let guard = fin.find("let _pending = crate::sessions::hold_pending_save();").expect("the guard is taken in finish");
+        let guard = fin.find("let pending = crate::sessions::hold_pending_save();").expect("the guard is taken in finish");
         let finalize = fin.find("acc.finalize_ended(&ended)").expect("finalize");
         let save = fin.find("crate::sessions::save_session(summary)").expect("save");
+        let release = fin.find("drop(pending);").expect("the guard is released explicitly after the save");
+        let toast = fin.find("notify_debrief_ready").expect("the toast");
         assert!(guard < finalize && finalize < save, "guard, then finalize, then save: nothing between them is unguarded");
+        assert!(save < release && release < toast, "released right after the save returns, before the end-of-session toast");
+        assert_eq!(fin.matches("hold_pending_save()").count(), 1);
         let src = include_str!("sessions.rs");
         let body = src.split(concat!("pub(crate) fn ", "save_session(")).nth(1).unwrap();
         let body = body.split(concat!("fn get_", "session_summaries")).next().unwrap();

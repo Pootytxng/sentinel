@@ -832,6 +832,9 @@ pub(crate) struct ClearReport {
     /// `not_attempted`. Empty otherwise. When it fires before anything was deleted the outcome is
     /// `Refused` instead, with these same typed reasons.
     pub(crate) stopped: Vec<Refusal>,
+    /// Files the start-up roll-forward left alone because the record did not confirm them (see
+    /// `confine_to_confirmed`). Always empty for a clear a screen confirmed.
+    pub(crate) skipped: Vec<Skipped>,
     pub(crate) kept: Vec<Kept>,
     pub(crate) unknown: Vec<String>,
     /// True only when every file the plan listed is gone.
@@ -875,6 +878,7 @@ impl ClearReport {
 /// hand it to the screen as it is: the refusal codes stay codes, never one joined sentence.
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", content = "detail", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)] // returned once per clear, on a cold path; boxing would ripple into every caller
 pub(crate) enum ClearOutcome {
     Refused(Vec<Refusal>),
     /// The files differ from the plan that was given; nothing was deleted.
@@ -1204,6 +1208,7 @@ pub(crate) const MEMORY_COPIES: &[MemoryCopy] = &[
     MemoryCopy { reason: "trial_result", holder: "benchmark_trial.rs state (last finished verdict and noise reading)", everything_only: false, reset_by: Some(Gate::Scoreboard) },
     MemoryCopy { reason: "incident_failure_flags", holder: "incident_observer.rs READ_FAILURE_REPORTED, SCAN_STORE_FAILED", everything_only: false, reset_by: Some(Gate::IncidentObserver) },
     MemoryCopy { reason: "support_preview_flag", holder: "support_evidence.rs PREVIEWED (the record was previewed this run), reset by support_evidence::forget_preview", everything_only: true, reset_by: Some(Gate::SupportEvidence) },
+    MemoryCopy { reason: "ledger_backup_report_flag", holder: "history.rs SAVE_BACKUP_REPORTED (a backup refresh failure was already recorded this run), reset by history::forget_backup_report with the support record", everything_only: true, reset_by: Some(Gate::SupportEvidence) },
     MemoryCopy { reason: "identity_log_throttle", holder: "intelligence.rs refresh_gate (time of the last identity refresh), reset by intelligence::forget_refresh_throttle", everything_only: false, reset_by: Some(Gate::Intelligence) },
     MemoryCopy { reason: "screen_memory", holder: "the window's own state and WebView storage (UI slice: relaunch)", everything_only: false, reset_by: None },
 ];
@@ -1225,6 +1230,7 @@ fn new_report(now: &ClearPlan) -> ClearReport {
         failed: Vec::new(),
         not_attempted: Vec::new(),
         stopped: Vec::new(),
+        skipped: Vec::new(),
         kept: now.kept.clone(),
         unknown: now.unknown.clone(),
         complete: false,
@@ -1335,6 +1341,8 @@ pub(crate) struct LedgerPhase {
     report: ClearReport,
     rest: Vec<PlannedDelete>,
     ledger_failed: bool,
+    /// Run from the start-up roll-forward: an unfinished run is never silently dropped, only abandoned.
+    rolled_forward: bool,
 }
 
 /// "Clear everything", phase 1: the change-history family and the Trial store. The caller must hold the
@@ -1352,12 +1360,12 @@ pub(crate) fn execute_everything_ledger_phase(
     facts: &ClearFacts,
     _experiment_gate: &crate::race_seam::StoreGuard,
     _ledger: &crate::history::LedgerGuard,
+    confine: Option<&ClearIntent>,
 ) -> Result<LedgerPhase, ClearOutcome> {
-    ledger_phase(root, plan, facts, &delete_one)
+    ledger_phase_with(root, plan, facts, &delete_one, confine)
 }
 
-/// The body of phase 1, with the delete as a parameter so a test can look at what is held while a file
-/// goes. Production passes `delete_one`.
+/// `ledger_phase_with` for a clear a screen confirmed (no record to confine to).
 #[allow(clippy::result_large_err)] // as above
 fn ledger_phase(
     root: &Path,
@@ -1365,23 +1373,42 @@ fn ledger_phase(
     facts: &ClearFacts,
     del: &dyn Fn(&Path, &str) -> Result<Removed, String>,
 ) -> Result<LedgerPhase, ClearOutcome> {
+    ledger_phase_with(root, plan, facts, del, None)
+}
+
+/// The body of phase 1, with the delete as a parameter so a test can look at what is held while a file
+/// goes. Production passes `delete_one`. `confine` is the pending record when this is the start-up
+/// roll-forward: the list is cut down to what the record confirmed and the record is left as it is.
+#[allow(clippy::result_large_err)] // as above
+fn ledger_phase_with(
+    root: &Path,
+    plan: &ClearPlan,
+    facts: &ClearFacts,
+    del: &dyn Fn(&Path, &str) -> Result<Removed, String>,
+    confine: Option<&ClearIntent>,
+) -> Result<LedgerPhase, ClearOutcome> {
     if plan.scope != Scope::Everything {
         return Err(ClearOutcome::Refused(vec![ledger_lock_required()]));
     }
-    let now = replan(root, plan, facts)?;
-    // The intent record goes down BEFORE the first delete, and only after the re-plan said yes (a refused
-    // clear must leave no record behind for the next start to roll forward). If it cannot be written,
-    // nothing is deleted. Nothing listed means nothing to roll forward (and a missing root is never created).
-    if now.delete.is_empty() {
-        // no record
-    } else if let Err(why) = ensure_intent(root, facts) {
-        return Err(ClearOutcome::Refused(vec![Refusal {
-            code: "clear_intent_unwritable",
-            detail: format!("Compy could not write the record that lets an interrupted clear be finished ({why}), so nothing was deleted."),
-            files: Vec::new(),
-        }]));
+    let mut now = replan(root, plan, facts)?;
+    let mut skipped = Vec::new();
+    if let Some(intent) = confine {
+        (now.delete, skipped) = confine_to_confirmed(&now.delete, intent);
+    } else if !now.delete.is_empty() {
+        // The intent record goes down BEFORE the first delete, and only after the re-plan said yes. If it
+        // cannot be written, nothing is deleted. Nothing listed means nothing to roll forward (and a
+        // missing root is never created). It outlives the call only if a file was actually deleted:
+        // `finish_everything` removes it otherwise.
+        if let Err(why) = ensure_intent(root, facts, &now.delete) {
+            return Err(ClearOutcome::Refused(vec![Refusal {
+                code: "clear_intent_unwritable",
+                detail: format!("Compy could not write the record that lets an interrupted clear be finished ({why}), so nothing was deleted."),
+                files: Vec::new(),
+            }]));
+        }
     }
     let mut report = new_report(&now);
+    report.skipped = skipped;
     let mut ledger_failed = false;
     let (mine, rest): (Vec<PlannedDelete>, Vec<PlannedDelete>) =
         now.delete.iter().cloned().partition(|d| matches!(gate_of(d), Gate::Ledger | Gate::Experiment));
@@ -1399,31 +1426,65 @@ fn ledger_phase(
             }
         }
     }
-    Ok(LedgerPhase { report, rest, ledger_failed })
+    Ok(LedgerPhase { report, rest, ledger_failed, rolled_forward: confine.is_some() })
 }
 
 /// "Clear everything", phase 2, run AFTER the Trial gate and the ledger lock are released: every other
 /// file, each under its own store's lock one at a time, the support record last.
 pub(crate) fn finish_everything(root: &Path, phase: LedgerPhase, gates: &dyn ClearGates) -> ClearOutcome {
-    let LedgerPhase { mut report, rest, mut ledger_failed } = phase;
+    let LedgerPhase { mut report, rest, mut ledger_failed, rolled_forward } = phase;
     let stopped = delete_rows(root, &rest, gates, &[], &mut report, &mut ledger_failed);
-    // Every file is gone: the backend's part is finished, only the screen's browser storage is left. If the
-    // record cannot be advanced the next start's roll-forward finds nothing to delete and advances it then.
-    if stopped.is_empty() && report.failed.is_empty() && report.not_attempted.is_empty() {
+    // What the record does now. A record may outlive the call only if at least one file was deleted:
+    // otherwise the screen is told "refused/nothing changed" and a leftover record would wipe everything at
+    // the next start without asking.
+    let progress = !report.deleted.is_empty() || !report.already_gone.is_empty();
+    let clean = stopped.is_empty() && report.failed.is_empty() && report.not_attempted.is_empty() && report.skipped.is_empty();
+    if clean {
+        // Every file is gone: the backend's part is finished, only the screen's browser storage is left. If
+        // the record cannot be advanced it stays pending, and the next start's roll-forward (confined to
+        // the files it lists, all gone now) advances it.
         if let Err(why) = mark_files_done(root) {
             eprintln!("[data_clear] the clear finished but its record could not be advanced ({why}); the next start will advance it");
         }
+    } else if !progress && !rolled_forward {
+        if let Err(why) = remove_intent(root) {
+            eprintln!("[data_clear] nothing was deleted but the clear's record could not be removed ({why})");
+        }
+    } else if let Err(why) = set_abandoned(root, "needs_reconfirm", NEEDS_RECONFIRM) {
+        eprintln!("[data_clear] the clear did not finish and its record could not be marked ({why})");
     }
     settle_run(report, stopped)
 }
 
+/// Why an unfinished clear is never finished by itself: what is left is whatever the user has now, so the
+/// user confirms again on a screen.
+const NEEDS_RECONFIRM: &str = "The clear did not finish. Nothing more is deleted until it is confirmed again.";
+
+/// Removes a record this run wrote and has no use for. Only a readable, pending one.
+fn remove_intent(root: &Path) -> Result<(), String> {
+    match read_intent(root) {
+        IntentRead::Valid(i) if i.stage == IntentStage::FilesPending => delete_one(root, INTENT_FILE).map(|_| ()),
+        _ => Ok(()),
+    }
+}
+
 /// What a "clear everything" is checked against once the locks are held.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) enum Expected {
     /// The fingerprint of the plan the screen showed. A different list deletes nothing (`PlanChanged`).
     Fingerprint(String),
-    /// No screen is involved (start-up): the recorded intent is the authority, the re-plan still refuses.
-    RecordedIntent,
+    /// No screen is involved (start-up): the pending record is the authority, and it narrows the list to
+    /// what the record confirmed. The token is made only by `roll_forward_at`, is moved in (used once), and
+    /// is checked against the record on disk under the locks.
+    RecordedIntent(IntentToken),
+}
+
+fn no_clear_in_progress() -> Refusal {
+    Refusal {
+        code: "no_clear_in_progress",
+        detail: "There is no unfinished \"clear everything\" to finish, so nothing was deleted.".to_string(),
+        files: Vec::new(),
+    }
 }
 
 impl From<&str> for Expected {
@@ -1462,6 +1523,14 @@ pub(crate) fn clear_everything_at(
             Ok(g) => g,
             Err(e) => return ClearOutcome::Refused(vec![store_lock_unavailable("the change history", &e)]),
         };
+        // The start-up path needs a pending record that is still the one its token was made from.
+        let confine = match &expected {
+            Expected::Fingerprint(_) => None,
+            Expected::RecordedIntent(token) => match read_intent(root) {
+                IntentRead::Valid(i) if i.stage == IntentStage::FilesPending && i == token.intent => Some(i),
+                _ => return ClearOutcome::Refused(vec![no_clear_in_progress()]),
+            },
+        };
         let facts = facts();
         let plan = plan_clear(root, Scope::Everything, &facts);
         // A refusal is named as one (as `clear_play_history_at` does), not folded into "files changed".
@@ -1471,7 +1540,7 @@ pub(crate) fn clear_everything_at(
         if matches!(&expected, Expected::Fingerprint(fp) if plan.fingerprint != *fp) {
             return ClearOutcome::PlanChanged;
         }
-        match execute_everything_ledger_phase(root, &plan, &facts, &experiment_gate, &ledger) {
+        match execute_everything_ledger_phase(root, &plan, &facts, &experiment_gate, &ledger, confine.as_ref()) {
             Ok(phase) => phase,
             Err(outcome) => return outcome,
         }
@@ -1521,6 +1590,37 @@ pub(crate) struct ClearIntent {
     pub(crate) abandoned_code: Option<String>,
     #[serde(default)]
     pub(crate) abandoned_detail: Option<String>,
+    /// The files the confirmed plan listed, as they were when the clear started. The roll-forward deletes
+    /// nothing that is not here AND still unchanged AND still in the plan the compiled inventory makes:
+    /// a record can narrow what is deleted, never add a target. (A record without this field, or an
+    /// empty one, deletes nothing.)
+    #[serde(default)]
+    pub(crate) confirmed: Vec<ConfirmedFile>,
+}
+
+/// One entry of the confirmed plan: inventory row id, file name, size and modified time (ms since 1970).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ConfirmedFile {
+    pub(crate) row_id: String,
+    pub(crate) rel: String,
+    pub(crate) size: u64,
+    pub(crate) modified_ms: u64,
+}
+
+/// A file the roll-forward left alone, and why. Never an error: it is reported so the screen can say so.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct Skipped {
+    pub(crate) rel: String,
+    /// `not_in_confirmed_plan`, `changed_since_confirmed`, `newer_than_clear`, `invalid_record_entry`.
+    pub(crate) reason: &'static str,
+}
+
+/// Capability to run the start-up roll-forward. Only `roll_forward_at` builds one (a source test pins that),
+/// from the record it just read, and it is moved into `clear_everything_at`, which re-reads the record under
+/// the locks and refuses unless it is still the pending record this token was made from.
+#[derive(Debug)]
+pub(crate) struct IntentToken {
+    intent: ClearIntent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1556,25 +1656,59 @@ fn write_intent(root: &Path, intent: &ClearIntent) -> Result<(), String> {
     crate::atomic_write::write_atomic(&root.join(INTENT_FILE), &bytes).map_err(|e| e.to_string())
 }
 
-/// Writes (or refreshes) the record for a clear about to start. An unreadable record is an error: it is
-/// never overwritten. A pending record keeps its original start time.
-fn ensure_intent(root: &Path, facts: &ClearFacts) -> Result<(), String> {
-    let started_at = match read_intent(root) {
-        IntentRead::Unreadable(why) => return Err(format!("the record of an earlier clear can't be read: {why}")),
-        IntentRead::Valid(i) if i.stage == IntentStage::FilesPending => i.started_at,
-        _ => facts.now.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
-    };
+/// Writes the record for a clear about to start: its start time, the licence choice and the confirmed
+/// list (`planned`: what the re-plan under the locks says will be deleted). An unreadable record is an
+/// error: it is never overwritten. An older record (pending, abandoned or waiting for the screen) is
+/// replaced: the clear in hand was just confirmed and supersedes it.
+fn ensure_intent(root: &Path, facts: &ClearFacts, planned: &[PlannedDelete]) -> Result<(), String> {
+    if let IntentRead::Unreadable(why) = read_intent(root) {
+        return Err(format!("the record of an earlier clear can't be read: {why}"));
+    }
     write_intent(
         root,
         &ClearIntent {
             scope: "all".to_string(),
             remove_licence: facts.remove_licence,
-            started_at,
+            started_at: facts.now.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
             stage: IntentStage::FilesPending,
             abandoned_code: None,
             abandoned_detail: None,
+            confirmed: planned
+                .iter()
+                .map(|d| ConfirmedFile { row_id: d.row_id.to_string(), rel: d.rel.clone(), size: d.size, modified_ms: u64::try_from(d.modified_ms).unwrap_or(u64::MAX) })
+                .collect(),
         },
     )
+}
+
+/// Takes `planned` down to what the record confirmed: a file is kept for deletion only if the record lists
+/// it with the same inventory row, size and modified time, a path that stays inside the root, and a
+/// modified time no later than the record's start. Everything else is left and named. Entries of the record
+/// that are not a plain inventory file name are named too (and never acted on).
+fn confine_to_confirmed(planned: &[PlannedDelete], intent: &ClearIntent) -> (Vec<PlannedDelete>, Vec<Skipped>) {
+    let mut keep = Vec::new();
+    let mut skipped = Vec::new();
+    for d in planned {
+        let entry = intent.confirmed.iter().find(|e| e.rel == d.rel);
+        let reason = match entry {
+            None => Some("not_in_confirmed_plan"),
+            Some(_) if validate_rel(&d.rel).is_err() => Some("invalid_record_entry"),
+            Some(_) if d.modified_ms / 1000 > u128::from(intent.started_at) => Some("newer_than_clear"),
+            Some(e) if e.row_id != d.row_id || e.size != d.size || u128::from(e.modified_ms) != d.modified_ms => Some("changed_since_confirmed"),
+            Some(_) => None,
+        };
+        match reason {
+            None => keep.push(d.clone()),
+            Some(reason) => skipped.push(Skipped { rel: d.rel.clone(), reason }),
+        }
+    }
+    for e in &intent.confirmed {
+        let known_row = data_inventory::rows().iter().any(|r| r.id == e.row_id);
+        if (validate_rel(&e.rel).is_err() || !known_row) && !skipped.iter().any(|s| s.rel == e.rel) {
+            skipped.push(Skipped { rel: e.rel.clone(), reason: "invalid_record_entry" });
+        }
+    }
+    (keep, skipped)
 }
 
 /// Every file is gone: advance a pending record to "only the screen's storage is left". Anything else on
@@ -1628,19 +1762,21 @@ pub(crate) fn acknowledge_clear_at(root: &Path) -> Result<(), Refusal> {
 
 /// Refusal codes that mean the ledger no longer matches what the clear was confirmed against (a change is
 /// on again, the ledger can't be read, a damaged copy was set aside). The roll-forward abandons on these
-/// and keeps every `history.json*` file. Other refusals (a Trial, a fresh working file, a lock) may pass
-/// by the next start, so they only defer.
+/// and keeps every `history.json*` file, and the roll-forward reports that code. Any other refusal (a Trial, a
+/// fresh working file, a lock) abandons with `needs_reconfirm`: the roll-forward makes one attempt only.
 const LEDGER_ABANDON_CODES: &[&str] = &["changes_applied", "ledger_unreadable", "ledger_set_aside"];
 
 /// What the start-up roll-forward did.
 #[derive(Debug, Serialize)]
 #[serde(tag = "status", content = "detail", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)] // returned once at start-up; same reason as `ClearOutcome`
 pub(crate) enum RollForward {
     /// No record: nothing was interrupted.
     NothingToDo,
     /// The record was finished: every file it listed is gone (the record now waits for the screen).
     Completed(ClearReport),
-    /// Some files are still there (a failure or a stop); the record is kept for the next start.
+    /// Some files are still there (a failure, a stop, or files the record did not confirm: `skipped`). The
+    /// record is `Abandoned` with `needs_reconfirm`: nothing more is deleted at start-up.
     Incomplete(ClearReport),
     /// The files were already gone; only the screen's browser storage is left. Nothing was deleted.
     WebviewPending,
@@ -1648,7 +1784,8 @@ pub(crate) enum RollForward {
     Abandoned { code: String, detail: String },
     /// The record can't be read. Kept as it is, reported, and nothing was deleted.
     Kept { code: &'static str, detail: String },
-    /// A refusal that may pass (or no data root): nothing was deleted, the record is kept.
+    /// No data root, or the record on disk was not the one this attempt read: nothing was deleted and the
+    /// record was left as it is.
     Deferred(Vec<Refusal>),
 }
 
@@ -1679,20 +1816,28 @@ pub(crate) fn roll_forward_at(root: &Path, facts: &dyn Fn() -> ClearFacts, gates
     }
     let remove_licence = intent.remove_licence;
     let facts_of_record = || ClearFacts { remove_licence, ..facts() };
-    match clear_everything_at(root, Expected::RecordedIntent, &facts_of_record, gates) {
-        ClearOutcome::Refused(refusals) => match refusals.iter().find(|r| LEDGER_ABANDON_CODES.contains(&r.code)) {
-            Some(r) => {
-                let (code, detail) = (r.code, r.detail.clone());
-                if let Err(why) = set_abandoned(root, code, &detail) {
-                    eprintln!("[data_clear] the clear was abandoned ({code}) but its record could not be updated ({why})");
-                }
-                RollForward::Abandoned { code: code.to_string(), detail }
+    let abandon = |code: &'static str, detail: String| {
+        if let Err(why) = set_abandoned(root, code, &detail) {
+            eprintln!("[data_clear] the clear was abandoned ({code}) but its record could not be updated ({why})");
+        }
+        RollForward::Abandoned { code: code.to_string(), detail }
+    };
+    // One attempt only. Whatever does not finish now becomes `Abandoned` ("needs_reconfirm"): what is left
+    // is whatever the user has now, and only a screen may confirm deleting that.
+    match clear_everything_at(root, Expected::RecordedIntent(IntentToken { intent: intent.clone() }), &facts_of_record, gates) {
+        ClearOutcome::Refused(refusals) => {
+            if refusals.iter().any(|r| r.code == "no_clear_in_progress") {
+                return RollForward::Deferred(refusals); // the record is not ours to touch
             }
-            None => RollForward::Deferred(refusals),
-        },
-        // Cannot happen with no expected fingerprint; deferred rather than guessed at.
-        ClearOutcome::PlanChanged => RollForward::Deferred(Vec::new()),
-        ClearOutcome::Done(report) if report.complete => RollForward::Completed(report),
+            match refusals.iter().find(|r| LEDGER_ABANDON_CODES.contains(&r.code)) {
+                Some(r) => abandon(r.code, r.detail.clone()),
+                None => abandon("needs_reconfirm", NEEDS_RECONFIRM.to_string()),
+            }
+        }
+        // Cannot happen with no expected fingerprint.
+        ClearOutcome::PlanChanged => abandon("needs_reconfirm", NEEDS_RECONFIRM.to_string()),
+        ClearOutcome::Done(report) if report.complete && report.skipped.is_empty() && report.stopped.is_empty() => RollForward::Completed(report),
+        // `finish_everything` has already marked the record `Abandoned`.
         ClearOutcome::Done(report) => RollForward::Incomplete(report),
     }
 }
@@ -1757,6 +1902,8 @@ impl ClearEffects for ProcessEffects {
     }
     fn forget_support_preview(&self) {
         crate::support_evidence::forget_preview();
+        // Same record, same lock: the "backup failure already recorded" flag belongs to it too.
+        crate::history::forget_backup_report();
     }
     fn forget_identity_throttle(&self) {
         crate::intelligence::forget_refresh_throttle();
@@ -2988,17 +3135,17 @@ mod tests {
         assert!(exp < led, "Experiment, then History: the declared nesting");
     }
 
-    // ===== D7 item 3 (backed out): the Trial gate is the shared `StoreGuard` again; see the remaining list ==
+    // ===== the public ledger phase (the Trial gate is the shared `StoreGuard`; see the remaining list) ===
 
     #[test]
-    fn y2_the_public_ledger_phase_runs_with_the_two_guards_and_the_clear_goes_on_to_the_rest() {
+    fn l1_the_public_ledger_phase_takes_the_two_guards_and_phase_two_finishes_the_clear() {
         let t = Tmp::new("y2");
         seed(&t);
         let plan = plan_clear(&t.root, Scope::Everything, &later());
         assert!(plan.can_proceed(), "{:?}", plan.refusals);
         let trial = crate::experiment::lock_store().unwrap();
         let ledger = crate::history::lock_ledger().unwrap();
-        let phase = execute_everything_ledger_phase(&t.root, &plan, &later(), &trial, &ledger).unwrap_or_else(|o| panic!("phase 1: {o:?}"));
+        let phase = execute_everything_ledger_phase(&t.root, &plan, &later(), &trial, &ledger, None).unwrap_or_else(|o| panic!("phase 1: {o:?}"));
         drop(ledger);
         drop(trial);
         assert!(!t.has("history.json") && !t.has("history.json.bak") && !t.has("experiments.json"));
@@ -3412,6 +3559,13 @@ mod tests {
         t.listing().into_iter().filter(|l| !l.starts_with(INTENT_FILE)).collect()
     }
 
+    /// A pending record for a clear confirmed with `facts`: the plan under those facts, then the record
+    /// exactly as the clear writes it before its first delete.
+    fn pend(t: &Tmp, facts: &ClearFacts) -> Result<(), String> {
+        let plan = plan_clear(&t.root, Scope::Everything, facts);
+        ensure_intent(&t.root, facts, &plan.delete)
+    }
+
     fn roll(t: &Tmp) -> RollForward {
         roll_forward_at(&t.root, &later, &NoGates)
     }
@@ -3426,7 +3580,7 @@ mod tests {
             let t = Tmp::new("i1");
             seed(&t);
             let plan = plan_clear(&t.root, Scope::Everything, &later());
-            ensure_intent(&t.root, &later()).unwrap(); // what the clear writes before its first delete
+            pend(&t, &later()).unwrap(); // what the clear writes before its first delete
             for d in plan.delete.iter().take(n) {
                 delete_one(&t.root, &d.rel).unwrap(); // ... then the process dies after n files
             }
@@ -3448,7 +3602,7 @@ mod tests {
     fn i1b_after_the_backup_but_before_history_json_the_next_start_deletes_history_json_and_nothing_recreates_it() {
         let t = Tmp::new("i1b");
         seed(&t);
-        ensure_intent(&t.root, &later()).unwrap();
+        pend(&t, &later()).unwrap();
         delete_one(&t.root, "history.json.bak").unwrap();
         assert!(t.has("history.json"));
         assert!(matches!(roll(&t), RollForward::Completed(_)));
@@ -3456,24 +3610,31 @@ mod tests {
     }
 
     #[test]
-    fn i1c_a_clear_that_stopped_part_way_is_finished_by_the_next_start() {
+    fn i1c_a_clear_that_stopped_part_way_is_not_finished_by_the_next_start_but_by_a_new_confirmation() {
         let t = Tmp::new("i1c");
         seed(&t);
         let shown = plan_clear(&t.root, Scope::Everything, &later());
         let gates = FlipAfter { fx: TestEffects::new(), after: 2, calls: Default::default() };
         let report = done(clear_everything_at(&t.root, &shown.fingerprint, &later, &gates));
         assert!(!report.complete && !report.stopped.is_empty());
-        assert_eq!(intent_of(&t).stage, IntentStage::FilesPending, "unfinished: the record stays pending");
-        assert!(matches!(roll(&t), RollForward::Completed(_)));
-        assert!(plan_clear(&t.root, Scope::Everything, &later()).nothing_to_do());
+        let i = intent_of(&t);
+        assert_eq!((i.stage, i.abandoned_code.as_deref()), (IntentStage::Abandoned, Some("needs_reconfirm")), "the screen saw the stop: not left pending for the next start");
+        // The next start deletes nothing, however much is left.
+        let before = t.listing();
+        assert!(matches!(roll(&t), RollForward::Abandoned { code, .. } if code == "needs_reconfirm"));
+        assert_eq!(before, t.listing());
+        // A new confirmation (a new plan, a new record) finishes it.
+        let again = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(done(clear_everything_at(&t.root, &again.fingerprint, &later, &NoGates)).complete);
         assert_eq!(intent_of(&t).stage, IntentStage::WebviewPending);
+        assert!(plan_clear(&t.root, Scope::Everything, &later()).nothing_to_do());
     }
 
     #[test]
     fn i2_an_applied_change_that_appeared_since_abandons_the_clear_with_a_typed_reason_and_deletes_nothing() {
         let t = Tmp::new("i2");
         seed(&t);
-        ensure_intent(&t.root, &later()).unwrap();
+        pend(&t, &later()).unwrap();
         t.ledger(&[("Game mode", "applied")]); // a change is on again
         let before = listing_but_intent(&t);
         let ledger_before = t.read("history.json");
@@ -3498,7 +3659,7 @@ mod tests {
         let t = Tmp::new("i2b");
         seed(&t);
         t.put("history.json", "{ not a ledger");
-        ensure_intent(&t.root, &later()).unwrap();
+        pend(&t, &later()).unwrap();
         let before = listing_but_intent(&t);
         assert!(matches!(roll(&t), RollForward::Abandoned { code, .. } if code == "ledger_unreadable"));
         assert_eq!(before, listing_but_intent(&t));
@@ -3542,7 +3703,7 @@ mod tests {
         let t = Tmp::new("i4");
         seed(&t);
         assert!(matches!(roll(&t), RollForward::NothingToDo));
-        ensure_intent(&t.root, &later()).unwrap();
+        pend(&t, &later()).unwrap();
         for scope in [Scope::PlayHistory, Scope::Everything] {
             let plan = plan_clear(&t.root, scope, &later());
             assert!(!rels(&plan).contains(&INTENT_FILE), "{scope:?}");
@@ -3598,7 +3759,7 @@ mod tests {
         // Pending files: refused, record kept.
         let t = Tmp::new("i6b");
         seed(&t);
-        ensure_intent(&t.root, &later()).unwrap();
+        pend(&t, &later()).unwrap();
         assert_eq!(acknowledge_clear_at(&t.root).unwrap_err().code, "clear_files_pending");
         assert!(t.has(INTENT_FILE));
     }
@@ -3608,7 +3769,7 @@ mod tests {
         for remove in [false, true] {
             let t = Tmp::new("i7");
             seed(&t);
-            ensure_intent(&t.root, &ClearFacts { remove_licence: remove, ..later() }).unwrap();
+            pend(&t, &ClearFacts { remove_licence: remove, ..later() }).unwrap();
             // The start-up facts always say `false`; the record decides.
             assert!(matches!(roll_forward_at(&t.root, &later, &NoGates), RollForward::Completed(_)));
             assert_eq!(t.has("license.key"), !remove, "remove_licence={remove}");
@@ -3616,19 +3777,218 @@ mod tests {
     }
 
     #[test]
-    fn i8_a_pending_record_keeps_its_start_time_and_the_roll_forward_refuses_while_a_trial_runs() {
+    fn i8_after_one_start_up_attempt_the_record_is_abandoned_and_a_later_start_deletes_nothing() {
         let t = Tmp::new("i8");
         seed(&t);
-        let first = ClearFacts { now: SystemTime::UNIX_EPOCH + Duration::from_secs(1000), ..later() };
-        ensure_intent(&t.root, &first).unwrap();
-        ensure_intent(&t.root, &later()).unwrap();
-        assert_eq!(intent_of(&t).started_at, 1000);
-        let before = t.listing();
+        pend(&t, &later()).unwrap();
+        let before = listing_but_intent(&t);
         let busy = || ClearFacts { benchmark_trial_running: true, ..later() };
         let outcome = roll_forward_at(&t.root, &busy, &NoGates);
-        assert!(matches!(&outcome, RollForward::Deferred(r) if r.iter().any(|x| x.code == "benchmark_trial_running")), "{outcome:?}");
-        assert_eq!(before, t.listing(), "deferred: nothing was deleted and the record is still pending");
-        assert_eq!(intent_of(&t).stage, IntentStage::FilesPending);
+        assert!(matches!(&outcome, RollForward::Abandoned { code, .. } if code == "needs_reconfirm"), "{outcome:?}");
+        assert_eq!(before, listing_but_intent(&t), "refused at start-up: nothing was deleted");
+        assert_eq!(intent_of(&t).stage, IntentStage::Abandoned, "one attempt only: the record is not left pending");
+        // Every later start, however idle, deletes nothing: only a new confirmation may.
+        assert!(matches!(roll(&t), RollForward::Abandoned { code, .. } if code == "needs_reconfirm"));
+        assert_eq!(before, listing_but_intent(&t));
+    }
+
+    /// A start-up roll-forward that did not finish (a stop part-way) leaves the record abandoned, so data the
+    /// user creates afterwards is never swept up by a later start.
+    #[test]
+    fn w1a_a_roll_forward_that_stops_part_way_abandons_and_the_data_made_since_survives_every_later_start() {
+        let t = Tmp::new("w1a");
+        seed(&t);
+        pend(&t, &later()).unwrap();
+        let gates = FlipAfter { fx: TestEffects::new(), after: 2, calls: Default::default() };
+        let outcome = roll_forward_at(&t.root, &later, &gates);
+        let RollForward::Incomplete(report) = &outcome else { panic!("expected Incomplete, got {outcome:?}") };
+        assert!(!report.stopped.is_empty() && !report.deleted.is_empty());
+        let i = intent_of(&t);
+        assert_eq!((i.stage, i.abandoned_code.as_deref()), (IntentStage::Abandoned, Some("needs_reconfirm")));
+        // The user plays on: new data in files the clear had not reached yet.
+        t.put("support/evidence.jsonl", "made after the clear");
+        t.put("sessions.json", "made after the clear");
+        let before = t.listing();
+        for _ in 0..2 {
+            assert!(matches!(roll(&t), RollForward::Abandoned { code, .. } if code == "needs_reconfirm"));
+            assert_eq!(before, t.listing(), "a later start deletes nothing");
+        }
+        assert_eq!(t.read("sessions.json"), "made after the clear");
+    }
+
+    fn edit_record(t: &Tmp, f: impl FnOnce(&mut ClearIntent)) {
+        let mut i = intent_of(t);
+        f(&mut i);
+        write_intent(&t.root, &i).unwrap();
+    }
+
+    fn skipped_of(o: &RollForward) -> Vec<(String, &'static str)> {
+        match o {
+            RollForward::Incomplete(r) => r.skipped.iter().map(|s| (s.rel.clone(), s.reason)).collect(),
+            other => panic!("expected Incomplete, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn w1b_a_hand_edited_record_can_never_add_a_target() {
+        let t = Tmp::new("w1b");
+        seed(&t);
+        pend(&t, &later()).unwrap();
+        let entry = |row: &str, rel: &str| ConfirmedFile { row_id: row.to_string(), rel: rel.to_string(), size: 1, modified_ms: 1 };
+        edit_record(&t, |i| {
+            i.confirmed = vec![
+                entry("ledger-main", "history.json"),     // the ledger, with a size and time that are not its own
+                entry("sessions", "../evil.json"),        // leaves the root
+                entry("sessions", "a/b/c.json"),          // deeper than any store file
+                entry("no-such-row", "made-up.json"),     // not in the inventory
+            ];
+        });
+        let before = listing_but_intent(&t);
+        let outcome = roll(&t);
+        let skipped = skipped_of(&outcome);
+        assert_eq!(before, listing_but_intent(&t), "nothing was deleted");
+        assert!(t.has("history.json") && t.has("history.json.bak"));
+        assert!(skipped.contains(&("history.json".to_string(), "changed_since_confirmed")), "{skipped:?}");
+        for bad in ["../evil.json", "a/b/c.json", "made-up.json"] {
+            assert!(skipped.contains(&(bad.to_string(), "invalid_record_entry")), "{bad}: {skipped:?}");
+        }
+        assert!(skipped.contains(&("sessions.json".to_string(), "not_in_confirmed_plan")), "{skipped:?}");
+        assert_eq!(intent_of(&t).stage, IntentStage::Abandoned);
+        assert!(!t.base.join("evil.json").exists());
+    }
+
+    #[test]
+    fn w1b_a_file_modified_after_the_clear_started_is_never_deleted() {
+        let t = Tmp::new("w1b2");
+        seed(&t);
+        pend(&t, &later()).unwrap();
+        edit_record(&t, |i| i.started_at = 1000); // every file now looks newer than the clear
+        let before = listing_but_intent(&t);
+        let outcome = roll(&t);
+        let skipped = skipped_of(&outcome);
+        assert!(!skipped.is_empty() && skipped.iter().all(|(_, why)| *why == "newer_than_clear"), "{skipped:?}");
+        assert_eq!(before, listing_but_intent(&t));
+    }
+
+    #[test]
+    fn w1b_a_changed_file_and_a_file_that_was_not_in_the_confirmed_plan_are_kept_and_the_rest_goes() {
+        let t = Tmp::new("w1b3");
+        seed(&t);
+        pend(&t, &later()).unwrap();
+        t.put("sessions.json", "rewritten after the clear began"); // size and time differ from the record
+        t.put("sessions.json.corrupt.999", "new"); // a file the confirmed plan never listed
+        let outcome = roll(&t);
+        let skipped = skipped_of(&outcome);
+        assert!(skipped.contains(&("sessions.json".to_string(), "changed_since_confirmed")), "{skipped:?}");
+        assert!(skipped.contains(&("sessions.json.corrupt.999".to_string(), "not_in_confirmed_plan")), "{skipped:?}");
+        assert!(t.has("sessions.json") && t.has("sessions.json.corrupt.999"));
+        assert!(!t.has("drift.json") && !t.has("history.json"), "what the record confirmed and is unchanged still goes");
+    }
+
+    #[test]
+    fn w1c_a_hand_edited_record_cannot_make_the_licence_go() {
+        let t = Tmp::new("w1c");
+        seed(&t);
+        pend(&t, &later()).unwrap(); // confirmed WITHOUT removing the licence
+        edit_record(&t, |i| i.remove_licence = true);
+        let outcome = roll(&t);
+        let skipped = skipped_of(&outcome);
+        assert!(t.has("license.key"), "the licence was not in the confirmed list");
+        assert!(skipped.contains(&("license.key".to_string(), "not_in_confirmed_plan")), "{skipped:?}");
+        // Confirmed WITH it: it goes (the legitimate case, i7).
+        let t = Tmp::new("w1c2");
+        seed(&t);
+        pend(&t, &ClearFacts { remove_licence: true, ..later() }).unwrap();
+        assert!(matches!(roll(&t), RollForward::Completed(_)));
+        assert!(!t.has("license.key"));
+    }
+
+    #[test]
+    fn b1_a_refused_clear_that_deleted_nothing_leaves_no_record_and_one_that_deleted_a_file_keeps_it() {
+        // Nothing for phase 1 to delete: no ledger family, no Trial store.
+        let t = Tmp::new("b1");
+        seed(&t);
+        for f in ["history.json", "history.json.bak", "history.json.restored", "history.json.bak.corrupt", "experiments.json"] {
+            fs::remove_file(t.root.join(f)).unwrap();
+        }
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(shown.can_proceed(), "{:?}", shown.refusals);
+        assert!(!rels(&shown).iter().any(|r| r.starts_with("history.json") || *r == "experiments.json"));
+        let fx = TestEffects::new();
+        fx.live.set(running(|s| s.capture_active = true)); // seen only inside phase 2's first gate
+        let before = t.listing();
+        let outcome = clear_everything_at(&t.root, &shown.fingerprint, &later, &LiveGates(&fx));
+        assert!(matches!(&outcome, ClearOutcome::Refused(r) if r[0].code == "capture_running"), "{outcome:?}");
+        assert_eq!(before, t.listing(), "nothing was deleted");
+        assert!(!t.has(INTENT_FILE), "refused with nothing deleted: no record for the next start to act on");
+        // Mirror: one file deleted, then stopped: the record stays (abandoned: the screen saw the stop).
+        let t = Tmp::new("b1b");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        let gates = FlipAfter { fx: TestEffects::new(), after: 2, calls: Default::default() };
+        let report = done(clear_everything_at(&t.root, &shown.fingerprint, &later, &gates));
+        assert!(!report.deleted.is_empty() && !report.stopped.is_empty());
+        assert!(t.has(INTENT_FILE));
+        assert_eq!(intent_of(&t).stage, IntentStage::Abandoned);
+    }
+
+    #[test]
+    fn m5_the_ledger_backup_report_flag_is_a_listed_memory_copy_reset_with_the_support_record() {
+        let c = MEMORY_COPIES.iter().find(|c| c.reason == "ledger_backup_report_flag").expect("listed");
+        assert_eq!((c.reset_by, c.everything_only), (Some(Gate::SupportEvidence), true));
+        assert!(c.holder.contains("SAVE_BACKUP_REPORTED"));
+        // Real reset: the production effect calls it (it lives under the support record's gate arm).
+        let core = include_str!("data_clear.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+        let body = core.split("fn forget_support_preview(&self) {").nth(1).unwrap().split("\n    }\n").next().unwrap();
+        assert!(body.contains("crate::history::forget_backup_report();"), "{body}");
+        assert!(include_str!("history.rs").contains("static SAVE_BACKUP_REPORTED"), "the flag this row names still exists");
+        // And no other once-per-run flag of that kind is left unlisted in history.rs.
+        assert_eq!(include_str!("history.rs").matches("static SAVE_BACKUP_REPORTED").count(), 1);
+    }
+
+    #[test]
+    fn t1_recorded_intent_needs_the_pending_record_it_was_made_from_and_is_used_once() {
+        let dummy = |t: &Tmp| IntentToken {
+            intent: ClearIntent {
+                scope: "all".to_string(),
+                remove_licence: false,
+                started_at: u64::MAX,
+                stage: IntentStage::FilesPending,
+                abandoned_code: None,
+                abandoned_detail: None,
+                confirmed: plan_clear(&t.root, Scope::Everything, &later())
+                    .delete
+                    .iter()
+                    .map(|d| ConfirmedFile { row_id: d.row_id.to_string(), rel: d.rel.clone(), size: d.size, modified_ms: d.modified_ms as u64 })
+                    .collect(),
+            },
+        };
+        // No record on disk: refused, nothing deleted.
+        let t = Tmp::new("t1");
+        seed(&t);
+        let before = t.listing();
+        let outcome = clear_everything_at(&t.root, Expected::RecordedIntent(dummy(&t)), &later, &NoGates);
+        assert!(matches!(&outcome, ClearOutcome::Refused(r) if r[0].code == "no_clear_in_progress"), "{outcome:?}");
+        assert_eq!(before, t.listing());
+        // A record that is not the one the token was made from: refused.
+        pend(&t, &later()).unwrap();
+        edit_record(&t, |i| i.remove_licence = true);
+        let before = t.listing();
+        let outcome = clear_everything_at(&t.root, Expected::RecordedIntent(dummy(&t)), &later, &NoGates);
+        assert!(matches!(&outcome, ClearOutcome::Refused(r) if r[0].code == "no_clear_in_progress"), "{outcome:?}");
+        assert_eq!(before, t.listing());
+        // The matching record: it works, once. A second token made from the same record is refused.
+        let token = IntentToken { intent: intent_of(&t) };
+        let again = IntentToken { intent: intent_of(&t) };
+        assert!(done(clear_everything_at(&t.root, Expected::RecordedIntent(token), &later, &NoGates)).complete);
+        let after = t.listing();
+        let outcome = clear_everything_at(&t.root, Expected::RecordedIntent(again), &later, &NoGates);
+        assert!(matches!(&outcome, ClearOutcome::Refused(r) if r[0].code == "no_clear_in_progress"), "{outcome:?}");
+        assert_eq!(after, t.listing());
+        // Only the roll-forward builds one.
+        let core = include_str!("data_clear.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+        assert_eq!(core.matches("Expected::RecordedIntent(").count(), 2, "one construction (roll_forward_at), one match (clear_everything_at)");
+        assert_eq!(core.matches("IntentToken {").count(), 2, "the struct and its one literal");
     }
 
     #[test]

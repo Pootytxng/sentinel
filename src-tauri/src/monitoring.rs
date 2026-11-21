@@ -1578,8 +1578,8 @@ impl LiveSession {
             events.retain(|e| u64::from(e.at_secs) <= duration_secs);
         }
         if acc.worth_saving() {
-            // Unsaved work for a clear to refuse on; released on every path out of this block, a panic included.
-            let _pending = crate::sessions::hold_pending_save();
+            // Unsaved work for a clear to refuse on; released right after the save returns, and on every path out of this block, a panic included.
+            let pending = crate::sessions::hold_pending_save();
             let mut summary = acc.finalize_ended(&ended);
             summary.ended = Some(reason);
             summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
@@ -1608,7 +1608,9 @@ impl LiveSession {
             // regression against the game's last steady session). Otherwise the debrief waits
             // in the app, silently. A short blip is never saved, so it never toasts.
             let ended = summary.clone();
-            if let Ok(Some(saved)) = crate::sessions::save_session(summary) {
+            let saved = crate::sessions::save_session(summary);
+            drop(pending); // settled: the toast below is not unsaved work
+            if let Ok(Some(saved)) = saved {
                 // M6-unread: a session whose figures are untrusted (more than a fifth of it unmeasured,
                 // `mostly_unread`) settles nothing, so it never interrupts the player with a verdict
                 // toast; its debrief waits in the app and says why.

@@ -1438,6 +1438,12 @@ fn save_history(root: &MutationRoot, h: &[AppliedChange]) -> Result<(), String> 
 /// stale backup (a later save's refresh failing) matters more than a backup that was never created.
 static SAVE_BACKUP_REPORTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// "A backup refresh failure was already recorded this run" belongs to the support record, so a clear
+/// that deletes that record forgets it (D7: `data_clear` calls this under the support record's lock).
+pub(crate) fn forget_backup_report() {
+    SAVE_BACKUP_REPORTED.store(false, std::sync::atomic::Ordering::Release);
+}
+
 fn report_backup_not_refreshed(why: &str) {
     if claim_once(&SAVE_BACKUP_REPORTED) {
         crate::support_evidence::record(
