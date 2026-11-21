@@ -65,12 +65,49 @@ describe("postureLine (real headline + priorities-driven sentence)", () => {
   it("ready with limiters → says what is listed below as worth a look, never 'worth fixing' (view-1121b B3)", () => {
     const p = postureLine(readiness([check("ready", "SSD")]), priorities(3), 1);
     expect(p.tone).toBe("ready");
-    expect(p.sentence).toBe("All readiness checks pass. 3 things are listed below as worth a look.");
+    expect(p.sentence).toBe(
+      "Every check Compy could read came back right. 3 things are listed below as worth a look.",
+    );
     expect(postureLine(readiness([check("ready", "SSD")]), priorities(1), 0).sentence).toBe(
-      "All readiness checks pass. 1 thing is listed below as worth a look.",
+      "Every check Compy could read came back right. 1 thing is listed below as worth a look.",
     );
     expect(p.sentence).not.toMatch(/fix/i);
     expect(p.reassurance).toMatch(/1 safe change active/);
+  });
+
+  // review r1 B1: dialed-in also holds unread, advisory and dismissed checks, so the dek may never
+  // say "pass" for them.
+  it("an unread check: the dek never says 'pass', and says how many couldn't be read", () => {
+    const r = readiness([check("ready", "SSD"), check("unknown", "GPU driver")]);
+    const p = postureLine(r, priorities(1), 0);
+    expect(p.tone).toBe("ready");
+    expect(p.sentence).toBe(
+      "Every check Compy could read came back right. 1 thing is listed below as worth a look. 1 check couldn't be read.",
+    );
+    expect(p.sentence).not.toMatch(/pass/i);
+    // Zero limiters + unread: not "measured clean" either.
+    const z = postureLine(readiness([check("unknown", "A"), check("unknown", "B")]), priorities(0), 0);
+    expect(z.sentence).toBe("Every check Compy could read came back right. 2 checks couldn't be read.");
+    expect(z.sentence).not.toMatch(/measured clean/i);
+  });
+
+  it("an advisory check (not graded): the dek never says 'pass'", () => {
+    const p = postureLine(readiness([check("ready", "SSD"), check("advisory", "BIOS")]), priorities(2), 0);
+    expect(p.sentence).toBe(
+      "Every check Compy could read came back right. 2 things are listed below as worth a look.",
+    );
+    expect(p.sentence).not.toMatch(/pass/i);
+  });
+
+  it("a dismissed attention check: never 'came back right', and it is named as not counted", () => {
+    const r = readiness([check("ready", "SSD"), check("attention", "Refresh")], ["Refresh"]);
+    const p = postureLine(r, priorities(1), 0);
+    expect(p.tone).toBe("ready");
+    expect(p.sentence).toBe(
+      "1 thing is listed below as worth a look. 1 check you set aside isn't counted.",
+    );
+    expect(p.sentence).not.toMatch(/pass|came back right/i);
+    expect(postureLine(r, priorities(0), 0).sentence).toBe("1 check you set aside isn't counted.");
   });
 
   it("ready with zero limiters → the measured-clean win sentence", () => {

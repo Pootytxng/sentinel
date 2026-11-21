@@ -834,7 +834,9 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
     const c = mount().container;
     expect(c.querySelector(".hc-headline")!.textContent).toBe("You're ready to play");
     const dek = c.querySelector(".hc-verdict-dek")!.textContent;
-    expect(dek).toBe("All readiness checks pass. 1 thing is listed below as worth a look.");
+    expect(dek).toBe(
+      "Every check Compy could read came back right. 1 thing is listed below as worth a look.",
+    );
     // The tile it points at lists that one item under the same words.
     const row = c.querySelector(".hc-limiter")!;
     expect(row.querySelector(".hc-limiter-label")!.textContent).toBe("worth a look");

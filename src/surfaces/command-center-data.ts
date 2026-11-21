@@ -56,12 +56,32 @@ export function postureLine(
     return { headline: p.headline, sentence: p.sub, reassurance: "", tone: "scanning" };
   }
 
-  // dialed-in: all readiness checks pass. The "worth fixing" count is the advisory limiter count.
+  // dialed-in = no non-dismissed attention check. That is NOT "everything passed": checks Compy
+  // couldn't read (`unknown`) and attention checks the owner dismissed also land here, so the
+  // dek says only what is true: the checks Compy COULD read came back right, and it names how many
+  // couldn't be read / were set aside. The "worth a look" count is the priorities limiter count.
   const limiterCount = priorities?.limiters.length ?? 0;
-  const sentence =
-    limiterCount > 0
-      ? t("home.posture.readyWorthFixing", { count: limiterCount })
-      : t("home.posture.readyMeasuredClean");
+  const unread = Math.max(0, readiness?.unknown_count ?? 0);
+  const dismissedIds = new Set(readiness?.dismissed_ids ?? []);
+  const dismissedAttention = (readiness?.checks ?? []).filter(
+    (c) => c.status === "attention" && dismissedIds.has(c.id),
+  ).length;
+  const parts: string[] = [];
+  if (dismissedAttention > 0) {
+    // One of the read checks came back wrong and was set aside: never "came back right".
+    if (limiterCount > 0) parts.push(t("home.posture.listedWorthLook", { count: limiterCount }));
+  } else if (limiterCount > 0) {
+    parts.push(t("home.posture.readyWorthFixing", { count: limiterCount }));
+  } else {
+    parts.push(
+      unread > 0 ? t("home.posture.readyAllRead") : t("home.posture.readyMeasuredClean"),
+    );
+  }
+  if (unread > 0) parts.push(t("home.posture.unreadCount", { count: unread }));
+  if (dismissedAttention > 0) {
+    parts.push(t("home.posture.dismissedCount", { count: dismissedAttention }));
+  }
+  const sentence = parts.join(" ");
   // Unreadable is a word, not a silence: the reassurance beside it would otherwise read as "Compy
   // changed nothing". Pending (the model not read yet) says nothing — a stand-in is a claim.
   const changeNote =
