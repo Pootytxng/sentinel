@@ -6,6 +6,7 @@
 import type { TFunction } from "i18next";
 import type { HardwareInfo } from "../../App";
 import { fmtGB, fmtGHz } from "../hardware-format";
+import { usableRam } from "../../data/ram-format";
 
 export type Vec3 = [number, number, number];
 export type RigPartKind = "board" | "cpu" | "ram" | "gpu" | "storage" | "cooler" | "psu";
@@ -159,9 +160,9 @@ export function buildRigParts(hw: HardwareInfo, t?: TFunction): RigPart[] {
       assembled: [0.95, 1.05, -0.58],
       exploded: [2.6, 2.2, 0.3],
       rotation: [0, -0.5, 0.05],
-      tagline: fmtGB(hw.ram_total_bytes),
+      tagline: usableRam(t, hw.ram_total_bytes),
       specs: [
-        { label: tp(t, "totalLabel", "Total"), value: fmtGB(hw.ram_total_bytes) },
+        { label: tp(t, "totalLabel", "Total"), value: usableRam(t, hw.ram_total_bytes) },
         { label: tp(t, "inUseLabel", "In use"), value: fmtGB(hw.ram_used_bytes) },
         { label: tp(t, "noteLabel", "Note"), value: tp(t, "perSlotNoteValue", "Per-slot data not reported") },
       ],

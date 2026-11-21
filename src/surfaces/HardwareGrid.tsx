@@ -18,6 +18,7 @@ import type {
   MachineModel,
 } from "../types";
 import { fmtGB, fmtGHz } from "./hardware-format";
+import { installedRamGB } from "../data/ram-format";
 import { rigTierLine } from "../data/rig-tier";
 import { primaryGpu } from "../data/gpu-sensor";
 import { Term } from "../design/Term";
@@ -308,7 +309,9 @@ export function HardwareGrid({
   const driver = identityState(model, (id) => id.gpu_driver, (v) =>
     fmtDriverAge(v, primary?.driver_age_days, t),
   );
-  const ram = identityState(model, (id) => id.ram_gb, (gb) => t("gaming.hardwareGrid.ramGbValue", { gb }));
+  // Installed memory is the modules' sum (2 x 16 GB -> 32 GB); the model's own integer is Windows' usable total (31).
+  const installedGb = installedRamGB(hw.memory_modules);
+  const ram = identityState(model, (id) => id.ram_gb, (gb) => t("gaming.hardwareGrid.ramGbValue", { gb: installedGb ?? gb }));
   const display = identityState(model, (id) => id.display, (mode) => fmtDisplayMode(mode, hw, t));
   const windows = identityState(model, (id) => id.windows, String);
   const disagreements = model?.identity.disagreements ?? [];

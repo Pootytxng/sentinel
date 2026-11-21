@@ -8,6 +8,7 @@ import { readHologramV2 } from "../design/theme";
 import { Term } from "../design/Term";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { usableRam, usedOfUsableRam } from "../data/ram-format";
 import { driftMore, driftShort, HOME_DRIFT_LINES } from "./drift-named";
 import type { AppliedChange, GameReadiness, Priorities, SessionSummary } from "../types";
 import type { HardwareInfo } from "../App";
@@ -65,7 +66,6 @@ type Props = {
   onOpenLabStation?: (station: string) => void;
 };
 
-const fmtGB1 = (b: number) => (b / 1024 ** 3).toFixed(1);
 
 // Grade → v2 status tone (the token palette has ok/warn/info; "bad" leans on warn — the tag copy
 // carries the specifics). Neutral = no LED, no colored value (ungraded, e.g. NVIDIA temp).
@@ -328,8 +328,8 @@ export function HomeV2({
               name={t("home.homeV2.tag.ram")}
               value={
                 mem
-                  ? `${fmtGB1(mem.used)} / ${fmtGB1(mem.total)} GB`
-                  : `${fmtGB1(hw.ram_total_bytes)} GB`
+                  ? usedOfUsableRam(t, mem.used, mem.total)
+                  : usableRam(t, hw.ram_total_bytes)
               }
               valueTone={mem && mem.level !== "ok" ? "warn" : mem ? "ok" : null}
             />

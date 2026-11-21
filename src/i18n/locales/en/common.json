@@ -175,6 +175,10 @@
     "expected": "Expected",
     "unknown": "Unknown"
   },
+  "ram": {
+    "usable": "{{amount}} GB usable",
+    "usedOfUsable": "{{used}} / {{total}} GB usable"
+  },
   "confidenceNote": {
     "effectNotMeasured": "Effect on FPS not measured"
   },

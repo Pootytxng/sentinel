@@ -20,7 +20,7 @@ import { ShellV2 } from "./design/ShellV2";
 import { GamesRoom } from "./surfaces/glass/GamesRoom";
 import { ProblemsRoom } from "./surfaces/glass/ProblemsRoom";
 import { HomeGlass } from "./surfaces/glass/HomeGlass";
-import { fmtGB } from "./surfaces/hardware-format";
+import { usableRam } from "./data/ram-format";
 import { railFor, type HomeRailId } from "./design/homeRail";
 import { HomeRoom } from "./surfaces/HomeRoom";
 import { markInterviewArrival, INTERVIEW_ARRIVAL_EVENT } from "./surfaces/home-arrival";
@@ -1395,7 +1395,7 @@ function App() {
         // The primary GPU (largest VRAM), the one Home, the grid and Readiness name (review 2026-11-03).
         { label: t("app.rig.gpu"), value: primaryGpu(hw.gpus)?.name ?? t("app.rig.noGpu") },
         { label: t("app.rig.cpu"), value: hw.cpu_arch?.family_label || hw.cpu_brand },
-        { label: t("app.rig.ram"), value: fmtGB(hw.ram_total_bytes) },
+        { label: t("app.rig.ram"), value: usableRam(t, hw.ram_total_bytes) },
         { label: t("app.rig.os"), value: hw.windows_version?.product_name || `${hw.os_name} ${hw.os_version}` },
       ]
     : [];

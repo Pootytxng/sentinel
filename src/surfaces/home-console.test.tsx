@@ -845,6 +845,14 @@ describe("HomeConsole — the #1-limiter readout (measured fact + its fix route)
     expect(c.textContent).not.toMatch(/\d+ (things? )?worth fixing|Nothing is flagged|measured clean/i);
   });
 
+  // view-1121b: one PC read 33.7 GB on one screen and 31.4 GB on another. The memory total on Home is
+  // Windows' usable total in Windows' GB (1024^3), and it says "usable" (src/data/ram-format.ts).
+  it("the memory total says it is the usable amount, in Windows' GB", () => {
+    const c = mount().container; // fixture: 32 GiB total, no live reading yet
+    expect(c.textContent).toContain("32.0 GB usable");
+    expect(c.textContent).not.toMatch(/34\.4 GB/); // 32 GiB written with a decimal divisor
+  });
+
   // BENTO (2026-08-12): the limiter's TILE must always render — a half-width tile that sometimes
   // doesn't render leaves a hole under the two-row hero (`bento: no conditional partial tile`, and
   // the self-review FAIL that guard came from). What must never appear is a fabricated verdict: the

@@ -4,6 +4,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
+import { usableRam, usedOfUsableRam } from "../data/ram-format";
 import type { TFunction } from "i18next";
 import type {
   AppliedChange,
@@ -190,7 +191,6 @@ const HEALTH_CAMERA_TARGET_Y = -0.48;
 const DETECTED_SHORTCUTS = ["crash", "slow", "unsure"] as const;
 const CLEAR_SHORTCUTS = ["moreFps", "watchFps", "scores"] as const;
 
-const fmtGB1 = (b: number) => (b / 1024 ** 3).toFixed(1);
 
 // Grade → status tone for the callout LEDs (ok/warn only; neutral = no LED — ungraded).
 const gradeTone = (g: Grade): "ok" | "warn" | null =>
@@ -1143,8 +1143,8 @@ export function HomeConsole({
                       detail={ramSpeedNote(hw.memory_modules, t)}
                       value={
                         mem
-                          ? `${fmtGB1(mem.used)} / ${fmtGB1(mem.total)} GB`
-                          : `${fmtGB1(hw.ram_total_bytes)} GB`
+                          ? usedOfUsableRam(t, mem.used, mem.total)
+                          : usableRam(t, hw.ram_total_bytes)
                       }
                       valueTone={mem && mem.level !== "ok" ? "warn" : mem ? "ok" : null}
                     />

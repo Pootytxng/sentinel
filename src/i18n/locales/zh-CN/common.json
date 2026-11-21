@@ -169,6 +169,10 @@
     "expected": "预期",
     "unknown": "未知"
   },
+  "ram": {
+    "usable": "可用 {{amount}} GB",
+    "usedOfUsable": "已用 {{used}} / 可用 {{total}} GB"
+  },
   "confidenceNote": {
     "effectNotMeasured": "对 FPS 的影响未实测"
   },

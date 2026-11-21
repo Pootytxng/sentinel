@@ -1,8 +1,11 @@
 // Shared hardware-value formatters. Used by the App monitoring tabs AND the shared HardwareGrid
 // (which renders on the Home surfaces). Kept here, dependency-free, so HardwareGrid can reuse
 // them without a runtime import cycle back into App.tsx.
+import { ramGB } from "../data/ram-format";
 
-export const fmtGB = (bytes: number) => `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+// A size in Windows' "GB" (1024^3). Memory TOTALS go through src/data/ram-format.ts (usableRam), which
+// says "usable"; this one is for sizes that are not the RAM total (in use, swap, disks).
+export const fmtGB = (bytes: number) => `${ramGB(bytes)} GB`;
 export const fmtGHz = (mhz: number) => (mhz > 0 ? `${(mhz / 1000).toFixed(2)} GHz` : "—");
 
 // Compact a GPU name to its model for a glance card — strip vendor + marketing words, keep the model
