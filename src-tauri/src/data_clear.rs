@@ -32,7 +32,7 @@
 #![allow(dead_code)] // `Scope::Everything` and the report helpers are first used by D4-3 and D4-4.
 
 use crate::data_inventory::{self, Base, Category, InventoryRow, StorageKind};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -75,6 +75,10 @@ const EXPERIMENTS_ID: &str = "experiments";
 const LICENCE_ID: &str = "license";
 /// The Trial store. Read (never moved) by `read_trial_store`.
 const EXPERIMENTS_FILE: &str = "experiments.json";
+/// The "clear everything in progress" record (D7, design 3.3 step 1). Never deleted by a plan: only
+/// `acknowledge_clear_at` removes it, once nothing is left to roll forward. Its inventory row is `clear-intent`.
+const INTENT_FILE: &str = "clear-intent.json";
+const INTENT_ID: &str = "clear-intent";
 /// Files an elevated helper leaves behind. They are not play history: a leftover batch receipt can be
 /// the only evidence of which items of an interrupted batch finished. Kept by `PlayHistory`.
 const ELEVATED_LEFTOVER_IDS: &[&str] = &[
@@ -518,6 +522,11 @@ impl Run<'_> {
     fn decide(&self, hit: &Hit, rel: &str, mtime: Option<SystemTime>) -> Verdict {
         let everything = self.scope == Scope::Everything;
         let (row, class) = (hit.row, hit.class);
+        if row.id == INTENT_ID {
+            // The record of a clear in progress is the roll-forward's input: a plan never deletes it, in
+            // either scope, however old it is.
+            return Verdict::Keep("clear_in_progress", "Kept: the record of a clear that is under way or waiting for the screen to finish.");
+        }
         if is_ledger(row) {
             if !everything {
                 return Verdict::Keep("change_history", "The change history stays: every change Compy made can still be undone.");
@@ -685,6 +694,14 @@ pub(crate) fn plan_clear(root: &Path, scope: Scope, facts: &ClearFacts) -> Clear
     }
     let ledger = check_ledger(root);
     if scope == Scope::Everything {
+        // A record of an earlier clear that cannot be read is never overwritten or guessed at.
+        if let IntentRead::Unreadable(_) = read_intent(root) {
+            plan.refuse(
+                "clear_intent_unreadable",
+                "Compy can't read the record of an earlier \"clear everything\", so it can't tell whether one was left unfinished. The file was left exactly as it is.",
+                None,
+            );
+        }
         match &ledger {
             LedgerCheck::Clean => {}
             LedgerCheck::Applied(titles) => {
@@ -939,6 +956,7 @@ const UNLOCKED_STEMS: &[(&str, &str)] = &[
     ("last-seen-ruleset-version", "signed-rules cache, switched off in every build"),
     ("runtime/fps", "the capture helper's hand-off; the clear refuses while a capture runs or a session is unsaved"),
     ("gaming-session", "never deleted by either choice: the Gaming Mode contract is undo data (refused or kept)"),
+    ("clear-intent", "written only by the clear itself, under the Trial gate and the ledger lock or at start-up before any writer runs; a plan keeps it"),
 ];
 
 fn gate_of(d: &PlannedDelete) -> Gate {
@@ -1349,6 +1367,18 @@ fn ledger_phase(
         return Err(ClearOutcome::Refused(vec![ledger_lock_required()]));
     }
     let now = replan(root, plan, facts)?;
+    // The intent record goes down BEFORE the first delete, and only after the re-plan said yes (a refused
+    // clear must leave no record behind for the next start to roll forward). If it cannot be written,
+    // nothing is deleted. Nothing listed means nothing to roll forward (and a missing root is never created).
+    if now.delete.is_empty() {
+        // no record
+    } else if let Err(why) = ensure_intent(root, facts) {
+        return Err(ClearOutcome::Refused(vec![Refusal {
+            code: "clear_intent_unwritable",
+            detail: format!("Compy could not write the record that lets an interrupted clear be finished ({why}), so nothing was deleted."),
+            files: Vec::new(),
+        }]));
+    }
     let mut report = new_report(&now);
     let mut ledger_failed = false;
     let (mine, rest): (Vec<PlannedDelete>, Vec<PlannedDelete>) =
@@ -1375,6 +1405,13 @@ fn ledger_phase(
 pub(crate) fn finish_everything(root: &Path, phase: LedgerPhase, gates: &dyn ClearGates) -> ClearOutcome {
     let LedgerPhase { mut report, rest, mut ledger_failed } = phase;
     let stopped = delete_rows(root, &rest, gates, &[], &mut report, &mut ledger_failed);
+    // Every file is gone: the backend's part is finished, only the screen's browser storage is left. If the
+    // record cannot be advanced the next start's roll-forward finds nothing to delete and advances it then.
+    if stopped.is_empty() && report.failed.is_empty() && report.not_attempted.is_empty() {
+        if let Err(why) = mark_files_done(root) {
+            eprintln!("[data_clear] the clear finished but its record could not be advanced ({why}); the next start will advance it");
+        }
+    }
     settle_run(report, stopped)
 }
 
@@ -1384,6 +1421,18 @@ pub(crate) fn finish_everything(root: &Path, phase: LedgerPhase, gates: &dyn Cle
 pub(crate) fn clear_everything_at(
     root: &Path,
     expected_fingerprint: &str,
+    facts: &dyn Fn() -> ClearFacts,
+    gates: &dyn ClearGates,
+) -> ClearOutcome {
+    clear_everything_with(root, Some(expected_fingerprint), facts, gates)
+}
+
+/// `clear_everything_at`, where `expected_fingerprint: None` means "no screen confirmed this list": the
+/// start-up roll-forward, whose authority is the intent record the confirmed clear left on disk. Everything
+/// else (locks, the re-plan under them, refusals, the order of deletion) is the same code.
+fn clear_everything_with(
+    root: &Path,
+    expected_fingerprint: Option<&str>,
     facts: &dyn Fn() -> ClearFacts,
     gates: &dyn ClearGates,
 ) -> ClearOutcome {
@@ -1402,7 +1451,7 @@ pub(crate) fn clear_everything_at(
         if !plan.refusals.is_empty() {
             return ClearOutcome::Refused(plan.refusals);
         }
-        if plan.fingerprint != expected_fingerprint {
+        if expected_fingerprint.is_some_and(|expected| plan.fingerprint != expected) {
             return ClearOutcome::PlanChanged;
         }
         match execute_everything_ledger_phase(root, &plan, &facts, &experiment_gate, &ledger) {
@@ -1419,6 +1468,215 @@ fn store_lock_unavailable(what: &str, why: &str) -> Refusal {
         code: "store_lock_unavailable",
         detail: format!("Compy could not take the lock on {what} ({why}), so nothing was deleted. Restart Compy and try again."),
         files: Vec::new(),
+    }
+}
+
+// ---- the clear-intent record and the start-up roll-forward (D7, design 3.3 step 1 and 3.5) ---------
+//
+// "Clear everything" is many deletes with a crash possible between any two. The record below is written
+// before the first delete (once the re-plan under the locks said yes) and is the ONLY authority the
+// start-up roll-forward has to finish a clear nobody is watching. Pure functions over a root path: the
+// one function that touches the running app is `finish_interrupted_clear`, at the end of this file.
+
+/// Where a recorded clear stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum IntentStage {
+    /// Files may be left. The next start finishes them.
+    FilesPending,
+    /// Every file is gone; only the screen's browser storage is left (the screen's job, not built here).
+    WebviewPending,
+    /// The roll-forward stopped on purpose (`abandoned_code` says why). Nothing more is deleted for it.
+    Abandoned,
+}
+
+/// The stored record (`clear-intent.json`). The design's `webview_pending` flag is `stage` here: one field
+/// that cannot say two things at once.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct ClearIntent {
+    /// Always `"all"` today ("clear everything"); a record that says anything else is not understood.
+    pub(crate) scope: String,
+    pub(crate) remove_licence: bool,
+    /// Seconds since the Unix epoch.
+    pub(crate) started_at: u64,
+    pub(crate) stage: IntentStage,
+    #[serde(default)]
+    pub(crate) abandoned_code: Option<String>,
+    #[serde(default)]
+    pub(crate) abandoned_detail: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum IntentRead {
+    Absent,
+    Valid(ClearIntent),
+    /// Present but not a plain file, not readable, or not a record this build understands. Never deleted,
+    /// overwritten or guessed at.
+    Unreadable(String),
+}
+
+pub(crate) fn read_intent(root: &Path) -> IntentRead {
+    let path = root.join(INTENT_FILE);
+    match fs::symlink_metadata(&path) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return IntentRead::Absent,
+        Err(e) => return IntentRead::Unreadable(e.to_string()),
+        Ok(m) if is_link(&m) || !m.is_file() => return IntentRead::Unreadable("not a plain file".to_string()),
+        Ok(_) => {}
+    }
+    let text = match fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) => return IntentRead::Unreadable(e.to_string()),
+    };
+    match serde_json::from_str::<ClearIntent>(&text) {
+        Ok(i) if i.scope == "all" => IntentRead::Valid(i),
+        Ok(i) => IntentRead::Unreadable(format!("unknown scope `{}`", i.scope)),
+        Err(e) => IntentRead::Unreadable(e.to_string()),
+    }
+}
+
+fn write_intent(root: &Path, intent: &ClearIntent) -> Result<(), String> {
+    let bytes = serde_json::to_vec_pretty(intent).map_err(|e| e.to_string())?;
+    crate::atomic_write::write_atomic(&root.join(INTENT_FILE), &bytes).map_err(|e| e.to_string())
+}
+
+/// Writes (or refreshes) the record for a clear about to start. An unreadable record is an error: it is
+/// never overwritten. A pending record keeps its original start time.
+fn ensure_intent(root: &Path, facts: &ClearFacts) -> Result<(), String> {
+    let started_at = match read_intent(root) {
+        IntentRead::Unreadable(why) => return Err(format!("the record of an earlier clear can't be read: {why}")),
+        IntentRead::Valid(i) if i.stage == IntentStage::FilesPending => i.started_at,
+        _ => facts.now.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
+    };
+    write_intent(
+        root,
+        &ClearIntent {
+            scope: "all".to_string(),
+            remove_licence: facts.remove_licence,
+            started_at,
+            stage: IntentStage::FilesPending,
+            abandoned_code: None,
+            abandoned_detail: None,
+        },
+    )
+}
+
+/// Every file is gone: advance a pending record to "only the screen's storage is left". Anything else on
+/// disk (no record, a record at another stage, an unreadable one) is left exactly as it is.
+fn mark_files_done(root: &Path) -> Result<(), String> {
+    match read_intent(root) {
+        IntentRead::Valid(mut i) if i.stage == IntentStage::FilesPending => {
+            i.stage = IntentStage::WebviewPending;
+            write_intent(root, &i)
+        }
+        _ => Ok(()),
+    }
+}
+
+/// The roll-forward stopped on purpose: the record stays, as `Abandoned`, so the next start does not try
+/// again and the screen can say why.
+fn set_abandoned(root: &Path, code: &str, detail: &str) -> Result<(), String> {
+    match read_intent(root) {
+        IntentRead::Valid(mut i) => {
+            i.stage = IntentStage::Abandoned;
+            i.abandoned_code = Some(code.to_string());
+            i.abandoned_detail = Some(detail.to_string());
+            write_intent(root, &i)
+        }
+        _ => Ok(()),
+    }
+}
+
+/// The screen is done (its browser storage is cleared, or it has shown why the clear stopped): removes the
+/// record. A record whose files are still pending, or one that can't be read, is refused and kept.
+pub(crate) fn acknowledge_clear_at(root: &Path) -> Result<(), Refusal> {
+    match read_intent(root) {
+        IntentRead::Absent => Ok(()),
+        IntentRead::Unreadable(why) => Err(Refusal {
+            code: "clear_intent_unreadable",
+            detail: format!("Compy can't read the record of a clear ({why}), so it left it as it is."),
+            files: Vec::new(),
+        }),
+        IntentRead::Valid(i) if i.stage == IntentStage::FilesPending => Err(Refusal {
+            code: "clear_files_pending",
+            detail: "A clear still has files to delete, so its record was kept.".to_string(),
+            files: Vec::new(),
+        }),
+        IntentRead::Valid(_) => delete_one(root, INTENT_FILE).map(|_| ()).map_err(|why| Refusal {
+            code: "clear_intent_not_removed",
+            detail: format!("Compy could not remove the record of a finished clear: {why}"),
+            files: Vec::new(),
+        }),
+    }
+}
+
+/// Refusal codes that mean the ledger no longer matches what the clear was confirmed against (a change is
+/// on again, the ledger can't be read, a damaged copy was set aside). The roll-forward abandons on these
+/// and keeps every `history.json*` file. Other refusals (a Trial, a fresh working file, a lock) may pass
+/// by the next start, so they only defer.
+const LEDGER_ABANDON_CODES: &[&str] = &["changes_applied", "ledger_unreadable", "ledger_set_aside"];
+
+/// What the start-up roll-forward did.
+#[derive(Debug, Serialize)]
+#[serde(tag = "status", content = "detail", rename_all = "snake_case")]
+pub(crate) enum RollForward {
+    /// No record: nothing was interrupted.
+    NothingToDo,
+    /// The record was finished: every file it listed is gone (the record now waits for the screen).
+    Completed(ClearReport),
+    /// Some files are still there (a failure or a stop); the record is kept for the next start.
+    Incomplete(ClearReport),
+    /// The files were already gone; only the screen's browser storage is left. Nothing was deleted.
+    WebviewPending,
+    /// The clear was given up on, with a typed reason, and nothing more was deleted.
+    Abandoned { code: String, detail: String },
+    /// The record can't be read. Kept as it is, reported, and nothing was deleted.
+    Kept { code: &'static str, detail: String },
+    /// A refusal that may pass (or no data root): nothing was deleted, the record is kept.
+    Deferred(Vec<Refusal>),
+}
+
+/// Finishes a "clear everything" that was interrupted, from its record alone. Same code, same locks and
+/// the same re-plan as the confirmed clear (`clear_everything_with`), so the ledger is re-checked under
+/// both locks before the first delete: an applied change that appeared since abandons the ledger part and
+/// keeps every `history.json*` file. `facts` is the app's live state; the licence choice comes from the record.
+pub(crate) fn roll_forward_at(root: &Path, facts: &dyn Fn() -> ClearFacts, gates: &dyn ClearGates) -> RollForward {
+    let intent = match read_intent(root) {
+        IntentRead::Absent => return RollForward::NothingToDo,
+        IntentRead::Unreadable(why) => {
+            return RollForward::Kept {
+                code: "clear_intent_unreadable",
+                detail: format!("Compy can't read the record of an unfinished \"clear everything\" ({why}). It was left exactly as it is and nothing was deleted."),
+            }
+        }
+        IntentRead::Valid(i) => i,
+    };
+    match intent.stage {
+        IntentStage::WebviewPending => return RollForward::WebviewPending,
+        IntentStage::Abandoned => {
+            return RollForward::Abandoned {
+                code: intent.abandoned_code.unwrap_or_default(),
+                detail: intent.abandoned_detail.unwrap_or_default(),
+            }
+        }
+        IntentStage::FilesPending => {}
+    }
+    let remove_licence = intent.remove_licence;
+    let facts_of_record = || ClearFacts { remove_licence, ..facts() };
+    match clear_everything_with(root, None, &facts_of_record, gates) {
+        ClearOutcome::Refused(refusals) => match refusals.iter().find(|r| LEDGER_ABANDON_CODES.contains(&r.code)) {
+            Some(r) => {
+                let (code, detail) = (r.code, r.detail.clone());
+                if let Err(why) = set_abandoned(root, code, &detail) {
+                    eprintln!("[data_clear] the clear was abandoned ({code}) but its record could not be updated ({why})");
+                }
+                RollForward::Abandoned { code: code.to_string(), detail }
+            }
+            None => RollForward::Deferred(refusals),
+        },
+        // Cannot happen with no expected fingerprint; deferred rather than guessed at.
+        ClearOutcome::PlanChanged => RollForward::Deferred(Vec::new()),
+        ClearOutcome::Done(report) if report.complete => RollForward::Completed(report),
+        ClearOutcome::Done(report) => RollForward::Incomplete(report),
     }
 }
 
@@ -1631,6 +1889,19 @@ pub(crate) fn clear_everything(expected_fingerprint: &str, remove_licence: bool)
     match live_root() {
         Ok(root) => clear_everything_at(&root, expected_fingerprint, &|| live_facts(remove_licence), &LiveGates(&ProcessEffects)),
         Err(r) => ClearOutcome::Refused(vec![r]),
+    }
+}
+
+/// The start-up roll-forward on the real data root. NOT YET CALLED from `lib.rs`: the call site, when the
+/// screen slice wires it, is the FIRST thing in `setup`, synchronously, before the `app_start` record is
+/// written, before the experiment reconcile and before the ledger backup thread starts (design 3.5: the
+/// support record is deleted by the clear, and `backup_missing_ledger_at` would re-create `history.json.bak`
+/// from a surviving `history.json`). A sandbox, redirected or conflicted root defers (nothing is touched).
+/// Blocking: it takes store locks, so it must not run on the UI thread after start-up.
+pub(crate) fn finish_interrupted_clear() -> RollForward {
+    match live_root() {
+        Ok(root) => roll_forward_at(&root, &|| live_facts(false), &LiveGates(&ProcessEffects)),
+        Err(r) => RollForward::Deferred(vec![r]),
     }
 }
 
@@ -3128,5 +3399,248 @@ mod tests {
         let gated = body.find("gates.with_gate(gate, d.store, &mut run)").expect("the gate call");
         assert!(check < delete && delete < gated, "one closure: check, then delete; the gate runs that closure");
         assert_eq!(body.matches("delete_one(").count(), 1, "no second delete path that skips the check");
+    }
+
+    // ---- the clear-intent record and the start-up roll-forward (D7 item 5) ---------------------------
+
+    fn intent_of(t: &Tmp) -> ClearIntent {
+        match read_intent(&t.root) {
+            IntentRead::Valid(i) => i,
+            other => panic!("expected a readable record, got {other:?}"),
+        }
+    }
+
+    /// The listing without the record itself (its size changes when it is abandoned or advanced).
+    fn listing_but_intent(t: &Tmp) -> Vec<String> {
+        t.listing().into_iter().filter(|l| !l.starts_with(INTENT_FILE)).collect()
+    }
+
+    fn roll(t: &Tmp) -> RollForward {
+        roll_forward_at(&t.root, &later, &NoGates)
+    }
+
+    #[test]
+    fn i1_a_clear_interrupted_after_n_files_is_finished_by_the_next_start() {
+        let probe = Tmp::new("i1p");
+        seed(&probe);
+        let total = plan_clear(&probe.root, Scope::Everything, &later()).delete.len();
+        assert!(total > 6, "the seed must give the interruption somewhere to land");
+        for n in [0, 1, 2, 3, total - 1, total] {
+            let t = Tmp::new("i1");
+            seed(&t);
+            let plan = plan_clear(&t.root, Scope::Everything, &later());
+            ensure_intent(&t.root, &later()).unwrap(); // what the clear writes before its first delete
+            for d in plan.delete.iter().take(n) {
+                delete_one(&t.root, &d.rel).unwrap(); // ... then the process dies after n files
+            }
+            let outcome = roll(&t);
+            let RollForward::Completed(report) = &outcome else { panic!("n={n}: expected Completed, got {outcome:?}") };
+            assert!(report.complete, "n={n}");
+            assert_eq!(report.deleted.len() + report.already_gone.len(), total - n, "n={n}: only what was left");
+            assert!(plan_clear(&t.root, Scope::Everything, &later()).nothing_to_do(), "n={n}: nothing is left to clear");
+            assert!(t.root.is_dir(), "n={n}: the root folder is never removed");
+            assert_eq!(intent_of(&t).stage, IntentStage::WebviewPending, "n={n}: only the screen's part is left");
+            // A second start has nothing to do and deletes nothing.
+            let after = t.listing();
+            assert!(matches!(roll(&t), RollForward::WebviewPending));
+            assert_eq!(after, t.listing(), "n={n}");
+        }
+    }
+
+    #[test]
+    fn i1b_after_the_backup_but_before_history_json_the_next_start_deletes_history_json_and_nothing_recreates_it() {
+        let t = Tmp::new("i1b");
+        seed(&t);
+        ensure_intent(&t.root, &later()).unwrap();
+        delete_one(&t.root, "history.json.bak").unwrap();
+        assert!(t.has("history.json"));
+        assert!(matches!(roll(&t), RollForward::Completed(_)));
+        assert!(!t.has("history.json") && !t.has("history.json.bak"));
+    }
+
+    #[test]
+    fn i1c_a_clear_that_stopped_part_way_is_finished_by_the_next_start() {
+        let t = Tmp::new("i1c");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        let gates = FlipAfter { fx: TestEffects::new(), after: 2, calls: Default::default() };
+        let report = done(clear_everything_at(&t.root, &shown.fingerprint, &later, &gates));
+        assert!(!report.complete && !report.stopped.is_empty());
+        assert_eq!(intent_of(&t).stage, IntentStage::FilesPending, "unfinished: the record stays pending");
+        assert!(matches!(roll(&t), RollForward::Completed(_)));
+        assert!(plan_clear(&t.root, Scope::Everything, &later()).nothing_to_do());
+        assert_eq!(intent_of(&t).stage, IntentStage::WebviewPending);
+    }
+
+    #[test]
+    fn i2_an_applied_change_that_appeared_since_abandons_the_clear_with_a_typed_reason_and_deletes_nothing() {
+        let t = Tmp::new("i2");
+        seed(&t);
+        ensure_intent(&t.root, &later()).unwrap();
+        t.ledger(&[("Game mode", "applied")]); // a change is on again
+        let before = listing_but_intent(&t);
+        let ledger_before = t.read("history.json");
+        let outcome = roll(&t);
+        let RollForward::Abandoned { code, detail } = &outcome else { panic!("expected Abandoned, got {outcome:?}") };
+        assert_eq!(code, "changes_applied");
+        assert!(!detail.is_empty());
+        assert_eq!(before, listing_but_intent(&t), "nothing more was deleted: not even a file outside the ledger family");
+        assert_eq!(ledger_before, t.read("history.json"));
+        let i = intent_of(&t);
+        assert_eq!((i.stage, i.abandoned_code.as_deref()), (IntentStage::Abandoned, Some("changes_applied")));
+        // The next start reports the same and still deletes nothing.
+        assert!(matches!(roll(&t), RollForward::Abandoned { code, .. } if code == "changes_applied"));
+        assert_eq!(before, listing_but_intent(&t));
+        // The screen acknowledges it: the record goes, the data stays.
+        acknowledge_clear_at(&t.root).unwrap();
+        assert!(!t.has(INTENT_FILE) && t.has("history.json"));
+    }
+
+    #[test]
+    fn i2b_an_unreadable_ledger_also_abandons_and_keeps_every_history_file() {
+        let t = Tmp::new("i2b");
+        seed(&t);
+        t.put("history.json", "{ not a ledger");
+        ensure_intent(&t.root, &later()).unwrap();
+        let before = listing_but_intent(&t);
+        assert!(matches!(roll(&t), RollForward::Abandoned { code, .. } if code == "ledger_unreadable"));
+        assert_eq!(before, listing_but_intent(&t));
+        assert_eq!(t.read("history.json"), "{ not a ledger");
+    }
+
+    #[test]
+    fn i3_a_corrupt_intent_file_is_kept_reported_and_nothing_is_deleted() {
+        for body in ["{ this is not json", "", r#"{"scope":"all"}"#, r#"{"scope":"half","remove_licence":false,"started_at":1,"stage":"files_pending"}"#] {
+            let t = Tmp::new("i3");
+            seed(&t);
+            t.put(INTENT_FILE, body);
+            let before = t.listing();
+            let outcome = roll(&t);
+            let RollForward::Kept { code, detail } = &outcome else { panic!("`{body}`: expected Kept, got {outcome:?}") };
+            assert_eq!(*code, "clear_intent_unreadable");
+            assert!(!detail.is_empty());
+            assert_eq!(before, t.listing(), "`{body}`: nothing was deleted");
+            assert_eq!(t.read(INTENT_FILE), body, "`{body}`: the file is exactly as it was");
+            // A new clear does not guess at it either, and the screen cannot clear it away.
+            let plan = plan_clear(&t.root, Scope::Everything, &later());
+            assert!(plan.refusals.iter().any(|r| r.code == "clear_intent_unreadable"), "`{body}`");
+            assert!(matches!(clear_everything_at(&t.root, &plan.fingerprint, &later, &NoGates), ClearOutcome::Refused(_)));
+            assert_eq!(acknowledge_clear_at(&t.root).unwrap_err().code, "clear_intent_unreadable");
+            assert_eq!(before, t.listing());
+            assert_eq!(t.read(INTENT_FILE), body);
+        }
+    }
+
+    #[test]
+    fn i3b_a_link_or_folder_in_the_intent_place_is_unreadable_not_followed() {
+        let t = Tmp::new("i3b");
+        fs::create_dir_all(t.root.join(INTENT_FILE)).unwrap();
+        assert!(matches!(read_intent(&t.root), IntentRead::Unreadable(_)));
+        assert!(matches!(roll(&t), RollForward::Kept { .. }));
+        assert!(t.root.join(INTENT_FILE).is_dir());
+    }
+
+    #[test]
+    fn i4_no_plan_ever_lists_the_intent_record_and_no_record_means_nothing_to_do() {
+        let t = Tmp::new("i4");
+        seed(&t);
+        assert!(matches!(roll(&t), RollForward::NothingToDo));
+        ensure_intent(&t.root, &later()).unwrap();
+        for scope in [Scope::PlayHistory, Scope::Everything] {
+            let plan = plan_clear(&t.root, scope, &later());
+            assert!(!rels(&plan).contains(&INTENT_FILE), "{scope:?}");
+            assert!(plan.kept.iter().any(|k| k.rel == INTENT_FILE && k.code == "clear_in_progress"), "{scope:?}");
+        }
+        // Not even a very old record is "stale".
+        let far = ClearFacts { now: SystemTime::now() + Duration::from_secs(86_400 * 365), ..facts() };
+        assert!(!rels(&plan_clear(&t.root, Scope::Everything, &far)).contains(&INTENT_FILE));
+    }
+
+    #[test]
+    fn i5_the_record_is_written_before_the_first_delete_and_a_refused_clear_leaves_none() {
+        let t = Tmp::new("i5");
+        seed(&t);
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        let seen: std::cell::RefCell<Vec<Option<IntentStage>>> = Default::default();
+        let phase = ledger_phase(&t.root, &plan, &later(), &|root, rel| {
+            seen.borrow_mut().push(match read_intent(root) {
+                IntentRead::Valid(i) => Some(i.stage),
+                _ => None,
+            });
+            delete_one(root, rel)
+        });
+        assert!(phase.is_ok());
+        let seen = seen.into_inner();
+        assert!(!seen.is_empty() && seen.iter().all(|s| *s == Some(IntentStage::FilesPending)), "{seen:?}");
+        // Refused (a change is applied): nothing is written.
+        let t = Tmp::new("i5b");
+        seed(&t);
+        t.ledger(&[("Game mode", "applied")]);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(matches!(clear_everything_at(&t.root, &shown.fingerprint, &later, &NoGates), ClearOutcome::Refused(_)));
+        assert!(!t.has(INTENT_FILE), "a refused clear leaves no record for the next start to roll forward");
+        // PlayHistory never writes one.
+        let t = Tmp::new("i5c");
+        seed(&t);
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(done(exec(&t.root, &plan, &later())).complete);
+        assert!(!t.has(INTENT_FILE));
+    }
+
+    #[test]
+    fn i6_a_finished_clear_waits_for_the_screen_and_an_unfinished_one_cannot_be_acknowledged() {
+        let t = Tmp::new("i6");
+        seed(&t);
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(done(exec(&t.root, &plan, &later())).complete);
+        let i = intent_of(&t);
+        assert_eq!((i.stage, i.scope.as_str(), i.remove_licence), (IntentStage::WebviewPending, "all", false));
+        acknowledge_clear_at(&t.root).unwrap();
+        assert!(!t.has(INTENT_FILE));
+        acknowledge_clear_at(&t.root).unwrap(); // nothing there: fine
+        // Pending files: refused, record kept.
+        let t = Tmp::new("i6b");
+        seed(&t);
+        ensure_intent(&t.root, &later()).unwrap();
+        assert_eq!(acknowledge_clear_at(&t.root).unwrap_err().code, "clear_files_pending");
+        assert!(t.has(INTENT_FILE));
+    }
+
+    #[test]
+    fn i7_the_licence_choice_comes_from_the_record_not_from_the_start_up_facts() {
+        for remove in [false, true] {
+            let t = Tmp::new("i7");
+            seed(&t);
+            ensure_intent(&t.root, &ClearFacts { remove_licence: remove, ..later() }).unwrap();
+            // The start-up facts always say `false`; the record decides.
+            assert!(matches!(roll_forward_at(&t.root, &later, &NoGates), RollForward::Completed(_)));
+            assert_eq!(t.has("license.key"), !remove, "remove_licence={remove}");
+        }
+    }
+
+    #[test]
+    fn i8_a_pending_record_keeps_its_start_time_and_the_roll_forward_refuses_while_a_trial_runs() {
+        let t = Tmp::new("i8");
+        seed(&t);
+        let first = ClearFacts { now: SystemTime::UNIX_EPOCH + Duration::from_secs(1000), ..later() };
+        ensure_intent(&t.root, &first).unwrap();
+        ensure_intent(&t.root, &later()).unwrap();
+        assert_eq!(intent_of(&t).started_at, 1000);
+        let before = t.listing();
+        let busy = || ClearFacts { benchmark_trial_running: true, ..later() };
+        let outcome = roll_forward_at(&t.root, &busy, &NoGates);
+        assert!(matches!(&outcome, RollForward::Deferred(r) if r.iter().any(|x| x.code == "benchmark_trial_running")), "{outcome:?}");
+        assert_eq!(before, t.listing(), "deferred: nothing was deleted and the record is still pending");
+        assert_eq!(intent_of(&t).stage, IntentStage::FilesPending);
+    }
+
+    #[test]
+    fn i9_the_roll_forward_is_pure_over_a_root_and_the_live_hook_is_not_called_from_anywhere() {
+        let core = include_str!("data_clear.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+        let pure = core.split("pub(crate) fn roll_forward_at(").nth(1).unwrap().split("// ---- live wrappers").next().unwrap();
+        assert!(!pure.contains("live_root") && !pure.contains("ProcessEffects") && !pure.contains("live_facts"), "the roll-forward never resolves the real root");
+        for (name, src) in [("lib.rs", include_str!("lib.rs")), ("main.rs", include_str!("main.rs"))] {
+            assert!(!src.contains("finish_interrupted_clear"), "{name} must not call the start-up hook until the screen slice wires it");
+        }
     }
 }
