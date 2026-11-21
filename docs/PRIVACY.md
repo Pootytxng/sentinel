@@ -119,19 +119,23 @@ yourself — you are the transport, and you can read exactly what you are sendin
 **The diagnostic report ("Export Snapshot", Settings, Feedback & help)** is built on your PC and saved
 as a Markdown file and a JSON file under `%APPDATA%\Compy\exports\`. Compy never sends it; you choose
 whether to share it, and you can read it first. It is a detailed record and is meant to be: it holds your
-hardware and driver names, your network adapters (a physical adapter's name can name a VPN you use), the
+hardware and driver names, your network adapters (an adapter's name can name a VPN you use), the
 changes Compy made, and, for each recorded session, the game's program name, when you played and how it
 ran. Before the report is written, Compy changes these things in the copy it exports:
 
 - Programs that started during a game session, and startup entries you changed through Compy, are named
   only when they are on Compy's reviewed list of known programs (recorders, overlays, launchers, browsers,
-  chat and meeting apps, a torrent client, developer tools). Any other program is shown as "other
+  chat and meeting apps, a torrent client, developer tools, Windows Update). Any other program is shown as "other
   program 1", "other program 2" and so on, the same program keeping its number within one report, with
   counts and timing kept.
-- Your Windows user name and your computer name are replaced with `<user>` and `<host>` wherever Compy
-  finds them, including in file paths under `C:\Users\<name>`. QoS policy names are replaced by a
-  numbered label. A power plan that is not one of the plans Windows ships is shown as "a custom power
-  plan", and the ids of custom power plans and network interfaces are replaced by numbered labels.
+- Your Windows user name and your computer name are replaced with `<user>` and `<host>` (as whole
+  words; a name shorter than three letters or an ordinary word such as "Admin" or "User" is left alone
+  except in file paths, so such a name can still appear in text that is not a path). In any path under
+  `C:\Users\<name>` the name is always replaced. QoS policy
+  names are replaced by a numbered label. A power plan with a name you or your PC maker chose is shown
+  as "a custom power plan" (Windows' own plans, and copies of them such as the Ultimate Performance
+  plan Compy creates, keep their names), and the ids of custom power plans and network interfaces are
+  replaced by numbered labels.
 - The list of known programs that were already running when a game started, the computer-name field and
   any game-state field a newer Compy adds without being reviewed are left out.
 
