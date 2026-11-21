@@ -194,6 +194,8 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
     // Cross-game synthesis bookkeeping for the performance trend.
     let mut degrading_games: Vec<String> = Vec::new();
     let mut trend_eligible_games: Vec<String> = Vec::new();
+    // True while every slowing game's own trend is at Medium (the `strong` test below).
+    let mut degrading_all_strong = true;
     // Item 8 (opus r1): only lanes with a measured band were looked at for a direction.
     let (mut band_games, mut band_sessions) = (0usize, 0usize);
 
@@ -259,12 +261,14 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                 let change_pct = round1((last_fit - first_fit) / first_fit * 100.0);
                 if past(change_pct) {
                     let degrading = change_pct < 0.0;
+                    let strong = m >= STRONG_TREND_SESSIONS && change_pct.abs() >= 2.0 * floor;
                     if degrading {
                         degrading_games.push(game.clone());
+                        // The cross-game line is only as firm as its weakest game's own trend.
+                        degrading_all_strong &= strong;
                     }
                     let first_date = date_of(&low_lane[0].started_at);
                     let last_date = date_of(&low_lane[m - 1].started_at);
-                    let strong = m >= STRONG_TREND_SESSIONS && change_pct.abs() >= 2.0 * floor;
                     // CR-pattern-cap-and-words (b): quote the line the move was judged against: a
                     // fall is judged at the fall matching the band, a rise at the band itself.
                     let line = if degrading {
@@ -581,7 +585,13 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                 "1% lows have drifted down in {} games ({list}) over their recent sessions. A drift across several games can come from something they share, such as a driver, Windows or a part, but Compy can't tell which from this alone, and it doesn't rule out any one game.",
                 degrading_games.len()
             ),
-            confidence: Confidence::Medium,
+            // Medium only when every slowing game's own trend is Medium and no other measured game
+            // is flat or rising (nothing contradicts it); otherwise Low.
+            confidence: if degrading_all_strong && degrading_games.len() == trend_eligible_games.len() {
+                Confidence::Medium
+            } else {
+                Confidence::Low
+            },
             confidence_reason: "The same direction repeated across games. That is a correlation: it shows the games moved together, not what they share.".into(),
             supporting_evidence: degrading_games
                 .iter()
@@ -599,16 +609,17 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
         patterns.push(SessionPattern {
             id: "isolated-degradation".into(),
             game: Some(g.clone()),
-            title: format!("Only {g} is slowing down so far"),
+            title: format!("Of the games Compy could check, only {g} is slowing down"),
             detail: format!(
-                "{g} shows a downward 1% low trend while {} other tracked game(s) stayed flat. That shows up in {g} and not in the other games Compy measured. It could be something specific to {g}, such as a game update, its settings, or how it uses your PC. It doesn't rule out your PC.",
+                "{g} shows a downward 1% low trend while {} other measured game(s) did not drift down past their noise floor. That shows up in {g} and not in the other games Compy measured. It could be something specific to {g}, such as a game update, its settings, or how it uses your PC. It doesn't rule out your PC.",
                 others.len()
             ),
-            confidence: Confidence::Medium,
-            confidence_reason: "A comparison with other games, not a controlled test: games load a PC differently, so flat elsewhere doesn't clear the PC.".into(),
+            // One comparison, not two independent supports: the lowest level.
+            confidence: Confidence::Low,
+            confidence_reason: "A comparison with other games, not a controlled test: games load a PC differently, so no drop elsewhere doesn't clear the PC.".into(),
             supporting_evidence: others
                 .iter()
-                .map(|o| format!("{o}: no trend past the noise floor in the same period."))
+                .map(|o| format!("{o}: no downward 1% low trend past the noise floor."))
                 .collect(),
             raises_confidence: vec![format!(
                 "A {g} update landing near the start of the drift (Compy can't see game patches — check its patch notes)."
@@ -1041,7 +1052,62 @@ mod tests {
             .expect("synthesis fires");
         assert!(p.game.is_none());
         assert!(p.detail.contains("can't tell which"));
+        // Six sessions each: neither game's own trend is Medium (needs 8), so the pair is Low.
+        assert_eq!(p.confidence, Confidence::Low);
+    }
+
+    fn drifting(game: &str, n: usize, start: f64, step: f64, month: &str) -> Vec<SessionSummary> {
+        (0..n)
+            .map(|i| mk_session(&format!("2026-{month}-{:02}T10:00:00Z", i + 1), game, start + step * i as f64))
+            .collect()
+    }
+
+    #[test]
+    fn multi_game_is_medium_only_when_every_trend_is_medium_and_nothing_contradicts() {
+        // Both games: 10 sessions, a steep fall (each game's own trend is Medium).
+        let mut both = drifting("cp2077.exe", 10, 100.0, -5.0, "07");
+        both.extend(drifting("valorant.exe", 10, 200.0, -10.0, "08"));
+        let r = detect(&both);
+        let own: Vec<_> = r.patterns.iter().filter(|p| p.id == "performance-trend").collect();
+        assert!(own.len() == 2 && own.iter().all(|p| p.confidence == Confidence::Medium), "{own:?}");
+        let p = r.patterns.iter().find(|p| p.id == "multi-game-degradation").expect("fires");
         assert_eq!(p.confidence, Confidence::Medium);
+
+        // One slowing game is only Low-grade (6 sessions): the pair drops to Low.
+        let mut weak = drifting("cp2077.exe", 10, 100.0, -5.0, "07");
+        weak.extend(drifting("valorant.exe", 6, 200.0, -10.0, "08"));
+        let p = detect(&weak).patterns.into_iter().find(|p| p.id == "multi-game-degradation").expect("fires");
+        assert_eq!(p.confidence, Confidence::Low, "a weak member makes the pair Low");
+
+        // Both strong, but a third measured game did not drift down: contradicted, so Low.
+        let mut contra = both.clone();
+        contra.extend(drifting("fortnite.exe", 10, 150.0, 0.0, "09"));
+        let r = detect(&contra);
+        assert!(r.patterns.iter().any(|p| p.id == "multi-game-degradation"));
+        let p = r.patterns.iter().find(|p| p.id == "multi-game-degradation").unwrap();
+        assert_eq!(p.confidence, Confidence::Low, "a measured game that did not slow down contradicts the pair");
+    }
+
+    #[test]
+    fn isolated_game_is_low_even_when_its_own_trend_is_medium() {
+        let mut s = drifting("cp2077.exe", 10, 100.0, -5.0, "07");
+        s.extend(drifting("valorant.exe", 10, 200.0, 0.0, "08"));
+        let r = detect(&s);
+        let own = r.patterns.iter().find(|p| p.id == "performance-trend").expect("own trend");
+        assert_eq!(own.confidence, Confidence::Medium);
+        let p = r.patterns.iter().find(|p| p.id == "isolated-degradation").expect("fires");
+        assert_eq!(p.confidence, Confidence::Low);
+    }
+
+    #[test]
+    fn a_game_that_got_faster_is_not_described_as_flat() {
+        let mut s = drifting("cp2077.exe", 10, 100.0, -5.0, "07");
+        s.extend(drifting("valorant.exe", 10, 100.0, 5.0, "08")); // rising
+        let r = detect(&s);
+        let p = r.patterns.iter().find(|p| p.id == "isolated-degradation").expect("fires");
+        let text = shown_text(p);
+        assert!(!text.contains("flat") && !text.contains("same period"), "{text}");
+        assert!(text.contains("did not drift down"), "{text}");
     }
 
     /// Text of every field a pattern shows the user, lowercased.
@@ -1116,7 +1182,17 @@ mod tests {
         let r = detect(&iso);
         let p = r.patterns.iter().find(|p| p.id == "isolated-degradation").unwrap();
         assert!(p.detail.contains("It doesn't rule out your PC."), "{}", p.detail);
-        assert!(p.title.starts_with("Only ") && !p.title.contains("isolated"));
+        assert!(
+            p.title.contains("Of the games Compy could check, only cp2077") && !p.title.contains("isolated"),
+            "{}",
+            p.title
+        );
+        // One comparison is one support: the lowest level, never the "Likely" one.
+        assert_eq!(p.confidence, Confidence::Low);
+        // "Did not drift down" is what was measured; "flat" is not (a faster game isn't flat).
+        assert!(p.detail.contains("did not drift down past their noise floor"), "{}", p.detail);
+        assert!(!p.detail.contains("stayed flat") && !p.detail.contains("same period"));
+        assert!(p.supporting_evidence.iter().all(|e| e.contains("no downward 1% low trend past the noise floor") && !e.contains("same period")), "{:?}", p.supporting_evidence);
     }
 
     #[test]
@@ -1147,7 +1223,8 @@ mod tests {
             .iter()
             .find(|p| p.id == "isolated-degradation")
             .expect("fires");
-        assert!(p.detail.contains("stayed flat"));
+        assert!(p.detail.contains("did not drift down past their noise floor"));
+        assert_eq!(p.confidence, Confidence::Low);
         assert!(r.patterns.iter().all(|x| x.id != "multi-game-degradation"));
     }
 

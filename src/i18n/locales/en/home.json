@@ -266,10 +266,10 @@
         "sentence": "That is fine — you do not have to know. Windows keeps the record either way, and Compy reads it for you."
       },
       "slowAlways": {
-        "sentence": "You said it is slow all the time, not just in games. That is worth checking across the whole PC, not one game at a time."
+        "sentence": "You said it is slow all the time. That is worth checking across the whole PC, not one game at a time."
       },
       "slowSometimes": {
-        "sentence": "You said some games are slow and others are not. That can come from a game's settings, a heavier game needing more headroom, or something else. One measured session is what turns it into an answer."
+        "sentence": "You said some games are slow and others are not. That can come from a game's settings, a heavier game needing more headroom, or something else. Measured sessions are where Compy starts to answer that."
       },
       "stutter": {
         "sentence": "Hitching is a worst-frames problem, not an average-FPS one — the average can look perfectly fine while it is happening. So Compy compares your latest session of the game with your last steady one, and shows any crash Windows recorded.",

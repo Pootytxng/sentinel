@@ -111,6 +111,12 @@ describe("Problems room / case / rig-care text never excludes the PC on crash-lo
     for (const k of ["crashAnytime", "slowAlways", "slowSometimes"] as const) {
       expect(enHome.interview.f[k].sentence).toMatch(/^You said /);
     }
+    // "You said" may repeat only what the tapped option said ("It is slow all the time"), and one
+    // measured session is not promised to give an answer (sessions vary 13-26%, Constitution §38).
+    expect(enHome.interview.f.slowAlways.sentence).not.toMatch(/not just in games/i);
+    expect(zhHome.interview.f.slowAlways.sentence).not.toContain("不只是游戏");
+    expect(enHome.interview.f.slowSometimes.sentence).not.toMatch(/one measured session|turns it into an answer/i);
+    expect(zhHome.interview.f.slowSometimes.sentence).not.toContain("实测一次会话就能给出答案");
     expect(zhHome.interview.f.crashAnytime.sentence).toContain("你说");
     expect(zhHome.interview.f.slowAlways.sentence).toContain("你说");
     expect(zhHome.interview.f.slowSometimes.sentence).toContain("你说");
