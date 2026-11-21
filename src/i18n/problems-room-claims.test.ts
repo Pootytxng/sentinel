@@ -19,6 +19,19 @@ const EXCLUSION_PATTERNS: ReadonlyArray<[string, RegExp]> = [
   ["en: 'problem in the app itself'", /problem (in|inside) [^.]{0,40}itself/i],
   ["en: 'not a part'", /,\s*not a part\b/i],
   ["en: 'your PC is fine'", /your (pc|rig|machine) is (fine|healthy|ok)\b/i],
+  ["en: 'isn't / is not / not the PC'", /\b(isn'?t|is not|not) (your|the) (pc|computer|hardware|machine|rig)\b/i],
+  ["en: affirmative 'rules out your PC'", /(?<!(doesn't|does not|can't|cannot|not|never) )\brules? out (your|the) (pc|hardware|machine)/i],
+  ["en: 'points at {x} itself'", /\b(points?|pointing) at [^.]{0,40}\bitself\b/i],
+  ["en: 'rather than a game/title/app'", /rather than (a|the|any one|one) (game|title|app)/i],
+  ["en: 'points at the game' (the record never looked)", /points? at the game\b/i],
+  ["en: 'nothing wrong with your PC'", /nothing (is )?wrong with your/i],
+  ["en: 'PC is not the problem'", /(pc|hardware|machine) is not the problem/i],
+  ["en: 'overheating' as a finding", /\boverheating\b/i],
+  ["en: 'commonly heat'", /commonly heat/i],
+  ["en: 'not from a game or a driver'", /not from a game/i],
+  ["zh: '与…无关'", /与(你的)?(电脑|硬件)无关/],
+  ["zh: affirmative '排除了…'", /(?<!不能|无法|并不能)排除(了)?(你的)?(电脑|硬件|部件)/],
+  ["zh: '指向游戏'", /指向游戏/],
   ["zh: '而不是…部件/电脑'", /而不是[^。]{0,6}(部件|电脑|硬件|主机)/],
   ["zh: '应用本身'", /应用本身/],
   ["zh: '不是你的电脑'", /不是你的(电脑|硬件|主机)/],
@@ -59,15 +72,27 @@ describe("Problems room / case / rig-care text never excludes the PC on crash-lo
   });
 
   it("the replacement statements exist in both languages, take the game's name, and say it does not rule out the PC", () => {
-    for (const key of ["appCrash", "appHang", "hostProcess"] as const) {
+    for (const key of ["appCrash", "appHang", "hostProcess", "gpuTimeoutPeak", "shutdownPeak", "hardwareError", "hardwareErrorPeak"] as const) {
       const en = enGaming.blackBox.assessStatement[key];
       const zh = zhGaming.blackBox.assessStatement[key];
-      expect(en).toContain("{{subject}}");
-      expect(zh).toContain("{{subject}}");
-      expect(en).toContain("doesn't rule out your PC");
-      expect(zh).toContain("并不能排除你的电脑");
+      if (["appCrash", "appHang", "hostProcess"].includes(key)) {
+        expect(en).toContain("{{subject}}");
+        expect(zh).toContain("{{subject}}");
+      }
+      // every statement says what the record alone can't tell, and none names a cause
+      expect(en).toMatch(/can't tell|doesn't say which/);
+      expect(zh).toMatch(/无法判断/);
     }
-    expect(enLab.labConsole.rigFocus.away).toContain("doesn't rule out a part");
-    expect(zhLab.labConsole.rigFocus.away).toContain("并不能排除某个部件");
+    for (const key of ["appCrash", "appHang"] as const) {
+      expect(enGaming.blackBox.assessStatement[key]).toContain("in your PC");
+      expect(zhGaming.blackBox.assessStatement[key]).toContain("还是你的电脑");
+    }
+    for (const key of ["gpuTimeoutPeak", "shutdownPeak", "hardwareErrorPeak"] as const) {
+      expect(enGaming.blackBox.assessStatement[key]).toContain("{{temp}}");
+      expect(zhGaming.blackBox.assessStatement[key]).toContain("{{temp}}");
+      expect(enGaming.blackBox.assessStatement[key]).toContain("can't tell whether heat played a part");
+    }
+    expect(enLab.labConsole.rigFocus.away).toContain("can't say whether a part was involved");
+    expect(zhLab.labConsole.rigFocus.away).toContain("无法判断是否与某个部件有关");
   });
 });

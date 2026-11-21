@@ -25,7 +25,7 @@
 //     any below → "came back in K of N"; all within and at least MIN_PAYOFF_SESSIONS → "stayed
 //     within"; else not enough play.
 //   No outcome says it is fixed: an absence is a measurement, not proof of the cause.
-import type { CrashIncident, SessionSummary, WhatChangedReport } from "../types";
+import type { CrashAssessment, CrashIncident, SessionSummary, WhatChangedReport } from "../types";
 import { APP_KINDS, RESOLUTION_MIN_DAYS, appOf } from "../data/blackbox-resolution";
 import { MIN_BASELINE_SAMPLES } from "./baseline-grade";
 import { MAX_GOOD_CANDIDATES } from "./StutterCompare";
@@ -89,6 +89,11 @@ export type CareStep =
       /** The faulting app as Windows named it, for the copy; null where `app` is null. */
       appLabel: string | null;
       consistentWith: string;
+      /** The stable reading key (blackbox.rs rule); the feedback anchor matches on it, never on prose. */
+      rule: string | null;
+      statement: CrashAssessment["statement"] | null;
+      subject: string | null;
+      tempC: number | null;
       incidentId: string;
       incidentWhen: string;
     }
@@ -106,6 +111,33 @@ export type CareStep =
     };
 
 const ms = (iso: string) => Date.parse(iso);
+
+/** The reading key of a stored "Did this help?" answer written before the rule key was stored: the
+ *  exact English each rule said then (and now), mapped to the rule. The wording of a rule can change;
+ *  an answer already given must keep matching its step. */
+const LEGACY_READINGS: ReadonlyArray<[RegExp, string]> = [
+  [/^a problem inside .+ itself, rather than your PC$/, "app-specific"],
+  [/^likely a problem in code .+ was running for another program, rather than your hardware$/, "app-specific"],
+  [/^overheating around the time of the crash$/, "overheating"],
+  [/^a hardware-level error Windows logged/, "hardware-error"],
+  [/^your graphics driver \(.+\) repeatedly timing out$/, "graphics-driver"],
+  [/^an abrupt power loss or hard lock/, "power-hardlock"],
+  [/^a blue-screen crash whose stop code/, "beyond-us"],
+];
+export function legacyRuleOf(consistentWith: string): string | null {
+  return LEGACY_READINGS.find(([re]) => re.test(consistentWith))?.[1] ?? null;
+}
+/** Does a stored answer belong to this step's reading? By rule key (stored, else recovered from the
+ *  old English); only an answer whose reading can't be named falls back to the exact text. */
+export function sameReading(
+  e: { consistent_with?: unknown; rule?: unknown },
+  step: { consistentWith: string; rule: string | null },
+): boolean {
+  const text = typeof e.consistent_with === "string" ? e.consistent_with : "";
+  const stored = typeof e.rule === "string" && e.rule ? e.rule : legacyRuleOf(text);
+  if (stored && step.rule) return stored === step.rule;
+  return text === step.consistentWith;
+}
 /** Same kind as the step: same tag, and for app kinds the same faulting app. */
 export function sameKind(i: CrashIncident, step: { kind: string; app: string | null }): boolean {
   if (i.tag !== step.kind) return false;
@@ -144,6 +176,10 @@ export function pickCareStep(
       app,
       appLabel: app ? (inc.receipt?.faulting_app ?? null) : null,
       consistentWith: a.consistent_with,
+      rule: a.rule ?? legacyRuleOf(a.consistent_with),
+      statement: a.statement ?? null,
+      subject: a.subject ?? null,
+      tempC: a.temp_c ?? null,
       incidentId: inc.incident_id,
       incidentWhen: inc.when,
     };
@@ -281,7 +317,7 @@ export function anchorFor(step: CareStep, incidents: CrashIncident[] = [], now: 
           const at = e && typeof e.at === "string" ? ms(e.at) : NaN;
           if (
             e &&
-            e.consistent_with === step.consistentWith &&
+            sameReading(e, step) &&
             Number.isFinite(at) &&
             // The answer's own record (keyed by its `when`) must be of the same kind.
             incidents.some((inc) => inc.when === e.when && sameKind(inc, step))

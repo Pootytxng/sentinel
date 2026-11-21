@@ -7,8 +7,9 @@
 //   - overheating     → the GPU: the rule fires on a MEASURED high GPU temperature;
 //   - graphics-driver → the GPU: the same graphics-driver module timed out repeatedly — the card the
 //                       driver runs (the line says "its graphics driver", never "the card failed");
-//   - app-specific    → away: Windows recorded an app crash or hang; the line says that and that it
-//                       does not rule out a part (the rig is dimmed, no part is named);
+//   - app-specific    → note only: Windows recorded an app crash or hang; the line says that and that
+//                       the record alone can't say whether a part was involved. No part is named and
+//                       the rig is NOT dimmed (dim means "not this", limiter-part.ts);
 //   - hardware-error  → nothing: Windows' WHEA fault is heat, power OR memory — no one part;
 //   - power-hardlock  → nothing: power delivery, a deep hang, or a one-off — no one part;
 //   - beyond-us       → nothing: a stop code Compy won't guess at.
@@ -21,7 +22,7 @@ import type { RigPartKind } from "./rig-parts";
 
 export type IncidentFocus =
   | { kind: "part"; rule: "overheating" | "graphics-driver"; partId: string; partName: string }
-  | { kind: "away" }
+  | { kind: "record-only" }
   | null;
 
 export const INCIDENT_RULE_PART: Readonly<Partial<Record<AssessmentRule, RigPartKind>>> = {
@@ -59,7 +60,7 @@ export function gpuNameVendor(name: string | null | undefined): Vendor | null {
 export function incidentFocus(incident: CrashIncident | null | undefined, parts: readonly FocusPart[]): IncidentFocus {
   const rule = incident?.assessment?.rule;
   if (!rule) return null;
-  if (INCIDENT_RULE_AWAY.has(rule)) return { kind: "away" };
+  if (INCIDENT_RULE_AWAY.has(rule)) return { kind: "record-only" };
   const kind = INCIDENT_RULE_PART[rule];
   if (!kind) return null;
   const matches = parts.filter((p) => p.detected && p.kind === kind);

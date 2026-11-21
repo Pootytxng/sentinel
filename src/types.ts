@@ -708,7 +708,14 @@ export type AssessmentRule =
   | "power-hardlock"
   | "beyond-us";
 /** Which fixed, translated sentence an app-side record is shown with (blackbox.rs `AssessmentStatement`). */
-export type AssessmentStatement = "app-crash" | "app-hang" | "host-process";
+export type AssessmentStatement =
+  | "app-crash"
+  | "app-hang"
+  | "host-process"
+  | "gpu-timeout-peak"
+  | "shutdown-peak"
+  | "hardware-error"
+  | "hardware-error-peak";
 export type CrashAssessment = {
   /** P7-rig-care. Absent on records from a build before the key existed: read as "no rule known". */
   rule?: AssessmentRule;
@@ -716,6 +723,8 @@ export type CrashAssessment = {
   statement?: AssessmentStatement;
   /** The app name `statement` is about; absent when the record did not name one. */
   subject?: string;
+  /** The session's peak GPU temperature (°C) a `*-peak` statement quotes. */
+  temp_c?: number;
   consistent_with: string; // "consistent with…" — never "the cause is…"
   strength: AssessmentStrength;
   evidence: string[];

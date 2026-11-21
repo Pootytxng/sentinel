@@ -58,8 +58,8 @@ describe("incidentFocus", () => {
     });
   });
 
-  it("an app-specific record points away from the parts", () => {
-    expect(incidentFocus(inc("2026-10-20T10:00:00Z", "app-specific"), RIG)).toEqual({ kind: "away" });
+  it("an app-specific record gets a note only: no part, and nothing that dims the rig", () => {
+    expect(incidentFocus(inc("2026-10-20T10:00:00Z", "app-specific"), RIG)).toEqual({ kind: "record-only" });
   });
 
   it("ambiguous rules claim no part (WHEA, power/hard-lock, a stop code)", () => {

@@ -11,7 +11,6 @@ import type {
   BlackBoxReport,
   CrashIncident,
   CrashAssessment,
-  AssessmentStatement,
   CaseIntelligenceMatch,
   ChangedBeforeIncident,
   ChangedBeforeItem,
@@ -21,6 +20,7 @@ import { StutterCompare } from "./StutterCompare";
 import { peekStutterArrival } from "./care-arrival";
 import { SinceLastWorked } from "./SinceLastWorked";
 import { eventText } from "./event-text";
+import { assessStatementText } from "./assess-statement";
 import { writeLedger } from "../data/ledger-write";
 import { useConfirmOptional } from "../design/ConfirmDialog";
 import { LEDGER_CHANGED_EVENT } from "../types";
@@ -400,12 +400,6 @@ function IncidentRow({
   );
 }
 
-const ASSESS_STATEMENT_KEY: Record<AssessmentStatement, string> = {
-  "app-crash": "appCrash",
-  "app-hang": "appHang",
-  "host-process": "hostProcess",
-};
-
 // Black Box v2 triage block. "Consistent with…" framing only — never "the cause is…". Shows the exact
 // evidence it fired on and ONE reversible next step (research-only steps are clearly marked, never "do
 // this" for anything irreversible). Rendered only when the backend gate populated `assessment`.
@@ -430,12 +424,8 @@ function AssessmentBlock({
         </span>
       </div>
       {a.statement ? (
-        // What Windows recorded and what it does not rule out: one fixed sentence, never a cause.
-        <p className="bb-assess-line">
-          {t(`gaming.blackBox.assessStatement.${ASSESS_STATEMENT_KEY[a.statement]}`, {
-            subject: a.subject ?? t("gaming.blackBox.assessStatement.unnamedApp"),
-          })}
-        </p>
+        // What Windows recorded and what that record can't tell: one fixed sentence, never a cause.
+        <p className="bb-assess-line">{assessStatementText(t, a)}</p>
       ) : (
         <p className="bb-assess-line">
           {a.beyond_us
@@ -652,7 +642,13 @@ function ResolutionFeedback({ inc, allIncidents }: { inc: CrashIncident; allInci
       localStorage.setItem(voteKey, v);
       // Append to a capped LOCAL feedback log (no send — fleet aggregation is v3, gated).
       const log = JSON.parse(localStorage.getItem(FEEDBACK_LOG_KEY) || "[]");
-      log.push({ when: incidentKey, consistent_with: inc.assessment?.consistent_with ?? "", vote: v, at });
+      log.push({
+        when: incidentKey,
+        consistent_with: inc.assessment?.consistent_with ?? "",
+        rule: inc.assessment?.rule ?? null, // the stable reading key; the prose can be reworded (care-next-step)
+        vote: v,
+        at,
+      });
       localStorage.setItem(FEEDBACK_LOG_KEY, JSON.stringify(log.slice(-100)));
     } catch {
       /* localStorage unavailable — the vote just isn't remembered, no harm */

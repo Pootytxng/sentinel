@@ -529,9 +529,13 @@
     "assessLinePreBeyond": "This one is",
     "assessLinePreConsistent": "The evidence is consistent with",
     "assessStatement": {
-      "appCrash": "Windows recorded {{subject}} crashing. That points at the game or something it loads. It doesn't rule out your PC.",
-      "appHang": "Windows recorded {{subject}} not responding. That points at the game or something it loads. It doesn't rule out your PC.",
-      "hostProcess": "Windows recorded {{subject}} crashing. It is a Windows file that runs code for other programs, so that points at a program it was running. It doesn't rule out your PC.",
+      "appCrash": "Windows recorded {{subject}} crashing. That record alone can't tell where the problem is: in the program, in something it loads (such as a graphics driver), or in your PC.",
+      "appHang": "Windows recorded {{subject}} not responding. That record alone can't tell where the problem is: in the program, in something it loads (such as a graphics driver), or in your PC.",
+      "hostProcess": "Windows recorded {{subject}} crashing. It is a Windows file that runs code for other programs, so the record alone can't tell which program, driver or part of your PC was involved.",
+      "gpuTimeoutPeak": "Windows recorded a graphics-driver timeout. In the session running at the time, Compy measured the GPU peaking at {{temp}}°C. Compy hasn't compared that with this card's other sessions, so it can't tell whether heat played a part.",
+      "shutdownPeak": "Windows recorded an unexpected shutdown. In the session running at the time, Compy measured the GPU peaking at {{temp}}°C. Compy hasn't compared that with this card's other sessions, so it can't tell whether heat played a part.",
+      "hardwareError": "Windows logged a hardware-level error (WHEA). The hardware reports these itself; they can come from heat, power, memory, or an unstable overclock or undervolt. The record alone doesn't say which.",
+      "hardwareErrorPeak": "Windows logged a hardware-level error (WHEA). The hardware reports these itself; they can come from heat, power, memory, or an unstable overclock or undervolt. The record alone doesn't say which. In the session running at the time, Compy measured the GPU peaking at {{temp}}°C and hasn't compared that with this card's other sessions, so it can't tell whether heat played a part.",
       "unnamedApp": "an app"
     },
     "assessLinePostBeyond": "— beyond what Compy can safely narrow down.",

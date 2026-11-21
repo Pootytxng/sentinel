@@ -53,7 +53,7 @@ function assessedIncident(): CrashIncident {
     },
     assessment: {
       consistent_with: "your graphics driver (amdkmdag) repeatedly timing out",
-      strength: "partial", // repeats of one Windows record are one kind of evidence (p1-claims)
+      strength: "weak", // repeats of one Windows record are one kind of evidence (p1-claims)
       evidence: [
         "the same driver module (amdkmdag) stopped responding across 2 separate crashes",
         "the GPU temperature was not in the overheating range in those sessions",
@@ -92,8 +92,9 @@ describe("BlackBox surface (v2 triage UI)", () => {
     scan();
     expect(await screen.findByText("What this points to")).toBeInTheDocument();
     expect(screen.getByText(/your graphics driver \(amdkmdag\) repeatedly timing out/)).toBeInTheDocument();
-    expect(screen.getByText("Partial signal")).toBeInTheDocument(); // strength is a word, never a %
+    expect(screen.getByText("Weak signal")).toBeInTheDocument(); // strength is a word, never a %
     expect(screen.queryByText("Strong signal")).not.toBeInTheDocument();
+    expect(screen.queryByText("Partial signal")).not.toBeInTheDocument();
     expect(screen.getByText(/clean reinstall of your graphics driver/i)).toBeInTheDocument();
   });
 
@@ -108,9 +109,12 @@ describe("BlackBox surface (v2 triage UI)", () => {
       rule: "app-specific",
       statement: "app-crash",
       subject: "ROB RUN",
-      consistent_with: "ROB RUN crashing, which points at the game or something it loads and doesn't rule out your PC",
-      strength: "partial",
-      evidence: ["ROB RUN closed on its own, with no system-level error logged around it"],
+      consistent_with: "ROB RUN crashing; the record alone can't tell whether the problem is in the program, in something it loads (such as a graphics driver), or in your PC",
+      strength: "weak",
+      evidence: [
+        "Windows recorded ROB RUN crashing",
+        "Compy couldn't read the Windows System log for that time, so it can't say whether a system-level error was logged around it.",
+      ],
       next_step: {
         headline: "Verify the game's files, then update it",
         detail: "Let the launcher re-download anything broken.",
@@ -122,19 +126,23 @@ describe("BlackBox surface (v2 triage UI)", () => {
     return inc;
   };
 
-  it("an App-crash case renders the Partial label and the replacement sentence with the game's name, never the exclusion", async () => {
+  it("an App-crash case renders the Weak label and the replacement sentence with the game's name, never the exclusion", async () => {
     reportMock.value = { incidents: [appCrashIncident()], skipped_sources: [] };
     render(<BlackBox />);
     scan();
     await screen.findByText("What this points to");
-    expect(screen.getByText("Partial signal")).toBeInTheDocument();
+    expect(screen.getByText("Weak signal")).toBeInTheDocument();
     expect(screen.queryByText("Strong signal")).not.toBeInTheDocument();
+    expect(screen.queryByText("Partial signal")).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        "Windows recorded ROB RUN crashing. That points at the game or something it loads. It doesn't rule out your PC.",
+        "Windows recorded ROB RUN crashing. That record alone can't tell where the problem is: in the program, in something it loads (such as a graphics driver), or in your PC.",
       ),
     ).toBeInTheDocument();
+    // the evidence says it could not read the log, never "quiet" / "found none"
+    expect(screen.getByText(/couldn't read the Windows System log for that time/)).toBeInTheDocument();
     const body = document.body.textContent || "";
+    expect(body).not.toMatch(/points at the game|were quiet|closed on its own/i);
     expect(body).not.toMatch(/rather than your/i);
     expect(body).not.toMatch(/problem inside .* itself/i);
   });
@@ -147,7 +155,7 @@ describe("BlackBox surface (v2 triage UI)", () => {
       fireEvent.click(screen.getByRole("button", { name: i18n.t("gaming.blackBox.scanButton") }));
       await waitFor(() => expect(document.body.textContent).toContain("ROB RUN"));
       const body = document.body.textContent || "";
-      expect(body).toContain("Windows 记录到 ROB RUN 崩溃。这指向游戏或它加载的内容，并不能排除你的电脑。");
+      expect(body).toContain("Windows 记录到 ROB RUN 崩溃。仅凭这条记录，无法判断问题出在程序本身、它加载的内容（例如显卡驱动），还是你的电脑。");
       expect(body).not.toContain("强信号");
     } finally {
       await i18n.changeLanguage("en");

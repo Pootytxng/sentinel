@@ -601,3 +601,60 @@ describe("P7-depth: the next step's technical receipt", () => {
     expect(second.container.querySelector(".bb-next-why")!.textContent).not.toMatch(/safe first thing/);
   });
 });
+
+// p1-claims R7: the wording of a reading changed; an answer already given must keep matching it, and the
+// receipt shows the translated statement, not the raw English the engine also carries.
+describe("a reworded reading keeps its earlier 'Did this help?' answers", () => {
+  const WHEN = "2026-10-20T10:00:00Z";
+  const rob = (): CrashIncident => {
+    const rec = inc(WHEN, { app: "ROB RUN-Win64-Shipping.exe" });
+    rec.assessment = {
+      ...rec.assessment!,
+      rule: "app-specific",
+      statement: "app-crash",
+      subject: "ROB RUN",
+      consistent_with: "ROB RUN crashing; the record alone can't tell whether the problem is in the program, in something it loads (such as a graphics driver), or in your PC",
+    };
+    return rec;
+  };
+  it("an answer stored with the OLD English (no rule key) still anchors as 'taken'", () => {
+    localStorage.setItem("compy_bb_feedback", JSON.stringify([
+      { when: WHEN, consistent_with: "a problem inside ROB RUN itself, rather than your PC", vote: "yes", at: "2026-10-22T09:00:00Z" },
+    ]));
+    const all = [rob()];
+    expect(anchorFor(pickCareStep(all, null)!, all)).toEqual({ at: Date.parse("2026-10-22T09:00:00Z"), basis: "taken" });
+  });
+  it("the old Windows-host wording also still matches", () => {
+    localStorage.setItem("compy_bb_feedback", JSON.stringify([
+      { when: WHEN, consistent_with: "likely a problem in code RUNDLL32 was running for another program, rather than your hardware", vote: "yes", at: "2026-10-22T09:00:00Z" },
+    ]));
+    const all = [rob()];
+    expect(anchorFor(pickCareStep(all, null)!, all).basis).toBe("taken");
+  });
+  it("a new answer matches by the stored rule key even if the prose differs", () => {
+    localStorage.setItem("compy_bb_feedback", JSON.stringify([
+      { when: WHEN, consistent_with: "some earlier wording", rule: "app-specific", vote: "yes", at: "2026-10-22T09:00:00Z" },
+    ]));
+    const all = [rob()];
+    expect(anchorFor(pickCareStep(all, null)!, all).basis).toBe("taken");
+  });
+  it("an answer about a different reading does not match", () => {
+    localStorage.setItem("compy_bb_feedback", JSON.stringify([
+      { when: WHEN, consistent_with: "your graphics driver (nvlddmkm) repeatedly timing out", vote: "yes", at: "2026-10-22T09:00:00Z" },
+    ]));
+    const all = [rob()];
+    expect(anchorFor(pickCareStep(all, null)!, all).basis).toBe("shown");
+  });
+  it("the Care receipt shows the translated statement, not the engine's raw English", async () => {
+    h.incidents = [rob()];
+    const { container } = render(<BlackBox />);
+    fireEvent.click(screen.getByRole("button", { name: /scan/i }));
+    await waitFor(() => expect(container.querySelector(".bb-next")).not.toBeNull());
+    await openDoor(container, "bb-next-depth-receipt");
+    const dl = container.querySelector(".bb-next-receipt")!;
+    const rows = Object.fromEntries([...dl.querySelectorAll("dt")].map((dt) => [dt.textContent, dt.nextElementSibling!.textContent]));
+    expect(rows["Consistent with"]).toBe(
+      "Windows recorded ROB RUN crashing. That record alone can't tell where the problem is: in the program, in something it loads (such as a graphics driver), or in your PC.",
+    );
+  });
+});

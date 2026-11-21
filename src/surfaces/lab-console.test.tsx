@@ -1001,13 +1001,15 @@ describe("P7-rig-care: the Care station's crash record picks out the part on the
     expect(note()!.textContent).toContain("crash scan (2026-10-24T10:00:00Z)");
   });
 
-  it("an app-specific record dims the rig and says what Windows recorded, without ruling a part out", async () => {
+  it("an app-specific record keeps the note but does not dim the rig (dim means 'not this')", async () => {
     withIncidents([assessed("2026-10-24T10:00:00Z", "app-specific", "App crash")]);
     await scanThenBack();
-    await waitFor(() => expect(rig().getAttribute("data-dimmed")).toBe("1"));
+    await waitFor(() => expect(note()).not.toBeNull());
+    expect(rig().getAttribute("data-dimmed")).toBe("0");
     expect(rig().getAttribute("data-focus-id")).toBe("");
+    expect(note()!.getAttribute("data-focus")).toBe("record-only");
     expect(note()!.textContent).toMatch(/app crash or hang that Windows recorded/);
-    expect(note()!.textContent).toMatch(/doesn't rule out a part/);
+    expect(note()!.textContent).toMatch(/can't say whether a part was involved/);
     expect(note()!.textContent).not.toMatch(/not a part/);
     expect(note()!.textContent).toContain("(2026-10-24T10:00:00Z)");
   });

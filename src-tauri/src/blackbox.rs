@@ -258,8 +258,10 @@ fn assemble_incidents(
     incidents.truncate(MAX_INCIDENTS);
     // Black Box v2: triage layer. ONLY when the gate is ON (default OFF ⇒ this is skipped entirely and
     // every `assessment` stays `None` — exact v1 behavior). `assess` is pure + gate-independent.
+    // The log coverage is not known here (the real scan re-assesses in `report_from`, once it knows
+    // what the reader proved), so nothing is proven: no rule says "found nothing around it".
     if blackbox_v2_gate() {
-        apply_assessments(&mut incidents);
+        apply_assessments(&mut incidents, SystemLogCoverage::UNPROVEN);
     }
     // Compy Care Tier 1: attach a signed known-issue write-up where one matches. Hard-false in every
     // shipped build, so this is skipped entirely and every `case_intelligence` stays `None`.
@@ -291,9 +293,9 @@ fn apply_case_intelligence(incidents: &mut [Incident]) {
 /// Populate each incident's `assessment` from the pure rule engine. Two-phase (compute all, then
 /// assign) so each `assess` call can read the full incident list as `recent_context` (recurrence)
 /// while the assignment borrows mutably.
-fn apply_assessments(incidents: &mut [Incident]) {
+fn apply_assessments(incidents: &mut [Incident], coverage: SystemLogCoverage) {
     let assessments: Vec<Option<Assessment>> =
-        incidents.iter().map(|inc| assess(inc, incidents)).collect();
+        incidents.iter().map(|inc| assess_with(inc, incidents, coverage)).collect();
     for (inc, a) in incidents.iter_mut().zip(assessments) {
         inc.assessment = a;
     }
@@ -313,12 +315,59 @@ fn apply_assessments(incidents: &mut [Incident]) {
 /// overheating-consistent. Conservative — a measured reading, never a guess.
 const OVERHEAT_C: u32 = 85;
 
+/// How much weight the evidence carries. `Weak` is the lowest real level and the only one emitted
+/// today: every rule rests on ONE kind of evidence. `Partial` and `Strong` stay on the wire for the
+/// UI and are reserved for a rule that can show two independent supports AND check for contradicting
+/// evidence (for example a crash-session temperature compared with this card's other sessions);
+/// `no_rule_emits_above_weak_without_two_independent_supports` pins that none does yet.
+#[allow(dead_code)] // Partial/Strong are reserved, see above
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Strength {
     Strong,
     Partial,
     Weak,
+}
+
+/// What Compy actually read of the Windows System log, carried from the reader into the rules so an
+/// absence ("no system-level error logged around it") is said only when the window was really read.
+/// An unread log, or a window older than the oldest row a capped read kept, is NOT "quiet".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SystemLogCoverage {
+    /// The reader ran and reported no error other than "no matching events".
+    read_ok: bool,
+    /// How far back the scan is complete (`BlackBoxReport::clean_judgeable_from`); None = no read was cut.
+    judgeable_from: Option<DateTime<Utc>>,
+}
+
+impl SystemLogCoverage {
+    /// Nothing proven: the safe default. No absence line is ever said under this.
+    pub(crate) const UNPROVEN: Self = Self { read_ok: false, judgeable_from: None };
+
+    pub(crate) fn new(read_ok: bool, judgeable_from: Option<DateTime<Utc>>) -> Self {
+        Self { read_ok, judgeable_from }
+    }
+
+    /// True only when the System log was read and this incident's whole ±10 minute window lies inside
+    /// what the scan kept.
+    fn covers(&self, inc: &Incident) -> bool {
+        if !self.read_ok {
+            return false;
+        }
+        let Some(t) = parse_ts(&inc.when).map(|t| t.with_timezone(&Utc)) else {
+            return false;
+        };
+        self.judgeable_from.is_none_or(|from| t - chrono::Duration::minutes(10) >= from)
+    }
+}
+
+/// The two sentences an absence line can take: found nothing in a window that was read, or couldn't read.
+fn system_log_line(covered: bool) -> String {
+    if covered {
+        "Compy found no graphics-driver timeout, blue screen, hardware error or unexpected shutdown in the Windows System log within 10 minutes of it.".into()
+    } else {
+        "Compy couldn't read the Windows System log for that time, so it can't say whether a system-level error was logged around it.".into()
+    }
 }
 
 /// The ONE reversible/safe next step an assessment suggests. `reversible` is an INVARIANT — always true
@@ -385,6 +434,9 @@ pub(crate) struct Assessment {
     /// The app name `statement` is about (display form). None = the record did not name one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) subject: Option<String>,
+    /// The session's peak GPU temperature (°C) a `*Peak` statement quotes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) temp_c: Option<u32>,
 }
 
 /// The fixed sentences a surface renders for an app-side record. Each says what Windows recorded and
@@ -396,6 +448,14 @@ pub(crate) enum AssessmentStatement {
     AppHang,
     /// A Windows host process (RUNDLL32, svchost, ...) crashed; the program it was running is unknown.
     HostProcess,
+    /// A GPU timeout record plus the session's measured peak GPU temperature (`temp_c`).
+    GpuTimeoutPeak,
+    /// An unexpected-shutdown record plus the session's measured peak GPU temperature (`temp_c`).
+    ShutdownPeak,
+    /// A WHEA hardware-error record on its own.
+    HardwareError,
+    /// A WHEA record plus the session's measured peak GPU temperature (`temp_c`).
+    HardwareErrorPeak,
 }
 
 /// Gate for all of Black Box v2 (mirrors `gaming_mode_gate` / `receipts_gate`). **Owner-authorized
@@ -432,11 +492,23 @@ pub(crate) fn blackbox_v2_gate() -> bool {
 /// Pure triage. Tries each starter rule in priority order (strongest measured signal first); the first
 /// that clears its evidence bar wins. No rule fires ⇒ `None` (refuse to guess → evidence-only v1).
 /// `recent_context` is the full incident list (includes `incident` itself) — used for recurrence.
+/// Nothing about the System log's coverage is proven here, so no rule says "found nothing around it".
+/// (The shipped scan always goes through `assess_with`; this is the test seam.)
+#[cfg(test)]
 pub(crate) fn assess(incident: &Incident, recent_context: &[Incident]) -> Option<Assessment> {
+    assess_with(incident, recent_context, SystemLogCoverage::UNPROVEN)
+}
+
+/// `assess` with what the scan actually read of the System log.
+pub(crate) fn assess_with(
+    incident: &Incident,
+    recent_context: &[Incident],
+    coverage: SystemLogCoverage,
+) -> Option<Assessment> {
     rule_overheating(incident, recent_context)
         .or_else(|| rule_graphics_driver(incident, recent_context))
-        .or_else(|| rule_app_specific(incident, recent_context))
-        .or_else(|| rule_power_hardlock(incident, recent_context))
+        .or_else(|| rule_app_specific(incident, recent_context, coverage))
+        .or_else(|| rule_power_hardlock(incident, recent_context, coverage))
         .or_else(|| rule_beyond_us(incident))
 }
 
@@ -477,21 +549,30 @@ fn incident_within(inc: &Incident, ctx: &[Incident], mins: i64, kind_pred: impl 
     })
 }
 
-/// Rule 1 — overheating-consistent. A MEASURED high GPU temp (≥85 °C) in the pre-crash vitals on a GPU
-/// timeout or an unexpected shutdown → Strong (a measured reading plus a Windows record: two kinds).
-/// A WHEA hardware machine-check → Strong only when corroborated by a measured high temp, else Partial
-/// (repeats are the same kind of evidence). Honest about WHEA's breadth (heat OR power OR memory).
+/// Rule 1 — a record Windows made (GPU timeout, unexpected shutdown, WHEA fault) plus, where Compy was
+/// watching, the session's PEAK GPU temperature. Weak in every case: the peak is not the reading at the
+/// crash, 85 °C is an absolute line that many cards reach in normal use, and Compy has not compared it
+/// with this card's other sessions. So the line reports the measured number and says it can't tell
+/// whether heat played a part; it never says "overheating" and never excludes anything.
 fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
     let high = is_high_temp(inc);
     if high && matches!(inc.kind, IncidentKind::GpuTimeout | IncidentKind::UnexpectedShutdown) {
         let t = peak_temp(inc).unwrap_or(0);
+        let (statement, what) = if inc.kind == IncidentKind::GpuTimeout {
+            (AssessmentStatement::GpuTimeoutPeak, "a graphics-driver timeout")
+        } else {
+            (AssessmentStatement::ShutdownPeak, "an unexpected shutdown")
+        };
         return Some(Assessment {
             rule: AssessmentRule::Overheating,
-            consistent_with: "overheating around the time of the crash".into(),
-            strength: Strength::Strong,
+            consistent_with: format!(
+                "Windows recorded {what}; in the session running at the time Compy measured the GPU peaking at {t}°C and hasn't compared that with this card's other sessions, so it can't tell whether heat played a part"
+            ),
+            strength: Strength::Weak,
             evidence: vec![
-                format!("Compy recorded the GPU at {t}°C in the session running at the time"),
+                format!("Compy measured the GPU peaking at {t}°C in the session running at the time"),
                 format!("what Windows logged: {}", inc.tag.to_lowercase()),
+                "Compy hasn't compared that peak with this card's other sessions".into(),
             ],
             next_step: NextStep::safe(
                 "Check your temperatures under load",
@@ -500,29 +581,28 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
                  to start. Re-pasting or undervolting are bigger jobs to research first, not do blind.",
             ),
             beyond_us: false,
-            statement: None,
+            statement: Some(statement),
             subject: None,
+            temp_c: Some(t),
         });
     }
     if inc.kind == IncidentKind::HardwareError {
         let repeats = count_kind(ctx, IncidentKind::HardwareError) >= 2;
-        // Strong needs two independent supports: the Windows hardware record AND a measured high GPU
-        // temperature. The same record twice is one kind of evidence, so it stays Partial.
-        let strength = if high { Strength::Strong } else { Strength::Partial };
         let mut evidence = vec![
             format!(
                 "Windows logged a hardware-level fault {} (it calls these 'WHEA' errors)",
                 if repeats { "more than once" } else { "once" }
             ),
-            "these come straight from the hardware — not from a game or a driver setting".into(),
+            "these are reported by the hardware itself".into(),
         ];
-        if let Some(t) = peak_temp(inc) {
-            evidence.push(format!("the GPU was at {t}°C in the session at the time"));
+        let temp = peak_temp(inc);
+        if let Some(t) = temp {
+            evidence.push(format!("Compy measured the GPU peaking at {t}°C in the session at the time"));
         }
         return Some(Assessment {
             rule: AssessmentRule::HardwareError,
-            consistent_with: "a hardware-level error Windows logged — commonly heat, but also power or memory".into(),
-            strength,
+            consistent_with: "a hardware-level error Windows logged; it can come from heat, power, memory or an unstable overclock or undervolt, and the record alone doesn't say which".into(),
+            strength: Strength::Weak,
             evidence,
             next_step: NextStep::safe(
                 "Check temperatures under load, and that your memory is seated on its rated profile",
@@ -532,36 +612,51 @@ fn rule_overheating(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
                  change one blind).",
             ),
             beyond_us: false,
-            statement: None,
+            statement: Some(if temp.is_some() {
+                AssessmentStatement::HardwareErrorPeak
+            } else {
+                AssessmentStatement::HardwareError
+            }),
             subject: None,
+            temp_c: temp,
         });
     }
     None
 }
 
-/// Rule 2 — graphics-driver-consistent. The SAME GPU driver module timing out (TDR) across ≥2 crashes,
-/// temps NOT high (rule 1 owns the hot case). → Partial: repeats of one Windows record are one kind of
-/// evidence, and "temps not high" is the absence of a contrary sign, not a second support.
-/// Reversible: clean-reinstall.
+/// Rule 2 — graphics-driver. The SAME GPU driver module timing out (TDR) across ≥2 crashes, temps NOT
+/// high (rule 1 owns the hot case). Weak: repeats of one Windows record are one kind of evidence.
+/// The temperature line is said only for what was measured: every counted session has a reading, or
+/// the line says how many do not. Reversible: clean-reinstall.
 fn rule_graphics_driver(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
     if inc.kind != IncidentKind::GpuTimeout || is_high_temp(inc) {
         return None;
     }
     let module = inc.receipt.faulting_module.as_deref()?;
-    let same_module = ctx
+    let same: Vec<&Incident> = ctx
         .iter()
         .filter(|i| i.kind == IncidentKind::GpuTimeout && i.receipt.faulting_module.as_deref() == Some(module))
-        .count();
+        .collect();
+    let same_module = same.len();
     if same_module < 2 {
         return None;
     }
+    let unread = same.iter().filter(|i| peak_temp(i).is_none()).count();
+    let hottest = same.iter().filter_map(|i| peak_temp(i)).max();
+    let temp_line = if unread > 0 {
+        format!("Compy has no temperature reading for {unread} of those {same_module} sessions")
+    } else if let Some(h) = hottest.filter(|h| *h >= OVERHEAT_C) {
+        format!("the GPU peaked at {h}°C in one of those {same_module} sessions")
+    } else {
+        format!("Compy measured the GPU peaking below {OVERHEAT_C}°C in each of those {same_module} sessions")
+    };
     Some(Assessment {
         rule: AssessmentRule::GraphicsDriver,
         consistent_with: format!("your graphics driver ({module}) repeatedly timing out"),
-        strength: Strength::Partial,
+        strength: Strength::Weak,
         evidence: vec![
             format!("the same driver module ({module}) stopped responding across {same_module} separate crashes"),
-            "the GPU temperature was not in the overheating range in those sessions".into(),
+            temp_line,
         ],
         next_step: NextStep::safe(
             "Do a clean reinstall of your graphics driver",
@@ -573,14 +668,17 @@ fn rule_graphics_driver(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> 
         beyond_us: false,
         statement: None,
         subject: None,
+        temp_c: None,
     })
 }
 
-/// Rule 3 — app-specific. A lone app crash/hang with NO system-level event within ±10 min.
-/// → Partial: one Windows record is one kind of evidence, and where in the app Windows saw the crash
-/// does not rule out the PC (drivers, memory, heat and overclocks crash inside a game's own process).
-/// The sentence says what was recorded and that it does not rule out the PC. Reversible: verify files.
-fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
+/// Rule 3 — an app crash/hang with no system-level incident within ±10 min. Weak: one Windows record is
+/// one kind of evidence, and where in the app Windows saw the crash does not say whether the program,
+/// something it loads (a graphics driver) or the PC is behind it. The sentence says only that. The
+/// "found nothing around it" line is said ONLY when the System log was read for that window
+/// (`SystemLogCoverage`); otherwise the line says Compy couldn't read it. A system incident that WAS
+/// found still blocks the rule either way. Reversible: verify files.
+fn rule_app_specific(inc: &Incident, ctx: &[Incident], coverage: SystemLogCoverage) -> Option<Assessment> {
     if !matches!(inc.kind, IncidentKind::AppCrash | IncidentKind::AppHang) {
         return None;
     }
@@ -588,14 +686,14 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         return None; // a system event nearby → not safely "just the app"
     }
     let app = inc.receipt.faulting_app.as_deref().map(pretty_proc);
-    let subject = app.clone().unwrap_or_else(|| "that app".to_string());
+    let subject = app.clone().unwrap_or_else(|| "an app".to_string());
     let hang = inc.kind == IncidentKind::AppHang;
-    let what_happened = if hang { "not responding" } else { "crashing" };
-    let lead = match &app {
-        Some(a) => format!("{a} closed on its own, with no system-level error logged around it"),
-        None => "the app closed on its own, with no system-level error logged around it".to_string(),
+    let lead = if hang {
+        format!("Windows recorded {subject} not responding, and it was closed")
+    } else {
+        format!("Windows recorded {subject} crashing")
     };
-    let evidence = vec![lead, "your graphics, power, and hardware logs were quiet at that moment".into()];
+    let evidence = vec![lead, system_log_line(coverage.covers(inc))];
     // self-review 2026-10-28 (P7-depth): a crashing Windows host process (RUNDLL32, svchost, …) is
     // not a game, so "verify the game's files" is wrong advice. These hosts run other programs'
     // code; the honest step is to update Windows and whatever was starting.
@@ -603,17 +701,17 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         return Some(Assessment {
             rule: AssessmentRule::AppSpecific,
             consistent_with: format!(
-                "{subject} crashing, a Windows file that runs code for other programs, which points at a program it was running and doesn't rule out your PC"
+                "{subject} crashing, a Windows file that runs code for other programs; the record alone can't tell which program, driver or part of your PC was involved"
             ),
-            // Only the process name and a quiet hardware log are known here, so this is Partial.
-            strength: Strength::Partial,
+            strength: Strength::Weak,
             statement: Some(AssessmentStatement::HostProcess),
             subject: app.clone(),
+            temp_c: None,
             evidence,
             next_step: NextStep::safe(
                 "Update Windows, then the program that was starting",
-                "This file is part of Windows and runs code on behalf of other programs, so the fault is \
-                 often in the program it was hosting. Install any pending Windows updates, then update \
+                "This file is part of Windows and runs code on behalf of other programs, so the fault can \
+                 be in the program it was hosting. Install any pending Windows updates, then update \
                  the app you were opening when it happened. If it keeps repeating, the matching \
                  Application Error in Event Viewer (Windows Logs > Application) lists the faulting module, \
                  which can help identify the program involved.",
@@ -621,14 +719,16 @@ fn rule_app_specific(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
             beyond_us: false,
         });
     }
+    let what_happened = if hang { "not responding" } else { "crashing" };
     Some(Assessment {
         rule: AssessmentRule::AppSpecific,
         consistent_with: format!(
-            "{subject} {what_happened}, which points at the game or something it loads and doesn't rule out your PC"
+            "{subject} {what_happened}; the record alone can't tell whether the problem is in the program, in something it loads (such as a graphics driver), or in your PC"
         ),
-        strength: Strength::Partial,
+        strength: Strength::Weak,
         statement: Some(if hang { AssessmentStatement::AppHang } else { AssessmentStatement::AppCrash }),
         subject: app.clone(),
+        temp_c: None,
         evidence,
         next_step: NextStep::safe(
             "Verify the game's files, then update it",
@@ -665,9 +765,10 @@ fn is_windows_host_process(faulting_app: &str) -> bool {
     WINDOWS_HOST_PROCESSES.contains(&name.as_str())
 }
 
-/// Rule 4 — power / hard-lock-consistent. An unexpected shutdown (Kernel-Power 41 / EventLog 6008) with
-/// NO blue screen around it and temps NOT high. Inherently ambiguous → Partial, and honest about it.
-fn rule_power_hardlock(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
+/// Rule 4 — an unexpected shutdown (Kernel-Power 41 / EventLog 6008) with no blue-screen record around
+/// it and temps NOT high. Inherently ambiguous → Weak. "No blue-screen record" is said only when the
+/// System log was read for that window; otherwise the line says Compy couldn't read it.
+fn rule_power_hardlock(inc: &Incident, ctx: &[Incident], coverage: SystemLogCoverage) -> Option<Assessment> {
     if inc.kind != IncidentKind::UnexpectedShutdown || is_high_temp(inc) {
         return None;
     }
@@ -676,12 +777,18 @@ fn rule_power_hardlock(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
     if bluescreen_near(inc, ctx, 10) {
         return None;
     }
+    let bsod_line = if coverage.covers(inc) {
+        "Compy found no blue-screen record in the Windows System log within 10 minutes of it".to_string()
+    } else {
+        system_log_line(false)
+    };
     Some(Assessment {
         rule: AssessmentRule::PowerHardlock,
-        consistent_with: "an abrupt power loss or hard lock — Windows didn't get to record why".into(),
-        strength: Strength::Partial,
+        consistent_with: "an unexpected shutdown; the record alone can't say whether it was power, a hard lock or something else".into(),
+        strength: Strength::Weak,
         evidence: vec![
-            "the PC restarted without a clean shutdown, and left no blue-screen or crash dump".into(),
+            "Windows recorded that the PC restarted without a clean shutdown".into(),
+            bsod_line,
             "this pattern is genuinely ambiguous — it can be power delivery, a deep hardware hang, or a one-off".into(),
         ],
         next_step: NextStep::research(
@@ -693,6 +800,7 @@ fn rule_power_hardlock(inc: &Incident, ctx: &[Incident]) -> Option<Assessment> {
         beyond_us: false,
         statement: None,
         subject: None,
+        temp_c: None,
     })
 }
 
@@ -722,6 +830,7 @@ fn rule_beyond_us(inc: &Incident) -> Option<Assessment> {
         beyond_us: true,
         statement: None,
         subject: None,
+        temp_c: None,
     })
 }
 
@@ -1375,17 +1484,25 @@ fn event_log_script() -> String {
         .filter_map(event_log_query_xml)
         .map(|xml| {
             format!(
-                "@(Get-WinEvent -FilterXml '{}' -MaxEvents {EVENTS_PER_CHANNEL})",
+                "@(Get-WinEvent -FilterXml '{}' -MaxEvents {EVENTS_PER_CHANNEL} -ErrorVariable +cerr)",
                 xml.replace('\'', "''")
             )
         })
         .collect();
     format!(
-        "$ErrorActionPreference='SilentlyContinue';$e = {};{}",
+        "$ErrorActionPreference='SilentlyContinue';$cerr=@();$e = {};{}{}",
         reads.join(" + "),
+        EVENT_LOG_READ_CHECK,
         EVENT_LOG_PROJECTION
     )
 }
+
+/// Written to stderr by the reader script ONLY when no channel read failed. Get-WinEvent's "no events
+/// were found" is the one non-failure error; anything else (access denied, a broken channel) withholds
+/// the marker, and then the System log is not proven read. Without it an empty result is "unknown",
+/// never "nothing happened".
+const EVENT_LOG_READ_OK_MARK: &str = "COMPY_EVENTLOG_READ_OK";
+const EVENT_LOG_READ_CHECK: &str = "$bad=$false;foreach($x in $cerr){if([string]$x.FullyQualifiedErrorId -notlike 'NoMatchingEventsFound*'){$bad=$true}};if(-not $bad){[Console]::Error.WriteLine('COMPY_EVENTLOG_READ_OK')};";
 
 /// The row projection `parse_events_json` reads: time, id, provider, message, and `props` from
 /// EventData.
@@ -1396,7 +1513,7 @@ const EVENT_LOG_PROJECTION: &str = "@($e |\
 /// Read the crash/instability events Windows recorded (System + Application channels). Read-only,
 /// non-elevated, no window. Returns the parsed rows and an optional "skipped" note if the reader
 /// could not run at all (a clean machine returns an empty list, NOT a skip).
-fn collect_event_log() -> (Vec<RawEvent>, Option<String>) {
+fn collect_event_log() -> (Vec<RawEvent>, Option<String>, bool) {
     // Ask only for the (provider, id) pairs the classifier recognizes, capped PER CHANNEL. The old
     // id-only query let 8,500+ routine "Windows Error Reporting" 1001 notices fill its single 80-row
     // cap, so no shutdown, crash or blue screen ever reached this collector (#544). `EventData` →
@@ -1407,15 +1524,16 @@ fn collect_event_log() -> (Vec<RawEvent>, Option<String>) {
         .args(["-NoProfile", "-NonInteractive", "-Command", script.as_str()])
         .output()
     else {
-        return (Vec::new(), Some("Windows Event Log (couldn't run the reader)".into()));
+        return (Vec::new(), Some("Windows Event Log (couldn't run the reader)".into()), false);
     };
+    let read_ok = String::from_utf8_lossy(&out.stderr).contains(EVENT_LOG_READ_OK_MARK);
     let stdout = String::from_utf8_lossy(&out.stdout);
     let trimmed = stdout.trim();
     if trimmed.is_empty() {
         // Get-WinEvent emits nothing when no matching events exist → scanned cleanly, none found.
-        return (Vec::new(), None);
+        return (Vec::new(), None, read_ok);
     }
-    (parse_events_json(trimmed), None)
+    (parse_events_json(trimmed), None, read_ok)
 }
 
 /// Tolerant of ConvertTo-Json's array/object/null shapes; a malformed individual row is skipped,
@@ -1794,12 +1912,12 @@ pub(crate) fn get_crash_blackbox() -> BlackBoxReport {
 
 /// The scan without the "Changed before this" layer — what the background Care observer needs.
 pub(crate) fn collect_crash_blackbox() -> BlackBoxReport {
-    let (events, ev_skip) = collect_event_log();
+    let (events, ev_skip, event_log_read) = collect_event_log();
     let (wer, wer_skip, wer_cut) = collect_wer();
     let (reliability, rel_skip) = collect_reliability();
     let (skipped_sources, skipped_needs_admin) = classify_skips(ev_skip, wer_skip, rel_skip, minidump_skip_note());
     let sessions = crate::sessions::get_session_summaries();
-    let mut report = report_from(events, wer, wer_cut, reliability, &sessions, skipped_sources);
+    let mut report = report_from(events, wer, wer_cut, reliability, &sessions, skipped_sources, event_log_read);
     report.skipped_needs_admin = skipped_needs_admin;
     report
 }
@@ -1827,17 +1945,24 @@ fn report_from(
     reliability: Vec<ReliabilityRecord>,
     sessions: &[SessionSummary],
     skipped_sources: Vec<String>,
+    event_log_read: bool,
 ) -> BlackBoxReport {
     let read_cut = read_truncated_from(&events, &reliability).max(wer_cut);
-    let incidents = assemble_incidents(events, wer, reliability, sessions);
+    let mut incidents = assemble_incidents(events, wer, reliability, sessions);
     let incident_cut = (incidents.len() >= MAX_INCIDENTS)
         .then(|| incidents.iter().filter_map(|i| parse_ts(&i.when)).map(|t| t.with_timezone(&Utc)).min())
         .flatten();
+    let clean_judgeable_from = read_cut.max(incident_cut);
+    // Now that what was read is known, re-assess with it: an absence line ("found nothing around it")
+    // is allowed only for a window the System log was read for and the scan did not cut.
+    if blackbox_v2_gate() {
+        apply_assessments(&mut incidents, SystemLogCoverage::new(event_log_read, clean_judgeable_from));
+    }
     BlackBoxReport {
         incidents,
         skipped_sources,
         skipped_needs_admin: Vec::new(),
-        clean_judgeable_from: read_cut.max(incident_cut),
+        clean_judgeable_from,
         since_last_worked: None,
     }
 }
@@ -1880,7 +2005,7 @@ fn read_truncated_from(events: &[RawEvent], reliability: &[ReliabilityRecord]) -
 /// point included).
 #[cfg(test)]
 pub(crate) fn report_from_event_json(json: &str, sessions: &[SessionSummary]) -> BlackBoxReport {
-    report_from(parse_events_json(json), Vec::new(), None, Vec::new(), sessions, Vec::new())
+    report_from(parse_events_json(json), Vec::new(), None, Vec::new(), sessions, Vec::new(), true)
 }
 
 // ─── Pure-core tests (the collectors are a thin edge; logic + invariants are pinned here) ────────
@@ -2798,7 +2923,7 @@ mod blackbox_tests {
                 "{channel}'s query reads only its own channel"
             );
         }
-        let cap = format!("-MaxEvents {EVENTS_PER_CHANNEL})");
+        let cap = format!("-MaxEvents {EVENTS_PER_CHANNEL} -ErrorVariable");
         assert_eq!(script.matches(&cap).count(), 2, "each channel is capped on its own");
     }
 
@@ -2809,7 +2934,8 @@ mod blackbox_tests {
     #[test]
     #[ignore = "live OS read — run manually on a Windows rig"]
     fn blackbox_live_collectors_read_clean() {
-        let (events, ev_skip) = collect_event_log();
+        let (events, ev_skip, event_log_read) = collect_event_log();
+        eprintln!("live: event_log_read={event_log_read}");
         let (wer, wer_skip, wer_cut) = collect_wer();
         let (reliability, rel_skip) = collect_reliability();
         let incidents = assemble_incidents(events, wer, reliability, &[]);
@@ -2898,11 +3024,14 @@ mod blackbox_tests {
     }
 
     #[test]
-    fn overheating_strong_on_measured_high_gpu_temp() {
+    fn a_measured_high_gpu_peak_is_reported_as_a_number_never_as_overheating() {
         let inc = mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("amdkmdag"), None, None, Some(88));
         let a = assess(&inc, std::slice::from_ref(&inc)).expect("fires");
-        assert_eq!(a.strength, Strength::Strong);
-        assert!(a.consistent_with.contains("overheating"));
+        assert_eq!(a.strength, Strength::Weak, "a session peak plus a record is not two supports for 'heat'");
+        assert_eq!(a.rule, AssessmentRule::Overheating, "the rule key stays: the rig still picks the GPU");
+        assert_eq!((a.statement, a.temp_c), (Some(AssessmentStatement::GpuTimeoutPeak), Some(88)));
+        assert!(!a.consistent_with.to_lowercase().contains("overheating"));
+        assert!(a.consistent_with.contains("can't tell whether heat played a part"));
         assert!(a.evidence.iter().any(|e| e.contains("88°C")));
         assert!(a.next_step.reversible);
         assert!(!a.next_step.research_only, "checking temps is a do-it step, not research-only");
@@ -2910,23 +3039,28 @@ mod blackbox_tests {
     }
 
     #[test]
-    fn whea_is_partial_alone_or_repeated_and_strong_only_with_a_measured_high_temp() {
+    fn whea_is_weak_alone_repeated_or_with_a_temperature() {
         let one = mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, None);
         let a = assess(&one, std::slice::from_ref(&one)).expect("fires");
-        assert_eq!(a.strength, Strength::Partial, "a lone WHEA is honest about ambiguity");
+        assert_eq!(a.strength, Strength::Weak, "a lone WHEA is honest about ambiguity");
         assert!(a.consistent_with.contains("hardware-level"));
-        // two WHEA in context → still Partial: the same record twice is one kind of evidence
+        assert_eq!(a.statement, Some(AssessmentStatement::HardwareError));
+        let blob = serde_json::to_string(&a).unwrap().to_lowercase();
+        for banned in ["commonly heat", "not from a game", "driver setting"] {
+            assert!(!blob.contains(banned), "unsupported WHEA claim '{banned}': {blob}");
+        }
+        // two WHEA in context → still Weak: the same record twice is one kind of evidence
         let two = vec![
             mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, None),
             mk(IncidentKind::HardwareError, "2026-06-11T10:00:00Z", None, None, None, None),
         ];
         let a2 = assess(&two[0], &two).expect("fires");
-        assert_eq!(a2.strength, Strength::Partial, "repeats of one record are not a second support");
+        assert_eq!(a2.strength, Strength::Weak, "repeats of one record are not a second support");
         assert!(a2.next_step.reversible && !has_percent(&a2));
-        // a WHEA record plus a measured high GPU temperature are two kinds → Strong
+        // a WHEA record plus a session peak: still Weak (the peak is the GPU's, WHEA is often CPU/memory)
         let hot = mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, Some(90));
         let a3 = assess(&hot, std::slice::from_ref(&hot)).expect("fires");
-        assert_eq!(a3.strength, Strength::Strong);
+        assert_eq!((a3.strength, a3.statement, a3.temp_c), (Strength::Weak, Some(AssessmentStatement::HardwareErrorPeak), Some(90)));
     }
 
     #[test]
@@ -2934,13 +3068,13 @@ mod blackbox_tests {
         let cool = mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("nvlddmkm"), None, None, None);
         // one TDR → not enough → no driver claim (could be a one-off)
         assert!(rule_graphics_driver(&cool, std::slice::from_ref(&cool)).is_none(), "one TDR is not a pattern");
-        // two same-module TDRs, cool → Partial driver (one kind of evidence, repeated)
+        // two same-module TDRs, cool → Weak driver (one kind of evidence, repeated)
         let two = vec![
             mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("nvlddmkm"), None, None, None),
             mk(IncidentKind::GpuTimeout, "2026-06-11T20:00:00Z", Some("nvlddmkm"), None, None, None),
         ];
         let a = assess(&two[0], &two).expect("fires");
-        assert_eq!(a.strength, Strength::Partial);
+        assert_eq!(a.strength, Strength::Weak);
         assert!(a.consistent_with.contains("nvlddmkm"));
         assert!(a.next_step.headline.to_lowercase().contains("reinstall") && a.next_step.reversible);
         assert!(!has_percent(&a));
@@ -2949,16 +3083,16 @@ mod blackbox_tests {
             mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("nvlddmkm"), None, None, Some(90)),
             mk(IncidentKind::GpuTimeout, "2026-06-11T20:00:00Z", Some("nvlddmkm"), None, None, Some(90)),
         ];
-        assert!(assess(&hot[0], &hot).unwrap().consistent_with.contains("overheating"));
+        assert_eq!(assess(&hot[0], &hot).unwrap().rule, AssessmentRule::Overheating);
     }
 
     #[test]
     fn app_specific_only_when_no_system_event_is_near() {
         let lone = mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", Some("unity.dll"), Some("0xc0000005"), Some("game.exe"), None);
         let a = assess(&lone, std::slice::from_ref(&lone)).expect("fires");
-        assert_eq!(a.strength, Strength::Partial, "one app-crash record is one kind of evidence");
-        assert!(a.consistent_with.contains("game") && a.consistent_with.contains("doesn't rule out your PC"));
-        assert!(!a.consistent_with.contains("rather than"));
+        assert_eq!(a.strength, Strength::Weak, "one app-crash record is one kind of evidence");
+        assert!(a.consistent_with.contains("game") && a.consistent_with.contains("record alone can't tell"));
+        assert!(!a.consistent_with.contains("rather than") && !a.consistent_with.contains("points at the game"));
         assert_eq!(a.statement, Some(AssessmentStatement::AppCrash));
         assert_eq!(a.subject.as_deref(), Some("game"));
         assert!(a.next_step.reversible && !has_percent(&a));
@@ -2967,7 +3101,7 @@ mod blackbox_tests {
             mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", Some("unity.dll"), None, Some("game.exe"), None),
             mk(IncidentKind::GpuTimeout, "2026-06-12T21:03:00Z", Some("amdkmdag"), None, None, None),
         ];
-        assert!(rule_app_specific(&near[0], &near).is_none(), "a nearby system event blocks the app-side call");
+        assert!(rule_app_specific(&near[0], &near, SystemLogCoverage::UNPROVEN).is_none(), "a nearby system event blocks the app-side call");
     }
 
     #[test]
@@ -2978,12 +3112,12 @@ mod blackbox_tests {
             let lone = mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", None, Some("0xc0000005"), Some(app), None);
             let a = assess(&lone, std::slice::from_ref(&lone)).expect("fires");
             assert!(matches!(a.rule, AssessmentRule::AppSpecific));
-            assert_eq!(a.strength, Strength::Partial, "{app}: only the process name is known");
+            assert_eq!(a.strength, Strength::Weak, "{app}: only the process name is known");
             let step = format!("{} {}", a.next_step.headline, a.next_step.detail).to_lowercase();
             assert!(!step.contains("game"), "{app}: game advice for a Windows process: {step}");
             assert!(step.contains("windows update") || step.contains("windows updates"), "{app}: {step}");
             assert!(a.consistent_with.contains("other programs"), "{app}: {}", a.consistent_with);
-            assert!(a.consistent_with.contains("doesn't rule out your PC"), "{app}: {}", a.consistent_with);
+            assert!(a.consistent_with.contains("record alone can't tell"), "{app}: {}", a.consistent_with);
             assert_eq!(a.statement, Some(AssessmentStatement::HostProcess));
             assert!(a.next_step.reversible && !has_percent(&a));
         }
@@ -3000,10 +3134,10 @@ mod blackbox_tests {
     }
 
     #[test]
-    fn power_hardlock_is_partial_and_not_when_a_bsod_is_near() {
+    fn power_hardlock_is_weak_and_not_when_a_bsod_is_near() {
         let lock = mk(IncidentKind::UnexpectedShutdown, "2026-06-12T21:00:00Z", None, None, None, None);
         let a = assess(&lock, std::slice::from_ref(&lock)).expect("fires");
-        assert_eq!(a.strength, Strength::Partial, "hard-lock is inherently ambiguous");
+        assert_eq!(a.strength, Strength::Weak, "hard-lock is inherently ambiguous");
         assert!(a.next_step.reversible, "even the cable-reseat step is reversible");
         assert!(a.evidence.iter().any(|e| e.contains("ambiguous")));
         assert!(!has_percent(&a));
@@ -3012,7 +3146,7 @@ mod blackbox_tests {
             mk(IncidentKind::UnexpectedShutdown, "2026-06-12T21:00:00Z", None, None, None, None),
             mk(IncidentKind::BlueScreen, "2026-06-12T21:00:05Z", None, Some("0x133"), None, None),
         ];
-        assert!(rule_power_hardlock(&with_bsod[0], &with_bsod).is_none());
+        assert!(rule_power_hardlock(&with_bsod[0], &with_bsod, SystemLogCoverage::UNPROVEN).is_none());
     }
 
     #[test]
@@ -3087,38 +3221,154 @@ mod blackbox_tests {
     }
 
     #[test]
-    fn strong_needs_a_measured_reading_plus_a_record_and_no_rule_excludes_the_pc() {
-        // Strong is allowed only where two kinds of evidence agree: a measured high GPU temperature
-        // AND a Windows record. One kind of evidence (an app-crash record, a driver timeout seen
-        // twice, a WHEA record seen twice) is at most Partial.
+    fn no_rule_emits_above_weak_without_two_independent_supports() {
+        // Every rule rests on ONE kind of evidence today (a Windows record, repeated or with a session
+        // peak that is not a reading at the crash and is not compared with this card's other sessions).
+        // So nothing may be Partial or Strong. A rule that later shows two independent supports AND a
+        // contradiction check must change THIS test deliberately.
         for ctx in &firing_cases() {
             let a = assess(&ctx[0], ctx).expect("fires");
-            if a.strength == Strength::Strong {
-                assert!(
-                    matches!(a.rule, AssessmentRule::Overheating | AssessmentRule::HardwareError)
-                        && is_high_temp(&ctx[0]),
-                    "Strong without a measured high temperature plus a Windows record: {:?}",
-                    a.consistent_with
-                );
-            }
-            // No rule says the PC is excluded, whatever the crash location.
-            let blob = serde_json::to_string(&a).unwrap().to_lowercase();
-            for banned in ["rather than your", "not your pc", "your pc is fine", "itself, rather"] {
-                assert!(!blob.contains(banned), "rule excludes the PC: '{banned}' in {blob}");
-            }
+            assert_eq!(a.strength, Strength::Weak, "single-support rule above Weak: {:?}", a.consistent_with);
         }
         let hang = mk(IncidentKind::AppHang, "2026-06-12T21:00:00Z", None, None, Some("game.exe"), None);
         let a = assess(&hang, std::slice::from_ref(&hang)).expect("fires");
-        assert_eq!((a.strength, a.statement), (Strength::Partial, Some(AssessmentStatement::AppHang)));
+        assert_eq!((a.strength, a.statement), (Strength::Weak, Some(AssessmentStatement::AppHang)));
         let whea_twice = vec![
             mk(IncidentKind::HardwareError, "2026-06-12T21:00:00Z", None, None, None, None),
             mk(IncidentKind::HardwareError, "2026-06-11T10:00:00Z", None, None, None, None),
         ];
-        assert_ne!(assess(&whea_twice[0], &whea_twice).unwrap().strength, Strength::Strong);
+        assert_eq!(assess(&whea_twice[0], &whea_twice).unwrap().strength, Strength::Weak);
+        let hot_shutdown = mk(IncidentKind::UnexpectedShutdown, "2026-06-12T21:00:00Z", None, None, None, Some(92));
+        let a = assess(&hot_shutdown, std::slice::from_ref(&hot_shutdown)).expect("fires");
+        assert_eq!((a.strength, a.statement), (Strength::Weak, Some(AssessmentStatement::ShutdownPeak)));
         // the sentence names the game it was recorded for
         let rob = mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", None, None, Some("ROB RUN-Win64-Shipping.exe"), None);
         let a = assess(&rob, std::slice::from_ref(&rob)).expect("fires");
         assert_eq!(a.subject.as_deref(), Some("ROB RUN"));
+    }
+
+    #[test]
+    fn no_rule_excludes_the_pc_or_overclaims_heat() {
+        // Same patterns the locale scan uses, over every rule's full serialized output.
+        let banned = [
+            "rather than your",
+            "not your pc",
+            "your pc is fine",
+            "itself, rather",
+            "overheating",
+            "commonly heat",
+            "not from a game",
+            "points at the game",
+            "closed on its own",
+            "were quiet",
+            "left no blue-screen",
+            "logged around it",
+        ];
+        let mut cases = firing_cases();
+        cases.push(vec![mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", None, None, Some("svchost.exe"), None)]);
+        cases.push(vec![mk(IncidentKind::UnexpectedShutdown, "2026-06-12T21:00:00Z", None, None, None, Some(92))]);
+        for cov in [SystemLogCoverage::UNPROVEN, SystemLogCoverage::new(true, None)] {
+            for ctx in &cases {
+                let a = assess_with(&ctx[0], ctx, cov).expect("fires");
+                // the rule KEY ("overheating") is a stable machine key the rig reads, not prose
+                let mut wire = serde_json::to_value(&a).unwrap();
+                wire.as_object_mut().unwrap().remove("rule");
+                let blob = wire.to_string().to_lowercase();
+                for b in banned {
+                    // "logged around it" appears only inside the couldn't-read sentence, which is allowed.
+                    if b == "logged around it" && blob.contains("couldn't read the windows system log") {
+                        continue;
+                    }
+                    assert!(!blob.contains(b), "'{b}' in {blob}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_unread_or_cut_system_log_is_never_called_quiet() {
+        let lone = mk(IncidentKind::AppCrash, "2026-06-12T21:00:00Z", None, Some("0xc0000005"), Some("game.exe"), None);
+        let ctx = std::slice::from_ref(&lone);
+        let found_none = "Compy found no graphics-driver timeout, blue screen, hardware error or unexpected shutdown";
+        let couldnt = "Compy couldn't read the Windows System log for that time";
+        let line = |cov: SystemLogCoverage| {
+            let a = assess_with(&lone, ctx, cov).expect("fires");
+            assert_eq!(a.strength, Strength::Weak);
+            assert_eq!(a.statement, Some(AssessmentStatement::AppCrash), "same neutral sentence either way");
+            a.evidence.join(" | ")
+        };
+        // never read (reader failed / no marker): couldn't-read, never found-none
+        let unread = line(SystemLogCoverage::new(false, None));
+        assert!(unread.contains(couldnt) && !unread.contains(found_none), "{unread}");
+        assert!(!unread.to_lowercase().contains("quiet"));
+        // the default (nothing proven) is the same
+        let unproven = line(SystemLogCoverage::UNPROVEN);
+        assert!(unproven.contains(couldnt) && !unproven.contains(found_none));
+        // read, but the scan is only complete from AFTER the window opens (cut inside ±10 min)
+        let cut_inside = line(SystemLogCoverage::new(true, parse_ts("2026-06-12T20:55:00Z").map(|t| t.with_timezone(&Utc))));
+        assert!(cut_inside.contains(couldnt) && !cut_inside.contains(found_none), "{cut_inside}");
+        // read and complete back before the window: the only case that may say found-none
+        let covered = line(SystemLogCoverage::new(true, parse_ts("2026-06-12T20:00:00Z").map(|t| t.with_timezone(&Utc))));
+        assert!(covered.contains(found_none) && !covered.contains(couldnt), "{covered}");
+        // read with nothing cut at all
+        assert!(line(SystemLogCoverage::new(true, None)).contains(found_none));
+        // a system event that WAS found still blocks the app reading, whatever the coverage
+        let near = vec![
+            lone.clone(),
+            mk(IncidentKind::GpuTimeout, "2026-06-12T21:03:00Z", Some("amdkmdag"), None, None, None),
+        ];
+        assert!(rule_app_specific(&near[0], &near, SystemLogCoverage::new(false, None)).is_none());
+        // the hard-lock rule: no blue-screen line unless covered
+        let sd = mk(IncidentKind::UnexpectedShutdown, "2026-06-12T21:00:00Z", None, None, None, None);
+        let blob = |cov| assess_with(&sd, std::slice::from_ref(&sd), cov).unwrap().evidence.join(" | ");
+        assert!(blob(SystemLogCoverage::UNPROVEN).contains(couldnt));
+        assert!(blob(SystemLogCoverage::new(true, None)).contains("found no blue-screen record"));
+    }
+
+    #[test]
+    fn the_scan_carries_what_the_reader_proved_into_the_rules() {
+        let _g = V2GateForceOn::begin();
+        let json = r#"[{"time":"2026-06-12T21:42:00.0000000-07:00","id":1000,"provider":"Application Error","message":"crash","props":["game.exe","1.0","ts","unity.dll","1.0","ts","c0000005"]}]"#;
+        let evidence = |read: bool| {
+            let r = report_from(parse_events_json(json), Vec::new(), None, Vec::new(), &[], Vec::new(), read);
+            r.incidents[0].assessment.as_ref().expect("assessed").evidence.join(" | ")
+        };
+        assert!(evidence(false).contains("couldn't read the Windows System log"));
+        assert!(evidence(true).contains("Compy found no graphics-driver timeout"));
+    }
+
+    #[test]
+    fn the_reader_script_withholds_its_ok_marker_on_a_real_read_error() {
+        let script = event_log_script();
+        assert!(script.contains("-ErrorVariable +cerr"));
+        // only Get-WinEvent's "no matching events" is a non-failure
+        assert!(script.contains("NoMatchingEventsFound"));
+        assert!(script.contains(EVENT_LOG_READ_OK_MARK));
+    }
+
+    #[test]
+    fn the_driver_temperature_line_only_says_what_was_measured() {
+        // every counted session has a reading, all below the line
+        let cool = |when: &str| mk(IncidentKind::GpuTimeout, when, Some("nvlddmkm"), None, None, Some(70));
+        let all = vec![cool("2026-06-12T21:00:00Z"), cool("2026-06-11T20:00:00Z")];
+        let e = assess(&all[0], &all).unwrap().evidence.join(" | ");
+        assert!(e.contains("measured the GPU peaking below 85°C in each of those 2 sessions"), "{e}");
+        // one session had no temperature reading: say so, never "not in the overheating range"
+        let mixed = vec![cool("2026-06-12T21:00:00Z"), mk(IncidentKind::GpuTimeout, "2026-06-11T20:00:00Z", Some("nvlddmkm"), None, None, None)];
+        let e = assess(&mixed[0], &mixed).unwrap().evidence.join(" | ");
+        assert!(e.contains("no temperature reading for 1 of those 2 sessions"), "{e}");
+        assert!(!e.contains("overheating range") && !e.contains("below 85"));
+        // none read at all
+        let none = vec![
+            mk(IncidentKind::GpuTimeout, "2026-06-12T21:00:00Z", Some("nvlddmkm"), None, None, None),
+            mk(IncidentKind::GpuTimeout, "2026-06-11T20:00:00Z", Some("nvlddmkm"), None, None, None),
+        ];
+        let e = assess(&none[0], &none).unwrap().evidence.join(" | ");
+        assert!(e.contains("no temperature reading for 2 of those 2 sessions"), "{e}");
+        // another counted session was hot: say that instead of "below"
+        let hot_other = vec![cool("2026-06-12T21:00:00Z"), mk(IncidentKind::GpuTimeout, "2026-06-11T20:00:00Z", Some("nvlddmkm"), None, None, Some(91))];
+        let e = assess(&hot_other[0], &hot_other).unwrap().evidence.join(" | ");
+        assert!(e.contains("peaked at 91°C in one of those 2 sessions") && !e.contains("below"), "{e}");
     }
 
     #[test]
@@ -3198,7 +3448,7 @@ mod blackbox_tests {
         let out = from_events(events, &[]);
         assert_eq!(out.len(), 1);
         let a = out[0].assessment.as_ref().expect("a lone app crash assesses as app-specific");
-        assert!(a.consistent_with.contains("doesn't rule out your PC"));
+        assert!(a.consistent_with.contains("record alone can't tell"));
         assert!(a.next_step.reversible && !has_percent(a));
     }
 
@@ -3245,7 +3495,7 @@ mod blackbox_tests {
     #[test]
     fn report_clean_judgeable_from_takes_the_wer_cut() {
         let cut: DateTime<Utc> = "2026-10-05T00:00:00Z".parse().unwrap();
-        let r = report_from(Vec::new(), Vec::new(), Some(cut), Vec::new(), &[], Vec::new());
+        let r = report_from(Vec::new(), Vec::new(), Some(cut), Vec::new(), &[], Vec::new(), true);
         assert_eq!(r.clean_judgeable_from, Some(cut), "a cut WER read limits how far back clean can be said");
 
         // A full Application channel (EVENTS_PER_CHANNEL rows) cuts the Event Log read at its oldest
@@ -3259,10 +3509,10 @@ mod blackbox_tests {
                 })
                 .collect()
         };
-        let r = report_from(full_channel(), Vec::new(), Some(cut), Vec::new(), &[], Vec::new());
+        let r = report_from(full_channel(), Vec::new(), Some(cut), Vec::new(), &[], Vec::new(), true);
         assert_eq!(r.clean_judgeable_from, Some(cut), "WER cut later than the Event Log cut wins");
         let early_wer = t0 - chrono::Duration::days(3);
-        let r = report_from(full_channel(), Vec::new(), Some(early_wer), Vec::new(), &[], Vec::new());
+        let r = report_from(full_channel(), Vec::new(), Some(early_wer), Vec::new(), &[], Vec::new(), true);
         // (the 40 crashes also fill the incident cap, whose cut is later still; never the early WER one)
         assert!(r.clean_judgeable_from.is_some_and(|c| c >= t0), "Event Log cut later than the WER cut wins");
     }

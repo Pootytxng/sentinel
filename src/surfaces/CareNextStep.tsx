@@ -8,6 +8,7 @@ import { CareSupportExport } from "./CareHonestEnd";
 import { Depth, ReceiptRow } from "../design/Depth";
 import { displayModeLabel } from "../data/display-mode";
 import { prettyGameName } from "./game-name";
+import { assessStatementText } from "./assess-statement";
 import "./CareNextStep.css";
 
 // P6-next: the ONE next step at the top of the Care view, and its measured payoff. BlackBox picks the
@@ -185,7 +186,14 @@ export function CareNextStep({
                 <ReceiptRow label={rk("app")} value={step.appLabel} />
                 <ReceiptRow label={rk("record")} value={step.incidentId} />
                 <ReceiptRow label={rk("recordedAt")} value={step.incidentWhen} />
-                <ReceiptRow label={rk("consistentWith")} value={step.consistentWith} />
+                <ReceiptRow
+                  label={rk("consistentWith")}
+                  value={
+                    step.statement
+                      ? assessStatementText(t, { statement: step.statement, subject: step.subject ?? undefined, temp_c: step.tempC ?? undefined })
+                      : step.consistentWith
+                  }
+                />
                 <ReceiptRow label={rk("research")} value={step.research ? rk("researchYes") : rk("researchNo")} />
               </>
             ) : (

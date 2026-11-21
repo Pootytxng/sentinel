@@ -501,9 +501,13 @@
       "attribution": "以上是发布方的原话，不是 Compy 的判断。"
     },
     "assessStatement": {
-      "appCrash": "Windows 记录到 {{subject}} 崩溃。这指向游戏或它加载的内容，并不能排除你的电脑。",
-      "appHang": "Windows 记录到 {{subject}} 停止响应。这指向游戏或它加载的内容，并不能排除你的电脑。",
-      "hostProcess": "Windows 记录到 {{subject}} 崩溃。它是替其他程序运行代码的 Windows 文件，所以这指向它当时运行的某个程序，并不能排除你的电脑。",
+      "appCrash": "Windows 记录到 {{subject}} 崩溃。仅凭这条记录，无法判断问题出在程序本身、它加载的内容（例如显卡驱动），还是你的电脑。",
+      "appHang": "Windows 记录到 {{subject}} 停止响应。仅凭这条记录，无法判断问题出在程序本身、它加载的内容（例如显卡驱动），还是你的电脑。",
+      "hostProcess": "Windows 记录到 {{subject}} 崩溃。它是替其他程序运行代码的 Windows 文件，仅凭这条记录无法判断涉及的是哪个程序、驱动，还是你电脑的某个部件。",
+      "gpuTimeoutPeak": "Windows 记录到一次显卡驱动超时。在当时进行的那次会话中，Compy 测得 GPU 峰值温度为 {{temp}}°C。Compy 还没有把它与这张显卡其他会话的温度做对比，所以无法判断发热是否起了作用。",
+      "shutdownPeak": "Windows 记录到一次意外关机。在当时进行的那次会话中，Compy 测得 GPU 峰值温度为 {{temp}}°C。Compy 还没有把它与这张显卡其他会话的温度做对比，所以无法判断发热是否起了作用。",
+      "hardwareError": "Windows 记录到一次硬件级错误（WHEA）。这类错误由硬件自己上报，可能来自发热、供电、内存，或不稳定的超频或降压。仅凭这条记录无法判断是哪一种。",
+      "hardwareErrorPeak": "Windows 记录到一次硬件级错误（WHEA）。这类错误由硬件自己上报，可能来自发热、供电、内存，或不稳定的超频或降压。仅凭这条记录无法判断是哪一种。在当时进行的那次会话中，Compy 测得 GPU 峰值温度为 {{temp}}°C，但还没有与这张显卡其他会话的温度做对比，所以无法判断发热是否起了作用。",
       "unnamedApp": "某个应用"
     },
     "assessLinePreBeyond": "这一项属于",

@@ -318,8 +318,9 @@ export function LabConsole({
   const [openStation, setOpenStation] = useState<LabStationKey | null>(null);
   // P7-rig-care (ROADMAP P7 bullet 4, Constitution §24, §25): once the Care station has read the
   // crash records this visit, the newest assessed one — the record the Care step is drawn from —
-  // picks out the part its rule is about on the room's rig, or dims the rig when it reads as the app
-  // itself (rig/incident-part.ts). An open station takes the whole workspace and draws no rig, so the
+  // picks out the part its rule is about on the room's rig; an app-side record only gets a note, and
+  // the rig is never dimmed for it (dim means "not this"; one record can't say that, rig/incident-part.ts).
+  // An open station takes the whole workspace and draws no rig, so the
   // record shows on the rig when the user comes back to the room — not only while Care is open,
   // which would be never. No scan this visit → the rig is its own.
   const careRigParts = useMemo(() => buildRigParts(hw, t), [hw, t]);
@@ -763,7 +764,6 @@ export function LabConsole({
                   cameraTargetY={BENCH_CAMERA_TARGET_Y}
                   onSelectedIdChange={(_id, what) => setSelectedRig(what)}
                   focusId={careFocus?.kind === "part" ? careFocus.partId : null}
-                  dimmed={careFocus?.kind === "away"}
                 />
               </div>
               <ReticleCursor scopeRef={stageRef} />
@@ -1129,7 +1129,6 @@ export function LabConsole({
                   cameraTargetY={BENCH_CAMERA_TARGET_Y}
                   onSelectedIdChange={(_id, what) => setSelectedRig(what)}
                   focusId={careFocus?.kind === "part" ? careFocus.partId : null}
-                  dimmed={careFocus?.kind === "away"}
                 />
               </div>
               <ReticleCursor scopeRef={stageRef} />
