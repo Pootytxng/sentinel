@@ -268,6 +268,57 @@ describe("Problems room - identical incidents grouped", () => {
     expect(document.querySelectorAll(".bb-group-list > .bb-item")).toHaveLength(0);
   });
 
+  // review r1 B2: the red dot's record sits in a folded group on a plain visit, so no row is on
+  // screen. The group itself must say so and carry a button of its own for THAT record.
+  it("a marked record inside a folded group: the group carries the mark, says so, and its own button opens it and scrolls to that record", async () => {
+    reportMock.value = { incidents: many(5), skipped_sources: [] };
+    const target = rob(1); // NOT the care step's record (the newest, rob(4))
+    const { container } = render(<BlackBox selectedIncidentId={target.incident_id} expandGroupFor={null} />);
+    await screen.findByText(/closed 5 times/);
+    const group = container.querySelector(".bb-group") as HTMLElement;
+    expect(group.getAttribute("data-selected")).toBe("true");
+    expect(within(group).getByText(/The record you came here to see is in this group\./)).toBeTruthy();
+    expect(document.querySelectorAll(".bb-group-list > .bb-item")).toHaveLength(0);
+    const spy = vi.fn();
+    const orig = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = spy;
+    fireEvent.click(within(group).getByRole("button", { name: "Show that record" }));
+    HTMLElement.prototype.scrollIntoView = orig;
+    const marked = container.querySelectorAll('.bb-item[data-selected="true"]');
+    expect(marked).toHaveLength(1); // the row only; the open group no longer carries the mark
+    expect(marked[0].textContent).toContain("Nov 10, 12:01 PM");
+    expect(spy.mock.contexts.some((el) => el === marked[0]), "the marked record was not scrolled to").toBe(true);
+    expect(screen.queryByText(/The record you came here to see is in this group\./)).toBeNull();
+  });
+
+  it("the care step's button still targets the care step's record, not the marked one", async () => {
+    reportMock.value = { incidents: many(5), skipped_sources: [] };
+    const { container } = render(<BlackBox selectedIncidentId={rob(1).incident_id} expandGroupFor={null} />);
+    await screen.findByText(/closed 5 times/);
+    fireEvent.click(screen.getByRole("button", { name: "Show this record in the list" }));
+    const marked = container.querySelectorAll('.bb-item[data-selected="true"]');
+    expect(marked).toHaveLength(1);
+    expect(marked[0].textContent).toContain("Nov 11, 12:04 PM"); // the newest = the step's record
+  });
+
+  it("a marked record that is in no group shows no group line", async () => {
+    reportMock.value = { incidents: [rob(0), rob(1, { tag: "App hang", headline: `ROB RUN stopped responding (froze) — ${rob(1).when_display}` })], skipped_sources: [] };
+    const { container } = render(<BlackBox selectedIncidentId={rob(1).incident_id} expandGroupFor={null} />);
+    await screen.findAllByText(/ROB RUN/);
+    expect(container.querySelectorAll(".bb-group")).toHaveLength(0);
+    expect(screen.queryByText(/is in this group/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show that record" })).toBeNull();
+    expect(container.querySelectorAll('.bb-item[data-selected="true"]')).toHaveLength(1);
+  });
+
+  it("says the group line in Chinese", async () => {
+    await i18n.changeLanguage("zh-CN");
+    reportMock.value = { incidents: many(3), skipped_sources: [] };
+    render(<BlackBox selectedIncidentId={rob(1).incident_id} expandGroupFor={null} />);
+    await screen.findByText(/你要查看的那条记录在这一组里。/);
+    expect(screen.getByRole("button", { name: "显示那条记录" })).toBeTruthy();
+  });
+
   it("the next-step block's 'Show this record in the list' opens the folded group and scrolls to that record", async () => {
     const spy = vi.fn();
     const orig = HTMLElement.prototype.scrollIntoView;

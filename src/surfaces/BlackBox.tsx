@@ -610,12 +610,34 @@ function IncidentGroupBlock({
     : t("gaming.blackBox.group.other", { count, what: headlineWording(newest), range });
   // Members share one next step (it is part of the key): if it is the step shown above, say so once.
   const lifted = items.some(isLiftedInc);
+  // The marked record (a waiting record the red dot points to, a deep link or a reveal) sits in this
+  // folded group: its row is not rendered, so the group says so and carries its own button. Opening
+  // mounts the marked row, which scrolls itself into view (the same path the deep link takes).
+  const markedHere = !!selectedIncidentId && items.some((i) => i.incident_id === selectedIncidentId);
+  const markedHidden = markedHere && !open;
   return (
-    <li className="bb-item bb-group" data-group-size={count}>
+    <li
+      className="bb-item bb-group"
+      data-group-size={count}
+      data-selected={markedHidden ? "true" : undefined}
+    >
       <div className="bb-item-head">
         <span className="bb-tag">{newest.tag}</span>
         <span className="bb-headline">{headline}</span>
       </div>
+      {markedHidden && (
+        <p className="bb-group-marked">
+          {t("gaming.blackBox.group.markedHere")}{" "}
+          <button
+            type="button"
+            className="bb-receipt-toggle bb-group-show-marked"
+            onClick={() => setOpen(true)}
+            aria-controls={listId}
+          >
+            {t("gaming.blackBox.group.showMarked")}
+          </button>
+        </p>
+      )}
       {/* On every group, at any size: the list is the newest records Compy read, never Windows' total. */}
       <p className="bb-group-cap">{t("gaming.blackBox.group.capNote", { cap: INCIDENT_CAP })}</p>
       {newest.assessment && (

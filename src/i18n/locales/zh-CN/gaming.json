@@ -539,6 +539,8 @@
       "rangeDay": "都在 {{date}}",
       "capNote": "Compy 只读取 Windows 保留的最新记录（最多列出 {{cap}} 条），所以这里只统计这些；可能还有更早的记录没有被计入。",
       "showEach_other": "展开每一条（{{count}}）",
+      "markedHere": "你要查看的那条记录在这一组里。",
+      "showMarked": "显示那条记录",
       "hideEach": "收起各条记录",
       "eachLabel_other": "这 {{count}} 条记录，最新的在前",
       "sameForAll_other": "这 {{count}} 条记录都一样"

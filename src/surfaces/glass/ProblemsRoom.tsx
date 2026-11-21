@@ -24,8 +24,11 @@ export function ProblemsRoom({
   /** A one-time deep link to one incident (the Health card's "Find out why"). */
   focusIncidentId: string | null;
   /** The record the Problems door's dot counts (the Care observer's pending pointer). Arriving any
-   *  other way while it waits lands on it, so the dot and the page agree. Read-only: arriving here
-   *  does not mark it opened; only "Find out why" or "Not now" on Health clears it. */
+   *  other way while it waits marks it: its row is marked and scrolled to when it is listed on its
+   *  own. When it sits inside a folded group (a plain visit leaves groups folded), the row is not
+   *  on screen, so that group carries the mark, says "the record you came here to see is in this
+   *  group" and has its own button that opens the group and scrolls to the record. Read-only:
+   *  arriving here does not mark it opened; only "Find out why" or "Not now" on Health clears it. */
   pendingIncidentId?: string | null;
 }) {
   const { t } = useTranslation();

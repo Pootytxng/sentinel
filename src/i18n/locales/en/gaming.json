@@ -569,6 +569,8 @@
       "capNote": "Compy reads only the newest records Windows keeps (at most {{cap}} are listed), so this counts only those; older ones may exist that it did not count.",
       "showEach_other": "Show each one ({{count}})",
       "hideEach": "Hide the individual records",
+      "markedHere": "The record you came here to see is in this group.",
+      "showMarked": "Show that record",
       "eachLabel_other": "The {{count}} records, newest first",
       "sameForAll_other": "The same for all {{count}} of these records"
     }
