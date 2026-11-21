@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 // Compy may say what it DOES to a game (reads frame timing from Windows, injects nothing, writes
-// nothing to game files). It may not say a game is "never touched" (its process listings open every
-// process, a running game included, query-only; docs/ARCHITECTURE_LOCKS.md ~191), and it may not
+// nothing to game files). It may not say a game is "never touched": its process listings open no process
+// (one handle-free system snapshot), but a few places still open the game's own process with
+// PROCESS_QUERY_LIMITED_INFORMATION (fps.rs, monitoring.rs pid_running_as; docs/ARCHITECTURE_LOCKS.md ~191), and it may not
 // promise an outcome with anti-cheat or bans: the makers of anti-cheat do not publish what they
 // allow, so Compy cannot know. "Compy can't promise how any anti-cheat will react" is the true line.
 // Product text rule: CLAUDE.md "Honesty rules", docs/PRODUCT_CONSTITUTION.md section 38.

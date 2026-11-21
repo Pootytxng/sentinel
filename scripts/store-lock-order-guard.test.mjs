@@ -797,10 +797,6 @@ const LOCK_CENSUS = {
     class: "out",
     why: "the running capture's reading count and fps buckets the guided journey reads (P5-enough); in-memory only",
   },
-  "monitoring::SYS: OnceLock<Mutex<System>>": {
-    class: "out",
-    why: "the sysinfo handle used for memory-pressure reads; a probe handle, not a store",
-  },
   "monitoring::CTL: OnceLock<Mutex<u64>>": {
     class: "out",
     why:

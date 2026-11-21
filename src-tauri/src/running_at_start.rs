@@ -43,8 +43,8 @@
 //! the tick the first frame arrives, not the moment monitoring started: `first_frame_offset_s` says
 //! how long monitoring had been waiting). An enumeration that comes back empty is retried on the next
 //! [`SNAPSHOT_RETRIES`] frame ticks before the snapshot is marked `unread`. It reuses the 1 Hz
-//! names-only `sysinfo` enumeration the process-start detector already does: no second enumeration,
-//! no new process spawn. The added cost is one pass over the names (measured in the tests).
+//! handle-free process snapshot (`other_load::read_process_rows`, no process is opened) the
+//! process-start detector already takes: no second enumeration, no new process spawn. The added cost is one pass over the names (measured in the tests).
 #![cfg_attr(not(test), allow(dead_code))]
 
 use serde::{Deserialize, Deserializer, Serialize};
@@ -160,7 +160,7 @@ pub(crate) const PROGRAMS: &[Program] = &[
     // --- voice chat and meetings ---
     p!("discord", "Discord", VoiceMeeting, true, ["discord.exe"], "voice chat first; in-game overlay and screen share (presence only: many processes)"),
     p!("zoom", "Zoom", VoiceMeeting, true, ["zoom.exe"], "the resident Zoom client, open on many PCs with no meeting running"),
-    p!("zoom-meeting", "Zoom", VoiceMeeting, false, ["cpthost.exe"], "Zoom's meeting-time process: far better evidence than zoom.exe alone"),
+    p!("zoom-meeting", "Zoom (cpthost.exe)", VoiceMeeting, false, ["cpthost.exe"], "Zoom's meeting-time process: far better evidence than zoom.exe alone"),
     p!("teams", "Microsoft Teams", VoiceMeeting, true, ["teams.exe", "ms-teams.exe"], "meeting client (classic and new Teams); resident in the tray"),
 ];
 
@@ -408,6 +408,16 @@ fn is_chatter(name: &str) -> bool {
     let lower = name.to_lowercase();
     let base = lower.strip_suffix(".exe").unwrap_or(&lower);
     base == "compy" || PROC_IGNORE.contains(&base)
+}
+
+/// PURE: what a capture tick hands [`StartWatch::observe`]. A snapshot that could not be read is the
+/// failed-read form (no names, count 0), which `observe` already treats as "no tick for the diff, but a
+/// frame tick still spends the first-frame time and the retry budget". It is never skipped.
+pub(crate) fn tick_listing(rows: Option<&[crate::other_load::ProcRow]>) -> (HashSet<String>, u32) {
+    match rows {
+        Some(r) => (r.iter().map(crate::other_load::ProcRow::label).collect(), u32::try_from(r.len()).unwrap_or(u32::MAX)),
+        None => (HashSet::new(), 0),
+    }
 }
 
 /// One session's process-start watch: the 1 Hz name diff behind the "process-start" events, the
@@ -729,6 +739,46 @@ mod tests {
         let mut w = StartWatch::default();
         w.observe(machine(&["medal.exe"]), 50, false, 1, false);
         assert_eq!(w.finish(None).0, None);
+    }
+
+    #[test]
+    fn an_unreadable_capture_tick_is_the_failed_read_form_and_never_skipped() {
+        use crate::other_load::ProcRow;
+        let row = |pid: u32, name: &str| ProcRow { pid, parent: 0, name: Some(name.into()), threads: 1, working_set: 0, create_time: 1, cpu_100ns: 0 };
+        assert_eq!(tick_listing(None), (HashSet::new(), 0));
+        let rows = [row(4, "System"), row(10, "Medal.exe")];
+        let (names, total) = tick_listing(Some(&rows));
+        assert_eq!((total, names.contains("Medal.exe")), (2, true));
+        // A failed tick between two good ones is no diff and no phantom burst: the next good tick is quiet.
+        let big: Vec<String> = (0..40).map(|i| format!("p{i}.exe")).collect();
+        let good: HashSet<String> = big.iter().cloned().collect();
+        let mut w = StartWatch::default();
+        assert!(w.observe(good.clone(), 40, false, 1, false).is_empty());
+        let (n0, t0) = tick_listing(None);
+        assert!(w.observe(n0, t0, false, 2, false).is_empty());
+        assert!(w.observe(good, 40, false, 3, false).is_empty(), "the same machine after a failed tick starts nothing");
+        assert_eq!(w.finish(None).1, 0, "and is not counted as a skipped burst");
+        // A failed tick on the first frame still spends the first-frame time: the later snapshot's offset
+        // says when the frame was first seen, not when the read first worked.
+        let mut w = StartWatch::default();
+        let (n0, t0) = tick_listing(None);
+        w.observe(n0, t0, false, 5, true);
+        w.observe(machine(&["medal.exe"]), 60, false, 6, true);
+        let r = w.finish(None).0.unwrap();
+        assert_eq!((r.unread, r.first_frame_offset_s, r.taken_at_offset_s), (false, Some(5), 6));
+    }
+
+    #[test]
+    fn a_session_whose_every_snapshot_fails_ends_as_couldnt_read_not_as_no_frame() {
+        let mut w = StartWatch::default();
+        for t in 3..8 {
+            let (n, c) = tick_listing(None);
+            w.observe(n, c, false, t, true);
+        }
+        let (running, skipped, dropped) = w.finish(None);
+        let r = running.expect("attempted, so recorded");
+        assert!(r.unread && !summarise(&r).read);
+        assert_eq!((r.first_frame_offset_s, skipped, dropped), (Some(3), 0, 0));
     }
 
     #[test]
@@ -1179,11 +1229,11 @@ mod tests {
     }
 
     /// Run by hand on the target PC: `cargo test running_at_start -- --ignored --nocapture`. Measures
-    /// the real names-only enumeration the recorder does each second plus this slice's pass.
+    /// the real handle-free enumeration the recorder does each second (no process is opened) plus this
+    /// slice's pass.
     #[test]
     #[ignore]
     fn measured_on_this_pc_enumeration_plus_snapshot() {
-        let mut sys = sysinfo::System::new();
         let mut worst = std::time::Duration::ZERO;
         let mut total_time = std::time::Duration::ZERO;
         let mut snap_total = std::time::Duration::ZERO;
@@ -1191,9 +1241,9 @@ mod tests {
         let mut procs = 0;
         for _ in 0..runs {
             let t0 = std::time::Instant::now();
-            sys.refresh_processes_specifics(sysinfo::ProcessesToUpdate::All, true, sysinfo::ProcessRefreshKind::nothing());
-            let names: HashSet<String> = sys.processes().values().map(|p| p.name().to_string_lossy().into_owned()).collect();
-            procs = sys.processes().len();
+            let rows = crate::other_load::read_process_rows().expect("the snapshot reads on this PC");
+            let names: HashSet<String> = rows.iter().map(crate::other_load::ProcRow::label).collect();
+            procs = rows.len();
             let t1 = std::time::Instant::now();
             let r = snapshot(names.iter().map(String::as_str), procs as u32, 0, 0);
             let t2 = std::time::Instant::now();
@@ -1208,7 +1258,7 @@ mod tests {
     #[test]
     fn monitoring_is_wired_to_the_watch_and_the_row() {
         let src = include_str!("monitoring.rs");
-        for needle in ["watch.observe(", "tick_game.is_some()", "watch.finish(counters_end)", ".with_running_at_start("] {
+        for needle in ["watch.observe(", "running_at_start::tick_listing(", "tick_game.is_some()", "watch.finish(counters_end)", ".with_running_at_start("] {
             assert!(src.contains(needle), "monitoring.rs lost `{needle}`");
         }
         assert!(!src.contains("prev_procs"), "the bare previous-names set is back");

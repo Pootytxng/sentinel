@@ -244,27 +244,12 @@ pub(crate) struct MemoryPressure {
     pub top_consumers: Vec<MemConsumer>,
 }
 
-// Reused across polls (sysinfo recommends one System); memory totals only, it never refreshes processes.
-fn mem_pressure_system() -> &'static Mutex<System> {
-    static SYS: OnceLock<Mutex<System>> = OnceLock::new();
-    SYS.get_or_init(|| Mutex::new(System::new()))
-}
-
 #[tauri::command]
 pub(crate) fn get_memory_pressure() -> MemoryPressure {
     use std::collections::HashMap;
-    let Ok(mut sys) = mem_pressure_system().lock() else {
-        return MemoryPressure {
-            used_bytes: 0,
-            total_bytes: 0,
-            used_pct: 0,
-            swap_used_bytes: 0,
-            swap_total_bytes: 0,
-            level: "ok".into(),
-            advisory: None,
-            top_consumers: Vec::new(),
-        };
-    };
+    // Memory totals only: a fresh System per call keeps no state (and no lock is held across the snapshot below);
+    // it never refreshes processes.
+    let mut sys = System::new();
     sys.refresh_memory();
 
     let total = sys.total_memory();
@@ -1389,15 +1374,14 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 // enumeration gives the session's one start snapshot (which KNOWN programs were
                 // already running; ids only, `running_at_start.rs`) on the first tick a frame
                 // names the process, and counts the ticks/starts the diff could not list.
-                // Handle-free snapshot: opens no process. A tick whose snapshot cannot be read is
-                // skipped, never fed in as an empty list.
-                if let Some(rows) = crate::other_load::read_process_rows() {
-                    let total_procs = u32::try_from(rows.len()).unwrap_or(u32::MAX);
-                    let names: std::collections::HashSet<String> =
-                        rows.iter().map(crate::other_load::ProcRow::label).collect();
-                    let started = live.watch.observe(names, total_procs, at_cap, elapsed, tick_game.is_some());
-                    live.events.extend(started);
-                }
+                // Handle-free snapshot: opens no process. A tick whose snapshot cannot be read still
+                // reaches `observe` as the failed-read form (no names, count 0): the watch then neither
+                // diffs it (no phantom burst on the next good tick) nor loses the first-frame time and
+                // the retry budget behind the start snapshot's "couldn't read".
+                let rows = crate::other_load::read_process_rows();
+                let (names, total_procs) = crate::running_at_start::tick_listing(rows.as_deref());
+                let started = live.watch.observe(names, total_procs, at_cap, elapsed, tick_game.is_some());
+                live.events.extend(started);
             }
             // Monitoring stopped (or the helper went away): a session still open ends with the wall
             // time since it began, as every session always has.

@@ -342,6 +342,8 @@ const _: () = assert!(OFF_PPID == OFF_PID + 8 && ROW_MIN == 152);
 /// One process as the handle-free snapshot describes it. Everything here comes from the snapshot buffer;
 /// nothing needs a process handle. NOT available without a handle (and so not here): full exe path,
 /// command line, user, environment, per-process disk I/O. A caller that wants those gets "unknown".
+// Fields the snapshot holds for callers that need them (parent, threads, times); not all are read yet.
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ProcRow {
     pub pid: u32,
@@ -414,36 +416,6 @@ pub(crate) fn read_process_rows() -> Option<Vec<ProcRow>> {
     parse_process_rows(&buf)
 }
 
-/// PURE: each process in `cur`'s CPU use over the time between two snapshots, as a percentage of the whole
-/// machine (0 to 100, summed over `cores`): `cpu time grown / (wall time * cores)`. `wall_100ns` is the
-/// elapsed wall time between the two snapshots in 100 ns units.
-/// - No earlier snapshot (`prev` is `None`): every value is `None` (unknown), never 0.
-/// - A process absent from `prev`, or with the same pid but a different creation time (pid reuse), has no
-///   baseline: `None`. A process in `prev` but not in `cur` is dropped (the result follows `cur`).
-/// - A CPU time that went backwards, zero wall time or zero cores: `None`.
-#[cfg_attr(not(test), allow(dead_code))] // the sanctioned replacement for sysinfo's cpu_usage; no caller needs it yet
-pub(crate) fn process_cpu_percent(
-    prev: Option<&[ProcRow]>,
-    cur: &[ProcRow],
-    wall_100ns: u64,
-    cores: u32,
-) -> Vec<(u32, Option<f64>)> {
-    cur.iter()
-        .map(|c| {
-            let pct = (|| {
-                let p = prev?
-                    .iter()
-                    .find(|p| p.pid == c.pid && p.create_time == c.create_time)?;
-                if wall_100ns == 0 || cores == 0 || c.cpu_100ns < p.cpu_100ns {
-                    return None;
-                }
-                let used = (c.cpu_100ns - p.cpu_100ns) as f64;
-                Some((used / (wall_100ns as f64 * cores as f64) * 100.0).clamp(0.0, 100.0))
-            })();
-            (c.pid, pct)
-        })
-        .collect()
-}
 // ---------------------------------------------------------------------------------------------
 // Windows readers
 // ---------------------------------------------------------------------------------------------
@@ -1124,41 +1096,36 @@ mod tests {
     }
 
     #[test]
-    fn cpu_percent_is_unknown_on_the_first_sample_never_zero() {
-        let cur = [row(10, 1, 5_000)];
-        assert_eq!(process_cpu_percent(None, &cur, 10_000_000, 4), vec![(10, None)]);
-    }
-
-    #[test]
-    fn cpu_percent_is_the_cpu_time_growth_over_wall_time_and_cores() {
-        let prev = [row(10, 1, 1_000), row(11, 1, 0)];
-        // 1 s of wall time on 4 cores; pid 10 used 1 s of CPU (25% of the machine), pid 11 none.
-        let cur = [row(10, 1, 1_000 + 10_000_000), row(11, 1, 0)];
-        let got = process_cpu_percent(Some(&prev), &cur, 10_000_000, 4);
-        assert_eq!(got, vec![(10, Some(25.0)), (11, Some(0.0))]);
-        // Never above the whole machine, even with a sloppy wall clock.
-        let hot = [row(10, 1, 1_000 + 90_000_000)];
-        assert_eq!(process_cpu_percent(Some(&prev), &hot, 10_000_000, 4), vec![(10, Some(100.0))]);
-    }
-
-    #[test]
-    fn cpu_percent_drops_gone_processes_and_does_not_trust_a_reused_pid() {
-        let prev = [row(10, 1, 100), row(11, 1, 100), row(12, 1, 100)];
-        // 11 is gone (dropped), 12's pid was reused by a new process (different create time: unknown),
-        // 13 is new (unknown), 10 continues.
-        let cur = [row(10, 1, 100 + 5_000_000), row(12, 2, 3), row(13, 3, 9)];
-        let got = process_cpu_percent(Some(&prev), &cur, 10_000_000, 1);
-        assert_eq!(got, vec![(10, Some(50.0)), (12, None), (13, None)]);
-    }
-
-    #[test]
-    fn cpu_percent_is_unknown_when_the_inputs_cannot_support_a_number() {
-        let prev = [row(10, 1, 500)];
-        let cur = [row(10, 1, 400)]; // CPU time went backwards
-        assert_eq!(process_cpu_percent(Some(&prev), &cur, 10_000_000, 4), vec![(10, None)]);
-        let cur = [row(10, 1, 900)];
-        assert_eq!(process_cpu_percent(Some(&prev), &cur, 0, 4), vec![(10, None)]);
-        assert_eq!(process_cpu_percent(Some(&prev), &cur, 10_000_000, 0), vec![(10, None)]);
+    fn the_row_parser_pins_its_chain_errors_and_never_returns_a_partial_list() {
+        const ENTRY: usize = 256;
+        let good = snapshot(&[(4, "System", 1, 0, 50), (1234, "Game.exe", 77, 600, 400), (9, "x.exe", 2, 0, 0)]);
+        assert_eq!(parse_process_rows(&good).unwrap().len(), 3);
+        let set_next = |buf: &mut Vec<u8>, i: usize, v: u32| buf[i * ENTRY..i * ENTRY + 4].copy_from_slice(&v.to_le_bytes());
+        // An offset that does not advance past one entry (self-referencing or overlapping): unread.
+        for bad_next in [1u32, (ROW_MIN - 1) as u32] {
+            let mut b = good.clone();
+            set_next(&mut b, 0, bad_next);
+            assert_eq!(parse_process_rows(&b), None, "next={bad_next}");
+        }
+        // An offset (u32, so never backwards) that leaves the buffer: unread.
+        let mut b = good.clone();
+        set_next(&mut b, 1, u32::MAX);
+        assert_eq!(parse_process_rows(&b), None);
+        let mut b = good.clone();
+        set_next(&mut b, 0, (good.len() + 1) as u32);
+        assert_eq!(parse_process_rows(&b), None);
+        // A truncated entry: long enough for the old 88-byte reads, too short for the row fields.
+        let mut b = good.clone();
+        set_next(&mut b, 0, 160);
+        b.truncate(160 + 100);
+        assert_eq!(parse_process_rows(&b), None);
+        // The next entry starts exactly at the end of the buffer: unread, not a partial list.
+        assert_eq!(parse_process_rows(&good[..ENTRY - 1]), None);
+        // The idle process has no image name: the label sysinfo used.
+        let mut idle = snapshot(&[(0, "placeholder", 1, 0, 0)]);
+        idle[OFF_NAME_LEN..OFF_NAME_LEN + 2].copy_from_slice(&0u16.to_le_bytes());
+        let rows = parse_process_rows(&idle).unwrap();
+        assert_eq!((rows[0].name.clone(), rows[0].label()), (None, "Idle".to_string()));
     }
 
     #[test]
@@ -1458,68 +1425,196 @@ mod tests {
 /// Permanent guard (docs/ARCHITECTURE_LOCKS.md, "Boundaries that remain absolute": no game-memory read).
 /// A sysinfo process refresh opens every running process, a protected game included, with
 /// PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, and `refresh_all` after `System::new_all` reads their
-/// memory. No production code in this crate may use one: running programs come from the handle-free
-/// snapshot in this file ([`read_process_rows`]). This scans EVERY `.rs` file under `src-tauri/src`.
+/// memory. Nothing in this crate, test code included (a test run on the owner's PC while a game is open
+/// must not touch it either), may use one: running programs come from the handle-free snapshot in this file
+/// ([`read_process_rows`]). This scans EVERY `.rs` file under `src-tauri/src`.
+///
+/// The text is first MASKED (comments, string and char literals blanked, newlines kept), so a comment can
+/// neither trip nor satisfy the guard and brackets in strings cannot confuse it. Most identifiers are
+/// then banned everywhere. `.processes(` / `.process(` are banned in production only, because test code
+/// legitimately reads `RefreshKind::processes()` (hardware.rs's own guard); a `#[cfg(test)]` item is
+/// dropped by real bracket-depth tracking, never by "the next closing line".
 #[cfg(test)]
 mod process_refresh_guard {
     use std::path::{Path, PathBuf};
 
-    const FORBIDDEN: &[&str] = &[
+    /// Banned in all code, test modules included.
+    const FORBIDDEN_EVERYWHERE: &[&str] = &[
         "new_all",
         "refresh_all",
         "refresh_processes",
         "ProcessRefreshKind",
         "ProcessesToUpdate",
-        ".processes(",
-        ".process(",
         "with_processes",
+        // Renaming the kind (`use sysinfo::RefreshKind as R; R::everything()`) would hide `everything()`.
+        "RefreshKind as",
+        "sysinfo::*",
     ];
+    /// Banned in production code only (test code reads `RefreshKind::processes()` as a plain accessor).
+    const FORBIDDEN_IN_PRODUCTION: &[&str] = &[".processes(", ".process("];
 
-    /// Production text only. Drops every `#[cfg(test)]` item and every line that starts with `//` (so a
-    /// comment can neither trip nor satisfy the guard). An item that follows the attribute is dropped through
-    /// its closing line at the SAME indent (`}`, `};`, `});`), or through its own line when that ends
-    /// in `;`. Anything else, including a comment, stays scanned.
-    fn production_text(src: &str) -> String {
-        let mut out = Vec::new();
-        let mut skip_indent: Option<usize> = None;
-        let mut item_started = false;
-        for line in src.lines() {
-            let indent = line.len() - line.trim_start().len();
-            if let Some(ind) = skip_indent {
-                let t = line.trim_start();
-                if t.starts_with("#[") && !item_started {
-                    continue; // further attributes on the same test item
+    /// Blank comments and string / char literals (newlines kept, so line structure survives).
+    fn mask(src: &str) -> String {
+        let c: Vec<char> = src.chars().collect();
+        let mut out = String::with_capacity(src.len());
+        let blank = |out: &mut String, ch: char| out.push(if ch == '\n' { '\n' } else { ' ' });
+        let ident = |ch: char| ch.is_alphanumeric() || ch == '_';
+        let mut i = 0;
+        while i < c.len() {
+            let ch = c[i];
+            let next = c.get(i + 1).copied();
+            if ch == '/' && next == Some('/') {
+                while i < c.len() && c[i] != '\n' {
+                    out.push(' ');
+                    i += 1;
                 }
-                if !item_started {
-                    item_started = true;
-                    if t.trim_end().ends_with(';') {
-                        skip_indent = None; // a one-line item
+            } else if ch == '/' && next == Some('*') {
+                let mut depth = 0;
+                while i < c.len() {
+                    if c[i] == '/' && c.get(i + 1) == Some(&'*') {
+                        depth += 1;
+                        out.push_str("  ");
+                        i += 2;
+                    } else if c[i] == '*' && c.get(i + 1) == Some(&'/') {
+                        depth -= 1;
+                        out.push_str("  ");
+                        i += 2;
+                        if depth == 0 {
+                            break;
+                        }
+                    } else {
+                        blank(&mut out, c[i]);
+                        i += 1;
                     }
-                    continue;
                 }
-                if indent == ind && t.starts_with(['}', ')']) {
-                    skip_indent = None;
+            } else if (ch == 'r' || (ch == 'b' && next == Some('r'))) && (i == 0 || !ident(c[i - 1])) && {
+                // a raw string: r"..", r#".."#, br#".."#
+                let mut j = i + if ch == 'b' { 2 } else { 1 };
+                while c.get(j) == Some(&'#') {
+                    j += 1;
                 }
-                continue;
+                c.get(j) == Some(&'"')
+            } {
+                let mut j = i + if ch == 'b' { 2 } else { 1 };
+                let mut hashes = 0;
+                while c.get(j) == Some(&'#') {
+                    hashes += 1;
+                    j += 1;
+                }
+                j += 1; // the opening quote
+                while i < j {
+                    out.push(' ');
+                    i += 1;
+                }
+                while i < c.len() {
+                    if c[i] == '"' && (0..hashes).all(|k| c.get(i + 1 + k) == Some(&'#')) {
+                        for _ in 0..=hashes {
+                            out.push(' ');
+                        }
+                        i += 1 + hashes;
+                        break;
+                    }
+                    blank(&mut out, c[i]);
+                    i += 1;
+                }
+            } else if ch == '"' {
+                out.push(' ');
+                i += 1;
+                while i < c.len() && c[i] != '"' {
+                    if c[i] == '\\' && i + 1 < c.len() {
+                        out.push(' ');
+                        i += 1;
+                    }
+                    blank(&mut out, c[i]);
+                    i += 1;
+                }
+                if i < c.len() {
+                    out.push(' ');
+                    i += 1;
+                }
+            } else if ch == '\'' {
+                // A char literal ('x', '\n', '\'') or a lifetime ('a). A lifetime has no closing quote after one char.
+                let is_char = match next {
+                    Some('\\') => true,
+                    Some(_) => c.get(i + 2) == Some(&'\''),
+                    None => false,
+                };
+                if is_char {
+                    out.push(' ');
+                    i += 1;
+                    while i < c.len() && c[i] != '\'' {
+                        if c[i] == '\\' && i + 1 < c.len() {
+                            out.push(' ');
+                            i += 1;
+                        }
+                        blank(&mut out, c[i]);
+                        i += 1;
+                    }
+                    if i < c.len() {
+                        out.push(' ');
+                        i += 1;
+                    }
+                } else {
+                    out.push(ch);
+                    i += 1;
+                }
+            } else {
+                out.push(ch);
+                i += 1;
             }
-            if line.trim() == "#[cfg(test)]" {
-                skip_indent = Some(indent);
-                item_started = false;
-                continue;
-            }
-            if line.trim_start().starts_with("//") {
-                continue;
-            }
-            out.push(line);
         }
-        out.join("\n")
+        out
     }
 
-    fn violations(text: &str) -> Vec<&'static str> {
-        let mut v: Vec<&'static str> = FORBIDDEN.iter().copied().filter(|p| text.contains(p)).collect();
+    /// Byte length of the item that starts at the beginning of `s` (after a `#[cfg(test)]`): through the
+    /// `;` at bracket depth 0, or the `}` that closes depth back to 0. `s` is masked, so every bracket is code.
+    fn item_end(s: &str) -> usize {
+        let mut depth = 0i32;
+        for (i, ch) in s.char_indices() {
+            match ch {
+                '{' | '[' | '(' => depth += 1,
+                '}' | ']' | ')' => {
+                    if depth == 0 {
+                        return i; // the enclosing block's closer: the item was a lone attribute-less tail
+                    }
+                    depth -= 1;
+                    if depth == 0 && ch == '}' {
+                        return i + 1;
+                    }
+                }
+                ';' if depth == 0 => return i + 1,
+                _ => {}
+            }
+        }
+        s.len()
+    }
+
+    /// Masked text with every `#[cfg(test)]` item blanked.
+    fn drop_test_items(masked: &str) -> String {
+        const MARK: &str = "#[cfg(test)]";
+        let mut out = String::with_capacity(masked.len());
+        let mut rest = masked;
+        while let Some(i) = rest.find(MARK) {
+            out.push_str(&rest[..i]);
+            let after = &rest[i + MARK.len()..];
+            let end = item_end(after);
+            out.extend(after[..end].chars().map(|ch| if ch == '\n' { '\n' } else { ' ' }));
+            out.extend(std::iter::repeat_n(' ', MARK.len()));
+            rest = &after[end..];
+        }
+        out.push_str(rest);
+        out
+    }
+
+    /// Every banned name found in `src`.
+    fn violations(src: &str) -> Vec<&'static str> {
+        let masked = mask(src);
+        let prod = drop_test_items(&masked);
+        let mut v: Vec<&'static str> = FORBIDDEN_EVERYWHERE.iter().copied().filter(|p| masked.contains(p)).collect();
+        v.extend(FORBIDDEN_IN_PRODUCTION.iter().copied().filter(|p| prod.contains(p)));
         // `RefreshKind::everything()` includes processes; the Cpu/Memory kinds of the same name do not.
-        if text.match_indices("RefreshKind::everything").any(|(i, _)| {
-            let before = &text[..i];
+        if masked.match_indices("RefreshKind::everything").any(|(i, _)| {
+            let before = &masked[..i];
             !before.ends_with("Cpu") && !before.ends_with("Memory")
         }) {
             v.push("RefreshKind::everything");
@@ -1539,7 +1634,7 @@ mod process_refresh_guard {
     }
 
     #[test]
-    fn no_production_file_refreshes_processes_through_sysinfo() {
+    fn no_file_in_the_crate_refreshes_processes_through_sysinfo() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
         let mut files = Vec::new();
         rs_files(&root, &mut files);
@@ -1547,16 +1642,19 @@ mod process_refresh_guard {
         let mut bad = Vec::new();
         let mut scanned_monitoring = false;
         for f in &files {
-            // An out-of-line test module (`#[cfg(test)] mod tests;`) is a whole file of fixtures.
-            if f.file_name().is_some_and(|n| n == "tests.rs") {
-                continue;
-            }
             let src = std::fs::read_to_string(f).expect("read source");
-            let prod = production_text(&src);
+            // An out-of-line test module (`#[cfg(test)] mod tests;`) is a whole file of test code: only the
+            // everywhere-banned names apply to it, like any `#[cfg(test)]` item.
+            let is_test_file = f.file_name().is_some_and(|n| n == "tests.rs");
+            let v = if is_test_file {
+                let masked = mask(&src);
+                FORBIDDEN_EVERYWHERE.iter().copied().filter(|p| masked.contains(p)).collect()
+            } else {
+                violations(&src)
+            };
             if f.ends_with("monitoring.rs") {
-                scanned_monitoring = prod.contains("fn get_memory_pressure");
+                scanned_monitoring = drop_test_items(&mask(&src)).contains("fn get_memory_pressure");
             }
-            let v = violations(&prod);
             if !v.is_empty() {
                 bad.push(format!("{}: {v:?}", f.strip_prefix(&root).unwrap_or(f).display()));
             }
@@ -1581,15 +1679,48 @@ mod process_refresh_guard {
         assert_eq!(violations("RefreshKind::nothing().with_processes(k)"), vec!["with_processes"]);
         assert_eq!(violations("System::new_with_specifics(RefreshKind::everything())"), vec!["RefreshKind::everything"]);
         assert!(violations("RefreshKind::nothing().with_cpu(CpuRefreshKind::everything())").is_empty());
-        // A comment can neither hide code nor count as code.
-        assert!(violations(&production_text("// sys.refresh_all();\n/// System::new_all()\nfn a() {}")).is_empty());
-        assert_eq!(violations(&production_text("fn a() { sys.refresh_all(); } // fine")), vec!["refresh_all"]);
-        // A test item is dropped; the production code after it is still scanned.
-        let t = "#[cfg(test)]\nmod t {\n    fn b() { sys.refresh_all(); }\n}\nfn c() { System::new_all(); }";
-        assert_eq!(violations(&production_text(t)), vec!["new_all"]);
-        let one = "#[cfg(test)]\nuse crate::x::Y;\nfn c() { sys.refresh_all(); }";
-        assert_eq!(violations(&production_text(one)), vec!["refresh_all"]);
-        let nested = "    #[cfg(test)]\n    fn t() {\n        let _ = 1;\n    }\n    fn p() { sys.refresh_all(); }";
-        assert_eq!(violations(&production_text(nested)), vec!["refresh_all"]);
+        // The alias dodge: the rename itself fails, wherever it is.
+        assert_eq!(violations("use sysinfo::RefreshKind as R;\nlet k = R::everything();"), vec!["RefreshKind as"]);
+        assert_eq!(violations("use sysinfo::*;"), vec!["sysinfo::*"]);
+        assert_eq!(violations("use sysinfo::{ProcessRefreshKind, System};"), vec!["ProcessRefreshKind"]);
+    }
+
+    #[test]
+    fn comments_and_literals_neither_hide_code_nor_count_as_code() {
+        assert!(violations("// sys.refresh_all();\n/// System::new_all()\nfn a() {}").is_empty());
+        assert!(violations("/* sys.refresh_all(); /* nested new_all() */ still a comment refresh_all() */ fn a() {}").is_empty());
+        assert_eq!(violations("/* a comment */ sys.refresh_all();"), vec!["refresh_all"]);
+        assert_eq!(violations("fn a() { sys.refresh_all(); } // fine"), vec!["refresh_all"]);
+        assert!(violations(r#"let s = "sys.refresh_all() and new_all"; let t = "esc \" new_all";"#).is_empty());
+        assert!(violations("let s = r#\"sys.refresh_all() \" new_all\"#;").is_empty());
+        // A char literal holding a quote does not open a string; a lifetime is not a char literal.
+        assert_eq!(violations("let c = '\"'; sys.refresh_all();"), vec!["refresh_all"]);
+        assert_eq!(violations("fn f<'a>(x: &'a str) { sys.new_all(); }"), vec!["new_all"]);
+        assert_eq!(violations("let c = '\\''; sys.new_all();"), vec!["new_all"]);
+    }
+
+    #[test]
+    fn a_test_item_is_dropped_by_bracket_depth_and_the_code_after_it_is_still_scanned() {
+        // Ends with `];`: the old "next closing line" rule swallowed `p`.
+        let arr = "#[cfg(test)]\nconst A: [u8; 1] = [\n    1,\n];\nfn p() { sys.processes(); }";
+        assert_eq!(violations(arr), vec![".processes("]);
+        // A one-line fn.
+        assert_eq!(violations("#[cfg(test)]\nfn h() {}\nfn p() { sys.process(1); }"), vec![".process("]);
+        // A nested module; brackets inside its comments and strings do not end it early.
+        let nested = "#[cfg(test)]\nmod t {\n    mod u {\n        // }\n        /* } */\n        fn a() { let s = \"}\"; sys.processes(); }\n    }\n}\nfn p() { sys.new_all(); }";
+        assert_eq!(violations(nested), vec!["new_all"]);
+        // A `use` line, and a multi-line signature.
+        assert_eq!(violations("#[cfg(test)]\nuse crate::x::{Y, Z};\nfn p() { sys.processes(); }"), vec![".processes("]);
+        let sig = "#[cfg(test)]\nfn assess<T>(\n    a: T,\n) -> T {\n    sys.processes();\n    a\n}\nfn p() { sys.process(2); }";
+        assert_eq!(violations(sig), vec![".process("]);
+        // An indented item inside an impl block; the impl's own closer is not consumed.
+        let imp = "impl X {\n    #[cfg(test)]\n    fn t() { sys.processes(); }\n    fn p() { sys.process(3); }\n}";
+        assert_eq!(violations(imp), vec![".process("]);
+        // `mod tests;` (out of line) is one line.
+        assert_eq!(violations("#[cfg(test)]\nmod tests;\nfn p() { sys.processes(); }"), vec![".processes("]);
+        // Test code is NOT exempt from the refresh calls themselves.
+        assert_eq!(violations("#[cfg(test)]\nmod t { fn b() { sys.refresh_all(); } }"), vec!["refresh_all"]);
+        // ... and a `System::new_all()` placed after a `];`-ending test item fails.
+        assert_eq!(violations("#[cfg(test)]\nconst A: [u8; 1] = [\n    1,\n];\nfn p() { System::new_all(); }"), vec!["new_all"]);
     }
 }

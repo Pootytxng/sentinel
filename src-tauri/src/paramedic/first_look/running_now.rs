@@ -87,13 +87,7 @@ pub(crate) fn out(read: &RunningRead) -> RunningNowOut {
         RunningRead::Read(r) if r.total == 0 => RunningNowOut { state: "unread", programs: Vec::new(), more: 0 },
         RunningRead::Read(r) if r.ids.is_empty() => RunningNowOut { state: "none", programs: Vec::new(), more: 0 },
         RunningRead::Read(r) => {
-            // Two table rows can share a display name (Zoom's client and its meeting process): show it once.
-            let mut all: Vec<Running> = Vec::new();
-            for p in PROGRAMS.iter().filter(|p| r.ids.contains(&p.id)) {
-                if !all.iter().any(|a| a.name == p.display_name) {
-                    all.push(Running { id: p.id, name: p.display_name });
-                }
-            }
+            let all: Vec<Running> = PROGRAMS.iter().filter(|p| r.ids.contains(&p.id)).map(|p| Running { id: p.id, name: p.display_name }).collect();
             let more = all.len().saturating_sub(SHOWN) as u32;
             RunningNowOut { state: "listed", programs: all.into_iter().take(SHOWN).collect(), more }
         }
@@ -131,11 +125,14 @@ mod tests {
     }
 
     #[test]
-    fn the_display_names_claim_presence_only_and_a_shared_name_is_listed_once() {
-        // "Zoom" (zoom.exe) and Zoom's meeting process (cpthost.exe) are two table rows with one display name.
+    fn the_display_names_claim_presence_only_and_no_two_rows_share_one() {
+        // zoom.exe and Zoom's meeting helper cpthost.exe are two rows: the helper is named by its image, so
+        // it is never reported as plain "Zoom".
         let r = from_names(["zoom.exe", "cpthost.exe", "link.exe"]);
         let o = out(&RunningRead::Read(r));
-        assert_eq!(o.programs.iter().map(|p| p.name).collect::<Vec<_>>(), vec!["link.exe", "Zoom"], "table order, Zoom once");
+        assert_eq!(o.programs.iter().map(|p| p.name).collect::<Vec<_>>(), vec!["link.exe", "Zoom", "Zoom (cpthost.exe)"]);
+        let names: std::collections::HashSet<&str> = PROGRAMS.iter().map(|p| p.display_name).collect();
+        assert_eq!(names.len(), PROGRAMS.len(), "display names are unique");
         for banned in ["in a meeting", "MSVC"] {
             assert!(PROGRAMS.iter().all(|p| !p.display_name.contains(banned)), "{banned}: a name must not claim more than presence");
         }
@@ -172,9 +169,7 @@ mod tests {
         let o = out(&RunningRead::Read(from_names(every)));
         assert_eq!(o.state, "listed");
         assert_eq!(o.programs.len(), SHOWN);
-        // One row per display name (Zoom's two table rows are shown once).
-        let names: std::collections::HashSet<&str> = PROGRAMS.iter().map(|p| p.display_name).collect();
-        assert_eq!(o.programs.len() as u32 + o.more, names.len() as u32);
+        assert_eq!(o.programs.len() as u32 + o.more, PROGRAMS.len() as u32);
         // Every listed program stays listed, background or not; nothing is said about residency.
         let two = out(&RunningRead::Read(from_names(["medal.exe", "firefox.exe"])));
         assert_eq!(two.programs.iter().map(|p| p.id).collect::<Vec<_>>(), vec!["medal", "firefox"]);
