@@ -601,7 +601,7 @@
       "tag": "HOUSE RULES",
       "title": "What Compy refuses to do",
       "noKernelDriver": "Nothing installed deep inside Windows",
-      "noInjection": "Never touches your games — safe with anti-cheat",
+      "noInjection": "Doesn't inject into games or change game files",
       "wifiOff": "No account, no telemetry — the only call out is a signed update check",
       "kickerPre": "The sketchy tweaks aren't missing.",
       "kickerEmph": "They're refused."

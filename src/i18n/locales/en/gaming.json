@@ -611,7 +611,7 @@
     "nudgeTitle": "Light up your fans & temperatures",
     "nudgeBodyPre": "Your fans show as ghosts because Compy stays",
     "nudgeBodyEmph": "driver-free",
-    "nudgeBodyPost": "(anti-cheat-safe) — it reads live RPM and temps from a free monitor you run, instead of shipping a driver of its own. Install either (Compy reads both automatically):",
+    "nudgeBodyPost": "— it reads live RPM and temps from a free monitor you run, instead of shipping a driver of its own. Install either (Compy reads both automatically):",
     "libreHardwareMonitorButton": "LibreHardwareMonitor",
     "lhmNote": "Open-source · runs persistently, no time limit, no setup. Heads-up: its low-level driver can trip strict anti-cheat (Valorant/Vanguard) — close it before those games.",
     "hwinfoButton": "HWiNFO",

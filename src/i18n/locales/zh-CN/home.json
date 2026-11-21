@@ -578,7 +578,7 @@
       "tag": "使用守则",
       "title": "Compy 绝不会做的事",
       "noKernelDriver": "不会安装深入 Windows 底层的组件",
-      "noInjection": "绝不触碰你的游戏——对反作弊安全",
+      "noInjection": "不向游戏注入代码，也不修改游戏文件",
       "wifiOff": "无需账号、无遥测数据——唯一的对外连接是签名更新检查",
       "kickerPre": "可疑的优化项并非缺失。",
       "kickerEmph": "而是被拒绝了。"

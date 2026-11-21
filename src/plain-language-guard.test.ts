@@ -146,7 +146,7 @@ describe("plain-language guard: engineer-speak stays off consumer surfaces", () 
     expect(caught("Network driver updated recently"), "'network' contains 'etw' — must NOT match").toBe(false);
     expect(caught("your network connection"), "'network' again").toBe(false);
     // And the replacements it accepted must actually pass, or the fix was not a fix.
-    expect(caught("Watched from outside your game — nothing added to the game, nothing installed deep inside Windows. Safe with anti-cheat."), "the replacement copy").toBe(false);
+    expect(caught("Watched from outside your game — nothing added to the game, nothing installed deep inside Windows. Frame timing is read from Windows, not from inside the game."), "the replacement copy").toBe(false);
     expect(caught("no CPU temp — needs a sensor app"), "the replacement callout").toBe(false);
   });
 

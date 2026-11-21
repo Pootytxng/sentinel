@@ -258,7 +258,11 @@ describe("comp fidelity — Live, matched against 02-live-approved.png", () => {
     const post: string = en.monitorConsole.etwHonestyPost;
     expect(post, "the comp's wording").toContain("no hooks or injected overlay");
     expect(post, "the no-driver fact").toMatch(/driver/i);
-    expect(post, "the anti-cheat promise").toMatch(/anti-cheat/i);
+    // The old "Safe with anti-cheat" promised an outcome Compy cannot know (src/i18n/game-safety-claims.test.ts).
+    // What the line may say is how frames are measured and that Compy cannot speak for any anti-cheat.
+    expect(post, "how frames are measured").toContain("Frame timing is read from Windows, not from inside the game");
+    expect(post, "no promise about anti-cheat").toContain("can't promise how any anti-cheat will react");
+    expect(post, "no outcome promised").not.toMatch(/safe with/i);
   });
 });
 

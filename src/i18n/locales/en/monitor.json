@@ -96,7 +96,7 @@
     "cpuLabel": "CPU load",
     "ramLabel": "RAM",
     "etwEmph": "Watched from outside your game",
-    "etwHonestyPost": " · no hooks or injected overlay, and no driver installed deep in Windows. Safe with anti-cheat.",
+    "etwHonestyPost": " · no hooks or injected overlay, and no driver installed deep in Windows. Frame timing is read from Windows, not from inside the game. Compy can't promise how any anti-cheat will react.",
     "narrative": {
       "eyebrow": "Session monitor",
       "readyHeadline": "Ready when you are",
@@ -120,7 +120,7 @@
   "monitorPanels": {
     "cpuTempOffer": {
       "title": "Turn CPU temperature on",
-      "why": "Compy ships no driver of its own — that is what keeps it anti-cheat-safe — so it shows the temperature a free monitor app publishes.",
+      "why": "Compy ships no driver of its own, so it shows the temperature a free monitor app publishes.",
       "appName": {
         "hwinfo": "HWiNFO",
         "lhm": "LibreHardwareMonitor"
@@ -195,7 +195,7 @@
     "adminDeclined": "Administrator permission was declined — tap “Start FPS capture” to allow it.",
     "capturingHint": "Capturing… launch or focus a DX11/DX12 game to see frames (Vulkan/OpenGL aren't counted yet).",
     "etwEmph": "Watched from outside your game",
-    "etwHonestyPost": " — nothing added to it, and no driver installed deep in Windows. Safe with anti-cheat.",
+    "etwHonestyPost": " — nothing added to it, and no driver installed deep in Windows. Frame timing is read from Windows, not from inside the game. Compy can't promise how any anti-cheat will react.",
     "inGameOverlayTitle": "In-game overlay",
     "hideOverlay": "Hide overlay",
     "showOverlay": "Show overlay",

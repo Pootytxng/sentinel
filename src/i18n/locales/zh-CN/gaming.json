@@ -582,7 +582,7 @@
     "nudgeTitle": "点亮你的风扇与温度显示",
     "nudgeBodyPre": "你的风扇目前显示为虚影,是因为 Compy 坚持",
     "nudgeBodyEmph": "不安装驱动",
-    "nudgeBodyPost": "(对反作弊系统安全)——它会从你自行运行的免费监测软件读取实时转速与温度,而不是自带驱动。安装以下任意一个即可(Compy 会自动读取两者):",
+    "nudgeBodyPost": "——它会从你自行运行的免费监测软件读取实时转速与温度,而不是自带驱动。安装以下任意一个即可(Compy 会自动读取两者):",
     "libreHardwareMonitorButton": "LibreHardwareMonitor",
     "lhmNote": "开源 · 可持续运行,无时间限制,无需配置。提醒:它的底层驱动可能会触发严格的反作弊系统(Valorant/Vanguard)——请在运行这些游戏前将其关闭。",
     "hwinfoButton": "HWiNFO",
