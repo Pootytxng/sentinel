@@ -224,8 +224,6 @@ describe("the single vitest run really does cover hooks and pipeline guards", ()
       "scripts/release-powershell-static-guard.test.mjs",
       "scripts/verify-updater-signature.test.mjs",
       "scripts/encoding-guard.test.mjs",
-      "tools/entry/hooks-verify.test.mjs",
-      "tools/entry/claim.test.mjs",
     ]) {
       expect(existsSync(join(ROOT, suite)), `suite missing: ${suite}`).toBe(true);
     }

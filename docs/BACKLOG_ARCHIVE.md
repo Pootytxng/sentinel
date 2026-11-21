@@ -226,7 +226,7 @@ Both are closed records with their guards already in the tree - A4/A5 (`02be7adc
 > landed (PR [#194](https://github.com/Pootytxng/sentinel/pull/194), merged), and **COLOR-1 was never
 > open** — it shipped 2026-08-13 (`700cd565`), and the queue was reading the 🔴 marker on the
 > ARCHIVED original inside that row's collapsed `<details>` block. bug → guard:
-> [`../src/ui-vision-status-guard.test.ts`](../src/ui-vision-status-guard.test.ts) now fails the build
+> `src/ui-vision-status-guard.test.ts` (removed in the 2026-11-20 diet) now fails the build
 > on a status marker inside an archive block, and on any queue item calling a shipped vision row open.
 
 ## 2026-08-24 — two closed NEXT UP ① rows, moved verbatim (section cap)
@@ -246,7 +246,7 @@ link needed re-pointing. Point-in-time records; current truth is `docs/RELEASE_S
 > [`perf/raw/`](perf/raw/) (`coldstart-{dc4d55e,head}-{B,C}.json`). bug → guard: a `cargo
 > build --release` binary loads the **dev URL** and measures a connection timeout that looks like
 > a start — [`../scripts/q7-probe.mjs`](../scripts/q7-probe.mjs) now refuses a sample whose rail
-> never painted, and [`../src/perf-evidence-integrity-guard.test.ts`](../src/perf-evidence-integrity-guard.test.ts)
+> never painted, and `src/perf-evidence-integrity-guard.test.ts` (removed in the 2026-11-20 diet)
 > fails the build if a doc cites one.
 
 > **The pricing row CLOSED 2026-08-22 — the owner answered (*"land 193 dude"*) and PR

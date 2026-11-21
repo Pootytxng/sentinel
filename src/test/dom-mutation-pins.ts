@@ -32,6 +32,7 @@ export const DOM_WRITES: string[] = [
   "src/i18n/language.ts Element.write lang on document.documentElement",
   "src/main.tsx Element.write lang on document.documentElement",
   "src/surfaces/LabConsole.tsx Element.write scrollTop on scroller",
+  "src/surfaces/glass/ParamedicCard.tsx Element.write scrollTop on scrollRef.current", // reset the card to the top when it reopens (b8f782d7)
   "src/surfaces/monitor/SessionStack.tsx Element.write height on canvas", // its own <canvas> bitmap
   "src/surfaces/monitor/SessionStack.tsx Element.write width on canvas",
   "src/test/setup.ts Element.write scrollIntoView on HTMLElement.prototype", // jsdom lacks it

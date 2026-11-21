@@ -1,6 +1,7 @@
 # AUDIT tests: parked out of the pre-push gate (npm run test:gate). npm run test:audit runs exactly these.
 # Format: repo-relative path with forward slashes, optional TAB and a reason. Every test file NOT listed here runs in the gate.
 # Only a test that does not protect a user belongs here. New tests default to the gate.
+# Moved to the gate 2026-11-20 (x3-audit): src/i18n/orphan-key-guard.test.ts and src/affordance-census.test.ts. Removing UI text or a control trips them, and they cost about 2 s each.
 scripts/alias-harness-orphan-guard.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
 scripts/alias-propagation-harness.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
 scripts/console-window-guard.test.mjs	dev-desktop politeness / perf tooling
@@ -33,7 +34,6 @@ scripts/tree-kill-stale-parent-guard.test.mjs	release-pipeline BEHAVIOUR harness
 scripts/verify-release-gate.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
 scripts/verify-release-state-guard.test.mjs	release-pipeline BEHAVIOUR harness (spawns PowerShell, slow); must run in verify-release.ps1 before every publish
 scripts/windows-only-coverage.test.mjs	repo hygiene / encoding / test-infra
-src/affordance-census.test.ts	style/copy/a11y/idle census or source-text pin
 src/ambient-animation-cost-guard.test.ts	style/copy/a11y/idle census or source-text pin
 src/arc-v2-reachability-guard.test.ts	style/copy/a11y/idle census or source-text pin
 src/button-legibility-guard.test.ts	style/copy/a11y/idle census or source-text pin
@@ -81,7 +81,6 @@ src/flag-default-drift-guard.test.ts	style/copy/a11y/idle census or source-text 
 src/focus-ring-guard.test.ts	style/copy/a11y/idle census or source-text pin
 src/hardware-grid-lead-budget-guard.test.ts	style/copy/a11y/idle census or source-text pin
 src/hidden-poll-guard.test.ts	style/copy/a11y/idle census or source-text pin
-src/i18n/orphan-key-guard.test.ts	locale completeness beyond placeholders
 src/idle-motion-guard.test.ts	style/copy/a11y/idle census or source-text pin
 src/jargon-term-gloss-guard.test.ts	style/copy/a11y/idle census or source-text pin
 src/keepalive-idle-guard.test.ts	style/copy/a11y/idle census or source-text pin
