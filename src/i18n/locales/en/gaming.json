@@ -572,10 +572,10 @@
       "hideEach": "Hide the individual records",
       "markedHere": "The record you came here to see is in this group.",
       "showMarked": "Show that record",
-      "apartCrash_one": "Compy read {{total}} crash records for {{app}} in all; {{count}} is shown separately because its details differ.",
-      "apartCrash_other": "Compy read {{total}} crash records for {{app}} in all; {{count}} are shown separately because their details differ.",
-      "apartHang_one": "Compy read {{total}} freeze records for {{app}} in all; {{count}} is shown separately because its details differ.",
-      "apartHang_other": "Compy read {{total}} freeze records for {{app}} in all; {{count}} are shown separately because their details differ.",
+      "apartCrash_one": "{{total}} of the crash records listed here are for {{app}}; {{count}} is shown separately because its details differ.",
+      "apartCrash_other": "{{total}} of the crash records listed here are for {{app}}; {{count}} are shown separately because their details differ.",
+      "apartHang_one": "{{total}} of the freeze records listed here are for {{app}}; {{count}} is shown separately because its details differ.",
+      "apartHang_other": "{{total}} of the freeze records listed here are for {{app}}; {{count}} are shown separately because their details differ.",
       "eachLabel_other": "The {{count}} records, newest first",
       "sameForAll_other": "The same for all {{count}} of these records"
     }

@@ -413,17 +413,17 @@ describe("Problems room - records outside a group are counted, not hidden", () =
       },
     });
 
-  it("22 identical + 1 with different evidence: the group keeps its count and says Compy read 23 in all, 1 shown separately", async () => {
+  it("22 identical + 1 with different evidence: the group keeps its count and says 23 of the listed crash records are ROB RUN, 1 shown separately", async () => {
     const { container } = await open([...many(22), odd(22)]);
     expect(container.querySelectorAll(".bb-list > .bb-item")).toHaveLength(2);
     expect(screen.getByText(/closed 22 times in the Windows records Compy read/)).toBeTruthy();
-    expect(screen.getByText("Compy read 23 crash records for ROB RUN in all; 1 is shown separately because its details differ.")).toBeTruthy();
+    expect(screen.getByText("23 of the crash records listed here are for ROB RUN; 1 is shown separately because its details differ.")).toBeTruthy();
   });
 
   it("said in Chinese", async () => {
     await i18n.changeLanguage("zh-CN");
     await open([...many(22), odd(22)]);
-    expect(screen.getByText("Compy 一共读到 23 条 ROB RUN 的崩溃记录；其中 1 条因细节不同而单独显示。")).toBeTruthy();
+    expect(screen.getByText("这里列出的崩溃记录中有 23 条属于 ROB RUN；其中 1 条因细节不同而单独显示。")).toBeTruthy();
   });
 
   it("no line when every record of that program and kind is in the group", async () => {
@@ -435,5 +435,32 @@ describe("Problems room - records outside a group are counted, not hidden", () =
     const other = rob(9, { receipt: { ...rob(9).receipt, faulting_app: "Discord.exe" } });
     const { container } = await open([...many(3), other]);
     expect(container.querySelector(".bb-group-apart")).toBeNull();
+  });
+});
+
+describe("Problems room - a second reveal still moves focus (review B1)", () => {
+  it("care-step reveal, hide the group, then 'Show that record': focus lands on the record again, not the page", async () => {
+    const { container } = await open(many(5));
+    fireEvent.click(screen.getByRole("button", { name: "Show this record in the list" }));
+    const first = container.querySelector('.bb-item[data-selected="true"]') as HTMLElement;
+    expect(document.activeElement).toBe(first);
+    fireEvent.click(screen.getByRole("button", { name: "Hide the individual records" }));
+    const again = screen.getByRole("button", { name: "Show that record" });
+    again.focus();
+    fireEvent.click(again);
+    const row = container.querySelector('.bb-item[data-selected="true"]') as HTMLElement;
+    expect(row.textContent).toContain("Nov 11, 12:04 PM");
+    expect(document.activeElement, "focus fell to the page on the second reveal").toBe(row);
+  });
+
+  it("the marked record's note is its description, so a screen reader hears it with the record's name", async () => {
+    reportMock.value = { incidents: many(5), skipped_sources: [] };
+    const { container } = render(<BlackBox selectedIncidentId={rob(1).incident_id} expandGroupFor={null} />);
+    await screen.findByText(/closed 5 times/);
+    fireEvent.click(screen.getByRole("button", { name: "Show that record" }));
+    const row = container.querySelector('.bb-item[data-selected="true"]') as HTMLElement;
+    const note = document.getElementById(row.getAttribute("aria-describedby")!);
+    expect(note?.textContent).toBe("This is the one you came here to see.");
+    expect(row.getAttribute("aria-label")).toContain("Record: ");
   });
 });

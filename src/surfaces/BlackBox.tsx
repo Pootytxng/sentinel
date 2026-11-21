@@ -383,6 +383,7 @@ function IncidentRow({
   const { t } = useTranslation();
   const [showReceipt, setShowReceipt] = useState(false);
   const headId = useId();
+  const noteId = useId();
   const ref = useRef<HTMLLIElement | null>(null);
   // A layout effect, not a passive one (CR-glass-scroll-flake): it runs in the commit that draws the
   // row, before paint. The passive effect ran in a later task, so the list's top could paint first
@@ -405,9 +406,16 @@ function IncidentRow({
       ref={ref}
       tabIndex={-1}
       aria-label={t("gaming.blackBox.recordLabel", { headline: inc.headline })}
+      // aria-label names the record; the "this is the one you came here to see" note is read as its
+      // description, so a screen reader hears both when focus lands here.
+      aria-describedby={selected ? noteId : undefined}
       data-selected={selected ? "true" : undefined}
     >
-      {selected && <p className="bb-selected-note">{t("gaming.blackBox.selectedNote")}</p>}
+      {selected && (
+        <p className="bb-selected-note" id={noteId}>
+          {t("gaming.blackBox.selectedNote")}
+        </p>
+      )}
       <div className="bb-item-head">
         {compact ? (
           <span className="bb-headline" id={headId}>
@@ -719,7 +727,9 @@ function IncidentGroupBlock({
               allIncidents={allIncidents}
               selected={!!selectedIncidentId && inc.incident_id === selectedIncidentId}
               scrollNonce={reveal?.n}
-              focusNonce={reveal?.n ?? markedFocus}
+              // Nonces only grow, so the newest press wins. `reveal` is never cleared, so a spent
+              // care-step nonce must not shadow a later "Show that record" press.
+              focusNonce={Math.max(reveal?.n ?? 0, markedFocus ?? 0) || undefined}
               restore={restore}
               lifted={isLiftedInc(inc)}
               compact
