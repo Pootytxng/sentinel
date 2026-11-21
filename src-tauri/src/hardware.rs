@@ -3925,6 +3925,7 @@ mod no_process_refresh_guard {
         "ProcessesToUpdate",
         ".processes(",
         ".process(",
+        "with_processes",
     ];
 
     /// Production text only: drops every `#[cfg(test)]` item (a column-0 attribute through the
@@ -3952,7 +3953,15 @@ mod no_process_refresh_guard {
     }
 
     fn violations(text: &str) -> Vec<&'static str> {
-        FORBIDDEN.iter().copied().filter(|p| text.contains(p)).collect()
+        let mut v: Vec<&'static str> = FORBIDDEN.iter().copied().filter(|p| text.contains(p)).collect();
+        // `RefreshKind::everything()` includes processes; the Cpu/Memory kinds of the same name do not.
+        if text.match_indices("RefreshKind::everything").any(|(i, _)| {
+            let before = &text[..i];
+            !before.ends_with("Cpu") && !before.ends_with("Memory")
+        }) {
+            v.push("RefreshKind::everything");
+        }
+        v
     }
 
     #[test]
@@ -3968,6 +3977,9 @@ mod no_process_refresh_guard {
         assert_eq!(violations("sys.refresh_processes_specifics(ProcessesToUpdate::All, true, k);"), vec!["refresh_processes", "ProcessesToUpdate"]);
         assert_eq!(violations("for p in sys.processes() {}"), vec![".processes("]);
         assert_eq!(violations("sys.process(pid);"), vec![".process("]);
+        assert_eq!(violations("System::new_with_specifics(RefreshKind::everything())"), vec!["RefreshKind::everything"]);
+        assert_eq!(violations("RefreshKind::nothing().with_processes(k)"), vec!["with_processes"]);
+        assert!(violations("RefreshKind::nothing().with_cpu(CpuRefreshKind::everything()).with_memory(MemoryRefreshKind::everything())").is_empty());
         // Comments and test modules do not count; code does.
         let text = "// sys.refresh_all();\nfn a() {}\n#[cfg(test)]\nmod t {\n    fn b() { sys.refresh_all(); }\n}\nfn c() {}";
         assert!(violations(&production_text(text)).is_empty());
@@ -3990,6 +4002,6 @@ mod no_process_refresh_guard {
         assert!(kind.cpu().is_some(), "CPU brand/frequency/cores are used");
         assert!(kind.memory().is_some(), "RAM and swap totals are used");
         // The CPU list still comes out of the narrow construction (brand, core count are built there).
-        assert!(hardware_system().cpus().len() >= 1);
+        assert!(!hardware_system().cpus().is_empty());
     }
 }
