@@ -329,3 +329,37 @@ describe("RerunCheckBand - a check that has not run is not a check that graded n
     expect(line()).not.toContain("No full check has run yet");
   });
 });
+
+// Desk re-check 2026-11-21 (real data): the band said "Last full check 2w ago · all 14 looked good"
+// next to the Home tile's "13 of 14 checks look right". The record was the first check's, written
+// when nothing was flagged; the tile reads live readiness (one check has since drifted).
+describe("RerunCheckBand - one source for the counts", () => {
+  const live13of14 = () =>
+    readiness({ checks: [...Array.from({ length: 13 }, () => chk("ready")), chk("attention")], attention_count: 1, ready_count: 13 });
+
+  it("a stored all-good record that live readiness contradicts is not repeated: live counts, no age, never 'all 14'", () => {
+    storeCheck({ at: Date.now() - 15 * 86_400_000, total: 14, green: 14, advisory: 0, unread: 0, fixCount: 0 });
+    render(<RerunCheckBand readiness={live13of14()} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("1 of 14 checks needs a look");
+    expect(line()).not.toMatch(/all 14|looked good|ago/i);
+  });
+
+  it("a stored record that live readiness agrees with keeps its age", () => {
+    storeCheck({ at: Date.now() - 2 * 3_600_000, total: 14, green: 14, advisory: 0, unread: 0, fixCount: 0 });
+    const r = readiness({ checks: Array.from({ length: 14 }, () => chk("ready")), ready_count: 14 });
+    render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("Last full check 2h ago · all 14 looked good");
+  });
+
+  it("a check that can no longer be read also retires the stored all-good line", () => {
+    storeCheck({ at: Date.now() - 86_400_000 * 3, total: 14, green: 14, advisory: 0, unread: 0, fixCount: 0 });
+    const r = readiness({
+      checks: [...Array.from({ length: 13 }, () => chk("ready")), chk("unknown")],
+      unknown_count: 1,
+      ready_count: 13,
+    });
+    render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("13 of 14 checks look good · 1 couldn't be measured");
+    expect(line()).not.toMatch(/all 14|ago/i);
+  });
+});

@@ -68,7 +68,27 @@ export function RerunCheckBand({
   // in this file INVISIBLE to the census — the first draft used a helper and the census duly reported
   // Home and the shell as having each lost eleven affordances. Blinding a guard to save keystrokes is
   // strictly worse than the keystrokes are expensive.
-  const snap = checking ? null : readLastCheck();
+  const stored = checking ? null : readLastCheck();
+  // ONE SOURCE FOR THE COUNTS (desk re-check 2026-11-21: "Last full check 2w ago · all 14 looked good"
+  // beside the Home tile's "13 of 14 checks look right"). The stored record is the first check's
+  // verdict as it stood then; the tile and the readiness ring read the live readiness. When the live
+  // read is known and its counts differ from the record's (a check has since drifted, or one can no
+  // longer be read), the record is not repeated: the live counts are shown, with no age, so the two
+  // can never disagree. Same denominators as HomeGlass: graded = checks - unread - advisory,
+  // good = graded - attention.
+  const liveKnown = !!readiness && readiness.checks.length > 0;
+  const liveUnread = readiness?.unknown_count ?? 0;
+  const liveAdvisory = readiness?.advisory_count ?? 0;
+  const liveGood = Math.max(
+    0,
+    (readiness?.checks.length ?? 0) - liveUnread - liveAdvisory - (readiness?.attention_count ?? 0),
+  );
+  const snap =
+    stored &&
+    liveKnown &&
+    (stored.green !== liveGood || stored.unread !== liveUnread || stored.advisory !== liveAdvisory)
+      ? null
+      : stored;
 
   let sentence: string;
   let warn = false;
