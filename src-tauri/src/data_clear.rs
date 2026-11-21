@@ -839,7 +839,7 @@ fn validate_rel(rel: &str) -> Result<Vec<&str>, String> {
     Ok(segs)
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Removed {
     Deleted,
     AlreadyGone,
@@ -959,7 +959,9 @@ fn delete_one_with(root: &Path, rel: &str, before_delete: &dyn Fn()) -> Result<R
         Ok(_) => {}
     }
     before_delete();
-    remove_by_handle(&file, &canon_dir.join(leaf))?;
+    if remove_by_handle(&file, &canon_dir.join(leaf))? == Removed::AlreadyGone {
+        return Ok(Removed::AlreadyGone);
+    }
     match fs::symlink_metadata(&file) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Removed::Deleted),
         _ => Err("is still there after the delete".to_string()),
@@ -967,8 +969,12 @@ fn delete_one_with(root: &Path, rel: &str, before_delete: &dyn Fn()) -> Result<R
 }
 
 #[cfg(not(windows))]
-fn remove_by_handle(file: &Path, _expected: &Path) -> Result<(), String> {
-    fs::remove_file(file).map_err(|e| e.to_string())
+fn remove_by_handle(file: &Path, _expected: &Path) -> Result<Removed, String> {
+    match fs::remove_file(file) {
+        Ok(()) => Ok(Removed::Deleted),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Removed::AlreadyGone),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 /// Windows: open the file itself (FILE_FLAG_OPEN_REPARSE_POINT, so a link is opened as the link and
@@ -978,7 +984,7 @@ fn remove_by_handle(file: &Path, _expected: &Path) -> Result<(), String> {
 /// differ, so nothing is deleted. The three kernel32 calls are declared by hand, as `data_root.rs` does,
 /// so no `windows` crate feature is added.
 #[cfg(windows)]
-fn remove_by_handle(file: &Path, expected: &Path) -> Result<(), String> {
+fn remove_by_handle(file: &Path, expected: &Path) -> Result<Removed, String> {
     use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
     use std::os::windows::io::AsRawHandle;
     const DELETE: u32 = 0x0001_0000;
@@ -994,8 +1000,8 @@ fn remove_by_handle(file: &Path, expected: &Path) -> Result<(), String> {
         .open(file);
     let handle_file = match opened {
         Ok(f) => f,
-        // Gone between the last check and the open: nothing to delete, which the caller's read-back accepts.
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        // Gone between the last check and the open: nothing was deleted by this call, so say so.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Removed::AlreadyGone),
         Err(e) => return Err(e.to_string()),
     };
     let attrs = handle_file.metadata().map_err(|e| e.to_string())?.file_attributes();
@@ -1006,7 +1012,8 @@ fn remove_by_handle(file: &Path, expected: &Path) -> Result<(), String> {
     if win_handle::normalize(&final_path) != win_handle::normalize(&expected.to_string_lossy()) {
         return Err("is not where it was planned (a folder was swapped for a link), so nothing was deleted".to_string());
     }
-    win_handle::delete_on_close(handle_file.as_raw_handle())
+    win_handle::delete_on_close(handle_file.as_raw_handle())?;
+    Ok(Removed::Deleted)
     // The handle drops here: the file is gone once it closes.
 }
 
@@ -1115,6 +1122,37 @@ fn replan(root: &Path, plan: &ClearPlan, facts: &ClearFacts) -> Result<ClearPlan
     Ok(now)
 }
 
+/// One in-memory copy of something a clear deletes, and what is done about it. The list is enumerated, not
+/// assumed: `restart_required` is true unless every copy that applies to the scope has a reset.
+pub(crate) struct MemoryCopy {
+    /// Stable code carried in `restart_reasons` when this copy is NOT reset.
+    pub(crate) reason: &'static str,
+    /// Where it lives.
+    pub(crate) holder: &'static str,
+    /// `Everything` only, or both scopes.
+    pub(crate) everything_only: bool,
+    /// The gate that resets it under the store's lock, or `None` when the clear has no safe way to.
+    pub(crate) reset_by: Option<Gate>,
+}
+
+pub(crate) const MEMORY_COPIES: &[MemoryCopy] = &[
+    MemoryCopy { reason: "benchmark_cache", holder: "benchmark.rs state_cache (baseline, latest run, efficacy, error)", everything_only: false, reset_by: Some(Gate::Benchmark) },
+    MemoryCopy { reason: "trial_result", holder: "benchmark_trial.rs state (last finished verdict and noise reading)", everything_only: false, reset_by: Some(Gate::Scoreboard) },
+    MemoryCopy { reason: "incident_failure_flags", holder: "incident_observer.rs READ_FAILURE_REPORTED, SCAN_STORE_FAILED", everything_only: false, reset_by: Some(Gate::IncidentObserver) },
+    MemoryCopy { reason: "support_preview_flag", holder: "support_evidence.rs PREVIEWED (the record was previewed this run; no clear-owner API)", everything_only: true, reset_by: None },
+    MemoryCopy { reason: "identity_log_throttle", holder: "intelligence.rs refresh_gate (time of the last identity refresh; no clear-owner API)", everything_only: true, reset_by: None },
+    MemoryCopy { reason: "screen_memory", holder: "the window's own state and WebView storage (UI slice: relaunch)", everything_only: false, reset_by: None },
+];
+
+/// The reasons a restart is still needed after a clear of `scope`, from `copies`.
+fn restart_reasons_in(copies: &[MemoryCopy], scope: Scope) -> Vec<&'static str> {
+    copies
+        .iter()
+        .filter(|c| c.reset_by.is_none() && (!c.everything_only || scope == Scope::Everything))
+        .map(|c| c.reason)
+        .collect()
+}
+
 fn new_report(now: &ClearPlan) -> ClearReport {
     ClearReport {
         scope: now.scope,
@@ -1126,8 +1164,8 @@ fn new_report(now: &ClearPlan) -> ClearReport {
         unknown: now.unknown.clone(),
         complete: false,
         nothing_to_do: false,
-        restart_required: false,
-        restart_reasons: Vec::new(),
+        restart_required: !restart_reasons_in(MEMORY_COPIES, now.scope).is_empty(),
+        restart_reasons: restart_reasons_in(MEMORY_COPIES, now.scope),
         webview: now.webview.clone(),
     }
 }
@@ -1315,23 +1353,63 @@ fn store_lock_unavailable(what: &str, why: &str) -> Refusal {
 
 use crate::data_root;
 
-/// The real gates: each store's own lock, then the store's memory reset, then (while still holding the
-/// lock) the clear epoch is bumped so a save that began before this delete is dropped when it gets the
-/// lock. One lock per call, nothing else held.
-pub(crate) struct LiveGates;
+/// What a delete that worked does besides deleting: the clear epoch and the in-memory resets. A trait so a
+/// test supplies its own instances and no process-wide state is touched by any test; the app uses
+/// [`ProcessEffects`].
+pub(crate) trait ClearEffects {
+    /// A store file was deleted (called under that store's lock): move the clear epoch.
+    fn deleted(&self);
+    /// Runs `delete` with the benchmark cache's lock held, and resets the cache before letting go if the
+    /// delete worked. The process's cache hydrates itself from the data root on first use, so a test must
+    /// never reach it: it supplies its own lock and its own copy.
+    fn with_benchmark_locked(&self, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String>;
+    /// The last finished trial's verdict, after the scoreboard is gone.
+    fn forget_trial_result(&self);
+    /// The incident observer's failure-streak flags, under its lock, after its record is gone.
+    fn forget_incident_failures(&self);
+}
 
-impl ClearGates for LiveGates {
+/// The process-wide instances: the real epoch, the real benchmark cache and trial state, the real flags.
+pub(crate) struct ProcessEffects;
+
+impl ClearEffects for ProcessEffects {
+    fn deleted(&self) {
+        crate::atomic_write::bump_clear_epoch();
+    }
+    fn with_benchmark_locked(&self, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+        crate::benchmark::with_state_locked(|state| {
+            let result = delete();
+            if result.is_ok() {
+                crate::benchmark::reset_for_clear(state);
+            }
+            result
+        })?
+    }
+    fn forget_trial_result(&self) {
+        let _ = crate::benchmark_trial::forget_finished_result();
+    }
+    fn forget_incident_failures(&self) {
+        crate::incident_observer::forget_failure_streak();
+    }
+}
+
+/// The real gates: each store's own lock, then (while still holding it) the epoch move and the store's
+/// memory reset, from `effects`. One lock per call, nothing else held.
+pub(crate) struct LiveGates<'a>(pub(crate) &'a dyn ClearEffects);
+
+impl ClearGates for LiveGates<'_> {
     fn with_gate(&self, gate: Gate, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+        let fx = self.0;
         let mut run = || {
             let result = delete();
             if matches!(result, Ok(Removed::Deleted)) {
-                crate::atomic_write::bump_clear_epoch();
+                fx.deleted();
             }
             result
         };
         let result = match gate {
             Gate::Sessions => crate::sessions::with_store_locked(run),
-            Gate::Benchmark => crate::benchmark::with_store_cleared(run)?,
+            Gate::Benchmark => fx.with_benchmark_locked(&mut run),
             Gate::Scoreboard => crate::benchmark_scoreboard::with_store_locked(run),
             Gate::NoiseFloor => {
                 let _lock = crate::noise_floor::lock_gate();
@@ -1339,7 +1417,13 @@ impl ClearGates for LiveGates {
             }
             Gate::Comparison => crate::comparison::with_store_locked(run),
             Gate::Drift => crate::drift::with_store_locked(run),
-            Gate::IncidentObserver => crate::incident_observer::with_store_locked(run),
+            Gate::IncidentObserver => crate::incident_observer::with_store_locked(|| {
+                let result = run();
+                if result.is_ok() {
+                    fx.forget_incident_failures();
+                }
+                result
+            }),
             Gate::Intelligence => {
                 let _lock = crate::intelligence::lock_store().map_err(|()| "the identity log lock is poisoned".to_string())?;
                 run()
@@ -1359,7 +1443,7 @@ impl ClearGates for LiveGates {
         // After the scoreboard's lock is released: the last finished benchmark trial's verdict is measured
         // against data that is gone. (A running trial is refused up front, so this is only the quiet case.)
         if gate == Gate::Scoreboard && result.is_ok() {
-            let _ = crate::benchmark_trial::forget_finished_result();
+            fx.forget_trial_result();
         }
         result
     }
@@ -1419,7 +1503,7 @@ pub(crate) fn clear_play_history_at(root: &Path, expected_fingerprint: &str, fac
 /// Blocking: wait on store locks, so call it from `spawn_blocking`, never the UI thread.
 pub(crate) fn clear_play_history(expected_fingerprint: &str) -> ClearOutcome {
     match live_root() {
-        Ok(root) => clear_play_history_at(&root, expected_fingerprint, &live_facts(false), &LiveGates),
+        Ok(root) => clear_play_history_at(&root, expected_fingerprint, &live_facts(false), &LiveGates(&ProcessEffects)),
         Err(r) => ClearOutcome::Refused(vec![r]),
     }
 }
@@ -1429,7 +1513,7 @@ pub(crate) fn clear_play_history(expected_fingerprint: &str) -> ClearOutcome {
 /// Blocking, like `clear_play_history`.
 pub(crate) fn clear_everything(expected_fingerprint: &str, remove_licence: bool) -> ClearOutcome {
     match live_root() {
-        Ok(root) => clear_everything_at(&root, expected_fingerprint, &|| live_facts(remove_licence), &LiveGates),
+        Ok(root) => clear_everything_at(&root, expected_fingerprint, &|| live_facts(remove_licence), &LiveGates(&ProcessEffects)),
         Err(r) => ClearOutcome::Refused(vec![r]),
     }
 }
@@ -2176,6 +2260,7 @@ mod tests {
 
     use crate::race_seam::{held_now, StoreLock};
     use std::cell::RefCell;
+    use std::sync::Mutex;
 
     fn lock_for(gate: Gate) -> StoreLock {
         match gate {
@@ -2195,14 +2280,73 @@ mod tests {
         }
     }
 
+    /// Effects with instances of the test's own: nothing process-wide (epoch, benchmark cache, trial state,
+    /// incident flags) is read or written by any test.
+    struct TestEffects {
+        epoch: crate::atomic_write::ClearEpoch,
+        bench: RefCell<crate::benchmark::BenchmarkState>,
+        bench_lock: &'static Mutex<u8>, // leaked: the recorded guard must be static
+        bench_resets: std::cell::Cell<u32>,
+        trial_forgets: std::cell::Cell<u32>,
+        incident_forgets: std::cell::Cell<u32>,
+    }
+
+    impl TestEffects {
+        fn new() -> Self {
+            let bench = crate::benchmark::BenchmarkState {
+                baseline_at: Some("2026-11-01T00:00:00Z".into()),
+                error: Some("old".into()),
+                ..Default::default()
+            };
+            Self {
+                epoch: crate::atomic_write::ClearEpoch::new(),
+                bench: RefCell::new(bench),
+                bench_lock: Box::leak(Box::new(std::sync::Mutex::new(0u8))),
+                bench_resets: Default::default(),
+                trial_forgets: Default::default(),
+                incident_forgets: Default::default(),
+            }
+        }
+    }
+
+    impl ClearEffects for TestEffects {
+        fn deleted(&self) {
+            self.epoch.bump();
+        }
+        fn with_benchmark_locked(&self, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+            // The same shape as the process's: a recorded Benchmark lock held across the delete, then the
+            // reset of a copy the test owns. The real cache is never touched.
+            let _lock = crate::race_seam::hold_lock(StoreLock::Benchmark, || self.bench_lock.lock().unwrap());
+            let result = delete();
+            if result.is_ok() {
+                crate::benchmark::reset_for_clear(&mut self.bench.borrow_mut());
+                self.bench_resets.set(self.bench_resets.get() + 1);
+            }
+            result
+        }
+        fn forget_trial_result(&self) {
+            self.trial_forgets.set(self.trial_forgets.get() + 1);
+        }
+        fn forget_incident_failures(&self) {
+            self.incident_forgets.set(self.incident_forgets.get() + 1);
+        }
+    }
+
     /// The real gates, with a look at what this thread holds while each file goes.
     struct Probe {
         seen: RefCell<Vec<(Gate, Vec<StoreLock>)>>,
+        fx: TestEffects,
+    }
+
+    impl Probe {
+        fn new() -> Self {
+            Probe { seen: RefCell::new(Vec::new()), fx: TestEffects::new() }
+        }
     }
 
     impl ClearGates for Probe {
         fn with_gate(&self, gate: Gate, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
-            LiveGates.with_gate(gate, &mut || {
+            LiveGates(&self.fx).with_gate(gate, &mut || {
                 self.seen.borrow_mut().push((gate, held_now()));
                 delete()
             })
@@ -2215,7 +2359,7 @@ mod tests {
         let t = Tmp::new("x1");
         seed(&t);
         t.put("support/evidence.jsonl.tmp", "x");
-        let probe = Probe { seen: RefCell::new(Vec::new()) };
+        let probe = Probe::new();
         let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
         let report = done(execute_clear(&t.root, &plan, &later(), &probe));
         assert!(report.complete, "{report:?}");
@@ -2232,7 +2376,7 @@ mod tests {
         // every other store alone, the support record last.
         let t = Tmp::new("x1b");
         seed(&t);
-        let probe = Probe { seen: RefCell::new(Vec::new()) };
+        let probe = Probe::new();
         let plan = plan_clear(&t.root, Scope::Everything, &later());
         let outcome = clear_everything_at(&t.root, &plan.fingerprint, &later, &probe);
         let report = done(outcome);
@@ -2284,15 +2428,21 @@ mod tests {
     fn x4_a_real_delete_moves_the_clear_epoch_so_an_earlier_save_is_dropped() {
         let t = Tmp::new("x4");
         seed(&t);
-        let before = crate::atomic_write::clear_epoch();
+        let fx = TestEffects::new();
+        let before = fx.epoch.now();
         let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
-        assert!(done(execute_clear(&t.root, &plan, &later(), &LiveGates)).complete);
-        assert!(crate::atomic_write::clear_epoch() > before, "a delete under the store lock must move the epoch");
+        assert!(done(execute_clear(&t.root, &plan, &later(), &LiveGates(&fx))).complete);
+        assert!(fx.epoch.now() > before, "a delete under the store lock must move the epoch");
+        // Each memory reset ran once, for its own store, after a delete that worked.
+        assert_eq!(fx.bench_resets.get(), 1, "the benchmark cache is reset once");
+        assert!(fx.bench.borrow().baseline_at.is_none() && fx.bench.borrow().error.is_none(), "and the copy it was handed is empty");
+        assert_eq!(fx.trial_forgets.get(), 1, "the finished trial result is forgotten once");
+        assert_eq!(fx.incident_forgets.get(), 1, "the incident failure flags are forgotten once");
         // Nothing to delete (second run): no delete happened, so nothing needs dropping.
-        let mid = crate::atomic_write::clear_epoch();
+        let mid = fx.epoch.now();
         let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
         assert!(plan.nothing_to_do());
-        assert_eq!(crate::atomic_write::clear_epoch(), mid, "planning is a pure read");
+        assert_eq!(fx.epoch.now(), mid, "planning is a pure read");
     }
 
     // (3) typed outcome: codes, never one joined string; "couldn't read" is not "nothing to do"
@@ -2505,5 +2655,44 @@ mod tests {
         for forbidden in [concat!("App", "Handle"), concat!("tauri", "::"), "tauri::command", "#[tauri"] {
             assert!(!code.contains(forbidden), "found {forbidden}: the core and wrappers must not know Tauri");
         }
+    }
+
+    // (2) restart_required is honest: true while any copy has no reset, with each reason named
+    #[test]
+    fn x16_restart_is_required_with_the_specific_reasons_until_every_copy_is_reset() {
+        let t = Tmp::new("x16");
+        seed(&t);
+        let play = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let report = done(exec(&t.root, &play, &later()));
+        assert!(report.restart_required, "the screen's own memory is not reset by the backend");
+        assert_eq!(report.restart_reasons, ["screen_memory"], "play history: only the window's memory");
+        let every = restart_reasons_in(MEMORY_COPIES, Scope::Everything);
+        assert_eq!(every, ["support_preview_flag", "identity_log_throttle", "screen_memory"], "everything: the three with no reset");
+        // Every copy that HAS a reset names a gate the executor really takes; none is listed as a reason.
+        for c in MEMORY_COPIES.iter().filter(|c| c.reset_by.is_some()) {
+            assert!(!every.contains(&c.reason), "{} is reset, so it is not a reason", c.reason);
+        }
+        // False only when every applicable copy is reset (a table where all of them are).
+        let all_reset = [
+            MemoryCopy { reason: "a", holder: "x", everything_only: false, reset_by: Some(Gate::Benchmark) },
+            MemoryCopy { reason: "b", holder: "y", everything_only: true, reset_by: Some(Gate::Scoreboard) },
+        ];
+        assert!(restart_reasons_in(&all_reset, Scope::Everything).is_empty());
+        // An unreset copy that only applies to Everything does not force a restart after play history.
+        let only_everything = [MemoryCopy { reason: "c", holder: "z", everything_only: true, reset_by: None }];
+        assert!(restart_reasons_in(&only_everything, Scope::PlayHistory).is_empty());
+        assert_eq!(restart_reasons_in(&only_everything, Scope::Everything), ["c"]);
+    }
+
+    // (5) a file that vanished between the checks and the open is AlreadyGone, never Deleted
+    #[test]
+    fn x17_a_file_gone_before_the_open_is_reported_as_already_gone() {
+        let t = Tmp::new("x17");
+        t.put("sessions.json", "[]");
+        let p = t.root.join("sessions.json");
+        let out = delete_one_with(&t.root, "sessions.json", &|| std::fs::remove_file(&p).unwrap()).unwrap();
+        assert_eq!(out, Removed::AlreadyGone);
+        t.put("sessions.json", "[]");
+        assert_eq!(delete_one(&t.root, "sessions.json").unwrap(), Removed::Deleted);
     }
 }

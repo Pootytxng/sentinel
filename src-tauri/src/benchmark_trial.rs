@@ -64,6 +64,11 @@ pub(crate) fn trial_state() -> TrialState {
 /// runs, so this is only the quiet case). True when something was reset.
 pub(crate) fn forget_finished_result() -> bool {
     let Ok(mut s) = state().lock() else { return false };
+    forget_in(&mut s)
+}
+
+/// `forget_finished_result` on a state the caller owns (a test uses its own).
+fn forget_in(s: &mut TrialState) -> bool {
     if s.running {
         return false;
     }
@@ -988,24 +993,19 @@ mod trial_tests {
     }
 }
 
-/// D6: forgetting a finished trial's result.
+/// D6: forgetting a finished trial's result. Works on a `TrialState` of the test's own; the process-wide
+/// state is never touched.
 #[cfg(test)]
 mod d6_clear_tests {
     use super::*;
 
     #[test]
     fn a_finished_result_is_forgotten_and_a_running_trial_is_left_alone() {
-        set(|s| {
-            s.running = false;
-            s.status = "done".into();
-            s.noise_floor_pct = Some(2.5);
-        });
-        assert!(forget_finished_result());
-        let after = trial_state();
-        assert!(after.status.is_empty() && after.noise_floor_pct.is_none() && after.verdict.is_none());
-        set(|s| s.running = true);
-        assert!(!forget_finished_result(), "a running trial cannot be reset from here");
-        assert!(trial_state().running);
-        set(|s| s.running = false);
+        let mut s = TrialState { running: false, status: "done".into(), noise_floor_pct: Some(2.5), ..Default::default() };
+        assert!(forget_in(&mut s));
+        assert!(s.status.is_empty() && s.noise_floor_pct.is_none() && s.verdict.is_none());
+        let mut running = TrialState { running: true, status: "measuring".into(), ..Default::default() };
+        assert!(!forget_in(&mut running), "a running trial cannot be reset from here");
+        assert!(running.running && running.status == "measuring");
     }
 }

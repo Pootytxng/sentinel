@@ -62,16 +62,33 @@ static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
 /// before a clear reads this when it starts, and checks it again UNDER its store lock, right before it
 /// writes: if it moved, the clear ran in between and the write is dropped, never made. Lives here (a
 /// leaf every store already reaches) so a store module needs no edge to `data_clear`.
-static CLEAR_EPOCH: AtomicU64 = AtomicU64::new(0);
+static CLEAR_EPOCH: ClearEpoch = ClearEpoch::new();
 
-/// The clear epoch now. Read it when a save STARTS.
-pub(crate) fn clear_epoch() -> u64 {
-    CLEAR_EPOCH.load(Ordering::Acquire)
+/// A clear epoch as a value, so a test can use its own and never touch the process-wide one.
+pub(crate) struct ClearEpoch(AtomicU64);
+
+impl ClearEpoch {
+    pub(crate) const fn new() -> Self {
+        Self(AtomicU64::new(0))
+    }
+    /// Read it when a save STARTS.
+    pub(crate) fn now(&self) -> u64 {
+        self.0.load(Ordering::Acquire)
+    }
+    /// Called by the clear, while it holds the store's lock and has just deleted the store.
+    pub(crate) fn bump(&self) {
+        self.0.fetch_add(1, Ordering::AcqRel);
+    }
 }
 
-/// Called by the clear, while it holds the store's lock and has just deleted the store.
+/// The process-wide clear epoch now. Read it when a save STARTS.
+pub(crate) fn clear_epoch() -> u64 {
+    CLEAR_EPOCH.now()
+}
+
+/// The process-wide epoch, bumped by the real clear (`data_clear::ProcessEffects`) and by nothing else.
 pub(crate) fn bump_clear_epoch() {
-    CLEAR_EPOCH.fetch_add(1, Ordering::AcqRel);
+    CLEAR_EPOCH.bump();
 }
 
 /// A temp name that is unique per process and per call, and that sorts next to its target so a

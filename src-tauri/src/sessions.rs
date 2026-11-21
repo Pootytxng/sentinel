@@ -1127,7 +1127,12 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<Option<SavedSessio
     let compared = summary.clone();
     // The sessions lock is released before the comparison below (its own lock, no nesting).
     match unless_cleared(started_epoch, crate::atomic_write::clear_epoch, || save_session_to(&sessions_path(), summary)) {
-        None => return Ok(None), // a clear ran since this save began: nothing is written, nothing settled
+        None => {
+            // Not silent, and not "too short": a clear of the stored data ran while this session was being
+            // saved, so it was not written (and nothing is settled against it). Say so.
+            eprintln!("[sessions] a clear of the stored data ran while this session was being saved: the session was dropped, not written");
+            return Ok(None);
+        }
         Some(saved) => saved?,
     }
     // M4: if a comparison was armed for this game, compute the cross-session delta now.
@@ -2235,19 +2240,71 @@ mod d6_clear_tests {
         assert!(!path.exists());
     }
 
-    // The old behaviour, shown: with no lock and no epoch a save that loaded before the delete rewrites
-    // the whole pre-clear history after it. (This is what the lock and the epoch are for.)
+    // The same race with the epoch check switched off, shown on disk: the late save lands after the clear.
+    // With the check (the tests above) the file stays absent; without it the clear is undone by a write.
     #[test]
-    fn without_the_epoch_check_a_stale_save_would_have_resurrected_the_history() {
+    fn without_the_epoch_check_the_late_save_would_land_after_the_clear() {
         let dir = scratch("old");
         let path = dir.join("sessions.json");
         for i in 0..3 {
             save_session_to(&path, one(&format!("2026-11-0{}T10:00:00Z", i + 1))).unwrap();
         }
-        let loaded_before_clear = load_sessions_checked_from(&path).unwrap();
-        std::fs::remove_file(&path).unwrap();
-        // What `save_session_to` would now do with `loaded_before_clear`: write it all back.
-        assert_eq!(loaded_before_clear.len(), 3, "the stale copy holds the old rows; only the epoch check keeps them out");
+        let started = 0u64;
+        with_store_locked(|| std::fs::remove_file(&path).unwrap());
+        // `|| started` is "no clear ever noticed": the guard is blind.
+        let late = unless_cleared(started, || started, || save_session_to(&path, one("2026-11-09T10:00:00Z")));
+        assert!(matches!(late, Some(Ok(()))));
+        assert!(path.exists(), "a blind guard writes after the clear");
+        assert_eq!(rows(&path), 1, "and the file holds that one late session (the old three stay gone: the load is under the lock)");
+    }
+
+    // No clear ever happens: every save lands, in order, none dropped.
+    #[test]
+    fn with_no_clear_every_save_lands() {
+        let dir = scratch("noclear");
+        let path = dir.join("sessions.json");
+        let epoch = crate::atomic_write::ClearEpoch::new();
+        for i in 0..12 {
+            let started = epoch.now();
+            let s = one(&format!("2026-11-{:02}T10:00:00Z", i + 1));
+            let out = unless_cleared(started, || epoch.now(), || save_session_to(&path, s));
+            assert!(matches!(out, Some(Ok(()))), "save {i} must not be dropped");
+            assert_eq!(rows(&path), i + 1);
+        }
+        let got: Vec<String> = load_sessions_from(&path).into_iter().map(|s| s.started_at).collect();
+        for i in 0..12 {
+            assert!(got.contains(&format!("2026-11-{:02}T10:00:00Z", i + 1)), "session {i} is in the file");
+        }
+    }
+
+    // The new lock's live benefit: many writers at once, every row present exactly once, no deadlock.
+    #[test]
+    fn concurrent_saves_through_the_lock_and_epoch_lose_nothing_and_do_not_deadlock() {
+        const WRITERS: usize = 16;
+        let dir = scratch("stress");
+        let path = std::sync::Arc::new(dir.join("sessions.json"));
+        let epoch = std::sync::Arc::new(crate::atomic_write::ClearEpoch::new());
+        let (tx, rx) = std::sync::mpsc::channel();
+        for w in 0..WRITERS {
+            let (path, epoch, tx) = (path.clone(), epoch.clone(), tx.clone());
+            std::thread::spawn(move || {
+                let started = epoch.now();
+                let s = one(&format!("2026-12-{:02}T10:00:00Z", w + 1));
+                let out = unless_cleared(started, || epoch.now(), || save_session_to(&path, s));
+                tx.send(matches!(out, Some(Ok(())))).unwrap();
+            });
+        }
+        drop(tx);
+        for _ in 0..WRITERS {
+            let landed = rx.recv_timeout(std::time::Duration::from_secs(60)).expect("a writer is stuck: deadlock");
+            assert!(landed, "no writer was dropped or failed");
+        }
+        let got: Vec<String> = load_sessions_from(&path).into_iter().map(|s| s.started_at).collect();
+        assert_eq!(got.len(), WRITERS, "{got:?}");
+        for w in 0..WRITERS {
+            let want = format!("2026-12-{:02}T10:00:00Z", w + 1);
+            assert_eq!(got.iter().filter(|g| **g == want).count(), 1, "{want} exactly once");
+        }
     }
 
     #[test]

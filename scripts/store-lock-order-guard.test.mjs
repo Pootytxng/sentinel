@@ -1086,7 +1086,7 @@ describe("D6: the clear takes one store lock at a time, plus the one declared ne
     const arms = body.split(/\n\s*Gate::/).slice(1);
     expect(arms.length).toBeGreaterThanOrEqual(12);
     for (const arm of arms) {
-      const calls = arm.match(/(with_store_locked|with_store_cleared|lock_gate|lock_store)\s*\(/g) ?? [];
+      const calls = arm.match(/(with_store_locked|with_benchmark_locked|lock_gate|lock_store)\s*\(/g) ?? [];
       expect(calls.length, `a gate arm takes more than one lock: ${arm.slice(0, 80)}`).toBeLessThanOrEqual(1);
     }
   });
@@ -1100,7 +1100,7 @@ describe("D6: the clear takes one store lock at a time, plus the one declared ne
       benchmark_scoreboard: ["with_store_locked", "lock_scoreboard"],
       readiness: ["with_store_locked", "lock_dismissals"],
       incident_observer: ["with_store_locked", "lock_state"],
-      benchmark: ["with_store_cleared", "lock_state"],
+      benchmark: ["with_state_locked", "lock_state"],
     };
     for (const [module, [gate, lock]] of Object.entries(gates)) {
       const body = fnBody(code(module), `fn ${gate}`);
@@ -1110,6 +1110,15 @@ describe("D6: the clear takes one store lock at a time, plus the one declared ne
         /history::|support_evidence::|experiment::|comparison::|drift::|intelligence::|noise_floor::lock/,
       );
     }
+  });
+
+  it("the process's benchmark gate takes the real cache lock once and resets only after a delete that worked", () => {
+    const body = fnBody(code("data_clear"), "impl ClearEffects for ProcessEffects");
+    const at = body.indexOf("fn with_benchmark_locked");
+    expect(at, "ProcessEffects::with_benchmark_locked is missing").toBeGreaterThanOrEqual(0);
+    const gate = body.slice(at);
+    expect([...gate.matchAll(/benchmark::with_state_locked\s*\(/g)]).toHaveLength(1);
+    expect(gate).toMatch(/if result\.is_ok\(\) \{\s*crate::benchmark::reset_for_clear\(state\);/);
   });
 
   it("save_session releases the sessions lock before it settles the comparison", () => {

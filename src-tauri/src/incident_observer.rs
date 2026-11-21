@@ -646,15 +646,23 @@ fn rmw_locked<T>(
     Ok(out)
 }
 
-/// Runs `f` (the clear's delete of the incident record) with every writer held off, then forgets the
-/// failure-streak flags, which describe the file that is gone (D6). The record is not reset in memory
-/// because there is none: every path here re-reads the file under this lock.
+/// Runs `f` (the clear's delete of the incident record) with every writer held off (D6). The record is
+/// not held in memory: every path here re-reads the file under this lock. What IS held in memory is the
+/// failure-streak flags; the clear resets them through `forget_failure_streak`, inside `f`.
 pub(crate) fn with_store_locked<R>(f: impl FnOnce() -> R) -> R {
     let _guard = lock_state();
-    let out = f();
-    READ_FAILURE_REPORTED.store(false, Ordering::Release);
-    SCAN_STORE_FAILED.store(false, Ordering::Release);
-    out
+    f()
+}
+
+/// Forgets the failure-streak flags, which describe a file that is gone (D6).
+pub(crate) fn forget_failure_streak() {
+    forget_failure_streak_in(&READ_FAILURE_REPORTED, &SCAN_STORE_FAILED);
+}
+
+/// `forget_failure_streak` on flags the caller owns (a test uses its own).
+fn forget_failure_streak_in(read_reported: &AtomicBool, scan_failed: &AtomicBool) {
+    read_reported.store(false, Ordering::Release);
+    scan_failed.store(false, Ordering::Release);
 }
 
 /// Write the support event for a failure. Called only after the state lock is released: the
@@ -1738,50 +1746,73 @@ mod tests {
     }
 
     /// D6: the clear's gate and the epoch-aware writer. (Nested: this file keeps ONE test block at the tail.)
+    /// Each test uses its own epoch and flags and a temp folder; no process-wide state is touched.
     mod d6_clear_tests {
-    use super::*;
+        use super::*;
+        use crate::atomic_write::ClearEpoch;
 
-    fn scratch(tag: &str) -> PathBuf {
-        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let dir = std::env::temp_dir()
-            .join(format!("compy-d6-incident-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir.join("incident-observer.json")
-    }
+        fn scratch(tag: &str) -> PathBuf {
+            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            let dir = std::env::temp_dir()
+                .join(format!("compy-d6-incident-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+            std::fs::create_dir_all(&dir).unwrap();
+            dir.join("incident-observer.json")
+        }
 
-    #[test]
-    fn a_scan_that_began_before_a_clear_saves_nothing() {
-        let path = scratch("drop");
-        // A real state on disk, then the clear deletes it and moves the epoch.
-        with_state_at(&path, |_| ()).unwrap();
-        assert!(path.exists());
-        with_store_locked(|| std::fs::remove_file(&path).unwrap());
-        let wrote = rmw_unless(&path, || false, |state| state.seen.len()).unwrap();
-        assert!(wrote.is_none(), "the scan's findings are dropped");
-        assert!(!path.exists(), "and the record is not recreated behind the clear");
-        // A scan that begins after the clear is new data.
-        let wrote = rmw_unless(&path, || true, |state| state.seen.len()).unwrap();
-        assert_eq!(wrote, Some(0));
-        assert!(path.exists());
-    }
+        fn stamp(state: &mut IncidentObserverState) {
+            state.last_scan_at = Some("2026-11-21T10:00:00Z".to_string());
+        }
 
-    #[test]
-    fn the_clears_gate_forgets_the_failure_streak_flags_of_the_file_that_is_gone() {
-        READ_FAILURE_REPORTED.store(true, Ordering::Release);
-        SCAN_STORE_FAILED.store(true, Ordering::Release);
-        let out = with_store_locked(|| 5);
-        assert_eq!(out, 5);
-        assert!(!READ_FAILURE_REPORTED.load(Ordering::Acquire) && !SCAN_STORE_FAILED.load(Ordering::Acquire));
-    }
+        // The scan's findings are what the file would hold; a clear that ran since the scan began means the
+        // file must not exist afterwards (not merely "a function returned None").
+        #[test]
+        fn a_scan_that_began_before_a_clear_leaves_no_file_behind() {
+            let path = scratch("drop");
+            let epoch = ClearEpoch::new();
+            with_state_at(&path, |s| s.last_scan_at = Some("2026-11-01T00:00:00Z".into())).unwrap();
+            let started = epoch.now(); // the scan begins and starts gathering
+            with_store_locked(|| {
+                // the clear: deletes the record, moves the epoch while holding the lock
+                std::fs::remove_file(&path).unwrap();
+                epoch.bump();
+            });
+            let saved = rmw_unless(&path, || epoch.now() == started, stamp).unwrap();
+            assert!(saved.is_none(), "dropped");
+            assert!(!path.exists(), "the record is not recreated behind the clear");
+            // A scan that begins after the clear is new data and lands.
+            let started = epoch.now();
+            let saved = rmw_unless(&path, || epoch.now() == started, stamp).unwrap();
+            assert!(saved.is_some());
+            assert_eq!(load_checked(&path).unwrap().last_scan_at.as_deref(), Some("2026-11-21T10:00:00Z"));
+        }
 
-    #[test]
-    fn the_scan_notes_the_epoch_before_it_gathers_and_checks_it_under_the_lock() {
-        let src = include_str!("incident_observer.rs");
-        let f = src.split(concat!("fn scan", "_now(")).nth(1).unwrap().split("\nfn notify").next().unwrap();
-        let noted = f.find("let started_epoch = crate::atomic_write::clear_epoch()").expect("noted");
-        let gathered = f.find("collect_crash_blackbox()").expect("gathered");
-        assert!(noted < gathered, "the epoch is read before the evidence is gathered");
-        assert!(f.contains("clear_epoch() == started_epoch"), "and compared inside the locked write");
+        #[test]
+        fn with_no_clear_the_scan_always_lands() {
+            let path = scratch("noclear");
+            let epoch = ClearEpoch::new();
+            for round in 0..5 {
+                let started = epoch.now();
+                let saved = rmw_unless(&path, || epoch.now() == started, |s| s.last_scan_at = Some(format!("round {round}"))).unwrap();
+                assert!(saved.is_some(), "round {round}: no clear ran, so the write is never dropped");
+                assert_eq!(load_checked(&path).unwrap().last_scan_at, Some(format!("round {round}")));
+            }
+        }
+
+        #[test]
+        fn the_failure_streak_flags_are_forgotten() {
+            let (read, scan) = (AtomicBool::new(true), AtomicBool::new(true));
+            forget_failure_streak_in(&read, &scan);
+            assert!(!read.load(Ordering::Acquire) && !scan.load(Ordering::Acquire));
+        }
+
+        #[test]
+        fn the_scan_notes_the_epoch_before_it_gathers_and_checks_it_under_the_lock() {
+            let src = include_str!("incident_observer.rs");
+            let f = src.split(concat!("fn scan", "_now(")).nth(1).unwrap().split("\nfn notify").next().unwrap();
+            let noted = f.find("let started_epoch = crate::atomic_write::clear_epoch()").expect("noted");
+            let gathered = f.find("collect_crash_blackbox()").expect("gathered");
+            assert!(noted < gathered, "the epoch is read before the evidence is gathered");
+            assert!(f.contains("clear_epoch() == started_epoch"), "and compared inside the locked write");
+        }
     }
-}
 }

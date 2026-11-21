@@ -1241,8 +1241,6 @@ fn drift_inputs(
     (observations, seen)
 }
 
-/// #281 — the dismissals store's policy and its two user-facing error strings are UNCHANGED by the
-/// atomic-write lane. Explicit temp paths only; nothing reads the real data root.
 /// Runs `f` with every writer of readiness_dismissals.json held off: the clear's delete (D6). Takes this
 /// module's one lock and nothing else; `f` must not take another store's lock.
 pub(crate) fn with_store_locked<R>(f: impl FnOnce() -> R) -> R {
@@ -1250,6 +1248,8 @@ pub(crate) fn with_store_locked<R>(f: impl FnOnce() -> R) -> R {
     f()
 }
 
+/// #281 — the dismissals store's policy and its two user-facing error strings are UNCHANGED by the
+/// atomic-write lane. Explicit temp paths only; nothing reads the real data root.
 #[cfg(test)]
 mod readiness_dismissal_persistence_tests {
     use super::*;
