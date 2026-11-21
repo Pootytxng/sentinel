@@ -6,12 +6,10 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 
 ## NOW (in flight, each on its own branch)
 - [ ] Security slice 1: system tools by absolute path, pinned child environment — closes planted-tool and inherited-environment risk (claude/m1-hard-1; reviewed and green, waiting for the owner's direct go-ahead to push)
-- [ ] Handles audit: every remaining sysinfo all-process listing replaced by the handle-free snapshot, plus a permanent guard (claude/g2-handles 8b9e3101; in safety review)
-- [ ] Name each drifted setting: "now X; Compy last recorded Y" (claude/n1-drift 5b9168a1; review fixes B1-B6 being applied: Home shows a short form only, driver age is not drift)
 - [ ] Parked: capture without elevation when the account is in "Performance Log Users" (claude/d1s1-capture e95c81de, verified); waits behind claude/m1-hard-1 c5e4b3af and needs a rebase over g2-handles (monitoring.rs)
 
 ## NEXT (in order)
-- [ ] Install current main and run the look-only checks (only while the owner is away; blocked 2026-11-21: the PC was not idle): what the card says about the four rough ROB RUN sessions after the Nov 19 driver update; history.json.bak; the grouped Problems room
+- [ ] Look-only checks of the installed desk build a0cfaca3 (installed 2026-11-21): what the card says about the four rough ROB RUN sessions after the Nov 19 driver update; the grouped Problems room; `Running right now` (report: _train\view-1121b\report.md once it runs)
 - [ ] Handles audit S5: the direct query-only opens of the game (fps.rs ~520/~643, monitoring.rs ~896)
 - [ ] Remove or rewrite the #[ignore] test in running_at_start.rs (~1180) that opens every process
 - [ ] Paramedic card: drift evidence lines name the setting (driftApplied/driftOther)
@@ -74,6 +72,11 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - Coordinator defaults the owner may overturn: ship date Friday 2026-12-11; v1 ships only the admin fixes the Paramedic needs; install to Program Files; no use of the word "guarantee"; a strength above the lowest needs two independent supports and no contradicting evidence (in the Paramedic's code and now the Problems room's; not yet written in the constitution); the full health check shows no score ring (removed 2026-11-20, one revert restores it).
 
 ## Done (newest first)
+- 2026-11-21 - desk build a0cfaca3 installed and stamped (installed over 4115e40e; `history.json.bak` is now written at start-up)
+- 2026-11-21 - Handles audit S1-S4: every remaining sysinfo all-process listing replaced by the handle-free snapshot, with a permanent guard (claude/g2-handles) df8d5d7d, e59541f7
+- 2026-11-21 - Drift: the Home line and the Check screen name the setting, what it is now, and what Compy last recorded and when; review fixes say only what the ledger and the check know (claude/n1-drift) 7709f7a2, a816b545
+- 2026-11-21 - Clear my data: core landed (inventory-driven plan and executor; reads the Trial store without moving it, keeps its set-asides); its commands are unregistered, so nothing shows in the app yet 26e2dad5, 40cfe1c2
+- 2026-11-21 - Vocabulary slice 1: source and strength types, first caller, branded top strength (no screen change beyond the top strength) 7c446a8f, 227026b5
 - 2026-11-21 - In-app game claims corrected: "Never touches your games" and "Safe with anti-cheat" replaced by what the code proves (glossary, export report, Leftovers and tweaks text too); permanent guard src/i18n/game-safety-claims.test.ts scans locale files, src/data and Rust strings c4a5b168, 4b2c13d6, e63c482c
 - 2026-11-21 - Export report redaction: other programs' names, Windows user and computer names (whole word), custom power plan names and paths; PRIVACY.md paragraph rewritten; two privacy review rounds 64f63c87
 - 2026-11-21 - Problems room shows identical crash records as one group ("...N times in the Windows records Compy read...", limit note on every group, "Show each one") 17a688d3, c0257d8c
@@ -112,6 +115,7 @@ The push check can fail on a vitest 15 s timeout when several builds share the P
 - 2026-11-20 — §38 recorded ca2989ef
 
 ## Session log (newest 10)
+- 2026-11-21 desk-install session 5: built and installed main a0cfaca3 over 4115e40e, proved at runtime, stamped in RELEASE_STATE; look-only checks in _train\view-1121b.
 - 2026-11-21 session: landed the game-claims correction, export redaction, grouped crash records, first-look running-now, power-plan and hardware-sweep safety fixes (listed under Done; each reviewed, each through the push check). Install of current main and look-only checks blocked at 06:00 PT (PC not idle); installed build is still 4115e40e. g2-handles and n1-drift in review; d1s1-capture parked.
 - 2026-11-20 desk-install session 4: built and installed main 4115e40e, proved at runtime, stamped in RELEASE_STATE; look-only checks (new-user sandbox, then real data) in _train\view-1120e.
 - 2026-11-20 afternoon session: landed 0cc3a30e, fec63809, cb8afffe, abbad9bc, b8f782d7 (each reviewed, each through the push check). Look-only check of 5f4cad34 on the owner's data ran (_train\view-1120d\report-2.md); the brand-new-user half did NOT run (owner came back to the PC). Affordance baseline re-recorded: the score ring's entries and the header button retired by the coordinator, reported to the owner, reversible.
