@@ -839,9 +839,9 @@ impl SessionAccumulator {
     }
 
     pub(crate) fn finalize(mut self, duration_secs: u64) -> SessionSummary {
-        // D6: from here until `save_session` settles it, this summary is the recorder's unsaved work.
-        // The `open` ticket drops when this function returns; the pending count carries the gap.
-        RECORDER.handed_to_save();
+        // The recorder's unsaved-work count is NOT moved here: the caller holds a `PendingSave` guard
+        // (`hold_pending_save`) across finalize, the analysis and `save_session`, so a panic anywhere in
+        // between still releases it.
         self.flush_bucket(); // the trailing partial bucket is real samples too
         let n = self.samples.max(1) as f64;
         let dominant = |m: HashMap<String, u32>| m.into_iter().max_by_key(|(_, c)| *c).map(|(p, _)| p);
@@ -1047,13 +1047,29 @@ impl Drop for OpenTicket {
     }
 }
 
-/// Settles one pending save on every way out of `save_session`.
-struct SaveSettled(&'static RecorderGauge);
+/// The recorder's unsaved-work count, as a guard. Taken by the recorder thread right before it finalizes a
+/// session and dropped when it is done with it (saved, dropped, failed, or a panic unwinding past it), so
+/// the gauge is released on EVERY path. A panic between `finalize` and `save_session` (the stutter
+/// analysis, the capability and game-state collection, the power-plan read) used to leave a count that
+/// nothing settled, and a later clear would refuse as "still finishing a session" until the app restarted.
+pub(crate) struct PendingSave(&'static RecorderGauge);
 
-impl Drop for SaveSettled {
+impl PendingSave {
+    fn take(gauge: &'static RecorderGauge) -> Self {
+        gauge.handed_to_save();
+        Self(gauge)
+    }
+}
+
+impl Drop for PendingSave {
     fn drop(&mut self) {
         self.0.save_settled();
     }
+}
+
+/// The recorder's guard for one finished session: hold it from before `finalize` until the save is done.
+pub(crate) fn hold_pending_save() -> PendingSave {
+    PendingSave::take(&RECORDER)
 }
 
 /// The sessions.json key that marks a row's `compy_changes_active` as not recorded (#669). The count
@@ -1252,9 +1268,8 @@ pub(crate) struct SavedSession {
 /// Returns `Ok(Some(_))` if a real session was saved, `Ok(None)` if it was dropped as too short.
 /// Saving alone no longer fires the debrief toast: the caller asks `experiment::session_end_notice`.
 pub(crate) fn save_session(summary: SessionSummary) -> Result<Option<SavedSession>, String> {
-    // D6: settles the recorder's pending count on every way out, and notes the clear epoch before any
-    // read of the store, so a save that began before a clear is dropped rather than written after it.
-    let _settled = SaveSettled(&RECORDER);
+    // D6: notes the clear epoch before any read of the store, so a save that began before a clear is
+    // dropped rather than written after it. (The recorder's pending count is the caller's `PendingSave`.)
     let started_epoch = crate::atomic_write::clear_epoch(CLEAR_STORE);
     // Drop trivially short sessions entirely — no debrief, and crucially no armed-comparison
     // resolution (a blip must not confound or settle a pending comparison; the arm waits).
@@ -2471,29 +2486,66 @@ mod d6_clear_tests {
         assert!(!G.busy());
         let ticket = OpenTicket::take(&G);
         assert!(G.busy(), "an open recording");
-        G.handed_to_save(); // finalize: the summary exists but is not saved
+        let pending = PendingSave::take(&G); // the recorder is about to finalize: the summary is unsaved work
         drop(ticket); // the accumulator is gone; the unsaved summary still counts
         assert!(G.busy(), "the gap between finalize and save is covered");
-        drop(SaveSettled(&G)); // save_session returned
+        drop(pending); // the save is done
         assert!(!G.busy(), "idle once saved");
-        drop(SaveSettled(&G)); // a summary that never came from finalize cannot go below zero
+        G.save_settled(); // a settle with nothing pending cannot go below zero
+        assert!(!G.busy());
+    }
+
+    // D7: the gauge is released on every path, a panic included (the leak the D6 review named).
+    #[test]
+    fn a_panic_between_finalize_and_save_still_releases_the_unsaved_session_gauge() {
+        static G: RecorderGauge = RecorderGauge::new();
+        assert!(!G.busy());
+        let outcome = std::panic::catch_unwind(|| {
+            let _open = OpenTicket::take(&G);
+            let _pending = PendingSave::take(&G);
+            assert!(G.busy(), "busy inside the scope");
+            panic!("stutter analysis blew up between finalize and save");
+        });
+        assert!(outcome.is_err(), "the panic happened");
+        assert!(!G.busy(), "unwinding dropped both guards: the gauge is back to zero");
+        // And a normal scope, an early return, and a `?` out of a function all release it too.
+        fn early(g: &'static RecorderGauge, fail: bool) -> Result<(), ()> {
+            let _pending = PendingSave::take(g);
+            if fail {
+                return Err(());
+            }
+            Ok(())
+        }
+        assert!(early(&G, true).is_err() && !G.busy());
+        assert!(early(&G, false).is_ok() && !G.busy());
+        // Two guards (a clear refuses until BOTH are gone) count, and each drop takes back only its own.
+        let (a, b) = (PendingSave::take(&G), PendingSave::take(&G));
+        drop(a);
+        assert!(G.busy(), "one is still pending");
+        drop(b);
         assert!(!G.busy());
     }
 
     #[test]
-    fn a_live_accumulator_makes_the_recorder_busy_and_finalize_hands_over_to_the_save() {
+    fn a_live_accumulator_makes_the_recorder_busy_and_the_recorder_holds_the_pending_guard_across_the_save() {
         let acc = SessionAccumulator::new("t".into(), Some(0));
         assert!(recorder_busy(), "an accumulator is an open recording");
-        let summary = acc.finalize(10);
-        assert!(recorder_busy(), "the finalized summary is still unsaved work");
-        drop(summary);
-        // `save_session` settles through this guard on every return (its first statement builds it); the
-        // function itself is not called here: it reaches the real data root and the app's notifiers.
-        drop(SaveSettled(&RECORDER));
+        drop(acc.finalize(10)); // finalize alone moves no pending count: the caller's guard does
+        // The recorder thread (monitoring.rs, `LiveSession::finish`) takes the guard BEFORE it finalizes and
+        // lets it go after the save; the function itself is not called here (it reaches the live app).
+        let mon = include_str!("monitoring.rs");
+        let fin = mon.split("fn finish(self, ended: crate::session_boundary::Ended)").nth(1).expect("LiveSession::finish");
+        let fin = fin.split("\n// True when UAC is fully disabled").next().unwrap();
+        let guard = fin.find("let _pending = crate::sessions::hold_pending_save();").expect("the guard is taken in finish");
+        let finalize = fin.find("acc.finalize_ended(&ended)").expect("finalize");
+        let save = fin.find("crate::sessions::save_session(summary)").expect("save");
+        assert!(guard < finalize && finalize < save, "guard, then finalize, then save: nothing between them is unguarded");
         let src = include_str!("sessions.rs");
         let body = src.split(concat!("pub(crate) fn ", "save_session(")).nth(1).unwrap();
         let body = body.split(concat!("fn get_", "session_summaries")).next().unwrap();
-        assert!(body.contains("let _settled = SaveSettled(&RECORDER)"), "save_session holds the settle guard for its whole body");
+        assert!(!body.contains("SaveSettled"), "the count has one owner, the guard");
+        let finalize_fn = src.split("pub(crate) fn finalize(mut self").nth(1).unwrap().split("fn finalize_ended").next().unwrap();
+        assert!(!finalize_fn.contains("handed_to_save"), "finalize no longer moves the count");
     }
 
     // D7: a session save follows only the sessions epoch. Another store's clear moves another key.

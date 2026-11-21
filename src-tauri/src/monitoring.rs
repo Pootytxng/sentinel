@@ -1578,6 +1578,8 @@ impl LiveSession {
             events.retain(|e| u64::from(e.at_secs) <= duration_secs);
         }
         if acc.worth_saving() {
+            // Unsaved work for a clear to refuse on; released on every path out of this block, a panic included.
+            let _pending = crate::sessions::hold_pending_save();
             let mut summary = acc.finalize_ended(&ended);
             summary.ended = Some(reason);
             summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
