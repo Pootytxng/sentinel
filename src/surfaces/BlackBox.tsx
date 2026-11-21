@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -36,6 +36,14 @@ import { CareNextStep } from "./CareNextStep";
 import { pickCareStep, isLifted, storedStutterStep, dismissStoredStep, markFinalShown, type StutterResult } from "./care-next-step";
 import { CareHonestEnd } from "./CareHonestEnd";
 import { prettyGameName } from "./game-name";
+import {
+  groupIncidents,
+  headlineWording,
+  isCapped,
+  sharedUnknownItems,
+  INCIDENT_CAP,
+  type IncidentGroup,
+} from "./blackbox-group";
 import { honestEndFor, splitSkips } from "./care-honest-end";
 import "./BlackBox.css";
 
@@ -251,16 +259,28 @@ export function BlackBox({
             )
           ) : (
             <ul className="bb-list">
-              {report.incidents.map((inc, i) => (
-                <IncidentRow
-                  key={inc.incident_id || `${inc.when}-${i}`}
-                  inc={inc}
-                  allIncidents={report.incidents}
-                  selected={!!selectedIncidentId && inc.incident_id === selectedIncidentId}
-                  restore={restore}
-                  lifted={isLifted(careStep, inc)}
-                />
-              ))}
+              {groupIncidents(report.incidents).map((g, gi) =>
+                g.items.length === 1 ? (
+                  <IncidentRow
+                    key={g.items[0].incident_id || `${g.items[0].when}-${gi}`}
+                    inc={g.items[0]}
+                    allIncidents={report.incidents}
+                    selected={!!selectedIncidentId && g.items[0].incident_id === selectedIncidentId}
+                    restore={restore}
+                    lifted={isLifted(careStep, g.items[0])}
+                  />
+                ) : (
+                  <IncidentGroupBlock
+                    key={g.items[0].incident_id || `${g.items[0].when}-${gi}`}
+                    group={g}
+                    allIncidents={report.incidents}
+                    capped={isCapped(report.incidents.length)}
+                    selectedIncidentId={selectedIncidentId}
+                    restore={restore}
+                    isLiftedInc={(inc) => isLifted(careStep, inc)}
+                  />
+                ),
+              )}
             </ul>
           )}
 
@@ -301,10 +321,18 @@ function IncidentRow({
   selected = false,
   restore,
   lifted = false,
+  compact = false,
+  hideCategories,
 }: {
   inc: CrashIncident;
   allIncidents: CrashIncident[];
   restore?: RestoreCtx;
+  /** P2-group: one record inside a group's "Show each one" list. The program, kind and assessment
+   *  are said once by the group, so the row keeps what is its own (time, vitals, changed-before,
+   *  known issue, the answer to "Did this point you the right way?", the receipt). */
+  compact?: boolean;
+  /** P2-group: "Unknown" rows the group already says once for every record; left out here. */
+  hideCategories?: ReadonlySet<string>;
   /** P6-next: this record's step is the one shown at the top; the row points there. */
   lifted?: boolean;
   /** This is the exact incident the user was routed here to see. Marked, and scrolled into view —
@@ -327,8 +355,14 @@ function IncidentRow({
     <li className="bb-item" ref={ref} data-selected={selected ? "true" : undefined}>
       {selected && <p className="bb-selected-note">{t("gaming.blackBox.selectedNote")}</p>}
       <div className="bb-item-head">
-        <span className="bb-tag">{inc.tag}</span>
-        <span className="bb-headline">{inc.headline}</span>
+        {compact ? (
+          <span className="bb-headline">{inc.when_display}</span>
+        ) : (
+          <>
+            <span className="bb-tag">{inc.tag}</span>
+            <span className="bb-headline">{inc.headline}</span>
+          </>
+        )}
       </div>
 
       {inc.vitals ? (
@@ -343,13 +377,19 @@ function IncidentRow({
       )}
 
       {inc.changed_before && (
-        <ChangedBeforeBlock cb={inc.changed_before} restore={restore} />
+        <ChangedBeforeBlock cb={inc.changed_before} restore={restore} hide={hideCategories} />
       )}
 
       {/* Black Box v2 (only present when blackbox_v2_gate() is ON): triage — consistent-with + a
           strength WORD (never a percentage) + the evidence + ONE reversible next step. v2.1 adds the
           measured-absence line under a step the user marked helpful. */}
-      {inc.assessment && <AssessmentBlock inc={inc} allIncidents={allIncidents} lifted={lifted} />}
+      {inc.assessment && !compact && <AssessmentBlock inc={inc} allIncidents={allIncidents} lifted={lifted} />}
+      {inc.assessment && compact && (
+        <div className="bb-compact-assess">
+          {lifted && <p className="bb-nextstep-pointer">{t("gaming.blackBox.nextStep.shownAbove")}</p>}
+          <ResolutionFeedback inc={inc} allIncidents={allIncidents} />
+        </div>
+      )}
 
       {/* Compy Care Tier 1 (only present when case_intelligence_gate() is ON and the SIGNED catalog
           matched): somebody else's published write-up, carried verbatim. A separate section from the
@@ -407,10 +447,13 @@ function AssessmentBlock({
   inc,
   allIncidents,
   lifted = false,
+  omitFeedback = false,
 }: {
   inc: CrashIncident;
   allIncidents: CrashIncident[];
   lifted?: boolean;
+  /** P2-group: the answer is asked per record, inside the group's list, not under the shared reading. */
+  omitFeedback?: boolean;
 }) {
   const { t } = useTranslation();
   const a = inc.assessment as CrashAssessment; // only rendered when present
@@ -458,8 +501,114 @@ function AssessmentBlock({
           <p className="bb-nextstep-detail">{a.next_step.detail}</p>
         </div>
       )}
-      <ResolutionFeedback inc={inc} allIncidents={allIncidents} />
+      {!omitFeedback && <ResolutionFeedback inc={inc} allIncidents={allIncidents} />}
     </div>
+  );
+}
+
+// P2-group: several incidents that share program, kind and assessment (see blackbox-group.ts), as one
+// block. The headline counts what Compy could read; the shared reading is said once; the individual
+// records (each with its own vitals, changed-before rows, restore offer, answer and receipt) stay
+// behind a real disclosure button. A group of one never comes here: it renders as an IncidentRow.
+function IncidentGroupBlock({
+  group,
+  allIncidents,
+  capped,
+  selectedIncidentId,
+  restore,
+  isLiftedInc,
+}: {
+  group: IncidentGroup;
+  allIncidents: CrashIncident[];
+  capped: boolean;
+  selectedIncidentId?: string | null;
+  restore?: RestoreCtx;
+  /** Is this record's step the one shown at the top? */
+  isLiftedInc: (inc: CrashIncident) => boolean;
+}) {
+  const { t, i18n } = useTranslation();
+  const { items } = group;
+  const newest = items[0];
+  const oldest = items[items.length - 1];
+  const hasSelected = !!selectedIncidentId && items.some((i) => i.incident_id === selectedIncidentId);
+  const [open, setOpen] = useState(hasSelected);
+  const listId = useId();
+  const count = items.length;
+  const shared = useMemo(() => sharedUnknownItems(items), [items]);
+  const hide = useMemo(() => new Set(shared.map((s) => s.category)), [shared]);
+  const when = (iso: string) => fmtWhen(iso, i18n.language);
+  const day = (iso: string, withYear: boolean) =>
+    new Date(iso).toLocaleDateString(i18n.language, {
+      month: "short",
+      day: "numeric",
+      ...(withYear ? { year: "numeric" } : {}),
+    });
+  const withYear = new Date(oldest.when).getFullYear() !== new Date(newest.when).getFullYear();
+  const from = day(oldest.when, withYear);
+  const to = day(newest.when, withYear);
+  const range =
+    from === to
+      ? t("gaming.blackBox.group.rangeDay", { date: to })
+      : t("gaming.blackBox.group.rangeSpan", { from, to });
+  const app = newest.receipt.faulting_app ? prettyGameName(newest.receipt.faulting_app) || newest.receipt.faulting_app : "";
+  const lineKey =
+    app && newest.tag === "App crash"
+      ? "gaming.blackBox.group.crash"
+      : app && newest.tag === "App hang"
+      ? "gaming.blackBox.group.hang"
+      : null;
+  const headline = lineKey
+    ? t(lineKey, { count, app, range })
+    : t("gaming.blackBox.group.other", { count, what: headlineWording(newest), range });
+  // Members share one next step (it is part of the key): if it is the step shown above, say so once.
+  const lifted = items.some(isLiftedInc);
+  return (
+    <li className="bb-item bb-group" data-group-size={count}>
+      <div className="bb-item-head">
+        <span className="bb-tag">{newest.tag}</span>
+        <span className="bb-headline">{headline}</span>
+      </div>
+      {capped && <p className="bb-group-cap">{t("gaming.blackBox.group.capNote", { cap: INCIDENT_CAP })}</p>}
+      {newest.assessment && (
+        <AssessmentBlock inc={newest} allIncidents={allIncidents} lifted={lifted} omitFeedback />
+      )}
+      {shared.length > 0 && (
+        <div className="bb-changed bb-group-shared">
+          <p className="bb-changed-head">{t("gaming.blackBox.changedBefore.title")}</p>
+          <p className="bb-changed-anchor">{t("gaming.blackBox.group.sameForAll", { count })}</p>
+          <ul className="bb-changed-list">
+            {shared.map((it) => (
+              <ChangedBeforeRow key={it.category} it={it} when={when} />
+            ))}
+          </ul>
+        </div>
+      )}
+      <button
+        type="button"
+        className="bb-receipt-toggle bb-group-toggle"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={listId}
+      >
+        {open ? t("gaming.blackBox.group.hideEach") : t("gaming.blackBox.group.showEach", { count })}
+      </button>
+      {open && (
+        <ul id={listId} className="bb-list bb-group-list" aria-label={t("gaming.blackBox.group.eachLabel", { count })}>
+          {items.map((inc, i) => (
+            <IncidentRow
+              key={inc.incident_id || `${inc.when}-${i}`}
+              inc={inc}
+              allIncidents={allIncidents}
+              selected={!!selectedIncidentId && inc.incident_id === selectedIncidentId}
+              restore={restore}
+              lifted={isLiftedInc(inc)}
+              compact
+              hideCategories={hide}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }
 
@@ -692,8 +841,18 @@ function fmtWhen(iso: string, lang: string): string {
   return d.toLocaleString(lang, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-function ChangedBeforeBlock({ cb, restore }: { cb: ChangedBeforeIncident; restore?: RestoreCtx }) {
+function ChangedBeforeBlock({
+  cb,
+  restore,
+  hide,
+}: {
+  cb: ChangedBeforeIncident;
+  restore?: RestoreCtx;
+  /** P2-group: categories whose (identical, unknown) row the group already says once. */
+  hide?: ReadonlySet<string>;
+}) {
   const { t, i18n } = useTranslation();
+  const items = hide ? cb.items.filter((it) => !hide.has(it.category)) : cb.items;
   const when = (iso: string) => fmtWhen(iso, i18n.language);
   return (
     <div className="bb-changed">
@@ -710,9 +869,9 @@ function ChangedBeforeBlock({ cb, restore }: { cb: ChangedBeforeIncident; restor
       ) : (
         <p className="bb-changed-anchor">{t("gaming.blackBox.changedBefore.noSession")}</p>
       )}
-      {cb.items.length > 0 && (
+      {items.length > 0 && (
         <ul className="bb-changed-list">
-          {cb.items.map((it) => (
+          {items.map((it) => (
             <ChangedBeforeRow key={it.category} it={it} when={when} />
           ))}
         </ul>

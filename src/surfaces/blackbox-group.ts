@@ -1,0 +1,101 @@
+import type { ChangedBeforeItem, CrashIncident } from "../types";
+
+// Problems room: identical incidents shown as one group (P2-group). Pure helpers, no I/O.
+//
+// Two incidents are "identical" only when everything the room says about them besides WHEN is the
+// same: the program Windows named, the kind, the headline wording, the whole assessment (rule,
+// statement, strength, evidence, next step) and any known-issue match. Any difference keeps them
+// apart, so a group never hides a reading that differs between its members. What differs per
+// incident (vitals, "Changed before this", restore offers, the receipt, the stored "Did this point
+// you the right way?" answer) is not part of the key and stays per incident.
+
+/** Mirrors `MAX_INCIDENTS` in src-tauri/src/blackbox.rs. A report with this many incidents was cut
+ *  there: older records may exist that Compy did not read, so counts are "of the newest 25". */
+export const INCIDENT_CAP = 25;
+
+export type IncidentGroup = {
+  key: string;
+  /** Newest first. */
+  items: CrashIncident[];
+};
+
+/** The headline minus its trailing date: "ROB RUN stopped working and closed — Nov 20, 12:17 AM" is
+ *  split into the shared wording and the optional ", while X was running" tail. */
+export function headlineWording(inc: CrashIncident): string {
+  const cut = inc.headline.indexOf(` — ${inc.when_display}`);
+  if (cut < 0) return inc.headline;
+  return inc.headline.slice(0, cut) + inc.headline.slice(cut + ` — ${inc.when_display}`.length);
+}
+
+/** The faulting program as a comparable token: file name only, trimmed, lowercased. */
+function programOf(inc: CrashIncident): string {
+  const raw = (inc.receipt?.faulting_app ?? "").trim();
+  const base = raw.split(/[\\/]/).pop() ?? raw;
+  return base.trim().toLowerCase();
+}
+
+export function groupKey(inc: CrashIncident): string {
+  const a = inc.assessment;
+  const c = inc.case_intelligence;
+  return JSON.stringify([
+    programOf(inc),
+    inc.tag,
+    headlineWording(inc),
+    a
+      ? [a.rule ?? null, a.statement ?? null, a.subject ?? null, a.temp_c ?? null, a.strength, a.beyond_us,
+         a.consistent_with, a.evidence, a.next_step]
+      : null,
+    c ? [c.case_id, c.level, c.catalog_version] : null,
+  ]);
+}
+
+const time = (inc: CrashIncident) => {
+  const ms = Date.parse(inc.when);
+  return Number.isNaN(ms) ? null : ms;
+};
+
+/** Groups by `groupKey`. Members are newest first (stable where a time can't be read); groups are
+ *  ordered by their newest member. A group of one is one incident, unchanged. */
+export function groupIncidents(incidents: CrashIncident[]): IncidentGroup[] {
+  const ordered = incidents
+    .map((inc, i) => ({ inc, i }))
+    .sort((x, y) => {
+      const a = time(x.inc);
+      const b = time(y.inc);
+      if (a !== null && b !== null && a !== b) return b - a;
+      return x.i - y.i;
+    })
+    .map((x) => x.inc);
+  const groups = new Map<string, IncidentGroup>();
+  for (const inc of ordered) {
+    const key = groupKey(inc);
+    const g = groups.get(key);
+    if (g) g.items.push(inc);
+    else groups.set(key, { key, items: [inc] });
+  }
+  return [...groups.values()];
+}
+
+/** Was the scan cut at the reader's cap? Then a count is "among the newest N", never a total. */
+export function isCapped(incidentCount: number): boolean {
+  return incidentCount >= INCIDENT_CAP;
+}
+
+const unknownSig = (it: ChangedBeforeItem) =>
+  it.status === "unknown" && it.events.length === 0
+    ? `${it.category}|${it.unknown_reason ?? ""}|${it.last_reading_at ?? ""}`
+    : null;
+
+/** The "Unknown: ..." rows that read the same for EVERY incident in the group (same category, same
+ *  reason, same last reading): shown once at group level. Anything else stays per incident, and an
+ *  unknown is never turned into "none". */
+export function sharedUnknownItems(items: CrashIncident[]): ChangedBeforeItem[] {
+  if (items.length < 2 || items.some((i) => !i.changed_before)) return [];
+  return items[0].changed_before!.items.filter((it) => {
+    const sig = unknownSig(it);
+    return (
+      sig !== null &&
+      items.every((o) => o.changed_before!.items.some((x) => x.category === it.category && unknownSig(x) === sig))
+    );
+  });
+}

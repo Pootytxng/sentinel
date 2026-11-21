@@ -646,3 +646,24 @@
     gap: 2px;
   }
 }
+
+/* P2-group: identical incidents as one block; the individual records sit behind "Show each one". */
+.bb-group-cap {
+  margin: 0;
+  color: var(--ix-text-3);
+  font-size: var(--type-label);
+  line-height: 1.5;
+}
+
+.bb-group-toggle {
+  align-self: flex-start;
+}
+
+.bb-group-list {
+  margin-top: 4px;
+}
+
+.bb-group-list > .bb-item {
+  background: transparent;
+  padding: 10px 12px;
+}

@@ -529,7 +529,19 @@
     "yesButton": "是",
     "noButton": "否",
     "selectedNote": "这就是你要查看的那条记录。",
-    "selectedMissing": "本次扫描中没有你打开的那条记录。Windows 可能已经轮换掉了它，或者记录它的来源需要管理员权限才能读取。"
+    "selectedMissing": "本次扫描中没有你打开的那条记录。Windows 可能已经轮换掉了它，或者记录它的来源需要管理员权限才能读取。",
+    "group": {
+      "crash_other": "Windows 记录到 {{app}} 停止工作并关闭，共 {{count}} 次，{{range}}。",
+      "hang_other": "Windows 记录到 {{app}} 停止响应（卡住），共 {{count}} 次，{{range}}。",
+      "other_other": "{{what}}：Windows 日志中共有 {{count}} 条记录，{{range}}。",
+      "rangeSpan": "从 {{from}} 到 {{to}}",
+      "rangeDay": "都在 {{date}}",
+      "capNote": "Compy 最多只读取最近的 {{cap}} 条记录，所以这里只统计这些；可能还有更早的记录没有被计入。",
+      "showEach_other": "展开每一条（{{count}}）",
+      "hideEach": "收起各条记录",
+      "eachLabel_other": "这 {{count}} 条记录，最新的在前",
+      "sameForAll_other": "这 {{count}} 条记录都一样"
+    }
   },
   "twoFutures": {
     "heading": "双重未来",
