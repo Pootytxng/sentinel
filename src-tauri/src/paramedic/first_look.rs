@@ -21,6 +21,11 @@ use std::time::{Duration, Instant};
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use serde::{Deserialize, Serialize};
 
+mod crash_split;
+mod running_now;
+
+use self::crash_split::CrashSplit;
+use self::running_now::{RunningNowOut, RunningRead};
 use super::changes::{collect_reader, spawn_reader, status_limits, Limit, Slots, CHANGES_BUDGET};
 use super::extras::{crash_dto, crash_outcome, CrashMatch, CrashOutcome, CrashRead};
 use super::facts::{self, CompyChange, Fact, FactsInput, FactsRead, HistoryRead};
@@ -104,6 +109,9 @@ pub(crate) struct Crashes {
     pub args: BTreeMap<&'static str, String>,
     pub signature_module: Option<String>,
     pub signature_before: Option<String>,
+    /// How many of those records fall before and after the earliest dated change (counts and dates only);
+    /// none when there is no dated change to split at.
+    pub split: Option<CrashSplit>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -136,6 +144,9 @@ pub(crate) struct FirstLook {
     pub facts: Vec<Fact>,
     /// Changes Compy itself made inside the window, newest first (read from the ledger without writing).
     pub compy_changes: Vec<CompyChange>,
+    /// Known programs (the reviewed allowlist) running at this moment: a fact about now, not about when the
+    /// game ran badly. Read for the whole PC and for a picked game, with or without a window.
+    pub running_now: RunningNowOut,
     /// What Compy could not see, per kind; the card words each.
     pub limits: Vec<Limit>,
     /// Every asked kind was read completely (so "no dated change" may be said when the lists are empty).
@@ -189,6 +200,7 @@ pub(crate) struct Sources {
     pub mods: ModsRead,
     pub facts: FactsRead,
     pub history: HistoryRead,
+    pub running: RunningRead,
 }
 
 pub(super) fn limit(kind: &'static str, code: &'static str, args: &[(&'static str, String)]) -> Limit {
@@ -278,6 +290,7 @@ pub(crate) fn build_with(since: Since, now: DateTime<Utc>, game: &GameCtx, src: 
         mods_settings_only: Vec::new(),
         facts: Vec::new(),
         compy_changes: Vec::new(),
+        running_now: running_now::out(&src.running),
         limits: Vec::new(),
         read_all: false,
         method: METHOD,
@@ -462,10 +475,12 @@ fn crashes_part(game: &GameCtx, crashes: &CrashRead, out: &mut FirstLook) {
                 Some(exe) => CrashMatch::Program(exe),
                 None => CrashMatch::InstallFolder,
             };
-            match crash_outcome(h, how, earliest_exact(out)) {
+            let earliest = earliest_exact(out);
+            match crash_outcome(h, how, earliest) {
                 CrashOutcome::Line(l) => {
                     let (module, before) = l.signature.unzip();
-                    out.crashes = Some(Crashes { args: l.args.into_iter().collect(), signature_module: module, signature_before: before });
+                    let split = crash_split::split(h, how, earliest);
+                    out.crashes = Some(Crashes { args: l.args.into_iter().collect(), signature_module: module, signature_before: before, split });
                 }
                 // Not "no crashes": some reports were not read.
                 CrashOutcome::NoneCounted { partial: true } => out.limits.push(limit("crashes", "partial", &[])),
@@ -702,7 +717,12 @@ pub(crate) struct Io {
     pub facts: fn(&GameCtx) -> FactsRead,
     /// Compy's own changes from the change ledger (a read that writes nothing).
     pub history: fn() -> HistoryRead,
+    /// Which known programs are running right now: one names-only process listing, read-only.
+    pub running: fn() -> RunningRead,
 }
+
+/// One running-now listing at a time (the command's slot; tests that go through it take `one_at_a_time`).
+static RUNNING_SLOT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// The answer for `sel` and `since` at `now`: the game is resolved first (it names the folder the other readers
 /// need), then the dated readers, the crash read and the folder scan run side by side inside one shared
@@ -725,6 +745,8 @@ pub(crate) fn run_with(sel: &FirstLookGame, since: Since, now: DateTime<Utc>, bu
         spawn_reader("paramedic-first-look-facts", slots.map(|s| &s.facts), move || (io.facts)(&g))
     };
     let history_rx = window_hours(since).map(|_| spawn_reader("paramedic-first-look-history", slots.map(|s| &s.history), move || (io.history)()));
+    // Running now is a fact about this moment: asked for every choice, the whole PC and a picked game alike.
+    let running_rx = spawn_reader("paramedic-first-look-running", slots.map(|_| &RUNNING_SLOT), move || (io.running)());
     let changes = window_hours(since).map(|hours| {
         let t0 = now - ChronoDuration::hours(hours);
         let g = game.clone();
@@ -734,7 +756,8 @@ pub(crate) fn run_with(sel: &FirstLookGame, since: Since, now: DateTime<Utc>, bu
     let mods = mods_rx.map_or(ModsRead::NotRead, |rx| collect_reader(rx, budget, started).unwrap_or_else(ModsRead::Unavailable));
     let facts = collect_reader(facts_rx, budget, started).unwrap_or_else(FactsRead::Unavailable);
     let history = history_rx.map_or(HistoryRead::NotRead, |rx| collect_reader(rx, budget, started).unwrap_or_else(HistoryRead::Unavailable));
-    build_with(since, now, &game, &Sources { changes, crashes, mods, facts, history })
+    let running = collect_reader(running_rx, budget, started).unwrap_or_else(RunningRead::Unavailable);
+    build_with(since, now, &game, &Sources { changes, crashes, mods, facts, history, running })
 }
 
 /// Pure: a Steam pick against Steam's listing. A game the complete listing does not hold is "not in Steam"; a
@@ -820,7 +843,7 @@ fn history_real() -> HistoryRead {
     HistoryRead::Read(crate::history::read_ledger_stamps())
 }
 
-const REAL: Io = Io { resolve: resolve_real, changes: changes_real, crashes: crashes_real, mods: mods_real, facts: facts_real, history: history_real };
+const REAL: Io = Io { resolve: resolve_real, changes: changes_real, crashes: crashes_real, mods: mods_real, facts: facts_real, history: history_real, running: running_now::read_real };
 
 /// One reader of each kind at a time: a press while an earlier reader still runs reads `took-too-long`.
 static SLOTS: Slots = Slots::new();
@@ -1543,7 +1566,7 @@ mod tests {
     fn the_first_look_writes_nothing_and_starts_nothing() {
         // Source-text guard (the pattern of the elevated-helper guard): this file reads Windows' records
         // through change_sources only. Words are assembled so this test does not match itself.
-        let src = include_str!("first_look.rs");
+        for src in [include_str!("first_look.rs"), include_str!("first_look/crash_split.rs"), include_str!("first_look/running_now.rs")] {
         let code = src.split("#[cfg(test)]").next().unwrap();
         for banned in [
             ["Command", "::new"].concat(),
@@ -1554,7 +1577,8 @@ mod tests {
             ["get_game_", "readiness"].concat(),
             ["compy_data_", "dir"].concat(),
         ] {
-            assert!(!code.contains(&banned), "first_look.rs must not contain {banned}");
+            assert!(!code.contains(&banned), "the first look's sources must not contain {banned}");
+        }
         }
     }
 
@@ -1876,7 +1900,10 @@ mod tests {
     fn fake_history() -> HistoryRead {
         HistoryRead::NotRead
     }
-    const FAKE: Io = Io { resolve: fake_resolve, changes: fake_changes, crashes: fake_crashes, mods: fake_mods, facts: fake_facts, history: fake_history };
+    fn fake_running() -> RunningRead {
+        RunningRead::NotRead
+    }
+    const FAKE: Io = Io { resolve: fake_resolve, changes: fake_changes, crashes: fake_crashes, mods: fake_mods, facts: fake_facts, history: fake_history, running: fake_running };
 
     fn reset_counts() {
         for c in [&CALLS, &CRASH_CALLS, &MOD_CALLS] {
@@ -2017,5 +2044,100 @@ mod tests {
         // No recorded game found anywhere: nothing is merged on the name alone.
         let l = change_sources::SteamListing { games: vec![g(1, r"D:\Lib\steamapps\common\DOOM")], complete: true };
         assert_eq!(games_dto(Ok(l), &[]).games[0].recorded, None);
+    }
+
+    // ---- S5: the crash records before and after the earliest dated change -------------------------
+
+    #[test]
+    fn a_picked_game_with_a_dated_change_gets_the_split_of_its_crash_records_at_that_change() {
+        let h = history(
+            vec![
+                crash("robrun.exe", "2026-11-02T10:00:00Z", Some(true)),
+                crash("robrun.exe", "2026-11-05T10:00:00Z", Some(true)),
+                crash("robrun.exe", "2026-11-19T10:00:00Z", Some(true)),
+                crash("other.exe", "2026-11-01T10:00:00Z", Some(true)),
+            ],
+            false,
+        );
+        let a = with_crashes(h, read(vec![steam_ev("2026-11-18T09:00:00Z", false)]));
+        let s = a.crashes.as_ref().unwrap().split.as_ref().expect("a split");
+        assert_eq!((s.before, s.after, s.gap), (2, 1, None));
+        assert_eq!(s.change, "2026-11-18T09:00:00Z");
+    }
+
+    #[test]
+    fn the_split_sits_beside_the_same_signature_sentence_and_does_not_replace_it() {
+        let h = history(vec![crash("robrun.exe", "2026-11-02T10:00:00Z", Some(true)), crash("robrun.exe", "2026-11-19T10:00:00Z", Some(true))], false);
+        let a = with_crashes(h, read(vec![steam_ev("2026-11-18T09:00:00Z", false)]));
+        let c = a.crashes.as_ref().unwrap();
+        assert!(c.signature_module.is_some() && c.signature_before.is_some(), "the existing sentence's inputs are still there");
+        assert_eq!(c.split.as_ref().map(|s| (s.before, s.after)), Some((1, 1)));
+        // Nothing before the change: the "not the whole story" sentence is not said, and the split says so honestly.
+        let h = history(vec![crash("robrun.exe", "2026-11-19T10:00:00Z", Some(true)), crash("robrun.exe", "2026-11-20T10:00:00Z", Some(true))], false);
+        let a = with_crashes(h, read(vec![steam_ev("2026-11-18T09:00:00Z", false)]));
+        let c = a.crashes.as_ref().unwrap();
+        assert!(c.signature_module.is_none());
+        assert_eq!(c.split.as_ref().map(|s| (s.before, s.after, s.gap)), Some((0, 2, Some("starts-later"))));
+    }
+
+    #[test]
+    fn no_dated_change_means_no_split() {
+        let h = history(vec![crash("robrun.exe", "2026-11-02T10:00:00Z", Some(true))], false);
+        let a = with_crashes(h, read(vec![]));
+        assert!(a.crashes.as_ref().unwrap().split.is_none());
+    }
+
+    // ---- S4: known programs running now -----------------------------------------------------------
+
+    fn running_of(names: &[&str]) -> RunningRead {
+        RunningRead::Read(running_now::from_names(names.iter().copied()))
+    }
+
+    #[test]
+    fn running_now_is_given_for_the_whole_pc_and_a_picked_game_and_the_same_way_for_always() {
+        for (game, since) in [(GameCtx::default(), Since::ThisWeek), (steam_ctx(), Since::ThisWeek), (GameCtx::default(), Since::Always), (steam_ctx(), Since::Always)] {
+            let a = build_with(since, utc(NOW), &game, &Sources { running: running_of(&["Medal.exe", "System"]), ..Sources::default() });
+            assert_eq!(a.running_now.state, "listed");
+            assert_eq!(a.running_now.programs.iter().map(|p| p.name).collect::<Vec<_>>(), vec!["Medal"]);
+        }
+    }
+
+    #[test]
+    fn running_now_asks_nobody_means_not_read_and_an_unread_listing_is_never_none() {
+        let a = build_with(Since::ThisWeek, utc(NOW), &GameCtx::default(), &Sources::default());
+        assert_eq!(a.running_now.state, "not-read");
+        let a = build_with(Since::ThisWeek, utc(NOW), &GameCtx::default(), &Sources { running: running_of(&[]), ..Sources::default() });
+        assert_eq!(a.running_now.state, "unread");
+        let a = build_with(Since::ThisWeek, utc(NOW), &GameCtx::default(), &Sources { running: running_of(&["System"]), ..Sources::default() });
+        assert_eq!(a.running_now.state, "none");
+    }
+
+    fn running_listed() -> RunningRead {
+        running_of(&["medal.exe", "discord.exe", "obs64.exe"])
+    }
+    fn running_dead() -> RunningRead {
+        panic!("the process listing stopped");
+    }
+
+    #[test]
+    fn the_command_path_reads_running_now_for_every_choice_and_a_dead_reader_is_its_own_state() {
+        let _t = one_at_a_time();
+        for sel in [FirstLookGame::WholePc, FirstLookGame::Steam { app_id: 2000, name: Some("ROB RUN".into()) }] {
+            for since in [Since::ThisWeek, Since::Always] {
+                let io = Io { running: running_listed, ..FAKE };
+                let a = run_with(&sel, since, utc(NOW), Duration::from_secs(2), io, None);
+                assert_eq!(a.running_now.programs.len(), 3, "{sel:?} {since:?}");
+            }
+        }
+        let io = Io { running: running_dead, ..FAKE };
+        let a = run_with(&FirstLookGame::WholePc, Since::ThisWeek, utc(NOW), Duration::from_secs(2), io, None);
+        assert_eq!((a.running_now.state, a.running_now.programs.len()), ("reader-failed", 0));
+    }
+
+    #[test]
+    fn running_now_serialises_no_raw_process_name_through_the_whole_answer() {
+        let a = build_with(Since::ThisWeek, utc(NOW), &GameCtx::default(), &Sources { running: running_of(&["Medal.exe", "my-private-tool.exe", "System"]), ..Sources::default() });
+        let json = serde_json::to_string(&a).unwrap();
+        assert!(json.contains("\"name\":\"Medal\"") && !json.contains("my-private-tool") && !json.contains("Medal.exe"), "{json}");
     }
 }

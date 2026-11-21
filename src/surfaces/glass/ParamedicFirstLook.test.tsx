@@ -37,7 +37,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 import "../../i18n";
 import i18n from "../../i18n";
 import type { ParamedicDiagnosis } from "../../types";
-import type { CompyChange, FirstLookChange, FirstLookFact, ParamedicFirstLook as FirstLookAnswer, RecordedGame, SteamGames } from "./ParamedicFirstLook";
+import type { CompyChange, FirstLookChange, FirstLookCrashSplit, FirstLookFact, ParamedicFirstLook as FirstLookAnswer, RecordedGame, SteamGames } from "./ParamedicFirstLook";
 import { ParamedicCard } from "./ParamedicCard";
 
 afterEach(() => {
@@ -107,6 +107,7 @@ const answer = (over: Partial<FirstLookAnswer> = {}): FirstLookAnswer => ({
   mods_settings_only: [],
   facts: [],
   compy_changes: [],
+  running_now: { state: "not-read", programs: [], more: 0 },
   limits: completeLimits,
   read_all: true,
   method: "paramedic-first-look-v1",
@@ -627,7 +628,7 @@ describe("the first look for a picked game", () => {
   it("crash history is the first block under 'What looks off on this PC', with 'at least' for a partial read", async () => {
     await look(
       gameAnswer({
-        crashes: { args: { n: "3", since: "2026-11-02T10:00:00Z", partial: "true", byName: "false", versions: "" }, signature_module: "UnityPlayer.dll", signature_before: "2026-11-19T05:12:26Z" },
+        crashes: { args: { n: "3", since: "2026-11-02T10:00:00Z", partial: "true", byName: "false", versions: "" }, signature_module: "UnityPlayer.dll", signature_before: "2026-11-19T05:12:26Z", split: null },
         looks_off: [modRow()],
       }),
     );
@@ -642,7 +643,7 @@ describe("the first look for a picked game", () => {
 
   it("the same-signature sentence is said only when the engine sent a signature; a single crash and 'matched by program name' use the measured flow's words", async () => {
     await look(
-      gameAnswer({ crashes: { args: { n: "1", since: "2026-11-02T10:00:00Z", partial: "false", byName: "true", versions: "2" }, signature_module: null, signature_before: null } }),
+      gameAnswer({ crashes: { args: { n: "1", since: "2026-11-02T10:00:00Z", partial: "false", byName: "true", versions: "2" }, signature_module: null, signature_before: null, split: null } }),
     );
     const text = screen.getByTestId("first-look-crashes").textContent ?? "";
     expect(text).toMatch(/^ROB RUN has closed unexpectedly once, on [A-Z][a-z]{2} \d+\. \(matched by program name\) These crashes are across 2 versions of the game\.$|^ROB RUN has closed unexpectedly once, on [A-Z][a-z]{2} \d+\.\s?\(matched by program name\)/);
@@ -704,7 +705,7 @@ describe("the first look for a picked game", () => {
       gameAnswer({
         touch_games: [driver],
         other_changes: [programs],
-        crashes: { args: { n: "2", since: "2026-11-02T10:00:00Z", partial: "false", byName: "false", versions: "" }, signature_module: null, signature_before: null },
+        crashes: { args: { n: "2", since: "2026-11-02T10:00:00Z", partial: "false", byName: "false", versions: "" }, signature_module: null, signature_before: null, split: null },
         limits: [{ kind: "driver", code: "access-denied", args: {} }],
         read_all: false,
       }),
@@ -835,7 +836,7 @@ describe("what looks off on this PC", () => {
     await pick(
       "This week",
       gameAnswer({
-        crashes: { args: { n: "2", since: "2026-11-02T10:00:00Z", partial: "false", byName: "false", versions: "" }, signature_module: null, signature_before: null },
+        crashes: { args: { n: "2", since: "2026-11-02T10:00:00Z", partial: "false", byName: "false", versions: "" }, signature_module: null, signature_before: null, split: null },
         looks_off: [modRow()],
         facts: [fact("on-battery")],
       }),
@@ -987,7 +988,7 @@ describe("first-look review r1", () => {
     await pick(label, a);
   }
   const alwaysTold = { since: "always" as const, from: null, to: "2026-11-20T12:00:00Z", hours: null };
-  const crashes = { args: { n: "26", since: "2026-11-10T19:17:16Z", partial: "true" }, signature_module: "UnityPlayer.dll", signature_before: null };
+  const crashes = { args: { n: "26", since: "2026-11-10T19:17:16Z", partial: "true" }, signature_module: "UnityPlayer.dll", signature_before: null, split: null };
 
   it("'it's always been like this' still shows what was read: the crash line, a fact and the facts limit", async () => {
     await lookAs(
@@ -1141,7 +1142,7 @@ describe("first-look review r2", () => {
   it("the crash lines come first in what looks off, and what looks off comes right after what the user told Compy", async () => {
     await lookAs(
       gameAnswer({
-        crashes: { args: { n: "2", since: "2026-11-02T10:00:00Z" }, signature_module: "UnityPlayer.dll", signature_before: "2026-11-15T13:44:49Z" },
+        crashes: { args: { n: "2", since: "2026-11-02T10:00:00Z" }, signature_module: "UnityPlayer.dll", signature_before: "2026-11-15T13:44:49Z", split: null },
         facts: [fact("on-battery")],
         looks_off: [modRow()],
         compy_changes: [compy("Tweak", "2026-11-18T10:00:00Z")],
@@ -1185,6 +1186,204 @@ describe("first-look review r2", () => {
       expect(engine.calls.filter((c) => c.cmd === "paramedic_list_games").length).toBeGreaterThanOrEqual(2);
     } finally {
       engine.listBusy = 0;
+    }
+  });
+});
+
+// ---- S4 and S5: programs running right now, and the crash records before and after the earliest change ------
+
+describe("running right now (S4)", () => {
+  const running = (over: Partial<FirstLookAnswer["running_now"]> = {}): FirstLookAnswer["running_now"] => ({
+    state: "listed",
+    programs: [
+      { id: "medal", name: "Medal", resident: true },
+      { id: "obs-studio", name: "OBS Studio", resident: false },
+    ],
+    more: 0,
+    ...over,
+  });
+  const block = () => screen.getByTestId("first-look-running");
+
+  it("lists the known programs as a fact about now, says it is not about when the game ran badly, and claims no effect", async () => {
+    await toTheQuestion();
+    await pick("This week", answer({ running_now: running() }));
+    expect(within(block()).getByText("Running right now")).toBeTruthy();
+    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Running right now: Medal, OBS Studio.");
+    const now = screen.getByTestId("first-look-running-now").textContent ?? "";
+    expect(now).toBe("This is what is running now, not what was running when the problem happened. Compy didn't see that, and it hasn't measured whether any of these affects a game.");
+    expect(block().textContent).toContain("Some of these start with Windows and sit in the background on many PCs.");
+    expect(block().textContent).not.toMatch(/caus|slow|lag|because|affects? your/i);
+  });
+
+  it("says nothing about starting with Windows when none of the listed programs is a resident one, and names the game for a picked game", async () => {
+    engine.steam = steamList([]);
+    await toThePicker(noSessions(), { games: recorded });
+    fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
+    await pick("This week", gameAnswer({ running_now: running({ programs: [{ id: "obs-studio", name: "OBS Studio", resident: false }] }) }));
+    expect(block().textContent).not.toContain("start with Windows");
+    expect(screen.getByTestId("first-look-running-now").textContent).toMatch(/^This is what is running now, not what was running when ROB RUN ran badly\./);
+  });
+
+  it("shows the count of the rest after the cap", async () => {
+    await toTheQuestion();
+    await pick("This week", answer({ running_now: running({ more: 3 }) }));
+    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Running right now: Medal, OBS Studio and 3 more.");
+  });
+
+  it("a read that found none of the listed programs says exactly that, scoped to the programs Compy looks for", async () => {
+    await toTheQuestion();
+    await pick("This week", answer({ running_now: running({ state: "none", programs: [] }) }));
+    expect(screen.getByTestId("first-look-running-none").textContent).toBe("None of the programs Compy looks for (recorders, overlays, launchers, build tools, browsers) are running right now.");
+    expect(screen.queryByTestId("first-look-running-now")).toBeNull();
+  });
+
+  it("an unread, late or dead listing says it couldn't read and never says none", async () => {
+    const cases: [FirstLookAnswer["running_now"]["state"], string][] = [
+      ["unread", "Compy couldn't read the list of running programs, so it can't say what is running."],
+      ["took-too-long", "Compy didn't finish reading the running programs in time, so it can't say what is running."],
+      ["reader-failed", "Compy couldn't read the running programs (the reader stopped unexpectedly)."],
+    ];
+    for (const [state, sentence] of cases) {
+      cleanup();
+      await toTheQuestion();
+      await pick("This week", answer({ running_now: running({ state, programs: [] }) }));
+      expect(screen.getByTestId("first-look-running-unread").textContent).toBe(sentence);
+      expect(block().textContent).not.toMatch(/None of the programs|no program/i);
+      engine.calls.length = 0;
+    }
+  });
+
+  it("a listing nobody asked for shows no block at all", async () => {
+    await toTheQuestion();
+    await pick("This week", answer());
+    expect(screen.queryByTestId("first-look-running")).toBeNull();
+  });
+
+  it("'It's always been like this' still shows what is running now", async () => {
+    await toTheQuestion();
+    await pick("It's always been like this", answer({ told: { since: "always", from: null, to: "2026-11-20T12:00:00Z", hours: null }, changes_listed: false, running_now: running() }));
+    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Running right now: Medal, OBS Studio.");
+  });
+
+  it("works in Chinese: the list, the now-not-then line and the unread line come from the zh-CN keys", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      engine.diagnose = noSessions();
+      render(<ParamedicCard noGames />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
+      fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "是从什么时候开始的？" })).toBeTruthy());
+      await pick("这周", answer({ running_now: running() }));
+      expect(screen.getByTestId("first-look-running-list").textContent).toBe("此刻正在运行：Medal、OBS Studio。");
+      expect(screen.getByTestId("first-look-running-now").textContent).toContain("不是问题出现时在运行的内容");
+      cleanup();
+      engine.calls.length = 0;
+      engine.diagnose = noSessions();
+      render(<ParamedicCard noGames />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
+      fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
+      await waitFor(() => expect(screen.getByRole("heading", { name: "是从什么时候开始的？" })).toBeTruthy());
+      await pick("这周", answer({ running_now: running({ state: "unread", programs: [] }) }));
+      expect(screen.getByTestId("first-look-running-unread").textContent).toBe("Compy 没能读取正在运行的程序列表，所以说不准现在运行着什么。");
+    } finally {
+      await i18n.changeLanguage("en");
+    }
+  });
+});
+
+describe("the crash records before and after the earliest change (S5)", () => {
+  const CHANGE = "2026-11-19T09:00:00Z";
+  const crashes = (split: FirstLookCrashSplit | null): NonNullable<FirstLookAnswer["crashes"]> => ({
+    args: { n: "26", since: "2026-10-01T10:00:00Z", partial: "true" },
+    signature_module: null,
+    signature_before: null,
+    split,
+  });
+  const sp = (over: Partial<FirstLookCrashSplit> = {}): FirstLookCrashSplit => ({ before: 20, after: 6, change: CHANGE, oldest_read: "2026-10-01T10:00:00Z", gap: null, ...over });
+  async function lookAs(a: FirstLookAnswer, label = "This week") {
+    engine.steam = steamList([]);
+    await toThePicker(noSessions(), { games: recorded });
+    fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
+    await pick(label, a);
+  }
+  const line = () => screen.getByTestId("first-look-crash-split").textContent ?? "";
+  const DATE = "[A-Z][a-z]{2} \\d+, [^(]+";
+
+  it("says how many readable records are from before and after the change, each as 'at least', and sits under the crash line", async () => {
+    await lookAs(gameAnswer({ crashes: crashes(sp()) }));
+    expect(line()).toMatch(new RegExp(`^Of the crash records Compy could read, at least 20 are from before ${DATE}\\(the earliest dated change Compy found\\) and at least 6 from after\\.$`));
+    const block = screen.getByTestId("first-look-crashes");
+    expect(block.lastElementChild).toBe(screen.getByTestId("first-look-crash-split"));
+  });
+
+  it("uses 'is' for one record before the change", async () => {
+    await lookAs(gameAnswer({ crashes: crashes(sp({ before: 1, after: 4 })) }));
+    expect(line()).toMatch(/at least 1 is from before /);
+  });
+
+  it("says none from after only as 'none from after', and none from before only when the records reach back past the change", async () => {
+    await lookAs(gameAnswer({ crashes: crashes(sp({ before: 3, after: 0 })) }));
+    expect(line()).toMatch(/at least 3 are from before .*and none from after\.$/);
+    cleanup();
+    await lookAs(gameAnswer({ crashes: crashes(sp({ before: 0, after: 5 })) }));
+    expect(line()).toMatch(/^Of the crash records Compy could read, none are from before .*and at least 5 from after\.$/);
+  });
+
+  it("when the records do not reach back past the change it says it can't tell how many came before, and that Windows keeps a limited number", async () => {
+    await lookAs(gameAnswer({ crashes: crashes(sp({ before: 0, after: 5, gap: "starts-later", oldest_read: "2026-11-20T01:00:00Z" })) }));
+    const text = line();
+    expect(text).toMatch(/at least 5 are from after .*The oldest record it could read is from [A-Z][a-z]{2} \d+, .*so it can't say how many came before\. Windows keeps only a limited number of crash records\.$/);
+    expect(text).not.toMatch(/none are from before/);
+  });
+
+  it("when some records could not be read it says that instead of none before", async () => {
+    await lookAs(gameAnswer({ crashes: crashes(sp({ before: 0, after: 5, gap: "unread" })) }));
+    expect(line()).toMatch(/Some records couldn't be read, so it can't say how many came before\.$/);
+    expect(line()).not.toMatch(/none are from before/);
+  });
+
+  it("states counts and dates only: no rate, no more or fewer since, no cause, in every variant", async () => {
+    const variants = [sp(), sp({ before: 1 }), sp({ before: 3, after: 0 }), sp({ before: 0, after: 5 }), sp({ before: 0, after: 5, gap: "starts-later" }), sp({ before: 0, after: 5, gap: "unread" })];
+    for (const v of variants) {
+      cleanup();
+      await lookAs(gameAnswer({ crashes: crashes(v) }));
+      expect(line(), JSON.stringify(v)).not.toMatch(/\bmore\b|fewer|\brate\b|per day|per week|caus|because|started|stopped|worse|better|increase|decrease|since the change/i);
+    }
+  });
+
+  it("no split means no split line, and the existing same-file sentence is still said by itself", async () => {
+    await lookAs(
+      gameAnswer({
+        crashes: { args: { n: "2", since: "2026-11-02T10:00:00Z" }, signature_module: "UnityPlayer.dll", signature_before: "2026-11-15T13:44:49Z", split: null },
+      }),
+    );
+    expect(screen.queryByTestId("first-look-crash-split")).toBeNull();
+    expect(screen.getByTestId("first-look-crashes").textContent).toContain("so that change can't be the whole story for them.");
+  });
+
+  it("works in Chinese: both counts and the 'can't tell how many came before' line come from the zh-CN keys", async () => {
+    await i18n.changeLanguage("zh-CN");
+    try {
+      for (const [split, want] of [
+        [sp(), /至少有 20 条在 .*之前，至少有 6 条在之后。$/],
+        [sp({ before: 0, after: 5, gap: "starts-later", oldest_read: "2026-11-20T01:00:00Z" }), /所以它说不准之前有多少条。Windows 只保留有限数量的崩溃记录。$/],
+        [sp({ before: 0, after: 5, gap: "unread" }), /有些记录没能读取，所以 Compy 说不准之前有多少条。$/],
+      ] as [FirstLookCrashSplit, RegExp][]) {
+        cleanup();
+        engine.calls.length = 0;
+        engine.steam = steamList([]);
+        engine.diagnose = noSessions();
+        render(<ParamedicCard games={recorded} />);
+        fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+        await waitFor(() => expect(screen.getByRole("heading", { name: "哪款游戏？" })).toBeTruthy());
+        fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
+        await pick("这周", gameAnswer({ crashes: crashes(split) }));
+        expect(line()).toMatch(want);
+      }
+    } finally {
+      await i18n.changeLanguage("en");
     }
   });
 });

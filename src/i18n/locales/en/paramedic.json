@@ -153,7 +153,31 @@
       "withDrive": "{{name}} ({{drive}}:)"
     },
     "crash": {
-      "none": "Windows has no crash record for {{game}} in the records Compy read."
+      "none": "Windows has no crash record for {{game}} in the records Compy read.",
+      "split": {
+        "both_one": "Of the crash records Compy could read, at least {{count}} is from before {{date}} (the earliest dated change Compy found) and at least {{after}} from after.",
+        "both_other": "Of the crash records Compy could read, at least {{count}} are from before {{date}} (the earliest dated change Compy found) and at least {{after}} from after.",
+        "beforeOnly_one": "Of the crash records Compy could read, at least {{count}} is from before {{date}} (the earliest dated change Compy found) and none from after.",
+        "beforeOnly_other": "Of the crash records Compy could read, at least {{count}} are from before {{date}} (the earliest dated change Compy found) and none from after.",
+        "afterOnly": "Of the crash records Compy could read, none are from before {{date}} (the earliest dated change Compy found) and at least {{count}} from after.",
+        "startsLater_one": "Of the crash records Compy could read, at least {{count}} is from after {{date}} (the earliest dated change Compy found). The oldest record it could read is from {{oldest}}, so it can't say how many came before. Windows keeps only a limited number of crash records.",
+        "startsLater_other": "Of the crash records Compy could read, at least {{count}} are from after {{date}} (the earliest dated change Compy found). The oldest record it could read is from {{oldest}}, so it can't say how many came before. Windows keeps only a limited number of crash records.",
+        "unread_one": "Of the crash records Compy could read, at least {{count}} is from after {{date}} (the earliest dated change Compy found). Some records couldn't be read, so it can't say how many came before.",
+        "unread_other": "Of the crash records Compy could read, at least {{count}} are from after {{date}} (the earliest dated change Compy found). Some records couldn't be read, so it can't say how many came before."
+      }
+    },
+    "running": {
+      "title": "Running right now",
+      "listed": "Running right now: {{names}}.",
+      "listedMore": "Running right now: {{names}} and {{more}} more.",
+      "separator": ", ",
+      "none": "None of the programs Compy looks for (recorders, overlays, launchers, build tools, browsers) are running right now.",
+      "nowGame": "This is what is running now, not what was running when {{game}} ran badly. Compy didn't see that, and it hasn't measured whether any of these affects a game.",
+      "nowPc": "This is what is running now, not what was running when the problem happened. Compy didn't see that, and it hasn't measured whether any of these affects a game.",
+      "resident": "Some of these start with Windows and sit in the background on many PCs.",
+      "unread": "Compy couldn't read the list of running programs, so it can't say what is running.",
+      "tookTooLong": "Compy didn't finish reading the running programs in time, so it can't say what is running.",
+      "readerFailed": "Compy couldn't read the running programs (the reader stopped unexpectedly)."
     },
     "compy": {
       "applied": "Compy changed “{{title}}” on {{when}}.",

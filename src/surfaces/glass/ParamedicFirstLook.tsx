@@ -37,6 +37,19 @@ export type FirstLookFact = { id: string; args: Record<string, string> };
 /** A change Compy itself made inside the window (from its change history). */
 export type CompyChange = { title: string; at: string; undone: boolean; undone_at: string | null };
 
+/** The game's crash records before and after the earliest dated change: counts and dates only. `gap` is set when
+ *  Compy can't say how many came before (`starts-later`: its oldest readable record is not older than the change;
+ *  `unread`: some records could not be read). */
+export type FirstLookCrashSplit = { before: number; after: number; change: string; oldest_read: string | null; gap: "starts-later" | "unread" | null };
+
+/** Known programs running at this moment (the reviewed allowlist only). `state` other than "listed" and "none" is
+ *  a "couldn't read" outcome; only "none" says none. */
+export type FirstLookRunning = {
+  state: "listed" | "none" | "unread" | "took-too-long" | "reader-failed" | "not-read";
+  programs: { id: string; name: string; resident: boolean }[];
+  more: number;
+};
+
 export type ParamedicFirstLook = {
   told: { since: FirstLookSince; from: string | null; to: string; hours: number | null };
   /** The picked game's display name; null for the whole PC. */
@@ -49,7 +62,7 @@ export type ParamedicFirstLook = {
   /** Steam's last recorded update of the game when it is older than the window (read completely). */
   game_files_since: string | null;
   /** The game's crash records Compy could read: the measured flow's own args (n, since, partial, byName, versions). */
-  crashes: { args: Record<string, string>; signature_module: string | null; signature_before: string | null } | null;
+  crashes: { args: Record<string, string>; signature_module: string | null; signature_before: string | null; split: FirstLookCrashSplit | null } | null;
   /** Windows' crash records were read completely and none is the game's. */
   crashes_none: boolean;
   /** Facts with dates or numbers that are not a change in the window (a mod's files outside it). */
@@ -62,6 +75,8 @@ export type ParamedicFirstLook = {
   facts: FirstLookFact[];
   /** Changes Compy made inside the window, newest first. */
   compy_changes: CompyChange[];
+  /** Known programs running right now: a fact about now, not about when the problem happened. */
+  running_now: FirstLookRunning;
   limits: ParamedicLimit[];
   read_all: boolean;
   method: string;
@@ -556,6 +571,50 @@ function crashSentence(c: NonNullable<ParamedicFirstLook["crashes"]>, game: stri
   return out;
 }
 
+/** Counts and dates only: how many readable records fall before and after the earliest dated change. Every count is
+ *  "at least". When Compy can't see back past the change it says so instead of saying none. */
+function splitSentence(s: FirstLookCrashSplit, t: T, dates: Dates): string {
+  const date = dates.dayTime(s.change);
+  if (s.gap === "starts-later" && s.oldest_read) return t("paramedic.firstLook.crash.split.startsLater", { count: s.after, date, oldest: dates.dayTime(s.oldest_read) });
+  if (s.gap) return t("paramedic.firstLook.crash.split.unread", { count: s.after, date });
+  if (s.before === 0) return t("paramedic.firstLook.crash.split.afterOnly", { count: s.after, date });
+  if (s.after === 0) return t("paramedic.firstLook.crash.split.beforeOnly", { count: s.before, date });
+  return t("paramedic.firstLook.crash.split.both", { count: s.before, after: s.after, date });
+}
+
+/** Known programs running now, as a fact about now. Never "none" unless the listing was read and held none. */
+function RunningNow({ r, game, t }: { r: FirstLookRunning; game: string | null; t: T }) {
+  if (r.state === "not-read") return null;
+  let body: ReactNode;
+  if (r.state === "listed") {
+    const names = r.programs.map((p) => p.name).join(t("paramedic.firstLook.running.separator"));
+    body = (
+      <>
+        <p data-testid="first-look-running-list">{r.more > 0 ? t("paramedic.firstLook.running.listedMore", { names, more: r.more }) : t("paramedic.firstLook.running.listed", { names })}</p>
+        <p className="gl-para-note" data-testid="first-look-running-now">
+          {game ? t("paramedic.firstLook.running.nowGame", { game }) : t("paramedic.firstLook.running.nowPc")}
+        </p>
+        {r.programs.some((p) => p.resident) && <p className="gl-para-note">{t("paramedic.firstLook.running.resident")}</p>}
+      </>
+    );
+  } else if (r.state === "none") {
+    body = <p data-testid="first-look-running-none">{t("paramedic.firstLook.running.none")}</p>;
+  } else {
+    const key = r.state === "took-too-long" ? "tookTooLong" : r.state === "reader-failed" ? "readerFailed" : "unread";
+    body = (
+      <p data-testid="first-look-running-unread">{key === "tookTooLong" ? t("paramedic.firstLook.running.tookTooLong") : key === "readerFailed" ? t("paramedic.firstLook.running.readerFailed") : t("paramedic.firstLook.running.unread")}</p>
+    );
+  }
+  return (
+    <div role="group" aria-label={t("paramedic.firstLook.running.title")} data-testid="first-look-running">
+      <p>
+        <strong>{t("paramedic.firstLook.running.title")}</strong>
+      </p>
+      {body}
+    </div>
+  );
+}
+
 /** `elsewhere`: opened from a card that already has a measured answer, so the lead does not say there are no earlier sessions.
  */
 export function ParamedicFirstLook({
@@ -855,6 +914,11 @@ export function ParamedicFirstLook({
                       {s}
                     </p>
                   ))}
+                  {a.crashes.split && (
+                    <p className="gl-para-note" data-testid="first-look-crash-split">
+                      {splitSentence(a.crashes.split, t, dates)}
+                    </p>
+                  )}
                 </div>
               )}
               {gameName && a.crashes_none && (
@@ -881,6 +945,7 @@ export function ParamedicFirstLook({
               )}
             </div>
           )}
+      <RunningNow r={a.running_now} game={gameName} t={t} />
       {a.changes_listed && (
         <>
           {a.compy_changes.length > 0 && (
