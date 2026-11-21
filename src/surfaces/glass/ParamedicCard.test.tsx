@@ -800,7 +800,7 @@ describe("ParamedicCard: recovered", () => {
     await waitFor(() => expect(rows().length).toBe(3));
     openAll();
     expect(
-      screen.getByText("Memory peaked at 20.0 of 32.0 GB when it ran normally, but not every rough session had memory nearly full, so Compy can't say whether memory is the reason."),
+      screen.getByText("Memory peaked at 20.0 of 32.0 GB usable when it ran normally, but not every rough session had memory nearly full, so Compy can't say whether memory is the reason."),
     ).toBeTruthy();
     expect(screen.getByText("Compy has no memory reading for the rough sessions, so it can't compare.")).toBeTruthy();
     expect(screen.getByText(/That is consistent with background programs, but Compy can't see programs that were already running\./)).toBeTruthy();
@@ -2192,32 +2192,36 @@ describe("ParamedicCard: 'Check again' pressed from a first-look answer or after
 });
 
 // P3 cardtruth, bug 2: the drift suspect said "Which setting it was ... isn't recorded" while Home named it. The card now
-// names the setting from the same drift list Home uses (drift-named.ts rules), and says "isn't recorded" only when it can't.
+// names the setting from the same drift list Home uses (drift-named.ts rules), but only when that list's drift is the very
+// notice the engine found (same noticed_at). "Not loaded", "no longer off" and "can't match" are each worded as what they are.
 describe("ParamedicCard: the drift suspect names the setting the way Home does", () => {
   const TITLE = "Trim Windows visual effects";
+  const NOTICED = "2026-11-19T20:49:30Z";
+  const READY = "2026-11-19T20:37:06Z";
   const drift = (over: Record<string, unknown> = {}) => ({
     id: "applied-changes",
     label: "Compy changes were turned back off",
     detail: "",
-    noticed_at: "2026-11-19T20:49:30Z",
+    noticed_at: NOTICED,
     unreadable_now: false,
     value_now: null,
-    last_ready_at: "2026-11-19T20:37:06Z",
+    last_ready_at: READY,
     last_ready_value: null,
     titles: [TITLE],
     applied_at: ["2026-11-15T13:45:00Z"],
     ...over,
   });
-  const suspect = (check = "applied-changes") =>
+  const suspect = (args: Record<string, string>) =>
     find("setting-drift", {
       evidence: [
-        { kind: "known", code: "drift-noticed", args: { check }, against: false, source: "drift" },
+        { kind: "known", code: "drift-noticed", args, against: false, source: "drift" },
         { kind: "unknown", code: "which-not-recorded", args: {}, against: false, source: "drift" },
       ],
       fix: steps("setting-drift"),
     });
-  async function open(drifts: unknown[] | undefined, check = "applied-changes") {
-    answer.value = { ...base, why_first: null, findings: [suspect(check)] };
+  const FOUND = { check: "applied-changes", noticed: NOTICED, ready: READY };
+  async function open(drifts: unknown[] | null | undefined, args: Record<string, string> = FOUND) {
+    answer.value = { ...base, why_first: null, findings: [suspect(args)] };
     render(<ParamedicCard drifts={drifts as never} />);
     fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
     await waitFor(() => expect(rows().length).toBe(1));
@@ -2225,44 +2229,84 @@ describe("ParamedicCard: the drift suspect names the setting the way Home does",
     return screen.getByTestId("paramedic").textContent ?? "";
   }
 
-  it("names the setting and its one ledger date, and no longer says which setting it was isn't recorded", async () => {
+  it("names the setting and its one ledger date, says what the records give in order, and no longer says which setting it was isn't recorded", async () => {
+    const { stampOf } = await import("../drift-named");
     const text = await open([drift()]);
     expect(text).toContain(`Compy's own check found that “${TITLE}”, a setting Compy applied, is no longer on.`);
     expect(text).toMatch(/You turned it on with Compy on [A-Z][a-z]{2} \d{1,2}, /);
+    expect(text).toContain(`Compy last saw it on at ${stampOf(READY, "en")} and noticed it off at ${stampOf(NOTICED, "en")}.`);
     expect(text).toContain("What changed it isn't recorded.");
     expect(text).not.toContain("Which setting it was");
+    // The order is a plain fact: it is never related to a driver update or the rough sessions in words.
+    expect(text).not.toMatch(/driver update|because|caused|probably/i);
   });
 
-  it("with several settings off it lists them and gives no single date", async () => {
+  it("with several settings off it says they are off now and gives no single date", async () => {
     const text = await open([drift({ titles: [TITLE, "Enable Windows Game Mode"], applied_at: ["2026-11-15T13:45:00Z", "2026-11-15T13:44:00Z"] })]);
-    expect(text).toContain(`these settings Compy applied are no longer on: ${TITLE}, Enable Windows Game Mode.`);
+    expect(text).toContain(`Compy's own check found a setting it applied was no longer on. Off now: ${TITLE}, Enable Windows Game Mode.`);
+    expect(text).not.toContain("these settings Compy applied");
     expect(text).not.toContain("You turned it on with Compy on");
   });
 
-  it("no title in the list: never invents one, and still says which setting it was isn't recorded", async () => {
-    for (const drifts of [undefined, [], [drift({ titles: [], applied_at: [] })], [drift({ unreadable_now: true })]]) {
+  it("the list not loaded (undefined or null) is 'couldn't read which setting it was', never 'isn't recorded'", async () => {
+    for (const drifts of [undefined, null]) {
       cleanup();
       const text = await open(drifts);
-      expect(text, JSON.stringify(drifts)).toContain("Compy's own check found a setting it applied is no longer on.");
-      expect(text).toContain("Which setting it was, and what changed it, isn't recorded.");
+      expect(text, String(drifts)).toContain("Compy's own check found a setting it applied is no longer on.");
+      expect(text).toContain("Compy couldn't read which setting it was just now. What changed it isn't recorded.");
+      expect(text).not.toContain("Which setting it was, and what changed it, isn't recorded.");
       expect(text).not.toContain(TITLE);
-      expect(text).not.toContain("You turned it on with Compy on");
     }
   });
 
-  it("a single title without a ledger stamp is named with no date", async () => {
-    const text = await open([drift({ applied_at: [""] })]);
-    expect(text).toContain(`“${TITLE}”`);
-    expect(text).not.toContain("You turned it on with Compy on");
+  it("a loaded list with nothing drifting is 'isn't recorded' (the setting is not off now), and invents no title", async () => {
+    const text = await open([]);
+    expect(text).toContain("Which setting it was, and what changed it, isn't recorded.");
+    expect(text).not.toContain("couldn't read which setting");
+    expect(text).not.toContain(TITLE);
+    cleanup();
+    const noTitles = await open([drift({ titles: [], applied_at: [] })]);
+    expect(noTitles).toContain("Which setting it was, and what changed it, isn't recorded.");
+    expect(noTitles).not.toContain("You turned it on with Compy on");
   });
 
-  it("another watched setting is named by its short form from the same list", async () => {
-    const text = await open(
-      [drift({ id: "monitor-refresh", label: "Monitor refresh rate", titles: [], applied_at: [], value_now: "144 Hz", unreadable_now: false })],
-      "monitor-refresh",
-    );
+  it("an unreadable check is 'couldn't read', never a name", async () => {
+    const text = await open([drift({ unreadable_now: true })]);
+    expect(text).toContain("Compy couldn't read which setting it was just now.");
+    expect(text).not.toContain(TITLE);
+  });
+
+  it("a live drift noticed at a different time is a different event: it is not named as the one the engine found", async () => {
+    const text = await open([drift({ noticed_at: "2026-11-20T09:00:00Z", titles: ["Enable Windows Game Mode"] })]);
+    expect(text).not.toContain("Enable Windows Game Mode");
+    expect(text).not.toContain(TITLE);
+    expect(text).toContain("Compy's own check found a setting it applied is no longer on.");
+    expect(text).toContain("Compy couldn't read which setting it was just now.");
+    // The engine's line carries no noticed time (an older answer): nothing to match, so nothing is named.
+    cleanup();
+    const old = await open([drift()], { check: "applied-changes" });
+    expect(old).not.toContain(TITLE);
+  });
+
+  it("a single title without a ledger stamp is named with no date; no 'last seen' stamp means no order sentence", async () => {
+    const text = await open([drift({ applied_at: [""] })], { check: "applied-changes", noticed: NOTICED });
+    expect(text).toContain(`“${TITLE}”`);
+    expect(text).not.toContain("You turned it on with Compy on");
+    expect(text).not.toContain("Compy last saw it");
+  });
+
+  it("another watched setting is named by its short form only when it is the same notice", async () => {
+    const monitor = (over: Record<string, unknown> = {}) =>
+      drift({ id: "monitor-refresh", label: "Monitor refresh rate", titles: [], applied_at: [], value_now: "144 Hz", unreadable_now: false, ...over });
+    const args = { check: "monitor-refresh", noticed: NOTICED, ready: READY };
+    const text = await open([monitor()], args);
     expect(text).toContain("Compy noticed a setting it watches had changed: Monitor refresh rate: now 144 Hz.");
+    expect(text).toContain("Compy last saw it unchanged at");
     expect(text).toContain("What changed it isn't recorded.");
+    cleanup();
+    const other = await open([monitor({ noticed_at: "2026-11-20T09:00:00Z" })], args);
+    expect(other).not.toContain("144 Hz");
+    expect(other).toContain("Compy noticed a setting it watches had changed.");
   });
 
   it("says the same in Chinese from the zh-CN keys", async () => {
@@ -2270,7 +2314,7 @@ describe("ParamedicCard: the drift suspect names the setting the way Home does",
     const i18n = (await import("../../i18n")).default;
     await i18n.changeLanguage("zh-CN");
     try {
-      answer.value = { ...base, why_first: null, findings: [suspect()] };
+      answer.value = { ...base, why_first: null, findings: [suspect(FOUND)] };
       render(<ParamedicCard drifts={[drift()] as never} />);
       fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
       await waitFor(() => expect(rows().length).toBe(1));
@@ -2279,6 +2323,13 @@ describe("ParamedicCard: the drift suspect names the setting the way Home does",
       expect(text).toContain(zh.driftAppliedNamed_other.replace("{{titles}}", TITLE));
       expect(text).toContain(zh.whichChangedNotRecorded);
       expect(text).not.toContain(zh.whichNotRecorded);
+      cleanup();
+      answer.value = { ...base, why_first: null, findings: [suspect(FOUND)] };
+      render(<ParamedicCard />);
+      fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
+      await waitFor(() => expect(rows().length).toBe(1));
+      openAll();
+      expect(screen.getByTestId("paramedic").textContent ?? "").toContain(zh.whichNotLoaded);
     } finally {
       await i18n.changeLanguage("en");
     }
@@ -2286,13 +2337,15 @@ describe("ParamedicCard: the drift suspect names the setting the way Home does",
 });
 
 // P3 cardtruth, bug 3: "Compy didn't record what was running" next to "Firefox was already running". Each now says which
-// rough sessions it is about, so both can be true at once.
+// sessions it is about, so both can be true at once; and "was already running" says what it cannot: nothing is known about
+// the programs open when the game ran normally unless the normal sessions have a record.
 describe("ParamedicCard: 'already running' and 'not recorded' are scoped to their own sessions", () => {
-  const running = (n: string, of: string) =>
+  const running = (n: string, of: string, name = "Node.js") =>
     find("background-load", {
-      evidence: [{ kind: "measured", code: "already-running", args: { id: "node", name: "Node.js", n, of }, against: false, source: "sessions" }],
+      evidence: [{ kind: "measured", code: "already-running", args: { id: "node", name, n, of }, against: false, source: "sessions" }],
       fix: steps("background-load"),
     });
+  const rec = (over: Record<string, unknown> = {}) => ({ recorded: 3, rough: 4, normal_recorded: 0, normal: 10, open: ["Node.js"], ...over });
   async function open(d: Partial<ParamedicDiagnosis>) {
     answer.value = { ...base, why_first: null, ...d };
     render(<ParamedicCard />);
@@ -2303,26 +2356,58 @@ describe("ParamedicCard: 'already running' and 'not recorded' are scoped to thei
   }
 
   it("3 of 4 recorded: both lines are shown, each about its own sessions, and neither says nothing was running", async () => {
-    const text = await open({ findings: [running("3", "4")], unknowns: ["running-at-start"], start_record: { recorded: 3, rough: 4 } });
-    expect(text).toContain("In the 3 of 4 rough Game A sessions where Compy recorded what was running, Node.js was already running when the game started.");
+    const text = await open({ findings: [running("3", "4")], unknowns: ["running-at-start"], start_record: rec() as never });
+    expect(text).toContain("Compy recorded what was running at the start of 3 of the 4 rough Game A sessions; Node.js was already running in all 3.");
     expect(text).toContain("For 1 of the 4 rough Game A sessions, Compy didn't record what was running when the game started.");
     expect(text).not.toContain("Compy didn't record what was running when this session started.");
     expect(text).not.toMatch(/nothing was running|no programs were running/i);
   });
 
-  it("every rough session recorded: the plain sentence and no 'not recorded' line", async () => {
-    const text = await open({ findings: [running("1", "1")], unknowns: [], start_record: { recorded: 1, rough: 1 } });
-    expect(text).toContain("Node.js was already running when Game A started.");
-    expect(text).not.toContain("didn't record what was running");
+  it("1 of 4 recorded: 'in that one', never 'in the 1 of 4'", async () => {
+    const text = await open({ findings: [running("1", "4")], unknowns: ["running-at-start"], start_record: rec({ recorded: 1 }) as never });
+    expect(text).toContain("Compy recorded what was running at the start of 1 of the 4 rough Game A sessions; Node.js was already running in that one.");
+    expect(text).not.toContain("In the 1 of 4");
+  });
+
+  it("every rough session recorded, or an older answer with no counts: the plain sentence", async () => {
+    const all = await open({ findings: [running("1", "1")], unknowns: [], start_record: rec({ recorded: 1, rough: 1, normal_recorded: 3, normal: 3 }) as never });
+    expect(all).toContain("Node.js was already running when Game A started.");
+    expect(all).not.toContain("didn't record what was running");
+    cleanup();
+    const old = await open({ findings: [find("background-load", { evidence: [{ kind: "measured", code: "already-running", args: { id: "node", name: "Node.js" }, against: false, source: "sessions" }], fix: steps("background-load") })], unknowns: [] });
+    expect(old).toContain("Node.js was already running when Game A started.");
+  });
+
+  it("no record of what ran when the normal sessions started: says it can't tell whether the program was open then too", async () => {
+    const text = await open({ findings: [running("3", "4")], unknowns: ["running-at-start", "running-at-start-normal"], start_record: rec() as never });
+    expect(text).toContain("Compy didn't record what was running when Game A's normal sessions started, so it can't tell whether Node.js was also open in the sessions that ran normally.");
+  });
+
+  it("only one or two normal sessions recorded: too few, and says how many", async () => {
+    const text = await open({ findings: [running("3", "4")], unknowns: ["running-at-start-normal"], start_record: rec({ normal_recorded: 2 }) as never });
+    expect(text).toContain("Compy recorded what was running at the start of only 2 of the 10 normal Game A sessions Compy looked at, too few to tell whether Node.js was also open in the sessions that ran normally.");
+    expect(text).not.toContain("didn't record what was running when Game A's normal sessions started");
+  });
+
+  it("several programs: lists them all in the same line", async () => {
+    const both = find("background-load", {
+      evidence: [
+        { kind: "measured", code: "already-running", args: { id: "node", name: "Node.js", n: "3", of: "4" }, against: false, source: "sessions" },
+        { kind: "measured", code: "already-running", args: { id: "firefox", name: "Firefox", n: "3", of: "4" }, against: false, source: "sessions" },
+      ],
+      fix: steps("background-load"),
+    });
+    const text = await open({ findings: [both], unknowns: ["running-at-start-normal"], start_record: rec({ open: ["Node.js", "Firefox"] }) as never });
+    expect(text).toContain("so it can't tell whether any of these were also open in the sessions that ran normally: Node.js, Firefox.");
   });
 
   it("none of several rough sessions recorded: says none of them was recorded, not that nothing ran", async () => {
-    const text = await open({ unknowns: ["running-at-start"], start_record: { recorded: 0, rough: 4 } });
+    const text = await open({ unknowns: ["running-at-start"], start_record: rec({ recorded: 0, open: [] }) as never });
     expect(text).toContain("Compy didn't record what was running when any of the 4 rough Game A sessions started.");
   });
 
   it("one rough session with no record keeps the single-session sentence", async () => {
-    const text = await open({ unknowns: ["running-at-start"], start_record: { recorded: 0, rough: 1 } });
+    const text = await open({ unknowns: ["running-at-start"], start_record: rec({ recorded: 0, rough: 1, open: [] }) as never });
     expect(text).toContain("Compy didn't record what was running when this session started.");
   });
 
@@ -2331,16 +2416,35 @@ describe("ParamedicCard: 'already running' and 'not recorded' are scoped to thei
     const i18n = (await import("../../i18n")).default;
     await i18n.changeLanguage("zh-CN");
     try {
-      answer.value = { ...base, why_first: null, findings: [running("3", "4")], unknowns: ["running-at-start"], start_record: { recorded: 3, rough: 4 } };
+      answer.value = { ...base, why_first: null, findings: [running("3", "4")], unknowns: ["running-at-start", "running-at-start-normal"], start_record: rec() as never };
       render(<ParamedicCard />);
       fireEvent.click(screen.getByRole("button", { name: "出问题了" }));
       await waitFor(() => expect(rows().length).toBe(1));
       openAll();
       const text = screen.getByTestId("paramedic").textContent ?? "";
-      expect(text).toContain(zh.evidence.alreadyRunningScoped.replace("{{of}}", "4").replace("{{game}}", "Game A").replace(/\{\{n\}\}/g, "3").replace("{{name}}", "Node.js"));
+      expect(text).toContain(zh.evidence.alreadyRunningScoped_other.replace("{{of}}", "4").replace("{{game}}", "Game A").replace(/\{\{n\}\}/g, "3").replace("{{name}}", "Node.js"));
       expect(text).toContain(zh.unknown.runningAtStartSome.replace("{{rough}}", "4").replace("{{game}}", "Game A").replace("{{missing}}", "1"));
+      expect(text).toContain(zh.unknown.runningAtStartNormalNone_other.replace("{{game}}", "Game A").replace("{{name}}", "Node.js"));
     } finally {
       await i18n.changeLanguage("en");
     }
+  });
+});
+
+// P3 cardtruth review r1: the memory figure is in the unit every other screen uses, so the card says "usable" beside it.
+describe("ParamedicCard: the memory total is the usable figure", () => {
+  it("says 'usable' beside the total on the memory line, in both languages", async () => {
+    const mem = find("memory-pressure", {
+      evidence: [{ kind: "measured", code: "ram-peak", args: { peakGb: "29.1", totalGb: "31.4" }, against: false, source: "sessions" }],
+      fix: steps("memory-pressure"),
+    });
+    answer.value = { ...base, why_first: null, findings: [mem] };
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(screen.getByTestId("paramedic").textContent ?? "").toContain("Memory peaked at 29.1 of 31.4 GB usable in one rough session.");
+    const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8")).evidence as Record<string, string>;
+    expect(zh.ramPeak).toContain("可用");
   });
 });

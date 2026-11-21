@@ -5,8 +5,9 @@
 //! Honesty:
 //! - "None" is said only when the read succeeded and the picked game has no recorded session. A read that failed
 //!   (`unread`) and a pick Compy cannot match to a recorded game (`unmatched`) are "can't tell", never zero.
-//! - A pick with a program name (a game Compy recorded) is matched on that exact name, ignoring case and edge
-//!   spaces. A pick with only a display name (a Steam pick) is matched on the same letters and digits as the
+//! - A pick with a program name (a game Compy recorded) is matched on that exact name, ignoring ASCII case and
+//!   edge spaces (a non-ASCII program name is matched case-sensitively). Two games that share a program name are
+//!   counted together: the sessions file has no other key, and Home counts the same way. A pick with only a display name (a Steam pick) is matched on the same letters and digits as the
 //!   recorded program's display name; when nothing matches, that is `unmatched`, not "no sessions".
 //! - Counts are recorded rows, as Home counts them. This module compares nothing: it says how many exist.
 
@@ -162,9 +163,50 @@ mod tests {
         assert_eq!((o.state, o.total, o.game, o.unmatched), ("read", Some(35), None, false));
     }
 
+    /// A row shaped like the ones on the owner's PC (the big per-session series, the game state with what was
+    /// running, a field this build does not know), under invented names: the extraction takes the program name
+    /// of every row and nothing else comes through.
     #[test]
-    fn the_need_is_the_measured_flows_own_number() {
-        assert_eq!(out(&recorded(), &GameCtx::default()).need, BASELINE_MIN as u32);
+    fn a_real_shaped_sessions_file_gives_every_rows_program_name_and_nothing_else() {
+        let row = |name: &str, at: &str| {
+            format!(
+                r#"{{"started_at":"{at}","duration_secs":900,"process_name":"{name}","samples":900,"avg_fps":81.5,"avg_frametime_ms":12.3,
+                "low1_fps_est":52.0,"fps_series":[[0,80.0],[1,81.0],[2,79.5]],"stutter_timeline":[],"stutter_events":[],
+                "game_state":{{"running_at_start":{{"read":true,"known":[{{"id":"node","category":"build"}}]}}}},"a_field_from_a_later_build":7}}"#
+            )
+        };
+        let text = format!("[{},{},{}]", row("Fixture Quest.exe", "2026-11-11T10:00:00Z"), row("Fixture Quest.exe", "2026-11-12T10:00:00Z"), row("Other Title.exe", "2026-11-13T10:00:00Z"));
+        let dir = std::env::temp_dir().join(format!("compy-p3-shaped-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("sessions.json");
+        std::fs::write(&path, text).unwrap();
+        if let Err(e) = crate::sessions::read_sessions_readonly_from(&path) {
+            panic!("the real-shaped file must parse: {e}");
+        }
+        let got = read_at(&path);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(got, SessionsRead::Read(vec!["Fixture Quest.exe".into(), "Fixture Quest.exe".into(), "Other Title.exe".into()]));
+        assert_eq!(out(&got, &seen("Fixture Quest.exe")).game, Some(2));
+        let json = serde_json::to_string(&out(&got, &seen("Fixture Quest.exe"))).unwrap();
+        assert!(!json.contains("Fixture") && !json.contains("node"), "only counts leave: {json}");
+    }
+
+    /// A Steam pick whose store name is not the program's name cannot be matched: it is never "no sessions".
+    #[test]
+    fn a_steam_name_that_differs_from_the_program_name_is_unmatched_never_zero() {
+        let read = SessionsRead::Read(vec!["bf6.exe".into(), "bf6.exe".into(), "bf6.exe".into()]);
+        let o = out(&read, &steam("Battlefield 6"));
+        assert_eq!((o.state, o.game, o.unmatched), ("read", None, true));
+    }
+
+    /// Rust to TS wire contract: the keys and values of the recorded block are pinned by the shared fixture.
+    #[test]
+    fn the_recorded_block_matches_the_p3_wire_fixture() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../../src/test/fixtures/paramedic-p3.wire.json")).unwrap();
+        let mut v: Vec<String> = std::iter::repeat_n("ROB RUN.exe".to_string(), 20).collect();
+        v.extend(std::iter::repeat_n("PBZ.exe".to_string(), 13));
+        let o = out(&SessionsRead::Read(v), &seen("ROB RUN.exe"));
+        assert_eq!(serde_json::to_value(&o).unwrap(), fixture["recorded"]);
     }
 
     #[test]

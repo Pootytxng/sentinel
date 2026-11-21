@@ -2223,6 +2223,61 @@ mod tests {
         assert_eq!((a.recorded.state, a.recorded.total, a.recorded.game), ("unread", None, None));
     }
 
+    fn sessions_slow() -> SessionsRead {
+        std::thread::sleep(Duration::from_millis(900));
+        twenty_rob_sessions()
+    }
+
+    /// A press while an earlier sessions reader still runs reads `took-too-long`: unread, never a count and never zero.
+    #[test]
+    fn a_sessions_reader_still_running_from_an_earlier_press_is_unread_and_the_slot_is_free_after() {
+        let _t = one_at_a_time();
+        let slots: &'static Slots = Box::leak(Box::new(Slots::new()));
+        let io = Io { resolve: resolve_rob, sessions: twenty_rob_sessions, ..FAKE };
+        let sel = FirstLookGame::Seen { process: "ROB RUN.exe".into() };
+        SESSIONS_SLOT.store(true, Ordering::SeqCst);
+        let a = run_with(&sel, Since::ThisWeek, utc(NOW), Duration::from_secs(2), io, Some(slots));
+        SESSIONS_SLOT.store(false, Ordering::SeqCst);
+        assert_eq!((a.recorded.state, a.recorded.total, a.recorded.game), ("unread", None, None));
+        let a = run_with(&sel, Since::ThisWeek, utc(NOW), Duration::from_secs(2), io, Some(slots));
+        assert_eq!((a.recorded.state, a.recorded.game), ("read", Some(20)), "the slot was freed by the previous answer");
+    }
+
+    /// A sessions file that reads past the budget is `unread` (the other readers still answer), never a count.
+    #[test]
+    fn a_sessions_reader_past_the_budget_is_unread_never_a_count_or_zero() {
+        let _t = one_at_a_time();
+        let io = Io { resolve: resolve_rob, sessions: sessions_slow, ..FAKE };
+        let sel = FirstLookGame::Seen { process: "ROB RUN.exe".into() };
+        let started = Instant::now();
+        let a = run_with(&sel, Since::ThisWeek, utc(NOW), Duration::from_millis(300), io, None);
+        assert!(started.elapsed() < Duration::from_millis(850), "the answer waited for a late reader: {:?}", started.elapsed());
+        assert_eq!((a.recorded.state, a.recorded.total, a.recorded.game), ("unread", None, None));
+        std::thread::sleep(Duration::from_millis(700));
+    }
+
+    fn steam_pick_ctx(_s: &FirstLookGame) -> GameCtx {
+        GameCtx { name: Some("Battlefield 6".into()), exe: None, ..GameCtx::default() }
+    }
+
+    #[test]
+    fn through_the_command_path_a_steam_name_with_no_recorded_match_is_unmatched_and_another_game_among_others_is_zero() {
+        let _t = one_at_a_time();
+        let io = Io { resolve: steam_pick_ctx, sessions: twenty_rob_sessions, ..FAKE };
+        let sel = FirstLookGame::Steam { app_id: 2807960, name: Some("Battlefield 6".into()) };
+        let a = run_with(&sel, Since::ThisWeek, utc(NOW), Duration::from_secs(2), io, None);
+        assert_eq!((a.recorded.state, a.recorded.total, a.recorded.game, a.recorded.unmatched), ("read", Some(33), None, true));
+        // A game Compy knows by program name, with none of the 33 recorded sessions: a read that succeeded found 0.
+        let io = Io { resolve: other_game_ctx, sessions: twenty_rob_sessions, ..FAKE };
+        let sel = FirstLookGame::Seen { process: "Other Game.exe".into() };
+        let a = run_with(&sel, Since::ThisWeek, utc(NOW), Duration::from_secs(2), io, None);
+        assert_eq!((a.recorded.state, a.recorded.total, a.recorded.game, a.recorded.unmatched), ("read", Some(33), Some(0), false));
+    }
+
+    fn other_game_ctx(_s: &FirstLookGame) -> GameCtx {
+        GameCtx { name: Some("Other Game".into()), exe: Some("Other Game.exe".into()), ..GameCtx::default() }
+    }
+
     #[test]
     fn nobody_asked_for_sessions_serialises_as_not_read_with_no_counts() {
         let a = build_with(Since::ThisWeek, utc(NOW), &GameCtx::default(), &Sources::default());

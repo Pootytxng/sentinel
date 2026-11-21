@@ -486,11 +486,17 @@ pub(crate) struct Diagnosis {
     pub method: &'static str,
 }
 
-/// Rough sessions of the game with a readable start-of-session snapshot (`recorded`), of all of them (`rough`).
-#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+/// Rough sessions of the game with a readable start-of-session snapshot (`recorded`), of all of them (`rough`);
+/// the same for the normal sessions (`normal_recorded` of `normal`); and the display names of the programs that
+/// were already running in every recorded rough session (`open`), so the card can say what the normal sessions'
+/// missing record leaves unknown.
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct StartRecord {
     pub recorded: u32,
     pub rough: u32,
+    pub normal_recorded: u32,
+    pub normal: u32,
+    pub open: Vec<&'static str>,
 }
 
 impl Diagnosis {
@@ -540,7 +546,8 @@ fn median(v: &mut [f64]) -> f64 {
 }
 
 fn gb(bytes: u64) -> String {
-    format!("{:.1}", bytes as f64 / 1e9)
+    // GiB, the unit every other screen uses for memory ("31.4 GB usable"), not 1e9.
+    format!("{:.1}", bytes as f64 / 1_073_741_824.0)
 }
 
 fn nonblank(s: &Option<String>) -> Option<&str> {
@@ -2142,9 +2149,7 @@ fn start_evidence(c: &Ctx, game: &str) -> (Vec<Evidence>, bool, Vec<&'static str
     let diffs = if st.base.len() >= RUNNING_BASELINE_MIN { ras::differs_between(&st.rough, &st.base) } else { Vec::new() };
     for p in ras::PROGRAMS {
         let diff = diffs.iter().find(|d| d.id == p.id && d.more_in_rough());
-        let in_every_rough = st.rough.iter().all(|r| r.known.iter().any(|k| k.id == p.id));
-        let presence = ras::ProgramPresence { id: p.id, name: p.display_name, always_resident: p.always_resident };
-        if in_every_rough && ras::already_running_sentence(&presence, game).is_some() {
+        if already_running(p, &st, game) {
             // `n` of `of`: it was open in every rough session that has a readable snapshot, which may be fewer
             // than all of them. The card says which, so this line and "didn't record" can both be true.
             evidence.push(ev(
@@ -2174,10 +2179,35 @@ fn start_evidence(c: &Ctx, game: &str) -> (Vec<Evidence>, bool, Vec<&'static str
     (evidence, timing, named)
 }
 
-/// How many rough sessions have a readable start snapshot, of all of them (none when there is no rough session).
+/// A program that gets the "was already running" line: open in every readable rough snapshot and not one that is
+/// always resident (see `running_at_start`).
+fn already_running(p: &crate::running_at_start::Program, st: &StartRead, game: &str) -> bool {
+    use crate::running_at_start as ras;
+    let in_every_rough = st.rough.iter().all(|r| r.known.iter().any(|k| k.id == p.id));
+    let presence = ras::ProgramPresence { id: p.id, name: p.display_name, always_resident: p.always_resident };
+    in_every_rough && ras::already_running_sentence(&presence, game).is_some()
+}
+
+/// How many rough sessions have a readable start snapshot, of all of them, the same for the normal sessions, and
+/// which programs were open in every recorded rough one (none when there is no rough session).
 fn start_record(c: &Ctx) -> Option<StartRecord> {
     let st = start_read(c);
-    (st.rough_total > 0).then_some(StartRecord { recorded: st.rough.len() as u32, rough: st.rough_total as u32 })
+    if st.rough_total == 0 {
+        return None;
+    }
+    let game = intelligence::pretty_game_name(&c.first_bad.game);
+    let open = if st.rough.is_empty() {
+        Vec::new()
+    } else {
+        crate::running_at_start::PROGRAMS.iter().filter(|p| already_running(p, &st, &game)).map(|p| p.display_name).collect()
+    };
+    Some(StartRecord {
+        recorded: st.rough.len() as u32,
+        rough: st.rough_total as u32,
+        normal_recorded: st.base.len() as u32,
+        normal: c.base.len() as u32,
+        open,
+    })
 }
 
 /// What Compy could not see about the start of the rough sessions. With a readable snapshot on every rough
@@ -2349,6 +2379,12 @@ fn detect_background(c: &Ctx, out: &mut Out) {
                 ("date", newest_other),
             ],
         ));
+    }
+    // "Was already running" is only about the rough sessions. With fewer than `RUNNING_BASELINE_MIN` normal sessions
+    // that have a record, nothing says whether the same programs were open when the game ran normally: said, so the
+    // line is not read as a comparison.
+    if start_ev.iter().any(|e| e.code == "already-running") && start_read(c).base.len() < RUNNING_BASELINE_MIN {
+        out.unknown("running-at-start-normal");
     }
     evidence.extend(start_ev);
     evidence.extend(states.iter().filter(|(_, st)| shown(st)).filter_map(|(k, st)| load_evidence(*k, *st, c.affected.len(), contradiction)));
@@ -2561,7 +2597,13 @@ fn detect_setting_drift(c: &Ctx, out: &mut Out) {
                 None => When::Seen { at: iso(noticed) },
             };
         }
-        evidence.push(ev(EvidenceKind::Known, "drift-noticed", "drift", false, &[("check", n.id.clone())]));
+        // `noticed` (and `ready`, the last time it was seen fine) identify THIS notice: the card names a setting only
+        // when the live drift it reads carries the same `noticed_at`, never one that went off later.
+        let mut args = vec![("check", n.id.clone()), ("noticed", n.noticed_at.clone())];
+        if let Some(r) = n.last_ready_at.as_deref().filter(|r| ts(r).is_some()) {
+            args.push(("ready", r.to_string()));
+        }
+        evidence.push(ev(EvidenceKind::Known, "drift-noticed", "drift", false, &args));
     }
     if evidence.is_empty() {
         if ambiguous {

@@ -2741,7 +2741,8 @@ mod recovery_f3 {
     }
 
     fn gb_of(g: f64) -> Option<u64> {
-        Some((g * 1e9) as u64)
+        // GiB, the unit `gb` prints in.
+        Some((g * 1_073_741_824.0) as u64)
     }
 
     fn ram_episode(rough: &[(u32, f64)], recovered_peak: Option<f64>) -> Diagnosis {
@@ -4644,7 +4645,141 @@ fn already_running_and_not_recorded_are_scoped_to_the_sessions_each_is_about() {
     let line = f.evidence.iter().find(|e| e.code == "already-running").expect("open in every readable rough snapshot");
     assert_eq!((line.args.get("n").map(String::as_str), line.args.get("of").map(String::as_str)), (Some("3"), Some("4")));
     assert!(d.unknowns.contains(&"running-at-start"), "one rough session has no record: {:?}", d.unknowns);
-    assert_eq!(d.start_record, Some(StartRecord { recorded: 3, rough: 4 }));
+    assert_eq!(d.start_record, Some(StartRecord { recorded: 3, rough: 4, normal_recorded: 3, normal: 3, open: vec!["OBS Studio"] }));
+    assert!(!d.unknowns.contains(&"running-at-start-normal"), "three normal sessions have a record: {:?}", d.unknowns);
+}
+
+/// A rough session that starts a build tool, so the background-load finding exists even where the start snapshots
+/// of the normal sessions cannot be compared (no timing from them).
+fn busy(mut s: SessionFacts) -> SessionFacts {
+    s.busy_starts = 5;
+    s.busy_names = vec!["rustc".into()];
+    s
+}
+
+/// The owner's shape: four rough sessions, three with a snapshot of what was running (a program open in all three);
+/// thirteen normal sessions, none with one (the comparison looks at the newest ten of them). "Was already running" says nothing about the normal sessions, so the
+/// engine must say that Compy cannot tell whether the same program was open when the game ran normally.
+fn owner_shape(normal_with_record: usize) -> Diagnosis {
+    let mut sess = steady(13);
+    // The newest normal sessions carry the record: the comparison looks at the newest ten.
+    for s in sess.iter_mut().rev().take(normal_with_record) {
+        s.running_at_start = Some(snap(&[]));
+    }
+    let mut first = facts("2026-10-20T10:00:00Z", 600, 600, 100.0, 30.0);
+    first.busy_starts = 5;
+    first.busy_names = vec!["rustc".into()];
+    sess.push(first);
+    for day in ["2026-10-21", "2026-10-22", "2026-10-23"] {
+        let mut r = facts(&format!("{day}T10:00:00Z"), 600, 600, 100.0, 30.0);
+        r.running_at_start = Some(snap(&["obs64.exe"]));
+        sess.push(busy(r));
+    }
+    run_load(sess)
+}
+
+#[test]
+fn already_running_with_no_record_of_the_normal_sessions_says_it_cannot_tell_whether_it_was_open_then_too() {
+    let d = owner_shape(0);
+    let f = bg_finding(&d).expect("the build tool starts make the finding");
+    let line = f.evidence.iter().find(|e| e.code == "already-running").expect("open in all three recorded rough sessions");
+    assert_eq!((line.args.get("n").map(String::as_str), line.args.get("of").map(String::as_str)), (Some("3"), Some("4")));
+    assert!(f.evidence.iter().all(|e| e.code != "open-counts"), "no counts against normal sessions that have no record");
+    assert!(d.unknowns.contains(&"running-at-start-normal"), "{:?}", d.unknowns);
+    assert!(d.unknowns.contains(&"running-at-start"), "one rough session has none either");
+    assert_eq!(d.start_record, Some(StartRecord { recorded: 3, rough: 4, normal_recorded: 0, normal: 10, open: vec!["OBS Studio"] }));
+}
+
+#[test]
+fn one_or_two_normal_sessions_with_a_record_are_still_too_few_and_three_are_not() {
+    for few in [1usize, 2] {
+        let d = owner_shape(few);
+        assert!(d.unknowns.contains(&"running-at-start-normal"), "{few}: {:?}", d.unknowns);
+        assert_eq!(d.start_record.as_ref().map(|r| (r.normal_recorded, r.normal)), Some((few as u32, 10)));
+    }
+    let d = owner_shape(3);
+    assert!(!d.unknowns.contains(&"running-at-start-normal"), "{:?}", d.unknowns);
+    let f = bg_finding(&d).expect("finding");
+    assert!(f.evidence.iter().any(|e| e.code == "open-counts"), "three normal records are compared, and the counts say what they show");
+}
+
+#[test]
+fn a_rough_session_whose_snapshot_cannot_be_read_counts_as_not_recorded() {
+    let mut sess = start_episode(quiet_base(3), Some(snap(&["obs64.exe"])));
+    let mut second = facts("2026-10-21T10:00:00Z", 600, 600, 100.0, 30.0);
+    second.running_at_start = Some(snapshot(std::iter::empty(), 0, 0, 0));
+    sess.push(second);
+    let d = run_load(sess);
+    assert_eq!(d.start_record.as_ref().map(|r| (r.recorded, r.rough)), Some((1, 2)));
+    assert!(d.unknowns.contains(&"running-at-start"), "{:?}", d.unknowns);
+}
+
+#[test]
+fn there_is_no_start_record_without_a_rough_session_and_it_is_not_serialised() {
+    let d = run_load(steady(6));
+    assert_eq!(d.start_record, None);
+    let json = serde_json::to_value(&d).unwrap();
+    assert!(json.get("start_record").is_none(), "{json}");
+}
+
+#[test]
+fn the_memory_figures_are_in_the_unit_every_other_screen_uses() {
+    // 33_719_000_000 bytes is 31.4 GiB ("31.4 GB usable" everywhere else), not 33.7 of 1e9.
+    assert_eq!(gb(33_719_000_000), "31.4");
+    assert_eq!(gb(1_073_741_824), "1.0");
+    assert_eq!(gb(0), "0.0");
+}
+
+#[test]
+fn a_drift_notice_carries_the_time_it_was_noticed_and_last_seen_fine_so_the_card_can_match_it() {
+    let mut sess = steady_on_old("g", 10);
+    sess.push(rough_on_new("g", 10));
+    let mut inp = inputs(sess);
+    inp.drift.push(DriftFact {
+        id: "applied-changes".into(),
+        last_ready_at: Some("2026-10-07T11:30:00Z".into()),
+        noticed_at: "2026-10-07T12:00:00Z".into(),
+    });
+    let d = diagnose(&inp, Complaint::Slow, Some("g"));
+    let f = d.findings.iter().find(|f| f.id == "setting-drift").expect("noticed inside the window");
+    let line = f.evidence.iter().find(|e| e.code == "drift-noticed").unwrap();
+    assert_eq!(line.args.get("check").map(String::as_str), Some("applied-changes"));
+    assert_eq!(line.args.get("noticed").map(String::as_str), Some("2026-10-07T12:00:00Z"));
+    assert_eq!(line.args.get("ready").map(String::as_str), Some("2026-10-07T11:30:00Z"));
+    // No last-seen stamp: none is invented.
+    inp.drift[0].last_ready_at = None;
+    let d = diagnose(&inp, Complaint::Slow, Some("g"));
+    let f = d.findings.iter().find(|f| f.id == "setting-drift").unwrap();
+    let line = f.evidence.iter().find(|e| e.code == "drift-noticed").unwrap();
+    assert!(line.args.contains_key("noticed") && !line.args.contains_key("ready"), "{:?}", line.args);
+}
+
+/// Rust → TS wire contract for the P3 card fields: the fixture is what `src/test/fixtures/paramedic-p3.wire.json`
+/// pins and `src/paramedic-p3-contract.test.ts` checks against the TS types. A field renamed here fails both.
+#[test]
+fn the_p3_wire_fixture_matches_what_serde_emits() {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../src/test/fixtures/paramedic-p3.wire.json")).unwrap();
+    let d = owner_shape(0);
+    let json = serde_json::to_value(&d).unwrap();
+    assert_eq!(json["start_record"], fixture["start_record"]);
+    let keys = |e: &str, findings: &[Finding]| -> Vec<String> {
+        let line = findings.iter().flat_map(|f| f.evidence.iter()).find(|x| x.code == e).unwrap_or_else(|| panic!("no {e} line"));
+        let mut k: Vec<String> = line.args.keys().map(|k| k.to_string()).collect();
+        k.sort();
+        k
+    };
+    let want = |name: &str| -> Vec<String> {
+        let mut k: Vec<String> = fixture[name].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_string()).collect();
+        k.sort();
+        k
+    };
+    assert_eq!(keys("already-running", &d.findings), want("already_running_arg_keys"));
+    let mut sess = steady_on_old("g", 10);
+    sess.push(rough_on_new("g", 10));
+    let mut inp = inputs(sess);
+    inp.drift.push(DriftFact { id: "applied-changes".into(), last_ready_at: Some("2026-10-07T11:30:00Z".into()), noticed_at: "2026-10-07T12:00:00Z".into() });
+    let drift = diagnose(&inp, Complaint::Slow, Some("g"));
+    assert_eq!(keys("drift-noticed", &drift.findings), want("drift_noticed_arg_keys"));
 }
 
 #[test]
@@ -4653,7 +4788,7 @@ fn with_every_rough_session_recorded_the_scope_is_all_of_them_and_nothing_is_mis
     let f = bg_finding(&d).expect("timing");
     let line = f.evidence.iter().find(|e| e.code == "already-running").unwrap();
     assert_eq!((line.args.get("n").map(String::as_str), line.args.get("of").map(String::as_str)), (Some("1"), Some("1")));
-    assert_eq!(d.start_record, Some(StartRecord { recorded: 1, rough: 1 }));
+    assert_eq!(d.start_record, Some(StartRecord { recorded: 1, rough: 1, normal_recorded: 3, normal: 3, open: vec!["OBS Studio"] }));
     assert!(!d.unknowns.contains(&"running-at-start"));
 }
 

@@ -587,7 +587,8 @@ function cantTellMeasures(a: ParamedicFirstLook, measured: FirstLookMeasured): b
   const r = a.recorded;
   if (!r || r.state !== "read") return false;
   if (a.game == null) return !r.total;
-  if (r.unmatched || r.game == null) return false;
+  // A pick Compy couldn't match to a recorded game keeps the line: playing it with a capture is what would make it matchable.
+  if (r.unmatched || r.game == null) return true;
   return r.game < r.need;
 }
 

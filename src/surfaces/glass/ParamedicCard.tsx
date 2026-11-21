@@ -16,6 +16,7 @@ import type {
   ParamedicLimit,
   ParamedicNow,
   ParamedicRuledOut,
+  ParamedicStartRecord,
   ParamedicWhen,
 } from "../../types";
 import { useDates } from "./GamesRoom";
@@ -23,24 +24,44 @@ import { ParamedicFirstLook, firstLookApplies, firstLookMeasured, type RecordedG
 
 type T = ReturnType<typeof useTranslation>["t"];
 type Dates = ReturnType<typeof useDates>;
-/** `drifts`: the settings Compy watches that read changed now (the same list Home names them from), `lang`: the app's
- *  language for a stamp, `startRecord`: how many of the rough sessions have a record of what was running at the start,
- *  `driftAllNamed`: set while one finding's evidence is worded, when every drift line in it named its setting. */
+/** Which sessions have a record of what was running at the start (rough and normal), and the programs that were open
+ *  in every recorded rough one. */
+type StartRecord = ParamedicStartRecord;
+/** What one drift notice can say about its setting: `named` (the live drift is the same notice and has its title),
+ *  `notLoaded` (no drift list, an unreadable check, or a live drift that is not the notice the engine found: Compy
+ *  couldn't read which setting it was), `notRecorded` (the list is loaded and the setting is not off now, or has no title). */
+type DriftState = "named" | "notLoaded" | "notRecorded";
+/** `drifts`: the settings Compy watches that read changed now (the same list Home names them from); null/undefined =
+ *  the list was not loaded, [] = loaded and nothing drifting. `lang`: the app's language for a stamp. `driftState`: set
+ *  while one finding's evidence is worded, for what its drift lines could say about the setting. */
 type Ctx = {
   t: T;
   dates: Dates;
   game: string;
-  drifts?: Drift[];
+  drifts?: Drift[] | null;
   lang?: string;
-  startRecord?: { recorded: number; rough: number };
-  driftAllNamed?: boolean;
+  startRecord?: StartRecord;
+  driftState?: DriftState;
 };
 
 const RAW = { interpolation: { escapeValue: false } } as const;
 
+const sameInstant = (a: string | null | undefined, b: string | null | undefined): boolean => {
+  if (!a || !b) return false;
+  const [x, y] = [new Date(a).getTime(), new Date(b).getTime()];
+  return Number.isFinite(x) && x === y;
+};
+
+/** The live drift for a check, but only when it is the notice the engine's line is about (same `noticed_at`): a setting
+ *  that went off later, or came back and went off again, is a different event and is not named as this one. */
+function liveDrift(check: string, noticed: string | undefined, ctx: Ctx): Drift | undefined {
+  const d = (ctx.drifts ?? []).find((x) => x.id === check);
+  return d && sameInstant(d.noticed_at, noticed) ? d : undefined;
+}
+
 /** The applied changes now off, named from the drift list Home uses. An unreadable check names none (as drift-named.ts). */
-function appliedTitles(ctx: Ctx): { titles: string[]; appliedAt: string | null } {
-  const d = (ctx.drifts ?? []).find((x) => x.id === "applied-changes");
+function appliedTitles(ctx: Ctx, noticed: string | undefined): { titles: string[]; appliedAt: string | null } {
+  const d = liveDrift("applied-changes", noticed, ctx);
   if (!d || d.unreadable_now === true) return { titles: [], appliedAt: null };
   const titles = (d.titles ?? []).filter((x) => x.trim() !== "");
   // The date is the ledger's own stamp for that change, only when there is exactly one change.
@@ -48,11 +69,41 @@ function appliedTitles(ctx: Ctx): { titles: string[]; appliedAt: string | null }
   return { titles, appliedAt };
 }
 
-/** Whether a drift notice for this check can be named from the live drift list. */
-function driftNamed(check: string, ctx: Ctx): boolean {
-  if (check === "applied-changes") return appliedTitles(ctx).titles.length > 0;
+/** What a drift notice can say about its setting, from the live drift list Home names it from. */
+function driftState(check: string, noticed: string | undefined, ctx: Ctx): DriftState {
+  if (check === "power-profile") return "named";
+  if (ctx.drifts == null) return "notLoaded";
   const d = (ctx.drifts ?? []).find((x) => x.id === check);
-  return !!d && d.unreadable_now !== true && !!d.label?.trim();
+  if (!d) return "notRecorded";
+  if (d.unreadable_now === true || !liveDrift(check, noticed, ctx)) return "notLoaded";
+  const named = check === "applied-changes" ? appliedTitles(ctx, noticed).titles.length > 0 : !!d.label?.trim();
+  return named ? "named" : "notRecorded";
+}
+
+/** The drift list's own words for what changed, per the same notice the engine found. */
+function driftLine(check: string, noticed: string | undefined, ctx: Ctx, state: DriftState): string {
+  const { t } = ctx;
+  if (check === "applied-changes") {
+    const { titles, appliedAt } = appliedTitles(ctx, noticed);
+    if (state !== "named" || titles.length === 0) return t("paramedic.evidence.driftApplied");
+    const named = t("paramedic.evidence.driftAppliedNamed", { count: titles.length, titles: titles.join(", "), ...RAW });
+    return appliedAt ? `${named} ${t("common.driftNamed.applied.onDate", { when: appliedAt, ...RAW })}` : named;
+  }
+  if (check === "power-profile") return t("paramedic.evidence.driftPower");
+  const d = liveDrift(check, noticed, ctx);
+  if (state === "named" && d) return t("paramedic.evidence.driftOtherNamed", { what: driftShort(d, t), ...RAW });
+  return t("paramedic.evidence.driftOther");
+}
+
+/** The order the records give, as plain facts and only when both stamps exist: last seen as it was, then noticed changed. */
+function driftOrder(check: string, a: Record<string, string>, ctx: Ctx): string | null {
+  const lang = ctx.lang ?? "en";
+  const seen = stampOf(a.ready, lang);
+  const noticed = stampOf(a.noticed, lang);
+  if (!seen || !noticed) return null;
+  return check === "applied-changes"
+    ? ctx.t("paramedic.evidence.driftSeenThenOff", { seen, noticed, ...RAW })
+    : ctx.t("paramedic.evidence.driftSeenThenChanged", { seen, noticed, ...RAW });
 }
 
 const pct = (ratio: number) => Math.round(ratio * 100);
@@ -300,8 +351,9 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     // Presence only: the one allowed sentence for a program on its own, and counts across rough and normal sessions.
     case "already-running":
       // True of the rough sessions that were recorded: when some were not, the line says how many were.
+      // The program was open in every recorded rough session, so "all n" is exact.
       return Number(a.n) > 0 && Number(a.of) > Number(a.n)
-        ? t("paramedic.evidence.alreadyRunningScoped", { name: a.name, game, n: a.n, of: a.of })
+        ? t("paramedic.evidence.alreadyRunningScoped", { count: Number(a.n), name: a.name, game, n: a.n, of: a.of })
         : t("paramedic.evidence.alreadyRunning", { name: a.name, game });
     case "open-counts":
       return t("paramedic.evidence.openCounts", { count: Number(a.rm), r: a.r, rm: a.rm, n: a.n, nm: a.nm });
@@ -332,21 +384,15 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
     case "ram-lower":
       return t("paramedic.evidence.ramLower", { peakGb: a.peakGb });
     case "drift-noticed": {
-      // Named from the same drift list Home names it from (drift-named.ts rules): a setting is named only when its
-      // title is there; without it the line stays general and the next line says the setting isn't recorded.
-      if (a.check === "applied-changes") {
-        const { titles, appliedAt } = appliedTitles(ctx);
-        if (titles.length === 0) return t("paramedic.evidence.driftApplied");
-        const named = t("paramedic.evidence.driftAppliedNamed", { count: titles.length, titles: titles.join(", "), ...RAW });
-        return appliedAt ? `${named} ${t("common.driftNamed.applied.onDate", { when: appliedAt, ...RAW })}` : named;
-      }
-      if (a.check === "power-profile") return t("paramedic.evidence.driftPower");
-      const d = (ctx.drifts ?? []).find((x) => x.id === a.check);
-      if (d && driftNamed(a.check, ctx)) return t("paramedic.evidence.driftOtherNamed", { what: driftShort(d, t), ...RAW });
-      return t("paramedic.evidence.driftOther");
+      // Named from the same drift list Home names it from (drift-named.ts rules), and only when that list's drift is
+      // the notice the engine found (same `noticed_at`): otherwise the line stays general and the next line says why.
+      const line = driftLine(a.check, a.noticed, ctx, driftState(a.check, a.noticed, ctx));
+      const order = driftOrder(a.check, a, ctx);
+      return order ? `${line} ${order}` : line;
     }
     case "which-not-recorded":
-      return ctx.driftAllNamed ? t("paramedic.evidence.whichChangedNotRecorded") : t("paramedic.evidence.whichNotRecorded");
+      if (ctx.driftState === "named") return t("paramedic.evidence.whichChangedNotRecorded");
+      return ctx.driftState === "notLoaded" ? t("paramedic.evidence.whichNotLoaded") : t("paramedic.evidence.whichNotRecorded");
     case "count-changed":
       return t("paramedic.evidence.countChanged", { from: a.from, to: a.to });
     case "value-changed":
@@ -563,6 +609,15 @@ function unknownLine(code: string, { t, game, startRecord }: Ctx): string | null
           : t("paramedic.unknown.runningAtStartNone", { rough: startRecord.rough, game });
       }
       return t("paramedic.unknown.runningAtStart");
+    case "running-at-start-normal": {
+      // "Was already running" is about the rough sessions only: say what the normal sessions' record leaves unknown.
+      const names = startRecord?.open ?? [];
+      if (!startRecord || names.length === 0) return null;
+      const name = names.join(", ");
+      return startRecord.normal_recorded > 0
+        ? t("paramedic.unknown.runningAtStartNormalSome", { count: names.length, n: startRecord.normal_recorded, of: startRecord.normal, name, game, ...RAW })
+        : t("paramedic.unknown.runningAtStartNormalNone", { count: names.length, name, game, ...RAW });
+    }
     case "start-list-only":
       return t("paramedic.unknown.startListOnly");
     case "other-load":
@@ -742,7 +797,10 @@ const present = (xs: (string | null)[]): string[] => xs.filter((x): x is string 
 function Evidence({ list, ctx: base, hideInstallAt }: { list: ParamedicEvidence[]; ctx: Ctx; hideInstallAt?: string }) {
   // "Which setting it was isn't recorded" is said only while a drift line here could not name its setting.
   const drift = list.filter((e) => e.code === "drift-noticed");
-  const ctx: Ctx = drift.length > 0 && drift.every((e) => e.args.check === "power-profile" || driftNamed(e.args.check, base)) ? { ...base, driftAllNamed: true } : base;
+  const states = drift.map((e) => driftState(e.args.check, e.args.noticed, base));
+  // "What changed it isn't recorded" only after every drift line named its setting; "couldn't read" when any could not be matched.
+  const driftAll: DriftState | undefined = states.length === 0 ? undefined : states.every((s) => s === "named") ? "named" : states.includes("notLoaded") ? "notLoaded" : "notRecorded";
+  const ctx: Ctx = driftAll ? { ...base, driftState: driftAll } : base;
   const rows = list
     .filter((e) => !(hideInstallAt && e.code === "install-recorded" && e.args.when === hideInstallAt))
     .map((e) => ({ e, text: evidenceLine(e, ctx) }))
@@ -1233,7 +1291,8 @@ type View =
 /** The answer region counts as "more below" when more than this many px are still hidden under its bottom edge. */
 const MORE_SLACK_PX = 4;
 
-export function ParamedicCard({ noGames = false, games = [], drifts = [] }: { noGames?: boolean; games?: RecordedGame[]; drifts?: Drift[] } = {}) {
+/** `drifts`: null/undefined while the readiness scan has not loaded (no default: "not loaded" is not "no drift"). */
+export function ParamedicCard({ noGames = false, games = [], drifts }: { noGames?: boolean; games?: RecordedGame[]; drifts?: Drift[] | null } = {}) {
   const { t, i18n } = useTranslation();
   const dates = useDates();
   const [view, setView] = useState<View>({ kind: "idle" });

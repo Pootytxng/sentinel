@@ -1469,6 +1469,10 @@ export type ParamedicRecovery = {
   also_changed: ParamedicEvidence[];
 };
 
+/** Rough sessions with a record of what was running at the start (`recorded` of `rough`), the same for the normal
+ *  sessions Compy compared with (`normal_recorded` of `normal`), and the programs open in every recorded rough one. */
+export type ParamedicStartRecord = { recorded: number; rough: number; normal_recorded: number; normal: number; open: string[] };
+
 export type ParamedicDiagnosis = {
   complaint: ParamedicComplaint;
   state: ParamedicState;
@@ -1490,6 +1494,6 @@ export type ParamedicDiagnosis = {
   /** Start times of this game's recent sessions that may hold two games: not judged, named in one note line. */
   mixed_sessions: string[];
   /** How many of the rough sessions have a record of what was running at the start, of all of them (absent: no rough session). */
-  start_record?: { recorded: number; rough: number };
+  start_record?: ParamedicStartRecord;
   method: string;
 };

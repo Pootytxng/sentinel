@@ -1483,7 +1483,9 @@ describe("what Compy can't tell yet rests on the sessions it recorded", () => {
     expect(body).toBe(
       "Compy couldn't match ROB RUN to a game it has recorded, so it can't tell whether it runs worse than before, or which of these changes matters.",
     );
-    expect(group).not.toMatch(/hasn't seen|hasn't recorded|Start a capture/);
+    expect(group).not.toMatch(/hasn't seen|hasn't recorded/);
+    // Playing it with a capture is what would make it matchable: the instruction stays.
+    expect(group).toContain("Start a capture in Live");
   });
 
   it("2 recorded sessions is 'not enough yet' with the capture instruction; 0 of a game among others is 'hasn't recorded a session of it'", async () => {

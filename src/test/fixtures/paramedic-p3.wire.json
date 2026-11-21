@@ -1,0 +1,6 @@
+{
+  "start_record": { "recorded": 3, "rough": 4, "normal_recorded": 0, "normal": 10, "open": ["OBS Studio"] },
+  "already_running_arg_keys": ["id", "name", "n", "of"],
+  "drift_noticed_arg_keys": ["check", "noticed", "ready"],
+  "recorded": { "state": "read", "total": 33, "game": 20, "unmatched": false, "need": 3 }
+}
