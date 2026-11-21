@@ -174,6 +174,11 @@ function findingTitle(f: ParamedicFinding, { t, dates, game }: Ctx): string | nu
     f.evidence.some((e) => e.code === "already-running") &&
     !f.evidence.some((e) => e.code === "starts-seen")
   ) {
+    // The lines under it also say programs were seen starting in a partly measured or another game's session: the
+    // heading names both, so it never says only "already open" over lines about starts (or the other way round).
+    const partial = f.evidence.some((e) => e.code === "starts-seen-partial") ? 1 : 0;
+    const other = f.evidence.filter((e) => e.code === "starts-seen-other").reduce((n, e) => n + (Number(e.args.count) || 1), 0);
+    if (partial + other > 0) return t("paramedic.finding.backgroundLoad.openNearby", { count: partial + other });
     return t("paramedic.finding.backgroundLoad.open");
   }
   // Starts seen only in a partly measured session or in another game's sessions, none in the rough session(s)
@@ -681,7 +686,7 @@ function seenLine(s: ParamedicRuledOut, { t, dates, game }: Ctx): string | null 
     case "sitting-merged":
       return t("paramedic.seen.sittingMerged", { count: Number(a.count) });
     case "game-crash-signature":
-      return t("paramedic.seen.gameCrashSignature", { module: a.module, what: t("paramedic.seen.crashBeforeWhat", { date: dates.day(a.before) }) });
+      return t("paramedic.seen.gameCrashSignature", { module: a.module, what: t("paramedic.seen.crashBeforeWhat", { date: dates.day(a.before), kind: a.kind === "compy" ? t("paramedic.seen.changeKind.compy") : t("paramedic.seen.changeKind.windows") }) });
     case "mod-settings-only":
       // Files of a mod's own are not proof it is installed: said exactly so.
       return t("paramedic.seen.modSettingsOnly", { game, name: a.name });
@@ -1288,6 +1293,16 @@ type View =
   | { kind: "failed" }
   | { kind: "done"; d: ParamedicDiagnosis };
 
+const LAYER_ROLES = new Set(["dialog", "alertdialog", "menu", "listbox", "tooltip", "combobox"]);
+
+/** A popover-like layer: an element that is one (by role) or a toggle that opened one (`aria-haspopup`, expanded). */
+function isLayer(n: HTMLElement): boolean {
+  const role = n.getAttribute("role");
+  if (role && LAYER_ROLES.has(role)) return true;
+  const popup = n.getAttribute("aria-haspopup");
+  return !!popup && popup !== "false" && n.getAttribute("aria-expanded") === "true";
+}
+
 /** The answer region counts as "more below" when more than this many px are still hidden under its bottom edge. */
 const MORE_SLACK_PX = 4;
 
@@ -1381,13 +1396,16 @@ export function ParamedicCard({ noGames = false, games = [], drifts }: { noGames
   // The questions are open over a check that is still running: nothing there is dimmed or inert.
   const dim = busy && !showQuestions;
   // Escape closes the open card from anywhere inside it, exactly when "Close" is offered (an answer, the open
-  // questions) and also after a failed or slow check; but not inside a disclosure that is open (a row, a fold,
-  // "Show more"), where it keeps its normal job, and not while "Check again" is running over an answer.
+  // questions) and also after a failed or slow check; and not while "Check again" is running over an answer.
+  // An open row, fold or "Show more" is an inline section, not a layer on top: Escape still closes the card from
+  // inside it (focus stays on its toggle, so the old rule made Escape dead once anything was opened). Only a
+  // popover-like layer (a dialog, menu, listbox, tooltip or a toggle that opens one) keeps the key for itself, so it
+  // closes first.
   const onKeyDown = (e: ReactKeyboardEvent<HTMLElement>) => {
     if (e.key !== "Escape" || e.defaultPrevented) return;
     if (!(view.kind === "done" || view.kind === "failed" || view.kind === "still" || showQuestions)) return;
     for (let n = e.target as HTMLElement | null; n && n !== e.currentTarget; n = n.parentElement) {
-      if (n.getAttribute("aria-expanded") === "true" || n.querySelector(":scope > [aria-expanded=\"true\"]")) return;
+      if (isLayer(n)) return;
     }
     e.preventDefault();
     close();

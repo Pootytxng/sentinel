@@ -1455,6 +1455,54 @@ mod windows_records {
         d.limits.iter().filter(|l| l.kind == kind).map(|l| l.code).collect()
     }
 
+    // ---- p4-cardagree: ONE definition of "the earliest dated change", shared with the first look -----------
+
+    fn same_file_crashes() -> super::super::extras::CrashRead {
+        use super::super::extras::{CrashFact, CrashHistory, CrashRead};
+        let k = |when: &str| CrashFact { app: "g".into(), when: utc(when), module: Some("nvwgf2umx.dll".into()), code: Some("c0000005".into()), version: None, path_ok: None };
+        CrashRead::Read(CrashHistory { crashes: vec![k("2026-09-28T08:00:00Z"), k("2026-10-08T08:00:00Z")], listed: true, partial: false })
+    }
+
+    /// The card's crash-signature line: (date, kind) of the earliest dated change it names.
+    fn signature_of(compy: &[&str]) -> Option<(String, String)> {
+        let mut inp = with(scenario(), report(vec![gpu("2026-10-06T12:00:00Z", "1.0", "2.0", Some(true))]), GameSteam::Found);
+        inp.crashes = same_file_crashes();
+        inp.compy_applies = compy.iter().map(|s| utc(s)).collect();
+        let d = diagnose(&inp, Complaint::Slow, Some("g"));
+        d.seen.iter().find(|s| s.id == "game-crash-signature").map(|s| (s.args["before"].clone(), s.args["kind"].clone()))
+    }
+
+    /// The Nov 15 / Nov 19 bug: Compy's own apply is a dated change, so when it falls in the card's period it is the
+    /// earliest one, and the sentence says it is a change Compy applied.
+    #[test]
+    fn a_compy_apply_in_the_period_is_the_earliest_dated_change_and_is_named_as_compys() {
+        assert_eq!(signature_of(&["2026-10-05T09:00:00Z"]), Some(("2026-10-05T09:00:00Z".into(), "compy".into())));
+    }
+
+    #[test]
+    fn a_compy_apply_outside_the_period_or_none_leaves_the_windows_change_named_as_windows() {
+        let windows = Some(("2026-10-06T12:00:00Z".to_string(), "windows".to_string()));
+        // Applied before the last normal session ended: not a change between the normal sessions and the rough ones.
+        assert_eq!(signature_of(&["2026-10-02T09:00:00Z"]), windows);
+        // Applied after the first rough session started.
+        assert_eq!(signature_of(&["2026-10-09T11:00:00Z"]), windows);
+        assert_eq!(signature_of(&[]), windows);
+    }
+
+    #[test]
+    fn the_shared_function_takes_the_earliest_moment_and_names_where_it_came_from() {
+        use super::super::extras::{earliest_dated_change, ChangeOrigin};
+        let d = |s: &str| utc(s);
+        let e = earliest_dated_change([d("2026-11-19T12:49:00Z")], [d("2026-11-15T13:44:49Z"), d("2026-11-19T12:37:00Z")]).unwrap();
+        assert_eq!((e.at, e.origin), (d("2026-11-15T13:44:49Z"), ChangeOrigin::Compy));
+        let e = earliest_dated_change([d("2026-11-19T12:49:00Z"), d("2026-11-20T01:00:00Z")], [d("2026-11-21T00:00:00Z")]).unwrap();
+        assert_eq!((e.at, e.origin), (d("2026-11-19T12:49:00Z"), ChangeOrigin::Windows));
+        // A tie names the Windows record; nothing at all is nothing.
+        let e = earliest_dated_change([d("2026-11-19T12:00:00Z")], [d("2026-11-19T12:00:00Z")]).unwrap();
+        assert_eq!(e.origin, ChangeOrigin::Windows);
+        assert!(earliest_dated_change([], []).is_none());
+    }
+
     #[test]
     fn the_exact_install_time_replaces_the_unread_line_and_is_not_a_second_support() {
         let d = found(scenario(), report(vec![gpu("2026-10-06T12:00:00Z", "1.0", "2.0", Some(true))]));
@@ -3825,15 +3873,15 @@ mod temperature_and_crashes {
         CrashRead::Read(CrashHistory { crashes, listed: true, partial: false })
     }
 
-    /// A mod whose files were created inside the period is the one dated candidate (its date is `IN`).
+    /// A change Compy applied inside the period is the one dated change (its date is `IN`). A mod's file-creation
+    /// time is not a dated change (Windows resets it when a folder is copied), so it is not used for this.
     fn with_crashes(crashes: CrashRead, dated_candidate: bool) -> Diagnosis {
         let mut sess = steady(4);
         sess.push(facts(HI, 600, 600, 100.0, 30.0));
         let mut inp = inputs(sess);
         inp.crashes = crashes;
         if dated_candidate {
-            let m = ModFound { name: "ReShade", strong: true, loader_file_present: true, first_seen: Some(utc(IN)), settings_changed: None, last_log_write: None };
-            inp.mods = ModInput { game: ModsRead::Read(ModsVerdict::Found(vec![m])), others: Vec::new() };
+            inp.compy_applies = vec![utc(IN)];
         }
         diagnose(&inp, Complaint::Slow, Some("g"))
     }
@@ -3954,7 +4002,23 @@ mod temperature_and_crashes {
         let d = with_crashes(history(vec![sig("2026-09-20T08:00:00Z"), sig("2026-10-07T08:00:00Z")]), true);
         let l = signature_line(&d).expect("both conditions hold");
         assert_eq!(l.args["module"], "nvwgf2umx.dll");
-        assert_eq!(l.args["before"], IN, "the date the mod's files were created: a real dated change");
+        assert_eq!(l.args["before"], IN, "the date Compy applied a change: a real dated change");
+        assert_eq!(l.args["kind"], "compy");
+    }
+
+    /// The card and the first look agree: a mod's file-creation time is not a change time for either.
+    #[test]
+    fn a_mods_file_creation_time_does_not_date_the_card_either() {
+        let mut sess = steady(4);
+        sess.push(facts(HI, 600, 600, 100.0, 30.0));
+        let mut inp = inputs(sess);
+        inp.crashes = history(vec![sig("2026-09-20T08:00:00Z"), sig("2026-10-07T08:00:00Z")]);
+        let m = ModFound { name: "ReShade", strong: true, loader_file_present: true, first_seen: Some(utc(IN)), settings_changed: None, last_log_write: None };
+        inp.mods = ModInput { game: ModsRead::Read(ModsVerdict::Found(vec![m])), others: Vec::new() };
+        let d = diagnose(&inp, Complaint::Slow, Some("g"));
+        assert!(ids(&d).contains(&"graphics-mod"), "the mod is still a finding");
+        assert!(signature_line(&d).is_none(), "its creation time dates nothing");
+        assert!(crash_line(&d).is_some());
     }
 
     #[test]

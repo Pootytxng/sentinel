@@ -268,6 +268,11 @@ pub(crate) struct DiagnoseInputs {
     /// The crash reports Windows keeps for apps, as the command read them. Never part of a recorded fixture.
     #[serde(skip)]
     crashes: CrashRead,
+    /// When Compy applied each change in its own ledger (read without writing). Dates only: with the Windows
+    /// side's dated changes they decide "the earliest dated change" (`extras::earliest_dated_change`). A ledger
+    /// that could not be read leaves this empty, and the sentence then names a Windows-recorded change only.
+    #[serde(skip)]
+    compy_applies: Vec<DateTime<Utc>>,
 }
 
 // ---- Outputs: codes, ids and numbers. The UI owns every sentence. ----------------------------
@@ -1070,7 +1075,10 @@ pub(crate) async fn paramedic_diagnose(complaint: Complaint, game: Option<String
     let Some(flight) = FlightGuard::begin() else { return Err(BUSY.to_string()) };
     tauri::async_runtime::spawn_blocking(move || -> Result<Diagnosis, String> {
         let _flight = flight;
-        let inp = read_inputs_from(&crate::compy_data_dir())?;
+        let mut inp = read_inputs_from(&crate::compy_data_dir())?;
+        if let Ok(stamps) = crate::history::read_ledger_stamps() {
+            inp.compy_applies = stamps.iter().filter_map(|s| ts(&s.applied_at)).collect();
+        }
         let fetch = |t0, t1, exe: String| changes::read_real_changes(t0, t1, &exe);
         let fetch_mods = |exe: String, others: Vec<String>, budget: std::time::Duration| mods::read_real_mods(&exe, &others, budget);
         let fetch_crashes = |exe: String| extras::read_real_crashes(&exe);
@@ -1221,6 +1229,7 @@ fn inputs_from_parts(
             .collect(),
         sightings_unread: false,
         drift_unread: false,
+        compy_applies: Vec::new(),
         changes: ChangeRead::NotRead,
         mods: ModInput::default(),
         crashes: CrashRead::NotRead,

@@ -1299,7 +1299,7 @@ describe("ParamedicCard: temperature and crash history", () => {
       answerOf([background()], {
         seen: [
           { id: "game-crashes", args: { n: "3", since: first } },
-          { id: "game-crash-signature", args: { module: "nvwgf2umx.dll", before: change } },
+          { id: "game-crash-signature", args: { module: "nvwgf2umx.dll", before: change, kind: "windows" } },
         ],
       }),
     );
@@ -1308,8 +1308,24 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(checked()).toContain(`Game A has closed unexpectedly 3 times since ${day(first)}.`);
     expect(checked()).not.toMatch(/probably/);
     expect(checked()).toContain(
-      `All the crashes Compy could read stopped in the same file (nvwgf2umx.dll), and some happened before the earliest dated change Compy found (${day(change)}), so that change can't be the whole story for them.`,
+      `All the crashes Compy could read stopped in the same file (nvwgf2umx.dll), and some happened before the earliest dated change Compy found between your last normal session and the rough ones (${day(change)}, a change Windows recorded), so that change can't be the whole story for them.`,
     );
+  });
+
+  it("the earliest dated change says what kind it was: a change Compy applied is not called a Windows record", async () => {
+    const change = "2026-11-15T13:44:49Z";
+    await ask(
+      answerOf([background()], {
+        seen: [
+          { id: "game-crashes", args: { n: "3", since: "2026-11-02T09:00:00Z" } },
+          { id: "game-crash-signature", args: { module: "nvwgf2umx.dll", before: change, kind: "compy" } },
+        ],
+      }),
+    );
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(`(${day(change)}, a change Compy applied)`);
+    expect(checked()).not.toContain("a change Windows recorded");
   });
 
   it("memory says it was checked against the rough sessions, in the plural when there were several", async () => {
@@ -1658,21 +1674,48 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
   });
 
-  it("Escape inside an open disclosure keeps its normal behaviour: the card stays open", async () => {
+  // p4: focus stays on the toggle that opened a row, so the old "an open disclosure keeps Escape" rule left Escape dead
+  // for the rest of the visit. An inline section is not a layer: Escape closes the card, focus returns to the bar's button.
+  it("Escape closes the card after a row inside it was opened, from its toggle and from its own text", async () => {
     await ask(base);
     await waitFor(() => expect(rows().length).toBe(1));
     const btn = within(rows()[0]).getByRole("button");
     fireEvent.click(btn);
     expect(btn.getAttribute("aria-expanded")).toBe("true");
+    btn.focus();
     fireEvent.keyDown(btn, { key: "Escape" });
-    expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("true");
-    expect(rows().length).toBe(1);
-    // Inside the disclosure's own body too.
+    expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+    cleanup();
+    await ask(base);
+    await waitFor(() => expect(rows().length).toBe(1));
+    fireEvent.click(within(rows()[0]).getByRole("button"));
     fireEvent.keyDown(screen.getByText("Your graphics driver changed from 1.0 to 2.0."), { key: "Escape" });
+    expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Something's wrong" }));
+  });
+
+  it("Escape inside a popover-like layer (a dialog, or a toggle that opened a popup) closes that layer first and leaves the card open", async () => {
+    await ask(base);
+    await waitFor(() => expect(rows().length).toBe(1));
+    const region = scrollRegion();
+    const layer = document.createElement("div");
+    layer.setAttribute("role", "dialog");
+    const inner = document.createElement("button");
+    layer.appendChild(inner);
+    region.appendChild(layer);
+    fireEvent.keyDown(inner, { key: "Escape" });
     expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("true");
-    // With it closed again, the same key closes the card.
-    fireEvent.click(btn);
-    fireEvent.keyDown(btn, { key: "Escape" });
+    layer.remove();
+    const toggle = document.createElement("button");
+    toggle.setAttribute("aria-haspopup", "listbox");
+    toggle.setAttribute("aria-expanded", "true");
+    region.appendChild(toggle);
+    fireEvent.keyDown(toggle, { key: "Escape" });
+    expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("true");
+    toggle.remove();
+    // With no layer open, the same key closes the card.
+    fireEvent.keyDown(region, { key: "Escape" });
     expect(screen.getByTestId("paramedic").getAttribute("data-open")).toBe("false");
   });
 
@@ -2051,6 +2094,24 @@ describe("ParamedicCard: honest headings, test-not-fix steps and a button that w
   it("a program already open in the judged session keeps its own heading when other sessions also had starts", async () => {
     await showing([m("already-running", { id: "obs-studio", name: "OBS Studio" }), m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "" })]);
     expect(rows()[0].textContent).toMatch(/Other programs were already open when you started playing/);
+  });
+
+  it("p4: when its lines also say programs were seen starting elsewhere, the heading says both (one session / several)", async () => {
+    await showing([m("already-running", { id: "obs-studio", name: "OBS Studio" }), m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "cargo" })]);
+    expect(rows()[0].textContent).toContain("Other programs were already open when you started playing, and programs were seen starting in another recent session");
+    expect(rows()[0].textContent).not.toMatch(/recent sessions/);
+    cleanup();
+    await showing([
+      m("already-running", { id: "obs-studio", name: "OBS Studio" }),
+      m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "cargo" }),
+      m("starts-seen-other", { count: "2", otherGame: "PBZ", names: "cargo", date: "2026-11-19T10:00:00Z" }),
+    ]);
+    expect(rows()[0].textContent).toContain("Other programs were already open when you started playing, and programs were seen starting in other recent sessions");
+    cleanup();
+    // Already open and nothing seen starting elsewhere: the plain heading.
+    await showing([m("already-running", { id: "obs-studio", name: "OBS Studio" })]);
+    expect(rows()[0].textContent).toContain("Other programs were already open when you started playing");
+    expect(rows()[0].textContent).not.toMatch(/seen starting/);
   });
 
   it("the steps under a Possible suspect are 'How to test this'; under a Likely one they stay 'How to fix it'", async () => {

@@ -64,6 +64,7 @@
     "none": {
       "gpuDriver": "Windows recorded no graphics driver version change in this period.",
       "windowsUpdate": "Windows Update recorded no monthly Windows update, Windows version update or driver update in this period.",
+      "windowsUpdateDriverElsewhere": "Windows Update recorded no monthly Windows update, Windows version update or driver update in this period; the graphics driver change on {{when}} was installed another way.",
       "programs": "No program shows an install or update date in this period."
     },
     "nothing": "Compy found no dated change in this period. That doesn't mean nothing is wrong: Compy hasn't measured how any game runs.",
@@ -130,7 +131,7 @@
       "pcRecorded_other": "Compy has recorded {{count}} game sessions, but this list is for the whole PC, not one game, so it doesn't compare any of them.",
       "unreadGame": "Compy couldn't read the sessions it recorded just now, so it can't tell whether {{game}} runs worse than before, or which of these changes matters.",
       "unreadPc": "Compy couldn't read the sessions it recorded just now, so it can't tell whether anything runs worse than before, or which of these changes matters.",
-      "unmatched": "Compy couldn't match {{game}} to a game it has recorded, so it can't tell whether it runs worse than before, or which of these changes matters."
+      "unmatched": "None of the sessions Compy has recorded is named {{game}}, so it can't tell whether it has recorded this game under another name, whether it runs worse than before, or which of these changes matters."
     },
     "changeWhen": "Change when it started",
     "footer": "Compy lists what it can see on this PC. It doesn't say why a game runs badly until it has measured it.",
@@ -162,26 +163,28 @@
     },
     "crash": {
       "none": "Windows has no crash record for {{game}} in the records Compy read.",
+      "signatureWhat": "the earliest dated change in this list ({{date}}, {{kind}})",
+      "splitWhat": "the earliest dated change in this list: {{kind}}",
       "split": {
-        "both_one": "Of the crash records Compy could read, at least {{count}} is from before {{date}} (the earliest dated change Compy found) and at least {{after}} from after.",
-        "both_other": "Of the crash records Compy could read, at least {{count}} are from before {{date}} (the earliest dated change Compy found) and at least {{after}} from after.",
-        "beforeOnly_one": "Of the crash records Compy could read, at least {{count}} is from before {{date}} (the earliest dated change Compy found) and none from after.",
-        "beforeOnly_other": "Of the crash records Compy could read, at least {{count}} are from before {{date}} (the earliest dated change Compy found) and none from after.",
-        "afterOnly": "Of the crash records Compy could read, none are from before {{date}} (the earliest dated change Compy found) and at least {{count}} from after. That is a count by date; Compy hasn't tested whether that change matters to the game.",
-        "beforeUnread_one": "Of the crash records Compy could read, at least {{count}} is from before {{date}} (the earliest dated change Compy found). Some records couldn't be read, so it can't say whether any came after.",
-        "beforeUnread_other": "Of the crash records Compy could read, at least {{count}} are from before {{date}} (the earliest dated change Compy found). Some records couldn't be read, so it can't say whether any came after.",
-        "startsLater_one": "Of the crash records Compy could read, at least {{count}} is from after {{date}} (the earliest dated change Compy found). The oldest record it could read is from {{oldest}}, so it can't say how many came before. Windows keeps only a limited number of crash records.",
-        "startsLater_other": "Of the crash records Compy could read, at least {{count}} are from after {{date}} (the earliest dated change Compy found). The oldest record it could read is from {{oldest}}, so it can't say how many came before. Windows keeps only a limited number of crash records.",
-        "startsLaterNoOldest_one": "Of the crash records Compy could read, at least {{count}} is from after {{date}} (the earliest dated change Compy found). It can't say how many came before.",
-        "startsLaterNoOldest_other": "Of the crash records Compy could read, at least {{count}} are from after {{date}} (the earliest dated change Compy found). It can't say how many came before.",
-        "unread_one": "Of the crash records Compy could read, at least {{count}} is from after {{date}} (the earliest dated change Compy found). Some records couldn't be read, so it can't say how many came before.",
-        "unread_other": "Of the crash records Compy could read, at least {{count}} are from after {{date}} (the earliest dated change Compy found). Some records couldn't be read, so it can't say how many came before."
+        "both_one": "Of the crash records Compy could read, at least {{count}} is from before {{date}} ({{what}}) and at least {{after}} from after.",
+        "both_other": "Of the crash records Compy could read, at least {{count}} are from before {{date}} ({{what}}) and at least {{after}} from after.",
+        "beforeOnly_one": "Of the crash records Compy could read, at least {{count}} is from before {{date}} ({{what}}) and none from after.",
+        "beforeOnly_other": "Of the crash records Compy could read, at least {{count}} are from before {{date}} ({{what}}) and none from after.",
+        "afterOnly": "Of the crash records Compy could read, none are from before {{date}} ({{what}}) and at least {{count}} from after. That is a count by date; Compy hasn't tested whether that change matters to the game.",
+        "beforeUnread_one": "Of the crash records Compy could read, at least {{count}} is from before {{date}} ({{what}}). Some records couldn't be read, so it can't say whether any came after.",
+        "beforeUnread_other": "Of the crash records Compy could read, at least {{count}} are from before {{date}} ({{what}}). Some records couldn't be read, so it can't say whether any came after.",
+        "startsLater_one": "Of the crash records Compy could read, at least {{count}} is from after {{date}} ({{what}}). The oldest record it could read is from {{oldest}}, so it can't say how many came before. Windows keeps only a limited number of crash records.",
+        "startsLater_other": "Of the crash records Compy could read, at least {{count}} are from after {{date}} ({{what}}). The oldest record it could read is from {{oldest}}, so it can't say how many came before. Windows keeps only a limited number of crash records.",
+        "startsLaterNoOldest_one": "Of the crash records Compy could read, at least {{count}} is from after {{date}} ({{what}}). It can't say how many came before.",
+        "startsLaterNoOldest_other": "Of the crash records Compy could read, at least {{count}} are from after {{date}} ({{what}}). It can't say how many came before.",
+        "unread_one": "Of the crash records Compy could read, at least {{count}} is from after {{date}} ({{what}}). Some records couldn't be read, so it can't say how many came before.",
+        "unread_other": "Of the crash records Compy could read, at least {{count}} are from after {{date}} ({{what}}). Some records couldn't be read, so it can't say how many came before."
       }
     },
     "running": {
       "title": "Running right now",
-      "listed": "Running right now: {{names}}.",
-      "listedMore": "Running right now: {{names}} and {{more}} more.",
+      "listed": "{{names}}.",
+      "listedMore": "{{names}} and {{more}} more.",
       "separator": ", ",
       "none": "Compy didn't find any program from its list running right now. The list is short and matches by program name only; it holds some recorders and overlays, voice chat apps, launchers, browsers, build and developer tools, and Windows Update.",
       "nowGame": "This is what is running now, not what was running when the problem with {{game}} happened. Compy didn't see that, and it hasn't measured whether any of these affects a game.",
@@ -278,6 +281,8 @@
       "what": "Other programs started while you played",
       "measured": "The rest of your PC was busier than usual while you played",
       "open": "Other programs were already open when you started playing",
+      "openNearby_one": "Other programs were already open when you started playing, and programs were seen starting in another recent session",
+      "openNearby_other": "Other programs were already open when you started playing, and programs were seen starting in other recent sessions",
       "nearby_one": "Other programs were seen starting in another recent session",
       "nearby_other": "Other programs were seen starting in other recent sessions"
     },
@@ -660,7 +665,11 @@
     "gameCrashes_one": "{{game}} has closed unexpectedly once, on {{since}}.",
     "gameCrashes_other": "{{game}} has closed unexpectedly {{count}} times since {{since}}.",
     "gameCrashSignature": "All the crashes Compy could read stopped in the same file ({{module}}), and some happened before {{what}}, so that change can't be the whole story for them.",
-    "crashBeforeWhat": "the earliest dated change Compy found ({{date}})",
+    "crashBeforeWhat": "the earliest dated change Compy found between your last normal session and the rough ones ({{date}}, {{kind}})",
+    "changeKind": {
+      "compy": "a change Compy applied",
+      "windows": "a change Windows recorded"
+    },
     "gpuTemp_one": "Graphics card temperature peaked at {{rough}}°C in the rough session; in normal sessions it typically peaks around {{base}}°C.",
     "gpuTemp_other": "Graphics card temperature peaked at {{rough}}°C in the rough sessions (the highest of them); in normal sessions it typically peaks around {{base}}°C.",
     "gameCrashesPartial_one": "Windows' crash records that Compy could read show {{game}} closing unexpectedly at least once, on {{since}}.",

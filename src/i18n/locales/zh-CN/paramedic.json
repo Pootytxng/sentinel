@@ -64,6 +64,7 @@
     "none": {
       "gpuDriver": "这段时间内，Windows 没有记录到显卡驱动版本发生变化。",
       "windowsUpdate": "Windows 更新在这段时间没有记录每月 Windows 更新、Windows 版本更新或驱动更新。",
+      "windowsUpdateDriverElsewhere": "Windows 更新在这段时间没有记录每月 Windows 更新、Windows 版本更新或驱动更新；{{when}} 的显卡驱动变化是通过其他方式安装的。",
       "programs": "这段时间没有程序显示安装或更新日期。"
     },
     "nothing": "这段时间内，Compy 没有找到带日期的变化。这不代表一切正常：Compy 还没有测量过任何游戏的运行情况。",
@@ -130,7 +131,7 @@
       "pcRecorded_other": "Compy 已记录了 {{count}} 个游戏场次，但这份清单针对整台电脑，不是某一个游戏，所以不会比较其中任何一个。",
       "unreadGame": "Compy 刚才没能读取它记录的游戏数据，所以无法判断 {{game}} 是否比以前运行得更差，也无法判断这些变化中哪个重要。",
       "unreadPc": "Compy 刚才没能读取它记录的游戏数据，所以无法判断是否有什么比以前运行得更差，也无法判断这些变化中哪个重要。",
-      "unmatched": "Compy 无法把 {{game}} 对应到它记录过的游戏，所以无法判断它是否比以前运行得更差，也无法判断这些变化中哪个重要。"
+      "unmatched": "Compy 已记录的场次中没有一个名为 {{game}}，所以无法判断它是否以别的名字记录过这款游戏，也无法判断它是否比以前运行得更差，或这些变化中哪个重要。"
     },
     "changeWhen": "重新选择开始的时间",
     "footer": "Compy 列出它在这台电脑上能看到的内容。在测量之前，它不会说游戏为什么运行不好。",
@@ -162,26 +163,28 @@
     },
     "crash": {
       "none": "在 Compy 读取的记录中，Windows 没有 {{game}} 的崩溃记录。",
+      "signatureWhat": "这份列表中最早一项有日期的变化（{{date}}，{{kind}}）",
+      "splitWhat": "这份列表中最早一项有日期的变化：{{kind}}",
       "split": {
-        "both_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之前，至少有 {{after}} 条在之后。",
-        "both_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之前，至少有 {{after}} 条在之后。",
-        "beforeOnly_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之前，之后没有。",
-        "beforeOnly_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之前，之后没有。",
-        "afterOnly": "在 Compy 能读到的崩溃记录中，{{date}}（Compy 找到的最早一项有日期的变化）之前没有，之后至少有 {{count}} 条。这只是按日期的计数；Compy 没有测试过那项变化是否对游戏有影响。",
-        "beforeUnread_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之前。有些记录没能读取，所以 Compy 说不准之后有没有。",
-        "beforeUnread_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之前。有些记录没能读取，所以 Compy 说不准之后有没有。",
-        "startsLater_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。Compy 能读到的最早一条记录在 {{oldest}}，所以它说不准之前有多少条。Windows 只保留有限数量的崩溃记录。",
-        "startsLater_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。Compy 能读到的最早一条记录在 {{oldest}}，所以它说不准之前有多少条。Windows 只保留有限数量的崩溃记录。",
-        "startsLaterNoOldest_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。Compy 说不准之前有多少条。",
-        "startsLaterNoOldest_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。Compy 说不准之前有多少条。",
-        "unread_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。有些记录没能读取，所以 Compy 说不准之前有多少条。",
-        "unread_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。有些记录没能读取，所以 Compy 说不准之前有多少条。"
+        "both_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之前，至少有 {{after}} 条在之后。",
+        "both_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之前，至少有 {{after}} 条在之后。",
+        "beforeOnly_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之前，之后没有。",
+        "beforeOnly_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之前，之后没有。",
+        "afterOnly": "在 Compy 能读到的崩溃记录中，{{date}}（{{what}}）之前没有，之后至少有 {{count}} 条。这只是按日期的计数；Compy 没有测试过那项变化是否对游戏有影响。",
+        "beforeUnread_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之前。有些记录没能读取，所以 Compy 说不准之后有没有。",
+        "beforeUnread_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之前。有些记录没能读取，所以 Compy 说不准之后有没有。",
+        "startsLater_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之后。Compy 能读到的最早一条记录在 {{oldest}}，所以它说不准之前有多少条。Windows 只保留有限数量的崩溃记录。",
+        "startsLater_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之后。Compy 能读到的最早一条记录在 {{oldest}}，所以它说不准之前有多少条。Windows 只保留有限数量的崩溃记录。",
+        "startsLaterNoOldest_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之后。Compy 说不准之前有多少条。",
+        "startsLaterNoOldest_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之后。Compy 说不准之前有多少条。",
+        "unread_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之后。有些记录没能读取，所以 Compy 说不准之前有多少条。",
+        "unread_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之后。有些记录没能读取，所以 Compy 说不准之前有多少条。"
       }
     },
     "running": {
       "title": "此刻正在运行",
-      "listed": "此刻正在运行：{{names}}。",
-      "listedMore": "此刻正在运行：{{names}}，以及另外 {{more}} 个。",
+      "listed": "{{names}}。",
+      "listedMore": "{{names}}，以及另外 {{more}} 个。",
       "separator": "、",
       "none": "Compy 没有发现其名单中的程序此刻在运行。这份名单很短，只按程序名匹配；其中有部分录制软件和悬浮层、语音聊天、启动器、浏览器、编译和开发工具，以及 Windows 更新。",
       "nowGame": "这是此刻正在运行的内容，不是 {{game}} 出问题时在运行的内容。Compy 没有看到那一刻，也还没有测量过其中任何一项是否会影响游戏。",
@@ -278,6 +281,8 @@
       "what": "你玩游戏时有其他程序启动了",
       "measured": "游戏时，电脑其余部分比平时更忙",
       "open": "你开始玩游戏时，其他程序已经打开了",
+      "openNearby_one": "你开始玩游戏时，其他程序已经打开了；近期的另一次游戏中，还曾看到有程序启动",
+      "openNearby_other": "你开始玩游戏时，其他程序已经打开了；近期的其他几次游戏中，还曾看到有程序启动",
       "nearby_one": "近期的另一次游戏中，曾看到有其他程序启动",
       "nearby_other": "近期的其他几次游戏中，曾看到有其他程序启动"
     },
@@ -660,7 +665,11 @@
     "gameCrashes_one": "{{game}} 曾在 {{since}} 意外关闭过一次。",
     "gameCrashes_other": "{{game}} 自 {{since}} 起已意外关闭 {{count}} 次。",
     "gameCrashSignature": "Compy 能读到的所有崩溃都停在同一个文件里（{{module}}），而且有些发生在{{what}}之前，所以这项变化不能解释它们的全部。",
-    "crashBeforeWhat": "Compy 找到的最早一项有日期的变化（{{date}}）",
+    "crashBeforeWhat": "Compy 在你上一次正常对局与这些卡顿对局之间找到的最早一项有日期的变化（{{date}}，{{kind}}）",
+    "changeKind": {
+      "compy": "Compy 应用的一项变化",
+      "windows": "Windows 记录的一项变化"
+    },
     "gpuTemp_one": "显卡温度在出问题的那次游戏中最高达到 {{rough}}°C；在正常的几次中，通常最高约为 {{base}}°C。",
     "gpuTemp_other": "显卡温度在出问题的那几次游戏中最高达到 {{rough}}°C（取其中最高的一次）；在正常的几次中，通常最高约为 {{base}}°C。",
     "gameCrashesPartial_one": "Compy 能读到的 Windows 崩溃记录显示，{{game}} 至少意外关闭过一次，在 {{since}}。",

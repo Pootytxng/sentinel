@@ -29,7 +29,7 @@ use self::crash_split::CrashSplit;
 use self::recorded::{RecordedOut, SessionsRead};
 use self::running_now::{RunningNowOut, RunningRead};
 use super::changes::{collect_reader, spawn_reader, status_limits, Limit, Slots, CHANGES_BUDGET};
-use super::extras::{crash_dto, crash_outcome, CrashMatch, CrashOutcome, CrashRead};
+use super::extras::{crash_dto, crash_outcome, earliest_dated_change, CrashMatch, CrashOutcome, CrashRead, EarliestChange};
 use super::facts::{self, CompyChange, Fact, FactsInput, FactsRead, HistoryRead};
 use super::mods::{CouldNot, ModFound, ModsRead, ModsVerdict};
 use super::{iso, Certainty, EvidenceKind};
@@ -111,6 +111,9 @@ pub(crate) struct Crashes {
     pub args: BTreeMap<&'static str, String>,
     pub signature_module: Option<String>,
     pub signature_before: Option<String>,
+    /// What the earliest dated change (the date in `signature_before` and in `split`) was: `windows` (a change
+    /// Windows recorded) or `compy` (a change Compy applied). None when there is no dated change.
+    pub change_kind: Option<&'static str>,
     /// How many of those records fall before and after the earliest dated change (counts and dates only);
     /// none when there is no dated change to split at.
     pub split: Option<CrashSplit>,
@@ -462,10 +465,12 @@ fn mod_rows(found: &[ModFound], t0: Option<DateTime<Utc>>, now: DateTime<Utc>, o
 /// reference the same-signature line needs.
 /// Compy's own changes count (they are dated moments). A mod's file-creation time does not: Windows resets
 /// it when a folder is copied or moved, so it is not a change time.
-fn earliest_exact(out: &FirstLook) -> Option<DateTime<Utc>> {
+/// The definition itself lives in `extras::earliest_dated_change`, which the card uses too; this only feeds it
+/// the first look's own period (the Windows rows listed and Compy's applies in the ledger).
+fn earliest_exact(out: &FirstLook) -> Option<EarliestChange> {
     let rows = out.touch_games.iter().filter(|c| c.precision == "exact" && c.id != "graphics-mod").filter_map(|c| c.at.as_deref()).filter_map(super::ts);
     let compy = out.compy_changes.iter().filter_map(|c| super::ts(&c.at));
-    rows.chain(compy).min()
+    earliest_dated_change(rows, compy)
 }
 
 /// The picked game's Windows crash records, through the measured flow's rule (`extras::crash_outcome`).
@@ -483,11 +488,12 @@ fn crashes_part(game: &GameCtx, crashes: &CrashRead, out: &mut FirstLook) {
                 None => CrashMatch::InstallFolder,
             };
             let earliest = earliest_exact(out);
-            match crash_outcome(h, how, earliest) {
+            match crash_outcome(h, how, earliest.map(|e| e.at)) {
                 CrashOutcome::Line(l) => {
                     let (module, before) = l.signature.unzip();
-                    let split = crash_split::split(h, how, earliest);
-                    out.crashes = Some(Crashes { args: l.args.into_iter().collect(), signature_module: module, signature_before: before, split });
+                    let split = crash_split::split(h, how, earliest.map(|e| e.at));
+                    let change_kind = earliest.map(|e| e.origin.code());
+                    out.crashes = Some(Crashes { args: l.args.into_iter().collect(), signature_module: module, signature_before: before, change_kind, split });
                 }
                 // Not "no crashes": some reports were not read.
                 CrashOutcome::NoneCounted { partial: true } => out.limits.push(limit("crashes", "partial", &[])),
@@ -1997,10 +2003,37 @@ mod tests {
         src.history = HistoryRead::Read(Ok(vec![compy_stamp("Enable Windows Game Mode", "2026-11-15T13:44:49Z")]));
         let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src);
         assert_eq!(a.crashes.as_ref().unwrap().signature_before.as_deref(), Some("2026-11-15T13:44:49Z"));
+        assert_eq!(a.crashes.as_ref().unwrap().change_kind, Some("compy"), "the sentence says it is a change Compy applied");
         // Without Compy's own change the reference is the Steam row, as before.
         src.history = HistoryRead::Read(Ok(vec![]));
         let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src);
         assert_eq!(a.crashes.as_ref().unwrap().signature_before.as_deref(), Some("2026-11-19T09:00:00Z"));
+        assert_eq!(a.crashes.as_ref().unwrap().change_kind, Some("windows"));
+    }
+
+    /// The two crash sentences of one answer (same-file line and before/after counts) name the same moment and the
+    /// same kind of change, and the counts add up to the crash line's total.
+    #[test]
+    fn the_signature_line_and_the_split_name_one_change_and_one_total() {
+        let h = history(
+            vec![
+                crash("robrun.exe", "2026-11-10T10:00:00Z", Some(true)),
+                crash("robrun.exe", "2026-11-12T10:00:00Z", Some(true)),
+                crash("robrun.exe", "2026-11-17T10:00:00Z", Some(true)),
+                crash("robrun.exe", "2026-11-20T10:00:00Z", Some(true)),
+            ],
+            false,
+        );
+        let mut src = steam_only(game_report(read(vec![steam_ev("2026-11-19T09:00:00Z", false)])));
+        src.crashes = CrashRead::Read(h);
+        src.history = HistoryRead::Read(Ok(vec![compy_stamp("Enable Windows Game Mode", "2026-11-15T13:44:49Z")]));
+        let a = build_with(Since::ThisWeek, utc(NOW), &steam_ctx(), &src);
+        let c = a.crashes.as_ref().unwrap();
+        let s = c.split.as_ref().expect("a split");
+        assert_eq!(s.change, "2026-11-15T13:44:49Z");
+        assert_eq!(c.signature_before.as_deref(), Some(s.change.as_str()), "one date for both sentences");
+        assert_eq!((s.before, s.after), (2, 2));
+        assert_eq!(c.args["n"], (s.before + s.after).to_string(), "the counts add up to the crash line's total");
     }
 
     #[test]

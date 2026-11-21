@@ -69,7 +69,7 @@ export type ParamedicFirstLook = {
   /** Steam's last recorded update of the game when it is older than the window (read completely). */
   game_files_since: string | null;
   /** The game's crash records Compy could read: the measured flow's own args (n, since, partial, byName, versions). */
-  crashes: { args: Record<string, string>; signature_module: string | null; signature_before: string | null; split: FirstLookCrashSplit | null } | null;
+  crashes: { args: Record<string, string>; signature_module: string | null; signature_before: string | null; change_kind?: string | null; split: FirstLookCrashSplit | null } | null;
   /** Windows' crash records were read completely and none is the game's. */
   crashes_none: boolean;
   /** Facts with dates or numbers that are not a change in the window (a mod's files outside it). */
@@ -522,12 +522,19 @@ function Rows({ rows, t, dates, game }: { rows: FirstLookChange[]; t: T; dates: 
   );
 }
 
-function noneLine(code: string, t: T): string | null {
+function noneLine(code: string, t: T, dates: Dates, touch: FirstLookChange[]): string | null {
   switch (code) {
     case "gpu-driver":
       return t("paramedic.firstLook.none.gpuDriver");
-    case "windows-update":
-      return t("paramedic.firstLook.none.windowsUpdate");
+    case "windows-update": {
+      // "none" is only sent when the Windows Update history was read completely and holds no matching entry. Beside a
+      // graphics driver change in the same period the two would read as a contradiction, so the line says that the
+      // driver came another way (never the case when the history couldn't be read: that is a limit, not "none").
+      const driver = touch.find((c) => c.id.startsWith("gpu-driver") && c.at);
+      return driver?.at
+        ? t("paramedic.firstLook.none.windowsUpdateDriverElsewhere", { when: dates.day(driver.at) })
+        : t("paramedic.firstLook.none.windowsUpdate");
+    }
     case "programs":
       return t("paramedic.firstLook.none.programs");
     default:
@@ -575,10 +582,12 @@ function cantTellBody(a: ParamedicFirstLook, measured: FirstLookMeasured, t: T):
     return game ? t("paramedic.firstLook.cantTell.unreadGame", { game }) : t("paramedic.firstLook.cantTell.unreadPc");
   }
   if (game == null) return r.total ? t("paramedic.firstLook.cantTell.pcRecorded", { count: r.total }) : t("paramedic.firstLook.cantTell.body");
+  // The read worked and found sessions, but none under this game's name: "can't tell", said as what it is.
   if (r.unmatched || r.game == null) return t("paramedic.firstLook.cantTell.unmatched", { game });
   if (r.game >= r.need) return t("paramedic.firstLook.cantTell.recorded", { count: r.game, game });
   if (r.game > 0) return t("paramedic.firstLook.cantTell.bodyFew", { game });
-  return r.total ? t("paramedic.firstLook.cantTell.noneOfGame", { game }) : t("paramedic.firstLook.cantTell.body");
+  // The read worked and none of the recorded sessions (maybe none at all) belongs to this game.
+  return t("paramedic.firstLook.cantTell.noneOfGame", { game });
 }
 
 /** The "start a capture and play" line belongs only where more sessions would change the answer. */
@@ -602,32 +611,39 @@ function crashSentence(c: NonNullable<ParamedicFirstLook["crashes"]>, game: stri
   const versions = a.versions ? t("paramedic.seen.crashesVersions", { n: Number(a.versions) }) : "";
   const out = [`${base}${byName}${versions}`];
   if (c.signature_module && c.signature_before) {
-    out.push(t("paramedic.seen.gameCrashSignature", { module: c.signature_module, what: t("paramedic.seen.crashBeforeWhat", { date: dates.day(c.signature_before) }) }));
+    out.push(t("paramedic.seen.gameCrashSignature", { module: c.signature_module, what: t("paramedic.firstLook.crash.signatureWhat", { date: dates.day(c.signature_before), kind: changeKindText(c.change_kind, t) }) }));
   }
   return out;
 }
 
-/** Counts and dates only: how many readable records fall before and after the earliest dated change. Every count is
- *  "at least". When Compy can't see back past the change it says so instead of saying none. */
-function splitSentence(s: FirstLookCrashSplit, t: T, dates: Dates): string {
-  const date = dates.dayTime(s.change);
-  // Matched by program name only: the count may include another program of the same name (the measured flow's own hedge).
-  const hedge = s.by_name ? t("paramedic.seen.crashesByName") : "";
-  return `${splitBody(s, t, dates, date)}${hedge}`;
+/** What kind of change the "earliest dated change" is: one Compy applied, or one Windows recorded. The engine sends
+ *  it with every date it names. */
+function changeKindText(kind: string | null | undefined, t: T): string {
+  return kind === "compy" ? t("paramedic.seen.changeKind.compy") : t("paramedic.seen.changeKind.windows");
 }
 
-function splitBody(s: FirstLookCrashSplit, t: T, dates: Dates, date: string): string {
+/** Counts and dates only: how many readable records fall before and after the earliest dated change. Every count is
+ *  "at least". When Compy can't see back past the change it says so instead of saying none. */
+function splitSentence(s: FirstLookCrashSplit, kind: string | null | undefined, t: T, dates: Dates): string {
+  const date = dates.dayTime(s.change);
+  const what = t("paramedic.firstLook.crash.splitWhat", { kind: changeKindText(kind, t) });
+  // Matched by program name only: the count may include another program of the same name (the measured flow's own hedge).
+  const hedge = s.by_name ? t("paramedic.seen.crashesByName") : "";
+  return `${splitBody(s, t, dates, date, what)}${hedge}`;
+}
+
+function splitBody(s: FirstLookCrashSplit, t: T, dates: Dates, date: string, what: string): string {
   if (s.gap === "starts-later") {
     // Rust always sends the oldest read date with this gap; without it say only what is known (the count after), never that records couldn't be read.
     return s.oldest_read
-      ? t("paramedic.firstLook.crash.split.startsLater", { count: s.after, date, oldest: dates.dayTime(s.oldest_read) })
-      : t("paramedic.firstLook.crash.split.startsLaterNoOldest", { count: s.after, date });
+      ? t("paramedic.firstLook.crash.split.startsLater", { count: s.after, date, what, oldest: dates.dayTime(s.oldest_read) })
+      : t("paramedic.firstLook.crash.split.startsLaterNoOldest", { count: s.after, date, what });
   }
-  if (s.gap === "unread-after") return t("paramedic.firstLook.crash.split.beforeUnread", { count: s.before, date });
-  if (s.gap) return t("paramedic.firstLook.crash.split.unread", { count: s.after, date });
-  if (s.before === 0) return t("paramedic.firstLook.crash.split.afterOnly", { count: s.after, date });
-  if (s.after === 0) return t("paramedic.firstLook.crash.split.beforeOnly", { count: s.before, date });
-  return t("paramedic.firstLook.crash.split.both", { count: s.before, after: s.after, date });
+  if (s.gap === "unread-after") return t("paramedic.firstLook.crash.split.beforeUnread", { count: s.before, date, what });
+  if (s.gap) return t("paramedic.firstLook.crash.split.unread", { count: s.after, date, what });
+  if (s.before === 0) return t("paramedic.firstLook.crash.split.afterOnly", { count: s.after, date, what });
+  if (s.after === 0) return t("paramedic.firstLook.crash.split.beforeOnly", { count: s.before, date, what });
+  return t("paramedic.firstLook.crash.split.both", { count: s.before, after: s.after, date, what });
 }
 
 /** Known programs running now, as a fact about now. Never "none" unless the listing was read and held none. */
@@ -963,7 +979,7 @@ export function ParamedicFirstLook({
                   ))}
                   {a.crashes.split && (
                     <p className="gl-para-note" data-testid="first-look-crash-split">
-                      {splitSentence(a.crashes.split, t, dates)}
+                      {splitSentence(a.crashes.split, a.crashes.change_kind, t, dates)}
                     </p>
                   )}
                 </div>
@@ -1022,7 +1038,7 @@ export function ParamedicFirstLook({
               )}
               {noneTouch.map((n) => (
                 <p key={n} className="gl-para-note">
-                  {noneLine(n, t)}
+                  {noneLine(n, t, dates, a.touch_games)}
                 </p>
               ))}
               {gameName && a.game_files_since && (
@@ -1049,7 +1065,7 @@ export function ParamedicFirstLook({
           {(otherRows.length > 0 || nonePrograms || programLimits.length > 0) && (
             <Fold title={t("paramedic.firstLook.group.other")} testid="first-look-other">
               {otherRows.length > 0 && <Rows rows={otherRows} t={t} dates={dates} game={gameName} />}
-              {nonePrograms && <p className="gl-para-note">{noneLine("programs", t)}</p>}
+              {nonePrograms && <p className="gl-para-note">{noneLine("programs", t, dates, a.touch_games)}</p>}
               {programLimits.map((l, i) => (
                 <p key={`${l.kind}-${l.code}-${i}`} className="gl-para-note" data-testid="first-look-group-limit">
                   {limitLine(l, t, dates, gameName)}

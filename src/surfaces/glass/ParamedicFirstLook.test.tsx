@@ -342,6 +342,36 @@ describe("the answer", () => {
     expect(inGroup).toContain("Compy couldn't see when drivers were installed: Windows needs administrator rights to show that log.");
   });
 
+  // p4: both can be true (the driver came from the vendor's installer), but side by side they read as a contradiction.
+  it("Windows Update 'none' beside a graphics driver change says the driver was installed another way, with its date", async () => {
+    await toTheQuestion();
+    await pick("This week", answer({ touch_games: [driver], other_changes: [], none: ["windows-update"], read_all: true }));
+    const touch = screen.getByTestId("first-look-touch").textContent ?? "";
+    expect(touch).toMatch(
+      /Windows Update recorded no monthly Windows update, Windows version update or driver update in this period; the graphics driver change on [A-Z][a-z]{2} \d+ was installed another way\./,
+    );
+    expect(touch).not.toContain("in this period.Windows Update");
+    expect(screen.queryByText("Windows Update recorded no monthly Windows update, Windows version update or driver update in this period.")).toBeNull();
+  });
+
+  it("a Windows Update history that could not be read is 'couldn't see', never 'installed another way'", async () => {
+    await toTheQuestion();
+    await pick(
+      "This week",
+      answer({ touch_games: [driver], other_changes: [], none: [], read_all: false, limits: [{ kind: "windows-update", code: "access-denied", args: {} }] }),
+    );
+    const touch = screen.getByTestId("first-look-touch").textContent ?? "";
+    expect(touch).not.toMatch(/installed another way|Windows Update recorded no/);
+    expect(touch).toContain("Compy couldn't see which Windows updates were installed");
+  });
+
+  it("with no driver change in the period the Windows Update line is the plain one", async () => {
+    await toTheQuestion();
+    await pick("This week", answer({ touch_games: [], other_changes: [], none: ["gpu-driver", "windows-update"], read_all: true }));
+    expect(screen.getByText("Windows Update recorded no monthly Windows update, Windows version update or driver update in this period.")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("installed another way");
+  });
+
   it("ends with what Compy can't tell yet and the one next step, and claims no measurement", async () => {
     await toTheQuestion();
     await pick("This week", answer());
@@ -640,7 +670,7 @@ describe("the first look for a picked game", () => {
     // The crash block comes before any other fact in the block.
     expect(crashes.compareDocumentPosition(within(block).getByTestId("first-look-rows")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(crashes.textContent).toMatch(/^Windows' crash records that Compy could read show ROB RUN closing unexpectedly at least 3 times\. The oldest of these is from [A-Z][a-z]{2} \d+\./);
-    expect(crashes.textContent).toMatch(/All the crashes Compy could read stopped in the same file \(UnityPlayer\.dll\), and some happened before the earliest dated change Compy found \([A-Z][a-z]{2} \d+\), so that change can't be the whole story for them\.$/);
+    expect(crashes.textContent).toMatch(/All the crashes Compy could read stopped in the same file \(UnityPlayer\.dll\), and some happened before the earliest dated change in this list \([A-Z][a-z]{2} \d+, a change Windows recorded\), so that change can't be the whole story for them\.$/);
   });
 
   it("the same-signature sentence is said only when the engine sent a signature; a single crash and 'matched by program name' use the measured flow's words", async () => {
@@ -1210,7 +1240,9 @@ describe("running right now (S4)", () => {
     await toTheQuestion();
     await pick("This week", answer({ running_now: running() }));
     expect(within(block()).getByText("Running right now")).toBeTruthy();
-    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Running right now: Medal, OBS Studio.");
+    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Medal, OBS Studio.");
+    // p4: the heading says it once; the first line is the names, not the heading again.
+    expect(block().textContent?.match(/Running right now/g)).toHaveLength(1);
     const now = screen.getByTestId("first-look-running-now").textContent ?? "";
     expect(now).toBe("This is what is running now, not what was running when the problem happened. Compy didn't see that, and it hasn't measured whether any of these affects a game.");
     expect(block().textContent).not.toMatch(/background|start with Windows|many PCs/i);
@@ -1223,14 +1255,14 @@ describe("running right now (S4)", () => {
     fireEvent.click(screen.getByRole("button", { name: "ROB RUN" }));
     await pick("This week", gameAnswer({ running_now: running({ programs: [{ id: "medal", name: "Medal" }] }) }));
     expect(block().textContent).not.toMatch(/background|start with Windows|many PCs/i);
-    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Running right now: Medal.");
+    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Medal.");
     expect(screen.getByTestId("first-look-running-now").textContent).toMatch(/^This is what is running now, not what was running when the problem with ROB RUN happened\./);
   });
 
   it("shows the count of the rest after the cap", async () => {
     await toTheQuestion();
     await pick("This week", answer({ running_now: running({ more: 3 }) }));
-    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Running right now: Medal, OBS Studio and 3 more.");
+    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Medal, OBS Studio and 3 more.");
   });
 
   it("a read that found none of the listed programs says exactly that, scoped to the programs Compy looks for", async () => {
@@ -1265,7 +1297,7 @@ describe("running right now (S4)", () => {
   it("'It's always been like this' still shows what is running now", async () => {
     await toTheQuestion();
     await pick("It's always been like this", answer({ told: { since: "always", from: null, to: "2026-11-20T12:00:00Z", hours: null }, changes_listed: false, running_now: running() }));
-    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Running right now: Medal, OBS Studio.");
+    expect(screen.getByTestId("first-look-running-list").textContent).toBe("Medal, OBS Studio.");
   });
 
   it("works in Chinese: the list, the now-not-then line and the unread line come from the zh-CN keys", async () => {
@@ -1278,7 +1310,7 @@ describe("running right now (S4)", () => {
       fireEvent.click(screen.getByRole("button", { name: "其他游戏，或者整台电脑" }));
       await waitFor(() => expect(screen.getByRole("heading", { name: "是从什么时候开始的？" })).toBeTruthy());
       await pick("这周", answer({ running_now: running() }));
-      expect(screen.getByTestId("first-look-running-list").textContent).toBe("此刻正在运行：Medal、OBS Studio。");
+      expect(screen.getByTestId("first-look-running-list").textContent).toBe("Medal、OBS Studio。");
       expect(screen.getByTestId("first-look-running-now").textContent).toContain("不是问题出现时在运行的内容");
       cleanup();
       engine.calls.length = 0;
@@ -1316,9 +1348,24 @@ describe("the crash records before and after the earliest change (S5)", () => {
 
   it("says how many readable records are from before and after the change, each as 'at least', and sits under the crash line", async () => {
     await lookAs(gameAnswer({ crashes: crashes(sp()) }));
-    expect(line()).toMatch(new RegExp(`^Of the crash records Compy could read, at least 20 are from before ${DATE}\\(the earliest dated change Compy found\\) and at least 6 from after\\.$`));
+    expect(line()).toMatch(new RegExp(`^Of the crash records Compy could read, at least 20 are from before ${DATE}\\(the earliest dated change in this list: a change Windows recorded\\) and at least 6 from after\\.$`));
     const block = screen.getByTestId("first-look-crashes");
     expect(block.lastElementChild).toBe(screen.getByTestId("first-look-crash-split"));
+  });
+
+  it("p4: both crash sentences say what kind of change the earliest one is, and name the same date", async () => {
+    const c = { ...crashes(sp()), signature_module: "UnityPlayer.dll", signature_before: CHANGE, change_kind: "compy" };
+    await lookAs(gameAnswer({ crashes: c }));
+    const all = screen.getByTestId("first-look-crashes").textContent ?? "";
+    expect(all).toMatch(/some happened before the earliest dated change in this list \([A-Z][a-z]{2} \d+, a change Compy applied\), so that change can't be the whole story/);
+    expect(line()).toContain("(the earliest dated change in this list: a change Compy applied)");
+    expect(all).not.toContain("a change Windows recorded");
+    // The counts are the crash line's own total.
+    expect(Number(c.args.n)).toBe(20 + 6);
+    cleanup();
+    await lookAs(gameAnswer({ crashes: { ...c, change_kind: "windows" } }));
+    expect(screen.getByTestId("first-look-crashes").textContent).toContain("a change Windows recorded");
+    expect(screen.getByTestId("first-look-crashes").textContent).not.toContain("a change Compy applied");
   });
 
   it("uses 'is' for one record before the change", async () => {
@@ -1365,7 +1412,7 @@ describe("the crash records before and after the earliest change (S5)", () => {
 
   it("when some records could not be read and none readable is after the change, it says it can't say whether any came after, never 'none from after'", async () => {
     await lookAs(gameAnswer({ crashes: crashes(sp({ before: 2, after: 0, gap: "unread-after" })) }));
-    expect(line()).toMatch(/^Of the crash records Compy could read, at least 2 are from before .*\(the earliest dated change Compy found\)\. Some records couldn't be read, so it can't say whether any came after\.$/);
+    expect(line()).toMatch(/^Of the crash records Compy could read, at least 2 are from before .*\(the earliest dated change in this list: a change Windows recorded\)\. Some records couldn't be read, so it can't say whether any came after\.$/);
     expect(line()).not.toMatch(/none from after/);
     cleanup();
     await lookAs(gameAnswer({ crashes: crashes(sp({ before: 1, after: 0, gap: "unread-after" })) }));
@@ -1481,9 +1528,9 @@ describe("what Compy can't tell yet rests on the sessions it recorded", () => {
   it("a pick Compy couldn't match to a recorded game is 'can't tell', not 'none'", async () => {
     const { body, group } = await lookAt(gameAnswer({ recorded: rec({ game: null, unmatched: true }) }));
     expect(body).toBe(
-      "Compy couldn't match ROB RUN to a game it has recorded, so it can't tell whether it runs worse than before, or which of these changes matters.",
+      "None of the sessions Compy has recorded is named ROB RUN, so it can't tell whether it has recorded this game under another name, whether it runs worse than before, or which of these changes matters.",
     );
-    expect(group).not.toMatch(/hasn't seen|hasn't recorded/);
+    expect(group).not.toMatch(/hasn't seen|hasn't recorded|couldn't match/);
     // Playing it with a capture is what would make it matchable: the instruction stays.
     expect(group).toContain("Start a capture in Live");
   });
@@ -1498,10 +1545,24 @@ describe("what Compy can't tell yet rests on the sessions it recorded", () => {
     expect(none.group).toContain("Start a capture in Live");
   });
 
-  it("'hasn't seen a game run yet' is still said when the read succeeded and Compy has recorded nothing at all", async () => {
+  // p4: a sandbox or new user who has simply never recorded the game is told that, not "couldn't match".
+  it("a read that worked and holds no session of the game (or none at all) says 'hasn't recorded a session of it yet', with the capture line", async () => {
     const { body, group } = await lookAt(gameAnswer({ recorded: rec({ total: 0, game: 0 }) }));
-    expect(body).toContain(STALE);
+    expect(body).toBe("Compy hasn't recorded a session of ROB RUN yet, so it can't tell whether anything runs worse than before, or which of these changes matters.");
+    expect(group).not.toMatch(/couldn't match/);
     expect(group).toContain("Start a capture in Live");
+  });
+
+  it("the three cases stay apart: none recorded, name matches none of the recorded sessions, sessions couldn't be read", async () => {
+    const none = await lookAt(gameAnswer({ recorded: rec({ total: 0, game: 0 }) }));
+    cleanup();
+    const unmatched = await lookAt(gameAnswer({ recorded: rec({ total: 5, game: null, unmatched: true }) }));
+    cleanup();
+    const unread = await lookAt(gameAnswer({ recorded: rec({ state: "unread", total: null, game: null }) }));
+    expect(none.body).toMatch(/^Compy hasn't recorded a session of ROB RUN yet/);
+    expect(unmatched.body).toMatch(/^None of the sessions Compy has recorded is named ROB RUN/);
+    expect(unread.body).toMatch(/^Compy couldn't read the sessions/);
+    expect(new Set([none.body, unmatched.body, unread.body]).size).toBe(3);
   });
 
   it("the whole PC: a count of all recorded sessions when there are some, the old line only when there are none, 'couldn't read' otherwise", async () => {

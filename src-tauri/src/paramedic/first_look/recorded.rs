@@ -73,6 +73,12 @@ pub(crate) fn out(read: &SessionsRead, game: &GameCtx) -> RecordedOut {
         o.game = Some(count(names.iter().filter(|n| n.trim().eq_ignore_ascii_case(exe)).count()));
         return o;
     }
+    // A read that succeeded and found no session at all (a new PC, a cleared history): no session of this game
+    // is recorded. That is a fact, not an unmatched name.
+    if names.is_empty() {
+        o.game = Some(0);
+        return o;
+    }
     let want = game.name.as_deref().map(letters).unwrap_or_default();
     let matched = if want.is_empty() { 0 } else { names.iter().filter(|n| letters(&crate::intelligence::pretty_game_name(n)) == want).count() };
     if matched > 0 {
@@ -155,6 +161,21 @@ mod tests {
         assert_eq!(out(&recorded(), &steam("Rob Run")).game, Some(20));
         let o = out(&recorded(), &steam("Some Steam Game"));
         assert_eq!((o.state, o.game, o.unmatched), ("read", None, true));
+    }
+
+    /// A new PC (or a cleared history): the read worked and holds no session at all. For a Steam pick that is
+    /// "none recorded of this game", never "couldn't match" (which is for a name that matches none of the SOME
+    /// recorded sessions).
+    #[test]
+    fn a_steam_pick_on_a_pc_with_no_recorded_sessions_is_none_recorded_not_unmatched() {
+        let o = out(&SessionsRead::Read(Vec::new()), &steam("ROB RUN"));
+        assert_eq!((o.state, o.total, o.game, o.unmatched), ("read", Some(0), Some(0), false));
+        // Sessions exist, none under that name: still not zero, still not a failure; the card can only say so.
+        let o = out(&SessionsRead::Read(vec!["PBZ.exe".into()]), &steam("ROB RUN"));
+        assert_eq!((o.state, o.total, o.game, o.unmatched), ("read", Some(1), None, true));
+        // A failed read is neither.
+        let o = out(&SessionsRead::Unavailable("unreadable"), &steam("ROB RUN"));
+        assert_eq!((o.state, o.total, o.game, o.unmatched), ("unread", None, None, false));
     }
 
     #[test]

@@ -139,11 +139,16 @@ pub(super) fn detect_crashes(c: &Ctx, out: &mut Out) {
         CrashRead::Read(h) if !h.listed => out.unknown("crashes-unreadable"),
         CrashRead::Read(h) => {
             let game = c.first_bad.game.as_str();
-            match crash_outcome(h, CrashMatch::Program(game), earliest_change(&out.cands)) {
+            // The card's period: after the last normal session, up to the first rough one. Windows' dated rows
+            // among the candidates and Compy's own applies in that period, by the same function the first look uses.
+            let windows = dated_candidates(&out.cands);
+            let compy = c.inp.compy_applies.iter().copied().filter(|t| *t > c.win_start && *t <= c.win_end);
+            let earliest = earliest_dated_change(windows, compy);
+            match crash_outcome(h, CrashMatch::Program(game), earliest.map(|e| e.at)) {
                 CrashOutcome::Line(l) => {
                     out.see("game-crashes", &l.args);
-                    if let Some((module, before)) = l.signature {
-                        out.see("game-crash-signature", &[("module", module), ("before", before)]);
+                    if let (Some((module, before)), Some(e)) = (l.signature, earliest) {
+                        out.see("game-crash-signature", &[("module", module), ("before", before), ("kind", e.origin.code().to_string())]);
                     }
                 }
                 // No count line to carry the limit: say what could not be seen.
@@ -186,7 +191,7 @@ pub(crate) enum CrashOutcome {
 }
 
 /// THE crash rule, shared by the measured flow and the first look (one code path, one set of sentences).
-/// `earliest` is the earliest REAL dated change (see `earliest_change`): the signature line needs one.
+/// `earliest` is the earliest REAL dated change (see `earliest_dated_change`): the signature line needs one.
 pub(crate) fn crash_outcome(h: &CrashHistory, how: CrashMatch<'_>, earliest: Option<DateTime<Utc>>) -> CrashOutcome {
     let mine: Vec<&CrashFact> = match how {
         CrashMatch::Program(game) => h.crashes.iter().filter(|k| same_game(&k.app, game) && k.path_ok != Some(false)).collect(),
@@ -210,19 +215,58 @@ pub(crate) fn crash_outcome(h: &CrashHistory, how: CrashMatch<'_>, earliest: Opt
     CrashOutcome::Line(CrashLine { args, signature: shared_signature(&mine, earliest) })
 }
 
-/// The earliest a REAL dated candidate change happened: an exact date, or the date a mod's files were
-/// created in the game's folder (its own evidence line). The edge of an observed-between window is where
-/// Compy happened to be looking, not a date of anything, so it never counts.
-fn earliest_change(cands: &[Cand]) -> Option<DateTime<Utc>> {
+/// Where the earliest dated change came from: said in the sentence, so a reader knows what "change" means.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ChangeOrigin {
+    /// A change Windows recorded (a driver install, an update, a game's files, a program install).
+    Windows,
+    /// A change Compy applied, from its own ledger.
+    Compy,
+}
+
+impl ChangeOrigin {
+    pub(crate) fn code(self) -> &'static str {
+        match self {
+            ChangeOrigin::Windows => "windows",
+            ChangeOrigin::Compy => "compy",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct EarliestChange {
+    pub at: DateTime<Utc>,
+    pub origin: ChangeOrigin,
+}
+
+/// THE definition of "the earliest dated change Compy found", shared by the card and the first look: the earliest
+/// exact moment among the changes Windows recorded and the changes Compy applied, in the period the caller looked
+/// at. A day-precision row, a window edge and a mod's file-creation time are not moments (Windows resets the
+/// creation time when a folder is copied), so callers never pass them. On a tie the Windows record is named.
+pub(crate) fn earliest_dated_change(
+    windows: impl IntoIterator<Item = DateTime<Utc>>,
+    compy: impl IntoIterator<Item = DateTime<Utc>>,
+) -> Option<EarliestChange> {
+    let w = windows.into_iter().min().map(|at| EarliestChange { at, origin: ChangeOrigin::Windows });
+    let c = compy.into_iter().min().map(|at| EarliestChange { at, origin: ChangeOrigin::Compy });
+    match (w, c) {
+        (Some(w), Some(c)) => Some(if c.at < w.at { c } else { w }),
+        (w, c) => w.or(c),
+    }
+}
+
+/// The exact dates of the card's dated candidates that Windows recorded. The edge of an observed-between window
+/// is where Compy happened to be looking, not a date of anything, so it never counts; a mod's file-creation time
+/// does not either (see `earliest_dated_change`).
+fn dated_candidates(cands: &[Cand]) -> Vec<DateTime<Utc>> {
     cands
         .iter()
-        .filter(|k| k.t)
+        .filter(|k| k.t && k.id != "graphics-mod")
         .filter_map(|k| match &k.since {
             When::Exact { at } => ts(at),
-            _ if k.id == "graphics-mod" => k.evidence.iter().find(|e| e.code == "mod-files-created").and_then(|e| e.args.get("date")).and_then(|d| ts(d)),
             _ => None,
         })
-        .min()
+        .collect()
 }
 
 /// `Some((module, date of the earliest dated change))` only when BOTH hold: two or more crashes, all
