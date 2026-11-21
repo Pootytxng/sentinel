@@ -1289,6 +1289,58 @@ fn a_session_with_no_memory_reading_is_never_a_lower_one() {
     assert!(d.unknowns.contains(&"memory") || m.evidence.iter().any(|e| e.code == "ram-peak"));
 }
 
+/// p4 review: the memory line is scoped to the rough sessions that have a record. With the owner's shape (four rough
+/// sessions peaking 20.0, 26.2, 26.3 and 28.4 of 31.4 GB usable, normal sessions at 20.0, and one more rough session
+/// with no memory record) it says how many were nearly full and when, that one rough session only matched the normal
+/// peak, and that one had no record: a single session's peak never stands for the whole rough run.
+#[test]
+fn the_memory_line_says_how_many_rough_sessions_were_nearly_full_and_not_one_peak_for_all() {
+    let gib = |x: f64| Some((x * 1_073_741_824.0) as u64);
+    let mut sess = steady(4);
+    for s in sess.iter_mut() {
+        s.peak_ram_bytes = gib(20.0);
+        s.ram_total_bytes = gib(31.4);
+    }
+    for (day, peak) in [(9, Some(20.0)), (10, Some(26.2)), (11, Some(26.3)), (12, Some(28.4)), (13, None)] {
+        let mut r = facts(&at_day(day, 10), 600, 600, 100.0, 30.0);
+        if let Some(p) = peak {
+            r.peak_ram_bytes = gib(p);
+            r.ram_total_bytes = gib(31.4);
+        }
+        sess.push(r);
+    }
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    let m = d.findings.iter().find(|f| f.id == "memory-pressure").expect("one rough session was nearly full");
+    let line = |code: &str| m.evidence.iter().find(|e| e.code == code).unwrap_or_else(|| panic!("{code} missing: {:?}", m.evidence.iter().map(|e| e.code).collect::<Vec<_>>()));
+    let peak = line("ram-peak");
+    assert_eq!(
+        (peak.args["full"].as_str(), peak.args["count"].as_str(), peak.args["percent"].as_str(), peak.args["peakGb"].as_str(), peak.args["totalGb"].as_str()),
+        ("1", "4", "90", "28.4", "31.4"),
+        "{:?}",
+        peak.args
+    );
+    assert_eq!(peak.args["dates"], at_day(12, 10), "the date of the one nearly full session");
+    let same = line("ram-normal-range");
+    assert_eq!((same.args["count"].as_str(), same.args["basePeakGb"].as_str()), ("1", "20.0"));
+    assert!(same.against, "a rough session that only matched the normal peak counts against memory");
+    assert_eq!(line("ram-unrecorded").args["count"], "1");
+    assert_eq!(line("ram-unrecorded").kind, EvidenceKind::Unknown);
+    assert_eq!(line("ram-lower").args["peakGb"], "26.3");
+    // Every rough session recorded and every one at or under the normal peak: no ram-normal-range line is invented.
+    let mut sess = steady(4);
+    for s in sess.iter_mut() {
+        s.peak_ram_bytes = gib(20.0);
+        s.ram_total_bytes = gib(31.4);
+    }
+    let mut r = facts(&at_day(9, 10), 600, 600, 100.0, 30.0);
+    r.peak_ram_bytes = gib(29.0);
+    r.ram_total_bytes = gib(31.4);
+    sess.push(r);
+    let d = diagnose(&inputs(sess), Complaint::Slow, Some("g"));
+    let m = d.findings.iter().find(|f| f.id == "memory-pressure").expect("nearly full");
+    assert!(m.evidence.iter().all(|e| e.code != "ram-normal-range" && e.code != "ram-unrecorded"), "{:?}", m.evidence.iter().map(|e| e.code).collect::<Vec<_>>());
+}
+
 #[test]
 fn a_thin_session_with_an_unread_cap_still_corroborates_against_baselines_it_cannot_flatter() {
     let make = |cap: CapState| {
@@ -1465,11 +1517,49 @@ mod windows_records {
 
     /// The card's crash-signature line: (date, kind) of the earliest dated change it names.
     fn signature_of(compy: &[&str]) -> Option<(String, String)> {
+        let applies = super::super::extras::CompyApplies::Read(compy.iter().map(|s| (utc(s), "Enable Game Mode".to_string())).collect());
+        let d = signature_diagnosis(applies);
+        d.seen.iter().find(|s| s.id == "game-crash-signature").map(|s| (s.args["before"].clone(), s.args["kind"].clone()))
+    }
+
+    fn signature_diagnosis(applies: super::super::extras::CompyApplies) -> Diagnosis {
         let mut inp = with(scenario(), report(vec![gpu("2026-10-06T12:00:00Z", "1.0", "2.0", Some(true))]), GameSteam::Found);
         inp.crashes = same_file_crashes();
-        inp.compy_applies = compy.iter().map(|s| utc(s)).collect();
-        let d = diagnose(&inp, Complaint::Slow, Some("g"));
-        d.seen.iter().find(|s| s.id == "game-crash-signature").map(|s| (s.args["before"].clone(), s.args["kind"].clone()))
+        inp.compy_applies = applies;
+        diagnose(&inp, Complaint::Slow, Some("g"))
+    }
+
+    /// p4 review B3: a ledger that could not be read is not "Compy changed nothing". The sentence keeps the Windows
+    /// change it can stand behind, says so with a `ledger` flag (the UI then drops the word "earliest"), and the
+    /// card adds an unknown line.
+    #[test]
+    fn an_unreadable_ledger_is_an_unknown_line_and_the_signature_stops_saying_earliest() {
+        use super::super::extras::CompyApplies;
+        let d = signature_diagnosis(CompyApplies::Unreadable);
+        let s = d.seen.iter().find(|s| s.id == "game-crash-signature").expect("the Windows-recorded change still dates it");
+        assert_eq!((s.args["before"].as_str(), s.args["kind"].as_str(), s.args.get("ledger").map(String::as_str)), ("2026-10-06T12:00:00Z", "windows", Some("unreadable")));
+        assert!(d.unknowns.contains(&"compy-ledger-unreadable"), "{:?}", d.unknowns);
+        // A ledger that was read, or never asked for, adds neither the flag nor the line.
+        for ok in [CompyApplies::Read(Vec::new()), CompyApplies::NotRead] {
+            let d = signature_diagnosis(ok);
+            assert!(d.seen.iter().all(|s| !s.args.contains_key("ledger")));
+            assert!(!d.unknowns.contains(&"compy-ledger-unreadable"));
+        }
+    }
+
+    /// p4 review: two changes applied in the same minute are both named; one a day later is not.
+    #[test]
+    fn the_compy_changes_applied_at_that_moment_are_named() {
+        use super::super::extras::CompyApplies;
+        let applies = CompyApplies::Read(vec![
+            (utc("2026-10-05T09:00:30Z"), "Turn on Game Mode".into()),
+            (utc("2026-10-05T09:00:05Z"), "Set the power plan".into()),
+            (utc("2026-10-06T09:00:00Z"), "Later change".into()),
+        ]);
+        let d = signature_diagnosis(applies);
+        let s = d.seen.iter().find(|s| s.id == "game-crash-signature").expect("line");
+        assert_eq!(s.args["kind"], "compy");
+        assert_eq!(s.args["titles"], "Set the power plan\u{1f}Turn on Game Mode");
     }
 
     /// The Nov 15 / Nov 19 bug: Compy's own apply is a dated change, so when it falls in the card's period it is the
@@ -3881,7 +3971,7 @@ mod temperature_and_crashes {
         let mut inp = inputs(sess);
         inp.crashes = crashes;
         if dated_candidate {
-            inp.compy_applies = vec![utc(IN)];
+            inp.compy_applies = super::super::extras::CompyApplies::Read(vec![(utc(IN), "Turn on Game Mode".to_string())]);
         }
         diagnose(&inp, Complaint::Slow, Some("g"))
     }

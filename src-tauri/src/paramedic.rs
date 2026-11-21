@@ -268,11 +268,12 @@ pub(crate) struct DiagnoseInputs {
     /// The crash reports Windows keeps for apps, as the command read them. Never part of a recorded fixture.
     #[serde(skip)]
     crashes: CrashRead,
-    /// When Compy applied each change in its own ledger (read without writing). Dates only: with the Windows
-    /// side's dated changes they decide "the earliest dated change" (`extras::earliest_dated_change`). A ledger
-    /// that could not be read leaves this empty, and the sentence then names a Windows-recorded change only.
+    /// When Compy applied each change in its own ledger, with its title (read without writing). With the Windows
+    /// side's dated changes the dates decide "the earliest dated change" (`extras::earliest_dated_change`). A
+    /// ledger that could not be read is `Unreadable`, never an empty list: the card then says it can't tell which
+    /// change came first.
     #[serde(skip)]
-    compy_applies: Vec<DateTime<Utc>>,
+    compy_applies: extras::CompyApplies,
 }
 
 // ---- Outputs: codes, ids and numbers. The UI owns every sentence. ----------------------------
@@ -1076,9 +1077,7 @@ pub(crate) async fn paramedic_diagnose(complaint: Complaint, game: Option<String
     tauri::async_runtime::spawn_blocking(move || -> Result<Diagnosis, String> {
         let _flight = flight;
         let mut inp = read_inputs_from(&crate::compy_data_dir())?;
-        if let Ok(stamps) = crate::history::read_ledger_stamps() {
-            inp.compy_applies = stamps.iter().filter_map(|s| ts(&s.applied_at)).collect();
-        }
+        inp.compy_applies = extras::compy_applies_from(crate::history::read_ledger_stamps());
         let fetch = |t0, t1, exe: String| changes::read_real_changes(t0, t1, &exe);
         let fetch_mods = |exe: String, others: Vec<String>, budget: std::time::Duration| mods::read_real_mods(&exe, &others, budget);
         let fetch_crashes = |exe: String| extras::read_real_crashes(&exe);
@@ -1229,7 +1228,7 @@ fn inputs_from_parts(
             .collect(),
         sightings_unread: false,
         drift_unread: false,
-        compy_applies: Vec::new(),
+        compy_applies: extras::CompyApplies::NotRead,
         changes: ChangeRead::NotRead,
         mods: ModInput::default(),
         crashes: CrashRead::NotRead,
@@ -2471,10 +2470,38 @@ fn detect_memory(c: &Ctx, out: &mut Out) {
     let base_peak = c.base.iter().filter_map(|s| s.peak_ram_bytes).max().unwrap_or(0);
     // Only sessions that recorded a reading can be "lower"; a missing reading is neither high nor low.
     let lower: Vec<&SessionFacts> = c.affected.iter().copied().filter(|s| s.ram_fraction().is_some_and(|f| f < RAM_FULL_FRACTION)).collect();
+    // The line is scoped to the rough sessions that have a memory record: how many were nearly full (against the
+    // line the code applies), the highest of those peaks and the date of each, so one session's peak is never
+    // presented as describing the whole rough run.
+    let recorded = c.affected.iter().filter(|s| s.ram_fraction().is_some()).count();
+    let unrecorded = c.affected.len() - recorded;
+    let mut full_days: Vec<&str> = full_rough.iter().map(|s| s.started_at.as_str()).collect();
+    full_days.sort_unstable();
     let mut evidence = vec![
-        ev(EvidenceKind::Measured, "ram-peak", "sessions", false, &[("peakGb", gb(peak(worst))), ("totalGb", gb(total))]),
+        ev(
+            EvidenceKind::Measured,
+            "ram-peak",
+            "sessions",
+            false,
+            &[
+                ("peakGb", gb(peak(worst))),
+                ("totalGb", gb(total)),
+                ("full", full_rough.len().to_string()),
+                ("count", recorded.to_string()),
+                ("percent", format!("{}", (RAM_FULL_FRACTION * 100.0).round() as u32)),
+                ("dates", full_days.join("\u{1f}")),
+            ],
+        ),
         ev(EvidenceKind::Measured, "ram-baseline", "sessions", false, &[("peakGb", gb(base_peak))]),
     ];
+    // Rough sessions whose memory peak was no higher than the normal sessions' own highest: said plainly.
+    let normal_range = lower.iter().filter(|s| s.peak_ram_bytes.is_some_and(|p| p <= base_peak)).count();
+    if normal_range > 0 {
+        evidence.push(ev(EvidenceKind::Measured, "ram-normal-range", "sessions", true, &[("count", normal_range.to_string()), ("basePeakGb", gb(base_peak))]));
+    }
+    if unrecorded > 0 {
+        evidence.push(ev(EvidenceKind::Unknown, "ram-unrecorded", "sessions", false, &[("count", unrecorded.to_string())]));
+    }
     if full_rough.iter().any(|s| s.ram_events > 0) {
         evidence.push(ev(EvidenceKind::Measured, "ram-warning", "sessions", false, &[]));
     }

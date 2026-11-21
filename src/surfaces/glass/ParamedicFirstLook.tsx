@@ -528,11 +528,16 @@ function noneLine(code: string, t: T, dates: Dates, touch: FirstLookChange[]): s
       return t("paramedic.firstLook.none.gpuDriver");
     case "windows-update": {
       // "none" is only sent when the Windows Update history was read completely and holds no matching entry. Beside a
-      // graphics driver change in the same period the two would read as a contradiction, so the line says that the
-      // driver came another way (never the case when the history couldn't be read: that is a limit, not "none").
-      const driver = touch.find((c) => c.id.startsWith("gpu-driver") && c.at);
-      return driver?.at
-        ? t("paramedic.firstLook.none.windowsUpdateDriverElsewhere", { when: dates.day(driver.at) })
+      // graphics driver change in the same period the two would read as a contradiction, so the line says that Windows
+      // Update's record has no entry for it: that is all Compy saw (not that the driver came another way). With two or
+      // more driver changes it names each date or their number, never only one of them. Never when the history couldn't
+      // be read: that is a limit, not "none".
+      const drivers = touch.filter((c) => c.id.startsWith("gpu-driver") && c.at);
+      if (drivers.length === 1 && drivers[0].at) {
+        return t("paramedic.firstLook.none.windowsUpdateDriverNoEntry", { when: dates.day(drivers[0].at) });
+      }
+      return drivers.length > 1
+        ? t("paramedic.firstLook.none.windowsUpdateDriversNoEntry", { n: drivers.length })
         : t("paramedic.firstLook.none.windowsUpdate");
     }
     case "programs":
@@ -611,22 +616,33 @@ function crashSentence(c: NonNullable<ParamedicFirstLook["crashes"]>, game: stri
   const versions = a.versions ? t("paramedic.seen.crashesVersions", { n: Number(a.versions) }) : "";
   const out = [`${base}${byName}${versions}`];
   if (c.signature_module && c.signature_before) {
-    out.push(t("paramedic.seen.gameCrashSignature", { module: c.signature_module, what: t("paramedic.firstLook.crash.signatureWhat", { date: dates.day(c.signature_before), kind: changeKindText(c.change_kind, t) }) }));
+    const kind = changeKindText(c.change_kind, t);
+    const date = dates.day(c.signature_before);
+    // The group titles are the headings the list shows, by their own keys, so the sentence can't drift from them.
+    const touch = t("paramedic.firstLook.group.touch");
+    const compy = t("paramedic.firstLook.group.compy");
+    const what = kind
+      ? t("paramedic.firstLook.crash.signatureWhat", { touch, compy, date, kind })
+      : t("paramedic.firstLook.crash.signatureWhatNoKind", { touch, compy, date });
+    out.push(t("paramedic.seen.gameCrashSignature", { module: c.signature_module, what }));
   }
   return out;
 }
 
-/** What kind of change the "earliest dated change" is: one Compy applied, or one Windows recorded. The engine sends
- *  it with every date it names. */
-function changeKindText(kind: string | null | undefined, t: T): string {
-  return kind === "compy" ? t("paramedic.seen.changeKind.compy") : t("paramedic.seen.changeKind.windows");
+/** What kind of change the earliest change is: one Compy applied, or one Windows recorded. The engine sends it with
+ *  every date it names; when it is missing the kind is left out, never defaulted. */
+function changeKindText(kind: string | null | undefined, t: T): string | null {
+  return kind === "compy" ? t("paramedic.seen.changeKind.compy") : kind === "windows" ? t("paramedic.seen.changeKind.windows") : null;
 }
 
 /** Counts and dates only: how many readable records fall before and after the earliest dated change. Every count is
  *  "at least". When Compy can't see back past the change it says so instead of saying none. */
 function splitSentence(s: FirstLookCrashSplit, kind: string | null | undefined, t: T, dates: Dates): string {
   const date = dates.dayTime(s.change);
-  const what = t("paramedic.firstLook.crash.splitWhat", { kind: changeKindText(kind, t) });
+  const kindText = changeKindText(kind, t);
+  const touch = t("paramedic.firstLook.group.touch");
+  const compy = t("paramedic.firstLook.group.compy");
+  const what = kindText ? t("paramedic.firstLook.crash.splitWhat", { touch, compy, kind: kindText }) : t("paramedic.firstLook.crash.splitWhatNoKind", { touch, compy });
   // Matched by program name only: the count may include another program of the same name (the measured flow's own hedge).
   const hedge = s.by_name ? t("paramedic.seen.crashesByName") : "";
   return `${splitBody(s, t, dates, date, what)}${hedge}`;

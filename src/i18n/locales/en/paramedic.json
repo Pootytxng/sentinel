@@ -64,7 +64,8 @@
     "none": {
       "gpuDriver": "Windows recorded no graphics driver version change in this period.",
       "windowsUpdate": "Windows Update recorded no monthly Windows update, Windows version update or driver update in this period.",
-      "windowsUpdateDriverElsewhere": "Windows Update recorded no monthly Windows update, Windows version update or driver update in this period; the graphics driver change on {{when}} was installed another way.",
+      "windowsUpdateDriverNoEntry": "Windows Update recorded no monthly Windows update, Windows version update or driver update in this period; its record has no entry for the graphics driver change on {{when}}.",
+      "windowsUpdateDriversNoEntry": "Windows Update recorded no monthly Windows update, Windows version update or driver update in this period; its record has no entry for any of the {{n}} graphics driver changes.",
       "programs": "No program shows an install or update date in this period."
     },
     "nothing": "Compy found no dated change in this period. That doesn't mean nothing is wrong: Compy hasn't measured how any game runs.",
@@ -131,7 +132,7 @@
       "pcRecorded_other": "Compy has recorded {{count}} game sessions, but this list is for the whole PC, not one game, so it doesn't compare any of them.",
       "unreadGame": "Compy couldn't read the sessions it recorded just now, so it can't tell whether {{game}} runs worse than before, or which of these changes matters.",
       "unreadPc": "Compy couldn't read the sessions it recorded just now, so it can't tell whether anything runs worse than before, or which of these changes matters.",
-      "unmatched": "None of the sessions Compy has recorded is named {{game}}, so it can't tell whether it has recorded this game under another name, whether it runs worse than before, or which of these changes matters."
+      "unmatched": "None of the sessions Compy has recorded is named {{game}}, so it can't tell whether it runs worse than before, or which of these changes matters."
     },
     "changeWhen": "Change when it started",
     "footer": "Compy lists what it can see on this PC. It doesn't say why a game runs badly until it has measured it.",
@@ -163,8 +164,10 @@
     },
     "crash": {
       "none": "Windows has no crash record for {{game}} in the records Compy read.",
-      "signatureWhat": "the earliest dated change in this list ({{date}}, {{kind}})",
-      "splitWhat": "the earliest dated change in this list: {{kind}}",
+      "signatureWhat": "the earliest change with an exact time under “{{touch}}” or “{{compy}}” ({{date}}, {{kind}})",
+      "signatureWhatNoKind": "the earliest change with an exact time under “{{touch}}” or “{{compy}}” ({{date}})",
+      "splitWhat": "the earliest change with an exact time under “{{touch}}” or “{{compy}}”: {{kind}}",
+      "splitWhatNoKind": "the earliest change with an exact time under “{{touch}}” or “{{compy}}”",
       "split": {
         "both_one": "Of the crash records Compy could read, at least {{count}} is from before {{date}} ({{what}}) and at least {{after}} from after.",
         "both_other": "Of the crash records Compy could read, at least {{count}} are from before {{date}} ({{what}}) and at least {{after}} from after.",
@@ -281,8 +284,8 @@
       "what": "Other programs started while you played",
       "measured": "The rest of your PC was busier than usual while you played",
       "open": "Other programs were already open when you started playing",
-      "openNearby_one": "Other programs were already open when you started playing, and programs were seen starting in another recent session",
-      "openNearby_other": "Other programs were already open when you started playing, and programs were seen starting in other recent sessions",
+      "openNearby_one": "Programs were open when you started; programs were seen starting in another session",
+      "openNearby_other": "Programs were open when you started; programs were seen starting in other sessions",
       "nearby_one": "Other programs were seen starting in another recent session",
       "nearby_other": "Other programs were seen starting in other recent sessions"
     },
@@ -355,7 +358,12 @@
     "openCounts_other": "It was open in {{r}} of {{rm}} rough sessions and {{n}} of {{nm}} normal ones.",
     "openCountsNamed_one": "{{name}} was open at the start of {{r}} of {{rm}} rough session and {{n}} of {{nm}} normal ones.",
     "openCountsNamed_other": "{{name}} was open at the start of {{r}} of {{rm}} rough sessions and {{n}} of {{nm}} normal ones.",
-    "ramPeak": "Memory peaked at {{peakGb}} of {{totalGb}} GB usable in one rough session.",
+    "ramPeak_one": "Memory was nearly full (at least {{percent}}% of what's usable) in the rough session that has a memory record: it peaked at {{peakGb}} of {{totalGb}} GB usable on {{dates}}.",
+    "ramPeak_other": "Memory was nearly full (at least {{percent}}% of what's usable) in {{full}} of the {{count}} rough sessions that have a memory record; the highest peak was {{peakGb}} of {{totalGb}} GB usable ({{dates}}).",
+    "ramNormalRange_one": "In {{count}} other rough session, memory peaked no higher than in your normal sessions ({{basePeakGb}} GB).",
+    "ramNormalRange_other": "In {{count}} other rough sessions, memory peaked no higher than in your normal sessions ({{basePeakGb}} GB).",
+    "ramUnrecorded_one": "{{count}} rough session has no memory record.",
+    "ramUnrecorded_other": "{{count}} rough sessions have no memory record.",
     "ramBaseline": "Your normal sessions peaked at {{peakGb}} GB.",
     "ramWarning": "Compy saw memory nearly full during that session.",
     "ramLower": "Other rough sessions only reached {{peakGb}} GB.",
@@ -611,7 +619,8 @@
     "gpuTemp": "How hot your graphics card got (it wasn't recorded in both the rough and the normal sessions)",
     "crashesUnavailable": "Whether {{game}} has closed unexpectedly before (looking took too long)",
     "crashesUnreadable": "Whether {{game}} has closed unexpectedly before (Windows' crash records couldn't be read)",
-    "crashesPartial": "Compy could only read some of Windows' crash records, and found none for {{game}} in those."
+    "crashesPartial": "Compy could only read some of Windows' crash records, and found none for {{game}} in those.",
+    "compyLedger": "Compy couldn't read its own record of changes just now, so it can't say which change came first."
   },
   "nothingWrong": {
     "title": "Nothing looks wrong",
@@ -665,8 +674,12 @@
     "gameCrashes_one": "{{game}} has closed unexpectedly once, on {{since}}.",
     "gameCrashes_other": "{{game}} has closed unexpectedly {{count}} times since {{since}}.",
     "gameCrashSignature": "All the crashes Compy could read stopped in the same file ({{module}}), and some happened before {{what}}, so that change can't be the whole story for them.",
-    "crashBeforeWhat": "the earliest dated change Compy found between your last normal session and the rough ones ({{date}}, {{kind}})",
+    "crashBeforeWhat": "the earliest change with an exact time that Compy found between your last normal session and the rough ones ({{date}}, {{kind}})",
+    "crashBeforeWhatNoKind": "the earliest change with an exact time that Compy found between your last normal session and the rough ones ({{date}})",
+    "crashBeforeWindowsOnly": "a change Windows recorded between your last normal session and the rough ones ({{date}})",
     "changeKind": {
+      "compyNamed_one": "when Compy applied “{{title}}”",
+      "compyNamed_other": "{{count}} changes Compy applied: {{titles}}",
       "compy": "a change Compy applied",
       "windows": "a change Windows recorded"
     },

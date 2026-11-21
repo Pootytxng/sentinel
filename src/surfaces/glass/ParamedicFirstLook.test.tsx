@@ -342,26 +342,37 @@ describe("the answer", () => {
     expect(inGroup).toContain("Compy couldn't see when drivers were installed: Windows needs administrator rights to show that log.");
   });
 
-  // p4: both can be true (the driver came from the vendor's installer), but side by side they read as a contradiction.
-  it("Windows Update 'none' beside a graphics driver change says the driver was installed another way, with its date", async () => {
+  // p4: both can be true, but side by side they read as a contradiction. Compy only knows Windows Update's own record
+  // has no entry for the driver change, not how the driver arrived, so that is all it says.
+  it("Windows Update 'none' beside a graphics driver change says its record has no entry for it, with the date", async () => {
     await toTheQuestion();
     await pick("This week", answer({ touch_games: [driver], other_changes: [], none: ["windows-update"], read_all: true }));
     const touch = screen.getByTestId("first-look-touch").textContent ?? "";
     expect(touch).toMatch(
-      /Windows Update recorded no monthly Windows update, Windows version update or driver update in this period; the graphics driver change on [A-Z][a-z]{2} \d+ was installed another way\./,
+      /Windows Update recorded no monthly Windows update, Windows version update or driver update in this period; its record has no entry for the graphics driver change on [A-Z][a-z]{2} \d+\./,
     );
+    expect(touch).not.toMatch(/another way|was installed/);
     expect(touch).not.toContain("in this period.Windows Update");
     expect(screen.queryByText("Windows Update recorded no monthly Windows update, Windows version update or driver update in this period.")).toBeNull();
   });
 
-  it("a Windows Update history that could not be read is 'couldn't see', never 'installed another way'", async () => {
+  it("with two graphics driver changes the line covers both, never only the first one", async () => {
+    await toTheQuestion();
+    const second = change("gpu-driver-installed", "2026-11-17T05:12:26Z", { to: "9.9", maker: "nvidia" }, "gpu-driver");
+    await pick("This week", answer({ touch_games: [driver, second], other_changes: [], none: ["windows-update"], read_all: true }));
+    const touch = screen.getByTestId("first-look-touch").textContent ?? "";
+    expect(touch).toContain("its record has no entry for any of the 2 graphics driver changes.");
+    expect(touch).not.toMatch(/graphics driver change on /);
+  });
+
+  it("a Windows Update history that could not be read is 'couldn't see', never 'no entry'", async () => {
     await toTheQuestion();
     await pick(
       "This week",
       answer({ touch_games: [driver], other_changes: [], none: [], read_all: false, limits: [{ kind: "windows-update", code: "access-denied", args: {} }] }),
     );
     const touch = screen.getByTestId("first-look-touch").textContent ?? "";
-    expect(touch).not.toMatch(/installed another way|Windows Update recorded no/);
+    expect(touch).not.toMatch(/its record has no entry|Windows Update recorded no/);
     expect(touch).toContain("Compy couldn't see which Windows updates were installed");
   });
 
@@ -369,7 +380,7 @@ describe("the answer", () => {
     await toTheQuestion();
     await pick("This week", answer({ touch_games: [], other_changes: [], none: ["gpu-driver", "windows-update"], read_all: true }));
     expect(screen.getByText("Windows Update recorded no monthly Windows update, Windows version update or driver update in this period.")).toBeTruthy();
-    expect(document.body.textContent).not.toContain("installed another way");
+    expect(document.body.textContent).not.toContain("its record has no entry");
   });
 
   it("ends with what Compy can't tell yet and the one next step, and claims no measurement", async () => {
@@ -670,7 +681,9 @@ describe("the first look for a picked game", () => {
     // The crash block comes before any other fact in the block.
     expect(crashes.compareDocumentPosition(within(block).getByTestId("first-look-rows")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(crashes.textContent).toMatch(/^Windows' crash records that Compy could read show ROB RUN closing unexpectedly at least 3 times\. The oldest of these is from [A-Z][a-z]{2} \d+\./);
-    expect(crashes.textContent).toMatch(/All the crashes Compy could read stopped in the same file \(UnityPlayer\.dll\), and some happened before the earliest dated change in this list \([A-Z][a-z]{2} \d+, a change Windows recorded\), so that change can't be the whole story for them\.$/);
+    expect(crashes.textContent).toMatch(/All the crashes Compy could read stopped in the same file \(UnityPlayer\.dll\), and some happened before the earliest change with an exact time under “Changes that touch games” or “Changes Compy made” \([A-Z][a-z]{2} \d+\), so that change can't be the whole story for them\.$/);
+    // No change kind was sent: it is left out, never defaulted to "a change Windows recorded".
+    expect(crashes.textContent).not.toMatch(/a change Windows recorded|a change Compy applied/);
   });
 
   it("the same-signature sentence is said only when the engine sent a signature; a single crash and 'matched by program name' use the measured flow's words", async () => {
@@ -1334,8 +1347,10 @@ describe("the crash records before and after the earliest change (S5)", () => {
     args: { n: "26", since: "2026-10-01T10:00:00Z", partial: "true" },
     signature_module: null,
     signature_before: null,
+    change_kind: "windows",
     split,
   });
+  const WHAT = "the earliest change with an exact time under “Changes that touch games” or “Changes Compy made”";
   const sp = (over: Partial<FirstLookCrashSplit> = {}): FirstLookCrashSplit => ({ before: 20, after: 6, change: CHANGE, oldest_read: "2026-10-01T10:00:00Z", gap: null, by_name: false, ...over });
   async function lookAs(a: FirstLookAnswer, label = "This week") {
     engine.steam = steamList([]);
@@ -1348,7 +1363,7 @@ describe("the crash records before and after the earliest change (S5)", () => {
 
   it("says how many readable records are from before and after the change, each as 'at least', and sits under the crash line", async () => {
     await lookAs(gameAnswer({ crashes: crashes(sp()) }));
-    expect(line()).toMatch(new RegExp(`^Of the crash records Compy could read, at least 20 are from before ${DATE}\\(the earliest dated change in this list: a change Windows recorded\\) and at least 6 from after\\.$`));
+    expect(line()).toMatch(new RegExp(`^Of the crash records Compy could read, at least 20 are from before ${DATE}\\(${WHAT}: a change Windows recorded\\) and at least 6 from after\\.$`));
     const block = screen.getByTestId("first-look-crashes");
     expect(block.lastElementChild).toBe(screen.getByTestId("first-look-crash-split"));
   });
@@ -1357,8 +1372,9 @@ describe("the crash records before and after the earliest change (S5)", () => {
     const c = { ...crashes(sp()), signature_module: "UnityPlayer.dll", signature_before: CHANGE, change_kind: "compy" };
     await lookAs(gameAnswer({ crashes: c }));
     const all = screen.getByTestId("first-look-crashes").textContent ?? "";
-    expect(all).toMatch(/some happened before the earliest dated change in this list \([A-Z][a-z]{2} \d+, a change Compy applied\), so that change can't be the whole story/);
-    expect(line()).toContain("(the earliest dated change in this list: a change Compy applied)");
+    expect(all).toContain(`some happened before ${WHAT} (`);
+    expect(all).toMatch(/\([A-Z][a-z]{2} \d+, a change Compy applied\), so that change can't be the whole story/);
+    expect(line()).toContain(`(${WHAT}: a change Compy applied)`);
     expect(all).not.toContain("a change Windows recorded");
     // The counts are the crash line's own total.
     expect(Number(c.args.n)).toBe(20 + 6);
@@ -1366,6 +1382,29 @@ describe("the crash records before and after the earliest change (S5)", () => {
     await lookAs(gameAnswer({ crashes: { ...c, change_kind: "windows" } }));
     expect(screen.getByTestId("first-look-crashes").textContent).toContain("a change Windows recorded");
     expect(screen.getByTestId("first-look-crashes").textContent).not.toContain("a change Compy applied");
+  });
+
+  // p4 review B2: the sentence says exactly which part of the list the date comes from, by the list's own headings.
+  it("p4: the two group names the sentence quotes are the headings the list renders", async () => {
+    const c = { ...crashes(sp()), signature_module: "UnityPlayer.dll", signature_before: CHANGE, change_kind: "compy" };
+    await lookAs(gameAnswer({ crashes: c, touch_games: [driver], compy_changes: [compy("Turn off Game DVR", "2026-11-18T10:00:00Z")] }));
+    const quoted = [...(screen.getByTestId("first-look-crashes").textContent ?? "").matchAll(/“([^”]+)”/g)].map((m) => m[1]);
+    const rendered = [within(screen.getByTestId("first-look-touch")).getByText("Changes that touch games"), within(screen.getByTestId("first-look-compy")).getByText("Changes Compy made")].map((h) => h.textContent);
+    expect(quoted.slice(0, 2)).toEqual(rendered);
+    expect(line()).toContain("“Changes that touch games” or “Changes Compy made”");
+  });
+
+  // The sentences take the group names from the group keys (not from typed text), in both languages, so they cannot drift.
+  it("p4: the signature and split sentences are built from the group keys in en and zh-CN", () => {
+    for (const lang of ["en", "zh-CN"]) {
+      const j = JSON.parse(readFileSync(join("src", "i18n", "locales", lang, "paramedic.json"), "utf8")).firstLook as { crash: Record<string, string>; group: Record<string, string> };
+      for (const key of ["signatureWhat", "signatureWhatNoKind", "splitWhat", "splitWhatNoKind"]) {
+        expect(j.crash[key], `${lang} ${key}`).toContain("{{touch}}");
+        expect(j.crash[key], `${lang} ${key}`).toContain("{{compy}}");
+        expect(j.crash[key], `${lang} ${key}`).not.toContain(j.group.touch);
+        expect(j.crash[key], `${lang} ${key}`).not.toContain(j.group.compy);
+      }
+    }
   });
 
   it("uses 'is' for one record before the change", async () => {
@@ -1412,7 +1451,7 @@ describe("the crash records before and after the earliest change (S5)", () => {
 
   it("when some records could not be read and none readable is after the change, it says it can't say whether any came after, never 'none from after'", async () => {
     await lookAs(gameAnswer({ crashes: crashes(sp({ before: 2, after: 0, gap: "unread-after" })) }));
-    expect(line()).toMatch(/^Of the crash records Compy could read, at least 2 are from before .*\(the earliest dated change in this list: a change Windows recorded\)\. Some records couldn't be read, so it can't say whether any came after\.$/);
+    expect(line()).toMatch(/^Of the crash records Compy could read, at least 2 are from before .*\(the earliest change with an exact time under “Changes that touch games” or “Changes Compy made”: a change Windows recorded\)\. Some records couldn't be read, so it can't say whether any came after\.$/);
     expect(line()).not.toMatch(/none from after/);
     cleanup();
     await lookAs(gameAnswer({ crashes: crashes(sp({ before: 1, after: 0, gap: "unread-after" })) }));
@@ -1528,9 +1567,9 @@ describe("what Compy can't tell yet rests on the sessions it recorded", () => {
   it("a pick Compy couldn't match to a recorded game is 'can't tell', not 'none'", async () => {
     const { body, group } = await lookAt(gameAnswer({ recorded: rec({ game: null, unmatched: true }) }));
     expect(body).toBe(
-      "None of the sessions Compy has recorded is named ROB RUN, so it can't tell whether it has recorded this game under another name, whether it runs worse than before, or which of these changes matters.",
+      "None of the sessions Compy has recorded is named ROB RUN, so it can't tell whether it runs worse than before, or which of these changes matters.",
     );
-    expect(group).not.toMatch(/hasn't seen|hasn't recorded|couldn't match/);
+    expect(group).not.toMatch(/hasn't seen|hasn't recorded|couldn't match|another name/);
     // Playing it with a capture is what would make it matchable: the instruction stays.
     expect(group).toContain("Start a capture in Live");
   });

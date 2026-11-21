@@ -142,13 +142,33 @@ pub(super) fn detect_crashes(c: &Ctx, out: &mut Out) {
             // The card's period: after the last normal session, up to the first rough one. Windows' dated rows
             // among the candidates and Compy's own applies in that period, by the same function the first look uses.
             let windows = dated_candidates(&out.cands);
-            let compy = c.inp.compy_applies.iter().copied().filter(|t| *t > c.win_start && *t <= c.win_end);
-            let earliest = earliest_dated_change(windows, compy);
+            // An unreadable ledger is not "Compy changed nothing": it stays out of the comparison and the answer
+            // says so (below), and the sentence never claims the earliest change of all.
+            let in_period: Vec<(DateTime<Utc>, &str)> = match &c.inp.compy_applies {
+                CompyApplies::Read(v) => v.iter().filter(|(t, _)| *t > c.win_start && *t <= c.win_end).map(|(t, title)| (*t, title.as_str())).collect(),
+                CompyApplies::NotRead | CompyApplies::Unreadable => Vec::new(),
+            };
+            let ledger_unreadable = matches!(c.inp.compy_applies, CompyApplies::Unreadable);
+            let earliest = earliest_dated_change(windows, in_period.iter().map(|(t, _)| *t));
             match crash_outcome(h, CrashMatch::Program(game), earliest.map(|e| e.at)) {
                 CrashOutcome::Line(l) => {
                     out.see("game-crashes", &l.args);
                     if let (Some((module, before)), Some(e)) = (l.signature, earliest) {
-                        out.see("game-crash-signature", &[("module", module), ("before", before), ("kind", e.origin.code().to_string())]);
+                        let mut args = vec![("module", module), ("before", before), ("kind", e.origin.code().to_string())];
+                        if ledger_unreadable {
+                            // The date is a change Windows recorded, which is true whatever the ledger holds; "earliest" is not.
+                            args.push(("ledger", "unreadable".to_string()));
+                            out.unknown("compy-ledger-unreadable");
+                        } else if e.origin == ChangeOrigin::Compy {
+                            // Which change(s) Compy applied at that moment, so "a change Compy applied" is never vague.
+                            let mut near: Vec<(DateTime<Utc>, &str)> =
+                                in_period.iter().copied().filter(|(t, title)| *t >= e.at && (*t - e.at).num_seconds() < 60 && !title.trim().is_empty()).collect();
+                            near.sort_by_key(|(t, _)| *t);
+                            if !near.is_empty() {
+                                args.push(("titles", near.iter().map(|(_, title)| *title).collect::<Vec<_>>().join("\u{1f}")));
+                            }
+                        }
+                        out.see("game-crash-signature", &args);
                     }
                 }
                 // No count line to carry the limit: say what could not be seen.
@@ -230,6 +250,28 @@ impl ChangeOrigin {
             ChangeOrigin::Windows => "windows",
             ChangeOrigin::Compy => "compy",
         }
+    }
+}
+
+/// Compy's own ledger of applied changes, as the card's input: when and what. A read that failed is its own
+/// state, never an empty list.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) enum CompyApplies {
+    /// Nobody asked (recorded fixtures): nothing is said about Compy's own changes either way.
+    #[default]
+    NotRead,
+    /// The ledger could not be read.
+    Unreadable,
+    /// `(applied at, title)` for every row, whatever its status.
+    Read(Vec<(DateTime<Utc>, String)>),
+}
+
+/// The ledger read (`history::read_ledger_stamps`) as the card's input. A row with an unparseable date is left
+/// out of the list, the same as the first look does.
+pub(crate) fn compy_applies_from(read: Result<Vec<crate::history::LedgerStamp>, String>) -> CompyApplies {
+    match read {
+        Ok(stamps) => CompyApplies::Read(stamps.into_iter().filter_map(|s| ts(&s.applied_at).map(|t| (t, s.title))).collect()),
+        Err(_) => CompyApplies::Unreadable,
     }
 }
 

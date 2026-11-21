@@ -64,7 +64,8 @@
     "none": {
       "gpuDriver": "这段时间内，Windows 没有记录到显卡驱动版本发生变化。",
       "windowsUpdate": "Windows 更新在这段时间没有记录每月 Windows 更新、Windows 版本更新或驱动更新。",
-      "windowsUpdateDriverElsewhere": "Windows 更新在这段时间没有记录每月 Windows 更新、Windows 版本更新或驱动更新；{{when}} 的显卡驱动变化是通过其他方式安装的。",
+      "windowsUpdateDriverNoEntry": "Windows 更新在这段时间没有记录每月 Windows 更新、Windows 版本更新或驱动更新；{{when}} 的显卡驱动变化在它的记录中没有对应条目。",
+      "windowsUpdateDriversNoEntry": "Windows 更新在这段时间没有记录每月 Windows 更新、Windows 版本更新或驱动更新；这 {{n}} 次显卡驱动变化在它的记录中都没有对应条目。",
       "programs": "这段时间没有程序显示安装或更新日期。"
     },
     "nothing": "这段时间内，Compy 没有找到带日期的变化。这不代表一切正常：Compy 还没有测量过任何游戏的运行情况。",
@@ -131,7 +132,7 @@
       "pcRecorded_other": "Compy 已记录了 {{count}} 个游戏场次，但这份清单针对整台电脑，不是某一个游戏，所以不会比较其中任何一个。",
       "unreadGame": "Compy 刚才没能读取它记录的游戏数据，所以无法判断 {{game}} 是否比以前运行得更差，也无法判断这些变化中哪个重要。",
       "unreadPc": "Compy 刚才没能读取它记录的游戏数据，所以无法判断是否有什么比以前运行得更差，也无法判断这些变化中哪个重要。",
-      "unmatched": "Compy 已记录的场次中没有一个名为 {{game}}，所以无法判断它是否以别的名字记录过这款游戏，也无法判断它是否比以前运行得更差，或这些变化中哪个重要。"
+      "unmatched": "Compy 已记录的场次中没有一个名为 {{game}}，所以无法判断它是否比以前运行得更差，或这些变化中哪个重要。"
     },
     "changeWhen": "重新选择开始的时间",
     "footer": "Compy 列出它在这台电脑上能看到的内容。在测量之前，它不会说游戏为什么运行不好。",
@@ -163,8 +164,10 @@
     },
     "crash": {
       "none": "在 Compy 读取的记录中，Windows 没有 {{game}} 的崩溃记录。",
-      "signatureWhat": "这份列表中最早一项有日期的变化（{{date}}，{{kind}}）",
-      "splitWhat": "这份列表中最早一项有日期的变化：{{kind}}",
+      "signatureWhat": "“{{touch}}”或“{{compy}}”中最早一项有确切时间的变化（{{date}}，{{kind}}）",
+      "signatureWhatNoKind": "“{{touch}}”或“{{compy}}”中最早一项有确切时间的变化（{{date}}）",
+      "splitWhat": "“{{touch}}”或“{{compy}}”中最早一项有确切时间的变化：{{kind}}",
+      "splitWhatNoKind": "“{{touch}}”或“{{compy}}”中最早一项有确切时间的变化",
       "split": {
         "both_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之前，至少有 {{after}} 条在之后。",
         "both_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（{{what}}）之前，至少有 {{after}} 条在之后。",
@@ -281,8 +284,8 @@
       "what": "你玩游戏时有其他程序启动了",
       "measured": "游戏时，电脑其余部分比平时更忙",
       "open": "你开始玩游戏时，其他程序已经打开了",
-      "openNearby_one": "你开始玩游戏时，其他程序已经打开了；近期的另一次游戏中，还曾看到有程序启动",
-      "openNearby_other": "你开始玩游戏时，其他程序已经打开了；近期的其他几次游戏中，还曾看到有程序启动",
+      "openNearby_one": "开始游戏时已有程序打开；另一次游戏中还看到有程序启动",
+      "openNearby_other": "开始游戏时已有程序打开；其他几次游戏中还看到有程序启动",
       "nearby_one": "近期的另一次游戏中，曾看到有其他程序启动",
       "nearby_other": "近期的其他几次游戏中，曾看到有其他程序启动"
     },
@@ -355,7 +358,12 @@
     "openCounts_other": "它在 {{rm}} 次不顺的游戏中有 {{r}} 次已经打开，在 {{nm}} 次正常的游戏中有 {{n}} 次。",
     "openCountsNamed_one": "{{name}} 在 {{rm}} 次不顺的游戏开始时有 {{r}} 次已经打开，在 {{nm}} 次正常的游戏中有 {{n}} 次。",
     "openCountsNamed_other": "{{name}} 在 {{rm}} 次不顺的游戏开始时有 {{r}} 次已经打开，在 {{nm}} 次正常的游戏中有 {{n}} 次。",
-    "ramPeak": "在一次卡顿的游戏中，内存最高用到 {{peakGb}} GB（可用 {{totalGb}} GB）。",
+    "ramPeak_one": "在有内存记录的这次卡顿游戏中，内存几乎用满（至少占可用内存的 {{percent}}%）：{{dates}} 的峰值为 {{peakGb}} GB（可用 {{totalGb}} GB）。",
+    "ramPeak_other": "在有内存记录的 {{count}} 次卡顿游戏中，有 {{full}} 次内存几乎用满（至少占可用内存的 {{percent}}%）；最高峰值为 {{peakGb}} GB（可用 {{totalGb}} GB，{{dates}}）。",
+    "ramNormalRange_one": "另有 {{count}} 次卡顿游戏，内存峰值不高于你正常游戏时的（{{basePeakGb}} GB）。",
+    "ramNormalRange_other": "另有 {{count}} 次卡顿游戏，内存峰值不高于你正常游戏时的（{{basePeakGb}} GB）。",
+    "ramUnrecorded_one": "有 {{count}} 次卡顿游戏没有内存记录。",
+    "ramUnrecorded_other": "有 {{count}} 次卡顿游戏没有内存记录。",
     "ramBaseline": "你正常游戏时内存最高用到 {{peakGb}} GB。",
     "ramWarning": "Compy 在那次游戏中看到内存几乎用满。",
     "ramLower": "其他卡顿的游戏内存只用到 {{peakGb}} GB。",
@@ -611,7 +619,8 @@
     "gpuTemp": "显卡温度有多高（出问题的那次和正常的几次没有都记录到）",
     "crashesUnavailable": "{{game}} 以前是否意外关闭过（查看用时过长）",
     "crashesUnreadable": "{{game}} 以前是否意外关闭过（Windows 的崩溃记录读不了）",
-    "crashesPartial": "Compy 只读到了 Windows 崩溃记录的一部分，其中没有找到 {{game}} 的崩溃。"
+    "crashesPartial": "Compy 只读到了 Windows 崩溃记录的一部分，其中没有找到 {{game}} 的崩溃。",
+    "compyLedger": "Compy 刚才无法读取它自己的更改记录，所以无法说出哪一项变化最早。"
   },
   "nothingWrong": {
     "title": "看起来一切正常",
@@ -665,8 +674,12 @@
     "gameCrashes_one": "{{game}} 曾在 {{since}} 意外关闭过一次。",
     "gameCrashes_other": "{{game}} 自 {{since}} 起已意外关闭 {{count}} 次。",
     "gameCrashSignature": "Compy 能读到的所有崩溃都停在同一个文件里（{{module}}），而且有些发生在{{what}}之前，所以这项变化不能解释它们的全部。",
-    "crashBeforeWhat": "Compy 在你上一次正常对局与这些卡顿对局之间找到的最早一项有日期的变化（{{date}}，{{kind}}）",
+    "crashBeforeWhat": "Compy 在你上一次正常对局与这些卡顿对局之间找到的最早一项有确切时间的变化（{{date}}，{{kind}}）",
+    "crashBeforeWhatNoKind": "Compy 在你上一次正常对局与这些卡顿对局之间找到的最早一项有确切时间的变化（{{date}}）",
+    "crashBeforeWindowsOnly": "Windows 在你上一次正常对局与这些卡顿对局之间记录的一项变化（{{date}}）",
     "changeKind": {
+      "compyNamed_one": "Compy 应用“{{title}}”时",
+      "compyNamed_other": "Compy 应用的 {{count}} 项变化：{{titles}}",
       "compy": "Compy 应用的一项变化",
       "windows": "Windows 记录的一项变化"
     },

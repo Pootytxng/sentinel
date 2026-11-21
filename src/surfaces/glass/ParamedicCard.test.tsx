@@ -1308,8 +1308,51 @@ describe("ParamedicCard: temperature and crash history", () => {
     expect(checked()).toContain(`Game A has closed unexpectedly 3 times since ${day(first)}.`);
     expect(checked()).not.toMatch(/probably/);
     expect(checked()).toContain(
-      `All the crashes Compy could read stopped in the same file (nvwgf2umx.dll), and some happened before the earliest dated change Compy found between your last normal session and the rough ones (${day(change)}, a change Windows recorded), so that change can't be the whole story for them.`,
+      `All the crashes Compy could read stopped in the same file (nvwgf2umx.dll), and some happened before the earliest change with an exact time that Compy found between your last normal session and the rough ones (${day(change)}, a change Windows recorded), so that change can't be the whole story for them.`,
     );
+  });
+
+  // p4 review: a missing kind is left out; an unreadable ledger drops "earliest" and adds an unknown line; the Compy
+  // change(s) are named when the ledger gave titles.
+  it("p4: with no kind sent the sentence leaves the kind out instead of calling it a Windows record", async () => {
+    const change = "2026-11-12T09:00:00Z";
+    await ask(answerOf([background()], { seen: [{ id: "game-crashes", args: { n: "3", since: "2026-11-02T09:00:00Z" } }, { id: "game-crash-signature", args: { module: "nvwgf2umx.dll", before: change } }] }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(`between your last normal session and the rough ones (${day(change)}), so that change`);
+    expect(checked()).not.toMatch(/a change Windows recorded|a change Compy applied/);
+  });
+
+  it("p4: an unreadable ledger says it can't tell which change came first, and the sentence no longer says 'earliest'", async () => {
+    const change = "2026-11-12T09:00:00Z";
+    await ask(
+      answerOf([background()], {
+        seen: [
+          { id: "game-crashes", args: { n: "3", since: "2026-11-02T09:00:00Z" } },
+          { id: "game-crash-signature", args: { module: "nvwgf2umx.dll", before: change, kind: "windows", ledger: "unreadable" } },
+        ],
+        unknowns: ["compy-ledger-unreadable"],
+      }),
+    );
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain("Compy couldn't read its own record of changes just now, so it can't say which change came first.");
+    expect(checked()).toContain(`some happened before a change Windows recorded between your last normal session and the rough ones (${day(change)}), so that change can't be the whole story for them.`);
+    expect(checked()).not.toMatch(/earliest/);
+  });
+
+  it("p4: the Compy change(s) applied at that moment are named, one or several", async () => {
+    const change = "2026-11-15T13:44:49Z";
+    const sentence = (titles: string) => ask(answerOf([background()], { seen: [{ id: "game-crashes", args: { n: "3", since: "2026-11-02T09:00:00Z" } }, { id: "game-crash-signature", args: { module: "m.dll", before: change, kind: "compy", titles } }] }));
+    await sentence("Turn on Game Mode");
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(`(${day(change)}, when Compy applied “Turn on Game Mode”)`);
+    cleanup();
+    await sentence("Turn on Game Mode\u001fSet the power plan");
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    expect(checked()).toContain(`(${day(change)}, 2 changes Compy applied: “Turn on Game Mode”, “Set the power plan”)`);
   });
 
   it("the earliest dated change says what kind it was: a change Compy applied is not called a Windows record", async () => {
@@ -1324,6 +1367,7 @@ describe("ParamedicCard: temperature and crash history", () => {
     );
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
+    // No titles sent (an older answer, or a blank title): the plain kind, never an invented name.
     expect(checked()).toContain(`(${day(change)}, a change Compy applied)`);
     expect(checked()).not.toContain("a change Windows recorded");
   });
@@ -2093,20 +2137,23 @@ describe("ParamedicCard: honest headings, test-not-fix steps and a button that w
 
   it("a program already open in the judged session keeps its own heading when other sessions also had starts", async () => {
     await showing([m("already-running", { id: "obs-studio", name: "OBS Studio" }), m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "" })]);
-    expect(rows()[0].textContent).toMatch(/Other programs were already open when you started playing/);
+    // Its own half still leads the heading (the plain one-half wording is the next test's last case).
+    expect(rows()[0].textContent).toMatch(/^Programs were open when you started;/);
   });
 
   it("p4: when its lines also say programs were seen starting elsewhere, the heading says both (one session / several)", async () => {
     await showing([m("already-running", { id: "obs-studio", name: "OBS Studio" }), m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "cargo" })]);
-    expect(rows()[0].textContent).toContain("Other programs were already open when you started playing, and programs were seen starting in another recent session");
-    expect(rows()[0].textContent).not.toMatch(/recent sessions/);
+    expect(rows()[0].textContent).toContain("Programs were open when you started; programs were seen starting in another session");
+    expect(rows()[0].textContent).not.toMatch(/other sessions/);
+    // Short enough to sit on one or two lines of a row title.
+    expect("Programs were open when you started; programs were seen starting in other sessions".length).toBeLessThan(90);
     cleanup();
     await showing([
       m("already-running", { id: "obs-studio", name: "OBS Studio" }),
       m("starts-seen-partial", { date: "2026-11-18T10:00:00Z", names: "cargo" }),
       m("starts-seen-other", { count: "2", otherGame: "PBZ", names: "cargo", date: "2026-11-19T10:00:00Z" }),
     ]);
-    expect(rows()[0].textContent).toContain("Other programs were already open when you started playing, and programs were seen starting in other recent sessions");
+    expect(rows()[0].textContent).toContain("Programs were open when you started; programs were seen starting in other sessions");
     cleanup();
     // Already open and nothing seen starting elsewhere: the plain heading.
     await showing([m("already-running", { id: "obs-studio", name: "OBS Studio" })]);
@@ -2494,9 +2541,11 @@ describe("ParamedicCard: 'already running' and 'not recorded' are scoped to thei
 
 // P3 cardtruth review r1: the memory figure is in the unit every other screen uses, so the card says "usable" beside it.
 describe("ParamedicCard: the memory total is the usable figure", () => {
+  const day = (iso: string) => new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(iso));
   it("says 'usable' beside the total on the memory line, in both languages", async () => {
+    const when = "2026-11-21T11:42:39Z";
     const mem = find("memory-pressure", {
-      evidence: [{ kind: "measured", code: "ram-peak", args: { peakGb: "29.1", totalGb: "31.4" }, against: false, source: "sessions" }],
+      evidence: [{ kind: "measured", code: "ram-peak", args: { peakGb: "29.1", totalGb: "31.4", full: "1", count: "1", percent: "90", dates: when }, against: false, source: "sessions" }],
       fix: steps("memory-pressure"),
     });
     answer.value = { ...base, why_first: null, findings: [mem] };
@@ -2504,8 +2553,45 @@ describe("ParamedicCard: the memory total is the usable figure", () => {
     fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
     await waitFor(() => expect(rows().length).toBe(1));
     openAll();
-    expect(screen.getByTestId("paramedic").textContent ?? "").toContain("Memory peaked at 29.1 of 31.4 GB usable in one rough session.");
+    expect(screen.getByTestId("paramedic").textContent ?? "").toContain(`it peaked at 29.1 of 31.4 GB usable on ${day(when)}.`);
     const zh = JSON.parse(readFileSync(join("src", "i18n", "locales", "zh-CN", "paramedic.json"), "utf8")).evidence as Record<string, string>;
-    expect(zh.ramPeak).toContain("可用");
+    expect(zh.ramPeak_one).toContain("可用");
+    expect(zh.ramPeak_other).toContain("可用");
+  });
+
+  // p4 review: with the owner's shape (4 rough sessions with a record, 1 nearly full; 1 more with no record) the lines
+  // say how many, the threshold, when, and that others only matched the normal peak, never one peak for the whole run.
+  it("says in how many rough sessions memory was nearly full, the threshold and the date, that others matched the normal peak, and that one has no record", async () => {
+    const when = "2026-11-21T11:42:39Z";
+    const mem = find("memory-pressure", {
+      evidence: [
+        { kind: "measured", code: "ram-peak", args: { peakGb: "28.4", totalGb: "31.4", full: "1", count: "4", percent: "90", dates: when }, against: false, source: "sessions" },
+        { kind: "measured", code: "ram-baseline", args: { peakGb: "20.0" }, against: false, source: "sessions" },
+        { kind: "measured", code: "ram-normal-range", args: { count: "1", basePeakGb: "20.0" }, against: true, source: "sessions" },
+        { kind: "unknown", code: "ram-unrecorded", args: { count: "1" }, against: false, source: "sessions" },
+        { kind: "measured", code: "ram-lower", args: { peakGb: "26.3", count: "3" }, against: true, source: "sessions" },
+      ],
+      fix: steps("memory-pressure"),
+    });
+    answer.value = { ...base, why_first: null, findings: [mem] };
+    render(<ParamedicCard />);
+    fireEvent.click(screen.getByRole("button", { name: "Something's wrong" }));
+    await waitFor(() => expect(rows().length).toBe(1));
+    openAll();
+    const text = screen.getByTestId("paramedic").textContent ?? "";
+    expect(text).toContain(`Memory was nearly full (at least 90% of what's usable) in 1 of the 4 rough sessions that have a memory record; the highest peak was 28.4 of 31.4 GB usable (${day(when)}).`);
+    expect(text).toContain("In 1 other rough session, memory peaked no higher than in your normal sessions (20.0 GB).");
+    expect(text).toContain("1 rough session has no memory record.");
+    expect(text).not.toContain("in one rough session");
+  });
+
+  it("p4: the memory strings carry the same placeholders in both languages", () => {
+    const load = (lang: string) => JSON.parse(readFileSync(join("src", "i18n", "locales", lang, "paramedic.json"), "utf8")).evidence as Record<string, string>;
+    const en = load("en");
+    const zh = load("zh-CN");
+    const ph = (s: string) => (s.match(/\{\{\w+\}\}/g) ?? []).sort().join(",");
+    for (const k of ["ramPeak_one", "ramPeak_other", "ramNormalRange_one", "ramNormalRange_other", "ramUnrecorded_one", "ramUnrecorded_other"]) {
+      expect(ph(zh[k]), k).toBe(ph(en[k]));
+    }
   });
 });

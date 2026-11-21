@@ -380,8 +380,16 @@ function evidenceLine(e: ParamedicEvidence, ctx: Ctx): string | null {
       return t("paramedic.evidence.loadNotRecorded");
     case "figure-scope":
       return t("paramedic.evidence.figureScope");
-    case "ram-peak":
-      return t("paramedic.evidence.ramPeak", { peakGb: a.peakGb, totalGb: a.totalGb });
+    case "ram-peak": {
+      // Scoped to the rough sessions with a memory record: how many were nearly full, the highest of those peaks and
+      // the date of each (never one session's peak for the whole rough run). `percent` is the line the code applies.
+      const days = (a.dates ?? "").split(US).filter(Boolean).map((d) => dates.day(d)).join(t("paramedic.firstLook.running.separator"));
+      return t("paramedic.evidence.ramPeak", { count: Number(a.count ?? 1), full: a.full ?? "1", percent: a.percent ?? "90", peakGb: a.peakGb, totalGb: a.totalGb, dates: days });
+    }
+    case "ram-normal-range":
+      return t("paramedic.evidence.ramNormalRange", { count: Number(a.count), basePeakGb: a.basePeakGb });
+    case "ram-unrecorded":
+      return t("paramedic.evidence.ramUnrecorded", { count: Number(a.count) });
     case "ram-baseline":
       return t("paramedic.evidence.ramBaseline", { peakGb: a.peakGb });
     case "ram-warning":
@@ -541,6 +549,9 @@ function stepLines(fix: ParamedicFix, { t, game }: Ctx): string[] {
   }
 }
 
+/** The engine joins a list inside one argument (titles, dates) with this unit separator. */
+const US = "\u001f";
+
 function ruledOutLine(n: ParamedicRuledOut, { t, dates, game }: Ctx): string | null {
   const a = n.args;
   switch (n.id) {
@@ -601,6 +612,8 @@ function unknownLine(code: string, { t, game, startRecord }: Ctx): string | null
       return t("paramedic.unknown.crashesUnreadable", { game });
     case "crashes-partial":
       return t("paramedic.unknown.crashesPartial", { game });
+    case "compy-ledger-unreadable":
+      return t("paramedic.unknown.compyLedger");
     case "startup-programs":
       return t("paramedic.unknown.startupPrograms");
     case "overlays":
@@ -685,8 +698,30 @@ function seenLine(s: ParamedicRuledOut, { t, dates, game }: Ctx): string | null 
       return loadLine(a.kind, a, t);
     case "sitting-merged":
       return t("paramedic.seen.sittingMerged", { count: Number(a.count) });
-    case "game-crash-signature":
-      return t("paramedic.seen.gameCrashSignature", { module: a.module, what: t("paramedic.seen.crashBeforeWhat", { date: dates.day(a.before), kind: a.kind === "compy" ? t("paramedic.seen.changeKind.compy") : t("paramedic.seen.changeKind.windows") }) });
+    case "game-crash-signature": {
+      const date = dates.day(a.before);
+      // Compy couldn't read its own record of changes: the date is a change Windows recorded, and the sentence does not
+      // say "earliest" (a Compy change may have come first).
+      if (a.ledger === "unreadable") {
+        return t("paramedic.seen.gameCrashSignature", { module: a.module, what: t("paramedic.seen.crashBeforeWindowsOnly", { date }) });
+      }
+      // What kind of change it was, and which Compy change(s) when the ledger names them. A missing kind is left out,
+      // never defaulted to "a change Windows recorded".
+      const titles = (a.titles ?? "").split(US).filter(Boolean);
+      const sep = t("paramedic.firstLook.running.separator");
+      const kind =
+        a.kind === "compy"
+          ? titles.length === 0
+            ? t("paramedic.seen.changeKind.compy")
+            : t("paramedic.seen.changeKind.compyNamed", { count: titles.length, title: titles[0], titles: titles.slice(0, 3).map((x) => `“${x}”`).join(sep) + (titles.length > 3 ? "…" : "") })
+          : a.kind === "windows"
+            ? t("paramedic.seen.changeKind.windows")
+            : null;
+      return t("paramedic.seen.gameCrashSignature", {
+        module: a.module,
+        what: kind ? t("paramedic.seen.crashBeforeWhat", { date, kind }) : t("paramedic.seen.crashBeforeWhatNoKind", { date }),
+      });
+    }
     case "mod-settings-only":
       // Files of a mod's own are not proof it is installed: said exactly so.
       return t("paramedic.seen.modSettingsOnly", { game, name: a.name });
