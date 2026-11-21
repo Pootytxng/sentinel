@@ -759,7 +759,7 @@ export default function Check({
           {/* "Limiters we measured" only over rows that rest on a measurement; a list of facts Compy read
               (a plan, a setting, a driver age) is "Worth a look": their effect on FPS is not measured. */}
           <div className="check-section-label">
-            {limiters.every((l) => isMeasuredRow(l.basis)) ? t("optimize.check.biggestLimiters") : t("optimize.check.worthALook")}
+            {limiters.length > 0 && limiters.every((l) => isMeasuredRow(l.basis)) ? t("optimize.check.biggestLimiters") : t("optimize.check.worthALook")}
           </div>
           {limiters.length === 0 ? (
             // Deliberately NOT "measured clean" — the scan subtitle above already says it (the

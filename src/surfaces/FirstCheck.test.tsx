@@ -4,6 +4,7 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 import { invoke } from "@tauri-apps/api/core";
+import "../i18n";
 import FirstCheck, { FIRST_CHECK_KEY } from "./FirstCheck";
 import { ConfirmProvider } from "../design/ConfirmDialog";
 import { LAST_CHECK_KEY } from "./last-check";
@@ -271,6 +272,65 @@ describe("FirstCheck (audit M1)", () => {
     expect(await screen.findByRole("button", { name: "Apply" })).toBeInTheDocument();
     // …and the reversibility promise is already on the card — no Apply click required.
     expect(screen.getByText(/roll this back anytime/i)).toBeInTheDocument();
+  });
+});
+
+// Review M4 (2026-11-20): the Re-run check screen said "#1 biggest limiter" over a fact Compy read and
+// printed the raw band ("Medium confidence"). It says "First on the list", and a fact row reads Known
+// with "Effect on FPS not measured"; a measured row keeps its band's word.
+describe("FirstCheck rows rest on what Compy has (review M4)", () => {
+  const row = (id: string, basis: "fact" | "measured" | undefined, confidence: "high" | "medium" | "low") => ({
+    id,
+    title: `Row ${id}`,
+    reason: "A reason.",
+    linked: null,
+    confidence,
+    ...(basis ? { basis } : {}),
+    status: "attention",
+  });
+  const scanWith = (limiters: unknown[]) =>
+    vi.mocked(invoke).mockImplementation(((cmd: string) => {
+      if (cmd === "get_game_readiness")
+        return Promise.resolve({
+          checks: [{ id: "a", label: "SSD check", status: "ready", detail: "", value: null }],
+          ready_count: 1,
+          attention_count: 0,
+          unknown_count: 0,
+          advisory_count: 0,
+          advisory: "",
+          dismissed_ids: [],
+          drifts: [],
+        });
+      if (cmd === "priorities_from")
+        return Promise.resolve({ limiters, already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null });
+      if (cmd === "get_recommendations") return Promise.resolve([]);
+      return Promise.resolve(null);
+    }) as never);
+  const mount = () =>
+    render(
+      <ConfirmProvider>
+        <FirstCheck onDone={vi.fn()} />
+      </ConfirmProvider>,
+    );
+
+  it("the first row is tagged 'First on the list', never '#1 biggest limiter'", async () => {
+    scanWith([row("one", "fact", "medium")]);
+    mount();
+    expect(await screen.findByText("First on the list")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/biggest limiter/i);
+  });
+
+  it("a fact row reads Known + 'Effect on FPS not measured', not 'Medium confidence'; a measured one keeps its band's word", async () => {
+    scanWith([row("one", "fact", "high"), row("two", "fact", "medium"), row("three", "measured", "medium")]);
+    const { container } = mount();
+    await screen.findByText("First on the list");
+    const conf = Array.from(container.querySelectorAll(".fc-rest-conf")).map((e) => e.textContent ?? "");
+    expect(conf).toHaveLength(2);
+    expect(conf[0]).toContain("Known");
+    expect(conf[0]).toContain("Effect on FPS not measured");
+    expect(conf[1]).toContain("Likely");
+    expect(conf[1]).not.toContain("not measured");
+    expect(container.textContent).not.toMatch(/confidence/i);
   });
 });
 

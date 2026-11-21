@@ -2461,14 +2461,14 @@ describe("P4-exit: what Compy tested on this game", () => {
       putProbe("readiness-scan", scan([lim("monitor-refresh", "Monitor refresh rate")]));
       await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
       expect(screen.getByTestId("exp-summary-settings-done")).toHaveTextContent(
-        "The last check's top limiter is a setting, not a part: Monitor refresh rate. No upgrade is recommended for it.",
+        "The last check's top item is a setting, not a part: Monitor refresh rate. No upgrade is recommended for it.",
       );
       cleanup();
       putProbe("readiness-scan", scan([lim("gpu-headroom", "Graphics card")]));
       await renderOwner([pass("visual-effects", "Trim Windows visual effects", 1)]);
       const done = screen.getByTestId("exp-summary-settings-done");
       expect(done).toHaveAttribute("data-kind", "part-limiter");
-      expect(done).toHaveTextContent("The last check's top limiter is a part of this PC: Graphics card.");
+      expect(done).toHaveTextContent("The last check's top item is a part of this PC: Graphics card.");
       // P9-part-line-context (Phase 9 Exit: never a part in isolation): what Compy can't check.
       expect(done).toHaveTextContent(
         "Graphics card. Before any part: Compy can't check how a new one would fit the rest of this PC (its power supply, motherboard and case). Check those first.",
@@ -2641,7 +2641,7 @@ describe("P4-exit: what Compy tested on this game", () => {
       expect(panel).toHaveAttribute("data-headline", "still-worth-testing");
       const line = screen.getByTestId("exp-summary-software-first");
       expect(line).toHaveTextContent(
-        "The last check's top limiter is a part of this PC: Graphics card. Try this setting before any upgrade: Turn off mouse acceleration.",
+        "The last check's top item is a part of this PC: Graphics card. Try this setting before any upgrade: Turn off mouse acceleration.",
       );
       expect(line.textContent).not.toMatch(/buy|\$|price|upgrade to/i);
       expect(screen.queryByTestId("exp-summary-settings-done")).toBeNull();

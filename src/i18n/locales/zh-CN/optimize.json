@@ -127,6 +127,7 @@
     "networkDriverRecent_other": "网络驱动也比较新——没什么好折腾的。",
     "biggestLimiters": "最大限制因素",
     "worthALook": "值得一看",
+    "firstOnList": "清单第一项",
     "noLimiterStandsOut": "这台主机没有明显的限制因素——今天没什么需要改的。",
     "revertedSingleTitle": "「{{title}}」自己又关掉了",
     "revertedMultiCount": "你应用过的 {{count}} 项设置已被关闭",

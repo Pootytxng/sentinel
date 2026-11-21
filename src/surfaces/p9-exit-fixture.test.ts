@@ -107,7 +107,7 @@ describe("P9-exit-fixture: each Phase 9 Exit branch, from priorities to the game
       case "part-limiter":
         // P9-part-line-context: the part the check named, then what Compy can't check before replacing it.
         expect(text).toBe(
-          "Settings have reached what Compy can test here. The last check's top limiter is a part of this PC: Game install drive. Before any drive: Compy can't read which free M.2 slots, SATA ports or drive bays your motherboard and case have. Check those first.",
+          "Settings have reached what Compy can test here. The last check's top item is a part of this PC: Game install drive. Before any drive: Compy can't read which free M.2 slots, SATA ports or drive bays your motherboard and case have. Check those first.",
         );
         break;
       default: {

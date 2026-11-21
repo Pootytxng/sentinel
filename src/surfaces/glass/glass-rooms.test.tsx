@@ -251,13 +251,16 @@ describe("GL-empty — 'What's holding FPS back' speaks for what it read: the se
 
   it("F1: no limiter in a read setup says the checked setup has nothing standing out, with no session claimed", () => {
     home({ sessions: [], priorities: noLimiters });
-    expect(screen.getByRole("region", { name: "What's holding FPS back" })).toBe(limiter());
+    // Nothing measured is on the card, so it is not titled "What's holding FPS back" (review M1).
+    expect(screen.getByRole("region", { name: "Worth a look" })).toBe(limiter());
+    expect(limiter().textContent).not.toContain("holding FPS back");
     expect(limiter().textContent).toContain("Nothing in the setup Compy checked stands out.");
     expect(limiter().textContent).not.toMatch(/session/i);
   });
 
   it("F2: priorities not back yet (or failed) says the setup is unread, and names no session", () => {
     home({ sessions: [], priorities: null });
+    expect(screen.getByRole("region", { name: "Worth a look" })).toBe(limiter());
     expect(limiter().textContent).toContain("Compy hasn't read your setup.");
     expect(limiter().textContent).not.toMatch(/session/i);
   });

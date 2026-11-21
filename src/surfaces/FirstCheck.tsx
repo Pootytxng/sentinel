@@ -1,5 +1,7 @@
 import { useLayoutEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { writeLedger } from "../data/ledger-write";
+import { RowConfidence } from "../design/ConfidenceWord";
 import type { PriorityItem } from "../types";
 import { TrustSwitch } from "../design/TrustSwitch";
 import { Wordmark } from "../design/Wordmark";
@@ -44,6 +46,7 @@ export default function FirstCheck({
   const [openRestId, setOpenRestId] = useState<string | null>(null);
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const confirm = useConfirm();
+  const { t } = useTranslation();
 
   const finish = () => {
     try {
@@ -185,10 +188,10 @@ export default function FirstCheck({
                 : subtitle}
             </p>
 
-            {/* #1 biggest limiter spotlight */}
+            {/* The first row of the list: "First on the list": a fact Compy read has no measured effect, so it is not called a limiter. */}
             {top && (
               <div className="fc-spotlight">
-                <div className="fc-spotlight-tag">#1 biggest limiter</div>
+                <div className="fc-spotlight-tag">{t("optimize.check.firstOnList")}</div>
                 <div className="fc-spotlight-title">{top.title}</div>
                 <p className="fc-spotlight-reason">{top.reason}</p>
                 <div className="fc-spotlight-foot">
@@ -252,7 +255,7 @@ export default function FirstCheck({
                         <span className="fc-rest-title">{lim.title}</span>
                         <span className="fc-rest-right">
                           <span className="fc-rest-conf">
-                            {lim.confidence[0].toUpperCase() + lim.confidence.slice(1)} confidence
+                            <RowConfidence basis={lim.basis} band={lim.confidence} />
                           </span>
                           <span className="fc-rest-caret">{open ? "▾" : "▸"}</span>
                         </span>

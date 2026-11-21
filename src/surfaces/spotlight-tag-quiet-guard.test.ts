@@ -29,8 +29,14 @@ describe("spotlight #1-limiter tags stay quiet, never loud alert badges", () => 
   });
 
   it("the quiet lowercase tag is actually present (guard wired to the real strings)", () => {
-    expect(firstCheckTsx).toContain("biggest limiter");
-    expect(setupHomeJson).toContain("biggest limiter");
+    // 2026-11-20: "#1 biggest limiter" -> "First on the list" (a fact Compy read is not a measured limiter);
+    // FirstCheck now renders it through t("optimize.check.firstOnList").
+    const optimizeJson = readFileSync(join("src", "i18n", "locales", "en", "optimize.json"), "utf8");
+    expect(firstCheckTsx).toContain("optimize.check.firstOnList");
+    expect(optimizeJson).toContain('"firstOnList": "First on the list"');
+    expect(setupHomeJson).toContain('"spotlightTag": "First on the list"');
+    expect(firstCheckTsx).not.toContain("biggest limiter");
+    expect(setupHomeJson).not.toContain("#1 biggest limiter");
   });
 
   const tagBlock = (css: string, selector: string) => {

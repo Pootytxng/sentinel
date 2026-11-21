@@ -369,7 +369,7 @@ export function HomeGlass({
             <h2 className="gl-card-title" id="gl-home-limiter">
               {/* "What's holding FPS back" only when the top row rests on a measurement. A fact Compy read
                   (a plan, a setting, a driver age) has no measured effect on FPS: "Worth a look". */}
-              {topLimiter && !isMeasuredRow(topLimiter.basis) ? t("home.glass.limiter.titleFact") : t("home.glass.limiter.title")}
+              {topLimiter && isMeasuredRow(topLimiter.basis) ? t("home.glass.limiter.title") : t("home.glass.limiter.titleFact")}
             </h2>
             {topLimiter ? (
               <div className="gl-rows">

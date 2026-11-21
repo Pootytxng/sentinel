@@ -380,7 +380,7 @@ describe("Check", () => {
       </ConfirmProvider>,
     );
     // Wait for the verdict phase (the result block) to render.
-    expect(await screen.findByText("Limiters we measured")).toBeInTheDocument();
+    expect(await screen.findByText("Worth a look")).toBeInTheDocument();
     expect(screen.getByText(/Your GPU's been running warm/i)).toBeInTheDocument();
     expect(screen.getByText(/Peaked at 84°C across your last 3 sessions/i)).toBeInTheDocument();
     // named-place law: the link is deliberate travel to the exact Learn guide.
@@ -402,7 +402,7 @@ describe("Check", () => {
         <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="amd" sessions={elsewhere} gpus={gpus} />
       </ConfirmProvider>,
     );
-    expect(await screen.findByText("Limiters we measured")).toBeInTheDocument();
+    expect(await screen.findByText("Worth a look")).toBeInTheDocument();
     expect(screen.queryByText(/running warm/i)).not.toBeInTheDocument();
     // Two of the three recorded this PC's card (the most-VRAM GPU), one recorded none.
     const mixed = [{ ...HOT[0], hw_fingerprint: card("AMD Radeon RX 9070 XT") }, HOT[1], { ...HOT[2], hw_fingerprint: card("AMD Radeon RX 9070 XT") }];
@@ -432,7 +432,7 @@ describe("Check", () => {
         <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="amd" sessions={[sess(60), sess(61), sess(59)]} />
       </ConfirmProvider>,
     );
-    expect(await screen.findByText("Limiters we measured")).toBeInTheDocument();
+    expect(await screen.findByText("Worth a look")).toBeInTheDocument();
     expect(screen.queryByText(/running warm/i)).not.toBeInTheDocument();
     // NVIDIA rig, sustained-hot — still no nudge (no AMD guide; v1 AMD-only).
     rerender(
@@ -455,7 +455,7 @@ describe("Check", () => {
         />
       </ConfirmProvider>,
     );
-    expect(await screen.findByText("Limiters we measured")).toBeInTheDocument();
+    expect(await screen.findByText("Worth a look")).toBeInTheDocument();
     // Age is a fact; "newer exists" stays a maybe — never "out of date", no version claim.
     // P5.5: the row is fact-only; the card's ONE shared note carries the maybe.
     expect(screen.getByText(/Your AMD graphics driver is 200 days old/)).toBeInTheDocument();
@@ -481,7 +481,7 @@ describe("Check", () => {
       </ConfirmProvider>
     );
     const { rerender } = render(checkWith(null));
-    expect(await screen.findByText("Limiters we measured")).toBeInTheDocument();
+    expect(await screen.findByText("Worth a look")).toBeInTheDocument();
     // Missing data is a skip, not an alarm — no age, no nudge, no URL.
     expect(screen.getByText(/couldn't read your graphics driver's date/i)).toBeInTheDocument();
     expect(screen.queryByText(/days old/)).not.toBeInTheDocument();
@@ -570,7 +570,7 @@ describe("Check", () => {
         />
       </ConfirmProvider>,
     );
-    expect(await screen.findByText("Limiters we measured")).toBeInTheDocument();
+    expect(await screen.findByText("Worth a look")).toBeInTheDocument();
     // P5.5 grouped card: the row states the FACT only (no per-device "newer may be available"
     // paragraph — the card's single shared note carries the honest maybe exactly once).
     expect(
@@ -855,6 +855,20 @@ describe("Check", () => {
     expect(labels()).toContain("Limiters we measured");
     expect(row.textContent).toContain("Likely");
     expect(row.textContent).not.toContain("not measured");
+  });
+
+  // Review M2: an empty list is vacuously "all measured"; it must not be headed "Limiters we measured".
+  it("an empty limiter list is headed 'Worth a look', never 'Limiters we measured'", async () => {
+    prioritiesMock.payload = { limiters: [], already_fine: [], not_worth_touching: [], session_hint: null, upgrade_path: null };
+    render(
+      <ConfirmProvider>
+        <Check isAppliable={() => false} onOpenLibrary={vi.fn()} onChanged={vi.fn()} vendor="any" />
+      </ConfirmProvider>,
+    );
+    expect(await screen.findByText("No limiter stands out on this rig — nothing to change today.")).toBeInTheDocument();
+    const labels = Array.from(document.querySelectorAll(".check-section-label")).map((e) => e.textContent);
+    expect(labels).toContain("Worth a look");
+    expect(labels).not.toContain("Limiters we measured");
   });
 
   // ── Session hint (P9-hint-shown) ──
