@@ -21,6 +21,7 @@ mod running_at_start; // Which KNOWN programs (reviewed allowlist, ids only, nev
 mod stutter; // Stutter Forensics — correlates a session's worst dips with concurrent signals.
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (HWiNFO/LHM/OHM) — driver-free.
 mod data_root; // #130 — the canonical data-root resolver: detects a container/junction-redirected persistence root instead of trusting the APPDATA *string*, halts on a split rather than guessing, and hands out `MutationRoot` (the capability type every Windows-mutation and receipt-write path now requires) only for a verified canonical root.
+mod data_inventory; // D4-1 - the inventory of everything Compy stores (data only, no I/O); kept complete by scripts/data-root-guard.test.mjs. First readers: the Clear-my-data commands (D4-2/D4-3).
 mod diagnostics;
 mod experiment; // Intelligence Phase 3 — user-started single-variable experiment engine + optimization simulator. ARMED 2026-07-17 (experiment_gate()==true, owner sign-off; orchestrates the existing audited mutation boundary — no new apply/rollback primitive; user-started only, defense-in-depth gate checks retained).
 mod export;
