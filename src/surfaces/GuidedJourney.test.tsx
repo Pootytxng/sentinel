@@ -1202,7 +1202,7 @@ describe("P5-realplay: the change stays on while you play", () => {
     expect(state.experiments[0]).toMatchObject({ status: "running" });
   });
 
-  it("a decided look is concluded right after the session that decided it: Likely better, kept", async () => {
+  it("a decided look is concluded right after the session that decided it: Possibly better, kept", async () => {
     state.experiments = [running()];
     state.sessions = [OLD, ...AS_IS, session(ago(30), 5400), session(ago(20), 5400)];
     state.rpProgress = backendLike();
@@ -1215,7 +1215,7 @@ describe("P5-realplay: the change stays on while you play", () => {
       await statusIs("Keep playing, Compy is still collecting (2 of 3 sessions).");
       fireEvent.click(await enabled("Measure my next session"));
       expect(await finalLine()).toBe(
-        "Likely better: Compy kept HAGS. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% allowance for normal swings between sessions.",
+        "Possibly better: Compy kept HAGS. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% allowance for normal swings between sessions.",
       );
       expect(calls("conclude_realplay")).toEqual([{ experimentId: "exp:9-0", crashed: false }]);
       expect(announced).toHaveBeenCalled();
@@ -1293,10 +1293,10 @@ describe("P5-realplay: the change stays on while you play", () => {
     expect(calls("conclude_realplay")).toHaveLength(0);
     // Review 2026-11-02 (fix 4): before the tap, the panel says what the tap does.
     expect(screen.getByTestId("realplay-see-how").textContent).toBe(
-      "Seeing the result ends the test: Compy keeps HAGS only if the result is Likely better, and otherwise puts it back the way it was before the test.",
+      "Seeing the result ends the test: Compy keeps HAGS only if the result is Possibly better, and otherwise puts it back the way it was before the test.",
     );
     fireEvent.click(await enabled("See the result"));
-    expect(await finalLine()).toMatch(/^Likely better: Compy kept HAGS\./);
+    expect(await finalLine()).toMatch(/^Possibly better: Compy kept HAGS\./);
   });
 
   // Review 2026-11-02 (fix 8): a record that holds no numbers for its verdict (a crash one) said

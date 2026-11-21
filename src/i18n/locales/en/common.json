@@ -164,7 +164,7 @@
   "confidenceHint": {
     "known": "Compy read this directly on your PC.",
     "measured": "Measured on this PC, before and after.",
-    "measuredOnce": "Measured once on this PC: one before-and-after comparison, not repeated.",
+    "measuredOnce": "One before-and-after comparison on this PC.",
     "possible": "The evidence points this way, but it is not confirmed and Compy has no second, independent support for it.",
     "likely": "The reading is measured; what it means here is inferred from the evidence, not proven.",
     "expected": "From how Windows works, not measured on this PC.",
@@ -175,6 +175,7 @@
     "known": "Known",
     "measured": "Measured",
     "measuredOnce": "Measured once",
+    "measuredTimes_other": "Measured {{count}} times",
     "possible": "Possible",
     "likely": "Likely",
     "expected": "Expected",

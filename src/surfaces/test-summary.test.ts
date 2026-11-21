@@ -13,6 +13,7 @@ import {
   LESSON_LIBRARY_ID,
   LESSON_RULES,
   avgBandOf,
+  comparisonsOf,
   fallsOf,
   fellOn,
   worseOn,
@@ -281,6 +282,25 @@ describe("P5-learned on the owner's records today", () => {
   });
 });
 
+// Review r1 B6: "Likely" needs two independent supports. A comparison is a judged run with a measured
+// verdict; they agree when every one of them gave the newest one's verdict.
+describe("comparisonsOf: how many completed comparisons a change has, and whether they agree", () => {
+  it("one comparison: counted once, so a real-play word stays Possibly", () => {
+    expect(comparisonsOf([{ verdict: "improved" }])).toEqual({ comparisons: 1, comparisonsAgree: true });
+  });
+  it("two comparisons that agree", () => {
+    expect(comparisonsOf([{ verdict: "improved" }, { verdict: "improved" }])).toEqual({ comparisons: 2, comparisonsAgree: true });
+  });
+  it("two comparisons that disagree", () => {
+    expect(comparisonsOf([{ verdict: "improved" }, { verdict: "regressed" }])).toEqual({ comparisons: 2, comparisonsAgree: false });
+    expect(comparisonsOf([{ verdict: "no-change" }, { verdict: "improved" }]).comparisonsAgree).toBe(false);
+  });
+  it("a run that judged nothing is not a comparison", () => {
+    expect(comparisonsOf([{ verdict: "too-noisy" }, { verdict: "improved" }, { verdict: null }])).toEqual({ comparisons: 1, comparisonsAgree: true });
+    expect(comparisonsOf([])).toEqual({ comparisons: 0, comparisonsAgree: true });
+  });
+});
+
 describe("P5-learned lesson rules", () => {
   const row = (over: Partial<TestedChange>): TestedChange => ({
     recId: "x",
@@ -293,6 +313,8 @@ describe("P5-learned lesson rules", () => {
     stillApplied: "on",
     noise: { band_pct: 3, measured_noise_pct: null },
     trials: 1,
+    comparisons: 1,
+    comparisonsAgree: true,
     sameContext: null,
     context: "unverified",
     deltaLow1Pct: 0,

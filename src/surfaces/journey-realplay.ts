@@ -484,19 +484,30 @@ export function realPlayWhy(exp: RealPlayRecord, t: Translate): string {
 export function realPlayFace(
   exp: { verdict: string | null; status?: string; kept?: boolean; stop_reason?: string | null; real_play?: RealPlayEvidence | null },
   t: Translate,
+  /** True only for a change with at least two completed comparisons that agree and none that
+   *  disagree (test-summary.ts `comparisonsOf`). One comparison, and any record on its own, is
+   *  "Possibly": "Likely" needs two independent supports. */
+  likely = false,
 ): string | null {
   switch (exp.verdict) {
     case null:
     case undefined:
       return null;
-    case "improved":
-      return t(
-        (exp.status === "kept" || exp.kept === true) && !putBackInHistory(exp)
-          ? "lab.experimentBench.journey.realPlay.face.likelyBetterKept"
-          : "lab.experimentBench.journey.realPlay.face.likelyBetter",
-      );
+    case "improved": {
+      const kept = (exp.status === "kept" || exp.kept === true) && !putBackInHistory(exp);
+      // Literal t("...") call sites only: the locale-parity guard and the affordance census read them.
+      if (!likely)
+        return kept
+          ? t("lab.experimentBench.journey.realPlay.face.possiblyBetterKept")
+          : t("lab.experimentBench.journey.realPlay.face.possiblyBetter");
+      return kept
+        ? t("lab.experimentBench.journey.realPlay.face.likelyBetterKept")
+        : t("lab.experimentBench.journey.realPlay.face.likelyBetter");
+    }
     case "regressed":
-      return t("lab.experimentBench.journey.realPlay.face.likelyWorse");
+      return likely
+        ? t("lab.experimentBench.journey.realPlay.face.likelyWorse")
+        : t("lab.experimentBench.journey.realPlay.face.possiblyWorse");
     case "no-change":
       return t("lab.experimentBench.journey.realPlay.face.noClearDifference");
     default:

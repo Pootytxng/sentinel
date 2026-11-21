@@ -3515,27 +3515,27 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     },
   };
 
-  it("a concluded real-play row reads Likely better, with its own band, never Measurably faster", async () => {
+  it("a concluded real-play row reads Possibly better (one comparison), with its own band, never Measurably faster", async () => {
     state.gate = true;
     state.experiments = [RP_KEPT];
     render(<ExperimentBench />);
-    const row = (await screen.findByText("Likely better — kept")).closest("li")!;
+    const row = (await screen.findByText("Possibly better — kept")).closest("li")!;
     expect(row.textContent).not.toMatch(/Measurably faster/);
     expect(within(row).getByTestId("exp-compared-receipt").textContent).toBe(
       "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band (the allowance for normal swings between sessions). The 1% low rose by more than the band and the average didn't fall by more, so the change was kept.",
     );
     expect(screen.getAllByText(wholeLine("Judged against a ±3% band from this test's own sessions: an allowance for normal swings between your Valorant sessions (3 without the change, 3 with it).")).length).toBeGreaterThan(0);
-    // The per-game summary says the real-play face and the Likely word, never Measured.
+    // The per-game summary says the real-play face and the Possibly word, never Measured.
     const summary = await screen.findByTestId("exp-summary");
-    expect(summary.textContent).toMatch(/Likely better — kept/);
-    expect(summary.textContent).toMatch(/Likely/);
+    expect(summary.textContent).toMatch(/Possibly better — kept/);
+    expect(summary.textContent).toMatch(/Possibly/);
     expect(summary.textContent).not.toMatch(/Measurably faster/);
   });
 
   // Review 2026-11-02 (fix 3): the rule sentence was picked by verdict alone, so a real-play row put
   // back in Test → Applied & history after a Likely better ended "...so the change was kept", beside
   // its own "restored" face.
-  it("a real-play row put back after Likely better never says the change was kept", async () => {
+  it("a real-play row put back after Possibly better never says the change was kept", async () => {
     state.gate = true;
     const putBack = {
       ...RP_KEPT,
@@ -3546,7 +3546,7 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     };
     state.experiments = [putBack];
     const first = render(<ExperimentBench />);
-    const row = (await screen.findByText("Likely better — restored")).closest("li")!;
+    const row = (await screen.findByText("Possibly better — restored")).closest("li")!;
     expect(within(row).getByTestId("exp-compared-receipt").textContent).toBe(
       "Compared across 3 sessions with it on and 3 without: 1% low +12.1%, average frame rate +0.4%, both against a ±3% band (the allowance for normal swings between sessions). The 1% low rose by more than the band and the average didn't fall by more, but the change was put back before Compy kept it.",
     );
@@ -3555,7 +3555,7 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     // Maximum FPS leads with the average, and ends the same way.
     state.experiments = [{ ...putBack, outcome: "max-fps" }];
     const second = render(<ExperimentBench />);
-    const maxRow = (await screen.findByText("Likely better — restored")).closest("li")!;
+    const maxRow = (await screen.findByText("Possibly better — restored")).closest("li")!;
     expect(within(maxRow).getByTestId("exp-compared-receipt").textContent).toBe(
       "Judged for Maximum FPS. Compared across 3 sessions with it on and 3 without: average frame rate +0.4%, 1% low +12.1%, both against a ±3% band (the allowance for normal swings between sessions). The average rose by more than the band and the 1% low didn't fall by more, but the change was put back before Compy kept it.",
     );
@@ -3564,13 +3564,71 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
     try {
       state.experiments = [putBack];
       render(<ExperimentBench />);
-      const zhRow = (await screen.findByText("较可能更好——已恢复")).closest("li")!;
+      const zhRow = (await screen.findByText("可能更好——已恢复")).closest("li")!;
       const zh = within(zhRow).getByTestId("exp-compared-receipt").textContent;
       expect(zh).toMatch(/但在 Compy 保留它之前，这项更改已被恢复原样。$/);
       expect(zh).not.toMatch(/所以保留了这项更改/);
     } finally {
       await i18n.changeLanguage("en");
     }
+  });
+
+  // Review r1 B6: "Likely" needs two independent supports. The summary's confidence word and the
+  // real-play face follow the data: how many completed comparisons the change has, and whether they agree.
+  describe("review r1 B6: the words follow the number of agreeing comparisons", () => {
+    const second = { ...RP_KEPT, id: "exp:8-1", concluded_at: "2026-11-05T10:00:00Z" };
+    const tested = async () => (await screen.findByTestId("exp-summary-tested")).textContent ?? "";
+
+    it("one completed comparison: Measured once and Possibly better, never Likely", async () => {
+      state.gate = true;
+      state.experiments = [RP_KEPT];
+      render(<ExperimentBench />);
+      const line = await tested();
+      expect(line).toMatch(/Possibly better — kept/);
+      expect(line).toMatch(/Measured once/);
+      expect(line).not.toMatch(/Likely|Measured \d+ times/);
+    });
+
+    it("two comparisons that agree: Measured 2 times and Likely better", async () => {
+      state.gate = true;
+      state.experiments = [RP_KEPT, second];
+      render(<ExperimentBench />);
+      const line = await tested();
+      expect(line).toMatch(/Likely better — kept/);
+      expect(line).toMatch(/Measured 2 times/);
+      expect(line).not.toMatch(/Possibly/);
+    });
+
+    it("two comparisons that disagree: Possibly, never Likely", async () => {
+      state.gate = true;
+      state.experiments = [
+        RP_KEPT,
+        { ...second, status: "restored", kept: false, verdict: "regressed", stop_reason: null },
+      ];
+      render(<ExperimentBench />);
+      const line = await tested();
+      expect(line).toMatch(/Possibly worse — restored/);
+      expect(line).toMatch(/Measured 2 times/);
+      expect(line).not.toMatch(/Likely/);
+    });
+
+    it("reads in Chinese: 可能 for one comparison, 较可能 only for two that agree", async () => {
+      await i18n.changeLanguage("zh-CN");
+      try {
+        state.gate = true;
+        state.experiments = [RP_KEPT];
+        const first = render(<ExperimentBench />);
+        const one = await tested();
+        expect(one).toMatch(/可能更好——已保留/);
+        expect(one).not.toMatch(/较可能/);
+        first.unmount();
+        state.experiments = [RP_KEPT, second];
+        render(<ExperimentBench />);
+        expect(await tested()).toMatch(/较可能更好——已保留/);
+      } finally {
+        await i18n.changeLanguage("en");
+      }
+    });
   });
 
   it("a real-play row that judged nothing says why in real-play words, never the session-halves sentence", async () => {
@@ -3592,7 +3650,7 @@ describe("P5-realplay: a running real-play Trial on the bench", () => {
       state.gate = true;
       state.experiments = [RP_KEPT];
       render(<ExperimentBench />);
-      expect((await screen.findAllByText("较可能更好——已保留")).length).toBeGreaterThan(0);
+      expect((await screen.findAllByText("可能更好——已保留")).length).toBeGreaterThan(0);
       expect(screen.getByTestId("experiment-bench").textContent).not.toMatch(/lab\.experimentBench|\{\{/);
     } finally {
       await i18n.changeLanguage("en");

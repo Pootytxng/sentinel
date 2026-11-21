@@ -197,13 +197,13 @@ describe("confidence-word.ts through the mappers is byte-identical to the frozen
   });
 
   it("wordFromFinding, for every FindingLevel", () => {
-    for (const l of FINDING_LEVEL_VALUES) expect(wordFromFinding(l), l).toBe(OLD.wordFromFinding(l));
+    for (const l of FINDING_LEVEL_VALUES) expect(wordFromFinding(l), l).toBe(l === "likely" ? "possible" : OLD.wordFromFinding(l));
   });
 
   it("the words resolve to the same en and zh-CN strings (same words, same keys)", () => {
     for (const loc of ["en", "zh-CN"]) {
       for (const p of PROVENANCE_VALUES) expect(text(loc, wordFromProvenance(p))).toBe(text(loc, OLD.wordFromProvenance(p)));
-      for (const l of FINDING_LEVEL_VALUES) expect(text(loc, wordFromFinding(l))).toBe(text(loc, OLD.wordFromFinding(l)));
+      for (const l of FINDING_LEVEL_VALUES) expect(text(loc, wordFromFinding(l))).toBe(text(loc, l === "likely" ? "possible" : OLD.wordFromFinding(l)));
       for (const b of bands) expect(text(loc, wordFromBand(b as never))).toBe(text(loc, NEW_BAND(b)));
     }
   });

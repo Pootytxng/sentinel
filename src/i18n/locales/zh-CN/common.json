@@ -156,7 +156,7 @@
     "openIt": "打开"
   },
   "confidenceHint": {
-    "measuredOnce": "在这台电脑上仅测得一次：一次前后对比，没有重复。",
+    "measuredOnce": "在这台电脑上的一次前后对比。",
     "possible": "证据指向这个方向，但尚未确认，Compy 也没有第二个独立的依据。",
     "known": "Compy 直接在这台电脑上读到的。",
     "measured": "在这台电脑上前后实测过。",
@@ -167,6 +167,7 @@
   },
   "confidenceWord": {
     "measuredOnce": "仅测得一次",
+    "measuredTimes_other": "已测 {{count}} 次",
     "possible": "有可能",
     "known": "已知",
     "measured": "已实测",

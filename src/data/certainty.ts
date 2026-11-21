@@ -208,7 +208,10 @@ export function fromProvenance(p: Provenance): Mapped {
  *  is absent on a two-session Trial), so it is `measured-once`, never `measured`. */
 export const BENCH_KIND_VALUES = ["estimate", "measured", "real-play"] as const;
 export type BenchKind = (typeof BENCH_KIND_VALUES)[number];
-export function fromBench(kind: BenchKind, band: ConfidenceBand | null | undefined): Mapped {
+export function fromBench(kind: BenchKind, band: ConfidenceBand | null | undefined, comparisons = 1): Mapped {
   if (band !== "high" && band !== "medium") return CANT_TELL;
-  return kind === "estimate" ? source("general") : source("measured-once");
+  if (kind === "estimate") return source("general");
+  // `comparisons` is the number of completed before/after comparisons of THIS change (judged runs that
+  // reached a measured verdict). One is measured once; two or more is measured that many times.
+  return comparisons >= 2 ? source("measured") : source("measured-once");
 }

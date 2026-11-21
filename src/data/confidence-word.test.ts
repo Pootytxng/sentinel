@@ -35,7 +35,7 @@ describe("confidence vocabulary", () => {
 
   it("the interview's finding level is already in the vocabulary", () => {
     expect(wordFromFinding("measured")).toBe("measured");
-    expect(wordFromFinding("likely")).toBe("likely");
+    expect(wordFromFinding("likely")).toBe("possible");
     expect(wordFromFinding("unknown")).toBe("unknown");
   });
 

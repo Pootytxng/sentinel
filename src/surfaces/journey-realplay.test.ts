@@ -131,7 +131,7 @@ describe("P5-realplay: what the progress read says", () => {
       closeHow: null,
       // Review 2026-11-02 (fix 4): before the tap, what See the result does (concludeRealPlayTrial).
       seeHow:
-        "Seeing the result ends the test: Compy keeps HAGS only if the result is Likely better, and otherwise puts it back the way it was before the test.",
+        "Seeing the result ends the test: Compy keeps HAGS only if the result is Possibly better, and otherwise puts it back the way it was before the test.",
     });
     for (const phase of ["collecting", "stopped"] as const) expect(realPlayView(RUNNING, progress({ phase }), t, "en").seeHow, phase).toBeNull();
     const lines: Record<string, string> = {
@@ -156,7 +156,7 @@ describe("P5-realplay: what the progress read says", () => {
           ? "Closing records what the sessions Compy counted show, and keeps nothing, since HAGS was already put back."
           : stop === "other-change" || stop === "conditions"
             ? "Closing records what the sessions Compy counted show, keeps nothing, and writes HAGS back exactly as it was before the test, since something else changed during it."
-            : "Closing judges the sessions Compy counted. Unless they show HAGS likely better, Compy then writes the setting back exactly as it was before the test, even if it was changed outside Compy since.",
+            : "Closing judges the sessions Compy counted. Unless they show HAGS possibly better, Compy then writes the setting back exactly as it was before the test, even if it was changed outside Compy since.",
       );
     }
   });
@@ -215,7 +215,7 @@ describe("P5-realplay: what the progress read says", () => {
               ? t("lab.experimentBench.journey.realPlay.closeHowConfounded", { change: "HAGS" })
               : t("lab.experimentBench.journey.realPlay.closeHow", { change: "HAGS" }),
         );
-        if (stop === "put-back-in-history" || confounded) expect(v.closeHow).not.toMatch(/likely better|较可能更好/);
+        if (stop === "put-back-in-history" || confounded) expect(v.closeHow).not.toMatch(/likely better|possibly better|可能更好/);
         expect(v.action).toBe("close");
       });
   });
@@ -258,21 +258,21 @@ describe("P5-realplay: what the progress read says", () => {
 });
 
 describe("P5-realplay: what a concluded real-play Trial says", () => {
-  it("Likely better: kept, on the metric its outcome is judged on, with both counts and the band", () => {
+  it("Possibly better: kept, on the metric its outcome is judged on, with both counts and the band", () => {
     const won = { status: "kept", verdict: "improved", kept: true };
     expect(realPlayResult(concluded(won, { band_pct: 3, delta_low1_pct: 12.1, delta_avg_pct: 0.4 }), "WardogsClient", t)).toBe(
-      "Likely better: Compy kept HAGS. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% allowance for normal swings between sessions.",
+      "Possibly better: Compy kept HAGS. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% allowance for normal swings between sessions.",
     );
     // Maximum FPS is judged on the average.
     expect(realPlayResult(concluded({ ...won, outcome: "max-fps" }, { band_pct: 4.2, delta_low1_pct: 1, delta_avg_pct: 8.24 }, 5, 4), "W", t)).toBe(
-      "Likely better: Compy kept HAGS. With it on, your average frame rate was 8.2% higher across 4 sessions than across 5 without it, more than the ±4.2% allowance for normal swings between sessions.",
+      "Possibly better: Compy kept HAGS. With it on, your average frame rate was 8.2% higher across 4 sessions than across 5 without it, more than the ±4.2% allowance for normal swings between sessions.",
     );
   });
 
-  it("Likely worse: put back, naming the metric that fell", () => {
+  it("Possibly worse: put back, naming the metric that fell", () => {
     const worse = { verdict: "regressed" };
     expect(realPlayResult(concluded(worse, { band_pct: 4.1, delta_low1_pct: -9.4, delta_avg_pct: -2 }, 4, 5), "W", t)).toBe(
-      "Likely worse: Compy put HAGS back. With it on, your 1% low (the worst moments) was 9.4% lower across 5 sessions than across 4 without it, more than the ±4.1% allowance for normal swings between sessions.",
+      "Possibly worse: Compy put HAGS back. With it on, your 1% low (the worst moments) was 9.4% lower across 5 sessions than across 4 without it, more than the ±4.1% allowance for normal swings between sessions.",
     );
     // Maximum FPS puts it back when the average OR the 1% low fell beyond the band: the one that did.
     expect(realPlayResult(concluded({ ...worse, outcome: "max-fps" }, { band_pct: 3, delta_low1_pct: -1, delta_avg_pct: -6 }), "W", t)).toMatch(
@@ -328,7 +328,7 @@ describe("P5-realplay: what a concluded real-play Trial says", () => {
   it("Likely worse names the fall it was judged at, not the band", () => {
     const worse = { verdict: "regressed", outcome: "max-fps", game_noise: { model: 3 } };
     expect(realPlayResult(concluded(worse, { band_pct: 10, delta_low1_pct: -2, delta_avg_pct: -9.5 }, 4, 5), "W", t)).toBe(
-      "Likely worse: Compy put HAGS back. With it on, your average frame rate was 9.5% lower across 5 sessions than across 4 without it, past −9%, the fall that matches the +10% allowance for normal swings between sessions.",
+      "Possibly worse: Compy put HAGS back. With it on, your average frame rate was 9.5% lower across 5 sessions than across 4 without it, past −9%, the fall that matches the +10% allowance for normal swings between sessions.",
     );
     // Recommended's 1% low in real play is read on the band both ways: the band words stand.
     expect(realPlayResult(concluded({ verdict: "regressed", game_noise: { model: 3 } }, { band_pct: 10, delta_low1_pct: -12, delta_avg_pct: 0 }), "W", t)).toMatch(
@@ -418,13 +418,13 @@ describe("P5-realplay: what a concluded real-play Trial says", () => {
     const numbers = { band_pct: 3, delta_low1_pct: 12.1, delta_avg_pct: 0.4, look: 1, stop: "put-back-in-history" };
     const better = realPlayResult(concluded({ ...history, verdict: "improved" }, numbers), "W", t);
     expect(better).toBe(
-      "Likely better: HAGS was put back in Test → Applied & history. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% allowance for normal swings between sessions.",
+      "Possibly better: HAGS was put back in Test → Applied & history. With it on, your 1% low (the worst moments) was 12.1% higher across 3 sessions than across 3 without it, more than the ±3% allowance for normal swings between sessions.",
     );
     // Even a record that says "kept" beside that stop reason never reads as kept.
     expect(realPlayResult(concluded({ ...history, status: "kept", kept: true, verdict: "improved" }, numbers), "W", t)).not.toMatch(/kept/i);
-    expect(realPlayFace({ ...history, status: "kept", verdict: "improved" }, t)).toBe("Likely better — restored");
+    expect(realPlayFace({ ...history, status: "kept", verdict: "improved" }, t)).toBe("Possibly better — restored");
     expect(realPlayResult(concluded({ ...history, verdict: "regressed" }, { ...numbers, delta_low1_pct: -9 }), "W", t)).toMatch(
-      /^Likely worse: HAGS was put back in Test → Applied & history\. With it on, your 1% low/,
+      /^Possibly worse: HAGS was put back in Test → Applied & history\. With it on, your 1% low/,
     );
     expect(realPlayResult(concluded({ ...history, verdict: "insufficient-evidence" }, { stop: "put-back-in-history" }, 3, 2), "W", t)).toBe(
       "Unknown: HAGS was put back in Test → Applied & history after only 2 sessions with it on were counted, too few to judge.",
@@ -432,21 +432,29 @@ describe("P5-realplay: what a concluded real-play Trial says", () => {
   });
 
   it("explains the rule it was judged by, and that nothing was judged when nothing was", () => {
-    expect(realPlayWhy(concluded({ verdict: "improved" }), t)).toMatch(/^Real play compares your sessions .* Recommended keeps a change only when it is likely better/);
-    expect(realPlayWhy(concluded({ verdict: "regressed", outcome: "max-fps" }), t)).toMatch(/Maximum FPS keeps a change only when it is likely better: the average higher/);
+    expect(realPlayWhy(concluded({ verdict: "improved" }), t)).toMatch(/^Real play compares your sessions .* Recommended keeps a change only when the result is Possibly better/);
+    expect(realPlayWhy(concluded({ verdict: "regressed", outcome: "max-fps" }), t)).toMatch(/Maximum FPS keeps a change only when the result is Possibly better: the average higher/);
     expect(realPlayWhy(concluded({ verdict: "too-noisy" }), t)).toBe(
       "Real play needs enough sessions on each side that can be compared fairly, so nothing was judged. The line above says what got in the way, and what happened to the change.",
     );
   });
 
-  it("history faces: Likely better / Likely worse / No clear difference / Unknown, never a measured-faster face", () => {
-    expect(realPlayFace({ verdict: "improved", status: "kept" }, t)).toBe("Likely better — kept");
-    expect(realPlayFace({ verdict: "improved", kept: true }, t)).toBe("Likely better — kept");
-    expect(realPlayFace({ verdict: "improved", status: "restored" }, t)).toBe("Likely better — restored");
-    expect(realPlayFace({ verdict: "regressed" }, t)).toBe("Likely worse — restored");
+  it("history faces: Possibly better / Possibly worse / No clear difference / Unknown, never a measured-faster face", () => {
+    expect(realPlayFace({ verdict: "improved", status: "kept" }, t)).toBe("Possibly better — kept");
+    expect(realPlayFace({ verdict: "improved", kept: true }, t)).toBe("Possibly better — kept");
+    expect(realPlayFace({ verdict: "improved", status: "restored" }, t)).toBe("Possibly better — restored");
+    expect(realPlayFace({ verdict: "regressed" }, t)).toBe("Possibly worse — restored");
     expect(realPlayFace({ verdict: "no-change" }, t)).toBe("No clear difference — restored");
     for (const v of ["too-noisy", "insufficient-evidence", "confounded", "not-comparable"]) expect(realPlayFace({ verdict: v }, t), v).toBe("Unknown — restored");
     expect(realPlayFace({ verdict: null }, t)).toBeNull();
+    // Review r1 B6: Likely only for a change with two or more agreeing comparisons (the `likely` flag);
+    // one comparison, and any record on its own, is Possibly.
+    expect(realPlayFace({ verdict: "improved", status: "kept" }, t, true)).toMatch(/^Likely better .{1} kept$/);
+    expect(realPlayFace({ verdict: "improved", status: "restored" }, t, true)).toMatch(/^Likely better .{1} restored$/);
+    expect(realPlayFace({ verdict: "regressed" }, t, true)).toMatch(/^Likely worse .{1} restored$/);
+    expect(realPlayFace({ verdict: "no-change" }, t, true)).toBe(realPlayFace({ verdict: "no-change" }, t));
+    expect(realPlayFace({ verdict: "improved", status: "kept" }, t)).not.toMatch(/Likely/);
+    expect(realPlayFace({ verdict: "regressed" }, t)).not.toMatch(/Likely/);
   });
 
   it("its band line names this test's own sessions, never older history", () => {
@@ -551,15 +559,16 @@ describe("P5-realplay: every line in zh-CN too", () => {
       `HAGS已开启（自 ${whenText(APPLIED, "zh-CN")} 起）。在 Compy 得出结果之前它会一直保持开启：最多 8 局，最晚到 ${whenText(UNTIL, "zh-CN")}。`,
     );
     expect(realPlayResult(concluded({ status: "kept", verdict: "improved" }, { band_pct: 3, delta_low1_pct: 12.1, delta_avg_pct: 0.4 }), "W", t)).toBe(
-      "较可能更好：已保留HAGS。开启后的 3 局与未开启的 3 局相比，1% 最低帧（最卡的时刻）高了 12.1%，超出了为各局之间正常波动留出的 ±3% 余量。",
+      "可能更好：已保留HAGS。开启后的 3 局与未开启的 3 局相比，1% 最低帧（最卡的时刻）高了 12.1%，超出了为各局之间正常波动留出的 ±3% 余量。",
     );
-    expect(realPlayFace({ verdict: "improved", status: "kept" }, t)).toBe("较可能更好——已保留");
+    expect(realPlayFace({ verdict: "improved", status: "kept" }, t)).toBe("可能更好——已保留");
+    expect(realPlayFace({ verdict: "improved", status: "kept" }, t, true)).toMatch(/^\u8f83\u53ef\u80fd\u66f4\u597d/);
     expect(realPlayOffer(progress({ phase: "collecting-before", experiment_id: null, before: 0 }), "HAGS", "WardogsClient", t)).toBe(
       "也可以边正常玩边测试：Compy 会先测量 3 局保持现状的WardogsClient（目前已测 0 局），然后开启HAGS，并在你随意玩的期间一直保持开启。",
     );
     expect(
       realPlayResult(concluded({ status: "restored", kept: false, verdict: "improved", stop_reason: "real-play-put-back-in-history" }, { band_pct: 3, delta_low1_pct: 12.1, delta_avg_pct: 0.4, look: 1 }), "W", t),
-    ).toBe("较可能更好：HAGS已在“测试 → 已应用与历史”中被撤销。开启后的 3 局与未开启的 3 局相比，1% 最低帧（最卡的时刻）高了 12.1%，超出了为各局之间正常波动留出的 ±3% 余量。");
+    ).toBe("可能更好：HAGS已在“测试 → 已应用与历史”中被撤销。开启后的 3 局与未开启的 3 局相比，1% 最低帧（最卡的时刻）高了 12.1%，超出了为各局之间正常波动留出的 ±3% 余量。");
     expect(notCountedWhy("no-reading", 600, t)).toBe("没有帧率读数");
     expect(realPlayResult(concluded({ verdict: "insufficient-evidence" }, { stop: "window-over" }, 3, 1), "W", t)).toBe(
       "未知：已把HAGS恢复原样。测试停止前，开启后只统计到 1 局（测试时间已经结束），太少，无法判断。",

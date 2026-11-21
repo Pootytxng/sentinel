@@ -960,7 +960,7 @@ describe("HomeConsole — verdict/top-limiter one-owner dedup", () => {
 // verdict sentence verbatim (get_intelligence_headline is non-null ONLY for a real
 // improved/regressed verdict, engine-enforced). Flag "0" must render nothing AND never fetch.
 const headlineFixture = {
-  text: "1% lows improved 10.1% vs your previous Valorant session. Most likely: GPU driver updated.",
+  text: "1% lows improved 10.1% vs your previous Valorant session. Possible reason: GPU driver updated.",
   verdict: "improved",
   game: "Valorant",
   session_started_at: "2026-07-10T20:00:00Z",

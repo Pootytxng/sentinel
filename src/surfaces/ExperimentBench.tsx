@@ -378,13 +378,18 @@ function simVerdictCopy(t: Translate): Record<string, { label: string; blocked: 
 // Self-review r2 2026-10-28: the word carries the shared gloss, like every other confidence word.
 // P5-realplay: a real-play result is a supported inference from sessions played however the owner
 // played (Likely), never a controlled measurement, and never High.
-function BenchWord({ c, kind }: { c: Confidence; kind: BenchKind }) {
+function BenchWord({ c, kind, comparisons = 1 }: { c: Confidence; kind: BenchKind; comparisons?: number }) {
   const { t } = useTranslation();
   // u3-focus 2026-11-21: through certainty.ts fromBench. A real-play result and a two-session Trial are
   // each ONE before/after comparison (the Trial record stores no repeat count): "Measured once", not
   // "Measured" and not "Likely" (nothing above Possible without two independent supports).
-  const word: ConfidenceWord = wordFromBench(kind, c);
-  return <Term tip={t(confidenceHintKey(word))}>{t(confidenceWordKey(word))}</Term>;
+  // With two or more completed comparisons of the change it says how many ("Measured 3 times").
+  const word: ConfidenceWord = wordFromBench(kind, c, comparisons);
+  const label =
+    word === "measured" && comparisons >= 2
+      ? t("common.confidenceWord.measuredTimes", { count: comparisons })
+      : t(confidenceWordKey(word));
+  return <Term tip={t(confidenceHintKey(word))}>{label}</Term>;
 }
 
 // §11 receipt line: the band the verdict was judged against, and whether this game's own noise on
@@ -2067,13 +2072,15 @@ function TestSummary({ s }: { s: GameTestSummary }) {
       <>
         {t("lab.experimentBench.summary.row", {
           title: r.title,
-          text: r.realPlay ? realPlayFace({ verdict: r.verdict, kept: r.kept }, t) : (verdicts[r.verdict] ?? r.verdict),
+          text: r.realPlay
+            ? realPlayFace({ verdict: r.verdict, kept: r.kept }, t, r.comparisons >= 2 && r.comparisonsAgree)
+            : (verdicts[r.verdict] ?? r.verdict),
         })}
         {sep}
         {r.realPlay ? (
-          <BenchWord c={r.confidence ?? "unknown"} kind="real-play" />
+          <BenchWord c={r.confidence ?? "unknown"} kind="real-play" comparisons={r.comparisons} />
         ) : (
-          <BenchWord c={r.confidence ?? "unknown"} kind="measured" />
+          <BenchWord c={r.confidence ?? "unknown"} kind="measured" comparisons={r.comparisons} />
         )}
         {sep}
         {[

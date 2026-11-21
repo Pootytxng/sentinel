@@ -216,6 +216,12 @@ export type TestedChange = {
   noise: SummaryNoise | null;
   /** How many judged Trials of this change on this game. */
   trials: number;
+  /** Completed before/after comparisons of this change on this game: the judged Trials that reached a
+   *  measured verdict (improved / no-change / regressed). A Trial that judged nothing is not one. */
+  comparisons: number;
+  /** Every one of those comparisons gave the same verdict as the newest measured one. With 2 or more
+   *  comparisons that agree, a real-play result may say "Likely"; otherwise it says "Possibly". */
+  comparisonsAgree: boolean;
   /** Its Trial's baseline ran under the same graphics driver and Windows build as the newest session.
    *  null when either side didn't record them. Derived from `context`. */
   sameContext: boolean | null;
@@ -277,6 +283,15 @@ const MEASURED_VERDICTS = new Set(["improved", "no-change", "regressed"]);
  *  an attempt that judged nothing (too-noisy, confounded, not-comparable, expired, insufficient…). */
 export const isMeasuredVerdict = (verdict: string | null | undefined): boolean =>
   verdict != null && MEASURED_VERDICTS.has(verdict);
+
+/** The completed before/after comparisons among one change's judged runs (oldest first), and whether
+ *  they agree. Agreement is the only thing that can lift a real-play "Possibly better" to "Likely
+ *  better": two independent comparisons pointing the same way and none pointing another. */
+export function comparisonsOf(runs: readonly { verdict: string | null }[]): { comparisons: number; comparisonsAgree: boolean } {
+  const measured = runs.filter((r) => isMeasuredVerdict(r.verdict)).map((r) => r.verdict);
+  const newest = measured[measured.length - 1];
+  return { comparisons: measured.length, comparisonsAgree: measured.every((v) => v === newest) };
+}
 
 /** Attempts in a row on one change that gave no result Compy can use now, before it stops offering
  *  another run (ENGINE §7: repeatability is insufficient; stopping early is success). ONE budget
@@ -745,6 +760,7 @@ export function summarizeGame(
       stillApplied: stillApplied(x.rec_id),
       noise: x.noise_evidence ?? null,
       trials: runs.length,
+      ...comparisonsOf(runs),
       sameContext: sameContext(x.baseline_session_id),
       context: matchOf(x.baseline_session_id),
       deltaLow1Pct: x.treatment?.delta_low1_pct ?? null,

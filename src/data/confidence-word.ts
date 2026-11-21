@@ -79,13 +79,17 @@ export function wordFromProvenance(p: Provenance): ConfidenceWord {
 /** A bench result's word, through certainty.ts fromBench: a simulator estimate is "Expected"; a real-play
  *  result and a two-session Trial are each ONE before/after comparison, so "Measured once" (never
  *  "Measured", never "Likely"); a low or unknown band is "Unknown". */
-export function wordFromBench(kind: BenchKind, band: ConfidenceBand | "high" | "medium" | "low" | null | undefined): ConfidenceWord {
-  return shownWord(fromBench(kind, band));
+export function wordFromBench(
+  kind: BenchKind,
+  band: ConfidenceBand | "high" | "medium" | "low" | null | undefined,
+  comparisons = 1,
+): ConfidenceWord {
+  return shownWord(fromBench(kind, band, comparisons));
 }
 
 /** The Home interview's finding level is already in the vocabulary. */
 export function wordFromFinding(level: FindingLevel): ConfidenceWord {
-  return legacyWord(fromFindingLevel(level));
+  return shownWord(fromFindingLevel(level));
 }
 
 /** The i18n key of a word (common.confidenceWord.*). */
