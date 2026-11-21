@@ -62,3 +62,23 @@ describe("gameLibrary — a game is what Compy measured (glass redesign)", () =>
     expect(playTime(-5)).toEqual({ h: 0, m: 0 });
   });
 });
+
+describe("gameLibrary — a mostly-unread session is listed but never the last or best figure (m6-unread)", () => {
+  it("lists it, counts its play time, but shows no last/best figure from it", () => {
+    const [g] = gameLibrary([
+      session({ started_at: "2026-10-20T20:00:00Z", avg_fps: 100, low1_fps_est: 80 }),
+      session({ started_at: "2026-10-28T20:00:00Z", avg_fps: 300, low1_fps_est: 250, unreadable_seconds: 721 } as Partial<SessionSummary>),
+    ]);
+    expect(g.sessions).toHaveLength(2);
+    expect(g.totalSecs).toBe(7200);
+    expect(g.lastAvg).toBeNull();
+    expect(g.lastLow).toBeNull();
+    expect(g.bestAvg).toBe(100);
+  });
+
+  it("exactly a fifth unread is still a measured figure", () => {
+    const [g] = gameLibrary([session({ avg_fps: 300, unreadable_seconds: 720 } as Partial<SessionSummary>)]);
+    expect(g.lastAvg).toBe(300);
+    expect(g.bestAvg).toBe(300);
+  });
+});

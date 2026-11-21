@@ -616,3 +616,31 @@ describe("CR-tuning-gpu-other-card: GPU signals read only sessions on this card"
     expect(limit?.untied).toBeUndefined();
   });
 });
+
+describe("a mostly-unread session is not a measured one (m6-unread)", () => {
+  const unreadFlag = { unreadable_seconds: 721 } as Partial<SessionSummary>; // of 3600 s: just over a fifth
+  const dropped = { started_at: "2026-06-08T19:00:00Z", low1_fps_est: 40 };
+  const run = (extra: Partial<SessionSummary>) => {
+    const ss = [sess({ ...dropped, ...extra }), ...threeGoodSessions()];
+    return measureTuning(baseline(), ss, measured(), ok(ss))!;
+  };
+
+  it("control: the same drop on a fully read session IS called a regression", () => {
+    const m = run({});
+    expect(m.fpsRegressed).toBe(true);
+    expect(m.low1DeltaPct).not.toBeNull();
+  });
+
+  it("a mostly-unread session never makes the frames 'worse' or 'held', and its low is not shown as a delta", () => {
+    const m = run(unreadFlag);
+    expect(m.fpsRegressed).toBe(false);
+    expect(m.fpsImproved).toBe(false);
+    expect(m.low1DeltaPct).toBeNull();
+    expect(m.fpsUnmeasured).toBe(true);
+    expect(m.detail).toContain("a session Compy couldn't read most of");
+  });
+
+  it("exactly a fifth unread is still judged", () => {
+    expect(run({ unreadable_seconds: 720 } as Partial<SessionSummary>).fpsRegressed).toBe(true);
+  });
+});

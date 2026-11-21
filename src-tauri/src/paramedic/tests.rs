@@ -61,6 +61,7 @@ fn facts(at: &str, dur: u64, samples: u32, avg: f64, low1: f64) -> SessionFacts 
         cap: CapState::Unknown,
         mixed: false,
         ended: None,
+        mostly_unread: false,
     }
 }
 
@@ -1174,6 +1175,7 @@ fn summary() -> crate::sessions::SessionSummary {
         gpu_load: None,
         frame_cap: None,
         ended: None,
+        unreadable_seconds: 0,
     }
 }
 
@@ -5323,4 +5325,58 @@ fn facts_read_why_a_session_ended_and_an_old_row_reads_as_not_recorded() {
     row.ended = Some(SessionEnd::ProcessExited);
     assert_eq!(facts_from(&row).ended, Some(SessionEnd::ProcessExited));
     assert_eq!(facts_from(&summary()).ended, None);
+}
+
+// ==== a mostly-unread session is not graded (m6-unread) ============================================
+fn unread(mut s: SessionFacts) -> SessionFacts {
+    s.mostly_unread = true;
+    s
+}
+
+#[test]
+fn the_adapter_marks_a_session_mostly_unread_at_exactly_over_a_fifth_of_its_seconds() {
+    let mut s = summary(); // 600 s
+    s.unreadable_seconds = 120;
+    assert!(!facts_from(&s).mostly_unread, "exactly a fifth is still graded");
+    assert!(facts_from(&s).judgeable());
+    s.unreadable_seconds = 121;
+    assert!(facts_from(&s).mostly_unread, "one second more is not");
+    assert!(!facts_from(&s).judgeable(), "and it is then not judgeable");
+}
+
+#[test]
+fn a_mostly_unread_session_is_never_normal_never_rough_never_a_baseline_never_absent() {
+    // Four normal days, one rough day (day 5), then two mostly-unread days: one that LOOKS rough (day 6) and
+    // one that looks normal (day 7). Neither may count as rough, as normal, as a baseline, or corroborate.
+    let day = |d: u32, low1: f64| facts(&format!("2026-10-{d:02}T10:00:00Z"), 600, 600, 100.0, low1);
+    let mut sess = steady(4);
+    sess.push(day(5, 30.0));
+    sess.push(unread(day(6, 10.0)));
+    sess.push(unread(day(7, 50.0)));
+    let inp = inputs(sess);
+    let rows = game_sessions(&inp, "g");
+    assert_eq!(rows.len(), 7, "a mostly-unread session is still one of the game's sessions (never absent)");
+    let judged = judge_game(&rows);
+    for i in [5, 6] {
+        assert_eq!(judged[i].verdict, Verdict::Unjudged, "day {} is not graded", i + 1);
+        assert!(!judged[i].would_fire && judged[i].eval.is_none(), "day {} neither fires nor corroborates", i + 1);
+    }
+    assert_eq!(judged[4].verdict, Verdict::Fired, "the one really rough session is still found");
+    assert!((0..4).all(|i| judged[i].verdict != Verdict::Fired));
+    let d = diagnose(&inp, Complaint::Slow, Some("g"));
+    let p = d.problem.expect("the rough day is found");
+    assert_eq!(p.sessions_affected.len(), 1, "rough count: only the graded rough session, not the unread one that looked rough");
+    assert!(p.partial_sessions.is_empty(), "an unread session is not a partial corroboration");
+    assert_eq!(p.later_unjudged, 2, "both unread days are named as not graded, not dropped");
+    // Baseline: the four normal days only.
+    let base = judged[4].base.as_ref().expect("baseline");
+    assert_eq!(base.ids, vec![0, 1, 2, 3]);
+    // A normal-looking unread day among the normal days does not join the baseline either.
+    let mut mid = steady(3);
+    mid.insert(2, unread(facts("2026-10-02T12:00:00Z", 600, 600, 100.0, 50.0)));
+    let mid_inp = inputs(mid);
+    let rows = game_sessions(&mid_inp, "g");
+    let judged = judge_game(&rows);
+    assert_eq!(judged.iter().filter(|j| j.verdict == Verdict::Unjudged).count(), 1);
+    assert_eq!(judged[3].verdict, Verdict::NeedsMore(2), "the third graded day sees two normal sessions before it, not three");
 }

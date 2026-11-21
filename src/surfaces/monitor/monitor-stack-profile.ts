@@ -1,6 +1,6 @@
 import type { TFunction } from "i18next";
 import type { SessionSummary } from "../../types";
-import { knownFps, allBackground } from "../../lib/session-metrics";
+import { knownFps, allBackground, mostlyUnread } from "../../lib/session-metrics";
 
 // Monitor v5 "Flight Deck + Session Stack" pure math (plan 2026-07-11-monitor-v5-deck-stack,
 // T1). Everything here is flat 2D over REAL measured series — the v3→v4 chain law: no
@@ -82,6 +82,8 @@ export function sessionDelta(
   front: SessionSummary | null | undefined,
   prev: SessionSummary | null | undefined,
 ): SessionDelta {
+  // A mostly-unread session's aggregates describe only the seconds that were read: not a side of a delta.
+  if ((front && mostlyUnread(front)) || (prev && mostlyUnread(prev))) return { avgFps: null, low1: null };
   return {
     avgFps: num(front?.avg_fps, prev?.avg_fps),
     low1: num(front?.low1_fps_est, prev?.low1_fps_est),
@@ -192,7 +194,7 @@ export function stackRowsFrom(sessions: SessionSummary[], gameOnly?: string | nu
     const prev = picked[i + 1] ?? null;
     const delta: StackRowDelta | null = prev
       ? {
-          avgFps: num(s.avg_fps, prev.avg_fps),
+          avgFps: sessionDelta(s, prev).avgFps,
           sameGame: !!s.process_name && s.process_name === prev.process_name,
           prevGame: prev.process_name,
         }

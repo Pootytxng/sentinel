@@ -6,7 +6,7 @@
 
 import type { SessionSummary } from "../types";
 import { prettyGameName } from "../surfaces/game-name";
-import { allBackground, knownFps } from "../lib/session-metrics";
+import { allBackground, knownFps, mostlyUnread } from "../lib/session-metrics";
 
 export type GameEntry = {
   /** Stable grouping key: the process name, lower-cased. */
@@ -46,15 +46,21 @@ export function gameLibrary(all: SessionSummary[]): GameEntry[] {
   for (const [key, list] of byKey) {
     const sessions = [...list].sort((a, b) => ts(b) - ts(a));
     const newest = sessions[0];
-    const avgs = sessions.map((s) => knownFps(s.avg_fps)).filter((v): v is number => v != null);
+    // A mostly-unread session is listed (it was played) but its averages are not a measured figure: it is
+    // never the "last" reading and never the "best" one.
+    const avgs = sessions
+      .filter((s) => !mostlyUnread(s))
+      .map((s) => knownFps(s.avg_fps))
+      .filter((v): v is number => v != null);
+    const newestRead = !mostlyUnread(newest);
     games.push({
       key,
       name: prettyGameName(newest.process_name) || newest.process_name,
       sessions,
       lastPlayed: newest.started_at,
       totalSecs: sessions.reduce((sum, s) => sum + (Number.isFinite(s.duration_secs) ? Math.max(0, s.duration_secs) : 0), 0),
-      lastAvg: knownFps(newest.avg_fps),
-      lastLow: knownFps(newest.low1_fps_est),
+      lastAvg: newestRead ? knownFps(newest.avg_fps) : null,
+      lastLow: newestRead ? knownFps(newest.low1_fps_est) : null,
       bestAvg: avgs.length ? Math.max(...avgs) : null,
     });
   }

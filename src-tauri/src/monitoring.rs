@@ -791,6 +791,29 @@ pub(crate) fn gate_unreadable<T>(sample: Option<T>, unread: UnreadRead) -> (Opti
     }
 }
 
+/// PURE: one recorder second, reader side. What the helper left on disk (its report, the marker's count and
+/// age, the report's age) becomes the report this second may record (withheld while the snapshot is
+/// unreadable), whether the second is flagged unreadable, and the unreadable read itself.
+pub(crate) fn unreadable_second<T>(
+    parsed: Option<T>,
+    report_ticks: u64,
+    marker_ticks: Option<u64>,
+    marker_age: Option<std::time::Duration>,
+    sample_age: Option<std::time::Duration>,
+) -> (Option<T>, bool, UnreadRead) {
+    let unread = unreadable_read(marker_ticks, marker_age, sample_age, report_ticks);
+    let (sample, flagged) = gate_unreadable(parsed, unread);
+    (sample, flagged, unread)
+}
+
+/// PURE glue: hands one second's unreadable read to the open session's accumulator and says whether the
+/// live progress must be refreshed. The session's count is the helper's own cumulative counter (a delta
+/// since this session's last look), never the yes/no flag, which sees about half the half-second ticks.
+pub(crate) fn feed_unreadable(acc: &mut crate::sessions::SessionAccumulator, unread: UnreadRead, flagged: bool) -> bool {
+    let added = acc.observe_unreadable_counter(unread.ticks);
+    flagged || added > 0
+}
+
 /// The marker as it is on disk: its count (if readable) and its age (if present).
 fn read_marker() -> (Option<u64>, Option<std::time::Duration>) {
     let path = fps_unreadable_path();
@@ -1292,13 +1315,9 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 // frames": the report up to 3 s old that is still on disk is NOT re-recorded as this
                 // second's, and the second is counted as unreadable below.
                 let (marker_ticks, marker_age) = read_marker();
-                let unread = unreadable_read(
-                    marker_ticks,
-                    marker_age,
-                    fps_age,
-                    parsed.as_ref().map_or(0, |s| s.snapshot_unreadable_ticks),
-                );
-                let (sample, second_unreadable) = gate_unreadable(parsed, unread);
+                let report_ticks = parsed.as_ref().map_or(0, |s| s.snapshot_unreadable_ticks);
+                let (sample, second_unreadable, unread) =
+                    unreadable_second(parsed, report_ticks, marker_ticks, marker_age, fps_age);
                 // The boundary sees only a reading that names its process; `alive` is asked only on a
                 // tick with no fresh reading, so a game that is merely silent (alt-tab, loading,
                 // minimised) is never mistaken for a game that is gone.
@@ -1334,8 +1353,7 @@ fn start_fps_capture_locked() -> Result<(), String> {
                 // yes/no once a second against half-second ticks and so sees about half of them. The
                 // flag only drives the live readout and the withheld report. Ticks add no reading, no
                 // zero and no gap-fill; the session's own length still includes them.
-                let added = live.acc.observe_unreadable_counter(unread.ticks);
-                if second_unreadable || added > 0 {
+                if feed_unreadable(&mut live.acc, unread, second_unreadable) {
                     *lock_progress() = Some(live.acc.progress());
                 }
                 if let Some(s) = &sample {
@@ -2238,6 +2256,46 @@ mod unreadable_tests {
         assert_eq!(loud["unreadable_now"], true);
         assert_eq!(loud["unreadable_ticks"], 9);
         assert!(loud["sample"].is_null(), "an unreadable second shows no sample");
+    }
+
+    /// The recorder's per-second wiring, reader output to session record: the same two functions the
+    /// recorder thread calls, driven with what the helper leaves on disk. Only the file reads and the
+    /// session tracker are outside this seam.
+    #[test]
+    fn reader_output_reaches_the_session_as_the_helpers_counter_delta_not_the_flag() {
+        use super::{feed_unreadable, unreadable_second};
+        use std::time::Duration as D;
+        let mut acc = crate::sessions::SessionAccumulator::new("2026-11-21T00:00:00Z".into(), Some(0));
+        acc.unreadable_counter_baseline(0);
+        // What the helper left on disk each second: marker count, marker age, report age, ticks the report
+        // carries, and whether a report exists.
+        type Disk = (Option<u64>, Option<D>, Option<D>, u64, bool);
+        let seconds: [Disk; 5] = [
+            (None, None, Some(D::from_millis(200)), 0, true),                         // fine
+            (Some(6), Some(D::from_millis(500)), Some(D::from_secs(3)), 6, true),     // snapshot unreadable: report is older
+            (Some(6), Some(D::from_millis(1500)), Some(D::from_millis(100)), 6, true), // recovered: report newer than marker
+            (Some(2), Some(D::from_millis(500)), Some(D::from_secs(3)), 2, true),     // helper restarted: counter went back
+            (None, None, None, 0, false),                                              // nothing on disk at all
+        ];
+        let mut flagged_seconds = 0;
+        let mut recorded = 0;
+        let mut refreshed = Vec::new();
+        for (marker, m_age, s_age, ticks, has_report) in seconds {
+            let (sample, flagged, unread) = unreadable_second(has_report.then_some("report"), ticks, marker, m_age, s_age);
+            if sample.is_some() {
+                recorded += 1;
+            }
+            if flagged {
+                flagged_seconds += 1;
+            }
+            refreshed.push(feed_unreadable(&mut acc, unread, flagged));
+        }
+        assert_eq!(flagged_seconds, 2, "the live flag saw two seconds (about half the ticks)");
+        assert_eq!(recorded, 2, "a report older than the marker is not re-recorded as that second's");
+        assert_eq!(refreshed, [false, true, false, true, false], "progress is refreshed only when something changed");
+        acc.record_tick("g.exe", 60.0, 16.6, 50.0, 1, Some(true));
+        let summary = acc.finalize(100);
+        assert_eq!(summary.unreadable_seconds, 4, "6 ticks + 2 after the restart = 8 half-second ticks = 4 s, from the counter, not the 2 flagged seconds");
     }
 
     /// The Rust half of the wire contract: `src/test/fixtures/unreadable.wire.json` is what serde emits

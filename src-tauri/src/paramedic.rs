@@ -223,6 +223,12 @@ pub(crate) struct SessionFacts {
     /// row is never joined to the one after it, because Compy cannot tell a relaunch from a new sitting.
     #[serde(default)]
     ended: Option<crate::session_boundary::SessionEnd>,
+    /// More than a fifth of the session's seconds could not be read (`SessionSummary::mostly_unread`). Its
+    /// numbers describe only the seconds that were read, so it is NOT graded: never normal, never rough,
+    /// never a baseline, never a partial corroboration. It still counts as an "unjudged" session, so the card's
+    /// "later sessions weren't graded" line names it instead of dropping it.
+    #[serde(default)]
+    mostly_unread: bool,
 }
 
 /// A time Compy looked at the PC's identity (an `IdentitySnapshot`, reduced).
@@ -594,7 +600,8 @@ impl SessionFacts {
     }
 
     fn judgeable(&self) -> bool {
-        self.duration_secs >= MIN_JUDGE_SECS
+        !self.mostly_unread
+            && self.duration_secs >= MIN_JUDGE_SECS
             && self.samples >= MIN_JUDGE_SAMPLES
             && self.coverage() >= MIN_JUDGE_COVERAGE
             && self.ratio().is_some()
@@ -707,7 +714,8 @@ fn judge_game(sess: &[&SessionFacts]) -> Vec<Judgement> {
             pool.iter().copied().filter(|&j| sess[j].cap.same_as(s.cap)).collect()
         };
         let base = base_stats(sess, &same);
-        let eval = base.as_ref().and_then(|b| evaluate(s, b));
+        // A mostly-unread session is never evaluated: its ratio is the ratio of the seconds that were read.
+        let eval = if s.mostly_unread { None } else { base.as_ref().and_then(|b| evaluate(s, b)) };
         let fired = eval.is_some_and(|e| e.fired);
         let verdict = if !judgeable {
             Verdict::Unjudged
@@ -1199,6 +1207,7 @@ pub(crate) fn facts_from(s: &crate::sessions::SessionSummary) -> SessionFacts {
         // session's own series (a row written by a build that holds one process identity is Clean without looking).
         mixed: matches!(crate::session_boundary::suspected_splice(s, &[]), crate::session_boundary::Splice::Suspected(_)),
         ended: s.ended,
+        mostly_unread: s.mostly_unread(),
         cap: match crate::noise_floor::cap_read(s) {
             crate::noise_floor::CapRead::Uncapped => CapState::Uncapped,
             crate::noise_floor::CapRead::Capped { at_fps } => CapState::Capped { at_fps },

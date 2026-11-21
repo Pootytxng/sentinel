@@ -1,5 +1,5 @@
 import type { SessionSummary, ArmedComparison, ComparisonResult } from "../types";
-import { allBackground } from "../lib/session-metrics";
+import { allBackground, mostlyUnread } from "../lib/session-metrics";
 
 /** comparison.rs `PostComparability` (CR-tuning-comparability). */
 export type PostComparability = {
@@ -308,7 +308,12 @@ export function measureTuning(
     postComparability?.some((p) => p.started_at === s.started_at && !p.comparable && p.conditions_unknown !== true) ===
     true;
   const comparable = (s: SessionSummary) =>
-    band != null && band.cap?.state === "uncapped" && s.frame_cap?.state === "uncapped" && conditionsComparable(s);
+    band != null &&
+    band.cap?.state === "uncapped" &&
+    s.frame_cap?.state === "uncapped" &&
+    conditionsComparable(s) &&
+    // A session Compy could not read most of has no frame figure to judge on: never "held", never "too aggressive".
+    !mostlyUnread(s);
   const fallPct = band?.fall_pct ?? null;
   const baseLow1 = baseline.baseline_low1_fps;
   const deltaPct = (low1: number): number | null =>
@@ -321,7 +326,7 @@ export function measureTuning(
       return d != null && d < -fallPct;
     });
   const latest = post[0] ?? null;
-  const low1DeltaPct = latest ? deltaPct(latest.low1_fps_est) : null;
+  const low1DeltaPct = latest && !mostlyUnread(latest) ? deltaPct(latest.low1_fps_est) : null;
   const fpsImproved =
     band != null && latest != null && comparable(latest) && low1DeltaPct != null && low1DeltaPct > band.low1_band_pct;
   // Frames "held" only when every post session was judged on the band (opus r1).
@@ -338,9 +343,10 @@ export function measureTuning(
   const capLeftOut = (s: SessionSummary) => band?.cap?.state !== "uncapped" || s.frame_cap?.state !== "uncapped";
   const causes = [
     leftOut.some(listedDifferent) && "another GPU, driver or game build",
+    leftOut.some((s) => mostlyUnread(s) && !listedDifferent(s)) && "a session Compy couldn't read most of",
     leftOut.some((s) => conditionsComparable(s) && capLeftOut(s)) && "a different or unread frame cap",
   ].filter((c): c is string => typeof c === "string");
-  const unmatched = leftOut.some((s) => !conditionsComparable(s) && !listedDifferent(s));
+  const unmatched = leftOut.some((s) => !mostlyUnread(s) && !conditionsComparable(s) && !listedDifferent(s));
   const unjudgedWhy =
     band == null
       ? "this game's noise between sessions isn't measured"

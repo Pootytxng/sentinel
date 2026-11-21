@@ -469,3 +469,25 @@ describe("deltas never subtract an unmeasured reading (#656 visual FAIL item 3, 
     expect(rows[0].delta?.avgFps).toBe(40);
   });
 });
+
+describe("deltas never take a mostly-unread session as a side (m6-unread)", () => {
+  const unread = (over: Partial<SessionSummary> = {}) => sess({ unreadable_seconds: 121, ...over } as Partial<SessionSummary>);
+
+  it("sessionDelta is null on both aggregates when either side is mostly unread", () => {
+    expect(sessionDelta(sess({ avg_fps: 200 }), sess({ avg_fps: 100 })).avgFps).toBe(100);
+    expect(sessionDelta(unread({ avg_fps: 200 }), sess({ avg_fps: 100 }))).toEqual({ avgFps: null, low1: null });
+    expect(sessionDelta(sess({ avg_fps: 200 }), unread({ avg_fps: 100 }))).toEqual({ avgFps: null, low1: null });
+    expect(sessionDelta(sess({ avg_fps: 200, unreadable_seconds: 120 } as Partial<SessionSummary>), sess({ avg_fps: 100 })).avgFps).toBe(100);
+  });
+
+  it("a stack row's delta chip is empty against a mostly-unread neighbour", () => {
+    const m = stackRowsFrom([sess({ started_at: "2026-07-09T21:00:00Z", avg_fps: 200 }), unread({ avg_fps: 100 })]);
+    expect(m.rows[0].delta?.avgFps).toBeNull();
+  });
+
+  it("the deck delta is empty when the current session is mostly unread", () => {
+    const d = deckDeltaFrom([unread({ started_at: "2026-07-09T21:00:00Z" }), sess()]);
+    expect(d?.avgFps).toBeNull();
+    expect(d?.low1).toBeNull();
+  });
+});
