@@ -1019,6 +1019,26 @@ pub(crate) fn clear_baseline() -> Result<(), String> {
 
 /// #281 — the store's missing/corrupt policy is UNCHANGED by the atomic-write lane. These run
 /// against explicit temp paths; none of them reads the real `%APPDATA%\Compy` data root.
+/// The clear's delete of `benchmark.json` (D6), with the state cache held across it, so a baseline save
+/// (`set_baseline` holds this same lock across `save_store`) cannot interleave. When `f` succeeded the
+/// in-memory state is reset too: the baseline, the latest run, the efficacy and the last error, so the
+/// screen stops showing a baseline that is gone and `set_baseline` cannot write it back. A failed `f`
+/// leaves memory alone (the file is still there). `running` is untouched: a run in flight finishes into
+/// `latest` only, and `latest` is never written to disk except through `set_baseline`.
+pub(crate) fn with_store_cleared<R, E>(f: impl FnOnce() -> Result<R, E>) -> Result<Result<R, E>, String> {
+    let mut s = lock_state().map_err(|_| "benchmark state lock poisoned".to_string())?;
+    let out = f();
+    if out.is_ok() {
+        s.baseline = None;
+        s.baseline_at = None;
+        s.latest = None;
+        s.latest_at = None;
+        s.efficacy = None;
+        s.error = None;
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod benchmark_store_persistence_tests {
     use super::*;
@@ -1507,5 +1527,40 @@ mod benchmark_tests {
         assert_eq!(normalize(50.0, f64::NAN), 0);
         // A legitimately-zero raw (e.g. a cancelled run that did no work) stays an honest 0.
         assert_eq!(normalize(0.0, 100.0), 0);
+    }
+}
+
+/// D6: the clear's owner API for the baseline cache.
+#[cfg(test)]
+mod d6_clear_tests {
+    use super::*;
+
+    #[test]
+    fn a_successful_delete_resets_the_memory_and_a_failed_one_leaves_it_alone() {
+        {
+            let mut s = lock_state().unwrap();
+            s.baseline_at = Some("2026-11-01T00:00:00Z".into());
+            s.latest_at = Some("2026-11-02T00:00:00Z".into());
+            s.error = Some("old error".into());
+        }
+        // The file is still there: memory keeps showing what disk still holds.
+        let failed = with_store_cleared(|| Err::<(), &str>("held open by another program")).unwrap();
+        assert!(failed.is_err());
+        assert!(benchmark_state().baseline_at.is_some(), "a failed delete must not hide a baseline that is still on disk");
+        // Deleted: the screen stops showing the baseline and `set_baseline` has nothing to write back.
+        let ok = with_store_cleared(|| Ok::<(), &str>(())).unwrap();
+        assert!(ok.is_ok());
+        let after = benchmark_state();
+        assert!(after.baseline.is_none() && after.baseline_at.is_none() && after.latest.is_none());
+        assert!(after.latest_at.is_none() && after.efficacy.is_none() && after.error.is_none());
+        assert!(set_baseline().is_err(), "no latest run is left in memory to be written back");
+    }
+
+    #[test]
+    fn the_reset_happens_under_the_state_lock_that_set_baseline_holds() {
+        let src = include_str!("benchmark.rs");
+        let f = src.split(concat!("pub(crate) fn ", "with_store_cleared")).nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(f.contains("lock_state()"), "the delete and the reset run with the cache held");
+        assert!(f.contains("f();") || f.contains("= f()"), "the delete runs inside it");
     }
 }

@@ -830,6 +830,13 @@ fn fresh_scratch(name: String) -> std::path::PathBuf {
     dir
 }
 
+/// Runs `f` with every writer of compy_comparison.json and compy_comparison_result.json held off: the clear's delete (D6). Takes this
+/// module's one lock and nothing else; `f` must not take another store's lock.
+pub(crate) fn with_store_locked<R>(f: impl FnOnce() -> R) -> R {
+    let _lock = lock_comparison();
+    f()
+}
+
 #[cfg(test)]
 mod comparison_persistence_tests {
     use super::*;

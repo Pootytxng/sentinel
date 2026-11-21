@@ -246,6 +246,12 @@ pub(crate) enum StoreLock {
     /// here is a torn `benchmark.json`. All five acquisition sites are recorded, not just the two
     /// that persist — an unrecorded site of the same mutex would make re-entrancy detection unsound.
     Benchmark,
+    /// `sessions::SESSIONS_LOCK` (D6) - the whole read-modify-write of `sessions.json` in
+    /// `save_session_to`, and the clear's delete of it. A leaf: nothing inside reaches another store.
+    Sessions,
+    /// `hwchange::FINGERPRINT_LOCK` (D6) - `get_hardware_changes`' first-run write,
+    /// `acknowledge_hardware_changes`, and the clear's delete of `hardware-fingerprint.json`. A leaf.
+    HardwareFingerprint,
     /// `noise_floor::write_gate`'s `GATE` — guards `load_from` -> `upsert` -> `save_to` on
     /// `noise_floors.json` (P4-noise-store). A leaf: nothing inside reaches another store, and its
     /// one caller (`benchmark_trial`'s calibration thread) holds no store lock when it records.
@@ -282,6 +288,8 @@ impl StoreLock {
             StoreLock::Intelligence => "intelligence::store_write_gate",
             StoreLock::Benchmark => "benchmark::state_cache",
             StoreLock::NoiseFloor => "noise_floor::write_gate",
+            StoreLock::Sessions => "sessions::SESSIONS_LOCK",
+            StoreLock::HardwareFingerprint => "hwchange::FINGERPRINT_LOCK",
             StoreLock::TestOuter => "TEST_OUTER",
             StoreLock::TestMiddle => "TEST_MIDDLE",
             StoreLock::TestInner => "TEST_INNER",

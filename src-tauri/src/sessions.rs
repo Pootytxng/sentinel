@@ -486,6 +486,8 @@ pub(crate) struct SessionAccumulator {
     hist_prev: HashMap<u64, (u32, Vec<u64>)>,
     /// Measured frames per bucket, per presenting process.
     pacing: HashMap<String, Vec<u64>>,
+    /// D6: this accumulator counts as an open recording (see [`RecorderGauge`]) until it is dropped.
+    _open: OpenTicket,
 }
 
 impl SessionAccumulator {
@@ -528,6 +530,7 @@ impl SessionAccumulator {
             gpu_load: None,
             hist_prev: HashMap::new(),
             pacing: HashMap::new(),
+            _open: OpenTicket::take(&RECORDER),
         }
     }
 
@@ -733,6 +736,9 @@ impl SessionAccumulator {
     }
 
     pub(crate) fn finalize(mut self, duration_secs: u64) -> SessionSummary {
+        // D6: from here until `save_session` settles it, this summary is the recorder's unsaved work.
+        // The `open` ticket drops when this function returns; the pending count carries the gap.
+        RECORDER.handed_to_save();
         self.flush_bucket(); // the trailing partial bucket is real samples too
         let n = self.samples.max(1) as f64;
         let dominant = |m: HashMap<String, u32>| m.into_iter().max_by_key(|(_, c)| *c).map(|(p, _)| p);
@@ -824,6 +830,107 @@ fn gaming_mode_plan_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Op
 
 fn sessions_path() -> PathBuf {
     compy_data_dir().join("sessions.json")
+}
+
+/// Serializes the whole read-modify-write of sessions.json, process-wide (D6). `save_session_to` loads
+/// every row, pushes one and renames the whole file back; without this, a "clear play history" that
+/// deleted the file between that load and that rename would see the whole pre-clear history written
+/// straight back. The clear takes this same lock around its delete (`with_store_locked`). A leaf: inside
+/// it a save reaches only `noise_floor::cap_read` (arithmetic) and `atomic_write`, never another store.
+static SESSIONS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Recovering from poison and clearing it: the store is re-read from disk on every entry, so a panic
+/// mid-save guards nothing a fresh read does not already fix (same policy as `drift::lock_drift`).
+fn lock_sessions() -> crate::race_seam::StoreGuard {
+    crate::race_seam::hold_lock(crate::race_seam::StoreLock::Sessions, || {
+        SESSIONS_LOCK.lock().unwrap_or_else(|poisoned| {
+            SESSIONS_LOCK.clear_poison();
+            poisoned.into_inner()
+        })
+    })
+}
+
+/// Takes the sessions lock, then runs `write` only if no clear has run since `started_epoch` (read
+/// when the save began). `None` = a clear ran in between and the write was dropped. The epoch is
+/// checked UNDER the lock, and the clear bumps it while holding the same lock, so either the save
+/// finishes first (and the clear then deletes it) or it sees the new epoch and writes nothing.
+/// `epoch_now` is a parameter so a test can drive both orders without touching the process epoch.
+fn unless_cleared<R>(started_epoch: u64, epoch_now: impl Fn() -> u64, write: impl FnOnce() -> R) -> Option<R> {
+    let _guard = lock_sessions();
+    (epoch_now() == started_epoch).then(write)
+}
+
+/// Runs `f` with every writer of sessions.json held off (the clear's delete).
+pub(crate) fn with_store_locked<R>(f: impl FnOnce() -> R) -> R {
+    let _guard = lock_sessions();
+    f()
+}
+
+/// What the session recorder is doing right now, for the clear (D6). A capture's `fps_active` flag is
+/// cleared by Stop BEFORE the recorder thread has finalized and saved the session it was holding
+/// (`monitoring::LiveSession::finish`, which runs after the thread's next one-second check), so that
+/// flag alone does not say the recorder is done. This counts the recorder's own work: `open` = an
+/// accumulator exists (a session is being measured or is being finalized), `pending` = a finalized
+/// summary has not yet been through `save_session`. The clear refuses while either is above zero.
+pub(crate) struct RecorderGauge {
+    open: std::sync::atomic::AtomicUsize,
+    pending: std::sync::atomic::AtomicUsize,
+}
+
+impl RecorderGauge {
+    pub(crate) const fn new() -> Self {
+        Self { open: std::sync::atomic::AtomicUsize::new(0), pending: std::sync::atomic::AtomicUsize::new(0) }
+    }
+    fn opened(&self) {
+        self.open.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
+    fn closed(&self) {
+        let _ = self.open.try_update(std::sync::atomic::Ordering::AcqRel, std::sync::atomic::Ordering::Acquire, |n| n.checked_sub(1));
+    }
+    /// `finalize` produced a summary that `save_session` has yet to settle.
+    fn handed_to_save(&self) {
+        self.pending.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
+    /// `save_session` is done with a summary (saved, dropped or failed). Saturating, so a summary that
+    /// never came from `finalize` (a test) cannot push the count below zero.
+    fn save_settled(&self) {
+        let _ = self.pending.try_update(std::sync::atomic::Ordering::AcqRel, std::sync::atomic::Ordering::Acquire, |n| n.checked_sub(1));
+    }
+    pub(crate) fn busy(&self) -> bool {
+        self.open.load(std::sync::atomic::Ordering::Acquire) > 0 || self.pending.load(std::sync::atomic::Ordering::Acquire) > 0
+    }
+}
+
+static RECORDER: RecorderGauge = RecorderGauge::new();
+
+/// True while the recorder holds a session that is not yet saved (see [`RecorderGauge`]).
+pub(crate) fn recorder_busy() -> bool {
+    RECORDER.busy()
+}
+
+/// Held by a `SessionAccumulator` for its whole life: the gauge's `open` count.
+struct OpenTicket(&'static RecorderGauge);
+
+impl OpenTicket {
+    fn take(gauge: &'static RecorderGauge) -> Self {
+        gauge.opened();
+        Self(gauge)
+    }
+}
+
+impl Drop for OpenTicket {
+    fn drop(&mut self) {
+        self.0.closed();
+    }
+}
+
+/// Settles one pending save on every way out of `save_session`.
+struct SaveSettled(&'static RecorderGauge);
+
+impl Drop for SaveSettled {
+    fn drop(&mut self) {
+        self.0.save_settled();
+    }
 }
 
 /// The sessions.json key that marks a row's `compy_changes_active` as not recorded (#669). The count
@@ -1003,6 +1110,10 @@ pub(crate) struct SavedSession {
 /// Returns `Ok(Some(_))` if a real session was saved, `Ok(None)` if it was dropped as too short.
 /// Saving alone no longer fires the debrief toast: the caller asks `experiment::session_end_notice`.
 pub(crate) fn save_session(summary: SessionSummary) -> Result<Option<SavedSession>, String> {
+    // D6: settles the recorder's pending count on every way out, and notes the clear epoch before any
+    // read of the store, so a save that began before a clear is dropped rather than written after it.
+    let _settled = SaveSettled(&RECORDER);
+    let started_epoch = crate::atomic_write::clear_epoch();
     // Drop trivially short sessions entirely — no debrief, and crucially no armed-comparison
     // resolution (a blip must not confound or settle a pending comparison; the arm waits).
     if !meets_min_duration(summary.duration_secs) {
@@ -1014,7 +1125,11 @@ pub(crate) fn save_session(summary: SessionSummary) -> Result<Option<SavedSessio
     // now refuse, and a fix comparison settled against a session the history doesn't hold would show
     // a result no session backs, with its arm already spent.
     let compared = summary.clone();
-    save_session_to(&sessions_path(), summary)?;
+    // The sessions lock is released before the comparison below (its own lock, no nesting).
+    match unless_cleared(started_epoch, crate::atomic_write::clear_epoch, || save_session_to(&sessions_path(), summary)) {
+        None => return Ok(None), // a clear ran since this save began: nothing is written, nothing settled
+        Some(saved) => saved?,
+    }
     // M4: if a comparison was armed for this game, compute the cross-session delta now.
     let settled = crate::comparison::on_session_finalized(&compared);
     // Tier 2 receipts (Q9a, #217): a finalized session is the ONLY thing that produces a receipt,
@@ -2042,5 +2157,140 @@ mod session_tests {
         assert_eq!(counted.compy_changes_legacy_active, None);
         assert!(a.counted_since_set_aside(at + chrono::TimeDelta::seconds(1)).is_none(), "another set-aside");
         assert!(whole.counted_since_set_aside(at).is_none(), "a session with whole counts has none since");
+    }
+}
+
+/// D6: the clear's pieces that live in this file. Every test works on its own temp folder.
+#[cfg(test)]
+mod d6_clear_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    fn scratch(tag: &str) -> PathBuf {
+        static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!("compy-d6-sessions-{tag}-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn one(started: &str) -> SessionSummary {
+        let mut acc = SessionAccumulator::new(started.into(), Some(0));
+        acc.record_fps("g.exe", 100.0, 10.0, 80.0, 0);
+        acc.finalize(600)
+    }
+
+    fn rows(path: &Path) -> usize {
+        load_sessions_from(path).len()
+    }
+
+    // A save that began before a clear is dropped: the old rows do not come back, and neither does it.
+    #[test]
+    fn a_save_that_began_before_a_clear_is_dropped_and_the_old_rows_never_return() {
+        let dir = scratch("drop");
+        let path = dir.join("sessions.json");
+        for i in 0..3 {
+            save_session_to(&path, one(&format!("2026-11-0{}T10:00:00Z", i + 1))).unwrap();
+        }
+        assert_eq!(rows(&path), 3);
+        let epoch = AtomicU64::new(7);
+        let started = epoch.load(Ordering::Acquire); // the save begins here
+        // The clear: deletes the file under the sessions lock, moves the epoch while still holding it.
+        with_store_locked(|| {
+            std::fs::remove_file(&path).unwrap();
+            epoch.fetch_add(1, Ordering::AcqRel);
+        });
+        let late = unless_cleared(started, || epoch.load(Ordering::Acquire), || save_session_to(&path, one("2026-11-09T10:00:00Z")));
+        assert!(late.is_none(), "a save begun before the clear must be dropped");
+        assert!(!path.exists(), "nothing was written: the three old rows are gone and stay gone");
+        // A save that begins AFTER the clear is new data and is written.
+        let started = epoch.load(Ordering::Acquire);
+        let fresh = unless_cleared(started, || epoch.load(Ordering::Acquire), || save_session_to(&path, one("2026-11-10T10:00:00Z")));
+        assert!(matches!(fresh, Some(Ok(()))));
+        assert_eq!(rows(&path), 1, "only the new session");
+    }
+
+    // The same, with the save really waiting on the lock the clear holds.
+    #[test]
+    fn a_save_waiting_on_the_lock_the_clear_holds_sees_the_new_epoch_and_writes_nothing() {
+        let dir = scratch("wait");
+        let path = dir.join("sessions.json");
+        for i in 0..3 {
+            save_session_to(&path, one(&format!("2026-11-0{}T10:00:00Z", i + 1))).unwrap();
+        }
+        let epoch = std::sync::Arc::new(AtomicU64::new(0));
+        let started = epoch.load(Ordering::Acquire);
+        let late = with_store_locked(|| {
+            // The save is spawned while the clear holds the lock, so it cannot get ahead of it.
+            let (e, p) = (epoch.clone(), path.clone());
+            let save = std::thread::spawn(move || {
+                unless_cleared(started, || e.load(Ordering::Acquire), || save_session_to(&p, one("2026-11-09T10:00:00Z"))).is_none()
+            });
+            std::fs::remove_file(&path).unwrap();
+            epoch.fetch_add(1, Ordering::AcqRel);
+            save
+        })
+        .join()
+        .unwrap();
+        assert!(late, "the save got the lock after the clear and was dropped");
+        assert!(!path.exists());
+    }
+
+    // The old behaviour, shown: with no lock and no epoch a save that loaded before the delete rewrites
+    // the whole pre-clear history after it. (This is what the lock and the epoch are for.)
+    #[test]
+    fn without_the_epoch_check_a_stale_save_would_have_resurrected_the_history() {
+        let dir = scratch("old");
+        let path = dir.join("sessions.json");
+        for i in 0..3 {
+            save_session_to(&path, one(&format!("2026-11-0{}T10:00:00Z", i + 1))).unwrap();
+        }
+        let loaded_before_clear = load_sessions_checked_from(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        // What `save_session_to` would now do with `loaded_before_clear`: write it all back.
+        assert_eq!(loaded_before_clear.len(), 3, "the stale copy holds the old rows; only the epoch check keeps them out");
+    }
+
+    #[test]
+    fn the_recorder_gauge_is_busy_while_a_session_is_open_or_unsaved() {
+        static G: RecorderGauge = RecorderGauge::new();
+        assert!(!G.busy());
+        let ticket = OpenTicket::take(&G);
+        assert!(G.busy(), "an open recording");
+        G.handed_to_save(); // finalize: the summary exists but is not saved
+        drop(ticket); // the accumulator is gone; the unsaved summary still counts
+        assert!(G.busy(), "the gap between finalize and save is covered");
+        drop(SaveSettled(&G)); // save_session returned
+        assert!(!G.busy(), "idle once saved");
+        drop(SaveSettled(&G)); // a summary that never came from finalize cannot go below zero
+        assert!(!G.busy());
+    }
+
+    #[test]
+    fn a_live_accumulator_makes_the_recorder_busy_and_finalize_hands_over_to_the_save() {
+        let acc = SessionAccumulator::new("t".into(), Some(0));
+        assert!(recorder_busy(), "an accumulator is an open recording");
+        let summary = acc.finalize(10);
+        assert!(recorder_busy(), "the finalized summary is still unsaved work");
+        drop(summary);
+        // `save_session` settles through this guard on every return (its first statement builds it); the
+        // function itself is not called here: it reaches the real data root and the app's notifiers.
+        drop(SaveSettled(&RECORDER));
+        let src = include_str!("sessions.rs");
+        let body = src.split(concat!("pub(crate) fn ", "save_session(")).nth(1).unwrap();
+        let body = body.split(concat!("fn get_", "session_summaries")).next().unwrap();
+        assert!(body.contains("let _settled = SaveSettled(&RECORDER)"), "save_session holds the settle guard for its whole body");
+    }
+
+    #[test]
+    fn the_save_notes_the_epoch_first_and_lets_go_of_the_lock_before_the_comparison() {
+        let src = include_str!("sessions.rs");
+        let body = src.split(concat!("pub(crate) fn ", "save_session(")).nth(1).unwrap();
+        let body = body.split(concat!("fn get_", "session_summaries")).next().unwrap();
+        let noted = body.find("let started_epoch = crate::atomic_write::clear_epoch()").expect("epoch noted");
+        let read = body.find("create_dir_all").expect("first touch of the store");
+        let locked = body.find("unless_cleared(started_epoch").expect("the guarded write");
+        let settled = body.find(concat!("comparison::", "on_session_finalized(")).expect("the settle");
+        assert!(noted < read && read < locked && locked < settled, "epoch, then the store, then the comparison outside the lock");
+        assert!(!body.contains("lock_sessions()"), "the lock is taken only inside unless_cleared, which returns before the comparison");
     }
 }

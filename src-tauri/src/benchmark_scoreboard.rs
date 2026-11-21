@@ -224,6 +224,13 @@ pub(crate) fn clear_scoreboard() -> Result<(), String> {
     save_store(&ScoreStore::default())
 }
 
+/// Runs `f` with every writer of scoreboard.json held off: the clear's delete (D6). Takes this
+/// module's one lock and nothing else; `f` must not take another store's lock.
+pub(crate) fn with_store_locked<R>(f: impl FnOnce() -> R) -> R {
+    let _lock = lock_scoreboard();
+    f()
+}
+
 #[cfg(test)]
 mod scoreboard_tests {
     use super::*;

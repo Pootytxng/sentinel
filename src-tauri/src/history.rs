@@ -62,6 +62,18 @@ pub(crate) fn lock_history() -> Result<crate::race_seam::StoreGuard, String> {
     })
 }
 
+/// The Trust Ledger lock as a VALUE that only [`lock_ledger`] can make (D6). `data_clear`'s "clear
+/// everything" path takes `&LedgerGuard` as a parameter, so the code that deletes `history.json*` cannot
+/// be called without the ledger lock held: it does not type-check.
+pub(crate) struct LedgerGuard {
+    _guard: crate::race_seam::StoreGuard,
+}
+
+/// [`lock_history`], wrapped. Same lock, same recorded acquisition, same poison policy (an `Err`).
+pub(crate) fn lock_ledger() -> Result<LedgerGuard, String> {
+    lock_history().map(|_guard| LedgerGuard { _guard })
+}
+
 /// The rec_ids `apply_recommendation` can one-click apply (anything else is
 /// advisory-only). Single backend source of truth — `export` and `priorities`
 /// reuse it. MUST stay in sync with the dispatch match in `apply_recommendation`

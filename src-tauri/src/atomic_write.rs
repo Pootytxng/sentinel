@@ -58,6 +58,22 @@ pub(crate) enum FailPoint {
 /// Per-process counter so two writes from the same process never pick the same temp name.
 static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
+/// How many times a "clear my data" has deleted a store in this process (D6). A writer that started
+/// before a clear reads this when it starts, and checks it again UNDER its store lock, right before it
+/// writes: if it moved, the clear ran in between and the write is dropped, never made. Lives here (a
+/// leaf every store already reaches) so a store module needs no edge to `data_clear`.
+static CLEAR_EPOCH: AtomicU64 = AtomicU64::new(0);
+
+/// The clear epoch now. Read it when a save STARTS.
+pub(crate) fn clear_epoch() -> u64 {
+    CLEAR_EPOCH.load(Ordering::Acquire)
+}
+
+/// Called by the clear, while it holds the store's lock and has just deleted the store.
+pub(crate) fn bump_clear_epoch() {
+    CLEAR_EPOCH.fetch_add(1, Ordering::AcqRel);
+}
+
 /// A temp name that is unique per process and per call, and that sorts next to its target so a
 /// leftover is recognisable as this helper's. It stays in the TARGET's own directory — a temp on
 /// another volume would make the rename a copy, which is exactly the non-atomic behaviour being

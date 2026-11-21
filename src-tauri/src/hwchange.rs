@@ -67,6 +67,27 @@ fn fingerprint_path() -> std::path::PathBuf {
     crate::compy_data_dir().join("hardware-fingerprint.json")
 }
 
+/// Serializes the two writers of the baseline file (`get_hardware_changes`' first-run write and
+/// `acknowledge_hardware_changes`) with the clear's delete (D6). Before this the file had no lock and
+/// was written with a plain truncate-and-write. A leaf: inside it only this file is read or written.
+static FINGERPRINT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Recovering from poison and clearing it: the file is re-read on every entry.
+fn lock_fingerprint() -> crate::race_seam::StoreGuard {
+    crate::race_seam::hold_lock(crate::race_seam::StoreLock::HardwareFingerprint, || {
+        FINGERPRINT_LOCK.lock().unwrap_or_else(|poisoned| {
+            FINGERPRINT_LOCK.clear_poison();
+            poisoned.into_inner()
+        })
+    })
+}
+
+/// Runs `f` with both writers of the baseline file held off (the clear's delete).
+pub(crate) fn with_store_locked<R>(f: impl FnOnce() -> R) -> R {
+    let _guard = lock_fingerprint();
+    f()
+}
+
 /// Load a persisted fingerprint (None when absent or unreadable — both mean "no baseline yet").
 fn load_fingerprint(path: &std::path::Path) -> Option<HardwareFingerprint> {
     std::fs::read_to_string(path).ok().and_then(|s| serde_json::from_str(&s).ok())
@@ -116,6 +137,9 @@ pub(crate) struct HardwareChangeReport {
 pub(crate) fn get_hardware_changes() -> HardwareChangeReport {
     let hw = crate::hardware::collect_hardware();
     let current = fingerprint(&hw);
+    // D6: the read and the first-run write are one section under the fingerprint lock, so a clear
+    // cannot delete the file between them (`with_store_locked`).
+    let _lock = lock_fingerprint();
     match load_fingerprint(&fingerprint_path()) {
         None => {
             let _ = write_fingerprint(&fingerprint_path(), &current);
@@ -134,7 +158,9 @@ pub(crate) fn get_hardware_changes() -> HardwareChangeReport {
 #[tauri::command]
 pub(crate) fn acknowledge_hardware_changes() -> Result<(), String> {
     let hw = crate::hardware::collect_hardware();
-    write_fingerprint(&fingerprint_path(), &fingerprint(&hw))
+    let current = fingerprint(&hw);
+    let _lock = lock_fingerprint();
+    write_fingerprint(&fingerprint_path(), &current)
 }
 
 #[cfg(test)]

@@ -59,6 +59,18 @@ pub(crate) fn trial_state() -> TrialState {
     state().lock().map(|s| s.clone()).unwrap_or_default()
 }
 
+/// D6: forget the last FINISHED trial's verdict, noise reading and status after a clear deleted the data
+/// they were measured against. A trial that is still running is left alone (the clear refuses while one
+/// runs, so this is only the quiet case). True when something was reset.
+pub(crate) fn forget_finished_result() -> bool {
+    let Ok(mut s) = state().lock() else { return false };
+    if s.running {
+        return false;
+    }
+    *s = TrialState::default();
+    true
+}
+
 pub(crate) fn cancel_trial() {
     cancel_flag().store(true, Ordering::Relaxed);
 }
@@ -973,5 +985,27 @@ mod trial_tests {
     fn stack_trial_items_empty_when_nothing_appliable() {
         let requested = vec![("power-ultimate".to_string(), "Ultimate".to_string())];
         assert!(stack_trial_items(&requested).is_empty());
+    }
+}
+
+/// D6: forgetting a finished trial's result.
+#[cfg(test)]
+mod d6_clear_tests {
+    use super::*;
+
+    #[test]
+    fn a_finished_result_is_forgotten_and_a_running_trial_is_left_alone() {
+        set(|s| {
+            s.running = false;
+            s.status = "done".into();
+            s.noise_floor_pct = Some(2.5);
+        });
+        assert!(forget_finished_result());
+        let after = trial_state();
+        assert!(after.status.is_empty() && after.noise_floor_pct.is_none() && after.verdict.is_none());
+        set(|s| s.running = true);
+        assert!(!forget_finished_result(), "a running trial cannot be reset from here");
+        assert!(trial_state().running);
+        set(|s| s.running = false);
     }
 }

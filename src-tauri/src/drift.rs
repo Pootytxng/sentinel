@@ -316,6 +316,13 @@ pub(crate) fn read_notices_readonly_from(path: &std::path::Path) -> Result<Vec<D
 
 /// #281 — drift's best-effort save still swallows every failure and still returns nothing. Explicit
 /// temp paths only; nothing reads the real data root.
+/// Runs `f` with every writer of drift.json held off: the clear's delete (D6). Takes this
+/// module's one lock and nothing else; `f` must not take another store's lock.
+pub(crate) fn with_store_locked<R>(f: impl FnOnce() -> R) -> R {
+    let _lock = lock_drift();
+    f()
+}
+
 #[cfg(test)]
 mod drift_persistence_tests {
     use super::*;
