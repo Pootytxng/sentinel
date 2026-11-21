@@ -415,11 +415,16 @@ pub(crate) fn parse_process_rows(buf: &[u8]) -> Option<Vec<ProcRow>> {
 
 /// One handle-free snapshot as rows (no process is opened). `None` on any failure: unread, never empty.
 pub(crate) fn read_process_rows() -> Option<Vec<ProcRow>> {
-    let mut buf = Vec::new();
-    if !take_process_snapshot(&mut buf) {
+    read_process_rows_into(&mut Vec::new())
+}
+
+/// [`read_process_rows`] with the caller's buffer, so a loop reuses one allocation (and the size the
+/// last snapshot needed) instead of zero-filling a fresh 1 MiB every tick.
+pub(crate) fn read_process_rows_into(buf: &mut Vec<u8>) -> Option<Vec<ProcRow>> {
+    if !take_process_snapshot(buf) {
         return None;
     }
-    parse_process_rows(&buf)
+    parse_process_rows(buf)
 }
 
 // PURE questions over snapshot rows. They replace the three direct `OpenProcess` calls on a game pid
@@ -436,9 +441,15 @@ pub(crate) fn image_name_for(rows: &[ProcRow], pid: u32) -> String {
     find_row(rows, pid).and_then(|r| r.name.clone()).unwrap_or_default()
 }
 
-/// STRICT identity: `pid` is present, has threads (an exited process other programs still hold a handle
-/// to has none), runs an image named `expected_name` (case-insensitive; an unreadable name fails), and,
-/// when `created` is known, is the same lifetime (a recycled pid has a different creation time).
+/// STRICT identity: `pid` is present, has threads, runs an image named `expected_name`
+/// (case-insensitive; an unreadable name fails), and, when `created` is known, is the same lifetime (a
+/// recycled pid has a different creation time).
+///
+/// OBSERVED (live test `an_exited_child_whose_handle_is_still_open_is_not_alive_in_the_snapshot`, Windows,
+/// 20 children x 20 probes right after `wait()` with the `Child` handle still held): an exited process
+/// that another party still holds open is ABSENT from the snapshot (400 of 400 probes), never listed
+/// with threads. The `threads > 0` check is a second guard for a listed-but-empty entry, which that test
+/// never saw. That test fails if the form ever changes.
 pub(crate) fn alive_as(rows: &[ProcRow], pid: u32, expected_name: &str, created: Option<i64>) -> bool {
     find_row(rows, pid).is_some_and(|r| {
         r.threads > 0
@@ -1138,6 +1149,54 @@ mod tests {
         assert_eq!(running_as(Some(&rows), 12, "x.exe"), Some(true), "present but unnamed: as a failed name query read");
     }
 
+    /// LIVE (opens no foreign process; spawns our own children): the case other programs create after a game
+    /// closes. A child that has EXITED while its `Child` (an open handle to it) is still held must not read
+    /// as alive. Twenty children are spawned together, seen alive in the snapshot, reaped with `wait()`
+    /// (the handle stays open), then probed repeatedly. The observed form is counted and printed.
+    #[test]
+    fn an_exited_child_whose_handle_is_still_open_is_not_alive_in_the_snapshot() {
+        use std::process::{Command, Stdio};
+        let mut kids: Vec<std::process::Child> = (0..20)
+            .map(|_| {
+                Command::new("cmd")
+                    .args(["/C", "ping -n 3 127.0.0.1 >nul"])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .spawn()
+                    .expect("spawn cmd")
+            })
+            .collect();
+        let rows = read_process_rows().expect("the snapshot reads");
+        let created: Vec<(u32, Option<i64>)> =
+            kids.iter().map(|k| (k.id(), find_row(&rows, k.id()).map(|r| r.create_time))).collect();
+        for (pid, c) in &created {
+            assert!(c.is_some(), "child {pid} must be listed while it runs");
+            assert!(alive_as(&rows, *pid, "cmd.exe", *c), "a running child is alive");
+            assert_eq!(running_as(Some(&rows), *pid, "cmd.exe"), Some(true));
+        }
+        for k in kids.iter_mut() {
+            k.wait().expect("child exits"); // reaped; the handle inside `Child` stays open
+        }
+        let (mut absent, mut zero_threads, mut with_threads) = (0u32, 0u32, 0u32);
+        for _round in 0..20 {
+            let rows = read_process_rows().expect("the snapshot reads");
+            for (pid, c) in &created {
+                match find_row(&rows, *pid) {
+                    None => absent += 1,
+                    Some(r) if r.threads == 0 => zero_threads += 1,
+                    Some(_) => with_threads += 1,
+                }
+                assert!(!alive_as(&rows, *pid, "cmd.exe", *c), "exited but still held open must not be alive (pid {pid})");
+                assert_eq!(running_as(Some(&rows), *pid, "cmd.exe"), Some(false), "pid {pid}");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        eprintln!("exited-but-held children over 20 x 20 probes: absent={absent} zero_threads={zero_threads} with_threads={with_threads}");
+        assert_eq!(with_threads, 0);
+        drop(kids);
+    }
+
     #[test]
     fn image_name_for_is_empty_when_the_pid_or_name_is_missing() {
         let rows = vec![named(10, "Game.exe", 500, 1), ProcRow { name: None, ..row(12, 502, 0) }];
@@ -1834,21 +1893,29 @@ mod process_refresh_guard {
     // (fps.rs name + alive, monitoring.rs pid_running_as) were replaced by snapshot rows, so the list
     // below is EMPTY. A future need must be added here, by file and function with a one-line reason, in
     // the same change that reviews it: `OpenProcess` anywhere else, test code included, fails. The
-    // substring also catches `NtOpenProcess`, `ZwOpenProcess` and `OpenProcessToken`.
+    // substring also catches `NtOpenProcess`, `ZwOpenProcess` and `OpenProcessToken`; `DuplicateHandle` and
+    // `GetProcessHandleFromHwnd` (other ways to end up holding a process handle) are held to the same list.
+    //
+    // SCOPE: this reads `src-tauri/src/**/*.rs` as masked text, nothing else. It cannot see dependency
+    // crates (sysinfo's process refresh is banned separately above) and cannot see a name looked up by
+    // string (`GetProcAddress(h, "OpenProcess")` is masked away like any literal).
     // (src-tauri/src-relative file with `/`, function name, why this site may open a process).
     const OPEN_PROCESS_ALLOWLIST: &[(&str, &str, &str)] = &[];
+    const HANDLE_CALLS: &[&str] = &["OpenProcess", "DuplicateHandle", "GetProcessHandleFromHwnd"];
 
     /// Where `OpenProcess` appears in `src`: the enclosing function name for each production occurrence,
     /// plus "<test code>" if any occurrence is inside a `#[cfg(test)]` item. Masked first, so comments
     /// and string literals neither trip nor hide it.
     fn open_process_sites(src: &str) -> Vec<String> {
-        const NAME: &str = "OpenProcess";
         let masked = mask(src);
         let prod = drop_test_items(&masked);
         let ident = |c: char| c.is_alphanumeric() || c == '_';
-        let mut sites: Vec<String> = prod
-            .match_indices(NAME)
-            .map(|(i, _)| {
+        let count = |s: &str| HANDLE_CALLS.iter().map(|n| s.matches(n).count()).sum::<usize>();
+        let mut hits: Vec<usize> = HANDLE_CALLS.iter().flat_map(|n| prod.match_indices(n).map(|(i, _)| i)).collect();
+        hits.sort_unstable();
+        let mut sites: Vec<String> = hits
+            .into_iter()
+            .map(|i| {
                 let before = &prod[..i];
                 before
                     .match_indices("fn ")
@@ -1858,7 +1925,7 @@ mod process_refresh_guard {
                     .unwrap_or_else(|| "<top level>".to_string())
             })
             .collect();
-        if masked.matches(NAME).count() > prod.matches(NAME).count() {
+        if count(&masked) > count(&prod) {
             sites.push("<test code>".to_string());
         }
         sites
@@ -1905,6 +1972,9 @@ mod process_refresh_guard {
         assert_eq!(open_process_sites("fn probe(pid: u32) { OpenProcess(Q, false, pid); }"), vec!["probe"]);
         assert_eq!(open_process_sites("fn a() {}\nfn b() { let h = NtOpenProcess(x); }"), vec!["b"]);
         assert_eq!(open_process_sites("fn t() { OpenProcessToken(h, 8, &mut t); }"), vec!["t"]);
+        assert_eq!(open_process_sites("fn d() { DuplicateHandle(a, b, c); }"), vec!["d"]);
+        assert_eq!(open_process_sites("fn h() { GetProcessHandleFromHwnd(w); }"), vec!["h"]);
+        assert_eq!(open_process_sites("fn x() { OpenProcess(1); }\nfn y() { DuplicateHandle(1); }"), vec!["x", "y"]);
         // Comments and strings are not code; a test item is "<test code>", not a production site.
         assert!(open_process_sites("// OpenProcess\nfn a() { let s = \"OpenProcess\"; }").is_empty());
         assert_eq!(open_process_sites("#[cfg(test)]\nmod t { fn x() { OpenProcess(1); } }\nfn p() {}"), vec!["<test code>"]);
@@ -1914,6 +1984,6 @@ mod process_refresh_guard {
         assert!(!allowed(list, "a.rs", "other"), "a different function in an allowed file");
         assert!(!allowed(list, "c.rs", "probe"), "the same function name in another file");
         assert!(!allowed(list, "b.rs", "quiet"), "no reason, no entry");
-        assert!(!allowed(OPEN_PROCESS_ALLOWLIST, "fps.rs", "resolve_process_name"));
+        assert!(OPEN_PROCESS_ALLOWLIST.is_empty(), "adding a site is a reviewed decision: update the plan and the claims header");
     }
 }

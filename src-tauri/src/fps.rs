@@ -117,13 +117,14 @@ pub(crate) fn select_game_presenter(
             continue;
         }
         // A presenter we couldn't even NAME can never be "the game": the name is "" when the
-        // process snapshot has no readable image name for the pid (it used to be "" when
-        // OpenProcess failed) — which was exactly the protected/system-process
-        // case (live catch 2026-07-22: dwm.exe's name failed to resolve on the dev box, so
-        // "" slid past the name denylist below and the compositor won at a fabricated
-        // 803 fps). Games are user-session processes the elevated helper can always open;
-        // an unnameable presenter is a system process, and a session can't honestly
-        // attribute to a nameless one anyway.
+        // process snapshot has no readable image name for the pid. (Before the snapshot, the name
+        // came from an OpenProcess that was refused for protected processes, so "" mostly meant
+        // "protected": live catch 2026-07-22, dwm.exe's name failed to resolve on the dev box, so
+        // "" slid past the name denylist below and the compositor won at a fabricated 803 fps.)
+        // The snapshot names such presenters too: dwm.exe now meets the denylist, and a game whose
+        // anti-cheat used to block the open (it came back "" and was never measured) is now named
+        // and CAN attach, if it passes the window evidence in `qualifies_as_game`. That is a new
+        // acceptance on purpose, not only new rejections.
         if c.name.is_empty() {
             continue;
         }
@@ -463,6 +464,72 @@ struct FpsReport {
     /// P4-smooth-measure: the reported chain's cumulative frame-time histogram ([`FrameHistWire`]).
     #[serde(skip_serializing_if = "Option::is_none")]
     frame_hist: Option<FrameHistWire>,
+    /// How many ticks since this helper started could not read the process snapshot (and so emitted
+    /// nothing). Cumulative; omitted while 0. Lets a reader tell "the helper could not look" from
+    /// "no frames". Readers ignore it today (the app's `FpsSample` skips unknown fields).
+    #[serde(skip_serializing_if = "is_zero")]
+    snapshot_unreadable_ticks: u64,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
+}
+
+/// Counts ticks whose process snapshot could not be read, and rate-limits the message about it: the
+/// first, then every `EVERY`th (a persistent failure would otherwise print twice a second).
+#[derive(Default)]
+struct UnreadableTicks {
+    total: u64,
+}
+
+impl UnreadableTicks {
+    const EVERY: u64 = 120; // ~1 minute at one tick per 500 ms
+
+    /// Record one unreadable tick; true when it should be reported now.
+    fn note(&mut self) -> bool {
+        self.total += 1;
+        self.total == 1 || self.total.is_multiple_of(Self::EVERY)
+    }
+}
+
+/// What one tick's identity step produced. `skipped` = the snapshot was unreadable: nothing was
+/// decided and `attachment` / `created` are exactly what came in (fail closed, state unchanged).
+struct IdentityStep {
+    attachment: Attachment,
+    created: Option<(u32, i64)>,
+    best: Option<(u32, String, Vec<f64>)>,
+    skipped: bool,
+}
+
+/// The closure `advance_attachment` is given: is `pid` still the process we attached to? `created` is
+/// the creation time remembered at attach (only for that pid).
+fn alive_for(
+    rows: &[crate::other_load::ProcRow],
+    created: Option<(u32, i64)>,
+    pid: u32,
+    name: &str,
+) -> bool {
+    let created = created.filter(|(p, _)| *p == pid).map(|(_, c)| c);
+    crate::other_load::alive_as(rows, pid, name, created)
+}
+
+/// One tick of identity: name every candidate from the snapshot, advance the sticky attachment, and
+/// remember the attached pid's creation time. `rows == None` (snapshot unreadable) changes nothing.
+fn identity_step(
+    attachment: Attachment,
+    created: Option<(u32, i64)>,
+    mut candidates: Vec<PresenterCandidate>,
+    rows: Option<&[crate::other_load::ProcRow]>,
+) -> IdentityStep {
+    let Some(rows) = rows else {
+        return IdentityStep { attachment, created, best: None, skipped: true };
+    };
+    for c in &mut candidates {
+        c.name = crate::other_load::image_name_for(rows, c.pid);
+    }
+    let (next, best) = advance_attachment(attachment, candidates, &|pid, name| alive_for(rows, created, pid, name));
+    let created = track_created(created, &next, rows);
+    IdentityStep { attachment: next, created, best, skipped: false }
 }
 
 /// What the report says about foreground. Only a resolvable foreground
@@ -745,6 +812,9 @@ pub fn run_capture() {
     let mut attachment = Attachment::new();
     // (pid, creation time) of the attached game, from the snapshot of the tick it attached.
     let mut attached_created: Option<(u32, i64)> = None;
+    // The snapshot buffer lives across ticks (no 1 MiB allocation per tick), and unreadable ticks are counted.
+    let mut snap_buf: Vec<u8> = Vec::new();
+    let mut unreadable = UnreadableTicks::default();
     loop {
         std::thread::sleep(Duration::from_millis(REPORT_INTERVAL_MS));
         let now = Instant::now();
@@ -796,16 +866,6 @@ pub fn run_capture() {
             });
         }
         drop(map);
-        // ONE handle-free snapshot names every presenter and answers "is the attached game still that
-        // process". If it cannot be read, emit nothing this tick (fail closed, state unchanged): an
-        // unreadable snapshot must neither name the game "" nor release a live attachment.
-        let Some(rows) = crate::other_load::read_process_rows() else {
-            eprintln!("[compy-fps] process snapshot unreadable - skipping this tick.");
-            continue;
-        };
-        for c in &mut candidates {
-            c.name = crate::other_load::image_name_for(&rows, c.pid);
-        }
         let chains: Vec<(u32, u64, Vec<f64>)> =
             candidates.iter().map(|c| (c.pid, c.swapchain, c.recent.clone())).collect();
         let pids: Vec<u32> = candidates.iter().map(|c| c.pid).collect();
@@ -814,17 +874,36 @@ pub fn run_capture() {
             c.evidence = evidence.get(&c.pid).copied().unwrap_or_default();
         }
         let was_attached = matches!(&attachment, Attachment::Attached { .. });
-        let created_for = attached_created;
-        let (next, best) = advance_attachment(
+        // ONE handle-free snapshot names every presenter and answers "is the attached game still that
+        // process". Nothing to name and nothing attached: nothing to ask, so no snapshot. Unreadable:
+        // `identity_step` decides nothing and changes nothing (fail closed): it must neither name the
+        // game "" nor release a live attachment.
+        let rows = if candidates.is_empty() && !was_attached {
+            Some(Vec::new())
+        } else {
+            crate::other_load::read_process_rows_into(&mut snap_buf)
+        };
+        let step = identity_step(
             std::mem::replace(&mut attachment, Attachment::new()),
+            attached_created,
             candidates,
-            &|pid, name| {
-                let created = created_for.filter(|(p, _)| *p == pid).map(|(_, c)| c);
-                crate::other_load::alive_as(&rows, pid, name, created)
-            },
+            rows.as_deref(),
         );
-        attachment = next;
-        attached_created = track_created(attached_created, &attachment, &rows);
+        attachment = step.attachment;
+        attached_created = step.created;
+        let best = step.best;
+        if step.skipped {
+            if unreadable.note() {
+                eprintln!(
+                    "[compy-fps] process snapshot unreadable - skipping the tick ({} so far).",
+                    unreadable.total
+                );
+                if let Some(out) = &opts.out_path {
+                    write_atomic(&format!("{out}.snapshot-unreadable"), &unreadable.total.to_string());
+                }
+            }
+            continue;
+        }
         match (&attachment, was_attached) {
             (Attachment::Attached { pid, name }, false) => {
                 eprintln!("[compy-fps] attached to {name} (pid {pid})");
@@ -869,6 +948,7 @@ pub fn run_capture() {
                 low1_fps: if p99 > 0.0 { 1000.0 / p99 } else { 0.0 },
                 frames_last_sec: frames,
                 recent_frametimes_ms,
+                snapshot_unreadable_ticks: unreadable.total,
             };
 
             if let Ok(line) = serde_json::to_string(&report) {
@@ -1454,9 +1534,12 @@ mod frame_hist_tests {
 #[cfg(test)]
 mod handle_free_identity_tests {
     //! The attached game's identity comes from snapshot rows (pid + image name + creation time), with no
-    //! process opened. These drive the real state machine with `alive_as` over synthetic rows.
-    use super::{advance_attachment, track_created, Attachment, PresenterCandidate, WindowEvidence};
-    use crate::other_load::{alive_as, ProcRow};
+    //! process opened. These drive `identity_step` (the function the capture loop calls) over synthetic rows.
+    use super::{
+        identity_step, select_game_presenter, track_created, Attachment, FpsReport, IdentityStep,
+        PresenterCandidate, UnreadableTicks, WindowEvidence, ATTACH_STREAK_TICKS,
+    };
+    use crate::other_load::ProcRow;
 
     fn proc_row(pid: u32, name: &str, create: i64, threads: u32) -> ProcRow {
         ProcRow {
@@ -1475,9 +1558,22 @@ mod handle_free_identity_tests {
         Attachment::Attached { pid: 10, name: "Game.exe".into() }
     }
 
-    fn silent_tick(rows: &[ProcRow], created: Option<(u32, i64)>) -> Attachment {
-        let created = created.filter(|(p, _)| *p == 10).map(|(_, c)| c);
-        advance_attachment(attached(), vec![], &|pid, name| alive_as(rows, pid, name, created)).0
+    fn cand(pid: u32, frames: usize, ev: WindowEvidence) -> PresenterCandidate {
+        PresenterCandidate { pid, name: String::new(), swapchain: 1, recent: vec![6.0; frames], evidence: ev }
+    }
+
+    const GAME_WINDOW: WindowEvidence =
+        WindowEvidence { owns_visible_toplevel: true, foreground: true, covers_monitor: true };
+    const NO_WINDOW: WindowEvidence =
+        WindowEvidence { owns_visible_toplevel: false, foreground: false, covers_monitor: false };
+
+    /// One silent tick (no frames) of an attached game, through the real step.
+    fn silent_tick(rows: &[ProcRow], created: Option<(u32, i64)>) -> IdentityStep {
+        identity_step(attached(), created, vec![], Some(rows))
+    }
+
+    fn is_attached(s: &IdentityStep) -> bool {
+        matches!(s.attachment, Attachment::Attached { pid: 10, .. })
     }
 
     #[test]
@@ -1499,33 +1595,134 @@ mod handle_free_identity_tests {
     #[test]
     fn a_silent_attached_game_stays_attached_while_the_same_process_lives() {
         let rows = vec![proc_row(10, "Game.exe", 500, 9)];
-        assert!(matches!(silent_tick(&rows, Some((10, 500))), Attachment::Attached { pid: 10, .. }));
+        assert!(is_attached(&silent_tick(&rows, Some((10, 500)))));
     }
 
     #[test]
     fn exit_recycle_and_another_image_each_release_the_attachment() {
         let created = Some((10, 500));
-        // Gone from the snapshot.
-        assert!(matches!(silent_tick(&[], created), Attachment::Unattached { .. }));
-        // Exited but still listed (another program holds a handle): no threads.
-        assert!(matches!(silent_tick(&[proc_row(10, "Game.exe", 500, 0)], created), Attachment::Unattached { .. }));
-        // The pid now runs another image.
-        assert!(matches!(silent_tick(&[proc_row(10, "cmd.exe", 500, 3)], created), Attachment::Unattached { .. }));
-        // The pid was recycled by a new process of the SAME exe (new creation time).
-        assert!(matches!(silent_tick(&[proc_row(10, "Game.exe", 777, 3)], created), Attachment::Unattached { .. }));
+        assert!(!is_attached(&silent_tick(&[], created)), "gone from the snapshot");
+        assert!(!is_attached(&silent_tick(&[proc_row(10, "Game.exe", 500, 0)], created)), "listed, no threads");
+        assert!(!is_attached(&silent_tick(&[proc_row(10, "cmd.exe", 500, 3)], created)), "another image");
+        assert!(!is_attached(&silent_tick(&[proc_row(10, "Game.exe", 777, 3)], created)), "same exe, new lifetime");
+        let released = silent_tick(&[proc_row(10, "Game.exe", 777, 3)], created);
+        assert_eq!(released.created, None, "the remembered start is cleared with the attachment");
     }
 
     #[test]
     fn a_recycled_pid_that_is_presenting_is_not_measured_under_the_old_lifetime() {
         let rows = vec![proc_row(10, "Game.exe", 777, 3)];
-        let cand = PresenterCandidate {
-            pid: 10,
-            name: "Game.exe".into(),
-            swapchain: 1,
-            recent: vec![6.0, 6.0, 6.0],
-            evidence: WindowEvidence::default(),
+        let step = identity_step(attached(), Some((10, 500)), vec![cand(10, 3, GAME_WINDOW)], Some(&rows));
+        assert!(step.best.is_none() && !is_attached(&step) && !step.skipped);
+    }
+
+    #[test]
+    fn an_unreadable_snapshot_decides_nothing_and_changes_nothing() {
+        let step = identity_step(attached(), Some((10, 500)), vec![cand(10, 3, GAME_WINDOW)], None);
+        assert!(step.skipped, "the tick is marked skipped, distinct from a tick with no frames");
+        assert!(is_attached(&step), "a live attachment is not released by a failed read");
+        assert_eq!(step.created, Some((10, 500)), "the remembered start is kept");
+        assert!(step.best.is_none(), "nothing is reported");
+        // An unattached state stays unattached and keeps its streak.
+        let un = Attachment::Unattached { last_pid: Some(7), streak: 2 };
+        let step = identity_step(un, None, vec![cand(7, 3, GAME_WINDOW)], None);
+        assert!(step.skipped && matches!(step.attachment, Attachment::Unattached { last_pid: Some(7), streak: 2 }));
+        // An empty (but readable) snapshot is NOT a skip: the attached game is simply gone.
+        let step = identity_step(attached(), Some((10, 500)), vec![], Some(&[]));
+        assert!(!step.skipped && !is_attached(&step));
+    }
+
+    #[test]
+    fn acquire_then_recycle_end_to_end_through_the_step() {
+        let rows = vec![proc_row(10, "Game.exe", 500, 9), proc_row(4, "System", 1, 100)];
+        let (mut att, mut created) = (Attachment::new(), None);
+        let mut reported = 0;
+        for _ in 0..ATTACH_STREAK_TICKS {
+            let s = identity_step(att, created, vec![cand(10, 3, GAME_WINDOW)], Some(&rows));
+            reported += usize::from(s.best.is_some());
+            (att, created) = (s.attachment, s.created);
+        }
+        assert!(matches!(att, Attachment::Attached { pid: 10, .. }) && reported == 1, "attached on the streak tick");
+        assert_eq!(created, Some((10, 500)), "the start is recorded on the attach tick, from the same rows");
+        // Presenting under the same lifetime keeps reporting.
+        let s = identity_step(att, created, vec![cand(10, 3, GAME_WINDOW)], Some(&rows));
+        assert!(s.best.is_some());
+        // The pid is recycled by the same exe: released, nothing reported, no start remembered.
+        let recycled = vec![proc_row(10, "Game.exe", 900, 9)];
+        let s = identity_step(s.attachment, s.created, vec![cand(10, 3, GAME_WINDOW)], Some(&recycled));
+        assert!(s.best.is_none() && s.created.is_none() && !is_attached(&s));
+    }
+
+    #[test]
+    fn an_attachment_without_a_remembered_start_falls_back_to_the_name() {
+        let rows = vec![proc_row(10, "Game.exe", 777, 9)];
+        assert!(is_attached(&silent_tick(&rows, None)), "name-only identity, the old behaviour");
+        assert!(!is_attached(&silent_tick(&[proc_row(10, "other.exe", 777, 9)], None)));
+    }
+
+    #[test]
+    fn unreadable_ticks_are_counted_and_reported_first_then_every_120th() {
+        let mut u = UnreadableTicks::default();
+        let mut said = Vec::new();
+        for _ in 1..=361 {
+            if u.note() {
+                said.push(u.total);
+            }
+        }
+        assert_eq!(said, vec![1, 120, 240, 360]);
+        assert_eq!(u.total, 361);
+    }
+
+    #[test]
+    fn the_report_carries_the_unreadable_count_only_when_there_is_one() {
+        let rep = |n| FpsReport {
+            pid: 1,
+            process_name: "g.exe".into(),
+            fps: 60.0,
+            avg_frametime_ms: 16.6,
+            low1_fps: 50.0,
+            frames_last_sec: 60,
+            recent_frametimes_ms: vec![16.6],
+            foreground: None,
+            frame_hist: None,
+            snapshot_unreadable_ticks: n,
         };
-        let (next, report) = advance_attachment(attached(), vec![cand], &|pid, name| alive_as(&rows, pid, name, Some(500)));
-        assert!(report.is_none() && matches!(next, Attachment::Unattached { .. }));
+        assert!(!serde_json::to_string(&rep(0)).unwrap().contains("snapshot_unreadable_ticks"));
+        assert!(serde_json::to_string(&rep(3)).unwrap().contains("\"snapshot_unreadable_ticks\":3"));
+    }
+
+    /// Names the snapshot now supplies that the old open often refused. Each well-known non-game presenter
+    /// is rejected by the name denylist, or (windowless GPU children, services) by the window evidence.
+    #[test]
+    fn well_known_non_game_presenters_named_by_the_snapshot_never_attach() {
+        // Denylisted names are rejected even if they somehow had a fullscreen foreground window.
+        for name in ["dwm.exe", "explorer.exe", "msedgewebview2.exe", "compy.exe", "SearchHost.exe", "TextInputHost.exe"] {
+            let named = PresenterCandidate { name: name.into(), ..cand(5, 200, GAME_WINDOW) };
+            assert!(select_game_presenter(vec![named]).is_none(), "{name} is denylisted");
+        }
+        // Everything else below presents from a process that owns no visible top-level window (an Electron
+        // or browser GPU child, a launcher service, an anti-cheat service): the window evidence rejects
+        // it through the real state machine for many ticks, whatever its name.
+        for name in [
+            "Discord.exe", "chrome.exe", "msedge.exe", "firefox.exe", "Code.exe", "Claude.exe", "steamwebhelper.exe",
+            "EasyAntiCheat.exe", "EasyAntiCheat_EOS.exe", "BEService.exe", "vgc.exe", "Battle.net.exe", "EpicGamesLauncher.exe",
+        ] {
+            let rows = vec![proc_row(5, name, 100, 20)];
+            let (mut att, mut created) = (Attachment::new(), None);
+            for _ in 0..(ATTACH_STREAK_TICKS * 3) {
+                let s = identity_step(att, created, vec![cand(5, 200, NO_WINDOW)], Some(&rows));
+                assert!(s.best.is_none(), "{name} must not be reported");
+                (att, created) = (s.attachment, s.created);
+            }
+            assert!(matches!(att, Attachment::Unattached { .. }), "{name} must not attach");
+        }
+        // The same names DO name the game itself, as intended: an unrelated game exe attaches on the streak.
+        let rows = vec![proc_row(5, "Game.exe", 100, 20)];
+        let (mut att, mut created) = (Attachment::new(), None);
+        for _ in 0..ATTACH_STREAK_TICKS {
+            let s = identity_step(att, created, vec![cand(5, 200, GAME_WINDOW)], Some(&rows));
+            (att, created) = (s.attachment, s.created);
+        }
+        assert!(matches!(att, Attachment::Attached { pid: 5, .. }));
     }
 }

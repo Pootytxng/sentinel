@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 
 // Compy may say what it DOES to a game (reads frame timing from Windows, injects nothing, writes
 // nothing to game files). The true remaining set (src-tauri, guarded by other_load.rs
-// `open_process_appears_only_at_allowlisted_sites`, whose allowlist is empty): Compy opens NO process by id,
-// the game included. Process names, "is the game still running" and pid-reuse checks all read one
-// system-wide snapshot (other_load::read_process_rows: pid, parent, image name, create time, threads,
-// session). It reads no game memory and holds no handle to the game; frame timing is read from Windows'
+// `open_process_appears_only_at_allowlisted_sites`, whose allowlist is empty; it scans src-tauri/src only,
+// not dependency crates): Compy's own code opens NO process by id, the game included. Process names and
+// "is the game still running" read one system-wide snapshot (other_load::read_process_rows: pid, parent,
+// image name, create time, threads, session); only the FPS helper also checks pid reuse by creation time
+// (the app's check is by name). It reads no game memory and holds no handle to the game; frame timing is read from Windows'
 // event tracing (ETW); window and foreground checks are window-manager queries. It may still not say
 // "never touched" or promise an outcome with anti-cheat or bans: the makers of anti-cheat do not publish
 // what they allow, so Compy cannot know (docs/ARCHITECTURE_LOCKS.md ~191).

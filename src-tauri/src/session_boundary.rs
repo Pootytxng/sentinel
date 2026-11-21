@@ -834,7 +834,7 @@ mod review_tests {
 
     #[test]
     fn a_probe_that_never_answers_still_cannot_absorb_a_second_game() {
-        // OpenProcess denied for A: the probe says None for 300 ticks, then B presents.
+        // The liveness probe cannot read A (e.g. the process snapshot failed): it says None for 300 ticks, then B presents.
         let mut r = Rig::new();
         for t in 0..60 {
             r.tick(t, A, None);

@@ -1819,8 +1819,12 @@ mod game_running_tests {
         let mut child = std::process::Command::new("cmd").args(["/C", "exit 0"]).spawn().expect("spawn cmd");
         let pid = child.id();
         child.wait().expect("cmd exits");
+        // `wait()` reaps the child but keeps its handle open (`child` is still in scope), the same
+        // state as a launcher holding a handle to a game that closed. The probe must read it as closed
+        // (the snapshot no longer lists it); the handle is dropped only after.
+        assert_eq!(pid_running_as(pid, "cmd.exe"), Some(false));
         drop(child);
-        // The pid is gone, or (while a handle lingers) reads as exited, or is reused by another image.
+        // And still closed once the handle is released (gone, or reused by another image).
         assert_eq!(pid_running_as(pid, "cmd.exe"), Some(false));
     }
 }

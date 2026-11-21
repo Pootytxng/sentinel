@@ -119,8 +119,9 @@ windows = { version = "0.59", features = [
   # interrupt-affinity tweaks where they're meaningful (multi-CCD), and refuses
   # them on single-CCD parts (e.g. an 8-core X3D) — read-only, no elevation.
   "Win32_System_SystemInformation",
-  # OpenProcess + QueryFullProcessImageNameW, so the elevated FPS helper can
-  # resolve the presenting process's name (it has the rights; the UI doesn't).
+  # Still needed: GetExitCodeProcess/WaitForSingleObject on the elevated launch's own child
+  # (actions.rs), thread/system times (latency.rs, other_load.rs). Compy opens NO other process
+  # by id: the FPS helper names and watches the game from the process snapshot (other_load.rs).
   "Win32_System_Threading",
   # Read HWiNFO's published sensor block (shared memory-mapped file) for CPU temp — read-only,
   # no driver of our own. OpenFileMappingW / MapViewOfFile. See cpu_temp.rs.
