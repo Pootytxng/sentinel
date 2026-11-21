@@ -257,19 +257,19 @@
         "sentence": "Windows writes down every crash and freeze. Compy reads that record back in plain English and tells you what it actually says."
       },
       "crashAnytime": {
-        "sentence": "Crashes that happen while you are barely using the PC point at the machine rather than a game. Windows keeps its own record of them."
+        "sentence": "You said it crashes any time. That could be a game, Windows, a driver or a part, so Compy starts with what Windows recorded instead of guessing."
       },
       "crashBoot": {
-        "sentence": "Trouble right after startup usually points at something loading with Windows. The record names what happened last."
+        "sentence": "Trouble right after startup is worth checking against what loads with Windows. The record names what happened last."
       },
       "crashUnsure": {
         "sentence": "That is fine — you do not have to know. Windows keeps the record either way, and Compy reads it for you."
       },
       "slowAlways": {
-        "sentence": "Slow everywhere, not just in games, usually means something is holding the whole machine back rather than one title."
+        "sentence": "You said it is slow all the time, not just in games. That is worth checking across the whole PC, not one game at a time."
       },
       "slowSometimes": {
-        "sentence": "Slow in some games and not others is normally a settings or headroom story. One measured session is what turns that into an answer."
+        "sentence": "You said some games are slow and others are not. That can come from a game's settings, a heavier game needing more headroom, or something else. One measured session is what turns it into an answer."
       },
       "stutter": {
         "sentence": "Hitching is a worst-frames problem, not an average-FPS one — the average can look perfectly fine while it is happening. So Compy compares your latest session of the game with your last steady one, and shows any crash Windows recorded.",

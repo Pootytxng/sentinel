@@ -3,6 +3,8 @@ import enGaming from "./locales/en/gaming.json";
 import zhGaming from "./locales/zh-CN/gaming.json";
 import enLab from "./locales/en/lab.json";
 import zhLab from "./locales/zh-CN/lab.json";
+import enHome from "./locales/en/home.json";
+import zhHome from "./locales/zh-CN/home.json";
 
 // The Problems room (Black Box), its case text and the Lab rig line that reads the same crash record
 // may say what Windows recorded and what that does not rule out. They may never exclude the PC (or a
@@ -11,6 +13,15 @@ import zhLab from "./locales/zh-CN/lab.json";
 //
 // Allowlist is empty on purpose. A string that needs an entry here is a string that breaks the rule.
 const ALLOWLIST: readonly string[] = [];
+
+// Strings that match a pattern but make no claim, excluded by EXACT key with the reason. Not an
+// allowlist of claims: a claim that trips a pattern gets reworded, never listed here.
+const NO_CLAIM_EXCLUSIONS: Readonly<Record<string, string>> = {
+  "en/home.json:homeConsole.rigFocus.away":
+    "Caption true by construction: LIMITER_AWAY (limiter-part.ts) holds only limiter ids that are a setting or software, and the line says only what the flagged item is, never that a part is fine.",
+  "en/home.json:interview.palette.heat.keywords":
+    "Hidden command-palette search terms the user may type; never rendered as a statement.",
+};
 
 const EXCLUSION_PATTERNS: ReadonlyArray<[string, RegExp]> = [
   ["en: 'rather than your PC/hardware'", /rather than your (pc|hardware|machine|rig)/i],
@@ -56,7 +67,13 @@ const SOURCES: Array<[string, unknown]> = [
   ["zh-CN/gaming.json", zhGaming],
   ["en/lab.json#labConsole", enLab.labConsole],
   ["zh-CN/lab.json#labConsole", zhLab.labConsole],
+  // home.json whole: the interview lines (what Compy says after the user's pick) and the Home rig caption.
+  ["en/home.json", enHome],
+  ["zh-CN/home.json", zhHome],
 ];
+
+// File key as the exclusion list spells it: the part of the source name before any "#".
+const fileKey = (file: string) => file.split("#")[0];
 
 describe("Problems room / case / rig-care text never excludes the PC on crash-location evidence", () => {
   it("no en or zh-CN string in gaming.json or lab.json carries an exclusion pattern (allowlist empty)", () => {
@@ -65,11 +82,43 @@ describe("Problems room / case / rig-care text never excludes the PC on crash-lo
     for (const [file, json] of SOURCES) {
       for (const [path, text] of leaves(json)) {
         for (const [label, re] of EXCLUSION_PATTERNS) {
-          if (re.test(text) && !ALLOWLIST.includes(`${file}:${path}`)) hits.push(`${file}:${path} [${label}] ${text}`);
+          const key = `${fileKey(file)}:${path}`;
+          if (re.test(text) && !ALLOWLIST.includes(key) && !(key in NO_CLAIM_EXCLUSIONS)) {
+            hits.push(`${file}:${path} [${label}] ${text}`);
+          }
         }
       }
     }
     expect(hits).toEqual([]);
+  });
+
+  it("the no-claim exclusion list holds exactly the two known keys, and each one still matches a pattern", () => {
+    expect(Object.keys(NO_CLAIM_EXCLUSIONS).sort()).toEqual([
+      "en/home.json:homeConsole.rigFocus.away",
+      "en/home.json:interview.palette.heat.keywords",
+    ]);
+    const all = new Map<string, string>();
+    for (const [file, json] of SOURCES) for (const [path, text] of leaves(json)) all.set(`${fileKey(file)}:${path}`, text);
+    for (const key of Object.keys(NO_CLAIM_EXCLUSIONS)) {
+      const text = all.get(key);
+      expect(text, `${key} must exist`).toBeTypeOf("string");
+      // An entry that no longer trips a pattern is dead weight: delete it instead of keeping the exemption.
+      expect(EXCLUSION_PATTERNS.some(([, re]) => re.test(text as string)), `${key} no longer matches any pattern`).toBe(true);
+    }
+  });
+
+  it("the interview lines repeat what the user said as theirs and do not exclude a game, the PC or a part", () => {
+    for (const k of ["crashAnytime", "slowAlways", "slowSometimes"] as const) {
+      expect(enHome.interview.f[k].sentence).toMatch(/^You said /);
+    }
+    expect(zhHome.interview.f.crashAnytime.sentence).toContain("你说");
+    expect(zhHome.interview.f.slowAlways.sentence).toContain("你说");
+    expect(zhHome.interview.f.slowSometimes.sentence).toContain("你说");
+    expect(enHome.interview.f.crashAnytime.sentence).toContain("That could be a game, Windows, a driver or a part");
+    for (const k of ["crashAnytime", "crashBoot", "slowAlways", "slowSometimes"] as const) {
+      expect(enHome.interview.f[k].sentence).not.toMatch(/\busually\b|\bnormally\b|rather than/i);
+      expect(zhHome.interview.f[k].sentence).not.toMatch(/通常/);
+    }
   });
 
   it("the replacement statements exist in both languages, take the game's name, and say it does not rule out the PC", () => {

@@ -295,7 +295,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                         )],
                         raises_confidence: vec![
                             "More sessions in the same direction.".into(),
-                            "The same drift showing up in another game (system-wide, not game-side).".into(),
+                            format!("The same drift showing up in another game, which would show it isn't specific to {game}."),
                         ],
                         next_test: degrading.then(|| format!(
                             "Open History, pick the last good {game} session and the first slow one, and run \"What changed?\" between them."
@@ -336,7 +336,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                     )],
                     raises_confidence: vec![
                         "More sessions continuing the climb.".into(),
-                        "The same climb in other games (points at the machine, not the game).".into(),
+                        format!("The same climb in other games, which would show it isn't specific to {game}."),
                     ],
                     next_test: (change_c > 0.0).then(|| "Check dust filters and fan behavior, then watch the next session's peak temperature in Live.".to_string()),
                 });
@@ -379,7 +379,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                     )],
                     raises_confidence: vec![
                         "More sessions continuing the climb.".into(),
-                        "The same climb showing up in the GPU thermal trend too (points at the case/cooling, not one component).".into(),
+                        "The same climb showing up in the GPU thermal trend too, which would show it isn't only the CPU. It wouldn't say whether the case, the cooling or the room is behind it.".into(),
                     ],
                     next_test: (change_c > 0.0).then(|| "Check CPU cooler contact/dust and case airflow, then watch the next session's peak CPU temperature in Live.".to_string()),
                 });
@@ -578,11 +578,11 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
             game: None,
             title: "More than one game is slowing down".into(),
             detail: format!(
-                "1% lows have drifted down in {} games ({list}) over their recent sessions — a shared drift points at the system, not any one game.",
+                "1% lows have drifted down in {} games ({list}) over their recent sessions. A drift across several games can come from something they share, such as a driver, Windows or a part, but Compy can't tell which from this alone, and it doesn't rule out any one game.",
                 degrading_games.len()
             ),
             confidence: Confidence::Medium,
-            confidence_reason: "The same direction repeated independently across games — still a correlation, but one a single game update can't explain.".into(),
+            confidence_reason: "The same direction repeated across games. That is a correlation: it shows the games moved together, not what they share.".into(),
             supporting_evidence: degrading_games
                 .iter()
                 .map(|g| format!("{g}: downward 1% low trend past the noise floor."))
@@ -590,7 +590,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
             raises_confidence: vec![
                 "A system-level change (driver, Windows build, power plan) landing near the start of the drift.".into(),
             ],
-            next_test: Some("Run \"What changed?\" on the game with the clearest before/after pair — a system-wide cause should show up in its window.".into()),
+            next_test: Some("Run \"What changed?\" on the game with the clearest before/after pair — it lists what changed on the PC in that window.".into()),
         });
     } else if degrading_games.len() == 1 && trend_eligible_games.len() >= 2 {
         let g = &degrading_games[0];
@@ -599,13 +599,13 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
         patterns.push(SessionPattern {
             id: "isolated-degradation".into(),
             game: Some(g.clone()),
-            title: format!("The slowdown looks isolated to {g}"),
+            title: format!("Only {g} is slowing down so far"),
             detail: format!(
-                "{g} shows a downward 1% low trend while {} other tracked game(s) stayed flat — that points at {g} itself (a game update, its settings) rather than your PC.",
+                "{g} shows a downward 1% low trend while {} other tracked game(s) stayed flat. That shows up in {g} and not in the other games Compy measured. It could be something specific to {g}, such as a game update, its settings, or how it uses your PC. It doesn't rule out your PC.",
                 others.len()
             ),
             confidence: Confidence::Medium,
-            confidence_reason: "Other games act as a natural control group — flat there, down here.".into(),
+            confidence_reason: "A comparison with other games, not a controlled test: games load a PC differently, so flat elsewhere doesn't clear the PC.".into(),
             supporting_evidence: others
                 .iter()
                 .map(|o| format!("{o}: no trend past the noise floor in the same period."))
@@ -614,7 +614,7 @@ pub(crate) fn detect_patterns(sessions: &[SessionSummary], band_at: &dyn Fn(&Ses
                 "A {g} update landing near the start of the drift (Compy can't see game patches — check its patch notes)."
             )],
             next_test: Some(format!(
-                "Run \"What changed?\" between the last good and first slow {g} sessions — if nothing system-side changed, the game is the remaining suspect."
+                "Run \"What changed?\" between the last good and first slow {g} sessions. It lists what changed on the PC in that window, and it can't see game patches."
             )),
         });
     }
@@ -1040,8 +1040,98 @@ mod tests {
             .find(|p| p.id == "multi-game-degradation")
             .expect("synthesis fires");
         assert!(p.game.is_none());
-        assert!(p.detail.contains("system"));
+        assert!(p.detail.contains("can't tell which"));
         assert_eq!(p.confidence, Confidence::Medium);
+    }
+
+    /// Text of every field a pattern shows the user, lowercased.
+    fn shown_text(p: &SessionPattern) -> String {
+        let mut t = format!("{} {} {}", p.title, p.detail, p.confidence_reason);
+        for s in p.supporting_evidence.iter().chain(p.raises_confidence.iter()) {
+            t.push(' ');
+            t.push_str(s);
+        }
+        if let Some(n) = &p.next_test {
+            t.push(' ');
+            t.push_str(n);
+        }
+        t.to_lowercase()
+    }
+
+    /// A cross-game comparison can say "shows up in one game and not the others"; it can't say the
+    /// PC (or the game) is cleared. A PC fault can hit one game; a shared fault can hit all.
+    const EXCLUSION_WORDING: &[&str] = &[
+        "rather than your pc",
+        "rather than the pc",
+        "points at the system",
+        "not any one game",
+        "not your pc",
+        "isn't your pc",
+        "itself (",
+        "points at the game",
+        "natural control group",
+        "remaining suspect",
+        "system-wide cause",
+        "points at the machine",
+        "not the game",
+        "not game-side",
+        "not one component",
+    ];
+
+    #[test]
+    fn cross_game_lines_never_exclude_the_pc_or_the_game() {
+        let mut multi: Vec<SessionSummary> = Vec::new();
+        let mut iso: Vec<SessionSummary> = Vec::new();
+        for i in 0..6 {
+            multi.push(mk_session(&day(i), "cp2077.exe", 100.0 - 2.5 * i as f64));
+            multi.push(mk_session(&format!("2026-07-{:02}T20:00:00Z", i + 1), "valorant.exe", 200.0 - 5.0 * i as f64));
+            iso.push(mk_session(&day(i), "cp2077.exe", 100.0 - 2.5 * i as f64));
+            iso.push(mk_session(&format!("2026-07-{:02}T20:00:00Z", i + 1), "valorant.exe", 200.0));
+        }
+        // Thermal fixtures: both the GPU and the CPU trend fire, so their lines are checked too.
+        let hot: Vec<SessionSummary> = (0..6)
+            .map(|i| {
+                let mut s = mk_session(&day(i), "cp2077.exe", 100.0 - 2.5 * i as f64);
+                s.peak_gpu_temp_c = Some(70 + (i as u32) * 3);
+                s.peak_cpu_temp_c = Some(60 + (i as u32) * 3);
+                s
+            })
+            .collect();
+        for (id, sessions) in [("multi-game-degradation", &multi), ("isolated-degradation", &iso)] {
+            assert!(detect(sessions).patterns.iter().any(|p| p.id == id), "{id} must fire");
+        }
+        for (name, sessions) in [("multi", &multi), ("isolated", &iso), ("hot", &hot)] {
+            let r = detect(sessions);
+            assert!(!r.patterns.is_empty(), "{name}");
+            for p in &r.patterns {
+                let text = shown_text(p);
+                for bad in EXCLUSION_WORDING {
+                    assert!(!text.contains(bad), "{name}/{} shows exclusion wording {bad:?}: {text}", p.id);
+                }
+            }
+        }
+        let ids: Vec<String> = detect(&hot).patterns.iter().map(|p| p.id.clone()).collect();
+        assert!(ids.iter().any(|i| i == "thermal-trend") && ids.iter().any(|i| i == "cpu-thermal-trend"), "{ids:?}");
+        // The isolated line says what was seen and what it does not rule out.
+        let r = detect(&iso);
+        let p = r.patterns.iter().find(|p| p.id == "isolated-degradation").unwrap();
+        assert!(p.detail.contains("It doesn't rule out your PC."), "{}", p.detail);
+        assert!(p.title.starts_with("Only ") && !p.title.contains("isolated"));
+    }
+
+    #[test]
+    fn exclusion_wording_list_catches_the_old_sentences() {
+        // Break-check for the test above: the retired sentences must trip it.
+        let old = [
+            "that points at cp2077 itself (a game update, its settings) rather than your PC.",
+            "a shared drift points at the system, not any one game.",
+            "the same climb in other games (points at the machine, not the game).",
+            "the same drift showing up in another game (system-wide, not game-side).",
+            "(points at the case/cooling, not one component).",
+        ];
+        for s in old {
+            assert!(EXCLUSION_WORDING.iter().any(|b| s.to_lowercase().contains(b)), "{s}");
+        }
     }
 
     #[test]
