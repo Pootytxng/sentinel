@@ -226,8 +226,8 @@ pub(crate) enum StoreLock {
     Readiness,
     /// `incident_observer::STATE_LOCK`.
     IncidentObserver,
-    /// `history::HISTORY_LOCK` — the Trust Ledger. Taken at eight sites, every one of them through
-    /// `history::lock_history`, which propagates poison as an `Err` at all eight. One policy, not two.
+    /// `history::HISTORY_LOCK` — the Trust Ledger. Taken at ten sites, every one of them through
+    /// `history::lock_history`, which propagates poison as an `Err` at all ten. One policy, not two.
     History,
     /// `support_evidence`'s `LOCK`. A leaf, and the innermost lock of THREE declared nestings, not
     /// one: `Comparison`, `History` and `Experiment` each reach it. `record` appends and
@@ -298,7 +298,7 @@ impl StoreLock {
 ///   `support_evidence::record`, which takes that module's lock. This is the pair PR #395's review
 ///   derived by hand and then defended with a sentence nobody had checked.
 /// - `History -> SupportEvidence` — `load_history` / `save_history` report a damaged or unwritable
-///   ledger through `support_evidence::record`, and the eight `HISTORY_LOCK` sites hold the ledger
+///   ledger through `support_evidence::record`, and the ten `HISTORY_LOCK` sites hold the ledger
 ///   lock across those calls.
 /// - `Experiment -> History` — the live one, and the one the first version of this table missed
 ///   entirely because the Experiment gate was not recorded. `start_experiment` holds

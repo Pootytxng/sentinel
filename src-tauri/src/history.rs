@@ -1421,11 +1421,13 @@ fn save_history(root: &MutationRoot, h: &[AppliedChange]) -> Result<(), String> 
 }
 
 /// Once per process: a backup that stays unwritable fails on every save (twice per mutation), and
-/// the support record is a 400-entry ring that other evidence would be pushed out of. Shared by the
-/// post-save refresh and the start-up backup so the two never report twice between them.
+/// the support record is a 400-entry ring that other evidence would be pushed out of. The post-save
+/// refresh ONLY: a start-up failure records its own entry and never claims this flag, because a
+/// stale backup (a later save's refresh failing) matters more than a backup that was never created.
+static SAVE_BACKUP_REPORTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 fn report_backup_not_refreshed(why: &str) {
-    static BACKUP_REPORTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    if claim_once(&BACKUP_REPORTED) {
+    if claim_once(&SAVE_BACKUP_REPORTED) {
         crate::support_evidence::record(
             crate::support_evidence::EventKind::Ledger,
             "ledger_backup",
@@ -1459,8 +1461,24 @@ fn ensure_backup_at_start_for(root: Result<MutationRoot, String>) -> StartupBack
         let Ok(_guard) = lock_history() else { return StartupBackup::Skipped };
         backup_missing_ledger_at(&ledger_path_for(&root))
     };
-    if let StartupBackup::Failed(why) = &outcome {
-        report_backup_not_refreshed(why);
+    // Runs once per process, so no once-flag; and it must not touch the save path's flag.
+    // The detail is a fixed sentence or the I/O reason: never a path's rows or any ledger content.
+    match &outcome {
+        StartupBackup::Failed(why) => crate::support_evidence::record(
+            crate::support_evidence::EventKind::Ledger,
+            "ledger_backup",
+            "not_created_at_start",
+            crate::support_evidence::Outcome::Failed,
+            why,
+        ),
+        StartupBackup::Written => crate::support_evidence::record(
+            crate::support_evidence::EventKind::Ledger,
+            "ledger_backup",
+            "created_at_start",
+            crate::support_evidence::Outcome::Ok,
+            "backup copy created at start",
+        ),
+        StartupBackup::Skipped => {}
     }
     outcome
 }
@@ -6989,6 +7007,52 @@ mod ledger_backup_tests {
         assert_eq!(std::fs::read(backup_path(&ledger)).unwrap(), std::fs::read(&ledger).unwrap());
         let _ = (std::fs::remove_file(&ledger), std::fs::remove_file(backup_path(&ledger)));
         std::fs::remove_dir_all(&sandbox).ok();
+    }
+
+    #[test]
+    fn a_startup_failure_does_not_claim_the_save_paths_report_flag() {
+        use std::sync::atomic::Ordering::Relaxed;
+        let _serial = serial();
+        let root = crate::data_root::mutation_root().expect("the test root");
+        let ledger = ledger_path_for(&root);
+        std::fs::create_dir_all(root.path()).unwrap();
+        save_history_to(&ledger, &rows(2)).unwrap();
+        std::fs::remove_file(backup_path(&ledger)).unwrap();
+        let blocker = ledger.with_extension("json.bak.tmp");
+        std::fs::create_dir(&blocker).unwrap(); // the start-up backup write cannot start
+        SAVE_BACKUP_REPORTED.store(false, Relaxed);
+        assert!(matches!(ensure_backup_at_start_for(crate::data_root::mutation_root()), StartupBackup::Failed(_)));
+        assert!(!SAVE_BACKUP_REPORTED.load(Relaxed), "a later save-path failure must still be recorded");
+        assert!(claim_once(&SAVE_BACKUP_REPORTED), "the save path's flag is still free to claim");
+        SAVE_BACKUP_REPORTED.store(false, Relaxed);
+        std::fs::remove_dir(&blocker).ok();
+        let _ = (std::fs::remove_file(&ledger), std::fs::remove_file(backup_path(&ledger)));
+    }
+
+    #[test]
+    fn the_startup_step_holds_the_history_lock_across_the_read_and_the_backup_write() {
+        let src = include_str!("history.rs");
+        let production = src.split("mod ledger_backup_tests").next().expect("source");
+        let body = production.split_once("fn ensure_backup_at_start_for(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        let (lock, write) = (body.find("let Ok(_guard) = lock_history()"), body.find("backup_missing_ledger_at("));
+        assert!(matches!((lock, write), (Some(l), Some(w)) if l < w), "the lock is taken first and held by a named guard: {body}");
+        assert!(!body.contains("report_backup_not_refreshed") && !body.contains("SAVE_BACKUP_REPORTED"), "{body}");
+        assert_eq!(production.matches("backup_missing_ledger_at(").count(), 2, "one definition, one caller: the locked step");
+        let core = production.split_once("fn backup_missing_ledger_at(").and_then(|(_, r)| r.split_once("\n}\n")).expect("fn").0;
+        assert!(core.contains("std::fs::read(ledger)") && core.contains("write_backup_copy(ledger, &bytes)"), "{core}");
+    }
+
+    #[test]
+    fn the_startup_step_is_spawned_off_the_setup_thread_after_the_experiment_reconcile() {
+        let lib = include_str!("lib.rs");
+        let (reconcile, spawn) = (
+            lib.find("crate::experiment::reconcile_interrupted_starts()"),
+            lib.find(".spawn(history::ensure_backup_at_start)"),
+        );
+        assert!(matches!((reconcile, spawn), (Some(r), Some(s)) if r < s), "spawned after the reconcile");
+        let line = lib.lines().find(|l| l.contains(".spawn(history::ensure_backup_at_start)")).unwrap();
+        assert!(line.contains("std::thread::Builder::new()") && !line.contains("bounded_read_within"), "{line}");
+        assert!(!lib.contains("history::ensure_backup_at_start();"), "never called on the setup thread");
     }
 
     #[test]
