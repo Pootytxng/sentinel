@@ -699,9 +699,10 @@ export function HomeConsole({
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
   const avgFps = strip.kind === "data" ? strip.avgFps : null;
   const lowFps = strip.kind === "data" ? strip.low1Est : null;
-  const fpsGrade: Grade = strip.kind === "data" ? gradeFps(strip.avgFps, rig) : "neutral";
+  // M6-unread: a mostly-unmeasured last session shows its numbers ungraded (neutral ink).
+  const fpsGrade: Grade = strip.kind === "data" && !strip.ungraded ? gradeFps(strip.avgFps, rig) : "neutral";
   const low1Grade: Grade =
-    strip.kind === "data" ? gradeLow1(strip.low1Est, strip.avgFps) : "neutral";
+    strip.kind === "data" && !strip.ungraded ? gradeLow1(strip.low1Est, strip.avgFps) : "neutral";
   const checking = readiness == null; // checks literally still running
   // LOCKED rule 5 (codebase review 2026-11-03): the reading is the snapshot of the GPU this face
   // names, graded by the vendor whose sensor produced it. The sensor list is NVML-first and hw.gpus

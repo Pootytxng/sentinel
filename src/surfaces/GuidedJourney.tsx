@@ -74,7 +74,7 @@ import { useTranslation } from "react-i18next";
 import "../i18n";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary } from "../types";
-import { allBackground } from "../lib/session-metrics";
+import { allBackground, usableReading } from "../lib/session-metrics";
 import { writeLedger } from "../data/ledger-write";
 import { ChangedOutsideRemedy } from "./ChangedOutsideRemedy";
 import { prettyGameName } from "./game-name";
@@ -323,7 +323,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 // The same reading test the bench applies (ExperimentBench `isUsableReading`, experiment.rs
 // `has_frame_reading`).
 function usable(s: SessionSummary): boolean {
-  return Number.isFinite(s.avg_fps) && s.avg_fps > 0 && Number.isFinite(s.low1_fps_est) && s.low1_fps_est > 0 && s.process_name.trim() !== "";
+  return usableReading(s); // includes M6-unread: a session mostly unmeasured is not a reading to rest on
 }
 
 /** Resolves when the measured game's process has closed, when capture ended elsewhere after the game

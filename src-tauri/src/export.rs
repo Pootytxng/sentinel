@@ -627,6 +627,20 @@ fn yn(b: Option<bool>) -> &'static str {
         None => "—",
     }
 }
+/// M6-unread: the unmeasured time of a session row in the app's human duration, `None` when there was
+/// none (a row an older Compy wrote, or a session that could always look).
+fn unreadable_secs_text(row: &Value) -> Option<String> {
+    vu64(row, "unreadable_seconds").filter(|n| *n > 0).map(fmt_duration)
+}
+
+/// The note that stands beside a session's figures when some of its seconds went unmeasured; empty
+/// when none did.
+fn unreadable_note(row: &Value) -> String {
+    unreadable_secs_text(row)
+        .map(|t| format!(" \u{b7} Compy couldn't measure {t} of it (left out of these figures)"))
+        .unwrap_or_default()
+}
+
 fn fmt_duration(secs: u64) -> String {
     let (h, m, s) = (secs / 3600, (secs % 3600) / 60, secs % 60);
     if h > 0 {
@@ -898,6 +912,22 @@ pub(crate) fn build_markdown_report(
             );
             continue;
         }
+        // M6-unread: seconds Compy could not look at are left out of every figure on the row, and
+        // the row says so beside them. More than a fifth unmeasured and the frame-rate figures are
+        // not printed at all (the app shows that session as "not graded").
+        let unread_note = unreadable_note(s);
+        if crate::sessions::row_mostly_unread(s) {
+            let _ = writeln!(
+                o,
+                "- **{}** \u{b7} {dur} \u{b7} not graded: Compy couldn't measure {} of it (more than a fifth), so its frame-rate figures are left out",
+                {
+                    let p = vstr(s, "process_name");
+                    if p == "\u{2014}" { "Unknown game".to_string() } else { p }
+                },
+                unreadable_secs_text(s).unwrap_or_default(),
+            );
+            continue;
+        }
         let fps = vf64(s, "avg_fps").map(|n| format!("{n:.1}")).unwrap_or_else(|| "—".into());
         let ft = vf64(s, "avg_frametime_ms").map(|n| format!("{n:.1} ms")).unwrap_or_else(|| "—".into());
         let low = vf64(s, "low1_fps_est").map(|n| format!("{n:.1}")).unwrap_or_else(|| "—".into());
@@ -906,7 +936,7 @@ pub(crate) fn build_markdown_report(
         let ram = vu64(s, "peak_ram_used_bytes").map(gib).unwrap_or_else(|| "—".into());
         let _ = writeln!(
             o,
-            "- **{}** · {dur} · avg {fps} fps · {ft} · 1% low ~{low} · peak GPU {gtemp}/{gusage} · peak RAM {ram}",
+            "- **{}** · {dur} · avg {fps} fps · {ft} · 1% low ~{low} · peak GPU {gtemp}/{gusage} · peak RAM {ram}{unread_note}",
             {
                 let p = vstr(s, "process_name");
                 if p == "—" { "Unknown game".to_string() } else { p }
@@ -1157,15 +1187,26 @@ fn build_discord_block(
     // The newest session that measured play, and only readings it measured (codebase review
     // 2026-11-02): a session behind another window the whole time saves 0s that mean "not measured",
     // and printed "0 avg / 0 1% low".
-    if let Some(s) = crate::sessions::newest_measured_row(sessions) {
-        match (measured(s, "avg_fps"), measured(s, "low1_fps_est")) {
-            (Some(avg), Some(low)) => {
-                let _ = writeln!(o, "session · {} · {avg:.0} avg / {low:.0} 1% low", vstr(s, "process_name"));
+    if let Some(s) = crate::sessions::newest_row_with_reading(sessions) {
+        let note = unreadable_note(s);
+        if crate::sessions::row_mostly_unread(s) {
+            // More than a fifth unmeasured: no grade and no figures, the session still named.
+            let _ = writeln!(
+                o,
+                "session \u{b7} {} \u{b7} not graded: Compy couldn't measure {} of it",
+                vstr(s, "process_name"),
+                unreadable_secs_text(s).unwrap_or_default(),
+            );
+        } else {
+            match (measured(s, "avg_fps"), measured(s, "low1_fps_est")) {
+                (Some(avg), Some(low)) => {
+                    let _ = writeln!(o, "session \u{b7} {} \u{b7} {avg:.0} avg / {low:.0} 1% low{note}", vstr(s, "process_name"));
+                }
+                (Some(avg), None) => {
+                    let _ = writeln!(o, "session \u{b7} {} \u{b7} {avg:.0} avg{note}", vstr(s, "process_name"));
+                }
+                _ => {}
             }
-            (Some(avg), None) => {
-                let _ = writeln!(o, "session · {} · {avg:.0} avg", vstr(s, "process_name"));
-            }
-            _ => {}
         }
     }
     let _ = writeln!(o, "measured, not promised · {}", site_host());
@@ -1283,8 +1324,22 @@ pub(crate) fn build_consumer_report(
              benchmarks."
         );
         // The newest session that measured play, as the Discord block reads it.
-        if let Some(latest) = crate::sessions::newest_measured_row(sessions) {
-            if let Some(fps) = measured(latest, "avg_fps") {
+        if let Some(latest) = crate::sessions::newest_row_with_reading(sessions) {
+            if crate::sessions::row_mostly_unread(latest) {
+                // M6-unread: more than a fifth of it unmeasured: named, but not graded and no figure.
+                let game = {
+                    let p = vstr(latest, "process_name");
+                    if p == "—" { "a game".to_string() } else { p }
+                };
+                let _ = writeln!(
+                    o,
+                    "- Most recent: **{game}** \u{2014} not graded: Compy couldn't measure {} of it.",
+                    unreadable_secs_text(latest).unwrap_or_default()
+                );
+            } else if let Some(fps) = measured(latest, "avg_fps") {
+                let unread = unreadable_secs_text(latest)
+                    .map(|t| format!(" Compy couldn't measure {t} of it, so this covers only the rest."))
+                    .unwrap_or_default();
                 let game = {
                     let p = vstr(latest, "process_name");
                     if p == "—" { "a game".to_string() } else { p }
@@ -1294,7 +1349,7 @@ pub(crate) fn build_consumer_report(
                     .unwrap_or_default();
                 let _ = writeln!(
                     o,
-                    "- Most recent: **{game}** — about {fps:.0} frames per second{dur}."
+                    "- Most recent: **{game}** — about {fps:.0} frames per second{dur}.{unread}"
                 );
             }
         }
@@ -1731,6 +1786,41 @@ mod export_tests {
         assert!(md.contains("—")); // missing values degrade gracefully
         assert!(md.contains("No changes applied yet."));
         assert!(md.contains("No game sessions recorded yet."));
+    }
+
+    /// M6-unread: every export names the seconds Compy could not measure beside the figures, and a
+    /// session of which more than a fifth went unmeasured prints no grade or frame-rate figure at all.
+    #[test]
+    fn unmeasured_seconds_are_named_beside_the_figures_and_a_mostly_unread_session_is_not_graded() {
+        let some = json!([{ "process_name": "game.exe", "duration_secs": 900, "samples": 800, "unreadable_seconds": 90,
+            "avg_fps": 141.0, "avg_frametime_ms": 7.1, "low1_fps_est": 98.0 }]);
+        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &some, &json!([]), "embedded", "t", None);
+        let line = md.lines().find(|l| l.starts_with("- **game.exe**")).expect("listed");
+        assert!(line.contains("avg 141.0 fps") && line.contains("Compy couldn't measure 1m 30s of it"), "{line}");
+        let card = build_discord_block(&Value::Null, &json!({}), &some, &json!([]), "t");
+        assert!(card.contains("141 avg / 98 1% low \u{b7} Compy couldn't measure 1m 30s of it"), "{card}");
+        let consumer = build_consumer_report(&Value::Null, &json!([]), &json!({}), &some, "t", None);
+        assert!(consumer.contains("about 141 frames per second over 15m 0s. Compy couldn't measure 1m 30s of it"), "{consumer}");
+
+        let none = json!([{ "process_name": "game.exe", "duration_secs": 900, "samples": 800,
+            "avg_fps": 141.0, "avg_frametime_ms": 7.1, "low1_fps_est": 98.0 }]);
+        for out in [
+            build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &none, &json!([]), "embedded", "t", None),
+            build_discord_block(&Value::Null, &json!({}), &none, &json!([]), "t"),
+            build_consumer_report(&Value::Null, &json!([]), &json!({}), &none, "t", None),
+        ] {
+            assert!(!out.contains("couldn't measure"), "nothing unmeasured, nothing said: {out}");
+        }
+
+        let most = json!([{ "process_name": "game.exe", "duration_secs": 900, "samples": 500, "unreadable_seconds": 400,
+            "avg_fps": 141.0, "avg_frametime_ms": 7.1, "low1_fps_est": 98.0 }]);
+        let md = build_markdown_report(&Value::Null, &json!([]), &json!([]), &json!({}), &most, &json!([]), "embedded", "t", None);
+        let line = md.lines().find(|l| l.starts_with("- **game.exe**")).expect("listed");
+        assert!(line.contains("not graded") && line.contains("6m 40s") && !line.contains("141") && !line.contains("98"), "{line}");
+        let card = build_discord_block(&Value::Null, &json!({}), &most, &json!([]), "t");
+        assert!(card.contains("session \u{b7} game.exe \u{b7} not graded") && !card.contains("141"), "{card}");
+        let consumer = build_consumer_report(&Value::Null, &json!([]), &json!({}), &most, "t", None);
+        assert!(consumer.contains("Most recent: **game.exe**") && consumer.contains("not graded") && !consumer.contains("141"), "{consumer}");
     }
 
     #[test]

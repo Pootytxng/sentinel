@@ -14,7 +14,7 @@ import type { HardwareInfo } from "../App";
 import { RoomShell } from "../design/room-shell";
 import { LedgerHealthNotice, knownIncomplete, useLedgerHealth } from "../design/LedgerHealthNotice";
 import { Sparkline } from "../design/Sparkline";
-import { knownFps } from "../lib/session-metrics";
+import { knownFps, mostlyUnread } from "../lib/session-metrics";
 import { useReducedMotion } from "../design/use-motion";
 import { readHologramV2 } from "../design/theme";
 import { postureLine, liveStrip } from "./command-center-data";
@@ -259,9 +259,10 @@ export function HomeHud({
   const posture = postureLine(readiness, priorities, inEffect, t);
   const strip = liveStrip(sessions, t);
   const rig = { refreshHz: hw.display?.current_refresh_rate_hz ?? null };
-  const fpsGrade: Grade = strip.kind === "data" ? gradeFps(strip.avgFps, rig) : "neutral";
+  // M6-unread: a mostly-unmeasured last session shows its numbers ungraded (neutral ink).
+  const fpsGrade: Grade = strip.kind === "data" && !strip.ungraded ? gradeFps(strip.avgFps, rig) : "neutral";
   const low1Grade: Grade =
-    strip.kind === "data" ? gradeLow1(strip.low1Est, strip.avgFps) : "neutral";
+    strip.kind === "data" && !strip.ungraded ? gradeLow1(strip.low1Est, strip.avgFps) : "neutral";
   const gradeClass = (g: Grade) => (g === "neutral" ? "" : ` hud-grade-${g}`);
   const gradeInk = (g: Grade) => (g === "neutral" ? undefined : { color: gradeColor(g) });
   const checking = readiness == null; // checks literally still running
@@ -356,6 +357,7 @@ export function HomeHud({
     () =>
       [...sessions]
         .sort((a, b) => a.started_at.localeCompare(b.started_at))
+        .filter((s) => !mostlyUnread(s)) // M6-unread: not a measured point
         .map((s) => knownFps(s.avg_fps))
         .filter((v): v is number => v !== null)
         .slice(-12),

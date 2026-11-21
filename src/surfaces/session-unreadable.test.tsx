@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, afterAll } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import type { SessionSummary } from "../types";
 import i18n from "../i18n";
+import { leftOutSpan } from "../lib/session-metrics";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(() => Promise.resolve(null)) }));
 
@@ -37,6 +38,10 @@ function sess(over: Partial<SessionSummary> = {}): SessionSummary {
 }
 
 const t = (key: string, opts?: Record<string, unknown>) => i18n.t(key, opts) as string;
+// The debrief prints durations in the app's own human format (monitor.leftOut), never raw seconds.
+const span = (secs: number) => leftOutSpan(secs, i18n.t as never);
+const line = (count: number, total: number) =>
+  t("monitor.sessionDebrief.unreadable", { count: span(count), total: span(total) });
 
 const debrief = (s: SessionSummary) =>
   render(
@@ -64,7 +69,7 @@ describe("the debrief line for seconds Compy couldn't measure", () => {
     await i18n.changeLanguage("en");
     const { container } = debrief(sess({ unreadable_seconds: 10 }));
     expect(container.querySelector(".debrief-unreadable")?.textContent).toBe(
-      "Compy couldn't measure 10 of this session's 70 seconds, so the numbers cover the rest.",
+      "Compy couldn't measure 10 s of this session's 1 min 10 s, so the numbers cover the rest.",
     );
   });
 
@@ -72,7 +77,7 @@ describe("the debrief line for seconds Compy couldn't measure", () => {
     await i18n.changeLanguage("zh-CN");
     const { container } = debrief(sess({ unreadable_seconds: 10 }));
     expect(container.querySelector(".debrief-unreadable")?.textContent).toBe(
-      "本次会话的 70 秒中，Compy 有 10 秒无法测量，所以这些数字只涵盖其余部分。",
+      "本次会话的 1 分 10 秒 中，Compy 有 10 秒 无法测量，所以这些数字只涵盖其余部分。",
     );
   });
 
@@ -89,12 +94,16 @@ describe("the debrief line for seconds Compy couldn't measure", () => {
     it("stands beside the normal verdict while under a fifth is unmeasured, and grades as before", async () => {
       await i18n.changeLanguage(lang);
       const { container } = debrief(sess({ unreadable_seconds: 14 })); // exactly 20% of 70 s
-      expect(container.querySelector(".debrief-unreadable")?.textContent).toBe(
-        t("monitor.sessionDebrief.unreadable", { count: 14, total: 70 }),
+      expect(container.querySelector(".debrief-unreadable")?.textContent).toBe(line(14, 70));
+      // Still graded: the normal verdict (a 130 / 144 ratio is smooth), not the partial one...
+      expect(container.querySelector(".debrief-verdict")?.textContent).toBe(
+        t("monitor.sessionDebrief.verdict.smooth.headline"),
       );
-      expect(container.querySelector(".debrief-sub")?.textContent).not.toBe(
-        t("monitor.sessionDebrief.verdict.partial.sub"),
+      expect(container.querySelector(".debrief-sub")?.textContent).toBe(
+        t("monitor.sessionDebrief.verdict.smooth.sub", { pct: 90 }),
       );
+      // ...and the 1% low tile keeps its grade colour.
+      expect(container.querySelectorAll(".debrief-tile-value")[1]?.getAttribute("style")).not.toBeNull();
     });
 
     it("past a fifth the figures are marked: no verdict, the partial reason, the numbers still shown", async () => {
@@ -106,11 +115,12 @@ describe("the debrief line for seconds Compy couldn't measure", () => {
       expect(container.querySelector(".debrief-sub")?.textContent).toBe(
         t("monitor.sessionDebrief.verdict.partial.sub"),
       );
-      expect(container.querySelector(".debrief-unreadable")?.textContent).toBe(
-        t("monitor.sessionDebrief.unreadable", { count: 15, total: 70 }),
-      );
+      expect(container.querySelector(".debrief-unreadable")?.textContent).toBe(line(15, 70));
       // The measured seconds' own figures are still printed (ungraded), never blanked into "0".
       expect(container.textContent).toContain("144");
+      // The first two tiles are the frame-rate figures (average, 1% low): no grade colour on either.
+      const tiles = [...container.querySelectorAll(".debrief-tile-value")].slice(0, 2);
+      expect(tiles.map((n) => n.getAttribute("style")), "no frame-rate tile carries a grade colour").toEqual([null, null]);
     });
 
     it("a session with no reading at all and every second unreadable is not graded and says why", async () => {
@@ -121,9 +131,18 @@ describe("the debrief line for seconds Compy couldn't measure", () => {
       expect(container.querySelector(".debrief-sub")?.textContent).toBe(
         t("monitor.sessionDebrief.verdict.partial.sub"),
       );
-      expect(container.querySelector(".debrief-unreadable")?.textContent).toBe(
-        t("monitor.sessionDebrief.unreadable", { count: 70, total: 70 }),
-      );
+      expect(container.querySelector(".debrief-unreadable")?.textContent).toBe(line(70, 70));
+    });
+
+    it("an ungraded session names no measured problem: no stutter insight, no '#1 fix' framing", async () => {
+      await i18n.changeLanguage(lang);
+      const insight = "Your stutters line up with a background scan.";
+      const trusted = debrief(sess({ stutter_insight: insight }));
+      expect(trusted.container.textContent).toContain(insight);
+      cleanup();
+      const ungraded = debrief(sess({ stutter_insight: insight, unreadable_seconds: 30 })); // over a fifth of 70 s
+      expect(ungraded.container.textContent).not.toContain(insight);
+      expect(ungraded.container.querySelector(".debrief-unreadable")?.textContent).toBe(line(30, 70));
     });
   });
 });

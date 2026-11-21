@@ -141,7 +141,7 @@ struct GameLane<'a> {
 /// A session with no reading (`samples == 0`: the game was behind another window the whole time,
 /// P4-show-f1) is never comparable: its 0 1% low means "not measured", not a drop.
 fn comparable(s: &SessionSummary) -> bool {
-    s.samples >= MIN_COMPARE_SAMPLES && s.low1_fps_est > 0.0 && !s.process_name.is_empty()
+    s.samples >= MIN_COMPARE_SAMPLES && s.low1_fps_est > 0.0 && !s.process_name.is_empty() && !s.mostly_unread()
 }
 
 fn lanes(sessions: &[SessionSummary]) -> (Vec<GameLane<'_>>, usize) {
@@ -1252,5 +1252,16 @@ mod tests {
         assert!(r.patterns.iter().all(|p| p.id != "performance-trend"));
         // …and the exclusion is stated, not silent.
         assert!(r.coverage.iter().any(|c| c.contains("unreadable timestamps")));
+    }
+
+    #[test]
+    fn a_mostly_unread_session_is_not_comparable() {
+        let ok = mk_session("2026-07-01T10:00:00Z", "cp2077.exe", 100.0);
+        assert!(comparable(&ok));
+        let mut unread = ok.clone();
+        unread.unreadable_seconds = 300; // 300 of 600 s
+        assert!(!comparable(&unread), "an untrusted session never feeds a pattern");
+        unread.unreadable_seconds = 120; // exactly a fifth is still trusted
+        assert!(comparable(&unread));
     }
 }

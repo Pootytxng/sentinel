@@ -4,7 +4,7 @@
     "minutes": "{{minutes}} min {{seconds}} s"
   },
   "unreadable": {
-    "now": "Compy couldn't read this second."
+    "now": "Compy couldn't measure this second."
   },
   "monitor": {
     "tuningPresetsTitle": "Tuning presets",
@@ -46,7 +46,9 @@
       "unmeasuredLowHeadline": "Last session averaged {{fps}} fps in {{game}} — 1% lows weren't measured.",
       "unmeasuredAverageHeadline": "Last session's 1% lows were {{low}} fps in {{game}} — the average wasn't measured.",
       "unmeasuredHeadline": "Last session's frame rate in {{game}} wasn't measured.",
-      "sub": "Measured over {{duration}} · {{samples}} samples · a live estimate, not a benchmark."
+      "sub": "Measured over {{duration}} · {{samples}} samples · a live estimate, not a benchmark.",
+      "notGradedHeadline": "{{game}}: not graded - Compy couldn't measure more than a fifth of this session.",
+      "notGradedSub": "Measured over the part of {{duration}} it could read - not a verdict on the whole session."
     }
   },
   "monitorConsole": {
@@ -235,7 +237,7 @@
   },
   "sessionDebrief": {
     "leftOut": "{{span}} left out while another window was in front.",
-    "unreadable": "Compy couldn't measure {{count}} of this session's {{total}} seconds, so the numbers cover the rest.",
+    "unreadable": "Compy couldn't measure {{count}} of this session's {{total}}, so the numbers cover the rest.",
     "screenTarget": "Your average was about {{pct}}% of your {{rate}} Hz screen.",
     "screenTargetMet": "Your average kept up with your {{rate}} Hz screen.",
     "comparisonHeader": "COMPARISON · {{title}} · two {{game}} sessions",
@@ -338,7 +340,8 @@
     "cleanSession": "Good session, good rig. Nothing worth changing.",
     "cleanSessionOffer": "Good session, good rig.",
     "comparisonWaitShort": "Too short to compare: {{readings}} of the {{min}} readings the {{title}} comparison needs. It's still waiting for your next {{game}} session.",
-    "comparisonWaitNoReading": "No frame reading this session, so the {{title}} comparison is still waiting for your next {{game}} session."
+    "comparisonWaitNoReading": "No frame reading this session, so the {{title}} comparison is still waiting for your next {{game}} session.",
+    "comparisonWaitUnreadable": "More than a fifth of this session went unmeasured, so the {{title}} comparison is still waiting for your next {{game}} session."
   },
   "sessionTrends": {
     "proGateFeature": "Long-term history & trends",

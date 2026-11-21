@@ -475,7 +475,10 @@ export function SessionDebrief({
     });
   }
   // A concrete stutter correlation outranks the generic insight for the single "one thing" slot.
-  const shownInsight = s.stutter_insight || insight;
+  // M6-unread: an ungraded session names no measured problem either - its stutter log covers only the
+  // seconds Compy could read, so a "problem was measured" claim (and the "#1 fix" framing that follows
+  // from it) would speak for time it never saw.
+  const shownInsight = untrusted ? null : s.stutter_insight || insight;
 
   const topRec = topLimiter
     ? recs.find((r) => r.id === (topLimiter.linked ?? topLimiter.id))
@@ -560,7 +563,10 @@ export function SessionDebrief({
       )}
       {unread != null && (
         <p className="debrief-sub debrief-unreadable">
-          {t("monitor.sessionDebrief.unreadable", { count: unread, total: s.duration_secs })}
+          {t("monitor.sessionDebrief.unreadable", {
+            count: leftOutSpan(unread, t),
+            total: leftOutSpan(Math.max(0, Math.round(s.duration_secs)), t),
+          })}
         </p>
       )}
 
@@ -609,10 +615,15 @@ export function SessionDebrief({
                 title: armed.rec_title,
                 game: prettyGameName(armed.game),
               })
-            : t("monitor.sessionDebrief.comparisonWaitNoReading", {
-                title: armed.rec_title,
-                game: prettyGameName(armed.game),
-              })}
+            : wait.reason === "mostly-unread"
+              ? t("monitor.sessionDebrief.comparisonWaitUnreadable", {
+                  title: armed.rec_title,
+                  game: prettyGameName(armed.game),
+                })
+              : t("monitor.sessionDebrief.comparisonWaitNoReading", {
+                  title: armed.rec_title,
+                  game: prettyGameName(armed.game),
+                })}
         </p>
       )}
 

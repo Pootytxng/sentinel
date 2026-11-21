@@ -2,7 +2,7 @@ import type { TFunction } from "i18next";
 import type { SessionSummary } from "../types";
 import { prettyGameName } from "./game-name";
 import { shortVerdict, fmtDur } from "./Play";
-import { knownFps } from "../lib/session-metrics";
+import { knownFps, mostlyUnread } from "../lib/session-metrics";
 
 // Pure verdict/measured derivations for the V2 Monitor room (V2-5, spec
 // 2026-07-02-v2-shell-sourcing-and-plan). Same contract as optimizeVerdict: measured facts
@@ -30,6 +30,14 @@ export function monitorVerdict(sessions: SessionSummary[], t: TFunction): Monito
   }
   const game =
     prettyGameName(latest.process_name) || t("monitor.monitorV2.verdict.lastGameFallback");
+  // M6-unread: more than a fifth of the session went unmeasured (Compy could not read the process
+  // list), so no smooth/rough sentence is said about it: it is named, ungraded, and says why.
+  if (mostlyUnread(latest)) {
+    return {
+      headline: t("monitor.monitorV2.verdict.notGradedHeadline", { game }),
+      sub: t("monitor.monitorV2.verdict.notGradedSub", { duration: fmtDur(latest.duration_secs) }),
+    };
+  }
   // An unmeasured average or 1% low arrives as 0 (the sampler's "unknown"), missing, or
   // non-finite (knownFps). Honest-measurement law: a headline states only what was measured and
   // says what wasn't — never "fell to 0 fps" (#602) or "averaged 0 fps" (#645). With either

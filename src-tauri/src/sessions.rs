@@ -243,12 +243,17 @@ pub(crate) struct SessionSummary {
     /// could not read the Windows process snapshot, so it could not tell which program was presenting).
     /// They are LEFT OUT, never zeros and never "no frames": no number above counts them (`samples`,
     /// the averages, the 1% low, `fps_series`), and `duration_secs` is still wall time including them.
-    /// A floor, not a total: only seconds the helper's marker showed are counted. 0 on every row an
-    /// older Compy wrote (nothing says it could not look) and on a session that always could.
-    /// More than [`UNREADABLE_UNTRUSTED_PCT`] percent of the session makes its figures untrusted
-    /// ([`SessionSummary::mostly_unread`]). Additive: written only when above 0, and an older Compy
-    /// ignores the key.
-    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    /// What the number is: the helper's own count of ticks it could not look on, taken as a delta over
+    /// this session's span of the capture (a counter that went backwards, a helper restart, starts over
+    /// from 0), times the helper's tick length, rounded up to whole seconds, and never more than
+    /// `duration_secs`. For a session that ended at its last reading (its process exited, another game
+    /// took over) the ticks after that reading are not counted: they lie outside `duration_secs`.
+    /// So it is an estimate in whole seconds (at most half a second too high per outage), not a floor.
+    /// 0 on every row an older Compy wrote (nothing says it could not look) and on a session that
+    /// always could. More than [`UNREADABLE_UNTRUSTED_PCT`] percent of the session makes its figures
+    /// untrusted ([`SessionSummary::mostly_unread`]). Additive: written only when above 0, a damaged
+    /// value loads as 0 with the row intact, and an older Compy ignores the key.
+    #[serde(default, skip_serializing_if = "is_zero_u32", deserialize_with = "unreadable_seconds_lenient")]
     pub(crate) unreadable_seconds: u32,
 }
 
@@ -260,9 +265,28 @@ fn is_zero_u32(n: &u32) -> bool {
 /// `other_load` draws for unread ticks), the session's figures are marked untrusted.
 pub(crate) const UNREADABLE_UNTRUSTED_PCT: u64 = 20;
 
+/// The one rule for "too much of the session went unmeasured", over plain numbers so the typed
+/// summary and a JSON row (`newest_measured_row`) cannot drift apart. Strict `>`, integer math.
+pub(crate) fn unreadable_is_untrusted(unreadable_seconds: u64, duration_secs: u64) -> bool {
+    unreadable_seconds.saturating_mul(100) > duration_secs.saturating_mul(UNREADABLE_UNTRUSTED_PCT)
+}
+
 /// An unknown or damaged `ended` value reads as not recorded, never as a failed load.
 fn session_end_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<crate::session_boundary::SessionEnd>, D::Error> {
     Ok(serde_json::from_value(serde_json::Value::deserialize(d)?).ok())
+}
+
+/// A damaged `unreadable_seconds` (not a whole number that fits) reads as 0 (nothing recorded), never
+/// as a failed load of the row.
+fn unreadable_seconds_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    Ok(serde_json::from_value(serde_json::Value::deserialize(d)?).unwrap_or(0))
+}
+
+/// Whole seconds for `ticks` helper ticks, rounded UP (a half-second tick that could not look still
+/// left a second not measured), so the count never understates what was left out.
+pub(crate) fn unreadable_ticks_to_secs(ticks: u64) -> u32 {
+    let ms = ticks.saturating_mul(crate::fps::REPORT_INTERVAL_MS);
+    u32::try_from(ms.div_ceil(1000)).unwrap_or(u32::MAX)
 }
 
 /// An unknown or damaged `frame_cap` value reads as not recorded, never as a failed load.
@@ -372,7 +396,7 @@ impl SessionSummary {
     /// unreadable second reads as mostly unread. The averages still describe the seconds that WERE
     /// measured; this says they are too few of the session to speak for it.
     pub(crate) fn mostly_unread(&self) -> bool {
-        u64::from(self.unreadable_seconds) * 100 > self.duration_secs * UNREADABLE_UNTRUSTED_PCT
+        unreadable_is_untrusted(u64::from(self.unreadable_seconds), self.duration_secs)
     }
 
     /// #618: this session read with its counts since the set-aside at `at`, for a check whose own
@@ -517,8 +541,15 @@ pub(crate) struct SessionAccumulator {
     hist_prev: HashMap<u64, (u32, Vec<u64>)>,
     /// Measured frames per bucket, per presenting process.
     pacing: HashMap<String, Vec<u64>>,
-    /// M6-unread: seconds Compy couldn't read (see [`SessionSummary::unreadable_seconds`]).
-    unreadable_secs: u32,
+    /// M6-unread: helper ticks that could not look during this session, as a delta of the helper's own
+    /// cumulative counter (see [`SessionSummary::unreadable_seconds`]).
+    unreadable_ticks: u64,
+    /// Of those, the ticks since the last reading of any kind: they lie after the session's last
+    /// reading, so a session that ENDED there (exit, another game) does not own them.
+    unreadable_ticks_since_reading: u64,
+    /// The counter as last seen (`None` until the first look: that look is only a baseline, so ticks
+    /// from before this session are never charged to it).
+    unreadable_counter_last: Option<u64>,
     /// D6: this accumulator counts as an open recording (see [`RecorderGauge`]) until it is dropped.
     _open: OpenTicket,
 }
@@ -563,7 +594,9 @@ impl SessionAccumulator {
             gpu_load: None,
             hist_prev: HashMap::new(),
             pacing: HashMap::new(),
-            unreadable_secs: 0,
+            unreadable_ticks: 0,
+            unreadable_ticks_since_reading: 0,
+            unreadable_counter_last: None,
             _open: OpenTicket::take(&RECORDER),
         }
     }
@@ -606,13 +639,33 @@ impl SessionAccumulator {
         }
     }
 
-    /// M6-unread: one second on which Compy could not look (the helper could not read the process
-    /// snapshot). It adds no reading, no zero and no bucket sample, so no average, 1% low or series
-    /// point counts it. The frame histogram forgets its last reading, so the frames of the next
-    /// readable second start a fresh count instead of filling the gap in as if they had been placed.
-    pub(crate) fn record_unreadable(&mut self) {
-        self.unreadable_secs = self.unreadable_secs.saturating_add(1);
-        self.hist_prev.clear();
+    /// M6-unread: this second's reading of the helper's cumulative unreadable-tick counter (the ticks
+    /// on which it could not read the process snapshot). Returns the ticks added to THIS session.
+    /// The first look only sets the baseline; later looks add the difference. A counter that went
+    /// BACKWARDS means the helper restarted (a new count from 0), so the new value is itself the
+    /// ticks since the restart: never a negative or a huge delta. Unreadable ticks add no reading, no
+    /// zero and no bucket sample, so no average, 1% low or series point counts them, and the frame
+    /// histogram forgets its last reading so the next readable second starts a fresh count instead of
+    /// filling the gap in as if its frames had been placed.
+    pub(crate) fn observe_unreadable_counter(&mut self, total: u64) -> u64 {
+        let delta = match self.unreadable_counter_last {
+            None => 0,
+            Some(last) if total >= last => total - last,
+            Some(_) => total,
+        };
+        self.unreadable_counter_last = Some(total);
+        if delta > 0 {
+            self.unreadable_ticks = self.unreadable_ticks.saturating_add(delta);
+            self.unreadable_ticks_since_reading = self.unreadable_ticks_since_reading.saturating_add(delta);
+            self.hist_prev.clear();
+        }
+        delta
+    }
+
+    /// The counter's value when this session began, when the caller knows it (a capture that has just
+    /// started: its helper counts from 0), so ticks before its first look are still its own.
+    pub(crate) fn unreadable_counter_baseline(&mut self, total: u64) {
+        self.unreadable_counter_last = Some(total);
     }
 
     /// One helper tick with its focus reading (P4-comparable). `foreground` is whether the game's
@@ -628,6 +681,8 @@ impl SessionAccumulator {
         elapsed_secs: u32,
         foreground: Option<bool>,
     ) -> bool {
+        // Any reading, measured or background, is a reading: what came before it is inside the session.
+        self.unreadable_ticks_since_reading = 0;
         match foreground {
             Some(false) => {
                 *self.background_secs_excluded.get_or_insert(0) += 1;
@@ -770,7 +825,7 @@ impl SessionAccumulator {
             started_at: self.started_at.clone(),
             samples: self.samples,
             fps_series,
-            unreadable_secs: self.unreadable_secs,
+            unreadable_secs: unreadable_ticks_to_secs(self.unreadable_ticks),
         }
     }
 
@@ -829,10 +884,23 @@ impl SessionAccumulator {
             frame_cap: None,
             // Stamped by the monitoring loop, which knows why the session ended.
             ended: None,
-            // Never more than the session's own length: a session that ended at its last reading
-            // (its process exited) drops the seconds counted after it, as its signal log does.
-            unreadable_seconds: self.unreadable_secs.min(u32::try_from(duration_secs).unwrap_or(u32::MAX)),
+            // Never more than the session's own length. (A session that ended at its last reading has
+            // already had its post-reading ticks taken off: see `finalize_ended`.)
+            unreadable_seconds: unreadable_ticks_to_secs(self.unreadable_ticks)
+                .min(u32::try_from(duration_secs).unwrap_or(u32::MAX)),
         }
+    }
+
+    /// [`Self::finalize`] for a session that ended as `ended` says. A session that ended at its last
+    /// reading (`ProcessExited`, `TargetChanged`) has a duration that stops there, so the ticks counted
+    /// after that reading (while the exit was being confirmed, or a running game sat unreadable) are
+    /// outside it and are not its own: counting them would divide seconds that were never in the
+    /// session. `CaptureStopped` ends at the stop, so every tick up to it stays.
+    pub(crate) fn finalize_ended(mut self, ended: &crate::session_boundary::Ended) -> SessionSummary {
+        if ended.reason != crate::session_boundary::SessionEnd::CaptureStopped {
+            self.unreadable_ticks = self.unreadable_ticks.saturating_sub(self.unreadable_ticks_since_reading);
+        }
+        self.finalize(u64::from(ended.duration_secs))
     }
 }
 
@@ -1139,8 +1207,27 @@ fn save_session_to(path: &Path, summary: SessionSummary) -> Result<(), String> {
 /// first), for readers that take "the most recent session": a row with `samples: 0` (P4-show-f1,
 /// the game was behind another window the whole time) has no numbers to read, so it is skipped. A
 /// row without the key counts as measured.
+///
+/// M6-unread: a row of which more than a fifth went unmeasured ([`row_mostly_unread`]) is not used as
+/// a measured session here either (the receipts and priorities readers rest decisions on it); a
+/// reader that SHOWS the newest session and can say it is ungraded uses [`newest_row_with_reading`].
 pub(crate) fn newest_measured_row(sessions: &serde_json::Value) -> Option<&serde_json::Value> {
+    sessions.as_array()?.iter().find(|s| {
+        s.get("samples").and_then(serde_json::Value::as_u64) != Some(0) && !row_mostly_unread(s)
+    })
+}
+
+/// The newest row with a reading at all (`samples` not 0), trusted or not, for a reader that prints
+/// it with its unmeasured share beside it instead of skipping it to an older session.
+pub(crate) fn newest_row_with_reading(sessions: &serde_json::Value) -> Option<&serde_json::Value> {
     sessions.as_array()?.iter().find(|s| s.get("samples").and_then(serde_json::Value::as_u64) != Some(0))
+}
+
+/// M6-unread: a JSON row whose own `unreadable_seconds` is over a fifth of its `duration_secs` is
+/// untrusted ([`SessionSummary::mostly_unread`]); a row without the key never was.
+pub(crate) fn row_mostly_unread(row: &serde_json::Value) -> bool {
+    let n = |k: &str| row.get(k).and_then(serde_json::Value::as_u64).unwrap_or(0);
+    unreadable_is_untrusted(n("unreadable_seconds"), n("duration_secs"))
 }
 
 /// Does saving a session with `samples` readings trigger a Tier 2 receipt? Not when it measured
@@ -1549,6 +1636,22 @@ mod session_tests {
     fn a_session_that_measured_nothing_sends_no_receipt() {
         assert!(!sends_receipt(0));
         assert!(sends_receipt(1));
+    }
+
+    /// M6-unread: a JSON row over a fifth unmeasured is not "the newest measured session" for the
+    /// readers that rest on it; the readers that show it still find it.
+    #[test]
+    fn newest_measured_row_skips_a_mostly_unread_row_but_newest_row_with_reading_keeps_it() {
+        let rows = serde_json::json!([
+            { "samples": 600, "duration_secs": 600, "unreadable_seconds": 300, "avg_fps": 50.0 },
+            { "samples": 600, "duration_secs": 600, "unreadable_seconds": 120, "avg_fps": 120.0 },
+            { "samples": 600, "duration_secs": 600, "avg_fps": 90.0 }
+        ]);
+        assert_eq!(newest_measured_row(&rows).unwrap()["avg_fps"], 120.0, "exactly a fifth is still trusted");
+        assert_eq!(newest_row_with_reading(&rows).unwrap()["avg_fps"], 50.0);
+        assert!(row_mostly_unread(&rows[0]) && !row_mostly_unread(&rows[1]) && !row_mostly_unread(&rows[2]));
+        let only = serde_json::json!([{ "samples": 600, "duration_secs": 600, "unreadable_seconds": 601 }]);
+        assert!(newest_measured_row(&only).is_none());
     }
 
     #[test]
@@ -2411,10 +2514,14 @@ mod unreadable_second_tests {
     /// 30 readable seconds, 10 unreadable in the middle, 30 readable again: 70 s of wall time.
     fn gap_in_the_middle() -> SessionSummary {
         let mut acc = SessionAccumulator::new("2026-11-21T00:00:00Z".into(), Some(0));
+        acc.unreadable_counter_baseline(0);
+        let mut counter = 0u64; // the helper's cumulative count: two 500 ms ticks per unreadable second
         for t in 0..70u32 {
             if (30..40).contains(&t) {
-                acc.record_unreadable();
+                counter += 2;
+                acc.observe_unreadable_counter(counter);
             } else {
+                acc.observe_unreadable_counter(counter);
                 acc.record_tick("g.exe", 100.0, 10.0, 80.0, t, Some(true));
             }
         }
@@ -2437,8 +2544,9 @@ mod unreadable_second_tests {
     #[test]
     fn a_session_with_every_second_unreadable_has_no_numbers_and_is_not_saved() {
         let mut acc = SessionAccumulator::new("2026-11-21T00:00:00Z".into(), Some(0));
-        for _ in 0..100 {
-            acc.record_unreadable();
+        acc.unreadable_counter_baseline(0);
+        for second in 1..=100u64 {
+            acc.observe_unreadable_counter(second * 2);
         }
         assert_eq!(acc.progress().unreadable_secs, 100);
         assert!(!acc.has_data() && !acc.worth_saving(), "no game was ever named, so there is no row to attach it to");
@@ -2474,10 +2582,9 @@ mod unreadable_second_tests {
     #[test]
     fn unreadable_seconds_never_exceed_the_sessions_own_length() {
         let mut acc = SessionAccumulator::new("2026-11-21T00:00:00Z".into(), Some(0));
+        acc.unreadable_counter_baseline(0);
         acc.record_tick("g.exe", 100.0, 10.0, 80.0, 0, Some(true));
-        for _ in 0..100 {
-            acc.record_unreadable(); // counted after the game's last reading, before its exit was confirmed
-        }
+        acc.observe_unreadable_counter(200); // 100 s of ticks, counted over a session only 60 s long
         assert_eq!(acc.finalize(60).unreadable_seconds, 60);
     }
 
@@ -2498,10 +2605,189 @@ mod unreadable_second_tests {
         acc.record_frame_hist("g.exe", &wire(0, 160), true, 2);
         let before: u64 = acc.pacing["g.exe"].iter().sum();
         assert_eq!(before, 60);
-        acc.record_unreadable();
+        acc.unreadable_counter_baseline(0);
+        acc.observe_unreadable_counter(2);
         acc.record_frame_hist("g.exe", &wire(0, 400), true, 4); // 240 frames since, over an unread stretch
         assert_eq!(acc.pacing["g.exe"].iter().sum::<u64>(), before, "those frames are not placed, so not counted");
         acc.record_frame_hist("g.exe", &wire(0, 460), true, 5);
         assert_eq!(acc.pacing["g.exe"].iter().sum::<u64>(), before + 60);
+    }
+
+    fn fresh() -> SessionAccumulator {
+        SessionAccumulator::new("2026-11-21T00:00:00Z".into(), Some(0))
+    }
+
+    fn counted(acc: &SessionAccumulator) -> u32 {
+        acc.progress().unreadable_secs
+    }
+
+    #[test]
+    fn the_count_is_the_helpers_own_counter_as_a_delta_over_the_session() {
+        let mut acc = fresh();
+        assert_eq!(acc.observe_unreadable_counter(40), 0, "the first look is only a baseline: ticks before it are not this session's");
+        assert_eq!(counted(&acc), 0);
+        assert_eq!(acc.observe_unreadable_counter(40), 0, "no new tick, nothing added");
+        assert_eq!(acc.observe_unreadable_counter(43), 3);
+        assert_eq!(acc.observe_unreadable_counter(44), 1, "one missed tick is caught every time, not half the time");
+        assert_eq!(acc.finalize(60).unreadable_seconds, 2, "4 ticks of 500 ms are 2 s");
+    }
+
+    #[test]
+    fn ticks_become_whole_seconds_rounded_up_never_down() {
+        let secs = unreadable_ticks_to_secs;
+        assert_eq!((secs(0), secs(1), secs(2), secs(3), secs(4)), (0, 1, 1, 2, 2));
+        assert_eq!(secs(u64::MAX), u32::MAX, "no overflow");
+    }
+
+    #[test]
+    fn a_counter_that_goes_backwards_is_a_restarted_helper_never_a_negative_or_huge_delta() {
+        let mut acc = fresh();
+        acc.unreadable_counter_baseline(0);
+        assert_eq!(acc.observe_unreadable_counter(900), 900);
+        assert_eq!(acc.observe_unreadable_counter(2), 2, "the new helper counted 2 ticks since it started");
+        assert_eq!(acc.observe_unreadable_counter(0), 0, "marker gone and nothing yet: no ticks, not a wrap-around");
+        assert_eq!(acc.observe_unreadable_counter(0), 0);
+        assert_eq!(acc.observe_unreadable_counter(5), 5);
+        assert_eq!(acc.unreadable_ticks, 907);
+    }
+
+    #[test]
+    fn two_games_in_one_capture_each_own_only_their_own_ticks() {
+        // One helper, one counter across the whole capture: game A's session, a gap, then game B's.
+        let mut a = fresh();
+        a.unreadable_counter_baseline(0); // the capture's first session
+        a.observe_unreadable_counter(4);
+        a.record_tick("a.exe", 100.0, 10.0, 80.0, 1, Some(true));
+        a.observe_unreadable_counter(6);
+        a.record_tick("a.exe", 100.0, 10.0, 80.0, 2, Some(true));
+        // A ends; 10 ticks pass between sessions (counter 6 -> 16) and belong to nobody.
+        let mut b = fresh(); // B begins at its first reading; its first look is its baseline
+        assert_eq!(b.observe_unreadable_counter(16), 0);
+        b.record_tick("b.exe", 60.0, 16.0, 40.0, 0, Some(true));
+        b.observe_unreadable_counter(19);
+        b.record_tick("b.exe", 60.0, 16.0, 40.0, 1, Some(true));
+        assert_eq!((a.unreadable_ticks, b.unreadable_ticks), (6, 3));
+    }
+
+    /// The boundary and the accumulator together, one tick per second, a game that presents for 600 s
+    /// and then is unreadable for `tail` s (two 500 ms helper ticks a second), then `end`.
+    fn drive(tail: u32, end: crate::session_boundary::SessionEnd) -> (SessionSummary, crate::session_boundary::Ended) {
+        use crate::session_boundary::{SessionEnd, Tracker};
+        let mut done: Option<(SessionSummary, crate::session_boundary::Ended)> = None;
+        let mut first = fresh();
+        first.unreadable_counter_baseline(0);
+        let mut tracker = Tracker::open_at(0, first);
+        let mut counter = 0u64;
+        let tail_end = 600 + tail;
+        for now in 1..=tail_end + 3 {
+            let reading = now <= 600;
+            if !reading && now <= tail_end {
+                counter += 2;
+            }
+            // After the tail: ProcessExited = the app's own snapshot now says the pid is gone;
+            // TargetChanged = another game presents; CaptureStopped = it never ends by itself.
+            let after = now > tail_end;
+            let frame = match (reading, after, end) {
+                (true, _, _) => Some(("g.exe", 7)),
+                (false, true, SessionEnd::TargetChanged) => Some(("other.exe", 9)),
+                _ => None,
+            };
+            let gone = after && end == SessionEnd::ProcessExited;
+            tracker.advance(
+                now,
+                frame,
+                |_, _| if gone { Some(false) } else { None },
+                |acc, ended| done = Some((acc.finalize_ended(&ended), ended)),
+                |_| {
+                    let mut b = fresh();
+                    b.unreadable_counter_baseline(counter);
+                    b
+                },
+            );
+            if let Some(cur) = tracker.current() {
+                cur.observe_unreadable_counter(counter);
+                if reading {
+                    cur.record_tick("g.exe", 100.0, 10.0, 80.0, now, Some(true));
+                }
+            }
+        }
+        if end == SessionEnd::CaptureStopped {
+            tracker.stop(tail_end, |acc, ended| done = Some((acc.finalize_ended(&ended), ended)));
+        }
+        done.expect("the session ended")
+    }
+
+    #[test]
+    fn a_game_that_exits_after_an_unreadable_tail_does_not_charge_the_tail_to_its_session() {
+        use crate::session_boundary::SessionEnd::*;
+        let (s, ended) = drive(150, ProcessExited);
+        assert_eq!(ended.reason, ProcessExited);
+        assert_eq!(s.duration_secs, 600, "duration stops at the last reading");
+        assert_eq!(s.unreadable_seconds, 0, "the 150 s after it are outside the session");
+        assert!(!s.mostly_unread(), "every second inside the duration was measured");
+    }
+
+    #[test]
+    fn a_game_replaced_by_another_does_not_charge_the_old_ones_tail_either() {
+        use crate::session_boundary::SessionEnd::*;
+        let (s, ended) = drive(150, TargetChanged);
+        assert_eq!(ended.reason, TargetChanged);
+        assert_eq!((s.duration_secs, s.unreadable_seconds), (600, 0));
+        assert!(!s.mostly_unread());
+    }
+
+    #[test]
+    fn a_capture_that_stops_during_an_unreadable_tail_keeps_every_unreadable_second() {
+        use crate::session_boundary::SessionEnd::*;
+        let (s, ended) = drive(200, CaptureStopped);
+        assert_eq!(ended.reason, CaptureStopped);
+        assert_eq!(s.duration_secs, 800, "wall time to the stop");
+        assert_eq!(s.unreadable_seconds, 200);
+        assert!(s.mostly_unread(), "200 of 800 s is over a fifth");
+    }
+
+    #[test]
+    fn unreadable_seconds_in_the_middle_of_a_game_that_then_exits_still_count() {
+        use crate::session_boundary::{SessionEnd::*, Tracker};
+        let mut done = None;
+        let mut first = fresh();
+        first.unreadable_counter_baseline(0);
+        let mut tracker = Tracker::open_at(0, first);
+        let mut counter = 0u64;
+        for now in 1..=700u32 {
+            let reading = !(300..400).contains(&now) && now <= 600;
+            if (300..400).contains(&now) {
+                counter += 2;
+            }
+            let gone = now > 600;
+            tracker.advance(
+                now,
+                reading.then_some(("g.exe", 7)),
+                |_, _| if gone { Some(false) } else { None },
+                |acc, ended| done = Some((acc.finalize_ended(&ended), ended)),
+                |_| fresh(),
+            );
+            if let Some(cur) = tracker.current() {
+                cur.observe_unreadable_counter(counter);
+                if reading {
+                    cur.record_tick("g.exe", 100.0, 10.0, 80.0, now, Some(true));
+                }
+            }
+        }
+        let (s, ended): (SessionSummary, _) = done.unwrap();
+        assert_eq!(ended.reason, ProcessExited);
+        assert_eq!(s.unreadable_seconds, 100, "a gap followed by readings is inside the session");
+    }
+
+    #[test]
+    fn a_damaged_unreadable_seconds_loads_as_zero_with_the_row_intact() {
+        let row0 = disk_row(&gap_in_the_middle()).unwrap();
+        for bad in [serde_json::json!("ten"), serde_json::json!(-4), serde_json::json!(1.5), serde_json::json!(null), serde_json::json!([1])] {
+            let mut row = row0.clone();
+            row["unreadable_seconds"] = bad.clone();
+            let loaded = from_disk_row(row).unwrap_or_else(|e| panic!("{bad} must not fail the row: {e}"));
+            assert_eq!(loaded.unreadable_seconds, 0, "{bad}");
+            assert_eq!(loaded.samples, 60, "the rest of the row is intact");
+        }
     }
 }

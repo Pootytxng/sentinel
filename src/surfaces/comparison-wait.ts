@@ -1,6 +1,6 @@
 import type { ArmedComparison, SessionSummary } from "../types";
 import { MIN_BASELINE_SAMPLES } from "./baseline-grade";
-import { allBackground } from "../lib/session-metrics";
+import { allBackground, mostlyUnread } from "../lib/session-metrics";
 
 // CR-cmp-wait: comparison.rs `on_session_finalized_at` leaves an armed comparison waiting, with no
 // line saying why, when a same-game session is under MIN_TREATMENT_SAMPLES or has no frame reading.
@@ -9,6 +9,7 @@ import { allBackground } from "../lib/session-metrics";
 // already has its own line.
 export type ComparisonWait =
   | { reason: "short"; readings: number; min: number }
+  | { reason: "mostly-unread" }
   | { reason: "no-reading" };
 
 const reading = (n: number) => Number.isFinite(n) && n > 0;
@@ -26,6 +27,9 @@ export function comparisonWait(
   if (s.samples < MIN_BASELINE_SAMPLES) {
     return { reason: "short", readings: s.samples, min: MIN_BASELINE_SAMPLES };
   }
+  // M6-unread: comparison.rs counts a session of which more than a fifth was unmeasured as having no
+  // frame reading (`has_frame_reading`), so it waits - and the debrief says that is why.
+  if (mostlyUnread(s)) return { reason: "mostly-unread" };
   if (!reading(s.avg_fps) || !reading(s.low1_fps_est)) return { reason: "no-reading" };
   return null;
 }

@@ -2532,6 +2532,9 @@ fn assemble_from(g: &Gathered) -> TimelineAssembly {
     })
 }
 
+/// M6-unread: why a session that is mostly unmeasured isn't compared (see `SessionSummary::mostly_unread`).
+const MOSTLY_UNREAD: &str = "Compy couldn't measure more than a fifth of that session (it could not read the process list), so it is not compared. Its numbers describe only the part it could read.";
+
 /// P4-show-f1: why a session with no reading can't be compared.
 const NOTHING_MEASURED: &str =
     "That session measured nothing: another window was in front the whole time, so there's nothing to compare.";
@@ -2544,6 +2547,9 @@ fn what_changed_impl(g: &Gathered, started_at: &str) -> WhatChangedOutcome {
     };
     if current.samples == 0 {
         return WhatChangedOutcome::Unavailable { reason: NOTHING_MEASURED.into() };
+    }
+    if current.mostly_unread() {
+        return WhatChangedOutcome::Unavailable { reason: MOSTLY_UNREAD.into() };
     }
     let Some(ct) = parse_utc(&current.started_at) else {
         return WhatChangedOutcome::Unavailable {
@@ -2559,6 +2565,7 @@ fn what_changed_impl(g: &Gathered, started_at: &str) -> WhatChangedOutcome {
             s.process_name.eq_ignore_ascii_case(&current.process_name)
                 && s.started_at != current.started_at
                 && s.samples > 0
+                && !s.mostly_unread() // an untrusted session is not a baseline (skipped, never "no session")
         })
         .filter_map(|s| parse_utc(&s.started_at).map(|t| (t, s)))
         .filter(|(t, _)| *t < ct)
@@ -2620,6 +2627,9 @@ fn what_changed_between_impl(
     }
     if baseline.samples == 0 || current.samples == 0 {
         return WhatChangedOutcome::Unavailable { reason: NOTHING_MEASURED.into() };
+    }
+    if baseline.mostly_unread() || current.mostly_unread() {
+        return WhatChangedOutcome::Unavailable { reason: MOSTLY_UNREAD.into() };
     }
     // Like-for-like only: a game's 1% low is only meaningful against itself. Comparing two
     // different games would look like a verdict but measure nothing honest.
@@ -3122,17 +3132,23 @@ pub(crate) struct IntelligenceHeadline {
     pub session_started_at: String,
 }
 
+/// The newest session that measured play (P4-show-f1) AND can be trusted: one of which more than a
+/// fifth went unmeasured (M6-unread) is not the session a headline compares, and never reads as
+/// "no session" either - the headline looks past it to the newest one that was measured.
+fn newest_trusted_session(sessions: &[crate::sessions::SessionSummary]) -> Option<&crate::sessions::SessionSummary> {
+    sessions
+        .iter()
+        .filter(|s| s.samples > 0 && !s.mostly_unread())
+        .filter_map(|s| parse_utc(&s.started_at).map(|t| (t, s)))
+        .max_by_key(|(t, _)| *t)
+        .map(|(_, s)| s)
+}
+
 #[tauri::command]
 pub(crate) fn get_intelligence_headline() -> Option<IntelligenceHeadline> {
     refresh_identity_snapshots_async();
     let g = gather();
-    let latest = g
-        .sessions
-        .iter()
-        .filter(|s| s.samples > 0) // the newest session that measured play (P4-show-f1)
-        .filter_map(|s| parse_utc(&s.started_at).map(|t| (t, s)))
-        .max_by_key(|(t, _)| *t)
-        .map(|(_, s)| s)?;
+    let latest = newest_trusted_session(&g.sessions)?;
     match what_changed_impl(&g, &latest.started_at) {
         WhatChangedOutcome::Report(r) if r.verdict == "improved" || r.verdict == "regressed" => {
             Some(IntelligenceHeadline {
@@ -5884,5 +5900,61 @@ mod tests {
         let cb = report.incidents[0].changed_before.as_ref().expect("attached");
         assert_eq!(cb.anchor.as_ref().unwrap().started_at, "2026-09-20T10:00:00Z");
         assert_eq!(cb.anchor_kind, "measured", "a session older than a truncated channel was called clean");
+    }
+
+    // ---- M6-unread: a session of which more than a fifth went unmeasured is not a measured one ----
+
+    /// 300 of this session's 600 seconds went unmeasured: past the one-in-five line.
+    fn mostly_unread(mut s: SessionSummary) -> SessionSummary {
+        s.unreadable_seconds = 300;
+        s
+    }
+
+    #[test]
+    fn what_changed_will_not_grade_a_mostly_unread_session_and_says_why() {
+        let g = gathered_with(vec![
+            mk_session("2026-07-01T10:00:00Z", "cp2077.exe", 100.0, 140.0),
+            mostly_unread(mk_session("2026-07-02T10:00:00Z", "cp2077.exe", 96.0, 138.0)),
+        ]);
+        let out = what_changed_impl(&g, "2026-07-02T10:00:00Z");
+        assert_eq!(unavailable_reason(&out), MOSTLY_UNREAD, "not 'no session', not a verdict");
+        assert!(MOSTLY_UNREAD.contains("couldn't measure"));
+    }
+
+    #[test]
+    fn a_mostly_unread_session_is_skipped_as_the_baseline_not_taken_for_it() {
+        let g = gathered_with(vec![
+            mk_session("2026-07-01T10:00:00Z", "cp2077.exe", 100.0, 140.0),
+            mostly_unread(mk_session("2026-07-02T10:00:00Z", "cp2077.exe", 96.0, 138.0)),
+            mk_session("2026-07-03T10:00:00Z", "cp2077.exe", 99.0, 139.0),
+        ]);
+        let WhatChangedOutcome::Report(r) = what_changed_impl(&g, "2026-07-03T10:00:00Z") else {
+            panic!("a trusted earlier session exists");
+        };
+        assert_eq!(r.baseline.started_at, "2026-07-01T10:00:00Z", "the adjacent untrusted session is looked past");
+    }
+
+    #[test]
+    fn an_explicit_pair_with_a_mostly_unread_side_is_refused_with_the_reason() {
+        let g = gathered_with(vec![
+            mostly_unread(mk_session("2026-07-01T10:00:00Z", "cp2077.exe", 100.0, 140.0)),
+            mk_session("2026-07-03T10:00:00Z", "cp2077.exe", 80.0, 120.0),
+        ]);
+        let out = what_changed_between_impl(&g, "2026-07-01T10:00:00Z", "2026-07-03T10:00:00Z");
+        assert_eq!(unavailable_reason(&out), MOSTLY_UNREAD);
+        let out = what_changed_between_impl(&g, "2026-07-03T10:00:00Z", "2026-07-01T10:00:00Z");
+        assert_eq!(unavailable_reason(&out), MOSTLY_UNREAD, "either side");
+    }
+
+    #[test]
+    fn the_headline_reads_past_a_mostly_unread_newest_session() {
+        let sessions = vec![
+            mk_session("2026-07-01T10:00:00Z", "cp2077.exe", 100.0, 140.0),
+            mk_session("2026-07-02T10:00:00Z", "cp2077.exe", 99.0, 139.0),
+            mostly_unread(mk_session("2026-07-03T10:00:00Z", "cp2077.exe", 50.0, 90.0)),
+        ];
+        assert_eq!(newest_trusted_session(&sessions).unwrap().started_at, "2026-07-02T10:00:00Z");
+        let only_unread = vec![mostly_unread(mk_session("2026-07-03T10:00:00Z", "cp2077.exe", 50.0, 90.0))];
+        assert!(newest_trusted_session(&only_unread).is_none(), "nothing trusted: no headline, not a graded one");
     }
 }

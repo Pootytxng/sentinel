@@ -350,6 +350,7 @@ fn sessions_like<'s>(
     let mut like: Vec<_> = sessions
         .iter()
         .filter(|s| s.samples >= crate::experiment::MIN_BASELINE_SAMPLES)
+        .filter(|s| !s.mostly_unread()) // M6-unread: an untrusted session must not move the noise band
         .filter(|s| NoiseConditions::of_session(s).is_some_and(|c| still_current(&c, now)))
         .filter_map(|s| Some((parse(&s.started_at)?, s)))
         .collect();
@@ -1890,5 +1891,16 @@ pub(crate) mod tests {
         assert_eq!(serde_json::from_value::<GameNoise>(old).unwrap().cap_unread, 0);
         let zero = GameNoise { cap_unread: 0, ..n };
         assert!(serde_json::to_value(&zero).unwrap().get("cap_unread").is_none());
+    }
+
+    #[test]
+    fn a_mostly_unread_session_does_not_move_the_noise_band() {
+        let conditions = NoiseConditions::of_session(&played("2026-09-01T10:00:00+00:00", 100.0, 0)).unwrap();
+        let mut all: Vec<SessionSummary> = (1..=3).map(|d| played(&format!("2026-09-0{d}T10:00:00+00:00"), 100.0, 0)).collect();
+        assert_eq!(sessions_like(&all, &conditions).len(), 3);
+        all[1].unreadable_seconds = 600; // of 1200 s
+        let like = sessions_like(&all, &conditions);
+        assert_eq!(like.len(), 2, "the untrusted session is left out of the band");
+        assert!(like.iter().all(|(_, s)| !s.mostly_unread()));
     }
 }

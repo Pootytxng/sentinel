@@ -9,7 +9,7 @@ import type { InEffectCounts } from "../data/machine-model";
 import { deriveSystemPosture } from "./system-posture";
 import { latestSession } from "./dashboard-data";
 import { prettyGameName } from "./game-name";
-import { knownFps, allBackground } from "../lib/session-metrics";
+import { knownFps, allBackground, mostlyUnread } from "../lib/session-metrics";
 
 // (The former `signalRing`/`SignalRing` ratio widget was retired 2026-07-14 — orphaned after Home
 // stopped rendering the ring. It read raw attention_count/unknown_count instead of the dismissed-aware
@@ -110,6 +110,8 @@ export type LiveStrip =
       low1Est: number | null;
       peakTempC: number | null;
       startedAt: string;
+      /** M6-unread: more than a fifth of that session went unmeasured, so its numbers are shown but not graded. */
+      ungraded: boolean;
     };
 
 export function liveStrip(sessions: SessionSummary[], t: TFunction): LiveStrip {
@@ -123,5 +125,6 @@ export function liveStrip(sessions: SessionSummary[], t: TFunction): LiveStrip {
     // P4-show-f1: behind another window the whole time, the GPU peak is the game idling, not play.
     peakTempC: allBackground(s) ? null : s.peak_gpu_temp_c,
     startedAt: s.started_at,
+    ungraded: mostlyUnread(s),
   };
 }

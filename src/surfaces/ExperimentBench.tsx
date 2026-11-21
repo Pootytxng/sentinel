@@ -24,7 +24,7 @@ import { prettyGameName } from "./game-name";
 import { assumedBandLine, type AssumedBand } from "./assumed-band";
 // Item 7: the label lives in one shared module; re-exported for existing importers.
 export { assumedBandLine };
-import { knownFps } from "../lib/session-metrics";
+import { knownFps, usableReading } from "../lib/session-metrics";
 import { SectionLabel, VerdictBand, simulationTone } from "./measurement-chrome";
 import { BentoTile } from "../design/bento/BentoGrid";
 import { Picker } from "../design/Picker";
@@ -566,13 +566,7 @@ function retestReasonsLine(rows: readonly TestedChange[], t: Translate, sep: str
 // `has_frame_reading`) and a recorded game. The one test the baseline, the hypothesis wording and the
 // after-session match all share, so the bench never offers a session the backend then refuses.
 function isUsableReading(s: SessionSummary): boolean {
-  return (
-    Number.isFinite(s.avg_fps) &&
-    s.avg_fps > 0 &&
-    Number.isFinite(s.low1_fps_est) &&
-    s.low1_fps_est > 0 &&
-    s.process_name.trim() !== ""
-  );
+  return usableReading(s); // includes M6-unread: has_frame_reading refuses a session mostly unmeasured
 }
 
 /** The honest baseline: the most recent monitored session with a real frame-rate reading and a known

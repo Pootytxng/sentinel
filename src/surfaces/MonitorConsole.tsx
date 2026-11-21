@@ -39,7 +39,7 @@ import { SessionStack } from "./monitor/SessionStack";
 import { deckDeltaFrom, fmtDeltaGlyph } from "./monitor/monitor-stack-profile";
 import { prettyGameName } from "./game-name";
 import { monitorVerdict } from "./monitor-v2-data";
-import { knownFps } from "../lib/session-metrics";
+import { knownFps, mostlyUnread } from "../lib/session-metrics";
 import { fmtDurCoarse } from "./Play";
 import "../i18n";
 import "./monitor-console.css";
@@ -385,6 +385,9 @@ export function MonitorConsole({
   // a 1% low without its average has no ratio to grade.
   const latestAvg = knownFps(latest?.avg_fps);
   const latestLow = knownFps(latest?.low1_fps_est);
+  // M6-unread: the numbers of a mostly-unmeasured session stay on screen but are not coloured as a
+  // grade (the headline above already says "not graded").
+  const latestUngraded = latest ? mostlyUnread(latest) : false;
 
   // THE NARRATIVE'S ONE VERDICT is about readiness, because the action beneath it is Start capture.
   // Three states, all real: mid-command, recording, idle. Nothing is claimed about a game.
@@ -508,7 +511,7 @@ export function MonitorConsole({
                   label={t("monitor.monitorConsole.deltaAvgFps")}
                   value={latestAvg}
                   unit="fps"
-                  tone={latestAvg == null ? "neutral" : arcTone(gradeFps(latestAvg, rig))}
+                  tone={latestAvg == null || latestUngraded ? "neutral" : arcTone(gradeFps(latestAvg, rig))}
                 />
                 <Reading
                   id="low1"
@@ -516,7 +519,7 @@ export function MonitorConsole({
                   value={latestLow}
                   unit="fps"
                   tone={
-                    latestLow == null || latestAvg == null
+                    latestLow == null || latestAvg == null || latestUngraded
                       ? "neutral"
                       : arcTone(gradeLow1(latestLow, latestAvg))
                   }

@@ -1640,9 +1640,15 @@ fn session_by_id<'a>(sessions: &'a [SessionSummary], id: &str) -> SessionLookup<
 }
 
 /// A session carries a real frame-rate reading: both the average and the 1% low were measured.
-/// Without a 1% low there is nothing to judge a Trial on.
+/// Without a 1% low there is nothing to judge a Trial on. M6-unread: a session of which more than a
+/// fifth was unmeasured (`mostly_unread`) carries no reading a decision may rest on, so it is not a
+/// measured session here: Trials, comparisons, real-play looks and baselines all skip it.
 pub(crate) fn has_frame_reading(s: &SessionSummary) -> bool {
-    s.avg_fps.is_finite() && s.avg_fps > 0.0 && s.low1_fps_est.is_finite() && s.low1_fps_est > 0.0
+    s.avg_fps.is_finite()
+        && s.avg_fps > 0.0
+        && s.low1_fps_est.is_finite()
+        && s.low1_fps_est > 0.0
+        && !s.mostly_unread()
 }
 
 // ─── P7-notify: which finished sessions earn the session-end toast ─────────
@@ -1714,6 +1720,7 @@ pub(crate) fn session_end_notice(
                         s.started_at != session.started_at
                             && s.process_name == session.process_name
                             && s.samples > 0
+                            && !s.mostly_unread() // an untrusted first after-session must not hide the trusted one
                             && after(s, at)
                     })
             })
@@ -9610,6 +9617,32 @@ mod experiment_tests {
         assert_eq!(at(&[ExperimentRecord { status: ExperimentStatus::Kept, ..running() }], &after), None);
         // A record without the apply time can't place the session after the change.
         assert_eq!(at(&[ExperimentRecord { applied_at: None, ..running() }], &after), None);
+    }
+
+    /// M6-unread: a session of which more than a fifth went unmeasured has no frame reading a
+    /// decision may rest on, and as an earlier "after" session it must not hide the trusted one.
+    #[test]
+    fn a_mostly_unread_session_has_no_frame_reading_and_does_not_use_up_the_trials_after_session() {
+        let mut unread = session(NOW, 150.0);
+        unread.unreadable_seconds = 450; // of 900 s
+        assert!(has_frame_reading(&session(NOW, 150.0)));
+        assert!(!has_frame_reading(&unread), "untrusted: not a measured session for a Trial, a comparison or a look");
+        unread.unreadable_seconds = 180; // exactly a fifth is still trusted
+        assert!(has_frame_reading(&unread));
+        let mut first_after = session("2026-09-01T12:00:00+00:00", 150.0);
+        first_after.unreadable_seconds = 450;
+        let second = session("2026-09-01T14:00:00+00:00", 150.0);
+        let sessions = [session(BASE_ID, 150.0), first_after.clone(), second.clone()];
+        assert_eq!(
+            session_end_notice(&first_after, &sessions, &[running()], None, MEASURED),
+            None,
+            "an untrusted session settles nothing"
+        );
+        assert_eq!(
+            session_end_notice(&second, &sessions, &[running()], None, MEASURED),
+            Some(SessionEndNotice::TrialMeasured),
+            "the untrusted first after-session did not use up the toast"
+        );
     }
 
     #[test]

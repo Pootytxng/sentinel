@@ -45,6 +45,26 @@ export function mostlyUnread(s: { unreadable_seconds?: number | null; duration_s
   return n != null && n * 100 > Math.max(0, s.duration_secs) * UNREADABLE_UNTRUSTED_PCT;
 }
 
+/** A session a Trial, a comparison or a journey may rest on: a real frame rate and 1% low, a recorded
+ *  game, and not mostly unmeasured. Mirror of experiment.rs `has_frame_reading` (which refuses a
+ *  session of which more than a fifth went unmeasured) plus the recorded-game check its callers add. */
+export function usableReading(s: {
+  avg_fps: number;
+  low1_fps_est: number;
+  process_name: string;
+  duration_secs: number;
+  unreadable_seconds?: number | null;
+}): boolean {
+  return (
+    Number.isFinite(s.avg_fps) &&
+    s.avg_fps > 0 &&
+    Number.isFinite(s.low1_fps_est) &&
+    s.low1_fps_est > 0 &&
+    s.process_name.trim() !== "" &&
+    !mostlyUnread(s)
+  );
+}
+
 /** "24 s" / "2 min 36 s" in the viewer's language (keys under monitor.leftOut). */
 export function leftOutSpan(secs: number, t: Translate): string {
   return secs < 60

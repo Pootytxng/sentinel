@@ -264,7 +264,7 @@ pub(crate) fn advance_attachment(
 }
 
 // How far back the per-second stats window looks, and how often we report.
-const REPORT_INTERVAL_MS: u64 = 500;
+pub(crate) const REPORT_INTERVAL_MS: u64 = 500;
 const STATS_WINDOW: Duration = Duration::from_secs(1);
 // Drop a process from tracking after this long with no presents (it stopped
 // rendering / closed), so the map doesn't grow without bound.

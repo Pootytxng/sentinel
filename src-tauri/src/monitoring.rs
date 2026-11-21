@@ -1253,8 +1253,11 @@ fn start_fps_capture_locked() -> Result<(), String> {
             // A session belongs to ONE process identity: the boundary decides, once a second, when
             // the open session ends (its process is gone, or another one is presenting) and when the
             // next begins. A fresh capture opens a session at once, as it always did.
-            let mut tracker =
-                crate::session_boundary::Tracker::open_at(0, LiveSession::begin(started_at, active_changes, 0));
+            let mut first = LiveSession::begin(started_at, active_changes, 0);
+            // This capture's helper counts unreadable ticks from 0 (its marker was cleared above), so
+            // the first session owns every one of them; later sessions baseline at their first look.
+            first.acc.unreadable_counter_baseline(0);
+            let mut tracker = crate::session_boundary::Tracker::open_at(0, first);
             // P5-enough: a new capture starts from nothing, never the last capture's count.
             *lock_progress() = None;
             while capture_live(generation) {
@@ -1326,10 +1329,13 @@ fn start_fps_capture_locked() -> Result<(), String> {
                     continue;
                 };
                 let elapsed = now.saturating_sub(live.began_at);
-                if second_unreadable {
-                    // Counted as what it is: a second Compy couldn't measure. It adds no reading, no
-                    // zero and no gap-fill; the session's own length still includes it.
-                    live.acc.record_unreadable();
+                // The session's count comes from the helper's own cumulative counter (`unread.ticks`),
+                // as a delta since this session's last look - NOT from the live flag, which samples a
+                // yes/no once a second against half-second ticks and so sees about half of them. The
+                // flag only drives the live readout and the withheld report. Ticks add no reading, no
+                // zero and no gap-fill; the session's own length still includes them.
+                let added = live.acc.observe_unreadable_counter(unread.ticks);
+                if second_unreadable || added > 0 {
                     *lock_progress() = Some(live.acc.progress());
                 }
                 if let Some(s) = &sample {
@@ -1554,7 +1560,7 @@ impl LiveSession {
             events.retain(|e| u64::from(e.at_secs) <= duration_secs);
         }
         if acc.worth_saving() {
-            let mut summary = acc.finalize(duration_secs);
+            let mut summary = acc.finalize_ended(&ended);
             summary.ended = Some(reason);
             summary.hw_fingerprint = Some(crate::hardware::current_fingerprint());
             summary.gaming_mode_active = Some(gaming_mode_seen);
@@ -2242,9 +2248,8 @@ mod unreadable_tests {
             serde_json::from_str(include_str!("../../src/test/fixtures/unreadable.wire.json")).unwrap();
         let mut acc = crate::sessions::SessionAccumulator::new("2026-11-21T00:00:00Z".into(), Some(0));
         acc.record_tick("g.exe", 98.5, 10.1, 80.0, 0, Some(true));
-        for _ in 0..4 {
-            acc.record_unreadable();
-        }
+        acc.unreadable_counter_baseline(0);
+        acc.observe_unreadable_counter(8); // 8 half-second ticks = 4 s
         let progress = acc.progress();
         let status = serde_json::to_value(FpsStatus {
             active: true,
@@ -2262,9 +2267,8 @@ mod unreadable_tests {
         assert_eq!(status, fixture["fps_status"], "the whole status, key for key");
         let mut again = crate::sessions::SessionAccumulator::new("2026-11-21T00:00:00Z".into(), Some(0));
         again.record_tick("g.exe", 98.5, 10.1, 80.0, 0, Some(true));
-        for _ in 0..12 {
-            again.record_unreadable();
-        }
+        again.unreadable_counter_baseline(0);
+        again.observe_unreadable_counter(24); // 24 ticks = 12 s
         let summary = serde_json::to_value(again.finalize(100)).unwrap();
         assert_eq!(summary["unreadable_seconds"], fixture["session_unreadable_seconds"]);
     }

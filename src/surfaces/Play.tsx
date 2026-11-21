@@ -28,7 +28,7 @@ import {
 } from "../data/metric-grade";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { useDocumentVisible } from "../data/use-document-visible";
-import { knownFps } from "../lib/session-metrics";
+import { knownFps, mostlyUnread } from "../lib/session-metrics";
 import "../i18n";
 import "./Play.css";
 
@@ -80,6 +80,9 @@ export function shortVerdict(s: SessionSummary): string {
 // pinned verbatim by monitor-v2.test.tsx. This helper only picks which translated word to RENDER;
 // it never feeds back into shortVerdict's own return value or any comparison.
 export function verdictLabel(t: TFunction, s: SessionSummary): string {
+  // M6-unread: past a fifth of the session unmeasured it is not graded anywhere (the debrief says so):
+  // a Smooth/Rough word here would grade time Compy never saw. Same rule as sessions.rs mostly_unread.
+  if (mostlyUnread(s)) return t("monitor.play.notGradedVerdict");
   // The grade IS the 1%-low/average ratio, so without both readings there is nothing to grade.
   // shortVerdict's non-committal "Some dips" would otherwise describe a session nobody measured.
   if (knownFps(s.avg_fps) == null || knownFps(s.low1_fps_est) == null) {
@@ -311,6 +314,8 @@ export default function Play({
   const heroAvg = knownFps(latest?.avg_fps);
   const heroLow = knownFps(latest?.low1_fps_est);
   const heroFt = knownFps(latest?.avg_frametime_ms);
+  // M6-unread: the hero's numbers of a mostly-unmeasured session stay but carry no grade colour.
+  const heroUngraded = latest ? mostlyUnread(latest) : false;
 
   // Monitor restructure: which half(s) to render. "all" (flag-off) shows both, byte-identical to today.
   const showLive = view !== "sessions";
@@ -348,15 +353,15 @@ export default function Play({
           </div>
           <div className="play-hero-metrics">
             <div className="play-hero-metric">
-              <span className="play-hero-value" style={heroAvg == null ? undefined : gradeStyle(gradeFps(heroAvg, rig))}>{fmtReading(heroAvg)}</span>
+              <span className="play-hero-value" style={heroAvg == null || heroUngraded ? undefined : gradeStyle(gradeFps(heroAvg, rig))}>{fmtReading(heroAvg)}</span>
               <span className="play-hero-label"><Term id="hz-vs-fps">{t("monitor.play.avgFpsTermLabel")}</Term></span>
             </div>
             <div className="play-hero-metric">
-              <span className="play-hero-value" style={heroLow == null || heroAvg == null ? undefined : gradeStyle(gradeLow1(heroLow, heroAvg))}>{fmtReading(heroLow)}</span>
+              <span className="play-hero-value" style={heroLow == null || heroAvg == null || heroUngraded ? undefined : gradeStyle(gradeLow1(heroLow, heroAvg))}>{fmtReading(heroLow)}</span>
               <span className="play-hero-label"><Term id="one-percent-lows">{t("monitor.play.oneLowTermLabel")}</Term>{t("monitor.play.estSuffix")}</span>
             </div>
             <div className="play-hero-metric">
-              <span className="play-hero-value" style={heroFt == null ? undefined : gradeStyle(gradeFrametimeMs(heroFt, rig))}>{fmtReading(heroFt, 1)}</span>
+              <span className="play-hero-value" style={heroFt == null || heroUngraded ? undefined : gradeStyle(gradeFrametimeMs(heroFt, rig))}>{fmtReading(heroFt, 1)}</span>
               <span className="play-hero-label">ms <Term id="frametime">{t("monitor.play.frametimeTermLabel")}</Term></span>
             </div>
             <div className="play-hero-metric">
