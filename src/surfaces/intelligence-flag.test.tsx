@@ -170,7 +170,7 @@ const report: WhatChangedOutcome = {
 // A not-comparable report: the sessions ran on different hardware, so the comparability banner
 // (its reasons + changed_context) is the SOLE owner of the "why". Even though this fixture
 // deliberately carries a non-empty leading_hypotheses (a hostile producer that DID push a cause),
-// the surface must refuse to render a "Most likely cause" card — otherwise it would triple-state
+// the surface must refuse to render a "Possible cause" card — otherwise it would triple-state
 // the hardware break the banner already carries. Guards the WhatChangedReportView showLeader
 // invariant against a future backend regression (the current backend leaves this empty).
 const notComparableReport: WhatChangedOutcome = {
@@ -215,16 +215,16 @@ describe("WhatChangedPanel — compy_intelligence default ON", () => {
     expect(call?.args).toEqual({ startedAt: "2026-07-10T20:00:00Z" });
   });
 
-  it("renders a report: verdict class, headline verbatim, leader under 'Most likely cause', §7 disclosure", async () => {
+  it("renders a report: verdict class, headline verbatim, leader under 'Possible cause', §7 disclosure", async () => {
     harness.outcome = report;
     const { container } = mountPanel();
     await waitFor(() => expect(container.querySelector(".wcp-improved")).toBeTruthy());
     expect(container.querySelector("h3.wcp-headline")?.textContent).toBe(
       "1% lows improved 10.1% vs your previous Valorant session. Most likely: GPU driver updated.",
     );
-    expect(container.textContent).toContain("Most likely cause");
+    expect(container.textContent).toContain("Possible cause");
     // P7-confidence: the hypothesis band reads as the one vocabulary word; the raw band is kept.
-    expect(container.querySelector(".wcp-hypo-lead .wcp-hypo-conf")?.textContent).toBe("Likely");
+    expect(container.querySelector(".wcp-hypo-lead .wcp-hypo-conf")?.textContent).toBe("Possible");
     expect(container.querySelector(".wcp-hypo-lead .wcp-hypo-conf [data-confidence]")?.getAttribute("data-confidence")).toBe("medium");
     expect(container.textContent).toContain("Next test");
     // The working stays folded behind the §7 disclosure until asked.
@@ -243,14 +243,14 @@ describe("WhatChangedPanel — compy_intelligence default ON", () => {
     expect(container.querySelector(".wcp-nf")?.textContent).not.toContain("±");
   });
 
-  it("suppresses the 'Most likely cause' card on a not-comparable report — the banner owns the why, no triple-state", async () => {
+  it("suppresses the 'Possible cause' card on a not-comparable report — the banner owns the why, no triple-state", async () => {
     harness.outcome = notComparableReport;
     const { container } = mountPanel();
     await waitFor(() => expect(container.querySelector(".wcp-inconclusive")).toBeTruthy());
     // The comparability banner renders and carries the hardware break...
     expect(container.querySelector(".wcp-compare")).toBeTruthy();
-    // ...but the surface refuses a "Most likely cause" card even though the fixture supplied one.
-    expect(container.textContent).not.toContain("Most likely cause");
+    // ...but the surface refuses a "Possible cause" card even though the fixture supplied one.
+    expect(container.textContent).not.toContain("Possible cause");
     expect(container.querySelector(".wcp-hypo-lead")).toBeNull();
     // The actionable next test still shows — it's the one thing the banner doesn't express.
     expect(container.textContent).toContain("Next test");
