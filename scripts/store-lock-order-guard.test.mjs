@@ -739,6 +739,13 @@ const LOCK_CENSUS = {
       "test sees another's files. Not compiled into the shipped binary; it serializes tests, not a " +
       "read-modify-write of user state, and production code never takes it.",
   },
+  "change_sources::PLANT_LOCK: Mutex<()>": {
+    class: "out",
+    why:
+      "test-only (`#[cfg(test)] mod tests`, g4): serializes the tests that plant a decoy wevtutil.exe " +
+      "beside the test executable, so two of them never share that one file. Not compiled into the " +
+      "shipped binary; it touches no user state and production code never takes it.",
+  },
   "gaming_orchestrator::SESSION_OP: Mutex<()>": {
     class: "out",
     why:
