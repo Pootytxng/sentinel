@@ -250,13 +250,20 @@ describe("comp fidelity — Live, matched against 02-live-approved.png", () => {
   });
 
   it("the honesty line keeps BOTH facts the comp's shorter wording could have cost", () => {
-    // The comp draws "Watched from outside your game · no hooks or injected overlay." — that
-    // phrasing is adopted. What is NOT adopted is dropping the rest: the no-driver fact (LOCKED
+    // The comp draws "Watched from outside your game · no hooks or injected overlay." That phrasing is
+    // NOT adopted any more (view-1121b): beside Compy's own OVERLAY control it read as "Compy has no
+    // overlay". Compy's overlay is a separate click-through window (tauri.conf.json, monitoring.rs), so
+    // the line says nothing is injected AND that the overlay is a separate window. What is also NOT
+    // adopted is dropping the rest: the no-driver fact (LOCKED
     // rule 1 — the current build ships no driver) and the anti-cheat promise (LOCKED rule 2) are
     // the reason this line exists at all, and a picture is not a reason to delete a claim a user
     // makes decisions on. Logged as a deviation; pinned here so it cannot be "tidied" later.
     const post: string = en.monitorConsole.etwHonestyPost;
-    expect(post, "the comp's wording").toContain("no hooks or injected overlay");
+    expect(post, "nothing is injected into the game").toContain("no hooks or code injected into it");
+    expect(post, "the overlay is said to exist, as a separate window").toContain("Compy's overlay is a separate window on top");
+    expect(post, "never reads as 'no overlay' next to an OVERLAY control").not.toMatch(/no [^.]*overlay/i);
+    expect(en.play.etwHonestyPost, "the Play room's line says the same").toContain("Compy's overlay is a separate window on top");
+    expect(en.play.etwHonestyPost).not.toMatch(/no [^.]*overlay|nothing added/i);
     expect(post, "the no-driver fact").toMatch(/driver/i);
     // The old "Safe with anti-cheat" promised an outcome Compy cannot know (src/i18n/game-safety-claims.test.ts).
     // What the line may say is how frames are measured and that Compy cannot speak for any anti-cheat.

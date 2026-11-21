@@ -105,7 +105,7 @@ describe("game-safety claims: Compy states what it does, never an outcome with a
 
     const fresh: Array<[string, string]> = [
       ["en home", "Doesn't inject into games or change game files"],
-      ["en monitor", " · no hooks or injected overlay, and no driver installed deep in Windows. Frame timing is read from Windows, not from inside the game. Compy can't promise how any anti-cheat will react."],
+      ["en monitor", " · no hooks or code injected into it, and no driver installed deep in Windows. Compy's overlay is a separate window on top. Frame timing is read from Windows, not from inside the game. Compy can't promise how any anti-cheat will react."],
       ["en optimize", "and Compy can't tell how a game's anti-cheat treats it."],
       ["en caution", "its low-level driver can trip strict anti-cheat (Valorant/Vanguard) — close it before those games."],
       ["en voltage", "A gauge, not a control — Compy never touches your voltage."],
