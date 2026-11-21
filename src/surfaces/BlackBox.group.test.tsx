@@ -81,9 +81,9 @@ describe("Problems room - identical incidents grouped", () => {
     expect(container.querySelectorAll(".bb-list > .bb-item")).toHaveLength(1);
     const from = dayLabel(many(25)[0].when);
     const to = dayLabel(many(25)[24].when);
-    expect(screen.getByText(`ROB RUN stopped working and closed 25 times that Windows recorded, from ${from} to ${to}.`)).toBeTruthy();
-    // The cap is said: 25 is what the reader keeps, so it is not a total.
-    expect(screen.getByText(/at most the 25 most recent records, so this counts only those; older ones may exist/)).toBeTruthy();
+    expect(screen.getByText(`ROB RUN stopped working and closed 25 times in the Windows records Compy read, from ${from} to ${to}.`)).toBeTruthy();
+    // The limit is said: these are the newest records Compy read, so the count is not a total.
+    expect(screen.getByText("Compy reads only the newest records Windows keeps (at most 25 are listed), so this counts only those; older ones may exist that it did not count.")).toBeTruthy();
     // The shared reading, once.
     expect(screen.getAllByText(/WEAK SIGNAL/i)).toHaveLength(1);
     expect(screen.getAllByText(/That record alone can't tell where the problem is/)).toHaveLength(1);
@@ -91,10 +91,62 @@ describe("Problems room - identical incidents grouped", () => {
     expect(screen.queryByRole("button", { name: "Show the receipt" })).toBeNull();
   });
 
-  it("a group below the cap says nothing about a cut", async () => {
+  it("a group says what it counted at ANY size: 'records Compy read' and the limit note, never 'that Windows recorded'", async () => {
+    const { container } = await open(many(3));
+    expect(screen.getByText(/closed 3 times in the Windows records Compy read/)).toBeTruthy();
+    expect(screen.getAllByText(/at most 25 are listed/)).toHaveLength(1);
+    expect(container.textContent).not.toMatch(/that Windows recorded/);
+  });
+
+  it("every group in a mixed list carries the limit note, including a group of 2", async () => {
+    const hang = (i: number) => rob(i, { tag: "App hang", headline: `ROB RUN stopped responding (froze) — ${rob(i).when_display}` });
+    const { container } = await open([rob(0), rob(1), hang(5), hang(6), hang(7)]);
+    expect(container.querySelectorAll(".bb-group")).toHaveLength(2);
+    expect(container.querySelectorAll(".bb-group-cap")).toHaveLength(2);
+  });
+
+  it("a ', while X was running' tail is not lost: each record keeps its full headline behind the button", async () => {
+    const tailed = (i: number) =>
+      rob(i, {
+        headline: `Launcher stopped working and closed — Nov 10, 12:0${i} PM, while ROB RUN was running`,
+        receipt: { ...rob(i).receipt, faulting_app: "Launcher.exe" },
+      });
+    const { container } = await open([tailed(0), tailed(1), tailed(2)]);
+    expect(container.querySelector(".bb-group .bb-headline")!.textContent).toMatch(/^Launcher stopped working and closed 3 times in the Windows records Compy read/);
+    expect(container.textContent).not.toMatch(/while ROB RUN was running/);
+    fireEvent.click(screen.getByRole("button", { name: "Show each one (3)" }));
+    expect(screen.getAllByText(/Launcher stopped working and closed — Nov 10, 12:0\d PM, while ROB RUN was running/)).toHaveLength(3);
+    // A record without the tail is a different group.
+    const plain = rob(3, { receipt: { ...rob(3).receipt, faulting_app: "Launcher.exe" }, headline: "Launcher stopped working and closed — Nov 10, 12:03 PM" });
+    cleanup();
+    const again = await open([tailed(0), tailed(1), plain]);
+    expect(again.container.querySelectorAll(".bb-group")).toHaveLength(1);
+    expect(again.container.querySelectorAll(".bb-list > .bb-item")).toHaveLength(2);
+  });
+
+  it("each record shows its own faulting module and code; none is presented as shared", async () => {
+    const withFault = (i: number, mod: string, code: string) => rob(i, { receipt: { ...rob(i).receipt, faulting_module: mod, code } });
+    const { container } = await open([withFault(0, "a.dll", "0xc0000005"), withFault(1, "b.dll", "0xc0000409")]);
+    expect(container.querySelector(".bb-group")!.textContent).not.toMatch(/a\.dll|b\.dll|0xc000/);
+    fireEvent.click(screen.getByRole("button", { name: "Show each one (2)" }));
+    const lines = [...container.querySelectorAll(".bb-compact-fault")].map((p) => p.textContent);
+    expect(lines).toEqual(["Faulting module: b.dll · Code: 0xc0000409", "Faulting module: a.dll · Code: 0xc0000005"]);
+  });
+
+  it("the disclosure's aria-controls names an element that exists while collapsed, and each Yes/No is described by its record", async () => {
     await open(many(3));
-    expect(screen.getByText(/closed 3 times that Windows recorded/)).toBeTruthy();
-    expect(screen.queryByText(/most recent .* records/)).toBeNull();
+    const btn = screen.getByRole("button", { name: "Show each one (3)" });
+    const id = btn.getAttribute("aria-controls")!;
+    const list = document.getElementById(id)!;
+    expect(list, "aria-controls points at nothing while collapsed").not.toBeNull();
+    expect(list.hidden).toBe(true);
+    fireEvent.click(btn);
+    expect(list.hidden).toBe(false);
+    const yes = screen.getAllByRole("button", { name: "Yes" });
+    expect(yes).toHaveLength(3);
+    const label = (b: HTMLElement) => document.getElementById(b.getAttribute("aria-describedby")!)?.textContent;
+    expect(yes.map(label)).toEqual(["Nov 10, 12:02 PM", "Nov 10, 12:01 PM", "Nov 10, 12:00 PM"].map((_, i) => rob(2 - i).headline));
+    screen.getAllByRole("button", { name: "No" }).forEach((b) => expect(label(b)).toBeTruthy());
   });
 
   it("'Show each one' is a real button with aria-expanded; opening it lists all 25 with every per-incident control", async () => {
@@ -180,7 +232,7 @@ describe("Problems room - identical incidents grouped", () => {
     expect(blocks[1].textContent).toContain("ROB RUN stopped responding (froze) — Nov 21, 12:30 PM");
     expect(blocks[1].querySelector('button[aria-expanded]')!.textContent).toBe("Show the receipt");
     expect(blocks[2].classList.contains("bb-group")).toBe(true);
-    expect(blocks[2].textContent).toMatch(/closed 2 times that Windows recorded/);
+    expect(blocks[2].textContent).toMatch(/closed 2 times in the Windows records Compy read/);
   });
 
   it("a differing strength keeps two otherwise identical crashes apart", async () => {
@@ -191,10 +243,16 @@ describe("Problems room - identical incidents grouped", () => {
     expect(container.querySelectorAll(".bb-group")).toHaveLength(0);
   });
 
-  it("the deep-linked incident opens its group and stays marked", async () => {
+  it("the deep-linked incident opens its group, stays marked, and is scrolled to", async () => {
+    const spy = vi.fn();
+    const orig = HTMLElement.prototype.scrollIntoView; // the test setup stubs it here (jsdom lacks it)
+    HTMLElement.prototype.scrollIntoView = spy;
     reportMock.value = { incidents: many(5), skipped_sources: [] };
     const { container } = render(<BlackBox selectedIncidentId={rob(2).incident_id} />);
     await screen.findByText(/closed 5 times/);
+    HTMLElement.prototype.scrollIntoView = orig;
+    expect(spy, "the targeted record was not scrolled into view").toHaveBeenCalledTimes(1);
+    expect((spy.mock.contexts[0] as HTMLElement).getAttribute("data-selected")).toBe("true");
     const marked = container.querySelectorAll('.bb-item[data-selected="true"]');
     expect(marked).toHaveLength(1);
     expect(marked[0].textContent).toContain("This is the one you came here to see.");
@@ -204,9 +262,9 @@ describe("Problems room - identical incidents grouped", () => {
   it("says it in Chinese, with a plural-safe count and no cause or fix wording", async () => {
     await i18n.changeLanguage("zh-CN");
     const { container } = await open(many(25));
-    expect(container.querySelector(".bb-group .bb-headline")!.textContent).toMatch(/^Windows 记录到 ROB RUN 停止工作并关闭，共 25 次，从 .+ 到 .+。$/);
+    expect(container.querySelector(".bb-group .bb-headline")!.textContent).toMatch(/^在 Compy 读取的 Windows 记录中，ROB RUN 停止工作并关闭，共 25 次，从 .+ 到 .+。$/);
     expect(screen.getByRole("button", { name: "展开每一条（25）" }).getAttribute("aria-expanded")).toBe("false");
-    expect(container.querySelector(".bb-group-cap")!.textContent).toContain("25");
+    expect(container.querySelector(".bb-group-cap")!.textContent).toBe("Compy 只读取 Windows 保留的最新记录（最多列出 25 条），所以这里只统计这些；可能还有更早的记录没有被计入。");
     expect(container.textContent).not.toMatch(/guarantee|caused|fixed|probably/i);
   });
 

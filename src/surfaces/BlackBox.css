@@ -667,3 +667,9 @@
   background: transparent;
   padding: 10px 12px;
 }
+
+.bb-compact-fault {
+  margin: 0;
+  color: var(--ix-text-3);
+  font-size: var(--type-label);
+}

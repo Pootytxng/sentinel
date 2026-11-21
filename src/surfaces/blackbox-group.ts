@@ -9,9 +9,17 @@ import type { ChangedBeforeItem, CrashIncident } from "../types";
 // incident (vitals, "Changed before this", restore offers, the receipt, the stored "Did this point
 // you the right way?" answer) is not part of the key and stays per incident.
 
-/** Mirrors `MAX_INCIDENTS` in src-tauri/src/blackbox.rs. A report with this many incidents was cut
- *  there: older records may exist that Compy did not read, so counts are "of the newest 25". */
+/** Mirrors `MAX_INCIDENTS` in src-tauri/src/blackbox.rs (a test reads that file and compares). The
+ *  list is the newest records of ALL kinds merged, and earlier reads are cut too (per-channel, WER and
+ *  Reliability limits), so a group's count is only ever "of the records Compy read", at any size. */
 export const INCIDENT_CAP = 25;
+
+// Notes on what a group can and cannot say:
+// - The program is the bare file name from the event: two programs with the same file name in
+//   different folders cannot be told apart in the data and share a group.
+// - Groups are ordered by their newest member, so the list is not strictly chronological: an old
+//   single can sit below a group whose oldest member is older still.
+// - The faulting module and code are not part of the key; the record row shows each record's own.
 
 export type IncidentGroup = {
   key: string;
@@ -74,11 +82,6 @@ export function groupIncidents(incidents: CrashIncident[]): IncidentGroup[] {
     else groups.set(key, { key, items: [inc] });
   }
   return [...groups.values()];
-}
-
-/** Was the scan cut at the reader's cap? Then a count is "among the newest N", never a total. */
-export function isCapped(incidentCount: number): boolean {
-  return incidentCount >= INCIDENT_CAP;
 }
 
 const unknownSig = (it: ChangedBeforeItem) =>

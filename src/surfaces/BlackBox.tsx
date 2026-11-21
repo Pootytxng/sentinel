@@ -39,7 +39,6 @@ import { prettyGameName } from "./game-name";
 import {
   groupIncidents,
   headlineWording,
-  isCapped,
   sharedUnknownItems,
   INCIDENT_CAP,
   type IncidentGroup,
@@ -198,6 +197,8 @@ export function BlackBox({
 
   // P6-unknown: only some skips need admin; the rest are reader failures (a re-scan, not admin).
   const skips = splitSkips(report);
+  // P2-group: identical incidents as one group; stable between renders so the groups' own memos hold.
+  const groups = useMemo(() => (report ? groupIncidents(report.incidents) : []), [report]);
 
   const selectedMissing =
     !!selectedIncidentId &&
@@ -259,7 +260,7 @@ export function BlackBox({
             )
           ) : (
             <ul className="bb-list">
-              {groupIncidents(report.incidents).map((g, gi) =>
+              {groups.map((g, gi) =>
                 g.items.length === 1 ? (
                   <IncidentRow
                     key={g.items[0].incident_id || `${g.items[0].when}-${gi}`}
@@ -274,7 +275,6 @@ export function BlackBox({
                     key={g.items[0].incident_id || `${g.items[0].when}-${gi}`}
                     group={g}
                     allIncidents={report.incidents}
-                    capped={isCapped(report.incidents.length)}
                     selectedIncidentId={selectedIncidentId}
                     restore={restore}
                     isLiftedInc={(inc) => isLifted(careStep, inc)}
@@ -322,6 +322,7 @@ function IncidentRow({
   restore,
   lifted = false,
   compact = false,
+  fullHeadline = false,
   hideCategories,
 }: {
   inc: CrashIncident;
@@ -331,6 +332,9 @@ function IncidentRow({
    *  are said once by the group, so the row keeps what is its own (time, vitals, changed-before,
    *  known issue, the answer to "Did this point you the right way?", the receipt). */
   compact?: boolean;
+  /** P2-group: in a compact row, show the record's whole headline (with its ", while X was running"
+   *  tail) rather than only its time. */
+  fullHeadline?: boolean;
   /** P2-group: "Unknown" rows the group already says once for every record; left out here. */
   hideCategories?: ReadonlySet<string>;
   /** P6-next: this record's step is the one shown at the top; the row points there. */
@@ -341,6 +345,7 @@ function IncidentRow({
 }) {
   const { t } = useTranslation();
   const [showReceipt, setShowReceipt] = useState(false);
+  const headId = useId();
   const ref = useRef<HTMLLIElement | null>(null);
   // A layout effect, not a passive one (CR-glass-scroll-flake): it runs in the commit that draws the
   // row, before paint. The passive effect ran in a later task, so the list's top could paint first
@@ -356,7 +361,9 @@ function IncidentRow({
       {selected && <p className="bb-selected-note">{t("gaming.blackBox.selectedNote")}</p>}
       <div className="bb-item-head">
         {compact ? (
-          <span className="bb-headline">{inc.when_display}</span>
+          <span className="bb-headline" id={headId}>
+            {fullHeadline ? inc.headline : inc.when_display}
+          </span>
         ) : (
           <>
             <span className="bb-tag">{inc.tag}</span>
@@ -364,6 +371,14 @@ function IncidentRow({
           </>
         )}
       </div>
+
+      {compact && (r.faulting_module || r.code) && (
+        <p className="bb-compact-fault">
+          {r.faulting_module && `${t("gaming.blackBox.faultingModuleLabel")}: ${r.faulting_module}`}
+          {r.faulting_module && r.code && " · "}
+          {r.code && `${t("gaming.blackBox.codeLabel")}: ${r.code}`}
+        </p>
+      )}
 
       {inc.vitals ? (
         <div className="bb-vitals">
@@ -387,7 +402,7 @@ function IncidentRow({
       {inc.assessment && compact && (
         <div className="bb-compact-assess">
           {lifted && <p className="bb-nextstep-pointer">{t("gaming.blackBox.nextStep.shownAbove")}</p>}
-          <ResolutionFeedback inc={inc} allIncidents={allIncidents} />
+          <ResolutionFeedback inc={inc} allIncidents={allIncidents} describedBy={headId} />
         </div>
       )}
 
@@ -513,14 +528,12 @@ function AssessmentBlock({
 function IncidentGroupBlock({
   group,
   allIncidents,
-  capped,
   selectedIncidentId,
   restore,
   isLiftedInc,
 }: {
   group: IncidentGroup;
   allIncidents: CrashIncident[];
-  capped: boolean;
   selectedIncidentId?: string | null;
   restore?: RestoreCtx;
   /** Is this record's step the one shown at the top? */
@@ -568,7 +581,8 @@ function IncidentGroupBlock({
         <span className="bb-tag">{newest.tag}</span>
         <span className="bb-headline">{headline}</span>
       </div>
-      {capped && <p className="bb-group-cap">{t("gaming.blackBox.group.capNote", { cap: INCIDENT_CAP })}</p>}
+      {/* On every group, at any size: the list is the newest records Compy read, never Windows' total. */}
+      <p className="bb-group-cap">{t("gaming.blackBox.group.capNote", { cap: INCIDENT_CAP })}</p>
       {newest.assessment && (
         <AssessmentBlock inc={newest} allIncidents={allIncidents} lifted={lifted} omitFeedback />
       )}
@@ -592,9 +606,15 @@ function IncidentGroupBlock({
       >
         {open ? t("gaming.blackBox.group.hideEach") : t("gaming.blackBox.group.showEach", { count })}
       </button>
-      {open && (
-        <ul id={listId} className="bb-list bb-group-list" aria-label={t("gaming.blackBox.group.eachLabel", { count })}>
-          {items.map((inc, i) => (
+      {/* Always in the DOM so aria-controls points at a real id; hidden (and empty) until opened. */}
+      <ul
+        id={listId}
+        className="bb-list bb-group-list"
+        hidden={!open}
+        aria-label={t("gaming.blackBox.group.eachLabel", { count })}
+      >
+        {open &&
+          items.map((inc, i) => (
             <IncidentRow
               key={inc.incident_id || `${inc.when}-${i}`}
               inc={inc}
@@ -603,11 +623,13 @@ function IncidentGroupBlock({
               restore={restore}
               lifted={isLiftedInc(inc)}
               compact
+              // A crash/hang group headline names the program only; each record's own headline (which
+              // can carry ", while X was running") stays in full, in the backend's words.
+              fullHeadline={!!lineKey}
               hideCategories={hide}
             />
           ))}
-        </ul>
-      )}
+      </ul>
     </li>
   );
 }
@@ -779,7 +801,16 @@ function resolutionLine(res: IncidentResolution, t: TFunction, lang: string): st
       : t("gaming.blackBox.resolution.noneSince", { count: res.days, days: res.days, kind });
 }
 
-function ResolutionFeedback({ inc, allIncidents }: { inc: CrashIncident; allIncidents: CrashIncident[] }) {
+function ResolutionFeedback({
+  inc,
+  allIncidents,
+  describedBy,
+}: {
+  inc: CrashIncident;
+  allIncidents: CrashIncident[];
+  /** P2-group: id of the record's headline, so each Yes/No says which record it answers. */
+  describedBy?: string;
+}) {
   const { t, i18n } = useTranslation();
   const incidentKey = inc.when;
   const voteKey = `compy_bb_helpful_${incidentKey}`;
@@ -821,10 +852,10 @@ function ResolutionFeedback({ inc, allIncidents }: { inc: CrashIncident; allInci
   return (
     <div className="bb-helpful">
       <span className="bb-helpful-q">{t("gaming.blackBox.didThisHelpQuestion")}</span>
-      <button className="bb-helpful-btn" onClick={() => cast("yes")}>
+      <button className="bb-helpful-btn" onClick={() => cast("yes")} aria-describedby={describedBy}>
         {t("gaming.blackBox.yesButton")}
       </button>
-      <button className="bb-helpful-btn" onClick={() => cast("no")}>
+      <button className="bb-helpful-btn" onClick={() => cast("no")} aria-describedby={describedBy}>
         {t("gaming.blackBox.noButton")}
       </button>
     </div>

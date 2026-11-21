@@ -4,7 +4,6 @@ import {
   groupIncidents,
   groupKey,
   headlineWording,
-  isCapped,
   sharedUnknownItems,
   INCIDENT_CAP,
 } from "./blackbox-group";
@@ -93,10 +92,18 @@ describe("groupIncidents", () => {
 });
 
 describe("the cap", () => {
-  it("is the reader's 25, and only a report that reached it is 'cut'", () => {
-    expect(INCIDENT_CAP).toBe(25);
-    expect(isCapped(24)).toBe(false);
-    expect(isCapped(25)).toBe(true);
+  it("is the number the backend truncates to (the note says 'at most 25 are listed')", () => {
+    const files = import.meta.glob("../../src-tauri/src/blackbox.rs", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    const rs = Object.values(files)[0] ?? "";
+    const m = rs.match(/const MAX_INCIDENTS: usize = (\d+);/);
+    expect(m, "MAX_INCIDENTS not found in blackbox.rs").not.toBeNull();
+    expect(INCIDENT_CAP).toBe(Number(m![1]));
+  });
+
+  it("a record that differs only in its tail ('while X was running') is a different group", () => {
+    const tail = inc(1, { headline: `${inc(1).headline}, while ROB RUN was running` });
+    expect(groupIncidents([inc(0), tail])).toHaveLength(2);
+    expect(headlineWording(tail)).toBe("ROB RUN stopped working and closed, while ROB RUN was running");
   });
 });
 
