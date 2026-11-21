@@ -1757,6 +1757,7 @@ describe("ParamedicCard: Check again, the scroll hint and the entry points", () 
         facts: [],
         compy_changes: [],
         limits: [],
+        running_now: { state: "none", programs: [], more: 0 },
         read_all: true,
         method: "paramedic-first-look-v1",
       },
@@ -2080,6 +2081,7 @@ describe("ParamedicCard: honest headings, test-not-fix steps and a button that w
     facts: [],
     compy_changes: [],
     limits: [],
+    running_now: { state: "none", programs: [], more: 0 },
     read_all: true,
     method: "paramedic-first-look-v1",
   };
@@ -2134,6 +2136,7 @@ describe("ParamedicCard: 'Check again' pressed from a first-look answer or after
     facts: [],
     compy_changes: [],
     limits: [],
+    running_now: { state: "none", programs: [], more: 0 },
     read_all: true,
     method: "paramedic-first-look-v1",
   };

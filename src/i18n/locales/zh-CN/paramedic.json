@@ -164,6 +164,8 @@
         "beforeUnread_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之前。有些记录没能读取，所以 Compy 说不准之后有没有。",
         "startsLater_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。Compy 能读到的最早一条记录在 {{oldest}}，所以它说不准之前有多少条。Windows 只保留有限数量的崩溃记录。",
         "startsLater_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。Compy 能读到的最早一条记录在 {{oldest}}，所以它说不准之前有多少条。Windows 只保留有限数量的崩溃记录。",
+        "startsLaterNoOldest_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。Compy 说不准之前有多少条。",
+        "startsLaterNoOldest_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。Compy 说不准之前有多少条。",
         "unread_one": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。有些记录没能读取，所以 Compy 说不准之前有多少条。",
         "unread_other": "在 Compy 能读到的崩溃记录中，至少有 {{count}} 条在 {{date}}（Compy 找到的最早一项有日期的变化）之后。有些记录没能读取，所以 Compy 说不准之前有多少条。"
       }
@@ -173,7 +175,7 @@
       "listed": "此刻正在运行：{{names}}。",
       "listedMore": "此刻正在运行：{{names}}，以及另外 {{more}} 个。",
       "separator": "、",
-      "none": "Compy 没有发现其名单中的程序此刻在运行。它按程序名匹配：录制软件和悬浮层、语音聊天、启动器、浏览器、编译和开发工具、Windows 更新。",
+      "none": "Compy 没有发现其名单中的程序此刻在运行。这份名单很短，只按程序名匹配；其中有部分录制软件和悬浮层、语音聊天、启动器、浏览器、编译和开发工具，以及 Windows 更新。",
       "nowGame": "这是此刻正在运行的内容，不是 {{game}} 出问题时在运行的内容。Compy 没有看到那一刻，也还没有测量过其中任何一项是否会影响游戏。",
       "nowPc": "这是此刻正在运行的内容，不是问题出现时在运行的内容。Compy 没有看到那一刻，也还没有测量过其中任何一项是否会影响游戏。",
       "unread": "Compy 没能读取正在运行的程序列表，所以说不准现在运行着什么。",

@@ -143,7 +143,7 @@ pub(crate) const PROGRAMS: &[Program] = &[
     p!("cargo", "cargo", BuildTool, false, ["cargo.exe"], "Rust build driver; saturates CPU and disk while building"),
     p!("rustc", "rustc", BuildTool, false, ["rustc.exe"], "Rust compiler"),
     p!("clippy", "clippy", BuildTool, false, ["clippy-driver.exe"], "Rust lint driver (a compile)"),
-    p!("msvc-linker", "the MSVC linker", BuildTool, false, ["link.exe"], "linker step of native builds; heavy memory and disk"),
+    p!("msvc-linker", "link.exe", BuildTool, false, ["link.exe"], "linker step of native builds; heavy memory and disk"),
     p!("msbuild", "MSBuild", BuildTool, false, ["msbuild.exe"], "Visual Studio build driver"),
     // --- developer tools that other apps also use ---
     p!("node", "Node.js", DeveloperTool, false, ["node.exe"], "tsc, vitest and dev servers run on it, but some apps bundle node.exe too, so it is its own category"),
@@ -160,7 +160,7 @@ pub(crate) const PROGRAMS: &[Program] = &[
     // --- voice chat and meetings ---
     p!("discord", "Discord", VoiceMeeting, true, ["discord.exe"], "voice chat first; in-game overlay and screen share (presence only: many processes)"),
     p!("zoom", "Zoom", VoiceMeeting, true, ["zoom.exe"], "the resident Zoom client, open on many PCs with no meeting running"),
-    p!("zoom-meeting", "Zoom (in a meeting)", VoiceMeeting, false, ["cpthost.exe"], "Zoom's meeting-time process: far better evidence than zoom.exe alone"),
+    p!("zoom-meeting", "Zoom", VoiceMeeting, false, ["cpthost.exe"], "Zoom's meeting-time process: far better evidence than zoom.exe alone"),
     p!("teams", "Microsoft Teams", VoiceMeeting, true, ["teams.exe", "ms-teams.exe"], "meeting client (classic and new Teams); resident in the tray"),
 ];
 

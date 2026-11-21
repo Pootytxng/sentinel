@@ -1234,7 +1234,7 @@ describe("running right now (S4)", () => {
   it("a read that found none of the listed programs says exactly that, scoped to the programs Compy looks for", async () => {
     await toTheQuestion();
     await pick("This week", answer({ running_now: running({ state: "none", programs: [] }) }));
-    expect(screen.getByTestId("first-look-running-none").textContent).toBe("Compy didn't find any program from its list running right now. It matches by program name: recorders and overlays, voice chat, launchers, browsers, build and developer tools, Windows Update.");
+    expect(screen.getByTestId("first-look-running-none").textContent).toBe("Compy didn't find any program from its list running right now. The list is short and matches by program name only; it holds some recorders and overlays, voice chat apps, launchers, browsers, build and developer tools, and Windows Update.");
     expect(screen.queryByTestId("first-look-running-now")).toBeNull();
   });
 
@@ -1337,6 +1337,13 @@ describe("the crash records before and after the earliest change (S5)", () => {
     const text = line();
     expect(text).toMatch(/at least 5 are from after .*The oldest record it could read is from [A-Z][a-z]{2} \d+, .*so it can't say how many came before\. Windows keeps only a limited number of crash records\.$/);
     expect(text).not.toMatch(/none are from before/);
+  });
+
+  it("a starts-later split with no oldest date says only what is known and never that records couldn't be read", async () => {
+    await lookAs(gameAnswer({ crashes: crashes(sp({ before: 0, after: 5, gap: "starts-later", oldest_read: null })) }));
+    const text = line();
+    expect(text).toMatch(/at least 5 are from after .*It can't say how many came before\.$/);
+    expect(text).not.toMatch(/couldn't be read|none are from before|oldest record/);
   });
 
   it("when some records could not be read it says that instead of none before", async () => {

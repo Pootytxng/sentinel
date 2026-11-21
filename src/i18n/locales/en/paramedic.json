@@ -164,6 +164,8 @@
         "beforeUnread_other": "Of the crash records Compy could read, at least {{count}} are from before {{date}} (the earliest dated change Compy found). Some records couldn't be read, so it can't say whether any came after.",
         "startsLater_one": "Of the crash records Compy could read, at least {{count}} is from after {{date}} (the earliest dated change Compy found). The oldest record it could read is from {{oldest}}, so it can't say how many came before. Windows keeps only a limited number of crash records.",
         "startsLater_other": "Of the crash records Compy could read, at least {{count}} are from after {{date}} (the earliest dated change Compy found). The oldest record it could read is from {{oldest}}, so it can't say how many came before. Windows keeps only a limited number of crash records.",
+        "startsLaterNoOldest_one": "Of the crash records Compy could read, at least {{count}} is from after {{date}} (the earliest dated change Compy found). It can't say how many came before.",
+        "startsLaterNoOldest_other": "Of the crash records Compy could read, at least {{count}} are from after {{date}} (the earliest dated change Compy found). It can't say how many came before.",
         "unread_one": "Of the crash records Compy could read, at least {{count}} is from after {{date}} (the earliest dated change Compy found). Some records couldn't be read, so it can't say how many came before.",
         "unread_other": "Of the crash records Compy could read, at least {{count}} are from after {{date}} (the earliest dated change Compy found). Some records couldn't be read, so it can't say how many came before."
       }
@@ -173,7 +175,7 @@
       "listed": "Running right now: {{names}}.",
       "listedMore": "Running right now: {{names}} and {{more}} more.",
       "separator": ", ",
-      "none": "Compy didn't find any program from its list running right now. It matches by program name: recorders and overlays, voice chat, launchers, browsers, build and developer tools, Windows Update.",
+      "none": "Compy didn't find any program from its list running right now. The list is short and matches by program name only; it holds some recorders and overlays, voice chat apps, launchers, browsers, build and developer tools, and Windows Update.",
       "nowGame": "This is what is running now, not what was running when the problem with {{game}} happened. Compy didn't see that, and it hasn't measured whether any of these affects a game.",
       "nowPc": "This is what is running now, not what was running when the problem happened. Compy didn't see that, and it hasn't measured whether any of these affects a game.",
       "unread": "Compy couldn't read the list of running programs, so it can't say what is running.",

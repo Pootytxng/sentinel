@@ -39,7 +39,8 @@ export type CompyChange = { title: string; at: string; undone: boolean; undone_a
 
 /** The game's crash records before and after the earliest dated change: counts and dates only. `gap` is set when
  *  Compy can't say how many came before (`starts-later`: its oldest readable record is not older than the change;
- *  `unread`: some records could not be read). */
+ *  `unread`: some records could not be read, and none of the readable ones is before the change;
+ *  `unread-after`: some records could not be read, and none of the readable ones is after the change, so a newer one may be among them). */
 export type FirstLookCrashSplit = { before: number; after: number; change: string; oldest_read: string | null; gap: "starts-later" | "unread" | "unread-after" | null; by_name: boolean };
 
 /** Known programs running at this moment (the reviewed allowlist only). `state` other than "listed" and "none" is
@@ -581,7 +582,12 @@ function splitSentence(s: FirstLookCrashSplit, t: T, dates: Dates): string {
 }
 
 function splitBody(s: FirstLookCrashSplit, t: T, dates: Dates, date: string): string {
-  if (s.gap === "starts-later" && s.oldest_read) return t("paramedic.firstLook.crash.split.startsLater", { count: s.after, date, oldest: dates.dayTime(s.oldest_read) });
+  if (s.gap === "starts-later") {
+    // Rust always sends the oldest read date with this gap; without it say only what is known (the count after), never that records couldn't be read.
+    return s.oldest_read
+      ? t("paramedic.firstLook.crash.split.startsLater", { count: s.after, date, oldest: dates.dayTime(s.oldest_read) })
+      : t("paramedic.firstLook.crash.split.startsLaterNoOldest", { count: s.after, date });
+  }
   if (s.gap === "unread-after") return t("paramedic.firstLook.crash.split.beforeUnread", { count: s.before, date });
   if (s.gap) return t("paramedic.firstLook.crash.split.unread", { count: s.after, date });
   if (s.before === 0) return t("paramedic.firstLook.crash.split.afterOnly", { count: s.after, date });
@@ -951,7 +957,7 @@ export function ParamedicFirstLook({
               )}
             </div>
           )}
-      {a.running_now && <RunningNow r={a.running_now} game={gameName} t={t} />}
+      <RunningNow r={a.running_now} game={gameName} t={t} />
       {a.changes_listed && (
         <>
           {a.compy_changes.length > 0 && (
