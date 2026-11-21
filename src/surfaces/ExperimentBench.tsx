@@ -9,6 +9,7 @@
 
 import { withTerms } from "../design/with-terms";
 import { confidenceHintKey, confidenceWordKey, type ConfidenceWord } from "../data/confidence-word";
+import type { BenchKind } from "../data/certainty";
 import { Term } from "../design/Term";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -377,7 +378,7 @@ function simVerdictCopy(t: Translate): Record<string, { label: string; blocked: 
 // Self-review r2 2026-10-28: the word carries the shared gloss, like every other confidence word.
 // P5-realplay: a real-play result is a supported inference from sessions played however the owner
 // played (Likely), never a controlled measurement, and never High.
-function BenchWord({ c, kind }: { c: Confidence; kind: "estimate" | "measured" | "real-play" }) {
+function BenchWord({ c, kind }: { c: Confidence; kind: BenchKind }) {
   const { t } = useTranslation();
   const word: ConfidenceWord =
     c === "high" || c === "medium" ? (kind === "estimate" ? "expected" : kind === "real-play" ? "likely" : "measured") : "unknown";

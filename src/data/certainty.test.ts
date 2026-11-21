@@ -22,12 +22,13 @@ import {
   fromProvenance,
   limitMostLikelyToOne,
   sourceForAbsence,
-  sourceKey,
   strengthFor,
-  strengthKey,
+  strengthWire,
   type Mapped,
   type SourcedValue,
+  type Strength,
 } from "./certainty";
+import { wordFromBand, wordFromFinding, wordFromProvenance, wordFromRow } from "./confidence-word";
 
 // D3 vocabulary, slice 1. The Rust enums keep their serde names (no wire change); these tests pin
 // that every serialized value the Rust side can emit has a mapper row, and that the rules of the
@@ -42,10 +43,15 @@ function rustVariants(file: string, enumName: string, rename: "kebab-case" | "lo
     String.raw`#\[serde\(rename_all = "${rename}"\)\]\s*pub\(crate\) enum ${enumName} \{([\s\S]*?)\n\}`,
   ).exec(src);
   if (!body) throw new Error(`could not find ${rename} enum ${enumName} in ${file}`);
-  return body[1]
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => /^[A-Z][A-Za-z0-9]*,?$/.test(line))
+  // Fail loudly on anything that is not a bare variant, a comment, an attribute or a blank line: a
+  // variant with a payload or a trailing comment must not be silently dropped from the list.
+  const lines = body[1].split("\n").map((line) => line.trim());
+  for (const line of lines) {
+    const ok = line === "" || line.startsWith("//") || /^#\[[^\]]*\](\s*\/\/.*)?$/.test(line) || /^[A-Z][A-Za-z0-9]*,$/.test(line);
+    if (!ok) throw new Error(`${enumName} in ${file}: cannot parse enum line ${JSON.stringify(line)} (payload or trailing comment?)`);
+  }
+  return lines
+    .filter((line) => /^[A-Z][A-Za-z0-9]*,$/.test(line))
     .map((line) => line.replace(/,$/, "").replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase());
 }
 
@@ -73,9 +79,10 @@ describe("vocabulary wire contract (Rust serde names <-> TS literals)", () => {
     expect(STRENGTHS as readonly string[]).not.toContain("unknown");
   });
 
-  it("i18n keys are built under common.source.* and common.strength.*", () => {
-    expect(SOURCES.map(sourceKey)).toContain("common.source.measured-once");
-    expect(STRENGTHS.map(strengthKey)).toEqual(["common.strength.possible", "common.strength.most-likely"]);
+  it("a strength round-trips to its wire spelling", () => {
+    const top = strengthFor({ independentSupports: 2, contradicting: 0, keySupportUnread: false });
+    expect(top && strengthWire(top)).toBe("most-likely");
+    expect(strengthWire("possible")).toBe("possible");
   });
 });
 
@@ -128,19 +135,68 @@ describe("mapping table: every old serialized value has a row", () => {
   });
 
   it("FindingLevel and Provenance", () => {
-    const find: Record<(typeof FINDING_LEVEL_VALUES)[number], Mapped> = { measured: src("measured"), likely: str("possible"), unknown: src("unread") };
+    const find: Record<(typeof FINDING_LEVEL_VALUES)[number], Mapped> = { measured: src("measured"), likely: str("possible"), unknown: CANT };
     for (const v of FINDING_LEVEL_VALUES) expect(fromFindingLevel(v), v).toEqual(find[v]);
     const prov: Record<(typeof PROVENANCE_VALUES)[number], Mapped> = { verified: src("read"), "measured-signal": src("measured-once"), "expected-impact": src("general") };
     for (const v of PROVENANCE_VALUES) expect(fromProvenance(v), v).toEqual(prov[v]);
   });
 
-  it("Bench words: estimate is general, real play is measured once, a trial is measured, low is can't tell", () => {
+  it("Bench words: estimate is general; real play and a two-session trial (one before/after pair, no repeat count stored) are measured once; low is can't tell", () => {
     for (const band of ["high", "medium"] as const) {
       expect(fromBench("estimate", band)).toEqual(src("general"));
       expect(fromBench("real-play", band)).toEqual(src("measured-once"));
-      expect(fromBench("measured", band)).toEqual(src("measured"));
+      expect(fromBench("measured", band)).toEqual(src("measured-once"));
     }
     for (const kind of BENCH_KIND_VALUES) for (const band of ["low", "unknown", null, undefined] as const) expect(fromBench(kind, band)).toEqual(CANT);
+  });
+});
+
+// FROZEN copy of confidence-word.ts as it was on main (c4a5b168) before D3 slice 1. Do not edit it:
+// it is the reference the new, mapper-based implementation must match for every input.
+type OldWord = "known" | "measured" | "likely" | "expected" | "unknown";
+const OLD = {
+  wordFromBand: (band: string | null | undefined): OldWord => (band === "high" || band === "medium" ? "likely" : "unknown"),
+  wordFromRow: (basis: string | undefined, band: string | null | undefined): OldWord => (basis === "measured" ? OLD.wordFromBand(band) : "known"),
+  wordFromProvenance: (p: string): OldWord => (p === "verified" ? "known" : p === "measured-signal" ? "measured" : p === "expected-impact" ? "expected" : "unknown"),
+  wordFromFinding: (level: string): OldWord => level as OldWord,
+};
+
+describe("confidence-word.ts through the mappers is byte-identical to the frozen old implementation", () => {
+  const bands = [
+    ...new Set([
+      ...rustVariants("priorities.rs", "Confidence", "kebab-case"),
+      ...rustVariants("intelligence.rs", "Confidence", "kebab-case"),
+    ]),
+    null,
+    undefined,
+  ] as const;
+  const bases = [undefined, ...rustVariants("priorities.rs", "Basis", "kebab-case")] as ("fact" | "measured" | undefined)[];
+  const locales = join("src", "i18n", "locales");
+  const text = (loc: string, w: string) => (JSON.parse(readFileSync(join(locales, loc, "common.json"), "utf8")) as { confidenceWord: Record<string, string> }).confidenceWord[w];
+
+  it("wordFromBand, for every band the Rust side can send plus null and undefined", () => {
+    expect(bands.length).toBeGreaterThanOrEqual(6);
+    for (const b of bands) expect(wordFromBand(b as never), String(b)).toBe(OLD.wordFromBand(b));
+  });
+
+  it("wordFromRow, for every basis (and none) x every band", () => {
+    for (const basis of bases) for (const b of bands) expect(wordFromRow(basis, b as never), `${basis}/${b}`).toBe(OLD.wordFromRow(basis, b));
+  });
+
+  it("wordFromProvenance, for every Provenance and an out-of-domain value", () => {
+    for (const p of [...PROVENANCE_VALUES, "nonsense"]) expect(wordFromProvenance(p as never), p).toBe(OLD.wordFromProvenance(p));
+  });
+
+  it("wordFromFinding, for every FindingLevel", () => {
+    for (const l of FINDING_LEVEL_VALUES) expect(wordFromFinding(l), l).toBe(OLD.wordFromFinding(l));
+  });
+
+  it("the words resolve to the same en and zh-CN strings (same words, same keys)", () => {
+    for (const loc of ["en", "zh-CN"]) {
+      for (const p of PROVENANCE_VALUES) expect(text(loc, wordFromProvenance(p))).toBe(text(loc, OLD.wordFromProvenance(p)));
+      for (const l of FINDING_LEVEL_VALUES) expect(text(loc, wordFromFinding(l))).toBe(text(loc, OLD.wordFromFinding(l)));
+      for (const b of bands) expect(text(loc, wordFromBand(b as never))).toBe(text(loc, OLD.wordFromBand(b)));
+    }
   });
 });
 
@@ -182,7 +238,8 @@ describe("rules the vocabulary enforces", () => {
   });
 
   it("at most one most-likely per answer", () => {
-    expect(limitMostLikelyToOne(["most-likely", "most-likely", "possible", null, "most-likely"])).toEqual(["most-likely", "possible", "possible", null, "possible"]);
+    const top = strengthFor({ independentSupports: 2, contradicting: 0, keySupportUnread: false });
+    expect(limitMostLikelyToOne([top, top, "possible", null, top])).toEqual([top, "possible", "possible", null, "possible"]);
     expect(limitMostLikelyToOne([])).toEqual([]);
   });
 
@@ -191,10 +248,38 @@ describe("rules the vocabulary enforces", () => {
     expect(sourceForAbsence(false)).toEqual({ axis: "source", source: "unread" });
   });
 
+  it("limitMostLikelyToOne keeps the first most-likely by position (callers pass strongest first)", () => {
+    const top = strengthFor({ independentSupports: 2, contradicting: 0, keySupportUnread: false });
+    const out = limitMostLikelyToOne(["possible", top, top]);
+    expect(out).toEqual(["possible", top, "possible"]);
+  });
+
+  // The next three are compile-time proofs: they hold under `tsc` (npm run build), not under vitest.
+  // Each @ts-expect-error fails the BUILD if the line stops being a type error.
   it("an unread value carries no value field", () => {
     const unread: SourcedValue<number> = { source: "unread", reason: "the log could not be opened" };
     expect("value" in unread).toBe(false);
     // @ts-expect-error: the unread arm has no `value`, so it cannot be read as an empty/zero value
     void unread.value;
+    // @ts-expect-error: and an unread line cannot be built with a value
+    const bad: SourcedValue<number> = { source: "unread", reason: "x", value: 0 };
+    void bad;
+  });
+
+  it("a fact line cannot carry a strength (compile-time)", () => {
+    // @ts-expect-error: the source arm of Mapped has no `strength` field
+    const bad: Mapped = { axis: "source", source: "read", strength: "possible" };
+    void bad;
+  });
+
+  it("a bare 'most-likely' literal is not a Strength; only strengthFor / fromCertainty('likely') make one (compile-time)", () => {
+    // @ts-expect-error: the top strength is branded
+    const bad: Strength = "most-likely";
+    void bad;
+    // @ts-expect-error: and so is building the strength arm by hand
+    const bad2: Mapped = { axis: "strength", strength: "most-likely" };
+    void bad2;
+    const good: Strength = "possible";
+    void good;
   });
 });
