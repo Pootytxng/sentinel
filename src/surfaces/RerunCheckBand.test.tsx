@@ -363,3 +363,24 @@ describe("RerunCheckBand - one source for the counts", () => {
     expect(line()).not.toMatch(/all 14|ago/i);
   });
 });
+
+describe("RerunCheckBand - review B3", () => {
+  it("a stored 14/14 against a live read of 16 checks (2 need a look) is not repeated: same green count, different total", () => {
+    storeCheck({ at: Date.now() - 15 * 86_400_000, total: 14, green: 14, advisory: 0, unread: 0, fixCount: 0 });
+    const r = readiness({
+      checks: [...Array.from({ length: 14 }, () => chk("ready")), chk("attention"), chk("attention")],
+      attention_count: 2,
+      ready_count: 14,
+    });
+    render(<RerunCheckBand readiness={r} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("2 of 16 checks need a look");
+    expect(line()).not.toMatch(/all 14|looked good|ago/i);
+  });
+
+  it("before the live read has loaded, the stored line is dated and past tense, never a present 'checks look good'", () => {
+    storeCheck({ at: Date.now() - 15 * 86_400_000, total: 14, green: 14, advisory: 0, unread: 0, fixCount: 0 });
+    render(<RerunCheckBand readiness={null} checking={false} onRunCheck={() => {}} />);
+    expect(line()).toContain("Last full check 2w ago · all 14 looked good");
+    expect(line()).not.toMatch(/checks look good/);
+  });
+});

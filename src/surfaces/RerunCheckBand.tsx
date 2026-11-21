@@ -86,7 +86,10 @@ export function RerunCheckBand({
   const snap =
     stored &&
     liveKnown &&
-    (stored.green !== liveGood || stored.unread !== liveUnread || stored.advisory !== liveAdvisory)
+    (stored.total !== readiness!.checks.length ||
+      stored.green !== liveGood ||
+      stored.unread !== liveUnread ||
+      stored.advisory !== liveAdvisory)
       ? null
       : stored;
 
