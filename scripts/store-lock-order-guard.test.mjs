@@ -711,6 +711,25 @@ const LOCK_CENSUS = {
       "through noise_floor::lock_gate; a leaf that reaches no other store.",
   },
 
+  "sessions::SESSIONS_LOCK: Mutex<()>": {
+    class: "persistence",
+    variant: "Sessions",
+    why:
+      "D6: the whole load -> push -> rename of sessions.json in save_session_to (before this the file " +
+      "had no lock, so a clear's delete could be undone by a save that had already read the history), " +
+      "and the clear's delete of it. Taken through lock_sessions only; a leaf: inside it a save reaches " +
+      "noise_floor::cap_read (arithmetic) and atomic_write, and save_session releases it before " +
+      "comparison::on_session_finalized, so it nests nothing.",
+  },
+  "hwchange::FINGERPRINT_LOCK: Mutex<()>": {
+    class: "persistence",
+    variant: "HardwareFingerprint",
+    why:
+      "D6: the two writers of hardware-fingerprint.json (get_hardware_changes' first-run write and " +
+      "acknowledge_hardware_changes), which had no lock, and the clear's delete of it. Taken through " +
+      "lock_fingerprint only, after the hardware has been read; a leaf that reaches no other store.",
+  },
+
   // ── out of class ───────────────────────────────────────────────────────────────────────────
   "data_root::FILES: Mutex<()>": {
     class: "out",
@@ -1022,5 +1041,84 @@ describe("#398: the source half of the Experiment -> History claim", () => {
         "Either the call moved (re-derive it), or the nesting is gone (delete the pair and the " +
         "tests that assert it).",
     ).toHaveLength(8);
+  });
+});
+
+describe("D6: the clear takes one store lock at a time, plus the one declared nesting", () => {
+  const fnBody = (src, sig) => {
+    const at = src.indexOf(sig);
+    expect(at, `${sig} is missing`).toBeGreaterThanOrEqual(0);
+    const rest = src.slice(at + sig.length);
+    const end = rest.search(/\n(?:pub\(crate\) |pub )?fn\s|\nimpl\s|\n\}/);
+    return end === -1 ? rest : rest.slice(0, end);
+  };
+
+  it("clear_everything_at takes the Trial gate and then the ledger lock, once each, in that order", () => {
+    const body = fnBody(code("data_clear"), "pub(crate) fn clear_everything_at(");
+    const exp = [...body.matchAll(/experiment::lock_store\s*\(/g)];
+    const led = [...body.matchAll(/history::lock_ledger\s*\(/g)];
+    expect(exp, "the Trial gate is taken exactly once").toHaveLength(1);
+    expect(led, "the ledger lock is taken exactly once").toHaveLength(1);
+    expect(exp[0].index, "Experiment -> History is the declared order; History -> Experiment is not").toBeLessThan(
+      led[0].index,
+    );
+  });
+
+  it("nothing in data_clear takes the History lock except through history::lock_ledger", () => {
+    const src = code("data_clear");
+    expect(src).not.toMatch(/lock_history\s*\(/);
+    expect([...src.matchAll(/lock_ledger\s*\(/g)]).toHaveLength(1);
+  });
+
+  it("execute_everything_ledger_phase cannot be called without the ledger guard", () => {
+    const src = code("data_clear");
+    const at = src.indexOf("pub(crate) fn execute_everything_ledger_phase(");
+    expect(at).toBeGreaterThanOrEqual(0);
+    const sig = src.slice(at, src.indexOf(") ->", at));
+    expect(sig).toMatch(/crate::history::LedgerGuard/);
+    expect(sig).toMatch(/crate::race_seam::StoreGuard/);
+  });
+
+  it("every per-store gate takes exactly one store lock and never the ledger", () => {
+    const body = fnBody(code("data_clear"), "impl ClearGates for LiveGates");
+    expect(body).not.toMatch(/lock_ledger|lock_history/);
+    // Each arm names one gate function. Count the lock-taking calls: one per arm, never two on one line.
+    const arms = body.split(/\n\s*Gate::/).slice(1);
+    expect(arms.length).toBeGreaterThanOrEqual(12);
+    for (const arm of arms) {
+      const calls = arm.match(/(with_store_locked|with_store_cleared|lock_gate|lock_store)\s*\(/g) ?? [];
+      expect(calls.length, `a gate arm takes more than one lock: ${arm.slice(0, 80)}`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("every store module the clear gates exposes one recorded gate function", () => {
+    const gates = {
+      sessions: ["with_store_locked", "lock_sessions"],
+      hwchange: ["with_store_locked", "lock_fingerprint"],
+      drift: ["with_store_locked", "lock_drift"],
+      comparison: ["with_store_locked", "lock_comparison"],
+      benchmark_scoreboard: ["with_store_locked", "lock_scoreboard"],
+      readiness: ["with_store_locked", "lock_dismissals"],
+      incident_observer: ["with_store_locked", "lock_state"],
+      benchmark: ["with_store_cleared", "lock_state"],
+    };
+    for (const [module, [gate, lock]] of Object.entries(gates)) {
+      const body = fnBody(code(module), `fn ${gate}`);
+      const taken = [...body.matchAll(new RegExp(`\\b${lock}\\s*\\(`, "g"))];
+      expect(taken, `${module}::${gate} must take ${lock} exactly once`).toHaveLength(1);
+      expect(body, `${module}::${gate} must not reach another store`).not.toMatch(
+        /history::|support_evidence::|experiment::|comparison::|drift::|intelligence::|noise_floor::lock/,
+      );
+    }
+  });
+
+  it("save_session releases the sessions lock before it settles the comparison", () => {
+    const sessions = code("sessions");
+    const save = fnBody(sessions, "pub(crate) fn save_session(");
+    expect(save).toMatch(/unless_cleared\s*\(/);
+    expect(save).not.toMatch(/lock_sessions\s*\(/);
+    const guarded = fnBody(sessions, "fn unless_cleared");
+    expect(guarded, "the guarded write is the only place that holds the sessions lock").toMatch(/lock_sessions\s*\(/);
+    expect(guarded).not.toMatch(/comparison::|history::|support_evidence::|incident_observer::/);
   });
 });

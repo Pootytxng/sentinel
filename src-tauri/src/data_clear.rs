@@ -149,6 +149,20 @@ impl ClearPlan {
         self.refusals.is_empty()
     }
 
+    /// Nothing is refused and nothing would be deleted. Distinct from "couldn't read": an unreadable
+    /// folder, ledger or Trial store is a refusal with its own code, never this.
+    pub(crate) fn nothing_to_do(&self) -> bool {
+        self.refusals.is_empty() && self.delete.is_empty()
+    }
+
+    /// A plan that deletes nothing because the live wrapper could not even start (no usable data root,
+    /// a lock that could not be taken). One typed refusal.
+    pub(crate) fn refused(scope: Scope, code: &'static str, detail: &str) -> Self {
+        let mut plan = ClearPlan::empty(scope);
+        plan.refuse(code, detail, None);
+        plan.finish()
+    }
+
     fn empty(scope: Scope) -> Self {
         ClearPlan {
             scope,
@@ -201,6 +215,12 @@ impl ClearPlan {
 pub(crate) struct ClearFacts {
     /// A capture (a game being measured) is running.
     pub(crate) capture_active: bool,
+    /// The session recorder holds a session it has not finished saving (D6). Distinct from
+    /// `capture_active`: Stop clears that flag before the recorder thread has saved its session.
+    pub(crate) recorder_busy: bool,
+    /// A benchmark trial is running (D6): it applies a change and writes the scoreboard and noise floors
+    /// when it ends.
+    pub(crate) benchmark_trial_running: bool,
     /// `Everything` only: also delete the licence token.
     pub(crate) remove_licence: bool,
     /// The clock the "working file is older than an hour" rule reads.
@@ -610,6 +630,16 @@ pub(crate) fn plan_clear(root: &Path, scope: Scope, facts: &ClearFacts) -> Clear
     if facts.capture_active {
         plan.refuse("capture_running", "Compy is measuring a game right now. Close the game or stop measuring first.", None);
     }
+    if facts.recorder_busy {
+        plan.refuse(
+            "recording_in_progress",
+            "Compy is still finishing the play session it just measured. Try again in a moment.",
+            None,
+        );
+    }
+    if facts.benchmark_trial_running {
+        plan.refuse("benchmark_trial_running", "A benchmark trial is running. Let it finish or cancel it first.", None);
+    }
     match read_trial_store(root) {
         TrialRead::Idle | TrialRead::NoStore => {}
         // Pending is a start that may have changed Windows (its receipt can be missing): a change may be on.
@@ -754,8 +784,14 @@ pub(crate) struct ClearReport {
     pub(crate) unknown: Vec<String>,
     /// True only when every file the plan listed is gone.
     pub(crate) complete: bool,
-    /// The running app still holds some of this in memory; it needs a restart.
+    /// True when nothing was listed at all: not a failure, and not "couldn't read".
+    pub(crate) nothing_to_do: bool,
+    /// The running app still holds some of this in memory and has no safe reset for it; it needs a
+    /// restart. False when every in-memory copy was reset (benchmark baseline, benchmark trial result,
+    /// the observer's failure flags) or none exists; the browser's own storage is the screen's job.
     pub(crate) restart_required: bool,
+    /// Why, one code per thing that could not be reset. Empty when `restart_required` is false.
+    pub(crate) restart_reasons: Vec<&'static str>,
     pub(crate) webview: Vec<WebviewTarget>,
 }
 
@@ -763,7 +799,9 @@ impl ClearReport {
     /// The one sentence a screen may show. It says "Cleared" only when everything listed is gone.
     pub(crate) fn summary(&self) -> String {
         let gone = self.deleted.len() + self.already_gone.len();
-        if self.complete {
+        if self.complete && self.nothing_to_do {
+            "Nothing to clear.".to_string()
+        } else if self.complete {
             format!("Cleared: {gone} file(s) deleted.")
         } else {
             format!(
@@ -775,7 +813,10 @@ impl ClearReport {
     }
 }
 
-#[derive(Debug)]
+/// What a clear answers with. Serializes as `{"status": ..., "detail": ...}` so the future command can
+/// hand it to the screen as it is: the refusal codes stay codes, never one joined sentence.
+#[derive(Debug, Serialize)]
+#[serde(tag = "status", content = "detail", rename_all = "snake_case")]
 pub(crate) enum ClearOutcome {
     Refused(Vec<Refusal>),
     /// The files differ from the plan that was given; nothing was deleted.
@@ -798,19 +839,97 @@ fn validate_rel(rel: &str) -> Result<Vec<&str>, String> {
     Ok(segs)
 }
 
-enum Removed {
+#[derive(Debug)]
+pub(crate) enum Removed {
     Deleted,
     AlreadyGone,
 }
 
+// ---- gates: one lock per store, taken one at a time (D6, design 3.3) ------------------------------
+
+/// The writers a file's delete must exclude. One per store; the store's own lock is the gate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Gate {
+    Sessions,
+    Benchmark,
+    Scoreboard,
+    NoiseFloor,
+    Comparison,
+    Drift,
+    IncidentObserver,
+    Intelligence,
+    HardwareFingerprint,
+    Readiness,
+    SupportEvidence,
+    /// The Trial store gate. Taken alone for `PlayHistory`; held by the caller for `Everything`.
+    Experiment,
+    /// `history.json*`: needs the History lock, which only `Everything` holds (as `&LedgerGuard`).
+    Ledger,
+    /// No writer lock exists for this file (see `UNLOCKED_STEMS` for why none is needed).
+    Unlocked,
+}
+
+/// Store stems (the file name up to its first `.`, folder kept) whose writers hold a lock, and which.
+const GATED_STEMS: &[(&str, Gate)] = &[
+    ("sessions", Gate::Sessions),
+    ("benchmark", Gate::Benchmark),
+    ("scoreboard", Gate::Scoreboard),
+    ("noise_floors", Gate::NoiseFloor),
+    ("compy_comparison", Gate::Comparison),
+    ("compy_comparison_result", Gate::Comparison),
+    ("drift", Gate::Drift),
+    ("care/incident-observer", Gate::IncidentObserver),
+    ("intelligence", Gate::Intelligence),
+    ("hardware-fingerprint", Gate::HardwareFingerprint),
+    ("readiness_dismissals", Gate::Readiness),
+    ("support/evidence", Gate::SupportEvidence),
+    ("experiments", Gate::Experiment),
+];
+
+/// Stems with no writer lock, and why the clear needs none. A test requires every concrete data-root
+/// inventory row to be gated or listed here, so a new store forces a decision.
+const UNLOCKED_STEMS: &[(&str, &str)] = &[
+    ("receipts-consent", "written only with the value the user just chose; it never rewrites older contents"),
+    ("license", "activation writes the token being activated, deactivation removes it; no read-modify-write"),
+    ("case-intelligence/fetch-disabled", "an empty marker the user creates; Compy only looks for it"),
+    ("case-intelligence/last-known-good", "a cache the fetch writes whole (temp + rename) from a fresh download"),
+    ("cached-manifest", "signed-rules cache, switched off in every build; written whole by the fetch"),
+    ("cached-rules", "signed-rules cache, switched off in every build; written whole by the fetch"),
+    ("last-seen-ruleset-version", "signed-rules cache, switched off in every build"),
+    ("runtime/fps", "the capture helper's hand-off; the clear refuses while a capture runs or a session is unsaved"),
+    ("gaming-session", "never deleted by either choice: the Gaming Mode contract is undo data (refused or kept)"),
+];
+
+fn gate_of(d: &PlannedDelete) -> Gate {
+    if d.row_id.starts_with("ledger-") {
+        return Gate::Ledger;
+    }
+    let stem = stem_of(&d.rel);
+    GATED_STEMS.iter().find(|(s, _)| *s == stem).map_or(Gate::Unlocked, |(_, g)| *g)
+}
+
+/// Excludes every writer of a store for the length of one delete.
+pub(crate) trait ClearGates {
+    /// Takes the lock(s) of `gate`'s store, runs `delete`, resets what the running app holds in memory
+    /// for that store when the delete worked, and releases. Nothing else is held meanwhile. An `Err`
+    /// means the delete failed or the gate could not be taken (then nothing was deleted).
+    fn with_gate(&self, gate: Gate, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String>;
+}
+
+// ---- deleting one file --------------------------------------------------------------------------
+
 /// Deletes one planned file, re-checking on the spot that it is a plain file whose folders are plain
-/// folders inside the root. Never follows a link.
+/// folders inside the root. Never follows a link. On Windows the delete itself goes through a handle
+/// (see `remove_by_handle`), which closes the window a path-based check leaves open.
 fn delete_one(root: &Path, rel: &str) -> Result<Removed, String> {
+    delete_one_with(root, rel, &|| {})
+}
+
+/// `delete_one` with a seam: `before_delete` runs after every path check and before the file is opened,
+/// which is where a folder swapped for a junction would slip in. Tests use it; production passes a no-op.
+fn delete_one_with(root: &Path, rel: &str, before_delete: &dyn Fn()) -> Result<Removed, String> {
     let segs = validate_rel(rel)?;
-    // Re-checked immediately before every delete: the root itself is a plain folder, not a link. These
-    // checks are by path, so a folder swapped for a junction between a check and `remove_file` is not
-    // caught; deleting through a handle opened with FILE_FLAG_OPEN_REPARSE_POINT and checking its final
-    // path is the full fix (listed in `d5-clear-before-wiring.md`).
+    // Re-checked immediately before every delete: the root itself is a plain folder, not a link.
     match fs::symlink_metadata(root) {
         Ok(m) if m.is_dir() && !is_link(&m) => {}
         Ok(_) => return Err("the data folder is a link or not a folder, so nothing was touched".to_string()),
@@ -831,32 +950,171 @@ fn delete_one(root: &Path, rel: &str) -> Result<Removed, String> {
     if !canon_dir.starts_with(&canon_root) {
         return Err("the folder leads outside Compy's data folder, so nothing was touched".to_string());
     }
-    let file: PathBuf = dir.join(segs[segs.len() - 1]);
+    let leaf = segs[segs.len() - 1];
+    let file: PathBuf = dir.join(leaf);
     match fs::symlink_metadata(&file) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Removed::AlreadyGone),
         Err(e) => return Err(format!("could not be checked ({e})")),
         Ok(m) if is_link(&m) || !m.is_file() => return Err("is not a plain file, so it was left alone".to_string()),
         Ok(_) => {}
     }
-    fs::remove_file(&file).map_err(|e| e.to_string())?;
+    before_delete();
+    remove_by_handle(&file, &canon_dir.join(leaf))?;
     match fs::symlink_metadata(&file) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Removed::Deleted),
         _ => Err("is still there after the delete".to_string()),
     }
 }
 
-/// Deletes what `plan` listed, and only that. Re-plans first: a refusal now, or a list that differs from
-/// `plan`, deletes nothing. A file that fails is reported and the rest go on, except that a failure
-/// inside the ledger family stops the family (the backup must be gone before `history.json`).
-pub(crate) fn execute_clear(root: &Path, plan: &ClearPlan, facts: &ClearFacts) -> ClearOutcome {
+#[cfg(not(windows))]
+fn remove_by_handle(file: &Path, _expected: &Path) -> Result<(), String> {
+    fs::remove_file(file).map_err(|e| e.to_string())
+}
+
+/// Windows: open the file itself (FILE_FLAG_OPEN_REPARSE_POINT, so a link is opened as the link and
+/// never followed) with DELETE access, check through the HANDLE that it is a plain file and that its
+/// final path is exactly `expected` (the canonical folder inside the data root plus its name), and delete
+/// through that same handle. A folder swapped for a junction after the path checks makes the final path
+/// differ, so nothing is deleted. The three kernel32 calls are declared by hand, as `data_root.rs` does,
+/// so no `windows` crate feature is added.
+#[cfg(windows)]
+fn remove_by_handle(file: &Path, expected: &Path) -> Result<(), String> {
+    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+    use std::os::windows::io::AsRawHandle;
+    const DELETE: u32 = 0x0001_0000;
+    const FILE_READ_ATTRIBUTES: u32 = 0x0080;
+    const SHARE_ALL: u32 = 0x7;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    const ATTR_REPARSE_POINT: u32 = 0x400;
+    const ATTR_DIRECTORY: u32 = 0x10;
+    let opened = fs::OpenOptions::new()
+        .access_mode(DELETE | FILE_READ_ATTRIBUTES)
+        .share_mode(SHARE_ALL)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(file);
+    let handle_file = match opened {
+        Ok(f) => f,
+        // Gone between the last check and the open: nothing to delete, which the caller's read-back accepts.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.to_string()),
+    };
+    let attrs = handle_file.metadata().map_err(|e| e.to_string())?.file_attributes();
+    if attrs & (ATTR_REPARSE_POINT | ATTR_DIRECTORY) != 0 {
+        return Err("is not a plain file, so it was left alone".to_string());
+    }
+    let final_path = win_handle::final_path(handle_file.as_raw_handle())?;
+    if win_handle::normalize(&final_path) != win_handle::normalize(&expected.to_string_lossy()) {
+        return Err("is not where it was planned (a folder was swapped for a link), so nothing was deleted".to_string());
+    }
+    win_handle::delete_on_close(handle_file.as_raw_handle())
+    // The handle drops here: the file is gone once it closes.
+}
+
+#[cfg(windows)]
+mod win_handle {
+    use std::ffi::c_void;
+
+    #[repr(C)]
+    struct FileDispositionInfo {
+        delete_file: u8,
+    }
+
+    #[repr(C)]
+    struct FileDispositionInfoEx {
+        flags: u32,
+    }
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetFinalPathNameByHandleW(handle: *mut c_void, path: *mut u16, len: u32, flags: u32) -> u32;
+        fn SetFileInformationByHandle(handle: *mut c_void, class: i32, info: *const c_void, size: u32) -> i32;
+    }
+
+    /// The handle's final, resolved path (`\\?\C:\...`), with every junction on the way followed.
+    pub(super) fn final_path(handle: *mut c_void) -> Result<String, String> {
+        let mut buf = vec![0u16; 512];
+        loop {
+            // SAFETY: `handle` is a live file handle owned by the caller's `File`; `buf` is a writable
+            // buffer of exactly `buf.len()` UTF-16 units, which is what is passed.
+            let n = unsafe { GetFinalPathNameByHandleW(handle, buf.as_mut_ptr(), buf.len() as u32, 0) } as usize;
+            if n == 0 {
+                return Err(format!("its location could not be checked ({})", std::io::Error::last_os_error()));
+            }
+            if n < buf.len() {
+                return Ok(String::from_utf16_lossy(&buf[..n]));
+            }
+            buf.resize(n + 1, 0);
+        }
+    }
+
+    /// Case-insensitive, without the `\\?\` prefix, so two spellings of one path compare equal.
+    pub(super) fn normalize(path: &str) -> String {
+        path.trim_start_matches(r"\\?\").to_lowercase()
+    }
+
+    /// Marks the open file for deletion; it goes when the handle closes. Tries POSIX semantics that also
+    /// ignore the read-only attribute (what `std::fs::remove_file` does), then the classic form.
+    pub(super) fn delete_on_close(handle: *mut c_void) -> Result<(), String> {
+        const FILE_DISPOSITION_INFO_CLASS: i32 = 4;
+        const FILE_DISPOSITION_INFO_EX_CLASS: i32 = 21;
+        const DELETE: u32 = 0x1;
+        const POSIX_SEMANTICS: u32 = 0x2;
+        const IGNORE_READONLY: u32 = 0x10;
+        let ex = FileDispositionInfoEx { flags: DELETE | POSIX_SEMANTICS | IGNORE_READONLY };
+        // SAFETY: a live handle opened with DELETE access; `ex` is a repr(C) struct of the size passed.
+        let ok = unsafe {
+            SetFileInformationByHandle(
+                handle,
+                FILE_DISPOSITION_INFO_EX_CLASS,
+                (&ex as *const FileDispositionInfoEx).cast(),
+                std::mem::size_of::<FileDispositionInfoEx>() as u32,
+            )
+        };
+        if ok != 0 {
+            return Ok(());
+        }
+        let classic = FileDispositionInfo { delete_file: 1 };
+        // SAFETY: as above, with the classic one-byte BOOLEAN structure.
+        let ok = unsafe {
+            SetFileInformationByHandle(
+                handle,
+                FILE_DISPOSITION_INFO_CLASS,
+                (&classic as *const FileDispositionInfo).cast(),
+                std::mem::size_of::<FileDispositionInfo>() as u32,
+            )
+        };
+        if ok != 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error().to_string())
+        }
+    }
+}
+
+// ---- executing -----------------------------------------------------------------------------------
+
+fn ledger_lock_required() -> Refusal {
+    Refusal {
+        code: "ledger_lock_required",
+        detail: "Deleting the change history needs the change-history lock, and this path does not hold it. Nothing was deleted.".to_string(),
+        files: Vec::new(),
+    }
+}
+
+/// Re-plans and checks the plan the caller was shown still stands.
+fn replan(root: &Path, plan: &ClearPlan, facts: &ClearFacts) -> Result<ClearPlan, ClearOutcome> {
     let now = plan_clear(root, plan.scope, facts);
     if !now.refusals.is_empty() {
-        return ClearOutcome::Refused(now.refusals);
+        return Err(ClearOutcome::Refused(now.refusals));
     }
     if now.fingerprint != plan.fingerprint || now.delete != plan.delete {
-        return ClearOutcome::PlanChanged;
+        return Err(ClearOutcome::PlanChanged);
     }
-    let mut report = ClearReport {
+    Ok(now)
+}
+
+fn new_report(now: &ClearPlan) -> ClearReport {
+    ClearReport {
         scope: now.scope,
         deleted: Vec::new(),
         already_gone: Vec::new(),
@@ -865,16 +1123,122 @@ pub(crate) fn execute_clear(root: &Path, plan: &ClearPlan, facts: &ClearFacts) -
         kept: now.kept.clone(),
         unknown: now.unknown.clone(),
         complete: false,
-        restart_required: true,
+        nothing_to_do: false,
+        restart_required: false,
+        restart_reasons: Vec::new(),
         webview: now.webview.clone(),
+    }
+}
+
+fn settle(mut report: ClearReport) -> ClearOutcome {
+    report.nothing_to_do = report.deleted.is_empty()
+        && report.already_gone.is_empty()
+        && report.failed.is_empty()
+        && report.not_attempted.is_empty();
+    report.complete = report.failed.is_empty() && report.not_attempted.is_empty();
+    ClearOutcome::Done(report)
+}
+
+/// Deletes `rows` in order. A file whose gate the caller already holds (`held`) or that has no writer
+/// lock is deleted directly; any other goes through `gates`, which takes that store's lock for that one
+/// delete. A failure is reported and the rest go on, except inside the ledger family, which stops.
+fn delete_rows(
+    root: &Path,
+    rows: &[PlannedDelete],
+    gates: &dyn ClearGates,
+    held: &[Gate],
+    report: &mut ClearReport,
+    ledger_failed: &mut bool,
+) {
+    for d in rows {
+        if *ledger_failed && d.row_id.starts_with("ledger-") {
+            report.not_attempted.push(d.rel.clone());
+            continue;
+        }
+        let gate = gate_of(d);
+        let mut run = || delete_one(root, &d.rel);
+        let result = if gate == Gate::Unlocked || held.contains(&gate) {
+            run()
+        } else if gate == Gate::Ledger {
+            Err(ledger_lock_required().detail)
+        } else {
+            gates.with_gate(gate, &mut run)
+        };
+        match result {
+            Ok(Removed::Deleted) => report.deleted.push(d.rel.clone()),
+            Ok(Removed::AlreadyGone) => report.already_gone.push(d.rel.clone()),
+            Err(error) => {
+                *ledger_failed |= d.row_id.starts_with("ledger-");
+                report.failed.push(FailedDelete { rel: d.rel.clone(), error });
+            }
+        }
+    }
+}
+
+/// "Clear play history": deletes what `plan` listed, and only that, each store under its own lock for the
+/// length of its own delete and nothing else held. Re-plans first: a refusal now, or a list that differs
+/// from `plan`, deletes nothing. It never touches `history.json*` and takes `Scope::PlayHistory` plans
+/// only: a `Scope::Everything` plan is refused (`ledger_lock_required`), because that path must hold the
+/// ledger lock and has its own entry point (`clear_everything_at`).
+pub(crate) fn execute_clear(root: &Path, plan: &ClearPlan, facts: &ClearFacts, gates: &dyn ClearGates) -> ClearOutcome {
+    if plan.scope != Scope::PlayHistory {
+        return ClearOutcome::Refused(vec![ledger_lock_required()]);
+    }
+    let now = match replan(root, plan, facts) {
+        Ok(n) => n,
+        Err(outcome) => return outcome,
     };
+    let mut report = new_report(&now);
     let mut ledger_failed = false;
-    for d in &now.delete {
+    delete_rows(root, &now.delete, gates, &[], &mut report, &mut ledger_failed);
+    settle(report)
+}
+
+/// What `execute_everything_ledger_phase` leaves for `finish_everything`.
+pub(crate) struct LedgerPhase {
+    report: ClearReport,
+    rest: Vec<PlannedDelete>,
+    ledger_failed: bool,
+}
+
+/// "Clear everything", phase 1: the change-history family and the Trial store. The caller must hold the
+/// Trial gate and then the ledger lock (the one declared nesting `Experiment -> History`); the ledger
+/// lock is taken as `&LedgerGuard`, a value only `history::lock_ledger` makes, so this function cannot be
+/// called without it. Re-plans UNDER both locks, so "no change is applied" is the answer at the moment of
+/// the delete, and an apply that landed first is seen and refuses. Deletes the ledger family in its fixed
+/// order (backup before `history.json`), stopping the family on a failure, then `experiments.json`.
+pub(crate) fn execute_everything_ledger_phase(
+    root: &Path,
+    plan: &ClearPlan,
+    facts: &ClearFacts,
+    _experiment_gate: &crate::race_seam::StoreGuard,
+    _ledger: &crate::history::LedgerGuard,
+) -> Result<LedgerPhase, ClearOutcome> {
+    ledger_phase(root, plan, facts, &delete_one)
+}
+
+/// The body of phase 1, with the delete as a parameter so a test can look at what is held while a file
+/// goes. Production passes `delete_one`.
+fn ledger_phase(
+    root: &Path,
+    plan: &ClearPlan,
+    facts: &ClearFacts,
+    del: &dyn Fn(&Path, &str) -> Result<Removed, String>,
+) -> Result<LedgerPhase, ClearOutcome> {
+    if plan.scope != Scope::Everything {
+        return Err(ClearOutcome::Refused(vec![ledger_lock_required()]));
+    }
+    let now = replan(root, plan, facts)?;
+    let mut report = new_report(&now);
+    let mut ledger_failed = false;
+    let (mine, rest): (Vec<PlannedDelete>, Vec<PlannedDelete>) =
+        now.delete.iter().cloned().partition(|d| matches!(gate_of(d), Gate::Ledger | Gate::Experiment));
+    for d in &mine {
         if ledger_failed && d.row_id.starts_with("ledger-") {
             report.not_attempted.push(d.rel.clone());
             continue;
         }
-        match delete_one(root, &d.rel) {
+        match del(root, &d.rel) {
             Ok(Removed::Deleted) => report.deleted.push(d.rel.clone()),
             Ok(Removed::AlreadyGone) => report.already_gone.push(d.rel.clone()),
             Err(error) => {
@@ -883,49 +1247,189 @@ pub(crate) fn execute_clear(root: &Path, plan: &ClearPlan, facts: &ClearFacts) -
             }
         }
     }
-    report.complete = report.failed.is_empty() && report.not_attempted.is_empty();
-    ClearOutcome::Done(report)
+    Ok(LedgerPhase { report, rest, ledger_failed })
+}
+
+/// "Clear everything", phase 2, run AFTER the Trial gate and the ledger lock are released: every other
+/// file, each under its own store's lock one at a time, the support record last.
+pub(crate) fn finish_everything(root: &Path, phase: LedgerPhase, gates: &dyn ClearGates) -> ClearOutcome {
+    let LedgerPhase { mut report, rest, mut ledger_failed } = phase;
+    delete_rows(root, &rest, gates, &[], &mut report, &mut ledger_failed);
+    settle(report)
+}
+
+/// "Clear everything" as one call: takes the Trial gate, then the ledger lock, runs phase 1 under both,
+/// releases both, then runs phase 2. `facts` is read AFTER the locks are held. The root is an argument:
+/// the live wrapper resolves it, this never does.
+pub(crate) fn clear_everything_at(
+    root: &Path,
+    expected_fingerprint: &str,
+    facts: &dyn Fn() -> ClearFacts,
+    gates: &dyn ClearGates,
+) -> ClearOutcome {
+    let phase = {
+        let experiment_gate = match crate::experiment::lock_store() {
+            Ok(g) => g,
+            Err(e) => return ClearOutcome::Refused(vec![store_lock_unavailable("the Trial store", &e)]),
+        };
+        let ledger = match crate::history::lock_ledger() {
+            Ok(g) => g,
+            Err(e) => return ClearOutcome::Refused(vec![store_lock_unavailable("the change history", &e)]),
+        };
+        let facts = facts();
+        let plan = plan_clear(root, Scope::Everything, &facts);
+        if plan.fingerprint != expected_fingerprint {
+            return ClearOutcome::PlanChanged;
+        }
+        match execute_everything_ledger_phase(root, &plan, &facts, &experiment_gate, &ledger) {
+            Ok(phase) => phase,
+            Err(outcome) => return outcome,
+        }
+        // `ledger`, then `experiment_gate`, drop here.
+    };
+    finish_everything(root, phase, gates)
+}
+
+fn store_lock_unavailable(what: &str, why: &str) -> Refusal {
+    Refusal {
+        code: "store_lock_unavailable",
+        detail: format!("Compy could not take the lock on {what} ({why}), so nothing was deleted. Restart Compy and try again."),
+        files: Vec::new(),
+    }
 }
 
 // ---- live wrappers (the only code below that touches the running app) ------------------------------
 //
-// NOT REGISTERED as Tauri commands, on purpose (review r1, B2): no `#[tauri::command]`, no entry in
-// `generate_handler!`, `build.rs` APP_COMMANDS or `capabilities/default.json`. They are ordinary
-// functions nothing calls. What must exist BEFORE they are registered is in
-// `C:\Users\Kuya\code\_train\d5-clear-before-wiring.md` (per-store locks, in-memory caches, the
-// browser keys, typed refusals, off the main thread, a handle-based delete, the ledger lock for
-// Everything, honest screen copy).
+// STILL NOT REGISTERED as Tauri commands, on purpose: no `#[tauri::command]`, no entry in
+// `generate_handler!`, `build.rs` APP_COMMANDS or `capabilities/default.json`. What must still exist
+// before they are registered is in `C:\Users\Kuya\code\_train\d6-before-wiring-remaining.md`.
+//
+// They are plain blocking functions of `String`/`bool` arguments that return owned, `Send` values and
+// capture no Tauri handle, so the future command can run them with `spawn_blocking` and never wait on a
+// store lock on the UI thread. Each has an `_at` twin that takes the root, the facts and the gates as
+// arguments; the tests drive the twins with a temp folder, so no test resolves the real data root.
 
-/// Reads the facts only the running app knows.
-fn live_facts() -> ClearFacts {
+use crate::data_root;
+
+/// The real gates: each store's own lock, then the store's memory reset, then (while still holding the
+/// lock) the clear epoch is bumped so a save that began before this delete is dropped when it gets the
+/// lock. One lock per call, nothing else held.
+pub(crate) struct LiveGates;
+
+impl ClearGates for LiveGates {
+    fn with_gate(&self, gate: Gate, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+        let mut run = || {
+            let result = delete();
+            if matches!(result, Ok(Removed::Deleted)) {
+                crate::atomic_write::bump_clear_epoch();
+            }
+            result
+        };
+        let result = match gate {
+            Gate::Sessions => crate::sessions::with_store_locked(run),
+            Gate::Benchmark => crate::benchmark::with_store_cleared(run)?,
+            Gate::Scoreboard => crate::benchmark_scoreboard::with_store_locked(run),
+            Gate::NoiseFloor => {
+                let _lock = crate::noise_floor::lock_gate();
+                run()
+            }
+            Gate::Comparison => crate::comparison::with_store_locked(run),
+            Gate::Drift => crate::drift::with_store_locked(run),
+            Gate::IncidentObserver => crate::incident_observer::with_store_locked(run),
+            Gate::Intelligence => {
+                let _lock = crate::intelligence::lock_store().map_err(|()| "the identity log lock is poisoned".to_string())?;
+                run()
+            }
+            Gate::HardwareFingerprint => crate::hwchange::with_store_locked(run),
+            Gate::Readiness => crate::readiness::with_store_locked(run),
+            Gate::SupportEvidence => {
+                let _lock = crate::support_evidence::lock_store();
+                run()
+            }
+            Gate::Experiment => {
+                let _lock = crate::experiment::lock_store()?;
+                run()
+            }
+            Gate::Ledger | Gate::Unlocked => return Err("this file has no store gate to take".to_string()),
+        };
+        // After the scoreboard's lock is released: the last finished benchmark trial's verdict is measured
+        // against data that is gone. (A running trial is refused up front, so this is only the quiet case.)
+        if gate == Gate::Scoreboard && result.is_ok() {
+            let _ = crate::benchmark_trial::forget_finished_result();
+        }
+        result
+    }
+}
+
+/// The facts only the running app knows.
+fn live_facts(remove_licence: bool) -> ClearFacts {
     ClearFacts {
         capture_active: crate::monitoring::fps_active().load(std::sync::atomic::Ordering::Acquire),
-        remove_licence: false,
+        recorder_busy: crate::sessions::recorder_busy(),
+        benchmark_trial_running: crate::benchmark_trial::trial_state().running,
+        remove_licence,
         now: SystemTime::now(),
     }
 }
 
-/// What "Clear play history" would delete, keep and leave alone, right now. A pure read: the Trial store
-/// is read without being moved.
-pub(crate) fn plan_clear_play_history() -> Result<ClearPlan, String> {
-    let root = crate::data_root::mutation_root()?;
-    Ok(plan_clear(root.path(), Scope::PlayHistory, &live_facts()))
+/// The root a clear may touch, or the typed reason there is none (a sandbox, redirected, conflicted or
+/// unavailable root). Never guesses a folder.
+fn live_root() -> Result<PathBuf, Refusal> {
+    data_root::mutation_root().map(|r| r.path().to_path_buf()).map_err(|why| Refusal {
+        code: "data_root_unavailable",
+        detail: why,
+        files: Vec::new(),
+    })
+}
+
+/// What "Clear play history" would delete, keep and leave alone, right now. A pure read.
+pub(crate) fn plan_clear_play_history() -> ClearPlan {
+    match live_root() {
+        Ok(root) => plan_clear(&root, Scope::PlayHistory, &live_facts(false)),
+        Err(r) => ClearPlan::refused(Scope::PlayHistory, r.code, &r.detail),
+    }
+}
+
+/// What "Clear everything" would delete, keep and leave alone, right now. A pure read.
+pub(crate) fn plan_clear_everything(remove_licence: bool) -> ClearPlan {
+    match live_root() {
+        Ok(root) => plan_clear(&root, Scope::Everything, &live_facts(remove_licence)),
+        Err(r) => ClearPlan::refused(Scope::Everything, r.code, &r.detail),
+    }
+}
+
+/// `clear_play_history` on an explicit root. Plans again, refuses on a stale fingerprint
+/// (`PlanChanged`), then deletes through `execute_clear`. Typed: refusals keep their codes.
+pub(crate) fn clear_play_history_at(root: &Path, expected_fingerprint: &str, facts: &ClearFacts, gates: &dyn ClearGates) -> ClearOutcome {
+    let plan = plan_clear(root, Scope::PlayHistory, facts);
+    if !plan.refusals.is_empty() {
+        return ClearOutcome::Refused(plan.refusals);
+    }
+    if plan.fingerprint != expected_fingerprint {
+        return ClearOutcome::PlanChanged;
+    }
+    execute_clear(root, &plan, facts, gates)
 }
 
 /// Deletes the play history the plan with `expected_fingerprint` listed. Never touches `history.json*`.
-/// The outcome is typed: refusals keep their codes, and a list that differs from the one shown is
-/// `PlanChanged` ("things changed since you looked").
-pub(crate) fn clear_play_history(expected_fingerprint: &str) -> Result<ClearOutcome, String> {
-    let root = crate::data_root::mutation_root()?;
-    // The experiment store gate is the outermost lock and the only one held: no new lock order.
-    let _gate = crate::experiment::lock_store()?;
-    let facts = live_facts();
-    let plan = plan_clear(root.path(), Scope::PlayHistory, &facts);
-    if plan.fingerprint != expected_fingerprint {
-        return Ok(ClearOutcome::PlanChanged);
+/// Blocking: wait on store locks, so call it from `spawn_blocking`, never the UI thread.
+pub(crate) fn clear_play_history(expected_fingerprint: &str) -> ClearOutcome {
+    match live_root() {
+        Ok(root) => clear_play_history_at(&root, expected_fingerprint, &live_facts(false), &LiveGates),
+        Err(r) => ClearOutcome::Refused(vec![r]),
     }
-    Ok(execute_clear(root.path(), &plan, &facts))
 }
+
+/// Deletes everything the plan with `expected_fingerprint` listed (the licence only when asked). Takes
+/// the Trial gate then the ledger lock for the change-history family; see `clear_everything_at`.
+/// Blocking, like `clear_play_history`.
+pub(crate) fn clear_everything(expected_fingerprint: &str, remove_licence: bool) -> ClearOutcome {
+    match live_root() {
+        Ok(root) => clear_everything_at(&root, expected_fingerprint, &|| live_facts(remove_licence), &LiveGates),
+        Err(r) => ClearOutcome::Refused(vec![r]),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -996,12 +1500,34 @@ mod tests {
     }
 
     fn facts() -> ClearFacts {
-        ClearFacts { capture_active: false, remove_licence: false, now: SystemTime::now() }
+        ClearFacts { capture_active: false, recorder_busy: false, benchmark_trial_running: false, remove_licence: false, now: SystemTime::now() }
     }
 
     /// Two hours on, so every working file counts as old enough.
     fn later() -> ClearFacts {
         ClearFacts { now: SystemTime::now() + Duration::from_secs(7200), ..facts() }
+    }
+
+    /// No locks: most tests here are about WHAT is deleted and in what order. The gates, the locks and
+    /// the ledger lock have tests of their own below.
+    struct NoGates;
+
+    impl ClearGates for NoGates {
+        fn with_gate(&self, _gate: Gate, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+            delete()
+        }
+    }
+
+    /// Runs a plan of either scope the way production does (Everything takes the Trial gate and the
+    /// ledger lock itself), without any store gates.
+    fn exec(root: &Path, plan: &ClearPlan, facts: &ClearFacts) -> ClearOutcome {
+        match plan.scope {
+            Scope::PlayHistory => execute_clear(root, plan, facts, &NoGates),
+            Scope::Everything => {
+                let facts = facts.clone();
+                clear_everything_at(root, &plan.fingerprint, &move || facts.clone(), &NoGates)
+            }
+        }
     }
 
     fn rels(plan: &ClearPlan) -> Vec<&str> {
@@ -1093,7 +1619,7 @@ mod tests {
         seed(&t);
         t.put("notes.txt", "mine");
         let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
-        let report = done(execute_clear(&t.root, &plan, &later()));
+        let report = done(exec(&t.root, &plan, &later()));
         assert!(report.complete);
         let mut deleted = report.deleted.clone();
         deleted.sort();
@@ -1113,10 +1639,10 @@ mod tests {
         let mut tampered = plan_clear(&t2.root, Scope::PlayHistory, &later());
         tampered.delete.push(PlannedDelete { rel: "notes.txt".into(), row_id: "sessions", category: "play_history", size: 4, modified_ms: 0 });
         let before = t2.listing();
-        assert!(matches!(execute_clear(&t2.root, &tampered, &later()), ClearOutcome::PlanChanged));
+        assert!(matches!(exec(&t2.root, &tampered, &later()), ClearOutcome::PlanChanged));
         let mut other = plan_clear(&t2.root, Scope::PlayHistory, &later());
         other.fingerprint = "not-the-fingerprint".into();
-        assert!(matches!(execute_clear(&t2.root, &other, &later()), ClearOutcome::PlanChanged));
+        assert!(matches!(exec(&t2.root, &other, &later()), ClearOutcome::PlanChanged));
         assert_eq!(before, t2.listing());
     }
 
@@ -1145,7 +1671,7 @@ mod tests {
         assert!(plan.refusals.iter().any(|r| r.code == "changes_applied"));
         assert_eq!(plan.applied_changes, vec!["Core parking".to_string()]);
         assert!(plan.offer_undo_all);
-        match execute_clear(&t.root, &plan, &later()) {
+        match exec(&t.root, &plan, &later()) {
             ClearOutcome::Refused(r) => assert!(r.iter().any(|x| x.code == "changes_applied")),
             other => panic!("expected Refused, got {other:?}"),
         }
@@ -1189,7 +1715,7 @@ mod tests {
             let plan = plan_clear(&t.root, scope, &facts());
             assert!(plan.refusals.iter().any(|r| r.code == code), "{tag}: {:?}", plan.refusals);
             assert!(plan.delete.is_empty(), "{tag}");
-            assert!(matches!(execute_clear(&t.root, &plan, &facts()), ClearOutcome::Refused(_)), "{tag}");
+            assert!(matches!(exec(&t.root, &plan, &facts()), ClearOutcome::Refused(_)), "{tag}");
             assert_eq!(before, t.listing(), "{tag}");
         }
         for scope in [Scope::PlayHistory, Scope::Everything] {
@@ -1213,7 +1739,7 @@ mod tests {
         assert!(plan.can_proceed());
         assert!(plan.kept.iter().any(|k| k.rel == "experiments.json" && k.code == "trials_tied_to_changes"));
         assert!(!rels(&plan).contains(&"experiments.json"));
-        let report = done(execute_clear(&t.root, &plan, &later()));
+        let report = done(exec(&t.root, &plan, &later()));
         assert!(report.complete && !t.has("sessions.json") && t.has("experiments.json"));
         let after: Vec<String> = family.iter().map(|f| t.read(f)).collect();
         assert_eq!(before, after, "Clear play history must not change a ledger or Gaming Mode file");
@@ -1232,7 +1758,7 @@ mod tests {
         assert!(!crate::legacy_copy_in_would_run(&t.base, &t.root));
         assert!(plan_clear(&t.root, Scope::Everything, &later()).legacy_folder_present);
         let plan = plan_clear(&t.root, Scope::Everything, &later());
-        let report = done(execute_clear(&t.root, &plan, &later()));
+        let report = done(exec(&t.root, &plan, &later()));
         assert!(report.complete, "{report:?}");
         assert!(t.root.is_dir(), "the data root folder must survive");
         assert!(!crate::legacy_copy_in_would_run(&t.base, &t.root), "a clear must not re-arm the legacy copy-in");
@@ -1244,7 +1770,7 @@ mod tests {
         // An empty or missing root is never created by a clear.
         let gone = t.base.join("Compy-never-made");
         let p = plan_clear(&gone, Scope::Everything, &facts());
-        assert!(p.delete.is_empty() && done(execute_clear(&gone, &p, &facts())).complete);
+        assert!(p.delete.is_empty() && done(exec(&gone, &p, &facts())).complete);
         assert!(!gone.exists());
     }
 
@@ -1267,7 +1793,7 @@ mod tests {
             t.put(f, "mine");
         }
         let plan = plan_clear(&t.root, Scope::Everything, &later());
-        let report = done(execute_clear(&t.root, &plan, &later()));
+        let report = done(exec(&t.root, &plan, &later()));
         assert!(report.complete);
         for u in ["notes.txt", "work-control/", "exports/my-own-notes.docx", "care/other.json", "history.json.old", "sessions.json.bak", "sessions-2.json", "history.json.bak.old", "Thumbs.db"] {
             assert!(report.unknown.contains(&u.to_string()), "{u} must be reported: {:?}", report.unknown);
@@ -1290,7 +1816,7 @@ mod tests {
         let hold = |rel: &str| fs::OpenOptions::new().read(true).share_mode(0).open(t.root.join(rel)).unwrap();
         let locks = [hold("sessions.json"), hold("drift.json")];
         let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
-        let report = done(execute_clear(&t.root, &plan, &later()));
+        let report = done(exec(&t.root, &plan, &later()));
         assert!(!report.complete, "a failure must not be reported as complete");
         for f in ["sessions.json", "drift.json"] {
             assert!(report.failed.iter().any(|x| x.rel == f), "{f} must be reported: {:?}", report.failed);
@@ -1303,7 +1829,7 @@ mod tests {
         drop(locks);
         let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
         assert_eq!(rels(&plan).iter().filter(|r| **r == "sessions.json" || **r == "drift.json").count(), 2);
-        let report = done(execute_clear(&t.root, &plan, &later()));
+        let report = done(exec(&t.root, &plan, &later()));
         assert!(report.complete && report.summary().starts_with("Cleared"));
         for f in PLAY_HISTORY_FILES {
             assert!(!t.has(f), "{f}");
@@ -1317,14 +1843,14 @@ mod tests {
         seed(&t);
         let lock = fs::OpenOptions::new().read(true).share_mode(0).open(t.root.join("history.json.bak")).unwrap();
         let plan = plan_clear(&t.root, Scope::Everything, &later());
-        let report = done(execute_clear(&t.root, &plan, &later()));
+        let report = done(exec(&t.root, &plan, &later()));
         assert!(!report.complete);
         assert!(report.failed.iter().any(|f| f.rel == "history.json.bak"));
         assert!(report.not_attempted.contains(&"history.json".to_string()), "history.json must not be tried after the backup failed");
         assert!(t.has("history.json") && t.has("history.json.bak"), "main and backup stay together");
         drop(lock);
         let plan = plan_clear(&t.root, Scope::Everything, &later());
-        let report = done(execute_clear(&t.root, &plan, &later()));
+        let report = done(exec(&t.root, &plan, &later()));
         assert!(report.complete, "{report:?}");
         assert!(!t.has("history.json") && !t.has("history.json.bak"));
     }
@@ -1355,7 +1881,7 @@ mod tests {
             assert!(plan.kept.iter().any(|k| k.rel == d && k.code == "link_left_alone"), "{d}: {:?}", plan.kept);
         }
         assert!(plan.delete.iter().all(|d| !d.rel.contains('/')), "nothing behind a link is listed");
-        done(execute_clear(&t.root, &plan, &later()));
+        done(exec(&t.root, &plan, &later()));
         assert_eq!(fs::read_dir(&other).unwrap().count(), 5, "files behind the junctions must survive");
         // Swapped in after the plan was made: the single-file delete re-checks the folder itself.
         assert!(delete_one(&t.root, "exports/compy-report-1.md").is_err());
@@ -1377,7 +1903,7 @@ mod tests {
         junction(&link, &real);
         let plan = plan_clear(&link, Scope::PlayHistory, &later());
         assert!(plan.refusals.iter().any(|r| r.code == "root_not_a_plain_folder") && plan.delete.is_empty());
-        assert!(matches!(execute_clear(&link, &plan, &later()), ClearOutcome::Refused(_)));
+        assert!(matches!(exec(&link, &plan, &later()), ClearOutcome::Refused(_)));
         assert!(real.join("sessions.json").exists());
         fs::remove_dir(&link).unwrap();
     }
@@ -1402,7 +1928,7 @@ mod tests {
             assert_eq!(before, t.listing(), "planning must not rename the damaged store");
             assert_eq!(t.read("experiments.json"), "{ damaged");
             assert!(!t.has("experiments.json.corrupt"));
-            assert!(matches!(execute_clear(&t.root, &plan, &later()), ClearOutcome::Refused(_)));
+            assert!(matches!(exec(&t.root, &plan, &later()), ClearOutcome::Refused(_)));
             assert_eq!(before, t.listing());
         }
     }
@@ -1420,7 +1946,7 @@ mod tests {
             assert!(play.kept.iter().any(|k| k.rel == f && k.code == "trial_record_set_aside"), "{f}: {:?}", play.kept);
             assert!(!rels(&play).contains(&f));
         }
-        let report = done(execute_clear(&t.root, &play, &later()));
+        let report = done(exec(&t.root, &play, &later()));
         assert!(report.complete);
         assert_eq!(t.read("experiments.json.corrupt"), "damaged trial records");
         assert_eq!(t.read("experiments.json.corrupt.1700000000-1"), "older still");
@@ -1428,7 +1954,7 @@ mod tests {
         let every = plan_clear(&t.root, Scope::Everything, &later());
         assert!(every.refusals.iter().any(|r| r.code == "trial_record_set_aside"), "{:?}", every.refusals);
         assert!(every.delete.is_empty());
-        assert!(matches!(execute_clear(&t.root, &every, &later()), ClearOutcome::Refused(_)));
+        assert!(matches!(exec(&t.root, &every, &later()), ClearOutcome::Refused(_)));
         assert_eq!(before, t.listing());
     }
 
@@ -1442,7 +1968,7 @@ mod tests {
                 let before = t.listing();
                 let plan = plan_clear(&t.root, scope, &later());
                 assert!(plan.refusals.iter().any(|r| r.code == "trial_running"), "{status} {scope:?}: {:?}", plan.refusals);
-                assert!(matches!(execute_clear(&t.root, &plan, &later()), ClearOutcome::Refused(_)));
+                assert!(matches!(exec(&t.root, &plan, &later()), ClearOutcome::Refused(_)));
                 assert_eq!(before, t.listing());
             }
         }
@@ -1508,7 +2034,7 @@ mod tests {
         let before = t.listing();
         // Same name, new bytes: the count the user was shown is stale.
         t.put("sessions.json", "a much longer body than before");
-        assert!(matches!(execute_clear(&t.root, &plan, &later()), ClearOutcome::PlanChanged));
+        assert!(matches!(exec(&t.root, &plan, &later()), ClearOutcome::PlanChanged));
         assert!(t.has("sessions.json") && t.has("drift.json"), "nothing is deleted on a mismatch");
         let _ = before;
         // Same name, same size, only the modified time moved.
@@ -1518,7 +2044,7 @@ mod tests {
         let f = fs::OpenOptions::new().write(true).open(t.root.join("drift.json")).unwrap();
         f.set_modified(SystemTime::now() + Duration::from_secs(60)).unwrap();
         drop(f);
-        assert!(matches!(execute_clear(&t.root, &plan, &later()), ClearOutcome::PlanChanged));
+        assert!(matches!(exec(&t.root, &plan, &later()), ClearOutcome::PlanChanged));
         assert!(t.has("drift.json") && t.has("sessions.json"));
     }
 
@@ -1563,7 +2089,7 @@ mod tests {
         }
         assert!(at("history.json") < at("experiments.json") && at("sessions.json") < at("support/evidence.jsonl"));
         assert_eq!(at("support/evidence.jsonl"), order.len() - 1, "the support record goes last");
-        let report = done(execute_clear(&t.root, &plan, &later()));
+        let report = done(exec(&t.root, &plan, &later()));
         assert!(report.complete);
         let pos = |f: &str| report.deleted.iter().position(|d| d == f).unwrap();
         assert!(pos("history.json.bak") < pos("history.json"));
@@ -1572,7 +2098,7 @@ mod tests {
         t.put("history.json.bak", "[]");
         let plan = plan_clear(&t.root, Scope::Everything, &later());
         assert!(rels(&plan).contains(&"history.json.bak"));
-        assert!(done(execute_clear(&t.root, &plan, &later())).complete);
+        assert!(done(exec(&t.root, &plan, &later())).complete);
         assert_eq!(crate::history::not_rolled_back_titles_at(&t.root.join("history.json")).unwrap(), Vec::<String>::new());
         assert!(!t.has("history.json.bak"));
     }
@@ -1639,6 +2165,341 @@ mod tests {
         }
         for name in ["sessions.json", "history.json.bak.corrupt.2", "exports/compy-support-full-20261120-1.json", "gaming-restore-ab12-cd.receipts", "runtime/elev-12-3.ticket", "memcompress-restore-1700000000000.result"] {
             assert!(classify(name, &ctx).is_some(), "{name}");
+        }
+    }
+
+    // ===== D6: locks, memory, typed outcomes, ledger lock, handle delete, recorder, blocking =========
+
+    use crate::race_seam::{held_now, StoreLock};
+    use std::cell::RefCell;
+
+    fn lock_for(gate: Gate) -> StoreLock {
+        match gate {
+            Gate::Sessions => StoreLock::Sessions,
+            Gate::Benchmark => StoreLock::Benchmark,
+            Gate::Scoreboard => StoreLock::BenchmarkScoreboard,
+            Gate::NoiseFloor => StoreLock::NoiseFloor,
+            Gate::Comparison => StoreLock::Comparison,
+            Gate::Drift => StoreLock::Drift,
+            Gate::IncidentObserver => StoreLock::IncidentObserver,
+            Gate::Intelligence => StoreLock::Intelligence,
+            Gate::HardwareFingerprint => StoreLock::HardwareFingerprint,
+            Gate::Readiness => StoreLock::Readiness,
+            Gate::SupportEvidence => StoreLock::SupportEvidence,
+            Gate::Experiment => StoreLock::Experiment,
+            Gate::Ledger | Gate::Unlocked => panic!("{gate:?} has no store lock of its own"),
+        }
+    }
+
+    /// The real gates, with a look at what this thread holds while each file goes.
+    struct Probe {
+        seen: RefCell<Vec<(Gate, Vec<StoreLock>)>>,
+    }
+
+    impl ClearGates for Probe {
+        fn with_gate(&self, gate: Gate, delete: &mut dyn FnMut() -> Result<Removed, String>) -> Result<Removed, String> {
+            LiveGates.with_gate(gate, &mut || {
+                self.seen.borrow_mut().push((gate, held_now()));
+                delete()
+            })
+        }
+    }
+
+    // (1) every writer of a deleted store is excluded: one lock per store, one at a time
+    #[test]
+    fn x1_every_store_is_deleted_under_its_own_lock_and_nothing_else_is_held() {
+        let t = Tmp::new("x1");
+        seed(&t);
+        t.put("support/evidence.jsonl.tmp", "x");
+        let probe = Probe { seen: RefCell::new(Vec::new()) };
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let report = done(execute_clear(&t.root, &plan, &later(), &probe));
+        assert!(report.complete, "{report:?}");
+        let seen = probe.seen.borrow();
+        let gates: Vec<Gate> = seen.iter().map(|(g, _)| *g).collect();
+        for g in [Gate::Sessions, Gate::Benchmark, Gate::Scoreboard, Gate::NoiseFloor, Gate::Comparison, Gate::Drift, Gate::IncidentObserver, Gate::Intelligence, Gate::HardwareFingerprint, Gate::Experiment] {
+            assert!(gates.contains(&g), "{g:?} was not taken: {gates:?}");
+        }
+        for (gate, held) in seen.iter() {
+            assert_eq!(held, &vec![lock_for(*gate)], "{gate:?}: exactly its own lock, nothing else held");
+        }
+        assert!(held_now().is_empty(), "nothing is held afterwards");
+        // The same through `Everything`: the ledger family and Trial store under [Experiment, History],
+        // every other store alone, the support record last.
+        let t = Tmp::new("x1b");
+        seed(&t);
+        let probe = Probe { seen: RefCell::new(Vec::new()) };
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        let outcome = clear_everything_at(&t.root, &plan.fingerprint, &later, &probe);
+        let report = done(outcome);
+        assert!(report.complete, "{report:?}");
+        let seen = probe.seen.borrow();
+        for (gate, held) in seen.iter() {
+            assert_eq!(held, &vec![lock_for(*gate)], "{gate:?}");
+            assert!(!matches!(gate, Gate::Experiment | Gate::Ledger), "phase 1 owns those, not a per-file gate");
+        }
+        assert_eq!(seen.last().map(|(g, _)| *g), Some(Gate::SupportEvidence), "the support record goes last");
+        assert!(held_now().is_empty());
+    }
+
+    // (1) every concrete inventory row is gated or has a written reason it needs no gate
+    #[test]
+    fn x2_every_concrete_inventory_row_is_gated_or_explained() {
+        for row in data_root_rows() {
+            if row.path.contains('<') || row.id.starts_with("ledger-") {
+                continue;
+            }
+            let stem = stem_of(row.path);
+            let gated = GATED_STEMS.iter().any(|(s, _)| *s == stem);
+            let unlocked = UNLOCKED_STEMS.iter().any(|(s, why)| *s == stem && why.len() > 20);
+            assert!(gated ^ unlocked, "{} (stem {stem}) must be in exactly one of GATED_STEMS / UNLOCKED_STEMS", row.id);
+        }
+        for (stem, _) in GATED_STEMS {
+            assert!(data_root_rows().any(|r| stem_of(r.path) == *stem), "GATED_STEMS names `{stem}`, which no inventory row has");
+        }
+    }
+
+    // (1) the secondary files of a store (set-asides, temp files) take the owner's gate
+    #[test]
+    fn x3_secondary_files_take_their_stores_gate() {
+        let t = Tmp::new("x3");
+        seed(&t);
+        t.put("care/incident-observer.12.3.json.tmp", "x");
+        t.put("sessions.json.tmp", "x");
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let gate_for = |rel: &str| gate_of(plan.delete.iter().find(|d| d.rel == rel).unwrap_or_else(|| panic!("{rel} not planned")));
+        assert_eq!(gate_for("sessions.json.corrupt.123"), Gate::Sessions);
+        assert_eq!(gate_for("sessions.json.tmp"), Gate::Sessions);
+        assert_eq!(gate_for(".drift.json.12-3.tmp"), Gate::Drift);
+        assert_eq!(gate_for("care/incident-observer.12.3.json.tmp"), Gate::IncidentObserver);
+        assert_eq!(gate_for("runtime/fps.json"), Gate::Unlocked);
+    }
+
+    // (2) a save racing a clear never resurrects old rows: the real gate bumps the epoch under the lock
+    #[test]
+    fn x4_a_real_delete_moves_the_clear_epoch_so_an_earlier_save_is_dropped() {
+        let t = Tmp::new("x4");
+        seed(&t);
+        let before = crate::atomic_write::clear_epoch();
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(done(execute_clear(&t.root, &plan, &later(), &LiveGates)).complete);
+        assert!(crate::atomic_write::clear_epoch() > before, "a delete under the store lock must move the epoch");
+        // Nothing to delete (second run): no delete happened, so nothing needs dropping.
+        let mid = crate::atomic_write::clear_epoch();
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(plan.nothing_to_do());
+        assert_eq!(crate::atomic_write::clear_epoch(), mid, "planning is a pure read");
+    }
+
+    // (3) typed outcome: codes, never one joined string; "couldn't read" is not "nothing to do"
+    #[test]
+    fn x5_refusals_come_back_as_a_typed_list_and_serialize_with_their_codes() {
+        let t = Tmp::new("x5");
+        seed(&t);
+        let busy = ClearFacts { capture_active: true, recorder_busy: true, benchmark_trial_running: true, ..later() };
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &busy);
+        let before = t.listing();
+        let outcome = clear_play_history_at(&t.root, &plan.fingerprint, &busy, &NoGates);
+        let ClearOutcome::Refused(reasons) = &outcome else { panic!("expected Refused, got {outcome:?}") };
+        let codes: Vec<&str> = reasons.iter().map(|r| r.code).collect();
+        assert_eq!(codes, ["capture_running", "recording_in_progress", "benchmark_trial_running"], "one typed entry each");
+        assert_eq!(before, t.listing(), "a refusal deletes nothing");
+        let json = serde_json::to_value(&outcome).unwrap();
+        assert_eq!(json["status"], "refused");
+        assert_eq!(json["detail"][1]["code"], "recording_in_progress");
+        let stale = clear_play_history_at(&t.root, "not-the-fingerprint", &later(), &NoGates);
+        assert_eq!(serde_json::to_value(&stale).unwrap()["status"], "plan_changed");
+    }
+
+    #[test]
+    fn x6_couldnt_read_and_nothing_to_do_are_different_answers() {
+        // Nothing there: a clean, empty answer.
+        let t = Tmp::new("x6");
+        let empty = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(empty.nothing_to_do() && empty.can_proceed());
+        let report = done(exec(&t.root, &empty, &later()));
+        assert!(report.nothing_to_do && report.complete && report.summary() == "Nothing to clear.");
+        // A Trial store that cannot be read: a refusal with its own code, not "nothing to do".
+        t.put("sessions.json", "x");
+        t.put("experiments.json", "{ damaged");
+        let unreadable = plan_clear(&t.root, Scope::PlayHistory, &later());
+        assert!(!unreadable.nothing_to_do());
+        assert!(unreadable.refusals.iter().any(|r| r.code == "trial_state_unknown"));
+        // A ledger that cannot be read refuses Everything with its own code.
+        let t = Tmp::new("x6b");
+        t.put("history.json", "{ not a ledger");
+        let every = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(!every.nothing_to_do() && every.refusals.iter().any(|r| r.code == "ledger_unreadable"));
+        // A wrapper that cannot even start answers with a typed plan, not a string.
+        let none = ClearPlan::refused(Scope::PlayHistory, "data_root_unavailable", "why");
+        assert!(!none.nothing_to_do() && none.refusals[0].code == "data_root_unavailable" && none.delete.is_empty());
+    }
+
+    // (4) the change-history family cannot be deleted without the ledger lock
+    #[test]
+    fn x7_play_history_entry_refuses_an_everything_plan_and_deletes_nothing() {
+        let t = Tmp::new("x7");
+        seed(&t);
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        let before = t.listing();
+        let ClearOutcome::Refused(r) = execute_clear(&t.root, &plan, &later(), &NoGates) else { panic!("must refuse") };
+        assert_eq!(r[0].code, "ledger_lock_required");
+        assert_eq!(before, t.listing());
+        // And the ledger phase, handed an Everything-less plan, refuses too.
+        let play = plan_clear(&t.root, Scope::PlayHistory, &later());
+        let _gate = crate::experiment::lock_store().unwrap();
+        let _ledger = crate::history::lock_ledger().unwrap();
+        assert!(matches!(ledger_phase(&t.root, &play, &later(), &delete_one), Err(ClearOutcome::Refused(_))));
+    }
+
+    #[test]
+    fn x8_the_ledger_family_goes_while_the_trial_gate_and_the_ledger_lock_are_both_held() {
+        let t = Tmp::new("x8");
+        seed(&t);
+        let plan = plan_clear(&t.root, Scope::Everything, &later());
+        let gate = crate::experiment::lock_store().unwrap();
+        let ledger = crate::history::lock_ledger().unwrap();
+        let seen = RefCell::new(Vec::new());
+        let phase = ledger_phase(&t.root, &plan, &later(), &|root, rel| {
+            seen.borrow_mut().push((rel.to_string(), held_now()));
+            delete_one(root, rel)
+        });
+        let phase = phase.ok().expect("phase 1 runs");
+        drop(ledger);
+        drop(gate);
+        let seen = seen.borrow();
+        assert!(seen.iter().any(|(rel, _)| rel == "history.json") && seen.iter().any(|(rel, _)| rel == "history.json.bak"));
+        for (rel, held) in seen.iter() {
+            assert_eq!(held, &vec![StoreLock::Experiment, StoreLock::History], "{rel}: Experiment then History, the declared order");
+        }
+        let pos = |f: &str| seen.iter().position(|(r, _)| r == f).unwrap();
+        assert!(pos("history.json.bak") < pos("history.json"), "backup before main");
+        assert!(held_now().is_empty());
+        // Phase 2 then takes nothing from phase 1's locks.
+        assert!(done(finish_everything(&t.root, phase, &NoGates)).complete);
+        assert!(!t.has("history.json") && !t.has("sessions.json") && !t.has("support/evidence.jsonl"));
+    }
+
+    #[test]
+    fn x9_a_change_applied_before_the_locks_were_taken_is_seen_under_them() {
+        let t = Tmp::new("x9");
+        seed(&t);
+        let shown = plan_clear(&t.root, Scope::Everything, &later());
+        assert!(shown.can_proceed());
+        // An apply lands after the screen read its plan: the re-plan under the locks sees it.
+        t.ledger(&[("Game mode", "applied")]);
+        let before = t.listing();
+        let outcome = clear_everything_at(&t.root, &shown.fingerprint, &later, &NoGates);
+        assert!(!matches!(outcome, ClearOutcome::Done(_)), "must not delete: {outcome:?}");
+        assert_eq!(before, t.listing());
+        assert!(t.has("history.json") && t.has("history.json.bak"));
+    }
+
+    #[test]
+    fn x10_the_signature_of_the_ledger_phase_takes_the_ledger_guard_and_nothing_else_locks_history() {
+        let core = include_str!("data_clear.rs").split("// ---- live wrappers").next().unwrap();
+        let sig = core.split("pub(crate) fn execute_everything_ledger_phase(").nth(1).and_then(|r| r.split(") ->").next()).unwrap();
+        assert!(sig.contains("&crate::history::LedgerGuard"), "the ledger lock must be a parameter: {sig}");
+        let code: String = core.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
+        assert!(!code.contains(concat!("lock_", "history(")), "the ledger lock comes only through history::lock_ledger");
+        assert_eq!(code.matches("history::lock_ledger()").count(), 1, "exactly one place takes it: clear_everything_at");
+        let exp = code.find("experiment::lock_store()").expect("the Trial gate");
+        let led = code.find("history::lock_ledger()").expect("the ledger lock");
+        assert!(exp < led, "Experiment, then History: the declared nesting");
+    }
+
+    // (5) handle-based delete
+    #[cfg(windows)]
+    #[test]
+    fn x11_a_folder_swapped_for_a_junction_between_the_check_and_the_delete_is_not_followed() {
+        let t = Tmp::new("x11");
+        let other = t.base.join("other");
+        fs::create_dir_all(&other).unwrap();
+        fs::write(other.join("incident-observer.json"), "must survive").unwrap();
+        t.put("care/incident-observer.json", "mine");
+        let swap = || {
+            fs::remove_dir_all(t.root.join("care")).unwrap();
+            junction(&t.root.join("care"), &other);
+        };
+        let r = delete_one_with(&t.root, "care/incident-observer.json", &swap);
+        assert!(r.is_err(), "a swapped folder must stop the delete: {r:?}");
+        assert!(r.unwrap_err().contains("swapped"), "and say why");
+        assert_eq!(fs::read_to_string(other.join("incident-observer.json")).unwrap(), "must survive");
+        fs::remove_dir(t.root.join("care")).unwrap(); // the junction only
+        assert!(other.join("incident-observer.json").exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn x12_a_file_deletes_by_handle_including_a_read_only_one() {
+        let t = Tmp::new("x12");
+        t.put("sessions.json", "x");
+        t.put("drift.json", "x");
+        let mut perms = fs::metadata(t.root.join("drift.json")).unwrap().permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(t.root.join("drift.json"), perms).unwrap();
+        assert!(matches!(delete_one(&t.root, "sessions.json"), Ok(Removed::Deleted)));
+        assert!(matches!(delete_one(&t.root, "drift.json"), Ok(Removed::Deleted)), "read-only is not a reason to keep it");
+        assert!(!t.has("sessions.json") && !t.has("drift.json"));
+        assert!(matches!(delete_one(&t.root, "sessions.json"), Ok(Removed::AlreadyGone)));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn x13_a_file_held_open_by_someone_else_is_reported_not_deleted_through_the_handle_path() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let t = Tmp::new("x13");
+        t.put("sessions.json", "x");
+        let _hold = fs::OpenOptions::new().read(true).share_mode(0).open(t.root.join("sessions.json")).unwrap();
+        assert!(delete_one(&t.root, "sessions.json").is_err());
+        assert!(t.has("sessions.json"));
+    }
+
+    // (6) the recorder's own state, not a sleep
+    #[test]
+    fn x14_an_unsaved_session_refuses_the_clear_and_the_recorder_state_is_read_from_the_recorder() {
+        let t = Tmp::new("x14");
+        seed(&t);
+        let unsaved = ClearFacts { recorder_busy: true, ..later() };
+        let plan = plan_clear(&t.root, Scope::PlayHistory, &unsaved);
+        assert!(plan.refusals.iter().any(|r| r.code == "recording_in_progress") && plan.delete.is_empty());
+        assert!(matches!(exec(&t.root, &plan, &unsaved), ClearOutcome::Refused(_)));
+        assert!(t.has("sessions.json"));
+        // Everything refuses for the same reason.
+        let every = plan_clear(&t.root, Scope::Everything, &unsaved);
+        assert!(every.refusals.iter().any(|r| r.code == "recording_in_progress"));
+        // The live fact comes from the recorder (a gauge the accumulator and `save_session` move), and a
+        // capture flag alone is not read as "done".
+        let live = include_str!("data_clear.rs").split("fn live_facts(").nth(1).unwrap().split("\n}\n").next().unwrap();
+        assert!(live.contains("sessions::recorder_busy()"), "{live}");
+        assert!(live.contains("fps_active()"), "the capture flag is still read too");
+    }
+
+    // (7) blocking, off the UI thread: plain Send functions that capture no Tauri handle
+    // Type-level only: the wrappers themselves are deliberately NOT referenced here. Calling or even naming
+    // them links the live app (monitoring, data root) into the test binary, which then needs the app's
+    // Windows manifest to start (STATUS_ENTRYPOINT_NOT_FOUND), and a test must never reach the real root.
+    fn assert_blockable<R: Send + 'static>() {}
+
+    #[test]
+    fn x15_the_wrappers_can_be_handed_to_spawn_blocking() {
+        // What a `spawn_blocking` closure returns must be owned and `Send`; its arguments are `String`/`bool`.
+        assert_blockable::<ClearOutcome>();
+        assert_blockable::<ClearPlan>();
+        let src = include_str!("data_clear.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+        for sig in [
+            "pub(crate) fn clear_play_history(expected_fingerprint: &str) -> ClearOutcome",
+            "pub(crate) fn clear_everything(expected_fingerprint: &str, remove_licence: bool) -> ClearOutcome",
+            "pub(crate) fn plan_clear_play_history() -> ClearPlan",
+            "pub(crate) fn plan_clear_everything(remove_licence: bool) -> ClearPlan",
+        ] {
+            assert!(src.contains(sig), "the wrapper signature changed: {sig}");
+        }
+        // Not Tauri-aware: no handle type anywhere outside the test module.
+        let all = include_str!("data_clear.rs").split("#[cfg(test)]\nmod tests").next().unwrap();
+        let code: String = all.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
+        for forbidden in [concat!("App", "Handle"), concat!("tauri", "::"), "tauri::command", "#[tauri"] {
+            assert!(!code.contains(forbidden), "found {forbidden}: the core and wrappers must not know Tauri");
         }
     }
 }
