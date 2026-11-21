@@ -2452,6 +2452,19 @@ pub(crate) fn read_ledger_stamps_at(path: &Path) -> Result<Vec<LedgerStamp>, Str
         .collect())
 }
 
+/// Titles of the ledger's rows that are NOT rolled back (still counted as applied), read from `path`
+/// without moving, writing or reporting anything (`read_history_unlocked`). "Clear my data" asks this
+/// before it may touch the ledger family: any row other than `rolled_back` counts, so a row Windows
+/// already shows as off but that was never undone through Compy still blocks a clear, and a ledger
+/// that can't be read is an `Err`, never "no changes".
+pub(crate) fn not_rolled_back_titles_at(path: &Path) -> Result<Vec<String>, String> {
+    Ok(read_history_unlocked(path)?
+        .into_iter()
+        .filter(|c| c.status != "rolled_back")
+        .map(|c| c.rec_title)
+        .collect())
+}
+
 /// PURE-ish read of the ledger at `path` that never moves, writes or reports anything. Absent is an
 /// empty ledger; a file that can't be read or doesn't parse is an error naming which.
 fn read_history_unlocked(path: &Path) -> Result<Vec<AppliedChange>, String> {

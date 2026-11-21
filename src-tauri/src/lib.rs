@@ -21,6 +21,7 @@ mod running_at_start; // Which KNOWN programs (reviewed allowlist, ids only, nev
 mod stutter; // Stutter Forensics — correlates a session's worst dips with concurrent signals.
 mod cpu_temp; // CPU temp via interop with a user-installed monitor (HWiNFO/LHM/OHM) — driver-free.
 mod data_root; // #130 — the canonical data-root resolver: detects a container/junction-redirected persistence root instead of trusting the APPDATA *string*, halts on a split rather than guessing, and hands out `MutationRoot` (the capability type every Windows-mutation and receipt-write path now requires) only for a verified canonical root.
+mod data_clear; // D4-2 - "Clear my data": the pure plan (what would be deleted, kept, left alone, refused) and the executor that deletes exactly what a plan listed, driven only by data_inventory.rs. Clear play history is wired to two commands; Clear everything has the same core and no command yet (D4-3).
 mod data_inventory; // D4-1 - the inventory of everything Compy stores (data only, no I/O); kept complete by scripts/data-root-guard.test.mjs. First readers: the Clear-my-data commands (D4-2/D4-3).
 mod diagnostics;
 mod experiment; // Intelligence Phase 3 — user-started single-variable experiment engine + optimization simulator. ARMED 2026-07-17 (experiment_gate()==true, owner sign-off; orchestrates the existing audited mutation boundary — no new apply/rollback primitive; user-started only, defense-in-depth gate checks retained).
@@ -806,12 +807,19 @@ pub(crate) fn compy_data_dir() -> PathBuf {
 //
 // NOTE: the legacy literal MUST stay "Sentinel" (the old brand) — it's the source we copy FROM. Do
 // not let a future brand-rename sweep touch it.
+/// The one condition that starts the legacy copy-in: the new data dir does not exist yet AND the
+/// legacy `Sentinel` folder beside it does. "Clear my data" must keep this false: it never removes the
+/// data root folder (`data_clear` tests this with a real `Sentinel` folder present).
+pub(crate) fn legacy_copy_in_would_run(app_data: &std::path::Path, new_dir: &std::path::Path) -> bool {
+    !new_dir.exists() && app_data.join("Sentinel").exists()
+}
+
 fn migrate_legacy_data_once(app_data: &std::path::Path, new_dir: &std::path::Path) {
     static DONE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
     DONE.get_or_init(|| {
         let legacy = app_data.join("Sentinel");
         // Migrate only when the new dir doesn't exist yet AND the legacy one does.
-        if new_dir.exists() || !legacy.exists() {
+        if !legacy_copy_in_would_run(app_data, new_dir) {
             return;
         }
         // Atomic: copy into a staging dir, then rename into place. A mid-copy failure leaves NO
@@ -1898,6 +1906,8 @@ pub fn run() {
             off_main::preview_support_evidence,
             off_main::export_support_evidence,
             support_evidence::clear_support_evidence,
+            data_clear::plan_clear_play_history,
+            data_clear::clear_play_history,
             get_latency_diagnostics,
             latency_measure_wake,
             latency_measure_mouse,
