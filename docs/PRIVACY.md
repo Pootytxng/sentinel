@@ -3,7 +3,7 @@
 **Status: DRAFT v0.7 (2026-11-21).** v0.7 is a correction pass: every sentence was checked against the
 code on `main`. It adds the stored files, the process-handling facts and the exact list of what can
 leave your PC that earlier versions did not give in full, and it removes sentences the code does not
-support. **Anonymous results sharing ("Receipts")**, signed advisory downloads and signed rule updates
+support. **Results sharing ("Receipts")**, signed advisory downloads and signed rule updates
 have code in the source but are **switched off in code**, so no build sends anything through them; they
 are described here so they can never arrive unannounced. It is **not legal advice** — the owner should
 still have it reviewed by a qualified professional before public distribution. Owner/contact identity:
@@ -27,16 +27,17 @@ Pootytxng — GitHub issues, or compysupport@gmail.com.
 
 ## The short version
 
-**Compy's analysis and saved history stay on your PC.** It does not collect, transmit, sell, or
-share any of your data — no accounts, no telemetry, no analytics, no advertising, and no upload of
-your hardware, sessions, or results. Its one automatic network use is a **signed update check to
-GitHub**, which carries none of your data and which you can switch off in Settings; an installer
-downloads only after you approve it. A second path — **anonymous results sharing** — is written into
+**Compy's analysis and saved history stay on your PC.** It does not send, sell, or
+share your data — no accounts, no telemetry, no analytics, no advertising, and no upload of
+your hardware, sessions, or results. Its one automatic network use is an **update check to
+GitHub**, which carries none of your data, is on by default and can be switched off in Settings; an
+installer downloads only after you approve it, and is installed only if its signature matches the key
+built into Compy. A second path — **results sharing** — is written into
 the software but switched off in code, sends nothing in any build you can install, and would stay off
 for you until you switched it on; it is described in full below so it can never arrive unannounced.
-**The only personal data we ever collect is on our website:** if you join
-the launch waitlist, we store your email (to send one launch message) and a hashed version of your
-IP (for spam prevention) — nothing else, and no third-party trackers. Details below.
+**The only personal data we collect is on our website and in emails you choose to send us:** if you join
+the launch waitlist, we store your email (to send one launch message), the time you joined and a hashed
+version of your IP (for spam prevention) — nothing else, and no third-party trackers. Details below.
 
 ## What Compy reads
 
@@ -52,6 +53,14 @@ machine**, including:
   if you run HWiNFO, LibreHardwareMonitor or OpenHardwareMonitor, it displays the value that tool
   publishes. Compy installs no driver for this; any driver in that picture belongs to the tool you chose
   to install.
+- **Windows' own records about this PC.** Each time Compy starts (and at most every five minutes after that), it
+  reads Windows' crash and reliability records (Windows Error Reporting files, the Reliability history, the event
+  log and the list of crash dump files) to notice crashes and freezes, including of other programs. To answer
+  "what changed on this PC", it reads the dates of driver and Windows updates from the event log, the list of
+  installed programs with their install dates, and the files Steam keeps about when a game last updated. It also
+  reads your startup entries and network adapters. These are read on your PC. Crash notes keep the program's name
+  (never its path), the kind of crash, its time and a one-line headline; the "what changed" readings are shown on
+  screen and are not saved by Compy.
 - **Which applications start, while — and only while — a capture session is running.** Once per
   second Compy compares the list of running process names against the previous second, so that a
   stutter can be explained by "something else just launched" instead of left a mystery. Only the
@@ -69,9 +78,17 @@ machine**, including:
   reviewed list that are running at that moment, and only on your screen: that listing is not stored, not
   exported and not sent.
 
-**How Compy looks at programs.** The list of running programs comes from one Windows process snapshot
-that opens no program. The only program Compy opens a handle to is the game or app whose frame rate it
-is measuring, with query-only access, to resolve its file name and to check whether it is still running.
+**How Compy looks at programs.** Compy's own code does not open other programs. The list of running programs, and
+the check whether your game is still running, come from one Windows process snapshot (the list Task Manager also
+shows: names, ids and start times), which is read without opening any program. Compy reads no program's memory and
+holds no handle to your game. Frame timing comes from Windows' event tracing (ETW): while the frame-rate graph runs,
+Compy's capture helper (a second copy of Compy that Windows starts with administrator rights after you approve the
+prompt) receives Windows' frame events from every program that draws through DirectX, which can include a browser
+or chat app as well as your game. It uses them to find the program drawing the most frames and keeps only that
+program's name and id. The only processes Compy holds handles to are ones it starts itself: that helper and the
+Windows tools it runs, such as PowerShell, powercfg, netsh and wevtutil. A test fails the build if Compy's own
+source code gains a call that opens another process; that test checks Compy's code, not the third-party libraries
+or Windows components Compy uses.
 
 This information is **displayed to you and used only on your device**. Compy does not include it
 in the update request, and does not upload it anywhere.
@@ -97,7 +114,7 @@ Everything below stays on your PC. The complete list of what the code writes is 
   including the application-start notes described above; older sessions shed those when the file is
   saved. This is a record of what you played and when, and Compy keeps it so it can compare a bad
   session against a good one. It stays on your device: there is no path in the software that sends
-  it, and deleting the file simply starts a new empty history. A `sessions.json` Compy cannot read is
+  it (apart from the switched-off results sharing below), and deleting the file simply starts a new empty history. A `sessions.json` Compy cannot read is
   kept as `sessions.json.corrupt` rather than deleted.
 - **Trials, benchmarks and comparisons:** `experiments.json` (each Trial: which game, the measured
   before and after figures, a link to the ledger entry), `benchmark.json`, `scoreboard.json`,
@@ -112,7 +129,7 @@ Everything below stays on your PC. The complete list of what the code writes is 
   and `care\incident-observer.json` (crashes and freezes Compy noticed in Windows' own records,
   including the name of the application involved).
 - **Choices you made:** `readiness_dismissals.json` (readiness items you dismissed) and
-  `receipts-consent.json` (your answer about sharing anonymous results; a missing file means off).
+  `receipts-consent.json` (your answer about sharing results; a missing file means off).
 - **Gaming Mode file:** `gaming-session.json` exists only while Gaming Mode is on, or if it was left
   unfinished; it lists the temporary changes made and how to restore each one.
 - **Saved reports:** every report you export is a file in `%APPDATA%\Compy\exports\`. Compy does not
@@ -122,12 +139,12 @@ Everything below stays on your PC. The complete list of what the code writes is 
   it say *"applied before your hardware changed"* instead of guessing. **It is deliberately not a
   machine ID.** It is the first 8 bytes of a SHA-256 of exactly four spec strings — GPU model, GPU
   driver version, whole gigabytes of RAM, and display resolution/refresh rate — and nothing else:
-  no serial number, no MAC address, no Windows installation ID, no disk ID, no username. Thousands
-  of identical rigs produce the identical value, which is the point — it groups by hardware class
-  and cannot single you out. It stays on your disk.
+  no serial number, no MAC address, no Windows installation ID, no disk ID, no username. It is the
+  same for every PC with the same four values; an unusual combination can be rare. It stays on your disk.
 - **Licence file (only if a licence key is entered):** a licence is saved as
-  `%APPDATA%\Compy\license.key`. Licensing is switched off in current builds, so none is written
-  today. The signed token inside it carries a **one-way hash of the email address you purchased
+  `%APPDATA%\Compy\license.key`. Licensing is switched off in current builds and the app hides key entry, so
+  none is written today; if one were entered, the file would hold exactly the text entered, saved before it is
+  checked. The signed token inside it carries a **one-way hash of the email address you purchased
   with** — not the address itself — along with the tier name and the issue and expiry dates. Compy
   reads it locally to decide whether Pro features are unlocked; nothing sends it back out.
 - **FPS monitoring working files:** temporary data under `%APPDATA%\Compy\runtime\`
@@ -140,17 +157,20 @@ Everything below stays on your PC. The complete list of what the code writes is 
 - **The app window's own storage.** The window is Microsoft Edge WebView2, which keeps this window's
   storage under `%LOCALAPPDATA%\gg.compy.app\`. Compy keeps small entries there: your appearance and
   feature choices, the language, which intro and tour screens you have seen, recommendations you
-  dismissed, and a few small records. **It also holds text you type:** an unsent feedback note (kept until
+  dismissed, which crash reports you marked helpful, which care steps were shown and where you stopped a guided
+  journey (these name the game or program involved), saved GPU settings snapshots and your monitor's refresh rate.
+  **It also holds text you type:** an unsent feedback note (kept until
   you empty the box; Compy has no way to send it on its own), parts you add to the rig model by hand and,
   for the current window session only, text you paste into the Learn autopsy. Compy does not send any
   of it. WebView2 also keeps its own browser cache there.
 - **Window size and position:** saved by the window-state component in
   `%APPDATA%\gg.compy.app\.window-state.json`.
 - **An older Compy folder:** a PC that ran Compy before its rename may still have `%APPDATA%\Sentinel`.
-  Compy copies it into the Compy folder once, only if the Compy folder does not exist, and never changes
-  or deletes it. Delete it yourself if you do not want the old data.
+  Whenever Compy starts and finds no Compy folder but finds this one, it copies it into a new Compy folder (and
+  never changes or deletes it); that copy brings back the old Trust Ledger as it was.  Delete it yourself if you do not want the old data.
 - **Developer builds only:** a debug build writes `launch-debug.log` (the command-line arguments of each
-  launch) into a `Compy` folder directly under `%LOCALAPPDATA%` (not the data folder above). Release builds do not.
+  launch, which can include file paths containing your Windows user name) into a `Compy` folder directly under
+  `%LOCALAPPDATA%` (the per-user install folder, not the data folder above). Release builds do not.
 - **Support record:** a short rolling log of what Compy itself did — app starts, reads and writes of
   the Trust Ledger, the FPS capture helper starting and stopping, and whether each apply or rollback
   succeeded, failed, or was declined at the Windows admin prompt. Stored at
@@ -158,7 +178,8 @@ Everything below stays on your PC. The complete list of what the code writes is 
   off as new ones arrive. It is **redacted as it is written and again when you export it** —
   usernames, your computer name, file paths, IP addresses, license keys and hardware serials are
   replaced with `<user>`, `<host>`, `<path>`, `<ip>`, `<key>`, `<serial>`. It records outcomes, not
-  content: no file contents, no keystrokes, no browsing, no game data.
+  content: no file contents, no keystrokes, no browsing. A detail line is free text written by Compy's code and can
+  mention a program's name; paths and names are masked as above.
 
 **Nothing sends the support record.** Compy has no way to upload it. You can read it in the app,
 export it to a file under `%APPDATA%\Compy\exports\`, and attach that file to a support conversation
@@ -177,8 +198,8 @@ ran. Before the report is written, Compy changes these things in the copy it exp
   program 1", "other program 2" and so on, the same program keeping its number within one report, with
   counts and timing kept.
 - Your Windows user name and your computer name are replaced with `<user>` and `<host>` (as whole
-  words; a name shorter than three letters or an ordinary word such as "Admin" or "User" is left alone
-  except in file paths, so such a name can still appear in text that is not a path). In any path under
+  words; a name shorter than three letters, or one of 28 common words Compy will not replace in text (for example
+  Admin, User, Owner, Max, Gamer), is left alone except in file paths, so such a name can still appear in text that is not a path). In any path under
   `C:\Users\<name>` the name is always replaced. QoS policy
   names are replaced by a numbered label. A power plan with a name you or your PC maker chose is shown
   as "a custom power plan" (Windows' own plans, and copies of them such as the Ultimate Performance
@@ -196,7 +217,9 @@ before you post it in public: it is made to help someone diagnose your PC, not t
 
 The **Email it to me** button in the same place opens a draft in your own mail program, addressed to
 compysupport@gmail.com, holding your note and a short snapshot summary. Compy does not send it: nothing
-leaves until you press send in your mail program, and you can edit or delete the draft first.
+leaves until you press send in your mail program, and you can edit or delete the draft first. If you send it,
+the message, your email address and the summary reach the owner's Gmail inbox (hosted by Google) and stay there
+until deleted.
 
 **Deleting files by hand.** The FPS working files, the temporary files, the saved reports, the support
 record and the damaged `.corrupt` copies of the stores other than the ledger are not needed to keep
@@ -222,7 +245,7 @@ not say what the uninstaller does with the data folder, because that has not bee
 ## What Compy does NOT do
 
 - No telemetry, usage analytics, or crash reporting. (Three clarifications, so this can't be
-  misread: Compy does ask GitHub whether a newer signed version exists — see **Network use**
+  misread: Compy does ask GitHub whether a newer version exists — see **Network use**
   below — but that request carries nothing about you or your PC, and you can switch it off. And
   Compy does keep the **local support record** described above — that is a file on your disk that
   only you can read or send, not reporting, because nothing transmits it. Third: the **anonymous
@@ -232,43 +255,51 @@ not say what the uninstaller does with the data folder, because that has not bee
 - No account, login, or cloud sync.
 - No advertising or tracking identifiers.
 - No selling or sharing of data with third parties.
-- No background uploads: the only request Compy makes on its own is the update check below.
+- No background uploads: the only request Compy makes on its own is the update check below. Compy does record
+  locally without you opening a screen: at start-up and periodically it checks Windows' crash records and its own
+  drift checks, and while monitoring or a capture runs it records the session. All of it stays in the files listed
+  above.
 
 ## Network use
 
 **What can leave this PC from Compy's own code, in full:**
 
-1. **The update check** (automatic; you can switch it off): a request to GitHub for a release file.
+1. **The update check** (automatic and on by default; you can switch it off in Settings, but the first check runs
+   as soon as Compy's main window opens on first launch, before you can reach the setting): a request to GitHub
+   for a release file.
 2. **The update download**, only after you press **Update now**.
 3. **Things you open yourself:** a link you click opens in your default browser, **Email it to me** opens
    a draft in your mail program, and a guided step can open a Windows Settings page. In each case your
    browser, mail program or Windows does the rest.
 
-Nothing else. Everything else in the software that could reach the network is switched off in code and is
-described below. The app window is Microsoft Edge WebView2, a Microsoft component; this policy covers
-what Compy's code does and does not describe what Microsoft itself collects.
+Nothing else from Compy's own code. Everything else in the software that could reach the network is switched off in
+code and is described below. The app window is Microsoft Edge WebView2, a Microsoft component, and the installer
+may download it from Microsoft if Windows lacks it (the installer settings name no other mode, so Tauri's default
+applies); this policy covers what Compy's code does and does not describe what Microsoft itself collects.
 
-Compy makes **one kind of automatic network request: a signed update check.** (A second path exists
-in the source but is switched off in every build — see **Anonymous results sharing** at the end of
+Compy makes **one kind of automatic network request: an update check.** (A second path exists
+in the source but is switched off in every build — see **Results sharing** at the end of
 this section.)
 
 - **What it asks.** Whether a newer signed version of Compy exists, by fetching a fixed release
   manifest from GitHub:
   `https://github.com/Pootytxng/compy-releases/releases/latest/download/latest.json`. That URL is a
-  redirect, so the check touches **two GitHub-operated hosts**, not one: `github.com`, which answers
-  with the redirect, and `objects.githubusercontent.com`, GitHub's release-asset host, which serves
-  the manifest file itself. Both are GitHub; no other host is contacted.
+  redirect, so the check reaches `github.com` and then the GitHub file-download host it redirects to; Compy's
+  code names only `github.com`. If you choose **Update now**, the installer is downloaded from the address
+  written in that release file.
 - **When.** Once when the app starts, and about every four hours while it stays open.
 - **What it sends about you.** Nothing. The address is fixed and holds no version, system or
-  identifier, and the request carries no hardware inventory, no sessions, no Trust Ledger, no
+  identifier, the request names only the update component and its version, and the request carries no hardware inventory, no sessions, no Trust Ledger, no
   settings, and no account — there is no account. As with any ordinary web request, GitHub does see
   connection metadata such as your IP address, under GitHub's own privacy terms.
 - **Nothing is downloaded automatically.** If a newer version exists, Compy shows you the version
   and its notes. The installer downloads only after you choose **Update now**, and it must pass
-  cryptographic signature verification against the public key built into Compy before it installs.
+  cryptographic signature verification against the public key built into Compy before it installs. The release
+  file that describes the update is fetched over HTTPS; it is the installer, not that file, that is signature-checked.
   The update component saves the installer to a temporary place it chooses; Compy's code does not
   name that place.
-- **You can turn it off.** *Settings → About → Automatic update checks.* With it off, Compy makes
+- **You can turn it off.** It is on by default, and the first check runs as soon as Compy's main window opens on first
+  launch, before you can reach the setting. *Settings → About → Automatic update checks.* With it off, Compy makes
   no network request at all on its own; **Check now** in the same row runs a single check when you
   ask for one. Turning checks off never weakens signature verification.
 
@@ -277,7 +308,7 @@ example, a GPU driver download page or the HWiNFO and LibreHardwareMonitor downl
 when you click the link. Once a link opens, your browser, not Compy, handles it under your browser's
 own privacy terms.
 
-### Anonymous results sharing ("Receipts") — built, switched off, and opt-in if it is ever switched on
+### Results sharing ("Receipts") — built, switched off, and opt-in if it is ever switched on
 
 Compy's source code contains a second network path, which **sends nothing in any build you can
 install today.** It is disclosed here in full, ahead of ever running, so that it can never appear on
@@ -303,16 +334,17 @@ your PC as a surprise. Two independent switches stand in front of it:
 - **A schema version number.**
 
 **What a receipt never contains:** your name, email, IP address, Windows username, machine name,
-serial numbers, hardware IDs, file paths, installed program lists, browsing data, or any identifier
-that could tie two receipts to the same PC. There is no account, so there is nothing to attach it to.
+serial numbers, hardware IDs, file paths, installed program lists, browsing data, or any account or
+machine identifier. There is no account, so there is nothing to attach it to. (A receipt is not proof of
+anonymity: a rare GPU model and a game name can point to few PCs.)
 
 - **Where it would go.** One address, `compy-bd6.pages.dev/api/usage` (the future `compy.gg`), which
   we operate. No third party, no analytics provider, no ad network.
 - **When.** At most once when a monitored gaming session ends.
 - **What we would keep.** The receipt itself, with no network identifier stored beside it. To stop
   flooding, the server counts submissions using a **hashed** form of your IP address held in a
-  separate table that **deletes itself after one hour** — it is never written next to a receipt, so
-  receipts cannot be linked back to a machine or to each other, even by us.
+  separate table; the server deletes entries older than an hour each time it receives a receipt, so an entry can
+  outlive the hour if no later receipt arrives. It is never written next to a receipt.
 - **Why it exists.** To learn whether a recommendation actually helps on hardware like yours, so the
   advice you get is measured rather than guessed.
 
@@ -330,9 +362,9 @@ separate, and one part of it collects data — **only if you choose to give it:*
   for one purpose: to send you a single message when the public beta opens. We do **not** sell it,
   share it with third parties, add you to other lists, or use it to track you.
 - **Hashed IP (spam prevention).** When you submit the form, your IP address is converted to a
-  one-way cryptographic hash (SHA-256 with a secret value) **before** it is stored — the raw IP
+  one-way cryptographic hash (SHA-256 with a server-side value added) **before** it is stored — the raw IP
   address is never written to our records. The hash lets us limit spam without keeping your actual IP.
-  It is stored in the same row as your email, and the site's code has no step that deletes it.
+  It is stored in the same row as your email and the time you joined, and the site's code has no step that deletes it.
 - **Where it's stored.** In a database (Cloudflare D1) on the site's hosting backend. The website
   itself loads **no third-party trackers, analytics, advertising scripts, or social pixels** — the
   page is built to make zero third-party requests.
@@ -342,7 +374,7 @@ separate, and one part of it collects data — **only if you choose to give it:*
 
 This website data collection is separate from the app. The installed Compy app does not send the
 website — or anyone else — your hardware, session history, Trust Ledger, or settings. Its only
-automatic connection is the signed update check described above.
+automatic connection from Compy's own code is the update check described above.
 
 ## Future: signed rule updates (currently disabled)
 
@@ -361,8 +393,8 @@ you requested. It installs no kernel driver of its own and does not inject code 
 
 ## Children's privacy
 
-Compy is a PC utility, not directed at children, and collects no personal information from
-anyone.
+Compy is a PC utility and is not directed at children. The app sends no personal information to us. The website
+waitlist collects an email address; it is not meant for children (the owner has yet to set an age limit).
 
 ## Changes to this policy
 
