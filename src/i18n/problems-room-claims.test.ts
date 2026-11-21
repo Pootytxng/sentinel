@@ -28,6 +28,7 @@ const EXCLUSION_PATTERNS: ReadonlyArray<[string, RegExp]> = [
   ["en: 'PC is not the problem'", /(pc|hardware|machine) is not the problem/i],
   ["en: 'overheating' as a finding", /\boverheating\b/i],
   ["en: 'commonly heat'", /commonly heat/i],
+  ["en/zh: 'running hot' / 温度过高 as a finding", /running hot|温度过高/i],
   ["en: 'not from a game or a driver'", /not from a game/i],
   ["zh: '与…无关'", /与(你的)?(电脑|硬件)无关/],
   ["zh: affirmative '排除了…'", /(?<!不能|无法|并不能)排除(了)?(你的)?(电脑|硬件|部件)/],

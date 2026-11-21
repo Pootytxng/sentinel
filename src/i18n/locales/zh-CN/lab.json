@@ -199,7 +199,7 @@
     },
     "addPartRoute": "添加 Compy 无法检测到的部件",
     "rigFocus": {
-      "overheating": "已高亮：{{part}} — 崩溃扫描中最新的记录（{{when}}）与它温度过高的情况相符。",
+      "overheating": "已高亮：{{part}} — 崩溃扫描中最新的记录（{{when}}）来自一次 Compy 测得这张显卡达到 85°C 或以上的会话。Compy 无法判断发热是否起了作用。",
       "graphicsDriver": "已高亮：{{part}} — 崩溃扫描中最新的记录（{{when}}）与它的显卡驱动超时的情况相符。",
       "away": "崩溃扫描中最新的记录（{{when}}）是 Windows 记录到的某个应用崩溃或停止响应。仅凭这条记录，无法判断是否与某个部件有关。"
     }

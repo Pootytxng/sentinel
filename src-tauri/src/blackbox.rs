@@ -320,11 +320,12 @@ const OVERHEAT_C: u32 = 85;
 /// UI and are reserved for a rule that can show two independent supports AND check for contradicting
 /// evidence (for example a crash-session temperature compared with this card's other sessions);
 /// `no_rule_emits_above_weak_without_two_independent_supports` pins that none does yet.
-#[allow(dead_code)] // Partial/Strong are reserved, see above
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Strength {
+    #[allow(dead_code)] // reserved, see above
     Strong,
+    #[allow(dead_code)] // reserved, see above
     Partial,
     Weak,
 }
@@ -1497,12 +1498,14 @@ fn event_log_script() -> String {
     )
 }
 
-/// Written to stderr by the reader script ONLY when no channel read failed. Get-WinEvent's "no events
+/// Written to stderr as `COMPY_EVENTLOG_READ_OK rows=<n>` by the reader script ONLY when no channel read
+/// failed, where n is the number of rows it is about to emit. Rust trusts the read only if it parsed
+/// exactly n rows (see `event_log_read_proven`). The first line below is the failure rule: Get-WinEvent's "no events
 /// were found" is the one non-failure error; anything else (access denied, a broken channel) withholds
 /// the marker, and then the System log is not proven read. Without it an empty result is "unknown",
 /// never "nothing happened".
 const EVENT_LOG_READ_OK_MARK: &str = "COMPY_EVENTLOG_READ_OK";
-const EVENT_LOG_READ_CHECK: &str = "$bad=$false;foreach($x in $cerr){if([string]$x.FullyQualifiedErrorId -notlike 'NoMatchingEventsFound*'){$bad=$true}};if(-not $bad){[Console]::Error.WriteLine('COMPY_EVENTLOG_READ_OK')};";
+const EVENT_LOG_READ_CHECK: &str = "$bad=$false;foreach($x in $cerr){if([string]$x.FullyQualifiedErrorId -notlike 'NoMatchingEventsFound*'){$bad=$true}};if(-not $bad){[Console]::Error.WriteLine('COMPY_EVENTLOG_READ_OK rows=' + @($e).Count)};";
 
 /// The row projection `parse_events_json` reads: time, id, provider, message, and `props` from
 /// EventData.
@@ -1526,14 +1529,33 @@ fn collect_event_log() -> (Vec<RawEvent>, Option<String>, bool) {
     else {
         return (Vec::new(), Some("Windows Event Log (couldn't run the reader)".into()), false);
     };
-    let read_ok = String::from_utf8_lossy(&out.stderr).contains(EVENT_LOG_READ_OK_MARK);
+    let stderr = String::from_utf8_lossy(&out.stderr);
     let stdout = String::from_utf8_lossy(&out.stdout);
     let trimmed = stdout.trim();
-    if trimmed.is_empty() {
-        // Get-WinEvent emits nothing when no matching events exist → scanned cleanly, none found.
-        return (Vec::new(), None, read_ok);
-    }
-    (parse_events_json(trimmed), None, read_ok)
+    // Empty output + a marker saying rows=0 is "scanned cleanly, none found"; empty output without
+    // that marker is just "nothing arrived".
+    let events = if trimmed.is_empty() { Vec::new() } else { parse_events_json(trimmed) };
+    let read_ok = event_log_read_proven(&stderr, &events);
+    (events, None, read_ok)
+}
+
+/// Pure: was the System/Application read PROVEN? Only when the script's marker says how many rows it
+/// emitted AND Rust parsed exactly that many, each with a readable time. No marker, a count mismatch,
+/// a JSON step that failed or was cut, or a row that didn't deserialise or has no usable time: all
+/// "couldn't read" (so no "found nothing" is ever said, and a dropped row can't hide a full channel).
+fn event_log_read_proven(stderr: &str, events: &[RawEvent]) -> bool {
+    let Some(rest) = stderr.split(EVENT_LOG_READ_OK_MARK).nth(1) else {
+        return false;
+    };
+    let Some(n) = rest
+        .trim_start()
+        .strip_prefix("rows=")
+        .and_then(|r| r.split(|c: char| !c.is_ascii_digit()).next())
+        .and_then(|d| d.parse::<usize>().ok())
+    else {
+        return false;
+    };
+    n == events.len() && events.iter().all(|e| parse_ts(&e.time).is_some())
 }
 
 /// Tolerant of ConvertTo-Json's array/object/null shapes; a malformed individual row is skipped,
@@ -1952,7 +1974,12 @@ fn report_from(
     let incident_cut = (incidents.len() >= MAX_INCIDENTS)
         .then(|| incidents.iter().filter_map(|i| parse_ts(&i.when)).map(|t| t.with_timezone(&Utc)).min())
         .flatten();
-    let clean_judgeable_from = read_cut.max(incident_cut);
+    let mut clean_judgeable_from = read_cut.max(incident_cut);
+    if !event_log_read {
+        // A read that was not proven (rows dropped, a count that doesn't match, no marker) can't say
+        // where its newest-40 cut was, so nothing before now may be called clean.
+        clean_judgeable_from = Some(Utc::now());
+    }
     // Now that what was read is known, re-assess with it: an absence line ("found nothing around it")
     // is allowed only for a window the System log was read for and the scan did not cut.
     if blackbox_v2_gate() {
@@ -3338,8 +3365,54 @@ mod blackbox_tests {
     }
 
     #[test]
+    fn a_read_is_proven_only_when_rust_parsed_every_row_the_script_counted() {
+        let rows = |n: usize| -> Vec<RawEvent> {
+            (0..n)
+                .map(|i| RawEvent {
+                    time: format!("2026-06-12T21:0{i}:00.0000000-07:00"),
+                    ..RawEvent::default()
+                })
+                .collect()
+        };
+        let mark = |n: usize| format!("COMPY_EVENTLOG_READ_OK rows={n}\r\n");
+        assert!(event_log_read_proven(&mark(2), &rows(2)), "marker matches: proven");
+        assert!(event_log_read_proven(&mark(0), &[]), "rows=0 and nothing parsed: scanned cleanly");
+        assert!(!event_log_read_proven(&mark(2), &rows(1)), "marker says 2, one parsed: not proven");
+        assert!(!event_log_read_proven(&mark(0), &rows(1)));
+        assert!(!event_log_read_proven("", &rows(2)), "no marker: not proven");
+        assert!(!event_log_read_proven("COMPY_EVENTLOG_READ_OK", &[]), "old marker without a count: not proven");
+        assert!(!event_log_read_proven("COMPY_EVENTLOG_READ_OK rows=x", &[]));
+        let mut bad_time = rows(2);
+        bad_time[1].time = "garbage".into();
+        assert!(!event_log_read_proven(&mark(2), &bad_time), "an unreadable time: not proven");
+    }
+
+    #[test]
+    fn a_dropped_row_means_couldnt_read_never_found_none() {
+        let _g = V2GateForceOn::begin();
+        let json = r#"[{"time":"2026-06-12T21:42:00.0000000-07:00","id":1000,"provider":"Application Error","message":"crash","props":["game.exe","1.0","ts","unity.dll","1.0","ts","c0000005"]}]"#;
+        let evidence = |marker: &str| {
+            let events = parse_events_json(json);
+            let read = event_log_read_proven(marker, &events);
+            let r = report_from(events, Vec::new(), None, Vec::new(), &[], Vec::new(), read);
+            (read, r.incidents[0].assessment.as_ref().expect("assessed").evidence.join(" | "), r.clean_judgeable_from)
+        };
+        // marker says 2 rows, only 1 parsed
+        let (read, e, cut) = evidence("COMPY_EVENTLOG_READ_OK rows=2");
+        assert!(!read && e.contains("couldn't read the Windows System log") && !e.contains("found no"), "{e}");
+        assert!(cut.is_some(), "an unproven read can't call anything before now clean");
+        // marker absent
+        let (read, e, _) = evidence("");
+        assert!(!read && e.contains("couldn't read the Windows System log") && !e.contains("found no"), "{e}");
+        // marker matches
+        let (read, e, _) = evidence("COMPY_EVENTLOG_READ_OK rows=1");
+        assert!(read && e.contains("Compy found no graphics-driver timeout") && !e.contains("couldn't read"), "{e}");
+    }
+
+    #[test]
     fn the_reader_script_withholds_its_ok_marker_on_a_real_read_error() {
         let script = event_log_script();
+        assert!(script.contains("'COMPY_EVENTLOG_READ_OK rows=' + @($e).Count"), "the marker carries the row count");
         assert!(script.contains("-ErrorVariable +cerr"));
         // only Get-WinEvent's "no matching events" is a non-failure
         assert!(script.contains("NoMatchingEventsFound"));

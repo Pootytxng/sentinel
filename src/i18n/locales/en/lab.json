@@ -203,7 +203,7 @@
     },
     "addPartRoute": "Add a part Compy can't detect",
     "rigFocus": {
-      "overheating": "Highlighted: {{part}} — the newest record from your crash scan ({{when}}) is consistent with it running hot.",
+      "overheating": "Highlighted: {{part}} — the newest record from your crash scan ({{when}}) came from a session where Compy measured this card at 85°C or more. Compy can't tell whether heat played a part.",
       "graphicsDriver": "Highlighted: {{part}} — the newest record from your crash scan ({{when}}) is consistent with its graphics driver timing out.",
       "away": "The newest record from your crash scan ({{when}}) is an app crash or hang that Windows recorded. That record alone can't say whether a part was involved."
     }
