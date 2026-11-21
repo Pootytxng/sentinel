@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Term } from "./Term";
-import { confidenceHintKey, confidenceWordKey, isMeasuredRow, wordFromBand, wordFromRow } from "../data/confidence-word";
+import { confidenceHintKey, confidenceWordKey, isMeasuredRow, wordFromBand, wordFromPattern, wordFromRow } from "../data/confidence-word";
 import type { ConfidenceBand, PriorityBasis } from "../types";
 
 /** P7-confidence, review 2026-10-28: a band's word ("Likely", "Unknown") with its one-line hint in the
@@ -12,6 +12,18 @@ export function ConfidenceWord({ band }: { band: ConfidenceBand | "high" | "medi
   return (
     <span data-confidence={band ?? undefined}>
       <Term tip={t(confidenceHintKey(word))}>{t(confidenceWordKey(word))}</Term>
+    </span>
+  );
+}
+
+/** A cross-session pattern's word (History). "Measured" for a supported trend, "Unknown" otherwise; its
+ *  hint says it is a trend across recorded sessions, not a cause. Never "Likely" (wordFromPattern). */
+export function PatternConfidence({ band }: { band: ConfidenceBand | "high" | "medium" | "low" | null | undefined }) {
+  const { t } = useTranslation();
+  const word = wordFromPattern(band);
+  return (
+    <span data-confidence={band ?? undefined}>
+      <Term tip={t(word === "measured" ? "common.confidenceHint.pattern" : confidenceHintKey(word))}>{t(confidenceWordKey(word))}</Term>
     </span>
   );
 }

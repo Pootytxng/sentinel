@@ -10,7 +10,7 @@
 // default face is translated.
 import type { ConfidenceBand, Provenance } from "../types";
 import type { FindingLevel } from "../surfaces/home-interview-data";
-import { fromFindingLevel, fromHypothesisBand, fromPriorityRow, fromProvenance, PROVENANCE_VALUES, type Mapped } from "./certainty";
+import { fromFindingLevel, fromHypothesisBand, fromPatternBand, fromPriorityRow, fromProvenance, PROVENANCE_VALUES, type Mapped } from "./certainty";
 
 export type ConfidenceWord = "known" | "measured" | "likely" | "expected" | "unknown";
 
@@ -33,6 +33,16 @@ function legacyWord(m: Mapped): ConfidenceWord {
  *  high and medium are supported inferences; low and unknown are not enough evidence to lean on. */
 export function wordFromBand(band: ConfidenceBand | "high" | "medium" | "low" | null | undefined): ConfidenceWord {
   return legacyWord(fromHypothesisBand(band));
+}
+
+/** A cross-session pattern (History's "Patterns across your sessions"). The rows are measured
+ *  observations (certainty.ts `fromPatternBand`: source "measured"), so a supported pattern says
+ *  "Measured", never "Likely": the screen states a trend in the numbers, not a cause. A band that is
+ *  low or unknown is not a supported trend, so it stays "Unknown". The retired strength word
+ *  ("Likely" above "Possible" with no two independent supports) cannot come out of here. */
+export function wordFromPattern(band: ConfidenceBand | "high" | "medium" | "low" | null | undefined): ConfidenceWord {
+  if (band !== "high" && band !== "medium") return "unknown";
+  return legacyWord(fromPatternBand(band));
 }
 
 /** A priority row only says it was measured when its basis says so. Older data with no basis reads as

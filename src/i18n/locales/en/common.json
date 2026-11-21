@@ -166,7 +166,8 @@
     "measured": "Measured on this PC, before and after.",
     "likely": "The reading is measured; what it means here is inferred from the evidence, not proven.",
     "expected": "From how Windows works, not measured on this PC.",
-    "unknown": "Not enough evidence yet to say."
+    "unknown": "Not enough evidence yet to say.",
+    "pattern": "Measured across your recorded sessions. It describes a trend in the numbers, not a cause."
   },
   "confidenceWord": {
     "known": "Known",

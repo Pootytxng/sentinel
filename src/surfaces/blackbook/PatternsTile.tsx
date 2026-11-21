@@ -1,4 +1,4 @@
-import { ConfidenceWord } from "../../design/ConfidenceWord";
+import { PatternConfidence } from "../../design/ConfidenceWord";
 import { withTerms } from "../../design/with-terms";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -36,7 +36,7 @@ function PatternCard({ p, expert }: { p: SessionPattern; expert: boolean }) {
           {p.game && <span className="bpt-card-game">{prettyGameName(p.game) || p.game}</span>}
         </div>
         <span className="bpt-card-conf">
-          <ConfidenceWord band={p.confidence} />
+          <PatternConfidence band={p.confidence} />
         </span>
       </div>
       {/* Self-review r2 2026-10-28 (P7-jargon): engine sentences carry "1% low" / "noise floor". */}
