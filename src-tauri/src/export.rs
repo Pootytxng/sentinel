@@ -98,6 +98,8 @@ impl ExportEnv {
     /// This machine: the support-evidence literals (USERNAME, USERDOMAIN, COMPUTERNAME, 3+ characters),
     /// the profile folder's own name, minus ordinary words; and the active power plan.
     pub(crate) fn this_machine() -> Self {
+        // data-root-allow: reads only the profile folder's NAME, to scrub it from the exported text;
+        // no path is composed from it and nothing is read, written or opened.
         let leaf = std::env::var("USERPROFILE").ok().and_then(|p| std::path::Path::new(&p).file_name()?.to_str().map(str::to_owned));
         let literals = usable_literals(crate::support_evidence::sensitive_literals(), leaf);
         let active_plan = crate::current_power_scheme().map(|p| ActivePlan { name: p.name, guid: p.guid });
@@ -2124,8 +2126,8 @@ mod export_tests {
             (format!(r"C:\Users\{C_USER}\AppData\Roaming\Compy"), format!(r"{u}\AppData\Roaming\Compy")),
             (format!("c:/users/{C_USER}/Desktop/x.log"), "c:/users/<user>/Desktop/x.log".into()),
             (format!(r"saved C:\Users\John {C_USER}\Documents\a.txt ok"), format!(r"saved {u}\Documents\a.txt ok")),
-            (format!(r#"run "C:\Users\John Smith" now"#), format!(r#"run "{u}" now"#)),
-            (format!(r#"run "C:\Users\John Smith\a b.exe" now"#), format!(r#"run "{u}\a b.exe" now"#)),
+            (r#"run "C:\Users\John Smith" now"#.into(), format!(r#"run "{u}" now"#)),
+            (r#"run "C:\Users\John Smith\a b.exe" now"#.into(), format!(r#"run "{u}\a b.exe" now"#)),
             (r"C:\\Users\\john\\a".into(), r"C:\\Users\\<user>\\a".into()),
             (r"(C:\Users\john)".into(), format!("({u})")),
             (r"C:\Users\john, D:\x".into(), format!(r"{u}, D:\x")),
