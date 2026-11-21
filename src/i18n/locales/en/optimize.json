@@ -299,7 +299,7 @@
     "rollingBackEllipsis": "Rolling back…",
     "noSavedUndo": "Compy has no saved undo for this change.",
     "unknownGpu": "unknown GPU",
-    "rigLabelFormat": "{{gpu}} · {{ramGb}} GB RAM",
+    "rigLabelFormat": "{{gpu}} · {{ram}}",
     "historyOtherRigTitle": "Applied before your hardware changed",
     "historyOtherRigTag": "other rig",
     "historyRolledBack": "✓ rolled back",

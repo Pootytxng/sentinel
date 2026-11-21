@@ -170,7 +170,7 @@
         "clock": "报告主频",
         "vram": "显存",
         "driver": "驱动版本",
-        "memory": "已使用",
+        "memory": "已用，占可用总量",
         "storage": "可用空间",
         "capacity": "容量",
         "refresh": "刷新率",

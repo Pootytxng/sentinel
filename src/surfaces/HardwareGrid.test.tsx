@@ -222,7 +222,7 @@ describe("HardwareGrid identity rows (Shared Machine Model, #451)", () => {
       <HardwareGrid hw={baseHw({ cpu_brand: "Test CPU", gpus: [gpu()] })} model={known()} />
     );
     expect(cardByLabel(container, "CPU").querySelector(".card-value")?.textContent).toBe("AMD Ryzen 7 7800X3D");
-    expect(cardByLabel(container, "Memory").querySelector(".card-value")?.textContent).toBe("32 GB");
+    expect(cardByLabel(container, "Memory").querySelector(".card-value")?.textContent).toBe("32 GB usable");
     const graphics = cardByLabel(container, "Graphics");
     expect(graphics.querySelector(".card-value")?.textContent).toBe("Radeon RX 9070 XT");
     // The model's driver version, with the inventory's age beside it.
@@ -322,7 +322,36 @@ describe("HardwareGrid identity rows (Shared Machine Model, #451)", () => {
     expect(screen.getByText("Saved baseline: 16")).toBeTruthy();
     expect(note?.textContent).toContain("different rounding conventions");
     // The card itself still carries the canonical value — the disagreement is reported, not resolved.
+    expect(cardByLabel(container, "Memory").querySelector(".card-value")?.textContent).toBe("32 GB usable");
+  });
+
+  // review r1: the rig-tier basis ("... 31 GB RAM") sat above the memory card ("32 GB") on the same panel.
+  it("the tier basis and the memory card use the same installed figure (2 x 16 GB: 32 GB, never 31)", () => {
+    const hw = baseHw({
+      ram_total_bytes: Math.round(31.4 * 1024 ** 3),
+      gpus: [gpu()],
+      memory_modules: [mod(), mod()],
+    });
+    const { container } = render(<HardwareGrid hw={hw} model={known()} />);
     expect(cardByLabel(container, "Memory").querySelector(".card-value")?.textContent).toBe("32 GB");
+    const basis = container.querySelector(".hw-tier-basis")?.textContent ?? "";
+    expect(basis).toContain("32 GB RAM");
+    expect(basis).not.toMatch(/31 GB/);
+  });
+
+  it("one of two modules unread: the card and the tier say 'usable' and never the partial '16 GB'", () => {
+    const hw = baseHw({
+      ram_total_bytes: Math.round(31.4 * 1024 ** 3),
+      gpus: [gpu()],
+      memory_modules: [mod(), mod({ capacity_bytes: 0 })],
+    });
+    const { container } = render(<HardwareGrid hw={hw} model={known()} />);
+    const card = cardByLabel(container, "Memory").querySelector(".card-value")?.textContent ?? "";
+    expect(card).toContain("usable");
+    expect(card).not.toMatch(/^16 GB/);
+    const basis = container.querySelector(".hw-tier-basis")?.textContent ?? "";
+    expect(basis).toContain("31 GB usable RAM");
+    expect(basis).not.toMatch(/16 GB RAM/);
   });
 
   it("renders no disagreement note when the producers agree", () => {

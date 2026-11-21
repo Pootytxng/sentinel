@@ -31,12 +31,22 @@ describe("rigTier — conservative spec composite", () => {
 
 describe("rigTierLine — transparent basis, never fabricated", () => {
   it("names the exact inputs the tier was read from", () => {
-    const line = rigTierLine(16 * GIB, 8, 32 * GIB);
+    const line = rigTierLine(16 * GIB, 8, 32 * GIB, 32);
     expect(line?.tier).toBe("High");
     expect(line?.basis).toContain("16 GB VRAM");
     expect(line?.basis).toContain("8 cores");
     expect(line?.basis).toContain("32 GB RAM");
     expect(line?.basis).toContain("rough"); // never presented as authoritative
+  });
+
+  it("without the module sum the basis says 'usable', and with it the tier uses installed memory", () => {
+    const usable = Math.round(15.6 * GIB); // a 16 GB PC: Windows leaves about 15.6 usable
+    expect(rigTierLine(16 * GIB, 8, usable)?.basis).toContain("16 GB usable RAM");
+    expect(rigTierLine(16 * GIB, 8, usable)?.tier).toBe("Mid"); // 15.6 < 16: no High from a usable total
+    const installed = rigTierLine(16 * GIB, 8, usable, 16);
+    expect(installed?.basis).toContain("16 GB RAM");
+    expect(installed?.basis).not.toContain("usable");
+    expect(installed?.tier).toBe("High"); // 16 GB installed is 16 GB
   });
 
   it("returns null when nothing is readable (no tier from nothing)", () => {

@@ -275,7 +275,7 @@
     "rollingBackEllipsis": "正在回滚…",
     "noSavedUndo": "Compy 没有为这项更改保存撤销方式。",
     "unknownGpu": "未知 GPU",
-    "rigLabelFormat": "{{gpu}} · {{ramGb}} GB 内存",
+    "rigLabelFormat": "{{gpu}} · {{ram}}",
     "historyOtherRigTitle": "在你的硬件变更之前应用的",
     "historyOtherRigTag": "其他主机",
     "historyRolledBack": "✓ 已回滚",

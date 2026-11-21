@@ -9,7 +9,7 @@
 
 export type RigTier = "Entry" | "Mid" | "High";
 
-const GIB = 1024 ** 3;
+import { GIB } from "./ram-format";
 
 export function rigTier(vramBytes: number, physicalCores: number, ramBytes: number): RigTier {
   const vramGb = vramBytes / GIB;
@@ -29,14 +29,21 @@ export function rigTierLine(
   vramBytes: number,
   physicalCores: number,
   ramBytes: number,
+  /** The modules' sum (ram-format `installedRamGB`), when every module was read. The tier and its
+   *  basis line then use INSTALLED memory, the number the memory card shows ("32 GB"), not Windows'
+   *  usable total ("31 GB"): one panel never prints two different RAM figures. */
+  installedGb: number | null = null,
 ): { tier: RigTier; basis: string } | null {
   const read = (n: number) => Number.isFinite(n) && n > 0;
   if (!read(vramBytes) || !read(physicalCores) || !read(ramBytes)) return null;
-  const tier = rigTier(vramBytes, physicalCores, ramBytes);
+  const ramForTier = installedGb != null && installedGb > 0 ? installedGb * GIB : ramBytes;
+  const tier = rigTier(vramBytes, physicalCores, ramForTier);
   const vramGb = Math.round(vramBytes / GIB);
-  const ramGb = Math.round(ramBytes / GIB);
+  const ramGb = Math.round(ramForTier / GIB);
+  // Without the module sum the figure is Windows' usable total, and the line says so.
+  const ram = installedGb != null && installedGb > 0 ? `${ramGb} GB RAM` : `${ramGb} GB usable RAM`;
   return {
     tier,
-    basis: `rough, from ${vramGb} GB VRAM · ${physicalCores} cores · ${ramGb} GB RAM`,
+    basis: `rough, from ${vramGb} GB VRAM · ${physicalCores} cores · ${ram}`,
   };
 }

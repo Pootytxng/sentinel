@@ -16,15 +16,24 @@ export const GIB = 1024 ** 3;
 /** Bytes as a one-decimal number of GB ("31.4"), no unit. */
 export const ramGB = (bytes: number): string => (bytes / GIB).toFixed(1);
 
-/** The sum of the installed memory modules, in whole GB; null when no module size was read. */
+/** The sum of the installed memory modules, in whole GB. Null when no module was listed OR when any
+ *  one module's size was not read: a partial sum is not the installed total (one of two 16 GB sticks
+ *  unread would print "16 GB" on a 32 GB PC), so callers show the usable figure, labelled "usable". */
 export function installedRamGB(modules: ReadonlyArray<{ capacity_bytes: number }> | null | undefined): number | null {
-  const total = (modules ?? []).reduce((n, m) => n + (m.capacity_bytes > 0 ? m.capacity_bytes : 0), 0);
-  return total > 0 ? Math.round(total / GIB) : null;
+  const list = modules ?? [];
+  if (list.length === 0 || list.some((m) => !(m.capacity_bytes > 0))) return null;
+  return Math.round(list.reduce((n, m) => n + m.capacity_bytes, 0) / GIB);
 }
 
 /** "31.4 GB usable". `t` is optional so a plain-data caller still gets the English words. */
 export function usableRam(t: TFunction | undefined, bytes: number): string {
   return t ? t("common.ram.usable", { amount: ramGB(bytes) }) : `${ramGB(bytes)} GB usable`;
+}
+
+/** "31 GB usable" for the backend's whole-number `ram_gb`, which is Windows' usable total rounded
+ *  (hardware.rs), never the installed sum: a stamp or baseline says so instead of printing a bare "31 GB". */
+export function usableRamWhole(t: TFunction | undefined, gb: number): string {
+  return t ? t("common.ram.usable", { amount: String(gb) }) : `${gb} GB usable`;
 }
 
 /** "19.6 / 31.4 GB usable": what is in use out of what is usable. */

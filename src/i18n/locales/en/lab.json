@@ -172,7 +172,7 @@
         "clock": "Reported clock",
         "vram": "Video memory",
         "driver": "Driver version",
-        "memory": "In use",
+        "memory": "In use, of usable",
         "storage": "Free space",
         "capacity": "Capacity",
         "refresh": "Refresh rate",

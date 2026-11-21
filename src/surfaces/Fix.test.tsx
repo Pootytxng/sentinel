@@ -579,7 +579,7 @@ describe("Fix", () => {
     expect(screen.getByText("other rig")).toBeTruthy(); // the row tag
     fireEvent.click(screen.getByText("Change stamped-other")); // expand the receipt
     expect(screen.getByText(/Last seen working on/)).toBeTruthy();
-    expect(screen.getByText(/GTX 1070 · 16 GB RAM/)).toBeTruthy();
+    expect(screen.getByText(/GTX 1070 · 16 GB usable/)).toBeTruthy();
   });
 
   it("A5 hardware tag: an ACTIVE change from other hardware gets the quiet heads-up card line", () => {
@@ -590,7 +590,7 @@ describe("Fix", () => {
     };
     render(<Fix recs={[]} {...baseProps} changes={[ch]} view="applied" />);
     expect(screen.getByText(/Last seen working on/)).toBeTruthy();
-    expect(screen.getByText(/GTX 1070 · 16 GB RAM/)).toBeTruthy();
+    expect(screen.getByText(/GTX 1070 · 16 GB usable/)).toBeTruthy();
     // Honest scope: a same-rig active change shows NO such line.
     localStorage.clear();
   });

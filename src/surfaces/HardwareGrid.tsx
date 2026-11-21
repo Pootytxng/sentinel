@@ -294,10 +294,14 @@ export function HardwareGrid({
   const evidence = useComponentEvidence(useIntelligenceFlag());
   // Rough, transparent rig tier (owner-greenlit 2026-06-22) — see src/data/rig-tier.ts. It names the
   // exact specs it read, and the bands are conservative (a single strong axis can't inflate the tier).
+  // Installed memory is the modules' sum (2 x 16 GB -> 32 GB); null when any module's size is unread.
+  // The tier line and the memory row below both use it, so one panel never says "31 GB" above "32 GB".
+  const installedGb = installedRamGB(hw.memory_modules);
   const tier = rigTierLine(
     Math.max(0, ...(hw.gpus ?? []).map((g) => g.vram_bytes)),
     hw.cpu_cores_physical,
     hw.ram_total_bytes,
+    installedGb,
   );
   // The six identity rows, each from its Fact. The formatters print a KNOWN value only; a missing
   // one never reaches them, so no "0 GB" or "—" can come out of this block.
@@ -309,9 +313,12 @@ export function HardwareGrid({
   const driver = identityState(model, (id) => id.gpu_driver, (v) =>
     fmtDriverAge(v, primary?.driver_age_days, t),
   );
-  // Installed memory is the modules' sum (2 x 16 GB -> 32 GB); the model's own integer is Windows' usable total (31).
-  const installedGb = installedRamGB(hw.memory_modules);
-  const ram = identityState(model, (id) => id.ram_gb, (gb) => t("gaming.hardwareGrid.ramGbValue", { gb: installedGb ?? gb }));
+  // The model's own integer is Windows' usable total (31), so without the module sum it is labelled "usable".
+  const ram = identityState(model, (id) => id.ram_gb, (gb) =>
+    installedGb != null
+      ? t("gaming.hardwareGrid.ramGbValue", { gb: installedGb })
+      : t("common.ram.usable", { amount: String(gb) }),
+  );
   const display = identityState(model, (id) => id.display, (mode) => fmtDisplayMode(mode, hw, t));
   const windows = identityState(model, (id) => id.windows, String);
   const disagreements = model?.identity.disagreements ?? [];

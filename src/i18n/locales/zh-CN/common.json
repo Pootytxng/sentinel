@@ -171,8 +171,8 @@
     "unknown": "未知"
   },
   "ram": {
-    "usable": "可用 {{amount}} GB",
-    "usedOfUsable": "已用 {{used}} / 可用 {{total}} GB"
+    "usable": "可用总量 {{amount}} GB",
+    "usedOfUsable": "已用 {{used}} GB / 可用总量 {{total}} GB"
   },
   "confidenceNote": {
     "effectNotMeasured": "对 FPS 的影响未实测"

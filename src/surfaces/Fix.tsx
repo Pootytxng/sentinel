@@ -25,6 +25,7 @@ import { useExpertView } from "../design/use-expert-view";
 import { PROVENANCE_LABEL, PROVENANCE_NOTE } from "../data/provenance";
 import { recMutation } from "../data/rec-mutations";
 import { slimProofLine } from "../data/slim-proof";
+import { usableRamWhole } from "../data/ram-format";
 import { SlimRecRow, SlimDetailRow } from "../design/SlimRecRow";
 import { ActionDetailsSheet, type ActionRec } from "./ActionDetails";
 import { Sheet } from "../design/bento";
@@ -881,11 +882,11 @@ function ActiveChangeCard({
   );
 }
 
-// A5 rig tagging: the short human name of a stamped rig ("RX 9070 XT · 32 GB RAM"). Only ever
+// A5 rig tagging: the short human name of a stamped rig ("RX 9070 XT · 31 GB usable"). Only ever
 // renders fields the stamp actually recorded — an empty GPU read stays honest.
 function rigLabel(f: NonNullable<AppliedChange["hw_fingerprint"]>, t: TFunction): string {
   const gpu = f.gpu.trim() || t("optimize.fix.unknownGpu");
-  return t("optimize.fix.rigLabelFormat", { gpu, ramGb: f.ram_gb });
+  return t("optimize.fix.rigLabelFormat", { gpu, ram: usableRamWhole(t, f.ram_gb) });
 }
 
 // P5-outcomes-f1: "Applied/Undone because of your <outcome> Trial, <when>" for a row made from the

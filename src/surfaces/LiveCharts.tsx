@@ -5,6 +5,7 @@ import "../i18n";
 import "./DashboardV2.css";
 import "./LiveCharts.css";
 import { gradeRamPct, gradeColor } from "../data/metric-grade";
+import { usedOfUsableRam } from "../data/ram-format";
 import { gradeGpuTempForVendor } from "../data/gpu-sensor";
 import { AnimatedNumber } from "../design/AnimatedNumber";
 import { useDocumentVisible } from "../data/use-document-visible";
@@ -99,7 +100,7 @@ export function LiveCharts() {
         <Area values={gpuH.current} id="gpu" />
       </section>
       <section className="d2-card d2-live">
-        <div className="d2-live-head"><span className="d2-eyebrow">{t("monitor.liveCharts.memory")}</span><span className="d2-live-sub">{cpu ? `${(cpu.ram_used_bytes / 1024 ** 3).toFixed(1)} / ${(cpu.ram_total_bytes / 1024 ** 3).toFixed(0)} GB` : ""}</span></div>
+        <div className="d2-live-head"><span className="d2-eyebrow">{t("monitor.liveCharts.memory")}</span><span className="d2-live-sub">{cpu ? usedOfUsableRam(t, cpu.ram_used_bytes, cpu.ram_total_bytes) : ""}</span></div>
         <div className="d2-live-value"><span className="d2-num" style={ramColor ? { color: ramColor } : undefined}>{ramPct != null ? <AnimatedNumber value={ramPct} /> : "—"}</span><span className="d2-unit">%</span></div>
         <Area values={ramH.current} id="ram" />
       </section>

@@ -161,7 +161,9 @@ export function subsystemReadings(sub: LabSubsystem, hw: HardwareInfo): LabReadi
     }
 
     case "memory": {
-      // In-use of installed. Direction is named by the label, not left to the bar.
+      // In use, of the USABLE total (Windows' `ram_total_bytes`, not the installed sum). The label
+      // ("In use, of usable") names both the direction and which total, so the figure is never
+      // read as installed memory. fmtGB divides by 1024^3 via ram-format.
       if (hw.ram_total_bytes <= 0) return out;
       out.push({
         kind: "gauge",
